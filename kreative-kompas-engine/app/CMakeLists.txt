@@ -1,0 +1,10 @@
+add_executable(kke_demo main.cpp CubeModule.cpp)
+target_link_libraries(kke_demo PRIVATE kke_engine)
+
+engine_add_shader(kke_demo ${CMAKE_SOURCE_DIR}/shaders/cube.vert)
+engine_add_shader(kke_demo ${CMAKE_SOURCE_DIR}/shaders/cube.frag)
+engine_add_shader(kke_demo ${CMAKE_SOURCE_DIR}/shaders/grid.vert)
+engine_add_shader(kke_demo ${CMAKE_SOURCE_DIR}/shaders/grid.frag)
+engine_add_shader(kke_demo ${CMAKE_SOURCE_DIR}/shaders/particle.vert)
+engine_add_shader(kke_demo ${CMAKE_SOURCE_DIR}/shaders/particle.frag)
+engine_add_shader(kke_demo ${CMAKE_SOURCE_DIR}/shaders/particle.comp)
