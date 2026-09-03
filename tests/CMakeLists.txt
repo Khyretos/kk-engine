@@ -6,6 +6,7 @@ add_executable(kke_tests
     test_rml_text_safety.cpp
     test_game_manifest.cpp
     test_marketplace_index.cpp
+    test_engine_error.cpp
 )
 target_link_libraries(kke_tests PRIVATE kke_engine GTest::gtest_main)
 

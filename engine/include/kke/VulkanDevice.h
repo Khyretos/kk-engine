@@ -6,6 +6,14 @@
 #include <optional>
 #include <cstdint>
 
+#if KKE_ENABLE_GPU_PROFILER
+// VulkanProfiler's extension header (see README "GPU profiler
+// (VulkanProfiler) integration") — only required when this build option
+// is actually on. A default build never needs this header to exist, so
+// it never needs the layer installed just to compile.
+#include <VkProfilerEXT.h>
+#endif
+
 namespace kke {
 
 class Window;
@@ -46,6 +54,29 @@ public:
     double timestampPeriodNs() const { return m_timestampPeriodNs; }
     bool largePointsSupported() const { return m_largePointsSupported; }
 
+    // True only if KKE_ENABLE_GPU_PROFILER was set at build time AND the
+    // VulkanProfiler layer was actually found installed at instance
+    // creation — see README "GPU profiler (VulkanProfiler) integration".
+    // Code that wants to call vkGetProfilerFrameDataEXT (StatsModule,
+    // once that slice lands) should check this first rather than assume
+    // the layer is present just because the build option was on.
+    bool gpuProfilerEnabled() const { return m_gpuProfilerEnabled; }
+
+    // What StatsModule actually pulls out of the layer's frame-data tree
+    // each frame: total frame duration as the layer measured it (an
+    // independent cross-check against this engine's own timestamp-query
+    // GPU timing in Renderer), and a real count of leaf commands
+    // (VK_PROFILER_REGION_TYPE_COMMAND_EXT nodes — actual draws/
+    // dispatches/copies, not render passes or pipelines) recursively
+    // walked from the returned tree. valid is false if the profiler
+    // isn't enabled or the query failed — always check it.
+    struct GpuProfilerFrameSummary {
+        bool valid = false;
+        float frameDurationMs = 0.0f;
+        uint32_t commandCount = 0;
+    };
+    GpuProfilerFrameSummary queryGpuProfilerFrameSummary() const;
+
 private:
     void createInstance(bool enableValidation);
     void setupDebugMessenger();
@@ -53,6 +84,7 @@ private:
     void createLogicalDevice(bool enableValidation);
     void createAllocator();
     void createCommandPool();
+    void loadGpuProfilerFunctions(); // no-op if m_gpuProfilerEnabled is false
 
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) const;
     bool isDeviceSuitable(VkPhysicalDevice device) const;
@@ -76,6 +108,15 @@ private:
     bool m_largePointsSupported = false;
 
     bool m_validationEnabled = false;
+    bool m_gpuProfilerEnabled = false;
+
+#if KKE_ENABLE_GPU_PROFILER
+    // Loaded via vkGetDeviceProcAddr, not volk — these are a third-party
+    // layer's extension functions, not core Vulkan or something volk's
+    // generated loader knows about. Null unless m_gpuProfilerEnabled.
+    PFN_vkGetProfilerFrameDataEXT m_vkGetProfilerFrameDataEXT = nullptr;
+    PFN_vkFreeProfilerFrameDataEXT m_vkFreeProfilerFrameDataEXT = nullptr;
+#endif
 };
 
 } // namespace kke

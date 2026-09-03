@@ -3,6 +3,10 @@
 #include "kke/VulkanCheck.h"
 #include "kke/Log.h"
 
+#if KKE_ENABLE_GPU_PROFILER
+#include <VkProfilerEXT.h>
+#endif
+
 #include <cstring>
 #include <iostream>
 #include <set>
@@ -17,25 +21,34 @@ const std::vector<const char*> kValidationLayers = {
     "VK_LAYER_KHRONOS_validation"
 };
 
+// lstalmir/VulkanProfiler — see README "GPU profiler (VulkanProfiler)
+// integration" for the full story: what this layer actually is, how it
+// was verified, and what's still not done. Not built/installed by this
+// repo — it's a separate system-level Vulkan layer, same as the
+// validation layer above. This constant, the availability check, and
+// the enable logic below all work correctly whether or not it's
+// actually installed, exactly like validation layers already do.
+const char* kGpuProfilerLayerName = "VK_LAYER_PROFILER_unified";
+
 const std::vector<const char*> kDeviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 
-bool checkValidationLayerSupport() {
+bool isInstanceLayerAvailable(const char* layerName) {
     uint32_t layerCount = 0;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
     std::vector<VkLayerProperties> availableLayers(layerCount);
     vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
+    for (const auto& props : availableLayers) {
+        if (std::strcmp(layerName, props.layerName) == 0) return true;
+    }
+    return false;
+}
+
+bool checkValidationLayerSupport() {
     for (const char* layerName : kValidationLayers) {
-        bool found = false;
-        for (const auto& props : availableLayers) {
-            if (std::strcmp(layerName, props.layerName) == 0) {
-                found = true;
-                break;
-            }
-        }
-        if (!found) return false;
+        if (!isInstanceLayerAvailable(layerName)) return false;
     }
     return true;
 }
@@ -74,6 +87,7 @@ VulkanDevice::VulkanDevice(Window& window, bool enableValidation)
 
     createAllocator();
     createCommandPool();
+    loadGpuProfilerFunctions();
 }
 
 VulkanDevice::~VulkanDevice() {
@@ -91,6 +105,28 @@ void VulkanDevice::createInstance(bool enableValidation) {
         enableValidation = false;
         m_validationEnabled = false;
     }
+
+    std::vector<const char*> layers;
+    if (enableValidation) {
+        layers.insert(layers.end(), kValidationLayers.begin(), kValidationLayers.end());
+    }
+
+#if KKE_ENABLE_GPU_PROFILER
+    // See the comment on kGpuProfilerLayerName: this degrades gracefully
+    // to "not enabled, logged, nothing else changes" if the layer isn't
+    // actually installed on this machine — same pattern as validation
+    // layers just above.
+    m_gpuProfilerEnabled = isInstanceLayerAvailable(kGpuProfilerLayerName);
+    if (m_gpuProfilerEnabled) {
+        layers.push_back(kGpuProfilerLayerName);
+        log::get("VulkanDevice")->info("GPU profiler layer '{}' found and will be enabled", kGpuProfilerLayerName);
+    } else {
+        log::get("VulkanDevice")->warn(
+            "KKE_ENABLE_GPU_PROFILER is on but layer '{}' isn't installed — see README "
+            "'GPU profiler (VulkanProfiler) integration' for how to build/install it. Continuing without it.",
+            kGpuProfilerLayerName);
+    }
+#endif
 
     VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -110,13 +146,31 @@ void VulkanDevice::createInstance(bool enableValidation) {
     createInfo.pApplicationInfo = &appInfo;
     createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
     createInfo.ppEnabledExtensionNames = extensions.data();
+    createInfo.enabledLayerCount = static_cast<uint32_t>(layers.size());
+    createInfo.ppEnabledLayerNames = layers.empty() ? nullptr : layers.data();
 
-    if (enableValidation) {
-        createInfo.enabledLayerCount = static_cast<uint32_t>(kValidationLayers.size());
-        createInfo.ppEnabledLayerNames = kValidationLayers.data();
-    } else {
-        createInfo.enabledLayerCount = 0;
+#if KKE_ENABLE_GPU_PROFILER
+    // Requests VK_PROFILER_MODE_PER_DRAWCALL_EXT — the finest-grained
+    // sampling mode the layer supports, matching "check everything up to
+    // the draw calls." Only meaningful if m_gpuProfilerEnabled is true;
+    // harmless (ignored) otherwise since no layer is present to read it.
+    VkLayerSettingEXT profilerSetting{};
+    profilerSetting.pLayerName = kGpuProfilerLayerName;
+    profilerSetting.pSettingName = "sampling_mode";
+    profilerSetting.type = VK_LAYER_SETTING_TYPE_STRING_EXT;
+    profilerSetting.valueCount = 1;
+    static const char* kDrawcallMode = "drawcall";
+    profilerSetting.pValues = &kDrawcallMode;
+
+    VkLayerSettingsCreateInfoEXT layerSettingsInfo{};
+    layerSettingsInfo.sType = VK_STRUCTURE_TYPE_LAYER_SETTINGS_CREATE_INFO_EXT;
+    layerSettingsInfo.settingCount = 1;
+    layerSettingsInfo.pSettings = &profilerSetting;
+
+    if (m_gpuProfilerEnabled) {
+        createInfo.pNext = &layerSettingsInfo;
     }
+#endif
 
     VK_CHECK(vkCreateInstance(&createInfo, nullptr, &m_instance));
 }
@@ -294,6 +348,72 @@ uint32_t VulkanDevice::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags
         }
     }
     throw std::runtime_error("failed to find suitable memory type");
+}
+
+void VulkanDevice::loadGpuProfilerFunctions() {
+#if KKE_ENABLE_GPU_PROFILER
+    if (!m_gpuProfilerEnabled) return;
+
+    // These are the layer's own extension functions — volk's generated
+    // loader has no idea they exist, so they're loaded by hand exactly
+    // the way any Vulkan extension function is meant to be: through
+    // vkGetDeviceProcAddr, not linked against directly.
+    m_vkGetProfilerFrameDataEXT =
+        reinterpret_cast<PFN_vkGetProfilerFrameDataEXT>(vkGetDeviceProcAddr(m_device, "vkGetProfilerFrameDataEXT"));
+    m_vkFreeProfilerFrameDataEXT =
+        reinterpret_cast<PFN_vkFreeProfilerFrameDataEXT>(vkGetDeviceProcAddr(m_device, "vkFreeProfilerFrameDataEXT"));
+
+    if (!m_vkGetProfilerFrameDataEXT || !m_vkFreeProfilerFrameDataEXT) {
+        log::get("VulkanDevice")->warn(
+            "GPU profiler layer is active but vkGetProfilerFrameDataEXT/vkFreeProfilerFrameDataEXT "
+            "could not be loaded — frame data queries will report invalid. The layer's own overlay "
+            "should still work regardless.");
+        m_gpuProfilerEnabled = false;
+    }
+#endif
+}
+
+namespace {
+#if KKE_ENABLE_GPU_PROFILER
+// Recursively counts actual leaf commands (draws/dispatches/copies —
+// VK_PROFILER_REGION_TYPE_COMMAND_EXT) in the layer's returned region
+// tree, skipping over the render-pass/pipeline/command-buffer grouping
+// levels above them. This is the real "how many draw calls" number,
+// not a proxy for it.
+uint32_t countCommandRegions(const VkProfilerRegionDataEXT& region) {
+    uint32_t count = (region.regionType == VK_PROFILER_REGION_TYPE_COMMAND_EXT) ? 1 : 0;
+    for (uint32_t i = 0; i < region.subregionCount; ++i) {
+        count += countCommandRegions(region.pSubregions[i]);
+    }
+    return count;
+}
+#endif
+} // namespace
+
+VulkanDevice::GpuProfilerFrameSummary VulkanDevice::queryGpuProfilerFrameSummary() const {
+    GpuProfilerFrameSummary summary;
+#if KKE_ENABLE_GPU_PROFILER
+    if (!m_gpuProfilerEnabled || !m_vkGetProfilerFrameDataEXT || !m_vkFreeProfilerFrameDataEXT) {
+        return summary;
+    }
+
+    VkProfilerDataEXT data{};
+    data.sType = VK_STRUCTURE_TYPE_PROFILER_DATA_EXT;
+
+    if (m_vkGetProfilerFrameDataEXT(m_device, &data) == VK_SUCCESS) {
+        summary.valid = true;
+        // "duration" isn't documented with explicit units in
+        // VkProfilerEXT.h; inferred as milliseconds from matching this
+        // engine's own timestamp-query GPU timing and the layer's own
+        // overlay display convention (see README) — not an assumption
+        // taken from an authoritative doc string, worth remembering if
+        // the numbers ever look off by 1000x.
+        summary.frameDurationMs = data.frame.duration;
+        summary.commandCount = countCommandRegions(data.frame);
+        m_vkFreeProfilerFrameDataEXT(m_device, &data);
+    }
+#endif
+    return summary;
 }
 
 } // namespace kke

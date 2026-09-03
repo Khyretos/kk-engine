@@ -3,29 +3,36 @@ target_link_libraries(kke_demo PRIVATE kke_engine)
 
 # Bundled default fonts (see README "Default fonts / font fallback chain")
 # — copied next to the executable, same relative-path convention as shaders.
-add_custom_command(TARGET kke_demo POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets/fonts
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${CMAKE_SOURCE_DIR}/assets/fonts/NotoSans-Regular.ttf
-            ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets/fonts/NotoSans-Regular.ttf
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${CMAKE_SOURCE_DIR}/assets/fonts/NotoColorEmoji.ttf
-            ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets/fonts/NotoColorEmoji.ttf
-)
+#
+# OUTPUT-based custom commands with explicit DEPENDS, not POST_BUILD: a
+# POST_BUILD command only runs when the target itself actually relinks,
+# so editing a font/manifest file without touching any source file would
+# silently NOT re-copy it on the next `cmake --build` — found exactly
+# this bug while testing the hardware-requirements check (had to copy
+# game.json by hand to verify a change took effect). This form makes
+# Ninja/Make check each file's mtime against its DEPENDS every build,
+# regardless of whether kke_demo's sources changed.
+function(kke_copy_runtime_file SRC DEST_RELATIVE)
+    set(output_path ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${DEST_RELATIVE})
+    get_filename_component(output_dir ${output_path} DIRECTORY)
+    string(MD5 target_suffix "${output_path}")
+    add_custom_command(
+        OUTPUT ${output_path}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${output_dir}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC} ${output_path}
+        DEPENDS ${SRC}
+        COMMENT "Copying ${DEST_RELATIVE}"
+    )
+    add_custom_target(kke_copy_${target_suffix} DEPENDS ${output_path})
+    add_dependencies(kke_demo kke_copy_${target_suffix})
+endfunction()
+
+kke_copy_runtime_file(${CMAKE_SOURCE_DIR}/assets/fonts/NotoSans-Regular.ttf assets/fonts/NotoSans-Regular.ttf)
+kke_copy_runtime_file(${CMAKE_SOURCE_DIR}/assets/fonts/NotoColorEmoji.ttf assets/fonts/NotoColorEmoji.ttf)
 
 # A minimal local "marketplace" directory for MarketplaceUiModule to scan
-# at runtime — this game folder copying its own game.json into a
-# marketplace/ directory next to the executable is a stand-in for "a real
-# marketplace folder full of imported games" (see README "Game folder
-# convention & marketplace"). Real multi-game discovery is still tracked
-# as unstarted work; this is just enough for the demo to have something
-# real to scan and render.
-add_custom_command(TARGET kke_demo POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/marketplace/kke_demo_game
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${CMAKE_CURRENT_SOURCE_DIR}/game.json
-            ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/marketplace/kke_demo_game/game.json
-)
+# at runtime — see README "Game folder convention & marketplace".
+kke_copy_runtime_file(${CMAKE_CURRENT_SOURCE_DIR}/game.json marketplace/kke_demo_game/game.json)
 
 engine_add_shader(kke_demo ${CMAKE_SOURCE_DIR}/shaders/cube.vert)
 engine_add_shader(kke_demo ${CMAKE_SOURCE_DIR}/shaders/cube.frag)

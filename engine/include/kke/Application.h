@@ -4,12 +4,15 @@
 #include "kke/Renderer.h"
 #include "kke/DebugUi.h"
 #include "kke/Module.h"
+#include "kke/EngineError.h"
 
 #include <glm/glm.hpp>
+#include <functional>
 #include <memory>
 #include <string>
 #include <typeindex>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace kke {
@@ -24,6 +27,29 @@ struct Camera {
     float fovDegrees = 45.0f;
     float nearPlane = 0.1f;
     float farPlane = 100.0f;
+};
+
+// Recorded when a module throws during any lifecycle call — see
+// Application::run()'s per-module try/catch and "Debugging" in the
+// README for the full reasoning. Kept in call order, oldest first.
+//
+// friendlyMessage and technicalMessage are ALWAYS both populated,
+// regardless of what was actually thrown: a module that throws a plain
+// std::exception gets its what() text copied into both (the only text
+// available), while a module that throws kke::EngineError (see
+// EngineError.h) gets the real plain-language/technical split, plus
+// source/file/line when known. DebugControlModule's Emergency Log shows
+// friendlyMessage prominently and technicalMessage as a secondary
+// detail — designed so a non-programmer gets something actionable
+// without the technical text being hidden from someone who wants it.
+struct BrokenModuleInfo {
+    std::string moduleName;
+    std::string stage;             // which lifecycle method threw, e.g. "update", "render"
+    std::string friendlyMessage;   // plain language — the thing to show a scripter first
+    std::string technicalMessage;  // e.what() — always available, shown as a secondary detail
+    ErrorSource source = ErrorSource::Unknown;
+    std::string file;              // empty if unknown
+    int line = 0;                  // 0 if unknown
 };
 
 // Owns the window, renderer, and debug UI; resolves module dependency
@@ -94,8 +120,31 @@ public:
     VulkanDevice& device() { return m_renderer->device(); }
     Camera& camera() { return m_camera; }
 
+    // --- Debug pause/step ---
+    // Freezes simulation (fixedUpdate/update stop advancing) while still
+    // rendering every frame, so the same, stable frame keeps presenting
+    // for as long as you like — the point being to give an external
+    // capture tool (RenderDoc, a Vulkan profiling layer, or just staring
+    // at validation-layer output) a frame that isn't changing out from
+    // under you. Rendering itself is never paused: a frozen frame still
+    // needs to actually get drawn and presented to be inspectable at all.
+    bool isPaused() const { return m_paused; }
+    void setPaused(bool paused) { m_paused = paused; }
+    // Advances the simulation by exactly one fixed tick + one update()
+    // call, then re-freezes — for stepping through frames one at a time
+    // while paused. A no-op if not currently paused.
+    void stepOneFrame() { if (m_paused) m_stepRequested = true; }
+
+    // --- Per-module error isolation ---
+    // See run()'s per-module try/catch: a module that throws during any
+    // lifecycle call gets recorded here and is never called again for
+    // the rest of this session (not even shutdown() — see run()'s
+    // comment on that tradeoff). Everything else keeps running.
+    const std::vector<BrokenModuleInfo>& brokenModules() const { return m_brokenModuleInfos; }
+
 private:
     void resolveInitOrder();
+    void safeInvoke(Module* m, const char* stage, const std::function<void()>& fn);
 
     Window m_window;
     std::unique_ptr<Renderer> m_renderer; // created after window, needs it for the surface
@@ -106,6 +155,12 @@ private:
     std::vector<std::unique_ptr<Module>> m_modules;
     std::vector<Module*> m_initOrder; // m_modules reordered so dependencies come first
     std::unordered_map<std::type_index, Module*> m_moduleByType;
+
+    bool m_paused = false;
+    bool m_stepRequested = false;
+
+    std::unordered_set<Module*> m_faultedModules; // see safeInvoke() — never called again once here
+    std::vector<BrokenModuleInfo> m_brokenModuleInfos;
 };
 
 } // namespace kke

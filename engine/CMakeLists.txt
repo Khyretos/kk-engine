@@ -22,6 +22,7 @@ set(ENGINE_SOURCES
     src/modules/OrbitCameraModule.cpp
     src/modules/UiModule.cpp
     src/modules/MarketplaceUiModule.cpp
+    src/modules/DebugControlModule.cpp
 )
 
 set(ENGINE_HEADERS
@@ -36,6 +37,7 @@ set(ENGINE_HEADERS
     include/kke/DebugUi.h
     include/kke/ShaderUtils.h
     include/kke/Module.h
+    include/kke/EngineError.h
     include/kke/Capabilities.h
     include/kke/Application.h
     include/kke/RmlVulkanRenderInterface.h
@@ -50,6 +52,7 @@ set(ENGINE_HEADERS
     include/kke/modules/OrbitCameraModule.h
     include/kke/modules/UiModule.h
     include/kke/modules/MarketplaceUiModule.h
+    include/kke/modules/DebugControlModule.h
 )
 
 add_library(kke_engine STATIC ${ENGINE_SOURCES} ${ENGINE_HEADERS})
@@ -79,6 +82,12 @@ if(KKE_ENABLE_VALIDATION)
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_VALIDATION=1)
 else()
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_VALIDATION=0)
+endif()
+
+if(KKE_ENABLE_GPU_PROFILER)
+    target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_GPU_PROFILER=1)
+else()
+    target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_GPU_PROFILER=0)
 endif()
 
 if(WIN32)

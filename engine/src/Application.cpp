@@ -21,11 +21,73 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
 Application::~Application() {
     // Shut down in reverse dependency order: a module that depends on
     // another should tear itself down first, while what it depends on is
-    // still alive to be torn down safely after.
+    // still alive to be torn down safely after. Faulted modules are
+    // skipped entirely — see safeInvoke()'s comment on why even
+    // shutdown() isn't trusted once a module has already thrown.
     for (auto it = m_initOrder.rbegin(); it != m_initOrder.rend(); ++it) {
-        (*it)->shutdown();
+        if (m_faultedModules.count(*it)) continue;
+        safeInvoke(*it, "shutdown", [&] { (*it)->shutdown(); });
     }
     log::shutdown(); // flush the async queue before the process exits
+}
+
+// The one place a Module's own code can hand control back to the engine
+// mid-lifecycle-call — and therefore the one place a bug in a module
+// (an uncaught exception, or something that isn't even a C++ exception)
+// shouldn't be allowed to take the whole engine down with it. A module
+// that throws here is: logged clearly (module name, which lifecycle
+// stage, the actual message) via the same spdlog-based logger every
+// other module uses; recorded in m_brokenModuleInfos for
+// DebugControlModule's "emergency window" to display; and added to
+// m_faultedModules, meaning it is NEVER CALLED AGAIN for the rest of
+// this session — not update(), not render(), not even shutdown() when
+// the Application itself is torn down. That last part is a deliberate
+// choice: a module that has already misbehaved once is not a module
+// whose cleanup code should be trusted either. Everything ELSE keeps
+// running exactly as if this one module didn't exist.
+void Application::safeInvoke(Module* m, const char* stage, const std::function<void()>& fn) {
+    if (m_faultedModules.count(m)) return;
+
+    try {
+        fn();
+    } catch (const EngineError& e) {
+        // The rich path: a module threw something that already carries a
+        // plain-language message, source, and (usually) a file/line —
+        // see EngineError.h. Nothing to guess here; just record what it
+        // told us.
+        m_faultedModules.insert(m);
+        BrokenModuleInfo info;
+        info.moduleName = m->name();
+        info.stage = stage;
+        info.friendlyMessage = e.friendlyMessage();
+        info.technicalMessage = e.what();
+        info.source = e.source();
+        info.file = e.file();
+        info.line = e.line();
+        m_brokenModuleInfos.push_back(info);
+
+        auto logger = log::get(m->name());
+        if (e.hasLocation()) {
+            logger->error("disabled for the rest of this session after throwing during {}() at {}:{} — {}",
+                           stage, e.file(), e.line(), e.friendlyMessage());
+        } else {
+            logger->error("disabled for the rest of this session after throwing during {}(): {}",
+                           stage, e.friendlyMessage());
+        }
+    } catch (const std::exception& e) {
+        // The plain path: whatever threw this had no way to tell us
+        // anything beyond what(). friendlyMessage and technicalMessage
+        // end up identical — there's no richer text to split them with —
+        // and source is honestly Unknown rather than guessed at.
+        m_faultedModules.insert(m);
+        m_brokenModuleInfos.push_back({ m->name(), stage, e.what(), e.what(), ErrorSource::Unknown, "", 0 });
+        log::get(m->name())->error("disabled for the rest of this session after throwing during {}(): {}", stage, e.what());
+    } catch (...) {
+        m_faultedModules.insert(m);
+        const char* message = "threw something that isn't a std::exception — no message available";
+        m_brokenModuleInfos.push_back({ m->name(), stage, message, message, ErrorSource::Unknown, "", 0 });
+        log::get(m->name())->error("disabled for the rest of this session after throwing a non-standard exception during {}()", stage);
+    }
 }
 
 void Application::resolveInitOrder() {
@@ -83,7 +145,18 @@ void Application::resolveInitOrder() {
 void Application::run() {
     resolveInitOrder();
     for (Module* m : m_initOrder) {
-        m->init(*this);
+        // A module that throws during init() is disabled the same as any
+        // other stage — see safeInvoke(). One real caveat worth stating:
+        // if init() throws partway through creating GPU resources, this
+        // module's own destructor (still called normally later, via
+        // unique_ptr) inherits whatever half-built state it left behind.
+        // Every module in this engine builds its GPU resources through
+        // RAII wrappers (Buffer, Pipeline, etc.) specifically so a
+        // partial init() still leaves safely-destructible state — but a
+        // module that doesn't follow that pattern could still misbehave
+        // on destruction. Fault isolation reduces this risk; it can't
+        // eliminate it for code this engine doesn't control.
+        safeInvoke(m, "init", [&] { m->init(*this); });
     }
 
     auto startTime = std::chrono::high_resolution_clock::now();
@@ -94,7 +167,7 @@ void Application::run() {
     while (m_window.pollEvents([this](const SDL_Event& e) {
         m_debugUi->processEvent(e);
         for (Module* m : m_initOrder) {
-            m->onEvent(e);
+            safeInvoke(m, "onEvent", [&] { m->onEvent(e); });
         }
     })) {
         auto now = std::chrono::high_resolution_clock::now();
@@ -102,25 +175,50 @@ void Application::run() {
         float totalTime = std::chrono::duration<float>(now - startTime).count();
         lastFrameTime = now;
 
-        // Cap how much simulation time a single slow frame can inject —
-        // otherwise a long stall (asset load, breakpoint) causes a burst
-        // of catch-up fixed ticks that then takes even longer, stalling
-        // further: the classic "spiral of death."
-        accumulator = std::min(accumulator + dt, m_fixedDt * 8.0f);
+        // --- Pause/step: see Application.h for the full reasoning.
+        // Rendering below always runs regardless of m_paused — only
+        // simulation (fixedUpdate/update/compute) is gated here.
+        bool advancingThisFrame = !m_paused || m_stepRequested;
 
-        while (accumulator >= m_fixedDt) {
+        if (!m_paused) {
+            // Cap how much simulation time a single slow frame can inject
+            // — otherwise a long stall (asset load, breakpoint) causes a
+            // burst of catch-up fixed ticks that then takes even longer,
+            // stalling further: the classic "spiral of death."
+            accumulator = std::min(accumulator + dt, m_fixedDt * 8.0f);
+
+            while (accumulator >= m_fixedDt) {
+                tickIndex++;
+                FixedUpdateContext fixedCtx{ m_fixedDt, tickIndex };
+                for (Module* m : m_initOrder) {
+                    safeInvoke(m, "fixedUpdate", [&] { m->fixedUpdate(fixedCtx); });
+                }
+                accumulator -= m_fixedDt;
+            }
+        } else if (m_stepRequested) {
+            // Single-step: exactly one fixed tick, ignoring whatever the
+            // accumulator happens to hold — stepping should feel like
+            // "advance by one deterministic tick," not "however much
+            // wall-clock time happened to pass while paused."
             tickIndex++;
             FixedUpdateContext fixedCtx{ m_fixedDt, tickIndex };
             for (Module* m : m_initOrder) {
-                m->fixedUpdate(fixedCtx);
+                safeInvoke(m, "fixedUpdate", [&] { m->fixedUpdate(fixedCtx); });
             }
-            accumulator -= m_fixedDt;
         }
 
-        UpdateContext updateCtx{ dt, totalTime };
-        for (Module* m : m_initOrder) {
-            m->update(updateCtx);
+        if (advancingThisFrame) {
+            // While stepping, dt itself is frozen (time isn't really
+            // passing), so hand modules the fixed tick length instead of
+            // a real wall-clock delta — a well-defined, reproducible
+            // "one step" rather than an arbitrary tiny number.
+            float effectiveDt = m_paused ? m_fixedDt : dt;
+            UpdateContext updateCtx{ effectiveDt, totalTime };
+            for (Module* m : m_initOrder) {
+                safeInvoke(m, "update", [&] { m->update(updateCtx); });
+            }
         }
+        m_stepRequested = false; // consumed whether or not we were actually paused
 
         glm::mat4 view = glm::lookAt(m_camera.position, m_camera.target, m_camera.up);
         glm::mat4 proj = glm::perspective(glm::radians(m_camera.fovDegrees), m_renderer->aspectRatio(),
@@ -136,20 +234,27 @@ void Application::run() {
 
         m_debugUi->beginFrame();
         for (Module* m : m_initOrder) {
-            m->renderUi();
+            safeInvoke(m, "renderUi", [&] { m->renderUi(); });
         }
 
         if (m_renderer->beginFrame()) {
             VkCommandBuffer cmd = m_renderer->currentCommandBuffer();
 
-            for (Module* m : m_initOrder) {
-                m->compute(cmd);
+            // compute() is gated by the same advancingThisFrame flag as
+            // fixedUpdate/update: a compute-driven simulation (e.g.
+            // ParticleModule) that ran unconditionally here would keep
+            // visibly moving every frame even while "paused," defeating
+            // the entire point of holding a frame steady for inspection.
+            if (advancingThisFrame) {
+                for (Module* m : m_initOrder) {
+                    safeInvoke(m, "compute", [&] { m->compute(cmd); });
+                }
             }
 
             m_renderer->beginRenderPass();
             renderCtx.cmd = cmd;
             for (Module* m : m_initOrder) {
-                m->render(renderCtx);
+                safeInvoke(m, "render", [&] { m->render(renderCtx); });
             }
             m_debugUi->render(cmd);
 

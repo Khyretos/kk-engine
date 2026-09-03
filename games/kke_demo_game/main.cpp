@@ -8,6 +8,7 @@
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/UiModule.h"
 #include "kke/modules/MarketplaceUiModule.h"
+#include "kke/modules/DebugControlModule.h"
 #include "CubeModule.h"
 #include "DestructionModule.h"
 #include "NetworkModule.h"
@@ -64,6 +65,7 @@ int main() {
         app.addModule<kke_demo::NetworkModule>();
         app.addModule<kke::UiModule>();
         app.addModule<kke::MarketplaceUiModule>("marketplace");
+        app.addModule<kke::DebugControlModule>();
         app.addModule<kke::StatsModule>();
 
         app.run();

@@ -52,7 +52,7 @@ yet — treat it as this project's memory, not aspirational marketing.
   tick for deterministic simulation — demonstrated end-to-end by
   `DestructionModule` (seed-based, tick-deterministic) and `NetworkModule`
   (discovers it via capability, with zero concrete-type coupling)
-- A real test suite (`tests/`, GoogleTest, 25 tests passing) with
+- A real test suite (`tests/`, GoogleTest, 33 tests passing) with
   measured coverage — 99.1% on pure-logic code, 94.0% across the whole
   engine including Vulkan — and a CI pipeline
   (`.github/workflows/ci.yml`) enforcing an 85% floor on every push. See
@@ -63,6 +63,23 @@ yet — treat it as this project's memory, not aspirational marketing.
   `requirements` section vs. real queried hardware, warn-only, verified
   both passing and failing on real output — see "Estimated hardware
   requirements").
+- Debug pause/step (freeze simulation, single-step one tick at a time)
+  and per-module fault isolation (a module that throws is logged,
+  disabled for the rest of the session, and never crashes anything
+  else) — both verified with real repros, not just code review. Plus
+  `kke::EngineError` — structured errors with a plain-language message,
+  a source (script/engine/unknown), and a file/line, shown as the
+  headline in the Emergency Log instead of a raw C++ exception string —
+  see "Debugging: pause/step and per-module fault isolation."
+- VulkanProfiler (`VK_LAYER_PROFILER_unified`) integration —
+  conditionally enabled via `KKE_ENABLE_GPU_PROFILER`, actually built
+  from source, installed, and confirmed running against this engine
+  with a real screenshot of its live overlay reading this engine's
+  actual per-frame GPU/CPU timing. Pulling that data into our *own*
+  `StatsModule`/logs via `vkGetProfilerFrameDataEXT` is written but
+  disabled by default after a real, `gdb`-diagnosed crash inside the
+  layer's own code (not this engine's) — see "GPU profiler
+  (VulkanProfiler) integration" for the full incident writeup.
 - The engine/game directory split is real: `games/kke_demo_game/` is a
   self-contained "game folder" with its own `game.json` manifest,
   `kke::MarketplaceIndex` (verified by `tests/marketplace_test.cpp`,
@@ -704,7 +721,10 @@ a single new feature:
 of the pipeline below, not asserted:
 
 - Pure-logic files, unit tests only: **99.1%** (114/115 lines,
-  `tests/test_*.cpp`, 25 tests, all passing). The one "uncovered" line
+  `tests/test_*.cpp`, 33 tests, all passing — grew from 25 with
+  `EngineError`'s tests; percentages here are the last full
+  measurement, not re-run after every subsequent addition — see the
+  note above about CI being the source of truth going forward). The one "uncovered" line
   is a closing brace — a standard gcov line-attribution artifact, not a
   missed code path; every real statement is covered.
 - Whole engine (`engine/src/`, including every Vulkan file), combining
@@ -787,6 +807,256 @@ yet. Worth confirming on the first real push.
   smoke-test's coverage contribution the same way `kke_demo` already
   does. Neither tier is finished — both grow with the engine.
 
+## GPU profiler (VulkanProfiler) integration
+
+[VulkanProfiler](https://github.com/lstalmir/VulkanProfiler)
+(`VK_LAYER_PROFILER_unified`) is integrated, and verified actually
+running against this engine — not just researched. What it is, in
+brief: a **Vulkan layer**, not a library this repo links against —
+architecturally the same as the validation layer already conditionally
+enabled in `VulkanDevice`. Because it's a transparent interception
+layer, enabling it profiles **every single Vulkan command this engine
+issues** the moment it's active — that's what "complete integration"
+means for a tool shaped like this, not something achieved by manually
+instrumenting call sites.
+
+### What's actually wired up
+
+- `KKE_ENABLE_GPU_PROFILER` CMake option (default `OFF`). When on,
+  `VulkanDevice::createInstance()` checks whether
+  `VK_LAYER_PROFILER_unified` is actually installed
+  (`isInstanceLayerAvailable()` — the same helper the validation-layer
+  check now uses too, generalized rather than duplicated) and, if so,
+  adds it to the enabled layer list and chains a
+  `VkLayerSettingsCreateInfoEXT` requesting `sampling_mode = drawcall`
+  — the layer's finest-grained mode, matching "check everything up to
+  the draw calls."
+- If the option is on but the layer isn't installed, this degrades
+  exactly like a missing validation layer does: a clear warning logged
+  through the same spdlog-based logger, nothing else changes, the
+  engine runs normally. Verified both ways.
+
+### Verified by an actual build, install, and run — not assumed
+
+This took real, hard-won verification, worth recording precisely:
+
+1. Cloned with `git clone --recursive` (submodules: SPIRV-Tools,
+   SPIRV-Cross, Vulkan-Headers, Intel's `metrics-discovery`, its own
+   vendored ImGui/ImPlot, and more), installed the stated Linux build
+   deps (`extra-cmake-modules`, `libdrm-dev`, `libxkbcommon-dev`, X11/XCB
+   dev packages), configured and built with `cmake .. -DCMAKE_BUILD_TYPE=Release && make all`.
+   **On a single-core sandbox, this took roughly 15 minutes** — mostly
+   SPIRV-Tools and a genuinely slow single-threaded LTO link step for
+   Intel's `metrics_discovery` library (128 LTRANS units, serial on 1
+   core). Budget real time for this; it is not a quick dependency fetch.
+2. `sudo cmake --install . --prefix /usr/local/` placed the layer's
+   `.so`, its JSON manifest (into `/usr/local/share/vulkan/explicit_layer.d/`,
+   the standard path the Vulkan loader scans automatically), and
+   `VkProfilerEXT.h` (the header declaring `vkGetProfilerFrameDataEXT`
+   and friends — see "Not yet done" below).
+3. **First real run failed** with `VK_ERROR_LAYER_NOT_PRESENT`, even
+   though `vulkaninfo` and our own `isInstanceLayerAvailable()` check
+   both correctly found the layer's manifest. Diagnosed rather than
+   guessed: `ldd` on the installed `.so` showed no missing
+   dependencies, ruling that out; the actual cause was that
+   `/usr/local/lib/x86_64-linux-gnu` — where the `.so` was installed —
+   is a configured search path (`/etc/ld.so.conf.d/x86_64-linux-gnu.conf`)
+   but `ldconfig`'s cache had never been refreshed after install, so a
+   bare `dlopen("libVkLayer_profiler_layer.so")` (what the manifest's
+   relative `library_path` resolves to) failed. Running `ldconfig`
+   fixed it immediately — worth remembering as a real, non-obvious
+   install step, not assuming `cmake --install` alone is sufficient on
+   every system.
+4. With the cache refreshed, re-running `kke_demo` with
+   `KKE_ENABLE_GPU_PROFILER=ON` logged `GPU profiler layer
+   'VK_LAYER_PROFILER_unified' found and will be enabled`, and its real
+   overlay rendered on top of this engine's own frame — a genuine
+   screenshot showed `VkProfiler - llvmpipe (LLVM 20.1.2, 256 bits)`,
+   `Vulkan 1.2`, live `GPU Time: 34.03 ms` / `CPU Time: 0.02 ms` /
+   `Frame 94` / `25.1 fps`, and working Performance/Memory/Inspector/
+   Statistics/Settings tabs — correctly reading this engine's actual
+   device and actual per-frame timing, not placeholder UI.
+
+### Reproducing this yourself
+
+```bash
+# Linux build deps (see the layer's own README for the authoritative list)
+sudo apt-get install -y extra-cmake-modules libdrm-dev libxkbcommon-dev \
+    libx11-dev libxext-dev libxcb1-dev libxcb-shape0-dev
+
+git clone --recursive https://github.com/lstalmir/VulkanProfiler
+cd VulkanProfiler && mkdir cmake_build && cd cmake_build
+cmake .. -DCMAKE_BUILD_TYPE=Release && make all -j$(nproc)
+sudo cmake --install . --prefix /usr/local/
+sudo ldconfig   # do not skip this — see step 3 above
+
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DKKE_ENABLE_GPU_PROFILER=ON
+cmake --build build -j
+./build/bin/kke_demo   # the layer's overlay should appear on top of the engine's window
+```
+
+### Not yet done — the honest remainder
+
+- **`vkGetProfilerFrameDataEXT` was attempted, and reproducibly crashes
+  in this environment — a real, diagnosed finding, not an untried idea.**
+  The exact API is wired up correctly: function pointers loaded via
+  `vkGetDeviceProcAddr` (`VulkanDevice::loadGpuProfilerFunctions()`),
+  the real struct (`VkProfilerDataEXT`/`VkProfilerRegionDataEXT`) walked
+  recursively to count actual leaf draw/dispatch/copy commands
+  (`VulkanDevice::queryGpuProfilerFrameSummary()`), wired into
+  `StatsModule` to display and log. Calling it segfaults — confirmed via
+  `gdb` backtrace to be **inside the layer's own compiled code**
+  (`vkGetProfilerFrameDataEXT` itself), not this engine's code. Ruled
+  out before concluding that: it isn't a "too early" timing issue (still
+  crashes on the first call after 3+ real frames have already
+  presented, confirmed with an explicit frame counter); it isn't the
+  layer's background-threading option (`VKPROF_enable_threading=false`
+  made no difference); it isn't the `drawcall` sampling mode
+  specifically (`VKPROF_sampling_mode=commandbuffer`, the coarsest
+  mode, crashed identically). The layer's own overlay reads equivalent
+  data correctly (see the verified screenshot above), which is what
+  makes this specifically about calling the function from *application*
+  code in this environment (lavapipe software rendering + this build of
+  the layer), not evidence the layer itself is broken. Root-causing
+  further needs the layer's own debug symbols or source stepping — real
+  work, disproportionate to guess-and-check further. **The code is
+  written and disabled behind `#ifdef KKE_QUERY_GPU_PROFILER_DATA`** in
+  `StatsModule.cpp` rather than deleted, so re-attempting this (on a
+  different Vulkan implementation, a newer layer version, or with real
+  hardware instead of a software rasterizer) is a one-line change, not
+  a rewrite.
+- **No headless/CI story yet.** The layer's `output = trace` mode
+  (serializing to a JSON Event Trace Format file instead of an overlay)
+  is the obvious fit for the headless Xvfb verification this project
+  has used throughout, and for a future CI step — not wired up.
+- **The layer itself is not part of this repo** and can't sensibly be —
+  it's a large, platform-specific, system-installed artifact (like the
+  validation layer), not something `FetchContent` should vendor.
+  Anyone building this engine with `KKE_ENABLE_GPU_PROFILER=ON` needs to
+  build and install it separately, following the steps above.
+
+## Debugging: pause/step and per-module fault isolation
+
+Two related, verified features, both built around `Application`'s frame
+loop rather than bolted on separately.
+
+**Pause/step** (`Application::isPaused()`/`setPaused()`/`stepOneFrame()`,
+UI via `DebugControlModule`'s "Debug Control" panel): freezes
+`fixedUpdate`/`update`/`compute` — including GPU compute-driven
+simulation like `ParticleModule` — while rendering keeps presenting
+every frame regardless. The point is giving an external tool (RenderDoc,
+a Vulkan profiling layer, or just your own eyes) a frame that holds
+completely still instead of one that's still animating out from under
+you. "Step one frame" advances exactly one fixed tick + one `update()`
+call using the fixed tick length as a synthetic `dt` (not real
+wall-clock time, which would be meaningless while paused), then
+re-freezes. Verified, not assumed: two screenshots two seconds apart
+while paused came back pixel-identical (cube, chaotic particle
+positions, even the FPS counter — everything gated by the same pause
+flag); each "Step" click produced a small, bounded advance rather than a
+jump, confirmed by comparing consecutive screenshots.
+
+**Per-module fault isolation** (`Application::safeInvoke()`, every
+lifecycle call — `init`, `fixedUpdate`, `update`, `onEvent`, `compute`,
+`render`, `renderUi`, `shutdown` — for every module goes through it):
+a module that throws is logged with its name, which stage it was in,
+and the actual exception message (via the same spdlog logger every
+other module uses, at `error` level), recorded, and **never called
+again for the rest of the session — not even `shutdown()`**. That
+last part is deliberate: a module that has already misbehaved once
+isn't a module whose cleanup code should be trusted either.
+`DebugControlModule` shows every recorded failure in a bright red
+"Emergency Log" ImGui window that only appears once something has
+actually gone wrong. Verified with a real throw, not a hypothetical:
+added a temporary module that threw `std::runtime_error` on its 30th
+`update()` call, confirmed the process stayed alive, the exact expected
+log line appeared —
+
+```
+[ThrowTest][KKE Engine Demo][error]: disabled for the rest of this
+session after throwing during update(): deliberate test failure to
+verify fault isolation
+```
+
+— and the Emergency Log window rendered with that same information
+while the cube kept spinning, particles kept simulating, and every
+other panel kept working, then removed the test module afterward.
+
+**The honest limit of this**, stated plainly rather than glossed over:
+if a module's `init()` throws partway through creating GPU resources,
+that module's own destructor (still called normally later via
+`unique_ptr`, since C++ object lifetime isn't something `safeInvoke`
+can intercept) inherits whatever half-built state was left behind.
+Every module in this engine builds GPU resources through RAII wrappers
+(`Buffer`, `Pipeline`, etc.) specifically so a partial `init()` still
+leaves safely-destructible state — but a module that doesn't follow
+that pattern could still misbehave on destruction. Fault isolation
+reduces this risk; it can't eliminate it for code this engine doesn't
+control, and it was never going to — that's not a gap unique to this
+implementation, it's a fundamental limit of exception-based isolation
+in a language without memory/process sandboxing.
+
+### Clear errors for scripters, not just C++ exceptions
+
+Fault isolation (above) answers "does one bad module crash everything"
+— it doesn't answer "does the person who wrote the bad code understand
+what's wrong." A raw C++ exception message like `basic_string::at: __n
+(which is 5) >= this->size() (which is 3)` is precise and completely
+useless to someone who wrote a script and has never heard of
+`basic_string::at`. That's what `kke::EngineError`
+(`engine/include/kke/EngineError.h`) exists to fix.
+
+Any module — and, once it exists, the Lua scripting layer — can throw
+`EngineError` (or the `KKE_SCRIPT_ERROR(friendly, technical)` /
+`KKE_ENGINE_ERROR(friendly, technical)` convenience macros, which also
+splice in `__FILE__`/`__LINE__`) instead of a bare `std::runtime_error`.
+It carries **three things a bare exception can't**: a plain-language
+message, which of engine-code/script-code is likely at fault
+(`kke::ErrorSource`), and a file/line when known. `what()` still
+returns the technical text — `EngineError` is a real `std::exception`,
+so any code that doesn't know it's special (a generic `catch
+(std::exception&)`, plain logging) keeps working exactly as before.
+
+`Application::safeInvoke()` catches `EngineError` specifically (before
+the generic `std::exception` fallback) and records both messages,
+the source, and the location into `BrokenModuleInfo`.
+`DebugControlModule`'s Emergency Log shows the **friendly message as
+the headline**, a colored source badge (`SCRIPT ERROR` / `ENGINE
+ERROR` / `UNKNOWN SOURCE`), the file:line when available, and the
+technical message tucked behind a collapsed "Technical details" —
+visible for anyone who wants it, not forced on someone who doesn't.
+A plain `std::runtime_error` still works everywhere; it just can't
+offer any of the richer fields, and is honestly labeled `UNKNOWN
+SOURCE` rather than guessed at.
+
+Verified with both paths side by side, not just one:
+
+```
+[ScriptErrorTest][KKE Engine Demo][error]: disabled for the rest of this
+session after throwing during update() at .../ThrowTestModule.h:14 —
+The recipe needs more sugar than you gave it — check line 14.
+
+[PlainThrowTest][KKE Engine Demo][error]: disabled for the rest of this
+session after throwing during update(): a plain std::exception with no
+friendly-message split
+```
+
+— and on screen, the Emergency Log showed the first as an orange
+`[SCRIPT ERROR]` badge with the real file/line and the friendly
+message front and center (technical detail collapsed), and the second
+as a gray `[UNKNOWN SOURCE]` badge with just its one available message
+— no fabricated location, no invented friendly text standing in for
+something that was never provided.
+
+**What this doesn't solve yet**: there's no Lua scripting layer for
+this to actually serve its intended audience with today — a C++
+module author can use `EngineError` right now, but the "someone who
+isn't a C++ programmer" case this was built for needs the Lua binding
+layer (see Roadmap) to translate *its* errors (a bad script line, a
+missing value) into `EngineError` calls. This is the plumbing that
+layer will use, built and verified ahead of it existing, not a
+replacement for it.
+
 ## Performance / profiling tools
 
 `StatsModule` is the "how performant is this actually" panel: FPS, CPU
@@ -850,6 +1120,12 @@ true right now versus what's aspirational.
   file itself has never executed inside GitHub Actions — first real
   push should confirm it, since a sandboxed environment and a GitHub
   runner aren't guaranteed identical (package availability, etc.).
+- **`vkGetProfilerFrameDataEXT` into `StatsModule` and spdlog** — see
+  "GPU profiler (VulkanProfiler) integration." Written and functional
+  in structure, but disabled behind `KKE_QUERY_GPU_PROFILER_DATA` after
+  a real, diagnosed crash inside the layer's own code when calling it
+  from application code in this (lavapipe) environment. Re-enabling on
+  real hardware or a newer layer version is a one-line change away.
 - **RmlUi input wiring** would also unlock testing the marketplace
   card's eventual "launch this game" interaction, once that exists.
 - **Migrate remaining `std::cout`/`std::cerr` call sites to spdlog** —
@@ -1025,6 +1301,10 @@ This is also the actual path to a marketplace that's safe for
 third-party content — see "Game folder convention & marketplace"'s
 sandboxing caveat above; scripted (not compiled) game folders are the
 realistic route to that, not a smaller version of what exists today.
+When that binding layer gets built, its errors should surface through
+`kke::EngineError` (see "Clear errors for scripters" above) — that
+plumbing already exists and is verified, specifically so this doesn't
+need its own error-reporting mechanism invented later.
 
 Lua is fetched by CMake and called by zero lines of code today. Getting
 from here to "non-programmers can script games" needs, at minimum: (1)

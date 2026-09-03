@@ -19,6 +19,7 @@ option(ENGINE_ENABLE_LUA "Build with Lua scripting support" OFF) # wired later
 option(ENGINE_HEADLESS_TEST "Build the headless smoke-test target" ON)
 option(KKE_ENABLE_TESTS "Build the unit test suite (tests/)" ON)
 option(KKE_ENABLE_COVERAGE "Instrument builds for code coverage (gcc/clang --coverage). See README 'Test suite & coverage'." OFF)
+option(KKE_ENABLE_GPU_PROFILER "Request the VulkanProfiler layer (VK_LAYER_PROFILER_unified) at instance creation if installed. See README 'GPU profiler (VulkanProfiler) integration'." OFF)
 
 if(KKE_ENABLE_COVERAGE)
     if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
