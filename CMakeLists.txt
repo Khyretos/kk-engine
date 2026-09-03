@@ -17,6 +17,16 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 option(KKE_ENABLE_VALIDATION "Enable Vulkan validation layers in debug" ON)
 option(ENGINE_ENABLE_LUA "Build with Lua scripting support" OFF) # wired later
 option(ENGINE_HEADLESS_TEST "Build the headless smoke-test target" ON)
+option(KKE_ENABLE_TESTS "Build the unit test suite (tests/)" ON)
+option(KKE_ENABLE_COVERAGE "Instrument builds for code coverage (gcc/clang --coverage). See README 'Test suite & coverage'." OFF)
+
+if(KKE_ENABLE_COVERAGE)
+    if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+        message(WARNING "KKE_ENABLE_COVERAGE is most meaningful with -DCMAKE_BUILD_TYPE=Debug (no optimization skewing line counts).")
+    endif()
+    add_compile_options(--coverage -O0 -g)
+    add_link_options(--coverage)
+endif()
 
 include(FetchContent)
 
@@ -117,6 +127,72 @@ target_compile_definitions(imgui PUBLIC
 )
 
 # ---------------------------------------------------------------------------
+# RmlUi — HTML/CSS-inspired UI library (game-facing UI, not a debug tool
+# like ImGui). Requires a real font engine to initialise at all, so we use
+# its bundled FreeType backend (system package, found via find_package)
+# rather than a hand-written stub. See engine/include/kke/modules/UiModule.h
+# for exactly what is and isn't wired up yet — this is a multi-slice
+# integration, and rendering isn't live until a later slice.
+# ---------------------------------------------------------------------------
+set(RMLUI_FONT_ENGINE "freetype" CACHE STRING "" FORCE)
+set(RMLUI_SAMPLES OFF CACHE BOOL "" FORCE)
+set(RMLUI_LUA_BINDINGS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    rmlui
+    GIT_REPOSITORY https://github.com/mikke89/RmlUi.git
+    GIT_TAG        6.3
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(rmlui)
+
+# ---------------------------------------------------------------------------
+# nlohmann/json — the engine's one JSON library. Foundational rather than
+# optional: game.json manifests, the marketplace index, and (eventually)
+# save data are all specified to be JSON — see GameManifest.h and the
+# README's "Game folder convention & marketplace" section.
+# ---------------------------------------------------------------------------
+FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG        v3.11.3
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
+# ---------------------------------------------------------------------------
+# spdlog — the engine's one logging library. Async by design (see
+# engine/include/kke/Log.h): log calls push onto a queue consumed by a
+# background thread, so a burst of log lines never blocks the render/game
+# thread waiting on stdout I/O. Header+source, MIT licensed.
+# ---------------------------------------------------------------------------
+FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG        v1.14.1
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(spdlog)
+
+# ---------------------------------------------------------------------------
+# GoogleTest — the unit test framework for this engine's pure-logic code
+# (manifest parsing, marketplace dedup, text-escaping — see README "Test
+# suite & coverage"). Deliberately NOT used to unit-test Vulkan/GPU code;
+# that stays verified the way it already has been, by actually building
+# and running the engine headlessly against lavapipe.
+# ---------------------------------------------------------------------------
+if(KKE_ENABLE_TESTS)
+    set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+        googletest
+        GIT_REPOSITORY https://github.com/google/googletest.git
+        GIT_TAG        v1.15.2
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_MakeAvailable(googletest)
+endif()
+
+# ---------------------------------------------------------------------------
 # Lua — scripting hooks. Off by default until the engine actually calls into it.
 # ---------------------------------------------------------------------------
 if(ENGINE_ENABLE_LUA)
@@ -175,4 +251,19 @@ add_subdirectory(engine)
 # ---------------------------------------------------------------------------
 # App executable (the actual window + cube demo)
 # ---------------------------------------------------------------------------
-add_subdirectory(app)
+# ---------------------------------------------------------------------------
+# Games — each subdirectory of games/ is a self-contained "game folder"
+# (see README "Game folder convention & marketplace"). Only one is built
+# by default right now; a real multi-game build (or marketplace-driven
+# discovery) is tracked in the Roadmap, not implemented yet — this single
+# add_subdirectory is today's honest state, not a placeholder pretending
+# to be more general than it is.
+# ---------------------------------------------------------------------------
+add_subdirectory(games/kke_demo_game)
+
+# ---------------------------------------------------------------------------
+# Standalone smoke tests (no test framework wired in yet — see tests/).
+# ---------------------------------------------------------------------------
+if(KKE_ENABLE_TESTS)
+    add_subdirectory(tests)
+endif()

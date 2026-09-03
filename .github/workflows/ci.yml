@@ -1,0 +1,109 @@
+name: CI
+
+# Runs on every push and pull request — see README "Test suite &
+# coverage" for the reasoning behind this pipeline's shape: unit tests
+# cover pure logic (manifest parsing, marketplace dedup, text escaping)
+# with an enforced 85% line-coverage floor; Vulkan/GPU-touching code
+# stays verified the way this whole project has been built — by actually
+# compiling and running it headlessly against Mesa's lavapipe software
+# Vulkan device, not by mocking the Vulkan API.
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test-and-coverage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            cmake ninja-build \
+            libvulkan-dev vulkan-tools mesa-vulkan-drivers \
+            glslang-tools spirv-tools \
+            libfreetype-dev \
+            fonts-noto-core fonts-noto-color-emoji \
+            xvfb xdotool imagemagick lcov \
+            libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev \
+            pkg-config libgl1-mesa-dev libegl1-mesa-dev
+
+      # --- Plain build: this is what a contributor/CI should catch first,
+      # fast, before paying for a second coverage-instrumented build. ---
+      - name: Configure (plain)
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build (plain)
+        run: cmake --build build -j
+
+      - name: Run unit tests (plain)
+        run: ./build/bin/kke_tests
+
+      - name: Headless smoke test — does the engine actually run?
+        run: |
+          Xvfb :99 -screen 0 1280x720x24 &
+          sleep 2
+          cd build/bin
+          rm -f imgui.ini
+          DISPLAY=:99 SDL_VIDEODRIVER=x11 timeout 8 ./kke_demo > run.log 2>&1
+          exit_code=$?
+          cat run.log
+          # timeout's own SIGTERM produces exit code 124 — that's success
+          # here (the engine ran for the full duration without crashing).
+          # Any other non-zero exit is a real failure.
+          if [ "$exit_code" -ne 124 ] && [ "$exit_code" -ne 0 ]; then
+            echo "kke_demo exited with unexpected code $exit_code"
+            exit 1
+          fi
+          if grep -qi "Fatal error" run.log; then
+            echo "kke_demo logged a fatal error"
+            exit 1
+          fi
+
+      # --- Coverage build: separate build directory, deliberately not
+      # reusing the plain one (mixing instrumented and non-instrumented
+      # objects corrupts gcov data). ---
+      - name: Configure (coverage)
+        run: cmake -B build-coverage -G Ninja -DCMAKE_BUILD_TYPE=Debug -DKKE_ENABLE_COVERAGE=ON
+
+      - name: Build (coverage)
+        run: cmake --build build-coverage -j
+
+      - name: Run unit tests (coverage)
+        run: ./build-coverage/bin/kke_tests
+
+      - name: Run headless demo (coverage) — exercises Vulkan/GPU code paths
+        run: |
+          pkill Xvfb || true
+          sleep 1
+          Xvfb :99 -screen 0 1280x720x24 &
+          sleep 2
+          cd build-coverage/bin
+          rm -f imgui.ini
+          DISPLAY=:99 SDL_VIDEODRIVER=x11 timeout 8 ./kke_demo > run.log 2>&1 || true
+          cat run.log
+
+      - name: Generate coverage report
+        run: |
+          lcov --capture --directory build-coverage --output-file coverage_full.info \
+            --ignore-errors mismatch,unused,negative,inconsistent,gcov,source
+          lcov --extract coverage_full.info "*/engine/src/*" \
+            --output-file coverage_engine.info --ignore-errors unused
+          lcov --summary coverage_engine.info | tee coverage_summary.txt
+          genhtml coverage_engine.info --output-directory coverage_html
+
+      - name: Enforce 85% line coverage floor
+        run: |
+          percent=$(grep "lines" coverage_summary.txt | grep -oP '\d+\.\d+(?=%)')
+          echo "Measured line coverage: ${percent}%"
+          awk -v p="$percent" 'BEGIN { if (p+0 < 85.0) { print "Coverage " p "% is below the 85% floor"; exit 1 } else { print "Coverage " p "% meets the 85% floor" } }'
+
+      - name: Upload coverage HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage_html/

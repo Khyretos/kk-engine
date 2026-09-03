@@ -15,6 +15,14 @@ class VulkanDevice;
 // (wireframe, skybox, UI-in-world, ...) are new configs, not new classes.
 struct PipelineConfig {
     bool useVertexInput = true;          // false = shader synthesizes its own vertices (e.g. fullscreen tri, SSBO-driven particles)
+    // If useVertexInput is true and this is left empty, the pipeline uses
+    // kke::Vertex's layout (position+color, see Mesh.h) — the common case
+    // for this engine's own meshes. Set both of these explicitly instead
+    // when binding a *different* vertex format (e.g. RmlUi's own Vertex
+    // struct in RmlVulkanRenderInterface) — they must describe the same
+    // buffer layout the caller will actually bind.
+    std::vector<VkVertexInputBindingDescription> customVertexBindings;
+    std::vector<VkVertexInputAttributeDescription> customVertexAttributes;
     VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
     VkFrontFace frontFace = VK_FRONT_FACE_CLOCKWISE;

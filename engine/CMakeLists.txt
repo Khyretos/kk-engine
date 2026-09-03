@@ -10,9 +10,18 @@ set(ENGINE_SOURCES
     src/DebugUi.cpp
     src/ShaderUtils.cpp
     src/Application.cpp
+    src/RmlVulkanRenderInterface.cpp
+    src/GameManifest.cpp
+    src/MarketplaceIndex.cpp
+    src/RmlTextSafety.cpp
+    src/Log.cpp
+    src/HardwareCheck.cpp
     src/modules/GridModule.cpp
     src/modules/StatsModule.cpp
     src/modules/ParticleModule.cpp
+    src/modules/OrbitCameraModule.cpp
+    src/modules/UiModule.cpp
+    src/modules/MarketplaceUiModule.cpp
 )
 
 set(ENGINE_HEADERS
@@ -27,10 +36,20 @@ set(ENGINE_HEADERS
     include/kke/DebugUi.h
     include/kke/ShaderUtils.h
     include/kke/Module.h
+    include/kke/Capabilities.h
     include/kke/Application.h
+    include/kke/RmlVulkanRenderInterface.h
+    include/kke/GameManifest.h
+    include/kke/MarketplaceIndex.h
+    include/kke/RmlTextSafety.h
+    include/kke/Log.h
+    include/kke/HardwareCheck.h
     include/kke/modules/GridModule.h
     include/kke/modules/StatsModule.h
     include/kke/modules/ParticleModule.h
+    include/kke/modules/OrbitCameraModule.h
+    include/kke/modules/UiModule.h
+    include/kke/modules/MarketplaceUiModule.h
 )
 
 add_library(kke_engine STATIC ${ENGINE_SOURCES} ${ENGINE_HEADERS})
@@ -46,6 +65,9 @@ target_link_libraries(kke_engine PUBLIC
     glm::glm
     stb
     imgui
+    RmlUi::Core
+    nlohmann_json::nlohmann_json
+    spdlog::spdlog
 )
 
 target_compile_definitions(kke_engine PUBLIC

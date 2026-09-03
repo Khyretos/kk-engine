@@ -46,6 +46,12 @@ VkSurfaceKHR Window::createSurface(VkInstance instance) const {
 }
 
 bool Window::pollEvents(const EventCallback& onEvent) {
+    // Deltas are per-frame — reset them here, then accumulate below as
+    // events for this frame come in.
+    m_mouseState.deltaX = 0.0f;
+    m_mouseState.deltaY = 0.0f;
+    m_mouseState.scrollDelta = 0.0f;
+
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         if (onEvent) onEvent(event);
@@ -63,6 +69,20 @@ bool Window::pollEvents(const EventCallback& onEvent) {
                     m_shouldClose = true;
                 }
                 break;
+            case SDL_EVENT_MOUSE_MOTION:
+                m_mouseState.deltaX += event.motion.xrel;
+                m_mouseState.deltaY += event.motion.yrel;
+                break;
+            case SDL_EVENT_MOUSE_WHEEL:
+                m_mouseState.scrollDelta += event.wheel.y;
+                break;
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            case SDL_EVENT_MOUSE_BUTTON_UP: {
+                bool down = (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN);
+                if (event.button.button == SDL_BUTTON_LEFT) m_mouseState.leftButtonDown = down;
+                if (event.button.button == SDL_BUTTON_RIGHT) m_mouseState.rightButtonDown = down;
+                break;
+            }
             default:
                 break;
         }

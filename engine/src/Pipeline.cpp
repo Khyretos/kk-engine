@@ -32,16 +32,23 @@ Pipeline::Pipeline(VulkanDevice& device, VkRenderPass renderPass,
     VkPipelineShaderStageCreateInfo stages[] = { vertStage, fragStage };
 
     VkVertexInputBindingDescription binding{};
-    std::array<VkVertexInputAttributeDescription, 2> attributes{};
+    std::array<VkVertexInputAttributeDescription, 2> defaultAttributes{};
     VkPipelineVertexInputStateCreateInfo vertexInput{};
     vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     if (config.useVertexInput) {
-        binding = Vertex::bindingDescription();
-        attributes = Vertex::attributeDescriptions();
-        vertexInput.vertexBindingDescriptionCount = 1;
-        vertexInput.pVertexBindingDescriptions = &binding;
-        vertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributes.size());
-        vertexInput.pVertexAttributeDescriptions = attributes.data();
+        if (!config.customVertexBindings.empty()) {
+            vertexInput.vertexBindingDescriptionCount = static_cast<uint32_t>(config.customVertexBindings.size());
+            vertexInput.pVertexBindingDescriptions = config.customVertexBindings.data();
+            vertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(config.customVertexAttributes.size());
+            vertexInput.pVertexAttributeDescriptions = config.customVertexAttributes.data();
+        } else {
+            binding = Vertex::bindingDescription();
+            defaultAttributes = Vertex::attributeDescriptions();
+            vertexInput.vertexBindingDescriptionCount = 1;
+            vertexInput.pVertexBindingDescriptions = &binding;
+            vertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(defaultAttributes.size());
+            vertexInput.pVertexAttributeDescriptions = defaultAttributes.data();
+        }
     }
     // else: leave vertexInput zeroed — the vertex shader synthesizes its own
     // vertices (fullscreen triangle, gl_VertexIndex into an SSBO, etc).

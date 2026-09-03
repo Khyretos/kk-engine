@@ -1,0 +1,32 @@
+{
+  "id": "engine.kke.demo",
+  "title": "KKE Engine Demo",
+  "description": "The Kreative Kompas Engine's own building-block demo: a spinning cube, a reference grid, a GPU-simulated particle fountain, seed-based destruction with network-replication discovery, and an orbit camera — all as independent kke::Module instances. Not a game so much as a proof that the engine's pieces work together.",
+  "version": "0.1.0",
+  "icon": "",
+  "banner": "",
+  "tags": ["demo", "engine-sample", "sandbox"],
+  "engine_version": "0.1.0",
+  "modules": [
+    "Cube",
+    "Grid",
+    "OrbitCamera",
+    "Particles",
+    "Destruction",
+    "Network",
+    "UI",
+    "Stats"
+  ],
+  "requirements": {
+    "minimum": {
+      "vram_mb": 128,
+      "vulkan_api_version": "1.0"
+    },
+    "recommended": {
+      "vram_mb": 512,
+      "vulkan_api_version": "1.2",
+      "required_device_features": ["largePoints"]
+    },
+    "notes": "Best-effort, developer-declared estimates, not automatically measured from the code — see README 'Estimated hardware requirements'. The 20,000-particle GPU compute simulation and RmlUi glyph-atlas textures are the main memory/feature drivers; largePoints affects particle sprite size only and degrades gracefully without it."
+  }
+}

@@ -1,6 +1,7 @@
 #include "kke/VulkanDevice.h"
 #include "kke/Window.h"
 #include "kke/VulkanCheck.h"
+#include "kke/Log.h"
 
 #include <cstring>
 #include <iostream>
@@ -44,8 +45,10 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
     VkDebugUtilsMessageTypeFlagsEXT /*type*/,
     const VkDebugUtilsMessengerCallbackDataEXT* data,
     void* /*userData*/) {
-    if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-        std::cerr << "[vulkan] " << data->pMessage << std::endl;
+    if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+        log::get("VulkanDevice")->error("{}", data->pMessage);
+    } else if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+        log::get("VulkanDevice")->warn("{}", data->pMessage);
     }
     return VK_FALSE;
 }
@@ -84,7 +87,7 @@ VulkanDevice::~VulkanDevice() {
 
 void VulkanDevice::createInstance(bool enableValidation) {
     if (enableValidation && !checkValidationLayerSupport()) {
-        std::cerr << "[vulkan] validation layers requested but not available; continuing without them\n";
+        log::get("VulkanDevice")->warn("validation layers requested but not available; continuing without them");
         enableValidation = false;
         m_validationEnabled = false;
     }
@@ -207,7 +210,7 @@ void VulkanDevice::pickPhysicalDevice() {
     VkPhysicalDeviceProperties props{};
     vkGetPhysicalDeviceProperties(m_physicalDevice, &props);
     m_timestampPeriodNs = static_cast<double>(props.limits.timestampPeriod);
-    std::cout << "[vulkan] using device: " << props.deviceName << std::endl;
+    log::get("VulkanDevice")->info("using device: {}", props.deviceName);
 }
 
 void VulkanDevice::createLogicalDevice(bool enableValidation) {

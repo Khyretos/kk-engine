@@ -14,6 +14,17 @@ class Window {
 public:
     using EventCallback = std::function<void(const SDL_Event&)>;
 
+    // Per-frame mouse state. Deltas are "since the last pollEvents() call",
+    // not since button-down — accumulate them yourself (see
+    // OrbitCameraModule) if you need total drag distance.
+    struct MouseState {
+        float deltaX = 0.0f;
+        float deltaY = 0.0f;
+        float scrollDelta = 0.0f;
+        bool leftButtonDown = false;
+        bool rightButtonDown = false;
+    };
+
     Window(const std::string& title, uint32_t width, uint32_t height);
     ~Window();
 
@@ -35,12 +46,16 @@ public:
     bool wasResized() const { return m_resized; }
     void clearResizedFlag() { m_resized = false; }
 
+    // Valid for the frame between this pollEvents() call and the next.
+    const MouseState& mouseState() const { return m_mouseState; }
+
     SDL_Window* handle() const { return m_window; }
 
 private:
     SDL_Window* m_window = nullptr;
     bool m_shouldClose = false;
     bool m_resized = false;
+    MouseState m_mouseState;
 };
 
 } // namespace kke

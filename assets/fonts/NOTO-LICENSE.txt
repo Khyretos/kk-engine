@@ -1,0 +1,11 @@
+NotoSans-Regular.ttf is from the Noto Fonts project (Google), licensed
+under the SIL Open Font License, Version 1.1 (OFL-1.1) — genuinely
+open-source and redistributable, matching this engine's no-closed-source
+dependency rule.
+
+Source: https://github.com/googlei18n/noto-fonts
+License text: https://scripts.sil.org/OFL
+
+This file was obtained via Ubuntu's `fonts-noto-core` package for
+convenience during development; the upstream source and full OFL-1.1
+license text should be consulted for redistribution details.
