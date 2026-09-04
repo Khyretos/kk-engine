@@ -131,6 +131,7 @@ bool UiModule::EngineSystemInterface::LogMessage(Rml::Log::Type type, const Rml:
 }
 
 void UiModule::init(Application& app) {
+    m_app = &app;
     m_renderInterface = std::make_unique<RmlVulkanRenderInterface>(app.device(), app.renderer().renderPass());
 
     Rml::SetSystemInterface(&m_systemInterface);
@@ -178,6 +179,14 @@ void UiModule::init(Application& app) {
 
 void UiModule::update(const UpdateContext& /*ctx*/) {
     if (m_context) {
+        // By this point in the frame the swapchain has already been
+        // recreated if a resize happened — see the class comment for
+        // why this per-frame check, not the SDL resize event directly.
+        VkExtent2D extent = m_app->renderer().extent();
+        Rml::Vector2i currentSize = m_context->GetDimensions();
+        if (currentSize.x != static_cast<int>(extent.width) || currentSize.y != static_cast<int>(extent.height)) {
+            m_context->SetDimensions(Rml::Vector2i(static_cast<int>(extent.width), static_cast<int>(extent.height)));
+        }
         m_context->Update();
     }
 }

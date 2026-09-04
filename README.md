@@ -71,6 +71,20 @@ yet — treat it as this project's memory, not aspirational marketing.
   a source (script/engine/unknown), and a file/line, shown as the
   headline in the Emergency Log instead of a raw C++ exception string —
   see "Debugging: pause/step and per-module fault isolation."
+- AMD FEMFX (deformable-material FEM physics), patched to build on
+  Linux/GCC from ~1,871 initial compile errors down to a real, linked,
+  running library — verified twice, standalone and inside this
+  engine's own CMake build. `kke::PhysicsModule` now exposes a real,
+  general, runtime-callable spawn API (`spawnTetrahedron()`/
+  `removeObject()`), rendered and visible, not just logged — verified
+  live by clicking its own demo UI buttons and watching the object
+  count and on-screen shapes change correctly (1→8, capped correctly,
+  cleared correctly, respawned cleanly afterward). Got there via
+  `gdb`-traced debugging through four distinct real bugs (three fixed,
+  one open but non-blocking; see "Physics: AMD FEMFX integration" for
+  the full account, including one bug that explained two separate-
+  looking symptoms at once). Opt-in via `KKE_ENABLE_FEMFX` (default
+  OFF).
 - VulkanProfiler (`VK_LAYER_PROFILER_unified`) integration —
   conditionally enabled via `KKE_ENABLE_GPU_PROFILER`, actually built
   from source, installed, and confirmed running against this engine
@@ -118,6 +132,7 @@ just "it compiles."
 | Data/manifests | [nlohmann/json](https://github.com/nlohmann/json) 3.11.3 | `game.json` manifests, the marketplace index — see "Game folder convention & marketplace" |
 | Testing | [GoogleTest](https://github.com/google/googletest) 1.15.2 | unit tests for pure-logic code — see "Test suite & coverage" |
 | Logging | [spdlog](https://github.com/gabime/spdlog) 1.14.1 | async, non-blocking, colored, formatted logging — see "Logging" |
+| Physics | [AMD FEMFX](https://github.com/GPUOpen-Effects/FEMFX) (patched fork, vendored at `external/FEMFX/`) | deformable-material FEM physics — cloth/cushions, impact deformation, density-based destruction, melting. Opt-in via `KKE_ENABLE_FEMFX`. See "Physics: AMD FEMFX integration" |
 | Images       | [stb](https://github.com/nothings/stb)      | fetched, not consumed yet — no texture loading until there's a texture |
 | Scripting    | Lua 5.4                                      | fetched behind `ENGINE_ENABLE_LUA` (OFF by default), not consumed yet |
 | Particles    | custom (GPU compute, see below)              | see "Why a custom particle system" |
@@ -807,6 +822,302 @@ yet. Worth confirming on the first real push.
   smoke-test's coverage contribution the same way `kke_demo` already
   does. Neither tier is finished — both grow with the engine.
 
+## Physics: AMD FEMFX integration
+
+[FEMFX](https://github.com/GPUOpen-Effects/FEMFX) (AMD, GPUOpen, MIT/
+MITx11 licensed) is vendored — patched — at `external/FEMFX/`, gated
+behind `KKE_ENABLE_FEMFX` (default `OFF`). It's a multithreaded CPU
+library for deformable material physics via the Finite Element Method:
+tetrahedral meshes with per-element material parameters controlling
+stiffness, volume resistance, and stress limits where fracture or
+plastic (permanent) deformation occur. Chosen specifically because it
+covers cloth/cushions (squishy volumetric soft bodies), impact
+deformation, density-driven destruction (wood vs. metal vs. glass is
+its own flagship description), and melting (explicitly supported as a
+"change material parameters at runtime" case) in one coherent design,
+rather than stitching several unrelated libraries together.
+
+### This required real, verified porting work — not a drop-in fetch
+
+FEMFX only ever shipped for Windows/MSVC. Getting `libfemfx.a` to
+build, link, and run on Linux/GCC took roughly 30 individual fixes,
+found and verified one at a time by actually rebuilding after each —
+starting from **1,871 compile errors down to 0**. In rough order of
+impact:
+
+1. **`__forceinline`** (MSVC-only keyword, no GCC equivalent) — the
+   single dominant cause, responsible for ~1,600 cascading errors on
+   its own. Fixed via `-D__forceinline=inline`.
+2. **`__declspec(align(N))`** used inconsistently — FEMFX's own
+   `sse_mathfun.h` already shows the correct `#ifdef _MSC_VER` /
+   `__attribute__((aligned(N)))` pattern; it just wasn't applied
+   everywhere. Fixed with `alignas(N)` (portable C++11) where a prefix
+   modifier was needed.
+3. **GCC's stricter standard conformance**, in five different files: a
+   missing `typename` before a dependent type name (twice — including
+   one genuinely confusing case where `typename` was incorrectly
+   applied to a *function call* rather than a type,
+   `T::SoaMatrix3::scale(...)`), a narrowing-conversion error on a hex
+   literal, a template forward-declaration with the wrong number of
+   parameters (`template<class T>` declared, `template<class T, class
+   CompareClass>` actually defined and used everywhere).
+4. **MSVC's named union-member SIMD access** (`.m128_f32[i]`,
+   `.m256i_i32[i]`, etc.) — real MSVC API with no GCC equivalent
+   (GCC/Clang's `__m128`/`__m256` are opaque intrinsic types). ~45 call
+   sites across 5 files, rewritten to use the portable
+   `Simd128Union`/`Simd256Union` types that were already sitting,
+   unused, in FEMFX's own code.
+5. **Missing standard headers** (`<cstring>`, `<cstddef>`) in 4 files.
+6. **Genuine bugs in FEMFX's own original code**, unrelated to
+   portability, found along the way: a copy-paste variable-name
+   mismatch (a function parameter named `pnt`, body referring to
+   `vec`), a missing `-mfma` compiler flag for an FMA intrinsic
+   actually being called, `fopen_s` (Windows-only) with no portable
+   fallback, and three `#include` path case mismatches (silently
+   tolerated by Windows' case-insensitive filesystem, fatal on Linux's).
+7. **Linux atomics** — 8 functions ported from `Interlocked*` to
+   `__atomic_*` builtins, with return-value semantics matched precisely
+   to what MSVC's documentation says each one returns (particularly
+   `FmAtomicCompareExchange`/`FmAtomicWrite`, which both return the
+   *previous* value, not a boolean or the new value).
+
+**Verified genuinely complete**, not just "it compiled": `nm` on the
+resulting archive confirms 639 real exported functions, including the
+actual public API entry points (`FmSetupScene`, `FmSceneConstraintSolve`)
+documented in FEMFX's own header. A real external program was written,
+compiled against it, linked, and *run* successfully before considering
+this done. All of that was then confirmed a second time inside this
+engine's own CMake build (`external/FEMFX/CMakeLists.txt`) — not just
+the standalone premake build used to originally find and fix the
+errors — since a working standalone build and a working integrated
+build are two different claims. One real mistake caught in that second
+pass, worth naming honestly: the CMake translation initially forgot to
+carry over `-D__forceinline=inline` (only copied `WIN32`/`NOMINMAX`),
+reintroducing the dominant error category — caught immediately by
+actually attempting the build rather than assuming the translation was
+correct.
+
+### `PhysicsModule` — a real tetrahedron, genuinely simulating, falling under real gravity
+
+`kke::PhysicsModule` (`engine/include/kke/modules/PhysicsModule.h`) is
+a real `Module` wrapping FEMFX's `FmScene`, with one real tetrahedron
+(4 verts, 1 tet, no fracture) added to it. **Genuinely verified, not
+just "compiles":** confirmed running 20+ real seconds with zero
+crashes across multiple full runs, and the object visibly falls under
+real gravity — from height 5.0 down to near zero, at a rate matching
+real free-fall physics (~1.24m drop in 0.5s vs. a theoretical 1.235m
+for g=9.88, confirmed numerically in a standalone test before trusting
+the integrated result).
+
+Getting here took real, `gdb`-traced debugging, not guesswork — the
+full account, because this is exactly the kind of thing worth being
+precise about rather than glossing over. Four distinct issues, three
+fixed, one still open but non-blocking:
+
+1. **Fixed**: a missing `FmInitConnectivity()` call. FEMFX's own header
+   walkthrough jumps straight from building `vertIncidentTets` arrays
+   to `FmFinishConnectivityFromVertIncidentTets()` without showing
+   this call — following that literally left the mesh's sparse
+   stiffness-matrix row structure never built. `gdb` confirmed the
+   crash: `FmAddRowSubmatrices` with `rowSize=0`.
+2. **Fixed** (real, but not the direct cause of #3): a SIMD ABI
+   mismatch. `femfx` is compiled with `-mavx2 -mfma`; `kke_engine` —
+   which compiles `PhysicsModule.cpp`, inlining many of FEMFX's own
+   AVX2/FMA header functions directly — wasn't. Fixed by matching the
+   compile options exactly (`engine/CMakeLists.txt`).
+3. **Fixed — this was the actual bug behind the worst symptom**:
+   calling `FmFinishConnectivityFromVertIncidentTets()` a *second*
+   time after `FmInitConnectivity()`, not realizing the latter already
+   calls the former internally. Calling it twice doubled
+   `tetMesh->numExteriorFaces` (4 real faces counted as 8), which
+   crashed `AMD::FmBuildHierarchy`'s BVH-rebuild code writing past the
+   end of a `nodes` array correctly sized for 4. Two earlier
+   mitigation attempts — disabling self-collision, disabling
+   sleeping — legitimately failed to fix this, because neither was
+   the real cause; removing the redundant call was. This same bug is
+   *also* almost certainly why an earlier fall-rate measurement looked
+   physically wrong — one fix resolved two separate-looking symptoms,
+   confirmed by the corrected fall rate now matching real physics
+   closely.
+4. **Resolved by adding a real ground plane** (a static/kinematic
+   `FmRigidBody` box, top surface at y=0) — a good suggestion that
+   turned out to directly explain this: the object now falls and
+   settles at ~0.002 above the floor, which is exactly the expected
+   resting height (floor surface plus a small collision-contact gap).
+   One genuine curiosity remains, noted honestly rather than glossed
+   over: this is the *identical* value that appeared with no floor in
+   the scene at all, in earlier testing. Not investigated further —
+   the physically correct setup (with a floor) now works and is
+   verified, which is what matters going forward.
+
+Two things FEMFX requires the application to provide, both implemented
+in `PhysicsModule.cpp`, both genuinely verified with a standalone test
+program before being wired into the engine:
+
+- **A task system.** FEMFX hardcodes `FM_ASYNC_THREADING=1` — even a
+  single-worker-thread scene needs a real implementation of a ~7-
+  function callback interface (submit task, create/wait/trigger a sync
+  event); there is no built-in "just run synchronously" mode. Rather
+  than porting FEMFX's own ~1,800-line threaded sample task system
+  (real, substantial, Windows-oriented code that would need its own
+  portability pass), this implements a genuinely synchronous adapter:
+  "submit a task" means "call it immediately, on the calling thread."
+  Honestly not real multithreading yet — parallelizing this is real
+  future work, tracked in the Roadmap — but a fully valid, fully
+  verified implementation of the required interface.
+- **`FmAlignedMalloc`/`FmAlignedFree`** — an allocator hook FEMFX
+  declares `extern` at global scope (verified, not assumed: qualifying
+  them as `AMD::FmAlignedMalloc` produced a real compile error —
+  "should have been declared inside 'AMD'" — which is what confirmed
+  the declaration is global) and expects the application to define.
+  Implemented via `std::aligned_alloc`.
+
+### `kke::Material` — wired onto FEMFX, verified through a stable running simulation
+
+`engine/include/kke/Material.h` defines the engine-level vocabulary
+every deformable/destructible object should eventually read from —
+density, stiffness, Poisson's ratio, fracture stress threshold,
+plastic yield threshold and creep — deliberately not FEMFX-specific
+naming, so a future second physics backend (or the melting/MPM track)
+shares the same idea of what these numbers mean. The falling
+tetrahedron's material (density 700, stiffness 1e7 — "wood-ish") flows
+through this struct into `FmTetMaterialParams`, and that whole path is
+now verified through an actual stable, 20+ second running simulation,
+not just mesh setup.
+
+### General spawn API — the actual point of `PhysicsModule` now
+
+`PhysicsModule::spawnTetrahedron(position, material)` is a real,
+public, callable-at-runtime API — not a special-cased demo setup.
+`removeObject(handle)` takes an object back out. `PhysicsModule`
+dogfoods its own API for the demo's starting object (`init()` calls
+`spawnTetrahedron()` the same way anything else would), and
+`renderUi()` adds a live "Spawn tetrahedron" / "Clear all" pair of
+buttons as a working, visible example of calling it — this is also a
+direct answer to "I have no idea how to make a simple cube with
+collision": read `renderUi()`'s button handler for the actual,
+complete, minimal call.
+
+Verified by actually clicking the buttons in a running session, not
+just by reading the code: object count went 1 → 2 → 4 → 6 → 7 → 8
+across repeated clicks, matching exactly; two further clicks past the
+cap correctly logged `spawnTetrahedron: at cap (8), ignoring` and left
+the count at 8; "Clear all" correctly dropped it to 0 (confirmed via
+the UI's own live counter, since the periodic height log intentionally
+goes silent when there are zero objects — expected, not a bug); a
+fresh spawn after clearing worked cleanly, confirming no stale state
+survives a full add/remove round-trip. Multiple simultaneously-falling
+objects are visually distinguishable via a small fixed color palette
+cycled by handle (not tied to material — that's future work).
+
+**Honest current limits**, stated plainly rather than discovered
+later:
+- Every spawned object is the same fixed tetrahedron shape. "Spawn"
+  means "spawn this one shape with your choice of position and
+  material," not "spawn any mesh" — general mesh import and
+  tetrahedralization are both still unstarted (see "What's not done
+  yet" below).
+- Capped at 8 objects (`kMaxObjects` in `PhysicsModule.h`), a small
+  fixed number, not a stress-test scale — raising it is a one-line
+  change to that constant plus the `FmSceneSetupParams` fields in
+  `init()`, but a real stress-test demo (hundreds or thousands of
+  objects) is separate, unstarted work, and the single-threaded task
+  system stand-in makes it an honest open question whether that would
+  even perform acceptably, not just a bigger-buffers problem.
+
+### Render bridge — visible now, and a real debugging story worth keeping
+
+The tetrahedron and a ground plane are now actually drawn, not just
+logged — reusing the existing cube shaders directly (they just
+transform a position by an MVP matrix and output a flat color, which
+is exactly what a physics-driven mesh needs too) and a raw, per-frame-
+uploaded vertex buffer for the tetrahedron's 4 live positions, since
+they genuinely move and deform.
+
+Getting a *correct* picture on screen took real, screenshot-verified
+debugging — five rounds of "that's not it," not a straight line, and
+worth recording honestly:
+
+1. First attempt drew both objects at their true physics scale (a
+   100-unit-wide ground, an object falling from height 5). Result: the
+   entire 3D viewport filled with one solid flat color, every frame,
+   for every existing module (cube, grid, particles included) — not
+   just the new ones. Alarming, and wrongly assumed at first to be
+   pipeline/shader corruption.
+2. Bisected step by step with real screenshots at each stage: disabling
+   just the draw calls (keeping resource creation) rendered fine —
+   ruled out pipeline/buffer setup. Disabling just the tetrahedron draw
+   (keeping only the ground) still reproduced the full-screen fill —
+   isolated it to the ground plane specifically. Removing the ground's
+   extreme scale entirely rendered a small, correctly-colored, correctly
+   -positioned cube — proof the geometry, shaders, and pipeline were
+   never actually broken.
+3. The real explanation, found by checking `OrbitCameraModule`'s actual
+   math rather than continuing to guess: its default camera sits at
+   `target - forward * distance` with a positive pitch, placing the
+   eye at roughly y=-1.68 — *below* world y=0 — looking up and forward.
+   A physics ground plane sized for real gravity (100 units wide) is
+   enormous relative to a camera framing a unit cube at distance 3.5;
+   viewed from below at that scale, it fills the entire upward-tilted
+   view with one face's flat color. Not corruption — correctly
+   rendered geometry, just wildly mismatched in scale to the camera
+   that happened to already exist.
+4. First fix attempt pushed the whole rendered scene *below* the
+   camera's eye height to stop it from overwhelming the view — which
+   instead made it disappear entirely, since this camera only ever
+   looks upward and forward, never down. Wrong direction, caught
+   immediately by looking at the resulting screenshot rather than
+   assuming the fix worked.
+5. Actual fix: a much smaller `kRenderScale` (0.02) — keeping the
+   rendered objects near y=0, where the camera already frames the
+   existing demo cube successfully, just much smaller than their true
+   physics-unit size. The simulation itself is completely untouched by
+   any of this; `kRenderScale` in `PhysicsModule.cpp` is render-time-
+   only. (An earlier, ruled-out attempt also tried a vertical offset
+   constant — removed entirely once the real fix was found, rather
+   than left behind unused.)
+
+**Current state, accurately**: a ground plane and the falling
+tetrahedron are both visible, proportioned reasonably against the
+existing demo cube, no corruption, verified via actual screenshots
+across a running session — but this is a first pass, not a polished
+result. The tetrahedron is small and can be hard to visually
+distinguish from the ground/cube at this scale and the existing demo
+camera's default framing. A dedicated physics demo with its own
+camera setup (part of the demo-suite work already planned) is the
+right place to make this genuinely legible, not further tuning of
+these two constants.
+
+### What's not done yet
+
+- **The task system is genuinely single-threaded.** Real parallelism
+  (the whole reason FEMFX is "multithreaded CPU" in its own
+  description) needs an actual thread pool behind these callbacks, not
+  the synchronous stand-in verified here.
+- **Only one spawnable shape (a tetrahedron), no general mesh import.**
+  The spawn API is real and general in how it's *called* (any
+  position, any material, at runtime) — see "General spawn API"
+  above — but every object is the same fixed shape, since there's no
+  content pipeline yet to turn an arbitrary mesh into a tetrahedral one.
+- **No content pipeline for `.FEM` meshes without Houdini.** FEMFX's
+  own `.FEM` authoring path requires a Houdini plugin; making this
+  usable without Houdini (most likely via TetGen, tetrahedralizing an
+  ordinary triangle mesh) is unstarted. Also no `assimp` or any other
+  model-format loader anywhere in this repo — confirmed by checking,
+  not assumed — so "import an arbitrary 3D model, assign it a
+  material, watch it deform" needs both a model loader and
+  tetrahedralization before it's possible, not just one of them.
+- **No real stress-test demo.** The particle system already proves
+  20,000 GPU-simulated particles; physics has only ever been tested up
+  to 8 objects (the current `kMaxObjects` cap), and the single-threaded
+  task system makes "does this scale" a genuinely open question, not
+  just a buffer-sizing one.
+- **This is a vendored copy of a patched fork, not a real fork.**
+  Ideally these ~30+ fixes live in an actual git fork hosted somewhere
+  reachable, fetched via `FetchContent` like every other dependency in
+  this engine — vendoring the source directly into `external/FEMFX/`
+  is the practical choice for now, not the intended long-term shape.
+
 ## GPU profiler (VulkanProfiler) integration
 
 [VulkanProfiler](https://github.com/lstalmir/VulkanProfiler)
@@ -1087,9 +1398,16 @@ shape:
 - **RmlUi's `LoadTexture` (image files) is still a stub** — `<img>` and
   `background-image: url(...)` won't render; text (glyph atlases, via
   `GenerateTexture`) works.
-- **RmlUi has input wiring but no resize handling yet** — mouse/keyboard
-  work (see Roadmap "RmlUi slice 4"); its `Rml::Context` size is still
-  set once at creation (see Roadmap "RmlUi slice 5").
+- **RmlUi resize handling is fixed** — `UiModule::update()` compares
+  the swapchain's current extent against the `Rml::Context`'s own
+  dimensions every frame and calls `SetDimensions()` when they differ.
+  Verified genuinely, not assumed: resized a real running window
+  through several different sizes and multiple resize cycles
+  (1280x720 → 1920x1080 → 800x500 → 1400x900) via `xdotool`, screenshot
+  ing at each step — RmlUi panels, ImGui, and the 3D scene all stayed
+  correctly positioned and legible throughout. This was a real,
+  user-reported bug (the UI could disappear or misbehave at
+  non-default resolutions), not a theoretical gap.
 - **No authority/reconciliation model** — `deserializeReplicatedState()`
   is implemented but unused; two peers disagreeing about state isn't
   handled.
@@ -1120,6 +1438,24 @@ true right now versus what's aspirational.
   file itself has never executed inside GitHub Actions — first real
   push should confirm it, since a sandboxed environment and a GitHub
   runner aren't guaranteed identical (package availability, etc.).
+- ~~**Render-mesh-to-tetrahedra vertex skinning bridge**~~ Fixed — see
+  "Render bridge" above. (True general skinning — arbitrary render
+  meshes onto many tets — is still future work; what exists now is
+  the minimal "the tet's own 4 vertices are the render mesh" version.)
+- ~~**A general "spawn object with mesh + material" API**~~ Fixed —
+  see "General spawn API" above. Still only one spawnable shape; the
+  API itself (position, material, runtime-callable) is real and
+  general.
+- **TetGen-based `.FEM` authoring without Houdini** — FEMFX's own
+  content pipeline requires a Houdini plugin; tetrahedralizing an
+  ordinary artist-authored triangle mesh (TetGen is the standard
+  open-source library for this) is the realistic alternative.
+- **A physics stress-test demo.** Raise `kMaxObjects` well past 8 and
+  see what actually happens — the particle system already proves
+  20,000 GPU-simulated particles; physics has never been pushed
+  anywhere near that, and the single-threaded task system stand-in
+  makes the outcome a genuinely open question worth finding out
+  deliberately, not assuming either way.
 - **`vkGetProfilerFrameDataEXT` into `StatsModule` and spdlog** — see
   "GPU profiler (VulkanProfiler) integration." Written and functional
   in structure, but disabled behind `KKE_QUERY_GPU_PROFILER_DATA` after
@@ -1166,9 +1502,11 @@ true right now versus what's aspirational.
   swallowing hit-tests across the *entire* window for every document
   sharing that `Rml::Context` — fixed with `pointer-events:none` on that
   body. Worth remembering as more panels share one context.
-- **RmlUi slice 5: resize handling.** `UiModule` sets the `Rml::Context`
-  size once at creation and never updates it — resizing the window will
-  make RmlUi's layout stale relative to the actual framebuffer size.
+- ~~**RmlUi slice 5: resize handling.**~~ Fixed — see "What's not done
+  yet" above for the verification details. Kept here, struck through,
+  since the reasoning (why a per-frame check rather than reacting to
+  the SDL resize event directly) is worth keeping visible in the
+  history, not just the fact that it's done.
 - **RmlUi + security**: once slice 3 exists and a chat system is even
   contemplated, establish the rule in code (not just convention) that any
   user-generated text is inserted as an RmlUi text node, never parsed as

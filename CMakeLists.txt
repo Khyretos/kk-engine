@@ -18,6 +18,7 @@ option(KKE_ENABLE_VALIDATION "Enable Vulkan validation layers in debug" ON)
 option(ENGINE_ENABLE_LUA "Build with Lua scripting support" OFF) # wired later
 option(ENGINE_HEADLESS_TEST "Build the headless smoke-test target" ON)
 option(KKE_ENABLE_TESTS "Build the unit test suite (tests/)" ON)
+option(KKE_ENABLE_FEMFX "Build the vendored, patched AMD FEMFX deformable-physics library. See README 'Physics: AMD FEMFX integration'." OFF)
 option(KKE_ENABLE_COVERAGE "Instrument builds for code coverage (gcc/clang --coverage). See README 'Test suite & coverage'." OFF)
 option(KKE_ENABLE_GPU_PROFILER "Request the VulkanProfiler layer (VK_LAYER_PROFILER_unified) at instance creation if installed. See README 'GPU profiler (VulkanProfiler) integration'." OFF)
 
@@ -247,6 +248,14 @@ endfunction()
 # ---------------------------------------------------------------------------
 # Engine core library
 # ---------------------------------------------------------------------------
+# FEMFX (if enabled) must be added before engine/, since engine's own
+# CMakeLists.txt links against the femfx target — found by actually
+# hitting this ordering issue rather than assuming it, see README
+# "Physics: AMD FEMFX integration."
+if(KKE_ENABLE_FEMFX)
+    add_subdirectory(external/FEMFX)
+endif()
+
 add_subdirectory(engine)
 
 # ---------------------------------------------------------------------------

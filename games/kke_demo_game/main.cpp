@@ -9,6 +9,9 @@
 #include "kke/modules/UiModule.h"
 #include "kke/modules/MarketplaceUiModule.h"
 #include "kke/modules/DebugControlModule.h"
+#if KKE_ENABLE_FEMFX
+#include "kke/modules/PhysicsModule.h"
+#endif
 #include "CubeModule.h"
 #include "DestructionModule.h"
 #include "NetworkModule.h"
@@ -66,6 +69,9 @@ int main() {
         app.addModule<kke::UiModule>();
         app.addModule<kke::MarketplaceUiModule>("marketplace");
         app.addModule<kke::DebugControlModule>();
+#if KKE_ENABLE_FEMFX
+        app.addModule<kke::PhysicsModule>();
+#endif
         app.addModule<kke::StatsModule>();
 
         app.run();

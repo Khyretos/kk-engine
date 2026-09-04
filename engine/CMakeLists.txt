@@ -23,6 +23,7 @@ set(ENGINE_SOURCES
     src/modules/UiModule.cpp
     src/modules/MarketplaceUiModule.cpp
     src/modules/DebugControlModule.cpp
+    src/modules/PhysicsModule.cpp
 )
 
 set(ENGINE_HEADERS
@@ -53,6 +54,8 @@ set(ENGINE_HEADERS
     include/kke/modules/UiModule.h
     include/kke/modules/MarketplaceUiModule.h
     include/kke/modules/DebugControlModule.h
+    include/kke/modules/PhysicsModule.h
+    include/kke/Material.h
 )
 
 add_library(kke_engine STATIC ${ENGINE_SOURCES} ${ENGINE_HEADERS})
@@ -88,6 +91,25 @@ if(KKE_ENABLE_GPU_PROFILER)
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_GPU_PROFILER=1)
 else()
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_GPU_PROFILER=0)
+endif()
+
+if(KKE_ENABLE_FEMFX)
+    target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_FEMFX=1)
+    target_link_libraries(kke_engine PUBLIC femfx)
+    # MUST match external/FEMFX/CMakeLists.txt's own compile options
+    # exactly. FEMFX's headers are full of `inline` functions using
+    # AVX2/FMA SIMD intrinsics directly (FmInitVector3, FmInitMatrix3,
+    # etc.) — any translation unit that includes AMD_FEMFX.h and calls
+    # them, like PhysicsModule.cpp, inlines and compiles that SIMD code
+    # itself. Compiling it with different -m flags than the femfx
+    # library itself was built with is a real, reproduced ABI mismatch
+    # across the vector-register calling convention — found as an
+    # actual segfault (that a stack-lifetime fix did NOT resolve,
+    # ruling that theory out first) before landing on this as the
+    # actual cause, not assumed.
+    target_compile_options(kke_engine PUBLIC -mavx2 -mfma)
+else()
+    target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_FEMFX=0)
 endif()
 
 if(WIN32)

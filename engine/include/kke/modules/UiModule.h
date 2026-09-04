@@ -27,7 +27,16 @@ namespace kke {
 //     stb_image, which is a separate, independent piece of work.
 //   - Loading documents from actual .rml/.rcss files on disk (the in-
 //     memory test document is a deliberately small stand-in).
-//   - Resizing the Rml::Context when the window resizes.
+//
+// Resizing IS handled now: update() compares the current swapchain
+// extent against the context's own dimensions every frame and calls
+// SetDimensions() when they differ. Checked once per frame rather than
+// reacting to the SDL resize event directly, specifically to sidestep
+// an event-ordering question that wasn't worth resolving cleverly: by
+// the time update() runs, the swapchain has already been recreated for
+// this frame (if needed), so its extent is always trustworthy here —
+// whereas reacting to the resize event itself would require knowing
+// whether that recreation has already happened yet in the same frame.
 //
 // Input (mouse/keyboard) IS wired now, via onEvent() — see its
 // implementation for the SDL-to-RmlUi key mapping, which covers common
@@ -65,6 +74,7 @@ private:
     Rml::Context* m_context = nullptr;
     Rml::ElementDocument* m_testDocument = nullptr;
     bool m_initialised = false;
+    Application* m_app = nullptr; // needed each frame in update() to detect window resize
 };
 
 } // namespace kke
