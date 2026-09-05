@@ -42,6 +42,12 @@ struct RenderContext {
     glm::vec3 cameraPos;
     float aspectRatio;
     VkRenderPass renderPass;
+    // Set 0, binding 0 in every lit pipeline — see kke::LightingBuffer.
+    // Threaded through here rather than requiring every module to
+    // separately cache an Application* just to reach
+    // app.lightingBuffer(), matching how view/proj/cameraPos already
+    // flow through this same struct instead of a lookup.
+    VkDescriptorSet lightingDescriptorSet = VK_NULL_HANDLE;
 };
 
 // A dependency one module declares on another, by concrete type. Declaring

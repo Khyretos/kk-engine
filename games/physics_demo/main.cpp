@@ -57,6 +57,19 @@ int main() {
         // spawn loop) so they don't all land in one overlapping pile.
         app.addModule<kke::PhysicsModule>(/*renderScale=*/1.0f, /*initialObjectCount=*/6);
 
+        // A real demonstration of multi-light support (see README
+        // "Lighting"), not just a single hardcoded light left at its
+        // default -- a cool-toned fill light from roughly the
+        // opposite side of the default warm key light, low intensity,
+        // so it softens shadowed faces without washing out the real
+        // directional shading the key light provides.
+        kke::Light& fillLight = app.lighting().lights[1];
+        fillLight.enabled = true;
+        fillLight.isDirectional = true;
+        fillLight.direction = glm::normalize(glm::vec3(0.6f, -0.3f, 0.5f));
+        fillLight.color = glm::vec3(0.55f, 0.65f, 0.85f); // cool blue-ish fill
+        fillLight.intensity = 0.35f;
+
         app.addModule<kke::UiModule>();
         app.addModule<kke::DebugControlModule>();
         app.addModule<kke::StatsModule>();

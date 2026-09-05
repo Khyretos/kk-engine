@@ -164,7 +164,38 @@ still incomplete (`vkGetProfilerFrameDataEXT` querying real per-frame
 data is written but disabled behind a separate, off-by-default flag
 after a real, diagnosed crash -- see that section for the full account).
 
-## 5. If something still doesn't work
+## 5. Cross-machine build benchmarking
+
+```bash
+cmake -P tools/build_benchmark.cmake everything   # or "default"
+```
+
+One command, works identically on Windows/Linux/macOS (it's a CMake
+script, not bash/PowerShell — CMake is already required either way, so
+this needs nothing extra). It **deletes any existing `build/`
+directory first** — this matters: a partially-built or stale `build/`
+would make the timing numbers meaningless for comparing against
+someone else's from-scratch build, so every run genuinely starts clean.
+
+It configures, builds, and runs the full test suite, timing each step
+and counting warnings/errors directly from the captured compiler
+output — not just the exit code. Everything gets written to a single,
+timestamped, hostname-tagged file under `benchmark_logs/` (e.g.
+`benchmark_logs/build_log_20260905_042808_yourhostname.txt`), with a
+short summary at both the top (system info: OS, CPU core counts,
+memory, CMake version) and bottom (configure/build/test times and
+pass/fail), plus the complete raw output below that for anyone who
+needs to dig into a specific failure.
+
+**Send that whole log file back** for a direct, apples-to-apples
+comparison against results from other machines — different OS,
+different CPU, different core count, integrated vs. discrete GPU, and
+eventually laptop and mobile hardware too. This tool covers build and
+test performance only; a separate *runtime* performance benchmark
+(frame rates, physics throughput across different GPUs) is real,
+planned future work, not something this script measures.
+
+## 6. If something still doesn't work
 
 **`Fatal error: Vulkan error (-6) in: vkCreateInstance(...)`** -- this
 was a real bug, found on exactly this kind of report (real AMD

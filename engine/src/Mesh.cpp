@@ -11,8 +11,8 @@ VkVertexInputBindingDescription Vertex::bindingDescription() {
     return desc;
 }
 
-std::array<VkVertexInputAttributeDescription, 2> Vertex::attributeDescriptions() {
-    std::array<VkVertexInputAttributeDescription, 2> attrs{};
+std::array<VkVertexInputAttributeDescription, 3> Vertex::attributeDescriptions() {
+    std::array<VkVertexInputAttributeDescription, 3> attrs{};
     attrs[0].binding = 0;
     attrs[0].location = 0;
     attrs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
@@ -22,6 +22,11 @@ std::array<VkVertexInputAttributeDescription, 2> Vertex::attributeDescriptions()
     attrs[1].location = 1;
     attrs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
     attrs[1].offset = offsetof(Vertex, color);
+
+    attrs[2].binding = 0;
+    attrs[2].location = 2;
+    attrs[2].format = VK_FORMAT_R32G32B32_SFLOAT;
+    attrs[2].offset = offsetof(Vertex, normal);
 
     return attrs;
 }
@@ -50,7 +55,11 @@ void Mesh::draw(VkCommandBuffer cmd) const {
 Mesh Mesh::createCube(VulkanDevice& device) {
     // Each face gets its own 4 vertices (not shared) so every face can have a
     // distinct flat color — makes it immediately obvious on screen that this
-    // is a cube rotating in 3D, not a flat quad.
+    // is a cube rotating in 3D, not a flat quad. Not sharing vertices per-face
+    // also means each face gets its own exact outward normal below, rather
+    // than needing to average normals at shared corners the way a smooth-
+    // shaded mesh would — the right approach for a cube, where every face is
+    // meant to look flat, not rounded.
     const glm::vec3 red{1.0f, 0.2f, 0.2f};
     const glm::vec3 green{0.2f, 1.0f, 0.2f};
     const glm::vec3 blue{0.2f, 0.2f, 1.0f};
@@ -58,25 +67,32 @@ Mesh Mesh::createCube(VulkanDevice& device) {
     const glm::vec3 cyan{0.2f, 1.0f, 1.0f};
     const glm::vec3 magenta{1.0f, 0.2f, 1.0f};
 
+    const glm::vec3 nPosZ{0.0f, 0.0f, 1.0f};
+    const glm::vec3 nNegZ{0.0f, 0.0f, -1.0f};
+    const glm::vec3 nPosX{1.0f, 0.0f, 0.0f};
+    const glm::vec3 nNegX{-1.0f, 0.0f, 0.0f};
+    const glm::vec3 nPosY{0.0f, 1.0f, 0.0f};
+    const glm::vec3 nNegY{0.0f, -1.0f, 0.0f};
+
     std::vector<Vertex> vertices = {
         // +Z (front) - red
-        {{-0.5f, -0.5f,  0.5f}, red}, {{0.5f, -0.5f,  0.5f}, red},
-        {{ 0.5f,  0.5f,  0.5f}, red}, {{-0.5f, 0.5f,  0.5f}, red},
+        {{-0.5f, -0.5f,  0.5f}, red, nPosZ}, {{0.5f, -0.5f,  0.5f}, red, nPosZ},
+        {{ 0.5f,  0.5f,  0.5f}, red, nPosZ}, {{-0.5f, 0.5f,  0.5f}, red, nPosZ},
         // -Z (back) - green
-        {{ 0.5f, -0.5f, -0.5f}, green}, {{-0.5f, -0.5f, -0.5f}, green},
-        {{-0.5f,  0.5f, -0.5f}, green}, {{ 0.5f,  0.5f, -0.5f}, green},
+        {{ 0.5f, -0.5f, -0.5f}, green, nNegZ}, {{-0.5f, -0.5f, -0.5f}, green, nNegZ},
+        {{-0.5f,  0.5f, -0.5f}, green, nNegZ}, {{ 0.5f,  0.5f, -0.5f}, green, nNegZ},
         // +X (right) - blue
-        {{0.5f, -0.5f,  0.5f}, blue}, {{0.5f, -0.5f, -0.5f}, blue},
-        {{0.5f,  0.5f, -0.5f}, blue}, {{0.5f,  0.5f,  0.5f}, blue},
+        {{0.5f, -0.5f,  0.5f}, blue, nPosX}, {{0.5f, -0.5f, -0.5f}, blue, nPosX},
+        {{0.5f,  0.5f, -0.5f}, blue, nPosX}, {{0.5f,  0.5f,  0.5f}, blue, nPosX},
         // -X (left) - yellow
-        {{-0.5f, -0.5f, -0.5f}, yellow}, {{-0.5f, -0.5f,  0.5f}, yellow},
-        {{-0.5f,  0.5f,  0.5f}, yellow}, {{-0.5f,  0.5f, -0.5f}, yellow},
+        {{-0.5f, -0.5f, -0.5f}, yellow, nNegX}, {{-0.5f, -0.5f,  0.5f}, yellow, nNegX},
+        {{-0.5f,  0.5f,  0.5f}, yellow, nNegX}, {{-0.5f,  0.5f, -0.5f}, yellow, nNegX},
         // +Y (top) - cyan
-        {{-0.5f, 0.5f,  0.5f}, cyan}, {{0.5f, 0.5f,  0.5f}, cyan},
-        {{ 0.5f, 0.5f, -0.5f}, cyan}, {{-0.5f, 0.5f, -0.5f}, cyan},
+        {{-0.5f, 0.5f,  0.5f}, cyan, nPosY}, {{0.5f, 0.5f,  0.5f}, cyan, nPosY},
+        {{ 0.5f, 0.5f, -0.5f}, cyan, nPosY}, {{-0.5f, 0.5f, -0.5f}, cyan, nPosY},
         // -Y (bottom) - magenta
-        {{-0.5f, -0.5f, -0.5f}, magenta}, {{0.5f, -0.5f, -0.5f}, magenta},
-        {{ 0.5f, -0.5f,  0.5f}, magenta}, {{-0.5f, -0.5f,  0.5f}, magenta},
+        {{-0.5f, -0.5f, -0.5f}, magenta, nNegY}, {{0.5f, -0.5f, -0.5f}, magenta, nNegY},
+        {{ 0.5f, -0.5f,  0.5f}, magenta, nNegY}, {{-0.5f, -0.5f,  0.5f}, magenta, nNegY},
     };
 
     std::vector<uint32_t> indices;

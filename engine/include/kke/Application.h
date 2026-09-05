@@ -5,8 +5,10 @@
 #include "kke/DebugUi.h"
 #include "kke/Module.h"
 #include "kke/EngineError.h"
+#include "kke/LightingBuffer.h"
 
 #include <glm/glm.hpp>
+#include <array>
 #include <functional>
 #include <memory>
 #include <string>
@@ -27,6 +29,49 @@ struct Camera {
     float fovDegrees = 45.0f;
     float nearPlane = 0.1f;
     float farPlane = 100.0f;
+};
+
+// One light — either directional (uses `direction`, ignores `position`)
+// or a point light (uses `position`, ignores `direction`). Kept as one
+// struct with a type flag rather than two separate types: the GPU-side
+// UBO this feeds needs a fixed-layout array either way, and a shared
+// CPU-side struct keeps LightingBuffer's upload code simple (see
+// LightingBuffer.h/.cpp — Renderer owns one, updated once per frame
+// from whatever's in Application::lighting() when render() runs).
+struct Light {
+    bool enabled = false;
+    bool isDirectional = true;
+    glm::vec3 direction{0.0f, -1.0f, 0.0f}; // meaningful only if isDirectional
+    glm::vec3 position{0.0f};               // meaningful only if !isDirectional
+    glm::vec3 color{1.0f, 1.0f, 1.0f};
+    float intensity = 1.0f;
+};
+
+// Same reasoning as Camera just above: nearly every module that draws
+// real geometry wants to read the current lights, so this lives on
+// Application directly rather than behind a getModule<>() lookup.
+// kMaxLights is a real, fixed limit (not "as many as you want") because
+// the GPU-side UBO this feeds has a fixed-size array — see
+// LightingBuffer.h for exactly how that's laid out and why 4 was
+// chosen (a small, genuinely useful number for a first real multi-
+// light slice, not an arbitrary round number).
+struct Lighting {
+    static constexpr int kMaxLights = 4;
+    std::array<Light, kMaxLights> lights;
+    glm::vec3 ambientColor{0.15f, 0.15f, 0.15f}; // flat fill light so unlit faces read as dim, not pure black
+
+    Lighting() {
+        // A sensible default so a demo that never touches lighting at
+        // all still looks like the single-light version this replaced,
+        // not suddenly pitch black — matches this project's own
+        // "verify no regression" discipline rather than assuming a
+        // silent behavior change is fine.
+        lights[0].enabled = true;
+        lights[0].isDirectional = true;
+        lights[0].direction = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f));
+        lights[0].color = glm::vec3(1.0f, 0.98f, 0.92f);
+        lights[0].intensity = 1.0f;
+    }
 };
 
 // Recorded when a module throws during any lifecycle call — see
@@ -119,6 +164,8 @@ public:
     Renderer& renderer() { return *m_renderer; }
     VulkanDevice& device() { return m_renderer->device(); }
     Camera& camera() { return m_camera; }
+    Lighting& lighting() { return m_lighting; }
+    LightingBuffer& lightingBuffer() { return *m_lightingBuffer; }
 
     // --- Debug pause/step ---
     // Freezes simulation (fixedUpdate/update stop advancing) while still
@@ -150,6 +197,8 @@ private:
     std::unique_ptr<Renderer> m_renderer; // created after window, needs it for the surface
     std::unique_ptr<DebugUi> m_debugUi;
     Camera m_camera;
+    Lighting m_lighting;
+    std::unique_ptr<LightingBuffer> m_lightingBuffer;
     float m_fixedDt;
 
     std::vector<std::unique_ptr<Module>> m_modules;

@@ -38,7 +38,22 @@ yet — treat it as this project's memory, not aspirational marketing.
 - A **module system** (`kke::Module` + `kke::Application`) that drives
   everything else — see "Architecture" below
 - A spinning cube (`CubeModule`) — the original milestone, ported into
-  the module shape
+  the module shape. **A real, reported rendering bug was found and
+  fixed here**: with the default backface culling, one triangle of the
+  cube's top face would intermittently vanish at certain rotation
+  angles — confirmed via real screenshots (background grid lines
+  visible right through the gap), not just described. Every face's
+  vertex winding checks out correctly by hand (cross-product against
+  each face's own outward normal, all six faces) and the depth-test
+  configuration is standard, so the actual runtime culling decision
+  depends on something in the view/projection handedness that static
+  analysis didn't capture — not fully explained, but empirically fixed
+  and verified: six screenshots across a full rotation with culling
+  disabled show a completely solid cube every time, matching the same
+  six moments that showed the gap with culling on. Same pattern this
+  codebase already uses for `PhysicsModule`'s own rendered geometry
+  (see "Physics: AMD FEMFX integration") — culling is simply off for
+  this small demo geometry rather than reverse-engineered further.
 - A depth-correct reference grid (`GridModule`) so you have a fixed sense
   of scale and perspective in the scene
 - Mouse-driven camera control (`OrbitCameraModule`) — left-drag to orbit,
@@ -157,6 +172,130 @@ just "it compiles."
 All dependencies are fetched from source via CMake `FetchContent` — same
 version on every platform, no system package hunting.
 
+## Lighting — a real multi-light system, verified visually
+
+**A genuine multi-light system exists now, not a single hardcoded
+light**: `kke::Light`/`kke::Lighting` on `Application` (mirroring the
+existing `Camera` pattern — most modules want to read this, so it
+lives on `Application` directly rather than behind a `getModule<>()`
+lookup) hold up to 4 directional or point lights plus an ambient
+color, configurable from any game's own code. A new `LightingBuffer`
+class owns the actual GPU uniform buffer and descriptor set feeding
+this into every lit shader, updated once per frame and shared by every
+module that draws lit geometry — `RenderContext` now carries the
+descriptor set through to `render()`, the same way `view`/`proj`/
+`cameraPos` already did. `cube.frag` loops over all 4 lights doing
+real Blinn-Phong shading (diffuse **and** specular highlights, not
+just flat diffuse) for whichever are enabled.
+
+**Verified as genuinely multiple lights, not just one moved into a
+UBO**: `games/physics_demo` now runs a warm key light plus a second,
+cooler-toned fill light from roughly the opposite side — confirmed
+with real screenshots that the floor is visibly, measurably brighter
+with both lights active than with the single default light alone, the
+one comparison that actually distinguishes "two lights blending" from
+"a second light silently being ignored."
+
+**A real, substantial crash found and fixed getting here — worth the
+honest account**: after building all of this and confirming it
+compiled clean, `kke_demo` started, logged its hardware check
+successfully, and then died with **no error message at all** — just
+silently gone. `gdb -batch -ex run -ex bt` (not guessing) traced it to
+`vkCreateGraphicsPipelines` segfaulting deep inside the Vulkan driver,
+called from `DestructionModule::init()` — a *third* consumer of the
+shared `cube.vert`/`cube.frag` shaders, alongside `CubeModule` and
+`PhysicsModule`, that got completely missed when the shaders started
+requiring a light descriptor set and a larger push-constant struct.
+Its pipeline was being created with neither, an invalid mismatch
+between what the shader now declares and what the pipeline layout
+actually provides — validation layers aren't available in this
+project's sandboxed test environment to catch that cleanly, so it
+crashed instead of erroring. Found every consumer this time by
+actually searching for `cube.vert.spv`/`cube.frag.spv` across the
+whole codebase (three files, not two) rather than fixing one crash and
+assuming that was the only one — fixed all three consistently, then
+re-verified: `kke_demo`'s cube, its destruction-fragment explosion
+(triggered live, screenshotted mid-flight), and `physics_demo`'s
+ground and tetrahedra all render correctly with real, visible shading.
+
+**Two real, honest simplifications in this system, not oversights**:
+- Normals are transformed by `mat3(model)` (rotation + scale, ignoring
+  translation), not the mathematically general inverse-transpose. This
+  is exactly correct for rotation and uniform scale — everything this
+  engine currently draws — and only becomes wrong under non-uniform
+  scale. Checked directly for the one real non-uniform-scale case that
+  exists (the physics ground's thin slab, scaled differently on Y than
+  X/Z): its normals are all axis-aligned, and an axis-aligned normal
+  under a diagonal (even non-uniform) scale matrix stays exactly
+  correct after normalizing — so this simplification happens to be
+  exact here too, not just "close enough." Worth revisiting properly
+  if a future mesh needs actual non-uniform scale with a
+  non-axis-aligned normal.
+- Physics objects didn't have real per-vertex normals before this
+  slice at all — adding a `normal` field to the shared `Vertex` struct
+  without also computing real values for `PhysicsModule`'s tetrahedra
+  would have left them lit by uninitialized memory. Fixed by summing
+  each vertex's adjacent face normals (weighted by face area, via the
+  un-normalized cross product) and normalizing once — correct,
+  meaningful shading for real exterior-facing geometry, not full
+  smooth-shading correctness across a mesh's interior (which doesn't
+  matter, since interior faces are never visible).
+- Camera position (needed for the specular half-vector) is threaded
+  through the lighting UBO rather than push constants — push constants
+  are already at 128 bytes with `mvp`+`model`, the commonly-guaranteed
+  minimum on some hardware. Not perfectly semantically "lighting" data,
+  a pragmatic, documented choice given that real constraint.
+
+See "What's still ahead" further down for the real remaining plan —
+shadows, PBR, a way to add point lights dynamically from gameplay code
+at runtime (the current API sets fixed lights at startup) — none of
+which this system attempts yet.
+
+## What's still ahead for lighting
+
+Still entirely unbuilt, checked directly rather than assumed: shadows
+of any kind, PBR materials (roughness/metallic workflow), and a way
+for gameplay code to add/remove lights dynamically at runtime rather
+than configuring the fixed 4-slot array at startup. Building all of
+that out is still genuinely substantial work — Vulkan gives no
+plug-and-play lighting the way some higher-level engines do; every
+piece has to be written.
+
+**The real plan, and the exact resources to build it from** — recorded
+here specifically so both a human and an AI picking this project back
+up have the same starting point, not scattered notes:
+
+- **[Sascha Willems' Vulkan Samples](https://github.com/SaschaWillems/Vulkan)**
+  — the reference implementation for nearly everything this engine
+  will eventually need: deferred shading (many dynamic lights
+  efficiently), shadow mapping (directional/omnidirectional/cascaded),
+  and a full PBR pipeline. Working, runnable Vulkan code, not just
+  theory — the first place to look for "how does a real Vulkan engine
+  actually implement X."
+- **[LearnOpenGL](https://learnopengl.com/)** — the math and theory
+  (Blinn-Phong, attenuation, PBR) transfers almost directly to Vulkan
+  even though the code examples are OpenGL/GLSL. The best place to
+  actually *understand* the lighting equations before implementing
+  them, rather than just copying a sample.
+- **[vkguide.dev](https://vkguide.dev/)** — a from-scratch modern
+  Vulkan renderer walkthrough, particularly strong on compute shaders
+  and efficient buffer management — relevant for light culling once
+  there's more than one or two lights on screen.
+
+**The architectural direction**: deferred rendering (or clustered
+forward rendering once there are enough lights to matter) — render
+geometry data (positions, normals, colors/material properties) into a
+G-buffer first, then compute all lighting in a second pass that reads
+those textures. This keeps performance reasonable with many lights,
+rather than recomputing full lighting per-object per-light in a single
+forward pass.
+
+**What real PBR content will need that isn't here yet**:
+[fastgltf](https://github.com/spnda/fastgltf) — a modern glTF 2.0
+loader that captures PBR material data (roughness/metallic maps)
+directly. Not yet added as a dependency; needed once there's an actual
+lighting pipeline for it to feed data into, not before.
+
 ## Build
 
 **See `INSTRUCTIONS.md` for the real, complete setup guide** — exact
@@ -168,6 +307,21 @@ Boost detection quirk, and a real Vulkan crash that this project's
 original sandboxed development environment never surfaced. All of
 that is fixed now (see "Real hardware findings, fixed" below) and
 documented properly in `INSTRUCTIONS.md`, not just patched quietly.
+
+**Cross-machine build/test benchmarking**: `cmake -P tools/
+build_benchmark.cmake everything` — one genuinely OS-agnostic command
+(a CMake script, so it needs nothing beyond CMake itself on Windows/
+Linux/macOS alike) that wipes any existing `build/` directory first
+(a stale one would make timing comparisons meaningless), then
+configures, builds, and runs the full test suite, timing each step and
+counting real warnings/errors from the captured output. Writes one
+timestamped, hostname-tagged log file to `benchmark_logs/` — see
+INSTRUCTIONS.md "Cross-machine build benchmarking" for the full
+picture, including why this is a CMake script rather than bash/
+PowerShell. Verified against both a genuine success and a genuine
+failure (a real, reproducible configure failure — this sandbox can't
+reach `lua.org` — correctly stopped early with the real error captured
+in the log, rather than plowing ahead or failing silently).
 
 The short version, once system packages are installed:
 
@@ -861,12 +1015,13 @@ tests → headless smoke test (does `kke_demo` run 8 seconds under Xvfb +
 lavapipe without crashing or logging a fatal error) → coverage-
 instrumented build → unit tests again → headless demo run again (so
 GPU code paths that only execute at runtime count) → `lcov`/`genhtml` →
-**fail the build if line coverage drops below 85%**. Not run in this
-sandboxed session (no GitHub Actions runner here) — validated by running
-every individual command above by hand and confirming the exact parsing
-logic CI uses against real output before writing it into the workflow
-file, but the workflow itself hasn't executed in GitHub's infrastructure
-yet. Worth confirming on the first real push.
+**fail the build if line coverage drops below 85%**. Now genuinely
+confirmed running on GitHub's real infrastructure, not just validated
+by hand locally — and the first real run found a real bug in the
+workflow script itself (a `bash -e`/errexit gotcha in the smoke-test
+step's exit-code handling, not the engine), found by reading the
+actual failure log and reproducing it locally before fixing — see
+"Immediate next slices" further down for the full account.
 
 ### What this doesn't cover yet
 
@@ -1343,6 +1498,23 @@ step — first with the ground disabled entirely (proving the six
 falling tetrahedra themselves render correctly, clearly distinguishable
 by color and shape), then with the clamp at increasingly smaller
 values until the floor read as a floor rather than a wall of color. A
+
+**A real, reported "objects float above the floor" bug, found after
+that — a second mistake in the same block of code, not a leftover from
+the first fix.** The ground's Y translation was computed BEFORE its
+thickness was clamped down, using a fixed `-0.5 * renderScale`
+regardless of how thin the clamp then made the box — at
+`renderScale=1.0`, that left the rendered floor's top surface at
+`y=-0.475`, while an object actually rests at `y≈0.002` (the real
+physics contact surface). A visible ~0.475-unit gap between where
+objects visually landed and where the floor was drawn, exactly
+matching what got reported. Fixed by computing the thickness first and
+deriving the translation from it, so the rendered top surface is
+always exactly `y=0` regardless of how the clamp scales the box.
+Verified with real screenshots before and after — objects visibly
+resting flush on the floor now, not floating above it — and a
+regression check against `kke_demo_game`'s own much smaller
+`renderScale=0.02` ground confirmed no change there.
 regression screenshot of `kke_demo_game` afterward confirmed no visual
 change there, and — a genuine bonus, not engineered for — its
 Marketplace panel now shows "# 2 games," correctly auto-discovering
@@ -1812,12 +1984,22 @@ true right now versus what's aspirational.
 
 ### Immediate next slices (each independently buildable/runnable)
 
-- **Confirm the CI workflow actually runs on GitHub's infrastructure.**
-  `.github/workflows/ci.yml` was written and its coverage-threshold
-  parsing logic verified locally against real output, but the workflow
-  file itself has never executed inside GitHub Actions — first real
-  push should confirm it, since a sandboxed environment and a GitHub
-  runner aren't guaranteed identical (package availability, etc.).
+- ~~**Confirm the CI workflow actually runs on GitHub's infrastructure.**~~
+  Confirmed — and it found a real bug on the very first real run, not a
+  clean pass. The "Headless smoke test" step failed with "Process
+  completed with exit code 124" despite that step's own script being
+  written specifically to treat 124 (from `timeout 8 ./kke_demo`) as
+  success. Root cause, confirmed by reproducing it locally under the
+  exact same `bash -e` GitHub Actions uses: errexit aborts a script
+  immediately when a bare command on its own line returns non-zero —
+  `timeout`'s 124 killed the script *before* `exit_code=$?` or the
+  check meant to accept 124 ever ran. Fixed with `set +e`/`set -e`
+  bracketing just that one command, verified by reproducing both the
+  broken and fixed behavior locally against the exact same shell
+  invocation before pushing anything. The build (625/625 objects) and
+  all 40 tests had already passed cleanly on the real runner before
+  this — the engine itself was never the problem, only this one
+  script's exit-code handling.
 - ~~**Render-mesh-to-tetrahedra vertex skinning bridge**~~ Fixed — see
   "Render bridge" above. (True general skinning — arbitrary render
   meshes onto many tets — is still future work; what exists now is

@@ -188,6 +188,13 @@ const glm::vec3 kColorPalette[] = {
     {0.20f, 0.45f, 0.25f}, // mossy green
 };
 
+// File scope, not local to init() — render() needs it too, for both
+// the ground and every spawned object's own push constants. A real
+// bug during this file's own first lighting-support pass: this used
+// to be declared inside init() only, which compiled fine there but
+// left render() unable to see it at all.
+struct PhysicsPushConstants { glm::mat4 mvp; glm::mat4 model; };
+
 } // namespace
 
 // The actual scale mismatch, found empirically rather than assumed: the
@@ -286,10 +293,10 @@ void PhysicsModule::init(Application& app) {
     // position by an MVP matrix and output a flat color, which is
     // exactly what a physics-driven mesh needs too, no new shaders
     // required.
-    struct PhysicsPushConstants { glm::mat4 mvp; };
     {
         PipelineConfig config;
         config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PhysicsPushConstants) };
+        config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout() };
         m_pipeline = std::make_unique<Pipeline>(
             app.device(), app.renderer().renderPass(),
             "shaders/cube.vert.spv", "shaders/cube.frag.spv", config);
@@ -523,6 +530,8 @@ void PhysicsModule::render(const RenderContext& ctx) {
     }
 
     m_pipeline->bind(ctx.cmd);
+    vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(),
+                             0, 1, &ctx.lightingDescriptorSet, 0, nullptr);
 
     // Ground plane — a unit cube scaled to a visually-proportionate
     // size for whatever camera this demo uses, positioned to match
@@ -537,23 +546,29 @@ void PhysicsModule::render(const RenderContext& ctx) {
     // volume the physics ground rigid body actually uses is untouched
     // by this — this only ever affects what gets drawn.
     {
-        glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.5f, 0.0f) * m_renderScale);
+        // Width and thickness computed BEFORE the translation, not
+        // after — a real, reported bug (objects visually resting well
+        // above the floor) was exactly this ordering mistake: the old
+        // code translated the box to a fixed y=-0.5*renderScale first,
+        // then scaled its thickness down via the clamp below, leaving
+        // the box's TOP surface wherever that fixed translate minus
+        // half the (now much thinner) scaled thickness landed — at
+        // renderScale=1.0 that's y=-0.475, not y=0, a visible ~0.475
+        // unit gap between the floor an object actually rests on
+        // (real physics surface, y=0.002) and where the floor was
+        // drawn. Fixed by computing the thickness first and deriving
+        // the translation FROM it, so the rendered top surface is
+        // always exactly y=0 regardless of how the clamp scales it.
+        float groundWidth = glm::clamp(100.0f * m_renderScale, 0.5f, 10.0f);
+        float groundThickness = glm::clamp(0.05f * m_renderScale, 0.0005f, 0.15f);
+
+        glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.5f * groundThickness, 0.0f));
         // A thin *visual* slab, not matching the physics ground's full
         // 1-unit collision thickness — purely so a flat floor reads as
         // a floor rather than a thick block from any angle.
-        //
-        // Width is clamped, not a straight *m_renderScale multiply —
-        // at m_renderScale=1.0 (games/physics_demo's real-world
-        // scale), 100*1.0 reproduces the exact "floor fills the whole
-        // screen" issue found and fixed earlier at a different scale
-        // (see this block's own comment above). Clamping to a max of
-        // 25 fixes that while leaving kke_demo_game's already-verified
-        // 100*0.02=2 completely unchanged (2 is well under the clamp).
-        float groundWidth = glm::clamp(100.0f * m_renderScale, 0.5f, 10.0f);
-        float groundThickness = glm::clamp(0.05f * m_renderScale, 0.0005f, 0.15f);
         model = glm::scale(model, glm::vec3(groundWidth, groundThickness, groundWidth));
-        glm::mat4 mvp = ctx.proj * ctx.view * model;
-        vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(mvp), &mvp);
+        PhysicsPushConstants pc{ ctx.proj * ctx.view * model, model };
+        vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
         m_groundMesh->bind(ctx.cmd);
         m_groundMesh->draw(ctx.cmd);
     }
@@ -562,11 +577,12 @@ void PhysicsModule::render(const RenderContext& ctx) {
     // already in world space, so the model matrix is identity; see the
     // class comment for why this is the simplest possible render
     // bridge, not a real skinning one.
-    glm::mat4 mvp = ctx.proj * ctx.view; // model = identity, shared by every object
-    vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(mvp), &mvp);
+    PhysicsPushConstants pc{ ctx.proj * ctx.view, glm::mat4(1.0f) }; // model = identity, shared by every object
+    vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
 
     size_t colorIndex = 0;
     std::vector<Vertex> verts; // reused across objects, resized per-object below
+    std::vector<glm::vec3> normalSum; // reused too — accumulated per-vertex before normalizing
     for (auto& [handle, obj] : m_objects) {
         glm::vec3 color = kColorPalette[colorIndex % (sizeof(kColorPalette) / sizeof(kColorPalette[0]))];
         ++colorIndex;
@@ -577,6 +593,44 @@ void PhysicsModule::render(const RenderContext& ctx) {
             verts[i].position = glm::vec3(p.x, p.y, p.z) * m_renderScale;
             verts[i].color = color;
         }
+
+        // Real per-vertex normals, not left uninitialized — a genuine
+        // gap from when this class only ever wrote position/color:
+        // adding a `normal` field to the shared Vertex struct (for
+        // this engine's first real lighting slice) would otherwise
+        // have left every physics object lit by garbage memory. Each
+        // vertex is shared by up to 3 of a tet's 4 faces (the same
+        // winding convention already used for the index buffer, in
+        // spawnTetMesh()); summing the un-normalized cross-product of
+        // each adjacent face and normalizing once at the end weights
+        // larger faces more, a standard, reasonable approach — not
+        // full smooth-shading correctness across an entire multi-tet
+        // mesh's interior, but correct and meaningful for genuine
+        // exterior-facing geometry, which is all that's ever visible.
+        normalSum.assign(obj->numVerts, glm::vec3(0.0f));
+        for (uint32_t t = 0; t < obj->numTets; ++t) {
+            const uint32_t* ids = obj->tetVertIds[t].ids;
+            const uint32_t faces[4][3] = {
+                {ids[3], ids[1], ids[2]},
+                {ids[2], ids[0], ids[3]},
+                {ids[1], ids[3], ids[0]},
+                {ids[0], ids[2], ids[1]},
+            };
+            for (const auto& f : faces) {
+                glm::vec3 a = verts[f[0]].position;
+                glm::vec3 b = verts[f[1]].position;
+                glm::vec3 c = verts[f[2]].position;
+                glm::vec3 faceNormal = glm::cross(b - a, c - a);
+                normalSum[f[0]] += faceNormal;
+                normalSum[f[1]] += faceNormal;
+                normalSum[f[2]] += faceNormal;
+            }
+        }
+        for (uint32_t i = 0; i < obj->numVerts; ++i) {
+            float len = glm::length(normalSum[i]);
+            verts[i].normal = (len > 1e-8f) ? (normalSum[i] / len) : glm::vec3(0.0f, 1.0f, 0.0f);
+        }
+
         obj->vertexBuffer->upload(verts.data(), verts.size() * sizeof(Vertex));
 
         VkBuffer buffers[] = { obj->vertexBuffer->handle() };

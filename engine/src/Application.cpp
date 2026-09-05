@@ -14,6 +14,7 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
     : m_window(title, width, height), m_fixedDt(1.0f / fixedUpdateHz) {
     log::init(title);
     m_renderer = std::make_unique<Renderer>(m_window);
+    m_lightingBuffer = std::make_unique<LightingBuffer>(m_renderer->device());
     m_debugUi = std::make_unique<DebugUi>(m_window, m_renderer->device(), m_renderer->renderPass(),
                                            m_renderer->swapChainImageCount());
 }
@@ -231,6 +232,12 @@ void Application::run() {
         renderCtx.cameraPos = m_camera.position;
         renderCtx.aspectRatio = m_renderer->aspectRatio();
         renderCtx.renderPass = m_renderer->renderPass();
+        renderCtx.lightingDescriptorSet = m_lightingBuffer->descriptorSet();
+
+        // Once per frame, before any module's render() might bind and
+        // draw using it — every lit module shares this same one buffer
+        // and descriptor set (see LightingBuffer.h).
+        m_lightingBuffer->update(m_lighting, m_camera.position);
 
         // ImGui's NewFrame() (inside beginFrame()) must only be called
         // for a frame that will also reach Render() — calling it here,

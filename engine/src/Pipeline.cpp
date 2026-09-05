@@ -32,7 +32,7 @@ Pipeline::Pipeline(VulkanDevice& device, VkRenderPass renderPass,
     VkPipelineShaderStageCreateInfo stages[] = { vertStage, fragStage };
 
     VkVertexInputBindingDescription binding{};
-    std::array<VkVertexInputAttributeDescription, 2> defaultAttributes{};
+    std::array<VkVertexInputAttributeDescription, 3> defaultAttributes{};
     VkPipelineVertexInputStateCreateInfo vertexInput{};
     vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     if (config.useVertexInput) {

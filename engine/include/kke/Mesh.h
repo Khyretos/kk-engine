@@ -16,9 +16,10 @@ class VulkanDevice;
 struct Vertex {
     glm::vec3 position;
     glm::vec3 color;
+    glm::vec3 normal;
 
     static VkVertexInputBindingDescription bindingDescription();
-    static std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions();
+    static std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions();
 };
 
 // A GPU-resident mesh: vertex + index buffer, ready to bind and draw.

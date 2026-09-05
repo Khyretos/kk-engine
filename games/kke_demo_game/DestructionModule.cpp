@@ -12,6 +12,7 @@ namespace {
 
 struct CubePushConstants {
     glm::mat4 mvp;
+    glm::mat4 model;
 };
 
 uint32_t wangHash(uint32_t x) {
@@ -76,6 +77,7 @@ void DestructionModule::init(kke::Application& app) {
 
     kke::PipelineConfig config;
     config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(CubePushConstants) };
+    config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout() };
 
     m_pipeline = std::make_unique<kke::Pipeline>(
         app.device(), app.renderer().renderPass(),
@@ -98,11 +100,13 @@ void DestructionModule::render(const kke::RenderContext& ctx) {
     float elapsed = static_cast<float>(m_currentTick - m_triggerTick) * m_fixedDt;
 
     m_pipeline->bind(ctx.cmd);
+    vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(),
+                             0, 1, &ctx.lightingDescriptorSet, 0, nullptr);
     m_fragmentMesh->bind(ctx.cmd);
 
     for (uint32_t i = 0; i < m_fragmentCount; ++i) {
         glm::mat4 model = fragmentTransform(m_seed, i, elapsed);
-        CubePushConstants pc{ ctx.proj * ctx.view * model };
+        CubePushConstants pc{ ctx.proj * ctx.view * model, model };
         vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
         m_fragmentMesh->draw(ctx.cmd);
     }

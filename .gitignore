@@ -6,3 +6,4 @@ compile_commands.json
 .vs/
 .vscode/
 *.user
+benchmark_logs/

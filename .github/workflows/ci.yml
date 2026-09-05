@@ -48,8 +48,23 @@ jobs:
           sleep 2
           cd build/bin
           rm -f imgui.ini
+          # set +e/set -e around just this one command, not a stylistic
+          # choice — a real CI failure, found and fixed here: GitHub
+          # Actions runs each step's script under `bash -e` by default,
+          # and under errexit, a bare command returning non-zero on its
+          # own line (not as part of an `if`/`&&`/`||`) aborts the WHOLE
+          # script immediately — before `exit_code=$?` or the check below
+          # ever runs. That's exactly what happened: this step failed in
+          # CI with "Process completed with exit code 124" despite the
+          # very next lines being written specifically to treat 124 as
+          # success — the abort happened before those lines were ever
+          # reached. Disabling errexit for just this one command lets its
+          # real exit code get captured and checked deliberately, instead
+          # of errexit silently overriding the intended logic.
+          set +e
           DISPLAY=:99 SDL_VIDEODRIVER=x11 timeout 8 ./kke_demo > run.log 2>&1
           exit_code=$?
+          set -e
           cat run.log
           # timeout's own SIGTERM produces exit code 124 — that's success
           # here (the engine ran for the full duration without crashing).
