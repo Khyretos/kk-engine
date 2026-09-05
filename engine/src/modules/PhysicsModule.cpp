@@ -11,6 +11,11 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <queue>
+#include <functional>
 #include <glm/gtc/matrix_transform.hpp>
 
 // FEMFX declares these extern (FEMFXCommon.h) and expects the
@@ -37,23 +42,116 @@ namespace kke {
 
 namespace {
 
-// FEMFX hardcodes FM_ASYNC_THREADING=1 — even a single-worker-thread
-// scene requires a real implementation of this callback interface,
-// there is no built-in synchronous fallback. What follows is a
-// genuinely synchronous adapter, verified standalone before being
-// wired in here: "submit a task" means "call it immediately, on the
-// calling thread." This is honestly not real multithreading yet — see
-// PhysicsModule.h's class comment and the README Roadmap.
+// A real thread pool, replacing the earlier synchronous stand-in —
+// verified standalone (a separate test program, same scene/tet setup
+// as this file's own defaults) before being wired in here, same
+// discipline as everything else in this class's history.
+//
+// Design, and why: FEMFX indexes a per-worker scratch buffer array
+// directly by whatever GetTaskSystemWorkerIndex() returns — confirmed
+// by reading FEMFXSimulate.cpp directly, not assumed:
+// scene->threadTempMemoryBuffer->buffers[workerIndex]. That array is
+// sized to EXACTLY numWorkerThreads, not numWorkerThreads+1 (confirmed
+// in FEMFXThreadTempMemory.cpp: numBuffers = params.numWorkerThreads).
+// Two threads returning the same index would race on the same memory.
+// This pool reserves index 0 for the main thread itself, permanently,
+// and gives real pool threads indices 1..N-1 — every possible caller,
+// whichever thread FEMFX's own internal task-chaining ends up running
+// work on, has a stable, unique index for as long as that thread
+// exists.
+//
+// A real, non-obvious bug found and fixed while verifying this
+// standalone: with numWorkers==1 (a real, legitimate configuration —
+// it's what every prior verified run in this class's history used),
+// the pool creates zero real worker threads. Queuing a task in that
+// configuration deadlocks forever, since nothing would ever service
+// the queue — hit as an actual hang under `timeout`, not anticipated.
+// Fixed by falling back to synchronous inline execution specifically
+// when numWorkers<=1, matching the exact behavior the old stand-in
+// always had for that case.
+class ThreadPool {
+public:
+    explicit ThreadPool(int totalWorkers) : m_numWorkers(totalWorkers) {
+        tl_workerIndex = 0; // main thread claims index 0, permanently
+        for (int i = 1; i < totalWorkers; ++i) {
+            m_threads.emplace_back([this, i] {
+                tl_workerIndex = i;
+                workerLoop();
+            });
+        }
+    }
+
+    ~ThreadPool() {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_stopping = true;
+        }
+        m_cv.notify_all();
+        for (auto& t : m_threads) t.join();
+    }
+
+    int numWorkers() const { return m_numWorkers; }
+
+    void submit(std::function<void()> task) {
+        if (m_numWorkers <= 1) {
+            // See the class comment — this is the deadlock fix, not
+            // an optimization: with zero pool threads, queuing would
+            // starve forever.
+            task();
+            return;
+        }
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_tasks.push(std::move(task));
+        }
+        m_cv.notify_one();
+    }
+
+    static thread_local int tl_workerIndex;
+
+private:
+    void workerLoop() {
+        while (true) {
+            std::function<void()> task;
+            {
+                std::unique_lock<std::mutex> lock(m_mutex);
+                m_cv.wait(lock, [this] { return m_stopping || !m_tasks.empty(); });
+                if (m_stopping && m_tasks.empty()) return;
+                task = std::move(m_tasks.front());
+                m_tasks.pop();
+            }
+            task();
+        }
+    }
+
+    int m_numWorkers;
+    std::vector<std::thread> m_threads;
+    std::queue<std::function<void()>> m_tasks;
+    std::mutex m_mutex;
+    std::condition_variable m_cv;
+    bool m_stopping = false;
+};
+thread_local int ThreadPool::tl_workerIndex = -1;
+
+ThreadPool* g_pool = nullptr; // set in PhysicsModule::init(), read by the callbacks below
+std::unique_ptr<ThreadPool> g_poolOwner; // actual owner — see PhysicsModule::init()/shutdown()
+
+// Real synchronization now — not a no-op, since tasks can genuinely
+// still be pending when something waits on them (unlike the old
+// stand-in, where everything had already run synchronously by the
+// time anyone called Wait).
 struct SyncEvent {
+    std::mutex mutex;
+    std::condition_variable cv;
     bool triggered = false;
 };
 
-int GetTaskSystemNumThreads() { return 1; }
-int GetTaskSystemWorkerIndex() { return 0; }
+int GetTaskSystemNumThreads() { return g_pool->numWorkers(); }
+int GetTaskSystemWorkerIndex() { return ThreadPool::tl_workerIndex; }
 
 void SubmitAsyncTask(const char* /*name*/, AMD::FmTaskFuncCallback func, void* data,
                       int32_t begin, int32_t end) {
-    func(data, begin, end);
+    g_pool->submit([func, data, begin, end] { func(data, begin, end); });
 }
 
 AMD::FmSyncEvent* CreateSyncEvent() {
@@ -65,14 +163,18 @@ void DestroySyncEvent(AMD::FmSyncEvent* event) {
 }
 
 void WaitForSyncEvent(AMD::FmSyncEvent* event) {
-    // Since SubmitAsyncTask above runs everything synchronously to
-    // completion before returning, whatever would trigger this event
-    // has already happened by the time anyone calls Wait.
-    (void)event;
+    auto* e = reinterpret_cast<SyncEvent*>(event);
+    std::unique_lock<std::mutex> lock(e->mutex);
+    e->cv.wait(lock, [e] { return e->triggered; });
 }
 
 void TriggerSyncEvent(AMD::FmSyncEvent* event) {
-    reinterpret_cast<SyncEvent*>(event)->triggered = true;
+    auto* e = reinterpret_cast<SyncEvent*>(event);
+    {
+        std::lock_guard<std::mutex> lock(e->mutex);
+        e->triggered = true;
+    }
+    e->cv.notify_all();
 }
 
 // A small fixed palette so multiple spawned objects are visually
@@ -91,18 +193,34 @@ const glm::vec3 kColorPalette[] = {
 // The actual scale mismatch, found empirically rather than assumed: the
 // physics scene uses real units (gravity=9.88 m/s^2, an object falling
 // from 5 units up, landing on a 100-unit-wide floor) — all correct and
-// necessary for the simulation to behave physically. But this demo's
-// existing camera orbits at a distance of 3.5 units around a *unit*
-// cube (see OrbitCameraModule). Rendering the physics objects at their
-// true scale meant the 100-unit floor alone filled nearly the entire
-// view from that camera — not a rendering bug, just two very different
-// scales sharing one camera. This factor shrinks only the *visual*
-// representation; the simulation itself is untouched and still uses
-// real units throughout.
-constexpr float kRenderScale = 0.02f;
-
+// necessary for the simulation to behave physically. The generic
+// kke_demo_game's camera orbits at a distance of 3.5 units around a
+// *unit* cube (see OrbitCameraModule), so rendering physics objects at
+// their true scale there filled nearly the entire view with one flat
+// color — not a rendering bug, just two very different scales sharing
+// one camera. That's exactly why renderScale is a constructor
+// parameter (m_renderScale), not a fixed constant here anymore: a demo
+// with its own camera suited to real physics scale (see
+// games/physics_demo) can pass 1.0 and skip this workaround entirely.
+// The simulation itself is completely untouched by this either way —
+// it only ever affects render-time positions.
 void PhysicsModule::init(Application& app) {
     m_app = &app;
+
+    // Real thread count now, not hardcoded to 1 — std::thread::
+    // hardware_concurrency() can legitimately return 0 (meaning
+    // "unknown," per the standard, not "zero cores"), so that's
+    // explicitly guarded rather than silently produced as numWorkers=0
+    // (which the pool wasn't designed for and shouldn't need to be).
+    // On a genuinely single-core machine this correctly resolves to 1,
+    // which the pool's own fallback path (see ThreadPool::submit)
+    // handles as synchronous execution, not a degraded/broken
+    // multithreaded path.
+    unsigned int hwThreads = std::thread::hardware_concurrency();
+    int numWorkers = (hwThreads == 0) ? 1 : static_cast<int>(hwThreads);
+    g_poolOwner = std::make_unique<ThreadPool>(numWorkers);
+    g_pool = g_poolOwner.get();
+    log::get(name())->info("Task system: {} worker(s) (hardware_concurrency={})", numWorkers, hwThreads);
 
     // Sized for kMaxObjects (see PhysicsModule.h) plus the one ground
     // rigid body — generous-but-modest numbers, not derived from first
@@ -124,7 +242,7 @@ void PhysicsModule::init(Application& app) {
     sceneParams.maxSceneVerts = kMaxObjects * 4 + 16;
     sceneParams.maxTetMeshBufferFeatures = 128;
     sceneParams.maxConstraintSolverDataSize = 1 << 22;
-    sceneParams.numWorkerThreads = 1;
+    sceneParams.numWorkerThreads = numWorkers;
     sceneParams.rigidBodiesExternal = false;
 
     m_scene = AMD::FmCreateScene(sceneParams);
@@ -179,64 +297,84 @@ void PhysicsModule::init(Application& app) {
 
     m_groundMesh = std::make_unique<Mesh>(Mesh::createCube(app.device()));
 
-    // Tet index buffer: static, shared by every spawned object — a
-    // tetrahedron's face topology never changes, and every object is
-    // the same shape (see PhysicsModule.h "honest current limits").
-    // Winding follows FEMFXTetMeshConnectivity.h's own documented
-    // convention ("Faces CCW from exterior: 312, 203, 130, 021").
-    const uint32_t tetIndices[12] = {
-        3, 1, 2,  // face opposite vertex 0
-        2, 0, 3,  // face opposite vertex 1
-        1, 3, 0,  // face opposite vertex 2
-        0, 2, 1,  // face opposite vertex 3
-    };
-    m_tetIndexBuffer = std::make_unique<Buffer>(Buffer::createDeviceLocal(
-        app.device(), tetIndices, sizeof(tetIndices), VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
-
-    // The API dogfoods itself: the demo's one starting object is
+    // The API dogfoods itself: the demo's starting object(s) are
     // created by calling the same public spawnTetrahedron() anyone
     // else (including renderUi()'s own button) would call, not
-    // through separate one-off setup code.
+    // through separate one-off setup code. Spread out at varied
+    // positions/heights when spawning more than one, so multiple
+    // objects don't all land stacked in the exact same spot.
     Material woodMaterial;
     woodMaterial.density = 700.0f;
     woodMaterial.stiffness = 1.0e7f;
     woodMaterial.poissonsRatio = 0.3f;
     woodMaterial.plasticYieldThreshold = 0.0f;
     woodMaterial.fractureStressThreshold = 1.0e8f; // high — this one isn't meant to fracture
-    spawnTetrahedron(glm::vec3(0.0f, 5.0f, 0.0f), woodMaterial);
+
+    for (int i = 0; i < m_initialObjectCount; ++i) {
+        float x = (i % 3 - 1) * 2.5f;
+        float z = (i / 3) * 2.5f;
+        float y = 5.0f + i * 1.5f; // staggered heights so they don't all land at once
+        spawnTetrahedron(glm::vec3(x, y, z), woodMaterial);
+    }
 
     log::get(name())->info("FEMFX scene created (ground + {} object(s), cap={})", m_objects.size(), kMaxObjects);
 }
 
-PhysicsModule::ObjectHandle PhysicsModule::spawnTetrahedron(const glm::vec3& position, const Material& material) {
+PhysicsModule::ObjectHandle PhysicsModule::spawnTetMesh(const TetMeshData& mesh, const glm::vec3& position, const Material& material) {
     if (m_objects.size() >= kMaxObjects) {
-        log::get(name())->warn("spawnTetrahedron: at cap ({}), ignoring", kMaxObjects);
+        log::get(name())->warn("spawnTetMesh: at cap ({}), ignoring", kMaxObjects);
         return kInvalidHandle;
+    }
+    if (mesh.vertices.empty() || mesh.tets.empty()) {
+        log::get(name())->error("spawnTetMesh: mesh has no vertices or no tets");
+        return kInvalidHandle;
+    }
+    for (const auto& tet : mesh.tets) {
+        for (uint32_t idx : tet) {
+            if (idx >= mesh.vertices.size()) {
+                log::get(name())->error("spawnTetMesh: tet references vertex {}, but mesh only has {} vertices",
+                                         idx, mesh.vertices.size());
+                return kInvalidHandle;
+            }
+        }
     }
 
     auto obj = std::make_unique<SpawnedTet>();
+    const uint numVerts = static_cast<uint>(mesh.vertices.size());
+    const uint numTets = static_cast<uint>(mesh.tets.size());
+    obj->numVerts = numVerts;
+    obj->numTets = numTets;
 
-    const uint numVerts = 4;
-    const uint numTets = 1;
-
-    // Same relative shape as always verified — 4 verts forming one
-    // tetrahedron — just offset by `position` instead of a fixed spot.
-    obj->restPositions[0] = AMD::FmInitVector3(position.x + 0.0f, position.y + 0.0f, position.z + 0.0f);
-    obj->restPositions[1] = AMD::FmInitVector3(position.x + 1.0f, position.y + 0.0f, position.z + 0.0f);
-    obj->restPositions[2] = AMD::FmInitVector3(position.x + 0.0f, position.y + 1.0f, position.z + 0.0f);
-    obj->restPositions[3] = AMD::FmInitVector3(position.x + 0.0f, position.y + 0.0f, position.z + 1.0f);
-
-    obj->tetVertIds[0].ids[0] = 0;
-    obj->tetVertIds[0].ids[1] = 1;
-    obj->tetVertIds[0].ids[2] = 2;
-    obj->tetVertIds[0].ids[3] = 3;
-
+    obj->restPositions.resize(numVerts);
     for (uint i = 0; i < numVerts; ++i) {
-        obj->vertIncidentTets[i].Add(0u);
+        const glm::vec3& v = mesh.vertices[i];
+        obj->restPositions[i] = AMD::FmInitVector3(position.x + v.x, position.y + v.y, position.z + v.z);
+    }
+
+    obj->tetVertIds.resize(numTets);
+    for (uint i = 0; i < numTets; ++i) {
+        const auto& t = mesh.tets[i];
+        obj->tetVertIds[i].ids[0] = t[0];
+        obj->tetVertIds[i].ids[1] = t[1];
+        obj->tetVertIds[i].ids[2] = t[2];
+        obj->tetVertIds[i].ids[3] = t[3];
+    }
+
+    // Real per-vertex incident-tet lists, not the single hardcoded
+    // "every vertex belongs to tet 0" case from before — for each tet,
+    // every one of its 4 vertices gets that tet's index added to its
+    // own incident list. This is what makes a real multi-tet mesh
+    // behave as one connected deformable body rather than a pile of
+    // disconnected tets that happen to share vertex positions.
+    obj->vertIncidentTets.resize(numVerts);
+    for (uint t = 0; t < numTets; ++t) {
+        for (int j = 0; j < 4; ++j) {
+            obj->vertIncidentTets[obj->tetVertIds[t].ids[j]].Add(t);
+        }
     }
 
     AMD::FmTetMeshBufferBounds bounds;
-    AMD::FmComputeTetMeshBufferBounds(&bounds, nullptr, nullptr, obj->vertIncidentTets, obj->tetVertIds,
+    AMD::FmComputeTetMeshBufferBounds(&bounds, nullptr, nullptr, obj->vertIncidentTets.data(), obj->tetVertIds.data(),
                                        nullptr, numVerts, numTets, /*enableFracture=*/false);
 
     AMD::FmTetMeshBufferSetupParams meshParams;
@@ -254,7 +392,7 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetrahedron(const glm::vec3& pos
 
     obj->tetMeshBuffer = AMD::FmCreateTetMeshBuffer(meshParams, nullptr, nullptr, &obj->tetMesh);
     if (!obj->tetMeshBuffer || !obj->tetMesh) {
-        log::get(name())->error("spawnTetrahedron: FmCreateTetMeshBuffer failed");
+        log::get(name())->error("spawnTetMesh: FmCreateTetMeshBuffer failed");
         return kInvalidHandle;
     }
 
@@ -262,7 +400,7 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetrahedron(const glm::vec3& pos
         AMD::FmInitVector3(1.0f, 0.0f, 0.0f),
         AMD::FmInitVector3(0.0f, 1.0f, 0.0f),
         AMD::FmInitVector3(0.0f, 0.0f, 1.0f));
-    AMD::FmInitVertState(obj->tetMesh, obj->restPositions, identity, AMD::FmInitVector3(0.0f), 1.0f, AMD::FmInitVector3(0.0f));
+    AMD::FmInitVertState(obj->tetMesh, obj->restPositions.data(), identity, AMD::FmInitVector3(0.0f), 1.0f, AMD::FmInitVector3(0.0f));
 
     // kke::Material -> FmTetMaterialParams, the actual bridge.
     AMD::FmTetMaterialParams femfxMaterial;
@@ -273,7 +411,7 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetrahedron(const glm::vec3& pos
     femfxMaterial.plasticCreep = material.plasticCreep;
     femfxMaterial.fractureStressThreshold = material.fractureStressThreshold;
 
-    AMD::FmInitTetState(obj->tetMesh, obj->tetVertIds, femfxMaterial);
+    AMD::FmInitTetState(obj->tetMesh, obj->tetVertIds.data(), femfxMaterial);
     AMD::FmComputeMeshConstantMatrices(obj->tetMesh);
 
     // A FRESH set of arrays for FmInitConnectivity, not the same
@@ -283,12 +421,14 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetrahedron(const glm::vec3& pos
     // same arrays crashed immediately in standalone testing, building
     // a fresh set fixed it. See PhysicsModule.h's class comment for
     // the real, gdb-traced crash this call fixes.
-    AMD::FmArray<uint> connectivityVertIncidentTets[4];
-    for (uint i = 0; i < numVerts; ++i) {
-        connectivityVertIncidentTets[i].Add(0u);
+    std::vector<AMD::FmArray<uint>> connectivityVertIncidentTets(numVerts);
+    for (uint t = 0; t < numTets; ++t) {
+        for (int j = 0; j < 4; ++j) {
+            connectivityVertIncidentTets[obj->tetVertIds[t].ids[j]].Add(t);
+        }
     }
-    if (!AMD::FmInitConnectivity(obj->tetMesh, connectivityVertIncidentTets)) {
-        log::get(name())->error("spawnTetrahedron: FmInitConnectivity failed");
+    if (!AMD::FmInitConnectivity(obj->tetMesh, connectivityVertIncidentTets.data())) {
+        log::get(name())->error("spawnTetMesh: FmInitConnectivity failed");
         AMD::FmDestroyTetMeshBuffer(obj->tetMeshBuffer);
         return kInvalidHandle;
     }
@@ -300,7 +440,7 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetrahedron(const glm::vec3& pos
 
     int initResult = AMD::FmFinishTetMeshInit(obj->tetMesh);
     if (initResult != 0) {
-        log::get(name())->error("spawnTetrahedron: FmFinishTetMeshInit failed with code {}", initResult);
+        log::get(name())->error("spawnTetMesh: FmFinishTetMeshInit failed with code {}", initResult);
         AMD::FmDestroyTetMeshBuffer(obj->tetMeshBuffer);
         return kInvalidHandle;
     }
@@ -311,11 +451,46 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetrahedron(const glm::vec3& pos
     obj->sceneBufferId = AMD::FmAddTetMeshBufferToScene(m_scene, obj->tetMeshBuffer);
     obj->material = material;
     obj->vertexBuffer = std::make_unique<Buffer>(
-        m_app->device(), sizeof(Vertex) * 4, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        m_app->device(), sizeof(Vertex) * numVerts, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+    // Per-object index buffer now (different objects can have
+    // different topology) — same face-winding convention already
+    // verified for the single-tet case, generalized: for tet i with
+    // global vertex ids (a,b,c,d), its 4 faces follow
+    // FEMFXTetMeshConnectivity.h's documented "CCW from exterior:
+    // 312, 203, 130, 021" using THIS tet's own vertex ids, not always
+    // literally 0,1,2,3 like the old hardcoded single-tet version.
+    std::vector<uint32_t> indices;
+    indices.reserve(numTets * 12);
+    for (uint t = 0; t < numTets; ++t) {
+        const auto& ids = obj->tetVertIds[t].ids;
+        indices.push_back(ids[3]); indices.push_back(ids[1]); indices.push_back(ids[2]);
+        indices.push_back(ids[2]); indices.push_back(ids[0]); indices.push_back(ids[3]);
+        indices.push_back(ids[1]); indices.push_back(ids[3]); indices.push_back(ids[0]);
+        indices.push_back(ids[0]); indices.push_back(ids[2]); indices.push_back(ids[1]);
+    }
+    obj->indexBuffer = std::make_unique<Buffer>(Buffer::createDeviceLocal(
+        m_app->device(), indices.data(), indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
 
     ObjectHandle handle = m_nextHandle++;
     m_objects[handle] = std::move(obj);
     return handle;
+}
+
+PhysicsModule::ObjectHandle PhysicsModule::spawnTetrahedron(const glm::vec3& position, const Material& material) {
+    // The exact single-tetrahedron shape this class's whole
+    // verification history (gdb-traced crashes and their fixes,
+    // sustained stability runs, the render-scale debugging saga) was
+    // built and checked against — now just one call into the general
+    // path, not separate code. See the class comment for why keeping
+    // this thin wrapper, rather than deleting it in favor of callers
+    // building their own TetMeshData, is deliberate: it keeps that
+    // whole verification history actually covering spawnTetMesh(),
+    // not sitting next to it as an untested special case.
+    TetMeshData mesh;
+    mesh.vertices = { {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f} };
+    mesh.tets = { {0, 1, 2, 3} };
+    return spawnTetMesh(mesh, position, material);
 }
 
 void PhysicsModule::removeObject(ObjectHandle handle) {
@@ -349,51 +524,78 @@ void PhysicsModule::render(const RenderContext& ctx) {
 
     m_pipeline->bind(ctx.cmd);
 
-    // Ground plane — a unit cube scaled to the box half-dims doubled,
-    // positioned to match where it was actually created in the scene.
+    // Ground plane — a unit cube scaled to a visually-proportionate
+    // size for whatever camera this demo uses, positioned to match
+    // the real physics ground's location. Deliberately NOT the full
+    // 100-unit width of the actual physics collision volume: at
+    // renderScale=1.0 (see games/physics_demo), a camera close enough
+    // to clearly frame a handful of falling objects is also close
+    // enough that a full 100-unit floor fills the entire view with one
+    // flat color — confirmed by bisection (disabling just this draw
+    // fixed it), the same class of issue found and fixed earlier in
+    // this class's history at a different scale. The *collision*
+    // volume the physics ground rigid body actually uses is untouched
+    // by this — this only ever affects what gets drawn.
     {
-        glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.5f, 0.0f) * kRenderScale);
+        glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.5f, 0.0f) * m_renderScale);
         // A thin *visual* slab, not matching the physics ground's full
         // 1-unit collision thickness — purely so a flat floor reads as
         // a floor rather than a thick block from any angle.
-        model = glm::scale(model, glm::vec3(100.0f, 0.05f, 100.0f) * kRenderScale);
+        //
+        // Width is clamped, not a straight *m_renderScale multiply —
+        // at m_renderScale=1.0 (games/physics_demo's real-world
+        // scale), 100*1.0 reproduces the exact "floor fills the whole
+        // screen" issue found and fixed earlier at a different scale
+        // (see this block's own comment above). Clamping to a max of
+        // 25 fixes that while leaving kke_demo_game's already-verified
+        // 100*0.02=2 completely unchanged (2 is well under the clamp).
+        float groundWidth = glm::clamp(100.0f * m_renderScale, 0.5f, 10.0f);
+        float groundThickness = glm::clamp(0.05f * m_renderScale, 0.0005f, 0.15f);
+        model = glm::scale(model, glm::vec3(groundWidth, groundThickness, groundWidth));
         glm::mat4 mvp = ctx.proj * ctx.view * model;
         vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(mvp), &mvp);
         m_groundMesh->bind(ctx.cmd);
         m_groundMesh->draw(ctx.cmd);
     }
 
-    // Every spawned object — each one's 4 live simulated positions are
+    // Every spawned object — each one's simulated vertex positions are
     // already in world space, so the model matrix is identity; see the
     // class comment for why this is the simplest possible render
-    // bridge, not a general one.
+    // bridge, not a real skinning one.
     glm::mat4 mvp = ctx.proj * ctx.view; // model = identity, shared by every object
     vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(mvp), &mvp);
-    vkCmdBindIndexBuffer(ctx.cmd, m_tetIndexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
 
     size_t colorIndex = 0;
+    std::vector<Vertex> verts; // reused across objects, resized per-object below
     for (auto& [handle, obj] : m_objects) {
         glm::vec3 color = kColorPalette[colorIndex % (sizeof(kColorPalette) / sizeof(kColorPalette[0]))];
         ++colorIndex;
 
-        Vertex verts[4];
-        for (int i = 0; i < 4; ++i) {
-            AMD::FmVector3 p = AMD::FmGetVertPosition(*obj->tetMesh, (uint)i);
-            verts[i].position = glm::vec3(p.x, p.y, p.z) * kRenderScale;
+        verts.resize(obj->numVerts);
+        for (uint32_t i = 0; i < obj->numVerts; ++i) {
+            AMD::FmVector3 p = AMD::FmGetVertPosition(*obj->tetMesh, i);
+            verts[i].position = glm::vec3(p.x, p.y, p.z) * m_renderScale;
             verts[i].color = color;
         }
-        obj->vertexBuffer->upload(verts, sizeof(verts));
+        obj->vertexBuffer->upload(verts.data(), verts.size() * sizeof(Vertex));
 
         VkBuffer buffers[] = { obj->vertexBuffer->handle() };
         VkDeviceSize offsets[] = { 0 };
         vkCmdBindVertexBuffers(ctx.cmd, 0, 1, buffers, offsets);
-        vkCmdDrawIndexed(ctx.cmd, 12, 1, 0, 0, 0);
+        vkCmdBindIndexBuffer(ctx.cmd, obj->indexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
+        vkCmdDrawIndexed(ctx.cmd, obj->numTets * 12, 1, 0, 0, 0);
     }
 }
 
 void PhysicsModule::renderUi() {
-    ImGui::SetNextWindowPos(ImVec2(10, 500), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(300, 0), ImGuiCond_FirstUseEver);
+    // Position/size chosen to fit the panel's actual content within a
+    // default 1280x720 window without needing to scroll — re-checked
+    // after adding the "Load mesh" section made the panel taller than
+    // it used to be; the old y=500 start overflowed the bottom of the
+    // window at that height, found by actually testing this in a
+    // running session, not assumed to still fit.
+    ImGui::SetNextWindowPos(ImVec2(320, 10), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(300, 400), ImGuiCond_FirstUseEver);
     ImGui::Begin("Physics");
 
     ImGui::Text("Objects: %zu / %u", m_objects.size(), kMaxObjects);
@@ -435,6 +637,32 @@ void PhysicsModule::renderUi() {
         }
     }
 
+    ImGui::Separator();
+    ImGui::TextWrapped(
+        "Load a real tetrahedralized mesh from disk -- proves the "
+        "general spawnTetMesh() path, not just the single hardcoded "
+        "tetrahedron above. Path is temporarily hardcoded (no asset "
+        "browser yet) -- see kke_tetrahedralizer and README 'Content "
+        "pipeline: CGAL tetrahedralization'.");
+    if (ImGui::Button("Load /tmp/test_output.ktet.json")) {
+        try {
+            TetMeshData mesh = loadTetMeshFromFile("/tmp/test_output.ktet.json");
+            Material material;
+            material.density = 700.0f;
+            material.stiffness = 1.0e7f;
+            material.poissonsRatio = 0.3f;
+            material.plasticYieldThreshold = 0.0f;
+            material.fractureStressThreshold = 1.0e8f;
+            ObjectHandle handle = spawnTetMesh(mesh, glm::vec3(0.0f, m_nextSpawnHeight, 0.0f), material);
+            if (handle != kInvalidHandle) {
+                log::get(name())->info("Loaded and spawned mesh: {} verts, {} tets",
+                                        mesh.vertices.size(), mesh.tets.size());
+            }
+        } catch (const std::exception& e) {
+            log::get(name())->error("Load mesh failed: {}", e.what());
+        }
+    }
+
     ImGui::End();
 }
 
@@ -458,6 +686,13 @@ void PhysicsModule::shutdown() {
         m_scene = nullptr;
         log::get(name())->info("FEMFX scene destroyed");
     }
+
+    // Destroyed last, after the scene — FmDestroyScene may itself
+    // submit/wait on tasks during cleanup, so the pool needs to still
+    // be alive for that. g_pool cleared first so nothing can observe
+    // a dangling pointer between these two lines.
+    g_pool = nullptr;
+    g_poolOwner.reset();
 }
 
 } // namespace kke

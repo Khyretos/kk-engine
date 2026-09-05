@@ -48,7 +48,14 @@ __RCSID("$NetBSD: qsort.c,v 1.20 2009/06/01 06:37:40 yamt Exp $");
 
 #define min(a, b)    (a) < (b) ? a : b
 
+// glibc's sys/cdefs.h already defines __P(args) with the exact same
+// meaning (old K&R-vs-ANSI prototype portability) — guarding avoids a
+// real "redefined" warning on every build, found by a user wanting a
+// genuinely clean build on real hardware, without changing what this
+// expands to either way.
+#ifndef __P
 #define __P(x) x
+#endif
 #define _DIAGASSERT assert
 
 /*

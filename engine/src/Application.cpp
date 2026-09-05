@@ -232,12 +232,25 @@ void Application::run() {
         renderCtx.aspectRatio = m_renderer->aspectRatio();
         renderCtx.renderPass = m_renderer->renderPass();
 
-        m_debugUi->beginFrame();
-        for (Module* m : m_initOrder) {
-            safeInvoke(m, "renderUi", [&] { m->renderUi(); });
-        }
-
+        // ImGui's NewFrame() (inside beginFrame()) must only be called
+        // for a frame that will also reach Render() — calling it here,
+        // unconditionally, before knowing whether m_renderer->beginFrame()
+        // will even succeed, was a real bug: when the swapchain is out
+        // of date (e.g. mid-resize) and beginFrame() returns false, this
+        // whole block gets skipped, so Render() never runs for that
+        // frame — and the *next* frame's NewFrame() call then fires
+        // without a matching Render() in between, which is exactly
+        // ImGui's own "Forgot to call Render() or EndFrame()" assertion.
+        // Found by actually reproducing it (resizing the window under
+        // Xvfb crashed a real running session), not by inspection alone.
+        // Fixed by moving both calls inside the success branch below,
+        // so they only ever run for a frame guaranteed to complete.
         if (m_renderer->beginFrame()) {
+            m_debugUi->beginFrame();
+            for (Module* m : m_initOrder) {
+                safeInvoke(m, "renderUi", [&] { m->renderUi(); });
+            }
+
             VkCommandBuffer cmd = m_renderer->currentCommandBuffer();
 
             // compute() is gated by the same advancingThisFrame flag as

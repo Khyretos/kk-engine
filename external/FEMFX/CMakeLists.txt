@@ -67,6 +67,20 @@ target_compile_definitions(femfx PUBLIC WIN32 NOMINMAX __forceinline=inline)
 # -fno-exceptions match the original premake build's own flags.
 target_compile_options(femfx PRIVATE
     -mavx2 -mfma -ffast-math -fno-exceptions
+    # Two remaining warnings genuinely worth suppressing rather than
+    # patching, unlike the __P/FM_FORCE_INLINE fixes above (which were
+    # real, if minor, bugs) — both are either intentional in AMD's own
+    # upstream code or pure compiler noise unrelated to correctness:
+    #   -Wdelete-incomplete: FEMFXAsyncThreading.h deletes a `void*`
+    #     deliberately (a type-erased task-data pointer pattern) — not
+    #     something to rewrite deep in FEMFX's own threading internals
+    #     without being an upstream maintainer.
+    #   -Wpsabi: a pure informational GCC note about AVX-aligned struct
+    #     calling-convention history ("the ABI... has changed in GCC
+    #     4.6"), not an actual defect — this codebase already targets
+    #     one consistent, modern GCC ABI throughout, so the historical
+    #     note has no bearing here.
+    -Wno-delete-incomplete -Wno-psabi
 )
 
 set_target_properties(femfx PROPERTIES

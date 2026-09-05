@@ -5,6 +5,7 @@
 add_executable(kke_tests
     test_rml_text_safety.cpp
     test_game_manifest.cpp
+    test_tet_mesh_asset.cpp
     test_marketplace_index.cpp
     test_engine_error.cpp
 )

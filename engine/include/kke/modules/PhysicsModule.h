@@ -5,11 +5,14 @@
 #include "kke/Pipeline.h"
 #include "kke/Mesh.h"
 #include "kke/Buffer.h"
+#include "kke/TetMeshAsset.h"
 
 #include <glm/glm.hpp>
 #include <memory>
 #include <unordered_map>
 #include <cstdint>
+#include <vector>
+#include <string>
 
 #if KKE_ENABLE_FEMFX
 
@@ -32,31 +35,54 @@ namespace kke {
 // Linux at all before this module could exist.
 //
 // GENERAL SPAWN API — this is the actual point of this class now, not
-// just "one hardcoded falling tetrahedron": call spawnTetrahedron() at
-// any time after init() has run (including at runtime, from ImGui —
-// see renderUi() for a live, working example of exactly that) to add
-// another object with its own position and kke::Material. Each
-// returns an ObjectHandle; removeObject() takes it back out of the
-// scene and frees its FEMFX resources. The demo's own single falling
-// tetrahedron is created by init() calling this same public method,
-// not through separate one-off code — the API is dogfooded, not just
-// declared.
+// just "one hardcoded falling tetrahedron": call spawnTetMesh() at any
+// time after init() has run (including at runtime, from ImGui — see
+// renderUi() for a live, working example of exactly that) to add
+// another object with its own shape, position, and kke::Material. As
+// of the CGAL content-pipeline work (see README "Content pipeline:
+// CGAL tetrahedralization"), "its own shape" is genuinely arbitrary —
+// spawnTetMesh() takes a kke::TetMeshData loaded from any
+// kke_tetrahedralizer output file, not just the one hardcoded
+// tetrahedron. spawnTetrahedron() still exists as a thin convenience
+// wrapper (builds a 4-vert/1-tet TetMeshData and calls spawnTetMesh())
+// — kept specifically because it's the same call the demo's starting
+// object and every earlier verification in this codebase already
+// exercised; reimplementing it on top of the general path rather than
+// deleting it means that whole verification history still covers the
+// general path too, not just a special case sitting next to it.
+// Each spawn call returns an ObjectHandle; removeObject() takes it
+// back out of the scene and frees its FEMFX resources.
 //
 // HONEST CURRENT LIMITS, not hidden:
-//   - Every spawned object is the same fixed single-tetrahedron shape
-//     (4 verts, 1 tet, no fracture) — there is no general mesh import
-//     or tetrahedralization yet (see README "Physics: AMD FEMFX
-//     integration" and the Roadmap's TetGen entry), so "spawn" means
-//     "spawn this one shape with your choice of position and
-//     material," not "spawn any mesh."
 //   - The scene is sized for a small, fixed number of objects
 //     (kMaxObjects below), not stress-test scale — this engine has
 //     never been tested with more than a handful of physics objects,
 //     and the task system is still a synchronous single-thread stand-
 //     in (see the class's own notes on that further down). A real
 //     stress-test demo is separately planned, not assumed to work here.
-//   - No render-mesh-to-tetrahedra skinning bridge for anything beyond
-//     this one shape — see the render bridge section further down.
+//   - Every spawned object's tets are independent, disconnected
+//     tetrahedra as far as FEMFX's fracture/plasticity model is
+//     concerned unless the mesh's own connectivity says otherwise —
+//     spawnTetMesh() computes real shared-vertex connectivity from
+//     whatever TetMeshData it's given (see spawnTetMesh()'s own
+//     comment), so a real multi-tet imported mesh behaves as one
+//     connected deformable body, not a pile of separate tets that
+//     happen to share vertex positions.
+//   - No render-mesh-to-tetrahedra *skinning* bridge — each object's
+//     own simulated tet vertices are directly what gets rendered, with
+//     no separate higher-resolution render surface. FEMFX's own
+//     `RenderTetAssignment` sample is what real skinning (a detailed
+//     render mesh draped over a coarser simulation tet mesh) looks
+//     like — worth reading before building that; a CGAL-tetrahedralized
+//     mesh at reasonable quality settings is usually detailed enough
+//     to render directly, but a real skinning bridge is what a
+//     modeler-authored high-poly character would need.
+//   - kke_tetrahedralizer (the CGAL-based offline tool that produces
+//     the files spawnTetMesh() loads) currently only accepts OFF input
+//     and only the direct-CDT "already watertight" pipeline — no
+//     OBJ/FBX/glTF import and no voxel-grid robustness path for messy
+//     non-manifold input yet. See the tool's own header comment and
+//     the README's "Content pipeline" section.
 //
 // THE FULL, HONEST DEBUGGING ACCOUNT from getting the first object
 // working at all — four distinct real issues found via gdb and direct
@@ -104,6 +130,23 @@ public:
     using ObjectHandle = uint32_t;
     static constexpr ObjectHandle kInvalidHandle = 0;
 
+    // renderScale defaults to 0.02 — the value tuned specifically for
+    // the generic kke_demo_game's small-scale camera (see the .cpp's
+    // own comment on kRenderScale for the full story of why that
+    // number exists at all). A demo whose camera is actually suited to
+    // real-world physics scale (a 100-unit floor, gravity=9.88) should
+    // pass 1.0 here rather than force its camera to fight this scale
+    // hack — that's the whole reason this is a constructor parameter
+    // now instead of a fixed constant.
+    //
+    // initialObjectCount spawns that many tetrahedra at init(), spread
+    // out at varied positions/heights rather than stacked on top of
+    // each other, instead of the original single hardcoded object —
+    // for a demo where "physics is visibly happening" matters more
+    // than needing someone to click the spawn button first.
+    explicit PhysicsModule(float renderScale = 0.02f, int initialObjectCount = 1)
+        : m_renderScale(renderScale), m_initialObjectCount(initialObjectCount) {}
+
     const char* name() const override { return "Physics"; }
 
     void init(Application& app) override;
@@ -112,13 +155,22 @@ public:
     void renderUi() override;
     void shutdown() override;
 
-    // Adds one tetrahedron-shaped object to the scene at `position`
-    // (world/physics units — see kRenderScale in the .cpp for how this
-    // relates to what's actually drawn), with material properties from
-    // `material` mapped onto FEMFX's FmTetMaterialParams. Returns
-    // kInvalidHandle if the scene is already at kMaxObjects or if setup
-    // fails for any other reason — always check before assuming the
-    // object exists.
+    // The general path (see the class comment). `mesh` must have at
+    // least one vertex and one tet, and every tet's 4 indices must be
+    // valid vertex indices — exactly what kke::loadTetMeshFromFile()
+    // itself already guarantees for a file loaded through it, but this
+    // function re-validates anyway since it's callable directly with
+    // hand-built data too, not just loaded files. Returns
+    // kInvalidHandle if the scene is already at kMaxObjects or if any
+    // setup step fails — always check before assuming the object
+    // exists.
+    ObjectHandle spawnTetMesh(const TetMeshData& mesh, const glm::vec3& position, const Material& material);
+
+    // Convenience wrapper: builds a 4-vert/1-tet TetMeshData for the
+    // same single tetrahedron shape used throughout this class's own
+    // verification history, and calls spawnTetMesh() with it — see
+    // the class comment for why this is implemented on top of the
+    // general path rather than kept as separate, parallel code.
     ObjectHandle spawnTetrahedron(const glm::vec3& position, const Material& material);
 
     // Removes a previously spawned object. Safe to call with
@@ -148,12 +200,23 @@ private:
         uint sceneBufferId = 0;                          // needed to remove it from the scene later
         Material material;
         std::unique_ptr<Buffer> vertexBuffer;            // re-uploaded every frame — this object moves/deforms
+        std::unique_ptr<Buffer> indexBuffer;             // static per-object now — different objects can have different topology
+        uint32_t numVerts = 0;
+        uint32_t numTets = 0;
 
         // Kept alive for this object's whole lifetime — see the struct
-        // comment above for why.
-        AMD::FmVector3 restPositions[4];
-        AMD::FmTetVertIds tetVertIds[1];
-        AMD::FmArray<uint> vertIncidentTets[4];
+        // comment above for why. std::vector rather than fixed-size
+        // arrays now that a spawned object's vertex/tet count is
+        // genuinely variable, not always exactly 4/1 — safe for the
+        // same reason fixed arrays were safe: SpawnedTet itself is
+        // heap-allocated (std::unique_ptr, see m_objects below) and
+        // never moved once created, so these vectors' own internal
+        // buffers are just as stable as fixed member arrays were,
+        // provided nothing resizes them after spawnTetMesh() finishes
+        // building them once — which is exactly how they're used.
+        std::vector<AMD::FmVector3> restPositions;
+        std::vector<AMD::FmTetVertIds> tetVertIds;
+        std::vector<AMD::FmArray<uint>> vertIncidentTets;
     };
 
     // A small, fixed cap, not a stress-test number — see the class
@@ -163,6 +226,8 @@ private:
     static constexpr uint32_t kMaxObjects = 8;
 
     AMD::FmScene* m_scene = nullptr;
+    float m_renderScale; // see the constructor's doc comment
+    int m_initialObjectCount; // see the constructor's doc comment
     AMD::FmRigidBody* m_ground = nullptr; // static kinematic ground plane, top surface at y=0
     Application* m_app = nullptr;         // needed by spawnTetrahedron() if called after init(), e.g. from renderUi()
 
@@ -171,17 +236,17 @@ private:
 
     // Render bridge — this is genuinely the simplest possible version,
     // not a real render-mesh-to-tetrahedra skinning system: each
-    // object has exactly one tetrahedron, so its 4 simulated vertices
-    // *are* the render mesh, with no separate render-resolution
-    // surface to skin onto. FEMFX's own `RenderTetAssignment` sample
-    // is what a real bridge (arbitrary render mesh skinned onto many
-    // tets) looks like — worth reading before generalizing this past
-    // one shape. Shared across every spawned object, since they're all
-    // the same shape: one pipeline, one static index buffer. Only the
-    // per-object vertex buffer (in SpawnedTet above) actually differs.
+    // object's own simulated tet vertices are directly what gets
+    // rendered, with no separate render-resolution surface to skin
+    // onto. FEMFX's own `RenderTetAssignment` sample is what a real
+    // bridge (arbitrary detailed render mesh skinned onto a coarser
+    // tet mesh) looks like — worth reading before building that. The
+    // pipeline is shared across every object (same shaders regardless
+    // of shape); vertex and index buffers are per-object now, stored
+    // on SpawnedTet above, since different spawned objects can
+    // genuinely have different vertex/tet counts.
     std::unique_ptr<Pipeline> m_pipeline;
     std::unique_ptr<Mesh> m_groundMesh;
-    std::unique_ptr<Buffer> m_tetIndexBuffer;
 
     // renderUi() state — a spawn button needs *something* to vary
     // between clicks, or every spawned object would land in an

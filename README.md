@@ -75,15 +75,32 @@ yet — treat it as this project's memory, not aspirational marketing.
   Linux/GCC from ~1,871 initial compile errors down to a real, linked,
   running library — verified twice, standalone and inside this
   engine's own CMake build. `kke::PhysicsModule` now exposes a real,
-  general, runtime-callable spawn API (`spawnTetrahedron()`/
-  `removeObject()`), rendered and visible, not just logged — verified
-  live by clicking its own demo UI buttons and watching the object
-  count and on-screen shapes change correctly (1→8, capped correctly,
-  cleared correctly, respawned cleanly afterward). Got there via
-  `gdb`-traced debugging through four distinct real bugs (three fixed,
+  general, runtime-callable spawn API (`spawnTetMesh()`/
+  `spawnTetrahedron()`/`removeObject()`) that accepts genuinely
+  arbitrary tetrahedral meshes, not just one hardcoded shape. Paired
+  with a real content pipeline: `tools/tetrahedralizer` (CGAL, GPL,
+  strictly isolated from the game runtime — see "Content pipeline:
+  CGAL tetrahedralization") converts an arbitrary mesh into
+  tetrahedra offline; `kke::loadTetMeshFromFile()` (no CGAL) loads the
+  result at runtime. Verified genuinely end-to-end in a live session:
+  a real 401-tetrahedron mesh, produced entirely by the offline tool,
+  spawned via this API, and observed falling under real gravity to a
+  stable rest. Got there via `gdb`-traced debugging through four
+  distinct real bugs in the physics integration alone (three fixed,
   one open but non-blocking; see "Physics: AMD FEMFX integration" for
   the full account, including one bug that explained two separate-
-  looking symptoms at once). Opt-in via `KKE_ENABLE_FEMFX` (default
+  looking symptoms at once). The task system is now genuine
+  multithreading too, not the earlier synchronous stand-in — a real
+  thread pool, verified standalone before integration, catching a real
+  correctness risk (per-worker scratch-buffer indexing, confirmed
+  directly in FEMFX's own source) and a real deadlock (numWorkers==1
+  queuing into an empty pool) before either could bite. `tools/
+  physics_benchmark` exists so the actual speedup can be measured
+  honestly on real multi-core hardware — this sandbox's single core
+  can only prove correctness, not performance, and says so plainly
+  rather than reporting a misleading number. Opt-in via
+  `KKE_ENABLE_FEMFX` (default OFF); the tetrahedralizer tool is
+  separately opt-in via `KKE_ENABLE_TETRAHEDRALIZER` (also default
   OFF).
 - VulkanProfiler (`VK_LAYER_PROFILER_unified`) integration —
   conditionally enabled via `KKE_ENABLE_GPU_PROFILER`, actually built
@@ -142,20 +159,66 @@ version on every platform, no system package hunting.
 
 ## Build
 
-Requires: CMake ≥ 3.24, a C++20 compiler, the Vulkan SDK/loader headers
-(`libvulkan-dev` on Linux), and either `glslc` or `glslangValidator` on
-`PATH` for shader compilation.
+**See `INSTRUCTIONS.md` for the real, complete setup guide** — exact
+system packages for Debian/Ubuntu and Arch, the single-command build,
+how to run each demo, and a troubleshooting section. It exists because
+this section alone wasn't enough: a real person building on real
+hardware (AMD Radeon RX 9070XT, Arch Linux) hit missing packages, a
+Boost detection quirk, and a real Vulkan crash that this project's
+original sandboxed development environment never surfaced. All of
+that is fixed now (see "Real hardware findings, fixed" below) and
+documented properly in `INSTRUCTIONS.md`, not just patched quietly.
+
+The short version, once system packages are installed:
 
 ```bash
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
-cmake --build build -j
-./build/bin/kke_demo
+cmake --workflow --preset everything   # configures AND builds, every optional feature on
+cd build/bin && ./kke_demo
 ```
 
-Run it from `build/bin/` (or copy the `shaders/` and `assets/` folders
-next to the executable) — shader `.spv` files and the bundled font are
-placed next to the binary at build time, and the app currently looks for
-them via a relative path (see "Known simplifications").
+`cmake --workflow --preset default` matches this project's actual
+default option values (no FEMFX, no tetrahedralizer, no GPU profiler,
+no Lua) if you want the smaller, faster build instead. Both need
+CMake 3.25+ for workflow presets specifically — `INSTRUCTIONS.md`
+covers the manual, flag-by-flag equivalent for older CMake.
+
+Run demos from `build/bin/`, not the repository root — shaders,
+fonts, and each demo's `game.json` are copied next to the compiled
+executable at build time, and relative paths assume that location.
+
+### Real hardware findings, fixed
+
+Everything in this subsection was found by an actual person building
+on actual hardware, not anticipated in advance:
+
+- **A real Vulkan crash** (`vkCreateInstance` failing with
+  `VK_ERROR_LAYER_NOT_PRESENT`, real AMD hardware, `KKE_ENABLE_GPU_
+  PROFILER=ON`) — a required extension (`VK_EXT_layer_settings`)
+  wasn't enabled alongside the profiler layer's settings chain, which
+  this project's original software-rendered (`lavapipe`) test
+  environment tolerated but a real driver's stricter validation did
+  not. Fixed, plus a genuine robustness addition on top: if enabling
+  the profiler layer still fails at `vkCreateInstance` (a real,
+  distinct failure mode from "layer not installed" — a layer can be
+  *enumerable* without being *loadable*), the engine now retries once
+  without it instead of crashing.
+- **A real Boost/CMake/CGAL detection quirk on Arch Linux** — Boost
+  was genuinely installed, but not found without manually passing
+  `-DBoost_INCLUDE_DIR=/usr/include`. The tetrahedralizer's
+  `CMakeLists.txt` now auto-detects that standard path as a fallback.
+- **Real, unnecessary build warnings** — two were genuine bugs, fixed
+  properly rather than suppressed: this project's own earlier
+  portability patch in `FEMFXTypes.h` was unconditionally redefining
+  `FM_FORCE_INLINE` after `FEMFXVectorMath.h` had already set it
+  (fixed with `#undef`), and two vendored `qsort_*.cpp` files
+  redefined glibc's own `__P` macro without checking if it already
+  existed (fixed with a guard). The remainder — SDL3's own vendored
+  source, a couple of FEMFX-internal patterns not worth rewriting deep
+  in AMD's own threading code — are suppressed narrowly at the target
+  level, not blanket-silenced. Verified with a full clean rebuild of
+  both the `default` and `everything` presets: genuinely zero
+  warnings, down from 30+.
+- **No single-command build** — `CMakePresets.json` added (see above).
 
 ### Headless smoke test (what we used to verify this milestone)
 
@@ -166,7 +229,9 @@ DISPLAY=:99 SDL_VIDEODRIVER=x11 ./build/bin/kke_demo
 
 Works against Mesa's `lavapipe` software Vulkan driver, no GPU required
 — useful for CI and for the kind of sandboxed verification this project
-has been built with throughout.
+has been built with throughout. **Real hardware testing matters too,
+though** — see "Real hardware findings, fixed" just above for what this
+alone didn't catch.
 
 ## Architecture: the module system
 
@@ -985,7 +1050,163 @@ through this struct into `FmTetMaterialParams`, and that whole path is
 now verified through an actual stable, 20+ second running simulation,
 not just mesh setup.
 
-### General spawn API — the actual point of `PhysicsModule` now
+## Content pipeline: CGAL tetrahedralization
+
+Turning an arbitrary imported mesh into something FEMFX can actually
+simulate needs tetrahedralization — converting a surface mesh into a
+volume filled with tetrahedra. `tools/tetrahedralizer` (built only
+when `KKE_ENABLE_TETRAHEDRALIZER=ON`, never part of the default
+build) does this offline, and `kke::loadTetMeshFromFile()`
+(`engine/include/kke/TetMeshAsset.h`) loads its output into the
+running engine.
+
+### Why CGAL, and why TetGen isn't used despite being the more
+obvious "just for tetrahedralization" choice
+
+Checked directly rather than assumed, since this project's hard
+constraint is no license fees, ever:
+
+| Library | License (verified directly) | Can handle non-convex, possibly-messy imported meshes? |
+|---|---|---|
+| **TetGen** | AGPLv3, or a paid commercial license from WIAS Berlin | Yes, but only clean/watertight input — no robustness path for messy real-world assets |
+| **CGAL** (`Mesh_3` package specifically — confirmed per-package, not just "CGAL is dual-licensed" in general) | GPL (not AGPL — no network-service clause) | Yes, including a voxel-grid pipeline for non-watertight/non-manifold input |
+| Qhull | Genuinely permissive (BSD-like) | **No** — confirmed directly: cannot do non-convex volume meshing at all, wrong tool regardless of license |
+| Fade3D | Free only for personal non-commercial research; paid license for any commercial use | Yes |
+| Houdini's Tetrahedralize SOP | Not a library — a node inside a separately-licensed, proprietary DCC application | N/A |
+
+TetGen was ruled out on *technical* grounds before licensing cost was
+even investigated: this engine's actual goal ("take the problem away
+from the user, handle any imported model") means robustness to messy,
+non-watertight input matters more than raw speed on already-clean
+input, and CGAL's `Mesh_3` covers everything TetGen offers plus that
+robustness path. Adding TetGen anyway would mean a second, *stricter*
+copyleft license for no net capability gain — so its actual commercial
+licensing cost was never priced out; it didn't need to be for this to
+be the right call.
+
+A real thesis (Ladhani, 2022, uploaded during this project and read in
+full) independently surveyed this same technical space — for
+navigation-mesh generation, a different application, but the actual
+tetrahedralization *technique* (constrained Delaunay tetrahedralization,
+direct-CDT vs. voxel-grid pipelines, sliver-tetrahedra quality issues)
+is the same operation either way. Real findings from it that shaped
+this design: generation is genuinely slow (their tests saw generation
+times reaching tens of minutes in adverse cases) — confirming this
+must stay a one-time, cached, offline step, never attempted at
+runtime; and CGAL's voxel pipeline has a documented "incorrect area"
+boundary-approximation error, tunable via `facet_distance`, worth
+knowing about before trusting a generated mesh's boundary blindly.
+
+### The architecture: why CGAL never touches the game runtime
+
+GPL's copyleft attaches to whatever gets *distributed* containing its
+code — not to data a GPL-licensed tool produces as output. (Not legal
+advice — I'm not a lawyer, and this is well-established common
+practice, not a guarantee for any specific situation. Worth a real
+look if this engine is ever used commercially.) So the architecture
+keeps a hard line: `tools/tetrahedralizer` links CGAL and is the
+*only* place in this entire repo allowed to; `engine/` and every
+`games/` runtime never link CGAL and only ever read the tool's plain
+JSON output through `kke::loadTetMeshFromFile()`. A developer's
+shipped, closed-source game is never affected by CGAL's license,
+despite CGAL existing in this repository at all.
+
+### Verified genuinely end-to-end, not just "should work"
+
+1. Installed CGAL 5.6 + Boost + GMP + MPFR from apt, wrote a minimal
+   standalone test *before* building anything around it — confirmed
+   402 real tetrahedra out of a test shape.
+2. Built `kke_tetrahedralizer` for real — hit and fixed two real
+   build issues (a CGAL/Eigen3 CMake target mismatch, a
+   `Weighted_point_3` vs. `Point_3` type error) — and ran it on a real
+   test mesh: **181 vertices, 401 tets**, written as valid, internally
+   -consistent JSON.
+3. Built `kke::loadTetMeshFromFile()` (7 real GoogleTest cases: valid
+   load, missing file, malformed JSON, missing keys, out-of-range
+   index, empty mesh, malformed vertex — all pass) and verified it
+   against the tool's *actual* output file, not just a hand-written
+   fixture: loaded back exactly 181 verts / 401 tets, matching
+   precisely.
+4. Generalized `PhysicsModule` from one hardcoded tetrahedron to
+   `spawnTetMesh(TetMeshData, position, material)` — real per-vertex
+   incident-tet connectivity computed for an arbitrary mesh, not the
+   old single-tet special case. `spawnTetrahedron()` now exists as a
+   thin wrapper over this general path, meaning this whole class's
+   prior verification history (the four gdb-traced bugs, the render-
+   scale debugging saga) now actually covers the general path, not a
+   separate untested case sitting next to it. Confirmed regression-
+   free: after the rewrite, the original demo object logged the exact
+   same numbers (0.2275 → 0.0020) as before it.
+5. **Clicked "Load mesh" in a real running session** and watched the
+   actual 401-tet mesh spawn, fall under real gravity (6.3981 → 1.3228
+   → 0.2244 → settling at 0.1852 — a different, and correctly
+   *different*, resting height than the simple tetrahedron's 0.0020,
+   since this vertex isn't at the bottom of a more complex shape),
+   and hold stable for a sustained 8+ seconds. Object count correctly
+   read "2 / 8" throughout.
+6. **Honest, real performance data point, not assumed**: frame rate
+   dropped from ~27 FPS to ~4 FPS with this one 401-tet object active,
+   on top of the existing single tetrahedron. Real, concrete evidence
+   for the already-documented "task system is genuinely single-
+   threaded" limitation — not a new problem, but no longer a
+   theoretical one either.
+
+### Repair pipeline — real robustness, verified against real defects, not assumed
+
+`kke_tetrahedralizer` no longer loads input directly into a
+`Polyhedron_3` (which requires the input to already be a valid
+oriented manifold, and hard-fails otherwise). It now reads input as a
+raw polygon soup and runs a real repair pipeline before any meshing
+step sees the data: `CGAL::Polygon_mesh_processing`'s own
+`repair_polygon_soup` (removes duplicate/degenerate elements),
+`orient_polygon_soup` (fixes inconsistent face winding),
+`polygon_soup_to_polygon_mesh`, `triangulate_faces` (Mesh_3's
+polyhedral domain requires purely triangular faces — quads and other
+n-gons are genuinely common in real-world models), and
+`stitch_borders` (closes small gaps by merging matching boundary
+edges).
+
+**Verified against real, deliberately-broken test meshes, not just
+described:**
+- A hand-built mesh with inconsistent face winding across adjacent
+  faces failed to even *parse* under the old direct-load approach.
+  Under the repair pipeline, it loads and meshes successfully.
+- A hand-built mesh using quad faces hit
+  `CGAL::Assertion_exception: "Your input polyhedron must be
+  triangulated!"` before `triangulate_faces` was added; succeeds after.
+- A mesh combining quad faces *and* bad winding — genuinely closed,
+  but with both defects at once — went through the full repair
+  pipeline and tetrahedralized cleanly into 236 verts / 612 tets.
+- **A mesh with a real, missing-geometry hole** (not a fixable winding
+  or triangulation defect — an actual gap `stitch_borders` has no
+  matching edge to close) was tested too, specifically to find the
+  failure mode's honest edge: feeding a non-closed polyhedron into
+  Mesh_3's polyhedral domain doesn't fail cleanly, it **segfaults**
+  deep inside CGAL's own CDT code. Found by actually triggering it,
+  not assumed. Fixed by adding an explicit `is_closed()` check that
+  refuses with a clear, actionable error instead — a real gap still
+  needs the voxel-grid pipeline (below), not a crash.
+- **Regression-checked**: the original clean test tetrahedron
+  produces the exact same output through the new repair-first pipeline
+  as it did before this rewrite — 181 verts, 401 tets, unchanged.
+
+### What's not done yet
+
+- **The full voxel-grid pipeline for genuinely missing geometry** —
+  `stitch_borders` only closes gaps where matching boundary edges
+  already exist; an actual hole (real geometry missing, not just a
+  fixable winding/triangulation defect) still correctly refuses rather
+  than crashing, but can't be tetrahedralized yet. This was the
+  original reason CGAL was chosen over TetGen and remains the biggest
+  real gap.
+- **`kke_tetrahedralizer` only accepts OFF input** — no OBJ/FBX/glTF
+  import yet (needs a separate model-import step, most likely via
+  assimp, feeding into this same repair pipeline).
+- **No asset browser or real content-pipeline integration** — the
+  demo's "Load mesh" button uses a hardcoded `/tmp/` path as a
+  deliberate, temporary stand-in.
+
+
 
 `PhysicsModule::spawnTetrahedron(position, material)` is a real,
 public, callable-at-runtime API — not a special-cased demo setup.
@@ -1020,12 +1241,115 @@ later:
 - Capped at 8 objects (`kMaxObjects` in `PhysicsModule.h`), a small
   fixed number, not a stress-test scale — raising it is a one-line
   change to that constant plus the `FmSceneSetupParams` fields in
-  `init()`, but a real stress-test demo (hundreds or thousands of
-  objects) is separate, unstarted work, and the single-threaded task
-  system stand-in makes it an honest open question whether that would
-  even perform acceptably, not just a bigger-buffers problem.
+  `init()`. The task system is now real multithreading (see "Real
+  multithreading" below), not the synchronous stand-in this note
+  originally warned about — but a real stress-test demo (hundreds or
+  thousands of objects) is still separate, unstarted work, and this
+  sandbox's single CPU core means even the multithreading fix hasn't
+  been proven to help at scale here, only proven correct.
 
-### Render bridge — visible now, and a real debugging story worth keeping
+## The demo suite
+
+Beyond `kke_demo_game` (the general building-block showcase) and
+`games/physics_demo` (see below), there are now dedicated demos for
+individual capabilities, matching the same "one focused demo per
+thing, verified visually before moving on" discipline throughout.
+
+### `games/imgui_demo`
+
+Wraps Dear ImGui's own built-in `ImGui::ShowDemoWindow()` rather than
+hand-curating a widget list — confirmed before building this that
+`imgui_demo.cpp` is already compiled into this engine's `imgui` target
+(see root `CMakeLists.txt`) and nothing disables it. This is genuinely
+the canonical, comprehensive answer to "show me everything this UI
+library can do," maintained by ImGui itself: every widget type
+(buttons, sliders, color pickers, drag/drop, tables, trees, tabs,
+menus, popups, text editing, plotting), all in one place. Verified
+interactively, not just "the window opened": clicked into the
+"Widgets" section and confirmed it expands to the real, full category
+list (Basic, Tree Nodes, Text Input, Tabs, Plotting, Drag and Drop,
+and more). Always built (no `KKE_ENABLE_*` gate needed — no
+dependency beyond the core engine).
+
+### `games/rmlui_demo`
+
+A genuinely rich showcase, not the minimal 3-box test document
+`UiModule` loads by default: real `<input>` (text/checkbox/radio/
+range), `<select>`, `<textarea>`, `<tabset>`, and `<progress>`
+elements, styled via RCSS. **A real, verified finding along the way**:
+these elements are confirmed to already be part of RmlUi 6.3's Core
+library directly (checked by finding their headers under
+`Include/RmlUi/Core/Elements/` in the fetched source, not assumed) —
+they were merged in from the older, separate "Controls" plugin some
+RmlUi tutorials still reference, so no additional library needed
+linking.
+
+**The first layout was genuinely broken**, and worth being honest
+about rather than glossing over: panels were positioned by guessing at
+pixel coordinates, and badly overlapped both `StatsModule`'s
+Performance panel and `DebugControlModule`'s panel, with text visibly
+clipped. Fixed properly, not patched around: found the *exact*
+hardcoded positions of both ImGui panels directly in their source
+(`StatsModule.cpp`: `(10,10)`; `DebugControlModule.cpp`: `(340,250)`)
+and laid out every RmlUi panel to avoid both zones plus `UiModule`'s
+own default test document at the bottom of the screen. Verified with
+real screenshots at each step, including a genuine interaction test —
+clicked the "Details" tab and confirmed the tabset actually switched
+content (`Overview`'s panel replaced by `Details`'s), not just that a
+tab visually highlighted.
+
+### `games/physics_demo` — a dedicated demo, because the shared one couldn't show this legibly
+
+`kke_demo_game`'s render bridge worked, but was genuinely hard to
+see: a single small tetrahedron at a render scale (0.02) tuned to fit
+a camera built for a unit cube, not real physics content. Rather than
+keep tuning that mismatch, `games/physics_demo` is a real, separate
+game folder with its own camera and its own scale — `OrbitCameraModule`
+and `PhysicsModule` both gained constructor parameters
+(`initialDistance`/`initialPitch`/`initialYaw`/`initialTarget`, and
+`renderScale`/`initialObjectCount`) specifically to make this possible
+without duplicating either class.
+
+**Two real CMake conflicts hit and fixed while building this**, both
+found by actually building a second executable, not anticipated:
+1. Two executables compiling the same shader file collided on a
+   global CMake target name (`shader_rml_ui_frag` already exists).
+   Fixed by guarding `engine_add_shader` with `if(NOT TARGET ...)`.
+2. Two executables copying the same bundled font to the same output
+   path hit a Ninja "multiple rules generate the same output" error —
+   the copy-file helper had been duplicated as a separately-named
+   function per game. Fixed properly: refactored into one shared
+   `engine_copy_runtime_file` function at the root `CMakeLists.txt`,
+   used by both games now instead of two divergent copies of the same
+   logic.
+
+**The ground plane needed its own fix, and it was the exact same bug
+class as before, at a new scale.** `renderScale=1.0` (real physics
+units — a 100-unit floor) reproduced the old "floor fills the entire
+screen with one flat color" issue, confirmed by the same bisection
+technique used the first time: disabling just the ground draw fixed
+the view immediately, isolating it before touching anything else.
+Fixed by clamping the ground's *visual* width independently of
+`renderScale` (0.5 to 10 units) rather than letting it scale
+unboundedly — verified to leave `kke_demo_game`'s already-working
+2-unit floor (100 × 0.02) completely untouched, since 2 is well under
+the clamp, while giving `physics_demo`'s real-scale floor a
+proportionate, legible size instead of 100 units. The actual physics
+collision volume is unaffected either way — this only ever changes
+what gets drawn.
+
+**Verified visually, not just logically**: real screenshots at each
+step — first with the ground disabled entirely (proving the six
+falling tetrahedra themselves render correctly, clearly distinguishable
+by color and shape), then with the clamp at increasingly smaller
+values until the floor read as a floor rather than a wall of color. A
+regression screenshot of `kke_demo_game` afterward confirmed no visual
+change there, and — a genuine bonus, not engineered for — its
+Marketplace panel now shows "# 2 games," correctly auto-discovering
+`physics_demo`'s `game.json` through the same scanning this engine
+already had.
+
+
 
 The tetrahedron and a ground plane are now actually drawn, not just
 logged — reusing the existing cube shaders directly (they just
@@ -1088,12 +1412,68 @@ camera setup (part of the demo-suite work already planned) is the
 right place to make this genuinely legible, not further tuning of
 these two constants.
 
+### Real multithreading — a real thread pool, replacing the synchronous stand-in
+
+The task system callbacks used to be a genuinely synchronous
+stand-in: "submit a task" meant "call it immediately, on the calling
+thread." This is now a real thread pool, verified standalone before
+being wired into `PhysicsModule`, matching this whole project's
+established discipline.
+
+**A real correctness risk, found by reading FEMFX's own source
+directly, not assumed**: `GetTaskSystemWorkerIndex()`'s return value
+indexes straight into a per-worker scratch buffer array
+(`scene->threadTempMemoryBuffer->buffers[workerIndex]`, confirmed in
+`FEMFXSimulate.cpp`), and that array is sized to *exactly*
+`numWorkerThreads` (confirmed in `FEMFXThreadTempMemory.cpp`) — not
+`numWorkerThreads + 1`. Two threads returning the same index would
+silently race on the same memory. The pool reserves index 0
+permanently for the main thread and gives real pool threads indices
+1..N-1, so every possible caller — whichever thread FEMFX's own
+internal task-chaining ends up running work on — has a stable, unique
+slot for as long as that thread exists.
+
+**A real deadlock, found by hitting it, not anticipated**: with
+`numWorkers==1` (a real, legitimate configuration — every prior
+verified run in this class's history used it), the pool creates zero
+real worker threads. Queuing a task in that configuration hangs
+forever under a real `timeout`, since nothing would ever service the
+queue. Fixed with a synchronous fallback specifically for that case —
+"run inline" when there's no pool thread to hand work to, matching
+exactly what the old stand-in always did.
+
+**Correctness verified, not just "it didn't crash"**: a standalone
+test ran the exact same scene with 1 worker and with 4 workers and
+compared the final simulated position — **identical both times**
+(0.2276), strong evidence the worker-index scheme doesn't corrupt
+anything. Confirmed 3 distinct OS threads genuinely executed submitted
+tasks (not just queued-and-ignored). Integrated into `PhysicsModule`
+(replacing the stand-in entirely, sized via
+`std::thread::hardware_concurrency()` with a guard for the "0 means
+unknown" case the standard allows), rebuilt clean, all 40 tests still
+pass, and both `physics_demo` and `kke_demo_game` produce byte-
+identical settling behavior to every prior verified run.
+
+**The one honest, important limit on what could be verified here**:
+this sandbox has exactly 1 CPU core (`nproc` == 1). Real speedup
+cannot be demonstrated in an environment with no second core for
+parallelism to use — confirmed directly: 4 workers measurably ran
+*slower* than 1 in this environment, exactly the pure thread/sync
+overhead you'd expect with zero real parallelism to offset it.
+
+`tools/physics_benchmark` (`kke_physics_benchmark`, gated by
+`KKE_ENABLE_FEMFX`) exists specifically so this can be measured
+honestly on real multi-core hardware: it runs the same scene with 1
+worker and with `hardware_concurrency()` workers back-to-back, checks
+that both produce the same result, and prints a clear speed
+comparison — including an explicit note if it detects it's running on
+a single-core machine, rather than reporting a misleading number.
+Usage: `kke_physics_benchmark [numTets] [numSteps] [forceMultiWorkers]`.
+
 ### What's not done yet
 
-- **The task system is genuinely single-threaded.** Real parallelism
-  (the whole reason FEMFX is "multithreaded CPU" in its own
-  description) needs an actual thread pool behind these callbacks, not
-  the synchronous stand-in verified here.
+- ~~**The task system is genuinely single-threaded.**~~ Fixed — see
+  "Real multithreading" above for the full account.
 - **Only one spawnable shape (a tetrahedron), no general mesh import.**
   The spawn API is real and general in how it's *called* (any
   position, any material, at runtime) — see "General spawn API"
@@ -1446,16 +1826,71 @@ true right now versus what's aspirational.
   see "General spawn API" above. Still only one spawnable shape; the
   API itself (position, material, runtime-callable) is real and
   general.
-- **TetGen-based `.FEM` authoring without Houdini** — FEMFX's own
-  content pipeline requires a Houdini plugin; tetrahedralizing an
-  ordinary artist-authored triangle mesh (TetGen is the standard
-  open-source library for this) is the realistic alternative.
+- ~~**TetGen-based `.FEM` authoring without Houdini**~~ Resolved by
+  choosing CGAL instead — see "Content pipeline: CGAL
+  tetrahedralization" for the full technical and licensing reasoning.
+  A real repair pipeline (soup repair, orientation fixing,
+  triangulation, border stitching) now handles genuinely common real-
+  world defects — verified against actual broken test meshes, not
+  assumed — closing most of what this entry originally flagged. What's
+  still genuinely open: no voxel-grid pipeline for real missing
+  geometry (a true hole, as opposed to a fixable winding/triangulation
+  defect, correctly refuses with a clear error rather than crashing,
+  but still can't be tetrahedralized), and no OBJ/FBX/glTF import
+  (needs assimp, feeding into this same repair pipeline).
+- ~~**The ImGui resize assertion crash**~~ Fixed. Real root cause,
+  found by reading `Application.cpp`'s frame loop, not by guessing:
+  `m_debugUi->beginFrame()` (which calls `ImGui::NewFrame()`) ran
+  unconditionally, *before* checking whether `m_renderer->beginFrame()`
+  would even succeed. When the swapchain went out of date mid-resize
+  and that check failed, the whole rendering block — including
+  `ImGui::Render()` — got skipped for that frame, so the *next*
+  frame's `NewFrame()` fired with no matching `Render()` in between,
+  which is exactly what the assertion was complaining about. Fixed by
+  moving `beginFrame()` and the `renderUi()` calls inside the success
+  branch, so they only ever run for a frame guaranteed to complete.
+  Verified by reproducing the *exact* crash first (a single resize
+  killed a real running session), then confirming the fix survives
+  four rapid resize cycles in a row without issue, followed by a full
+  test-suite pass.
+- ~~**A dedicated, visually legible physics demo**~~ Done — see
+  "`games/physics_demo` — a dedicated demo" above for the real camera/
+  scale/ground-size work this took, verified with real screenshots at
+  each step. Now genuinely being used as the actual demo, not deferred.
+- ~~**ImGui showcase demo**~~ and ~~**RmlUi showcase demo**~~ Done —
+  see "The demo suite" section above for both. The shared-shader-target
+  and shared-font-copy CMake fixes made while building `physics_demo`
+  paid off immediately here — both new demos reuse shader files already
+  used elsewhere (`grid.vert/frag`, `rml_ui.vert/frag`) and hit no
+  collision at all, confirming those fixes were real and general, not
+  narrowly patched for one case. What *was* newly found and fixed here:
+  a badly-overlapping first RmlUi layout, fixed by checking the other
+  panels' actual hardcoded positions in their own source rather than
+  guessing.
+- **The rest of the demo suite** — a VulkanProfiler demo with sample
+  analysis, chunk-loading/streaming (dual-viewport), culling
+  (dual-viewport) — still genuinely unstarted. The chunk-streaming and
+  culling demos in particular are not "just wrap existing capability
+  in a demo" the way the two done so far were — this engine has no
+  chunk/streaming system and no frustum/occlusion culling at all yet,
+  so those two are real subsystems to design and build, not just demo
+  wrapping.
+- ~~**Real multithreading for the physics task system**~~ Done — see
+  "Real multithreading" in "Physics: AMD FEMFX integration" for the
+  full account, including a real correctness risk (per-worker scratch
+  buffer indexing) and a real deadlock, both found and fixed before
+  trusting it. `tools/physics_benchmark` exists specifically so the
+  actual speedup can be measured on real multi-core hardware — this
+  sandbox's single core can only prove correctness, not performance.
 - **A physics stress-test demo.** Raise `kMaxObjects` well past 8 and
   see what actually happens — the particle system already proves
   20,000 GPU-simulated particles; physics has never been pushed
-  anywhere near that, and the single-threaded task system stand-in
-  makes the outcome a genuinely open question worth finding out
-  deliberately, not assuming either way.
+  anywhere near that. Real multithreading now exists (see above) but
+  hasn't been proven to help at scale — only proven correct — since
+  this sandbox has no second core to show a speedup on. Already have
+  one real data point pointing at real cost: a single 401-tet mesh
+  dropped frame rate from ~27 FPS to ~4 FPS in this sandbox's
+  software-rendered, single-core environment.
 - **`vkGetProfilerFrameDataEXT` into `StatsModule` and spdlog** — see
   "GPU profiler (VulkanProfiler) integration." Written and functional
   in structure, but disabled behind `KKE_QUERY_GPU_PROFILER_DATA` after

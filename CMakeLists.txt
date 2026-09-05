@@ -19,6 +19,7 @@ option(ENGINE_ENABLE_LUA "Build with Lua scripting support" OFF) # wired later
 option(ENGINE_HEADLESS_TEST "Build the headless smoke-test target" ON)
 option(KKE_ENABLE_TESTS "Build the unit test suite (tests/)" ON)
 option(KKE_ENABLE_FEMFX "Build the vendored, patched AMD FEMFX deformable-physics library. See README 'Physics: AMD FEMFX integration'." OFF)
+option(KKE_ENABLE_TETRAHEDRALIZER "Build the offline mesh-to-tetrahedra import tool (needs system CGAL — see tools/tetrahedralizer/README or the engine README's content-pipeline section). Deliberately never linked into kke_engine or any game runtime." OFF)
 option(KKE_ENABLE_COVERAGE "Instrument builds for code coverage (gcc/clang --coverage). See README 'Test suite & coverage'." OFF)
 option(KKE_ENABLE_GPU_PROFILER "Request the VulkanProfiler layer (VK_LAYER_PROFILER_unified) at instance creation if installed. See README 'GPU profiler (VulkanProfiler) integration'." OFF)
 
@@ -73,6 +74,20 @@ FetchContent_Declare(
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(SDL3)
+
+# SDL3's own vendored source produces occasional warnings depending on
+# which platform backends get compiled (X11, Wayland, KMSDRM, etc. all
+# vary by system) — e.g. -Wdiscarded-qualifiers in SDL_string.c,
+# -Wunused-variable in the Wayland mouse backend. Not our code to fix,
+# and SDL3 is actively maintained upstream, not something this project
+# has taken ownership of patching the way external/FEMFX has. Given
+# warnings from different SDL3 files surface on different systems'
+# platform-backend combinations, suppressing broadly for this one
+# third-party target is more robust than chasing individual warning
+# types file by file as each new system reveals a different one.
+if(TARGET SDL3-static)
+    target_compile_options(SDL3-static PRIVATE -w)
+endif()
 
 # ---------------------------------------------------------------------------
 # GLM — header-only math library.
@@ -215,6 +230,40 @@ endif()
 find_program(GLSLC_EXECUTABLE glslc)
 find_program(GLSLANG_VALIDATOR_EXECUTABLE glslangValidator)
 
+# Shared by every game's CMakeLists.txt (originally duplicated as a
+# locally-named function per game — kke_copy_runtime_file,
+# physics_demo_copy_runtime_file — until adding a second game that
+# copies the *same* source file (the bundled fonts) to the *same*
+# output path exposed a real conflict: Ninja refuses "multiple rules
+# generate bin/assets/fonts/NotoSans-Regular.ttf" when two separately-
+# named functions each declare their own add_custom_command for that
+# identical output. One shared function, with the same "don't
+# redeclare" guard as engine_add_shader below, fixes this the same way.
+#
+# OUTPUT-based custom commands with explicit DEPENDS, not POST_BUILD:
+# a POST_BUILD command only runs when the target itself actually
+# relinks, so editing a font/manifest file without touching any source
+# file would silently NOT re-copy it on the next `cmake --build` —
+# found exactly this bug while testing the hardware-requirements check
+# (had to copy game.json by hand to verify a change took effect).
+function(engine_copy_runtime_file TARGET SRC DEST_RELATIVE)
+    set(output_path ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${DEST_RELATIVE})
+    get_filename_component(output_dir ${output_path} DIRECTORY)
+    string(MD5 target_suffix "${output_path}")
+    set(copy_target_name "engine_copy_${target_suffix}")
+    if(NOT TARGET ${copy_target_name})
+        add_custom_command(
+            OUTPUT ${output_path}
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${output_dir}
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC} ${output_path}
+            DEPENDS ${SRC}
+            COMMENT "Copying ${DEST_RELATIVE}"
+        )
+        add_custom_target(${copy_target_name} DEPENDS ${output_path})
+    endif()
+    add_dependencies(${TARGET} ${copy_target_name})
+endfunction()
+
 function(engine_add_shader TARGET SHADER_SOURCE)
     get_filename_component(SHADER_NAME ${SHADER_SOURCE} NAME)
     set(SHADER_OUTPUT ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/${SHADER_NAME}.spv)
@@ -241,7 +290,16 @@ function(engine_add_shader TARGET SHADER_SOURCE)
     endif()
 
     string(REPLACE "." "_" SHADER_TARGET_NAME "shader_${SHADER_NAME}")
-    add_custom_target(${SHADER_TARGET_NAME} DEPENDS ${SHADER_OUTPUT})
+    # Guarded: a shader file used by more than one executable (as of
+    # games/physics_demo reusing kke_demo_game's cube.vert/frag for its
+    # own render bridge) would otherwise try to declare this same
+    # target twice — CMake target names are global, not per-consumer.
+    # The underlying compiled .spv output path is already shared/keyed
+    # by filename, so this only needs to exist once regardless of how
+    # many executables depend on it.
+    if(NOT TARGET ${SHADER_TARGET_NAME})
+        add_custom_target(${SHADER_TARGET_NAME} DEPENDS ${SHADER_OUTPUT})
+    endif()
     add_dependencies(${TARGET} ${SHADER_TARGET_NAME})
 endfunction()
 
@@ -259,6 +317,31 @@ endif()
 add_subdirectory(engine)
 
 # ---------------------------------------------------------------------------
+# Tools — deliberately separate from the engine/game build graph. See
+# tools/tetrahedralizer/README.md and the engine README's "Content
+# pipeline: CGAL tetrahedralization" section for why: CGAL is GPL-
+# licensed, and this tool is the ONLY place in this whole repo that's
+# allowed to link it. Nothing in engine/ or games/ may depend on this
+# target or include any CGAL header, ever — that boundary is what lets
+# a game built with this engine ship fully closed-source despite this
+# tool existing at all.
+# ---------------------------------------------------------------------------
+if(KKE_ENABLE_TETRAHEDRALIZER)
+    add_subdirectory(tools/tetrahedralizer)
+endif()
+
+# The physics multithreading benchmark — links femfx directly (not
+# kke_engine), so it only needs KKE_ENABLE_FEMFX, not the
+# tetrahedralizer's separate CGAL gate. See tools/physics_benchmark/
+# main.cpp's own top comment for why this tool exists: this sandbox
+# has exactly 1 CPU core, so no real speedup could ever be measured
+# here — this tool is what lets that be measured honestly on whatever
+# hardware actually has more than one.
+if(KKE_ENABLE_FEMFX)
+    add_subdirectory(tools/physics_benchmark)
+endif()
+
+# ---------------------------------------------------------------------------
 # App executable (the actual window + cube demo)
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
@@ -270,6 +353,25 @@ add_subdirectory(engine)
 # to be more general than it is.
 # ---------------------------------------------------------------------------
 add_subdirectory(games/kke_demo_game)
+
+# A dedicated physics demo, not another module bolted onto
+# kke_demo_game — see games/physics_demo/main.cpp's own comment for
+# why: real physics units and kke_demo_game's small-scale content
+# don't share a sensible camera. Only meaningful with FEMFX actually
+# built; skipped entirely otherwise rather than building a binary that
+# can only print an error and exit.
+if(KKE_ENABLE_FEMFX)
+    add_subdirectory(games/physics_demo)
+endif()
+
+# A dedicated demo for Dear ImGui — see games/imgui_demo/main.cpp for
+# details. Always built (no gate) — has no dependency beyond the core
+# engine, unlike physics_demo.
+add_subdirectory(games/imgui_demo)
+
+# A dedicated demo for RmlUi — see games/rmlui_demo/main.cpp for
+# details. Always built, same reasoning as imgui_demo above.
+add_subdirectory(games/rmlui_demo)
 
 # ---------------------------------------------------------------------------
 # Standalone smoke tests (no test framework wired in yet — see tests/).

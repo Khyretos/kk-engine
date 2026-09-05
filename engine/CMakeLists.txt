@@ -12,6 +12,7 @@ set(ENGINE_SOURCES
     src/Application.cpp
     src/RmlVulkanRenderInterface.cpp
     src/GameManifest.cpp
+    src/TetMeshAsset.cpp
     src/MarketplaceIndex.cpp
     src/RmlTextSafety.cpp
     src/Log.cpp
@@ -43,6 +44,7 @@ set(ENGINE_HEADERS
     include/kke/Application.h
     include/kke/RmlVulkanRenderInterface.h
     include/kke/GameManifest.h
+    include/kke/TetMeshAsset.h
     include/kke/MarketplaceIndex.h
     include/kke/RmlTextSafety.h
     include/kke/Log.h

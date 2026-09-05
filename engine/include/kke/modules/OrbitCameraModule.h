@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kke/Module.h"
+#include <glm/glm.hpp>
 
 namespace kke {
 
@@ -13,6 +14,16 @@ namespace kke {
 // render anything itself, so it has no init()/render() to speak of.
 class OrbitCameraModule : public Module {
 public:
+    // Defaults match this class's original hardcoded values (tuned
+    // for the generic kke_demo_game's small-scale content — a unit
+    // cube at distance 3.5). Any demo whose content lives at a
+    // different scale — a real-world-scale physics scene with a
+    // 100-unit floor, for instance — should pass its own values
+    // rather than fight the defaults with a render-side scale hack.
+    explicit OrbitCameraModule(float initialDistance = 3.5f, float initialPitch = 0.5f,
+                                float initialYaw = -0.6f, glm::vec3 initialTarget = glm::vec3(0.0f))
+        : m_distance(initialDistance), m_pitch(initialPitch), m_yaw(initialYaw), m_target(initialTarget) {}
+
     const char* name() const override { return "OrbitCamera"; }
 
     void init(Application& app) override;
@@ -22,9 +33,10 @@ public:
 private:
     Application* m_app = nullptr;
 
-    float m_yaw = -0.6f;   // radians
-    float m_pitch = 0.5f;  // radians, clamped away from the poles
-    float m_distance = 3.5f;
+    float m_yaw;
+    float m_pitch; // radians, clamped away from the poles
+    float m_distance;
+    glm::vec3 m_target;
 
     bool m_autoOrbit = false;
     float m_autoOrbitSpeedDegPerSec = 20.0f;

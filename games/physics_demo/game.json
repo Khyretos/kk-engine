@@ -1,0 +1,27 @@
+{
+  "id": "engine.kke.physics_demo",
+  "title": "KKE Physics Demo",
+  "description": "A dedicated demo for AMD FEMFX deformable-material physics: several tetrahedral objects fall from varied heights onto a real-world-scale floor, with a camera actually suited to that scale rather than the tiny render-scale hack kke_demo_game needs. Click 'Spawn tetrahedron' in the Physics panel to add more live.",
+  "version": "0.1.0",
+  "icon": "",
+  "banner": "",
+  "tags": ["demo", "physics", "femfx"],
+  "engine_version": "0.1.0",
+  "modules": [
+    "OrbitCamera",
+    "Physics",
+    "UI",
+    "Stats"
+  ],
+  "requirements": {
+    "minimum": {
+      "vram_mb": 128,
+      "vulkan_api_version": "1.0"
+    },
+    "recommended": {
+      "vram_mb": 256,
+      "vulkan_api_version": "1.2"
+    },
+    "notes": "Best-effort, developer-declared estimates -- see README 'Estimated hardware requirements'. FEMFX's own simulation is CPU-side (single-threaded task system stand-in -- see README 'Physics: AMD FEMFX integration'); GPU load here is light, just the render bridge."
+  }
+}

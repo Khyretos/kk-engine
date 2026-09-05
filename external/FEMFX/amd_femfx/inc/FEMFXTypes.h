@@ -46,6 +46,17 @@ THE SOFTWARE.
 // premake's own build script sets unconditionally, even for this
 // Linux build) — see soa_float.h/sse_mathfun.h for AMD's own correct
 // use of this same _MSC_VER pattern elsewhere in this codebase.
+//
+// FM_FORCE_INLINE specifically needs an #undef first: FEMFXVectorMath.h
+// (included just above) already defines it via its own #ifndef guard,
+// so redefining it here unconditionally produced a real "redefined"
+// warning on nearly every FEMFX translation unit — found by a user
+// building on real hardware who, reasonably, wanted a clean build
+// rather than pages of warnings. Both paths resolve to the same
+// effective value either way (this file's own -D__forceinline=inline
+// compile definition makes them equivalent), so this changes zero
+// behavior, only removes the warning.
+#undef FM_FORCE_INLINE
 #define FM_FORCE_INLINE inline
 #define FM_RESTRICT __restrict__
 #define FM_ALIGN_OF(x) alignof(x)

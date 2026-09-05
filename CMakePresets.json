@@ -1,0 +1,52 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "default",
+      "displayName": "Default (core engine only)",
+      "description": "Matches this project's default CMake option values exactly -- no FEMFX, no tetrahedralizer, no GPU profiler, no Lua. The smallest, fastest build; only kke_demo/imgui_demo/rmlui_demo and the test suite.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build"
+    },
+    {
+      "name": "everything",
+      "displayName": "Everything enabled",
+      "description": "Every optional piece this engine has, on at once: FEMFX physics, the CGAL tetrahedralizer tool, GPU profiling, and Lua scripting. This is what most people actively developing the engine itself want -- see INSTRUCTIONS.md for the system packages this needs first (CGAL/Boost for the tetrahedralizer in particular).",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "KKE_ENABLE_FEMFX": "ON",
+        "KKE_ENABLE_TETRAHEDRALIZER": "ON",
+        "KKE_ENABLE_GPU_PROFILER": "ON",
+        "ENGINE_ENABLE_LUA": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "default",
+      "configurePreset": "default"
+    },
+    {
+      "name": "everything",
+      "configurePreset": "everything"
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "default",
+      "steps": [
+        { "type": "configure", "name": "default" },
+        { "type": "build", "name": "default" }
+      ]
+    },
+    {
+      "name": "everything",
+      "steps": [
+        { "type": "configure", "name": "everything" },
+        { "type": "build", "name": "everything" }
+      ]
+    }
+  ]
+}

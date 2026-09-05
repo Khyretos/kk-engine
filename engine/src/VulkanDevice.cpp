@@ -12,6 +12,7 @@
 #include <set>
 #include <stdexcept>
 #include <vector>
+#include <algorithm>
 
 namespace kke {
 
@@ -141,19 +142,23 @@ void VulkanDevice::createInstance(bool enableValidation) {
         extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
 
-    VkInstanceCreateInfo createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    createInfo.pApplicationInfo = &appInfo;
-    createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
-    createInfo.ppEnabledExtensionNames = extensions.data();
-    createInfo.enabledLayerCount = static_cast<uint32_t>(layers.size());
-    createInfo.ppEnabledLayerNames = layers.empty() ? nullptr : layers.data();
-
 #if KKE_ENABLE_GPU_PROFILER
     // Requests VK_PROFILER_MODE_PER_DRAWCALL_EXT — the finest-grained
     // sampling mode the layer supports, matching "check everything up to
     // the draw calls." Only meaningful if m_gpuProfilerEnabled is true;
     // harmless (ignored) otherwise since no layer is present to read it.
+    //
+    // VK_EXT_layer_settings must actually be in the enabled extension
+    // list for this pNext chain to be valid — a real bug, not just
+    // theoretical: found after a real user on real AMD hardware (RX
+    // 9070XT) hit vkCreateInstance failing with VK_ERROR_LAYER_NOT_
+    // PRESENT (-6), which this sandbox's lavapipe software renderer
+    // apparently tolerated without the extension enabled but a real
+    // driver's stricter validation did not.
+    if (m_gpuProfilerEnabled) {
+        extensions.push_back(VK_EXT_LAYER_SETTINGS_EXTENSION_NAME);
+    }
+
     VkLayerSettingEXT profilerSetting{};
     profilerSetting.pLayerName = kGpuProfilerLayerName;
     profilerSetting.pSettingName = "sampling_mode";
@@ -166,13 +171,68 @@ void VulkanDevice::createInstance(bool enableValidation) {
     layerSettingsInfo.sType = VK_STRUCTURE_TYPE_LAYER_SETTINGS_CREATE_INFO_EXT;
     layerSettingsInfo.settingCount = 1;
     layerSettingsInfo.pSettings = &profilerSetting;
+#endif
 
+    VkInstanceCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    createInfo.pApplicationInfo = &appInfo;
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+    createInfo.ppEnabledExtensionNames = extensions.data();
+    createInfo.enabledLayerCount = static_cast<uint32_t>(layers.size());
+    createInfo.ppEnabledLayerNames = layers.empty() ? nullptr : layers.data();
+
+#if KKE_ENABLE_GPU_PROFILER
     if (m_gpuProfilerEnabled) {
         createInfo.pNext = &layerSettingsInfo;
     }
 #endif
 
-    VK_CHECK(vkCreateInstance(&createInfo, nullptr, &m_instance));
+    VkResult result = vkCreateInstance(&createInfo, nullptr, &m_instance);
+
+#if KKE_ENABLE_GPU_PROFILER
+    // Graceful fallback, not just a graceful *enumeration* check — the
+    // existing isInstanceLayerAvailable() check above only catches
+    // "the layer's manifest isn't registered at all." It does NOT
+    // catch "the manifest is registered (so enumeration finds it) but
+    // the loader can't actually load/initialize it" — confirmed to be
+    // a real, distinct failure mode by a real user's exact error: our
+    // own log line "layer found and will be enabled" printed
+    // successfully, immediately followed by vkCreateInstance itself
+    // failing with VK_ERROR_LAYER_NOT_PRESENT. Retrying once, without
+    // the profiler layer, is what "GPU profiler integration should
+    // degrade gracefully" always meant to cover — this is the second,
+    // previously-missing half of that promise, not new behavior.
+    if (result != VK_SUCCESS && m_gpuProfilerEnabled) {
+        log::get("VulkanDevice")->warn(
+            "GPU profiler layer '{}' was found during enumeration, but vkCreateInstance failed "
+            "with it enabled (VkResult {}) -- the layer's manifest may be registered without a "
+            "working library behind it, or something about this driver rejects it. Retrying "
+            "without the profiler layer rather than treating this as fatal.",
+            kGpuProfilerLayerName, static_cast<int>(result));
+
+        m_gpuProfilerEnabled = false;
+        layers.erase(std::remove(layers.begin(), layers.end(), std::string(kGpuProfilerLayerName)),
+                     layers.end());
+        // Explicit erase-remove on the value, not assuming it's the
+        // last element pushed — validation layers may already occupy
+        // earlier slots, and relying on push order here would be a
+        // real, if subtle, bug waiting to bite whenever that ordering
+        // assumption stopped holding.
+        auto extIt = std::find(extensions.begin(), extensions.end(),
+                                std::string(VK_EXT_LAYER_SETTINGS_EXTENSION_NAME));
+        if (extIt != extensions.end()) extensions.erase(extIt);
+
+        createInfo.pNext = nullptr;
+        createInfo.enabledLayerCount = static_cast<uint32_t>(layers.size());
+        createInfo.ppEnabledLayerNames = layers.empty() ? nullptr : layers.data();
+        createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+        createInfo.ppEnabledExtensionNames = extensions.data();
+
+        result = vkCreateInstance(&createInfo, nullptr, &m_instance);
+    }
+#endif
+
+    VK_CHECK(result);
 }
 
 void VulkanDevice::setupDebugMessenger() {

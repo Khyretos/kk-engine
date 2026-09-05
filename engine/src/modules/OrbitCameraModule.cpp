@@ -10,6 +10,7 @@ namespace kke {
 
 void OrbitCameraModule::init(Application& app) {
     m_app = &app;
+    app.camera().target = m_target;
 }
 
 void OrbitCameraModule::update(const UpdateContext& ctx) {

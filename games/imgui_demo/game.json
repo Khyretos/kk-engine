@@ -1,0 +1,27 @@
+{
+  "id": "engine.kke.imgui_demo",
+  "title": "KKE ImGui Demo",
+  "description": "A dedicated demo for Dear ImGui: wraps ImGui's own built-in ShowDemoWindow(), the library's canonical showcase of every widget type it supports (buttons, sliders, color pickers, drag/drop, tables, trees, tabs, menus, popups, text editing, plotting, and more), against a minimal grid + orbit-camera backdrop.",
+  "version": "0.1.0",
+  "icon": "",
+  "banner": "",
+  "tags": ["demo", "imgui", "ui"],
+  "engine_version": "0.1.0",
+  "modules": [
+    "Grid",
+    "OrbitCamera",
+    "ImGuiShowcase",
+    "Stats"
+  ],
+  "requirements": {
+    "minimum": {
+      "vram_mb": 64,
+      "vulkan_api_version": "1.0"
+    },
+    "recommended": {
+      "vram_mb": 128,
+      "vulkan_api_version": "1.0"
+    },
+    "notes": "Best-effort, developer-declared estimates -- see README 'Estimated hardware requirements'. This demo is UI-only content; the 3D backdrop (grid) is trivial to render."
+  }
+}

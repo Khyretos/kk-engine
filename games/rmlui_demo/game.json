@@ -1,0 +1,26 @@
+{
+  "id": "engine.kke.rmlui_demo",
+  "title": "KKE RmlUi Demo",
+  "description": "A dedicated demo for RmlUi: real <input> (text/checkbox/radio/range), <select>, <textarea>, <tabset>, and <progress> elements -- all confirmed part of RmlUi 6.3's Core library directly, styled via RCSS, rendered through this engine's real Vulkan text pipeline.",
+  "version": "0.1.0",
+  "icon": "",
+  "banner": "",
+  "tags": ["demo", "rmlui", "ui"],
+  "engine_version": "0.1.0",
+  "modules": [
+    "UI",
+    "RmlUiShowcase",
+    "Stats"
+  ],
+  "requirements": {
+    "minimum": {
+      "vram_mb": 64,
+      "vulkan_api_version": "1.0"
+    },
+    "recommended": {
+      "vram_mb": 128,
+      "vulkan_api_version": "1.0"
+    },
+    "notes": "Best-effort, developer-declared estimates -- see README 'Estimated hardware requirements'. RmlUi's glyph-atlas textures are the main driver here; no 3D content in this demo at all."
+  }
+}
