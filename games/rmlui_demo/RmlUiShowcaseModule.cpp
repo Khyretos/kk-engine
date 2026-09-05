@@ -27,13 +27,55 @@ const char* kShowcaseRml = R"(
         .panel { position: absolute; background-color: #1e1e2e; padding: 12px; border: 1px #555555; }
         .panel h1 { font-size: 16px; color: #a0c8ff; margin-bottom: 8px; }
         input.text { background-color: #333344; color: #ffffff; padding: 4px; border: 1px #666677; width: 200px; }
-        select { background-color: #333344; color: #ffffff; padding: 4px; width: 200px; }
+        /* Same root cause found for the select/slider fixes above,
+           discovered while investigating why nothing here responded to
+           clicks at all: RmlUi auto-assigns a .checkbox/.radio class
+           to these inputs (confirmed against the same real RmlUi
+           sample, invader.rcss), but nothing here ever styled them --
+           so they rendered at their default near-zero size, meaning
+           there was no visible glyph AND no meaningfully clickable
+           area. Not a hit-testing bug; there was genuinely nothing
+           there to hit. */
+        input.checkbox, input.radio { width: 16px; height: 16px; background-color: #333344; border: 1px #666677; vertical-align: -3px; }
+        input.checkbox:hover, input.radio:hover { background-color: #3d3d4f; }
+        input.checkbox:checked, input.radio:checked { background-color: #4a7ac9; border: 1px #6a9aee; }
+        select { color: #ffffff; width: 200px; }
+        /* select's own outer box was the only thing styled before --
+           the actual VISIBLE parts are named sub-elements RmlUi creates
+           internally (confirmed against a real, working RmlUi sample,
+           Samples/assets/invader.rcss, not guessed): selectvalue (the
+           closed box showing the current choice), selectarrow (the
+           dropdown indicator), and selectbox (the popup list) with its
+           own option children. None of these inherit from `select`
+           automatically, which is exactly why the dropdown had no
+           visible background or hover effect before this fix -- the
+           parts a user actually sees and clicks were never styled at all. */
+        select selectvalue { display: block; background-color: #333344; padding: 4px 8px; border: 1px #666677; }
+        select selectvalue:hover { background-color: #3d3d4f; }
+        select selectarrow { width: 22px; background-color: #43435a; }
+        select selectbox { background-color: #2a2a3a; border: 1px #666677; padding: 2px; margin-top: 2px; }
+        select selectbox option { padding: 4px 8px; color: #dddddd; }
+        select selectbox option:checked { background-color: #3d3d4f; font-weight: bold; }
+        select selectbox option:hover { background-color: #4a7ac9; color: #ffffff; }
         textarea { background-color: #333344; color: #ffffff; padding: 4px; width: 200px; height: 44px; border: 1px #666677; }
         button { background-color: #4a7ac9; color: #ffffff; padding: 6px 14px; border: 1px #6a9aee; }
         button:hover { background-color: #5a8ad9; }
+        tabset tabs { display: block; }
         tabset tab { background-color: #333344; color: #cccccc; padding: 4px 12px; }
         tabset tab:selected { background-color: #4a7ac9; color: #ffffff; }
-        tabset panel { background-color: #262636; color: #ffffff; padding: 10px; }
+        tabset panel { display: block; background-color: #262636; color: #ffffff; padding: 10px; }
+        /* Same class of gap as the select dropdown above: only the
+           outer <input type="range"> box existed in CSS before, never
+           its actual visible/draggable parts. slidertrack is the
+           groove; sliderbar is the real draggable thumb -- without an
+           explicit size and color, it rendered with nothing to see or
+           grab, which is exactly why the slider "didn't work." Verified
+           against the same real RmlUi sample as the dropdown fix above. */
+        input.range { width: 200px; height: 20px; }
+        input.range slidertrack { display: block; width: 200px; height: 14px; margin-top: 3px; background-color: #333344; border: 1px #666677; }
+        input.range sliderbar { display: block; width: 18px; height: 18px; margin-top: -2px; background-color: #4a7ac9; border: 1px #6a9aee; }
+        input.range sliderbar:hover { background-color: #5a8ad9; }
+        input.range sliderbar:active { background-color: #3a6ab9; }
         progress { width: 200px; height: 16px; }
         progress fill { background-color: #4a7ac9; }
         progress df-fill { background-color: #4a7ac9; }

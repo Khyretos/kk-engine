@@ -33,13 +33,18 @@ std::string MarketplaceUiModule::buildDocumentRml() const {
         // though its background is fully transparent. Found this by
         // instrumenting Context::GetHoverElement() and seeing it resolve
         // to "body"/"#root" everywhere on screen, not by guessing.
-        << R"(<div style="position:absolute; left:820px; top:140px; width:420px; background-color:#1a1d2e; padding:16px;">)"
-        // NOTE: card <p> elements currently render running into each
-        // other rather than stacking on separate lines — a block-layout/
-        // RCSS detail (verified: not a data or escaping problem, the
-        // content itself is complete and correct) worth revisiting when
-        // this gets real visual design attention, not blocking on it now.
-        << R"(<p style="font-size:22px; color:#ffffff;">Marketplace (# )" << m_index.count() << R"( games)</p>)";
+        << R"(<div style="display:block; position:absolute; left:820px; top:140px; width:420px; background-color:#1a1d2e; padding:16px;">)"
+        // Confirmed and fixed: display:block was missing from every <p>
+        // and <div> below. RmlUi has no built-in "p/div default to
+        // block" rule the way a browser does — that behavior in
+        // RmlUi's own Samples comes from a *stylesheet* the samples
+        // link in (Samples/assets/rml.rcss), not something baked into
+        // the engine for every document. This document never linked
+        // one, so every element defaulted to inline, which is exactly
+        // why titles/ids/descriptions/tags all ran together on one
+        // line instead of stacking. Same root cause, same fix, as the
+        // rmlui_demo tabset layout bug found earlier this session.
+        << R"(<p style="display:block; font-size:22px; color:#ffffff;">Marketplace (# )" << m_index.count() << R"( games)</p>)";
 
     for (const auto& game : m_index.games()) {
         // Every field below came from someone else's game.json, not this
@@ -57,14 +62,14 @@ std::string MarketplaceUiModule::buildDocumentRml() const {
             tags += escapeRmlText(tag);
         }
 
-        rml << R"(<div style="margin-top:12px; padding:10px; background-color:#2a2f4a;">)"
-            << R"(<p style="font-size:18px; color:#ffffff;">)" << title << "</p>"
-            << R"(<p style="font-size:13px; color:#9aa0c0;">)" << id << "</p>";
+        rml << R"(<div style="display:block; margin-top:12px; padding:10px; background-color:#2a2f4a;">)"
+            << R"(<p style="display:block; font-size:18px; color:#ffffff;">)" << title << "</p>"
+            << R"(<p style="display:block; font-size:13px; color:#9aa0c0;">)" << id << "</p>";
         if (!description.empty()) {
-            rml << R"(<p style="font-size:14px; color:#c8ccdc; margin-top:6px;">)" << description << "</p>";
+            rml << R"(<p style="display:block; font-size:14px; color:#c8ccdc; margin-top:6px;">)" << description << "</p>";
         }
         if (!tags.empty()) {
-            rml << R"(<p style="font-size:12px; color:#7fd8a0; margin-top:6px;">)" << tags << "</p>";
+            rml << R"(<p style="display:block; font-size:12px; color:#7fd8a0; margin-top:6px;">)" << tags << "</p>";
         }
         rml << "</div>";
     }

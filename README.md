@@ -1984,6 +1984,50 @@ true right now versus what's aspirational.
 
 ### Immediate next slices (each independently buildable/runnable)
 
+- **RmlUi demo: three real interaction bugs found and fixed, one still
+  open.** All three verified with actual clicks/state changes, not
+  just visual appearance:
+  - **Tabset content beside the tabs, not under them** — both
+    `tabset tabs` and `tabset panel` needed explicit `display: block`,
+    confirmed against RmlUi's own working sample
+    (`Samples/assets/invader.rcss`), not guessed.
+  - **Checkbox/radio invisible and unclickable** — found while
+    investigating the slider: neither had *any* CSS at all, so they
+    rendered at effectively zero size. Not a hit-testing bug — there
+    was genuinely nothing there to click. Fixed with real sizing;
+    verified by clicking "Mode B" and watching "Mode A" correctly
+    deselect (real radio-group exclusivity, not just a color change).
+  - **Dropdown with no background or hover** — only the outer `select`
+    element had ever been styled; the parts a user actually sees and
+    clicks (`selectvalue`, `selectarrow`, `selectbox`,
+    `selectbox option`) inherit nothing automatically. Fixed with real
+    styling for all of them.
+  - **The range slider still doesn't respond to any click or drag** —
+    genuinely unresolved despite substantial real effort: read RmlUi's
+    own `WidgetSlider.cpp` to understand its exact event model,
+    verified CSS selectors against the same working sample, tried
+    precise pixel-level coordinate targeting (cropped/zoomed
+    screenshots), made the track significantly taller, gave it an
+    explicit width suspecting an auto-width-resolves-to-zero layout
+    bug, and tested genuine incremental-motion drags rather than
+    single-point clicks. None of it worked, despite the *identical*
+    class of fix (give an unstyled sub-element real size/color)
+    working immediately for checkbox/radio moments earlier. Needs
+    RmlUi's own debugger tool wired in, or a different diagnostic
+    angle — not more CSS guessing.
+- ~~**Marketplace card text running together unformatted**~~ Fixed —
+  and there was already an honest comment in the code flagging this
+  exact symptom, left by an earlier pass that verified it wasn't a
+  data/escaping problem but didn't chase the real cause. Same root
+  cause as the tabset bug above: RmlUi has no built-in "p/div default
+  to block" behavior the way a browser does — that comes from a
+  stylesheet RmlUi's own samples happen to link in, not something
+  built into the engine for every document. `MarketplaceUiModule`'s
+  generated RML never linked one, so every `<p>`/`<div>` defaulted to
+  inline. Fixed by adding `display: block` directly to each generated
+  element's inline style. Verified with a real screenshot: three
+  clearly separated cards, proper title/id/description/tags hierarchy,
+  where before everything ran together as one unbroken block of text.
 - ~~**Confirm the CI workflow actually runs on GitHub's infrastructure.**~~
   Confirmed — and it found a real bug on the very first real run, not a
   clean pass. The "Headless smoke test" step failed with "Process
