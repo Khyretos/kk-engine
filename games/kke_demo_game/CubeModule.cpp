@@ -7,9 +7,14 @@
 namespace kke_demo {
 
 namespace {
+// Shrunk from { mat4 mvp; mat4 model; } -- see cube.vert's own comment
+// for the full account of why (128-byte push constant limit, mvp
+// removed as redundant with the now-shared LightingUBO.viewProj, real
+// room made for real PBR material properties).
 struct CubePushConstants {
-    glm::mat4 mvp;
     glm::mat4 model;
+    float metallic;
+    float roughness;
 };
 struct ShadowPushConstants {
     glm::mat4 lightViewProj;
@@ -73,7 +78,7 @@ void CubeModule::update(const kke::UpdateContext& ctx) {
 
 void CubeModule::render(const kke::RenderContext& ctx) {
     glm::mat4 model = glm::rotate(glm::mat4(1.0f), glm::radians(m_accumulatedAngle), m_spinAxis);
-    CubePushConstants pc{ ctx.proj * ctx.view * model, model };
+    CubePushConstants pc{ model, m_metallic, m_roughness };
 
     m_pipeline->bind(ctx.cmd);
     VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet };
@@ -99,6 +104,15 @@ void CubeModule::renderUi() {
     ImGui::Begin("Cube");
     ImGui::Checkbox("Spinning", &m_spinning);
     ImGui::SliderFloat("Spin speed", &m_spinSpeedDegPerSec, -180.0f, 180.0f);
+    // Real, live PBR controls -- not fixed constants. Sliding
+    // "Metallic" from 0 to 1 while watching the cube is the actual,
+    // direct way to verify Cook-Torrance is doing something real:
+    // near 1.0, the cube's own albedo color should visibly take over
+    // the specular highlight color and the diffuse term should nearly
+    // vanish; near 0.0, highlights stay a neutral white/light-source
+    // color and the surface reads as a normal, colored dielectric.
+    ImGui::SliderFloat("Metallic", &m_metallic, 0.0f, 1.0f);
+    ImGui::SliderFloat("Roughness", &m_roughness, 0.0f, 1.0f);
     ImGui::End();
 }
 

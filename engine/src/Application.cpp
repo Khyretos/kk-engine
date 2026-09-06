@@ -341,7 +341,7 @@ void Application::run() {
         // Once per frame, before any module's render() might bind and
         // draw using it — every lit module shares this same one buffer
         // and descriptor set (see LightingBuffer.h).
-        m_lightingBuffer->update(m_lighting, m_camera.position, lightViewProj);
+        m_lightingBuffer->update(m_lighting, m_camera.position, lightViewProj, proj * view);
 
         // ImGui's NewFrame() (inside beginFrame()) must only be called
         // for a frame that will also reach Render() — calling it here,

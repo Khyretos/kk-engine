@@ -35,7 +35,7 @@ public:
     // guaranteed-minimum limit on some hardware) — not perfectly
     // semantically "lighting" data, but a pragmatic, documented choice
     // given the real constraint, not an accident.
-    void update(const Lighting& lighting, const glm::vec3& cameraPos, const glm::mat4& lightViewProj);
+    void update(const Lighting& lighting, const glm::vec3& cameraPos, const glm::mat4& lightViewProj, const glm::mat4& viewProj);
 
     VkDescriptorSetLayout descriptorSetLayout() const { return m_setLayout; }
     VkDescriptorSet descriptorSet() const { return m_descriptorSet; }

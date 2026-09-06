@@ -11,8 +11,9 @@ namespace kke_demo {
 namespace {
 
 struct CubePushConstants {
-    glm::mat4 mvp;
     glm::mat4 model;
+    float metallic;
+    float roughness;
 };
 
 uint32_t wangHash(uint32_t x) {
@@ -107,7 +108,11 @@ void DestructionModule::render(const kke::RenderContext& ctx) {
 
     for (uint32_t i = 0; i < m_fragmentCount; ++i) {
         glm::mat4 model = fragmentTransform(m_seed, i, elapsed);
-        CubePushConstants pc{ ctx.proj * ctx.view * model, model };
+        // Fixed, reasonable dielectric default -- these fragments
+        // aren't spawned through the same Material-driven path
+        // PhysicsModule's objects are (see that module's own comment
+        // on why its ground plane gets the same kind of fixed default).
+        CubePushConstants pc{ model, 0.0f, 0.6f };
         vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
         m_fragmentMesh->draw(ctx.cmd);
     }

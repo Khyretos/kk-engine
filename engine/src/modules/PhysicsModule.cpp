@@ -195,7 +195,7 @@ const glm::vec3 kColorPalette[] = {
 // bug during this file's own first lighting-support pass: this used
 // to be declared inside init() only, which compiled fine there but
 // left render() unable to see it at all.
-struct PhysicsPushConstants { glm::mat4 mvp; glm::mat4 model; };
+struct PhysicsPushConstants { glm::mat4 model; float metallic; float roughness; };
 
 } // namespace
 
@@ -689,18 +689,23 @@ void PhysicsModule::render(const RenderContext& ctx) {
         // 1-unit collision thickness — purely so a flat floor reads as
         // a floor rather than a thick block from any angle.
         model = glm::scale(model, glm::vec3(groundWidth, groundThickness, groundWidth));
-        PhysicsPushConstants pc{ ctx.proj * ctx.view * model, model };
+        // A matte, non-metallic ground plane (concrete/stone-like) --
+        // a fixed, reasonable default rather than something read from
+        // a Material, since the ground isn't spawned through the same
+        // Material-driven path every other object here is.
+        PhysicsPushConstants pc{ model, 0.0f, 0.9f };
         vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
         m_groundMesh->bind(ctx.cmd);
         m_groundMesh->draw(ctx.cmd);
     }
 
     // Every spawned object — each one's simulated vertex positions are
-    // already in world space, so the model matrix is identity; see the
-    // class comment for why this is the simplest possible render
-    // bridge, not a real skinning one.
-    PhysicsPushConstants pc{ ctx.proj * ctx.view, glm::mat4(1.0f) }; // model = identity, shared by every object
-    vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+    // already in world space, so the model matrix is identity for all
+    // of them; see the class comment for why this is the simplest
+    // possible render bridge, not a real skinning one. metallic/
+    // roughness, unlike model, genuinely differ per-object now (see
+    // Material.h) -- pushed inside the loop below, once per object,
+    // rather than once here outside it.
 
     size_t colorIndex = 0;
     std::vector<Vertex> verts; // reused across objects, resized per-object below
@@ -746,6 +751,9 @@ void PhysicsModule::render(const RenderContext& ctx) {
             }
 
             obj->vertexBuffer->upload(verts.data(), verts.size() * sizeof(Vertex));
+
+            PhysicsPushConstants pc{ glm::mat4(1.0f), obj->material.metallic, obj->material.roughness };
+            vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
 
             VkBuffer buffers[] = { obj->vertexBuffer->handle() };
             VkDeviceSize offsets[] = { 0 };
@@ -826,6 +834,9 @@ void PhysicsModule::render(const RenderContext& ctx) {
 
             obj->vertexBuffer->upload(verts.data(), verts.size() * sizeof(Vertex));
             obj->indexBuffer->upload(dynamicIndices.data(), dynamicIndices.size() * sizeof(uint32_t));
+
+            PhysicsPushConstants pc{ glm::mat4(1.0f), obj->material.metallic, obj->material.roughness };
+            vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
 
             VkBuffer buffers[] = { obj->vertexBuffer->handle() };
             VkDeviceSize offsets[] = { 0 };

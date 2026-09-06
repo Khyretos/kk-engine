@@ -45,6 +45,17 @@ struct Material {
     // threshold, per unit of excess stress. Higher = dents more easily
     // once yielding starts.
     float plasticCreep = 0.3f;
+
+    // Real PBR visual properties (see shaders/cube.frag's Cook-Torrance
+    // implementation) -- deliberately living on the same Material a
+    // spawned object's physics already reads from, not a separate
+    // visual-only struct: a material's look and its physical behavior
+    // are the same real-world concept (iron is shiny AND stiff AND
+    // dense for the same underlying reason), and keeping them together
+    // means kke::MaterialGridModule's presets already double as visual
+    // presets with no extra plumbing.
+    float metallic = 0.0f;  // 0 = dielectric (wood, stone, plastic), 1 = metal
+    float roughness = 0.7f; // 0 = mirror-smooth, 1 = fully matte
 };
 
 } // namespace kke

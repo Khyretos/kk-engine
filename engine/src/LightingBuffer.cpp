@@ -24,7 +24,13 @@ struct LightingUBOData {
     GPULight lights[Lighting::kMaxLights];
     glm::vec4 ambient;   // rgb = ambient color; a unused (padding)
     glm::vec4 cameraPos; // rgb = world-space camera position, needed for specular; a unused
-    glm::mat4 lightViewProj; // new field, appended -- see ShadowMap.h; matches cube.vert/frag's own copy of this struct exactly, field for field, in the same order
+    glm::mat4 lightViewProj; // appended -- see ShadowMap.h
+    glm::mat4 viewProj; // appended -- the real camera's view*proj, computed once here instead of
+                         // redundantly inside every single object's own push constants (see
+                         // PBRPushConstants in cube.vert/frag's own comment for why that mattered:
+                         // freeing this 64 bytes out of the push constant was what made room for
+                         // real per-object metallic/roughness within the 128-byte guaranteed-minimum
+                         // push constant limit)
 };
 
 } // namespace
@@ -92,7 +98,7 @@ LightingBuffer::~LightingBuffer() {
     if (m_setLayout) vkDestroyDescriptorSetLayout(m_device.device(), m_setLayout, nullptr);
 }
 
-void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos, const glm::mat4& lightViewProj) {
+void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos, const glm::mat4& lightViewProj, const glm::mat4& viewProj) {
     LightingUBOData data{};
     for (int i = 0; i < Lighting::kMaxLights; ++i) {
         const Light& src = lighting.lights[i];
@@ -111,6 +117,7 @@ void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos
     data.ambient = glm::vec4(lighting.ambientColor, 0.0f);
     data.cameraPos = glm::vec4(cameraPos, 0.0f);
     data.lightViewProj = lightViewProj;
+    data.viewProj = viewProj;
 
     m_buffer->upload(&data, sizeof(data));
 }

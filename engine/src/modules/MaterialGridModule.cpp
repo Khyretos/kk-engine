@@ -33,11 +33,11 @@ struct MaterialPreset {
 // intent (wood bends, glass is brittle and snaps near its yield point,
 // rubber barely breaks at all).
 const MaterialPreset kPresets[] = {
-    { "wood",   "Wood",   "#8a5a2b", []{ Material m; m.density=600.0f;  m.stiffness=1.0e7f; m.poissonsRatio=0.30f; m.fractureStressThreshold=3.0e5f; m.plasticYieldThreshold=1.0e5f; m.plasticCreep=0.3f; return m; }() },
-    { "stone",  "Stone",  "#7a7a7a", []{ Material m; m.density=2500.0f; m.stiffness=3.0e7f; m.poissonsRatio=0.25f; m.fractureStressThreshold=1.0e5f; m.plasticYieldThreshold=9.0e4f; m.plasticCreep=0.1f; return m; }() },
-    { "iron",   "Iron",   "#b0b8c0", []{ Material m; m.density=7870.0f; m.stiffness=2.0e8f; m.poissonsRatio=0.30f; m.fractureStressThreshold=5.0e8f; m.plasticYieldThreshold=2.0e8f; m.plasticCreep=0.2f; return m; }() },
-    { "rubber", "Rubber", "#2b2b2b", []{ Material m; m.density=1200.0f; m.stiffness=1.0e5f; m.poissonsRatio=0.45f; m.fractureStressThreshold=1.0e7f; m.plasticYieldThreshold=5.0e6f; m.plasticCreep=0.05f; return m; }() },
-    { "glass",  "Glass",  "#bfe3f0", []{ Material m; m.density=2500.0f; m.stiffness=7.0e7f; m.poissonsRatio=0.22f; m.fractureStressThreshold=5.0e4f; m.plasticYieldThreshold=4.0e4f; m.plasticCreep=0.02f; return m; }() },
+    { "wood",   "Wood",   "#8a5a2b", []{ Material m; m.density=600.0f;  m.stiffness=1.0e7f; m.poissonsRatio=0.30f; m.fractureStressThreshold=3.0e5f; m.plasticYieldThreshold=1.0e5f; m.plasticCreep=0.3f; m.metallic=0.0f; m.roughness=0.75f; return m; }() },
+    { "stone",  "Stone",  "#7a7a7a", []{ Material m; m.density=2500.0f; m.stiffness=3.0e7f; m.poissonsRatio=0.25f; m.fractureStressThreshold=1.0e5f; m.plasticYieldThreshold=9.0e4f; m.plasticCreep=0.1f; m.metallic=0.0f; m.roughness=0.9f; return m; }() },
+    { "iron",   "Iron",   "#b0b8c0", []{ Material m; m.density=7870.0f; m.stiffness=2.0e8f; m.poissonsRatio=0.30f; m.fractureStressThreshold=5.0e8f; m.plasticYieldThreshold=2.0e8f; m.plasticCreep=0.2f; m.metallic=0.9f; m.roughness=0.35f; return m; }() },
+    { "rubber", "Rubber", "#2b2b2b", []{ Material m; m.density=1200.0f; m.stiffness=1.0e5f; m.poissonsRatio=0.45f; m.fractureStressThreshold=1.0e7f; m.plasticYieldThreshold=5.0e6f; m.plasticCreep=0.05f; m.metallic=0.0f; m.roughness=0.95f; return m; }() },
+    { "glass",  "Glass",  "#bfe3f0", []{ Material m; m.density=2500.0f; m.stiffness=7.0e7f; m.poissonsRatio=0.22f; m.fractureStressThreshold=5.0e4f; m.plasticYieldThreshold=4.0e4f; m.plasticCreep=0.02f; m.metallic=0.0f; m.roughness=0.05f; return m; }() },
 };
 constexpr int kNumPresets = sizeof(kPresets) / sizeof(kPresets[0]);
 
