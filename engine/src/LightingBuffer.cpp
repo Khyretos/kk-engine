@@ -24,6 +24,7 @@ struct LightingUBOData {
     GPULight lights[Lighting::kMaxLights];
     glm::vec4 ambient;   // rgb = ambient color; a unused (padding)
     glm::vec4 cameraPos; // rgb = world-space camera position, needed for specular; a unused
+    glm::mat4 lightViewProj; // new field, appended -- see ShadowMap.h; matches cube.vert/frag's own copy of this struct exactly, field for field, in the same order
 };
 
 } // namespace
@@ -91,7 +92,7 @@ LightingBuffer::~LightingBuffer() {
     if (m_setLayout) vkDestroyDescriptorSetLayout(m_device.device(), m_setLayout, nullptr);
 }
 
-void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos) {
+void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos, const glm::mat4& lightViewProj) {
     LightingUBOData data{};
     for (int i = 0; i < Lighting::kMaxLights; ++i) {
         const Light& src = lighting.lights[i];
@@ -109,6 +110,7 @@ void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos
     }
     data.ambient = glm::vec4(lighting.ambientColor, 0.0f);
     data.cameraPos = glm::vec4(cameraPos, 0.0f);
+    data.lightViewProj = lightViewProj;
 
     m_buffer->upload(&data, sizeof(data));
 }

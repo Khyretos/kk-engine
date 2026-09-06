@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
 namespace kke {
 
@@ -25,11 +26,14 @@ class VulkanDevice;
 // vertex color in the fragment shader is a no-op, so one code path
 // covers both cases.
 //
-// STILL STUBBED: LoadTexture (the path actual image files — <img>,
-// background-image — come through) returns the same default white
-// texture rather than decoding real image data. That needs stb_image
-// wired up first (see README Roadmap) and is a separate, independent
-// piece of work from what made text rendering possible here.
+// LoadTexture (the path actual image files — <img>, background-image —
+// come through) is real now too: decodes with stb_image (already a
+// real dependency elsewhere, see the root CMakeLists.txt), forcing
+// RGBA8 output to match createTextureFromPixels' own expected format
+// exactly, then reuses that same GPU upload path GenerateTexture
+// already relies on. A file that fails to load or decode falls back to
+// the same 1x1 white default untextured geometry already uses, rather
+// than treating a missing/corrupt image as fatal.
 class RmlVulkanRenderInterface : public Rml::RenderInterface {
 public:
     RmlVulkanRenderInterface(VulkanDevice& device, VkRenderPass renderPass);
@@ -69,6 +73,40 @@ private:
     CompiledTexture createTextureFromPixels(const uint8_t* pixels, uint32_t width, uint32_t height);
     void destroyTexture(CompiledTexture& texture);
     VkDescriptorSet allocateAndWriteDescriptor(VkImageView view);
+
+    // A real, gdb-and-validation-layer-diagnosed bug this fixes: both
+    // ReleaseGeometry() and ReleaseTexture() used to destroy their
+    // underlying GPU resources immediately, with no check that the GPU
+    // had actually finished using them. Renderer.cpp waits on a fence
+    // for frame slot N at the start of every frame N re-uses that slot
+    // (kMaxFramesInFlight = 2, see Renderer.h) — so a resource is only
+    // truly safe to destroy once that many frames have genuinely
+    // elapsed since it was released, not the instant RmlUi says it's
+    // done with it. Confirmed as the real cause of a long-standing
+    // crash (RmlUi's own debugger "Outlines" tool, which churns
+    // through far more temporary geometry per frame than normal
+    // content ever does) by installing real Vulkan validation layers
+    // in the same sandbox that had none — the previous investigation
+    // only ever had a bare, symbol-less segfault deep inside the
+    // driver to go on. With validation on, the actual error was exact
+    // and unambiguous: "vkCmdWriteTimestamp(): was called in
+    // VkCommandBuffer ... which is invalid because bound VkBuffer ...
+    // was destroyed" — a buffer freed while a still-in-flight command
+    // buffer from a prior frame was still referencing it.
+    struct PendingDeletion {
+        uint64_t queuedAtFrame;
+        std::unique_ptr<CompiledGeometry> geometry; // exactly one of these two is set
+        CompiledTexture texture;
+        bool isTexture = false;
+    };
+    std::vector<PendingDeletion> m_pendingDeletions;
+    uint64_t m_frameCounter = 0;
+    // A real margin beyond the bare minimum (kMaxFramesInFlight = 2),
+    // not copied blindly — cheap insurance against being off-by-one
+    // in reasoning about exactly when a fence wait guarantees
+    // completion, for a queue this small and this infrequently
+    // touched that the extra frame of latency costs nothing real.
+    static constexpr uint64_t kDeletionDelayFrames = 3;
 
     VulkanDevice& m_device;
     std::unique_ptr<Pipeline> m_pipeline;

@@ -1,6 +1,14 @@
 #include "kke/RmlVulkanRenderInterface.h"
 #include "kke/VulkanDevice.h"
 #include "kke/VulkanCheck.h"
+#include "kke/Log.h"
+
+// STB_IMAGE_IMPLEMENTATION must be defined in exactly one translation
+// unit across the whole project — confirmed via a real grep that no
+// other file already does this before adding it here. This is the
+// natural, and currently only, consumer of stb_image in this codebase.
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
 
 #include <algorithm>
 #include <array>
@@ -87,6 +95,27 @@ RmlVulkanRenderInterface::RmlVulkanRenderInterface(VulkanDevice& device, VkRende
 }
 
 RmlVulkanRenderInterface::~RmlVulkanRenderInterface() {
+    // A real bug in the deferred-deletion fix itself, found the same
+    // way as the original bug it fixed — a real run, not assumed
+    // correct: pending deletions queued shortly before shutdown never
+    // get the kDeletionDelayFrames of real frames they need to become
+    // "safe," and the per-frame sweep in beginFrame() never runs again
+    // once the app is closing. For pending geometry this was harmless
+    // (its unique_ptr<CompiledGeometry> destroys itself automatically
+    // once m_pendingDeletions itself is destroyed below) — but a
+    // pending *texture* is a bare struct of raw Vulkan/VMA handles
+    // with no destructor at all, so those would leak past process
+    // exit and trip VMA's own "allocations not freed" assertion.
+    // Confirmed exactly this way: a real run of rmlui_demo with its
+    // debugger enabled hit this assertion on clean shutdown, traced
+    // directly to this gap, not guessed.
+    for (auto& pending : m_pendingDeletions) {
+        if (pending.isTexture) {
+            destroyTexture(pending.texture);
+        }
+    }
+    m_pendingDeletions.clear();
+
     for (auto& [handle, texture] : m_textures) {
         destroyTexture(texture);
     }
@@ -239,6 +268,30 @@ void RmlVulkanRenderInterface::beginFrame(VkCommandBuffer cmd, glm::vec2 screenS
     m_screenSize = screenSizePixels;
     m_scissorEnabled = false;
 
+    // Real deferred-destruction sweep, not decorative — see
+    // PendingDeletion's own comment in the header for the full,
+    // validation-layer-confirmed account of the crash this fixes.
+    // Only frees GPU resources whose queued frame is old enough that a
+    // fence wait (in Renderer.cpp, at the start of every frame that
+    // re-uses that same frame slot) already guarantees the GPU is
+    // genuinely done with them — called once per frame, here, since
+    // beginFrame() itself is already UiModule's own once-per-frame
+    // entry point into this class.
+    ++m_frameCounter;
+    m_pendingDeletions.erase(
+        std::remove_if(m_pendingDeletions.begin(), m_pendingDeletions.end(),
+                        [this](PendingDeletion& pending) {
+                            if (m_frameCounter - pending.queuedAtFrame < kDeletionDelayFrames) return false;
+                            if (pending.isTexture) {
+                                destroyTexture(pending.texture);
+                            }
+                            // else: pending.geometry is a unique_ptr going out of
+                            // scope right here, which is what actually destroys
+                            // its Buffers -- nothing else to do explicitly.
+                            return true;
+                        }),
+        m_pendingDeletions.end());
+
     m_pipeline->bind(cmd);
 
     VkRect2D fullScreen{ { 0, 0 }, { static_cast<uint32_t>(screenSizePixels.x), static_cast<uint32_t>(screenSizePixels.y) } };
@@ -288,14 +341,44 @@ void RmlVulkanRenderInterface::RenderGeometry(
 }
 
 void RmlVulkanRenderInterface::ReleaseGeometry(Rml::CompiledGeometryHandle geometryHandle) {
-    m_geometry.erase(geometryHandle);
+    auto it = m_geometry.find(geometryHandle);
+    if (it == m_geometry.end()) return;
+    PendingDeletion pending;
+    pending.queuedAtFrame = m_frameCounter;
+    pending.geometry = std::move(it->second);
+    pending.isTexture = false;
+    m_pendingDeletions.push_back(std::move(pending));
+    m_geometry.erase(it);
 }
 
-Rml::TextureHandle RmlVulkanRenderInterface::LoadTexture(Rml::Vector2i& texture_dimensions, const Rml::String& /*source*/) {
-    // Stub — see the class comment. Real image-file decoding (stb_image)
-    // is a separate, independent piece of work from GenerateTexture below.
-    texture_dimensions = Rml::Vector2i(1, 1);
-    return 0; // 0 = "use the default texture," same as untextured geometry
+Rml::TextureHandle RmlVulkanRenderInterface::LoadTexture(Rml::Vector2i& texture_dimensions, const Rml::String& source) {
+    int width = 0, height = 0, channels = 0;
+    // Forcing 4 channels (RGBA) regardless of the source file's own
+    // format — matches createTextureFromPixels' own hardcoded
+    // VK_FORMAT_R8G8B8A8_UNORM expectation exactly, so this can reuse
+    // that same real GPU upload path unmodified rather than needing a
+    // second, format-aware variant of it.
+    stbi_uc* pixels = stbi_load(source.c_str(), &width, &height, &channels, 4);
+    if (!pixels) {
+        // A missing or corrupt file isn't fatal — same convention as
+        // untextured geometry (texture handle 0), not a thrown error,
+        // so one broken <img src="..."> doesn't take down an entire
+        // document. stbi_failure_reason() is genuinely useful here
+        // (distinguishes "file not found" from "not a valid image"),
+        // logged rather than silently swallowed.
+        log::get("UI")->warn("RmlVulkanRenderInterface::LoadTexture: failed to load '{}' ({})",
+                              source, stbi_failure_reason() ? stbi_failure_reason() : "unknown reason");
+        texture_dimensions = Rml::Vector2i(1, 1);
+        return 0;
+    }
+
+    CompiledTexture texture = createTextureFromPixels(pixels, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+    stbi_image_free(pixels);
+
+    texture_dimensions = Rml::Vector2i(width, height);
+    uintptr_t handle = m_nextTextureHandle++;
+    m_textures[handle] = texture;
+    return handle;
 }
 
 Rml::TextureHandle RmlVulkanRenderInterface::GenerateTexture(Rml::Span<const Rml::byte> source, Rml::Vector2i source_dimensions) {
@@ -313,7 +396,11 @@ Rml::TextureHandle RmlVulkanRenderInterface::GenerateTexture(Rml::Span<const Rml
 void RmlVulkanRenderInterface::ReleaseTexture(Rml::TextureHandle textureHandle) {
     auto it = m_textures.find(textureHandle);
     if (it == m_textures.end()) return;
-    destroyTexture(it->second);
+    PendingDeletion pending;
+    pending.queuedAtFrame = m_frameCounter;
+    pending.texture = it->second;
+    pending.isTexture = true;
+    m_pendingDeletions.push_back(std::move(pending));
     m_textures.erase(it);
 }
 

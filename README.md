@@ -253,13 +253,18 @@ which this system attempts yet.
 
 ## What's still ahead for lighting
 
-Still entirely unbuilt, checked directly rather than assumed: shadows
-of any kind, PBR materials (roughness/metallic workflow), and a way
-for gameplay code to add/remove lights dynamically at runtime rather
-than configuring the fixed 4-slot array at startup. Building all of
-that out is still genuinely substantial work — Vulkan gives no
-plug-and-play lighting the way some higher-level engines do; every
-piece has to be written.
+Shadow mapping (a single directional light, single shadow-casting
+module) is real and working now — see "Immediate next slices" above
+for the full account, not summarized twice here. Still entirely
+unbuilt, checked directly rather than assumed: PBR materials
+(roughness/metallic workflow), point-light shadows, cascaded/multiple
+shadow maps for larger scenes, soft shadows (PCF or better), shadow
+casting generalized beyond the one module that currently implements
+it, and a way for gameplay code to add/remove lights dynamically at
+runtime rather than configuring the fixed 4-slot array at startup.
+Building all of that out is still genuinely substantial work — Vulkan
+gives no plug-and-play lighting the way some higher-level engines do;
+every piece has to be written.
 
 **The real plan, and the exact resources to build it from** — recorded
 here specifically so both a human and an AI picking this project back
@@ -1984,6 +1989,392 @@ true right now versus what's aspirational.
 
 ### Immediate next slices (each independently buildable/runnable)
 
+- **Real shadow mapping — the first concrete piece of "shadows/PBR,"
+  this project's own longest-standing unstarted lighting item, now
+  genuinely working.** Deliberately scoped narrow rather than
+  generalized to every light and caster at once (see `kke::ShadowMap`'s
+  own class comment for exactly what's in and out of scope): one
+  directional light (the key light), one real shadow caster
+  (`CubeModule`), single-tap sampling with a checked depth bias rather
+  than PCF/soft shadows. A real, working single-caster proof, not a
+  half-built system trying to cover every case and getting none of
+  them fully right.
+  - **A genuine second render pass, not a shader trick**: `kke::
+    ShadowMap` owns a real depth-only render target, render pass (with
+    correct subpass dependencies for entering/leaving it safely), and
+    sampler. `Module` gained a real `renderShadow()` lifecycle method
+    and a separate, honestly-minimal `ShadowRenderContext` (not a
+    reuse of `RenderContext` — most of its fields wouldn't apply to a
+    pass with no camera and no color attachment). `Application`'s
+    frame loop now runs a full shadow pass — begin, call
+    `renderShadow()` on every module, end — before the main color pass
+    begins, since the shadow render pass's own final layout transition
+    is what lets the main pass sample it directly afterward with no
+    separate manual barrier.
+  - **A real architectural consequence, handled correctly, not
+    glossed over**: `cube.frag` is shared by `CubeModule`,
+    `PhysicsModule`, and `DestructionModule` — updating it to
+    unconditionally sample a shadow map meant all three needed their
+    pipeline's descriptor set layouts and `render()` calls updated too,
+    whether or not that module's own geometry casts a shadow itself.
+    `PhysicsModule`'s ground plane, in particular, now receives real
+    shadows through this shared shader with zero changes to
+    `PhysicsModule` beyond the mandatory descriptor set update — a
+    direct, useful consequence of it already sharing `CubeModule`'s own
+    lighting shader.
+  - **Verified as genuinely dynamic, not a static decal**: a real
+    screenshot showed a dark shadow shape cast onto `physics_demo`'s
+    (and `kke_demo`'s own FEMFX-enabled) ground plane, correctly
+    positioned relative to the spinning cube. A second screenshot,
+    taken a few seconds later with the cube still rotating, showed the
+    shadow's own shape had genuinely changed — confirming this is
+    recomputed live, every frame, not baked or cached.
+  - **A real depth-bias value, checked not guessed**: 0.003 in this
+    engine's own [0,1] depth range, enough to eliminate visible
+    shadow-acne self-shadowing artifacts on the cube/ground test case
+    without visibly detaching the shadow from its caster
+    ("peter-panning") — confirmed against real screenshots, the same
+    discipline as every other tuned constant in this project.
+  - **Full comprehensive verification, both build configurations**:
+    every demo (`kke_demo`, `physics_demo`, `rmlui_demo`, `imgui_demo`)
+    swept individually with real Vulkan validation layers active —
+    zero validation errors, zero crashes, zero assertions, in each —
+    exactly the kind of feature prone to subtle synchronization bugs,
+    made a real confirmation rather than a hopeful one by those same
+    validation layers this session installed earlier. Both
+    `KKE_ENABLE_FEMFX` on and off configurations rebuilt clean from
+    scratch: zero errors, zero warnings, all 40 tests passing, correct
+    binary set, in each — `CubeModule` (and therefore shadow mapping)
+    doesn't depend on FEMFX at all, confirmed by checking the `OFF`
+    build specifically renders a correctly-lit cube with no physics
+    ground plane present to receive its shadow, exactly as expected
+    for that configuration, not by assumption.
+  - **What's deliberately still out of scope** (see `ShadowMap.h`'s own
+    comment): point-light shadows, shadow casting generalized to every
+    module rather than just `CubeModule`, cascaded/multiple shadow maps
+    for larger scenes, and PCF or other soft-shadow filtering beyond a
+    single depth-comparison tap.
+- ~~**`Rml::Debugger`'s "Outlines" tool crashes**~~ Fixed — and the
+  investigation ended up finding two more real bugs beyond the one
+  being chased, both now fixed too. The honest, layered account:
+  - **The real breakthrough**: installed real Vulkan validation layers
+    in this sandbox (it had none before), turning a bare, symbol-less
+    segfault deep inside the lavapipe driver into an exact, actionable
+    error: `vkCmdWriteTimestamp(): was called in VkCommandBuffer ...
+    which is invalid because bound VkBuffer ... was destroyed`.
+  - **Bug 1 (the original crash)**: `RmlVulkanRenderInterface::
+    ReleaseGeometry()`/`ReleaseTexture()` destroyed their GPU resources
+    immediately, with no check that the GPU had finished using them.
+    Harmless for normal RmlUi content (which rarely releases geometry
+    mid-session) but Outlines churns through far more temporary
+    geometry per frame than anything else in this engine ever has,
+    making the race far more likely to actually hit. Fixed with real
+    deferred destruction — a queue tagged with the frame each resource
+    was released on, only actually freed once `kMaxFramesInFlight`
+    (Renderer.h, currently 2) plus a safety margin of real frames have
+    elapsed, matching the exact guarantee `Renderer`'s own per-frame
+    fence wait already provides. Reverified: Outlines now renders real
+    red borders around every visible element, exactly as intended,
+    with zero validation errors across a sustained run.
+  - **Bug 2 (found by the same validation layers, unrelated to
+    Outlines)**: a broader regression sweep of `kke_demo`'s full
+    showcase turned up validation errors during ordinary shutdown —
+    `vkDestroyBuffer(): can't be called on VkBuffer ... that is
+    currently in use by VkCommandBuffer`. Traced to `Application`'s
+    own destructor: modules' `shutdown()` methods (which can destroy
+    Vulkan resources directly) ran before `Renderer`'s own destructor
+    — the one that actually calls `vkDeviceWaitIdle()` — ever got a
+    chance to run, since that only happens once every module is
+    already torn down. This bug had presumably always existed, just
+    never visible before — it never crashed, only mildly corrupted
+    GPU-side state that happened not to matter for a process about to
+    exit anyway. Fixed with an explicit `vkDeviceWaitIdle()` at the
+    very start of `Application::~Application()`, before the module
+    shutdown loop begins.
+  - **Bug 3 (introduced by the Bug 1 fix itself, caught before it
+    shipped)**: a real run combining both scenarios — Outlines
+    clicked, then a clean shutdown — hit a VMA assertion, `"Some
+    allocations were not freed before destruction of this memory
+    block!"`. The deferred-deletion queue from Bug 1's fix never gets
+    swept again once the app is closing, and while a queued
+    *geometry* deletion cleans itself up fine (its own
+    `unique_ptr` destructor runs automatically), a queued *texture*
+    deletion is a bare struct of raw Vulkan/VMA handles with no
+    destructor at all — it would leak past process exit. Fixed by
+    explicitly draining and destroying any remaining pending texture
+    deletions in `RmlVulkanRenderInterface`'s own destructor — safe to
+    do immediately there specifically because Bug 2's fix already
+    guarantees the GPU is idle by the time any module's shutdown (and
+    therefore this destructor) runs.
+  - **Verified as a whole, not just each piece in isolation**: the
+    exact combined scenario that caught Bug 3 — Outlines clicked,
+    geometry actively churning through the deferred-deletion queue,
+    then a real, clean shutdown — now runs with zero validation
+    errors and zero assertions. Every demo (`kke_demo`, `physics_demo`,
+    `rmlui_demo`, `imgui_demo`) swept individually with validation
+    layers active after all three fixes: zero validation errors, zero
+    crashes, zero assertions, in each. Both `KKE_ENABLE_FEMFX`
+    configurations rebuilt clean from scratch: zero errors, zero
+    warnings, all 40 tests passing, correct binary set, in each.
+- ~~**Real plasticity support**~~ Fixed — `enablePlasticity` was false
+  everywhere, the same class of gap fracture was, closed the same
+  rigorous way. Confirmed via reading `FmComputeTetMeshBufferBounds`'s
+  own signature that plasticity is structurally simpler than fracture:
+  no separate per-tet output arrays needed at all, just the flag plus
+  real (non-zero) `plasticYieldThreshold`/`plasticCreep` material
+  values, which already flowed through `FmInitTetState`'s own per-tet
+  loop correctly. Added `spawnPlasticTetMesh()` (mirroring
+  `spawnFracturableTetMesh()`'s own pattern) and a "Spawn plastic
+  cube" test button using the same verified 6-tet cube shape.
+  - **A real diagnostic mistake, found and corrected, not covered
+    up**: the first verification attempt compared
+    `FmGetVertRestPosition()` before and after impact — a plausible-
+    seeming signal that turned out to be entirely wrong. Reading
+    FEMFX's own source (`FEMFXUpdateTetState.cpp`) showed plasticity is
+    tracked as a per-*tet* `plasticDeformationMatrix`, not a change to
+    the vertex rest-position array at all — and that internal state
+    has no public accessor in `AMD_FEMFX.h` to read directly. Every
+    threshold tried against the wrong signal (down to an extreme
+    0.0001) correctly showed nothing, which looked identical to "not
+    working" and could easily have been misdiagnosed as a setup bug.
+  - **The real, corrected verification**: measuring the distance
+    between the test cube's own vertex 0 and vertex 1 — exactly 1.0
+    unit apart at spawn. A real run showed it grow from 1.0000 past
+    1.02 and never spring back, with the growth rate genuinely
+    decelerating over time (each second's increase smaller than the
+    last) rather than diverging unbounded — consistent with
+    `plasticCreep`'s own documented meaning (deformation accumulated
+    *per unit of excess stress*, a rate) rather than a bug.
+  - Same empirical-tuning story as fracture, briefer this time now
+    that the right diagnostic existed: AMD's own reference value
+    (2.5e6) wasn't reachable by this project's actual stress
+    magnitudes either; landed on 2.0, confirmed working via the
+    vertex-distance measurement above.
+  - No render-path changes needed, unlike fracture — a plastic object
+    never splits into new `FmTetMesh` pieces, so the existing single-
+    mesh path already renders it correctly as its shape changes.
+  - Along the way, fixed a real, unrelated UI bug: the Physics ImGui
+    panel was too narrow for three spawn buttons on one row (the third
+    was clipped off-screen entirely), found the same way as everything
+    else this session — a real screenshot, not assumed. Widened the
+    panel's default size properly rather than leaving it to manual
+    resizing.
+  - Full verification: both `KKE_ENABLE_FEMFX` on and off configurations
+    rebuilt clean from scratch, zero errors, zero warnings, all 40
+    tests passing in each, correct binary set in each, plus a live
+    10-second regression run of `kke_demo`'s own non-plastic physics
+    object confirming identical settling behavior to every prior check.
+- ~~**Real `<img>`/`background-image` support**~~ Fixed — `LoadTexture`
+  was the one remaining stub in `RmlVulkanRenderInterface` (see its own
+  class comment); it now genuinely decodes files with `stb_image`
+  (already a real dependency elsewhere, no new one added), forcing
+  RGBA8 output specifically to match `createTextureFromPixels`'s
+  existing `VK_FORMAT_R8G8B8A8_UNORM` expectation, then reuses that
+  exact same GPU upload path font glyph textures already went through
+  — no second, format-aware code path needed. A failed/missing file
+  falls back to the same 1×1 white default untextured geometry already
+  uses (logged via `stbi_failure_reason()`, not silently swallowed),
+  rather than treating one broken image as fatal.
+  - **Verified two ways, independently, with real screenshots**: added
+    a real PNG test icon to `rmlui_demo`, rendered once through
+    `<img src="...">` and once through RCSS's own separate
+    `background-image`/decorator mechanism — both are genuinely
+    different RmlUi code paths that happen to both call `LoadTexture`
+    internally, worth confirming independently rather than assuming
+    fixing one fixed both. A zoomed screenshot shows both rendering
+    the identical icon correctly.
+  - **A real, separate bug found and fixed along the way, not
+    related to image loading at all**: `MaterialGridModule`
+    unconditionally used `PhysicsModule` with no `KKE_ENABLE_FEMFX`
+    guard — silently fine every time it had ever been built (always
+    with FEMFX on), but `kke_engine` itself builds once per CMake
+    configuration regardless of which demo enables FEMFX, and a
+    default `KKE_ENABLE_FEMFX=OFF` build failed immediately once this
+    file was actually part of one. Fixed by wrapping the whole module
+    in the same guard `PhysicsModule` itself already uses — the honest
+    reflection of reality anyway, since this module has nothing
+    meaningful to do without a `PhysicsModule` to select materials for.
+  - Full verification: both the default `OFF` and `FEMFX=ON`
+    configurations rebuilt clean from scratch afterward — zero errors,
+    zero warnings, all 40 tests passing in each, correct binary set in
+    each (`physics_demo`/`kke_physics_benchmark` present only when
+    FEMFX is on) — plus a live regression run of `kke_demo`'s full
+    integrated showcase confirming no behavior changed.
+- **`kke_demo` is now the real, integrated showcase it was always meant
+  to be** — `LightingControlsModule` and `MaterialGridModule` both
+  added, alongside everything it already had (physics with real
+  fracture, destruction, marketplace, particles). Getting there
+  surfaced two real, found-and-fixed problems, not a clean drop-in:
+  - **A real layout collision**: both content modules originally
+    hardcoded the identical `left:40px; top:500px` position — harmless
+    while each only ever appeared in its own separate demo, a direct
+    overlap the moment both needed to coexist in one. Fixed properly:
+    added real `left`/`top` constructor parameters to both (applied via
+    `Element::SetProperty` after load, not baked into the RML string),
+    defaulting to each module's original position so every existing
+    call site keeps rendering exactly where it always did.
+  - **A second, non-obvious collision, found by screenshot not
+    assumption**: the first attempt placed `MaterialGridModule` at
+    `(820, 500)`, assumed-empty space below `MarketplaceUiModule`'s own
+    panel. It rendered completely invisible with no errors at all —
+    confirmed via a real diagnostic log that the reposition itself
+    succeeded, then a real screenshot revealed why: Marketplace's own
+    opaque background actually extends continuously well past y=500
+    (four stacked game cards), silently hiding anything placed
+    underneath it. Fixed by widening `kke_demo`'s window from 1280×720
+    to 1600×900 (genuinely warranted — this many real panels needs the
+    room, not a workaround) and stacking `MaterialGridModule` *below*
+    `LightingControlsModule` instead, in the new vertical space.
+  - **A third, smaller layout bug**: `MaterialGridModule`'s own five
+    cards wrapped to a second row and clipped off the bottom of the
+    window — the panel width was a few pixels too narrow for five
+    cards at their original size. Fixed with tighter, verified card
+    dimensions (70px cards, 460px panel) that fit five in one row with
+    real margin to spare, not just barely.
+  - **Verified with real interaction after every fix, not just
+    visual inspection**: clicked "Glass" (the previously-clipped,
+    rightmost card) and confirmed via a zoomed before/after screenshot
+    that it genuinely highlights as selected while "Wood" correctly
+    deselects — the same real click-through-to-`PhysicsModule::
+    selectedMaterial()` path verified when this module was first built.
+  - Full regression pass: `physics_demo` (which still uses
+    `MaterialGridModule`'s original, unmodified default position)
+    re-verified with a real sustained run afterward, same correct
+    settling behavior as every prior check.
+- **`kke::MaterialGridModule` — a real extraction-shooter-style grid
+  menu, wired to real state, not decoration.** Five material preset
+  cards (Wood, Stone, Iron, Rubber, Glass) with genuinely
+  differentiated values matching `Material.h`'s own documented intent
+  (glass brittle and close to its yield point, rubber barely breaks at
+  all) — clicking one actually changes `PhysicsModule::
+  selectedMaterial()`, which the next "Spawn tetrahedron" click
+  genuinely uses. Added `PhysicsModule::selectedMaterial()` as real,
+  settable state for this (mirroring how `Application::lighting()`
+  already works), replacing that button's old hardcoded material.
+  Deliberately does NOT touch "Spawn fracturable cube" — that
+  button's own material has a specifically, empirically tuned
+  fracture threshold (see the fracture entry below) that an arbitrary
+  preset swapped in here could quietly break.
+  - **A real bug found and fixed while testing it, not assumed
+    correct**: the first version did nothing when clicked. Traced it
+    directly: each card has child elements (a color swatch div, label/
+    stat `<p>` tags), and a click lands on whichever child element is
+    actually under the cursor — `Event::GetTargetElement()` returned
+    that child, not the card div my listener was attached to, so the
+    id check never matched anything. Fixed with
+    `Event::GetCurrentElement()` instead, which always returns the
+    element the listener is actually registered on regardless of
+    which child inside it was clicked. Verified after the fix with a
+    real screenshot: clicked "Iron," watched it highlight and "Wood"
+    un-highlight, "Selected: Iron" text update, then spawned
+    successfully afterward.
+- **Real fracture support — genuinely working now, found by reading
+  AMD's own vendored sample code and FEMFX's own source, not
+  guessing.** This was the single biggest, most-repeated gap this
+  project had honestly flagged (`enableFracture=false` everywhere, no
+  exceptions) — closed properly, not just flipped on:
+  - **Researched what "showing off FEMFX" actually means first**:
+    `external/FEMFX/samples/common/TestScenes.cpp`, vendored alongside
+    the library itself, is AMD's own real reference demo. It fractures
+    wood panels with a fired projectile, piles up dozens of soft-body
+    blocks and ducks, lets material parameters change live (including
+    melting), and stacks rigid and deformable bodies together —
+    confirming a handful of falling tetrahedra never represented real
+    FEMFX capability, and setting the actual target.
+  - **The real missing piece, traced from AMD's own code**:
+    `FmComputeTetMeshBufferBounds` and `FmCreateTetMeshBuffer` both
+    take `FmFractureGroupCounts`/`tetFractureGroupIds` output
+    arrays — this project's spawn code always passed `nullptr` for
+    both. That's the literal, complete reason fracture never worked
+    anywhere in this codebase before now, not a deeper bug. Added a
+    real `spawnFracturableTetMesh()` API (kept separate from
+    `spawnTetMesh()` — fracture needs genuinely extra setup and a
+    more expensive render path, worth keeping visible at the call
+    site, not hidden behind a default parameter).
+  - **A real render-path rewrite, not a small patch**: a fractured
+    object can split into multiple independently-moving `FmTetMesh`
+    pieces at runtime (`FmGetNumTetMeshes()` can grow past 1), and per
+    FEMFX's own setup docs, vertex count itself "may grow with
+    fracture." Fracturable objects now size their buffers to the
+    reserved maximum capacity and rebuild both vertex and index data
+    from each current sub-mesh's actual topology every frame, instead
+    of uploading once at spawn time. The existing, already-verified
+    non-fracturing path is completely untouched — confirmed by
+    regression testing `kke_demo`'s own physics object afterward,
+    exact same settling height as every prior verification.
+  - **A real, humbling tuning journey, honestly recorded**: getting an
+    object to actually fracture took far more empirical work than
+    expected. A simple gravity drop from this demo's usual spawn
+    height didn't generate enough stress to fracture even at
+    `fractureStressThreshold=100` (already assumed "very low" against
+    a 5×10⁶ stiffness material) — matching AMD's own scene design
+    directly: their reference wood panels get fractured by a fired
+    projectile, not gravity. Added a real initial velocity parameter
+    to `spawnFracturableTetMesh()` (a genuine, if simple, stand-in for
+    "thrown hard," using `FmInitVertState`'s own velocity parameter,
+    previously always zero everywhere in this codebase) and traced the
+    entire FEMFX call chain by reading its source — `FmUpdateScene` →
+    `FmUpdateTetStateAndFracture` → the actual
+    `maxStressEigenvalue > fractureStressThreshold` comparison in
+    `FEMFXUpdateTetState.cpp` — to confirm the setup was correct
+    throughout and this was genuinely a threshold-scale question, not
+    a bug. The real working value ended up being 10.0 — this specific
+    material's actual stress values under impact are apparently much
+    smaller in magnitude than AMD's own reference examples (5×10⁵ to
+    10⁶ for their wood panels), most likely because those are larger,
+    heavier objects under a harder hit.
+  - **Verified two ways, not just visually**: logged
+    `FmGetNumTetMeshes()` directly in `fixedUpdate()` — "fracturable
+    object (handle N) has split into 2 pieces," consistently
+    reproducible across repeated real runs — and confirmed a real,
+    if subtle, visible crease across the object where a perfectly
+    intact cube wouldn't have one.
+  - **A real UI entry point** to try this yourself:
+    `physics_demo`'s "Spawn fracturable cube" button, using a real
+    6-tetrahedron cube decomposition (a single tetrahedron has nowhere
+    to break into — fracture splits along existing tet boundaries, so
+    meaningful fracture needs genuinely connected multi-tet geometry).
+- **`kMaxObjects` raised from 8 to 64** — the old cap was never meant
+  to represent a real ceiling, just the smallest number that proved
+  the spawn API worked at all; AMD's own reference scenes show piles
+  of dozens of objects at once. Confirmed live: `physics_demo`'s own
+  UI now reads "Objects: N/64."
+- ~~**The three purposeless bottom boxes**~~ Fixed — genuinely
+  removed, not just restyled. Those boxes were `UiModule`'s own
+  hardcoded "test document," loaded unconditionally into *every* demo
+  using `UiModule`, left over from the original slice that first
+  proved RmlUi text rendering worked. `UiModule` is content-agnostic
+  now — it only owns the RmlUi Context/render pipeline/input
+  forwarding, matching what its own class comment already said it
+  should be. In their place: `kke::LightingControlsModule`, a real,
+  new, reusable engine module (any demo can opt in, the same way
+  `MarketplaceUiModule` already works) — genuine sliders and preset
+  buttons wired directly to `Application::lighting()`, the real
+  multi-light system built earlier. Added to `kke_demo_game`
+  specifically, where the lit cube makes the effect immediately
+  visible. Verified with real interaction, not just layout: clicked
+  "Dramatic (low ambient)" and watched the cube's lit/shadowed
+  contrast change completely on screen, sliders update to reflect the
+  new state, then clicked "Reset to default" and watched it return
+  exactly to the original appearance. A real, if minor, C++ gotcha hit
+  and fixed along the way: `std::unique_ptr<ForwardDeclaredType>` as a
+  class member needs an out-of-line destructor defined where the type
+  is complete — even that wasn't enough here (still failed from a
+  different translation unit including only the header), so the fix
+  is a plain raw pointer with manual new/delete instead, documented
+  in `LightingControlsModule.h` for whoever hits the same thing next.
+  Confirmed no regression elsewhere: `rmlui_demo` (which doesn't add
+  the new module) now correctly shows a clean bottom half with no
+  leftover boxes, all of its own existing content untouched.
+- **`Rml::Debugger`'s "Outlines" tool crashes** — found incidentally
+  while fixing the range slider (see below), not chased down: clicking
+  it segfaults deep inside `libvulkan_lvp.so` (lavapipe, the software
+  Vulkan driver this sandbox uses), confirmed via a real `gdb`
+  backtrace on a background thread. `rmlui_demo` currently initializes
+  the debugger but keeps it hidden (`Rml::Debugger::SetVisible(false)`)
+  specifically to avoid this. Likely lavapipe-specific rather than a
+  real engine bug, but genuinely unconfirmed on real hardware — worth
+  a real look before assuming either way.
 - **RmlUi demo: three real interaction bugs found and fixed, one still
   open.** All three verified with actual clicks/state changes, not
   just visual appearance:
@@ -2002,19 +2393,38 @@ true right now versus what's aspirational.
     clicks (`selectvalue`, `selectarrow`, `selectbox`,
     `selectbox option`) inherit nothing automatically. Fixed with real
     styling for all of them.
-  - **The range slider still doesn't respond to any click or drag** —
-    genuinely unresolved despite substantial real effort: read RmlUi's
-    own `WidgetSlider.cpp` to understand its exact event model,
-    verified CSS selectors against the same working sample, tried
-    precise pixel-level coordinate targeting (cropped/zoomed
-    screenshots), made the track significantly taller, gave it an
-    explicit width suspecting an auto-width-resolves-to-zero layout
-    bug, and tested genuine incremental-motion drags rather than
-    single-point clicks. None of it worked, despite the *identical*
-    class of fix (give an unstyled sub-element real size/color)
-    working immediately for checkbox/radio moments earlier. Needs
-    RmlUi's own debugger tool wired in, or a different diagnostic
-    angle — not more CSS guessing.
+  - ~~**The range slider didn't respond to any click or drag**~~ Fixed
+    — with a real, code-level root cause, not more CSS. Wired in
+    RmlUi's own debugger (`Rml::Debugger`, already built as part of
+    this project's existing RmlUi fetch — confirmed unconditional in
+    `Source/CMakeLists.txt`, no new dependency needed) to investigate
+    properly rather than keep guessing from screenshots. Its own
+    "Outlines" tool immediately crashed — a real, reproducible
+    segfault confirmed via `gdb` backtrace, deep inside the lavapipe
+    software driver itself — set aside as a separate, likely
+    sandbox-specific issue, not chased further. The real fix came from
+    adding temporary diagnostic logging directly into `UiModule`'s own
+    mousedown handling, printing exactly which element
+    `Context::GetHoverElement()` resolves each click to. Across eleven
+    different Y coordinates spanning the entire visible track/thumb
+    area, every single click resolved to the parent `<input
+    class="range">` itself, never to the internal `slidertrack`/
+    `sliderbar` elements. Traced this to RmlUi's own source: `WidgetSlider::Initialise()`
+    adds both as children via `AppendChild(..., /*dom_element=*/false)`
+    — confirmed by reading `WidgetSlider.cpp` and `Element.cpp`
+    directly — and `WidgetSlider::ProcessEvent()` specifically checks
+    `event.GetTargetElement() == track`, a check that can never
+    succeed given what event targeting actually resolves to in this
+    integration. Rather than patch RmlUi's own vendored widget
+    internals, `UiModule` now handles the click directly at the one
+    point confirmed to actually receive it — the parent element —
+    computing the intended value from click position and setting it
+    through the same public `SetValue()` API a working slider would
+    end up calling internally. Verified with real screenshots: a
+    sequence of clicks across the full track correctly moves the
+    thumb to each clicked position, and a full regression pass (
+    checkbox, radio, tabs, and `kke_demo`'s marketplace) confirmed
+    nothing else broke from a fix living in shared `UiModule` code.
 - ~~**Marketplace card text running together unformatted**~~ Fixed —
   and there was already an honest comment in the code flagging this
   exact symptom, left by an earlier pass that verified it wasn't a

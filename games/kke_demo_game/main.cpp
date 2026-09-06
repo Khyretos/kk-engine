@@ -8,6 +8,8 @@
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/UiModule.h"
 #include "kke/modules/MarketplaceUiModule.h"
+#include "kke/modules/LightingControlsModule.h"
+#include "kke/modules/MaterialGridModule.h"
 #include "kke/modules/DebugControlModule.h"
 #if KKE_ENABLE_FEMFX
 #include "kke/modules/PhysicsModule.h"
@@ -30,7 +32,7 @@
 // asking it for its replicated state.
 int main() {
     try {
-        kke::Application app("Kreative Kompas Engine - Demo", 1280, 720);
+        kke::Application app("Kreative Kompas Engine - Demo", 1600, 900);
 
         // Best-effort hardware check against this game's own
         // developer-declared requirements (game.json's "requirements"
@@ -68,9 +70,18 @@ int main() {
         app.addModule<kke_demo::NetworkModule>();
         app.addModule<kke::UiModule>();
         app.addModule<kke::MarketplaceUiModule>("marketplace");
+        app.addModule<kke::LightingControlsModule>();
         app.addModule<kke::DebugControlModule>();
 #if KKE_ENABLE_FEMFX
         app.addModule<kke::PhysicsModule>();
+        // Below LightingControlsModule's own panel, not beside it —
+        // found via a real screenshot that MarketplaceUiModule's own
+        // panel (left:820px) has an opaque background extending well
+        // past y=500, completely hiding anything placed underneath it
+        // there. The larger 1600x900 window (see the Application
+        // constructor above) gives enough real vertical room below
+        // LightingControlsModule's panel for this instead.
+        app.addModule<kke::MaterialGridModule>(/*left=*/40.0f, /*top=*/640.0f);
 #endif
         app.addModule<kke::StatsModule>();
 

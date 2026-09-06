@@ -2,6 +2,7 @@
 #include "kke/Log.h"
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/UiModule.h"
+#include "kke/modules/MaterialGridModule.h"
 #include "kke/modules/DebugControlModule.h"
 #include "kke/modules/StatsModule.h"
 #if KKE_ENABLE_FEMFX
@@ -71,6 +72,7 @@ int main() {
         fillLight.intensity = 0.35f;
 
         app.addModule<kke::UiModule>();
+        app.addModule<kke::MaterialGridModule>();
         app.addModule<kke::DebugControlModule>();
         app.addModule<kke::StatsModule>();
 

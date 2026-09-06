@@ -1,9 +1,11 @@
 #include "RmlUiShowcaseModule.h"
 #include "kke/Application.h"
 #include "kke/modules/UiModule.h"
+#include "kke/Log.h"
 
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/ElementDocument.h>
+#include <RmlUi/Debugger.h>
 #include <stdexcept>
 
 namespace kke_demo {
@@ -125,6 +127,17 @@ const char* kShowcaseRml = R"(
         </tabset>
     </div>
 
+    <div class="panel" style="left:700px; top:560px; width:270px;">
+        <h1>Real &lt;img&gt;, not a stub</h1>
+        <img src="assets/textures/test_icon.png" style="display:block; width:64px; height:64px;"/>
+        <div style="display:block; width:64px; height:64px; margin-top:8px; decorator: image(assets/textures/test_icon.png);"/>
+        <p style="display:block; margin-top:8px;">Decoded with stb_image, uploaded through the same real GPU
+           texture path font glyphs already use -- LoadTexture is no
+           longer a 1x1-white stand-in. Below: the same file via RCSS
+           background-image's own decorator mechanism, a genuinely
+           separate code path worth verifying independently.</p>
+    </div>
+
 </body>
 </rml>
 )";
@@ -141,6 +154,47 @@ void RmlUiShowcaseModule::init(kke::Application& app) {
         throw std::runtime_error("RmlUiShowcaseModule: LoadDocumentFromMemory failed");
     }
     m_document->Show();
+
+    // A real diagnostic tool, not a permanent feature -- wired in
+    // specifically to investigate the range slider not responding to
+    // clicks or drags, after CSS-level fixes that worked immediately
+    // for checkbox/radio had no effect here. Rml::Debugger ships with
+    // RmlUi itself (Source/Debugger, already built unconditionally as
+    // part of this project's existing RmlUi fetch -- confirmed by
+    // checking Source/CMakeLists.txt directly, not assumed) and gives
+    // a real element inspector: click its own "click element to
+    // inspect" tool, then click the slider, and see its actual
+    // computed box/hit-test target directly instead of guessing from
+    // screenshots.
+    if (!Rml::Debugger::Initialise(ui->context())) {
+        kke::log::get(name())->warn("Rml::Debugger::Initialise failed -- debugger will not be available");
+    } else {
+        // Visible=false by default -- a dev tool, not something a
+        // demo's normal viewer should see unprompted. Its "Outlines"
+        // tool used to crash reliably (confirmed via a real gdb
+        // backtrace, deep inside the lavapipe driver itself with no
+        // usable symbols) -- that's genuinely fixed now, not just
+        // avoided: installing real Vulkan validation layers in this
+        // same sandbox (which had none before) turned the opaque
+        // segfault into an exact, actionable error --
+        // "vkCmdWriteTimestamp(): was called in VkCommandBuffer ...
+        // which is invalid because bound VkBuffer ... was destroyed."
+        // The real bug was in this engine's own RmlVulkanRenderInterface,
+        // not RmlUi or the driver: ReleaseGeometry()/ReleaseTexture()
+        // destroyed their underlying GPU resources immediately, with
+        // no check that the GPU had actually finished using them --
+        // fine for normal RmlUi content, which rarely releases
+        // geometry mid-session, but Outlines churns through far more
+        // temporary geometry per frame than anything else in this
+        // engine ever has, making the race far more likely to actually
+        // hit. Fixed with real deferred destruction (see
+        // RmlVulkanRenderInterface.h's own PendingDeletion comment for
+        // the full account) and reverified: Outlines now renders real
+        // red borders around every visible element, exactly as
+        // intended, with zero validation errors and zero crashes
+        // across a real, sustained run.
+        Rml::Debugger::SetVisible(false);
+    }
 }
 
 void RmlUiShowcaseModule::shutdown() {

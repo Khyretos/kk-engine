@@ -27,6 +27,17 @@ sudo apt-get install -y \
     libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
     libxinerama-dev libwayland-dev
 
+# Strongly recommended, not required to build or run: Vulkan validation
+# layers. This project's own sandboxed development environment ran
+# without these for most of its history, and it genuinely cost real
+# debugging time — a real crash (RmlUi's debugger "Outlines" tool)
+# showed up as a bare, symbol-less segfault deep inside the graphics
+# driver, with nothing actionable to go on, until these were finally
+# installed and turned it into an exact, specific error message
+# instead. See README "Immediate next slices" for the full account of
+# what that one install uncovered (three real bugs, not just one).
+sudo apt-get install -y vulkan-validationlayers
+
 # Only needed for -DKKE_ENABLE_TETRAHEDRALIZER=ON:
 sudo apt-get install -y libcgal-dev libgmp-dev libmpfr-dev libboost-dev libeigen3-dev
 ```
@@ -38,6 +49,10 @@ sudo pacman -S --needed \
     base-devel cmake ninja git \
     vulkan-icd-loader vulkan-headers vulkan-tools glslang \
     extra-cmake-modules libdrm libxkbcommon xorg-server-devel
+
+# Strongly recommended, not required — see the Debian/Ubuntu block
+# above for why.
+sudo pacman -S --needed vulkan-validation-layers
 
 # Only needed for -DKKE_ENABLE_TETRAHEDRALIZER=ON:
 sudo pacman -S --needed cgal boost boost-libs eigen

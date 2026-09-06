@@ -14,19 +14,31 @@ class ElementDocument;
 namespace kke {
 
 // SLICE 2 of the RmlUi integration (slice 1 was init/shutdown lifecycle
-// only — see README/git history). This slice makes RmlUi fully visible:
+// only — see README/git history). This slice made RmlUi fully visible:
 // real geometry AND real textures through RmlVulkanRenderInterface, a
-// bundled Noto Sans fallback font, and a small in-memory test document
-// with actual text proving the whole pipeline — layout, font shaping,
-// glyph atlas generation, texture upload, Vulkan draw calls — works end
-// to end.
+// bundled Noto Sans fallback font, and (originally) a small in-memory
+// test document proving the whole pipeline — layout, font shaping,
+// glyph atlas generation, texture upload, Vulkan draw calls — worked
+// end to end.
+//
+// That original test document is gone now, deliberately — it was
+// always meant as temporary verification, not permanent content, and
+// having it hardcoded here meant every single demo using UiModule
+// showed the exact same three purposeless boxes, unrelated to
+// whatever that demo actually was ("this is not purposeful," a real
+// and fair reported complaint). UiModule itself is content-agnostic
+// now — it just owns the RmlUi Context/render pipeline/input
+// forwarding; any actual document content is each demo's own choice,
+// added via context() the same way MarketplaceUiModule already did.
+// See kke::LightingControlsModule for a real, working example: a
+// genuinely useful panel (not test boxes) that any demo can opt into.
 //
 // Deliberately NOT in this slice (see README "Roadmap"):
 //   - Real image-file decoding (<img>, background-image: url(...)) —
 //     RmlVulkanRenderInterface::LoadTexture is still a stub; this needs
 //     stb_image, which is a separate, independent piece of work.
-//   - Loading documents from actual .rml/.rcss files on disk (the in-
-//     memory test document is a deliberately small stand-in).
+//   - Loading documents from actual .rml/.rcss files on disk (every
+//     document in this engine so far is built in-memory in C++).
 //
 // Resizing IS handled now: update() compares the current swapchain
 // extent against the context's own dimensions every frame and calls
@@ -55,11 +67,11 @@ public:
     void onEvent(const SDL_Event& event) override;
     void shutdown() override;
 
-    // Lets other modules (e.g. MarketplaceUiModule) add their own
-    // Rml::ElementDocument into the same context/render pipeline, without
-    // each needing to own a separate Rml::Context (RmlUi supports many
-    // documents in one context; a second context is a heavier and
-    // unnecessary tool for "another panel").
+    // Lets other modules (e.g. MarketplaceUiModule, LightingControlsModule)
+    // add their own Rml::ElementDocument into the same context/render
+    // pipeline, without each needing to own a separate Rml::Context
+    // (RmlUi supports many documents in one context; a second context
+    // is a heavier and unnecessary tool for "another panel").
     Rml::Context* context() { return m_context; }
 
 private:
@@ -72,7 +84,6 @@ private:
     EngineSystemInterface m_systemInterface;
     std::unique_ptr<RmlVulkanRenderInterface> m_renderInterface;
     Rml::Context* m_context = nullptr;
-    Rml::ElementDocument* m_testDocument = nullptr;
     bool m_initialised = false;
     Application* m_app = nullptr; // needed each frame in update() to detect window resize
 };

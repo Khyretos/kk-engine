@@ -19,10 +19,17 @@ public:
     void init(kke::Application& app) override;
     void update(const kke::UpdateContext& ctx) override;
     void render(const kke::RenderContext& ctx) override;
+    void renderShadow(const kke::ShadowRenderContext& ctx) override;
     void renderUi() override;
 
 private:
     std::unique_ptr<kke::Pipeline> m_pipeline;
+    // A real, separate pipeline for the shadow pass — see
+    // shadow.vert/frag: same vertex layout as the main pipeline (so it
+    // binds the exact same kke::Mesh unmodified) but a completely
+    // different, much simpler set of shaders/state (no descriptor sets,
+    // no fragment output, a different render pass).
+    std::unique_ptr<kke::Pipeline> m_shadowPipeline;
     std::unique_ptr<kke::Mesh> m_mesh;
 
     bool m_spinning = true;

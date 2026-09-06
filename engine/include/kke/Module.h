@@ -48,6 +48,29 @@ struct RenderContext {
     // app.lightingBuffer(), matching how view/proj/cameraPos already
     // flow through this same struct instead of a lookup.
     VkDescriptorSet lightingDescriptorSet = VK_NULL_HANDLE;
+    // Set 1, binding 0 — the shadow map sampler (see kke::ShadowMap).
+    // Every pipeline sharing cube.frag needs a compatible set 1 bound
+    // at draw time, whether or not that specific module's own geometry
+    // casts a shadow itself, because the fragment shader unconditionally
+    // declares that binding. Same "thread it through the context, don't
+    // make every module look it up" reasoning as lightingDescriptorSet
+    // above.
+    VkDescriptorSet shadowMapDescriptorSet = VK_NULL_HANDLE;
+};
+
+// Passed to Module::renderShadow() — a real, separate, depth-only pass
+// (see kke::ShadowMap) that runs once per frame before the main
+// RenderContext-based pass above. Deliberately its own small struct
+// rather than reusing RenderContext: a shadow pass has no color
+// attachment, no camera view/proj (it uses the light's own
+// view-projection instead), and no lighting descriptor set to bind —
+// reusing RenderContext here would mean most of its fields are
+// meaningless in this context, which is worse than a second, honestly
+// minimal struct.
+struct ShadowRenderContext {
+    VkCommandBuffer cmd;
+    VkRenderPass renderPass;
+    glm::mat4 lightViewProj;
 };
 
 // A dependency one module declares on another, by concrete type. Declaring
@@ -129,6 +152,18 @@ public:
     // Called once per frame, with the render pass already active. Bind a
     // pipeline, push constants, and issue draw calls here.
     virtual void render(const RenderContext& ctx) {}
+
+    // Called once per frame, before render() — a real, separate,
+    // depth-only pass (see ShadowRenderContext's own comment, and
+    // kke::ShadowMap). Default no-op: most modules don't cast shadows
+    // and shouldn't need to think about this at all. Override only for
+    // geometry that should actually appear in the shadow map — see
+    // CubeModule for the first real example. Binding/drawing here
+    // should mirror render()'s own geometry as closely as makes sense,
+    // but through a much simpler pipeline (see shadow.vert/frag): no
+    // lighting, no textures, no descriptor sets at all, just position
+    // transformed into light space.
+    virtual void renderShadow(const ShadowRenderContext& ctx) {}
 
     // Called once per frame, before the render pass begins, to build any
     // ImGui:: panels this module wants on screen (stats, debug toggles...).

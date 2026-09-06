@@ -6,6 +6,7 @@
 #include "kke/Module.h"
 #include "kke/EngineError.h"
 #include "kke/LightingBuffer.h"
+#include "kke/ShadowMap.h"
 
 #include <glm/glm.hpp>
 #include <array>
@@ -166,6 +167,18 @@ public:
     Camera& camera() { return m_camera; }
     Lighting& lighting() { return m_lighting; }
     LightingBuffer& lightingBuffer() { return *m_lightingBuffer; }
+    // The shadow map sampler's descriptor SET LAYOUT (not the set
+    // itself -- that's bound automatically via RenderContext, see
+    // Module.h) -- needed by any module drawing through cube.frag at
+    // pipeline-creation time, since that pipeline's layout must
+    // declare a compatible set 1 whether or not that module's own
+    // geometry casts a shadow.
+    VkDescriptorSetLayout shadowMapSetLayout() const { return m_shadowMapSetLayout; }
+    // The ShadowMap instance itself — needed by real shadow-casting
+    // modules (see CubeModule) at pipeline-creation time, to get its
+    // render pass (shadowMap().renderPass()) for their own shadow
+    // pipeline.
+    ShadowMap& shadowMap() { return *m_shadowMap; }
 
     // --- Debug pause/step ---
     // Freezes simulation (fixedUpdate/update stop advancing) while still
@@ -199,6 +212,20 @@ private:
     Camera m_camera;
     Lighting m_lighting;
     std::unique_ptr<LightingBuffer> m_lightingBuffer;
+    // Real shadow mapping infrastructure -- see kke::ShadowMap's own
+    // class comment for the full scope (single directional light, one
+    // shadow-casting pass, no PCF/soft shadows yet). The descriptor set
+    // layout/pool/set here are for the shadow map *sampler* specifically
+    // (set 1 in cube.frag) -- a separate, small piece of Vulkan state
+    // from ShadowMap's own render pass/framebuffer, owned here rather
+    // than inside ShadowMap itself because every pipeline that shares
+    // cube.frag (CubeModule, PhysicsModule, DestructionModule) needs
+    // this same layout at pipeline-creation time, before any of them
+    // necessarily has a live ShadowMap reference yet.
+    std::unique_ptr<ShadowMap> m_shadowMap;
+    VkDescriptorSetLayout m_shadowMapSetLayout = VK_NULL_HANDLE;
+    VkDescriptorPool m_shadowMapDescriptorPool = VK_NULL_HANDLE;
+    VkDescriptorSet m_shadowMapDescriptorSet = VK_NULL_HANDLE;
     float m_fixedDt;
 
     std::vector<std::unique_ptr<Module>> m_modules;

@@ -166,6 +166,39 @@ public:
     // exists.
     ObjectHandle spawnTetMesh(const TetMeshData& mesh, const glm::vec3& position, const Material& material);
 
+    // Same as spawnTetMesh(), but with real fracture enabled — the
+    // object can genuinely break apart into multiple independently-
+    // moving pieces under enough stress. Kept as a SEPARATE method
+    // rather than adding a parameter to spawnTetMesh() itself: enabling
+    // fracture requires real, extra per-tet setup (FmFractureGroupCounts,
+    // tetFractureGroupIds — see spawnTetMesh()'s own implementation
+    // comment for the full account of what FEMFX actually needs here,
+    // confirmed against AMD's own vendored sample code, not guessed),
+    // and fracturable objects take a genuinely more expensive render
+    // path (rebuilding vertex/index data every frame instead of once —
+    // see SpawnedTet's own comment on why) — a real, meaningful
+    // distinction worth keeping visible at the call site, not hidden
+    // behind a boolean default parameter.
+    ObjectHandle spawnFracturableTetMesh(const TetMeshData& mesh, const glm::vec3& position, const Material& material,
+                                          const glm::vec3& initialVelocity = glm::vec3(0.0f));
+
+    // Same as spawnTetMesh(), but with real plasticity enabled — the
+    // object can genuinely dent and stay dented (permanent deformation)
+    // rather than always springing back to its original rest shape.
+    // Structurally simpler than fracture to enable — confirmed by
+    // reading FmComputeTetMeshBufferBounds's own signature, which has
+    // real, separate output parameters for fracture bookkeeping
+    // (FmFractureGroupCounts, tetFractureGroupIds) but nothing
+    // plasticity-specific at all — just the enablePlasticity flag plus
+    // real (non-default-zero) plasticYieldThreshold/plasticCreep
+    // material values, which already flow through FmInitTetState's own
+    // per-tet loop correctly. No render-path changes needed either:
+    // unlike fracture, a plastic object never splits into new
+    // FmTetMesh pieces, so the existing single-mesh render path
+    // already handles it.
+    ObjectHandle spawnPlasticTetMesh(const TetMeshData& mesh, const glm::vec3& position, const Material& material,
+                                      const glm::vec3& initialVelocity = glm::vec3(0.0f));
+
     // Convenience wrapper: builds a 4-vert/1-tet TetMeshData for the
     // same single tetrahedron shape used throughout this class's own
     // verification history, and calls spawnTetMesh() with it — see
@@ -182,7 +215,27 @@ public:
 
     size_t objectCount() const { return m_objects.size(); }
 
+    // The material a plain "Spawn tetrahedron" click uses — real,
+    // settable state (mirroring how Application::lighting() already
+    // works), not a per-button hardcoded value. Built specifically so
+    // an external UI (see kke::MaterialGridModule) can change what
+    // gets spawned next, the same way its own lighting presets already
+    // change real Application::lighting() state. Deliberately NOT used
+    // by "Spawn fracturable cube" — that button's own material has a
+    // specifically, empirically tuned fracture threshold (see
+    // renderUi()'s own comment on how that value was found) that an
+    // arbitrary preset swapped in here could quietly break.
+    Material& selectedMaterial() { return m_selectedMaterial; }
+
 private:
+    // Shared implementation behind both spawnTetMesh() (enableFracture
+    // always false) and spawnFracturableTetMesh() (always true) — see
+    // that method's own header comment for why fracture support needed
+    // a real, separate entry point rather than a bool parameter on the
+    // existing public method.
+    ObjectHandle spawnTetMeshInternal(const TetMeshData& mesh, const glm::vec3& position, const Material& material, bool enableFracture,
+                                       const glm::vec3& initialVelocity = glm::vec3(0.0f), bool enablePlasticity = false);
+
     // One spawned tetrahedron's full FEMFX + render state. A plain
     // struct, not a class with its own methods — PhysicsModule owns
     // the behavior, this just owns the data, and it needs a genuinely
@@ -204,6 +257,23 @@ private:
         uint32_t numVerts = 0;
         uint32_t numTets = 0;
 
+        // Real fracture support — see spawnTetMesh()'s own comment for
+        // the full account of what this needed. When true, render()
+        // takes a genuinely different, more expensive path: fracture
+        // can split one object into multiple independently-moving
+        // FmTetMesh pieces at runtime (FmGetNumTetMeshes() can grow
+        // past 1), and FEMFX's own setup docs say vertex count itself
+        // "may grow with fracture" (new vertices duplicated along
+        // fracture seams) — so a fracturable object's vertex/index
+        // buffers are sized to bounds.maxVerts/maxTets (the reserved
+        // capacity), not the object's initial spawn-time counts, and
+        // both get rebuilt from each current sub-mesh's actual
+        // topology every frame rather than uploaded once and reused.
+        bool fracturable = false;
+        bool plastic = false; // see spawnPlasticTetMesh()'s own comment
+        uint32_t maxVerts = 0;
+        uint32_t maxTets = 0;
+
         // Kept alive for this object's whole lifetime — see the struct
         // comment above for why. std::vector rather than fixed-size
         // arrays now that a spawned object's vertex/tet count is
@@ -217,15 +287,27 @@ private:
         std::vector<AMD::FmVector3> restPositions;
         std::vector<AMD::FmTetVertIds> tetVertIds;
         std::vector<AMD::FmArray<uint>> vertIncidentTets;
+        // Fracture-specific, only populated/used when fracturable —
+        // same lifetime reasoning as the arrays above.
+        std::vector<AMD::FmFractureGroupCounts> fractureGroupCounts;
+        std::vector<uint> tetFractureGroupIds;
     };
 
-    // A small, fixed cap, not a stress-test number — see the class
-    // comment's "honest current limits." Raising this later just
-    // means raising the FmSceneSetupParams fields in init() to match;
-    // nothing else about the design changes.
-    static constexpr uint32_t kMaxObjects = 8;
+    // Raised from the original 8 to a genuinely meaningful showcase
+    // number, not a stress-test number either — see the class
+    // comment's "honest current limits." AMD's own reference demo
+    // scenes (see external/FEMFX/samples/common/TestScenes.cpp,
+    // vendored alongside the library itself) show piles of dozens of
+    // soft-body objects at once (BLOCKS_SCENE, DUCKS_SCENE), not a
+    // handful — 8 was never meant to represent a real ceiling, just
+    // the smallest number that proved the spawn API worked at all.
+    // Raising this further just means raising the FmSceneSetupParams
+    // fields in init() to match; nothing else about the design
+    // changes.
+    static constexpr uint32_t kMaxObjects = 64;
 
     AMD::FmScene* m_scene = nullptr;
+    Material m_selectedMaterial; // see selectedMaterial()'s own doc comment above
     float m_renderScale; // see the constructor's doc comment
     int m_initialObjectCount; // see the constructor's doc comment
     AMD::FmRigidBody* m_ground = nullptr; // static kinematic ground plane, top surface at y=0

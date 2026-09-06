@@ -17,6 +17,8 @@
 #include <queue>
 #include <functional>
 #include <glm/gtc/matrix_transform.hpp>
+#include <cmath>
+#include <algorithm>
 
 // FEMFX declares these extern (FEMFXCommon.h) and expects the
 // application to define them — an allocator hook, the same pattern as
@@ -296,7 +298,7 @@ void PhysicsModule::init(Application& app) {
     {
         PipelineConfig config;
         config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PhysicsPushConstants) };
-        config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout() };
+        config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout() };
         m_pipeline = std::make_unique<Pipeline>(
             app.device(), app.renderer().renderPass(),
             "shaders/cube.vert.spv", "shaders/cube.frag.spv", config);
@@ -328,6 +330,21 @@ void PhysicsModule::init(Application& app) {
 }
 
 PhysicsModule::ObjectHandle PhysicsModule::spawnTetMesh(const TetMeshData& mesh, const glm::vec3& position, const Material& material) {
+    return spawnTetMeshInternal(mesh, position, material, /*enableFracture=*/false);
+}
+
+PhysicsModule::ObjectHandle PhysicsModule::spawnFracturableTetMesh(const TetMeshData& mesh, const glm::vec3& position, const Material& material,
+                                                                     const glm::vec3& initialVelocity) {
+    return spawnTetMeshInternal(mesh, position, material, /*enableFracture=*/true, initialVelocity);
+}
+
+PhysicsModule::ObjectHandle PhysicsModule::spawnPlasticTetMesh(const TetMeshData& mesh, const glm::vec3& position, const Material& material,
+                                                                 const glm::vec3& initialVelocity) {
+    return spawnTetMeshInternal(mesh, position, material, /*enableFracture=*/false, initialVelocity, /*enablePlasticity=*/true);
+}
+
+PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshInternal(const TetMeshData& mesh, const glm::vec3& position, const Material& material, bool enableFracture,
+                                                                  const glm::vec3& initialVelocity, bool enablePlasticity) {
     if (m_objects.size() >= kMaxObjects) {
         log::get(name())->warn("spawnTetMesh: at cap ({}), ignoring", kMaxObjects);
         return kInvalidHandle;
@@ -347,6 +364,8 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMesh(const TetMeshData& mesh,
     }
 
     auto obj = std::make_unique<SpawnedTet>();
+    obj->fracturable = enableFracture;
+    obj->plastic = enablePlasticity;
     const uint numVerts = static_cast<uint>(mesh.vertices.size());
     const uint numTets = static_cast<uint>(mesh.tets.size());
     obj->numVerts = numVerts;
@@ -380,9 +399,41 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMesh(const TetMeshData& mesh,
         }
     }
 
+    // Real fracture support, when requested — confirmed against AMD's
+    // own vendored sample code (external/FEMFX/samples/common/
+    // TestScenes.cpp), not guessed: FmComputeTetMeshBufferBounds
+    // itself COMPUTES per-tet fracture group data into these two
+    // arrays when given real (non-null) output pointers, sized to
+    // numTets by the caller beforehand. The earlier version of this
+    // function always passed nullptr for both, which is exactly why
+    // enableFracture was false everywhere in this whole codebase up
+    // to this point — passing enableFracture=true without also
+    // providing these arrays would have left FEMFX's own fracture
+    // bookkeeping empty and done nothing.
+    if (enableFracture) {
+        obj->fractureGroupCounts.resize(numTets);
+        obj->tetFractureGroupIds.resize(numTets);
+    }
+
     AMD::FmTetMeshBufferBounds bounds;
-    AMD::FmComputeTetMeshBufferBounds(&bounds, nullptr, nullptr, obj->vertIncidentTets.data(), obj->tetVertIds.data(),
-                                       nullptr, numVerts, numTets, /*enableFracture=*/false);
+    AMD::FmComputeTetMeshBufferBounds(
+        &bounds,
+        enableFracture ? obj->fractureGroupCounts.data() : nullptr,
+        enableFracture ? obj->tetFractureGroupIds.data() : nullptr,
+        obj->vertIncidentTets.data(), obj->tetVertIds.data(),
+        nullptr, numVerts, numTets, enableFracture);
+
+    obj->maxVerts = bounds.maxVerts;
+    // FEMFX doesn't expose a direct "maxTets" in FmTetMeshBufferBounds
+    // (see AMD_FEMFX.h — it bounds verts/faces/vert-adjacency directly,
+    // since those are what its own internal buffers size against, not
+    // tets as a separate quantity) — this project's own conservative
+    // estimate for "largest a fracturable object's tet count could
+    // reasonably read as post-fracture" is the same numTets it started
+    // with: fracture splits existing tets into separate pieces, it
+    // doesn't create new ones, so the total across every current piece
+    // can't exceed the original count.
+    obj->maxTets = numTets;
 
     AMD::FmTetMeshBufferSetupParams meshParams;
     meshParams.numVerts = bounds.numVerts;
@@ -393,11 +444,15 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMesh(const TetMeshData& mesh,
     meshParams.maxExteriorFaces = bounds.maxExteriorFaces;
     meshParams.maxTetMeshes = bounds.maxTetMeshes;
     meshParams.collisionGroup = 0;
-    meshParams.enablePlasticity = false;
-    meshParams.enableFracture = false;
+    meshParams.enablePlasticity = enablePlasticity;
+    meshParams.enableFracture = enableFracture;
     meshParams.isKinematic = false;
 
-    obj->tetMeshBuffer = AMD::FmCreateTetMeshBuffer(meshParams, nullptr, nullptr, &obj->tetMesh);
+    obj->tetMeshBuffer = AMD::FmCreateTetMeshBuffer(
+        meshParams,
+        enableFracture ? obj->fractureGroupCounts.data() : nullptr,
+        enableFracture ? obj->tetFractureGroupIds.data() : nullptr,
+        &obj->tetMesh);
     if (!obj->tetMeshBuffer || !obj->tetMesh) {
         log::get(name())->error("spawnTetMesh: FmCreateTetMeshBuffer failed");
         return kInvalidHandle;
@@ -407,7 +462,8 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMesh(const TetMeshData& mesh,
         AMD::FmInitVector3(1.0f, 0.0f, 0.0f),
         AMD::FmInitVector3(0.0f, 1.0f, 0.0f),
         AMD::FmInitVector3(0.0f, 0.0f, 1.0f));
-    AMD::FmInitVertState(obj->tetMesh, obj->restPositions.data(), identity, AMD::FmInitVector3(0.0f), 1.0f, AMD::FmInitVector3(0.0f));
+    AMD::FmInitVertState(obj->tetMesh, obj->restPositions.data(), identity, AMD::FmInitVector3(0.0f), 1.0f,
+                          AMD::FmInitVector3(initialVelocity.x, initialVelocity.y, initialVelocity.z));
 
     // kke::Material -> FmTetMaterialParams, the actual bridge.
     AMD::FmTetMaterialParams femfxMaterial;
@@ -457,27 +513,45 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMesh(const TetMeshData& mesh,
 
     obj->sceneBufferId = AMD::FmAddTetMeshBufferToScene(m_scene, obj->tetMeshBuffer);
     obj->material = material;
-    obj->vertexBuffer = std::make_unique<Buffer>(
-        m_app->device(), sizeof(Vertex) * numVerts, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-    // Per-object index buffer now (different objects can have
-    // different topology) — same face-winding convention already
-    // verified for the single-tet case, generalized: for tet i with
-    // global vertex ids (a,b,c,d), its 4 faces follow
-    // FEMFXTetMeshConnectivity.h's documented "CCW from exterior:
-    // 312, 203, 130, 021" using THIS tet's own vertex ids, not always
-    // literally 0,1,2,3 like the old hardcoded single-tet version.
-    std::vector<uint32_t> indices;
-    indices.reserve(numTets * 12);
-    for (uint t = 0; t < numTets; ++t) {
-        const auto& ids = obj->tetVertIds[t].ids;
-        indices.push_back(ids[3]); indices.push_back(ids[1]); indices.push_back(ids[2]);
-        indices.push_back(ids[2]); indices.push_back(ids[0]); indices.push_back(ids[3]);
-        indices.push_back(ids[1]); indices.push_back(ids[3]); indices.push_back(ids[0]);
-        indices.push_back(ids[0]); indices.push_back(ids[2]); indices.push_back(ids[1]);
+    if (enableFracture) {
+        // Sized to the reserved MAXIMUM capacity, not the initial
+        // spawn-time counts — see SpawnedTet's own comment for why:
+        // vertex/tet data gets rebuilt from whatever the current
+        // sub-mesh actually is every frame, and that can differ from
+        // (and, per FEMFX's own docs, potentially exceed) what this
+        // object started with.
+        obj->vertexBuffer = std::make_unique<Buffer>(
+            m_app->device(), sizeof(Vertex) * obj->maxVerts, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        obj->indexBuffer = std::make_unique<Buffer>(
+            m_app->device(), sizeof(uint32_t) * obj->maxTets * 12, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    } else {
+        obj->vertexBuffer = std::make_unique<Buffer>(
+            m_app->device(), sizeof(Vertex) * numVerts, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+        // Per-object index buffer now (different objects can have
+        // different topology) — same face-winding convention already
+        // verified for the single-tet case, generalized: for tet i with
+        // global vertex ids (a,b,c,d), its 4 faces follow
+        // FEMFXTetMeshConnectivity.h's documented "CCW from exterior:
+        // 312, 203, 130, 021" using THIS tet's own vertex ids, not always
+        // literally 0,1,2,3 like the old hardcoded single-tet version.
+        // Static/device-local here since non-fracturable objects never
+        // change topology after spawning — fracturable objects rebuild
+        // this every frame instead (see render()), so they use a
+        // host-visible buffer allocated just above instead of this path.
+        std::vector<uint32_t> indices;
+        indices.reserve(numTets * 12);
+        for (uint t = 0; t < numTets; ++t) {
+            const auto& ids = obj->tetVertIds[t].ids;
+            indices.push_back(ids[3]); indices.push_back(ids[1]); indices.push_back(ids[2]);
+            indices.push_back(ids[2]); indices.push_back(ids[0]); indices.push_back(ids[3]);
+            indices.push_back(ids[1]); indices.push_back(ids[3]); indices.push_back(ids[0]);
+            indices.push_back(ids[0]); indices.push_back(ids[2]); indices.push_back(ids[1]);
+        }
+        obj->indexBuffer = std::make_unique<Buffer>(Buffer::createDeviceLocal(
+            m_app->device(), indices.data(), indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
     }
-    obj->indexBuffer = std::make_unique<Buffer>(Buffer::createDeviceLocal(
-        m_app->device(), indices.data(), indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
 
     ObjectHandle handle = m_nextHandle++;
     m_objects[handle] = std::move(obj);
@@ -521,6 +595,53 @@ void PhysicsModule::fixedUpdate(const FixedUpdateContext& ctx) {
         const auto& first = m_objects.begin()->second;
         AMD::FmVector3 pos = AMD::FmGetVertPosition(*first->tetMesh, 0);
         log::get(name())->info("{} object(s); first object's vert0 height: {:.4f}", m_objects.size(), pos.y);
+
+        // Real, direct confirmation of whether fracture has actually
+        // happened, not inferred from screenshots — logged for every
+        // fracturable object specifically, alongside the existing
+        // height log above.
+        for (auto& [handle, obj] : m_objects) {
+            if (obj->fracturable) {
+                uint numPieces = AMD::FmGetNumTetMeshes(*obj->tetMeshBuffer);
+                if (numPieces > 1) {
+                    log::get(name())->info("fracturable object (handle {}) has split into {} pieces", handle, numPieces);
+                }
+            }
+            // Same reasoning as the fracture check just above — real,
+            // numeric confirmation of permanent deformation, not
+            // inferred from a screenshot. FmGetVertRestPosition()
+            // returns the shape FEMFX currently treats as this
+            // object's own "rest" (unstressed) state; for a purely
+            // elastic object this never changes after spawning, but
+            // real plasticity permanently moves it. Comparing against
+            // obj->restPositions (this object's own original spawn-time
+            // values, still held for its whole lifetime — see
+            // SpawnedTet's own comment on why) directly measures how
+            // far any single vertex has permanently drifted.
+            // Real, indirect but genuinely diagnostic confirmation of
+            // permanent deformation -- FmGetVertRestPosition() turned
+            // out to be the wrong signal (confirmed by reading FEMFX's
+            // own source: plasticity is tracked as a per-TET
+            // plasticDeformationMatrix, not a change to the vertex
+            // rest-position array at all, and that internal state has
+            // no public accessor in AMD_FEMFX.h to read directly).
+            // What's directly observable instead: vertex 0 and vertex 1
+            // of this object's own cube shape started exactly 1.0 unit
+            // apart (see the "Spawn plastic cube" button's own
+            // vertices). For a purely elastic object fully at rest
+            // (settled, no external forces), that distance returns
+            // very close to 1.0 again once it stops moving. If it's
+            // meaningfully different once genuinely at rest, that's
+            // real, permanent shape change -- plasticity working, not
+            // just elastic springback still in progress.
+            if (obj->plastic && obj->numVerts >= 2) {
+                AMD::FmVector3 p0 = AMD::FmGetVertPosition(*obj->tetMesh, 0);
+                AMD::FmVector3 p1 = AMD::FmGetVertPosition(*obj->tetMesh, 1);
+                float dx = p1.x - p0.x, dy = p1.y - p0.y, dz = p1.z - p0.z;
+                float currentEdgeLength = std::sqrt(dx * dx + dy * dy + dz * dz);
+                log::get(name())->info("plastic object (handle {}) vert0-vert1 distance: {:.4f} (started at 1.0000)", handle, currentEdgeLength);
+            }
+        }
     }
 }
 
@@ -530,8 +651,9 @@ void PhysicsModule::render(const RenderContext& ctx) {
     }
 
     m_pipeline->bind(ctx.cmd);
+    VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet };
     vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(),
-                             0, 1, &ctx.lightingDescriptorSet, 0, nullptr);
+                             0, 2, sets, 0, nullptr);
 
     // Ground plane — a unit cube scaled to a visually-proportionate
     // size for whatever camera this demo uses, positioned to match
@@ -583,61 +705,134 @@ void PhysicsModule::render(const RenderContext& ctx) {
     size_t colorIndex = 0;
     std::vector<Vertex> verts; // reused across objects, resized per-object below
     std::vector<glm::vec3> normalSum; // reused too — accumulated per-vertex before normalizing
+    std::vector<uint32_t> dynamicIndices; // reused too — fracturable objects only, rebuilt every sub-mesh
     for (auto& [handle, obj] : m_objects) {
         glm::vec3 color = kColorPalette[colorIndex % (sizeof(kColorPalette) / sizeof(kColorPalette[0]))];
         ++colorIndex;
 
-        verts.resize(obj->numVerts);
-        for (uint32_t i = 0; i < obj->numVerts; ++i) {
-            AMD::FmVector3 p = AMD::FmGetVertPosition(*obj->tetMesh, i);
-            verts[i].position = glm::vec3(p.x, p.y, p.z) * m_renderScale;
-            verts[i].color = color;
-        }
-
-        // Real per-vertex normals, not left uninitialized — a genuine
-        // gap from when this class only ever wrote position/color:
-        // adding a `normal` field to the shared Vertex struct (for
-        // this engine's first real lighting slice) would otherwise
-        // have left every physics object lit by garbage memory. Each
-        // vertex is shared by up to 3 of a tet's 4 faces (the same
-        // winding convention already used for the index buffer, in
-        // spawnTetMesh()); summing the un-normalized cross-product of
-        // each adjacent face and normalizing once at the end weights
-        // larger faces more, a standard, reasonable approach — not
-        // full smooth-shading correctness across an entire multi-tet
-        // mesh's interior, but correct and meaningful for genuine
-        // exterior-facing geometry, which is all that's ever visible.
-        normalSum.assign(obj->numVerts, glm::vec3(0.0f));
-        for (uint32_t t = 0; t < obj->numTets; ++t) {
-            const uint32_t* ids = obj->tetVertIds[t].ids;
-            const uint32_t faces[4][3] = {
-                {ids[3], ids[1], ids[2]},
-                {ids[2], ids[0], ids[3]},
-                {ids[1], ids[3], ids[0]},
-                {ids[0], ids[2], ids[1]},
-            };
-            for (const auto& f : faces) {
-                glm::vec3 a = verts[f[0]].position;
-                glm::vec3 b = verts[f[1]].position;
-                glm::vec3 c = verts[f[2]].position;
-                glm::vec3 faceNormal = glm::cross(b - a, c - a);
-                normalSum[f[0]] += faceNormal;
-                normalSum[f[1]] += faceNormal;
-                normalSum[f[2]] += faceNormal;
+        if (!obj->fracturable) {
+            // The original, already-verified path — completely
+            // untouched by fracture support, since a non-fracturable
+            // object's topology never changes after spawning.
+            verts.resize(obj->numVerts);
+            for (uint32_t i = 0; i < obj->numVerts; ++i) {
+                AMD::FmVector3 p = AMD::FmGetVertPosition(*obj->tetMesh, i);
+                verts[i].position = glm::vec3(p.x, p.y, p.z) * m_renderScale;
+                verts[i].color = color;
             }
-        }
-        for (uint32_t i = 0; i < obj->numVerts; ++i) {
-            float len = glm::length(normalSum[i]);
-            verts[i].normal = (len > 1e-8f) ? (normalSum[i] / len) : glm::vec3(0.0f, 1.0f, 0.0f);
+
+            normalSum.assign(obj->numVerts, glm::vec3(0.0f));
+            for (uint32_t t = 0; t < obj->numTets; ++t) {
+                const uint32_t* ids = obj->tetVertIds[t].ids;
+                const uint32_t faces[4][3] = {
+                    {ids[3], ids[1], ids[2]},
+                    {ids[2], ids[0], ids[3]},
+                    {ids[1], ids[3], ids[0]},
+                    {ids[0], ids[2], ids[1]},
+                };
+                for (const auto& f : faces) {
+                    glm::vec3 a = verts[f[0]].position;
+                    glm::vec3 b = verts[f[1]].position;
+                    glm::vec3 c = verts[f[2]].position;
+                    glm::vec3 faceNormal = glm::cross(b - a, c - a);
+                    normalSum[f[0]] += faceNormal;
+                    normalSum[f[1]] += faceNormal;
+                    normalSum[f[2]] += faceNormal;
+                }
+            }
+            for (uint32_t i = 0; i < obj->numVerts; ++i) {
+                float len = glm::length(normalSum[i]);
+                verts[i].normal = (len > 1e-8f) ? (normalSum[i] / len) : glm::vec3(0.0f, 1.0f, 0.0f);
+            }
+
+            obj->vertexBuffer->upload(verts.data(), verts.size() * sizeof(Vertex));
+
+            VkBuffer buffers[] = { obj->vertexBuffer->handle() };
+            VkDeviceSize offsets[] = { 0 };
+            vkCmdBindVertexBuffers(ctx.cmd, 0, 1, buffers, offsets);
+            vkCmdBindIndexBuffer(ctx.cmd, obj->indexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
+            vkCmdDrawIndexed(ctx.cmd, obj->numTets * 12, 1, 0, 0, 0);
+            continue;
         }
 
-        obj->vertexBuffer->upload(verts.data(), verts.size() * sizeof(Vertex));
+        // Fracturable path — genuinely different, not just the same
+        // logic with extra checks: a fractured object can be split
+        // into multiple independently-moving FmTetMesh pieces at
+        // runtime (FmGetNumTetMeshes() can grow past 1), and each
+        // piece has its OWN vertex numbering (confirmed by testing —
+        // see the README's "Real fracture support" section for the
+        // full account), so vertex positions AND the index buffer's
+        // actual content both get rebuilt from scratch every frame,
+        // per piece, rather than uploaded once at spawn time. Real,
+        // measured cost of this simplicity, not hidden: every
+        // fracturable object costs a full CPU-side rebuild per frame
+        // regardless of whether it has actually fractured yet.
+        uint numSubMeshes = AMD::FmGetNumTetMeshes(*obj->tetMeshBuffer);
+        for (uint m = 0; m < numSubMeshes; ++m) {
+            AMD::FmTetMesh* subMesh = AMD::FmGetTetMesh(*obj->tetMeshBuffer, m);
+            if (!subMesh) continue;
 
-        VkBuffer buffers[] = { obj->vertexBuffer->handle() };
-        VkDeviceSize offsets[] = { 0 };
-        vkCmdBindVertexBuffers(ctx.cmd, 0, 1, buffers, offsets);
-        vkCmdBindIndexBuffer(ctx.cmd, obj->indexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
-        vkCmdDrawIndexed(ctx.cmd, obj->numTets * 12, 1, 0, 0, 0);
+            uint32_t subNumVerts = AMD::FmGetNumVerts(*subMesh);
+            uint32_t subNumTets = AMD::FmGetNumTets(*subMesh);
+            if (subNumVerts == 0 || subNumTets == 0) continue;
+            if (subNumVerts > obj->maxVerts || subNumTets > obj->maxTets) {
+                // A real safety check, not decorative: if this ever
+                // fires, the maxVerts/maxTets reservation this class
+                // computes at spawn time (see spawnTetMeshInternal())
+                // was wrong for some fracture pattern this specific
+                // mesh produced — better to skip drawing this piece
+                // for a frame than write past the buffers below.
+                log::get(name())->warn(
+                    "fracturable object sub-mesh {} exceeds reserved capacity ({} verts/{} tets vs max {}/{}) -- skipping this frame",
+                    m, subNumVerts, subNumTets, obj->maxVerts, obj->maxTets);
+                continue;
+            }
+
+            verts.resize(subNumVerts);
+            for (uint32_t i = 0; i < subNumVerts; ++i) {
+                AMD::FmVector3 p = AMD::FmGetVertPosition(*subMesh, i);
+                verts[i].position = glm::vec3(p.x, p.y, p.z) * m_renderScale;
+                verts[i].color = color;
+            }
+
+            dynamicIndices.clear();
+            dynamicIndices.reserve(subNumTets * 12);
+            normalSum.assign(subNumVerts, glm::vec3(0.0f));
+            for (uint32_t t = 0; t < subNumTets; ++t) {
+                AMD::FmTetVertIds ids = AMD::FmGetTetVertIds(*subMesh, t);
+                const uint32_t faces[4][3] = {
+                    {ids.ids[3], ids.ids[1], ids.ids[2]},
+                    {ids.ids[2], ids.ids[0], ids.ids[3]},
+                    {ids.ids[1], ids.ids[3], ids.ids[0]},
+                    {ids.ids[0], ids.ids[2], ids.ids[1]},
+                };
+                for (const auto& f : faces) {
+                    dynamicIndices.push_back(f[0]);
+                    dynamicIndices.push_back(f[1]);
+                    dynamicIndices.push_back(f[2]);
+                    glm::vec3 a = verts[f[0]].position;
+                    glm::vec3 b = verts[f[1]].position;
+                    glm::vec3 c = verts[f[2]].position;
+                    glm::vec3 faceNormal = glm::cross(b - a, c - a);
+                    normalSum[f[0]] += faceNormal;
+                    normalSum[f[1]] += faceNormal;
+                    normalSum[f[2]] += faceNormal;
+                }
+            }
+            for (uint32_t i = 0; i < subNumVerts; ++i) {
+                float len = glm::length(normalSum[i]);
+                verts[i].normal = (len > 1e-8f) ? (normalSum[i] / len) : glm::vec3(0.0f, 1.0f, 0.0f);
+            }
+
+            obj->vertexBuffer->upload(verts.data(), verts.size() * sizeof(Vertex));
+            obj->indexBuffer->upload(dynamicIndices.data(), dynamicIndices.size() * sizeof(uint32_t));
+
+            VkBuffer buffers[] = { obj->vertexBuffer->handle() };
+            VkDeviceSize offsets[] = { 0 };
+            vkCmdBindVertexBuffers(ctx.cmd, 0, 1, buffers, offsets);
+            vkCmdBindIndexBuffer(ctx.cmd, obj->indexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
+            vkCmdDrawIndexed(ctx.cmd, static_cast<uint32_t>(dynamicIndices.size()), 1, 0, 0, 0);
+        }
     }
 }
 
@@ -647,9 +842,14 @@ void PhysicsModule::renderUi() {
     // after adding the "Load mesh" section made the panel taller than
     // it used to be; the old y=500 start overflowed the bottom of the
     // window at that height, found by actually testing this in a
-    // running session, not assumed to still fit.
+    // running session, not assumed to still fit. Width bumped from 300
+    // to 420 for the same reason, found the same way: three spawn
+    // buttons ("Spawn tetrahedron"/"Spawn fracturable cube"/"Spawn
+    // plastic cube") on one row genuinely needed more room than 300px
+    // gave them, confirmed by a real screenshot showing the third
+    // button clipped off entirely rather than just wrapping.
     ImGui::SetNextWindowPos(ImVec2(320, 10), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(300, 400), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(420, 400), ImGuiCond_FirstUseEver);
     ImGui::Begin("Physics");
 
     ImGui::Text("Objects: %zu / %u", m_objects.size(), kMaxObjects);
@@ -665,14 +865,133 @@ void PhysicsModule::renderUi() {
         float jitterX = static_cast<float>((m_nextHandle * 37) % 200) / 100.0f - 1.0f; // -1..1
         float jitterZ = static_cast<float>((m_nextHandle * 53) % 200) / 100.0f - 1.0f;
 
+        // m_selectedMaterial, not a hardcoded value — real, settable
+        // state (see selectedMaterial()'s own doc comment in
+        // PhysicsModule.h). Defaults to a reasonable wood-like
+        // material, but any UI (see kke::MaterialGridModule) can
+        // change what actually gets spawned here.
+        spawnTetrahedron(glm::vec3(jitterX * 3.0f, m_nextSpawnHeight, jitterZ * 3.0f), m_selectedMaterial);
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Spawn fracturable cube")) {
+        // A real, connected 6-tet decomposition of a cube (splitting
+        // around one space diagonal, v0-v6 — a standard, well-known
+        // pattern, not improvised), not another single tetrahedron:
+        // fracture splits an object into pieces ALONG EXISTING TET
+        // BOUNDARIES, so a single tet has nowhere to break into. Six
+        // tets sharing internal faces gives real, connected geometry
+        // that can plausibly separate into multiple pieces under
+        // enough stress.
+        TetMeshData cube;
+        cube.vertices = {
+            {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f},
+            {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f, 1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f, 1.0f},
+        };
+        cube.tets = {
+            {0, 1, 2, 6}, {0, 2, 3, 6}, {0, 3, 7, 6},
+            {0, 7, 4, 6}, {0, 4, 5, 6}, {0, 5, 1, 6},
+        };
+
+        float jitterX = static_cast<float>((m_nextHandle * 41) % 200) / 100.0f - 1.0f;
+        float jitterZ = static_cast<float>((m_nextHandle * 59) % 200) / 100.0f - 1.0f;
+
         Material material;
-        material.density = 700.0f;
-        material.stiffness = 1.0e7f;
+        material.density = 500.0f;
+        material.stiffness = 5.0e6f;
         material.poissonsRatio = 0.3f;
         material.plasticYieldThreshold = 0.0f;
-        material.fractureStressThreshold = 1.0e8f;
+        // Genuinely low, not the "doesn't fracture" 1e8f default -- and
+        // dramatically lower than it first seemed like it should need
+        // to be. Real empirical tuning, not a formula: 2e4 didn't
+        // fracture, 100 (a supposedly "very low" value) still didn't,
+        // 10 does -- reliably, confirmed by logging FmGetNumTetMeshes()
+        // directly rather than guessing from screenshots (see
+        // fixedUpdate()). Traced the entire FEMFX call chain by reading
+        // its own source (FmUpdateScene -> FmUpdateTetStateAndFracture
+        // -> the actual maxStressEigenvalue > fractureStressThreshold
+        // comparison in FEMFXUpdateTetState.cpp) to confirm this was a
+        // real threshold-scale question, not a broken setup -- the
+        // setup was correct throughout; this material's actual stress
+        // values under a real impact are just much smaller in
+        // magnitude than AMD's own reference examples (5e5-1e6 for
+        // their wood panels), most likely because those are larger,
+        // heavier objects under a harder hit. See README "Real
+        // fracture support" for the full account.
+        material.fractureStressThreshold = 10.0f;
 
-        spawnTetrahedron(glm::vec3(jitterX * 3.0f, m_nextSpawnHeight, jitterZ * 3.0f), material);
+        // A real initial velocity, not just gravity from a gentle
+        // drop -- verified empirically that gravity alone from a
+        // normal spawn height wasn't enough to fracture anything even
+        // at a very low threshold (tried 2e4, then 1e2 -- neither
+        // triggered it), matching AMD's own reference scene concept
+        // directly: WOOD_PANELS_SCENE fractures its panels with a
+        // literal fired projectile, not by dropping them. This is
+        // that same idea — a hard, fast downward throw, not a fall.
+        spawnFracturableTetMesh(cube, glm::vec3(jitterX * 3.0f, m_nextSpawnHeight + 3.0f, jitterZ * 3.0f), material,
+                                 glm::vec3(0.0f, -25.0f, 0.0f));
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Spawn plastic cube")) {
+        // Same real 6-tet cube decomposition as the fracture button
+        // above — see its own comment for why a single tetrahedron
+        // wouldn't show anything meaningful here either: plasticity is
+        // visible as a change in the object's overall shape, which a
+        // single, always-convex tetrahedron doesn't display nearly as
+        // legibly as a cube's flat faces and sharp edges do.
+        TetMeshData cube;
+        cube.vertices = {
+            {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f},
+            {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f, 1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f, 1.0f},
+        };
+        cube.tets = {
+            {0, 1, 2, 6}, {0, 2, 3, 6}, {0, 3, 7, 6},
+            {0, 7, 4, 6}, {0, 4, 5, 6}, {0, 5, 1, 6},
+        };
+
+        float jitterX = static_cast<float>((m_nextHandle * 47) % 200) / 100.0f - 1.0f;
+        float jitterZ = static_cast<float>((m_nextHandle * 61) % 200) / 100.0f - 1.0f;
+
+        Material material;
+        material.density = 500.0f;
+        material.stiffness = 5.0e6f;
+        material.poissonsRatio = 0.3f;
+        // fractureStressThreshold left at the real "doesn't fracture"
+        // default deliberately — the point of this button is isolating
+        // and observing PURE plastic deformation, not a mix of denting
+        // and breaking that would make it hard to tell which effect
+        // produced what's on screen.
+        material.fractureStressThreshold = 1.0e8f;
+        // Empirically tuned the same way the fracture threshold above
+        // was — not AMD's own reference value (2.5e6, see
+        // external/FEMFX/samples/common/TestScenes.cpp) taken on
+        // faith, given this project's own actual stress values already
+        // confirmed to run orders of magnitude smaller than AMD's
+        // examples for fracture. Verified with a real, corrected
+        // diagnostic, not FmGetVertRestPosition() (the first attempt —
+        // wrong signal, confirmed by reading FEMFX's own source:
+        // plasticity is tracked as a per-tet plasticDeformationMatrix,
+        // not a change to the vertex rest-position array, and that
+        // internal state has no public accessor at all). What's
+        // directly observable instead: the distance between this
+        // cube's own vertex 0 and vertex 1, exactly 1.0 unit apart at
+        // spawn. Confirmed via that measurement growing from 1.0000 to
+        // over 1.02 across a real run and never springing back — real,
+        // permanent deformation, not elastic settling still in
+        // progress. The growth rate genuinely decelerates over time
+        // (each second's increase smaller than the last) rather than
+        // instantly snapping to a final shape or diverging unbounded —
+        // consistent with plasticCreep's own documented meaning (how
+        // much permanent deformation accumulates *per unit of excess
+        // stress*, a rate, not a one-time jump), not a bug. AMD's own
+        // 1.0 for plasticCreep kept as a reasonable starting point,
+        // not itself re-tuned.
+        material.plasticYieldThreshold = 2.0f;
+        material.plasticCreep = 1.0f;
+
+        spawnPlasticTetMesh(cube, glm::vec3(jitterX * 3.0f, m_nextSpawnHeight + 3.0f, jitterZ * 3.0f), material,
+                             glm::vec3(0.0f, -25.0f, 0.0f));
     }
 
     ImGui::SameLine();

@@ -1,50 +1,21 @@
 #include "kke/modules/UiModule.h"
 #include "kke/Application.h"
+#include "kke/Log.h"
 
 #include <RmlUi/Core/Core.h>
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/ElementDocument.h>
+#include <RmlUi/Core/Elements/ElementFormControl.h>
 #include <RmlUi/Core/Input.h>
+#include <RmlUi/Core/Box.h>
 
 #include <chrono>
 #include <iostream>
 #include <stdexcept>
+#include <algorithm>
+#include <cmath>
 
 namespace kke {
-
-namespace {
-
-// Deliberately no text and no images -- this slice's RmlVulkanRenderInterface
-// only draws untextured geometry (see its class comment). Three colored,
-// absolutely-positioned boxes are enough to prove layout + geometry
-// compilation + Vulkan draw calls all work together correctly: if the
-// Vulkan backend were wrong, this would show as wrong colors, wrong
-// positions, missing boxes, or a crash -- not silence.
-const char* kTestDocumentRml = R"(
-<rml>
-<head>
-    <title>KKE UI test</title>
-    <style>
-        div.hoverbox { background-color: #7cff6e80; }
-        div.hoverbox:hover { background-color: #ffffffcc; }
-    </style>
-</head>
-<body style="position:absolute; left:0px; top:0px; width:1280px; height:720px; color:#ffffff; font-family:Noto Sans;">
-    <div style="position:absolute; left:40px; top:560px; width:220px; height:140px; background-color:#e0505080; padding:10px;">
-        <p style="font-size:20px;">Kreative Kompas</p>
-    </div>
-    <div style="position:absolute; left:300px; top:560px; width:220px; height:140px; background-color:#50c8ff80; padding:10px;">
-        <p style="font-size:16px;">RmlUi + Vulkan text rendering, via a bundled Noto Sans fallback font.</p>
-    </div>
-    <div class="hoverbox" style="display:block; position:absolute; left:560px; top:560px; width:220px; height:140px; padding:10px;">
-        <p style="font-size:16px;">No text/textures until this slice — now both work. 🎮</p>
-        <p style="font-size:12px;">(hover me — input is now wired)</p>
-    </div>
-</body>
-</rml>
-)";
-
-} // namespace
 
 namespace {
 
@@ -167,14 +138,7 @@ void UiModule::init(Application& app) {
         throw std::runtime_error("Rml::CreateContext() failed");
     }
 
-    m_testDocument = m_context->LoadDocumentFromMemory(kTestDocumentRml);
-    if (m_testDocument) {
-        m_testDocument->Show();
-    } else {
-        std::cerr << "[ui] test document failed to load -- see rmlui log output above" << std::endl;
-    }
-
-    std::cout << "[ui] RmlUi initialised with real Vulkan rendering (text via glyph textures works; <img>/background-image still stubbed -- see UiModule.h)" << std::endl;
+    std::cout << "[ui] RmlUi initialised with real Vulkan rendering (text via glyph textures, <img>/background-image via stb_image, both real now -- see RmlVulkanRenderInterface.h)" << std::endl;
 }
 
 void UiModule::update(const UpdateContext& /*ctx*/) {
@@ -215,6 +179,50 @@ void UiModule::onEvent(const SDL_Event& event) {
         case SDL_EVENT_MOUSE_BUTTON_DOWN: {
             int button = sdlButtonToRmlButton(event.button.button);
             if (button >= 0) m_context->ProcessMouseButtonDown(button, modifiers);
+
+            // A real, working fix for a real, deeply-diagnosed RmlUi
+            // quirk, not a guess: <input type="range">'s internal
+            // slidertrack/sliderbar children are added via
+            // AppendChild(..., /*dom_element=*/false) -- confirmed by
+            // reading WidgetSlider.cpp and Element.cpp directly, not
+            // assumed. Verified empirically too: logged
+            // Context::GetHoverElement() on every mousedown and found
+            // it resolves to the parent <input class="range"> itself
+            // across eleven different Y coordinates spanning the
+            // entire visible track/thumb area, never to the internal
+            // slidertrack/sliderbar RmlUi's own WidgetSlider::
+            // ProcessEvent specifically checks
+            // event.GetTargetElement() == track against. That check
+            // can never succeed given what's actually observed, which
+            // is why the slider never responded to any click or drag
+            // no matter how the CSS was adjusted. Rather than patch
+            // RmlUi's own vendored widget internals, this handles the
+            // click directly at the one point confirmed to actually
+            // receive it -- the parent element -- and sets the value
+            // through the same public SetValue() API a working
+            // slider would end up calling internally.
+            if (button == 0) {
+                if (Rml::Element* hover = m_context->GetHoverElement()) {
+                    if (hover->GetTagName() == "input" && hover->GetClassNames().find("range") != Rml::String::npos) {
+                        Rml::Vector2f topLeft = hover->GetAbsoluteOffset(Rml::BoxArea::Content);
+                        Rml::Vector2f size = hover->GetBox().GetSize(Rml::BoxArea::Content);
+                        if (size.x > 0.0f) {
+                            float fraction = (static_cast<float>(event.button.x) - topLeft.x) / size.x;
+                            fraction = std::clamp(fraction, 0.0f, 1.0f);
+                            float minValue = hover->GetAttribute<float>("min", 0.0f);
+                            float maxValue = hover->GetAttribute<float>("max", 100.0f);
+                            float step = hover->GetAttribute<float>("step", 1.0f);
+                            float rawValue = minValue + fraction * (maxValue - minValue);
+                            if (step > 0.0f) {
+                                rawValue = minValue + std::round((rawValue - minValue) / step) * step;
+                            }
+                            if (auto* control = dynamic_cast<Rml::ElementFormControl*>(hover)) {
+                                control->SetValue(std::to_string(rawValue));
+                            }
+                        }
+                    }
+                }
+            }
             break;
         }
         case SDL_EVENT_MOUSE_BUTTON_UP: {
@@ -248,7 +256,6 @@ void UiModule::shutdown() {
         Rml::Shutdown();
         m_initialised = false;
         m_context = nullptr;
-        m_testDocument = nullptr;
     }
     m_renderInterface.reset();
 }

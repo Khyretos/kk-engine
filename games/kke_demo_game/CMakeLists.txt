@@ -15,6 +15,8 @@ engine_copy_runtime_file(kke_demo ${CMAKE_CURRENT_SOURCE_DIR}/game.json marketpl
 
 engine_add_shader(kke_demo ${CMAKE_SOURCE_DIR}/shaders/cube.vert)
 engine_add_shader(kke_demo ${CMAKE_SOURCE_DIR}/shaders/cube.frag)
+engine_add_shader(kke_demo ${CMAKE_SOURCE_DIR}/shaders/shadow.vert)
+engine_add_shader(kke_demo ${CMAKE_SOURCE_DIR}/shaders/shadow.frag)
 engine_add_shader(kke_demo ${CMAKE_SOURCE_DIR}/shaders/grid.vert)
 engine_add_shader(kke_demo ${CMAKE_SOURCE_DIR}/shaders/grid.frag)
 engine_add_shader(kke_demo ${CMAKE_SOURCE_DIR}/shaders/particle.vert)

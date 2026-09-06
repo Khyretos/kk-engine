@@ -14,6 +14,7 @@ set(ENGINE_SOURCES
     src/GameManifest.cpp
     src/TetMeshAsset.cpp
     src/LightingBuffer.cpp
+    src/ShadowMap.cpp
     src/MarketplaceIndex.cpp
     src/RmlTextSafety.cpp
     src/Log.cpp
@@ -24,6 +25,8 @@ set(ENGINE_SOURCES
     src/modules/OrbitCameraModule.cpp
     src/modules/UiModule.cpp
     src/modules/MarketplaceUiModule.cpp
+    src/modules/LightingControlsModule.cpp
+    src/modules/MaterialGridModule.cpp
     src/modules/DebugControlModule.cpp
     src/modules/PhysicsModule.cpp
 )
@@ -47,6 +50,7 @@ set(ENGINE_HEADERS
     include/kke/GameManifest.h
     include/kke/TetMeshAsset.h
     include/kke/LightingBuffer.h
+    include/kke/ShadowMap.h
     include/kke/MarketplaceIndex.h
     include/kke/RmlTextSafety.h
     include/kke/Log.h
@@ -57,6 +61,8 @@ set(ENGINE_HEADERS
     include/kke/modules/OrbitCameraModule.h
     include/kke/modules/UiModule.h
     include/kke/modules/MarketplaceUiModule.h
+    include/kke/modules/LightingControlsModule.h
+    include/kke/modules/MaterialGridModule.h
     include/kke/modules/DebugControlModule.h
     include/kke/modules/PhysicsModule.h
     include/kke/Material.h
