@@ -25,10 +25,18 @@ const char* kShowcaseRml = R"(
 <head>
     <title>RmlUi Showcase</title>
     <style>
-        body { color: #ffffff; font-family: Noto Sans; }
-        .panel { position: absolute; background-color: #1e1e2e; padding: 12px; border: 1px #555555; }
-        .panel h1 { font-size: 16px; color: #a0c8ff; margin-bottom: 8px; }
-        input.text { background-color: #333344; color: #ffffff; padding: 4px; border: 1px #666677; width: 200px; }
+        // pointer-events: none on body -- see LightingControlsModule's
+        // own comment (and MarketplaceUiModule's earlier, already-
+        // proven version of this exact fix) for the full account:
+        // every document's body covers the full viewport for hit-
+        // testing by default, and rmlui_demo shows several separate
+        // documents/panels at once, so without this the most-recently-
+        // shown one's invisible body would absorb clicks meant for
+        // panels behind it.
+        body { color: #ffffff; font-family: Noto Sans; pointer-events: none; }
+        .panel { position: absolute; background-color: #1e1e2e; padding: 12px; border: 1px #555555; pointer-events: auto; font-family: Noto Sans; }
+        .panel h1 { font-size: 16px; color: #a0c8ff; margin-bottom: 8px; font-family: Noto Sans; }
+        input.text { background-color: #333344; color: #ffffff; padding: 4px; border: 1px #666677; width: 200px; font-family: Noto Sans; }
         /* Same root cause found for the select/slider fixes above,
            discovered while investigating why nothing here responded to
            clicks at all: RmlUi auto-assigns a .checkbox/.radio class
@@ -41,7 +49,7 @@ const char* kShowcaseRml = R"(
         input.checkbox, input.radio { width: 16px; height: 16px; background-color: #333344; border: 1px #666677; vertical-align: -3px; }
         input.checkbox:hover, input.radio:hover { background-color: #3d3d4f; }
         input.checkbox:checked, input.radio:checked { background-color: #4a7ac9; border: 1px #6a9aee; }
-        select { color: #ffffff; width: 200px; }
+        select { color: #ffffff; width: 200px; font-family: Noto Sans; }
         /* select's own outer box was the only thing styled before --
            the actual VISIBLE parts are named sub-elements RmlUi creates
            internally (confirmed against a real, working RmlUi sample,
@@ -56,16 +64,16 @@ const char* kShowcaseRml = R"(
         select selectvalue:hover { background-color: #3d3d4f; }
         select selectarrow { width: 22px; background-color: #43435a; }
         select selectbox { background-color: #2a2a3a; border: 1px #666677; padding: 2px; margin-top: 2px; }
-        select selectbox option { padding: 4px 8px; color: #dddddd; }
+        select selectbox option { padding: 4px 8px; color: #dddddd; font-family: Noto Sans; }
         select selectbox option:checked { background-color: #3d3d4f; font-weight: bold; }
         select selectbox option:hover { background-color: #4a7ac9; color: #ffffff; }
-        textarea { background-color: #333344; color: #ffffff; padding: 4px; width: 200px; height: 44px; border: 1px #666677; }
-        button { background-color: #4a7ac9; color: #ffffff; padding: 6px 14px; border: 1px #6a9aee; }
+        textarea { background-color: #333344; color: #ffffff; padding: 4px; width: 200px; height: 44px; border: 1px #666677; font-family: Noto Sans; }
+        button { background-color: #4a7ac9; color: #ffffff; padding: 6px 14px; border: 1px #6a9aee; font-family: Noto Sans; }
         button:hover { background-color: #5a8ad9; }
         tabset tabs { display: block; }
-        tabset tab { background-color: #333344; color: #cccccc; padding: 4px 12px; }
+        tabset tab { background-color: #333344; color: #cccccc; padding: 4px 12px; font-family: Noto Sans; }
         tabset tab:selected { background-color: #4a7ac9; color: #ffffff; }
-        tabset panel { display: block; background-color: #262636; color: #ffffff; padding: 10px; }
+        tabset panel { display: block; background-color: #262636; color: #ffffff; padding: 10px; font-family: Noto Sans; }
         /* Same class of gap as the select dropdown above: only the
            outer <input type="range"> box existed in CSS before, never
            its actual visible/draggable parts. slidertrack is the
@@ -83,7 +91,7 @@ const char* kShowcaseRml = R"(
         progress df-fill { background-color: #4a7ac9; }
     </style>
 </head>
-<body style="width:1280px; height:720px;">
+<body style="width:1280px; height:720px; pointer-events:none;">
 
     <div class="panel" style="left:700px; top:20px; width:250px;">
         <h1>Text input, button, textarea</h1>

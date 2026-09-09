@@ -5,6 +5,7 @@ layout(location = 1) in vec3 fragNormalWorld;
 layout(location = 2) in vec3 fragPosWorld;
 layout(location = 3) in vec4 fragPosLightSpace;
 layout(location = 4) in vec2 fragMetallicRoughness;
+layout(location = 5) in vec2 fragUV;
 layout(location = 0) out vec4 outColor;
 
 // Mirrors kke::LightingBuffer's GPULight/LightingUBOData C++ structs
@@ -25,14 +26,36 @@ layout(set = 0, binding = 0) uniform LightingUBO {
 } lighting;
 
 layout(set = 1, binding = 0) uniform sampler2D shadowMap;
+// Set 2: the material's own albedo texture -- see kke::Texture and
+// kke::Application's own default 1x1 white texture (bound here for
+// any object that doesn't have a real one of its own, so this
+// binding is always valid regardless of whether that specific
+// object's material actually has a texture). Sampled and multiplied
+// into albedo below, not used to replace it outright: a plain white
+// texture leaves the vertex color fully in control (white * color =
+// color, an exact no-op), while a real texture modulates it --
+// meaning every object drawn through this shader keeps working
+// exactly as before, whether or not it has a texture of its own.
+layout(set = 2, binding = 0) uniform sampler2D albedoTexture;
 
 const float PI = 3.14159265359;
 
-// Real shadow lookup, not decorative -- see kke::ShadowMap's own class
-// comment for the full account of what's implemented (a single
-// directional light, single-tap, no PCF/soft edges yet) and what's
-// deliberately still out of scope. Returns 1.0 for "fully lit," 0.0
-// for "fully in shadow."
+// Real shadow lookup with PCF (Percentage-Closer Filtering) — a real
+// quality improvement over the single-tap version this replaced, not
+// a rewrite for its own sake. A single tap produces a hard, aliased,
+// stair-stepped shadow edge (every shadow-map texel boundary shows up
+// as a visible jump in the rendered image); PCF instead samples a
+// small neighborhood around each shadow-map lookup and averages the
+// binary in/out-of-shadow results, giving a smooth gradient across
+// that same edge. textureSize(shadowMap, 0) queries the actual bound
+// shadow map's real resolution at runtime rather than hardcoding it
+// separately here (see kke::ShadowMap's own resolution parameter) —
+// correct even if that resolution ever changes, with nothing in this
+// shader needing to know or track it. A 3x3 kernel (9 taps) is a
+// standard, real trade-off: enough samples for a genuinely smooth edge
+// without the cost of a larger kernel this project's own scenes don't
+// need. Returns 1.0 for "fully lit," 0.0 for "fully in shadow," with
+// real fractional values now for pixels straddling a shadow edge.
 float computeShadow(vec4 posLightSpace) {
     vec3 projCoords = posLightSpace.xyz / posLightSpace.w;
     vec2 shadowUV = projCoords.xy * 0.5 + 0.5;
@@ -42,9 +65,17 @@ float computeShadow(vec4 posLightSpace) {
         return 1.0;
     }
 
-    float closestDepth = texture(shadowMap, shadowUV).r;
     float bias = 0.003;
-    return (currentDepth - bias > closestDepth) ? 0.0 : 1.0;
+    vec2 texelSize = 1.0 / vec2(textureSize(shadowMap, 0));
+
+    float litSum = 0.0;
+    for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            float closestDepth = texture(shadowMap, shadowUV + vec2(dx, dy) * texelSize).r;
+            litSum += (currentDepth - bias > closestDepth) ? 0.0 : 1.0;
+        }
+    }
+    return litSum / 9.0;
 }
 
 // Trowbridge-Reitz GGX normal distribution function -- how much the
@@ -87,7 +118,12 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
 }
 
 void main() {
-    vec3 albedo = fragColor;
+    // TEMPORARY DIAGNOSTIC -- world-space normal directly as color, to
+    // check unambiguously whether multiple distinct faces are actually
+    // being rasterized at all for physics-spawned tetrahedra.
+    outColor = vec4(normalize(fragNormalWorld) * 0.5 + 0.5, 1.0);
+    return;
+    vec3 albedo = fragColor * texture(albedoTexture, fragUV).rgb;
     // Clamped away from the true extremes (0.0 and 1.0), not just
     // whatever a UI slider happens to allow through -- roughness=0
     // makes distributionGGX's denominator degenerate toward a

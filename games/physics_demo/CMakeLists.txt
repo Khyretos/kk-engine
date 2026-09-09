@@ -16,5 +16,7 @@ engine_copy_runtime_file(physics_demo ${CMAKE_CURRENT_SOURCE_DIR}/game.json mark
 # rml_ui.vert/frag: UiModule's real Vulkan text rendering.
 engine_add_shader(physics_demo ${CMAKE_SOURCE_DIR}/shaders/cube.vert)
 engine_add_shader(physics_demo ${CMAKE_SOURCE_DIR}/shaders/cube.frag)
+engine_add_shader(physics_demo ${CMAKE_SOURCE_DIR}/shaders/shadow.vert)
+engine_add_shader(physics_demo ${CMAKE_SOURCE_DIR}/shaders/shadow.frag)
 engine_add_shader(physics_demo ${CMAKE_SOURCE_DIR}/shaders/rml_ui.vert)
 engine_add_shader(physics_demo ${CMAKE_SOURCE_DIR}/shaders/rml_ui.frag)

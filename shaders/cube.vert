@@ -3,12 +3,14 @@
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inColor;
 layout(location = 2) in vec3 inNormal;
+layout(location = 3) in vec2 inUV;
 
 layout(location = 0) out vec3 fragColor;
 layout(location = 1) out vec3 fragNormalWorld;
 layout(location = 2) out vec3 fragPosWorld;
 layout(location = 3) out vec4 fragPosLightSpace;
 layout(location = 4) out vec2 fragMetallicRoughness;
+layout(location = 5) out vec2 fragUV;
 
 // Shrunk from { mat4 mvp; mat4 model; } (128 bytes -- exactly at the
 // guaranteed-minimum Vulkan push constant limit, no room left at all)
@@ -61,4 +63,5 @@ void main() {
     fragNormalWorld = normalize(mat3(pc.model) * inNormal);
     fragPosLightSpace = lighting.lightViewProj * worldPos;
     fragMetallicRoughness = vec2(pc.metallic, pc.roughness);
+    fragUV = inUV;
 }

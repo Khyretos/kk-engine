@@ -78,7 +78,7 @@ void DestructionModule::init(kke::Application& app) {
 
     kke::PipelineConfig config;
     config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(CubePushConstants) };
-    config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout() };
+    config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), app.materialTextureSetLayout() };
 
     m_pipeline = std::make_unique<kke::Pipeline>(
         app.device(), app.renderer().renderPass(),
@@ -101,9 +101,9 @@ void DestructionModule::render(const kke::RenderContext& ctx) {
     float elapsed = static_cast<float>(m_currentTick - m_triggerTick) * m_fixedDt;
 
     m_pipeline->bind(ctx.cmd);
-    VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet };
+    VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, ctx.defaultMaterialTextureDescriptorSet };
     vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(),
-                             0, 2, sets, 0, nullptr);
+                             0, 3, sets, 0, nullptr);
     m_fragmentMesh->bind(ctx.cmd);
 
     for (uint32_t i = 0; i < m_fragmentCount; ++i) {

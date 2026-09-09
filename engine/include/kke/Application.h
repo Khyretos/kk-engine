@@ -7,6 +7,7 @@
 #include "kke/EngineError.h"
 #include "kke/LightingBuffer.h"
 #include "kke/ShadowMap.h"
+#include "kke/Texture.h"
 
 #include <glm/glm.hpp>
 #include <array>
@@ -179,6 +180,16 @@ public:
     // render pass (shadowMap().renderPass()) for their own shadow
     // pipeline.
     ShadowMap& shadowMap() { return *m_shadowMap; }
+    // Set 2's own layout -- needed by any module drawing through
+    // cube.frag at pipeline-creation time, same reasoning as
+    // shadowMapSetLayout() above.
+    VkDescriptorSetLayout materialTextureSetLayout() const { return m_materialTextureSetLayout; }
+    // The default (1x1 white) texture's own descriptor set -- what
+    // every object without a real texture of its own binds. Modules
+    // with a real texture (see CubeModule) create and bind their own
+    // separate descriptor set using the same materialTextureSetLayout()
+    // instead of this one.
+    VkDescriptorSet defaultTextureDescriptorSet() const { return m_defaultTextureDescriptorSet; }
 
     // --- Debug pause/step ---
     // Freezes simulation (fixedUpdate/update stop advancing) while still
@@ -226,6 +237,17 @@ private:
     VkDescriptorSetLayout m_shadowMapSetLayout = VK_NULL_HANDLE;
     VkDescriptorPool m_shadowMapDescriptorPool = VK_NULL_HANDLE;
     VkDescriptorSet m_shadowMapDescriptorSet = VK_NULL_HANDLE;
+
+    // The material albedo texture's own descriptor infrastructure (set
+    // 2 in cube.frag) -- same reasoning, same pattern, as the shadow
+    // map's own set above. m_defaultWhiteTexture/m_defaultTextureDescriptorSet
+    // are what every object sharing cube.frag binds unless it has a
+    // real texture of its own (see kke::Texture's own class comment,
+    // and CubeModule for the first real, non-default consumer).
+    std::unique_ptr<Texture> m_defaultWhiteTexture;
+    VkDescriptorSetLayout m_materialTextureSetLayout = VK_NULL_HANDLE;
+    VkDescriptorPool m_materialTextureDescriptorPool = VK_NULL_HANDLE;
+    VkDescriptorSet m_defaultTextureDescriptorSet = VK_NULL_HANDLE;
     float m_fixedDt;
 
     std::vector<std::unique_ptr<Module>> m_modules;

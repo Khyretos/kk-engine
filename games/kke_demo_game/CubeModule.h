@@ -3,6 +3,7 @@
 #include "kke/Module.h"
 #include "kke/Pipeline.h"
 #include "kke/Mesh.h"
+#include "kke/Texture.h"
 
 #include <memory>
 
@@ -21,6 +22,7 @@ public:
     void render(const kke::RenderContext& ctx) override;
     void renderShadow(const kke::ShadowRenderContext& ctx) override;
     void renderUi() override;
+    void shutdown() override;
 
 private:
     std::unique_ptr<kke::Pipeline> m_pipeline;
@@ -31,6 +33,20 @@ private:
     // no fragment output, a different render pass).
     std::unique_ptr<kke::Pipeline> m_shadowPipeline;
     std::unique_ptr<kke::Mesh> m_mesh;
+    // A real, generated procedural texture (checkerboard) — see
+    // kke::Texture and CubeModule.cpp's own comment on why generated
+    // rather than loaded from a file for this first real material-
+    // texture consumer. Owns its own small descriptor pool/set,
+    // separate from kke::Application's own default-white-texture pool,
+    // since this is a genuinely different, real texture no other
+    // module shares.
+    std::unique_ptr<kke::Texture> m_texture;
+    VkDescriptorPool m_texturePool = VK_NULL_HANDLE;
+    VkDescriptorSet m_textureDescriptorSet = VK_NULL_HANDLE;
+    // Stashed during init() specifically so shutdown() (which, like
+    // every Module::shutdown(), takes no parameters -- see Module.h)
+    // has a real VkDevice to destroy m_texturePool with.
+    VkDevice m_device = VK_NULL_HANDLE;
 
     bool m_spinning = true;
     float m_spinSpeedDegPerSec = 45.0f;

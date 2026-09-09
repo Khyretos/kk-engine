@@ -72,6 +72,65 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         vkUpdateDescriptorSets(m_renderer->device().device(), 1, &write, 0, nullptr);
     }
 
+    // The material albedo texture's own descriptor infrastructure (set
+    // 2 in cube.frag) -- same pattern as the shadow map's own set just
+    // above. A 1x1 opaque white pixel as the default: sampling it and
+    // multiplying into a fragment's albedo (see cube.frag) is an exact
+    // no-op, so every object drawn through this shader keeps rendering
+    // exactly as it did before this feature existed, unless it's given
+    // a real texture of its own (see kke::Texture, CubeModule).
+    {
+        const uint8_t whitePixel[4] = { 255, 255, 255, 255 };
+        m_defaultWhiteTexture = std::make_unique<Texture>(m_renderer->device(), whitePixel, 1, 1);
+
+        VkDescriptorSetLayoutBinding binding{};
+        binding.binding = 0;
+        binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        binding.descriptorCount = 1;
+        binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+        VkDescriptorSetLayoutCreateInfo layoutInfo{};
+        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layoutInfo.bindingCount = 1;
+        layoutInfo.pBindings = &binding;
+        VK_CHECK(vkCreateDescriptorSetLayout(m_renderer->device().device(), &layoutInfo, nullptr, &m_materialTextureSetLayout));
+
+        // maxSets=2, not 1 -- this pool needs to cover both the default
+        // texture's own set (allocated below) and CubeModule's real
+        // one (allocated separately, using this same layout, when it
+        // creates its own texture). A single shared pool for both, not
+        // a second pool just for CubeModule, since there's only ever
+        // one other real consumer of this exact layout right now.
+        VkDescriptorPoolSize poolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2 };
+        VkDescriptorPoolCreateInfo poolInfo{};
+        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        poolInfo.maxSets = 2;
+        poolInfo.poolSizeCount = 1;
+        poolInfo.pPoolSizes = &poolSize;
+        VK_CHECK(vkCreateDescriptorPool(m_renderer->device().device(), &poolInfo, nullptr, &m_materialTextureDescriptorPool));
+
+        VkDescriptorSetAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocInfo.descriptorPool = m_materialTextureDescriptorPool;
+        allocInfo.descriptorSetCount = 1;
+        allocInfo.pSetLayouts = &m_materialTextureSetLayout;
+        VK_CHECK(vkAllocateDescriptorSets(m_renderer->device().device(), &allocInfo, &m_defaultTextureDescriptorSet));
+
+        VkDescriptorImageInfo imageInfo{};
+        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageInfo.imageView = m_defaultWhiteTexture->imageView();
+        imageInfo.sampler = m_defaultWhiteTexture->sampler();
+
+        VkWriteDescriptorSet write{};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = m_defaultTextureDescriptorSet;
+        write.dstBinding = 0;
+        write.descriptorCount = 1;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        write.pImageInfo = &imageInfo;
+        vkUpdateDescriptorSets(m_renderer->device().device(), 1, &write, 0, nullptr);
+    }
+
     m_debugUi = std::make_unique<DebugUi>(m_window, m_renderer->device(), m_renderer->renderPass(),
                                            m_renderer->swapChainImageCount());
 }
@@ -118,6 +177,8 @@ Application::~Application() {
         VkDevice dev = m_renderer->device().device();
         if (m_shadowMapDescriptorPool) vkDestroyDescriptorPool(dev, m_shadowMapDescriptorPool, nullptr);
         if (m_shadowMapSetLayout) vkDestroyDescriptorSetLayout(dev, m_shadowMapSetLayout, nullptr);
+        if (m_materialTextureDescriptorPool) vkDestroyDescriptorPool(dev, m_materialTextureDescriptorPool, nullptr);
+        if (m_materialTextureSetLayout) vkDestroyDescriptorSetLayout(dev, m_materialTextureSetLayout, nullptr);
     }
 
     log::shutdown(); // flush the async queue before the process exits
@@ -337,6 +398,7 @@ void Application::run() {
         renderCtx.renderPass = m_renderer->renderPass();
         renderCtx.lightingDescriptorSet = m_lightingBuffer->descriptorSet();
         renderCtx.shadowMapDescriptorSet = m_shadowMapDescriptorSet;
+        renderCtx.defaultMaterialTextureDescriptorSet = m_defaultTextureDescriptorSet;
 
         // Once per frame, before any module's render() might bind and
         // draw using it — every lit module shares this same one buffer

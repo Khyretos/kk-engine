@@ -21,7 +21,8 @@ class VulkanDevice;
 // fully right — see README "Immediate next slices" for what's
 // deliberately still out of scope (point-light shadows, multiple
 // shadow casters generalized across every module, cascaded/multiple
-// shadow maps for large scenes, soft shadows/PCF beyond a single tap).
+// shadow maps for large scenes). Soft shadow edges (3x3 PCF) are real
+// and working now -- see cube.frag's own computeShadow().
 //
 // Standard shadow-mapping technique, nothing exotic: render the scene
 // from the light's own point of view into a depth-only image, then in

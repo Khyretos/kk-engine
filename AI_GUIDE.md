@@ -4,8 +4,10 @@ This file exists so that **any** AI model — not just the one that wrote
 this codebase — can pick up Kreative Kompas Engine and start contributing
 correctly without re-deriving its architecture from scratch. If you are an
 AI agent (Claude, a fork of this project's model, or anything else) reading
-this to orient yourself: start here, then go to `README.md` for depth on
-any specific topic this file points at.
+this to orient yourself: start here, then check `ROADMAP.md` (what
+actually works right now, by system) and `BUGS.md` (specific defects
+already found, before you go looking for new ones or re-find an old one),
+then go to `README.md` for full depth/reasoning on any specific topic.
 
 ## What this engine is, in one paragraph
 
@@ -72,11 +74,27 @@ you read this; check the README's Roadmap section for current state.
    README.md for what's already vetted). This is a hard constraint, not
    a preference, because of the Roblox-marketplace-like ambition — a
    closed dependency anywhere would compromise that.
-5. **Update `README.md`'s Roadmap section as part of the change**, not as
-   an afterthought. Every gap you notice, every simplification you make
-   knowingly, every "this works but X is deferred" — write it down there.
-   The Roadmap is the project's memory across sessions; treat leaving it
-   stale as a bug in your work, not a documentation nice-to-have.
+5. **Check `BUGS.md` and `ROADMAP.md` before starting work, and update
+   both as part of the change, not as an afterthought.** Before
+   debugging anything, search `BUGS.md` for the symptom, the file, or
+   the general area — a fix that already landed in one module has a
+   real history of resurfacing as a "new" bug in a sibling module
+   because nothing pointed back to the original. Before claiming a
+   system works or starting work on one, check its row in
+   `ROADMAP.md`. When you fix a bug, add or update its row in
+   `BUGS.md` in the same session, with enough in "Root cause" and
+   "Fix" that someone hitting a similar symptom elsewhere can
+   recognize the same pattern without re-deriving it. When a system's
+   status genuinely changes, update its row in `ROADMAP.md`. Treat
+   leaving either file stale as a bug in your work, not a
+   documentation nice-to-have — see `BUGS.md`'s own intro for a real,
+   concrete example of what letting this slide costs (a fix
+   rediscovered as a "new" bug in a different module, and a README
+   section that confidently claimed two different things that had
+   already stopped being true). `README.md`'s own "Immediate next
+   slices" remains the fuller narrative/reasoning trail and is still
+   worth adding to for the "why," but it is not a substitute for the
+   structured, queryable state these two files keep.
 6. **Follow the module boundary discipline that already exists**:
    - Something that needs to exist whether or not anything else is
      present → a `Module`, added in `main.cpp`.

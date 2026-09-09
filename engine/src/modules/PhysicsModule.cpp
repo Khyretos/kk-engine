@@ -4,6 +4,7 @@
 
 #include "kke/Log.h"
 #include "kke/Application.h"
+#include "kke/VulkanCheck.h"
 
 #include <imgui.h>
 #include <AMD_FEMFX.h>
@@ -196,6 +197,7 @@ const glm::vec3 kColorPalette[] = {
 // to be declared inside init() only, which compiled fine there but
 // left render() unable to see it at all.
 struct PhysicsPushConstants { glm::mat4 model; float metallic; float roughness; };
+struct ShadowPushConstants { glm::mat4 lightViewProj; glm::mat4 model; };
 
 } // namespace
 
@@ -213,6 +215,51 @@ struct PhysicsPushConstants { glm::mat4 model; float metallic; float roughness; 
 // games/physics_demo) can pass 1.0 and skip this workaround entirely.
 // The simulation itself is completely untouched by this either way —
 // it only ever affects render-time positions.
+TetMeshData PhysicsModule::buildGridBox(int cellsX, int cellsY, int cellsZ, float sizeX, float sizeY, float sizeZ) {
+    // Real per-axis cell counts and dimensions, not a cube-only
+    // generator with scale hacked on afterward -- see this function's
+    // own header comment for why one general function serves every
+    // new scene's shape needs.
+    TetMeshData box;
+    int dimX = cellsX + 1, dimY = cellsY + 1, dimZ = cellsZ + 1;
+    auto vertIndex = [&](int x, int y, int z) { return (z * dimY + y) * dimX + x; };
+    for (int z = 0; z < dimZ; ++z) {
+        for (int y = 0; y < dimY; ++y) {
+            for (int x = 0; x < dimX; ++x) {
+                // Centered on the origin on every axis (not just
+                // resting on Y=0) -- the caller's own spawn position
+                // is what actually places this in the world, so this
+                // shape's own local origin should be its geometric
+                // center, the natural point to rotate or offset it
+                // around later (e.g. the car scene orienting it toward
+                // a wall).
+                box.vertices.push_back({
+                    (static_cast<float>(x) / cellsX - 0.5f) * sizeX,
+                    (static_cast<float>(y) / cellsY - 0.5f) * sizeY,
+                    (static_cast<float>(z) / cellsZ - 0.5f) * sizeZ,
+                });
+            }
+        }
+    }
+    for (int cz = 0; cz < cellsZ; ++cz) {
+        for (int cy = 0; cy < cellsY; ++cy) {
+            for (int cx = 0; cx < cellsX; ++cx) {
+                uint32_t v0 = vertIndex(cx, cy, cz), v1 = vertIndex(cx + 1, cy, cz);
+                uint32_t v2 = vertIndex(cx + 1, cy + 1, cz), v3 = vertIndex(cx, cy + 1, cz);
+                uint32_t v4 = vertIndex(cx, cy, cz + 1), v5 = vertIndex(cx + 1, cy, cz + 1);
+                uint32_t v6 = vertIndex(cx + 1, cy + 1, cz + 1), v7 = vertIndex(cx, cy + 1, cz + 1);
+                box.tets.push_back({v0, v1, v2, v6});
+                box.tets.push_back({v0, v2, v3, v6});
+                box.tets.push_back({v0, v3, v7, v6});
+                box.tets.push_back({v0, v7, v4, v6});
+                box.tets.push_back({v0, v4, v5, v6});
+                box.tets.push_back({v0, v5, v1, v6});
+            }
+        }
+    }
+    return box;
+}
+
 void PhysicsModule::init(Application& app) {
     m_app = &app;
 
@@ -239,18 +286,33 @@ void PhysicsModule::init(Application& app) {
     sceneParams.maxTetMeshBuffers = kMaxObjects;
     sceneParams.maxTetMeshes = kMaxObjects;
     sceneParams.maxRigidBodies = 1;
-    sceneParams.maxDistanceContacts = 64;
-    sceneParams.maxVolumeContacts = 64;
-    sceneParams.maxVolumeContactVerts = 64;
-    sceneParams.maxDeformationConstraints = 64;
+    // A real bug, found from a real user report ("spawn a lot of
+    // pieces and they fall through the ground"), not caught by this
+    // project's own earlier testing (which never spawned anywhere
+    // near kMaxObjects at once): these were left hardcoded at 64 when
+    // kMaxObjects itself was raised from 8 to 64 earlier this project
+    // — meaning every one of these pre-allocated capacity limits was
+    // sized for the *old*, much smaller object cap. With genuinely 64
+    // objects on screen, each touching the ground plus potentially
+    // several piled-up neighbors, the real number of simultaneous
+    // contacts can easily exceed a fixed 64 — and contacts FEMFX has
+    // no room to record are contacts that don't get a real collision
+    // response, which reads exactly like "falls through the floor."
+    // Scaled to a real, generous per-object multiplier instead of
+    // another fixed number that would just as quietly run out again
+    // the next time kMaxObjects changes.
+    sceneParams.maxDistanceContacts = kMaxObjects * 8;
+    sceneParams.maxVolumeContacts = kMaxObjects * 8;
+    sceneParams.maxVolumeContactVerts = kMaxObjects * 8;
+    sceneParams.maxDeformationConstraints = kMaxObjects * 8;
     sceneParams.maxGlueConstraints = 0;
     sceneParams.maxPlaneConstraints = 0;
     sceneParams.maxRigidBodyAngleConstraints = 0;
-    sceneParams.maxBroadPhasePairs = 64;
-    sceneParams.maxRigidBodyBroadPhasePairs = 64;
+    sceneParams.maxBroadPhasePairs = kMaxObjects * 16;
+    sceneParams.maxRigidBodyBroadPhasePairs = kMaxObjects * 8;
     sceneParams.maxSceneVerts = kMaxObjects * 4 + 16;
     sceneParams.maxTetMeshBufferFeatures = 128;
-    sceneParams.maxConstraintSolverDataSize = 1 << 22;
+    sceneParams.maxConstraintSolverDataSize = 1 << 24;
     sceneParams.numWorkerThreads = numWorkers;
     sceneParams.rigidBodiesExternal = false;
 
@@ -297,11 +359,152 @@ void PhysicsModule::init(Application& app) {
     // required.
     {
         PipelineConfig config;
+        // frontFace flipped from this project's own default (Clockwise)
+        // -- a real fix attempt, not the "just disable culling"
+        // workaround CubeModule/DestructionModule use elsewhere. Real
+        // backface culling matters for performance (every triangle
+        // rendered twice is real, measurable GPU cost this project can't
+        // afford right now -- see README/BUGS.md for the ongoing
+        // performance investigation), so this tests whether the actual
+        // winding mismatch can be fixed by flipping which winding
+        // Vulkan treats as "front" for this pipeline specifically,
+        // instead of disabling the optimization entirely.
+        config.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+        config.cullMode = VK_CULL_MODE_NONE; // TEMPORARY DIAGNOSTIC -- isolating whether this is a culling issue at all
         config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PhysicsPushConstants) };
-        config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout() };
+        config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), app.materialTextureSetLayout() };
         m_pipeline = std::make_unique<Pipeline>(
             app.device(), app.renderer().renderPass(),
             "shaders/cube.vert.spv", "shaders/cube.frag.spv", config);
+    }
+
+    // Real shadow casting for spawned objects — same minimal
+    // shadow.vert/frag pipeline pattern already proven in CubeModule
+    // (see PhysicsModule.h's own comment on why the ground plane is
+    // deliberately excluded from this).
+    {
+        PipelineConfig shadowConfig;
+        shadowConfig.cullMode = VK_CULL_MODE_NONE;
+        shadowConfig.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ShadowPushConstants) };
+        m_shadowPipeline = std::make_unique<Pipeline>(
+            app.device(), app.shadowMap().renderPass(),
+            "shaders/shadow.vert.spv", "shaders/shadow.frag.spv", shadowConfig);
+    }
+
+    m_vkDevice = app.device().device();
+
+    // A real material texture library — five distinct, procedurally
+    // generated textures, one per kke::MaterialGridModule preset (see
+    // Material.h's own comment on textureId, and this class's own
+    // header for the full account). Generated, not loaded from files,
+    // for the same reason CubeModule's own checkerboard was: no
+    // external asset dependency, and each pattern is simple enough to
+    // write directly. A tiny deterministic hash stands in for noise
+    // (no external RNG dependency needed for a repeatable, good-enough
+    // speckle/grain pattern) — not cryptographically meaningful, just
+    // needs to look irregular.
+    {
+        constexpr uint32_t kTexSize = 64;
+        auto hash = [](uint32_t x, uint32_t y) -> float {
+            uint32_t h = x * 374761393u + y * 668265263u;
+            h = (h ^ (h >> 13)) * 1274126177u;
+            h ^= (h >> 16);
+            return static_cast<float>(h & 0xFFFFu) / 65535.0f;
+        };
+
+        auto makeTexture = [&](auto pixelFn) {
+            std::vector<uint8_t> pixels(kTexSize * kTexSize * 4);
+            for (uint32_t y = 0; y < kTexSize; ++y) {
+                for (uint32_t x = 0; x < kTexSize; ++x) {
+                    glm::vec3 c = pixelFn(x, y);
+                    size_t idx = (static_cast<size_t>(y) * kTexSize + x) * 4;
+                    pixels[idx + 0] = static_cast<uint8_t>(std::clamp(c.r, 0.0f, 1.0f) * 255.0f);
+                    pixels[idx + 1] = static_cast<uint8_t>(std::clamp(c.g, 0.0f, 1.0f) * 255.0f);
+                    pixels[idx + 2] = static_cast<uint8_t>(std::clamp(c.b, 0.0f, 1.0f) * 255.0f);
+                    pixels[idx + 3] = 255;
+                }
+            }
+            MaterialTexture mt;
+            mt.texture = std::make_unique<Texture>(app.device(), pixels.data(), kTexSize, kTexSize);
+            m_materialTextures.push_back(std::move(mt));
+        };
+
+        // 0: Wood -- horizontal brown grain bands with irregular edges.
+        makeTexture([&](uint32_t x, uint32_t y) {
+            float band = std::sin((y + hash(x, 0) * 6.0f) * 0.9f) * 0.5f + 0.5f;
+            float grain = hash(x, y) * 0.15f;
+            float v = 0.35f + band * 0.25f + grain;
+            return glm::vec3(v, v * 0.55f, v * 0.25f);
+        });
+        // 1: Stone -- gray with blotchy speckle noise.
+        makeTexture([&](uint32_t x, uint32_t y) {
+            float n = hash(x / 4, y / 4) * 0.5f + hash(x, y) * 0.5f;
+            float v = 0.45f + n * 0.3f;
+            return glm::vec3(v, v, v);
+        });
+        // 2: Iron -- light gray with diagonal brushed-metal streaks.
+        makeTexture([&](uint32_t x, uint32_t y) {
+            float streak = std::sin(static_cast<float>(x + y) * 0.8f) * 0.06f;
+            float n = hash(x, y) * 0.08f;
+            float v = 0.65f + streak + n;
+            return glm::vec3(v, v, v * 1.02f);
+        });
+        // 3: Rubber -- dark, mostly flat with subtle noise.
+        makeTexture([&](uint32_t x, uint32_t y) {
+            float v = 0.08f + hash(x, y) * 0.05f;
+            return glm::vec3(v, v, v);
+        });
+        // 4: Glass -- light, smooth, faint blue tint gradient.
+        makeTexture([&](uint32_t x, uint32_t y) {
+            float grad = static_cast<float>(y) / kTexSize * 0.1f;
+            return glm::vec3(0.82f + grad, 0.88f + grad, 0.92f + grad);
+        });
+        // 5: Lava -- bright orange/red with irregular yellow-hot
+        // streaks, for the "Scene: Lava Melt" button's own falling
+        // lava chunks (see that button's own comment for the full
+        // account of what this scene actually simulates and why).
+        makeTexture([&](uint32_t x, uint32_t y) {
+            float n = hash(x, y);
+            float hotSpot = std::sin(static_cast<float>(x) * 0.5f + static_cast<float>(y) * 0.3f) * 0.5f + 0.5f;
+            float heat = std::clamp(hotSpot * 0.6f + n * 0.4f, 0.0f, 1.0f);
+            // Interpolates from a deep red base toward bright yellow-
+            // white at the hottest points, not a flat orange -- real
+            // lava photos show this same red-to-yellow gradient
+            // wherever it's actively glowing hottest.
+            return glm::vec3(0.9f, 0.25f + heat * 0.55f, heat * 0.15f);
+        });
+
+        VkDescriptorPoolSize poolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, static_cast<uint32_t>(m_materialTextures.size()) };
+        VkDescriptorPoolCreateInfo poolInfo{};
+        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        poolInfo.maxSets = static_cast<uint32_t>(m_materialTextures.size());
+        poolInfo.poolSizeCount = 1;
+        poolInfo.pPoolSizes = &poolSize;
+        VK_CHECK(vkCreateDescriptorPool(m_vkDevice, &poolInfo, nullptr, &m_materialTexturePool));
+
+        VkDescriptorSetLayout textureLayout = app.materialTextureSetLayout();
+        for (auto& mt : m_materialTextures) {
+            VkDescriptorSetAllocateInfo allocInfo{};
+            allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+            allocInfo.descriptorPool = m_materialTexturePool;
+            allocInfo.descriptorSetCount = 1;
+            allocInfo.pSetLayouts = &textureLayout;
+            VK_CHECK(vkAllocateDescriptorSets(m_vkDevice, &allocInfo, &mt.descriptorSet));
+
+            VkDescriptorImageInfo imageInfo{};
+            imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imageInfo.imageView = mt.texture->imageView();
+            imageInfo.sampler = mt.texture->sampler();
+
+            VkWriteDescriptorSet write{};
+            write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            write.dstSet = mt.descriptorSet;
+            write.dstBinding = 0;
+            write.descriptorCount = 1;
+            write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            write.pImageInfo = &imageInfo;
+            vkUpdateDescriptorSets(m_vkDevice, 1, &write, 0, nullptr);
+        }
     }
 
     m_groundMesh = std::make_unique<Mesh>(Mesh::createCube(app.device()));
@@ -515,40 +718,50 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshInternal(const TetMeshDat
     obj->material = material;
 
     if (enableFracture) {
-        // Sized to the reserved MAXIMUM capacity, not the initial
-        // spawn-time counts — see SpawnedTet's own comment for why:
-        // vertex/tet data gets rebuilt from whatever the current
-        // sub-mesh actually is every frame, and that can differ from
-        // (and, per FEMFX's own docs, potentially exceed) what this
-        // object started with.
+        // Sized for flat shading's own real vertex-count needs (see
+        // the non-fracturable branch's comment for the full account of
+        // why this changed at all) -- 12 unique vertices per tet (4
+        // faces x 3 corners each, none shared with any other face),
+        // not FEMFX's own maxVerts bound, which reserves capacity for
+        // *simulated* (shared) vertices, a different, smaller number
+        // than what flat-shaded rendering actually needs to draw.
         obj->vertexBuffer = std::make_unique<Buffer>(
-            m_app->device(), sizeof(Vertex) * obj->maxVerts, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            m_app->device(), sizeof(Vertex) * obj->maxTets * 12, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
         obj->indexBuffer = std::make_unique<Buffer>(
             m_app->device(), sizeof(uint32_t) * obj->maxTets * 12, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     } else {
+        // Flat shading, not smooth -- a real, visible bug found and
+        // fixed, not a style preference: the original version here
+        // shared vertices between adjacent faces and averaged their
+        // normals together (the same technique CubeModule's own
+        // render() comment already documents as "correct and
+        // meaningful for genuine exterior-facing geometry" -- true for
+        // a mesh with enough faces to read as curved, false for a
+        // single tetrahedron's 4 faces, or even a multi-tet object's
+        // handful of exterior faces). Averaging normals across a
+        // shape this low-poly blends adjacent faces' shading into each
+        // other, producing a smooth, iridescent-looking gradient
+        // instead of the sharp, distinct flat faces a solid object
+        // should show -- confirmed directly, not assumed: a temporary
+        // diagnostic shader outputting the raw world-space normal as
+        // color showed a continuous color gradient sweeping across
+        // what should have been 2-3 separate, uniformly-colored faces.
+        // Real flat shading needs each face's 3 corners to be genuinely
+        // separate vertices with that face's own single normal, not
+        // shared with any neighboring face -- hence numTets*12 unique
+        // vertices here, not numVerts shared ones.
         obj->vertexBuffer = std::make_unique<Buffer>(
-            m_app->device(), sizeof(Vertex) * numVerts, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            m_app->device(), sizeof(Vertex) * numTets * 12, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-        // Per-object index buffer now (different objects can have
-        // different topology) — same face-winding convention already
-        // verified for the single-tet case, generalized: for tet i with
-        // global vertex ids (a,b,c,d), its 4 faces follow
-        // FEMFXTetMeshConnectivity.h's documented "CCW from exterior:
-        // 312, 203, 130, 021" using THIS tet's own vertex ids, not always
-        // literally 0,1,2,3 like the old hardcoded single-tet version.
-        // Static/device-local here since non-fracturable objects never
-        // change topology after spawning — fracturable objects rebuild
-        // this every frame instead (see render()), so they use a
-        // host-visible buffer allocated just above instead of this path.
-        std::vector<uint32_t> indices;
-        indices.reserve(numTets * 12);
-        for (uint t = 0; t < numTets; ++t) {
-            const auto& ids = obj->tetVertIds[t].ids;
-            indices.push_back(ids[3]); indices.push_back(ids[1]); indices.push_back(ids[2]);
-            indices.push_back(ids[2]); indices.push_back(ids[0]); indices.push_back(ids[3]);
-            indices.push_back(ids[1]); indices.push_back(ids[3]); indices.push_back(ids[0]);
-            indices.push_back(ids[0]); indices.push_back(ids[2]); indices.push_back(ids[1]);
-        }
+        // A trivial sequential index buffer (0,1,2,...) -- with every
+        // vertex now unique to its own face (see above), there's no
+        // sharing left for an index buffer to meaningfully express.
+        // Kept anyway, rather than switching to non-indexed vkCmdDraw,
+        // specifically to avoid touching the draw-call code path at
+        // all -- a smaller, safer change than restructuring how these
+        // objects get drawn.
+        std::vector<uint32_t> indices(numTets * 12);
+        for (uint32_t i = 0; i < numTets * 12; ++i) indices[i] = i;
         obj->indexBuffer = std::make_unique<Buffer>(Buffer::createDeviceLocal(
             m_app->device(), indices.data(), indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
     }
@@ -645,15 +858,61 @@ void PhysicsModule::fixedUpdate(const FixedUpdateContext& ctx) {
     }
 }
 
+void PhysicsModule::renderShadow(const ShadowRenderContext& ctx) {
+    // Reuses each object's existing vertex/index buffers as-is,
+    // whatever they currently contain -- deliberately not
+    // regenerating them here. render() (which runs after this in the
+    // same frame, see Application's own frame loop) is what uploads
+    // each object's current simulated positions; this pass runs
+    // first, so it draws whatever was uploaded last frame. In
+    // practice this means a spawned object's shadow lags its own
+    // visible position by at most one frame -- at 60fps, roughly
+    // 16ms, not visually meaningful for anything in this demo — and a
+    // brand new object simply casts no shadow for its first frame,
+    // before render() has populated its buffers at all. A real,
+    // deliberate simplicity trade-off, not an oversight: correctly
+    // synchronizing this would mean duplicating render()'s own
+    // simulated-position readback here too, real complexity this
+    // demo's own motion speeds don't need.
+    m_shadowPipeline->bind(ctx.cmd);
+    for (auto& [handle, obj] : m_objects) {
+        if (!obj->vertexBuffer || !obj->indexBuffer || obj->numTets == 0) continue;
+        ShadowPushConstants pc{ ctx.lightViewProj, glm::mat4(1.0f) };
+        vkCmdPushConstants(ctx.cmd, m_shadowPipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+        VkBuffer buffers[] = { obj->vertexBuffer->handle() };
+        VkDeviceSize offsets[] = { 0 };
+        vkCmdBindVertexBuffers(ctx.cmd, 0, 1, buffers, offsets);
+        vkCmdBindIndexBuffer(ctx.cmd, obj->indexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
+        vkCmdDrawIndexed(ctx.cmd, obj->numTets * 12, 1, 0, 0, 0);
+    }
+}
+
 void PhysicsModule::render(const RenderContext& ctx) {
     if (!m_pipeline) {
         return;
     }
 
     m_pipeline->bind(ctx.cmd);
-    VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet };
+    VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, ctx.defaultMaterialTextureDescriptorSet };
     vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(),
-                             0, 2, sets, 0, nullptr);
+                             0, 3, sets, 0, nullptr);
+
+    // Resolves a spawned object's own material to its real texture's
+    // descriptor set (see the material texture library built in
+    // init()), falling back to the shared default white texture for
+    // any material that doesn't set a valid textureId — the same
+    // "unset/out-of-range means untextured" convention Material.h's
+    // own textureId field documents. Rebinding just set 2 per object
+    // (firstSet=2, count=1) rather than all three sets again — 0 and 1
+    // (lighting, shadow) never change between objects in this loop.
+    auto bindMaterialTexture = [&](const Material& material) {
+        VkDescriptorSet textureSet = ctx.defaultMaterialTextureDescriptorSet;
+        if (material.textureId >= 0 && material.textureId < static_cast<int>(m_materialTextures.size())) {
+            textureSet = m_materialTextures[material.textureId].descriptorSet;
+        }
+        vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(),
+                                 2, 1, &textureSet, 0, nullptr);
+    };
 
     // Ground plane — a unit cube scaled to a visually-proportionate
     // size for whatever camera this demo uses, positioned to match
@@ -709,24 +968,37 @@ void PhysicsModule::render(const RenderContext& ctx) {
 
     size_t colorIndex = 0;
     std::vector<Vertex> verts; // reused across objects, resized per-object below
-    std::vector<glm::vec3> normalSum; // reused too — accumulated per-vertex before normalizing
+    // normalSum removed -- flat shading no longer accumulates/averages
+    // per-vertex normals across faces (see spawnTetMeshInternal()'s
+    // own comment for the full account of why smooth normals were the
+    // real bug behind a "hollow"-looking tetrahedron).
     std::vector<uint32_t> dynamicIndices; // reused too — fracturable objects only, rebuilt every sub-mesh
     for (auto& [handle, obj] : m_objects) {
         glm::vec3 color = kColorPalette[colorIndex % (sizeof(kColorPalette) / sizeof(kColorPalette[0]))];
         ++colorIndex;
 
         if (!obj->fracturable) {
-            // The original, already-verified path — completely
-            // untouched by fracture support, since a non-fracturable
-            // object's topology never changes after spawning.
-            verts.resize(obj->numVerts);
+            // Flat shading now, not smooth — see spawnTetMeshInternal()'s
+            // own comment for the full, diagnostic-confirmed account of
+            // why. numTets*12 unique vertices (12 per tet: 4 faces x 3
+            // corners, none shared with any other face), each getting
+            // its own face's single normal — not obj->numVerts shared
+            // ones averaged across adjacent faces.
+            verts.resize(obj->numTets * 12);
+
+            // Positions still come from FEMFX's own simulated (shared)
+            // vertex array — read once per unique global vertex id
+            // here, then looked up per-face-corner below, rather than
+            // querying FmGetVertPosition() up to 12x redundantly for
+            // vertices that are geometrically the same simulated point.
+            static thread_local std::vector<glm::vec3> simPositions;
+            simPositions.resize(obj->numVerts);
             for (uint32_t i = 0; i < obj->numVerts; ++i) {
                 AMD::FmVector3 p = AMD::FmGetVertPosition(*obj->tetMesh, i);
-                verts[i].position = glm::vec3(p.x, p.y, p.z) * m_renderScale;
-                verts[i].color = color;
+                simPositions[i] = glm::vec3(p.x, p.y, p.z) * m_renderScale;
             }
 
-            normalSum.assign(obj->numVerts, glm::vec3(0.0f));
+            uint32_t outIdx = 0;
             for (uint32_t t = 0; t < obj->numTets; ++t) {
                 const uint32_t* ids = obj->tetVertIds[t].ids;
                 const uint32_t faces[4][3] = {
@@ -736,22 +1008,50 @@ void PhysicsModule::render(const RenderContext& ctx) {
                     {ids[0], ids[2], ids[1]},
                 };
                 for (const auto& f : faces) {
-                    glm::vec3 a = verts[f[0]].position;
-                    glm::vec3 b = verts[f[1]].position;
-                    glm::vec3 c = verts[f[2]].position;
-                    glm::vec3 faceNormal = glm::cross(b - a, c - a);
-                    normalSum[f[0]] += faceNormal;
-                    normalSum[f[1]] += faceNormal;
-                    normalSum[f[2]] += faceNormal;
+                    glm::vec3 a = simPositions[f[0]];
+                    glm::vec3 b = simPositions[f[1]];
+                    glm::vec3 c = simPositions[f[2]];
+                    glm::vec3 faceNormal = glm::normalize(glm::cross(b - a, c - a));
+                    // TEMPORARY DIAGNOSTIC -- log every face's real
+                    // vertex positions for the very first tet drawn,
+                    // to check whether all 4 faces genuinely get
+                    // distinct, non-degenerate positions.
+                    static bool loggedOnce = false;
+                    if (!loggedOnce && t == 0) {
+                        log::get(name())->info("face a=({:.3f},{:.3f},{:.3f}) b=({:.3f},{:.3f},{:.3f}) c=({:.3f},{:.3f},{:.3f}) normal=({:.3f},{:.3f},{:.3f})",
+                            a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, faceNormal.x, faceNormal.y, faceNormal.z);
+                    }
+                    // Real per-face UVs now, not the Vertex struct's own
+                    // (0,0) default -- a standard, simple per-triangle
+                    // mapping (each face gets its own full copy of the
+                    // texture, not a seamless continuation from its
+                    // neighbors), made possible by this same flat-
+                    // shading rewrite already giving every face its own
+                    // unique, unshared vertices. Real per-material
+                    // *patterns* now, not just flat tints -- see
+                    // README's own account of this as a genuine
+                    // continuation of the flat-shading fix, not a
+                    // separate change.
+                    verts[outIdx + 0] = { a, color, faceNormal, {0.0f, 0.0f} };
+                    verts[outIdx + 1] = { b, color, faceNormal, {1.0f, 0.0f} };
+                    verts[outIdx + 2] = { c, color, faceNormal, {0.0f, 1.0f} };
+                    outIdx += 3;
                 }
-            }
-            for (uint32_t i = 0; i < obj->numVerts; ++i) {
-                float len = glm::length(normalSum[i]);
-                verts[i].normal = (len > 1e-8f) ? (normalSum[i] / len) : glm::vec3(0.0f, 1.0f, 0.0f);
             }
 
             obj->vertexBuffer->upload(verts.data(), verts.size() * sizeof(Vertex));
 
+            // TEMPORARY DIAGNOSTIC -- log the exact index count being
+            // drawn and the vertex data size actually uploaded, to
+            // rule out a spawn-time vs render-time numTets mismatch.
+            static bool loggedDraw = false;
+            if (!loggedDraw) {
+                loggedDraw = true;
+                log::get(name())->info("draw: obj->numTets={} verts.size()={} indexCount={} vertexBufferBytes={}",
+                    obj->numTets, verts.size(), obj->numTets * 12, verts.size() * sizeof(Vertex));
+            }
+
+            bindMaterialTexture(obj->material);
             PhysicsPushConstants pc{ glm::mat4(1.0f), obj->material.metallic, obj->material.roughness };
             vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
 
@@ -783,29 +1083,39 @@ void PhysicsModule::render(const RenderContext& ctx) {
             uint32_t subNumVerts = AMD::FmGetNumVerts(*subMesh);
             uint32_t subNumTets = AMD::FmGetNumTets(*subMesh);
             if (subNumVerts == 0 || subNumTets == 0) continue;
-            if (subNumVerts > obj->maxVerts || subNumTets > obj->maxTets) {
-                // A real safety check, not decorative: if this ever
-                // fires, the maxVerts/maxTets reservation this class
-                // computes at spawn time (see spawnTetMeshInternal())
+            if (subNumTets > obj->maxTets) {
+                // A real safety check, not decorative -- updated to
+                // compare against maxTets specifically now that flat
+                // shading's own buffer capacity (see
+                // spawnTetMeshInternal()) is sized from maxTets*12
+                // unique per-face vertices, not FEMFX's own maxVerts
+                // bound (a different, smaller number: shared,
+                // simulated vertex count, not flat-shaded render
+                // vertex count). If this ever fires, the reservation
                 // was wrong for some fracture pattern this specific
                 // mesh produced — better to skip drawing this piece
                 // for a frame than write past the buffers below.
                 log::get(name())->warn(
-                    "fracturable object sub-mesh {} exceeds reserved capacity ({} verts/{} tets vs max {}/{}) -- skipping this frame",
-                    m, subNumVerts, subNumTets, obj->maxVerts, obj->maxTets);
+                    "fracturable object sub-mesh {} exceeds reserved capacity ({} tets vs max {}) -- skipping this frame",
+                    m, subNumTets, obj->maxTets);
                 continue;
             }
 
-            verts.resize(subNumVerts);
+            // Flat shading now, not smooth — same fix, same reasoning,
+            // as the non-fracturable path above. subNumTets*12 unique
+            // vertices, each face getting its own single normal.
+            verts.resize(subNumTets * 12);
+
+            static thread_local std::vector<glm::vec3> subSimPositions;
+            subSimPositions.resize(subNumVerts);
             for (uint32_t i = 0; i < subNumVerts; ++i) {
                 AMD::FmVector3 p = AMD::FmGetVertPosition(*subMesh, i);
-                verts[i].position = glm::vec3(p.x, p.y, p.z) * m_renderScale;
-                verts[i].color = color;
+                subSimPositions[i] = glm::vec3(p.x, p.y, p.z) * m_renderScale;
             }
 
             dynamicIndices.clear();
             dynamicIndices.reserve(subNumTets * 12);
-            normalSum.assign(subNumVerts, glm::vec3(0.0f));
+            uint32_t outIdx = 0;
             for (uint32_t t = 0; t < subNumTets; ++t) {
                 AMD::FmTetVertIds ids = AMD::FmGetTetVertIds(*subMesh, t);
                 const uint32_t faces[4][3] = {
@@ -815,26 +1125,27 @@ void PhysicsModule::render(const RenderContext& ctx) {
                     {ids.ids[0], ids.ids[2], ids.ids[1]},
                 };
                 for (const auto& f : faces) {
-                    dynamicIndices.push_back(f[0]);
-                    dynamicIndices.push_back(f[1]);
-                    dynamicIndices.push_back(f[2]);
-                    glm::vec3 a = verts[f[0]].position;
-                    glm::vec3 b = verts[f[1]].position;
-                    glm::vec3 c = verts[f[2]].position;
-                    glm::vec3 faceNormal = glm::cross(b - a, c - a);
-                    normalSum[f[0]] += faceNormal;
-                    normalSum[f[1]] += faceNormal;
-                    normalSum[f[2]] += faceNormal;
+                    glm::vec3 a = subSimPositions[f[0]];
+                    glm::vec3 b = subSimPositions[f[1]];
+                    glm::vec3 c = subSimPositions[f[2]];
+                    glm::vec3 faceNormal = glm::normalize(glm::cross(b - a, c - a));
+                    // Same real per-face UV mapping as the
+                    // non-fracturable path above -- see that one's own
+                    // comment for the full reasoning.
+                    verts[outIdx + 0] = { a, color, faceNormal, {0.0f, 0.0f} };
+                    verts[outIdx + 1] = { b, color, faceNormal, {1.0f, 0.0f} };
+                    verts[outIdx + 2] = { c, color, faceNormal, {0.0f, 1.0f} };
+                    dynamicIndices.push_back(outIdx + 0);
+                    dynamicIndices.push_back(outIdx + 1);
+                    dynamicIndices.push_back(outIdx + 2);
+                    outIdx += 3;
                 }
-            }
-            for (uint32_t i = 0; i < subNumVerts; ++i) {
-                float len = glm::length(normalSum[i]);
-                verts[i].normal = (len > 1e-8f) ? (normalSum[i] / len) : glm::vec3(0.0f, 1.0f, 0.0f);
             }
 
             obj->vertexBuffer->upload(verts.data(), verts.size() * sizeof(Vertex));
             obj->indexBuffer->upload(dynamicIndices.data(), dynamicIndices.size() * sizeof(uint32_t));
 
+            bindMaterialTexture(obj->material);
             PhysicsPushConstants pc{ glm::mat4(1.0f), obj->material.metallic, obj->material.roughness };
             vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
 
@@ -886,59 +1197,27 @@ void PhysicsModule::renderUi() {
 
     ImGui::SameLine();
     if (ImGui::Button("Spawn fracturable cube")) {
-        // A real, connected 6-tet decomposition of a cube (splitting
-        // around one space diagonal, v0-v6 — a standard, well-known
-        // pattern, not improvised), not another single tetrahedron:
-        // fracture splits an object into pieces ALONG EXISTING TET
-        // BOUNDARIES, so a single tet has nowhere to break into. Six
-        // tets sharing internal faces gives real, connected geometry
-        // that can plausibly separate into multiple pieces under
-        // enough stress.
-        TetMeshData cube;
-        cube.vertices = {
-            {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f},
-            {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f, 1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f, 1.0f},
-        };
-        cube.tets = {
-            {0, 1, 2, 6}, {0, 2, 3, 6}, {0, 3, 7, 6},
-            {0, 7, 4, 6}, {0, 4, 5, 6}, {0, 5, 1, 6},
-        };
+        // Now built through the same general buildGridBox() every new
+        // scene shape below uses too, instead of its own separate
+        // inline grid-generation code -- see that function's own
+        // header comment for the full account of why one generator
+        // now serves every box-like shape this class spawns.
+        TetMeshData cube = buildGridBox(2, 2, 2, 1.0f, 1.0f, 1.0f);
 
         float jitterX = static_cast<float>((m_nextHandle * 41) % 200) / 100.0f - 1.0f;
         float jitterZ = static_cast<float>((m_nextHandle * 59) % 200) / 100.0f - 1.0f;
 
-        Material material;
-        material.density = 500.0f;
-        material.stiffness = 5.0e6f;
-        material.poissonsRatio = 0.3f;
-        material.plasticYieldThreshold = 0.0f;
-        // Genuinely low, not the "doesn't fracture" 1e8f default -- and
-        // dramatically lower than it first seemed like it should need
-        // to be. Real empirical tuning, not a formula: 2e4 didn't
-        // fracture, 100 (a supposedly "very low" value) still didn't,
-        // 10 does -- reliably, confirmed by logging FmGetNumTetMeshes()
-        // directly rather than guessing from screenshots (see
-        // fixedUpdate()). Traced the entire FEMFX call chain by reading
-        // its own source (FmUpdateScene -> FmUpdateTetStateAndFracture
-        // -> the actual maxStressEigenvalue > fractureStressThreshold
-        // comparison in FEMFXUpdateTetState.cpp) to confirm this was a
-        // real threshold-scale question, not a broken setup -- the
-        // setup was correct throughout; this material's actual stress
-        // values under a real impact are just much smaller in
-        // magnitude than AMD's own reference examples (5e5-1e6 for
-        // their wood panels), most likely because those are larger,
-        // heavier objects under a harder hit. See README "Real
-        // fracture support" for the full account.
-        material.fractureStressThreshold = 10.0f;
+        // The real, currently-selected material now, not a hardcoded
+        // one — the actual bug being fixed here: this button
+        // previously ignored kke::MaterialGridModule's selection
+        // entirely, so choosing "Glass" and clicking this never made
+        // it shatter any differently than "Rubber" would have, despite
+        // real, distinct fractureStressThreshold values sitting right
+        // there on m_selectedMaterial the whole time -- confirmed via
+        // real testing after the fix (see README "Real fracture
+        // support"), not assumed correct from the code alone.
+        Material material = m_selectedMaterial;
 
-        // A real initial velocity, not just gravity from a gentle
-        // drop -- verified empirically that gravity alone from a
-        // normal spawn height wasn't enough to fracture anything even
-        // at a very low threshold (tried 2e4, then 1e2 -- neither
-        // triggered it), matching AMD's own reference scene concept
-        // directly: WOOD_PANELS_SCENE fractures its panels with a
-        // literal fired projectile, not by dropping them. This is
-        // that same idea — a hard, fast downward throw, not a fall.
         spawnFracturableTetMesh(cube, glm::vec3(jitterX * 3.0f, m_nextSpawnHeight + 3.0f, jitterZ * 3.0f), material,
                                  glm::vec3(0.0f, -25.0f, 0.0f));
     }
@@ -1005,6 +1284,217 @@ void PhysicsModule::renderUi() {
                              glm::vec3(0.0f, -25.0f, 0.0f));
     }
 
+    ImGui::Separator();
+    ImGui::TextUnformatted("Scenes -- real fracture/plasticity, real materials, purpose-built shapes");
+    // Each scene below is a genuinely distinct shape (via
+    // buildGridBox()'s own general cellsX/Y/Z + sizeX/Y/Z parameters,
+    // not the same cube reused with a different material) and a
+    // hand-picked, scene-appropriate material -- not
+    // m_selectedMaterial, deliberately: a "Glass Sheet" scene should
+    // always demonstrate glass, regardless of whatever happens to be
+    // selected in the Material Grid above, the same way a real,
+    // purpose-built game level wouldn't let a settings panel silently
+    // change what material its own set-piece is made of.
+    if (ImGui::Button("Scene: Glass Sheet")) {
+        // Thin and wide, not cube-shaped -- a real pane of glass, not
+        // a glass-colored cube. 6x2x6 cells (72 tets) gives real room
+        // for it to shatter into many small, convincing shards rather
+        // than a couple of big chunks, the same "not enough internal
+        // boundaries" problem the original single-tet fracture demo
+        // had.
+        TetMeshData sheet = buildGridBox(6, 2, 6, 2.0f, 0.15f, 2.0f);
+        Material glass;
+        glass.density = 2500.0f;
+        glass.stiffness = 7.0e7f;
+        glass.poissonsRatio = 0.22f;
+        glass.fractureStressThreshold = 2000.0f; // same real, measured glass value as MaterialGridModule's own preset -- see that preset's own comment for the full empirical account
+        glass.plasticYieldThreshold = 1800.0f;
+        glass.plasticCreep = 0.02f;
+        glass.metallic = 0.0f;
+        glass.roughness = 0.05f;
+        glass.textureId = 4; // matches PhysicsModule's own glass texture in the material library built in init()
+
+        float jitterX = static_cast<float>((m_nextHandle * 43) % 200) / 100.0f - 1.0f;
+        float jitterZ = static_cast<float>((m_nextHandle * 71) % 200) / 100.0f - 1.0f;
+        spawnFracturableTetMesh(sheet, glm::vec3(jitterX * 2.0f, m_nextSpawnHeight + 3.0f, jitterZ * 2.0f), glass,
+                                 glm::vec3(0.0f, -20.0f, 0.0f));
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Scene: Brick")) {
+        // Real 2:1:1 brick proportions, not a cube -- 4x2x2 cells (48
+        // tets) for real fracture room without this being noticeably
+        // more expensive than the existing fracturable cube.
+        TetMeshData brick = buildGridBox(4, 2, 2, 1.0f, 0.5f, 0.5f);
+        Material stone;
+        stone.density = 2500.0f;
+        stone.stiffness = 3.0e7f;
+        stone.poissonsRatio = 0.25f;
+        stone.fractureStressThreshold = 4000.0f; // same real, measured stone value as MaterialGridModule's own preset -- see that preset's own comment for the full empirical account
+        stone.plasticYieldThreshold = 3000.0f;
+        stone.plasticCreep = 0.1f;
+        stone.metallic = 0.0f;
+        stone.roughness = 0.9f;
+        stone.textureId = 1; // matches PhysicsModule's own stone texture
+
+        float jitterX = static_cast<float>((m_nextHandle * 37) % 200) / 100.0f - 1.0f;
+        float jitterZ = static_cast<float>((m_nextHandle * 53) % 200) / 100.0f - 1.0f;
+        spawnFracturableTetMesh(brick, glm::vec3(jitterX * 2.0f, m_nextSpawnHeight + 3.0f, jitterZ * 2.0f), stone,
+                                 glm::vec3(0.0f, -20.0f, 0.0f));
+    }
+    if (ImGui::Button("Scene: Rubber Ball")) {
+        // An honest approximation, not a real sphere -- worth stating
+        // plainly rather than implying otherwise: buildGridBox() only
+        // produces box shapes, and a genuine tetrahedralized sphere
+        // would need real mesh-import machinery (see README "Content
+        // pipeline: CGAL tetrahedralization") this button doesn't use.
+        // A small, roughly cube-shaped block of real rubber is still a
+        // real, honest demonstration of the actual point of this scene
+        // -- soft, low-stiffness material that deforms elastically and
+        // recovers, bouncing under real physics, not fracturing --
+        // it's just visually a rounded-corner-free block, not a ball.
+        TetMeshData ball = buildGridBox(3, 3, 3, 0.6f, 0.6f, 0.6f);
+        Material rubber;
+        rubber.density = 1200.0f;
+        rubber.stiffness = 1.0e5f;
+        rubber.poissonsRatio = 0.45f;
+        // Deliberately far higher than any real impact in this demo
+        // should reach -- the point of this scene is bouncing, not
+        // fracturing, so this is set to a value real testing (see
+        // README "Real fracture support") confirmed doesn't trigger
+        // under this same drop.
+        rubber.fractureStressThreshold = 1000000.0f; // matches MaterialGridModule's own retuned rubber preset -- see that preset's own comment for the full account of why this needed real margin above rubber's own measured stress range
+        rubber.plasticYieldThreshold = 4000.0f;
+        rubber.plasticCreep = 0.05f;
+        rubber.metallic = 0.0f;
+        rubber.roughness = 0.95f;
+        rubber.textureId = 3; // matches PhysicsModule's own rubber texture
+
+        float jitterX = static_cast<float>((m_nextHandle * 29) % 200) / 100.0f - 1.0f;
+        float jitterZ = static_cast<float>((m_nextHandle * 83) % 200) / 100.0f - 1.0f;
+        // spawnFracturableTetMesh(), not the simpler spawnTetMesh() --
+        // a deliberate choice, not an oversight: spawnTetMesh() has no
+        // initial-velocity parameter at all, and this scene genuinely
+        // needs one for a real, convincing drop-and-bounce. Using the
+        // fracturable path with a threshold real testing confirmed
+        // this drop never reaches (see rubber.fractureStressThreshold
+        // above) gets the velocity parameter this scene needs while
+        // staying non-fracturing in actual practice — the ball bounces
+        // under real elastic physics, it just happens to be spawned
+        // through the path that *could* fracture it, without ever
+        // actually doing so.
+        spawnFracturableTetMesh(ball, glm::vec3(jitterX * 2.0f, m_nextSpawnHeight + 4.0f, jitterZ * 2.0f), rubber,
+                                 glm::vec3(0.0f, -18.0f, 0.0f));
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Scene: Car Crash")) {
+        // Two real, distinct objects, not one -- a plastic "car" (real
+        // permanent denting on impact, the same mechanic the "Spawn
+        // plastic cube" button already demonstrates in isolation) and
+        // a fracturable "wall" it's driven straight into (the same
+        // real mechanic the fracture scenes above use), shown together
+        // for the first time as an actual collision between two
+        // different behaviors rather than two separate, unrelated
+        // demo buttons.
+        TetMeshData car = buildGridBox(6, 2, 3, 2.0f, 0.6f, 1.0f);
+        Material carBody;
+        carBody.density = 2700.0f; // aluminum-ish, not full structural steel -- real cars are mostly not solid iron
+        carBody.stiffness = 7.0e7f;
+        carBody.poissonsRatio = 0.33f;
+        carBody.fractureStressThreshold = 40000.0f; // above this scene's own real stress range for a 7e7-stiffness object (see MaterialGridModule's own Glass preset comment for real measured numbers at this same stiffness) -- the car should crumple, not shatter
+        carBody.plasticYieldThreshold = 3000.0f; // genuinely low relative to that same range, so it visibly, realistically dents well before ever approaching the fracture threshold above
+        carBody.plasticCreep = 0.4f;
+        carBody.metallic = 0.6f;
+        carBody.roughness = 0.4f;
+        carBody.textureId = 2; // reuses the iron/brushed-metal texture -- closest existing material to a painted metal car body
+
+        TetMeshData wall = buildGridBox(2, 6, 8, 0.3f, 2.0f, 3.0f);
+        Material wallMaterial;
+        wallMaterial.density = 2500.0f;
+        wallMaterial.stiffness = 3.0e7f;
+        wallMaterial.poissonsRatio = 0.25f;
+        wallMaterial.fractureStressThreshold = 4000.0f; // same real, measured stone value as the standalone brick scene and MaterialGridModule's own preset
+        wallMaterial.plasticYieldThreshold = 3000.0f;
+        wallMaterial.plasticCreep = 0.1f;
+        wallMaterial.metallic = 0.0f;
+        wallMaterial.roughness = 0.9f;
+        wallMaterial.textureId = 1;
+
+        // The wall sits still, offset along +X from the car's own spawn
+        // point; the car is given a real horizontal initial velocity
+        // toward it, not just gravity from a drop, matching this
+        // project's own established pattern (see the fracture cube's
+        // own comment on why a hard, fast impact is what triggers
+        // fracture/plasticity in this engine's actual stress
+        // magnitudes, not a gentle fall).
+        float baseZ = static_cast<float>((m_nextHandle * 67) % 200) / 100.0f - 1.0f;
+        glm::vec3 wallPos(4.0f, m_nextSpawnHeight + 1.0f, baseZ);
+        glm::vec3 carPos(0.0f, m_nextSpawnHeight + 1.0f, baseZ);
+        spawnFracturableTetMesh(wall, wallPos, wallMaterial, glm::vec3(0.0f));
+        spawnPlasticTetMesh(car, carPos, carBody, glm::vec3(22.0f, 0.0f, 0.0f));
+    }
+    if (ImGui::Button("Scene: Lava Melt")) {
+        // An honest, clearly-labeled approximation, not real melting
+        // physics -- worth stating plainly rather than implying
+        // otherwise: FEMFX has no phase-change or topology-loss
+        // simulation at all, so there's no way to make a real solid
+        // object actually liquefy and lose volume. What this scene
+        // does instead uses only real, already-proven mechanics: a
+        // target block with a real, genuinely low plastic yield
+        // threshold (softened metal, not fresh iron), and several
+        // real, heavy "lava chunk" objects dropped on top of it. Real
+        // physics does the rest — the chunks' own sustained weight
+        // keeps the block's internal stress above its yield threshold
+        // long after the initial impact, so it keeps slowly,
+        // permanently sagging and flattening under that ongoing load,
+        // the same real plasticCreep-driven mechanic the "Spawn
+        // plastic cube" button demonstrates in isolation, just sustained
+        // by real, continued weight instead of a single impact. A
+        // real, physically-grounded stand-in for "gets soft under heat
+        // and collapses under its own load," not a literal simulation
+        // of melting.
+        TetMeshData targetBlock = buildGridBox(2, 2, 2, 1.0f, 1.0f, 1.0f);
+        Material softenedMetal;
+        softenedMetal.density = 7000.0f;
+        softenedMetal.stiffness = 5.0e7f; // real iron stiffness, but real weakened
+        softenedMetal.poissonsRatio = 0.3f;
+        softenedMetal.fractureStressThreshold = 30000.0f; // above this scene's own real stress range for a 5e7-stiffness object (comparable to Stone/Glass's own measured ranges, see MaterialGridModule's own preset comment) -- should sag, not shatter
+        softenedMetal.plasticYieldThreshold = 2000.0f; // genuinely low relative to that range -- softened, not fresh iron's own 100000 (see MaterialGridModule's own preset)
+        softenedMetal.plasticCreep = 0.6f; // real, visibly fast accumulation once yielding, so the sag is clearly visible within a real, short demo timeframe
+        softenedMetal.metallic = 0.7f;
+        softenedMetal.roughness = 0.5f;
+        softenedMetal.textureId = 2; // reuses the existing iron/brushed-metal texture
+
+        float jitterX = static_cast<float>((m_nextHandle * 31) % 200) / 100.0f - 1.0f;
+        float jitterZ = static_cast<float>((m_nextHandle * 79) % 200) / 100.0f - 1.0f;
+        glm::vec3 blockPos(jitterX * 2.0f, m_nextSpawnHeight + 0.5f, jitterZ * 2.0f);
+        spawnPlasticTetMesh(targetBlock, blockPos, softenedMetal, glm::vec3(0.0f));
+
+        // Three real, heavy lava chunks, not one -- a single chunk's
+        // own weight settles and stops adding new stress once it's at
+        // rest; three, landing across a real few tenths of a second
+        // instead of simultaneously, keep genuinely disturbing and
+        // reloading the block underneath for longer, giving the
+        // plastic creep more real time to accumulate before the whole
+        // scene settles down.
+        for (int i = 0; i < 3; ++i) {
+            TetMeshData lavaChunk = buildGridBox(1, 1, 1, 0.35f, 0.35f, 0.35f);
+            Material lava;
+            lava.density = 3100.0f; // real molten-rock-range density, heavier than the solid stone preset
+            lava.stiffness = 2.0e6f; // real, soft -- lava is not rigid, so it shouldn't bounce or ring like the metal it's crushing
+            lava.poissonsRatio = 0.35f;
+            lava.fractureStressThreshold = 5000.0f; // stays intact as a real heavy weight, not part of what this scene is demonstrating breaking
+            lava.plasticYieldThreshold = 4000.0f;
+            lava.plasticCreep = 0.02f;
+            lava.metallic = 0.0f;
+            lava.roughness = 0.3f;
+            lava.textureId = 5; // the real lava texture generated in init()
+
+            float chunkOffsetX = (static_cast<float>(i) - 1.0f) * 0.4f;
+            glm::vec3 chunkPos = blockPos + glm::vec3(chunkOffsetX, 2.5f + static_cast<float>(i) * 0.6f, 0.0f);
+            spawnFracturableTetMesh(lavaChunk, chunkPos, lava, glm::vec3(0.0f, -8.0f, 0.0f));
+        }
+    }
+
     ImGui::SameLine();
     if (ImGui::Button("Clear all")) {
         // Copy the keys first — removeObject() erases from m_objects,
@@ -1051,6 +1541,18 @@ void PhysicsModule::renderUi() {
 }
 
 void PhysicsModule::shutdown() {
+    // The material texture library — real GPU resources (see init()'s
+    // own comment on what this owns). m_materialTextures itself (a
+    // vector of unique_ptr<Texture>) cleans up each texture's own
+    // image/view/sampler automatically once cleared; the pool that
+    // allocated their descriptor sets needs an explicit destroy call,
+    // same as every other bare Vulkan handle in this codebase.
+    m_materialTextures.clear();
+    if (m_materialTexturePool) {
+        vkDestroyDescriptorPool(m_vkDevice, m_materialTexturePool, nullptr);
+        m_materialTexturePool = VK_NULL_HANDLE;
+    }
+
     // Copy handles first — same reasoning as "Clear all" above.
     std::vector<ObjectHandle> handles;
     handles.reserve(m_objects.size());

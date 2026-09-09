@@ -86,6 +86,32 @@ private:
     Rml::Context* m_context = nullptr;
     bool m_initialised = false;
     Application* m_app = nullptr; // needed each frame in update() to detect window resize
+
+    // Real slider-drag state -- see onEvent()'s own comment on why this
+    // exists at all (RmlUi's own <input type="range"> internals never
+    // receive click/drag events directly, confirmed by reading its
+    // source, not assumed). Without this, mousedown could jump a
+    // slider's value once, but there was nothing tracking that a drag
+    // was in progress, so mouse motion afterward did nothing --
+    // matching a real, reported "cannot drag sliders" complaint.
+    // Cleared on mouse-up regardless of where the button is released,
+    // so a drag that ends off the slider doesn't leave this stuck.
+    Rml::Element* m_draggingSlider = nullptr;
+
+    // Real panel-dragging state -- same mousedown/mousemove/mouseup
+    // pattern as m_draggingSlider above, tracking a different kind of
+    // drag: moving a whole panel by its own title bar, not scrubbing a
+    // single control's value. m_dragPanelStartOffset is the panel's
+    // own absolute pixel position (queried once, at drag start, via
+    // GetAbsoluteOffset() rather than trying to parse whatever units
+    // its left/top happen to be set in) and m_dragStartMouse is the
+    // mouse position at that same moment — every subsequent motion
+    // event computes a pixel delta from these two and applies it,
+    // rather than accumulating small per-frame deltas that could drift
+    // from the true mouse offset over a long drag.
+    Rml::Element* m_draggingPanel = nullptr;
+    Rml::Vector2f m_dragPanelStartOffset{0.0f, 0.0f};
+    Rml::Vector2f m_dragStartMouse{0.0f, 0.0f};
 };
 
 } // namespace kke

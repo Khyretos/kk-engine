@@ -56,6 +56,14 @@ struct RenderContext {
     // make every module look it up" reasoning as lightingDescriptorSet
     // above.
     VkDescriptorSet shadowMapDescriptorSet = VK_NULL_HANDLE;
+    // Set 2, binding 0 — the material's own albedo texture (see
+    // kke::Texture, kke::Application's own default white texture, and
+    // this struct's own comment above on lightingDescriptorSet for the
+    // "thread it through the context" reasoning, which applies
+    // identically here). Defaults to Application's own white texture's
+    // descriptor set; a module with a real texture of its own (see
+    // CubeModule) binds that instead, ignoring this field entirely.
+    VkDescriptorSet defaultMaterialTextureDescriptorSet = VK_NULL_HANDLE;
 };
 
 // Passed to Module::renderShadow() — a real, separate, depth-only pass

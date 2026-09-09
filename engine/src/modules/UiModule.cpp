@@ -87,6 +87,67 @@ Rml::Input::KeyIdentifier sdlKeyToRmlKey(SDL_Keycode key) {
     }
 }
 
+// Real, shared drag-and-click logic for <input type="range"> --
+// extracted so both the initial click (mousedown) and every
+// subsequent drag frame (mousemove while held) go through the exact
+// same value computation, rather than two separately-maintained
+// copies that could quietly drift apart. See UiModule::onEvent()'s
+// own comment for why this direct approach exists at all instead of
+// relying on RmlUi's own WidgetSlider internals.
+void setRangeSliderValueFromMouseX(Rml::Element* rangeInput, float mouseX) {
+    Rml::Vector2f topLeft = rangeInput->GetAbsoluteOffset(Rml::BoxArea::Content);
+    Rml::Vector2f size = rangeInput->GetBox().GetSize(Rml::BoxArea::Content);
+    if (size.x <= 0.0f) return;
+    float fraction = (mouseX - topLeft.x) / size.x;
+    fraction = std::clamp(fraction, 0.0f, 1.0f);
+    float minValue = rangeInput->GetAttribute<float>("min", 0.0f);
+    float maxValue = rangeInput->GetAttribute<float>("max", 100.0f);
+    float step = rangeInput->GetAttribute<float>("step", 1.0f);
+    float rawValue = minValue + fraction * (maxValue - minValue);
+    if (step > 0.0f) {
+        rawValue = minValue + std::round((rawValue - minValue) / step) * step;
+    }
+    if (auto* control = dynamic_cast<Rml::ElementFormControl*>(rangeInput)) {
+        control->SetValue(std::to_string(rawValue));
+    }
+}
+
+bool isRangeSliderInput(Rml::Element* element) {
+    return element && element->GetTagName() == "input" &&
+           element->GetClassNames().find("range") != Rml::String::npos;
+}
+
+// Walks up from a clicked "draggable-handle" element (a panel's own
+// title bar) to find the nearest ancestor with a real, explicit "left"
+// property set -- the actual positioned panel a drag should move, not
+// necessarily the handle's own immediate parent, in case a future
+// panel ever wraps its title in extra structure. Checking for an
+// explicit "left" rather than RmlUi's own computed `position` enum
+// deliberately -- Property::Get<T>() needs the exact stored type, and
+// position is stored as an internal enum, not a string, so comparing
+// against a string would be a real type mismatch, not a working check
+// that happens to look reasonable. Every real panel in this project
+// sets left explicitly (see each module's own SetProperty("left", ...)
+// or inline style), so this is an equally reliable signal without that
+// risk.
+Rml::Element* findDraggablePanelAncestor(Rml::Element* handle) {
+    // Starts from the handle's own PARENT, not the handle itself -- a
+    // real bug found and fixed, not assumed correct: GetProperty("left")
+    // turned out to return non-null even for the handle itself (RmlUi
+    // apparently returns an explicit "auto" property rather than a
+    // true null for an unset left), so the original version of this
+    // loop matched the title text element on its very first iteration
+    // and never walked any further -- confirmed directly via a real
+    // diagnostic log showing "panel found, tag='p'" when it should
+    // have found the actual container div.
+    for (Rml::Element* el = handle->GetParentNode(); el != nullptr; el = el->GetParentNode()) {
+        if (el->GetProperty("left") != nullptr) {
+            return el;
+        }
+    }
+    return nullptr;
+}
+
 } // namespace
 
 double UiModule::EngineSystemInterface::GetElapsedTime() {
@@ -175,6 +236,35 @@ void UiModule::onEvent(const SDL_Event& event) {
     switch (event.type) {
         case SDL_EVENT_MOUSE_MOTION:
             m_context->ProcessMouseMove(static_cast<int>(event.motion.x), static_cast<int>(event.motion.y), modifiers);
+            // Real slider dragging -- see this class's own header
+            // comment on m_draggingSlider for why this exists. Every
+            // motion event while a range input is being dragged
+            // recomputes and sets its value from the current mouse X,
+            // the same real fix already applied to the initial click
+            // below, just repeated continuously instead of once.
+            if (m_draggingSlider) {
+                setRangeSliderValueFromMouseX(m_draggingSlider, static_cast<float>(event.motion.x));
+            }
+            // Real panel dragging — see m_draggingPanel's own header
+            // comment. A pixel delta from the drag's own start point,
+            // converted to the same percentage units this project's
+            // panels are actually positioned in (see
+            // LightingControlsModule/MaterialGridModule/
+            // MarketplaceUiModule's own "why percentages, not pixels"
+            // comments) against the context's current dimensions, so a
+            // dragged panel keeps tracking the mouse correctly even if
+            // the window is resized mid-drag.
+            if (m_draggingPanel) {
+                Rml::Vector2i ctxSize = m_context->GetDimensions();
+                float dx = static_cast<float>(event.motion.x) - m_dragStartMouse.x;
+                float dy = static_cast<float>(event.motion.y) - m_dragStartMouse.y;
+                float newLeftPx = m_dragPanelStartOffset.x + dx;
+                float newTopPx = m_dragPanelStartOffset.y + dy;
+                if (ctxSize.x > 0 && ctxSize.y > 0) {
+                    m_draggingPanel->SetProperty("left", std::to_string(newLeftPx / ctxSize.x * 100.0f) + "%");
+                    m_draggingPanel->SetProperty("top", std::to_string(newTopPx / ctxSize.y * 100.0f) + "%");
+                }
+            }
             break;
         case SDL_EVENT_MOUSE_BUTTON_DOWN: {
             int button = sdlButtonToRmlButton(event.button.button);
@@ -202,24 +292,37 @@ void UiModule::onEvent(const SDL_Event& event) {
             // through the same public SetValue() API a working
             // slider would end up calling internally.
             if (button == 0) {
-                if (Rml::Element* hover = m_context->GetHoverElement()) {
-                    if (hover->GetTagName() == "input" && hover->GetClassNames().find("range") != Rml::String::npos) {
-                        Rml::Vector2f topLeft = hover->GetAbsoluteOffset(Rml::BoxArea::Content);
-                        Rml::Vector2f size = hover->GetBox().GetSize(Rml::BoxArea::Content);
-                        if (size.x > 0.0f) {
-                            float fraction = (static_cast<float>(event.button.x) - topLeft.x) / size.x;
-                            fraction = std::clamp(fraction, 0.0f, 1.0f);
-                            float minValue = hover->GetAttribute<float>("min", 0.0f);
-                            float maxValue = hover->GetAttribute<float>("max", 100.0f);
-                            float step = hover->GetAttribute<float>("step", 1.0f);
-                            float rawValue = minValue + fraction * (maxValue - minValue);
-                            if (step > 0.0f) {
-                                rawValue = minValue + std::round((rawValue - minValue) / step) * step;
-                            }
-                            if (auto* control = dynamic_cast<Rml::ElementFormControl*>(hover)) {
-                                control->SetValue(std::to_string(rawValue));
-                            }
-                        }
+                Rml::Element* hover = m_context->GetHoverElement();
+                if (isRangeSliderInput(hover)) {
+                    setRangeSliderValueFromMouseX(hover, static_cast<float>(event.button.x));
+                    // Real drag start, not just a one-time click — a
+                    // genuine, reported gap this closes: clicking
+                    // alone could set a value, but holding and moving
+                    // the mouse afterward did nothing, since nothing
+                    // tracked that a drag was in progress. Tracked by
+                    // raw Element* rather than a handle/ID: this
+                    // module doesn't outlive a single frame's elements
+                    // in a way that would make the pointer stale
+                    // before mouse-up clears it below.
+                    m_draggingSlider = hover;
+                } else if (hover && hover->GetClassNames().find("draggable-handle") != Rml::String::npos) {
+                    // Real panel-move start — a genuine, reported gap
+                    // this closes: panels couldn't be repositioned by
+                    // the user at all before this. Finds the actual
+                    // positioned ancestor (see
+                    // findDraggablePanelAncestor's own comment on why
+                    // that's not necessarily the handle's direct
+                    // parent) and records its real current pixel
+                    // position via GetAbsoluteOffset() — not by trying
+                    // to parse whatever units its left/top happen to
+                    // already be set in. Verified working end to end
+                    // with a real before/after screenshot: the
+                    // Marketplace panel visibly moved as one unit,
+                    // following the mouse.
+                    if (Rml::Element* panel = findDraggablePanelAncestor(hover)) {
+                        m_draggingPanel = panel;
+                        m_dragPanelStartOffset = panel->GetAbsoluteOffset(Rml::BoxArea::Border);
+                        m_dragStartMouse = Rml::Vector2f(static_cast<float>(event.button.x), static_cast<float>(event.button.y));
                     }
                 }
             }
@@ -228,6 +331,14 @@ void UiModule::onEvent(const SDL_Event& event) {
         case SDL_EVENT_MOUSE_BUTTON_UP: {
             int button = sdlButtonToRmlButton(event.button.button);
             if (button >= 0) m_context->ProcessMouseButtonUp(button, modifiers);
+            // Ends the drag unconditionally on any button-up, even if
+            // the mouse has moved off the slider by then (a real,
+            // expected case for a fast drag) -- matching how every
+            // native slider control behaves, rather than leaving this
+            // stuck set and having the next unrelated mouse motion
+            // keep dragging a slider the user has already let go of.
+            m_draggingSlider = nullptr;
+            m_draggingPanel = nullptr;
             break;
         }
         case SDL_EVENT_MOUSE_WHEEL:

@@ -1,6 +1,7 @@
 #include "kke/modules/LightingControlsModule.h"
 #include "kke/Application.h"
 #include "kke/modules/UiModule.h"
+#include "kke/Log.h"
 
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/Element.h>
@@ -26,22 +27,42 @@ const char* kLightingControlsRml = R"(
 <head>
     <title>Lighting Controls</title>
     <style>
-        body { color: #ffffff; font-family: Noto Sans; }
-        .panel { position: absolute; left: 40px; top: 500px; width: 740px; background-color: #1a1d2e; padding: 14px; }
-        .panel h1 { display: block; font-size: 18px; color: #a0c8ff; margin-bottom: 8px; }
+        // pointer-events: none on body specifically -- a real,
+        // significant bug this fixes, found by direct diagnostic
+        // logging, not assumed: every RmlUi document's <body> covers
+        // the FULL viewport for hit-testing by default, regardless of
+        // where its own visible content actually sits. With several
+        // of this engine's UI panels each living in their own
+        // document, shown simultaneously side by side on one screen,
+        // the most-recently-shown document's own full-screen,
+        // invisible body sat on top in z-order and silently absorbed
+        // every click across the *entire* screen -- including areas
+        // far outside its own visible panel, over completely different
+        // panels' content. That's a real, direct explanation for
+        // multiple real, reported symptoms at once: sliders that
+        // never responded to drag, panels that couldn't be dragged
+        // by their title bar, clicks that seemed to land on nothing.
+        // pointer-events: none here lets clicks pass straight through
+        // the invisible parts of this document's body to whatever's
+        // actually underneath; .panel below opts back into normal
+        // hit-testing explicitly, since it's the one real, visible
+        // thing in this document that should still receive clicks.
+        body { color: #ffffff; font-family: Noto Sans; pointer-events: none; }
+        .panel { position: absolute; left: 40px; top: 500px; width: 740px; background-color: #1a1d2e; padding: 14px; pointer-events: auto; }
+        .panel h1 { display: block; font-size: 18px; color: #a0c8ff; margin-bottom: 8px; font-family: Noto Sans; }
         .row { display: block; margin-top: 8px; }
-        .row span { display: inline-block; width: 160px; }
+        .row span { display: inline-block; width: 160px; font-family: Noto Sans; }
         input.range { width: 300px; height: 18px; vertical-align: -4px; }
         input.range slidertrack { display: block; width: 300px; height: 12px; margin-top: 3px; background-color: #333344; border: 1px #666677; }
         input.range sliderbar { display: block; width: 16px; height: 16px; margin-top: -3px; background-color: #4a7ac9; border: 1px #6a9aee; }
         input.range sliderbar:hover { background-color: #5a8ad9; }
-        button { display: inline-block; background-color: #333344; color: #ffffff; padding: 6px 14px; border: 1px #666677; margin-top: 10px; margin-right: 8px; }
+        button { display: inline-block; background-color: #333344; color: #ffffff; padding: 6px 14px; border: 1px #666677; margin-top: 10px; margin-right: 8px; font-family: Noto Sans; }
         button:hover { background-color: #4a7ac9; }
     </style>
 </head>
-<body style="width:1280px; height:720px;">
+<body style="width:1280px; height:720px; pointer-events:none;">
     <div id="lighting-controls-panel" class="panel">
-        <h1>Lighting Controls -- real kke::Lighting state, changed live</h1>
+        <h1 class="draggable-handle">Lighting Controls -- real kke::Lighting state, changed live</h1>
         <div class="row"><span>Ambient</span><input id="ambient" type="range" min="0" max="1" step="0.01" value="0.15"/></div>
         <div class="row"><span>Key light intensity</span><input id="key-intensity" type="range" min="0" max="3" step="0.05" value="1.0"/></div>
         <div class="row"><span>Fill light intensity</span><input id="fill-intensity" type="range" min="0" max="2" step="0.05" value="0.0"/></div>
@@ -161,12 +182,19 @@ void LightingControlsModule::init(Application& app) {
     // Real repositioning via SetProperty, not baked into the RML/RCSS
     // string — lets more than one instance of this kind of content
     // module share a screen at different positions instead of always
-    // landing at the same hardcoded spot. Only actually moves anything
-    // when a caller passes non-default left/top; existing call sites
-    // that don't keep rendering exactly where they always did.
+    // landing at the same hardcoded spot.
+    //
+    // Percentages now, not pixels -- see MaterialGridModule.cpp's own
+    // identical comment for the full account of the real, reported
+    // bug this fixes (fixed-pixel positioning meant panels went
+    // partly or entirely off-screen at any window size other than
+    // 1600x900, confirmed by actually resizing the window). m_left/
+    // m_top stay pixel values in this class's own public constructor
+    // API; converted to a percentage of the 1600x900 reference design
+    // size here, the one point they're actually applied.
     if (Rml::Element* panel = m_document->GetElementById("lighting-controls-panel")) {
-        panel->SetProperty("left", std::to_string(m_left) + "px");
-        panel->SetProperty("top", std::to_string(m_top) + "px");
+        panel->SetProperty("left", std::to_string(m_left / 1600.0f * 100.0f) + "%");
+        panel->SetProperty("top", std::to_string(m_top / 900.0f * 100.0f) + "%");
     }
 
     m_listener = new PresetButtonListener(m_app);

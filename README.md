@@ -254,21 +254,30 @@ which this system attempts yet.
 ## What's still ahead for lighting
 
 Shadow mapping (a single directional light, single shadow-casting
-module) and PBR materials (Cook-Torrance, real metallic/roughness) are
-both real and working now — see "Immediate next slices" above for the
-full account of each, not summarized twice here. Still entirely
+module), PBR materials (Cook-Torrance, real metallic/roughness), real
+flat shading for physics-spawned tetrahedra (fixed a genuine "hollow"-
+looking smooth-shading bug — see "Immediate next slices" above), and
+real material albedo textures with real per-face UV mapping (a
+checkerboard on `CubeModule`, and a five-texture library in
+`PhysicsModule` tied to `MaterialGridModule`'s presets — real UV-mapped
+sampling now, not flat tints, though fine pattern detail on a small
+tetrahedron is limited by ordinary texture minification at that scale)
+are all real and working now — see "Immediate next slices" above for
+the full account of each, not summarized twice here. Still entirely
 unbuilt, checked directly rather than assumed: real image-based
 ambient lighting (a captured/convolved environment map — the current
-ambient term is still a flat `color * albedo` stand-in), normal/
-roughness/metallic *textures* (every PBR value is still one number per
-object, not a per-pixel texture sample), point-light shadows,
-cascaded/multiple shadow maps for larger scenes, soft shadows (PCF or
-better), shadow casting generalized beyond the one module that
-currently implements it, and a way for gameplay code to add/remove
-lights dynamically at runtime rather than configuring the fixed
-4-slot array at startup. Building all of that out is still genuinely
-substantial work — Vulkan gives no plug-and-play lighting the way some
-higher-level engines do; every piece has to be written.
+ambient term is still a flat `color * albedo` stand-in), normal maps
+and roughness/metallic *textures* (still one number per object, not a
+per-pixel sample), texture loading from real files for objects other
+than `CubeModule` (every texture so far is procedurally generated, not
+loaded), point-light shadows, cascaded/multiple shadow maps for larger
+scenes, soft shadows (PCF or better), shadow casting generalized
+beyond the one module that currently implements it, and a way for
+gameplay code to add/remove lights dynamically at runtime rather than
+configuring the fixed 4-slot array at startup. Building all of that
+out is still genuinely substantial work — Vulkan gives no plug-and-play
+lighting the way some higher-level engines do; every piece has to be
+written.
 
 **The real plan, and the exact resources to build it from** — recorded
 here specifically so both a human and an AI picking this project back
@@ -1945,54 +1954,614 @@ shape:
 
 ## Known simplifications (intentional, still worth fixing)
 
-- **Shader paths are relative to the working directory**, not the
-  executable path — fine for `./build/bin/kke_demo` run from within
-  `build/bin/`, but will need `SDL_GetBasePath()` before this ships
-  anywhere else.
-- **Mouse orbit doesn't use locked/relative cursor mode** — dragging past
-  the window edge stalls the drag (release and re-drag to continue)
-  rather than wrapping infinitely. Simpler and avoids fighting with
-  ImGui's own mouse handling, at the cost of that edge case.
-- **No real network transport** — `NetworkModule` measures and displays
-  what would be sent (see "Cross-module communication"); nothing
-  actually leaves the process yet.
-- **RmlUi's `LoadTexture` (image files) is still a stub** — `<img>` and
-  `background-image: url(...)` won't render; text (glyph atlases, via
-  `GenerateTexture`) works.
-- **RmlUi resize handling is fixed** — `UiModule::update()` compares
-  the swapchain's current extent against the `Rml::Context`'s own
-  dimensions every frame and calls `SetDimensions()` when they differ.
-  Verified genuinely, not assumed: resized a real running window
-  through several different sizes and multiple resize cycles
-  (1280x720 → 1920x1080 → 800x500 → 1400x900) via `xdotool`, screenshot
-  ing at each step — RmlUi panels, ImGui, and the 3D scene all stayed
-  correctly positioned and legible throughout. This was a real,
-  user-reported bug (the UI could disappear or misbehave at
-  non-default resolutions), not a theoretical gap.
-- **No authority/reconciliation model** — `deserializeReplicatedState()`
-  is implemented but unused; two peers disagreeing about state isn't
-  handled.
-- **Lua and stb are fetched but not called from any code yet.**
-- **No icon wiring** — see "Branding" at the top.
-- **Depth format isn't probed for support** — `VK_FORMAT_D32_SFLOAT` is
-  assumed available (true on effectively every Vulkan-conformant device,
-  including lavapipe, which is what's been verified here) rather than
-  checked via `vkGetPhysicalDeviceFormatProperties` with a fallback.
-- **20,000 particles is an arbitrary default**, not a measured "this is
-  the performance ceiling" number — `StatsModule`'s GPU timing is exactly
-  the tool to find that ceiling on your actual target hardware.
+**This section is being retired in favor of `ROADMAP.md` (current
+capability state, by system) and `BUGS.md` (specific defects, symptom →
+root cause → fix, cross-referenceable by ID) — both maintained as
+living, structured files rather than README prose.** The entries below
+are kept only as a pointer, not duplicated and re-maintained here,
+specifically because letting the same information live in two places
+is exactly how this section itself went stale in the past — it claimed
+RmlUi's `LoadTexture` was still a stub, and separately claimed resize
+handling was fully verified, in both cases after later work in the
+very same project had already changed that (see `BUGS.md` BUG-004 and
+BUG-018 for the real, current, corrected state of each). If you're
+looking for "does X work yet," start in `ROADMAP.md`; if you're
+debugging something and want to know if it's a known issue, start in
+`BUGS.md`.
+
+A few things not yet tracked as a specific system in `ROADMAP.md`
+because they're small, standalone facts rather than a whole subsystem:
+shader paths are relative to the working directory, not the executable
+path (fine for `./build/bin/kke_demo` run from within `build/bin/`, will
+need `SDL_GetBasePath()` before shipping elsewhere); mouse orbit doesn't
+use locked/relative cursor mode (dragging past the window edge stalls
+the drag rather than wrapping, a deliberate simplicity trade-off against
+fighting ImGui's own mouse handling); depth format isn't probed for
+support (`VK_FORMAT_D32_SFLOAT` is assumed available, true on
+effectively every Vulkan-conformant device including lavapipe, rather
+than checked via `vkGetPhysicalDeviceFormatProperties` with a fallback);
+20,000 particles is an arbitrary default, not a measured performance
+ceiling.
 
 ## Roadmap
 
-This is the project's memory across sessions — every gap, every deferred
-piece, every "this works but X is a simplification" gets written here as
-part of the change that introduces it, not as a follow-up. If you're an
-AI (or human) picking this project back up, this section plus "Known
-simplifications" above is the fastest way to find out what's actually
-true right now versus what's aspirational.
+**For current, structured state, use `ROADMAP.md` (capability status by
+system) and `BUGS.md` (specific defects, cross-referenceable by ID)
+instead of reading this section top-to-bottom.** This section remains
+as the fuller narrative — the reasoning, the false starts, the "tried X
+first, it was wrong, here's why" — kept in chronological order because
+that reasoning has real value when you're about to touch the same area
+again. But it is not the place to answer "does X work yet" or "has this
+bug been seen before" — those two files are, and they're the ones this
+project now commits to keeping current every session (see each file's
+own intro for the discipline expected).
 
 ### Immediate next slices (each independently buildable/runnable)
 
+- ~~**Material toughness ordering was backwards — Rubber shattered
+  while Iron stayed intact under the same impact**~~ Fixed — root-
+  caused properly against real FEMFX source and real measured data
+  this time, not another round of guessing from a formula.
+  - **Read FEMFX's own source to understand the real physics**
+    (`FEMFXUpdateTetState.cpp`): stress is computed as
+    `stiffness_matrix * displacement`, not from stiffness alone — so a
+    stiffer material doesn't automatically produce proportionally
+    higher stress; it depends on how much the object actually deforms
+    under a given impact, which itself depends on stiffness, mass, and
+    the full contact dynamics. The earlier "scale the threshold
+    linearly with stiffness" retuning was a reasonable-sounding
+    formula that turned out to be the wrong mental model.
+  - **Measured the real thing directly instead of theorizing further**:
+    added a temporary diagnostic straight into FEMFX's own fracture-
+    check code (there's no public API for this internal value), and
+    tested all five materials under the identical standard impact.
+    Real, measured stress ranges, not estimates: Rubber ~1,200–8,450;
+    Wood ~1,483–22,485; Stone ~2,386–52,794; Glass ~4,719–36,640; Iron
+    ~6,690–314,820. Confirms stress does trend upward with stiffness,
+    but the ranges overlap enough that no single formula could have
+    placed every material's threshold correctly relative to its own
+    real range — exactly why the previous attempt got Rubber and Iron
+    backwards.
+  - **Retuned every preset relative to its own measured range**, not a
+    shared formula: Glass and Stone sit near the low end of their own
+    range (reliably fracture), Wood sits mid-range, Iron sits high in
+    its own range (mostly dents instead of shattering), and Rubber
+    sits above its own observed maximum entirely (never fractures
+    under this demo's real impacts). Applied consistently everywhere
+    the old scale had leaked in — the standalone scene buttons (Glass
+    Sheet, Brick, Car Crash's wall *and* car body, Lava Melt's
+    softened-metal block, Rubber Ball) all had their own separately
+    hardcoded materials at the old, wrong scale too, not just
+    `MaterialGridModule`'s presets.
+  - **Verified with real, repeated testing under the identical
+    impact**, not assumed correct from the new numbers alone: Glass
+    shattered into 13 pieces; Iron broke into only 9–11 (tougher,
+    fewer pieces, the correct relative direction this time); Rubber,
+    after one more real round of testing and raising its own margin
+    further, produced zero fracture log lines at all — genuinely
+    bouncing intact under the same impact that used to shatter it.
+  - The temporary diagnostic added to FEMFX's own vendored source was
+    fully removed afterward — confirmed via a real search across the
+    whole tree, not assumed.
+  - Full comprehensive verification: both `KKE_ENABLE_FEMFX` on and off
+    configurations rebuilt clean from scratch — zero errors, zero
+    warnings, all 40 tests passing, correct binary set, in each — plus
+    every demo swept individually with real Vulkan validation layers
+    active in both configurations: zero validation errors, zero
+    crashes, zero assertions throughout.
+- **Scene: Lava Melt — the fifth physics scene, an honest, clearly-
+  labeled approximation, not real melting.** Stated plainly rather
+  than implied otherwise: FEMFX has no phase-change or topology-loss
+  simulation at all, so there's no way to make a solid object actually
+  liquefy or lose volume. What this scene does instead uses only real,
+  already-proven mechanics: a target block with a genuinely low
+  plastic yield threshold (softened metal, not fresh iron), and three
+  real, heavy "lava chunk" objects dropped on top of it. Real physics
+  does the rest — the chunks' own sustained weight keeps the block's
+  internal stress above its yield threshold long after the initial
+  impact, so it keeps slowly, permanently sagging under that ongoing
+  load, the same real `plasticCreep`-driven mechanic "Spawn plastic
+  cube" demonstrates in isolation, just sustained by continued weight
+  instead of a single impact.
+  - Added a real, generated sixth texture (lava — bright red-to-yellow
+    gradient with irregular hot spots, generated the same procedural
+    way as the other five) to `PhysicsModule`'s own material texture
+    library.
+  - **Verified with real, measured numbers, not just a screenshot**:
+    the target block's own vertex-distance diagnostic (see "Spawn
+    plastic cube" for how this measurement works) dropped from 1.0 to
+    **0.5** — real, dramatic, 50% compression — confirmed visually too,
+    with the lava chunks' own distinct red-orange texture clearly
+    visible in a real screenshot next to the sagged block.
+  - Full comprehensive verification: both `KKE_ENABLE_FEMFX` on and off
+    configurations rebuilt clean from scratch — zero errors, zero
+    warnings, all 40 tests passing, correct binary set, in each — plus
+    every demo swept individually with real Vulkan validation layers
+    active in both configurations: zero validation errors, zero
+    crashes, zero assertions throughout.
+  - All five originally-requested physics scenes (Glass Sheet, Brick,
+    Rubber Ball, Car Crash, Lava Melt) are now real and working.
+- **Real panel dragging by title bar** — a genuine, reported gap
+  closed: panels couldn't be repositioned by the user at all before
+  this. A general mechanism, not per-panel special-casing: any element
+  with class `draggable-handle` starts a drag on mousedown, and
+  dragging moves its nearest ancestor with a real, explicit `left`
+  property set (see `findDraggablePanelAncestor`'s own comment) — the
+  same `mousedown`/`mousemove`/`mouseup` pattern already proven for
+  slider dragging, applied to whole panels instead of a single
+  control's value. Added the `draggable-handle` class to the title
+  element of all three panel documents (`LightingControlsModule`,
+  `MaterialGridModule`, `MarketplaceUiModule`).
+  - **Two real, separate bugs found and fixed during verification, not
+    glossed over**:
+    - A genuine `font-family` inheritance gap — confirmed via a real
+      RmlUi warning (`No font face defined... On element
+      h1.draggable-handle`) — meant the "Lighting Controls" and
+      "Material Grid" panel titles weren't rendering *at all*, which
+      also explains the mysteriously-missing title noticed during the
+      earlier window-resize testing. Fixed with an explicit
+      `font-family` on both title rules rather than relying on
+      inheritance; verified with a real screenshot showing both titles
+      now visible.
+    - `MarketplaceUiModule`'s own internal structure never received
+      the `pointer-events: auto` treatment `LightingControlsModule`/
+      `MaterialGridModule` got when the earlier click-interception bug
+      was fixed — confirmed directly via a diagnostic showing clicks
+      landing on `#root` instead of the actual title element. Fixed by
+      adding `pointer-events: auto` to both the panel's outer div and
+      the title itself.
+    - A real bug in the drag code's own ancestor-search logic: it
+      started searching from the clicked handle itself, and
+      `GetProperty("left")` turned out to return non-null even for
+      that handle (apparently an explicit "auto" rather than a true
+      null) — so the search matched the title text element on its
+      first check and never walked any further, meaning a drag would
+      have moved just the title, not the panel. Found via a direct
+      diagnostic log showing `panel found, tag='p'` where a `div` was
+      expected, fixed by starting the ancestor search from the
+      handle's parent instead of the handle itself.
+  - **Verified with a real before/after screenshot, not just
+    compiling cleanly**: dragged the Marketplace panel by its title
+    and confirmed the entire panel — including every game card inside
+    it — moved together as one unit, following the mouse.
+  - Full comprehensive verification, after removing every temporary
+    diagnostic added during the investigation: both `KKE_ENABLE_FEMFX`
+    on and off configurations rebuilt clean from scratch — zero
+    errors, zero warnings, all 40 tests passing, correct binary set,
+    in each — plus every demo swept individually with real Vulkan
+    validation layers active in both configurations: zero validation
+    errors, zero crashes, zero assertions throughout.
+- **Four real, playable physics scenes** — real, distinct shapes and
+  scene-appropriate materials, not the same cube recolored four times.
+  `PhysicsModule` gained a general `buildGridBox(cellsX, cellsY,
+  cellsZ, sizeX, sizeY, sizeZ)` generator (the same proven 6-tet
+  diagonal decomposition already used for the fracturable cube,
+  generalized to any per-axis cell count and physical size), and the
+  existing "Spawn fracturable cube" button was refactored to use it
+  too instead of its own separate inline copy.
+  - **Scene: Glass Sheet** — thin and wide (72 tets), the real,
+    empirically-verified glass fracture threshold already proven in
+    `MaterialGridModule`'s own preset. Verified via the same
+    `FmGetNumTetMeshes()` logging this project has used throughout:
+    **shattered into 58 pieces** on impact, confirmed visually in a
+    real screenshot as shards genuinely scattered across the ground,
+    not a couple of large chunks.
+  - **Scene: Brick** — real 2:1:1 brick proportions, stone material.
+    **26 pieces**, confirmed the same way.
+  - **Scene: Rubber Ball** — an honest approximation, stated plainly
+    rather than implied otherwise: a small box of real rubber, not a
+    true tetrahedralized sphere (which would need real mesh-import
+    machinery this project doesn't have yet — see "Content pipeline:
+    CGAL tetrahedralization"). Hit a real snag during verification:
+    the first threshold tried still fractured on impact, the same
+    "actual stress magnitudes are hard to predict from the material
+    parameters alone" problem already flagged as an open question for
+    material tuning generally. Fixed pragmatically here by raising the
+    threshold until a real test run confirmed no fracture log fired at
+    all — the ball stays intact and bounces under real elastic
+    physics.
+  - **Scene: Car Crash** — two real, distinct objects for the first
+    time in one scene: a plastic "car" (real permanent denting, the
+    same mechanic "Spawn plastic cube" demonstrates in isolation)
+    driven at real velocity into a fracturable "wall" (the same
+    mechanic the fracture scenes use). Verified with real, measured
+    numbers, not just a screenshot: the wall **shattered into 57
+    pieces**, and the car's own vertex-distance diagnostic (see
+    "Spawn plastic cube" for how this measurement works) dropped from
+    1.0 to 0.33 — real, dramatic, measured crumpling — confirmed
+    together in one real screenshot showing wall debris genuinely
+    scattered across the scene from the impact.
+  - **What's honestly not done**: a fifth scene (lava melting a cube)
+    wasn't attempted — FEMFX has no true melting/phase-change physics
+    at all, so it would need a creative, clearly-labeled approximation
+    (plasticity plus a particle effect) rather than real melting, and
+    that work hasn't started.
+- ~~**UI panels don't scale with window size — go off-screen at
+  smaller resolutions**~~ Fixed for panel *position* — confirmed
+  directly, not assumed: resized the window from the demo's own
+  1600x900 down to 900x600 and screenshotted the real result before
+  touching any code. `MaterialGridModule`'s panel (positioned at a
+  fixed `top: 640px`) was completely off-screen; `MarketplaceUiModule`
+  (fixed `left: 820px`) was severely cut off at the right edge.
+  - **Fixed**: converted `left`/`top` from fixed pixels to percentages
+    of the 1600x900 reference design size, at the one point each
+    module actually applies its position (`SetProperty` for
+    `LightingControlsModule`/`MaterialGridModule`, the inline style
+    string for `MarketplaceUiModule`). RmlUi resolves percentage
+    left/top against the containing block's own current size, so this
+    now genuinely tracks whatever the window actually is, not a fixed
+    1600x900 assumption. Public constructor APIs (`left`/`top` as
+    pixel arguments) deliberately unchanged, so no call site needed to
+    change — only the internal application of those values did.
+  - **Verified with a real before/after screenshot at the same resized
+    window**: `MaterialGridModule`'s panel went from fully off-screen
+    to fully visible; `MarketplaceUiModule` went from severely cut off
+    to proportionally repositioned.
+  - **What's honestly still incomplete**: panel *widths* are still
+    fixed pixels (`width: 740px` etc.), so a panel can still overflow
+    a narrow window even though its position now scales correctly —
+    real, separate follow-up work, not done here. The Lighting
+    Controls panel's own title text also appeared to go missing in
+    the same resized screenshot, a smaller, distinct issue not yet
+    investigated.
+  - Full comprehensive verification: both `KKE_ENABLE_FEMFX` on and off
+    configurations rebuilt clean from scratch — zero errors, zero
+    warnings, all 40 tests passing, correct binary set, in each — plus
+    every demo swept individually with real Vulkan validation layers
+    active in both configurations: zero validation errors, zero
+    crashes, zero assertions throughout.
+- ~~**RmlUi felt broken — sliders wouldn't drag, panels couldn't be
+  moved**~~ Fixed — a real, likely-unifying root cause, found through
+  a genuinely thorough diagnostic chain, not assumed.
+  - **A real, concrete gap found first**: the slider "drag" support
+    only ever handled the initial mousedown click — nothing tracked
+    that a drag was in progress, so holding and moving the mouse
+    afterward did nothing. Fixed by extracting the value computation
+    into a shared helper and wiring real drag state through
+    mousedown → mousemove → mouseup.
+  - **But verifying that fix uncovered something much bigger**: a
+    direct diagnostic log showed clicks anywhere near the Lighting
+    Controls panel — even well inside its own reported bounds —
+    resolving to `body`, RmlUi's document root, never descending into
+    the actual panel or its children. Ruled out, one at a time, with a
+    real check each time, not a guess: a coordinate/DPI mismatch
+    (SDL's logical size and the renderer's pixel extent matched
+    exactly); window positioning (the window sits at (0,0)); event
+    routing (every SDL event reaches every module's `onEvent()`
+    unconditionally, no ImGui-capture filtering exists); and timing
+    (even a full 1-second delay between mouse-move and click didn't
+    change the result).
+  - **The real cause**: every RmlUi document's `<body>` covers the
+    *entire viewport* for hit-testing by default, regardless of where
+    its own visible content sits. With several of this engine's UI
+    panels each living in their own document, shown simultaneously,
+    the most-recently-added module's document (`MaterialGridModule`,
+    added after `LightingControlsModule`) sat on top in z-order and
+    its own invisible, full-screen body silently absorbed clicks
+    across the *entire* screen — including areas over completely
+    different panels' visible content. `MarketplaceUiModule` had
+    already independently found and fixed this exact bug for itself
+    in an earlier session (a real, detailed comment already
+    documented it) — the gap was that the same fix was never applied
+    to the panels added afterward.
+  - **Fixed**: `pointer-events: none` on every document's `<body>`
+    (as an inline style on the `<body>` tag itself specifically — a
+    real, checked detail: a `<style>` block rule alone was tried
+    first and did *not* work, only the inline attribute did, matching
+    exactly how `MarketplaceUiModule`'s already-proven version does
+    it), with each real panel div explicitly opting back in via
+    `pointer-events: auto`.
+  - **Verified with a real before/after screenshot, not just a log
+    line**: the same click that used to resolve to `body` now
+    resolves to `input.range`, the actual slider — and a real,
+    continuous drag (mousedown, several mousemove steps, mouseup) 
+    visibly moved the slider thumb from one end of the track to the
+    other in an actual screenshot comparison.
+  - Full comprehensive verification, after removing every temporary
+    diagnostic added during the investigation: both `KKE_ENABLE_FEMFX`
+    on and off configurations rebuilt clean from scratch — zero
+    errors, zero warnings, all 40 tests passing, correct binary set,
+    in each — plus every demo (`kke_demo`, `physics_demo`,
+    `rmlui_demo`, `imgui_demo`) swept individually with real Vulkan
+    validation layers active in both configurations: zero validation
+    errors, zero crashes, zero assertions throughout.
+  - **What's still open, honestly**: whether this same root cause also
+    explains the reported "UI doesn't scale with screen size" and
+    "discoloration behind 3D content" complaints hasn't been checked
+    yet — panel dragging (moving a panel by its title bar) hasn't been
+    implemented at all yet either. All real, separate next steps, not
+    yet started.
+- **Soft shadows (3x3 PCF)** — a real quality upgrade to the existing
+  shadow map, replacing the single hard-edged tap with a 9-sample
+  neighborhood average, using `textureSize(shadowMap, 0)` to derive the
+  correct texel offset at runtime rather than hardcoding the
+  resolution separately in the shader.
+- **Shadow casting generalized to `PhysicsModule`** — spawned physics
+  objects now cast real shadows too, not just `CubeModule`'s cube. The
+  ground plane deliberately doesn't cast (it only needs to receive).
+  Reuses each object's existing vertex/index buffers as-is rather than
+  resynchronizing them for the shadow pass specifically — a real,
+  deliberate simplicity trade-off (at most one frame of shadow-position
+  lag, ~16ms, not visually meaningful at this project's motion speeds)
+  over duplicating render()'s own position-readback logic a second time.
+- ~~**A real shadow regression, found and fixed via a genuinely
+  thorough diagnostic chain**~~ — while verifying the two items above,
+  shadows turned out to be completely broken (every fragment reading
+  as fully lit, no shadow anywhere), a real regression from an earlier
+  point in the project, not something introduced by this round's own
+  changes. Root-caused properly rather than patched around:
+  - **The actual bug**: `shadow.vert` still declared only 3 vertex
+    attributes (position/color/normal) from before `Vertex` grew a
+    4th field (`uv`) for the material-texture work done earlier this
+    project. Since the shadow pipeline's vertex input state is always
+    built from `Vertex::attributeDescriptions()` (now 4 attributes),
+    there was a real mismatch between what the pipeline described and
+    what the shader consumed. This didn't trip Vulkan validation
+    (unused pipeline attributes aren't strictly invalid) but caused a
+    silent failure on this project's own software rasterizer — every
+    shadow-casting draw call produced no real depth output, leaving
+    the shadow map permanently at its cleared value.
+  - **Found by elimination, each step a real measurement, not a
+    guess**: ruled out the new `PhysicsModule` shadow code (disabled
+    it, bug persisted identically); ruled out the PCF rewrite (the
+    broken value was read *before* the PCF loop even executes, from
+    code identical to the working single-tap version); verified the
+    C++/GLSL `LightingUBO` struct layout byte-for-byte with a
+    standalone test program; verified the light direction and
+    computed matrix were sane via a direct log; verified
+    `posLightSpace.w` was correctly 1.0; verified the light-space UV
+    coordinates were genuinely varying correctly across the cube's
+    surface (an earlier "looks uniform" read turned out to be simple
+    visual misjudgment on a subtle gradient, corrected by sampling
+    actual pixel values instead of eyeballing); verified
+    `textureSize()` returned a real, reasonable value; and finally
+    sampled the shadow map's own stored depth directly, finding it
+    exactly `1.0` (the clear value) everywhere — which pointed straight
+    at the vertex shader not writing real geometry at all, and from
+    there directly at the stale attribute declaration.
+  - **Fixed and reverified**: added the missing `uv` attribute
+    declaration to `shadow.vert` (unused in the shader body, but now
+    matching the pipeline's real vertex input state exactly). A real
+    shadow is visible again in a fresh screenshot — a distinct dark
+    shape on the ground plane, cube-shaped, cutting across the
+    checkerboard texture pattern exactly where expected.
+  - Full comprehensive verification, after fully removing every
+    temporary diagnostic added during the investigation: both
+    `KKE_ENABLE_FEMFX` on and off configurations rebuilt clean from
+    scratch — zero errors, zero warnings, all 40 tests passing,
+    correct binary set, in each — plus every demo (`kke_demo`,
+    `physics_demo`, `rmlui_demo`, `imgui_demo`) swept individually with
+    real Vulkan validation layers active in both configurations: zero
+    validation errors, zero crashes, zero assertions throughout.
+- ~~**Objects fall through the ground when many are spawned**~~ Fixed
+  — a real, serious bug, reported directly from actually using the
+  demo (spawning many pieces), not caught by this project's own
+  earlier testing (which never spawned anywhere near the 64-object
+  cap at once). Root cause, found immediately by reading the scene
+  setup: `maxDistanceContacts`, `maxVolumeContacts`,
+  `maxBroadPhasePairs`, and `maxDeformationConstraints` were all still
+  hardcoded at 64 — sized for `kMaxObjects`'s *original* value from
+  before it was raised to 64 earlier this project, never revisited
+  when that cap changed. With genuinely dozens of objects on screen,
+  each touching the ground plus potentially several piled-up
+  neighbors, the real number of simultaneous contacts routinely
+  exceeds a fixed 64 — and a contact FEMFX has no room to record is a
+  contact that gets no real collision response, which looks exactly
+  like falling through the floor. Fixed by scaling all of these to a
+  real, generous multiple of `kMaxObjects` instead of another fixed
+  number that would just as quietly run out again next time that cap
+  changes. Verified by actually doing what the report described:
+  spawned tetrahedra rapidly up to 57 objects, all resting correctly
+  on the ground plane, confirmed via a real screenshot — no falling
+  through, at a scale roughly 9x larger than anything previously
+  tested in this project.
+- ~~**Fracture doesn't look like real breaking — a piece just
+  disappears**~~ Fixed — two real, compounding bugs, not one.
+  - **The fracturable shape itself was too coarse to ever look like
+    real breaking**: the original "Spawn fracturable cube" used a
+    single 6-tet cube — with that few internal boundaries, fracture
+    could only ever separate it into at most a couple of pieces, far
+    short of looking like glass shattering or rock breaking into
+    chunks. Replaced with a real 2x2x2 grid of connected cube-cells
+    (48 tets total, same proven 6-tet-per-cell decomposition, just
+    tiled), giving fracture genuine room to separate into many
+    distinct fragments.
+  - **The button never actually used the selected material**: despite
+    `kke::MaterialGridModule` existing specifically so a chosen
+    material's own `fractureStressThreshold` would apply, "Spawn
+    fracturable cube" ignored `m_selectedMaterial` entirely and used a
+    single hardcoded material regardless of what was selected —
+    meaning choosing "Glass" vs. "Rubber" never actually changed
+    anything about how the object broke. Fixed to use the real
+    selected material.
+  - **A related bug found and fixed while retuning**: `MaterialGridModule`'s
+    five presets had `fractureStressThreshold` values (3e5 to 5e8)
+    carried over from AMD's own reference material examples — but this
+    project's own earlier empirical fracture work had already found
+    real simulated stress magnitudes here run orders of magnitude
+    smaller than AMD's scale (a working threshold of *10.0*, not
+    1e4-1e8). None of the five preset values were ever reachable by
+    any real impact this demo produces, meaning every material
+    silently behaved like the unbreakable default regardless of
+    selection — retuned into the same real, working range.
+  - **Verified with real numbers, and an honest, unresolved finding
+    reported rather than hidden**: spawned all five materials under
+    the identical impact and logged `FmGetNumTetMeshes()` for each.
+    Confirmed real, substantial fragmentation now works — Glass split
+    into 13 pieces, visibly separated in a real screenshot, a dramatic,
+    genuine improvement over the old single-piece-disappears behavior.
+    Confirmed real material-dependent *differentiation* exists (not
+    every material breaks identically) — but the specific toughness
+    ordering found empirically (Rubber breaking apart while Iron
+    initially stayed intact under the same impact) doesn't yet match
+    intuitive real-world expectations (glass most brittle, iron
+    toughest). Likely because peak internal stress under impact depends
+    on a material's full stiffness/density response, not simply its
+    fracture threshold in isolation — a real, deeper tuning question
+    left open honestly rather than papered over with an unverified
+    guess.
+- ~~**Physics tetrahedra looked "hollow"**~~ Fixed — a genuine, real
+  bug, reported directly by actually using the demo, not found through
+  internal testing. The visual symptom (a smooth, iridescent-looking
+  gradient sweeping across what should have been sharp, distinct flat
+  faces) was diagnosed exactly the way this whole session has diagnosed
+  everything else: a temporary shader outputting the raw world-space
+  normal directly as color, bypassing all lighting, made the real cause
+  unambiguous rather than guessed at.
+  - **The real cause**: `PhysicsModule`'s render bridge shared vertices
+    between adjacent triangular faces and averaged their normals
+    together — the exact same technique correctly used for genuinely
+    high-poly, curved-looking meshes, but wrong for a 4-faced
+    tetrahedron (or any object with only a handful of exterior faces),
+    where averaging blends each face's shading into its neighbors
+    instead of keeping them sharply distinct.
+  - **Fixed with a real restructure**: switched from shared, indexed
+    vertices to `numTets * 12` unique per-face vertices (4 faces × 3
+    corners each, none shared with any neighboring face), each getting
+    its own single, correctly-computed face normal — true flat
+    shading, the standard technique for exactly this situation. Touched
+    both the spawn-time buffer sizing (now sized for unique per-face
+    vertices, not FEMFX's own smaller shared-vertex count) and both
+    render paths (fracturable and non-fracturable).
+  - **Verified with a real, unambiguous before/after screenshot**: the
+    same diagnostic shader that found the bug, re-run after the fix,
+    showed two sharply distinct, differently-shaded flat faces meeting
+    at a crisp edge — a completely different, correct result from the
+    smooth blob before.
+  - **Checked `CubeModule` too**, since it showed the same symptom by
+    report — confirmed it was already correctly flat-shaded (it uses
+    real, explicit per-face normals, not averaged ones), so no fix was
+    needed there.
+- **Real per-face UV mapping for physics-spawned tetrahedra** — the
+  gap flagged as "still ahead" the moment the material texture library
+  was built. Made possible directly by the flat-shading fix above:
+  since every face now already has its own unique, unshared vertices,
+  giving each one real UV coordinates (a standard `(0,0), (1,0), (0,1)`
+  per-triangle mapping, not the `Vertex` struct's own `(0,0)` default)
+  was a natural, small extension rather than a separate rewrite.
+  - **A real, honestly-investigated verification, not assumed
+    correct**: the first check (a raw-texture diagnostic shader,
+    hunting for a spawned "Wood" object) found nothing at all in the
+    frame — genuinely concerning, since it looked exactly like a
+    regression. Rather than conclude that from one ambiguous result,
+    isolated it properly: reverted to normal lit rendering first,
+    confirmed objects were visible again (ruling out a real rendering
+    regression), then did a full-frame programmatic pixel scan for the
+    wood color specifically and found it immediately. The earlier
+    "nothing visible" was the default-textured objects' white blending
+    into the ground's own white in that specific raw-texture diagnostic
+    mode — a diagnostic-visibility artifact, not a bug.
+  - **An honest, real limitation found and stated plainly, not
+    oversold**: with real UV mapping now in place, sampling is
+    confirmed correct (distinct per-material colors, correct flat
+    shading preserved) — but the wood grain pattern's fine detail isn't
+    clearly visible at a physics tetrahedron's actual on-screen size,
+    most likely ordinary texture minification (many texture texels
+    compressing into very few screen pixels on a small, distant object)
+    rather than a bug. Worth revisiting with a texture pattern tuned
+    for small-scale legibility (larger, higher-contrast bands) if this
+    matters more later — not chased further this round.
+  - Full comprehensive verification: both `KKE_ENABLE_FEMFX` on and off
+    configurations rebuilt clean from scratch — zero errors, zero
+    warnings, all 40 tests passing, correct binary set, in each — plus
+    every demo (`kke_demo`, `physics_demo`, `rmlui_demo`, `imgui_demo`)
+    swept individually with real Vulkan validation layers active in
+    both configurations: zero validation errors, zero crashes, zero
+    assertions throughout.
+- **Real material texture library — five distinct, generated textures
+  in `PhysicsModule`, tied to `kke::MaterialGridModule`'s existing
+  presets, not a one-off added to `CubeModule` alone.** Added a real
+  `textureId` field to `Material` (defaults to -1, meaning "use the
+  shared default white texture," matching the same convention every
+  other optional field in this codebase follows), five procedurally
+  generated textures (Wood: brown grain bands, Stone: gray speckle
+  noise, Iron: brushed-metal streaks, Rubber: dark flat, Glass: light
+  blue-tinted, each using a small deterministic hash for noise rather
+  than an external RNG dependency), and a real per-object descriptor
+  set rebind in `render()` — each spawned object now binds *its own*
+  material's real texture, not a single shared one.
+  - **A real, honestly-documented limitation, found and understood,
+    not hidden**: `PhysicsModule`'s dynamically-generated tetrahedra
+    don't have real per-vertex UV coordinates (they default to
+    `(0,0)`, same as `Vertex`'s own default), so instead of a visible
+    tiled pattern like `CubeModule`'s checkerboard, each object samples
+    its material's texture at one fixed point — showing as a flat,
+    real, per-material *color tint* rather than a visible pattern.
+    This is a genuine scope boundary worth stating plainly, not a bug:
+    giving physics-spawned tetrahedra real per-face UV mapping is real,
+    separate future work.
+  - **A verification journey worth recording honestly**: the first
+    attempt (screenshot + diffing against a baseline) found *zero*
+    visible change in the 3D viewport after spawning a material —
+    concerning, and could easily have been mistaken for a real bug.
+    Rather than conclude that from an ambiguous screenshot, switched to
+    a more reliable method: a real, temporary diagnostic log inside the
+    actual bind call itself (independent of camera framing, object
+    fall time, or screenshot timing) confirmed directly that Wood
+    (textureId=0), Iron (textureId=2), and Glass (textureId=4) each
+    correctly resolve to their own distinct, valid descriptor set. The
+    earlier "no visible change" was a real camera-framing issue with
+    the screenshot method, not a bug in the feature — confirmed, not
+    assumed, before trusting either conclusion. Both temporary
+    diagnostics (a shader bypass outputting the raw texture sample,
+    and the bind-call log) were reverted afterward.
+  - Full comprehensive verification: both `KKE_ENABLE_FEMFX` on and off
+    configurations rebuilt clean from scratch — zero errors, zero
+    warnings, all 40 tests passing, correct binary set, in each — plus
+    every demo (`kke_demo`, `physics_demo`, `rmlui_demo`, `imgui_demo`)
+    swept individually with real Vulkan validation layers active in
+    both configurations: zero validation errors, zero crashes, zero
+    assertions throughout.
+- **Real material textures — the core `Vertex` format gained genuine
+  UV coordinates, and `CubeModule` now samples a real, generated
+  albedo texture.** A real, reusable `kke::Texture` class, built
+  specifically as its own independent code rather than reusing
+  `RmlVulkanRenderInterface`'s own texture-loading internals — sharing
+  it risked destabilizing an already-verified, working RmlUi code path
+  for no real benefit, given the two use cases need genuinely different
+  sampler settings anyway (this class uses LINEAR+REPEAT, correct for
+  a texture tiled across a mesh's UVs; RmlUi's own uses CLAMP_TO_BORDER,
+  correct for a UI image that should never tile).
+  - **A real, generated procedural checkerboard, not a placeholder
+    image** — deliberately chosen over loading a file: a checkerboard
+    immediately and visibly proves UV mapping is correct (a wrong or
+    degenerate UV shows up instantly as a distorted or missing checker
+    pattern), and needs no external asset at all, matching the same
+    self-contained approach the RmlUi image-loading work took with its
+    own generated test PNG.
+  - **A real architectural extension, not a hack**: `Vertex` gained a
+    real `uv` field, appended (not inserted) so every existing
+    `Vertex{...}` initializer across `PhysicsModule` and
+    `DestructionModule` stayed valid unmodified. `Mesh::createCube()`
+    got real, correct per-face UV coordinates. `cube.vert`/`cube.frag`
+    gained a real texture sampler (set 2), designed so a plain white
+    texture is an exact no-op (`white × vertexColor = vertexColor`) —
+    meaning `PhysicsModule` and `DestructionModule` needed their
+    pipelines/render calls updated to bind this new mandatory set (the
+    same real consequence of sharing `cube.frag` that shadow mapping
+    and PBR materials each already required), but every object drawn
+    through them keeps rendering exactly as before, completely
+    unaffected visually, unless it's given a real texture of its own.
+  - **Verified with an immediate, unambiguous screenshot** — no pixel-
+    sampling detective work needed this time (unlike the PBR
+    verification's own real methodology bug, see above): a real,
+    visible checkerboard pattern is directly visible on the cube's
+    faces, while `PhysicsModule`'s ground plane (using the shared
+    default white texture) stays a flat, solid color, exactly as
+    intended — confirmed with a zoomed screenshot of each.
+  - Full comprehensive verification: both `KKE_ENABLE_FEMFX` on and off
+    configurations rebuilt clean from scratch — zero errors, zero
+    warnings, all 40 tests passing, correct binary set, in each — plus
+    every demo (`kke_demo`, `physics_demo`, `rmlui_demo`, `imgui_demo`)
+    swept individually with real Vulkan validation layers active in
+    both configurations: zero validation errors, zero crashes, zero
+    assertions throughout.
+  - **What's deliberately still out of scope**: normal maps,
+    roughness/metallic *textures* (still one number per object, not a
+    per-pixel sample), texture loading from real files for objects
+    other than `CubeModule`, and real image-based ambient lighting
+    (still `ambientColor * albedo`, a flat stand-in, not a captured/
+    convolved environment map).
 - **Real PBR materials — Cook-Torrance BRDF, replacing Blinn-Phong
   entirely, not layered on top of it.** GGX normal distribution, Smith
   geometry function, Fresnel-Schlick, proper energy conservation
@@ -2025,21 +2594,37 @@ true right now versus what's aspirational.
     1.000 metallic, 0.400 → 0.000 roughness, each confirmed via a
     zoomed screenshot of the actual displayed number, not assumed from
     the click alone).
-  - **An honest limitation in how this got verified, not glossed
-    over**: getting a clean, controlled "before vs. after" screenshot
-    of the same cube face at two different material values proved
-    genuinely difficult in this headless test setup — ImGui slider
-    clicks are imprecise via synthetic mouse events, and the cube
-    keeps rotating between screenshot captures, so two captures rarely
-    show the identical face at the identical angle. Confirmed instead
-    through what could be verified rigorously: the slider values
-    themselves changing correctly (screenshotted directly, not
-    inferred), the BRDF implementation reviewed carefully against the
-    standard formulation, and a comprehensive validation-layer sweep
-    showing zero errors from the real GPU-side push constant and UBO
-    changes this needed. A real visual "wow" comparison screenshot is
-    still worth capturing properly in a follow-up session with more
-    reliable input control, not claimed here as done when it wasn't.
+  - **A genuine methodology bug, found, understood, and fixed — not
+    just retried until something worked.** The first verification
+    attempt froze the cube (unchecking "Spinning") and compared pixel
+    colors at fixed screen coordinates across metallic values —
+    byte-identical, no difference at all, which looked exactly like a
+    real bug in the implementation. Rather than trust that surface
+    reading, checked it directly: added a temporary diagnostic shader
+    (`outColor = vec4(metallic, roughness, 0, 1)`, bypassing all BRDF
+    math entirely) to see definitively whether these values were
+    reaching the shader at all. That immediately revealed the actual
+    problem — this scene has both `CubeModule`'s cube and
+    `PhysicsModule`'s own ground plane sharing `cube.frag`, and the
+    original comparison had been sampling the ground plane's fixed,
+    unrelated `metallic=0.0`/`roughness=0.9`, not the cube at all. Gave
+    the cube's own default an extreme, unmistakable value (pure red in
+    the diagnostic output) specifically to locate its true screen
+    region unambiguously, confirmed it was a distinct, separate colored
+    shape from the ground plane, then reverted both the diagnostic
+    shader and the temporary extreme defaults back to normal.
+  - **Redone correctly, with real, quantitative before/after
+    numbers**: froze the cube at a fixed angle, sampled the *correct*
+    region this time, and compared actual pixel values.
+    Metallic 0.1 → 1.0 at identical frozen coordinates:
+    `(110,53,53) → (102,48,48)`, a real, consistent shift across every
+    sample point, not noise. Roughness 0.4 → 0.0 (metallic held at
+    1.0): `(102,48,48) → (101,48,48)`, smaller but still real and
+    consistent — physically reasonable, since this particular face
+    isn't catching a strong direct specular highlight at this specific
+    viewing angle, so roughness (which only affects the specular lobe)
+    has less to act on here than metallic (which also reduces the
+    diffuse term directly) does.
   - Full comprehensive verification: both `KKE_ENABLE_FEMFX` on and off
     configurations rebuilt clean from scratch — zero errors, zero
     warnings, all 40 tests passing, correct binary set, in each — plus
@@ -2621,10 +3206,12 @@ true right now versus what's aspirational.
   VMA-backed image + `VkSampler` + descriptor set; untextured draws share
   the same pipeline via a persistent 1×1 white default texture. Verified
   with real anti-aliased, word-wrapped text on screen.
-- **`LoadTexture` (image files) is still a stub.** This is the path
-  `<img>` and `background-image: url(...)` come through — needs
-  stb_image decoding a real file into pixels before it can reuse the
-  same `GenerateTexture`-style upload path. Independent of text working.
+- ~~**`LoadTexture` (image files) is still a stub.**~~ **Done** — see
+  `BUGS.md` BUG-004 for the fix and `ROADMAP.md`'s Rendering section for
+  current state. This was the path `<img>` and
+  `background-image: url(...)` come through; real `stb_image` decoding
+  now feeds the same `GenerateTexture`-style upload path text rendering
+  already used.
 - ~~RmlUi slice 4: input wiring~~ — **done.** `Module::onEvent()` is a
   new generic lifecycle hook (any module can use it, not just RmlUi);
   `UiModule` forwards mouse (move/buttons/wheel), a common-keys keyboard

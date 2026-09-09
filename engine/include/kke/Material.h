@@ -56,6 +56,19 @@ struct Material {
     // presets with no extra plumbing.
     float metallic = 0.0f;  // 0 = dielectric (wood, stone, plastic), 1 = metal
     float roughness = 0.7f; // 0 = mirror-smooth, 1 = fully matte
+
+    // Which pre-generated procedural texture (see
+    // kke::PhysicsModule's own material texture library) this
+    // material's surface should use — an index, not the texture
+    // itself: Material stays a plain, physics-and-visuals-only data
+    // struct with no Vulkan/GPU concept in it at all, matching how
+    // it's used from ordinary code (spawnTetMesh() etc.) that
+    // shouldn't need to know or care about descriptor sets. -1 means
+    // "no specific texture" — the object renders with the shared
+    // default white texture (a flat color, exactly the look every
+    // Material had before this field existed), same as any object
+    // whose material doesn't set this explicitly.
+    int textureId = -1;
 };
 
 } // namespace kke

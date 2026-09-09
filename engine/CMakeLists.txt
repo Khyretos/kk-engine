@@ -15,6 +15,7 @@ set(ENGINE_SOURCES
     src/TetMeshAsset.cpp
     src/LightingBuffer.cpp
     src/ShadowMap.cpp
+    src/Texture.cpp
     src/MarketplaceIndex.cpp
     src/RmlTextSafety.cpp
     src/Log.cpp
@@ -51,6 +52,7 @@ set(ENGINE_HEADERS
     include/kke/TetMeshAsset.h
     include/kke/LightingBuffer.h
     include/kke/ShadowMap.h
+    include/kke/Texture.h
     include/kke/MarketplaceIndex.h
     include/kke/RmlTextSafety.h
     include/kke/Log.h

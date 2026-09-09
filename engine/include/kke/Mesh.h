@@ -17,9 +17,19 @@ struct Vertex {
     glm::vec3 position;
     glm::vec3 color;
     glm::vec3 normal;
+    // Appended, not inserted -- keeps every existing struct-initializer
+    // call site (PhysicsModule, DestructionModule) valid without
+    // needing every one updated just to add this field. Defaults to
+    // (0,0) via each Vertex's own default member initializer below,
+    // meaning code that doesn't set it explicitly gets a harmless,
+    // well-defined UV rather than uninitialized memory -- correct for
+    // objects sampling a flat, single-color material texture (see
+    // kke::Application's own default white texture), where the exact
+    // UV value genuinely doesn't matter.
+    glm::vec2 uv{0.0f, 0.0f};
 
     static VkVertexInputBindingDescription bindingDescription();
-    static std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions();
+    static std::array<VkVertexInputAttributeDescription, 4> attributeDescriptions();
 };
 
 // A GPU-resident mesh: vertex + index buffer, ready to bind and draw.

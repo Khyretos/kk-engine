@@ -11,8 +11,8 @@ VkVertexInputBindingDescription Vertex::bindingDescription() {
     return desc;
 }
 
-std::array<VkVertexInputAttributeDescription, 3> Vertex::attributeDescriptions() {
-    std::array<VkVertexInputAttributeDescription, 3> attrs{};
+std::array<VkVertexInputAttributeDescription, 4> Vertex::attributeDescriptions() {
+    std::array<VkVertexInputAttributeDescription, 4> attrs{};
     attrs[0].binding = 0;
     attrs[0].location = 0;
     attrs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
@@ -27,6 +27,11 @@ std::array<VkVertexInputAttributeDescription, 3> Vertex::attributeDescriptions()
     attrs[2].location = 2;
     attrs[2].format = VK_FORMAT_R32G32B32_SFLOAT;
     attrs[2].offset = offsetof(Vertex, normal);
+
+    attrs[3].binding = 0;
+    attrs[3].location = 3;
+    attrs[3].format = VK_FORMAT_R32G32_SFLOAT;
+    attrs[3].offset = offsetof(Vertex, uv);
 
     return attrs;
 }
@@ -76,23 +81,23 @@ Mesh Mesh::createCube(VulkanDevice& device) {
 
     std::vector<Vertex> vertices = {
         // +Z (front) - red
-        {{-0.5f, -0.5f,  0.5f}, red, nPosZ}, {{0.5f, -0.5f,  0.5f}, red, nPosZ},
-        {{ 0.5f,  0.5f,  0.5f}, red, nPosZ}, {{-0.5f, 0.5f,  0.5f}, red, nPosZ},
+        {{-0.5f, -0.5f,  0.5f}, red, nPosZ, {0.0f, 0.0f}}, {{0.5f, -0.5f,  0.5f}, red, nPosZ, {1.0f, 0.0f}},
+        {{ 0.5f,  0.5f,  0.5f}, red, nPosZ, {1.0f, 1.0f}}, {{-0.5f, 0.5f,  0.5f}, red, nPosZ, {0.0f, 1.0f}},
         // -Z (back) - green
-        {{ 0.5f, -0.5f, -0.5f}, green, nNegZ}, {{-0.5f, -0.5f, -0.5f}, green, nNegZ},
-        {{-0.5f,  0.5f, -0.5f}, green, nNegZ}, {{ 0.5f,  0.5f, -0.5f}, green, nNegZ},
+        {{ 0.5f, -0.5f, -0.5f}, green, nNegZ, {0.0f, 0.0f}}, {{-0.5f, -0.5f, -0.5f}, green, nNegZ, {1.0f, 0.0f}},
+        {{-0.5f,  0.5f, -0.5f}, green, nNegZ, {1.0f, 1.0f}}, {{ 0.5f,  0.5f, -0.5f}, green, nNegZ, {0.0f, 1.0f}},
         // +X (right) - blue
-        {{0.5f, -0.5f,  0.5f}, blue, nPosX}, {{0.5f, -0.5f, -0.5f}, blue, nPosX},
-        {{0.5f,  0.5f, -0.5f}, blue, nPosX}, {{0.5f,  0.5f,  0.5f}, blue, nPosX},
+        {{0.5f, -0.5f,  0.5f}, blue, nPosX, {0.0f, 0.0f}}, {{0.5f, -0.5f, -0.5f}, blue, nPosX, {1.0f, 0.0f}},
+        {{0.5f,  0.5f, -0.5f}, blue, nPosX, {1.0f, 1.0f}}, {{0.5f,  0.5f,  0.5f}, blue, nPosX, {0.0f, 1.0f}},
         // -X (left) - yellow
-        {{-0.5f, -0.5f, -0.5f}, yellow, nNegX}, {{-0.5f, -0.5f,  0.5f}, yellow, nNegX},
-        {{-0.5f,  0.5f,  0.5f}, yellow, nNegX}, {{-0.5f,  0.5f, -0.5f}, yellow, nNegX},
+        {{-0.5f, -0.5f, -0.5f}, yellow, nNegX, {0.0f, 0.0f}}, {{-0.5f, -0.5f,  0.5f}, yellow, nNegX, {1.0f, 0.0f}},
+        {{-0.5f,  0.5f,  0.5f}, yellow, nNegX, {1.0f, 1.0f}}, {{-0.5f,  0.5f, -0.5f}, yellow, nNegX, {0.0f, 1.0f}},
         // +Y (top) - cyan
-        {{-0.5f, 0.5f,  0.5f}, cyan, nPosY}, {{0.5f, 0.5f,  0.5f}, cyan, nPosY},
-        {{ 0.5f, 0.5f, -0.5f}, cyan, nPosY}, {{-0.5f, 0.5f, -0.5f}, cyan, nPosY},
+        {{-0.5f, 0.5f,  0.5f}, cyan, nPosY, {0.0f, 0.0f}}, {{0.5f, 0.5f,  0.5f}, cyan, nPosY, {1.0f, 0.0f}},
+        {{ 0.5f, 0.5f, -0.5f}, cyan, nPosY, {1.0f, 1.0f}}, {{-0.5f, 0.5f, -0.5f}, cyan, nPosY, {0.0f, 1.0f}},
         // -Y (bottom) - magenta
-        {{-0.5f, -0.5f, -0.5f}, magenta, nNegY}, {{0.5f, -0.5f, -0.5f}, magenta, nNegY},
-        {{ 0.5f, -0.5f,  0.5f}, magenta, nNegY}, {{-0.5f, -0.5f,  0.5f}, magenta, nNegY},
+        {{-0.5f, -0.5f, -0.5f}, magenta, nNegY, {0.0f, 0.0f}}, {{0.5f, -0.5f, -0.5f}, magenta, nNegY, {1.0f, 0.0f}},
+        {{ 0.5f, -0.5f,  0.5f}, magenta, nNegY, {1.0f, 1.0f}}, {{-0.5f, -0.5f,  0.5f}, magenta, nNegY, {0.0f, 1.0f}},
     };
 
     std::vector<uint32_t> indices;

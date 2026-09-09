@@ -2,9 +2,11 @@
 #include "kke/modules/UiModule.h"
 #include "kke/RmlTextSafety.h"
 #include "kke/Application.h"
+#include "kke/Log.h"
 
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/ElementDocument.h>
+#include <RmlUi/Core/Element.h>
 
 #include <iostream>
 #include <sstream>
@@ -33,7 +35,18 @@ std::string MarketplaceUiModule::buildDocumentRml() const {
         // though its background is fully transparent. Found this by
         // instrumenting Context::GetHoverElement() and seeing it resolve
         // to "body"/"#root" everywhere on screen, not by guessing.
-        << R"(<div style="display:block; position:absolute; left:820px; top:140px; width:420px; background-color:#1a1d2e; padding:16px;">)"
+        //
+        // left/top as percentages, not pixels -- a real, reported bug
+        // this fixes: fixed-pixel positioning kept this panel at the
+        // same absolute screen position regardless of actual window
+        // size, pushing it partly or entirely off-screen at any
+        // resolution other than the 1600x900 this was designed
+        // against (confirmed by actually resizing the window and
+        // screenshotting the result). 51.25%/15.56% is exactly
+        // 820px/140px against that same 1600x900 reference design,
+        // just expressed so RmlUi resolves it against whatever the
+        // window's own current size actually is.
+        << R"(<div style="display:block; position:absolute; left:51.25%; top:15.56%; width:420px; background-color:#1a1d2e; padding:16px; pointer-events:auto;">)"
         // Confirmed and fixed: display:block was missing from every <p>
         // and <div> below. RmlUi has no built-in "p/div default to
         // block" rule the way a browser does — that behavior in
@@ -44,7 +57,7 @@ std::string MarketplaceUiModule::buildDocumentRml() const {
         // why titles/ids/descriptions/tags all ran together on one
         // line instead of stacking. Same root cause, same fix, as the
         // rmlui_demo tabset layout bug found earlier this session.
-        << R"(<p style="display:block; font-size:22px; color:#ffffff;">Marketplace (# )" << m_index.count() << R"( games)</p>)";
+        << R"(<p class="draggable-handle" style="display:block; font-size:22px; color:#ffffff; pointer-events:auto; font-family:Noto Sans;">Marketplace (# )" << m_index.count() << R"( games)</p>)";
 
     for (const auto& game : m_index.games()) {
         // Every field below came from someone else's game.json, not this
@@ -63,13 +76,13 @@ std::string MarketplaceUiModule::buildDocumentRml() const {
         }
 
         rml << R"(<div style="display:block; margin-top:12px; padding:10px; background-color:#2a2f4a;">)"
-            << R"(<p style="display:block; font-size:18px; color:#ffffff;">)" << title << "</p>"
-            << R"(<p style="display:block; font-size:13px; color:#9aa0c0;">)" << id << "</p>";
+            << R"(<p style="display:block; font-size:18px; color:#ffffff; font-family:Noto Sans;">)" << title << "</p>"
+            << R"(<p style="display:block; font-size:13px; color:#9aa0c0; font-family:Noto Sans;">)" << id << "</p>";
         if (!description.empty()) {
-            rml << R"(<p style="display:block; font-size:14px; color:#c8ccdc; margin-top:6px;">)" << description << "</p>";
+            rml << R"(<p style="display:block; font-size:14px; color:#c8ccdc; margin-top:6px; font-family:Noto Sans;">)" << description << "</p>";
         }
         if (!tags.empty()) {
-            rml << R"(<p style="display:block; font-size:12px; color:#7fd8a0; margin-top:6px;">)" << tags << "</p>";
+            rml << R"(<p style="display:block; font-size:12px; color:#7fd8a0; margin-top:6px; font-family:Noto Sans;">)" << tags << "</p>";
         }
         rml << "</div>";
     }

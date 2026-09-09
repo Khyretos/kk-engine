@@ -5,6 +5,7 @@
 #include "kke/Pipeline.h"
 #include "kke/Mesh.h"
 #include "kke/Buffer.h"
+#include "kke/Texture.h"
 #include "kke/TetMeshAsset.h"
 
 #include <glm/glm.hpp>
@@ -152,6 +153,7 @@ public:
     void init(Application& app) override;
     void fixedUpdate(const FixedUpdateContext& ctx) override;
     void render(const RenderContext& ctx) override;
+    void renderShadow(const ShadowRenderContext& ctx) override;
     void renderUi() override;
     void shutdown() override;
 
@@ -228,6 +230,22 @@ public:
     Material& selectedMaterial() { return m_selectedMaterial; }
 
 private:
+    // A real, general box-mesh generator — the same 8-corner, 6-tet
+    // diagonal decomposition already proven for the single-cell cube
+    // and the 2x2x2 "Spawn fracturable cube" grid, generalized to any
+    // cell count and any physical dimensions per axis. What makes the
+    // new scene-specific shapes (a thin glass sheet, an elongated
+    // brick, a car-like block, a wall) all possible from one function
+    // instead of four separately hand-written ones: a thin sheet is
+    // just this with a small Y cell count and a small sizeY; a brick
+    // is this with roughly 2:1:1 proportions; a wall is this scaled
+    // wide and tall but thin. cellsX/Y/Z are the *tet* resolution
+    // (more cells = more possible fracture pieces, at real simulation
+    // cost — see the "Spawn fracturable cube" button's own comment on
+    // why cell count matters for how convincing fracture looks), while
+    // sizeX/Y/Z are the actual physical dimensions in world units.
+    static TetMeshData buildGridBox(int cellsX, int cellsY, int cellsZ, float sizeX, float sizeY, float sizeZ);
+
     // Shared implementation behind both spawnTetMesh() (enableFracture
     // always false) and spawnFracturableTetMesh() (always true) — see
     // that method's own header comment for why fracture support needed
@@ -307,6 +325,22 @@ private:
     static constexpr uint32_t kMaxObjects = 64;
 
     AMD::FmScene* m_scene = nullptr;
+
+    // A small material texture library — five real, distinct
+    // procedurally-generated textures, one per kke::MaterialGridModule
+    // preset (Wood/Stone/Iron/Rubber/Glass, matching their own
+    // material.textureId — see Material.h's own comment on that
+    // field). Each object binds the texture its own spawning
+    // Material points to (see render()); an object whose material
+    // doesn't set textureId falls back to the shared default white
+    // texture, same as before this feature existed.
+    struct MaterialTexture {
+        std::unique_ptr<Texture> texture;
+        VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+    };
+    std::vector<MaterialTexture> m_materialTextures;
+    VkDescriptorPool m_materialTexturePool = VK_NULL_HANDLE;
+    VkDevice m_vkDevice = VK_NULL_HANDLE; // stashed for shutdown(), which takes no Application& — see CubeModule's own identical comment
     Material m_selectedMaterial; // see selectedMaterial()'s own doc comment above
     float m_renderScale; // see the constructor's doc comment
     int m_initialObjectCount; // see the constructor's doc comment
@@ -328,6 +362,13 @@ private:
     // on SpawnedTet above, since different spawned objects can
     // genuinely have different vertex/tet counts.
     std::unique_ptr<Pipeline> m_pipeline;
+    // Real shadow casting for spawned objects — the ground plane is
+    // deliberately excluded (see renderShadow()'s own comment): it's
+    // a receiver, not a caster, and casting its own shadow onto itself
+    // would be meaningless. Same minimal shadow.vert/frag pipeline
+    // pattern already proven in CubeModule, just a second, independent
+    // instance of it here.
+    std::unique_ptr<Pipeline> m_shadowPipeline;
     std::unique_ptr<Mesh> m_groundMesh;
 
     // renderUi() state — a spawn button needs *something* to vary
