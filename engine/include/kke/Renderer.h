@@ -60,8 +60,15 @@ public:
     // frame has fully round-tripped.
     float lastGpuFrameTimeMs() const { return m_lastGpuFrameTimeMs; }
 
-private:
+    // Frames the CPU may be ahead of the GPU. Anything a module writes
+    // from the CPU every frame (a dynamic vertex buffer, say) needs this
+    // many copies, indexed by currentFrameIndex(): by the time
+    // beginFrame() returns, the GPU is guaranteed done with that index's
+    // previous use, but not with the other one.
     static constexpr int kMaxFramesInFlight = 2;
+    uint32_t currentFrameIndex() const { return m_currentFrame; }
+
+private:
 
     void createSyncObjects();
     void createCommandBuffers();

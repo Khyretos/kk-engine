@@ -64,6 +64,9 @@ struct RenderContext {
     // descriptor set; a module with a real texture of its own (see
     // CubeModule) binds that instead, ignoring this field entirely.
     VkDescriptorSet defaultMaterialTextureDescriptorSet = VK_NULL_HANDLE;
+    // Which of Renderer::kMaxFramesInFlight slots this frame uses — see
+    // Renderer::currentFrameIndex() for when per-frame copies are needed.
+    uint32_t frameIndex = 0;
 };
 
 // Passed to Module::renderShadow() — a real, separate, depth-only pass
@@ -79,6 +82,7 @@ struct ShadowRenderContext {
     VkCommandBuffer cmd;
     VkRenderPass renderPass;
     glm::mat4 lightViewProj;
+    uint32_t frameIndex = 0; // same as RenderContext::frameIndex
 };
 
 // A dependency one module declares on another, by concrete type. Declaring

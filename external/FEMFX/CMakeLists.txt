@@ -81,6 +81,16 @@ target_compile_options(femfx PRIVATE
     #     one consistent, modern GCC ABI throughout, so the historical
     #     note has no bearing here.
     -Wno-delete-incomplete -Wno-psabi
+    # Always optimized, even in a Debug build of everything else. The
+    # project's default build type is Debug (validation layers, easy
+    # stepping through engine code), and CMake's Debug flags are just
+    # `-g` — i.e. -O0. FEMFX is dense SIMD math; at -O0 every intrinsic
+    # becomes a function call plus stack spills, and a single glass sheet
+    # shattering measured 200-400 ms per physics step in physics_demo's
+    # scripted benchmark (see PERFORMANCE_NOTES.md). Nobody steps through
+    # FEMFX's solver internals day to day, so there's no reason to pay
+    # that. Release/RelWithDebInfo already carry their own -O flags.
+    $<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>
 )
 
 set_target_properties(femfx PROPERTIES

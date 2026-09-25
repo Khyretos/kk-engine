@@ -29,6 +29,7 @@ limitations. 🔴 Not started / stub.
 | Frame loop, fixed timestep | 🟢 | Real accumulator-based fixed update separate from variable render rate. |
 | Cross-module communication | 🟢 | `Application::getModule<T>()`, documented capability-discovery pattern (`findCapability<T>()`) for loose coupling — see README "Cross-module communication." |
 | Logging | 🟢 | spdlog-based, async, per-module named loggers. |
+| Fixed-step overload behavior | 🟢 | At most `setMaxFixedStepsPerFrame()` (default 2) catch-up ticks per frame; an overloaded simulation runs in slow motion instead of freezing the app — see `BUGS.md` BUG-030. |
 | Debug pause/step | 🟢 | Real: freezes `fixedUpdate`/physics while still rendering, `Step one frame` for single-tick advance. |
 | Build system, both `KKE_ENABLE_FEMFX` on/off | 🟢 | Both configurations verified to build clean and run clean every session this file's history covers. |
 | Test suite | 🟢 | 40 GoogleTest unit tests, 85% coverage floor enforced for pure-logic code (`GameManifest`, `MarketplaceIndex`, `RmlTextSafety`). GPU/Vulkan code is verified by build-and-run instead (see README "Test suite & coverage" for why the split). |
@@ -69,14 +70,14 @@ limitations. 🔴 Not started / stub.
 | System | Status | Notes |
 |---|---|---|
 | Tetrahedral deformable-body simulation | 🟢 | Real FEMFX integration, not a stub — see README "Physics: AMD FEMFX integration." |
-| Real fracture | 🟢 | Verified with real, measured piece counts across many real drops — see `BUGS.md` BUG-007 for the shape-resolution fix that made this visually convincing. |
+| Real fracture | 🟢 | Verified with real, measured piece counts across many real drops — see `BUGS.md` BUG-007 for the shape-resolution fix that made this visually convincing. Fractured pieces now all actually render (they mostly didn't — BUG-026). |
 | Real plasticity | 🟢 | Verified via real vertex-distance measurement (not FEMFX's own rest-position API, which doesn't track this — see `BUGS.md` BUG-003). |
 | Material toughness tuning | 🟢 | Real, measured stress ranges per material, not a guessed formula — see `BUGS.md` BUG-020 for the full account, including the wrong approach that preceded it. |
-| Scene-scale robustness (many objects) | 🟢 | Verified up to ~57 simultaneous objects without falling through the ground — see `BUGS.md` BUG-005. |
+| Scene-scale robustness (many objects) | 🟢 | Verified up to ~57 simultaneous objects without falling through the ground — see `BUGS.md` BUG-005. Scene capacities are now sized for fracture pieces too (4096 pieces), and any FEMFX limit that is hit gets logged — see BUG-027. |
 | General box-shape generator | 🟢 | `PhysicsModule::buildGridBox(cellsX, cellsY, cellsZ, sizeX, sizeY, sizeZ)` — arbitrary per-axis cell counts and physical dimensions, used by every scene below. |
 | Purpose-built physics scenes | 🟢 | Five real scenes, each independently verified: **Glass Sheet** (shatters into ~13-58 real pieces depending on threshold tuning at time of test), **Brick** (real 2:1:1 proportions, breaks into chunks), **Rubber Ball** (honest approximation — a box, not a true tetrahedralized sphere, see its own in-code comment; bounces without fracturing), **Car Crash** (two real objects: a plastic-deforming "car" and a fracturable "wall"), **Lava Melt** (honest approximation — real plasticity under sustained real weight, not true phase-change physics; FEMFX has none). |
 | Real sphere / curved-shape tetrahedralization | 🔴 | Not started — would need real mesh-import machinery (see Content pipeline's own CGAL section) beyond the box generator. |
-| Performance at scale on real hardware | 🔴 | User-reported and confirmed as a real, serious problem, not just a test-sandbox artifact: single-digit FPS spawning a handful of fracture fragments, CPU-bound (~69%+), no GPU offload for the physics itself. Real, honest context found while investigating: this sandbox has exactly 1 CPU core (confirmed via `nproc`), which alone explains a large part of it — but the *architecture* also has real, unaddressed gaps (no active-body budget, no GPU-particle handoff for settled/small debris, no buffer pooling for fragments, no sleep state) found by studying RayFire and Chaos's own real optimization patterns — see `PERFORMANCE_NOTES.md` for the full, real research and a concrete, prioritized action list. None of it implemented yet. |
+| Performance at scale | 🟡 | Much better, measured, not yet checked on real hardware. Sleeping works (settled piles cost ~0.2 ms/step), FEMFX always optimized, only exterior faces drawn, catch-up capped at 2 ticks/frame. Min-spec emulation (1 core): 0.6 → 11.0 FPS average over the scripted benchmark, with 6x more fracture pieces than before (the old build was silently capping fracture). Remaining gap: while a big break is still flying, cost scales with awake piece count (~55 ms/step for ~475 pieces on 1 core) — no debris budget yet. See `PERFORMANCE_NOTES.md` "Status" and `HARDWARE_TESTS.md` HW-001..HW-004. |
 | Network authority / reconciliation | 🔴 | Not started — see Networking section. |
 
 ## UI (RmlUi + ImGui)
@@ -126,10 +127,12 @@ limitations. 🔴 Not started / stub.
 | Headless verification workflow (Xvfb + lavapipe) | 🟢 | This is how every visual claim in this project's whole history has actually been checked — screenshot or log-inspect, never "should work." See README "Build" and `AI_GUIDE.md`. |
 | `BUGS.md` (this pair, bug side) | 🟢 | Just established this session. |
 | `ROADMAP.md` (this file) | 🟢 | Just established this session. |
+| Scripted physics benchmark (`KKE_PHYSICS_BENCH`) | 🟢 | Same scenes at the same simulation ticks on every machine, one comparable `BENCH RESULT:` line. `KKE_PHYSICS_THREADS` overrides the worker count; the pool respects CPU affinity, so `taskset -c 0` really is 1 thread. |
+| `HARDWARE_TESTS.md` | 🟢 | Checklist of everything only real hardware can answer, with what to send back. |
 
 ---
 
-## How these four files relate
+## How these files relate
 
 - **`AI_GUIDE.md`** — process rules or an AI/human picking up this repo
   needs to follow (verify before claiming, read real source over
@@ -141,9 +144,12 @@ limitations. 🔴 Not started / stub.
   in the same session.
 - **`PERFORMANCE_NOTES.md`** — real, researched architecture notes on
   how production destruction systems (RayFire, Chaos) actually solve
-  the performance problems KKE is now hitting for real. Not a changelog
-  — a plan, with a concrete, prioritized action list, none of it
-  implemented yet as of this file's own last update.
+  the performance problems KKE is hitting, plus a "Status" section at
+  the top with measured before/after numbers and the current next steps.
+- **`HARDWARE_TESTS.md`** — what needs a real machine to check (a real
+  GPU, many cores, the min-spec emulation, how it looks and feels), with
+  exact commands and what to send back. The AI side does the code and
+  sandbox measurements; this is the human side's list.
 - **`README.md`**'s own "Immediate next slices" — the fuller narrative
   of *how* and *why*, kept for depth/reasoning. Not a replacement for
   the files above, which exist specifically so that depth doesn't

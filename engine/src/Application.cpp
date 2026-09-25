@@ -338,9 +338,12 @@ void Application::run() {
             // — otherwise a long stall (asset load, breakpoint) causes a
             // burst of catch-up fixed ticks that then takes even longer,
             // stalling further: the classic "spiral of death."
-            accumulator = std::min(accumulator + dt, m_fixedDt * 8.0f);
+            // See setMaxFixedStepsPerFrame() for why this cap is small.
+            accumulator = std::min(accumulator + dt, m_fixedDt * static_cast<float>(m_maxFixedStepsPerFrame));
 
+            m_fixedStepsLastFrame = 0;
             while (accumulator >= m_fixedDt) {
+                m_fixedStepsLastFrame++;
                 tickIndex++;
                 FixedUpdateContext fixedCtx{ m_fixedDt, tickIndex };
                 for (Module* m : m_initOrder) {
@@ -449,6 +452,7 @@ void Application::run() {
             shadowCtx.cmd = cmd;
             shadowCtx.renderPass = m_shadowMap->renderPass();
             shadowCtx.lightViewProj = lightViewProj;
+            shadowCtx.frameIndex = m_renderer->currentFrameIndex();
             m_shadowMap->beginRenderPass(cmd);
             for (Module* m : m_initOrder) {
                 safeInvoke(m, "renderShadow", [&] { m->renderShadow(shadowCtx); });
@@ -457,6 +461,7 @@ void Application::run() {
 
             m_renderer->beginRenderPass();
             renderCtx.cmd = cmd;
+            renderCtx.frameIndex = m_renderer->currentFrameIndex();
             for (Module* m : m_initOrder) {
                 safeInvoke(m, "render", [&] { m->render(renderCtx); });
             }

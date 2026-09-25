@@ -1,6 +1,10 @@
 {
   "version": 6,
-  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
   "configurePresets": [
     {
       "name": "default",
@@ -21,6 +25,16 @@
         "KKE_ENABLE_GPU_PROFILER": "ON",
         "ENGINE_ENABLE_LUA": "ON"
       }
+    },
+    {
+      "name": "everything-release",
+      "inherits": "everything",
+      "displayName": "Everything enabled, optimized",
+      "description": "Same as 'everything', but RelWithDebInfo (optimized, still has symbols) in its own build-release/ directory. Use this to judge performance -- the Debug build compiles engine code at -O0, which is fine for stepping through code but not representative of what a player would see. FEMFX itself is always optimized either way (see external/FEMFX/CMakeLists.txt).",
+      "binaryDir": "${sourceDir}/build-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
     }
   ],
   "buildPresets": [
@@ -31,21 +45,50 @@
     {
       "name": "everything",
       "configurePreset": "everything"
+    },
+    {
+      "name": "everything-release",
+      "configurePreset": "everything-release"
     }
   ],
   "workflowPresets": [
     {
       "name": "default",
       "steps": [
-        { "type": "configure", "name": "default" },
-        { "type": "build", "name": "default" }
+        {
+          "type": "configure",
+          "name": "default"
+        },
+        {
+          "type": "build",
+          "name": "default"
+        }
       ]
     },
     {
       "name": "everything",
       "steps": [
-        { "type": "configure", "name": "everything" },
-        { "type": "build", "name": "everything" }
+        {
+          "type": "configure",
+          "name": "everything"
+        },
+        {
+          "type": "build",
+          "name": "everything"
+        }
+      ]
+    },
+    {
+      "name": "everything-release",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "everything-release"
+        },
+        {
+          "type": "build",
+          "name": "everything-release"
+        }
       ]
     }
   ]

@@ -1,7 +1,7 @@
 # PERFORMANCE_NOTES.md — what RayFire and Chaos actually do, and what it means for KKE
 
-This file exists because the physics demo's performance is genuinely bad
-right now, and rather than guess at fixes, this is a real study of how two
+This file exists because the physics demo's performance was genuinely
+bad, and rather than guess at fixes, this is a real study of how two
 production destruction systems (RayFire, a mature Unity/3ds Max plugin;
 Chaos, Unreal's own in-house solver) actually keep hundreds of fracturing
 objects fast. **Nothing here is copied** — no code, no assets, no direct
@@ -11,10 +11,70 @@ stack. Sources: RayFire's own component documentation (Rigid, Connectivity,
 Debris, Dust, Shatter, Unyielding — user-provided), and Epic's public Chaos
 Destruction documentation plus their own published performance writeups.
 
+## Status — what's been done, measured (latest first)
+
+### Slice 1: stop wasting work (done)
+
+Measured with physics_demo's scripted benchmark
+(`KKE_PHYSICS_BENCH=<ticks>` — same scenes spawned at the same
+simulation ticks on every machine, one `BENCH RESULT:` line at the end;
+see HARDWARE_TESTS.md HW-001). 1200 ticks = 20 simulated seconds,
+every scene spawned at least once, Debug build, lavapipe (software)
+rendering competing for the same cores.
+
+| Run | Build | FPS avg | Physics step avg / max | Pieces at end | Peak RAM |
+|---|---|---|---|---|---|
+| **Min-spec emulation** (1 core, `taskset -c 0`) | before | 0.6 (600 ticks only) | 235 ms / 1193 ms | 76 (fracture silently capped) | 186 MB |
+| **Min-spec emulation** (1 core) | after | 11.0 | 21 ms / 104 ms | 475 | 194 MB |
+| 4 cores | before | 1.6 | 82 ms / 386 ms | 76 (fracture silently capped) | 186 MB |
+| 4 cores | after | 25.5 | 10.8 ms / 47 ms | 475 | 196 MB |
+
+Once the debris settles, the after-build's physics step for the whole
+475-piece pile is **~0.2 ms** (it was ~95 ms with the same pile before
+sleeping worked); the frame rate is then limited by software rendering,
+not physics. Min-spec claim as of now: **the full demo runs on one core
+and well under 2 GB; big fracture events run in slow motion (~10 FPS,
+~0.4x speed) while debris is flying, then recover completely.**
+
+What changed, biggest effect first (each has a BUGS.md entry with the
+evidence):
+
+1. **FEMFX sleeping actually works now** (BUG-028) — it was disabled,
+   and after enabling it the kinematic ground *rigid body* re-woke
+   every resting piece on the next step. The ground is now FEMFX's own
+   built-in floor plane. This is item 3 below, and it turned out to
+   matter more than anything else on the list.
+2. **FEMFX always compiled optimized** (BUG-029) — Debug builds ran
+   the solver at -O0.
+3. **At most 2 catch-up ticks per frame** (BUG-030) — was 8, which
+   turned one slow tick into eight per frame.
+4. **Render only exterior faces, skip sleeping objects, one buffer per
+   frame in flight** — ~10x fewer triangles, no CPU rebuild for
+   anything asleep, and fixes BUG-026 (fracture pieces invisible).
+5. **Scene capacities sized for fracture** (BUG-027), with FEMFX's own
+   limit warnings logged so an undersized limit is visible.
+
+### Next slice, in order
+
+1. **Debris budget** (item 1 below). While a big break is still flying,
+   cost scales with piece count: ~475 awake pieces cost ~55 ms/step on
+   one core. A cap on awake pieces plus retiring the smallest/oldest
+   debris (delete, or hand to ParticleModule) bounds the worst case, and
+   that worst case is what min-spec feels.
+2. **Coarser fracture by default** — a Glass Sheet (432 tets) breaks
+   into ~60 pieces; FEMFX fracture groups (`FmFractureGroupCounts`,
+   already computed at spawn) can keep chunks together, which is the
+   same idea as Chaos's clustered fracture. Fewer, bigger pieces is
+   cheaper *and* usually reads better.
+3. **Thread scaling on real hardware** (HARDWARE_TESTS.md HW-003) before
+   touching the thread pool.
+
 ## The one honest fact that has to come first
 
-**This project's own dev sandbox has exactly 1 CPU core** (confirmed via
-`nproc` while investigating this — not assumed). `PhysicsModule`'s own
+**This project's own dev sandbox had exactly 1 CPU core** when this was
+first written (confirmed via `nproc`; later sessions have had 4). The
+1-core case is now kept on purpose as the *min-spec baseline*
+(`taskset -c 0`, see HARDWARE_TESTS.md), not treated as an accident. `PhysicsModule`'s own
 thread pool sizing (`std::thread::hardware_concurrency()`) correctly
 detects this and falls back to fully synchronous execution — which is
 *correct behavior*, not a bug, but it means every FPS number measured in
@@ -164,8 +224,9 @@ a different processor** — see below.
 
 ## What this means for KKE, concretely — real, actionable next steps
 
-Roughly in order of expected impact vs. effort, **none of this done yet,
-all of it a real, separate task**:
+Roughly in order of expected impact vs. effort, as originally planned
+(item 3 is now done — see "Status" at the top for what's done and the
+current order of what's next):
 
 1. **Cap simultaneously-active FEMFX objects with an explicit budget**,
    and hand fragments beyond the cap (or fragments below a size
@@ -207,8 +268,9 @@ all of it a real, separate task**:
    keeping in mind as the engine grows scripted/repeated destruction use
    cases.
 
-None of items 1-4 have been implemented yet — this file is the research
-and plan, not a changelog of work already done. See `ROADMAP.md`'s
+Item 3 (sleep) is done, plus the render-side half of it (sleeping
+objects skip their vertex rebuild/upload) — see "Status" at the top.
+Items 1, 2, 4-7 are still open. See `ROADMAP.md`'s
 Physics section for current status and `BUGS.md` for the active,
 unresolved hollow-tetrahedron rendering investigation, which is a
 separate, correctness (not performance) issue being worked in parallel.

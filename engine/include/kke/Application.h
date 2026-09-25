@@ -206,6 +206,20 @@ public:
     // while paused. A no-op if not currently paused.
     void stepOneFrame() { if (m_paused) m_stepRequested = true; }
 
+    // The most fixedUpdate() ticks a single rendered frame may run to
+    // catch up with wall-clock time. When the simulation can't keep up
+    // (a big fracture event, a slow machine) the leftover time is
+    // dropped: the world briefly runs in slow motion, but the frame rate
+    // stays usable. The old cap was 8, which turned one expensive tick
+    // into eight per frame — measured at 0.4 FPS in physics_demo — and
+    // made the overload worse instead of absorbing it. 1 = never catch
+    // up (pure slow-motion under load); 0 is treated as 1.
+    void setMaxFixedStepsPerFrame(uint32_t steps) { m_maxFixedStepsPerFrame = steps ? steps : 1; }
+    uint32_t maxFixedStepsPerFrame() const { return m_maxFixedStepsPerFrame; }
+    // Fixed ticks actually run during the most recent frame — so a stats
+    // panel can show when the simulation is falling behind.
+    uint32_t fixedStepsLastFrame() const { return m_fixedStepsLastFrame; }
+
     // --- Per-module error isolation ---
     // See run()'s per-module try/catch: a module that throws during any
     // lifecycle call gets recorded here and is never called again for
@@ -249,6 +263,8 @@ private:
     VkDescriptorPool m_materialTextureDescriptorPool = VK_NULL_HANDLE;
     VkDescriptorSet m_defaultTextureDescriptorSet = VK_NULL_HANDLE;
     float m_fixedDt;
+    uint32_t m_maxFixedStepsPerFrame = 2;
+    uint32_t m_fixedStepsLastFrame = 0;
 
     std::vector<std::unique_ptr<Module>> m_modules;
     std::vector<Module*> m_initOrder; // m_modules reordered so dependencies come first

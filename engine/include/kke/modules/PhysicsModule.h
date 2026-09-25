@@ -7,6 +7,7 @@
 #include "kke/Buffer.h"
 #include "kke/Texture.h"
 #include "kke/TetMeshAsset.h"
+#include "kke/Renderer.h"
 
 #include <glm/glm.hpp>
 #include <memory>
@@ -217,6 +218,13 @@ public:
 
     size_t objectCount() const { return m_objects.size(); }
 
+    // The purpose-built demo scenes, callable from code rather than only
+    // from renderUi()'s buttons — the scripted benchmark below uses
+    // these, and so will any future scripting layer (Lua) that wants to
+    // set up a scene without clicking through ImGui.
+    enum class Scene { GlassSheet, Brick, RubberBall, CarCrash, LavaMelt, FracturableCube, PlasticCube };
+    void spawnScene(Scene scene);
+
     // The material a plain "Spawn tetrahedron" click uses — real,
     // settable state (mirroring how Application::lighting() already
     // works), not a per-button hardcoded value. Built specifically so
@@ -244,6 +252,19 @@ private:
     // cost — see the "Spawn fracturable cube" button's own comment on
     // why cell count matters for how convincing fracture looks), while
     // sizeX/Y/Z are the actual physical dimensions in world units.
+    // Rebuilds each awake object's exterior-face vertices and uploads
+    // them into this frame's buffer slot. Runs once per frame, from
+    // whichever of renderShadow()/render() comes first.
+    void prepareRenderData(uint32_t frameIndex);
+    uint64_t m_frameCounter = 0;       // bumped at the end of render()
+    uint64_t m_preparedFrame = ~0ull;  // m_frameCounter value prepareRenderData() last ran for
+    uint32_t m_awakeObjects = 0;       // stats, from the last prepareRenderData()
+    uint32_t m_renderedFaces = 0;
+    uint32_t m_totalPieces = 0;
+    uint32_t m_awakePieces = 0;
+    uint32_t m_lastWarningFlags = 0;
+    double m_pendingPrepMs = 0.0;      // prepareRenderData() time, folded into the frame's render-prep stat   // FEMFX FM_WARNING_FLAG_* seen in the last second, see fixedUpdate()
+
     static TetMeshData buildGridBox(int cellsX, int cellsY, int cellsZ, float sizeX, float sizeY, float sizeZ);
 
     // Shared implementation behind both spawnTetMesh() (enableFracture
@@ -270,23 +291,35 @@ private:
         AMD::FmTetMeshBuffer* tetMeshBuffer = nullptr;
         uint sceneBufferId = 0;                          // needed to remove it from the scene later
         Material material;
-        std::unique_ptr<Buffer> vertexBuffer;            // re-uploaded every frame — this object moves/deforms
-        std::unique_ptr<Buffer> indexBuffer;             // static per-object now — different objects can have different topology
+        // Render data. Only the *exterior* faces of the tet mesh are
+        // drawn — interior faces are shared by two tets and can never be
+        // seen, and they were most of the triangles (a 6x2x6 glass sheet
+        // has 432 tets = 1,728 faces, of which ~150 are on the outside).
+        // Fracture turns interior faces into new exterior ones, and
+        // FEMFX's own exterior-face list tracks that, so crack surfaces
+        // still show up. Flat-shaded, non-indexed: 3 unique vertices per
+        // face (see BUGS.md BUG-006 for why vertices aren't shared).
+        //
+        // cpuVerts is rebuilt only while some piece of the object is
+        // awake; once FEMFX puts every piece to sleep, the last build is
+        // reused as-is. One GPU buffer per frame in flight, so writing
+        // this frame's copy never races the GPU reading last frame's.
+        std::vector<Vertex> cpuVerts;
+        uint64_t cpuVersion = 0;
+        std::unique_ptr<Buffer> vertexBuffers[Renderer::kMaxFramesInFlight];
+        uint64_t gpuVersion[Renderer::kMaxFramesInFlight] = {};
+        uint32_t maxRenderVerts = 0;  // capacity of each vertexBuffers[] entry
+        bool asleep = false;          // every piece asleep as of the last prepareRenderData()
+        glm::vec3 color{1.0f};
         uint32_t numVerts = 0;
         uint32_t numTets = 0;
 
         // Real fracture support — see spawnTetMesh()'s own comment for
-        // the full account of what this needed. When true, render()
-        // takes a genuinely different, more expensive path: fracture
-        // can split one object into multiple independently-moving
-        // FmTetMesh pieces at runtime (FmGetNumTetMeshes() can grow
-        // past 1), and FEMFX's own setup docs say vertex count itself
-        // "may grow with fracture" (new vertices duplicated along
-        // fracture seams) — so a fracturable object's vertex/index
-        // buffers are sized to bounds.maxVerts/maxTets (the reserved
-        // capacity), not the object's initial spawn-time counts, and
-        // both get rebuilt from each current sub-mesh's actual
-        // topology every frame rather than uploaded once and reused.
+        // the full account of what this needed. A fracturable object can
+        // split into many independently-moving FmTetMesh pieces at
+        // runtime (FmGetNumTetMeshes() grows past 1); prepareRenderData()
+        // walks every piece either way, so rendering no longer branches
+        // on this flag.
         bool fracturable = false;
         bool plastic = false; // see spawnPlasticTetMesh()'s own comment
         uint32_t maxVerts = 0;
@@ -323,6 +356,9 @@ private:
     // fields in init() to match; nothing else about the design
     // changes.
     static constexpr uint32_t kMaxObjects = 64;
+    // Fracture pieces across the whole scene — each one is its own FEMFX
+    // tet mesh. See init()'s comment on scene capacities.
+    static constexpr uint32_t kMaxScenePieces = 4096;
 
     AMD::FmScene* m_scene = nullptr;
 
@@ -344,7 +380,6 @@ private:
     Material m_selectedMaterial; // see selectedMaterial()'s own doc comment above
     float m_renderScale; // see the constructor's doc comment
     int m_initialObjectCount; // see the constructor's doc comment
-    AMD::FmRigidBody* m_ground = nullptr; // static kinematic ground plane, top surface at y=0
     Application* m_app = nullptr;         // needed by spawnTetrahedron() if called after init(), e.g. from renderUi()
 
     std::unordered_map<ObjectHandle, std::unique_ptr<SpawnedTet>> m_objects;
@@ -378,6 +413,39 @@ private:
     // future work once there's more than one material worth choosing
     // between in a demo.
     float m_nextSpawnHeight = 5.0f;
+
+    // Real, measured cost, shown in renderUi() and logged once a second —
+    // so "physics is slow" is a number, not an impression. Accumulated
+    // over a one-second window, then published into the m_last* fields.
+    struct TimingWindow {
+        uint32_t ticks = 0;
+        uint32_t frames = 0;
+        double stepMsTotal = 0.0;
+        double stepMsMax = 0.0;
+        double renderPrepMsTotal = 0.0;
+    };
+    TimingWindow m_timing;
+    double m_timingWindowStart = 0.0; // seconds, steady_clock
+    double m_lastStepMsAvg = 0.0;
+    double m_lastStepMsMax = 0.0;
+    double m_lastRenderPrepMsAvg = 0.0;
+    float m_lastTicksPerSecond = 0.0f;
+    float m_lastFramesPerSecond = 0.0f;
+    void publishTimingWindow(double nowSeconds);
+
+    // Scripted benchmark — set KKE_PHYSICS_BENCH=<ticks> in the
+    // environment and physics_demo spawns a fixed sequence of scenes on
+    // a fixed tick schedule, logs a summary, and quits. Same scenes at
+    // the same simulation ticks on every machine, so logs from different
+    // hardware (or before/after a change) compare directly.
+    uint64_t m_benchTicks = 0; // 0 = disabled
+    double m_benchStartSeconds = 0.0;
+    uint64_t m_benchFrames = 0;
+    double m_benchStepMsTotal = 0.0;
+    double m_benchStepMsMax = 0.0;
+    double m_benchRenderPrepMsTotal = 0.0;
+    bool m_benchDone = false;
+    void benchTick(uint64_t tickIndex);
 };
 
 } // namespace kke

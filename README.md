@@ -1998,6 +1998,23 @@ own intro for the discipline expected).
 
 ### Immediate next slices (each independently buildable/runnable)
 
+- **Physics performance, slice 1 — done, measured on a min-spec
+  emulation (1 core).** The short version: physics was mostly doing
+  work it didn't need to. FEMFX ran unoptimized in Debug builds; its
+  sleep system was switched off and, once switched on, the ground
+  rigid body woke every resting piece again the next step; every hidden
+  interior triangle was rebuilt and uploaded every frame; and the
+  fixed-step loop ran up to 8 catch-up ticks per frame, turning one slow
+  tick into eight. Along the way: fractured objects were mostly
+  invisible (all pieces were uploaded to the same spot in one buffer),
+  scene capacities silently capped fracture at ~64 pieces, and every
+  demo crashed on exit (an RmlUi listener use-after-free). Result over
+  the scripted benchmark on one core: 0.6 → 11.0 FPS average with six
+  times as many pieces, and a settled 475-piece pile costs ~0.2 ms per
+  physics step. Numbers and next steps in `PERFORMANCE_NOTES.md`
+  ("Status"), evidence per fix in `BUGS.md` BUG-025..BUG-030, and what
+  still needs real hardware in `HARDWARE_TESTS.md`.
+
 - ~~**Material toughness ordering was backwards — Rubber shattered
   while Iron stayed intact under the same impact**~~ Fixed — root-
   caused properly against real FEMFX source and real measured data

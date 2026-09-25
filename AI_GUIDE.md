@@ -5,8 +5,10 @@ this codebase — can pick up Kreative Kompas Engine and start contributing
 correctly without re-deriving its architecture from scratch. If you are an
 AI agent (Claude, a fork of this project's model, or anything else) reading
 this to orient yourself: start here, then check `ROADMAP.md` (what
-actually works right now, by system) and `BUGS.md` (specific defects
+actually works right now, by system), `BUGS.md` (specific defects
 already found, before you go looking for new ones or re-find an old one),
+and `HARDWARE_TESTS.md` (what's waiting on, or has come back from, real
+hardware),
 then go to `README.md` for full depth/reasoning on any specific topic.
 
 ## What this engine is, in one paragraph
@@ -106,6 +108,27 @@ you read this; check the README's Roadmap section for current state.
    Don't add a fourth pattern without a clear reason; these three cover
    everything built so far, including the harder cases (destruction ↔
    networking, see README).
+
+## How the work is split, and the min-spec baseline
+
+The person driving this project has asked for a clear split: **the AI
+does the design, code, and every measurement the sandbox can make; the
+person does anything that needs real hardware** (a real GPU, many cores,
+real feel). Whenever a change can only be confirmed on real hardware,
+add an entry to `HARDWARE_TESTS.md` with exact commands and exactly what
+to send back, instead of claiming it works or silently skipping it.
+
+**Every performance claim is made against a min-spec baseline: 1 CPU
+core, ~2 GB RAM.** Emulate it in the sandbox with `taskset -c 0` (the
+physics thread pool respects CPU affinity) and report peak memory from
+`/usr/bin/time -v`. State results as "works on min-spec with these
+limits," then separately what a real machine is expected to do. For
+physics, use the scripted benchmark (`KKE_PHYSICS_BENCH=<ticks>
+./physics_demo`, see `PERFORMANCE_NOTES.md`) so numbers are comparable
+across machines and across changes — measure before and after.
+
+Commit directly to `main` for now — this is a WIP proof of concept, and
+the person has said branches/PRs start once it reaches alpha.
 
 ## Where to actually look
 

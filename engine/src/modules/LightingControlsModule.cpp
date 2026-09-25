@@ -242,6 +242,13 @@ void LightingControlsModule::update(const UpdateContext& /*ctx*/) {
 
 void LightingControlsModule::shutdown() {
     if (m_document) {
+        // Detach before deleting the listener — see MaterialGridModule::
+        // shutdown() and BUGS.md BUG-025 for the use-after-free this avoids.
+        for (const char* buttonId : { "preset-warm", "preset-dramatic", "preset-flat", "preset-reset" }) {
+            if (Rml::Element* button = m_document->GetElementById(buttonId)) {
+                button->RemoveEventListener(Rml::EventId::Click, m_listener);
+            }
+        }
         m_document->Close();
         m_document = nullptr;
     }

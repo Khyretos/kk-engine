@@ -270,6 +270,17 @@ void MaterialGridModule::init(Application& app) {
 
 void MaterialGridModule::shutdown() {
     if (m_document) {
+        // Detach before deleting the listener below. Close() only queues
+        // the document for unloading; RmlUi actually tears it down later
+        // (at the latest in Rml::Shutdown(), from UiModule), and that
+        // teardown calls OnDetach() on every listener still attached —
+        // which was already deleted here: a use-after-free that crashed
+        // every demo on exit. See BUGS.md BUG-025.
+        for (int i = 0; i < kNumPresets; ++i) {
+            if (Rml::Element* card = m_document->GetElementById(std::string("card-") + kPresets[i].id)) {
+                card->RemoveEventListener(Rml::EventId::Click, m_listener);
+            }
+        }
         m_document->Close();
         m_document = nullptr;
     }

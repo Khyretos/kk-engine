@@ -2379,6 +2379,11 @@ namespace AMD
         return tetMesh.numExteriorFaces;
     }
 
+    bool FmIsTetMeshSleeping(const FmTetMesh& tetMesh)
+    {
+        return FM_IS_SET(tetMesh.flags, FM_OBJECT_FLAG_SLEEPING);
+    }
+
     void FmGetExteriorFace(uint* tetId, uint* faceId, const FmTetMesh& tetMesh, uint extFaceIdx)
     {
         const FmExteriorFace& face = tetMesh.exteriorFaces[extFaceIdx];

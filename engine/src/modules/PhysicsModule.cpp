@@ -20,6 +20,11 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <cmath>
 #include <algorithm>
+#include <chrono>
+#include <SDL3/SDL.h>
+#if defined(__linux__)
+#include <sched.h>
+#endif
 
 // FEMFX declares these extern (FEMFXCommon.h) and expects the
 // application to define them — an allocator hook, the same pattern as
@@ -44,6 +49,10 @@ void FmAlignedFree(void* ptr) {
 namespace kke {
 
 namespace {
+
+double nowSeconds() {
+    return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 
 // A real thread pool, replacing the earlier synchronous stand-in —
 // verified standalone (a separate test program, same scene/tet setup
@@ -273,7 +282,22 @@ void PhysicsModule::init(Application& app) {
     // handles as synchronous execution, not a degraded/broken
     // multithreaded path.
     unsigned int hwThreads = std::thread::hardware_concurrency();
+#if defined(__linux__)
+    // hardware_concurrency() reports every core in the machine, ignoring
+    // CPU affinity — so a process pinned to one core (taskset, a
+    // container CPU limit, or the min-spec emulation in
+    // PERFORMANCE_NOTES.md) would still start one worker per core, all
+    // fighting over the same core. Count the cores we may actually use.
+    cpu_set_t affinity;
+    if (sched_getaffinity(0, sizeof(affinity), &affinity) == 0) {
+        hwThreads = static_cast<unsigned int>(CPU_COUNT(&affinity));
+    }
+#endif
     int numWorkers = (hwThreads == 0) ? 1 : static_cast<int>(hwThreads);
+    if (const char* forced = std::getenv("KKE_PHYSICS_THREADS")) {
+        int n = std::atoi(forced);
+        if (n > 0) numWorkers = n;
+    }
     g_poolOwner = std::make_unique<ThreadPool>(numWorkers);
     g_pool = g_poolOwner.get();
     log::get(name())->info("Task system: {} worker(s) (hardware_concurrency={})", numWorkers, hwThreads);
@@ -283,38 +307,35 @@ void PhysicsModule::init(Application& app) {
     // principles, verified empirically by actually spawning up to the
     // cap via renderUi()'s button rather than assumed correct.
     AMD::FmSceneSetupParams sceneParams;
+    // Capacities are per *scene*, and FEMFX counts every fracture piece
+    // as its own tet mesh with its own contacts. These used to be sized
+    // for kMaxObjects single tetrahedra (maxTetMeshes=64, maxSceneVerts=
+    // 272, 512 contacts) — one Glass Sheet alone has 147 verts and
+    // shatters into ~60 pieces, so after the first break FEMFX was
+    // silently dropping pieces, contacts and constraint-solver verts.
+    // Dropped contacts are the "falls through the floor" symptom from
+    // BUGS.md BUG-005, just further out. FEMFX reports every limit it
+    // hits (FmWarningsReport) — fixedUpdate() now logs those, so if any
+    // of these are still too small, the log says which one.
+    // Proportions follow AMD's own TestScenes.h, scaled down.
     sceneParams.maxTetMeshBuffers = kMaxObjects;
-    sceneParams.maxTetMeshes = kMaxObjects;
-    sceneParams.maxRigidBodies = 1;
-    // A real bug, found from a real user report ("spawn a lot of
-    // pieces and they fall through the ground"), not caught by this
-    // project's own earlier testing (which never spawned anywhere
-    // near kMaxObjects at once): these were left hardcoded at 64 when
-    // kMaxObjects itself was raised from 8 to 64 earlier this project
-    // — meaning every one of these pre-allocated capacity limits was
-    // sized for the *old*, much smaller object cap. With genuinely 64
-    // objects on screen, each touching the ground plus potentially
-    // several piled-up neighbors, the real number of simultaneous
-    // contacts can easily exceed a fixed 64 — and contacts FEMFX has
-    // no room to record are contacts that don't get a real collision
-    // response, which reads exactly like "falls through the floor."
-    // Scaled to a real, generous per-object multiplier instead of
-    // another fixed number that would just as quietly run out again
-    // the next time kMaxObjects changes.
-    sceneParams.maxDistanceContacts = kMaxObjects * 8;
-    sceneParams.maxVolumeContacts = kMaxObjects * 8;
-    sceneParams.maxVolumeContactVerts = kMaxObjects * 8;
-    sceneParams.maxDeformationConstraints = kMaxObjects * 8;
+    sceneParams.maxTetMeshes = kMaxScenePieces;
+    sceneParams.maxRigidBodies = 0; // no rigid bodies -- see the ground comment below
+    sceneParams.maxDistanceContacts = 65536;
+    sceneParams.maxVolumeContacts = 8192;
+    sceneParams.maxVolumeContactVerts = 131072;
+    sceneParams.maxDeformationConstraints = kMaxObjects * 64;
     sceneParams.maxGlueConstraints = 0;
     sceneParams.maxPlaneConstraints = 0;
     sceneParams.maxRigidBodyAngleConstraints = 0;
-    sceneParams.maxBroadPhasePairs = kMaxObjects * 16;
-    sceneParams.maxRigidBodyBroadPhasePairs = kMaxObjects * 8;
-    sceneParams.maxSceneVerts = kMaxObjects * 4 + 16;
-    sceneParams.maxTetMeshBufferFeatures = 128;
-    sceneParams.maxConstraintSolverDataSize = 1 << 24;
+    sceneParams.maxBroadPhasePairs = 16384;
+    sceneParams.maxRigidBodyBroadPhasePairs = 0;
+    sceneParams.maxSceneVerts = 65536;
+    sceneParams.maxTetMeshBufferFeatures = 4096;
     sceneParams.numWorkerThreads = numWorkers;
     sceneParams.rigidBodiesExternal = false;
+    sceneParams.maxConstraintSolverDataSize = AMD::FmEstimateSceneConstraintSolverDataSize(sceneParams);
+    log::get(name())->info("FEMFX constraint solver memory: {:.1f} MB", sceneParams.maxConstraintSolverDataSize / (1024.0 * 1024.0));
 
     m_scene = AMD::FmCreateScene(sceneParams);
     if (!m_scene) {
@@ -333,23 +354,26 @@ void PhysicsModule::init(Application& app) {
     );
     AMD::FmSetSceneTaskSystemCallbacks(m_scene, callbacks);
 
-    // --- A wide, flat, kinematic (static) ground plane, top surface at
-    // y=0.
-    AMD::FmRigidBodySetupParams groundParams;
-    groundParams.halfDimX = 50.0f;
-    groundParams.halfDimY = 0.5f;
-    groundParams.halfDimZ = 50.0f;
-    groundParams.mass = 1.0f; // irrelevant for a kinematic body, but must be nonzero for the inertia calc below
-    groundParams.isKinematic = true;
-    groundParams.collisionGroup = 0;
-    groundParams.state.pos = AMD::FmInitVector3(0.0f, -0.5f, 0.0f);
-    groundParams.bodyInertiaTensor = AMD::FmComputeBodyInertiaTensorForBox(50.0f, 0.5f, 50.0f, 1.0f);
-
-    m_ground = AMD::FmCreateRigidBody(groundParams);
-    if (!m_ground) {
-        throw std::runtime_error("FmCreateRigidBody returned null");
+    // --- The ground: FEMFX's own built-in scene collision plane, not a
+    // rigid body. FmSceneControlParams::collisionPlanes defaults to a
+    // floor at y=0 (every other side open), which is exactly the ground
+    // this demo wants. This used to be a 100x1x100 kinematic box rigid
+    // body on top of that plane, and it had two real costs:
+    //   - FEMFX treats a rigid body as always-awake, and its contact
+    //     with a sleeping tet mesh woke that mesh again on the very next
+    //     step. So nothing resting on the ground could ever stay asleep —
+    //     measured: ~480 of 491 debris pieces awake after 15 s, even
+    //     though ~95% of them were moving slower than 0.05 m/s.
+    //   - Every piece paid a box-vs-mesh contact test every step.
+    // With the plane alone, settled scenes sleep completely and the
+    // physics step for the same 475-piece pile drops from ~95 ms to
+    // ~0.2 ms (1-core min-spec emulation, see PERFORMANCE_NOTES.md).
+    // Objects rest at the same height as before (0.0020 above y=0).
+    {
+        AMD::FmSceneControlParams controlParams = AMD::FmGetSceneControlParams(*m_scene);
+        controlParams.collisionPlanes.minY = 0.0f;
+        AMD::FmSetSceneControlParams(m_scene, controlParams);
     }
-    AMD::FmAddRigidBodyToScene(m_scene, m_ground);
 
     // --- Shared render resources (see PhysicsModule.h for why these
     // are shared across every spawned object, not per-object). Reuses
@@ -530,6 +554,12 @@ void PhysicsModule::init(Application& app) {
     }
 
     log::get(name())->info("FEMFX scene created (ground + {} object(s), cap={})", m_objects.size(), kMaxObjects);
+
+    m_timingWindowStart = nowSeconds();
+    if (const char* bench = std::getenv("KKE_PHYSICS_BENCH")) {
+        m_benchTicks = std::strtoull(bench, nullptr, 10);
+        if (m_benchTicks) log::get(name())->info("BENCH: scripted benchmark enabled, {} ticks", m_benchTicks);
+    }
 }
 
 PhysicsModule::ObjectHandle PhysicsModule::spawnTetMesh(const TetMeshData& mesh, const glm::vec3& position, const Material& material) {
@@ -712,59 +742,29 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshInternal(const TetMeshDat
     }
 
     AMD::FmEnableSelfCollision(obj->tetMesh, false);
-    AMD::FmEnableSleeping(m_scene, obj->tetMesh, false);
+    // Sleeping ON. This used to be disabled for every object, and
+    // fracture pieces inherit their parent's flags, so every shard of
+    // every break kept being fully simulated forever — total cost only
+    // ever went up. FEMFX's own defaults (max speed < 2.0, average speed
+    // < 0.15 for 20 consecutive steps) put settled objects and debris to
+    // sleep; a collision with something awake wakes their island again.
+    // This is the "Sleeping" state from PERFORMANCE_NOTES.md's RayFire/
+    // Chaos research, and FEMFX already had it built in.
+    AMD::FmEnableSleeping(m_scene, obj->tetMesh, true);
 
     obj->sceneBufferId = AMD::FmAddTetMeshBufferToScene(m_scene, obj->tetMeshBuffer);
     obj->material = material;
 
-    if (enableFracture) {
-        // Sized for flat shading's own real vertex-count needs (see
-        // the non-fracturable branch's comment for the full account of
-        // why this changed at all) -- 12 unique vertices per tet (4
-        // faces x 3 corners each, none shared with any other face),
-        // not FEMFX's own maxVerts bound, which reserves capacity for
-        // *simulated* (shared) vertices, a different, smaller number
-        // than what flat-shaded rendering actually needs to draw.
-        obj->vertexBuffer = std::make_unique<Buffer>(
-            m_app->device(), sizeof(Vertex) * obj->maxTets * 12, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-        obj->indexBuffer = std::make_unique<Buffer>(
-            m_app->device(), sizeof(uint32_t) * obj->maxTets * 12, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-    } else {
-        // Flat shading, not smooth -- a real, visible bug found and
-        // fixed, not a style preference: the original version here
-        // shared vertices between adjacent faces and averaged their
-        // normals together (the same technique CubeModule's own
-        // render() comment already documents as "correct and
-        // meaningful for genuine exterior-facing geometry" -- true for
-        // a mesh with enough faces to read as curved, false for a
-        // single tetrahedron's 4 faces, or even a multi-tet object's
-        // handful of exterior faces). Averaging normals across a
-        // shape this low-poly blends adjacent faces' shading into each
-        // other, producing a smooth, iridescent-looking gradient
-        // instead of the sharp, distinct flat faces a solid object
-        // should show -- confirmed directly, not assumed: a temporary
-        // diagnostic shader outputting the raw world-space normal as
-        // color showed a continuous color gradient sweeping across
-        // what should have been 2-3 separate, uniformly-colored faces.
-        // Real flat shading needs each face's 3 corners to be genuinely
-        // separate vertices with that face's own single normal, not
-        // shared with any neighboring face -- hence numTets*12 unique
-        // vertices here, not numVerts shared ones.
-        obj->vertexBuffer = std::make_unique<Buffer>(
-            m_app->device(), sizeof(Vertex) * numTets * 12, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-        // A trivial sequential index buffer (0,1,2,...) -- with every
-        // vertex now unique to its own face (see above), there's no
-        // sharing left for an index buffer to meaningfully express.
-        // Kept anyway, rather than switching to non-indexed vkCmdDraw,
-        // specifically to avoid touching the draw-call code path at
-        // all -- a smaller, safer change than restructuring how these
-        // objects get drawn.
-        std::vector<uint32_t> indices(numTets * 12);
-        for (uint32_t i = 0; i < numTets * 12; ++i) indices[i] = i;
-        obj->indexBuffer = std::make_unique<Buffer>(Buffer::createDeviceLocal(
-            m_app->device(), indices.data(), indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
+    // Sized from FEMFX's own maxExteriorFaces bound — for a fracturable
+    // object that already accounts for every interior face that could
+    // become exterior as it breaks, so the buffer never needs to grow.
+    // See SpawnedTet's own comment for why only exterior faces are drawn.
+    obj->maxRenderVerts = bounds.maxExteriorFaces * 3;
+    for (auto& vb : obj->vertexBuffers) {
+        vb = std::make_unique<Buffer>(
+            m_app->device(), sizeof(Vertex) * obj->maxRenderVerts, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     }
+    obj->color = kColorPalette[m_nextHandle % (sizeof(kColorPalette) / sizeof(kColorPalette[0]))];
 
     ObjectHandle handle = m_nextHandle++;
     m_objects[handle] = std::move(obj);
@@ -798,7 +798,26 @@ void PhysicsModule::removeObject(ObjectHandle handle) {
 }
 
 void PhysicsModule::fixedUpdate(const FixedUpdateContext& ctx) {
+    if (m_benchTicks) benchTick(ctx.tickIndex);
+
+    double stepStart = nowSeconds();
     AMD::FmUpdateScene(m_scene, ctx.fixedDt);
+    double stepMs = (nowSeconds() - stepStart) * 1000.0;
+    m_timing.ticks++;
+    m_timing.stepMsTotal += stepMs;
+    m_timing.stepMsMax = std::max(m_timing.stepMsMax, stepMs);
+    // FEMFX's own record of any capacity it ran out of this step (see
+    // init()'s comment on scene capacities). Collected here, logged once
+    // a second by publishTimingWindow(), then cleared.
+    AMD::FmWarningsReport& warnings = AMD::FmGetSceneWarningsReportRef(m_scene);
+    if (warnings.flags.val) {
+        m_lastWarningFlags |= warnings.flags.val;
+        warnings.flags.val = 0;
+    }
+    if (m_benchTicks && !m_benchDone) {
+        m_benchStepMsTotal += stepMs;
+        m_benchStepMsMax = std::max(m_benchStepMsMax, stepMs);
+    }
 
     // Logged every ~1s (at 60Hz), not every tick — see spdlog's own
     // async design: this is exactly the "don't spend even the queue-push
@@ -858,32 +877,115 @@ void PhysicsModule::fixedUpdate(const FixedUpdateContext& ctx) {
     }
 }
 
-void PhysicsModule::renderShadow(const ShadowRenderContext& ctx) {
-    // Reuses each object's existing vertex/index buffers as-is,
-    // whatever they currently contain -- deliberately not
-    // regenerating them here. render() (which runs after this in the
-    // same frame, see Application's own frame loop) is what uploads
-    // each object's current simulated positions; this pass runs
-    // first, so it draws whatever was uploaded last frame. In
-    // practice this means a spawned object's shadow lags its own
-    // visible position by at most one frame -- at 60fps, roughly
-    // 16ms, not visually meaningful for anything in this demo — and a
-    // brand new object simply casts no shadow for its first frame,
-    // before render() has populated its buffers at all. A real,
-    // deliberate simplicity trade-off, not an oversight: correctly
-    // synchronizing this would mean duplicating render()'s own
-    // simulated-position readback here too, real complexity this
-    // demo's own motion speeds don't need.
-    m_shadowPipeline->bind(ctx.cmd);
+void PhysicsModule::prepareRenderData(uint32_t frameIndex) {
+    if (m_preparedFrame == m_frameCounter) return;
+    m_preparedFrame = m_frameCounter;
+    double start = nowSeconds();
+
+    m_awakeObjects = 0;
+    m_renderedFaces = 0;
+    m_totalPieces = 0;
+    m_awakePieces = 0;
+    static thread_local std::vector<glm::vec3> simPositions;
+
     for (auto& [handle, obj] : m_objects) {
-        if (!obj->vertexBuffer || !obj->indexBuffer || obj->numTets == 0) continue;
-        ShadowPushConstants pc{ ctx.lightViewProj, glm::mat4(1.0f) };
-        vkCmdPushConstants(ctx.cmd, m_shadowPipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
-        VkBuffer buffers[] = { obj->vertexBuffer->handle() };
+        const uint numPieces = AMD::FmGetNumTetMeshes(*obj->tetMeshBuffer);
+        m_totalPieces += numPieces;
+
+        bool anyAwake = obj->cpuVersion == 0; // never built yet: build once regardless
+        for (uint m = 0; m < numPieces; ++m) {
+            const AMD::FmTetMesh* piece = AMD::FmGetTetMesh(*obj->tetMeshBuffer, m);
+            if (piece && !AMD::FmIsTetMeshSleeping(*piece)) {
+                anyAwake = true;
+                ++m_awakePieces;
+            }
+        }
+        obj->asleep = !anyAwake;
+
+        if (anyAwake) {
+            ++m_awakeObjects;
+            obj->cpuVerts.clear();
+            bool truncated = false;
+            // Every piece goes into the same buffer back to back and is
+            // drawn with one call. The old path uploaded each fracture
+            // piece to offset 0 of the same buffer and recorded a draw
+            // per piece — but the GPU only runs those draws after the
+            // CPU has finished all the uploads, so every draw saw the
+            // *last* piece's data. A shattered object rendered as one
+            // piece drawn N times plus stale leftovers.
+            for (uint m = 0; m < numPieces; ++m) {
+                const AMD::FmTetMesh* piece = AMD::FmGetTetMesh(*obj->tetMeshBuffer, m);
+                if (!piece) continue;
+                const uint numVerts = AMD::FmGetNumVerts(*piece);
+                const uint numFaces = AMD::FmGetNumExteriorFaces(*piece);
+                if (numVerts == 0 || numFaces == 0) continue;
+
+                simPositions.resize(numVerts);
+                for (uint i = 0; i < numVerts; ++i) {
+                    AMD::FmVector3 p = AMD::FmGetVertPosition(*piece, i);
+                    simPositions[i] = glm::vec3(p.x, p.y, p.z) * m_renderScale;
+                }
+
+                for (uint f = 0; f < numFaces; ++f) {
+                    if (obj->cpuVerts.size() + 3 > obj->maxRenderVerts) { truncated = true; break; } // see below
+                    uint tetId = 0, faceId = 0;
+                    AMD::FmGetExteriorFace(&tetId, &faceId, *piece, f);
+                    AMD::FmTetVertIds ids = AMD::FmGetTetVertIds(*piece, tetId);
+                    // FEMFX's own face numbering (FmGetFaceVertIds in
+                    // FEMFXTetMeshConnectivity.h) — the same winding the
+                    // old hardcoded 4-face table used.
+                    glm::vec3 a = simPositions[ids.ids[3 - faceId]];
+                    glm::vec3 b = simPositions[ids.ids[(5 - faceId) % 4]];
+                    glm::vec3 c = simPositions[ids.ids[(faceId + 2) % 4]];
+                    glm::vec3 n = glm::cross(b - a, c - a);
+                    float len = glm::length(n);
+                    n = len > 1e-12f ? n / len : glm::vec3(0.0f, 1.0f, 0.0f);
+                    // Per-face UVs: each face gets its own full copy of
+                    // the material texture (see BUGS.md BUG-006's
+                    // flat-shading fix, which this relies on).
+                    obj->cpuVerts.push_back({ a, obj->color, n, {0.0f, 0.0f} });
+                    obj->cpuVerts.push_back({ b, obj->color, n, {1.0f, 0.0f} });
+                    obj->cpuVerts.push_back({ c, obj->color, n, {0.0f, 1.0f} });
+                }
+            }
+            if (truncated) {
+                // Should be impossible (maxExteriorFaces is FEMFX's own
+                // upper bound including fracture); logged rather than
+                // silently truncated if it ever does happen.
+                static bool warned = false;
+                if (!warned) {
+                    warned = true;
+                    log::get(name())->warn("object {} hit its render capacity ({} verts) -- some faces not drawn", handle, obj->maxRenderVerts);
+                }
+            }
+            ++obj->cpuVersion;
+        }
+
+        if (obj->gpuVersion[frameIndex] != obj->cpuVersion && !obj->cpuVerts.empty()) {
+            obj->vertexBuffers[frameIndex]->upload(obj->cpuVerts.data(), obj->cpuVerts.size() * sizeof(Vertex));
+            obj->gpuVersion[frameIndex] = obj->cpuVersion;
+        }
+        m_renderedFaces += static_cast<uint32_t>(obj->cpuVerts.size() / 3);
+    }
+
+    m_pendingPrepMs += (nowSeconds() - start) * 1000.0;
+}
+
+void PhysicsModule::renderShadow(const ShadowRenderContext& ctx) {
+    // Same frame's data as render() — prepareRenderData() runs from
+    // whichever of the two is called first (this one, in Application's
+    // frame loop), so shadows no longer lag a frame behind the objects.
+    prepareRenderData(ctx.frameIndex);
+
+    m_shadowPipeline->bind(ctx.cmd);
+    ShadowPushConstants pc{ ctx.lightViewProj, glm::mat4(1.0f) };
+    vkCmdPushConstants(ctx.cmd, m_shadowPipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+    for (auto& [handle, obj] : m_objects) {
+        if (obj->cpuVerts.empty() || obj->gpuVersion[ctx.frameIndex] != obj->cpuVersion) continue;
+        VkBuffer buffers[] = { obj->vertexBuffers[ctx.frameIndex]->handle() };
         VkDeviceSize offsets[] = { 0 };
         vkCmdBindVertexBuffers(ctx.cmd, 0, 1, buffers, offsets);
-        vkCmdBindIndexBuffer(ctx.cmd, obj->indexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
-        vkCmdDrawIndexed(ctx.cmd, obj->numTets * 12, 1, 0, 0, 0);
+        vkCmdDraw(ctx.cmd, static_cast<uint32_t>(obj->cpuVerts.size()), 1, 0, 0);
     }
 }
 
@@ -891,6 +993,22 @@ void PhysicsModule::render(const RenderContext& ctx) {
     if (!m_pipeline) {
         return;
     }
+    double prepStart = nowSeconds();
+    struct PrepTimer {
+        PhysicsModule* self; double start;
+        ~PrepTimer() {
+            double now = nowSeconds();
+            double ms = (now - start) * 1000.0 + self->m_pendingPrepMs;
+            self->m_pendingPrepMs = 0.0;
+            self->m_timing.frames++;
+            self->m_timing.renderPrepMsTotal += ms;
+            if (self->m_benchTicks && !self->m_benchDone && self->m_benchStartSeconds > 0.0) {
+                self->m_benchFrames++;
+                self->m_benchRenderPrepMsTotal += ms;
+            }
+            if (now - self->m_timingWindowStart >= 1.0) self->publishTimingWindow(now);
+        }
+    } prepTimer{ this, prepStart };
 
     m_pipeline->bind(ctx.cmd);
     VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, ctx.defaultMaterialTextureDescriptorSet };
@@ -966,237 +1084,85 @@ void PhysicsModule::render(const RenderContext& ctx) {
     // Material.h) -- pushed inside the loop below, once per object,
     // rather than once here outside it.
 
-    size_t colorIndex = 0;
-    std::vector<Vertex> verts; // reused across objects, resized per-object below
-    // normalSum removed -- flat shading no longer accumulates/averages
-    // per-vertex normals across faces (see spawnTetMeshInternal()'s
-    // own comment for the full account of why smooth normals were the
-    // real bug behind a "hollow"-looking tetrahedron).
-    std::vector<uint32_t> dynamicIndices; // reused too — fracturable objects only, rebuilt every sub-mesh
+    prepareRenderData(ctx.frameIndex);
     for (auto& [handle, obj] : m_objects) {
-        glm::vec3 color = kColorPalette[colorIndex % (sizeof(kColorPalette) / sizeof(kColorPalette[0]))];
-        ++colorIndex;
-
-        if (!obj->fracturable) {
-            // Flat shading now, not smooth — see spawnTetMeshInternal()'s
-            // own comment for the full, diagnostic-confirmed account of
-            // why. numTets*12 unique vertices (12 per tet: 4 faces x 3
-            // corners, none shared with any other face), each getting
-            // its own face's single normal — not obj->numVerts shared
-            // ones averaged across adjacent faces.
-            verts.resize(obj->numTets * 12);
-
-            // Positions still come from FEMFX's own simulated (shared)
-            // vertex array — read once per unique global vertex id
-            // here, then looked up per-face-corner below, rather than
-            // querying FmGetVertPosition() up to 12x redundantly for
-            // vertices that are geometrically the same simulated point.
-            static thread_local std::vector<glm::vec3> simPositions;
-            simPositions.resize(obj->numVerts);
-            for (uint32_t i = 0; i < obj->numVerts; ++i) {
-                AMD::FmVector3 p = AMD::FmGetVertPosition(*obj->tetMesh, i);
-                simPositions[i] = glm::vec3(p.x, p.y, p.z) * m_renderScale;
-            }
-
-            uint32_t outIdx = 0;
-            for (uint32_t t = 0; t < obj->numTets; ++t) {
-                const uint32_t* ids = obj->tetVertIds[t].ids;
-                const uint32_t faces[4][3] = {
-                    {ids[3], ids[1], ids[2]},
-                    {ids[2], ids[0], ids[3]},
-                    {ids[1], ids[3], ids[0]},
-                    {ids[0], ids[2], ids[1]},
-                };
-                for (const auto& f : faces) {
-                    glm::vec3 a = simPositions[f[0]];
-                    glm::vec3 b = simPositions[f[1]];
-                    glm::vec3 c = simPositions[f[2]];
-                    glm::vec3 faceNormal = glm::normalize(glm::cross(b - a, c - a));
-                    // TEMPORARY DIAGNOSTIC -- log every face's real
-                    // vertex positions for the very first tet drawn,
-                    // to check whether all 4 faces genuinely get
-                    // distinct, non-degenerate positions.
-                    static bool loggedOnce = false;
-                    if (!loggedOnce && t == 0) {
-                        log::get(name())->info("face a=({:.3f},{:.3f},{:.3f}) b=({:.3f},{:.3f},{:.3f}) c=({:.3f},{:.3f},{:.3f}) normal=({:.3f},{:.3f},{:.3f})",
-                            a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, faceNormal.x, faceNormal.y, faceNormal.z);
-                    }
-                    // Real per-face UVs now, not the Vertex struct's own
-                    // (0,0) default -- a standard, simple per-triangle
-                    // mapping (each face gets its own full copy of the
-                    // texture, not a seamless continuation from its
-                    // neighbors), made possible by this same flat-
-                    // shading rewrite already giving every face its own
-                    // unique, unshared vertices. Real per-material
-                    // *patterns* now, not just flat tints -- see
-                    // README's own account of this as a genuine
-                    // continuation of the flat-shading fix, not a
-                    // separate change.
-                    verts[outIdx + 0] = { a, color, faceNormal, {0.0f, 0.0f} };
-                    verts[outIdx + 1] = { b, color, faceNormal, {1.0f, 0.0f} };
-                    verts[outIdx + 2] = { c, color, faceNormal, {0.0f, 1.0f} };
-                    outIdx += 3;
-                }
-            }
-
-            obj->vertexBuffer->upload(verts.data(), verts.size() * sizeof(Vertex));
-
-            // TEMPORARY DIAGNOSTIC -- log the exact index count being
-            // drawn and the vertex data size actually uploaded, to
-            // rule out a spawn-time vs render-time numTets mismatch.
-            static bool loggedDraw = false;
-            if (!loggedDraw) {
-                loggedDraw = true;
-                log::get(name())->info("draw: obj->numTets={} verts.size()={} indexCount={} vertexBufferBytes={}",
-                    obj->numTets, verts.size(), obj->numTets * 12, verts.size() * sizeof(Vertex));
-            }
-
-            bindMaterialTexture(obj->material);
-            PhysicsPushConstants pc{ glm::mat4(1.0f), obj->material.metallic, obj->material.roughness };
-            vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
-
-            VkBuffer buffers[] = { obj->vertexBuffer->handle() };
-            VkDeviceSize offsets[] = { 0 };
-            vkCmdBindVertexBuffers(ctx.cmd, 0, 1, buffers, offsets);
-            vkCmdBindIndexBuffer(ctx.cmd, obj->indexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
-            vkCmdDrawIndexed(ctx.cmd, obj->numTets * 12, 1, 0, 0, 0);
-            continue;
-        }
-
-        // Fracturable path — genuinely different, not just the same
-        // logic with extra checks: a fractured object can be split
-        // into multiple independently-moving FmTetMesh pieces at
-        // runtime (FmGetNumTetMeshes() can grow past 1), and each
-        // piece has its OWN vertex numbering (confirmed by testing —
-        // see the README's "Real fracture support" section for the
-        // full account), so vertex positions AND the index buffer's
-        // actual content both get rebuilt from scratch every frame,
-        // per piece, rather than uploaded once at spawn time. Real,
-        // measured cost of this simplicity, not hidden: every
-        // fracturable object costs a full CPU-side rebuild per frame
-        // regardless of whether it has actually fractured yet.
-        uint numSubMeshes = AMD::FmGetNumTetMeshes(*obj->tetMeshBuffer);
-        for (uint m = 0; m < numSubMeshes; ++m) {
-            AMD::FmTetMesh* subMesh = AMD::FmGetTetMesh(*obj->tetMeshBuffer, m);
-            if (!subMesh) continue;
-
-            uint32_t subNumVerts = AMD::FmGetNumVerts(*subMesh);
-            uint32_t subNumTets = AMD::FmGetNumTets(*subMesh);
-            if (subNumVerts == 0 || subNumTets == 0) continue;
-            if (subNumTets > obj->maxTets) {
-                // A real safety check, not decorative -- updated to
-                // compare against maxTets specifically now that flat
-                // shading's own buffer capacity (see
-                // spawnTetMeshInternal()) is sized from maxTets*12
-                // unique per-face vertices, not FEMFX's own maxVerts
-                // bound (a different, smaller number: shared,
-                // simulated vertex count, not flat-shaded render
-                // vertex count). If this ever fires, the reservation
-                // was wrong for some fracture pattern this specific
-                // mesh produced — better to skip drawing this piece
-                // for a frame than write past the buffers below.
-                log::get(name())->warn(
-                    "fracturable object sub-mesh {} exceeds reserved capacity ({} tets vs max {}) -- skipping this frame",
-                    m, subNumTets, obj->maxTets);
-                continue;
-            }
-
-            // Flat shading now, not smooth — same fix, same reasoning,
-            // as the non-fracturable path above. subNumTets*12 unique
-            // vertices, each face getting its own single normal.
-            verts.resize(subNumTets * 12);
-
-            static thread_local std::vector<glm::vec3> subSimPositions;
-            subSimPositions.resize(subNumVerts);
-            for (uint32_t i = 0; i < subNumVerts; ++i) {
-                AMD::FmVector3 p = AMD::FmGetVertPosition(*subMesh, i);
-                subSimPositions[i] = glm::vec3(p.x, p.y, p.z) * m_renderScale;
-            }
-
-            dynamicIndices.clear();
-            dynamicIndices.reserve(subNumTets * 12);
-            uint32_t outIdx = 0;
-            for (uint32_t t = 0; t < subNumTets; ++t) {
-                AMD::FmTetVertIds ids = AMD::FmGetTetVertIds(*subMesh, t);
-                const uint32_t faces[4][3] = {
-                    {ids.ids[3], ids.ids[1], ids.ids[2]},
-                    {ids.ids[2], ids.ids[0], ids.ids[3]},
-                    {ids.ids[1], ids.ids[3], ids.ids[0]},
-                    {ids.ids[0], ids.ids[2], ids.ids[1]},
-                };
-                for (const auto& f : faces) {
-                    glm::vec3 a = subSimPositions[f[0]];
-                    glm::vec3 b = subSimPositions[f[1]];
-                    glm::vec3 c = subSimPositions[f[2]];
-                    glm::vec3 faceNormal = glm::normalize(glm::cross(b - a, c - a));
-                    // Same real per-face UV mapping as the
-                    // non-fracturable path above -- see that one's own
-                    // comment for the full reasoning.
-                    verts[outIdx + 0] = { a, color, faceNormal, {0.0f, 0.0f} };
-                    verts[outIdx + 1] = { b, color, faceNormal, {1.0f, 0.0f} };
-                    verts[outIdx + 2] = { c, color, faceNormal, {0.0f, 1.0f} };
-                    dynamicIndices.push_back(outIdx + 0);
-                    dynamicIndices.push_back(outIdx + 1);
-                    dynamicIndices.push_back(outIdx + 2);
-                    outIdx += 3;
-                }
-            }
-
-            obj->vertexBuffer->upload(verts.data(), verts.size() * sizeof(Vertex));
-            obj->indexBuffer->upload(dynamicIndices.data(), dynamicIndices.size() * sizeof(uint32_t));
-
-            bindMaterialTexture(obj->material);
-            PhysicsPushConstants pc{ glm::mat4(1.0f), obj->material.metallic, obj->material.roughness };
-            vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
-
-            VkBuffer buffers[] = { obj->vertexBuffer->handle() };
-            VkDeviceSize offsets[] = { 0 };
-            vkCmdBindVertexBuffers(ctx.cmd, 0, 1, buffers, offsets);
-            vkCmdBindIndexBuffer(ctx.cmd, obj->indexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
-            vkCmdDrawIndexed(ctx.cmd, static_cast<uint32_t>(dynamicIndices.size()), 1, 0, 0, 0);
-        }
+        if (obj->cpuVerts.empty() || obj->gpuVersion[ctx.frameIndex] != obj->cpuVersion) continue;
+        bindMaterialTexture(obj->material);
+        PhysicsPushConstants pc{ glm::mat4(1.0f), obj->material.metallic, obj->material.roughness };
+        vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+        VkBuffer buffers[] = { obj->vertexBuffers[ctx.frameIndex]->handle() };
+        VkDeviceSize offsets[] = { 0 };
+        vkCmdBindVertexBuffers(ctx.cmd, 0, 1, buffers, offsets);
+        vkCmdDraw(ctx.cmd, static_cast<uint32_t>(obj->cpuVerts.size()), 1, 0, 0);
     }
+    ++m_frameCounter;
 }
 
-void PhysicsModule::renderUi() {
-    // Position/size chosen to fit the panel's actual content within a
-    // default 1280x720 window without needing to scroll — re-checked
-    // after adding the "Load mesh" section made the panel taller than
-    // it used to be; the old y=500 start overflowed the bottom of the
-    // window at that height, found by actually testing this in a
-    // running session, not assumed to still fit. Width bumped from 300
-    // to 420 for the same reason, found the same way: three spawn
-    // buttons ("Spawn tetrahedron"/"Spawn fracturable cube"/"Spawn
-    // plastic cube") on one row genuinely needed more room than 300px
-    // gave them, confirmed by a real screenshot showing the third
-    // button clipped off entirely rather than just wrapping.
-    ImGui::SetNextWindowPos(ImVec2(320, 10), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(420, 400), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Physics");
-
-    ImGui::Text("Objects: %zu / %u", m_objects.size(), kMaxObjects);
-    ImGui::TextWrapped(
-        "This is a live example of PhysicsModule's spawn API, not a "
-        "special-cased demo button -- see PhysicsModule::spawnTetrahedron() "
-        "for the exact call this makes.");
-
-    if (ImGui::Button("Spawn tetrahedron")) {
-        // A little horizontal jitter so consecutive spawns don't land
-        // in the exact same spot — genuinely just for a legible demo,
-        // not a real placement system.
-        float jitterX = static_cast<float>((m_nextHandle * 37) % 200) / 100.0f - 1.0f; // -1..1
-        float jitterZ = static_cast<float>((m_nextHandle * 53) % 200) / 100.0f - 1.0f;
-
-        // m_selectedMaterial, not a hardcoded value — real, settable
-        // state (see selectedMaterial()'s own doc comment in
-        // PhysicsModule.h). Defaults to a reasonable wood-like
-        // material, but any UI (see kke::MaterialGridModule) can
-        // change what actually gets spawned here.
-        spawnTetrahedron(glm::vec3(jitterX * 3.0f, m_nextSpawnHeight, jitterZ * 3.0f), m_selectedMaterial);
+void PhysicsModule::publishTimingWindow(double now) {
+    double window = now - m_timingWindowStart;
+    m_lastStepMsAvg = m_timing.ticks ? m_timing.stepMsTotal / m_timing.ticks : 0.0;
+    m_lastStepMsMax = m_timing.stepMsMax;
+    m_lastRenderPrepMsAvg = m_timing.frames ? m_timing.renderPrepMsTotal / m_timing.frames : 0.0;
+    m_lastTicksPerSecond = static_cast<float>(m_timing.ticks / window);
+    m_lastFramesPerSecond = static_cast<float>(m_timing.frames / window);
+    log::get(name())->info("perf: {:.1f} fps, {:.1f} ticks/s, step avg {:.2f} ms max {:.2f} ms, render prep {:.2f} ms, "
+                           "{} object(s) / {} piece(s), {} awake piece(s), {} faces drawn",
+                           m_lastFramesPerSecond, m_lastTicksPerSecond, m_lastStepMsAvg, m_lastStepMsMax,
+                           m_lastRenderPrepMsAvg, m_objects.size(), m_totalPieces, m_awakePieces, m_renderedFaces);
+    if (m_lastWarningFlags) {
+        log::get(name())->warn("FEMFX hit a scene capacity limit this second (FM_WARNING_FLAG_* = 0x{:x}, see AMD_FEMFX.h) -- "
+                               "contacts/pieces beyond it were dropped", m_lastWarningFlags);
+        m_lastWarningFlags = 0;
     }
+    m_timing = TimingWindow{};
+    m_timingWindowStart = now;
+}
 
-    ImGui::SameLine();
-    if (ImGui::Button("Spawn fracturable cube")) {
+// The fixed schedule: every scene this module has, a second apart in
+// simulation time, so the run covers fracture, plasticity, bouncing and
+// a pile-up of debris all at once by the end. Keyed on tickIndex rather
+// than wall-clock time so a slow machine sees the exact same simulation,
+// just more slowly — which is what makes the numbers comparable.
+void PhysicsModule::benchTick(uint64_t tickIndex) {
+    if (m_benchDone) return;
+    if (m_benchStartSeconds == 0.0) m_benchStartSeconds = nowSeconds();
+    switch (tickIndex) {
+        case 30:  spawnScene(Scene::GlassSheet); break;
+        case 90:  spawnScene(Scene::Brick); break;
+        case 150: spawnScene(Scene::CarCrash); break;
+        case 210: spawnScene(Scene::LavaMelt); break;
+        case 270: spawnScene(Scene::RubberBall); break;
+        case 330: spawnScene(Scene::FracturableCube); break;
+        case 360: spawnScene(Scene::GlassSheet); break;
+        case 390: spawnScene(Scene::FracturableCube); break;
+        case 420: spawnScene(Scene::Brick); break;
+        default: break;
+    }
+    if (tickIndex < m_benchTicks) return;
+
+    m_benchDone = true;
+    double wall = nowSeconds() - m_benchStartSeconds;
+    uint totalTets = 0, pieces = 0;
+    for (auto& [handle, obj] : m_objects) {
+        uint n = AMD::FmGetNumTetMeshes(*obj->tetMeshBuffer);
+        pieces += n;
+        for (uint m = 0; m < n; ++m) totalTets += AMD::FmGetNumTets(*AMD::FmGetTetMesh(*obj->tetMeshBuffer, m));
+    }
+    log::get(name())->info(
+        "BENCH RESULT: {} ticks in {:.2f} s wall ({:.2f}x realtime), {} frames ({:.1f} fps avg), "
+        "step avg {:.2f} ms max {:.2f} ms, render prep avg {:.2f} ms, {} objects / {} pieces / {} tets",
+        m_benchTicks, wall, (m_benchTicks / 60.0) / wall, m_benchFrames, m_benchFrames / wall,
+        m_benchStepMsTotal / m_benchTicks, m_benchStepMsMax,
+        m_benchFrames ? m_benchRenderPrepMsTotal / m_benchFrames : 0.0,
+        m_objects.size(), pieces, totalTets);
+    SDL_Event quit{};
+    quit.type = SDL_EVENT_QUIT;
+    SDL_PushEvent(&quit);
+}
+
+void PhysicsModule::spawnScene(Scene scene) {
+    switch (scene) {
+    case Scene::FracturableCube: {
         // Now built through the same general buildGridBox() every new
         // scene shape below uses too, instead of its own separate
         // inline grid-generation code -- see that function's own
@@ -1220,10 +1186,9 @@ void PhysicsModule::renderUi() {
 
         spawnFracturableTetMesh(cube, glm::vec3(jitterX * 3.0f, m_nextSpawnHeight + 3.0f, jitterZ * 3.0f), material,
                                  glm::vec3(0.0f, -25.0f, 0.0f));
+        break;
     }
-
-    ImGui::SameLine();
-    if (ImGui::Button("Spawn plastic cube")) {
+    case Scene::PlasticCube: {
         // Same real 6-tet cube decomposition as the fracture button
         // above — see its own comment for why a single tetrahedron
         // wouldn't show anything meaningful here either: plasticity is
@@ -1282,20 +1247,9 @@ void PhysicsModule::renderUi() {
 
         spawnPlasticTetMesh(cube, glm::vec3(jitterX * 3.0f, m_nextSpawnHeight + 3.0f, jitterZ * 3.0f), material,
                              glm::vec3(0.0f, -25.0f, 0.0f));
+        break;
     }
-
-    ImGui::Separator();
-    ImGui::TextUnformatted("Scenes -- real fracture/plasticity, real materials, purpose-built shapes");
-    // Each scene below is a genuinely distinct shape (via
-    // buildGridBox()'s own general cellsX/Y/Z + sizeX/Y/Z parameters,
-    // not the same cube reused with a different material) and a
-    // hand-picked, scene-appropriate material -- not
-    // m_selectedMaterial, deliberately: a "Glass Sheet" scene should
-    // always demonstrate glass, regardless of whatever happens to be
-    // selected in the Material Grid above, the same way a real,
-    // purpose-built game level wouldn't let a settings panel silently
-    // change what material its own set-piece is made of.
-    if (ImGui::Button("Scene: Glass Sheet")) {
+    case Scene::GlassSheet: {
         // Thin and wide, not cube-shaped -- a real pane of glass, not
         // a glass-colored cube. 6x2x6 cells (72 tets) gives real room
         // for it to shatter into many small, convincing shards rather
@@ -1318,9 +1272,9 @@ void PhysicsModule::renderUi() {
         float jitterZ = static_cast<float>((m_nextHandle * 71) % 200) / 100.0f - 1.0f;
         spawnFracturableTetMesh(sheet, glm::vec3(jitterX * 2.0f, m_nextSpawnHeight + 3.0f, jitterZ * 2.0f), glass,
                                  glm::vec3(0.0f, -20.0f, 0.0f));
+        break;
     }
-    ImGui::SameLine();
-    if (ImGui::Button("Scene: Brick")) {
+    case Scene::Brick: {
         // Real 2:1:1 brick proportions, not a cube -- 4x2x2 cells (48
         // tets) for real fracture room without this being noticeably
         // more expensive than the existing fracturable cube.
@@ -1340,8 +1294,9 @@ void PhysicsModule::renderUi() {
         float jitterZ = static_cast<float>((m_nextHandle * 53) % 200) / 100.0f - 1.0f;
         spawnFracturableTetMesh(brick, glm::vec3(jitterX * 2.0f, m_nextSpawnHeight + 3.0f, jitterZ * 2.0f), stone,
                                  glm::vec3(0.0f, -20.0f, 0.0f));
+        break;
     }
-    if (ImGui::Button("Scene: Rubber Ball")) {
+    case Scene::RubberBall: {
         // An honest approximation, not a real sphere -- worth stating
         // plainly rather than implying otherwise: buildGridBox() only
         // produces box shapes, and a genuine tetrahedralized sphere
@@ -1384,9 +1339,9 @@ void PhysicsModule::renderUi() {
         // actually doing so.
         spawnFracturableTetMesh(ball, glm::vec3(jitterX * 2.0f, m_nextSpawnHeight + 4.0f, jitterZ * 2.0f), rubber,
                                  glm::vec3(0.0f, -18.0f, 0.0f));
+        break;
     }
-    ImGui::SameLine();
-    if (ImGui::Button("Scene: Car Crash")) {
+    case Scene::CarCrash: {
         // Two real, distinct objects, not one -- a plastic "car" (real
         // permanent denting on impact, the same mechanic the "Spawn
         // plastic cube" button already demonstrates in isolation) and
@@ -1431,8 +1386,9 @@ void PhysicsModule::renderUi() {
         glm::vec3 carPos(0.0f, m_nextSpawnHeight + 1.0f, baseZ);
         spawnFracturableTetMesh(wall, wallPos, wallMaterial, glm::vec3(0.0f));
         spawnPlasticTetMesh(car, carPos, carBody, glm::vec3(22.0f, 0.0f, 0.0f));
+        break;
     }
-    if (ImGui::Button("Scene: Lava Melt")) {
+    case Scene::LavaMelt: {
         // An honest, clearly-labeled approximation, not real melting
         // physics -- worth stating plainly rather than implying
         // otherwise: FEMFX has no phase-change or topology-loss
@@ -1493,7 +1449,78 @@ void PhysicsModule::renderUi() {
             glm::vec3 chunkPos = blockPos + glm::vec3(chunkOffsetX, 2.5f + static_cast<float>(i) * 0.6f, 0.0f);
             spawnFracturableTetMesh(lavaChunk, chunkPos, lava, glm::vec3(0.0f, -8.0f, 0.0f));
         }
+        break;
     }
+    }
+}
+
+void PhysicsModule::renderUi() {
+    // Position/size chosen to fit the panel's actual content within a
+    // default 1280x720 window without needing to scroll — re-checked
+    // after adding the "Load mesh" section made the panel taller than
+    // it used to be; the old y=500 start overflowed the bottom of the
+    // window at that height, found by actually testing this in a
+    // running session, not assumed to still fit. Width bumped from 300
+    // to 420 for the same reason, found the same way: three spawn
+    // buttons ("Spawn tetrahedron"/"Spawn fracturable cube"/"Spawn
+    // plastic cube") on one row genuinely needed more room than 300px
+    // gave them, confirmed by a real screenshot showing the third
+    // button clipped off entirely rather than just wrapping.
+    ImGui::SetNextWindowPos(ImVec2(320, 10), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(420, 400), ImGuiCond_FirstUseEver);
+    ImGui::Begin("Physics");
+
+    ImGui::Text("Objects: %zu / %u", m_objects.size(), kMaxObjects);
+    ImGui::Text("Physics step: %.2f ms avg, %.2f ms max (%.0f ticks/s)", m_lastStepMsAvg, m_lastStepMsMax, m_lastTicksPerSecond);
+    ImGui::Text("Render prep: %.2f ms  |  %.0f fps", m_lastRenderPrepMsAvg, m_lastFramesPerSecond);
+    ImGui::Text("Pieces: %u (%u awake)  |  faces drawn: %u", m_totalPieces, m_awakePieces, m_renderedFaces);
+    if (m_app->fixedStepsLastFrame() >= m_app->maxFixedStepsPerFrame() && m_lastTicksPerSecond < 55.0f) {
+        ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.2f, 1.0f), "Simulation can't keep up -- running in slow motion");
+    }
+    ImGui::TextWrapped(
+        "This is a live example of PhysicsModule's spawn API, not a "
+        "special-cased demo button -- see PhysicsModule::spawnTetrahedron() "
+        "for the exact call this makes.");
+
+    if (ImGui::Button("Spawn tetrahedron")) {
+        // A little horizontal jitter so consecutive spawns don't land
+        // in the exact same spot — genuinely just for a legible demo,
+        // not a real placement system.
+        float jitterX = static_cast<float>((m_nextHandle * 37) % 200) / 100.0f - 1.0f; // -1..1
+        float jitterZ = static_cast<float>((m_nextHandle * 53) % 200) / 100.0f - 1.0f;
+
+        // m_selectedMaterial, not a hardcoded value — real, settable
+        // state (see selectedMaterial()'s own doc comment in
+        // PhysicsModule.h). Defaults to a reasonable wood-like
+        // material, but any UI (see kke::MaterialGridModule) can
+        // change what actually gets spawned here.
+        spawnTetrahedron(glm::vec3(jitterX * 3.0f, m_nextSpawnHeight, jitterZ * 3.0f), m_selectedMaterial);
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Spawn fracturable cube")) spawnScene(Scene::FracturableCube);
+
+    ImGui::SameLine();
+    if (ImGui::Button("Spawn plastic cube")) spawnScene(Scene::PlasticCube);
+
+    ImGui::Separator();
+    ImGui::TextUnformatted("Scenes -- real fracture/plasticity, real materials, purpose-built shapes");
+    // Each scene below is a genuinely distinct shape (via
+    // buildGridBox()'s own general cellsX/Y/Z + sizeX/Y/Z parameters,
+    // not the same cube reused with a different material) and a
+    // hand-picked, scene-appropriate material -- not
+    // m_selectedMaterial, deliberately: a "Glass Sheet" scene should
+    // always demonstrate glass, regardless of whatever happens to be
+    // selected in the Material Grid above, the same way a real,
+    // purpose-built game level wouldn't let a settings panel silently
+    // change what material its own set-piece is made of.
+    if (ImGui::Button("Scene: Glass Sheet")) spawnScene(Scene::GlassSheet);
+    ImGui::SameLine();
+    if (ImGui::Button("Scene: Brick")) spawnScene(Scene::Brick);
+    if (ImGui::Button("Scene: Rubber Ball")) spawnScene(Scene::RubberBall);
+    ImGui::SameLine();
+    if (ImGui::Button("Scene: Car Crash")) spawnScene(Scene::CarCrash);
+    if (ImGui::Button("Scene: Lava Melt")) spawnScene(Scene::LavaMelt);
 
     ImGui::SameLine();
     if (ImGui::Button("Clear all")) {
@@ -1563,10 +1590,6 @@ void PhysicsModule::shutdown() {
         removeObject(handle);
     }
 
-    if (m_ground) {
-        AMD::FmDestroyRigidBody(m_ground);
-        m_ground = nullptr;
-    }
     if (m_scene) {
         AMD::FmDestroyScene(m_scene);
         m_scene = nullptr;
