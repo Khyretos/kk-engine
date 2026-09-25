@@ -124,6 +124,9 @@ Apply & save and restart — do your choices come back?
 `cd build/bin && ./synty_demo` with the Prototype pack in
 `assets/synty/POLYGON_Prototype/`. Check the level and characters look
 right, press **B** for bones, pose a bone from the Characters panel.
+Ragdolls: **R**, **Shift+R**, **T**, and **G** (glass pane) — does the
+fall look believable, does anything explode, jitter, or sink through the
+floor? How does the frame rate hold when everything falls at once?
 Then try another pack you own: unzip it the same way and point
 `KKE_SYNTY_DIR` at it — the demo only builds the Prototype level, but
 the log line `loaded '...': ... bone(s), ... animation(s), bounds ...`

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <glm/glm.hpp>
 #include <string>
 #include <vector>
 
@@ -62,6 +63,25 @@ class ISettingsListener {
 public:
     virtual ~ISettingsListener() = default;
     virtual void onSettingsChanged(const EngineSettings& settings) = 0;
+};
+
+// Implemented by a physics module that can simulate ragdolls (FEMFX's
+// PhysicsModule is the first). Character code builds a kke::RagdollDesc
+// from its skeleton (kke/Ragdoll.h), hands it to whichever module offers
+// this, and reads body transforms back every frame — so swapping physics
+// engines doesn't touch the character side.
+struct RagdollDesc;
+class IRagdollPhysics {
+public:
+    using RagdollHandle = uint32_t; // 0 = invalid
+    virtual ~IRagdollPhysics() = default;
+    // Every body starts moving at `initialVelocity` (world, m/s).
+    virtual RagdollHandle createRagdoll(const RagdollDesc& desc, const glm::vec3& initialVelocity) = 0;
+    virtual void destroyRagdoll(RagdollHandle handle) = 0;
+    // Current world transform of each body, in RagdollDesc::bodies order.
+    virtual bool ragdollBodyTransforms(RagdollHandle handle, std::vector<glm::mat4>& out) const = 0;
+    // Adds a velocity change to one body (a punch, a bullet, an explosion).
+    virtual void pushRagdollBody(RagdollHandle handle, int body, const glm::vec3& deltaVelocity) = 0;
 };
 
 } // namespace kke

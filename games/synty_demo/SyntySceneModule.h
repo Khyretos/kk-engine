@@ -2,6 +2,8 @@
 
 #include "kke/Module.h"
 #include "kke/modules/ModelModule.h"
+#include "kke/Capabilities.h"
+#include "kke/Ragdoll.h"
 
 #include <string>
 #include <vector>
@@ -31,7 +33,16 @@ private:
         kke::ModelModule::ModelId model = 0;
         std::string behavior; // "clip", "wave", "breathe", "pose"
         glm::vec3 position{0.0f};
+        // Ragdoll state (0 = standing, driven by animation/posing).
+        kke::IRagdollPhysics::RagdollHandle ragdoll = 0;
+        kke::RagdollDesc ragdollDesc;
+        kke::RagdollSkinBinding binding;
+        std::string behaviorBeforeRagdoll;
     };
+    void ragdoll(Character& c, const glm::vec3& push);
+    void standUp(Character& c);
+    kke::IRagdollPhysics* m_physics = nullptr; // optional: whatever module offers ragdolls
+    void throughGlass(Character& c); // FEMFX build only: see the .cpp
     kke::ModelModule::ModelId load(const std::string& relative);
     void place(const std::string& relative, glm::vec3 position, float yawDegrees = 0.0f, glm::vec3 scale = glm::vec3(1.0f));
     void rotateBone(Character& c, const char* bone, glm::vec3 eulerDegrees);

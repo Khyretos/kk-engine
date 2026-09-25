@@ -114,6 +114,7 @@ limitations. 🔴 Not started / stub.
 | FBX/OBJ model import (`kke::loadModel`) | 🟢 | ufbx-based: meshes, materials, texture resolution, skeletons, skin weights, sampled clips. Unit-tested (incl. real Synty character when installed). |
 | Model rendering (`kke::ModelModule`) | 🟡 | Instances, PBR lit/textured, shadows, CPU skinning, clip playback, bone posing, bone overlay. **Not yet:** GPU skinning (for crowds), mipmaps (distant textures alias), frustum culling, instanced draws. |
 | Synty packs | 🟡 | POLYGON Prototype verified (`games/synty_demo`). Loaded from git-ignored `assets/synty/` — see `assets/README.md`. Other packs untested (HARDWARE_TESTS.md HW-009). |
+| Ragdolls | 🟡 | Physics-agnostic `kke::RagdollDesc` + `buildHumanoidRagdoll()` (unit-tested) behind `IRagdollPhysics`; FEMFX implementation in `PhysicsModule` (rigid boxes, glue joints, hinge knees). Collide with floor and FEMFX deformables (ragdoll-through-glass verified). **Not yet:** limb self-collision and joint cone/twist limits (FEMFX's built-in rigid solver lacks both — a dedicated rigid-body module is the fix), blending back from ragdoll to animation. |
 | Asset browser | 🔴 | Not started — tetrahedralized mesh loading path is proven (`Load /tmp/test_output.ktet.json` button) but there's no UI to browse/pick assets. |
 | Lua scripting | 🔴 | Fetched as a dependency, not called from any code yet. |
 

@@ -6,6 +6,9 @@
 #include "kke/modules/StatsModule.h"
 
 #include "SyntySceneModule.h"
+#if KKE_ENABLE_FEMFX
+#include "kke/modules/PhysicsModule.h"
+#endif
 
 #include <iostream>
 
@@ -25,6 +28,12 @@ int main() {
 
         app.addModule<kke::OrbitCameraModule>(/*distance=*/9.0f, /*pitch=*/-0.35f, /*yaw=*/2.85f, glm::vec3(0.0f, 0.9f, -1.5f));
         app.addModule<kke::ModelModule>();
+#if KKE_ENABLE_FEMFX
+        // Ragdolls (and anything else FEMFX: fracture, soft bodies). Real
+        // units, no starting objects, and the level draws its own floor.
+        auto& physics = app.addModule<kke::PhysicsModule>(/*renderScale=*/1.0f, /*initialObjectCount=*/0);
+        physics.setDrawGround(false);
+#endif
         app.addModule<kke_demo::SyntySceneModule>();
         app.addModule<kke::DebugControlModule>();
         app.addModule<kke::StatsModule>();

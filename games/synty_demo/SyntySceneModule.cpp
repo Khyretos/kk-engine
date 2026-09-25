@@ -4,6 +4,9 @@
 #include "kke/Log.h"
 
 #include <glm/gtc/matrix_transform.hpp>
+#if KKE_ENABLE_FEMFX
+#include "kke/modules/PhysicsModule.h"
+#endif
 #include <imgui.h>
 
 #include <cmath>
@@ -64,6 +67,10 @@ void SyntySceneModule::place(const std::string& relative, glm::vec3 position, fl
 void SyntySceneModule::init(kke::Application& app) {
     m_app = &app;
     m_models = app.getModule<kke::ModelModule>();
+    // Optional and loosely coupled: any module implementing
+    // IRagdollPhysics (FEMFX's PhysicsModule today) enables ragdolls.
+    auto ragdollProviders = app.findCapability<kke::IRagdollPhysics>();
+    m_physics = ragdollProviders.empty() ? nullptr : ragdollProviders.front();
     m_packDir = findPackDir();
     if (m_packDir.empty()) {
         kke::log::get(name())->warn("Synty POLYGON Prototype pack not found. Unzip it so that "
@@ -146,7 +153,14 @@ void SyntySceneModule::rotateBone(Character& c, const char* boneName, glm::vec3 
 void SyntySceneModule::update(const kke::UpdateContext& ctx) {
     m_time += ctx.dt;
     m_models->setShowBones(m_showBones);
+    std::vector<glm::mat4> bodies;
     for (Character& c : m_characters) {
+        if (c.ragdoll && m_physics && m_physics->ragdollBodyTransforms(c.ragdoll, bodies)) {
+            const kke::ModelData* d = m_models->model(c.model);
+            glm::mat4 worldToModel = glm::inverse(m_models->transform(c.instance));
+            m_models->setBoneWorldOverride(c.instance, kke::poseFromRagdoll(*d, c.binding, bodies, worldToModel));
+            continue;
+        }
         float t = m_time;
         if (c.behavior == "wave") {
             // Arm up and out, forearm swinging. Axes were found by trying
@@ -168,8 +182,83 @@ void SyntySceneModule::update(const kke::UpdateContext& ctx) {
     }
 }
 
+void SyntySceneModule::ragdoll(Character& c, const glm::vec3& push) {
+    if (!m_physics || c.ragdoll) return;
+    const kke::ModelData* d = m_models->model(c.model);
+    if (!d) return;
+    // Start from whatever pose the character is in right now.
+    glm::mat4 instance = m_models->transform(c.instance);
+    std::vector<glm::mat4> world = m_models->boneWorld(c.instance);
+    for (glm::mat4& w : world) w = instance * w;
+    std::string missing;
+    c.ragdollDesc = kke::buildHumanoidRagdoll(*d, world, 70.0f, &missing);
+    if (c.ragdollDesc.bodies.empty()) {
+        kke::log::get(name())->warn("'{}' can't ragdoll: skeleton has no '{}' bone", c.label, missing);
+        return;
+    }
+    c.binding = kke::bindSkeletonToRagdoll(*d, world, c.ragdollDesc);
+    c.ragdoll = m_physics->createRagdoll(c.ragdollDesc, glm::vec3(0.0f));
+    if (!c.ragdoll) return;
+    // Shove the upper body harder than the legs so it topples, not slides.
+    for (const char* body : { "torso", "head" }) m_physics->pushRagdollBody(c.ragdoll, c.ragdollDesc.findBody(body), push);
+    m_physics->pushRagdollBody(c.ragdoll, c.ragdollDesc.findBody("pelvis"), push * 0.4f);
+    c.behaviorBeforeRagdoll = c.behavior;
+    c.behavior = "ragdoll";
+}
+
+// Stands a glass pane 1.8 m in front of the character (away from the
+// camera) and throws the character through it: a ragdoll (FEMFX rigid
+// bodies) hitting a fracturable FEMFX deformable body. This one needs the
+// concrete PhysicsModule for the pane — the ragdoll itself only goes
+// through IRagdollPhysics.
+void SyntySceneModule::throughGlass(Character& c) {
+#if KKE_ENABLE_FEMFX
+    auto* physics = m_app->getModule<kke::PhysicsModule>();
+    if (!physics || c.ragdoll) return;
+    glm::vec3 away = m_app->camera().target - m_app->camera().position;
+    away.y = 0.0f;
+    away = glm::length(away) > 1e-3f ? glm::normalize(away) : glm::vec3(0, 0, -1);
+    kke::Material glass;
+    glass.density = 2500.0f;
+    glass.stiffness = 7.0e7f;
+    glass.poissonsRatio = 0.22f;
+    glass.fractureStressThreshold = 2000.0f; // same measured glass value as PhysicsModule's Glass Sheet scene
+    glass.metallic = 0.0f;
+    glass.roughness = 0.05f;
+    glass.textureId = 4;
+    glm::vec3 pane = glm::vec3(m_models->transform(c.instance)[3]) + away * 1.8f + glm::vec3(0, 1.21f, 0);
+    float yaw = glm::degrees(std::atan2(away.x, away.z));
+    physics->spawnFracturableBox(glm::ivec3(6, 6, 1), glm::vec3(2.2f, 2.4f, 0.1f), pane, glass, yaw);
+    ragdoll(c, away * 11.0f + glm::vec3(0, 1.5f, 0));
+#else
+    (void)c;
+#endif
+}
+
+void SyntySceneModule::standUp(Character& c) {
+    if (!c.ragdoll) return;
+    m_physics->destroyRagdoll(c.ragdoll);
+    c.ragdoll = 0;
+    m_models->setBoneWorldOverride(c.instance, {});
+    c.behavior = c.behaviorBeforeRagdoll;
+}
+
 void SyntySceneModule::onEvent(const SDL_Event& event) {
-    if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat && event.key.key == SDLK_B) m_showBones = !m_showBones;
+    if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat) return;
+    if (event.key.key == SDLK_B) m_showBones = !m_showBones;
+    if (event.key.key == SDLK_R && !m_characters.empty()) {
+        // Shift+R: everyone; R: the selected character. Pushed away from
+        // the camera so you see them fall.
+        glm::vec3 away = m_app->camera().target - m_app->camera().position;
+        away.y = 0.0f;
+        away = glm::length(away) > 1e-3f ? glm::normalize(away) : glm::vec3(0, 0, -1);
+        bool all = (event.key.mod & SDL_KMOD_SHIFT) != 0;
+        for (int i = 0; i < static_cast<int>(m_characters.size()); ++i) {
+            if (all || i == m_selected) ragdoll(m_characters[i], away * 4.0f + glm::vec3(0, 1.0f, 0));
+        }
+    }
+    if (event.key.key == SDLK_T) for (Character& c : m_characters) standUp(c);
+    if (event.key.key == SDLK_G && !m_characters.empty()) throughGlass(m_characters[m_selected]);
 }
 
 void SyntySceneModule::renderUi() {
@@ -185,6 +274,12 @@ void SyntySceneModule::renderUi() {
     }
     ImGui::Text("%zu props, %zu characters, %zu draw calls", m_propCount, m_characters.size(), m_models->drawCallsLastFrame());
     ImGui::Checkbox("Show bones (B)", &m_showBones);
+    if (m_physics) {
+        ImGui::TextWrapped("R: ragdoll selected   Shift+R: everyone   T: stand up   G: through a glass pane\n"
+                           "(physics body boxes: Physics panel)");
+    } else {
+        ImGui::TextDisabled("Ragdolls need a physics module (build with -DKKE_ENABLE_FEMFX=ON)");
+    }
     for (int i = 0; i < static_cast<int>(m_characters.size()); ++i) {
         if (ImGui::RadioButton(m_characters[i].label.c_str(), m_selected == i)) {
             m_selected = i;

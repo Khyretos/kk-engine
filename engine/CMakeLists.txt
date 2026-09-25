@@ -14,6 +14,7 @@ set(ENGINE_SOURCES
     src/GameManifest.cpp
     src/EngineSettings.cpp
     src/ModelAsset.cpp
+    src/Ragdoll.cpp
     src/TetMeshAsset.cpp
     src/LightingBuffer.cpp
     src/ShadowMap.cpp
@@ -55,6 +56,7 @@ set(ENGINE_HEADERS
     include/kke/GameManifest.h
     include/kke/EngineSettings.h
     include/kke/ModelAsset.h
+    include/kke/Ragdoll.h
     include/kke/TetMeshAsset.h
     include/kke/LightingBuffer.h
     include/kke/ShadowMap.h

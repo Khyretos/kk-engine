@@ -1488,6 +1488,22 @@ hand-posed skeleton you edit bone by bone from the **Characters** panel.
 **B** toggles the bone overlay (drawn on top, lined up exactly with the
 skinned meshes).
 
+**Ragdolls** (FEMFX build): **R** ragdolls the selected character with a
+shove, **Shift+R** knocks everyone over, **T** stands them back up, and
+**G** stands a FEMFX glass pane in front of the selected character and
+throws them through it — rigid-body ragdoll meets fracturable deformable
+body; the pane shatters (~57 pieces) and everything goes to sleep once it
+settles. The character side only talks to `kke::IRagdollPhysics`
+(`Capabilities.h`), so another physics module could provide ragdolls
+without the character code changing. The ragdoll itself is built from the
+skeleton by `kke::buildHumanoidRagdoll()` (`Ragdoll.h`, unit-tested):
+11 boxes (pelvis, torso, head, upper/lower arms, thighs, calves), ball
+joints, hinge knees, starting from whatever pose the character is in.
+**Current limits, from FEMFX itself:** limbs don't collide with each other
+(its built-in rigid solver has no rigid-vs-rigid contacts — AMD's samples
+disable them too) and there are no cone/twist limits, so limbs can
+over-rotate. Ragdolls do collide with the floor and FEMFX objects.
+
 The pack is never committed (licensed per user): put it at
 `assets/synty/POLYGON_Prototype/` or set `KKE_SYNTY_DIR` — see
 `assets/README.md`. Without it the demo runs and says where to put it.

@@ -18,6 +18,7 @@
 #include <queue>
 #include <functional>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <cmath>
 #include <algorithm>
 #include <chrono>
@@ -320,16 +321,18 @@ void PhysicsModule::init(Application& app) {
     // Proportions follow AMD's own TestScenes.h, scaled down.
     sceneParams.maxTetMeshBuffers = kMaxObjects;
     sceneParams.maxTetMeshes = kMaxScenePieces;
-    sceneParams.maxRigidBodies = 0; // no rigid bodies -- see the ground comment below
+    // Rigid bodies are ragdoll limbs (see createRagdoll()); the ground is
+    // FEMFX's built-in floor plane, not a body -- see the ground comment below.
+    sceneParams.maxRigidBodies = kMaxRigidBodies;
     sceneParams.maxDistanceContacts = 65536;
     sceneParams.maxVolumeContacts = 8192;
     sceneParams.maxVolumeContactVerts = 131072;
     sceneParams.maxDeformationConstraints = kMaxObjects * 64;
-    sceneParams.maxGlueConstraints = 0;
+    sceneParams.maxGlueConstraints = kMaxRigidBodies * 2;
     sceneParams.maxPlaneConstraints = 0;
-    sceneParams.maxRigidBodyAngleConstraints = 0;
+    sceneParams.maxRigidBodyAngleConstraints = kMaxRigidBodies;
     sceneParams.maxBroadPhasePairs = 16384;
-    sceneParams.maxRigidBodyBroadPhasePairs = 0;
+    sceneParams.maxRigidBodyBroadPhasePairs = 4096;
     sceneParams.maxSceneVerts = 65536;
     sceneParams.maxTetMeshBufferFeatures = 4096;
     sceneParams.numWorkerThreads = numWorkers;
@@ -353,6 +356,8 @@ void PhysicsModule::init(Application& app) {
         TriggerSyncEvent
     );
     AMD::FmSetSceneTaskSystemCallbacks(m_scene, callbacks);
+    // Ragdoll limbs don't collide with each other (see createRagdoll()).
+    AMD::FmSetGroupsCanCollide(m_scene, kRagdollCollisionGroup, kRagdollCollisionGroup, false);
 
     // --- The ground: FEMFX's own built-in scene collision plane, not a
     // rigid body. FmSceneControlParams::collisionPlanes defaults to a
@@ -771,6 +776,16 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshInternal(const TetMeshDat
     return handle;
 }
 
+PhysicsModule::ObjectHandle PhysicsModule::spawnFracturableBox(const glm::ivec3& cells, const glm::vec3& size, const glm::vec3& center,
+                                                                 const Material& material, float yawDegrees, const glm::vec3& velocity) {
+    TetMeshData box = buildGridBox(cells.x, cells.y, cells.z, size.x, size.y, size.z);
+    if (yawDegrees != 0.0f) {
+        glm::mat3 r = glm::mat3(glm::rotate(glm::mat4(1.0f), glm::radians(yawDegrees), glm::vec3(0, 1, 0)));
+        for (glm::vec3& v : box.vertices) v = r * v;
+    }
+    return spawnFracturableTetMesh(box, center, material, velocity);
+}
+
 PhysicsModule::ObjectHandle PhysicsModule::spawnTetrahedron(const glm::vec3& position, const Material& material) {
     // The exact single-tetrahedron shape this class's whole
     // verification history (gdb-traced crashes and their fixes,
@@ -1058,6 +1073,7 @@ void PhysicsModule::render(const RenderContext& ctx) {
         // drawn. Fixed by computing the thickness first and deriving
         // the translation FROM it, so the rendered top surface is
         // always exactly y=0 regardless of how the clamp scales it.
+        if (m_drawGround) {
         float groundWidth = glm::clamp(100.0f * m_renderScale, 0.5f, 10.0f);
         float groundThickness = glm::clamp(0.05f * m_renderScale, 0.0005f, 0.15f);
 
@@ -1074,6 +1090,24 @@ void PhysicsModule::render(const RenderContext& ctx) {
         vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
         m_groundMesh->bind(ctx.cmd);
         m_groundMesh->draw(ctx.cmd);
+        }
+    }
+
+    if (m_showRagdollBodies) {
+        vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(), 2, 1,
+                                 &ctx.defaultMaterialTextureDescriptorSet, 0, nullptr);
+        m_groundMesh->bind(ctx.cmd);
+        std::vector<glm::mat4> transforms;
+        for (auto& [handle, rd] : m_ragdolls) {
+            ragdollBodyTransforms(handle, transforms);
+            for (size_t i = 0; i < transforms.size(); ++i) {
+                glm::mat4 m = glm::scale(transforms[i], rd.halfExtents[i] * 2.0f * m_renderScale);
+                m[3] = glm::vec4(glm::vec3(transforms[i][3]) * m_renderScale, 1.0f);
+                PhysicsPushConstants pc{ m, 0.0f, 0.6f };
+                vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+                m_groundMesh->draw(ctx.cmd);
+            }
+        }
     }
 
     // Every spawned object — each one's simulated vertex positions are
@@ -1096,6 +1130,116 @@ void PhysicsModule::render(const RenderContext& ctx) {
         vkCmdDraw(ctx.cmd, static_cast<uint32_t>(obj->cpuVerts.size()), 1, 0, 0);
     }
     ++m_frameCounter;
+}
+
+PhysicsModule::RagdollHandle PhysicsModule::createRagdoll(const RagdollDesc& desc, const glm::vec3& initialVelocity) {
+    if (!m_scene || desc.bodies.empty()) return 0;
+    size_t used = 0;
+    for (auto& [h, rd] : m_ragdolls) used += rd.bodies.size();
+    if (used + desc.bodies.size() > kMaxRigidBodies) {
+        log::get(name())->warn("createRagdoll: would exceed {} rigid bodies", kMaxRigidBodies);
+        return 0;
+    }
+    RagdollInstance rd;
+    for (const RagdollBody& b : desc.bodies) {
+        glm::quat q = glm::quat_cast(glm::mat3(b.transform));
+        AMD::FmRigidBodySetupParams params;
+        params.state.pos = AMD::FmInitVector3(b.transform[3].x, b.transform[3].y, b.transform[3].z);
+        params.state.quat = AMD::FmInitQuat(q.x, q.y, q.z, q.w);
+        params.state.vel = AMD::FmInitVector3(initialVelocity.x, initialVelocity.y, initialVelocity.z);
+        params.halfDimX = b.halfExtents.x;
+        params.halfDimY = b.halfExtents.y;
+        params.halfDimZ = b.halfExtents.z;
+        params.mass = b.mass;
+        params.bodyInertiaTensor = AMD::FmComputeBodyInertiaTensorForBox(b.halfExtents.x, b.halfExtents.y, b.halfExtents.z, b.mass);
+        params.collisionGroup = static_cast<uint8_t>(kRagdollCollisionGroup);
+        AMD::FmRigidBody* body = AMD::FmCreateRigidBody(params);
+        if (!body) {
+            log::get(name())->error("createRagdoll: FmCreateRigidBody failed for '{}'", b.name);
+            continue;
+        }
+        uint id = AMD::FmAddRigidBodyToScene(m_scene, body);
+        AMD::FmEnableSleeping(m_scene, body, true);
+        rd.bodies.push_back(body);
+        rd.bodyIds.push_back(id);
+        rd.halfExtents.push_back(b.halfExtents);
+    }
+    if (rd.bodies.size() != desc.bodies.size()) {
+        for (size_t i = 0; i < rd.bodies.size(); ++i) {
+            AMD::FmRemoveRigidBodyFromScene(m_scene, rd.bodyIds[i]);
+            AMD::FmDestroyRigidBody(rd.bodies[i]);
+        }
+        return 0;
+    }
+    auto bodySpace = [&](int body, glm::vec3 worldPoint) {
+        const glm::mat4& t = desc.bodies[body].transform;
+        return glm::transpose(glm::mat3(t)) * (worldPoint - glm::vec3(t[3]));
+    };
+    for (const RagdollJoint& j : desc.joints) {
+        // Ball joint: pin the same world point on both bodies. Settings
+        // follow AMD's own car sample (TestScenes.cpp): full correction.
+        AMD::FmGlueConstraintSetupParams glue;
+        glue.bufferIdA = rd.bodyIds[j.bodyA];
+        glue.bufferIdB = rd.bodyIds[j.bodyB];
+        glm::vec3 a = bodySpace(j.bodyA, j.anchor), b = bodySpace(j.bodyB, j.anchor);
+        glue.posBodySpaceA[0] = a.x; glue.posBodySpaceA[1] = a.y; glue.posBodySpaceA[2] = a.z; glue.posBodySpaceA[3] = 1.0f;
+        glue.posBodySpaceB[0] = b.x; glue.posBodySpaceB[1] = b.y; glue.posBodySpaceB[2] = b.z; glue.posBodySpaceB[3] = 1.0f;
+        glue.kVelCorrection = 1.0f;
+        glue.kPosCorrection = 1.0f;
+        rd.glueIds.push_back(AMD::FmAddGlueConstraintToScene(m_scene, glue));
+        if (j.hinge) {
+            AMD::FmRigidBodyAngleConstraintSetupParams hinge;
+            hinge.objectIdA = rd.bodyIds[j.bodyA];
+            hinge.objectIdB = rd.bodyIds[j.bodyB];
+            glm::vec3 axA = glm::transpose(glm::mat3(desc.bodies[j.bodyA].transform)) * j.hingeAxis;
+            glm::vec3 axB = glm::transpose(glm::mat3(desc.bodies[j.bodyB].transform)) * j.hingeAxis;
+            hinge.axisBodySpaceA = AMD::FmInitVector3(axA.x, axA.y, axA.z);
+            hinge.axisBodySpaceB = AMD::FmInitVector3(axB.x, axB.y, axB.z);
+            hinge.kVelCorrection = 1.0f;
+            hinge.kPosCorrection = 1.0f;
+            hinge.frictionCoeff = 0.4f;
+            rd.hingeIds.push_back(AMD::FmAddRigidBodyAngleConstraintToScene(m_scene, hinge));
+        }
+    }
+    RagdollHandle handle = m_nextRagdoll++;
+    log::get(name())->info("ragdoll {}: {} bodies, {} joints ({} hinges)", handle, rd.bodies.size(), rd.glueIds.size(), rd.hingeIds.size());
+    m_ragdolls[handle] = std::move(rd);
+    return handle;
+}
+
+void PhysicsModule::destroyRagdoll(RagdollHandle handle) {
+    auto it = m_ragdolls.find(handle);
+    if (it == m_ragdolls.end() || !m_scene) return;
+    RagdollInstance& rd = it->second;
+    for (uint id : rd.hingeIds) AMD::FmRemoveRigidBodyAngleConstraintFromScene(m_scene, id);
+    for (uint id : rd.glueIds) AMD::FmRemoveGlueConstraintFromScene(m_scene, id);
+    for (size_t i = 0; i < rd.bodies.size(); ++i) {
+        AMD::FmRemoveRigidBodyFromScene(m_scene, rd.bodyIds[i]);
+        AMD::FmDestroyRigidBody(rd.bodies[i]);
+    }
+    m_ragdolls.erase(it);
+}
+
+bool PhysicsModule::ragdollBodyTransforms(RagdollHandle handle, std::vector<glm::mat4>& out) const {
+    auto it = m_ragdolls.find(handle);
+    if (it == m_ragdolls.end()) return false;
+    out.resize(it->second.bodies.size());
+    for (size_t i = 0; i < out.size(); ++i) {
+        AMD::FmVector3 p = AMD::FmGetPosition(*it->second.bodies[i]);
+        AMD::FmQuat q = AMD::FmGetRotation(*it->second.bodies[i]);
+        glm::mat4 m = glm::mat4_cast(glm::quat(q.w, q.x, q.y, q.z));
+        m[3] = glm::vec4(p.x, p.y, p.z, 1.0f);
+        out[i] = m;
+    }
+    return true;
+}
+
+void PhysicsModule::pushRagdollBody(RagdollHandle handle, int body, const glm::vec3& dv) {
+    auto it = m_ragdolls.find(handle);
+    if (it == m_ragdolls.end() || body < 0 || body >= static_cast<int>(it->second.bodies.size())) return;
+    AMD::FmRigidBody* rb = it->second.bodies[body];
+    AMD::FmVector3 v = AMD::FmGetVelocity(*rb);
+    AMD::FmSetVelocity(m_scene, rb, AMD::FmInitVector3(v.x + dv.x, v.y + dv.y, v.z + dv.z));
 }
 
 void PhysicsModule::publishTimingWindow(double now) {
@@ -1474,6 +1618,11 @@ void PhysicsModule::renderUi() {
     ImGui::Text("Physics step: %.2f ms avg, %.2f ms max (%.0f ticks/s)", m_lastStepMsAvg, m_lastStepMsMax, m_lastTicksPerSecond);
     ImGui::Text("Render prep: %.2f ms  |  %.0f fps", m_lastRenderPrepMsAvg, m_lastFramesPerSecond);
     ImGui::Text("Pieces: %u (%u awake)  |  faces drawn: %u", m_totalPieces, m_awakePieces, m_renderedFaces);
+    if (!m_ragdolls.empty()) {
+        ImGui::Text("Ragdolls: %zu", m_ragdolls.size());
+        ImGui::SameLine();
+        ImGui::Checkbox("show bodies", &m_showRagdollBodies);
+    }
     if (m_app->fixedStepsLastFrame() >= m_app->maxFixedStepsPerFrame() && m_lastTicksPerSecond < 55.0f) {
         ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.2f, 1.0f), "Simulation can't keep up -- running in slow motion");
     }
@@ -1589,6 +1738,10 @@ void PhysicsModule::shutdown() {
     for (ObjectHandle handle : handles) {
         removeObject(handle);
     }
+
+    std::vector<RagdollHandle> ragdolls;
+    for (auto& [h, rd] : m_ragdolls) ragdolls.push_back(h);
+    for (RagdollHandle h : ragdolls) destroyRagdoll(h);
 
     if (m_scene) {
         AMD::FmDestroyScene(m_scene);

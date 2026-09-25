@@ -8,6 +8,8 @@
 #include "kke/Texture.h"
 #include "kke/TetMeshAsset.h"
 #include "kke/Renderer.h"
+#include "kke/Capabilities.h"
+#include "kke/Ragdoll.h"
 
 #include <glm/glm.hpp>
 #include <memory>
@@ -127,7 +129,7 @@ namespace kke {
 //   - FmAlignedMalloc/FmAlignedFree — an allocator hook FEMFX declares
 //     extern and expects the application to define. Implemented via
 //     std::aligned_alloc.
-class PhysicsModule : public Module {
+class PhysicsModule : public Module, public IRagdollPhysics {
 public:
     using ObjectHandle = uint32_t;
     static constexpr ObjectHandle kInvalidHandle = 0;
@@ -209,6 +211,13 @@ public:
     // general path rather than kept as separate, parallel code.
     ObjectHandle spawnTetrahedron(const glm::vec3& position, const Material& material);
 
+    // A fracturable box of cellsX*Y*Z cells (6 tets each) with the given
+    // world size, centered at `center` and turned `yawDegrees` about +Y.
+    // More cells = more, smaller pieces when it breaks, at more cost.
+    ObjectHandle spawnFracturableBox(const glm::ivec3& cells, const glm::vec3& size, const glm::vec3& center,
+                                     const Material& material, float yawDegrees = 0.0f,
+                                     const glm::vec3& velocity = glm::vec3(0.0f));
+
     // Removes a previously spawned object. Safe to call with
     // kInvalidHandle or a handle that's already been removed — both
     // are no-ops, not errors, matching this codebase's general
@@ -224,6 +233,24 @@ public:
     // set up a scene without clicking through ImGui.
     enum class Scene { GlassSheet, Brick, RubberBall, CarCrash, LavaMelt, FracturableCube, PlasticCube };
     void spawnScene(Scene scene);
+
+    // ---- IRagdollPhysics (see kke/Capabilities.h, kke/Ragdoll.h)
+    // Bodies are FEMFX rigid boxes joined by glue (ball) constraints, with
+    // hinge constraints where RagdollJoint::hinge is set. They collide with
+    // the floor and with FEMFX deformable/fracturable objects, but not with
+    // each other: FEMFX's built-in rigid body solver doesn't do rigid-vs-
+    // rigid contacts (AMD's own samples disable them the same way). No
+    // cone/twist joint limits exist in FEMFX, so limbs can over-rotate.
+    RagdollHandle createRagdoll(const RagdollDesc& desc, const glm::vec3& initialVelocity) override;
+    void destroyRagdoll(RagdollHandle handle) override;
+    bool ragdollBodyTransforms(RagdollHandle handle, std::vector<glm::mat4>& out) const override;
+    void pushRagdollBody(RagdollHandle handle, int body, const glm::vec3& deltaVelocity) override;
+
+    // The visual ground slab this module draws at y=0. Turn it off when
+    // the game draws its own floor (it would z-fight).
+    void setDrawGround(bool draw) { m_drawGround = draw; }
+    // Draw each ragdoll rigid body as a box (physics debug view).
+    void setShowRagdollBodies(bool show) { m_showRagdollBodies = show; }
 
     // The material a plain "Spawn tetrahedron" click uses — real,
     // settable state (mirroring how Application::lighting() already
@@ -413,6 +440,18 @@ private:
     // future work once there's more than one material worth choosing
     // between in a demo.
     float m_nextSpawnHeight = 5.0f;
+
+    struct RagdollInstance {
+        std::vector<AMD::FmRigidBody*> bodies;
+        std::vector<uint> bodyIds, glueIds, hingeIds;
+        std::vector<glm::vec3> halfExtents;
+    };
+    std::unordered_map<RagdollHandle, RagdollInstance> m_ragdolls;
+    RagdollHandle m_nextRagdoll = 1;
+    static constexpr uint kRagdollCollisionGroup = 3;
+    static constexpr uint kMaxRigidBodies = 256;
+    bool m_drawGround = true;
+    bool m_showRagdollBodies = false;
 
     // Real, measured cost, shown in renderUi() and logged once a second —
     // so "physics is slow" is a number, not an impression. Accumulated
