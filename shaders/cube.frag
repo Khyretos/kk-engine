@@ -117,13 +117,19 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
+
+// Colors are authored in sRGB (color pickers, hex codes, palette values)
+// but the swapchain is VK_FORMAT_B8G8R8A8_SRGB, which gamma-encodes
+// whatever the shader writes. Writing sRGB values straight out encoded
+// them twice: everything looked washed out. Convert to linear first.
+vec3 srgbToLinear(vec3 c) {
+    return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c));
+}
+
 void main() {
-    // TEMPORARY DIAGNOSTIC -- world-space normal directly as color, to
-    // check unambiguously whether multiple distinct faces are actually
-    // being rasterized at all for physics-spawned tetrahedra.
-    outColor = vec4(normalize(fragNormalWorld) * 0.5 + 0.5, 1.0);
-    return;
-    vec3 albedo = fragColor * texture(albedoTexture, fragUV).rgb;
+    // Albedo textures are VK_FORMAT_R8G8B8A8_SRGB, so sampling already
+    // returns linear values; vertex colors need converting here.
+    vec3 albedo = srgbToLinear(fragColor) * texture(albedoTexture, fragUV).rgb;
     // Clamped away from the true extremes (0.0 and 1.0), not just
     // whatever a UI slider happens to allow through -- roughness=0
     // makes distributionGGX's denominator degenerate toward a

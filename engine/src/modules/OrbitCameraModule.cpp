@@ -19,7 +19,7 @@ void OrbitCameraModule::update(const UpdateContext& ctx) {
 
     // Don't fight ImGui: if the mouse is over/dragging an ImGui widget,
     // that input belongs to the UI, not the camera.
-    bool uiWantsMouse = ImGui::GetIO().WantCaptureMouse;
+    bool uiWantsMouse = ImGui::GetIO().WantCaptureMouse || m_app->uiCapturesMouse();
 
     if (!uiWantsMouse && mouse.leftButtonDown) {
         m_yaw += mouse.deltaX * m_orbitSensitivity;

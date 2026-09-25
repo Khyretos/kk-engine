@@ -99,18 +99,18 @@ const char* kMaterialGridRml = R"(
            physics_demo but not once kke_demo (see README "Complete
            kke_demo showcase") needed to fit this beside
            LightingControlsModule's own panel on the same screen. */
-        .gridpanel { position: absolute; left: 40px; top: 500px; width: 460px; background-color: #1a1d2e; padding: 14px; pointer-events: auto; }
-        .gridpanel h1 { display: block; font-size: 15px; color: #a0c8ff; margin-bottom: 10px; font-family: Noto Sans; }
-        .card { display: inline-block; width: 70px; height: 118px; margin-right: 6px; background-color: #262636; border: 2px #333344; padding: 4px; text-align: center; }
-        .card:hover { border: 2px #6a9aee; background-color: #2d2d42; }
-        .card.selected { border: 2px #4a7ac9; background-color: #2a3a5a; }
-        .swatch { display: block; width: 44px; height: 44px; margin-left: auto; margin-right: auto; margin-bottom: 5px; border: 1px #00000080; }
-        .cardlabel { display: block; font-size: 12px; color: #ffffff; font-family: Noto Sans; }
-        .cardstat { display: block; font-size: 10px; color: #9aa0c0; font-family: Noto Sans; }
-        .hint { display: block; margin-top: 10px; font-size: 12px; color: #7fd8a0; font-family: Noto Sans; }
+        .gridpanel { position: absolute; left: 40dp; top: 500dp; width: 460dp; max-width: 92%; background-color: #1a1d2e; padding: 14dp; pointer-events: auto; }
+        .gridpanel h1 { display: block; font-size: 15dp; color: #a0c8ff; margin-bottom: 10dp; font-family: Noto Sans; }
+        .card { display: inline-block; width: 70dp; height: 118dp; margin-right: 6dp; background-color: #262636; border: 2dp #333344; padding: 4dp; text-align: center; }
+        .card:hover { border: 2dp #6a9aee; background-color: #2d2d42; }
+        .card.selected { border: 2dp #4a7ac9; background-color: #2a3a5a; }
+        .swatch { display: block; width: 44dp; height: 44dp; margin-left: auto; margin-right: auto; margin-bottom: 5dp; border: 1dp #00000080; }
+        .cardlabel { display: block; font-size: 12dp; color: #ffffff; font-family: Noto Sans; }
+        .cardstat { display: block; font-size: 10dp; color: #9aa0c0; font-family: Noto Sans; }
+        .hint { display: block; margin-top: 10dp; font-size: 12dp; color: #7fd8a0; font-family: Noto Sans; }
     </style>
 </head>
-<body style="width:1280px; height:720px; pointer-events:none;">
+<body style="width:100%; height:100%; pointer-events:none;">
     <div id="material-grid-panel" class="gridpanel">
         <h1 class="draggable-handle">Material Grid -- select what "Spawn tetrahedron" spawns next</h1>
         <div id="card-wood" class="card selected">

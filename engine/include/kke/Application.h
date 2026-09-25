@@ -199,6 +199,13 @@ public:
     // at validation-layer output) a frame that isn't changing out from
     // under you. Rendering itself is never paused: a frozen frame still
     // needs to actually get drawn and presented to be inspectable at all.
+    // Set every frame by UI modules (RmlUi's UiModule) while the mouse is
+    // over, or dragging, one of their elements — so gameplay/camera
+    // modules don't also react to a click meant for a button. ImGui has
+    // its own equivalent (ImGui::GetIO().WantCaptureMouse); check both.
+    void setUiCapturesMouse(bool captured) { m_uiCapturesMouse = captured; }
+    bool uiCapturesMouse() const { return m_uiCapturesMouse; }
+
     bool isPaused() const { return m_paused; }
     void setPaused(bool paused) { m_paused = paused; }
     // Advances the simulation by exactly one fixed tick + one update()
@@ -271,6 +278,7 @@ private:
     std::unordered_map<std::type_index, Module*> m_moduleByType;
 
     bool m_paused = false;
+    bool m_uiCapturesMouse = false;
     bool m_stepRequested = false;
 
     std::unordered_set<Module*> m_faultedModules; // see safeInvoke() — never called again once here

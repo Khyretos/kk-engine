@@ -24,7 +24,7 @@ std::vector<ModuleDependency> MarketplaceUiModule::dependencies() const {
 std::string MarketplaceUiModule::buildDocumentRml() const {
     std::ostringstream rml;
     rml << R"(<rml><head><title>Marketplace</title></head>)"
-        << R"(<body style="position:absolute; left:0px; top:0px; width:1280px; height:720px; font-family:Noto Sans; pointer-events:none;">)"
+        << R"(<body style="position:absolute; left:0dp; top:0dp; width:100%; height:100%; font-family:Noto Sans; pointer-events:none;">)"
         // pointer-events:none is load-bearing, not decorative: without it,
         // this full-screen body swallowed every mouse hit-test across the
         // ENTIRE window for any document in the same Rml::Context loaded
@@ -46,7 +46,7 @@ std::string MarketplaceUiModule::buildDocumentRml() const {
         // 820px/140px against that same 1600x900 reference design,
         // just expressed so RmlUi resolves it against whatever the
         // window's own current size actually is.
-        << R"(<div style="display:block; position:absolute; left:51.25%; top:15.56%; width:420px; background-color:#1a1d2e; padding:16px; pointer-events:auto;">)"
+        << R"(<div style="display:block; position:absolute; left:51.25%; top:15.56%; width:420dp; max-width:45%; background-color:#1a1d2e; padding:16dp; pointer-events:auto;">)"
         // Confirmed and fixed: display:block was missing from every <p>
         // and <div> below. RmlUi has no built-in "p/div default to
         // block" rule the way a browser does — that behavior in
@@ -57,7 +57,7 @@ std::string MarketplaceUiModule::buildDocumentRml() const {
         // why titles/ids/descriptions/tags all ran together on one
         // line instead of stacking. Same root cause, same fix, as the
         // rmlui_demo tabset layout bug found earlier this session.
-        << R"(<p class="draggable-handle" style="display:block; font-size:22px; color:#ffffff; pointer-events:auto; font-family:Noto Sans;">Marketplace (# )" << m_index.count() << R"( games)</p>)";
+        << R"(<p class="draggable-handle" style="display:block; font-size:22dp; color:#ffffff; pointer-events:auto; font-family:Noto Sans;">Marketplace (# )" << m_index.count() << R"( games)</p>)";
 
     for (const auto& game : m_index.games()) {
         // Every field below came from someone else's game.json, not this
@@ -75,14 +75,14 @@ std::string MarketplaceUiModule::buildDocumentRml() const {
             tags += escapeRmlText(tag);
         }
 
-        rml << R"(<div style="display:block; margin-top:12px; padding:10px; background-color:#2a2f4a;">)"
-            << R"(<p style="display:block; font-size:18px; color:#ffffff; font-family:Noto Sans;">)" << title << "</p>"
-            << R"(<p style="display:block; font-size:13px; color:#9aa0c0; font-family:Noto Sans;">)" << id << "</p>";
+        rml << R"(<div style="display:block; margin-top:12dp; padding:10dp; background-color:#2a2f4a;">)"
+            << R"(<p style="display:block; font-size:18dp; color:#ffffff; font-family:Noto Sans;">)" << title << "</p>"
+            << R"(<p style="display:block; font-size:13dp; color:#9aa0c0; font-family:Noto Sans;">)" << id << "</p>";
         if (!description.empty()) {
-            rml << R"(<p style="display:block; font-size:14px; color:#c8ccdc; margin-top:6px; font-family:Noto Sans;">)" << description << "</p>";
+            rml << R"(<p style="display:block; font-size:14dp; color:#c8ccdc; margin-top:6dp; font-family:Noto Sans;">)" << description << "</p>";
         }
         if (!tags.empty()) {
-            rml << R"(<p style="display:block; font-size:12px; color:#7fd8a0; margin-top:6px; font-family:Noto Sans;">)" << tags << "</p>";
+            rml << R"(<p style="display:block; font-size:12dp; color:#7fd8a0; margin-top:6dp; font-family:Noto Sans;">)" << tags << "</p>";
         }
         rml << "</div>";
     }

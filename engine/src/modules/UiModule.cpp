@@ -71,6 +71,10 @@ Rml::Input::KeyIdentifier sdlKeyToRmlKey(SDL_Keycode key) {
         case SDLK_LCTRL: return KI_LCONTROL;
         case SDLK_RCTRL: return KI_RCONTROL;
         case SDLK_PERIOD: return KI_OEM_PERIOD;
+        case SDLK_KP_ENTER: return KI_NUMPADENTER;
+        case SDLK_MINUS: return KI_OEM_MINUS;
+        case SDLK_COMMA: return KI_OEM_COMMA;
+        case SDLK_INSERT: return KI_INSERT;
         case SDLK_F1: return KI_F1;
         case SDLK_F2: return KI_F2;
         case SDLK_F3: return KI_F3;
@@ -150,6 +154,17 @@ Rml::Element* findDraggablePanelAncestor(Rml::Element* handle) {
 
 } // namespace
 
+void UiModule::EngineSystemInterface::ActivateKeyboard(Rml::Vector2f caretPosition, float lineHeight) {
+    if (!window) return;
+    SDL_Rect area{ static_cast<int>(caretPosition.x), static_cast<int>(caretPosition.y), 1, static_cast<int>(lineHeight) };
+    SDL_SetTextInputArea(window, &area, 0);
+    SDL_StartTextInput(window);
+}
+
+void UiModule::EngineSystemInterface::DeactivateKeyboard() {
+    if (window) SDL_StopTextInput(window);
+}
+
 double UiModule::EngineSystemInterface::GetElapsedTime() {
     static const auto start = std::chrono::steady_clock::now();
     return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
@@ -164,6 +179,7 @@ bool UiModule::EngineSystemInterface::LogMessage(Rml::Log::Type type, const Rml:
 
 void UiModule::init(Application& app) {
     m_app = &app;
+    m_systemInterface.window = app.window().handle();
     m_renderInterface = std::make_unique<RmlVulkanRenderInterface>(app.device(), app.renderer().renderPass());
 
     Rml::SetSystemInterface(&m_systemInterface);
@@ -202,18 +218,41 @@ void UiModule::init(Application& app) {
     std::cout << "[ui] RmlUi initialised with real Vulkan rendering (text via glyph textures, <img>/background-image via stb_image, both real now -- see RmlVulkanRenderInterface.h)" << std::endl;
 }
 
-void UiModule::update(const UpdateContext& /*ctx*/) {
-    if (m_context) {
-        // By this point in the frame the swapchain has already been
-        // recreated if a resize happened — see the class comment for
-        // why this per-frame check, not the SDL resize event directly.
-        VkExtent2D extent = m_app->renderer().extent();
-        Rml::Vector2i currentSize = m_context->GetDimensions();
-        if (currentSize.x != static_cast<int>(extent.width) || currentSize.y != static_cast<int>(extent.height)) {
-            m_context->SetDimensions(Rml::Vector2i(static_cast<int>(extent.width), static_cast<int>(extent.height)));
-        }
-        m_context->Update();
+// The window height at which 1dp == 1px (times m_uiScale). Documents
+// were designed against 1600x900; scaling by height rather than width
+// keeps text size tied to how much vertical room there is, which is
+// what makes a HUD or menu read the same at 720p, 1080p and 4K. The
+// lower clamp stops text becoming unreadable in a small window.
+static constexpr float kReferenceHeight = 900.0f;
+
+// RmlUi's layout, animations, transitions and hover state all advance in
+// Context::Update(). This used to run in update(), which Application
+// skips while the simulation is paused (see DebugControlModule) — so
+// pausing also froze every menu: no hover, no animation, stale layout.
+// renderUi() runs on every frame that gets drawn, paused or not.
+void UiModule::renderUi() {
+    if (!m_context) return;
+    VkExtent2D extent = m_app->renderer().extent();
+    Rml::Vector2i currentSize = m_context->GetDimensions();
+    if (currentSize.x != static_cast<int>(extent.width) || currentSize.y != static_cast<int>(extent.height)) {
+        m_context->SetDimensions(Rml::Vector2i(static_cast<int>(extent.width), static_cast<int>(extent.height)));
     }
+    m_pixelsPerPoint = m_app->window().pixelsPerPoint();
+    float ratio = std::max(0.6f, static_cast<float>(extent.height) / kReferenceHeight) * m_uiScale;
+    if (std::abs(ratio - m_dpRatio) > 1e-3f || std::abs(m_context->GetDensityIndependentPixelRatio() - ratio) > 1e-3f) {
+        m_dpRatio = ratio;
+        m_context->SetDensityIndependentPixelRatio(ratio);
+    }
+    m_context->Update();
+    m_app->setUiCapturesMouse(m_context->IsMouseInteracting() || m_draggingSlider || m_draggingPanel);
+}
+
+void UiModule::reloadStyleSheets() {
+    if (!m_context) return;
+    for (int i = 0; i < m_context->GetNumDocuments(); ++i) {
+        m_context->GetDocument(i)->ReloadStyleSheet();
+    }
+    log::get(name())->info("reloaded stylesheets for {} document(s)", m_context->GetNumDocuments());
 }
 
 void UiModule::render(const RenderContext& ctx) {
@@ -232,10 +271,12 @@ void UiModule::onEvent(const SDL_Event& event) {
     if (!m_context) return;
 
     int modifiers = currentRmlModifiers();
+    // Window coordinates -> framebuffer pixels (see Window::pixelsPerPoint()).
+    const float ppp = m_pixelsPerPoint;
 
     switch (event.type) {
         case SDL_EVENT_MOUSE_MOTION:
-            m_context->ProcessMouseMove(static_cast<int>(event.motion.x), static_cast<int>(event.motion.y), modifiers);
+            m_context->ProcessMouseMove(static_cast<int>(event.motion.x * ppp), static_cast<int>(event.motion.y * ppp), modifiers);
             // Real slider dragging -- see this class's own header
             // comment on m_draggingSlider for why this exists. Every
             // motion event while a range input is being dragged
@@ -243,7 +284,7 @@ void UiModule::onEvent(const SDL_Event& event) {
             // the same real fix already applied to the initial click
             // below, just repeated continuously instead of once.
             if (m_draggingSlider) {
-                setRangeSliderValueFromMouseX(m_draggingSlider, static_cast<float>(event.motion.x));
+                setRangeSliderValueFromMouseX(m_draggingSlider, event.motion.x * ppp);
             }
             // Real panel dragging — see m_draggingPanel's own header
             // comment. A pixel delta from the drag's own start point,
@@ -256,8 +297,8 @@ void UiModule::onEvent(const SDL_Event& event) {
             // the window is resized mid-drag.
             if (m_draggingPanel) {
                 Rml::Vector2i ctxSize = m_context->GetDimensions();
-                float dx = static_cast<float>(event.motion.x) - m_dragStartMouse.x;
-                float dy = static_cast<float>(event.motion.y) - m_dragStartMouse.y;
+                float dx = event.motion.x * ppp - m_dragStartMouse.x;
+                float dy = event.motion.y * ppp - m_dragStartMouse.y;
                 float newLeftPx = m_dragPanelStartOffset.x + dx;
                 float newTopPx = m_dragPanelStartOffset.y + dy;
                 if (ctxSize.x > 0 && ctxSize.y > 0) {
@@ -294,7 +335,7 @@ void UiModule::onEvent(const SDL_Event& event) {
             if (button == 0) {
                 Rml::Element* hover = m_context->GetHoverElement();
                 if (isRangeSliderInput(hover)) {
-                    setRangeSliderValueFromMouseX(hover, static_cast<float>(event.button.x));
+                    setRangeSliderValueFromMouseX(hover, event.button.x * ppp);
                     // Real drag start, not just a one-time click — a
                     // genuine, reported gap this closes: clicking
                     // alone could set a value, but holding and moving
@@ -322,7 +363,7 @@ void UiModule::onEvent(const SDL_Event& event) {
                     if (Rml::Element* panel = findDraggablePanelAncestor(hover)) {
                         m_draggingPanel = panel;
                         m_dragPanelStartOffset = panel->GetAbsoluteOffset(Rml::BoxArea::Border);
-                        m_dragStartMouse = Rml::Vector2f(static_cast<float>(event.button.x), static_cast<float>(event.button.y));
+                        m_dragStartMouse = Rml::Vector2f(event.button.x * ppp, event.button.y * ppp);
                     }
                 }
             }
@@ -345,6 +386,10 @@ void UiModule::onEvent(const SDL_Event& event) {
             m_context->ProcessMouseWheel(Rml::Vector2f(-event.wheel.x, -event.wheel.y), modifiers);
             break;
         case SDL_EVENT_KEY_DOWN: {
+            if (event.key.key == SDLK_F5 || (event.key.key == SDLK_R && (event.key.mod & SDL_KMOD_CTRL))) {
+                reloadStyleSheets();
+                break;
+            }
             Rml::Input::KeyIdentifier key = sdlKeyToRmlKey(event.key.key);
             if (key != Rml::Input::KI_UNKNOWN) m_context->ProcessKeyDown(key, modifiers);
             break;

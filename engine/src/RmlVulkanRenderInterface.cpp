@@ -14,13 +14,18 @@
 #include <array>
 #include <cstddef>
 #include <vector>
+#include <algorithm>
+#include <glm/gtc/type_ptr.hpp>
 
 namespace kke {
 
 namespace {
+// projection * the element's own CSS transform (identity unless the
+// element has `transform:`), plus RmlUi's per-draw pixel translation.
 struct RmlPushConstants {
-    glm::vec2 screenSize;  // pixels
+    glm::mat4 transform;
     glm::vec2 translation; // pixels
+    glm::vec2 pad;
 };
 } // namespace
 
@@ -87,6 +92,7 @@ RmlVulkanRenderInterface::RmlVulkanRenderInterface(VulkanDevice& device, VkRende
     config.depthTestEnable = false;
     config.depthWriteEnable = false;
     config.blendEnable = true;
+    config.premultipliedAlpha = true;
     config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(RmlPushConstants) };
     config.descriptorSetLayouts = { m_textureSetLayout };
 
@@ -267,6 +273,17 @@ void RmlVulkanRenderInterface::beginFrame(VkCommandBuffer cmd, glm::vec2 screenS
     m_currentCmd = cmd;
     m_screenSize = screenSizePixels;
     m_scissorEnabled = false;
+    m_transform = glm::mat4(1.0f);
+    // Pixel space (top-left origin, y down) straight to Vulkan clip space
+    // (also y down) — no flip. Wide z range so rotateX/Y transforms don't
+    // clip against the near/far planes.
+    m_projection = glm::mat4(1.0f);
+    m_projection[0][0] = 2.0f / std::max(1.0f, screenSizePixels.x);
+    m_projection[1][1] = 2.0f / std::max(1.0f, screenSizePixels.y);
+    m_projection[2][2] = -1.0f / 10000.0f;
+    m_projection[3][0] = -1.0f;
+    m_projection[3][1] = -1.0f;
+    m_projection[3][2] = 0.5f;
 
     // Real deferred-destruction sweep, not decorative — see
     // PendingDeletion's own comment in the header for the full,
@@ -330,7 +347,7 @@ void RmlVulkanRenderInterface::RenderGeometry(
     vkCmdBindDescriptorSets(m_currentCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(),
                              0, 1, &descriptorSet, 0, nullptr);
 
-    RmlPushConstants pc{ m_screenSize, glm::vec2(translation.x, translation.y) };
+    RmlPushConstants pc{ m_projection * m_transform, glm::vec2(translation.x, translation.y), glm::vec2(0.0f) };
     vkCmdPushConstants(m_currentCmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
 
     VkBuffer vertexBuffers[] = { geometry.vertexBuffer->handle() };
@@ -372,6 +389,14 @@ Rml::TextureHandle RmlVulkanRenderInterface::LoadTexture(Rml::Vector2i& texture_
         return 0;
     }
 
+    // RmlUi 6 expects premultiplied textures (glyph atlases from
+    // GenerateTexture already are) — see the premultiplied blend state.
+    for (size_t i = 0; i < static_cast<size_t>(width) * static_cast<size_t>(height); ++i) {
+        stbi_uc* px = pixels + i * 4;
+        px[0] = static_cast<stbi_uc>(px[0] * px[3] / 255);
+        px[1] = static_cast<stbi_uc>(px[1] * px[3] / 255);
+        px[2] = static_cast<stbi_uc>(px[2] * px[3] / 255);
+    }
     CompiledTexture texture = createTextureFromPixels(pixels, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
     stbi_image_free(pixels);
 
@@ -422,6 +447,11 @@ void RmlVulkanRenderInterface::SetScissorRegion(Rml::Rectanglei region) {
 
     VkRect2D rect{ { x, y }, { width, height } };
     vkCmdSetScissor(m_currentCmd, 0, 1, &rect);
+}
+
+void RmlVulkanRenderInterface::SetTransform(const Rml::Matrix4f* transform) {
+    // Rml::Matrix4f is column-major by default, same as glm.
+    m_transform = transform ? glm::make_mat4(transform->data()) : glm::mat4(1.0f);
 }
 
 } // namespace kke

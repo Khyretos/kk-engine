@@ -50,6 +50,12 @@ public:
     const MouseState& mouseState() const { return m_mouseState; }
 
     SDL_Window* handle() const { return m_window; }
+    // Framebuffer pixels per SDL window coordinate. SDL3 reports mouse
+    // positions in window coordinates, which differ from pixels on a
+    // scaled desktop (Wayland/KDE/GNOME fractional scaling, macOS
+    // Retina). Multiply event coordinates by this to get the pixel
+    // position the renderer (and RmlUi) actually lays out in.
+    float pixelsPerPoint() const;
 
 private:
     SDL_Window* m_window = nullptr;

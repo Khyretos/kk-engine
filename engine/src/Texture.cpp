@@ -18,7 +18,7 @@ Texture::Texture(VulkanDevice& device, const std::string& filePath) : m_device(d
     int width = 0, height = 0, channels = 0;
     // Forcing 4 channels (RGBA), same reasoning as
     // RmlVulkanRenderInterface::LoadTexture: matches this class's own
-    // fixed VK_FORMAT_R8G8B8A8_UNORM exactly.
+    // fixed VK_FORMAT_R8G8B8A8_SRGB exactly.
     stbi_uc* pixels = stbi_load(filePath.c_str(), &width, &height, &channels, 4);
     if (!pixels) {
         throw std::runtime_error("kke::Texture: failed to load '" + filePath + "' (" +
@@ -50,7 +50,7 @@ void Texture::createFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32
     imageInfo.extent = { width, height, 1 };
     imageInfo.mipLevels = 1;
     imageInfo.arrayLayers = 1;
-    imageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+    imageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
     imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     imageInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -121,7 +121,7 @@ void Texture::createFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     viewInfo.image = m_image;
     viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    viewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+    viewInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
     viewInfo.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
     VK_CHECK(vkCreateImageView(m_device.device(), &viewInfo, nullptr, &m_imageView));
 

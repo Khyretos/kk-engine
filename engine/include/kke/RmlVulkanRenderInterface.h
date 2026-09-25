@@ -55,6 +55,9 @@ public:
     void ReleaseTexture(Rml::TextureHandle texture) override;
     void EnableScissorRegion(bool enable) override;
     void SetScissorRegion(Rml::Rectanglei region) override;
+    // Optional in Rml::RenderInterface — without it every CSS `transform`
+    // (scale/rotate/translate, and animations of them) was silently ignored.
+    void SetTransform(const Rml::Matrix4f* transform) override;
 
 private:
     struct CompiledGeometry {
@@ -123,6 +126,8 @@ private:
 
     VkCommandBuffer m_currentCmd = VK_NULL_HANDLE;
     glm::vec2 m_screenSize{0.0f, 0.0f};
+    glm::mat4 m_projection{1.0f};
+    glm::mat4 m_transform{1.0f};
     bool m_scissorEnabled = false;
 };
 

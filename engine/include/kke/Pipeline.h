@@ -29,6 +29,11 @@ struct PipelineConfig {
     bool depthTestEnable = true;
     bool depthWriteEnable = true;
     bool blendEnable = false;
+    // Source colors are already multiplied by their own alpha (RmlUi 6
+    // hands over premultiplied vertex colors and textures). Blending
+    // those with SRC_ALPHA applies alpha twice — translucent content
+    // comes out too dark and muddy. See BUGS.md BUG-021.
+    bool premultipliedAlpha = false;
     VkPushConstantRange pushConstantRange{}; // size == 0 => pipeline has no push constants
     std::vector<VkDescriptorSetLayout> descriptorSetLayouts; // empty => no descriptor sets
 };

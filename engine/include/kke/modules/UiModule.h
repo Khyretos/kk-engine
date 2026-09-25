@@ -62,7 +62,7 @@ public:
     const char* name() const override { return "UI"; }
 
     void init(Application& app) override;
-    void update(const UpdateContext& ctx) override;
+    void renderUi() override; // RmlUi layout/animation tick — see the .cpp for why not update()
     void render(const RenderContext& ctx) override;
     void onEvent(const SDL_Event& event) override;
     void shutdown() override;
@@ -74,11 +74,30 @@ public:
     // is a heavier and unnecessary tool for "another panel").
     Rml::Context* context() { return m_context; }
 
+    // User-facing UI scale multiplier (1.0 = default). The effective
+    // density-independent pixel ratio is this times a factor from the
+    // window height (see kReferenceHeight in the .cpp), so every
+    // document authored in `dp` units scales with the window and with
+    // this setting. Author RCSS in dp, not px, to get this for free.
+    void setUiScale(float scale) { m_uiScale = scale; }
+    float uiScale() const { return m_uiScale; }
+    float dpRatio() const { return m_dpRatio; }
+
+    // Reloads every open document's stylesheet from disk — bound to F5
+    // (and Ctrl+R) so .rcss edits show up without restarting.
+    void reloadStyleSheets();
+
 private:
     class EngineSystemInterface : public Rml::SystemInterface {
     public:
         double GetElapsedTime() override;
         bool LogMessage(Rml::Log::Type type, const Rml::String& message) override;
+        // Called by RmlUi when a text field gains/loses focus. SDL3 only
+        // delivers SDL_EVENT_TEXT_INPUT between SDL_StartTextInput() and
+        // SDL_StopTextInput(), so without these, typing did nothing.
+        void ActivateKeyboard(Rml::Vector2f caretPosition, float lineHeight) override;
+        void DeactivateKeyboard() override;
+        SDL_Window* window = nullptr;
     };
 
     EngineSystemInterface m_systemInterface;
@@ -96,6 +115,10 @@ private:
     // matching a real, reported "cannot drag sliders" complaint.
     // Cleared on mouse-up regardless of where the button is released,
     // so a drag that ends off the slider doesn't leave this stuck.
+    float m_uiScale = 1.0f;
+    float m_dpRatio = 1.0f;
+    float m_pixelsPerPoint = 1.0f; // see Window::pixelsPerPoint()
+
     Rml::Element* m_draggingSlider = nullptr;
 
     // Real panel-dragging state -- same mousedown/mousemove/mouseup

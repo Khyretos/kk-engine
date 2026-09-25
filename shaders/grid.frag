@@ -19,6 +19,15 @@ float gridLine(vec2 coord, float spacing) {
     return 1.0 - min(min(grid.x, grid.y), 1.0);
 }
 
+
+// Colors are authored in sRGB (color pickers, hex codes, palette values)
+// but the swapchain is VK_FORMAT_B8G8R8A8_SRGB, which gamma-encodes
+// whatever the shader writes. Writing sRGB values straight out encoded
+// them twice: everything looked washed out. Convert to linear first.
+vec3 srgbToLinear(vec3 c) {
+    return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c));
+}
+
 void main() {
     vec2 coord = inWorldPos.xz;
 
@@ -34,5 +43,5 @@ void main() {
     float dist = length(inWorldPos - pc.cameraPos.xyz);
     float fade = 1.0 - smoothstep(10.0, 25.0, dist);
 
-    outColor = vec4(color, line * fade * 0.9);
+    outColor = vec4(srgbToLinear(color), line * fade * 0.9);
 }

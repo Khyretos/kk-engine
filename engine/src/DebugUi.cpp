@@ -4,6 +4,7 @@
 #include "kke/VulkanCheck.h"
 
 #include <imgui.h>
+#include <cmath>
 #include <backends/imgui_impl_sdl3.h>
 #include <backends/imgui_impl_vulkan.h>
 
@@ -41,6 +42,15 @@ DebugUi::DebugUi(Window& window, VulkanDevice& device, VkRenderPass renderPass, 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
+    // ImGui's style colors are sRGB values, but its Vulkan backend writes
+    // them unconverted into this engine's sRGB swapchain, which encodes
+    // them a second time — every panel looked washed out. Converting the
+    // palette to linear once here fixes the look without touching the
+    // backend. (Colors passed per-widget, e.g. TextColored, are still raw.)
+    for (ImVec4& c : ImGui::GetStyle().Colors) {
+        auto toLinear = [](float v) { return v <= 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f); };
+        c = ImVec4(toLinear(c.x), toLinear(c.y), toLinear(c.z), c.w);
+    }
 
     VkInstance instance = device.instance();
     ImGui_ImplVulkan_LoadFunctions(imguiVulkanLoader, &instance);

@@ -88,13 +88,13 @@ limitations. 🔴 Not started / stub.
 | RmlUi image loading | 🟢 | See Rendering section — `<img>`/`background-image` real via `stb_image`. |
 | RmlUi context resize handling | 🟢 | Context dimensions genuinely track the swapchain extent every frame. |
 | RmlUi panel *positioning* at different window sizes | 🟢 | Percentage-based, genuinely scales — see `BUGS.md` BUG-018. |
-| RmlUi panel *width* at different window sizes | 🔴 | Still fixed pixels — see `BUGS.md` BUG-022 (open). A panel can still overflow a narrow window. |
+| RmlUi scaling (position *and* size) | 🟢 | Everything in `dp`; dp ratio follows window height x user UI scale (`UiModule::setUiScale()`). See `BUGS.md` BUG-022. |
 | RmlUi range slider interaction (click + drag) | 🟢 | Real click-to-jump and real continuous drag, both bypassing a genuine RmlUi internal-widget limitation — see `BUGS.md` BUG-011. |
 | RmlUi hit-testing across multiple simultaneous documents | 🟢 | See `BUGS.md` BUG-012 — was fundamentally broken (most panels effectively unclickable), now fixed everywhere it's been found. **Any new panel/document added in the future needs the same `pointer-events` treatment from day one, or this regresses for that panel specifically — see BUG-012's own fix description before adding a new UI document.** |
 | RmlUi panel dragging (move by title bar) | 🟢 | Real, general mechanism (`draggable-handle` class + nearest-positioned-ancestor search) — see `BUGS.md` BUG-013/BUG-014. |
 | RmlUi debugger (Outlines, etc.) | 🟢 | Real GPU-resource-lifetime bugs found and fixed — see `BUGS.md` BUG-002. |
 | RmlUi text rendering (`font-family` on every rule) | 🟢 | Real, systemic gap found via a general verification sweep, not a specific bug report — `font-family` does not reliably inherit through the RmlUi DOM in this project's setup, so several elements across all four generated documents silently rendered no text at all (Material Grid's card labels/stats, confirmed missing in a real screenshot). Fixed everywhere found — see `BUGS.md` BUG-024. **Any new RCSS rule that displays text needs `font-family` set explicitly, every time — this is now a standing rule, not just a one-off fix.** |
-| RmlUi discoloration behind 3D content | 🔴 | **Reported by user, not yet reproduced or root-caused** — see `BUGS.md` BUG-021 (open, needs clearer repro). |
+| Color management (sRGB) | 🟢 | Colors linearized before writing to the sRGB swapchain, premultiplied UI blending — see `BUGS.md` BUG-021. Needs a real-GPU look (HW-005). |
 | ImGui integration | 🟢 | Full canonical demo confirmed working (buttons, sliders, color pickers, drag/drop, tables, trees, tabs, plotting, text editing). |
 | ImGui + RmlUi coexistence | 🟢 | Both receive every SDL event; no conditional capture-blocking exists between them (confirmed directly while investigating BUG-012, ruled out as a cause). |
 | Font fallback chain | 🟢 | Noto Sans + Noto Color Emoji, documented in README. |

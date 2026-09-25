@@ -14,7 +14,7 @@ Window::Window(const std::string& title, uint32_t width, uint32_t height) {
         title.c_str(),
         static_cast<int>(width),
         static_cast<int>(height),
-        SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+        SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
 
     if (!m_window) {
         throw std::runtime_error(std::string("SDL_CreateWindow failed: ") + SDL_GetError());
@@ -92,6 +92,13 @@ bool Window::pollEvents(const EventCallback& onEvent) {
 
 void Window::getFramebufferSize(int& width, int& height) const {
     SDL_GetWindowSizeInPixels(m_window, &width, &height);
+}
+
+float Window::pixelsPerPoint() const {
+    int w = 0, h = 0, pw = 0, ph = 0;
+    SDL_GetWindowSize(m_window, &w, &h);
+    SDL_GetWindowSizeInPixels(m_window, &pw, &ph);
+    return (w > 0 && pw > 0) ? static_cast<float>(pw) / static_cast<float>(w) : 1.0f;
 }
 
 } // namespace kke

@@ -48,19 +48,19 @@ const char* kLightingControlsRml = R"(
         // hit-testing explicitly, since it's the one real, visible
         // thing in this document that should still receive clicks.
         body { color: #ffffff; font-family: Noto Sans; pointer-events: none; }
-        .panel { position: absolute; left: 40px; top: 500px; width: 740px; background-color: #1a1d2e; padding: 14px; pointer-events: auto; }
-        .panel h1 { display: block; font-size: 18px; color: #a0c8ff; margin-bottom: 8px; font-family: Noto Sans; }
-        .row { display: block; margin-top: 8px; }
-        .row span { display: inline-block; width: 160px; font-family: Noto Sans; }
-        input.range { width: 300px; height: 18px; vertical-align: -4px; }
-        input.range slidertrack { display: block; width: 300px; height: 12px; margin-top: 3px; background-color: #333344; border: 1px #666677; }
-        input.range sliderbar { display: block; width: 16px; height: 16px; margin-top: -3px; background-color: #4a7ac9; border: 1px #6a9aee; }
+        .panel { position: absolute; left: 40dp; top: 500dp; width: 740dp; max-width: 92%; background-color: #1a1d2e; padding: 14dp; pointer-events: auto; }
+        .panel h1 { display: block; font-size: 18dp; color: #a0c8ff; margin-bottom: 8dp; font-family: Noto Sans; }
+        .row { display: block; margin-top: 8dp; }
+        .row span { display: inline-block; width: 160dp; font-family: Noto Sans; }
+        input.range { width: 300dp; height: 18dp; vertical-align: -4dp; }
+        input.range slidertrack { display: block; width: 300dp; height: 12dp; margin-top: 3dp; background-color: #333344; border: 1dp #666677; }
+        input.range sliderbar { display: block; width: 16dp; height: 16dp; margin-top: -3dp; background-color: #4a7ac9; border: 1dp #6a9aee; }
         input.range sliderbar:hover { background-color: #5a8ad9; }
-        button { display: inline-block; background-color: #333344; color: #ffffff; padding: 6px 14px; border: 1px #666677; margin-top: 10px; margin-right: 8px; font-family: Noto Sans; }
+        button { display: inline-block; background-color: #333344; color: #ffffff; padding: 6dp 14dp; border: 1dp #666677; margin-top: 10dp; margin-right: 8dp; font-family: Noto Sans; }
         button:hover { background-color: #4a7ac9; }
     </style>
 </head>
-<body style="width:1280px; height:720px; pointer-events:none;">
+<body style="width:100%; height:100%; pointer-events:none;">
     <div id="lighting-controls-panel" class="panel">
         <h1 class="draggable-handle">Lighting Controls -- real kke::Lighting state, changed live</h1>
         <div class="row"><span>Ambient</span><input id="ambient" type="range" min="0" max="1" step="0.01" value="0.15"/></div>
