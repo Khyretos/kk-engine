@@ -1,0 +1,157 @@
+/*
+ * KKE UI Showcase — shared theme.
+ *
+ * Rules of thumb for this engine's RmlUi setup (see BUGS.md):
+ *   - Sizes in dp, never px. UiModule scales dp with window height and
+ *     the player's UI-scale setting (BUG-022).
+ *   - RmlUi has no browser default stylesheet: block elements need
+ *     display: block (BUG-001). That's what the base section is for.
+ *   - Text needs a font-family; the universal rule below covers every
+ *     element (BUG-015/BUG-024 were rules that relied on inheritance).
+ *   - Edit this file while the demo runs and press F5 to reload.
+ */
+
+/* ---------- base ---------- */
+* { font-family: Noto Sans; }
+body { font-size: 15dp; color: #e8ecf4; width: 100%; height: 100%; }
+div, p, h1, h2, h3, h4, section, header, footer, ul, li, form, panel, panels, tabs { display: block; }
+h1 { font-size: 34dp; font-weight: bold; }
+h2 { font-size: 22dp; font-weight: bold; margin-bottom: 8dp; }
+h3 { font-size: 16dp; font-weight: bold; color: #9fb4e0; margin: 14dp 0 6dp 0; }
+em { font-style: italic; }
+strong, b { font-weight: bold; }
+small { font-size: 12dp; }
+.muted { color: #8b93aa; }
+.accent { color: #ffcf5c; }
+.good { color: #6fe39a; }
+.bad { color: #ff7373; }
+.row { display: block; margin: 6dp 0; }
+.spacer { display: inline-block; width: 12dp; }
+.right { float: right; }
+.clear { clear: both; }
+.hidden { display: none; }
+
+/* ---------- panels ---------- */
+.panel {
+    background-color: #151a2bee;
+    border: 1dp #2f3a5c;
+    border-radius: 10dp;
+    padding: 18dp;
+}
+.glass {
+    decorator: linear-gradient(170deg, #1d2542f0, #0f1322f0);
+    border: 1dp #3a4a7a;
+    border-radius: 12dp;
+}
+.title-bar { font-size: 13dp; letter-spacing: 2dp; color: #8b93aa; margin-bottom: 10dp; }
+
+/* ---------- buttons ---------- */
+button, .button {
+    display: inline-block;
+    padding: 9dp 18dp;
+    margin: 4dp;
+    border-radius: 6dp;
+    background-color: #28314f;
+    border: 1dp #3d4a78;
+    color: #e8ecf4;
+    text-align: center;
+    cursor: pointer;
+    transition: background-color border-color transform 0.15s cubic-out;
+}
+button:hover, .button:hover { background-color: #34427a; border-color: #6e88d8; transform: scale(1.04); }
+button:active, .button:active { background-color: #1e2640; transform: scale(0.97); }
+button.primary { decorator: linear-gradient(180deg, #4f7cff, #3553c9); border-color: #7a9bff; }
+button.primary:hover { decorator: linear-gradient(180deg, #6b91ff, #4061dc); }
+button.danger { background-color: #6b2330; border-color: #b24155; }
+button.danger:hover { background-color: #8a2d3e; }
+button:disabled, .button.disabled { color: #5d6580; background-color: #1c2136; border-color: #2a3150; transform: none; cursor: auto; }
+button.small { padding: 5dp 10dp; font-size: 13dp; }
+.keycap {
+    display: inline-block; min-width: 18dp; padding: 1dp 6dp; margin: 0 2dp;
+    border: 1dp #56628e; border-bottom-width: 3dp; border-radius: 4dp;
+    background-color: #20263c; font-size: 12dp; text-align: center; color: #cfd6ea;
+}
+
+/* ---------- form controls ---------- */
+input.text, input.password, textarea {
+    display: inline-block;
+    width: 220dp; padding: 7dp 10dp;
+    background-color: #0d1120; border: 1dp #3a4670; border-radius: 5dp;
+    color: #ffffff; cursor: text;
+}
+input.text:focus, textarea:focus { border-color: #7a9bff; }
+textarea { height: 80dp; }
+
+input.checkbox {
+    display: inline-block; width: 20dp; height: 20dp; vertical-align: -4dp;
+    background-color: #0d1120; border: 2dp #4a5888; border-radius: 4dp;
+    cursor: pointer; transition: background-color 0.1s;
+}
+input.checkbox:hover { border-color: #7a9bff; }
+input.checkbox:checked { background-color: #4f7cff; border-color: #7a9bff; decorator: image(assets/check.png); }
+
+input.radio {
+    display: inline-block; width: 18dp; height: 18dp; vertical-align: -4dp;
+    background-color: #0d1120; border: 2dp #4a5888; border-radius: 9dp; cursor: pointer;
+}
+input.radio:checked { background-color: #4f7cff; border-color: #cfd9ff; }
+
+input.range { display: inline-block; width: 220dp; height: 20dp; vertical-align: -5dp; cursor: pointer; }
+input.range slidertrack { display: block; height: 6dp; margin-top: 7dp; background-color: #0d1120; border: 1dp #3a4670; border-radius: 3dp; }
+input.range sliderbar { display: block; width: 16dp; height: 16dp; margin-top: 2dp; background-color: #7a9bff; border: 2dp #dfe6ff; border-radius: 8dp; }
+input.range sliderbar:hover { background-color: #a8bcff; }
+input.range sliderarrowdec, input.range sliderarrowinc { display: none; }
+
+select { display: inline-block; width: 200dp; height: 32dp; cursor: pointer; }
+select selectvalue { display: block; height: 30dp; padding: 5dp 32dp 5dp 10dp; text-align: left; background-color: #0d1120; border: 1dp #3a4670; border-radius: 5dp; }
+select:hover selectvalue { border-color: #7a9bff; }
+select selectarrow { width: 26dp; height: 32dp; decorator: image(assets/arrow_down.png); }
+select selectbox { margin-top: 2dp; background-color: #121833; border: 1dp #3a4670; border-radius: 5dp; }
+select selectbox option { display: block; padding: 6dp 10dp; background-color: #121833; cursor: pointer; }
+select selectbox option:hover { background-color: #2d3a6a; }
+select selectbox option:checked { color: #ffcf5c; }
+
+progress { display: inline-block; height: 12dp; background-color: #0b0f1c; border: 1dp #2d3658; border-radius: 6dp; }
+progress fill { border-radius: 5dp; background-color: #4f7cff; }
+
+label { display: inline-block; margin-right: 14dp; cursor: pointer; }
+
+/* ---------- tabs ---------- */
+tabset { display: block; }
+tabset tabs { display: block; margin-bottom: 14dp; border-bottom: 1dp #2f3a5c; }
+tabset tab {
+    display: inline-block; padding: 9dp 16dp; margin-right: 4dp;
+    color: #8b93aa; border-bottom: 3dp #00000000; cursor: pointer;
+    transition: color border-color 0.15s;
+}
+tabset tab:hover { color: #e8ecf4; }
+tabset tab:selected { color: #ffffff; border-bottom-color: #ffcf5c; }
+tabset panels { display: block; }
+tabset panel { display: block; }
+
+/* ---------- scrollbars ---------- */
+scrollbarvertical { width: 10dp; margin-left: 4dp; }
+scrollbarvertical slidertrack { background-color: #0d1120; border-radius: 5dp; }
+scrollbarvertical sliderbar { background-color: #3a4670; border-radius: 5dp; min-height: 24dp; }
+scrollbarvertical sliderbar:hover { background-color: #5b6ca8; }
+scrollbarvertical sliderarrowdec, scrollbarvertical sliderarrowinc { height: 0; }
+
+/* ---------- animations ---------- */
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slide-up { from { opacity: 0; transform: translateY(24dp); } to { opacity: 1; transform: translateY(0dp); } }
+@keyframes slide-right { from { opacity: 0; transform: translateX(-40dp); } to { opacity: 1; transform: translateX(0dp); } }
+@keyframes pulse { 0% { opacity: 0.45; } 50% { opacity: 1; } 100% { opacity: 0.45; } }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes float-up { from { opacity: 1; transform: translateY(0dp) scale(1.0); } to { opacity: 0; transform: translateY(-60dp) scale(1.3); } }
+@keyframes shake { 0% { transform: translateX(0dp); } 25% { transform: translateX(-6dp); } 50% { transform: translateX(6dp); } 75% { transform: translateX(-3dp); } 100% { transform: translateX(0dp); } }
+.anim-fade { animation: 0.35s cubic-out fade-in; }
+.anim-slide-up { animation: 0.45s cubic-out slide-up; }
+.anim-pulse { animation: 1.6s sine-in-out infinite pulse; }
+
+/* ---------- modal ---------- */
+.modal-backdrop { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background-color: #05070ecc; z-index: 50; }
+.modal {
+    position: absolute; left: 50%; top: 42%; width: 420dp; max-width: 90%;
+    margin-left: -210dp; z-index: 51;
+    animation: 0.3s back-out slide-up;
+}

@@ -56,6 +56,10 @@ public:
     // Retina). Multiply event coordinates by this to get the pixel
     // position the renderer (and RmlUi) actually lays out in.
     float pixelsPerPoint() const;
+    // Borderless fullscreen on the current display (SDL3's "desktop"
+    // mode). The resulting resize recreates the swapchain as usual.
+    void setFullscreen(bool fullscreen);
+    bool isFullscreen() const;
 
 private:
     SDL_Window* m_window = nullptr;

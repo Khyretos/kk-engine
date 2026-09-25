@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kke/Module.h"
+#include "kke/Capabilities.h"
 #include "kke/RmlVulkanRenderInterface.h"
 
 #include <RmlUi/Core/SystemInterface.h>
@@ -57,7 +58,7 @@ namespace kke {
 // non-US-layout punctuation beyond period/comma). Extend the mapping
 // table as real need for a specific key comes up rather than trying to
 // cover SDL's entire keycode space speculatively.
-class UiModule : public Module {
+class UiModule : public Module, public ISettingsListener {
 public:
     const char* name() const override { return "UI"; }
 
@@ -66,6 +67,7 @@ public:
     void render(const RenderContext& ctx) override;
     void onEvent(const SDL_Event& event) override;
     void shutdown() override;
+    void onSettingsChanged(const EngineSettings& settings) override;
 
     // Lets other modules (e.g. MarketplaceUiModule, LightingControlsModule)
     // add their own Rml::ElementDocument into the same context/render

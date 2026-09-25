@@ -1,0 +1,161 @@
+<rml>
+<head>
+    <title>Settings</title>
+    <link type="text/rcss" href="theme.rcss"/>
+    <style>
+        body { background-color: #05070e99; }
+        #window {
+            position: absolute; left: 50%; top: 9%; width: 760dp; max-width: 94%; height: 80%;
+            transform: translateX(-50%);
+            animation: 0.35s cubic-out slide-up;
+        }
+        #content { height: 100%; }
+        #scroll { position: absolute; left: 18dp; right: 18dp; top: 64dp; bottom: 70dp; overflow-y: auto; }
+        .setting { display: block; padding: 9dp 4dp; border-bottom: 1dp #222a45; }
+        .setting .name { display: inline-block; width: 38%; }
+        .setting .desc { display: block; font-size: 12dp; color: #8b93aa; margin-top: 2dp; }
+        .setting .control { display: inline-block; width: 60%; text-align: right; }
+        .setting .value { display: inline-block; width: 52dp; text-align: right; color: #ffcf5c; }
+        .setting input.range { width: 60%; }
+        .binding { display: inline-block; min-width: 110dp; padding: 5dp 10dp; border-radius: 5dp; text-align: center;
+                   background-color: #0d1120; border: 1dp #3a4670; cursor: pointer; }
+        .binding:hover { border-color: #7a9bff; }
+        .binding.capturing { border-color: #ffcf5c; color: #ffcf5c; animation: 1s sine-in-out infinite pulse; }
+        #bottom {
+            position: absolute; left: 18dp; right: 18dp; bottom: 14dp; height: 44dp;
+            border-top: 1dp #2f3a5c; padding-top: 10dp;
+        }
+        #dirty { display: inline-block; color: #ffcf5c; margin-top: 8dp; animation: 0.3s fade-in; }
+        #saved { display: inline-block; color: #6fe39a; margin-top: 8dp; }
+        #buttons { float: right; }
+        .note { font-size: 12dp; color: #8b93aa; padding: 10dp 4dp; }
+        @media (max-width: 800px) { .setting .name { width: 100%; } .setting .control { width: 100%; text-align: left; } }
+    </style>
+</head>
+<body data-model="settings">
+<div id="window" class="panel glass">
+<div id="content">
+    <div class="title-bar">SETTINGS — changes preview live, <b>Apply &amp; save</b> keeps them ({{ path }})</div>
+    <div id="scroll">
+    <tabset id="tabs">
+        <tab>Graphics</tab>
+        <panel>
+            <div class="setting">
+                <span class="name">Fullscreen<span class="desc">Borderless on the current display</span></span>
+                <span class="control"><input type="checkbox" data-checked="fullscreen"/></span>
+            </div>
+            <div class="setting">
+                <span class="name">VSync<span class="desc">Wait for the display refresh (off = uncapped)</span></span>
+                <span class="control"><input type="checkbox" data-checked="vsync"/></span>
+            </div>
+            <div class="setting">
+                <span class="name">Frame-rate limit<span class="desc">Saves power when VSync is off</span></span>
+                <span class="control">
+                    <select data-value="fps_limit">
+                        <option value="0">Unlimited</option>
+                        <option value="30">30 fps</option>
+                        <option value="60">60 fps</option>
+                        <option value="120">120 fps</option>
+                        <option value="144">144 fps</option>
+                    </select>
+                </span>
+            </div>
+            <div class="setting">
+                <span class="name">Field of view<span class="desc">Vertical, degrees</span></span>
+                <span class="control"><input type="range" min="30" max="120" step="1" data-value="fov"/><span class="value">{{ fov | format(0) }}°</span></span>
+            </div>
+            <div class="setting">
+                <span class="name">Shadows</span>
+                <span class="control"><input type="checkbox" data-checked="shadows"/></span>
+            </div>
+            <div class="setting">
+                <span class="name">Brightness<span class="desc">Scales ambient light</span></span>
+                <span class="control"><input type="range" min="0" max="3" step="0.05" data-value="brightness"/><span class="value">{{ brightness | format(2) }}</span></span>
+            </div>
+            <div class="setting">
+                <span class="name">UI scale<span class="desc">On top of automatic scaling by window height</span></span>
+                <span class="control"><input type="range" min="0.5" max="2.5" step="0.05" data-value="ui_scale"/><span class="value">{{ ui_scale | format(2) }}×</span></span>
+            </div>
+            <div class="setting">
+                <span class="name">Developer overlay<span class="desc">ImGui panels (also F1)</span></span>
+                <span class="control"><input type="checkbox" data-checked="debug_overlay"/></span>
+            </div>
+        </panel>
+
+        <tab>Audio</tab>
+        <panel>
+            <div class="note">🔇 No audio module exists yet — these are saved and will be read by one when it does.</div>
+            <div class="setting">
+                <span class="name">Master volume</span>
+                <span class="control"><input type="range" min="0" max="100" step="1" data-value="master"/><span class="value">{{ master }}%</span></span>
+            </div>
+            <div class="setting">
+                <span class="name">Music</span>
+                <span class="control"><input type="range" min="0" max="100" step="1" data-value="music"/><span class="value">{{ music }}%</span></span>
+            </div>
+            <div class="setting">
+                <span class="name">Effects</span>
+                <span class="control"><input type="range" min="0" max="100" step="1" data-value="effects"/><span class="value">{{ effects }}%</span></span>
+            </div>
+            <div class="setting">
+                <span class="name">Mute when window loses focus</span>
+                <span class="control"><input type="checkbox" data-checked="mute_unfocused"/></span>
+            </div>
+        </panel>
+
+        <tab>Controls</tab>
+        <panel>
+            <div class="setting">
+                <span class="name">Mouse sensitivity<span class="desc">Try it: drag the 3D view behind the menus</span></span>
+                <span class="control"><input type="range" min="0.1" max="5" step="0.1" data-value="sensitivity"/><span class="value">{{ sensitivity | format(1) }}</span></span>
+            </div>
+            <div class="setting">
+                <span class="name">Invert Y axis</span>
+                <span class="control"><input type="checkbox" data-checked="invert_y"/></span>
+            </div>
+            <h3>Key bindings — click one, then press a key (Esc cancels)</h3>
+            <div class="setting" data-for="b, i : bindings">
+                <span class="name">{{ b.label }}</span>
+                <span class="control">
+                    <span class="binding" data-class-capturing="capturing == i" data-event-click="rebind(i)">
+                        {{ capturing == i ? 'press a key…' : b.key }}
+                    </span>
+                </span>
+            </div>
+        </panel>
+
+        <tab>Gameplay</tab>
+        <panel>
+            <div class="setting">
+                <span class="name">Difficulty</span>
+                <span class="control">
+                    <label><input type="radio" name="difficulty" value="easy" data-checked="difficulty"/> Easy</label>
+                    <label><input type="radio" name="difficulty" value="normal" data-checked="difficulty"/> Normal</label>
+                    <label><input type="radio" name="difficulty" value="hard" data-checked="difficulty"/> Hard</label>
+                </span>
+            </div>
+            <div class="setting">
+                <span class="name">Show damage numbers<span class="desc">Used by the HUD screen</span></span>
+                <span class="control"><input type="checkbox" data-checked="damage_numbers"/></span>
+            </div>
+            <div class="setting">
+                <span class="name">Physics catch-up steps<span class="desc">Max fixed ticks per frame; lower = slow-motion instead of stutter under load</span></span>
+                <span class="control"><input type="range" min="1" max="8" step="1" data-value="max_steps"/><span class="value">{{ max_steps }}</span></span>
+            </div>
+        </panel>
+    </tabset>
+    </div>
+    <div id="bottom">
+        <span id="dirty" data-if="dirty">• Unsaved changes</span>
+        <span id="saved" data-if="!dirty">✔ Saved</span>
+        <span id="buttons">
+            <button class="small" data-event-click="reset_defaults">Defaults</button>
+            <button class="small" data-event-click="revert" data-attrif-disabled="!dirty">Revert</button>
+            <button class="small primary" data-event-click="save">Apply &amp; save</button>
+            <button class="small" data-event-click="go('menu')">Back</button>
+        </span>
+    </div>
+</div>
+</div>
+</body>
+</rml>

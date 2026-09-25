@@ -81,7 +81,19 @@ void Renderer::recreateSwapChain() {
     m_swapChain->recreate();
 }
 
+void Renderer::setVSync(bool vsync) {
+    if (vsync == m_swapChain->vsync()) return;
+    m_swapChain->setVSync(vsync);
+    m_recreatePending = true;
+}
+
+bool Renderer::vsync() const { return m_swapChain->vsync(); }
+
 bool Renderer::beginFrame() {
+    if (m_recreatePending) {
+        m_recreatePending = false;
+        recreateSwapChain();
+    }
     vkWaitForFences(m_device->device(), 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
 
     // The fence wait above guarantees this frame slot's prior GPU work (if

@@ -20,6 +20,13 @@ public:
 
     void recreate();
 
+    // true: FIFO (waits for the display's refresh — no tearing, capped
+    // frame rate, least power). false: MAILBOX (no tearing, uncapped),
+    // falling back to IMMEDIATE, then FIFO if neither is supported.
+    // Takes effect on the next recreate().
+    void setVSync(bool vsync) { m_vsync = vsync; }
+    bool vsync() const { return m_vsync; }
+
     VkSwapchainKHR handle() const { return m_swapChain; }
     VkFormat imageFormat() const { return m_imageFormat; }
     VkFormat depthFormat() const { return m_depthFormat; }
@@ -27,6 +34,7 @@ public:
     VkRenderPass renderPass() const { return m_renderPass; }
     VkFramebuffer framebuffer(uint32_t index) const { return m_framebuffers[index]; }
     size_t imageCount() const { return m_images.size(); }
+    bool hasStencil() const { return m_hasStencil; }
 
 private:
     void create();
@@ -48,7 +56,9 @@ private:
     VmaAllocation m_depthImageAllocation = VK_NULL_HANDLE;
     VkImageView m_depthImageView = VK_NULL_HANDLE;
     VkFormat m_depthFormat = VK_FORMAT_D32_SFLOAT;
+    bool m_hasStencil = false;
 
+    bool m_vsync = false; // matches this engine's behavior before the setting existed
     VkFormat m_imageFormat{};
     VkExtent2D m_extent{};
 };

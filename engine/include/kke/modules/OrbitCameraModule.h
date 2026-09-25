@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kke/Module.h"
+#include "kke/Capabilities.h"
 #include <glm/glm.hpp>
 
 namespace kke {
@@ -12,7 +13,7 @@ namespace kke {
 //
 // Writes directly into Application::camera() every frame; doesn't own or
 // render anything itself, so it has no init()/render() to speak of.
-class OrbitCameraModule : public Module {
+class OrbitCameraModule : public Module, public ISettingsListener {
 public:
     // Defaults match this class's original hardcoded values (tuned
     // for the generic kke_demo_game's small-scale content — a unit
@@ -29,6 +30,9 @@ public:
     void init(Application& app) override;
     void update(const UpdateContext& ctx) override;
     void renderUi() override;
+    void onSettingsChanged(const EngineSettings& settings) override;
+
+    void setAutoOrbit(bool enabled, float degreesPerSecond = 20.0f) { m_autoOrbit = enabled; m_autoOrbitSpeedDegPerSec = degreesPerSecond; }
 
 private:
     Application* m_app = nullptr;
@@ -44,6 +48,8 @@ private:
     float m_orbitSensitivity = 0.005f;
     float m_panSensitivity = 0.003f;
     float m_zoomSensitivity = 0.3f;
+    float m_sensitivityScale = 1.0f; // from EngineSettings::controls.mouseSensitivity
+    bool m_invertY = false;
 };
 
 } // namespace kke

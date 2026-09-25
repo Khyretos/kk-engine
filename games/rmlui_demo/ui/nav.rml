@@ -1,0 +1,49 @@
+<rml>
+<head>
+    <title>Showcase navigation</title>
+    <link type="text/rcss" href="theme.rcss"/>
+    <style>
+        /* The nav bar floats over every screen; its body must not swallow
+           clicks meant for the screen underneath (BUGS.md BUG-012). */
+        body { pointer-events: none; }
+        #nav {
+            pointer-events: auto;
+            position: absolute; left: 50%; top: 10dp; width: 820dp; max-width: 96%;
+            transform: translateX(-50%);
+            padding: 6dp 8dp;
+            background-color: #0b0e1acc; border: 1dp #2f3a5c; border-radius: 22dp;
+            text-align: center;
+        }
+        #nav .tab {
+            display: inline-block; padding: 6dp 14dp; margin: 0 2dp; border-radius: 16dp;
+            color: #aab3cc; font-size: 14dp; cursor: pointer;
+            transition: background-color color 0.15s;
+        }
+        #nav .tab:hover { background-color: #26304f; color: #ffffff; }
+        #nav .tab.active { background-color: #4f7cff; color: #ffffff; }
+        #hint {
+            position: absolute; left: 0; bottom: 8dp; width: 100%;
+            text-align: center; font-size: 12dp; color: #8b93aacc;
+        }
+        /* Responsive: on narrow windows hide the labels' long forms. */
+        @media (max-width: 900px) {
+            #nav .long { display: none; }
+            #hint { display: none; }
+        }
+    </style>
+</head>
+<body data-model="nav">
+    <div id="nav">
+        <span class="tab" data-class-active="screen == 'menu'"      data-event-click="go('menu')">🏠<span class="long"> Main menu</span></span>
+        <span class="tab" data-class-active="screen == 'settings'"  data-event-click="go('settings')">⚙<span class="long"> Settings</span></span>
+        <span class="tab" data-class-active="screen == 'inventory'" data-event-click="go('inventory')">🎒<span class="long"> Inventory</span></span>
+        <span class="tab" data-class-active="screen == 'hud'"       data-event-click="go('hud')">❤<span class="long"> HUD</span></span>
+        <span class="tab" data-class-active="screen == 'dialog'"    data-event-click="go('dialog')">💬<span class="long"> Dialogue &amp; chat</span></span>
+        <span class="tab" data-class-active="screen == 'loading'"   data-event-click="go('loading')">⏳<span class="long"> Loading</span></span>
+    </div>
+    <div id="hint">
+        <span class="keycap">Esc</span> main menu &#160; <span class="keycap">F1</span> developer overlay &#160;
+        <span class="keycap">F5</span> reload styles &#160; UI scale {{ ui_scale | format(2) }}x ({{ width }}×{{ height }})
+    </div>
+</body>
+</rml>

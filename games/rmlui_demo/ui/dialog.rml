@@ -1,0 +1,61 @@
+<rml>
+<head>
+    <title>Dialogue</title>
+    <link type="text/rcss" href="theme.rcss"/>
+    <style>
+        body { pointer-events: none; }
+        #dialog { pointer-events: auto; position: absolute; left: 50%; bottom: 6%; width: 820dp; max-width: 94%;
+                  transform: translateX(-50%); padding: 0; animation: 0.4s cubic-out slide-up; }
+        #portrait { float: left; width: 130dp; height: 150dp; font-size: 84dp; line-height: 150dp; text-align: center;
+                    decorator: radial-gradient(circle, #3a4a86 0%, #151a2b 75%); border-radius: 12dp 0 0 12dp; }
+        #body { margin-left: 146dp; padding: 16dp 18dp 14dp 0; min-height: 120dp; }
+        #speaker { font-size: 18dp; font-weight: bold; color: #ffcf5c; }
+        #speaker .role { font-size: 12dp; font-weight: normal; color: #8b93aa; margin-left: 8dp; }
+        #text { font-size: 17dp; line-height: 26dp; margin-top: 6dp; min-height: 52dp; }
+        #caret { animation: 0.8s infinite pulse; color: #ffcf5c; }
+        #choices { clear: both; padding: 8dp 18dp 14dp 146dp; }
+        .choice { display: block; padding: 7dp 12dp; margin: 3dp 0; border-radius: 6dp; cursor: pointer; color: #cfd6ea;
+                  transition: background-color padding-left 0.12s; }
+        .choice:hover { background-color: #26304f; padding-left: 20dp; color: #ffffff; }
+        .choice .n { color: #ffcf5c; margin-right: 8dp; }
+        .choice.leave .n { color: #8b93aa; }
+        #skip { float: right; font-size: 12dp; color: #8b93aa; }
+
+        #chat { pointer-events: auto; position: absolute; left: 24dp; top: 70dp; width: 380dp; max-width: 45%; }
+        #log { height: 220dp; overflow-y: auto; margin-bottom: 8dp; }
+        .msg { display: block; margin: 3dp 0; font-size: 14dp; }
+        .msg .who { font-weight: bold; }
+        .msg.system { color: #8b93aa; font-style: italic; }
+        #chat input.text { width: 78%; }
+        @media (max-width: 1000px) { #chat { display: none; } }
+    </style>
+</head>
+<body data-model="dialog">
+    <div id="chat" class="panel glass">
+        <div class="title-bar">CHAT — user text is inserted as text, never parsed as markup</div>
+        <div id="log">
+            <div class="msg" data-for="m : messages" data-class-system="m.system">
+                <span class="who" data-if="!m.system" data-style-color="m.color">{{ m.who }}:</span> {{ m.text }}
+            </div>
+        </div>
+        <form data-event-submit="send">
+            <input type="text" name="message" data-value="draft" maxlength="200" placeholder="Say something…"/>
+            <button class="small primary" data-event-click="send">Send</button>
+        </form>
+    </div>
+
+    <div id="dialog" class="panel glass">
+        <div id="portrait">{{ portrait }}</div>
+        <div id="body">
+            <div id="speaker">{{ speaker }}<span class="role">{{ role }}</span>
+                <span id="skip" data-if="typing">click or <span class="keycap">Space</span> to skip</span></div>
+            <div id="text" data-event-click="skip">{{ shown_text }}<span id="caret" data-if="typing">|</span></div>
+        </div>
+        <div id="choices" data-if="!typing">
+            <div class="choice" data-for="c, i : choices" data-class-leave="c.leave" data-event-click="choose(i)">
+                <span class="n">{{ i + 1 }}.</span>{{ c.text }}
+            </div>
+        </div>
+    </div>
+</body>
+</rml>

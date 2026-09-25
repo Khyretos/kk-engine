@@ -34,6 +34,13 @@ struct PipelineConfig {
     // those with SRC_ALPHA applies alpha twice — translucent content
     // comes out too dark and muddy. See BUGS.md BUG-021.
     bool premultipliedAlpha = false;
+    // Stencil, for RmlUi clip masks (see RmlVulkanRenderInterface). When
+    // enabled, reference/compare mask/write mask are dynamic state set
+    // with vkCmdSetStencil*; the ops below are fixed per pipeline.
+    bool stencilTestEnable = false;
+    VkCompareOp stencilCompareOp = VK_COMPARE_OP_ALWAYS;
+    VkStencilOp stencilPassOp = VK_STENCIL_OP_KEEP;
+    bool colorWriteEnable = true;
     VkPushConstantRange pushConstantRange{}; // size == 0 => pipeline has no push constants
     std::vector<VkDescriptorSetLayout> descriptorSetLayouts; // empty => no descriptor sets
 };

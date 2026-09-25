@@ -102,6 +102,24 @@ send the line — the hex flags say exactly which limit
 (`FM_WARNING_FLAG_*` in `external/FEMFX/amd_femfx/inc/AMD_FEMFX.h`).
 **Result:** —
 
+### HW-008 · UI showcase on a real desktop (dev box)
+`cd build/bin && ./rmlui_demo`. Click through every nav tab. Then in
+Settings: toggle **Fullscreen** and **VSync**, set a frame-rate limit,
+drag **UI scale** and **FOV**, toggle **Shadows**, rebind a key, then
+Apply & save and restart — do your choices come back?
+- Does clicking land exactly where you click? (Especially with desktop
+  scaling at 125%/150% — this was broken before, BUG-032.)
+- Does typing work in the chat box? Does Enter send?
+- Drag items around the inventory and onto equipment slots.
+- Resize the window small and large: does everything stay on screen
+  and readable?
+- Do colors look like the screenshots in the session (dark navy panels,
+  not washed-out grey)?
+- Is VSync on really capped to your refresh rate, and off uncapped
+  (check with F1 → Performance panel)?
+**Send back:** anything that looks or behaves wrong, with a screenshot.
+**Result:** —
+
 ## Done
 
 Nothing run on real hardware yet under this checklist. (Earlier

@@ -1,0 +1,43 @@
+<rml>
+<head>
+    <title>Loading</title>
+    <link type="text/rcss" href="theme.rcss"/>
+    <style>
+        body { decorator: linear-gradient(180deg, #070a14 0%, #0f1630 60%, #1a1030 100%); }
+        #center { position: absolute; left: 50%; top: 38%; width: 560dp; max-width: 90%; transform: translateX(-50%); text-align: center; }
+        #spinner { display: inline-block; width: 64dp; height: 64dp; border-radius: 32dp;
+                   decorator: conic-gradient(#4f7cff00, #4f7cff 70%, #ffcf5c 100%);
+                   animation: 1.1s linear infinite spin; }
+        #spinner-hole { width: 48dp; height: 48dp; margin: 8dp; border-radius: 24dp; background-color: #0c1226; }
+        #area { font-size: 28dp; font-weight: bold; margin-top: 18dp; }
+        #stage { color: #8b93aa; margin: 6dp 0 14dp 0; font-size: 14dp; }
+        #bar { display: block; width: 100%; height: 10dp; }
+        #bar fill { decorator: linear-gradient(90deg, #4f7cff, #ffcf5c); }
+        #percent { font-size: 13dp; color: #aab3cc; margin-top: 6dp; }
+        #tip { position: absolute; left: 50%; bottom: 10%; width: 640dp; max-width: 90%; transform: translateX(-50%);
+               text-align: center; color: #aab3cc; }
+        #tip b { color: #ffcf5c; }
+        #ready { font-size: 18dp; margin-top: 18dp; }
+        .steps { margin-top: 18dp; text-align: left; display: inline-block; font-size: 13dp; }
+        .steps div { color: #5d6580; }
+        .steps div.done { color: #6fe39a; }
+        .steps div.active { color: #ffffff; }
+    </style>
+</head>
+<body data-model="loading" data-event-keydown="continue_if_ready" data-event-click="continue_if_ready">
+    <div id="center">
+        <div id="spinner" data-if="progress < 100"><div id="spinner-hole"></div></div>
+        <div id="area">{{ area }}</div>
+        <div id="stage">{{ stage }}</div>
+        <progress id="bar" data-attr-value="progress" max="100"/>
+        <div id="percent">{{ progress | format(0) }}%</div>
+        <div class="steps">
+            <div data-for="s, i : steps" data-class-done="i < step_index" data-class-active="i == step_index">
+                {{ i < step_index ? '✔' : (i == step_index ? '›' : '·') }} {{ s }}
+            </div>
+        </div>
+        <div id="ready" class="anim-pulse" data-if="progress >= 100">Press any key to continue</div>
+    </div>
+    <div id="tip"><b>TIP</b> — {{ tip }}</div>
+</body>
+</rml>

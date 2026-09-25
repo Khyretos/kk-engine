@@ -1444,32 +1444,38 @@ list (Basic, Tree Nodes, Text Input, Tabs, Plotting, Drag and Drop,
 and more). Always built (no `KKE_ENABLE_*` gate needed — no
 dependency beyond the core engine).
 
-### `games/rmlui_demo`
+### `games/rmlui_demo` — the UI showcase
 
-A genuinely rich showcase, not the minimal 3-box test document
-`UiModule` loads by default: real `<input>` (text/checkbox/radio/
-range), `<select>`, `<textarea>`, `<tabset>`, and `<progress>`
-elements, styled via RCSS. **A real, verified finding along the way**:
-these elements are confirmed to already be part of RmlUi 6.3's Core
-library directly (checked by finding their headers under
-`Include/RmlUi/Core/Elements/` in the fetched source, not assumed) —
-they were merged in from the older, separate "Controls" plugin some
-RmlUi tutorials still reference, so no additional library needed
-linking.
+A selectable set of real game screens, each a plain `.rml`/`.rcss` file in
+`games/rmlui_demo/ui/` bound to C++ state (`ShowcaseModule`) through
+RmlUi data models. The nav bar at the top switches screens; `Esc`
+returns to the main menu, `F1` toggles the ImGui developer overlay, `F5`
+reloads stylesheets.
 
-**The first layout was genuinely broken**, and worth being honest
-about rather than glossing over: panels were positioned by guessing at
-pixel coordinates, and badly overlapped both `StatsModule`'s
-Performance panel and `DebugControlModule`'s panel, with text visibly
-clipped. Fixed properly, not patched around: found the *exact*
-hardcoded positions of both ImGui panels directly in their source
-(`StatsModule.cpp`: `(10,10)`; `DebugControlModule.cpp`: `(340,250)`)
-and laid out every RmlUi panel to avoid both zones plus `UiModule`'s
-own default test document at the bottom of the screen. Verified with
-real screenshots at each step, including a genuine interaction test —
-clicked the "Details" tab and confirmed the tabset actually switched
-content (`Overview`'s panel replaced by `Details`'s), not just that a
-tab visually highlighted.
+| Screen | What it shows off |
+|---|---|
+| **Main menu** | Staggered entrance animations, hover transitions, radial-gradient vignette over a live 3D scene, modal dialogs (Credits, Quit → really quits), `@media` rules for small windows. |
+| **Settings** | Every control is data-bound straight to `kke::EngineSettings` and **actually changes the engine** live: fullscreen, VSync, frame-rate limit, FOV, shadows, brightness, UI scale, developer overlay, mouse sensitivity/invert, key rebinding (click, press a key), difficulty, physics catch-up steps. Apply & save writes `settings.json`; Revert/Defaults work; "unsaved changes" indicator. Tabs, checkboxes, radios, sliders, dropdown, scrolling. |
+| **Inventory** | Drag & drop between slots, equipment slots that refuse the wrong item type, stacking, rarity borders, filter chips, sort, hover details panel, double-click to consume, weight bar with gradient that turns red when heavy. Item icons are color emoji — no image assets needed. |
+| **HUD** | Health/mana/stamina/XP bars with a lagging "ghost" damage bar, hotbar with cooldown sweeps (keys 1–6), floating damage numbers, hit flash, minimap with a conic-gradient radar sweep, compass, quest tracker, toasts. `pointer-events` set so only the interactive parts take clicks. |
+| **Dialogue & chat** | Typewriter NPC text with a branching conversation tree and numbered choices; a chat log with text input where player text is inserted as text, never markup. |
+| **Loading** | Animated spinner, gradient progress bar, step checklist, rotating tips, "press any key". |
+
+Run it: `cd build/bin && ./rmlui_demo`. Iterate on one screen with
+`KKE_SHOWCASE_START=inventory ./rmlui_demo`; edit the source `.rcss`
+live with `KKE_UI_ROOT=../../games/rmlui_demo/ui ./rmlui_demo` and press F5.
+
+What the engine gained to make this possible (all in `engine/`, usable by
+any game): dp-based scaling by window height × UI scale; RmlUi ticking
+while paused; SDL3 text input; HiDPI mouse mapping; UI mouse capture so
+clicks don't also move the camera; CSS transforms, CSS gradients
+(`linear-/radial-/conic-gradient`) and stencil clip masks in the Vulkan
+backend; correct sRGB + premultiplied-alpha color; bold/italic fonts;
+`kke::EngineSettings` (+ unit tests) and `kke::SettingsModule`, which
+applies settings through `ISettingsListener`. Still not implemented in
+the backend: RmlUi *filters and layers* (`filter: blur()`,
+`box-shadow`, `drop-shadow`), which need render-to-texture — those
+properties are silently ignored for now.
 
 ### `games/physics_demo` — a dedicated demo, because the shared one couldn't show this legibly
 

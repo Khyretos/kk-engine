@@ -94,7 +94,14 @@ void DebugUi::processEvent(const SDL_Event& event) {
 
 void DebugUi::render(VkCommandBuffer cmd) {
     ImGui::Render();
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+    if (m_visible) ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+}
+
+void DebugUi::setVisible(bool visible) {
+    m_visible = visible;
+    ImGuiIO& io = ImGui::GetIO();
+    if (visible) io.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
+    else io.ConfigFlags |= ImGuiConfigFlags_NoMouse;
 }
 
 } // namespace kke

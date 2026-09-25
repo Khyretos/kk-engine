@@ -5,6 +5,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <chrono>
+#include <thread>
 #include <queue>
 #include <stdexcept>
 #include <string>
@@ -468,6 +469,11 @@ void Application::run() {
             m_debugUi->render(cmd);
 
             m_renderer->endFrame();
+        }
+
+        if (m_frameRateLimit > 0.0f) {
+            auto frameEnd = lastFrameTime + std::chrono::duration<double>(1.0 / m_frameRateLimit);
+            std::this_thread::sleep_until(frameEnd);
         }
     }
 }

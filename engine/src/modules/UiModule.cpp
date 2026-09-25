@@ -1,6 +1,7 @@
 #include "kke/modules/UiModule.h"
 #include "kke/Application.h"
 #include "kke/Log.h"
+#include "kke/EngineSettings.h"
 
 #include <RmlUi/Core/Core.h>
 #include <RmlUi/Core/Context.h>
@@ -180,7 +181,7 @@ bool UiModule::EngineSystemInterface::LogMessage(Rml::Log::Type type, const Rml:
 void UiModule::init(Application& app) {
     m_app = &app;
     m_systemInterface.window = app.window().handle();
-    m_renderInterface = std::make_unique<RmlVulkanRenderInterface>(app.device(), app.renderer().renderPass());
+    m_renderInterface = std::make_unique<RmlVulkanRenderInterface>(app.device(), app.renderer().renderPass(), app.renderer().hasStencil());
 
     Rml::SetSystemInterface(&m_systemInterface);
     Rml::SetRenderInterface(m_renderInterface.get());
@@ -204,6 +205,13 @@ void UiModule::init(Application& app) {
     // text without the document needing to say anything special. Verified
     // to render in genuine color (not grayscale-tinted) — see README
     // "Default fonts" for how that was actually confirmed, not assumed.
+    // Bold/Italic are optional extra faces of the same family: without
+    // them `font-weight: bold` silently renders the regular face.
+    for (const char* face : { "assets/fonts/NotoSans-Bold.ttf", "assets/fonts/NotoSans-Italic.ttf" }) {
+        if (!Rml::LoadFontFace(face)) {
+            log::get(name())->info("optional font face '{}' not found -- bold/italic text will use the regular face", face);
+        }
+    }
     if (!Rml::LoadFontFace("assets/fonts/NotoColorEmoji.ttf", /*fallback_face=*/true)) {
         std::cerr << "[ui] warning: failed to load bundled NotoColorEmoji.ttf — "
                      "emoji will not render." << std::endl;
@@ -245,6 +253,10 @@ void UiModule::renderUi() {
     }
     m_context->Update();
     m_app->setUiCapturesMouse(m_context->IsMouseInteracting() || m_draggingSlider || m_draggingPanel);
+}
+
+void UiModule::onSettingsChanged(const EngineSettings& settings) {
+    m_uiScale = settings.graphics.uiScale;
 }
 
 void UiModule::reloadStyleSheets() {

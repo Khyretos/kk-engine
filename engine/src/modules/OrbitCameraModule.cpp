@@ -1,5 +1,6 @@
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/Application.h"
+#include "kke/EngineSettings.h"
 
 #include <imgui.h>
 #include <glm/gtc/constants.hpp>
@@ -22,8 +23,8 @@ void OrbitCameraModule::update(const UpdateContext& ctx) {
     bool uiWantsMouse = ImGui::GetIO().WantCaptureMouse || m_app->uiCapturesMouse();
 
     if (!uiWantsMouse && mouse.leftButtonDown) {
-        m_yaw += mouse.deltaX * m_orbitSensitivity;
-        m_pitch -= mouse.deltaY * m_orbitSensitivity;
+        m_yaw += mouse.deltaX * m_orbitSensitivity * m_sensitivityScale;
+        m_pitch -= mouse.deltaY * m_orbitSensitivity * m_sensitivityScale * (m_invertY ? -1.0f : 1.0f);
         constexpr float kPitchLimit = glm::half_pi<float>() - 0.05f;
         m_pitch = std::clamp(m_pitch, -kPitchLimit, kPitchLimit);
     }
@@ -59,6 +60,11 @@ void OrbitCameraModule::renderUi() {
     ImGui::Checkbox("Auto-orbit", &m_autoOrbit);
     ImGui::SliderFloat("Auto-orbit speed", &m_autoOrbitSpeedDegPerSec, -180.0f, 180.0f);
     ImGui::End();
+}
+
+void OrbitCameraModule::onSettingsChanged(const EngineSettings& settings) {
+    m_sensitivityScale = settings.controls.mouseSensitivity;
+    m_invertY = settings.controls.invertY;
 }
 
 } // namespace kke

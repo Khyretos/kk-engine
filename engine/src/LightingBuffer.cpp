@@ -114,7 +114,7 @@ void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos
         }
         dst.colorIntensity = glm::vec4(src.color, src.intensity);
     }
-    data.ambient = glm::vec4(lighting.ambientColor, 0.0f);
+    data.ambient = glm::vec4(lighting.ambientColor, lighting.shadowsEnabled ? 1.0f : 0.0f); // a = shadows on/off, read by cube.frag
     data.cameraPos = glm::vec4(cameraPos, 0.0f);
     data.lightViewProj = lightViewProj;
     data.viewProj = viewProj;

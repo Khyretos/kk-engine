@@ -155,7 +155,7 @@ void main() {
     // encodes.
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
-    float shadow = computeShadow(fragPosLightSpace);
+    float shadow = lighting.ambient.a > 0.5 ? computeShadow(fragPosLightSpace) : 1.0;
     vec3 Lo = vec3(0.0);
 
     for (int i = 0; i < 4; ++i) {

@@ -9,6 +9,9 @@
 // natural, and currently only, consumer of stb_image in this codebase.
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
+#include <RmlUi/Core/Dictionary.h>
+#include <RmlUi/Core/Variant.h>
+#include <RmlUi/Core/DecorationTypes.h>
 
 #include <algorithm>
 #include <array>
@@ -27,10 +30,20 @@ struct RmlPushConstants {
     glm::vec2 translation; // pixels
     glm::vec2 pad;
 };
+static_assert(sizeof(RmlPushConstants) == 80, "rml_gradient.frag expects its block at offset 80");
+
+struct GradientPushConstants {
+    glm::vec2 p;
+    glm::vec2 v;
+    float t0;
+    float t1;
+    int func;
+    int pad;
+};
 } // namespace
 
-RmlVulkanRenderInterface::RmlVulkanRenderInterface(VulkanDevice& device, VkRenderPass renderPass)
-    : m_device(device) {
+RmlVulkanRenderInterface::RmlVulkanRenderInterface(VulkanDevice& device, VkRenderPass renderPass, bool stencilAvailable)
+    : m_device(device), m_stencilAvailable(stencilAvailable) {
     // --- Descriptor set layout: one combined image sampler, fragment-only ---
     VkDescriptorSetLayoutBinding binding{};
     binding.binding = 0;
@@ -47,11 +60,11 @@ RmlVulkanRenderInterface::RmlVulkanRenderInterface(VulkanDevice& device, VkRende
     // --- Descriptor pool: sized for a generous number of glyph atlases /
     // images a typical UI might have live at once. Grows are not
     // supported (would need a second pool) — fine for this slice's scope.
-    VkDescriptorPoolSize poolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 256 };
+    VkDescriptorPoolSize poolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1024 };
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    poolInfo.maxSets = 256;
+    poolInfo.maxSets = 1024; // glyph atlases, images, and one ramp per gradient
     poolInfo.poolSizeCount = 1;
     poolInfo.pPoolSizes = &poolSize;
     VK_CHECK(vkCreateDescriptorPool(device.device(), &poolInfo, nullptr, &m_descriptorPool));
@@ -93,11 +106,38 @@ RmlVulkanRenderInterface::RmlVulkanRenderInterface(VulkanDevice& device, VkRende
     config.depthWriteEnable = false;
     config.blendEnable = true;
     config.premultipliedAlpha = true;
+    if (m_stencilAvailable) {
+        // Every draw tests stencil == reference; with the compare mask at 0
+        // (clip mask disabled) that test always passes. See applyStencilState().
+        config.stencilTestEnable = true;
+        config.stencilCompareOp = VK_COMPARE_OP_EQUAL;
+        config.stencilPassOp = VK_STENCIL_OP_KEEP;
+    }
     config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(RmlPushConstants) };
     config.descriptorSetLayouts = { m_textureSetLayout };
 
     m_pipeline = std::make_unique<Pipeline>(
         device, renderPass, "shaders/rml_ui.vert.spv", "shaders/rml_ui.frag.spv", config);
+
+    // Same vertex stage and state; the fragment stage reads the gradient
+    // parameters from push constants placed after the vertex ones.
+    config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+                                 sizeof(RmlPushConstants) + sizeof(GradientPushConstants) };
+    m_gradientPipeline = std::make_unique<Pipeline>(
+        device, renderPass, "shaders/rml_ui.vert.spv", "shaders/rml_gradient.frag.spv", config);
+
+    if (m_stencilAvailable) {
+        // Mask writers: same vertex stage, no color output, stencil only.
+        config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(RmlPushConstants) };
+        config.colorWriteEnable = false;
+        config.stencilCompareOp = VK_COMPARE_OP_ALWAYS;
+        config.stencilPassOp = VK_STENCIL_OP_REPLACE;
+        m_maskReplacePipeline = std::make_unique<Pipeline>(
+            device, renderPass, "shaders/rml_ui.vert.spv", "shaders/rml_ui.frag.spv", config);
+        config.stencilPassOp = VK_STENCIL_OP_INCREMENT_AND_CLAMP;
+        m_maskIncrementPipeline = std::make_unique<Pipeline>(
+            device, renderPass, "shaders/rml_ui.vert.spv", "shaders/rml_ui.frag.spv", config);
+    }
 }
 
 RmlVulkanRenderInterface::~RmlVulkanRenderInterface() {
@@ -120,6 +160,10 @@ RmlVulkanRenderInterface::~RmlVulkanRenderInterface() {
             destroyTexture(pending.texture);
         }
     }
+    for (auto& [handle, gradient] : m_gradients) {
+        destroyTexture(gradient.ramp);
+    }
+    m_gradients.clear();
     m_pendingDeletions.clear();
 
     for (auto& [handle, texture] : m_textures) {
@@ -310,6 +354,9 @@ void RmlVulkanRenderInterface::beginFrame(VkCommandBuffer cmd, glm::vec2 screenS
         m_pendingDeletions.end());
 
     m_pipeline->bind(cmd);
+    m_clipMaskEnabled = false;
+    m_stencilRef = 0;
+    applyStencilState();
 
     VkRect2D fullScreen{ { 0, 0 }, { static_cast<uint32_t>(screenSizePixels.x), static_cast<uint32_t>(screenSizePixels.y) } };
     vkCmdSetScissor(cmd, 0, 1, &fullScreen);
@@ -452,6 +499,171 @@ void RmlVulkanRenderInterface::SetScissorRegion(Rml::Rectanglei region) {
 void RmlVulkanRenderInterface::SetTransform(const Rml::Matrix4f* transform) {
     // Rml::Matrix4f is column-major by default, same as glm.
     m_transform = transform ? glm::make_mat4(transform->data()) : glm::mat4(1.0f);
+}
+
+Rml::CompiledShaderHandle RmlVulkanRenderInterface::CompileShader(const Rml::String& name, const Rml::Dictionary& parameters) {
+    CompiledGradient g;
+    const bool repeating = Rml::Get(parameters, "repeating", false);
+    if (name == "linear-gradient") {
+        g.func = 0;
+        Rml::Vector2f p0 = Rml::Get(parameters, "p0", Rml::Vector2f(0.f));
+        Rml::Vector2f p1 = Rml::Get(parameters, "p1", Rml::Vector2f(0.f));
+        g.p = { p0.x, p0.y };
+        g.v = { p1.x - p0.x, p1.y - p0.y };
+    } else if (name == "radial-gradient") {
+        g.func = 1;
+        Rml::Vector2f c = Rml::Get(parameters, "center", Rml::Vector2f(0.f));
+        Rml::Vector2f r = Rml::Get(parameters, "radius", Rml::Vector2f(1.f));
+        g.p = { c.x, c.y };
+        g.v = { 1.0f / std::max(r.x, 1e-6f), 1.0f / std::max(r.y, 1e-6f) };
+    } else if (name == "conic-gradient") {
+        g.func = 2;
+        Rml::Vector2f c = Rml::Get(parameters, "center", Rml::Vector2f(0.f));
+        float angle = Rml::Get(parameters, "angle", 0.f);
+        g.p = { c.x, c.y };
+        g.v = { std::cos(angle), std::sin(angle) };
+    } else {
+        log::get("UI")->warn("RmlVulkanRenderInterface: unsupported shader '{}'", name);
+        return {};
+    }
+    if (repeating) g.func += 3;
+
+    auto it = parameters.find("color_stop_list");
+    if (it == parameters.end() || it->second.GetType() != Rml::Variant::COLORSTOPLIST) return {};
+    const Rml::ColorStopList& stops = it->second.GetReference<Rml::ColorStopList>();
+    if (stops.empty()) return {};
+    g.t0 = stops.front().position.number;
+    g.t1 = stops.back().position.number;
+    if (g.t1 <= g.t0) g.t1 = g.t0 + 1e-4f;
+
+    // Bake the stops into a ramp over [t0, t1], interpolating between
+    // neighbours with smoothstep exactly like RmlUi's GL3 shader does.
+    constexpr uint32_t kRampSize = 256;
+    std::vector<uint8_t> ramp(kRampSize * 4);
+    for (uint32_t i = 0; i < kRampSize; ++i) {
+        float t = g.t0 + (g.t1 - g.t0) * (static_cast<float>(i) / (kRampSize - 1));
+        float color[4];
+        for (int c = 0; c < 4; ++c) color[c] = stops[0].color[c] / 255.0f;
+        for (size_t s = 1; s < stops.size(); ++s) {
+            float a = stops[s - 1].position.number, b = stops[s].position.number;
+            float x = b > a ? std::clamp((t - a) / (b - a), 0.0f, 1.0f) : (t >= b ? 1.0f : 0.0f);
+            float w = x * x * (3.0f - 2.0f * x);
+            for (int c = 0; c < 4; ++c) color[c] = color[c] + (stops[s].color[c] / 255.0f - color[c]) * w;
+        }
+        for (int c = 0; c < 4; ++c) ramp[i * 4 + c] = static_cast<uint8_t>(std::clamp(color[c], 0.0f, 1.0f) * 255.0f + 0.5f);
+    }
+    g.ramp = createTextureFromPixels(ramp.data(), kRampSize, 1);
+
+    uintptr_t handle = m_nextGradientHandle++;
+    m_gradients[handle] = g;
+    return static_cast<Rml::CompiledShaderHandle>(handle);
+}
+
+void RmlVulkanRenderInterface::RenderShader(Rml::CompiledShaderHandle shaderHandle, Rml::CompiledGeometryHandle geometryHandle,
+                                            Rml::Vector2f translation, Rml::TextureHandle /*texture*/) {
+    auto sit = m_gradients.find(static_cast<uintptr_t>(shaderHandle));
+    auto git = m_geometry.find(static_cast<uintptr_t>(geometryHandle));
+    if (sit == m_gradients.end() || git == m_geometry.end() || m_currentCmd == VK_NULL_HANDLE) return;
+    const CompiledGradient& g = sit->second;
+
+    m_gradientPipeline->bind(m_currentCmd);
+    vkCmdBindDescriptorSets(m_currentCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_gradientPipeline->layout(),
+                             0, 1, &g.ramp.descriptorSet, 0, nullptr);
+    struct {
+        RmlPushConstants vert;
+        GradientPushConstants frag;
+    } pc{ { m_projection * m_transform, glm::vec2(translation.x, translation.y), glm::vec2(0.0f) },
+          { g.p, g.v, g.t0, g.t1, g.func, 0 } };
+    vkCmdPushConstants(m_currentCmd, m_gradientPipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                       0, sizeof(pc), &pc);
+    CompiledGeometry& geometry = *git->second;
+    VkBuffer vertexBuffers[] = { geometry.vertexBuffer->handle() };
+    VkDeviceSize offsets[] = { 0 };
+    vkCmdBindVertexBuffers(m_currentCmd, 0, 1, vertexBuffers, offsets);
+    vkCmdBindIndexBuffer(m_currentCmd, geometry.indexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(m_currentCmd, geometry.indexCount, 1, 0, 0, 0);
+    // RenderGeometry() assumes the regular pipeline is bound.
+    m_pipeline->bind(m_currentCmd);
+    applyStencilState();
+}
+
+void RmlVulkanRenderInterface::ReleaseShader(Rml::CompiledShaderHandle shaderHandle) {
+    auto it = m_gradients.find(static_cast<uintptr_t>(shaderHandle));
+    if (it == m_gradients.end()) return;
+    PendingDeletion pending;
+    pending.queuedAtFrame = m_frameCounter;
+    pending.texture = it->second.ramp;
+    pending.isTexture = true;
+    m_pendingDeletions.push_back(std::move(pending));
+    m_gradients.erase(it);
+}
+
+void RmlVulkanRenderInterface::applyStencilState() {
+    if (!m_stencilAvailable || m_currentCmd == VK_NULL_HANDLE) return;
+    vkCmdSetStencilCompareMask(m_currentCmd, VK_STENCIL_FACE_FRONT_AND_BACK, m_clipMaskEnabled ? 0xFF : 0x00);
+    vkCmdSetStencilWriteMask(m_currentCmd, VK_STENCIL_FACE_FRONT_AND_BACK, 0xFF);
+    vkCmdSetStencilReference(m_currentCmd, VK_STENCIL_FACE_FRONT_AND_BACK, m_stencilRef);
+}
+
+void RmlVulkanRenderInterface::EnableClipMask(bool enable) {
+    m_clipMaskEnabled = enable && m_stencilAvailable;
+    applyStencilState();
+}
+
+// Same scheme as RmlUi's GL3 backend: after Set/SetInverse the visible
+// region holds stencil value 1; each Intersect increments inside its
+// geometry, so the visible region is where stencil == number of masks.
+void RmlVulkanRenderInterface::RenderToClipMask(Rml::ClipMaskOperation operation, Rml::CompiledGeometryHandle geometryHandle,
+                                                Rml::Vector2f translation) {
+    auto it = m_geometry.find(static_cast<uintptr_t>(geometryHandle));
+    if (!m_stencilAvailable || it == m_geometry.end() || m_currentCmd == VK_NULL_HANDLE) return;
+
+    auto clearStencil = [this](uint32_t value) {
+        VkClearAttachment clear{};
+        clear.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT;
+        clear.clearValue.depthStencil = { 1.0f, value };
+        VkClearRect rect{};
+        rect.rect = { { 0, 0 }, { static_cast<uint32_t>(m_screenSize.x), static_cast<uint32_t>(m_screenSize.y) } };
+        rect.layerCount = 1;
+        vkCmdClearAttachments(m_currentCmd, 1, &clear, 1, &rect);
+    };
+
+    Pipeline* writer = m_maskReplacePipeline.get();
+    uint32_t writeRef = 1;
+    switch (operation) {
+        case Rml::ClipMaskOperation::Set:
+            clearStencil(0);
+            writeRef = 1;
+            m_stencilRef = 1;
+            break;
+        case Rml::ClipMaskOperation::SetInverse:
+            clearStencil(1);
+            writeRef = 0;
+            m_stencilRef = 1;
+            break;
+        case Rml::ClipMaskOperation::Intersect:
+            writer = m_maskIncrementPipeline.get();
+            ++m_stencilRef;
+            break;
+    }
+
+    writer->bind(m_currentCmd);
+    vkCmdSetStencilCompareMask(m_currentCmd, VK_STENCIL_FACE_FRONT_AND_BACK, 0xFF);
+    vkCmdSetStencilWriteMask(m_currentCmd, VK_STENCIL_FACE_FRONT_AND_BACK, 0xFF);
+    vkCmdSetStencilReference(m_currentCmd, VK_STENCIL_FACE_FRONT_AND_BACK, writeRef);
+    vkCmdBindDescriptorSets(m_currentCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, writer->layout(), 0, 1,
+                             &m_defaultTexture.descriptorSet, 0, nullptr);
+    RmlPushConstants pc{ m_projection * m_transform, glm::vec2(translation.x, translation.y), glm::vec2(0.0f) };
+    vkCmdPushConstants(m_currentCmd, writer->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+    CompiledGeometry& geometry = *it->second;
+    VkBuffer vertexBuffers[] = { geometry.vertexBuffer->handle() };
+    VkDeviceSize offsets[] = { 0 };
+    vkCmdBindVertexBuffers(m_currentCmd, 0, 1, vertexBuffers, offsets);
+    vkCmdBindIndexBuffer(m_currentCmd, geometry.indexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(m_currentCmd, geometry.indexCount, 1, 0, 0, 0);
+
+    m_pipeline->bind(m_currentCmd);
+    applyStencilState();
 }
 
 } // namespace kke

@@ -51,4 +51,17 @@ public:
     virtual void deserializeReplicatedState(const std::vector<uint8_t>& data) = 0;
 };
 
+// Implemented by any module that reacts to player settings (UI scale,
+// camera sensitivity, ...). kke::SettingsModule calls every implementer
+// whenever settings are applied — and a module that implements this
+// works fine in a game with no SettingsModule at all (it just never gets
+// called). Same "recognize each other if both present" pattern as
+// INetworkReplicable above.
+struct EngineSettings;
+class ISettingsListener {
+public:
+    virtual ~ISettingsListener() = default;
+    virtual void onSettingsChanged(const EngineSettings& settings) = 0;
+};
+
 } // namespace kke

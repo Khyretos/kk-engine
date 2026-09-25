@@ -36,7 +36,9 @@ class VulkanDevice;
 // than treating a missing/corrupt image as fatal.
 class RmlVulkanRenderInterface : public Rml::RenderInterface {
 public:
-    RmlVulkanRenderInterface(VulkanDevice& device, VkRenderPass renderPass);
+    // stencilAvailable: the render pass's depth attachment has a stencil
+    // aspect (Renderer::hasStencil()); without it clip masks are skipped.
+    RmlVulkanRenderInterface(VulkanDevice& device, VkRenderPass renderPass, bool stencilAvailable = false);
     ~RmlVulkanRenderInterface() override;
 
     // Called by UiModule once per frame, right before Rml::Context::Render()
@@ -58,6 +60,21 @@ public:
     // Optional in Rml::RenderInterface — without it every CSS `transform`
     // (scale/rotate/translate, and animations of them) was silently ignored.
     void SetTransform(const Rml::Matrix4f* transform) override;
+
+    // Optional — CSS gradient decorators (linear-/radial-/conic-gradient,
+    // and repeating- variants). Without these, RmlUi silently drew
+    // nothing for any gradient background. See shaders/rml_gradient.frag.
+    Rml::CompiledShaderHandle CompileShader(const Rml::String& name, const Rml::Dictionary& parameters) override;
+    void RenderShader(Rml::CompiledShaderHandle shader, Rml::CompiledGeometryHandle geometry, Rml::Vector2f translation,
+                      Rml::TextureHandle texture) override;
+    void ReleaseShader(Rml::CompiledShaderHandle shader) override;
+
+    // Optional — clip masks. RmlUi uses these instead of a scissor
+    // rectangle whenever an element with overflow clipping sits inside a
+    // CSS transform (e.g. a scrolling list in a panel that slides in).
+    // Without them nothing was clipped at all in that case.
+    void EnableClipMask(bool enable) override;
+    void RenderToClipMask(Rml::ClipMaskOperation operation, Rml::CompiledGeometryHandle geometry, Rml::Vector2f translation) override;
 
 private:
     struct CompiledGeometry {
@@ -96,6 +113,21 @@ private:
     // VkCommandBuffer ... which is invalid because bound VkBuffer ...
     // was destroyed" — a buffer freed while a still-in-flight command
     // buffer from a prior frame was still referencing it.
+    struct CompiledGradient {
+        CompiledTexture ramp;
+        glm::vec2 p{0.0f}, v{0.0f};
+        float t0 = 0.0f, t1 = 1.0f;
+        int func = 0;
+    };
+    std::unordered_map<uintptr_t, CompiledGradient> m_gradients;
+    uintptr_t m_nextGradientHandle = 1;
+    std::unique_ptr<Pipeline> m_gradientPipeline;
+    std::unique_ptr<Pipeline> m_maskReplacePipeline, m_maskIncrementPipeline; // stencil-only writes
+    bool m_stencilAvailable = false;
+    bool m_clipMaskEnabled = false;
+    uint32_t m_stencilRef = 0;
+    void applyStencilState(); // re-sets dynamic stencil state after a pipeline bind
+
     struct PendingDeletion {
         uint64_t queuedAtFrame;
         std::unique_ptr<CompiledGeometry> geometry; // exactly one of these two is set

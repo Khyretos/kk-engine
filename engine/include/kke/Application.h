@@ -61,6 +61,9 @@ struct Lighting {
     static constexpr int kMaxLights = 4;
     std::array<Light, kMaxLights> lights;
     glm::vec3 ambientColor{0.15f, 0.15f, 0.15f}; // flat fill light so unlit faces read as dim, not pure black
+    // Light 0's shadow map is still rendered either way (so toggling is
+    // instant), but lit shaders ignore it when this is false.
+    bool shadowsEnabled = true;
 
     Lighting() {
         // A sensible default so a demo that never touches lighting at
@@ -204,6 +207,14 @@ public:
     // modules don't also react to a click meant for a button. ImGui has
     // its own equivalent (ImGui::GetIO().WantCaptureMouse); check both.
     void setUiCapturesMouse(bool captured) { m_uiCapturesMouse = captured; }
+
+    // 0 = unlimited. Sleeps at the end of each frame to hold this rate —
+    // saves power/heat on laptops and handhelds; combine with VSync off.
+    void setFrameRateLimit(float fps) { m_frameRateLimit = fps; }
+    float frameRateLimit() const { return m_frameRateLimit; }
+
+    // The ImGui developer overlay (Performance, Physics, Camera panels...).
+    DebugUi& debugUi() { return *m_debugUi; }
     bool uiCapturesMouse() const { return m_uiCapturesMouse; }
 
     bool isPaused() const { return m_paused; }
@@ -279,6 +290,7 @@ private:
 
     bool m_paused = false;
     bool m_uiCapturesMouse = false;
+    float m_frameRateLimit = 0.0f;
     bool m_stepRequested = false;
 
     std::unordered_set<Module*> m_faultedModules; // see safeInvoke() — never called again once here

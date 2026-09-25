@@ -8,6 +8,7 @@ add_executable(kke_tests
     test_tet_mesh_asset.cpp
     test_marketplace_index.cpp
     test_engine_error.cpp
+    test_engine_settings.cpp
 )
 target_link_libraries(kke_tests PRIVATE kke_engine GTest::gtest_main)
 

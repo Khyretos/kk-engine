@@ -1,0 +1,124 @@
+<rml>
+<head>
+    <title>Inventory</title>
+    <link type="text/rcss" href="theme.rcss"/>
+    <style>
+        body { background-color: #05070eaa; }
+        #window { position: absolute; left: 50%; top: 9%; width: 1000dp; max-width: 96%; transform: translateX(-50%);
+                  animation: 0.35s cubic-out slide-up; }
+        #cols { display: block; }
+        .col { float: left; }
+        #equip { width: 200dp; }
+        #grid-col { width: 470dp; margin: 0 18dp; }
+        #details { width: 250dp; }
+        .col h3 { margin-top: 0; }
+
+        .slot {
+            position: relative; float: left; width: 68dp; height: 68dp; margin: 3dp;
+            background-color: #0d1120; border: 2dp #262f4d; border-radius: 8dp;
+            transition: border-color background-color 0.12s;
+        }
+        .slot:hover { border-color: #56628e; }
+        /* drop target feedback while dragging over it */
+        .slot:drag-hover { border-color: #ffcf5c; background-color: #2a2a1a; }
+        .slot.dimmed { opacity: 0.25; }
+        .slot.selected { border-color: #7a9bff; }
+        .item {
+            display: block; width: 100%; height: 100%;
+            text-align: center; font-size: 34dp; line-height: 64dp;
+            drag: clone; cursor: move;
+        }
+        .item:drag { opacity: 0.35; }
+        .count { position: absolute; right: 5dp; bottom: 2dp; font-size: 12dp; line-height: 14dp; font-weight: bold;
+                 color: #ffffff; font-effect: outline(1dp #000000); }
+        .common    { border-color: #3a4260; }
+        .uncommon  { border-color: #2f8f4e; }
+        .rare      { border-color: #3a6fd8; }
+        .epic      { border-color: #9a4ad8; }
+        .legendary { border-color: #e0a030; }
+
+        #equip .eq { display: block; clear: both; margin-bottom: 6dp; }
+        #equip .eq .slot { margin: 0 8dp 0 0; }
+        #equip .eq .label { display: block; padding-top: 22dp; font-size: 13dp; color: #8b93aa; }
+
+        #filters { margin-bottom: 8dp; }
+        #filters span { display: inline-block; padding: 4dp 10dp; margin-right: 4dp; border-radius: 12dp; font-size: 13dp;
+                        background-color: #1a2038; cursor: pointer; }
+        #filters span:hover { background-color: #2a3458; }
+        #filters span.on { background-color: #4f7cff; }
+
+        #details .big { font-size: 64dp; text-align: center; line-height: 80dp; }
+        #details .name { font-size: 18dp; font-weight: bold; text-align: center; }
+        #details .rarity { text-align: center; font-size: 12dp; letter-spacing: 2dp; margin-bottom: 10dp; }
+        #details .stat { display: block; font-size: 13dp; margin: 3dp 0; }
+        #details .stat span { float: right; color: #ffcf5c; }
+        #details .desc { font-style: italic; color: #aab3cc; margin: 10dp 0; font-size: 13dp; }
+
+        #footer { clear: both; padding-top: 14dp; }
+        #weight { width: 300dp; }
+        #weight fill { decorator: linear-gradient(90deg, #3a6fd8, #6fe39a); }
+        #weight.heavy fill { decorator: linear-gradient(90deg, #d8913a, #ff5a5a); }
+        #gold { float: right; font-size: 18dp; color: #ffcf5c; }
+        #toast { position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%); padding: 8dp 16dp;
+                 background-color: #1b2440ee; border: 1dp #56628e; border-radius: 16dp; animation: 0.25s cubic-out slide-up; }
+        @media (max-width: 1100px) { #details { display: none; } }
+        @media (max-width: 760px)  { #equip { display: none; } }
+    </style>
+</head>
+<body data-model="inv">
+<div id="window" class="panel glass">
+    <div class="title-bar">INVENTORY — drag items between slots · drop on equipment to equip · double-click a potion to drink</div>
+    <div id="cols">
+        <div id="equip" class="col">
+            <h3>Equipped</h3>
+            <div class="eq" data-for="slot, i : equipment">
+                <div class="slot" data-attr-slot="'e' + i" data-class-selected="selected == 'e' + i"
+                     data-class-common="slot.rarity == 'common'" data-class-uncommon="slot.rarity == 'uncommon'"
+                     data-class-rare="slot.rarity == 'rare'" data-class-epic="slot.rarity == 'epic'" data-class-legendary="slot.rarity == 'legendary'"
+                     data-event-mouseover="hover('e' + i)" data-event-click="select('e' + i)">
+                    <div class="item" data-if="slot.icon != ''">{{ slot.icon }}</div>
+                </div>
+                <span class="label">{{ slot.slot_label }}</span>
+            </div>
+        </div>
+
+        <div id="grid-col" class="col">
+            <div id="filters">
+                <span data-for="f : filters" data-class-on="filter == f" data-event-click="filter = f">{{ f }}</span>
+                <button class="small right" data-event-click="sort">Sort by rarity</button>
+            </div>
+            <div data-for="slot, i : bag" class="slot" data-attr-slot="'b' + i"
+                 data-class-dimmed="filter != 'All' && slot.icon != '' && slot.category != filter"
+                 data-class-selected="selected == 'b' + i"
+                 data-class-common="slot.rarity == 'common'" data-class-uncommon="slot.rarity == 'uncommon'"
+                 data-class-rare="slot.rarity == 'rare'" data-class-epic="slot.rarity == 'epic'" data-class-legendary="slot.rarity == 'legendary'"
+                 data-event-mouseover="hover('b' + i)" data-event-click="select('b' + i)" data-event-dblclick="use('b' + i)">
+                <div class="item" data-if="slot.icon != ''">{{ slot.icon }}<span class="count" data-if="slot.count > 1">{{ slot.count }}</span></div>
+            </div>
+        </div>
+
+        <div id="details" class="col">
+            <h3>Details</h3>
+            <div data-if="detail.icon != ''">
+                <div class="big">{{ detail.icon }}</div>
+                <div class="name">{{ detail.name }}</div>
+                <div class="rarity" data-class-good="detail.rarity == 'uncommon'" data-class-accent="detail.rarity == 'legendary'">{{ detail.rarity | to_upper }}</div>
+                <div class="stat" data-if="detail.power > 0">Power <span>{{ detail.power }}</span></div>
+                <div class="stat" data-if="detail.armor > 0">Armor <span>{{ detail.armor }}</span></div>
+                <div class="stat">Weight <span>{{ detail.weight | format(1) }} kg</span></div>
+                <div class="stat">Value <span>{{ detail.value }} 🪙</span></div>
+                <div class="desc">“{{ detail.description }}”</div>
+            </div>
+            <div class="muted" data-if="detail.icon == ''">Hover an item to inspect it.</div>
+        </div>
+    </div>
+
+    <div id="footer">
+        Weight {{ weight | format(1) }} / {{ max_weight | format(0) }} kg
+        <progress id="weight" data-attr-value="weight" data-attr-max="max_weight" data-class-heavy="weight > max_weight * 0.8"/>
+        <span id="gold">🪙 {{ gold }}</span>
+    </div>
+    <div id="toast" data-if="toast != ''">{{ toast }}</div>
+</div>
+</body>
+</rml>

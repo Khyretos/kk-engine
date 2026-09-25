@@ -76,11 +76,14 @@ void SwapChain::create() {
     }
 
     VkPresentModeKHR chosenPresentMode = VK_PRESENT_MODE_FIFO_KHR; // always available, vsync
-    for (const auto& mode : presentModes) {
-        if (mode == VK_PRESENT_MODE_MAILBOX_KHR) {
-            chosenPresentMode = mode;
-            break;
+    if (!m_vsync) {
+        bool hasMailbox = false, hasImmediate = false;
+        for (const auto& mode : presentModes) {
+            hasMailbox |= (mode == VK_PRESENT_MODE_MAILBOX_KHR);
+            hasImmediate |= (mode == VK_PRESENT_MODE_IMMEDIATE_KHR);
         }
+        if (hasMailbox) chosenPresentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+        else if (hasImmediate) chosenPresentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
     }
 
     VkExtent2D extent;
@@ -153,7 +156,20 @@ void SwapChain::createDepthResources() {
     // (including lavapipe, which is what we verify against headlessly), so
     // we don't bother probing vkGetPhysicalDeviceFormatProperties for a
     // fallback here — worth revisiting if you target something exotic.
+    // A stencil aspect is wanted for RmlUi clip masks (clipping inside
+    // CSS-transformed elements); fall back to depth-only if the device
+    // offers neither combined format, and the UI then skips clip masks.
     m_depthFormat = VK_FORMAT_D32_SFLOAT;
+    m_hasStencil = false;
+    for (VkFormat candidate : { VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT }) {
+        VkFormatProperties props{};
+        vkGetPhysicalDeviceFormatProperties(m_device.physicalDevice(), candidate, &props);
+        if (props.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+            m_depthFormat = candidate;
+            m_hasStencil = true;
+            break;
+        }
+    }
 
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -178,7 +194,7 @@ void SwapChain::createDepthResources() {
     viewInfo.image = m_depthImage;
     viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
     viewInfo.format = m_depthFormat;
-    viewInfo.subresourceRange = { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1 };
+    viewInfo.subresourceRange = { static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_DEPTH_BIT | (m_hasStencil ? VK_IMAGE_ASPECT_STENCIL_BIT : 0)), 0, 1, 0, 1 };
 
     VK_CHECK(vkCreateImageView(m_device.device(), &viewInfo, nullptr, &m_depthImageView));
 }
@@ -199,7 +215,7 @@ void SwapChain::createRenderPass() {
     depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
     depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    depthAttachment.stencilLoadOp = m_hasStencil ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;

@@ -74,8 +74,9 @@ Pipeline::Pipeline(VulkanDevice& device, VkRenderPass renderPass,
     multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
     VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                                           VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    colorBlendAttachment.colorWriteMask = config.colorWriteEnable
+        ? (VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT)
+        : 0;
     colorBlendAttachment.blendEnable = config.blendEnable ? VK_TRUE : VK_FALSE;
     if (config.blendEnable) {
         colorBlendAttachment.srcColorBlendFactor = config.premultipliedAlpha ? VK_BLEND_FACTOR_ONE : VK_BLEND_FACTOR_SRC_ALPHA;
@@ -92,6 +93,10 @@ Pipeline::Pipeline(VulkanDevice& device, VkRenderPass renderPass,
     colorBlending.pAttachments = &colorBlendAttachment;
 
     std::vector<VkDynamicState> dynamicStates = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+    if (config.stencilTestEnable) {
+        dynamicStates.insert(dynamicStates.end(), { VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK, VK_DYNAMIC_STATE_STENCIL_WRITE_MASK,
+                                                    VK_DYNAMIC_STATE_STENCIL_REFERENCE });
+    }
     VkPipelineDynamicStateCreateInfo dynamicState{};
     dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
     dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
@@ -113,6 +118,17 @@ Pipeline::Pipeline(VulkanDevice& device, VkRenderPass renderPass,
     depthStencil.depthTestEnable = config.depthTestEnable ? VK_TRUE : VK_FALSE;
     depthStencil.depthWriteEnable = config.depthWriteEnable ? VK_TRUE : VK_FALSE;
     depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+    if (config.stencilTestEnable) {
+        depthStencil.stencilTestEnable = VK_TRUE;
+        VkStencilOpState op{};
+        op.failOp = VK_STENCIL_OP_KEEP;
+        op.depthFailOp = VK_STENCIL_OP_KEEP;
+        op.passOp = config.stencilPassOp;
+        op.compareOp = config.stencilCompareOp;
+        op.compareMask = op.writeMask = 0xFF; // dynamic; placeholders
+        depthStencil.front = op;
+        depthStencil.back = op;
+    }
 
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;

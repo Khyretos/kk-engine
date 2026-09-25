@@ -94,6 +94,14 @@ void Window::getFramebufferSize(int& width, int& height) const {
     SDL_GetWindowSizeInPixels(m_window, &width, &height);
 }
 
+void Window::setFullscreen(bool fullscreen) {
+    SDL_SetWindowFullscreen(m_window, fullscreen);
+}
+
+bool Window::isFullscreen() const {
+    return (SDL_GetWindowFlags(m_window) & SDL_WINDOW_FULLSCREEN) != 0;
+}
+
 float Window::pixelsPerPoint() const {
     int w = 0, h = 0, pw = 0, ph = 0;
     SDL_GetWindowSize(m_window, &w, &h);

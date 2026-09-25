@@ -1,0 +1,91 @@
+<rml>
+<head>
+    <title>Main menu</title>
+    <link type="text/rcss" href="theme.rcss"/>
+    <style>
+        body { decorator: radial-gradient(circle farthest-corner at 25% 50%, #0a0e1a00 30%, #05070ee6 100%); }
+        #left {
+            position: absolute; left: 7%; top: 18%; width: 420dp;
+        }
+        #logo { font-size: 13dp; letter-spacing: 6dp; color: #ffcf5c; animation: 0.6s cubic-out fade-in; }
+        #title { font-size: 54dp; font-weight: bold; line-height: 56dp; margin: 6dp 0 2dp 0; color: #ffffff;
+                 font-effect: shadow(0 3dp #000000aa); animation: 0.7s cubic-out slide-right; }
+        #subtitle { color: #aab3cc; margin-bottom: 30dp; animation: 0.9s cubic-out fade-in; }
+        .menu-item {
+            display: block; width: 300dp; padding: 12dp 20dp; margin: 6dp 0;
+            font-size: 19dp; color: #d6dcef; cursor: pointer;
+            border-left: 3dp #00000000; border-radius: 0 6dp 6dp 0;
+            decorator: linear-gradient(90deg, #1b2440cc, #1b244000);
+            transition: padding-left border-color color 0.18s cubic-out;
+        }
+        .menu-item:hover { padding-left: 34dp; color: #ffffff; border-left-color: #ffcf5c;
+                           decorator: linear-gradient(90deg, #3a4a86ee, #3a4a8600); }
+        .menu-item.disabled { color: #5d6580; cursor: auto; }
+        .menu-item.disabled:hover { padding-left: 20dp; border-left-color: #00000000; color: #5d6580; }
+        .menu-item .hint { float: right; font-size: 12dp; color: #8b93aa; margin-top: 4dp; }
+        /* staggered entrance: same animation, increasing delay */
+        #m1 { animation: 0.45s 0.05s cubic-out slide-right; }
+        #m2 { animation: 0.45s 0.10s cubic-out slide-right; }
+        #m3 { animation: 0.45s 0.15s cubic-out slide-right; }
+        #m4 { animation: 0.45s 0.20s cubic-out slide-right; }
+        #m5 { animation: 0.45s 0.25s cubic-out slide-right; }
+        #m6 { animation: 0.45s 0.30s cubic-out slide-right; }
+        #m7 { animation: 0.45s 0.35s cubic-out slide-right; }
+
+        #news { position: absolute; right: 5%; bottom: 12%; width: 340dp; max-width: 40%; animation: 0.8s 0.3s cubic-out slide-up; }
+        #news h3 { margin-top: 0; }
+        #news .item { margin: 8dp 0; padding-bottom: 8dp; border-bottom: 1dp #2a3350; }
+        #news .date { font-size: 12dp; color: #8b93aa; }
+        #footer { position: absolute; left: 7%; bottom: 5%; font-size: 12dp; color: #6b7390; }
+        #press { position: absolute; left: 0; width: 100%; bottom: 5%; text-align: center; color: #cfd6ea; }
+
+        .credits p { margin: 4dp 0; }
+        @media (max-width: 1000px) { #news { display: none; } #left { left: 5%; } }
+        @media (max-height: 600px) { #title { font-size: 38dp; line-height: 40dp; } .menu-item { padding: 7dp 20dp; } }
+    </style>
+</head>
+<body data-model="menu">
+    <div id="left">
+        <div id="logo">KREATIVE KOMPAS ENGINE</div>
+        <div id="title">Project Lego</div>
+        <div id="subtitle">A UI showcase — every screen here is plain RML/RCSS, edit and press F5.</div>
+
+        <div id="m1" class="menu-item disabled">Continue <span class="hint">no save yet</span></div>
+        <div id="m2" class="menu-item" data-event-click="go('loading')">New game <span class="hint">loading then HUD</span></div>
+        <div id="m3" class="menu-item" data-event-click="go('inventory')">Inventory</div>
+        <div id="m4" class="menu-item" data-event-click="go('dialog')">Talk to the blacksmith</div>
+        <div id="m5" class="menu-item" data-event-click="go('settings')">Settings</div>
+        <div id="m6" class="menu-item" data-event-click="show_credits = true">Credits</div>
+        <div id="m7" class="menu-item" data-event-click="show_quit = true">Quit</div>
+    </div>
+
+    <div id="news" class="panel glass">
+        <h3>What's new</h3>
+        <div class="item"><div class="date">This build</div>Settings actually apply: VSync, fullscreen, FOV, shadows, UI scale…</div>
+        <div class="item"><div class="date">This build</div>Inventory drag &amp; drop with equipment slots.</div>
+        <div class="item" style="border-bottom: 0;"><div class="date">Next</div>Synty characters, bones and ragdolls.</div>
+    </div>
+
+    <div id="footer">v{{ version }} · {{ fps }} fps</div>
+
+    <div class="modal-backdrop" data-if="show_credits" data-event-click="show_credits = false"></div>
+    <div class="modal panel glass credits" data-if="show_credits">
+        <h2>Credits</h2>
+        <p>Engine: Kreative Kompas Engine (AI-coded, see README)</p>
+        <p>UI: RmlUi · Debug UI: Dear ImGui · Physics: AMD FEMFX</p>
+        <p>Fonts: Noto Sans, Noto Color Emoji (SIL OFL)</p>
+        <p class="muted">Click anywhere outside to close.</p>
+        <div style="text-align: right;"><button data-event-click="show_credits = false">Close</button></div>
+    </div>
+
+    <div class="modal-backdrop" data-if="show_quit"></div>
+    <div class="modal panel glass" data-if="show_quit">
+        <h2>Quit to desktop?</h2>
+        <p class="muted">Any unsaved settings are kept in memory only.</p>
+        <div style="text-align: right; margin-top: 16dp;">
+            <button data-event-click="show_quit = false">Cancel</button>
+            <button class="danger" data-event-click="quit">Quit</button>
+        </div>
+    </div>
+</body>
+</rml>

@@ -47,6 +47,7 @@ public:
     VkCommandBuffer currentCommandBuffer() const { return m_commandBuffers[m_currentFrame]; }
     VkRenderPass renderPass() const { return m_swapChain->renderPass(); }
     VkExtent2D extent() const { return m_swapChain->extent(); }
+    bool hasStencil() const { return m_swapChain->hasStencil(); }
     float aspectRatio() const {
         auto e = m_swapChain->extent();
         return e.height > 0 ? static_cast<float>(e.width) / static_cast<float>(e.height) : 1.0f;
@@ -67,6 +68,11 @@ public:
     // previous use, but not with the other one.
     static constexpr int kMaxFramesInFlight = 2;
     uint32_t currentFrameIndex() const { return m_currentFrame; }
+    // Changes present mode; the swapchain is rebuilt at the start of the
+    // next beginFrame() (never mid-frame, while a command buffer that
+    // references the old one is being recorded).
+    void setVSync(bool vsync);
+    bool vsync() const;
 
 private:
 
@@ -87,6 +93,7 @@ private:
     std::vector<bool> m_timestampPoolHasData;
 
     uint32_t m_currentFrame = 0;
+    bool m_recreatePending = false;
     uint32_t m_currentImageIndex = 0;
     float m_lastGpuFrameTimeMs = -1.0f;
 };

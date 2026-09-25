@@ -33,9 +33,16 @@ public:
     // and before vkCmdEndRenderPass.
     void render(VkCommandBuffer cmd);
 
+    // Hidden: ImGui still runs its frame (modules' renderUi() calls stay
+    // valid) but nothing is drawn and it ignores the mouse, so it can't
+    // block clicks meant for the game or RmlUi.
+    void setVisible(bool visible);
+    bool visible() const { return m_visible; }
+
 private:
     VulkanDevice& m_device;
     VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
+    bool m_visible = true;
 };
 
 } // namespace kke

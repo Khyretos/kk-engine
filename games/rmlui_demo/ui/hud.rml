@@ -1,0 +1,120 @@
+<rml>
+<head>
+    <title>HUD</title>
+    <link type="text/rcss" href="theme.rcss"/>
+    <style>
+        /* A HUD sits over the game: only its interactive bits take clicks. */
+        body { pointer-events: none; }
+        #vitals { position: absolute; left: 24dp; bottom: 36dp; width: 320dp; }
+        .bar { display: block; position: relative; height: 22dp; margin: 5dp 0; border-radius: 11dp;
+               background-color: #0b0f1ccc; border: 1dp #2d3658; }
+        .bar .fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 10dp; transition: width 0.25s cubic-out; }
+        .bar .ghost { position: absolute; left: 0; top: 0; height: 100%; border-radius: 10dp; background-color: #ffffff55; transition: width 0.8s cubic-in-out; }
+        .bar .text { position: absolute; left: 10dp; top: 1dp; font-size: 13dp; font-weight: bold; font-effect: outline(1dp #000000cc); }
+        #hp .fill { decorator: linear-gradient(90deg, #b3202c, #ff5a5a); }
+        #mp .fill { decorator: linear-gradient(90deg, #2046b3, #5a9bff); }
+        #sp .fill { decorator: linear-gradient(90deg, #2f8f4e, #8be36f); }
+        #hp.low { animation: 0.8s sine-in-out infinite pulse; }
+        #xp { height: 6dp; margin-top: 8dp; }
+        #xp .fill { decorator: linear-gradient(90deg, #9a4ad8, #e0a030); }
+        #level { font-size: 12dp; color: #cfd6ea; }
+
+        #hotbar { position: absolute; left: 50%; bottom: 36dp; width: 620dp; margin-left: -310dp; text-align: center; pointer-events: auto; }
+        .hk { display: inline-block; position: relative; width: 58dp; height: 58dp; margin: 0 3dp;
+              background-color: #0b0f1ccc; border: 2dp #2d3658; border-radius: 8dp;
+              font-size: 28dp; line-height: 54dp; text-align: center; cursor: pointer;
+              transition: transform border-color 0.1s; }
+        .hk:hover { border-color: #7a9bff; transform: scale(1.08); }
+        .hk.ready { border-color: #56628e; }
+        .hk .cd { position: absolute; left: 0; bottom: 0; width: 100%; background-color: #000000aa; border-radius: 6dp; }
+        .hk .key { position: absolute; left: 4dp; top: 2dp; font-size: 11dp; line-height: 12dp; color: #aab3cc; }
+        .hk .secs { position: absolute; left: 0; width: 100%; top: 0; font-size: 16dp; font-weight: bold; color: #ffffff; }
+
+        #minimap { position: absolute; right: 24dp; top: 70dp; width: 170dp; height: 170dp; border-radius: 85dp;
+                   decorator: radial-gradient(circle, #2a4a3a 0%, #13241c 70%, #0b140f 100%); border: 3dp #56628e; }
+        .blip { position: absolute; width: 10dp; height: 10dp; margin: -5dp 0 0 -5dp; border-radius: 5dp; }
+        .blip.foe { background-color: #ff5a5a; }
+        .blip.objective { background-color: #ffcf5c; border: 2dp #ffffff; }
+        #me { position: absolute; left: 50%; top: 50%; width: 0; height: 0; margin: -8dp 0 0 -6dp;
+              border-left: 6dp #00000000; border-right: 6dp #00000000; border-bottom: 14dp #ffffff; }
+        #sweep { position: absolute; left: 0; top: 0; width: 100%; height: 100%; border-radius: 85dp;
+                 decorator: conic-gradient(from 0deg, #6fe39a55 0deg, #6fe39a00 60deg, #6fe39a00 360deg);
+                 animation: 3s linear infinite spin; }
+        #compass { position: absolute; right: 24dp; top: 250dp; width: 170dp; text-align: center; font-size: 13dp; color: #cfd6ea; }
+
+        #quests { position: absolute; right: 24dp; top: 290dp; width: 260dp; }
+        .quest { margin-bottom: 8dp; padding: 8dp 10dp; background-color: #0b0f1caa; border-left: 3dp #ffcf5c; border-radius: 0 6dp 6dp 0; }
+        .quest .qt { font-weight: bold; font-size: 14dp; }
+        .quest .qs { font-size: 12dp; color: #aab3cc; }
+        .quest.done { border-left-color: #6fe39a; opacity: 0.6; }
+
+        #toasts { position: absolute; left: 24dp; top: 70dp; width: 320dp; }
+        .toast { margin-bottom: 6dp; padding: 7dp 12dp; background-color: #0b0f1ccc; border-radius: 6dp; font-size: 14dp;
+                 animation: 0.35s cubic-out slide-right; }
+        .toast.loot { border-left: 3dp #3a6fd8; }
+        .toast.warn { border-left: 3dp #ff5a5a; }
+        .toast.xp { border-left: 3dp #9a4ad8; }
+
+        #crosshair { position: absolute; left: 50%; top: 50%; width: 22dp; height: 22dp; margin: -11dp 0 0 -11dp;
+                     border: 2dp #ffffffaa; border-radius: 11dp; }
+        #hitflash { position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+                    decorator: radial-gradient(circle farthest-corner, #ff000000 55%, #ff000066 100%); animation: 0.5s cubic-out fade-in; }
+        .dmg { position: absolute; font-size: 26dp; font-weight: bold; color: #ffcf5c; font-effect: outline(2dp #000000);
+               animation: 1.1s cubic-out float-up; }
+        .dmg.crit { color: #ff5a5a; font-size: 34dp; }
+        #controls { position: absolute; left: 50%; top: 70dp; margin-left: -200dp; width: 400dp; text-align: center; pointer-events: auto; }
+        @media (max-width: 1000px) { #quests { display: none; } #hotbar { width: 440dp; margin-left: -220dp; } .hk { width: 40dp; height: 40dp; font-size: 20dp; line-height: 36dp; } }
+    </style>
+</head>
+<body data-model="hud">
+    <div id="hitflash" data-if="hit_flash"></div>
+    <div id="crosshair"></div>
+    <div class="dmg" data-for="d : damage" data-class-crit="d.crit" data-style-left="d.x + '%'" data-style-top="d.y + '%'">{{ d.amount }}</div>
+
+    <div id="toasts">
+        <div class="toast" data-for="t : toasts" data-class-loot="t.kind == 'loot'" data-class-warn="t.kind == 'warn'" data-class-xp="t.kind == 'xp'">{{ t.text }}</div>
+    </div>
+
+    <div id="controls" class="muted">
+        <small>Press <span class="keycap">1</span>–<span class="keycap">6</span> or click the hotbar ·
+        <button class="small" data-event-click="take_damage">Take a hit</button>
+        <button class="small" data-event-click="add_loot">Loot</button></small>
+    </div>
+
+    <div id="minimap">
+        <div id="sweep"></div>
+        <div class="blip" data-for="b : blips" data-class-foe="b.kind == 'enemy'" data-class-objective="b.kind == 'quest'"
+             data-style-left="b.x + '%'" data-style-top="b.y + '%'"></div>
+        <div id="me"></div>
+    </div>
+    <div id="compass">{{ heading }}</div>
+
+    <div id="quests">
+        <div class="quest" data-for="q : quests" data-class-done="q.done">
+            <div class="qt">{{ q.done ? '✔ ' : '' }}{{ q.title }}</div>
+            <div class="qs">{{ q.step }}</div>
+        </div>
+    </div>
+
+    <div id="vitals">
+        <div id="level">Level {{ level }} · {{ player_name }}</div>
+        <div id="hp" class="bar" data-class-low="hp < max_hp * 0.3">
+            <div class="ghost" data-style-width="(ghost_hp / max_hp * 100) + '%'"></div>
+            <div class="fill" data-style-width="(hp / max_hp * 100) + '%'"></div>
+            <div class="text">❤ {{ hp | format(0) }} / {{ max_hp }}</div>
+        </div>
+        <div id="mp" class="bar"><div class="fill" data-style-width="(mp / max_mp * 100) + '%'"></div><div class="text">💧 {{ mp | format(0) }} / {{ max_mp }}</div></div>
+        <div id="sp" class="bar"><div class="fill" data-style-width="(sp / 100 * 100) + '%'"></div><div class="text">⚡ {{ sp | format(0) }}</div></div>
+        <div id="xp" class="bar"><div class="fill" data-style-width="(xp / xp_next * 100) + '%'"></div></div>
+    </div>
+
+    <div id="hotbar">
+        <div class="hk" data-for="a, i : abilities" data-class-ready="a.cooldown <= 0" data-event-click="cast(i)">
+            {{ a.icon }}
+            <div class="cd" data-if="a.cooldown > 0" data-style-height="(a.cooldown / a.max_cooldown * 100) + '%'"></div>
+            <div class="secs" data-if="a.cooldown > 0">{{ a.cooldown | format(1) }}</div>
+            <div class="key">{{ i + 1 }}</div>
+        </div>
+    </div>
+</body>
+</rml>
