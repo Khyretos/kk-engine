@@ -156,12 +156,14 @@ BUGS.md / PERFORMANCE_NOTES.md entry with full detail.
 1. **Debris budget + hand-off to GPU particles** — worst-case physics cost
    is "many awake pieces right after a big break" (~55 ms/step for ~475
    pieces on 1 core).
-2. **Debris that sleeps** — after a break, ~60 of 67 pieces were still
-   awake 10 s later on one core (10-20 ms/step). Suspects: pieces of the
-   same object resting interpenetrated, and plastic objects that creep
-   forever (the physics benchmark's awake count swings 2 <-> 390 for the
-   same reason). Candidate fixes: tuned sleep thresholds in our FEMFX
-   fork, no self-collision between pieces of one object, debris budget.
+2. **Debris budget** — after a break, pieces take ~7 s of *simulated*
+   time to fall asleep (measured: 67 pieces, speeds decaying normally,
+   FEMFX's default sleep thresholds). On one core the simulation runs in
+   slow motion, so that's ~15-20 s of 10-20 ms steps. Candidates: faster
+   settling for small pieces (damping / sleep thresholds per piece size in
+   our FEMFX fork), a cap on awake debris, tiny pieces handed to GPU
+   particles. The physics benchmark's awake count swinging 2 <-> 390 is a
+   separate lead: plastic objects that creep forever and re-wake the pile.
 3. **Frustum culling + instancing for props** — Synty levels are hundreds
    of repeated meshes.
 4. **Mip maps** — texture bandwidth and shimmering.
