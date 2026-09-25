@@ -16,6 +16,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <typeindex>
 
@@ -48,7 +49,7 @@ constexpr float kProxyCellSize = 0.3f; // metres; smaller = more, finer pieces
 
 const glm::vec3 kSelectColor(1.0f, 0.75f, 0.1f);
 const glm::vec3 kHoverColor(0.55f, 0.8f, 1.0f);
-const glm::vec3 kGhostTint(0.55f, 1.0f, 0.55f);
+const glm::vec3 kGhostColor(0.55f, 1.0f, 0.55f); // placement outline
 
 } // namespace
 
@@ -98,11 +99,28 @@ void SandboxModule::openAssetFolder(const std::string& folder) {
         return;
     }
     std::snprintf(m_folderInput, sizeof(m_folderInput), "%s", folder.c_str());
+    m_variant = 0;
+    m_overlay = 1; // the pack's first grid, if it has one: Synty's Prototype look
+    applyLook();
     m_status = std::to_string(m_catalog.assets.size()) + " assets in " + std::to_string(m_catalog.packs.size()) + " pack(s)";
     kke::log::get(name())->info("asset folder '{}': {}", folder, m_status);
 }
 
 // ---------------------------------------------------------------- objects
+
+const kke::CatalogPack* SandboxModule::packOf(const std::string& asset) const {
+    const kke::CatalogAsset* a = m_catalog.find(asset);
+    return a ? m_catalog.pack(a->pack) : nullptr;
+}
+
+// The overlay comes from the first pack that has grids (packs rarely mix).
+void SandboxModule::applyLook() {
+    std::string overlay;
+    for (const kke::CatalogPack& p : m_catalog.packs) {
+        if (m_overlay > 0 && m_overlay <= static_cast<int>(p.overlayTextures.size())) { overlay = p.overlayTextures[m_overlay - 1]; break; }
+    }
+    m_models->setWorldOverlay(overlay, m_overlayTile, m_overlayStrength);
+}
 
 kke::ModelModule::ModelId SandboxModule::loadAsset(const std::string& assetName) {
     const kke::CatalogAsset* asset = m_catalog.find(assetName);
@@ -243,8 +261,11 @@ void SandboxModule::beginPlacing(const std::string& asset, float yawDegrees, uin
         // Move the real object instead of spawning a ghost.
         m_ghost = moving->instance;
     } else {
+        // The preview is the real model with its real texture; the green
+        // outline (drawn in update()) marks it as not placed yet.
         m_ghost = m_models->spawn(model);
-        m_models->setTint(m_ghost, kGhostTint);
+        if (const kke::CatalogPack* pack = packOf(asset); pack && m_variant > 0 && m_variant < static_cast<int>(pack->textureVariants.size()))
+            m_models->setTextureOverride(m_ghost, pack->textureVariants[m_variant]);
     }
     m_ghostModel = model;
     m_ghostValid = false;
@@ -276,7 +297,11 @@ void SandboxModule::commitPlacement(bool keepPlacing) {
         m_tool = Tool::Select;
         return;
     }
-    if (Object* o = spawnObject(m_placeAsset, m_ghostPos, m_placeYaw)) m_selected = o->id;
+    if (Object* o = spawnObject(m_placeAsset, m_ghostPos, m_placeYaw)) {
+        m_selected = o->id;
+        o->texture = m_models->textureOverride(m_ghost);
+        m_models->setTextureOverride(o->instance, o->texture);
+    }
     if (!keepPlacing) cancelPlacing();
 }
 
@@ -308,11 +333,16 @@ void SandboxModule::update(const kke::UpdateContext&) {
             if (const kke::ModelData* d = m_models->model(m_ghostModel)) {
                 glm::mat4 t = objectTransform(*d, m_ghostPos, m_placeYaw);
                 m_models->setTransform(m_ghost, t);
-                m_debug->box(t, d->boundsMin, d->boundsMax, kGhostTint, 0.02f, true);
+                m_debug->box(t, d->boundsMin, d->boundsMax, kGhostColor, 0.02f, true);
             }
-            m_debug->cross(m_ghostPos, 0.25f, kGhostTint);
+            m_debug->cross(m_ghostPos, 0.25f, kGhostColor);
         }
         m_hovered = 0;
+    } else if (m_tool == Tool::Shoot) {
+        m_hovered = 0;
+        // Aim marker where the ball is heading (first hit: ground or object).
+        glm::vec3 aim;
+        if (mouseFree && placementPoint(aim, 0)) m_debug->cross(aim, 0.3f, glm::vec3(1.0f, 0.35f, 0.25f));
     } else {
         m_hovered = mouseFree ? pickObject() : 0;
     }
@@ -334,6 +364,7 @@ void SandboxModule::onEvent(const SDL_Event& event) {
         if (io.WantCaptureMouse || m_app->uiCapturesMouse()) return;
         bool shift = (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
         if (m_tool == Tool::Place) commitPlacement(/*keepPlacing=*/shift);
+        else if (m_tool == Tool::Shoot) throwBall();
         else m_selected = pickObject();
         return;
     }
@@ -341,14 +372,30 @@ void SandboxModule::onEvent(const SDL_Event& event) {
         m_placeYaw += event.wheel.y > 0 ? m_rotateStep : -m_rotateStep;
         return;
     }
-    if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat || io.WantCaptureKeyboard) return;
+    // WantTextInput, not WantCaptureKeyboard: ImGui claims the keyboard
+    // whenever one of its windows has focus (e.g. right after clicking an
+    // asset), which silently swallowed F/Del/R. Only typing into a text
+    // field should block the shortcuts (BUG-041).
+    if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat || io.WantTextInput) return;
     bool ctrl = (event.key.mod & SDL_KMOD_CTRL) != 0;
     bool shift = (event.key.mod & SDL_KMOD_SHIFT) != 0;
     Object* sel = find(m_selected);
     switch (event.key.key) {
     case SDLK_ESCAPE:
         if (m_tool == Tool::Place) cancelPlacing();
+        else if (m_tool == Tool::Shoot) m_tool = Tool::Select;
         else m_selected = 0;
+        break;
+    case SDLK_1:
+        cancelPlacing();
+        m_tool = Tool::Select;
+        break;
+    case SDLK_2:
+        cancelPlacing();
+        if (m_hasFemfx) m_tool = Tool::Shoot;
+        break;
+    case SDLK_SPACE:
+        throwBall();
         break;
     case SDLK_R:
         if (m_tool == Tool::Place) m_placeYaw += shift ? -m_rotateStep : m_rotateStep;
@@ -513,7 +560,10 @@ bool SandboxModule::saveLayout(const std::string& path) {
     j["version"] = 1;
     j["objects"] = nlohmann::json::array();
     for (const Object& o : m_objects) {
-        j["objects"].push_back({ { "asset", o.asset }, { "position", { o.position.x, o.position.y, o.position.z } }, { "yaw", o.yawDegrees } });
+        nlohmann::json e = { { "asset", o.asset }, { "position", { o.position.x, o.position.y, o.position.z } }, { "yaw", o.yawDegrees } };
+        // File name only, so a layout works on another machine's pack folder.
+        if (!o.texture.empty()) e["texture"] = std::filesystem::path(o.texture).filename().string();
+        j["objects"].push_back(e);
     }
     std::ofstream f(path);
     if (!f) { m_status = "Could not write " + path; return false; }
@@ -536,7 +586,13 @@ bool SandboxModule::loadLayout(const std::string& path) {
     for (const auto& e : j["objects"]) {
         std::string asset = e.value("asset", "");
         auto p = e.value("position", std::vector<float>{ 0, 0, 0 });
-        if (p.size() != 3 || !spawnObject(asset, { p[0], p[1], p[2] }, e.value("yaw", 0.0f))) ++missing;
+        Object* o = p.size() == 3 ? spawnObject(asset, { p[0], p[1], p[2] }, e.value("yaw", 0.0f)) : nullptr;
+        if (!o) { ++missing; continue; }
+        std::string tex = e.value("texture", "");
+        if (const kke::CatalogPack* pack = packOf(asset); pack && !tex.empty()) {
+            for (const std::string& v : pack->textureVariants)
+                if (std::filesystem::path(v).filename() == tex) { o->texture = v; m_models->setTextureOverride(o->instance, v); }
+        }
     }
     m_selected = 0;
     m_status = "Loaded " + std::to_string(m_objects.size()) + " objects from " + path;
@@ -622,7 +678,19 @@ void SandboxModule::inspectorUi() {
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
     ImGui::TextWrapped("Camera: right-drag orbit, middle-drag pan, wheel zoom, WASD/QE move");
     ImGui::PopStyleColor();
-    if (m_tool == Tool::Place) {
+    int tool = m_tool == Tool::Shoot ? 2 : (m_tool == Tool::Place ? 1 : 0);
+    if (ImGui::RadioButton("Select (1)", tool == 0)) { cancelPlacing(); m_tool = Tool::Select; }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(true);
+    ImGui::RadioButton("Place", tool == 1);
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!m_hasFemfx);
+    if (ImGui::RadioButton("Shoot (2)", tool == 2)) { cancelPlacing(); m_tool = Tool::Shoot; }
+    ImGui::EndDisabled();
+    if (m_tool == Tool::Shoot) {
+        ImGui::TextColored(ImVec4(1, 0.5f, 0.35f, 1), "Click: fire a ball at the cursor   Esc: stop");
+    } else if (m_tool == Tool::Place) {
         ImGui::TextColored(ImVec4(0.55f, 1, 0.55f, 1), m_movingId ? "Moving: %s" : "Placing: %s", m_placeAsset.c_str());
         ImGui::TextWrapped("Click: place (Shift+click: keep placing)   R / Ctrl+wheel: rotate   Esc: stop");
     } else {
@@ -642,6 +710,19 @@ void SandboxModule::inspectorUi() {
         if (const kke::ModelData* d = m_models->model(o->model)) {
             glm::vec3 size = d->boundsMax - d->boundsMin;
             ImGui::TextDisabled("%.2f x %.2f x %.2f m, %zu tris, %zu bones", size.x, size.y, size.z, d->triangleCount(), d->bones.size());
+        }
+        if (const kke::CatalogPack* pack = packOf(o->asset); pack && pack->textureVariants.size() > 1) {
+            std::string current = o->texture.empty() ? "Model's own" : std::filesystem::path(o->texture).stem().string();
+            if (ImGui::BeginCombo("Texture", current.c_str())) {
+                if (ImGui::Selectable("Model's own", o->texture.empty())) { o->texture.clear(); m_models->setTextureOverride(o->instance, ""); }
+                for (const std::string& v : pack->textureVariants) {
+                    if (ImGui::Selectable(std::filesystem::path(v).stem().string().c_str(), o->texture == v)) {
+                        o->texture = v;
+                        m_models->setTextureOverride(o->instance, v);
+                    }
+                }
+                ImGui::EndCombo();
+            }
         }
         if (ImGui::Button("Move (G)")) beginPlacing(o->asset, o->yawDegrees, o->id);
         ImGui::SameLine();
@@ -675,8 +756,10 @@ void SandboxModule::inspectorUi() {
         for (int i = 0; i < kBreakMaterialCount; ++i) names[i] = kBreakMaterials[i].name;
         ImGui::Combo("Breaks as", &m_breakMaterial, names, kBreakMaterialCount);
         ImGui::SliderFloat("Ball speed", &m_ballSpeed, 5.0f, 40.0f, "%.0f m/s");
-        ImGui::TextWrapped("F: throw a ball at the cursor (max %zu, oldest removed)", kMaxBalls);
+        ImGui::TextWrapped("Shoot tool (2) or F / Space: throw a ball at the cursor (max %zu, oldest removed)", kMaxBalls);
     }
+
+    lookUi();
 
     ImGui::SeparatorText("Layout");
     ImGui::InputText("File", m_layoutPath, sizeof(m_layoutPath));
@@ -687,6 +770,52 @@ void SandboxModule::inspectorUi() {
     if (ImGui::Button("Clear")) clearAll();
     if (!m_status.empty()) ImGui::TextWrapped("%s", m_status.c_str());
     ImGui::End();
+}
+
+void SandboxModule::lookUi() {
+    // Variants/overlays of the first pack that has them.
+    const kke::CatalogPack* pack = nullptr;
+    for (const kke::CatalogPack& p : m_catalog.packs) if (!p.textureVariants.empty() || !p.overlayTextures.empty()) { pack = &p; break; }
+    if (!pack) return;
+    ImGui::SeparatorText("Look");
+    if (pack->textureVariants.size() > 1) {
+        auto label = [&](int i) { return std::filesystem::path(pack->textureVariants[i]).stem().string(); };
+        m_variant = std::clamp(m_variant, 0, static_cast<int>(pack->textureVariants.size()) - 1);
+        if (ImGui::BeginCombo("New objects", m_variant == 0 ? "Model's own" : label(m_variant).c_str())) {
+            for (int i = 0; i < static_cast<int>(pack->textureVariants.size()); ++i) {
+                if (ImGui::Selectable(i == 0 ? "Model's own" : label(i).c_str(), m_variant == i)) {
+                    m_variant = i;
+                    if (m_ghost && !m_movingId) m_models->setTextureOverride(m_ghost, i ? pack->textureVariants[i] : "");
+                }
+            }
+            ImGui::EndCombo();
+        }
+        if (ImGui::Button("Apply to all objects")) {
+            for (Object& o : m_objects) {
+                const kke::CatalogPack* op = packOf(o.asset);
+                if (op != pack) continue;
+                o.texture = m_variant ? pack->textureVariants[m_variant] : "";
+                m_models->setTextureOverride(o.instance, o.texture);
+            }
+        }
+    }
+    if (!pack->overlayTextures.empty()) {
+        bool changed = false;
+        std::string current = m_overlay == 0 ? "None" : std::filesystem::path(pack->overlayTextures[m_overlay - 1]).stem().string();
+        if (ImGui::BeginCombo("World grid", current.c_str())) {
+            if (ImGui::Selectable("None", m_overlay == 0)) { m_overlay = 0; changed = true; }
+            for (int i = 0; i < static_cast<int>(pack->overlayTextures.size()); ++i) {
+                if (ImGui::Selectable(std::filesystem::path(pack->overlayTextures[i]).stem().string().c_str(), m_overlay == i + 1)) {
+                    m_overlay = i + 1;
+                    changed = true;
+                }
+            }
+            ImGui::EndCombo();
+        }
+        changed |= ImGui::SliderFloat("Grid tile", &m_overlayTile, 0.5f, 8.0f, "%.1f m");
+        changed |= ImGui::SliderFloat("Grid strength", &m_overlayStrength, 0.0f, 1.0f);
+        if (changed) applyLook();
+    }
 }
 
 void SandboxModule::renderUi() {

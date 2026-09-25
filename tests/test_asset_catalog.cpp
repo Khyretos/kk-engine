@@ -29,6 +29,8 @@ fs::path makeUserLayout() {
     touch(root / "POLYGON_Prototype/Demonstration.fbx");
     touch(root / "POLYGON_Prototype/Textures/PolygonPrototype_Texture_01_Emission.png");
     touch(root / "POLYGON_Prototype/Textures/PolygonPrototype_Texture_01.png");
+    touch(root / "POLYGON_Prototype/Textures/PolygonPrototype_Texture_02.png");
+    touch(root / "POLYGON_Prototype/Textures/PolygonPrototype_Texture_Grid_01.png");
     touch(root / "POLYGON_Town/Characters/SK_Character_Father_01.fbx");
     touch(root / "POLYGON_Town/FBX/SM_Bld_House_01.fbx");
     touch(root / "POLYGON_Town/FBX/SM_Veh_Car_01.fbx");
@@ -84,6 +86,12 @@ TEST(AssetCatalog, PicksMainTextureNotEmissionOrNormal) {
     auto c = kke::AssetCatalog::scan(root.string());
     EXPECT_EQ(fs::path(c.pack("POLYGON_Prototype")->defaultTexture).filename(), "PolygonPrototype_Texture_01.png");
     EXPECT_EQ(fs::path(c.pack("POLYGON_Town")->defaultTexture).filename(), "PolygonTown_Texture_01_A.png");
+    // Variants and overlays: helpers (emission) excluded, grids separate.
+    const kke::CatalogPack* proto = c.pack("POLYGON_Prototype");
+    ASSERT_EQ(proto->textureVariants.size(), 2u);
+    EXPECT_EQ(fs::path(proto->textureVariants[1]).filename(), "PolygonPrototype_Texture_02.png");
+    ASSERT_EQ(proto->overlayTextures.size(), 1u);
+    EXPECT_EQ(fs::path(proto->overlayTextures[0]).filename(), "PolygonPrototype_Texture_Grid_01.png");
     EXPECT_EQ(c.pack("POLYGON_Town")->textureDirs.size(), 1u);
     EXPECT_EQ(c.pack("nope"), nullptr);
     fs::remove_all(root);

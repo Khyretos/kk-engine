@@ -1,0 +1,220 @@
+// Shared lighting for lit mesh shaders. #include after declaring the
+// fragment inputs; provides the set 0 lighting UBO, set 1 shadow map,
+// srgbToLinear() and shadeSurface().
+// Mirrors kke::LightingBuffer's GPULight/LightingUBOData C++ structs
+// byte-for-byte -- see engine/src/LightingBuffer.cpp for the CPU side
+// this is fed from, and Application.h for Light/Lighting, the
+// game-facing API that ultimately fills this in.
+struct GPULight {
+    vec4 directionOrPosition; // xyz = direction or position; w = 1.0 if positional (point), 0.0 if directional
+    vec4 colorIntensity;      // rgb = color; a = intensity (<=0 means disabled)
+};
+
+layout(set = 0, binding = 0) uniform LightingUBO {
+    GPULight lights[4];
+    vec4 ambient;   // rgb = ambient color
+    vec4 cameraPos; // rgb = world-space camera position, for specular
+    mat4 lightViewProj;
+    mat4 viewProj; // see cube.vert's own comment on why this is here
+} lighting;
+
+layout(set = 1, binding = 0) uniform sampler2D shadowMap;
+// Set 2: the material's own albedo texture -- see kke::Texture and
+// kke::Application's own default 1x1 white texture (bound here for
+// any object that doesn't have a real one of its own, so this
+// binding is always valid regardless of whether that specific
+// object's material actually has a texture). Sampled and multiplied
+// into albedo below, not used to replace it outright: a plain white
+// texture leaves the vertex color fully in control (white * color =
+// color, an exact no-op), while a real texture modulates it --
+// meaning every object drawn through this shader keeps working
+// exactly as before, whether or not it has a texture of its own.
+
+const float PI = 3.14159265359;
+
+// Real shadow lookup with PCF (Percentage-Closer Filtering) — a real
+// quality improvement over the single-tap version this replaced, not
+// a rewrite for its own sake. A single tap produces a hard, aliased,
+// stair-stepped shadow edge (every shadow-map texel boundary shows up
+// as a visible jump in the rendered image); PCF instead samples a
+// small neighborhood around each shadow-map lookup and averages the
+// binary in/out-of-shadow results, giving a smooth gradient across
+// that same edge. textureSize(shadowMap, 0) queries the actual bound
+// shadow map's real resolution at runtime rather than hardcoding it
+// separately here (see kke::ShadowMap's own resolution parameter) —
+// correct even if that resolution ever changes, with nothing in this
+// shader needing to know or track it. A 3x3 kernel (9 taps) is a
+// standard, real trade-off: enough samples for a genuinely smooth edge
+// without the cost of a larger kernel this project's own scenes don't
+// need. Returns 1.0 for "fully lit," 0.0 for "fully in shadow," with
+// real fractional values now for pixels straddling a shadow edge.
+float computeShadow(vec4 posLightSpace) {
+    vec3 projCoords = posLightSpace.xyz / posLightSpace.w;
+    vec2 shadowUV = projCoords.xy * 0.5 + 0.5;
+    float currentDepth = projCoords.z;
+
+    if (shadowUV.x < 0.0 || shadowUV.x > 1.0 || shadowUV.y < 0.0 || shadowUV.y > 1.0) {
+        return 1.0;
+    }
+
+    float bias = 0.003;
+    vec2 texelSize = 1.0 / vec2(textureSize(shadowMap, 0));
+
+    float litSum = 0.0;
+    for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            float closestDepth = texture(shadowMap, shadowUV + vec2(dx, dy) * texelSize).r;
+            litSum += (currentDepth - bias > closestDepth) ? 0.0 : 1.0;
+        }
+    }
+    return litSum / 9.0;
+}
+
+// Trowbridge-Reitz GGX normal distribution function -- how much the
+// microfacet normals are concentrated around the halfway vector.
+// Concentrated (small denominator growth) for low roughness -> a
+// tight, bright highlight; spread out for high roughness -> a broad,
+// dim one. Standard formulation, e.g. https://learnopengl.com/PBR/Theory
+float distributionGGX(vec3 N, vec3 H, float roughness) {
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH * NdotH;
+    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    denom = PI * denom * denom;
+    return a2 / max(denom, 0.0001);
+}
+
+// Schlick-GGX geometry function for a single direction (view or
+// light) -- how much light is self-shadowed/masked by the surface's
+// own microfacets. Combined for both directions (Smith's method) in
+// geometrySmith below.
+float geometrySchlickGGX(float NdotV, float roughness) {
+    float r = roughness + 1.0;
+    float k = (r * r) / 8.0;
+    return NdotV / max(NdotV * (1.0 - k) + k, 0.0001);
+}
+
+float geometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    return geometrySchlickGGX(NdotV, roughness) * geometrySchlickGGX(NdotL, roughness);
+}
+
+// Fresnel-Schlick -- reflectivity increases toward grazing angles for
+// every real material, dielectric or metal. F0 is the base
+// reflectivity straight-on (see main() for how it's derived from
+// albedo/metallic).
+vec3 fresnelSchlick(float cosTheta, vec3 F0) {
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+
+// Colors are authored in sRGB (color pickers, hex codes, palette values)
+// but the swapchain is VK_FORMAT_B8G8R8A8_SRGB, which gamma-encodes
+// whatever the shader writes. Writing sRGB values straight out encoded
+// them twice: everything looked washed out. Convert to linear first.
+vec3 srgbToLinear(vec3 c) {
+    return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c));
+}
+
+// Full lighting for one surface point: PBR (GGX) for up to 4 lights,
+// shadow on light 0, flat ambient, Reinhard tone map. Shared by every
+// lit mesh shader (cube.frag, model.frag) so they can't drift apart.
+vec3 shadeSurface(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 posWorld, vec4 posLightSpace) {
+    vec2 fragMetallicRoughness = metallicRoughness;
+    vec3 fragNormalWorld = normalWorld;
+    vec3 fragPosWorld = posWorld;
+    vec4 fragPosLightSpace = posLightSpace;
+    // Clamped away from the true extremes (0.0 and 1.0), not just
+    // whatever a UI slider happens to allow through -- roughness=0
+    // makes distributionGGX's denominator degenerate toward a
+    // divide-by-near-zero (an infinitely sharp, aliased/flickering
+    // highlight under any real-time sampling), and metallic=1 combined
+    // with roughness=0 is the single most extreme, least physically
+    // meaningful corner of the whole model. Checked against real
+    // screenshots: 0.05/0.95 preserves the full visual range a demo
+    // actually wants (mirror-sharp metal vs. soft rough plastic) with
+    // none of the near-zero instability.
+    float metallic = clamp(fragMetallicRoughness.x, 0.0, 1.0);
+    float roughness = clamp(fragMetallicRoughness.y, 0.05, 0.95);
+
+    vec3 N = normalize(fragNormalWorld);
+    vec3 V = normalize(lighting.cameraPos.xyz - fragPosWorld);
+
+    // Base reflectivity at normal incidence -- 0.04 is the standard,
+    // widely-used approximation for non-metals (dielectrics: plastic,
+    // wood, stone all cluster close to this regardless of color).
+    // Metals reflect their own albedo color instead of a fixed dim
+    // gray -- physically, a metal's "diffuse" color IS its specular
+    // reflectance, which is exactly what mixing toward albedo here
+    // encodes.
+    vec3 F0 = mix(vec3(0.04), albedo, metallic);
+
+    float shadow = lighting.ambient.a > 0.5 ? computeShadow(fragPosLightSpace) : 1.0;
+    vec3 Lo = vec3(0.0);
+
+    for (int i = 0; i < 4; ++i) {
+        float intensity = lighting.lights[i].colorIntensity.a;
+        if (intensity <= 0.0) continue; // disabled -- see the CPU-side "enabled" convention
+
+        vec3 radiance = lighting.lights[i].colorIntensity.rgb * intensity;
+        bool isPositional = lighting.lights[i].directionOrPosition.w > 0.5;
+
+        vec3 L; // direction FROM the surface TOWARD the light
+        if (isPositional) {
+            L = normalize(lighting.lights[i].directionOrPosition.xyz - fragPosWorld);
+        } else {
+            L = normalize(-lighting.lights[i].directionOrPosition.xyz);
+        }
+        vec3 H = normalize(V + L);
+
+        float NDF = distributionGGX(N, H, roughness);
+        float G = geometrySmith(N, V, L, roughness);
+        vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+        vec3 numerator = NDF * G * F;
+        float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+        vec3 specular = numerator / denominator;
+
+        // Energy conservation: kS (specular contribution) is F itself;
+        // kD (diffuse) is whatever's left after that, and a metal has
+        // no diffuse term at all (a metal's electrons absorb and
+        // re-emit light entirely as specular reflection -- there is no
+        // subsurface scattering to produce a diffuse color).
+        vec3 kS = F;
+        vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
+
+        float NdotL = max(dot(N, L), 0.0);
+
+        // Shadow only attenuates light[0] (the key light -- the only
+        // one ShadowMap actually renders a depth pass for). Same real,
+        // documented scope limit as the previous Blinn-Phong version
+        // of this shader, unchanged by the PBR rewrite.
+        float thisLightShadow = (i == 0) ? shadow : 1.0;
+
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL * thisLightShadow;
+    }
+
+    // Ambient: ubo.ambient times albedo, not a real irradiance
+    // environment map -- a deliberate, documented simplification (see
+    // README "What's still ahead for lighting"). Real image-based
+    // ambient lighting needs a captured/generated environment map plus
+    // irradiance convolution and a prefiltered specular mip chain,
+    // none of which exist yet; this is a flat stand-in so ambient-only
+    // surfaces don't read as pure black, same role the old Blinn-Phong
+    // shader's ambient term played.
+    vec3 ambient = lighting.ambient.rgb * albedo;
+
+    vec3 color = ambient + Lo;
+    // Reinhard tone mapping -- Lo can exceed 1.0 per-channel with
+    // strong lights/low roughness (a real, physically-expected PBR
+    // result, not a bug), and without compressing it back down first,
+    // those values would just clip to flat white instead of rolling
+    // off smoothly. A simple, standard choice, not a full filmic curve
+    // -- worth revisiting alongside real HDR/bloom if this engine ever
+    // adds either.
+    color = color / (color + vec3(1.0));
+
+    return color;
+}

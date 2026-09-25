@@ -11,6 +11,7 @@
 #endif
 
 #include <iostream>
+#include <vector>
 
 // Synty assets in the engine: FBX loading, textured lit props, skinned
 // characters with clips, procedural and hand posing, a bone view.
@@ -26,17 +27,20 @@ int main() {
         app.lighting().lights[1].intensity = 0.35f;
         app.lighting().ambientColor = glm::vec3(0.25f);
 
-        app.addModule<kke::OrbitCameraModule>(/*distance=*/9.0f, /*pitch=*/-0.35f, /*yaw=*/2.85f, glm::vec3(0.0f, 0.9f, -1.5f));
+        std::vector<kke::Module*> panels;
+        panels.push_back(&app.addModule<kke::OrbitCameraModule>(/*distance=*/9.0f, /*pitch=*/-0.35f, /*yaw=*/2.85f, glm::vec3(0.0f, 0.9f, -1.5f)));
         app.addModule<kke::ModelModule>();
 #if KKE_ENABLE_FEMFX
         // Ragdolls (and anything else FEMFX: fracture, soft bodies). Real
         // units, no starting objects, and the level draws its own floor.
         auto& physics = app.addModule<kke::PhysicsModule>(/*renderScale=*/1.0f, /*initialObjectCount=*/0);
         physics.setDrawGround(false);
+        panels.push_back(&physics);
 #endif
-        app.addModule<kke_demo::SyntySceneModule>();
-        app.addModule<kke::DebugControlModule>();
-        app.addModule<kke::StatsModule>();
+        auto& scene = app.addModule<kke_demo::SyntySceneModule>();
+        panels.push_back(&app.addModule<kke::DebugControlModule>());
+        panels.push_back(&app.addModule<kke::StatsModule>());
+        scene.setEnginePanels(panels);
         app.run();
     } catch (const std::exception& e) {
         std::cerr << "Fatal error: " << e.what() << std::endl;

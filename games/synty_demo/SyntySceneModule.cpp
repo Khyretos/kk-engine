@@ -75,6 +75,10 @@ void SyntySceneModule::init(kke::Application& app) {
         return;
     }
     kke::log::get(name())->info("asset folder '{}': {} pack(s), {} assets", m_packDir, m_catalog.packs.size(), m_catalog.assets.size());
+    // The Prototype look: its world-space measuring grid over the atlas
+    // colours (what Synty's own Prototype shader does).
+    if (const kke::CatalogPack* proto = m_catalog.pack(m_catalog.find("SM_Buildings_Floor_5x5_01")->pack); proto && !proto->overlayTextures.empty())
+        m_models->setWorldOverlay(proto->overlayTextures.front(), 2.0f, 1.0f);
 
     // --- the level: a 20x20 m floor of 5x5 tiles, walls, stairs, props
     for (int x = -2; x < 2; ++x) {
@@ -106,12 +110,12 @@ void SyntySceneModule::init(kke::Application& app) {
     place("StaticMeshes/SM_Prop_FlagPole_01.fbx", glm::vec3(0.0f, 0, -8.0f));
 
     // --- characters in a row, each doing something different
-    struct Spec { const char* file; const char* label; const char* behavior; glm::vec3 tint; };
+    struct Spec { const char* file; const char* label; const char* behavior; };
     const Spec specs[] = {
-        { "Characters/SK_Character_Dummy_Male_01.fbx", "Dummy (male) - FBX clip", "clip", { 1.0f, 1.0f, 1.0f } },
-        { "Characters/SK_Character_Dummy_Female_01.fbx", "Dummy (female) - procedural wave", "wave", { 1.0f, 0.75f, 0.6f } },
-        { "Characters/SK_Character_Male_Face_01.fbx", "Male - idle breathing", "breathe", { 0.65f, 0.8f, 1.0f } },
-        { "Characters/SK_Character_Female_Face_01.fbx", "Female - hand-posed", "pose", { 0.75f, 1.0f, 0.7f } },
+        { "Characters/SK_Character_Dummy_Male_01.fbx", "Dummy (male) - FBX clip", "clip" },
+        { "Characters/SK_Character_Dummy_Female_01.fbx", "Dummy (female) - procedural wave", "wave" },
+        { "Characters/SK_Character_Male_Face_01.fbx", "Male - idle breathing", "breathe" },
+        { "Characters/SK_Character_Female_Face_01.fbx", "Female - hand-posed", "pose" },
     };
     for (int i = 0; i < 4; ++i) {
         Character c;
@@ -121,7 +125,6 @@ void SyntySceneModule::init(kke::Application& app) {
         if (!c.model) continue;
         c.position = glm::vec3((i - 1.5f) * 1.6f, 0.0f, 0.0f);
         c.instance = m_models->spawn(c.model, glm::translate(glm::mat4(1.0f), c.position));
-        m_models->setTint(c.instance, specs[i].tint);
         if (c.behavior == "clip") m_models->playAnimation(c.instance, 0, true);
         m_characters.push_back(c);
     }
@@ -243,6 +246,10 @@ void SyntySceneModule::standUp(Character& c) {
 void SyntySceneModule::onEvent(const SDL_Event& event) {
     if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat) return;
     if (event.key.key == SDLK_B) m_showBones = !m_showBones;
+    if (event.key.key == SDLK_F1) {
+        m_showEnginePanels = !m_showEnginePanels;
+        for (kke::Module* m : m_enginePanels) m->setUiVisible(m_showEnginePanels);
+    }
     if (event.key.key == SDLK_R && !m_characters.empty()) {
         // Shift+R: everyone; R: the selected character. Pushed away from
         // the camera so you see them fall.
@@ -272,6 +279,9 @@ void SyntySceneModule::renderUi() {
     }
     ImGui::Text("%zu props, %zu characters, %zu draw calls", m_propCount, m_characters.size(), m_models->drawCallsLastFrame());
     ImGui::Checkbox("Show bones (B)", &m_showBones);
+    ImGui::SameLine();
+    if (ImGui::Checkbox("Engine panels (F1)", &m_showEnginePanels))
+        for (kke::Module* m : m_enginePanels) m->setUiVisible(m_showEnginePanels);
     if (m_physics) {
         ImGui::TextWrapped("R: ragdoll selected   Shift+R: everyone   T: stand up   G: through a glass pane\n"
                            "(physics body boxes: Physics panel)");

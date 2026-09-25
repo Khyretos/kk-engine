@@ -58,6 +58,17 @@ public:
     void setVisible(InstanceId instance, bool visible);
     // Multiplies the material color (e.g. to tell identical dummies apart).
     void setTint(InstanceId instance, const glm::vec3& tint);
+    // Draw this instance with another image in place of its materials'
+    // albedo textures — Synty packs ship recoloured variants of one atlas
+    // (PolygonPrototype_Texture_01..10) that share the same UVs. Only
+    // materials that had a texture are affected. "" = back to the model's own.
+    void setTextureOverride(InstanceId instance, const std::string& texturePath);
+    std::string textureOverride(InstanceId instance) const;
+    // A world-space triplanar overlay multiplied onto every instance (the
+    // look of Synty's Prototype grid shader, using its *_Grid_* images):
+    // one image tile covers `tileSizeMetres`. "" turns it off.
+    void setWorldOverlay(const std::string& texturePath, float tileSizeMetres = 2.0f, float strength = 1.0f);
+    void setOverlayEnabled(InstanceId instance, bool enabled);
 
     // ---- skinned instances
     // Plays one of the model's clips (ModelData::animations); -1 stops and
@@ -100,6 +111,9 @@ private:
         glm::mat4 transform{1.0f};
         glm::vec3 tint{1.0f};
         bool visible = true;
+        bool overlay = true;
+        VkDescriptorSet textureOverride = VK_NULL_HANDLE;
+        std::string textureOverridePath;
         // skinned only
         std::vector<glm::mat4> locals;
         std::vector<glm::mat4> worldOverride;
@@ -128,6 +142,8 @@ private:
     ModelId m_nextModel = 1;
     InstanceId m_nextInstance = 1;
     bool m_showBones = false, m_showMeshes = true;
+    VkDescriptorSet m_overlaySet = VK_NULL_HANDLE;
+    float m_overlayTile = 0.0f, m_overlayStrength = 1.0f;
     uint64_t m_frame = 0;
     size_t m_drawCalls = 0;
 };

@@ -287,6 +287,10 @@ function(engine_copy_runtime_file TARGET SRC DEST_RELATIVE)
     add_dependencies(${TARGET} ${copy_target_name})
 endfunction()
 
+# Shared GLSL included by several shaders (#include "pbr_common.glsl");
+# every shader rebuilds when one changes.
+file(GLOB KKE_SHADER_INCLUDES ${CMAKE_SOURCE_DIR}/shaders/*.glsl)
+
 function(engine_add_shader TARGET SHADER_SOURCE)
     get_filename_component(SHADER_NAME ${SHADER_SOURCE} NAME)
     set(SHADER_OUTPUT ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/${SHADER_NAME}.spv)
@@ -297,7 +301,7 @@ function(engine_add_shader TARGET SHADER_SOURCE)
             OUTPUT ${SHADER_OUTPUT}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADER_OUTPUT_DIR}
             COMMAND ${GLSLC_EXECUTABLE} ${SHADER_SOURCE} -o ${SHADER_OUTPUT}
-            DEPENDS ${SHADER_SOURCE}
+            DEPENDS ${SHADER_SOURCE} ${KKE_SHADER_INCLUDES}
             COMMENT "Compiling shader ${SHADER_NAME} (glslc)"
         )
     elseif(GLSLANG_VALIDATOR_EXECUTABLE)
@@ -305,7 +309,7 @@ function(engine_add_shader TARGET SHADER_SOURCE)
             OUTPUT ${SHADER_OUTPUT}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADER_OUTPUT_DIR}
             COMMAND ${GLSLANG_VALIDATOR_EXECUTABLE} -V ${SHADER_SOURCE} -o ${SHADER_OUTPUT}
-            DEPENDS ${SHADER_SOURCE}
+            DEPENDS ${SHADER_SOURCE} ${KKE_SHADER_INCLUDES}
             COMMENT "Compiling shader ${SHADER_NAME} (glslangValidator)"
         )
     else()

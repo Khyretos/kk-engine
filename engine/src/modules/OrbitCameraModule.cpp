@@ -50,7 +50,9 @@ void OrbitCameraModule::update(const UpdateContext& ctx) {
     if (!uiWantsMouse && panButton) {
         camera.target += (right * (-mouse.deltaX * m_panSensitivity) + up * (mouse.deltaY * m_panSensitivity)) * panScale;
     }
-    if (editor && !ImGui::GetIO().WantCaptureKeyboard) {
+    // WantTextInput, not WantCaptureKeyboard: ImGui claims the keyboard
+    // whenever one of its windows merely has focus (BUG-041).
+    if (editor && !ImGui::GetIO().WantTextInput) {
         const bool* keys = SDL_GetKeyboardState(nullptr);
         glm::vec3 flatForward = glm::normalize(glm::vec3(forward.x, 0.0f, forward.z));
         glm::vec3 flatRight = glm::normalize(glm::vec3(right.x, 0.0f, right.z));

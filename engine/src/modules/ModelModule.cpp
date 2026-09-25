@@ -11,7 +11,9 @@
 namespace kke {
 
 namespace {
-struct PushConstants { glm::mat4 model; float metallic; float roughness; };
+// Matches model.vert/model.frag: material = (metallic, roughness, overlay
+// tile size in metres or 0, overlay strength); tint.rgb multiplies color.
+struct PushConstants { glm::mat4 model; glm::vec4 material; glm::vec4 tint; };
 struct ShadowPushConstants { glm::mat4 lightViewProj; glm::mat4 model; };
 constexpr uint32_t kMaxTextureSets = 512;
 
@@ -26,18 +28,24 @@ void ModelModule::init(Application& app) {
 
     PipelineConfig config;
     config.cullMode = VK_CULL_MODE_BACK_BIT;
-    // ModelAsset outputs counter-clockwise front faces; the engine's
-    // projection flips Y, which turns that into clockwise on screen.
-    config.frontFace = VK_FRONT_FACE_CLOCKWISE;
-    config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants) };
-    config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), app.materialTextureSetLayout() };
-    m_pipeline = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/cube.vert.spv", "shaders/cube.frag.spv", config);
+    // ModelAsset outputs counter-clockwise front faces (glTF/OpenGL
+    // convention). The projection flips Y (proj[1][1] *= -1), but Vulkan
+    // also measures winding in framebuffer space, whose Y points down —
+    // the two flips cancel, so front faces stay counter-clockwise. This
+    // said CLOCKWISE until BUG-040: every model was drawn inside-out
+    // (outer faces culled, the inside of the far faces visible).
+    config.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants) };
+    // Set 3 = world overlay texture (same one-sampler layout as set 2).
+    config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), app.materialTextureSetLayout(),
+                                    app.materialTextureSetLayout() };
+    m_pipeline = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/model.vert.spv", "shaders/model.frag.spv", config);
 
     // Skeleton overlay: same shader, drawn on top of everything.
     config.cullMode = VK_CULL_MODE_NONE;
     config.depthTestEnable = false;
     config.depthWriteEnable = false;
-    m_bonePipeline = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/cube.vert.spv", "shaders/cube.frag.spv", config);
+    m_bonePipeline = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/model.vert.spv", "shaders/model.frag.spv", config);
 
     PipelineConfig shadowConfig;
     shadowConfig.cullMode = VK_CULL_MODE_NONE;
@@ -201,6 +209,28 @@ void ModelModule::setVisible(InstanceId id, bool visible) {
     if (auto it = m_instances.find(id); it != m_instances.end()) it->second.visible = visible;
 }
 
+void ModelModule::setTextureOverride(InstanceId id, const std::string& texturePath) {
+    auto it = m_instances.find(id);
+    if (it == m_instances.end()) return;
+    it->second.textureOverride = texturePath.empty() ? VK_NULL_HANDLE : textureSetFor(texturePath);
+    it->second.textureOverridePath = texturePath;
+}
+
+std::string ModelModule::textureOverride(InstanceId id) const {
+    auto it = m_instances.find(id);
+    return it == m_instances.end() ? std::string() : it->second.textureOverridePath;
+}
+
+void ModelModule::setWorldOverlay(const std::string& texturePath, float tileSizeMetres, float strength) {
+    m_overlaySet = texturePath.empty() ? VK_NULL_HANDLE : textureSetFor(texturePath);
+    m_overlayTile = m_overlaySet ? tileSizeMetres : 0.0f;
+    m_overlayStrength = strength;
+}
+
+void ModelModule::setOverlayEnabled(InstanceId id, bool enabled) {
+    if (auto it = m_instances.find(id); it != m_instances.end()) it->second.overlay = enabled;
+}
+
 void ModelModule::setTint(InstanceId id, const glm::vec3& tint) {
     if (auto it = m_instances.find(id); it != m_instances.end()) it->second.tint = tint;
 }
@@ -273,7 +303,7 @@ void ModelModule::skinInstance(Instance& inst, uint32_t frameIndex) {
         if (!gm.skinned) continue;
         const ModelMesh& src = lm.data.meshes[gm.meshIndex];
         SkinnedBuffers& sb = inst.skinned[si++];
-        const glm::vec3 color = lm.data.materials[src.material].baseColor * inst.tint;
+        const glm::vec3 color = lm.data.materials[src.material].baseColor; // tint: push constant
         for (size_t v = 0; v < src.vertices.size(); ++v) {
             glm::vec3 p, n;
             skinVertex(src.vertices[v], skin, p, n);
@@ -311,10 +341,12 @@ void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
 
 void ModelModule::render(const RenderContext& ctx) {
     m_drawCalls = 0;
-    VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, ctx.defaultMaterialTextureDescriptorSet };
+    VkDescriptorSet overlay = m_overlaySet ? m_overlaySet : ctx.defaultMaterialTextureDescriptorSet;
+    VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, ctx.defaultMaterialTextureDescriptorSet, overlay };
+    const VkShaderStageFlags pcStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     if (m_showMeshes) {
         m_pipeline->bind(ctx.cmd);
-        vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(), 0, 3, sets, 0, nullptr);
+        vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(), 0, 4, sets, 0, nullptr);
         VkDescriptorSet boundTexture = ctx.defaultMaterialTextureDescriptorSet;
         for (auto& [id, inst] : m_instances) {
             if (!inst.visible) continue;
@@ -323,16 +355,18 @@ void ModelModule::render(const RenderContext& ctx) {
             size_t si = 0;
             for (const GpuMesh& gm : lm.meshes) {
                 const GpuMaterial& mat = lm.materials[gm.material];
+                // A texture variant (e.g. Synty's _Texture_02) replaces the
+                // atlas of every textured material; untextured ones keep
+                // their plain color.
                 VkDescriptorSet tex = mat.textureSet ? mat.textureSet : ctx.defaultMaterialTextureDescriptorSet;
+                if (inst.textureOverride && mat.textureSet) tex = inst.textureOverride;
                 if (tex != boundTexture) {
                     vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(), 2, 1, &tex, 0, nullptr);
                     boundTexture = tex;
                 }
-                // Tint via a scale on the model matrix would be wrong; static
-                // meshes bake the material color into vertices and a tint is
-                // only applied to skinned meshes (rebuilt every frame anyway).
-                PushConstants pc{ inst.transform, mat.metallic, mat.roughness };
-                vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+                float tile = inst.overlay ? m_overlayTile : 0.0f;
+                PushConstants pc{ inst.transform, glm::vec4(mat.metallic, mat.roughness, tile, m_overlayStrength), glm::vec4(inst.tint, 1.0f) };
+                vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), pcStages, 0, sizeof(pc), &pc);
                 if (gm.skinned) {
                     SkinnedBuffers& sb = inst.skinned[si++];
                     VkBuffer vb = sb.vertices[ctx.frameIndex]->handle();
@@ -351,7 +385,8 @@ void ModelModule::render(const RenderContext& ctx) {
 
     if (!m_showBones) return;
     m_bonePipeline->bind(ctx.cmd);
-    vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_bonePipeline->layout(), 0, 3, sets, 0, nullptr);
+    sets[3] = ctx.defaultMaterialTextureDescriptorSet;
+    vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_bonePipeline->layout(), 0, 4, sets, 0, nullptr);
     m_boneMesh->bind(ctx.cmd);
     for (auto& [id, inst] : m_instances) {
         if (!inst.visible || inst.locals.empty()) continue;
@@ -370,8 +405,8 @@ void ModelModule::render(const RenderContext& ctx) {
             glm::vec3 z = glm::cross(x, y);
             float thick = std::clamp(len * 0.12f, 0.006f, 0.03f);
             glm::mat4 m(glm::vec4(x * thick, 0), glm::vec4(y * len, 0), glm::vec4(z * thick, 0), glm::vec4(a, 1));
-            PushConstants pc{ m, 0.0f, 1.0f };
-            vkCmdPushConstants(ctx.cmd, m_bonePipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+            PushConstants pc{ m, glm::vec4(0.0f, 1.0f, 0.0f, 0.0f), glm::vec4(1.0f) };
+            vkCmdPushConstants(ctx.cmd, m_bonePipeline->layout(), pcStages, 0, sizeof(pc), &pc);
             m_boneMesh->draw(ctx.cmd);
         }
     }

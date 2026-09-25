@@ -26,6 +26,11 @@ public:
 
     // The pack's root folder (containing _SourceFiles/), or empty.
     const std::string& packDir() const { return m_packDir; }
+    // Engine debug panels hidden behind F1 so the scene stays visible.
+    void setEnginePanels(std::vector<kke::Module*> panels) {
+        m_enginePanels = std::move(panels);
+        for (kke::Module* m : m_enginePanels) m->setUiVisible(false);
+    }
 
 private:
     struct Character {
@@ -60,6 +65,8 @@ private:
     std::vector<glm::vec3> m_poseEuler; // per bone of the posed character
     bool m_showBones = false;
     size_t m_propCount = 0;
+    std::vector<kke::Module*> m_enginePanels;
+    bool m_showEnginePanels = false;
 };
 
 } // namespace kke_demo

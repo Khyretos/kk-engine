@@ -21,7 +21,8 @@ namespace kke {
 //     SK_ characters, SM_Bld_ buildings, SM_Prop_ props, SM_Env_ /
 //     SM_Generic_ environment, SM_Veh_ vehicles, SM_Wep_ weapons...)
 //   - textures: any folder named "Textures" (any case) in the pack; the
-//     pack's default texture is its "*_Texture_01*" image if present.
+//     pack's default texture is its "*_Texture_01*" image if present;
+//     "*_Texture_NN" images are its variants, "*Grid*" ones overlays.
 //
 // Pure file-system logic, no GPU — unit-tested in tests/test_asset_catalog.cpp.
 struct CatalogAsset {
@@ -37,6 +38,12 @@ struct CatalogPack {
     std::string root;
     std::vector<std::string> textureDirs;
     std::string defaultTexture; // may be empty
+    // Recoloured versions of the pack's atlas that share its UVs
+    // ("*_Texture_01".."*_Texture_10"), sorted; includes defaultTexture.
+    std::vector<std::string> textureVariants;
+    // World-space overlay patterns ("*_Grid_*": POLYGON Prototype's
+    // measuring grids), sorted.
+    std::vector<std::string> overlayTextures;
     size_t assetCount = 0;
 };
 

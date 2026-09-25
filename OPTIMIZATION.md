@@ -101,7 +101,7 @@ stay under ~500 MB resident. Benchmarks report `peak_rss_mb` for this.
 | Spatial partitioning (grid / BVH) | 90s | Culling, picking, placement in the sandbox | backlog (brute force measured fine for now — log #12) |
 | Level of detail (mesh LOD, impostors) | 90s | Synty packs ship LODs in some packs; impostors for distant props | backlog |
 | Texture atlases | N64/PS1 | Synty packs are built around one atlas per pack — keep it that way: one texture bind for a whole pack | ✅ natural fit |
-| Mip mapping | 90s | All textures: less aliasing *and* less bandwidth | in progress |
+| Mip mapping | 90s | All textures: less aliasing *and* less bandwidth | ✅ done (log #14) |
 | Texture compression (BCn/ASTC) | 2000s | Asset cooking step | backlog |
 | Vertex quantization (16-bit) | N64/PS1 | Static meshes: positions as int16 + per-mesh scale, normals as oct-encoded 2×8 bit | backlog |
 | Instanced draws | 2000s | Repeated props (Synty levels are 90% repeats) | backlog |
@@ -124,6 +124,7 @@ BUGS.md / PERFORMANCE_NOTES.md entry with full detail.
 
 | # | What | Why it works | Measured effect | Where |
 |---|---|---|---|---|
+| 14 | Mip maps for every `kke::Texture`, built on the CPU in linear light | Distant texels were sampled from the full 2048² atlas: shimmering, and every fetch a cache miss. Box filter averages in linear space (sRGB bytes averaged directly darken each mip); two LUTs (256 floats decode, 4096 bytes encode) keep it ~10 ms per 2048² image. CPU, not `vkCmdBlitImage`: works on every device regardless of blit format support, and is the same code the asset-cooking step will run offline | Grid overlay stable at distance (it shimmered without). GPU-side win not measured yet — needs a real GPU (HW-011) | `Texture.cpp` |
 | 13 | Sandbox budgets: max 6 thrown balls (oldest removed), breakable-prop proxies capped at 48 cells (288 tets) | Rule 5 — anything a player can spam gets a cap and a policy. 48 cells ≈ a Glass Sheet, the worst single object we've measured | Min-spec (1 core): breaking a crate costs ~10 ms/step while 43 pieces move, back to ~0.1 ms once they sleep (~5 s) | `SandboxModule.cpp` constants |
 | 12 | Brute-force ray-vs-AABB picking, on purpose | A slab test is ~20 flops; 2,000 objects ≈ 40k flops, far under 0.1 ms. A BVH would be complexity with no measurable win at sandbox sizes — revisit when levels reach ~10k objects | Not measurable in the frame profile | `SandboxModule::pickObject`, `kke/Picking.h` |
 | 11 | Asset list uses `ImGuiListClipper` | Only visible rows are submitted, so a 3,000-asset catalog costs the same as 30 | 457-asset Prototype list: no UI cost change vs an empty list | `SandboxModule::assetBrowserUi` |

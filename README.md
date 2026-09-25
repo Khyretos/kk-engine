@@ -1531,6 +1531,10 @@ model in them.
 
 - **Assets panel:** filter by pack, category (from Synty's name prefixes)
   or search; click an asset, then click in the world to place it.
+- **Look:** the pack's texture variants (Prototype's `_Texture_01..10`
+  recolours) for new objects, per object, or all at once; the world grid
+  overlay (Prototype's `_Grid_*` patterns, tile size, strength) — saved
+  with the layout.
 - **Placing:** snaps to the grid (0.25–5 m, or off); lands on top of
   whatever is under the cursor, so crates stack. `R` / `Ctrl+wheel`
   rotate, `Shift+click` keeps placing, `Esc` stops.
@@ -1541,8 +1545,9 @@ model in them.
   zoom, WASD/QE move, Shift faster.
 - **Physics (FEMFX build):** `K` ragdolls/stands up a selected character;
   `X` turns a selected prop into a breakable physics object (Wood, Stone,
-  Glass, or Metal that dents); `F` throws a ball at the cursor (6 at most,
-  oldest removed). `F1` shows the engine's debug panels.
+  Glass, or Metal that dents); the Shoot tool (`2`, then left-click), `F`
+  or `Space` throws a ball at the cursor (6 at most, oldest removed).
+  `F1` shows the engine's debug panels.
 
 Honest limits: a breakable prop is a box of the prop's bounds wearing a
 material texture, not the prop's shape. Placed static meshes don't

@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <map>
 #include <cstdlib>
+#include <regex>
 #include <set>
 
 namespace kke {
@@ -122,11 +123,20 @@ AssetCatalog AssetCatalog::scan(const std::string& rootPath) {
         std::sort(pack.textureDirs.begin(), pack.textureDirs.end());
         std::sort(images.begin(), images.end());
         for (const fs::path& img : images) {
-            std::string n = lower(img.filename().string());
-            bool isMain = n.find("_texture_01") != std::string::npos && n.find("emission") == std::string::npos &&
-                          n.find("normal") == std::string::npos && n.find("_mask") == std::string::npos;
-            if (isMain) { pack.defaultTexture = img.string(); break; }
+            std::string n = lower(img.stem().string());
+            bool helper = n.find("emission") != std::string::npos || n.find("normal") != std::string::npos ||
+                          n.find("_mask") != std::string::npos || n.find("metallic") != std::string::npos;
+            if (helper) continue;
+            if (n.find("grid") != std::string::npos) { pack.overlayTextures.push_back(img.string()); continue; }
+            // "..._texture_NN" or "..._texture_NN_X" (Town's _01_A, _01_B):
+            // a variant of the atlas.
+            static const std::regex kVariant(R"(_texture_\d+(_[a-z0-9]{1,3})?$)");
+            if (std::regex_search(n, kVariant)) {
+                pack.textureVariants.push_back(img.string());
+                if (pack.defaultTexture.empty() && n.find("_texture_01") != std::string::npos) pack.defaultTexture = img.string();
+            }
         }
+        if (pack.defaultTexture.empty() && !pack.textureVariants.empty()) pack.defaultTexture = pack.textureVariants.front();
 
         for (auto& [key, path] : byStem) {
             CatalogAsset a;

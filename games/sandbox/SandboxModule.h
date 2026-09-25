@@ -42,7 +42,7 @@ public:
     void setEnginePanels(std::vector<kke::Module*> panels);
 
 private:
-    enum class Tool { Select, Place };
+    enum class Tool { Select, Place, Shoot };
 
     struct Object {
         uint32_t id = 0;
@@ -52,6 +52,7 @@ private:
         kke::ModelModule::ModelId model = 0;
         kke::ModelModule::InstanceId instance = 0;
         bool character = false;
+        std::string texture;      // texture variant path, "" = the model's own
         // Ragdoll (characters)
         kke::IRagdollPhysics::RagdollHandle ragdoll = 0;
         kke::RagdollDesc ragdollDesc;
@@ -84,6 +85,9 @@ private:
     void restoreProp(Object& o);
     void throwBall();
 
+    void applyLook();                   // overlay + variants from the Look settings
+    const kke::CatalogPack* packOf(const std::string& asset) const;
+    void lookUi();
     void assetBrowserUi();
     void inspectorUi();
     void folderNotFoundUi();
@@ -122,6 +126,12 @@ private:
     bool m_ghostValid = false;
     float m_snap = 0.5f;
     float m_rotateStep = 45.0f;
+
+    // Look (texture variant for new objects, world grid overlay)
+    int m_variant = 0;                 // index into the pack's textureVariants
+    int m_overlay = 1;                 // 0 = none, else overlayTextures[m_overlay - 1]
+    float m_overlayTile = 2.0f;
+    float m_overlayStrength = 1.0f;
 
     // Physics toys
     int m_breakMaterial = 0;           // index into kBreakMaterials (see .cpp)
