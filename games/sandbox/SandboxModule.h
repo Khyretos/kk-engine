@@ -5,6 +5,7 @@
 #include "kke/Module.h"
 #include "kke/Picking.h"
 #include "kke/Ragdoll.h"
+#include "kke/VoxelTets.h"
 #include "kke/modules/DebugDrawModule.h"
 #include "kke/modules/ModelModule.h"
 
@@ -57,9 +58,14 @@ private:
         kke::IRagdollPhysics::RagdollHandle ragdoll = 0;
         kke::RagdollDesc ragdollDesc;
         kke::RagdollSkinBinding binding;
-        // Breakable physics proxy (props): while set, the mesh is hidden
-        // and FEMFX simulates a box of the prop's size instead.
+        // Breakable (props): a FEMFX tet volume voxelized from the prop's
+        // own mesh; the prop's vertices are glued to it (embedding) and
+        // drawn deformed every frame the physics is awake.
         uint32_t proxy = 0;
+        kke::TetEmbedding embedding;          // all mesh parts' vertices, concatenated
+        std::vector<glm::vec3> restNormals;
+        std::vector<size_t> partOffsets;      // where each mesh part starts in the arrays above
+        bool settled = false;                 // last frame's vertices already match a sleeping object
     };
 
     kke::ModelModule::ModelId loadAsset(const std::string& name);
@@ -83,6 +89,7 @@ private:
     void standUp(Object& o);
     void makeBreakable(Object& o);
     void restoreProp(Object& o);
+    void updateBreakables();
     void throwBall();
 
     void applyLook();                   // overlay + variants from the Look settings
@@ -135,6 +142,11 @@ private:
 
     // Physics toys
     int m_breakMaterial = 0;           // index into kBreakMaterials (see .cpp)
+    int m_patternOverride = 0;         // 0 = the material's own pattern, else FracturePattern + 1
+    float m_chunkScale = 1.0f;         // multiplies the material's chunk size
+    int m_detailCells = 60;
+    float m_toughness = 1.0f;          // multiplies the material's fracture threshold            // voxel budget per prop (6 tets per cell)
+    std::string m_lastBreakStats;
     float m_ballSpeed = 18.0f;
     std::vector<uint32_t> m_balls;     // oldest first; capped (see throwBall)
     char m_layoutPath[256] = "sandbox_layout.json";

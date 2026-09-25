@@ -18,6 +18,8 @@ set(ENGINE_SOURCES
     src/BenchmarkReport.cpp
     src/AssetCatalog.cpp
     src/Picking.cpp
+    src/VoxelTets.cpp
+    src/FracturePattern.cpp
     src/SystemInfo.cpp
     src/TetMeshAsset.cpp
     src/LightingBuffer.cpp
@@ -65,6 +67,8 @@ set(ENGINE_HEADERS
     include/kke/BenchmarkReport.h
     include/kke/AssetCatalog.h
     include/kke/Picking.h
+    include/kke/VoxelTets.h
+    include/kke/FracturePattern.h
     include/kke/TetMeshAsset.h
     include/kke/LightingBuffer.h
     include/kke/ShadowMap.h
@@ -157,4 +161,13 @@ endif()
 target_compile_definitions(kke_engine PRIVATE KKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}")
 if(WIN32)
     target_link_libraries(kke_engine PUBLIC psapi) # peak memory in benchmark reports
+endif()
+
+# Hot CPU loops stay optimized in Debug builds too (same reasoning as
+# FEMFX, BUGS.md BUG-029): texture mip generation, voxelization and
+# fracture setup are pure number crunching, 5-20x slower at -O0, and
+# nobody steps through them in a debugger. OPTIMIZATION.md log #15.
+if(NOT MSVC)
+    set_source_files_properties(src/Texture.cpp src/VoxelTets.cpp src/FracturePattern.cpp
+        PROPERTIES COMPILE_OPTIONS "$<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>")
 endif()

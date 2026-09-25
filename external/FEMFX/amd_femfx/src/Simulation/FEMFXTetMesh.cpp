@@ -2384,6 +2384,11 @@ namespace AMD
         return FM_IS_SET(tetMesh.flags, FM_OBJECT_FLAG_SLEEPING);
     }
 
+    float FmGetTetMaxStress(const FmTetMesh& tetMesh, uint tetId)
+    {
+        return tetMesh.tetsFractureMaterialParams ? tetMesh.tetsFractureMaterialParams[tetId].lastMaxStress : 0.0f;
+    }
+
     void FmGetExteriorFace(uint* tetId, uint* faceId, const FmTetMesh& tetMesh, uint extFaceIdx)
     {
         const FmExteriorFace& face = tetMesh.exteriorFaces[extFaceIdx];

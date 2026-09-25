@@ -46,7 +46,11 @@ the folder into the Assets panel). Does it find **all** your packs, and
 do the categories make sense? Build something: floor tiles, walls,
 stacked props (placement, snapping, rotate, move, duplicate, delete),
 then save, quit, restart and load it. Then play: `K` on a character,
-`X` on props with each "Breaks as" material, `F` to throw balls.
+`X` on props with each "Breaks as" material, then the Shoot tool (`2`,
+click) or `F`/`Space`. Wood should splinter, stone crumble into chunks,
+glass shatter radially, metal dent without breaking — and nothing should
+break *before* you shoot it. Does it feel right? Watch FPS after big
+breaks (debris is slow to sleep).
 Anything that loads wrong (textures missing, pieces in the floor) or
 feels awkward is exactly what I need.
 **Send back:** screenshots, the saved `sandbox_layout.json`, the asset

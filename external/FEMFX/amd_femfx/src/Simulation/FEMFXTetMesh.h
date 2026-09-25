@@ -76,8 +76,9 @@ namespace AMD
     struct FmTetFractureMaterialParams
     {
         float fractureStressThreshold;          // Threshold for stress max eigenvalue where fracture occurs
+        float lastMaxStress;                    // KKE addition: stress max eigenvalue from the last update (see FmGetTetMaxStress)
 
-        inline FmTetFractureMaterialParams() : fractureStressThreshold(5.0e3f) {}
+        inline FmTetFractureMaterialParams() : fractureStressThreshold(5.0e3f), lastMaxStress(0.0f) {}
     };
 
     // Tet material params for deformation constraints

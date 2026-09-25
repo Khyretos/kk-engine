@@ -14,6 +14,7 @@ add_executable(kke_tests
     test_benchmark_report.cpp
     test_asset_catalog.cpp
     test_picking.cpp
+    test_voxel_fracture.cpp
 )
 target_link_libraries(kke_tests PRIVATE kke_engine GTest::gtest_main)
 target_compile_definitions(kke_tests PRIVATE KKE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

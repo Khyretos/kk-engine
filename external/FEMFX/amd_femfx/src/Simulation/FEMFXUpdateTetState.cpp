@@ -1188,6 +1188,12 @@ namespace AMD
 
         if (updatedState.testFracture)
         {
+            // KKE addition: keep the value so the application can read it
+            // (FmGetTetMaxStress) - used to arm fracture relative to an
+            // object's settled stress. tetsFractureMaterialParams exists
+            // whenever fracture is tested.
+            tetMesh->tetsFractureMaterialParams[tetId].lastMaxStress = updatedState.maxStressEigenvalue;
+
             if (updatedState.maxStressEigenvalue > updatedState.fractureStressThreshold)
             {
                 uint tetToFractureIndex = FmAtomicIncrement(&tetMesh->numTetsToFracture.val) - 1;

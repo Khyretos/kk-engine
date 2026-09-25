@@ -1549,10 +1549,29 @@ model in them.
   or `Space` throws a ball at the cursor (6 at most, oldest removed).
   `F1` shows the engine's debug panels.
 
-Honest limits: a breakable prop is a box of the prop's bounds wearing a
-material texture, not the prop's shape. Placed static meshes don't
-collide, so balls and debris only hit the ground, other physics objects
-and ragdolls, and a crate stacked on one you broke stays floating.
+**How breakable props work** (engine pieces, reusable by any game):
+1. `kke::voxelizeToTets` turns the prop's own triangles into a tet volume
+   (cells fitted to its bounds; works on open, non-watertight meshes),
+   and `kke::fitSurfaceToMesh` pulls the outside onto the real surface.
+2. `kke::fractureChunks` groups tets by the material's pattern — wood
+   **splinters** along its longest axis, stone breaks into **Voronoi
+   chunks**, glass shatters **radially**, ceramic into **shards**, metal
+   is **solid** and dents (plasticity). `kke::fractureFlagsFromChunks`
+   bakes that into FEMFX face flags, so cracks can only run between
+   chunks. "Pattern" in the panel overrides the material's own.
+3. The prop's mesh is subdivided and each triangle glued to the tet under
+   it (`kke::embedTriangles`); `PhysicsModule::deformEmbedded` moves it
+   every frame the physics is awake, so the prop bends, dents and breaks
+   *as itself* (its texture, variant and grid). Fresh crack faces are
+   drawn in the prop's own colours.
+4. Props arm 0.75-2 s after spawning, once settled: only stress *added*
+   by a hit breaks them (BUGS.md BUG-043).
+
+Setup costs ~12-17 ms per prop. Honest limits: placed static meshes
+still don't collide (balls and debris only hit the ground, physics
+objects and ragdolls), so a crate on a broken one stays floating;
+debris is slow to fall asleep, which keeps one core busy (~10-20 ms/step
+for ~70 pieces) until it does — next on the physics list.
 
 ### `games/physics_demo` — a dedicated demo, because the shared one couldn't show this legibly
 

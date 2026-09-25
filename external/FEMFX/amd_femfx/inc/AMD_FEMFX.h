@@ -1040,6 +1040,11 @@ namespace AMD
     // re-reading and re-uploading vertex positions that cannot have changed.
     bool FmIsTetMeshSleeping(const FmTetMesh& tetMesh);
 
+    // KKE addition: the tet's stress max eigenvalue (the value compared
+    // against fractureStressThreshold) from its last simulation update, or
+    // 0 if fracture isn't enabled for the mesh.
+    float FmGetTetMaxStress(const FmTetMesh& tetMesh, uint tetId);
+
     // Get the tet id and face id (0..3) for the exterior face in a tet mesh.
     // Use FmGetNumExteriorFaces() to get number.
     void FmGetExteriorFace(uint* tetId, uint* faceId, const FmTetMesh& tetMesh, uint extFaceIdx);

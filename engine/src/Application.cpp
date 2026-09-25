@@ -179,6 +179,8 @@ Application::~Application() {
         if (m_shadowMapDescriptorPool) vkDestroyDescriptorPool(dev, m_shadowMapDescriptorPool, nullptr);
         if (m_shadowMapSetLayout) vkDestroyDescriptorSetLayout(dev, m_shadowMapSetLayout, nullptr);
         if (m_materialTextureDescriptorPool) vkDestroyDescriptorPool(dev, m_materialTextureDescriptorPool, nullptr);
+        m_textureCache.clear();
+        if (m_textureCachePool) vkDestroyDescriptorPool(dev, m_textureCachePool, nullptr);
         if (m_materialTextureSetLayout) vkDestroyDescriptorSetLayout(dev, m_materialTextureSetLayout, nullptr);
     }
 
@@ -476,6 +478,50 @@ void Application::run() {
             std::this_thread::sleep_until(frameEnd);
         }
     }
+}
+
+VkDescriptorSet Application::textureSet(const std::string& path) {
+    if (path.empty()) return VK_NULL_HANDLE;
+    if (auto it = m_textureCache.find(path); it != m_textureCache.end()) return it->second.set;
+    VkDevice dev = m_renderer->device().device();
+    if (!m_textureCachePool) {
+        constexpr uint32_t kMaxCachedTextures = 1024;
+        VkDescriptorPoolSize size{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, kMaxCachedTextures };
+        VkDescriptorPoolCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        info.maxSets = kMaxCachedTextures;
+        info.poolSizeCount = 1;
+        info.pPoolSizes = &size;
+        VK_CHECK(vkCreateDescriptorPool(dev, &info, nullptr, &m_textureCachePool));
+    }
+    CachedTexture entry;
+    try {
+        entry.texture = std::make_unique<Texture>(m_renderer->device(), path);
+        VkDescriptorSetAllocateInfo alloc{};
+        alloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        alloc.descriptorPool = m_textureCachePool;
+        alloc.descriptorSetCount = 1;
+        alloc.pSetLayouts = &m_materialTextureSetLayout;
+        if (vkAllocateDescriptorSets(dev, &alloc, &entry.set) != VK_SUCCESS) {
+            log::get("Textures")->warn("texture cache full; '{}' drawn untextured", path);
+            entry = {};
+        } else {
+            VkDescriptorImageInfo image{ entry.texture->sampler(), entry.texture->imageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+            VkWriteDescriptorSet write{};
+            write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            write.dstSet = entry.set;
+            write.descriptorCount = 1;
+            write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            write.pImageInfo = &image;
+            vkUpdateDescriptorSets(dev, 1, &write, 0, nullptr);
+        }
+    } catch (const std::exception& e) {
+        log::get("Textures")->warn("texture '{}' failed to load ({}); drawn untextured", path, e.what());
+        entry = {};
+    }
+    VkDescriptorSet set = entry.set;
+    m_textureCache[path] = std::move(entry);
+    return set;
 }
 
 } // namespace kke

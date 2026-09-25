@@ -107,7 +107,7 @@ stay under ~500 MB resident. Benchmarks report `peak_rss_mb` for this.
 | Instanced draws | 2000s | Repeated props (Synty levels are 90% repeats) | backlog |
 | Baked / vertex lighting | PS1/N64 | Optional "retro/min-spec" lighting path | idea |
 | Debris budget / particle hand-off | 2010s (Chaos, RayFire) | Small/far fracture pieces → GPU particles | backlog (PERFORMANCE_NOTES.md #1) |
-| Clustered fracture | 2010s (Chaos) | Material-driven fracture patterns | in progress |
+| Clustered fracture | 2010s (Chaos) | Material-driven fracture patterns (chunks = fewer, bigger, cheaper pieces) | ✅ done (BUG-043) |
 | Time-slicing | all | Asset streaming, tetrahedralization of user-placed props | backlog |
 | Job system / task graph | 2010s | Physics already threaded; engine-wide jobs later | partly |
 | GPU skinning | 2000s | Crowds of characters | backlog |
@@ -124,6 +124,9 @@ BUGS.md / PERFORMANCE_NOTES.md entry with full detail.
 
 | # | What | Why it works | Measured effect | Where |
 |---|---|---|---|---|
+| 17 | Hot CPU files at -O2 in Debug too (`Texture.cpp`, `VoxelTets.cpp`, `FracturePattern.cpp`) | Same reasoning as FEMFX (BUG-029): pure number crunching nobody steps through; -O0 made mip generation alone ~200 ms per atlas | Part of #16's 300 -> 12 ms | `engine/CMakeLists.txt` |
+| 16 | One engine-wide texture cache (`Application::textureSet`) | ModelModule and PhysicsModule each loaded the same 2048² Synty atlas: 2x the GPU memory (21 MB each with mips) and ~200 ms per extra load | Making a prop breakable: 300 ms -> 12 ms total setup (of which texture 220 -> 0 ms) | `Application.cpp` |
+| 15 | Point-in-tet search on a uniform grid with precomputed inverse matrices | Brute force was O(points x tets) with a matrix inverse per test; the grid makes it ~O(points) and a barycentric test one mat3 multiply | 4,368-triangle wall: embedding 123 ms -> 1.2 ms | `kke::embedPoints` |
 | 14 | Mip maps for every `kke::Texture`, built on the CPU in linear light | Distant texels were sampled from the full 2048² atlas: shimmering, and every fetch a cache miss. Box filter averages in linear space (sRGB bytes averaged directly darken each mip); two LUTs (256 floats decode, 4096 bytes encode) keep it ~10 ms per 2048² image. CPU, not `vkCmdBlitImage`: works on every device regardless of blit format support, and is the same code the asset-cooking step will run offline | Grid overlay stable at distance (it shimmered without). GPU-side win not measured yet — needs a real GPU (HW-011) | `Texture.cpp` |
 | 13 | Sandbox budgets: max 6 thrown balls (oldest removed), breakable-prop proxies capped at 48 cells (288 tets) | Rule 5 — anything a player can spam gets a cap and a policy. 48 cells ≈ a Glass Sheet, the worst single object we've measured | Min-spec (1 core): breaking a crate costs ~10 ms/step while 43 pieces move, back to ~0.1 ms once they sleep (~5 s) | `SandboxModule.cpp` constants |
 | 12 | Brute-force ray-vs-AABB picking, on purpose | A slab test is ~20 flops; 2,000 objects ≈ 40k flops, far under 0.1 ms. A BVH would be complexity with no measurable win at sandbox sizes — revisit when levels reach ~10k objects | Not measurable in the frame profile | `SandboxModule::pickObject`, `kke/Picking.h` |
@@ -153,8 +156,12 @@ BUGS.md / PERFORMANCE_NOTES.md entry with full detail.
 1. **Debris budget + hand-off to GPU particles** — worst-case physics cost
    is "many awake pieces right after a big break" (~55 ms/step for ~475
    pieces on 1 core).
-2. **Clustered, material-driven fracture** — fewer, bigger pieces is both
-   cheaper and better-looking (in progress).
+2. **Debris that sleeps** — after a break, ~60 of 67 pieces were still
+   awake 10 s later on one core (10-20 ms/step). Suspects: pieces of the
+   same object resting interpenetrated, and plastic objects that creep
+   forever (the physics benchmark's awake count swings 2 <-> 390 for the
+   same reason). Candidate fixes: tuned sleep thresholds in our FEMFX
+   fork, no self-collision between pieces of one object, debris budget.
 3. **Frustum culling + instancing for props** — Synty levels are hundreds
    of repeated meshes.
 4. **Mip maps** — texture bandwidth and shimmering.

@@ -84,6 +84,22 @@ public:
     // transforms; empty vector clears the override.
     void setBoneWorldOverride(InstanceId instance, std::vector<glm::mat4> world);
 
+    // Draw a (non-skinned) instance from caller-supplied world-space
+    // vertices instead of mesh + transform: one position/normal vector per
+    // mesh part, in ModelData::meshes[i].vertices order. This is how a
+    // physics-simulated prop is drawn (PhysicsModule::deformEmbedded moves
+    // the vertices; UVs, materials and textures stay the model's own).
+    // Uploaded once per frame in flight after each call; empty clears.
+    void setDeformedVertices(InstanceId instance, const std::vector<std::vector<glm::vec3>>& positions,
+                             const std::vector<std::vector<glm::vec3>>& normals);
+    bool isDeformed(InstanceId instance) const;
+    // Replace the geometry a deformed instance draws with, per mesh part
+    // (e.g. a finer, unshared triangle soup for a breakable prop — see
+    // kke::TriangleSoup). Materials stay the part's own; UVs come from
+    // `vertices`. Afterwards setDeformedVertices() takes one position per
+    // vertex given here. Clearing the deformation clears this too.
+    void setDeformedTopology(InstanceId instance, const std::vector<std::vector<ModelVertex>>& vertices);
+
     // Draws every skinned instance's skeleton on top (depth test off).
     void setShowBones(bool show) { m_showBones = show; }
     bool showBones() const { return m_showBones; }
@@ -118,6 +134,9 @@ private:
         std::vector<glm::mat4> locals;
         std::vector<glm::mat4> worldOverride;
         std::vector<SkinnedBuffers> skinned; // one per skinned mesh of the model
+        std::vector<SkinnedBuffers> deformed; // one per mesh part while setDeformedVertices is active
+        uint64_t deformVersion = 0;
+        uint64_t deformUploaded[Renderer::kMaxFramesInFlight] = {};
         int clip = -1;
         float clipTime = 0.0f, clipSpeed = 1.0f;
         bool clipLoop = true;
@@ -126,15 +145,13 @@ private:
 
     VkDescriptorSet textureSetFor(const std::string& path);
     void skinInstance(Instance& inst, uint32_t frameIndex);
+    void uploadDeformed(Instance& inst, uint32_t frameIndex);
     std::vector<glm::mat4> currentBoneWorld(const Instance& inst) const;
 
     Application* m_app = nullptr;
     std::unique_ptr<Pipeline> m_pipeline, m_shadowPipeline, m_bonePipeline;
     std::unique_ptr<Mesh> m_boneMesh;
-    VkDescriptorPool m_pool = VK_NULL_HANDLE;
     VkDevice m_device = VK_NULL_HANDLE;
-    std::unordered_map<std::string, std::unique_ptr<Texture>> m_textures;
-    std::unordered_map<std::string, VkDescriptorSet> m_textureSets;
 
     std::unordered_map<std::string, ModelId> m_modelByPath;
     std::unordered_map<ModelId, std::unique_ptr<LoadedModel>> m_models;

@@ -193,6 +193,13 @@ public:
     // separate descriptor set using the same materialTextureSetLayout()
     // instead of this one.
     VkDescriptorSet defaultTextureDescriptorSet() const { return m_defaultTextureDescriptorSet; }
+    // The engine-wide image cache: loads an image file once (decode + mip
+    // chain) and returns a descriptor set for materialTextureSetLayout().
+    // Every module asking for the same path shares one GPU copy — a Synty
+    // atlas is 2048x2048 (21 MB with mips), and loading it per module both
+    // doubled memory and cost ~200 ms per extra load. VK_NULL_HANDLE if the
+    // file can't be loaded (logged once).
+    VkDescriptorSet textureSet(const std::string& path);
 
     // --- Debug pause/step ---
     // Freezes simulation (fixedUpdate/update stop advancing) while still
@@ -280,6 +287,9 @@ private:
     VkDescriptorSetLayout m_materialTextureSetLayout = VK_NULL_HANDLE;
     VkDescriptorPool m_materialTextureDescriptorPool = VK_NULL_HANDLE;
     VkDescriptorSet m_defaultTextureDescriptorSet = VK_NULL_HANDLE;
+    struct CachedTexture { std::unique_ptr<Texture> texture; VkDescriptorSet set = VK_NULL_HANDLE; };
+    std::unordered_map<std::string, CachedTexture> m_textureCache;
+    VkDescriptorPool m_textureCachePool = VK_NULL_HANDLE;
     float m_fixedDt;
     uint32_t m_maxFixedStepsPerFrame = 2;
     uint32_t m_fixedStepsLastFrame = 0;

@@ -2,6 +2,7 @@
 
 #include "kke/Application.h"
 #include "kke/Log.h"
+#include "kke/FracturePattern.h"
 #include "kke/Material.h"
 #if KKE_ENABLE_FEMFX
 #include "kke/modules/PhysicsModule.h"
@@ -24,17 +25,21 @@ namespace kke_sandbox {
 
 namespace {
 
-// What "Make breakable" turns a prop into. Values are the measured
+// What "Make breakable" turns a prop into: a FEMFX material plus how it
+// breaks (kke/FracturePattern.h) — the material decides the pattern, so
+// wood splinters, stone crumbles into chunks, glass shatters radially and
+// metal bends instead of breaking. Material values are the measured
 // presets from MaterialGridModule (see its comment and BUGS.md BUG-020
 // for how the fracture thresholds were found); textureId picks
-// PhysicsModule's matching procedural texture.
-struct BreakMaterial { const char* name; kke::Material material; bool plastic; };
+// PhysicsModule's matching texture, shown on fresh crack faces only.
+struct BreakMaterial { const char* name; kke::Material material; kke::FracturePattern pattern; float chunkSize; bool plastic; };
 const BreakMaterial kBreakMaterials[] = {
-    { "Wood (splinters)", []{ kke::Material m; m.density=600.0f;  m.stiffness=1.0e7f; m.poissonsRatio=0.30f; m.fractureStressThreshold=8000.0f; m.plasticYieldThreshold=6000.0f; m.plasticCreep=0.3f; m.metallic=0.0f; m.roughness=0.75f; m.textureId=0; return m; }(), false },
-    { "Stone (crumbles)", []{ kke::Material m; m.density=2500.0f; m.stiffness=3.0e7f; m.poissonsRatio=0.25f; m.fractureStressThreshold=4000.0f; m.plasticYieldThreshold=3000.0f; m.plasticCreep=0.1f; m.metallic=0.0f; m.roughness=0.9f; m.textureId=1; return m; }(), false },
-    { "Glass (shatters)", []{ kke::Material m; m.density=2500.0f; m.stiffness=7.0e7f; m.poissonsRatio=0.22f; m.fractureStressThreshold=2000.0f; m.plasticYieldThreshold=1800.0f; m.plasticCreep=0.02f; m.metallic=0.0f; m.roughness=0.05f; m.textureId=4; return m; }(), false },
+    { "Wood (splinters)", []{ kke::Material m; m.density=600.0f;  m.stiffness=1.0e7f; m.poissonsRatio=0.30f; m.fractureStressThreshold=8000.0f; m.plasticYieldThreshold=6000.0f; m.plasticCreep=0.3f; m.metallic=0.0f; m.roughness=0.75f; m.textureId=0; return m; }(), kke::FracturePattern::Splinters, 0.35f, false },
+    { "Stone (chunks)",   []{ kke::Material m; m.density=2500.0f; m.stiffness=3.0e7f; m.poissonsRatio=0.25f; m.fractureStressThreshold=4000.0f; m.plasticYieldThreshold=3000.0f; m.plasticCreep=0.1f; m.metallic=0.0f; m.roughness=0.9f; m.textureId=1; return m; }(), kke::FracturePattern::Voronoi, 0.45f, false },
+    { "Glass (shatters)", []{ kke::Material m; m.density=2500.0f; m.stiffness=7.0e7f; m.poissonsRatio=0.22f; m.fractureStressThreshold=2000.0f; m.plasticYieldThreshold=1800.0f; m.plasticCreep=0.02f; m.metallic=0.0f; m.roughness=0.05f; m.textureId=4; return m; }(), kke::FracturePattern::Radial, 0.3f, false },
+    { "Ceramic (shards)", []{ kke::Material m; m.density=2300.0f; m.stiffness=5.0e7f; m.poissonsRatio=0.22f; m.fractureStressThreshold=2500.0f; m.plasticYieldThreshold=2400.0f; m.plasticCreep=0.02f; m.metallic=0.0f; m.roughness=0.3f; m.textureId=1; return m; }(), kke::FracturePattern::Shards, 0.1f, false },
     // Metal dents instead of breaking: FEMFX plasticity, no fracture.
-    { "Metal (dents)",    []{ kke::Material m; m.density=7870.0f; m.stiffness=2.0e7f; m.poissonsRatio=0.30f; m.fractureStressThreshold=1.0e9f; m.plasticYieldThreshold=2000.0f; m.plasticCreep=0.5f; m.metallic=0.9f; m.roughness=0.35f; m.textureId=2; return m; }(), true },
+    { "Metal (dents)",    []{ kke::Material m; m.density=7870.0f; m.stiffness=2.0e7f; m.poissonsRatio=0.30f; m.fractureStressThreshold=1.0e9f; m.plasticYieldThreshold=2000.0f; m.plasticCreep=0.5f; m.metallic=0.9f; m.roughness=0.35f; m.textureId=2; return m; }(), kke::FracturePattern::Solid, 1.0f, true },
 };
 constexpr int kBreakMaterialCount = static_cast<int>(sizeof(kBreakMaterials) / sizeof(kBreakMaterials[0]));
 
@@ -42,10 +47,6 @@ constexpr int kBreakMaterialCount = static_cast<int>(sizeof(kBreakMaterials) / s
 // and a policy). Past the cap the oldest ball is removed — a thrown ball
 // that's been lying around is the least interesting object in the scene.
 constexpr size_t kMaxBalls = 6;
-// Breakable proxies: at most this many cells (6 tets each) per prop, so
-// one big prop can't cost more than a Glass Sheet (~36 cells) on min-spec.
-constexpr int kMaxProxyCells = 48;
-constexpr float kProxyCellSize = 0.3f; // metres; smaller = more, finer pieces
 
 const glm::vec3 kSelectColor(1.0f, 0.75f, 0.1f);
 const glm::vec3 kHoverColor(0.55f, 0.8f, 1.0f);
@@ -316,6 +317,8 @@ void SandboxModule::update(const kke::UpdateContext&) {
     glm::vec3 gridCenter(kke::snapTo(target.x, gridStep * 2), 0.002f, kke::snapTo(target.z, gridStep * 2));
     m_debug->gridXZ(gridCenter, 12.0f, gridStep, glm::vec3(0.32f, 0.34f, 0.4f), 0.012f);
 
+    updateBreakables();
+
     // Ragdolls drive their characters' skeletons.
     std::vector<glm::mat4> bodies;
     for (Object& o : m_objects) {
@@ -480,42 +483,166 @@ void SandboxModule::standUp(Object& o) {
     m_models->setBoneWorldOverride(o.instance, {});
 }
 
-// Turns a placed prop into a physics object of the same size: the Synty
-// mesh is hidden and a FEMFX box proxy (textured with the chosen
-// material) takes its place, ready to be knocked over, dented or broken.
-//
-// Honest limitation: the proxy is a box of the prop's bounds, not its
-// shape, and it wears a material texture, not the prop's. Shape-matched
-// proxies coloured from the prop's own texture are the next step
-// (ROADMAP "destructible props").
+// Turns a placed prop into a physics object with its own shape and look:
+//   1. the prop's triangles (all mesh parts, in world space) are voxelized
+//      into a tet volume (kke::voxelizeToTets, budget m_detailCells);
+//   2. tets are grouped into chunks by the material's fracture pattern and
+//      faces inside a chunk are locked (kke::fractureFlagsFromChunks), so
+//      it breaks into splinters / chunks / radial shards, not single tets;
+//      interior vertices are jittered so cracks aren't grid-straight;
+//   3. every render vertex is glued to its tet (kke::embedPoints), and
+//      each frame the physics is awake the prop's own mesh is redrawn from
+//      the tets (updateBreakables) — same UVs, texture and overlay, bending
+//      and breaking with the simulation. PhysicsModule only draws the
+//      fresh crack faces, textured with the material.
 void SandboxModule::makeBreakable(Object& o) {
 #if KKE_ENABLE_FEMFX
     auto* physics = m_app->getModule<kke::PhysicsModule>();
     const kke::ModelData* d = m_models->model(o.model);
-    if (!physics || !d || o.proxy) return;
-    glm::vec3 size = glm::max(d->boundsMax - d->boundsMin, glm::vec3(0.05f));
-    // Cells: ~kProxyCellSize each, at least 1 per axis, then scaled down
-    // uniformly until the total fits the budget.
-    glm::ivec3 cells = glm::max(glm::ivec3(glm::round(size / kProxyCellSize)), glm::ivec3(1));
-    while (cells.x * cells.y * cells.z > kMaxProxyCells) cells = glm::max(cells * 3 / 4, glm::ivec3(1));
-    const BreakMaterial& bm = kBreakMaterials[std::clamp(m_breakMaterial, 0, kBreakMaterialCount - 1)];
-    glm::vec3 center = o.position + glm::vec3(0.0f, size.y * 0.5f + 0.005f, 0.0f);
-    if (bm.plastic) {
-        kke::TetMeshData box = kke::PhysicsModule::buildGridBox(cells.x, cells.y, cells.z, size.x, size.y, size.z);
-        glm::mat3 yaw = glm::mat3(glm::rotate(glm::mat4(1.0f), glm::radians(o.yawDegrees), glm::vec3(0, 1, 0)));
-        for (glm::vec3& v : box.vertices) v = yaw * v;
-        o.proxy = physics->spawnPlasticTetMesh(box, center, bm.material);
-    } else {
-        o.proxy = physics->spawnFracturableBox(cells, size, center, bm.material, o.yawDegrees);
+    if (!physics || !d || o.proxy || o.character) return;
+    const double start = SDL_GetPerformanceCounter() / static_cast<double>(SDL_GetPerformanceFrequency());
+    const glm::mat4 t = objectTransform(*d, o.position, o.yawDegrees);
+    const glm::mat3 rot(t);
+
+    // World-space vertices and triangles of every mesh part.
+    std::vector<glm::vec3> points, normals;
+    std::vector<uint32_t> tris;
+    o.partOffsets.clear();
+    for (const kke::ModelMesh& mesh : d->meshes) {
+        o.partOffsets.push_back(points.size());
+        uint32_t base = static_cast<uint32_t>(points.size());
+        for (const kke::ModelVertex& v : mesh.vertices) {
+            points.push_back(glm::vec3(t * glm::vec4(v.position, 1.0f)));
+            normals.push_back(glm::normalize(rot * v.normal));
+        }
+        for (uint32_t i : mesh.indices) tris.push_back(base + i);
     }
+    if (tris.empty()) return;
+    // Simulate around the prop's centre (FEMFX adds the spawn position).
+    glm::vec3 mn(1e30f), mx(-1e30f);
+    for (const glm::vec3& p : points) { mn = glm::min(mn, p); mx = glm::max(mx, p); }
+    const glm::vec3 center = (mn + mx) * 0.5f;
+    for (glm::vec3& p : points) p -= center;
+
+    const BreakMaterial& bm = kBreakMaterials[std::clamp(m_breakMaterial, 0, kBreakMaterialCount - 1)];
+    const kke::FracturePattern pattern = m_patternOverride > 0 ? static_cast<kke::FracturePattern>(m_patternOverride - 1) : bm.pattern;
+    const glm::vec3 size = mx - mn;
+    const float maxDim = std::max({ size.x, size.y, size.z });
+    const float cell = std::clamp(maxDim / 6.0f, 0.06f, 0.4f);
+    kke::VoxelTetMesh vox = kke::voxelizeToTets(points, tris, cell, static_cast<size_t>(m_detailCells));
+    if (vox.mesh.tets.empty()) return;
+    // Hug the prop: pull the voxel surface onto the real triangles.
+    kke::fitSurfaceToMesh(vox.mesh, points, tris, vox.cellSize * 0.75f);
+    const uint32_t seed = o.id * 2654435761u;
+    std::vector<uint32_t> chunks = kke::fractureChunks(vox.mesh, pattern, bm.chunkSize * m_chunkScale, seed);
+    if (pattern != kke::FracturePattern::Solid) kke::jitterInteriorVertices(vox.mesh, vox.cellSize * 0.12f, seed + 1);
+
+    kke::Material material = bm.material;
+    material.fractureStressThreshold *= m_toughness;
+    kke::PhysicsModule::TetSpawnOptions opts;
+    opts.fracture = pattern != kke::FracturePattern::Solid;
+    opts.plastic = bm.plastic;
+    opts.tetFlags = kke::fractureFlagsFromChunks(vox.mesh, chunks);
+    opts.drawOnlyCracks = true;
+    opts.armFractureAfterSeconds = 2.0f; // settle, then arm relative to resting stress (BUG-043)
+    // Insides take the prop's own colours: each tet vertex gets the UV of
+    // the nearest prop vertex, drawn with the prop's texture. Synty atlases
+    // map each part to one colour swatch, so a blue crate is blue inside.
+    {
+        std::vector<glm::vec2> uvs;
+        for (const kke::ModelMesh& mesh : d->meshes) for (const kke::ModelVertex& v : mesh.vertices) uvs.push_back(v.uv);
+        opts.vertexUVs.resize(vox.mesh.vertices.size());
+        for (size_t v = 0; v < vox.mesh.vertices.size(); ++v) {
+            float best = 1e30f;
+            for (size_t i = 0; i < points.size(); ++i) {
+                glm::vec3 dd = points[i] - vox.mesh.vertices[v];
+                float d2 = glm::dot(dd, dd);
+                if (d2 < best) { best = d2; opts.vertexUVs[v] = uvs[i]; }
+            }
+        }
+        opts.texturePath = o.texture;
+        if (opts.texturePath.empty())
+            for (const kke::ModelMaterial& m : d->materials) if (!m.albedoTexture.empty()) { opts.texturePath = m.albedoTexture; break; }
+    }
+    // 3 mm up so it doesn't start inside the ground plane; the render mesh
+    // follows the tets, so the drop is invisible.
+    o.proxy = physics->spawnTetMeshWithOptions(vox.mesh, center + glm::vec3(0.0f, 0.003f, 0.0f), material, opts);
     if (!o.proxy) {
         m_status = "Physics is full (object limit reached) - delete something first";
         return;
     }
-    m_models->setVisible(o.instance, false);
-    m_status = o.asset + " is now " + bm.name + " (" + std::to_string(cells.x * cells.y * cells.z * 6) + " tets) - F throws a ball";
+    // The drawn surface: every part as an unshared, subdivided triangle
+    // soup (edges <= half a cell) glued triangle-by-triangle to the tets.
+    std::vector<std::vector<kke::ModelVertex>> topology(d->meshes.size());
+    std::vector<glm::vec3> soupPositions;
+    o.restNormals.clear();
+    o.partOffsets.clear();
+    const size_t budgetPerPart = 12000 / std::max<size_t>(1, d->meshes.size());
+    for (size_t m = 0; m < d->meshes.size(); ++m) {
+        const kke::ModelMesh& mesh = d->meshes[m];
+        kke::TriangleSoup soup;
+        for (uint32_t i : mesh.indices) {
+            const kke::ModelVertex& v = mesh.vertices[i];
+            soup.positions.push_back(glm::vec3(t * glm::vec4(v.position, 1.0f)) - center);
+            soup.normals.push_back(glm::normalize(rot * v.normal));
+            soup.uvs.push_back(v.uv);
+        }
+        kke::subdivideSoup(soup, std::max({ vox.cellSize3.x, vox.cellSize3.y, vox.cellSize3.z }) * 0.5f, budgetPerPart);
+        o.partOffsets.push_back(soupPositions.size());
+        for (size_t v = 0; v < soup.positions.size(); ++v) {
+            kke::ModelVertex mv;
+            mv.position = soup.positions[v] + center;
+            mv.normal = soup.normals[v];
+            mv.uv = soup.uvs[v];
+            topology[m].push_back(mv);
+        }
+        soupPositions.insert(soupPositions.end(), soup.positions.begin(), soup.positions.end());
+        o.restNormals.insert(o.restNormals.end(), soup.normals.begin(), soup.normals.end());
+    }
+    o.embedding = kke::embedTriangles(vox.mesh, soupPositions);
+    m_models->setDeformedTopology(o.instance, topology);
+    o.settled = false;
+    const double ms = (SDL_GetPerformanceCounter() / static_cast<double>(SDL_GetPerformanceFrequency()) - start) * 1000.0;
+    char buf[256];
+    std::snprintf(buf, sizeof(buf), "%s: %zu cells (%.2fx%.2fx%.2f m), %zu tets, %zu chunks (%s), %zu triangles glued, %.1f ms",
+                  o.asset.c_str(), vox.solidCells, vox.cellSize3.x, vox.cellSize3.y, vox.cellSize3.z, vox.mesh.tets.size(), kke::chunkCount(chunks),
+                  kke::fracturePatternName(pattern), soupPositions.size() / 3, ms);
+    m_lastBreakStats = buf;
+    m_status = o.asset + " is now " + bm.name + " - shoot it (2, then click)";
+    kke::log::get(name())->info("breakable {}", m_lastBreakStats);
 #else
     (void)o;
+#endif
+}
+
+// Redraws breakable props from their physics tets. Skipped once an
+// object is asleep and its last pose was drawn: a settled pile of
+// debris costs nothing here (OPTIMIZATION.md rule 1).
+void SandboxModule::updateBreakables() {
+#if KKE_ENABLE_FEMFX
+    auto* physics = m_app->getModule<kke::PhysicsModule>();
+    if (!physics) return;
+    static thread_local std::vector<glm::vec3> pos, nrm;
+    static thread_local std::vector<std::vector<glm::vec3>> partPos, partNrm;
+    for (Object& o : m_objects) {
+        if (!o.proxy) continue;
+        const bool asleep = physics->isObjectAsleep(o.proxy);
+        if (asleep && o.settled) continue;
+        if (!physics->deformEmbedded(o.proxy, o.embedding, o.restNormals, pos, nrm)) {
+            restoreProp(o); // physics removed it (runaway guard): put the prop back
+            continue;
+        }
+        const size_t parts = o.partOffsets.size();
+        partPos.resize(parts);
+        partNrm.resize(parts);
+        for (size_t p = 0; p < parts; ++p) {
+            size_t begin = o.partOffsets[p], end = p + 1 < parts ? o.partOffsets[p + 1] : pos.size();
+            partPos[p].assign(pos.begin() + begin, pos.begin() + end);
+            partNrm[p].assign(nrm.begin() + begin, nrm.begin() + end);
+        }
+        m_models->setDeformedVertices(o.instance, partPos, partNrm);
+        o.settled = asleep;
+    }
 #endif
 }
 
@@ -524,6 +651,9 @@ void SandboxModule::restoreProp(Object& o) {
     if (auto* physics = m_app->getModule<kke::PhysicsModule>()) physics->removeObject(o.proxy);
 #endif
     o.proxy = 0;
+    o.embedding = {};
+    o.restNormals.clear();
+    m_models->setDeformedVertices(o.instance, {}, {});
     m_models->setVisible(o.instance, true);
 }
 
@@ -755,6 +885,15 @@ void SandboxModule::inspectorUi() {
         const char* names[kBreakMaterialCount];
         for (int i = 0; i < kBreakMaterialCount; ++i) names[i] = kBreakMaterials[i].name;
         ImGui::Combo("Breaks as", &m_breakMaterial, names, kBreakMaterialCount);
+        const char* patterns[] = { "Material's own", "Shards", "Voronoi chunks", "Splinters", "Radial (glass)", "Solid (bends only)" };
+        ImGui::Combo("Pattern", &m_patternOverride, patterns, 6);
+        ImGui::SliderFloat("Chunk size", &m_chunkScale, 0.4f, 3.0f, "x%.1f");
+        ImGui::SliderInt("Detail (cells)", &m_detailCells, 15, 150);
+        ImGui::SliderFloat("Toughness", &m_toughness, 0.2f, 5.0f, "x%.1f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Multiplies the material's fracture strength.\nProps arm 0.75-2 s after spawning, once settled:\nonly stress added by a hit can break them.");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Voxel budget per prop, 6 tetrahedra per cell.\nMore = closer shape and smaller pieces, more CPU.\n~60 is fine on one core.");
+        if (!m_lastBreakStats.empty()) ImGui::TextDisabled("%s", m_lastBreakStats.c_str());
+        if (ImGui::Button("Restore all props")) for (Object& o : m_objects) if (o.proxy) restoreProp(o);
         ImGui::SliderFloat("Ball speed", &m_ballSpeed, 5.0f, 40.0f, "%.0f m/s");
         ImGui::TextWrapped("Shoot tool (2) or F / Space: throw a ball at the cursor (max %zu, oldest removed)", kMaxBalls);
     }

@@ -7,6 +7,7 @@
 #include "kke/Buffer.h"
 #include "kke/Texture.h"
 #include "kke/TetMeshAsset.h"
+#include "kke/VoxelTets.h"
 #include "kke/Renderer.h"
 #include "kke/Capabilities.h"
 #include "kke/Ragdoll.h"
@@ -218,6 +219,52 @@ public:
                                      const Material& material, float yawDegrees = 0.0f,
                                      const glm::vec3& velocity = glm::vec3(0.0f));
 
+    // Everything above, with every knob: fracture and/or plasticity, an
+    // initial velocity, per-tet FEMFX flags (e.g. from
+    // kke::fractureFlagsFromChunks() — which faces may crack), and
+    // whether to draw the whole tet surface or only fresh crack faces
+    // (for objects whose real look is a render mesh glued on with
+    // kke::embedPoints — see deformEmbedded()).
+    struct TetSpawnOptions {
+        bool fracture = false;
+        bool plastic = false;
+        glm::vec3 velocity{0.0f};
+        std::vector<uint16_t> tetFlags;   // empty, or one FM_TET_FLAG_* set per tet
+        bool drawOnlyCracks = false;
+        // "Settle, then arm": spawn unbreakable; once the object has come
+        // to rest (asleep, or this many seconds at most — never sooner than
+        // 0.75 s), each tet's threshold becomes the material threshold PLUS
+        // 1.25x the peak stress that tet carried while settling. Only
+        // stress *added* by an impact breaks it, so a prop never collapses
+        // under its own weight whatever its size (BUG-043: FEMFX's resting
+        // stress on a 1 m crate was ~4x wood's threshold). 0 = off: the
+        // plain material threshold applies from the first step.
+        float armFractureAfterSeconds = 0.0f;
+        // Optional look for the tet surface / crack faces: an image file
+        // and one UV per TetMeshData vertex (e.g. taken from the nearest
+        // vertex of the prop's own mesh, so a blue crate is blue inside).
+        // Empty = the material's procedural texture with box-projected UVs.
+        std::string texturePath;
+        std::vector<glm::vec2> vertexUVs;
+    };
+    ObjectHandle spawnTetMeshWithOptions(const TetMeshData& mesh, const glm::vec3& position, const Material& material,
+                                         const TetSpawnOptions& options);
+
+    // World-space positions and normals of embedded points (see
+    // kke::TetEmbedding; tet indices refer to the TetMeshData the object
+    // was spawned from), following deformation and fracture. `restNormals`
+    // are the points' normals in the same space as that TetMeshData.
+    // Normals are carried by each tet's deformation (inverse-transpose),
+    // so dents and bends shade correctly. Returns false if the handle is
+    // unknown. Cost: one small matrix per used tet + one per point.
+    bool deformEmbedded(ObjectHandle handle, const TetEmbedding& embedding, const std::vector<glm::vec3>& restNormals,
+                        std::vector<glm::vec3>& outPositions, std::vector<glm::vec3>& outNormals) const;
+    // True once every piece of the object is asleep (nothing moves: a
+    // caller can skip recomputing anything derived from it).
+    bool isObjectAsleep(ObjectHandle handle) const;
+    // Number of separate pieces the object has broken into (1 = intact).
+    uint32_t pieceCount(ObjectHandle handle) const;
+
     // Removes a previously spawned object. Safe to call with
     // kInvalidHandle or a handle that's already been removed — both
     // are no-ops, not errors, matching this codebase's general
@@ -305,7 +352,9 @@ private:
     // a real, separate entry point rather than a bool parameter on the
     // existing public method.
     ObjectHandle spawnTetMeshInternal(const TetMeshData& mesh, const glm::vec3& position, const Material& material, bool enableFracture,
-                                       const glm::vec3& initialVelocity = glm::vec3(0.0f), bool enablePlasticity = false);
+                                       const glm::vec3& initialVelocity = glm::vec3(0.0f), bool enablePlasticity = false,
+                                       const std::vector<uint16_t>* tetFlags = nullptr, bool drawOnlyCracks = false,
+                                       float armFractureAfterSeconds = 0.0f);
 
     // One spawned tetrahedron's full FEMFX + render state. A plain
     // struct, not a class with its own methods — PhysicsModule owns
@@ -374,6 +423,23 @@ private:
         // same lifetime reasoning as the arrays above.
         std::vector<AMD::FmFractureGroupCounts> fractureGroupCounts;
         std::vector<uint> tetFractureGroupIds;
+        std::vector<uint16_t> tetFlags;                  // FM_TET_FLAG_* per tet, kept alive for FEMFX
+
+        // Embedded render meshes (spawnTetMeshWithOptions drawOnlyCracks):
+        // only faces that were *inside* the original mesh are drawn —
+        // bit f of originalExterior[t] = face f of buffer tet t was on the
+        // outside at spawn. restInverse[t] = inverse of the tet's rest
+        // edge matrix, for deformation gradients.
+        bool drawOnlyCracks = false;
+        uint32_t loggedPieces = 1;                       // last piece count written to the log
+        bool armPending = false;                         // see TetSpawnOptions::armFractureAfterSeconds
+        uint32_t armAge = 0, armMaxTicks = 0;            // ticks since spawn, deadline
+        AMD::FmTetMaterialParams armedParams{};          // the real material, applied when armed
+        std::vector<float> settleStress;                 // per tet: peak stress while settling
+        VkDescriptorSet textureSet = VK_NULL_HANDLE;     // image file texture (TetSpawnOptions), else the material's own
+        std::vector<glm::vec2> vertexUVs;                // per original vertex (optional)
+        std::vector<uint8_t> originalExterior;
+        std::vector<glm::mat3> restInverse;
     };
 
     // Raised from the original 8 to a genuinely meaningful showcase

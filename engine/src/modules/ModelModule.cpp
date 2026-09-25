@@ -15,7 +15,6 @@ namespace {
 // tile size in metres or 0, overlay strength); tint.rgb multiplies color.
 struct PushConstants { glm::mat4 model; glm::vec4 material; glm::vec4 tint; };
 struct ShadowPushConstants { glm::mat4 lightViewProj; glm::mat4 model; };
-constexpr uint32_t kMaxTextureSets = 512;
 
 Vertex toVertex(const ModelVertex& v, const glm::vec3& color) {
     return Vertex{ v.position, color, v.normal, v.uv };
@@ -52,14 +51,6 @@ void ModelModule::init(Application& app) {
     shadowConfig.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ShadowPushConstants) };
     m_shadowPipeline = std::make_unique<Pipeline>(app.device(), app.shadowMap().renderPass(), "shaders/shadow.vert.spv", "shaders/shadow.frag.spv", shadowConfig);
 
-    VkDescriptorPoolSize poolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, kMaxTextureSets };
-    VkDescriptorPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.maxSets = kMaxTextureSets;
-    poolInfo.poolSizeCount = 1;
-    poolInfo.pPoolSizes = &poolSize;
-    VK_CHECK(vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_pool));
-
     // A bone is drawn as a box from its parent's origin to its own:
     // unit length along +Y, thin in X/Z, scaled/rotated per bone.
     std::vector<Vertex> verts;
@@ -78,38 +69,8 @@ void ModelModule::init(Application& app) {
     m_boneMesh = std::make_unique<Mesh>(app.device(), verts, idx);
 }
 
-VkDescriptorSet ModelModule::textureSetFor(const std::string& path) {
-    if (path.empty()) return VK_NULL_HANDLE;
-    if (auto it = m_textureSets.find(path); it != m_textureSets.end()) return it->second;
-    VkDescriptorSet set = VK_NULL_HANDLE;
-    try {
-        auto texture = std::make_unique<Texture>(m_app->device(), path);
-        VkDescriptorSetLayout layout = m_app->materialTextureSetLayout();
-        VkDescriptorSetAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        allocInfo.descriptorPool = m_pool;
-        allocInfo.descriptorSetCount = 1;
-        allocInfo.pSetLayouts = &layout;
-        if (vkAllocateDescriptorSets(m_device, &allocInfo, &set) != VK_SUCCESS) {
-            log::get(name())->warn("out of texture descriptor sets ({}); '{}' drawn untextured", kMaxTextureSets, path);
-            set = VK_NULL_HANDLE;
-        } else {
-            VkDescriptorImageInfo imageInfo{ texture->sampler(), texture->imageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-            VkWriteDescriptorSet write{};
-            write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            write.dstSet = set;
-            write.descriptorCount = 1;
-            write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            write.pImageInfo = &imageInfo;
-            vkUpdateDescriptorSets(m_device, 1, &write, 0, nullptr);
-            m_textures[path] = std::move(texture);
-        }
-    } catch (const std::exception& e) {
-        log::get(name())->warn("texture '{}' failed to load ({}); drawn untextured", path, e.what());
-    }
-    m_textureSets[path] = set;
-    return set;
-}
+// Shared with every other module through Application's texture cache.
+VkDescriptorSet ModelModule::textureSetFor(const std::string& path) { return m_app->textureSet(path); }
 
 ModelModule::ModelId ModelModule::load(const std::string& path, const ModelLoadOptions& options) {
     if (!m_app) {
@@ -291,6 +252,87 @@ void ModelModule::update(const UpdateContext& ctx) {
     }
 }
 
+void ModelModule::setDeformedVertices(InstanceId id, const std::vector<std::vector<glm::vec3>>& positions,
+                                      const std::vector<std::vector<glm::vec3>>& normals) {
+    auto it = m_instances.find(id);
+    if (it == m_instances.end()) return;
+    Instance& inst = it->second;
+    if (positions.empty()) {
+        inst.deformed.clear();
+        return;
+    }
+    const LoadedModel& lm = *m_models[inst.model];
+    if (inst.deformed.empty()) {
+        // First use: CPU mirror + one vertex buffer per frame in flight per
+        // mesh part (same scheme as skinned meshes), index buffer shared.
+        for (const ModelMesh& src : lm.data.meshes) {
+            SkinnedBuffers sb;
+            sb.cpu.resize(src.vertices.size());
+            for (size_t v = 0; v < src.vertices.size(); ++v) {
+                sb.cpu[v] = toVertex(src.vertices[v], lm.data.materials[src.material].baseColor);
+            }
+            for (auto& vb : sb.vertices) {
+                vb = std::make_unique<Buffer>(m_app->device(), sizeof(Vertex) * std::max<size_t>(1, src.vertices.size()),
+                                              VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            }
+            sb.indices = std::make_unique<Buffer>(Buffer::createDeviceLocal(m_app->device(), src.indices.data(),
+                                                                            std::max<size_t>(1, src.indices.size()) * sizeof(uint32_t),
+                                                                            VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
+            sb.indexCount = static_cast<uint32_t>(src.indices.size());
+            inst.deformed.push_back(std::move(sb));
+        }
+    }
+    for (size_t m = 0; m < inst.deformed.size() && m < positions.size(); ++m) {
+        SkinnedBuffers& sb = inst.deformed[m];
+        const size_t n = std::min(sb.cpu.size(), positions[m].size());
+        for (size_t v = 0; v < n; ++v) {
+            sb.cpu[v].position = positions[m][v];
+            if (m < normals.size() && v < normals[m].size()) sb.cpu[v].normal = normals[m][v];
+        }
+    }
+    ++inst.deformVersion;
+}
+
+void ModelModule::setDeformedTopology(InstanceId id, const std::vector<std::vector<ModelVertex>>& parts) {
+    auto it = m_instances.find(id);
+    if (it == m_instances.end()) return;
+    Instance& inst = it->second;
+    const LoadedModel& lm = *m_models[inst.model];
+    inst.deformed.clear();
+    for (size_t m = 0; m < lm.data.meshes.size(); ++m) {
+        const std::vector<ModelVertex>& src = m < parts.size() ? parts[m] : std::vector<ModelVertex>{};
+        SkinnedBuffers sb;
+        const glm::vec3 color = lm.data.materials[lm.data.meshes[m].material].baseColor;
+        sb.cpu.reserve(src.size());
+        for (const ModelVertex& v : src) sb.cpu.push_back(toVertex(v, color));
+        std::vector<uint32_t> indices(src.size());
+        for (uint32_t i = 0; i < indices.size(); ++i) indices[i] = i;
+        for (auto& vb : sb.vertices) {
+            vb = std::make_unique<Buffer>(m_app->device(), sizeof(Vertex) * std::max<size_t>(1, src.size()), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                                          VMA_MEMORY_USAGE_CPU_TO_GPU);
+        }
+        if (indices.empty()) indices.push_back(0);
+        sb.indices = std::make_unique<Buffer>(Buffer::createDeviceLocal(m_app->device(), indices.data(), indices.size() * sizeof(uint32_t),
+                                                                        VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
+        sb.indexCount = static_cast<uint32_t>(src.size());
+        inst.deformed.push_back(std::move(sb));
+    }
+    ++inst.deformVersion;
+}
+
+bool ModelModule::isDeformed(InstanceId id) const {
+    auto it = m_instances.find(id);
+    return it != m_instances.end() && !it->second.deformed.empty();
+}
+
+void ModelModule::uploadDeformed(Instance& inst, uint32_t frameIndex) {
+    if (inst.deformed.empty() || inst.deformUploaded[frameIndex] == inst.deformVersion) return;
+    for (SkinnedBuffers& sb : inst.deformed) {
+        if (!sb.cpu.empty()) sb.vertices[frameIndex]->upload(sb.cpu.data(), sb.cpu.size() * sizeof(Vertex));
+    }
+    inst.deformUploaded[frameIndex] = inst.deformVersion;
+}
+
 void ModelModule::skinInstance(Instance& inst, uint32_t frameIndex) {
     if (inst.skinnedFrame == m_frame || inst.skinned.empty()) return;
     inst.skinnedFrame = m_frame;
@@ -319,6 +361,20 @@ void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
     for (auto& [id, inst] : m_instances) {
         if (!inst.visible || !m_showMeshes) continue;
         skinInstance(inst, ctx.frameIndex);
+        if (!inst.deformed.empty()) {
+            uploadDeformed(inst, ctx.frameIndex);
+            ShadowPushConstants pc{ ctx.lightViewProj, glm::mat4(1.0f) }; // vertices are already in world space
+            vkCmdPushConstants(ctx.cmd, m_shadowPipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+            for (SkinnedBuffers& sb : inst.deformed) {
+                if (!sb.indexCount) continue;
+                VkBuffer vb = sb.vertices[ctx.frameIndex]->handle();
+                VkDeviceSize off = 0;
+                vkCmdBindVertexBuffers(ctx.cmd, 0, 1, &vb, &off);
+                vkCmdBindIndexBuffer(ctx.cmd, sb.indices->handle(), 0, VK_INDEX_TYPE_UINT32);
+                vkCmdDrawIndexed(ctx.cmd, sb.indexCount, 1, 0, 0, 0);
+            }
+            continue;
+        }
         ShadowPushConstants pc{ ctx.lightViewProj, inst.transform };
         vkCmdPushConstants(ctx.cmd, m_shadowPipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
         const LoadedModel& lm = *m_models[inst.model];
@@ -351,7 +407,9 @@ void ModelModule::render(const RenderContext& ctx) {
         for (auto& [id, inst] : m_instances) {
             if (!inst.visible) continue;
             skinInstance(inst, ctx.frameIndex);
+            uploadDeformed(inst, ctx.frameIndex);
             const LoadedModel& lm = *m_models[inst.model];
+            const bool deformed = !inst.deformed.empty();
             size_t si = 0;
             for (const GpuMesh& gm : lm.meshes) {
                 const GpuMaterial& mat = lm.materials[gm.material];
@@ -365,9 +423,19 @@ void ModelModule::render(const RenderContext& ctx) {
                     boundTexture = tex;
                 }
                 float tile = inst.overlay ? m_overlayTile : 0.0f;
-                PushConstants pc{ inst.transform, glm::vec4(mat.metallic, mat.roughness, tile, m_overlayStrength), glm::vec4(inst.tint, 1.0f) };
+                PushConstants pc{ deformed ? glm::mat4(1.0f) : inst.transform, glm::vec4(mat.metallic, mat.roughness, tile, m_overlayStrength),
+                                  glm::vec4(inst.tint, 1.0f) };
                 vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), pcStages, 0, sizeof(pc), &pc);
-                if (gm.skinned) {
+                if (deformed) {
+                    SkinnedBuffers& sb = inst.deformed[gm.meshIndex];
+                    if (sb.indexCount) {
+                        VkBuffer vb = sb.vertices[ctx.frameIndex]->handle();
+                        VkDeviceSize off = 0;
+                        vkCmdBindVertexBuffers(ctx.cmd, 0, 1, &vb, &off);
+                        vkCmdBindIndexBuffer(ctx.cmd, sb.indices->handle(), 0, VK_INDEX_TYPE_UINT32);
+                        vkCmdDrawIndexed(ctx.cmd, sb.indexCount, 1, 0, 0, 0);
+                    }
+                } else if (gm.skinned) {
                     SkinnedBuffers& sb = inst.skinned[si++];
                     VkBuffer vb = sb.vertices[ctx.frameIndex]->handle();
                     VkDeviceSize off = 0;
@@ -415,12 +483,6 @@ void ModelModule::render(const RenderContext& ctx) {
 void ModelModule::shutdown() {
     m_instances.clear();
     m_models.clear();
-    m_textures.clear();
-    m_textureSets.clear();
-    if (m_pool) {
-        vkDestroyDescriptorPool(m_device, m_pool, nullptr);
-        m_pool = VK_NULL_HANDLE;
-    }
 }
 
 } // namespace kke
