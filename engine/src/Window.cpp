@@ -65,7 +65,7 @@ bool Window::pollEvents(const EventCallback& onEvent) {
                 m_resized = true;
                 break;
             case SDL_EVENT_KEY_DOWN:
-                if (event.key.key == SDLK_ESCAPE) {
+                if (event.key.key == SDLK_ESCAPE && m_quitOnEscape) {
                     m_shouldClose = true;
                 }
                 break;

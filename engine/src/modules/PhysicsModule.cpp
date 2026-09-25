@@ -5,6 +5,8 @@
 #include "kke/Log.h"
 #include "kke/Application.h"
 #include "kke/VulkanCheck.h"
+#include "kke/BenchmarkReport.h"
+#include "kke/VulkanDevice.h"
 
 #include <imgui.h>
 #include <AMD_FEMFX.h>
@@ -225,6 +227,25 @@ struct ShadowPushConstants { glm::mat4 lightViewProj; glm::mat4 model; };
 // games/physics_demo) can pass 1.0 and skip this workaround entirely.
 // The simulation itself is completely untouched by this either way —
 // it only ever affects render-time positions.
+// A ball made from a grid box: every vertex of a cells^3 cube grid is
+// mapped onto the ball with the standard "spherified cube" formula
+// (x' = x * sqrt(1 - y^2/2 - z^2/2 + y^2 z^2 / 3), and so on), which is
+// smooth and one-to-one, so every tetrahedron stays valid (positive
+// volume) — just stretched near the cube's former corners. Cheaper and
+// simpler than true sphere tetrahedralization (CGAL), and good enough
+// for a bouncing rubber ball.
+TetMeshData PhysicsModule::buildSphere(int cells, float radius) {
+    TetMeshData mesh = buildGridBox(cells, cells, cells, 2.0f, 2.0f, 2.0f); // unit cube [-1,1]^3
+    for (glm::vec3& v : mesh.vertices) {
+        glm::vec3 s = v * v;
+        glm::vec3 p(v.x * std::sqrt(std::max(0.0f, 1.0f - s.y / 2.0f - s.z / 2.0f + s.y * s.z / 3.0f)),
+                    v.y * std::sqrt(std::max(0.0f, 1.0f - s.z / 2.0f - s.x / 2.0f + s.z * s.x / 3.0f)),
+                    v.z * std::sqrt(std::max(0.0f, 1.0f - s.x / 2.0f - s.y / 2.0f + s.x * s.y / 3.0f)));
+        v = p * radius;
+    }
+    return mesh;
+}
+
 TetMeshData PhysicsModule::buildGridBox(int cellsX, int cellsY, int cellsZ, float sizeX, float sizeY, float sizeZ) {
     // Real per-axis cell counts and dimensions, not a cube-only
     // generator with scale hacked on afterward -- see this function's
@@ -295,10 +316,12 @@ void PhysicsModule::init(Application& app) {
     }
 #endif
     int numWorkers = (hwThreads == 0) ? 1 : static_cast<int>(hwThreads);
+    m_hardwareThreads = std::thread::hardware_concurrency();
     if (const char* forced = std::getenv("KKE_PHYSICS_THREADS")) {
         int n = std::atoi(forced);
         if (n > 0) numWorkers = n;
     }
+    m_workerThreads = numWorkers;
     g_poolOwner = std::make_unique<ThreadPool>(numWorkers);
     g_pool = g_poolOwner.get();
     log::get(name())->info("Task system: {} worker(s) (hardware_concurrency={})", numWorkers, hwThreads);
@@ -832,6 +855,7 @@ void PhysicsModule::fixedUpdate(const FixedUpdateContext& ctx) {
     if (m_benchTicks && !m_benchDone) {
         m_benchStepMsTotal += stepMs;
         m_benchStepMsMax = std::max(m_benchStepMsMax, stepMs);
+        m_benchStepSamples.push_back(stepMs);
     }
 
     // Logged every ~1s (at 60Hz), not every tick — see spdlog's own
@@ -902,6 +926,7 @@ void PhysicsModule::prepareRenderData(uint32_t frameIndex) {
     m_totalPieces = 0;
     m_awakePieces = 0;
     static thread_local std::vector<glm::vec3> simPositions;
+    static thread_local std::vector<glm::vec3> restPositions;
 
     for (auto& [handle, obj] : m_objects) {
         const uint numPieces = AMD::FmGetNumTetMeshes(*obj->tetMeshBuffer);
@@ -936,9 +961,12 @@ void PhysicsModule::prepareRenderData(uint32_t frameIndex) {
                 if (numVerts == 0 || numFaces == 0) continue;
 
                 simPositions.resize(numVerts);
+                restPositions.resize(numVerts);
                 for (uint i = 0; i < numVerts; ++i) {
                     AMD::FmVector3 p = AMD::FmGetVertPosition(*piece, i);
                     simPositions[i] = glm::vec3(p.x, p.y, p.z) * m_renderScale;
+                    AMD::FmVector3 r = AMD::FmGetVertRestPosition(*piece, i);
+                    restPositions[i] = glm::vec3(r.x, r.y, r.z);
                 }
 
                 for (uint f = 0; f < numFaces; ++f) {
@@ -949,18 +977,31 @@ void PhysicsModule::prepareRenderData(uint32_t frameIndex) {
                     // FEMFX's own face numbering (FmGetFaceVertIds in
                     // FEMFXTetMeshConnectivity.h) — the same winding the
                     // old hardcoded 4-face table used.
-                    glm::vec3 a = simPositions[ids.ids[3 - faceId]];
-                    glm::vec3 b = simPositions[ids.ids[(5 - faceId) % 4]];
-                    glm::vec3 c = simPositions[ids.ids[(faceId + 2) % 4]];
+                    const uint ia = ids.ids[3 - faceId], ib = ids.ids[(5 - faceId) % 4], ic = ids.ids[(faceId + 2) % 4];
+                    glm::vec3 a = simPositions[ia];
+                    glm::vec3 b = simPositions[ib];
+                    glm::vec3 c = simPositions[ic];
                     glm::vec3 n = glm::cross(b - a, c - a);
                     float len = glm::length(n);
                     n = len > 1e-12f ? n / len : glm::vec3(0.0f, 1.0f, 0.0f);
-                    // Per-face UVs: each face gets its own full copy of
-                    // the material texture (see BUGS.md BUG-006's
-                    // flat-shading fix, which this relies on).
-                    obj->cpuVerts.push_back({ a, obj->color, n, {0.0f, 0.0f} });
-                    obj->cpuVerts.push_back({ b, obj->color, n, {1.0f, 0.0f} });
-                    obj->cpuVerts.push_back({ c, obj->color, n, {0.0f, 1.0f} });
+                    // Box-projected UVs from REST positions (BUGS.md
+                    // BUG-036): project onto the plane most facing this
+                    // face in the object's undeformed shape. Texture flows
+                    // continuously across a whole side, stays glued to the
+                    // material as it moves/bends, and crack faces get it too.
+                    // (Per-triangle 0..1 UVs made every intact box look
+                    // like a mosaic of shards before anything broke.)
+                    const glm::vec3 ra = restPositions[ia], rb = restPositions[ib], rc = restPositions[ic];
+                    glm::vec3 rn = glm::abs(glm::cross(rb - ra, rc - ra));
+                    auto project = [&](const glm::vec3& r) {
+                        constexpr float kTexelsPerMeter = 1.5f; // texture repeats every ~0.67 m
+                        if (rn.x >= rn.y && rn.x >= rn.z) return glm::vec2(r.z, r.y) * kTexelsPerMeter;
+                        if (rn.y >= rn.z) return glm::vec2(r.x, r.z) * kTexelsPerMeter;
+                        return glm::vec2(r.x, r.y) * kTexelsPerMeter;
+                    };
+                    obj->cpuVerts.push_back({ a, obj->color, n, project(ra) });
+                    obj->cpuVerts.push_back({ b, obj->color, n, project(rb) });
+                    obj->cpuVerts.push_back({ c, obj->color, n, project(rc) });
                 }
             }
             if (truncated) {
@@ -1258,6 +1299,11 @@ void PhysicsModule::publishTimingWindow(double now) {
                                "contacts/pieces beyond it were dropped", m_lastWarningFlags);
         m_lastWarningFlags = 0;
     }
+    if (m_benchTicks && !m_benchDone && m_benchStartSeconds > 0.0) {
+        m_benchWindows.push_back({ now - m_benchStartSeconds, m_lastFramesPerSecond, m_lastTicksPerSecond, m_lastStepMsAvg,
+                                   m_lastStepMsMax, m_lastRenderPrepMsAvg, static_cast<double>(m_totalPieces),
+                                   static_cast<double>(m_awakePieces) });
+    }
     m_timing = TimingWindow{};
     m_timingWindowStart = now;
 }
@@ -1299,9 +1345,56 @@ void PhysicsModule::benchTick(uint64_t tickIndex) {
         m_benchStepMsTotal / m_benchTicks, m_benchStepMsMax,
         m_benchFrames ? m_benchRenderPrepMsTotal / m_benchFrames : 0.0,
         m_objects.size(), pieces, totalTets);
+    writeBenchReport(wall, pieces, totalTets);
     SDL_Event quit{};
     quit.type = SDL_EVENT_QUIT;
     SDL_PushEvent(&quit);
+}
+
+// Writes benchmark/physics_<time>_<host>.{json,txt} (or $KKE_BENCH_DIR) —
+// see kke/BenchmarkReport.h. Paste either file back for analysis.
+void PhysicsModule::writeBenchReport(double wall, uint pieces, uint totalTets) {
+    BenchmarkReport r;
+    r.name = "physics";
+    r.system = collectSystemInfo(m_app->device().physicalDevice());
+    auto env = [](const char* k) { const char* v = std::getenv(k); return std::string(v ? v : ""); };
+    r.config = {
+        { "scene", "scripted: glass, brick, car crash, lava, rubber ball, fracture cubes (PhysicsModule::benchTick)" },
+        { "ticks", std::to_string(m_benchTicks) },
+        { "fixed_hz", "60" },
+        { "physics_worker_threads", std::to_string(m_workerThreads) },
+        { "hardware_concurrency", std::to_string(m_hardwareThreads) },
+        { "KKE_PHYSICS_THREADS", env("KKE_PHYSICS_THREADS").empty() ? "(unset)" : env("KKE_PHYSICS_THREADS") },
+        { "max_fixed_steps_per_frame", std::to_string(m_app->maxFixedStepsPerFrame()) },
+        { "render_scale", std::to_string(m_renderScale) },
+    };
+    r.sampleColumns = { "t_s", "fps", "ticks_per_s", "step_avg_ms", "step_max_ms", "render_prep_ms", "pieces", "awake_pieces" };
+    r.samples = m_benchWindows;
+    double stepAvg = m_benchTicks ? m_benchStepMsTotal / m_benchTicks : 0.0;
+    r.results = {
+        { "wall_s", wall },
+        { "realtime_factor", (m_benchTicks / 60.0) / wall },
+        { "frames", static_cast<double>(m_benchFrames) },
+        { "fps_avg", m_benchFrames / wall },
+        { "step_avg_ms", stepAvg },
+        { "step_p50_ms", percentile(m_benchStepSamples, 50) },
+        { "step_p95_ms", percentile(m_benchStepSamples, 95) },
+        { "step_p99_ms", percentile(m_benchStepSamples, 99) },
+        { "step_max_ms", m_benchStepMsMax },
+        { "render_prep_avg_ms", m_benchFrames ? m_benchRenderPrepMsTotal / m_benchFrames : 0.0 },
+        { "objects", static_cast<double>(m_objects.size()) },
+        { "pieces", static_cast<double>(pieces) },
+        { "tets", static_cast<double>(totalTets) },
+        { "peak_rss_mb", peakResidentMemoryMb() },
+    };
+    r.notes = {
+        "realtime_factor 1.0 = the simulation kept up with wall-clock time the whole run.",
+        "step_* = FEMFX FmUpdateScene per fixed tick; render_prep = CPU time building physics vertex data per frame.",
+    };
+    std::string dir = env("KKE_BENCH_DIR").empty() ? "benchmark" : env("KKE_BENCH_DIR");
+    std::string base = r.writeFiles(dir, timestampForFileName(), hostNameForFileName());
+    if (base.empty()) log::get(name())->error("BENCH: could not write report to '{}'", dir);
+    else log::get(name())->info("BENCH REPORT: {}.txt and .json", base);
 }
 
 void PhysicsModule::spawnScene(Scene scene) {
@@ -1451,7 +1544,7 @@ void PhysicsModule::spawnScene(Scene scene) {
         // -- soft, low-stiffness material that deforms elastically and
         // recovers, bouncing under real physics, not fracturing --
         // it's just visually a rounded-corner-free block, not a ball.
-        TetMeshData ball = buildGridBox(3, 3, 3, 0.6f, 0.6f, 0.6f);
+        TetMeshData ball = buildSphere(4, 0.35f);
         Material rubber;
         rubber.density = 1200.0f;
         rubber.stiffness = 1.0e5f;
@@ -1526,8 +1619,12 @@ void PhysicsModule::spawnScene(Scene scene) {
         // fracture/plasticity in this engine's actual stress
         // magnitudes, not a gentle fall).
         float baseZ = static_cast<float>((m_nextHandle * 67) % 200) / 100.0f - 1.0f;
-        glm::vec3 wallPos(4.0f, m_nextSpawnHeight + 1.0f, baseZ);
-        glm::vec3 carPos(0.0f, m_nextSpawnHeight + 1.0f, baseZ);
+        // Both start resting on the floor (y is each box's center: half
+        // its height, plus a hair so they don't begin interpenetrating
+        // the ground plane). They used to spawn ~6 m up and fall first,
+        // which is not what a car crash looks like.
+        glm::vec3 wallPos(4.0f, 1.0f + 0.01f, baseZ);
+        glm::vec3 carPos(0.0f, 0.3f + 0.01f, baseZ);
         spawnFracturableTetMesh(wall, wallPos, wallMaterial, glm::vec3(0.0f));
         spawnPlasticTetMesh(car, carPos, carBody, glm::vec3(22.0f, 0.0f, 0.0f));
         break;

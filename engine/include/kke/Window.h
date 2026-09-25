@@ -59,11 +59,15 @@ public:
     // Borderless fullscreen on the current display (SDL3's "desktop"
     // mode). The resulting resize recreates the swapchain as usual.
     void setFullscreen(bool fullscreen);
+    // Esc closes the window by default — handy for tech demos, wrong for
+    // any game with menus (Esc means "back"). Games turn this off.
+    void setQuitOnEscape(bool quit) { m_quitOnEscape = quit; }
     bool isFullscreen() const;
 
 private:
     SDL_Window* m_window = nullptr;
     bool m_shouldClose = false;
+    bool m_quitOnEscape = true;
     bool m_resized = false;
     MouseState m_mouseState;
 };

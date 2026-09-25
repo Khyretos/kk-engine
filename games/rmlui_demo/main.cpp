@@ -16,6 +16,7 @@
 int main() {
     try {
         kke::Application app("Kreative Kompas Engine - UI Showcase", 1280, 720);
+        app.window().setQuitOnEscape(false); // Esc = back to the main menu (see ShowcaseModule)
 
         auto& camera = app.addModule<kke::OrbitCameraModule>(/*distance=*/9.0f, /*pitch=*/-0.35f, /*yaw=*/-0.6f, glm::vec3(0.0f, 0.6f, 0.0f));
         camera.setAutoOrbit(true, 6.0f);

@@ -11,6 +11,7 @@ add_executable(kke_tests
     test_engine_settings.cpp
     test_model_asset.cpp
     test_ragdoll.cpp
+    test_benchmark_report.cpp
 )
 target_link_libraries(kke_tests PRIVATE kke_engine GTest::gtest_main)
 target_compile_definitions(kke_tests PRIVATE KKE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

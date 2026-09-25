@@ -35,20 +35,20 @@ use, so a 1-core run really does use 1 worker thread (check the
 
 ## Open — please run these
 
-### HW-001 · Physics benchmark, optimized build (dev box)
-Build with the new preset, then run the scripted benchmark:
+**Benchmarks now write files** to `benchmark/` (next to where you run
+them): a `.txt` to read and a `.json` for analysis, including your CPU,
+GPU, driver, RAM, OS and build type. Paste either file back instead of
+log lines.
+
+### HW-010 · Physics thread scaling, as one file (dev box)
+Replaces HW-003 (which only produced one line — `KKE_PHYSICS_THREADS`
+probably didn't take effect in that shell). From the repository root:
 ```bash
-cmake --workflow --preset everything-release
-cd build-release/bin
-KKE_PHYSICS_BENCH=1200 ./physics_demo 2>&1 | tee bench_release.log
+cmake --workflow --preset everything-release   # if not built yet
+cmake -P tools/run_physics_benchmarks.cmake
 ```
-It spawns every scene on a fixed schedule, runs 1200 physics ticks
-(20 simulated seconds), prints one `BENCH RESULT:` line, and quits by
-itself. **Send back:** the `BENCH RESULT` line, the `Task system` line,
-and a handful of the `perf:` lines (one per second).
-*Expectation:* on 16 threads + a real GPU this should stay near 60 FPS
-except for short dips when something big shatters. If it doesn't, the
-`perf:` lines say whether the physics step or rendering is the cost.
+Runs the benchmark at 1, 2, 4, 8, 16 threads (up to your core count).
+**Send back:** `benchmark/sweep_<time>/summary.txt`.
 **Result:** —
 
 ### HW-002 · Same benchmark, Debug build (dev box)
@@ -56,15 +56,6 @@ Same as HW-001 but from `build/` (`cmake --workflow --preset everything`).
 FEMFX itself is optimized in both now; this measures how much the rest
 of the engine costs at -O0. **Send back:** the `BENCH RESULT` line.
 **Result:** —
-
-### HW-003 · Physics thread scaling (dev box)
-```bash
-for n in 1 2 4 8 16; do KKE_PHYSICS_THREADS=$n KKE_PHYSICS_BENCH=1200 ./physics_demo 2>&1 | grep "BENCH RESULT"; done
-```
-Answers PERFORMANCE_NOTES.md item 5 (does the thread pool actually help,
-and where does it stop helping?). The sandbox has 4 cores and a software
-renderer competing for them, so it can't answer this. **Send back:** all
-five lines. **Result:** —
 
 ### HW-004 · Min-spec emulation (dev box)
 Run the `systemd-run` command above with the release build. **Send back:**
@@ -138,6 +129,16 @@ what matter. (A quick way to load one: change a path in
 
 ## Done
 
-Nothing run on real hardware yet under this checklist. (Earlier
-real-hardware findings — the Arch build gaps and the
+### HW-001 · Physics benchmark, optimized build — ✅ 2026-09-25
+Dev box (Ryzen 7 9800X3D, RX 9070 XT). `BENCH RESULT: 1200 ticks in
+19.98 s wall (1.00x realtime), 162884 frames (8151.0 fps avg), step avg
+1.38 ms max 5.77 ms, render prep avg 0.03 ms, 19 objects / 484 pieces /
+2178 tets`. The simulation kept up with real time the entire run; the
+worst physics step (5.8 ms) is a third of a 60 Hz frame. For comparison
+the 1-core sandbox emulation needs 21 ms average. Settled pile: 0.06 ms.
+
+### HW-003 · Thread scaling — ⚠️ inconclusive 2026-09-25
+Only one run came back (step avg 1.40 ms, same as HW-001), so the thread
+count most likely didn't change. Superseded by HW-010.
+
 `VK_EXT_layer_settings` crash — are recorded in INSTRUCTIONS.md.)

@@ -15,6 +15,8 @@ set(ENGINE_SOURCES
     src/EngineSettings.cpp
     src/ModelAsset.cpp
     src/Ragdoll.cpp
+    src/BenchmarkReport.cpp
+    src/SystemInfo.cpp
     src/TetMeshAsset.cpp
     src/LightingBuffer.cpp
     src/ShadowMap.cpp
@@ -57,6 +59,7 @@ set(ENGINE_HEADERS
     include/kke/EngineSettings.h
     include/kke/ModelAsset.h
     include/kke/Ragdoll.h
+    include/kke/BenchmarkReport.h
     include/kke/TetMeshAsset.h
     include/kke/LightingBuffer.h
     include/kke/ShadowMap.h
@@ -141,4 +144,11 @@ elseif(APPLE)
     target_compile_definitions(kke_engine PUBLIC KKE_PLATFORM_MACOS=1)
 else()
     target_compile_definitions(kke_engine PUBLIC KKE_PLATFORM_LINUX=1)
+endif()
+
+# Recorded in benchmark reports (kke/BenchmarkReport.h) so results from
+# Debug and Release builds are never confused with each other.
+target_compile_definitions(kke_engine PRIVATE KKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}")
+if(WIN32)
+    target_link_libraries(kke_engine PUBLIC psapi) # peak memory in benchmark reports
 endif()

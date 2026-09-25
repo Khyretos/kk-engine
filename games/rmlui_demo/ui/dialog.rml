@@ -26,7 +26,12 @@
         .msg { display: block; margin: 3dp 0; font-size: 14dp; }
         .msg .who { font-weight: bold; }
         .msg.system { color: #8b93aa; font-style: italic; }
-        #chat input.text { width: 78%; }
+        /* Flex row: the field takes the free space and the button matches
+           its height, whatever the UI scale. (inline-block + baseline
+           alignment left the button sitting lower than the field.) */
+        #chat form { display: flex; flex-direction: row; align-items: stretch; }
+        #chat input.text { flex: 1 1 auto; width: auto; margin: 0; }
+        #chat button { flex: 0 0 auto; margin: 0 0 0 6dp; padding: 0 14dp; line-height: 30dp; }
         @media (max-width: 1000px) { #chat { display: none; } }
     </style>
 </head>

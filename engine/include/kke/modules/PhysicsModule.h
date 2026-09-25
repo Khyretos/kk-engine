@@ -293,6 +293,7 @@ private:
     double m_pendingPrepMs = 0.0;      // prepareRenderData() time, folded into the frame's render-prep stat   // FEMFX FM_WARNING_FLAG_* seen in the last second, see fixedUpdate()
 
     static TetMeshData buildGridBox(int cellsX, int cellsY, int cellsZ, float sizeX, float sizeY, float sizeZ);
+    static TetMeshData buildSphere(int cells, float radius);
 
     // Shared implementation behind both spawnTetMesh() (enableFracture
     // always false) and spawnFracturableTetMesh() (always true) — see
@@ -484,6 +485,11 @@ private:
     double m_benchStepMsMax = 0.0;
     double m_benchRenderPrepMsTotal = 0.0;
     bool m_benchDone = false;
+    std::vector<double> m_benchStepSamples;            // every tick's step time, for percentiles
+    std::vector<std::vector<double>> m_benchWindows;   // one row per second, see publishTimingWindow()
+    int m_workerThreads = 1;
+    unsigned m_hardwareThreads = 0;
+    void writeBenchReport(double wallSeconds, uint totalPieces, uint totalTets);
     void benchTick(uint64_t tickIndex);
 };
 
