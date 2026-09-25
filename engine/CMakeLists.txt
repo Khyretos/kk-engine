@@ -16,6 +16,7 @@ set(ENGINE_SOURCES
     src/ModelAsset.cpp
     src/Ragdoll.cpp
     src/BenchmarkReport.cpp
+    src/AssetCatalog.cpp
     src/SystemInfo.cpp
     src/TetMeshAsset.cpp
     src/LightingBuffer.cpp
@@ -60,6 +61,7 @@ set(ENGINE_HEADERS
     include/kke/ModelAsset.h
     include/kke/Ragdoll.h
     include/kke/BenchmarkReport.h
+    include/kke/AssetCatalog.h
     include/kke/TetMeshAsset.h
     include/kke/LightingBuffer.h
     include/kke/ShadowMap.h

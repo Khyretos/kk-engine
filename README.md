@@ -1504,9 +1504,9 @@ joints, hinge knees, starting from whatever pose the character is in.
 disable them too) and there are no cone/twist limits, so limbs can
 over-rotate. Ragdolls do collide with the floor and FEMFX objects.
 
-The pack is never committed (licensed per user): put it at
-`assets/synty/POLYGON_Prototype/` or set `KKE_SYNTY_DIR` — see
-`assets/README.md`. Without it the demo runs and says where to put it.
+The pack is never committed (licensed per user): put the extracted pack
+folder(s) in `assets/synty/` (any layout) or set `KKE_ASSETS_DIR` — see
+`assets/README.md`. Without it the demo runs and lists where it looked.
 
 Engine pieces this added, usable by any game:
 - `kke::loadModel()` (`ModelAsset.h`) — FBX/OBJ to meshes, materials,

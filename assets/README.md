@@ -6,12 +6,23 @@ the main README's "Branding" section for where to wire it in per platform.
 ## Licensed art packs (Synty etc.) — `assets/synty/`
 
 Paid asset packs are licensed per user and **must never be committed**
-(`assets/synty/` is in `.gitignore`). Unzip a pack so its `_SourceFiles/`
-folder sits at `assets/synty/<PackName>/_SourceFiles/`, e.g.
+(`assets/synty/` is in `.gitignore`).
 
-    assets/synty/POLYGON_Prototype/_SourceFiles/{Characters,StaticMeshes,Textures}
+**Setup:** extract your pack(s) and put the pack folders inside
+`assets/synty/`. Any layout works — the engine scans for them
+(`kke::AssetCatalog`):
 
-`games/synty_demo` finds it there (searching upward from the working
-directory), or wherever the `KKE_SYNTY_DIR` environment variable points
-(the folder that contains `_SourceFiles/`). FBX files are loaded directly
-with `kke::loadModel` / `kke::ModelModule`; nothing needs converting.
+    assets/synty/POLYGON_Prototype/Characters/SK_Character_Dummy_Male_01.fbx
+    assets/synty/POLYGON_Prototype/StaticMeshes/...
+    assets/synty/POLYGON_Town/FBX/...            (Town calls it FBX — fine)
+    assets/synty/<Pack>/_SourceFiles/...         (older zips — also fine)
+
+Several packs side by side are picked up together. OBJ copies of FBX
+files are ignored (FBX carries more data). Each pack's `Textures` folder
+and its `*_Texture_01` atlas are found automatically.
+
+**Or keep your packs anywhere** and point the engine at the folder that
+contains them: `KKE_ASSETS_DIR=/path/to/my/synty ./synty_demo` (the older
+`KKE_SYNTY_DIR` also works). Without either, the demos search
+`assets/synty` upward from where you run them and from the executable's
+folder, and list every place they looked if nothing is found.

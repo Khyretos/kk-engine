@@ -4,6 +4,7 @@
 #include "kke/modules/ModelModule.h"
 #include "kke/Capabilities.h"
 #include "kke/Ragdoll.h"
+#include "kke/AssetCatalog.h"
 
 #include <string>
 #include <vector>
@@ -49,7 +50,9 @@ private:
 
     kke::Application* m_app = nullptr;
     kke::ModelModule* m_models = nullptr;
-    std::string m_packDir;
+    std::string m_packDir;          // the asset folder (may hold several packs)
+    kke::AssetCatalog m_catalog;
+    std::vector<std::string> m_searched;
     std::vector<Character> m_characters;
     float m_time = 0.0f;
     int m_selected = 3;

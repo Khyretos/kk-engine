@@ -1,5 +1,7 @@
 #include "kke/ModelAsset.h"
 
+#include "kke/AssetCatalog.h"
+
 #include <gtest/gtest.h>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -186,8 +188,10 @@ TEST(ModelAsset, RotatingChildBoneMovesOnlyWeightedVertices) {
 // Only runs where the Synty Prototype pack has been dropped into
 // assets/synty/ (it is never committed — paid, licensed content).
 TEST(ModelAsset, SyntyCharacterIfInstalled) {
-    fs::path file = fs::path(KKE_SOURCE_DIR) / "assets/synty/POLYGON_Prototype/_SourceFiles/Characters/SK_Character_Dummy_Male_01.fbx";
-    if (!fs::exists(file)) GTEST_SKIP() << "Synty pack not installed at " << file;
+    auto catalog = kke::AssetCatalog::scan((std::filesystem::path(KKE_SOURCE_DIR) / "assets/synty").string());
+    const kke::CatalogAsset* dummy = catalog.find("SK_Character_Dummy_Male_01");
+    if (!dummy) GTEST_SKIP() << "Synty Prototype pack not installed in assets/synty";
+    std::filesystem::path file = dummy->path;
     kke::ModelData m = kke::loadModel(file.string());
     EXPECT_TRUE(m.isSkinned());
     EXPECT_GE(m.bones.size(), 48u);

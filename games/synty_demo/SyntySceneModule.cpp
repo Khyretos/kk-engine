@@ -18,34 +18,28 @@ namespace kke_demo {
 
 namespace fs = std::filesystem;
 
-namespace {
-// Synty packs are licensed per user and never committed (see
-// assets/README.md), so find wherever this machine keeps them.
-std::string findPackDir() {
-    std::vector<fs::path> candidates;
-    if (const char* env = std::getenv("KKE_SYNTY_DIR")) candidates.emplace_back(env);
-    for (const char* base : { "assets/synty", "../assets/synty", "../../assets/synty", "../../../assets/synty" }) {
-        candidates.emplace_back(fs::path(base) / "POLYGON_Prototype");
-    }
-    for (const fs::path& c : candidates) {
-        std::error_code ec;
-        if (fs::is_directory(c / "_SourceFiles", ec)) return fs::weakly_canonical(c, ec).string();
-    }
-    return {};
-}
-} // namespace
 
 std::vector<kke::ModuleDependency> SyntySceneModule::dependencies() const {
     return { { std::type_index(typeid(kke::ModelModule)), true, "loads and draws the Synty FBX models" } };
 }
 
+// `relative` is kept for readability ("StaticMeshes/SM_Prop_Crate_01.fbx")
+// but only the file name matters: the catalog finds it wherever the pack
+// keeps it (StaticMeshes/, FBX/, _SourceFiles/...).
 kke::ModelModule::ModelId SyntySceneModule::load(const std::string& relative) {
+    std::string name = fs::path(relative).stem().string();
+    const kke::CatalogAsset* asset = m_catalog.find(name);
+    if (!asset) {
+        kke::log::get(this->name())->warn("asset '{}' not found in any pack under '{}'", name, m_packDir);
+        return 0;
+    }
+    const kke::CatalogPack* pack = m_catalog.pack(asset->pack);
     kke::ModelLoadOptions opts;
-    opts.textureSearchPaths = { m_packDir + "/_SourceFiles/Textures" };
+    opts.textureSearchPaths = pack->textureDirs;
     // Some meshes reference textures from other Synty packs (the trees
     // point at POLYGON Military's atlas); fall back to this pack's own.
-    opts.fallbackTexture = m_packDir + "/_SourceFiles/Textures/PolygonPrototype_Texture_01.png";
-    return m_models->load(m_packDir + "/_SourceFiles/" + relative, opts);
+    opts.fallbackTexture = pack->defaultTexture;
+    return m_models->load(asset->path, opts);
 }
 
 void SyntySceneModule::place(const std::string& relative, glm::vec3 position, float yawDegrees, glm::vec3 scale) {
@@ -71,13 +65,16 @@ void SyntySceneModule::init(kke::Application& app) {
     // IRagdollPhysics (FEMFX's PhysicsModule today) enables ragdolls.
     auto ragdollProviders = app.findCapability<kke::IRagdollPhysics>();
     m_physics = ragdollProviders.empty() ? nullptr : ragdollProviders.front();
-    m_packDir = findPackDir();
-    if (m_packDir.empty()) {
-        kke::log::get(name())->warn("Synty POLYGON Prototype pack not found. Unzip it so that "
-                                    "assets/synty/POLYGON_Prototype/_SourceFiles/ exists, or set KKE_SYNTY_DIR.");
+    const char* base = SDL_GetBasePath();
+    m_packDir = kke::findAssetFolder("assets/synty", { "KKE_ASSETS_DIR", "KKE_SYNTY_DIR" }, base ? base : "", &m_searched);
+    if (!m_packDir.empty()) m_catalog = kke::AssetCatalog::scan(m_packDir);
+    if (m_packDir.empty() || !m_catalog.find("SM_Buildings_Floor_5x5_01")) {
+        kke::log::get(name())->warn("Synty POLYGON Prototype pack not found. Put the extracted pack folder(s) in assets/synty/ "
+                                    "(e.g. assets/synty/POLYGON_Prototype/Characters/...) or set KKE_ASSETS_DIR.");
+        m_packDir.clear();
         return;
     }
-    kke::log::get(name())->info("using Synty pack at '{}'", m_packDir);
+    kke::log::get(name())->info("asset folder '{}': {} pack(s), {} assets", m_packDir, m_catalog.packs.size(), m_catalog.assets.size());
 
     // --- the level: a 20x20 m floor of 5x5 tiles, walls, stairs, props
     for (int x = -2; x < 2; ++x) {
@@ -266,9 +263,10 @@ void SyntySceneModule::renderUi() {
     ImGui::SetNextWindowSize(ImVec2(360, 0), ImGuiCond_FirstUseEver);
     ImGui::Begin("Characters");
     if (m_packDir.empty()) {
-        ImGui::TextWrapped("Synty POLYGON Prototype pack not found.\n\nUnzip it into assets/synty/POLYGON_Prototype/ "
-                           "(so _SourceFiles/ is inside), or set KKE_SYNTY_DIR. It is never committed to git: "
-                           "Synty assets are licensed per user.");
+        ImGui::TextWrapped("Synty POLYGON Prototype pack not found.\n\nPut your extracted pack folder(s) inside assets/synty/ "
+                           "(any layout: assets/synty/POLYGON_Prototype/Characters/... works), or set KKE_ASSETS_DIR to the "
+                           "folder that contains them. Never committed to git: Synty assets are licensed per user.\n\nLooked in:");
+        for (const std::string& p : m_searched) ImGui::BulletText("%s", p.c_str());
         ImGui::End();
         return;
     }

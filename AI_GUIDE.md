@@ -130,6 +130,16 @@ across machines and across changes — measure before and after.
 Commit directly to `main` for now — this is a WIP proof of concept, and
 the person has said branches/PRs start once it reaches alpha.
 
+## Performance is a design constraint, not a phase
+
+Read `OPTIMIZATION.md` before touching anything on a hot path (physics,
+rendering, skinning, UI updates). The short version: budgets per system,
+measure before and after with the benchmark reports in `benchmark/`,
+prefer doing less work over doing work faster, no per-frame heap
+allocation, and **every optimization gets a row in OPTIMIZATION.md's log
+with its reasoning and numbers** — complex code is fine where measured,
+unexplained complex code is not.
+
 ## Where to actually look
 
 Don't re-read every file — the README has two tables built exactly for

@@ -1,5 +1,7 @@
 #include "kke/Ragdoll.h"
 
+#include "kke/AssetCatalog.h"
+
 #include <gtest/gtest.h>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -138,8 +140,10 @@ TEST(Ragdoll, MissingBoneReportsWhich) {
 }
 
 TEST(Ragdoll, SyntyCharacterIfInstalled) {
-    std::filesystem::path file = std::filesystem::path(KKE_SOURCE_DIR) / "assets/synty/POLYGON_Prototype/_SourceFiles/Characters/SK_Character_Dummy_Male_01.fbx";
-    if (!std::filesystem::exists(file)) GTEST_SKIP() << "Synty pack not installed";
+    auto catalog = kke::AssetCatalog::scan((std::filesystem::path(KKE_SOURCE_DIR) / "assets/synty").string());
+    const kke::CatalogAsset* dummy = catalog.find("SK_Character_Dummy_Male_01");
+    if (!dummy) GTEST_SKIP() << "Synty Prototype pack not installed in assets/synty";
+    std::filesystem::path file = dummy->path;
     kke::ModelData m = kke::loadModel(file.string());
     auto world = kke::computeRestPose(m);
     std::string missing;
