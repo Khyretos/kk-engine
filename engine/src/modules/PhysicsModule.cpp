@@ -1534,16 +1534,9 @@ void PhysicsModule::spawnScene(Scene scene) {
         break;
     }
     case Scene::RubberBall: {
-        // An honest approximation, not a real sphere -- worth stating
-        // plainly rather than implying otherwise: buildGridBox() only
-        // produces box shapes, and a genuine tetrahedralized sphere
-        // would need real mesh-import machinery (see README "Content
-        // pipeline: CGAL tetrahedralization") this button doesn't use.
-        // A small, roughly cube-shaped block of real rubber is still a
-        // real, honest demonstration of the actual point of this scene
-        // -- soft, low-stiffness material that deforms elastically and
-        // recovers, bouncing under real physics, not fracturing --
-        // it's just visually a rounded-corner-free block, not a ball.
+        // A real ball now: buildSphere() pushes a cell grid out onto a
+        // sphere (BUG-039). Soft, low-stiffness rubber that deforms
+        // elastically and recovers, bouncing rather than fracturing.
         TetMeshData ball = buildSphere(4, 0.35f);
         Material rubber;
         rubber.density = 1200.0f;

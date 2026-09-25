@@ -98,7 +98,7 @@ stay under ~500 MB resident. Benchmarks report `peak_rss_mb` for this.
 | Fixed timestep + capped catch-up | 90s | `Application::setMaxFixedStepsPerFrame` | ✅ done |
 | Object pools / free lists | 80s+ | Fracture pieces, particles, projectiles | backlog |
 | Frustum culling | 90s | ModelModule instances, physics objects | in progress |
-| Spatial partitioning (grid / BVH) | 90s | Culling, picking, placement in the sandbox | backlog |
+| Spatial partitioning (grid / BVH) | 90s | Culling, picking, placement in the sandbox | backlog (brute force measured fine for now — log #12) |
 | Level of detail (mesh LOD, impostors) | 90s | Synty packs ship LODs in some packs; impostors for distant props | backlog |
 | Texture atlases | N64/PS1 | Synty packs are built around one atlas per pack — keep it that way: one texture bind for a whole pack | ✅ natural fit |
 | Mip mapping | 90s | All textures: less aliasing *and* less bandwidth | in progress |
@@ -124,6 +124,10 @@ BUGS.md / PERFORMANCE_NOTES.md entry with full detail.
 
 | # | What | Why it works | Measured effect | Where |
 |---|---|---|---|---|
+| 13 | Sandbox budgets: max 6 thrown balls (oldest removed), breakable-prop proxies capped at 48 cells (288 tets) | Rule 5 — anything a player can spam gets a cap and a policy. 48 cells ≈ a Glass Sheet, the worst single object we've measured | Min-spec (1 core): breaking a crate costs ~10 ms/step while 43 pieces move, back to ~0.1 ms once they sleep (~5 s) | `SandboxModule.cpp` constants |
+| 12 | Brute-force ray-vs-AABB picking, on purpose | A slab test is ~20 flops; 2,000 objects ≈ 40k flops, far under 0.1 ms. A BVH would be complexity with no measurable win at sandbox sizes — revisit when levels reach ~10k objects | Not measurable in the frame profile | `SandboxModule::pickObject`, `kke/Picking.h` |
+| 11 | Asset list uses `ImGuiListClipper` | Only visible rows are submitted, so a 3,000-asset catalog costs the same as 30 | 457-asset Prototype list: no UI cost change vs an empty list | `SandboxModule::assetBrowserUi` |
+| 10 | Debug lines: all lines of a frame → one vertex buffer, 1 draw per layer | Camera-facing quads built on the CPU (no geometry shader, no wide-line feature needed, works on lavapipe/mobile); buffer per frame in flight, grown to high-water mark and reused — zero allocations once warm | Sandbox grid + boxes (~110 lines): 2 draw calls | `DebugDrawModule` |
 | 9 | Box-projected UVs from rest positions for physics pieces | Correctness fix, but done without extra passes: computed in the same loop that builds the vertex, from data FEMFX already stores | No measurable cost (render prep unchanged within noise) | `PhysicsModule::prepareRenderData`, BUG-036 |
 | 8 | CPU skinning only when drawn, once per frame | `skinnedFrame` guard: the shadow pass and main pass share one skinning result | 4 Synty characters: skinning not visible in profile | `ModelModule::skinInstance` |
 | 7 | Premultiplied alpha + sRGB-correct UI | Correctness, but also removes a per-pixel divide from the naive fix path | — | BUG-021 |

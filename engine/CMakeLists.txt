@@ -17,6 +17,7 @@ set(ENGINE_SOURCES
     src/Ragdoll.cpp
     src/BenchmarkReport.cpp
     src/AssetCatalog.cpp
+    src/Picking.cpp
     src/SystemInfo.cpp
     src/TetMeshAsset.cpp
     src/LightingBuffer.cpp
@@ -38,6 +39,7 @@ set(ENGINE_SOURCES
     src/modules/PhysicsModule.cpp
     src/modules/SettingsModule.cpp
     src/modules/ModelModule.cpp
+    src/modules/DebugDrawModule.cpp
 )
 
 set(ENGINE_HEADERS
@@ -62,6 +64,7 @@ set(ENGINE_HEADERS
     include/kke/Ragdoll.h
     include/kke/BenchmarkReport.h
     include/kke/AssetCatalog.h
+    include/kke/Picking.h
     include/kke/TetMeshAsset.h
     include/kke/LightingBuffer.h
     include/kke/ShadowMap.h
@@ -77,6 +80,7 @@ set(ENGINE_HEADERS
     include/kke/modules/UiModule.h
     include/kke/modules/SettingsModule.h
     include/kke/modules/ModelModule.h
+    include/kke/modules/DebugDrawModule.h
     include/kke/modules/MarketplaceUiModule.h
     include/kke/modules/LightingControlsModule.h
     include/kke/modules/MaterialGridModule.h

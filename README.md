@@ -1522,6 +1522,33 @@ Engine pieces this added, usable by any game:
 - Pieces are placed by their bounds (Synty pivots vary: building parts
   at a corner, props at their center).
 
+### `games/sandbox` — build with your packs, then break it
+
+`cd build/bin && ./sandbox`. Finds your asset packs (same rules as the
+Synty demo: `assets/synty/`, `KKE_ASSETS_DIR`, or type a folder into the
+Assets panel, which also lists everywhere it looked) and lists every
+model in them.
+
+- **Assets panel:** filter by pack, category (from Synty's name prefixes)
+  or search; click an asset, then click in the world to place it.
+- **Placing:** snaps to the grid (0.25–5 m, or off); lands on top of
+  whatever is under the cursor, so crates stack. `R` / `Ctrl+wheel`
+  rotate, `Shift+click` keeps placing, `Esc` stops.
+- **Editing:** click to select, `G` move, `R` rotate, `Ctrl+D` duplicate,
+  `Del` delete. `Ctrl+S` / `Ctrl+L` save/load the layout as JSON
+  (`KKE_SANDBOX_LAYOUT=file.json` loads one at startup).
+- **Camera (editor controls):** right-drag orbit, middle-drag pan, wheel
+  zoom, WASD/QE move, Shift faster.
+- **Physics (FEMFX build):** `K` ragdolls/stands up a selected character;
+  `X` turns a selected prop into a breakable physics object (Wood, Stone,
+  Glass, or Metal that dents); `F` throws a ball at the cursor (6 at most,
+  oldest removed). `F1` shows the engine's debug panels.
+
+Honest limits: a breakable prop is a box of the prop's bounds wearing a
+material texture, not the prop's shape. Placed static meshes don't
+collide, so balls and debris only hit the ground, other physics objects
+and ragdolls, and a crate stacked on one you broke stays floating.
+
 ### `games/physics_demo` — a dedicated demo, because the shared one couldn't show this legibly
 
 `kke_demo_game`'s render bridge worked, but was genuinely hard to

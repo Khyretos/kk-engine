@@ -23,6 +23,11 @@ public:
         float scrollDelta = 0.0f;
         bool leftButtonDown = false;
         bool rightButtonDown = false;
+        bool middleButtonDown = false;
+        // Cursor position in window points (multiply by pixelsPerPoint()
+        // for framebuffer pixels, e.g. for picking).
+        float x = 0.0f;
+        float y = 0.0f;
     };
 
     Window(const std::string& title, uint32_t width, uint32_t height);

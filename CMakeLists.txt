@@ -396,6 +396,7 @@ add_subdirectory(games/imgui_demo)
 # details. Always built, same reasoning as imgui_demo above.
 add_subdirectory(games/rmlui_demo)
 add_subdirectory(games/synty_demo)
+add_subdirectory(games/sandbox)
 
 # ---------------------------------------------------------------------------
 # Standalone smoke tests (no test framework wired in yet — see tests/).

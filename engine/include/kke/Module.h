@@ -161,6 +161,13 @@ public:
     // individual motion events.
     virtual void onEvent(const SDL_Event& event) {}
 
+    // Whether Application calls this module's renderUi(). Lets a game
+    // hide engine debug panels it doesn't want on screen (the sandbox
+    // keeps Physics/Camera/Stats behind one toggle) without every module
+    // growing its own "show panel" flag.
+    void setUiVisible(bool visible) { m_uiVisible = visible; }
+    bool uiVisible() const { return m_uiVisible; }
+
     // Called once per frame, with the render pass already active. Bind a
     // pipeline, push constants, and issue draw calls here.
     virtual void render(const RenderContext& ctx) {}
@@ -187,6 +194,8 @@ public:
     // reverse dependency order (dependents shut down before what they
     // depend on).
     virtual void shutdown() {}
+private:
+    bool m_uiVisible = true;
 };
 
 } // namespace kke

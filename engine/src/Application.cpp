@@ -425,7 +425,7 @@ void Application::run() {
         if (m_renderer->beginFrame()) {
             m_debugUi->beginFrame();
             for (Module* m : m_initOrder) {
-                safeInvoke(m, "renderUi", [&] { m->renderUi(); });
+                if (m->uiVisible()) safeInvoke(m, "renderUi", [&] { m->renderUi(); });
             }
 
             VkCommandBuffer cmd = m_renderer->currentCommandBuffer();

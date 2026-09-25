@@ -1,0 +1,9 @@
+{
+  "id": "engine.kke.sandbox",
+  "title": "KKE Sandbox",
+  "description": "A toy box over your own asset packs: browse every model it finds, place and stack pieces on a grid, move/rotate/duplicate/delete, save and load layouts, ragdoll characters, turn props into breakable physics objects and throw balls at them. Needs packs in assets/synty/ or a folder you pick (never committed).",
+  "version": "0.1.0",
+  "tags": ["demo", "sandbox", "editor", "synty", "physics", "ragdoll"],
+  "engine_version": "0.3",
+  "modules": ["Models", "DebugDraw", "OrbitCamera", "Physics"]
+}

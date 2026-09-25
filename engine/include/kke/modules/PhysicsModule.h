@@ -246,6 +246,12 @@ public:
     bool ragdollBodyTransforms(RagdollHandle handle, std::vector<glm::mat4>& out) const override;
     void pushRagdollBody(RagdollHandle handle, int body, const glm::vec3& deltaVelocity) override;
 
+    // Procedural tet meshes, centered on the origin: a box of cells (6
+    // tets each) and a "spherified cube" ball. Public so games can spawn
+    // their own shapes (projectiles, crates) through spawn*TetMesh().
+    static TetMeshData buildGridBox(int cellsX, int cellsY, int cellsZ, float sizeX, float sizeY, float sizeZ);
+    static TetMeshData buildSphere(int cells, float radius);
+
     // The visual ground slab this module draws at y=0. Turn it off when
     // the game draws its own floor (it would z-fight).
     void setDrawGround(bool draw) { m_drawGround = draw; }
@@ -292,8 +298,6 @@ private:
     uint32_t m_lastWarningFlags = 0;
     double m_pendingPrepMs = 0.0;      // prepareRenderData() time, folded into the frame's render-prep stat   // FEMFX FM_WARNING_FLAG_* seen in the last second, see fixedUpdate()
 
-    static TetMeshData buildGridBox(int cellsX, int cellsY, int cellsZ, float sizeX, float sizeY, float sizeZ);
-    static TetMeshData buildSphere(int cells, float radius);
 
     // Shared implementation behind both spawnTetMesh() (enableFracture
     // always false) and spawnFracturableTetMesh() (always true) — see

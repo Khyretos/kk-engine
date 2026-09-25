@@ -34,6 +34,14 @@ public:
 
     void setAutoOrbit(bool enabled, float degreesPerSecond = 20.0f) { m_autoOrbit = enabled; m_autoOrbitSpeedDegPerSec = degreesPerSecond; }
 
+    // Viewer (default): left-drag orbit, right-drag pan, scroll zoom.
+    // Editor: left click is free for the tool (select/place), so orbit is
+    // right-drag, pan is middle-drag, and WASD moves the target across
+    // the ground (Shift = faster, Q/E = down/up), scaled by distance.
+    enum class Controls { Viewer, Editor };
+    void setControls(Controls c) { m_controls = c; }
+    void setDistanceLimits(float minDistance, float maxDistance) { m_minDistance = minDistance; m_maxDistance = maxDistance; }
+
 private:
     Application* m_app = nullptr;
 
@@ -41,6 +49,10 @@ private:
     float m_pitch; // radians, clamped away from the poles
     float m_distance;
     glm::vec3 m_target;
+
+    Controls m_controls = Controls::Viewer;
+    float m_minDistance = 0.5f;
+    float m_maxDistance = 30.0f;
 
     bool m_autoOrbit = false;
     float m_autoOrbitSpeedDegPerSec = 20.0f;

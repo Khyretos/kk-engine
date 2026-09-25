@@ -40,6 +40,19 @@ them): a `.txt` to read and a `.json` for analysis, including your CPU,
 GPU, driver, RAM, OS and build type. Paste either file back instead of
 log lines.
 
+### HW-011 · Sandbox with your packs (dev box, interactive)
+`cd build/bin && ./sandbox` with your packs in `assets/synty/` (or type
+the folder into the Assets panel). Does it find **all** your packs, and
+do the categories make sense? Build something: floor tiles, walls,
+stacked props (placement, snapping, rotate, move, duplicate, delete),
+then save, quit, restart and load it. Then play: `K` on a character,
+`X` on props with each "Breaks as" material, `F` to throw balls.
+Anything that loads wrong (textures missing, pieces in the floor) or
+feels awkward is exactly what I need.
+**Send back:** screenshots, the saved `sandbox_layout.json`, the asset
+count line from the Assets panel, and log warnings.
+**Result:** —
+
 ### HW-010 · Physics thread scaling, as one file (dev box)
 Replaces HW-003 (which only produced one line — `KKE_PHYSICS_THREADS`
 probably didn't take effect in that shell). From the repository root:

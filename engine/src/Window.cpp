@@ -72,6 +72,8 @@ bool Window::pollEvents(const EventCallback& onEvent) {
             case SDL_EVENT_MOUSE_MOTION:
                 m_mouseState.deltaX += event.motion.xrel;
                 m_mouseState.deltaY += event.motion.yrel;
+                m_mouseState.x = event.motion.x;
+                m_mouseState.y = event.motion.y;
                 break;
             case SDL_EVENT_MOUSE_WHEEL:
                 m_mouseState.scrollDelta += event.wheel.y;
@@ -81,6 +83,9 @@ bool Window::pollEvents(const EventCallback& onEvent) {
                 bool down = (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN);
                 if (event.button.button == SDL_BUTTON_LEFT) m_mouseState.leftButtonDown = down;
                 if (event.button.button == SDL_BUTTON_RIGHT) m_mouseState.rightButtonDown = down;
+                if (event.button.button == SDL_BUTTON_MIDDLE) m_mouseState.middleButtonDown = down;
+                m_mouseState.x = event.button.x;
+                m_mouseState.y = event.button.y;
                 break;
             }
             default:
