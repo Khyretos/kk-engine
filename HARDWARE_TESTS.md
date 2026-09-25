@@ -120,6 +120,19 @@ Apply & save and restart — do your choices come back?
 **Send back:** anything that looks or behaves wrong, with a screenshot.
 **Result:** —
 
+### HW-009 · Synty demo, and your other Synty packs (dev box)
+`cd build/bin && ./synty_demo` with the Prototype pack in
+`assets/synty/POLYGON_Prototype/`. Check the level and characters look
+right, press **B** for bones, pose a bone from the Characters panel.
+Then try another pack you own: unzip it the same way and point
+`KKE_SYNTY_DIR` at it — the demo only builds the Prototype level, but
+the log line `loaded '...': ... bone(s), ... animation(s), bounds ...`
+and any `texture ... not found` warnings for the other pack's files are
+what matter. (A quick way to load one: change a path in
+`games/synty_demo/SyntySceneModule.cpp`.)
+**Send back:** screenshot, plus any warnings/errors from the log.
+**Result:** —
+
 ## Done
 
 Nothing run on real hardware yet under this checklist. (Earlier

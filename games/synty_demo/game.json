@@ -1,0 +1,9 @@
+{
+  "id": "engine.kke.synty_demo",
+  "title": "KKE Synty Demo",
+  "description": "Synty POLYGON assets loaded straight from FBX: a small level built from Prototype pieces, skinned characters with animation, procedural posing and a bone view. Needs the pack in assets/synty/ (never committed).",
+  "version": "0.1.0",
+  "tags": ["demo", "synty", "models", "skinning", "animation"],
+  "engine_version": "0.3",
+  "modules": ["Models", "OrbitCamera", "Settings", "UI"]
+}

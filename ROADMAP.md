@@ -111,6 +111,9 @@ limitations. 🔴 Not started / stub.
 | Game manifest format (`game.json`) | 🟢 | Real parser, real unit-tested (`GameManifest`). |
 | Marketplace index (multi-game discovery) | 🟢 | Real, unit-tested (`MarketplaceIndex`). |
 | CGAL tetrahedralization pipeline | 🟢 | Real external tool (`kke_tetrahedralizer`) producing real `.ktet.json` assets loadable via `spawnTetMesh()`'s general path — see README "Content pipeline." |
+| FBX/OBJ model import (`kke::loadModel`) | 🟢 | ufbx-based: meshes, materials, texture resolution, skeletons, skin weights, sampled clips. Unit-tested (incl. real Synty character when installed). |
+| Model rendering (`kke::ModelModule`) | 🟡 | Instances, PBR lit/textured, shadows, CPU skinning, clip playback, bone posing, bone overlay. **Not yet:** GPU skinning (for crowds), mipmaps (distant textures alias), frustum culling, instanced draws. |
+| Synty packs | 🟡 | POLYGON Prototype verified (`games/synty_demo`). Loaded from git-ignored `assets/synty/` — see `assets/README.md`. Other packs untested (HARDWARE_TESTS.md HW-009). |
 | Asset browser | 🔴 | Not started — tetrahedralized mesh loading path is proven (`Load /tmp/test_output.ktet.json` button) but there's no UI to browse/pick assets. |
 | Lua scripting | 🔴 | Fetched as a dependency, not called from any code yet. |
 

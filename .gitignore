@@ -7,3 +7,6 @@ compile_commands.json
 .vscode/
 *.user
 benchmark_logs/
+
+# Paid/licensed art packs (e.g. Synty) are never committed — see assets/README.md
+assets/synty/

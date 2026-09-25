@@ -1477,6 +1477,35 @@ the backend: RmlUi *filters and layers* (`filter: blur()`,
 `box-shadow`, `drop-shadow`), which need render-to-texture — those
 properties are silently ignored for now.
 
+### `games/synty_demo` — Synty assets, skinning and bones
+
+Loads Synty POLYGON FBX files directly (via `kke::loadModel`, backed by
+ufbx) and builds a small level from the Prototype pack: floor tiles,
+walls, stairs, crates, barrels, trees, barrier, flag. Four skinned
+characters stand in the middle, each doing something different — the
+FBX's own animation clip, a procedural wave, idle breathing, and a
+hand-posed skeleton you edit bone by bone from the **Characters** panel.
+**B** toggles the bone overlay (drawn on top, lined up exactly with the
+skinned meshes).
+
+The pack is never committed (licensed per user): put it at
+`assets/synty/POLYGON_Prototype/` or set `KKE_SYNTY_DIR` — see
+`assets/README.md`. Without it the demo runs and says where to put it.
+
+Engine pieces this added, usable by any game:
+- `kke::loadModel()` (`ModelAsset.h`) — FBX/OBJ to meshes, materials,
+  skeleton, skin weights and sampled animation clips; meters, +Y up.
+  Resolves textures the file points at with an artist's own path
+  (`U:/Dropbox/...`) by file name, also trying `.png`/`.tga` for
+  `.psd` references, with an optional fallback texture. Unit-tested,
+  including against the real Synty character when installed.
+- `kke::ModelModule` — cached loading, instances, lit/textured/shadowed
+  drawing, CPU skinning, clip playback, per-bone posing
+  (`boneLocals()`), and `setBoneWorldOverride()` for physics-driven
+  skeletons.
+- Pieces are placed by their bounds (Synty pivots vary: building parts
+  at a corner, props at their center).
+
 ### `games/physics_demo` — a dedicated demo, because the shared one couldn't show this legibly
 
 `kke_demo_game`'s render bridge worked, but was genuinely hard to

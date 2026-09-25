@@ -9,8 +9,10 @@ add_executable(kke_tests
     test_marketplace_index.cpp
     test_engine_error.cpp
     test_engine_settings.cpp
+    test_model_asset.cpp
 )
 target_link_libraries(kke_tests PRIVATE kke_engine GTest::gtest_main)
+target_compile_definitions(kke_tests PRIVATE KKE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 include(GoogleTest)
 gtest_discover_tests(kke_tests)

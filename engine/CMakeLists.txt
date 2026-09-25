@@ -13,6 +13,7 @@ set(ENGINE_SOURCES
     src/RmlVulkanRenderInterface.cpp
     src/GameManifest.cpp
     src/EngineSettings.cpp
+    src/ModelAsset.cpp
     src/TetMeshAsset.cpp
     src/LightingBuffer.cpp
     src/ShadowMap.cpp
@@ -32,6 +33,7 @@ set(ENGINE_SOURCES
     src/modules/DebugControlModule.cpp
     src/modules/PhysicsModule.cpp
     src/modules/SettingsModule.cpp
+    src/modules/ModelModule.cpp
 )
 
 set(ENGINE_HEADERS
@@ -52,6 +54,7 @@ set(ENGINE_HEADERS
     include/kke/RmlVulkanRenderInterface.h
     include/kke/GameManifest.h
     include/kke/EngineSettings.h
+    include/kke/ModelAsset.h
     include/kke/TetMeshAsset.h
     include/kke/LightingBuffer.h
     include/kke/ShadowMap.h
@@ -66,6 +69,7 @@ set(ENGINE_HEADERS
     include/kke/modules/OrbitCameraModule.h
     include/kke/modules/UiModule.h
     include/kke/modules/SettingsModule.h
+    include/kke/modules/ModelModule.h
     include/kke/modules/MarketplaceUiModule.h
     include/kke/modules/LightingControlsModule.h
     include/kke/modules/MaterialGridModule.h
@@ -89,6 +93,7 @@ target_link_libraries(kke_engine PUBLIC
     imgui
     RmlUi::Core
     nlohmann_json::nlohmann_json
+    ufbx
     spdlog::spdlog
 )
 

@@ -191,6 +191,29 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(spdlog)
 
 # ---------------------------------------------------------------------------
+# ufbx — FBX (and OBJ) loading for art packs like Synty's: meshes,
+# materials, skeletons, skin weights, animations. MIT licensed, a single
+# .c/.h pair with no dependencies of its own (see kke/ModelAsset.h).
+# Chosen over assimp for being small, fast to build, and very thorough on
+# FBX specifically, which is the format most asset-store packs ship.
+# ---------------------------------------------------------------------------
+FetchContent_Declare(
+    ufbx
+    GIT_REPOSITORY https://github.com/ufbx/ufbx.git
+    GIT_TAG        v0.23.0
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(ufbx)
+if(NOT TARGET ufbx)
+    add_library(ufbx STATIC ${ufbx_SOURCE_DIR}/ufbx.c)
+    target_include_directories(ufbx PUBLIC ${ufbx_SOURCE_DIR})
+    set_target_properties(ufbx PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    # Always optimized, same reasoning as FEMFX: nobody steps through the
+    # FBX parser, and a Debug -O0 parse of a big pack is needlessly slow.
+    target_compile_options(ufbx PRIVATE $<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>)
+endif()
+
+# ---------------------------------------------------------------------------
 # GoogleTest — the unit test framework for this engine's pure-logic code
 # (manifest parsing, marketplace dedup, text-escaping — see README "Test
 # suite & coverage"). Deliberately NOT used to unit-test Vulkan/GPU code;
@@ -372,6 +395,7 @@ add_subdirectory(games/imgui_demo)
 # A dedicated demo for RmlUi — see games/rmlui_demo/main.cpp for
 # details. Always built, same reasoning as imgui_demo above.
 add_subdirectory(games/rmlui_demo)
+add_subdirectory(games/synty_demo)
 
 # ---------------------------------------------------------------------------
 # Standalone smoke tests (no test framework wired in yet — see tests/).
