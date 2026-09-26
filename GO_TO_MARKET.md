@@ -70,7 +70,7 @@ Cheap things that compound. None of them need the engine to be done.
 | 2.5 | Start a devlog: one short post per month (what landed, one GIF). Claude drafts from `git log` + BUGS.md + headless captures; Kees posts it | Claude drafts, **Kees** posts | free |
 | 2.6 | Build a GIF/screenshot library: every time a visual feature lands, capture it headlessly (Xvfb + ffmpeg) and keep the best in `docs/media/` | Claude | free |
 | 2.7 | Record the good footage on a real GPU (lavapipe renders correctly but slowly; trailers need 60 fps). OBS is free | **Kees** records, Claude writes the shot list and edits notes | free |
-| 2.8 | Keep the repo private or public? Public early = stars and feedback accumulate before launch, and the devlog can link to it. Recommended: **public now that the licence (#13) is in** | **Kees** | free |
+| 2.8 | Repo is public (it always was; confirmed 2026-09-26). Stars and feedback can accumulate before launch, and the devlog links to it. Rule: nothing private (asset share hash, paid packs, keys) ever goes in a commit | Claude (done) | free |
 
 ## 3. Launch gate — when we go
 
