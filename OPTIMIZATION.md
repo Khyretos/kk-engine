@@ -124,6 +124,7 @@ BUGS.md / PERFORMANCE_NOTES.md entry with full detail.
 
 | # | What | Why it works | Measured effect | Where |
 |---|---|---|---|---|
+| 27 | Showcase crates merged into one mesh per frame (CPU transform of 24 vertices per crate), one draw + one shadow draw | 300 crates were 600 draws of the same cube; rebuilding ~7k vertices costs ~0.1 ms, far less than the per-draw overhead | Stress test, 4-core VM, lavapipe: crates 18.9 -> 20.5 fps, impacts 13.2 -> 15.6 fps (software raster is fill-bound, so the draw-call win on a real GPU should be larger) | `ShowcaseModule::batchCrates` |
 | 26 | Resource governor: default budget is half the usable cores for workers (1..8, CPU affinity aware), 144 fps cap with vsync off, 15 fps while unfocused/minimized, optional 3D render scale 0.5..1 (offscreen pass + one linear blit, UI stays full resolution). "Use everything" lifts all of it | Rule: run with what it needs. Past ~144 fps the GPU only makes heat; a game in the background needs no 60 fps; physics threads beyond half the cores fight the OS, browser and voice chat. Render scale cuts fragment work by scale²; at 1.0 the path is off (no copy) | Town block, 4-core VM, lavapipe: 2 worker threads instead of 4; 27 -> 32 fps at scale 0.5 (software raster, so the GPU win on real hardware is larger, not measured yet) | `kke::computeBudget`, `Renderer::setRenderScale`, `Application::run` background cap |
 | 25 | Instancing: 2+ visible copies of the same rigid model (same texture/overlay) drawn as one instanced draw per mesh part, shadow pass too | Level kits repeat the same wall/floor pieces hundreds of times; each copy was its own draw with its own push constants. Now one per-frame instance buffer (matrix + tint) | Synty demo start view: 28 -> 15 draw calls, identical image | `ModelModule::buildBatches`, `model_instanced.vert`, `shadow_instanced.vert` |
 | 24 | Debris budget for broken breakables (default 200 pieces; oldest sleeping piece removed first) | Rule 5. FEMFX's cost follows the number of *awake bodies* (~0.15-0.2 ms each per step on one core), not tets; an eruption keeps adding bodies | `kke_physics_lab volcano`, 1 thread, 1 boulder/s: ~8 ms/step steady with a 60-piece budget; unbounded it only grows | `PhysicsModule::enforceDebrisBudget`, Physics panel slider |
@@ -161,12 +162,6 @@ BUGS.md / PERFORMANCE_NOTES.md entry with full detail.
 ---
 
 ## 5. Backlog (ranked by expected win on min-spec)
-
-0. **Showcase crates as instanced draws** — the stress test's crate rain
-   (300 boxes) is drawn one `DynamicMeshRenderer` draw per crate, twice
-   (shadow + colour): 600 draws for one cube mesh. Draw them like
-   ModelModule's instanced rigid models (#25). Measure with the stress
-   test's `crates.*` numbers before and after.
 
 1. **Debris budget + hand-off to GPU particles** — worst-case physics cost
    is "many awake pieces right after a big break" (~55 ms/step for ~475

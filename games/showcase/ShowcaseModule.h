@@ -98,6 +98,12 @@ private:
     std::unique_ptr<kke::DynamicMeshRenderer> m_level, m_capsule;
     // Unit cubes, one per colour (the renderer colours by vertex).
     std::vector<std::unique_ptr<kke::DynamicMeshRenderer>> m_cubes;
+    std::vector<glm::vec3> m_cubeColors;
+    // Every crate in one mesh, rebuilt each frame from the bodies: one
+    // draw (and one shadow draw) instead of two per crate.
+    std::unique_ptr<kke::DynamicMeshRenderer> m_crateBatch;
+    size_t m_crateBatchIndices = 0;
+    void batchCrates();
 
     // Crates and the moving platform (Jolt).
     struct Crate { kke::RigidWorld::BodyId body; glm::vec3 half; int cube; };
