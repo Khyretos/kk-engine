@@ -3,10 +3,10 @@
 <text x="36" y="16" font-size="13" font-weight="bold" fill="#222">bench.particle_fluid_2000_ms</text>
 <text x="604" y="16" text-anchor="end" fill="#666">lower is better</text>
 <line x1="36" y1="144" x2="604" y2="144" stroke="#ccc"/>
-<text x="32" y="40.0" text-anchor="end" fill="#666">4.93</text>
+<text x="32" y="40.0" text-anchor="end" fill="#666">5.01</text>
 <text x="32" y="144.0" text-anchor="end" fill="#666">0.0000</text>
 <text x="36" y="160" fill="#666">09e1a9e</text>
-<text x="604" y="160" text-anchor="end" fill="#666">f794eb8</text>
-<path d="M36.0,55.2 L92.8,54.8 L149.6,54.9 L206.4,55.1 L263.2,58.8 L320.0,58.9 L376.8,56.8 L433.6,58.3 L490.4,57.3 L547.2,65.3 L604.0,50.1" fill="none" stroke="#2563eb" stroke-width="2"/>
-<g fill="#2563eb"><circle cx="36.0" cy="55.2" r="2.5"><title>09e1a9e: 4.06</title></circle><circle cx="92.8" cy="54.8" r="2.5"><title>c1360ad: 4.07</title></circle><circle cx="149.6" cy="54.9" r="2.5"><title>cc93bb6: 4.07</title></circle><circle cx="206.4" cy="55.1" r="2.5"><title>0f9f717: 4.06</title></circle><circle cx="263.2" cy="58.8" r="2.5"><title>60ebebc: 3.89</title></circle><circle cx="320.0" cy="58.9" r="2.5"><title>b997491: 3.89</title></circle><circle cx="376.8" cy="56.8" r="2.5"><title>9e8a68a: 3.98</title></circle><circle cx="433.6" cy="58.3" r="2.5"><title>3c58296: 3.91</title></circle><circle cx="490.4" cy="57.3" r="2.5"><title>17a3e38: 3.96</title></circle><circle cx="547.2" cy="65.3" r="2.5"><title>9a8bda9: 3.59</title></circle><circle cx="604.0" cy="50.1" r="2.5"><title>f794eb8: 4.29</title></circle></g>
+<text x="604" y="160" text-anchor="end" fill="#666">7d49a68</text>
+<path d="M36.0,56.6 L87.6,56.2 L139.3,56.2 L190.9,56.5 L242.5,60.1 L294.2,60.2 L345.8,58.1 L397.5,59.6 L449.1,58.6 L500.7,66.5 L552.4,51.5 L604.0,50.1" fill="none" stroke="#2563eb" stroke-width="2"/>
+<g fill="#2563eb"><circle cx="36.0" cy="56.6" r="2.5"><title>09e1a9e: 4.06</title></circle><circle cx="87.6" cy="56.2" r="2.5"><title>c1360ad: 4.07</title></circle><circle cx="139.3" cy="56.2" r="2.5"><title>cc93bb6: 4.07</title></circle><circle cx="190.9" cy="56.5" r="2.5"><title>0f9f717: 4.06</title></circle><circle cx="242.5" cy="60.1" r="2.5"><title>60ebebc: 3.89</title></circle><circle cx="294.2" cy="60.2" r="2.5"><title>b997491: 3.89</title></circle><circle cx="345.8" cy="58.1" r="2.5"><title>9e8a68a: 3.98</title></circle><circle cx="397.5" cy="59.6" r="2.5"><title>3c58296: 3.91</title></circle><circle cx="449.1" cy="58.6" r="2.5"><title>17a3e38: 3.96</title></circle><circle cx="500.7" cy="66.5" r="2.5"><title>9a8bda9: 3.59</title></circle><circle cx="552.4" cy="51.5" r="2.5"><title>f794eb8: 4.29</title></circle><circle cx="604.0" cy="50.1" r="2.5"><title>7d49a68: 4.36</title></circle></g>
 </svg>
