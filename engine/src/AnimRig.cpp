@@ -121,7 +121,20 @@ FootPlacer::FootPlacer(const ModelData&, const TwoBoneChain& left, const TwoBone
     : m_left(left), m_right(right), m_pelvis(pelvis), m_s(s) {}
 
 void FootPlacer::apply(const ModelData& model, Pose& pose, const GroundQuery& ground, float dt, float weight) {
+    SurfaceQuery flat;
+    if (ground)
+        flat = [&ground](const glm::vec3& from, glm::vec3& hit, glm::vec3& normal) {
+            normal = glm::vec3(0.0f, 1.0f, 0.0f);
+            return ground(from, hit);
+        };
+    apply(model, pose, flat, dt, weight);
+}
+
+void FootPlacer::apply(const ModelData& model, Pose& pose, const SurfaceQuery& ground, float dt, float weight) {
     if (!valid()) return;
+    const glm::vec3 up(0.0f, 1.0f, 0.0f);
+    const float maxTilt = glm::radians(m_s.maxTilt);
+    glm::vec3 wantNormal[2] = { up, up };
     weight = glm::clamp(weight, 0.0f, 1.0f);
     const std::vector<glm::mat4> world = poseToModel(model, pose);
     const TwoBoneChain* legs[2] = { &m_left, &m_right };
@@ -129,17 +142,29 @@ void FootPlacer::apply(const ModelData& model, Pose& pose, const GroundQuery& gr
     float want[2] = { 0.0f, 0.0f };
     for (int i = 0; i < 2; ++i) {
         feet[i] = positionOf(world[legs[i]->end]);
-        glm::vec3 hit;
+        glm::vec3 hit, normal;
         // The capsule stands at model y = 0; a foot's ground above or
         // below that is how far the foot should move.
-        if (weight > 0.0f && ground && ground(feet[i] + glm::vec3(0.0f, m_s.probeUp, 0.0f), hit))
+        if (weight > 0.0f && ground && ground(feet[i] + glm::vec3(0.0f, m_s.probeUp, 0.0f), hit, normal)) {
             want[i] = glm::clamp(hit.y, -m_s.maxDrop, m_s.maxRaise);
+            // Tilt toward the slope, at most maxTilt, scaled by weight.
+            const glm::vec3 axis = glm::cross(up, normal);
+            const float s = glm::length(axis);
+            if (s > 1e-4f && normal.y > 0.0f) {
+                const float angle = std::min(std::atan2(s, normal.y), maxTilt) * weight;
+                wantNormal[i] = glm::angleAxis(angle, axis / s) * up;
+            }
+        }
     }
     const float wantPelvis = std::max(-m_s.maxDrop, std::min(0.0f, std::min(want[0], want[1])));
     const float k = dt > 0.0f ? 1.0f - std::exp(-m_s.smoothing * dt) : 1.0f;
-    for (int i = 0; i < 2; ++i) m_footOffset[i] += (want[i] - m_footOffset[i]) * k;
+    for (int i = 0; i < 2; ++i) {
+        m_footOffset[i] += (want[i] - m_footOffset[i]) * k;
+        m_footNormal[i] = glm::normalize(m_footNormal[i] + (wantNormal[i] - m_footNormal[i]) * k);
+    }
     m_pelvisOffset += (wantPelvis - m_pelvisOffset) * k;
-    if (std::abs(m_pelvisOffset) < 1e-5f && std::abs(m_footOffset[0]) < 1e-5f && std::abs(m_footOffset[1]) < 1e-5f) return;
+    const bool level = m_footNormal[0].y > 0.99999f && m_footNormal[1].y > 0.99999f;
+    if (level && std::abs(m_pelvisOffset) < 1e-5f && std::abs(m_footOffset[0]) < 1e-5f && std::abs(m_footOffset[1]) < 1e-5f) return;
 
     // Lower the pelvis (in its parent's space).
     const int parent = model.bones[m_pelvis].parent;
@@ -158,6 +183,20 @@ void FootPlacer::apply(const ModelData& model, Pose& pose, const GroundQuery& gr
         glm::vec3 bend = knee - (hip + positionOf(lowered[legs[i]->end])) * 0.5f;
         if (glm::length(bend) < 1e-3f) bend = glm::vec3(0.0f, 0.0f, 1.0f);
         solveTwoBone(model, pose, *legs[i], target, knee + glm::normalize(bend) * 0.5f);
+    }
+
+    // Finally the feet lie along the ground: the animated foot rotation
+    // (from before the leg IK, which would otherwise swing it along with
+    // the calf), turned in model space by the tilt from level to the slope.
+    if (level) return;
+    const std::vector<glm::mat4> solved = poseToModel(model, pose);
+    for (int i = 0; i < 2; ++i) {
+        if (m_footNormal[i].y > 0.99999f) continue;
+        const int foot = legs[i]->end, parentBone = model.bones[foot].parent;
+        const glm::quat tilt = rotationBetween(up, m_footNormal[i]);
+        const glm::quat footModel = tilt * rotationOf(world[foot]);
+        const glm::quat parentModel = parentBone >= 0 ? rotationOf(solved[parentBone]) : glm::quat(1, 0, 0, 0);
+        pose[foot].r = glm::normalize(glm::inverse(parentModel) * footModel);
     }
 }
 

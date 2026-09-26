@@ -101,6 +101,37 @@ TEST(AnimRig, FeetFindUnevenGround) {
     EXPECT_NEAR(pos(m, p, l.end).y, 0.0f, 0.01f);
 }
 
+// On a 20 degree slope the feet turn with it (model space: the rotation
+// from the animated foot to the placed one takes up onto the normal);
+// a 50 degree one is clamped to maxTilt.
+TEST(AnimRig, FeetTiltWithTheSlope) {
+    ModelData m = legs();
+    const kke::TwoBoneChain l = kke::findChain(m, "thigh_l", "calf_l", "foot_l");
+    const kke::TwoBoneChain r = kke::findChain(m, "thigh_r", "calf_r", "foot_r");
+    for (float slope : { 20.0f, 50.0f }) {
+        kke::FootPlacer placer(m, l, r, 1);
+        const glm::vec3 n = glm::angleAxis(glm::radians(slope), glm::vec3(1, 0, 0)) * glm::vec3(0, 1, 0);
+        auto ground = [&](const glm::vec3& from, glm::vec3& hit, glm::vec3& normal) {
+            hit = glm::vec3(from.x, 0.0f, from.z);
+            normal = n;
+            return true;
+        };
+        Pose p;
+        for (int i = 0; i < 120; ++i) {
+            p = restPose(m);
+            placer.apply(m, p, kke::FootPlacer::SurfaceQuery(ground), 1.0f / 60.0f);
+        }
+        const std::vector<glm::mat4> before = kke::poseToModel(m, restPose(m));
+        const std::vector<glm::mat4> after = kke::poseToModel(m, p);
+        const glm::quat delta = glm::quat_cast(glm::mat3(after[l.end])) * glm::inverse(glm::quat_cast(glm::mat3(before[l.end])));
+        const glm::vec3 footUp = delta * glm::vec3(0, 1, 0);
+        const float expected = std::min(slope, 30.0f);
+        EXPECT_NEAR(glm::degrees(std::acos(glm::clamp(footUp.y, -1.0f, 1.0f))), expected, 1.0f) << "slope " << slope;
+        EXPECT_GT(footUp.z, 0.0f); // tilted the same way as the ground
+        EXPECT_NEAR(pos(m, p, l.end).y, 0.0f, 0.01f); // still standing on it
+    }
+}
+
 TEST(AnimRig, CanonicalNamesPairUalWithSynty) {
     EXPECT_EQ(kke::canonicalBoneName("UpperArm_L"), kke::canonicalBoneName("upperarm_l"));
     EXPECT_EQ(kke::canonicalBoneName("indexFinger_02_r"), kke::canonicalBoneName("index_02_r"));

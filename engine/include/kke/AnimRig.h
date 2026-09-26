@@ -40,18 +40,22 @@ void solveTwoBone(const ModelData& model, Pose& pose, const TwoBoneChain& chain,
 // ---------------------------------------------------------------------
 // Foot placement: each foot keeps its animated height above the ground
 // under it (so steps still lift), the pelvis drops when a foot must go
-// lower than the capsule's floor, and two-bone IK bends the legs.
-// Smoothed over frames, so stepping onto a stair isn't a snap.
+// lower than the capsule's floor, two-bone IK bends the legs, and each
+// foot tilts to lie along the slope under it (up to maxTilt). Smoothed
+// over frames, so stepping onto a stair isn't a snap.
 class FootPlacer {
 public:
     // model-space point -> the ground below it (model space). False = none.
     using GroundQuery = std::function<bool(const glm::vec3& from, glm::vec3& ground)>;
+    // Same, plus the ground's normal there (model space, unit length).
+    using SurfaceQuery = std::function<bool(const glm::vec3& from, glm::vec3& ground, glm::vec3& normal)>;
 
     struct Settings {
         float maxDrop = 0.45f;    // how far the pelvis may go down
         float maxRaise = 0.45f;   // how far a foot may go up
         float probeUp = 0.5f;     // ground ray starts this far above the foot
         float smoothing = 14.0f;  // 1/s: how fast offsets follow the ground
+        float maxTilt = 30.0f;    // degrees a foot may tilt to match a slope
     };
 
     FootPlacer() = default;
@@ -60,7 +64,11 @@ public:
     bool valid() const { return m_left.valid() && m_right.valid() && m_pelvis >= 0; }
 
     // `weight` 0 = off (e.g. in the air, where feet must not reach down).
+    void apply(const ModelData& model, Pose& pose, const SurfaceQuery& ground, float dt, float weight = 1.0f);
+    // Flat feet: every ground counts as level.
     void apply(const ModelData& model, Pose& pose, const GroundQuery& ground, float dt, float weight = 1.0f);
+    // The (smoothed, clamped) ground normal each foot is tilted to; 0 = left.
+    glm::vec3 footNormal(int foot) const { return m_footNormal[foot & 1]; }
     float pelvisOffset() const { return m_pelvisOffset; }
     Settings& settings() { return m_s; }
 
@@ -70,6 +78,7 @@ private:
     Settings m_s;
     float m_footOffset[2] = { 0.0f, 0.0f };
     float m_pelvisOffset = 0.0f;
+    glm::vec3 m_footNormal[2] = { glm::vec3(0, 1, 0), glm::vec3(0, 1, 0) };
 };
 
 // ---------------------------------------------------------------------

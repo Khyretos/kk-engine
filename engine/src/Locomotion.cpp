@@ -347,7 +347,9 @@ void Locomotion::updateAir(const Input& in, float dt, bool grounded) {
         m_jumpedFromGround = false;
         m_speed = m_measuredSpeed;
         const glm::vec3 vel = m_world.characterVelocity(m_id);
-        if (m_measuredSpeed > 0.1f) m_moveDir = glm::normalize(flat(vel));
+        // Landing on a slope: the feet slid sideways while the velocity is
+        // (nearly) straight down, so there may be no direction to keep.
+        if (m_measuredSpeed > 0.1f && glm::length(flat(vel)) > 1e-3f) m_moveDir = glm::normalize(flat(vel));
         enter(State::Ground);
         // Queued "go up" fires on landing (bunny hop / vault chain).
         if (m_buffer > 0.0f) updateGround(in, 0.0f, true);

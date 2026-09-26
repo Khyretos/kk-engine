@@ -372,3 +372,28 @@ TEST(SceneTrails, TownBlockFence) {
     EXPECT_EQ(r.vaults, 1);
     EXPECT_LT(r.end.z, 0.0f);
 }
+// Falling onto a ramp: the feet slide sideways on landing while the
+// velocity points straight down. Once, that direction was normalized
+// from zero and the character's position became NaN (showcase ramp).
+TEST(Locomotion, LandingOnARampStaysFinite) {
+    Course c;
+    RigidWorld::BodyDesc d;
+    d.motion = RigidWorld::Motion::Static;
+    d.halfExtents = { 2.2f, 0.12f, 1.8f };
+    d.position = { -3.2f, 0.95f, -7.0f };
+    d.rotation = glm::angleAxis(glm::radians(-24.0f), glm::vec3(0, 0, 1));
+    c.world.add(d);
+    RigidWorld::CharacterDesc cd;
+    cd.position = { -3.0f, 1.5f, -7.0f };
+    c.player = c.world.addCharacter(cd);
+    Locomotion loco(c.world, c.player);
+    bool landed = false;
+    for (int i = 0; i < 120; ++i) {
+        loco.update(Locomotion::Input{}, kDt);
+        c.world.step(kDt);
+        landed |= loco.landed();
+        const glm::vec3 f = c.feet();
+        ASSERT_TRUE(std::isfinite(f.x) && std::isfinite(f.y) && std::isfinite(f.z)) << "frame " << i;
+    }
+    EXPECT_TRUE(landed);
+}

@@ -125,7 +125,9 @@ After the Animator, two small modifiers run in a fixed order
 - **Feet on the ground.** Each foot keeps its animated lift above the
   ground under it, the hips drop when one foot has to go lower than the
   capsule's floor (stairs, slopes, rock), and analytic two-bone IK bends
-  the legs. Smoothed over frames, and off in the air.
+  the legs. Each foot also tilts to lie along the ground under it (the
+  ray's normal, at most 30 degrees), keeping the animated foot angle on
+  top of that. Smoothed over frames, and off in the air.
 - **Hands on the edge.** During the first part of a vault or climb, the
   hands go to the top edge the probe found, shoulder-width apart, with
   the elbows bending out and back. It stands in for the hand plant the
@@ -153,9 +155,10 @@ speed); it's for authored moves such as a real vault clip.
 
 - Ledge hang and shimmy, corners, ledge-to-ledge leaps (*Ledge actions*),
   wall run.
-- Foot rotation to match slopes, and CCD for longer chains (*IK
-  fundamentals with CCD*, 8pX6LeZdpOo); the legs and arms use the
-  analytic two-bone solve.
+- CCD for longer chains (*IK fundamentals with CCD*, 8pX6LeZdpOo); the
+  legs and arms use the analytic two-bone solve.
+- Standing still on a walkable slope creeps downhill (~5 cm/s on the
+  24 degree ramp); the character should hold its place.
 - Animation layering (upper body over locomotion; *Animation layering
   pipelines*, Fsa2wxyQvzM, blocked below).
 - Rest-pose matching for retargeting between skeletons whose rest poses

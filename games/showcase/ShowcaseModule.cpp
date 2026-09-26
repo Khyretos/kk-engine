@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <typeindex>
@@ -128,6 +129,15 @@ void ShowcaseModule::init(kke::Application& app) {
         }
         m_rig.yaw = 0.0f; // looking down the lane (-Z)
         m_status = "Autopilot";
+    }
+    // KKE_START_AT=x,y,z[,facing yaw in degrees]: start there (screenshots
+    // of one spot, e.g. "-3.2,1.4,-7,90" stands on the ramp facing down it).
+    if (const char* at = std::getenv("KKE_START_AT"); at && *at) {
+        float x = 0, y = 0, z = 0, yaw = 0;
+        if (std::sscanf(at, "%f,%f,%f,%f", &x, &y, &z, &yaw) >= 3) {
+            m_loco->teleport(glm::vec3(x, y, z));
+            m_loco->setFacing(glm::vec3(std::sin(glm::radians(yaw)), 0.0f, -std::cos(glm::radians(yaw))));
+        }
     }
     if (const char* st = std::getenv("KKE_STRESS_TEST"); st && *st && *st != '0') {
         m_stressQuitAtEnd = true;
@@ -459,14 +469,15 @@ void ShowcaseModule::applyIk(float dt) {
     // Feet: on the ground only (in the air they'd reach for the floor).
     m_footWeight += ((m_footIk && st == State::Ground ? 1.0f : 0.0f) - m_footWeight) * k;
     kke::RigidWorld& w = m_rigid->world();
-    auto ground = [&](const glm::vec3& from, glm::vec3& hit) {
+    auto ground = [&](const glm::vec3& from, glm::vec3& hit, glm::vec3& normal) {
         const glm::vec3 start = glm::vec3(toWorld * glm::vec4(from, 1.0f));
         kke::RigidWorld::RayHit h = w.raycast(start, glm::vec3(0, -1, 0), 1.2f);
         if (!h.hit || h.normal.y < 0.5f) return false;
         hit = glm::vec3(toModel * glm::vec4(h.point, 1.0f));
+        normal = glm::normalize(glm::mat3(toModel) * h.normal);
         return true;
     };
-    m_feet.apply(m_rigData, pose, ground, dt, m_footWeight);
+    m_feet.apply(m_rigData, pose, kke::FootPlacer::SurfaceQuery(ground), dt, m_footWeight);
 
     // Hands: on the top edge during the first part of a vault or climb,
     // where the stand-in clips have no hand plant of their own.
