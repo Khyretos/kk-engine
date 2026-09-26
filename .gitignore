@@ -23,3 +23,7 @@ dist/
 # them into assets/animations/ instead of committing them.
 assets/animations/*.fbx
 assets/animations/*.glb
+
+# The docs site (mkdocs build), see docs/DOCS_SITE.md
+site/
+__pycache__/

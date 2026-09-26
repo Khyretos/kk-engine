@@ -601,6 +601,13 @@ add_subdirectory(games/melt_demo)
 add_subdirectory(games/jiggle_demo)
 add_subdirectory(games/sea_demo)
 
+# The starter template (docs/tutorials/getting-started.md), and games made
+# from it with tools/new_game, which lists them in games/my_games.cmake.
+if(KKE_ENABLE_JOLT AND ENGINE_ENABLE_LUA)
+    add_subdirectory(games/template)
+    include(games/my_games.cmake)
+endif()
+
 # ---------------------------------------------------------------------------
 # Standalone smoke tests (no test framework wired in yet — see tests/).
 # ---------------------------------------------------------------------------

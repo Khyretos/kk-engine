@@ -1,0 +1,4 @@
+#!/bin/sh
+# Makes a new game from games/template: tools/new_game my_game
+# (the same as: cmake -DNAME=my_game -P tools/new_game.cmake)
+exec cmake -DNAME="$1" -P "$(dirname "$0")/new_game.cmake"
