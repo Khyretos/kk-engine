@@ -1,0 +1,31 @@
+{{ define "main" }}
+<section class="page-hero">
+  <div class="blobs" aria-hidden="true"><span></span><span></span><span></span></div>
+  <div class="wrap">
+    <h1 class="reveal"><span class="gradient-text animated">Showcase</span></h1>
+    <div class="section-lead reveal">{{ .Content }}</div>
+    <nav class="jump reveal">
+      {{ range site.Data.features }}<a href="#{{ .id }}" style="--accent: {{ .accent }}"><i class="{{ .icon }}"></i> {{ .title }}</a>{{ end }}
+    </nav>
+  </div>
+</section>
+{{ range $i, $f := site.Data.features }}
+<section class="feature{{ if modBool $i 2 }}{{ else }} flip{{ end }}" id="{{ $f.id }}" style="--accent: {{ $f.accent }}">
+  <div class="wrap feature-grid">
+    <div class="feature-text reveal">
+      <span class="feature-icon"><i class="{{ $f.icon }}"></i></span>
+      <h2>{{ $f.title }}</h2>
+      <p class="tagline">{{ $f.tagline }}</p>
+      <p>{{ $f.summary }}</p>
+      <ul class="points">{{ range $f.points }}<li><i class="fa-solid fa-check"></i> {{ . }}</li>{{ end }}</ul>
+      {{ with $f.code }}<pre class="snippet"><code>{{ . }}</code></pre>{{ end }}
+      <p class="meta">
+        {{ with $f.demo }}<span><i class="fa-solid fa-play"></i> Try it: <code>{{ . }}</code></span>{{ end }}
+        {{ with $f.docs }}<a href="{{ printf "docs/%s" . | relURL }}"><i class="fa-solid fa-book"></i> Read the guide</a>{{ end }}
+      </p>
+    </div>
+    <div class="feature-media reveal">{{ partial "feature-media.html" $f }}</div>
+  </div>
+</section>
+{{ end }}
+{{ end }}
