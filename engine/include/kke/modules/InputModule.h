@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kke/InputDevices.h"
+#include "kke/InputSanity.h"
 #include "kke/InputMap.h"
 #include "kke/Module.h"
 
@@ -65,8 +66,21 @@ public:
     // Virtual devices (SDL virtual joysticks) for testing without
     // hardware: KKE_VIRTUAL_INPUT=hosas,pad attaches two identical flight
     // sticks and a gamepad with gyro; KKE_VIRTUAL_INPUT_ANIMATE=1 moves
-    // them. Used by CI and screenshots; harmless otherwise.
+    // them. Used by CI and screenshots. Developer builds only: shipping
+    // builds ignore both variables (kke/DevTools.h).
     void attachVirtualDevices(const std::string& spec);
+
+    // Every local key, mouse button, pad button and pad stick, judged for
+    // input no human makes: rapid-fire mods, macros, scripted sticks
+    // (kke/InputSanity.h, docs/ANTI_CHEAT.md). Findings are logged at info
+    // level (evidence, not an engine fault); games read them here (or set
+    // sanity().onFinding) to send them to their server or show them to
+    // moderators. Never acts alone.
+    InputSanity& sanity() { return m_sanity; }
+    // The control ids it reports: kind in the top 4 bits (1 key, 2 mouse
+    // button, 3 pad button, 4 pad axis), then the pad (low 12 bits of its
+    // id) and the SDL scancode / button / axis in the low 8 or 16 bits.
+    static uint32_t sanityControl(const SDL_Event& event);
 
 private:
     void defineUiActions(InputMap& m);
@@ -79,6 +93,7 @@ private:
     InputDevices m_devices;
     std::vector<std::unique_ptr<InputMap>> m_maps;
     double m_now = 0.0;
+    InputSanity m_sanity;
 };
 
 } // namespace kke

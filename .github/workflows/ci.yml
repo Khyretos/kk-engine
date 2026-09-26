@@ -22,6 +22,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Shipping builds (-DKKE_SHIPPING=ON, docs/ANTI_CHEAT.md) compile the
+  # developer tools out: this keeps that configuration building with zero
+  # warnings and its tests passing (DevTools.* checks the debug switches
+  # really are ignored).
+  shipping-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            cmake ninja-build \
+            libvulkan-dev glslang-tools spirv-tools \
+            libfreetype-dev libudev-dev libdbus-1-dev \
+            libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev \
+            pkg-config libgl1-mesa-dev libegl1-mesa-dev \
+            libasound2-dev libdecor-0-dev libexpat1-dev libxml2-dev
+
+      - name: Configure (shipping)
+        run: cmake -B build-ship -G Ninja -DCMAKE_BUILD_TYPE=Release -DKKE_SHIPPING=ON -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_VALIDATION=OFF -DKKE_ENABLE_BENCHMARKS=OFF
+
+      - name: Build (shipping)
+        run: cmake --build build-ship -j --target kke_tests starter_game sandbox kke_seal
+
+      - name: Run unit tests (shipping)
+        run: ./build-ship/bin/kke_tests
+
   build-test-and-coverage:
     runs-on: ubuntu-24.04
     steps:

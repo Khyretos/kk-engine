@@ -1,5 +1,6 @@
 #pragma once
 
+#include "kke/net/Authority.h"
 #include "kke/net/Protocol.h"
 #include "kke/net/Transport.h"
 
@@ -198,6 +199,17 @@ public:
     size_t badPackets() const { return m_badPackets; }
     size_t corrections() const { return m_corrections; }
     size_t refusedMoves() const { return m_refusedMoves; } // by checkMove
+    size_t refusedEvents() const { return m_refusedEvents; } // by authority or checkEvent
+
+    // Who decides what, per player role (kke/net/Authority.h,
+    // docs/ANTI_CHEAT.md): a Server-authority move or event from a client
+    // is dropped, a Client-authority move skips the checks, Checked is
+    // the speed limits + checkMove / checkEvent. Roles are forgotten when
+    // a player leaves.
+    AuthorityPolicy authority;
+    // An event from a player whose events are Checked: may it happen?
+    // false = dropped (onEvent never sees it). Unset = allowed.
+    std::function<bool(uint8_t id, const GameEventMsg&)> checkEvent;
 
     MovementLimits limits;
     // A move that passed the speed limits: may the player go from `from`
@@ -245,7 +257,7 @@ private:
     struct BreakSet { uint32_t seed = 0; std::set<std::pair<uint16_t, uint16_t>> borders; };
     std::map<uint16_t, SpawnMsg> m_spawns;  // persistent ones, for late joiners
     std::map<uint16_t, BreakSet> m_breaks;
-    size_t m_refusedMoves = 0;
+    size_t m_refusedMoves = 0, m_refusedEvents = 0;
     bool m_running = false, m_started = false;
     double m_now = 0.0, m_start = 0.0, m_nextSnapshot = 0.0;
     std::string m_hostName, m_hostCharacter;

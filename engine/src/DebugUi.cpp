@@ -1,4 +1,5 @@
 #include "kke/DebugUi.h"
+#include "kke/DevTools.h"
 #include "kke/Window.h"
 #include "kke/VulkanDevice.h"
 #include "kke/VulkanCheck.h"
@@ -98,6 +99,8 @@ void DebugUi::render(VkCommandBuffer cmd) {
 }
 
 void DebugUi::setVisible(bool visible) {
+    // Shipping builds: the developer panels never show (kke/DevTools.h).
+    if constexpr (!dev::kEnabled) visible = false;
     m_visible = visible;
     ImGuiIO& io = ImGui::GetIO();
     if (visible) io.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;

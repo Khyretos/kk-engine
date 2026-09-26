@@ -135,6 +135,7 @@ limitations. 🔴 Not started / stub.
 | Replication measurement/demo | 🟢 | `NetworkModule` genuinely measures and displays what *would* be sent. |
 | Real network transport | 🟢 | `kke::net::EnetTransport` (UDP, reliable + unreliable channels, LAN discovery), loopback and lag/jitter/loss simulation for tests; `NetModule` hosts and joins games (docs/NETWORKING.md). Dedicated server image and internet NAT traversal not yet. |
 | Authority / reconciliation model | 🟡 | `NetServer`/`NetClient`: owner-predicted players checked against speed limits, walls and flying (`WorldMoveCheck`) and corrected, server-authoritative bodies with snapshot interpolation, reliable events, host-spawned objects, breakables that break into the host's pieces everywhere. Input replay (competitive) is still #28. The old `kke_demo_game` `NetworkModule` is still only a measurement demo. |
+| Anti-cheat (non-invasive) | 🟡 | `KKE_SHIPPING` builds compile out dev panels, Lua console, hot reload and debug switches; per-role server authority (`AuthorityPolicy`, `checkEvent`); `InputSanity` flags turbo, macros, noiseless sticks, inhuman reactions; sealed data (`kke::seal`, `kke_seal`). Fog of war, server-side input checks, review queue: #48 (docs/ANTI_CHEAT.md). |
 
 ## Tooling / dev experience
 
