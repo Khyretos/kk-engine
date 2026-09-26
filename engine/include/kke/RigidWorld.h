@@ -1,0 +1,128 @@
+#pragma once
+
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+
+#include <cstdint>
+#include <memory>
+#include <vector>
+
+namespace kke {
+
+// Rigid bodies, world collision and the character controller, on Jolt
+// Physics (MIT; Horizon Forbidden West, Godot 4). Plain C++, no GPU, so
+// unit tests and tools/physics_lab can drive it directly;
+// RigidBodyModule is the engine module around it.
+//
+// Why a second physics engine: FEMFX (PhysicsModule) simulates deformable,
+// breakable objects and costs ~0.15-0.2 ms per awake body per step on one
+// core; a level's static collision, hundreds of rocks and debris pieces,
+// and the players themselves need a rigid-body engine that costs a few
+// microseconds per body (SCALING.md). FEMFX stays for the hero objects.
+class RigidWorld {
+public:
+    using BodyId = uint32_t;
+    using CharacterId = uint32_t;
+    static constexpr BodyId kNoBody = 0xffffffffu;
+
+    enum class Motion : uint8_t { Static, Kinematic, Dynamic };
+    enum class Shape : uint8_t { Box, Sphere, Capsule, ConvexHull, Mesh };
+
+    struct BodyDesc {
+        Shape shape = Shape::Box;
+        glm::vec3 halfExtents{0.5f};         // Box
+        float radius = 0.5f;                 // Sphere, Capsule
+        float halfHeight = 0.5f;             // Capsule: half the cylinder part (along Y)
+        std::vector<glm::vec3> points;       // ConvexHull points / Mesh vertices (body space)
+        std::vector<uint32_t> indices;       // Mesh triangles (Static/Kinematic only)
+        Motion motion = Motion::Dynamic;
+        glm::vec3 position{0.0f};
+        glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec3 velocity{0.0f}, angularVelocity{0.0f};
+        float density = 1000.0f;             // kg/m^3 (mass from the shape's volume)
+        float friction = 0.6f, restitution = 0.1f;
+        uint32_t material = 0;               // game-defined id, reported in contacts (sounds, effects)
+    };
+
+    struct Settings {
+        int threads = -1;                    // worker threads; -1 = cores - 1 (at least 1), 0 = none
+        uint32_t maxBodies = 65536;
+        glm::vec3 gravity{0.0f, -9.81f, 0.0f};
+        float contactReportSpeed = 0.5f;     // m/s: slower impacts aren't reported
+    };
+
+    struct RayHit {
+        bool hit = false;
+        BodyId body = kNoBody;
+        glm::vec3 point{0.0f}, normal{0.0f, 1.0f, 0.0f};
+        float distance = 0.0f;
+    };
+
+    // A new contact between two bodies (or a body and a character's
+    // push): for impact sounds, particles, damage.
+    struct Contact {
+        BodyId a = kNoBody, b = kNoBody;
+        glm::vec3 point{0.0f}, normal{0.0f};
+        float speed = 0.0f;                  // approach speed along the normal, m/s
+        uint32_t materialA = 0, materialB = 0;
+    };
+
+    struct CharacterDesc {
+        float radius = 0.3f;
+        float height = 1.8f;                 // total, feet to head
+        float maxSlopeDegrees = 50.0f;       // steeper = a wall
+        float stepUp = 0.35f;                // stairs
+        float mass = 70.0f;
+        float pushStrength = 400.0f;         // N: how hard it can push dynamic bodies
+        glm::vec3 position{0.0f};            // feet
+    };
+    struct CharacterInput {
+        glm::vec3 move{0.0f};                // desired horizontal velocity, m/s (y ignored)
+        bool jump = false;
+        float jumpSpeed = 5.0f;
+    };
+
+    RigidWorld();
+    explicit RigidWorld(const Settings& settings);
+    ~RigidWorld();
+    RigidWorld(const RigidWorld&) = delete;
+    RigidWorld& operator=(const RigidWorld&) = delete;
+
+    BodyId add(const BodyDesc& desc);
+    void remove(BodyId body);
+    size_t bodyCount() const;
+    size_t activeBodyCount() const;
+    bool isActive(BodyId body) const;
+
+    glm::vec3 position(BodyId body) const;
+    glm::quat rotation(BodyId body) const;
+    glm::mat4 transform(BodyId body) const;
+    glm::vec3 velocity(BodyId body) const;
+    void setVelocity(BodyId body, const glm::vec3& v);
+    void addImpulse(BodyId body, const glm::vec3& impulse, const glm::vec3& worldPoint);
+    // Kinematic bodies: move there over the next step (pushes things).
+    void moveKinematic(BodyId body, const glm::vec3& position, const glm::quat& rotation, float dt);
+
+    RayHit raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance) const;
+
+    CharacterId addCharacter(const CharacterDesc& desc);
+    void removeCharacter(CharacterId id);
+    void setCharacterInput(CharacterId id, const CharacterInput& input);
+    glm::vec3 characterPosition(CharacterId id) const; // feet
+    glm::vec3 characterVelocity(CharacterId id) const;
+    bool characterOnGround(CharacterId id) const;
+    void teleportCharacter(CharacterId id, const glm::vec3& feet);
+
+    // Advances characters then bodies by dt (fixed step recommended).
+    void step(float dt);
+    double lastStepMs() const;
+
+    // Contacts since the last call.
+    std::vector<Contact> takeContacts();
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> m;
+};
+
+} // namespace kke

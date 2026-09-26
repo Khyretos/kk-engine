@@ -2,8 +2,23 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdlib>
+#include <string>
+
 #include <filesystem>
 #include <fstream>
+
+namespace {
+// setenv/unsetenv are POSIX; Windows has _putenv_s ("" removes it).
+void setEnv(const char* name, const std::string& value) {
+#if defined(_WIN32)
+    _putenv_s(name, value.c_str());
+#else
+    if (value.empty()) unsetenv(name);
+    else setenv(name, value.c_str(), 1);
+#endif
+}
+} // namespace
 
 namespace fs = std::filesystem;
 
@@ -142,10 +157,10 @@ TEST(AssetCatalog, FindAssetFolderSearchesEnvThenParents) {
     EXPECT_FALSE(searched.empty());
     // env var wins
     fs::create_directories(base / "elsewhere");
-    setenv("KKE_TEST_ASSETS", (base / "elsewhere").string().c_str(), 1);
+    setEnv("KKE_TEST_ASSETS", (base / "elsewhere").string());
     EXPECT_EQ(fs::path(kke::findAssetFolder("assets/packs", { "KKE_TEST_ASSETS" }, (base / "build/bin").string())),
               fs::weakly_canonical(base / "elsewhere"));
-    unsetenv("KKE_TEST_ASSETS");
+    setEnv("KKE_TEST_ASSETS", "");
     EXPECT_EQ(kke::findAssetFolder("definitely/not/here", {}, (base / "build/bin").string()), "");
     fs::remove_all(base);
 }

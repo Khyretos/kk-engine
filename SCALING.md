@@ -62,6 +62,13 @@ GPU numbers (HW-013, HW-014) are the ones that count.
 
 ---
 
+### Rigid bodies (Jolt, added right after this was written)
+
+`RigidWorld.AThousandFallingBoxesFitAFrameOnOneThread`: 1,000 boxes
+raining onto the ground, one thread: **1.56 ms per step on average,
+6.6 ms at the worst step**. The same count of FEMFX bodies would be
+~150-200 ms. That's the headroom the volcano needs.
+
 ## 2. Scenario by scenario
 
 ### A. Volcano parkour, one player, one machine — **doable, with changes**

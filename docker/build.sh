@@ -24,8 +24,9 @@ windows)
     cmake -S "$src" -B "$bld" -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DKKE_ENABLE_FEMFX=ON \
         -DCMAKE_TOOLCHAIN_FILE="$src/cmake/toolchains/mingw-w64-x86_64.cmake"
     cmake --build "$bld" -j "$jobs"
-    if command -v wine >/dev/null 2>&1 && [ "${RUN_TESTS:-1}" = "1" ]; then
-        (cd "$bld/bin" && WINEDEBUG=-all wine ./kke_tests.exe --gtest_brief=1) || echo "warning: tests under Wine failed (see above)"
+    wine="$(command -v wine || command -v wine64 || true)"
+    if [ -n "$wine" ] && [ "${RUN_TESTS:-1}" = "1" ]; then
+        (cd "$bld/bin" && WINEDEBUG=-all "$wine" ./kke_tests.exe --gtest_brief=1) || echo "warning: tests under Wine failed (see above)"
     fi
     cp -r "$bld/bin/." "$out/"
     ;;

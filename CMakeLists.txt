@@ -18,6 +18,7 @@ option(KKE_ENABLE_VALIDATION "Enable Vulkan validation layers in debug" ON)
 option(ENGINE_ENABLE_LUA "Build with Lua scripting support" OFF) # wired later
 option(ENGINE_HEADLESS_TEST "Build the headless smoke-test target" ON)
 option(KKE_ENABLE_TESTS "Build the unit test suite (tests/)" ON)
+option(KKE_ENABLE_JOLT "Build the Jolt Physics rigid-body/collision layer (MIT): static world collision, rigid bodies, character controller. See ACTION_PLAN.md 1.1." ON)
 option(KKE_ENABLE_FEMFX "Build the vendored, patched AMD FEMFX deformable-physics library. See README 'Physics: AMD FEMFX integration'." OFF)
 option(KKE_ENABLE_COVERAGE "Instrument builds for code coverage (gcc/clang --coverage). See README 'Test suite & coverage'." OFF)
 option(KKE_ENABLE_GPU_PROFILER "Request the VulkanProfiler layer (VK_LAYER_PROFILER_unified) at instance creation if installed. See README 'GPU profiler (VulkanProfiler) integration'." OFF)
@@ -392,6 +393,46 @@ endfunction()
 # ---------------------------------------------------------------------------
 # Engine core library
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Jolt Physics — rigid bodies, collision, character controller (MIT).
+# FEMFX stays for deformable/breakable hero objects; Jolt carries the rest
+# (the world's collision, rocks, debris, players): SCALING.md.
+# ---------------------------------------------------------------------------
+if(KKE_ENABLE_JOLT)
+    set(TARGET_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+    set(TARGET_HELLO_WORLD OFF CACHE BOOL "" FORCE)
+    set(TARGET_PERFORMANCE_TEST OFF CACHE BOOL "" FORCE)
+    set(TARGET_SAMPLES OFF CACHE BOOL "" FORCE)
+    set(TARGET_VIEWER OFF CACHE BOOL "" FORCE)
+    set(ENABLE_ALL_WARNINGS OFF CACHE BOOL "" FORCE)
+    set(INTERPROCEDURAL_OPTIMIZATION OFF CACHE BOOL "" FORCE)
+    set(DEBUG_RENDERER_IN_DEBUG_AND_RELEASE OFF CACHE BOOL "" FORCE)
+    set(PROFILER_IN_DEBUG_AND_RELEASE OFF CACHE BOOL "" FORCE)
+    set(OBJECT_LAYER_BITS 16 CACHE STRING "" FORCE)
+    # Jolt's own GPU compute backends (hair) need DXC/Metal toolchains;
+    # the rigid-body core doesn't. Our renderer owns the GPU.
+    set(JPH_USE_DX12 OFF CACHE BOOL "" FORCE)
+    set(JPH_USE_VK OFF CACHE BOOL "" FORCE)
+    set(JPH_USE_MTL OFF CACHE BOOL "" FORCE)
+    # Same SSE4.2/AVX level everywhere Jolt is used; x86 builds only
+    # (ARM builds use Jolt's NEON path automatically).
+    FetchContent_Declare(
+        JoltPhysics
+        GIT_REPOSITORY https://github.com/jrouwe/JoltPhysics.git
+        GIT_TAG        v5.6.0
+        GIT_SHALLOW    TRUE
+        SOURCE_SUBDIR  Build
+    )
+    set(KKE_SAVED_SHARED ${BUILD_SHARED_LIBS})
+    set(BUILD_SHARED_LIBS OFF)
+    FetchContent_MakeAvailable(JoltPhysics)
+    set(BUILD_SHARED_LIBS ${KKE_SAVED_SHARED})
+    # Optimized even in Debug (same reasoning as FEMFX: a dense solver).
+    if(NOT MSVC)
+        target_compile_options(Jolt PRIVATE $<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>)
+    endif()
+endif()
+
 # FEMFX (if enabled) must be added before engine/, since engine's own
 # CMakeLists.txt links against the femfx target — found by actually
 # hitting this ordering issue rather than assuming it, see README

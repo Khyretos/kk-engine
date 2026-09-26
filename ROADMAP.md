@@ -72,7 +72,7 @@ limitations. 🔴 Not started / stub.
 | Tetrahedral deformable-body simulation | 🟢 | Real FEMFX integration, not a stub — see README "Physics: AMD FEMFX integration." |
 | Real fracture | 🟢 | Verified with real, measured piece counts across many real drops — see `BUGS.md` BUG-007 for the shape-resolution fix that made this visually convincing. Fractured pieces now all actually render (they mostly didn't — BUG-026). |
 | Natural fracture patterns (Voronoi, KKE-driven breaking) | 🟢 | `kke::VoronoiFracture` (random-angle cracks, same tet count) + `kke::BreakGraph` + `PhysicsModule::Breakable` (plain FEMFX bodies swapped at break time, not FEMFX's own fracture: BUG-046). Seeds: world x object (`kke::fractureSeed`). Damage scales with the hit (break window + grace, BUG-051). Physics demo "Break test" scene. Thresholds measured with `tools/physics_lab`. |
-| Rigid bodies (rocks, debris, characters, vehicles) | 🔴 | **The main scaling gap** (SCALING.md): FEMFX costs ~0.15-0.2 ms per awake body per step on one core; a rock storm needs a rigid-body layer (plan: Jolt, as a module next to FEMFX). |
+| Rigid bodies + world collision + character controller (Jolt) | 🟡 | `kke::RigidWorld` / `RigidBodyModule` on Jolt 5.6 (MIT): static/kinematic/dynamic bodies (box, sphere, capsule, convex hull, triangle mesh), ray casts, contact events with material ids, `CharacterVirtual` controller (walk, slopes, stairs, jump, push). 1,000 falling boxes: 1.56 ms/step avg on one thread (FEMFX: ~0.2 ms *per body*). **Not yet:** FEMFX <-> Jolt collision between the two worlds, rigid breakables. |
 | FEMFX on ARM / WebAssembly | 🔴 | FEMFX's vector math is x86 AVX intrinsics: no Android, Apple Silicon or browser build until a SIMDe port (SCALING.md D). |
 | Real plasticity | 🟢 | Verified via real vertex-distance measurement (not FEMFX's own rest-position API, which doesn't track this — see `BUGS.md` BUG-003). |
 | Material toughness tuning | 🟢 | Real, measured stress ranges per material, not a guessed formula — see `BUGS.md` BUG-020 for the full account, including the wrong approach that preceded it. |
@@ -146,7 +146,7 @@ limitations. 🔴 Not started / stub.
 | Scripted physics benchmark (`KKE_PHYSICS_BENCH`) | 🟢 | Same scenes at the same simulation ticks on every machine, one comparable `BENCH RESULT:` line. `KKE_PHYSICS_THREADS` overrides the worker count; the pool respects CPU affinity, so `taskset -c 0` really is 1 thread. |
 | `HARDWARE_TESTS.md` | 🟢 | Checklist of everything only real hardware can answer, with what to send back. |
 | `tools/physics_lab` (`kke_physics_lab`) | 🟢 | Headless FEMFX experiments, no window/GPU: `fracture` (stability of every pattern), `shoot` (threshold tuning), `volcano` (worst-case load), `freefall`, `rest`. |
-| Cross-platform builds | 🟡 | `docker compose run --rm linux / windows / android` (docker/). Linux: builds + 125 tests pass in the container. Windows: MinGW-w64 cross build (see README). Android: native build with FEMFX off. macOS / Windows-MSVC: manual "Platforms" GitHub workflow. Browser: needs a WebGPU renderer (SCALING.md). |
+| Cross-platform builds | 🟡 | `docker compose run --rm linux / windows / android` (docker/). Linux: builds + all tests pass in the container. Windows: MinGW-w64 cross build of every game and tool, unit tests pass under Wine. Android: native build with FEMFX off. macOS / Windows-MSVC: manual "Platforms" GitHub workflow. Browser: needs a WebGPU renderer (SCALING.md). |
 
 ---
 

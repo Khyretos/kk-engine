@@ -14,4 +14,10 @@ set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 # Self-contained .exe files: no libstdc++/libgcc/winpthread DLLs to ship.
 set(CMAKE_EXE_LINKER_FLAGS_INIT "-static -static-libgcc -static-libstdc++")
-set(CMAKE_SHARED_LINKER_FLAGS_INIT "-static-libgcc -static-libstdc++")
+set(CMAKE_SHARED_LINKER_FLAGS_INIT "-static -static-libgcc -static-libstdc++") # DLLs too: no libwinpthread-1.dll to ship
+# Run Windows binaries at build time (gtest test discovery) through Wine
+# when it's installed (it is in docker/windows.Dockerfile).
+find_program(KKE_WINE NAMES wine wine64)
+if(KKE_WINE)
+    set(CMAKE_CROSSCOMPILING_EMULATOR ${KKE_WINE})
+endif()

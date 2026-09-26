@@ -22,7 +22,12 @@ add_executable(kke_tests
     test_floating_bodies.cpp
 )
 target_link_libraries(kke_tests PRIVATE kke_engine GTest::gtest_main)
+if(KKE_ENABLE_JOLT)
+    target_sources(kke_tests PRIVATE test_rigid_world.cpp)
+endif()
 target_compile_definitions(kke_tests PRIVATE KKE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 include(GoogleTest)
-gtest_discover_tests(kke_tests)
+# PRE_TEST: tests are listed when ctest runs, not at build time, so a
+# cross build (Windows .exe on Linux) doesn't have to run them to link.
+gtest_discover_tests(kke_tests DISCOVERY_MODE PRE_TEST)

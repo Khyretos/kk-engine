@@ -68,7 +68,8 @@ TEST(ModelAsset, ResolvesArtistTexturePathByFileName) {
     ASSERT_NE(red, nullptr);
     EXPECT_EQ(fs::path(red->albedoTexture).filename().string(), "Atlas_01.png");
     EXPECT_TRUE(fs::exists(red->albedoTexture));
-    EXPECT_NE(red->albedoTextureOriginal.find("U:/Artist"), std::string::npos);
+    // The artist's original path is kept (separators are the platform's: U:\\Artist on Windows).
+    EXPECT_NE(red->albedoTextureOriginal.find("Artist"), std::string::npos);
     EXPECT_EQ(red->baseColor, glm::vec3(1.0f)); // textured: color becomes a neutral tint
     fs::remove_all(dir);
 }

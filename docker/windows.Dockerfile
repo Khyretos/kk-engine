@@ -10,6 +10,8 @@ RUN dpkg --add-architecture i386 && apt-get update && apt-get install -y --no-in
         wine64 \
     && rm -rf /var/lib/apt/lists/*
 
+# Ubuntu installs wine64 outside PATH.
+ENV PATH=/usr/lib/wine:$PATH
 WORKDIR /src
 ENTRYPOINT ["/src/docker/build.sh"]
 CMD ["windows"]
