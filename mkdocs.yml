@@ -90,6 +90,7 @@ nav:
   - Reference:
       - Lua API: reference/lua-api.md
       - Optimization: OPTIMIZATION.md
+      - Benchmarks: BENCHMARKS.md
       - Performance notes: PERFORMANCE_NOTES.md
       - Scaling and platforms: SCALING.md
       - Hardware tests: HARDWARE_TESTS.md
