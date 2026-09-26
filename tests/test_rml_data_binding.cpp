@@ -14,6 +14,7 @@
 #include <RmlUi/Core.h>
 #include <gtest/gtest.h>
 
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -51,7 +52,13 @@ protected:
         Rml::SetRenderInterface(&s_renderer);
         Rml::SetSystemInterface(&s_system);
         ASSERT_TRUE(Rml::Initialise());
-        ASSERT_TRUE(Rml::LoadFontFace(KKE_SOURCE_DIR "/assets/fonts/NotoSans-Regular.ttf"));
+        // The source tree's copy when it exists; otherwise the one the
+        // build copies next to the executables (the test binary runs from a
+        // packaged build on the Release workflow's Windows runner, where
+        // the build machine's source path doesn't exist).
+        const std::filesystem::path sourceFont = KKE_SOURCE_DIR "/assets/fonts/NotoSans-Regular.ttf";
+        const std::string font = std::filesystem::exists(sourceFont) ? sourceFont.string() : "assets/fonts/NotoSans-Regular.ttf";
+        ASSERT_TRUE(Rml::LoadFontFace(font)) << "font not found at " << font;
     }
     static void TearDownTestSuite() { Rml::Shutdown(); }
 
