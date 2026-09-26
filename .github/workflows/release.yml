@@ -5,7 +5,8 @@
 # pre-release when the tag has a '-' in it). Running the workflow by hand
 # (Actions tab -> "Release" -> Run workflow) builds and tests the same
 # packages and keeps them as run artifacts; tick "draft" to also put them
-# in a draft release that only maintainers can see.
+# in a draft release that only maintainers can see, or "publish" to release
+# them for real (GitHub then creates the version's tag on that commit).
 #
 # Both platforms build on Linux: Windows is cross-compiled with MinGW-w64
 # (same toolchain as docker/windows.Dockerfile; the C++ runtime is linked
@@ -26,6 +27,10 @@ on:
         default: dev
       draft:
         description: Also create a draft GitHub Release
+        type: boolean
+        default: false
+      publish:
+        description: Publish the release now (creates the version's tag on this commit)
         type: boolean
         default: false
 
@@ -189,7 +194,7 @@ jobs:
 
   release:
     needs: [linux, windows-test]
-    if: github.event_name == 'push' || inputs.draft
+    if: github.event_name == 'push' || inputs.draft || inputs.publish
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -205,10 +210,16 @@ jobs:
           REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
           IS_TAG: ${{ github.event_name == 'push' }}
+          PUBLISH: ${{ inputs.publish }}
         run: |
           ls -l dist
           flags=()
           if [ "$IS_TAG" = true ]; then
+            case "$VERSION" in *-*) flags+=(--prerelease) ;; esac
+          elif [ "$PUBLISH" = true ]; then
+            # GitHub creates the tag on this commit as it publishes.
+            [[ "$VERSION" =~ ^v[0-9] ]] || { echo "::error::publish needs a version like v0.1.0-alpha, got '$VERSION'"; exit 1; }
+            flags+=(--target "$SHA")
             case "$VERSION" in *-*) flags+=(--prerelease) ;; esac
           else
             flags+=(--draft --target "$SHA")
