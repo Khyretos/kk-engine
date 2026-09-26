@@ -70,6 +70,8 @@ void NetModule::init(Application& app) {
     m_physics = app.getModule<PhysicsModule>();
 #endif
     if (const char* n = std::getenv("KKE_NET_NAME"); n && *n) playerName = n;
+    if (const char* p = std::getenv("KKE_NET_PASSWORD"); p && *p) m_config.password = p; // to join, or to require when hosting
+    std::snprintf(m_passwordInput, sizeof(m_passwordInput), "%s", m_config.password.c_str());
     simulated.latencyMs = envFloat("KKE_NET_LAG", 0.0f);
     simulated.jitterMs = envFloat("KKE_NET_JITTER", 0.0f);
     simulated.lossPercent = envFloat("KKE_NET_LOSS", 0.0f);
@@ -175,7 +177,13 @@ bool NetModule::join(const std::string& address, uint16_t port, std::string* err
     m_transport = std::move(transport);
     m_enet = raw;
     m_client = std::move(client);
-    m_client->onEvent = [this](const net::GameEventMsg& e) { dispatchEvent(e); };
+    m_client->onEvent = [this](const net::GameEventMsg& e) {
+        if (e.kind == net::kEventServerMessage) {
+            m_serverMessage.assign(e.payload.begin(), e.payload.end());
+            log::get(name())->info("Server: {}", m_serverMessage);
+        }
+        dispatchEvent(e);
+    };
     m_client->onCorrection = [this](const glm::vec3& p) { if (onCorrection) onCorrection(p); };
     m_client->onPlayer = [this](uint8_t id, bool joined) { if (onPlayer) onPlayer(id, joined); };
     m_client->onSpawn = [this](const net::SpawnMsg& m) { onSpawnMsg(m); };
@@ -200,6 +208,7 @@ void NetModule::leave() {
         m_transport->close();
     }
     m_client.reset();
+    m_serverMessage.clear();
     m_server.reset();
     m_transport.reset();
     m_enet = nullptr;
@@ -592,8 +601,10 @@ void NetModule::renderUi() {
     ImGui::SetNextWindowSize(ImVec2(320 * s, 0), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Network")) { ImGui::End(); return; }
     ImGui::TextWrapped("%s", m_status.c_str());
+    if (m_role == Role::Client && !m_serverMessage.empty()) ImGui::TextWrapped("Server: %s", m_serverMessage.c_str());
     if (m_role == Role::Offline) {
         if (ImGui::InputText("Name", m_nameInput, sizeof(m_nameInput))) playerName = m_nameInput;
+        if (ImGui::InputText("Password", m_passwordInput, sizeof(m_passwordInput), ImGuiInputTextFlags_Password)) m_config.password = m_passwordInput;
         if (ImGui::Button("Host")) host(0);
         ImGui::Separator();
         ImGui::InputText("Address", m_addressInput, sizeof(m_addressInput));

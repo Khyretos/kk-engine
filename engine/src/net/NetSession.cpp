@@ -81,6 +81,19 @@ namespace {
 
 bool finite(const glm::vec3& v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); }
 
+// Compares every byte whatever the first difference (no timing hint of
+// how much of a password was right).
+bool sameSecret(const std::string& a, const std::string& b) {
+    unsigned diff = static_cast<unsigned>(a.size() ^ b.size());
+    const size_t n = std::max(a.size(), b.size());
+    for (size_t i = 0; i < n; ++i) {
+        const unsigned char x = i < a.size() ? static_cast<unsigned char>(a[i]) : 0;
+        const unsigned char y = i < b.size() ? static_cast<unsigned char>(b[i]) : 0;
+        diff |= static_cast<unsigned>(x ^ y);
+    }
+    return diff == 0;
+}
+
 template <typename Msg>
 void sendMsg(ITransport& t, PeerId peer, Channel ch, MessageType type, Msg msg) {
     t.send(peer, ch, encode(type, msg));
@@ -170,6 +183,20 @@ void NetServer::sendEvent(uint16_t kind, const std::vector<uint8_t>& payload, in
     broadcastReliable(encode(MessageType::GameEvent, e), exceptPlayer);
 }
 
+void NetServer::sendEventTo(uint8_t playerId, uint16_t kind, const std::vector<uint8_t>& payload) {
+    Client* c = byId(playerId);
+    if (!c || c->peer == kNoPeer) return;
+    GameEventMsg e{ 0, kind, payload };
+    if (e.payload.size() > kMaxEventBytes) e.payload.resize(kMaxEventBytes);
+    sendMsg(m_transport, c->peer, Channel::Reliable, MessageType::GameEvent, e);
+}
+
+std::string NetServer::address(uint8_t playerId) const {
+    for (const Client& c : m_clients)
+        if (c.id == playerId && playerId) return m_transport.address(c.peer);
+    return {};
+}
+
 void NetServer::relayEvent(const GameEventMsg& e) {
     GameEventMsg copy = e;
     broadcastReliable(encode(MessageType::GameEvent, copy), e.fromPlayer);
@@ -220,12 +247,17 @@ void NetServer::forgetBreaks(uint16_t id) { m_breaks.erase(id); }
 void NetServer::handleHello(Client& c, const HelloMsg& m) {
     std::string reason;
     if (c.id != 0) return; // a second Hello: ignore
+    const size_t slots = m_config.dedicated ? m_config.maxPlayers : m_config.maxPlayers - 1; // the host's own player takes one
     if (m.version != kProtocolVersion)
         reason = "version mismatch: server speaks protocol " + std::to_string(kProtocolVersion) + ", you " + std::to_string(m.version);
     else if (m.gameId != m_config.gameId)
         reason = "this server runs '" + m_config.gameId + "', not '" + m.gameId + "'";
-    else if (clientCount() + 1 >= m_config.maxPlayers)
+    else if (!sameSecret(m.password, m_config.password))
+        reason = m.password.empty() ? "this server needs a password" : "wrong password";
+    else if (clientCount() >= slots)
         reason = "server is full (" + std::to_string(m_config.maxPlayers) + " players)";
+    else if (admit)
+        reason = admit(m.name, m_transport.address(c.peer));
     if (!reason.empty()) return drop(c, reason);
     uint8_t id = 1;
     while (byId(id)) ++id;
@@ -235,8 +267,8 @@ void NetServer::handleHello(Client& c, const HelloMsg& m) {
     WelcomeMsg w{ id, static_cast<uint8_t>(m_config.maxPlayers), m_config.snapshotHz, timeMs() };
     sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::Welcome, w);
     // Who's here already (the host, then the other clients), then tell
-    // them about the new one.
-    sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::PlayerInfo, PlayerInfoMsg{ 0, true, m_hostName, m_hostCharacter });
+    // them about the new one. A dedicated server has no player of its own.
+    if (!m_config.dedicated) sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::PlayerInfo, PlayerInfoMsg{ 0, true, m_hostName, m_hostCharacter });
     for (const Client& o : m_clients)
         if (o.id && o.id != id) sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::PlayerInfo, PlayerInfoMsg{ o.id, true, o.name, o.character });
     PlayerInfoMsg joined{ id, true, c.name, c.character };
@@ -571,7 +603,7 @@ void NetClient::update(double now) {
         if (e.peer != m_server) continue;
         switch (e.type) {
         case NetEvent::Type::Connected: {
-            HelloMsg h{ kProtocolVersion, m_config.gameId, m_name, m_character };
+            HelloMsg h{ kProtocolVersion, m_config.gameId, m_name, m_character, m_config.password };
             sendMsg(m_transport, m_server, Channel::Reliable, MessageType::Hello, h);
             m_statusText = "saying hello";
             break;

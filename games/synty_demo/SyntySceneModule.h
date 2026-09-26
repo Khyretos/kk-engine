@@ -39,6 +39,9 @@ private:
         kke::ModelModule::ModelId model = 0;
         std::string behavior; // "clip", "wave", "breathe", "pose"
         glm::vec3 position{0.0f};
+        // Four legs (buildQuadrupedRagdoll) and how heavy, for ragdolls.
+        bool animal = false;
+        float mass = 70.0f;
         // Ragdoll state (0 = standing, driven by animation/posing).
         kke::IRagdollPhysics::RagdollHandle ragdoll = 0;
         kke::RagdollDesc ragdollDesc;

@@ -1,0 +1,10 @@
+# The build context for docker/server/Dockerfile: the sources only (the
+# repo root's .dockerignore is for the website image). Never the asset
+# packs: they are licensed and mounted at run time instead.
+.git
+build*/
+dist/
+assets/synty/
+website/
+docker/server/data/
+docker/server/directory/

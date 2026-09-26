@@ -41,6 +41,11 @@ set(ENGINE_SOURCES
     src/net/Transport.cpp
     src/net/NetSession.cpp
     src/net/ScriptSpawns.cpp
+    src/server/ServerConfig.cpp
+    src/server/ServerFiles.cpp
+    src/server/ServerAccess.cpp
+    src/server/Leaderboard.cpp
+    src/server/Directory.cpp
     src/net/Authority.cpp
     src/InputSanity.cpp
     src/PackSeal.cpp
@@ -231,7 +236,7 @@ else()
 endif()
 
 if(KKE_ENABLE_NET)
-    target_sources(kke_engine PRIVATE src/net/EnetTransport.cpp)
+    target_sources(kke_engine PRIVATE src/net/EnetTransport.cpp src/server/DirectoryNet.cpp src/server/DedicatedServer.cpp)
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_NET=1)
     target_link_libraries(kke_engine PUBLIC kke_enet)
     if(KKE_ENABLE_JOLT)

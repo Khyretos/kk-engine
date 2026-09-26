@@ -66,6 +66,7 @@ LongAxis findLongAxis(const std::vector<glm::vec3>& points);
 // swinger's shoulder). Angle 0 = straight ahead along `forward`.
 struct SwingSettings {
     float swingSeconds = 0.26f;   // the fast part, the only part that hits
+    float maxStepSeconds = 0.05f; // longer frames (a hitch) advance the swing by this much, so it's still seen
     float holdSeconds = 0.30f;    // follow-through pose, then the bat goes away
     float startDegrees = -80.0f;  // negative = to the left
     float endDegrees = 95.0f;
@@ -73,6 +74,7 @@ struct SwingSettings {
     float reach = 1.25f;          // bat tip, from the pivot (m)
     float pivotHeight = 1.15f;    // shoulder height above the ground (m)
     float maxPushSpeed = 9.0f;    // m/s given to what is hit, at full swing speed
+    float minPushSpeed = 4.0f;    // m/s at least: a hit always knocks things over, even at the swing's slow ends
     float lift = 2.5f;            // m/s upward on a hit, so hit things leave the ground
 };
 
@@ -105,6 +107,7 @@ public:
         bool hit = false;
         glm::vec3 point{0.0f};
         glm::vec3 push{0.0f};
+        float degrees = 0.0f;     // the bat's angle when it hit
     };
     Hit sweep(const glm::vec3& boxMin, const glm::vec3& boxMax) const;
 
@@ -112,13 +115,14 @@ public:
 
 private:
     enum class Phase { Idle, Swing, Hold };
-    float angleAt(float t) const; // t = seconds into the swing
+    float angleAt(float t) const;        // t = seconds into the swing
+    float angularSpeedAt(float t) const; // degrees per second at t
 
     SwingSettings m_settings;
     Phase m_phase = Phase::Idle;
     float m_time = 0.0f;
     float m_angle = 0.0f, m_prevAngle = 0.0f;
-    float m_angularSpeed = 0.0f; // degrees per second, last update
+    float m_sweptFrom = 0.0f, m_sweptTo = 0.0f; // swing time the last update covered
     bool m_swept = false;        // the last update moved the bat through the swing
     glm::vec3 m_pivot{0.0f};
     glm::vec3 m_forward{0.0f, 0.0f, -1.0f}, m_right{1.0f, 0.0f, 0.0f};

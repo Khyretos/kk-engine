@@ -62,6 +62,8 @@ struct NetConfig {
     double connectTimeout = 10.0;   // client: no Welcome by then: give up
     size_t maxBadPackets = 20;      // malformed packets before a kick
     size_t maxEventsPerSecond = 60; // per client; more are dropped
+    std::string password;           // server: required to join ("" = none); client: what it sends
+    bool dedicated = false;         // server: no player of its own (kke_server), all slots for clients
 };
 
 // How far a player may move between two of its states (server check).
@@ -155,6 +157,7 @@ NetBodyState interpolate(const Timeline<NetBodyState>& line, double time, double
 
 // Reserved event kinds (games use 0 .. 0xFEFF).
 constexpr uint16_t kEventBodiesReset = 0xFF00; // the replicated body set changed: forget old bodies
+constexpr uint16_t kEventServerMessage = 0xFF01; // a line from the server to show (its MOTD, "say"): UTF-8 text
 
 // ------------------------------------------------------------------ server
 
@@ -177,6 +180,9 @@ public:
     // A client's event to everyone else (the game decides what to relay).
     void relayEvent(const GameEventMsg& e);
     void kick(uint8_t playerId, const std::string& reason);
+    // Host -> one client (a reply: a leaderboard, a chat line to one player).
+    void sendEventTo(uint8_t playerId, uint16_t kind, const std::vector<uint8_t>& payload);
+    std::string address(uint8_t playerId) const; // where a client is (bans, logs)
 
     // Objects made at run time (see Spawns above). `persistent`: also
     // sent to players who join later, until despawn(). Ids are the game's
@@ -219,6 +225,10 @@ public:
     std::function<bool(uint8_t id, const NetPlayerState& from, const NetPlayerState& to, double dt)> checkMove;
     std::function<void(const GameEventMsg&)> onEvent;          // from a client
     std::function<void(uint8_t id, bool joined)> onPlayer;
+    // Asked at every join after version, game and password: "" lets the
+    // player in, anything else is the reason they're turned away (a ban,
+    // an allow list; kke::ServerAccess).
+    std::function<std::string(const std::string& name, const std::string& address)> admit;
 
 private:
     struct Client {

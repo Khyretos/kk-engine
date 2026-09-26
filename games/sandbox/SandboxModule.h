@@ -6,6 +6,7 @@
 #include "kke/Picking.h"
 #include "kke/PlayBlocks.h"
 #include "kke/Ragdoll.h"
+#include "kke/RigidWorld.h"
 #include "kke/SceneFile.h"
 #include "kke/VoxelTets.h"
 #include "kke/modules/DebugDrawModule.h"
@@ -88,6 +89,8 @@ private:
         kke::IRagdollPhysics::RagdollHandle ragdoll = 0;
         kke::RagdollDesc ragdollDesc;
         kke::RagdollSkinBinding binding;
+        // Jolt collision (a static box of its bounds) so ragdolls land on it.
+        kke::RigidWorld::BodyId collider = kke::RigidWorld::kNoBody;
         // Breakable (props): a FEMFX tet volume voxelized from the prop's
         // own mesh; the prop's vertices are glued to it (embedding) and
         // drawn deformed every frame the physics is awake.
@@ -117,6 +120,11 @@ private:
     glm::mat4 objectTransform(const kke::ModelData& model, const glm::vec3& position, float yawDegrees, float scale = 1.0f) const;
     glm::mat4 objectTransform(const Object& o) const;
     void applyTransform(Object& o);
+    // Jolt, when present: the floor, and a static box per placed piece
+    // (people excluded: they're what gets knocked over).
+    kke::RigidWorld* rigidWorld() const;
+    void syncCollider(Object& o);
+    void dropCollider(Object& o);
     Object* spawnObject(const std::string& asset, const glm::vec3& position, float yawDegrees, uint32_t id = 0, const std::string& pack = {});
     void removeObject(uint32_t id);
     void clearAll();

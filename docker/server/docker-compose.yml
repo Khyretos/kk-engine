@@ -1,0 +1,40 @@
+# A KKE server with Docker (docs/SERVER_HOSTING.md "Docker"):
+#
+#   docker compose -f docker/server/docker-compose.yml up -d      start
+#   docker compose -f docker/server/docker-compose.yml logs -f    watch
+#   docker attach kke-server                                      console (help; Ctrl+P Ctrl+Q leaves)
+#   docker compose -f docker/server/docker-compose.yml down       stop (players are told, files saved)
+#
+# Settings: the variables below, or a server.json in ./data. Everything the
+# server keeps (access list, leaderboards) is in ./data/save.
+services:
+  server:
+    image: kke-server
+    container_name: kke-server
+    build: { context: ../.., dockerfile: docker/server/Dockerfile }
+    ports: [ "27960:27960/udp" ]
+    volumes: [ "./data:/data" ]
+    environment:
+      KKE_SERVER_NAME: "My KKE server"
+      KKE_SERVER_PASSWORD: ""                  # set one to keep it private
+      KKE_SERVER_MAX_PLAYERS: "16"
+      KKE_SERVER_ROLES: "players,leaderboard"
+      KKE_SERVER_MOTD: "Welcome!"
+      # KKE_SERVER_PUBLIC: "true"               # list it on the directories below
+      # KKE_SERVER_DIRECTORIES: "directory.example.org:27950"
+    stdin_open: true   # the console, through docker attach
+    tty: true
+    restart: unless-stopped
+    stop_grace_period: 15s
+
+  # Your own server list, for friends, a community or a studio. Uncomment,
+  # then point servers at it with KKE_SERVER_DIRECTORIES=<this host>:27950.
+  # directory:
+  #   image: kke-server
+  #   container_name: kke-directory
+  #   ports: [ "27950:27950/udp" ]
+  #   volumes: [ "./directory:/data" ]
+  #   environment:
+  #     KKE_SERVER_NAME: "My server list"
+  #     KKE_SERVER_ROLES: "directory"
+  #   restart: unless-stopped

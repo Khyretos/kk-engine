@@ -132,7 +132,9 @@ TEST(PlayBlocks, SwingMissesWhatIsOutOfReach) {
 TEST(PlayBlocks, BigFrameStepsStillHitThinThings) {
     // One 0.2 s frame covers most of the arc; the sweep samples in between.
     const glm::vec3 mn(-0.02f, 0.0f, -1.2f), mx(0.02f, 2.0f, -0.6f);
-    kke::BatSwing swing;
+    kke::SwingSettings st;
+    st.maxStepSeconds = 1.0f; // let the 0.2 s frame through unclamped
+    kke::BatSwing swing(st);
     ASSERT_TRUE(swing.start(glm::vec3(0, 1.15f, 0), glm::vec3(0, 0, -1)));
     EXPECT_TRUE(swingAt(swing, mn, mx, 0.2f).hit);
 }
@@ -145,4 +147,43 @@ TEST(PlayBlocks, FollowThroughDoesNotHit) {
     const glm::vec3 tip = swing.pivot() + swing.direction() * 0.8f;
     swing.update(1.0f / 60.0f);
     EXPECT_FALSE(swing.sweep(tip - glm::vec3(0.2f), tip + glm::vec3(0.2f)).hit);
+}
+
+TEST(PlayBlocks, AHitchNeitherSkipsTheSwingNorWeakensTheHit) {
+    const glm::vec3 mn(-0.25f, 0.0f, -4.25f), mx(0.25f, 1.8f, -3.75f);
+    const glm::vec3 forward(0, 0, -1);
+    kke::BatSwing smooth;
+    ASSERT_TRUE(smooth.start(smooth.pivotFor(glm::vec3(0, 0, -4), forward), forward));
+    const kke::BatSwing::Hit a = swingAt(smooth, mn, mx);
+    ASSERT_TRUE(a.hit);
+
+    // A one-second frame (the bat model loading) only advances the swing
+    // by maxStepSeconds: it is still going afterwards.
+    kke::BatSwing hitched;
+    ASSERT_TRUE(hitched.start(hitched.pivotFor(glm::vec3(0, 0, -4), forward), forward));
+    hitched.update(1.0f);
+    EXPECT_TRUE(hitched.hitting());
+
+    // Even a whole swing in one frame pushes as hard as a smooth one:
+    // the push is the swing's speed where it hit, not angle / frame time.
+    kke::SwingSettings st;
+    st.maxStepSeconds = 1.0f;
+    kke::BatSwing oneFrame(st);
+    ASSERT_TRUE(oneFrame.start(oneFrame.pivotFor(glm::vec3(0, 0, -4), forward), forward));
+    const kke::BatSwing::Hit b = swingAt(oneFrame, mn, mx, 1.0f);
+    ASSERT_TRUE(b.hit);
+    EXPECT_NEAR(glm::length(b.push), glm::length(a.push), 0.15f * glm::length(a.push));
+}
+
+TEST(PlayBlocks, EveryHitKnocksOver) {
+    // Something the bat only grazes at the very start of the swing, where
+    // it barely moves, still gets at least minPushSpeed.
+    kke::BatSwing swing;
+    const glm::vec3 pivot(0, 1.15f, 0);
+    ASSERT_TRUE(swing.start(pivot, glm::vec3(0, 0, -1)));
+    const glm::vec3 tip = pivot + swing.direction(swing.settings().startDegrees) * 1.0f;
+    const kke::BatSwing::Hit hit = swingAt(swing, tip - glm::vec3(0.05f), tip + glm::vec3(0.05f));
+    ASSERT_TRUE(hit.hit);
+    EXPECT_LT(hit.degrees, swing.settings().startDegrees + 5.0f);
+    EXPECT_GE(glm::length(glm::vec2(hit.push.x, hit.push.z)), swing.settings().minPushSpeed - 1e-3f);
 }
