@@ -159,7 +159,7 @@ if(KKE_ENABLE_FEMFX)
     # actual segfault (that a stack-lifetime fix did NOT resolve,
     # ruling that theory out first) before landing on this as the
     # actual cause, not assumed.
-    target_compile_options(kke_engine PUBLIC -mavx2 -mfma)
+    target_compile_options(kke_engine PUBLIC ${KKE_AVX2_FLAGS})
 else()
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_FEMFX=0)
 endif()

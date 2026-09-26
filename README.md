@@ -358,6 +358,24 @@ Run demos from `build/bin/`, not the repository root — shaders,
 fonts, and each demo's `game.json` are copied next to the compiled
 executable at build time, and relative paths assume that location.
 
+### Other platforms: Docker builds
+
+Like your other projects, each platform builds in its own container
+(`docker-compose.yml`, `docker/`); the source is mounted, output goes to
+`dist/<platform>/`:
+
+```bash
+docker compose run --rm linux     # Ubuntu 24.04, builds everything, runs the unit tests
+docker compose run --rm windows   # MinGW-w64 cross build -> .exe, unit tests under Wine
+docker compose run --rm android   # NDK arm64-v8a native build (FEMFX off: see SCALING.md)
+```
+
+macOS/iOS can't be built in a container (Apple's SDK licence): the
+manual "Platforms" GitHub workflow builds macOS (and Windows with MSVC)
+on GitHub's runners. What works on which platform, what blocks the rest
+(FEMFX is x86-AVX only; browsers have no Vulkan) and the plan:
+**SCALING.md**, section D.
+
 ### Real hardware findings, fixed
 
 Everything in this subsection was found by an actual person building
@@ -1227,6 +1245,16 @@ tetrahedron's material (density 700, stiffness 1e7 — "wood-ish") flows
 through this struct into `FmTetMaterialParams`, and that whole path is
 now verified through an actual stable, 20+ second running simulation,
 not just mesh setup.
+
+## Scaling: worst cases, multiplayer, platforms
+
+**SCALING.md** answers "does a volcano level with 40 players on PCs,
+phones and browsers perform?" with measured numbers (FEMFX costs
+~0.15-0.2 ms per awake body per step on one core; a rock storm needs a
+rigid-body layer) and the build order for what's missing: rigid bodies,
+instancing/LOD/split screen, networking, platforms. The numbers come
+from `tools/physics_lab` (`kke_physics_lab volcano|shoot|fracture`), a
+headless FEMFX harness that needs no window or GPU.
 
 ## Content pipeline: turning meshes into physics volumes
 

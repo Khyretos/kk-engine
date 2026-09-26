@@ -383,7 +383,7 @@ private:
     struct SpawnedTet {
         AMD::FmTetMesh* tetMesh = nullptr;               // owned by tetMeshBuffer, not separately
         AMD::FmTetMeshBuffer* tetMeshBuffer = nullptr;
-        uint sceneBufferId = 0;                          // needed to remove it from the scene later
+        uint32_t sceneBufferId = 0;                          // needed to remove it from the scene later
         Material material;
         // Render data. Only the *exterior* faces of the tet mesh are
         // drawn — interior faces are shared by two tets and can never be
@@ -431,11 +431,11 @@ private:
         // building them once — which is exactly how they're used.
         std::vector<AMD::FmVector3> restPositions;
         std::vector<AMD::FmTetVertIds> tetVertIds;
-        std::vector<AMD::FmArray<uint>> vertIncidentTets;
+        std::vector<AMD::FmArray<uint32_t>> vertIncidentTets;
         // Fracture-specific, only populated/used when fracturable —
         // same lifetime reasoning as the arrays above.
         std::vector<AMD::FmFractureGroupCounts> fractureGroupCounts;
-        std::vector<uint> tetFractureGroupIds;
+        std::vector<uint32_t> tetFractureGroupIds;
         std::vector<uint16_t> tetFlags;                  // FM_TET_FLAG_* per tet, kept alive for FEMFX
 
         // Embedded render meshes (spawnTetMeshWithOptions drawOnlyCracks):
@@ -597,13 +597,13 @@ private:
 
     struct RagdollInstance {
         std::vector<AMD::FmRigidBody*> bodies;
-        std::vector<uint> bodyIds, glueIds, hingeIds;
+        std::vector<uint32_t> bodyIds, glueIds, hingeIds;
         std::vector<glm::vec3> halfExtents;
     };
     std::unordered_map<RagdollHandle, RagdollInstance> m_ragdolls;
     RagdollHandle m_nextRagdoll = 1;
-    static constexpr uint kRagdollCollisionGroup = 3;
-    static constexpr uint kMaxRigidBodies = 256;
+    static constexpr uint32_t kRagdollCollisionGroup = 3;
+    static constexpr uint32_t kMaxRigidBodies = 256;
     bool m_drawGround = true;
     bool m_showRagdollBodies = false;
 
@@ -642,7 +642,7 @@ private:
     std::vector<std::vector<double>> m_benchWindows;   // one row per second, see publishTimingWindow()
     int m_workerThreads = 1;
     unsigned m_hardwareThreads = 0;
-    void writeBenchReport(double wallSeconds, uint totalPieces, uint totalTets);
+    void writeBenchReport(double wallSeconds, uint32_t totalPieces, uint32_t totalTets);
     void benchTick(uint64_t tickIndex);
 };
 

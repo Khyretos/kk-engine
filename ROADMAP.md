@@ -71,6 +71,9 @@ limitations. 🔴 Not started / stub.
 |---|---|---|
 | Tetrahedral deformable-body simulation | 🟢 | Real FEMFX integration, not a stub — see README "Physics: AMD FEMFX integration." |
 | Real fracture | 🟢 | Verified with real, measured piece counts across many real drops — see `BUGS.md` BUG-007 for the shape-resolution fix that made this visually convincing. Fractured pieces now all actually render (they mostly didn't — BUG-026). |
+| Natural fracture patterns (Voronoi, KKE-driven breaking) | 🟢 | `kke::VoronoiFracture` (random-angle cracks, same tet count) + `kke::BreakGraph` + `PhysicsModule::Breakable` (plain FEMFX bodies swapped at break time, not FEMFX's own fracture: BUG-046). Seeds: world x object (`kke::fractureSeed`). Damage scales with the hit (break window + grace, BUG-051). Physics demo "Break test" scene. Thresholds measured with `tools/physics_lab`. |
+| Rigid bodies (rocks, debris, characters, vehicles) | 🔴 | **The main scaling gap** (SCALING.md): FEMFX costs ~0.15-0.2 ms per awake body per step on one core; a rock storm needs a rigid-body layer (plan: Jolt, as a module next to FEMFX). |
+| FEMFX on ARM / WebAssembly | 🔴 | FEMFX's vector math is x86 AVX intrinsics: no Android, Apple Silicon or browser build until a SIMDe port (SCALING.md D). |
 | Real plasticity | 🟢 | Verified via real vertex-distance measurement (not FEMFX's own rest-position API, which doesn't track this — see `BUGS.md` BUG-003). |
 | Material toughness tuning | 🟢 | Real, measured stress ranges per material, not a guessed formula — see `BUGS.md` BUG-020 for the full account, including the wrong approach that preceded it. |
 | Scene-scale robustness (many objects) | 🟢 | Verified up to ~57 simultaneous objects without falling through the ground — see `BUGS.md` BUG-005. Scene capacities are now sized for fracture pieces too (4096 pieces), and any FEMFX limit that is hit gets logged — see BUG-027. |
@@ -78,6 +81,7 @@ limitations. 🔴 Not started / stub.
 | Purpose-built physics scenes | 🟢 | Five real scenes, each independently verified: **Glass Sheet** (shatters into ~13-58 real pieces depending on threshold tuning at time of test), **Brick** (real 2:1:1 proportions, breaks into chunks), **Rubber Ball** (honest approximation — a box, not a true tetrahedralized sphere, see its own in-code comment; bounces without fracturing), **Car Crash** (two real objects: a plastic-deforming "car" and a fracturable "wall"), **Lava Melt** (honest approximation — real plasticity under sustained real weight, not true phase-change physics; FEMFX has none). |
 | Real sphere / curved-shape tetrahedralization | 🟢 | `buildSphere` (spherified cube) and `kke::voxelizeToTets` + `fitSurfaceToMesh` for any mesh. |
 | Performance at scale | 🟡 | Much better, measured, not yet checked on real hardware. Sleeping works (settled piles cost ~0.2 ms/step), FEMFX always optimized, only exterior faces drawn, catch-up capped at 2 ticks/frame. Min-spec emulation (1 core): 0.6 → 11.0 FPS average over the scripted benchmark, with 6x more fracture pieces than before (the old build was silently capping fracture). Remaining gap: while a big break is still flying, cost scales with awake piece count (~55 ms/step for ~475 pieces on 1 core) — no debris budget yet. See `PERFORMANCE_NOTES.md` "Status" and `HARDWARE_TESTS.md` HW-001..HW-004. |
+| Debris budget | 🟢 | `PhysicsModule::setDebrisBudget` (default 200 broken pieces, oldest sleeping piece removed first), slider in the Physics panel. |
 | Network authority / reconciliation | 🔴 | Not started — see Networking section. |
 
 ## UI (RmlUi + ImGui)
@@ -127,7 +131,7 @@ limitations. 🔴 Not started / stub.
 | System | Status | Notes |
 |---|---|---|
 | Replication measurement/demo | 🟢 | `NetworkModule` genuinely measures and displays what *would* be sent. |
-| Real network transport | 🔴 | Nothing actually leaves the process yet. |
+| Real network transport | 🔴 | Nothing actually leaves the process yet. Plan for 40 mixed-platform players (authoritative server, predicted clients, seed-based break events instead of debris): SCALING.md §2C. |
 | Authority / reconciliation model | 🔴 | `deserializeReplicatedState()` exists but is unused; two peers disagreeing about state isn't handled at all. |
 
 ## Tooling / dev experience
@@ -141,6 +145,8 @@ limitations. 🔴 Not started / stub.
 | `ROADMAP.md` (this file) | 🟢 | Just established this session. |
 | Scripted physics benchmark (`KKE_PHYSICS_BENCH`) | 🟢 | Same scenes at the same simulation ticks on every machine, one comparable `BENCH RESULT:` line. `KKE_PHYSICS_THREADS` overrides the worker count; the pool respects CPU affinity, so `taskset -c 0` really is 1 thread. |
 | `HARDWARE_TESTS.md` | 🟢 | Checklist of everything only real hardware can answer, with what to send back. |
+| `tools/physics_lab` (`kke_physics_lab`) | 🟢 | Headless FEMFX experiments, no window/GPU: `fracture` (stability of every pattern), `shoot` (threshold tuning), `volcano` (worst-case load), `freefall`, `rest`. |
+| Cross-platform builds | 🟡 | `docker compose run --rm linux / windows / android` (docker/). Linux: builds + 125 tests pass in the container. Windows: MinGW-w64 cross build (see README). Android: native build with FEMFX off. macOS / Windows-MSVC: manual "Platforms" GitHub workflow. Browser: needs a WebGPU renderer (SCALING.md). |
 
 ---
 

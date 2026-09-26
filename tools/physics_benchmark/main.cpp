@@ -27,6 +27,9 @@
 #include "AMD_FEMFX.h"
 #include <cstdio>
 #include <cstdlib>
+#if defined(_WIN32)
+#include <malloc.h>
+#endif
 #include <thread>
 #include <mutex>
 #include <condition_variable>
@@ -41,9 +44,19 @@ using namespace AMD;
 
 void* FmAlignedMalloc(size_t size, size_t alignment) {
     size_t roundedSize = ((size + alignment - 1) / alignment) * alignment;
+    #if defined(_WIN32)
+    return _aligned_malloc(roundedSize, alignment); // no std::aligned_alloc in the Windows C runtime
+#else
     return std::aligned_alloc(alignment, roundedSize);
+#endif
 }
-void FmAlignedFree(void* ptr) { std::free(ptr); }
+void FmAlignedFree(void* ptr) {
+#if defined(_WIN32)
+    _aligned_free(ptr);
+#else
+    std::free(ptr);
+#endif
+}
 
 namespace {
 

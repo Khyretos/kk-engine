@@ -2,7 +2,7 @@ add_executable(synty_demo main.cpp SyntySceneModule.cpp)
 target_link_libraries(synty_demo PRIVATE kke_engine)
 
 engine_copy_runtime_file(synty_demo ${CMAKE_CURRENT_SOURCE_DIR}/game.json marketplace/synty_demo/game.json)
-foreach(shader model.vert model.frag cube.vert cube.frag shadow.vert shadow.frag)
+foreach(shader model.vert model_instanced.vert shadow_instanced.vert model.frag cube.vert cube.frag shadow.vert shadow.frag)
     engine_add_shader(synty_demo ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()
 # The Synty pack itself is found at runtime (assets/synty/ or KKE_SYNTY_DIR)

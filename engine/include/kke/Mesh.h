@@ -39,6 +39,9 @@ public:
 
     void bind(VkCommandBuffer cmd) const;
     void draw(VkCommandBuffer cmd) const;
+    // `instances` copies in one call (per-instance data bound by the
+    // caller at binding 1, see ModelModule's instanced pipeline).
+    void drawInstanced(VkCommandBuffer cmd, uint32_t instances, uint32_t firstInstance = 0) const;
 
     static Mesh createCube(VulkanDevice& device);
 

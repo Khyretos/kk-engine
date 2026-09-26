@@ -12,6 +12,9 @@
 #include <imgui.h>
 #include <AMD_FEMFX.h>
 #include <cstdlib>
+#if defined(_WIN32)
+#include <malloc.h>
+#endif
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -45,11 +48,19 @@ void* FmAlignedMalloc(size_t size, size_t alignment) {
     // type's natural alignment as the second argument, so rounding size
     // up is correct and harmless regardless of what's being allocated.
     size_t roundedSize = ((size + alignment - 1) / alignment) * alignment;
+    #if defined(_WIN32)
+    return _aligned_malloc(roundedSize, alignment); // no std::aligned_alloc in the Windows C runtime
+#else
     return std::aligned_alloc(alignment, roundedSize);
+#endif
 }
 
 void FmAlignedFree(void* ptr) {
+#if defined(_WIN32)
+    _aligned_free(ptr);
+#else
     std::free(ptr);
+#endif
 }
 
 namespace kke {
@@ -651,7 +662,7 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshWithOptions(const TetMesh
             if (options.fracture && !obj.armPending) {
                 AMD::FmTetMaterialParams p = toFemfx(material);
                 const float base = p.fractureStressThreshold;
-                for (uint t = 0; t < obj.numTets; ++t) {
+                for (uint32_t t = 0; t < obj.numTets; ++t) {
                     if (obj.tetStrength[t] == 1.0f) continue;
                     p.fractureStressThreshold = base * obj.tetStrength[t];
                     AMD::FmUpdateTetMaterialParams(m_scene, obj.tetMesh, t, p);
@@ -908,19 +919,19 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshInternal(const TetMeshDat
     auto obj = std::make_unique<SpawnedTet>();
     obj->fracturable = enableFracture;
     obj->plastic = enablePlasticity;
-    const uint numVerts = static_cast<uint>(mesh.vertices.size());
-    const uint numTets = static_cast<uint>(mesh.tets.size());
+    const uint32_t numVerts = static_cast<uint32_t>(mesh.vertices.size());
+    const uint32_t numTets = static_cast<uint32_t>(mesh.tets.size());
     obj->numVerts = numVerts;
     obj->numTets = numTets;
 
     obj->restPositions.resize(numVerts);
-    for (uint i = 0; i < numVerts; ++i) {
+    for (uint32_t i = 0; i < numVerts; ++i) {
         const glm::vec3& v = mesh.vertices[i];
         obj->restPositions[i] = AMD::FmInitVector3(position.x + v.x, position.y + v.y, position.z + v.z);
     }
 
     obj->tetVertIds.resize(numTets);
-    for (uint i = 0; i < numTets; ++i) {
+    for (uint32_t i = 0; i < numTets; ++i) {
         const auto& t = mesh.tets[i];
         obj->tetVertIds[i].ids[0] = t[0];
         obj->tetVertIds[i].ids[1] = t[1];
@@ -935,7 +946,7 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshInternal(const TetMeshDat
     // behave as one connected deformable body rather than a pile of
     // disconnected tets that happen to share vertex positions.
     obj->vertIncidentTets.resize(numVerts);
-    for (uint t = 0; t < numTets; ++t) {
+    for (uint32_t t = 0; t < numTets; ++t) {
         for (int j = 0; j < 4; ++j) {
             obj->vertIncidentTets[obj->tetVertIds[t].ids[j]].Add(t);
         }
@@ -1033,8 +1044,8 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshInternal(const TetMeshDat
     // same arrays crashed immediately in standalone testing, building
     // a fresh set fixed it. See PhysicsModule.h's class comment for
     // the real, gdb-traced crash this call fixes.
-    std::vector<AMD::FmArray<uint>> connectivityVertIncidentTets(numVerts);
-    for (uint t = 0; t < numTets; ++t) {
+    std::vector<AMD::FmArray<uint32_t>> connectivityVertIncidentTets(numVerts);
+    for (uint32_t t = 0; t < numTets; ++t) {
         for (int j = 0; j < 4; ++j) {
             connectivityVertIncidentTets[obj->tetVertIds[t].ids[j]].Add(t);
         }
@@ -1057,7 +1068,7 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshInternal(const TetMeshDat
         return kInvalidHandle;
     }
 
-    for (uint t = 0; t < obj->tetFlags.size(); ++t) {
+    for (uint32_t t = 0; t < obj->tetFlags.size(); ++t) {
         if (obj->tetFlags[t]) AMD::FmSetTetFlags(obj->tetMesh, t, obj->tetFlags[t]);
     }
 
@@ -1065,7 +1076,7 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshInternal(const TetMeshDat
     // (a face used by only one tet), and each tet's inverse rest edges.
     obj->drawOnlyCracks = drawOnlyCracks;
     obj->restInverse.resize(numTets);
-    for (uint t = 0; t < numTets; ++t) {
+    for (uint32_t t = 0; t < numTets; ++t) {
         const auto& ids = mesh.tets[t];
         glm::mat3 dm(mesh.vertices[ids[1]] - mesh.vertices[ids[0]], mesh.vertices[ids[2]] - mesh.vertices[ids[0]],
                      mesh.vertices[ids[3]] - mesh.vertices[ids[0]]);
@@ -1073,16 +1084,16 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshInternal(const TetMeshDat
     }
     if (drawOnlyCracks) {
         std::map<std::array<uint32_t, 3>, int> faceUse;
-        auto key = [&](uint t, int f) {
+        auto key = [&](uint32_t t, int f) {
             std::array<uint32_t, 3> k{};
             int j = 0;
             for (int i = 0; i < 4; ++i) if (i != f) k[j++] = mesh.tets[t][i];
             std::sort(k.begin(), k.end());
             return k;
         };
-        for (uint t = 0; t < numTets; ++t) for (int f = 0; f < 4; ++f) ++faceUse[key(t, f)];
+        for (uint32_t t = 0; t < numTets; ++t) for (int f = 0; f < 4; ++f) ++faceUse[key(t, f)];
         obj->originalExterior.assign(numTets, 0);
-        for (uint t = 0; t < numTets; ++t)
+        for (uint32_t t = 0; t < numTets; ++t)
             for (int f = 0; f < 4; ++f)
                 if (faceUse[key(t, f)] == 1) obj->originalExterior[t] |= static_cast<uint8_t>(1u << f);
     }
@@ -1207,7 +1218,7 @@ bool PhysicsModule::deformEmbedded(ObjectHandle handle, const TetEmbedding& embe
         TetNow& c = cache[t];
         if (c.valid) return c;
         c.valid = true;
-        uint localTet = 0, meshIdx = 0;
+        uint32_t localTet = 0, meshIdx = 0;
         const AMD::FmTetMesh* piece = AMD::FmGetTetMeshContainingTet(&localTet, &meshIdx, *obj.tetMeshBuffer, t);
         if (!piece) {
             for (auto& v : c.x) v = glm::vec3(0.0f);
@@ -1248,8 +1259,8 @@ bool PhysicsModule::isObjectAsleep(ObjectHandle handle) const {
     }
     auto it = m_objects.find(handle);
     if (it == m_objects.end()) return true;
-    const uint numPieces = AMD::FmGetNumTetMeshes(*it->second->tetMeshBuffer);
-    for (uint m = 0; m < numPieces; ++m) {
+    const uint32_t numPieces = AMD::FmGetNumTetMeshes(*it->second->tetMeshBuffer);
+    for (uint32_t m = 0; m < numPieces; ++m) {
         const AMD::FmTetMesh* piece = AMD::FmGetTetMesh(*it->second->tetMeshBuffer, m);
         if (piece && !AMD::FmIsTetMeshSleeping(*piece)) return false;
     }
@@ -1349,14 +1360,14 @@ void PhysicsModule::fixedUpdate(const FixedUpdateContext& ctx) {
         // last sample: FEMFX may put an object to sleep before it has even
         // landed (it slept 1 cm above the floor in one test), and a stale
         // sample armed it too weakly.
-        for (uint t = 0; t < obj->numTets; ++t)
+        for (uint32_t t = 0; t < obj->numTets; ++t)
             obj->settleStress[t] = std::max(obj->settleStress[t] * 0.9f, AMD::FmGetTetMaxStress(*obj->tetMesh, t)); // decaying peak, see updateBreakables()
         const bool settled = AMD::FmIsTetMeshSleeping(*obj->tetMesh);
         if (obj->armAge < 45 || (!settled && obj->armAge < obj->armMaxTicks)) continue;
         // Arm relative to the settled state (see TetSpawnOptions).
         constexpr float kRestStressFactor = 1.25f;
         float restMax = 0.0f;
-        for (uint t = 0; t < obj->numTets; ++t) {
+        for (uint32_t t = 0; t < obj->numTets; ++t) {
             AMD::FmTetMaterialParams p = obj->armedParams;
             if (t < obj->tetStrength.size()) p.fractureStressThreshold *= obj->tetStrength[t];
             p.fractureStressThreshold += kRestStressFactor * obj->settleStress[t];
@@ -1391,7 +1402,7 @@ void PhysicsModule::fixedUpdate(const FixedUpdateContext& ctx) {
     if (!m_objects.empty() && ctx.tickIndex % 60 == 0) {
         std::vector<ObjectHandle> runaways;
         for (auto& [handle, obj] : m_objects) {
-            const uint numPieces = AMD::FmGetNumTetMeshes(*obj->tetMeshBuffer);
+            const uint32_t numPieces = AMD::FmGetNumTetMeshes(*obj->tetMeshBuffer);
             if (obj->fracturable && numPieces != obj->loggedPieces) {
                 log::get(name())->info("object {} has split into {} pieces", handle, numPieces);
                 obj->loggedPieces = numPieces;
@@ -1401,7 +1412,7 @@ void PhysicsModule::fixedUpdate(const FixedUpdateContext& ctx) {
             // would otherwise stay awake forever, costing CPU and waking
             // anything it touches. Anything non-finite or beyond 10 km is
             // removed and reported.
-            for (uint m = 0; m < numPieces; ++m) {
+            for (uint32_t m = 0; m < numPieces; ++m) {
                 const AMD::FmTetMesh* piece = AMD::FmGetTetMesh(*obj->tetMeshBuffer, m);
                 if (!piece) continue;
                 AMD::FmVector3 lo = AMD::FmGetMinPosition(*piece), hi = AMD::FmGetMaxPosition(*piece);
@@ -1438,11 +1449,11 @@ void PhysicsModule::prepareRenderData(uint32_t frameIndex) {
     static thread_local std::vector<glm::vec3> restPositions;
 
     for (auto& [handle, obj] : m_objects) {
-        const uint numPieces = AMD::FmGetNumTetMeshes(*obj->tetMeshBuffer);
+        const uint32_t numPieces = AMD::FmGetNumTetMeshes(*obj->tetMeshBuffer);
         m_totalPieces += numPieces;
 
         bool anyAwake = obj->cpuVersion == 0; // never built yet: build once regardless
-        for (uint m = 0; m < numPieces; ++m) {
+        for (uint32_t m = 0; m < numPieces; ++m) {
             const AMD::FmTetMesh* piece = AMD::FmGetTetMesh(*obj->tetMeshBuffer, m);
             if (piece && !AMD::FmIsTetMeshSleeping(*piece)) {
                 anyAwake = true;
@@ -1468,33 +1479,33 @@ void PhysicsModule::prepareRenderData(uint32_t frameIndex) {
             static thread_local std::vector<std::vector<uint32_t>> bufferTetOf;
             if (obj->drawOnlyCracks) {
                 bufferTetOf.assign(numPieces, {});
-                for (uint t = 0; t < obj->numTets; ++t) {
-                    uint localTet = 0, meshIdx = 0;
+                for (uint32_t t = 0; t < obj->numTets; ++t) {
+                    uint32_t localTet = 0, meshIdx = 0;
                     if (!AMD::FmGetTetMeshContainingTet(&localTet, &meshIdx, *obj->tetMeshBuffer, t) || meshIdx >= numPieces) continue;
                     auto& map = bufferTetOf[meshIdx];
                     if (map.size() <= localTet) map.resize(localTet + 1, UINT32_MAX);
                     map[localTet] = t;
                 }
             }
-            for (uint m = 0; m < numPieces; ++m) {
+            for (uint32_t m = 0; m < numPieces; ++m) {
                 const AMD::FmTetMesh* piece = AMD::FmGetTetMesh(*obj->tetMeshBuffer, m);
                 if (!piece) continue;
-                const uint numVerts = AMD::FmGetNumVerts(*piece);
-                const uint numFaces = AMD::FmGetNumExteriorFaces(*piece);
+                const uint32_t numVerts = AMD::FmGetNumVerts(*piece);
+                const uint32_t numFaces = AMD::FmGetNumExteriorFaces(*piece);
                 if (numVerts == 0 || numFaces == 0) continue;
 
                 simPositions.resize(numVerts);
                 restPositions.resize(numVerts);
-                for (uint i = 0; i < numVerts; ++i) {
+                for (uint32_t i = 0; i < numVerts; ++i) {
                     AMD::FmVector3 p = AMD::FmGetVertPosition(*piece, i);
                     simPositions[i] = glm::vec3(p.x, p.y, p.z) * m_renderScale;
                     AMD::FmVector3 r = AMD::FmGetVertRestPosition(*piece, i);
                     restPositions[i] = glm::vec3(r.x, r.y, r.z);
                 }
 
-                for (uint f = 0; f < numFaces; ++f) {
+                for (uint32_t f = 0; f < numFaces; ++f) {
                     if (obj->cpuVerts.size() + 3 > obj->maxRenderVerts) { truncated = true; break; } // see below
-                    uint tetId = 0, faceId = 0;
+                    uint32_t tetId = 0, faceId = 0;
                     AMD::FmGetExteriorFace(&tetId, &faceId, *piece, f);
                     if (obj->drawOnlyCracks) {
                         const auto& map = bufferTetOf[m];
@@ -1505,7 +1516,7 @@ void PhysicsModule::prepareRenderData(uint32_t frameIndex) {
                     // FEMFX's own face numbering (FmGetFaceVertIds in
                     // FEMFXTetMeshConnectivity.h) — the same winding the
                     // old hardcoded 4-face table used.
-                    const uint ia = ids.ids[3 - faceId], ib = ids.ids[(5 - faceId) % 4], ic = ids.ids[(faceId + 2) % 4];
+                    const uint32_t ia = ids.ids[3 - faceId], ib = ids.ids[(5 - faceId) % 4], ic = ids.ids[(faceId + 2) % 4];
                     glm::vec3 a = simPositions[ia];
                     glm::vec3 b = simPositions[ib];
                     glm::vec3 c = simPositions[ic];
@@ -1745,7 +1756,7 @@ PhysicsModule::RagdollHandle PhysicsModule::createRagdoll(const RagdollDesc& des
             log::get(name())->error("createRagdoll: FmCreateRigidBody failed for '{}'", b.name);
             continue;
         }
-        uint id = AMD::FmAddRigidBodyToScene(m_scene, body);
+        uint32_t id = AMD::FmAddRigidBodyToScene(m_scene, body);
         AMD::FmEnableSleeping(m_scene, body, true);
         rd.bodies.push_back(body);
         rd.bodyIds.push_back(id);
@@ -1798,8 +1809,8 @@ void PhysicsModule::destroyRagdoll(RagdollHandle handle) {
     auto it = m_ragdolls.find(handle);
     if (it == m_ragdolls.end() || !m_scene) return;
     RagdollInstance& rd = it->second;
-    for (uint id : rd.hingeIds) AMD::FmRemoveRigidBodyAngleConstraintFromScene(m_scene, id);
-    for (uint id : rd.glueIds) AMD::FmRemoveGlueConstraintFromScene(m_scene, id);
+    for (uint32_t id : rd.hingeIds) AMD::FmRemoveRigidBodyAngleConstraintFromScene(m_scene, id);
+    for (uint32_t id : rd.glueIds) AMD::FmRemoveGlueConstraintFromScene(m_scene, id);
     for (size_t i = 0; i < rd.bodies.size(); ++i) {
         AMD::FmRemoveRigidBodyFromScene(m_scene, rd.bodyIds[i]);
         AMD::FmDestroyRigidBody(rd.bodies[i]);
@@ -1878,11 +1889,11 @@ void PhysicsModule::benchTick(uint64_t tickIndex) {
 
     m_benchDone = true;
     double wall = nowSeconds() - m_benchStartSeconds;
-    uint totalTets = 0, pieces = 0;
+    uint32_t totalTets = 0, pieces = 0;
     for (auto& [handle, obj] : m_objects) {
-        uint n = AMD::FmGetNumTetMeshes(*obj->tetMeshBuffer);
+        uint32_t n = AMD::FmGetNumTetMeshes(*obj->tetMeshBuffer);
         pieces += n;
-        for (uint m = 0; m < n; ++m) totalTets += AMD::FmGetNumTets(*AMD::FmGetTetMesh(*obj->tetMeshBuffer, m));
+        for (uint32_t m = 0; m < n; ++m) totalTets += AMD::FmGetNumTets(*AMD::FmGetTetMesh(*obj->tetMeshBuffer, m));
     }
     log::get(name())->info(
         "BENCH RESULT: {} ticks in {:.2f} s wall ({:.2f}x realtime), {} frames ({:.1f} fps avg), "
@@ -1899,7 +1910,7 @@ void PhysicsModule::benchTick(uint64_t tickIndex) {
 
 // Writes benchmark/physics_<time>_<host>.{json,txt} (or $KKE_BENCH_DIR) —
 // see kke/BenchmarkReport.h. Paste either file back for analysis.
-void PhysicsModule::writeBenchReport(double wall, uint pieces, uint totalTets) {
+void PhysicsModule::writeBenchReport(double wall, uint32_t pieces, uint32_t totalTets) {
     BenchmarkReport r;
     r.name = "physics";
     r.system = collectSystemInfo(m_app->device().physicalDevice());

@@ -29,6 +29,9 @@
 #include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
+#if defined(_WIN32)
+#include <malloc.h>
+#endif
 #include <cstring>
 #include <deque>
 #include <functional>
@@ -42,9 +45,19 @@ using namespace AMD;
 
 void* FmAlignedMalloc(size_t size, size_t alignment) {
     size_t rounded = ((size + alignment - 1) / alignment) * alignment;
+    #if defined(_WIN32)
+    return _aligned_malloc(rounded, alignment); // no std::aligned_alloc in the Windows C runtime
+#else
     return std::aligned_alloc(alignment, rounded);
+#endif
 }
-void FmAlignedFree(void* ptr) { std::free(ptr); }
+void FmAlignedFree(void* ptr) {
+#if defined(_WIN32)
+    _aligned_free(ptr);
+#else
+    std::free(ptr);
+#endif
+}
 
 namespace {
 

@@ -1,0 +1,26 @@
+# Cross-platform builds in containers (like your other projects):
+#
+#   docker compose run --rm linux      # -> dist/linux    (+ runs the unit tests)
+#   docker compose run --rm windows    # -> dist/windows  (MinGW-w64 cross build, tests under Wine)
+#   docker compose run --rm android    # -> dist/android  (arm64-v8a .so files; see SCALING.md: FEMFX needs the SIMDe port first)
+#
+# The source tree is mounted, not copied: edit on the host, rebuild in the
+# container. Build trees go to build-docker/<platform>/ (git-ignored).
+# macOS/iOS can't be built in a container (Apple's SDK licence); they
+# build on GitHub's macOS runners instead (.github/workflows/platforms.yml).
+services:
+  linux:
+    build: { context: docker, dockerfile: linux.Dockerfile }
+    image: kke-build-linux
+    volumes: [ ".:/src" ]
+    command: [ "linux" ]
+  windows:
+    build: { context: docker, dockerfile: windows.Dockerfile }
+    image: kke-build-windows
+    volumes: [ ".:/src" ]
+    command: [ "windows" ]
+  android:
+    build: { context: docker, dockerfile: android.Dockerfile }
+    image: kke-build-android
+    volumes: [ ".:/src" ]
+    command: [ "android" ]

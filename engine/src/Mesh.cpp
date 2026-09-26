@@ -57,6 +57,10 @@ void Mesh::draw(VkCommandBuffer cmd) const {
     vkCmdDrawIndexed(cmd, m_indexCount, 1, 0, 0, 0);
 }
 
+void Mesh::drawInstanced(VkCommandBuffer cmd, uint32_t instances, uint32_t firstInstance) const {
+    vkCmdDrawIndexed(cmd, m_indexCount, instances, 0, 0, firstInstance);
+}
+
 Mesh Mesh::createCube(VulkanDevice& device) {
     // Each face gets its own 4 vertices (not shared) so every face can have a
     // distinct flat color — makes it immediately obvious on screen that this

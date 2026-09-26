@@ -58,13 +58,17 @@ target_include_directories(femfx PRIVATE
 # translation unit that includes FEMFX headers, not just this library's
 # own .cpp files, since __forceinline appears directly in public headers
 # other code includes too.
-target_compile_definitions(femfx PUBLIC WIN32 NOMINMAX __forceinline=inline)
+target_compile_definitions(femfx PUBLIC WIN32 NOMINMAX $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:__forceinline=inline>)
 
 # -mavx2 -mfma: FEMFX's own SIMD code calls FMA3 intrinsics (_mm_fmadd_ps)
 # directly; -mavx2 alone compiles but fails at the "always_inline can't
 # inline without this target feature" step — verified by hitting that
 # exact error and fixing it this way, not assumed. -ffast-math and
 # -fno-exceptions match the original premake build's own flags.
+if(MSVC)
+    # The original Windows build's settings (premake5.lua): AVX2, fast math.
+    target_compile_options(femfx PRIVATE /arch:AVX2 /fp:fast)
+else()
 target_compile_options(femfx PRIVATE
     -mavx2 -mfma -ffast-math -fno-exceptions
     # Two remaining warnings genuinely worth suppressing rather than
@@ -92,6 +96,7 @@ target_compile_options(femfx PRIVATE
     # that. Release/RelWithDebInfo already carry their own -O flags.
     $<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>
 )
+endif()
 
 set_target_properties(femfx PROPERTIES
     CXX_STANDARD 14

@@ -8,6 +8,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <cmath>
+#include <map>
+#include <tuple>
 
 namespace kke {
 
@@ -62,6 +64,32 @@ void ModelModule::init(Application& app) {
     shadowConfig.cullMode = VK_CULL_MODE_NONE;
     shadowConfig.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ShadowPushConstants) };
     m_shadowPipeline = std::make_unique<Pipeline>(app.device(), app.shadowMap().renderPass(), "shaders/shadow.vert.spv", "shaders/shadow.frag.spv", shadowConfig);
+
+    // Instanced variants (OPTIMIZATION.md #25): kke::Vertex at binding 0,
+    // InstanceGpu (model matrix + tint) per instance at binding 1.
+    {
+        auto binding0 = Vertex::bindingDescription();
+        auto attrs0 = Vertex::attributeDescriptions();
+        VkVertexInputBindingDescription binding1{ 1, sizeof(InstanceGpu), VK_VERTEX_INPUT_RATE_INSTANCE };
+        std::vector<VkVertexInputAttributeDescription> attrs(attrs0.begin(), attrs0.end());
+        for (uint32_t c = 0; c < 4; ++c) attrs.push_back({ 8 + c, 1, VK_FORMAT_R32G32B32A32_SFLOAT, static_cast<uint32_t>(sizeof(glm::vec4) * c) });
+        attrs.push_back({ 12, 1, VK_FORMAT_R32G32B32A32_SFLOAT, static_cast<uint32_t>(offsetof(InstanceGpu, tint)) });
+        PipelineConfig inst;
+        inst.cullMode = VK_CULL_MODE_BACK_BIT;
+        inst.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+        inst.customVertexBindings = { binding0, binding1 };
+        inst.customVertexAttributes = attrs;
+        inst.pushConstantRange = config.pushConstantRange;
+        inst.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), app.materialTextureSetLayout(),
+                                      app.materialTextureSetLayout() };
+        m_instancedPipeline = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/model_instanced.vert.spv",
+                                                         "shaders/model.frag.spv", inst);
+        PipelineConfig instShadow = shadowConfig;
+        instShadow.customVertexBindings = inst.customVertexBindings;
+        instShadow.customVertexAttributes = attrs;
+        m_instancedShadowPipeline = std::make_unique<Pipeline>(app.device(), app.shadowMap().renderPass(), "shaders/shadow_instanced.vert.spv",
+                                                               "shaders/shadow.frag.spv", instShadow);
+    }
 
     // A bone is drawn as a box from its parent's origin to its own:
     // unit length along +Y, thin in X/Z, scaled/rotated per bone.
@@ -389,15 +417,86 @@ bool ModelModule::mightBeVisible(const Instance& inst, const Frustum& f) const {
     return f.intersectsAabb(wmn, wmx);
 }
 
+// Groups visible, rigid (not skinned, not deformed) instances of the same
+// model, texture and overlay setting. Groups of 2+ are drawn instanced;
+// singles stay on the normal path (no instance buffer for one copy).
+void ModelModule::buildBatches(const Frustum& f, std::vector<Batch>& out, std::vector<InstanceGpu>& data, bool markDrawn) {
+    out.clear();
+    data.clear();
+    if (!m_instancing) return;
+    struct Key {
+        ModelId model; VkDescriptorSet tex; bool overlay;
+        bool operator<(const Key& o) const { return std::tie(model, tex, overlay) < std::tie(o.model, o.tex, o.overlay); }
+    };
+    std::map<Key, std::vector<Instance*>> groups;
+    for (auto& [id, inst] : m_instances) {
+        if (!inst.visible || !inst.deformed.empty() || !inst.worldOverride.empty() || !inst.skinned.empty()) continue;
+        const LoadedModel& lm = *m_models[inst.model];
+        bool anySkinned = false;
+        for (const GpuMesh& gm : lm.meshes) anySkinned |= gm.skinned;
+        if (anySkinned || !mightBeVisible(inst, f)) continue;
+        groups[{ inst.model, inst.textureOverride, inst.overlay }].push_back(&inst);
+    }
+    for (auto& [key, list] : groups) {
+        if (list.size() < 2) continue;
+        Batch b{ key.model, key.tex, key.overlay, static_cast<uint32_t>(data.size()), static_cast<uint32_t>(list.size()) };
+        for (Instance* inst : list) {
+            data.push_back({ inst->transform, glm::vec4(inst->tint, 1.0f) });
+            if (markDrawn) inst->batchedFrame = m_frame;
+        }
+        out.push_back(b);
+    }
+}
+
+void ModelModule::uploadInstances(int pass, uint32_t frameIndex, const std::vector<InstanceGpu>& data) {
+    if (data.empty()) return;
+    auto& buf = m_instanceBuffers[pass][frameIndex];
+    size_t& cap = m_instanceCapacity[pass][frameIndex];
+    if (!buf || cap < data.size()) {
+        cap = std::max<size_t>(64, data.size() * 2);
+        buf = std::make_unique<Buffer>(m_app->device(), sizeof(InstanceGpu) * cap, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    }
+    buf->upload(data.data(), sizeof(InstanceGpu) * data.size());
+}
+
 void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
     ++m_frame; // renderShadow runs first each frame (see Application's frame loop)
     m_shadowPipeline->bind(ctx.cmd);
     // Cull against the light's own frustum: things off camera still cast
     // shadows into view, things outside the shadow map can't.
     const Frustum lightFrustum = Frustum::fromViewProj(ctx.lightViewProj);
+    // Instanced groups first; what they drew is skipped below.
+    if (m_showMeshes) {
+        buildBatches(lightFrustum, m_batches, m_instanceData, false);
+        uploadInstances(0, ctx.frameIndex, m_instanceData);
+        if (!m_batches.empty()) {
+            m_instancedShadowPipeline->bind(ctx.cmd);
+            ShadowPushConstants pc{ ctx.lightViewProj, glm::mat4(1.0f) };
+            vkCmdPushConstants(ctx.cmd, m_instancedShadowPipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+            VkBuffer ib = m_instanceBuffers[0][ctx.frameIndex]->handle();
+            for (const Batch& b : m_batches) {
+                const LoadedModel& lm = *m_models[b.model];
+                VkDeviceSize off = sizeof(InstanceGpu) * b.first;
+                vkCmdBindVertexBuffers(ctx.cmd, 1, 1, &ib, &off);
+                for (const GpuMesh& gm : lm.meshes) {
+                    gm.mesh->bind(ctx.cmd);
+                    gm.mesh->drawInstanced(ctx.cmd, b.count);
+                }
+            }
+            m_shadowPipeline->bind(ctx.cmd);
+        }
+    }
+    // Which instances the batches covered (same rules as buildBatches).
+    auto batched = [&](const Instance& inst) {
+        if (m_batches.empty() || !inst.deformed.empty() || !inst.worldOverride.empty() || !inst.skinned.empty()) return false;
+        for (const Batch& b : m_batches)
+            if (b.model == inst.model && b.textureOverride == inst.textureOverride && b.overlay == inst.overlay) return true;
+        return false;
+    };
     for (auto& [id, inst] : m_instances) {
         if (!inst.visible || !m_showMeshes) continue;
         if (!mightBeVisible(inst, lightFrustum)) continue;
+        if (batched(inst)) continue;
         skinInstance(inst, ctx.frameIndex);
         if (!inst.deformed.empty()) {
             uploadDeformed(inst, ctx.frameIndex);
@@ -442,13 +541,46 @@ void ModelModule::render(const RenderContext& ctx) {
     VkDescriptorSet overlay = m_overlaySet ? m_overlaySet : ctx.defaultMaterialTextureDescriptorSet;
     VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, ctx.defaultMaterialTextureDescriptorSet, overlay };
     const VkShaderStageFlags pcStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    m_instancedCount = 0;
     if (m_showMeshes) {
+        // Instancing (OPTIMIZATION.md #25): 2+ visible copies of the same
+        // rigid model (same texture/overlay) are one draw per mesh part.
+        buildBatches(frustum, m_batches, m_instanceData, true);
+        uploadInstances(1, ctx.frameIndex, m_instanceData);
+        if (!m_batches.empty()) {
+            m_instancedPipeline->bind(ctx.cmd);
+            vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_instancedPipeline->layout(), 0, 4, sets, 0, nullptr);
+            VkBuffer ib = m_instanceBuffers[1][ctx.frameIndex]->handle();
+            VkDescriptorSet bound = ctx.defaultMaterialTextureDescriptorSet;
+            for (const Batch& b : m_batches) {
+                const LoadedModel& lm = *m_models[b.model];
+                VkDeviceSize off = sizeof(InstanceGpu) * b.first;
+                vkCmdBindVertexBuffers(ctx.cmd, 1, 1, &ib, &off);
+                for (const GpuMesh& gm : lm.meshes) {
+                    const GpuMaterial& mat = lm.materials[gm.material];
+                    VkDescriptorSet tex = mat.textureSet ? mat.textureSet : ctx.defaultMaterialTextureDescriptorSet;
+                    if (b.textureOverride && mat.textureSet) tex = b.textureOverride;
+                    if (tex != bound) {
+                        vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_instancedPipeline->layout(), 2, 1, &tex, 0, nullptr);
+                        bound = tex;
+                    }
+                    PushConstants pc{ glm::mat4(1.0f), glm::vec4(mat.metallic, mat.roughness, b.overlay ? m_overlayTile : 0.0f, m_overlayStrength),
+                                      glm::vec4(mat.color, 0.0f) };
+                    vkCmdPushConstants(ctx.cmd, m_instancedPipeline->layout(), pcStages, 0, sizeof(pc), &pc);
+                    gm.mesh->bind(ctx.cmd);
+                    gm.mesh->drawInstanced(ctx.cmd, b.count);
+                    ++m_drawCalls;
+                }
+                m_instancedCount += b.count;
+            }
+        }
         m_pipeline->bind(ctx.cmd);
         vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(), 0, 4, sets, 0, nullptr);
         VkDescriptorSet boundTexture = ctx.defaultMaterialTextureDescriptorSet;
         for (auto& [id, inst] : m_instances) {
             if (!inst.visible) continue;
             if (!mightBeVisible(inst, frustum)) { ++m_culled; continue; }
+            if (inst.batchedFrame == m_frame) continue; // drawn instanced above
             skinInstance(inst, ctx.frameIndex);
             uploadDeformed(inst, ctx.frameIndex);
             const LoadedModel& lm = *m_models[inst.model];

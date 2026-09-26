@@ -110,6 +110,11 @@ public:
     // Instances skipped last frame because they were outside the camera
     // frustum (see render()).
     size_t culledLastFrame() const { return m_culled; }
+    // Instances drawn through instancing last frame (N copies of one
+    // model = one draw per mesh part), and toggling it (A/B comparisons).
+    size_t instancedLastFrame() const { return m_instancedCount; }
+    void setInstancingEnabled(bool on) { m_instancing = on; }
+    bool instancingEnabled() const { return m_instancing; }
 
 private:
     struct GpuMaterial { glm::vec3 color; float metallic, roughness; VkDescriptorSet textureSet = VK_NULL_HANDLE; };
@@ -144,7 +149,15 @@ private:
         float clipTime = 0.0f, clipSpeed = 1.0f;
         bool clipLoop = true;
         uint64_t skinnedFrame = ~0ull;
+        uint64_t batchedFrame = ~0ull; // drawn instanced this frame (see render())
     };
+    // Per-instance data for the instanced pipelines (binding 1).
+    struct InstanceGpu { glm::mat4 model; glm::vec4 tint; };
+    // A run of instances sharing model + texture + overlay: one draw per
+    // mesh part. Built each frame after culling.
+    struct Batch { ModelId model; VkDescriptorSet textureOverride; bool overlay; uint32_t first, count; };
+    void buildBatches(const struct Frustum& f, std::vector<Batch>& out, std::vector<InstanceGpu>& data, bool markDrawn);
+    void uploadInstances(int pass, uint32_t frameIndex, const std::vector<InstanceGpu>& data);
 
     VkDescriptorSet textureSetFor(const std::string& path);
     void skinInstance(Instance& inst, uint32_t frameIndex);
@@ -169,6 +182,14 @@ private:
     uint64_t m_frame = 0;
     size_t m_drawCalls = 0;
     size_t m_culled = 0;
+    size_t m_instancedCount = 0;
+    bool m_instancing = true;
+    std::unique_ptr<Pipeline> m_instancedPipeline, m_instancedShadowPipeline;
+    // [pass: 0 shadow, 1 main][frame in flight]
+    std::unique_ptr<Buffer> m_instanceBuffers[2][Renderer::kMaxFramesInFlight];
+    size_t m_instanceCapacity[2][Renderer::kMaxFramesInFlight] = {};
+    std::vector<Batch> m_batches;
+    std::vector<InstanceGpu> m_instanceData;
 };
 
 } // namespace kke

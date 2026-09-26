@@ -11,3 +11,7 @@ benchmark/
 
 # Paid/licensed art packs (e.g. Synty) are never committed — see assets/README.md
 assets/synty/
+
+# docker-compose cross builds (docker/build.sh)
+build-docker/
+dist/

@@ -32,10 +32,38 @@ endif()
 
 include(FetchContent)
 
+# FEMFX's SIMD code needs AVX2 + FMA, and everything that includes its
+# headers must be compiled with the same flags (a mismatch was a real,
+# reproduced ABI crash, see engine/CMakeLists.txt). Spelled per compiler.
+if(MSVC)
+    set(KKE_AVX2_FLAGS /arch:AVX2)
+else()
+    set(KKE_AVX2_FLAGS -mavx2 -mfma)
+endif()
+
 # ---------------------------------------------------------------------------
 # Vulkan headers/loader (system SDK — validated via find_package)
 # ---------------------------------------------------------------------------
-find_package(Vulkan REQUIRED)
+# Only the *headers* are needed at build time: volk loads the Vulkan
+# driver at runtime. When there's no Vulkan SDK for the target (cross-
+# compiling for Windows from Linux, docker/windows.Dockerfile), the
+# official headers are fetched instead.
+find_package(Vulkan QUIET)
+if(NOT Vulkan_FOUND)
+    message(STATUS "Vulkan SDK not found for this target: fetching Vulkan-Headers (volk loads the driver at runtime)")
+    FetchContent_Declare(
+        vulkan_headers
+        GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-Headers.git
+        GIT_TAG        v1.3.290
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_MakeAvailable(vulkan_headers)
+    set(Vulkan_INCLUDE_DIR "${vulkan_headers_SOURCE_DIR}/include" CACHE PATH "" FORCE)
+    set(Vulkan_INCLUDE_DIRS "${vulkan_headers_SOURCE_DIR}/include")
+    if(NOT TARGET Vulkan::Headers)
+        add_library(Vulkan::Headers ALIAS Vulkan-Headers)
+    endif()
+endif()
 
 # ---------------------------------------------------------------------------
 # volk — Vulkan meta-loader. One job, does it well.
@@ -150,6 +178,32 @@ target_compile_definitions(imgui PUBLIC
 # for exactly what is and isn't wired up yet — this is a multi-slice
 # integration, and rendering isn't live until a later slice.
 # ---------------------------------------------------------------------------
+# FreeType: the system's when there is one (Linux packages), otherwise
+# built from source (cross builds for Windows/Android have none). The
+# override makes RmlUi's own find_package(Freetype) pick up this build.
+find_package(Freetype QUIET)
+if(NOT Freetype_FOUND AND NOT FREETYPE_FOUND)
+    message(STATUS "FreeType not found for this target: building it from source")
+    set(FT_DISABLE_ZLIB ON CACHE BOOL "" FORCE)
+    set(FT_DISABLE_BZIP2 ON CACHE BOOL "" FORCE)
+    set(FT_DISABLE_PNG ON CACHE BOOL "" FORCE)
+    set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE)
+    set(FT_DISABLE_BROTLI ON CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+        freetype
+        GIT_REPOSITORY https://github.com/freetype/freetype.git
+        GIT_TAG        VER-2-13-3
+        GIT_SHALLOW    TRUE
+        OVERRIDE_FIND_PACKAGE
+    )
+    FetchContent_MakeAvailable(freetype)
+    if(NOT TARGET Freetype::Freetype)
+        add_library(Freetype::Freetype ALIAS freetype)
+    endif()
+    set(FREETYPE_FOUND TRUE)
+    set(FREETYPE_LIBRARIES freetype)
+    set(FREETYPE_INCLUDE_DIRS "${freetype_SOURCE_DIR}/include")
+endif()
 set(RMLUI_FONT_ENGINE "freetype" CACHE STRING "" FORCE)
 set(RMLUI_SAMPLES OFF CACHE BOOL "" FORCE)
 set(RMLUI_LUA_BINDINGS OFF CACHE BOOL "" FORCE)
@@ -228,7 +282,13 @@ if(KKE_ENABLE_TESTS)
         GIT_TAG        v1.15.2
         GIT_SHALLOW    TRUE
     )
+    # Static, whatever RmlUi's BUILD_SHARED_LIBS=ON cache option says:
+    # a shared gtest/gmock with static libgcc fails to link on MinGW
+    # (duplicate _Unwind_Resume), and tests don't need DLLs anyway.
+    set(KKE_SAVED_SHARED ${BUILD_SHARED_LIBS})
+    set(BUILD_SHARED_LIBS OFF)
     FetchContent_MakeAvailable(googletest)
+    set(BUILD_SHARED_LIBS ${KKE_SAVED_SHARED})
 endif()
 
 # ---------------------------------------------------------------------------

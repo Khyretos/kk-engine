@@ -1,0 +1,49 @@
+# Builds for the platforms the main CI doesn't cover. Manual only (Actions
+# tab -> "Platforms" -> Run workflow), so a platform that doesn't build yet
+# never sends failure emails for normal pushes. See SCALING.md section D.
+name: Platforms
+
+on:
+  workflow_dispatch:
+
+jobs:
+  windows-msvc:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Ninja
+        run: choco install -y ninja
+      - name: Vulkan SDK
+        uses: humbletim/setup-vulkan-sdk@v1.2.1
+        with:
+          vulkan-query-version: 1.3.290.0
+          vulkan-components: Vulkan-Headers, Vulkan-Loader, Glslang
+          vulkan-use-cache: true
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DKKE_ENABLE_FEMFX=ON
+      - name: Build
+        run: cmake --build build
+      - name: Unit tests
+        run: build/bin/kke_tests.exe --gtest_brief=1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kke-windows-msvc
+          path: build/bin
+
+  macos:
+    runs-on: macos-latest   # Apple Silicon: FEMFX (x86 AVX) is off until its SIMDe port
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: brew install ninja glslang molten-vk freetype
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DKKE_ENABLE_FEMFX=OFF
+      - name: Build
+        run: cmake --build build
+      - name: Unit tests
+        run: build/bin/kke_tests --gtest_brief=1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kke-macos
+          path: build/bin
