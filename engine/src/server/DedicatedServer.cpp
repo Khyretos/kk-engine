@@ -2,6 +2,11 @@
 
 #include "kke/net/Protocol.h"
 #include "kke/net/ScriptSpawns.h"
+#include "kke/PackSeal.h"
+#include "kke/server/RelayService.h"
+#include "kke/server/ServerFiles.h"
+
+#include <nlohmann/json.hpp>
 
 #if KKE_ENABLE_LUA
 #include "kke/server/ServerScripts.h"
@@ -56,6 +61,12 @@ DedicatedServer::DedicatedServer(ServerConfig config, net::ITransport& transport
 DedicatedServer::~DedicatedServer() { stop(); }
 
 std::string DedicatedServer::accessPath() const { return (std::filesystem::path(m_config.saveDir) / "access.json").string(); }
+std::string DedicatedServer::joinCode() const { return m_relayHost ? m_relayHost->joinText() : std::string(); }
+
+std::string DedicatedServer::relayedAddress(const std::string& host, uint16_t port) const {
+    return m_relayHost ? m_relayHost->realAddress(host, port) : std::string();
+}
+
 std::string DedicatedServer::leaderboardPath() const { return (std::filesystem::path(m_config.saveDir) / "leaderboards.json").string(); }
 
 bool DedicatedServer::start(std::vector<std::string>& errors) {
@@ -119,12 +130,23 @@ bool DedicatedServer::start(std::vector<std::string>& errors) {
     if (errors.size() != before) return false;
 
     if (m_config.hasGameSocket()) {
+        // Encrypted, always: the key stays the same across restarts, so
+        // players (and relays) can recognise this server.
+        std::string keyError;
+        const std::string keyPath = (std::filesystem::path(m_config.saveDir) / "server.key").string();
+        if (!net::ServerIdentity::loadOrCreate(keyPath, m_identity, &keyError)) {
+            errors.push_back("encryption key: " + keyError);
+            return false;
+        }
+        info("encryption: every connection; this server's key is " + m_identity.fingerprint());
+        m_secure = std::make_unique<net::SecureTransport>(m_transport);
+        m_secure->setIdentity(m_identity);
         net::NetConfig nc;
         nc.gameId = m_config.game;
         nc.maxPlayers = m_config.maxPlayers;
         nc.password = m_config.password;
         nc.dedicated = true;
-        m_net = std::make_unique<net::NetServer>(m_transport, nc);
+        m_net = std::make_unique<net::NetServer>(*m_secure, nc);
         std::string error;
         if (!m_net->start(m_config.port, m_config.name, {}, &error)) {
             errors.push_back("UDP port " + std::to_string(m_config.port) + ": " + error);
@@ -181,6 +203,58 @@ bool DedicatedServer::start(std::vector<std::string>& errors) {
         info("scripts: " + std::to_string(files.size()) + " from '" + m_config.scripts + "'" + (list.empty() ? " (none: sv_*.lua, sh_*.lua)" : ": " + list));
     }
 #endif
+    if (m_config.hasRole("relay")) {
+        m_relayService = std::make_unique<RelayService>();
+        m_relayService->log = [this](const std::string& s) { info(s); };
+        std::string error;
+        if (!m_relayService->start(m_config.relayPort, m_config.relaySlots, &error)) {
+            errors.push_back(error);
+            return false;
+        }
+        info("relay: listening on UDP port " + std::to_string(m_config.relayPort) + ", " + std::to_string(m_config.relaySlots) + " players at once on " +
+             std::to_string(m_config.relayPort + 1) + "-" + std::to_string(m_config.relayPort + m_config.relaySlots));
+    }
+    if (!m_config.relay.empty() && m_net) {
+        if (!m_raw) {
+            errors.push_back("relay: join codes need the game's UDP socket (kke_server gives it; this transport has none)");
+            return false;
+        }
+        m_relayHost = std::make_unique<net::RelayHost>(*m_raw);
+        m_relayHost->log = [this](const std::string& s) { info(s); };
+        // The code from last time, so the one players saved keeps working.
+        const std::string path = (std::filesystem::path(m_config.saveDir) / "relay.json").string();
+        net::RelayHost::Saved saved;
+        bool haveSaved = false;
+        std::string text;
+        if (readFile(path, text)) {
+            const auto j = nlohmann::json::parse(text, nullptr, false);
+            if (j.is_object() && j.contains("code") && j["code"].is_string() && j.contains("secret") && j["secret"].is_string() &&
+                seal::fromHex(j["secret"].get<std::string>(), saved.secret)) {
+                saved.code = j["code"].get<std::string>();
+                haveSaved = true;
+            } else {
+                warning(path + ": damaged; a new join code will be made");
+            }
+        }
+        m_relayHost->onCode = [this, path](const std::string&) {
+            const net::RelayHost::Saved now = m_relayHost->saved();
+            nlohmann::json j{ { "code", now.code }, { "secret", seal::toHex(now.secret) } };
+            std::string error;
+            if (!writeFileAtomic(path, j.dump(2) + "\n", &error)) warning("relay: can't keep the join code: " + error);
+            std::error_code ec;
+            std::filesystem::permissions(path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write, std::filesystem::perm_options::replace, ec);
+            if (m_publisher) m_publisher->setEntry(directoryEntry());
+        };
+        m_raw->onRaw = [this](const std::string& host, uint16_t port, const std::vector<uint8_t>& data) {
+            if (m_relayHost) m_relayHost->onDatagram(host, port, data);
+        };
+        std::string error;
+        if (!m_relayHost->start({ m_config.relay }, m_config.game, m_identity.publicKey, haveSaved ? &saved : nullptr, &error)) {
+            errors.push_back("relay: " + error);
+            return false;
+        }
+        info("relay: asking " + m_config.relay + " for a join code");
+    }
     if (m_config.hasRole("directory")) {
         m_directory = std::make_unique<DirectoryService>();
         m_directory->log = [this](const std::string& s) { info(s); };
@@ -244,6 +318,8 @@ void DedicatedServer::update(double now) {
         m_visibility->update(now, players);
     }
     if (m_net) m_net->update(now);
+    if (m_relayHost) m_relayHost->update(now);
+    if (m_relayService) m_relayService->update(now);
     if (m_directory) m_directory->update(now);
     if (m_publisher) m_publisher->update(now);
     if (now >= m_nextSave) {
@@ -329,7 +405,12 @@ std::string DedicatedServer::command(const std::string& line) {
     if (cmd == "help")
         return std::string("status | players | kick <id|name> [reason] | ban <id|name|address> [reason] | unban <name|address> | bans | admin <name> | "
                            "allow <name> | say <text> | mute <id|name> | unmute <id|name> | top <board> | save | stop") +
-               (m_config.hasRole("scripts") ? " | scripts | reload [file] | lua <code>" : "");
+               (m_config.hasRole("scripts") ? " | scripts | reload [file] | lua <code>" : "") + (m_config.relay.empty() ? "" : " | code");
+    if (cmd == "code") {
+        if (m_config.relay.empty()) return "no join code: set a relay (\"relay\" in server.json, KKE_SERVER_RELAY, --relay)";
+        const std::string code = joinCode();
+        return code.empty() ? "no join code yet: waiting for relay " + m_config.relay : "join code: " + code + " (players type it in Multiplayer)";
+    }
 #if KKE_ENABLE_LUA
     if (cmd == "scripts" || cmd == "reload" || cmd == "lua") {
         if (!m_scripts) return "this server has no scripts role";
@@ -346,6 +427,10 @@ std::string DedicatedServer::command(const std::string& line) {
         if (m_scripts) s += "; " + std::to_string(m_scripts->scripts().size()) + " scripts, " + std::to_string(m_scripts->bodyCount()) + " bodies";
 #endif
         if (m_store) s += std::string("; storage: ") + m_store->backendName();
+        if (m_relayHost) s += "; join code: " + (joinCode().empty() ? std::string("waiting for the relay") : joinCode());
+        if (m_relayService && m_relayService->core())
+            s += "; relay: " + std::to_string(m_relayService->core()->servers()) + " servers, " + std::to_string(m_relayService->core()->sessions()) +
+                 " players relayed";
         return s;
     }
     if (cmd == "players") {
@@ -442,6 +527,11 @@ void DedicatedServer::stop(const std::string& reason) {
     if (m_scripts) m_scripts->shutdown(); // their Shutdown hook, while the players are still here
     m_scripts.reset();
 #endif
+    if (m_relayHost) m_relayHost->stop(); // the code is free at once, not in 30 s
+    m_relayHost.reset();
+    if (m_raw) m_raw->onRaw = nullptr;
+    if (m_relayService) m_relayService->stop();
+    m_relayService.reset();
     if (m_net) {
         for (const net::RemotePlayer& p : m_net->players(m_now)) m_net->kick(p.id, reason);
         // Flush the goodbyes before the socket closes.
@@ -450,6 +540,7 @@ void DedicatedServer::stop(const std::string& reason) {
         m_net->stop();
         m_net.reset();
     }
+    m_secure.reset();
     if (m_publisher) m_publisher->stop();
     m_publisher.reset();
     if (m_directory) m_directory->stop();

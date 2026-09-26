@@ -120,8 +120,15 @@ jobs:
 
   windows:
     runs-on: ubuntu-24.04
+    outputs:
+      source_dir: ${{ steps.src.outputs.dir }}
     steps:
       - uses: actions/checkout@v5
+
+      # Tests read data files from the source tree by the absolute path
+      # they were compiled with (KKE_SOURCE_DIR); windows-test recreates it.
+      - id: src
+        run: echo "dir=$GITHUB_WORKSPACE" >> "$GITHUB_OUTPUT"
 
       - name: Install MinGW-w64 and tools
         run: |
@@ -164,6 +171,21 @@ jobs:
     needs: windows
     runs-on: windows-latest
     steps:
+      - uses: actions/checkout@v5
+      # Some tests read files from the source tree (shaders, scenes, fonts)
+      # at the Linux build machine's absolute path, which Windows resolves
+      # on the current drive: link that path to this checkout.
+      - name: Source tree at the build machine's path
+        shell: pwsh
+        env:
+          SOURCE_DIR: ${{ needs.windows.outputs.source_dir }}
+        run: |
+          $drive = Split-Path -Qualifier $PWD
+          $link = Join-Path $drive ($env:SOURCE_DIR -replace '/', '\')
+          New-Item -ItemType Directory -Force -Path (Split-Path $link) | Out-Null
+          New-Item -ItemType Junction -Path $link -Target $env:GITHUB_WORKSPACE | Out-Null
+          if (-not (Test-Path (Join-Path $link 'shaders'))) { throw "source tree not reachable at $link" }
+          Write-Output "source tree linked at $link"
       - uses: actions/download-artifact@v7
         with:
           name: kke-tests-windows

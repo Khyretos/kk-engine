@@ -5,6 +5,8 @@
 #include "kke/modules/PhysicsModule.h"
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/net/EnetTransport.h"
+#include "kke/net/Relay.h"
+#include "kke/net/SecureTransport.h"
 #include "kke/net/LevelSight.h"
 
 #include <imgui.h>
@@ -72,6 +74,7 @@ void NetModule::init(Application& app) {
 #endif
     if (const char* n = std::getenv("KKE_NET_NAME"); n && *n) playerName = n;
     if (const char* p = std::getenv("KKE_NET_PASSWORD"); p && *p) m_config.password = p; // to join, or to require when hosting
+    if (const char* r = std::getenv("KKE_NET_RELAY"); r && *r) relay = r;
     std::snprintf(m_passwordInput, sizeof(m_passwordInput), "%s", m_config.password.c_str());
     simulated.latencyMs = envFloat("KKE_NET_LAG", 0.0f);
     simulated.jitterMs = envFloat("KKE_NET_JITTER", 0.0f);
@@ -89,10 +92,11 @@ void NetModule::init(Application& app) {
     } else if (m.rfind("join:", 0) == 0) {
         std::string address;
         uint16_t port = kDefaultPort;
-        splitAddress(m.substr(5), address, port);
+        if (net::looksLikeJoinCode(m.substr(5))) address = m.substr(5); // CODE@relay:port: the port is the relay's
+        else splitAddress(m.substr(5), address, port);
         if (!join(address, port, &error)) log::get(name())->error("KKE_NET={}: {}", m, error);
     } else {
-        log::get(name())->error("KKE_NET='{}': expected host, host:PORT or join:ADDRESS[:PORT]", m);
+        log::get(name())->error("KKE_NET='{}': expected host, host:PORT, join:ADDRESS[:PORT] or join:CODE[@RELAY]", m);
     }
 }
 
@@ -115,9 +119,11 @@ bool NetModule::host(uint16_t port, std::string* error) {
         net::EnetTransport* raw = enet.get();
         auto transport = std::make_unique<net::ConditionedTransport>(std::move(enet));
         transport->conditions = simulated;
-        auto server = std::make_unique<net::NetServer>(*transport, m_config);
+        auto secure = std::make_unique<net::SecureTransport>(*transport); // a fresh key each time we host
+        auto server = std::make_unique<net::NetServer>(*secure, m_config);
         if (!server->start(static_cast<uint16_t>(p), playerName, playerCharacter, &lastError)) continue;
         m_transport = std::move(transport);
+        m_secure = std::move(secure);
         m_enet = raw;
         m_server = std::move(server);
         m_server->onEvent = [this](const net::GameEventMsg& e) { dispatchEvent(e); };
@@ -157,6 +163,24 @@ bool NetModule::host(uint16_t port, std::string* error) {
         m_enet->setDiscoveryInfo(discoveryInfo());
         m_role = Role::Host;
         m_status = "hosting on port " + std::to_string(p);
+        if (!relay.empty()) {
+            // A join code: friends type it, nobody forwards a port.
+            m_relayHost = std::make_unique<net::RelayHost>(*m_enet);
+            m_relayHost->log = [this](const std::string& line) { log::get(name())->info("{}", line); };
+            const uint16_t hostedPort = static_cast<uint16_t>(p);
+            m_relayHost->onCode = [this, hostedPort](const std::string&) {
+                m_status = "hosting on port " + std::to_string(hostedPort) + ", join code " + m_relayHost->joinText();
+            };
+            m_enet->onRaw = [this](const std::string& h, uint16_t port, const std::vector<uint8_t>& d) {
+                if (m_relayHost) m_relayHost->onDatagram(h, port, d);
+            };
+            m_enet->realAddress = [this](const std::string& h, uint16_t port) { return m_relayHost ? m_relayHost->realAddress(h, port) : std::string(); };
+            std::string relayError;
+            if (!m_relayHost->start({ relay }, m_config.gameId, m_secure->identity().publicKey, nullptr, &relayError)) {
+                log::get(name())->warn("No join code: {}", relayError);
+                m_relayHost.reset();
+            }
+        }
         m_search.reset();
         applyFollowers();
         log::get(name())->info("Hosting '{}' on UDP port {} ({})", playerName, p, m_transport->backendName());
@@ -173,15 +197,32 @@ bool NetModule::join(const std::string& address, uint16_t port, std::string* err
     net::EnetTransport* raw = enet.get();
     auto transport = std::make_unique<net::ConditionedTransport>(std::move(enet));
     transport->conditions = simulated;
-    auto client = std::make_unique<net::NetClient>(*transport, m_config);
+    auto secure = std::make_unique<net::SecureTransport>(*transport);
+    auto client = std::make_unique<net::NetClient>(*secure, m_config);
     std::string err;
-    if (!client->connect(address, port, playerName, playerCharacter, &err)) {
+    std::unique_ptr<net::RelayJoin> byCode;
+    if (net::looksLikeJoinCode(address)) {
+        // A join code: ask the relay where it is first (updateRelayJoin connects).
+        const auto target = net::parseJoinTarget(address, relay, &err);
+        if (target && raw->open(&err)) {
+            byCode = std::make_unique<net::RelayJoin>(*raw);
+            byCode->start(*target, m_config.gameId, now(), &err);
+        }
+        if (!byCode || byCode->state() == net::RelayJoin::State::Failed) {
+            if (error) *error = err;
+            m_status = "can't join: " + err;
+            return false;
+        }
+    } else if (!client->connect(address, port, playerName, playerCharacter, &err)) {
         if (error) *error = err;
         m_status = "can't join: " + err;
         return false;
     }
     m_transport = std::move(transport);
+    m_secure = std::move(secure);
     m_enet = raw;
+    m_relayJoin = std::move(byCode);
+    if (m_relayJoin) m_enet->onRaw = [this](const std::string& h, uint16_t p, const std::vector<uint8_t>& d) { if (m_relayJoin) m_relayJoin->onDatagram(h, p, d); };
     m_client = std::move(client);
     m_client->onEvent = [this](const net::GameEventMsg& e) {
         if (e.kind == net::kEventServerMessage) {
@@ -198,15 +239,56 @@ bool NetModule::join(const std::string& address, uint16_t port, std::string* err
     m_client->onVoice = [this](const net::VoiceMsg& m) { for (const auto& l : m_voiceListeners) l(m); };
     m_role = Role::Client;
     applyFollowers();
-    m_status = "joining " + address + ":" + std::to_string(port);
+    m_status = m_relayJoin ? m_relayJoin->status() : "joining " + address + ":" + std::to_string(port);
     m_search.reset();
-    log::get(name())->info("Joining {}:{} as '{}'", address, port, playerName);
+    if (m_relayJoin) log::get(name())->info("Joining {} as '{}'", address, playerName);
+    else log::get(name())->info("Joining {}:{} as '{}'", address, port, playerName);
     return true;
+}
+
+void NetModule::updateRelayJoin(double t) {
+    // No connection yet: service the socket so the relay's answers and the
+    // server's punches (intercepted) come in.
+    std::vector<net::NetEvent> ignored;
+    m_transport->poll(ignored);
+    m_relayJoin->update(t);
+    m_status = m_relayJoin->status();
+    if (!m_relayJoin->done()) return;
+    if (m_relayJoin->state() == net::RelayJoin::State::Failed) {
+        const std::string why = "can't join: " + m_relayJoin->error();
+        log::get(name())->warn("{}", why);
+        leave();
+        m_status = why;
+        return;
+    }
+    const bool direct = m_relayJoin->state() == net::RelayJoin::State::Direct;
+    m_secure->expectServerKey(m_relayJoin->serverKey()); // the key the relay vouched for, or no connection
+    std::string err;
+    if (!m_client->connect(m_relayJoin->connectHost(), m_relayJoin->connectPort(), playerName, playerCharacter, &err)) {
+        leave();
+        m_status = "can't join: " + err;
+        return;
+    }
+    log::get(name())->info("Join code found: connecting {} ({}:{})", direct ? "directly" : "through the relay", m_relayJoin->connectHost(),
+                           m_relayJoin->connectPort());
+    m_status = direct ? "connecting directly" : "connecting through the relay";
+    m_relayJoin.reset();
+    m_enet->onRaw = nullptr;
+}
+
+std::string NetModule::joinCode() const { return m_relayHost ? m_relayHost->joinText() : std::string();
 }
 
 void NetModule::leave() {
     if (m_role == Role::Offline && !m_transport) return;
     if (m_client) m_client->disconnect();
+    if (m_relayHost) m_relayHost->stop(); // the code frees at once
+    m_relayHost.reset();
+    m_relayJoin.reset();
+    if (m_enet) {
+        m_enet->onRaw = nullptr;
+        m_enet->realAddress = nullptr;
+    }
     if (m_server) m_server->stop();
     // Flush the goodbye before the socket closes.
     if (m_transport) {
@@ -217,6 +299,7 @@ void NetModule::leave() {
     m_client.reset();
     m_serverMessage.clear();
     m_server.reset();
+    m_secure.reset();
     m_transport.reset();
     m_enet = nullptr;
     m_role = Role::Offline;
@@ -519,6 +602,11 @@ void NetModule::update(const UpdateContext&) {
     if (m_server) m_server->voice = voiceRules; // the host may change them while playing
     const double t = now();
     if (m_transport) m_transport->conditions = simulated;
+    if (m_relayHost) m_relayHost->update(t);
+    if (m_relayJoin) {
+        updateRelayJoin(t);
+        if (m_relayJoin) return; // still finding the server
+    }
     if (m_server) {
         if (m_hasLocal) m_server->setLocalState(m_local);
         if (m_rigid) {
@@ -557,7 +645,8 @@ void NetModule::update(const UpdateContext&) {
             if (before != status) log::get(name())->info("Connected as player {}", m_client->playerId());
             m_status = "connected as player " + std::to_string(m_client->playerId());
         } else if (status == net::NetClient::Status::Rejected || status == net::NetClient::Status::Disconnected) {
-            const std::string why = m_client->statusText();
+            std::string why = m_client->statusText();
+            if (m_secure && !m_secure->failure().empty()) why = m_secure->failure(); // the encryption said why
             if (before != status) log::get(name())->warn("Left the game: {}", why);
             leave();
             m_status = why.empty() ? "disconnected" : why;
@@ -623,13 +712,18 @@ void NetModule::renderUi() {
     ImGui::SetNextWindowSize(ImVec2(320 * s, 0), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Network")) { ImGui::End(); return; }
     ImGui::TextWrapped("%s", m_status.c_str());
+    if (const std::string code = joinCode(); !code.empty()) {
+        ImGui::Text("Join code: %s", code.c_str());
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Copy")) ImGui::SetClipboardText(code.c_str());
+    }
     if (m_role == Role::Client && !m_serverMessage.empty()) ImGui::TextWrapped("Server: %s", m_serverMessage.c_str());
     if (m_role == Role::Offline) {
         if (ImGui::InputText("Name", m_nameInput, sizeof(m_nameInput))) playerName = m_nameInput;
         if (ImGui::InputText("Password", m_passwordInput, sizeof(m_passwordInput), ImGuiInputTextFlags_Password)) m_config.password = m_passwordInput;
         if (ImGui::Button("Host")) host(0);
         ImGui::Separator();
-        ImGui::InputText("Address", m_addressInput, sizeof(m_addressInput));
+        ImGui::InputText("Address or code", m_addressInput, sizeof(m_addressInput));
         ImGui::InputInt("Port", &m_portInput);
         m_portInput = std::clamp(m_portInput, 1, 65535);
         if (ImGui::Button("Join")) join(m_addressInput, static_cast<uint16_t>(m_portInput));

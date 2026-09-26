@@ -29,8 +29,10 @@ public:
     bool send(const std::string& host, uint16_t port, const std::vector<uint8_t>& data);
     // Every datagram waiting, then returns.
     void receive(const std::function<void(const std::string& address, uint16_t port, const uint8_t* data, size_t size)>& fn);
+    size_t maxDatagram = kMaxDatagram; // larger ones are dropped (the relay passes on whole ENet packets: 1500)
 
 private:
+    std::vector<uint8_t> m_buffer;
     static constexpr uint64_t kNone = ~0ull;
     uint64_t m_socket = kNone; // ENetSocket, widened (an int or a SOCKET)
     uint16_t m_port = 0;

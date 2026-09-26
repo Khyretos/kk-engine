@@ -4,6 +4,7 @@
 
 #include "kke/net/NetSession.h"
 #include "kke/net/ScriptSpawns.h"
+#include "kke/net/SecureTransport.h"
 #include "kke/net/Transport.h"
 #include "kke/server/DedicatedServer.h"
 #include "kke/server/ServerScripts.h"
@@ -36,6 +37,7 @@ struct Game {
     LoopbackTransport serverT{ net };
     std::unique_ptr<DedicatedServer> server;
     LoopbackTransport clientT{ net };
+    SecureTransport clientSecure{ clientT }; // a server's connections are always encrypted
     std::unique_ptr<NetClient> client;
     std::map<uint16_t, SpawnMsg> spawns;
     std::vector<uint16_t> despawns;
@@ -56,7 +58,7 @@ struct Game {
         server.reset();
     }
     void join(const std::string& name) {
-        client = std::make_unique<NetClient>(clientT);
+        client = std::make_unique<NetClient>(clientSecure);
         client->onSpawn = [this](const SpawnMsg& m) { spawns[m.id] = m; };
         client->onDespawn = [this](uint16_t id) { despawns.push_back(id); };
         client->onEvent = [this](const GameEventMsg& e) { events.push_back(e); };
