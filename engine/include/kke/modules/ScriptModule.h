@@ -31,7 +31,10 @@ class DynamicMeshRenderer;
 //
 // Realms, by file name: sv_*.lua runs only where the game's physics is the
 // truth (offline, or hosting); every other script runs on every player's
-// machine. Joining or leaving a game loads/unloads sv_ scripts.
+// machine. Joining or leaving a game loads/unloads sv_ scripts. What sv_
+// scripts spawn (physics bodies, breakables, balls) appears on every
+// player's machine too, moving and breaking with the host's copy
+// (NetModule spawns; docs/SCRIPTING.md "Multiplayer").
 //
 // Hooks the engine runs: "Init" (once, after the first load), "Think"
 // (dt, every frame), "Tick" (dt, tick; fixed rate, before physics results
@@ -65,6 +68,7 @@ public:
     ~ScriptModule() override;
 
     const char* name() const override { return "Scripts"; }
+    std::vector<ModuleDependency> dependencies() const override;
     void init(Application& app) override;
     void fixedUpdate(const FixedUpdateContext& ctx) override;
     void update(const UpdateContext& ctx) override;
@@ -92,9 +96,10 @@ public:
 
 private:
     struct ScriptFile { std::string path; std::filesystem::file_time_type mtime; bool ok = false; };
-    struct Body { uint32_t id; std::string source; bool sphere; glm::vec3 half; glm::vec3 color; };
+    // netId: its NetModule spawn id when replicated (0 = local only).
+    struct Body { uint32_t id; std::string source; bool sphere; glm::vec3 half; glm::vec3 color; uint16_t netId = 0; std::vector<uint8_t> netDesc{}; };
     struct ModelInstance { ModelModule::InstanceId id; std::string source; };
-    struct Breakable { uint32_t handle; std::string source; bool broken = false; };
+    struct Breakable { uint32_t handle; std::string source; bool broken = false; uint16_t netId = 0; uint16_t netKind = 0; std::vector<uint8_t> netDesc{}; };
     struct Document { int id; Rml::ElementDocument* doc; std::string source; };
     struct ClickHandler { int document; std::string element; int ref; std::string source; };
     struct Scene { int id; LoadedScene loaded; std::string source; glm::vec3 spawn; float spawnYaw; };
@@ -105,6 +110,15 @@ private:
     void bindUi();
     void bindScenes();
     void bindNet();
+    // Multiplayer copies of what sv_ scripts spawn (ScriptReplication.cpp).
+    void bindReplication();
+    void syncNetRole();                    // hosting / joining / leaving changed what's replicated
+    bool replicates(const std::string& source) const; // an sv_ script's, while hosting
+    void replicate(Body& b);               // host: tell the clients (no-op otherwise)
+    void replicate(Breakable& b);
+    void unreplicate(uint16_t netId);      // it's gone (host: everywhere)
+    void onNetSpawn(uint16_t id, uint16_t kind, const std::vector<uint8_t>& desc); // client: build the host's object
+    void onNetDespawn(uint16_t id);
     void releaseScript(const std::string& source); // everything `source` made
     void releaseAll();
     void checkBreaks();
@@ -133,6 +147,7 @@ private:
     struct NetMessage { std::string name, data; int from; };
     std::vector<NetMessage> m_netInbox;
     bool m_authority = true;
+    int m_netRole = 0; // NetModule::Role as last seen (0 = offline)
     std::unique_ptr<DynamicMeshRenderer> m_batch;
     size_t m_batchIndices = 0;
     double m_time = 0.0, m_scanTimer = 0.0;

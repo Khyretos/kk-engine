@@ -46,7 +46,7 @@ add_executable(kke_tests
 )
 target_link_libraries(kke_tests PRIVATE kke_engine GTest::gtest_main)
 if(KKE_ENABLE_JOLT)
-    target_sources(kke_tests PRIVATE test_rigid_world.cpp test_locomotion.cpp test_jolt_ragdoll.cpp)
+    target_sources(kke_tests PRIVATE test_rigid_world.cpp test_locomotion.cpp test_jolt_ragdoll.cpp test_move_check.cpp)
 endif()
 if(ENGINE_ENABLE_LUA)
     target_sources(kke_tests PRIVATE test_script_vm.cpp)

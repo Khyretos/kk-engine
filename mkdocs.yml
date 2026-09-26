@@ -3,7 +3,8 @@
 # Locally: pip install -r tools/docs_site/requirements.txt && mkdocs serve
 site_name: Kreative Kompas Engine
 site_description: A modular, open-source Vulkan game engine in C++17, with Lua scripting.
-site_url: https://khyretos.github.io/kk-engine/
+# The Docker image (website/) builds it for engine.kreative-kompas.com/docs/.
+site_url: !ENV [KKE_DOCS_SITE_URL, "https://khyretos.github.io/kk-engine/"]
 repo_url: https://github.com/Khyretos/kk-engine
 repo_name: Khyretos/kk-engine
 edit_uri: edit/main/docs/

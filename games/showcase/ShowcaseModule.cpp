@@ -473,14 +473,22 @@ void ShowcaseModule::spawnBreakables() {
     block({ 0.3f, 0.5f, 1.2f }, yard + glm::vec3(-0.9f, 0.25f, 0.0f));
     block({ 0.3f, 0.5f, 1.2f }, yard + glm::vec3(0.9f, 0.25f, 0.0f));
     const glm::vec3 hit(0.0f);
-    m_femfx->spawnPatternedBox({ 12, 1, 8 }, { 2.1f, 0.05f, 1.2f }, yard + glm::vec3(0, 0.525f, 0), glass, static_cast<int>(kke::FracturePattern::Radial), 0.45f, 0,
-                               glm::vec3(0.0f), 3.0f, &hit);
+    std::vector<kke::PhysicsModule::ObjectHandle> breakables;
+    breakables.push_back(m_femfx->spawnPatternedBox({ 12, 1, 8 }, { 2.1f, 0.05f, 1.2f }, yard + glm::vec3(0, 0.525f, 0), glass,
+                                                    static_cast<int>(kke::FracturePattern::Radial), 0.45f, 0, glm::vec3(0.0f), 3.0f, &hit));
     block({ 0.3f, 0.5f, 0.6f }, yard + glm::vec3(-1.05f, 0.25f, 3.0f));
     block({ 0.3f, 0.5f, 0.6f }, yard + glm::vec3(1.05f, 0.25f, 3.0f));
-    m_femfx->spawnPatternedBox({ 16, 1, 2 }, { 2.4f, 0.12f, 0.3f }, yard + glm::vec3(0, 0.561f, 3.0f), wood, static_cast<int>(kke::FracturePattern::Splinters), 0.35f, 0,
-                               glm::vec3(0.0f), 3.0f);
-    m_femfx->spawnPatternedBox({ 8, 6, 2 }, { 1.4f, 1.0f, 0.25f }, yard + glm::vec3(3.5f, 0.501f, -2.0f), stone, static_cast<int>(kke::FracturePattern::Voronoi), 0.3f, 3,
-                               glm::vec3(0.0f), 3.0f);
+    breakables.push_back(m_femfx->spawnPatternedBox({ 16, 1, 2 }, { 2.4f, 0.12f, 0.3f }, yard + glm::vec3(0, 0.561f, 3.0f), wood,
+                                                    static_cast<int>(kke::FracturePattern::Splinters), 0.35f, 0, glm::vec3(0.0f), 3.0f));
+    breakables.push_back(m_femfx->spawnPatternedBox({ 8, 6, 2 }, { 1.4f, 1.0f, 0.25f }, yard + glm::vec3(3.5f, 0.501f, -2.0f), stone,
+                                                    static_cast<int>(kke::FracturePattern::Voronoi), 0.3f, 3, glm::vec3(0.0f), 3.0f));
+#if KKE_ENABLE_NET
+    // Same three, same order, on every machine: the host's break, the
+    // others break along the same borders (docs/NETWORKING.md "Breakables").
+    if (m_net)
+        for (kke::PhysicsModule::ObjectHandle h : breakables)
+            if (h != kke::PhysicsModule::kInvalidHandle) m_net->replicateBreakable(h);
+#endif
 #endif
 }
 

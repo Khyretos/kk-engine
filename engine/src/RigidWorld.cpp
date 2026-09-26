@@ -325,6 +325,26 @@ void RigidWorld::bodiesInBox(const glm::vec3& min, const glm::vec3& max, std::ve
 }
 
 RigidWorld::RayHit RigidWorld::raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance) const {
+    return raycast(origin, direction, maxDistance, {});
+}
+
+namespace {
+class AcceptBodies final : public JPH::BodyFilter {
+public:
+    explicit AcceptBodies(const std::function<bool(RigidWorld::BodyId, RigidWorld::Motion)>& accept) : m_accept(accept) {}
+    bool ShouldCollideLocked(const JPH::Body& body) const override {
+        const RigidWorld::Motion motion = body.IsStatic() ? RigidWorld::Motion::Static
+                                          : body.IsKinematic() ? RigidWorld::Motion::Kinematic : RigidWorld::Motion::Dynamic;
+        return m_accept(body.GetID().GetIndexAndSequenceNumber(), motion);
+    }
+
+private:
+    const std::function<bool(RigidWorld::BodyId, RigidWorld::Motion)>& m_accept;
+};
+} // namespace
+
+RigidWorld::RayHit RigidWorld::raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance,
+                                       const std::function<bool(BodyId, Motion)>& accept) const {
     RayHit out;
     glm::vec3 dir = glm::length(direction) > 1e-9f ? glm::normalize(direction) : glm::vec3(0, -1, 0);
     JPH::RRayCast ray(toJR(origin), toJ(dir * maxDistance));
@@ -334,7 +354,8 @@ RigidWorld::RayHit RigidWorld::raycast(const glm::vec3& origin, const glm::vec3&
     JPH::RayCastSettings settings;
     settings.SetBackFaceMode(JPH::EBackFaceMode::CollideWithBackFaces);
     JPH::ClosestHitCollisionCollector<JPH::CastRayCollector> closest;
-    m->system.GetNarrowPhaseQuery().CastRay(ray, settings, closest);
+    if (accept) m->system.GetNarrowPhaseQuery().CastRay(ray, settings, closest, {}, {}, AcceptBodies(accept));
+    else m->system.GetNarrowPhaseQuery().CastRay(ray, settings, closest);
     if (!closest.HadHit()) return out;
     const JPH::RayCastResult& r = closest.mHit;
     out.hit = true;

@@ -44,6 +44,12 @@ jobs:
       # --strict: any warning (a broken link, a missing page) fails the build.
       - name: Build the site
         run: mkdocs build --strict
+      # The showcase site (website/, engine.kreative-kompas.com) is built
+      # here too, so a broken template fails CI instead of the deploy.
+      - name: Build the showcase site
+        run: |
+          curl -fsSL https://github.com/gohugoio/hugo/releases/download/v0.134.3/hugo_extended_0.134.3_linux-amd64.tar.gz | tar -xz -C "$RUNNER_TEMP" hugo
+          "$RUNNER_TEMP/hugo" --source website --minify --panicOnWarning -d "$RUNNER_TEMP/website"
       - name: Publish to gh-pages
         if: github.event_name != 'pull_request'
         run: |

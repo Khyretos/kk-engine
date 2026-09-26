@@ -1,0 +1,12 @@
+{{ define "main" }}
+<section class="page-hero small">
+  <div class="blobs" aria-hidden="true"><span></span><span></span><span></span></div>
+  <div class="wrap narrow">
+    {{ if eq .Section "devlog" }}<p class="eyebrow"><a href="{{ "devlog/" | relURL }}"><i class="fa-solid fa-arrow-left"></i> Devlog</a> · {{ .Date.Format "2 January 2006" }}</p>{{ end }}
+    <h1><span class="gradient-text animated">{{ .Title }}</span></h1>
+  </div>
+</section>
+<article class="section prose">
+  <div class="wrap narrow">{{ .Content }}</div>
+</article>
+{{ end }}

@@ -31,7 +31,10 @@ BreakGraph::BreakGraph(const TetMeshData& mesh, std::vector<uint32_t> chunkOfTet
         for (int f = 0; f < 4; ++f) {
             uint32_t n = m_neighbour[t][f];
             if (n == UINT32_MAX) m_exterior[t] |= static_cast<uint8_t>(1u << f);
-            else if (m_chunk[n] != m_chunk[t]) m_border[t] = 1;
+            else if (m_chunk[n] != m_chunk[t]) {
+                m_border[t] = 1;
+                m_borders.insert(key(m_chunk[t], m_chunk[n]));
+            }
         }
     m_threshold.assign(nt, 0.0f);
 }
@@ -57,6 +60,20 @@ bool BreakGraph::report(uint32_t tet, float stress, const std::function<bool(uin
 }
 
 bool BreakGraph::isBroken(uint32_t a, uint32_t b) const { return m_broken.count(key(a, b)) != 0; }
+
+std::vector<std::pair<uint32_t, uint32_t>> BreakGraph::brokenBorders() const {
+    std::vector<std::pair<uint32_t, uint32_t>> out;
+    out.reserve(m_broken.size());
+    for (uint64_t k : m_broken) out.push_back({ static_cast<uint32_t>(k >> 32), static_cast<uint32_t>(k & 0xFFFFFFFFu) });
+    std::sort(out.begin(), out.end());
+    return out;
+}
+
+bool BreakGraph::breakBorder(uint32_t a, uint32_t b) {
+    const uint64_t k = key(a, b);
+    if (a == b || !m_borders.count(k)) return false;
+    return m_broken.insert(k).second;
+}
 
 std::vector<std::vector<uint32_t>> BreakGraph::groups(const std::vector<uint32_t>& bodyTets, const std::function<bool(uint32_t)>& sameBody) const {
     std::unordered_map<uint32_t, uint32_t> parent;

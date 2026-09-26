@@ -957,6 +957,42 @@ void PhysicsModule::collectImpacts(float dt) {
     // FEMFX zeroes the count itself at the start of each step's contact search.
 }
 
+uint32_t PhysicsModule::breakableSeed(ObjectHandle h) const {
+    auto it = m_breakables.find(h);
+    return it == m_breakables.end() ? 0 : it->second.seed;
+}
+
+size_t PhysicsModule::brokenBorderCount(ObjectHandle h) const {
+    auto it = m_breakables.find(h);
+    return it == m_breakables.end() ? 0 : it->second.graph.brokenBorderCount();
+}
+
+std::vector<std::pair<uint32_t, uint32_t>> PhysicsModule::brokenBorders(ObjectHandle h) const {
+    auto it = m_breakables.find(h);
+    return it == m_breakables.end() ? std::vector<std::pair<uint32_t, uint32_t>>{} : it->second.graph.brokenBorders();
+}
+
+void PhysicsModule::setBreakableFollower(ObjectHandle h, bool follow) {
+    auto it = m_breakables.find(h);
+    if (it == m_breakables.end()) return;
+    it->second.follower = follow;
+    if (follow)
+        for (ObjectHandle ph : it->second.parts) m_objects[ph]->breakPending = -1; // a break of its own in flight: dropped
+}
+
+size_t PhysicsModule::applyBrokenBorders(ObjectHandle bh, const std::vector<std::pair<uint32_t, uint32_t>>& borders) {
+    auto it = m_breakables.find(bh);
+    if (it == m_breakables.end()) return 0;
+    size_t fresh = 0;
+    for (const auto& [a, c] : borders) fresh += it->second.graph.breakBorder(a, c) ? 1 : 0;
+    if (!fresh) return 0;
+    // Every part may have come apart; splitting one adds parts to the
+    // list, so walk a copy (a part that stays whole is left alone).
+    const std::vector<ObjectHandle> parts = it->second.parts;
+    for (ObjectHandle ph : parts) splitBreakablePart(bh, ph);
+    return fresh;
+}
+
 void PhysicsModule::updateBreakables() {
     for (auto& [bh, b] : m_breakables) {
         if (b.armPending) {
@@ -1001,6 +1037,7 @@ void PhysicsModule::updateBreakables() {
         //    cascaded into every piece - all-or-nothing. With both, the
         //    damage grows with the hit (a 0.8 m stone crate: 1 piece at
         //    12 m/s, 7 at 18, all 19 at 30).
+        if (b.follower) continue; // breaks only where its host says (applyBrokenBorders)
         constexpr int kBreakWindow = 2;
         std::vector<ObjectHandle> overloaded;
         for (ObjectHandle ph : b.parts) {
@@ -1257,12 +1294,13 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshInternal(const TetMeshDat
 
 PhysicsModule::ObjectHandle PhysicsModule::spawnPatternedBox(const glm::ivec3& cells, const glm::vec3& size, const glm::vec3& position,
                                                                const Material& material, int pattern, float chunkSize, int cellsPerCluster,
-                                                               const glm::vec3& velocity, float armSeconds, const glm::vec3* impactPoint) {
+                                                               const glm::vec3& velocity, float armSeconds, const glm::vec3* impactPoint,
+                                                               uint32_t seed) {
     TetMeshData box = buildGridBox(cells.x, cells.y, cells.z, size.x, size.y, size.z);
     FractureSeedOptions o;
     o.pattern = static_cast<FracturePattern>(pattern);
     o.chunkSize = chunkSize;
-    o.seed = fractureSeed(m_fractureWorldSeed, static_cast<uint32_t>(m_nextHandle));
+    o.seed = seed ? seed : fractureSeed(m_fractureWorldSeed, static_cast<uint32_t>(m_nextHandle));
     o.cellsPerCluster = cellsPerCluster;
     // Glass: the star centres somewhere near the middle (it lands flat,
     // so there's no single impact point to aim for).
@@ -1277,6 +1315,7 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnPatternedBox(const glm::ivec3& c
     opts.armFractureAfterSeconds = armSeconds;
     opts.tetStrength = std::move(baked.cut.tetStrength);
     ObjectHandle h = spawnTetMeshWithOptions(baked.cut.mesh, position, material, opts);
+    if (auto bit = m_breakables.find(h); bit != m_breakables.end()) bit->second.seed = o.seed;
     log::get(name())->info("patterned box {}: {} tets, {} pieces ({}), seed {}", h, baked.cut.mesh.tets.size(), baked.pieces,
                            fracturePatternName(o.pattern), o.seed);
     return h;

@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace kke::net {
@@ -22,7 +23,7 @@ namespace kke::net {
 //   velocity  +-64 m/s per axis, 1/128 m/s steps
 //   rotation  smallest-three quaternion, ~0.001 per component
 //   yaw       0..360 degrees, 1024 steps (0.35 degrees)
-constexpr uint16_t kProtocolVersion = 1;
+constexpr uint16_t kProtocolVersion = 2; // 2: Spawn, Despawn, Break (networking v2, #28)
 constexpr size_t kMaxPlayers = 32;
 constexpr size_t kMaxNameLength = 24;
 constexpr size_t kMaxGameIdLength = 32;
@@ -31,6 +32,9 @@ constexpr size_t kMaxReasonLength = 128;
 constexpr size_t kMaxEventBytes = 512;
 constexpr size_t kMaxBodiesPerSnapshot = 255;
 constexpr uint32_t kMaxBodyId = 65535;
+constexpr size_t kMaxSpawnBytes = 256;    // a spawned object's description (game-defined)
+constexpr size_t kMaxBordersPerBreak = 1024; // more go in several Break messages
+constexpr uint32_t kMaxChunkId = 65535;
 
 constexpr float kWorldXZ = 4096.0f;
 constexpr float kWorldYMin = -512.0f, kWorldYMax = 1536.0f;
@@ -47,6 +51,9 @@ enum class MessageType : uint8_t {
     GameEvent,       // either way (reliable): game-defined, relayed by the server
     PlayerState,     // client -> server (unreliable): my player now
     Snapshot,        // server -> client (unreliable): everyone and the bodies now
+    Spawn,           // server -> clients (reliable): an object the host made (a script's body)
+    Despawn,         // server -> clients (reliable): it's gone
+    Break,           // server -> clients (reliable): these borders of a breakable broke
     Count
 };
 
@@ -96,6 +103,27 @@ struct GameEventMsg {
     uint8_t fromPlayer = 0;    // filled in by the server, never trusted from a client
     uint16_t kind = 0;
     std::vector<uint8_t> payload;
+};
+// An object the host created at run time (a server script's body or
+// breakable): `id` is its network id (a body's id in snapshots, or a
+// breakable's in Break), `kind` says who builds it on a client, `desc` is
+// that builder's own serialized description. Persistent spawns are
+// repeated to late joiners; transient ones (a thrown ball) are not.
+struct SpawnMsg {
+    uint16_t id = 0;
+    uint16_t kind = 0;
+    std::vector<uint8_t> desc;
+};
+struct DespawnMsg { uint16_t id = 0; };
+// Pieces of a breakable (kke::BreakGraph) that came apart on the host:
+// each border is the pair of piece (chunk) ids either side of it. The same
+// baked pieces and the same broken borders give the same pieces on every
+// machine; `seed` is the breakable's fracture seed, so a client whose copy
+// was baked differently notices instead of breaking it wrongly.
+struct BreakMsg {
+    uint16_t id = 0;
+    uint32_t seed = 0;
+    std::vector<std::pair<uint16_t, uint16_t>> borders;
 };
 struct PlayerStateMsg {
     uint32_t timeMs = 0;       // sender's clock
@@ -159,6 +187,27 @@ template <typename Stream> void serialize(Stream& s, GameEventMsg& m) {
     s.integer(m.fromPlayer, 0, kMaxPlayers);
     s.integer(m.kind, 0, 65535);
     s.bytes(m.payload, kMaxEventBytes);
+}
+template <typename Stream> void serialize(Stream& s, SpawnMsg& m) {
+    s.integer(m.id, 0, kMaxBodyId);
+    s.integer(m.kind, 0, 65535);
+    s.bytes(m.desc, kMaxSpawnBytes);
+}
+template <typename Stream> void serialize(Stream& s, DespawnMsg& m) { s.integer(m.id, 0, kMaxBodyId); }
+template <typename Stream> void serialize(Stream& s, BreakMsg& m) {
+    s.integer(m.id, 0, kMaxBodyId);
+    s.bits(m.seed, 32);
+    uint32_t count = static_cast<uint32_t>(m.borders.size());
+    s.integer(count, 0, kMaxBordersPerBreak);
+    // 32 bits per border: a count the packet can't hold is refused first.
+    if constexpr (Stream::kReading) {
+        if (static_cast<size_t>(count) * 32 > s.bitsLeft()) s.fail();
+        m.borders.resize(s.ok() ? count : 0);
+    }
+    for (auto& [a, b] : m.borders) {
+        s.integer(a, 0, kMaxChunkId);
+        s.integer(b, 0, kMaxChunkId);
+    }
 }
 template <typename Stream> void serialize(Stream& s, PlayerStateMsg& m) {
     s.bits(m.timeMs, 32);

@@ -1,0 +1,19 @@
+{{/* A feature's images as a small carousel (first one shown), plus sounds. */}}
+<div class="media-stack" data-carousel>
+  {{ range $i, $m := .media }}
+  <figure class="media{{ if eq $i 0 }} active{{ end }}">
+    {{ with $m.video }}<video src="{{ . | relURL }}" poster="{{ $m.src | relURL }}" muted loop playsinline autoplay preload="none" aria-label="{{ $m.caption }}"></video>
+    {{ else }}<img src="{{ $m.src | relURL }}" alt="{{ $m.caption }}" loading="lazy" decoding="async">{{ end }}
+    <figcaption>{{ $m.caption }}</figcaption>
+  </figure>
+  {{ end }}
+  {{ if gt (len .media) 1 }}
+  <div class="dots">{{ range $i, $m := .media }}<button aria-label="Picture {{ add $i 1 }}"{{ if eq $i 0 }} class="active"{{ end }}></button>{{ end }}</div>
+  {{ end }}
+</div>
+{{ with .sounds }}
+<div class="sounds">
+  <span class="muted"><i class="fa-solid fa-volume-high"></i> Synthesized in the engine, not recorded:</span>
+  {{ range . }}<button class="chip" data-sound="{{ .src | relURL }}"><i class="fa-solid fa-play"></i> {{ .label }}</button>{{ end }}
+</div>
+{{ end }}
