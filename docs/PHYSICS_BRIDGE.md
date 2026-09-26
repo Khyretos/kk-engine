@@ -38,6 +38,46 @@ FEMFX starts with every collision group colliding only with itself.
 (`kExternalCollisionGroup`, 4) and with ragdoll limbs (group 3). Without
 that pairing the proxies exist but nothing hits them.
 
+## Rubble: small pieces leave FEMFX (issue #31)
+
+FEMFX costs ~0.15-0.2 ms per awake piece a step; Jolt a few microseconds
+per body. So once a breakable's break has played out (the piece is past
+its break grace and not about to split), the bridge hands pieces over:
+
+- small ones (at most `rubbleMaxSize`, 0.35 m, and `rubbleMaxTets`, 64), and
+- any piece that is a single baked chunk (nothing left in it to break),
+  up to `rubbleMaxChunkSize`, 0.8 m.
+
+Each becomes a Jolt convex hull of its vertices with the piece's mass,
+velocity and spin (`PhysicsModule::describeRubble`), and the piece leaves
+the FEMFX scene (`convertToRubble`). PhysicsModule keeps drawing its
+frozen surface where Jolt puts it (`setRubbleTransform`), and a
+breakable's embedded render points (Synty props) follow it too. At most
+`rubblePerStep` (6) go per fixed step, so a pane shattering into 30
+shards is spread over a few steps. `rubbleBudget` (800) caps the Jolt
+debris: past it the oldest resting piece is removed.
+
+Rubble isn't mirrored back into FEMFX as boxes: FEMFX pieces pass through
+shards lying on the ground (a detail; dozens of shards would fill the
+proxy budget). Pieces broken by FEMFX's own fracture (not a breakable)
+stay in FEMFX.
+
+## One interface for both engines
+
+`kke::IPhysicsWorld` (kke/Capabilities.h) is what both modules answer:
+raycasts, blasts (a velocity change fading with distance), stats and
+bounds queries. `kke/PhysicsWorld.h` asks every module at once:
+
+```cpp
+auto worlds = app.findCapability<kke::IPhysicsWorld>();
+kke::IPhysicsWorld::Hit hit = kke::physicsRaycast(worlds, from, dir, 50.0f); // closest, either engine
+kke::physicsBlast(worlds, hit.point, 3.0f, 8.0f);                            // crates, shards and glass alike
+```
+
+Ragdolls go through `IRagdollPhysics` the same way; `bestRagdollPhysics()`
+picks Jolt's when both engines are there (joint limits, limbs collide),
+FEMFX's otherwise.
+
 ## Things that exist in both worlds
 
 A support block that is both a FEMFX object and a Jolt static box
@@ -53,6 +93,7 @@ leaves such a body out.
   bottom crate. The log says how far the crates moved.
 - `KKE_BRIDGE=0` turns the bridge off, for comparison: the shards then
   fall through the crates to the ground.
+- `KKE_RUBBLE=0` keeps every piece in FEMFX, for comparison.
 - `KKE_BRIDGE_LOG=1` logs once a second how many boxes are mirrored and
   how many pushes went into Jolt, and what the bridge costs a step. The "FEMFX <-> Jolt" panel (F1) shows
   the same, with an on/off switch and a push scale.
@@ -65,6 +106,15 @@ leaves such a body out.
 | Iron ball rolled into a crate | crate knocked 0.84 m back | ball passes through |
 | Bridge cost | 0.04-0.05 ms a fixed step (6-14 boxes) | 0 |
 
+Rubble (same run, `KKE_DEMO_BRIDGE=1`, Debug build, Xvfb, 2026-09-26):
+
+| | Rubble on | `KKE_RUBBLE=0` |
+|---|---|---|
+| Glass pieces left in FEMFX | 0 of 31 (all to Jolt within a second) | 31, all awake |
+| FEMFX step, the second the glass breaks | 15.5 ms avg, 26 ms max | 30 ms avg, 45 ms max |
+| FEMFX step afterwards | ~9.5 ms (8-9 awake pieces) | ~22 ms (40 awake pieces) |
+| Bridge cost, handoff second | 0.15 ms a step | 0.09 ms |
+
 `kke_physics_benchmark` doesn't add the bridge, so its numbers are
 unchanged.
 
@@ -73,5 +123,6 @@ unchanged.
 - Kinematic proxies can't be moved by FEMFX within a step, so heavy
   FEMFX objects push Jolt bodies one step late, through the measured
   impulses.
-- No rubble handoff yet: small FEMFX pieces could become Jolt debris.
-- No shared `IPhysicsWorld` interface yet, and ragdolls stay on FEMFX.
+- Rubble doesn't deform or break again once it's in Jolt.
+- FEMFX's `rigidBodiesExternal` scene mode (a tighter coupling than
+  kinematic proxies) hasn't been evaluated.

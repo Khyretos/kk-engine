@@ -44,7 +44,13 @@ private:
         kke::RagdollDesc ragdollDesc;
         kke::RagdollSkinBinding binding;
         std::string behaviorBeforeRagdoll;
+        // Standing up: the last ragdoll pose (model space) blends back to
+        // the animated one over kStandUpSeconds. < 0 = not blending.
+        std::vector<glm::mat4> blendFrom;
+        float blendAge = -1.0f;
     };
+    void blendToAnimation(Character& c, float dt);
+    void addJoltLevel(); // floor and walls for Jolt ragdolls
     void ragdoll(Character& c, const glm::vec3& push);
     void standUp(Character& c);
     kke::IRagdollPhysics* m_physics = nullptr; // optional: whatever module offers ragdolls
