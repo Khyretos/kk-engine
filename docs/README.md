@@ -15,6 +15,7 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [INPUT.md](INPUT.md) | Rebindable actions, devices, triggers and chords |
 | [MOVEMENT.md](MOVEMENT.md) | How characters move, and the animation principles behind it |
 | [JIGGLE.md](JIGGLE.md) | Jiggle physics for bones, skin and soft bodies |
+| [RAGDOLLS.md](RAGDOLLS.md) | Humanoid and animal ragdolls, their joint limits and how to override them |
 | [NETWORKING.md](NETWORKING.md) | Transport, protocol, authority and replication |
 | [SCRIPTING.md](SCRIPTING.md) | Lua gameplay scripts |
 | [PLAY_TO_MAKE.md](PLAY_TO_MAKE.md) | Make the game while playing it: Simple, node graph and Lua levels |

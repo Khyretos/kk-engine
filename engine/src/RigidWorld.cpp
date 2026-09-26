@@ -456,6 +456,11 @@ RigidWorld::RagdollId RigidWorld::addRagdoll(const RagdollDesc& desc, const glm:
     for (const RagdollJoint& j : desc.joints) {
         const glm::vec3 centerB(desc.bodies[j.bodyB].transform[3]);
         const glm::vec3 along = unitOr(centerB - j.anchor, glm::vec3(0, -1, 0));
+        // Muscle tone: auto scales with the lighter body, so small animals
+        // aren't stiff and big ones aren't floppy.
+        const float friction = j.frictionTorque >= 0.0f
+                                   ? j.frictionTorque
+                                   : 0.5f + 0.4f * std::min(desc.bodies[j.bodyA].mass, desc.bodies[j.bodyB].mass);
         JPH::Ref<JPH::TwoBodyConstraintSettings> settings;
         if (j.hinge) {
             JPH::HingeConstraintSettings* h = new JPH::HingeConstraintSettings;
@@ -467,16 +472,27 @@ RigidWorld::RagdollId RigidWorld::addRagdoll(const RagdollDesc& desc, const glm:
             h->mPoint1 = h->mPoint2 = toJR(j.anchor);
             h->mHingeAxis1 = h->mHingeAxis2 = toJ(axis);
             h->mNormalAxis1 = h->mNormalAxis2 = toJ(normal);
-            const float lo = glm::radians(std::min(j.hingeMinDegrees, j.hingeMaxDegrees));
-            const float hi = glm::radians(std::max(j.hingeMinDegrees, j.hingeMaxDegrees));
-            h->mLimitsMin = std::clamp(lo, -glm::pi<float>(), 0.0f);
-            h->mLimitsMax = std::clamp(hi, 0.0f, glm::pi<float>());
-            h->mMaxFrictionTorque = 2.0f;
+            if (j.limited) {
+                const float lo = glm::radians(std::min(j.hingeMinDegrees, j.hingeMaxDegrees));
+                const float hi = glm::radians(std::max(j.hingeMinDegrees, j.hingeMaxDegrees));
+                h->mLimitsMin = std::clamp(lo, -glm::pi<float>(), 0.0f);
+                h->mLimitsMax = std::clamp(hi, 0.0f, glm::pi<float>());
+            } else {
+                h->mLimitsMin = -glm::pi<float>();
+                h->mLimitsMax = glm::pi<float>();
+            }
+            h->mMaxFrictionTorque = friction;
         } else {
             JPH::SwingTwistConstraintSettings* st = new JPH::SwingTwistConstraintSettings;
             settings = st;
             const glm::vec3 center = unitOr(j.swingAxis, along);
-            const glm::vec3 plane1 = perpendicular(center);
+            // Plane axis = what the main swing turns about (a hip's side
+            // axis). Jolt's constraint space is X = twist, Y = plane x twist
+            // (the "normal"), Z = plane: mPlaneHalfConeAngle limits turning
+            // about Y (swinging within the plane), mNormalHalfConeAngle
+            // turning about Z = the plane axis, i.e. our main swing.
+            const glm::vec3 bend = j.swingBendAxis - center * glm::dot(j.swingBendAxis, center);
+            const glm::vec3 plane1 = glm::length(bend) > 1e-3f ? glm::normalize(bend) : perpendicular(center);
             // Same frame on B, turned the way B already points.
             const glm::vec3 plane2 = fromTo(center, along) * plane1;
             st->mSpace = JPH::EConstraintSpace::WorldSpace;
@@ -485,13 +501,19 @@ RigidWorld::RagdollId RigidWorld::addRagdoll(const RagdollDesc& desc, const glm:
             st->mPlaneAxis1 = toJ(plane1);
             st->mTwistAxis2 = toJ(along);
             st->mPlaneAxis2 = toJ(glm::normalize(plane2 - along * glm::dot(plane2, along)));
-            const float swing = glm::radians(std::clamp(j.swingDegrees, 0.0f, 179.0f));
-            st->mNormalHalfConeAngle = st->mPlaneHalfConeAngle = swing;
-            const float twist = glm::radians(std::clamp(j.twistDegrees, 0.0f, 179.0f));
+            const float limitMax = j.limited ? 179.0f : 180.0f;
+            auto angle = [&](float degrees) { return glm::radians(j.limited ? std::clamp(degrees, 0.0f, limitMax) : limitMax); };
+            st->mNormalHalfConeAngle = angle(j.swingDegrees);
+            st->mPlaneHalfConeAngle = angle(j.swingSideDegrees < 0.0f ? j.swingDegrees : j.swingSideDegrees);
+            const float twist = angle(j.twistDegrees);
             st->mTwistMinAngle = -twist;
             st->mTwistMaxAngle = twist;
-            st->mMaxFrictionTorque = 2.0f;
+            st->mMaxFrictionTorque = friction;
         }
+        // Heavy bodies on light limbs (a horse's chest on its shins) need
+        // more solver passes, or limits give on impact.
+        settings->mNumVelocityStepsOverride = 20;
+        settings->mNumPositionStepsOverride = 8;
         JPH::TwoBodyConstraint* c = m->bodies().CreateConstraint(settings, JPH::BodyID(rd.bodies[j.bodyA]), JPH::BodyID(rd.bodies[j.bodyB]));
         if (!c) return fail("joint");
         rd.joints.emplace_back(c);

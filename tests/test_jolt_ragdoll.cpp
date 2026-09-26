@@ -2,6 +2,7 @@
 // self-collision, settling, cleanup.
 #include "kke/Ragdoll.h"
 #include "kke/RigidWorld.h"
+#include "RagdollTestRigs.h"
 
 #include <gtest/gtest.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -93,9 +94,10 @@ TEST(JoltRagdoll, FallsSettlesAndStaysInOnePiece) {
     ASSERT_TRUE(w.ragdollTransforms(id, now));
     for (size_t b = 0; b < now.size(); ++b) {
         EXPECT_GT(now[b][3].y, 0.0f) << d.bodies[b].name; // on the ground, not in it
-        EXPECT_LT(now[b][3].y, 0.6f) << d.bodies[b].name; // fell over
+        EXPECT_LT(now[b][3].y, 0.8f) << d.bodies[b].name; // fell over (maybe onto its knees)
         EXPECT_LT(glm::length(w.velocity(bodies[b])), 0.2f) << d.bodies[b].name;
     }
+    EXPECT_LT(now[static_cast<size_t>(d.findBody("head"))][3].y, 0.5f);
     // Joints held: both bodies still agree where each anchor is.
     for (size_t j = 0; j < d.joints.size(); ++j) {
         const glm::vec3 a = anchorOn(d, now, static_cast<int>(j), d.joints[j].bodyA);
@@ -203,6 +205,91 @@ TEST(JoltRagdoll, ThrownRagdollKeepsItsVelocity) {
     ASSERT_NE(id, 0u);
     w.step(1.0f / 60.0f);
     for (kke::RigidWorld::BodyId b : w.ragdollBodies(id)) EXPECT_NEAR(w.velocity(b).x, 3.0f, 0.3f);
+}
+
+namespace {
+
+// Forward/back angle of the left thigh in the pelvis's frame (0 = straight
+// down as built, positive = forward).
+float thighSwing(const kke::RagdollDesc& d, const std::vector<glm::mat4>& now) {
+    const int pelvis = d.findBody("pelvis"), thigh = d.findBody("thigh_l");
+    const glm::mat3 p0(d.bodies[pelvis].transform), p(now[pelvis]);
+    const glm::vec3 local = glm::transpose(p) * glm::normalize(glm::vec3(now[thigh][1]));
+    const glm::vec3 down = glm::transpose(p0) * glm::vec3(0, -1, 0), fwd = glm::transpose(p0) * glm::vec3(0, 0, 1);
+    return glm::degrees(std::atan2(glm::dot(local, fwd), glm::dot(local, down)));
+}
+
+float kickThigh(const kke::RagdollDesc& d, float impulse, bool limited = true) {
+    kke::RigidWorld w(single());
+    kke::RagdollDesc desc = d;
+    if (!limited) desc.findJoint("hip_l")->limited = false;
+    auto id = w.addRagdoll(desc, glm::vec3(0.0f));
+    EXPECT_NE(id, 0u);
+    // Hold the pelvis still, so only the hip moves.
+    w.setMotion(w.ragdollBodies(id)[desc.findBody("pelvis")], kke::RigidWorld::Motion::Kinematic);
+    const kke::RigidWorld::BodyId thigh = w.ragdollBodies(id)[desc.findBody("thigh_l")];
+    float most = 0.0f;
+    std::vector<glm::mat4> now;
+    for (int i = 0; i < 60; ++i) {
+        w.addImpulse(thigh, glm::vec3(0, 0, impulse), w.position(thigh) + glm::vec3(0, -0.2f, 0));
+        w.step(1.0f / 60.0f);
+        w.ragdollTransforms(id, now);
+        const float a = thighSwing(desc, now);
+        most = impulse > 0.0f ? std::max(most, a) : std::min(most, a);
+    }
+    return most;
+}
+
+} // namespace
+
+// A hip flexes ~120 degrees forward but extends only ~20 back.
+TEST(JoltRagdoll, HipsSwingFarForwardButLittleBack) {
+    const kke::RagdollDesc d = humanoid(glm::vec3(0, 5, 0));
+    const float forward = kickThigh(d, 3.0f);
+    const float back = kickThigh(d, -3.0f);
+    EXPECT_GT(forward, 100.0f);
+    EXPECT_LT(forward, 135.0f);
+    EXPECT_LT(back, -10.0f); // it does move back
+    EXPECT_GT(back, -30.0f); // but not far
+    // An override with no limits swings well past that.
+    EXPECT_LT(kickThigh(d, -3.0f, false), -60.0f);
+}
+
+TEST(JoltRagdoll, QuadrupedFallsSettlesAndItsKneesStayInRange) {
+    kke::RigidWorld w(single());
+    ground(w);
+    kke::ModelData m = kke_test::quadrupedSkeleton();
+    auto world = kke::computeRestPose(m);
+    // Horse.fbx is ~6 units tall: scale to a 1.7 m horse, 1 m up.
+    const glm::mat4 place = glm::translate(glm::mat4(1.0f), glm::vec3(0, 1.0f, 0)) * glm::scale(glm::mat4(1.0f), glm::vec3(0.28f));
+    for (auto& b : world) b = place * b;
+    const kke::RagdollDesc d = kke::buildQuadrupedRagdoll(m, world, 500.0f);
+    ASSERT_EQ(d.bodies.size(), 13u);
+    auto id = w.addRagdoll(d, glm::vec3(0.0f));
+    ASSERT_NE(id, 0u);
+    const auto bodies = w.ragdollBodies(id);
+    // Knock it over sideways.
+    w.addImpulse(bodies[d.findBody("chest")], glm::vec3(700.0f, 0, 0), glm::vec3(d.bodies[d.findBody("chest")].transform[3]) + glm::vec3(0, 0.3f, 0));
+    for (int i = 0; i < 360; ++i) {
+        w.step(1.0f / 60.0f);
+        for (size_t j = 0; j < d.joints.size(); ++j) {
+            if (!d.joints[j].hinge) continue;
+            const float a = w.ragdollHingeAngle(id, static_cast<int>(j));
+            EXPECT_GT(a, d.joints[j].hingeMinDegrees - 8.0f) << d.joints[j].name << " step " << i;
+            EXPECT_LT(a, d.joints[j].hingeMaxDegrees + 8.0f) << d.joints[j].name << " step " << i;
+        }
+    }
+    std::vector<glm::mat4> now;
+    ASSERT_TRUE(w.ragdollTransforms(id, now));
+    for (size_t b = 0; b < now.size(); ++b) {
+        EXPECT_GT(now[b][3].y, 0.0f) << d.bodies[b].name;
+        EXPECT_LT(glm::length(w.velocity(bodies[b])), 0.3f) << d.bodies[b].name;
+    }
+    for (size_t j = 0; j < d.joints.size(); ++j) {
+        const glm::vec3 a = anchorOn(d, now, static_cast<int>(j), d.joints[j].bodyA);
+        const glm::vec3 b = anchorOn(d, now, static_cast<int>(j), d.joints[j].bodyB);
+        EXPECT_LT(glm::distance(a, b), 0.05f) << d.joints[j].name;
+    }
 }
 
 TEST(RigidWorld, MassOverridesDensity) {

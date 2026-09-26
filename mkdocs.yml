@@ -89,6 +89,7 @@ nav:
       - Scenes: SCENES.md
       - Jiggle physics: JIGGLE.md
       - Physics bridge: PHYSICS_BRIDGE.md
+      - Ragdolls: RAGDOLLS.md
   - Reference:
       - Lua API: reference/lua-api.md
       - Optimization: OPTIMIZATION.md
