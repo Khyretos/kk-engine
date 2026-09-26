@@ -1266,7 +1266,7 @@ void ShowcaseModule::render(const kke::RenderContext& ctx) {
 }
 
 void ShowcaseModule::prepass(const kke::PrepassContext& ctx) {
-    if (m_lava) m_lava->prepass(ctx);
+    if (m_lava && !ctx.sceneCovered) m_lava->prepass(ctx);
 }
 
 void ShowcaseModule::renderShadow(const kke::ShadowRenderContext& ctx) {

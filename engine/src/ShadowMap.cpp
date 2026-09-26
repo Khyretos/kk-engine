@@ -40,9 +40,12 @@ ShadowMap::ShadowMap(VulkanDevice& device, uint32_t resolution)
     viewInfo.subresourceRange = { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1 };
     VK_CHECK(vkCreateImageView(m_device.device(), &viewInfo, nullptr, &m_imageView));
 
-    // A basic single-tap sampler, not PCF/soft shadows yet (see the
-    // header's own comment on what's deliberately still out of scope).
-    // CLAMP_TO_BORDER with an opaque-white border color specifically:
+    // Depth-compare sampler: each lookup in computeShadow()
+    // (pbr_common.glsl, a sampler2DShadow) returns the lit fraction of
+    // the 2x2 texels around it, bilinearly weighted, so a 3x3 kernel of
+    // them gives a smooth 4x4-texel penumbra for the cost of 9 taps.
+    // Needs linear filtering on the depth format; without it the
+    // compare still works, just per texel. CLAMP_TO_BORDER with an opaque-white border color specifically:
     // a fragment whose light-space position falls outside the shadow
     // map's covered region (see computeLightViewProj's own sceneRadius
     // parameter) samples the border and reads back the maximum
@@ -53,14 +56,19 @@ ShadowMap::ShadowMap(VulkanDevice& device, uint32_t resolution)
     // incorrectly shadowed or unshadowed depending on chance.
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    samplerInfo.magFilter = VK_FILTER_LINEAR;
-    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    VkFormatProperties formatProps{};
+    vkGetPhysicalDeviceFormatProperties(m_device.physicalDevice(), m_format, &formatProps);
+    const VkFilter filter = (formatProps.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)
+        ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+    samplerInfo.magFilter = filter;
+    samplerInfo.minFilter = filter;
     samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
     samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
     samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
     samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
     samplerInfo.unnormalizedCoordinates = VK_FALSE;
-    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.compareEnable = VK_TRUE;
+    samplerInfo.compareOp = VK_COMPARE_OP_LESS_OR_EQUAL; // lit when the fragment is no farther than the stored depth
     samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
     VK_CHECK(vkCreateSampler(m_device.device(), &samplerInfo, nullptr, &m_sampler));
 
@@ -139,7 +147,19 @@ ShadowMap::~ShadowMap() {
     if (m_image) vmaDestroyImage(m_device.allocator(), m_image, m_allocation);
 }
 
-glm::mat4 ShadowMap::computeLightViewProj(const glm::vec3& lightDirection, const glm::vec3& sceneCenter, float sceneRadius) {
+PipelineConfig ShadowMap::casterConfig() {
+    PipelineConfig config;
+    config.cullMode = VK_CULL_MODE_NONE;
+    // Slope factor does the work: bias grows with how steeply the
+    // surface faces away from the light. The constant is tiny for D32
+    // (it's scaled by the depth's exponent) and only covers flat floors.
+    config.depthBiasConstant = 1.25f;
+    config.depthBiasSlope = 1.75f;
+    return config;
+}
+
+glm::mat4 ShadowMap::computeLightViewProj(const glm::vec3& lightDirection, const glm::vec3& sceneCenter, float sceneRadius,
+                                          uint32_t shadowMapResolution) {
     glm::vec3 dir = glm::normalize(lightDirection);
     // The light's own "camera" sits back along the reverse of its
     // direction, far enough that sceneRadius fits comfortably inside
@@ -157,7 +177,20 @@ glm::mat4 ShadowMap::computeLightViewProj(const glm::vec3& lightDirection, const
         up = glm::vec3(0.0f, 0.0f, 1.0f);
     }
 
-    glm::mat4 view = glm::lookAt(eye, sceneCenter, up);
+    glm::vec3 center = sceneCenter;
+    if (shadowMapResolution > 0) {
+        // Express the centre in the light's rotation-only frame, round its
+        // across-the-light coordinates to whole texels, and map it back.
+        const float texel = 2.0f * sceneRadius / static_cast<float>(shadowMapResolution);
+        const glm::mat4 rot = glm::lookAt(glm::vec3(0.0f), dir, up);
+        glm::vec4 c = rot * glm::vec4(sceneCenter, 1.0f);
+        c.x = std::round(c.x / texel) * texel;
+        c.y = std::round(c.y / texel) * texel;
+        center = glm::vec3(glm::inverse(rot) * c);
+        eye = center - dir * (sceneRadius * 3.0f);
+    }
+
+    glm::mat4 view = glm::lookAt(eye, center, up);
     glm::mat4 proj = glm::ortho(-sceneRadius, sceneRadius, -sceneRadius, sceneRadius, 0.1f, sceneRadius * 6.0f);
     // Same Vulkan Y-flip every other projection matrix in this engine
     // already applies (see Application.h/Camera) — glm's ortho(), like

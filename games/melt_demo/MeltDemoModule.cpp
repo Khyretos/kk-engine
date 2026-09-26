@@ -155,6 +155,7 @@ void MeltDemoModule::render(const kke::RenderContext& ctx) {
 // Particle colours from material and temperature, shared by both drawing
 // paths (smooth surface and raw spheres).
 void MeltDemoModule::prepass(const kke::PrepassContext& ctx) {
+    if (ctx.sceneCovered) return; // only feeds render()
     const BlockPreset& p = kPresets[m_preset];
     const auto& pos = m_fluid->positions();
     const auto& temp = m_fluid->temperatures();

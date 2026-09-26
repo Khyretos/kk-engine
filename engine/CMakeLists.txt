@@ -20,7 +20,9 @@ set(ENGINE_SOURCES
     src/BenchmarkReport.cpp
     src/AssetCatalog.cpp
     src/Picking.cpp
+    src/DrawOrder.cpp
     src/PlayBlocks.cpp
+    src/TouchGestures.cpp
     src/VoxelTets.cpp
     src/InteriorColor.cpp
     src/FracturePattern.cpp
@@ -47,6 +49,10 @@ set(ENGINE_SOURCES
     src/server/Leaderboard.cpp
     src/server/Directory.cpp
     src/voice/JitterBuffer.cpp
+    src/net/Authority.cpp
+    src/InputSanity.cpp
+    src/PackSeal.cpp
+    src/DevTools.cpp
     src/InputMap.cpp
     src/InputDevices.cpp
     src/modules/InputModule.cpp
@@ -119,6 +125,7 @@ set(ENGINE_HEADERS
     include/kke/AssetCatalog.h
     include/kke/Picking.h
     include/kke/PlayBlocks.h
+    include/kke/TouchGestures.h
     include/kke/VoxelTets.h
     include/kke/InteriorColor.h
     include/kke/FracturePattern.h
@@ -202,12 +209,20 @@ target_link_libraries(kke_engine PUBLIC
     ufbx
     spdlog::spdlog
     kke_miniaudio
+    kke_monocypher
 )
 
 target_compile_definitions(kke_engine PUBLIC
     VK_NO_PROTOTYPES              # volk owns all Vulkan function pointers
     GLFW_INCLUDE_NONE
 )
+
+# Shipping builds compile the developer tools out (kke/DevTools.h).
+if(KKE_SHIPPING)
+    target_compile_definitions(kke_engine PUBLIC KKE_DEV_TOOLS=0)
+else()
+    target_compile_definitions(kke_engine PUBLIC KKE_DEV_TOOLS=1)
+endif()
 
 if(KKE_ENABLE_VALIDATION)
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_VALIDATION=1)
@@ -292,6 +307,7 @@ endif()
 target_compile_definitions(kke_engine PRIVATE KKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}")
 if(WIN32)
     target_link_libraries(kke_engine PUBLIC psapi) # peak memory in benchmark reports
+    target_link_libraries(kke_engine PUBLIC bcrypt) # secure random for kke/PackSeal.h key generation
 endif()
 
 # Hot CPU loops stay optimized in Debug builds too (same reasoning as

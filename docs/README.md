@@ -18,6 +18,7 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [RAGDOLLS.md](RAGDOLLS.md) | Humanoid and animal ragdolls, their joint limits and how to override them |
 | [NETWORKING.md](NETWORKING.md) | Transport, protocol, authority and replication |
 | [SERVER_HOSTING.md](SERVER_HOSTING.md) | Running a server: kke_server, Docker, roles, directories, security |
+| [ANTI_CHEAT.md](ANTI_CHEAT.md) | Fair games without invasive software: shipping builds, server authority, input checks, sealed data |
 | [SCRIPTING.md](SCRIPTING.md) | Lua gameplay scripts |
 | [PLAY_TO_MAKE.md](PLAY_TO_MAKE.md) | Make the game while playing it: Simple, node graph and Lua levels |
 | [SCENES.md](SCENES.md) | Levels built from asset packs |

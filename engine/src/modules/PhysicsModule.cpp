@@ -486,8 +486,7 @@ void PhysicsModule::init(Application& app) {
     // (see PhysicsModule.h's own comment on why the ground plane is
     // deliberately excluded from this).
     {
-        PipelineConfig shadowConfig;
-        shadowConfig.cullMode = VK_CULL_MODE_NONE;
+        PipelineConfig shadowConfig = ShadowMap::casterConfig();
         shadowConfig.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ShadowPushConstants) };
         m_shadowPipeline = std::make_unique<Pipeline>(
             app.device(), app.shadowMap().renderPass(),

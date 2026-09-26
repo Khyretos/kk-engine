@@ -68,6 +68,11 @@ Pipeline::Pipeline(VulkanDevice& device, VkRenderPass renderPass,
     rasterizer.cullMode = config.cullMode;
     rasterizer.frontFace = config.frontFace;
     rasterizer.lineWidth = 1.0f;
+    if (config.depthBiasConstant != 0.0f || config.depthBiasSlope != 0.0f) {
+        rasterizer.depthBiasEnable = VK_TRUE;
+        rasterizer.depthBiasConstantFactor = config.depthBiasConstant;
+        rasterizer.depthBiasSlopeFactor = config.depthBiasSlope;
+    }
 
     VkPipelineMultisampleStateCreateInfo multisampling{};
     multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
