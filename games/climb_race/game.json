@@ -1,0 +1,9 @@
+{
+  "id": "kke.climb_race",
+  "title": "Climb Race",
+  "description": "Race a rival up a generated mountain face. Pick every hold yourself: bumpers reach, triggers lunge, both snatch; manage your stamina on ledges and jugs.",
+  "version": "0.1.0",
+  "tags": ["demo", "climbing", "racing", "physics", "ik"],
+  "engine_version": "0.3",
+  "modules": ["Settings", "Input", "RigidBodies", "Models", "UI", "Audio", "ClimbRace", "Stats"]
+}
