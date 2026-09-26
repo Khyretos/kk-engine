@@ -24,7 +24,8 @@ and your bandwidth, and has sliders to simulate a bad connection.
 
 | Variable | Meaning |
 |---|---|
-| `KKE_NET` | `host`, `host:PORT`, `join:ADDRESS` or `join:ADDRESS:PORT` |
+| `KKE_NET` | `host`, `host:PORT`, `join:ADDRESS`, `join:ADDRESS:PORT` or `join:CODE[@RELAY]` |
+| `KKE_NET_RELAY` | `host[:port]` of a relay: hosting gets a join code, and codes typed without `@relay` are asked there (docs/SERVER_HOSTING.md "Join codes") |
 | `KKE_NET_NAME` | your name in the game and in the LAN list |
 | `KKE_NET_LAG` | extra one-way delay in ms on everything this game sends |
 | `KKE_NET_JITTER` | ± random ms per packet (reorders unreliable packets) |
@@ -32,7 +33,36 @@ and your bandwidth, and has sliders to simulate a bad connection.
 
 A host takes UDP port 27960, or the next free one up to 27975, so several
 hosts can run on one PC and the LAN search still finds all of them. Allow
-that range in the firewall to play across machines.
+that range in the firewall to play across machines, or use a join code:
+with a relay set, the host's panel shows a code like `K7M-Q2P@relay.example.org`
+and friends type it in the Address box instead of an address; nobody
+forwards a port (docs/SERVER_HOSTING.md "Join codes").
+
+## Encryption
+
+Every connection is encrypted, on a LAN too, with nothing to set up
+(`kke/net/SecureTransport.h`, issue #44). The client and the server each
+make a throwaway X25519 key; the server adds its long-term key and proves
+it holds it; both derive one key per direction with BLAKE2b; every packet
+is then sealed with XChaCha20-Poly1305 (Monocypher, already used for
+`kke_seal`) and a counter as the nonce. So:
+
+- nobody on the path (café Wi-Fi, a relay, an ISP) can read the password,
+  chat, voice or moves, nor change or replay a packet: a packet that
+  fails its check is dropped, and a peer sending more than 20 of those
+  is dropped too;
+- a joiner who knows the server's key (a join code: the relay hands it
+  over) refuses any other, so nobody in the middle can pose as the
+  server; typing a plain address has no key to compare with (encrypted
+  all the same, like a first visit over https without a certificate);
+- keys are forward secret: a server key stolen later doesn't open old
+  recordings.
+
+It costs 25 bytes per packet and a few microseconds of CPU. `kke_server`
+keeps its key in `saveDir/server.key` (owner-only) and prints its
+fingerprint at start; a game hosting makes a new key each time. The
+handshake has its own version, so a game from before encryption can't
+join a new one (and is told nothing it could use).
 
 ## How it works
 
@@ -245,8 +275,8 @@ capsule doesn't; the honest fall after a refusal passes.
 - Input replay for competitive games (#28: needs a rewindable
   kke::Locomotion), rollback for fighting games, lockstep for RTS
   (ACTION_PLAN.md).
-- Dedicated server process and Docker image; secure connect tokens
-  (yojimbo), internet P2P with NAT traversal (GameNetworkingSockets).
+- Remembering a server's key per address (so a plain-address join can
+  warn when it changes); a relay per region picked by ping.
 - Voice chat (Opus).
 - Several local players per connection (couch + online).
 - Breaking on a client before the host says so (predicted breaks): today

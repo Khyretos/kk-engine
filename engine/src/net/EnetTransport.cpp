@@ -197,6 +197,27 @@ std::string EnetTransport::address(PeerId peer) const {
     if (it == m_peers.end()) return {};
     char ip[64] = {};
     if (enet_address_get_host_ip(&it->second->address, ip, sizeof ip) != 0) return {};
+    if (realAddress)
+        if (std::string real = realAddress(ip, it->second->address.port); !real.empty()) return real;
+    return ip;
+}
+
+bool EnetTransport::sendRaw(const std::string& host, uint16_t port, const std::vector<uint8_t>& data) {
+    if (!m_host || data.empty()) return false;
+    ENetAddress to{};
+    to.port = port;
+    if (enet_address_set_host_ip(&to, host.c_str()) != 0 && enet_address_set_host(&to, host.c_str()) != 0) return false;
+    ENetBuffer buf;
+    buf.data = const_cast<uint8_t*>(data.data());
+    buf.dataLength = data.size();
+    return enet_socket_send(m_host->socket, &to, &buf, 1) == static_cast<int>(data.size());
+}
+
+std::string EnetTransport::resolve(const std::string& host) {
+    ENetAddress a{};
+    if (enet_address_set_host(&a, host.c_str()) != 0) return {};
+    char ip[64] = {};
+    if (enet_address_get_host_ip(&a, ip, sizeof ip) != 0) return {};
     return ip;
 }
 
@@ -248,6 +269,13 @@ bool EnetTransport::discover(uint16_t firstPort, uint16_t lastPort) {
 int EnetTransport::intercept(ENetHost* host) {
     const size_t n = host->receivedDataLength;
     const uint8_t* d = host->receivedData;
+    if (relay::isRelayDatagram(d, n)) {
+        if (onRaw) {
+            char ip[64] = {};
+            if (enet_address_get_host_ip(&host->receivedAddress, ip, sizeof ip) == 0) onRaw(ip, host->receivedAddress.port, std::vector<uint8_t>(d, d + n));
+        }
+        return 1; // never ENet's
+    }
     if (n < 8) return 0;
     if (std::memcmp(d, kQuery, 8) == 0) {
         if (m_discoveryInfo.empty()) return 1; // not hosting: swallow, don't answer
