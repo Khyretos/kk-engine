@@ -313,6 +313,10 @@ marketplace's thumbnails are rendered there) with
 surfaces in the showcase and melt demo) returns early. Checked headless
 in the Synty demo: 0 draw calls, UI intact, validation clean.
 
+**Also:** opaque model draws are sorted nearest first
+(`kke::frontToBackOrder`), inside instanced draws and across them (#37).
+The measured depth prepass and the overdraw view remain open in #37.
+
 **Later the same day:** shadow map quality (#38). The shadow map is
 sampled with a depth-compare sampler (each of the 9 PCF taps is a
 hardware bilinear comparison), casters get slope-scaled depth bias from
@@ -330,7 +334,7 @@ in #20.
    (done)
 4. MSAA as a setting + optional SMAA 1x. (#36)
 5. HDR target, one tone map + exposure pass, 10-bit output. (#35)
-6. Front-to-back sorting, measured prepass, overdraw view. (#37)
+6. Front-to-back sorting (done), measured prepass, overdraw view. (#37)
 7. Shadow map quality: compare sampler, slope bias, stable projection. (done, #38)
 8. Texture compression at asset cooking. (#39)
 9. Don't render the 3D scene behind opaque menus. (done, #40)

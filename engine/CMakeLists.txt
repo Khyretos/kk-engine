@@ -20,6 +20,7 @@ set(ENGINE_SOURCES
     src/BenchmarkReport.cpp
     src/AssetCatalog.cpp
     src/Picking.cpp
+    src/DrawOrder.cpp
     src/PlayBlocks.cpp
     src/VoxelTets.cpp
     src/InteriorColor.cpp
