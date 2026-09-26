@@ -1,6 +1,8 @@
 #include "kke/Log.h"
 
 #include <spdlog/async.h>
+#include <spdlog/details/console_globals.h>
+#include <spdlog/details/registry.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 #include <cstdio>
@@ -23,12 +25,21 @@ bool g_exited = false;
 // already stopped (kke_tests.exe hung after "[ PASSED ]" in the Release
 // workflow, docs/RELEASES.md). An atexit handler runs while threads are
 // still alive, on every platform.
+//
+// atexit handlers and static destructors run in one combined reverse
+// order, so the handler must be registered after the statics it uses
+// exist: spdlog's registry and the console sinks' mutex are function-local
+// statics, and registering before they were built ran the handler after
+// the registry was destroyed (heap corruption at exit, "malloc_consolidate():
+// unaligned fastbin chunk detected" in the Benchmarks workflow).
 void shutdownAtExit() {
     g_exited = true;
     spdlog::shutdown();
 }
 
 void registerExitShutdown() {
+    spdlog::details::registry::instance();
+    spdlog::details::console_mutex::mutex();
     static const bool registered = std::atexit(shutdownAtExit) == 0;
     if (!registered) std::fprintf(stderr, "kke::log: could not register the exit-time logger shutdown\n");
 }
@@ -66,7 +77,9 @@ std::shared_ptr<spdlog::logger> get(const std::string& moduleName) {
     registerExitShutdown();
     auto logger = spdlog::create_async_nb<spdlog::sinks::stdout_color_sink_mt>(moduleName);
     logger->set_pattern(g_pattern);
-    logger->set_level(spdlog::get_level());
+    // The registry gives new loggers the global level (spdlog::set_level);
+    // spdlog::get_level() would dereference the default logger, which
+    // spdlog::shutdown() drops, so logging after shutdown() crashed here.
     return logger;
 }
 
