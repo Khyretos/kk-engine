@@ -7,11 +7,13 @@
 #include "kke/VoronoiFracture.h"
 #include "kke/Material.h"
 #include "kke/SceneLoader.h"
+#include "kke/modules/AudioModule.h"
 #if KKE_ENABLE_FEMFX
 #include "kke/modules/PhysicsModule.h"
 #endif
 
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <imgui.h>
 #include <nlohmann/json.hpp>
 
@@ -114,6 +116,12 @@ void SandboxModule::init(kke::Application& app) {
 #if KKE_ENABLE_FEMFX
     m_hasFemfx = app.getModule<kke::PhysicsModule>() != nullptr;
 #endif
+    m_blocks = kke::defaultPlayBlocks();
+    m_blockAssets.assign(m_blocks.size(), {});
+    if (const char* mode = std::getenv("KKE_SANDBOX_MODE")) {
+        if (std::strcmp(mode, "build") == 0) m_mode = Mode::Build;
+        else if (std::strcmp(mode, "play") != 0) kke::log::get(name())->warn("KKE_SANDBOX_MODE='{}' is not 'play' or 'build'; starting in play", mode);
+    }
     const char* base = SDL_GetBasePath();
     std::string folder = kke::findAssetFolder("assets/synty", { "KKE_ASSETS_DIR", "KKE_SYNTY_DIR" }, base ? base : "", &m_searched);
     if (!folder.empty()) openAssetFolder(folder);
@@ -142,8 +150,14 @@ void SandboxModule::setEnginePanels(std::vector<kke::Module*> panels) {
 
 void SandboxModule::openAssetFolder(const std::string& folder) {
     clearAll();
+    if (m_bat) m_models->remove(m_bat);
+    m_bat = 0;
+    m_batModel = 0;
     m_catalog = kke::AssetCatalog::scan(folder);
     m_assetFolder = m_catalog.assets.empty() ? std::string() : folder;
+    // The palette shows only the blocks whose assets these packs have.
+    for (size_t i = 0; i < m_blocks.size(); ++i)
+        m_blockAssets[i] = kke::availableAssets(m_blocks[i], [&](const std::string& n) { return m_catalog.find(n) != nullptr; });
     m_filterPack.clear();
     m_filterCategory.clear();
     m_filterDirty = true;
@@ -591,7 +605,7 @@ void SandboxModule::commitPlacement(bool keepPlacing) {
     }
     pushUndo();
     if (Object* o = spawnObject(m_placeAsset, m_ghostPos, m_placeYaw, 0, m_placePack)) {
-        select(o->id, false);
+        if (m_mode == Mode::Build) select(o->id, false); // Play mode has no selection
         o->texture = m_models->textureOverride(m_ghost);
         m_models->setTextureOverride(o->instance, o->texture);
     }
@@ -736,8 +750,11 @@ void SandboxModule::drawGizmo() {
 
 // ---------------------------------------------------------------- frame
 
-void SandboxModule::update(const kke::UpdateContext&) {
-    bool mouseFree = !ImGui::GetIO().WantCaptureMouse && !m_app->uiCapturesMouse();
+void SandboxModule::update(const kke::UpdateContext& ctx) {
+    // Play mode drags from the palette into the world, and ImGui keeps the
+    // mouse while its button is held, so there "free" means not over a window.
+    const bool play = m_mode == Mode::Play;
+    bool mouseFree = play ? !mouseOverUi() : !ImGui::GetIO().WantCaptureMouse && !m_app->uiCapturesMouse();
 
     // Ground grid around the camera target, snapped so it doesn't swim.
     glm::vec3 target = m_app->camera().target;
@@ -759,10 +776,13 @@ void SandboxModule::update(const kke::UpdateContext&) {
 
     // Level markers: the player spawn (arrow = facing) and point lights,
     // which light the sandbox too (slots 2-3; 0-1 are the sun and sky).
+    // Play mode hides the markers (editor things); the lights still light.
     {
         const glm::vec3 fwd(std::sin(glm::radians(m_spawnYaw)), 0.0f, -std::cos(glm::radians(m_spawnYaw)));
-        m_debug->box(m_spawn + glm::vec3(-0.3f, 0.0f, -0.3f), m_spawn + glm::vec3(0.3f, 1.8f, 0.3f), kSpawnColor, 0.02f);
-        m_debug->line(m_spawn + glm::vec3(0, 0.05f, 0), m_spawn + glm::vec3(0, 0.05f, 0) + fwd, kSpawnColor, 0.03f);
+        if (!play) {
+            m_debug->box(m_spawn + glm::vec3(-0.3f, 0.0f, -0.3f), m_spawn + glm::vec3(0.3f, 1.8f, 0.3f), kSpawnColor, 0.02f);
+            m_debug->line(m_spawn + glm::vec3(0, 0.05f, 0), m_spawn + glm::vec3(0, 0.05f, 0) + fwd, kSpawnColor, 0.03f);
+        }
         kke::Lighting& lighting = m_app->lighting();
         for (int i = 0; i < 2; ++i) {
             kke::Light& l = lighting.lights[2 + i];
@@ -772,7 +792,7 @@ void SandboxModule::update(const kke::UpdateContext&) {
             l.position = m_pointLights[i].position;
             l.color = m_pointLights[i].color;
             l.intensity = m_pointLights[i].intensity;
-            m_debug->cross(l.position, i == m_selectedLight ? 0.5f : 0.3f, kLightColor);
+            if (!play) m_debug->cross(l.position, i == m_selectedLight ? 0.5f : 0.3f, kLightColor);
         }
     }
 
@@ -781,6 +801,11 @@ void SandboxModule::update(const kke::UpdateContext&) {
         m_hovered = 0;
     } else if (m_tool == Tool::Place) {
         m_ghostValid = mouseFree && placementPoint(m_ghostPos, m_movingId);
+        // Play mode: new people turn to look at you.
+        if (play && m_ghostValid && !m_movingId) {
+            const kke::CatalogAsset* a = resolve(m_placeAsset, m_placePack);
+            if (a && a->skinned) m_placeYaw = kke::yawToFace(m_ghostPos, m_app->camera().position);
+        }
         m_models->setVisible(m_ghost, m_ghostValid);
         if (m_ghostValid) {
             if (const kke::ModelData* d = m_models->model(m_ghostModel)) {
@@ -803,15 +828,20 @@ void SandboxModule::update(const kke::UpdateContext&) {
             }
         }
         m_hovered = 0;
+    } else if (m_tool == Tool::Bat) {
+        m_hovered = 0;
+        glm::vec3 aim;
+        if (mouseFree && !m_swing.active() && placementPoint(aim, 0)) m_debug->cross(aim, 0.35f, glm::vec3(1.0f, 0.85f, 0.2f));
     } else if (m_tool == Tool::Shoot) {
         m_hovered = 0;
         // Aim marker where the ball is heading (first hit: ground or object).
         glm::vec3 aim;
         if (mouseFree && placementPoint(aim, 0)) m_debug->cross(aim, 0.3f, glm::vec3(1.0f, 0.35f, 0.25f));
     } else {
-        m_hoverHandle = mouseFree ? hoverHandle() : Handle::None;
+        m_hoverHandle = mouseFree && !play ? hoverHandle() : Handle::None;
         m_hovered = mouseFree && m_hoverHandle == Handle::None ? pickObject() : 0;
     }
+    updateBat(ctx.dt);
 
     for (const Object& o : m_objects) {
         const bool selected = isSelected(o.id);
@@ -827,6 +857,54 @@ void SandboxModule::update(const kke::UpdateContext&) {
 
 void SandboxModule::onEvent(const SDL_Event& event) {
     ImGuiIO& io = ImGui::GetIO();
+    if (m_mode == Mode::Play) {
+        // Simple mode: click or drag, nothing to remember. Placing that
+        // started with a press (on a palette picture, or on something in
+        // the world to pick it up) ends where the mouse is let go.
+        if (event.type == SDL_EVENT_MOUSE_BUTTON_UP && event.button.button == SDL_BUTTON_LEFT) {
+            if (m_dropOnRelease && m_tool == Tool::Place) {
+                if (!mouseOverUi()) commitPlacement(false);
+                else if (m_movingId) cancelPlacing(); // carried back onto the palette: put it back
+                // else: a tap on a palette picture, the next click places it
+            }
+            m_dropOnRelease = false;
+            return;
+        }
+        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT) {
+            if (mouseOverUi()) return;
+            if (m_tool == Tool::Place) commitPlacement(false);
+            else if (m_tool == Tool::Bat) swingBat();
+            else if (m_tool == Tool::Shoot) throwBall();
+            else if (Object* o = find(pickObject())) {
+                beginPlacing(o->asset, o->yawDegrees, o->id, o->pack);
+                m_dropOnRelease = true;
+            }
+            return;
+        }
+        if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat || io.WantTextInput) return;
+        switch (event.key.key) {
+        case SDLK_ESCAPE:
+            if (m_tool == Tool::Place) cancelPlacing();
+            m_tool = Tool::Select;
+            break;
+        case SDLK_SPACE:
+            if (m_tool == Tool::Bat) swingBat();
+            break;
+        case SDLK_Z:
+            if (event.key.mod & SDL_KMOD_CTRL) undo();
+            break;
+        case SDLK_F1:
+            m_showEnginePanels = !m_showEnginePanels;
+            for (kke::Module* m : m_enginePanels) m->setUiVisible(m_showEnginePanels);
+            break;
+        case SDLK_F2:
+            setMode(Mode::Build);
+            break;
+        default:
+            break;
+        }
+        return;
+    }
     if (event.type == SDL_EVENT_MOUSE_BUTTON_UP && event.button.button == SDL_BUTTON_LEFT && m_drag != Handle::None) {
         m_drag = Handle::None;
         if (!m_dragMoved && !m_undo.empty()) m_undo.pop_back(); // a click on a handle is not an edit
@@ -906,6 +984,9 @@ void SandboxModule::onEvent(const SDL_Event& event) {
     case SDLK_F1:
         m_showEnginePanels = !m_showEnginePanels;
         for (kke::Module* m : m_enginePanels) m->setUiVisible(m_showEnginePanels);
+        break;
+    case SDLK_F2:
+        setMode(Mode::Play);
         break;
     case SDLK_F:
         throwBall();
@@ -1836,9 +1917,235 @@ void SandboxModule::lightsUi() {
     }
 }
 
+// ---------------------------------------------------------------- play mode (Simple)
+
+void SandboxModule::setMode(Mode mode) {
+    if (m_tool == Tool::Place) cancelPlacing();
+    m_tool = Tool::Select;
+    m_dropOnRelease = false;
+    m_drag = Handle::None;
+    clearSelection();
+    m_mode = mode;
+}
+
+bool SandboxModule::mouseOverUi() const {
+    // AllowWhenBlockedByActiveItem: while a palette picture is held down
+    // (being dragged out) ImGui otherwise reports no window as hovered.
+    return ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) ||
+           m_app->uiCapturesMouse();
+}
+
+void SandboxModule::placeBlock(size_t block) {
+    if (block >= m_blocks.size()) return;
+    const std::string asset = kke::chooseAsset(m_blocks[block], m_blockAssets[block], m_lookPick++);
+    if (asset.empty()) return;
+    beginPlacing(asset, 0.0f);
+}
+
+void SandboxModule::standEveryoneUp() {
+    for (Object& o : m_objects)
+        if (o.ragdoll) standUp(o);
+}
+
+// Aims at the person under the mouse (else the ground there) and swings
+// from the camera's side, so the bat's sweet spot passes through them.
+void SandboxModule::swingBat() {
+    if (m_swing.active()) return;
+    const kke::Ray ray = mouseRay();
+    glm::vec3 target(0.0f);
+    float best = 1e30f;
+    for (const Object& o : m_objects) {
+        if (!o.character || o.ragdoll) continue;
+        glm::vec3 mn, mx;
+        worldBounds(o, mn, mx);
+        const float t = kke::rayAabb(ray, mn, mx);
+        if (t >= 0.0f && t < best) {
+            best = t;
+            target = glm::vec3((mn.x + mx.x) * 0.5f, mn.y, (mn.z + mx.z) * 0.5f);
+        }
+    }
+    if (best >= 1e30f) {
+        const float t = kke::rayPlaneY(ray, 0.0f);
+        if (t < 0.0f || t > m_app->camera().farPlane) return;
+        target = ray.at(t);
+    }
+    const glm::vec3 forward = target - m_app->camera().position;
+    if (!m_swing.start(m_swing.pivotFor(target, forward), forward)) return;
+    m_swingHits.clear();
+    // The bat model, loaded on the first swing. Without it the bat is a
+    // thick line: the swing and the hits don't depend on the model.
+    if (!m_batModel && !m_blocks.empty()) {
+        for (size_t i = 0; i < m_blocks.size(); ++i) {
+            if (m_blocks[i].kind != kke::PlayBlockKind::Tool || m_blockAssets[i].empty()) continue;
+            m_batModel = loadAsset(m_blockAssets[i].front());
+            if (const kke::ModelData* d = m_batModel ? m_models->model(m_batModel) : nullptr) {
+                std::vector<glm::vec3> points;
+                for (const kke::ModelMesh& mesh : d->meshes)
+                    for (const kke::ModelVertex& v : mesh.vertices) points.push_back(v.position);
+                m_batAxis = kke::findLongAxis(points);
+                m_bat = m_models->spawn(m_batModel);
+                m_models->setVisible(m_bat, false);
+            }
+            break;
+        }
+    }
+}
+
+void SandboxModule::updateBat(float dt) {
+    if (!m_swing.active()) return;
+    const bool stillOut = m_swing.update(dt);
+    {   // sweep() only hits over what this update swung through
+        for (Object& o : m_objects) {
+            if (!o.character || o.ragdoll || std::find(m_swingHits.begin(), m_swingHits.end(), o.id) != m_swingHits.end()) continue;
+            glm::vec3 mn, mx;
+            worldBounds(o, mn, mx);
+            const kke::BatSwing::Hit hit = m_swing.sweep(mn, mx);
+            if (!hit.hit) continue;
+            m_swingHits.push_back(o.id);
+            if (auto* audio = m_app->getModule<kke::AudioModule>())
+                audio->playImpact(hit.point, kke::AudioMaterialTable::Wood, 1.0f, o.id);
+            if (!m_ragdolls) {
+                m_status = "Knocking people over needs a physics module (ragdolls)";
+                continue;
+            }
+            ragdoll(o, hit.push);
+        }
+    }
+    // Draw the bat along the swing, tipped a little down.
+    const kke::SwingSettings& st = m_swing.settings();
+    const glm::vec3 dir = glm::normalize(m_swing.direction() + glm::vec3(0.0f, -0.2f, 0.0f));
+    const glm::vec3 hands = m_swing.pivot() + dir * st.innerReach;
+    if (m_bat && m_batAxis.length > 0.0f) {
+        const glm::mat4 t = glm::translate(glm::mat4(1.0f), hands) * glm::mat4_cast(glm::quat(m_batAxis.axis, dir)) *
+                            glm::translate(glm::mat4(1.0f), -m_batAxis.handle);
+        m_models->setTransform(m_bat, t);
+        m_models->setVisible(m_bat, stillOut);
+    } else if (stillOut) {
+        m_debug->line(hands, m_swing.pivot() + dir * st.reach, glm::vec3(0.75f, 0.5f, 0.25f), 0.05f);
+    }
+}
+
+void SandboxModule::modeSwitchUi() {
+    const float s = ImGui::GetFontSize() / 13.0f;
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + 8 * s), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+    ImGui::Begin("Mode", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                                  ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
+    if (ImGui::Button("Back to Play (F2)")) setMode(Mode::Play);
+    ImGui::End();
+}
+
+// The Simple palette: one row of big pictures along the bottom. Press one
+// and drag it into the world (or tap it, then click where it goes); the
+// bat is held instead and swings on every click.
+void SandboxModule::playPaletteUi() {
+    const float s = ImGui::GetFontSize() / 13.0f;
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + vp->WorkSize.y - 10 * s), ImGuiCond_Always, ImVec2(0.5f, 1.0f));
+    ImGui::SetNextWindowBgAlpha(0.8f);
+    ImGui::Begin("Play", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                                  ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar);
+    ImGui::SetWindowFontScale(1.4f);
+
+    bool anyone = false, anyoneStanding = false, anyoneDown = false;
+    for (const Object& o : m_objects) {
+        if (!o.character) continue;
+        anyone = true;
+        (o.ragdoll ? anyoneDown : anyoneStanding) = true;
+    }
+    const char* hint = m_assetFolder.empty()          ? "No asset packs found. Press Build to pick a folder."
+                       : m_tool == Tool::Place         ? "Let go where it should go!"
+                       : m_tool == Tool::Bat && anyoneDown && !anyoneStanding ? "Everyone fell over! Press Get up."
+                       : m_tool == Tool::Bat && !anyoneStanding ? "Bring a person, then click them to swing!"
+                       : m_tool == Tool::Bat           ? (m_ragdolls ? "Click someone to bonk them!" : "Click to swing (falling over needs the physics build)")
+                       : m_tool == Tool::Shoot         ? "Click to throw a ball!"
+                       : !anyone                       ? "Drag a person into the world!"
+                       : anyoneDown                    ? "Press Get up to try again, or grab the bat!"
+                                                       : "Grab the bat and bonk them!";
+    ImGui::TextUnformatted(hint);
+
+    const float cell = 76.0f * s;
+    const float lineH = ImGui::GetTextLineHeight();
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    const ImU32 frameCol = ImGui::GetColorU32(ImGuiCol_FrameBg), hoverCol = ImGui::GetColorU32(ImGuiCol_HeaderHovered),
+                activeCol = ImGui::GetColorU32(ImGuiCol_HeaderActive), textCol = ImGui::GetColorU32(ImGuiCol_Text);
+    bool first = true;
+    // One picture: an asset's thumbnail, or a big word. Returns the button
+    // state; `on` draws it highlighted (the tool in hand).
+    struct Press { bool pressed, released; };
+    auto picture = [&](const char* id, const char* label, const kke::CatalogAsset* asset, const char* word, bool on) -> Press {
+        if (!first) ImGui::SameLine();
+        first = false;
+        ImGui::PushID(id);
+        const ImVec2 p = ImGui::GetCursorScreenPos();
+        ImGui::InvisibleButton("cell", ImVec2(cell, cell + lineH));
+        const Press r{ ImGui::IsItemActivated(), ImGui::IsItemDeactivated() };
+        const ImVec2 imgMax(p.x + cell, p.y + cell);
+        draw->AddRectFilled(p, imgMax, on ? activeCol : (ImGui::IsItemHovered() ? hoverCol : frameCol), 10.0f * s);
+        bool drawn = false;
+        if (asset && m_thumbs) {
+            const kke::ThumbnailModule::View v = m_thumbs->get(asset->path, asset->pack, [&] { return kke::packLoadOptions(m_catalog, *asset); });
+            if (v.state == kke::ThumbnailModule::State::Ready) {
+                draw->AddImage(v.texture, p, imgMax, v.uv0, v.uv1);
+                drawn = true;
+            }
+        }
+        if (!drawn) {
+            const char* big = word ? word : label;
+            const ImVec2 ts = ImGui::CalcTextSize(big);
+            draw->AddText(ImVec2(p.x + (cell - ts.x) * 0.5f, p.y + (cell - ts.y) * 0.5f), textCol, big);
+        }
+        const float tw = ImGui::CalcTextSize(label).x;
+        draw->AddText(ImVec2(p.x + (cell - tw) * 0.5f, p.y + cell), textCol, label);
+        ImGui::PopID();
+        return r;
+    };
+
+    if (!m_assetFolder.empty()) {
+        if (picture("grab", "Grab", nullptr, "Hand", m_tool == Tool::Select).pressed) {
+            if (m_tool == Tool::Place) cancelPlacing();
+            m_tool = Tool::Select;
+        }
+        for (size_t i = 0; i < m_blocks.size(); ++i) {
+            const kke::PlayBlock& b = m_blocks[i];
+            if (m_blockAssets[i].empty()) continue; // not in these packs
+            const kke::CatalogAsset* a = m_catalog.find(m_blockAssets[i].front());
+            const bool tool = b.kind == kke::PlayBlockKind::Tool;
+            const bool on = tool ? m_tool == Tool::Bat
+                                 : m_tool == Tool::Place && !m_movingId &&
+                                       std::find(m_blockAssets[i].begin(), m_blockAssets[i].end(), m_placeAsset) != m_blockAssets[i].end();
+            const Press pr = picture(b.id.c_str(), b.label.c_str(), a, nullptr, on);
+            if (!pr.pressed) continue;
+            if (m_tool == Tool::Place) cancelPlacing();
+            if (tool) {
+                m_tool = m_tool == Tool::Bat ? Tool::Select : Tool::Bat;
+            } else {
+                placeBlock(i);
+                m_dropOnRelease = true; // dragged out: let go in the world to drop it
+            }
+        }
+        if (m_hasFemfx && picture("throw", "Throw", nullptr, "Ball!", m_tool == Tool::Shoot).pressed) {
+            if (m_tool == Tool::Place) cancelPlacing();
+            m_tool = m_tool == Tool::Shoot ? Tool::Select : Tool::Shoot;
+        }
+        if (anyoneDown && picture("getup", "Get up", nullptr, "Up!", false).pressed) standEveryoneUp();
+        if (!m_objects.empty() && picture("clear", "Clear", nullptr, "Empty", false).pressed) {
+            pushUndo();
+            clearAll();
+        }
+    }
+    if (picture("build", "Build", nullptr, "Tools", false).pressed) setMode(Mode::Build);
+    ImGui::End();
+}
+
 void SandboxModule::renderUi() {
+    if (m_mode == Mode::Play) {
+        playPaletteUi();
+        return;
+    }
     assetBrowserUi();
     inspectorUi();
+    modeSwitchUi();
 }
 
 } // namespace kke_sandbox

@@ -16,6 +16,7 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [JIGGLE.md](JIGGLE.md) | Jiggle physics for bones, skin and soft bodies |
 | [NETWORKING.md](NETWORKING.md) | Transport, protocol, authority and replication |
 | [SCRIPTING.md](SCRIPTING.md) | Lua gameplay scripts |
+| [PLAY_TO_MAKE.md](PLAY_TO_MAKE.md) | Make the game while playing it: Simple, node graph and Lua levels |
 | [SCENES.md](SCENES.md) | Levels built from asset packs |
 | [OPTIMIZATION.md](OPTIMIZATION.md) | Performance rules, measured log and backlog |
 | [PERFORMANCE_NOTES.md](PERFORMANCE_NOTES.md) | What RayFire and Chaos do for destruction at scale, and what KKE took from it |

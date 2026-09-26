@@ -79,6 +79,7 @@ nav:
       - 3. Script a pickup: tutorials/03-pickups.md
       - 4. Add sound: tutorials/04-sound.md
   - Guides:
+      - Play to make: PLAY_TO_MAKE.md
       - Scripting in Lua: SCRIPTING.md
       - Movement: MOVEMENT.md
       - Input: INPUT.md

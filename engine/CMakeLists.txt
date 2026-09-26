@@ -20,6 +20,7 @@ set(ENGINE_SOURCES
     src/BenchmarkReport.cpp
     src/AssetCatalog.cpp
     src/Picking.cpp
+    src/PlayBlocks.cpp
     src/VoxelTets.cpp
     src/InteriorColor.cpp
     src/FracturePattern.cpp
@@ -107,6 +108,7 @@ set(ENGINE_HEADERS
     include/kke/BenchmarkReport.h
     include/kke/AssetCatalog.h
     include/kke/Picking.h
+    include/kke/PlayBlocks.h
     include/kke/VoxelTets.h
     include/kke/InteriorColor.h
     include/kke/FracturePattern.h
