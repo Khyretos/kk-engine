@@ -22,6 +22,8 @@ set(ENGINE_SOURCES
     src/FracturePattern.cpp
     src/VoronoiFracture.cpp
     src/BreakGraph.cpp
+    src/Animator.cpp
+    src/CameraRig.cpp
     src/ParticleFluid.cpp
     src/MeltVolume.cpp
     src/SphereImpostors.cpp

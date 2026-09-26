@@ -454,6 +454,7 @@ add_subdirectory(engine)
 # has exactly 1 CPU core, so no real speedup could ever be measured
 # here — this tool is what lets that be measured honestly on whatever
 # hardware actually has more than one.
+add_subdirectory(tools/model_info)
 if(KKE_ENABLE_FEMFX)
     add_subdirectory(tools/physics_benchmark)
     add_subdirectory(tools/physics_lab)

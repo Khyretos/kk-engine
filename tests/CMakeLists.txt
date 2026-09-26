@@ -19,6 +19,8 @@ add_executable(kke_tests
     test_melt_volume.cpp
     test_voronoi_fracture.cpp
     test_break_graph.cpp
+    test_animator.cpp
+    test_camera_rig.cpp
     test_floating_bodies.cpp
 )
 target_link_libraries(kke_tests PRIVATE kke_engine GTest::gtest_main)
