@@ -1,9 +1,12 @@
 #include "kke/Locomotion.h"
+#include "kke/SceneLoader.h"
 
 #include <gtest/gtest.h>
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <filesystem>
 
 namespace {
 
@@ -302,4 +305,70 @@ TEST(Locomotion, ParkourLaneEndToEnd) {
         EXPECT_LE(c.feet().z, 8.5f) << "dt " << dt;
         EXPECT_NEAR(c.feet().y, 2.1f, 0.1f) << "dt " << dt; // on top of the ledge
     }
+}
+
+// The shipped Synty scenes, run end to end by a sprinting autopilot that
+// presses "go up" whenever the sprint sensor sees something. Needs the
+// packs in assets/synty/ (never committed), so CI skips it.
+namespace {
+struct TrailRun {
+    int vaults = 0, climbs = 0;
+    glm::vec3 end{0.0f};
+};
+
+TrailRun runTrail(const char* name, float stopZ) {
+    namespace fs = std::filesystem;
+    TrailRun out;
+    kke::AssetCatalog cat = kke::AssetCatalog::scan((fs::path(KKE_SOURCE_DIR) / "assets/synty").string());
+    kke::SceneFile sc = kke::SceneFile::load((fs::path(KKE_SOURCE_DIR) / "scenes" / (std::string(name) + ".scene.json")).string());
+    RigidWorld::Settings st;
+    st.threads = 0;
+    RigidWorld world(st);
+    kke::LoadedScene ls = kke::loadSceneCollision(sc, cat, world);
+    EXPECT_TRUE(ls.missing.empty()) << name << ": " << ls.missing.size() << " assets not found";
+    RigidWorld::CharacterDesc cd;
+    cd.position = sc.spawn;
+    auto id = world.addCharacter(cd);
+    Locomotion loco(world, id);
+    const float dt = 1.0f / 60.0f;
+    Locomotion::State last = loco.state();
+    for (int i = 0; i < 60 * 20; ++i) {
+        Locomotion::Input in = forward(true);
+        in.goUp = loco.state() == Locomotion::State::Ground &&
+                  loco.probe(in.move, loco.settings().sprintSensor).kind != Locomotion::Obstacle::Kind::None;
+        loco.update(in, dt);
+        world.step(dt);
+        if (loco.state() != last) {
+            last = loco.state();
+            if (last == Locomotion::State::Vault) ++out.vaults;
+            if (last == Locomotion::State::Climb) ++out.climbs;
+        }
+        out.end = world.characterPosition(id);
+        if (out.end.z < stopZ) break;
+    }
+    return out;
+}
+
+bool haveSyntyPacks() {
+    return std::filesystem::exists(std::filesystem::path(KKE_SOURCE_DIR) / "assets/synty/POLYGON_Nature_Source_Files") &&
+           std::filesystem::exists(std::filesystem::path(KKE_SOURCE_DIR) / "assets/synty/PolygonTown_Source_Files");
+}
+} // namespace
+
+TEST(SceneTrails, ForestTrail) {
+    if (!haveSyntyPacks()) GTEST_SKIP() << "Synty packs not in assets/synty/";
+    // Pillar, stone wall, stump and fence are vaults; the rock shelf is a
+    // climb; the log is small enough to step over.
+    TrailRun r = runTrail("forest_trail", -14.0f);
+    EXPECT_EQ(r.vaults, 4);
+    EXPECT_EQ(r.climbs, 1);
+    EXPECT_LT(r.end.z, -14.0f);
+}
+
+TEST(SceneTrails, TownBlockFence) {
+    if (!haveSyntyPacks()) GTEST_SKIP() << "Synty packs not in assets/synty/";
+    // Straight at the seam between two picket-fence panels.
+    TrailRun r = runTrail("town_block", 0.0f);
+    EXPECT_EQ(r.vaults, 1);
+    EXPECT_LT(r.end.z, 0.0f);
 }

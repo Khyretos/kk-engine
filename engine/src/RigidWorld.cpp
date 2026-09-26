@@ -253,14 +253,22 @@ RigidWorld::RayHit RigidWorld::raycast(const glm::vec3& origin, const glm::vec3&
     RayHit out;
     glm::vec3 dir = glm::length(direction) > 1e-9f ? glm::normalize(direction) : glm::vec3(0, -1, 0);
     JPH::RRayCast ray(toJR(origin), toJ(dir * maxDistance));
-    JPH::RayCastResult r;
-    if (!m->system.GetNarrowPhaseQuery().CastRay(ray, r)) return out;
+    // Hit both sides of triangles, like the character does: Synty meshes
+    // are often open or flipped, and a ray that slips through a back face
+    // would say "nothing there" in front of a wall the capsule can't pass.
+    JPH::RayCastSettings settings;
+    settings.SetBackFaceMode(JPH::EBackFaceMode::CollideWithBackFaces);
+    JPH::ClosestHitCollisionCollector<JPH::CastRayCollector> closest;
+    m->system.GetNarrowPhaseQuery().CastRay(ray, settings, closest);
+    if (!closest.HadHit()) return out;
+    const JPH::RayCastResult& r = closest.mHit;
     out.hit = true;
     out.body = r.mBodyID.GetIndexAndSequenceNumber();
     out.distance = r.mFraction * maxDistance;
     out.point = origin + dir * out.distance;
     JPH::BodyLockRead lock(m->system.GetBodyLockInterface(), r.mBodyID);
     if (lock.Succeeded()) out.normal = toG(lock.GetBody().GetWorldSpaceSurfaceNormal(r.mSubShapeID2, ray.GetPointOnRay(r.mFraction)));
+    if (glm::dot(out.normal, dir) > 0.0f) out.normal = -out.normal; // a back face: the side the ray came from
     return out;
 }
 

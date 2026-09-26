@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cctype>
 #include <filesystem>
 #include <functional>
@@ -335,6 +336,15 @@ ModelData loadModel(const std::string& path, const ModelLoadOptions& options) {
             } else {
                 grow(v.position);
             }
+        }
+    }
+    if (options.fixUnitMismatch && model.bones.empty() && !first && std::abs(scene->settings.unit_meters - 0.01) < 1e-6) {
+        const glm::vec3 size = model.boundsMax - model.boundsMin;
+        if (std::max(size.x, std::max(size.y, size.z)) < options.tinyModel) {
+            for (ModelMesh& m : model.meshes)
+                for (ModelVertex& v : m.vertices) v.position *= 100.0f;
+            model.boundsMin *= 100.0f;
+            model.boundsMax *= 100.0f;
         }
     }
     return model;

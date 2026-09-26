@@ -108,6 +108,7 @@ public:
     // Kinematic bodies: move there over the next step (pushes things).
     void moveKinematic(BodyId body, const glm::vec3& position, const glm::quat& rotation, float dt);
 
+    // Closest hit, front or back face; the normal faces the ray's origin.
     RayHit raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance) const;
 
     CharacterId addCharacter(const CharacterDesc& desc);

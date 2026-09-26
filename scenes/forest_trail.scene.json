@@ -1,0 +1,535 @@
+{
+  "format": "kke.scene",
+  "version": 1,
+  "name": "Forest trail",
+  "description": "A trail from POLYGON Nature, run along -Z from the camp: a fallen log to step over, a broken pillar, a low stone wall, a stump and a fence to vault, a rock shelf to climb, a curved bridge, and rocks too big to get over. Pines, birches and bushes line it; mountains close the view.",
+  "packs": [
+    "POLYGON_Nature_Source_Files"
+  ],
+  "spawn": {
+    "position": [
+      0,
+      0.05,
+      26
+    ],
+    "yaw": 0
+  },
+  "ground": {
+    "size": [
+      70,
+      80
+    ],
+    "color": [
+      0.3,
+      0.42,
+      0.24
+    ]
+  },
+  "objects": [
+    {
+      "asset": "SM_Terrain_Ground_Mound_Large_01",
+      "position": [
+        -12,
+        0,
+        -20
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Terrain_Ground_Mound_Large_01",
+      "position": [
+        14,
+        0,
+        6
+      ],
+      "yaw": 90,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Terrain_Rubble_Pebbles_01",
+      "position": [
+        0,
+        0,
+        10
+      ],
+      "collision": "none",
+      "grid": {
+        "count": [
+          1,
+          6
+        ],
+        "step": [
+          0,
+          -6
+        ]
+      }
+    },
+    {
+      "asset": "SM_Prop_CampFire_01",
+      "position": [
+        3,
+        0,
+        27
+      ],
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Prop_Chest_Wood_01",
+      "position": [
+        5,
+        0,
+        28.5
+      ],
+      "yaw": -30,
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Prop_TorchStick_01",
+      "position": [
+        -2,
+        0,
+        24
+      ],
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Prop_TorchStick_01",
+      "position": [
+        2,
+        0,
+        24
+      ],
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Tree_Log_01",
+      "position": [
+        0,
+        0,
+        19
+      ],
+      "yaw": 90,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Prop_Pillar_Broken_01",
+      "position": [
+        0.3,
+        0,
+        14
+      ],
+      "scale": 1.6,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Prop_StoneWall_01",
+      "position": [
+        0,
+        0,
+        9
+      ],
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Tree_Stump_01",
+      "position": [
+        0,
+        0,
+        4
+      ],
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Prop_Fence_01",
+      "position": [
+        -3,
+        0,
+        0
+      ],
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Prop_Fence_01",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Prop_Fence_01",
+      "position": [
+        3,
+        0,
+        0
+      ],
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Rock_Tile_03",
+      "position": [
+        0,
+        0,
+        -10
+      ],
+      "scale": 0.75,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Prop_Bridge_Curved_01",
+      "position": [
+        8,
+        0,
+        -14
+      ],
+      "yaw": 90,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Prop_Pillar_Arch_Moss_01",
+      "position": [
+        0,
+        0,
+        -18
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Prop_Pillar_Moss_01",
+      "position": [
+        -3,
+        0,
+        -21
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Prop_Pillar_Broken_Moss_02",
+      "position": [
+        2.5,
+        0,
+        -21
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Rock_Boulder_01",
+      "position": [
+        -6,
+        0,
+        -10
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Rock_Wall_01",
+      "position": [
+        6,
+        0,
+        -4
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Rock_Pile_04",
+      "position": [
+        -9,
+        0,
+        4
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Rock_Rounded_01",
+      "position": [
+        -4,
+        0,
+        15
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Rock_Small_01",
+      "position": [
+        4,
+        0,
+        12
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Rock_Cluster_Large_02",
+      "position": [
+        0,
+        0,
+        -34
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Tree_Pine_01",
+      "position": [
+        -9.0,
+        0,
+        22.0
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Tree_Birch_01",
+      "position": [
+        11.5,
+        0,
+        23.5
+      ],
+      "yaw": 47,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Tree_Pine_02",
+      "position": [
+        -14.0,
+        0,
+        16.0
+      ],
+      "yaw": 94,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Tree_Birch_03",
+      "position": [
+        9.0,
+        0,
+        17.5
+      ],
+      "yaw": 141,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Tree_Round_02",
+      "position": [
+        -11.5,
+        0,
+        10.0
+      ],
+      "yaw": 188,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Tree_PolyPine_01",
+      "position": [
+        14.0,
+        0,
+        11.5
+      ],
+      "yaw": 235,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Tree_Pine_Small_01",
+      "position": [
+        -9.0,
+        0,
+        4.0
+      ],
+      "yaw": 282,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Tree_Birch_02",
+      "position": [
+        11.5,
+        0,
+        5.5
+      ],
+      "yaw": 329,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Tree_Pine_01",
+      "position": [
+        -14.0,
+        0,
+        -2.0
+      ],
+      "yaw": 16,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Tree_Birch_01",
+      "position": [
+        9.0,
+        0,
+        -0.5
+      ],
+      "yaw": 63,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Tree_Pine_02",
+      "position": [
+        -11.5,
+        0,
+        -8.0
+      ],
+      "yaw": 110,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Tree_Birch_03",
+      "position": [
+        14.0,
+        0,
+        -6.5
+      ],
+      "yaw": 157,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Tree_Round_02",
+      "position": [
+        -9.0,
+        0,
+        -14.0
+      ],
+      "yaw": 204,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Tree_PolyPine_01",
+      "position": [
+        11.5,
+        0,
+        -12.5
+      ],
+      "yaw": 251,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Tree_Pine_Small_01",
+      "position": [
+        -14.0,
+        0,
+        -20.0
+      ],
+      "yaw": 298,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Tree_Birch_02",
+      "position": [
+        9.0,
+        0,
+        -18.5
+      ],
+      "yaw": 345,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Plant_Bush_01",
+      "position": [
+        -5,
+        0,
+        20
+      ],
+      "collision": "none"
+    },
+    {
+      "asset": "SM_Plant_Fern_02",
+      "position": [
+        5,
+        0,
+        16
+      ],
+      "yaw": 60,
+      "collision": "none"
+    },
+    {
+      "asset": "SM_Plant_Bush_03",
+      "position": [
+        -5,
+        0,
+        6
+      ],
+      "yaw": 120,
+      "collision": "none"
+    },
+    {
+      "asset": "SM_Plant_Fern_01",
+      "position": [
+        5,
+        0,
+        2
+      ],
+      "yaw": 180,
+      "collision": "none"
+    },
+    {
+      "asset": "SM_Plant_Bush_01",
+      "position": [
+        -4,
+        0,
+        -3
+      ],
+      "yaw": 240,
+      "collision": "none"
+    },
+    {
+      "asset": "SM_Plant_Fern_02",
+      "position": [
+        6,
+        0,
+        -20
+      ],
+      "yaw": 300,
+      "collision": "none"
+    },
+    {
+      "asset": "SM_Plant_Bush_03",
+      "position": [
+        -6,
+        0,
+        -16
+      ],
+      "yaw": 360,
+      "collision": "none"
+    },
+    {
+      "asset": "SM_Plant_Flowers_01",
+      "position": [
+        3.5,
+        0,
+        21
+      ],
+      "collision": "none"
+    },
+    {
+      "asset": "SM_Plant_Mushrooms_01",
+      "position": [
+        -2,
+        0,
+        11
+      ],
+      "collision": "none"
+    },
+    {
+      "asset": "SM_Terrain_Mountain_01",
+      "position": [
+        -40,
+        0,
+        -70
+      ],
+      "collision": "none"
+    },
+    {
+      "asset": "SM_Terrain_Mountain_02",
+      "position": [
+        30,
+        0,
+        -65
+      ],
+      "collision": "none"
+    }
+  ]
+}

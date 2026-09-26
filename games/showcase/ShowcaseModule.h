@@ -1,6 +1,8 @@
 #pragma once
 
 #include "kke/Animator.h"
+#include "kke/AssetCatalog.h"
+#include "kke/SceneLoader.h"
 #include "kke/CameraRig.h"
 #include "kke/Locomotion.h"
 #include "kke/Module.h"
@@ -45,6 +47,10 @@ private:
     void setupPlayer();
     void buildParkourLane(std::vector<kke::Vertex>& v, std::vector<uint32_t>& i);
     void updateAnimation(float dt);
+    // Synty scenes (scenes/*.scene.json), each loaded on first visit at
+    // its own spot far from the course.
+    void findScenes();
+    void visitScene(size_t index);
     void shoot();
     void forcePush();
     void setCaptured(bool on);
@@ -83,6 +89,8 @@ private:
     // checking the vault/climb feel without touching the keyboard).
     bool m_autopilot = false;
     float m_autopilotTime = 0.0f;
+    glm::vec3 m_autopilotStart{0.0f};
+    float m_autopilotEndZ = 0.0f;
     glm::vec3 m_spawn{0.0f, 0.05f, 6.0f};
     kke::ModelModule::ModelId m_charModel = 0;
     kke::ModelModule::InstanceId m_charInstance = 0;
@@ -90,6 +98,19 @@ private:
     std::unique_ptr<kke::Animator> m_anim;
     int m_stMove = -1, m_stCrouch = -1, m_stJump = -1, m_stFall = -1, m_stLand = -1;
     int m_stVault = -1, m_stClimbUp = -1, m_stClimbOver = -1;
+
+    struct SceneEntry {
+        std::string path;
+        kke::SceneFile file;
+        kke::LoadedScene loaded;
+        bool isLoaded = false;
+        glm::vec3 origin{0.0f};
+        std::unique_ptr<kke::DynamicMeshRenderer> ground;
+    };
+    std::vector<SceneEntry> m_scenes;
+    kke::AssetCatalog m_catalog;
+    bool m_catalogScanned = false;
+    std::string m_assetDir;
 
     // Lighting panel.
     float m_sunAzimuth = 35.0f, m_sunElevation = 50.0f, m_sunIntensity = 1.0f, m_ambient = 0.25f;

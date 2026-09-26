@@ -93,21 +93,31 @@ Locomotion::Obstacle Locomotion::probe(const glm::vec3& direction, const Sensor&
     Obstacle o;
     const Settings& s = m_settings;
     glm::vec3 dir = flat(direction);
-    if (glm::length(dir) < 1e-4f) return o;
+    if (glm::length(dir) < 1e-4f) { o.why = "no direction"; return o; }
     dir = glm::normalize(dir);
     const glm::vec3 feet = m_world.characterPosition(m_id);
 
+    // Faces are anything steeper than the walkable slope (Jolt's default
+    // 50 degrees): normal.y below cos(50).
+    const float maxFaceNormalY = 0.64f;
     // 1. The front face: rays forward from the body at knee, hip and chest
-    //    height (anything lower is a step the controller climbs by itself).
+    //    height (anything lower is a step the controller climbs by itself),
+    //    from the middle and both shoulders: a single centre ray slips
+    //    through the seam between two fence panels the capsule can't.
     RigidWorld::RayHit face;
+    const glm::vec3 side(-dir.z, 0.0f, dir.x);
     for (float y : { s.stepHeight + 0.05f, 0.9f, 1.4f }) {
-        RigidWorld::RayHit h = m_world.raycast(feet + glm::vec3(0.0f, y, 0.0f), dir, s.radius + sensor.reach);
-        if (!h.hit || std::abs(h.normal.y) > 0.5f) continue; // floors and ceilings aren't faces
-        if (!face.hit || h.distance < face.distance) face = h;
+        for (float x : { 0.0f, -0.6f * s.radius, 0.6f * s.radius }) {
+            RigidWorld::RayHit h = m_world.raycast(feet + glm::vec3(0.0f, y, 0.0f) + side * x, dir, s.radius + sensor.reach);
+            // Floors, ceilings and walkable slopes aren't faces; anything
+            // steeper than the controller can walk up is.
+            if (!h.hit || std::abs(h.normal.y) > maxFaceNormalY) continue;
+            if (!face.hit || h.distance < face.distance) face = h;
+        }
     }
-    if (!face.hit) return o;
+    if (!face.hit) { o.why = "nothing ahead"; return o; }
     glm::vec3 n = flat(face.normal);
-    if (glm::length(n) < 1e-3f) return o;
+    if (glm::length(n) < 1e-3f) { o.why = "no face"; return o; }
     n = glm::normalize(n);
     // Approach square to the face, whatever angle the ray came in at.
     const glm::vec3 in = -n;
@@ -117,14 +127,21 @@ Locomotion::Obstacle Locomotion::probe(const glm::vec3& direction, const Sensor&
     // 2. The top: a ray down, just past the face, from above the highest
     //    top this sensor can reach. Starting inside something = too tall.
     const float probeTop = feet.y + sensor.maxHeight + 0.3f;
-    const glm::vec3 overFace(face.point.x + in.x * 0.08f, probeTop, face.point.z + in.z * 0.08f);
-    RigidWorld::RayHit top = m_world.raycast(overFace, glm::vec3(0, -1, 0), sensor.maxHeight + 0.3f);
-    if (!top.hit || top.distance < 0.02f || top.normal.y < 0.7f) return o;
+    //    A rounded or bevelled rim (rocks) gets a second look further in.
+    RigidWorld::RayHit top;
+    for (float inset : { 0.08f, 0.25f }) {
+        const glm::vec3 overFace(face.point.x + in.x * inset, probeTop, face.point.z + in.z * inset);
+        top = m_world.raycast(overFace, glm::vec3(0, -1, 0), sensor.maxHeight + 0.3f);
+        if (!top.hit || top.distance < 0.02f || top.normal.y >= 0.7f) break;
+    }
+    if (!top.hit || top.distance < 0.02f) { o.why = "too tall"; return o; }
+    if (top.normal.y < 0.7f) { o.why = "top not flat"; return o; }
     const float topY = top.point.y;
     o.height = topY - feet.y;
-    if (o.height < s.stepHeight || o.height > sensor.maxHeight) return o;
+    if (o.height < s.stepHeight) { o.why = "a step"; return o; }
+    if (o.height > sensor.maxHeight) { o.why = "too tall"; return o; }
     // Room above the top edge for hands and a tucked body.
-    if (m_world.raycast(top.point + glm::vec3(0, 0.02f, 0), glm::vec3(0, 1, 0), 0.9f).hit) return o;
+    if (m_world.raycast(top.point + glm::vec3(0, 0.02f, 0), glm::vec3(0, 1, 0), 0.9f).hit) { o.why = "no room above"; return o; }
 
     // 3. Depth: walk across the top until it drops away.
     o.depth = 1e9f;
@@ -153,13 +170,24 @@ Locomotion::Obstacle Locomotion::probe(const glm::vec3& direction, const Sensor&
         }
     }
     if (o.depth >= 2.0f * s.radius + 0.1f) {
+        // Rock and terrain tops aren't flat: stand on whatever is under the
+        // target spot (up to a step above the edge), a little higher if
+        // the ground rises under the capsule's rim.
         glm::vec3 onTop = face.point + in * (0.08f + s.radius + 0.2f);
-        glm::vec3 feetThere(onTop.x, topY + 0.01f, onTop.z);
-        if (m_world.capsuleFits(feetThere + glm::vec3(0, 0.02f, 0), s.height, s.radius)) {
-            o.kind = Obstacle::Kind::Climb;
-            o.target = feetThere;
+        RigidWorld::RayHit ground = m_world.raycast(glm::vec3(onTop.x, topY + s.stepHeight + 0.3f, onTop.z), glm::vec3(0, -1, 0), s.stepHeight + 0.6f);
+        if (!ground.hit || ground.distance < 0.02f || ground.normal.y < 0.7f) { o.why = "no floor on top"; return o; }
+        for (float lift : { 0.02f, 0.1f, 0.2f }) {
+            glm::vec3 feetThere(onTop.x, ground.point.y + lift, onTop.z);
+            if (m_world.capsuleFits(feetThere, s.height, s.radius)) {
+                o.kind = Obstacle::Kind::Climb;
+                o.target = feetThere;
+                return o;
+            }
         }
+        o.why = "no room on top";
+        return o;
     }
+    o.why = o.height <= s.vaultMaxHeight && o.depth <= s.vaultMaxDepth ? "no room to land" : "too thin to stand on";
     return o;
 }
 

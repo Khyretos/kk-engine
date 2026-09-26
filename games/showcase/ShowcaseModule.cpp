@@ -104,11 +104,21 @@ void ShowcaseModule::init(kke::Application& app) {
     m_rig.pitch = -12.0f;
     app.window().setQuitOnEscape(false);
     m_status = "Click the view to control the character (Esc releases the mouse)";
+    findScenes();
+    // KKE_SCENE=town_block (or a path): start in that scene.
+    if (const char* want = std::getenv("KKE_SCENE"); want && *want)
+        for (size_t k = 0; k < m_scenes.size(); ++k)
+            if (m_scenes[k].path.find(want) != std::string::npos) visitScene(k);
     if (const char* a = std::getenv("KKE_DEMO_AUTOPILOT"); a && *a && *a != '0') {
+        // In a scene (KKE_SCENE): from its spawn toward -Z. Otherwise the
+        // course's parkour lane.
         m_autopilot = true;
-        m_loco->teleport(glm::vec3(20.0f, 0.05f, 28.0f));
+        if (m_autopilotStart == glm::vec3(0.0f)) {
+            m_autopilotStart = glm::vec3(20.0f, 0.05f, 28.0f);
+            m_loco->teleport(m_autopilotStart);
+        }
         m_rig.yaw = 0.0f; // looking down the lane (-Z)
-        m_status = "Autopilot: running the parkour lane";
+        m_status = "Autopilot";
     }
 }
 
@@ -197,6 +207,56 @@ void ShowcaseModule::buildParkourLane(std::vector<kke::Vertex>& v, std::vector<u
     addStaticBox({ { x, 0.75f, 16.0f }, { 2.5f, 0.75f, 1.2f }, block }, v, idx);        // 1.5 m block: climb
     addStaticBox({ { x, 1.05f, 9.5f }, { 2.5f, 1.05f, 1.5f }, block }, v, idx);         // 2.1 m ledge: sprint + climb
     addStaticBox({ { x - 4.0f, 1.5f, 12.0f }, { 0.3f, 1.5f, 4.0f }, tall }, v, idx);    // 3 m wall: no
+}
+
+void ShowcaseModule::findScenes() {
+    const char* base = SDL_GetBasePath();
+    std::string dir = kke::findAssetFolder("scenes", { "KKE_SCENES_DIR" }, base ? base : "");
+    if (dir.empty()) return;
+    std::vector<std::string> files;
+    for (const auto& e : std::filesystem::directory_iterator(dir))
+        if (e.path().string().ends_with(".scene.json")) files.push_back(e.path().string());
+    std::sort(files.begin(), files.end());
+    for (const std::string& f : files) {
+        try {
+            SceneEntry e;
+            e.path = f;
+            e.file = kke::SceneFile::load(f);
+            e.origin = glm::vec3(200.0f * static_cast<float>(m_scenes.size() + 1), 0.0f, 0.0f);
+            m_scenes.push_back(std::move(e));
+        } catch (const std::exception& ex) {
+            kke::log::get(name())->warn("{}", ex.what());
+        }
+    }
+}
+
+void ShowcaseModule::visitScene(size_t index) {
+    SceneEntry& e = m_scenes[index];
+    if (!e.isLoaded) {
+        if (!m_catalogScanned) {
+            const char* base = SDL_GetBasePath();
+            m_assetDir = kke::findAssetFolder("assets/synty", { "KKE_ASSETS_DIR", "KKE_SYNTY_DIR" }, base ? base : "");
+            if (!m_assetDir.empty()) m_catalog = kke::AssetCatalog::scan(m_assetDir);
+            m_catalogScanned = true;
+        }
+        e.loaded = kke::loadScene(e.file, m_catalog, *m_models, &m_rigid->world(), e.origin);
+        if (e.file.groundSize.x > 0.0f) {
+            std::vector<kke::Vertex> v;
+            std::vector<uint32_t> i;
+            appendBox(glm::translate(glm::mat4(1.0f), e.origin + glm::vec3(0, -0.25f, 0)),
+                      glm::vec3(e.file.groundSize.x * 0.5f, 0.25f, e.file.groundSize.y * 0.5f), e.file.groundColor, v, i);
+            e.ground = std::make_unique<kke::DynamicMeshRenderer>(*m_app);
+            e.ground->upload(v, i);
+        }
+        e.isLoaded = true;
+    }
+    m_autopilot = false;
+    m_autopilotStart = e.origin + e.file.spawn;
+    m_autopilotEndZ = e.origin.z + e.file.spawn.z - 45.0f;
+    m_loco->teleport(e.origin + e.file.spawn);
+    m_loco->setFacing(glm::vec3(std::sin(glm::radians(e.file.spawnYaw)), 0.0f, -std::cos(glm::radians(e.file.spawnYaw))));
+    m_rig.yaw = e.file.spawnYaw;
+    m_status = e.file.name + (e.loaded.missing.empty() ? std::string() : " (" + std::to_string(e.loaded.missing.size()) + " assets missing: install its packs)");
 }
 
 void ShowcaseModule::spawnCrates() {
@@ -428,18 +488,21 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     in.move.y = 0.0f;
     if (glm::length(in.move) > 1e-3f) in.move = glm::normalize(in.move) * std::min(1.0f, glm::length(m_moveInput));
     if (m_autopilot) {
-        // Down the lane at a run, sprinting for the tall ledge; "go up"
-        // whenever the sensors see something (a player's timing).
+        // Down the lane (or a scene's trail) toward -Z at a run; "go up"
+        // whenever the sensors see something (a player's timing). On the
+        // course it sprints from the block to the 2.1 m ledge.
         m_autopilotTime += dt;
         in.move = glm::vec3(0, 0, -1);
         const glm::vec3 at = w.characterPosition(m_player);
-        m_sprint = at.z < 14.8f; // past the block: sprint, the 2.1 m ledge needs it
+        const bool onCourse = std::abs(at.x) < 100.0f;
+        m_sprint = onCourse ? at.z < 14.8f : true;
         const auto& ls = m_loco->settings();
         if (m_loco->state() == kke::Locomotion::State::Ground &&
             m_loco->probe(in.move, m_sprint ? ls.sprintSensor : ls.walkSensor).kind != kke::Locomotion::Obstacle::Kind::None)
             m_jumpQueued = true;
-        if (at.z < 7.0f || m_autopilotTime > 20.0f) { // end of the lane: again
-            m_loco->teleport(glm::vec3(20.0f, 0.05f, 28.0f));
+        const float endZ = onCourse ? 7.0f : m_autopilotEndZ;
+        if (at.z < endZ || m_autopilotTime > 25.0f) { // the end: again
+            m_loco->teleport(m_autopilotStart);
             m_autopilotTime = 0.0f;
         }
     }
@@ -449,7 +512,15 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     in.goUp = m_jumpQueued;
     m_jumpQueued = false;
     if (m_rig.mode == kke::CameraRig::Mode::FirstPerson) m_loco->setFacing(m_rig.forward());
+    const kke::Locomotion::State before = m_loco->state();
     m_loco->update(in, dt);
+    if (m_autopilot && m_loco->state() != before &&
+        (m_loco->state() == kke::Locomotion::State::Vault || m_loco->state() == kke::Locomotion::State::Climb)) {
+        const kke::Locomotion::Obstacle& o = m_loco->lastObstacle();
+        kke::log::get(name())->info("autopilot: {} at z {:.1f} ({:.2f} m high, {:.2f} m deep)",
+                                    m_loco->state() == kke::Locomotion::State::Vault ? "vault" : "climb", w.characterPosition(m_player).z, o.height,
+                                    o.depth > 100.0f ? 0.0f : o.depth);
+    }
     if (m_loco->jumped() && m_anim) m_anim->play(m_stJump, 0.08f, true);
 
     const glm::vec3 feet = w.characterPosition(m_player);
@@ -518,6 +589,8 @@ void ShowcaseModule::updateAnimation(float dt) {
 
 void ShowcaseModule::render(const kke::RenderContext& ctx) {
     m_level->draw(ctx, glm::mat4(1.0f), 0.0f, 0.85f);
+    for (const SceneEntry& e : m_scenes)
+        if (e.ground) e.ground->draw(ctx, glm::mat4(1.0f), 0.0f, 0.95f);
     kke::RigidWorld& w = m_rigid->world();
     for (const Crate& c : m_crates) {
         glm::mat4 t = glm::scale(w.transform(c.body), c.half);
@@ -532,6 +605,8 @@ void ShowcaseModule::render(const kke::RenderContext& ctx) {
 
 void ShowcaseModule::renderShadow(const kke::ShadowRenderContext& ctx) {
     m_level->drawShadow(ctx);
+    for (const SceneEntry& e : m_scenes)
+        if (e.ground) e.ground->drawShadow(ctx);
     kke::RigidWorld& w = m_rigid->world();
     for (const Crate& c : m_crates) m_cubes[c.cube]->drawShadow(ctx, glm::scale(w.transform(c.body), c.half));
     m_cubes[3]->drawShadow(ctx, glm::scale(w.transform(m_platform), m_platformHalf));
@@ -578,6 +653,18 @@ void ShowcaseModule::renderUi() {
             ImGui::TextDisabled("Rebind everything in the RmlUi demo's Input screen (same input.json).");
             ImGui::TreePop();
         }
+    }
+    if (ImGui::CollapsingHeader("Scenes", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (m_scenes.empty()) ImGui::TextWrapped("No scenes/*.scene.json found.");
+        for (size_t k = 0; k < m_scenes.size(); ++k) {
+            ImGui::PushID(static_cast<int>(k));
+            if (ImGui::Button("Go")) visitScene(k);
+            ImGui::SameLine();
+            ImGui::TextUnformatted(m_scenes[k].file.name.c_str());
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", m_scenes[k].file.description.c_str());
+            ImGui::PopID();
+        }
+        if (ImGui::Button("Back to the course")) { m_loco->teleport(m_spawn); m_rig.yaw = 0.0f; }
     }
     if (ImGui::CollapsingHeader("Movement")) {
         static const char* kStates[] = { "ground", "air", "vault", "climb" };

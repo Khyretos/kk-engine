@@ -93,6 +93,13 @@ struct ModelLoadOptions {
     std::string fallbackTexture;
     bool loadAnimations = true;
     float animationSampleRate = 30.0f;
+    // Some exported packs mix units: the header says centimeters but a few
+    // files hold meters, so they load 100x too small (Synty Town's
+    // SM_Bld_Shop_01, SM_Env_Road_01, ...). With this on, an unskinned
+    // model in a centimeter file that comes out under `tinyModel` meters
+    // on every axis is taken as meters and scaled up 100x.
+    bool fixUnitMismatch = true;
+    float tinyModel = 0.1f;
 };
 
 // Throws std::runtime_error with the path and the reason on failure.

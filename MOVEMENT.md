@@ -10,7 +10,8 @@ where each principle lives in the code.
 Tested in `tests/test_locomotion.cpp` (12 tests, including the whole
 kke_demo parkour lane at 60 and at 15 fps). You can play it in `kke_demo`:
 walk to the lane at x = 20, or run `KKE_DEMO_AUTOPILOT=1 ./kke_demo` to watch
-it run the lane by itself.
+it run the lane by itself. The Synty scenes (SCENES.md) are real-art trails:
+`SceneTrails.*` runs them headless when the packs are present.
 
 ## The frame
 
@@ -38,14 +39,15 @@ with dynamic awareness (ray casts that read the level). Dynamic costs more
 code but lets a level designer drop in any mesh (*Designing AAA parkour
 system*; *Ledge actions*, IMSFMmekFxg). We use dynamic awareness because
 the Synty levels have hundreds of props nobody will mark up. `probe()`
-costs about 10–20 ray casts and 2–3 capsule tests, and runs only on the
+costs about 15–30 ray casts and 2–4 capsule tests, and runs only on the
 frame "go up" is pressed, or every frame while in the air.
 
-- **Face**: rays forward at knee, hip and chest height. Anything lower is a
-  stair the controller steps up by itself.
+- **Face**: rays forward at knee, hip and chest height, from the middle and
+  both shoulders (a centre ray slips through the seam between two fence
+  panels). Anything lower is a stair the controller steps up by itself.
 - **Top**: one ray down, just past the face, from above the highest top this
-  sensor can reach. A ray that starts inside geometry means the obstacle is
-  too tall.
+  sensor can reach, and a second one further in when the rim is bevelled
+  (rocks). A ray that starts inside geometry means the obstacle is too tall.
 - **Depth**: rays down across the top until it drops away. Thin is a fence
   (vault); a platform is a climb.
 - **Room**: capsule tests for a tucked body over the top, and for a standing

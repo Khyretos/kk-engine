@@ -93,6 +93,7 @@ public:
         float height = 0.0f;     // top above the feet
         float depth = 0.0f;      // front to back across the top (large = a platform)
         glm::vec3 target{0.0f};  // feet at the end of the move
+        const char* why = "";    // why it's None (debug panel, tests)
     };
 
     Locomotion(RigidWorld& world, RigidWorld::CharacterId id);
