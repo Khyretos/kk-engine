@@ -454,6 +454,10 @@ void ServerScripts::bind() {
         });
     }
     bindPhysics();
+    if (m_services.store) {
+        m_store = std::make_unique<ScriptStore>(*m_services.store, m_services.game);
+        m_store->bind(vm);
+    }
 }
 
 void ServerScripts::bindPhysics() {

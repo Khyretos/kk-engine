@@ -6,6 +6,7 @@
 #include "kke/net/Transport.h"
 #include "kke/voice/JitterBuffer.h"
 #if KKE_ENABLE_VOICE
+#include "kke/voice/VoiceCleaner.h"
 #include "kke/voice/VoiceCodec.h"
 #endif
 
@@ -13,6 +14,8 @@
 
 #include <cmath>
 #include <memory>
+#include <random>
+#include <vector>
 
 using namespace kke;
 using namespace kke::voice;
@@ -246,4 +249,86 @@ TEST(VoiceCodec, OpusRoundTripSoundsLikeTheInputAndConcealsLoss) {
     EXPECT_NEAR(rms, 0.4 / std::sqrt(2.0), 0.08); // the tone came through at about its level
     EXPECT_FALSE(dec.decode({ 0xFF, 0xFF, 0xFF }, out.data()) && false); // damaged input: no crash
 }
+
+// ---------------------------------------------------------------- the cleaner
+
+namespace {
+double rmsDb(const float* x, size_t n) {
+    double e = 0;
+    for (size_t i = 0; i < n; ++i) e += double(x[i]) * x[i];
+    return 10.0 * std::log10(e / double(n) + 1e-20);
+}
+} // namespace
+
+TEST(VoiceCleaner, TakesOutSteadyNoise) {
+    VoiceCleaner::Settings s;
+    s.echoCancellation = false;
+    VoiceCleaner c(s);
+    std::mt19937 rng(7);
+    std::normal_distribution<float> noise(0.0f, 0.03f); // a fan, about -30 dBFS
+    std::vector<float> frame(kFrameSamples);
+    double in = 0, out = 0;
+    float voice = 1.0f;
+    for (int f = 0; f < 150; ++f) { // 3 s
+        for (float& x : frame) x = noise(rng);
+        const double before = rmsDb(frame.data(), frame.size());
+        voice = c.process(frame.data(), nullptr);
+        if (f >= 100) { // after it settled
+            in += before;
+            out += rmsDb(frame.data(), frame.size());
+        }
+    }
+    RecordProperty("noise_reduction_db", std::to_string(in / 50 - out / 50));
+    EXPECT_LT(out / 50 - in / 50, -12.0) << "noise only " << (out - in) / 50 << " dB quieter";
+    EXPECT_LT(voice, 0.5f); // and it knows it isn't speech
+}
+
+TEST(VoiceCleaner, CancelsTheSpeakersEcho) {
+    VoiceCleaner::Settings s;
+    s.noiseSuppression = false; // measure the echo canceller alone
+    VoiceCleaner c(s);
+    std::mt19937 rng(3);
+    std::normal_distribution<float> far(0.0f, 0.1f); // the others' voices from the speakers
+    const size_t delay = 48 * 25;                     // 25 ms from speaker to microphone
+    std::vector<float> history(delay + kFrameSamples, 0.0f), played(kFrameSamples), mic(kFrameSamples);
+    double in = 0, out = 0;
+    for (int f = 0; f < 250; ++f) { // 5 s
+        std::copy(history.begin() + kFrameSamples, history.end(), history.begin());
+        for (size_t i = 0; i < size_t(kFrameSamples); ++i) played[i] = history[delay + i] = far(rng);
+        // The room: the speakers 25 ms ago, at half level, plus a faint reflection.
+        for (size_t i = 0; i < size_t(kFrameSamples); ++i) mic[i] = 0.5f * history[i] + (i >= 200 ? 0.1f * history[i - 200] : 0.0f);
+        const double before = rmsDb(mic.data(), mic.size());
+        c.process(mic.data(), played.data());
+        if (f >= 200) {
+            in += before;
+            out += rmsDb(mic.data(), mic.size());
+        }
+    }
+    RecordProperty("echo_reduction_db", std::to_string(in / 50 - out / 50));
+    EXPECT_LT(out / 50 - in / 50, -15.0) << "echo only " << (out - in) / 50 << " dB quieter";
+    EXPECT_GT(c.echoReductionDb(), 10.0f);
+}
+
+TEST(VoiceCleaner, BothOffLeavesTheMicrophoneAlone) {
+    VoiceCleaner c;
+    c.noiseSuppression = false;
+    c.echoCancellation = false;
+    std::vector<float> frame(kFrameSamples), orig;
+    for (size_t i = 0; i < frame.size(); ++i) frame[i] = 0.3f * std::sin(0.05f * float(i));
+    orig = frame;
+    EXPECT_EQ(c.process(frame.data(), nullptr), -1.0f);
+    EXPECT_EQ(frame, orig);
+}
 #endif
+
+TEST(AudioMixer, OutputTapHearsWhatTheSpeakersPlay) {
+    AudioMixer mixer(48000, 4);
+    auto tap = std::make_shared<AudioStream>(4800);
+    mixer.setOutputTap(tap);
+    std::vector<float> out(2 * 480);
+    mixer.mix(out.data(), 480);
+    EXPECT_EQ(tap->buffered(), 480u); // mono: one sample per frame
+    mixer.setOutputTap(nullptr);
+    mixer.mix(out.data(), 480);
+    EXPECT_EQ(tap->buffered(), 480u);
+}

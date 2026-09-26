@@ -32,6 +32,8 @@ public:
     std::vector<Item> list(const std::string& collection, const std::string& prefix = {}, size_t limit = 1000) override;
     std::optional<int64_t> increment(const std::string& collection, const std::string& key, int64_t delta) override;
     bool transaction(const std::function<bool()>& fn) override;
+    bool backup(const std::string& path) override;
+    bool canBackup() const override { return true; }
 
 private:
     bool exec(const char* sql);

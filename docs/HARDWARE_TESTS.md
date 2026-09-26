@@ -40,6 +40,21 @@ them): a `.txt` to read and a `.json` for analysis, including your CPU,
 GPU, driver, RAM, OS and build type. Paste either file back instead of
 log lines.
 
+### HW-018 · Voice chat echo and noise, with speakers (dev box + a second PC or phone hotspot)
+Voice chat now cleans the microphone (docs/NETWORKING.md "Voice"). Only a
+real microphone and real speakers can check it. Host kke_demo on one PC
+(`KKE_NET=host KKE_NET_NAME=A ./kke_demo`), join from another (`KKE_NET=join:ADDRESS KKE_NET_NAME=B ./kke_demo`).
+On A use **speakers, not headphones**, Voice panel (F1) on Open mic.
+1. B talks: does B hear themselves back from A's speakers? Untick A's
+   "Echo cancellation": does the echo come back? (It should, clearly.)
+   The number next to the tick box is how much it takes out, in dB.
+2. Turn on a fan or type loudly near A's mic while A says nothing: does
+   B hear it? Untick "Noise suppression": does it come back?
+3. A talks with the fan on: is A's voice clear, or watery/robotic?
+**Send back:** yes/no for each, the dB number, and the `Voice chat ready`
+and any `Voice` / `SpeexDSP` log lines from both.
+**Result:** —
+
 ### HW-017 · Audio demo with headphones (dev box)
 `cd build/bin && ./audio_demo`, headphones on. Click through the stations
 (or tick Tour). For each, does it sound like what "Listen for" says? In

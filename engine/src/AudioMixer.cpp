@@ -435,6 +435,16 @@ void AudioMixer::mix(float* out, int frames) {
     m_reverb->process(m_send.data(), out, frames);
     for (int i = 0; i < frames * 2; ++i) out[i] = softLimit(out[i]);
     if (m_capturing) m_capture.insert(m_capture.end(), out, out + size_t(frames) * 2);
+    if (m_outputTap) {
+        if (m_tapBlock.size() < size_t(frames)) m_tapBlock.resize(size_t(frames));
+        for (int i = 0; i < frames; ++i) m_tapBlock[size_t(i)] = 0.5f * (out[2 * i] + out[2 * i + 1]);
+        m_outputTap->push(m_tapBlock.data(), size_t(frames));
+    }
+}
+
+void AudioMixer::setOutputTap(AudioStreamHandle tap) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_outputTap = std::move(tap);
 }
 
 void AudioMixer::mixEchoes(float* out, int frames) {

@@ -90,6 +90,7 @@ Vectors: `Vec(x, y, z)` with `+ - * /`, `:length()`, `:normalized()`,
 | `ui` | RmlUi documents. `open(rml)` / `load("file.rml")` (next to the scripts) → doc, `text(doc, id, text)` (plain text, shown as typed), `rml(doc, id, markup)`, `class(doc, id, name, on)`, `property(doc, id, name, value)`, `show(doc, bool)`, `close(doc)`, `onClick(doc, id, fn)` |
 | `scene` | `list()` → names in `scenes/`, `load(name, origin)` → scene, missing count (or nil + reason), `unload(scene)`, `spawnPoint(scene)` → pos, yaw |
 | `net` | `role()` (`"offline"`, `"host"`, `"client"`), `isServer()`, `connected()`, `playerId()`, `players()` → `{ {id, name}, ... }`, `send(name, data)`: from a client to the host, from the host to every client; `data` is nil, a boolean, number, string or a table of those (up to 1 KB) |
+| `store` | What outlives the session ("Saving" below): `save(name, value)` → true or false, reason; `load(name [, default])`; `add(name [, n])` → new count; `remove(name)`; `keys([prefix])` → names in order |
 
 Everything a script makes (bodies, models, breakables, documents,
 scenes, click handlers) belongs to it: reloading, unloading or stopping
@@ -99,8 +100,36 @@ error naming the id. Each kind has a per-script budget
 16 documents, 4 scenes).
 
 A table exists only when its module is in the game (no RigidBodyModule,
-no `physics`). Script bodies are drawn by ScriptModule as one batched
+no `physics`); `store` is always there. Script bodies are drawn by ScriptModule as one batched
 mesh with shadows.
+
+## Saving
+
+What should still be there next time (a best score, what a player
+unlocked, what someone built) goes in `store`:
+
+```lua
+local best = store.load("best", 0)        -- 0 the first time (nothing saved yet)
+if score > best then store.save("best", score) end
+
+store.save("player.kees", { level = 3, items = { "sword", "map" } })
+local kees = store.load("player.kees")     -- the same table back
+store.add("coins", 5)                      -- counts up from 0; returns the new count
+store.remove("player.kees")                -- or store.save("player.kees", nil)
+for _, key in ipairs(store.keys("player.")) do print(key) end   -- names starting "player.", in order
+```
+
+- A name is 1-256 characters; a value is a number, text, true/false, or
+  a table of those (up to 1 MB saved). Functions can't be saved.
+- `save` and `remove` return true, or false and the reason (a full
+  disk). `load` never breaks a script: when there's nothing (or nothing
+  readable), you get the default.
+- Where it goes: `save/scripts.db` next to the game (a SQLite file,
+  docs/STORAGE.md), in the game's own collection, so another game's
+  scripts can't read or change it. Scripts on a host (`sv_` scripts)
+  save the shared world there; scripts on a player's machine save that
+  player's own things there.
+- break-the-targets (games/first_lua_game) keeps its best score this way.
 
 ## Safety and limits
 

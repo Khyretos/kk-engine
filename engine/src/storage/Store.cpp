@@ -23,6 +23,11 @@ void Store::setError(std::string e) const {
     m_error = std::move(e);
 }
 
+bool Store::backup(const std::string&) {
+    setError(std::string("a ") + backendName() + " store is backed up with its own tools (docs/STORAGE.md \"Backups\")");
+    return false;
+}
+
 bool Store::validCollection(const std::string& c) {
     return !c.empty() && c.size() <= kMaxCollection &&
            std::all_of(c.begin(), c.end(), [](char ch) { return (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-' || ch == '.'; });

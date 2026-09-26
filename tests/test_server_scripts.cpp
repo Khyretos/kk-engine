@@ -4,6 +4,7 @@
 
 #include "kke/net/NetSession.h"
 #include "kke/net/ScriptSpawns.h"
+#include "kke/net/SecureTransport.h"
 #include "kke/net/Transport.h"
 #include "kke/server/DedicatedServer.h"
 #include "kke/server/ServerScripts.h"
@@ -36,6 +37,7 @@ struct Game {
     LoopbackTransport serverT{ net };
     std::unique_ptr<DedicatedServer> server;
     LoopbackTransport clientT{ net };
+    SecureTransport clientSecure{ clientT }; // a server's connections are always encrypted
     std::unique_ptr<NetClient> client;
     std::map<uint16_t, SpawnMsg> spawns;
     std::vector<uint16_t> despawns;
@@ -56,7 +58,7 @@ struct Game {
         server.reset();
     }
     void join(const std::string& name) {
-        client = std::make_unique<NetClient>(clientT);
+        client = std::make_unique<NetClient>(clientSecure);
         client->onSpawn = [this](const SpawnMsg& m) { spawns[m.id] = m; };
         client->onDespawn = [this](uint16_t id) { despawns.push_back(id); };
         client->onEvent = [this](const GameEventMsg& e) { events.push_back(e); };
@@ -257,4 +259,20 @@ TEST(ServerScripts, BrokenAndRunawayScriptsDontStopTheServer) {
     write(c.scripts + "/sv_b_loop.lua", "print('fixed')");
     EXPECT_EQ(g.server->command("reload sv_b_loop.lua").rfind("reloaded 1", 0), 0u);
     EXPECT_TRUE(g.logged("fixed"));
+}
+
+TEST(ServerScripts, SaveInTheServersStoreAcrossRestarts) {
+    const std::string dir = tempDir("store");
+    ServerConfig c = scriptsConfig(dir);
+    c.game = "racer";
+    write(c.scripts + "/sv_days.lua", "day = store.add('world.day') print('day ' .. day)");
+    {
+        Game g(c);
+        g.run(0.1);
+        EXPECT_TRUE(g.logged("day 1"));
+    }
+    Game again(c); // a restart
+    again.run(0.1);
+    EXPECT_TRUE(again.logged("day 2"));
+    EXPECT_TRUE(again.server->store()->get("lua.racer", "world.day").has_value()); // the game's own collection
 }

@@ -42,6 +42,9 @@ struct KeyPair {
     PublicKey publicKey{};
 };
 
+// Bytes from the OS's secure random source (getrandom, arc4random,
+// BCryptGenRandom); false (with `error`) when that isn't available.
+bool randomBytes(uint8_t* out, size_t size, std::string* error = nullptr);
 // A fresh key pair from the OS's secure random source; false (with
 // `error`) when that isn't available.
 bool generateKeyPair(KeyPair& out, std::string* error = nullptr);

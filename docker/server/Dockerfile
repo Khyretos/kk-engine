@@ -43,6 +43,6 @@ ENV LD_LIBRARY_PATH=/opt/kke/lib
 USER kke
 WORKDIR /data
 VOLUME ["/data"]
-# The game (players join here); the directory role, when a server has it.
-EXPOSE 27960/udp 27950/udp
+# The game (players join here); the directory and relay roles, when a server has them.
+EXPOSE 27960/udp 27950/udp 27970-28034/udp
 ENTRYPOINT ["/opt/kke/kke_server"]

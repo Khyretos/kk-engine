@@ -6,6 +6,7 @@
 #include "kke/net/ScriptSpawns.h"
 #include "kke/net/Visibility.h"
 #include "kke/net/WorldMoveCheck.h"
+#include "kke/server/Directory.h"
 
 #include <functional>
 #include <map>
@@ -18,7 +19,8 @@ namespace kke {
 
 class RigidBodyModule;
 class PhysicsModule;
-namespace net { class EnetTransport; class ConditionedTransport; }
+namespace net { class EnetTransport; class ConditionedTransport; class SecureTransport; class RelayHost; class RelayJoin; }
+namespace server { class DirectoryBrowser; }
 
 // Multiplayer for a game (docs/NETWORKING.md): host a game (your game is the
 // server, you play in it), join one by address or from the LAN list, or
@@ -54,7 +56,17 @@ namespace net { class EnetTransport; class ConditionedTransport; }
 // Several games on one PC: hosts take the first free port from
 // kDefaultPort up (16 ports), and the LAN search asks all of them.
 //
-// Start from the command line: KKE_NET=host | host:PORT | join:ADDRESS[:PORT],
+// Every connection is encrypted (kke/net/SecureTransport.h). Join codes
+// (kke/net/Relay.h): with a relay set (KKE_NET_RELAY=host[:port], or
+// `relay`), hosting gets a code like K7M-Q2P that friends type instead of
+// an address, and nobody has to forward a port.
+//
+// Internet servers: the panel asks a server directory (a kke_server with
+// the directory role, docs/SERVER_HOSTING.md) for the public servers of
+// this game and joins one with a click. Which directory: `directories`,
+// or KKE_DIRECTORIES=host:port[,host:port].
+//
+// Start from the command line: KKE_NET=host | host:PORT | join:ADDRESS[:PORT] | join:CODE[@RELAY],
 // KKE_NET_NAME=Kees, KKE_NET_PASSWORD=secret (to join one; hosting, to
 // require it). Feel a bad connection on a LAN: KKE_NET_LAG=ms,
 // KKE_NET_JITTER=ms, KKE_NET_LOSS=percent (also sliders in the panel).
@@ -77,6 +89,7 @@ public:
 
     // --- sessions
     bool host(uint16_t port = 0, std::string* error = nullptr); // 0 = first free from kDefaultPort
+    // `address`: an address, or a join code ("K7M-Q2P", or "K7M-Q2P@relay.example.org").
     bool join(const std::string& address, uint16_t port = kDefaultPort, std::string* error = nullptr);
     void leave();
     Role role() const { return m_role; }
@@ -84,8 +97,18 @@ public:
     bool connected() const;
     const std::string& statusText() const { return m_status; }
     uint8_t localPlayerId() const;
+    const std::string& gameId() const { return m_config.gameId; }
 
     std::string playerName = "Player";
+    // Server directories ("host:port") the panel's server list asks; the
+    // first is asked unless the player types another. A game can ship its own.
+    std::vector<std::string> directories;
+    // Asks `directory` ("host:port") for this game's public servers; the
+    // answer arrives over the next frames (directoryServers()).
+    bool browseDirectory(const std::string& directory, std::string* error = nullptr);
+    const std::vector<server::DirectoryEntry>& directoryServers() const;
+    std::string relay;               // "host[:port]": join codes (hosting gets one; joining one asks here unless it names a relay)
+    std::string joinCode() const;    // while hosting with a relay: "K7M-Q2P@relay" once it gave one
     std::string playerCharacter;     // what others should draw you as ("" = the game's default)
 
     // --- the game's side
@@ -161,6 +184,7 @@ private:
     void dropSpawned();                        // left a game: spawned ids mean nothing any more
     void driveClientBodies(float dt);
     void lanSearchUi();
+    void directoryUi();
     double now() const;
     std::string discoveryInfo() const;
 
@@ -172,10 +196,17 @@ private:
     std::string m_serverMessage; // the last kEventServerMessage (a dedicated server's MOTD, "say")
     std::unique_ptr<net::ConditionedTransport> m_transport;
     net::EnetTransport* m_enet = nullptr; // inside m_transport
+    std::unique_ptr<net::SecureTransport> m_secure;   // over m_transport: what the server / client use
+    std::unique_ptr<net::RelayHost> m_relayHost;      // hosting: our join code
+    std::unique_ptr<net::RelayJoin> m_relayJoin;      // joining by code, until we know where to connect
+    void updateRelayJoin(double t);
     std::unique_ptr<net::NetServer> m_server;
     std::unique_ptr<net::NetClient> m_client;
     std::unique_ptr<net::EnetTransport> m_search; // LAN search while offline
     double m_searchUntil = 0.0;
+    std::unique_ptr<server::DirectoryBrowser> m_browser; // the server list, while asking and after
+    std::string m_browseStatus;
+    double m_browseUntil = 0.0;
 
     net::NetPlayerState m_local;
     bool m_hasLocal = false;
@@ -207,6 +238,7 @@ private:
     char m_nameInput[32] = "Player";
     char m_passwordInput[65] = "";
     char m_addressInput[128] = "127.0.0.1";
+    char m_directoryInput[128] = "";
     int m_portInput = kDefaultPort;
     double m_statTime = 0.0;
     uint64_t m_lastSent = 0, m_lastReceived = 0;
