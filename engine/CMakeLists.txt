@@ -61,6 +61,7 @@ set(ENGINE_SOURCES
     src/InputSanity.cpp
     src/PackSeal.cpp
     src/ContentPacks.cpp
+    src/DataFile.cpp
     src/DevTools.cpp
     src/InputMap.cpp
     src/InputDevices.cpp
@@ -156,6 +157,7 @@ set(ENGINE_HEADERS
     include/kke/Texture.h
     include/kke/MarketplaceIndex.h
     include/kke/ContentPacks.h
+    include/kke/DataFile.h
     include/kke/RmlTextSafety.h
     include/kke/Log.h
     include/kke/HardwareCheck.h
@@ -207,6 +209,7 @@ engine_copy_runtime_file(kke_engine ${CMAKE_SOURCE_DIR}/assets/fonts/NotoSans-Bo
 target_include_directories(kke_engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+target_link_libraries(kke_engine PRIVATE yaml-cpp::yaml-cpp) # kke/DataFile.h only
 
 target_link_libraries(kke_engine PUBLIC
     volk

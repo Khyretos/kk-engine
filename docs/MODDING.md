@@ -19,7 +19,7 @@ mods/
     maps/forest_camp.json     adds a new level
 ```
 
-Every file except `pack.json` and `kke.seal` sits where it would sit in the
+Every file except `pack.json` (or `pack.yml`) and `kke.seal` sits where it would sit in the
 game's own data folder. That is the Nexus Mods / Vortex convention (an
 archive's root is the game's data root), what a Steam Workshop item or a
 mod.io download unpacks to, and what anyone can make by copying a folder.
@@ -63,6 +63,29 @@ game in `dlc/`.
 | `host_share` | DLC only: an owner hosting a session lends it to their guests |
 | `multiplayer` | `everyone` (default: gameplay, every player needs it) or `local` (a HUD, sounds, a texture pack: only this machine) |
 | `public_key` | The author's key; with a `kke.seal` it proves the files are theirs and unchanged |
+
+### JSON or YAML
+
+Every data file here can be JSON or YAML, whichever the author likes:
+`pack.json` or `pack.yml` (or `.yaml`), `mods.json` or `mods.yml`, and the
+game's own `game.json` or `game.yml`. They read the same:
+
+```yaml
+id: com.example.mygame.frost
+title: Frost
+version: 1.1.0
+kind: dlc
+dependencies:
+  - base_weapons >= 1.0
+  - "? hd_textures"      # quote entries that start with ? ! or ~
+```
+
+If a folder has both and they differ, **the most recently changed file
+wins**, and the log (and the mods screen) names both, so an edit to either
+is never silently ignored. Identical twins are fine. YAML is read with YAML
+1.2's rules: `yes` and `no` are text (only `true`/`false` are booleans),
+and a version like `1.10` keeps its spelling. `kke/DataFile.h` does this
+for any other data file that wants it.
 
 ### Dependencies
 
