@@ -2,6 +2,7 @@
 
 #include "kke/Application.h"
 #include "kke/Log.h"
+#include "kke/modules/InputModule.h"
 #include "kke/modules/SoundVisualizerModule.h"
 #if KKE_ENABLE_JOLT
 #include "kke/modules/RigidBodyModule.h"
@@ -273,6 +274,38 @@ void AudioModule::handleContacts() {
 #endif
 }
 
+void AudioModule::handleSoftImpacts() {
+#if KKE_ENABLE_FEMFX
+    auto* phys = m_app->getModule<PhysicsModule>();
+    if (!phys) return;
+    std::vector<const PhysicsModule::ImpactEvent*> sorted;
+    for (const PhysicsModule::ImpactEvent& e : phys->frameImpacts())
+        if (e.speed > settings.impactThreshold) sorted.push_back(&e);
+    if (sorted.empty()) return;
+    std::sort(sorted.begin(), sorted.end(), [](auto* a, auto* b) { return a->speed > b->speed; });
+    int played = 0;
+    for (const PhysicsModule::ImpactEvent* e : sorted) {
+        // Soft-body pairs have their own key space (bit 63) next to Jolt's.
+        const uint64_t key = e->pair | (1ull << 63);
+        auto it = m_pairLastSound.find(key);
+        if (played >= settings.maxImpactsPerFrame || (it != m_pairLastSound.end() && m_time - it->second < settings.pairCooldown)) {
+            ++m_impactsSkipped;
+            continue;
+        }
+        m_pairLastSound[key] = m_time;
+        const float intensity = impactIntensity(e->speed, settings.impactThreshold, settings.impactFullSpeed);
+        const uint32_t seed = uint32_t(key * 0x9E3779B97F4A7C15ull >> 40) ^ m_seedCounter++;
+        const uint32_t a = audioMaterialFor(e->materialA);
+        // FEMFX's floor is a plain plane: it sounds like stone.
+        const uint32_t b = e->ground ? uint32_t(AudioMaterialTable::Stone) : audioMaterialFor(e->materialB);
+        playImpact(e->position, a, intensity, seed, 0.7f);
+        if (b != a) playImpact(e->position, b, intensity, seed + 1, 0.7f);
+        ++m_impactsPlayed;
+        ++played;
+    }
+#endif
+}
+
 void AudioModule::handleBreaks() {
 #if KKE_ENABLE_FEMFX
     auto* phys = m_app->getModule<PhysicsModule>();
@@ -335,7 +368,10 @@ void AudioModule::update(const UpdateContext& ctx) {
     }
     m_mixer->setListener(l);
     handleContacts();
+    handleSoftImpacts();
     handleBreaks();
+    if (auto* input = m_app->getModule<InputModule>(); input && input->map(0).action("audio.ping") && input->map(0).pressed("audio.ping"))
+        ping();
     if (tour && (m_tourTimer -= ctx.dt) <= 0.0f) {
         m_tourTimer = 0.6f;
         const glm::vec3 fwd = glm::normalize(l.forward);
@@ -431,9 +467,10 @@ void AudioModule::renderUi() {
 void AudioModule::shutdown() {
     if (m_shutDown) return;
     m_shutDown = true; // the destructor calls this again, after logging is gone
-    if (m_mixer && (m_impactsPlayed || m_impactsSkipped || m_breaksPlayed))
-        log::get(name())->info("Audio: {} impacts played, {} skipped (cooldown/cap), {} breaks, voices dropped {} stolen {}", m_impactsPlayed,
-                               m_impactsSkipped, m_breaksPlayed, m_mixer->droppedCount(), m_mixer->stolenCount());
+    if (m_mixer && (m_impactsPlayed || m_impactsSkipped || m_breaksPlayed || m_footsteps))
+        log::get(name())->info("Audio: {} impacts played, {} skipped (cooldown/cap), {} breaks, {} footsteps, voices dropped {} stolen {}; room RT60 {:.2f} s wet {:.2f}",
+                               m_impactsPlayed, m_impactsSkipped, m_breaksPlayed, m_footsteps, m_mixer->droppedCount(), m_mixer->stolenCount(),
+                               m_room.rt60, m_room.wet);
     if (m_device) {
         if (m_deviceRunning) ma_device_uninit(&m_device->device);
         m_device.reset();

@@ -155,10 +155,27 @@ public:
     };
     const std::vector<BreakEvent>& frameBreaks() const { return m_frameBreaks; }
 
+    // Something soft-body hit something this frame hard enough to hear:
+    // two FEMFX objects (FEMFX's collision report), or one landing on the
+    // ground plane (which FEMFX doesn't report: found from the piece's
+    // fall stopping at the floor). For AudioModule. Cleared every frame.
+    struct ImpactEvent {
+        glm::vec3 position{0.0f};   // world
+        float speed = 0.0f;         // m/s, approach speed along the contact normal
+        Material materialA;
+        Material materialB;         // the other object's; for the ground, see `ground`
+        bool ground = false;        // B is the floor
+        uint64_t pair = 0;          // stable id of the two objects, for per-pair cooldowns
+    };
+    const std::vector<ImpactEvent>& frameImpacts() const { return m_frameImpacts; }
+
     const char* name() const override { return "Physics"; }
 
     void init(Application& app) override;
-    void frameStart(const UpdateContext&) override { m_frameBreaks.clear(); }
+    void frameStart(const UpdateContext&) override {
+        m_frameBreaks.clear();
+        m_frameImpacts.clear();
+    }
     void fixedUpdate(const FixedUpdateContext& ctx) override;
     void render(const RenderContext& ctx) override;
     void renderShadow(const ShadowRenderContext& ctx) override;
@@ -536,6 +553,7 @@ private:
     // splits off (copies its current vertex state), or kInvalidHandle.
     ObjectHandle spawnBreakablePart(ObjectHandle breakable, const std::vector<uint32_t>& tets, ObjectHandle from, const glm::vec3& velocity);
     void updateBreakables();
+    void collectImpacts(float dt);
     void splitBreakablePart(ObjectHandle breakable, ObjectHandle part);
 
     // Raised from the original 8 to a genuinely meaningful showcase
@@ -580,6 +598,11 @@ private:
 
     std::unordered_map<ObjectHandle, std::unique_ptr<SpawnedTet>> m_objects;
     std::vector<BreakEvent> m_frameBreaks;
+    std::vector<ImpactEvent> m_frameImpacts;
+    static constexpr uint32_t kMaxReportedContacts = 256;
+    std::vector<AMD::FmCollisionReportDistanceContact> m_contactReport; // FEMFX writes into it during FmUpdateScene
+    struct PieceFall { float y = 0.0f, vy = 0.0f; uint64_t tick = 0; };
+    std::unordered_map<uint32_t, PieceFall> m_pieceFall;               // by FEMFX object id: landing detection
     ObjectHandle m_nextHandle = 1; // 0 is kInvalidHandle
 
     // Render bridge — this is genuinely the simplest possible version,

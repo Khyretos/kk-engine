@@ -2,14 +2,17 @@
 
 ACTION_PLAN.md 2.2. What exists, how it works, why it's built this way,
 and what's next. Code: `kke/AudioMixer.h`, `kke/ImpactSynth.h`,
-`kke/modules/AudioModule.h`, `kke/modules/SoundVisualizerModule.h`;
-tests: `tests/test_audio.cpp`; listen: `kke_audio_preview`.
+`kke/Footsteps.h`, `kke/RoomAcoustics.h`, `kke/modules/AudioModule.h`,
+`kke/modules/SoundVisualizerModule.h`; tests: `tests/test_audio.cpp`,
+`tests/test_footsteps.cpp`, `tests/test_room_acoustics.cpp`; listen:
+`kke_audio_preview`.
 
 ## What you get today
 
 - **Physics makes sound.** Jolt contacts (crates, props, anything with a
-  `BodyDesc::material`) and FEMFX breaks (`PhysicsModule::frameBreaks`)
-  play impacts of the materials involved: a wood crate on stone is a
+  `BodyDesc::material`), FEMFX objects hitting each other or the floor
+  (`PhysicsModule::frameImpacts`) and FEMFX breaks
+  (`PhysicsModule::frameBreaks`) play impacts of the materials involved: a wood crate on stone is a
   knock *and* a thud; glass breaking is a hard glass hit plus a few
   smaller ones for the pieces.
 - **Materials sound different without any sample files.** Impacts are
@@ -20,6 +23,19 @@ tests: `tests/test_audio.cpp`; listen: `kke_audio_preview`.
 - **3D.** Constant-power stereo pan, inverse-distance fall-off, a fade
   near the maximum distance, and a gentle high cut for sounds behind you
   (the cheapest front/back cue there is).
+- **Footsteps.** The showcase character's feet make steps on whatever
+  they land on (a ray under each foot finds the ground's material): soft
+  when walking, harder when sprinting, one loud step per foot on landing.
+- **Rooms sound like rooms.** A few dozen rays around the listener every
+  0.25 s measure the space: a stone hall rings for seconds, a padded room
+  is dry, a field has no reverb at all. Every spatial sound goes through
+  that room's reverb.
+- **Sound comes through doors.** A sound behind a wall that has a way
+  round (an opening the room rays found) is heard from the opening, as far
+  away as the path through it, instead of straight through the wall.
+- **Headphones mode.** Audio panel > Spatial > Binaural (or
+  `KKE_AUDIO_BINAURAL=1`): each ear hears a sound slightly later and darker
+  when it faces away, which gives real left/right and helps front/back.
 - **Walls muffle.** One ray per playing sound from the listener (Jolt),
   re-cast every 0.1 s. A hit lets through the wall material's
   `transmission` and lowers a low-pass cutoff: walls eat highs first.
@@ -39,6 +55,11 @@ tests: `tests/test_audio.cpp`; listen: `kke_audio_preview`.
   quietest voice or is dropped if it would be the quietest; at most 8
   impacts per frame (strongest first) and 80 ms between two sounds from
   the same pair of bodies, so a collapsing pile doesn't machine-gun.
+- **Menus and pings, by ear.** Moving focus, pressing buttons, toggling
+  checkboxes and dragging sliders in any RmlUi menu play short earcons.
+  **Q** (d-pad down on a controller, rebindable) pings your surroundings:
+  one ping per direction, clockwise from straight ahead, higher the closer
+  the wall, an airy "open" sound where there's nothing in range.
 - **Try it:** `KKE_AUDIO_TOUR=1 ./kke_demo` plays every material in turn,
   walking around you (front, right, back, left). The Audio panel (F1) has
   volumes per category, "hear each material" buttons, and the visualizer
@@ -120,6 +141,67 @@ Jolt ray cast returning the first wall's `transmission` (stone 0.1, wood
 0.35, glass 0.5). One ray per sound per 0.1 s. Replace it for anything
 smarter.
 
+### Reverb and openings
+
+`kke::probeRoom` casts `rays` (32) directions spread evenly over a sphere
+(a Fibonacci sphere) through `AudioModule::roomRay` (Jolt by default) and
+measures:
+
+- **walls**: share of the sideways rays that hit something that isn't a
+  floor; **ceiling**: share of the upward rays that hit (a roof);
+- **mean distance** of the hits (room size) and average **absorption**
+  (each material's `AudioMaterial::absorption`; an escaping ray counts
+  as 1, all absorbed);
+- **RT60** from Sabine's formula for a room of that "radius":
+  0.0537 r / a; **wet** from walls and roof (a field 0, an alley a
+  little, a hall a lot); pre-delay from the distance;
+- **openings**: every sideways direction that escaped.
+
+The reverb (`kke::Reverb`) is Freeverb's structure (Jezar, public domain):
+8 damped combs and 4 all-passes per ear, each comb's feedback set so the
+tail falls 60 dB in the room's RT60 (g = 10^(-3 d / RT60)). It is one send
+bus in the mixer: every spatial voice feeds it by `VoiceDesc::reverbSend`
+and its distance gain's square root (far sounds are mostly room). Changes
+glide over a block, so walking through a door doesn't click.
+
+When a sound is occluded, `findOpening` tries the three openings most in
+its direction at 3 and 6 m: if the listener sees that point and the point
+sees the sound, the mixer places the sound at the opening
+(`AudioMixer::setVia`) at the full path length, a little duller. At most 6
+rays per occluded sound per recheck. This is the "ambient rays" idea of
+WhoStoleMyCoffee/raytraced-audio.
+
+### Binaural
+
+A spherical head of radius 8.75 cm. The far ear hears a sound later by
+Woodworth's interaural time difference, (a/c)(θ + sin θ) for lateral angle
+θ (up to ~0.66 ms), read from a 64-sample delay line per voice with a
+fractional, ramped delay. Each ear then has Brown & Duda's (1998) head
+shadow: a one-pole shelf, H(s) = (α s + β)/(s + β) with β = 2c/a, lifting
+highs up to +6 dB for the ear facing the sound and cutting them ~20 dB for
+the one behind the head. No HRTF data sets, no licences.
+
+### Footsteps
+
+`kke::FootstepDetector` finds steps in any animation: a foot that rose
+clear of the ground and comes back down is a step. It watches each foot
+bone's height above the ground under it and learns the rig's resting
+ankle height by itself, so it works on slopes, stairs and any character
+without per-clip markers. `kke::CharacterFootsteps` binds the foot bones
+by name (UE, Mixamo, Synty), casts a ray under each foot for the ground's
+material and calls `AudioModule::playFootstep`. The sound
+(`synthesizeFootstep`) is the ground's own modes struck softly (heel, then
+toe) plus a scuff of its noise: long for dirt, a tick on stone.
+
+### FEMFX impacts
+
+FEMFX's collision report (one contact per object pair per step, approach
+faster than 1 m/s) gives the tet and barycentric point of each contact;
+the contact's velocity comes from `FmGetInterpolatedVelocity`. FEMFX's
+floor is a plane it handles itself and doesn't report, so a landing is
+found from a piece's centre of mass: falling fast one step, stopped the
+next, with its lowest point at the floor. It sounds like stone.
+
 ## Accessibility
 
 - **Deaf / hard of hearing:** the visualizer above, plus captions. Every
@@ -127,16 +209,20 @@ smarter.
   describe it.
 - **Blind / low vision:** materials are made to be told apart by ear
   (different mode ratios, ring times and noise), front/back gets a tone
-  cue, walls audibly muffle. Next: navigation pings, UI earcons, and a
-  "describe what I hear" mode.
+  cue, walls audibly muffle, sounds come through the doorway they really
+  come through, and Binaural mode gives headphone users a real left/right.
+  UI earcons (`AudioModule::playEarcon`, fired by UiModule for every
+  document) make menus usable by ear; navigation pings (`audio.ping`, Q)
+  tell you where the walls and the open ways are. Next: a "describe what I
+  hear" mode.
 
 ## Research notes (the links from the original brief)
 
 - **WhoStoleMyCoffee/raytraced-audio** (MIT, Godot): rays from the
   listener measure the room for reverb, per-source rays muffle sounds
   behind walls, "ambient" rays find openings so outside sound pans
-  toward doors. Our occlusion is its per-source ray; reverb from room
-  rays and the openings trick are next.
+  toward doors. Our occlusion is its per-source ray; room rays and the
+  openings trick are built the same way.
 - **JustGoscha/ray-tracing-audio** (MIT, JS): ray-traced reflections,
   binaural output, a live ray visualizer; reference for reflections and
   for the visualizer.
@@ -147,16 +233,15 @@ smarter.
   Every game made with KKE would need its own licence, so it can't be a
   dependency. The same techniques are being built here on Jolt instead.
 - **Steam Audio** (Apache-2.0): the optional high-end backend later
-  (HRTF, reflections, transmission through geometry).
+  (measured HRTFs, reflections, transmission through geometry). The
+  built-in binaural mode covers headphones without it; Steam Audio would
+  add measured HRTFs and elevation.
 
 ## Next, in order
 
-1. Footsteps from the character (`Locomotion` foot plants × ground
-   material) and sliding/rolling loops from resting contacts.
-2. FEMFX impacts (not just breaks); faster than once-a-second reporting
-   for the old fracture path (breakables are already immediate).
-3. Reverb from a few listener rays (room size and absorption), and the
-   "openings" trick from raytraced-audio.
-4. HRTF (Steam Audio as optional backend), Doppler.
-5. Streaming music/ambience from files, per-category ducking.
-6. Lock-free command queue if the mixer lock ever shows up.
+1. Sliding/rolling loops from resting contacts; Doppler.
+2. Steam Audio as an optional backend (measured HRTFs, elevation,
+   reflections).
+3. Streaming music/ambience from files, per-category ducking.
+4. A "describe what I hear" mode (spoken captions).
+5. Lock-free command queue if the mixer lock ever shows up.

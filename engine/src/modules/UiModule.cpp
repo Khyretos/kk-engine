@@ -2,11 +2,13 @@
 #include "kke/Application.h"
 #include "kke/Log.h"
 #include "kke/EngineSettings.h"
+#include "kke/modules/AudioModule.h"
 #include "kke/modules/InputModule.h"
 
 #include <RmlUi/Core/Core.h>
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/ElementDocument.h>
+#include <RmlUi/Core/EventListener.h>
 #include <RmlUi/Core/Elements/ElementFormControl.h>
 #include <RmlUi/Core/Input.h>
 #include <RmlUi/Core/Box.h>
@@ -18,6 +20,46 @@
 #include <cmath>
 
 namespace kke {
+
+namespace {
+// Plays an earcon for what just happened in a menu, so it can be used by
+// ear: moving focus blips, pressing rises, toggles go up or down, a
+// slider ticks. Listens in the capture phase at the context root, so it
+// hears every document without them opting in.
+class EarconListener : public Rml::EventListener {
+public:
+    explicit EarconListener(Application& app) : m_app(app) {}
+    void ProcessEvent(Rml::Event& event) override {
+        auto* audio = m_app.getModule<AudioModule>();
+        Rml::Element* target = event.GetTargetElement();
+        if (!audio || !target || target == target->GetOwnerDocument()) return;
+        const Rml::String& type = event.GetType();
+        const Rml::String tag = target->GetTagName();
+        const Rml::String inputType = target->GetAttribute<Rml::String>("type", "");
+        if (type == "focus") {
+            // A click focuses too; the click's own sound is enough.
+            if (SDL_GetMouseState(nullptr, nullptr) != 0) return;
+            audio->playEarcon(Earcon::Focus);
+        } else if (type == "click") {
+            if (tag == "button" || inputType == "submit" || inputType == "button" || target->HasAttribute("data-kke-script-doc") ||
+                target->IsClassSet("button"))
+                audio->playEarcon(Earcon::Activate);
+        } else if (type == "change") {
+            if (inputType == "checkbox" || inputType == "radio")
+                audio->playEarcon(target->HasAttribute("checked") ? Earcon::ToggleOn : Earcon::ToggleOff);
+            else if (inputType == "range" || tag == "select")
+                audio->playEarcon(Earcon::Tick, 0.4f);
+        }
+    }
+
+private:
+    Application& m_app;
+};
+} // namespace
+
+UiModule::UiModule() = default;
+UiModule::~UiModule() = default;
+
 
 namespace {
 
@@ -257,6 +299,9 @@ void UiModule::init(Application& app) {
         throw std::runtime_error("Rml::CreateContext() failed");
     }
 
+    m_earcons = std::make_unique<EarconListener>(app);
+    for (const char* ev : {"focus", "click", "change"}) m_context->AddEventListener(ev, m_earcons.get(), true);
+
     std::cout << "[ui] RmlUi initialised with real Vulkan rendering (text via glyph textures, <img>/background-image via stb_image, both real now -- see RmlVulkanRenderInterface.h)" << std::endl;
 }
 
@@ -454,6 +499,8 @@ void UiModule::onEvent(const SDL_Event& event) {
 }
 
 void UiModule::shutdown() {
+    if (m_context && m_earcons)
+        for (const char* ev : {"focus", "click", "change"}) m_context->RemoveEventListener(ev, m_earcons.get(), true);
     if (m_initialised) {
         Rml::Shutdown();
         m_initialised = false;

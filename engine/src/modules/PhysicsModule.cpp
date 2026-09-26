@@ -420,6 +420,17 @@ void PhysicsModule::init(Application& app) {
     // Ragdoll limbs don't collide with each other (see createRagdoll()).
     AMD::FmSetGroupsCanCollide(m_scene, kRagdollCollisionGroup, kRagdollCollisionGroup, false);
 
+    // Contacts for impact sounds (frameImpacts): one per object pair per
+    // step, only ones approaching faster than ~1 m/s.
+    {
+        m_contactReport.assign(kMaxReportedContacts, AMD::FmCollisionReportDistanceContact());
+        AMD::FmCollisionReport& report = AMD::FmGetSceneCollisionReportRef(m_scene);
+        report.distanceContactBuffer = m_contactReport.data();
+        report.maxDistanceContacts = kMaxReportedContacts;
+        report.maxDistanceContactsPerObjectPair = 1;
+        report.minContactRelVel = 1.0f / std::max(1e-6f, m_renderScale);
+    }
+
     // --- The ground: FEMFX's own built-in scene collision plane, not a
     // rigid body. FmSceneControlParams::collisionPlanes defaults to a
     // floor at y=0 (every other side open), which is exactly the ground
@@ -859,6 +870,86 @@ void PhysicsModule::enforceDebrisBudget() {
         ++m_debrisRemoved;
         --pieces;
     }
+}
+
+void PhysicsModule::collectImpacts(float dt) {
+    struct Owner { const SpawnedTet* obj; const AMD::FmTetMesh* piece; };
+    std::unordered_map<uint32_t, Owner> byId;
+    auto toWorld = [&](const AMD::FmVector3& v) { return glm::vec3(v.x, v.y, v.z) * m_renderScale; };
+
+    // Landings on the ground plane: FEMFX handles the floor itself and
+    // reports no contact for it, so watch each awake piece's centre of
+    // mass: falling fast one step, stopped the next, lowest point at the
+    // floor = it just hit the ground.
+    const float floorBand = 0.05f;          // m above the plane that counts as touching it
+    const float minLanding = 1.2f;          // m/s
+    for (auto& [handle, obj] : m_objects) {
+        const uint32_t n = AMD::FmGetNumTetMeshes(*obj->tetMeshBuffer);
+        for (uint32_t m = 0; m < n; ++m) {
+            const AMD::FmTetMesh* piece = AMD::FmGetTetMesh(*obj->tetMeshBuffer, m);
+            if (!piece) continue;
+            const uint32_t id = AMD::FmGetObjectId(*piece);
+            byId[id] = {obj.get(), piece};
+            if (AMD::FmIsTetMeshSleeping(*piece)) {
+                m_pieceFall.erase(id);
+                continue;
+            }
+            const float y = AMD::FmGetCenterOfMass(*piece).y * m_renderScale;
+            auto it = m_pieceFall.find(id);
+            if (it != m_pieceFall.end() && it->second.tick + 1 == m_physicsTick && dt > 0.0f) {
+                const float vy = (y - it->second.y) / dt;
+                const float lowest = AMD::FmGetMinPosition(*piece).y * m_renderScale;
+                if (it->second.vy < -minLanding && vy > it->second.vy * 0.4f && lowest < floorBand) {
+                    ImpactEvent e;
+                    e.position = toWorld(AMD::FmGetCenterOfMass(*piece));
+                    e.position.y = 0.0f;
+                    e.speed = -it->second.vy;
+                    e.materialA = obj->material;
+                    e.ground = true;
+                    e.pair = uint64_t(id) << 32 | 0xFFFFFFFFu;
+                    m_frameImpacts.push_back(e);
+                }
+                it->second = {y, vy, m_physicsTick};
+            } else {
+                m_pieceFall[id] = {y, 0.0f, m_physicsTick};
+            }
+        }
+    }
+    if (m_pieceFall.size() > byId.size() * 2 + 64) {
+        for (auto i = m_pieceFall.begin(); i != m_pieceFall.end();)
+            i = byId.count(i->first) ? std::next(i) : m_pieceFall.erase(i);
+    }
+
+    // Object against object, from FEMFX's report of this step.
+    AMD::FmCollisionReport& report = AMD::FmGetSceneCollisionReportRef(m_scene);
+    const uint32_t count = std::min<uint32_t>(report.numDistanceContacts.val, kMaxReportedContacts);
+    for (uint32_t i = 0; i < count; ++i) {
+        const AMD::FmCollisionReportDistanceContact& c = m_contactReport[i];
+        // Ragdoll limbs (rigid bodies) and fixed points: not a soft-body sound.
+        if ((c.objectIdA & FM_RB_FLAG) || c.objectIdA == FM_INVALID_ID) continue;
+        const auto a = byId.find(c.objectIdA);
+        if (a == byId.end()) continue;
+        const AMD::FmVector3 pos = AMD::FmGetInterpolatedPosition(c.posBaryA, *a->second.piece, c.tetIdA);
+        AMD::FmVector3 vel = AMD::FmGetInterpolatedVelocity(c.posBaryA, *a->second.piece, c.tetIdA);
+        ImpactEvent e;
+        e.materialA = a->second.obj->material;
+        e.materialB = e.materialA;
+        const bool bIsMesh = c.objectIdB != FM_INVALID_ID && !(c.objectIdB & FM_RB_FLAG);
+        const auto b = bIsMesh ? byId.find(c.objectIdB) : byId.end();
+        if (b != byId.end()) {
+            const AMD::FmVector3 vb = AMD::FmGetInterpolatedVelocity(c.posBaryB, *b->second.piece, c.tetIdB);
+            vel = AMD::FmInitVector3(vel.x - vb.x, vel.y - vb.y, vel.z - vb.z);
+            e.materialB = b->second.obj->material;
+        }
+        const glm::vec3 n(c.normal.x, c.normal.y, c.normal.z);
+        e.speed = std::fabs(glm::dot(glm::vec3(vel.x, vel.y, vel.z), n)) * m_renderScale;
+        if (!std::isfinite(e.speed) || e.speed <= 0.0f) continue;
+        e.position = toWorld(pos);
+        const uint32_t lo = std::min(c.objectIdA, c.objectIdB), hi = std::max(c.objectIdA, c.objectIdB);
+        e.pair = uint64_t(hi) << 32 | lo;
+        m_frameImpacts.push_back(e);
+    }
+    // FEMFX zeroes the count itself at the start of each step's contact search.
 }
 
 void PhysicsModule::updateBreakables() {
@@ -1384,6 +1475,7 @@ void PhysicsModule::fixedUpdate(const FixedUpdateContext& ctx) {
     double stepStart = nowSeconds();
     AMD::FmUpdateScene(m_scene, ctx.fixedDt);
     ++m_physicsTick;
+    collectImpacts(ctx.fixedDt);
     updateBreakables();
     enforceDebrisBudget();
     double stepMs = (nowSeconds() - stepStart) * 1000.0;

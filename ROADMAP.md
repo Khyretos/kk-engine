@@ -126,6 +126,7 @@ limitations. 🔴 Not started / stub.
 | Meltable solids (`kke::MeltVolume`) | 🟡 | Voxel density+temperature, latent-heat melting into liquid particles, marching-tetrahedra surface, chamfer SDF. **Not yet:** arbitrary shapes from meshes (voxelizer exists), refreezing into solid, burning/charring. |
 | Ocean + buoyancy (`kke::OceanWaves`, `kke::FloatingBodies`, `kke::OceanRenderer`) | 🟡 | Gerstner swell from wind (CPU = GPU), point-sampled Archimedes buoyancy with drag, heave damping, ballast; `games/sea_demo`. **Not yet:** refraction/underwater view, Synty props and FEMFX bodies as floaters, wakes/interactive ripples, shore/depth colour. |
 | Lua scripting | 🟢 | `kke::ScriptVM` + `kke::ScriptModule` (SCRIPTING.md): GMod-style hooks/timers, hot reload, per-script globals, runaway scripts hard-stopped (coroutine yield past `pcall`), memory cap, per-script CPU time. Bindings: physics, models/animation, FEMFX breakables, RmlUi documents, scenes, input, audio, camera, net (`sv_` realm, `net.send`). Example game: `games/first_lua_game` (break-the-targets, in kke_demo). **Not yet:** replicating what server scripts spawn, character bindings. |
+| Audio (`kke::AudioMixer`, `kke::AudioModule`) | 🟢 | docs/AUDIO.md: synthesized impacts per material (Jolt and FEMFX contacts, breaks), footsteps from the character's feet, ray-traced room reverb and sound through openings, occlusion, stereo or binaural (headphones), UI earcons, navigation pings, sound visualizer with captions. **Not yet:** Steam Audio backend, streaming music, Doppler. |
 
 ## Networking
 

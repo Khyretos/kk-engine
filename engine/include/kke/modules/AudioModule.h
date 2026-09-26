@@ -23,7 +23,9 @@ namespace kke {
 //   frameContacts) above a speed threshold becomes an impact of both
 //   materials, synthesized (kke::ImpactSynth), with a per-pair cooldown
 //   and a per-frame cap so a collapsing pile can't flood the mixer.
-//   FEMFX breaks (PhysicsModule::frameBreaks) play as a crack of the
+//   FEMFX objects hitting each other or the floor
+//   (PhysicsModule::frameImpacts) sound the same way. FEMFX breaks
+//   (PhysicsModule::frameBreaks) play as a crack of the
 //   object's material (Material::audioMaterial, or guessed).
 // - Occlusion: one ray per playing sound from the listener, re-cast every
 //   0.1 s; a wall in between lets through its material's `transmission`
@@ -113,6 +115,7 @@ private:
     struct PendingPing { float in; glm::vec3 position; SoundHandle sound; };
 
     void handleContacts();
+    void handleSoftImpacts();  // FEMFX objects hitting each other or the floor
     void handleBreaks();
     void updateOcclusion(float dt);
     void updateRoom(float dt);

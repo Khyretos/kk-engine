@@ -79,6 +79,7 @@ void InputModule::defineCharacterActions(InputMap& m) {
     def("interact", "Interact / push", "Combat");
     def("camera.toggle", "First / third person", "Camera");
     def("camera.zoom", "Camera distance", "Camera", ActionType::Axis1D, false);
+    def("audio.ping", "Ping surroundings (hear the walls)", "Accessibility");
 
     auto dirKey = [&](SDL_Scancode sc, int component, float scale) {
         Binding b = bind("move", key(sc), Trigger::Continuous);
@@ -125,6 +126,8 @@ void InputModule::defineCharacterActions(InputMap& m) {
     m.addBinding(bind("camera.toggle", key(SDL_SCANCODE_V)));
     m.addBinding(bind("camera.toggle", pad(SDL_GAMEPAD_BUTTON_RIGHT_STICK)));
     m.addBinding(bind("camera.zoom", { SourceKind::MouseWheel, 0, 0, 0 }, Trigger::Continuous));
+    m.addBinding(bind("audio.ping", key(SDL_SCANCODE_Q)));
+    m.addBinding(bind("audio.ping", pad(SDL_GAMEPAD_BUTTON_DPAD_DOWN)));
 }
 
 SDL_Scancode InputModule::mirrorScancode(SDL_Scancode sc) {

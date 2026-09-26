@@ -10,6 +10,7 @@
 namespace Rml {
 class Context;
 class ElementDocument;
+class EventListener;
 }
 
 namespace kke {
@@ -60,6 +61,8 @@ namespace kke {
 // cover SDL's entire keycode space speculatively.
 class UiModule : public Module, public ISettingsListener {
 public:
+    UiModule();
+    ~UiModule() override;
     const char* name() const override { return "UI"; }
 
     void init(Application& app) override;
@@ -108,6 +111,9 @@ private:
     EngineSystemInterface m_systemInterface;
     std::unique_ptr<RmlVulkanRenderInterface> m_renderInterface;
     Rml::Context* m_context = nullptr;
+    // UI sounds (docs/AUDIO.md "Accessibility"): focus, click and change
+    // in any document of the context play an AudioModule earcon.
+    std::unique_ptr<Rml::EventListener> m_earcons;
     bool m_initialised = false;
     Application* m_app = nullptr; // needed each frame in update() to detect window resize
 
