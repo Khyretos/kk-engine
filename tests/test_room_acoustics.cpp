@@ -268,3 +268,155 @@ TEST(Mixer, ReverbSendsSpatialSoundsOnly) {
     EXPECT_EQ(tailEnergy(false, 0.4f), 0.0);
     EXPECT_EQ(tailEnergy(true, 0.0f), 0.0);
 }
+
+namespace {
+// Room A (4 m half-size) with a door (`hole` half-size) in its +X wall,
+// inside a bigger closed room B: the door leads somewhere, not outdoors.
+AcousticRayFn roomBehindADoor(float hole) {
+    const AcousticRayFn inner = boxRoom({4, 3, 4}, AudioMaterialTable::Stone, hole);
+    const AcousticRayFn outer = boxRoom({12, 3, 12}, AudioMaterialTable::Stone);
+    return [=](const glm::vec3& from, const glm::vec3& dir, float maxDistance) {
+        const AcousticRay a = inner(from, dir, maxDistance);
+        return a.hit ? a : outer(from, dir, maxDistance);
+    };
+}
+} // namespace
+
+TEST(RoomAcoustics, PaddedRoomIsDrierThanStone) {
+    AudioMaterialTable m;
+    const RoomAcoustics stone = probeRoom(glm::vec3(0.0f), boxRoom({3, 2.5f, 3}, AudioMaterialTable::Stone), m);
+    const RoomAcoustics padded = probeRoom(glm::vec3(0.0f), boxRoom({3, 2.5f, 3}, AudioMaterialTable::Rubber), m);
+    EXPECT_LT(padded.wet, stone.wet * 0.5f);
+    EXPECT_GT(padded.surfaceAbsorption, stone.surfaceAbsorption);
+}
+
+TEST(RoomAcoustics, AHallsFloorIsNotAWayOut) {
+    // Rays that dip toward a far floor used to count as openings.
+    AudioMaterialTable m;
+    const RoomAcoustics hall = probeRoom(glm::vec3(0.0f, -6.4f, 0.0f), boxRoom({15, 8, 15}, AudioMaterialTable::Stone), m);
+    EXPECT_TRUE(hall.openings.empty());
+    EXPECT_FLOAT_EQ(hall.walls, 1.0f);
+    EXPECT_GT(hall.ceilingHeight, 10.0f);
+}
+
+TEST(RoomAcoustics, FindsADoorIntoTheNextRoom) {
+    AudioMaterialTable m;
+    const RoomAcoustics r = probeRoom(glm::vec3(0.0f), roomBehindADoor(0.8f), m);
+    ASSERT_FALSE(r.openings.empty());
+    const RoomOpening& o = r.openings.front();
+    EXPECT_GT(o.dir.x, 0.9f);
+    EXPECT_NEAR(o.through, 4.0f, 0.3f); // where it passes the wall
+    EXPECT_NEAR(o.reach, 12.0f, 0.5f);  // how far the next room goes
+    EXPECT_LT(r.openness, 0.2f);
+}
+
+TEST(RoomTracker, TurningProbesFindANarrowDoorAndKeepIt) {
+    AudioMaterialTable m;
+    // A 0.5 m gap: between two rays of one probe from every other angle.
+    const AcousticRayFn fn = roomBehindADoor(0.25f);
+    RoomTracker tracker;
+    RoomProbeSettings s;
+    s.rotation = 0.1f; // the first probe misses it
+    const RoomAcoustics first = probeRoom(glm::vec3(0.0f), fn, m, s);
+    EXPECT_TRUE(first.openings.empty());
+    int foundAt = -1;
+    for (int i = 0; i < 24 && foundAt < 0; ++i) {
+        s.rotation = 0.1f + float(i) * 2.39996323f;
+        tracker.update(glm::vec3(0.0f), probeRoom(glm::vec3(0.0f), fn, m, s), m);
+        if (!tracker.room().openings.empty()) foundAt = i;
+    }
+    ASSERT_GE(foundAt, 0) << "never found";
+    // Remembered for a few probes after it was seen, then forgotten if not seen again.
+    s.rotation = 0.1f;
+    tracker.update(glm::vec3(0.0f), probeRoom(glm::vec3(0.0f), fn, m, s), m);
+    EXPECT_FALSE(tracker.room().openings.empty());
+    for (int i = 0; i < tracker.settings.openingMemory; ++i) tracker.update(glm::vec3(0.0f), probeRoom(glm::vec3(0.0f), fn, m, s), m);
+    EXPECT_TRUE(tracker.room().openings.empty());
+}
+
+TEST(RoomTracker, BlendsNearbyProbesAndSnapsAfterATeleport) {
+    AudioMaterialTable m;
+    RoomTracker tracker;
+    tracker.update(glm::vec3(0.0f), probeRoom(glm::vec3(0.0f), boxRoom({4, 3, 4}, AudioMaterialTable::Stone), m), m);
+    const float stoneWet = tracker.room().wet;
+    const RoomAcoustics field = probeRoom(glm::vec3(0.0f), openField(), m);
+    tracker.update(glm::vec3(0.5f, 0.0f, 0.0f), field, m); // stepped outside
+    EXPECT_GT(tracker.room().wet, field.wet);
+    EXPECT_LT(tracker.room().wet, stoneWet);
+    tracker.update(glm::vec3(50.0f, 0.0f, 0.0f), field, m); // teleported
+    EXPECT_FLOAT_EQ(tracker.room().wet, field.wet);
+}
+
+TEST(RoomTracker, EchoesComeFromTheWalls) {
+    AudioMaterialTable m;
+    RoomTracker tracker;
+    tracker.update(glm::vec3(0.0f), probeRoom(glm::vec3(0.0f), boxRoom({6, 4, 6}, AudioMaterialTable::Stone), m), m);
+    const std::vector<EchoTap> taps = tracker.echoes(8, m);
+    ASSERT_GE(taps.size(), 4u);
+    EXPECT_LE(taps.size(), 8u);
+    for (const EchoTap& t : taps) {
+        EXPECT_GE(t.delay, 2.0f * 3.9f / 343.0f); // no nearer than the ceiling (4 m)
+        EXPECT_LE(t.delay, 2.0f * 8.6f / 343.0f); // no further than a corner
+        EXPECT_GT(t.gain, 0.0f);
+        EXPECT_LT(t.gain, 0.5f);
+    }
+    // Outdoors, nothing comes back.
+    RoomTracker outside;
+    outside.update(glm::vec3(0.0f), probeRoom(glm::vec3(0.0f), openField(), m), m);
+    EXPECT_TRUE(outside.echoes(8, m).empty());
+    // Soft walls send back less.
+    RoomTracker padded;
+    padded.update(glm::vec3(0.0f), probeRoom(glm::vec3(0.0f), boxRoom({6, 4, 6}, AudioMaterialTable::Rubber), m), m);
+    const std::vector<EchoTap> soft = padded.echoes(8, m);
+    ASSERT_FALSE(soft.empty());
+    EXPECT_LT(soft.front().gain, taps.front().gain * 0.6f);
+}
+
+TEST(Mixer, EchoArrivesLateFromTheWallsSide) {
+    AudioMixer m(48000, 4);
+    VoiceDesc d;
+    d.sound = noise(0.01f); // a 10 ms burst
+    d.position = glm::vec3(0.0f, 0.0f, -1.0f);
+    ASSERT_NE(m.play(d), 0u);
+    EchoTap t;
+    t.dir = glm::vec3(1.0f, 0.0f, 0.0f); // a wall on the right
+    t.delay = 0.1f;
+    t.gain = 0.5f;
+    m.setEchoes({t});
+    std::vector<float> out, block(2 * 480);
+    for (int i = 0; i < 20; ++i) {
+        m.mix(block.data(), 480);
+        out.insert(out.end(), block.begin(), block.end());
+    }
+    auto channel = [&](int ch, size_t from, size_t to) {
+        double e = 0.0;
+        for (size_t f = from; f < to; ++f) e += double(out[2 * f + size_t(ch)]) * out[2 * f + size_t(ch)];
+        return e;
+    };
+    // Silence between the burst and the echo, then the echo, mostly right.
+    EXPECT_LT(channel(0, 1500, 4700) + channel(1, 1500, 4700), 1e-8);
+    const double l = channel(0, 4700, 5800), r = channel(1, 4700, 5800);
+    EXPECT_GT(r, 1e-4);
+    EXPECT_GT(r, l * 4.0);
+}
+
+TEST(Mixer, OcclusionAppliesFromTheFirstBlock) {
+    auto firstBlock = [](float transmission) {
+        AudioMixer m(48000, 4);
+        VoiceDesc d;
+        d.sound = noise(0.1f);
+        d.position = glm::vec3(0.0f, 0.0f, -2.0f);
+        d.transmission = transmission;
+        m.play(d);
+        std::vector<float> out(2 * 480);
+        m.mix(out.data(), 480);
+        return energy(out, 0, out.size());
+    };
+    EXPECT_LT(firstBlock(0.1f), firstBlock(1.0f) * 0.05);
+}
+
+TEST(Mixer, AirDullsDistantSounds) {
+    EXPECT_GT(AudioMixer::airCutoff(1.0f), 18000.0f);
+    EXPECT_LT(AudioMixer::airCutoff(50.0f), 6000.0f);
+    EXPECT_GT(AudioMixer::airCutoff(10.0f), AudioMixer::airCutoff(20.0f));
+}

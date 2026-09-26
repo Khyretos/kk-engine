@@ -4,6 +4,7 @@
 #include "kke/Log.h"
 #include "kke/modules/AudioModule.h"
 
+#include <glm/gtc/constants.hpp>
 #include <imgui.h>
 #include <nlohmann/json.hpp>
 
@@ -98,6 +99,18 @@ void SoundVisualizerModule::drawOverlay() {
     const float radius = std::min(io.DisplaySize.x, io.DisplaySize.y) * settings.ringScale;
     const float px = ImGui::GetFontSize() / 13.0f * settings.markScale;
     std::vector<std::string> captions;
+    // Spatial captions, gathered first: sounds from about the same
+    // direction (a wood crate hitting stone is two sounds at one spot)
+    // share one caption, "Wood + Stone Impact", instead of printing over
+    // each other.
+    struct Caption {
+        float azimuth = 0.0f, offset = 0.0f;
+        SoundCategory category = SoundCategory::Impact;
+        std::vector<std::string> materials;
+        bool muffled = true; // until one of its sounds is clear
+        ImU32 color = 0;
+    };
+    std::vector<Caption> spatialCaptions;
 
     // Impacts last a few tens of milliseconds; a mark that short can't be
     // seen. Each sound's mark jumps to its loudness and then fades over
@@ -145,13 +158,38 @@ void SoundVisualizerModule::drawOverlay() {
         arc();
         dl->PathStroke(color, 0, w);
         if (settings.captions) {
-            const glm::vec2 t = ringPoint(s.azimuth, center, radius + thick + 10.0f * px);
-            const std::string text = muffled ? label + " (muffled)" : label;
-            const ImVec2 sz = ImGui::CalcTextSize(text.c_str());
-            const ImVec2 at(t.x - sz.x * 0.5f, t.y - sz.y * 0.5f);
-            dl->AddText(ImVec2(at.x + 1, at.y + 1), shadow, text.c_str());
-            dl->AddText(at, color, text.c_str());
+            const std::string& material = m_audio->materials().get(s.material).name;
+            Caption* same = nullptr;
+            for (Caption& c : spatialCaptions) {
+                const float d = std::fabs(std::remainder(c.azimuth - s.azimuth, glm::two_pi<float>()));
+                if (c.category == s.category && d < 0.25f) same = &c;
+            }
+            if (!same) {
+                spatialCaptions.push_back(Caption{s.azimuth, thick + 10.0f * px, s.category, {}, true, color});
+                same = &spatialCaptions.back();
+            }
+            if (std::find(same->materials.begin(), same->materials.end(), material) == same->materials.end()) same->materials.push_back(material);
+            same->muffled = same->muffled && muffled;
+            same->offset = std::max(same->offset, thick + 10.0f * px);
         }
+    }
+    // Different kinds of sound from about the same direction: stacked outward.
+    const float lineHeight = ImGui::GetFontSize() + 2.0f;
+    for (size_t i = 0; i < spatialCaptions.size(); ++i)
+        for (size_t j = 0; j < i; ++j)
+            if (std::fabs(std::remainder(spatialCaptions[i].azimuth - spatialCaptions[j].azimuth, glm::two_pi<float>())) < 0.25f)
+                spatialCaptions[i].offset = std::max(spatialCaptions[i].offset, spatialCaptions[j].offset + lineHeight);
+    const ImU32 captionShadow = IM_COL32(0, 0, 0, int(160 * settings.opacity));
+    for (const Caption& c : spatialCaptions) {
+        std::string text;
+        for (const std::string& m : c.materials) text += (text.empty() ? "" : " + ") + m;
+        text += std::string(" ") + soundCategoryName(c.category);
+        if (c.muffled) text += " (muffled)";
+        const glm::vec2 t = ringPoint(c.azimuth, center, radius + c.offset);
+        const ImVec2 sz = ImGui::CalcTextSize(text.c_str());
+        const ImVec2 at(t.x - sz.x * 0.5f, t.y - sz.y * 0.5f);
+        dl->AddText(ImVec2(at.x + 1, at.y + 1), captionShadow, text.c_str());
+        dl->AddText(at, c.color, text.c_str());
     }
     if (settings.captions && !captions.empty()) {
         float y = io.DisplaySize.y - 40.0f * px;

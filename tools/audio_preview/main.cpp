@@ -5,33 +5,22 @@
 // a wall. Usage: kke_audio_preview [out_dir]   (default: audio_preview/)
 #include "kke/AudioMixer.h"
 #include "kke/ImpactSynth.h"
+#include "kke/WavFile.h"
 
 #include <glm/gtc/constants.hpp>
 
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
-#include <fstream>
 #include <string>
 #include <vector>
 
 namespace {
-// 16-bit PCM WAV, written by hand (miniaudio's encoder is compiled out).
 bool writeWav(const std::string& path, const std::vector<float>& interleaved, int channels, int rate) {
-    std::ofstream f(path, std::ios::binary);
-    if (!f) return false;
-    auto u32 = [&](uint32_t v) { f.write(reinterpret_cast<const char*>(&v), 4); };
-    auto u16 = [&](uint16_t v) { f.write(reinterpret_cast<const char*>(&v), 2); };
-    const uint32_t bytes = uint32_t(interleaved.size() * 2);
-    f.write("RIFF", 4); u32(36 + bytes); f.write("WAVEfmt ", 8);
-    u32(16); u16(1); u16(uint16_t(channels)); u32(uint32_t(rate)); u32(uint32_t(rate * channels * 2)); u16(uint16_t(channels * 2)); u16(16);
-    f.write("data", 4); u32(bytes);
-    for (float s : interleaved) {
-        const float c = s < -1.0f ? -1.0f : (s > 1.0f ? 1.0f : s);
-        const int16_t v = int16_t(c * 32767.0f);
-        f.write(reinterpret_cast<const char*>(&v), 2);
-    }
-    return bool(f);
+    std::string error;
+    if (kke::writeWav(path, interleaved.data(), interleaved.size(), channels, rate, &error)) return true;
+    std::fprintf(stderr, "%s\n", error.c_str());
+    return false;
 }
 } // namespace
 

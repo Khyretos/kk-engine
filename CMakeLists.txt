@@ -651,6 +651,11 @@ add_subdirectory(games/sandbox)
 add_subdirectory(games/melt_demo)
 add_subdirectory(games/jiggle_demo)
 add_subdirectory(games/sea_demo)
+# Every audio case, one station each: walls and floors are Jolt bodies
+# (the sound's rays hit them), so it needs Jolt.
+if(KKE_ENABLE_JOLT)
+    add_subdirectory(games/audio_demo)
+endif()
 
 # The starter template (docs/tutorials/getting-started.md), and games made
 # from it with tools/new_game, which lists them in games/my_games.cmake.

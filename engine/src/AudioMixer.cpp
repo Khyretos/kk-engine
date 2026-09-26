@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace kke {
 
@@ -115,6 +116,10 @@ uint32_t AudioMixer::play(const VoiceDesc& desc) {
     if (m_nextId == 0) m_nextId = 1;
     v.desc = desc;
     v.estLoudness = est;
+    v.transmission = std::clamp(desc.transmission, 0.0f, 1.0f);
+    v.viaActive = desc.viaOpening;
+    v.via = desc.via;
+    v.pathLength = std::max(0.0f, desc.viaPathLength);
     if (int(m_voices.size()) >= m_maxVoices) {
         size_t quietest = 0;
         float q = 1e30f;
@@ -178,6 +183,21 @@ void AudioMixer::setRoom(float rt60, float damping, float wet, float preDelay) {
     m_reverb->setRoom(rt60, damping, wet, preDelay);
 }
 
+void AudioMixer::setEchoes(const std::vector<EchoTap>& taps) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    const float maxDelay = 0.2f * float(m_sampleRate);
+    for (int i = 0; i < kMaxEchoes; ++i) {
+        Echo& e = m_echoes[i];
+        if (i < int(taps.size())) {
+            e.dir = taps[size_t(i)].dir;
+            e.targetDelay = std::clamp(taps[size_t(i)].delay * float(m_sampleRate), 1.0f, maxDelay);
+            e.targetGain = std::max(0.0f, taps[size_t(i)].gain);
+        } else {
+            e.targetGain = 0.0f;
+        }
+    }
+}
+
 void AudioMixer::setSpatialMode(SpatialMode m) {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_mode = m;
@@ -214,6 +234,7 @@ std::vector<ActiveSound> AudioMixer::activeSounds() const {
         a.spatial = v.desc.spatial;
         a.loudness = v.started ? v.lastPeak : v.estLoudness;
         a.transmission = v.transmission;
+        a.viaOpening = v.viaActive;
         a.category = v.desc.category;
         a.material = v.desc.material;
         if (v.desc.spatial) {
@@ -255,7 +276,7 @@ void AudioMixer::mix(float* out, int frames) {
             v.desc.stream->read(m_streamBlock.data(), size_t(frames));
         }
         float gain = v.desc.gain * masterGain * categoryGain[size_t(v.desc.category)];
-        float pan = 0.0f, azimuth = 0.0f, distanceGain = 1.0f;
+        float pan = 0.0f, azimuth = 0.0f, distanceGain = 1.0f, distance = 0.0f;
         bool behind = false;
         if (v.desc.spatial) {
             Spatial s = spatialize(m_listener, heardAt(v), v.desc.minDistance, v.desc.maxDistance);
@@ -263,6 +284,7 @@ void AudioMixer::mix(float* out, int frames) {
             pan = s.pan;
             azimuth = s.azimuth;
             behind = s.behind;
+            distance = s.distance;
         }
         // Occlusion: less energy through, and walls eat the highs first.
         const float t = v.transmission;
@@ -273,6 +295,7 @@ void AudioMixer::mix(float* out, int frames) {
         gain *= distanceGain * t;
         float cutoff = 400.0f + 17600.0f * t * t;
         if (behind) cutoff = std::min(cutoff, 7000.0f); // head shadow: the cheapest front/back cue
+        if (airAbsorption && v.desc.spatial) cutoff = std::min(cutoff, airCutoff(distance));
         const float a = 1.0f - std::exp(-twoPiOverRate * cutoff);
 
         // Per-ear gains and, in binaural mode, delays and shelves.
@@ -333,15 +356,15 @@ void AudioMixer::mix(float* out, int frames) {
                     const float d = v.prevDelay[ch] + (delay[ch] - v.prevDelay[ch]) * k;
                     const int di = int(d);
                     const float df = d - float(di);
-                    const float s0 = v.hist[(v.histIdx - di + kItdSamples) % kItdSamples];
-                    const float s1 = v.hist[(v.histIdx - di - 1 + 2 * kItdSamples) % kItdSamples];
+                    const float s0 = v.hist[(v.histIdx - di) & kItdMask];
+                    const float s1 = v.hist[(v.histIdx - di - 1) & kItdMask];
                     const float in = s0 + (s1 - s0) * df;
                     const float y = shelf[ch].b0 * in + shelf[ch].b1 * v.shelfX[ch] - shelf[ch].a1 * v.shelfY[ch];
                     v.shelfX[ch] = in;
                     v.shelfY[ch] = y;
                     e[ch] = y;
                 }
-                v.histIdx = (v.histIdx + 1) % kItdSamples;
+                v.histIdx = (v.histIdx + 1) & kItdMask;
                 outL = e[0];
                 outR = e[1];
             }
@@ -364,8 +387,76 @@ void AudioMixer::mix(float* out, int frames) {
                                       return !v.desc.loop && double(v.cursor) / 65536.0 >= double(v.desc.sound->samples.size());
                                   }),
                    m_voices.end());
+    mixEchoes(out, frames);
     m_reverb->process(m_send.data(), out, frames);
     for (int i = 0; i < frames * 2; ++i) out[i] = softLimit(out[i]);
+    if (m_capturing) m_capture.insert(m_capture.end(), out, out + size_t(frames) * 2);
+}
+
+void AudioMixer::mixEchoes(float* out, int frames) {
+    bool any = false;
+    for (const Echo& e : m_echoes) any = any || e.targetGain > 0.0f || e.gainL > 0.0f || e.gainR > 0.0f;
+    if (!any) return;
+    // The line holds the longest echo (0.2 s) plus this block, rounded up
+    // to a power of two so wrapping is a mask.
+    size_t need = 1;
+    while (need < size_t(0.2f * float(m_sampleRate)) + size_t(frames) + 4) need <<= 1;
+    if (m_echoLine.size() < need) {
+        m_echoLine.assign(need, 0.0f);
+        m_echoIdx = 0;
+    }
+    const size_t n = m_echoLine.size(), mask = n - 1;
+    for (int f = 0; f < frames; ++f) m_echoLine[(m_echoIdx + size_t(f)) & mask] = m_send[size_t(f)];
+    glm::vec3 right = glm::cross(m_listener.forward, m_listener.up);
+    right = glm::dot(right, right) > 1e-12f ? glm::normalize(right) : glm::vec3(1, 0, 0);
+    const float invFrames = 1.0f / float(frames);
+    for (Echo& e : m_echoes) {
+        // A new delay: fade out at the old one first, then come back at it.
+        const bool jump = std::fabs(e.targetDelay - e.delay) > 0.005f * float(m_sampleRate);
+        const float g = jump ? 0.0f : e.targetGain * echoLevel;
+        const float angle = (std::clamp(glm::dot(e.dir, right), -1.0f, 1.0f) + 1.0f) * glm::quarter_pi<float>();
+        const float toL = g * std::cos(angle), toR = g * std::sin(angle);
+        const float fromDelay = e.delay, toDelay = jump ? e.delay : e.targetDelay;
+        if (toL > 0.0f || toR > 0.0f || e.gainL > 0.0f || e.gainR > 0.0f) {
+            const float dStep = (toDelay - fromDelay) * invFrames;
+            const float lStep = (toL - e.gainL) * invFrames, rStep = (toR - e.gainR) * invFrames;
+            float d = fromDelay, gl = e.gainL, gr = e.gainR;
+            for (int f = 0; f < frames; ++f) {
+                const float pos = float(m_echoIdx + size_t(f) + n) - d;
+                const size_t ip = size_t(pos);
+                const float frac = pos - float(ip);
+                const float x0 = m_echoLine[ip & mask];
+                const float x = x0 + (m_echoLine[(ip + 1) & mask] - x0) * frac;
+                out[2 * f] += x * gl;
+                out[2 * f + 1] += x * gr;
+                d += dStep;
+                gl += lStep;
+                gr += rStep;
+            }
+        }
+        e.gainL = toL;
+        e.gainR = toR;
+        e.delay = jump ? e.targetDelay : toDelay; // faded out: the next block starts at the new delay
+    }
+    m_echoIdx = (m_echoIdx + size_t(frames)) & mask;
+}
+
+void AudioMixer::startCapture(size_t reserveFrames) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_capture.clear();
+    m_capture.reserve(reserveFrames * 2);
+    m_capturing = true;
+}
+
+std::vector<float> AudioMixer::stopCapture() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_capturing = false;
+    return std::exchange(m_capture, {});
+}
+
+bool AudioMixer::capturing() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_capturing;
 }
 
 // ---------------------------------------------------------------- AudioStream

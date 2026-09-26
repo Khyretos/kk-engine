@@ -41,6 +41,7 @@ add_executable(kke_tests
     test_audio.cpp
     test_footsteps.cpp
     test_room_acoustics.cpp
+    test_wav_file.cpp
     test_thumbnails.cpp
     test_logo_mesh.cpp
     test_texture_mips.cpp
