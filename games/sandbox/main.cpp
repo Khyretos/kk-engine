@@ -41,8 +41,8 @@ int main() {
 #if KKE_ENABLE_FEMFX
         // Real units, nothing spawned at start; it draws the ground slab.
         auto& physics = app.addModule<kke::PhysicsModule>(/*renderScale=*/1.0f, /*initialObjectCount=*/0);
-        app.addModule<kke::AudioModule>(); // impacts and breaks make sound
-        app.addModule<kke::SoundVisualizerModule>();
+        panels.push_back(&app.addModule<kke::AudioModule>()); // impacts and breaks make sound
+        panels.push_back(&app.addModule<kke::SoundVisualizerModule>());
         physics.setDrawGround(false); // the sandbox draws a grid; placed floor tiles are the visible ground
         panels.push_back(&physics);
 #endif

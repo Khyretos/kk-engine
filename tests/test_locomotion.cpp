@@ -318,11 +318,15 @@ struct TrailRun {
     glm::vec3 end{0.0f};
 };
 
-TrailRun runTrail(const char* name, float stopZ) {
+kke::SceneFile loadTrailScene(const char* name) {
+    namespace fs = std::filesystem;
+    return kke::SceneFile::load((fs::path(KKE_SOURCE_DIR) / "scenes" / (std::string(name) + ".scene.json")).string());
+}
+
+TrailRun runTrail(const kke::SceneFile& sc, const char* name, float stopZ) {
     namespace fs = std::filesystem;
     TrailRun out;
     kke::AssetCatalog cat = kke::AssetCatalog::scan((fs::path(KKE_SOURCE_DIR) / "assets/synty").string());
-    kke::SceneFile sc = kke::SceneFile::load((fs::path(KKE_SOURCE_DIR) / "scenes" / (std::string(name) + ".scene.json")).string());
     RigidWorld::Settings st;
     st.threads = 0;
     RigidWorld world(st);
@@ -351,6 +355,8 @@ TrailRun runTrail(const char* name, float stopZ) {
     return out;
 }
 
+TrailRun runTrail(const char* name, float stopZ) { return runTrail(loadTrailScene(name), name, stopZ); }
+
 bool haveSyntyPacks() {
     return std::filesystem::exists(std::filesystem::path(KKE_SOURCE_DIR) / "assets/synty/POLYGON_Nature_Source_Files") &&
            std::filesystem::exists(std::filesystem::path(KKE_SOURCE_DIR) / "assets/synty/PolygonTown_Source_Files");
@@ -374,6 +380,16 @@ TEST(SceneTrails, TownBlockFence) {
     EXPECT_EQ(r.vaults, 1);
     EXPECT_LT(r.end.z, 0.0f);
 }
+// A level saved again (what the sandbox editor does: load, edit, save)
+// plays the same: same fence, same single vault.
+TEST(SceneTrails, TownBlockAfterASaveRoundTrip) {
+    if (!haveSyntyPacks()) GTEST_SKIP() << "Synty packs not in assets/synty/";
+    const kke::SceneFile resaved = kke::SceneFile::parse(loadTrailScene("town_block").toJson(), "resaved");
+    TrailRun r = runTrail(resaved, "town_block (resaved)", 0.0f);
+    EXPECT_EQ(r.vaults, 1);
+    EXPECT_LT(r.end.z, 0.0f);
+}
+
 // Falling onto a ramp: the feet slide sideways on landing while the
 // velocity points straight down. Once, that direction was normalized
 // from zero and the character's position became NaN (showcase ramp).

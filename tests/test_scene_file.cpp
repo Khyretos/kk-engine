@@ -77,3 +77,95 @@ TEST(SceneFile, ShippedScenesParse) {
         }
     EXPECT_GT(n, 0);
 }
+
+TEST(SceneFile, SavesAndLoadsBackTheSameScene) {
+    kke::SceneFile s;
+    s.name = "Round trip";
+    s.packs = { "POLYGON_Town" };
+    s.spawn = glm::vec3(1.5f, 0.0f, -2.25f);
+    s.spawnYaw = 135.0f;
+    s.groundSize = glm::vec2(60.0f, 40.0f);
+    s.worldSeed = 42;
+    s.hasSun = true;
+    s.sunDirection = glm::normalize(glm::vec3(-0.3f, -1.0f, 0.2f));
+    s.sunColor = glm::vec3(1.0f, 0.9f, 0.8f);
+    s.sunIntensity = 1.25f;
+    s.hasAmbient = true;
+    s.ambient = glm::vec3(0.1f, 0.12f, 0.15f);
+    s.lights.push_back({ glm::vec3(3.0f, 2.5f, 0.1f), glm::vec3(1.0f, 0.7f, 0.4f), 2.0f });
+    kke::SceneObject a;
+    a.asset = "SM_Prop_Crate_01";
+    a.position = glm::vec3(0.1f, 0.3f, -7.7f);
+    a.yaw = 45.0f;
+    a.scale = glm::vec3(1.5f);
+    a.collision = kke::SceneObject::Collision::Box;
+    a.texture = "PolygonTown_Texture_01_B.png";
+    a.breakable = "wood";
+    a.fractureSeed = 7;
+    a.pack = "POLYGON_City";
+    kke::SceneObject b;
+    b.asset = "SM_Env_Road_01";
+    b.gridCount = glm::ivec2(4, 2);
+    b.gridStep = glm::vec2(5.0f, 5.0f);
+    b.scale = glm::vec3(1.0f, 2.0f, 1.0f);
+    b.pivot = true;
+    s.objects = { a, b };
+
+    const std::string text = s.toJson();
+    EXPECT_EQ(text.find("0.10000000149"), std::string::npos) << "floats are written short: " << text;
+    kke::SceneFile r = kke::SceneFile::parse(text, "roundtrip");
+    EXPECT_EQ(r.toJson(), text); // stable: saving what was loaded changes nothing
+    EXPECT_EQ(r.name, s.name);
+    EXPECT_EQ(r.packs, s.packs);
+    EXPECT_EQ(r.spawn, s.spawn);
+    EXPECT_EQ(r.spawnYaw, s.spawnYaw);
+    EXPECT_EQ(r.groundSize, s.groundSize);
+    EXPECT_EQ(r.worldSeed, 42u);
+    ASSERT_TRUE(r.hasSun);
+    EXPECT_NEAR(glm::length(r.sunDirection - s.sunDirection), 0.0f, 1e-6f);
+    EXPECT_EQ(r.sunIntensity, 1.25f);
+    ASSERT_TRUE(r.hasAmbient);
+    EXPECT_EQ(r.ambient, s.ambient);
+    ASSERT_EQ(r.lights.size(), 1u);
+    EXPECT_EQ(r.lights[0].position, s.lights[0].position);
+    EXPECT_EQ(r.lights[0].intensity, 2.0f);
+    ASSERT_EQ(r.objects.size(), 2u);
+    EXPECT_EQ(r.objects[0].position, a.position); // exact, not approximately
+    EXPECT_EQ(r.objects[0].yaw, 45.0f);
+    EXPECT_EQ(r.objects[0].scale, glm::vec3(1.5f));
+    EXPECT_EQ(r.objects[0].collision, kke::SceneObject::Collision::Box);
+    EXPECT_EQ(r.objects[0].texture, a.texture);
+    EXPECT_EQ(r.objects[0].breakable, "wood");
+    EXPECT_EQ(r.objects[0].fractureSeed, 7u);
+    EXPECT_EQ(r.objects[0].pack, "POLYGON_City");
+    EXPECT_NE(text.find("\"position\": [0.1, 0.3, -7.7]"), std::string::npos) << text;
+    EXPECT_EQ(r.objects[1].gridCount, b.gridCount);
+    EXPECT_EQ(r.objects[1].gridStep, b.gridStep);
+    EXPECT_EQ(r.objects[1].scale, b.scale);
+    EXPECT_TRUE(r.objects[1].pivot);
+    EXPECT_EQ(r.instanceCount(), 9u);
+
+    // Through a file too (the temp-file-then-rename save).
+    const std::string path = ::testing::TempDir() + "kke_roundtrip.scene.json";
+    s.save(path);
+    EXPECT_EQ(kke::SceneFile::load(path).toJson(), text);
+    EXPECT_FALSE(std::filesystem::exists(path + ".tmp"));
+    std::filesystem::remove(path);
+}
+
+TEST(SceneFile, RejectsUnknownBreakableAndBadSun) {
+    EXPECT_THROW(kke::SceneFile::parse(R"({"format":"kke.scene","version":1,"objects":[{"asset":"A","breakable":"cheese"}]})"),
+                 std::runtime_error);
+    EXPECT_THROW(kke::SceneFile::parse(R"({"format":"kke.scene","version":1,"sun":{"direction":[0,0,0]},"objects":[]})"),
+                 std::runtime_error);
+}
+
+TEST(SceneFile, SaveToAMissingFolderThrowsNamingTheFile) {
+    kke::SceneFile s;
+    try {
+        s.save("/nonexistent-kke-folder/level.scene.json");
+        FAIL() << "expected a throw";
+    } catch (const std::runtime_error& e) {
+        EXPECT_NE(std::string(e.what()).find("level.scene.json"), std::string::npos);
+    }
+}

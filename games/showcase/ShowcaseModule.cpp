@@ -291,6 +291,26 @@ void ShowcaseModule::visitScene(size_t index) {
     m_loco->teleport(e.origin + e.file.spawn);
     m_loco->setFacing(glm::vec3(std::sin(glm::radians(e.file.spawnYaw)), 0.0f, -std::cos(glm::radians(e.file.spawnYaw))));
     m_rig.yaw = e.file.spawnYaw;
+    // The scene's lighting, as saved from the sandbox: the sun and ambient
+    // go into the Lighting panel's values (it drives light 0 every frame),
+    // point lights into slots 2-3 (0-1 are the sun and the sky fill).
+    if (e.file.hasSun) {
+        const glm::vec3 toSun = -e.file.sunDirection;
+        m_sunElevation = glm::degrees(std::asin(std::clamp(toSun.y, -1.0f, 1.0f)));
+        m_sunAzimuth = glm::degrees(std::atan2(toSun.x, toSun.z));
+        m_sunColor = e.file.sunColor;
+        m_sunIntensity = e.file.sunIntensity;
+    }
+    if (e.file.hasAmbient) m_ambient = std::max({ e.file.ambient.r, e.file.ambient.g, e.file.ambient.b });
+    for (int i = 0; i < 2; ++i) {
+        kke::Light& l = m_app->lighting().lights[2 + i];
+        l.enabled = i < static_cast<int>(e.file.lights.size());
+        if (!l.enabled) continue;
+        l.isDirectional = false;
+        l.position = e.origin + e.file.lights[i].position;
+        l.color = e.file.lights[i].color;
+        l.intensity = e.file.lights[i].intensity;
+    }
     m_status = e.file.name + (e.loaded.missing.empty() ? std::string() : " (" + std::to_string(e.loaded.missing.size()) + " assets missing: install its packs)");
 }
 

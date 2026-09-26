@@ -4,6 +4,9 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <charconv>
+#include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -15,6 +18,24 @@ namespace {
 glm::vec3 vec3(const nlohmann::json& j, const glm::vec3& fallback) {
     if (!j.is_array() || j.size() != 3) return fallback;
     return glm::vec3(j[0].get<float>(), j[1].get<float>(), j[2].get<float>());
+}
+
+// A float as the shortest decimal that reads back as the same float:
+// 0.1f is written "0.1", not "0.10000000149011612" (JSON numbers are
+// doubles), and still loads as exactly 0.1f.
+double num(float f) {
+    char buf[32];
+    auto r = std::to_chars(buf, buf + sizeof(buf), f);
+    *r.ptr = '\0';
+    return std::strtod(buf, nullptr);
+}
+nlohmann::json arr(const glm::vec3& v) { return nlohmann::json::array({ num(v.x), num(v.y), num(v.z) }); }
+
+const char* const kBreakables[] = { "wood", "stone", "glass", "ceramic", "metal" };
+
+bool knownBreakable(const std::string& b) {
+    for (const char* k : kBreakables) if (b == k) return true;
+    return false;
 }
 
 } // namespace
@@ -37,6 +58,30 @@ SceneFile SceneFile::parse(const std::string& text, const std::string& sourceNam
     if (j.contains("spawn")) {
         s.spawn = vec3(j["spawn"].value("position", nlohmann::json()), glm::vec3(0.0f));
         s.spawnYaw = j["spawn"].value("yaw", 0.0f);
+    }
+    s.worldSeed = j.value("worldSeed", 0u);
+    if (j.contains("sun")) {
+        const nlohmann::json& sun = j["sun"];
+        s.hasSun = true;
+        s.sunDirection = vec3(sun.value("direction", nlohmann::json()), s.sunDirection);
+        if (glm::dot(s.sunDirection, s.sunDirection) < 1e-8f) throw std::runtime_error(sourceName + ": \"sun\" direction is zero");
+        s.sunDirection = glm::normalize(s.sunDirection);
+        s.sunColor = vec3(sun.value("color", nlohmann::json()), s.sunColor);
+        s.sunIntensity = sun.value("intensity", s.sunIntensity);
+    }
+    if (j.contains("ambient")) {
+        s.hasAmbient = true;
+        s.ambient = vec3(j["ambient"], s.ambient);
+    }
+    if (j.contains("lights")) {
+        if (!j["lights"].is_array()) throw std::runtime_error(sourceName + ": \"lights\" must be an array");
+        for (const nlohmann::json& l : j["lights"]) {
+            SceneLight light;
+            light.position = vec3(l.value("position", nlohmann::json()), light.position);
+            light.color = vec3(l.value("color", nlohmann::json()), light.color);
+            light.intensity = l.value("intensity", light.intensity);
+            s.lights.push_back(light);
+        }
     }
     if (j.contains("ground")) {
         const nlohmann::json& g = j["ground"];
@@ -66,9 +111,104 @@ SceneFile SceneFile::parse(const std::string& text, const std::string& sourceNam
             if (so.gridCount.x < 1 || so.gridCount.y < 1 || so.gridCount.x * so.gridCount.y > 10000)
                 throw std::runtime_error(where + ": grid count must be 1..10000 cells");
         }
+        so.pack = o.value("pack", std::string());
+        so.texture = o.value("texture", std::string());
+        so.breakable = o.value("breakable", std::string());
+        if (!so.breakable.empty() && !knownBreakable(so.breakable))
+            throw std::runtime_error(where + ": \"breakable\" is wood, stone, glass, ceramic or metal, not \"" + so.breakable + "\"");
+        so.fractureSeed = o.value("fractureSeed", 0u);
         s.objects.push_back(std::move(so));
     }
     return s;
+}
+
+std::string SceneFile::toJson() const {
+    // Key order as a person would write it (ordered_json keeps insertion
+    // order), and defaults left out, so saved scenes stay readable diffs.
+    nlohmann::ordered_json j;
+    j["format"] = "kke.scene";
+    j["version"] = 1;
+    if (!name.empty()) j["name"] = name;
+    if (!description.empty()) j["description"] = description;
+    if (!packs.empty()) j["packs"] = packs;
+    j["spawn"] = { { "position", arr(spawn) }, { "yaw", num(spawnYaw) } };
+    if (groundSize.x > 0.0f || groundSize.y > 0.0f)
+        j["ground"] = { { "size", { num(groundSize.x), num(groundSize.y) } }, { "color", arr(groundColor) } };
+    if (worldSeed) j["worldSeed"] = worldSeed;
+    if (hasSun) j["sun"] = { { "direction", arr(sunDirection) }, { "color", arr(sunColor) }, { "intensity", num(sunIntensity) } };
+    if (hasAmbient) j["ambient"] = arr(ambient);
+    if (!lights.empty()) {
+        nlohmann::ordered_json ls = nlohmann::ordered_json::array();
+        for (const SceneLight& l : lights) ls.push_back({ { "position", arr(l.position) }, { "color", arr(l.color) }, { "intensity", num(l.intensity) } });
+        j["lights"] = ls;
+    }
+    nlohmann::ordered_json objs = nlohmann::ordered_json::array();
+    for (const SceneObject& o : objects) {
+        nlohmann::ordered_json e;
+        e["asset"] = o.asset;
+        e["position"] = arr(o.position);
+        if (o.yaw != 0.0f) e["yaw"] = num(o.yaw);
+        if (o.scale != glm::vec3(1.0f)) {
+            if (o.scale.x == o.scale.y && o.scale.y == o.scale.z) e["scale"] = num(o.scale.x);
+            else e["scale"] = arr(o.scale);
+        }
+        if (o.collision != SceneObject::Collision::Mesh) e["collision"] = o.collision == SceneObject::Collision::Box ? "box" : "none";
+        if (o.pivot) e["pivot"] = true;
+        if (o.gridCount != glm::ivec2(1, 1) || o.gridStep != glm::vec2(0.0f))
+            e["grid"] = { { "count", { o.gridCount.x, o.gridCount.y } }, { "step", { num(o.gridStep.x), num(o.gridStep.y) } } };
+        if (!o.pack.empty()) e["pack"] = o.pack;
+        if (!o.texture.empty()) e["texture"] = o.texture;
+        if (!o.breakable.empty()) e["breakable"] = o.breakable;
+        if (o.fractureSeed) e["fractureSeed"] = o.fractureSeed;
+        objs.push_back(std::move(e));
+    }
+    j["objects"] = std::move(objs);
+    // One line per array of numbers ("position": [1, 0, 2]), as people
+    // write scenes, instead of dump()'s one number per line.
+    const std::string text = j.dump(2);
+    std::string out;
+    out.reserve(text.size());
+    for (size_t i = 0; i < text.size(); ++i) {
+        if (text[i] == '[') {
+            const size_t end = text.find_first_of("[]{}\"", i + 1);
+            if (end != std::string::npos && text[end] == ']') {
+                std::string inner;
+                bool space = false;
+                for (size_t k = i + 1; k < end; ++k) {
+                    const char ch = text[k];
+                    if (ch == ' ' || ch == '\n') { space = !inner.empty(); continue; }
+                    if (space && inner.back() == ',') inner += ' ';
+                    space = false;
+                    inner += ch;
+                }
+                out += '[' + inner + ']';
+                i = end;
+                continue;
+            }
+        }
+        out += text[i];
+    }
+    return out + "\n";
+}
+
+void SceneFile::save(const std::string& path) const {
+    const std::string text = toJson();
+    const std::filesystem::path target(path);
+    std::filesystem::path tmp = target;
+    tmp += ".tmp";
+    {
+        std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+        if (!out) throw std::runtime_error(path + ": can't write (is the folder there and writable?)");
+        out << text;
+        out.flush();
+        if (!out) throw std::runtime_error(path + ": write failed (disk full?)");
+    }
+    std::error_code ec;
+    std::filesystem::rename(tmp, target, ec);
+    if (ec) {
+        std::filesystem::remove(tmp, ec);
+        throw std::runtime_error(path + ": can't replace the file: " + ec.message());
+    }
 }
 
 SceneFile SceneFile::load(const std::string& path) {

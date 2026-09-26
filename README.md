@@ -1443,9 +1443,25 @@ model in them.
 - **Placing:** snaps to the grid (0.25–5 m, or off); lands on top of
   whatever is under the cursor, so crates stack. `R` / `Ctrl+wheel`
   rotate, `Shift+click` keeps placing, `Esc` stops.
-- **Editing:** click to select, `G` move, `R` rotate, `Ctrl+D` duplicate,
-  `Del` delete. `Ctrl+S` / `Ctrl+L` save/load the layout as JSON
-  (`KKE_SANDBOX_LAYOUT=file.json` loads one at startup).
+- **Editing:** click to select, `Shift+click` adds to (or takes out of)
+  the selection, `Ctrl+A` selects everything. Drag the gizmo to move
+  along X/Y/Z, rotate around Y or scale (`Tab` switches; snaps to the
+  grid / rotate step / 10 %, hold `Shift` for free). `G` move, `R`
+  rotate (a group turns around its centre), `Ctrl+D` duplicate (the
+  copies follow the mouse; `Esc` takes them away again), `Del` delete.
+  Position, yaw, scale and collision can also be typed in the inspector.
+  Every edit can be undone: `Ctrl+Z`, `Ctrl+Y` / `Ctrl+Shift+Z` (100
+  steps; undo puts back exactly what changed, so a broken prop elsewhere
+  keeps its pieces).
+- **Levels:** `Ctrl+S` / `Ctrl+L` save/load a **kke.scene** (SCENES.md,
+  `kke/SceneFile.h`), by default `scenes/sandbox.scene.json`, so kke_demo
+  lists it in its Scenes panel (`KKE_SCENE=sandbox` starts in it) and
+  you walk it with Jolt collision per object: mesh, box or none. Saved
+  with the level: name, player spawn ("Spawn here", cyan box), sun,
+  ambient and up to 2 point lights, texture variants, breakable
+  materials and fracture seeds, and a floor under everything. Older
+  sandbox layouts still load. `KKE_SANDBOX_LAYOUT=file` loads one at
+  startup, `KKE_SANDBOX_SAVE=file` saves right after (converting).
 - **Camera (editor controls):** right-drag orbit, middle-drag pan, wheel
   zoom, WASD/QE move, Shift faster.
 - **Physics (FEMFX build):** `K` ragdolls/stands up a selected character;
@@ -1472,9 +1488,11 @@ model in them.
 4. Props arm 0.75-2 s after spawning, once settled: only stress *added*
    by a hit breaks them (BUGS.md BUG-043).
 
-Setup costs ~12-17 ms per prop. Honest limits: placed static meshes
-still don't collide (balls and debris only hit the ground, physics
-objects and ragdolls), so a crate on a broken one stays floating;
+Setup costs ~12-17 ms per prop. Honest limits: inside the sandbox,
+placed static meshes don't collide with FEMFX (balls and debris only hit
+the ground, physics objects and ragdolls; the games that load the level
+do collide, through Jolt), so a crate on a broken one stays floating;
+no asset thumbnails yet (the renderer can't draw into an ImGui image);
 debris is slow to fall asleep, which keeps one core busy (~10-20 ms/step
 for ~70 pieces) until it does — next on the physics list.
 

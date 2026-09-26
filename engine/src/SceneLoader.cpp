@@ -4,11 +4,21 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <filesystem>
 #include <map>
 
 namespace kke {
 
 namespace {
+
+// The object's own pack first (when the scene names one), then the
+// scene's pack order, then any pack.
+const CatalogAsset* findAsset(const AssetCatalog& catalog, const SceneObject& o, const SceneFile& scene) {
+    if (o.pack.empty()) return catalog.find(o.asset, scene.packs);
+    std::vector<std::string> prefer{ o.pack };
+    prefer.insert(prefer.end(), scene.packs.begin(), scene.packs.end());
+    return catalog.find(o.asset, prefer);
+}
 
 void addGround(const SceneFile& scene, const glm::vec3& origin, RigidWorld& world, LoadedScene& out) {
     if (scene.groundSize.x <= 0.0f || scene.groundSize.y <= 0.0f) return;
@@ -75,21 +85,34 @@ LoadedScene loadScene(const SceneFile& scene, const AssetCatalog& catalog, Model
     if (world) addGround(scene, origin, *world, out);
     for (const SceneObject& o : scene.objects) {
         ModelModule::ModelId id = 0;
-        if (auto it = loaded.find(o.asset); it != loaded.end()) id = it->second;
+        const std::string key = o.pack + "/" + o.asset;
+        if (auto it = loaded.find(key); it != loaded.end()) id = it->second;
         else {
-            const CatalogAsset* asset = catalog.find(o.asset, scene.packs);
+            const CatalogAsset* asset = findAsset(catalog, o, scene);
             if (asset) {
                 id = models.load(asset->path, packLoadOptions(catalog, *asset));
             }
-            loaded[o.asset] = id;
+            loaded[key] = id;
             if (!id) out.missing.push_back(o.asset);
         }
         if (!id) continue;
         const ModelData* d = models.model(id);
+        // A texture variant (the sandbox's per-object "Texture"): found by
+        // file name in the asset's pack, so the scene works on any machine.
+        std::string texture;
+        if (!o.texture.empty()) {
+            const CatalogAsset* asset = findAsset(catalog, o, scene);
+            if (const CatalogPack* pack = asset ? catalog.pack(asset->pack) : nullptr)
+                for (const std::string& v : pack->textureVariants)
+                    if (std::filesystem::path(v).filename() == o.texture) { texture = v; break; }
+            if (texture.empty())
+                log::get("Scene")->warn("scene '{}': texture '{}' for '{}' isn't in its pack; using the model's own", scene.name, o.texture, o.asset);
+        }
         for (int gz = 0; gz < o.gridCount.y; ++gz)
             for (int gx = 0; gx < o.gridCount.x; ++gx) {
                 const glm::mat4 t = shift * SceneFile::placement(o, d->boundsMin, d->boundsMax, { gx, gz });
                 out.instances.push_back(models.spawn(id, t));
+                if (!texture.empty()) models.setTextureOverride(out.instances.back(), texture);
                 if (world) addCollision(o, *d, t, *world, out);
             }
     }
@@ -107,10 +130,11 @@ LoadedScene loadSceneCollision(const SceneFile& scene, const AssetCatalog& catal
     const glm::mat4 shift = glm::translate(glm::mat4(1.0f), origin);
     for (const SceneObject& o : scene.objects) {
         if (o.collision == SceneObject::Collision::None) continue;
-        auto it = cache.find(o.asset);
+        const std::string key = o.pack + "/" + o.asset;
+        auto it = cache.find(key);
         if (it == cache.end()) {
             ModelData d;
-            if (const CatalogAsset* a = catalog.find(o.asset, scene.packs)) {
+            if (const CatalogAsset* a = findAsset(catalog, o, scene)) {
                 try {
                     ModelLoadOptions opts;
                     opts.loadAnimations = false;
@@ -118,7 +142,7 @@ LoadedScene loadSceneCollision(const SceneFile& scene, const AssetCatalog& catal
                 } catch (const std::exception&) {}
             }
             if (d.meshes.empty()) out.missing.push_back(o.asset);
-            it = cache.emplace(o.asset, std::move(d)).first;
+            it = cache.emplace(key, std::move(d)).first;
         }
         if (it->second.meshes.empty()) continue;
         for (int gz = 0; gz < o.gridCount.y; ++gz)

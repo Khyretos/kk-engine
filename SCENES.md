@@ -12,8 +12,15 @@ same scene.
   the course". `KKE_SCENE=town_block ./kke_demo` starts in one.
   `KKE_DEMO_AUTOPILOT=1` sprints from the spawn toward -Z and vaults or
   climbs whatever is in the way.
+- Building one: the sandbox (`games/sandbox`, README "Sandbox") saves
+  kke.scene files, by default `scenes/sandbox.scene.json`, with spawn,
+  sun, ambient, point lights, per-object collision, texture variants and
+  breakable materials. `SceneFile::save()` writes the same format back
+  (short floats, one line per vector, defaults left out), so saving a
+  loaded scene changes nothing (`SceneFile.SavesAndLoadsBackTheSameScene`).
 - Tests: `SceneTrails.*` in `tests/test_locomotion.cpp` run both trails
-  headless. They skip when the packs are missing (CI).
+  headless, and the town block again after a save round trip. They skip
+  when the packs are missing (CI).
 
 ## Getting the packs
 
