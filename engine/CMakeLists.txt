@@ -42,6 +42,7 @@ set(ENGINE_SOURCES
     src/net/Protocol.cpp
     src/net/Transport.cpp
     src/net/NetSession.cpp
+    src/net/InputReplay.cpp
     src/net/ScriptSpawns.cpp
     src/server/ServerConfig.cpp
     src/server/ServerFiles.cpp
@@ -240,7 +241,7 @@ endif()
 
 if(KKE_ENABLE_JOLT)
     target_sources(kke_engine PRIVATE src/RigidWorld.cpp src/Locomotion.cpp src/SceneLoader.cpp src/modules/RigidBodyModule.cpp src/modules/PhysicsBridgeModule.cpp
-        src/net/WorldMoveCheck.cpp src/net/LevelSight.cpp)
+        src/net/WorldMoveCheck.cpp src/net/LevelSight.cpp src/net/LocomotionReplay.cpp)
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_JOLT=1)
     target_link_libraries(kke_engine PUBLIC Jolt)
 else()

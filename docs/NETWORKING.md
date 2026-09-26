@@ -29,6 +29,7 @@ and your bandwidth, and has sliders to simulate a bad connection.
 | `KKE_NET_LAG` | extra one-way delay in ms on everything this game sends |
 | `KKE_NET_JITTER` | ± random ms per packet (reorders unreliable packets) |
 | `KKE_NET_LOSS` | percent of unreliable packets dropped |
+| `KKE_NET_REPLAY` | `1`: host with input replay (competitive; see "Input replay") |
 
 A host takes UDP port 27960, or the next free one up to 27975, so several
 hosts can run on one PC and the LAN search still finds all of them. Allow
@@ -81,7 +82,7 @@ that range in the firewall to play across machines.
     snapshots like the level's; `Despawn` removes them.
   - *Breaks*: `Break` messages carry which borders of a breakable broke on
     the host (below).
-  - *Robustness*: protocol version (now 4) and game id checked at join,
+  - *Robustness*: protocol version (now 5) and game id checked at join,
     then the server's password if it has one (compared in constant time;
     `KKE_NET_PASSWORD`, or the panel's Password field) and its access list
     (`NetServer::admit`: bans, allow list), a full server says so, silent peers time out, clients sending bad
@@ -177,17 +178,72 @@ the fall rule off with `minFallGravity = 0`). The Network panel shows the
 refusals and has a switch; the log gets one line per player per 5 s.
 Any game can add its own rule through `NetServer::checkMove`.
 
-### Why players are owner-predicted, not replayed
+### Input replay
 
-The standard for competitive shooters is server-side input replay: the
-client sends inputs, the server runs them, the client rewinds and replays
-its unacknowledged inputs when a correction arrives. That needs a player
-simulation that can be rewound. `kke::Locomotion` (vault, climb, hang,
-shimmy) can't be yet, and co-op and sandbox games don't need it, so the
-owner moves its player and the host checks the moves (speed limits,
-walls, flying: above). That catches blatant cheats; small ones (running a
-little fast inside the slack) need input replay, which is still open in
-issue #28.
+Two models for players, chosen by the host:
+
+- **Owner-predicted** (the default; co-op, sandbox, most games): your game
+  moves your player and sends where it is; the host checks each move
+  (above). Nothing to set up, nothing ever snaps back for an honest
+  player, and it catches the blatant cheats. Small ones (running a little
+  fast inside the slack) get through.
+- **Input replay** (competitive; tick **Input replay** next to Host, or
+  `KKE_NET_REPLAY=1`): your game sends *inputs* (move direction, sprint,
+  walk, crouch, jump, where you look) 60 times a second and the host runs
+  everyone's movement itself. Where a player is, is whatever the host's
+  own `kke::Locomotion` made of their inputs: speed hacks, fly hacks,
+  teleports and walking through walls have nothing to send. This is the
+  model of competitive shooters (Valve's Source, Overwatch, Rocket League).
+
+Nobody wants to wait for the host before their player moves, so with
+input replay your game still moves your player the moment you press
+(prediction). It keeps each input and the state after it; when the host's
+answer for an input disagrees (by more than 5 cm, or in another movement
+state: a vault the host didn't do), it goes back to that input, takes
+the host's position and plays every input since again (rewind and
+replay). With an honest client and the same level both sides agree and
+nothing moves; when they don't, the jump is hidden by fading a drawing
+offset (`playerDrawOffset()`).
+
+What makes it work (`kke/net/InputReplay.h`, `LocomotionReplay.h`):
+
+- *Exactly the same numbers on both sides.* Inputs are quantized before
+  the client steps them, to what the wire carries (`quantize()`), and
+  both sides step fixed 1/60 s ticks whatever the frame rate.
+- *Rewindable movement.* `RigidWorld::characterState()` saves a
+  character completely (Jolt's own state of the `CharacterVirtual`:
+  position, velocity, contacts, ground; its input, height and clock) and
+  `setCharacterState()` puts it back; a `Locomotion` is plain data, so a
+  copy is its whole state (`restore()`). A replayed character is stepped
+  on its own (`stepCharacter()`, `setCharacterManual()`), one input at a
+  time, so it can be replayed without stepping the whole world.
+- *The host waits rather than guesses* (`InputQueue`). Each host tick a
+  player may play one input. If theirs hasn't come (a slow frame, a
+  jittery link) they stand still a moment on the host and the ticks are
+  made up when the inputs arrive together, so the host runs exactly the
+  inputs the client predicted with: a bad connection costs latency, not
+  corrections. More than one input per tick on average can't be had:
+  a client sending faster only fills the queue, whose oldest inputs are
+  skipped (a jump in them still happens).
+- *Loss.* Every input packet carries the newest 16 unacknowledged inputs,
+  so a lost packet's inputs arrive with the next. The host answers with
+  `InputAck` (the last input it played and the state after it) with
+  each snapshot.
+
+In a game: `NetModule::setPlayer(&locomotion, character)` once, then each
+frame `if (!net.stepPlayer(input, dt)) locomotion.update(...)` instead of
+updating it yourself: offline, hosting or with owner prediction it
+returns false and nothing changes. The host creates a character and a
+`Locomotion` for each joining client (at `replaySpawn(id)`) and runs
+them. The showcase does all of this (`ShowcaseModule::stepNetPlayer`).
+
+For now, with input replay: players don't block each other (the host's
+characters don't collide with one another, so a client's prediction
+doesn't bump into stand-ins either); a teleport or respawn is the host's
+to make (one made by the client alone is put back); crates and other
+bodies near you are the host's, so pushing one is predicted only as far
+as your copy of it goes. Everything else (events, voice, spawns, breaks)
+works as with owner prediction.
 
 ## In kke_demo
 
@@ -240,14 +296,28 @@ capsule doesn't; the honest fall after a refusal passes.
 `tests/test_rigid_world.cpp`: bodies switch between dynamic and kinematic
 (kinematic ones hold still and push, dynamic again they fall).
 
+`tests/test_input_replay.cpp` (input replay): the host plays each input
+once and in order, waits for a late one and makes the ticks up, skips a
+lost one after a few ticks, and a client with a fast clock or one that
+goes quiet and bursts gets no extra distance; a press in a skipped input
+still happens; a fair client is never corrected, a push only the server
+knows about is rewound and replayed to the server's exact position, as
+is another movement state in the same place; inputs round trip bit for
+bit as the client stepped them; a Jolt character and its Locomotion put
+back mid-run move exactly the same again through a vault; and over a
+simulated network with lag, jitter and loss a Locomotion player vaults
+the same on both sides, a client with a wall missing from its level is
+stopped by the host's, and a cheat's fast clock buys nothing.
+
 ## Not yet
 
-- Input replay for competitive games (#28: needs a rewindable
-  kke::Locomotion), rollback for fighting games, lockstep for RTS
-  (ACTION_PLAN.md).
-- Dedicated server process and Docker image; secure connect tokens
-  (yojimbo), internet P2P with NAT traversal (GameNetworkingSockets).
-- Voice chat (Opus).
+- Rollback for fighting games, lockstep for RTS (ACTION_PLAN.md); with
+  input replay: player-vs-player collision, host-side respawns, and
+  lag-compensated hit checks (rewinding the other players to what the
+  shooter saw).
+- Secure connect tokens (yojimbo), internet P2P with NAT traversal
+  (GameNetworkingSockets). (Dedicated servers and voice chat are done:
+  docs/SERVER_HOSTING.md, "Voice" below.)
 - Several local players per connection (couch + online).
 - Breaking on a client before the host says so (predicted breaks): today
   a client's pane cracks half a round trip after the hit.

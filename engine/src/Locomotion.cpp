@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
 
 namespace kke {
 
@@ -208,7 +209,7 @@ void Locomotion::update(const Input& in, float dt) {
     // (which flashed the animation between idle and walk). Vaults and
     // climbs move the feet here every frame, so they use the frame time.
     const glm::vec3 feetNow = m_world.characterPosition(m_id);
-    const double simNow = m_world.simulatedTime();
+    const double simNow = m_world.characterTime(m_id);
     const float moved = float(simNow - m_lastSimTime);
     const bool scripted = m_state == State::Vault || m_state == State::Climb || m_state == State::Hang || m_state == State::Leap ||
                           m_state == State::WallRun;
@@ -254,6 +255,13 @@ void Locomotion::teleport(const glm::vec3& feet) {
     m_sinceGrounded = 0.0f;
     m_shimmy = 0.0f;
     enter(State::Ground);
+}
+
+void Locomotion::restore(const Locomotion& saved) {
+    if (&saved == this || &saved.m_world != &m_world || saved.m_id != m_id) return;
+    // All plain data but the world reference: rebuilt in place as a copy.
+    std::destroy_at(this);
+    std::construct_at(this, saved);
 }
 
 void Locomotion::jump(const Input& in) {

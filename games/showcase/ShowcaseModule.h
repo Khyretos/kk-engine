@@ -95,6 +95,7 @@ private:
     // everyone else's drawn with our character model and their own
     // animator; crates and the platform are the host's. Shots are events.
     void replicateBodies();
+    bool stepNetPlayer(const kke::Locomotion::Input& in, float dt);
     void sendNetState(const glm::vec3& feet);
     void updateAvatars(float dt);
     void onNetEvent(uint16_t kind, uint8_t from, const std::vector<uint8_t>& payload);

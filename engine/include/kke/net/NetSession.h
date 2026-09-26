@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kke/net/Authority.h"
+#include "kke/net/InputReplay.h"
 #include "kke/net/Protocol.h"
 #include "kke/net/Transport.h"
 
@@ -42,13 +43,17 @@ namespace kke::net {
 //             borders, so everyone sees the same pieces. Kept for late
 //             joiners too.
 //
-// Why owner-predicted players rather than server-side input replay: the
-// character's traversal state machine (kke::Locomotion: vault, climb,
-// hang) can't yet be rewound and replayed, and co-op / sandbox games
-// don't need it. The server does check every move: speed limits here,
-// and through `checkMove` whatever the game adds (NetModule: no walking
-// through walls, no flying; kke/net/WorldMoveCheck.h). Input replay for
-// competitive games is issue #28.
+// Players come in two models (docs/NETWORKING.md "Input replay"):
+//   owner-predicted (default; co-op, sandbox): the client moves its
+//             player and sends where it is; the server checks every move
+//             (speed limits here, and through `checkMove` whatever the
+//             game adds: NetModule refuses walls and flying,
+//             kke/net/WorldMoveCheck.h).
+//   input replay (NetConfig::inputReplay; competitive): the client sends
+//             its inputs, the server runs everyone's movement from them
+//             (nextInput / setPlayerState), the client predicts and
+//             rewinds (kke/net/InputReplay.h). Nothing a client says
+//             about where it is counts.
 
 struct NetConfig {
     std::string gameId = "kke";     // clients of another game are turned away
@@ -64,6 +69,8 @@ struct NetConfig {
     size_t maxEventsPerSecond = 60; // per client; more are dropped
     std::string password;           // server: required to join ("" = none); client: what it sends
     bool dedicated = false;         // server: no player of its own (kke_server), all slots for clients
+    bool inputReplay = false;       // server: players send inputs and the server moves them (the client learns it at Welcome)
+    uint16_t tickHz = 60;           // server: input ticks per second under inputReplay
 };
 
 // How far a player may move between two of its states (server check).
@@ -240,6 +247,20 @@ public:
     // when it's back.
     std::function<bool(uint8_t viewer, uint8_t subject)> sendPlayer;
 
+    // --- input replay (NetConfig::inputReplay; kke/net/InputReplay.h)
+    // Each server tick: inputTick() once, then for each client
+    //   while (nextInput(id, in)) step its movement with `in`;
+    // and setPlayerState if it moved. Usually one input a tick; none while
+    // its next hasn't come; a few when late ones arrive together
+    // (InputQueue).
+    void inputTick();
+    bool nextInput(uint8_t id, InputFrame& out);
+    // Client `id`'s player as this server's movement left it after the
+    // input from nextInput: what everyone else sees, and (InputAck, with
+    // each snapshot) its owner's answer.
+    void setPlayerState(uint8_t id, const NetPlayerState& state);
+    const InputQueue* inputs(uint8_t id) const; // null if unknown
+
     MovementLimits limits;
     // A move that passed the speed limits: may the player go from `from`
     // to `to` in `dt` seconds? false = refused (the client is corrected
@@ -275,6 +296,9 @@ private:
         size_t voiceInWindow = 0;
         std::map<uint16_t, float> priority; // body id -> accumulated priority
         std::map<uint16_t, bool> sentSleeping;
+        InputQueue inputs;            // input replay
+        uint32_t ackTick = 0;         // input replay: the input the state is after
+        bool ackPending = false;
     };
     Client* byPeer(PeerId peer);
     Client* byId(uint8_t id);
@@ -325,6 +349,14 @@ public:
 
     void setLocalState(const NetPlayerState& state) { m_local = state; m_hasLocal = true; }
     void sendEvent(uint16_t kind, const std::vector<uint8_t>& payload);
+    // Input replay: the server said (at Welcome) it moves our player from
+    // our inputs. Then send inputs each tick, not states (setLocalState
+    // is ignored), and correct with onInputAck (kke/net/InputReplay.h).
+    bool inputReplay() const { return m_inputReplay; }
+    uint16_t tickHz() const { return m_tickHz; }
+    // Consecutive ticks, oldest first (Prediction::unacknowledged); only
+    // the newest kMaxInputsPerMsg go.
+    void sendInputs(const std::vector<InputFrame>& frames);
     // Our voice: one Opus frame on `channel` (unreliable; the server decides who hears it).
     void sendVoice(VoiceChannel channel, uint16_t seq, const std::vector<uint8_t>& opusFrame);
 
@@ -344,6 +376,7 @@ public:
     std::function<void(uint16_t id)> onDespawn;                // remove it
     std::function<void(const BreakMsg&)> onBreak;              // break your copy along these borders
     std::function<void(const VoiceMsg&)> onVoice;              // someone's voice for us (speaker = their id)
+    std::function<void(uint32_t tick, const NetPlayerState&)> onInputAck; // input replay: our player after our input `tick`
 
 private:
     struct Player {
@@ -373,6 +406,8 @@ private:
     std::map<uint8_t, Player> m_players;
     std::map<uint16_t, Timeline<NetBodyState>> m_bodies;
     size_t m_badPackets = 0;
+    bool m_inputReplay = false;
+    uint16_t m_tickHz = 60;
 };
 
 } // namespace kke::net

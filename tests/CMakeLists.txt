@@ -33,6 +33,7 @@ add_executable(kke_tests
     test_camera_rig.cpp
     test_scene_file.cpp
     test_net.cpp
+    test_input_replay.cpp
     test_server.cpp
     test_voice.cpp
     test_storage.cpp

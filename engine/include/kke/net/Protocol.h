@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <cmath>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -23,7 +24,7 @@ namespace kke::net {
 //   velocity  +-64 m/s per axis, 1/128 m/s steps
 //   rotation  smallest-three quaternion, ~0.001 per component
 //   yaw       0..360 degrees, 1024 steps (0.35 degrees)
-constexpr uint16_t kProtocolVersion = 4; // 2: Spawn, Despawn, Break (#28); 3: join password (#42); 4: Voice
+constexpr uint16_t kProtocolVersion = 5; // 2: Spawn, Despawn, Break (#28); 3: join password (#42); 4: Voice; 5: Input, InputAck (#28)
 constexpr size_t kMaxPlayers = 32;
 constexpr size_t kMaxNameLength = 24;
 constexpr size_t kMaxGameIdLength = 32;
@@ -37,6 +38,7 @@ constexpr size_t kMaxSpawnBytes = 256;    // a spawned object's description (gam
 constexpr size_t kMaxBordersPerBreak = 1024; // more go in several Break messages
 constexpr uint32_t kMaxChunkId = 65535;
 constexpr size_t kMaxVoiceBytes = 256;     // one Opus frame (20 ms at up to ~100 kbit/s)
+constexpr size_t kMaxInputsPerMsg = 16;    // the newest unacknowledged inputs, resent until acknowledged
 
 constexpr float kWorldXZ = 4096.0f;
 constexpr float kWorldYMin = -512.0f, kWorldYMax = 1536.0f;
@@ -57,6 +59,8 @@ enum class MessageType : uint8_t {
     Despawn,         // server -> clients (reliable): it's gone
     Break,           // server -> clients (reliable): these borders of a breakable broke
     Voice,           // either way (unreliable): 20 ms of someone's voice, Opus-coded
+    Input,           // client -> server (unreliable): my newest inputs (input replay, kke/net/InputReplay.h)
+    InputAck,        // server -> one client (unreliable): your player after your input N
     Count
 };
 
@@ -75,6 +79,14 @@ struct NetPlayerState {
 };
 // Flag bits the engine itself understands (the rest are the game's).
 constexpr uint8_t kPlayerTeleported = 1u << 7; // a legitimate jump in position (spawn, scene change)
+
+// One tick of what a player asked for (input replay, kke/net/InputReplay.h).
+struct InputFrame {
+    uint32_t tick = 0;        // the client's tick number, +1 each tick from 0
+    glm::vec2 move{0.0f};     // world-space wish direction on X/Z, length 0..1
+    float yaw = 0.0f;         // degrees 0..360, where the player looks
+    uint8_t buttons = 0;      // kButton* (InputReplay.h) and the game's own bits
+};
 
 // A rigid body in a snapshot (server-authoritative physics).
 struct NetBodyState {
@@ -95,6 +107,8 @@ struct WelcomeMsg {
     uint8_t maxPlayers = 0;
     uint16_t snapshotHz = 0;
     uint32_t serverTimeMs = 0;
+    bool inputReplay = false;  // send Input, not PlayerState: the server moves your player (InputReplay.h)
+    uint16_t tickHz = 60;      // input ticks per second, with inputReplay
 };
 struct RejectMsg { std::string reason; };
 struct PlayerInfoMsg {
@@ -138,6 +152,12 @@ struct VoiceMsg {
     VoiceChannel channel = VoiceChannel::Proximity;
     uint16_t seq = 0;          // per speaker, +1 per frame (gaps: lost, conceal them)
     std::vector<uint8_t> data;
+};
+// Consecutive ticks, oldest first.
+struct InputMsg { std::vector<InputFrame> frames; };
+struct InputAckMsg {
+    uint32_t tick = 0;         // the last of your inputs the server played
+    NetPlayerState state;      // your player after it
 };
 struct PlayerStateMsg {
     uint32_t timeMs = 0;       // sender's clock
@@ -189,6 +209,8 @@ template <typename Stream> void serialize(Stream& s, WelcomeMsg& m) {
     s.integer(m.maxPlayers, 1, kMaxPlayers);
     s.integer(m.snapshotHz, 1, 120);
     s.bits(m.serverTimeMs, 32);
+    s.boolean(m.inputReplay);
+    s.integer(m.tickHz, 1, 240);
 }
 template <typename Stream> void serialize(Stream& s, RejectMsg& m) { s.string(m.reason, kMaxReasonLength); }
 template <typename Stream> void serialize(Stream& s, PlayerInfoMsg& m) {
@@ -231,6 +253,29 @@ template <typename Stream> void serialize(Stream& s, VoiceMsg& m) {
     m.channel = static_cast<VoiceChannel>(channel);
     s.integer(m.seq, 0, 65535);
     s.bytes(m.data, kMaxVoiceBytes);
+}
+template <typename Stream> void serialize(Stream& s, InputMsg& m) {
+    // The newest tick, then each input: the others are the ticks before it.
+    uint32_t newest = m.frames.empty() ? 0 : m.frames.back().tick;
+    s.bits(newest, 32);
+    uint32_t count = static_cast<uint32_t>(m.frames.size());
+    s.integer(count, 1, kMaxInputsPerMsg);
+    if constexpr (Stream::kReading) m.frames.resize(s.ok() ? count : 0);
+    for (size_t i = 0; i < m.frames.size(); ++i) {
+        InputFrame& f = m.frames[i];
+        if constexpr (Stream::kReading) f.tick = newest - static_cast<uint32_t>(m.frames.size() - 1 - i);
+        int x = static_cast<int>(std::lround(glm::clamp(f.move.x, -1.0f, 1.0f) * 127.0f));
+        int z = static_cast<int>(std::lround(glm::clamp(f.move.y, -1.0f, 1.0f) * 127.0f));
+        s.integer(x, -127, 127);
+        s.integer(z, -127, 127);
+        if constexpr (Stream::kReading) f.move = glm::vec2(float(x), float(z)) / 127.0f;
+        s.real(f.yaw, 0.0f, 360.0f, 360.0f / 1023.0f);
+        s.integer(f.buttons, 0, 255);
+    }
+}
+template <typename Stream> void serialize(Stream& s, InputAckMsg& m) {
+    s.bits(m.tick, 32);
+    serialize(s, m.state);
 }
 template <typename Stream> void serialize(Stream& s, PlayerStateMsg& m) {
     s.bits(m.timeMs, 32);

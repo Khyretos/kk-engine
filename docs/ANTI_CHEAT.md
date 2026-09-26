@@ -52,9 +52,11 @@ on every platform.
 **Fog of war for data** (Valorant, CS2): the server doesn't send a
 client the enemies it can't see, so a wallhack has nothing to show.
 
-**Lockstep and input replay** (StarCraft, fighting games with rollback):
-clients send only inputs; everyone simulates the same thing, so a
-client can't send an outcome at all.
+**Lockstep and input replay** (StarCraft, fighting games with rollback,
+competitive shooters): clients send only inputs; the server (or everyone)
+simulates the same thing, so a client can't send an outcome at all. KKE
+has server-side input replay for player movement (docs/NETWORKING.md
+"Input replay": `NetModule::inputReplay`, `KKE_NET_REPLAY=1`).
 
 What we deliberately *don't* do: kernel drivers (Riot Vanguard, EasyAntiCheat's
 kernel mode, BattlEye), scanning other processes, screenshots of the

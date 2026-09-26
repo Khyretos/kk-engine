@@ -264,7 +264,7 @@ void NetServer::handleHello(Client& c, const HelloMsg& m) {
     c.id = id;
     c.name = m.name.empty() ? "Player " + std::to_string(id) : m.name;
     c.character = m.character;
-    WelcomeMsg w{ id, static_cast<uint8_t>(m_config.maxPlayers), m_config.snapshotHz, timeMs() };
+    WelcomeMsg w{ id, static_cast<uint8_t>(m_config.maxPlayers), m_config.snapshotHz, timeMs(), m_config.inputReplay, m_config.tickHz };
     sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::Welcome, w);
     // Who's here already (the host, then the other clients), then tell
     // them about the new one. A dedicated server has no player of its own.
@@ -285,6 +285,7 @@ void NetServer::handleHello(Client& c, const HelloMsg& m) {
 
 void NetServer::handleState(Client& c, const PlayerStateMsg& m) {
     const NetPlayerState& s = m.state;
+    if (m_config.inputReplay) return bad(c, "a player state under input replay"); // the server moves this player
     if (!finite(s.position) || !finite(s.velocity)) return bad(c, "non-finite state");
     const Authority moveAuthority = authority.authority(c.id, Action::Move);
     if (moveAuthority == Authority::Server) return; // the server moves this player, not its client
@@ -353,6 +354,15 @@ void NetServer::receive(Client& c, const NetEvent& e) {
             if (onEvent) onEvent(*m);
         } else {
             bad(c, "event");
+        }
+        break;
+    case MessageType::Input:
+        if (!m_config.inputReplay) return bad(c, "inputs without input replay");
+        if (auto m = decode<InputMsg>(*type, e.data.data(), e.data.size())) {
+            // Resent until acknowledged: most are duplicates, dropped by the queue.
+            for (const InputFrame& f : m->frames) c.inputs.push(f);
+        } else {
+            bad(c, "input");
         }
         break;
     case MessageType::Voice:
@@ -459,6 +469,32 @@ void NetServer::update(double now) {
     }
 }
 
+void NetServer::inputTick() {
+    for (Client& c : m_clients)
+        if (c.id) c.inputs.beginTick();
+}
+
+bool NetServer::nextInput(uint8_t id, InputFrame& out) {
+    Client* c = byId(id);
+    return c && m_config.inputReplay && c->inputs.next(out);
+}
+
+void NetServer::setPlayerState(uint8_t id, const NetPlayerState& state) {
+    Client* c = byId(id);
+    if (!c || !m_config.inputReplay || !c->inputs.started()) return;
+    c->accepted = state;
+    c->acceptedAt = m_now;
+    c->hasState = true;
+    c->ackTick = c->inputs.lastPlayed();
+    c->ackPending = true;
+}
+
+const InputQueue* NetServer::inputs(uint8_t id) const {
+    for (const Client& c : m_clients)
+        if (c.id == id && c.id) return &c.inputs;
+    return nullptr;
+}
+
 // Players always; then bodies by accumulated priority until the packet's
 // budget is used. Awake bodies gain 1 per snapshot, sleeping ones 0.1, a
 // body that just fell asleep gets a boost so its resting pose arrives.
@@ -489,6 +525,10 @@ void NetServer::sendSnapshot(Client& c) {
         c.sentSleeping[b->id] = b->sleeping;
     }
     m_transport.send(c.peer, Channel::Unreliable, encode(MessageType::Snapshot, s));
+    if (c.ackPending) {
+        sendMsg(m_transport, c.peer, Channel::Unreliable, MessageType::InputAck, InputAckMsg{ c.ackTick, c.accepted });
+        c.ackPending = false;
+    }
 }
 
 std::vector<RemotePlayer> NetServer::players(double now) const {
@@ -499,7 +539,10 @@ std::vector<RemotePlayer> NetServer::players(double now) const {
         r.id = c.id;
         r.name = c.name;
         r.character = c.character;
-        if (c.hasState && c.clock.valid()) {
+        if (c.hasState && m_config.inputReplay) {
+            r.state = c.accepted; // this server's own movement: now, not 100 ms ago
+            r.hasState = true;
+        } else if (c.hasState && c.clock.valid()) {
             r.state = interpolate(c.states, c.clock.senderNow(now) - m_config.interpolationDelay, m_config.maxExtrapolation);
             r.hasState = true;
         }
@@ -555,6 +598,17 @@ void NetClient::sendEvent(uint16_t kind, const std::vector<uint8_t>& payload) {
     m_transport.send(m_server, Channel::Reliable, encode(MessageType::GameEvent, e));
 }
 
+void NetClient::sendInputs(const std::vector<InputFrame>& frames) {
+    if (m_status != Status::Connected || !m_inputReplay || frames.empty()) return;
+    // The wire carries only the newest tick: the others go only while
+    // they're the ticks right before it.
+    size_t first = frames.size() - 1;
+    while (first > 0 && frames.size() - first < kMaxInputsPerMsg && frames[first - 1].tick + 1 == frames[first].tick) --first;
+    InputMsg m;
+    m.frames.assign(frames.begin() + static_cast<std::ptrdiff_t>(first), frames.end());
+    sendMsg(m_transport, m_server, Channel::Unreliable, MessageType::Input, m);
+}
+
 void NetClient::sendVoice(VoiceChannel channel, uint16_t seq, const std::vector<uint8_t>& opusFrame) {
     if (m_status != Status::Connected || opusFrame.empty() || opusFrame.size() > kMaxVoiceBytes) return;
     VoiceMsg m{ 0, channel, seq, opusFrame };
@@ -573,6 +627,13 @@ void NetClient::receive(const NetEvent& e) {
             m_status = Status::Connected;
             m_statusText = "connected as player " + std::to_string(m->playerId);
             m_clock.observe(m->serverTimeMs / 1000.0, m_now);
+            m_inputReplay = m->inputReplay;
+            m_tickHz = m->tickHz;
+        } else ++m_badPackets;
+        break;
+    case MessageType::InputAck:
+        if (auto m = decode<InputAckMsg>(*type, d, n); m && m_inputReplay) {
+            if (onInputAck) onInputAck(m->tick, m->state);
         } else ++m_badPackets;
         break;
     case MessageType::Reject:
@@ -703,7 +764,7 @@ void NetClient::update(double now) {
         m_statusText = "no answer from the server";
         return;
     }
-    if (m_status == Status::Connected && m_hasLocal && now >= m_nextSend) {
+    if (m_status == Status::Connected && m_hasLocal && !m_inputReplay && now >= m_nextSend) {
         m_nextSend = std::max(m_nextSend + 1.0 / std::max<uint16_t>(1, m_config.stateHz), now);
         PlayerStateMsg m{ timeMs(), m_local };
         sendMsg(m_transport, m_server, Channel::Unreliable, MessageType::PlayerState, m);

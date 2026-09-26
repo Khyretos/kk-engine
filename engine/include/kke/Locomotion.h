@@ -143,6 +143,10 @@ public:
     void update(const Input& input, float dt);
     // Respawn: cancels any vault/climb and puts the feet there, standing still.
     void teleport(const glm::vec3& feet);
+    // Input replay (kke/net/InputReplay.h): a copy of a Locomotion is its
+    // whole state; restore() puts a copy of this one back (same world and
+    // character; the character's own state is RigidWorld::characterState).
+    void restore(const Locomotion& saved);
 
     State state() const { return m_state; }
     float stateTime() const { return m_stateTime; }

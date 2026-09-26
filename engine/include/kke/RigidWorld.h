@@ -4,6 +4,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <cstdint>
+#include <string>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -186,6 +187,29 @@ public:
     bool characterKinematic(CharacterId id) const;
     void moveCharacter(CharacterId id, const glm::vec3& feet); // keeps velocity
     void setCharacterVelocity(CharacterId id, const glm::vec3& velocity);
+    // Input replay (kke/net/InputReplay.h): a character stepped by its
+    // owner, one input at a time, with stepCharacter() instead of by
+    // step(), so it can be rewound (characterState) and replayed.
+    void setCharacterManual(CharacterId id, bool manual);
+    bool characterManual(CharacterId id) const;
+    // Advances one character by dt (as step() would), nothing else: no
+    // bodies, no simulatedTime(). Kinematic ones only gain the time.
+    void stepCharacter(CharacterId id, float dt);
+    // Seconds this character has been simulated: step() and
+    // stepCharacter() both count. Movement code measures motion against
+    // it (a manual character's clock isn't the world's).
+    double characterTime(CharacterId id) const;
+    // Everything a character is (position, velocity, contacts, input,
+    // size, clock), to put it back exactly with setCharacterState().
+    struct CharacterState {
+        std::string jolt;              // CharacterVirtual::SaveState
+        CharacterInput input;
+        float height = 0.0f;
+        bool kinematic = false;
+        double time = 0.0;
+    };
+    CharacterState characterState(CharacterId id) const;
+    void setCharacterState(CharacterId id, const CharacterState& state);
     // Would an upright capsule (feet at `feet`) fit without touching
     // anything? For checking a vault's landing spot or a ledge's top.
     bool capsuleFits(const glm::vec3& feet, float height, float radius) const;

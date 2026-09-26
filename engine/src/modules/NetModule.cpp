@@ -5,7 +5,9 @@
 #include "kke/modules/PhysicsModule.h"
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/net/EnetTransport.h"
+#include "kke/Locomotion.h"
 #include "kke/net/LevelSight.h"
+#include "kke/net/LocomotionReplay.h"
 
 #include <imgui.h>
 
@@ -76,6 +78,7 @@ void NetModule::init(Application& app) {
     simulated.latencyMs = envFloat("KKE_NET_LAG", 0.0f);
     simulated.jitterMs = envFloat("KKE_NET_JITTER", 0.0f);
     simulated.lossPercent = envFloat("KKE_NET_LOSS", 0.0f);
+    if (const char* r = std::getenv("KKE_NET_REPLAY"); r && *r && *r != '0') inputReplay = true;
     std::snprintf(m_nameInput, sizeof(m_nameInput), "%s", playerName.c_str());
 
     const char* mode = std::getenv("KKE_NET");
@@ -115,7 +118,9 @@ bool NetModule::host(uint16_t port, std::string* error) {
         net::EnetTransport* raw = enet.get();
         auto transport = std::make_unique<net::ConditionedTransport>(std::move(enet));
         transport->conditions = simulated;
-        auto server = std::make_unique<net::NetServer>(*transport, m_config);
+        net::NetConfig config = m_config;
+        config.inputReplay = inputReplay && m_rigid; // the players' movement runs in its world
+        auto server = std::make_unique<net::NetServer>(*transport, config);
         if (!server->start(static_cast<uint16_t>(p), playerName, playerCharacter, &lastError)) continue;
         m_transport = std::move(transport);
         m_enet = raw;
@@ -150,16 +155,19 @@ bool NetModule::host(uint16_t port, std::string* error) {
             if (!joined && m_moveCheck) m_moveCheck->forget(id);
             if (!joined && m_visibility) m_visibility->forget(id);
             if (!joined) m_moveLogAt.erase(id);
+            if (!joined) dropReplayed(id);
             log::get(name())->info("Player {} {} ({} connected)", id, joined ? "joined" : "left", m_server->clientCount());
             if (m_enet) m_enet->setDiscoveryInfo(discoveryInfo());
             if (onPlayer) onPlayer(id, joined);
         };
         m_enet->setDiscoveryInfo(discoveryInfo());
         m_role = Role::Host;
+        m_hostingReplay = config.inputReplay;
         m_status = "hosting on port " + std::to_string(p);
         m_search.reset();
         applyFollowers();
-        log::get(name())->info("Hosting '{}' on UDP port {} ({})", playerName, p, m_transport->backendName());
+        log::get(name())->info("Hosting '{}' on UDP port {} ({}{})", playerName, p, m_transport->backendName(),
+                               config.inputReplay ? ", input replay" : "");
         return true;
     }
     if (error) *error = lastError;
@@ -196,6 +204,9 @@ bool NetModule::join(const std::string& address, uint16_t port, std::string* err
     m_client->onDespawn = [this](uint16_t id) { onDespawnMsg(id); };
     m_client->onBreak = [this](const net::BreakMsg& m) { applyBreak(m); };
     m_client->onVoice = [this](const net::VoiceMsg& m) { for (const auto& l : m_voiceListeners) l(m); };
+    m_client->onInputAck = [this](uint32_t tick, const net::NetPlayerState& s) {
+        if (m_prediction) m_prediction->acknowledge(tick, s);
+    };
     m_role = Role::Client;
     applyFollowers();
     m_status = "joining " + address + ":" + std::to_string(port);
@@ -214,6 +225,10 @@ void NetModule::leave() {
         m_transport->poll(ignored);
         m_transport->close();
     }
+    stopPredicting();
+    while (!m_replayed.empty()) dropReplayed(m_replayed.begin()->first);
+    m_replayClock = 0.0;
+    m_hostingReplay = false;
     m_client.reset();
     m_serverMessage.clear();
     m_server.reset();
@@ -240,6 +255,105 @@ bool NetModule::connected() const {
 }
 
 uint8_t NetModule::localPlayerId() const { return m_client ? m_client->playerId() : 0; }
+
+// ---------------------------------------------------------------- input replay
+
+void NetModule::setPlayer(Locomotion* locomotion, RigidWorld::CharacterId character) {
+    if (locomotion != m_player || character != m_playerCharacter) stopPredicting();
+    m_player = locomotion;
+    m_playerCharacter = character;
+}
+
+void NetModule::stopPredicting() {
+    if (m_prediction)
+        log::get(name())->info("Input replay: {} ticks predicted, {} corrections ({} ticks replayed)", m_prediction->nextTick(),
+                               m_prediction->corrections, m_prediction->replayedTicks);
+    m_prediction.reset();
+    m_predictedMover.reset(); // hands the character back to RigidWorld::step()
+    m_tickClock = 0.0;
+    m_pendingUp = false;
+    m_loggedCorrections = 0;
+}
+
+bool NetModule::stepPlayer(const net::InputFrame& in, float frameDt) {
+    const bool predicting = m_client && m_client->status() == net::NetClient::Status::Connected && m_client->inputReplay() && m_rigid && m_player;
+    if (!predicting) {
+        stopPredicting();
+        return false;
+    }
+    if (!m_prediction) {
+        m_predictedMover = std::make_unique<net::LocomotionReplay>(m_rigid->world(), m_playerCharacter, *m_player);
+        m_prediction = std::make_unique<net::Prediction>(*m_predictedMover);
+        log::get(name())->info("Input replay: the host moves our player, predicted here at {} Hz", m_client->tickHz());
+    }
+    // Fixed ticks at the host's rate, whatever the frame rate: both sides
+    // must step the same dt. A press on a frame between ticks waits for the next.
+    const float tickDt = 1.0f / static_cast<float>(std::max<uint16_t>(1, m_client->tickHz()));
+    m_pendingUp = m_pendingUp || (in.buttons & net::kButtonUp) != 0;
+    m_tickClock += frameDt;
+    int ticks = 0;
+    while (m_tickClock >= tickDt && ticks < 15) {
+        net::InputFrame f = in;
+        f.buttons = static_cast<uint8_t>((in.buttons & ~net::kButtonUp) | (m_pendingUp ? net::kButtonUp : 0));
+        m_pendingUp = false;
+        m_prediction->tick(f, tickDt);
+        m_tickClock -= tickDt;
+        ++ticks;
+    }
+    if (ticks == 15) m_tickClock = 0.0; // a long stall: don't try to run it all
+    if (ticks) m_client->sendInputs(m_prediction->unacknowledged(net::kMaxInputsPerMsg));
+    if (m_prediction->corrections > m_loggedCorrections && now() - m_correctionLogAt > 5.0) {
+        m_correctionLogAt = now();
+        m_loggedCorrections = m_prediction->corrections;
+        log::get(name())->info("Input replay: the host put our player right ({} times in {} ticks)", m_prediction->corrections, m_prediction->nextTick());
+    }
+    return true;
+}
+
+glm::vec3 NetModule::playerDrawOffset() const { return m_prediction ? m_prediction->visualOffset() : glm::vec3(0.0f); }
+
+size_t NetModule::predictionCorrections() const { return m_prediction ? m_prediction->corrections : 0; }
+
+void NetModule::dropReplayed(uint8_t id) {
+    auto it = m_replayed.find(id);
+    if (it == m_replayed.end()) return;
+    it->second.mover.reset();
+    it->second.locomotion.reset();
+    if (m_rigid) m_rigid->world().removeCharacter(it->second.character);
+    m_replayed.erase(it);
+}
+
+// Host: each client's inputs, one per tick, run on its own character.
+void NetModule::runReplayedPlayers(double frameDt) {
+    if (!m_server || !m_rigid || !m_hostingReplay) return;
+    RigidWorld& w = m_rigid->world();
+    const double tickDt = 1.0 / 60.0; // NetConfig::tickHz, told to clients at Welcome
+    m_replayClock = std::min(m_replayClock + frameDt, 15 * tickDt); // a slow frame: catch up, but not forever
+    while (m_replayClock >= tickDt) {
+        m_replayClock -= tickDt;
+        m_server->inputTick();
+        for (const net::RemotePlayer& p : m_server->players(now())) {
+            net::InputFrame in;
+            bool moved = false;
+            while (m_server->nextInput(p.id, in)) {
+                auto it = m_replayed.find(p.id);
+                if (it == m_replayed.end()) {
+                    ReplayedPlayer r;
+                    RigidWorld::CharacterDesc cd;
+                    cd.position = replaySpawn ? replaySpawn(p.id) : (m_hasLocal ? m_local.position : glm::vec3(0.0f)) + glm::vec3(1.5f * p.id, 0.0f, 0.0f);
+                    r.character = w.addCharacter(cd);
+                    r.locomotion = std::make_unique<Locomotion>(w, r.character);
+                    r.mover = std::make_unique<net::LocomotionReplay>(w, r.character, *r.locomotion);
+                    it = m_replayed.emplace(p.id, std::move(r)).first;
+                    log::get(name())->info("Player {} moves by input replay", p.id);
+                }
+                it->second.mover->step(in, static_cast<float>(tickDt));
+                moved = true;
+            }
+            if (moved) m_server->setPlayerState(p.id, m_replayed.at(p.id).mover->state());
+        }
+    }
+}
 
 void NetModule::setLocalPlayer(const net::NetPlayerState& state) {
     m_local = state;
@@ -483,14 +597,19 @@ void NetModule::driveClientBodies(float dt) {
 void NetModule::syncRemoteCapsules(float dt) {
     if (!m_rigid) return;
     RigidWorld& w = m_rigid->world();
+    // Input replay: players don't block each other (the host's characters
+    // don't collide with one another), so a client's prediction may not
+    // bump into stand-ins the host doesn't have either.
+    const bool replay = m_hostingReplay || (m_client && m_client->inputReplay());
     for (auto it = m_capsules.begin(); it != m_capsules.end();) {
-        const bool present = std::any_of(m_remote.begin(), m_remote.end(), [&](const net::RemotePlayer& p) { return p.id == it->first && p.hasState; });
+        const bool present = !replay && !m_replayed.count(it->first) &&
+                             std::any_of(m_remote.begin(), m_remote.end(), [&](const net::RemotePlayer& p) { return p.id == it->first && p.hasState; });
         if (present) { ++it; continue; }
         w.remove(it->second);
         it = m_capsules.erase(it);
     }
     for (const net::RemotePlayer& p : m_remote) {
-        if (!p.hasState) continue;
+        if (replay || !p.hasState) continue;
         const glm::vec3 centre = p.state.position + glm::vec3(0.0f, kCapsuleCentre, 0.0f);
         auto it = m_capsules.find(p.id);
         if (it == m_capsules.end()) {
@@ -515,7 +634,7 @@ void NetModule::sendVoice(net::VoiceChannel channel, uint16_t seq, const std::ve
     else if (m_client) m_client->sendVoice(channel, seq, opusFrame);
 }
 
-void NetModule::update(const UpdateContext&) {
+void NetModule::update(const UpdateContext& ctx) {
     if (m_server) m_server->voice = voiceRules; // the host may change them while playing
     const double t = now();
     if (m_transport) m_transport->conditions = simulated;
@@ -546,6 +665,7 @@ void NetModule::update(const UpdateContext&) {
             m_visibility->update(t, players);
         }
         m_server->update(t);
+        runReplayedPlayers(ctx.dt);
         m_remote = m_server->players(t);
     } else if (m_client) {
         if (m_hasLocal) m_client->setLocalState(m_local);
@@ -628,6 +748,8 @@ void NetModule::renderUi() {
         if (ImGui::InputText("Name", m_nameInput, sizeof(m_nameInput))) playerName = m_nameInput;
         if (ImGui::InputText("Password", m_passwordInput, sizeof(m_passwordInput), ImGuiInputTextFlags_Password)) m_config.password = m_passwordInput;
         if (ImGui::Button("Host")) host(0);
+        ImGui::SameLine();
+        ImGui::Checkbox("Input replay (competitive)", &inputReplay);
         ImGui::Separator();
         ImGui::InputText("Address", m_addressInput, sizeof(m_addressInput));
         ImGui::InputInt("Port", &m_portInput);
@@ -641,6 +763,7 @@ void NetModule::renderUi() {
         if (m_client) {
             const auto st = m_client->stats();
             ImGui::Text("Host: RTT %.0f ms, loss %.1f%%", st.rttMs, st.lossPercent);
+            if (m_client->inputReplay()) ImGui::Text("Input replay: %zu corrections", predictionCorrections());
         }
         if (ImGui::BeginTable("peers", 3, ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn("Player");
@@ -668,6 +791,7 @@ void NetModule::renderUi() {
         }
         if (m_server) {
             ImGui::Text("Corrections sent: %zu, bad packets: %zu", m_server->corrections(), m_server->badPackets());
+            if (m_hostingReplay) ImGui::Text("Input replay: %zu players moved here", m_replayed.size());
             ImGui::Checkbox("Check moves (walls, flying)", &checkMoves);
             if (m_moveCheck) ImGui::Text("Refused: %zu through walls, %zu flying", m_moveCheck->throughWalls, m_moveCheck->flying);
             ImGui::Text("Spawned objects: %zu, breakables: %zu", m_spawned.size(), m_breakables.size());

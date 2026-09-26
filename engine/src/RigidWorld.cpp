@@ -26,6 +26,7 @@
 #include <Jolt/Physics/Constraints/SwingTwistConstraint.h>
 #include <Jolt/Physics/PhysicsSettings.h>
 #include <Jolt/Physics/PhysicsSystem.h>
+#include <Jolt/Physics/StateRecorderImpl.h>
 #include <Jolt/RegisterTypes.h>
 
 #include <glm/gtc/constants.hpp>
@@ -113,7 +114,10 @@ struct RigidWorld::Impl : public JPH::ContactListener {
         CharacterDesc desc;
         CharacterInput input;
         bool kinematic = false;
+        bool manual = false; // stepped by stepCharacter() only (input replay)
+        double time = 0.0;   // seconds simulated (characterTime)
     };
+    void stepCharacter(Character& c, float dt);
     std::unordered_map<CharacterId, Character> characters;
     CharacterId nextCharacter = 1;
     struct Ragdoll {
@@ -664,6 +668,60 @@ void RigidWorld::setCharacterVelocity(CharacterId id, const glm::vec3& velocity)
     if (it != m->characters.end()) it->second.ch->SetLinearVelocity(toJ(velocity));
 }
 
+void RigidWorld::setCharacterManual(CharacterId id, bool manual) {
+    auto it = m->characters.find(id);
+    if (it != m->characters.end()) it->second.manual = manual;
+}
+
+bool RigidWorld::characterManual(CharacterId id) const {
+    auto it = m->characters.find(id);
+    return it != m->characters.end() && it->second.manual;
+}
+
+void RigidWorld::stepCharacter(CharacterId id, float dt) {
+    auto it = m->characters.find(id);
+    if (it != m->characters.end() && dt > 0.0f) m->stepCharacter(it->second, dt);
+}
+
+double RigidWorld::characterTime(CharacterId id) const {
+    auto it = m->characters.find(id);
+    return it == m->characters.end() ? 0.0 : it->second.time;
+}
+
+RigidWorld::CharacterState RigidWorld::characterState(CharacterId id) const {
+    CharacterState out;
+    auto it = m->characters.find(id);
+    if (it == m->characters.end()) return out;
+    const Impl::Character& c = it->second;
+    JPH::StateRecorderImpl rec;
+    c.ch->SaveState(rec);
+    out.jolt = rec.GetData();
+    out.input = c.input;
+    out.height = c.desc.height;
+    out.kinematic = c.kinematic;
+    out.time = c.time;
+    return out;
+}
+
+void RigidWorld::setCharacterState(CharacterId id, const CharacterState& state) {
+    auto it = m->characters.find(id);
+    if (it == m->characters.end() || state.jolt.empty()) return;
+    Impl::Character& c = it->second;
+    // The capsule first (a crouch), with no room check: it was this size there.
+    if (std::abs(state.height - c.desc.height) >= 1e-4f) {
+        c.ch->SetShape(characterShape(state.height, c.desc.radius), FLT_MAX, m->system.GetDefaultBroadPhaseLayerFilter(Layers::kMoving),
+                       m->system.GetDefaultLayerFilter(Layers::kMoving), {}, {}, *m->temp);
+        c.desc.height = state.height;
+    }
+    JPH::StateRecorderImpl rec;
+    rec.WriteBytes(state.jolt.data(), state.jolt.size());
+    rec.Rewind();
+    c.ch->RestoreState(rec);
+    c.input = state.input;
+    c.kinematic = state.kinematic;
+    c.time = state.time;
+}
+
 bool RigidWorld::capsuleFits(const glm::vec3& feet, float height, float radius) const {
     JPH::RefConst<JPH::Shape> shape = characterShape(height, radius);
     // CollideShape places the shape by its centre of mass, not its origin.
@@ -677,45 +735,49 @@ bool RigidWorld::capsuleFits(const glm::vec3& feet, float height, float radius) 
     return !hit.HadHit();
 }
 
+void RigidWorld::Impl::stepCharacter(Character& c, float dt) {
+    c.time += dt;
+    if (c.kinematic) return; // placed by the caller (vaults, climbs)
+    const JPH::Vec3 gravity = system.GetGravity();
+    JPH::CharacterVirtual& ch = *c.ch;
+    ch.UpdateGroundVelocity();
+    const bool grounded = ch.GetGroundState() == JPH::CharacterVirtual::EGroundState::OnGround;
+    const JPH::Vec3 current = ch.GetLinearVelocity();
+    JPH::Vec3 move(c.input.move.x, 0.0f, c.input.move.z);
+    JPH::Vec3 v;
+    if (grounded) {
+        // On the ground: walk with it (moving platforms), jump off it.
+        v = ch.GetGroundVelocity() + move;
+        if (c.input.jump) v += JPH::Vec3(0.0f, c.input.jumpSpeed, 0.0f);
+    } else {
+        // In the air: keep the fall, some steering (airSteer).
+        JPH::Vec3 horizontal(current.GetX(), 0.0f, current.GetZ());
+        horizontal = horizontal + (move - horizontal) * std::min(1.0f, c.input.airSteer * dt);
+        v = horizontal + JPH::Vec3(0.0f, current.GetY(), 0.0f);
+    }
+    // Standing on walkable ground, only gravity's push *into* the
+    // ground applies: its slope-parallel part would make an idle
+    // character creep downhill (~5 cm/s on a 24 degree ramp).
+    if (grounded && !c.input.jump) {
+        const JPH::Vec3 n = ch.GetGroundNormal();
+        v += n * n.Dot(gravity) * dt;
+    } else {
+        v += gravity * dt;
+    }
+    ch.SetLinearVelocity(v);
+    JPH::CharacterVirtual::ExtendedUpdateSettings eus;
+    eus.mWalkStairsStepUp = JPH::Vec3(0.0f, c.desc.stepUp, 0.0f);
+    eus.mStickToFloorStepDown = JPH::Vec3(0.0f, -0.5f, 0.0f);
+    ch.ExtendedUpdate(dt, gravity, eus, system.GetDefaultBroadPhaseLayerFilter(Layers::kMoving),
+                      system.GetDefaultLayerFilter(Layers::kMoving), {}, {}, *temp);
+    c.input.jump = false; // one jump per press
+}
+
 void RigidWorld::step(float dt) {
     if (dt <= 0.0f) return;
     auto t0 = std::chrono::steady_clock::now();
-    const JPH::Vec3 gravity = m->system.GetGravity();
-    for (auto& [id, c] : m->characters) {
-        if (c.kinematic) continue; // placed by the caller (vaults, climbs)
-        JPH::CharacterVirtual& ch = *c.ch;
-        ch.UpdateGroundVelocity();
-        const bool grounded = ch.GetGroundState() == JPH::CharacterVirtual::EGroundState::OnGround;
-        const JPH::Vec3 current = ch.GetLinearVelocity();
-        JPH::Vec3 move(c.input.move.x, 0.0f, c.input.move.z);
-        JPH::Vec3 v;
-        if (grounded) {
-            // On the ground: walk with it (moving platforms), jump off it.
-            v = ch.GetGroundVelocity() + move;
-            if (c.input.jump) v += JPH::Vec3(0.0f, c.input.jumpSpeed, 0.0f);
-        } else {
-            // In the air: keep the fall, some steering (airSteer).
-            JPH::Vec3 horizontal(current.GetX(), 0.0f, current.GetZ());
-            horizontal = horizontal + (move - horizontal) * std::min(1.0f, c.input.airSteer * dt);
-            v = horizontal + JPH::Vec3(0.0f, current.GetY(), 0.0f);
-        }
-        // Standing on walkable ground, only gravity's push *into* the
-        // ground applies: its slope-parallel part would make an idle
-        // character creep downhill (~5 cm/s on a 24 degree ramp).
-        if (grounded && !c.input.jump) {
-            const JPH::Vec3 n = ch.GetGroundNormal();
-            v += n * n.Dot(gravity) * dt;
-        } else {
-            v += gravity * dt;
-        }
-        ch.SetLinearVelocity(v);
-        JPH::CharacterVirtual::ExtendedUpdateSettings eus;
-        eus.mWalkStairsStepUp = JPH::Vec3(0.0f, c.desc.stepUp, 0.0f);
-        eus.mStickToFloorStepDown = JPH::Vec3(0.0f, -0.5f, 0.0f);
-        ch.ExtendedUpdate(dt, gravity, eus, m->system.GetDefaultBroadPhaseLayerFilter(Layers::kMoving),
-                          m->system.GetDefaultLayerFilter(Layers::kMoving), {}, {}, *m->temp);
-        c.input.jump = false; // one jump per press
-    }
+    for (auto& [id, c] : m->characters)
+        if (!c.manual) m->stepCharacter(c, dt);
     // One collision step per 1/60 s (more for bigger steps).
     const int collisionSteps = std::max(1, static_cast<int>(std::ceil(dt * 60.0f - 0.01f)));
     m->system.Update(dt, collisionSteps, m->temp.get(), m->jobs.get());

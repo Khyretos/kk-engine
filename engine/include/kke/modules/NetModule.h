@@ -2,6 +2,7 @@
 
 #include "kke/Module.h"
 #include "kke/RigidWorld.h"
+#include "kke/net/InputReplay.h"
 #include "kke/net/NetSession.h"
 #include "kke/net/Visibility.h"
 #include "kke/net/WorldMoveCheck.h"
@@ -16,8 +17,9 @@
 namespace kke {
 
 class RigidBodyModule;
+class Locomotion;
 class PhysicsModule;
-namespace net { class EnetTransport; class ConditionedTransport; }
+namespace net { class EnetTransport; class ConditionedTransport; class LocomotionReplay; }
 
 // Multiplayer for a game (docs/NETWORKING.md): host a game (your game is the
 // server, you play in it), join one by address or from the LAN list, or
@@ -53,10 +55,17 @@ namespace net { class EnetTransport; class ConditionedTransport; }
 // Several games on one PC: hosts take the first free port from
 // kDefaultPort up (16 ports), and the LAN search asks all of them.
 //
+//   Input replay:     competitive games (docs/NETWORKING.md "Input
+//                     replay"): with `inputReplay` on when hosting, clients
+//                     send inputs and the host runs their kke::Locomotion
+//                     itself; a client's stepPlayer() predicts its own
+//                     player and rewinds when the host disagrees.
+//
 // Start from the command line: KKE_NET=host | host:PORT | join:ADDRESS[:PORT],
 // KKE_NET_NAME=Kees, KKE_NET_PASSWORD=secret (to join one; hosting, to
 // require it). Feel a bad connection on a LAN: KKE_NET_LAG=ms,
 // KKE_NET_JITTER=ms, KKE_NET_LOSS=percent (also sliders in the panel).
+// KKE_NET_REPLAY=1 hosts with input replay.
 class NetModule : public Module {
 public:
     enum class Role { Offline, Host, Client };
@@ -136,6 +145,27 @@ public:
     void addVoiceListener(std::function<void(const net::VoiceMsg&)> listener) { m_voiceListeners.push_back(std::move(listener)); }
     net::VoiceRules voiceRules; // host: proximity range, channels, team, server mutes
 
+    // --- input replay (docs/NETWORKING.md "Input replay")
+    // Host: players send inputs and this game moves them (a character
+    // and a kke::Locomotion each in the RigidBodyModule world). Set
+    // before host(); clients learn it when they join.
+    bool inputReplay = false;
+    // Host: where a joining player's character starts. Unset: beside the
+    // host's own player.
+    std::function<glm::vec3(uint8_t id)> replaySpawn;
+    // The game's own player. With input replay a client's stepPlayer()
+    // moves it; the host runs everyone else's the same way.
+    void setPlayer(Locomotion* locomotion, RigidWorld::CharacterId character);
+    // Each frame, instead of Locomotion::update(). True: NetModule moved
+    // the player (a client of an input-replay host: predicted in fixed
+    // ticks, corrected by the host). False: step it yourself as always
+    // (offline, hosting, or no input replay).
+    bool stepPlayer(const net::InputFrame& in, float frameDt);
+    bool predicting() const { return m_prediction != nullptr; } // the host moves our player (input replay)
+    // Add to the player's feet when drawing: hides a correction's jump.
+    glm::vec3 playerDrawOffset() const;
+    size_t predictionCorrections() const;
+
     // --- movement checks (host)
     bool checkMoves = true;
     net::MoveCheckSettings moveCheckSettings;
@@ -201,6 +231,27 @@ private:
     std::vector<std::function<void(const net::VoiceMsg&)>> m_voiceListeners;
     void dispatchEvent(const net::GameEventMsg& e);
     std::map<uint8_t, RigidWorld::BodyId> m_capsules; // remote player -> kinematic capsule
+
+    // Input replay.
+    struct ReplayedPlayer {                     // host: a client's player, moved here
+        RigidWorld::CharacterId character = 0;
+        std::unique_ptr<Locomotion> locomotion;
+        std::unique_ptr<net::LocomotionReplay> mover;
+    };
+    std::map<uint8_t, ReplayedPlayer> m_replayed;
+    double m_replayClock = 0.0;                 // host: time not yet run as ticks
+    bool m_hostingReplay = false;
+    void runReplayedPlayers(double frameDt);
+    void dropReplayed(uint8_t id);
+    Locomotion* m_player = nullptr;             // the game's own
+    RigidWorld::CharacterId m_playerCharacter = 0;
+    std::unique_ptr<net::LocomotionReplay> m_predictedMover; // client
+    std::unique_ptr<net::Prediction> m_prediction;
+    double m_tickClock = 0.0;
+    bool m_pendingUp = false;                   // "go up" pressed on a frame with no tick
+    size_t m_loggedCorrections = 0;
+    double m_correctionLogAt = -1e9;
+    void stopPredicting();
 
     // Panel
     char m_nameInput[32] = "Player";

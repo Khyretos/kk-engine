@@ -122,6 +122,8 @@ void ShowcaseModule::init(kke::Application& app) {
     if (m_net) {
         m_net->onEvent = [this](const kke::net::GameEventMsg& e) { onNetEvent(e.kind, e.fromPlayer, e.payload); };
         m_net->onCorrection = [this](const glm::vec3& p) { m_loco->teleport(p); };
+        // Input replay: players who join start where ours does, side by side.
+        m_net->replaySpawn = [this](uint8_t id) { return (m_autopilot ? m_autopilotStart : m_spawn) + glm::vec3(1.2f * id, 0.0f, 0.0f); };
     }
 #endif
     // The showcase is a developer demo: its ImGui panel is the UI, so the
@@ -527,6 +529,9 @@ void ShowcaseModule::setupPlayer() {
     cd.position = m_spawn;
     m_player = m_rigid->world().addCharacter(cd);
     m_loco = std::make_unique<kke::Locomotion>(m_rigid->world(), m_player);
+#if KKE_ENABLE_NET
+    if (m_net) m_net->setPlayer(m_loco.get(), m_player); // input replay moves it (docs/NETWORKING.md)
+#endif
     m_loco->setFacing(glm::vec3(0, 0, 1));
     m_facing = 180.0f;
 
@@ -964,7 +969,10 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
             m_loco->probe(in.move, m_sprint ? ls.sprintSensor : ls.walkSensor).kind != kke::Locomotion::Obstacle::Kind::None)
             m_jumpQueued = true;
         const float endZ = onCourse ? 7.0f : m_autopilotEndZ;
-        if (at.z < endZ || m_autopilotTime > 25.0f) { // the end: again
+        // The end: again. (Joined with input replay the host has our player
+        // and would put it back: run the course once.)
+        const bool hostMovesUs = m_net && m_net->predicting();
+        if (!hostMovesUs && (at.z < endZ || m_autopilotTime > 25.0f)) {
             m_loco->teleport(m_autopilotStart);
             m_autopilotTime = 0.0f;
         }
@@ -1020,7 +1028,7 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     m_jumpQueued = false;
     if (m_rig.mode == kke::CameraRig::Mode::FirstPerson) m_loco->setFacing(m_rig.forward());
     const kke::Locomotion::State before = m_loco->state();
-    m_loco->update(in, dt);
+    if (!stepNetPlayer(in, dt)) m_loco->update(in, dt);
     if (m_autopilot && m_loco->state() != before &&
         (m_loco->state() == kke::Locomotion::State::Vault || m_loco->state() == kke::Locomotion::State::Climb)) {
         const kke::Locomotion::Obstacle& o = m_loco->lastObstacle();
@@ -1154,6 +1162,24 @@ void ShowcaseModule::animate(kke::Animator& a, const MotionInfo& m, float dt) {
 }
 
 // Our player as the others should see it (NetModule sends it ~30x a second).
+// Joined to a host with input replay: NetModule moves the player from our
+// inputs (predicted, corrected by the host). False: move it here.
+bool ShowcaseModule::stepNetPlayer(const kke::Locomotion::Input& in, float dt) {
+#if KKE_ENABLE_NET
+    if (!m_net) return false;
+    kke::net::InputFrame f;
+    f.move = glm::vec2(in.move.x, in.move.z);
+    f.yaw = m_loco->facingYaw();
+    f.buttons = static_cast<uint8_t>((in.fast ? kke::net::kButtonFast : 0) | (in.slow ? kke::net::kButtonSlow : 0) |
+                                     (in.crouch ? kke::net::kButtonCrouch : 0) | (in.goUp ? kke::net::kButtonUp : 0));
+    return m_net->stepPlayer(f, dt);
+#else
+    (void)in;
+    (void)dt;
+    return false;
+#endif
+}
+
 void ShowcaseModule::sendNetState(const glm::vec3& feet) {
 #if KKE_ENABLE_NET
     if (!m_net) return;
