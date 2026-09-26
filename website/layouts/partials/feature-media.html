@@ -2,7 +2,8 @@
 <div class="media-stack" data-carousel>
   {{ range $i, $m := .media }}
   <figure class="media{{ if eq $i 0 }} active{{ end }}">
-    <img src="{{ $m.src | relURL }}" alt="{{ $m.caption }}" loading="lazy" decoding="async">
+    {{ with $m.video }}<video src="{{ . | relURL }}" poster="{{ $m.src | relURL }}" muted loop playsinline autoplay preload="none" aria-label="{{ $m.caption }}"></video>
+    {{ else }}<img src="{{ $m.src | relURL }}" alt="{{ $m.caption }}" loading="lazy" decoding="async">{{ end }}
     <figcaption>{{ $m.caption }}</figcaption>
   </figure>
   {{ end }}

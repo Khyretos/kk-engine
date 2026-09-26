@@ -6,7 +6,8 @@
 #   title, icon (Font Awesome class), accent (CSS colour), tagline
 #   summary:  one or two sentences
 #   points:   what you get, one line each
-#   media:    images (first one is the card image) with captions
+#   media:    images (first one is the card image) with captions; add
+#             video: media/x.webm to play a clip there instead
 #   sounds:   optional audio clips with labels (play buttons)
 #   demo:     the executable that shows it
 #   docs:     a page under /docs/ (the MkDocs site)
@@ -102,6 +103,7 @@
     - Jolt rigid bodies, world collision and a character controller
     - A bridge between deformable pieces and rigid bodies
   media:
+    - { src: media/glass-shatter.webp, video: media/glass-shatter.webm, caption: "Glass panes, a stone block and a plank hit by iron balls (tutorial 2, recorded in the engine)" }
     - { src: media/crate-rain.webp, caption: "The stress test: crate rain and breakables at an uncapped frame rate" }
   demo: kke_demo, physics_demo
   docs: PHYSICS_BRIDGE/

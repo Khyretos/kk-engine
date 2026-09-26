@@ -71,7 +71,7 @@ if breakable then
   breakable.box { pos = Vec(4, 0.61, 2), size = Vec(1.2, 1.2, 0.06), material = "glass" }
   breakable.box { pos = Vec(6, 0.4, 2), size = Vec(0.8, 0.8, 0.8), material = "stone" }
   hook.Add("Break", "throw.broke", function(id)
-    print("Something broke: " .. id)
+    print(string.format("Something broke: %d", id))
   end)
 end
 ```
