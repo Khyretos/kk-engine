@@ -77,6 +77,31 @@ LongAxis findLongAxis(const std::vector<glm::vec3>& points) {
     return out;
 }
 
+glm::vec2 padPointerStep(const glm::vec2& stick, float dt, float screenHeight, const PadPointerSettings& settings) {
+    const float length = glm::length(stick);
+    const float tilt = std::min(length, 1.0f);
+    if (tilt <= settings.deadzone || dt <= 0.0f) return glm::vec2(0.0f);
+    // Rescale so movement starts from zero at the deadzone's edge.
+    const float t = (tilt - settings.deadzone) / std::max(1.0f - settings.deadzone, 1e-4f);
+    const float speed = settings.pixelsPerSecond * (std::max(screenHeight, 1.0f) / 720.0f) * std::pow(t, settings.curve);
+    return stick / length * speed * dt;
+}
+
+int stepPaletteCell(const std::vector<glm::vec2>& centers, const glm::vec2& cursor, int direction) {
+    if (centers.empty()) return -1;
+    const int n = static_cast<int>(centers.size());
+    // The cell the cursor is on (the nearest by x, if the cursor is on
+    // the palette's row), else step in from the nearest end.
+    int nearest = 0;
+    for (int i = 1; i < n; ++i)
+        if (std::abs(centers[static_cast<size_t>(i)].x - cursor.x) < std::abs(centers[static_cast<size_t>(nearest)].x - cursor.x)) nearest = i;
+    const float cellGap = n > 1 ? std::abs(centers[1].x - centers[0].x) : 80.0f;
+    const bool onRow = std::abs(centers[static_cast<size_t>(nearest)].y - cursor.y) < cellGap * 0.75f &&
+                       std::abs(centers[static_cast<size_t>(nearest)].x - cursor.x) < cellGap * 0.75f;
+    if (!onRow) return direction >= 0 ? 0 : n - 1;
+    return ((nearest + (direction >= 0 ? 1 : -1)) % n + n) % n;
+}
+
 BatSwing::BatSwing(SwingSettings settings) : m_settings(settings) {}
 
 glm::vec3 BatSwing::pivotFor(const glm::vec3& target, const glm::vec3& forward) const {

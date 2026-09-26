@@ -8,11 +8,13 @@
 #include "kke/Ragdoll.h"
 #include "kke/RigidWorld.h"
 #include "kke/SceneFile.h"
+#include "kke/TouchGestures.h"
 #include "kke/VoxelTets.h"
 #include "kke/modules/DebugDrawModule.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/ThumbnailModule.h"
 
+#include <SDL3/SDL.h>
 #include <glm/glm.hpp>
 #include <string>
 #include <vector>
@@ -34,6 +36,14 @@ namespace kke_sandbox {
 // described above. F2 switches between the two; KKE_SANDBOX_MODE=build
 // starts in the editor.
 //
+// Play mode works the same with a finger (one finger is the mouse; two
+// turn and pinch-zoom the view, and drop whatever the first was dragging)
+// and with a gamepad: left stick moves a cursor, A presses (hold and move
+// to drag), B cancels, LB/RB or the D-pad jump along the palette, Y stands
+// everyone up, right stick turns the view, triggers zoom.
+// KKE_SANDBOX_REPLAY=file plays timed touches and gamepad input into it
+// (tests/sandbox_replays/; format in loadReplay()).
+//
 // Deliberately written against engine building blocks only (AssetCatalog,
 // ModelModule, DebugDrawModule, Picking, IRagdollPhysics, PhysicsModule),
 // so it doubles as the reference for how a game uses them. The physics
@@ -46,6 +56,7 @@ public:
     void update(const kke::UpdateContext& ctx) override;
     void renderUi() override;
     void onEvent(const SDL_Event& event) override;
+    void shutdown() override;
 
     // Scan a folder of packs (also used by the "Use this folder" field).
     void openAssetFolder(const std::string& folder);
@@ -191,6 +202,16 @@ private:
     void updateBat(float dt);
     void standEveryoneUp();
 
+    // Touch and gamepads (Play mode).
+    void openGamepad(SDL_JoystickID id);
+    void updatePad(float dt);
+    void padButton(uint8_t button, bool down);
+    void pointerButton(bool down);        // a left mouse press/release at the cursor
+    void warpPointer(const glm::vec2& p); // moves the real mouse (SDL fakes it where it can't)
+    void dropFingerDrag();                // a second finger landed: let go of what the first was dragging
+    bool loadReplay(const std::string& path);
+    void updateReplay(float dt);
+
     kke::Application* m_app = nullptr;
     kke::ModelModule* m_models = nullptr;
     kke::ThumbnailModule* m_thumbs = nullptr; // optional: the Assets panel shows a list without it
@@ -286,6 +307,28 @@ private:
     kke::ModelModule::InstanceId m_bat = 0;
     kke::LongAxis m_batAxis;
     std::vector<uint32_t> m_swingHits; // characters this swing already knocked over
+
+    // Touch and gamepads
+    kke::TouchGestures m_touches;        // only to know when a second finger lands
+    std::vector<SDL_Gamepad*> m_pads;
+    bool m_gamepadSubsystem = false;
+    glm::vec2 m_padCursor{-1.0f};        // where the gamepad's cursor is (window points); x < 0: not placed yet
+    double m_padLastUsed = -1e9;         // seconds; the cursor is drawn while a pad is in use
+    bool m_padPressing = false;
+    std::vector<glm::vec2> m_paletteCells; // centres, left to right, from the last palette drawn
+    struct ReplayStep {
+        float time = 0.0f;
+        int line = 0;
+        std::string kind, what;          // "finger" down/move/up, "pad" attach/axis/button
+        std::string name;                // pad axis or button name
+        uint64_t finger = 0;
+        float x = 0.0f, y = 0.0f, value = 0.0f;
+    };
+    std::vector<ReplayStep> m_replay;
+    size_t m_replayNext = 0;
+    float m_replayTime = 0.0f;
+    SDL_Joystick* m_replayPad = nullptr; // a virtual gamepad the replay drives
+    SDL_JoystickID m_replayPadId = 0;
 };
 
 } // namespace kke_sandbox

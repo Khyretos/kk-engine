@@ -507,16 +507,14 @@ void Application::run() {
         const glm::mat4& proj = drawViews[0].proj;
 
         // Real shadow mapping (see kke::ShadowMap) — computed from the
-        // key light (lights[0]) only, framed around a fixed scene
-        // region near the origin (radius 15) rather than any real
-        // scene-bounds tracking, which this project doesn't have yet.
-        // 15 was chosen to comfortably cover both kke_demo's cube and
-        // physics_demo's ground plane + falling objects without the
-        // shadow map's resolution being spread so thin the shadow
-        // edges turn visibly blocky — checked against a real
-        // screenshot, not picked blindly.
+        // key light (lights[0]) only, over a 15 m radius around what the
+        // first view's camera looks at, so shadows follow the player
+        // through a level bigger than that. 15 keeps the texels dense
+        // enough that edges don't turn blocky (checked against a
+        // screenshot). The centre is snapped to shadow texels so the
+        // edges don't shimmer as the camera moves.
         glm::mat4 lightViewProj = ShadowMap::computeLightViewProj(
-            m_lighting.lights[0].direction, glm::vec3(0.0f, 0.0f, 0.0f), 15.0f);
+            m_lighting.lights[0].direction, drawViews[0].camera.target, 15.0f, m_shadowMap->resolution());
 
         RenderContext renderCtx{};
         renderCtx.renderPass = m_renderer->renderPass();
@@ -575,14 +573,22 @@ void Application::run() {
             shadowCtx.renderPass = m_shadowMap->renderPass();
             shadowCtx.lightViewProj = lightViewProj;
             shadowCtx.frameIndex = m_renderer->currentFrameIndex();
-            m_shadowMap->beginRenderPass(cmd);
-            for (Module* m : m_initOrder) {
-                safeInvoke(m, "renderShadow", [&] { m->renderShadow(shadowCtx); });
+            // A full-screen opaque menu hides the 3D view (setSceneCovered):
+            // the shadow pass and render() are skipped. The scene pass
+            // still begins, so its clear and the overlay are unchanged;
+            // prepass() still runs (thumbnails for that very menu are made
+            // there) and scene-only prepass work checks sceneCovered.
+            const bool drawScene = !m_sceneCovered;
+            if (drawScene) {
+                m_shadowMap->beginRenderPass(cmd);
+                for (Module* m : m_initOrder) {
+                    safeInvoke(m, "renderShadow", [&] { m->renderShadow(shadowCtx); });
+                }
+                m_shadowMap->endRenderPass(cmd);
             }
-            m_shadowMap->endRenderPass(cmd);
 
             PrepassContext prepassCtx{ cmd, view, proj, drawViews[0].camera.position, sceneExtent, m_lightingBuffer->descriptorSet(),
-                                       m_renderer->currentFrameIndex() };
+                                       m_renderer->currentFrameIndex(), m_sceneCovered };
             for (Module* m : m_initOrder) {
                 safeInvoke(m, "prepass", [&] { m->prepass(prepassCtx); });
             }
@@ -590,7 +596,7 @@ void Application::run() {
             m_renderer->beginRenderPass();
             renderCtx.cmd = cmd;
             renderCtx.frameIndex = m_renderer->currentFrameIndex();
-            for (uint32_t i = 0; i < viewCount; ++i) {
+            for (uint32_t i = 0; drawScene && i < viewCount; ++i) {
                 const DrawView& d = drawViews[i];
                 renderCtx.view = d.view;
                 renderCtx.proj = d.proj;
