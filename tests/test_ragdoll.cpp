@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include <filesystem>
 
@@ -58,7 +59,7 @@ float maxError(const std::vector<glm::mat4>& a, const std::vector<glm::mat4>& b)
 
 } // namespace
 
-TEST(Ragdoll, BuildsElevenBodiesTenJointsTwoHinges) {
+TEST(Ragdoll, BuildsElevenBodiesTenJointsFourHinges) {
     kke::ModelData m = tPoseSkeleton();
     kke::RagdollDesc d = kke::buildHumanoidRagdoll(m, worldOf(m), 70.0f);
     EXPECT_EQ(d.bodies.size(), 11u);
@@ -70,7 +71,7 @@ TEST(Ragdoll, BuildsElevenBodiesTenJointsTwoHinges) {
         EXPECT_GE(j.bodyB, 0);
         EXPECT_NE(j.bodyA, j.bodyB);
     }
-    EXPECT_EQ(hinges, 2);
+    EXPECT_EQ(hinges, 4); // knees and elbows
     float mass = 0.0f;
     for (const auto& b : d.bodies) {
         mass += b.mass;
@@ -89,7 +90,8 @@ TEST(Ragdoll, JointAnchorsSitAtTheBones) {
     auto world = worldOf(m);
     kke::RagdollDesc d = kke::buildHumanoidRagdoll(m, world);
     int knee = -1;
-    for (size_t i = 0; i < d.joints.size(); ++i) if (d.joints[i].hinge) { knee = static_cast<int>(i); break; }
+    for (size_t i = 0; i < d.joints.size(); ++i)
+        if (d.joints[i].hinge && d.joints[i].bodyB == d.findBody("calf_l")) { knee = static_cast<int>(i); break; }
     ASSERT_GE(knee, 0);
     glm::vec3 calf = glm::vec3(world[m.findBone("calf_l")][3]);
     glm::vec3 calfR = glm::vec3(world[m.findBone("calf_r")][3]);
@@ -154,4 +156,76 @@ TEST(Ragdoll, SyntyCharacterIfInstalled) {
     for (const auto& b : d.bodies) bodies.push_back(b.transform);
     EXPECT_LT(maxError(kke::poseFromRagdoll(m, bind, bodies, glm::mat4(1.0f)), world), 1e-3f);
     for (const auto& b : d.bodies) EXPECT_GT(b.transform[3][1], 0.0f) << b.name; // everything above the floor
+}
+
+TEST(Ragdoll, JointLimitsFollowTheBuildPose) {
+    kke::ModelData m = tPoseSkeleton();
+    kke::RagdollDesc d = kke::buildHumanoidRagdoll(m, worldOf(m));
+    const auto jointTo = [&](const char* body) -> const kke::RagdollJoint& {
+        for (const auto& j : d.joints)
+            if (j.bodyB == d.findBody(body)) return j;
+        return d.joints.front();
+    };
+    // Straight legs and arms: bend up to the maximum, a hair past straight.
+    const kke::RagdollJoint& knee = jointTo("calf_l");
+    ASSERT_TRUE(knee.hinge);
+    EXPECT_NEAR(knee.hingeMinDegrees, -3.0f, 1e-3f);
+    EXPECT_NEAR(knee.hingeMaxDegrees, 150.0f, 1e-3f);
+    // Positive knee rotation (right hand rule) swings the foot backward (-Z
+    // is behind this skeleton: forward = lateral x up = +X x +Y = +Z).
+    const glm::vec3 down(0, -1, 0);
+    const glm::vec3 bent = glm::angleAxis(glm::radians(30.0f), knee.hingeAxis) * down;
+    EXPECT_LT(bent.z, -0.4f);
+    const kke::RagdollJoint& elbow = jointTo("lowerarm_l");
+    ASSERT_TRUE(elbow.hinge);
+    const glm::vec3 forearm = glm::angleAxis(glm::radians(30.0f), elbow.hingeAxis) * glm::vec3(1, 0, 0);
+    EXPECT_GT(forearm.z, 0.4f); // the hand comes forward
+    // A knee already bent 40 degrees keeps the same range around straight.
+    auto world = worldOf(m);
+    for (const char* bone : { "calf_l" }) {
+        const int c = m.findBone(bone);
+        const glm::vec3 knee0(world[c][3]);
+        const int foot = m.findBone("Foot_L");
+        const glm::vec3 shin = glm::vec3(world[foot][3]) - knee0;
+        world[foot][3] = glm::vec4(knee0 + glm::angleAxis(glm::radians(40.0f), glm::vec3(1, 0, 0)) * shin, 1.0f);
+    }
+    kke::RagdollDesc bentDesc = kke::buildHumanoidRagdoll(m, world);
+    for (const auto& j : bentDesc.joints) {
+        if (j.bodyB != bentDesc.findBody("calf_l")) continue;
+        EXPECT_NEAR(j.hingeMinDegrees, -43.0f, 0.5f);
+        EXPECT_NEAR(j.hingeMaxDegrees, 110.0f, 0.5f);
+    }
+    // Ball joints get a cone and a twist.
+    const kke::RagdollJoint& hip = jointTo("thigh_l");
+    EXPECT_FALSE(hip.hinge);
+    EXPECT_GT(hip.swingDegrees, 0.0f);
+    EXPECT_GT(hip.twistDegrees, 0.0f);
+    EXPECT_NEAR(hip.swingAxis.y, -1.0f, 1e-4f);
+}
+
+TEST(Ragdoll, BlendPosesGoesFromOneToTheOther) {
+    std::vector<glm::mat4> a{ glm::translate(glm::mat4(1.0f), glm::vec3(0, 1, 0)) };
+    std::vector<glm::mat4> b{ glm::rotate(glm::translate(glm::mat4(1.0f), glm::vec3(2, 1, 0)), glm::radians(90.0f), glm::vec3(0, 1, 0)) };
+    EXPECT_LT(maxError(kke::blendPoses(a, b, 0.0f), a), 1e-5f);
+    EXPECT_LT(maxError(kke::blendPoses(a, b, 1.0f), b), 1e-5f);
+    EXPECT_LT(maxError(kke::blendPoses(a, b, 7.0f), b), 1e-5f); // clamped
+    auto half = kke::blendPoses(a, b, 0.5f);
+    EXPECT_NEAR(half[0][3].x, 1.0f, 1e-5f);
+    const glm::vec3 x = glm::normalize(glm::vec3(half[0][0]));
+    EXPECT_NEAR(std::acos(glm::clamp(x.x, -1.0f, 1.0f)), glm::radians(45.0f), 1e-3f); // half the turn
+    // Scale comes from the target; extra bones come from the target too.
+    b[0] = glm::scale(b[0], glm::vec3(2.0f));
+    b.push_back(glm::translate(glm::mat4(1.0f), glm::vec3(5, 5, 5)));
+    auto scaled = kke::blendPoses(a, b, 0.5f);
+    ASSERT_EQ(scaled.size(), 2u);
+    EXPECT_NEAR(glm::length(glm::vec3(scaled[0][0])), 2.0f, 1e-4f);
+    EXPECT_NEAR(scaled[1][3].y, 5.0f, 1e-6f);
+}
+
+TEST(Ragdoll, BlendWeightEasesInAndOut) {
+    EXPECT_FLOAT_EQ(kke::blendWeight(0.0f, 0.5f), 0.0f);
+    EXPECT_FLOAT_EQ(kke::blendWeight(0.25f, 0.5f), 0.5f);
+    EXPECT_FLOAT_EQ(kke::blendWeight(1.0f, 0.5f), 1.0f);
+    EXPECT_FLOAT_EQ(kke::blendWeight(0.1f, 0.0f), 1.0f);
+    EXPECT_LT(kke::blendWeight(0.05f, 0.5f), 0.05f); // slow start
 }

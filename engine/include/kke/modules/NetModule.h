@@ -3,16 +3,19 @@
 #include "kke/Module.h"
 #include "kke/RigidWorld.h"
 #include "kke/net/NetSession.h"
+#include "kke/net/WorldMoveCheck.h"
 
 #include <functional>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
 namespace kke {
 
 class RigidBodyModule;
+class PhysicsModule;
 namespace net { class EnetTransport; class ConditionedTransport; }
 
 // Multiplayer for a game (docs/NETWORKING.md): host a game (your game is the
@@ -33,6 +36,18 @@ namespace net { class EnetTransport; class ConditionedTransport; }
 //   Events:           sendEvent(kind, bytes) for one-off things (a shot,
 //                     a push); onEvent receives them. The host decides
 //                     what to relay (relayEvent).
+//   Breakables:       replicateBreakable(handle) for every FEMFX breakable
+//                     of the level (same order everywhere). The host's
+//                     break; a client's copies only break along the
+//                     borders the host's broke, so the pieces match.
+//   Spawned objects:  the host's spawn(kind, description) makes an object
+//                     on every client (a server script's body or
+//                     breakable: ScriptModule listens); bindSpawnedBody /
+//                     bindSpawnedBreakable tie it to the local copy on
+//                     both sides so it moves and breaks with the host's.
+//   Movement checks:  the host refuses a client's move through a wall or
+//                     a flight (kke/net/WorldMoveCheck.h) and sends it
+//                     back to where it last was legitimately.
 //
 // Several games on one PC: hosts take the first free port from
 // kDefaultPort up (16 ports), and the LAN search asks all of them.
@@ -89,11 +104,45 @@ public:
     std::function<void(const glm::vec3&)> onCorrection;
     std::function<void(uint8_t id, bool joined)> onPlayer;
 
+    // --- breakables (FEMFX PhysicsModule handles; docs/NETWORKING.md "Breakables")
+    // A level breakable the same on every machine; returns its network id.
+    // Call in the same order everywhere, like replicateBody.
+    uint16_t replicateBreakable(uint32_t handle);
+    void clearBreakables(); // the level's breakables are gone (spawned ones stay)
+
+    // --- objects made while playing (docs/NETWORKING.md "Spawned objects")
+    // Ids from here up; the level's bodies and breakables number from 0.
+    static constexpr uint16_t kFirstSpawnId = 0x8000;
+    // Host: every client (and, if persistent, every later one) gets
+    // `kind` + `desc` in its spawn listeners. Returns the network id, or
+    // 0 when not hosting (offline: nothing to tell anyone).
+    uint16_t spawn(uint16_t kind, const std::vector<uint8_t>& desc, bool persistent = true);
+    void despawn(uint16_t id); // host: gone everywhere; also unbinds it here
+    // Either side: `id` is this body / breakable here (host: snapshots and
+    // breaks go out for it; client: it follows the host's).
+    void bindSpawnedBody(uint16_t id, RigidWorld::BodyId body);
+    void bindSpawnedBreakable(uint16_t id, uint32_t handle);
+    // Client: build / remove your copy. Listeners that don't know the
+    // kind ignore it.
+    void addSpawnListener(std::function<void(const net::SpawnMsg&)> listener) { m_spawnListeners.push_back(std::move(listener)); }
+    void addDespawnListener(std::function<void(uint16_t id)> listener) { m_despawnListeners.push_back(std::move(listener)); }
+
+    // --- movement checks (host)
+    bool checkMoves = true;
+    net::MoveCheckSettings moveCheckSettings;
+    size_t refusedMoves() const { return m_server ? m_server->refusedMoves() : 0; }
+
     net::LinkConditions simulated; // applied to what this game sends
 
 private:
     void openTransport();
     void syncRemoteCapsules(float dt);
+    void pollBreaks();                         // host: send what broke
+    void applyBreak(const net::BreakMsg& m);   // client: break along the host's borders
+    void applyFollowers();                     // client: breakables break only when told
+    void onSpawnMsg(const net::SpawnMsg& m);
+    void onDespawnMsg(uint16_t id);
+    void dropSpawned();                        // left a game: spawned ids mean nothing any more
     void driveClientBodies(float dt);
     void lanSearchUi();
     double now() const;
@@ -114,7 +163,23 @@ private:
     net::NetPlayerState m_local;
     bool m_hasLocal = false;
     std::vector<net::RemotePlayer> m_remote;
-    std::vector<RigidWorld::BodyId> m_bodies; // index = network id
+    std::map<uint16_t, RigidWorld::BodyId> m_bodies; // network id -> body
+    uint16_t m_nextLevelBody = 0;
+    struct NetBreakable {
+        uint32_t handle = 0;
+        size_t sentBorders = 0;  // host: broken borders already handed to the server
+        bool seedWarned = false;
+    };
+    std::map<uint16_t, NetBreakable> m_breakables; // network id -> FEMFX breakable
+    uint16_t m_nextLevelBreakable = 0;
+    std::map<uint16_t, std::vector<net::BreakMsg>> m_pendingBreaks; // client: for breakables not bound yet
+    std::set<uint16_t> m_spawned;               // host: live spawn ids
+    uint16_t m_nextSpawn = kFirstSpawnId;
+    std::vector<std::function<void(const net::SpawnMsg&)>> m_spawnListeners;
+    std::vector<std::function<void(uint16_t)>> m_despawnListeners;
+    std::unique_ptr<net::WorldMoveCheck> m_moveCheck;
+    std::map<uint8_t, double> m_moveLogAt;      // player -> when a refusal was last logged
+    PhysicsModule* m_physics = nullptr;         // FEMFX, for breakables (null without it)
     std::vector<std::function<void(const net::GameEventMsg&)>> m_listeners;
     void dispatchEvent(const net::GameEventMsg& e);
     std::map<uint8_t, RigidWorld::BodyId> m_capsules; // remote player -> kinematic capsule

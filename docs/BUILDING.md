@@ -25,7 +25,15 @@ sudo apt-get install -y \
     libvulkan-dev vulkan-tools mesa-vulkan-drivers glslang-tools \
     libdrm-dev libxkbcommon-dev \
     libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
-    libxinerama-dev libwayland-dev
+    libxinerama-dev libwayland-dev \
+    libfreetype-dev pkg-config libudev-dev libdbus-1-dev \
+    libgl1-mesa-dev libegl1-mesa-dev libasound2-dev libdecor-0-dev \
+    libexpat1-dev libxml2-dev
+
+# The last line keeps SDL's configure free of warnings: EGL for its Wayland
+# backend, ALSA audio, libdecor (window borders on GNOME/Weston), and
+# expat/libxml2 so cmake/wayland_scanner.cmake can build the newer
+# wayland-scanner SDL's protocol XML needs (Ubuntu 24.04 ships 1.22).
 
 # Strongly recommended, not required to build or run: Vulkan validation
 # layers. This project's own sandboxed development environment ran
@@ -48,7 +56,8 @@ sudo apt-get install -y libcgal-dev libgmp-dev libmpfr-dev libboost-dev libeigen
 sudo pacman -S --needed \
     base-devel cmake ninja git \
     vulkan-icd-loader vulkan-headers vulkan-tools glslang \
-    extra-cmake-modules libdrm libxkbcommon xorg-server-devel
+    extra-cmake-modules libdrm libxkbcommon xorg-server-devel \
+    wayland libdecor alsa-lib expat libxml2 freetype2
 
 # Strongly recommended, not required — see the Debian/Ubuntu block
 # above for why.

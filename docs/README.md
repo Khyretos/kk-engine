@@ -8,6 +8,7 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | Document | Contents |
 |---|---|
 | [BUILDING.md](BUILDING.md) | System packages, build presets, running each demo, troubleshooting |
+| [RELEASES.md](RELEASES.md) | Downloadable Windows and Linux builds: how a tag becomes a release |
 | [tutorials/](tutorials/index.md) | Make your own game from the starter template, then walk, break, pick up and add sound |
 | [HISTORY.md](HISTORY.md) | The development log: the original README, kept whole |
 | [AUDIO.md](AUDIO.md) | The audio engine: mixer, 3D sound, occlusion, impact synthesis, accessibility |
@@ -16,6 +17,7 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [JIGGLE.md](JIGGLE.md) | Jiggle physics for bones, skin and soft bodies |
 | [NETWORKING.md](NETWORKING.md) | Transport, protocol, authority and replication |
 | [SCRIPTING.md](SCRIPTING.md) | Lua gameplay scripts |
+| [PLAY_TO_MAKE.md](PLAY_TO_MAKE.md) | Make the game while playing it: Simple, node graph and Lua levels |
 | [SCENES.md](SCENES.md) | Levels built from asset packs |
 | [OPTIMIZATION.md](OPTIMIZATION.md) | Performance rules, measured log and backlog |
 | [RENDERING_PRINCIPLES.md](RENDERING_PRINCIPLES.md) | Rendering doctrine: no dithering, a clean image every frame, what we took from Threat Interactive |

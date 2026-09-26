@@ -4,6 +4,7 @@
 #include "kke/Capabilities.h"
 #include "kke/Module.h"
 #include "kke/Picking.h"
+#include "kke/PlayBlocks.h"
 #include "kke/Ragdoll.h"
 #include "kke/SceneFile.h"
 #include "kke/VoxelTets.h"
@@ -25,6 +26,12 @@ namespace kke_sandbox {
 // kke_demo and every game loads), and play with them — ragdoll
 // characters, turn props into breakable physics objects, throw balls at
 // everything.
+//
+// It opens in Play mode (docs/PLAY_TO_MAKE.md "Simple"): no panels, just a
+// row of big pictures to drag people and things out of, a bat to bonk
+// them with (they ragdoll) and a "Build" button that opens the full editor
+// described above. F2 switches between the two; KKE_SANDBOX_MODE=build
+// starts in the editor.
 //
 // Deliberately written against engine building blocks only (AssetCatalog,
 // ModelModule, DebugDrawModule, Picking, IRagdollPhysics, PhysicsModule),
@@ -53,8 +60,13 @@ public:
     // toggle (F1) so the sandbox's own UI stays readable.
     void setEnginePanels(std::vector<kke::Module*> panels);
 
+    // Play: the Simple-mode palette only. Build: the full editor.
+    enum class Mode { Play, Build };
+    void setMode(Mode mode);
+    Mode mode() const { return m_mode; }
+
 private:
-    enum class Tool { Select, Place, Shoot };
+    enum class Tool { Select, Place, Shoot, Bat };
     enum class Gizmo { Move, Rotate, Scale };
     enum class Handle { None, X, Y, Z, Ring, Scale };
 
@@ -161,6 +173,16 @@ private:
     void inspectorUi();
     void folderNotFoundUi();
 
+    // Play mode (Simple): the palette, dragging blocks into the world,
+    // picking placed things up again, and the bat.
+    void playPaletteUi();
+    void modeSwitchUi();
+    bool mouseOverUi() const;      // over any ImGui window, even mid-drag
+    void placeBlock(size_t block); // start placing (the ghost follows the mouse)
+    void swingBat();
+    void updateBat(float dt);
+    void standEveryoneUp();
+
     kke::Application* m_app = nullptr;
     kke::ModelModule* m_models = nullptr;
     kke::ThumbnailModule* m_thumbs = nullptr; // optional: the Assets panel shows a list without it
@@ -244,6 +266,18 @@ private:
     char m_layoutPath[512] = "sandbox.scene.json";
     std::vector<kke::Module*> m_enginePanels;
     bool m_showEnginePanels = false;
+
+    // Play mode
+    Mode m_mode = Mode::Play;
+    std::vector<kke::PlayBlock> m_blocks;
+    std::vector<std::vector<std::string>> m_blockAssets; // per block: its assets that are on disk
+    uint32_t m_lookPick = 0;         // turns through the character looks
+    bool m_dropOnRelease = false;    // placing by dragging: letting go of the mouse drops it
+    kke::BatSwing m_swing;
+    kke::ModelModule::ModelId m_batModel = 0;
+    kke::ModelModule::InstanceId m_bat = 0;
+    kke::LongAxis m_batAxis;
+    std::vector<uint32_t> m_swingHits; // characters this swing already knocked over
 };
 
 } // namespace kke_sandbox

@@ -639,3 +639,118 @@ TEST(Locomotion, HangsFromAThinWallItCannotStandOn) {
     EXPECT_NEAR(c.feet().y, 3.0f - loco.settings().hangReach, 0.05f);
     EXPECT_NEAR(c.feet().x, 16.3f + loco.settings().radius + 0.05f, 0.05f);
 }
+
+// Ledge leaps: hanging near the end of one wall, "go up" toward a second,
+// taller wall across a 1 m gap leaps over and hangs from its top.
+TEST(Locomotion, LeapsSidewaysAcrossAGapToAHigherEdge) {
+    Course c;
+    c.box({ 0.0f, 1.5f, -2.0f }, { 1.0f, 1.5f, 0.5f });  // x -1..1, top 3.0
+    c.box({ 2.8f, 1.7f, -2.0f }, { 0.8f, 1.7f, 0.5f });  // x 2..3.6, top 3.4
+    c.spawn({ 0.6f, 0.01f, 0.0f });
+    Locomotion loco(c.world, c.player);
+    Locomotion::Input jump = forward();
+    jump.goUp = true;
+    c.run(loco, jump, 1.2f);
+    ASSERT_EQ(loco.state(), Locomotion::State::Hang);
+    Locomotion::Input leap = sideways(1.0f);
+    leap.goUp = true;
+    c.run(loco, leap, 0.05f);
+    ASSERT_EQ(loco.state(), Locomotion::State::Leap);
+    c.run(loco, Locomotion::Input{}, 0.8f);
+    ASSERT_EQ(loco.state(), Locomotion::State::Hang);
+    EXPECT_NEAR(loco.hangEdge().y, 3.4f, 0.02f);
+    EXPECT_GT(c.feet().x, 2.0f + loco.settings().radius);
+    EXPECT_NEAR(c.feet().y, 3.4f - loco.settings().hangReach, 0.05f);
+    // Nothing further that way: "go up" sideways climbs instead of leaping.
+    c.run(loco, leap, 0.05f);
+    EXPECT_NE(loco.state(), Locomotion::State::Leap);
+}
+
+// A thin wall (nothing to stand on) under a beam: "go up" leaps up to the
+// beam's top.
+TEST(Locomotion, LeapsUpToAnEdgeAbove) {
+    Course c;
+    c.box({ 0.0f, 1.2f, -1.65f }, { 2.0f, 1.2f, 0.15f });   // face z = -1.5, top 2.4
+    c.box({ 0.0f, 3.35f, -1.65f }, { 2.0f, 0.25f, 0.15f }); // beam 3.1..3.6
+    c.spawn({ 0.0f, 0.01f, 0.0f });
+    Locomotion loco(c.world, c.player);
+    Locomotion::Input jump = forward();
+    jump.goUp = true;
+    c.run(loco, jump, 1.2f);
+    ASSERT_EQ(loco.state(), Locomotion::State::Hang);
+    EXPECT_NEAR(loco.hangEdge().y, 2.4f, 0.02f);
+    Locomotion::Input up = forward();
+    up.goUp = true;
+    c.run(loco, up, 0.05f);
+    ASSERT_EQ(loco.state(), Locomotion::State::Leap);
+    c.run(loco, Locomotion::Input{}, 0.8f);
+    ASSERT_EQ(loco.state(), Locomotion::State::Hang);
+    EXPECT_NEAR(loco.hangEdge().y, 3.6f, 0.02f);
+    EXPECT_NEAR(c.feet().y, 3.6f - loco.settings().hangReach, 0.05f);
+}
+
+namespace {
+// A 20 m wall along -Z with its face at x = 0.8, and the runner beside it.
+struct WallRunCourse : Course {
+    WallRunCourse() { box({ 1.0f, 2.0f, -10.0f }, { 0.2f, 2.0f, 10.0f }); }
+};
+void sprintAndJump(WallRunCourse& c, Locomotion& loco) {
+    c.run(loco, forward(true), 1.0f);
+    Locomotion::Input jump = forward(true);
+    jump.goUp = true;
+    c.run(loco, jump, 0.3f);
+}
+} // namespace
+
+TEST(Locomotion, JumpingAlongAWallRunsOnIt) {
+    WallRunCourse c;
+    c.spawn({ 0.25f, 0.01f, 1.0f });
+    Locomotion loco(c.world, c.player);
+    sprintAndJump(c, loco);
+    ASSERT_EQ(loco.state(), Locomotion::State::WallRun);
+    EXPECT_EQ(loco.wallRunSide(), 1.0f); // heading -Z, the wall at +X is on the right
+    const glm::vec3 start = c.feet();
+    c.run(loco, forward(true), 0.4f);
+    EXPECT_EQ(loco.state(), Locomotion::State::WallRun);
+    EXPECT_LT(c.feet().z, start.z - 1.5f);                       // running along it
+    EXPECT_NEAR(c.feet().x, 0.8f - loco.settings().radius - 0.05f, 0.05f); // beside it
+    EXPECT_GT(c.feet().y, 0.5f);                                  // up off the ground
+    // It ends: gravity wins, the runner lands and keeps running.
+    c.run(loco, forward(true), 2.0f);
+    EXPECT_EQ(loco.state(), Locomotion::State::Ground);
+    EXPECT_NEAR(c.feet().y, 0.0f, 0.05f);
+}
+
+TEST(Locomotion, WallJumpKicksOffTheWall) {
+    WallRunCourse c;
+    c.spawn({ 0.25f, 0.01f, 1.0f });
+    Locomotion loco(c.world, c.player);
+    sprintAndJump(c, loco);
+    ASSERT_EQ(loco.state(), Locomotion::State::WallRun);
+    c.run(loco, forward(true), 0.2f);
+    Locomotion::Input kick = forward(true);
+    kick.goUp = true;
+    c.run(loco, kick, 0.05f);
+    EXPECT_EQ(loco.state(), Locomotion::State::Air);
+    EXPECT_TRUE(loco.jumped() || c.world.characterVelocity(c.player).y > 2.0f);
+    EXPECT_LT(c.world.characterVelocity(c.player).x, -2.0f); // away from the wall
+    c.run(loco, forward(true), 2.0f);
+    EXPECT_EQ(loco.state(), Locomotion::State::Ground);
+    EXPECT_LT(c.feet().x, -0.5f);
+}
+
+// Walking (too slow) and jumping next to a wall is only a jump.
+TEST(Locomotion, SlowJumpNextToAWallIsNoWallRun) {
+    WallRunCourse c;
+    c.spawn({ 0.25f, 0.01f, 1.0f });
+    Locomotion loco(c.world, c.player);
+    c.run(loco, forward(), 1.0f);
+    Locomotion::Input jump = forward();
+    jump.goUp = true;
+    for (int i = 0; i < 60; ++i) {
+        loco.update(jump, kDt);
+        c.world.step(kDt);
+        jump.goUp = false;
+        ASSERT_NE(loco.state(), Locomotion::State::WallRun);
+    }
+}

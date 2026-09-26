@@ -1,0 +1,217 @@
+# Downloadable builds (docs/RELEASES.md, issue #14).
+#
+# Pushing a tag like v0.1.0-alpha builds Linux and Windows packages of the
+# engine's demos, tests them, and publishes them as a GitHub Release (a
+# pre-release when the tag has a '-' in it). Running the workflow by hand
+# (Actions tab -> "Release" -> Run workflow) builds and tests the same
+# packages and keeps them as run artifacts; tick "draft" to also put them
+# in a draft release that only maintainers can see.
+#
+# Both platforms build on Linux: Windows is cross-compiled with MinGW-w64
+# (same toolchain as docker/windows.Dockerfile; the C++ runtime is linked
+# statically, so no MinGW DLLs ship),
+# then its unit tests run on a real Windows runner. Paid art packs are
+# never part of a package: tools/packaging/package.sh refuses to package
+# one.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version name for the archives (e.g. v0.1.0-alpha)
+        required: true
+        default: dev
+      draft:
+        description: Also create a draft GitHub Release
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  VERSION: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            cmake ninja-build glslang-tools spirv-tools \
+            libvulkan-dev mesa-vulkan-drivers \
+            libfreetype-dev libudev-dev libdbus-1-dev \
+            libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev \
+            pkg-config libgl1-mesa-dev libegl1-mesa-dev \
+            libasound2-dev libdecor-0-dev libexpat1-dev libxml2-dev \
+            xvfb zip
+
+      # libstdc++/libgcc linked statically: the package then needs only
+      # glibc, FreeType and the system's Vulkan loader/driver.
+      - name: Configure
+        run: |
+          set -o pipefail
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DKKE_ENABLE_FEMFX=ON -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_VALIDATION=OFF \
+            "-DCMAKE_EXE_LINKER_FLAGS=-static-libstdc++ -static-libgcc" 2>&1 | tee configure.log
+
+      - name: Build
+        run: |
+          set -o pipefail
+          cmake --build build -j 2>&1 | tee build.log
+
+      - name: No warnings anywhere
+        run: tools/ci/check_warnings.sh configure.log build.log
+
+      - name: Unit tests
+        run: ./build/bin/kke_tests --gtest_brief=1
+
+      - name: Package
+        run: tools/packaging/package.sh --bin build/bin --platform linux --version "$VERSION" --out dist --deps build/_deps --strip strip
+
+      # The packaged demos, unpacked somewhere else and started from an
+      # unrelated folder: proves the package is complete and that games
+      # find their shaders next to the executable, not in the cwd.
+      - name: Smoke-test the package
+        run: |
+          mkdir -p "$RUNNER_TEMP/unpacked"
+          tar -xzf "dist/kk-engine-$VERSION-linux-x86_64.tar.gz" -C "$RUNNER_TEMP/unpacked"
+          pkg="$RUNNER_TEMP/unpacked/kk-engine-$VERSION-linux-x86_64"
+          Xvfb :99 -screen 0 1280x720x24 &
+          sleep 2
+          cd "$RUNNER_TEMP"
+          failed=0
+          for demo in kke_demo kke_basics physics_demo melt_demo jiggle_demo sea_demo imgui_demo rmlui_demo sandbox synty_demo; do
+            [ -x "$pkg/$demo" ] || { echo "== $demo: missing from the package"; failed=1; continue; }
+            set +e
+            DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_SKIP_INTRO=1 timeout 8 "$pkg/$demo" > "run_$demo.log" 2>&1
+            code=$?
+            set -e
+            if { [ "$code" -ne 124 ] && [ "$code" -ne 0 ]; } || grep -qi "Fatal error" "run_$demo.log"; then
+              echo "== $demo: FAILED (exit $code)"; tail -40 "run_$demo.log"; failed=1
+            else
+              echo "== $demo: ok"
+            fi
+          done
+          exit $failed
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kk-engine-linux
+          path: dist/*
+          if-no-files-found: error
+
+  windows:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MinGW-w64 and tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cmake ninja-build glslang-tools mingw-w64 g++-mingw-w64-x86-64-posix zip
+
+      - name: Configure (MinGW-w64 cross)
+        run: |
+          set -o pipefail
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DKKE_ENABLE_FEMFX=ON -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_VALIDATION=OFF \
+            -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake 2>&1 | tee configure.log
+
+      - name: Build
+        run: |
+          set -o pipefail
+          cmake --build build -j 2>&1 | tee build.log
+
+      - name: No warnings anywhere
+        run: tools/ci/check_warnings.sh configure.log build.log
+
+      - name: Package
+        run: tools/packaging/package.sh --bin build/bin --platform windows --version "$VERSION" --out dist --deps build/_deps --strip x86_64-w64-mingw32-strip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kk-engine-windows
+          path: dist/*
+          if-no-files-found: error
+
+      # The test binary is not part of the package; the next job runs it
+      # on real Windows.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kke-tests-windows
+          path: build/bin/kke_tests.exe
+          if-no-files-found: error
+
+  windows-test:
+    needs: windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: kke-tests-windows
+      - uses: actions/download-artifact@v4
+        with:
+          name: kk-engine-windows
+      # The tests run inside the unpacked package: that is where the DLLs
+      # they share with the demos (librmlui, libspdlog) are.
+      - name: Unpack and check the package
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem kk-engine-*-windows-x86_64.zip
+          Expand-Archive $zip.FullName -DestinationPath unpacked
+          $dir = (Get-ChildItem unpacked | Select-Object -First 1).FullName
+          foreach ($f in 'kke_demo.exe', 'shaders', 'assets', 'README.txt', 'LICENSE.txt', 'THIRD_PARTY_LICENSES.txt') {
+            if (-not (Test-Path (Join-Path $dir $f))) { throw "$f is missing from $($zip.Name)" }
+          }
+          Copy-Item kke_tests.exe $dir
+          "PKG_DIR=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Output "$($zip.Name): complete"
+      - name: Unit tests on Windows
+        shell: pwsh
+        run: |
+          Set-Location $env:PKG_DIR
+          .\kke_tests.exe --gtest_brief=1
+          if ($LASTEXITCODE -ne 0) { throw "kke_tests failed with exit code $LASTEXITCODE" }
+
+  release:
+    needs: [linux, windows-test]
+    if: github.event_name == 'push' || inputs.draft
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: kk-engine-*
+          path: dist
+          merge-multiple: true
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          IS_TAG: ${{ github.event_name == 'push' }}
+        run: |
+          ls -l dist
+          flags=()
+          if [ "$IS_TAG" = true ]; then
+            case "$VERSION" in *-*) flags+=(--prerelease) ;; esac
+          else
+            flags+=(--draft --target "$SHA")
+          fi
+          gh release create "$VERSION" dist/* --repo "$REPO" --title "Kreative Kompas Engine $VERSION" \
+            --notes "Downloadable builds of the engine's demos for Windows and Linux (x86_64, AVX2, Vulkan 1.3). Unpack the archive and run kke_demo. See README.txt inside the archive and docs/RELEASES.md." \
+            "${flags[@]}"

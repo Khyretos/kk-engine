@@ -20,6 +20,7 @@ set(ENGINE_SOURCES
     src/BenchmarkReport.cpp
     src/AssetCatalog.cpp
     src/Picking.cpp
+    src/PlayBlocks.cpp
     src/VoxelTets.cpp
     src/InteriorColor.cpp
     src/FracturePattern.cpp
@@ -31,6 +32,7 @@ set(ENGINE_SOURCES
     src/FrameStats.cpp
     src/Viewports.cpp
     src/PhysicsBridge.cpp
+    src/PhysicsWorld.cpp
     src/Buoyancy.cpp
     src/CameraRig.cpp
     src/SceneFile.cpp
@@ -38,6 +40,7 @@ set(ENGINE_SOURCES
     src/net/Protocol.cpp
     src/net/Transport.cpp
     src/net/NetSession.cpp
+    src/net/ScriptSpawns.cpp
     src/InputMap.cpp
     src/InputDevices.cpp
     src/modules/InputModule.cpp
@@ -76,6 +79,7 @@ set(ENGINE_SOURCES
     src/modules/DebugControlModule.cpp
     src/modules/PhysicsModule.cpp
     src/modules/PhysicsModuleBridge.cpp
+    src/modules/PhysicsModuleRubble.cpp
     src/modules/SettingsModule.cpp
     src/modules/ModelModule.cpp
     src/modules/ThumbnailModule.cpp
@@ -108,6 +112,7 @@ set(ENGINE_HEADERS
     include/kke/BenchmarkReport.h
     include/kke/AssetCatalog.h
     include/kke/Picking.h
+    include/kke/PlayBlocks.h
     include/kke/VoxelTets.h
     include/kke/InteriorColor.h
     include/kke/FracturePattern.h
@@ -205,7 +210,8 @@ else()
 endif()
 
 if(KKE_ENABLE_JOLT)
-    target_sources(kke_engine PRIVATE src/RigidWorld.cpp src/Locomotion.cpp src/SceneLoader.cpp src/modules/RigidBodyModule.cpp src/modules/PhysicsBridgeModule.cpp)
+    target_sources(kke_engine PRIVATE src/RigidWorld.cpp src/Locomotion.cpp src/SceneLoader.cpp src/modules/RigidBodyModule.cpp src/modules/PhysicsBridgeModule.cpp
+        src/net/WorldMoveCheck.cpp)
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_JOLT=1)
     target_link_libraries(kke_engine PUBLIC Jolt)
 else()
@@ -224,7 +230,7 @@ else()
 endif()
 
 if(ENGINE_ENABLE_LUA)
-    target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/modules/ScriptModule.cpp src/modules/ScriptBindings.cpp)
+    target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/modules/ScriptModule.cpp src/modules/ScriptBindings.cpp src/modules/ScriptReplication.cpp)
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_LUA=1)
     target_link_libraries(kke_engine PUBLIC lua_lib)
 else()
