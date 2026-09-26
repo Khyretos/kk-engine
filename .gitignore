@@ -11,6 +11,9 @@ benchmark/
 
 # Paid/licensed art packs (e.g. Synty) are never committed — see assets/README.md
 assets/synty/
+# Their thumbnails are renders of the same packs (kke::ThumbnailModule keeps
+# them in the user's cache folder; this catches KKE_THUMBNAIL_CACHE=./thumbnails).
+thumbnails/
 
 # docker-compose cross builds (docker/build.sh)
 build-docker/

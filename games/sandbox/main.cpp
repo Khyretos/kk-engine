@@ -6,6 +6,7 @@
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/StatsModule.h"
+#include "kke/modules/ThumbnailModule.h"
 
 #include "SandboxModule.h"
 #if KKE_ENABLE_FEMFX
@@ -35,6 +36,7 @@ int main() {
         camera.setDistanceLimits(1.0f, 120.0f);
         std::vector<kke::Module*> panels{ &camera };
         app.addModule<kke::ModelModule>();
+        app.addModule<kke::ThumbnailModule>(); // pictures in the Assets panel
         // Before SandboxModule: its update() clears last frame's lines,
         // then the sandbox adds this frame's.
         app.addModule<kke::DebugDrawModule>();

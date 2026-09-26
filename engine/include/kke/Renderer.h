@@ -63,6 +63,10 @@ public:
     VkRenderPass renderPass() const { return m_swapChain->renderPass(); }
     VkExtent2D extent() const { return m_swapChain->extent(); }
     bool hasStencil() const { return m_swapChain->hasStencil(); }
+    // The main pass's attachment formats: an offscreen pass with the same
+    // ones (and the same subpass dependency) can use every pipeline.
+    VkFormat colorFormat() const { return m_swapChain->imageFormat(); }
+    VkFormat depthFormat() const { return m_swapChain->depthFormat(); }
     float aspectRatio() const {
         auto e = m_swapChain->extent();
         return e.height > 0 ? static_cast<float>(e.width) / static_cast<float>(e.height) : 1.0f;
