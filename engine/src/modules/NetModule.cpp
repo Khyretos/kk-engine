@@ -5,6 +5,8 @@
 #include "kke/modules/PhysicsModule.h"
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/net/EnetTransport.h"
+#include "kke/server/DirectoryNet.h"
+#include "kke/server/ServerConfig.h"
 
 #include <imgui.h>
 
@@ -76,6 +78,22 @@ void NetModule::init(Application& app) {
     simulated.jitterMs = envFloat("KKE_NET_JITTER", 0.0f);
     simulated.lossPercent = envFloat("KKE_NET_LOSS", 0.0f);
     std::snprintf(m_nameInput, sizeof(m_nameInput), "%s", playerName.c_str());
+    if (const char* d = std::getenv("KKE_DIRECTORIES"); d && *d) {
+        directories.clear();
+        std::string list = d;
+        for (size_t start = 0; start <= list.size();) {
+            const size_t comma = std::min(list.find(',', start), list.size());
+            std::string item = list.substr(start, comma - start);
+            item.erase(0, item.find_first_not_of(' '));
+            item.erase(item.find_last_not_of(' ') + 1);
+            if (!item.empty()) directories.push_back(item);
+            start = comma + 1;
+        }
+    }
+    if (!directories.empty()) {
+        std::snprintf(m_directoryInput, sizeof(m_directoryInput), "%s", directories.front().c_str());
+        browseDirectory(directories.front()); // the list is there when the panel opens
+    }
 
     const char* mode = std::getenv("KKE_NET");
     if (!mode || !*mode) return;
@@ -511,6 +529,16 @@ void NetModule::sendVoice(net::VoiceChannel channel, uint16_t seq, const std::ve
 }
 
 void NetModule::update(const UpdateContext&) {
+    if (m_browser && !m_browser->done()) {
+        m_browser->update();
+        if (m_browser->done()) {
+            m_browseStatus = std::to_string(m_browser->servers().size()) + (m_browser->servers().size() == 1 ? " server" : " servers");
+            log::get(name())->info("Server list: {}", m_browseStatus);
+        } else if (now() > m_browseUntil && m_browseStatus.rfind("asking", 0) == 0) {
+            m_browseStatus = "no answer (is the address right, and the directory running?)";
+            log::get(name())->info("Server list: {}", m_browseStatus);
+        }
+    }
     if (m_server) m_server->voice = voiceRules; // the host may change them while playing
     const double t = now();
     if (m_transport) m_transport->conditions = simulated;
@@ -605,6 +633,71 @@ void NetModule::lanSearchUi() {
     }
 }
 
+const std::vector<server::DirectoryEntry>& NetModule::directoryServers() const {
+    static const std::vector<server::DirectoryEntry> none;
+    return m_browser ? m_browser->servers() : none;
+}
+
+bool NetModule::browseDirectory(const std::string& directory, std::string* error) {
+    std::string host;
+    uint16_t port = 0;
+    if (!server::splitHostPort(directory, host, port)) {
+        m_browseStatus = "'" + directory + "' isn't host:port";
+        if (error) *error = m_browseStatus;
+        return false;
+    }
+    if (!m_browser) m_browser = std::make_unique<server::DirectoryBrowser>();
+    std::string e;
+    if (!m_browser->query(host, port, m_config.gameId, &e)) {
+        m_browseStatus = e;
+        if (error) *error = e;
+        return false;
+    }
+    m_browseStatus = "asking " + directory + "...";
+    m_browseUntil = now() + 3.0;
+    return true;
+}
+
+void NetModule::directoryUi() {
+    ImGui::TextUnformatted("Internet servers");
+    ImGui::InputTextWithHint("##directory", "directory host:port", m_directoryInput, sizeof(m_directoryInput));
+    ImGui::SameLine();
+    ImGui::BeginDisabled(m_directoryInput[0] == 0);
+    if (ImGui::Button("Refresh")) browseDirectory(m_directoryInput);
+    ImGui::EndDisabled();
+    if (!m_browseStatus.empty()) ImGui::TextDisabled("%s", m_browseStatus.c_str());
+    else if (m_directoryInput[0] == 0) ImGui::TextDisabled("No server list set: type a directory's address (docs/SERVER_HOSTING.md)");
+    if (!m_browser) return;
+    for (const server::DirectoryEntry& e : m_browser->servers()) {
+        ImGui::PushID(static_cast<int>(e.port) ^ static_cast<int>(std::hash<std::string>{}(e.address)));
+        const bool sameVersion = e.protocol == net::kProtocolVersion;
+        const bool full = e.maxPlayers > 0 && e.players >= e.maxPlayers;
+        ImGui::BeginDisabled(!sameVersion || full);
+        const bool clicked = ImGui::SmallButton("Join");
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::Text("%s  %u/%u%s  %s:%u", e.name.c_str(), e.players, e.maxPlayers, e.password ? "  (password)" : "", e.address.c_str(), e.port);
+        if (!sameVersion) {
+            ImGui::SameLine();
+            ImGui::TextDisabled(e.protocol > net::kProtocolVersion ? "(newer version)" : "(older version)");
+        } else if (full) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("(full)");
+        }
+        ImGui::PopID();
+        if (clicked) {
+            if (e.password && m_config.password.empty()) {
+                m_browseStatus = "'" + e.name + "' needs a password: type it above, then Join";
+                break;
+            }
+            const std::string address = e.address;
+            const uint16_t port = e.port;
+            join(address, port);
+            break;
+        }
+    }
+}
+
 void NetModule::renderUi() {
     const float s = ImGui::GetFontSize() / 13.0f;
     ImGui::SetNextWindowSize(ImVec2(320 * s, 0), ImGuiCond_FirstUseEver);
@@ -622,6 +715,8 @@ void NetModule::renderUi() {
         if (ImGui::Button("Join")) join(m_addressInput, static_cast<uint16_t>(m_portInput));
         ImGui::Separator();
         lanSearchUi();
+        ImGui::Separator();
+        directoryUi();
     } else {
         if (ImGui::Button(m_role == Role::Host ? "Stop hosting" : "Leave")) leave();
         ImGui::Text("Up %.1f kbit/s, down %.1f kbit/s", m_upKbps, m_downKbps);

@@ -14,7 +14,9 @@
 #include "kke/storage/Store.h"
 
 #include <functional>
+#include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -47,6 +49,21 @@ public:
     // One console line ("help" lists them); what to print back.
     std::string command(const std::string& line);
     bool save(std::string* error = nullptr);
+    // A copy of the store in <saveDir>/backups now, keeping the newest
+    // config().backups; the file's path, or "" with `error`.
+    std::string backup(std::string* error = nullptr);
+
+    // What the server remembers of each player who has been here
+    // (collection "players", key: the folded name; docs/SERVER_HOSTING.md "Saves").
+    struct PlayerRecord {
+        std::string name;               // as they last spelled it
+        uint64_t firstSeen = 0, lastSeen = 0; // seconds since 1970
+        uint32_t visits = 0;
+        double playSeconds = 0;
+        bool hasPosition = false;
+        glm::vec3 position{ 0.0f };     // where they were when they left
+    };
+    std::optional<PlayerRecord> playerRecord(const std::string& name);
 
     std::function<void(const std::string& line)> log;  // info
     std::function<void(const std::string& line)> warn; // something to look at
@@ -65,6 +82,11 @@ private:
     void onEvent(const net::GameEventMsg& e);
     std::string accessPath() const;
     std::string leaderboardPath() const;
+    std::string backupDir() const;
+    void pruneBackups();
+    void seePlayer(uint8_t id);                // joined: counts the visit
+    void savePlayer(uint8_t id, bool leaving); // play time and position so far
+    void trackPositions();
     int findPlayer(const std::string& idOrName) const; // -1: none
     void info(const std::string& s) const { if (log) log(s); }
     void warning(const std::string& s) const { if (warn) warn(s); else info(s); }
@@ -81,7 +103,15 @@ private:
     std::unique_ptr<RigidWorld> m_world;
     std::unique_ptr<net::WorldMoveCheck> m_moveCheck;
     size_t m_collisionBodies = 0;
-    double m_now = 0, m_nextSave = 0;
+    struct Present {
+        std::string name;
+        double since = 0; // play time counted up to here
+        bool hasPosition = false;
+        glm::vec3 position{ 0.0f };
+    };
+    std::map<uint8_t, Present> m_present;
+    bool m_backups = false; // on, and the store can make them
+    double m_now = 0, m_nextSave = 0, m_nextBackup = 0, m_nextTrack = 0;
     bool m_started = false, m_stopRequested = false;
 };
 

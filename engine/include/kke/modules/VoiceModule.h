@@ -14,8 +14,14 @@
 //             reverberated like any other sound (category Voice).
 //   You:      mute anyone locally, set their volume, see who's speaking
 //             (speaking(id), and the panel). "Hear myself" tests the mic.
+//   Clean:    before coding, the microphone goes through echo
+//             cancellation (what the speakers play is taken out, so
+//             nobody hears themselves back when you don't wear
+//             headphones) and noise suppression (RNNoise takes out fans,
+//             keys, traffic); kke/voice/VoiceCleaner.h.
 //
-// KKE_VOICE=off leaves the microphone closed. KKE_VOICE_TONE=440 sends a
+// KKE_VOICE=off leaves the microphone closed. KKE_VOICE_NOISE=off and
+// KKE_VOICE_ECHO=off switch the cleaning off (both on by default). KKE_VOICE_TONE=440 sends a
 // tone of that pitch instead of the microphone, open mic (check a
 // connection without anyone talking). No microphone (a server, CI):
 // it still plays others; feedCapture() stands in for one in tests.
@@ -24,6 +30,7 @@
 #include "kke/Module.h"
 #include "kke/net/Protocol.h"
 #include "kke/voice/JitterBuffer.h"
+#include "kke/voice/VoiceCleaner.h"
 #include "kke/voice/VoiceCodec.h"
 
 #include <map>
@@ -44,6 +51,8 @@ public:
         float outputGain = 1.0f;
         float hearingRange = 40.0f;   // m: proximity voices fade out to here
         bool openMicrophone = true;   // false: listen only
+        bool noiseSuppression = true; // RNNoise on the microphone
+        bool echoCancellation = true; // take out what the speakers play (needs the audio output at 48 kHz)
     };
 
     VoiceModule();
@@ -69,6 +78,10 @@ public:
     bool muted(uint8_t playerId) const { return m_muted.count(playerId) != 0; }
     void setVolume(uint8_t playerId, float gain);
     float inputLevelDb() const { return m_vad.levelDb(); }
+    // The cleaner's view of the last microphone frame: speech probability
+    // (-1: noise suppression off) and how much echo it took out (dB).
+    float voiceProbability() const { return m_cleaner ? m_cleaner->voiceProbability() : -1.0f; }
+    float echoReductionDb() const { return m_cleaner ? m_cleaner->echoReductionDb() : 0.0f; }
 
     // Tests and tools: microphone samples (mono, 48 kHz) as if captured.
     void feedCapture(const float* samples, size_t count);
@@ -103,6 +116,8 @@ private:
     std::string m_captureName = "none";
     AudioStreamHandle m_captured = std::make_shared<AudioStream>(voice::kSampleRate); // mic -> game thread
     std::unique_ptr<voice::VoiceEncoder> m_encoder;
+    std::unique_ptr<voice::VoiceCleaner> m_cleaner;
+    AudioStreamHandle m_played; // what the speakers play (AudioMixer's output tap): the echo reference
     voice::VoiceActivity m_vad;
     std::map<uint8_t, Speaker> m_speakers;
     std::map<uint8_t, float> m_volumes;

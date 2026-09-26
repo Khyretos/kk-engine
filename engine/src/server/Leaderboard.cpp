@@ -153,6 +153,25 @@ bool Leaderboard::save(const std::string& path, std::string* error) {
     return true;
 }
 
+bool Leaderboard::load(storage::Store& store, std::vector<std::string>& errors, bool* exists) {
+    const std::optional<std::string> text = store.get("server", "leaderboards");
+    if (exists) *exists = text.has_value();
+    if (!text) {
+        if (!store.lastError().empty()) errors.push_back("leaderboards: can't read them from the store: " + store.lastError());
+        return false;
+    }
+    return fromJson(*text, errors);
+}
+
+bool Leaderboard::save(storage::Store& store, std::string* error) {
+    if (!store.put("server", "leaderboards", toJson())) {
+        if (error) *error = "leaderboards: " + store.lastError();
+        return false;
+    }
+    m_dirty = false;
+    return true;
+}
+
 // ---- messages
 
 namespace {

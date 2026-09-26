@@ -97,6 +97,8 @@ bool ServerConfig::loadJson(const std::string& text, std::vector<std::string>& e
     list("directories", directories);
     num("directoryPort", directoryPort, 1, 65535);
     num("tickRate", tickRate, 10, 240);
+    num("backups", backups, 0, 1000);
+    num("backupMinutes", backupMinutes, 1, 10080);
     if (j.contains("public")) {
         if (j["public"].is_boolean()) isPublic = j["public"].get<bool>();
         else errors.push_back("server.json \"public\": expected true or false");
@@ -106,7 +108,8 @@ bool ServerConfig::loadJson(const std::string& text, std::vector<std::string>& e
         else errors.push_back("server.json \"clientScores\": expected true or false");
     }
     static const std::vector<std::string> keys{ "name", "game", "port", "maxPlayers", "password", "motd", "roles", "scene", "saveDir",
-                                                "directories", "directoryPort", "tickRate", "public", "clientScores", "storage" };
+                                                "directories", "directoryPort", "tickRate", "public", "clientScores", "storage",
+                                                "backups", "backupMinutes" };
     for (auto it = j.begin(); it != j.end(); ++it)
         if (std::find(keys.begin(), keys.end(), it.key()) == keys.end())
             errors.push_back("server.json \"" + it.key() + "\": not a setting (a typo?)");
@@ -146,6 +149,15 @@ bool ServerConfig::applyEnv(const std::function<const char*(const char*)>& geten
     if (const char* v = get("KKE_SERVER_SAVE_DIR")) saveDir = v;
     if (const char* v = get("KKE_SERVER_STORAGE")) storage = v;
     if (const char* v = get("KKE_SERVER_DIRECTORIES")) directories = splitList(v);
+    auto countVar = [&](const char* key, uint16_t& out, unsigned lo, unsigned hi) {
+        const char* v = get(key);
+        if (!v) return;
+        uint16_t n = 0;
+        if ((parsePort(v, n) || std::string(v) == "0") && n >= lo && n <= hi) out = n;
+        else errors.push_back(std::string(key) + "='" + v + "': expected " + std::to_string(lo) + " to " + std::to_string(hi));
+    };
+    countVar("KKE_SERVER_BACKUPS", backups, 0, 1000);
+    countVar("KKE_SERVER_BACKUP_MINUTES", backupMinutes, 1, 10080);
     portVar("KKE_SERVER_DIRECTORY_PORT", directoryPort);
     if (const char* v = get("KKE_SERVER_PUBLIC"); v && !parseBool(v, isPublic)) errors.push_back(std::string("KKE_SERVER_PUBLIC='") + v + "': expected true or false");
     if (const char* v = get("KKE_SERVER_CLIENT_SCORES"); v && !parseBool(v, clientScores))
@@ -183,6 +195,15 @@ bool ServerConfig::applyArgs(const std::vector<std::string>& args, std::vector<s
         else if (a == "--save-dir") { if (value(v)) saveDir = v; }
         else if (a == "--storage") { if (value(v)) storage = v; }
         else if (a == "--directory") { if (value(v)) directories.push_back(v); }
+        else if (a == "--backups" || a == "--backup-minutes") {
+            if (value(v)) {
+                const bool count = a == "--backups";
+                uint16_t n = 0;
+                const bool parsed = parsePort(v, n) || (count && v == "0");
+                if (parsed && (count ? n <= 1000 : n >= 1 && n <= 10080)) (count ? backups : backupMinutes) = n;
+                else errors.push_back(a + " " + v + (count ? ": expected 0 to 1000" : ": expected 1 to 10080 (a week)"));
+            }
+        }
         else if (a == "--public") isPublic = true;
         else if (a == "--client-scores") clientScores = true;
         else if (a == "--config") { value(v); } // read before the layers are applied (kke_server's main)
@@ -231,6 +252,7 @@ std::string ServerConfig::describe() const {
         }
         out += "\n  storage: " + shown;
     }
+    out += "\n  backups: " + (backups ? std::to_string(backups) + " kept, every " + std::to_string(backupMinutes) + " min" : std::string("off"));
     if (!scene.empty()) out += "\n  scene: " + scene;
     if (hasRole("directory")) out += "\n  directory on UDP port " + std::to_string(directoryPort);
     if (isPublic) out += "\n  public, listed on: " + d;
@@ -255,8 +277,11 @@ std::string ServerConfig::usage() {
            "  --directory-port N    UDP port of this server's directory role (default 27950)\n"
            "  --client-scores       leaderboard: players may send their own scores\n"
            "  --storage URL         sqlite:FILE (default save/server.db), valkey://HOST:PORT, postgres://...\n"
+           "  --backups N           copies of the store kept in SAVE_DIR/backups (default 5, 0 = none)\n"
+           "  --backup-minutes N    how often one is made (default 60)\n"
            "Environment: KKE_SERVER_NAME, _GAME, _PORT, _MAX_PLAYERS, _PASSWORD, _MOTD, _ROLES,\n"
-           "  _SCENE, _SAVE_DIR, _DIRECTORIES, _DIRECTORY_PORT, _PUBLIC, _CLIENT_SCORES, _STORAGE\n"
+           "  _SCENE, _SAVE_DIR, _DIRECTORIES, _DIRECTORY_PORT, _PUBLIC, _CLIENT_SCORES, _STORAGE,\n"
+           "  _BACKUPS, _BACKUP_MINUTES\n"
            "  (flags win over them).\n";
 }
 

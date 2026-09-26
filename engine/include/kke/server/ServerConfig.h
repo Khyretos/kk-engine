@@ -27,6 +27,8 @@ struct ServerConfig {
     uint16_t tickRate = 60;            // server updates per second
     std::string storage;               // where the server keeps data (docs/STORAGE.md); "" = sqlite:<saveDir>/server.db
     bool clientScores = false;         // leaderboard: players may send their own scores (easy to cheat; see the docs)
+    uint16_t backups = 5;              // copies of the store kept in <saveDir>/backups (0 = none); the oldest goes
+    uint16_t backupMinutes = 60;       // how often one is made (and one on stop)
 
     bool hasRole(const std::string& role) const;
     // Players join (UDP `port`) when any of players, physics or leaderboard is on;
@@ -41,6 +43,7 @@ struct ServerConfig {
     // argv without the program name: --name X --port N --max-players N
     // --password X --game X --roles a,b --scene X --save-dir X --public
     // --directory host:port (repeatable) --directory-port N --client-scores --storage URL
+    // --backups N --backup-minutes N
     // --config path
     // (read by the caller first) --help.
     bool applyArgs(const std::vector<std::string>& args, std::vector<std::string>& errors);

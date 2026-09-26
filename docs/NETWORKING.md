@@ -202,6 +202,10 @@ issue #28.
   everyone (Breakables above).
 - Scripts: what `sv_*.lua` spawns shows up for everyone (docs/SCRIPTING.md
   "Multiplayer").
+- Internet servers: the Network panel (F1) lists the public servers a
+  directory knows for this game (docs/SERVER_HOSTING.md "Servers helping
+  each other"): `KKE_DIRECTORIES=host:port` fills it at start, Refresh
+  asks again, Join connects (with the Password field's password).
 
 ## Tests
 
@@ -245,9 +249,9 @@ capsule doesn't; the honest fall after a refusal passes.
 - Input replay for competitive games (#28: needs a rewindable
   kke::Locomotion), rollback for fighting games, lockstep for RTS
   (ACTION_PLAN.md).
-- Dedicated server process and Docker image; secure connect tokens
-  (yojimbo), internet P2P with NAT traversal (GameNetworkingSockets).
-- Voice chat (Opus).
+- Secure connect tokens (yojimbo), internet P2P with NAT traversal
+  (GameNetworkingSockets). (Dedicated servers, Docker and voice chat are
+  built: docs/SERVER_HOSTING.md, "Voice" below.)
 - Several local players per connection (couch + online).
 - Breaking on a client before the host says so (predicted breaks): today
   a client's pane cracks half a round trip after the hit.
@@ -280,12 +284,32 @@ default), with nothing to sign up for:
   placed, occluded and reverberated like any other sound. Mute or set
   the volume of anyone locally; `speaking(id)` lets a game draw a
   speaker icon.
-- `KKE_VOICE=off` keeps the microphone closed; `KKE_VOICE_TONE=440` sends
-  a test tone instead of the microphone, to check a connection with
-  nobody talking.
+- **Cleaning the microphone** (`kke::voice::VoiceCleaner`), before
+  coding, on by default, switches in the Voice panel:
+  - *Echo cancellation* (SpeexDSP's MDF filter, BSD): without headphones
+    the microphone hears the speakers, and the others would hear
+    themselves back. The mixer hands voice chat everything it plays
+    (`AudioMixer::setOutputTap`); an adaptive filter learns the path from
+    speaker to microphone (up to 200 ms of delay and room echo) and
+    subtracts it, then a residual echo suppressor takes out what's left.
+    The panel shows how many dB it took out. Needs the audio output at
+    48 kHz (the default).
+  - *Noise suppression* (RNNoise 0.1.1, BSD; its model is in the source,
+    416 KB): a small neural network trained on speech takes out fans,
+    keyboards, traffic and hiss, which also keeps the voice gate from
+    opening on noise.
+  - In the tests: steady noise 29 dB quieter; a speaker echo 25 ms late
+    with a reflection 21 dB quieter after 4 s of learning.
+- `KKE_VOICE=off` keeps the microphone closed; `KKE_VOICE_NOISE=off` /
+  `KKE_VOICE_ECHO=off` switch the cleaning off; `KKE_VOICE_TONE=440`
+  sends a test tone instead of the microphone (not cleaned), to check a
+  connection with nobody talking.
 
 Checked end to end: two kke_demo instances, the host sending a tone, the
 client (at 7 fps under a software GPU) played 1188 frames with nothing
 skipped. Tests: test_voice.cpp (jitter buffer, voice gate, streamed mixer
-voices, routing, flood cap, Opus round trip with a lost frame).
+voices, routing, flood cap, Opus round trip with a lost frame, noise
+suppression, echo cancellation, the mixer's output tap). With a real
+microphone and speakers it waits for a person: HW-018 in
+docs/HARDWARE_TESTS.md.
 

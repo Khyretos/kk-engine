@@ -55,18 +55,21 @@ setting it can't use rather than guessing.
   "directories": [],
   "public": false,
   "clientScores": false,
-  "storage": "sqlite:save/server.db"
+  "storage": "sqlite:save/server.db",
+  "backups": 5,
+  "backupMinutes": 60
 }
 ```
 
 Every setting also has a variable (`KKE_SERVER_NAME`, `_GAME`, `_PORT`,
 `_MAX_PLAYERS`, `_PASSWORD`, `_MOTD`, `_ROLES` as `a,b`, `_SCENE`,
 `_SAVE_DIR`, `_DIRECTORIES`, `_DIRECTORY_PORT`, `_PUBLIC`,
-`_CLIENT_SCORES`, `_STORAGE`) and a flag (`./kke_server --help`). `KKE_SERVER_CONFIG`
+`_CLIENT_SCORES`, `_STORAGE`, `_BACKUPS`, `_BACKUP_MINUTES`) and a flag (`./kke_server --help`). `KKE_SERVER_CONFIG`
 or `--config` picks another file. For the `physics` role the models of the
 scene come from the asset folder (`KKE_ASSETS_DIR`, as for the games).
 
-Players join with the game's Multiplayer panel (address and password) or
+Players join with the game's Network panel (address and password, or a
+click in its **Internet servers** list, see below) or
 `KKE_NET=join:ADDRESS KKE_NET_PASSWORD=...`. A dedicated server has no
 player of its own, so all `maxPlayers` slots are for players.
 
@@ -74,9 +77,38 @@ Console (stdin, or `docker attach kke-server`): `help`, `status`,
 `players`, `kick <id|name> [reason]`, `ban <id|name|address> [reason]`,
 `unban <name|address>`, `bans`, `admin <name>`, `allow <name>`,
 `say <text>`, `mute <id|name>`, `unmute <id|name>` (voice), `top [board]`,
-`save`, `stop`. `Ctrl+C` and `docker stop`
-(SIGTERM) stop it cleanly: players are told, files are saved. The
-leaderboards are also saved every minute.
+`seen <name>`, `save`, `backup`, `stop`. `Ctrl+C` and `docker stop`
+(SIGTERM) stop it cleanly: players are told, everything is saved and
+backed up. The leaderboards and players are also saved every minute.
+
+## Saves
+
+What a server remembers lives in its store (docs/STORAGE.md; by default
+the one file `saveDir/server.db`, or a Valkey / PostgreSQL server shared
+by many game servers):
+
+- **Players**: everyone who has been here, by name (case folded): first
+  and last visit, number of visits, time played, and where they were
+  when they left. `seen kees` in the console:
+  `Kees: 3 visits, played 41 min, first 2 days ago, last 5 min ago; left at 12.0, 0.0, -3.5`.
+- **Leaderboards** (the `leaderboard` role). A `leaderboards.json` from
+  before storage is imported on the first start and renamed
+  `leaderboards.json.imported`.
+- **Backups**: every `backupMinutes` (60) and on stop, a copy of the
+  whole store goes to `saveDir/backups/server-<date>-<time>.db` (UTC); the
+  newest `backups` (5) are kept, `0` turns them off. `backup` in the
+  console makes one now. A copy is one SQLite file: to restore, stop the
+  server and copy it over `server.db`. A Valkey or PostgreSQL store is
+  backed up with that database's own tools (RDB snapshots, `pg_dump`);
+  the server says so at start.
+- **The access list** stays a file (`access.json`), so an owner can edit
+  it by hand like 7DTD's `serveradmin.xml`.
+
+Next (#45 and #43): the world itself (spawned objects, broken
+breakables) once server-side Lua makes a dedicated server's world
+change; its scripts then save with the same `store.*` games use
+(docs/SCRIPTING.md "Saving"). A returning player put back where they
+left.
 
 ## Roles: what a server does
 
@@ -89,7 +121,7 @@ settings; a server runs any mix.
 | `players` | Joins, player states, snapshots, speed limits (docs/NETWORKING.md); passes each player's game events on to the others, as a host would; relays voice chat to whoever should hear it (nearby, team, everyone) | built |
 | `physics` | Owns the world: loads the scene's collision headlessly (`loadSceneCollision`) and refuses moves through walls and flights (`WorldMoveCheck`). Simulating replicated bodies on the server is next | built (collision + move checks) |
 | `leaderboard` | Named boards: each player's best score, top 10 per reply, kept in `saveDir/leaderboards.json`. Other servers using one leaderboard server is #46 | built |
-| `directory` | A server list: servers with `"public": true` register and send a heartbeat; games ask it for the list. Anyone can run one (a friend group, a modding community, a studio) | built (server side and `DirectoryBrowser`; the game's panel lists LAN games only so far) |
+| `directory` | A server list: servers with `"public": true` register and send a heartbeat; games ask it for the list. Anyone can run one (a friend group, a modding community, a studio) | built (the game's Network panel lists its servers; see below) |
 | `scripts` | Headless Lua (`sv_*.lua`) on the server | next (#43) |
 | `relay` | Join by code through NAT: both sides reach the relay, the relay forwards (and tries a hole punch first) | next (#44) |
 | `rollback` / `lockstep` | Input relay and checksums for rollback (fighting) and lockstep (RTS) games | planned (#28) |
@@ -120,9 +152,13 @@ Docker.
   in `directories`; the directory keeps a server while heartbeats arrive
   (every 10 s, dropped after 30 s) and answers list queries with name,
   game, address, players/max, whether it has a password, and its roles.
-  The game's LAN search and a directory list look the same in the UI.
-  The default list is empty: no KKE-run service is required (a studio can
-  ship its own directory address in `game.json`).
+  In a game, the Network panel's **Internet servers** asks a directory
+  for the servers of that game (name, players/max, a password or not)
+  and joins one with a click; servers of another protocol version or
+  full ones can't be picked. Which directory: the game sets
+  `NetModule::directories`, or `KKE_DIRECTORIES=host:port[,host:port]`;
+  the player can type another. The default list is empty: no KKE-run
+  service is required.
 - **Shared services**: a server can point a role at another server
   (`"leaderboard": "scores.example.org:27961"`), so ten game servers share
   one leaderboard (next: #46).
@@ -157,8 +193,9 @@ Designed in from the first piece; hardened as the parts grow.
   rate-limits heartbeats and queries per address, and never answers a
   heartbeat. Queries must be padded to 512 bytes and an answer is at most
   1200, so a spoofed query can't turn it into a traffic amplifier.
-- **Files**: the server never writes `server.json`; `access.json` and
-  `leaderboards.json` are replaced atomically. Damaged entries are skipped
+- **Files**: the server never writes `server.json`; `access.json` is
+  replaced atomically, the store is a database (a crash loses at most
+  the last moments, never the file). Damaged entries are skipped
   and reported, the rest still counts.
 - **The Docker image** runs as an unprivileged user and holds no asset
   packs.
@@ -196,9 +233,11 @@ host port and the data folder. A directory is the same image with
 | `kke_server`: headless, config file + env + flags, password, access file, console, clean stop | #42 | built |
 | Roles `physics` (scene collision, move checks), `leaderboard`, `directory` | #42 | built |
 | Docker image + compose | #42 | built |
-| Directory list in the game's Multiplayer panel; server-side physics bodies | #42 | next |
+| Directory list in the game's Network panel | #42 | built |
+| Server-side physics bodies | #42 | next |
 | Headless Lua on the server | #43 | planned |
 | Relay + join codes (self-hostable, no port forwarding) | #44 | planned |
-| Persistence and scheduled backups | #45 | planned |
+| Persistence: players, leaderboards in the store; rotating backups | #45 | built |
+| Persistence: world state (needs server Lua) | #45 | next |
 | Roles served by another server (shared leaderboard etc.) | #46 | planned |
 | Rollback / lockstep roles | #28 | planned |
