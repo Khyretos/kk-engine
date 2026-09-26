@@ -15,7 +15,12 @@
 
 namespace kke::script_net {
 
-// NetModule spawn kinds (next to NetModule::kScriptEventKind = 0x4C00).
+// Lua net.send messages ride game events of this kind: name \0 value
+// (ScriptVM::encodeValue). NetModule::kScriptEventKind, and kke_server's
+// scripts role (kke/server/ServerScripts.h), use the same.
+constexpr uint16_t kScriptEvent = 0x4C00;
+
+// NetModule spawn kinds, next to it.
 constexpr uint16_t kSpawnBody = 0x4C01;          // physics.box / physics.sphere
 constexpr uint16_t kSpawnBreakableBox = 0x4C02;  // breakable.box
 constexpr uint16_t kSpawnBall = 0x4C03;          // breakable.ball (transient: a throw)

@@ -49,6 +49,7 @@ add_executable(kke_tests
     test_texture_mips.cpp
     test_shadow_projection.cpp
     test_draw_order.cpp
+    test_tone_mapper.cpp
     test_jiggle.cpp
     test_rml_data_binding.cpp
     test_frame_retire_queue.cpp
@@ -61,6 +62,9 @@ if(KKE_ENABLE_JOLT)
 endif()
 if(ENGINE_ENABLE_LUA)
     target_sources(kke_tests PRIVATE test_script_vm.cpp)
+    if(KKE_ENABLE_NET)
+        target_sources(kke_tests PRIVATE test_server_scripts.cpp)
+    endif()
 endif()
 target_compile_definitions(kke_tests PRIVATE KKE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 

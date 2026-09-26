@@ -56,6 +56,6 @@ void main() {
     // environment map, as the opaque shader's ambient is).
     vec3 reflection = F * (lighting.ambient.rgb * 1.6 + vec3(0.06));
     vec3 color = body + spec + reflection;
-    color = color / (color + vec3(1.0)); // same Reinhard as shadeSurface
+    color = toneMap(color, lighting.toneParams); // same curve as shadeSurface
     outColor = vec4(color, 1.0);
 }

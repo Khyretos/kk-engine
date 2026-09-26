@@ -72,6 +72,17 @@ TEST(ServerConfig, ReportsEveryProblemInsteadOfGuessing) {
     errors.clear();
     EXPECT_FALSE(v.validate(errors));
     EXPECT_EQ(errors.size(), 4u);
+
+    ServerConfig fog; // fog of war needs the level's walls
+    fog.fogOfWar = true;
+    errors.clear();
+    EXPECT_FALSE(fog.validate(errors));
+    ASSERT_EQ(errors.size(), 1u);
+    EXPECT_NE(errors[0].find("physics"), std::string::npos);
+    EXPECT_TRUE(fog.loadJson(R"({"fogOfWar":false})", errors));
+    EXPECT_FALSE(fog.fogOfWar);
+    EXPECT_TRUE(fog.applyArgs({ "--fog-of-war" }, errors));
+    EXPECT_TRUE(fog.fogOfWar);
 }
 
 TEST(ServerConfig, NeverShowsThePassword) {
@@ -499,6 +510,42 @@ TEST(DedicatedServer, RefusesToStartOnBadSettings) {
     EXPECT_FALSE(s.start(errors));
     EXPECT_FALSE(errors.empty());
 }
+
+#if KKE_ENABLE_JOLT
+// fogOfWar (docs/ANTI_CHEAT.md "Fog of war"): a player far away is never
+// sent; one close by is.
+TEST(DedicatedServer, FogOfWarSendsOnlyWhoYouCouldSee) {
+    ServerConfig c = testConfig("dedicated_fog");
+    c.maxPlayers = 3;
+    c.roles = { "physics" };
+    c.scene = c.saveDir + "/empty.scene.json";
+    ASSERT_TRUE(writeFileAtomic(c.scene, R"({"format":"kke.scene","version":1,"name":"empty","objects":[]})"));
+    c.fogOfWar = true;
+    World w(c);
+    NetClient& a = w.join("A");
+    NetClient& far = w.join("Far");
+    NetClient& near = w.join("Near");
+    auto at = [](float x) {
+        NetPlayerState s;
+        s.position = glm::vec3(x, 0.0f, 0.0f);
+        return s;
+    };
+    for (int i = 0; i < 120; ++i) {
+        a.setLocalState(at(0.0f));
+        far.setLocalState(at(300.0f)); // beyond maxDistance
+        near.setLocalState(at(5.0f));  // within hearing
+        w.run(1.0 / 60.0);
+    }
+    bool sawNear = false;
+    for (const RemotePlayer& p : a.players(w.now)) {
+        if (p.name == "Far") {
+            EXPECT_FALSE(p.hasState) << "a player 300 m away was sent";
+        }
+        if (p.name == "Near") sawNear = p.hasState;
+    }
+    EXPECT_TRUE(sawNear);
+}
+#endif
 
 // A real directory on this machine's UDP: a public server registers, a
 // browser lists it, the bye removes it.
