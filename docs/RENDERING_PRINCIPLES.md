@@ -317,6 +317,21 @@ in the Synty demo: 0 draw calls, UI intact, validation clean.
 (`kke::frontToBackOrder`), inside instanced draws and across them (#37).
 The measured depth prepass and the overdraw view remain open in #37.
 
+**Also:** MSAA (#36). `graphics.msaa` in settings.json (1, 2, 4 or 8;
+default 4) is read at startup, because every scene pipeline bakes the
+sample count in; `KKE_MSAA=n` overrides it, and software rasterisers
+(the min-spec reference) run at 1x. With MSAA the 3D pass renders into a
+multisampled offscreen target that the render pass resolves, then the
+single-sample image goes to the swapchain the same way render scale
+does, and UI draws on top at full resolution. `kke::Pipeline` takes the
+sample count from the render pass it's built for
+(`VulkanDevice::renderPassSamples`), so modules need no changes; RmlUi
+and ImGui pipelines use `Renderer::overlayRenderPass()`. Thumbnails use
+`Renderer::createSceneCompatiblePass`, so they're anti-aliased too.
+Checked headless at 4x (Synty demo, sandbox with thumbnails, UI
+showcase): smoother edges, validation clean. SMAA 1x is still open in
+#36.
+
 **Later the same day:** shadow map quality (#38). The shadow map is
 sampled with a depth-compare sampler (each of the 9 PCF taps is a
 hardware bilinear comparison), casters get slope-scaled depth bias from
@@ -332,7 +347,7 @@ in #20.
    accumulation. (rule)
 3. Specular AA, coverage-preserving alpha mips, anisotropic filtering.
    (done)
-4. MSAA as a setting + optional SMAA 1x. (#36)
+4. MSAA as a setting (done) + optional SMAA 1x. (#36)
 5. HDR target, one tone map + exposure pass, 10-bit output. (#35)
 6. Front-to-back sorting (done), measured prepass, overdraw view. (#37)
 7. Shadow map quality: compare sampler, slope bias, stable projection. (done, #38)

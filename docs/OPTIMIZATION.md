@@ -103,7 +103,7 @@ stay under ~500 MB resident. Benchmarks report `peak_rss_mb` for this.
 | Texture atlases | N64/PS1 | Synty packs are built around one atlas per pack — keep it that way: one texture bind for a whole pack | ✅ natural fit |
 | Mip mapping | 90s | All textures: less aliasing *and* less bandwidth | ✅ done (log #14); alpha coverage kept per mip (log #32) |
 | Anisotropic filtering | 2000s | All material textures | ✅ done (log #32) |
-| MSAA (forward, no G-buffer) | 2000s | Geometric edges; a setting, off on min-spec | backlog (#36) |
+| MSAA (forward, no G-buffer) | 2000s | Geometric edges; a setting, off on min-spec | ✅ done (log #36) |
 | Texture compression (BCn/ASTC) | 2000s | Asset cooking step | backlog |
 | Vertex quantization (16-bit) | N64/PS1 | Static meshes: positions as int16 + per-mesh scale, normals as oct-encoded 2×8 bit | backlog |
 | Instanced draws | 2000s | Repeated props (Synty levels are 90% repeats) | backlog |
@@ -126,6 +126,7 @@ BUGS.md / PERFORMANCE_NOTES.md entry with full detail.
 
 | # | What | Why it works | Measured effect | Where |
 |---|---|---|---|---|
+| 36 | MSAA as a setting (default 4x, 1x on software rasterisers), resolved in the render pass | Anti-aliased geometry edges with no temporal filter: a forward renderer gets MSAA without G-buffer tricks. The multisampled colour is `STORE_OP_DONT_CARE` (never written to memory after the resolve), so the bandwidth cost stays in tile/cache on GPUs that support it (#36) | Not measured on a real GPU yet (HW); lavapipe at 4x renders correctly. The min-spec path is unchanged (1x) | `Renderer::setMsaaSamples`, `Renderer::createSceneCompatiblePass`, `Pipeline` |
 | 35 | Opaque model draws sorted nearest first: instances inside each instanced draw, the instanced draws, then the single draws | Early-Z rejects hidden pixels before they are shaded instead of shading far walls and painting over them. Stable sort, so equal distances never swap and flicker (#37) | Synty demo: same image (only the animated arm differs between captures), validation clean. Overdraw saving not measured yet; needs a real GPU or an overdraw view | `kke::frontToBackOrder`, `ModelModule::buildBatches`/`render` |
 | 34 | `Application::setSceneCovered`: nothing 3D drawn behind a full-screen opaque menu | Rule 1, do less work: the shadow pass and render() produce pixels nobody sees (the Dead Space remake menu case). Simulation and UI-owned prepass work (thumbnails) keep running (#40) | Synty demo with it forced on: 0 scene draw calls, UI unchanged, validation clean. Frame time not compared yet | `Application::run`, `PrepassContext::sceneCovered` |
 | 33 | Shadows: hardware depth-compare PCF, slope-scaled caster bias, shadow region follows the camera snapped to whole texels | Each of the 9 taps is now a bilinear 2x2 comparison (smooth ~4-texel edge for the same 9 fetches); bias scales with surface slope so the old 0.003 constant (~27 cm of peter-panning) drops to 0.0005; texel snapping keeps edges still while the region moves (#38) | Same tap count; snapping unit-tested (world point shifts by whole texels for any centre); Synty demo screenshot: soft contact shadows, no acne, validation clean | `kke::ShadowMap`, `pbr_common.glsl` |

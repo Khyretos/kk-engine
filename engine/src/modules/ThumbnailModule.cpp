@@ -83,51 +83,15 @@ void ThumbnailModule::createGpu() {
             return;
     }
 
-    // The main pass's attachments and subpass dependency (render passes
-    // are only compatible, i.e. share pipelines, when those match); only
-    // the colour's final layout differs: it ends ready to be copied.
-    std::array<VkAttachmentDescription, 2> a{};
-    a[0].format = m_colorFormat;
-    a[0].samples = VK_SAMPLE_COUNT_1_BIT;
-    a[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    a[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    a[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    a[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    a[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    a[0].finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    a[1].format = m_depthFormat;
-    a[1].samples = VK_SAMPLE_COUNT_1_BIT;
-    a[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    a[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    a[1].stencilLoadOp = r.hasStencil() ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    a[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    a[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    a[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    VkAttachmentReference colorRef{ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
-    VkAttachmentReference depthRef{ 1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
-    VkSubpassDescription subpass{};
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &colorRef;
-    subpass.pDepthStencilAttachment = &depthRef;
-    VkSubpassDependency dependency{};
-    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-    dependency.dstSubpass = 0;
-    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dependency.srcAccessMask = 0;
-    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-    VkRenderPassCreateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    info.attachmentCount = static_cast<uint32_t>(a.size());
-    info.pAttachments = a.data();
-    info.subpassCount = 1;
-    info.pSubpasses = &subpass;
-    info.dependencyCount = 1;
-    info.pDependencies = &dependency;
-    VK_CHECK(vkCreateRenderPass(dev, &info, nullptr, &m_pass));
+    // Laid out exactly like the scene pass (formats, MSAA, resolve,
+    // subpass dependency), so ModelModule's lit pipeline draws in it; the
+    // single-sample colour ends ready to be copied. Thumbnails get the
+    // same anti-aliasing as the game.
+    m_pass = r.createSceneCompatiblePass(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    m_samples = r.msaaSamples();
 
-    auto makeImage = [&](Image& img, uint32_t size, VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspect) {
+    auto makeImage = [&](Image& img, uint32_t size, VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspect,
+                         uint32_t samples = 1) {
         VkImageCreateInfo ii{};
         ii.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         ii.imageType = VK_IMAGE_TYPE_2D;
@@ -138,7 +102,7 @@ void ThumbnailModule::createGpu() {
         ii.tiling = VK_IMAGE_TILING_OPTIMAL;
         ii.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         ii.usage = usage;
-        ii.samples = VK_SAMPLE_COUNT_1_BIT;
+        ii.samples = static_cast<VkSampleCountFlagBits>(samples);
         ii.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         VmaAllocationCreateInfo ai{};
         ai.usage = VMA_MEMORY_USAGE_GPU_ONLY;
@@ -153,10 +117,14 @@ void ThumbnailModule::createGpu() {
     };
     makeImage(m_scratchColor, kTile, m_colorFormat, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
     makeImage(m_scratchDepth, kTile, m_depthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-              VK_IMAGE_ASPECT_DEPTH_BIT | (r.hasStencil() ? VK_IMAGE_ASPECT_STENCIL_BIT : 0));
+              VK_IMAGE_ASPECT_DEPTH_BIT | (r.hasStencil() ? VK_IMAGE_ASPECT_STENCIL_BIT : 0), m_samples);
+    if (m_samples > 1)
+        makeImage(m_scratchMsaa, kTile, m_colorFormat, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_IMAGE_ASPECT_COLOR_BIT, m_samples);
     makeImage(m_atlas, kAtlas, m_colorFormat, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
 
-    std::array<VkImageView, 2> views = { m_scratchColor.view, m_scratchDepth.view };
+    // With MSAA, attachment 2 is the resolve target (see createSceneCompatiblePass).
+    std::vector<VkImageView> views = m_samples > 1 ? std::vector<VkImageView>{ m_scratchMsaa.view, m_scratchDepth.view, m_scratchColor.view }
+                                                   : std::vector<VkImageView>{ m_scratchColor.view, m_scratchDepth.view };
     VkFramebufferCreateInfo fb{};
     fb.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
     fb.renderPass = m_pass;
@@ -215,7 +183,7 @@ void ThumbnailModule::destroyGpu() {
     m_sampler = VK_NULL_HANDLE;
     if (m_framebuffer) vkDestroyFramebuffer(dev, m_framebuffer, nullptr);
     m_framebuffer = VK_NULL_HANDLE;
-    for (Image* img : { &m_atlas, &m_scratchColor, &m_scratchDepth }) {
+    for (Image* img : { &m_atlas, &m_scratchColor, &m_scratchDepth, &m_scratchMsaa }) {
         if (img->view) vkDestroyImageView(dev, img->view, nullptr);
         if (img->image) vmaDestroyImage(device.allocator(), img->image, img->alloc);
         *img = Image{};
@@ -509,7 +477,7 @@ void ThumbnailModule::prepass(const PrepassContext& ctx) {
                                 VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT };
         vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT, 0, 1, &mb, 0, nullptr, 0, nullptr);
-        std::array<VkClearValue, 2> clears{};
+        std::array<VkClearValue, 3> clears{}; // [2]: MSAA resolve target, not cleared
         clears[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
         clears[1].depthStencil = { 1.0f, 0 };
         VkRenderPassBeginInfo rp{};
@@ -517,7 +485,7 @@ void ThumbnailModule::prepass(const PrepassContext& ctx) {
         rp.renderPass = m_pass;
         rp.framebuffer = m_framebuffer;
         rp.renderArea = { { 0, 0 }, { uint32_t(kTile), uint32_t(kTile) } };
-        rp.clearValueCount = uint32_t(clears.size());
+        rp.clearValueCount = m_samples > 1 ? 3u : 2u;
         rp.pClearValues = clears.data();
         vkCmdBeginRenderPass(cmd, &rp, VK_SUBPASS_CONTENTS_INLINE);
         VkViewport viewport{ 0.0f, 0.0f, float(kTile), float(kTile), 0.0f, 1.0f };

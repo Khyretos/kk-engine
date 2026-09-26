@@ -172,39 +172,63 @@ VkExtent2D Renderer::renderExtent() const {
              std::max(1u, static_cast<uint32_t>(std::lround(e.height * m_renderScale))) };
 }
 
-// Same attachments as the swapchain's pass (so the same pipelines draw
-// in it), but the colour ends as a blit source.
-void Renderer::createScenePass() {
-    VkFormat color = m_swapChain->imageFormat(), depth = m_swapChain->depthFormat();
-    if (m_scenePass && m_scenePassFormats[0] == color && m_scenePassFormats[1] == depth) return;
-    if (m_scenePass) vkDestroyRenderPass(m_device->device(), m_scenePass, nullptr);
-    m_scenePassFormats[0] = color;
-    m_scenePassFormats[1] = depth;
+void Renderer::setMsaaSamples(uint32_t samples) {
+    uint32_t want = 1;
+    while (want * 2 <= samples && want < 8) want *= 2; // 1, 2, 4 or 8
+    const uint32_t maxSupported = static_cast<uint32_t>(m_device->maxUsableSampleCount());
+    want = std::min(want, maxSupported);
+    if (want > 1 && !m_swapChain->canBlitTo()) {
+        std::cerr << "[renderer] MSAA unavailable: the swapchain can't be blitted to; staying at 1x" << std::endl;
+        want = 1;
+    }
+    m_msaa = want;
+    createScenePass(); // renderPass() hands it out from now on
+}
 
-    std::array<VkAttachmentDescription, 2> a{};
+// Same attachments as the swapchain's pass (so the same pipelines draw
+// in it), but the colour ends in colorFinalLayout. With MSAA: the colour
+// and depth are multisampled and a third, single-sample attachment
+// receives the resolved colour; the render pass does the resolve.
+VkRenderPass Renderer::createSceneCompatiblePass(VkImageLayout colorFinalLayout) {
+    const VkFormat color = m_swapChain->imageFormat(), depth = m_swapChain->depthFormat();
+    const VkSampleCountFlagBits samples = static_cast<VkSampleCountFlagBits>(m_msaa);
+    const bool msaa = m_msaa > 1;
+
+    std::array<VkAttachmentDescription, 3> a{};
     a[0].format = color;
-    a[0].samples = VK_SAMPLE_COUNT_1_BIT;
+    a[0].samples = samples;
     a[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    a[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    // The multisampled colour only lives until it's resolved.
+    a[0].storeOp = msaa ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE;
     a[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     a[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     a[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    a[0].finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    a[0].finalLayout = msaa ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : colorFinalLayout;
     a[1].format = depth;
-    a[1].samples = VK_SAMPLE_COUNT_1_BIT;
+    a[1].samples = samples;
     a[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     a[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     a[1].stencilLoadOp = m_swapChain->hasStencil() ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     a[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     a[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     a[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    a[2].format = color;
+    a[2].samples = VK_SAMPLE_COUNT_1_BIT;
+    a[2].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; // fully written by the resolve
+    a[2].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    a[2].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    a[2].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    a[2].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    a[2].finalLayout = colorFinalLayout;
 
     VkAttachmentReference colorRef{ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
     VkAttachmentReference depthRef{ 1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
+    VkAttachmentReference resolveRef{ 2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
     VkSubpassDescription subpass{};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &colorRef;
+    subpass.pResolveAttachments = msaa ? &resolveRef : nullptr;
     subpass.pDepthStencilAttachment = &depthRef;
 
     // Identical to SwapChain's own dependency: render passes are only
@@ -220,13 +244,26 @@ void Renderer::createScenePass() {
 
     VkRenderPassCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    info.attachmentCount = static_cast<uint32_t>(a.size());
+    info.attachmentCount = msaa ? 3u : 2u;
     info.pAttachments = a.data();
     info.subpassCount = 1;
     info.pSubpasses = &subpass;
     info.dependencyCount = 1;
     info.pDependencies = &dependency;
-    VK_CHECK(vkCreateRenderPass(m_device->device(), &info, nullptr, &m_scenePass));
+    VkRenderPass pass = VK_NULL_HANDLE;
+    VK_CHECK(vkCreateRenderPass(m_device->device(), &info, nullptr, &pass));
+    m_device->setRenderPassSamples(pass, samples);
+    return pass;
+}
+
+void Renderer::createScenePass() {
+    VkFormat color = m_swapChain->imageFormat(), depth = m_swapChain->depthFormat();
+    if (m_scenePass && m_scenePassFormats[0] == color && m_scenePassFormats[1] == depth && m_scenePassSamples == m_msaa) return;
+    if (m_scenePass) vkDestroyRenderPass(m_device->device(), m_scenePass, nullptr);
+    m_scenePassFormats[0] = color;
+    m_scenePassFormats[1] = depth;
+    m_scenePassSamples = m_msaa;
+    m_scenePass = createSceneCompatiblePass(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
     // Formats changed: every target was made for the old pass.
     for (uint32_t i = 0; i < kMaxFramesInFlight; ++i) m_sceneTargets[i].extent = {};
 }
@@ -237,7 +274,9 @@ void Renderer::destroySceneTarget(uint32_t frame) {
     if (t.framebuffer) vkDestroyFramebuffer(dev, t.framebuffer, nullptr);
     if (t.colorView) vkDestroyImageView(dev, t.colorView, nullptr);
     if (t.depthView) vkDestroyImageView(dev, t.depthView, nullptr);
+    if (t.msaaColorView) vkDestroyImageView(dev, t.msaaColorView, nullptr);
     if (t.color) vmaDestroyImage(m_device->allocator(), t.color, t.colorAlloc);
+    if (t.msaaColor) vmaDestroyImage(m_device->allocator(), t.msaaColor, t.msaaColorAlloc);
     if (t.depth) vmaDestroyImage(m_device->allocator(), t.depth, t.depthAlloc);
     t = SceneTarget{};
 }
@@ -252,8 +291,8 @@ void Renderer::ensureSceneTarget(uint32_t frame) {
     destroySceneTarget(frame);
     t.extent = e;
 
-    auto makeImage = [&](VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspect, VkImage& image,
-                         VmaAllocation& alloc, VkImageView& view) {
+    auto makeImage = [&](VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspect, VkSampleCountFlagBits samples,
+                         VkImage& image, VmaAllocation& alloc, VkImageView& view) {
         VkImageCreateInfo ii{};
         ii.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         ii.imageType = VK_IMAGE_TYPE_2D;
@@ -264,7 +303,7 @@ void Renderer::ensureSceneTarget(uint32_t frame) {
         ii.tiling = VK_IMAGE_TILING_OPTIMAL;
         ii.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         ii.usage = usage;
-        ii.samples = VK_SAMPLE_COUNT_1_BIT;
+        ii.samples = samples;
         ii.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         VmaAllocationCreateInfo ai{};
         ai.usage = VMA_MEMORY_USAGE_GPU_ONLY;
@@ -277,13 +316,20 @@ void Renderer::ensureSceneTarget(uint32_t frame) {
         vi.subresourceRange = { aspect, 0, 1, 0, 1 };
         VK_CHECK(vkCreateImageView(m_device->device(), &vi, nullptr, &view));
     };
+    const VkSampleCountFlagBits samples = static_cast<VkSampleCountFlagBits>(m_msaa);
     makeImage(m_scenePassFormats[0], VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-              VK_IMAGE_ASPECT_COLOR_BIT, t.color, t.colorAlloc, t.colorView);
+              VK_IMAGE_ASPECT_COLOR_BIT, VK_SAMPLE_COUNT_1_BIT, t.color, t.colorAlloc, t.colorView);
     makeImage(m_scenePassFormats[1], VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-              VK_IMAGE_ASPECT_DEPTH_BIT | (m_swapChain->hasStencil() ? VK_IMAGE_ASPECT_STENCIL_BIT : 0), t.depth,
+              VK_IMAGE_ASPECT_DEPTH_BIT | (m_swapChain->hasStencil() ? VK_IMAGE_ASPECT_STENCIL_BIT : 0), samples, t.depth,
               t.depthAlloc, t.depthView);
-
-    std::array<VkImageView, 2> views = { t.colorView, t.depthView };
+    std::vector<VkImageView> views;
+    if (m_msaa > 1) {
+        makeImage(m_scenePassFormats[0], VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_IMAGE_ASPECT_COLOR_BIT, samples, t.msaaColor,
+                  t.msaaColorAlloc, t.msaaColorView);
+        views = { t.msaaColorView, t.depthView, t.colorView }; // attachment 2 = resolve target
+    } else {
+        views = { t.colorView, t.depthView };
+    }
     VkFramebufferCreateInfo fb{};
     fb.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
     fb.renderPass = m_scenePass;
@@ -322,13 +368,13 @@ void Renderer::beginView(const VkRect2D& rect, bool clear) {
 void Renderer::beginRenderPass() {
     VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
 
-    std::array<VkClearValue, 2> clearValues{};
+    std::array<VkClearValue, 3> clearValues{}; // [2]: MSAA resolve target, not cleared
     clearValues[0].color = { { m_clearLinear.r, m_clearLinear.g, m_clearLinear.b, 1.0f } };
     clearValues[1].depthStencil = { 1.0f, 0 };
 
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    if (scaled()) {
+    if (offscreenScene()) {
         ensureSceneTarget(m_currentFrame);
         renderPassInfo.renderPass = m_scenePass;
         renderPassInfo.framebuffer = m_sceneTargets[m_currentFrame].framebuffer;
@@ -339,11 +385,11 @@ void Renderer::beginRenderPass() {
     VkExtent2D extent = renderExtent();
     renderPassInfo.renderArea.offset = { 0, 0 };
     renderPassInfo.renderArea.extent = extent;
-    renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+    renderPassInfo.clearValueCount = offscreenScene() && m_msaa > 1 ? 3u : 2u;
     renderPassInfo.pClearValues = clearValues.data();
 
     vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    m_inScenePass = scaled();
+    m_inScenePass = offscreenScene();
     setFullViewport(cmd, extent);
 }
 
