@@ -305,6 +305,14 @@ All three are spatial and per-frame: no temporal filter, no dithering.
    cutoff and foliage thins out and vanishes with distance. Unit-tested
    (`tests/test_texture_mips.cpp`).
 
+**Later the same day:** shadow map quality (#38). The shadow map is
+sampled with a depth-compare sampler (each of the 9 PCF taps is a
+hardware bilinear comparison), casters get slope-scaled depth bias from
+`ShadowMap::casterConfig()` so the shader bias shrank from 0.003 to
+0.0005, and the 15 m shadow region now follows the camera's target,
+snapped to whole shadow texels so edges don't shimmer. Cascades remain
+in #20.
+
 ## Adopt list (short)
 
 1. No dithering, ever. (rule, done)
@@ -315,7 +323,7 @@ All three are spatial and per-frame: no temporal filter, no dithering.
 4. MSAA as a setting + optional SMAA 1x. (#36)
 5. HDR target, one tone map + exposure pass, 10-bit output. (#35)
 6. Front-to-back sorting, measured prepass, overdraw view. (#37)
-7. Shadow map quality: compare sampler, slope bias, stable projection. (#38)
+7. Shadow map quality: compare sampler, slope bias, stable projection. (done, #38)
 8. Texture compression at asset cooking. (#39)
 9. Don't render the 3D scene behind opaque menus. (#40)
 10. LODs by screen size (#23); probe-based, stable ambient and GI

@@ -18,7 +18,8 @@ layout(set = 0, binding = 0) uniform LightingUBO {
     mat4 viewProj; // see cube.vert's own comment on why this is here
 } lighting;
 
-layout(set = 1, binding = 0) uniform sampler2D shadowMap;
+// A depth-compare sampler (kke::ShadowMap): texture() returns how lit.
+layout(set = 1, binding = 0) uniform sampler2DShadow shadowMap;
 // Set 2: the material's own albedo texture -- see kke::Texture and
 // kke::Application's own default 1x1 white texture (bound here for
 // any object that doesn't have a real one of its own, so this
@@ -32,39 +33,29 @@ layout(set = 1, binding = 0) uniform sampler2D shadowMap;
 
 const float PI = 3.14159265359;
 
-// Real shadow lookup with PCF (Percentage-Closer Filtering) — a real
-// quality improvement over the single-tap version this replaced, not
-// a rewrite for its own sake. A single tap produces a hard, aliased,
-// stair-stepped shadow edge (every shadow-map texel boundary shows up
-// as a visible jump in the rendered image); PCF instead samples a
-// small neighborhood around each shadow-map lookup and averages the
-// binary in/out-of-shadow results, giving a smooth gradient across
-// that same edge. textureSize(shadowMap, 0) queries the actual bound
-// shadow map's real resolution at runtime rather than hardcoding it
-// separately here (see kke::ShadowMap's own resolution parameter) —
-// correct even if that resolution ever changes, with nothing in this
-// shader needing to know or track it. A 3x3 kernel (9 taps) is a
-// standard, real trade-off: enough samples for a genuinely smooth edge
-// without the cost of a larger kernel this project's own scenes don't
-// need. Returns 1.0 for "fully lit," 0.0 for "fully in shadow," with
-// real fractional values now for pixels straddling a shadow edge.
+// Shadow lookup, 3x3 PCF on a depth-compare sampler: each tap is itself
+// a bilinear 2x2 comparison done by the hardware, so the nine taps give a
+// smooth edge ~4 texels wide instead of nine hard yes/no steps. Soft
+// edges come from filtering, never from random or dithered taps
+// (docs/RENDERING_PRINCIPLES.md). Returns 1.0 fully lit, 0.0 in shadow.
+// Most of the acne bias is on the casters (ShadowMap::casterConfig's
+// slope-scaled depth bias); this small constant only covers the PCF
+// taps landing on a sloped receiver.
 float computeShadow(vec4 posLightSpace) {
     vec3 projCoords = posLightSpace.xyz / posLightSpace.w;
     vec2 shadowUV = projCoords.xy * 0.5 + 0.5;
-    float currentDepth = projCoords.z;
 
     if (shadowUV.x < 0.0 || shadowUV.x > 1.0 || shadowUV.y < 0.0 || shadowUV.y > 1.0) {
         return 1.0;
     }
 
-    float bias = 0.003;
+    float ref = projCoords.z - 0.0005;
     vec2 texelSize = 1.0 / vec2(textureSize(shadowMap, 0));
 
     float litSum = 0.0;
     for (int dy = -1; dy <= 1; ++dy) {
         for (int dx = -1; dx <= 1; ++dx) {
-            float closestDepth = texture(shadowMap, shadowUV + vec2(dx, dy) * texelSize).r;
-            litSum += (currentDepth - bias > closestDepth) ? 0.0 : 1.0;
+            litSum += texture(shadowMap, vec3(shadowUV + vec2(dx, dy) * texelSize, ref));
         }
     }
     return litSum / 9.0;
