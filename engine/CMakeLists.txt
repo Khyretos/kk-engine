@@ -30,6 +30,8 @@ set(ENGINE_SOURCES
     src/ResourceGovernor.cpp
     src/FrameStats.cpp
     src/Viewports.cpp
+    src/PhysicsBridge.cpp
+    src/Buoyancy.cpp
     src/CameraRig.cpp
     src/SceneFile.cpp
     src/net/BitStream.cpp
@@ -72,6 +74,7 @@ set(ENGINE_SOURCES
     src/modules/MaterialGridModule.cpp
     src/modules/DebugControlModule.cpp
     src/modules/PhysicsModule.cpp
+    src/modules/PhysicsModuleBridge.cpp
     src/modules/SettingsModule.cpp
     src/modules/ModelModule.cpp
     src/modules/DebugDrawModule.cpp
@@ -197,7 +200,7 @@ else()
 endif()
 
 if(KKE_ENABLE_JOLT)
-    target_sources(kke_engine PRIVATE src/RigidWorld.cpp src/Locomotion.cpp src/SceneLoader.cpp src/modules/RigidBodyModule.cpp)
+    target_sources(kke_engine PRIVATE src/RigidWorld.cpp src/Locomotion.cpp src/SceneLoader.cpp src/modules/RigidBodyModule.cpp src/modules/PhysicsBridgeModule.cpp)
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_JOLT=1)
     target_link_libraries(kke_engine PUBLIC Jolt)
 else()

@@ -13,6 +13,7 @@
 #include "kke/Ragdoll.h"
 #include "kke/BreakGraph.h"
 #include "kke/InteriorColor.h"
+#include "kke/PhysicsBridge.h"
 
 #include <glm/glm.hpp>
 #include <memory>
@@ -332,6 +333,26 @@ public:
     bool ragdollBodyTransforms(RagdollHandle handle, std::vector<glm::mat4>& out) const override;
     void pushRagdollBody(RagdollHandle handle, int body, const glm::vec3& deltaVelocity) override;
 
+    // ---- The other physics world (kke/PhysicsBridge.h, PhysicsBridgeModule)
+    // Boxes FEMFX objects collide with from the next step on, replacing
+    // the last set (proxies not listed again are removed). They're
+    // kinematic in FEMFX: pieces bounce off them but can't move them;
+    // that way round goes through externalImpulses(). Keep the list to
+    // what's near moving pieces: FEMFX treats rigid bodies as always
+    // awake, so a proxy touching a sleeping piece keeps waking it.
+    void setExternalBoxes(const std::vector<BridgeBox>& boxes);
+    size_t externalBoxCount() const { return m_external.size(); }
+    struct ExternalImpulse {
+        uint64_t key = 0;
+        glm::vec3 impulse{0.0f}; // N s, world
+        glm::vec3 point{0.0f};   // where it acts
+    };
+    // What the last step's contacts gave each movable external box.
+    const std::vector<ExternalImpulse>& externalImpulses() const { return m_externalImpulses; }
+    // World bounds of every piece of every object; `awakeOnly` skips the
+    // sleeping ones.
+    void pieceBounds(std::vector<std::pair<glm::vec3, glm::vec3>>& out, bool awakeOnly) const;
+
     // Procedural tet meshes, centered on the origin: a box of cells (6
     // tets each) and a "spherified cube" ball. Public so games can spawn
     // their own shapes (projectiles, crates) through spawn*TetMesh().
@@ -631,6 +652,26 @@ private:
     RagdollHandle m_nextRagdoll = 1;
     static constexpr uint32_t kRagdollCollisionGroup = 3;
     static constexpr uint32_t kMaxRigidBodies = 256;
+    static constexpr uint32_t kMaxExternalBoxes = 96; // of kMaxRigidBodies
+    static constexpr uint32_t kExternalCollisionGroup = 4;
+    struct ExternalProxy {
+        AMD::FmRigidBody* body = nullptr;
+        uint32_t id = 0;
+        BridgeBox box;
+    };
+    std::unordered_map<uint64_t, ExternalProxy> m_external;
+    std::vector<ExternalImpulse> m_externalImpulses;
+    // Vertices near the movable proxies, sampled before a step.
+    struct ExternalSample {
+        const AMD::FmTetMesh* mesh = nullptr;
+        uint32_t vert = 0;
+        glm::vec3 velocity{0.0f};
+    };
+    std::vector<std::vector<ExternalSample>> m_externalSamples; // per movable proxy, in m_externalOrder
+    std::vector<uint64_t> m_externalOrder;
+    void sampleExternalContacts();
+    void measureExternalContacts(float dt);
+    void destroyExternalProxies();
     bool m_drawGround = true;
     bool m_showRagdollBodies = false;
 

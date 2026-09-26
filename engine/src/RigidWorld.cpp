@@ -8,6 +8,7 @@
 #include <Jolt/Core/TempAllocator.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Character/CharacterVirtual.h>
+#include <Jolt/Physics/Collision/BroadPhase/BroadPhaseQuery.h>
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/CollideShape.h>
 #include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
@@ -263,6 +264,40 @@ void RigidWorld::setTransform(BodyId body, const glm::vec3& position, const glm:
     m->bodies().SetPositionAndRotation(id, toJR(position), toJ(glm::normalize(rotation)), JPH::EActivation::Activate);
 }
 
+void RigidWorld::bodiesInBox(const glm::vec3& min, const glm::vec3& max, std::vector<BodyBox>& out) const {
+    JPH::AllHitCollisionCollector<JPH::CollideShapeBodyCollector> hits;
+    m->system.GetBroadPhaseQuery().CollideAABox(JPH::AABox(toJ(min), toJ(max)), hits);
+    for (const JPH::BodyID& id : hits.mHits) {
+        JPH::BodyLockRead lock(m->system.GetBodyLockInterface(), id);
+        if (!lock.Succeeded()) continue;
+        const JPH::Body& b = lock.GetBody();
+        const JPH::Shape* shape = b.GetShape();
+        if (shape->GetSubType() == JPH::EShapeSubType::Mesh) continue;
+        BodyBox box;
+        box.id = id.GetIndexAndSequenceNumber();
+        box.motion = b.IsStatic() ? Motion::Static : b.IsKinematic() ? Motion::Kinematic : Motion::Dynamic;
+        box.rotation = toG(b.GetRotation());
+        if (shape->GetSubType() == JPH::EShapeSubType::Box) {
+            box.center = toG(JPH::Vec3(b.GetCenterOfMassPosition()));
+            box.halfExtents = toG(static_cast<const JPH::BoxShape*>(shape)->GetHalfExtent());
+        } else {
+            const JPH::AABox local = shape->GetLocalBounds();
+            box.center = toG(JPH::Vec3(b.GetCenterOfMassTransform() * local.GetCenter()));
+            box.halfExtents = toG(local.GetExtent());
+        }
+        if (box.motion == Motion::Dynamic) {
+            box.velocity = toG(b.GetLinearVelocity());
+            box.angularVelocity = toG(b.GetAngularVelocity());
+            const float inv = b.GetMotionProperties()->GetInverseMass();
+            box.mass = inv > 0.0f ? 1.0f / inv : 0.0f;
+        } else if (box.motion == Motion::Kinematic) {
+            box.velocity = toG(b.GetLinearVelocity());
+            box.angularVelocity = toG(b.GetAngularVelocity());
+        }
+        out.push_back(box);
+    }
+}
+
 RigidWorld::RayHit RigidWorld::raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance) const {
     RayHit out;
     glm::vec3 dir = glm::length(direction) > 1e-9f ? glm::normalize(direction) : glm::vec3(0, -1, 0);
@@ -335,6 +370,19 @@ bool RigidWorld::setCharacterHeight(CharacterId id, float height) {
 float RigidWorld::characterHeight(CharacterId id) const {
     auto it = m->characters.find(id);
     return it == m->characters.end() ? 0.0f : it->second.desc.height;
+}
+
+float RigidWorld::characterRadius(CharacterId id) const {
+    auto it = m->characters.find(id);
+    return it == m->characters.end() ? 0.0f : it->second.desc.radius;
+}
+
+std::vector<RigidWorld::CharacterId> RigidWorld::characterIds() const {
+    std::vector<CharacterId> ids;
+    ids.reserve(m->characters.size());
+    for (const auto& [id, c] : m->characters) ids.push_back(id);
+    std::sort(ids.begin(), ids.end());
+    return ids;
 }
 
 void RigidWorld::setCharacterInput(CharacterId id, const CharacterInput& input) {

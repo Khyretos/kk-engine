@@ -8,7 +8,10 @@
 #include "kke/FrameStats.h"
 #include "kke/Footsteps.h"
 #include "kke/ResourceGovernor.h"
+#include "kke/Buoyancy.h"
 #include "kke/Locomotion.h"
+#include "kke/Ocean.h"
+#include "kke/OceanRenderer.h"
 #include "kke/Module.h"
 #include "kke/RigidWorld.h"
 #include "kke/SphereImpostors.h"
@@ -112,6 +115,20 @@ private:
         bool crouch = false, jumpQueued = false;
         float runTime = 0.0f; // on the lane: seconds since the start (< 0 = waiting)
     };
+    // Stations (Stations.cpp). The pool: a walled basin of water (vault
+    // over the wall to wade in) where crates, planks and a raft float,
+    // bob on small waves and right themselves; a steel block sinks.
+    void buildPool(std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx);
+    void spawnPoolFloaters(int& n);
+    void floatBodies(float dt);
+    bool inPool(const glm::vec3& p) const;
+    void drawPool(const kke::RenderContext& ctx);
+    kke::OceanWaves m_poolWaves;
+    std::unique_ptr<kke::OceanRenderer> m_poolWater;
+    std::vector<kke::RigidWorld::BodyBox> m_poolBodies;
+    std::vector<kke::BuoyancyPoint> m_buoyancy;
+    float m_poolTime = 0.0f;
+
     void setLocalPlayers(int count);
     void assignControllers();
     void updateLocalPlayers(float dt);
@@ -182,6 +199,12 @@ private:
     glm::vec3 m_autopilotStart{0.0f};
     float m_autopilotEndZ = 0.0f;
     float m_demoHang = -1.0f; // KKE_DEMO_HANG: seconds into the script, -1 = off
+    // KKE_DEMO_BRIDGE: an iron ball dropped on the yard's glass; logs how
+    // far the shards knocked the crates under it (FEMFX <-> Jolt bridge).
+    float m_demoBridge = -1.0f;
+    size_t m_yardCratesFirst = 0; // the crates under the glass: m_crates[first..first+3)
+    std::vector<glm::vec3> m_yardCratesStart;
+    void updateBridgeDemo(float dt);
     glm::vec3 m_demoAway{0.0f};
     glm::vec3 m_spawn{0.0f, 0.05f, 6.0f};
     kke::ModelModule::ModelId m_charModel = 0;

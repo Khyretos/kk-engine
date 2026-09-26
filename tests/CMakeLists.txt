@@ -25,6 +25,8 @@ add_executable(kke_tests
     test_resource_governor.cpp
     test_frame_stats.cpp
     test_viewports.cpp
+    test_physics_bridge.cpp
+    test_buoyancy.cpp
     test_camera_rig.cpp
     test_scene_file.cpp
     test_net.cpp
