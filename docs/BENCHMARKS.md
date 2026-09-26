@@ -44,7 +44,10 @@ appends the results to the
 [`benchmark-data` branch](https://github.com/Khyretos/kk-engine/tree/benchmark-data):
 `history.jsonl` holds every run, and its README shows a table and a trend
 chart per number. Pull requests run a quick pass and get a comparison in
-the job summary without being recorded.
+the job summary without being recorded. Runs on `main` go one at a time;
+when several pushes land while one runs, only the newest waits and the
+ones in between are skipped, so the history samples main rather than
+listing every commit.
 
 Every number is compared with the median of the last 10 runs, and changes
 beyond ±25% are marked in the job summary. Nothing fails on a slow
@@ -103,7 +106,20 @@ Frame times are the stress test's; the kke_bench column is the
 
 | Machine | Profile | GPU | FPS avg | 1% low | Verdict | Jolt step (ms) |
 |---|---|---|---:|---:|---|---:|
-| Cloud VM, Xeon @ 2.80 GHz, 4 vCPU, 16 GB (2026-09-26) | whole machine | lavapipe (software) | 20.0 | 12.3 | too slow | 1.74 |
+| Cloud VM, Xeon @ 2.80 GHz (2026-09-26) | `floor-1c-2g` | lavapipe (software) | 7.2 | 4.1 | too slow | 1.66 |
+| Cloud VM, Xeon @ 2.80 GHz (2026-09-26) | `laptop-1c-2g-vram512` | lavapipe, 512 MB cap | 7.3 | 4.6 | too slow | 1.70 |
+| Cloud VM, Xeon @ 2.80 GHz (2026-09-26) | `dual-2c-2g-vram1g` | lavapipe, 1 GB cap | 11.8 | 7.6 | too slow | 1.69 |
+| Cloud VM, Xeon @ 2.80 GHz (2026-09-26) | `mid-4c-8g` | lavapipe (software) | 19.4 | 11.3 | too slow | 1.66 |
+| Cloud VM, Xeon @ 2.80 GHz, 4 vCPU, 16 GB (2026-09-26) | whole machine, no Docker | lavapipe (software) | 20.0 | 12.3 | too slow | 1.74 |
+
+What these say: on a machine with no GPU at all, the CPU also draws every
+pixel, and drawing is most of the frame (on the floor profile the GPU
+passes take about 95% of it; physics is under 1 ms). The stress test is
+deliberately harder than a normal scene, so "too slow" here is the worst
+case, not what a typical game on that machine gets. The fps roughly
+scale with cores because lavapipe renders on every core it's given. The
+Jolt column stays flat because kke_bench is single-threaded by design.
+The VRAM caps didn't change anything: the showcase fits in 512 MB.
 
 ### Core + FEMFX
 

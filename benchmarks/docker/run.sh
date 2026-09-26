@@ -17,8 +17,9 @@ run)
     out="/src/benchmark/$profile"
     mkdir -p "$out"
     [ -x "$BUILD/bin/kke_bench" ] || { echo "no build in $BUILD: run the 'build' service first"; exit 1; }
-    mem=$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo max)
-    [ "$mem" = max ] && mem="no" || mem="$((mem / 1048576)) MB"
+    # cgroup v2, else v1 (where "no limit" is a huge number)
+    mem=$(cat /sys/fs/cgroup/memory.max 2>/dev/null || cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || echo max)
+    if [ "$mem" = max ] || [ "$mem" -ge 1099511627776 ]; then mem="no"; else mem="$((mem / 1048576)) MB"; fi
     echo "== profile $profile: $(nproc) core(s), $mem memory limit, VRAM budget ${KKE_VRAM_BUDGET_MB:-none}"
     vulkaninfo --summary 2>/dev/null | grep -E "deviceName|driverName" || true
 

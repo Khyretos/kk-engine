@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install system dependencies
         run: |
@@ -58,7 +58,9 @@ jobs:
 
       - name: Stress test (showcase, Xvfb + lavapipe)
         run: |
-          Xvfb :99 -screen 0 1280x720x24 &
+          # The X server's own keymap chatter (keysyms its xkb data lacks)
+          # goes to xvfb.log, uploaded with the reports.
+          Xvfb :99 -screen 0 1280x720x24 > "$GITHUB_WORKSPACE/bench-out-xvfb.log" 2>&1 &
           sleep 2
           cd build/bin
           rm -f imgui.ini
@@ -109,9 +111,10 @@ jobs:
 
       - name: Upload the reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: benchmark-reports
           path: |
             bench-out/
             build/bin/stress.log
+            bench-out-xvfb.log
