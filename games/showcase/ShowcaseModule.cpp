@@ -194,6 +194,7 @@ void ShowcaseModule::init(kke::Application& app) {
         if (std::sscanf(at, "%f,%f,%f,%f", &x, &y, &z, &yaw) >= 3) {
             m_loco->teleport(glm::vec3(x, y, z));
             m_loco->setFacing(glm::vec3(std::sin(glm::radians(yaw)), 0.0f, -std::cos(glm::radians(yaw))));
+            m_rig.yaw = yaw; // the camera looks the same way
         }
     }
     if (const char* h = std::getenv("KKE_DEMO_HANG"); h && *h && *h != '0') {
@@ -280,6 +281,7 @@ void ShowcaseModule::buildLevel() {
         addStaticBox({ { 10.0f + c.x * 1.4f, 0.6f, 6.0f + c.y * 1.4f }, { 0.1f, 0.6f, 0.1f }, wall }, v, idx);
     buildParkourLane(v, idx);
     buildPool(v, idx);
+    buildLava(v, idx);
     // Breaking yard floor marker.
     addStaticBox({ { 14.0f, 0.01f, -6.0f }, { 5.5f, 0.01f, 4.5f }, glm::vec3(0.3f, 0.3f, 0.25f) }, v, idx);
     m_level->upload(v, idx);
@@ -861,6 +863,9 @@ void ShowcaseModule::onNetEvent(uint16_t kind, uint8_t from, const std::vector<u
 }
 
 void ShowcaseModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
+    // Local only: every machine runs its own lava (what it looks like
+    // isn't gameplay state).
+    if (m_lava) m_lava->fixedUpdate(ctx.fixedDt, m_rigid->world(), lavaWatched());
     // Platform: back and forth, up and down.
     m_platformTime += ctx.fixedDt;
 #if KKE_ENABLE_NET
@@ -876,6 +881,7 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     m_fps = m_fps * 0.95f + (dt > 0.0f ? 1.0f / dt : 0.0f) * 0.05f;
     updateStressTest(dt);
     batchCrates();
+    if (m_lava) m_lava->update();
     kke::RigidWorld& w = m_rigid->world();
 
     // Crouch: a 1.0 m capsule. Standing up waits until there's headroom.
@@ -1148,6 +1154,7 @@ void ShowcaseModule::batchCrates() {
 void ShowcaseModule::render(const kke::RenderContext& ctx) {
     m_level->draw(ctx, glm::mat4(1.0f), 0.0f, 0.85f);
     drawPool(ctx);
+    if (m_lava) m_lava->render(ctx);
     for (const SceneEntry& e : m_scenes)
         if (e.ground) e.ground->draw(ctx, glm::mat4(1.0f), 0.0f, 0.95f);
     kke::RigidWorld& w = m_rigid->world();
@@ -1160,8 +1167,13 @@ void ShowcaseModule::render(const kke::RenderContext& ctx) {
     for (const glm::mat4& t : m_avatarCapsules) m_capsule->draw(ctx, t, 0.0f, 0.6f);
 }
 
+void ShowcaseModule::prepass(const kke::PrepassContext& ctx) {
+    if (m_lava) m_lava->prepass(ctx);
+}
+
 void ShowcaseModule::renderShadow(const kke::ShadowRenderContext& ctx) {
     m_level->drawShadow(ctx);
+    if (m_lava) m_lava->renderShadow(ctx);
     for (const SceneEntry& e : m_scenes)
         if (e.ground) e.ground->drawShadow(ctx);
     kke::RigidWorld& w = m_rigid->world();
@@ -1288,6 +1300,12 @@ void ShowcaseModule::renderUi() {
         ImGui::SliderFloat("Sun strength", &m_sunIntensity, 0.0f, 3.0f);
         ImGui::ColorEdit3("Sun colour", &m_sunColor.x);
         ImGui::SliderFloat("Ambient", &m_ambient, 0.0f, 1.0f);
+    }
+    if (m_lava && ImGui::CollapsingHeader("Lava")) {
+        ImGui::Text("Block: %s, %.0f %% left", m_lava->blockName(), m_lava->blockLeft() * 100.0f);
+        ImGui::Text("Liquid: %zu / %zu particles, %.2f ms a step", m_lava->particles(), m_lava->budget(), m_lava->stepMs());
+        if (ImGui::Button("Next block")) m_lava->next();
+        ImGui::TextDisabled("Runs only while a camera is within 18 m.");
     }
     if (ImGui::CollapsingHeader("Split screen")) {
         int players = static_cast<int>(m_locals.size()) + 1;

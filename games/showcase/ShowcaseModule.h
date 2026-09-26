@@ -10,6 +10,7 @@
 #include "kke/ResourceGovernor.h"
 #include "kke/Buoyancy.h"
 #include "kke/Locomotion.h"
+#include "LavaStation.h"
 #include "kke/Ocean.h"
 #include "kke/OceanRenderer.h"
 #include "kke/Module.h"
@@ -39,6 +40,7 @@ public:
     void fixedUpdate(const kke::FixedUpdateContext& ctx) override;
     void update(const kke::UpdateContext& ctx) override;
     void render(const kke::RenderContext& ctx) override;
+    void prepass(const kke::PrepassContext& ctx) override;
     void renderShadow(const kke::ShadowRenderContext& ctx) override;
     void renderUi() override;
     void onEvent(const SDL_Event& event) override;
@@ -128,6 +130,10 @@ private:
     std::vector<kke::RigidWorld::BodyBox> m_poolBodies;
     std::vector<kke::BuoyancyPoint> m_buoyancy;
     float m_poolTime = 0.0f;
+    // The lava station (LavaStation.cpp): a basin where lava melts a block.
+    void buildLava(std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx);
+    bool lavaWatched() const;
+    std::unique_ptr<LavaStation> m_lava;
 
     void setLocalPlayers(int count);
     void assignControllers();

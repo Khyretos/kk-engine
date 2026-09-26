@@ -1,4 +1,5 @@
-// kke_demo's stations (ACTION_PLAN.md 1.4, issue #12). The pool: Jolt
+// kke_demo's stations (ACTION_PLAN.md 1.4, issue #12). The lava basin
+// (LavaStation) and the pool: Jolt
 // bodies float in a walled basin with kke::boxBuoyancy (Archimedes at
 // sample points), on small Gerstner waves drawn by kke::OceanRenderer, the
 // same waves the buoyancy reads, so what bobs matches what you see.
@@ -17,6 +18,8 @@ const glm::vec2 kPoolHalf(4.0f, 4.0f); // inside the walls
 constexpr float kPoolWall = 1.0f;      // high: vault over it
 constexpr float kPoolWater = 0.75f;    // water level
 constexpr float kWallThickness = 0.3f;
+const glm::vec3 kLavaCenter(0.0f, 0.0f, 20.0f);
+constexpr float kLavaWatchDistance = 18.0f; // closer than this, the lava runs
 } // namespace
 
 bool ShowcaseModule::inPool(const glm::vec3& p) const {
@@ -89,6 +92,31 @@ void ShowcaseModule::floatBodies(float dt) {
         if (kke::boxBuoyancy(box, s, surface, m_buoyancy) <= 0.0f) continue;
         for (const kke::BuoyancyPoint& p : m_buoyancy) w.addImpulse(b.id, p.force * dt, p.point);
     }
+}
+
+// The lava basin: dark stone walls around LavaStation's fluid bounds, a
+// spout post, and the station itself.
+void ShowcaseModule::buildLava(std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx) {
+    const glm::vec3 basalt(0.2f, 0.19f, 0.18f), floor(0.12f, 0.11f, 0.1f);
+    const float t = kWallThickness * 0.5f, h = LavaStation::kWall * 0.5f, in = LavaStation::kHalf;
+    const float o = in + t;
+    addStaticBox({ kLavaCenter + glm::vec3(0.0f, h, -o), { o + t, h, t }, basalt }, v, idx);
+    addStaticBox({ kLavaCenter + glm::vec3(0.0f, h, o), { o + t, h, t }, basalt }, v, idx);
+    addStaticBox({ kLavaCenter + glm::vec3(-o, h, 0.0f), { t, h, o - t }, basalt }, v, idx);
+    addStaticBox({ kLavaCenter + glm::vec3(o, h, 0.0f), { t, h, o - t }, basalt }, v, idx);
+    addStaticBox({ kLavaCenter + glm::vec3(0.0f, 0.005f, 0.0f), { in, 0.005f, in }, floor }, v, idx);
+    // The spout: an arm over the basin from a post outside the back wall.
+    addStaticBox({ kLavaCenter + glm::vec3(0.12f, 1.0f, o + 0.4f), { 0.12f, 1.0f, 0.12f }, basalt }, v, idx);
+    addStaticBox({ kLavaCenter + glm::vec3(0.12f, 1.62f, (o + 0.4f) * 0.5f + 0.05f), { 0.08f, 0.06f, (o + 0.4f) * 0.5f + 0.05f }, basalt }, v, idx);
+    m_lava = std::make_unique<LavaStation>(*m_app, kLavaCenter);
+}
+
+bool ShowcaseModule::lavaWatched() const {
+    auto near = [](const glm::vec3& p) { return glm::length(glm::vec2(p.x - kLavaCenter.x, p.z - kLavaCenter.z)) < kLavaWatchDistance; };
+    if (m_app->views().empty()) return near(m_app->camera().position);
+    for (const kke::Application::View& view : m_app->views())
+        if (near(view.camera.position)) return true;
+    return false;
 }
 
 } // namespace kke_showcase
