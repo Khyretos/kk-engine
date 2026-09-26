@@ -24,6 +24,7 @@ add_executable(kke_tests
     test_break_graph.cpp
     test_animator.cpp
     test_anim_rig.cpp
+    test_climb_wall.cpp
     test_resource_governor.cpp
     test_frame_stats.cpp
     test_viewports.cpp

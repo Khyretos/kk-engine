@@ -30,6 +30,8 @@ set(ENGINE_SOURCES
     src/BreakGraph.cpp
     src/Animator.cpp
     src/AnimRig.cpp
+    src/ClimbWall.cpp
+    src/Climber.cpp
     src/ResourceGovernor.cpp
     src/FrameStats.cpp
     src/Viewports.cpp
