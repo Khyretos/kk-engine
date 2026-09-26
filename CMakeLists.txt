@@ -596,6 +596,11 @@ add_subdirectory(games/sandbox)
 add_subdirectory(games/melt_demo)
 add_subdirectory(games/jiggle_demo)
 add_subdirectory(games/sea_demo)
+# Every audio case, one station each: walls and floors are Jolt bodies
+# (the sound's rays hit them), so it needs Jolt.
+if(KKE_ENABLE_JOLT)
+    add_subdirectory(games/audio_demo)
+endif()
 
 # ---------------------------------------------------------------------------
 # Standalone smoke tests (no test framework wired in yet — see tests/).

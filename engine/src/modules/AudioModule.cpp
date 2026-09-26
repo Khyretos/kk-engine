@@ -2,6 +2,7 @@
 
 #include "kke/Application.h"
 #include "kke/Log.h"
+#include "kke/WavFile.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/SoundVisualizerModule.h"
 #if KKE_ENABLE_JOLT
@@ -18,6 +19,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <utility>
 
 namespace kke {
 
@@ -76,6 +78,7 @@ void AudioModule::init(Application& app) {
     if (const char* t = std::getenv("KKE_AUDIO_TOUR"); t && *t && *t != '0') tour = true;
     if (const char* b = std::getenv("KKE_AUDIO_BINAURAL"); b && *b && *b != '0') settings.spatial = SpatialMode::Binaural;
     m_mixer->setSpatialMode(settings.spatial);
+    if (const char* r = std::getenv("KKE_AUDIO_RECORD"); r && *r) startRecording(r);
     log->info("Audio ready: {} Hz, {} voices, output: {}", settings.sampleRate, settings.maxVoices, m_deviceName);
 
 #if KKE_ENABLE_JOLT
@@ -398,6 +401,31 @@ void AudioModule::update(const UpdateContext& ctx) {
     }
 }
 
+void AudioModule::startRecording(const std::string& path) {
+    if (!m_mixer || path.empty()) return;
+    // A minute up front; the audio thread grows it (rarely) after that.
+    m_mixer->startCapture(size_t(settings.sampleRate) * 60);
+    m_recordPath = path;
+    log::get(name())->info("Recording the audio output to {}", path);
+}
+
+bool AudioModule::stopRecording() {
+    auto log = log::get(name());
+    if (!m_mixer || m_recordPath.empty()) {
+        log->warn("stopRecording: nothing is being recorded");
+        return false;
+    }
+    const std::string path = std::exchange(m_recordPath, {});
+    const std::vector<float> samples = m_mixer->stopCapture();
+    std::string error;
+    if (!writeWav(path, samples.data(), samples.size(), 2, settings.sampleRate, &error)) {
+        log->error("Could not save the recording: {}", error);
+        return false;
+    }
+    log->info("Saved {:.1f} s of audio to {}", double(samples.size() / 2) / settings.sampleRate, path);
+    return true;
+}
+
 SoundHandle AudioModule::loadSound(const std::string& path) {
     ma_decoder_config cfg = ma_decoder_config_init(ma_format_f32, 1, ma_uint32(settings.sampleRate));
     ma_uint64 frames = 0;
@@ -477,6 +505,7 @@ void AudioModule::shutdown() {
         m_deviceRunning = false;
     }
     m_deviceRunning = false;
+    if (recording()) stopRecording(); // after the device: nothing mixes any more
 }
 
 } // namespace kke

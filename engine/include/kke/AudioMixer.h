@@ -64,6 +64,7 @@ struct ActiveSound {
     float azimuth = 0.0f;         // radians, 0 = straight ahead, +pi/2 = right
     float distance = 0.0f;
     float transmission = 1.0f;    // 1 = clear path, lower = behind something
+    bool viaOpening = false;      // heard through a door/window (setVia), not straight through the wall
     SoundCategory category = SoundCategory::Impact;
     uint32_t material = 0;
 };
@@ -128,6 +129,14 @@ public:
     // Writes `frames` stereo frames (2 floats each) to out, overwriting.
     void mix(float* out, int frames);
 
+    // Keeps a copy of everything mix() writes from now on (a recording of
+    // the output, for WAV files and tests). `reserveFrames` is allocated up
+    // front so the audio thread rarely has to grow the buffer.
+    void startCapture(size_t reserveFrames);
+    // Stops capturing and hands over what was captured (interleaved stereo).
+    std::vector<float> stopCapture();
+    bool capturing() const;
+
     std::vector<ActiveSound> activeSounds() const;
     size_t voiceCount() const;
     uint64_t droppedCount() const { return m_dropped; }
@@ -183,6 +192,8 @@ private:
     SpatialMode m_mode = SpatialMode::Stereo;
     std::unique_ptr<Reverb> m_reverb;
     std::vector<float> m_send;                    // this block's reverb send (mono)
+    bool m_capturing = false;
+    std::vector<float> m_capture;
 };
 
 } // namespace kke

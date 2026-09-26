@@ -96,6 +96,16 @@ public:
     // Null on failure (logged).
     SoundHandle loadSound(const std::string& path);
 
+    // Records everything the mixer outputs (device or silent) until
+    // stopRecording(), which writes it to `path` as a 16-bit stereo WAV.
+    // KKE_AUDIO_RECORD=file.wav records the whole run. For hearing what a
+    // headless run (CI, a server) played, and for comparing changes.
+    void startRecording(const std::string& path);
+    // False (and logged) when nothing was recording or the file couldn't
+    // be written.
+    bool stopRecording();
+    bool recording() const { return !m_recordPath.empty(); }
+
     // Returns 0..1, how much sound gets from `source` to `listener`.
     std::function<float(const glm::vec3& listener, const glm::vec3& source)> occlusionQuery;
     // Set to use something other than the camera as the ears.
@@ -145,6 +155,7 @@ private:
     std::vector<PendingPing> m_pings;
     SoundHandle m_earcons[size_t(Earcon::Count)];
     uint64_t m_footsteps = 0;
+    std::string m_recordPath;
 };
 
 } // namespace kke

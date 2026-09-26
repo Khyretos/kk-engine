@@ -45,6 +45,7 @@ set(ENGINE_SOURCES
     src/ImpactSynth.cpp
     src/Footsteps.cpp
     src/RoomAcoustics.cpp
+    src/WavFile.cpp
     src/modules/AudioModule.cpp
     src/modules/SoundVisualizerModule.cpp
     src/ParticleFluid.cpp

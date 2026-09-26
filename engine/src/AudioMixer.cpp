@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace kke {
 
@@ -214,6 +215,7 @@ std::vector<ActiveSound> AudioMixer::activeSounds() const {
         a.spatial = v.desc.spatial;
         a.loudness = v.started ? v.lastPeak : v.estLoudness;
         a.transmission = v.transmission;
+        a.viaOpening = v.viaActive;
         a.category = v.desc.category;
         a.material = v.desc.material;
         if (v.desc.spatial) {
@@ -352,6 +354,25 @@ void AudioMixer::mix(float* out, int frames) {
                    m_voices.end());
     m_reverb->process(m_send.data(), out, frames);
     for (int i = 0; i < frames * 2; ++i) out[i] = softLimit(out[i]);
+    if (m_capturing) m_capture.insert(m_capture.end(), out, out + size_t(frames) * 2);
+}
+
+void AudioMixer::startCapture(size_t reserveFrames) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_capture.clear();
+    m_capture.reserve(reserveFrames * 2);
+    m_capturing = true;
+}
+
+std::vector<float> AudioMixer::stopCapture() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_capturing = false;
+    return std::exchange(m_capture, {});
+}
+
+bool AudioMixer::capturing() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_capturing;
 }
 
 } // namespace kke
