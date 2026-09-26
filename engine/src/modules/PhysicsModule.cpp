@@ -1924,9 +1924,11 @@ void PhysicsModule::renderUi() {
     if (ImGui::Button("Scene: Rubber Ball")) spawnScene(Scene::RubberBall);
     ImGui::SameLine();
     if (ImGui::Button("Scene: Car Crash")) spawnScene(Scene::CarCrash);
-    if (ImGui::Button("Scene: Lava Melt")) spawnScene(Scene::LavaMelt);
+    // The old "Lava Melt" scene (a plastic block with lava cubes dropped on
+    // it) is kept for the scripted benchmark only; real pouring and melting
+    // lives in games/melt_demo (kke::ParticleFluid + kke::MeltVolume).
+    ImGui::TextDisabled("Lava & melting: run melt_demo");
 
-    ImGui::SameLine();
     if (ImGui::Button("Clear all")) {
         // Copy the keys first — removeObject() erases from m_objects,
         // so iterating that map directly while erasing from it would

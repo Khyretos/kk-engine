@@ -15,6 +15,8 @@ add_executable(kke_tests
     test_asset_catalog.cpp
     test_picking.cpp
     test_voxel_fracture.cpp
+    test_particle_fluid.cpp
+    test_melt_volume.cpp
 )
 target_link_libraries(kke_tests PRIVATE kke_engine GTest::gtest_main)
 target_compile_definitions(kke_tests PRIVATE KKE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

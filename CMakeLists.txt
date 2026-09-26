@@ -401,6 +401,7 @@ add_subdirectory(games/imgui_demo)
 add_subdirectory(games/rmlui_demo)
 add_subdirectory(games/synty_demo)
 add_subdirectory(games/sandbox)
+add_subdirectory(games/melt_demo)
 
 # ---------------------------------------------------------------------------
 # Standalone smoke tests (no test framework wired in yet — see tests/).

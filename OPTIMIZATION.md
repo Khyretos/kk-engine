@@ -124,6 +124,8 @@ BUGS.md / PERFORMANCE_NOTES.md entry with full detail.
 
 | # | What | Why it works | Measured effect | Where |
 |---|---|---|---|---|
+| 19 | Marching tetrahedra instead of marching cubes; SDF rebuilt only after melting | 16 cases instead of 256-entry tables, no ambiguity, watertight output (unit-tested); a melting block's surface + distance field only recompute when density changed | 24³ grid: remesh + SDF < 1 ms, and 0 ms on frames where nothing melted | `kke::MeltVolume` |
+| 18 | PBF neighbour lists built once per substep, reused by every solver pass | The grid search (27 hashed cells + dedupe) ran 7x per substep; lists make it 1x, passes then walk a flat array | 216-particle test: 2.5 ms -> 0.7 ms per step (3.6x) | `kke::ParticleFluid` |
 | 17 | Hot CPU files at -O2 in Debug too (`Texture.cpp`, `VoxelTets.cpp`, `FracturePattern.cpp`) | Same reasoning as FEMFX (BUG-029): pure number crunching nobody steps through; -O0 made mip generation alone ~200 ms per atlas | Part of #16's 300 -> 12 ms | `engine/CMakeLists.txt` |
 | 16 | One engine-wide texture cache (`Application::textureSet`) | ModelModule and PhysicsModule each loaded the same 2048² Synty atlas: 2x the GPU memory (21 MB each with mips) and ~200 ms per extra load | Making a prop breakable: 300 ms -> 12 ms total setup (of which texture 220 -> 0 ms) | `Application.cpp` |
 | 15 | Point-in-tet search on a uniform grid with precomputed inverse matrices | Brute force was O(points x tets) with a matrix inverse per test; the grid makes it ~O(points) and a barycentric test one mat3 multiply | 4,368-triangle wall: embedding 123 ms -> 1.2 ms | `kke::embedPoints` |

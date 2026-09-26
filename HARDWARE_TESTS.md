@@ -40,6 +40,18 @@ them): a `.txt` to read and a `.json` for analysis, including your CPU,
 GPU, driver, RAM, OS and build type. Paste either file back instead of
 log lines.
 
+### HW-012 · Melt demo feel and speed (dev box)
+`cd build/bin && ./melt_demo`, then each block (`Block` combo or
+`KKE_MELT_PRESET=0..3`). In the sandbox it only reached ~8 FPS (software
+GPU), so the simulation ran at ~0.27x speed and I tuned melting headless
+in simulated time. Does it look like pouring lava? Does the ice melt at a
+satisfying pace (target: about half gone in ~10 s), does lava crust too
+much or too little, does anything fly off unnaturally? Note the panel's
+"Fluid ms / melt ms" at a full 3,000 particles.
+**Send back:** a short screen recording or 3 screenshots per block, the
+panel numbers, and what feels off.
+**Result:** —
+
 ### HW-011 · Sandbox with your packs (dev box, interactive)
 `cd build/bin && ./sandbox` with your packs in `assets/synty/` (or type
 the folder into the Assets panel). Does it find **all** your packs, and

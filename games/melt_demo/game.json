@@ -1,0 +1,9 @@
+{
+  "id": "engine.kke.melt_demo",
+  "title": "KKE Melt Demo",
+  "description": "Pour lava onto a block and watch it melt: ice runs off as water and chills the lava into crust, wax and chocolate slump and harden again, aluminium glows before it goes. Particle liquid (Position Based Fluids) plus a meltable voxel solid.",
+  "version": "0.1.0",
+  "tags": ["demo", "fluid", "lava", "melting", "physics"],
+  "engine_version": "0.3",
+  "modules": ["MeltDemo", "OrbitCamera"]
+}
