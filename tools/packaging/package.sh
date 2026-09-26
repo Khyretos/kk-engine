@@ -70,7 +70,7 @@ $leak"
 
 # --- Every demo must be there and executable. ---------------------------
 demos=()
-for d in kke_demo kke_basics sandbox physics_demo melt_demo jiggle_demo sea_demo imgui_demo rmlui_demo synty_demo; do
+for d in kke_demo kke_basics sandbox physics_demo melt_demo jiggle_demo sea_demo imgui_demo rmlui_demo synty_demo audio_demo; do
     if [ -f "$stage/$d$exe" ]; then demos+=("$d"); fi
 done
 [ -f "$stage/kke_demo$exe" ] || die "kke_demo$exe is missing from $bin"

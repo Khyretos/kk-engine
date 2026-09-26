@@ -20,6 +20,7 @@
 // commit means the workload isn't deterministic, which is itself a bug.
 
 #include "kke/AudioMixer.h"
+#include "kke/RoomAcoustics.h"
 #include "kke/BenchmarkReport.h"
 #include "kke/FracturePattern.h"
 #include "kke/ImpactSynth.h"
@@ -193,6 +194,40 @@ std::vector<Case> makeCases() {
             v.sound = buf;
             v.loop = true;
             v.position = glm::vec3((r.next() - 0.5f) * 20.0f, r.next() * 3.0f, (r.next() - 0.5f) * 20.0f);
+            m->play(v);
+        }
+        auto out = std::make_shared<std::vector<float>>(480 * 2);
+        return std::function<double()>([m, out] {
+            m->mix(out->data(), 480);
+            return double((*out)[0]);
+        });
+    } });
+
+    // The same 32 voices with everything the realistic path adds: binaural
+    // ears, 8 wall echoes, every voice behind a wall (low-passed) and air
+    // absorption. The difference to audio_mix_32_voices is their cost.
+    cases.push_back({ "audio_mix_32_voices_full", "Audio mixer: 32 voices, binaural, 8 echoes, occlusion and air absorption, 10 ms", 400, [] {
+        auto m = std::make_shared<kke::AudioMixer>(48000, 32);
+        m->setRoom(1.2f, 0.4f, 0.3f, 0.02f);
+        m->setSpatialMode(kke::SpatialMode::Binaural);
+        std::vector<kke::EchoTap> taps;
+        for (int i = 0; i < kke::AudioMixer::kMaxEchoes; ++i) {
+            const float a = 0.8f * float(i);
+            taps.push_back({ glm::vec3(std::sin(a), 0.0f, std::cos(a)), 0.01f + 0.015f * float(i), 0.2f });
+        }
+        m->setEchoes(taps);
+        const kke::AudioMaterialTable table;
+        Lcg r{ 5u };
+        for (int i = 0; i < 32; ++i) {
+            kke::ImpactParams ip;
+            ip.intensity = 0.5f + 0.5f * r.next();
+            ip.seed = uint32_t(i + 1);
+            auto buf = std::make_shared<kke::SoundBuffer>(kke::synthesizeImpact(table.get(uint32_t(1 + i % 7)), ip));
+            kke::VoiceDesc v;
+            v.sound = buf;
+            v.loop = true;
+            v.position = glm::vec3((r.next() - 0.5f) * 20.0f, r.next() * 3.0f, (r.next() - 0.5f) * 20.0f);
+            v.transmission = 0.2f + 0.6f * r.next();
             m->play(v);
         }
         auto out = std::make_shared<std::vector<float>>(480 * 2);

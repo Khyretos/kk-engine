@@ -2,6 +2,7 @@
 
 #include <glm/glm.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -11,6 +12,7 @@
 namespace kke {
 
 class Reverb;
+struct EchoTap;
 
 // Mono PCM, float -1..1. Every sound the mixer plays is one of these:
 // synthesized impacts (kke::ImpactSynth) or decoded files (AudioModule).
@@ -46,6 +48,12 @@ struct VoiceDesc {
     SoundCategory category = SoundCategory::Impact;
     uint32_t material = 0;        // game/audio material id, for captions and the visualizer
     float reverbSend = 1.0f;      // how much of it the room echoes (spatial sounds only), 0..1
+    // Occlusion known when it starts (AudioModule works it out before
+    // playing), so not even the first block is heard through the wall.
+    float transmission = 1.0f;
+    bool viaOpening = false;      // heard through `via` (see setVia)
+    glm::vec3 via{0.0f};
+    float viaPathLength = 0.0f;
 };
 
 // The ears. forward/up need not be normalized.
@@ -117,6 +125,16 @@ public:
     // The room the listener is in (kke::probeRoom): the reverb every
     // spatial sound is sent to. wet 0 = outdoors, no reverb.
     void setRoom(float rt60, float damping, float wet, float preDelay);
+    // Early reflections off the walls around the listener (kke::RoomTracker::
+    // echoes): each a delayed copy of the room send, from the wall's side.
+    // Up to kMaxEchoes; a changed echo fades out and back in at its new
+    // delay (no clicks). An empty list fades them all out.
+    void setEchoes(const std::vector<EchoTap>& taps);
+    static constexpr int kMaxEchoes = 8;
+    float echoLevel = 1.0f;
+    // Distant sounds lose their highs in air (~22 kHz up close, ~5 kHz at 50 m).
+    bool airAbsorption = true;
+    static float airCutoff(float distance) { return 22000.0f / (1.0f + std::max(0.0f, distance) / 15.0f); }
     void setSpatialMode(SpatialMode m);
     SpatialMode spatialMode() const;
 
@@ -158,7 +176,8 @@ public:
     struct Shelf { float b0 = 1.0f, b1 = 0.0f, a1 = 0.0f; };
     static Shelf headShadow(float angle, int sampleRate, float headRadius = kHeadRadius);
     static constexpr float kHeadRadius = 0.0875f;  // m, an average adult head
-    static constexpr int kItdSamples = 64;         // delay line per voice: > 0.66 ms at 96 kHz
+    static constexpr int kItdSamples = 64;         // delay line per voice: > 0.66 ms at 96 kHz (a power of two)
+    static constexpr int kItdMask = kItdSamples - 1;
 
 private:
     struct Voice {
@@ -180,6 +199,7 @@ private:
         float shelfX[2] = {0.0f, 0.0f}, shelfY[2] = {0.0f, 0.0f};
     };
     float estimate(const VoiceDesc& d) const;
+    void mixEchoes(float* out, int frames);    // under m_mutex, after the voices filled m_send
     glm::vec3 heardAt(const Voice& v) const;   // where the ears place it (the opening it comes through)
 
     int m_sampleRate;
@@ -192,6 +212,15 @@ private:
     SpatialMode m_mode = SpatialMode::Stereo;
     std::unique_ptr<Reverb> m_reverb;
     std::vector<float> m_send;                    // this block's reverb send (mono)
+    struct Echo {
+        glm::vec3 dir{0.0f};
+        float delay = 0.0f, targetDelay = 0.0f; // samples
+        float targetGain = 0.0f;
+        float gainL = 0.0f, gainR = 0.0f;       // as of the end of the last block
+    };
+    Echo m_echoes[kMaxEchoes];
+    std::vector<float> m_echoLine;                // the send, delayed
+    size_t m_echoIdx = 0;
     bool m_capturing = false;
     std::vector<float> m_capture;
 };

@@ -252,6 +252,11 @@ void AudioDemoModule::buildWorld() {
                 "Here: walls left and right, a dead end behind, a way out ahead and a side opening to the right.",
                 {x, kEar, -5.0f}, 9.0f, 0.0f);
     }
+    // Inside a room the camera looks down steeply, over the walls.
+    for (Station& s : m_stations)
+        if (s.kind == Kind::StoneRoom || s.kind == Kind::Hall || s.kind == Kind::Padded || s.kind == Kind::Walls || s.kind == Kind::Door ||
+            s.kind == Kind::Pings)
+            s.cameraPitch = -1.0f;
     for (const Station& s : m_stations)
         for (const Emitter& e : s.emitters) marker(e.position, e.material);
     // The listener, the walker and the circling tick: moved every frame.
@@ -306,8 +311,11 @@ void AudioDemoModule::enter(int index) {
     m_time = 0.0f;
     m_nextHit.clear();
     for (const Emitter& e : s.emitters) m_nextHit.push_back(e.phase);
-    m_ours.clear();
+    m_seen.clear();
+    m_emitterOf.clear();
     m_measured = {};
+    m_measured.emitterThrough.assign(s.emitters.size(), 1.0f);
+    m_measured.emitterVia.assign(s.emitters.size(), false);
     m_nextCrate = 0.3f;
     m_nextStep = m_nextTick = 0.0f;
     m_nextPing = 0.8f;
@@ -317,7 +325,7 @@ void AudioDemoModule::enter(int index) {
         m_audio->mixer().setSpatialMode(kke::SpatialMode::Binaural);
         m_forcedBinaural = true;
     }
-    m_camera->setView(s.ears, s.cameraDistance, -0.55f, s.cameraYaw);
+    m_camera->setView(s.ears, s.cameraDistance, s.cameraPitch, s.cameraYaw);
     m_models->setTransform(m_earsMarker, glm::scale(glm::translate(glm::mat4(1.0f), s.ears), glm::vec3(0.25f, 0.3f, 0.25f)));
     m_models->setVisible(m_walker, s.kind == Kind::Footsteps);
     m_models->setVisible(m_circler, s.kind == Kind::Circle);
@@ -326,16 +334,10 @@ void AudioDemoModule::enter(int index) {
 
 void AudioDemoModule::tickStation(float dt) {
     const Station& s = m_stations[size_t(m_current)];
-    auto track = [&](uint32_t id) {
-        if (id) {
-            m_ours.insert(id);
-            ++m_measured.sounds;
-        }
-    };
     for (size_t i = 0; i < s.emitters.size(); ++i) {
         if (m_time < m_nextHit[i]) continue;
         const Emitter& e = s.emitters[i];
-        track(m_audio->playImpact(e.position, e.material, e.intensity));
+        if (const uint32_t id = m_audio->playImpact(e.position, e.material, e.intensity)) m_emitterOf[id] = int(i);
         m_nextHit[i] += e.period;
     }
     kke::RigidWorld& world = m_bodies->world();
@@ -387,7 +389,7 @@ void AudioDemoModule::tickStation(float dt) {
                 const kke::RigidWorld::RayHit hit = world.raycast(feet + glm::vec3(0, 0.5f, 0), glm::vec3(0, -1, 0), 1.0f);
                 const uint32_t ground = hit.hit ? hit.material : uint32_t(Mat::Dirt);
                 const float sideStep = (m_stepCount++ % 2 == 0) ? -0.12f : 0.12f;
-                track(m_audio->playFootstep(feet + glm::vec3(0, 0, sideStep), ground, 0.6f));
+                m_audio->playFootstep(feet + glm::vec3(0, 0, sideStep), ground, 0.6f);
             }
             break;
         }
@@ -397,7 +399,7 @@ void AudioDemoModule::tickStation(float dt) {
             m_models->setTransform(m_circler, glm::scale(glm::translate(glm::mat4(1.0f), p), glm::vec3(0.25f)));
             if (m_time >= m_nextTick) {
                 m_nextTick = m_time + 0.35f;
-                track(m_audio->playImpact(p, Mat::Plastic, 0.5f));
+                m_audio->playImpact(p, Mat::Plastic, 0.5f);
             }
             break;
         }
@@ -405,7 +407,6 @@ void AudioDemoModule::tickStation(float dt) {
             if (m_time >= m_nextPing) {
                 m_nextPing = m_time + 2.5f;
                 m_audio->ping();
-                ++m_measured.sounds;
             }
             break;
         default: break;
@@ -413,13 +414,20 @@ void AudioDemoModule::tickStation(float dt) {
 }
 
 void AudioDemoModule::measure() {
+    // Everything playing is this station's: entering one stops the rest.
     for (const kke::ActiveSound& a : m_audio->mixer().activeSounds()) {
-        if (!m_ours.count(a.id)) continue;
+        const bool first = m_seen.insert(a.id).second;
+        if (first) {
+            ++m_measured.sounds;
+            if (a.viaOpening) ++m_measured.throughDoor;
+        }
         m_measured.minTransmission = std::min(m_measured.minTransmission, a.transmission);
         m_measured.peak = std::max(m_measured.peak, a.loudness);
-        if (a.viaOpening) {
-            ++m_measured.throughDoor;
-            m_ours.erase(a.id); // count each sound once
+        auto it = m_emitterOf.find(a.id);
+        if (it != m_emitterOf.end()) {
+            float& t = m_measured.emitterThrough[size_t(it->second)];
+            t = std::min(t, a.transmission);
+            if (a.viaOpening) m_measured.emitterVia[size_t(it->second)] = true;
         }
     }
     const kke::RoomAcoustics& r = m_audio->room();
@@ -427,12 +435,19 @@ void AudioDemoModule::measure() {
     m_measured.wet = r.wet;
     m_measured.openness = r.openness;
     m_measured.openings = r.openings.size();
+    m_measured.echoes = m_audio->roomTracker().echoes(kke::AudioMixer::kMaxEchoes, m_audio->materials()).size();
+    m_measured.maxRays = std::max(m_measured.maxRays, m_audio->raysLastFrame());
 }
 
 void AudioDemoModule::logMeasured(const Station& s, const Measured& m) const {
-    kke::log::get(name())->info("  {}: {} sounds, room RT60 {:.2f} s wet {:.2f} open {:.2f} ({} openings), "
-                                "least through walls {:.2f}, {} through a door, peak {:.2f}",
-                                s.title, m.sounds, m.rt60, m.wet, m.openness, m.openings, m.minTransmission, m.throughDoor, m.peak);
+    std::string emitters;
+    for (size_t i = 0; i < s.emitters.size() && i < m.emitterThrough.size(); ++i)
+        emitters += fmt::format("{}{} {:.2f}{}", emitters.empty() ? "; " : ", ", s.emitters[i].label, m.emitterThrough[i],
+                                m.emitterVia[i] ? " (via opening)" : "");
+    kke::log::get(name())->info("  {}: {} sounds, room RT60 {:.2f} s wet {:.2f} open {:.2f} ({} openings), {} echoes, "
+                                "least through walls {:.2f}, {} through an opening, peak {:.2f}, max rays/frame {}{}",
+                                s.title, m.sounds, m.rt60, m.wet, m.openness, m.openings, m.echoes, m.minTransmission, m.throughDoor,
+                                m.peak, m.maxRays, emitters);
 }
 
 void AudioDemoModule::update(const kke::UpdateContext& ctx) {
@@ -455,7 +470,16 @@ void AudioDemoModule::update(const kke::UpdateContext& ctx) {
 void AudioDemoModule::renderUi() {
     if (m_current < 0) return;
     const float s = ImGui::GetFontSize() / 13.0f;
-    ImGui::SetNextWindowPos(ImVec2(10 * s, 10 * s), ImGuiCond_FirstUseEver);
+    if (++m_uiFrames == 2) {
+        // The engine's own panels start folded (once every window exists,
+        // on the second frame): this one is the demo.
+        const char* panels[] = {"Performance", "Audio", "Rigid bodies (Jolt)", "Camera"};
+        for (int i = 0; i < 4; ++i) {
+            ImGui::SetWindowCollapsed(panels[i], true, ImGuiCond_Always);
+            ImGui::SetWindowPos(panels[i], ImVec2(10 * s, (10 + 26 * float(i)) * s), ImGuiCond_Always);
+        }
+    }
+    ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 370 * s, 10 * s), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(360 * s, 0), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Audio demo")) {
         ImGui::End();

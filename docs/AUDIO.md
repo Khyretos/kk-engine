@@ -3,9 +3,10 @@
 ACTION_PLAN.md 2.2. What exists, how it works, why it's built this way,
 and what's next. Code: `kke/AudioMixer.h`, `kke/ImpactSynth.h`,
 `kke/Footsteps.h`, `kke/RoomAcoustics.h`, `kke/modules/AudioModule.h`,
-`kke/modules/SoundVisualizerModule.h`; tests: `tests/test_audio.cpp`,
-`tests/test_footsteps.cpp`, `tests/test_room_acoustics.cpp`; listen:
-`kke_audio_preview`.
+`kke/modules/SoundVisualizerModule.h`, `kke/WavFile.h`; tests:
+`tests/test_audio.cpp`, `tests/test_footsteps.cpp`,
+`tests/test_room_acoustics.cpp`, `tests/test_wav_file.cpp`; listen:
+`kke_audio_preview` and the audio demo (`games/audio_demo`).
 
 ## What you get today
 
@@ -28,17 +29,25 @@ and what's next. Code: `kke/AudioMixer.h`, `kke/ImpactSynth.h`,
   when walking, harder when sprinting, one loud step per foot on landing.
 - **Rooms sound like rooms.** A few dozen rays around the listener every
   0.25 s measure the space: a stone hall rings for seconds, a padded room
-  is dry, a field has no reverb at all. Every spatial sound goes through
-  that room's reverb.
+  is dry (soft walls send little back), a field has no reverb at all.
+  Every spatial sound goes through that room's reverb.
+- **Echoes.** The walls around you each send back a delayed copy from
+  their side: a slap off a hall's far wall 80 ms later, the ceiling above,
+  nothing outdoors.
 - **Sound comes through doors.** A sound behind a wall that has a way
-  round (an opening the room rays found) is heard from the opening, as far
-  away as the path through it, instead of straight through the wall.
+  round (a door or window the room rays found, to the outside or into the
+  next room) is heard from the opening, as far away as the path through
+  it, duller the sharper it had to bend, instead of straight through the
+  wall.
 - **Headphones mode.** Audio panel > Spatial > Binaural (or
   `KKE_AUDIO_BINAURAL=1`): each ear hears a sound slightly later and darker
   when it faces away, which gives real left/right and helps front/back.
-- **Walls muffle.** One ray per playing sound from the listener (Jolt),
-  re-cast every 0.1 s. A hit lets through the wall material's
-  `transmission` and lowers a low-pass cutoff: walls eat highs first.
+- **Walls muffle.** Every wall between you and a sound counts, by its
+  material and its thickness: a thin wood partition lets more through
+  than a thick one, two walls less than one. Worked out when the sound
+  starts (not even its first milliseconds come through the wall) and
+  again every 0.1 s. Walls eat the highs first.
+- **Air.** Far sounds lose their highs (~22 kHz up close, ~5 kHz at 50 m).
 - **Sound you can see** (`SoundVisualizerModule`): every sound is a mark
   on a ring around the screen centre in the direction it comes from (top
   = ahead), sized by loudness, coloured by category, thinner and labelled
@@ -54,7 +63,10 @@ and what's next. Code: `kke/AudioMixer.h`, `kke/ImpactSynth.h`,
 - **Budgets** (OPTIMIZATION.md rule 5): 32 voices; a new sound steals the
   quietest voice or is dropped if it would be the quietest; at most 8
   impacts per frame (strongest first) and 80 ms between two sounds from
-  the same pair of bodies, so a collapsing pile doesn't machine-gun.
+  the same pair of bodies, so a collapsing pile doesn't machine-gun. At
+  most `maxRaysPerFrame` (160) occlusion rays per frame for rechecks: with
+  many sounds playing, the most overdue are rechecked first and the rest
+  keep their last value a frame longer. The cost stays flat.
 - **Menus and pings, by ear.** Moving focus, pressing buttons, toggling
   checkboxes and dragging sliders in any RmlUi menu play short earcons.
   **Q** (d-pad down on a controller, rebindable) pings your surroundings:
@@ -64,6 +76,18 @@ and what's next. Code: `kke/AudioMixer.h`, `kke/ImpactSynth.h`,
   walking around you (front, right, back, left). The Audio panel (F1) has
   volumes per category, "hear each material" buttons, and the visualizer
   settings. `KKE_AUDIO=off` disables the output device.
+- **The audio demo** (`./audio_demo`): ten stations side by side, one
+  per case: open field, small stone room, great hall, padded room, the
+  same knock behind wood, glass and stone, a sound round through a door,
+  falling crates of six materials, footsteps on six grounds, a tick
+  circling your head (binaural) and pings. Turning the camera turns your
+  ears; the panel says what to listen for and shows what the engine
+  measured, with switches for reverb, muffling, openings and binaural.
+  `KKE_AUDIO_DEMO_TOUR=1` visits every station and logs the numbers,
+  `KKE_AUDIO_DEMO_EXIT=1` closes it after the tour.
+- **Record what played:** `KKE_AUDIO_RECORD=out.wav` (any game) saves the
+  whole mix as a WAV when the game closes, with or without a sound card;
+  `AudioModule::startRecording/stopRecording` from code.
 - **Listen without the engine:** `./kke_audio_preview [dir]` writes a WAV
   per material (soft, medium, hard) and two stereo files: a knock walking
   around the listener, and the same behind a wood wall.
@@ -136,26 +160,54 @@ smooth and stiff → glass, soft → rubber, dense → stone, light → wood).
 
 ### Occlusion
 
-`AudioModule::occlusionQuery(listener, source) -> 0..1`, by default a
-Jolt ray cast returning the first wall's `transmission` (stone 0.1, wood
-0.35, glass 0.5). One ray per sound per 0.1 s. Replace it for anything
-smarter.
+`AudioModule::soundPath(listener, source)` is what a sound hears through:
+`occlusionQuery(listener, source) -> 0..1` and, when that is muffled, a
+way round (below). The default query is Jolt: a ray to the sound; each
+wall it enters is measured by a second ray back from the sound restricted
+to that wall (its thickness), and lets through its material's
+`transmission` (stone 0.1, wood 0.35, glass 0.5, all for ~30 cm) to the
+power thickness / 0.3 m (clamped to 0.5..3). Then the ray carries on past
+that wall, up to four walls. Two rays per wall; replace the query for
+anything else.
 
-### Reverb and openings
+The path is worked out in `AudioModule::play` (and `playImpact`,
+`playFootstep`) before the voice starts: `VoiceDesc::transmission` and
+`via` go in with it, so the first block is already right. Every 0.1 s
+after that it is rechecked, within the frame's ray budget.
 
-`kke::probeRoom` casts `rays` (32) directions spread evenly over a sphere
-(a Fibonacci sphere) through `AudioModule::roomRay` (Jolt by default) and
-measures:
+The mixer turns transmission into gain and a one-pole low-pass
+(400 Hz + 17.6 kHz x t^2): walls eat highs first. Distance adds air
+absorption, a cutoff of 22 kHz / (1 + d / 15 m).
 
-- **walls**: share of the sideways rays that hit something that isn't a
-  floor; **ceiling**: share of the upward rays that hit (a roof);
-- **mean distance** of the hits (room size) and average **absorption**
-  (each material's `AudioMaterial::absorption`; an escaping ray counts
-  as 1, all absorbed);
-- **RT60** from Sabine's formula for a room of that "radius":
-  0.0537 r / a; **wet** from walls and roof (a field 0, an alley a
-  little, a hall a lot); pre-delay from the distance;
-- **openings**: every sideways direction that escaped.
+### Reverb, echoes and openings
+
+`kke::probeRoom` casts two sets of rays through `AudioModule::roomRay`
+(Jolt by default):
+
+- a **sphere** of `rays` (32) directions (a Fibonacci sphere): the
+  **mean distance** of the hits (room size), average **absorption** (each
+  material's `AudioMaterial::absorption`; an escaping ray counts as 1),
+  **ceiling** (share of the upward rays that hit) and its height;
+- a **level ring** of `ringRays` (24) at ear height: **walls** and
+  **openings**. A level ray never ends on a flat floor, so a big hall's
+  floor can't pass for a way out. A ray is an opening when it escapes, or
+  when it goes more than 0.5 m past the wall its neighbours hit (a door
+  into the next room: the opening remembers where it passes the wall,
+  `through`, and how far it stays free, `reach`).
+
+From those: **RT60** from Sabine's formula for a room of that "radius"
+(0.0537 r / a); **wet** from walls and roof (a field 0, an alley a little,
+a hall a lot) times how reflective the surfaces are (a padded room is dry
+even closed); damping from absorption; pre-delay from the distance.
+
+`kke::RoomTracker` keeps the result steady: each probe is turned by the
+golden angle from the last (`RoomProbeSettings::rotation`), so over a few
+probes the rays cover the gaps between each other and a door narrower
+than the spacing is found; the numbers blend (40% per probe) so the
+reverb doesn't wobble; openings are remembered for 6 probes (1.5 s) or
+until a ray finds a wall there; moving more than 2 m at once (a teleport)
+starts over, and the module then probes four times at once, so the room is
+right before the first sound.
 
 The reverb (`kke::Reverb`) is Freeverb's structure (Jezar, public domain):
 8 damped combs and 4 all-passes per ear, each comb's feedback set so the
@@ -164,12 +216,31 @@ bus in the mixer: every spatial voice feeds it by `VoiceDesc::reverbSend`
 and its distance gain's square root (far sounds are mostly room). Changes
 glide over a block, so walking through a door doesn't click.
 
-When a sound is occluded, `findOpening` tries the three openings most in
-its direction at 3 and 6 m: if the listener sees that point and the point
-sees the sound, the mixer places the sound at the opening
-(`AudioMixer::setVia`) at the full path length, a little duller. At most 6
-rays per occluded sound per recheck. This is the "ambient rays" idea of
+**Echoes** (early reflections): the tracker keeps the wall distance in 24
+directions around you; `RoomTracker::echoes` makes one tap per wall (bins
+within 4 ms merge) plus the ceiling: delayed by the way there and back
+(2d / 343 m/s), quieter by that extra path and the wall's absorption,
+from the wall's side. The mixer reads them off a 0.2 s delay line of the
+reverb send (`AudioMixer::setEchoes`, up to 8): a tap that moves fades
+out and back in at its new delay, so nothing clicks. Walls within a metre
+are left out (they fold into the direct sound). Cost: 8 multiply-adds per
+sample, whatever is playing.
+
+When a sound is muffled, `findOpening` tries the three openings most in
+its direction at two points each (just past the gap and 3 m further; 3 and
+6 m out for open air): if the listener sees that point and the point sees
+the sound, the mixer places the sound at the opening
+(`AudioMixer::setVia`) at the full path length. It is duller the sharper
+it bends round the edge (transmission 0.95 straight through down to 0.4
+for a U-turn: diffraction loses highs first), and never quieter than
+straight through the wall. This is the "ambient rays" idea of
 WhoStoleMyCoffee/raytraced-audio.
+
+**Cost** (kke_bench, 10 ms of output, debug build on the CI VM):
+`audio_mix_32_voices` 0.42 ms; `audio_mix_32_voices_full` (binaural, 8
+echoes, every voice occluded, air absorption) 0.83 ms. Rays: the room
+probe is 56 per 0.25 s, an occluded sound 2 per wall plus up to 12 for
+its way round, per 0.1 s, capped per frame.
 
 ### Binaural
 
@@ -239,9 +310,10 @@ next, with its lowest point at the floor. It sounds like stone.
 
 ## Next, in order
 
-1. Sliding/rolling loops from resting contacts; Doppler.
-2. Steam Audio as an optional backend (measured HRTFs, elevation,
+1. Steam Audio as an optional backend (measured HRTFs, elevation,
    reflections).
+2. Sliding/rolling loops from resting contacts; Doppler; a sound in
+   another room getting that room's reverb (per-source rooms).
 3. Streaming music/ambience from files, per-category ducking.
 4. A "describe what I hear" mode (spoken captions).
 5. Lock-free command queue if the mixer lock ever shows up.

@@ -59,7 +59,7 @@ private:
         Kind kind = Kind::Field;
         std::string title, listenFor;
         glm::vec3 ears{0.0f};      // the listening spot
-        float cameraDistance = 9.0f, cameraYaw = 0.0f, tourSeconds = 7.0f;
+        float cameraDistance = 9.0f, cameraYaw = 0.0f, cameraPitch = -0.55f, tourSeconds = 7.0f;
         std::vector<Emitter> emitters;
     };
     // What the engine did at a station, for the tour log and the panel.
@@ -67,7 +67,10 @@ private:
         int sounds = 0, throughDoor = 0;
         float minTransmission = 1.0f, peak = 0.0f;
         float rt60 = 0.0f, wet = 0.0f, openness = 0.0f;
-        size_t openings = 0;
+        size_t openings = 0, echoes = 0;
+        int maxRays = 0;
+        std::vector<float> emitterThrough; // per emitter: least that got through
+        std::vector<bool> emitterVia;      // per emitter: came through an opening
     };
     struct Crate {
         kke::RigidWorld::BodyId body = kke::RigidWorld::kNoBody;
@@ -100,7 +103,8 @@ private:
     int m_current = -1;
     float m_time = 0.0f;           // since entering the station
     std::vector<float> m_nextHit;  // per emitter
-    std::set<uint32_t> m_ours;     // voice ids played by this station
+    std::set<uint32_t> m_seen;                 // voices counted at this station
+    std::map<uint32_t, int> m_emitterOf;       // voice id -> emitter
     Measured m_measured;
     std::vector<Crate> m_crates;
     float m_nextCrate = 0.0f;
@@ -111,7 +115,7 @@ private:
     bool m_binauralBefore = false, m_forcedBinaural = false;
     bool m_tour = false, m_exitAfterTour = false;
     float m_tourLeft = 0.0f;
-    bool m_tourFailed = false;
+    int m_uiFrames = 0;
 };
 
 } // namespace kke_audio_demo
