@@ -1565,6 +1565,28 @@ jogs, jumps and stops on UAL clips, with an optional twin without jiggle
 to compare. Engine pieces: `kke::JiggleRig`, `kke::JiggleSkin`,
 `kke::JellyBody`, `kke::addHumanoidSoftTissue` — see [JIGGLE.md](JIGGLE.md).
 
+### `games/audio_demo` — every audio case, one station each
+
+`cd build/bin && ./audio_demo` (headphones recommended). Ten stations on
+one long field: open field, small stone room, great hall, padded room,
+the same knock behind wood, glass and stone, a sound round through a door,
+falling crates of six materials, footsteps on six grounds, a tick circling
+your head (binaural switched on there) and navigation pings. You stand at
+the station's listening spot; turning the camera turns your ears. The
+panel says what to listen for, shows what the engine measured (room RT60,
+reverb, openings, how much got through the walls) and has switches for
+reverb, muffling, openings and binaural. Walls and floors are Jolt bodies
+built from boxes in code: no assets.
+
+`KKE_AUDIO_DEMO_TOUR=1 KKE_AUDIO_DEMO_EXIT=1 KKE_AUDIO_RECORD=tour.wav`
+visits every station, logs the numbers per station and saves the 80 s mix.
+First tour (2026-09-26, headless) after the realism work: open field
+reverb 0; small stone room RT60 0.9 s, reverb 40%, 8 echoes; great hall
+RT60 2.2 s; padded room RT60 0.25 s, reverb 15% (was 50% before surfaces'
+softness counted); behind wood 0.30, glass 0.50, stone 0.07; the sound
+outside came through the door 5 times out of 5 (0 before the level ring
+and turning probes); 42 crate impacts; 18 footsteps.
+
 ### `games/melt_demo` — pour lava, melt things
 
 `cd build/bin && ./melt_demo` (`KKE_MELT_PRESET=0..3` picks the block).

@@ -257,7 +257,7 @@ void UiModule::frameStart(const UpdateContext& ctx) {
 void UiModule::init(Application& app) {
     m_app = &app;
     m_systemInterface.window = app.window().handle();
-    m_renderInterface = std::make_unique<RmlVulkanRenderInterface>(app.device(), app.renderer().renderPass(), app.renderer().hasStencil());
+    m_renderInterface = std::make_unique<RmlVulkanRenderInterface>(app.device(), app.renderer().overlayRenderPass(), app.renderer().hasStencil());
 
     Rml::SetSystemInterface(&m_systemInterface);
     Rml::SetRenderInterface(m_renderInterface.get());

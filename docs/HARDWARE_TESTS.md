@@ -40,6 +40,20 @@ them): a `.txt` to read and a `.json` for analysis, including your CPU,
 GPU, driver, RAM, OS and build type. Paste either file back instead of
 log lines.
 
+### HW-017 · Audio demo with headphones (dev box)
+`cd build/bin && ./audio_demo`, headphones on. Click through the stations
+(or tick Tour). For each, does it sound like what "Listen for" says? In
+particular: is the great hall's echo believable or too much? Is the
+padded room dry? Behind wood, glass and stone: is the order of
+loudness right, and does stone still sound like something? Round through
+a door: does the sound seem to come from the door? Around your head:
+does the tick go behind you with Binaural on? Anything that clicks,
+crackles or pumps when you turn the camera?
+**Send back:** station by station, "right" or what's off; and, if you can,
+`KKE_AUDIO_DEMO_TOUR=1 KKE_AUDIO_RECORD=tour.wav ./audio_demo` and the
+WAV it writes.
+**Result:** —
+
 ### HW-016 · Play mode with a controller and a touchscreen (dev box)
 `./sandbox` opens in Play mode. With a gamepad plugged in: left stick
 moves the ring cursor, RB/LB jump along the pictures, hold A on Person

@@ -93,7 +93,7 @@ jobs:
           sleep 2
           cd "$RUNNER_TEMP"
           failed=0
-          for demo in kke_demo kke_basics physics_demo melt_demo jiggle_demo sea_demo imgui_demo rmlui_demo sandbox synty_demo; do
+          for demo in kke_demo kke_basics physics_demo melt_demo jiggle_demo sea_demo imgui_demo rmlui_demo sandbox synty_demo audio_demo; do
             [ -x "$pkg/$demo" ] || { echo "== $demo: missing from the package"; failed=1; continue; }
             set +e
             DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_SKIP_INTRO=1 timeout 8 "$pkg/$demo" > "run_$demo.log" 2>&1

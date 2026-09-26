@@ -60,7 +60,26 @@ public:
     VkExtent2D renderExtent() const;
 
     VkCommandBuffer currentCommandBuffer() const { return m_commandBuffers[m_currentFrame]; }
-    VkRenderPass renderPass() const { return m_swapChain->renderPass(); }
+    // The pass render() draws in: create scene pipelines against this one.
+    // With MSAA it's the multisampled scene pass; otherwise the swapchain's.
+    VkRenderPass renderPass() const { return m_msaa > 1 ? m_scenePass : m_swapChain->renderPass(); }
+    // The pass renderOverlay() draws in (always single-sampled, full
+    // resolution): UI pipelines (RmlUi, ImGui) are created against this.
+    VkRenderPass overlayRenderPass() const { return m_swapChain->renderPass(); }
+
+    // Multisample anti-aliasing for the 3D pass: 1 (off), 2, 4 or 8,
+    // clamped to what the device supports. Must be set before any scene
+    // pipeline is created (pipelines bake the sample count in), so it
+    // takes effect on restart. The MSAA image is resolved into a single-
+    // sample one each frame, then the overlay draws on top as usual.
+    // No temporal filtering, no dithering (docs/RENDERING_PRINCIPLES.md).
+    void setMsaaSamples(uint32_t samples);
+    uint32_t msaaSamples() const { return m_msaa; }
+    // A new render pass laid out like the scene pass (same formats, sample
+    // count, resolve and subpass dependency), so every scene pipeline works
+    // in it; its single-sample colour ends in colorFinalLayout. For
+    // offscreen views of the scene (thumbnails). Caller destroys it.
+    VkRenderPass createSceneCompatiblePass(VkImageLayout colorFinalLayout);
     VkExtent2D extent() const { return m_swapChain->extent(); }
     bool hasStencil() const { return m_swapChain->hasStencil(); }
     // The main pass's attachment formats: an offscreen pass with the same
@@ -115,6 +134,9 @@ private:
     void createQueryPools();
     void recreateSwapChain();
     bool scaled() const { return m_renderScale < 1.0f && m_swapChain->canBlitTo(); }
+    // The 3D pass draws into an offscreen target (then blitted to the
+    // swapchain) when scaled or multisampled.
+    bool offscreenScene() const { return scaled() || m_msaa > 1; }
     void createScenePass();
     void ensureSceneTarget(uint32_t frame);
     void destroySceneTarget(uint32_t frame);
@@ -141,14 +163,18 @@ private:
     // Render scale: the 3D pass draws into a smaller image per frame in
     // flight, blitted up in beginOverlayPass(). Created on first use.
     float m_renderScale = 1.0f;
+    uint32_t m_msaa = 1;
     bool m_inScenePass = false;
     VkRenderPass m_scenePass = VK_NULL_HANDLE;
     VkFormat m_scenePassFormats[2] = {};
+    uint32_t m_scenePassSamples = 0;
     struct SceneTarget {
         VkExtent2D extent{};
-        VkImage color = VK_NULL_HANDLE, depth = VK_NULL_HANDLE;
-        VmaAllocation colorAlloc = VK_NULL_HANDLE, depthAlloc = VK_NULL_HANDLE;
-        VkImageView colorView = VK_NULL_HANDLE, depthView = VK_NULL_HANDLE;
+        // color: single-sample, the blit source. msaaColor: only with
+        // MSAA, resolved into color at the end of the pass.
+        VkImage color = VK_NULL_HANDLE, depth = VK_NULL_HANDLE, msaaColor = VK_NULL_HANDLE;
+        VmaAllocation colorAlloc = VK_NULL_HANDLE, depthAlloc = VK_NULL_HANDLE, msaaColorAlloc = VK_NULL_HANDLE;
+        VkImageView colorView = VK_NULL_HANDLE, depthView = VK_NULL_HANDLE, msaaColorView = VK_NULL_HANDLE;
         VkFramebuffer framebuffer = VK_NULL_HANDLE;
     };
     SceneTarget m_sceneTargets[kMaxFramesInFlight];

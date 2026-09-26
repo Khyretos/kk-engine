@@ -135,6 +135,8 @@ private:
         VkImageView view = VK_NULL_HANDLE;
     };
     Image m_atlas, m_scratchColor, m_scratchDepth;
+    Image m_scratchMsaa; // with MSAA: the multisampled colour, resolved into m_scratchColor
+    uint32_t m_samples = 1;
     VkFramebuffer m_framebuffer = VK_NULL_HANDLE;
     VkSampler m_sampler = VK_NULL_HANDLE;
     VkDescriptorSet m_imguiSet = VK_NULL_HANDLE;

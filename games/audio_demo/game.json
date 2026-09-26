@@ -1,0 +1,30 @@
+{
+  "id": "engine.kke.audio_demo",
+  "title": "KKE Audio Demo",
+  "description": "Every case the audio engine handles, one station each: open field, small stone room, great hall, padded room, sounds through wood/glass/stone walls, a sound coming round through a door, falling crates of six materials, footsteps on six grounds, a tick circling your head (binaural) and navigation pings. Turning the camera turns your ears.",
+  "version": "0.1.0",
+  "icon": "",
+  "banner": "",
+  "tags": ["demo", "audio", "accessibility"],
+  "engine_version": "0.1.0",
+  "modules": [
+    "OrbitCamera",
+    "RigidBodies",
+    "Models",
+    "Audio",
+    "SoundVisualizer",
+    "AudioDemo",
+    "Stats"
+  ],
+  "requirements": {
+    "minimum": {
+      "vram_mb": 128,
+      "vulkan_api_version": "1.0"
+    },
+    "recommended": {
+      "vram_mb": 256,
+      "vulkan_api_version": "1.2"
+    },
+    "notes": "Best-effort, developer-declared estimates -- see docs/HISTORY.md 'Estimated hardware requirements'. Headphones recommended for the binaural station."
+  }
+}

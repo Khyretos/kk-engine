@@ -67,6 +67,9 @@ public:
     // Esc closes the window by default — handy for tech demos, wrong for
     // any game with menus (Esc means "back"). Games turn this off.
     void setQuitOnEscape(bool quit) { m_quitOnEscape = quit; }
+    // Ends the run loop after this frame, as closing the window would
+    // (a demo's scripted tour finishing, a Quit button).
+    void requestClose() { m_shouldClose = true; }
     bool isFullscreen() const;
     // Window/taskbar icon from PNG bytes. Every window starts with the
     // engine's own (the Kreative Kompas logo); games may replace it.

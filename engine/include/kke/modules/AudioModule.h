@@ -51,7 +51,13 @@ public:
         bool occlusion = true;
         bool reverb = true;              // ray-traced room reverb
         bool openings = true;            // occluded sounds come through doors/windows the probe found
+        bool echoes = true;              // early reflections off the walls around you
         float roomProbeInterval = 0.25f; // s
+        // Rays the audio may cast in one frame for occlusion rechecks
+        // (the room probe and new sounds always get theirs). Past it,
+        // sounds keep their last value a frame longer: the cost stays flat
+        // however many sounds play.
+        int maxRaysPerFrame = 160;
         SpatialMode spatial = SpatialMode::Stereo; // KKE_AUDIO_BINAURAL=1 starts in Binaural
         bool earcons = true;             // UI sounds on focus/click/change
         float pingRange = 12.0f;         // m, navigation pings
@@ -76,7 +82,8 @@ public:
 
     // An impact sound of `material` at `position`. intensity 0..1.
     uint32_t playImpact(const glm::vec3& position, uint32_t material, float intensity, uint32_t seed = 0, float gain = 1.0f);
-    uint32_t play(const VoiceDesc& desc) { return m_mixer->play(desc); }
+    // Plays `desc`, occluded from its first sample (see soundPath).
+    uint32_t play(const VoiceDesc& desc);
     // A footstep on `material` (kke::CharacterFootsteps calls this).
     uint32_t playFootstep(const glm::vec3& position, uint32_t material, float intensity, uint32_t seed = 0, float gain = 0.8f);
     // A UI sound, centred (not spatial).
@@ -87,14 +94,36 @@ public:
     // clockwise from straight ahead, 70 ms apart.
     void ping();
 
-    // The listener's room, as last probed.
+    // The listener's room, as last probed (steadied over the last probes).
     const RoomAcoustics& room() const { return m_room; }
+    RoomTracker& roomTracker() { return m_tracker; }
+    // How a sound at `source` reaches the listener: through the walls in
+    // between (their materials and thickness), or round them through an
+    // opening. What play() and the rechecks use.
+    struct SoundPath {
+        float transmission = 1.0f;
+        bool viaOpening = false;
+        glm::vec3 via{0.0f};
+        float pathLength = 0.0f;
+    };
+    SoundPath soundPath(const glm::vec3& listener, const glm::vec3& source);
+    int raysLastFrame() const { return m_raysLastFrame; }
     // What the room probe and pings cast. Jolt by default; replaceable.
     AcousticRayFn roomRay;
 
     // Decodes WAV / FLAC / MP3 (miniaudio) to mono at the mixer's rate.
     // Null on failure (logged).
     SoundHandle loadSound(const std::string& path);
+
+    // Records everything the mixer outputs (device or silent) until
+    // stopRecording(), which writes it to `path` as a 16-bit stereo WAV.
+    // KKE_AUDIO_RECORD=file.wav records the whole run. For hearing what a
+    // headless run (CI, a server) played, and for comparing changes.
+    void startRecording(const std::string& path);
+    // False (and logged) when nothing was recording or the file couldn't
+    // be written.
+    bool stopRecording();
+    bool recording() const { return !m_recordPath.empty(); }
 
     // Returns 0..1, how much sound gets from `source` to `listener`.
     std::function<float(const glm::vec3& listener, const glm::vec3& source)> occlusionQuery;
@@ -121,7 +150,8 @@ private:
     void updateRoom(float dt);
     void updatePings(float dt);
     // A point by an opening that `source` can be heard through, or false.
-    bool findOpening(const glm::vec3& listener, const glm::vec3& source, glm::vec3& via, float& pathLength) const;
+    bool findOpening(const glm::vec3& listener, const glm::vec3& source, glm::vec3& via, float& pathLength);
+    uint32_t playTracked(VoiceDesc d);
 
     Application* m_app = nullptr;
     std::unique_ptr<AudioMixer> m_mixer;
@@ -141,10 +171,15 @@ private:
     float m_tourTimer = 0.0f;
     int m_tourStep = 0;
     RoomAcoustics m_room;
+    RoomTracker m_tracker;
+    uint32_t m_probeCount = 0;
+    glm::vec3 m_lastProbeAt{0.0f};
     float m_roomProbeIn = 0.0f;
+    int m_raysThisFrame = 0, m_raysLastFrame = 0;
     std::vector<PendingPing> m_pings;
     SoundHandle m_earcons[size_t(Earcon::Count)];
     uint64_t m_footsteps = 0;
+    std::string m_recordPath;
 };
 
 } // namespace kke
