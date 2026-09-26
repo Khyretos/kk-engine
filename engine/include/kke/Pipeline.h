@@ -34,6 +34,12 @@ struct PipelineConfig {
     // those with SRC_ALPHA applies alpha twice — translucent content
     // comes out too dark and muddy. See BUGS.md BUG-021.
     bool premultipliedAlpha = false;
+    // Set to override the colour blend factors outright (alpha keeps the
+    // defaults above): e.g. ZERO/SRC_COLOR multiplies what's behind by the
+    // output (coloured glass, jelly), ONE/ONE adds light.
+    bool customColorBlend = false;
+    VkBlendFactor srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+    VkBlendFactor dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
     // Stencil, for RmlUi clip masks (see RmlVulkanRenderInterface). When
     // enabled, reference/compare mask/write mask are dynamic state set
     // with vkCmdSetStencil*; the ops below are fixed per pipeline.

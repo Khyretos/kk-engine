@@ -873,6 +873,17 @@ void JellyBody::substep(float h, std::vector<Ball>& balls) {
     }
 }
 
+glm::vec3 JellyBody::deformedPoint(const glm::vec3& restPosition) const {
+    if (m_x.empty()) return restPosition;
+    const glm::vec3 f = (restPosition - m_p.min) / (m_p.max - m_p.min) * glm::vec3(m_p.cells);
+    const glm::ivec3 c = glm::clamp(glm::ivec3(glm::floor(f)), glm::ivec3(0), m_p.cells - 1);
+    const glm::vec3 w = glm::clamp(f - glm::vec3(c), glm::vec3(0.0f), glm::vec3(1.0f));
+    auto at = [&](int dx, int dy, int dz) { return m_x[id(c.x + dx, c.y + dy, c.z + dz)]; };
+    const glm::vec3 x00 = glm::mix(at(0, 0, 0), at(1, 0, 0), w.x), x10 = glm::mix(at(0, 1, 0), at(1, 1, 0), w.x);
+    const glm::vec3 x01 = glm::mix(at(0, 0, 1), at(1, 0, 1), w.x), x11 = glm::mix(at(0, 1, 1), at(1, 1, 1), w.x);
+    return glm::mix(glm::mix(x00, x10, w.y), glm::mix(x01, x11, w.y), w.z);
+}
+
 float JellyBody::deformation() const {
     if (m_x.empty()) return 0.0f;
     float sum = 0.0f;

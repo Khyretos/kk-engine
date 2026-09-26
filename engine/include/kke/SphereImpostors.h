@@ -44,7 +44,7 @@ private:
 
 // A mesh rebuilt on the CPU now and then (a melting surface, a procedural
 // terrain chunk): upload(...) when it changed, draw(...) every frame. Lit
-// by cube.vert + glow.frag (uv.x = glow). Buffers per frame in flight,
+// by cube.vert + glow.frag (uv.x = glow), or translucent (drawTranslucent). Buffers per frame in flight,
 // reused; nothing allocated per frame unless the mesh grows.
 class DynamicMeshRenderer {
 public:
@@ -52,12 +52,24 @@ public:
     void upload(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices);
     void draw(const RenderContext& ctx, const glm::mat4& model = glm::mat4(1.0f), float metallic = 0.0f, float roughness = 0.6f);
     void drawShadow(const ShadowRenderContext& ctx, const glm::mat4& model = glm::mat4(1.0f));
+    // Translucent material (jelly, gummy, coloured glass, slime): what's
+    // behind shows through, filtered by the colour, more so where the
+    // surface is seen face-on (thin) than at the edges (thick), with
+    // Fresnel reflections, light scattered inside and light shining
+    // through from behind. Two passes over the front faces: one
+    // multiplies what's already drawn by the transmittance, one adds the
+    // light. Draw it after everything opaque. Per vertex: color = tint,
+    // uv.x = density (absorption; 0 = clear, ~2-6 = jelly), uv.y =
+    // milkiness (0 = clear, 1 = opaque-ish, like panna cotta).
+    void drawTranslucent(const RenderContext& ctx, const glm::mat4& model = glm::mat4(1.0f), float roughness = 0.08f);
 
 private:
     struct FrameBuffers { std::unique_ptr<Buffer> vertices, indices; size_t vCap = 0, iCap = 0; uint64_t version = 0; };
     void ensureUploaded(uint32_t frame);
     Application& m_app;
     std::unique_ptr<Pipeline> m_pipeline, m_shadowPipeline;
+    std::unique_ptr<Pipeline> m_absorbPipeline, m_lightPipeline; // drawTranslucent(), made on first use
+    void bindAndDraw(const RenderContext& ctx, Pipeline& pipeline, const glm::mat4& model, float metallic, float roughness);
     FrameBuffers m_frames[Renderer::kMaxFramesInFlight];
     std::vector<Vertex> m_vertices;
     std::vector<uint32_t> m_indices;

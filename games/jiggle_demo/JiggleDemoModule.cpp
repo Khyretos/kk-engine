@@ -26,7 +26,28 @@ namespace {
 
 constexpr float kWalkSpeed = 1.6f, kJogSpeed = 3.6f, kSprintSpeed = 6.2f; // UAL clip speeds (showcase)
 constexpr size_t kMaxBalls = 14;
-const glm::vec3 kJellyColor(0.86f, 0.08f, 0.16f);
+// Jelly looks: tint (sRGB), density (absorption), milkiness.
+struct JellyLook { const char* name; glm::vec3 tint; float density, milkiness; };
+const JellyLook kLooks[] = {
+    { "Strawberry", { 0.95f, 0.12f, 0.2f }, 1.1f, 0.08f },
+    { "Lime", { 0.45f, 0.95f, 0.2f }, 0.9f, 0.08f },
+    { "Blue raspberry", { 0.15f, 0.55f, 0.98f }, 1.0f, 0.06f },
+    { "Orange", { 1.0f, 0.55f, 0.08f }, 0.8f, 0.12f },
+    { "Panna cotta", { 0.98f, 0.95f, 0.85f }, 0.4f, 0.85f },
+    { "Clear gelatin", { 0.97f, 0.93f, 0.8f }, 0.35f, 0.0f },
+};
+constexpr int kLookCount = static_cast<int>(sizeof(kLooks) / sizeof(kLooks[0]));
+// Fruit set in the jelly (rest positions, radius, colour): moves with it.
+struct Fruit { glm::vec3 rest; float radius; glm::vec3 color; };
+const Fruit kFruit[] = {
+    { { -0.18f, 0.16f, -0.12f }, 0.045f, { 0.2f, 0.18f, 0.45f } },  // blueberries
+    { { 0.2f, 0.3f, 0.1f }, 0.04f, { 0.18f, 0.16f, 0.42f } },
+    { { 0.05f, 0.12f, 0.22f }, 0.042f, { 0.22f, 0.2f, 0.5f } },
+    { { 0.12f, 0.2f, -0.2f }, 0.06f, { 0.95f, 0.25f, 0.3f } },    // raspberries
+    { { -0.22f, 0.32f, 0.18f }, 0.055f, { 0.9f, 0.2f, 0.28f } },
+    { { -0.05f, 0.28f, -0.02f }, 0.07f, { 0.98f, 0.95f, 0.8f } },  // a lychee
+    { { 0.27f, 0.12f, -0.02f }, 0.05f, { 0.98f, 0.6f, 0.1f } },    // mandarin
+};
 const glm::vec3 kBallColors[] = { { 0.98f, 0.8f, 0.1f }, { 0.15f, 0.55f, 0.95f }, { 0.2f, 0.8f, 0.35f },
                                   { 0.95f, 0.45f, 0.1f }, { 0.75f, 0.3f, 0.9f },  { 0.95f, 0.95f, 0.95f } };
 
@@ -78,6 +99,9 @@ void JiggleDemoModule::init(kke::Application& app) {
     Scene start = Scene::Jelly;
     if (const char* e = std::getenv("KKE_JIGGLE_SCENE"); e && (std::strcmp(e, "body") == 0 || std::strcmp(e, "character") == 0)) start = Scene::Body;
     if (const char* e = std::getenv("KKE_JIGGLE_TWIN")) m_showTwin = *e == '1';
+    if (const char* e = std::getenv("KKE_JELLY_LOOK")) m_look = std::clamp(std::atoi(e), 0, kLookCount - 1);
+    m_density = kLooks[m_look].density;
+    m_milkiness = kLooks[m_look].milkiness;
     if (const char* e = std::getenv("KKE_JIGGLE_MOVE")) {
         const int m = std::atoi(e);
         if (m >= 0 && m <= static_cast<int>(Move::Tour)) m_move = static_cast<Move>(m);
@@ -158,7 +182,9 @@ void JiggleDemoModule::updateJelly(float dt) {
     const auto& nrm = m_jelly.surfaceNormals();
     std::vector<kke::Vertex> v(pos.size());
     // (The dynamic-mesh shader reads uv.x as glow: keep it 0.)
-    for (size_t i = 0; i < pos.size(); ++i) v[i] = kke::Vertex{ pos[i], kJellyColor, nrm[i], glm::vec2(0.0f) };
+    // drawTranslucent reads uv.x = density, uv.y = milkiness.
+    const JellyLook& look = kLooks[m_look];
+    for (size_t i = 0; i < pos.size(); ++i) v[i] = kke::Vertex{ pos[i], look.tint, nrm[i], glm::vec2(m_density, m_milkiness) };
     m_jellyMesh->upload(v, m_jelly.surfaceIndices());
 }
 
@@ -334,8 +360,14 @@ void JiggleDemoModule::render(const kke::RenderContext& ctx) {
     m_sphereScratch.clear();
     if (m_scene == Scene::Jelly) {
         m_plate->draw(ctx, glm::mat4(1.0f), 0.0f, 0.3f);
-        m_jellyMesh->draw(ctx, glm::mat4(1.0f), 0.0f, 0.12f);
         for (size_t i = 0; i < m_balls.size(); ++i) m_sphereScratch.push_back({ m_balls[i].pos, m_balls[i].radius, m_ballColors[i], 0.0f, 0.35f });
+        if (m_fruit)
+            for (const Fruit& f : kFruit) m_sphereScratch.push_back({ m_jelly.deformedPoint(f.rest), f.radius, f.color, 0.0f, 0.45f });
+        // Opaque first, then the jelly over it (it filters what's behind).
+        if (!m_sphereScratch.empty()) m_spheres->draw(ctx, m_sphereScratch);
+        m_sphereScratch.clear();
+        if (m_translucent) m_jellyMesh->drawTranslucent(ctx, glm::mat4(1.0f), 0.06f);
+        else m_jellyMesh->draw(ctx, glm::mat4(1.0f), 0.0f, 0.12f);
     } else if (m_showPoints) {
         // Where the jiggle points are (bright) against where the pose puts them (dark).
         for (Dancer& d : m_dancers) {
@@ -397,6 +429,18 @@ void JiggleDemoModule::renderUi() {
         ImGui::SliderFloat("Firmness", &p.stiffness, 0.03f, 1.0f, "%.2f");
         ImGui::SliderInt("Iterations", &p.iterations, 1, 8);
         ImGui::SliderFloat("Damping", &p.damping, 0.0f, 0.2f, "%.3f");
+        ImGui::SeparatorText("Look");
+        const char* looks[kLookCount];
+        for (int i = 0; i < kLookCount; ++i) looks[i] = kLooks[i].name;
+        if (ImGui::Combo("Flavour", &m_look, looks, kLookCount)) {
+            m_density = kLooks[m_look].density;
+            m_milkiness = kLooks[m_look].milkiness;
+        }
+        ImGui::Checkbox("Translucent", &m_translucent);
+        ImGui::SameLine();
+        ImGui::Checkbox("Fruit inside", &m_fruit);
+        ImGui::SliderFloat("Density", &m_density, 0.0f, 4.0f, "%.2f");
+        ImGui::SliderFloat("Milkiness", &m_milkiness, 0.0f, 1.0f, "%.2f");
         ImGui::Separator();
         ImGui::Text("Lattice: %zu particles, surface %zu triangles", m_jelly.particleCount(), m_jelly.surfaceIndices().size() / 3);
         ImGui::Text("Balls: %zu   deformation %.1f mm", m_balls.size(), m_jelly.deformation() * 1000.0f);

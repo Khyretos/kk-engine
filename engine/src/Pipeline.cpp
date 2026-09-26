@@ -85,6 +85,10 @@ Pipeline::Pipeline(VulkanDevice& device, VkRenderPass renderPass,
         colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
         colorBlendAttachment.dstAlphaBlendFactor = config.premultipliedAlpha ? VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA : VK_BLEND_FACTOR_ZERO;
         colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+        if (config.customColorBlend) {
+            colorBlendAttachment.srcColorBlendFactor = config.srcColorBlendFactor;
+            colorBlendAttachment.dstColorBlendFactor = config.dstColorBlendFactor;
+        }
     }
 
     VkPipelineColorBlendStateCreateInfo colorBlending{};

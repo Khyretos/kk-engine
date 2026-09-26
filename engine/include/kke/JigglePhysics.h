@@ -308,6 +308,9 @@ public:
     const std::vector<glm::vec2>& surfaceUvs() const { return m_surfUv; }
     const std::vector<uint32_t>& surfaceIndices() const { return m_surfIdx; }
 
+    // Where a point given in the rest shape is now (trilinear in the
+    // lattice): things suspended in the jelly move with it.
+    glm::vec3 deformedPoint(const glm::vec3& restPosition) const;
     const std::vector<glm::vec3>& particles() const { return m_x; }
     size_t particleCount() const { return m_x.size(); }
     // How far the lattice is from its rest shape: mean particle displacement (m).

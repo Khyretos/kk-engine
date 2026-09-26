@@ -76,13 +76,44 @@ void DynamicMeshRenderer::ensureUploaded(uint32_t f) {
 
 void DynamicMeshRenderer::draw(const RenderContext& ctx, const glm::mat4& model, float metallic, float roughness) {
     if (m_indices.empty()) return;
+    bindAndDraw(ctx, *m_pipeline, model, metallic, roughness);
+}
+
+void DynamicMeshRenderer::drawTranslucent(const RenderContext& ctx, const glm::mat4& model, float roughness) {
+    if (m_indices.empty()) return;
+    if (!m_absorbPipeline) {
+        // Front faces only (CCW seen from outside, like every closed mesh
+        // here), depth tested against the opaque scene but not written,
+        // so it never hides what's behind it from itself.
+        PipelineConfig c;
+        c.cullMode = VK_CULL_MODE_BACK_BIT;
+        c.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+        c.depthWriteEnable = false;
+        c.blendEnable = true;
+        c.customColorBlend = true;
+        c.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPush) };
+        c.descriptorSetLayouts = { m_app.lightingBuffer().descriptorSetLayout(), m_app.shadowMapSetLayout(), m_app.materialTextureSetLayout() };
+        c.srcColorBlendFactor = VK_BLEND_FACTOR_ZERO; // behind *= transmittance
+        c.dstColorBlendFactor = VK_BLEND_FACTOR_SRC_COLOR;
+        m_absorbPipeline = std::make_unique<Pipeline>(m_app.device(), m_app.renderer().renderPass(), "shaders/cube.vert.spv",
+                                                      "shaders/translucent_absorb.frag.spv", c);
+        c.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // behind += light from the surface
+        c.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+        m_lightPipeline = std::make_unique<Pipeline>(m_app.device(), m_app.renderer().renderPass(), "shaders/cube.vert.spv",
+                                                     "shaders/translucent_light.frag.spv", c);
+    }
+    bindAndDraw(ctx, *m_absorbPipeline, model, 0.0f, roughness);
+    bindAndDraw(ctx, *m_lightPipeline, model, 0.0f, roughness);
+}
+
+void DynamicMeshRenderer::bindAndDraw(const RenderContext& ctx, Pipeline& pipeline, const glm::mat4& model, float metallic, float roughness) {
     ensureUploaded(ctx.frameIndex);
     FrameBuffers& fb = m_frames[ctx.frameIndex];
-    m_pipeline->bind(ctx.cmd);
+    pipeline.bind(ctx.cmd);
     VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, ctx.defaultMaterialTextureDescriptorSet };
-    vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(), 0, 3, sets, 0, nullptr);
+    vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout(), 0, 3, sets, 0, nullptr);
     MeshPush pc{ model, metallic, roughness };
-    vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+    vkCmdPushConstants(ctx.cmd, pipeline.layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
     VkBuffer vb = fb.vertices->handle();
     VkDeviceSize off = 0;
     vkCmdBindVertexBuffers(ctx.cmd, 0, 1, &vb, &off);

@@ -71,6 +71,9 @@ private:
     uint32_t m_rng = 0x9e3779b9u;
     double m_jellyMs = 0.0;
     int m_colorIndex = 0;
+    int m_look = 0;
+    float m_density = 1.0f, m_milkiness = 0.0f;
+    bool m_translucent = true, m_fruit = true;
 
     // --- bodies
     bool m_bodiesReady = false;

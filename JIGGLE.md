@@ -105,9 +105,19 @@ the tool (see the physics demo's rubber ball); for a jelly that wobbles,
 
 `cd build/bin && ./jiggle_demo`. `Tab` switches scenes.
 
-- **Jelly**: balls rain onto a strawberry jelly. `Space` toggles the rain,
-  `B` drops a big ball, `P` squishes it, `R` resets; sliders for firmness,
-  iterations, damping.
+- **Jelly**: balls rain onto a jelly with fruit set in it. `Space` toggles
+  the rain, `B` drops a big ball, `P` squishes it, `R` resets; sliders for
+  firmness, iterations, damping, and the look: flavour (strawberry, lime,
+  blue raspberry, orange, panna cotta, clear gelatin), density, milkiness.
+  `KKE_JELLY_LOOK=0..5` picks the flavour.
+
+  The jelly is drawn with `DynamicMeshRenderer::drawTranslucent`, a
+  reusable translucent material (`shaders/translucent*.{glsl,frag}`): one
+  pass multiplies what's behind by the transmittance (Beer-Lambert through
+  a thickness that grows toward the silhouette, so edges look richer, as
+  real jelly does), a second adds Fresnel reflection, light scattered
+  inside, light shining through from behind and a glossy highlight. No
+  sorting or extra render targets; draw it after the opaque scene.
 - **Body**: a Synty character reshaped with `addHumanoidSoftTissue`,
   running a circle on UAL clips: stand, jog, jump, sprint, stop dead, jump,
   walk (`5`, the tour), or `1`-`4` for one gait, `Space` to jump. The camera
