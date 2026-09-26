@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cfloat>
+#include <chrono>
 #include <cstdlib>
 
 namespace kke {
@@ -63,12 +64,15 @@ void PhysicsBridgeModule::fixedUpdate(const FixedUpdateContext&) {
         return;
     }
     RigidWorld& w = m_rigid->world();
+    const auto started = std::chrono::steady_clock::now();
 
     // FEMFX -> Jolt: what the pieces did to the bodies in FEMFX's last step.
     for (const PhysicsModule::ExternalImpulse& e : m_physics->externalImpulses()) {
         if (e.key & kCharacterKey) continue; // characters move as they're told
         w.addImpulse(static_cast<RigidWorld::BodyId>(e.key), e.impulse * pushScale, e.point);
         ++m_pushes;
+        ++m_logPushes;
+        m_logImpulse += glm::length(e.impulse);
     }
 
     // Jolt -> FEMFX: bodies near moving pieces (and moving bodies near
@@ -108,13 +112,17 @@ void PhysicsBridgeModule::fixedUpdate(const FixedUpdateContext&) {
         if (touchesAny(bmin, bmax, m_awake, margin) || (moving && touchesAny(bmin, bmax, m_all, margin))) m_boxes.push_back(box);
     }
     m_physics->setExternalBoxes(m_boxes);
+    m_logSeconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
     // KKE_BRIDGE_LOG=1: once a second, what the bridge did (tuning, tests).
     if (m_log && ++m_logTicks >= 60) {
         m_logTicks = 0;
         size_t movable = 0;
         for (const BridgeBox& b : m_boxes) movable += b.movable ? 1 : 0;
-        log::get(name())->info("{} Jolt boxes in FEMFX ({} movable), {} pushes into Jolt, {} awake pieces", m_boxes.size(), movable, m_pushes,
-                               m_awake.size());
+        log::get(name())->info("{} Jolt boxes in FEMFX ({} movable), {} pushes into Jolt ({:.2f} N s) this second, {} awake pieces, {:.3f} ms a step",
+                               m_boxes.size(), movable, m_logPushes, m_logImpulse, m_awake.size(), m_logSeconds * 1000.0 / 60.0);
+        m_logPushes = 0;
+        m_logSeconds = 0.0;
+        m_logImpulse = 0.0f;
     }
 }
 

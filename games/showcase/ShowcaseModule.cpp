@@ -785,6 +785,14 @@ void ShowcaseModule::updateBridgeDemo(float dt) {
             moved += fmt::format("{}crate {}: {:.3f} m", k ? ", " : "", k + 1, glm::length(d));
         }
         kke::log::get(name())->info("bridge demo: after the glass broke, {}", moved);
+        // Then an iron ball thrown along the ground into the pyramid's
+        // bottom-left crate: FEMFX hitting Jolt sideways.
+        m_yardCratesStart.assign(1, w.position(m_crates[0].body));
+        spawnBall(w.position(m_crates[0].body) + glm::vec3(0.0f, 0.0f, 2.5f), glm::vec3(0, 0, -1));
+    }
+    if (at(10.0f) && !m_yardCratesStart.empty()) {
+        const glm::vec3 d = w.position(m_crates[0].body) - m_yardCratesStart[0];
+        kke::log::get(name())->info("bridge demo: the ball knocked the crate {:.2f} m ({:.2f} m back)", glm::length(d), -d.z);
     }
 }
 
