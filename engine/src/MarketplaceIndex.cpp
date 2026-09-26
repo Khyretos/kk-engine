@@ -1,4 +1,5 @@
 #include "kke/MarketplaceIndex.h"
+#include "kke/DataFile.h"
 #include "kke/Log.h"
 
 #include <nlohmann/json.hpp>
@@ -17,7 +18,7 @@ void MarketplaceIndex::scanDirectory(const std::string& marketplaceRoot) {
 
     for (const auto& entry : fs::directory_iterator(marketplaceRoot)) {
         if (!entry.is_directory()) continue;
-        if (!fs::exists(entry.path() / "game.json")) continue; // not every subfolder need be a game
+        if (!datafile::exists(entry.path(), "game")) continue; // not every subfolder need be a game
 
         importGame(entry.path().string());
     }

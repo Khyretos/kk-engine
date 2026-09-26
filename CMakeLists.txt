@@ -315,6 +315,26 @@ set_target_properties(kke_monocypher PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_options(kke_monocypher PRIVATE $<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>)
 
 # ---------------------------------------------------------------------------
+# yaml-cpp — YAML for data files that also come as JSON (kke/DataFile.h):
+# pack.yml, mods.yml, game.yml work the same as their .json twins. MIT.
+# Only used inside the engine library (PRIVATE), converted to JSON there.
+# ---------------------------------------------------------------------------
+set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_BUILD_CONTRIB OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_INSTALL OFF CACHE BOOL "" FORCE)
+set(YAML_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    yaml_cpp
+    GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
+    GIT_TAG        yaml-cpp-0.9.0
+    GIT_SHALLOW    TRUE
+    SYSTEM
+)
+FetchContent_MakeAvailable(yaml_cpp)
+set_target_properties(yaml-cpp PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# ---------------------------------------------------------------------------
 # miniaudio — audio output device on every platform (ALSA/PulseAudio/
 # PipeWire/JACK, WASAPI, CoreAudio, AAudio/OpenSL, Web Audio) plus WAV/
 # FLAC/MP3 decoding. Public domain / MIT-0, one .c/.h pair. Only the

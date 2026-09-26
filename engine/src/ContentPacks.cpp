@@ -1,10 +1,10 @@
 #include "kke/ContentPacks.h"
+#include "kke/DataFile.h"
 
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <cctype>
-#include <fstream>
 #include <sstream>
 #include <tuple>
 
@@ -63,33 +63,6 @@ bool parseConstraint(const std::string& text, std::string& op, Version& version)
     const std::optional<Version> v = Version::parse(trim(s.substr(i)));
     if (!v) return false;
     version = *v;
-    return true;
-}
-
-std::string readFile(const fs::path& file, bool& ok) {
-    std::ifstream f(file, std::ios::binary);
-    ok = static_cast<bool>(f);
-    std::stringstream ss;
-    ss << f.rdbuf();
-    return ss.str();
-}
-
-bool writeFile(const fs::path& file, const std::string& text, std::string* error) {
-    // Write then rename, so a crash never leaves a half-written file.
-    const fs::path tmp = fs::path(file).concat(".tmp");
-    {
-        std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
-        if (!f || !(f << text)) {
-            fail(error, "can't write " + tmp.string());
-            return false;
-        }
-    }
-    std::error_code ec;
-    fs::rename(tmp, file, ec);
-    if (ec) {
-        fail(error, "can't replace " + file.string() + ": " + ec.message());
-        return false;
-    }
     return true;
 }
 
@@ -199,6 +172,10 @@ bool parseManifest(const std::string& text, PackManifest& out, std::string* erro
         fail(error, std::string("invalid JSON: ") + e.what());
         return false;
     }
+    return parseManifestData(j, out, error);
+}
+
+bool parseManifestData(const json& j, PackManifest& out, std::string* error) {
     if (!j.is_object()) {
         fail(error, "expected a JSON object");
         return false;
@@ -206,13 +183,13 @@ bool parseManifest(const std::string& text, PackManifest& out, std::string* erro
     PackManifest m;
     try {
         m.id = j.value("id", std::string());
-        m.title = j.value("title", std::string());
-        m.version = j.value("version", m.version);
+        m.title = datafile::text(j, "title");
+        m.version = datafile::text(j, "version", m.version);
         m.author = j.value("author", std::string());
         m.description = j.value("description", std::string());
         m.preview = j.value("preview", std::string());
         m.game = j.value("game", std::string());
-        m.gameVersion = j.value("game_version", std::string());
+        m.gameVersion = datafile::text(j, "game_version");
         m.entitlement = j.value("entitlement", std::string());
         m.hostShare = j.value("host_share", false);
         m.publicKey = j.value("public_key", std::string());
@@ -290,17 +267,13 @@ bool parseManifest(const std::string& text, PackManifest& out, std::string* erro
     return true;
 }
 
-bool loadManifest(const fs::path& packFolder, PackManifest& out, std::string* error) {
-    const fs::path file = packFolder / kManifestFile;
-    bool ok = false;
-    const std::string text = readFile(file, ok);
-    if (!ok) {
-        fail(error, "can't read " + file.string());
-        return false;
-    }
+bool loadManifest(const fs::path& packFolder, PackManifest& out, std::string* error, std::string* warning) {
+    datafile::Loaded loaded;
+    if (!datafile::load(packFolder, kManifestStem, loaded, error)) return false;
+    if (warning) *warning = loaded.warning;
     std::string why;
-    if (!parseManifest(text, out, &why)) {
-        fail(error, file.string() + ": " + why);
+    if (!parseManifestData(loaded.data, out, &why)) {
+        fail(error, loaded.file.string() + ": " + why);
         return false;
     }
     out.root = packFolder;
@@ -347,17 +320,18 @@ std::vector<PackManifest> discover(const std::vector<SearchRoot>& roots, std::ve
         for (fs::directory_iterator it(root.path, ec), end; !ec && it != end; it.increment(ec)) {
             std::error_code e2;
             if (it->is_symlink(e2) || !it->is_directory(e2)) continue;
-            if (fs::exists(it->path() / kManifestFile, e2)) folders.push_back(it->path());
+            if (datafile::exists(it->path(), kManifestStem)) folders.push_back(it->path());
         }
         if (ec) report(root.path.string(), "can't list: " + ec.message());
         std::sort(folders.begin(), folders.end());
         for (const fs::path& folder : folders) {
             PackManifest m;
-            std::string error;
-            if (!loadManifest(folder, m, &error)) {
+            std::string error, warning;
+            if (!loadManifest(folder, m, &error, &warning)) {
                 report(folder.filename().string(), error);
                 continue;
             }
+            if (!warning.empty()) report(m.id, warning);
             m.source = root.name;
             std::error_code e2;
             const bool hasSeal = fs::exists(folder / seal::kSealFileName, e2);
@@ -453,22 +427,24 @@ bool ModList::fromJson(const std::string& text, ModList& out, std::string* error
 }
 
 bool ModList::save(const fs::path& file, std::string* error) const {
-    return writeFile(file, toJson(), error);
+    return datafile::saveFile(file, json::parse(toJson()), error);
 }
 
 bool ModList::load(const fs::path& file, ModList& out, std::string* error) {
-    std::error_code ec;
-    if (!fs::exists(file, ec)) {
+    const fs::path folder = file.parent_path().empty() ? fs::path(".") : file.parent_path();
+    const std::string stem = file.stem().string();
+    if (!datafile::exists(folder, stem)) {
         out = {};
         return true;
     }
-    bool ok = false;
-    const std::string text = readFile(file, ok);
-    if (!ok) {
-        fail(error, "can't read " + file.string());
+    datafile::Loaded loaded;
+    if (!datafile::load(folder, stem, loaded, error)) return false;
+    std::string why;
+    if (!fromJson(loaded.data.dump(), out, &why)) {
+        fail(error, loaded.file.string() + ": " + why);
         return false;
     }
-    return fromJson(text, out, error);
+    return true;
 }
 
 // ------------------------------------------------------------ entitlements
@@ -677,7 +653,7 @@ void Mount::addLayer(const std::string& id, const fs::path& root, bool isPack) {
         }
         if (!it->is_regular_file(e2)) continue;
         const std::string rel = it->path().lexically_relative(root).generic_string();
-        if (isPack && (rel == kManifestFile || rel == seal::kSealFileName)) continue;
+        if (isPack && (datafile::isVariant(rel, kManifestStem) || rel == seal::kSealFileName)) continue;
         const std::string k = normalize(rel);
         if (k.empty()) continue;
         auto& layers = m_files[k].layers;
