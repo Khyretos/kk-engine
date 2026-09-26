@@ -419,6 +419,11 @@ void PhysicsModule::init(Application& app) {
     AMD::FmSetSceneTaskSystemCallbacks(m_scene, callbacks);
     // Ragdoll limbs don't collide with each other (see createRagdoll()).
     AMD::FmSetGroupsCanCollide(m_scene, kRagdollCollisionGroup, kRagdollCollisionGroup, false);
+    // FEMFX starts with every group colliding only with itself, so the
+    // pieces (group 0) must be paired explicitly with the ragdoll limbs and
+    // with the kinematic proxies of Jolt bodies (PhysicsBridgeModule).
+    AMD::FmSetGroupsCanCollide(m_scene, 0, kRagdollCollisionGroup, true);
+    AMD::FmSetGroupsCanCollide(m_scene, 0, kExternalCollisionGroup, true);
 
     // Contacts for impact sounds (frameImpacts): one per object pair per
     // step, only ones approaching faster than ~1 m/s.

@@ -53,6 +53,9 @@ private:
     size_t m_pushes = 0;
     bool m_log = false;
     int m_logTicks = 0;
+    size_t m_logPushes = 0;
+    float m_logImpulse = 0.0f;
+    double m_logSeconds = 0.0;
 };
 
 } // namespace kke
