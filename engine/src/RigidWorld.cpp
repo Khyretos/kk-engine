@@ -407,7 +407,15 @@ void RigidWorld::step(float dt) {
             horizontal = horizontal + (move - horizontal) * std::min(1.0f, c.input.airSteer * dt);
             v = horizontal + JPH::Vec3(0.0f, current.GetY(), 0.0f);
         }
-        v += gravity * dt;
+        // Standing on walkable ground, only gravity's push *into* the
+        // ground applies: its slope-parallel part would make an idle
+        // character creep downhill (~5 cm/s on a 24 degree ramp).
+        if (grounded && !c.input.jump) {
+            const JPH::Vec3 n = ch.GetGroundNormal();
+            v += n * n.Dot(gravity) * dt;
+        } else {
+            v += gravity * dt;
+        }
         ch.SetLinearVelocity(v);
         JPH::CharacterVirtual::ExtendedUpdateSettings eus;
         eus.mWalkStairsStepUp = JPH::Vec3(0.0f, c.desc.stepUp, 0.0f);

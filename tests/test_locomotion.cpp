@@ -388,12 +388,17 @@ TEST(Locomotion, LandingOnARampStaysFinite) {
     c.player = c.world.addCharacter(cd);
     Locomotion loco(c.world, c.player);
     bool landed = false;
-    for (int i = 0; i < 120; ++i) {
+    glm::vec3 settled(0.0f);
+    for (int i = 0; i < 240; ++i) {
         loco.update(Locomotion::Input{}, kDt);
         c.world.step(kDt);
         landed |= loco.landed();
         const glm::vec3 f = c.feet();
         ASSERT_TRUE(std::isfinite(f.x) && std::isfinite(f.y) && std::isfinite(f.z)) << "frame " << i;
+        if (i == 60) settled = f;
     }
     EXPECT_TRUE(landed);
+    // Then it stands still on the (walkable) ramp instead of creeping down.
+    EXPECT_NEAR(c.feet().x, settled.x, 0.01f);
+    EXPECT_NEAR(c.feet().y, settled.y, 0.01f);
 }

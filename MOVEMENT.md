@@ -157,8 +157,6 @@ speed); it's for authored moves such as a real vault clip.
   wall run.
 - CCD for longer chains (*IK fundamentals with CCD*, 8pX6LeZdpOo); the
   legs and arms use the analytic two-bone solve.
-- Standing still on a walkable slope creeps downhill (~5 cm/s on the
-  24 degree ramp); the character should hold its place.
 - Animation layering (upper body over locomotion; *Animation layering
   pipelines*, Fsa2wxyQvzM, blocked below).
 - Rest-pose matching for retargeting between skeletons whose rest poses
