@@ -129,7 +129,7 @@ ModelModule::ModelId ModelModule::load(const std::string& path, const ModelLoadO
     return add(std::move(data), path);
 }
 
-ModelModule::ModelId ModelModule::add(ModelData modelData, const std::string& key) {
+ModelModule::ModelId ModelModule::add(ModelData modelData, const std::string& key, bool transient) {
     if (!m_app) {
         log::get(name())->error("add('{}') called before init()", key);
         return 0;
@@ -159,18 +159,66 @@ ModelModule::ModelId ModelModule::add(ModelData modelData, const std::string& ke
             std::vector<Vertex> verts;
             verts.reserve(m.vertices.size());
             for (const ModelVertex& v : m.vertices) verts.push_back(toVertex(v));
-            gm.mesh = std::make_unique<Mesh>(m_app->device(), verts, m.indices);
+            gm.mesh = std::make_unique<Mesh>(m_app->device(), verts, m.indices, transient ? Mesh::Memory::HostVisible : Mesh::Memory::DeviceLocal);
         }
         loaded->meshes.push_back(std::move(gm));
     }
     ModelId id = m_nextModel++;
-    log::get(name())->info("loaded '{}': {} mesh part(s), {} triangles, {} material(s), {} bone(s), {} animation(s), "
+    if (!transient) log::get(name())->info("loaded '{}': {} mesh part(s), {} triangles, {} material(s), {} bone(s), {} animation(s), "
                            "bounds ({:.2f},{:.2f},{:.2f})..({:.2f},{:.2f},{:.2f})",
                            path, data.meshes.size(), data.triangleCount(), data.materials.size(), data.bones.size(), data.animations.size(),
                            data.boundsMin.x, data.boundsMin.y, data.boundsMin.z, data.boundsMax.x, data.boundsMax.y, data.boundsMax.z);
     m_models[id] = std::move(loaded);
     m_modelByPath[path] = id;
     return id;
+}
+
+bool ModelModule::unload(ModelId id) {
+    auto it = m_models.find(id);
+    if (it == m_models.end()) return false;
+    for (const auto& [iid, inst] : m_instances)
+        if (inst.model == id) return false;
+    // A command buffer still in flight may draw these buffers: the
+    // renderer frees them once those frames are done.
+    for (GpuMesh& gm : it->second->meshes)
+        if (gm.mesh) m_app->renderer().retire(std::move(gm.mesh));
+    for (auto p = m_modelByPath.begin(); p != m_modelByPath.end();) p = p->second == id ? m_modelByPath.erase(p) : std::next(p);
+    m_models.erase(it);
+    return true;
+}
+
+void ModelModule::drawStandalone(VkCommandBuffer cmd, ModelId id, const glm::mat4& transform, VkDescriptorSet lighting, VkDescriptorSet shadowMap,
+                                 VkDescriptorSet defaultTexture) {
+    auto it = m_models.find(id);
+    if (it == m_models.end()) return;
+    LoadedModel& lm = *it->second;
+    VkDescriptorSet sets[] = { lighting, shadowMap, defaultTexture, defaultTexture };
+    m_pipeline->bind(cmd);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(), 0, 4, sets, 0, nullptr);
+    const VkShaderStageFlags pcStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    VkDescriptorSet bound = defaultTexture;
+    for (GpuMesh& gm : lm.meshes) {
+        if (!gm.mesh) {
+            // Skinned parts are drawn from per-instance skinned copies;
+            // standalone they need their bind pose once.
+            const ModelMesh& m = lm.data.meshes[gm.meshIndex];
+            if (m.vertices.empty() || m.indices.empty()) continue;
+            std::vector<Vertex> verts;
+            verts.reserve(m.vertices.size());
+            for (const ModelVertex& v : m.vertices) verts.push_back(toVertex(v));
+            gm.mesh = std::make_unique<Mesh>(m_app->device(), verts, m.indices, Mesh::Memory::HostVisible);
+        }
+        const GpuMaterial& mat = lm.materials[gm.material];
+        VkDescriptorSet tex = mat.textureSet ? mat.textureSet : defaultTexture;
+        if (tex != bound) {
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(), 2, 1, &tex, 0, nullptr);
+            bound = tex;
+        }
+        PushConstants pc{ transform, glm::vec4(mat.metallic, mat.roughness, 0.0f, 0.0f), glm::vec4(mat.color, 0.0f) };
+        vkCmdPushConstants(cmd, m_pipeline->layout(), pcStages, 0, sizeof(pc), &pc);
+        gm.mesh->bind(cmd);
+        gm.mesh->draw(cmd);
+    }
 }
 
 const ModelData* ModelModule::model(ModelId id) const {

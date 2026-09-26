@@ -106,6 +106,9 @@ struct ModelLoadOptions {
     // return "" for none. AssetCatalog::namedTexture fits here.
     std::function<std::string(const std::string& material)> textureForMaterial;
     bool loadAnimations = true;
+    // True: a file with no meshes (an animation-only FBX) loads with none
+    // instead of throwing.
+    bool allowNoMeshes = false;
     float animationSampleRate = 30.0f;
     // Some exported packs mix units: the header says centimeters but a few
     // files hold meters, so they load 100x too small (Synty Town's

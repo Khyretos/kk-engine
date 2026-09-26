@@ -53,8 +53,21 @@ public:
     // Registers model data made or edited in code (e.g. a character given
     // soft-tissue bones by kke::addJiggleBone) under `key`, as if loaded
     // from a file of that name. Same key again returns the first one.
-    ModelId add(ModelData data, const std::string& key);
+    // transient: a short-lived model (thumbnails load thousands): no
+    // "loaded" log line, and its buffers are written directly instead of
+    // uploaded with a wait for the GPU (see Mesh::Memory).
+    ModelId add(ModelData data, const std::string& key, bool transient = false);
     const ModelData* model(ModelId id) const;
+    // Frees a model nothing uses any more (its GPU buffers once the frames
+    // in flight are done with them). False, and nothing freed, while an
+    // instance still draws it.
+    bool unload(ModelId model);
+    // Draws a model once, outside the world, into whatever pass is open
+    // (one compatible with the main pass): for thumbnails and previews.
+    // Skinned parts draw in their bind pose. The three sets are the lit
+    // pipeline's sets 0-2 (camera and lights, shadow map, default texture).
+    void drawStandalone(VkCommandBuffer cmd, ModelId model, const glm::mat4& transform, VkDescriptorSet lighting, VkDescriptorSet shadowMap,
+                        VkDescriptorSet defaultTexture);
 
     InstanceId spawn(ModelId model, const glm::mat4& transform = glm::mat4(1.0f));
     void remove(InstanceId instance);
