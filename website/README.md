@@ -14,6 +14,27 @@ docker compose up -d --build      # http://localhost:8080
 Put your reverse proxy in front of port 8080 for the domain and HTTPS.
 After pulling new commits, run the same command again to publish them.
 
+### The proxy shows 502 but the container is healthy
+
+The container's log only shows `127.0.0.1 ... "Wget"` lines: that is its own
+healthcheck, and it means the proxy's requests never arrive. Check, in order:
+
+1. `docker compose ps` shows `kke-website` as `healthy` with `0.0.0.0:8080->8080/tcp`.
+2. On the host, `curl -I http://localhost:8080/` returns `200`. If not, the
+   port is not published (another container or service may hold 8080; change
+   the left side of `"8080:8080"` in `docker-compose.yml`).
+3. The proxy's upstream port is **8080**, not 80. The image is
+   nginx-unprivileged, which cannot bind port 80.
+4. If the proxy itself runs in Docker (Nginx Proxy Manager, Traefik, Caddy),
+   `localhost` inside it is the proxy's own container. Join both to one
+   network (`networks:` block in `docker-compose.yml`, or
+   `docker network connect <proxy-network> kke-website`) and use
+   `http://kke-website:8080` as the upstream. Alternatively use the host's
+   Docker IP (`http://172.17.0.1:8080`, or `host.docker.internal` on Docker
+   Desktop).
+5. `docker logs kke-website` should then show the proxy's requests with
+   the real client IP instead of only the Wget lines.
+
 ## Work on it
 
 ```bash
