@@ -23,6 +23,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
+#include <cfloat>
 #include <chrono>
 #include <mutex>
 #include <thread>
@@ -260,12 +261,19 @@ RigidWorld::RayHit RigidWorld::raycast(const glm::vec3& origin, const glm::vec3&
     return out;
 }
 
+namespace {
+// A capsule standing on the origin (the character's position is its feet).
+JPH::RefConst<JPH::Shape> characterShape(float height, float radius) {
+    const float halfCylinder = std::max(0.01f, height * 0.5f - radius);
+    JPH::RotatedTranslatedShapeSettings shapeSettings(JPH::Vec3(0.0f, halfCylinder + radius, 0.0f), JPH::Quat::sIdentity(),
+                                                      new JPH::CapsuleShape(halfCylinder, radius));
+    return shapeSettings.Create().Get();
+}
+} // namespace
+
 RigidWorld::CharacterId RigidWorld::addCharacter(const CharacterDesc& d) {
-    const float halfCylinder = std::max(0.01f, d.height * 0.5f - d.radius);
-    JPH::RotatedTranslatedShapeSettings shapeSettings(JPH::Vec3(0.0f, halfCylinder + d.radius, 0.0f), JPH::Quat::sIdentity(),
-                                                      new JPH::CapsuleShape(halfCylinder, d.radius));
     JPH::CharacterVirtualSettings s;
-    s.mShape = shapeSettings.Create().Get();
+    s.mShape = characterShape(d.height, d.radius);
     s.mMaxSlopeAngle = JPH::DegreesToRadians(d.maxSlopeDegrees);
     s.mMaxStrength = d.pushStrength;
     s.mMass = d.mass;
@@ -279,6 +287,27 @@ RigidWorld::CharacterId RigidWorld::addCharacter(const CharacterDesc& d) {
 }
 
 void RigidWorld::removeCharacter(CharacterId id) { m->characters.erase(id); }
+
+bool RigidWorld::setCharacterHeight(CharacterId id, float height) {
+    auto it = m->characters.find(id);
+    if (it == m->characters.end()) return false;
+    Impl::Character& c = it->second;
+    height = std::max(height, 2.0f * c.desc.radius + 0.02f);
+    if (std::abs(height - c.desc.height) < 1e-4f) return true;
+    // Growing: refuse if the taller capsule would overlap anything
+    // (a tiny tolerance so resting contacts don't count).
+    const float tolerance = height > c.desc.height ? 0.01f : FLT_MAX;
+    if (!c.ch->SetShape(characterShape(height, c.desc.radius), tolerance, m->system.GetDefaultBroadPhaseLayerFilter(Layers::kMoving),
+                        m->system.GetDefaultLayerFilter(Layers::kMoving), {}, {}, *m->temp))
+        return false;
+    c.desc.height = height;
+    return true;
+}
+
+float RigidWorld::characterHeight(CharacterId id) const {
+    auto it = m->characters.find(id);
+    return it == m->characters.end() ? 0.0f : it->second.desc.height;
+}
 
 void RigidWorld::setCharacterInput(CharacterId id, const CharacterInput& input) {
     auto it = m->characters.find(id);

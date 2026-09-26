@@ -112,6 +112,11 @@ public:
     glm::vec3 characterVelocity(CharacterId id) const;
     bool characterOnGround(CharacterId id) const;
     void teleportCharacter(CharacterId id, const glm::vec3& feet);
+    // Crouch/stand: swaps the capsule for one `height` tall (feet stay put).
+    // Returns false, changing nothing, when there's no room (standing up
+    // under a low ceiling).
+    bool setCharacterHeight(CharacterId id, float height);
+    float characterHeight(CharacterId id) const;
 
     // Advances characters then bodies by dt (fixed step recommended).
     void step(float dt);

@@ -67,7 +67,7 @@ private:
     kke::CameraRig m_rig;
     float m_facing = 0.0f;          // degrees, the body's yaw
     bool m_captured = false;
-    bool m_crouch = false, m_walk = false, m_sprint = false;
+    bool m_crouch = false, m_wantCrouch = false, m_walk = false, m_sprint = false;
     bool m_jumpQueued = false;
     glm::vec3 m_spawn{0.0f, 0.05f, 6.0f};
     kke::ModelModule::ModelId m_charModel = 0;

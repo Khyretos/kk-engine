@@ -97,6 +97,42 @@ TEST(RigidWorld, CharacterWalksJumpsAndClimbsAStep) {
     EXPECT_TRUE(w.characterOnGround(ch));
 }
 
+TEST(RigidWorld, CrouchingFitsUnderALowCeilingAndStandingUpThereIsRefused) {
+    kke::RigidWorld w(single());
+    ground(w);
+    // A beam from 1.3 m up, over x = 2..4: a 1.8 m capsule can't pass.
+    kke::RigidWorld::BodyDesc beam;
+    beam.motion = kke::RigidWorld::Motion::Static;
+    beam.halfExtents = glm::vec3(1.0f, 0.2f, 2.0f);
+    beam.position = glm::vec3(3.0f, 1.5f, 0.0f);
+    w.add(beam);
+    auto walk = [&](kke::RigidWorld::CharacterId ch) {
+        kke::RigidWorld::CharacterInput in;
+        in.move = glm::vec3(3.0f, 0.0f, 0.0f);
+        for (int i = 0; i < 60; ++i) { w.setCharacterInput(ch, in); w.step(1.0f / 60.0f); }
+        in.move = glm::vec3(0.0f);
+        w.setCharacterInput(ch, in);
+        return w.characterPosition(ch).x;
+    };
+    kke::RigidWorld::CharacterDesc cd;
+    cd.position = glm::vec3(0.0f, 0.05f, 0.0f);
+    auto standing = w.addCharacter(cd);
+    EXPECT_LT(walk(standing), 2.0f); // blocked by the beam
+    w.removeCharacter(standing);
+
+    auto ch = w.addCharacter(cd);
+    ASSERT_TRUE(w.setCharacterHeight(ch, 1.0f));
+    EXPECT_FLOAT_EQ(w.characterHeight(ch), 1.0f);
+    const float x = walk(ch);
+    EXPECT_GT(x, 2.5f);
+    EXPECT_LT(x, 3.5f); // under the beam now
+    EXPECT_FALSE(w.setCharacterHeight(ch, 1.8f)); // no room to stand
+    EXPECT_FLOAT_EQ(w.characterHeight(ch), 1.0f);
+    // Walk out, then standing works.
+    walk(ch);
+    EXPECT_TRUE(w.setCharacterHeight(ch, 1.8f));
+}
+
 TEST(RigidWorld, CharacterPushesADynamicBox) {
     kke::RigidWorld w(single());
     ground(w);

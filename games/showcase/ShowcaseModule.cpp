@@ -144,6 +144,10 @@ void ShowcaseModule::buildLevel() {
     }
     // Pillars to walk around and hide the camera behind (spring arm).
     for (int k = 0; k < 4; ++k) addStaticBox({ { -14.0f + k * 2.5f, 1.5f, -14.0f }, { 0.4f, 1.5f, 0.4f }, wall }, v, idx);
+    // A low roof (1.2 m clearance) on corner posts: crouch (C) to get under.
+    addStaticBox({ { 10.0f, 1.35f, 6.0f }, { 1.5f, 0.15f, 1.5f }, accent }, v, idx);
+    for (glm::vec2 c : { glm::vec2(-1, -1), glm::vec2(1, -1), glm::vec2(1, 1), glm::vec2(-1, 1) })
+        addStaticBox({ { 10.0f + c.x * 1.4f, 0.6f, 6.0f + c.y * 1.4f }, { 0.1f, 0.6f, 0.1f }, wall }, v, idx);
     // Breaking yard floor marker.
     addStaticBox({ { 14.0f, 0.01f, -6.0f }, { 5.5f, 0.01f, 4.5f }, glm::vec3(0.3f, 0.3f, 0.25f) }, v, idx);
     m_level->upload(v, idx);
@@ -281,7 +285,7 @@ void ShowcaseModule::onEvent(const SDL_Event& e) {
     case SDLK_V:
         m_rig.mode = m_rig.mode == kke::CameraRig::Mode::ThirdPerson ? kke::CameraRig::Mode::FirstPerson : kke::CameraRig::Mode::ThirdPerson;
         break;
-    case SDLK_C: m_crouch = !m_crouch; break;
+    case SDLK_C: m_wantCrouch = !m_wantCrouch; break;
     case SDLK_F: shoot(); break;
     case SDLK_E: forcePush(); break;
     case SDLK_R:
@@ -332,6 +336,12 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     const float dt = ctx.dt;
     m_fps = m_fps * 0.95f + (dt > 0.0f ? 1.0f / dt : 0.0f) * 0.05f;
     kke::RigidWorld& w = m_rigid->world();
+
+    // Crouch: a 1.0 m capsule. Standing up waits until there's headroom.
+    if (m_wantCrouch != m_crouch && w.setCharacterHeight(m_player, m_wantCrouch ? 1.0f : 1.8f)) m_crouch = m_wantCrouch;
+    const float target = m_crouch ? 0.85f : 1.5f;
+    m_rig.settings.pivotHeight += (target - m_rig.settings.pivotHeight) * std::min(1.0f, 10.0f * dt);
+    m_rig.settings.eyeHeight = m_rig.settings.pivotHeight + 0.15f;
 
     // Input -> desired velocity, relative to the camera.
     glm::vec3 move(0.0f);
@@ -444,6 +454,9 @@ void ShowcaseModule::renderUi() {
     kke::RigidWorld& w = m_rigid->world();
     glm::vec3 v = w.characterVelocity(m_player);
     ImGui::Text("Speed %.1f m/s  %s", glm::length(glm::vec2(v.x, v.z)), w.characterOnGround(m_player) ? "on ground" : "in the air");
+    const glm::vec3 feet = w.characterPosition(m_player);
+    ImGui::Text("At %.1f %.1f %.1f, %s (%.1f m)", feet.x, feet.y, feet.z, m_crouch ? "crouched" : "standing", w.characterHeight(m_player));
+    if (m_wantCrouch != m_crouch) ImGui::TextColored(ImVec4(1, 0.8f, 0.3f, 1), "No room to stand up");
     ImGui::Text("Rigid bodies %zu (%zu awake), %.2f ms", w.bodyCount(), w.activeBodyCount(), w.lastStepMs());
     if (ImGui::CollapsingHeader("Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::TextUnformatted("WASD move, Shift sprint, Alt walk, Space jump,\nC crouch, mouse look, wheel zoom, V first/third person\n"
