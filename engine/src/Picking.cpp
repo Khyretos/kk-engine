@@ -66,4 +66,30 @@ float snapTo(float value, float step) {
     return step > 0.0f ? std::round(value / step) * step : value;
 }
 
+Frustum Frustum::fromViewProj(const glm::mat4& m) {
+    // Rows of the matrix (glm is column-major: m[col][row]).
+    auto row = [&](int r) { return glm::vec4(m[0][r], m[1][r], m[2][r], m[3][r]); };
+    Frustum f;
+    f.planes[0] = row(3) + row(0); // left
+    f.planes[1] = row(3) - row(0); // right
+    f.planes[2] = row(3) + row(1); // bottom (top with the Vulkan y flip - doesn't matter, both are kept)
+    f.planes[3] = row(3) - row(1);
+    f.planes[4] = row(3) + row(2); // near (for -w..w depth; for 0..w this is a little behind it: still safe)
+    f.planes[5] = row(3) - row(2); // far
+    for (glm::vec4& p : f.planes) {
+        float len = glm::length(glm::vec3(p));
+        if (len > 0.0f) p /= len;
+    }
+    return f;
+}
+
+bool Frustum::intersectsAabb(const glm::vec3& mn, const glm::vec3& mx) const {
+    for (const glm::vec4& p : planes) {
+        // The box corner furthest along the plane normal.
+        glm::vec3 v(p.x >= 0.0f ? mx.x : mn.x, p.y >= 0.0f ? mx.y : mn.y, p.z >= 0.0f ? mx.z : mn.z);
+        if (glm::dot(glm::vec3(p), v) + p.w < 0.0f) return false;
+    }
+    return true;
+}
+
 } // namespace kke

@@ -2,6 +2,7 @@
 
 #include "kke/Application.h"
 #include "kke/Log.h"
+#include "kke/Picking.h"
 #include "kke/VulkanCheck.h"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -372,11 +373,31 @@ void ModelModule::skinInstance(Instance& inst, uint32_t frameIndex) {
     }
 }
 
+bool ModelModule::mightBeVisible(const Instance& inst, const Frustum& f) const {
+    // Deformed parts (breakables) and ragdolls can be anywhere: always drawn.
+    if (!inst.deformed.empty() || !inst.worldOverride.empty()) return true;
+    const ModelData& d = m_models.at(inst.model)->data;
+    glm::vec3 mn = d.boundsMin, mx = d.boundsMax;
+    if (!inst.skinned.empty()) {
+        // Animation moves limbs past the bind-pose bounds: a margin.
+        glm::vec3 pad = (mx - mn) * 0.25f;
+        mn -= pad;
+        mx += pad;
+    }
+    glm::vec3 wmn, wmx;
+    transformAabb(mn, mx, inst.transform, wmn, wmx);
+    return f.intersectsAabb(wmn, wmx);
+}
+
 void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
     ++m_frame; // renderShadow runs first each frame (see Application's frame loop)
     m_shadowPipeline->bind(ctx.cmd);
+    // Cull against the light's own frustum: things off camera still cast
+    // shadows into view, things outside the shadow map can't.
+    const Frustum lightFrustum = Frustum::fromViewProj(ctx.lightViewProj);
     for (auto& [id, inst] : m_instances) {
         if (!inst.visible || !m_showMeshes) continue;
+        if (!mightBeVisible(inst, lightFrustum)) continue;
         skinInstance(inst, ctx.frameIndex);
         if (!inst.deformed.empty()) {
             uploadDeformed(inst, ctx.frameIndex);
@@ -414,6 +435,10 @@ void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
 
 void ModelModule::render(const RenderContext& ctx) {
     m_drawCalls = 0;
+    m_culled = 0;
+    // Frustum culling (OPTIMIZATION.md #23): an instance entirely outside
+    // the view is neither skinned, uploaded nor drawn.
+    const Frustum frustum = Frustum::fromViewProj(ctx.proj * ctx.view);
     VkDescriptorSet overlay = m_overlaySet ? m_overlaySet : ctx.defaultMaterialTextureDescriptorSet;
     VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, ctx.defaultMaterialTextureDescriptorSet, overlay };
     const VkShaderStageFlags pcStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
@@ -423,6 +448,7 @@ void ModelModule::render(const RenderContext& ctx) {
         VkDescriptorSet boundTexture = ctx.defaultMaterialTextureDescriptorSet;
         for (auto& [id, inst] : m_instances) {
             if (!inst.visible) continue;
+            if (!mightBeVisible(inst, frustum)) { ++m_culled; continue; }
             skinInstance(inst, ctx.frameIndex);
             uploadDeformed(inst, ctx.frameIndex);
             const LoadedModel& lm = *m_models[inst.model];

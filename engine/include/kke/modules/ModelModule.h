@@ -107,6 +107,9 @@ public:
 
     size_t instanceCount() const { return m_instances.size(); }
     size_t drawCallsLastFrame() const { return m_drawCalls; }
+    // Instances skipped last frame because they were outside the camera
+    // frustum (see render()).
+    size_t culledLastFrame() const { return m_culled; }
 
 private:
     struct GpuMaterial { glm::vec3 color; float metallic, roughness; VkDescriptorSet textureSet = VK_NULL_HANDLE; };
@@ -147,6 +150,8 @@ private:
     void skinInstance(Instance& inst, uint32_t frameIndex);
     void uploadDeformed(Instance& inst, uint32_t frameIndex);
     std::vector<glm::mat4> currentBoneWorld(const Instance& inst) const;
+    // False only when the instance certainly can't be seen through `f`.
+    bool mightBeVisible(const Instance& inst, const struct Frustum& f) const;
 
     Application* m_app = nullptr;
     std::unique_ptr<Pipeline> m_pipeline, m_shadowPipeline, m_bonePipeline;
@@ -163,6 +168,7 @@ private:
     float m_overlayTile = 0.0f, m_overlayStrength = 1.0f;
     uint64_t m_frame = 0;
     size_t m_drawCalls = 0;
+    size_t m_culled = 0;
 };
 
 } // namespace kke

@@ -277,7 +277,7 @@ void SyntySceneModule::renderUi() {
         ImGui::End();
         return;
     }
-    ImGui::Text("%zu props, %zu characters, %zu draw calls", m_propCount, m_characters.size(), m_models->drawCallsLastFrame());
+    ImGui::Text("%zu props, %zu characters, %zu draw calls, %zu culled", m_propCount, m_characters.size(), m_models->drawCallsLastFrame(), m_models->culledLastFrame());
     ImGui::Checkbox("Show bones (B)", &m_showBones);
     ImGui::SameLine();
     if (ImGui::Checkbox("Engine panels (F1)", &m_showEnginePanels))

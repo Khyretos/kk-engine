@@ -60,3 +60,15 @@ TEST(Picking, SnapTo) {
     EXPECT_FLOAT_EQ(kke::snapTo(-0.74f, 0.5f), -0.5f);
     EXPECT_FLOAT_EQ(kke::snapTo(1.26f, 0.0f), 1.26f);
 }
+
+TEST(Picking, FrustumCullsWhatIsOffScreen) {
+    glm::mat4 proj = kke::engineProjection(60.0f, 16.0f / 9.0f, 0.1f, 100.0f);
+    glm::mat4 view = glm::lookAt(glm::vec3(0, 0, 5), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+    kke::Frustum f = kke::Frustum::fromViewProj(proj * view);
+    EXPECT_TRUE(f.intersectsAabb(glm::vec3(-0.5f), glm::vec3(0.5f)));                       // in front
+    EXPECT_FALSE(f.intersectsAabb(glm::vec3(-0.5f, -0.5f, 6.0f), glm::vec3(0.5f, 0.5f, 7.0f))); // behind the camera
+    EXPECT_FALSE(f.intersectsAabb(glm::vec3(50.0f, -0.5f, -0.5f), glm::vec3(51.0f, 0.5f, 0.5f))); // far to the right
+    EXPECT_FALSE(f.intersectsAabb(glm::vec3(-0.5f, -0.5f, -200.0f), glm::vec3(0.5f, 0.5f, -150.0f))); // beyond far
+    EXPECT_TRUE(f.intersectsAabb(glm::vec3(-100.0f, -1.0f, -1.0f), glm::vec3(100.0f, 1.0f, 1.0f)));  // straddles the view
+    EXPECT_FALSE(f.intersectsAabb(glm::vec3(-0.5f, 40.0f, -0.5f), glm::vec3(0.5f, 41.0f, 0.5f)));   // above
+}

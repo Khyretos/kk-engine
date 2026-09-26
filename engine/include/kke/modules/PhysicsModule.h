@@ -285,6 +285,13 @@ public:
     // breaks its own way, and the same world breaks the same way on
     // every run (and, later, on every client of a multiplayer game).
     uint32_t fractureWorldSeed() const { return m_fractureWorldSeed; }
+    // Debris budget (OPTIMIZATION.md rule 5): at most this many pieces of
+    // broken breakables at once. Past it the oldest *sleeping* piece is
+    // removed (then the oldest piece). FEMFX costs ~0.15-0.2 ms per awake
+    // body on one core (tools/physics_lab volcano), so this is the knob
+    // that keeps a big break inside the frame. 0 = unlimited.
+    void setDebrisBudget(uint32_t maxPieces) { m_debrisBudget = maxPieces; }
+    uint32_t debrisBudget() const { return m_debrisBudget; }
     void setFractureWorldSeed(uint32_t seed) { m_fractureWorldSeed = seed; }
 
     // ---- IRagdollPhysics (see kke/Capabilities.h, kke/Ragdoll.h)
@@ -453,6 +460,7 @@ private:
         std::vector<uint32_t> bakedTetOf, bakedVertOf;
         int breakGrace = 0;     // ticks before a freshly split part may break (see updateBreakables())
         int breakPending = -1;  // >= 0: overloaded, splits in this many ticks
+        uint64_t bornTick = 0;  // for the debris budget (oldest goes first)
     };
 
     // An object with pre-baked pieces (TetSpawnOptions::chunkOfTet).
@@ -572,6 +580,10 @@ private:
     // between in a demo.
     float m_nextSpawnHeight = 5.0f;
     uint32_t m_fractureWorldSeed = 1;
+    uint32_t m_debrisBudget = 200;
+    uint64_t m_physicsTick = 0;
+    uint32_t m_debrisRemoved = 0;
+    void enforceDebrisBudget();
     bool m_startScenesDone = false; // KKE_PHYSICS_SCENES, see fixedUpdate()
     // Builds a w x h x d box of tets, bakes a fracture pattern into it
     // (kke::bakeFracture) and spawns it: the brick and glass scenes.

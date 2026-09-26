@@ -739,6 +739,7 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnBreakablePart(ObjectHandle bh, c
     if (h == kInvalidHandle) return kInvalidHandle;
     SpawnedTet& part = *m_objects[h];
     part.breakable = bh;
+    part.bornTick = m_physicsTick;
     part.bakedTetOf = tets;
     part.bakedVertOf = bakedVert;
     part.textureSet = b.textureSet;
@@ -788,6 +789,34 @@ void PhysicsModule::splitBreakablePart(ObjectHandle bh, ObjectHandle ph) {
     ++b.breaks;
     removeObject(ph);
     log::get(name())->info("breakable {} split: {} broken borders, now {} pieces", bh, b.graph.brokenBorderCount(), b.parts.size());
+}
+
+void PhysicsModule::enforceDebrisBudget() {
+    if (!m_debrisBudget) return;
+    size_t pieces = 0;
+    for (const auto& [bh, b] : m_breakables) pieces += b.parts.size() > 1 ? b.parts.size() : 0; // whole objects aren't debris
+    while (pieces > m_debrisBudget) {
+        ObjectHandle victim = kInvalidHandle;
+        uint64_t oldest = ~0ull;
+        bool victimAsleep = false;
+        for (const auto& [bh, b] : m_breakables) {
+            if (b.parts.size() < 2) continue;
+            for (ObjectHandle ph : b.parts) {
+                const SpawnedTet& p = *m_objects[ph];
+                const bool asleep = AMD::FmIsTetMeshSleeping(*p.tetMesh);
+                // Sleeping beats awake; then oldest.
+                if (victim == kInvalidHandle || (asleep && !victimAsleep) || (asleep == victimAsleep && p.bornTick < oldest)) {
+                    victim = ph;
+                    oldest = p.bornTick;
+                    victimAsleep = asleep;
+                }
+            }
+        }
+        if (victim == kInvalidHandle) break;
+        removeObject(victim); // embedded render points of it collapse to nothing (deformEmbedded)
+        ++m_debrisRemoved;
+        --pieces;
+    }
 }
 
 void PhysicsModule::updateBreakables() {
@@ -1309,7 +1338,9 @@ void PhysicsModule::fixedUpdate(const FixedUpdateContext& ctx) {
 
     double stepStart = nowSeconds();
     AMD::FmUpdateScene(m_scene, ctx.fixedDt);
+    ++m_physicsTick;
     updateBreakables();
+    enforceDebrisBudget();
     double stepMs = (nowSeconds() - stepStart) * 1000.0;
     for (auto& [handle, obj] : m_objects) {
         if (!obj->armPending) continue;
@@ -2272,6 +2303,12 @@ void PhysicsModule::renderUi() {
     ImGui::Begin("Physics");
 
     ImGui::Text("Objects: %zu / %u", m_objects.size(), kMaxObjects);
+    {
+        int budget = static_cast<int>(m_debrisBudget);
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10.0f);
+        if (ImGui::SliderInt("Debris budget", &budget, 0, 500)) m_debrisBudget = static_cast<uint32_t>(budget);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Most broken pieces kept at once (0 = no limit). Past it the oldest\nsleeping piece is removed. Each awake piece costs ~0.2 ms per step\non one core. Removed so far: %u", m_debrisRemoved);
+    }
     ImGui::Text("Physics step: %.2f ms avg, %.2f ms max (%.0f ticks/s)", m_lastStepMsAvg, m_lastStepMsMax, m_lastTicksPerSecond);
     ImGui::Text("Render prep: %.2f ms  |  %.0f fps", m_lastRenderPrepMsAvg, m_lastFramesPerSecond);
     ImGui::Text("Pieces: %u (%u awake)  |  faces drawn: %u", m_totalPieces, m_awakePieces, m_renderedFaces);

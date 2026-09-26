@@ -18,6 +18,7 @@
 //       budget (oldest pieces removed), timed per step. See SCALING.md.
 #include "AMD_FEMFX.h"
 #include "kke/BreakGraph.h"
+#include "kke/ParticleFluid.h"
 #include "kke/VoronoiFracture.h"
 #include "kke/VoxelTets.h"
 
@@ -535,6 +536,112 @@ int runShoot(const std::string& which, float speed) {
     return 0;
 }
 
+// "Run from the erupting volcano": breakable boulders (0.5-1.4 m, 8-14
+// Voronoi pieces each) thrown from a crater at `rate` per second onto a
+// 40 x 40 m play area, plus a lava flow of `lavaCount` particles, for
+// `seconds`. Debris budget (OPTIMIZATION.md rule 5): at most `maxBodies`
+// FEMFX bodies; past that, the oldest sleeping piece goes, then the
+// oldest piece. Reports step time per second of simulated time.
+int runVolcano(float seconds, int threads, float rate, int maxBodies, int lavaCount) {
+    ThreadPool pool(threads);
+    g_pool = &pool;
+    FmScene* scene = makeScene(threads, 1024, 8192);
+    const Mat rock{ 2600.0f, 3.0e7f, 0.25f, 1.2e5f };
+    std::deque<LabBreakable> boulders;
+    kke::ParticleFluid::Params fp;
+    fp.radius = 0.08f;
+    fp.substeps = 1;
+    kke::ParticleFluid lava(fp, static_cast<size_t>(std::max(1, lavaCount)));
+    uint32_t rng = 12345;
+    auto rnd = [&] { rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5; return (rng >> 8) * (1.0f / 16777216.0f); };
+    float spawnAccum = 0.0f;
+    const int steps = static_cast<int>(seconds * 60.0f);
+    std::vector<double> window;
+    double fluidMs = 0.0, physMs = 0.0, worstStep = 0.0;
+    size_t thrown = 0, removed = 0;
+    std::printf("volcano: %.0f s, %d thread(s), %.1f boulders/s, body budget %d, lava %d particles\n", seconds, threads, rate, maxBodies, lavaCount);
+    std::printf("   t  bodies  awake  step avg  step max  lava ms\n");
+    for (int step = 0; step < steps; ++step) {
+        spawnAccum += rate / 60.0f;
+        while (spawnAccum >= 1.0f) {
+            spawnAccum -= 1.0f;
+            ++thrown;
+            boulders.emplace_back();
+            LabBreakable& b = boulders.back();
+            float r = 0.25f + 0.45f * rnd();
+            kke::TetMeshData m = sphere(3, r);
+            kke::FractureSeedOptions o;
+            o.pattern = kke::FracturePattern::Voronoi;
+            o.chunkSize = r * 0.8f;
+            o.seed = kke::fractureSeed(1, static_cast<uint32_t>(thrown));
+            o.maxPieces = 14;
+            kke::BakedFracture baked = kke::bakeFracture(m, o);
+            b.mesh = baked.cut.mesh;
+            b.graph = kke::BreakGraph(baked.cut.mesh, baked.cut.chunkOfTet, baked.cut.tetStrength);
+            b.graph.arm(rock.fracture);
+            b.mat = rock;
+            b.origin = glm::vec3(-6.0f + 12.0f * rnd(), 18.0f + 4.0f * rnd(), -30.0f);
+            b.partOf.assign(b.mesh.tets.size(), nullptr);
+            b.localOf.assign(b.mesh.tets.size(), 0);
+            std::vector<uint32_t> all(b.mesh.tets.size());
+            for (uint32_t t = 0; t < all.size(); ++t) all[t] = t;
+            spawnPart(scene, b, all, nullptr, glm::vec3(-4.0f + 8.0f * rnd(), 4.0f + 6.0f * rnd(), 12.0f + 10.0f * rnd()));
+        }
+        for (int k = 0; k < 6 && lavaCount > 0 && lava.size() < static_cast<size_t>(lavaCount); ++k)
+            lava.add(glm::vec3(-1.0f + 2.0f * rnd(), 1.0f, -20.0f + rnd()), glm::vec3(0.0f, 0.0f, 3.0f), 1100.0f, 0);
+
+        // Budget: count bodies, drop the oldest (sleeping first).
+        size_t bodies = 0;
+        for (auto& b : boulders) bodies += b.parts.size();
+        while (bodies > static_cast<size_t>(maxBodies)) {
+            Object* victim = nullptr;
+            LabBreakable* owner = nullptr;
+            for (auto& b : boulders) {
+                for (Object* p : b.parts)
+                    if (FmIsTetMeshSleeping(*p->mesh) && (!victim || p->bornMs < victim->bornMs)) { victim = p; owner = &b; }
+            }
+            if (!victim) {
+                for (auto& b : boulders)
+                    for (Object* p : b.parts)
+                        if (!victim || p->bornMs < victim->bornMs) { victim = p; owner = &b; }
+            }
+            if (!victim) break;
+            owner->parts.erase(std::find(owner->parts.begin(), owner->parts.end(), victim));
+            for (auto& po : owner->partOf) if (po == victim) po = nullptr;
+            destroy(scene, victim);
+            --bodies;
+            ++removed;
+        }
+        while (!boulders.empty() && boulders.front().parts.empty()) boulders.pop_front();
+
+        double t0 = nowMs();
+        FmUpdateScene(scene, 1.0f / 60.0f);
+        for (auto& b : boulders) updateBreakable(scene, b);
+        double t1 = nowMs();
+        if (lavaCount > 0) lava.step(1.0f / 60.0f);
+        double t2 = nowMs();
+        physMs = t1 - t0;
+        fluidMs += t2 - t1;
+        window.push_back(physMs + (t2 - t1));
+        worstStep = std::max(worstStep, physMs + (t2 - t1));
+        if ((step + 1) % 60 == 0) {
+            size_t awake = 0;
+            bodies = 0;
+            for (auto& b : boulders)
+                for (Object* p : b.parts) { ++bodies; awake += !FmIsTetMeshSleeping(*p->mesh); }
+            double sum = 0.0, mx = 0.0;
+            for (double w : window) { sum += w; mx = std::max(mx, w); }
+            std::printf("%4d  %6zu  %5zu  %6.2f ms  %6.2f ms  %5.2f\n", (step + 1) / 60, bodies, awake, sum / window.size(), mx, fluidMs / 60.0);
+            window.clear();
+            fluidMs = 0.0;
+        }
+    }
+    std::printf("thrown %zu boulders, %zu pieces removed by the budget, worst step %.2f ms (16.7 ms = one 60 Hz frame)\n", thrown, removed, worstStep);
+    for (auto& b : boulders) for (Object* p : b.parts) destroy(scene, p);
+    FmDestroyScene(scene);
+    return 0;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -545,6 +652,9 @@ int main(int argc, char** argv) {
         int threads = argc > 4 ? std::atoi(argv[4]) : 1;
         return runFracture(pattern, seeds, threads);
     }
+    if (mode == "volcano")
+        return runVolcano(argc > 2 ? std::atof(argv[2]) : 30.0f, argc > 3 ? std::atoi(argv[3]) : 1, argc > 4 ? std::atof(argv[4]) : 2.0f,
+                          argc > 5 ? std::atoi(argv[5]) : 150, argc > 6 ? std::atoi(argv[6]) : 0);
     if (mode == "shoot") return runShoot(argc > 2 ? argv[2] : "voronoi", argc > 3 ? std::atof(argv[3]) : 18.0f);
     if (mode == "freefall") {
         ThreadPool pool(1);

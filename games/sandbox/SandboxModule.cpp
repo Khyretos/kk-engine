@@ -843,7 +843,7 @@ void SandboxModule::inspectorUi() {
     ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - 340 * s, 10 * s), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(330 * s, 0), ImGuiCond_FirstUseEver);
     ImGui::Begin("Sandbox");
-    ImGui::Text("%zu objects, %zu draw calls, %.0f FPS", m_objects.size(), m_models->drawCallsLastFrame(), io.Framerate);
+    ImGui::Text("%zu objects, %zu draw calls (%zu culled), %.0f FPS", m_objects.size(), m_models->drawCallsLastFrame(), m_models->culledLastFrame(), io.Framerate);
     if (ImGui::Checkbox("Engine panels (F1)", &m_showEnginePanels))
         for (kke::Module* m : m_enginePanels) m->setUiVisible(m_showEnginePanels);
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));

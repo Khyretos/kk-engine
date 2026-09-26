@@ -33,6 +33,16 @@ float rayAabb(const Ray& ray, const glm::vec3& boxMin, const glm::vec3& boxMax);
 // (Arvo's method: exact bounds of the 8 transformed corners, no loop over them).
 void transformAabb(const glm::vec3& localMin, const glm::vec3& localMax, const glm::mat4& m, glm::vec3& outMin, glm::vec3& outMax);
 
+// View frustum as 6 planes (Gribb-Hartmann, from proj * view), for
+// culling: an object whose bounds are entirely outside one plane can't
+// be on screen, so it isn't drawn (or skinned, or uploaded).
+struct Frustum {
+    glm::vec4 planes[6]; // xyz = inward normal, w = offset: inside when dot(n, p) + w >= 0
+    static Frustum fromViewProj(const glm::mat4& viewProj);
+    // Conservative: true if the box might be visible.
+    bool intersectsAabb(const glm::vec3& mn, const glm::vec3& mx) const;
+};
+
 // Snap to a grid step (step <= 0 returns the value unchanged).
 float snapTo(float value, float step);
 
