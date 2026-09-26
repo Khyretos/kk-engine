@@ -13,12 +13,12 @@
 namespace kke_showcase {
 
 namespace {
-const glm::vec3 kPoolCenter(-18.0f, 0.0f, 20.0f);
+using layout::kPoolCenter;
 const glm::vec2 kPoolHalf(4.0f, 4.0f); // inside the walls
 constexpr float kPoolWall = 1.0f;      // high: vault over it
 constexpr float kPoolWater = 0.75f;    // water level
 constexpr float kWallThickness = 0.3f;
-const glm::vec3 kLavaCenter(0.0f, 0.0f, 20.0f);
+using layout::kLavaCenter;
 constexpr float kLavaWatchDistance = 18.0f; // closer than this, the lava runs
 } // namespace
 

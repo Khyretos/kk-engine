@@ -47,6 +47,11 @@ struct PipelineConfig {
     VkCompareOp stencilCompareOp = VK_COMPARE_OP_ALWAYS;
     VkStencilOp stencilPassOp = VK_STENCIL_OP_KEEP;
     bool colorWriteEnable = true;
+    // Rasterizer depth bias (both 0 = off). Shadow casters get theirs from
+    // ShadowMap::casterConfig(): slope-scaled, so steep surfaces are pushed
+    // further than flat ones and neither shows acne.
+    float depthBiasConstant = 0.0f;
+    float depthBiasSlope = 0.0f;
     // Color attachments in the target render pass (same blend state for
     // all). 2+ for multiple render targets, 0 for depth-only passes.
     uint32_t colorAttachmentCount = 1;

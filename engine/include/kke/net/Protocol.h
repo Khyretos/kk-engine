@@ -23,12 +23,13 @@ namespace kke::net {
 //   velocity  +-64 m/s per axis, 1/128 m/s steps
 //   rotation  smallest-three quaternion, ~0.001 per component
 //   yaw       0..360 degrees, 1024 steps (0.35 degrees)
-constexpr uint16_t kProtocolVersion = 2; // 2: Spawn, Despawn, Break (networking v2, #28)
+constexpr uint16_t kProtocolVersion = 3; // 2: Spawn, Despawn, Break (#28); 3: join password (#42)
 constexpr size_t kMaxPlayers = 32;
 constexpr size_t kMaxNameLength = 24;
 constexpr size_t kMaxGameIdLength = 32;
 constexpr size_t kMaxCharacterLength = 64;
 constexpr size_t kMaxReasonLength = 128;
+constexpr size_t kMaxPasswordLength = 64;
 constexpr size_t kMaxEventBytes = 512;
 constexpr size_t kMaxBodiesPerSnapshot = 255;
 constexpr uint32_t kMaxBodyId = 65535;
@@ -85,6 +86,7 @@ struct NetBodyState {
 struct HelloMsg {
     uint16_t version = kProtocolVersion;
     std::string gameId, name, character;
+    std::string password{};    // "" when the server has none (docs/SERVER_HOSTING.md)
 };
 struct WelcomeMsg {
     uint8_t playerId = 0;
@@ -168,6 +170,7 @@ template <typename Stream> void serialize(Stream& s, HelloMsg& m) {
     s.string(m.gameId, kMaxGameIdLength);
     s.string(m.name, kMaxNameLength);
     s.string(m.character, kMaxCharacterLength);
+    s.string(m.password, kMaxPasswordLength);
 }
 template <typename Stream> void serialize(Stream& s, WelcomeMsg& m) {
     s.integer(m.playerId, 0, kMaxPlayers);

@@ -12,6 +12,11 @@ typedef struct _ENetPeer ENetPeer;
 
 namespace kke::net {
 
+// ENet's process-wide start (WSAStartup on Windows), counted: for other
+// code using enet sockets directly (the server directory). Pair them.
+bool enetRetain();
+void enetRelease();
+
 // ITransport over ENet (MIT, http://enet.bespin.org): reliable ordered and
 // unreliable sequenced channels over one UDP socket, with RTT and loss
 // measurement and its own keep-alive/timeout. Built when KKE_ENABLE_NET is
@@ -35,6 +40,7 @@ public:
     void disconnect(PeerId peer) override;
     void poll(std::vector<NetEvent>& out) override;
     PeerStats stats(PeerId peer) const override;
+    std::string address(PeerId peer) const override;
     uint16_t port() const override { return m_port; }
     void close() override;
     const char* backendName() const override { return "ENet"; }

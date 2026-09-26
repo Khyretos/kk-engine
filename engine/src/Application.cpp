@@ -507,16 +507,14 @@ void Application::run() {
         const glm::mat4& proj = drawViews[0].proj;
 
         // Real shadow mapping (see kke::ShadowMap) — computed from the
-        // key light (lights[0]) only, framed around a fixed scene
-        // region near the origin (radius 15) rather than any real
-        // scene-bounds tracking, which this project doesn't have yet.
-        // 15 was chosen to comfortably cover both kke_demo's cube and
-        // physics_demo's ground plane + falling objects without the
-        // shadow map's resolution being spread so thin the shadow
-        // edges turn visibly blocky — checked against a real
-        // screenshot, not picked blindly.
+        // key light (lights[0]) only, over a 15 m radius around what the
+        // first view's camera looks at, so shadows follow the player
+        // through a level bigger than that. 15 keeps the texels dense
+        // enough that edges don't turn blocky (checked against a
+        // screenshot). The centre is snapped to shadow texels so the
+        // edges don't shimmer as the camera moves.
         glm::mat4 lightViewProj = ShadowMap::computeLightViewProj(
-            m_lighting.lights[0].direction, glm::vec3(0.0f, 0.0f, 0.0f), 15.0f);
+            m_lighting.lights[0].direction, drawViews[0].camera.target, 15.0f, m_shadowMap->resolution());
 
         RenderContext renderCtx{};
         renderCtx.renderPass = m_renderer->renderPass();

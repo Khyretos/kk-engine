@@ -15,10 +15,13 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [INPUT.md](INPUT.md) | Rebindable actions, devices, triggers and chords |
 | [MOVEMENT.md](MOVEMENT.md) | How characters move, and the animation principles behind it |
 | [JIGGLE.md](JIGGLE.md) | Jiggle physics for bones, skin and soft bodies |
+| [RAGDOLLS.md](RAGDOLLS.md) | Humanoid and animal ragdolls, their joint limits and how to override them |
 | [NETWORKING.md](NETWORKING.md) | Transport, protocol, authority and replication |
+| [SERVER_HOSTING.md](SERVER_HOSTING.md) | Running a server: kke_server, Docker, roles, directories, security |
 | [SCRIPTING.md](SCRIPTING.md) | Lua gameplay scripts |
 | [PLAY_TO_MAKE.md](PLAY_TO_MAKE.md) | Make the game while playing it: Simple, node graph and Lua levels |
 | [SCENES.md](SCENES.md) | Levels built from asset packs |
+| [SHOWCASE.md](SHOWCASE.md) | kke_demo: the stations, controls, HUD and demo scripts |
 | [OPTIMIZATION.md](OPTIMIZATION.md) | Performance rules, measured log and backlog |
 | [RENDERING_PRINCIPLES.md](RENDERING_PRINCIPLES.md) | Rendering doctrine: no dithering, a clean image every frame, what we took from Threat Interactive |
 | [PERFORMANCE_NOTES.md](PERFORMANCE_NOTES.md) | What RayFire and Chaos do for destruction at scale, and what KKE took from it |

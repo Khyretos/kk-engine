@@ -31,7 +31,7 @@ constexpr int kRainCrates = 300;
 constexpr float kRainPerSecond = 30.0f;
 constexpr float kShotsPerSecond = 4.0f;
 const glm::vec3 kRainCenter(0.0f, 0.0f, -2.0f);
-const glm::vec3 kYard(14.0f, 0.0f, -6.0f); // ShowcaseModule::spawnBreakables
+using layout::kYard; // ShowcaseModule::spawnBreakables
 
 double nowSeconds() {
     return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();

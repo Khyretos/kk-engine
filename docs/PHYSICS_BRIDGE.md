@@ -76,7 +76,7 @@ kke::physicsBlast(worlds, hit.point, 3.0f, 8.0f);                            // 
 
 Ragdolls go through `IRagdollPhysics` the same way; `bestRagdollPhysics()`
 picks Jolt's when both engines are there (joint limits, limbs collide),
-FEMFX's otherwise.
+FEMFX's otherwise. [RAGDOLLS.md](RAGDOLLS.md) has the presets and their limits.
 
 ## Things that exist in both worlds
 
