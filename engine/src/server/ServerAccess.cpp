@@ -2,6 +2,8 @@
 
 #include "kke/server/ServerFiles.h"
 
+#include "kke/DataFile.h"
+
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -73,9 +75,10 @@ std::string ServerAccess::toJson() const {
 
 bool ServerAccess::fromJson(const std::string& text, std::vector<std::string>& errors) {
     const size_t before = errors.size();
-    const nlohmann::json j = nlohmann::json::parse(text, nullptr, false);
-    if (j.is_discarded() || !j.is_object()) {
-        errors.push_back("access.json: not a JSON object");
+    nlohmann::json j;
+    const bool parsed = datafile::parseAny(text, j);
+    if (!parsed || !j.is_object()) {
+        errors.push_back("access.json: not a JSON or YAML object");
         return false;
     }
     auto names = [&](const char* key, std::vector<std::string>& out) {
@@ -109,7 +112,7 @@ bool ServerAccess::fromJson(const std::string& text, std::vector<std::string>& e
 bool ServerAccess::load(const std::string& path, std::vector<std::string>& errors) {
     std::string text;
     bool exists = false;
-    if (!readFile(path, text, &exists)) {
+    if (!datafile::readText(path, text, &exists)) {
         if (!exists) return true;
         errors.push_back(path + ": can't read it");
         return false;
@@ -117,6 +120,9 @@ bool ServerAccess::load(const std::string& path, std::vector<std::string>& error
     return fromJson(text, errors);
 }
 
-bool ServerAccess::save(const std::string& path, std::string* error) const { return writeFileAtomic(path, toJson(), error); }
+bool ServerAccess::save(const std::string& path, std::string* error) const {
+    const std::string target = datafile::saveTarget(path).string(); // access.yml stays YAML
+    return writeFileAtomic(target, datafile::forFile(toJson(), target), error);
+}
 
 } // namespace kke::server

@@ -1,6 +1,7 @@
 #include "kke/modules/SoundVisualizerModule.h"
 
 #include "kke/Application.h"
+#include "kke/DataFile.h"
 #include "kke/Log.h"
 #include "kke/modules/AudioModule.h"
 
@@ -29,10 +30,16 @@ glm::vec2 SoundVisualizerModule::ringPoint(float azimuth, glm::vec2 center, floa
 }
 
 bool SoundVisualizerModule::load() {
-    std::ifstream in(m_path);
-    if (!in) return false;
+    std::string error;
+    bool exists = false;
+    nlohmann::json j;
+    const bool parsed = datafile::loadPath(m_path, j, &error, &exists); // accessibility.json or .yml
+    if (!exists) return false;
+    if (!parsed) {
+        log::get(name())->warn("Ignoring {}", error);
+        return false;
+    }
     try {
-        nlohmann::json j = nlohmann::json::parse(in, nullptr, true, /*ignore_comments=*/true);
         const auto& v = j.value("soundVisualizer", nlohmann::json::object());
         settings.enabled = v.value("enabled", settings.enabled);
         settings.ringScale = std::clamp(v.value("ringScale", settings.ringScale), 0.1f, 0.5f);
@@ -59,11 +66,9 @@ bool SoundVisualizerModule::load() {
 }
 
 bool SoundVisualizerModule::save() const {
+    const std::string target = datafile::saveTarget(m_path).string(); // accessibility.yml stays YAML
     nlohmann::json j;
-    {
-        std::ifstream in(m_path); // keep other sections of the file
-        if (in) try { j = nlohmann::json::parse(in, nullptr, true, true); } catch (...) { j = nlohmann::json::object(); }
-    }
+    if (!datafile::loadPath(target, j) || !j.is_object()) j = nlohmann::json::object(); // keep other sections of the file
     nlohmann::json v;
     v["enabled"] = settings.enabled;
     v["ringScale"] = settings.ringScale;
@@ -77,13 +82,13 @@ bool SoundVisualizerModule::save() const {
         v["categories"][soundCategoryName(SoundCategory(c))] = {{"show", settings.showCategory[c]}, {"color", {col.r, col.g, col.b}}};
     }
     j["soundVisualizer"] = v;
-    const std::string tmp = m_path + ".tmp";
+    const std::string tmp = target + ".tmp";
     {
         std::ofstream out(tmp);
         if (!out) return false;
-        out << j.dump(2) << "\n";
+        out << datafile::dump(j, datafile::formatOf(target).value_or(datafile::Format::Json));
     }
-    return std::rename(tmp.c_str(), m_path.c_str()) == 0;
+    return std::rename(tmp.c_str(), target.c_str()) == 0;
 }
 
 void SoundVisualizerModule::renderUi() {

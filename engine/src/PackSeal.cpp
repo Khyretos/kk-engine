@@ -1,5 +1,7 @@
 #include "kke/PackSeal.h"
 
+#include "kke/DataFile.h"
+
 #include <monocypher.h>
 #include <nlohmann/json.hpp>
 
@@ -200,9 +202,10 @@ std::string toJson(const Manifest& m) {
 
 bool fromJson(const std::string& text, Manifest& out, std::string* error) {
     out = Manifest{};
-    nlohmann::json j = nlohmann::json::parse(text, nullptr, false);
-    if (j.is_discarded() || !j.is_object()) {
-        fail(error, "not valid JSON");
+    nlohmann::json j;
+    const bool parsed = datafile::parseAny(text, j); // JSON or YAML: the signature covers the fields, not the text
+    if (!parsed || !j.is_object()) {
+        fail(error, "not valid JSON or YAML");
         return false;
     }
     if (!j.contains("format") || !j["format"].is_string() || j["format"].get<std::string>() != kFormat) {

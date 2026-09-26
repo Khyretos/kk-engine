@@ -69,7 +69,7 @@ shown. "Key" is the name the dependency check looks for.
 | nlohmann/json | `nlohmann_json` | v3.11.3 | JSON config and data files | MIT | Keep the copyright notice |
 | spdlog (with its bundled fmt) | `spdlog` | v1.14.1 | Logging | MIT (fmt: MIT) | Keep both copyright notices |
 | ufbx | `ufbx` | v0.23.0 | FBX model and animation import | MIT or public domain (Unlicense) | Nothing under the public-domain option |
-| yaml-cpp | `yaml_cpp` | yaml-cpp-0.9.0 | YAML versions of data files (`pack.yml`, `mods.yml`, `game.yml`; kke/DataFile.h) | MIT | Keep the copyright notice |
+| yaml-cpp | `yaml_cpp` | yaml-cpp-0.9.0 | YAML versions of every data file (`pack.yml`, `server.yml`, `settings.yml`, ...; kke/DataFile.h, docs/DATA_FILES.md) | MIT | Keep the copyright notice |
 | Monocypher | `monocypher` | 4.0.2 | Signatures and hashing for sealed data, anti-cheat and Kreative DRM | BSD-2-Clause or CC0-1.0 | Nothing under the CC0 option |
 | miniaudio | `miniaudio` | 0.11.22 | Audio mixing and output | Public domain (Unlicense) or MIT-0 | Nothing |
 | Lua | `lua` | 5.4.7 | Gameplay scripting | MIT | Keep the copyright notice |

@@ -9,6 +9,7 @@
 // ("help"). Ctrl+C or SIGTERM (docker stop) stops it cleanly.
 
 #include "kke/AssetCatalog.h"
+#include "kke/DataFile.h"
 #include "kke/net/EnetTransport.h"
 #include "kke/server/DedicatedServer.h"
 
@@ -95,7 +96,7 @@ int main(int argc, char** argv) {
     ServerConfig config;
     std::vector<std::string> errors;
     const bool explicitConfig = configPath != "server.json";
-    if (explicitConfig && !std::filesystem::exists(configPath)) errors.push_back(configPath + ": no such file");
+    if (explicitConfig && !std::filesystem::exists(kke::datafile::resolve(configPath))) errors.push_back(configPath + ": no such file");
     config.loadFile(configPath, errors);
     config.applyEnv([](const char* key) { return std::getenv(key); }, errors);
     config.applyArgs(args, errors);

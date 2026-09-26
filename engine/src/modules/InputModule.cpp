@@ -1,5 +1,6 @@
 #include "kke/modules/InputModule.h"
 
+#include "kke/DataFile.h"
 #include "kke/DevTools.h"
 #include "kke/Log.h"
 
@@ -179,11 +180,14 @@ void InputModule::init(Application&) {
     };
     // Device names/swaps load now (bindings load in commitDefaults(), after
     // the game has defined its actions).
-    std::ifstream f(m_path);
-    if (f) {
+    std::string error;
+    bool exists = false;
+    nlohmann::json j;
+    const bool parsed = datafile::loadPath(m_path, j, &error, &exists); // input.json or input.yml
+    if (exists && (!parsed || !j.is_object())) log::get(name())->warn("{}", error.empty() ? m_path + ": not an object" : error);
+    else if (exists && j.contains("devices")) {
         try {
-            nlohmann::json j = nlohmann::json::parse(f);
-            if (j.contains("devices")) m_devices.loadDevices(j["devices"]);
+            m_devices.loadDevices(j["devices"]);
         } catch (const std::exception& e) {
             log::get(name())->warn("{}: {}", m_path, e.what());
         }
@@ -279,10 +283,16 @@ void InputModule::commitDefaults() {
 }
 
 bool InputModule::load() {
-    std::ifstream f(m_path);
-    if (!f) return false;
+    std::string error;
+    bool exists = false;
+    nlohmann::json j;
+    const bool parsed = datafile::loadPath(m_path, j, &error, &exists);
+    if (!exists) return false;
+    if (!parsed || !j.is_object()) {
+        log::get(name())->warn("could not read {} (using defaults)", error.empty() ? m_path + ": not an object" : error);
+        return false;
+    }
     try {
-        nlohmann::json j = nlohmann::json::parse(f);
         const nlohmann::json& list = j.value("players", nlohmann::json::array());
         for (size_t p = 0; p < m_maps.size() && p < list.size(); ++p) {
             const int dropped = m_maps[p]->load(list[p]);
@@ -301,15 +311,16 @@ bool InputModule::load() {
 bool InputModule::save() const {
     nlohmann::json j{ { "version", 1 }, { "devices", m_devices.saveDevices() }, { "players", nlohmann::json::array() } };
     for (const auto& m : m_maps) j["players"].push_back(m->save());
-    const std::string tmp = m_path + ".tmp";
+    const std::string target = datafile::saveTarget(m_path).string(); // input.yml stays YAML
+    const std::string tmp = target + ".tmp";
     {
         std::ofstream f(tmp, std::ios::trunc);
         if (!f) return false;
-        f << j.dump(2);
+        f << datafile::dump(j, datafile::formatOf(target).value_or(datafile::Format::Json));
         if (!f) return false;
     }
-    std::remove(m_path.c_str());
-    return std::rename(tmp.c_str(), m_path.c_str()) == 0; // no half-written file on a crash
+    std::remove(target.c_str());
+    return std::rename(tmp.c_str(), target.c_str()) == 0; // no half-written file on a crash
 }
 
 void InputModule::frameStart(const UpdateContext& ctx) {

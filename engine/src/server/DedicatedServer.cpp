@@ -1,5 +1,7 @@
 #include "kke/server/DedicatedServer.h"
 
+#include "kke/DataFile.h"
+
 #include "kke/net/Protocol.h"
 #include "kke/net/ScriptSpawns.h"
 #include "kke/PackSeal.h"
@@ -280,13 +282,14 @@ bool DedicatedServer::start(std::vector<std::string>& errors) {
         m_relayHost = std::make_unique<net::RelayHost>(*m_raw);
         m_relayHost->log = [this](const std::string& s) { info(s); };
         // The code from last time, so the one players saved keeps working.
-        const std::string path = (std::filesystem::path(m_config.saveDir) / "relay.json").string();
+        // relay.json, or relay.yml if that's what the admin keeps (kke/DataFile.h)
+        const std::string path = datafile::saveTarget(std::filesystem::path(m_config.saveDir) / "relay.json").string();
         net::RelayHost::Saved saved;
         bool haveSaved = false;
         std::string text;
         if (readFile(path, text)) {
-            const auto j = nlohmann::json::parse(text, nullptr, false);
-            if (j.is_object() && j.contains("code") && j["code"].is_string() && j.contains("secret") && j["secret"].is_string() &&
+            nlohmann::json j;
+            if (datafile::parseAny(text, j) && j.is_object() && j.contains("code") && j["code"].is_string() && j.contains("secret") && j["secret"].is_string() &&
                 seal::fromHex(j["secret"].get<std::string>(), saved.secret)) {
                 saved.code = j["code"].get<std::string>();
                 haveSaved = true;
@@ -298,7 +301,7 @@ bool DedicatedServer::start(std::vector<std::string>& errors) {
             const net::RelayHost::Saved now = m_relayHost->saved();
             nlohmann::json j{ { "code", now.code }, { "secret", seal::toHex(now.secret) } };
             std::string error;
-            if (!writeFileAtomic(path, j.dump(2) + "\n", &error)) warning("relay: can't keep the join code: " + error);
+            if (!writeFileAtomic(path, datafile::forFile(j.dump(2) + "\n", path), &error)) warning("relay: can't keep the join code: " + error);
             std::error_code ec;
             std::filesystem::permissions(path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write, std::filesystem::perm_options::replace, ec);
             if (m_publisher) m_publisher->setEntry(directoryEntry());

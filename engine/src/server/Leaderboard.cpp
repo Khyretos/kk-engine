@@ -1,5 +1,7 @@
 #include "kke/server/Leaderboard.h"
 
+#include "kke/DataFile.h"
+
 #include "kke/net/BitStream.h"
 #include "kke/server/ServerAccess.h"
 #include "kke/server/ServerFiles.h"
@@ -102,9 +104,10 @@ std::string Leaderboard::toJson() const {
 
 bool Leaderboard::fromJson(const std::string& text, std::vector<std::string>& errors) {
     const size_t before = errors.size();
-    const nlohmann::json j = nlohmann::json::parse(text, nullptr, false);
-    if (j.is_discarded() || !j.is_object()) {
-        errors.push_back("leaderboards.json: not a JSON object");
+    nlohmann::json j;
+    const bool parsed = datafile::parseAny(text, j);
+    if (!parsed || !j.is_object()) {
+        errors.push_back("leaderboards.json: not a JSON or YAML object");
         return false;
     }
     m_boards.clear();
@@ -139,7 +142,7 @@ bool Leaderboard::fromJson(const std::string& text, std::vector<std::string>& er
 bool Leaderboard::load(const std::string& path, std::vector<std::string>& errors) {
     std::string text;
     bool exists = false;
-    if (!readFile(path, text, &exists)) {
+    if (!datafile::readText(path, text, &exists)) {
         if (!exists) return true;
         errors.push_back(path + ": can't read it");
         return false;
@@ -148,7 +151,8 @@ bool Leaderboard::load(const std::string& path, std::vector<std::string>& errors
 }
 
 bool Leaderboard::save(const std::string& path, std::string* error) {
-    if (!writeFileAtomic(path, toJson(), error)) return false;
+    const std::string target = datafile::saveTarget(path).string(); // leaderboards.yml stays YAML
+    if (!writeFileAtomic(target, datafile::forFile(toJson(), target), error)) return false;
     m_dirty = false;
     return true;
 }

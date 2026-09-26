@@ -22,6 +22,11 @@ namespace kke::datafile {
 // null or ~, numbers, everything else is text. Quoted values are always
 // text. A number that wouldn't survive as a number ("1.10", "007") stays
 // text, so versions keep their spelling.
+//
+// JSON may carry // and /* */ comments. YAML anchors and aliases work, but
+// a file that would expand past a million values or nest deeper than 256
+// levels is refused: mods come from strangers, and a few lines of YAML can
+// otherwise expand into billions of values.
 
 enum class Format { Json, Yaml };
 
@@ -60,5 +65,45 @@ std::filesystem::path saveTarget(const std::filesystem::path& folder, const std:
 
 // A text field that YAML may have turned into a number (version: 1.2).
 std::string text(const nlohmann::json& object, const char* key, const std::string& fallback = {});
+
+// ---- By path: for readers that are handed a full path ("save/access.json",
+// "settings.json", "scenes/forest.scene.json") rather than a folder and a
+// stem. Asked for foo.json, they use whichever of foo.json, foo.yml and
+// foo.yaml load() would (the newest), warning once when they differ. A path
+// with another extension is used as it is. See docs/DATA_FILES.md.
+
+// Text whose format isn't known (a reader's fromJson(text)): JSON first,
+// with // comments allowed, then YAML. The error is the JSON one when the
+// text starts like JSON ('{' or '['), the YAML one otherwise.
+bool parseAny(const std::string& text, nlohmann::json& out, std::string* error = nullptr);
+
+// The file to read for `file`: the newest existing spelling, or `file`
+// itself when none exists. Logs a warning, once per pair of file
+// versions, when the one chosen and an older one hold different data.
+std::filesystem::path resolve(const std::filesystem::path& file);
+
+// Reads resolve(file) whole. true and `text` when it was there and
+// readable; false otherwise (`exists` says which: a missing file is
+// usually fine, an unreadable one isn't). `used` gets the path read.
+bool readText(const std::filesystem::path& file, std::string& text, bool* exists = nullptr, std::filesystem::path* used = nullptr);
+
+// readText + parseAny. False when the file is missing (`exists` false,
+// `error` empty), unreadable or broken (`error` names the file and why).
+bool loadPath(const std::filesystem::path& file, nlohmann::json& out, std::string* error = nullptr, bool* exists = nullptr,
+              std::filesystem::path* used = nullptr);
+
+// Where a writer should save `file` so the next read gets it back: the
+// spelling resolve() picks, or `file` when there's none yet (new files
+// stay JSON). saveTarget("save/access.json") is "save/access.yml" when
+// that's the file the server admin wrote.
+std::filesystem::path saveTarget(const std::filesystem::path& file);
+
+// JSON text a writer produced (toJson() and friends) in `target`'s
+// format: unchanged for .json, converted for .yml/.yaml.
+std::string forFile(const std::string& jsonText, const std::filesystem::path& target);
+
+// For folder listings: "forest.scene.yml" with kind ".scene" -> "forest"
+// (also .json, .yaml); "" when the name isn't a `kind` data file.
+std::string nameOf(const std::filesystem::path& file, const std::string& kind);
 
 } // namespace kke::datafile

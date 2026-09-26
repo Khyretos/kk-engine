@@ -2,6 +2,7 @@
 
 #include "kke/Application.h"
 #include "kke/AssetCatalog.h"
+#include "kke/DataFile.h"
 #include "kke/FracturePattern.h"
 #include "kke/Log.h"
 #include "kke/modules/AudioModule.h"
@@ -348,8 +349,10 @@ void ShowcaseModule::findScenes() {
     if (dir.empty()) return;
     std::vector<std::string> files;
     for (const auto& e : std::filesystem::directory_iterator(dir))
-        if (e.path().string().ends_with(".scene.json")) files.push_back(e.path().string());
+        if (std::string n = kke::datafile::nameOf(e.path(), ".scene"); !n.empty()) // .json, .yml or .yaml
+            files.push_back((std::filesystem::path(dir) / (n + ".scene.json")).string()); // SceneFile::load picks the spelling
     std::sort(files.begin(), files.end());
+    files.erase(std::unique(files.begin(), files.end()), files.end());
     for (const std::string& f : files) {
         try {
             SceneEntry e;

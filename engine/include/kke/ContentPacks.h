@@ -105,7 +105,7 @@ struct PackManifest {
 constexpr const char* kManifestFile = "pack.json";
 constexpr const char* kManifestStem = "pack"; // pack.json, pack.yml or pack.yaml (kke/DataFile.h)
 
-// Parses a pack.json; false with `error` (naming the file) when it's not
+// Parses a pack.json (or the same in YAML); false with `error` (naming the file) when it's not
 // valid JSON, misses id/title, or has a bad version or dependency.
 bool parseManifest(const std::string& json, PackManifest& out, std::string* error = nullptr);
 bool parseManifestData(const nlohmann::json& data, PackManifest& out, std::string* error = nullptr);

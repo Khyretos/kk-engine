@@ -174,7 +174,8 @@ gyro turns; the pad avoids menu buttons). CI runs every demo this way.
         "modifiers": [ { "kind": "key", "code": 226 } ], "trigger": "press" } ] } ] }
 ```
 
-JSON (not YAML): see ACTION_PLAN.md. Written atomically (temp file +
+JSON or YAML (`input.yml` works too, and stays YAML when the engine saves
+it; see [DATA_FILES.md](DATA_FILES.md)). Written atomically (temp file +
 rename). Unknown actions and malformed entries are skipped, never fatal;
 actions a file doesn't mention keep their defaults (so a game update can
 add actions without resetting anyone's bindings).

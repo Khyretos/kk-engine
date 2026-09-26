@@ -1,26 +1,26 @@
 #include "kke/TetMeshAsset.h"
 
+#include "kke/DataFile.h"
+
 #include <nlohmann/json.hpp>
 
-#include <fstream>
 #include <stdexcept>
 
 namespace kke {
 
 TetMeshData loadTetMeshFromFile(const std::string& path) {
-    std::ifstream file(path);
-    if (!file) {
+    std::string error;
+    bool exists = false;
+    nlohmann::json j;
+    const bool parsed = datafile::loadPath(path, j, &error, &exists); // .json, .yml or .yaml
+    if (!exists) {
         throw std::runtime_error("loadTetMeshFromFile: could not open '" + path + "'");
     }
-
-    nlohmann::json j;
-    try {
-        file >> j;
-    } catch (const nlohmann::json::parse_error& e) {
-        throw std::runtime_error("loadTetMeshFromFile: '" + path + "' is not valid JSON: " + e.what());
+    if (!parsed) {
+        throw std::runtime_error("loadTetMeshFromFile: not valid JSON or YAML: " + error);
     }
 
-    if (!j.contains("vertices") || !j.contains("tets")) {
+    if (!j.is_object() || !j.contains("vertices") || !j.contains("tets")) {
         throw std::runtime_error("loadTetMeshFromFile: '" + path + "' is missing 'vertices' or 'tets'");
     }
 

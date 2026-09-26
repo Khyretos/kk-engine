@@ -1,6 +1,7 @@
 #include "SandboxModule.h"
 
 #include "kke/Application.h"
+#include "kke/DataFile.h"
 #include "kke/Log.h"
 #include "kke/FracturePattern.h"
 #include "kke/InteriorColor.h"
@@ -1584,12 +1585,13 @@ void SandboxModule::fromScene(const kke::SceneFile& scene) {
 // ("kke-sandbox-layout": objects with asset/position/yaw/texture/
 // fractureSeed/breakable, which is converted).
 bool SandboxModule::loadLayout(const std::string& path) {
-    std::ifstream f(path);
-    if (!f) { m_status = "Could not open " + path; kke::log::get(name())->error("{}", m_status); return false; }
-    std::stringstream text;
-    text << f.rdbuf();
+    std::string text;
+    std::filesystem::path used;
+    if (!kke::datafile::readText(path, text, nullptr, &used)) { m_status = "Could not open " + path; kke::log::get(name())->error("{}", m_status); return false; }
     try {
-        nlohmann::json j = nlohmann::json::parse(text.str(), nullptr, true, /*ignore_comments=*/true);
+        std::string why;
+        nlohmann::json j;
+        if (!kke::datafile::parseAny(text, j, &why) || !j.is_object()) throw std::runtime_error(used.generic_string() + ": not valid JSON or YAML" + (why.empty() ? std::string() : ": " + why));
         kke::SceneFile scene;
         if (j.value("format", std::string()) == "kke-sandbox-layout") {
             scene.worldSeed = j.value("worldSeed", 0u);
@@ -1610,7 +1612,7 @@ bool SandboxModule::loadLayout(const std::string& path) {
             scene.spawn = m_spawn;
             scene.spawnYaw = m_spawnYaw;
         } else {
-            scene = kke::SceneFile::parse(text.str(), path);
+            scene = kke::SceneFile::parse(text, used.generic_string());
         }
         fromScene(scene);
     } catch (const std::exception& e) {

@@ -1,5 +1,7 @@
 #include "kke/SceneFile.h"
 
+#include "kke/DataFile.h"
+
 #include <nlohmann/json.hpp>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -8,7 +10,6 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <sstream>
 #include <stdexcept>
 
 namespace kke {
@@ -41,12 +42,10 @@ bool knownBreakable(const std::string& b) {
 } // namespace
 
 SceneFile SceneFile::parse(const std::string& text, const std::string& sourceName) {
+    std::string why;
     nlohmann::json j;
-    try {
-        j = nlohmann::json::parse(text, nullptr, true, /*ignore_comments=*/true);
-    } catch (const nlohmann::json::parse_error& e) {
-        throw std::runtime_error(sourceName + ": not valid JSON: " + e.what());
-    }
+    if (!datafile::parseAny(text, j, &why)) throw std::runtime_error(sourceName + ": not valid JSON or YAML: " + why);
+    if (!j.is_object()) throw std::runtime_error(sourceName + ": should be an object with \"format\": \"kke.scene\"");
     if (j.value("format", std::string()) != "kke.scene")
         throw std::runtime_error(sourceName + ": \"format\" must be \"kke.scene\"");
     if (j.value("version", 0) != 1)
@@ -206,8 +205,9 @@ std::string SceneFile::toJson() const {
 }
 
 void SceneFile::save(const std::string& path) const {
-    const std::string text = toJson();
-    const std::filesystem::path target(path);
+    // A.scene.yml someone wrote by hand stays YAML (kke/DataFile.h).
+    const std::filesystem::path target = datafile::saveTarget(path);
+    const std::string text = datafile::forFile(toJson(), target);
     std::filesystem::path tmp = target;
     tmp += ".tmp";
     {
@@ -226,11 +226,10 @@ void SceneFile::save(const std::string& path) const {
 }
 
 SceneFile SceneFile::load(const std::string& path) {
-    std::ifstream in(path);
-    if (!in) throw std::runtime_error(path + ": can't open");
-    std::stringstream ss;
-    ss << in.rdbuf();
-    return parse(ss.str(), path);
+    std::string text;
+    std::filesystem::path used;
+    if (!datafile::readText(path, text, nullptr, &used)) throw std::runtime_error(path + ": can't open");
+    return parse(text, used.generic_string());
 }
 
 glm::mat4 SceneFile::placement(const SceneObject& o, const glm::vec3& bmin, const glm::vec3& bmax, glm::ivec2 cell) {

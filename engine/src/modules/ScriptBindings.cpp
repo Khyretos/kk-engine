@@ -16,6 +16,7 @@
 #include "kke/modules/ScriptModule.h"
 
 #include "kke/Application.h"
+#include "kke/DataFile.h"
 #include "kke/Log.h"
 #include "kke/net/ScriptSpawns.h"
 #include "kke/RmlTextSafety.h"
@@ -553,11 +554,11 @@ void ScriptModule::bindScenes() {
         std::vector<std::string> names;
         std::error_code ec;
         for (const auto& e : std::filesystem::directory_iterator(dir, ec)) {
-            const std::string f = e.path().filename().string();
-            const std::string ext = ".scene.json";
-            if (f.size() > ext.size() && f.compare(f.size() - ext.size(), ext.size(), ext) == 0) names.push_back(f.substr(0, f.size() - ext.size()));
+            // forest.scene.json, .yml or .yaml: listed once whichever exist
+            if (std::string n = datafile::nameOf(e.path().filename(), ".scene"); !n.empty()) names.push_back(std::move(n));
         }
         std::sort(names.begin(), names.end());
+        names.erase(std::unique(names.begin(), names.end()), names.end());
         for (size_t i = 0; i < names.size(); ++i) {
             lua_pushstring(L, names[i].c_str());
             lua_rawseti(L, -2, lua_Integer(i + 1));
@@ -574,7 +575,7 @@ void ScriptModule::bindScenes() {
         for (const Scene& s : m_scenes) mine += s.source == src;
         if (mine >= maxScenesPerScript) return luaL_error(L, "scene.load: this script already has %d scenes loaded (maxScenesPerScript)", int(maxScenesPerScript));
         const std::string dir = sceneDir();
-        const std::filesystem::path file = std::filesystem::path(dir) / (name + ".scene.json");
+        const std::filesystem::path file = datafile::resolve(std::filesystem::path(dir) / (name + ".scene.json"));
         std::error_code ec;
         if (dir.empty() || !std::filesystem::is_regular_file(file, ec)) {
             lua_pushnil(L);

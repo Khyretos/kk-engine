@@ -1,10 +1,11 @@
 #include "kke/EngineSettings.h"
 
+#include "kke/DataFile.h"
+
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <fstream>
-#include <sstream>
 #include <stdexcept>
 
 namespace kke {
@@ -100,13 +101,10 @@ std::string settingsToJson(const EngineSettings& s) {
 }
 
 EngineSettings settingsFromJson(const std::string& text) {
+    std::string why;
     nlohmann::json j;
-    try {
-        j = nlohmann::json::parse(text);
-    } catch (const nlohmann::json::parse_error& e) {
-        throw std::runtime_error(std::string("settings: invalid JSON: ") + e.what());
-    }
-    if (!j.is_object()) throw std::runtime_error("settings: top level must be a JSON object");
+    if (!datafile::parseAny(text, j, &why)) throw std::runtime_error("settings: invalid JSON or YAML: " + why);
+    if (!j.is_object()) throw std::runtime_error("settings: top level must be an object");
 
     EngineSettings s;
     const auto& g = section(j, "graphics");
@@ -147,25 +145,25 @@ EngineSettings settingsFromJson(const std::string& text) {
 }
 
 EngineSettings loadSettingsFile(const std::string& path, std::string* errorOut) {
-    std::ifstream in(path);
-    if (!in) {
+    std::string text;
+    std::filesystem::path used;
+    if (!datafile::readText(path, text, nullptr, &used)) {
         if (errorOut) *errorOut = "no settings file at '" + path + "' (using defaults)";
         return EngineSettings{};
     }
-    std::stringstream buffer;
-    buffer << in.rdbuf();
     try {
-        return settingsFromJson(buffer.str());
+        return settingsFromJson(text);
     } catch (const std::exception& e) {
-        if (errorOut) *errorOut = e.what();
+        if (errorOut) *errorOut = used.generic_string() + ": " + e.what();
         return EngineSettings{};
     }
 }
 
 bool saveSettingsFile(const EngineSettings& settings, const std::string& path) {
-    std::ofstream out(path, std::ios::trunc);
+    const std::filesystem::path target = datafile::saveTarget(path); // settings.yml stays YAML
+    std::ofstream out(target, std::ios::trunc);
     if (!out) return false;
-    out << settingsToJson(settings) << '\n';
+    out << datafile::forFile(settingsToJson(settings) + '\n', target);
     return static_cast<bool>(out);
 }
 

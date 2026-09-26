@@ -166,12 +166,7 @@ std::string Dependency::str() const {
 
 bool parseManifest(const std::string& text, PackManifest& out, std::string* error) {
     json j;
-    try {
-        j = json::parse(text);
-    } catch (const json::parse_error& e) {
-        fail(error, std::string("invalid JSON: ") + e.what());
-        return false;
-    }
+    if (!datafile::parseAny(text, j, error)) return false; // JSON or YAML
     return parseManifestData(j, out, error);
 }
 
@@ -406,8 +401,9 @@ std::string ModList::toJson() const {
 }
 
 bool ModList::fromJson(const std::string& text, ModList& out, std::string* error) {
+    json j;
+    if (!datafile::parseAny(text, j, error)) return false; // JSON or YAML
     try {
-        const json j = json::parse(text);
         if (j.value("format", std::string()) != "kke-modlist-1") {
             fail(error, "not a kke-modlist-1 file");
             return false;
