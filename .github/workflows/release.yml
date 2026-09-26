@@ -54,18 +54,26 @@ jobs:
             libfreetype-dev libudev-dev libdbus-1-dev \
             libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
             libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev \
-            pkg-config xvfb zip
+            pkg-config libgl1-mesa-dev libegl1-mesa-dev \
+            libasound2-dev libdecor-0-dev libexpat1-dev libxml2-dev \
+            xvfb zip
 
       # libstdc++/libgcc linked statically: the package then needs only
       # glibc, FreeType and the system's Vulkan loader/driver.
       - name: Configure
-        run: >
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-          -DKKE_ENABLE_FEMFX=ON -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_VALIDATION=OFF
-          "-DCMAKE_EXE_LINKER_FLAGS=-static-libstdc++ -static-libgcc"
+        run: |
+          set -o pipefail
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DKKE_ENABLE_FEMFX=ON -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_VALIDATION=OFF \
+            "-DCMAKE_EXE_LINKER_FLAGS=-static-libstdc++ -static-libgcc" 2>&1 | tee configure.log
 
       - name: Build
-        run: cmake --build build -j
+        run: |
+          set -o pipefail
+          cmake --build build -j 2>&1 | tee build.log
+
+      - name: No warnings anywhere
+        run: tools/ci/check_warnings.sh configure.log build.log
 
       - name: Unit tests
         run: ./build/bin/kke_tests --gtest_brief=1
@@ -116,13 +124,19 @@ jobs:
           sudo apt-get install -y -qq cmake ninja-build glslang-tools mingw-w64 g++-mingw-w64-x86-64-posix zip
 
       - name: Configure (MinGW-w64 cross)
-        run: >
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-          -DKKE_ENABLE_FEMFX=ON -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_VALIDATION=OFF
-          -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake
+        run: |
+          set -o pipefail
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DKKE_ENABLE_FEMFX=ON -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_VALIDATION=OFF \
+            -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake 2>&1 | tee configure.log
 
       - name: Build
-        run: cmake --build build -j
+        run: |
+          set -o pipefail
+          cmake --build build -j 2>&1 | tee build.log
+
+      - name: No warnings anywhere
+        run: tools/ci/check_warnings.sh configure.log build.log
 
       - name: Package
         run: tools/packaging/package.sh --bin build/bin --platform windows --version "$VERSION" --out dist --deps build/_deps --strip x86_64-w64-mingw32-strip
