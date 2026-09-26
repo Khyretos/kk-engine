@@ -84,6 +84,7 @@ nav:
       - Scripting in Lua: SCRIPTING.md
       - Movement: MOVEMENT.md
       - Input: INPUT.md
+      - Commands and orders: COMMANDS.md
       - Audio: AUDIO.md
       - Networking: NETWORKING.md
       - Anti-cheat: ANTI_CHEAT.md
