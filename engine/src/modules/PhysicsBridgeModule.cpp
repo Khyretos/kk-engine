@@ -53,6 +53,8 @@ void PhysicsBridgeModule::init(Application& app) {
     m_rigid = app.getModule<RigidBodyModule>();
     const char* logEnv = std::getenv("KKE_BRIDGE_LOG");
     m_log = logEnv && *logEnv && *logEnv != '0';
+    // KKE_RUBBLE=0: broken pieces stay in FEMFX (for comparison).
+    if (const char* r = std::getenv("KKE_RUBBLE"); r && *r) rubble = *r != '0';
 }
 
 void PhysicsBridgeModule::fixedUpdate(const FixedUpdateContext&) {
@@ -75,6 +77,9 @@ void PhysicsBridgeModule::fixedUpdate(const FixedUpdateContext&) {
         m_logImpulse += glm::length(e.impulse);
     }
 
+    syncRubble(w);
+    if (rubble) handOffRubble(w);
+
     // Jolt -> FEMFX: bodies near moving pieces (and moving bodies near
     // any piece), as boxes for FEMFX's next step.
     m_awake.clear();
@@ -85,7 +90,9 @@ void PhysicsBridgeModule::fixedUpdate(const FixedUpdateContext&) {
     m_found.clear();
     if (unionOf(m_all, margin, lo, hi)) w.bodiesInBox(lo, hi, m_found);
     for (const RigidWorld::BodyBox& b : m_found) {
-        if (m_ignored.count(b.id)) continue;
+        // Rubble isn't mirrored back: dozens of shards would fill FEMFX's
+        // proxy budget, and FEMFX pieces landing on shards is a detail.
+        if (m_ignored.count(b.id) || m_rubbleBodyIds.count(b.id)) continue;
         glm::vec3 bmin, bmax;
         BridgeBox box;
         box.key = b.id;
@@ -118,11 +125,94 @@ void PhysicsBridgeModule::fixedUpdate(const FixedUpdateContext&) {
         m_logTicks = 0;
         size_t movable = 0;
         for (const BridgeBox& b : m_boxes) movable += b.movable ? 1 : 0;
-        log::get(name())->info("{} Jolt boxes in FEMFX ({} movable), {} pushes into Jolt ({:.2f} N s) this second, {} awake pieces, {:.3f} ms a step",
-                               m_boxes.size(), movable, m_logPushes, m_logImpulse, m_awake.size(), m_logSeconds * 1000.0 / 60.0);
+        log::get(name())->info("{} Jolt boxes in FEMFX ({} movable), {} pushes into Jolt ({:.2f} N s) this second, {} awake pieces, "
+                               "{} pieces to Jolt this second ({} rubble bodies), {:.3f} ms a step",
+                               m_boxes.size(), movable, m_logPushes, m_logImpulse, m_awake.size(), m_logRubble, m_rubble.size(),
+                               m_logSeconds * 1000.0 / 60.0);
         m_logPushes = 0;
+        m_logRubble = 0;
         m_logSeconds = 0.0;
         m_logImpulse = 0.0f;
+    }
+}
+
+RigidWorld::BodyId PhysicsBridgeModule::rubbleBody(uint32_t piece) const {
+    auto it = m_rubble.find(piece);
+    return it == m_rubble.end() ? RigidWorld::kNoBody : it->second;
+}
+
+// Rubble Jolt moved: drawn there. Rubble PhysicsModule dropped (its
+// breakable was removed): out of Jolt too.
+void PhysicsBridgeModule::syncRubble(RigidWorld& w) {
+    for (auto it = m_rubble.begin(); it != m_rubble.end();) {
+        if (!m_physics->isRubble(it->first)) {
+            w.remove(it->second);
+            m_rubbleBodyIds.erase(it->second);
+            it = m_rubble.erase(it);
+            continue;
+        }
+        m_physics->setRubbleTransform(it->first, w.position(it->second), w.rotation(it->second));
+        ++it;
+    }
+    if (m_rubbleOrder.size() > m_rubble.size() * 2 + 64) {
+        std::deque<uint32_t> live;
+        for (uint32_t h : m_rubbleOrder)
+            if (m_rubble.count(h)) live.push_back(h);
+        m_rubbleOrder.swap(live);
+    }
+}
+
+void PhysicsBridgeModule::handOffRubble(RigidWorld& w) {
+    m_candidates.clear();
+    m_physics->rubbleCandidates(rubbleMaxSize, rubbleMaxTets, rubbleMaxChunkSize, m_candidates);
+    int handed = 0;
+    PhysicsModule::RubblePiece piece;
+    for (uint32_t h : m_candidates) {
+        if (handed >= rubblePerStep) break;
+        if (m_rubbleRefused.count(h) || !m_physics->describeRubble(h, piece)) continue;
+        RigidWorld::BodyDesc d;
+        d.shape = RigidWorld::Shape::ConvexHull;
+        d.points = piece.hull;
+        d.position = piece.center;
+        d.velocity = piece.velocity;
+        d.angularVelocity = piece.angularVelocity;
+        d.mass = piece.mass;
+        d.friction = 0.6f;
+        d.restitution = 0.15f;
+        const RigidWorld::BodyId body = w.add(d);
+        if (body == RigidWorld::kNoBody) {
+            // A sliver too thin for a hull: it stays in FEMFX.
+            m_rubbleRefused.insert(h);
+            continue;
+        }
+        if (!m_physics->convertToRubble(h)) {
+            w.remove(body);
+            m_rubbleRefused.insert(h);
+            continue;
+        }
+        m_rubble.emplace(h, body);
+        m_rubbleBodyIds.insert(body);
+        m_rubbleOrder.push_back(h);
+        ++handed;
+        ++m_rubbleTotal;
+        ++m_logRubble;
+    }
+    // Budget: the oldest resting pieces go first, then the oldest.
+    while (m_rubble.size() > rubbleBudget && !m_rubbleOrder.empty()) {
+        auto victim = m_rubbleOrder.end();
+        for (auto it = m_rubbleOrder.begin(); it != m_rubbleOrder.end(); ++it) {
+            auto r = m_rubble.find(*it);
+            if (r != m_rubble.end() && !w.isActive(r->second)) { victim = it; break; }
+        }
+        if (victim == m_rubbleOrder.end()) victim = m_rubbleOrder.begin();
+        const uint32_t h = *victim;
+        m_rubbleOrder.erase(victim);
+        auto r = m_rubble.find(h);
+        if (r == m_rubble.end()) continue;
+        w.remove(r->second);
+        m_rubbleBodyIds.erase(r->second);
+        m_rubble.erase(r);
+        m_physics->removeRubble(h);
     }
 }
 
@@ -134,6 +224,10 @@ void PhysicsBridgeModule::renderUi() {
     ImGui::Text("Jolt boxes in FEMFX: %zu", m_boxes.size());
     ImGui::Text("Pushes into Jolt: %zu", m_pushes);
     ImGui::SliderFloat("Push scale", &pushScale, 0.0f, 3.0f, "%.2f");
+    ImGui::Separator();
+    ImGui::Checkbox("Rubble to Jolt", &rubble);
+    ImGui::SliderFloat("Rubble max size (m)", &rubbleMaxSize, 0.05f, 1.0f, "%.2f");
+    ImGui::Text("Rubble bodies: %zu (%zu handed off)", m_rubble.size(), m_rubbleTotal);
     ImGui::End();
 }
 
@@ -145,7 +239,88 @@ namespace kke {
 std::vector<ModuleDependency> PhysicsBridgeModule::dependencies() const { return {}; }
 void PhysicsBridgeModule::init(Application&) {}
 void PhysicsBridgeModule::fixedUpdate(const FixedUpdateContext&) {}
+RigidWorld::BodyId PhysicsBridgeModule::rubbleBody(uint32_t piece) const {
+    auto it = m_rubble.find(piece);
+    return it == m_rubble.end() ? RigidWorld::kNoBody : it->second;
+}
+
+// Rubble Jolt moved: drawn there. Rubble PhysicsModule dropped (its
+// breakable was removed): out of Jolt too.
+void PhysicsBridgeModule::syncRubble(RigidWorld& w) {
+    for (auto it = m_rubble.begin(); it != m_rubble.end();) {
+        if (!m_physics->isRubble(it->first)) {
+            w.remove(it->second);
+            m_rubbleBodyIds.erase(it->second);
+            it = m_rubble.erase(it);
+            continue;
+        }
+        m_physics->setRubbleTransform(it->first, w.position(it->second), w.rotation(it->second));
+        ++it;
+    }
+    if (m_rubbleOrder.size() > m_rubble.size() * 2 + 64) {
+        std::deque<uint32_t> live;
+        for (uint32_t h : m_rubbleOrder)
+            if (m_rubble.count(h)) live.push_back(h);
+        m_rubbleOrder.swap(live);
+    }
+}
+
+void PhysicsBridgeModule::handOffRubble(RigidWorld& w) {
+    m_candidates.clear();
+    m_physics->rubbleCandidates(rubbleMaxSize, rubbleMaxTets, rubbleMaxChunkSize, m_candidates);
+    int handed = 0;
+    PhysicsModule::RubblePiece piece;
+    for (uint32_t h : m_candidates) {
+        if (handed >= rubblePerStep) break;
+        if (m_rubbleRefused.count(h) || !m_physics->describeRubble(h, piece)) continue;
+        RigidWorld::BodyDesc d;
+        d.shape = RigidWorld::Shape::ConvexHull;
+        d.points = piece.hull;
+        d.position = piece.center;
+        d.velocity = piece.velocity;
+        d.angularVelocity = piece.angularVelocity;
+        d.mass = piece.mass;
+        d.friction = 0.6f;
+        d.restitution = 0.15f;
+        const RigidWorld::BodyId body = w.add(d);
+        if (body == RigidWorld::kNoBody) {
+            // A sliver too thin for a hull: it stays in FEMFX.
+            m_rubbleRefused.insert(h);
+            continue;
+        }
+        if (!m_physics->convertToRubble(h)) {
+            w.remove(body);
+            m_rubbleRefused.insert(h);
+            continue;
+        }
+        m_rubble.emplace(h, body);
+        m_rubbleBodyIds.insert(body);
+        m_rubbleOrder.push_back(h);
+        ++handed;
+        ++m_rubbleTotal;
+        ++m_logRubble;
+    }
+    // Budget: the oldest resting pieces go first, then the oldest.
+    while (m_rubble.size() > rubbleBudget && !m_rubbleOrder.empty()) {
+        auto victim = m_rubbleOrder.end();
+        for (auto it = m_rubbleOrder.begin(); it != m_rubbleOrder.end(); ++it) {
+            auto r = m_rubble.find(*it);
+            if (r != m_rubble.end() && !w.isActive(r->second)) { victim = it; break; }
+        }
+        if (victim == m_rubbleOrder.end()) victim = m_rubbleOrder.begin();
+        const uint32_t h = *victim;
+        m_rubbleOrder.erase(victim);
+        auto r = m_rubble.find(h);
+        if (r == m_rubble.end()) continue;
+        w.remove(r->second);
+        m_rubbleBodyIds.erase(r->second);
+        m_rubble.erase(r);
+        m_physics->removeRubble(h);
+    }
+}
+
 void PhysicsBridgeModule::renderUi() {}
+RigidWorld::BodyId PhysicsBridgeModule::rubbleBody(uint32_t) const { return RigidWorld::kNoBody; }
 } // namespace kke
 
 #endif

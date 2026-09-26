@@ -1,5 +1,7 @@
 #include "kke/RigidWorld.h"
 
+#include "kke/Ragdoll.h"
+
 #include <Jolt/Jolt.h>
 
 #include <Jolt/Core/Factory.h>
@@ -12,6 +14,7 @@
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/CollideShape.h>
 #include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
+#include <Jolt/Physics/Collision/GroupFilterTable.h>
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
@@ -19,11 +22,15 @@
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/Constraints/HingeConstraint.h>
+#include <Jolt/Physics/Constraints/SwingTwistConstraint.h>
 #include <Jolt/Physics/PhysicsSettings.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
 
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
 #include <cfloat>
@@ -109,6 +116,13 @@ struct RigidWorld::Impl : public JPH::ContactListener {
     };
     std::unordered_map<CharacterId, Character> characters;
     CharacterId nextCharacter = 1;
+    struct Ragdoll {
+        std::vector<BodyId> bodies;
+        std::vector<JPH::Ref<JPH::Constraint>> joints; // per RagdollDesc joint
+        JPH::Ref<JPH::GroupFilterTable> filter;
+    };
+    std::unordered_map<RagdollId, Ragdoll> ragdolls;
+    RagdollId nextRagdoll = 1;
     std::mutex contactMutex;
     std::vector<Contact> contacts;
     double stepMs = 0.0;
@@ -153,6 +167,9 @@ RigidWorld::RigidWorld(const Settings& settings) : m(std::make_unique<Impl>()) {
 
 RigidWorld::~RigidWorld() {
     m->characters.clear();
+    for (auto& [id, rd] : m->ragdolls)
+        for (auto& c : rd.joints) m->system.RemoveConstraint(c);
+    m->ragdolls.clear();
     JPH::BodyIDVector ids;
     m->system.GetBodies(ids);
     for (JPH::BodyID id : ids) {
@@ -219,6 +236,10 @@ RigidWorld::BodyId RigidWorld::add(const BodyDesc& d) {
     bcs.mAngularVelocity = toJ(d.angularVelocity);
     bcs.mUserData = d.material;
     if (d.motion == Motion::Dynamic) bcs.mMotionQuality = JPH::EMotionQuality::LinearCast; // no tunnelling for fast rocks
+    if (d.mass > 0.0f && dynamic) {
+        bcs.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
+        bcs.mMassPropertiesOverride.mMass = d.mass;
+    }
     JPH::BodyID id = m->bodies().CreateAndAddBody(bcs, d.motion == Motion::Static ? JPH::EActivation::DontActivate : JPH::EActivation::Activate);
     return id.IsInvalid() ? kNoBody : id.GetIndexAndSequenceNumber();
 }
@@ -248,6 +269,11 @@ glm::vec3 RigidWorld::angularVelocity(BodyId body) const { return toG(m->bodies(
 void RigidWorld::setAngularVelocity(BodyId body, const glm::vec3& w) { m->bodies().SetAngularVelocity(JPH::BodyID(body), toJ(w)); }
 void RigidWorld::addImpulse(BodyId body, const glm::vec3& impulse, const glm::vec3& point) {
     m->bodies().AddImpulse(JPH::BodyID(body), toJ(impulse), toJR(point));
+}
+void RigidWorld::addVelocity(BodyId body, const glm::vec3& dv) {
+    JPH::BodyID id(body);
+    if (body == kNoBody || !m->bodies().IsAdded(id)) return;
+    m->bodies().AddLinearVelocity(id, toJ(dv));
 }
 void RigidWorld::moveKinematic(BodyId body, const glm::vec3& position, const glm::quat& rotation, float dt) {
     m->bodies().MoveKinematic(JPH::BodyID(body), toJR(position), toJ(glm::normalize(rotation)), dt);
@@ -322,6 +348,167 @@ RigidWorld::RayHit RigidWorld::raycast(const glm::vec3& origin, const glm::vec3&
     }
     if (glm::dot(out.normal, dir) > 0.0f) out.normal = -out.normal; // a back face: the side the ray came from
     return out;
+}
+
+namespace {
+// World bounds of an oriented box (rotation + center in `t`).
+void orientedBounds(const glm::mat4& t, const glm::vec3& half, glm::vec3& lo, glm::vec3& hi) {
+    glm::vec3 ext(0.0f);
+    for (int c = 0; c < 3; ++c) ext += glm::abs(glm::vec3(t[c])) * half[c];
+    lo = glm::vec3(t[3]) - ext;
+    hi = glm::vec3(t[3]) + ext;
+}
+
+glm::quat rotationOf(const glm::mat4& t) {
+    glm::mat3 r(t);
+    for (int c = 0; c < 3; ++c) {
+        const float len = glm::length(r[c]);
+        r[c] = len > 1e-12f ? r[c] / len : glm::vec3(0.0f);
+    }
+    return glm::normalize(glm::quat_cast(r));
+}
+
+// Any unit vector perpendicular to `v` (unit).
+glm::vec3 perpendicular(const glm::vec3& v) {
+    glm::vec3 p = glm::cross(v, std::fabs(v.y) < 0.9f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0));
+    return glm::normalize(p);
+}
+
+// Shortest rotation taking unit `a` to unit `b`.
+glm::quat fromTo(const glm::vec3& a, const glm::vec3& b) {
+    const float d = glm::dot(a, b);
+    if (d < -0.9999f) return glm::angleAxis(glm::pi<float>(), perpendicular(a));
+    const glm::vec3 c = glm::cross(a, b);
+    return glm::normalize(glm::quat(1.0f + d, c.x, c.y, c.z));
+}
+
+glm::vec3 unitOr(const glm::vec3& v, const glm::vec3& fallback) {
+    const float len = glm::length(v);
+    return len > 1e-6f ? v / len : fallback;
+}
+} // namespace
+
+RigidWorld::RagdollId RigidWorld::addRagdoll(const RagdollDesc& desc, const glm::vec3& initialVelocity) {
+    const int n = static_cast<int>(desc.bodies.size());
+    if (n == 0) return 0;
+    for (const RagdollJoint& j : desc.joints)
+        if (j.bodyA < 0 || j.bodyB < 0 || j.bodyA >= n || j.bodyB >= n || j.bodyA == j.bodyB) return 0;
+    const RagdollId id = m->nextRagdoll++;
+    Impl::Ragdoll rd;
+    rd.filter = new JPH::GroupFilterTable(static_cast<uint32_t>(n));
+    for (const RagdollJoint& j : desc.joints) rd.filter->DisableCollision(static_cast<JPH::CollisionGroup::SubGroupID>(j.bodyA),
+                                                                         static_cast<JPH::CollisionGroup::SubGroupID>(j.bodyB));
+    // Limbs that already overlap (an arm resting against the torso) would
+    // be pushed apart violently: they don't collide either.
+    std::vector<glm::vec3> lo(n), hi(n);
+    for (int i = 0; i < n; ++i) orientedBounds(desc.bodies[i].transform, desc.bodies[i].halfExtents * 0.9f, lo[i], hi[i]);
+    for (int a = 0; a < n; ++a)
+        for (int b = a + 1; b < n; ++b)
+            if (glm::all(glm::lessThan(lo[a], hi[b])) && glm::all(glm::lessThan(lo[b], hi[a])))
+                rd.filter->DisableCollision(static_cast<JPH::CollisionGroup::SubGroupID>(a), static_cast<JPH::CollisionGroup::SubGroupID>(b));
+
+    auto fail = [&](const char*) {
+        for (auto& c : rd.joints) m->system.RemoveConstraint(c);
+        for (BodyId b : rd.bodies) remove(b);
+        return RagdollId(0);
+    };
+    for (int i = 0; i < n; ++i) {
+        const RagdollBody& b = desc.bodies[i];
+        JPH::BoxShapeSettings box(toJ(glm::max(b.halfExtents, glm::vec3(0.01f))),
+                                  std::min(0.05f, glm::min(glm::min(b.halfExtents.x, b.halfExtents.y), b.halfExtents.z) * 0.5f));
+        JPH::ShapeSettings::ShapeResult shape = box.Create();
+        if (shape.HasError()) return fail("shape");
+        JPH::BodyCreationSettings bcs(shape.Get(), toJR(glm::vec3(b.transform[3])), toJ(rotationOf(b.transform)), JPH::EMotionType::Dynamic,
+                                      Layers::kMoving);
+        bcs.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
+        bcs.mMassPropertiesOverride.mMass = std::max(0.1f, b.mass);
+        bcs.mLinearVelocity = toJ(initialVelocity);
+        bcs.mFriction = 0.7f;
+        bcs.mRestitution = 0.05f;
+        bcs.mCollisionGroup = JPH::CollisionGroup(rd.filter, static_cast<JPH::CollisionGroup::GroupID>(id),
+                                                  static_cast<JPH::CollisionGroup::SubGroupID>(i));
+        bcs.mMotionQuality = JPH::EMotionQuality::LinearCast; // thrown limbs don't tunnel through thin walls
+        JPH::BodyID body = m->bodies().CreateAndAddBody(bcs, JPH::EActivation::Activate);
+        if (body.IsInvalid()) return fail("body");
+        rd.bodies.push_back(body.GetIndexAndSequenceNumber());
+    }
+    for (const RagdollJoint& j : desc.joints) {
+        const glm::vec3 centerB(desc.bodies[j.bodyB].transform[3]);
+        const glm::vec3 along = unitOr(centerB - j.anchor, glm::vec3(0, -1, 0));
+        JPH::Ref<JPH::TwoBodyConstraintSettings> settings;
+        if (j.hinge) {
+            JPH::HingeConstraintSettings* h = new JPH::HingeConstraintSettings;
+            settings = h;
+            const glm::vec3 axis = unitOr(j.hingeAxis, glm::vec3(1, 0, 0));
+            glm::vec3 normal = along - axis * glm::dot(along, axis);
+            normal = glm::length(normal) > 1e-4f ? glm::normalize(normal) : perpendicular(axis);
+            h->mSpace = JPH::EConstraintSpace::WorldSpace;
+            h->mPoint1 = h->mPoint2 = toJR(j.anchor);
+            h->mHingeAxis1 = h->mHingeAxis2 = toJ(axis);
+            h->mNormalAxis1 = h->mNormalAxis2 = toJ(normal);
+            const float lo = glm::radians(std::min(j.hingeMinDegrees, j.hingeMaxDegrees));
+            const float hi = glm::radians(std::max(j.hingeMinDegrees, j.hingeMaxDegrees));
+            h->mLimitsMin = std::clamp(lo, -glm::pi<float>(), 0.0f);
+            h->mLimitsMax = std::clamp(hi, 0.0f, glm::pi<float>());
+            h->mMaxFrictionTorque = 2.0f;
+        } else {
+            JPH::SwingTwistConstraintSettings* st = new JPH::SwingTwistConstraintSettings;
+            settings = st;
+            const glm::vec3 center = unitOr(j.swingAxis, along);
+            const glm::vec3 plane1 = perpendicular(center);
+            // Same frame on B, turned the way B already points.
+            const glm::vec3 plane2 = fromTo(center, along) * plane1;
+            st->mSpace = JPH::EConstraintSpace::WorldSpace;
+            st->mPosition1 = st->mPosition2 = toJR(j.anchor);
+            st->mTwistAxis1 = toJ(center);
+            st->mPlaneAxis1 = toJ(plane1);
+            st->mTwistAxis2 = toJ(along);
+            st->mPlaneAxis2 = toJ(glm::normalize(plane2 - along * glm::dot(plane2, along)));
+            const float swing = glm::radians(std::clamp(j.swingDegrees, 0.0f, 179.0f));
+            st->mNormalHalfConeAngle = st->mPlaneHalfConeAngle = swing;
+            const float twist = glm::radians(std::clamp(j.twistDegrees, 0.0f, 179.0f));
+            st->mTwistMinAngle = -twist;
+            st->mTwistMaxAngle = twist;
+            st->mMaxFrictionTorque = 2.0f;
+        }
+        JPH::TwoBodyConstraint* c = m->bodies().CreateConstraint(settings, JPH::BodyID(rd.bodies[j.bodyA]), JPH::BodyID(rd.bodies[j.bodyB]));
+        if (!c) return fail("joint");
+        rd.joints.emplace_back(c);
+        m->system.AddConstraint(c);
+    }
+    m->ragdolls.emplace(id, std::move(rd));
+    return id;
+}
+
+void RigidWorld::removeRagdoll(RagdollId id) {
+    auto it = m->ragdolls.find(id);
+    if (it == m->ragdolls.end()) return;
+    for (auto& c : it->second.joints) m->system.RemoveConstraint(c);
+    for (BodyId b : it->second.bodies) remove(b);
+    m->ragdolls.erase(it);
+}
+
+bool RigidWorld::ragdollTransforms(RagdollId id, std::vector<glm::mat4>& out) const {
+    auto it = m->ragdolls.find(id);
+    if (it == m->ragdolls.end()) return false;
+    out.resize(it->second.bodies.size());
+    for (size_t i = 0; i < out.size(); ++i) out[i] = transform(it->second.bodies[i]);
+    return true;
+}
+
+std::vector<RigidWorld::BodyId> RigidWorld::ragdollBodies(RagdollId id) const {
+    auto it = m->ragdolls.find(id);
+    return it == m->ragdolls.end() ? std::vector<BodyId>{} : it->second.bodies;
+}
+
+size_t RigidWorld::ragdollCount() const { return m->ragdolls.size(); }
+
+float RigidWorld::ragdollHingeAngle(RagdollId id, int joint) const {
+    auto it = m->ragdolls.find(id);
+    if (it == m->ragdolls.end() || joint < 0 || joint >= static_cast<int>(it->second.joints.size())) return 0.0f;
+    const JPH::Constraint* c = it->second.joints[joint].GetPtr();
+    if (c->GetSubType() != JPH::EConstraintSubType::Hinge) return 0.0f;
+    return glm::degrees(static_cast<const JPH::HingeConstraint*>(c)->GetCurrentAngle());
 }
 
 namespace {

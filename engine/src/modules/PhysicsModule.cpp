@@ -1311,7 +1311,16 @@ bool PhysicsModule::deformEmbedded(ObjectHandle handle, const TetEmbedding& embe
             if (!c.valid) {
                 c.valid = true;
                 auto pit = m_objects.find(b.partOfTet[t]);
-                if (pit == m_objects.end()) {
+                auto rit = pit == m_objects.end() ? m_rubble.find(b.partOfTet[t]) : m_rubble.end();
+                if (rit != m_rubble.end()) {
+                    // Rubble: the frozen tet, carried rigidly.
+                    const Rubble& r = rit->second;
+                    const glm::mat3 rot = glm::mat3_cast(r.rotation);
+                    const glm::vec3 at = r.position * m_renderScale;
+                    const uint32_t lt = b.localOfTet[t];
+                    for (int k = 0; k < 4; ++k) c.x[k] = at + rot * r.tetCorners[lt][k];
+                    c.normal = rot * r.tetNormal[lt];
+                } else if (pit == m_objects.end()) {
                     for (auto& v : c.x) v = glm::vec3(0.0f);
                     c.normal = glm::mat3(1.0f);
                 } else {
@@ -1396,7 +1405,7 @@ bool PhysicsModule::isObjectAsleep(ObjectHandle handle) const {
 
 uint32_t PhysicsModule::pieceCount(ObjectHandle handle) const {
     auto bit = m_breakables.find(handle);
-    if (bit != m_breakables.end()) return static_cast<uint32_t>(bit->second.parts.size());
+    if (bit != m_breakables.end()) return static_cast<uint32_t>(bit->second.parts.size() + bit->second.rubble.size());
     auto it = m_objects.find(handle);
     return it == m_objects.end() ? 0 : AMD::FmGetNumTetMeshes(*it->second->tetMeshBuffer);
 }
@@ -1422,7 +1431,13 @@ void PhysicsModule::removeObject(ObjectHandle handle) {
     if (bit != m_breakables.end()) {
         std::vector<ObjectHandle> parts = bit->second.parts;
         for (ObjectHandle p : parts) removeObject(p);
+        const std::vector<ObjectHandle> rubble = bit->second.rubble;
+        for (ObjectHandle r : rubble) removeRubble(r);
         m_breakables.erase(handle);
+        return;
+    }
+    if (m_rubble.count(handle)) {
+        removeRubble(handle);
         return;
     }
     auto it = m_objects.find(handle);
@@ -1578,6 +1593,113 @@ void PhysicsModule::fixedUpdate(const FixedUpdateContext& ctx) {
     }
 }
 
+// The exterior faces of every piece of `obj`, in world render units,
+// flat shaded, as prepareRenderData() draws them (and convertToRubble()
+// freezes them).
+void PhysicsModule::buildSurface(const SpawnedTet& obj, std::vector<Vertex>& out, bool& truncated) const {
+    const uint32_t numPieces = AMD::FmGetNumTetMeshes(*obj.tetMeshBuffer);
+    static thread_local std::vector<glm::vec3> simPositions;
+    static thread_local std::vector<glm::vec3> restPositions;
+    // Every piece goes into the same buffer back to back and is
+    // drawn with one call. The old path uploaded each fracture
+    // piece to offset 0 of the same buffer and recorded a draw
+    // per piece — but the GPU only runs those draws after the
+    // CPU has finished all the uploads, so every draw saw the
+    // *last* piece's data. A shattered object rendered as one
+    // piece drawn N times plus stale leftovers.
+    // Crack-only objects: which original tet each piece-local tet
+    // was, so faces that were on the original surface (drawn by the
+    // embedded render mesh instead) can be skipped.
+    static thread_local std::vector<std::vector<uint32_t>> bufferTetOf;
+    if (obj.drawOnlyCracks) {
+        bufferTetOf.assign(numPieces, {});
+        for (uint32_t t = 0; t < obj.numTets; ++t) {
+            uint32_t localTet = 0, meshIdx = 0;
+            if (!AMD::FmGetTetMeshContainingTet(&localTet, &meshIdx, *obj.tetMeshBuffer, t) || meshIdx >= numPieces) continue;
+            auto& map = bufferTetOf[meshIdx];
+            if (map.size() <= localTet) map.resize(localTet + 1, UINT32_MAX);
+            map[localTet] = t;
+        }
+    }
+    for (uint32_t m = 0; m < numPieces; ++m) {
+        const AMD::FmTetMesh* piece = AMD::FmGetTetMesh(*obj.tetMeshBuffer, m);
+        if (!piece) continue;
+        const uint32_t numVerts = AMD::FmGetNumVerts(*piece);
+        const uint32_t numFaces = AMD::FmGetNumExteriorFaces(*piece);
+        if (numVerts == 0 || numFaces == 0) continue;
+
+        simPositions.resize(numVerts);
+        restPositions.resize(numVerts);
+        for (uint32_t i = 0; i < numVerts; ++i) {
+            AMD::FmVector3 p = AMD::FmGetVertPosition(*piece, i);
+            simPositions[i] = glm::vec3(p.x, p.y, p.z) * m_renderScale;
+            AMD::FmVector3 r = AMD::FmGetVertRestPosition(*piece, i);
+            restPositions[i] = glm::vec3(r.x, r.y, r.z);
+        }
+
+        for (uint32_t f = 0; f < numFaces; ++f) {
+            if (out.size() + 3 > obj.maxRenderVerts) { truncated = true; break; } // see below
+            uint32_t tetId = 0, faceId = 0;
+            AMD::FmGetExteriorFace(&tetId, &faceId, *piece, f);
+            if (obj.drawOnlyCracks) {
+                const auto& map = bufferTetOf[m];
+                uint32_t bt = tetId < map.size() ? map[tetId] : UINT32_MAX;
+                if (bt == UINT32_MAX || (obj.originalExterior[bt] & (1u << faceId))) continue;
+            }
+            AMD::FmTetVertIds ids = AMD::FmGetTetVertIds(*piece, tetId);
+            // FEMFX's own face numbering (FmGetFaceVertIds in
+            // FEMFXTetMeshConnectivity.h) — the same winding the
+            // old hardcoded 4-face table used.
+            const uint32_t ia = ids.ids[3 - faceId], ib = ids.ids[(5 - faceId) % 4], ic = ids.ids[(faceId + 2) % 4];
+            glm::vec3 a = simPositions[ia];
+            glm::vec3 b = simPositions[ib];
+            glm::vec3 c = simPositions[ic];
+            glm::vec3 n = glm::cross(b - a, c - a);
+            float len = glm::length(n);
+            n = len > 1e-12f ? n / len : glm::vec3(0.0f, 1.0f, 0.0f);
+            // Box-projected UVs from REST positions (BUGS.md
+            // BUG-036): project onto the plane most facing this
+            // face in the object's undeformed shape. Texture flows
+            // continuously across a whole side, stays glued to the
+            // material as it moves/bends, and crack faces get it too.
+            // (Per-triangle 0..1 UVs made every intact box look
+            // like a mosaic of shards before anything broke.)
+            const glm::vec3 ra = restPositions[ia], rb = restPositions[ib], rc = restPositions[ic];
+            glm::vec3 rn = glm::abs(glm::cross(rb - ra, rc - ra));
+            auto project = [&](const glm::vec3& r) {
+                constexpr float kTexelsPerMeter = 1.5f; // texture repeats every ~0.67 m
+                if (rn.x >= rn.y && rn.x >= rn.z) return glm::vec2(r.z, r.y) * kTexelsPerMeter;
+                if (rn.y >= rn.z) return glm::vec2(r.x, r.z) * kTexelsPerMeter;
+                return glm::vec2(r.x, r.y) * kTexelsPerMeter;
+            };
+            glm::vec2 ua = project(ra), ub = project(rb), uc = project(rc);
+            // Fresh crack faces (inside the object before it
+            // broke) get the inner material: RayFire's "inner
+            // material" - broken edges read as broken.
+            const bool crack = obj.drawOnlyCracks || (!obj.originalExterior.empty() && tetId < obj.originalExterior.size() &&
+                                                       obj.breakable != kInvalidHandle && !(obj.originalExterior[tetId] & (1u << faceId)));
+            glm::vec3 color = obj.color;
+            if (crack && obj.interior.valid) {
+                // One flat colour: the texture's dominant colour,
+                // deeper (kke/InteriorColor.h).
+                ua = ub = uc = obj.interior.uv;
+                color = obj.interior.tint;
+            } else if (!obj.vertexUVs.empty() && obj.drawOnlyCracks) {
+                // Per-vertex UVs of the original tet corners (same
+                // corner order in every piece).
+                const auto& ov = obj.tetVertIds[bufferTetOf[m][tetId]].ids;
+                ua = obj.vertexUVs[ov[3 - faceId]];
+                ub = obj.vertexUVs[ov[(5 - faceId) % 4]];
+                uc = obj.vertexUVs[ov[(faceId + 2) % 4]];
+            }
+            if (crack && !obj.interior.valid) color *= kInteriorDarken;
+            out.push_back({ a, color, n, ua });
+            out.push_back({ b, color, n, ub });
+            out.push_back({ c, color, n, uc });
+        }
+    }
+}
+
 void PhysicsModule::prepareRenderData(uint32_t frameIndex) {
     if (m_preparedFrame == m_frameCounter) return;
     m_preparedFrame = m_frameCounter;
@@ -1587,9 +1709,6 @@ void PhysicsModule::prepareRenderData(uint32_t frameIndex) {
     m_renderedFaces = 0;
     m_totalPieces = 0;
     m_awakePieces = 0;
-    static thread_local std::vector<glm::vec3> simPositions;
-    static thread_local std::vector<glm::vec3> restPositions;
-
     for (auto& [handle, obj] : m_objects) {
         const uint32_t numPieces = AMD::FmGetNumTetMeshes(*obj->tetMeshBuffer);
         m_totalPieces += numPieces;
@@ -1608,104 +1727,7 @@ void PhysicsModule::prepareRenderData(uint32_t frameIndex) {
             ++m_awakeObjects;
             obj->cpuVerts.clear();
             bool truncated = false;
-            // Every piece goes into the same buffer back to back and is
-            // drawn with one call. The old path uploaded each fracture
-            // piece to offset 0 of the same buffer and recorded a draw
-            // per piece — but the GPU only runs those draws after the
-            // CPU has finished all the uploads, so every draw saw the
-            // *last* piece's data. A shattered object rendered as one
-            // piece drawn N times plus stale leftovers.
-            // Crack-only objects: which original tet each piece-local tet
-            // was, so faces that were on the original surface (drawn by the
-            // embedded render mesh instead) can be skipped.
-            static thread_local std::vector<std::vector<uint32_t>> bufferTetOf;
-            if (obj->drawOnlyCracks) {
-                bufferTetOf.assign(numPieces, {});
-                for (uint32_t t = 0; t < obj->numTets; ++t) {
-                    uint32_t localTet = 0, meshIdx = 0;
-                    if (!AMD::FmGetTetMeshContainingTet(&localTet, &meshIdx, *obj->tetMeshBuffer, t) || meshIdx >= numPieces) continue;
-                    auto& map = bufferTetOf[meshIdx];
-                    if (map.size() <= localTet) map.resize(localTet + 1, UINT32_MAX);
-                    map[localTet] = t;
-                }
-            }
-            for (uint32_t m = 0; m < numPieces; ++m) {
-                const AMD::FmTetMesh* piece = AMD::FmGetTetMesh(*obj->tetMeshBuffer, m);
-                if (!piece) continue;
-                const uint32_t numVerts = AMD::FmGetNumVerts(*piece);
-                const uint32_t numFaces = AMD::FmGetNumExteriorFaces(*piece);
-                if (numVerts == 0 || numFaces == 0) continue;
-
-                simPositions.resize(numVerts);
-                restPositions.resize(numVerts);
-                for (uint32_t i = 0; i < numVerts; ++i) {
-                    AMD::FmVector3 p = AMD::FmGetVertPosition(*piece, i);
-                    simPositions[i] = glm::vec3(p.x, p.y, p.z) * m_renderScale;
-                    AMD::FmVector3 r = AMD::FmGetVertRestPosition(*piece, i);
-                    restPositions[i] = glm::vec3(r.x, r.y, r.z);
-                }
-
-                for (uint32_t f = 0; f < numFaces; ++f) {
-                    if (obj->cpuVerts.size() + 3 > obj->maxRenderVerts) { truncated = true; break; } // see below
-                    uint32_t tetId = 0, faceId = 0;
-                    AMD::FmGetExteriorFace(&tetId, &faceId, *piece, f);
-                    if (obj->drawOnlyCracks) {
-                        const auto& map = bufferTetOf[m];
-                        uint32_t bt = tetId < map.size() ? map[tetId] : UINT32_MAX;
-                        if (bt == UINT32_MAX || (obj->originalExterior[bt] & (1u << faceId))) continue;
-                    }
-                    AMD::FmTetVertIds ids = AMD::FmGetTetVertIds(*piece, tetId);
-                    // FEMFX's own face numbering (FmGetFaceVertIds in
-                    // FEMFXTetMeshConnectivity.h) — the same winding the
-                    // old hardcoded 4-face table used.
-                    const uint32_t ia = ids.ids[3 - faceId], ib = ids.ids[(5 - faceId) % 4], ic = ids.ids[(faceId + 2) % 4];
-                    glm::vec3 a = simPositions[ia];
-                    glm::vec3 b = simPositions[ib];
-                    glm::vec3 c = simPositions[ic];
-                    glm::vec3 n = glm::cross(b - a, c - a);
-                    float len = glm::length(n);
-                    n = len > 1e-12f ? n / len : glm::vec3(0.0f, 1.0f, 0.0f);
-                    // Box-projected UVs from REST positions (BUGS.md
-                    // BUG-036): project onto the plane most facing this
-                    // face in the object's undeformed shape. Texture flows
-                    // continuously across a whole side, stays glued to the
-                    // material as it moves/bends, and crack faces get it too.
-                    // (Per-triangle 0..1 UVs made every intact box look
-                    // like a mosaic of shards before anything broke.)
-                    const glm::vec3 ra = restPositions[ia], rb = restPositions[ib], rc = restPositions[ic];
-                    glm::vec3 rn = glm::abs(glm::cross(rb - ra, rc - ra));
-                    auto project = [&](const glm::vec3& r) {
-                        constexpr float kTexelsPerMeter = 1.5f; // texture repeats every ~0.67 m
-                        if (rn.x >= rn.y && rn.x >= rn.z) return glm::vec2(r.z, r.y) * kTexelsPerMeter;
-                        if (rn.y >= rn.z) return glm::vec2(r.x, r.z) * kTexelsPerMeter;
-                        return glm::vec2(r.x, r.y) * kTexelsPerMeter;
-                    };
-                    glm::vec2 ua = project(ra), ub = project(rb), uc = project(rc);
-                    // Fresh crack faces (inside the object before it
-                    // broke) get the inner material: RayFire's "inner
-                    // material" - broken edges read as broken.
-                    const bool crack = obj->drawOnlyCracks || (!obj->originalExterior.empty() && tetId < obj->originalExterior.size() &&
-                                                               obj->breakable != kInvalidHandle && !(obj->originalExterior[tetId] & (1u << faceId)));
-                    glm::vec3 color = obj->color;
-                    if (crack && obj->interior.valid) {
-                        // One flat colour: the texture's dominant colour,
-                        // deeper (kke/InteriorColor.h).
-                        ua = ub = uc = obj->interior.uv;
-                        color = obj->interior.tint;
-                    } else if (!obj->vertexUVs.empty() && obj->drawOnlyCracks) {
-                        // Per-vertex UVs of the original tet corners (same
-                        // corner order in every piece).
-                        const auto& ov = obj->tetVertIds[bufferTetOf[m][tetId]].ids;
-                        ua = obj->vertexUVs[ov[3 - faceId]];
-                        ub = obj->vertexUVs[ov[(5 - faceId) % 4]];
-                        uc = obj->vertexUVs[ov[(faceId + 2) % 4]];
-                    }
-                    if (crack && !obj->interior.valid) color *= kInteriorDarken;
-                    obj->cpuVerts.push_back({ a, color, n, ua });
-                    obj->cpuVerts.push_back({ b, color, n, ub });
-                    obj->cpuVerts.push_back({ c, color, n, uc });
-                }
-            }
+            buildSurface(*obj, obj->cpuVerts, truncated);
             if (truncated) {
                 // Should be impossible (maxExteriorFaces is FEMFX's own
                 // upper bound including fracture); logged rather than
@@ -1744,6 +1766,15 @@ void PhysicsModule::renderShadow(const ShadowRenderContext& ctx) {
         VkDeviceSize offsets[] = { 0 };
         vkCmdBindVertexBuffers(ctx.cmd, 0, 1, buffers, offsets);
         vkCmdDraw(ctx.cmd, static_cast<uint32_t>(obj->cpuVerts.size()), 1, 0, 0);
+    }
+    for (auto& [handle, r] : m_rubble) {
+        if (!r.vertexBuffer) continue;
+        ShadowPushConstants rpc{ ctx.lightViewProj, rubbleModel(r) };
+        vkCmdPushConstants(ctx.cmd, m_shadowPipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(rpc), &rpc);
+        VkBuffer buffers[] = { r.vertexBuffer->handle() };
+        VkDeviceSize offsets[] = { 0 };
+        vkCmdBindVertexBuffers(ctx.cmd, 0, 1, buffers, offsets);
+        vkCmdDraw(ctx.cmd, static_cast<uint32_t>(r.verts.size()), 1, 0, 0);
     }
 }
 
@@ -1873,6 +1904,17 @@ void PhysicsModule::render(const RenderContext& ctx) {
         VkDeviceSize offsets[] = { 0 };
         vkCmdBindVertexBuffers(ctx.cmd, 0, 1, buffers, offsets);
         vkCmdDraw(ctx.cmd, static_cast<uint32_t>(obj->cpuVerts.size()), 1, 0, 0);
+    }
+    // Rubble (convertToRubble): a frozen shape where the other world put it.
+    for (auto& [handle, r] : m_rubble) {
+        if (!r.vertexBuffer) continue;
+        bindMaterialTexture(r.material, r.textureSet);
+        PhysicsPushConstants pc{ rubbleModel(r), r.material.metallic, r.material.roughness };
+        vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+        VkBuffer buffers[] = { r.vertexBuffer->handle() };
+        VkDeviceSize offsets[] = { 0 };
+        vkCmdBindVertexBuffers(ctx.cmd, 0, 1, buffers, offsets);
+        vkCmdDraw(ctx.cmd, static_cast<uint32_t>(r.verts.size()), 1, 0, 0);
     }
     ++m_frameCounter;
 }
@@ -2263,6 +2305,7 @@ void PhysicsModule::spawnScene(Scene scene) {
             for (auto& [h, o] : m_objects) handles.push_back(h);
             for (ObjectHandle h : handles) removeObject(h);
             m_breakables.clear();
+            clearRubble();
         }
         // Supports: plain, stiff, unbreakable stone blocks.
         Material support = stone;
@@ -2553,6 +2596,7 @@ void PhysicsModule::renderUi() {
             removeObject(handle);
         }
         m_breakables.clear();
+        clearRubble();
     }
 
     ImGui::End();
@@ -2581,6 +2625,7 @@ void PhysicsModule::shutdown() {
         removeObject(handle);
     }
     m_breakables.clear();
+    clearRubble();
 
     std::vector<RagdollHandle> ragdolls;
     for (auto& [h, rd] : m_ragdolls) ragdolls.push_back(h);

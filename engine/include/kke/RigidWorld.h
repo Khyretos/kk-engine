@@ -9,6 +9,8 @@
 
 namespace kke {
 
+struct RagdollDesc;
+
 // Rigid bodies, world collision and the character controller, on Jolt
 // Physics (MIT; Horizon Forbidden West, Godot 4). Plain C++, no GPU, so
 // unit tests and tools/physics_lab can drive it directly;
@@ -40,6 +42,7 @@ public:
         glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
         glm::vec3 velocity{0.0f}, angularVelocity{0.0f};
         float density = 1000.0f;             // kg/m^3 (mass from the shape's volume)
+        float mass = 0.0f;                   // kg; > 0 overrides density (inertia still from the shape)
         float friction = 0.6f, restitution = 0.1f;
         uint32_t material = 0;               // game-defined id, reported in contacts (sounds, effects)
     };
@@ -108,6 +111,8 @@ public:
     glm::vec3 angularVelocity(BodyId body) const; // rad/s, world axes
     void setAngularVelocity(BodyId body, const glm::vec3& w);
     void addImpulse(BodyId body, const glm::vec3& impulse, const glm::vec3& worldPoint);
+    // A velocity change whatever the mass (blasts, punches); wakes it.
+    void addVelocity(BodyId body, const glm::vec3& deltaVelocity);
     // Kinematic bodies: move there over the next step (pushes things).
     void moveKinematic(BodyId body, const glm::vec3& position, const glm::quat& rotation, float dt);
     // Dynamic <-> kinematic (a network client shows the server's bodies
@@ -134,6 +139,24 @@ public:
     // Bodies whose bounds overlap the world box min..max (triangle-mesh
     // bodies left out: a level mesh isn't a box). Appends to `out`.
     void bodiesInBox(const glm::vec3& min, const glm::vec3& max, std::vector<BodyBox>& out) const;
+
+    // Ragdolls (kke/Ragdoll.h): one box body per RagdollBody, joined by
+    // swing-twist joints (a cone and a twist range) and limited hinges.
+    // Limbs collide with each other, the world and everything else,
+    // except the two bodies of each joint (and pairs that already overlap
+    // at creation, which would otherwise fly apart).
+    using RagdollId = uint32_t; // 0 = none
+    // 0 if the desc is empty or invalid (a joint naming a missing body).
+    RagdollId addRagdoll(const RagdollDesc& desc, const glm::vec3& initialVelocity);
+    void removeRagdoll(RagdollId id);
+    // World transform of each body, in RagdollDesc::bodies order.
+    bool ragdollTransforms(RagdollId id, std::vector<glm::mat4>& out) const;
+    // Its bodies, in RagdollDesc::bodies order (empty if unknown).
+    std::vector<BodyId> ragdollBodies(RagdollId id) const;
+    size_t ragdollCount() const;
+    // Current hinge angle (degrees, as RagdollJoint measures it) of joint
+    // `joint`; 0 for ball joints and unknown ids.
+    float ragdollHingeAngle(RagdollId id, int joint) const;
 
     CharacterId addCharacter(const CharacterDesc& desc);
     void removeCharacter(CharacterId id);

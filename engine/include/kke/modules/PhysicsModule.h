@@ -16,6 +16,7 @@
 #include "kke/PhysicsBridge.h"
 
 #include <glm/glm.hpp>
+#include <array>
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -123,7 +124,7 @@ namespace kke {
 //   - FmAlignedMalloc/FmAlignedFree — an allocator hook FEMFX declares
 //     extern and expects the application to define. Implemented via
 //     std::aligned_alloc.
-class PhysicsModule : public Module, public IRagdollPhysics {
+class PhysicsModule : public Module, public IRagdollPhysics, public IPhysicsWorld {
 public:
     using ObjectHandle = uint32_t;
     static constexpr ObjectHandle kInvalidHandle = 0;
@@ -370,6 +371,47 @@ public:
     // sleeping ones.
     void pieceBounds(std::vector<std::pair<glm::vec3, glm::vec3>>& out, bool awakeOnly) const;
 
+    // ---- Rubble handoff (issue #31, PhysicsBridgeModule, docs/PHYSICS_BRIDGE.md)
+    // Small pieces broken off a breakable leave FEMFX and become rigid
+    // bodies in the other world: FEMFX costs ~0.15-0.2 ms per awake piece
+    // a step, Jolt a few microseconds per body. A piece that has left
+    // stays drawn here (and its breakable's embedded render points keep
+    // following it), wherever setRubbleTransform() puts it; it no longer
+    // deforms or breaks.
+    struct RubblePiece {
+        ObjectHandle handle = kInvalidHandle;
+        glm::vec3 center{0.0f};              // world, the mass centre
+        glm::vec3 velocity{0.0f}, angularVelocity{0.0f};
+        float mass = 0.0f;                   // kg
+        std::vector<glm::vec3> hull;         // the piece's vertices, relative to center
+        Material material;
+        float size = 0.0f;                   // m, largest extent
+    };
+    // Awake pieces of broken breakables that are done splitting (their
+    // break has played out) and either small (at most maxSize m across
+    // and maxTets tets) or a single baked chunk that can't break any
+    // further, up to maxChunkSize m across. Appended.
+    void rubbleCandidates(float maxSize, uint32_t maxTets, float maxChunkSize, std::vector<ObjectHandle>& out) const;
+    // The piece as a rigid body right now; false if it isn't a candidate.
+    bool describeRubble(ObjectHandle piece, RubblePiece& out) const;
+    // Takes the piece out of the FEMFX simulation. Its frame from now on:
+    // origin at RubblePiece::center, axes the world's (a body created at
+    // center with no rotation matches). False (nothing changed) if it
+    // isn't a candidate.
+    bool convertToRubble(ObjectHandle piece);
+    void setRubbleTransform(ObjectHandle piece, const glm::vec3& position, const glm::quat& rotation);
+    void removeRubble(ObjectHandle piece);
+    bool isRubble(ObjectHandle piece) const { return m_rubble.count(piece) != 0; }
+    size_t rubbleCount() const { return m_rubble.size(); }
+
+    // ---- IPhysicsWorld (kke/PhysicsWorld.h). Rubble isn't counted or hit
+    // here: it belongs to the rigid-body world now.
+    const char* physicsEngineName() const override { return "FEMFX"; }
+    Stats physicsStats() const override;
+    Hit physicsRaycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance) const override;
+    size_t physicsBlast(const glm::vec3& center, float radius, float speed) override;
+    void physicsBoundsInBox(const glm::vec3& min, const glm::vec3& max, std::vector<std::pair<glm::vec3, glm::vec3>>& out) const override;
+
     // Procedural tet meshes, centered on the origin: a box of cells (6
     // tets each) and a "spherified cube" ball. Public so games can spawn
     // their own shapes (projectiles, crates) through spawn*TetMesh().
@@ -555,7 +597,8 @@ private:
         std::vector<glm::vec2> vertexUVs;                 // per baked vertex (optional)
         InteriorFill interior;                            // crack face colour, copied to every part
         std::vector<ObjectHandle> parts;
-        std::vector<ObjectHandle> partOfTet;              // baked tet -> part
+        std::vector<ObjectHandle> rubble;                 // pieces handed to the rigid-body world (m_rubble)
+        std::vector<ObjectHandle> partOfTet;              // baked tet -> part (or rubble)
         std::vector<uint32_t> localOfTet;                 // baked tet -> tet index in that part
         std::vector<glm::mat3> restInverse;               // per baked tet
         Material material;
@@ -567,6 +610,26 @@ private:
         uint32_t breaks = 0;                              // split events so far
     };
     std::unordered_map<ObjectHandle, Breakable> m_breakables;
+    // A piece handed off as rubble (convertToRubble): frozen shape, drawn
+    // with a transform instead of rebuilt from FEMFX every frame.
+    struct Rubble {
+        ObjectHandle breakable = kInvalidHandle;
+        std::vector<std::array<glm::vec3, 4>> tetCorners; // per part-local tet, relative to the handoff centre (render units)
+        std::vector<glm::mat3> tetNormal;                 // per part-local tet: normal matrix at handoff
+        std::vector<Vertex> verts;                        // surface, relative to the handoff centre (render units)
+        std::unique_ptr<Buffer> vertexBuffer;
+        Material material;
+        VkDescriptorSet textureSet = VK_NULL_HANDLE;
+        glm::vec3 position{0.0f};                         // physics units
+        glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    };
+    std::unordered_map<ObjectHandle, Rubble> m_rubble;
+    bool isRubbleCandidate(const SpawnedTet& part, float maxSize, uint32_t maxTets, float maxChunkSize) const;
+    void retireRubble(Rubble& r);
+    void clearRubble();
+    glm::mat4 rubbleModel(const Rubble& r) const;
+    // Exterior faces of `obj` (every piece), world render units, as drawn.
+    void buildSurface(const SpawnedTet& obj, std::vector<Vertex>& out, bool& truncated) const;
     // TetSpawnOptions::interior, or worked out from its texture (invalid = none).
     InteriorFill resolveInterior(const TetSpawnOptions& options, bool textured);
     ObjectHandle spawnBreakable(const TetMeshData& mesh, const glm::vec3& position, const Material& material, const TetSpawnOptions& options);

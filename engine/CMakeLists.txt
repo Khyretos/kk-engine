@@ -31,6 +31,7 @@ set(ENGINE_SOURCES
     src/FrameStats.cpp
     src/Viewports.cpp
     src/PhysicsBridge.cpp
+    src/PhysicsWorld.cpp
     src/Buoyancy.cpp
     src/CameraRig.cpp
     src/SceneFile.cpp
@@ -75,6 +76,7 @@ set(ENGINE_SOURCES
     src/modules/DebugControlModule.cpp
     src/modules/PhysicsModule.cpp
     src/modules/PhysicsModuleBridge.cpp
+    src/modules/PhysicsModuleRubble.cpp
     src/modules/SettingsModule.cpp
     src/modules/ModelModule.cpp
     src/modules/DebugDrawModule.cpp
