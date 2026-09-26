@@ -61,6 +61,23 @@ struct LongAxis {
 };
 LongAxis findLongAxis(const std::vector<glm::vec3>& points);
 
+// A controller as a pointer (Simple mode on a gamepad): the left stick
+// moves a cursor, so every drag-and-click in the palette and the world
+// works the same as with a mouse or a finger.
+struct PadPointerSettings {
+    float deadzone = 0.2f;        // stick deflection that does nothing (worn sticks drift)
+    float pixelsPerSecond = 900.0f; // at full tilt, on a 720-pixel-tall screen
+    float curve = 2.0f;           // deflection^curve: small tilts for aiming, full tilt to cross the screen
+};
+// How far the cursor moves this frame for a stick deflection (-1..1 per
+// axis). `screenHeight` scales the speed so it takes the same time to
+// cross any screen.
+glm::vec2 padPointerStep(const glm::vec2& stick, float dt, float screenHeight, const PadPointerSettings& settings = {});
+// The palette cell to jump to from `cursor` with the shoulder buttons:
+// `direction` +1 = the next cell to the right, -1 = to the left, wrapping
+// around. `centers` in left-to-right order. -1 if there are none.
+int stepPaletteCell(const std::vector<glm::vec2>& centers, const glm::vec2& cursor, int direction);
+
 // A horizontal bat swing, right-handed: the bat sweeps from the swinger's
 // left, through straight ahead, to the right, around `pivot` (the
 // swinger's shoulder). Angle 0 = straight ahead along `forward`.
