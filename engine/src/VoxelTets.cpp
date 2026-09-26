@@ -321,10 +321,14 @@ TetEmbedding embedPoints(const TetMeshData& mesh, const std::vector<glm::vec3>& 
     e.weights.resize(points.size(), glm::vec4(1, 0, 0, 0));
     if (mesh.tets.empty()) return e;
     // Per tet: inverse edge matrix (barycentrics become one mat3 multiply)
-    // and bounds. Tets are binned into a uniform grid (cell = the average
-    // tet size), so each point only tests the handful of tets near it —
-    // O(points) instead of O(points x tets): ~120 ms -> ~2 ms for a
-    // 4,000-triangle wall (OPTIMIZATION.md log #15).
+    // and bounds. Tets are rasterised into a fine grid (a third of the
+    // average tet size): a point inside the volume only tests the few
+    // tets whose bounds cover its cell (the one containing it is always
+    // among them); a point outside uses the tets of the nearest covered
+    // cell, found for every empty cell up front by one BFS. O(1) per
+    // point. The previous 1-tet-size bins plus a ring search cost ~9 us
+    // per point (~110 ms for a 12,000-point pillar); this is ~20x faster
+    // (OPTIMIZATION.md log #15, #30).
     const size_t n = mesh.tets.size();
     std::vector<glm::mat3> inv(n);
     std::vector<glm::vec3> origin(n), bmin(n), bmax(n);
@@ -342,52 +346,70 @@ TetEmbedding embedPoints(const TetMeshData& mesh, const std::vector<glm::vec3>& 
         hi = glm::max(hi, bmax[t]);
         avgSize += glm::length(bmax[t] - bmin[t]);
     }
-    const float cell = std::max(avgSize / static_cast<float>(n), 1e-4f);
-    const glm::ivec3 dims = glm::clamp(glm::ivec3((hi - lo) / cell) + 1, glm::ivec3(1), glm::ivec3(256));
-    auto cellOf = [&](const glm::vec3& p) { return glm::clamp(glm::ivec3((p - lo) / cell), glm::ivec3(0), dims - 1); };
-    auto key = [&](const glm::ivec3& c) { return (static_cast<size_t>(c.z) * dims.y + c.y) * dims.x + c.x; };
-    std::vector<std::vector<uint32_t>> bins(static_cast<size_t>(dims.x) * dims.y * dims.z);
-    for (size_t t = 0; t < n; ++t) {
-        glm::ivec3 c0 = cellOf(bmin[t]), c1 = cellOf(bmax[t]);
-        for (int z = c0.z; z <= c1.z; ++z)
-            for (int y = c0.y; y <= c1.y; ++y)
-                for (int x = c0.x; x <= c1.x; ++x) bins[key({ x, y, z })].push_back(static_cast<uint32_t>(t));
+    float cell = std::max(avgSize / static_cast<float>(n) / 3.0f, 1e-4f);
+    // One empty cell of padding all round, and at most ~2M cells.
+    lo -= glm::vec3(cell);
+    hi += glm::vec3(cell);
+    glm::vec3 extent = hi - lo;
+    for (;;) {
+        const glm::vec3 d = glm::ceil(extent / cell);
+        if (static_cast<double>(d.x) * d.y * d.z <= 2.0e6) break;
+        cell *= 1.25f;
     }
-    auto weightsIn = [&](size_t t, const glm::vec3& p) {
-        glm::vec3 w = inv[t] * (p - origin[t]);
-        return glm::vec4(1.0f - w.x - w.y - w.z, w.x, w.y, w.z);
-    };
+    const glm::ivec3 dims = glm::max(glm::ivec3(glm::ceil(extent / cell)), glm::ivec3(1));
+    const size_t cells = static_cast<size_t>(dims.x) * dims.y * dims.z;
+    auto cellOf = [&](const glm::vec3& p) { return glm::clamp(glm::ivec3(glm::floor((p - lo) / cell)), glm::ivec3(0), dims - 1); };
+    auto key = [&](const glm::ivec3& c) { return (static_cast<size_t>(c.z) * dims.y + c.y) * dims.x + c.x; };
+    // Cell -> tets, as one flat array (count, prefix sum, fill).
+    std::vector<uint32_t> start(cells + 1, 0), ids;
+    for (int pass = 0; pass < 2; ++pass) {
+        std::vector<uint32_t> fill;
+        if (pass == 1) {
+            for (size_t i = 0; i < cells; ++i) start[i + 1] += start[i];
+            ids.resize(start[cells]);
+            fill.assign(start.begin(), start.end() - 1);
+        }
+        for (size_t t = 0; t < n; ++t) {
+            const glm::ivec3 c0 = cellOf(bmin[t]), c1 = cellOf(bmax[t]);
+            for (int z = c0.z; z <= c1.z; ++z)
+                for (int y = c0.y; y <= c1.y; ++y)
+                    for (int x = c0.x; x <= c1.x; ++x) {
+                        const size_t k = key({ x, y, z });
+                        if (pass == 0) ++start[k + 1];
+                        else ids[fill[k]++] = static_cast<uint32_t>(t);
+                    }
+        }
+    }
+    // Empty cell -> nearest covered cell (multi-source BFS, 6-connected).
+    std::vector<uint32_t> source(cells, UINT32_MAX);
+    {
+        std::vector<uint32_t> queue;
+        queue.reserve(cells);
+        for (size_t i = 0; i < cells; ++i)
+            if (start[i + 1] > start[i]) { source[i] = static_cast<uint32_t>(i); queue.push_back(static_cast<uint32_t>(i)); }
+        const long sx = 1, sy = dims.x, sz = static_cast<long>(dims.x) * dims.y;
+        for (size_t head = 0; head < queue.size(); ++head) {
+            const long i = queue[head];
+            const long x = i % dims.x, y = (i / dims.x) % dims.y, z = i / sz;
+            const long nb[6] = { x > 0 ? i - sx : -1, x + 1 < dims.x ? i + sx : -1, y > 0 ? i - sy : -1,
+                                 y + 1 < dims.y ? i + sy : -1, z > 0 ? i - sz : -1, z + 1 < dims.z ? i + sz : -1 };
+            for (long j : nb)
+                if (j >= 0 && source[j] == UINT32_MAX) { source[j] = source[i]; queue.push_back(static_cast<uint32_t>(j)); }
+        }
+    }
     for (size_t i = 0; i < points.size(); ++i) {
         const glm::vec3& p = points[i];
+        const size_t k = source[key(cellOf(p))];
         float bestScore = -std::numeric_limits<float>::max();
-        uint32_t bestTet = 0;
+        uint32_t bestTet = ids[start[k]];
         glm::vec4 bestW(1, 0, 0, 0);
-        // Search the point's cell, then grow the neighbourhood until some
-        // tet is found (points just outside the volume use the tet they
-        // are least outside of).
-        glm::ivec3 c = cellOf(p);
-        for (int r = 0; r <= 3 && bestScore < 0.0f; ++r) {
-            for (int z = c.z - r; z <= c.z + r; ++z)
-                for (int y = c.y - r; y <= c.y + r; ++y)
-                    for (int x = c.x - r; x <= c.x + r; ++x) {
-                        if (x < 0 || y < 0 || z < 0 || x >= dims.x || y >= dims.y || z >= dims.z) continue;
-                        if (std::max({ std::abs(x - c.x), std::abs(y - c.y), std::abs(z - c.z) }) != r) continue; // shell only
-                        for (uint32_t t : bins[key({ x, y, z })]) {
-                            glm::vec4 w = weightsIn(t, p);
-                            float score = std::min({ w.x, w.y, w.z, w.w });
-                            if (score > bestScore) { bestScore = score; bestTet = t; bestW = w; }
-                        }
-                    }
-            if (bestScore > -1e30f && r >= 1) break; // found candidates; don't wander further
-        }
-        if (bestScore == -std::numeric_limits<float>::max()) {
-            // Far outside everything: nearest tet by bounds centre.
-            float bestDist = std::numeric_limits<float>::max();
-            for (size_t t = 0; t < n; ++t) {
-                float dd = glm::length((bmin[t] + bmax[t]) * 0.5f - p);
-                if (dd < bestDist) { bestDist = dd; bestTet = static_cast<uint32_t>(t); }
-            }
-            bestW = weightsIn(bestTet, p);
+        for (uint32_t j = start[k]; j < start[k + 1]; ++j) {
+            const uint32_t t = ids[j];
+            const glm::vec3 w = inv[t] * (p - origin[t]);
+            const glm::vec4 w4(1.0f - w.x - w.y - w.z, w.x, w.y, w.z);
+            const float score = std::min({ w4.x, w4.y, w4.z, w4.w }); // >= 0: inside; else how far outside
+            if (score > bestScore) { bestScore = score; bestTet = t; bestW = w4; }
+            if (score >= 0.0f) break;
         }
         e.tet[i] = bestTet;
         e.weights[i] = bestW;

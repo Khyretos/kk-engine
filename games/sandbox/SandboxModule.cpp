@@ -1107,7 +1107,14 @@ void SandboxModule::makeBreakable(Object& o) {
             soup.normals.push_back(glm::normalize(rot * v.normal));
             soup.uvs.push_back(v.uv);
         }
-        kke::subdivideSoup(soup, std::max({ vox.cellSize3.x, vox.cellSize3.y, vox.cellSize3.z }) * 0.5f, budgetPerPart);
+        // Triangles no longer than a cell: small enough to bend with the
+        // tets. Half a cell used to be needed so whole triangles could
+        // follow the pieces; the cut below does that exactly now, so a
+        // breakable prop carries ~2.5x fewer triangles than before (fewer
+        // points to move and upload while it's awake; OPTIMIZATION.md #31).
+        // Props that only dent keep half a cell: the dents show better.
+        const float maxEdge = std::max({ vox.cellSize3.x, vox.cellSize3.y, vox.cellSize3.z }) * (opts.fracture ? 1.0f : 0.5f);
+        kke::subdivideSoup(soup, maxEdge, budgetPerPart);
         // Cut triangles that straddle a crack, so each piece's surface
         // ends exactly at its crack face (no lip on one side, no hole
         // into the other). Room for the cuts: +50% over the budget.

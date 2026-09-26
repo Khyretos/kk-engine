@@ -102,8 +102,9 @@ BakedFracture bakeFracture(const TetMeshData& mesh, const FractureSeedOptions& o
 // between those pieces, the plane the crack faces were snapped onto.
 // Where the border is too rough for its plane a triangle stays whole.
 // Measured: ~2% of a broken cube's surface hung on the wrong piece,
-// now ~0.6%; a Synty pillar gets ~50% more triangles and 30-90 ms more
-// setup when it is made breakable (tests/test_interior_fill.cpp).
+// now ~0.6% (tests/test_interior_fill.cpp). Cuts add ~60% triangles to
+// a pillar with 40 pieces and ~10 ms; the sandbox subdivides half as
+// finely as before to pay for it (OPTIMIZATION.md #30, #31).
 // Stops adding triangles at `maxTriangles`. Returns the piece of each
 // output triangle, for embedTrianglesInPieces().
 std::vector<uint32_t> splitSoupAtPieces(TriangleSoup& soup, const TetMeshData& mesh, const std::vector<uint32_t>& chunkOfTet,
