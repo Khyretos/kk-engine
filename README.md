@@ -145,6 +145,15 @@ cmake --build build --target kke_tests && ./build/bin/kke_tests
 
 CI builds on every push with warnings treated as errors and runs the unit
 test suite plus a headless smoke test on lavapipe.
+A second workflow runs the benchmark suite on every push to `main` and
+tracks the numbers over time ([docs/BENCHMARKS.md](docs/BENCHMARKS.md)).
+
+## Contributing
+
+Issues, pull requests and questions are welcome: start with
+[CONTRIBUTING.md](CONTRIBUTING.md). Everyone follows the
+[Code of Conduct](CODE_OF_CONDUCT.md); security problems go through
+[SECURITY.md](SECURITY.md).
 
 ## Support
 

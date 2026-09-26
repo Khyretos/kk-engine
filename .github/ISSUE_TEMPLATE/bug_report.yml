@@ -1,0 +1,58 @@
+name: Bug report
+description: Something crashes, looks wrong, or behaves differently from the docs.
+labels: ["type: bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. The stress-test report below answers most first questions (OS, CPU, GPU, driver, settings), so please attach it.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Which demo or game, and what you did. A save, scene file or Lua script helps a lot.
+      placeholder: |
+        1. ./kke_demo
+        2. Walk to the breaking yard, shoot the glass
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: stress
+    attributes:
+      label: Stress-test report
+      description: |
+        Run `KKE_STRESS_TEST=1 ./kke_demo` (or Performance → Run stress test in the showcase) and drag the `benchmark/stress_*.txt` file here.
+        If the engine can't get that far, say so and attach the log instead.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log output
+      description: The console output around the problem (errors and warnings especially).
+      render: text
+  - type: input
+    id: commit
+    attributes:
+      label: Version or commit
+      description: A release tag, or the output of `git rev-parse --short HEAD`.
+    validations:
+      required: true
+  - type: dropdown
+    id: build
+    attributes:
+      label: Build type
+      options:
+        - Downloaded release
+        - Built from source (Debug)
+        - Built from source (Release / RelWithDebInfo)
+    validations:
+      required: true

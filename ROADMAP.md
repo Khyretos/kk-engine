@@ -146,6 +146,7 @@ limitations. 🔴 Not started / stub.
 | `BUGS.md` (this pair, bug side) | 🟢 | Just established this session. |
 | `ROADMAP.md` (this file) | 🟢 | Just established this session. |
 | Scripted physics benchmark (`KKE_PHYSICS_BENCH`) | 🟢 | Same scenes at the same simulation ticks on every machine, one comparable `BENCH RESULT:` line. `KKE_PHYSICS_THREADS` overrides the worker count; the pool respects CPU affinity, so `taskset -c 0` really is 1 thread. |
+| Benchmark suite (`kke_bench` + stress test in CI) | 🟢 | Headless CPU cases plus the showcase stress test on every push to main, history and trend charts on the `benchmark-data` branch; Docker hardware profiles and `KKE_VRAM_BUDGET_MB`. docs/BENCHMARKS.md. |
 | `docs/HARDWARE_TESTS.md` | 🟢 | Checklist of everything only real hardware can answer, with what to send back. |
 | `tools/physics_lab` (`kke_physics_lab`) | 🟢 | Headless FEMFX experiments, no window/GPU: `fracture` (stability of every pattern), `shoot` (threshold tuning), `volcano` (worst-case load), `freefall`, `rest`. |
 | Cross-platform builds | 🟡 | `docker compose run --rm linux / windows / android` (docker/). Linux: builds + all tests pass in the container. Windows: MinGW-w64 cross build of every game and tool, unit tests pass under Wine. Android: native build with FEMFX off. macOS / Windows-MSVC: manual "Platforms" GitHub workflow. Browser: needs a WebGPU renderer (docs/SCALING.md). |

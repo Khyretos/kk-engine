@@ -18,5 +18,6 @@ Design notes for Kreative Kompas Engine, one file per system. Start with the
 | [OPTIMIZATION.md](OPTIMIZATION.md) | Performance rules, measured log and backlog |
 | [PERFORMANCE_NOTES.md](PERFORMANCE_NOTES.md) | What RayFire and Chaos do for destruction at scale, and what KKE took from it |
 | [SCALING.md](SCALING.md) | Worst cases, multiplayer limits and platform support |
+| [BENCHMARKS.md](BENCHMARKS.md) | The stress test, kke_bench, hardware profiles, tracked results |
 | [HARDWARE_TESTS.md](HARDWARE_TESTS.md) | Checks only real hardware can answer |
 | [GO_TO_MARKET.md](GO_TO_MARKET.md) | How KKE reaches people, and how it is funded |
