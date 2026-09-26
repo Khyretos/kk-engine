@@ -14,6 +14,7 @@ add_executable(kke_tests
     test_benchmark_report.cpp
     test_asset_catalog.cpp
     test_picking.cpp
+    test_play_blocks.cpp
     test_voxel_fracture.cpp
     test_interior_fill.cpp
     test_particle_fluid.cpp
@@ -36,6 +37,7 @@ add_executable(kke_tests
     test_audio.cpp
     test_footsteps.cpp
     test_room_acoustics.cpp
+    test_thumbnails.cpp
     test_logo_mesh.cpp
     test_jiggle.cpp
     test_rml_data_binding.cpp

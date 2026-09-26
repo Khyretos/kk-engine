@@ -1,0 +1,92 @@
+# Hardware profiles for the benchmark suite (docs/BENCHMARKS.md).
+#
+#   docker compose -f benchmarks/docker/compose.yml run --rm build          # once
+#   docker compose -f benchmarks/docker/compose.yml run --rm floor-1c-2g    # any profile
+#
+# Reports land in benchmark/<profile>/ (git-ignored). Docker can limit
+# cores (cpuset) and RAM, and pass a real GPU through; it can't limit
+# VRAM, so the "vram" profiles use the engine's KKE_VRAM_BUDGET_MB cap.
+# Profiles without a GPU force Mesa's lavapipe (software Vulkan).
+x-bench: &bench
+  build: { context: ., dockerfile: Dockerfile }
+  image: kke-bench
+  volumes: [ "../..:/src" ]
+  command: [ "run" ]
+  memswap_limit: -1
+
+x-software-gpu: &software-gpu
+  VK_DRIVER_FILES: /usr/share/vulkan/icd.d/lvp_icd.json
+  VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.json
+
+services:
+  build:
+    <<: *bench
+    command: [ "build" ]
+
+  # The floor KKE promises to run on: 1 core, 2 GB, no GPU.
+  floor-1c-2g:
+    <<: *bench
+    cpuset: "0"
+    mem_limit: 2g
+    memswap_limit: 2g
+    environment: { <<: *software-gpu, KKE_PROFILE: floor-1c-2g }
+
+  laptop-1c-2g-vram512:
+    <<: *bench
+    cpuset: "0"
+    mem_limit: 2g
+    memswap_limit: 2g
+    environment: { <<: *software-gpu, KKE_PROFILE: laptop-1c-2g-vram512, KKE_VRAM_BUDGET_MB: "512" }
+
+  dual-2c-2g-vram1g:
+    <<: *bench
+    cpuset: "0-1"
+    mem_limit: 2g
+    memswap_limit: 2g
+    environment: { <<: *software-gpu, KKE_PROFILE: dual-2c-2g-vram1g, KKE_VRAM_BUDGET_MB: "1024" }
+
+  mid-4c-8g:
+    <<: *bench
+    cpuset: "0-3"
+    mem_limit: 8g
+    memswap_limit: 8g
+    environment: { <<: *software-gpu, KKE_PROFILE: mid-4c-8g }
+
+  high-8c-16g:
+    <<: *bench
+    cpuset: "0-7"
+    mem_limit: 16g
+    memswap_limit: 16g
+    environment: { <<: *software-gpu, KKE_PROFILE: high-8c-16g }
+
+  # Real GPUs passed through (whole machine otherwise).
+  intel-arc:
+    <<: *bench
+    devices: [ "/dev/dri:/dev/dri" ]
+    environment: { KKE_PROFILE: intel-arc }
+
+  amd:
+    <<: *bench
+    devices: [ "/dev/dri:/dev/dri", "/dev/kfd:/dev/kfd" ]
+    environment: { KKE_PROFILE: amd }
+
+  # Needs nvidia-container-toolkit on the host.
+  nvidia:
+    <<: *bench
+    environment: { KKE_PROFILE: nvidia, NVIDIA_DRIVER_CAPABILITIES: all }
+    deploy:
+      resources:
+        reservations:
+          devices: [ { driver: nvidia, count: all, capabilities: [ gpu, graphics, utility ] } ]
+
+  # Your own limits: KKE_CPUSET=0-2 KKE_MEM=3g KKE_VRAM_BUDGET_MB=768 docker compose ... run --rm custom
+  custom:
+    <<: *bench
+    cpuset: "${KKE_CPUSET:-0}"
+    mem_limit: "${KKE_MEM:-2g}"
+    memswap_limit: "${KKE_MEM:-2g}"
+    devices: [ "${KKE_GPU_DEVICE:-/dev/null}:${KKE_GPU_DEVICE:-/dev/null}" ]
+    environment:
+      KKE_PROFILE: custom
+      KKE_VRAM_BUDGET_MB: "${KKE_VRAM_BUDGET_MB:-}"
+      VK_DRIVER_FILES: "${KKE_VK_DRIVER_FILES:-}"

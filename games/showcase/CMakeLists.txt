@@ -1,5 +1,5 @@
 # kke_demo: the walkable showcase (ACTION_PLAN.md P1).
-add_executable(kke_demo main.cpp ShowcaseModule.cpp StressTest.cpp SplitScreen.cpp Stations.cpp)
+add_executable(kke_demo main.cpp ShowcaseModule.cpp StressTest.cpp SplitScreen.cpp Stations.cpp LavaStation.cpp)
 target_link_libraries(kke_demo PRIVATE kke_engine)
 engine_copy_runtime_file(kke_demo ${CMAKE_CURRENT_SOURCE_DIR}/game.json marketplace/showcase/game.json)
 # Lua scripts (ScriptModule). The copy in bin/scripts/ is what runs; set
@@ -18,7 +18,7 @@ endforeach()
 foreach(shader rml_ui.vert rml_ui.frag rml_gradient.frag)
     engine_add_shader(kke_demo ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()
-foreach(shader model.vert model_instanced.vert shadow_instanced.vert model.frag shadow.vert shadow.frag cube.vert cube.frag glow.frag ocean.vert ocean.frag sky.vert sky.frag)
+foreach(shader model.vert model_instanced.vert shadow_instanced.vert model.frag shadow.vert shadow.frag cube.vert cube.frag glow.frag ocean.vert ocean.frag sky.vert sky.frag impostor.vert impostor.frag fluid_depth.frag fluid_blur.comp fluid_composite.frag)
     engine_add_shader(kke_demo ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()
 # Character animations (Quaternius' Universal Animation Library, CC0) are

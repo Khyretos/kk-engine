@@ -1,0 +1,43 @@
+name: Benchmark result
+description: Share stress-test or kke_bench numbers from your real hardware for docs/BENCHMARKS.md.
+title: "Benchmark: <CPU> / <GPU>"
+labels: ["area: tooling"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you! Real-hardware rows are what make [docs/BENCHMARKS.md](https://github.com/Khyretos/kk-engine/blob/main/docs/BENCHMARKS.md) worth reading.
+        Use a Release build or a downloaded release, close other heavy programs, and run on mains power if it's a laptop.
+  - type: textarea
+    id: stress
+    attributes:
+      label: Stress-test report
+      description: Run `KKE_STRESS_TEST=1 ./kke_demo` and drag BOTH `benchmark/stress_*.txt` and `.json` here.
+    validations:
+      required: true
+  - type: textarea
+    id: bench
+    attributes:
+      label: kke_bench report (optional)
+      description: Run `./kke_bench` and drag `benchmark/suite_*.json` here.
+  - type: input
+    id: machine
+    attributes:
+      label: Machine
+      description: Laptop or desktop model, or "custom build". Anything the report can't know (power mode, thermal limits).
+      placeholder: "ThinkPad T480, balanced power mode"
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Version or commit
+    validations:
+      required: true
+  - type: checkboxes
+    id: ok
+    attributes:
+      label: Publishing
+      options:
+        - label: The CPU/GPU/OS details from my report may be published in docs/BENCHMARKS.md (no host name or user name is published).
+          required: true

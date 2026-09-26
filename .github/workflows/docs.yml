@@ -1,0 +1,57 @@
+name: Docs site
+
+# Builds https://khyretos.github.io/kk-engine/ from docs/ (docs/DOCS_SITE.md)
+# and publishes it on every push to main, by pushing the built site to the
+# gh-pages branch (GitHub Pages serves that branch). Pull requests only
+# build it, so a broken link fails the PR instead of the site.
+#
+# Plain git for publishing, no Pages actions: nothing here depends on an
+# action runtime that GitHub deprecates.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push cancels an older PR build; publishes from main queue up
+# instead, so each one finishes.
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Material's notice about MkDocs 2.0; the build is pinned below 2.0 in
+  # tools/docs_site/requirements.txt, which is what the notice asks for.
+  NO_MKDOCS_2_WARNING: "true"
+
+jobs:
+  site:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # push to gh-pages
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tools/docs_site/requirements.txt
+      - name: Install MkDocs
+        run: pip install -r tools/docs_site/requirements.txt
+      # --strict: any warning (a broken link, a missing page) fails the build.
+      - name: Build the site
+        run: mkdocs build --strict
+      - name: Publish to gh-pages
+        if: github.event_name != 'pull_request'
+        run: |
+          cd site
+          touch .nojekyll # serve the files as they are
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Docs site from ${GITHUB_SHA}"
+          git push -q --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" gh-pages

@@ -20,6 +20,7 @@ set(ENGINE_SOURCES
     src/BenchmarkReport.cpp
     src/AssetCatalog.cpp
     src/Picking.cpp
+    src/PlayBlocks.cpp
     src/VoxelTets.cpp
     src/InteriorColor.cpp
     src/FracturePattern.cpp
@@ -77,6 +78,8 @@ set(ENGINE_SOURCES
     src/modules/PhysicsModuleBridge.cpp
     src/modules/SettingsModule.cpp
     src/modules/ModelModule.cpp
+    src/modules/ThumbnailModule.cpp
+    src/Thumbnails.cpp
     src/modules/DebugDrawModule.cpp
 )
 
@@ -105,6 +108,7 @@ set(ENGINE_HEADERS
     include/kke/BenchmarkReport.h
     include/kke/AssetCatalog.h
     include/kke/Picking.h
+    include/kke/PlayBlocks.h
     include/kke/VoxelTets.h
     include/kke/InteriorColor.h
     include/kke/FracturePattern.h
@@ -117,6 +121,8 @@ set(ENGINE_HEADERS
     include/kke/FluidSurface.h
     include/kke/Footsteps.h
     include/kke/RoomAcoustics.h
+    include/kke/Thumbnails.h
+    include/kke/modules/ThumbnailModule.h
     include/kke/TetMeshAsset.h
     include/kke/LightingBuffer.h
     include/kke/ShadowMap.h

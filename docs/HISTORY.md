@@ -1457,6 +1457,18 @@ model in them.
 
 - **Assets panel:** filter by pack, category (from Synty's name prefixes)
   or search; click an asset, then click in the world to place it.
+  "Pictures" shows a grid of thumbnails (`kke::ThumbnailModule`): each
+  model is rendered once (lit, framed by its bounds) into a 128 px
+  offscreen target with the main pass's attachments, copied into a
+  2048 px atlas ImGui draws directly, and saved as a PNG per pack in your
+  cache folder (`KKE_THUMBNAIL_CACHE`, else `~/.cache/kk-engine/thumbnails`,
+  `%LOCALAPPDATA%\kk-engine\thumbnails` on Windows; never in the repo:
+  they're renders of licensed packs). Files are read on a worker thread,
+  at most 2 renders and 16 cached pictures a frame, and only what's on
+  screen is asked for, newest first. Animation-only files show "(anim)".
+  Measured on the 3,070-asset test catalog with the software renderer
+  (llvmpipe): the list scrolls at ~125 fps, the grid at ~100-110 fps,
+  and the same while thumbnails are being made or come from disk.
 - **Look:** the pack's texture variants (Prototype's `_Texture_01..10`
   recolours) for new objects, per object, or all at once; the world grid
   overlay (Prototype's `_Grid_*` patterns, tile size, strength) — saved
