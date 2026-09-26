@@ -573,14 +573,22 @@ void Application::run() {
             shadowCtx.renderPass = m_shadowMap->renderPass();
             shadowCtx.lightViewProj = lightViewProj;
             shadowCtx.frameIndex = m_renderer->currentFrameIndex();
-            m_shadowMap->beginRenderPass(cmd);
-            for (Module* m : m_initOrder) {
-                safeInvoke(m, "renderShadow", [&] { m->renderShadow(shadowCtx); });
+            // A full-screen opaque menu hides the 3D view (setSceneCovered):
+            // the shadow pass and render() are skipped. The scene pass
+            // still begins, so its clear and the overlay are unchanged;
+            // prepass() still runs (thumbnails for that very menu are made
+            // there) and scene-only prepass work checks sceneCovered.
+            const bool drawScene = !m_sceneCovered;
+            if (drawScene) {
+                m_shadowMap->beginRenderPass(cmd);
+                for (Module* m : m_initOrder) {
+                    safeInvoke(m, "renderShadow", [&] { m->renderShadow(shadowCtx); });
+                }
+                m_shadowMap->endRenderPass(cmd);
             }
-            m_shadowMap->endRenderPass(cmd);
 
             PrepassContext prepassCtx{ cmd, view, proj, drawViews[0].camera.position, sceneExtent, m_lightingBuffer->descriptorSet(),
-                                       m_renderer->currentFrameIndex() };
+                                       m_renderer->currentFrameIndex(), m_sceneCovered };
             for (Module* m : m_initOrder) {
                 safeInvoke(m, "prepass", [&] { m->prepass(prepassCtx); });
             }
@@ -588,7 +596,7 @@ void Application::run() {
             m_renderer->beginRenderPass();
             renderCtx.cmd = cmd;
             renderCtx.frameIndex = m_renderer->currentFrameIndex();
-            for (uint32_t i = 0; i < viewCount; ++i) {
+            for (uint32_t i = 0; drawScene && i < viewCount; ++i) {
                 const DrawView& d = drawViews[i];
                 renderCtx.view = d.view;
                 renderCtx.proj = d.proj;
