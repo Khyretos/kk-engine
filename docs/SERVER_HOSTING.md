@@ -72,7 +72,8 @@ player of its own, so all `maxPlayers` slots are for players.
 Console (stdin, or `docker attach kke-server`): `help`, `status`,
 `players`, `kick <id|name> [reason]`, `ban <id|name|address> [reason]`,
 `unban <name|address>`, `bans`, `admin <name>`, `allow <name>`,
-`say <text>`, `top [board]`, `save`, `stop`. `Ctrl+C` and `docker stop`
+`say <text>`, `mute <id|name>`, `unmute <id|name>` (voice), `top [board]`,
+`save`, `stop`. `Ctrl+C` and `docker stop`
 (SIGTERM) stop it cleanly: players are told, files are saved. The
 leaderboards are also saved every minute.
 
@@ -84,7 +85,7 @@ settings; a server runs any mix.
 
 | Role | What it does | Status |
 |---|---|---|
-| `players` | Joins, player states, snapshots, speed limits (docs/NETWORKING.md); passes each player's game events on to the others, as a host would | built |
+| `players` | Joins, player states, snapshots, speed limits (docs/NETWORKING.md); passes each player's game events on to the others, as a host would; relays voice chat to whoever should hear it (nearby, team, everyone) | built |
 | `physics` | Owns the world: loads the scene's collision headlessly (`loadSceneCollision`) and refuses moves through walls and flights (`WorldMoveCheck`). Simulating replicated bodies on the server is next | built (collision + move checks) |
 | `leaderboard` | Named boards: each player's best score, top 10 per reply, kept in `saveDir/leaderboards.json`. Other servers using one leaderboard server is #46 | built |
 | `directory` | A server list: servers with `"public": true` register and send a heartbeat; games ask it for the list. Anyone can run one (a friend group, a modding community, a studio) | built (server side and `DirectoryBrowser`; the game's panel lists LAN games only so far) |

@@ -2,6 +2,7 @@
 
 #include <volk.h>
 #include <vk_mem_alloc.h>
+#include <unordered_map>
 #include <vector>
 #include <optional>
 #include <cstdint>
@@ -55,6 +56,18 @@ public:
     bool largePointsSupported() const { return m_largePointsSupported; }
     // 1.0 when samplerAnisotropy isn't supported (and so not enabled).
     float maxSamplerAnisotropy() const { return m_maxSamplerAnisotropy; }
+    // Highest MSAA count both a colour and a depth attachment support.
+    VkSampleCountFlagBits maxUsableSampleCount() const { return m_maxSampleCount; }
+    // A CPU rasteriser (lavapipe/llvmpipe, the min-spec reference).
+    bool isSoftwareRasterizer() const { return m_softwareRasterizer; }
+    // Sample count of the attachments in a render pass, so kke::Pipeline
+    // can match it without every caller passing it along. Passes never
+    // registered are single-sampled (shadow, UI, offscreen passes).
+    void setRenderPassSamples(VkRenderPass pass, VkSampleCountFlagBits samples) { m_passSamples[pass] = samples; }
+    VkSampleCountFlagBits renderPassSamples(VkRenderPass pass) const {
+        auto it = m_passSamples.find(pass);
+        return it == m_passSamples.end() ? VK_SAMPLE_COUNT_1_BIT : it->second;
+    }
 
     // True only if KKE_ENABLE_GPU_PROFILER was set at build time AND the
     // VulkanProfiler layer was actually found installed at instance
@@ -109,6 +122,9 @@ private:
     double m_timestampPeriodNs = 1.0;
     bool m_largePointsSupported = false;
     float m_maxSamplerAnisotropy = 1.0f;
+    VkSampleCountFlagBits m_maxSampleCount = VK_SAMPLE_COUNT_1_BIT;
+    bool m_softwareRasterizer = false;
+    std::unordered_map<VkRenderPass, VkSampleCountFlagBits> m_passSamples;
 
     bool m_validationEnabled = false;
     bool m_gpuProfilerEnabled = false;

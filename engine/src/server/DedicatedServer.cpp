@@ -103,6 +103,7 @@ bool DedicatedServer::start(std::vector<std::string>& errors) {
         m_net->onEvent = [this](const net::GameEventMsg& e) { onEvent(e); };
         m_net->onPlayer = [this](uint8_t id, bool joined) {
             if (m_moveCheck && !joined) m_moveCheck->forget(id);
+            if (!joined) m_net->voice.muted.erase(id); // the next player with this id starts unmuted
             info("player " + std::to_string(id) + (joined ? " joined from " + m_net->address(id) : " left") + " (" + std::to_string(m_net->clientCount()) +
                  "/" + std::to_string(m_config.maxPlayers) + ")");
             if (joined && !m_config.motd.empty()) m_net->sendEventTo(id, net::kEventServerMessage, text(m_config.motd));
@@ -234,7 +235,7 @@ std::string DedicatedServer::command(const std::string& line) {
 
     if (cmd == "help")
         return "status | players | kick <id|name> [reason] | ban <id|name|address> [reason] | unban <name|address> | bans | admin <name> | "
-               "allow <name> | say <text> | top <board> | save | stop";
+               "allow <name> | say <text> | mute <id|name> | unmute <id|name> | top <board> | save | stop";
     if (cmd == "status") {
         std::string s = m_config.name + ": ";
         if (m_net) s += std::to_string(m_net->clientCount()) + "/" + std::to_string(m_config.maxPlayers) + " players on UDP " + std::to_string(m_config.port);
@@ -291,6 +292,14 @@ std::string DedicatedServer::command(const std::string& line) {
         if (cmd == "admin") m_access.addAdmin(arg);
         else m_access.allow(arg);
         return saveAccess(cmd == "admin" ? arg + " is an admin" : arg + " may join (only listed players may, now)");
+    }
+    if (cmd == "mute" || cmd == "unmute") {
+        if (arg.empty()) return "usage: " + cmd + " <id|name>";
+        const int id = findPlayer(arg);
+        if (id < 0) return "no player '" + arg + "' (players lists them)";
+        if (cmd == "mute") m_net->voice.muted.insert(static_cast<uint8_t>(id));
+        else m_net->voice.muted.erase(static_cast<uint8_t>(id));
+        return arg + (cmd == "mute" ? "'s voice isn't passed on (until they leave, or unmute)" : " can be heard again");
     }
     if (cmd == "say") {
         const std::string msg = arg + (tail.empty() ? "" : " " + tail);

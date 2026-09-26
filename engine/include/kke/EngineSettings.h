@@ -18,6 +18,10 @@ struct EngineSettings {
         float frameRateLimit = 0.0f;   // 0 = unlimited
         float fieldOfView = 60.0f;     // vertical, degrees
         bool shadows = true;
+        // Multisample anti-aliasing for the 3D view: 1 (off), 2, 4 or 8.
+        // Read at startup (takes effect on restart); software rasterisers
+        // (the min-spec reference) always run at 1.
+        int msaa = 4;
         float brightness = 1.0f;       // multiplies ambient light
         float uiScale = 1.0f;          // see UiModule::setUiScale()
         bool showDebugOverlay = false; // the ImGui developer panels (F1 in the showcase)

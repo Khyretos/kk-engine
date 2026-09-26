@@ -180,8 +180,12 @@ private:
     // A run of instances sharing model + texture + overlay: one draw per
     // mesh part. Built each frame after culling.
     struct Batch { ModelId model; VkDescriptorSet textureOverride; bool overlay; uint32_t first, count; };
-    void buildBatches(const struct Frustum& f, std::vector<Batch>& out, std::vector<InstanceGpu>& data, bool markDrawn);
+    // eye set (camera passes): instances in each batch and the batches
+    // themselves come out nearest first (kke/DrawOrder.h).
+    void buildBatches(const struct Frustum& f, std::vector<Batch>& out, std::vector<InstanceGpu>& data, bool markDrawn,
+                      const glm::vec3* eye = nullptr);
     void uploadInstances(int pass, uint32_t frameIndex, const std::vector<InstanceGpu>& data);
+    std::vector<Instance*> m_singles; // render(): this view's non-instanced draws, reused
 
     VkDescriptorSet textureSetFor(const std::string& path);
     void skinInstance(Instance& inst, uint32_t frameIndex);

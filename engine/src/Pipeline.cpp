@@ -76,7 +76,7 @@ Pipeline::Pipeline(VulkanDevice& device, VkRenderPass renderPass,
 
     VkPipelineMultisampleStateCreateInfo multisampling{};
     multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    multisampling.rasterizationSamples = device.renderPassSamples(renderPass); // MSAA scene pass or 1x
 
     VkPipelineColorBlendAttachmentState colorBlendAttachment{};
     colorBlendAttachment.colorWriteMask = config.colorWriteEnable

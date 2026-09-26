@@ -409,6 +409,9 @@ TEST(DedicatedServer, ConsoleKicksBansAndBansHold) {
     w.run(0.2);
     ASSERT_FALSE(w.events[1].empty());
     EXPECT_EQ(w.events[1].back().kind, kEventServerMessage);
+    EXPECT_NE(w.server->command("mute kees").find("isn't passed on"), std::string::npos);
+    EXPECT_EQ(w.server->game()->voice.muted.count(k.playerId()), 1u);
+    EXPECT_NE(w.server->command("unmute Kees").find("heard again"), std::string::npos);
     EXPECT_NE(w.server->command("kick Kees").find("kicked"), std::string::npos);
     EXPECT_NE(w.server->command("frobnicate").find("unknown"), std::string::npos);
     EXPECT_EQ(w.server->command("unban griefer"), "unbanned griefer");

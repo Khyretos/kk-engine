@@ -34,6 +34,7 @@ add_executable(kke_tests
     test_scene_file.cpp
     test_net.cpp
     test_server.cpp
+    test_voice.cpp
     test_input_map.cpp
     test_input_devices.cpp
     test_floating_bodies.cpp
@@ -45,6 +46,7 @@ add_executable(kke_tests
     test_logo_mesh.cpp
     test_texture_mips.cpp
     test_shadow_projection.cpp
+    test_draw_order.cpp
     test_jiggle.cpp
     test_rml_data_binding.cpp
     test_frame_retire_queue.cpp

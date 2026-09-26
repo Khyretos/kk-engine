@@ -23,6 +23,30 @@ struct SoundBuffer {
 };
 using SoundHandle = std::shared_ptr<const SoundBuffer>;
 
+// Sound that arrives while it plays (voice chat: kke::VoiceModule): the
+// producer pushes mono samples at the mixer's rate, the mixer pulls them
+// block by block. Runs dry: silence until more comes. Holds at most
+// `capacity` samples (older ones are dropped: latency stays bounded).
+// Thread-safe; a voice playing it ends once close() is called and it is empty.
+class AudioStream {
+public:
+    explicit AudioStream(size_t capacity = 48000) : m_capacity(capacity) {}
+    void push(const float* samples, size_t count);
+    size_t read(float* out, size_t count); // fills all `count`; returns how many were real samples
+    size_t buffered() const;
+    void close();
+    bool finished() const; // closed and empty
+    uint64_t underruns() const;
+
+private:
+    mutable std::mutex m_mutex;
+    std::vector<float> m_ring;
+    size_t m_head = 0, m_size = 0, m_capacity;
+    bool m_closed = false;
+    uint64_t m_underruns = 0;
+};
+using AudioStreamHandle = std::shared_ptr<AudioStream>;
+
 // What a sound *is*, for the accessibility visualizer and captions, and
 // for per-category volume. Every sound carries one (docs/AUDIO.md).
 enum class SoundCategory : uint8_t { Impact, Footstep, Voice, Ambient, Ui, Music, Alert, Count };
@@ -54,6 +78,7 @@ struct VoiceDesc {
     bool viaOpening = false;      // heard through `via` (see setVia)
     glm::vec3 via{0.0f};
     float viaPathLength = 0.0f;
+    AudioStreamHandle stream;     // set: plays this live stream (at the mixer's rate) instead of `sound`
 };
 
 // The ears. forward/up need not be normalized.
@@ -223,6 +248,7 @@ private:
     size_t m_echoIdx = 0;
     bool m_capturing = false;
     std::vector<float> m_capture;
+    std::vector<float> m_streamBlock;             // this block of a streamed voice
 };
 
 } // namespace kke

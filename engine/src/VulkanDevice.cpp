@@ -327,6 +327,11 @@ void VulkanDevice::pickPhysicalDevice() {
     VkPhysicalDeviceProperties props{};
     vkGetPhysicalDeviceProperties(m_physicalDevice, &props);
     m_timestampPeriodNs = static_cast<double>(props.limits.timestampPeriod);
+    m_softwareRasterizer = props.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU;
+    const VkSampleCountFlags counts = props.limits.framebufferColorSampleCounts & props.limits.framebufferDepthSampleCounts;
+    for (VkSampleCountFlagBits s : { VK_SAMPLE_COUNT_8_BIT, VK_SAMPLE_COUNT_4_BIT, VK_SAMPLE_COUNT_2_BIT }) {
+        if (counts & s) { m_maxSampleCount = s; break; }
+    }
     log::get("VulkanDevice")->info("using device: {}", props.deviceName);
 }
 

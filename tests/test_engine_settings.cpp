@@ -20,6 +20,7 @@ TEST(EngineSettings, ModifiedValuesRoundTrip) {
     s.graphics.frameRateLimit = 144.0f;
     s.graphics.fieldOfView = 90.0f;
     s.graphics.shadows = false;
+    s.graphics.msaa = 2;
     s.graphics.brightness = 1.5f;
     s.graphics.uiScale = 1.25f;
     s.graphics.showDebugOverlay = false;
@@ -54,7 +55,7 @@ TEST(EngineSettings, WrongTypesAreIgnoredNotFatal) {
 
 TEST(EngineSettings, OutOfRangeValuesAreClamped) {
     EngineSettings s = kke::settingsFromJson(R"({
-        "graphics": {"fieldOfView": 5, "uiScale": 50, "brightness": -1, "frameRateLimit": 3},
+        "graphics": {"fieldOfView": 5, "uiScale": 50, "brightness": -1, "frameRateLimit": 3, "msaa": 6},
         "audio": {"master": 400, "music": -3},
         "controls": {"mouseSensitivity": 0},
         "gameplay": {"difficulty": "nightmare", "maxPhysicsStepsPerFrame": 99}
@@ -63,6 +64,7 @@ TEST(EngineSettings, OutOfRangeValuesAreClamped) {
     EXPECT_FLOAT_EQ(s.graphics.uiScale, 2.5f);
     EXPECT_FLOAT_EQ(s.graphics.brightness, 0.0f);
     EXPECT_FLOAT_EQ(s.graphics.frameRateLimit, 15.0f);
+    EXPECT_EQ(s.graphics.msaa, 4); // rounded down to a supported count
     EXPECT_EQ(s.audio.master, 100);
     EXPECT_EQ(s.audio.music, 0);
     EXPECT_FLOAT_EQ(s.controls.mouseSensitivity, 0.1f);

@@ -107,7 +107,7 @@ float AudioMixer::estimate(const VoiceDesc& d) const {
 }
 
 uint32_t AudioMixer::play(const VoiceDesc& desc) {
-    if (!desc.sound || desc.sound->samples.empty() || desc.sound->sampleRate <= 0) return 0;
+    if (!desc.stream && (!desc.sound || desc.sound->samples.empty() || desc.sound->sampleRate <= 0)) return 0;
     std::lock_guard<std::mutex> lock(m_mutex);
     const float est = estimate(desc);
     if (est <= 1e-5f) { ++m_dropped; return 0; }
@@ -267,8 +267,14 @@ void AudioMixer::mix(float* out, int frames) {
     const float twoPiOverRate = glm::two_pi<float>() / float(m_sampleRate);
     const bool binaural = m_mode == SpatialMode::Binaural;
     const float invFrames = 1.0f / float(frames);
+    static const SoundBuffer kSilence{ { 0.0f }, 48000 };
     for (Voice& v : m_voices) {
-        const SoundBuffer& buf = *v.desc.sound;
+        const bool streamed = v.desc.stream != nullptr;
+        const SoundBuffer& buf = streamed ? kSilence : *v.desc.sound;
+        if (streamed) {
+            if (m_streamBlock.size() < size_t(frames)) m_streamBlock.resize(size_t(frames));
+            v.desc.stream->read(m_streamBlock.data(), size_t(frames));
+        }
         float gain = v.desc.gain * masterGain * categoryGain[size_t(v.desc.category)];
         float pan = 0.0f, azimuth = 0.0f, distanceGain = 1.0f, distance = 0.0f;
         bool behind = false;
@@ -322,15 +328,20 @@ void AudioMixer::mix(float* out, int frames) {
         double pos = double(v.cursor) / 65536.0;
         float peak = 0.0f;
         for (int f = 0; f < frames; ++f) {
-            size_t i0 = size_t(pos);
-            if (i0 >= n) {
-                if (!v.desc.loop) break;
-                pos = std::fmod(pos, double(n));
-                i0 = size_t(pos);
+            float x;
+            if (streamed) {
+                x = m_streamBlock[size_t(f)];
+            } else {
+                size_t i0 = size_t(pos);
+                if (i0 >= n) {
+                    if (!v.desc.loop) break;
+                    pos = std::fmod(pos, double(n));
+                    i0 = size_t(pos);
+                }
+                const float frac = float(pos - double(i0));
+                const size_t i1 = i0 + 1 < n ? i0 + 1 : (v.desc.loop ? 0 : i0);
+                x = buf.samples[i0] + (buf.samples[i1] - buf.samples[i0]) * frac;
             }
-            const float frac = float(pos - double(i0));
-            const size_t i1 = i0 + 1 < n ? i0 + 1 : (v.desc.loop ? 0 : i0);
-            const float x = buf.samples[i0] + (buf.samples[i1] - buf.samples[i0]) * frac;
             v.lpState += a * (x - v.lpState);
             const float k = float(f) * invFrames;
             const float l = v.prevGainL + (gl - v.prevGainL) * k;
@@ -371,7 +382,10 @@ void AudioMixer::mix(float* out, int frames) {
         v.lastPeak = peak;
     }
     m_voices.erase(std::remove_if(m_voices.begin(), m_voices.end(),
-                                  [](const Voice& v) { return !v.desc.loop && double(v.cursor) / 65536.0 >= double(v.desc.sound->samples.size()); }),
+                                  [](const Voice& v) {
+                                      if (v.desc.stream) return v.desc.stream->finished();
+                                      return !v.desc.loop && double(v.cursor) / 65536.0 >= double(v.desc.sound->samples.size());
+                                  }),
                    m_voices.end());
     mixEchoes(out, frames);
     m_reverb->process(m_send.data(), out, frames);
@@ -443,6 +457,55 @@ std::vector<float> AudioMixer::stopCapture() {
 bool AudioMixer::capturing() const {
     std::lock_guard<std::mutex> lock(m_mutex);
     return m_capturing;
+}
+
+// ---------------------------------------------------------------- AudioStream
+
+void AudioStream::push(const float* samples, size_t count) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_capacity == 0 || m_closed) return;
+    if (m_ring.size() != m_capacity) m_ring.assign(m_capacity, 0.0f);
+    for (size_t i = 0; i < count; ++i) {
+        if (m_size == m_capacity) { // full: the oldest sample goes
+            m_head = (m_head + 1) % m_capacity;
+            --m_size;
+        }
+        m_ring[(m_head + m_size) % m_capacity] = samples[i];
+        ++m_size;
+    }
+}
+
+size_t AudioStream::read(float* out, size_t count) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    const size_t real = std::min(count, m_size);
+    for (size_t i = 0; i < real; ++i) out[i] = m_ring[(m_head + i) % m_capacity];
+    if (real) {
+        m_head = (m_head + real) % m_capacity;
+        m_size -= real;
+    }
+    std::fill(out + real, out + count, 0.0f);
+    if (real < count && !m_closed) ++m_underruns;
+    return real;
+}
+
+size_t AudioStream::buffered() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_size;
+}
+
+void AudioStream::close() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_closed = true;
+}
+
+bool AudioStream::finished() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_closed && m_size == 0;
+}
+
+uint64_t AudioStream::underruns() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_underruns;
 }
 
 } // namespace kke

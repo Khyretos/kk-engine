@@ -20,6 +20,7 @@ set(ENGINE_SOURCES
     src/BenchmarkReport.cpp
     src/AssetCatalog.cpp
     src/Picking.cpp
+    src/DrawOrder.cpp
     src/PlayBlocks.cpp
     src/TouchGestures.cpp
     src/VoxelTets.cpp
@@ -47,6 +48,7 @@ set(ENGINE_SOURCES
     src/server/ServerAccess.cpp
     src/server/Leaderboard.cpp
     src/server/Directory.cpp
+    src/voice/JitterBuffer.cpp
     src/net/Authority.cpp
     src/InputSanity.cpp
     src/PackSeal.cpp
@@ -245,8 +247,19 @@ if(KKE_ENABLE_NET)
     if(KKE_ENABLE_JOLT)
         target_sources(kke_engine PRIVATE src/modules/NetModule.cpp)
     endif()
+    if(KKE_ENABLE_VOICE)
+        target_sources(kke_engine PRIVATE src/voice/VoiceCodec.cpp)
+        target_link_libraries(kke_engine PUBLIC opus)
+        target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_VOICE=1)
+        if(KKE_ENABLE_JOLT)
+            target_sources(kke_engine PRIVATE src/modules/VoiceModule.cpp)
+        endif()
+    else()
+        target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_VOICE=0)
+    endif()
 else()
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_NET=0)
+    target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_VOICE=0)
 endif()
 
 if(ENGINE_ENABLE_LUA)

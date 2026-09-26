@@ -81,6 +81,7 @@ void InputModule::defineCharacterActions(InputMap& m) {
     def("camera.toggle", "First / third person", "Camera");
     def("camera.zoom", "Camera distance", "Camera", ActionType::Axis1D, false);
     def("audio.ping", "Ping surroundings (hear the walls)", "Accessibility");
+    def("voice.talk", "Push to talk (voice chat)", "Voice");
 
     auto dirKey = [&](SDL_Scancode sc, int component, float scale) {
         Binding b = bind("move", key(sc), Trigger::Continuous);
@@ -129,6 +130,7 @@ void InputModule::defineCharacterActions(InputMap& m) {
     m.addBinding(bind("camera.zoom", { SourceKind::MouseWheel, 0, 0, 0 }, Trigger::Continuous));
     m.addBinding(bind("audio.ping", key(SDL_SCANCODE_Q)));
     m.addBinding(bind("audio.ping", pad(SDL_GAMEPAD_BUTTON_DPAD_DOWN)));
+    m.addBinding(bind("voice.talk", key(SDL_SCANCODE_B))); // held while down
 }
 
 SDL_Scancode InputModule::mirrorScancode(SDL_Scancode sc) {

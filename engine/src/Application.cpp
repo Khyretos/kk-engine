@@ -1,4 +1,5 @@
 #include "kke/Application.h"
+#include "kke/EngineSettings.h"
 #include "kke/LogoIntro.h"
 #include "kke/DevTools.h"
 
@@ -58,6 +59,19 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
     }
     m_renderer = std::make_unique<Renderer>(m_window);
     m_renderer->setRenderScale(m_budget.renderScale);
+    {
+        // MSAA is baked into every scene pipeline, so it's chosen here,
+        // before any module creates one: the saved setting (settings.json
+        // next to the executable, as SettingsModule writes it), off on a
+        // software rasteriser (min-spec), KKE_MSAA=n overrides both.
+        EngineSettings saved = loadSettingsFile("settings.json");
+        saved.sanitize();
+        int msaa = m_renderer->device().isSoftwareRasterizer() ? 1 : saved.graphics.msaa;
+        if (const char* env = dev::env("KKE_MSAA"); env && *env) msaa = std::max(1, std::atoi(env));
+        m_renderer->setMsaaSamples(static_cast<uint32_t>(msaa));
+        log::get("Application")->info("MSAA {}x{}", m_renderer->msaaSamples(),
+                                      m_renderer->device().isSoftwareRasterizer() ? " (software rasteriser)" : "");
+    }
     m_lightingBuffer = std::make_unique<LightingBuffer>(m_renderer->device());
 
     // Real shadow mapping — see kke::ShadowMap's own class comment for
@@ -174,7 +188,7 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         vkUpdateDescriptorSets(m_renderer->device().device(), 1, &write, 0, nullptr);
     }
 
-    m_debugUi = std::make_unique<DebugUi>(m_window, m_renderer->device(), m_renderer->renderPass(),
+    m_debugUi = std::make_unique<DebugUi>(m_window, m_renderer->device(), m_renderer->overlayRenderPass(),
                                            m_renderer->swapChainImageCount());
     // Shipping builds start (and stay) with the developer panels hidden.
     m_debugUi->setVisible(dev::kEnabled);

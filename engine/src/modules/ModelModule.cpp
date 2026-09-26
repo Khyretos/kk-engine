@@ -1,4 +1,5 @@
 #include "kke/modules/ModelModule.h"
+#include "kke/DrawOrder.h"
 
 #include "kke/Application.h"
 #include "kke/Log.h"
@@ -492,7 +493,8 @@ bool ModelModule::mightBeVisible(const Instance& inst, const Frustum& f) const {
 // Groups visible, rigid (not skinned, not deformed) instances of the same
 // model, texture and overlay setting. Groups of 2+ are drawn instanced;
 // singles stay on the normal path (no instance buffer for one copy).
-void ModelModule::buildBatches(const Frustum& f, std::vector<Batch>& out, std::vector<InstanceGpu>& data, bool markDrawn) {
+void ModelModule::buildBatches(const Frustum& f, std::vector<Batch>& out, std::vector<InstanceGpu>& data, bool markDrawn,
+                               const glm::vec3* eye) {
     out.clear();
     data.clear();
     if (!m_instancing) return;
@@ -509,10 +511,30 @@ void ModelModule::buildBatches(const Frustum& f, std::vector<Batch>& out, std::v
         if (anySkinned || !mightBeVisible(inst, f)) continue;
         groups[{ inst.model, inst.textureOverride, inst.overlay }].push_back(&inst);
     }
-    for (auto& [key, list] : groups) {
-        if (list.size() < 2) continue;
-        Batch b{ key.model, key.tex, key.overlay, static_cast<uint32_t>(data.size()), static_cast<uint32_t>(list.size()) };
-        for (Instance* inst : list) {
+    std::vector<std::pair<const Key*, std::vector<Instance*>*>> kept;
+    for (auto& [key, list] : groups)
+        if (list.size() >= 2) kept.push_back({ &key, &list });
+    if (eye) {
+        // Nearest first, inside each instanced draw and across draws.
+        std::vector<glm::vec3> nearest(kept.size());
+        for (size_t k = 0; k < kept.size(); ++k) {
+            std::vector<Instance*>& list = *kept[k].second;
+            std::vector<glm::vec3> pos(list.size());
+            for (size_t i = 0; i < list.size(); ++i) pos[i] = glm::vec3(list[i]->transform[3]);
+            std::vector<Instance*> sorted;
+            sorted.reserve(list.size());
+            for (uint32_t i : frontToBackOrder(pos, *eye)) sorted.push_back(list[i]);
+            list.swap(sorted);
+            nearest[k] = glm::vec3(list.front()->transform[3]);
+        }
+        std::vector<std::pair<const Key*, std::vector<Instance*>*>> byDistance;
+        byDistance.reserve(kept.size());
+        for (uint32_t k : frontToBackOrder(nearest, *eye)) byDistance.push_back(kept[k]);
+        kept.swap(byDistance);
+    }
+    for (auto& [key, list] : kept) {
+        Batch b{ key->model, key->tex, key->overlay, static_cast<uint32_t>(data.size()), static_cast<uint32_t>(list->size()) };
+        for (Instance* inst : *list) {
             data.push_back({ inst->transform, glm::vec4(inst->tint, 1.0f) });
             if (markDrawn) inst->batchedFrame = m_viewPass;
         }
@@ -622,7 +644,7 @@ void ModelModule::render(const RenderContext& ctx) {
     if (m_showMeshes) {
         // Instancing (docs/OPTIMIZATION.md #25): 2+ visible copies of the same
         // rigid model (same texture/overlay) are one draw per mesh part.
-        buildBatches(frustum, m_batches, m_instanceData, true);
+        buildBatches(frustum, m_batches, m_instanceData, true, &ctx.cameraPos);
         uploadInstances(pass, ctx.frameIndex, m_instanceData);
         if (!m_batches.empty()) {
             m_instancedPipeline->bind(ctx.cmd);
@@ -654,10 +676,20 @@ void ModelModule::render(const RenderContext& ctx) {
         m_pipeline->bind(ctx.cmd);
         vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(), 0, 4, sets, 0, nullptr);
         VkDescriptorSet boundTexture = ctx.defaultMaterialTextureDescriptorSet;
+        // Single draws nearest first too (early-Z, #37). Deformed parts are
+        // in world space already (identity transform): they sort by their
+        // own origin, i.e. last among close objects, which is harmless.
+        m_singles.clear();
+        std::vector<glm::vec3> singlePos;
         for (auto& [id, inst] : m_instances) {
             if (!inst.visible) continue;
             if (!mightBeVisible(inst, frustum)) { ++m_culled; continue; }
             if (inst.batchedFrame == m_viewPass) continue; // drawn instanced above
+            m_singles.push_back(&inst);
+            singlePos.push_back(glm::vec3(inst.transform[3]));
+        }
+        for (uint32_t idx : frontToBackOrder(singlePos, ctx.cameraPos)) {
+            Instance& inst = *m_singles[idx];
             skinInstance(inst, ctx.frameIndex);
             uploadDeformed(inst, ctx.frameIndex);
             const LoadedModel& lm = *m_models[inst.model];
