@@ -24,10 +24,13 @@ namespace kke {
 class RigidWorld;
 namespace net {
 class WorldMoveCheck;
+class Visibility;
 }
 } // namespace kke
 
 namespace kke::server {
+
+class ServerScripts;
 
 class DedicatedServer {
 public:
@@ -74,6 +77,10 @@ public:
     Leaderboard& leaderboards() { return m_leaderboards; }
     const DirectoryService* directory() const { return m_directory.get(); }
     size_t collisionBodies() const { return m_collisionBodies; }
+#if KKE_ENABLE_LUA
+    ServerScripts* scripts() { return m_scripts.get(); } // the scripts role (null without it)
+#endif
+    RigidWorld* world() { return m_world.get(); }        // physics and scripts roles
     // Where this server keeps data (config().storage); games and future roles (#45) use it.
     storage::Store* store() { return m_store.get(); }
     DirectoryEntry directoryEntry() const; // what it tells directories
@@ -102,6 +109,10 @@ private:
     std::unique_ptr<DirectoryPublisher> m_publisher;
     std::unique_ptr<RigidWorld> m_world;
     std::unique_ptr<net::WorldMoveCheck> m_moveCheck;
+#if KKE_ENABLE_LUA
+    std::unique_ptr<ServerScripts> m_scripts;
+#endif
+    std::unique_ptr<net::Visibility> m_visibility; // fogOfWar
     size_t m_collisionBodies = 0;
     struct Present {
         std::string name;
@@ -112,6 +123,8 @@ private:
     std::map<uint8_t, Present> m_present;
     bool m_backups = false; // on, and the store can make them
     double m_now = 0, m_nextSave = 0, m_nextBackup = 0, m_nextTrack = 0;
+    double m_tickClock = -1; // the scripts role's fixed ticks: time simulated so far
+    uint64_t m_tick = 0;
     bool m_started = false, m_stopRequested = false;
 };
 

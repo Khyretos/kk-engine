@@ -44,6 +44,13 @@ hosting goes out when you do. On a client these objects belong to
 "(host)" in the Scripts panel and go away when you leave. Their `Break`
 hook fires on clients too (with the client's own id for it).
 
+On a dedicated server (`kke_server` with the `scripts` role,
+docs/SERVER_HOSTING.md "Scripts") the same `sv_` and `sh_` scripts run
+headless and replicate the same way; there `net.role()` is `"server"`,
+`net.send` takes a player id to send to one player, and `server.*` adds
+`say`, `kick`, `score` and `top` plus the `PlayerJoin` / `PlayerLeave`
+hooks.
+
 Scripts that aren't `sv_` run on every machine already, so what they
 spawn stays local (each machine makes its own). Other state crosses with
 `net.send`. How it works: docs/NETWORKING.md "Spawned objects" and

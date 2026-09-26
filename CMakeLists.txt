@@ -766,6 +766,7 @@ add_subdirectory(engine)
 # hardware actually has more than one.
 add_subdirectory(tools/model_info)
 add_subdirectory(tools/seal)
+add_subdirectory(tools/license)
 if(KKE_ENABLE_BENCHMARKS)
     add_subdirectory(benchmarks)
 endif()

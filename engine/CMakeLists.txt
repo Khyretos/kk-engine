@@ -53,6 +53,9 @@ set(ENGINE_SOURCES
     src/storage/MemoryStore.cpp
     src/storage/SqliteStore.cpp
     src/net/Authority.cpp
+    src/net/Visibility.cpp
+    src/GameRules.cpp
+    src/License.cpp
     src/InputSanity.cpp
     src/PackSeal.cpp
     src/DevTools.cpp
@@ -237,7 +240,7 @@ endif()
 
 if(KKE_ENABLE_JOLT)
     target_sources(kke_engine PRIVATE src/RigidWorld.cpp src/Locomotion.cpp src/SceneLoader.cpp src/modules/RigidBodyModule.cpp src/modules/PhysicsBridgeModule.cpp
-        src/net/WorldMoveCheck.cpp)
+        src/net/WorldMoveCheck.cpp src/net/LevelSight.cpp)
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_JOLT=1)
     target_link_libraries(kke_engine PUBLIC Jolt)
 else()
@@ -290,6 +293,9 @@ endif()
 
 if(ENGINE_ENABLE_LUA)
     target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/ScriptStore.cpp src/modules/ScriptModule.cpp src/modules/ScriptBindings.cpp src/modules/ScriptReplication.cpp)
+    if(KKE_ENABLE_NET)
+        target_sources(kke_engine PRIVATE src/server/ServerScripts.cpp)
+    endif()
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_LUA=1)
     target_link_libraries(kke_engine PUBLIC lua_lib)
 else()
@@ -335,6 +341,7 @@ target_compile_definitions(kke_engine PRIVATE KKE_BUILD_TYPE="${CMAKE_BUILD_TYPE
 if(WIN32)
     target_link_libraries(kke_engine PUBLIC psapi) # peak memory in benchmark reports
     target_link_libraries(kke_engine PUBLIC bcrypt) # secure random for kke/PackSeal.h key generation
+    target_link_libraries(kke_engine PUBLIC advapi32) # MachineGuid for kke/License.h
 endif()
 
 # Hot CPU loops stay optimized in Debug builds too (same reasoning as

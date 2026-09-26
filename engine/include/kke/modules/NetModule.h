@@ -3,6 +3,8 @@
 #include "kke/Module.h"
 #include "kke/RigidWorld.h"
 #include "kke/net/NetSession.h"
+#include "kke/net/ScriptSpawns.h"
+#include "kke/net/Visibility.h"
 #include "kke/net/WorldMoveCheck.h"
 #include "kke/server/Directory.h"
 
@@ -116,7 +118,7 @@ public:
     // More receivers of the same events, for modules other than the game's
     // own (ScriptModule's net.* takes kScriptEventKind). Each sees every event.
     void addEventListener(std::function<void(const net::GameEventMsg&)> listener) { m_listeners.push_back(std::move(listener)); }
-    static constexpr uint16_t kScriptEventKind = 0x4C00; // Lua net.send (docs/SCRIPTING.md)
+    static constexpr uint16_t kScriptEventKind = script_net::kScriptEvent; // Lua net.send (docs/SCRIPTING.md)
     std::function<void(const glm::vec3&)> onCorrection;
     std::function<void(uint8_t id, bool joined)> onPlayer;
 
@@ -154,6 +156,12 @@ public:
     bool checkMoves = true;
     net::MoveCheckSettings moveCheckSettings;
     size_t refusedMoves() const { return m_server ? m_server->refusedMoves() : 0; }
+
+    // --- fog of war (host; kke/net/Visibility.h, docs/ANTI_CHEAT.md): a
+    // client is only sent the players its player could see (through the
+    // static level) or hear. Off by default; competitive games turn it on.
+    bool fogOfWar = false;
+    net::VisibilitySettings visibilitySettings;
 
     net::LinkConditions simulated; // applied to what this game sends
 
@@ -206,6 +214,7 @@ private:
     std::vector<std::function<void(const net::SpawnMsg&)>> m_spawnListeners;
     std::vector<std::function<void(uint16_t)>> m_despawnListeners;
     std::unique_ptr<net::WorldMoveCheck> m_moveCheck;
+    std::unique_ptr<net::Visibility> m_visibility;
     std::map<uint8_t, double> m_moveLogAt;      // player -> when a refusal was last logged
     PhysicsModule* m_physics = nullptr;         // FEMFX, for breakables (null without it)
     std::vector<std::function<void(const net::GameEventMsg&)>> m_listeners;
