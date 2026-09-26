@@ -1,0 +1,3 @@
+// Windows executable icon (Explorer, taskbar before the window opens).
+// Added to every game by engine/CMakeLists.txt on Windows builds.
+IDI_ICON1 ICON "kk-engine.ico"

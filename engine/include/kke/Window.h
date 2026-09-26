@@ -68,6 +68,10 @@ public:
     // any game with menus (Esc means "back"). Games turn this off.
     void setQuitOnEscape(bool quit) { m_quitOnEscape = quit; }
     bool isFullscreen() const;
+    // Window/taskbar icon from PNG bytes. Every window starts with the
+    // engine's own (the Kreative Kompas logo); games may replace it.
+    // False where the platform has no per-window icon.
+    bool setIconFromPng(const unsigned char* png, size_t size);
 
 private:
     SDL_Window* m_window = nullptr;

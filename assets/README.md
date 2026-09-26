@@ -1,7 +1,14 @@
-Drop your engine icon here as `icon.png` (and `icon.ico` / `icon.icns` if
-you have platform-specific versions for windowing/taskbar icons later).
-Nothing in the build currently references this folder automatically — see
-the main README's "Branding" section for where to wire it in per platform.
+## Branding — `assets/branding/`
+
+The Kreative Kompas logo and banner (Kreative Kompas's own, committed):
+
+- `kreative-kompas-logo.svg` — the source of truth. The startup intro's 3D
+  logo is built from it: run `tools/branding/make_logo_outlines.py` after
+  changing it (regenerates `engine/src/LogoOutlines.inc`).
+- `logo-128.png` — embedded into the engine as every window's icon
+  (`engine/CMakeLists.txt`); `kk-engine.ico` + `kk-engine.rc` give the
+  Windows `.exe` files the same icon.
+- `logo-512.png`, `logo-1024.png`, `banner.png` — README and store art.
 
 ## Licensed art packs (Synty etc.) — `assets/synty/`
 

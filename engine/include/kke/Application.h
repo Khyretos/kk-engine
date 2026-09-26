@@ -166,6 +166,12 @@ public:
 
     void run();
 
+    // The Kreative Kompas intro (kke::LogoIntro) that run() plays before
+    // any module's init(). On by default; KKE_SKIP_INTRO=1 skips it for
+    // one run whatever this says.
+    void setIntroEnabled(bool enabled) { m_introEnabled = enabled; }
+    bool introEnabled() const { return m_introEnabled; }
+
     Window& window() { return m_window; }
     Renderer& renderer() { return *m_renderer; }
     VulkanDevice& device() { return m_renderer->device(); }
@@ -265,6 +271,7 @@ public:
 
 private:
     void resolveInitOrder();
+    void playIntro();
     void safeInvoke(Module* m, const char* stage, const std::function<void()>& fn);
 
     Window m_window;
@@ -310,6 +317,7 @@ private:
     std::unordered_map<std::type_index, Module*> m_moduleByType;
 
     bool m_paused = false;
+    bool m_introEnabled = true;
     bool m_uiCapturesMouse = false;
     float m_frameRateLimit = 0.0f;
     ResourceBudget m_budget;

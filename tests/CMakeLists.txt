@@ -30,6 +30,7 @@ add_executable(kke_tests
     test_input_devices.cpp
     test_floating_bodies.cpp
     test_audio.cpp
+    test_logo_mesh.cpp
 )
 target_link_libraries(kke_tests PRIVATE kke_engine GTest::gtest_main)
 if(KKE_ENABLE_JOLT)

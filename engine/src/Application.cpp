@@ -1,4 +1,5 @@
 #include "kke/Application.h"
+#include "kke/LogoIntro.h"
 
 #include <cstdlib>
 #include "kke/Log.h"
@@ -306,8 +307,51 @@ void Application::resolveInitOrder() {
     }
 }
 
+void Application::playIntro() {
+    if (const char* skip = std::getenv("KKE_SKIP_INTRO"); skip && *skip && *skip != '0') return;
+    std::unique_ptr<LogoIntro> intro;
+    try {
+        intro = std::make_unique<LogoIntro>(*this);
+    } catch (const std::exception& e) {
+        // A missing shader or a driver quirk must never stop the game itself.
+        log::get("Intro")->error("intro skipped: {}", e.what());
+        return;
+    }
+    // KKE_INTRO_AT=<seconds>: freeze the intro at that moment (screenshots).
+    float freezeAt = -1.0f;
+    if (const char* at = std::getenv("KKE_INTRO_AT"); at && *at) freezeAt = static_cast<float>(std::atof(at));
+
+    auto last = std::chrono::high_resolution_clock::now();
+    bool playing = true, skipped = false;
+    while (playing) {
+        if (!m_window.pollEvents([&](const SDL_Event& e) {
+                if ((e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat) || e.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+                    e.type == SDL_EVENT_FINGER_DOWN)
+                    skipped = true;
+            }))
+            break; // closed during the intro: run() sees the same close and ends
+        auto now = std::chrono::high_resolution_clock::now();
+        const float dt = std::chrono::duration<float>(now - last).count();
+        last = now;
+        if (skipped) intro->skip();
+        if (freezeAt >= 0.0f) intro->setTime(std::min(freezeAt, LogoIntro::kDuration));
+        else playing = intro->update(dt);
+        // Drawn even on the last pass, so the finished logo stays on
+        // screen while the modules below load.
+        if (m_renderer->beginFrame()) {
+            m_renderer->beginRenderPass();
+            intro->render(m_renderer->currentCommandBuffer());
+            m_renderer->endFrame();
+        }
+        if (m_frameRateLimit > 0.0f)
+            std::this_thread::sleep_until(now + std::chrono::duration<double>(1.0 / m_frameRateLimit));
+    }
+    vkDeviceWaitIdle(device().device());
+}
+
 void Application::run() {
     resolveInitOrder();
+    if (m_introEnabled) playIntro();
     for (Module* m : m_initOrder) {
         // A module that throws during init() is disabled the same as any
         // other stage — see safeInvoke(). One real caveat worth stating:

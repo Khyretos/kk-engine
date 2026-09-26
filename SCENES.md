@@ -15,6 +15,17 @@ same scene.
 - Tests: `SceneTrails.*` in `tests/test_locomotion.cpp` run both trails
   headless. They skip when the packs are missing (CI).
 
+## Getting the packs
+
+`tools/fetch_assets.sh` downloads packs from the asset share and extracts
+them into `assets/synty/` (`--list` shows what's there; one zip at a time,
+deleted after extracting; `.unitypackage` files are unpacked to their real
+paths). Example: `tools/fetch_assets.sh POLYGON_Town ANIMATION_`.
+
+The startup intro (kke::LogoIntro) uses no packs: its logo is built from
+`assets/branding/kreative-kompas-logo.svg`, which is Kreative Kompas's own
+and committed.
+
 ## Reproducing a scene
 
 1. Put the pack's source folder in `assets/synty/` under its own name (a

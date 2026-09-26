@@ -1,9 +1,16 @@
 #include "kke/Window.h"
 #include "kke/VulkanCheck.h"
 
+#include <stb_image.h>
+
+#include <cstddef>
 #include <stdexcept>
 
 namespace kke {
+
+// assets/branding/logo-128.png, embedded by engine/CMakeLists.txt.
+extern const unsigned char kEngineIconPng[];
+extern const std::size_t kEngineIconPngSize;
 
 Window::Window(const std::string& title, uint32_t width, uint32_t height) {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -19,6 +26,21 @@ Window::Window(const std::string& title, uint32_t width, uint32_t height) {
     if (!m_window) {
         throw std::runtime_error(std::string("SDL_CreateWindow failed: ") + SDL_GetError());
     }
+    setIconFromPng(kEngineIconPng, kEngineIconPngSize);
+}
+
+bool Window::setIconFromPng(const unsigned char* png, size_t size) {
+    int w = 0, h = 0, channels = 0;
+    stbi_uc* pixels = stbi_load_from_memory(png, static_cast<int>(size), &w, &h, &channels, 4);
+    if (!pixels) return false;
+    SDL_Surface* surface = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_RGBA32, pixels, w * 4);
+    // Some platforms (Wayland without the xdg-toplevel-icon protocol,
+    // macOS, which takes the icon from the app bundle) have no per-window
+    // icon; SDL reports that as a failure, which is harmless here.
+    const bool ok = surface && SDL_SetWindowIcon(m_window, surface);
+    if (surface) SDL_DestroySurface(surface);
+    stbi_image_free(pixels);
+    return ok;
 }
 
 Window::~Window() {

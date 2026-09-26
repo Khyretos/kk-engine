@@ -10,6 +10,8 @@ set(ENGINE_SOURCES
     src/DebugUi.cpp
     src/ShaderUtils.cpp
     src/Application.cpp
+    src/LogoMesh.cpp
+    src/LogoIntro.cpp
     src/RmlVulkanRenderInterface.cpp
     src/GameManifest.cpp
     src/EngineSettings.cpp
@@ -79,6 +81,8 @@ set(ENGINE_HEADERS
     include/kke/DebugUi.h
     include/kke/ShaderUtils.h
     include/kke/Module.h
+    include/kke/LogoMesh.h
+    include/kke/LogoIntro.h
     include/kke/EngineError.h
     include/kke/Capabilities.h
     include/kke/Application.h
@@ -125,6 +129,33 @@ set(ENGINE_HEADERS
 )
 
 add_library(kke_engine STATIC ${ENGINE_SOURCES} ${ENGINE_HEADERS})
+
+# The Kreative Kompas logo as the window/taskbar icon: the PNG is embedded
+# into the engine at configure time (re-run automatically when it changes),
+# so every game gets it without shipping or locating a file.
+set(KKE_ICON_PNG ${CMAKE_SOURCE_DIR}/assets/branding/logo-128.png)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${KKE_ICON_PNG})
+file(READ ${KKE_ICON_PNG} KKE_ICON_HEX HEX)
+string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," KKE_ICON_BYTES "${KKE_ICON_HEX}")
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/generated/EngineIcon.cpp
+    "// Generated from assets/branding/logo-128.png by engine/CMakeLists.txt.\n"
+    "#include <cstddef>\n"
+    "namespace kke { extern const unsigned char kEngineIconPng[] = { ${KKE_ICON_BYTES} };\n"
+    "extern const std::size_t kEngineIconPngSize = sizeof(kEngineIconPng); }\n")
+target_sources(kke_engine PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated/EngineIcon.cpp)
+# On Windows the .exe files carry the icon too (INTERFACE: compiled into
+# each game that links the engine).
+if(WIN32)
+    enable_language(RC)
+    target_sources(kke_engine INTERFACE ${CMAKE_SOURCE_DIR}/assets/branding/kk-engine.rc)
+endif()
+
+# The startup intro (kke::LogoIntro) runs in every game, so its shaders and
+# the title font ship with the engine rather than with each game.
+foreach(shader logo.vert logo.frag logo_backdrop.vert logo_backdrop.frag logo_text.vert logo_text.frag)
+    engine_add_shader(kke_engine ${CMAKE_SOURCE_DIR}/shaders/${shader})
+endforeach()
+engine_copy_runtime_file(kke_engine ${CMAKE_SOURCE_DIR}/assets/fonts/NotoSans-Bold.ttf assets/fonts/NotoSans-Bold.ttf)
 
 target_include_directories(kke_engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include

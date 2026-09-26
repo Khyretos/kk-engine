@@ -1,4 +1,8 @@
-# Kreative Kompas Engine (KKE)
+<p align="center">
+  <img src="assets/branding/banner.png" alt="Kreative Kompas Engine: direct your creativity" width="100%">
+</p>
+
+# <img src="assets/branding/logo-128.png" alt="" height="40" align="top"> Kreative Kompas Engine (KKE)
 
 A bare-bones, modular Vulkan game engine built from "lego pieces" — each
 library does one job, and every gameplay/rendering system beyond the core
@@ -13,11 +17,18 @@ special case baked into the engine.
 > personally write every line of — that's true regardless of who or what
 > wrote it, but it's especially worth saying plainly here.
 
-**Icon / branding:** drop your icon file into `assets/` (see
-`assets/README.md`). Nothing in the build wires it up automatically yet —
-that's platform-specific (window/taskbar icon via SDL3 on Linux/Windows,
-an `.icns` + bundle `Info.plist` on macOS) and hasn't been done. Flagging
-it as a known gap rather than silently skipping it.
+**Branding:** every game opens with the Kreative Kompas intro: the logo,
+extruded into a bevelled 3D emblem, assembles itself (the ring's arcs fly
+in, the Ks swing into place, the crown drops, the needle spins and settles
+on north), a light sweep crosses it and the name fades in. It lasts 4.5
+seconds, any key or click skips it, and its last frame stays up while the
+game loads (`kke::LogoIntro`, played by `Application::run()` before module
+init). Games turn it off with `app.setIntroEnabled(false)`; `KKE_SKIP_INTRO=1`
+skips it for one run (benchmarks, automated tests) and `KKE_INTRO_AT=3.2`
+freezes it at that second (screenshots). The logo is also every window's
+icon (Linux/Windows via SDL3) and the Windows `.exe` icon. Sources and how
+to regenerate the 3D outlines: `assets/README.md` → Branding. Not done yet:
+a macOS `.icns` + bundle `Info.plist`.
 
 **For AI agents working on this codebase** (this one, a fork, a future
 model): read `AI_GUIDE.md` first. It's a short, model-agnostic orientation
