@@ -7,6 +7,7 @@ Design notes for Kreative Kompas Engine, one file per system. Start with the
 | Document | Contents |
 |---|---|
 | [BUILDING.md](BUILDING.md) | System packages, build presets, running each demo, troubleshooting |
+| [RELEASES.md](RELEASES.md) | Downloadable Windows and Linux builds: how a tag becomes a release |
 | [HISTORY.md](HISTORY.md) | The development log: the original README, kept whole |
 | [AUDIO.md](AUDIO.md) | The audio engine: mixer, 3D sound, occlusion, impact synthesis, accessibility |
 | [INPUT.md](INPUT.md) | Rebindable actions, devices, triggers and chords |

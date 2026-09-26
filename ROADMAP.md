@@ -34,7 +34,7 @@ limitations. 🔴 Not started / stub.
 | Build system, both `KKE_ENABLE_FEMFX` on/off | 🟢 | Both configurations verified to build clean and run clean every session this file's history covers. |
 | Test suite | 🟢 | 40 GoogleTest unit tests, 85% coverage floor enforced for pure-logic code (`GameManifest`, `MarketplaceIndex`, `RmlTextSafety`). GPU/Vulkan code is verified by build-and-run instead (see docs/HISTORY.md "Test suite & coverage" for why the split). |
 | Icon / branding | 🟡 | Kreative Kompas logo is the window icon (SDL3, embedded) and the Windows `.exe` icon (`.rc`, not yet built on Windows); every game opens with the animated 3D logo intro (`kke::LogoIntro`, skippable, `KKE_SKIP_INTRO=1`). Missing: macOS `.icns` + bundle. |
-| Shader path resolution | 🟡 | Relative to working directory, not executable path — fine for `./build/bin/kke_demo` run from `build/bin/`, needs `SDL_GetBasePath()` before shipping anywhere else. |
+| Shader path resolution | 🟢 | Games switch to the executable's folder when the working directory has no `shaders/` (`enterRuntimeDirectory`, docs/RELEASES.md), so packaged builds start from anywhere. |
 
 ## Rendering (3D pipeline)
 

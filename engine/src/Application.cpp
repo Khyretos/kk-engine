@@ -8,6 +8,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <chrono>
+#include <filesystem>
+#include <system_error>
 #include <thread>
 #include <queue>
 #include <stdexcept>
@@ -15,9 +17,39 @@
 
 namespace kke {
 
+namespace {
+
+// Shaders, fonts and game manifests are opened by relative path
+// ("shaders/x.spv"), i.e. relative to the working directory. That holds
+// when a game is started from its own folder (build/bin, or a double-click
+// on Windows), but not from a desktop launcher or `./build/bin/kke_demo`
+// in the repo root. When the working directory has no shaders/ folder
+// and the executable's own folder does, switch to the executable's folder
+// (docs/RELEASES.md). Returns what happened, for the log.
+std::string enterRuntimeDirectory() {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    if (fs::is_directory("shaders", ec)) return {};
+    const char* base = SDL_GetBasePath();
+    if (!base) return std::string("no shaders/ folder here and the executable's folder is unknown: ") + SDL_GetError();
+    const fs::path exeDir(reinterpret_cast<const char8_t*>(base));
+    if (!fs::is_directory(exeDir / "shaders", ec)) return "no shaders/ folder here or next to the executable (" + std::string(base) + ")";
+    fs::current_path(exeDir, ec);
+    if (ec) return "could not switch to the executable's folder " + std::string(base) + ": " + ec.message();
+    return "working directory set to the executable's folder " + std::string(base);
+}
+
+// Filled before the logger exists (see the constructor), logged after.
+std::string g_runtimeDirNote;
+
+} // namespace
+
 Application::Application(const std::string& title, uint32_t width, uint32_t height, float fixedUpdateHz)
-    : m_window(title, width, height), m_fixedDt(1.0f / fixedUpdateHz) {
+    // The working directory is fixed before the window (the first member)
+    // exists, so every relative path the engine opens afterwards resolves.
+    : m_window((g_runtimeDirNote = enterRuntimeDirectory(), title), width, height), m_fixedDt(1.0f / fixedUpdateHz) {
     log::init(title);
+    if (!g_runtimeDirNote.empty()) log::get("Application")->info("{}", g_runtimeDirNote);
     {
         EngineSettings defaults;
         if (const char* all = std::getenv("KKE_USE_EVERYTHING"); all && *all == '1') defaults.performance.useEverything = true;

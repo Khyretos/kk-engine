@@ -48,6 +48,9 @@ What is solid, partial or not started yet, system by system:
 
 ## Quick start
 
+To just try the demos, download a Windows or Linux build from
+[Releases](https://github.com/Khyretos/kk-engine/releases), unpack it and run
+`kke_demo` ([docs/RELEASES.md](docs/RELEASES.md)). To build from source on
 Linux (Debian/Ubuntu shown; Arch and troubleshooting are in
 [docs/BUILDING.md](docs/BUILDING.md)):
 
@@ -144,7 +147,8 @@ cmake --build build --target kke_tests && ./build/bin/kke_tests
 ```
 
 CI builds on every push with warnings treated as errors and runs the unit
-test suite plus a headless smoke test on lavapipe.
+test suite plus a headless smoke test on lavapipe. Pushing a `v*` tag builds,
+tests and publishes Windows and Linux downloads ([docs/RELEASES.md](docs/RELEASES.md)).
 
 ## Support
 
