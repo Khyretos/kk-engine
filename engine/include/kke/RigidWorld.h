@@ -4,6 +4,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -119,6 +120,11 @@ public:
 
     // Closest hit, front or back face; the normal faces the ray's origin.
     RayHit raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance) const;
+    // The same, through every body `accept` says no to (e.g. only the
+    // static level: a network host checking a player's path,
+    // kke/net/WorldMoveCheck.h). Called with the body and its motion.
+    RayHit raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance,
+                   const std::function<bool(BodyId, Motion)>& accept) const;
 
     // A body as an oriented box (exact for boxes, the shape's bounds for
     // spheres, capsules and hulls): what the FEMFX bridge mirrors.

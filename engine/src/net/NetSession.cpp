@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 
 namespace kke::net {
 
@@ -173,6 +174,48 @@ void NetServer::relayEvent(const GameEventMsg& e) {
     broadcastReliable(encode(MessageType::GameEvent, copy), e.fromPlayer);
 }
 
+void NetServer::spawn(const SpawnMsg& m, bool persistent) {
+    SpawnMsg copy = m;
+    if (copy.desc.size() > kMaxSpawnBytes) copy.desc.resize(kMaxSpawnBytes);
+    broadcastReliable(encode(MessageType::Spawn, copy), -1);
+    if (persistent) m_spawns[copy.id] = std::move(copy);
+    else m_spawns.erase(copy.id);
+}
+
+void NetServer::despawn(uint16_t id) {
+    m_spawns.erase(id);
+    m_breaks.erase(id);
+    DespawnMsg m{ id };
+    broadcastReliable(encode(MessageType::Despawn, m), -1);
+}
+
+// One Break message per kMaxBordersPerBreak borders; to one peer, or
+// (kNoPeer) to every client.
+void NetServer::sendBreaks(PeerId peer, uint16_t id, uint32_t seed, const std::vector<std::pair<uint16_t, uint16_t>>& borders, int exceptPlayer) {
+    for (size_t first = 0; first < borders.size(); first += kMaxBordersPerBreak) {
+        BreakMsg m{ id, seed, {} };
+        const size_t last = std::min(borders.size(), first + kMaxBordersPerBreak);
+        m.borders.assign(borders.begin() + static_cast<std::ptrdiff_t>(first), borders.begin() + static_cast<std::ptrdiff_t>(last));
+        const std::vector<uint8_t> data = encode(MessageType::Break, m);
+        if (peer != kNoPeer) m_transport.send(peer, Channel::Reliable, data);
+        else broadcastReliable(data, exceptPlayer);
+    }
+}
+
+void NetServer::breakBorders(uint16_t id, uint32_t seed, const std::vector<std::pair<uint16_t, uint16_t>>& borders) {
+    BreakSet& set = m_breaks[id];
+    if (set.seed != seed) set = BreakSet{ seed, {} };
+    std::vector<std::pair<uint16_t, uint16_t>> fresh;
+    for (auto [a, b] : borders) {
+        if (a == b) continue; // not a border
+        if (a > b) std::swap(a, b);
+        if (set.borders.insert({ a, b }).second) fresh.push_back({ a, b });
+    }
+    if (!fresh.empty()) sendBreaks(kNoPeer, id, seed, fresh, -1);
+}
+
+void NetServer::forgetBreaks(uint16_t id) { m_breaks.erase(id); }
+
 void NetServer::handleHello(Client& c, const HelloMsg& m) {
     std::string reason;
     if (c.id != 0) return; // a second Hello: ignore
@@ -197,6 +240,11 @@ void NetServer::handleHello(Client& c, const HelloMsg& m) {
         if (o.id && o.id != id) sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::PlayerInfo, PlayerInfoMsg{ o.id, true, o.name, o.character });
     PlayerInfoMsg joined{ id, true, c.name, c.character };
     broadcastReliable(encode(MessageType::PlayerInfo, joined), id);
+    // What was made and broken before they came (reliable and ordered:
+    // a spawn arrives before the breaks of the breakable it makes).
+    for (auto& [sid, spawnMsg] : m_spawns) sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::Spawn, spawnMsg);
+    for (const auto& [bid, set] : m_breaks)
+        sendBreaks(c.peer, bid, set.seed, std::vector<std::pair<uint16_t, uint16_t>>(set.borders.begin(), set.borders.end()), -1);
     // A newcomer gets every body soon: high starting priority.
     for (const NetBodyState& b : m_bodies) c.priority[b.id] = 10.0f;
     if (onPlayer) onPlayer(id, true);
@@ -216,13 +264,10 @@ void NetServer::handleState(Client& c, const PlayerStateMsg& m) {
         const bool teleport = (s.flags & kPlayerTeleported) != 0 && m_now - c.lastTeleport >= limits.teleportCooldown;
         const bool ok = teleport || (horizontal <= limits.horizontalSpeed * dt + limits.slack &&
                                      d.y <= limits.riseSpeed * dt + limits.slack && -d.y <= limits.fallSpeed * dt + limits.slack);
-        if (!ok) {
-            if (m_now - c.lastCorrection > 0.5) {
-                sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::Correction, CorrectionMsg{ c.accepted.position });
-                c.lastCorrection = m_now;
-                ++m_corrections;
-            }
-            return;
+        if (!ok) return correct(c);
+        if (!teleport && checkMove && !checkMove(c.id, c.accepted, s, dt)) {
+            ++m_refusedMoves;
+            return correct(c);
         }
         if (teleport) c.lastTeleport = m_now;
     }
@@ -232,6 +277,15 @@ void NetServer::handleState(Client& c, const PlayerStateMsg& m) {
     c.acceptedTimeMs = m.timeMs;
     c.acceptedAt = m_now;
     c.hasState = true;
+}
+
+// Back to the last move that passed (at most twice a second: the states
+// already on their way from before it arrives are refused too).
+void NetServer::correct(Client& c) {
+    if (m_now - c.lastCorrection <= 0.5) return;
+    sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::Correction, CorrectionMsg{ c.accepted.position });
+    c.lastCorrection = m_now;
+    ++m_corrections;
 }
 
 void NetServer::receive(Client& c, const NetEvent& e) {
@@ -453,6 +507,22 @@ void NetClient::receive(const NetEvent& e) {
         if (auto m = decode<GameEventMsg>(*type, d, n)) {
             if (m->kind == kEventBodiesReset) m_bodies.clear();
             else if (onEvent) onEvent(*m);
+        } else ++m_badPackets;
+        break;
+    case MessageType::Spawn:
+        if (auto m = decode<SpawnMsg>(*type, d, n); m && e.channel == Channel::Reliable) {
+            if (onSpawn) onSpawn(*m);
+        } else ++m_badPackets;
+        break;
+    case MessageType::Despawn:
+        if (auto m = decode<DespawnMsg>(*type, d, n); m && e.channel == Channel::Reliable) {
+            m_bodies.erase(m->id);
+            if (onDespawn) onDespawn(m->id);
+        } else ++m_badPackets;
+        break;
+    case MessageType::Break:
+        if (auto m = decode<BreakMsg>(*type, d, n); m && e.channel == Channel::Reliable) {
+            if (onBreak) onBreak(*m);
         } else ++m_badPackets;
         break;
     case MessageType::Snapshot:

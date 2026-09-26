@@ -87,3 +87,36 @@ TEST(BreakGraph, BordersToOtherBodiesAreIgnored) {
         }
     EXPECT_EQ(g.brokenBorderCount(), 0u);
 }
+
+// Multiplayer (docs/NETWORKING.md "Breakables"): a host's broken borders,
+// applied to a second copy that never saw a stress, give the same pieces.
+TEST(BreakGraph, AFollowerGivenTheHostsBordersBreaksTheSame) {
+    std::vector<uint32_t> chunk;
+    kke::TetMeshData m = bar(chunk);
+    kke::BreakGraph host(m, chunk, {}), client(m, chunk, {});
+    host.arm(100.0f);
+    std::vector<uint32_t> tets(host.tetCount());
+    for (uint32_t t = 0; t < tets.size(); ++t) tets[t] = t;
+    for (uint32_t t : tets)
+        if (chunk[t] == 2 && host.isBorderTet(t)) host.report(t, 500.0f, all); // the 1|2 border
+    const auto borders = host.brokenBorders();
+    ASSERT_EQ(borders.size(), 1u);
+    EXPECT_EQ(borders[0], std::make_pair(1u, 2u));
+
+    for (const auto& [a, b] : borders) EXPECT_TRUE(client.breakBorder(b, a)); // either order
+    EXPECT_FALSE(client.breakBorder(1, 2)) << "already broken";
+    EXPECT_EQ(client.brokenBorders(), borders);
+    EXPECT_EQ(client.groups(tets, all), host.groups(tets, all));
+}
+
+TEST(BreakGraph, BordersThatDontExistCantBeBroken) {
+    std::vector<uint32_t> chunk;
+    kke::TetMeshData m = bar(chunk);
+    kke::BreakGraph g(m, chunk, {});
+    EXPECT_FALSE(g.breakBorder(0, 2)) << "pieces 0 and 2 don't touch";
+    EXPECT_FALSE(g.breakBorder(1, 1));
+    EXPECT_FALSE(g.breakBorder(7, 9000)) << "no such pieces (a message from a stranger)";
+    EXPECT_EQ(g.brokenBorderCount(), 0u);
+    EXPECT_TRUE(g.breakBorder(0, 1));
+    EXPECT_EQ(g.brokenBorderCount(), 1u);
+}

@@ -322,7 +322,24 @@ public:
     // walls/panes. armSeconds > 0: settle, then arm (see TetSpawnOptions).
     ObjectHandle spawnPatternedBox(const glm::ivec3& cells, const glm::vec3& size, const glm::vec3& position, const Material& material,
                                    int pattern, float chunkSize, int cellsPerCluster, const glm::vec3& velocity, float armSeconds = 0.0f,
-                                   const glm::vec3* impactPoint = nullptr);
+                                   const glm::vec3* impactPoint = nullptr, uint32_t seed = 0);
+    // (`seed` 0 = from the world seed and the handle, as described below;
+    // else exactly this one: a network client rebuilding the host's.)
+
+    // ---- Multiplayer (kke::NetModule, docs/NETWORKING.md "Breakables")
+    // The host breaks a breakable from its stresses and sends which
+    // borders broke; a client's copy is a "follower": it never breaks on
+    // its own, only along the borders applyBrokenBorders() is given, so
+    // both end up with the same pieces (the debris then flies its own way
+    // on each machine: FEMFX isn't deterministic across machines).
+    uint32_t breakableSeed(ObjectHandle handle) const;    // the fracture seed it was baked with; 0 = not a breakable
+    size_t brokenBorderCount(ObjectHandle handle) const;  // cheap: poll it, fetch brokenBorders() when it changes
+    std::vector<std::pair<uint32_t, uint32_t>> brokenBorders(ObjectHandle handle) const; // (piece, piece), see kke::BreakGraph
+    void setBreakableFollower(ObjectHandle handle, bool follow);
+    // Breaks these borders now, splitting every part that came apart.
+    // Pairs that aren't borders of this object are ignored. Returns how
+    // many borders were newly broken.
+    size_t applyBrokenBorders(ObjectHandle handle, const std::vector<std::pair<uint32_t, uint32_t>>& borders);
 
     // The world's fracture seed (see kke::fractureSeed): every breakable
     // this module builds mixes it with its own handle, so each object
@@ -565,6 +582,8 @@ private:
         bool armPending = false;
         uint32_t armAge = 0, armMaxTicks = 0;
         uint32_t breaks = 0;                              // split events so far
+        uint32_t seed = 0;                                // fracture seed (spawnPatternedBox), for multiplayer
+        bool follower = false;                            // see setBreakableFollower()
     };
     std::unordered_map<ObjectHandle, Breakable> m_breakables;
     // TetSpawnOptions::interior, or worked out from its texture (invalid = none).
