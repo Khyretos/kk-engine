@@ -6,7 +6,9 @@
 #include <algorithm>
 #include <cctype>
 #include <fstream>
+#include <mutex>
 #include <regex>
+#include <set>
 #include <sstream>
 
 namespace kke::datafile {
@@ -53,7 +55,14 @@ json plainScalar(const std::string& s) {
     return s;
 }
 
-json toJson(const YAML::Node& node) {
+constexpr size_t kMaxValues = 1'000'000; // after aliases are expanded
+constexpr int kMaxDepth = 256;
+
+// Aliases share nodes, so a small file can expand into billions of values:
+// `budget` counts every value converted.
+json toJson(const YAML::Node& node, size_t& budget, int depth = 0) {
+    if (++budget > kMaxValues) throw std::runtime_error("too much data (more than a million values once aliases are expanded)");
+    if (depth > kMaxDepth) throw std::runtime_error("nested more than " + std::to_string(kMaxDepth) + " levels deep");
     switch (node.Type()) {
     case YAML::NodeType::Null:
     case YAML::NodeType::Undefined:
@@ -64,14 +73,14 @@ json toJson(const YAML::Node& node) {
         return plainScalar(node.Scalar());
     case YAML::NodeType::Sequence: {
         json a = json::array();
-        for (const YAML::Node& e : node) a.push_back(toJson(e));
+        for (const YAML::Node& e : node) a.push_back(toJson(e, budget, depth + 1));
         return a;
     }
     case YAML::NodeType::Map: {
         json o = json::object();
         for (const auto& kv : node) {
             if (!kv.first.IsScalar()) throw std::runtime_error("keys must be plain text");
-            o[kv.first.Scalar()] = toJson(kv.second);
+            o[kv.first.Scalar()] = toJson(kv.second, budget, depth + 1);
         }
         return o;
     }
@@ -116,6 +125,47 @@ fs::file_time_type modified(const fs::path& file) {
     return ec ? fs::file_time_type::min() : t;
 }
 
+size_t newestOf(const std::vector<fs::path>& files) {
+    // The newest file wins; on a tie, the earlier of .json, .yml, .yaml.
+    size_t newest = 0;
+    for (size_t i = 1; i < files.size(); ++i)
+        if (modified(files[i]) > modified(files[newest])) newest = i;
+    return newest;
+}
+
+// A conflict is logged once per pair of file versions, however often the
+// file is read (settings and input maps are re-read while playing).
+void warnOnce(const std::string& key, const std::string& message) {
+    static std::mutex mutex;
+    static std::set<std::string> warned;
+    {
+        std::lock_guard lock(mutex);
+        if (!warned.insert(key).second) return;
+    }
+    log::get("Data")->warn("{}", message);
+}
+
+std::string versionKey(const std::vector<fs::path>& files) {
+    std::string key;
+    for (const fs::path& f : files) key += f.string() + "@" + std::to_string(modified(f).time_since_epoch().count()) + "|";
+    return key;
+}
+
+bool readWhole(const fs::path& file, std::string& text) {
+    std::ifstream f(file, std::ios::binary);
+    if (!f) return false;
+    std::stringstream ss;
+    ss << f.rdbuf();
+    if (f.bad()) return false;
+    text = ss.str();
+    return true;
+}
+
+bool startsLikeJson(const std::string& text) {
+    const size_t i = text.find_first_not_of(" \t\r\n");
+    return i != std::string::npos && (text[i] == '{' || text[i] == '[');
+}
+
 } // namespace
 
 std::optional<Format> formatOf(const fs::path& file) {
@@ -127,8 +177,9 @@ std::optional<Format> formatOf(const fs::path& file) {
 
 bool parse(const std::string& text, Format format, json& out, std::string* error) {
     try {
-        if (format == Format::Json) out = json::parse(text);
-        else out = toJson(YAML::Load(text));
+        size_t budget = 0;
+        if (format == Format::Json) out = json::parse(text, nullptr, true, /*ignore_comments=*/true);
+        else out = toJson(YAML::Load(text), budget);
         return true;
     } catch (const json::exception& e) {
         fail(error, std::string("invalid JSON: ") + e.what());
@@ -217,10 +268,7 @@ bool load(const fs::path& folder, const std::string& stem, Loaded& out, std::str
         fail(error, "no " + stem + ".json or " + stem + ".yml in " + folder.string());
         return false;
     }
-    // The newest file wins; on a tie, the earlier of .json, .yml, .yaml.
-    size_t newest = 0;
-    for (size_t i = 1; i < files.size(); ++i)
-        if (modified(files[i]) > modified(files[newest])) newest = i;
+    const size_t newest = newestOf(files);
     Loaded result;
     result.file = files[newest];
     if (!loadFile(result.file, result.data, error)) return false;
@@ -236,7 +284,7 @@ bool load(const fs::path& folder, const std::string& stem, Loaded& out, std::str
         for (const std::string& d : differing) names += (names.empty() ? "" : " and ") + d;
         result.warning = result.file.filename().string() + " and " + names + " in " + folder.string() + " differ: using " +
                          result.file.filename().string() + ", the most recently changed. Delete the other one to silence this.";
-        log::get("Data")->warn("{}", result.warning);
+        warnOnce(versionKey(files), result.warning);
     }
     out = std::move(result);
     return true;
@@ -245,10 +293,7 @@ bool load(const fs::path& folder, const std::string& stem, Loaded& out, std::str
 fs::path saveTarget(const fs::path& folder, const std::string& stem) {
     const std::vector<fs::path> files = variants(folder, stem);
     if (files.empty()) return folder / (stem + ".json");
-    size_t newest = 0;
-    for (size_t i = 1; i < files.size(); ++i)
-        if (modified(files[i]) > modified(files[newest])) newest = i;
-    return files[newest];
+    return files[newestOf(files)];
 }
 
 std::string text(const json& object, const char* key, const std::string& fallback) {
@@ -256,6 +301,83 @@ std::string text(const json& object, const char* key, const std::string& fallbac
     const json& v = object[key];
     if (v.is_number()) return v.dump();
     return v.get<std::string>(); // throws json::type_error for anything else, as value() would
+}
+
+// ---- By path
+
+bool parseAny(const std::string& text, json& out, std::string* error) {
+    std::string jsonError, yamlError;
+    if (parse(text, Format::Json, out, &jsonError)) return true;
+    if (parse(text, Format::Yaml, out, &yamlError)) return true;
+    fail(error, startsLikeJson(text) ? jsonError : yamlError);
+    return false;
+}
+
+fs::path resolve(const fs::path& file) {
+    if (!formatOf(file)) return file;
+    const std::vector<fs::path> files = variants(file.parent_path(), file.stem().string());
+    if (files.empty()) return file;
+    const size_t newest = newestOf(files);
+    if (files.size() > 1) {
+        // Same check as load(): twins are fine when they say the same.
+        std::string text;
+        json chosen, other;
+        const bool chosenOk = readWhole(files[newest], text) && parseAny(text, chosen);
+        std::string differing;
+        for (size_t i = 0; i < files.size(); ++i) {
+            if (i == newest) continue;
+            if (!chosenOk || !readWhole(files[i], text) || !parseAny(text, other) || other != chosen)
+                differing += (differing.empty() ? "" : " and ") + files[i].filename().string();
+        }
+        if (!differing.empty())
+            warnOnce(versionKey(files), files[newest].filename().string() + " and " + differing + " in " + file.parent_path().string() +
+                                            " differ: using " + files[newest].filename().string() +
+                                            ", the most recently changed. Delete the other one to silence this.");
+    }
+    return files[newest];
+}
+
+bool readText(const fs::path& file, std::string& text, bool* exists, fs::path* used) {
+    const fs::path p = resolve(file);
+    if (used) *used = p;
+    std::error_code ec;
+    const bool there = fs::is_regular_file(p, ec);
+    if (exists) *exists = there;
+    return there && readWhole(p, text);
+}
+
+bool loadPath(const fs::path& file, json& out, std::string* error, bool* exists, fs::path* used) {
+    std::string text;
+    fs::path p;
+    bool there = false;
+    const bool ok = readText(file, text, &there, &p);
+    if (exists) *exists = there;
+    if (used) *used = p;
+    if (!ok) {
+        fail(error, there ? "can't read " + p.string() : std::string());
+        return false;
+    }
+    std::string why;
+    if (!parseAny(text, out, &why)) {
+        fail(error, p.string() + ": " + why);
+        return false;
+    }
+    return true;
+}
+
+fs::path saveTarget(const fs::path& file) { return resolve(file); }
+
+std::string forFile(const std::string& jsonText, const fs::path& target) {
+    if (formatOf(target) != Format::Yaml) return jsonText;
+    json v;
+    return parse(jsonText, Format::Json, v) ? dump(v, Format::Yaml) : jsonText;
+}
+
+std::string nameOf(const fs::path& file, const std::string& kind) {
+    if (!formatOf(file)) return {};
+    const std::string stem = file.stem().string();
+    if (stem.size() <= kind.size() || stem.compare(stem.size() - kind.size(), kind.size(), kind) != 0) return {};
+    return stem.substr(0, stem.size() - kind.size());
 }
 
 } // namespace kke::datafile

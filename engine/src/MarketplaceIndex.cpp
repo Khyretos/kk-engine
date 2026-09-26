@@ -69,16 +69,19 @@ void MarketplaceIndex::save(const std::string& marketplaceJsonPath) const {
         json["games"].push_back(entry);
     }
 
-    std::ofstream file(marketplaceJsonPath);
-    file << json.dump(2);
+    const std::filesystem::path target = datafile::saveTarget(marketplaceJsonPath); // an index.yml stays YAML
+    std::ofstream file(target);
+    file << datafile::dump(json, datafile::formatOf(target).value_or(datafile::Format::Json));
 }
 
 void MarketplaceIndex::load(const std::string& marketplaceJsonPath) {
-    std::ifstream file(marketplaceJsonPath);
-    if (!file.is_open()) return; // no existing index yet — not an error
-
     nlohmann::json json;
-    file >> json;
+    std::string error;
+    bool exists = false;
+    if (!datafile::loadPath(marketplaceJsonPath, json, &error, &exists) || !json.is_object()) {
+        if (exists) log::get("Marketplace")->warn("ignoring the index: {}", error.empty() ? marketplaceJsonPath + ": not an object" : error);
+        return; // no existing index yet — not an error
+    }
 
     m_games.clear();
     m_indexById.clear();

@@ -1,9 +1,10 @@
 #include "kke/server/ServerConfig.h"
 
+#include "kke/DataFile.h"
+
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
-#include <fstream>
 #include <sstream>
 
 namespace kke::server {
@@ -56,14 +57,15 @@ bool splitHostPort(const std::string& s, std::string& host, uint16_t& port) {
 
 bool ServerConfig::loadJson(const std::string& text, std::vector<std::string>& errors) {
     const size_t before = errors.size();
-    nlohmann::json j = nlohmann::json::parse(text, nullptr, false);
-    if (j.is_discarded() || !j.is_object()) {
-        errors.push_back("server.json: not a JSON object (check commas and quotes)");
+    std::string why;
+    nlohmann::json j;
+    if (!datafile::parseAny(text, j, &why) || !j.is_object()) {
+        errors.push_back("server.json: not a JSON or YAML object (check commas, quotes and indents)" + (why.empty() ? std::string() : ": " + why));
         return false;
     }
     auto str = [&](const char* key, std::string& out) {
         if (!j.contains(key)) return;
-        if (j[key].is_string()) out = j[key].get<std::string>();
+        if (j[key].is_string() || j[key].is_number()) out = datafile::text(j, key); // password: 1234 in YAML is a number
         else errors.push_back(std::string("server.json \"") + key + "\": expected text");
     };
     auto num = [&](const char* key, uint16_t& out, unsigned lo, unsigned hi) {
@@ -125,11 +127,14 @@ bool ServerConfig::loadJson(const std::string& text, std::vector<std::string>& e
 }
 
 bool ServerConfig::loadFile(const std::string& path, std::vector<std::string>& errors) {
-    std::ifstream in(path);
-    if (!in) return true; // no file: the defaults
-    std::stringstream ss;
-    ss << in.rdbuf();
-    return loadJson(ss.str(), errors);
+    std::string text;
+    bool exists = false;
+    if (!datafile::readText(path, text, &exists)) {
+        if (!exists) return true; // no file: the defaults
+        errors.push_back(path + ": can't read it");
+        return false;
+    }
+    return loadJson(text, errors);
 }
 
 bool ServerConfig::applyEnv(const std::function<const char*(const char*)>& getenv, std::vector<std::string>& errors) {

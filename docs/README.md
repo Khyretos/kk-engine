@@ -23,6 +23,7 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [ANTI_CHEAT.md](ANTI_CHEAT.md) | Fair games without invasive software: shipping builds, server authority, fog of war, game rules, input checks, sealed data |
 | [DRM.md](DRM.md) | Kreative DRM: optional, offline-after-activation licences the developer controls |
 | [MODDING.md](MODDING.md) | DLC and mods: pack.json, load order, Nexus Mods / Steam Workshop / mod.io, playing together with one copy |
+| [DATA_FILES.md](DATA_FILES.md) | Every data file can be JSON or YAML; which one wins when both exist |
 | [SCRIPTING.md](SCRIPTING.md) | Lua gameplay scripts |
 | [PLAY_TO_MAKE.md](PLAY_TO_MAKE.md) | Make the game while playing it: Simple, node graph and Lua levels |
 | [SCENES.md](SCENES.md) | Levels built from asset packs |

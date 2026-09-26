@@ -1,5 +1,7 @@
 #include "kke/GameRules.h"
 
+#include "kke/DataFile.h"
+
 #include <nlohmann/json.hpp>
 
 #include <cctype>
@@ -211,8 +213,9 @@ std::string GameRules::toJson() const {
 }
 
 bool GameRules::loadJson(const std::string& text, std::string* error) {
-    const nlohmann::json j = nlohmann::json::parse(text, nullptr, false);
-    if (j.is_discarded() || !j.is_object() || !j.contains("rules") || !j["rules"].is_array()) {
+    nlohmann::json j;
+    const bool parsed = datafile::parseAny(text, j); // JSON or YAML (kke/DataFile.h)
+    if (!parsed || !j.is_object() || !j.contains("rules") || !j["rules"].is_array()) {
         fail(error, "expected {\"rules\": [...]}");
         return false;
     }

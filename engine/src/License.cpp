@@ -1,5 +1,7 @@
 #include "kke/License.h"
 
+#include "kke/DataFile.h"
+
 #include <monocypher.h>
 #include <nlohmann/json.hpp>
 
@@ -131,9 +133,10 @@ std::string toJson(const License& l) {
 
 bool fromJson(const std::string& text, License& out, std::string* error) {
     out = License{};
-    const nlohmann::json j = nlohmann::json::parse(text, nullptr, false);
-    if (j.is_discarded() || !j.is_object()) {
-        fail(error, "not valid JSON");
+    nlohmann::json j;
+    const bool parsed = datafile::parseAny(text, j); // JSON or YAML: the signature covers the fields, not the text
+    if (!parsed || !j.is_object()) {
+        fail(error, "not valid JSON or YAML");
         return false;
     }
     auto str = [&](const char* key, std::string& dst, bool required) {

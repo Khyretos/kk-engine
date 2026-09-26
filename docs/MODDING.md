@@ -84,8 +84,8 @@ If a folder has both and they differ, **the most recently changed file
 wins**, and the log (and the mods screen) names both, so an edit to either
 is never silently ignored. Identical twins are fine. YAML is read with YAML
 1.2's rules: `yes` and `no` are text (only `true`/`false` are booleans),
-and a version like `1.10` keeps its spelling. `kke/DataFile.h` does this
-for any other data file that wants it.
+and a version like `1.10` keeps its spelling. The same rules hold for every
+other data file the engine reads: see [DATA_FILES.md](DATA_FILES.md).
 
 ### Dependencies
 

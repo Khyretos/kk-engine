@@ -95,6 +95,7 @@ nav:
       - Ragdolls: RAGDOLLS.md
   - Reference:
       - Lua API: reference/lua-api.md
+      - JSON or YAML data files: DATA_FILES.md
       - Optimization: OPTIMIZATION.md
       - Rendering principles: RENDERING_PRINCIPLES.md
       - Benchmarks: BENCHMARKS.md
