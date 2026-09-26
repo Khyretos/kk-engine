@@ -8,6 +8,7 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | Document | Contents |
 |---|---|
 | [BUILDING.md](BUILDING.md) | System packages, build presets, running each demo, troubleshooting |
+| [DEPENDENCIES.md](DEPENDENCIES.md) | Every third-party library, tool, font and asset: version, licence, and what the licence asks of games shipped with KKE |
 | [RELEASES.md](RELEASES.md) | Downloadable Windows and Linux builds: how a tag becomes a release |
 | [tutorials/](tutorials/index.md) | Make your own game from the starter template, then walk, break, pick up and add sound |
 | [HISTORY.md](HISTORY.md) | The development log: the original README, kept whole |
@@ -19,7 +20,9 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [NETWORKING.md](NETWORKING.md) | Transport, protocol, authority and replication |
 | [STORAGE.md](STORAGE.md) | Saving data: SQLite built in, Valkey and PostgreSQL optional |
 | [SERVER_HOSTING.md](SERVER_HOSTING.md) | Running a server: kke_server, Docker, roles, directories, security |
-| [ANTI_CHEAT.md](ANTI_CHEAT.md) | Fair games without invasive software: shipping builds, server authority, input checks, sealed data |
+| [ANTI_CHEAT.md](ANTI_CHEAT.md) | Fair games without invasive software: shipping builds, server authority, fog of war, game rules, input checks, sealed data |
+| [DRM.md](DRM.md) | Kreative DRM: optional, offline-after-activation licences the developer controls |
+| [MODDING.md](MODDING.md) | DLC and mods: pack.json, load order, Nexus Mods / Steam Workshop / mod.io, playing together with one copy |
 | [SCRIPTING.md](SCRIPTING.md) | Lua gameplay scripts |
 | [PLAY_TO_MAKE.md](PLAY_TO_MAKE.md) | Make the game while playing it: Simple, node graph and Lua levels |
 | [SCENES.md](SCENES.md) | Levels built from asset packs |

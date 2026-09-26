@@ -1,5 +1,6 @@
 #pragma once
 
+#include "kke/net/Relay.h"
 #include "kke/net/Transport.h"
 
 #include <cstdint>
@@ -29,7 +30,10 @@ void enetRelease();
 // far above any peer count we allow, and ENet's intercept hook sees it
 // first. Several hosts on one PC each have their own port in the range,
 // so all of them answer.
-class EnetTransport : public ITransport {
+//
+// Join codes (kke/net/Relay.h) ride on the same socket too: relay
+// datagrams (sendRaw, onRaw) share the NAT mapping players connect through.
+class EnetTransport : public ITransport, public RawSocket {
 public:
     EnetTransport();
     ~EnetTransport() override;
@@ -45,6 +49,16 @@ public:
     void close() override;
     const char* backendName() const override { return "ENet"; }
     using ITransport::send;
+
+    // --- relay datagrams (RawSocket)
+    // A client's socket before connect(), so a join code's lookup and
+    // punches go out from the port the connection will use.
+    bool open(std::string* error = nullptr) { return ensureClientHost(error); }
+    bool sendRaw(const std::string& host, uint16_t port, const std::vector<uint8_t>& data) override;
+    std::string resolve(const std::string& host) override;
+    // Where a peer really is when it came through a relay (the relay's
+    // port for it -> the player's address): bans and logs use this.
+    std::function<std::string(const std::string& host, uint16_t port)> realAddress;
 
     // --- LAN discovery
     struct LanGame {

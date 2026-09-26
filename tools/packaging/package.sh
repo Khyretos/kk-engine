@@ -94,43 +94,8 @@ fi
 
 # --- Licences. ----------------------------------------------------------
 cp "$repo/LICENSE" "$stage/LICENSE.txt"
-{
-    echo "Third-party software in this build of the Kreative Kompas Engine."
-    echo "Each component's licence text follows, as shipped by its authors."
-    add() { # <component> <folder>
-        local lic f
-        lic="$(find "$2" -maxdepth 1 -type f \( -iname 'LICENSE*' -o -iname 'LICENCE*' -o -iname 'COPYING*' \
-            -o -iname 'COPYRIGHT*' -o -iname 'NOTICE*' \) | sort)"
-        if [ -z "$lic" ] && [ -f "$2/src/lua.h" ]; then
-            # Lua ships its MIT licence as the last comment block of lua.h.
-            printf '\n\n==============================================================================\n%s (src/lua.h)\n==============================================================================\n\n' "$1"
-            sed -n '/^\* Copyright (C) 1994/,/^\*\*\*\*\*/p' "$2/src/lua.h" | grep . || die "no licence block found in $2/src/lua.h"
-            return 0
-        fi
-        [ -n "$lic" ] || die "no licence file found for $1 in $2"
-        # Licences a top-level file only points to: FreeType's FTL (its
-        # LICENSE.TXT offers FTL or GPL) and the fmt copy bundled in spdlog.
-        # Steam Audio's third-party notices (Intel IPP, FFTS, ...) sit
-        # beside its licence.
-        for f in "$2/docs/FTL.TXT" "$2/include/spdlog/fmt/bundled/fmt.license.rst" "$2/THIRDPARTY.md"; do
-            if [ -f "$f" ]; then lic="$lic"$'\n'"$f"; fi
-        done
-        while IFS= read -r f; do
-            printf '\n\n==============================================================================\n%s (%s)\n==============================================================================\n\n' "$1" "$(basename "$f")"
-            cat "$f"
-        done <<< "$lic"
-    }
-    add "AMD FEMFX" "$repo/external/FEMFX"
-    if [ -n "$deps" ]; then
-        [ -d "$deps" ] || die "--deps folder '$deps' does not exist"
-        for src in "$deps"/*-src; do
-            [ -d "$src" ] || continue
-            comp="$(basename "$src" -src)"
-            case "$comp" in googletest) continue ;; esac  # tests only, not shipped
-            add "$comp" "$src"
-        done
-    fi
-} > "$stage/THIRD_PARTY_LICENSES.txt"
+"$repo/tools/packaging/third_party_licenses.sh" --platform "$platform" ${deps:+--deps "$deps"} \
+    > "$stage/THIRD_PARTY_LICENSES.txt"
 
 # --- README. -------------------------------------------------------------
 {

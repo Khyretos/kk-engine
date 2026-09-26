@@ -25,7 +25,8 @@ RUN cmake -S . -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release \
         -DKKE_ENABLE_VALIDATION=OFF -DKKE_ENABLE_POSTGRES=ON -DKKE_ENABLE_VALKEY=ON \
     && cmake --build /build --target kke_server \
     && mkdir -p /out/lib \
-    && cp /build/bin/kke_server /out/ \
+    && cp /build/bin/kke_server /src/LICENSE /out/ \
+    && tools/packaging/third_party_licenses.sh --platform linux --deps /build/_deps > /out/THIRD_PARTY_LICENSES.txt \
     && ldd /out/kke_server | awk '$3 ~ /^\/build\// { print $3 }' | xargs -r -I{} cp -L {} /out/lib/
 
 FROM ubuntu:24.04
@@ -35,10 +36,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends libfreetype6 li
     && useradd --system --create-home --home-dir /data kke
 COPY --from=build /out/kke_server /opt/kke/kke_server
 COPY --from=build /out/lib/ /opt/kke/lib/
+# The licences of everything above (docs/DEPENDENCIES.md); libpq and
+# FreeType bring theirs in /usr/share/doc.
+COPY --from=build /out/LICENSE /out/THIRD_PARTY_LICENSES.txt /opt/kke/
 ENV LD_LIBRARY_PATH=/opt/kke/lib
 USER kke
 WORKDIR /data
 VOLUME ["/data"]
-# The game (players join here); the directory role, when a server has it.
-EXPOSE 27960/udp 27950/udp
+# The game (players join here); the directory and relay roles, when a server has them.
+EXPOSE 27960/udp 27950/udp 27970-28034/udp
 ENTRYPOINT ["/opt/kke/kke_server"]

@@ -62,12 +62,13 @@ bool UdpSocket::send(const std::string& host, uint16_t port, const std::vector<u
 
 void UdpSocket::receive(const std::function<void(const std::string&, uint16_t, const uint8_t*, size_t)>& fn) {
     if (!isOpen()) return;
-    uint8_t data[kMaxDatagram + 1];
+    if (m_buffer.size() != maxDatagram + 1) m_buffer.resize(maxDatagram + 1);
+    uint8_t* data = m_buffer.data();
     for (int i = 0; i < 1024; ++i) { // a flood can't keep us here forever
         ENetAddress from{};
         ENetBuffer buf;
         buf.data = data;
-        buf.dataLength = sizeof data;
+        buf.dataLength = m_buffer.size();
         const int n = enet_socket_receive(sock(m_socket), &from, &buf, 1);
         if (n <= 0) return; // nothing waiting (0) or an error on a UDP socket (an ICMP echo): try next frame
         char ip[64] = {};

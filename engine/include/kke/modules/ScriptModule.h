@@ -3,6 +3,7 @@
 #include "kke/AssetCatalog.h"
 #include "kke/Module.h"
 #include "kke/SceneLoader.h"
+#include "kke/ScriptStore.h"
 #include "kke/ScriptVM.h"
 #include "kke/modules/ModelModule.h"
 
@@ -58,6 +59,8 @@ class DynamicMeshRenderer;
 //   audio.*      impact(pos, material, intensity), materials   (AudioModule)
 //   input.*      define(id, label, key), pressed, held, value  (InputModule)
 //   camera.*     position, forward, target
+//   store.*      save, load, add, remove, keys: what outlives the session
+//                (kke/ScriptStore.h; a file by default, see storeUrl)
 //
 // The panel (F1 panels in kke_demo) lists scripts with their CPU time and
 // errors, has Reload, and a one-line Lua console that runs in the console's
@@ -88,6 +91,16 @@ public:
     size_t maxDocumentsPerScript = 16;
     size_t maxScenesPerScript = 4;
 
+    // Where store.* keeps what scripts save (docs/STORAGE.md urls), opened
+    // on first use; KKE_SCRIPT_STORE overrides it. Set before init.
+    std::string storeUrl = "sqlite:save/scripts.db";
+    // Whose collection it is ("lua.<game>"); "" = the NetModule's game id,
+    // or "game" without one.
+    std::string storeGame;
+    // Or: a store someone else owns (a server's), used instead of storeUrl.
+    void useStore(storage::Store* shared) { m_sharedStore = shared; }
+    ScriptStore* scriptStore() { return m_store.get(); }
+
     // Whether a script file runs on this machine right now (realms above).
     static bool runsHere(const std::string& path, bool authority);
 
@@ -110,6 +123,7 @@ private:
     void bindUi();
     void bindScenes();
     void bindNet();
+    void bindStore();
     // Multiplayer copies of what sv_ scripts spawn (ScriptReplication.cpp).
     void bindReplication();
     void syncNetRole();                    // hosting / joining / leaving changed what's replicated
@@ -131,6 +145,8 @@ private:
 
     Application* m_app = nullptr;
     std::unique_ptr<ScriptVM> m_vm;
+    std::unique_ptr<ScriptStore> m_store;
+    storage::Store* m_sharedStore = nullptr;
     std::string m_dir;
     std::vector<ScriptFile> m_files;
     std::vector<Body> m_bodies;

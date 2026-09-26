@@ -33,3 +33,6 @@ docker/server/data/
 docker/server/directory/
 docker/server/valkey/
 docker/server/postgres/
+
+# ImGui window layout, written wherever a demo runs
+imgui.ini

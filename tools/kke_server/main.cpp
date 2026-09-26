@@ -111,6 +111,8 @@ int main(int argc, char** argv) {
 
     kke::net::EnetTransport transport;
     DedicatedServer server(config, transport, assets);
+    server.setRawSocket(&transport); // join codes: relay datagrams on the game's own socket
+    transport.realAddress = [&server](const std::string& host, uint16_t port) { return server.relayedAddress(host, port); };
     server.log = [](const std::string& s) { say("info", s); };
     server.warn = [](const std::string& s) { say("warn", s); };
     say("info", "kke_server starting: " + config.describe());
@@ -119,7 +121,10 @@ int main(int argc, char** argv) {
         say("error", "not started");
         return 1;
     }
-    if (config.hasGameSocket()) say("info", "ready: players join on UDP port " + std::to_string(config.port) + " (type help for commands)");
+    if (config.hasGameSocket())
+        say("info", "ready: players join on UDP port " + std::to_string(config.port) +
+                        (config.relay.empty() ? "" : ", or by join code once the relay gives one") + " (type help for commands)");
+    if (config.hasRole("relay")) say("info", "relay ready on UDP " + std::to_string(config.relayPort) + "-" + std::to_string(config.relayPort + config.relaySlots));
 
     std::signal(SIGINT, onSignal);
     std::signal(SIGTERM, onSignal);

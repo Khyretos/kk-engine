@@ -45,6 +45,8 @@ set(ENGINE_SOURCES
     src/net/Transport.cpp
     src/net/NetSession.cpp
     src/net/ScriptSpawns.cpp
+    src/net/SecureTransport.cpp
+    src/net/Relay.cpp
     src/server/ServerConfig.cpp
     src/server/ServerFiles.cpp
     src/server/ServerAccess.cpp
@@ -55,8 +57,12 @@ set(ENGINE_SOURCES
     src/storage/MemoryStore.cpp
     src/storage/SqliteStore.cpp
     src/net/Authority.cpp
+    src/net/Visibility.cpp
+    src/GameRules.cpp
+    src/License.cpp
     src/InputSanity.cpp
     src/PackSeal.cpp
+    src/ContentPacks.cpp
     src/DevTools.cpp
     src/InputMap.cpp
     src/InputDevices.cpp
@@ -151,6 +157,7 @@ set(ENGINE_HEADERS
     include/kke/ShadowMap.h
     include/kke/Texture.h
     include/kke/MarketplaceIndex.h
+    include/kke/ContentPacks.h
     include/kke/RmlTextSafety.h
     include/kke/Log.h
     include/kke/HardwareCheck.h
@@ -239,7 +246,7 @@ endif()
 
 if(KKE_ENABLE_JOLT)
     target_sources(kke_engine PRIVATE src/RigidWorld.cpp src/Locomotion.cpp src/SceneLoader.cpp src/modules/RigidBodyModule.cpp src/modules/PhysicsBridgeModule.cpp
-        src/net/WorldMoveCheck.cpp)
+        src/net/WorldMoveCheck.cpp src/net/LevelSight.cpp)
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_JOLT=1)
     target_link_libraries(kke_engine PUBLIC Jolt)
 else()
@@ -247,15 +254,16 @@ else()
 endif()
 
 if(KKE_ENABLE_NET)
-    target_sources(kke_engine PRIVATE src/net/EnetTransport.cpp src/server/DirectoryNet.cpp src/server/DedicatedServer.cpp)
+    target_sources(kke_engine PRIVATE src/net/EnetTransport.cpp src/server/DirectoryNet.cpp src/server/DedicatedServer.cpp
+        src/server/RelayService.cpp)
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_NET=1)
     target_link_libraries(kke_engine PUBLIC kke_enet)
     if(KKE_ENABLE_JOLT)
         target_sources(kke_engine PRIVATE src/modules/NetModule.cpp)
     endif()
     if(KKE_ENABLE_VOICE)
-        target_sources(kke_engine PRIVATE src/voice/VoiceCodec.cpp)
-        target_link_libraries(kke_engine PUBLIC opus)
+        target_sources(kke_engine PRIVATE src/voice/VoiceCodec.cpp src/voice/VoiceCleaner.cpp)
+        target_link_libraries(kke_engine PUBLIC opus PRIVATE kke_rnnoise kke_speexdsp)
         target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_VOICE=1)
         if(KKE_ENABLE_JOLT)
             target_sources(kke_engine PRIVATE src/modules/VoiceModule.cpp)
@@ -291,7 +299,10 @@ else()
 endif()
 
 if(ENGINE_ENABLE_LUA)
-    target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/modules/ScriptModule.cpp src/modules/ScriptBindings.cpp src/modules/ScriptReplication.cpp)
+    target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/ScriptStore.cpp src/modules/ScriptModule.cpp src/modules/ScriptBindings.cpp src/modules/ScriptReplication.cpp)
+    if(KKE_ENABLE_NET)
+        target_sources(kke_engine PRIVATE src/server/ServerScripts.cpp)
+    endif()
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_LUA=1)
     target_link_libraries(kke_engine PUBLIC lua_lib)
 else()
@@ -337,6 +348,7 @@ target_compile_definitions(kke_engine PRIVATE KKE_BUILD_TYPE="${CMAKE_BUILD_TYPE
 if(WIN32)
     target_link_libraries(kke_engine PUBLIC psapi) # peak memory in benchmark reports
     target_link_libraries(kke_engine PUBLIC bcrypt) # secure random for kke/PackSeal.h key generation
+    target_link_libraries(kke_engine PUBLIC advapi32) # MachineGuid for kke/License.h
 endif()
 
 # Hot CPU loops stay optimized in Debug builds too (same reasoning as

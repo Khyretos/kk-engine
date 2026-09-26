@@ -1,4 +1,5 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
 // Stylised-but-physical sea: Fresnel mix of a sky reflection and the
 // water's own deep colour, sun glint, and foam on the highest crests.
 // Opaque on purpose (no refraction pass): cheap on every GPU, and what
@@ -15,7 +16,10 @@ layout(set = 0, binding = 0) uniform LightingUBO {
     vec4 cameraPos;
     mat4 lightViewProj;
     mat4 viewProj;
+    vec4 toneParams; // x = tone mapper (tonemap.glsl), y = exposure
 } lighting;
+
+#include "tonemap.glsl"
 
 vec3 skyColor(vec3 dir) {
     float h = clamp(dir.y, 0.0, 1.0);
@@ -44,6 +48,6 @@ void main() {
     // Distance haze into the horizon colour.
     float dist = length(lighting.cameraPos.xyz - fragPos);
     color = mix(color, skyColor(vec3(0.0, 0.02, 0.0)), smoothstep(40.0, 140.0, dist));
-    color = color / (color + vec3(1.0)); // same Reinhard as the lit meshes
+    color = toneMap(color, lighting.toneParams); // same curve as the lit meshes
     outColor = vec4(color, 1.0);
 }
