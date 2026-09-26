@@ -31,6 +31,10 @@ set(ENGINE_SOURCES
     src/FrameStats.cpp
     src/CameraRig.cpp
     src/SceneFile.cpp
+    src/net/BitStream.cpp
+    src/net/Protocol.cpp
+    src/net/Transport.cpp
+    src/net/NetSession.cpp
     src/InputMap.cpp
     src/InputDevices.cpp
     src/modules/InputModule.cpp
@@ -193,6 +197,17 @@ if(KKE_ENABLE_JOLT)
     target_link_libraries(kke_engine PUBLIC Jolt)
 else()
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_JOLT=0)
+endif()
+
+if(KKE_ENABLE_NET)
+    target_sources(kke_engine PRIVATE src/net/EnetTransport.cpp)
+    target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_NET=1)
+    target_link_libraries(kke_engine PUBLIC kke_enet)
+    if(KKE_ENABLE_JOLT)
+        target_sources(kke_engine PRIVATE src/modules/NetModule.cpp)
+    endif()
+else()
+    target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_NET=0)
 endif()
 
 if(ENGINE_ENABLE_LUA)

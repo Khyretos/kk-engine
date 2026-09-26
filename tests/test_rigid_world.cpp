@@ -150,6 +150,34 @@ TEST(RigidWorld, CharacterPushesADynamicBox) {
     EXPECT_GT(w.position(crate).x, 1.6f);
 }
 
+// A network client's view of the server's crates: kinematic, they hold
+// still (no gravity), push what's in their way, and fall again once
+// handed back to the local simulation.
+TEST(RigidWorld, BodiesSwitchBetweenDynamicAndKinematic) {
+    kke::RigidWorld w(single());
+    ground(w);
+    kke::RigidWorld::BodyDesc d;
+    d.halfExtents = glm::vec3(0.3f);
+    d.position = glm::vec3(0.0f, 2.0f, 0.0f);
+    auto held = w.add(d);
+    d.position = glm::vec3(1.0f, 0.3f, 0.0f);
+    d.density = 100.0f;
+    auto crate = w.add(d);
+    w.setMotion(held, kke::RigidWorld::Motion::Kinematic);
+    for (int i = 0; i < 60; ++i) w.step(1.0f / 60.0f);
+    EXPECT_NEAR(w.position(held).y, 2.0f, 1e-3f); // no gravity while kinematic
+    w.setTransform(held, glm::vec3(0.0f, 0.3f, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+    for (int i = 1; i <= 60; ++i) {
+        w.moveKinematic(held, glm::vec3(0.02f * static_cast<float>(i), 0.3f, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), 1.0f / 60.0f);
+        w.step(1.0f / 60.0f);
+    }
+    EXPECT_GT(w.position(crate).x, 1.5f); // pushed out of the way
+    w.setMotion(held, kke::RigidWorld::Motion::Dynamic);
+    w.setTransform(held, glm::vec3(-3.0f, 2.0f, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+    for (int i = 0; i < 120; ++i) w.step(1.0f / 60.0f);
+    EXPECT_NEAR(w.position(held).y, 0.3f, 0.05f); // simulated again: it fell
+}
+
 TEST(RigidWorld, ManyBodiesSleepWhenSettled) {
     kke::RigidWorld w(single());
     ground(w);

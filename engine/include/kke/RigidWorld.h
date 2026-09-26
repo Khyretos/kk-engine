@@ -105,9 +105,17 @@ public:
     glm::mat4 transform(BodyId body) const;
     glm::vec3 velocity(BodyId body) const;
     void setVelocity(BodyId body, const glm::vec3& v);
+    glm::vec3 angularVelocity(BodyId body) const; // rad/s, world axes
+    void setAngularVelocity(BodyId body, const glm::vec3& w);
     void addImpulse(BodyId body, const glm::vec3& impulse, const glm::vec3& worldPoint);
     // Kinematic bodies: move there over the next step (pushes things).
     void moveKinematic(BodyId body, const glm::vec3& position, const glm::quat& rotation, float dt);
+    // Dynamic <-> kinematic (a network client shows the server's bodies
+    // as kinematic: they push the local player but follow the server).
+    // Static bodies can't change.
+    void setMotion(BodyId body, Motion motion);
+    // Straight there, no sweep (teleport; kinematic bodies after a jump).
+    void setTransform(BodyId body, const glm::vec3& position, const glm::quat& rotation);
 
     // Closest hit, front or back face; the normal faces the ray's origin.
     RayHit raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance) const;

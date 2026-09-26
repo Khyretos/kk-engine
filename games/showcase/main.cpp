@@ -3,6 +3,9 @@
 #include "kke/modules/DebugControlModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/ModelModule.h"
+#if KKE_ENABLE_NET
+#include "kke/modules/NetModule.h"
+#endif
 #include "kke/modules/RigidBodyModule.h"
 #if KKE_ENABLE_LUA
 #include "kke/modules/ScriptModule.h"
@@ -35,6 +38,15 @@ int main() {
         app.addModule<kke::InputModule>("input.json");
         std::vector<kke::Module*> panels;
         panels.push_back(&app.addModule<kke::RigidBodyModule>());
+#if KKE_ENABLE_NET
+        // Host / join / LAN list (F1), or KKE_NET=host | join:ADDRESS.
+        // Before the showcase, so a join is under way when the crates spawn.
+        {
+            kke::net::NetConfig net;
+            net.gameId = "kke_demo";
+            panels.push_back(&app.addModule<kke::NetModule>(net));
+        }
+#endif
         app.addModule<kke::ModelModule>();
         panels.push_back(&app.addModule<kke::AudioModule>());
         // Overlay stays on when panels are hidden; on by default here so the

@@ -382,6 +382,14 @@ panels. The character is Quaternius' Universal Animation Library mannequin
 (CC0): put `UAL1_Standard.fbx` in `assets/animations/` (git-ignored, 23 MB),
 or the character is a box. The old building-block demo is `kke_basics`.
 
+**Multiplayer** (see [NETWORKING.md](NETWORKING.md)): host or join a
+`kke_demo` game on your LAN or on one PC, from the F1 **Network** panel
+(Host, Join, Search LAN) or the command line:
+`KKE_NET=host ./kke_demo` in one terminal, `KKE_NET=join:127.0.0.1 ./kke_demo`
+in another. You see each other walk, vault and climb, push the same crates
+and see each other's shots. `KKE_NET_LAG`, `KKE_NET_JITTER` and
+`KKE_NET_LOSS` (or the panel sliders) simulate a bad connection.
+
 **Input** (see [INPUT.md](INPUT.md)): every control is an action you can
 rebind to anything: keys, mouse, gamepads (incl. paddles and gyro), HOTAS
 and other raw joysticks, identical twins (HOSAS) kept apart by USB port,

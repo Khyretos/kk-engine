@@ -243,11 +243,24 @@ glm::mat4 RigidWorld::transform(BodyId body) const {
 }
 glm::vec3 RigidWorld::velocity(BodyId body) const { return toG(m->bodies().GetLinearVelocity(JPH::BodyID(body))); }
 void RigidWorld::setVelocity(BodyId body, const glm::vec3& v) { m->bodies().SetLinearVelocity(JPH::BodyID(body), toJ(v)); }
+glm::vec3 RigidWorld::angularVelocity(BodyId body) const { return toG(m->bodies().GetAngularVelocity(JPH::BodyID(body))); }
+void RigidWorld::setAngularVelocity(BodyId body, const glm::vec3& w) { m->bodies().SetAngularVelocity(JPH::BodyID(body), toJ(w)); }
 void RigidWorld::addImpulse(BodyId body, const glm::vec3& impulse, const glm::vec3& point) {
     m->bodies().AddImpulse(JPH::BodyID(body), toJ(impulse), toJR(point));
 }
 void RigidWorld::moveKinematic(BodyId body, const glm::vec3& position, const glm::quat& rotation, float dt) {
     m->bodies().MoveKinematic(JPH::BodyID(body), toJR(position), toJ(glm::normalize(rotation)), dt);
+}
+void RigidWorld::setMotion(BodyId body, Motion motion) {
+    JPH::BodyID id(body);
+    if (body == kNoBody || !m->bodies().IsAdded(id) || motion == Motion::Static) return;
+    if (m->bodies().GetMotionType(id) == JPH::EMotionType::Static) return; // static bodies stay static (Jolt needs them created movable)
+    m->bodies().SetMotionType(id, motion == Motion::Kinematic ? JPH::EMotionType::Kinematic : JPH::EMotionType::Dynamic, JPH::EActivation::Activate);
+}
+void RigidWorld::setTransform(BodyId body, const glm::vec3& position, const glm::quat& rotation) {
+    JPH::BodyID id(body);
+    if (body == kNoBody || !m->bodies().IsAdded(id)) return;
+    m->bodies().SetPositionAndRotation(id, toJR(position), toJ(glm::normalize(rotation)), JPH::EActivation::Activate);
 }
 
 RigidWorld::RayHit RigidWorld::raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance) const {

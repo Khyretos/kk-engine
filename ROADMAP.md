@@ -83,7 +83,7 @@ limitations. 🔴 Not started / stub.
 | Performance at scale | 🟡 | Much better, measured, not yet checked on real hardware. Sleeping works (settled piles cost ~0.2 ms/step), FEMFX always optimized, only exterior faces drawn, catch-up capped at 2 ticks/frame. Min-spec emulation (1 core): 0.6 → 11.0 FPS average over the scripted benchmark, with 6x more fracture pieces than before (the old build was silently capping fracture). Remaining gap: while a big break is still flying, cost scales with awake piece count (~55 ms/step for ~475 pieces on 1 core) — no debris budget yet. See `PERFORMANCE_NOTES.md` "Status" and `HARDWARE_TESTS.md` HW-001..HW-004. |
 | Jiggle physics (bones, skin, soft bodies) | 🟢 | `kke/JigglePhysics.h`, core (no FEMFX needed): `JiggleRig` (verlet bone chains on any rig), `addJiggleBone` / `inflateSkin` / `addHumanoidSoftTissue` (soft tissue and curves for rigs that have none), `JiggleSkin` (boneless skin zones via `ModelModule::setSkinJiggle`), `JellyBody` (lattice shape matching with two-way ball contact). 14 unit tests; `games/jiggle_demo`. See JIGGLE.md. **Not yet:** GPU skinning path for crowds, jelly vs Jolt/FEMFX bodies. |
 | Debris budget | 🟢 | `PhysicsModule::setDebrisBudget` (default 200 broken pieces, oldest sleeping piece removed first), slider in the Physics panel. |
-| Network authority / reconciliation | 🔴 | Not started — see Networking section. |
+| Network authority / reconciliation | 🟡 | Host is authoritative for Jolt bodies; clients simulate their copies and steer them to the host's (NETWORKING.md). FEMFX breakables are still per machine. |
 
 ## UI (RmlUi + ImGui)
 
@@ -132,8 +132,8 @@ limitations. 🔴 Not started / stub.
 | System | Status | Notes |
 |---|---|---|
 | Replication measurement/demo | 🟢 | `NetworkModule` genuinely measures and displays what *would* be sent. |
-| Real network transport | 🔴 | Nothing actually leaves the process yet. Plan for 40 mixed-platform players (authoritative server, predicted clients, seed-based break events instead of debris): SCALING.md §2C. |
-| Authority / reconciliation model | 🔴 | `deserializeReplicatedState()` exists but is unused; two peers disagreeing about state isn't handled at all. |
+| Real network transport | 🟢 | `kke::net::EnetTransport` (UDP, reliable + unreliable channels, LAN discovery), loopback and lag/jitter/loss simulation for tests; `NetModule` hosts and joins games (NETWORKING.md). Dedicated server image and internet NAT traversal not yet. |
+| Authority / reconciliation model | 🟡 | `NetServer`/`NetClient`: owner-predicted players checked against speed limits and corrected, server-authoritative bodies with snapshot interpolation, reliable events. Input replay (competitive) is #28. The old `kke_demo_game` `NetworkModule` is still only a measurement demo. |
 
 ## Tooling / dev experience
 

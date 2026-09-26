@@ -13,10 +13,11 @@
 #include "kke/SphereImpostors.h"
 #include "kke/modules/ModelModule.h"
 
+#include <map>
 #include <memory>
 #include <vector>
 
-namespace kke { class RigidBodyModule; class PhysicsModule; class InputModule; }
+namespace kke { class RigidBodyModule; class PhysicsModule; class InputModule; class NetModule; }
 
 namespace kke_showcase {
 
@@ -50,6 +51,15 @@ private:
     void setupPlayer();
     void buildParkourLane(std::vector<kke::Vertex>& v, std::vector<uint32_t>& i);
     void updateAnimation(float dt);
+    // What the animation state machine reads: from kke::Locomotion for
+    // our player, from the network for everyone else's.
+    struct MotionInfo {
+        kke::Locomotion::State state = kke::Locomotion::State::Ground;
+        float speed = 0.0f, progress = 0.0f, stateTime = 0.0f, fallHeight = 0.0f;
+        bool crouch = false, landed = false, jumped = false;
+    };
+    void addAnimatorStates(kke::Animator& a);
+    void animate(kke::Animator& a, const MotionInfo& m, float dt);
     // Synty scenes (scenes/*.scene.json), each loaded on first visit at
     // its own spot far from the course.
     void findScenes();
@@ -65,6 +75,26 @@ private:
     void forcePush();
     void setCaptured(bool on);
     void readActions(float dt);
+    void resetCourse(); // crates back (asks the host when we're a client)
+
+    // Multiplayer (kke::NetModule, NETWORKING.md): our player's state out,
+    // everyone else's drawn with our character model and their own
+    // animator; crates and the platform are the host's. Shots are events.
+    void replicateBodies();
+    void sendNetState(const glm::vec3& feet);
+    void updateAvatars(float dt);
+    void onNetEvent(uint16_t kind, uint8_t from, const std::vector<uint8_t>& payload);
+    void spawnBall(const glm::vec3& from, const glm::vec3& dir);
+    struct Avatar {
+        kke::ModelModule::InstanceId instance = 0;
+        std::unique_ptr<kke::Animator> anim;
+        int lastState = -1;
+        float stateTime = 0.0f;
+    };
+    kke::NetModule* m_net = nullptr;
+    std::map<uint8_t, Avatar> m_avatars;
+    std::vector<glm::mat4> m_avatarCapsules; // no character model: boxes
+    glm::vec3 m_lastFeet{0.0f};
 
     // End-user stress test (ACTION_PLAN.md 1.7, StressTest.cpp): a fixed
     // script (walk, crate rain, breaking) at an uncapped frame rate, then

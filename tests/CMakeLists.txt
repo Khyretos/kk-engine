@@ -26,6 +26,7 @@ add_executable(kke_tests
     test_frame_stats.cpp
     test_camera_rig.cpp
     test_scene_file.cpp
+    test_net.cpp
     test_input_map.cpp
     test_input_devices.cpp
     test_floating_bodies.cpp

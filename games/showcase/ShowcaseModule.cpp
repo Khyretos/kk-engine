@@ -7,6 +7,10 @@
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/SettingsModule.h"
+#if KKE_ENABLE_NET
+#include "kke/modules/NetModule.h"
+#include "kke/net/BitStream.h"
+#endif
 #if KKE_ENABLE_FEMFX
 #include "kke/modules/PhysicsModule.h"
 #endif
@@ -50,12 +54,50 @@ void appendBox(const glm::mat4& m, const glm::vec3& half, const glm::vec3& color
     }
 }
 
+#if KKE_ENABLE_NET
+// Game events (NetModule::sendEvent), serialized the NETWORKING.md way:
+// one function per message for both directions.
+enum EventKind : uint16_t { kEventShoot = 1, kEventPush = 2, kEventReset = 3 };
+struct ShotEvent { glm::vec3 from{0.0f}, dir{0.0f, 0.0f, -1.0f}; };
+struct PushEvent { uint16_t body = 0; glm::vec3 dir{0.0f}, point{0.0f}; };
+template <typename Stream> bool serialize(Stream& s, ShotEvent& e) {
+    s.vec3(e.from, glm::vec3(-4096.0f, -512.0f, -4096.0f), glm::vec3(4096.0f, 1536.0f, 4096.0f), 1.0f / 256.0f);
+    s.vec3(e.dir, 1.0f, 1.0f / 2048.0f);
+    return s.ok();
+}
+template <typename Stream> bool serialize(Stream& s, PushEvent& e) {
+    s.integer(e.body, 0, 65535);
+    s.vec3(e.dir, 1.0f, 1.0f / 2048.0f);
+    s.vec3(e.point, glm::vec3(-4096.0f, -512.0f, -4096.0f), glm::vec3(4096.0f, 1536.0f, 4096.0f), 1.0f / 256.0f);
+    return s.ok();
+}
+template <typename T> std::vector<uint8_t> pack(T value) {
+    std::vector<uint8_t> out;
+    {
+        kke::net::WriteStream w(out);
+        serialize(w, value);
+    }
+    return out;
+}
+template <typename T> bool unpack(const std::vector<uint8_t>& data, T& value) {
+    kke::net::ReadStream r(data.data(), data.size());
+    return serialize(r, value) && r.ok();
+}
+#endif
+
+// Showcase bits in NetPlayerState::flags (kPlayerTeleported is the engine's).
+constexpr uint8_t kFlagCrouch = 0x01;
+
 } // namespace
 
 std::vector<kke::ModuleDependency> ShowcaseModule::dependencies() const {
     return { { std::type_index(typeid(kke::RigidBodyModule)), true, "collision, crates and the character controller" },
              { std::type_index(typeid(kke::InputModule)), true, "actions: keyboard/mouse, controllers, rebinding" },
-             { std::type_index(typeid(kke::ModelModule)), true, "draws the animated character" } };
+             { std::type_index(typeid(kke::ModelModule)), true, "draws the animated character" },
+#if KKE_ENABLE_NET
+             { std::type_index(typeid(kke::NetModule)), false, "multiplayer: joins before the crates spawn, so they follow the host" },
+#endif
+    };
 }
 
 void ShowcaseModule::init(kke::Application& app) {
@@ -63,6 +105,13 @@ void ShowcaseModule::init(kke::Application& app) {
     m_rigid = app.getModule<kke::RigidBodyModule>();
     m_models = app.getModule<kke::ModelModule>();
     m_input = app.getModule<kke::InputModule>();
+#if KKE_ENABLE_NET
+    m_net = app.getModule<kke::NetModule>();
+    if (m_net) {
+        m_net->onEvent = [this](const kke::net::GameEventMsg& e) { onNetEvent(e.kind, e.fromPlayer, e.payload); };
+        m_net->onCorrection = [this](const glm::vec3& p) { m_loco->teleport(p); };
+    }
+#endif
     // The showcase is a developer demo: its ImGui panel is the UI, so the
     // "debug overlay" setting stays on here.
     if (kke::SettingsModule* sm = app.getModule<kke::SettingsModule>()) {
@@ -335,6 +384,28 @@ void ShowcaseModule::spawnCrates() {
         d.position = glm::vec3(-2.0f + k * 1.6f, 0.6f, 10.0f);
         m_crates.push_back({ m_rigid->world().add(d), d.halfExtents, 2 });
     }
+    replicateBodies();
+}
+
+// The same bodies in the same order on every machine: network id 0 is the
+// platform, 1.. the crates.
+void ShowcaseModule::replicateBodies() {
+#if KKE_ENABLE_NET
+    if (!m_net) return;
+    m_net->clearBodies();
+    m_net->replicateBody(m_platform);
+    for (const Crate& c : m_crates) m_net->replicateBody(c.body);
+#endif
+}
+
+void ShowcaseModule::resetCourse() {
+#if KKE_ENABLE_NET
+    if (m_net && !m_net->authority()) {
+        m_net->sendEvent(kEventReset, {}); // the host's crates are the real ones
+        return;
+    }
+#endif
+    spawnCrates();
 }
 
 void ShowcaseModule::spawnBreakables() {
@@ -434,6 +505,9 @@ void ShowcaseModule::useCharacter(const std::string& asset) {
                                     missing.empty() ? "" : "; at rest: ", missing);
     }
     if (m_charInstance) m_models->remove(m_charInstance);
+    for (auto& [id, a] : m_avatars)
+        if (a.instance) m_models->remove(a.instance);
+    m_avatars.clear(); // respawned with the new model and rig next frame
     m_charModel = model;
     m_character = model == m_ualModel ? std::string() : asset;
     m_charInstance = m_models->spawn(m_charModel, glm::mat4(1.0f));
@@ -455,15 +529,23 @@ void ShowcaseModule::buildAnimator() {
     m_anim.reset();
     m_animSet = std::make_unique<kke::AnimationSet>(m_rigData);
     m_anim = std::make_unique<kke::Animator>(*m_animSet);
+    addAnimatorStates(*m_anim);
+    m_anim->play(m_stMove, 0.0f);
+    kke::log::get(name())->info("character: {} bones, {} clips", m_rigData.bones.size(), m_rigData.animations.size());
+}
+
+// The same states in the same order on every animator (ours and the other
+// players'), so the m_st* indices mean the same on all of them.
+void ShowcaseModule::addAnimatorStates(kke::Animator& a) {
     const kke::AnimationSet& s = *m_animSet;
-    m_stMove = m_anim->addBlendState("move", { { { s.find("|Idle_Loop"), 0.0f },
+    m_stMove = a.addBlendState("move", { { { s.find("|Idle_Loop"), 0.0f },
                                                  { s.find("|Walk_Loop"), kWalkSpeed },
                                                  { s.find("Jog_Fwd_Loop"), kJogSpeed },
                                                  { s.find("Sprint_Loop"), kSprintSpeed } } });
-    m_stCrouch = m_anim->addBlendState("crouch", { { { s.find("Crouch_Idle_Loop"), 0.0f }, { s.find("Crouch_Fwd_Loop"), kCrouchSpeed } } });
-    m_stJump = m_anim->addClipState("jump", s.find("Jump_Start"), false, 2.0f);
-    m_stFall = m_anim->addClipState("fall", s.find("Jump_Loop"), true);
-    m_stLand = m_anim->addClipState("land", s.find("Jump_Land"), false, 1.8f);
+    m_stCrouch = a.addBlendState("crouch", { { { s.find("Crouch_Idle_Loop"), 0.0f }, { s.find("Crouch_Fwd_Loop"), kCrouchSpeed } } });
+    m_stJump = a.addClipState("jump", s.find("Jump_Start"), false, 2.0f);
+    m_stFall = a.addClipState("fall", s.find("Jump_Loop"), true);
+    m_stLand = a.addClipState("land", s.find("Jump_Land"), false, 1.8f);
     // Vault and climb: the Universal Animation Library "Standard" set has
     // no vault or climb clips, so these use its closest poses as
     // stand-ins (tucked jump for the vault, the take-off reach and a
@@ -476,12 +558,10 @@ void ShowcaseModule::buildAnimator() {
             if (int c = s.find(n); c >= 0) return c;
         return -1;
     };
-    m_stVault = m_anim->addClipState("vault", pick({ "Vault", "Jump_Loop" }), true, 1.4f);
-    m_stClimbUp = m_anim->addClipState("climb_up", pick({ "Climb_Up", "Climb", "Jump_Start" }), false, 0.7f);
-    m_stHang = m_anim->addClipState("hang", pick({ "Hang_Idle", "Hang", "Jump_Loop" }), true, 0.35f);
-    m_stClimbOver = m_anim->addClipState("climb_over", pick({ "Climb_Over", "Crouch_Fwd_Loop" }), true, 1.3f);
-    m_anim->play(m_stMove, 0.0f);
-    kke::log::get(name())->info("character: {} bones, {} clips", m_rigData.bones.size(), m_rigData.animations.size());
+    m_stVault = a.addClipState("vault", pick({ "Vault", "Jump_Loop" }), true, 1.4f);
+    m_stClimbUp = a.addClipState("climb_up", pick({ "Climb_Up", "Climb", "Jump_Start" }), false, 0.7f);
+    m_stHang = a.addClipState("hang", pick({ "Hang_Idle", "Hang", "Jump_Loop" }), true, 0.35f);
+    m_stClimbOver = a.addClipState("climb_over", pick({ "Climb_Over", "Crouch_Fwd_Loop" }), true, 1.3f);
 }
 
 void ShowcaseModule::applyIk(float dt) {
@@ -589,7 +669,7 @@ void ShowcaseModule::readActions(float dt) {
     }
     if (in.pressed("interact")) forcePush();
     if (in.pressed("reset")) {
-        spawnCrates();
+        resetCourse();
         m_loco->teleport(m_spawn);
     }
     if (in.pressed("panels")) {
@@ -601,17 +681,28 @@ void ShowcaseModule::readActions(float dt) {
 // Shoots a heavy FEMFX ball from the camera (breaks the yard's glass,
 // wood and stone) and knocks any Jolt body the view points at.
 void ShowcaseModule::shoot() {
+    const kke::Camera& cam = m_app->camera();
+    const glm::vec3 dir = glm::normalize(cam.target - cam.position);
+    const glm::vec3 from = cam.position + dir * 1.0f;
+    spawnBall(from, dir);
+#if KKE_ENABLE_NET
+    if (m_net) m_net->sendEvent(kEventShoot, pack(ShotEvent{ from, dir })); // everyone sees the ball
+#endif
+    forcePush();
+}
+
+void ShowcaseModule::spawnBall(const glm::vec3& from, const glm::vec3& dir) {
 #if KKE_ENABLE_FEMFX
     if (m_femfx) {
-        const kke::Camera& cam = m_app->camera();
-        glm::vec3 dir = glm::normalize(cam.target - cam.position);
         kke::Material iron;
         iron.density = 7800.0f; iron.stiffness = 2.0e7f; iron.poissonsRatio = 0.3f;
         iron.fractureStressThreshold = 1.0e12f; iron.metallic = 0.9f; iron.roughness = 0.35f; iron.textureId = 2;
-        m_femfx->spawnFracturableTetMesh(kke::PhysicsModule::buildSphere(3, 0.15f), cam.position + dir * 1.0f, iron, dir * 22.0f);
+        m_femfx->spawnFracturableTetMesh(kke::PhysicsModule::buildSphere(3, 0.15f), from, iron, dir * 22.0f);
     }
+#else
+    (void)from;
+    (void)dir;
 #endif
-    forcePush();
 }
 
 void ShowcaseModule::forcePush() {
@@ -619,13 +710,57 @@ void ShowcaseModule::forcePush() {
     glm::vec3 dir = glm::normalize(cam.target - cam.position);
     auto hit = m_rigid->world().raycast(cam.position, dir, 30.0f);
     if (!hit.hit) return;
-    for (const Crate& c : m_crates)
-        if (c.body == hit.body) m_rigid->world().addImpulse(c.body, dir * 60.0f, hit.point);
+    for (size_t i = 0; i < m_crates.size(); ++i) {
+        if (m_crates[i].body != hit.body) continue;
+        // Here right away; on a client also on the host, whose crate ours follows.
+        m_rigid->world().addImpulse(m_crates[i].body, dir * 60.0f, hit.point);
+#if KKE_ENABLE_NET
+        if (m_net && !m_net->authority()) m_net->sendEvent(kEventPush, pack(PushEvent{ static_cast<uint16_t>(i + 1), dir, hit.point }));
+#endif
+    }
+}
+
+// Host: a client's shot (show it, pass it on), push (apply it), reset.
+// Client: another player's shot, relayed by the host.
+void ShowcaseModule::onNetEvent(uint16_t kind, uint8_t from, const std::vector<uint8_t>& payload) {
+#if KKE_ENABLE_NET
+    const bool host = m_net && m_net->role() == kke::NetModule::Role::Host;
+    switch (kind) {
+    case kEventShoot: {
+        ShotEvent e;
+        if (!unpack(payload, e) || glm::length(e.dir) < 0.5f) return;
+        spawnBall(e.from, glm::normalize(e.dir));
+        if (host) m_net->relayEvent({ from, kind, payload });
+        break;
+    }
+    case kEventPush: {
+        PushEvent e;
+        if (!host || !unpack(payload, e) || e.body == 0 || e.body > m_crates.size()) return;
+        // Only near where the crate is (a stale or made-up push does nothing).
+        const kke::RigidWorld::BodyId b = m_crates[e.body - 1].body;
+        if (glm::length(m_rigid->world().position(b) - e.point) > 2.0f) return;
+        m_rigid->world().addImpulse(b, glm::normalize(e.dir) * 60.0f, e.point);
+        break;
+    }
+    case kEventReset:
+        if (host) spawnCrates();
+        break;
+    default:
+        break;
+    }
+#else
+    (void)kind;
+    (void)from;
+    (void)payload;
+#endif
 }
 
 void ShowcaseModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
     // Platform: back and forth, up and down.
     m_platformTime += ctx.fixedDt;
+#if KKE_ENABLE_NET
+    if (m_net && !m_net->authority()) return; // a client's platform follows the host's
+#endif
     glm::vec3 p(-14.0f + 5.0f * std::sin(m_platformTime * 0.5f), 0.6f + 1.2f * (0.5f + 0.5f * std::sin(m_platformTime * 0.35f)), 6.0f);
     m_rigid->world().moveKinematic(m_platform, p, glm::quat(1, 0, 0, 0), ctx.fixedDt);
 }
@@ -719,6 +854,8 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     if (feet.y < -20.0f) m_loco->teleport(m_spawn); // fell out of the world
 
     updateAnimation(dt);
+    sendNetState(feet);
+    updateAvatars(dt);
     if (m_charInstance) {
         // Turn the model so it faces -Z (UAL's mannequin already does;
         // Synty characters face +Z), then like the rig at yaw 0.
@@ -747,39 +884,129 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
 
 void ShowcaseModule::updateAnimation(float dt) {
     if (!m_anim) return;
+    MotionInfo m;
+    m.state = m_loco->state();
+    m.speed = m_loco->groundSpeed();
+    m.progress = m_loco->traversalProgress();
+    m.stateTime = m_loco->stateTime();
+    m.fallHeight = m_loco->fallHeight();
+    m.crouch = m_crouch;
+    m.landed = m_loco->landed();
+    animate(*m_anim, m, dt);
+}
+
+void ShowcaseModule::animate(kke::Animator& a, const MotionInfo& m, float dt) {
     using State = kke::Locomotion::State;
-    const int cur = m_anim->current();
-    const float speed = m_loco->groundSpeed();
-    switch (m_loco->state()) {
+    if (m.jumped) a.play(m_stJump, 0.08f, true);
+    const int cur = a.current();
+    switch (m.state) {
     case State::Vault:
-        if (cur != m_stVault) m_anim->play(m_stVault, 0.08f);
+        if (cur != m_stVault) a.play(m_stVault, 0.08f);
         break;
     case State::Hang:
         // No hang clip in the UAL sets: the fall pose (legs down), slowed,
         // with hand IK on the edge. A pack with "Hang_Idle" is used by name.
-        if (cur != m_stHang) m_anim->play(m_stHang, 0.12f);
+        if (cur != m_stHang) a.play(m_stHang, 0.12f);
         break;
     case State::Climb:
         // Hands up the wall first, then the step over the edge.
-        if (m_loco->traversalProgress() < 0.6f) { if (cur != m_stClimbUp) m_anim->play(m_stClimbUp, 0.1f); }
-        else if (cur != m_stClimbOver) m_anim->play(m_stClimbOver, 0.15f);
+        if (m.progress < 0.6f) { if (cur != m_stClimbUp) a.play(m_stClimbUp, 0.1f); }
+        else if (cur != m_stClimbOver) a.play(m_stClimbOver, 0.15f);
         break;
     case State::Air:
-        if (cur == m_stJump && m_anim->finished()) m_anim->play(m_stFall, 0.15f);
+        if (cur == m_stJump && a.finished()) a.play(m_stFall, 0.15f);
         // Walked off an edge (not a jump): fall after a moment.
-        else if (cur != m_stJump && cur != m_stFall && m_loco->stateTime() > 0.15f) m_anim->play(m_stFall, 0.2f);
+        else if (cur != m_stJump && cur != m_stFall && m.stateTime > 0.15f) a.play(m_stFall, 0.2f);
         break;
     case State::Ground: {
-        if (m_loco->landed() && m_loco->fallHeight() > 0.6f) m_anim->play(m_stLand, 0.06f);
-        const int ground = m_crouch ? m_stCrouch : m_stMove;
-        const bool landing = m_anim->current() == m_stLand && !m_anim->finished() && speed < 1.0f;
-        const bool jumping = m_anim->current() == m_stJump && m_anim->stateTime() < 0.2f;
-        if (!landing && !jumping && m_anim->current() != ground) m_anim->play(ground, m_loco->landed() ? 0.12f : 0.2f);
+        if (m.landed && m.fallHeight > 0.6f) a.play(m_stLand, 0.06f);
+        const int ground = m.crouch ? m_stCrouch : m_stMove;
+        const bool landing = a.current() == m_stLand && !a.finished() && m.speed < 1.0f;
+        const bool jumping = a.current() == m_stJump && a.stateTime() < 0.2f;
+        if (!landing && !jumping && a.current() != ground) a.play(ground, m.landed ? 0.12f : 0.2f);
         break;
     }
     }
-    m_anim->setParameter(speed); // measured speed: legs match the ground, in turns too
-    m_anim->update(dt);
+    a.setParameter(m.speed); // measured speed: legs match the ground, in turns too
+    a.update(dt);
+}
+
+// Our player as the others should see it (NetModule sends it ~30x a second).
+void ShowcaseModule::sendNetState(const glm::vec3& feet) {
+#if KKE_ENABLE_NET
+    if (!m_net) return;
+    kke::net::NetPlayerState st;
+    st.position = feet;
+    st.velocity = m_rigid->world().characterVelocity(m_player);
+    st.yaw = m_facing;
+    st.state = static_cast<uint8_t>(m_loco->state());
+    st.speed = m_loco->groundSpeed();
+    st.progress = m_loco->traversalProgress();
+    st.aux = m_loco->fallHeight();
+    st.flags = m_crouch ? kFlagCrouch : 0;
+    // Resets, scene visits and falling out of the world: a jump the
+    // server's speed check should allow (and viewers shouldn't smooth).
+    if (glm::length(feet - m_lastFeet) > 3.0f) st.flags |= kke::net::kPlayerTeleported;
+    m_lastFeet = feet;
+    m_net->setLocalPlayer(st);
+#else
+    (void)feet;
+#endif
+}
+
+// Everyone else: our character model with its own animator, driven by the
+// state they send (interpolated ~100 ms behind), or a box without a model.
+void ShowcaseModule::updateAvatars(float dt) {
+    m_avatarCapsules.clear();
+#if KKE_ENABLE_NET
+    const std::vector<kke::net::RemotePlayer> none;
+    const auto& players = m_net ? m_net->remotePlayers() : none;
+    for (auto it = m_avatars.begin(); it != m_avatars.end();) {
+        const bool here = std::any_of(players.begin(), players.end(), [&](const kke::net::RemotePlayer& p) { return p.id == it->first && p.hasState; });
+        if (here) { ++it; continue; }
+        if (it->second.instance) m_models->remove(it->second.instance);
+        it = m_avatars.erase(it);
+    }
+    using State = kke::Locomotion::State;
+    for (const kke::net::RemotePlayer& p : players) {
+        if (!p.hasState) continue;
+        const kke::net::NetPlayerState& s = p.state;
+        const glm::mat4 base = glm::rotate(glm::translate(glm::mat4(1.0f), s.position), glm::radians(-s.yaw), glm::vec3(0, 1, 0));
+        if (!m_charModel || !m_animSet) {
+            m_avatarCapsules.push_back(base);
+            continue;
+        }
+        Avatar& a = m_avatars[p.id];
+        if (!a.instance) {
+            a.instance = m_models->spawn(m_charModel, base);
+            m_models->setOverlayEnabled(a.instance, false);
+            a.anim = std::make_unique<kke::Animator>(*m_animSet);
+            addAnimatorStates(*a.anim);
+        }
+        const State now = static_cast<State>(std::min<int>(s.state, static_cast<int>(State::Hang)));
+        MotionInfo m;
+        m.state = now;
+        m.speed = s.speed;
+        m.progress = s.progress;
+        m.crouch = (s.flags & kFlagCrouch) != 0;
+        if (static_cast<int>(now) != a.lastState) {
+            // What a state change means: a take-off going up is a jump,
+            // arriving on the ground is a landing from aux metres.
+            m.jumped = now == State::Air && a.lastState == static_cast<int>(State::Ground) && s.velocity.y > 1.0f;
+            m.landed = now == State::Ground && a.lastState == static_cast<int>(State::Air);
+            a.stateTime = 0.0f;
+            a.lastState = static_cast<int>(now);
+        }
+        a.stateTime += dt;
+        m.stateTime = a.stateTime;
+        m.fallHeight = s.aux;
+        animate(*a.anim, m, dt);
+        m_models->setTransform(a.instance, glm::rotate(glm::translate(glm::mat4(1.0f), s.position), glm::radians(m_modelYaw - s.yaw), glm::vec3(0, 1, 0)));
+        if (std::vector<glm::mat4>* locals = m_models->boneLocals(a.instance)) kke::poseToLocals(a.anim->pose(), *locals);
+    }
+#else
+    (void)dt;
+#endif
 }
 
 // ~0.1 ms for 300 crates on one core; far cheaper than 600 draws.
@@ -805,6 +1032,7 @@ void ShowcaseModule::render(const kke::RenderContext& ctx) {
         glm::mat4 t = glm::rotate(glm::translate(glm::mat4(1.0f), w.characterPosition(m_player)), glm::radians(-m_facing), glm::vec3(0, 1, 0));
         m_capsule->draw(ctx, t, 0.0f, 0.6f);
     }
+    for (const glm::mat4& t : m_avatarCapsules) m_capsule->draw(ctx, t, 0.0f, 0.6f);
 }
 
 void ShowcaseModule::renderShadow(const kke::ShadowRenderContext& ctx) {

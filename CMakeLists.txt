@@ -16,6 +16,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # ---------------------------------------------------------------------------
 option(KKE_ENABLE_VALIDATION "Enable Vulkan validation layers in debug" ON)
 option(ENGINE_ENABLE_LUA "Lua 5.4 gameplay scripting (kke::ScriptVM, ScriptModule; SCRIPTING.md)" ON)
+option(KKE_ENABLE_NET "Networking over ENet (MIT): kke::NetModule host/join, LAN discovery (NETWORKING.md). Off = offline only; the loopback transport and replication logic still build." ON)
 option(ENGINE_HEADLESS_TEST "Build the headless smoke-test target" ON)
 option(KKE_ENABLE_TESTS "Build the unit test suite (tests/)" ON)
 option(KKE_ENABLE_JOLT "Build the Jolt Physics rigid-body/collision layer (MIT): static world collision, rigid bodies, character controller. See ACTION_PLAN.md 1.1." ON)
@@ -356,6 +357,39 @@ if(ENGINE_ENABLE_LUA)
     endif()
     # Always optimized: nobody steps through the Lua VM, and scripts run in it.
     target_compile_options(lua_lib PRIVATE $<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>)
+endif()
+
+# ---------------------------------------------------------------------------
+# ENet 1.3.18 — the default network transport (NETWORKING.md). MIT, plain C,
+# every OS. Built from its sources here (its own CMakeLists predates the
+# CMake versions we require); the HAS_* feature macros are what its
+# configure script would find on any current Linux/macOS libc.
+# ---------------------------------------------------------------------------
+if(KKE_ENABLE_NET)
+    FetchContent_Declare(
+        enet
+        GIT_REPOSITORY https://github.com/lsalzman/enet.git
+        GIT_TAG        v1.3.18
+        GIT_SHALLOW    TRUE
+        SOURCE_SUBDIR  kke-no-cmake
+    )
+    FetchContent_MakeAvailable(enet)
+    set(KKE_ENET_SOURCES callbacks.c compress.c host.c list.c packet.c peer.c protocol.c)
+    if(WIN32)
+        list(APPEND KKE_ENET_SOURCES win32.c)
+    else()
+        list(APPEND KKE_ENET_SOURCES unix.c)
+    endif()
+    list(TRANSFORM KKE_ENET_SOURCES PREPEND ${enet_SOURCE_DIR}/)
+    add_library(kke_enet STATIC ${KKE_ENET_SOURCES})
+    target_include_directories(kke_enet SYSTEM PUBLIC ${enet_SOURCE_DIR}/include)
+    set_target_properties(kke_enet PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    if(WIN32)
+        target_link_libraries(kke_enet PUBLIC ws2_32 winmm)
+    else()
+        target_compile_definitions(kke_enet PRIVATE HAS_FCNTL=1 HAS_POLL=1 HAS_GETADDRINFO=1 HAS_GETNAMEINFO=1
+                                   HAS_INET_PTON=1 HAS_INET_NTOP=1 HAS_MSGHDR_FLAGS=1 HAS_SOCKLEN_T=1)
+    endif()
 endif()
 
 # ---------------------------------------------------------------------------
