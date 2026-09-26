@@ -8,6 +8,8 @@
 #include "kke/SceneFile.h"
 #include "kke/SceneLoader.h"
 #include "kke/net/WorldMoveCheck.h"
+#include "kke/net/LevelSight.h"
+#include "kke/net/Visibility.h"
 #endif
 
 #include <chrono>
@@ -85,6 +87,7 @@ bool DedicatedServer::start(std::vector<std::string>& errors) {
                 warning("physics: " + std::to_string(loaded.missing.size()) + " models of the scene aren't in the asset folder ('" + m_assetsDir +
                         "'; set KKE_ASSETS_DIR); their walls won't stop anyone");
             m_moveCheck = std::make_unique<net::WorldMoveCheck>(*m_world);
+            if (m_config.fogOfWar) m_visibility = std::make_unique<net::Visibility>(net::levelSight(*m_world));
             info("physics: " + m_config.scene + ", " + std::to_string(m_collisionBodies) + " collision bodies, " +
                  std::to_string(loaded.collisionTriangles) + " triangles");
         } catch (const std::exception& e) {
@@ -113,6 +116,7 @@ bool DedicatedServer::start(std::vector<std::string>& errors) {
         m_net->onEvent = [this](const net::GameEventMsg& e) { onEvent(e); };
         m_net->onPlayer = [this](uint8_t id, bool joined) {
             if (m_moveCheck && !joined) m_moveCheck->forget(id);
+            if (m_visibility && !joined) m_visibility->forget(id);
             if (!joined) m_net->voice.muted.erase(id); // the next player with this id starts unmuted
             info("player " + std::to_string(id) + (joined ? " joined from " + m_net->address(id) : " left") + " (" + std::to_string(m_net->clientCount()) +
                  "/" + std::to_string(m_config.maxPlayers) + ")");
@@ -124,6 +128,7 @@ bool DedicatedServer::start(std::vector<std::string>& errors) {
             m_net->checkMove = [this](uint8_t id, const net::NetPlayerState& from, const net::NetPlayerState& to, double dt) {
                 return m_moveCheck->check(id, from, to, dt) == net::WorldMoveCheck::Verdict::Ok;
             };
+        if (m_visibility) m_net->sendPlayer = [this](uint8_t viewer, uint8_t subject) { return m_visibility->visible(viewer, subject); };
 #endif
     }
     if (m_config.hasRole("directory")) {
@@ -167,6 +172,12 @@ void DedicatedServer::update(double now) {
     if (!m_started) return;
     m_now = now;
     if (m_nextSave == 0) m_nextSave = now + kAutosaveSeconds;
+    if (m_net && m_visibility) {
+        std::vector<net::Visibility::Player> players;
+        for (const net::RemotePlayer& p : m_net->players(now))
+            if (p.hasState) players.push_back({ p.id, p.state.position, p.state.velocity });
+        m_visibility->update(now, players);
+    }
     if (m_net) m_net->update(now);
     if (m_directory) m_directory->update(now);
     if (m_publisher) m_publisher->update(now);
@@ -359,6 +370,7 @@ void DedicatedServer::stop(const std::string& reason) {
     m_directory.reset();
     std::string error;
     if (!save(&error)) warning("on stop: " + error);
+    m_visibility.reset();
     m_moveCheck.reset();
     m_world.reset();
     m_store.reset();

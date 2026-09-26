@@ -22,6 +22,7 @@ namespace kke {
 class RigidWorld;
 namespace net {
 class WorldMoveCheck;
+class Visibility;
 }
 } // namespace kke
 
@@ -80,6 +81,7 @@ private:
     std::unique_ptr<DirectoryPublisher> m_publisher;
     std::unique_ptr<RigidWorld> m_world;
     std::unique_ptr<net::WorldMoveCheck> m_moveCheck;
+    std::unique_ptr<net::Visibility> m_visibility; // fogOfWar
     size_t m_collisionBodies = 0;
     double m_now = 0, m_nextSave = 0;
     bool m_started = false, m_stopRequested = false;
