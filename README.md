@@ -105,6 +105,12 @@ skips it for one run.
 
 ## Writing a game
 
+The quickest start is the starter template: `tools/new_game my_game`
+copies it (a character you can walk, jump and climb with, and a level in
+Lua), and [the tutorials](https://khyretos.github.io/kk-engine/tutorials/)
+grow it into a small game ([Make your own game](docs/tutorials/getting-started.md)).
+Under the hood a game is a list of modules:
+
 ```cpp
 #include "kke/Application.h"
 #include "kke/modules/GridModule.h"
@@ -129,6 +135,7 @@ example per system; Lua scripting is covered in
 
 | Document | Contents |
 |---|---|
+| [Docs site](https://khyretos.github.io/kk-engine/) | Getting started, tutorials, guides and the Lua API reference, searchable |
 | [ROADMAP.md](ROADMAP.md) | Current state of every system and the next gap in each |
 | [BUGS.md](BUGS.md) | Every defect found, its cause and fix |
 | [ACTION_PLAN.md](ACTION_PLAN.md) | Everything asked for, in priority order |

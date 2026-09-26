@@ -1,0 +1,9 @@
+{
+  "id": "local.starter_game",
+  "title": "Starter Game",
+  "description": "A character to walk, run, jump, vault and climb with, a small level and crates to push, built from the KKE starter template.",
+  "version": "0.1.0",
+  "tags": ["starter", "template"],
+  "engine_version": "0.3",
+  "modules": ["Settings", "Input", "RigidBodies", "Models", "UI", "Audio", "Scripts", "Player", "Stats"]
+}
