@@ -148,6 +148,7 @@ example per system; Lua scripting is covered in
 | [ACTION_PLAN.md](ACTION_PLAN.md) | Everything asked for, in priority order |
 | [docs/BUILDING.md](docs/BUILDING.md) | Full build guide, system packages, troubleshooting |
 | [docs/](docs/README.md) | Design notes per system: audio, input, movement, networking, scripting, optimization, scaling and more |
+| [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) | Every third-party library, tool and asset, its licence and what it asks of your game |
 | [docs/HISTORY.md](docs/HISTORY.md) | The development log: how each system was built and verified |
 | [AI_GUIDE.md](AI_GUIDE.md) | Rules for AI agents working on this codebase |
 
@@ -181,5 +182,9 @@ by milestone.
 ## Licence
 
 MIT, see [LICENSE](LICENSE). Vendored and fetched libraries keep their own
-licences (for example `external/FEMFX/` and the fonts in `assets/fonts/`).
+licences: every library, font, tool and asset the engine uses, its licence
+and what that licence asks of games made with KKE is listed in
+[docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) (all permissive; nothing
+copyleft is built into a game). Downloads carry every licence text in
+`THIRD_PARTY_LICENSES.txt`.
 The Kreative Kompas logo and banner are the project's branding.

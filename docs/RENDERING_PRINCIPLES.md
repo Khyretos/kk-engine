@@ -241,6 +241,24 @@ also our no-dither answer to banding):
 curve changes the look of every scene, so it lands as its own reviewed
 change, not a silent tweak.
 
+**Chosen (Kees, 2026-09-26): AgX by default, ACES and Reinhard on
+request.** The curve now lives once, in `shaders/tonemap.glsl`, and every
+lit shader calls it (`pbr_common.glsl`, `translucent_light.frag`,
+`ocean.frag`, `fluid_composite.frag`). A game picks it on its lighting:
+
+```cpp
+app.lighting().toneMapper = kke::ToneMapper::ACES; // AgX (default), ACES, Reinhard
+app.lighting().exposure = 1.2f;                    // scene light is multiplied by this first
+```
+
+`KKE_TONEMAP=agx|aces|reinhard` forces one for every scene, to compare
+them. AgX keeps hues as things get bright (a lit orange wall stays
+orange instead of going saturated yellow-orange); ACES has more contrast
+and saturation; Reinhard is the old look. The HDR target, one post pass
+and 10-bit output are still #35: until then the curve still runs per
+surface, before blending, and unlit shaders (sky, particles, grid) are
+still display-referred.
+
 ### 8. Textures and GPU utilisation
 
 **Argument.** (Video 25.) Texture bandwidth is often the real
@@ -348,7 +366,8 @@ in #20.
 3. Specular AA, coverage-preserving alpha mips, anisotropic filtering.
    (done)
 4. MSAA as a setting (done) + optional SMAA 1x. (#36)
-5. HDR target, one tone map + exposure pass, 10-bit output. (#35)
+5. AgX tone curve with exposure, selectable per game (done); HDR
+   target, one tone map pass, 10-bit output. (#35)
 6. Front-to-back sorting (done), measured prepass, overdraw view. (#37)
 7. Shadow map quality: compare sampler, slope bias, stable projection. (done, #38)
 8. Texture compression at asset cooking. (#39)

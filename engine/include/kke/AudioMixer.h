@@ -199,6 +199,10 @@ public:
     // Stops capturing and hands over what was captured (interleaved stereo).
     std::vector<float> stopCapture();
     bool capturing() const;
+    // Everything mix() writes from now on, mono (left + right halved), is
+    // pushed to `tap` too (null: none): what the speakers play, for voice
+    // chat's echo canceller (kke::voice::VoiceCleaner).
+    void setOutputTap(AudioStreamHandle tap);
 
     std::vector<ActiveSound> activeSounds() const;
     size_t voiceCount() const;
@@ -268,6 +272,8 @@ private:
     size_t m_echoIdx = 0;
     bool m_capturing = false;
     std::vector<float> m_capture;
+    AudioStreamHandle m_outputTap;
+    std::vector<float> m_tapBlock;
     std::vector<float> m_streamBlock;             // this block of a streamed voice
     std::shared_ptr<Spatializer> m_spatializer;
     std::vector<float> m_hrtfBlock;               // one voice's filtered mono block, for the spatializer

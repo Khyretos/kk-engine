@@ -15,6 +15,7 @@ add_executable(kke_tests
     test_asset_catalog.cpp
     test_picking.cpp
     test_play_blocks.cpp
+    test_node_graph.cpp
     test_touch_gestures.cpp
     test_voxel_fracture.cpp
     test_interior_fill.cpp
@@ -35,6 +36,7 @@ add_executable(kke_tests
     test_scene_file.cpp
     test_net.cpp
     test_server.cpp
+    test_relay.cpp
     test_voice.cpp
     test_storage.cpp
     test_input_map.cpp
@@ -50,11 +52,14 @@ add_executable(kke_tests
     test_texture_mips.cpp
     test_shadow_projection.cpp
     test_draw_order.cpp
+    test_tone_mapper.cpp
     test_jiggle.cpp
     test_rml_data_binding.cpp
     test_frame_retire_queue.cpp
     test_anti_cheat.cpp
     test_fair_play.cpp
+    test_content_packs.cpp
+    test_data_file.cpp
 )
 target_link_libraries(kke_tests PRIVATE kke_engine GTest::gtest_main)
 if(KKE_ENABLE_JOLT)
@@ -62,8 +67,19 @@ if(KKE_ENABLE_JOLT)
 endif()
 if(ENGINE_ENABLE_LUA)
     target_sources(kke_tests PRIVATE test_script_vm.cpp)
+    if(KKE_ENABLE_NET)
+        target_sources(kke_tests PRIVATE test_server_scripts.cpp)
+    endif()
 endif()
 target_compile_definitions(kke_tests PRIVATE KKE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+# ToneMapper.ValuesMatchTheShader reads shaders/tonemap.glsl. It is built
+# into the test binary because the Release workflow runs kke_tests from a
+# packaged build (no source tree, and the package ships only SPIR-V).
+file(READ ${CMAKE_SOURCE_DIR}/shaders/tonemap.glsl KKE_TONEMAP_GLSL)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/shaders/tonemap.glsl)
+configure_file(tonemap_glsl.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/tonemap_glsl.h @ONLY)
+target_include_directories(kke_tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 
 include(GoogleTest)
 # PRE_TEST: tests are listed when ctest runs, not at build time, so a

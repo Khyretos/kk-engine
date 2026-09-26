@@ -1,3 +1,4 @@
+#include "kke/ScriptStore.h"
 #include "kke/ScriptVM.h"
 #include "kke/modules/ScriptModule.h"
 
@@ -6,6 +7,7 @@
 #include <lua.h>
 
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 
 using namespace kke;
@@ -415,4 +417,95 @@ TEST(ScriptModule, ServerScriptsRunOnlyWhereThePhysicsIsTheTruth) {
     EXPECT_TRUE(ScriptModule::runsHere("scripts/toys.lua", false));
     EXPECT_TRUE(ScriptModule::runsHere("C:/game/scripts/sv_rules.lua", true));
     EXPECT_TRUE(ScriptModule::runsHere("scripts/sv_folder/rules.lua", false)); // the file name decides, not the folder
+}
+
+// ---------------------------------------------------------------- store.* (kke/ScriptStore.h)
+
+TEST(ScriptStore, SavesLoadsCountsAndLists) {
+    ScriptVM vm;
+    ScriptStore store("memory:", "My Game!");
+    EXPECT_EQ(store.collection(), "lua.my_game_");
+    store.bind(vm);
+    ASSERT_TRUE(vm.runString(R"(
+        ok = store.save("best", 120)
+        store.save("player.kees", { level = 3, items = { "sword", "map" }, brave = true })
+        store.save("player.ann", { level = 1 })
+        best = store.load("best", 0)
+        missing = store.load("nothing here", "default")
+        kees = store.load("player.kees")
+        level, item2, brave = kees.level, kees.items[2], kees.brave
+        coins = store.add("coins", 5)
+        coins = store.add("coins")
+        half = store.add("half", 0.5)
+        keys = store.keys("player.")
+        nkeys, first = #keys, keys[1]
+        store.remove("best")
+        gone = store.load("best", -1)
+        store.save("player.ann", nil) -- saving nothing removes it
+        after = #store.keys("player.")
+    )")) << (vm.errors().empty() ? "" : vm.errors().back().message);
+    EXPECT_TRUE(globalBool(vm, "ok"));
+    EXPECT_EQ(globalNumber(vm, "best"), 120);
+    EXPECT_EQ(globalString(vm, "missing"), "default");
+    EXPECT_EQ(globalNumber(vm, "level"), 3);
+    EXPECT_EQ(globalString(vm, "item2"), "map");
+    EXPECT_TRUE(globalBool(vm, "brave"));
+    EXPECT_EQ(globalNumber(vm, "coins"), 6);
+    EXPECT_EQ(globalNumber(vm, "half"), 0.5);
+    EXPECT_EQ(globalNumber(vm, "nkeys"), 2);
+    EXPECT_EQ(globalString(vm, "first"), "player.ann"); // in key order
+    EXPECT_EQ(globalNumber(vm, "gone"), -1);
+    EXPECT_EQ(globalNumber(vm, "after"), 1);
+    // Whole numbers stay whole.
+    ASSERT_TRUE(vm.runString("t = math.type(store.load('coins'))"));
+    EXPECT_EQ(globalString(vm, "t"), "integer");
+}
+
+TEST(ScriptStore, GamesCantSeeEachOthersSaves) {
+    auto shared = kke::storage::openStore("memory:");
+    ASSERT_TRUE(shared);
+    ScriptVM a, b;
+    ScriptStore sa(*shared, "racer"), sb(*shared, "farm");
+    sa.bind(a);
+    sb.bind(b);
+    ASSERT_TRUE(a.runString("store.save('best', 10)"));
+    ASSERT_TRUE(b.runString("v = store.load('best', 'none') n = #store.keys()"));
+    EXPECT_EQ(globalString(b, "v"), "none");
+    EXPECT_EQ(globalNumber(b, "n"), 0);
+    EXPECT_TRUE(shared->get("lua.racer", "best").has_value());
+}
+
+TEST(ScriptStore, MistakesAreScriptErrorsNotCrashes) {
+    ScriptVM vm;
+    ScriptStore store("memory:", "g");
+    store.bind(vm);
+    EXPECT_FALSE(vm.runString("store.save('f', print)"));      // functions can't be saved
+    EXPECT_FALSE(vm.runString("store.save('', 1)"));           // a name is needed
+    EXPECT_FALSE(vm.runString("store.save('t', 'x') store.add('t', 1)")); // not a number
+    EXPECT_FALSE(vm.runString("store.add('n', 'lots')"));
+    EXPECT_EQ(vm.errors().size(), 4u);
+    // A save that can't be opened says where and why, on first use.
+    ScriptVM vm2;
+    ScriptStore nowhere("ftp://nowhere", "g");
+    nowhere.bind(vm2);
+    EXPECT_FALSE(vm2.runString("store.load('x')"));
+    ASSERT_FALSE(vm2.errors().empty());
+    EXPECT_NE(vm2.errors().back().message.find("can't open the save"), std::string::npos) << vm2.errors().back().message;
+}
+
+TEST(ScriptStore, KeepsSavesInAFileAcrossRuns) {
+    const std::string path = (std::filesystem::temp_directory_path() / "kke_script_store.db").string();
+    for (const char* ext : { "", "-wal", "-shm" }) std::filesystem::remove(path + ext);
+    {
+        ScriptVM vm;
+        ScriptStore store("sqlite:" + path, "g");
+        store.bind(vm);
+        ASSERT_TRUE(vm.runString("store.save('built', { {x = 1, y = 2}, {x = 3, y = 4} })"));
+    }
+    ScriptVM vm;
+    ScriptStore store("sqlite:" + path, "g");
+    store.bind(vm);
+    ASSERT_TRUE(vm.runString("b = store.load('built') n, y = #b, b[2].y"));
+    EXPECT_EQ(globalNumber(vm, "n"), 2);
+    EXPECT_EQ(globalNumber(vm, "y"), 4);
 }

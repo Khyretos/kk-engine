@@ -157,8 +157,10 @@ FetchContent_MakeAvailable(glm)
 FetchContent_Declare(
     stb
     GIT_REPOSITORY https://github.com/nothings/stb.git
-    GIT_TAG        master
-    GIT_SHALLOW    TRUE
+    # stb has no releases: pinned to a commit so every build compiles (and
+    # docs/DEPENDENCIES.md describes) the same code. No GIT_SHALLOW: a
+    # shallow clone can only check out a branch or tag.
+    GIT_TAG        2c980bb59875b0d32144a71867fbdebb2f77cd20 # master, 2026-08-01
 )
 FetchContent_MakeAvailable(stb)
 add_library(stb INTERFACE)
@@ -311,6 +313,26 @@ add_library(kke_monocypher STATIC ${monocypher_SOURCE_DIR}/src/monocypher.c)
 target_include_directories(kke_monocypher SYSTEM PUBLIC ${monocypher_SOURCE_DIR}/src)
 set_target_properties(kke_monocypher PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_options(kke_monocypher PRIVATE $<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>)
+
+# ---------------------------------------------------------------------------
+# yaml-cpp — YAML for data files that also come as JSON (kke/DataFile.h):
+# pack.yml, mods.yml, game.yml work the same as their .json twins. MIT.
+# Only used inside the engine library (PRIVATE), converted to JSON there.
+# ---------------------------------------------------------------------------
+set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_BUILD_CONTRIB OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_INSTALL OFF CACHE BOOL "" FORCE)
+set(YAML_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    yaml_cpp
+    GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
+    GIT_TAG        yaml-cpp-0.9.0
+    GIT_SHALLOW    TRUE
+    SYSTEM
+)
+FetchContent_MakeAvailable(yaml_cpp)
+set_target_properties(yaml-cpp PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # ---------------------------------------------------------------------------
 # miniaudio — audio output device on every platform (ALSA/PulseAudio/
@@ -487,6 +509,77 @@ if(KKE_ENABLE_NET AND KKE_ENABLE_VOICE)
     )
     FetchContent_MakeAvailable(opus)
     set_target_properties(opus PROPERTIES POSITION_INDEPENDENT_CODE ON)
+endif()
+
+# ---------------------------------------------------------------------------
+# Cleaning up the microphone for voice chat (kke::voice::VoiceCleaner):
+#   RNNoise (BSD-3, Xiph, https://github.com/xiph/rnnoise): noise
+#   suppression by a small neural network. v0.1.1 carries its model in
+#   the source (rnn_data.c, 416 KB), where later versions download a much
+#   bigger one at build time.
+#   SpeexDSP (BSD-3, Xiph, https://github.com/xiph/speexdsp): the echo
+#   canceller (MDF) and its residual echo suppressor.
+# Both are autotools projects; the few C files we need are compiled here
+# directly (like hiredis), floating point, with SpeexDSP's small FFT.
+# ---------------------------------------------------------------------------
+if(KKE_ENABLE_NET AND KKE_ENABLE_VOICE)
+    FetchContent_Declare(
+        rnnoise
+        GIT_REPOSITORY https://github.com/xiph/rnnoise.git
+        GIT_TAG        v0.1.1
+        GIT_SHALLOW    TRUE
+        SOURCE_SUBDIR  kke-no-cmake
+    )
+    FetchContent_Declare(
+        speexdsp
+        GIT_REPOSITORY https://github.com/xiph/speexdsp.git
+        GIT_TAG        SpeexDSP-1.2.1
+        GIT_SHALLOW    TRUE
+        SOURCE_SUBDIR  kke-no-cmake
+    )
+    FetchContent_MakeAvailable(rnnoise speexdsp)
+    add_library(kke_rnnoise STATIC
+        ${rnnoise_SOURCE_DIR}/src/denoise.c ${rnnoise_SOURCE_DIR}/src/rnn.c ${rnnoise_SOURCE_DIR}/src/rnn_data.c
+        ${rnnoise_SOURCE_DIR}/src/pitch.c ${rnnoise_SOURCE_DIR}/src/kiss_fft.c ${rnnoise_SOURCE_DIR}/src/celt_lpc.c)
+    target_include_directories(kke_rnnoise SYSTEM PUBLIC ${rnnoise_SOURCE_DIR}/include)
+    set_target_properties(kke_rnnoise PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    target_compile_options(kke_rnnoise PRIVATE $<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>)
+    if(NOT WIN32)
+        target_link_libraries(kke_rnnoise PRIVATE m)
+    endif()
+
+    # speexdsp_config_types.h is made by its configure script; the same, here.
+    set(KKE_SPEEXDSP_GEN ${CMAKE_BINARY_DIR}/speexdsp-gen)
+    file(WRITE ${KKE_SPEEXDSP_GEN}/speexdsp_config_types.h.new
+        "#ifndef __SPEEX_TYPES_H__\n#define __SPEEX_TYPES_H__\n#include <stdint.h>\n"
+        "typedef int16_t spx_int16_t;\ntypedef uint16_t spx_uint16_t;\ntypedef int32_t spx_int32_t;\ntypedef uint32_t spx_uint32_t;\n#endif\n")
+    configure_file(${KKE_SPEEXDSP_GEN}/speexdsp_config_types.h.new ${KKE_SPEEXDSP_GEN}/speexdsp_config_types.h COPYONLY)
+    # Its warnings (the echo filter resetting itself when it diverged, ...)
+    # go to the engine log instead of stderr: kke_speex_warning() in
+    # engine/src/voice/VoiceCleaner.cpp.
+    file(WRITE ${KKE_SPEEXDSP_GEN}/kke_speex_log.h.new
+        "#ifndef KKE_SPEEX_LOG_H\n#define KKE_SPEEX_LOG_H\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n"
+        "void kke_speex_warning(const char* text, int value, int hasValue);\n#ifdef __cplusplus\n}\n#endif\n"
+        "#define OVERRIDE_SPEEX_WARNING\n#define OVERRIDE_SPEEX_WARNING_INT\n"
+        "static inline void speex_warning(const char* str) { kke_speex_warning(str, 0, 0); }\n"
+        "static inline void speex_warning_int(const char* str, int val) { kke_speex_warning(str, val, 1); }\n#endif\n")
+    configure_file(${KKE_SPEEXDSP_GEN}/kke_speex_log.h.new ${KKE_SPEEXDSP_GEN}/kke_speex_log.h COPYONLY)
+    add_library(kke_speexdsp STATIC
+        ${speexdsp_SOURCE_DIR}/libspeexdsp/mdf.c ${speexdsp_SOURCE_DIR}/libspeexdsp/preprocess.c
+        ${speexdsp_SOURCE_DIR}/libspeexdsp/fftwrap.c ${speexdsp_SOURCE_DIR}/libspeexdsp/smallft.c
+        ${speexdsp_SOURCE_DIR}/libspeexdsp/filterbank.c)
+    target_include_directories(kke_speexdsp SYSTEM PUBLIC ${speexdsp_SOURCE_DIR}/include ${KKE_SPEEXDSP_GEN})
+    target_compile_definitions(kke_speexdsp PRIVATE FLOATING_POINT USE_SMALLFT EXPORT=)
+    if(MSVC)
+        target_compile_options(kke_speexdsp PRIVATE /FI${KKE_SPEEXDSP_GEN}/kke_speex_log.h)
+    else()
+        target_compile_options(kke_speexdsp PRIVATE -include ${KKE_SPEEXDSP_GEN}/kke_speex_log.h)
+    endif()
+    set_target_properties(kke_speexdsp PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    target_compile_options(kke_speexdsp PRIVATE $<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>)
+    if(NOT WIN32)
+        target_link_libraries(kke_speexdsp PRIVATE m)
+    endif()
 endif()
 
 # ---------------------------------------------------------------------------
@@ -696,6 +789,7 @@ add_subdirectory(engine)
 add_subdirectory(tools/model_info)
 add_subdirectory(tools/seal)
 add_subdirectory(tools/license)
+add_subdirectory(tools/packs)
 if(KKE_ENABLE_BENCHMARKS)
     add_subdirectory(benchmarks)
 endif()

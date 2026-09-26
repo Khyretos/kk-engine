@@ -1,5 +1,7 @@
 #pragma once
 
+#include "kke/NodeGraph.h"
+
 #include <glm/glm.hpp>
 
 #include <cstdint>
@@ -45,6 +47,14 @@ namespace kke {
 //     "ambient": [0.25, 0.25, 0.25],
 //     "lights": [ { "position": [3, 2.5, 0], "color": [1, 0.7, 0.4], "intensity": 2 } ]
 //
+// Node graphs (play-to-make's Intermediate level, kke/NodeGraph.h), all
+// optional: per object "graph" (what that one thing does), per scene
+// "graph" (the level's own) and "recipes" (a palette block's graph, by
+// block id, where it differs from the built-in one):
+//
+//     "graph": { "name": "Level", "nodes": [ ... ], "links": [ ... ] },
+//     "recipes": { "bat": { "name": "Bat", "nodes": [ ... ], "links": [ ... ] } }
+//
 // save()/toJson() write the same format back (defaults left out), so a
 // scene round-trips: load -> edit -> save -> load gives the same scene.
 struct SceneObject {
@@ -61,6 +71,7 @@ struct SceneObject {
     std::string texture;            // texture variant file name, "" = the model's own
     std::string breakable;          // "" = static, else a break material name (see above)
     uint32_t fractureSeed = 0;      // 0 = let the game pick
+    NodeGraph graph;                // what this thing does (empty = nothing of its own)
 };
 
 struct SceneLight {
@@ -88,6 +99,8 @@ struct SceneFile {
     bool hasAmbient = false;
     glm::vec3 ambient{0.15f};
     std::vector<SceneLight> lights;
+    NodeGraph graph;                           // the level's own graph
+    std::map<std::string, NodeGraph> recipes;  // palette block id -> its graph
 
     // Throws std::runtime_error naming the file and the problem.
     static SceneFile load(const std::string& path);

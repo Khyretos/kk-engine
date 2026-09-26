@@ -88,6 +88,12 @@ SceneFile SceneFile::parse(const std::string& text, const std::string& sourceNam
         if (g.contains("size")) s.groundSize = glm::vec2(g["size"][0].get<float>(), g["size"][1].get<float>());
         s.groundColor = vec3(g.value("color", nlohmann::json()), s.groundColor);
     }
+    if (j.contains("graph")) s.graph = NodeGraph::fromJson(j["graph"].dump(), sourceName + ": graph");
+    if (j.contains("recipes")) {
+        if (!j["recipes"].is_object()) throw std::runtime_error(sourceName + ": \"recipes\" must be an object (block id -> graph)");
+        for (auto it = j["recipes"].begin(); it != j["recipes"].end(); ++it)
+            s.recipes[it.key()] = NodeGraph::fromJson(it->dump(), sourceName + ": recipes." + it.key());
+    }
     if (!j.contains("objects") || !j["objects"].is_array()) throw std::runtime_error(sourceName + ": needs an \"objects\" array");
     int index = 0;
     for (const nlohmann::json& o : j["objects"]) {
@@ -117,6 +123,7 @@ SceneFile SceneFile::parse(const std::string& text, const std::string& sourceNam
         if (!so.breakable.empty() && !knownBreakable(so.breakable))
             throw std::runtime_error(where + ": \"breakable\" is wood, stone, glass, ceramic or metal, not \"" + so.breakable + "\"");
         so.fractureSeed = o.value("fractureSeed", 0u);
+        if (o.contains("graph")) so.graph = NodeGraph::fromJson(o["graph"].dump(), where + ".graph");
         s.objects.push_back(std::move(so));
     }
     return s;
@@ -160,7 +167,14 @@ std::string SceneFile::toJson() const {
         if (!o.texture.empty()) e["texture"] = o.texture;
         if (!o.breakable.empty()) e["breakable"] = o.breakable;
         if (o.fractureSeed) e["fractureSeed"] = o.fractureSeed;
+        if (!o.graph.empty()) e["graph"] = nlohmann::ordered_json::parse(o.graph.toJson());
         objs.push_back(std::move(e));
+    }
+    if (!graph.empty()) j["graph"] = nlohmann::ordered_json::parse(graph.toJson());
+    if (!recipes.empty()) {
+        nlohmann::ordered_json r = nlohmann::ordered_json::object();
+        for (const auto& [block, g] : recipes) r[block] = nlohmann::ordered_json::parse(g.toJson());
+        j["recipes"] = std::move(r);
     }
     j["objects"] = std::move(objs);
     // One line per array of numbers ("position": [1, 0, 2]), as people

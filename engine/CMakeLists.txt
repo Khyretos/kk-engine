@@ -22,6 +22,8 @@ set(ENGINE_SOURCES
     src/Picking.cpp
     src/DrawOrder.cpp
     src/PlayBlocks.cpp
+    src/PlayScript.cpp
+    src/NodeGraph.cpp
     src/TouchGestures.cpp
     src/VoxelTets.cpp
     src/InteriorColor.cpp
@@ -45,6 +47,8 @@ set(ENGINE_SOURCES
     src/net/Transport.cpp
     src/net/NetSession.cpp
     src/net/ScriptSpawns.cpp
+    src/net/SecureTransport.cpp
+    src/net/Relay.cpp
     src/server/ServerConfig.cpp
     src/server/ServerFiles.cpp
     src/server/ServerAccess.cpp
@@ -60,6 +64,8 @@ set(ENGINE_SOURCES
     src/License.cpp
     src/InputSanity.cpp
     src/PackSeal.cpp
+    src/ContentPacks.cpp
+    src/DataFile.cpp
     src/DevTools.cpp
     src/InputMap.cpp
     src/InputDevices.cpp
@@ -154,6 +160,8 @@ set(ENGINE_HEADERS
     include/kke/ShadowMap.h
     include/kke/Texture.h
     include/kke/MarketplaceIndex.h
+    include/kke/ContentPacks.h
+    include/kke/DataFile.h
     include/kke/RmlTextSafety.h
     include/kke/Log.h
     include/kke/HardwareCheck.h
@@ -205,6 +213,7 @@ engine_copy_runtime_file(kke_engine ${CMAKE_SOURCE_DIR}/assets/fonts/NotoSans-Bo
 target_include_directories(kke_engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+target_link_libraries(kke_engine PRIVATE yaml-cpp::yaml-cpp) # kke/DataFile.h only
 
 target_link_libraries(kke_engine PUBLIC
     volk
@@ -250,15 +259,16 @@ else()
 endif()
 
 if(KKE_ENABLE_NET)
-    target_sources(kke_engine PRIVATE src/net/EnetTransport.cpp src/server/DirectoryNet.cpp src/server/DedicatedServer.cpp)
+    target_sources(kke_engine PRIVATE src/net/EnetTransport.cpp src/server/DirectoryNet.cpp src/server/DedicatedServer.cpp
+        src/server/RelayService.cpp)
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_NET=1)
     target_link_libraries(kke_engine PUBLIC kke_enet)
     if(KKE_ENABLE_JOLT)
         target_sources(kke_engine PRIVATE src/modules/NetModule.cpp)
     endif()
     if(KKE_ENABLE_VOICE)
-        target_sources(kke_engine PRIVATE src/voice/VoiceCodec.cpp)
-        target_link_libraries(kke_engine PUBLIC opus)
+        target_sources(kke_engine PRIVATE src/voice/VoiceCodec.cpp src/voice/VoiceCleaner.cpp)
+        target_link_libraries(kke_engine PUBLIC opus PRIVATE kke_rnnoise kke_speexdsp)
         target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_VOICE=1)
         if(KKE_ENABLE_JOLT)
             target_sources(kke_engine PRIVATE src/modules/VoiceModule.cpp)
@@ -294,7 +304,10 @@ else()
 endif()
 
 if(ENGINE_ENABLE_LUA)
-    target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/modules/ScriptModule.cpp src/modules/ScriptBindings.cpp src/modules/ScriptReplication.cpp)
+    target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/ScriptStore.cpp src/modules/ScriptModule.cpp src/modules/ScriptBindings.cpp src/modules/ScriptReplication.cpp)
+    if(KKE_ENABLE_NET)
+        target_sources(kke_engine PRIVATE src/server/ServerScripts.cpp)
+    endif()
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_LUA=1)
     target_link_libraries(kke_engine PUBLIC lua_lib)
 else()

@@ -55,6 +55,27 @@ store->transaction([&] {
   not lock what it read against other servers; use `increment` for
   shared counts.
 
+## Lua
+
+Game scripts save with `store.save` / `store.load` / `store.add` /
+`store.remove` / `store.keys` (docs/SCRIPTING.md "Saving"). Each game
+gets its own collection, `lua.<game id>`, so one game's scripts never see
+another's. By default a game keeps them in `save/scripts.db` next to it
+(`ScriptModule::storeUrl`, or `KKE_SCRIPT_STORE=valkey://...` for any
+url above); `ScriptModule::useStore` hands scripts a store someone else
+owns, such as a server's.
+
+## Backups
+
+`store->backup("backups/world-1.db")` writes a copy of everything as
+one SQLite file, to a temporary name first, so a copy that fails halfway
+never replaces a good one. SQLite stores copy themselves with
+`VACUUM INTO` (compact, consistent, while the game keeps using the
+store); memory stores write their contents. Valkey and PostgreSQL are
+backed up with their own tools (RDB snapshots, `pg_dump`):
+`canBackup()` is false and `backup()` says so. kke_server makes them on a
+schedule and keeps the newest few (docs/SERVER_HOSTING.md "Saves").
+
 ## Servers
 
 `kke_server` opens a store at start (`"storage"` in server.json,
@@ -70,7 +91,7 @@ services next to the game server: uncomment one and set
 
 `tests/test_storage.cpp` runs the same tests on every backend: memory and
 SQLite always; Valkey and PostgreSQL when `KKE_TEST_VALKEY` /
-`KKE_TEST_POSTGRES` name a server, e.g.
+`KKE_TEST_POSTGRES` name a server (backups too, for memory and SQLite), e.g.
 
 ```sh
 docker run -d -p 6379:6379 valkey/valkey:8-alpine
@@ -82,6 +103,5 @@ All four passed that way on 2026-09-26 (Valkey 8, PostgreSQL 17).
 
 ## Next
 
-Lua access for games (`store.get/put` in scripts, per-game sandboxed
-collections), world and player saves on servers (#45), and backups on a
-schedule.
+World saves on dedicated servers, once server scripts (#43) change a
+server's world (#45); a size budget per game collection.

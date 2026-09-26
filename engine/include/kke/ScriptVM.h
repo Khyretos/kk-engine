@@ -1,5 +1,7 @@
 #pragma once
 
+#include "kke/LuaApi.h"
+
 #include <glm/glm.hpp>
 
 #include <chrono>
@@ -69,6 +71,9 @@ public:
     // Removes everything `path` registered (hooks, timers, and anything an
     // onUnload listener cleans up), then runs it again.
     bool reloadFile(const std::string& path);
+    // The same for code that isn't a file (a node graph's generated Lua):
+    // unloads `source` and runs `code` as it, even after a hard stop.
+    bool reloadString(const std::string& code, const std::string& source);
     void unload(const std::string& source);
 
     // hook.Run(event, ...) from C++. Numbers, strings and bools as args.
@@ -90,6 +95,13 @@ public:
     // The function gets the lua_State and returns how many values it pushed.
     using Fn = std::function<int(lua_State*)>;
     void registerFunction(const std::string& table, const std::string& name, Fn fn);
+    // The same, documented (kke/LuaApi.h): what it takes and gives back,
+    // for the node graph's library and other tools.
+    void registerFunction(const ApiFunction& api, Fn fn);
+    // Documents an event scripts can hook (the engine runs it with hook.Run).
+    void describeEvent(const ApiEvent& event);
+    const std::vector<ApiFunction>& apiFunctions() const { return m_apiFunctions; }
+    const std::vector<ApiEvent>& apiEvents() const { return m_apiEvents; }
     // Called with the source whenever a script is unloaded (before a
     // reload, or unload()): engine bindings free what that script spawned.
     std::function<void(const std::string& source)> onUnload;
@@ -180,6 +192,8 @@ private:
     std::vector<std::string> m_stopped;
     std::vector<Error> m_errors;
     std::deque<Fn> m_functions; // stable addresses: Lua holds pointers to these
+    std::vector<ApiFunction> m_apiFunctions;
+    std::vector<ApiEvent> m_apiEvents;
     int m_runHookRef = -1, m_timersRef = -1, m_unloadRef = -1, m_envRef = -1;
 };
 

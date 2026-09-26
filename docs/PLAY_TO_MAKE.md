@@ -12,8 +12,8 @@ opens onto the same building blocks:
 | Level | Who | How you make things | Status |
 |---|---|---|---|
 | **Simple** | A five-year-old, anyone trying it for the first time | Drag big pictures into the world, click to use them | First prototype in the sandbox (below) |
-| **Intermediate** | Creative people who don't write code | A node graph (blueprints): wire "when this happens" to "do that" | Planned |
-| **Advanced** | Programmers | Plain Lua scripts ([SCRIPTING.md](SCRIPTING.md)) | Lua v2 works today; play blocks not bound yet |
+| **Intermediate** | Creative people who don't write code | A node graph (blueprints): wire "when this happens" to "do that" | First version in the sandbox: the Look tool (below) |
+| **Advanced** | Programmers | Plain Lua scripts ([SCRIPTING.md](SCRIPTING.md)) | Lua v2 works today; the play blocks are bound as `play.*` |
 
 ## One set of building blocks
 
@@ -129,6 +129,73 @@ installing needs Xcode with an Apple ID or TestFlight. Jolt runs there,
 so the bat and ragdolls would too; FEMFX (breakables, the thrown ball) is
 x86-only until its SIMDe port.
 
+## Intermediate mode: the node graph (Look)
+
+![The bat's recipe in the node graph editor](images/node-editor.png)
+
+In the sandbox's Play mode, the **Look** picture ("Inside") opens the node
+graph behind something:
+
+- **Look, then a picture in the palette:** that block's recipe, for every
+  one of them. The bat's is *When someone is hit (by the bat) → Knock over
+  (who, push) → Play sound "wood" (where)*, and it is what actually runs
+  when you swing: change it and the bat changes, while the game keeps
+  running.
+- **Look, then a thing in the world:** a graph for just that one person or
+  box (`me` in the graph). **Look, then the ground:** the level's graph
+  (*When the game starts*, *Every few seconds*).
+- **Show Lua** shows the Lua the graph stands for, next to it.
+
+The editor is RmlUi (so it is also there in shipping builds and on touch
+screens), drawn in the style of [Drawflow](https://github.com/jerosoler/drawflow)
+(MIT): white blocks with a coloured head, green for *when*, blue for *do*,
+orange for *if / repeat*, grey for values; round ports coloured by what
+flows through them; soft curved wires on a dotted canvas. Drawflow is
+JavaScript, so its look and way of working are ported, not its code
+(`games/sandbox/GraphEditor.*`).
+
+- **Add a block:** tap it in the list on the left, or drag a wire from a
+  port into empty space: a menu offers only the blocks that fit that port
+  and wires the new one up.
+- **Wire:** drag from a port to another. Ports that don't fit refuse the
+  wire. Dragging from a wired input picks the wire up again.
+- **Remove:** tap a block or a wire, then its round x (or Remove, Delete,
+  or X on a gamepad).
+- **Values:** - / + for numbers, tap to cycle sounds and blocks, tap to
+  flip yes/no; typing is only for text and places.
+- **Move around:** drag the empty canvas; zoom with the wheel, pinch, the
+  - / + buttons or the triggers. **Fit** (or Y) shows everything.
+
+| | Mouse | Finger | Gamepad |
+|---|---|---|---|
+| Press, drag | left button | one finger | A with the ring cursor |
+| Move the view | drag the canvas | two fingers | right stick |
+| Zoom | wheel | pinch | triggers |
+| Remove what's selected | Delete | the x | X |
+| Show everything | Fit | Fit | Y |
+| Close | Done, Esc | Done | B |
+
+How it works (`kke/NodeGraph.h`, `kke/PlayScript.h`):
+
+- **The node library is the Lua API.** Every documented binding
+  (`ScriptVM::registerFunction` with a `kke::ApiFunction`: label, doc,
+  typed parameters) becomes a block, and every documented event
+  (`describeEvent`) a *when* block. Adding a `play.*` binding adds a block.
+- **A graph runs as Lua.** `compileGraph` turns it into the script it stands
+  for (hooks, `timer.Simple`, `if`, `for`) and loads it into a ScriptVM, the
+  same one hand-written scripts use. "Show Lua" is that text.
+- **Live:** every change recompiles; a graph whose Lua changed is reloaded
+  (things it brought out are taken away first). Blocks light up yellow as
+  they run.
+- **Errors land on blocks:** a missing input or a circle is shown on the
+  block before it runs; a Lua error while it runs is mapped from its line
+  back to the block that made that line.
+- **Saved with the level:** graphs are part of `kke.scene` (per placed
+  thing, the level's, and recipes that differ from the default; see
+  `kke/SceneFile.h`).
+- `KKE_SANDBOX_LOOK=bat` (or `level`) starts with that graph open
+  (developer builds; screenshots).
+
 ## What makes Simple mode simple
 
 Rules for anything added to the Simple palette:
@@ -153,12 +220,12 @@ Yes. Most of the hard parts already exist:
   a "play my level" button that turns the scene into a game, and making the
   palette data-driven so new blocks are Lua recipes.
 - **Advanced:** Lua v2 has hooks, timers, physics, models, UI, scenes and
-  networking. It needs the play blocks bound (`play.*`, a `Hit` event)
-  and a way to attach a script to one placed thing.
-- **Intermediate** is the largest new piece: a node editor UI (there are
-  mature MIT ImGui node editors), a graph file format saved with the
-  scene, a runner that calls the Lua bindings, and the node library
-  generated from those bindings so it never falls behind Lua.
+  networking, and the play blocks are bound (`play.*`, the `Hit`,
+  `Clicked`, `Placed`, `FellOver` and `StoodUp` events). Still to do:
+  loading a hand-written script onto one placed thing.
+- **Intermediate** works in the sandbox (above). Still to do: more blocks
+  (push, score screens, a door), grouping blocks into your own block, and
+  real touch hardware checking the feel (docs/HARDWARE_TESTS.md).
 
 ## Next
 

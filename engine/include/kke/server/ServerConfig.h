@@ -20,17 +20,24 @@ struct ServerConfig {
     std::string motd;                  // shown to each player who joins
     std::vector<std::string> roles{ "players" };
     std::string scene;                 // a scenes/*.json whose collision the physics role loads
+    std::string scripts = "scripts";   // the scripts role: folder with the game's sv_*.lua / sh_*.lua
     std::string saveDir = "save";      // access.json, leaderboards.json, saves
     std::vector<std::string> directories; // "host:port" of directories to register with (public servers)
     bool isPublic = false;             // "public": register with `directories`
     uint16_t directoryPort = 27950;    // UDP, when this server has the directory role
+    std::string relay;                 // "host[:port]" of a relay: players join by code, no port forwarding
+    uint16_t relayPort = 27970;        // UDP, when this server has the relay role
+    uint16_t relaySlots = 64;          // relay role: players relayed at once, each on a port above relayPort
     uint16_t tickRate = 60;            // server updates per second
     std::string storage;               // where the server keeps data (docs/STORAGE.md); "" = sqlite:<saveDir>/server.db
     bool clientScores = false;         // leaderboard: players may send their own scores (easy to cheat; see the docs)
+    bool fogOfWar = false;             // physics: each player is only sent the players they could see or hear (docs/ANTI_CHEAT.md)
+    uint16_t backups = 5;              // copies of the store kept in <saveDir>/backups (0 = none); the oldest goes
+    uint16_t backupMinutes = 60;       // how often one is made (and one on stop)
 
     bool hasRole(const std::string& role) const;
-    // Players join (UDP `port`) when any of players, physics or leaderboard is on;
-    // a directory-only server has no players.
+    // Players join (UDP `port`) when any of players, physics, leaderboard
+    // or scripts is on; a directory or a relay alone has no players.
     bool hasGameSocket() const;
 
     // Each returns false and appends "where: what" lines to `errors` for
@@ -40,7 +47,8 @@ struct ServerConfig {
     bool applyEnv(const std::function<const char*(const char*)>& getenv, std::vector<std::string>& errors);
     // argv without the program name: --name X --port N --max-players N
     // --password X --game X --roles a,b --scene X --save-dir X --public
-    // --directory host:port (repeatable) --directory-port N --client-scores --storage URL
+    // --directory host:port (repeatable) --directory-port N --client-scores --fog-of-war --storage URL
+    // --scripts DIR --relay host[:port] --relay-port N --relay-slots N --backups N --backup-minutes N
     // --config path
     // (read by the caller first) --help.
     bool applyArgs(const std::vector<std::string>& args, std::vector<std::string>& errors);
