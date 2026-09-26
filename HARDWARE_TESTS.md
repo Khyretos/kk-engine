@@ -56,7 +56,10 @@ GPU), so the simulation ran at ~0.27x speed and I tuned melting headless
 in simulated time. Does it look like pouring lava? Does the ice melt at a
 satisfying pace (target: about half gone in ~10 s), does lava crust too
 much or too little, does anything fly off unnaturally? Note the panel's
-"Fluid ms / melt ms" at a full 3,000 particles.
+"Fluid ms / melt ms" at a full 3,000 particles. The liquid now draws as
+one smooth surface (screen-space fluid rendering); press `L` to compare
+with the raw particles — FPS with each, and does the smooth surface look
+like liquid (any flicker, streaks, halos at the edges)?
 **Send back:** a short screen recording or 3 screenshots per block, the
 panel numbers, and what feels off.
 **Result:** —
