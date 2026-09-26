@@ -1,0 +1,2225 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A modular, open-source Vulkan game engine in C++17, with Lua scripting.">
+      
+      
+      
+        <link rel="canonical" href="https://khyretos.github.io/kk-engine/MOVEMENT/">
+      
+      
+        <link rel="prev" href="../SCRIPTING/">
+      
+      
+        <link rel="next" href="../INPUT/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Movement - Kreative Kompas Engine</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#movementmd-how-characters-move-and-why" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Kreative Kompas Engine" class="md-header__button md-logo" aria-label="Kreative Kompas Engine" data-md-component="logo">
+      
+  <img src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Kreative Kompas Engine
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Movement
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Khyretos/kk-engine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Khyretos/kk-engine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../BUILDING/" class="md-tabs__link">
+          
+  
+  
+  Getting started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../tutorials/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../PLAY_TO_MAKE/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../reference/lua-api/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../devlog/" class="md-tabs__link">
+          
+  
+  
+  Project
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Kreative Kompas Engine" class="md-nav__button md-logo" aria-label="Kreative Kompas Engine" data-md-component="logo">
+      
+  <img src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png" alt="logo">
+
+    </a>
+    Kreative Kompas Engine
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Khyretos/kk-engine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Khyretos/kk-engine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BUILDING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install and build
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Make your own game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/01-walk-around/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1. Walk around
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/02-break-things/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    2. Break things
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/03-pickups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3. Script a pickup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/04-sound/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    4. Add sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PLAY_TO_MAKE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Play to make
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SCRIPTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scripting in Lua
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Movement
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Movement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-frame" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The frame
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#area-awareness-dynamic-no-markup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Area awareness: dynamic, no markup
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#floor-three-tiers-not-two" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Floor: three tiers, not two
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#turning-smoother-turn-movement-mm1-yskxt3q4ta8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Turning (Smoother turn movement, MM1, ysKxT3q4tA8)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#jumping-and-the-air-jump-fall-control-mm2-vpfah2t8ipg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Jumping and the air (Jump &amp; Fall control, MM2, vPFAh2T8Ipg)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ledge-hang-and-shimmy-ledge-actions-imsfmmekfxg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ledge hang and shimmy (Ledge actions, IMSFMmekFxg)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ledge-leaps-ledge-actions-imsfmmekfxg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ledge leaps (Ledge actions, IMSFMmekFxg)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wall-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wall run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vault-and-climb-parkour-ep3-rhzwhjpb-jq-ledge-actions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vault and climb (Parkour ep3, rhzwhJPb-jQ; Ledge actions)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#animations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Animations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#not-done-yet-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not done yet (next)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transcripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transcripts
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../INPUT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AUDIO/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../NETWORKING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Networking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SCENES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scenes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../JIGGLE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jiggle physics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PHYSICS_BRIDGE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/lua-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lua API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OPTIMIZATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../RENDERING_PRINCIPLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rendering principles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BENCHMARKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PERFORMANCE_NOTES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SCALING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scaling and platforms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../HARDWARE_TESTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../devlog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Devlog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../GO_TO_MARKET/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Going to market
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../HISTORY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development history
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DOCS_SITE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    This site
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-frame" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The frame
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#area-awareness-dynamic-no-markup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Area awareness: dynamic, no markup
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#floor-three-tiers-not-two" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Floor: three tiers, not two
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#turning-smoother-turn-movement-mm1-yskxt3q4ta8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Turning (Smoother turn movement, MM1, ysKxT3q4tA8)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#jumping-and-the-air-jump-fall-control-mm2-vpfah2t8ipg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Jumping and the air (Jump &amp; Fall control, MM2, vPFAh2T8Ipg)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ledge-hang-and-shimmy-ledge-actions-imsfmmekfxg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ledge hang and shimmy (Ledge actions, IMSFMmekFxg)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ledge-leaps-ledge-actions-imsfmmekfxg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ledge leaps (Ledge actions, IMSFMmekFxg)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wall-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wall run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vault-and-climb-parkour-ep3-rhzwhjpb-jq-ledge-actions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vault and climb (Parkour ep3, rhzwhJPb-jQ; Ledge actions)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#animations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Animations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#not-done-yet-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not done yet (next)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transcripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transcripts
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/Khyretos/kk-engine/edit/main/docs/MOVEMENT.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="movementmd-how-characters-move-and-why">MOVEMENT.md — how characters move, and why<a class="headerlink" href="#movementmd-how-characters-move-and-why" title="Permanent link">&para;</a></h1>
+<p><code>kke::Locomotion</code> (<code>engine/include/kke/Locomotion.h</code>) is the movement layer
+between input actions and <code>RigidWorld</code>'s character controller. Its rules
+come from PointDown's controller, "mechanics museum" and parkour videos
+(https://www.youtube.com/@PointDown). They're Godot videos, but the
+principles are engine-independent. This file keeps the notes and says
+where each principle lives in the code.</p>
+<p>Tested in <code>tests/test_locomotion.cpp</code> (12 tests, including the whole
+kke_demo parkour lane at 60 and at 15 fps). You can play it in <code>kke_demo</code>:
+walk to the lane at x = 20, or run <code>KKE_DEMO_AUTOPILOT=1 ./kke_demo</code> to watch
+it run the lane by itself. The Synty scenes (SCENES.md) are real-art trails:
+<code>SceneTrails.*</code> runs them headless when the packs are present.</p>
+<h2 id="the-frame">The frame<a class="headerlink" href="#the-frame" title="Permanent link">&para;</a></h2>
+<p>PointDown's controller core (<em>Advanced controller core</em>, E3BxMgmP4m0) splits
+a character into <strong>input → model → presentation</strong>:</p>
+<ol>
+<li><strong>Input</strong>: <code>InputModule</code> / <code>InputMap</code> gather actions (<code>move</code>, <code>sprint</code>,
+   <code>walk</code>, <code>crouch</code>, <code>jump</code>). The game never reads keys.</li>
+<li><strong>Area awareness</strong> runs next, before any state logic, and is the only
+   code that asks the world questions (<code>Locomotion::probe</code>).</li>
+<li><strong>Translation, per state</strong>: the current state turns actions into a move.
+   <code>jump</code> on the ground becomes a <em>vault</em> if a thin, hip-high obstacle is
+   ahead, a <em>climb</em> if there's a top with room, and a <em>jump</em> otherwise
+   (<em>Designing AAA parkour system</em>, veOpS2S8Lco: "input actions are not
+   move names").</li>
+<li><strong>Update</strong>: the state moves the capsule.</li>
+<li><strong>Presentation</strong>: the Animator picks poses from the state. Animations are
+   <em>pose providers</em>: they never decide where the capsule goes
+   (<em>Root motion once and for all</em>, _PHRm2EqfX0).</li>
+</ol>
+<h2 id="area-awareness-dynamic-no-markup">Area awareness: dynamic, no markup<a class="headerlink" href="#area-awareness-dynamic-no-markup" title="Permanent link">&para;</a></h2>
+<p>PointDown compares static awareness (trigger volumes placed by a designer)
+with dynamic awareness (ray casts that read the level). Dynamic costs more
+code but lets a level designer drop in any mesh (<em>Designing AAA parkour
+system</em>; <em>Ledge actions</em>, IMSFMmekFxg). We use dynamic awareness because
+the Synty levels have hundreds of props nobody will mark up. <code>probe()</code>
+costs about 15–30 ray casts and 2–4 capsule tests, and runs only on the
+frame "go up" is pressed, or every frame while in the air.</p>
+<ul>
+<li><strong>Face</strong>: rays forward at knee, hip and chest height, from the middle and
+  both shoulders (a centre ray slips through the seam between two fence
+  panels). Anything lower is a stair the controller steps up by itself.</li>
+<li><strong>Top</strong>: one ray down, just past the face, from above the highest top this
+  sensor can reach, and a second one further in when the rim is bevelled
+  (rocks). A ray that starts inside geometry means the obstacle is too tall.</li>
+<li><strong>Depth</strong>: rays down across the top until it drops away. Thin is a fence
+  (vault); a platform is a climb.</li>
+<li><strong>Room</strong>: capsule tests for a tucked body over the top, and for a standing
+  body at the landing or on the top.</li>
+<li><strong>Sensors per state</strong> (PointDown's "ray slice" resources): walking looks
+  0.7 m ahead and reaches 1.9 m, sprinting looks 1.6 m ahead and reaches
+  2.2 m, and the air sensor reaches 2.1 m. A 2.1 m ledge is only climbable
+  from a sprint.</li>
+</ul>
+<h2 id="floor-three-tiers-not-two">Floor: three tiers, not two<a class="headerlink" href="#floor-three-tiers-not-two" title="Permanent link">&para;</a></h2>
+<p>From <em>Designing AAA parkour system</em>: on the floor; up to 25 cm above the
+floor, which still counts as walking (snap down, no fall animation on a
+kerb or a stair edge going down); and in the air. That removes the
+fall/land stutter on small drops. Coyote time (0.12 s) and a jump buffer
+(0.15 s, PointDown's "queued input") come from the same idea: don't make
+the player hit a one-frame window.</p>
+<h2 id="turning-smoother-turn-movement-mm1-yskxt3q4ta8">Turning (<em>Smoother turn movement</em>, MM1, ysKxT3q4tA8)<a class="headerlink" href="#turning-smoother-turn-movement-mm1-yskxt3q4ta8" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Speed and direction are separate.</strong> Input rotates the direction at a
+  limited rate (600°/s running, 320°/s sprinting) instead of replacing the
+  velocity. The head doesn't jump 40 cm in one frame when you mash A/D.</li>
+<li><strong>Sharp turns slow you down</strong> to 60% while the turn lasts ("creatures
+  that value their lives drop speed in turns").</li>
+<li><strong>A 180° reversal keeps its side.</strong> Near 180° the sign of the angle
+  flips on float noise, and the turn would change sides every frame; the
+  last turn direction wins inside ±12° of 180°.</li>
+<li><strong>The animation follows the measured speed</strong>: the blend space gets how
+  far the feet actually moved, not the requested speed. Legs slow down in
+  turns and stop against walls. It is measured over the time physics simulated
+  since the last frame (physics steps at 60 Hz, frames don't), so a frame
+  between two physics steps doesn't read as standing still (BUG-054).</li>
+</ul>
+<h2 id="jumping-and-the-air-jump-fall-control-mm2-vpfah2t8ipg">Jumping and the air (<em>Jump &amp; Fall control</em>, MM2, vPFAh2T8Ipg)<a class="headerlink" href="#jumping-and-the-air-jump-fall-control-mm2-vpfah2t8ipg" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Air control is a small acceleration</strong> (5 m/s²), added to the flight and
+  capped at the take-off speed (at least 1.6 m/s for standing jumps). It
+  corrects a jump; it doesn't fly the character.</li>
+<li><strong>Facing is stored separately from velocity.</strong> When a wall deflects the
+  flight, the body still faces where you meant to go.</li>
+<li><strong>Take-off is a glue window.</strong> The last grounded frame may re-aim the run
+  at the input, so a jump straight after a turn goes where you asked.</li>
+<li><strong>Ledge grab in the air</strong>: rising slowly or falling, steering into a wall
+  whose top is within reach turns into a climb when "go up" is held, or
+  when the top is less than 1.5 m above the feet. Otherwise it hangs.</li>
+</ul>
+<h2 id="ledge-hang-and-shimmy-ledge-actions-imsfmmekfxg">Ledge hang and shimmy (<em>Ledge actions</em>, IMSFMmekFxg)<a class="headerlink" href="#ledge-hang-and-shimmy-ledge-actions-imsfmmekfxg" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Grab</strong>: in the air, steering into a wall whose top is 1.5-2.35 m
+  above the feet (and "go up" not held) hangs from it. That includes edges
+  the probe can't stand on, like a thin wall's top. The capsule is pulled
+  in over 0.15 s to 2.05 m below the top, square to the wall.</li>
+<li><strong>Shimmy</strong>: the sideways part of the input moves along the edge at
+  1.1 m/s. Every step re-finds the wall (at chest height) and the top
+  (just in from the face). Where either is gone, the top steps by more
+  than 15 cm, or the capsule wouldn't fit, the character stops: it never
+  shimmies off the end or through a side wall. The wall normal is
+  re-read each step, so gently curved walls work.</li>
+<li><strong>Corners</strong>: where the edge ends, an outside corner (the wall turns
+  away) or an inside corner (a wall ahead) with a top at the same height
+  is followed: the character moves around it over 0.3 s and hangs from
+  the new face. The held input keeps going the same way along the ledge,
+  even though it no longer points along the new wall. A top that steps
+  up or down is a real end.</li>
+<li><strong>Jump back</strong>: "go up" while pushing away from the wall jumps off it
+  (3.5 m/s out, 80% of a jump up), facing away, with no re-grab for 0.4 s.</li>
+<li><strong>Climb up</strong>: "go up" runs the normal checked climb from the hang (so
+  a thin wall with no room on top can be hung from but not climbed).</li>
+<li><strong>Let go</strong>: crouch. A small push off the wall, no coyote jump, and no
+  re-grab for 0.4 s.</li>
+<li>Animation: no hang clip in the UAL sets, so kke_demo uses the fall
+  pose slowed down with hand IK on the edge; a pack with <code>Hang_Idle</code> is
+  picked up by name. <code>KKE_DEMO_HANG=1 ./kke_demo</code> runs a jump, hang,
+  shimmy around the wall's end and a jump back at the lane's 3 m wall by itself.</li>
+<li>Tests: <code>Locomotion.JumpAtAHighWallHangsFromTheTop</code>,
+  <code>ShimmyAlongTheEdgeStopsWhereItEnds</code>, <code>ClimbUpFromAHang</code>,
+  <code>CrouchLetsGoAndDoesNotRegrab</code>, <code>HangsFromAThinWallItCannotStandOn</code>,
+  <code>ShimmyAlongTheEdgeAndAroundTheCorner</code>, <code>ShimmyStopsWhereTheTopStepsUp</code>,
+  <code>ShimmyIntoAnInsideCorner</code>, <code>JumpBackOffAHang</code>.</li>
+</ul>
+<h2 id="ledge-leaps-ledge-actions-imsfmmekfxg">Ledge leaps (<em>Ledge actions</em>, IMSFMmekFxg)<a class="headerlink" href="#ledge-leaps-ledge-actions-imsfmmekfxg" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Sideways</strong>: hanging, "go up" with the stick pushed along the wall
+  leaps to the next edge that way. The search walks along the wall past
+  the end of the current edge (the part shimmying covers is skipped) and
+  takes the nearest edge within 2.2 m that is up to 1.3 m higher or 1 m
+  lower. It lands a body width in from that edge's end, so the hands
+  aren't on a corner.</li>
+<li><strong>Up</strong>: with the stick into the wall (or no stick), "go up" climbs if
+  there is room on top. If there isn't (a thin wall, a sill), it leaps up
+  to an edge above on the same wall, up to 1.3 m higher.</li>
+<li>The target is found and checked before the leap, including room for
+  the body there and at the middle of the arc. The body moves
+  kinematically for 0.45 s: evenly along the ground, on a parabola in
+  height that peaks about 0.3 m above the higher end (PointDown's
+  ledge-leap parabola). It hangs on arrival. Hand IK reaches for the new
+  edge in the last 40%.</li>
+<li>No target (nothing in reach, no room) means no leap. A sideways "go up"
+  then climbs if it can, as before.</li>
+<li>Tests: <code>Locomotion.LeapsSidewaysAcrossAGapToAHigherEdge</code>,
+  <code>LeapsUpToAnEdgeAbove</code>.</li>
+</ul>
+<h2 id="wall-run">Wall run<a class="headerlink" href="#wall-run" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Start</strong>: in the air, going at least 4 m/s, still holding the run,
+  with a vertical wall at the hips and head within 0.45 m of the
+  capsule's side, and running along it rather than into it (the wall is
+  within 60 degrees of parallel). At least 0.35 m off the ground, so a
+  wall beside a kerb doesn't count.</li>
+<li><strong>On the wall</strong>: the body moves kinematically along the wall at the
+  entry speed, with the wall's normal re-read each step (gently curved
+  walls work). Height follows a lighter gravity (7 m/s² instead of 9.8),
+  starting with 70% of the take-off's vertical speed, so a run arcs up
+  about a metre and comes down. It lasts at most 1.1 s.</li>
+<li><strong>Ends</strong>: "go up" is a wall jump (4.5 m/s off the wall, 85% of a jump
+  up, 80% of the run kept). Letting go of the stick or crouching drops
+  off. Where the wall ends, the runner flies on with the momentum.
+  Something in the way stops the run. Landing on the floor keeps the run
+  going on the ground. The same wall can't catch you again for 0.35 s,
+  but another wall can, so wall-to-wall chains work.</li>
+<li>Animation: UAL2's <code>WallRun_L_Loop</code> / <code>WallRun_R_Loop</code> by wall side
+  (<code>Locomotion::wallRunSide()</code>). The camera's shoulder moves to the open
+  side during the run, because over the wall shoulder the spring arm
+  would pull in behind the head.</li>
+<li>Tests: <code>Locomotion.JumpingAlongAWallRunsOnIt</code>,
+  <code>WallJumpKicksOffTheWall</code>, <code>SlowJumpNextToAWallIsNoWallRun</code>.</li>
+<li>kke_demo: the trick course at x = 26 has a 12 m wall to run along, a
+  row of thin pillars with 1 m gaps and rising tops for leaps, and a thin
+  wall under a beam for the leap up. <code>KKE_DEMO_TRICKS=1 ./kke_demo</code> plays
+  through all of them.</li>
+</ul>
+<h2 id="vault-and-climb-parkour-ep3-rhzwhjpb-jq-ledge-actions">Vault and climb (<em>Parkour ep3</em>, rhzwhJPb-jQ; <em>Ledge actions</em>)<a class="headerlink" href="#vault-and-climb-parkour-ep3-rhzwhjpb-jq-ledge-actions" title="Permanent link">&para;</a></h2>
+<ul>
+<li>The capsule becomes <strong>kinematic</strong> for the move (<code>RigidWorld::
+  setCharacterKinematic</code>). It follows a path that was checked for room
+  before the move started, so there's no fight with the solver halfway
+  over.</li>
+<li><strong>Correction window</strong> (first 0.2 s): the body turns square to the
+  obstacle, whatever angle you came in at.</li>
+<li><strong>Vault path</strong>: PointDown's ledge-leap parabola (<code>leapParabola</code>). It is
+  solved through the start and the landing, with a peak that clears both
+  edges of the top. Horizontal speed stays constant, so a speed vault
+  keeps its momentum (90% of the entry speed).</li>
+<li><strong>Climb path</strong>: up the wall to the edge (hands on top), then over it onto
+  the top.</li>
+<li>At the end the momentum goes back to the controller, and the character
+  is on the floor that the probe found (no "stand on thin air" snap).</li>
+</ul>
+<h2 id="animations">Animations<a class="headerlink" href="#animations" title="Permanent link">&para;</a></h2>
+<p>The Universal Animation Library "Standard" set in <code>assets/animations/</code> has
+<strong>no vault or climb clips</strong> (its 43 clips are locomotion, jump, crouch,
+combat, sitting, swimming and interaction). <strong>Volume 2</strong> (<code>UAL2.fbx</code>, CC0,
+same skeleton, git-ignored like the first) has them: put it next to
+<code>UAL1_Standard.fbx</code> and kke_demo plays</p>
+<ul>
+<li><code>SafetyVault</code> for vaults (one hand on the top, legs swung to the side),</li>
+<li><code>ClimbUp_1m</code> for climbs up walls under 1.6 m, <code>ClimbUp_2m</code> above that.</li>
+</ul>
+<p>Those clips are made in place: the pelvis rises up to 0.8 m and comes back
+down at the end. Locomotion already moves the capsule up and over, so
+<code>AnimationSet::removeLift</code> takes the vertical travel out of them (the
+forward and sideways body motion stays). And they aren't played by the
+clock: <code>Animator::setProgress</code> poses them at Locomotion's progress through
+the move, so a vault that takes 0.4 s or 0.8 s (it depends on the entry
+speed) still puts the hand down on the edge. Other players see the same
+clips: the network state carries the obstacle height during the move.</p>
+<p>Without volume 2 the stand-ins are used: the tucked jump pose for the
+vault, the take-off reach and a crouch step for the climb. There is no
+hang or shimmy clip in either volume (the hang uses the slowed fall pose).</p>
+<p>After the Animator, two small modifiers run in a fixed order
+(<code>engine/include/kke/AnimRig.h</code>, PointDown's <em>SkeletonModifier3D</em> idea):</p>
+<ul>
+<li><strong>Feet on the ground.</strong> Each foot keeps its animated lift above the
+  ground under it, the hips drop when one foot has to go lower than the
+  capsule's floor (stairs, slopes, rock), and analytic two-bone IK bends
+  the legs. Each foot also tilts to lie along the ground under it (the
+  ray's normal, at most 30 degrees), keeping the animated foot angle on
+  top of that. Smoothed over frames, and off in the air.</li>
+<li><strong>Hands on the edge.</strong> During the first part of a vault or climb, the
+  hands go to the top edge the probe found, shoulder-width apart, with
+  the elbows bending out and back. It stands in for the hand plant the
+  stand-in clips don't have.</li>
+</ul>
+<p><strong>Any Synty character can wear the UAL clips.</strong> Bones pair up by name
+(UAL and Synty both follow the Unreal mannequin, give or take case and
+Synty's <code>indexFinger</code>/<code>finger</code>), and each paired bone copies the source's
+rotation change from its rest pose, turned by the difference in facing
+(UAL faces -Z, Synty +Z); the pelvis travel scales with leg length. The
+match logs which bones stayed at rest (Synty's eyes, eyebrows and toes).
+<em>Importing animated 3D characters</em> (a0_JVEY7sbY) puts it as a contract: a
+clip only means something for the skeleton it was made for, so a
+mismatch should be visible, not silent. Try it in kke_demo's Character
+panel, or <code>KKE_CHARACTER=SK_Character_Father_01 ./kke_demo</code>.</p>
+<p><strong>Root motion</strong> is available as data: <code>AnimationSet::extractRootMotion</code>
+moves a bone's horizontal travel out of the clips into a track, the clip
+plays in place, and <code>Animator::rootMotion()</code> reports the travel each
+update for the game to apply. Locomotion clips don't use it (the
+controller moves the capsule, and the blend space follows the measured
+speed); it's for authored moves such as a real vault clip.</p>
+<h2 id="not-done-yet-next">Not done yet (next)<a class="headerlink" href="#not-done-yet-next" title="Permanent link">&para;</a></h2>
+<ul>
+<li>CCD for longer chains (<em>IK fundamentals with CCD</em>, 8pX6LeZdpOo); the
+  legs and arms use the analytic two-bone solve.</li>
+<li>Animation layering (upper body over locomotion; <em>Animation layering
+  pipelines</em>, Fsa2wxyQvzM, blocked below).</li>
+<li>Rest-pose matching for retargeting between skeletons whose rest poses
+  differ a lot (A-pose vs T-pose arms); UAL and Synty are close enough.</li>
+</ul>
+<h2 id="transcripts">Transcripts<a class="headerlink" href="#transcripts" title="Permanent link">&para;</a></h2>
+<p>Fetched 2026-09-26 as auto-captions. YouTube blocks this server after
+about a dozen requests, so these videos didn't come through: <em>God Tier 3D
+Character Controller</em> (qIf5YQ8qJng), <em>Detect climbable ledges</em>
+(yxWxHfjNpa4), <em>Animation layering pipelines</em> (Fsa2wxyQvzM), <em>Post-start
+melee attack redirection</em> (WGZ-QG-0cpw), <em>Use professional AAA practices</em>
+(FgO5edghqRE). <em>Importing animated 3D characters</em> (a0_JVEY7sbY) came
+through on a retry. Their principles overlap with the videos above; retrying
+from another network would complete the set.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../SCRIPTING/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Scripting in Lua">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Scripting in Lua
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../INPUT/" class="md-footer__link md-footer__link--next" aria-label="Next: Input">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Input
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      MIT licence. KKE is written by Claude (Anthropic) working in the repository.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/Khyretos/kk-engine" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://ko-fi.com/khyretos" target="_blank" rel="noopener" title="ko-fi.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11.351 2.715c-2.7 0-4.986.025-6.83.26C2.078 3.285 0 5.154 0 8.61c0 3.506.182 6.13 1.585 8.493 1.584 2.701 4.233 4.182 7.662 4.182h.83c4.209 0 6.494-2.234 7.637-4a9.5 9.5 0 0 0 1.091-2.338C21.792 14.688 24 12.22 24 9.208v-.415c0-3.247-2.13-5.507-5.792-5.87-1.558-.156-2.65-.208-6.857-.208m0 1.947c4.208 0 5.09.052 6.571.182 2.624.311 4.13 1.584 4.13 4v.39c0 2.156-1.792 3.844-3.87 3.844h-.935l-.156.649c-.208 1.013-.597 1.818-1.039 2.546-.909 1.428-2.545 3.064-5.922 3.064h-.805c-2.571 0-4.831-.883-6.078-3.195-1.09-2-1.298-4.155-1.298-7.506 0-2.181.857-3.402 3.012-3.714 1.533-.233 3.559-.26 6.39-.26m6.547 2.287c-.416 0-.65.234-.65.546v2.935c0 .311.234.545.65.545 1.324 0 2.051-.754 2.051-2s-.727-2.026-2.052-2.026m-10.39.182c-1.818 0-3.013 1.48-3.013 3.142 0 1.533.858 2.857 1.949 3.897.727.701 1.87 1.429 2.649 1.896a1.47 1.47 0 0 0 1.507 0c.78-.467 1.922-1.195 2.623-1.896 1.117-1.039 1.974-2.364 1.974-3.897 0-1.662-1.247-3.142-3.039-3.142-1.065 0-1.792.545-2.338 1.298-.493-.753-1.246-1.298-2.312-1.298"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

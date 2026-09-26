@@ -1,0 +1,2381 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A modular, open-source Vulkan game engine in C++17, with Lua scripting.">
+      
+      
+      
+        <link rel="canonical" href="https://khyretos.github.io/kk-engine/RENDERING_PRINCIPLES/">
+      
+      
+        <link rel="prev" href="../OPTIMIZATION/">
+      
+      
+        <link rel="next" href="../BENCHMARKS/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Rendering principles - Kreative Kompas Engine</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#rendering_principlesmd-a-stable-sharp-image-earned-per-frame" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Kreative Kompas Engine" class="md-header__button md-logo" aria-label="Kreative Kompas Engine" data-md-component="logo">
+      
+  <img src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Kreative Kompas Engine
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Rendering principles
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Khyretos/kk-engine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Khyretos/kk-engine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../BUILDING/" class="md-tabs__link">
+          
+  
+  
+  Getting started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../tutorials/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../PLAY_TO_MAKE/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../reference/lua-api/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../devlog/" class="md-tabs__link">
+          
+  
+  
+  Project
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Kreative Kompas Engine" class="md-nav__button md-logo" aria-label="Kreative Kompas Engine" data-md-component="logo">
+      
+  <img src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png" alt="logo">
+
+    </a>
+    Kreative Kompas Engine
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Khyretos/kk-engine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Khyretos/kk-engine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BUILDING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install and build
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Make your own game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/01-walk-around/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1. Walk around
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/02-break-things/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    2. Break things
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/03-pickups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3. Script a pickup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/04-sound/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    4. Add sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PLAY_TO_MAKE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Play to make
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SCRIPTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scripting in Lua
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MOVEMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Movement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../INPUT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AUDIO/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../NETWORKING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Networking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SCENES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scenes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../JIGGLE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jiggle physics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PHYSICS_BRIDGE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/lua-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lua API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OPTIMIZATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rendering principles
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rendering principles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-one-hard-rule-no-dithering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The one hard rule: no dithering
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-this-review-was-done-and-its-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How this review was done (and its limits)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-kke-stands-today-the-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where KKE stands today (the baseline)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-criticisms-one-by-one" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The criticisms, one by one
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The criticisms, one by one">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-temporal-aa-and-upscalers-used-as-a-crutch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Temporal AA and upscalers used as a crutch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-non-temporal-anti-aliasing-msaa-smaa-specular-aa" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Non-temporal anti-aliasing: MSAA, SMAA, specular AA
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-overdraw-quad-utilisation-lods-and-nanite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Overdraw, quad utilisation, LODs and Nanite
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-pass-order-prepass-sorting-and-resource-clears" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Pass order, prepass, sorting and resource clears
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-shadows-optimized-shadow-maps-beat-ray-traced-shadows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Shadows: optimized shadow maps beat ray-traced shadows
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-lighting-and-gi-stable-beats-noisy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Lighting and GI: stable beats noisy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-tone-mapping-exposure-and-colour-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Tone mapping, exposure and colour management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8-textures-and-gpu-utilisation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Textures and GPU utilisation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#9-rendering-what-nobody-can-see-menus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Rendering what nobody can see: menus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#10-fake-realism-and-post-effects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. "Fake realism" and post effects
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#where-we-dont-follow-them-or-cant-yet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where we don't follow them (or can't yet)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#done-in-this-change-2026-09-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Done in this change (2026-09-26)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adopt-list-short" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adopt list (short)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BENCHMARKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PERFORMANCE_NOTES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SCALING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scaling and platforms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../HARDWARE_TESTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../devlog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Devlog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../GO_TO_MARKET/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Going to market
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../HISTORY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development history
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DOCS_SITE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    This site
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-one-hard-rule-no-dithering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The one hard rule: no dithering
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-this-review-was-done-and-its-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How this review was done (and its limits)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-kke-stands-today-the-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where KKE stands today (the baseline)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-criticisms-one-by-one" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The criticisms, one by one
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The criticisms, one by one">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-temporal-aa-and-upscalers-used-as-a-crutch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Temporal AA and upscalers used as a crutch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-non-temporal-anti-aliasing-msaa-smaa-specular-aa" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Non-temporal anti-aliasing: MSAA, SMAA, specular AA
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-overdraw-quad-utilisation-lods-and-nanite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Overdraw, quad utilisation, LODs and Nanite
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-pass-order-prepass-sorting-and-resource-clears" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Pass order, prepass, sorting and resource clears
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-shadows-optimized-shadow-maps-beat-ray-traced-shadows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Shadows: optimized shadow maps beat ray-traced shadows
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-lighting-and-gi-stable-beats-noisy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Lighting and GI: stable beats noisy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-tone-mapping-exposure-and-colour-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Tone mapping, exposure and colour management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8-textures-and-gpu-utilisation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Textures and GPU utilisation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#9-rendering-what-nobody-can-see-menus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Rendering what nobody can see: menus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#10-fake-realism-and-post-effects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. "Fake realism" and post effects
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#where-we-dont-follow-them-or-cant-yet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where we don't follow them (or can't yet)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#done-in-this-change-2026-09-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Done in this change (2026-09-26)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adopt-list-short" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adopt list (short)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/Khyretos/kk-engine/edit/main/docs/RENDERING_PRINCIPLES.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="rendering_principlesmd-a-stable-sharp-image-earned-per-frame">RENDERING_PRINCIPLES.md — a stable, sharp image, earned per frame<a class="headerlink" href="#rendering_principlesmd-a-stable-sharp-image-earned-per-frame" title="Permanent link">&para;</a></h1>
+<p>This is the rendering doctrine for KKE, written after reviewing the
+criticisms of modern real-time rendering made by the YouTube channel
+<a href="https://www.youtube.com/@threatinteractive">Threat Interactive</a>
+(2026-09-26). The channel is harsh in tone; this file ignores the tone and
+the personal attacks and keeps only the technical claims, weighed against
+what this engine actually does today.</p>
+<p>It sits next to <a href="../OPTIMIZATION/">OPTIMIZATION.md</a> (performance doctrine,
+measured log, backlog). Anything here that ships gets a row in that log.</p>
+<h2 id="the-one-hard-rule-no-dithering">The one hard rule: no dithering<a class="headerlink" href="#the-one-hard-rule-no-dithering" title="Permanent link">&para;</a></h2>
+<p><strong>KKE never uses dithering to render anything.</strong> Not ordered/Bayer or
+blue-noise dither, not screen-door or stochastic transparency, not
+checkerboard or interleaved rendering, not any effect whose raw output is
+a noisy pattern that only looks right after a temporal filter or a blur.
+This is the project owner's decision (Kees, 2026-09-26): it makes a game
+look bad, and no performance gain changes that. It is also in
+<a href="https://github.com/Khyretos/kk-engine/blob/main/AI_GUIDE.md">AI_GUIDE.md</a> as a non-negotiable rule.</p>
+<p>What to use instead, by problem:</p>
+<table>
+<thead>
+<tr>
+<th>Problem that dithering is usually used for</th>
+<th>KKE's answer</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Foliage, fences, hair cards (cutout alpha)</td>
+<td>Alpha test + coverage-preserving mips (done, below); MSAA on the edges when MSAA lands</td>
+</tr>
+<tr>
+<td>See-through objects, fades, LOD cross-fades</td>
+<td>Real alpha blending, sorted; or a short opacity fade with blending, not a screen-door pattern</td>
+</tr>
+<tr>
+<td>Banding in dark gradients (sky, fog)</td>
+<td>More precision: an HDR scene target and a 10-bit swapchain where the device has one (<a href="https://github.com/Khyretos/kk-engine/issues/35">#35</a>)</td>
+</tr>
+<tr>
+<td>Soft shadow edges</td>
+<td>Filtered shadow lookups (PCF, hardware compare), not random taps</td>
+</tr>
+<tr>
+<td>Cheap volumetrics / AO / reflections</td>
+<td>Lower resolution with an edge-aware (bilateral) upsample, or fewer, stable samples; never noise left for TAA</td>
+</tr>
+</tbody>
+</table>
+<p>One caveat to know about: MSAA <strong>alpha-to-coverage</strong> is implemented by
+some drivers with a dithered per-pixel sample mask. If we ever use it, it
+must be verified on the target drivers to produce no pattern; otherwise we
+stay with alpha test.</p>
+<h2 id="how-this-review-was-done-and-its-limits">How this review was done (and its limits)<a class="headerlink" href="#how-this-review-was-done-and-its-limits" title="Permanent link">&para;</a></h2>
+<ul>
+<li>All 33 videos on the channel were listed (titles, lengths).</li>
+<li>Transcripts could <strong>not</strong> be downloaded: YouTube currently answers this
+  cloud server with "sign in to confirm you're not a bot" (HTTP 429 /
+  <code>LOGIN_REQUIRED</code> on every client yt-dlp offers), and the public mirrors
+  that proxy captions are blocked the same way. A retry is scheduled; if
+  it succeeds this file will be revised.</li>
+<li>What <em>was</em> read: each video's full description from the channel feed,
+  which for the technical videos includes the <strong>chapter list</strong> and the
+  <strong>papers and talks they cite</strong> (SIGGRAPH/GDC material from Crytek,
+  Frostbite, Guerrilla, Polyphony, Activision, Valve, AMD). Their argument
+  is largely "do what these papers did", so the cited sources were used to
+  pin down what each claim means technically. Where the channel's own
+  public posts were findable (e.g. their clarification about Nanite and
+  quad overdraw), they were used too.</li>
+<li>So the summaries below are the technical positions as they come across
+  from chapter structure, cited sources and public statements, <strong>in our
+  own words</strong>, not quotes. Treat nuance inside a single video as possibly
+  missed.</li>
+</ul>
+<p>Videos weighted most (technical, with chapters or sources): 33 <em>Tutorial:
+How to optimize almost every step in modern game rendering</em>, 28/29
+(Crysis 3's deferred MSAA), 26/27 (Fox Engine / MGSV), 25 (textures and
+GPU utilisation), 24 (Dead Space menu), 21/22 (The Callisto Protocol
+frame breakdown), 32 (vendor-agnostic ray tracing), 19 (top 10 neglected
+areas), and the TAA / Nanite / "fake optimization" videos.</p>
+<h2 id="where-kke-stands-today-the-baseline">Where KKE stands today (the baseline)<a class="headerlink" href="#where-kke-stands-today-the-baseline" title="Permanent link">&para;</a></h2>
+<p>Read from the code on 2026-09-26:</p>
+<ul>
+<li><strong>Forward renderer</strong>: one scene pass, lit in the fragment shader
+  (<code>shaders/pbr_common.glsl</code>: GGX, up to 4 lights, flat ambient, shadow on
+  light 0). No G-buffer.</li>
+<li><strong>No anti-aliasing of any kind</strong>: every attachment is
+  <code>VK_SAMPLE_COUNT_1_BIT</code>, no post AA, nothing temporal.</li>
+<li><strong>Output straight to an 8-bit sRGB swapchain</strong>, with Reinhard tone
+  mapping per channel inside every surface shader. No HDR intermediate.</li>
+<li><strong>One 2D shadow map</strong>, manual 3x3 PCF (9 single taps), fixed bias.</li>
+<li><strong>Textures</strong>: RGBA8 uncompressed, CPU-built mips in linear light,
+  trilinear; until today no anisotropic filtering.</li>
+<li><strong>Culling / batching</strong>: frustum culling and instancing done
+  (OPTIMIZATION.md #23, #25); no LODs, no depth prepass, no draw sorting.</li>
+<li><strong>Render scale</strong> 0.5-1.0 as an opt-in min-spec knob (bilinear blit),
+  default 1.0 (OPTIMIZATION.md #26).</li>
+<li><strong>Nothing temporal and nothing dithered anywhere.</strong> That is a strong
+  starting point for everything below: we don't have to unwind a TAA
+  dependency, we just must not grow one.</li>
+</ul>
+<h2 id="the-criticisms-one-by-one">The criticisms, one by one<a class="headerlink" href="#the-criticisms-one-by-one" title="Permanent link">&para;</a></h2>
+<p>Each entry: what they argue (our words) → is it right → what it means here.</p>
+<h3 id="1-temporal-aa-and-upscalers-used-as-a-crutch">1. Temporal AA and upscalers used as a crutch<a class="headerlink" href="#1-temporal-aa-and-upscalers-used-as-a-crutch" title="Permanent link">&para;</a></h3>
+<p><strong>Argument.</strong> Modern pipelines render many effects deliberately
+under-sampled (half resolution, checkerboard, a few noisy rays per pixel,
+dithered transparency) and rely on TAA / TSR / DLSS to accumulate over
+frames and hide it. The result is a soft image, ghosting and smearing in
+motion, and effects that fall apart when the camera moves. Then upscaling
+is sold as "optimization" when it's really a lower resolution.</p>
+<p><strong>Weighing.</strong> The artifacts are real and well documented (Epic's own TAA
+talk, which they cite, describes the history-rejection trade-offs). The
+counterpoint is also real: TAA was adopted because it cheaply fixes
+specular and sub-pixel aliasing that deferred renderers can't fix with
+MSAA, and a well-tuned TAA looks better than no AA. Where they are most
+clearly right is the <em>dependency</em>: once effects are authored to be noisy,
+TAA becomes mandatory and can't be turned off.</p>
+<p><strong>For KKE.</strong> Adopt the principle: <strong>every frame must be correct on its
+own.</strong> No effect may need temporal accumulation to look right. If a
+temporal filter is ever added, it's an optional setting on top of an
+already clean image, never something an effect depends on. Our render
+scale stays an opt-in min-spec knob, never a budget assumption for
+content.</p>
+<h3 id="2-non-temporal-anti-aliasing-msaa-smaa-specular-aa">2. Non-temporal anti-aliasing: MSAA, SMAA, specular AA<a class="headerlink" href="#2-non-temporal-anti-aliasing-msaa-smaa-specular-aa" title="Permanent link">&para;</a></h3>
+<p><strong>Argument.</strong> (Videos 28, 29, 33 "AA non-temporal aspect".) MSAA was
+dropped because of deferred shading's memory and bandwidth cost, but
+Crysis 3 shipped MSAA in a deferred renderer in 2013, and the real cost
+drivers (per-sample shading everywhere, full-size MSAA G-buffers) can be
+contained: detect edge pixels, shade per-sample only there, and add a
+morphological filter (SMAA) for what MSAA misses. Also: aliasing on
+shiny surfaces should be treated at the material (specular AA), not
+blurred away afterwards.</p>
+<p><strong>Weighing.</strong> Technically sound; Crytek's, Valve's and Jimenez's papers
+back every piece. The honest limits: MSAA does nothing for shader
+aliasing (specular highlights, alpha-tested textures) by itself, and it
+costs memory and bandwidth, which matters on our min-spec (software
+rasteriser). So it must be a setting, not a requirement.</p>
+<p><strong>For KKE.</strong> This is the biggest easy win, because <strong>we are forward</strong>:
+MSAA in a forward renderer needs no G-buffer tricks at all.
+- Specular AA — <strong>done today</strong> (below).
+- Coverage-preserving alpha mips — <strong>done today</strong> (below).
+- MSAA 2x/4x as a setting, off on min-spec, plus optional SMAA 1x as a
+  spatial post filter: <a href="https://github.com/Khyretos/kk-engine/issues/36">#36</a>.</p>
+<h3 id="3-overdraw-quad-utilisation-lods-and-nanite">3. Overdraw, quad utilisation, LODs and Nanite<a class="headerlink" href="#3-overdraw-quad-utilisation-lods-and-nanite" title="Permanent link">&para;</a></h3>
+<p><strong>Argument.</strong> GPUs shade pixels in 2x2 quads; triangles that cover only
+a few pixels waste most of the lanes, so dense meshes cost far more than
+their pixel count. Classic LODs keep triangles large on screen. Nanite
+avoids quad waste with its own rasteriser but carries a large fixed cost,
+and in typical scenes well-authored LODs are faster. (Their later
+clarification: they never claimed Nanite itself uses quads; the point is
+that a frame of well-sized triangles beats it.)</p>
+<p><strong>Weighing.</strong> The quad-efficiency facts are standard GPU behaviour. The
+Nanite comparison depends heavily on content density; for kitbash-heavy
+film-quality scenes Nanite wins. For KKE's content (Synty low-poly packs,
+play-to-make levels) classic LODs are clearly the right tool.</p>
+<p><strong>For KKE.</strong> LOD selection by screen size, using the LODs Synty packs
+already ship, belongs to world streaming/LOD work
+(<a href="https://github.com/Khyretos/kk-engine/issues/23">#23</a>); a
+triangle-density / quad-overdraw debug view goes with the draw-order work
+in <a href="https://github.com/Khyretos/kk-engine/issues/37">#37</a>.</p>
+<h3 id="4-pass-order-prepass-sorting-and-resource-clears">4. Pass order, prepass, sorting and resource clears<a class="headerlink" href="#4-pass-order-prepass-sorting-and-resource-clears" title="Permanent link">&para;</a></h3>
+<p><strong>Argument.</strong> (Video 33 chapters: resource clearing, "how to properly
+prepass content", "how to properly sort basepass content"; video 22's
+pipeline breakdown.) Many frames waste time on clears nothing needed,
+prepasses that include geometry that never occludes anything, and base
+passes drawn in an order that defeats early-Z.</p>
+<p><strong>Weighing.</strong> Correct and uncontroversial; it's the kind of thing only a
+GPU capture shows. The payoff depends on overdraw, which we haven't
+measured.</p>
+<p><strong>For KKE.</strong> Sort opaque draws front to back (by instance batch), try a
+depth prepass for large occluders only and keep it if it measures
+faster, and add an overdraw view to see it:
+<a href="https://github.com/Khyretos/kk-engine/issues/37">#37</a>. Our depth
+attachments already use <code>STORE_OP_DONT_CARE</code>; the colour clear is kept
+because it's the cheapest way to start a tile on tiled GPUs.</p>
+<h3 id="5-shadows-optimized-shadow-maps-beat-ray-traced-shadows">5. Shadows: optimized shadow maps beat ray-traced shadows<a class="headerlink" href="#5-shadows-optimized-shadow-maps-beat-ray-traced-shadows" title="Permanent link">&para;</a></h3>
+<p><strong>Argument.</strong> (Videos 21, 22, 33 "perspective shadow maps".) Ray-traced
+shadows were chosen where well-optimized shadow maps would have looked as
+good for a fraction of the cost. Shadow maps are fast when their
+resolution is spent where the camera looks (perspective / cascaded
+projections), when static casters are cached, and when softening is done
+by filtering rather than noise.</p>
+<p><strong>Weighing.</strong> Agreed for our scale. RT shadows win for area-light
+softness and huge draw distances, which isn't where we are.</p>
+<p><strong>For KKE.</strong> Our single shadow map is fine for small scenes; improve it
+in this order: hardware depth-compare sampler (bilinear PCF for free),
+slope-scaled bias, texel-snapped light projection (no shimmer when the
+camera moves), then cascades as already planned in #20:
+<a href="https://github.com/Khyretos/kk-engine/issues/38">#38</a>.</p>
+<h3 id="6-lighting-and-gi-stable-beats-noisy">6. Lighting and GI: stable beats noisy<a class="headerlink" href="#6-lighting-and-gi-stable-beats-noisy" title="Permanent link">&para;</a></h3>
+<p><strong>Argument.</strong> (Video "Dynamic lighting was better nine years ago",
+Fox Engine videos, 33 "WIP GI &amp; hybrid reflections", 32.) Games from
+~2015 had convincing dynamic lighting from precomputed or probe-based
+indirect light and cheap light volumes; today's per-frame traced GI is
+noisy, needs denoising and temporal accumulation, and costs far more. Ray
+tracing, when used, should run on any vendor's hardware (compute or
+standard ray queries), not be tied to one vendor's features.</p>
+<p><strong>Weighing.</strong> The cost/stability argument is right for most games; the
+flexibility of fully dynamic GI (destructible or player-built worlds) is
+the real reason engines moved on. Our play-to-make worlds change at
+runtime, so fully baked lighting is not enough on its own.</p>
+<p><strong>For KKE.</strong> Prefer probe-based ambient (spherical harmonics or a small
+irradiance cubemap, re-baked in the background when the level changes)
+over per-frame traced GI. This is already planned in
+<a href="https://github.com/Khyretos/kk-engine/issues/20">#20</a> (image-based
+ambient) and <a href="https://github.com/Khyretos/kk-engine/issues/21">#21</a>
+(cheap GI); the principle "stable, no noise, no temporal dependency"
+applies to both. Any future ray tracing uses Vulkan's vendor-neutral
+<code>VK_KHR_ray_query</code>/compute, with a raster fallback.</p>
+<h3 id="7-tone-mapping-exposure-and-colour-management">7. Tone mapping, exposure and colour management<a class="headerlink" href="#7-tone-mapping-exposure-and-colour-management" title="Permanent link">&para;</a></h3>
+<p><strong>Argument.</strong> (Fox Engine videos, 33 "tone mapping &amp; exposure
+mechanics", sources from Polyphony (GT7) and Frostbite.) Much of what
+makes an older game look "right" is careful colour handling: HDR
+lighting, a tone curve that doesn't shift hues or crush saturation,
+proper exposure. Cheap per-channel curves make bright colours go
+yellow/white and look fake.</p>
+<p><strong>Weighing.</strong> Right, and it's a quality issue more than a speed one.</p>
+<p><strong>For KKE.</strong> Our per-channel Reinhard inside each surface shader is the
+weakest part of the current look: it desaturates highlights, it's
+duplicated in <code>translucent_light.frag</code>, it happens before blending (so
+blended surfaces mix tone-mapped values), and with an 8-bit target there
+is no room for bloom or exposure. Move to an HDR scene target, one tone
+map + exposure pass, and a 10-bit swapchain where available (which is
+also our no-dither answer to banding):
+<a href="https://github.com/Khyretos/kk-engine/issues/35">#35</a>. Changing the
+curve changes the look of every scene, so it lands as its own reviewed
+change, not a silent tweak.</p>
+<h3 id="8-textures-and-gpu-utilisation">8. Textures and GPU utilisation<a class="headerlink" href="#8-textures-and-gpu-utilisation" title="Permanent link">&para;</a></h3>
+<p><strong>Argument.</strong> (Video 25.) Texture bandwidth is often the real
+bottleneck. Block compression (BC1/BC4/BC5/BC7) cuts memory and
+bandwidth 4-8x at little visual cost, and a frame should balance
+arithmetic against memory traffic instead of piling on one.</p>
+<p><strong>Weighing.</strong> Correct and standard practice.</p>
+<p><strong>For KKE.</strong> Anisotropic filtering — <strong>done today</strong>. Compression at asset
+cooking (BC7 for colour, BC5 for normals, ASTC on mobile) was already
+backlog item 7 in OPTIMIZATION.md; now tracked in
+<a href="https://github.com/Khyretos/kk-engine/issues/39">#39</a>.</p>
+<h3 id="9-rendering-what-nobody-can-see-menus">9. Rendering what nobody can see: menus<a class="headerlink" href="#9-rendering-what-nobody-can-see-menus" title="Permanent link">&para;</a></h3>
+<p><strong>Argument.</strong> (Video 24, Dead Space remake.) The full 3D scene kept
+rendering at full cost behind an opaque menu, so the menu itself had bad
+frame rates.</p>
+<p><strong>For KKE.</strong> When a full-screen opaque UI (marketplace, pause menu) is
+open, skip the 3D scene (or reuse the last frame) and draw only the UI:
+<a href="https://github.com/Khyretos/kk-engine/issues/40">#40</a>.</p>
+<h3 id="10-fake-realism-and-post-effects">10. "Fake realism" and post effects<a class="headerlink" href="#10-fake-realism-and-post-effects" title="Permanent link">&para;</a></h3>
+<p><strong>Argument.</strong> Heavy film grain, chromatic aberration, lens dirt, motion
+blur and general blur are used to make images feel "cinematic" but mostly
+hide artifacts and make the image harder to read.</p>
+<p><strong>For KKE.</strong> We have none of these. Rule: they may exist later only as
+optional look settings, off by default, and never to hide an artifact.</p>
+<h3 id="where-we-dont-follow-them-or-cant-yet">Where we don't follow them (or can't yet)<a class="headerlink" href="#where-we-dont-follow-them-or-cant-yet" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Velocity compensation, TAA tuning</strong> (video 33's longest chapters):
+  not applicable while we have nothing temporal.</li>
+<li><strong>Deferred-specific MSAA tricks</strong>: we are forward; we get MSAA the easy
+  way.</li>
+<li><strong>Screen-space subsurface scattering, decals</strong>: no current need.</li>
+<li><strong>Vendor-agnostic ray tracing (video 32)</strong>: agreed in principle, not on
+  our roadmap soon.</li>
+</ul>
+<h2 id="done-in-this-change-2026-09-26">Done in this change (2026-09-26)<a class="headerlink" href="#done-in-this-change-2026-09-26" title="Permanent link">&para;</a></h2>
+<p>All three are spatial and per-frame: no temporal filter, no dithering.</p>
+<ol>
+<li><strong>Anisotropic filtering</strong> (<code>kke::Texture</code>, <code>VulkanDevice</code>): the
+   <code>samplerAnisotropy</code> feature is enabled where the device has it, and
+   material samplers use up to 8x. Floors and walls at glancing angles
+   stay sharp instead of dropping to a blurry mip.</li>
+<li><strong>Specular anti-aliasing</strong> (<code>pbr_common.glsl</code>: <code>specularAAKernel</code>,
+   <code>shadeSurfaceAA</code>): the spread of the normal within a pixel (its screen
+   derivatives) is added to GGX roughness (Kaplanyan/Tokuyoshi, with
+   Filament's constants), so distant or tightly curved shiny surfaces
+   don't sparkle. Shaders that <code>discard</code> take the kernel before the
+   discard, since derivatives after it are undefined.</li>
+<li><strong>Coverage-preserving alpha mips</strong> (<code>kke::TextureMips</code>): for any
+   texture with transparent texels, each mip's alpha is scaled so the
+   0.5 alpha test keeps the same fraction of texels as the full-size
+   image (Castaño 2010). Without it, box-filtered alpha drifts below the
+   cutoff and foliage thins out and vanishes with distance. Unit-tested
+   (<code>tests/test_texture_mips.cpp</code>).</li>
+</ol>
+<h2 id="adopt-list-short">Adopt list (short)<a class="headerlink" href="#adopt-list-short" title="Permanent link">&para;</a></h2>
+<ol>
+<li>No dithering, ever. (rule, done)</li>
+<li>Every frame correct on its own; nothing depends on temporal
+   accumulation. (rule)</li>
+<li>Specular AA, coverage-preserving alpha mips, anisotropic filtering.
+   (done)</li>
+<li>MSAA as a setting + optional SMAA 1x. (#36)</li>
+<li>HDR target, one tone map + exposure pass, 10-bit output. (#35)</li>
+<li>Front-to-back sorting, measured prepass, overdraw view. (#37)</li>
+<li>Shadow map quality: compare sampler, slope bias, stable projection. (#38)</li>
+<li>Texture compression at asset cooking. (#39)</li>
+<li>Don't render the 3D scene behind opaque menus. (#40)</li>
+<li>LODs by screen size (#23); probe-based, stable ambient and GI
+    (#20, #21).</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../OPTIMIZATION/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Optimization">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Optimization
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../BENCHMARKS/" class="md-footer__link md-footer__link--next" aria-label="Next: Benchmarks">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Benchmarks
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      MIT licence. KKE is written by Claude (Anthropic) working in the repository.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/Khyretos/kk-engine" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://ko-fi.com/khyretos" target="_blank" rel="noopener" title="ko-fi.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11.351 2.715c-2.7 0-4.986.025-6.83.26C2.078 3.285 0 5.154 0 8.61c0 3.506.182 6.13 1.585 8.493 1.584 2.701 4.233 4.182 7.662 4.182h.83c4.209 0 6.494-2.234 7.637-4a9.5 9.5 0 0 0 1.091-2.338C21.792 14.688 24 12.22 24 9.208v-.415c0-3.247-2.13-5.507-5.792-5.87-1.558-.156-2.65-.208-6.857-.208m0 1.947c4.208 0 5.09.052 6.571.182 2.624.311 4.13 1.584 4.13 4v.39c0 2.156-1.792 3.844-3.87 3.844h-.935l-.156.649c-.208 1.013-.597 1.818-1.039 2.546-.909 1.428-2.545 3.064-5.922 3.064h-.805c-2.571 0-4.831-.883-6.078-3.195-1.09-2-1.298-4.155-1.298-7.506 0-2.181.857-3.402 3.012-3.714 1.533-.233 3.559-.26 6.39-.26m6.547 2.287c-.416 0-.65.234-.65.546v2.935c0 .311.234.545.65.545 1.324 0 2.051-.754 2.051-2s-.727-2.026-2.052-2.026m-10.39.182c-1.818 0-3.013 1.48-3.013 3.142 0 1.533.858 2.857 1.949 3.897.727.701 1.87 1.429 2.649 1.896a1.47 1.47 0 0 0 1.507 0c.78-.467 1.922-1.195 2.623-1.896 1.117-1.039 1.974-2.364 1.974-3.897 0-1.662-1.247-3.142-3.039-3.142-1.065 0-1.792.545-2.338 1.298-.493-.753-1.246-1.298-2.312-1.298"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
