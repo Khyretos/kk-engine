@@ -33,6 +33,10 @@ namespace {
 // Blend-space points: the animations' own foot speeds, which are also
 // kke::Locomotion's default walk/run/sprint/crouch speeds, so feet don't slide.
 constexpr float kWalkSpeed = 1.6f, kJogSpeed = 3.6f, kSprintSpeed = 6.2f, kCrouchSpeed = 1.4f;
+// UAL2 clips the demo plays: vault and climbs (in place, lift removed).
+constexpr const char* kTraversalClips[] = { "SafetyVault", "ClimbUp_1m", "ClimbUp_2m" };
+// Climbs up walls this high (m) or more take the 2 m clip.
+constexpr float kClimbHighFrom = 1.6f;
 
 void appendBox(const glm::mat4& m, const glm::vec3& half, const glm::vec3& color, std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx) {
     const glm::vec3 n[6] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
@@ -469,6 +473,21 @@ void ShowcaseModule::setupPlayer() {
     m_ualModel = m_models->load(file);
     const kke::ModelData* d = m_ualModel ? m_models->model(m_ualModel) : nullptr;
     if (!d || d->animations.empty()) return;
+    // Volume 2 next to it: real vault and climb clips. Only the clips the
+    // demo plays are kept (the file has 134).
+    const std::string file2 = (std::filesystem::path(dir) / "UAL2.fbx").string();
+    if (std::filesystem::exists(file2)) {
+        auto ual2 = std::make_unique<kke::ModelData>(kke::loadModel(file2));
+        std::erase_if(ual2->animations, [](const kke::ModelAnimation& a) {
+            for (const char* keep : kTraversalClips)
+                if (a.name.find(keep) != std::string::npos) return false;
+            return true;
+        });
+        ual2->meshes.clear();
+        if (!ual2->bones.empty() && !ual2->animations.empty()) m_ual2 = std::move(ual2);
+    } else {
+        kke::log::get(name())->info("UAL2.fbx not in {}: vault and climb use stand-in poses", dir);
+    }
     const char* who = std::getenv("KKE_CHARACTER"); // e.g. SK_Character_Father_01
     useCharacter(who ? who : "");
 }
@@ -504,6 +523,10 @@ void ShowcaseModule::useCharacter(const std::string& asset) {
         kke::log::get(name())->info("'{}': {} of {} bones take the UAL clips{}{}", asset, match.matched, d->bones.size(),
                                     missing.empty() ? "" : "; at rest: ", missing);
     }
+    if (m_ual2) {
+        std::vector<kke::ModelAnimation> more = kke::retargetAnimations(*m_ual2, *d, kke::matchBones(*m_ual2, *d));
+        for (kke::ModelAnimation& a : more) m_rigData.animations.push_back(std::move(a));
+    }
     if (m_charInstance) m_models->remove(m_charInstance);
     for (auto& [id, a] : m_avatars)
         if (a.instance) m_models->remove(a.instance);
@@ -528,6 +551,11 @@ void ShowcaseModule::useCharacter(const std::string& asset) {
 void ShowcaseModule::buildAnimator() {
     m_anim.reset();
     m_animSet = std::make_unique<kke::AnimationSet>(m_rigData);
+    // The traversal clips lift the body up and over, in place, then snap
+    // back: Locomotion moves the capsule up, so the lift comes out.
+    for (size_t b = 0; b < m_rigData.bones.size(); ++b)
+        if (kke::canonicalBoneName(m_rigData.bones[b].name) == "pelvis")
+            for (const char* clip : kTraversalClips) m_animSet->removeLift(m_rigData, static_cast<int>(b), clip);
     m_anim = std::make_unique<kke::Animator>(*m_animSet);
     addAnimatorStates(*m_anim);
     m_anim->play(m_stMove, 0.0f);
@@ -562,6 +590,12 @@ void ShowcaseModule::addAnimatorStates(kke::Animator& a) {
     m_stClimbUp = a.addClipState("climb_up", pick({ "Climb_Up", "Climb", "Jump_Start" }), false, 0.7f);
     m_stHang = a.addClipState("hang", pick({ "Hang_Idle", "Hang", "Jump_Loop" }), true, 0.35f);
     m_stClimbOver = a.addClipState("climb_over", pick({ "Climb_Over", "Crouch_Fwd_Loop" }), true, 1.3f);
+    // UAL2's clips, when present: one clip for the whole move, posed by
+    // Locomotion's progress (so hands meet the edge whatever the timing).
+    auto real = [&](const char* clip, const char* state) { return s.find(clip) >= 0 ? a.addClipState(state, s.find(clip), false) : -1; };
+    m_stVaultClip = real("SafetyVault", "vault_clip");
+    m_stClimbLow = real("ClimbUp_1m", "climb_low");
+    m_stClimbHigh = real("ClimbUp_2m", "climb_high");
 }
 
 void ShowcaseModule::applyIk(float dt) {
@@ -890,6 +924,7 @@ void ShowcaseModule::updateAnimation(float dt) {
     m.progress = m_loco->traversalProgress();
     m.stateTime = m_loco->stateTime();
     m.fallHeight = m_loco->fallHeight();
+    m.obstacleHeight = m_loco->lastObstacle().height;
     m.crouch = m_crouch;
     m.landed = m_loco->landed();
     animate(*m_anim, m, dt);
@@ -901,7 +936,10 @@ void ShowcaseModule::animate(kke::Animator& a, const MotionInfo& m, float dt) {
     const int cur = a.current();
     switch (m.state) {
     case State::Vault:
-        if (cur != m_stVault) a.play(m_stVault, 0.08f);
+        if (m_stVaultClip >= 0) {
+            if (cur != m_stVaultClip) a.play(m_stVaultClip, 0.08f);
+            a.setProgress(m.progress);
+        } else if (cur != m_stVault) a.play(m_stVault, 0.08f);
         break;
     case State::Hang:
         // No hang clip in the UAL sets: the fall pose (legs down), slowed,
@@ -909,7 +947,14 @@ void ShowcaseModule::animate(kke::Animator& a, const MotionInfo& m, float dt) {
         if (cur != m_stHang) a.play(m_stHang, 0.12f);
         break;
     case State::Climb:
-        // Hands up the wall first, then the step over the edge.
+        if (m_stClimbLow >= 0 && m_stClimbHigh >= 0) {
+            // Low walls take the 1 m climb (a hop and push), high ones the 2 m.
+            const int clip = m.obstacleHeight < kClimbHighFrom ? m_stClimbLow : m_stClimbHigh;
+            if (cur != clip) a.play(clip, 0.1f);
+            a.setProgress(m.progress);
+            break;
+        }
+        // Stand-ins: hands up the wall first, then the step over the edge.
         if (m.progress < 0.6f) { if (cur != m_stClimbUp) a.play(m_stClimbUp, 0.1f); }
         else if (cur != m_stClimbOver) a.play(m_stClimbOver, 0.15f);
         break;
@@ -942,7 +987,9 @@ void ShowcaseModule::sendNetState(const glm::vec3& feet) {
     st.state = static_cast<uint8_t>(m_loco->state());
     st.speed = m_loco->groundSpeed();
     st.progress = m_loco->traversalProgress();
-    st.aux = m_loco->fallHeight();
+    // Vault / climb: the obstacle's height (which clip); else the fall.
+    const bool traversing = m_loco->state() == kke::Locomotion::State::Vault || m_loco->state() == kke::Locomotion::State::Climb;
+    st.aux = traversing ? m_loco->lastObstacle().height : m_loco->fallHeight();
     st.flags = m_crouch ? kFlagCrouch : 0;
     // Resets, scene visits and falling out of the world: a jump the
     // server's speed check should allow (and viewers shouldn't smooth).
@@ -1000,6 +1047,7 @@ void ShowcaseModule::updateAvatars(float dt) {
         a.stateTime += dt;
         m.stateTime = a.stateTime;
         m.fallHeight = s.aux;
+        m.obstacleHeight = s.aux;
         animate(*a.anim, m, dt);
         m_models->setTransform(a.instance, glm::rotate(glm::translate(glm::mat4(1.0f), s.position), glm::radians(m_modelYaw - s.yaw), glm::vec3(0, 1, 0)));
         if (std::vector<glm::mat4>* locals = m_models->boneLocals(a.instance)) kke::poseToLocals(a.anim->pose(), *locals);

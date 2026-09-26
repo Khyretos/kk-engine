@@ -56,6 +56,7 @@ private:
     struct MotionInfo {
         kke::Locomotion::State state = kke::Locomotion::State::Ground;
         float speed = 0.0f, progress = 0.0f, stateTime = 0.0f, fallHeight = 0.0f;
+        float obstacleHeight = 0.0f; // vault / climb: the top above the feet
         bool crouch = false, landed = false, jumped = false;
     };
     void addAnimatorStates(kke::Animator& a);
@@ -162,6 +163,9 @@ private:
     kke::ModelModule::ModelId m_charModel = 0;
     kke::ModelModule::InstanceId m_charInstance = 0;
     kke::ModelModule::ModelId m_ualModel = 0;
+    // UAL volume 2 (CC0, optional): the traversal clips (vault, climb,
+    // wall run), CPU only; its mesh is the same mannequin.
+    std::unique_ptr<kke::ModelData> m_ual2;
     std::string m_character;               // "" = mannequin
     std::vector<std::string> m_characters; // SK_ assets in the catalog
     kke::ModelData m_rigData;              // the character's bones + its clips
@@ -174,6 +178,8 @@ private:
     std::unique_ptr<kke::Animator> m_anim;
     int m_stMove = -1, m_stCrouch = -1, m_stJump = -1, m_stFall = -1, m_stLand = -1;
     int m_stVault = -1, m_stClimbUp = -1, m_stClimbOver = -1, m_stHang = -1;
+    // Real clips (UAL2), posed by the move's progress; -1 = stand-ins.
+    int m_stVaultClip = -1, m_stClimbLow = -1, m_stClimbHigh = -1;
 
     struct SceneEntry {
         std::string path;

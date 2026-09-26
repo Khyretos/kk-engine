@@ -52,6 +52,11 @@ public:
     // clip plays in place and the game decides where the capsule goes.
     // `model` gives the bone's parents (assumed not animated).
     void extractRootMotion(const ModelData& model, int bone);
+    // Vertical travel (a climb or vault authored in place: the pelvis goes
+    // up and over, then the clip snaps back) moves out of the clips whose
+    // name contains `clipPart`, so a controller that moves the capsule up
+    // doesn't lift the body twice. Returns how many clips it changed.
+    int removeLift(const ModelData& model, int bone, const std::string& clipPart);
     bool hasRootMotion() const { return m_rootBone >= 0; }
     // Model-space travel between two clip times (seconds, unwrapped:
     // a looping clip adds a whole cycle's travel per wrap).
@@ -95,6 +100,10 @@ public:
     // state has reached its end (e.g. "Jump_Land" done -> back to move).
     float stateTime() const { return m_time; }
     bool finished() const;
+    // Moves the controller times (a vault or climb lasts as long as the
+    // obstacle needs): pose the current clip state at `fraction` (0..1) of
+    // its length; the next update() stays there instead of advancing.
+    void setProgress(float fraction);
     // The blend-space parameter (e.g. ground speed in m/s).
     void setParameter(float value) { m_param = value; }
 
@@ -123,6 +132,7 @@ private:
     float m_phase = 0.0f, m_prevPhase = 0.0f;
     float m_fade = 0.0f, m_fadeLength = 0.0f;
     float m_param = 0.0f;
+    bool m_held = false; // setProgress() since the last update()
     glm::vec3 m_rootDelta{0.0f};
     Pose m_pose, m_scratchA, m_scratchB;
 };

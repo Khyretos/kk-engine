@@ -150,11 +150,25 @@ the player hit a one-frame window.
 
 The Universal Animation Library "Standard" set in `assets/animations/` has
 **no vault or climb clips** (its 43 clips are locomotion, jump, crouch,
-combat, sitting, swimming and interaction). kke_demo uses stand-ins: the
-tucked jump pose for the vault, the take-off reach and a crouch step for
-the climb. States look up `Vault`, `Climb_Up` and `Climb_Over` clips by name
-first, so a pack that has them (Quaternius' full UAL, for example) drops
-in without code changes.
+combat, sitting, swimming and interaction). **Volume 2** (`UAL2.fbx`, CC0,
+same skeleton, git-ignored like the first) has them: put it next to
+`UAL1_Standard.fbx` and kke_demo plays
+
+- `SafetyVault` for vaults (one hand on the top, legs swung to the side),
+- `ClimbUp_1m` for climbs up walls under 1.6 m, `ClimbUp_2m` above that.
+
+Those clips are made in place: the pelvis rises up to 0.8 m and comes back
+down at the end. Locomotion already moves the capsule up and over, so
+`AnimationSet::removeLift` takes the vertical travel out of them (the
+forward and sideways body motion stays). And they aren't played by the
+clock: `Animator::setProgress` poses them at Locomotion's progress through
+the move, so a vault that takes 0.4 s or 0.8 s (it depends on the entry
+speed) still puts the hand down on the edge. Other players see the same
+clips: the network state carries the obstacle height during the move.
+
+Without volume 2 the stand-ins are used: the tucked jump pose for the
+vault, the take-off reach and a crouch step for the climb. There is no
+hang or shimmy clip in either volume (the hang uses the slowed fall pose).
 
 After the Animator, two small modifiers run in a fixed order
 (`engine/include/kke/AnimRig.h`, PointDown's *SkeletonModifier3D* idea):

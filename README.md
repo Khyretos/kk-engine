@@ -380,7 +380,8 @@ to move, mouse to look, V first/third person, F or left click shoots the
 breaking yard, E or right click pushes crates, R resets, F1 shows the engine
 panels. The character is Quaternius' Universal Animation Library mannequin
 (CC0): put `UAL1_Standard.fbx` in `assets/animations/` (git-ignored, 23 MB),
-or the character is a box. The old building-block demo is `kke_basics`.
+or the character is a box. `UAL2.fbx` (volume 2, 70 MB) next to it adds the
+real vault and climb clips. The old building-block demo is `kke_basics`.
 
 **Multiplayer** (see [NETWORKING.md](NETWORKING.md)): host or join a
 `kke_demo` game on your LAN or on one PC, from the F1 **Network** panel

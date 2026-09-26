@@ -110,6 +110,27 @@ void AnimationSet::extractRootMotion(const ModelData& model, int bone) {
     }
 }
 
+int AnimationSet::removeLift(const ModelData& model, int bone, const std::string& clipPart) {
+    if (bone < 0 || bone >= static_cast<int>(model.bones.size()) || bone >= static_cast<int>(m_rest.size())) return 0;
+    glm::mat4 parent(1.0f);
+    std::vector<int> chain;
+    for (int p = model.bones[bone].parent; p >= 0; p = model.bones[p].parent) chain.push_back(p);
+    for (auto it = chain.rbegin(); it != chain.rend(); ++it) parent = parent * model.bones[*it].localRest;
+    const glm::mat4 toLocal = glm::inverse(parent);
+    int changed = 0;
+    for (Clip& c : m_clips) {
+        if (c.frames.empty() || c.name.find(clipPart) == std::string::npos) continue;
+        const float startY = (parent * glm::vec4(c.frames[0][bone].t, 1.0f)).y;
+        for (Pose& f : c.frames) {
+            glm::vec3 p = glm::vec3(parent * glm::vec4(f[bone].t, 1.0f));
+            p.y = startY;
+            f[bone].t = glm::vec3(toLocal * glm::vec4(p, 1.0f));
+        }
+        ++changed;
+    }
+    return changed;
+}
+
 glm::vec3 AnimationSet::rootAt(const Clip& c, float t) const {
     if (c.root.empty()) return glm::vec3(0.0f);
     const float f = t * c.sampleRate;
@@ -165,6 +186,14 @@ void Animator::play(int state, float fade, bool restart) {
     m_phase = 0.0f;
     m_fadeLength = m_previous >= 0 ? std::max(0.0f, fade) : 0.0f;
     m_fade = 0.0f;
+}
+
+void Animator::setProgress(float fraction) {
+    if (m_current < 0) return;
+    const State& s = m_states[m_current];
+    m_time = std::clamp(fraction, 0.0f, 1.0f) * stateDuration(s);
+    m_phase = std::clamp(fraction, 0.0f, 1.0f);
+    m_held = true;
 }
 
 float Animator::stateDuration(const State& s) const {
@@ -224,7 +253,8 @@ void Animator::update(float dt) {
         return s.clip >= 0 ? m_set->rootTravel(s.clip, before * s.speed, after * s.speed, s.loop) : glm::vec3(0.0f);
     };
     const float curBefore = m_time;
-    advance(cur, m_time, m_phase);
+    if (!m_held) advance(cur, m_time, m_phase);
+    m_held = false;
     m_rootDelta = travel(cur, curBefore, m_time);
     evaluate(cur, m_time, m_phase, m_scratchA);
     if (m_previous >= 0 && m_fade < m_fadeLength) {
