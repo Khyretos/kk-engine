@@ -36,6 +36,7 @@
     <div id="nav">
         <span class="tab" data-class-active="screen == 'menu'"      data-event-click="go('menu')">🏠<span class="long"> Main menu</span></span>
         <span class="tab" data-class-active="screen == 'settings'"  data-event-click="go('settings')">⚙<span class="long"> Settings</span></span>
+        <span class="tab" data-class-active="screen == 'input'"     data-event-click="go('input')">🎮<span class="long"> Input</span></span>
         <span class="tab" data-class-active="screen == 'inventory'" data-event-click="go('inventory')">🎒<span class="long"> Inventory</span></span>
         <span class="tab" data-class-active="screen == 'hud'"       data-event-click="go('hud')">❤<span class="long"> HUD</span></span>
         <span class="tab" data-class-active="screen == 'dialog'"    data-event-click="go('dialog')">💬<span class="long"> Dialogue &amp; chat</span></span>

@@ -2,6 +2,7 @@
 #include "kke/Application.h"
 #include "kke/Log.h"
 #include "kke/EngineSettings.h"
+#include "kke/modules/InputModule.h"
 
 #include <RmlUi/Core/Core.h>
 #include <RmlUi/Core/Context.h>
@@ -176,6 +177,39 @@ bool UiModule::EngineSystemInterface::LogMessage(Rml::Log::Type type, const Rml:
                          (type == Rml::Log::LT_WARNING) ? "[rmlui:warn] " : "[rmlui] ";
     std::cerr << prefix << message << std::endl;
     return true;
+}
+
+void UiModule::frameStart(const UpdateContext& ctx) {
+    if (!m_context || !m_app) return;
+    InputModule* input = m_app->getModule<InputModule>();
+    if (!input) return;
+    const InputMap& map = input->map(0);
+    auto tap = [&](Rml::Input::KeyIdentifier k, int mods = 0) {
+        // Nothing focused yet: the first press just focuses the first control.
+        Rml::Element* focus = m_context->GetFocusElement();
+        if ((!focus || focus->GetOwnerDocument() == focus) && k != Rml::Input::KI_ESCAPE) k = Rml::Input::KI_TAB;
+        m_context->ProcessKeyDown(k, mods);
+        m_context->ProcessKeyUp(k, mods);
+    };
+    // Directions repeat while held: after 0.4 s, every 0.11 s.
+    const char* dirs[4] = { "ui.up", "ui.down", "ui.left", "ui.right" };
+    const Rml::Input::KeyIdentifier keys[4] = { Rml::Input::KI_UP, Rml::Input::KI_DOWN, Rml::Input::KI_LEFT, Rml::Input::KI_RIGHT };
+    for (int i = 0; i < 4; ++i) {
+        if (map.pressed(dirs[i])) {
+            tap(keys[i]);
+            m_navHeld[i] = 0.0f;
+            m_navRepeat[i] = 0.4f;
+        } else if (map.held(dirs[i])) {
+            m_navHeld[i] += ctx.dt;
+            if (m_navHeld[i] >= m_navRepeat[i]) {
+                tap(keys[i]);
+                m_navRepeat[i] += 0.11f;
+            }
+        }
+    }
+    if (map.pressed("ui.accept")) tap(Rml::Input::KI_RETURN);
+    // ui.back / ui.prev / ui.next are the game's to interpret (close a
+    // menu, switch tabs); UiModule only moves focus and clicks.
 }
 
 void UiModule::init(Application& app) {

@@ -1,5 +1,6 @@
 #include "kke/Application.h"
 #include "kke/modules/DebugControlModule.h"
+#include "kke/modules/InputModule.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/modules/StatsModule.h"
@@ -22,6 +23,7 @@ int main() {
         app.lighting().lights[1].color = glm::vec3(0.55f, 0.65f, 0.85f);
         app.lighting().lights[1].intensity = 0.3f;
 
+        app.addModule<kke::InputModule>("input.json");
         std::vector<kke::Module*> panels;
         panels.push_back(&app.addModule<kke::RigidBodyModule>());
         app.addModule<kke::ModelModule>();

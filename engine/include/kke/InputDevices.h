@@ -144,6 +144,7 @@ private:
     CaptureOptions m_captureOptions;
     Captured m_captured;
     std::vector<InputSource> m_captureDown;               // pressed since beginCapture, in order
+    std::vector<InputSource> m_captureIgnore;             // held when capture began (the button that opened it)
     std::map<uint32_t, std::vector<float>> m_captureRest; // axis baselines per device
     std::map<uint32_t, std::array<float, SDL_GAMEPAD_AXIS_COUNT>> m_captureRestPad;
     glm::vec2 m_captureMotion{0.0f};

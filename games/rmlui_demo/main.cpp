@@ -4,8 +4,10 @@
 #include "kke/modules/SettingsModule.h"
 #include "kke/modules/StatsModule.h"
 #include "kke/modules/UiModule.h"
+#include "kke/modules/InputModule.h"
 
 #include "BackdropModule.h"
+#include "InputScreen.h"
 #include "ShowcaseModule.h"
 
 #include <iostream>
@@ -21,8 +23,10 @@ int main() {
         auto& camera = app.addModule<kke::OrbitCameraModule>(/*distance=*/9.0f, /*pitch=*/-0.35f, /*yaw=*/-0.6f, glm::vec3(0.0f, 0.6f, 0.0f));
         camera.setAutoOrbit(true, 6.0f);
         app.addModule<kke_demo::BackdropModule>();
+        app.addModule<kke::InputModule>("input.json");
         app.addModule<kke::UiModule>();
         app.addModule<kke::SettingsModule>("settings.json");
+        app.addModule<kke_demo::InputScreen>();
         app.addModule<kke_demo::ShowcaseModule>();
         app.addModule<kke::DebugControlModule>();
         app.addModule<kke::StatsModule>();

@@ -66,6 +66,9 @@ public:
     void renderUi() override; // RmlUi layout/animation tick — see the .cpp for why not update()
     void render(const RenderContext& ctx) override;
     void onEvent(const SDL_Event& event) override;
+    // Controller navigation: the InputModule's ui.* actions become RmlUi
+    // arrow/Enter/Tab keys (spatial navigation needs `nav: auto` in RCSS).
+    void frameStart(const UpdateContext& ctx) override;
     void shutdown() override;
     void onSettingsChanged(const EngineSettings& settings) override;
 
@@ -118,6 +121,7 @@ private:
     // Cleared on mouse-up regardless of where the button is released,
     // so a drag that ends off the slider doesn't leave this stuck.
     float m_uiScale = 1.0f;
+    float m_navHeld[4] = {}, m_navRepeat[4] = {};
     float m_dpRatio = 1.0f;
     float m_pixelsPerPoint = 1.0f; // see Window::pixelsPerPoint()
 

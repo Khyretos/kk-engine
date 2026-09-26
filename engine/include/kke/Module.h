@@ -150,6 +150,13 @@ public:
     // order (dependencies first).
     virtual void init(Application& app) {}
 
+    // Every frame, right after that frame's events and before anything
+    // else, paused or not (input: InputModule polls devices and evaluates
+    // bindings here, so menus keep working while the game is paused).
+    virtual void frameStart(const UpdateContext& ctx) {}
+    // Every frame after rendering (InputModule clears per-frame deltas).
+    virtual void frameEnd() {}
+
     // Called at a fixed tick rate (see FixedUpdateContext) — deterministic
     // simulation goes here, not in update().
     virtual void fixedUpdate(const FixedUpdateContext& ctx) {}

@@ -5,6 +5,7 @@
 #include "kke/FracturePattern.h"
 #include "kke/Log.h"
 #include "kke/modules/RigidBodyModule.h"
+#include "kke/modules/InputModule.h"
 #if KKE_ENABLE_FEMFX
 #include "kke/modules/PhysicsModule.h"
 #endif
@@ -51,6 +52,7 @@ void appendBox(const glm::mat4& m, const glm::vec3& half, const glm::vec3& color
 
 std::vector<kke::ModuleDependency> ShowcaseModule::dependencies() const {
     return { { std::type_index(typeid(kke::RigidBodyModule)), true, "collision, crates and the character controller" },
+             { std::type_index(typeid(kke::InputModule)), true, "actions: keyboard/mouse, controllers, rebinding" },
              { std::type_index(typeid(kke::ModelModule)), true, "draws the animated character" } };
 }
 
@@ -58,6 +60,20 @@ void ShowcaseModule::init(kke::Application& app) {
     m_app = &app;
     m_rigid = app.getModule<kke::RigidBodyModule>();
     m_models = app.getModule<kke::ModelModule>();
+    m_input = app.getModule<kke::InputModule>();
+    {
+        kke::InputMap& in = m_input->map(0);
+        kke::InputModule::defineCharacterActions(in);
+        in.defineAction({ "reset", "Reset crates + player", "Showcase", "game" });
+        in.defineAction({ "panels", "Engine panels", "Showcase", "game" });
+        in.addBinding(kke::InputModule::bind("reset", kke::InputModule::key(SDL_SCANCODE_R)));
+        in.addBinding(kke::InputModule::bind("reset", kke::InputModule::pad(SDL_GAMEPAD_BUTTON_START)));
+        in.addBinding(kke::InputModule::bind("panels", kke::InputModule::key(SDL_SCANCODE_F1)));
+        in.addBinding(kke::InputModule::bind("panels", kke::InputModule::pad(SDL_GAMEPAD_BUTTON_BACK)));
+        // Left-click shoots, but not the click that grabs the mouse (see onEvent).
+        m_input->commitDefaults();
+        if (const char* lefty = std::getenv("KKE_LEFT_HANDED"); lefty && *lefty == '1') kke::InputModule::mirrorKeyboard(in);
+    }
 #if KKE_ENABLE_FEMFX
     m_femfx = app.getModule<kke::PhysicsModule>();
 #endif
@@ -303,39 +319,59 @@ void ShowcaseModule::setCaptured(bool on) {
     SDL_SetWindowRelativeMouseMode(m_app->window().handle(), on);
 }
 
+// Only what isn't an action: clicking the view grabs the mouse, Esc
+// lets it go (Esc stays fixed so you can never lock yourself out).
 void ShowcaseModule::onEvent(const SDL_Event& e) {
     ImGuiIO& io = ImGui::GetIO();
     if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !m_captured && !io.WantCaptureMouse && e.button.button == SDL_BUTTON_LEFT) {
         setCaptured(true);
+        m_swallowFire = true; // this click grabbed the mouse; it isn't a shot
         return;
     }
-    if (e.type == SDL_EVENT_MOUSE_MOTION && m_captured) {
-        const float sens = 0.12f;
-        m_rig.addLook(e.motion.xrel * sens, -e.motion.yrel * sens);
+    if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_ESCAPE) setCaptured(false);
+}
+
+// Everything else goes through the input map (rebindable, controllers,
+// left-handed preset): see InputModule::defineCharacterActions.
+void ShowcaseModule::readActions(float dt) {
+    kke::InputMap& in = m_input->map(0);
+    // Typing in an ImGui field: the game doesn't hear the keys.
+    in.setContextEnabled("game", !ImGui::GetIO().WantTextInput);
+    const bool mouseLeft = m_input->devices().value({ kke::SourceKind::MouseButton, 0, SDL_BUTTON_LEFT, 0 }, nullptr) > 0.5f;
+    if (!mouseLeft) m_swallowFire = false;
+
+    if (m_captured) {
+        const glm::vec2 look = in.axis2("look");
+        m_rig.addLook(look.x * m_mouseSensitivity, look.y * m_mouseSensitivity);
     }
-    if (e.type == SDL_EVENT_MOUSE_WHEEL && m_captured)
-        m_rig.settings.armLength = std::clamp(m_rig.settings.armLength - e.wheel.y * 0.4f, 1.5f, 10.0f);
-    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && m_captured && e.button.button == SDL_BUTTON_LEFT) shoot();
-    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && m_captured && e.button.button == SDL_BUTTON_RIGHT) forcePush();
-    if (e.type != SDL_EVENT_KEY_DOWN || e.key.repeat || io.WantTextInput) return;
-    switch (e.key.key) {
-    case SDLK_ESCAPE: setCaptured(false); break;
-    case SDLK_SPACE: m_jumpQueued = true; break;
-    case SDLK_V:
+    const glm::vec2 rate = in.axis2("look.rate"); // stick / gyro: 1 = full speed
+    m_rig.addLook(rate.x * m_stickSpeed * dt, rate.y * m_stickSpeed * 0.7f * dt);
+    if (in.axis("camera.zoom") != 0.0f && m_captured)
+        m_rig.settings.armLength = std::clamp(m_rig.settings.armLength - in.axis("camera.zoom") * 0.4f, 1.5f, 10.0f);
+    if (in.pressed("camera.toggle"))
         m_rig.mode = m_rig.mode == kke::CameraRig::Mode::ThirdPerson ? kke::CameraRig::Mode::FirstPerson : kke::CameraRig::Mode::ThirdPerson;
-        break;
-    case SDLK_C: m_wantCrouch = !m_wantCrouch; break;
-    case SDLK_F: shoot(); break;
-    case SDLK_E: forcePush(); break;
-    case SDLK_R:
+
+    m_moveInput = in.axis2("move");
+    m_sprint = in.held("sprint");
+    m_walk = in.held("walk");
+    m_wantCrouch = in.held("crouch"); // a toggle by default; rebind as hold if you prefer
+    if (in.pressed("jump")) m_jumpQueued = true;
+
+    // Fire: once on press, then 4 shots/s while held.
+    const bool fireOk = !(mouseLeft && (!m_captured || m_swallowFire));
+    m_fireCooldown -= dt;
+    if (fireOk && in.held("fire") && (in.pressed("fire") || m_fireCooldown <= 0.0f)) {
+        shoot();
+        m_fireCooldown = 0.25f;
+    }
+    if (in.pressed("interact")) forcePush();
+    if (in.pressed("reset")) {
         spawnCrates();
         m_loco->teleport(m_spawn);
-        break;
-    case SDLK_F1:
+    }
+    if (in.pressed("panels")) {
         m_showPanels = !m_showPanels;
         for (kke::Module* p : m_panels) p->setUiVisible(m_showPanels);
-        break;
-    default: break;
     }
 }
 
@@ -382,21 +418,15 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     m_rig.settings.pivotHeight += (target - m_rig.settings.pivotHeight) * std::min(1.0f, 10.0f * dt);
     m_rig.settings.eyeHeight = m_rig.settings.pivotHeight + 0.15f;
 
-    // Input -> actions for the movement layer (camera-relative). What
-    // "go up" becomes (vault, climb or jump) is Locomotion's call, from
-    // what its sensors see in front of the character.
+    readActions(dt);
+    // Actions -> the movement layer, camera-relative. An analog stick gives
+    // partial speeds (walk by tilting a little). What "go up" becomes
+    // (vault, climb or jump) is Locomotion's call, from what its sensors
+    // see in front of the character.
     kke::Locomotion::Input in;
-    if (m_captured) {
-        const bool* keys = SDL_GetKeyboardState(nullptr);
-        if (keys[SDL_SCANCODE_W]) in.move += m_rig.forward();
-        if (keys[SDL_SCANCODE_S]) in.move -= m_rig.forward();
-        if (keys[SDL_SCANCODE_D]) in.move += m_rig.right();
-        if (keys[SDL_SCANCODE_A]) in.move -= m_rig.right();
-        in.move.y = 0.0f;
-        if (glm::length(in.move) > 1e-3f) in.move = glm::normalize(in.move);
-        m_sprint = keys[SDL_SCANCODE_LSHIFT];
-        m_walk = keys[SDL_SCANCODE_LALT];
-    }
+    in.move = m_rig.forward() * m_moveInput.y + m_rig.right() * m_moveInput.x;
+    in.move.y = 0.0f;
+    if (glm::length(in.move) > 1e-3f) in.move = glm::normalize(in.move) * std::min(1.0f, glm::length(m_moveInput));
     if (m_autopilot) {
         // Down the lane at a run, sprinting for the tall ledge; "go up"
         // whenever the sensors see something (a player's timing).
@@ -523,9 +553,31 @@ void ShowcaseModule::renderUi() {
     if (m_wantCrouch != m_crouch) ImGui::TextColored(ImVec4(1, 0.8f, 0.3f, 1), "No room to stand up");
     ImGui::Text("Rigid bodies %zu (%zu awake), %.2f ms", w.bodyCount(), w.activeBodyCount(), w.lastStepMs());
     if (ImGui::CollapsingHeader("Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::TextUnformatted("WASD move, Shift sprint, Alt walk, Space jump / vault / climb,\nC crouch, mouse look, wheel zoom, V first/third person\n"
-                               "Left click / F shoot (breaks the yard), right click / E push\n"
-                               "R reset crates + player, F1 engine panels, Esc mouse");
+        ImGui::TextUnformatted("Keyboard: WASD move, Shift sprint, Alt walk, Space jump / vault / climb,\nC crouch, mouse look, wheel zoom, V view, left click shoot, E push, R reset,\nF1 engine panels, Esc frees the mouse.\n"
+                               "Controller: left stick move, right stick look, A jump / vault / climb, B crouch,\nL3 sprint, RT shoot, Y push, R3 view, Start reset, Back panels.");
+        ImGui::SliderFloat("Mouse sensitivity", &m_mouseSensitivity, 0.02f, 0.5f, "%.2f deg/px");
+        ImGui::SliderFloat("Stick / gyro speed", &m_stickSpeed, 45.0f, 540.0f, "%.0f deg/s");
+        if (ImGui::Button("Left-handed keys (mirror)")) kke::InputModule::mirrorKeyboard(m_input->map(0));
+        ImGui::SameLine();
+        if (ImGui::Button("Save bindings")) m_status = m_input->save() ? "Bindings saved to " + m_input->path() : "Could not save bindings";
+        ImGui::SameLine();
+        if (ImGui::Button("Defaults")) m_input->map(0).restoreDefaults();
+        if (ImGui::TreeNode("Current bindings")) {
+            const kke::InputMap& in = m_input->map(0);
+            for (const kke::ActionDef& a : in.actions()) {
+                if (a.context != "game") continue;
+                std::string text;
+                for (size_t i : in.bindingsFor(a.id)) {
+                    const kke::Binding& bnd = in.bindings()[i];
+                    if (!text.empty()) text += ", ";
+                    for (const kke::InputSource& mod : bnd.modifiers) text += m_input->devices().describe(mod) + "+";
+                    text += m_input->devices().describe(bnd.source);
+                }
+                ImGui::Text("%s%s: %s", in.held(a.id) ? "> " : "  ", a.label.c_str(), text.c_str());
+            }
+            ImGui::TextDisabled("Rebind everything in the RmlUi demo's Input screen (same input.json).");
+            ImGui::TreePop();
+        }
     }
     if (ImGui::CollapsingHeader("Movement")) {
         static const char* kStates[] = { "ground", "air", "vault", "climb" };
