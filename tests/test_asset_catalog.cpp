@@ -155,6 +155,48 @@ TEST(AssetCatalog, FindsAtlasesWithoutTheUsualName) {
     fs::remove_all(root);
 }
 
+TEST(AssetCatalog, SameNameInTwoPacksPrefersTheSceneOnes) {
+    fs::path root = fs::temp_directory_path() / "kke_catalog_dupes";
+    fs::remove_all(root);
+    touch(root / "POLYGON_City/FBX/SM_Bld_Shop_01.fbx");
+    touch(root / "PolygonTown_Source_Files/FBX/SM_Bld_Shop_01.fbx");
+    kke::AssetCatalog c = kke::AssetCatalog::scan(root.string());
+    const kke::CatalogAsset* town = c.find("SM_Bld_Shop_01", { "PolygonTown_Source_Files" });
+    ASSERT_NE(town, nullptr);
+    EXPECT_NE(town->path.find("PolygonTown"), std::string::npos);
+    const kke::CatalogAsset* city = c.find("SM_Bld_Shop_01", { "POLYGON_City" });
+    ASSERT_NE(city, nullptr);
+    EXPECT_NE(city->path.find("POLYGON_City"), std::string::npos);
+    EXPECT_NE(c.find("SM_Bld_Shop_01", { "Nope" }), nullptr); // any pack after that
+    fs::remove_all(root);
+}
+
+TEST(AssetCatalog, TexturesNamedAfterTheAssetOrMaterial) {
+    fs::path root = fs::temp_directory_path() / "kke_catalog_named";
+    fs::remove_all(root);
+    touch(root / "Town/FBX/SM_Env_Road_01.fbx");
+    touch(root / "Town/FBX/SM_Bld_House_01.fbx");
+    touch(root / "Town/Textures/PolygonTown_Texture_01_A.png");
+    touch(root / "Town/Textures/PolygonTown_Road_01.png");
+    touch(root / "Town/Textures/PolygonTown_Road_Normal.png");
+    touch(root / "Nature/FBX/SM_Tree_Birch_01.fbx");
+    touch(root / "Nature/FBX/SM_Tree_Pine_01.fbx");
+    touch(root / "Nature/Textures/PolygonNature_01.png");
+    touch(root / "Nature/Textures/Leaves/Leaves_Generic_Texture.png");
+    touch(root / "Nature/Textures/Leaves/Leaves_Pine_Texture.png");
+    touch(root / "Nature/Textures/Leaves/Leaves_Pine_MaskTexture.png");
+    touch(root / "Nature/Textures/Trunks/Birch_Trunk_Texture.png");
+    kke::AssetCatalog c = kke::AssetCatalog::scan(root.string());
+    auto name = [](const std::string& p) { return fs::path(p).filename().string(); };
+    EXPECT_EQ(name(c.namedTexture(*c.find("SM_Env_Road_01"))), "PolygonTown_Road_01.png");
+    EXPECT_EQ(c.namedTexture(*c.find("SM_Bld_House_01")), "");
+    EXPECT_EQ(name(c.namedTexture(*c.find("SM_Tree_Pine_01"), "Leave")), "Leaves_Pine_Texture.png");
+    EXPECT_EQ(name(c.namedTexture(*c.find("SM_Tree_Birch_01"), "Leave")), "Leaves_Generic_Texture.png");
+    EXPECT_EQ(name(c.namedTexture(*c.find("SM_Tree_Birch_01"), "Trunk")), "Birch_Trunk_Texture.png");
+    EXPECT_EQ(c.namedTexture(*c.find("SM_Tree_Birch_01"), "lambert2"), "");
+    fs::remove_all(root);
+}
+
 TEST(AssetCatalog, MissingOrEmptyFolderIsEmptyNotAnError) {
     EXPECT_TRUE(kke::AssetCatalog::scan("/no/such/folder").packs.empty());
     fs::path root = fs::temp_directory_path() / "kke_catalog_empty";

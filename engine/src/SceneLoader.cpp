@@ -62,7 +62,7 @@ LoadedScene loadScene(const SceneFile& scene, const AssetCatalog& catalog, Model
         ModelModule::ModelId id = 0;
         if (auto it = loaded.find(o.asset); it != loaded.end()) id = it->second;
         else {
-            const CatalogAsset* asset = catalog.find(o.asset);
+            const CatalogAsset* asset = catalog.find(o.asset, scene.packs);
             if (asset) {
                 const CatalogPack* pack = catalog.pack(asset->pack);
                 ModelLoadOptions opts;
@@ -71,6 +71,9 @@ LoadedScene loadScene(const SceneFile& scene, const AssetCatalog& catalog, Model
                     opts.textureSearchPaths = pack->textureDirs;
                     // Some meshes point at another pack's atlas: use this one's.
                     opts.fallbackTexture = pack->defaultTexture;
+                    opts.assetTexture = catalog.namedTexture(*asset);
+                    opts.atlasForUntextured = !pack->defaultTexture.empty();
+                    opts.textureForMaterial = [&catalog, asset](const std::string& m) { return catalog.namedTexture(*asset, m); };
                 }
                 id = models.load(asset->path, opts);
             }
@@ -103,7 +106,7 @@ LoadedScene loadSceneCollision(const SceneFile& scene, const AssetCatalog& catal
         auto it = cache.find(o.asset);
         if (it == cache.end()) {
             ModelData d;
-            if (const CatalogAsset* a = catalog.find(o.asset)) {
+            if (const CatalogAsset* a = catalog.find(o.asset, scene.packs)) {
                 try {
                     ModelLoadOptions opts;
                     opts.loadAnimations = false;

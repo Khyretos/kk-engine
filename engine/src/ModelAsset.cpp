@@ -124,6 +124,8 @@ ModelData loadModel(const std::string& path, const ModelLoadOptions& options) {
                                       static_cast<float>(base.value_vec3.z));
         }
         const ufbx_texture* tex = base.texture ? base.texture : src->fbx.diffuse_color.texture;
+        // A texture node with no file name is no texture.
+        if (tex && tex->filename.length == 0 && tex->relative_filename.length == 0) tex = nullptr;
         if (tex) {
             mat.albedoTextureOriginal = std::string(tex->filename.data, tex->filename.length);
             std::error_code ec;
@@ -147,8 +149,21 @@ ModelData loadModel(const std::string& path, const ModelLoadOptions& options) {
             // leave it at mid-grey, which would darken the texture.
             if (!mat.albedoTexture.empty()) mat.baseColor = glm::vec3(1.0f);
         }
-        if (mat.albedoTexture.empty() && !options.fallbackTexture.empty() && tex) {
+        if (mat.albedoTexture.empty() && !options.assetTexture.empty()) {
+            // Synty's road points at an artist's missing .psd; its own
+            // road texture is the right one, not the pack atlas.
+            mat.albedoTexture = options.assetTexture;
+            mat.baseColor = glm::vec3(1.0f);
+        }
+        if (!tex && options.textureForMaterial) {
+            mat.albedoTexture = options.textureForMaterial(mat.name);
+            if (!mat.albedoTexture.empty()) mat.baseColor = glm::vec3(1.0f);
+        }
+        const bool neutral = std::max({ mat.baseColor.r, mat.baseColor.g, mat.baseColor.b }) -
+                             std::min({ mat.baseColor.r, mat.baseColor.g, mat.baseColor.b }) < 0.1f;
+        if (mat.albedoTexture.empty() && !options.fallbackTexture.empty() && (tex || (options.atlasForUntextured && neutral))) {
             mat.albedoTexture = options.fallbackTexture;
+            if (!tex) mat.baseColor = glm::vec3(1.0f);
         }
         materialIndex[src] = static_cast<uint32_t>(model.materials.size());
         model.materials.push_back(std::move(mat));

@@ -41,7 +41,10 @@ vec3 triplanarOverlay(vec3 pos, vec3 n, float cellSize) {
 }
 
 void main() {
-    vec3 albedo = srgbToLinear(fragColor) * texture(albedoTexture, fragUV).rgb;
+    vec4 texel = texture(albedoTexture, fragUV);
+    // Cutout cards (leaves, ferns): transparent texels aren't there.
+    if (texel.a < 0.5) discard;
+    vec3 albedo = srgbToLinear(fragColor) * texel.rgb;
     float cellSize = pc.material.z;
     if (cellSize > 0.0) {
         vec3 overlay = triplanarOverlay(fragOverlayPos, normalize(fragOverlayNormal), cellSize);

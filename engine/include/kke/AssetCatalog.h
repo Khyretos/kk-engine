@@ -62,6 +62,17 @@ struct AssetCatalog {
     std::vector<const CatalogAsset*> filter(const std::string& pack, const std::string& category, const std::string& search) const;
     // First asset with exactly this name (without extension), any pack.
     const CatalogAsset* find(const std::string& name) const;
+    // Same, but from the first of `packs` that has it (pack name or its
+    // folder name), then any pack. Packs reuse names for different
+    // models (POLYGON City and Town both have SM_Bld_Shop_01).
+    const CatalogAsset* find(const std::string& name, const std::vector<std::string>& packs) const;
+    // A pack image named after a word of the asset's name, for meshes
+    // with no texture of their own: SM_Env_Road_01 -> PolygonTown_Road_01.
+    // With `material`, one named after the material instead, preferring
+    // one that also names the asset: a birch's "Leave" material gets
+    // Leaves_Generic_Texture, a pine's gets Leaves_Pine_Texture.
+    // Empty when nothing matches (the atlas is then the right guess).
+    std::string namedTexture(const CatalogAsset& asset, const std::string& material = {}) const;
 };
 
 // Where the asset folder is on this machine. Checked in order:

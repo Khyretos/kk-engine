@@ -65,12 +65,25 @@ SM_Tree_Stump_01
 
 ## Things the packs taught the engine
 
-- **Mixed units.** Every Town FBX says centimeters, but a few hold meters
-  and loaded 100x too small (SM_Bld_Shop_01, SM_Env_Road_01,
-  SM_Env_Grass_01, SM_Env_Tree_01..03, SM_Prop_Cart_01).
-  `loadModel` now scales an unskinned model from a
+- **Same names, different packs.** POLYGON City and POLYGON Town both
+  have SM_Bld_Shop_01, SM_Env_Road_01, SM_Env_Grass_01 and more, as
+  different models. A scene's `"packs"` list now decides which one loads
+  (`AssetCatalog::find(name, packs)`); before that, the town was quietly
+  built from some City models.
+- **Mixed units.** Some City FBX files say centimeters but hold meters and
+  load 100x too small. `loadModel` scales an unskinned model from a
   centimeter file up 100x when it comes out under 10 cm on every axis
   (`ModelLoadOptions::fixUnitMismatch`).
+- **Textures the FBX doesn't name.** Synty meshes are UV-mapped onto the
+  pack atlas even where the material names no texture (Town roofs,
+  fences), so those get the atlas, unless the material has a deliberate
+  colour (blue glass). A few meshes use their own image instead: the road
+  points at an artist's missing .psd but is meant for
+  `PolygonTown_Road_01.png`, and Nature trees' "Trunk"/"Leave" materials
+  are meant for `Birch_Trunk_Texture.png` and `Leaves_Pine_Texture.png` /
+  `Leaves_Generic_Texture.png`. `AssetCatalog::namedTexture` finds these
+  by the asset's and the material's names. Leaves are cutout cards, so
+  the model shader now discards transparent texels.
 - **Open and flipped meshes.** Ray casts hit back faces too, like the
   character does, so the probe can't see through a wall the capsule
   can't pass.

@@ -214,6 +214,17 @@ const CatalogAsset* AssetCatalog::find(const std::string& name) const {
     return nullptr;
 }
 
+const CatalogAsset* AssetCatalog::find(const std::string& name, const std::vector<std::string>& preferred) const {
+    for (const std::string& want : preferred) {
+        for (const CatalogAsset& a : assets) {
+            if (a.name != name) continue;
+            const CatalogPack* p = pack(a.pack);
+            if (a.pack == want || (p && fs::path(p->root).filename().string() == want)) return &a;
+        }
+    }
+    return find(name);
+}
+
 std::string findAssetFolder(const std::string& relative, const std::vector<std::string>& envVars, const std::string& executableDir,
                             std::vector<std::string>* searched) {
     std::error_code ec;
@@ -236,6 +247,68 @@ std::string findAssetFolder(const std::string& relative, const std::vector<std::
         }
     }
     return {};
+}
+
+namespace {
+// Words of a name, minus Synty prefixes and numbers, lower case.
+std::vector<std::string> nameWords(const std::string& name) {
+    std::vector<std::string> words;
+    std::string word;
+    for (char c : name + "_") {
+        if (c == '_' || c == ' ' || c == ':') {
+            if (word.size() >= 4 && word != "Generic") words.push_back(lower(word));
+            word.clear();
+        } else if (!std::isdigit(static_cast<unsigned char>(c))) {
+            word += c;
+        }
+    }
+    return words;
+}
+} // namespace
+
+std::string AssetCatalog::namedTexture(const CatalogAsset& asset, const std::string& material) const {
+    const CatalogPack* p = pack(asset.pack);
+    if (!p) return {};
+    const std::vector<std::string> assetWords = nameWords(asset.name);
+    const std::vector<std::string> materialWords = nameWords(material);
+    if (!material.empty() && materialWords.empty()) return {};
+    std::string best;
+    int bestScore = 0;
+    std::error_code ec;
+    for (const std::string& dir : p->textureDirs) {
+        for (const auto& e : fs::recursive_directory_iterator(dir, fs::directory_options::follow_directory_symlink, ec)) {
+            if (!e.is_regular_file(ec)) continue;
+            const std::string stem = lower(e.path().stem().string());
+            const std::string ext = lower(e.path().extension().string());
+            if (ext != ".png" && ext != ".tga" && ext != ".jpg") continue;
+            if (stem.find("normal") != std::string::npos || stem.find("emissive") != std::string::npos ||
+                stem.find("metallic") != std::string::npos || stem.find("mask") != std::string::npos)
+                continue;
+            auto has = [&](const std::string& w) { return stem.find(w) != std::string::npos; };
+            int score = 0;
+            if (material.empty()) {
+                // The pack atlas isn't "named after" anything.
+                if (has("texture")) continue;
+                for (const std::string& w : assetWords)
+                    if (stem.find("_" + w + "_") != std::string::npos ||
+                        (stem.size() > w.size() && stem.compare(stem.size() - w.size() - 1, std::string::npos, "_" + w) == 0))
+                        score = 2;
+            } else {
+                bool named = false;
+                for (const std::string& w : materialWords) named = named || has(w);
+                if (!named) continue;
+                score = 1;
+                for (const std::string& w : assetWords) if (has(w)) score += 2;
+                if (has("generic")) score += 1;
+            }
+            const std::string path = e.path().string();
+            if (score > bestScore || (score == bestScore && score > 0 && path.size() < best.size())) {
+                bestScore = score;
+                best = path;
+            }
+        }
+    }
+    return best;
 }
 
 } // namespace kke

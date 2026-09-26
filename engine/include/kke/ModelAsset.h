@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -91,6 +92,19 @@ struct ModelLoadOptions {
     // Used when a material has no texture of its own, or its texture
     // can't be found (empty = none). Synty packs use one shared atlas.
     std::string fallbackTexture;
+    // A texture made for this model (AssetCatalog::namedTexture). Wins
+    // over fallbackTexture for materials whose texture is missing, and
+    // also covers materials that name no texture. Empty = none.
+    std::string assetTexture;
+    // Synty-style packs: every mesh is UV-mapped onto the pack atlas, even
+    // parts whose material names no texture (roofs, fences). True = give
+    // those the fallbackTexture too.
+    // Only for materials with a neutral (grey/white) colour: a saturated
+    // one (blue glass) was meant as a plain colour.
+    bool atlasForUntextured = false;
+    // Asked first for a material that names no texture (by material name);
+    // return "" for none. AssetCatalog::namedTexture fits here.
+    std::function<std::string(const std::string& material)> textureForMaterial;
     bool loadAnimations = true;
     float animationSampleRate = 30.0f;
     // Some exported packs mix units: the header says centimeters but a few
