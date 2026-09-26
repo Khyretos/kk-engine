@@ -73,3 +73,24 @@ TEST(MeltVolume, NoHeatNoMelt) {
     for (int i = 0; i < 60; ++i) v.step(1.0f / 60.0f, fluid);
     EXPECT_FLOAT_EQ(v.solidFraction(), 1.0f);
 }
+
+// Regression (user report: melt "fills an invisible cube" before it flows):
+// the grid's own boundary must not act as a wall. Just outside the grid the
+// distance field has to keep growing, not collapse to one cell.
+TEST(MeltVolume, GridBoundaryIsNotAWall) {
+    kke::MeltVolume v = makeCube(); // grid x in [-0.5, 0.5], block x in [-0.3, 0.3]
+    glm::vec3 n;
+    for (float x : { 0.45f, 0.5f, 0.55f, 0.58f }) {
+        float d = v.signedDistance(glm::vec3(x, 0.05f, 0.0f), n);
+        EXPECT_GT(d, 0.12f) << "x=" << x;      // ~x - 0.3 away from the block
+        EXPECT_GT(n.x, 0.5f) << "x=" << x;     // and pointing away from it
+    }
+    // A droplet sliding off the block's side keeps going outward.
+    kke::ParticleFluid::Params fp;
+    fp.radius = 0.03f;
+    kke::ParticleFluid fluid(fp, 10);
+    fluid.addCollider([&](const glm::vec3& p, glm::vec3& nn) { return v.signedDistance(p, nn); });
+    fluid.add(glm::vec3(0.4f, 0.03f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), 20.0f, 0);
+    for (int i = 0; i < 60; ++i) fluid.step(1.0f / 60.0f);
+    EXPECT_GT(fluid.positions()[0].x, 0.6f);
+}

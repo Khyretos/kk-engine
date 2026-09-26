@@ -43,7 +43,15 @@ void MeltVolume::fillBox(const glm::vec3& mn, const glm::vec3& mx, float tempera
 float MeltVolume::at(const std::vector<float>& f, int x, int y, int z) const {
     if (x < 0 || y < 0 || z < 0 || x >= m_dims.x || y >= m_dims.y || z >= m_dims.z) {
         if (&f == &m_density) return 0.0f;
-        if (&f == &m_distance) return m_cell; // outside the grid is empty
+        if (&f == &m_distance) {
+            // Outside the grid: extend the field (nearest edge voxel's
+            // distance plus how far out we are). This used to return one
+            // cell (2.5 cm), less than a droplet's radius, so the grid's
+            // own boundary acted as an invisible box around the block: melt
+            // pooled inside it and only flowed once it spilled over the top.
+            glm::ivec3 c = glm::clamp(glm::ivec3(x, y, z), glm::ivec3(0), m_dims - 1);
+            return f[idx(c.x, c.y, c.z)] + glm::length(glm::vec3(glm::ivec3(x, y, z) - c)) * m_cell;
+        }
         return m_startTemperature;
     }
     return f[idx(x, y, z)];
