@@ -16,3 +16,15 @@ services:
     ports:
       - "8080:8080"
     restart: unless-stopped
+    # If the reverse proxy runs in Docker too (Nginx Proxy Manager, Traefik,
+    # Caddy in a container), it cannot reach "localhost:8080": that is its own
+    # container. Put both on one network and point it at http://kke-website:8080
+    # (the container listens on 8080, not 80). Uncomment and set the network
+    # name (`docker network ls`), or run `docker network connect NET kke-website`.
+    # networks:
+    #   - proxy
+
+# networks:
+#   proxy:
+#     external: true
+#     name: proxy
