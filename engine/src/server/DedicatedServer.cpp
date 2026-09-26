@@ -1,6 +1,11 @@
 #include "kke/server/DedicatedServer.h"
 
 #include "kke/net/Protocol.h"
+#include "kke/net/ScriptSpawns.h"
+
+#if KKE_ENABLE_LUA
+#include "kke/server/ServerScripts.h"
+#endif
 
 #if KKE_ENABLE_JOLT
 #include "kke/AssetCatalog.h"
@@ -10,6 +15,7 @@
 #include "kke/net/WorldMoveCheck.h"
 #endif
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <sstream>
@@ -19,6 +25,8 @@ namespace kke::server {
 namespace {
 
 constexpr double kAutosaveSeconds = 60.0;
+constexpr double kScriptTick = 1.0 / 60.0; // the scripts role steps its world like a game (Tick hook, physics)
+constexpr int kMaxTicksPerUpdate = 8;      // behind by more (a paused VM): skip ahead rather than race
 
 uint64_t unixTime() {
     return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
@@ -71,7 +79,7 @@ bool DedicatedServer::start(std::vector<std::string>& errors) {
     if (m_config.hasRole("leaderboard")) m_leaderboards.load(leaderboardPath(), fileProblems);
     for (const std::string& p : fileProblems) warning(p);
 
-    if (m_config.hasRole("physics")) {
+    if (m_config.hasRole("physics") || (m_config.hasRole("scripts") && !m_config.scene.empty())) {
 #if KKE_ENABLE_JOLT
         try {
             const SceneFile scene = SceneFile::load(m_config.scene);
@@ -84,16 +92,27 @@ bool DedicatedServer::start(std::vector<std::string>& errors) {
             if (!loaded.missing.empty())
                 warning("physics: " + std::to_string(loaded.missing.size()) + " models of the scene aren't in the asset folder ('" + m_assetsDir +
                         "'; set KKE_ASSETS_DIR); their walls won't stop anyone");
-            m_moveCheck = std::make_unique<net::WorldMoveCheck>(*m_world);
+            if (m_config.hasRole("physics")) m_moveCheck = std::make_unique<net::WorldMoveCheck>(*m_world);
             info("physics: " + m_config.scene + ", " + std::to_string(m_collisionBodies) + " collision bodies, " +
                  std::to_string(loaded.collisionTriangles) + " triangles");
         } catch (const std::exception& e) {
             errors.push_back("scene '" + m_config.scene + "': " + e.what());
         }
 #else
-        errors.push_back("roles: physics needs a build with Jolt (KKE_ENABLE_JOLT)");
+        if (m_config.hasRole("physics")) errors.push_back("roles: physics needs a build with Jolt (KKE_ENABLE_JOLT)");
 #endif
     }
+#if KKE_ENABLE_JOLT
+    if (m_config.hasRole("scripts") && !m_world) {
+        // Scripts without a level: an empty world (their bodies fall forever unless they build a floor).
+        RigidWorld::Settings st;
+        st.threads = 0;
+        m_world = std::make_unique<RigidWorld>(st);
+    }
+#endif
+#if !KKE_ENABLE_LUA
+    if (m_config.hasRole("scripts")) errors.push_back("roles: scripts needs a build with Lua (ENGINE_ENABLE_LUA)");
+#endif
     if (errors.size() != before) return false;
 
     if (m_config.hasGameSocket()) {
@@ -113,6 +132,15 @@ bool DedicatedServer::start(std::vector<std::string>& errors) {
         m_net->onEvent = [this](const net::GameEventMsg& e) { onEvent(e); };
         m_net->onPlayer = [this](uint8_t id, bool joined) {
             if (m_moveCheck && !joined) m_moveCheck->forget(id);
+#if KKE_ENABLE_LUA
+            if (m_scripts) {
+                std::string name;
+                for (const net::RemotePlayer& p : m_net->players(m_now))
+                    if (p.id == id) name = p.name;
+                if (joined) m_scripts->playerJoined(id, name);
+                else m_scripts->playerLeft(id);
+            }
+#endif
             if (!joined) m_net->voice.muted.erase(id); // the next player with this id starts unmuted
             info("player " + std::to_string(id) + (joined ? " joined from " + m_net->address(id) : " left") + " (" + std::to_string(m_net->clientCount()) +
                  "/" + std::to_string(m_config.maxPlayers) + ")");
@@ -126,6 +154,28 @@ bool DedicatedServer::start(std::vector<std::string>& errors) {
             };
 #endif
     }
+#if KKE_ENABLE_LUA
+    if (m_config.hasRole("scripts") && m_net) {
+        ServerScripts::Services sv;
+        sv.world = m_world.get();
+        sv.leaderboards = m_config.hasRole("leaderboard") ? &m_leaderboards : nullptr;
+        sv.serverName = m_config.name;
+        sv.kick = [this](uint8_t id, const std::string& reason) { m_net->kick(id, reason); };
+        m_scripts = std::make_unique<ServerScripts>(m_config.scripts, *m_net, std::move(sv));
+        m_scripts->log = [this](const std::string& s) { info(s); };
+        m_scripts->warn = [this](const std::string& s) { warning(s); };
+        std::string error;
+        if (!m_scripts->load(&error)) {
+            errors.push_back(error);
+            m_scripts.reset();
+            return false;
+        }
+        const auto files = m_scripts->scripts();
+        std::string list;
+        for (const std::string& f : files) list += (list.empty() ? "" : ", ") + f;
+        info("scripts: " + std::to_string(files.size()) + " from '" + m_config.scripts + "'" + (list.empty() ? " (none: sv_*.lua, sh_*.lua)" : ": " + list));
+    }
+#endif
     if (m_config.hasRole("directory")) {
         m_directory = std::make_unique<DirectoryService>();
         m_directory->log = [this](const std::string& s) { info(s); };
@@ -165,8 +215,23 @@ DirectoryEntry DedicatedServer::directoryEntry() const {
 
 void DedicatedServer::update(double now) {
     if (!m_started) return;
-    m_now = now;
     if (m_nextSave == 0) m_nextSave = now + kAutosaveSeconds;
+#if KKE_ENABLE_LUA
+    if (m_scripts) {
+        // Fixed ticks, as a game's: the Tick hook, then the world steps.
+        if (m_tickClock < 0) m_tickClock = now;
+        if (now - m_tickClock > kMaxTicksPerUpdate * kScriptTick) m_tickClock = now - kMaxTicksPerUpdate * kScriptTick;
+        while (m_tickClock + kScriptTick <= now) {
+            m_tickClock += kScriptTick;
+            m_scripts->tick(static_cast<float>(kScriptTick), m_tick++);
+#if KKE_ENABLE_JOLT
+            if (m_world) m_world->step(static_cast<float>(kScriptTick));
+#endif
+        }
+        m_scripts->update(now, static_cast<float>(std::clamp(now - m_now, 0.0, 0.25)));
+    }
+#endif
+    m_now = now;
     if (m_net) m_net->update(now);
     if (m_directory) m_directory->update(now);
     if (m_publisher) m_publisher->update(now);
@@ -179,6 +244,13 @@ void DedicatedServer::update(double now) {
 
 void DedicatedServer::onEvent(const net::GameEventMsg& e) {
     const bool board = e.kind == kEventLeaderboardSubmit || e.kind == kEventLeaderboardQuery || e.kind == kEventLeaderboardReply;
+#if KKE_ENABLE_LUA
+    if (m_scripts && e.kind == script_net::kScriptEvent) {
+        // A client's net.send is for the server's scripts, as it is for a host's.
+        m_scripts->netMessage(e);
+        return;
+    }
+#endif
     if (!board) {
         // No game code on a plain server: a player's event goes to the others, as a host would pass it on.
         m_net->relayEvent(e);
@@ -244,14 +316,24 @@ std::string DedicatedServer::command(const std::string& line) {
     };
 
     if (cmd == "help")
-        return "status | players | kick <id|name> [reason] | ban <id|name|address> [reason] | unban <name|address> | bans | admin <name> | "
-               "allow <name> | say <text> | mute <id|name> | unmute <id|name> | top <board> | save | stop";
+        return std::string("status | players | kick <id|name> [reason] | ban <id|name|address> [reason] | unban <name|address> | bans | admin <name> | "
+                           "allow <name> | say <text> | mute <id|name> | unmute <id|name> | top <board> | save | stop") +
+               (m_config.hasRole("scripts") ? " | scripts | reload [file] | lua <code>" : "");
+#if KKE_ENABLE_LUA
+    if (cmd == "scripts" || cmd == "reload" || cmd == "lua") {
+        if (!m_scripts) return "this server has no scripts role";
+        return m_scripts->command(cmd, arg + (tail.empty() ? "" : " " + tail));
+    }
+#endif
     if (cmd == "status") {
         std::string s = m_config.name + ": ";
         if (m_net) s += std::to_string(m_net->clientCount()) + "/" + std::to_string(m_config.maxPlayers) + " players on UDP " + std::to_string(m_config.port);
         if (m_net) s += ", " + std::to_string(m_net->badPackets()) + " bad packets, " + std::to_string(m_net->refusedMoves()) + " moves refused";
         if (m_directory) s += (m_net ? "; " : "") + std::string("directory: ") + std::to_string(m_directory->registry().size()) + " servers listed";
         if (m_config.hasRole("leaderboard")) s += "; " + std::to_string(m_leaderboards.boards().size()) + " leaderboards";
+#if KKE_ENABLE_LUA
+        if (m_scripts) s += "; " + std::to_string(m_scripts->scripts().size()) + " scripts, " + std::to_string(m_scripts->bodyCount()) + " bodies";
+#endif
         if (m_store) s += std::string("; storage: ") + m_store->backendName();
         return s;
     }
@@ -345,6 +427,10 @@ std::string DedicatedServer::command(const std::string& line) {
 void DedicatedServer::stop(const std::string& reason) {
     if (!m_started) return;
     m_started = false;
+#if KKE_ENABLE_LUA
+    if (m_scripts) m_scripts->shutdown(); // their Shutdown hook, while the players are still here
+    m_scripts.reset();
+#endif
     if (m_net) {
         for (const net::RemotePlayer& p : m_net->players(m_now)) m_net->kick(p.id, reason);
         // Flush the goodbyes before the socket closes.

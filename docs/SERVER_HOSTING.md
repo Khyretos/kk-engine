@@ -90,13 +90,63 @@ settings; a server runs any mix.
 | `physics` | Owns the world: loads the scene's collision headlessly (`loadSceneCollision`) and refuses moves through walls and flights (`WorldMoveCheck`). Simulating replicated bodies on the server is next | built (collision + move checks) |
 | `leaderboard` | Named boards: each player's best score, top 10 per reply, kept in `saveDir/leaderboards.json`. Other servers using one leaderboard server is #46 | built |
 | `directory` | A server list: servers with `"public": true` register and send a heartbeat; games ask it for the list. Anyone can run one (a friend group, a modding community, a studio) | built (server side and `DirectoryBrowser`; the game's panel lists LAN games only so far) |
-| `scripts` | Headless Lua (`sv_*.lua`) on the server | next (#43) |
+| `scripts` | The game's server scripts (`sv_*.lua`, `sh_*.lua`) run headless: what they spawn shows up for every player, `net.send` works both ways, scores go on the leaderboards from the server's side | built (#43) |
 | `relay` | Join by code through NAT: both sides reach the relay, the relay forwards (and tries a hole punch first) | next (#44) |
 | `rollback` / `lockstep` | Input relay and checksums for rollback (fighting) and lockstep (RTS) games | planned (#28) |
 | `persistence` | World saves, player inventories, backups on a schedule | planned (#45) |
 
-The `players`, `physics` and `leaderboard` roles share the game port; a
-server with only `directory` has no players at all.
+The `players`, `physics`, `leaderboard` and `scripts` roles share the
+game port; a server with only `directory` has no players at all.
+
+## Scripts
+
+The `scripts` role runs a game's server scripts with no GPU, as the
+player who hosts a game runs them in theirs (docs/SCRIPTING.md). Put the
+game's `scripts/` folder next to the server, or point `"scripts"`
+(`KKE_SERVER_SCRIPTS`, `--scripts DIR`) at it:
+
+```sh
+./kke_server --roles players,scripts,leaderboard --scripts games/my_game/scripts --scene scenes/arena.json
+```
+
+- **Which files**: `sv_*.lua` and `sh_*.lua`, in name order. Other
+  scripts are the players' (menus, the camera, input) and don't load.
+- **The world**: with a `scene`, its collision is loaded (as for the
+  `physics` role); without one the world is empty and scripts build
+  their own floor. It steps 60 times a second; players are capsules in
+  it, so they push what scripts spawn.
+- **What they can use**: `hook`, `timer`, `shared`, `Vec`, `kke.*`,
+  `physics.*` (bodies are replicated: every player builds a copy, moving
+  ones travel in snapshots, late joiners get the ones still there),
+  `net.*` (`role()` is `"server"`; `send(name, data [, player])` to
+  everyone or one player; a player's `net.send` arrives in the
+  `NetMessage` hook) and `server.*`: `name()`, `say(text)`,
+  `kick(player, reason)`, `score(board, player, score)` (the cheat-proof
+  way to post scores: the server decides them) and `top(board [, n])`.
+  Breakables (FEMFX) aren't on the server yet.
+- **Hooks**: `Init`, `Think(dt)`, `Tick(dt, tick)`, `Contact(c)`,
+  `NetMessage(name, data, from)`, `PlayerJoin(id, name)`,
+  `PlayerLeave(id, name)`, `Shutdown`.
+- **Same sandbox as in a game**: no files, no OS, a memory cap, and a
+  runaway loop stops that script, not the server. A broken script is
+  reported in the log and the others run on.
+- **Console**: `scripts` (each one's state and bodies), `reload [file]`
+  (after an edit; new files are picked up too), `lua <code>` (runs one
+  line on the server).
+
+```lua
+-- sv_race.lua: the server times the race, so nobody can post a fake time.
+local started = {}
+hook.Add("NetMessage", "race", function(name, data, from)
+    if name == "start" then started[from] = kke.time() end
+    if name == "finish" and started[from] then
+        local ms = math.floor((kke.time() - started[from]) * 1000)
+        server.score("race", from, ms)
+        net.send("time", { ms = ms }, from)
+        started[from] = nil
+    end
+end)
+```
 
 **Leaderboards from a game**: the messages are game events
 (`kke/server/Leaderboard.h`). Send `kEventLeaderboardQuery` with
@@ -150,7 +200,7 @@ Designed in from the first piece; hardened as the parts grow.
 - **Scores**: players can't send scores unless the owner turns on
   `clientScores` (then a cheater can post any score under their own name,
   never someone else's). Games that care send scores from the server's
-  side, with server scripts (#43).
+  side, with a server script (`server.score`, "Scripts" above).
 - **Directories** list what servers say about themselves; a directory
   lists a server at the address its heartbeats come from (never one the
   packet names), keeps at most 8 servers per address and 4096 in all,
@@ -197,7 +247,7 @@ host port and the data folder. A directory is the same image with
 | Roles `physics` (scene collision, move checks), `leaderboard`, `directory` | #42 | built |
 | Docker image + compose | #42 | built |
 | Directory list in the game's Multiplayer panel; server-side physics bodies | #42 | next |
-| Headless Lua on the server | #43 | planned |
+| Headless Lua on the server (`scripts` role) | #43 | built |
 | Relay + join codes (self-hostable, no port forwarding) | #44 | planned |
 | Persistence and scheduled backups | #45 | planned |
 | Roles served by another server (shared leaderboard etc.) | #46 | planned |

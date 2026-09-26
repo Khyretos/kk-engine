@@ -20,6 +20,7 @@ struct ServerConfig {
     std::string motd;                  // shown to each player who joins
     std::vector<std::string> roles{ "players" };
     std::string scene;                 // a scenes/*.json whose collision the physics role loads
+    std::string scripts = "scripts";   // the scripts role: folder with the game's sv_*.lua / sh_*.lua
     std::string saveDir = "save";      // access.json, leaderboards.json, saves
     std::vector<std::string> directories; // "host:port" of directories to register with (public servers)
     bool isPublic = false;             // "public": register with `directories`
@@ -29,8 +30,8 @@ struct ServerConfig {
     bool clientScores = false;         // leaderboard: players may send their own scores (easy to cheat; see the docs)
 
     bool hasRole(const std::string& role) const;
-    // Players join (UDP `port`) when any of players, physics or leaderboard is on;
-    // a directory-only server has no players.
+    // Players join (UDP `port`) when any of players, physics, leaderboard
+    // or scripts is on; a directory alone has no players.
     bool hasGameSocket() const;
 
     // Each returns false and appends "where: what" lines to `errors` for
@@ -41,6 +42,7 @@ struct ServerConfig {
     // argv without the program name: --name X --port N --max-players N
     // --password X --game X --roles a,b --scene X --save-dir X --public
     // --directory host:port (repeatable) --directory-port N --client-scores --storage URL
+    // --scripts DIR
     // --config path
     // (read by the caller first) --help.
     bool applyArgs(const std::vector<std::string>& args, std::vector<std::string>& errors);

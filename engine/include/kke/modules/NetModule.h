@@ -3,6 +3,7 @@
 #include "kke/Module.h"
 #include "kke/RigidWorld.h"
 #include "kke/net/NetSession.h"
+#include "kke/net/ScriptSpawns.h"
 #include "kke/net/WorldMoveCheck.h"
 
 #include <functional>
@@ -101,7 +102,7 @@ public:
     // More receivers of the same events, for modules other than the game's
     // own (ScriptModule's net.* takes kScriptEventKind). Each sees every event.
     void addEventListener(std::function<void(const net::GameEventMsg&)> listener) { m_listeners.push_back(std::move(listener)); }
-    static constexpr uint16_t kScriptEventKind = 0x4C00; // Lua net.send (docs/SCRIPTING.md)
+    static constexpr uint16_t kScriptEventKind = script_net::kScriptEvent; // Lua net.send (docs/SCRIPTING.md)
     std::function<void(const glm::vec3&)> onCorrection;
     std::function<void(uint8_t id, bool joined)> onPlayer;
 
