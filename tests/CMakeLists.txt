@@ -49,10 +49,12 @@ add_executable(kke_tests
     test_texture_mips.cpp
     test_shadow_projection.cpp
     test_draw_order.cpp
+    test_tone_mapper.cpp
     test_jiggle.cpp
     test_rml_data_binding.cpp
     test_frame_retire_queue.cpp
     test_anti_cheat.cpp
+    test_fair_play.cpp
 )
 target_link_libraries(kke_tests PRIVATE kke_engine GTest::gtest_main)
 if(KKE_ENABLE_JOLT)
@@ -60,6 +62,9 @@ if(KKE_ENABLE_JOLT)
 endif()
 if(ENGINE_ENABLE_LUA)
     target_sources(kke_tests PRIVATE test_script_vm.cpp)
+    if(KKE_ENABLE_NET)
+        target_sources(kke_tests PRIVATE test_server_scripts.cpp)
+    endif()
 endif()
 target_compile_definitions(kke_tests PRIVATE KKE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 

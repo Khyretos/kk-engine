@@ -31,6 +31,7 @@ struct LightingUBOData {
                          // freeing this 64 bytes out of the push constant was what made room for
                          // real per-object metallic/roughness within the 128-byte guaranteed-minimum
                          // push constant limit)
+    glm::vec4 toneParams; // x = tone mapper (0 AgX, 1 ACES, 2 Reinhard -- shaders/tonemap.glsl), y = exposure
 };
 
 } // namespace
@@ -118,6 +119,7 @@ void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos
     data.cameraPos = glm::vec4(cameraPos, 0.0f);
     data.lightViewProj = lightViewProj;
     data.viewProj = viewProj;
+    data.toneParams = glm::vec4(static_cast<float>(lighting.toneMapper), lighting.exposure, 0.0f, 0.0f);
 
     m_buffer->upload(&data, sizeof(data));
 }

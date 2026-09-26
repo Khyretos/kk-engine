@@ -35,6 +35,7 @@ int main() {
         light.lights[1].color = glm::vec3(0.55f, 0.65f, 0.85f);
         light.lights[1].intensity = 0.3f;
         light.ambientColor = glm::vec3(0.2f);
+        light.toneMapper = kke::ToneMapper::AgX; // or ACES (punchier) / Reinhard; see docs/RENDERING_PRINCIPLES.md
 
         app.addModule<kke::SettingsModule>("settings.json"); // graphics, audio, accessibility
         app.addModule<kke::InputModule>("input.json");       // rebindable controls

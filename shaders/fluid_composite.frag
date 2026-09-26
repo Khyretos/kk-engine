@@ -15,12 +15,14 @@ layout(set = 0, binding = 0) uniform LightingUBO {
     vec4 cameraPos;
     mat4 lightViewProj;
     mat4 viewProj;
+    vec4 toneParams; // x = tone mapper (tonemap.glsl), y = exposure
 } lighting;
 layout(set = 1, binding = 0) uniform sampler2D fluidDepth;
 layout(set = 1, binding = 1) uniform sampler2D fluidColor;
 layout(push_constant) uniform PC { mat4 invProj; mat4 invView; } pc;
 
 #include "glow.glsl"
+#include "tonemap.glsl"
 
 vec3 viewPos(vec2 uv) {
     float z = texture(fluidDepth, uv).r;
@@ -59,6 +61,6 @@ void main() {
     vec3 sky = mix(vec3(0.35, 0.4, 0.45), vec3(0.6, 0.7, 0.8), clamp(reflect(-V, N).y * 0.5 + 0.5, 0.0, 1.0));
     vec3 color = albedo * (lighting.ambient.rgb + sun * ndl * 0.8) + sun * spec * 0.6;
     color = mix(color, sky, fresnel * 0.5);
-    color = color / (color + vec3(1.0));
+    color = toneMap(color, lighting.toneParams);
     outColor = vec4(color + glowColor(c.a), 1.0);
 }

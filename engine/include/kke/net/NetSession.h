@@ -80,7 +80,7 @@ struct RemotePlayer {
     uint8_t id = 0;
     std::string name, character;
     NetPlayerState state;           // interpolated for "now"
-    bool hasState = false;
+    bool hasState = false;          // false too while the server keeps it hidden (fog of war)
 };
 
 // Maps a sender's clock onto ours: offset = arrival - sent, following the
@@ -233,6 +233,12 @@ public:
     // An event from a player whose events are Checked: may it happen?
     // false = dropped (onEvent never sees it). Unset = allowed.
     std::function<bool(uint8_t id, const GameEventMsg&)> checkEvent;
+    // Fog of war (kke/net/Visibility.h, docs/ANTI_CHEAT.md): may player
+    // `viewer` be sent player `subject` (0 = the host) in its snapshots?
+    // Unset = everyone sees everyone. A client drops a player the moment
+    // it's left out (RemotePlayer::hasState false) and starts it fresh
+    // when it's back.
+    std::function<bool(uint8_t viewer, uint8_t subject)> sendPlayer;
 
     MovementLimits limits;
     // A move that passed the speed limits: may the player go from `from`
@@ -340,7 +346,12 @@ public:
     std::function<void(const VoiceMsg&)> onVoice;              // someone's voice for us (speaker = their id)
 
 private:
-    struct Player { std::string name, character; Timeline<NetPlayerState> states; };
+    struct Player {
+        std::string name, character;
+        Timeline<NetPlayerState> states;
+        uint32_t lastInMs = 0;    // newest snapshot that carried this player
+        bool everIn = false;
+    };
     void receive(const NetEvent& e);
     double renderTime(double now) const;
     uint32_t timeMs() const { return static_cast<uint32_t>((m_now - m_start) * 1000.0); }
