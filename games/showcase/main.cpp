@@ -13,6 +13,7 @@
 #include "kke/modules/SettingsModule.h"
 #include "kke/modules/SoundVisualizerModule.h"
 #include "kke/modules/StatsModule.h"
+#include "kke/modules/UiModule.h"
 #if KKE_ENABLE_FEMFX
 #include "kke/modules/PhysicsModule.h"
 #endif
@@ -48,6 +49,8 @@ int main() {
         }
 #endif
         app.addModule<kke::ModelModule>();
+        // RmlUi: documents made by Lua scripts (ui.*), e.g. break-the-targets' HUD.
+        app.addModule<kke::UiModule>();
         panels.push_back(&app.addModule<kke::AudioModule>());
         // Overlay stays on when panels are hidden; on by default here so the
         // demo shows it (a saved accessibility.json wins).

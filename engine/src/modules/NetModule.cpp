@@ -109,7 +109,7 @@ bool NetModule::host(uint16_t port, std::string* error) {
         m_transport = std::move(transport);
         m_enet = raw;
         m_server = std::move(server);
-        m_server->onEvent = [this](const net::GameEventMsg& e) { if (onEvent) onEvent(e); };
+        m_server->onEvent = [this](const net::GameEventMsg& e) { dispatchEvent(e); };
         m_server->onPlayer = [this](uint8_t id, bool joined) {
             log::get(name())->info("Player {} {} ({} connected)", id, joined ? "joined" : "left", m_server->clientCount());
             if (m_enet) m_enet->setDiscoveryInfo(discoveryInfo());
@@ -143,7 +143,7 @@ bool NetModule::join(const std::string& address, uint16_t port, std::string* err
     m_transport = std::move(transport);
     m_enet = raw;
     m_client = std::move(client);
-    m_client->onEvent = [this](const net::GameEventMsg& e) { if (onEvent) onEvent(e); };
+    m_client->onEvent = [this](const net::GameEventMsg& e) { dispatchEvent(e); };
     m_client->onCorrection = [this](const glm::vec3& p) { if (onCorrection) onCorrection(p); };
     m_client->onPlayer = [this](uint8_t id, bool joined) { if (onPlayer) onPlayer(id, joined); };
     m_role = Role::Client;
@@ -206,6 +206,11 @@ void NetModule::clearBodies() {
 void NetModule::sendEvent(uint16_t kind, const std::vector<uint8_t>& payload) {
     if (m_server) m_server->sendEvent(kind, payload);
     else if (m_client && connected()) m_client->sendEvent(kind, payload);
+}
+
+void NetModule::dispatchEvent(const net::GameEventMsg& e) {
+    if (onEvent) onEvent(e);
+    for (const auto& listener : m_listeners) listener(e);
 }
 
 void NetModule::relayEvent(const net::GameEventMsg& e) {

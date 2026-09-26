@@ -218,6 +218,11 @@ glm::mat4 ModelModule::transform(InstanceId id) const {
     return it == m_instances.end() ? glm::mat4(1.0f) : it->second.transform;
 }
 
+ModelModule::ModelId ModelModule::instanceModel(InstanceId id) const {
+    auto it = m_instances.find(id);
+    return it == m_instances.end() ? 0 : it->second.model;
+}
+
 void ModelModule::setVisible(InstanceId id, bool visible) {
     if (auto it = m_instances.find(id); it != m_instances.end()) it->second.visible = visible;
 }

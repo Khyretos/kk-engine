@@ -212,7 +212,7 @@ else()
 endif()
 
 if(ENGINE_ENABLE_LUA)
-    target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/modules/ScriptModule.cpp)
+    target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/modules/ScriptModule.cpp src/modules/ScriptBindings.cpp)
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_LUA=1)
     target_link_libraries(kke_engine PUBLIC lua_lib)
 else()

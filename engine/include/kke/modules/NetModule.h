@@ -82,6 +82,10 @@ public:
     void relayEvent(const net::GameEventMsg& e); // host: pass a client's event on to the others
 
     std::function<void(const net::GameEventMsg&)> onEvent;
+    // More receivers of the same events, for modules other than the game's
+    // own (ScriptModule's net.* takes kScriptEventKind). Each sees every event.
+    void addEventListener(std::function<void(const net::GameEventMsg&)> listener) { m_listeners.push_back(std::move(listener)); }
+    static constexpr uint16_t kScriptEventKind = 0x4C00; // Lua net.send (docs/SCRIPTING.md)
     std::function<void(const glm::vec3&)> onCorrection;
     std::function<void(uint8_t id, bool joined)> onPlayer;
 
@@ -111,6 +115,8 @@ private:
     bool m_hasLocal = false;
     std::vector<net::RemotePlayer> m_remote;
     std::vector<RigidWorld::BodyId> m_bodies; // index = network id
+    std::vector<std::function<void(const net::GameEventMsg&)>> m_listeners;
+    void dispatchEvent(const net::GameEventMsg& e);
     std::map<uint8_t, RigidWorld::BodyId> m_capsules; // remote player -> kinematic capsule
 
     // Panel

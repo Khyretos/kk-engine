@@ -60,6 +60,8 @@ public:
     void remove(InstanceId instance);
     void setTransform(InstanceId instance, const glm::mat4& transform);
     glm::mat4 transform(InstanceId instance) const;
+    // The model an instance draws (0 for an unknown instance).
+    ModelId instanceModel(InstanceId instance) const;
     void setVisible(InstanceId instance, bool visible);
     // Multiplies the material color (e.g. to tell identical dummies apart).
     void setTint(InstanceId instance, const glm::vec3& tint);

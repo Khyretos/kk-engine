@@ -1,0 +1,39 @@
+<rml>
+<head>
+    <title>Break the targets</title>
+    <style>
+        /* The body covers the whole screen for hit-testing: let clicks
+           through it, only the panels take them. */
+        body { width: 100%; height: 100%; color: #ffffff; font-family: Noto Sans; pointer-events: none; }
+        #hud { position: absolute; left: 50%; top: 16dp; width: 520dp; margin-left: -260dp; padding: 8dp 14dp;
+               background-color: #10131ecc; border-radius: 8dp; text-align: center; font-size: 18dp; }
+        #hud span { display: inline-block; margin: 0 12dp; }
+        #hud .big { font-size: 26dp; color: #ffd166; }
+        #time.low { color: #ff5a5a; }
+        #hint { display: block; font-size: 14dp; color: #b8c2d8; margin-top: 4dp; }
+        #results { position: absolute; left: 50%; top: 30%; width: 420dp; margin-left: -210dp; padding: 20dp;
+                   background-color: #10131ef0; border-radius: 10dp; text-align: center; pointer-events: auto; display: none; }
+        #results.shown { display: block; }
+        #results h1 { display: block; font-size: 30dp; color: #ffd166; margin-bottom: 10dp; }
+        #results p { display: block; font-size: 17dp; margin: 4dp 0; }
+        button { display: inline-block; margin-top: 14dp; padding: 8dp 22dp; background-color: #2f6fdb; border-radius: 6dp;
+                 font-size: 18dp; color: #ffffff; }
+        button:hover { background-color: #4a88f0; }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        <span>Score <span id="score" class="big">0</span></span>
+        <span>Time <span id="time" class="big">-</span></span>
+        <span>Targets <span id="left" class="big">-</span></span>
+        <span id="hint">Press T to start. Shoot the blocks (left mouse).</span>
+    </div>
+    <div id="results">
+        <h1 id="result-title">Time!</h1>
+        <p id="result-score"></p>
+        <p id="result-shots"></p>
+        <p id="result-best"></p>
+        <button id="again">Play again (T)</button>
+    </div>
+</body>
+</rml>

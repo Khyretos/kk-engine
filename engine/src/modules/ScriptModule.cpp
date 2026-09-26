@@ -8,7 +8,11 @@
 #if KKE_ENABLE_JOLT
 #include "kke/modules/RigidBodyModule.h"
 #endif
+#if KKE_ENABLE_NET
+#include "kke/modules/NetModule.h"
+#endif
 
+#include <RmlUi/Core/EventListener.h>
 #include <imgui.h>
 #include <lauxlib.h>
 #include <lua.h>
@@ -81,15 +85,15 @@ void ScriptModule::init(Application& app) {
     if (const char* d = std::getenv("KKE_SCRIPTS_DIR"); d && *d) m_dir = d;
     m_vm = std::make_unique<ScriptVM>();
     m_vm->printSink = [this](const std::string& src, const std::string& text) { log(src, text); };
-    m_vm->onUnload = [this](const std::string& source) {
-#if KKE_ENABLE_JOLT
-        auto* rb = m_app->getModule<RigidBodyModule>();
-        for (const Body& b : m_bodies)
-            if (b.source == source && rb) rb->world().remove(b.id);
-#endif
-        m_bodies.erase(std::remove_if(m_bodies.begin(), m_bodies.end(), [&](const Body& b) { return b.source == source; }), m_bodies.end());
+    m_vm->onUnload = [this](const std::string& source) { releaseScript(source); };
+    m_vm->onStopped = [this](const std::string& source) {
+        for (ScriptFile& f : m_files)
+            if (f.path == source) f.ok = false;
     };
     m_batch = std::make_unique<DynamicMeshRenderer>(app);
+#if KKE_ENABLE_NET
+    if (auto* net = app.getModule<NetModule>()) m_authority = net->authority();
+#endif
     bindAll();
     scanFolder(false);
     log::get(name())->info("{} script(s) from '{}'", m_files.size(), m_dir);
@@ -100,7 +104,8 @@ void ScriptModule::scanFolder(bool reloadChanged) {
     if (!std::filesystem::is_directory(m_dir, ec)) return;
     std::vector<std::string> found;
     for (const auto& e : std::filesystem::directory_iterator(m_dir, ec))
-        if (e.is_regular_file() && e.path().extension() == ".lua") found.push_back(e.path().generic_string());
+        if (e.is_regular_file() && e.path().extension() == ".lua" && runsHere(e.path().generic_string(), m_authority))
+            found.push_back(e.path().generic_string());
     std::sort(found.begin(), found.end());
     for (const std::string& path : found) {
         const auto mtime = std::filesystem::last_write_time(path, ec);
@@ -116,7 +121,7 @@ void ScriptModule::scanFolder(bool reloadChanged) {
             log(path, it->ok ? "reloaded" : "reload failed (see error above)");
         }
     }
-    // Deleted files: unload them.
+    // Deleted files (or sv_ scripts once we're a client): unload them.
     for (auto it = m_files.begin(); it != m_files.end();) {
         if (std::find(found.begin(), found.end(), it->path) == found.end()) {
             m_vm->unload(it->path);
@@ -273,6 +278,11 @@ void ScriptModule::bindAll() {
         vm.registerFunction("physics", "count", [this](lua_State* L) { lua_pushinteger(L, lua_Integer(m_bodies.size())); return 1; });
     }
 #endif
+    bindModels();
+    bindBreakables();
+    bindUi();
+    bindScenes();
+    bindNet();
 }
 
 void ScriptModule::fixedUpdate(const FixedUpdateContext& ctx) {
@@ -286,11 +296,23 @@ void ScriptModule::update(const UpdateContext& ctx) {
         m_inited = true;
         m_vm->callHook("Init");
     }
-    if ((m_scanTimer -= ctx.dt) <= 0.0) {
+    bool rescan = (m_scanTimer -= ctx.dt) <= 0.0;
+#if KKE_ENABLE_NET
+    // Hosting, joining or leaving changes which scripts run here (sv_*).
+    if (auto* net = m_app->getModule<NetModule>(); net && net->authority() != m_authority) {
+        m_authority = net->authority();
+        log("", m_authority ? "this game is the server now: loading sv_ scripts" : "joined a game: sv_ scripts run on the host");
+        rescan = true;
+    }
+#endif
+    if (rescan) {
         m_scanTimer = 0.5; // hot reload: poll modification times twice a second
         scanFolder(true);
     }
     m_vm->updateTimers(m_time);
+    dispatchNet();
+    dispatchClicks();
+    checkBreaks();
 #if KKE_ENABLE_JOLT
     if (auto* rbm = m_app->getModule<RigidBodyModule>(); rbm && m_vm->hookCount("Contact") > 0) {
         int n = 0;
@@ -316,6 +338,13 @@ void ScriptModule::update(const UpdateContext& ctx) {
     }
 #endif
     m_vm->callHook("Think", ctx.dt);
+    // Per-script CPU time this frame, smoothed for the panel.
+    for (const auto& [source, total] : m_vm->cpuTimes()) {
+        const double ms = (total - m_cpuLast[source]) * 1000.0;
+        m_cpuLast[source] = total;
+        double& shown = m_cpuMs[source];
+        shown += (ms - shown) * 0.1;
+    }
 
     // One mesh for every script body, rebuilt each frame (same approach as
     // kke_demo's crates: one draw instead of hundreds).
@@ -349,9 +378,13 @@ void ScriptModule::renderUi() {
     ImGui::SetNextWindowSize(ImVec2(420 * s, 320 * s), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Scripts (Lua)")) { ImGui::End(); return; }
     ImGui::Text("Folder: %s   (edit a file and save: it reloads)", m_dir.c_str());
-    ImGui::Text("Memory %.1f KB, bodies %zu, errors %zu", double(m_vm->memoryUsed()) / 1024.0, m_bodies.size(), m_vm->errors().size());
+    ImGui::Text("Memory %.1f KB, bodies %zu, models %zu, breakables %zu, UI %zu, errors %zu", double(m_vm->memoryUsed()) / 1024.0,
+                m_bodies.size(), m_models.size(), m_breakables.size(), m_documents.size(), m_vm->errors().size());
     for (const ScriptFile& f : m_files) {
-        ImGui::TextColored(f.ok ? ImVec4(0.5f, 1, 0.5f, 1) : ImVec4(1, 0.4f, 0.4f, 1), "%s %s", f.ok ? "OK " : "ERR", f.path.c_str());
+        const bool stopped = std::find(m_vm->stoppedScripts().begin(), m_vm->stoppedScripts().end(), f.path) != m_vm->stoppedScripts().end();
+        ImGui::TextColored(f.ok ? ImVec4(0.5f, 1, 0.5f, 1) : ImVec4(1, 0.4f, 0.4f, 1), "%s %s", stopped ? "STOP" : f.ok ? "OK  " : "ERR ", f.path.c_str());
+        ImGui::SameLine();
+        ImGui::TextDisabled("%.2f ms", m_cpuMs[f.path]);
         ImGui::SameLine();
         ImGui::PushID(f.path.c_str());
         if (ImGui::SmallButton("Reload")) {
@@ -374,11 +407,21 @@ void ScriptModule::renderUi() {
     }
     if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 4) ImGui::SetScrollHereY(1.0f);
     ImGui::EndChild();
+    // The console line runs in its own globals, or in one script's (to
+    // look at or poke its state: print(score)).
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.3f);
+    if (ImGui::BeginCombo("##target", std::filesystem::path(m_consoleTarget).filename().string().c_str())) {
+        if (ImGui::Selectable("console", m_consoleTarget == "console")) m_consoleTarget = "console";
+        for (const ScriptFile& f : m_files)
+            if (ImGui::Selectable(std::filesystem::path(f.path).filename().string().c_str(), m_consoleTarget == f.path)) m_consoleTarget = f.path;
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
     ImGui::SetNextItemWidth(-1);
     if (ImGui::InputTextWithHint("##lua", "Lua, e.g. print(camera.position())  (Enter runs)", m_consoleInput, sizeof(m_consoleInput),
                                  ImGuiInputTextFlags_EnterReturnsTrue)) {
         m_console.push_back("> " + std::string(m_consoleInput));
-        m_vm->runString(m_consoleInput, "console");
+        m_vm->runString(m_consoleInput, m_consoleTarget);
         m_consoleInput[0] = 0;
         ImGui::SetKeyboardFocusHere(-1);
     }
@@ -387,12 +430,7 @@ void ScriptModule::renderUi() {
 
 void ScriptModule::shutdown() {
     if (m_vm && m_inited) m_vm->callHook("Shutdown");
-#if KKE_ENABLE_JOLT
-    if (m_app)
-        if (auto* rbm = m_app->getModule<RigidBodyModule>())
-            for (const Body& b : m_bodies) rbm->world().remove(b.id);
-#endif
-    m_bodies.clear();
+    if (m_app) releaseAll();
     m_batch.reset();
 }
 
