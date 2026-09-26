@@ -13,10 +13,18 @@
 # Packs already extracted (a folder of that name exists) are skipped.
 # .unitypackage archives are tar.gz with GUID-named entries; they are
 # unpacked to their real asset paths.
+#
+# The share's link hash is private (anyone with it can download the paid
+# packs), so it is never in the repo: set KKE_SHARE_HASH in your shell or
+# in the environment's secrets.
 set -euo pipefail
 
 SHARE_HOST="${KKE_SHARE_HOST:-https://media.kreative-kompas.com/files}"
-SHARE_HASH="${KKE_SHARE_HASH:-5xYMfBp07ctAdPkTX27ZCg}"
+SHARE_HASH="${KKE_SHARE_HASH:-}"
+if [[ -z "$SHARE_HASH" ]]; then
+    echo "fetch_assets.sh: set KKE_SHARE_HASH to the asset share's link hash (kept out of the repo)" >&2
+    exit 2
+fi
 DEST="${KKE_ASSETS_DIR:-$(cd "$(dirname "$0")/.." && pwd)/assets/synty}"
 
 listing() {

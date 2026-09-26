@@ -21,6 +21,7 @@ same scene.
 them into `assets/synty/` (`--list` shows what's there; one zip at a time,
 deleted after extracting; `.unitypackage` files are unpacked to their real
 paths). Example: `tools/fetch_assets.sh POLYGON_Town ANIMATION_`.
+It needs `KKE_SHARE_HASH` (the share's private link hash, never committed).
 
 The startup intro (kke::LogoIntro) uses no packs: its logo is built from
 `assets/branding/kreative-kompas-logo.svg`, which is Kreative Kompas's own
