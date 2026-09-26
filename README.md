@@ -1629,11 +1629,19 @@ Engine pieces (reusable, unit-tested, render-agnostic):
   surface by marching *tetrahedra* (no lookup tables, watertight).
 - `kke::SphereImpostorRenderer` (lit sphere impostors with real depth and
   incandescent glow) and `kke::DynamicMeshRenderer` (CPU-updated meshes).
-  The liquid is drawn as overlapping spheres for now; screen-space fluid
-  rendering (a smooth continuous surface) is the next rendering task.
+- `kke::FluidSurfaceRenderer` — screen-space fluid rendering (van der
+  Laan et al. 2009, the approach behind NVIDIA Flex's liquids): particles
+  into an offscreen linear-depth + colour target, a bilateral blur in
+  compute (fixed size in world units, stops at depth jumps), then a
+  full-screen pass that rebuilds the surface, lights it and writes real
+  depth. The particles read as one continuous liquid. `L` toggles back to
+  the raw spheres for comparison; "Smoothing" sets the blur radius.
+  Uses the new `Module::prepass()` hook (offscreen work every drawn frame,
+  between the shadow pass and the main pass).
 
-Honest limits: liquid is drawn as overlapping spheres, not a smooth
-surface (screen-space fluid rendering is the upgrade); no steam/boiling;
+Honest limits: the smooth surface is opaque (no thickness-based
+transparency or refraction yet) and shows some vertical streaking from
+the separable blur; no steam/boiling;
 values are tuned to *feel* right, not measured. FEMFX has no liquids, so
 this is separate from it; the old physics_demo "Lava Melt" scene only
 remains in the scripted benchmark.

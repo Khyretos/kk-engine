@@ -85,6 +85,20 @@ struct ShadowRenderContext {
     uint32_t frameIndex = 0; // same as RenderContext::frameIndex
 };
 
+// Handed to Module::prepass(): every drawn frame, after the shadow pass
+// and before the main render pass — for modules that render into their
+// own offscreen targets (screen-space effects like smooth liquid
+// surfaces) and consume the result in render().
+struct PrepassContext {
+    VkCommandBuffer cmd;
+    glm::mat4 view;
+    glm::mat4 proj;       // Vulkan Y-flip applied
+    glm::vec3 cameraPos;
+    VkExtent2D extent;    // main framebuffer size in pixels
+    VkDescriptorSet lightingDescriptorSet;
+    uint32_t frameIndex = 0;
+};
+
 // A dependency one module declares on another, by concrete type. Declaring
 // a dependency changes two things: (1) init() order — dependencies are
 // always init()'d before the modules that depend on them; (2) whether
@@ -167,6 +181,11 @@ public:
     // growing its own "show panel" flag.
     void setUiVisible(bool visible) { m_uiVisible = visible; }
     bool uiVisible() const { return m_uiVisible; }
+
+    // Called every drawn frame (paused or not) between the shadow pass and
+    // the main render pass, outside any render pass: record your own
+    // offscreen passes/compute here. Default no-op.
+    virtual void prepass(const PrepassContext& ctx) {}
 
     // Called once per frame, with the render pass already active. Bind a
     // pipeline, push constants, and issue draw calls here.

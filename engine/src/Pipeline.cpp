@@ -89,8 +89,9 @@ Pipeline::Pipeline(VulkanDevice& device, VkRenderPass renderPass,
 
     VkPipelineColorBlendStateCreateInfo colorBlending{};
     colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    colorBlending.attachmentCount = 1;
-    colorBlending.pAttachments = &colorBlendAttachment;
+    std::vector<VkPipelineColorBlendAttachmentState> blendStates(config.colorAttachmentCount, colorBlendAttachment);
+    colorBlending.attachmentCount = config.colorAttachmentCount;
+    colorBlending.pAttachments = blendStates.data();
 
     std::vector<VkDynamicState> dynamicStates = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
     if (config.stencilTestEnable) {

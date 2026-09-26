@@ -124,6 +124,7 @@ BUGS.md / PERFORMANCE_NOTES.md entry with full detail.
 
 | # | What | Why it works | Measured effect | Where |
 |---|---|---|---|---|
+| 20 | Liquid surface in screen space instead of meshing it | Building a mesh from particles (marching cubes over a density grid) costs CPU every frame and scales with volume; the screen-space method's cost is per *pixel* — one sphere pass, 4 blur dispatches, one full-screen pass — independent of particle count past the sphere pass. Render targets are created once and only rebuilt on resize | Not measured on a real GPU yet (lavapipe here). Half-resolution targets are the backlog knob for min-spec | `kke::FluidSurfaceRenderer` |
 | 19 | Marching tetrahedra instead of marching cubes; SDF rebuilt only after melting | 16 cases instead of 256-entry tables, no ambiguity, watertight output (unit-tested); a melting block's surface + distance field only recompute when density changed | 24³ grid: remesh + SDF < 1 ms, and 0 ms on frames where nothing melted | `kke::MeltVolume` |
 | 18 | PBF neighbour lists built once per substep, reused by every solver pass | The grid search (27 hashed cells + dedupe) ran 7x per substep; lists make it 1x, passes then walk a flat array | 216-particle test: 2.5 ms -> 0.7 ms per step (3.6x) | `kke::ParticleFluid` |
 | 17 | Hot CPU files at -O2 in Debug too (`Texture.cpp`, `VoxelTets.cpp`, `FracturePattern.cpp`) | Same reasoning as FEMFX (BUG-029): pure number crunching nobody steps through; -O0 made mip generation alone ~200 ms per atlas | Part of #16's 300 -> 12 ms | `engine/CMakeLists.txt` |

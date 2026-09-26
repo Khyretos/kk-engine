@@ -1,0 +1,36 @@
+#version 450
+// Screen-space fluid, pass 2: separable bilateral blur of linear depth.
+// Neighbours count less the more their depth differs (so separate blobs
+// and silhouettes don't smear together); the kernel is a fixed size in
+// *world* units (wider on screen when close), so the surface smoothness
+// doesn't change with distance. Empty pixels (0) are skipped.
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(set = 0, binding = 0, r32f) uniform readonly image2D src;
+layout(set = 0, binding = 1, r32f) uniform writeonly image2D dst;
+layout(push_constant) uniform PC {
+    ivec2 dir;          // (1,0) or (0,1)
+    float projScale;    // pixels per metre at depth 1 (viewport height * proj[1][1] / 2)
+    float worldRadius;  // blur radius in metres
+    float depthFalloff; // metres; bigger = blur across larger depth steps
+} pc;
+
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(src);
+    if (p.x >= size.x || p.y >= size.y) return;
+    float z = imageLoad(src, p).r;
+    if (z <= 0.0) { imageStore(dst, p, vec4(0.0)); return; }
+    int radius = int(clamp(pc.worldRadius * pc.projScale / z, 1.0, 20.0));
+    float sigma = float(radius) * 0.5;
+    float sum = 0.0, wsum = 0.0;
+    for (int i = -radius; i <= radius; ++i) {
+        ivec2 q = clamp(p + pc.dir * i, ivec2(0), size - 1);
+        float zq = imageLoad(src, q).r;
+        if (zq <= 0.0) continue;
+        float dz = (zq - z) / pc.depthFalloff;
+        float w = exp(-float(i * i) / (2.0 * sigma * sigma)) * exp(-dz * dz);
+        sum += zq * w;
+        wsum += w;
+    }
+    imageStore(dst, p, vec4(sum / max(wsum, 1e-6)));
+}

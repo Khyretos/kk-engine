@@ -462,6 +462,12 @@ void Application::run() {
             }
             m_shadowMap->endRenderPass(cmd);
 
+            PrepassContext prepassCtx{ cmd, view, proj, m_camera.position, m_renderer->extent(), m_lightingBuffer->descriptorSet(),
+                                       m_renderer->currentFrameIndex() };
+            for (Module* m : m_initOrder) {
+                safeInvoke(m, "prepass", [&] { m->prepass(prepassCtx); });
+            }
+
             m_renderer->beginRenderPass();
             renderCtx.cmd = cmd;
             renderCtx.frameIndex = m_renderer->currentFrameIndex();

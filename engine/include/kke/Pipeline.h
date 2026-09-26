@@ -41,6 +41,9 @@ struct PipelineConfig {
     VkCompareOp stencilCompareOp = VK_COMPARE_OP_ALWAYS;
     VkStencilOp stencilPassOp = VK_STENCIL_OP_KEEP;
     bool colorWriteEnable = true;
+    // Color attachments in the target render pass (same blend state for
+    // all). 2+ for multiple render targets, 0 for depth-only passes.
+    uint32_t colorAttachmentCount = 1;
     VkPushConstantRange pushConstantRange{}; // size == 0 => pipeline has no push constants
     std::vector<VkDescriptorSetLayout> descriptorSetLayouts; // empty => no descriptor sets
 };

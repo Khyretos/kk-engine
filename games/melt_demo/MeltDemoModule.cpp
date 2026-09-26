@@ -44,6 +44,9 @@ float rand01(uint32_t& s) {
 void MeltDemoModule::init(kke::Application& app) {
     m_app = &app;
     m_spheres = std::make_unique<kke::SphereImpostorRenderer>(app);
+    m_surface = std::make_unique<kke::FluidSurfaceRenderer>(app);
+    m_surface->settings().blurWorldRadius = kParticleRadius * 2.5f;
+    m_surface->settings().depthFalloff = kParticleRadius * 2.0f;
     m_blockMesh = std::make_unique<kke::DynamicMeshRenderer>(app);
     m_ground = std::make_unique<kke::DynamicMeshRenderer>(app);
     // Ground: a 6 m slab top at y = 0, dark stone.
@@ -145,7 +148,14 @@ void MeltDemoModule::render(const kke::RenderContext& ctx) {
     const BlockPreset& p = kPresets[m_preset];
     m_blockMesh->draw(ctx, glm::mat4(1.0f), p.incandescent ? 0.8f : 0.0f, p.incandescent ? 0.35f : 0.25f);
 
-    // Particle colours from material and temperature.
+    if (m_smoothSurface) m_surface->draw(ctx);
+    else m_spheres->draw(ctx, m_sphereScratch);
+}
+
+// Particle colours from material and temperature, shared by both drawing
+// paths (smooth surface and raw spheres).
+void MeltDemoModule::prepass(const kke::PrepassContext& ctx) {
+    const BlockPreset& p = kPresets[m_preset];
     const auto& pos = m_fluid->positions();
     const auto& temp = m_fluid->temperatures();
     const auto& mat = m_fluid->materials();
@@ -167,7 +177,14 @@ void MeltDemoModule::render(const kke::RenderContext& ctx) {
             s.roughness = 0.15f;
         }
     }
-    m_spheres->draw(ctx, m_sphereScratch);
+    if (!m_smoothSurface) return;
+    m_surfaceScratch.resize(m_sphereScratch.size());
+    for (size_t i = 0; i < m_sphereScratch.size(); ++i) {
+        const auto& s = m_sphereScratch[i];
+        m_surfaceScratch[i] = { s.center, kParticleRadius * 1.6f, s.color, s.glow };
+    }
+    m_surface->prepass(ctx, m_surfaceScratch);
+
 }
 
 void MeltDemoModule::renderShadow(const kke::ShadowRenderContext& ctx) { m_blockMesh->drawShadow(ctx); }
@@ -176,6 +193,7 @@ void MeltDemoModule::onEvent(const SDL_Event& event) {
     if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat || ImGui::GetIO().WantTextInput) return;
     if (event.key.key == SDLK_SPACE) m_pouring = !m_pouring;
     if (event.key.key == SDLK_R) reset();
+    if (event.key.key == SDLK_L) m_smoothSurface = !m_smoothSurface;
 }
 
 void MeltDemoModule::renderUi() {
@@ -187,6 +205,10 @@ void MeltDemoModule::renderUi() {
     for (int i = 0; i < kPresetCount; ++i) names[i] = kPresets[i].name;
     if (ImGui::Combo("Block", &m_preset, names, kPresetCount)) reset();
     ImGui::Checkbox("Pour lava (Space)", &m_pouring);
+    ImGui::Checkbox("Smooth liquid surface (L)", &m_smoothSurface);
+    if (m_smoothSurface) {
+        ImGui::SliderFloat("Smoothing", &m_surface->settings().blurWorldRadius, 0.01f, 0.2f, "%.2f m");
+    }
     ImGui::SliderFloat("Pour rate", &m_pourRate, 30.0f, 400.0f, "%.0f drops/s");
     ImGui::SliderFloat("Lava temperature", &m_lavaTemperature, 800.0f, 1400.0f, "%.0f C");
     if (ImGui::Button("Reset (R)")) reset();
