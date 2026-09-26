@@ -83,6 +83,7 @@ nav:
       - Play to make: PLAY_TO_MAKE.md
       - Scripting in Lua: SCRIPTING.md
       - Movement: MOVEMENT.md
+      - AI (animals, enemies, companions): AI.md
       - Input: INPUT.md
       - Audio: AUDIO.md
       - Networking: NETWORKING.md

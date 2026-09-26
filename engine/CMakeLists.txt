@@ -43,6 +43,13 @@ set(ENGINE_SOURCES
     src/Buoyancy.cpp
     src/CameraRig.cpp
     src/SceneFile.cpp
+    src/ai/Steering.cpp
+    src/ai/Perception.cpp
+    src/ai/Utility.cpp
+    src/ai/NavMesh.cpp
+    src/ai/Species.cpp
+    src/ai/AiWorld.cpp
+    src/ai/AiScript.cpp
     src/net/BitStream.cpp
     src/net/Protocol.cpp
     src/net/Transport.cpp
@@ -242,6 +249,7 @@ target_link_libraries(kke_engine PUBLIC
     RmlUi::Core
     nlohmann_json::nlohmann_json
     kke_sqlite
+    kke_recast
     ufbx
     spdlog::spdlog
     kke_miniaudio

@@ -16,6 +16,7 @@ add_executable(kke_tests
     test_picking.cpp
     test_play_blocks.cpp
     test_node_graph.cpp
+    test_ai.cpp
     test_touch_gestures.cpp
     test_voxel_fracture.cpp
     test_interior_fill.cpp

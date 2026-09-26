@@ -15,6 +15,7 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [AUDIO.md](AUDIO.md) | The audio engine: mixer, 3D sound, occlusion, impact synthesis, accessibility |
 | [INPUT.md](INPUT.md) | Rebindable actions, devices, triggers and chords |
 | [MOVEMENT.md](MOVEMENT.md) | How characters move, and the animation principles behind it |
+| [AI.md](AI.md) | The AI core: senses, needs, utility decisions, steering, navmesh, orders, `ai.*` in Lua |
 | [JIGGLE.md](JIGGLE.md) | Jiggle physics for bones, skin and soft bodies |
 | [RAGDOLLS.md](RAGDOLLS.md) | Humanoid and animal ragdolls, their joint limits and how to override them |
 | [NETWORKING.md](NETWORKING.md) | Transport, protocol, authority and replication |
