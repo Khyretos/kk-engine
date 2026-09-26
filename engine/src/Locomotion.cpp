@@ -185,6 +185,16 @@ void Locomotion::update(const Input& in, float dt) {
     else updateAir(in, dt, grounded);
 }
 
+void Locomotion::teleport(const glm::vec3& feet) {
+    m_world.setCharacterKinematic(m_id, false);
+    m_world.teleportCharacter(m_id, feet);
+    m_world.setCharacterInput(m_id, RigidWorld::CharacterInput{});
+    m_speed = 0.0f;
+    m_buffer = 0.0f;
+    m_sinceGrounded = 0.0f;
+    enter(State::Ground);
+}
+
 void Locomotion::jump(const Input& in) {
     const Settings& s = m_settings;
     // The take-off is the last moment on the ground: it may re-aim the

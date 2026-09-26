@@ -100,6 +100,8 @@ public:
 
     // Call once per frame before RigidWorld::step().
     void update(const Input& input, float dt);
+    // Respawn: cancels any vault/climb and puts the feet there, standing still.
+    void teleport(const glm::vec3& feet);
 
     State state() const { return m_state; }
     float stateTime() const { return m_stateTime; }

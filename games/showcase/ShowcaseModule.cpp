@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <typeindex>
 
@@ -22,8 +23,8 @@ namespace kke_showcase {
 
 namespace {
 
-// Movement speeds (m/s) and the blend-space points they line up with: the
-// animations' own foot speeds, so feet don't slide.
+// Blend-space points: the animations' own foot speeds, which are also
+// kke::Locomotion's default walk/run/sprint/crouch speeds, so feet don't slide.
 constexpr float kWalkSpeed = 1.6f, kJogSpeed = 3.6f, kSprintSpeed = 6.2f, kCrouchSpeed = 1.4f;
 
 void appendBox(const glm::mat4& m, const glm::vec3& half, const glm::vec3& color, std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx) {
@@ -87,6 +88,12 @@ void ShowcaseModule::init(kke::Application& app) {
     m_rig.pitch = -12.0f;
     app.window().setQuitOnEscape(false);
     m_status = "Click the view to control the character (Esc releases the mouse)";
+    if (const char* a = std::getenv("KKE_DEMO_AUTOPILOT"); a && *a && *a != '0') {
+        m_autopilot = true;
+        m_loco->teleport(glm::vec3(20.0f, 0.05f, 28.0f));
+        m_rig.yaw = 0.0f; // looking down the lane (-Z)
+        m_status = "Autopilot: running the parkour lane";
+    }
 }
 
 void ShowcaseModule::addStaticBox(const Box& b, std::vector<kke::Vertex>& v, std::vector<uint32_t>& i) {
@@ -148,6 +155,7 @@ void ShowcaseModule::buildLevel() {
     addStaticBox({ { 10.0f, 1.35f, 6.0f }, { 1.5f, 0.15f, 1.5f }, accent }, v, idx);
     for (glm::vec2 c : { glm::vec2(-1, -1), glm::vec2(1, -1), glm::vec2(1, 1), glm::vec2(-1, 1) })
         addStaticBox({ { 10.0f + c.x * 1.4f, 0.6f, 6.0f + c.y * 1.4f }, { 0.1f, 0.6f, 0.1f }, wall }, v, idx);
+    buildParkourLane(v, idx);
     // Breaking yard floor marker.
     addStaticBox({ { 14.0f, 0.01f, -6.0f }, { 5.5f, 0.01f, 4.5f }, glm::vec3(0.3f, 0.3f, 0.25f) }, v, idx);
     m_level->upload(v, idx);
@@ -158,6 +166,21 @@ void ShowcaseModule::buildLevel() {
     p.halfExtents = m_platformHalf;
     p.position = glm::vec3(-14.0f, 0.5f, 6.0f);
     m_platform = m_rigid->world().add(p);
+}
+
+// The parkour lane (x = 20, run toward -Z from z = 28): nothing here is
+// marked up. kke::Locomotion's sensors decide what each piece is: a fence
+// and a low wall to vault, a chest-high block to climb, a 2.1 m ledge only
+// a sprint reaches, and a 3 m wall that is just a wall.
+void ShowcaseModule::buildParkourLane(std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx) {
+    const glm::vec3 fence(0.75f, 0.62f, 0.35f), block(0.5f, 0.55f, 0.62f), tall(0.45f, 0.42f, 0.4f);
+    const float x = 20.0f;
+    addStaticBox({ { x, 0.005f, 17.0f }, { 2.6f, 0.005f, 11.5f }, glm::vec3(0.42f, 0.44f, 0.4f) }, v, idx); // lane marking
+    addStaticBox({ { x, 0.5f, 24.0f }, { 2.5f, 0.5f, 0.15f }, fence }, v, idx);         // 1.0 m fence: vault
+    addStaticBox({ { x, 0.3f, 20.5f }, { 2.5f, 0.3f, 0.25f }, fence }, v, idx);         // 0.6 m wall: vault
+    addStaticBox({ { x, 0.75f, 16.0f }, { 2.5f, 0.75f, 1.2f }, block }, v, idx);        // 1.5 m block: climb
+    addStaticBox({ { x, 1.05f, 9.5f }, { 2.5f, 1.05f, 1.5f }, block }, v, idx);         // 2.1 m ledge: sprint + climb
+    addStaticBox({ { x - 4.0f, 1.5f, 12.0f }, { 0.3f, 1.5f, 4.0f }, tall }, v, idx);    // 3 m wall: no
 }
 
 void ShowcaseModule::spawnCrates() {
@@ -227,6 +250,8 @@ void ShowcaseModule::setupPlayer() {
     kke::RigidWorld::CharacterDesc cd;
     cd.position = m_spawn;
     m_player = m_rigid->world().addCharacter(cd);
+    m_loco = std::make_unique<kke::Locomotion>(m_rigid->world(), m_player);
+    m_loco->setFacing(glm::vec3(0, 0, 1));
     m_facing = 180.0f;
 
     // Quaternius' Universal Animation Library (CC0): a mannequin with 43
@@ -255,6 +280,20 @@ void ShowcaseModule::setupPlayer() {
     m_stJump = m_anim->addClipState("jump", s.find("Jump_Start"), false, 2.0f);
     m_stFall = m_anim->addClipState("fall", s.find("Jump_Loop"), true);
     m_stLand = m_anim->addClipState("land", s.find("Jump_Land"), false, 1.8f);
+    // Vault and climb: the Universal Animation Library "Standard" set has
+    // no vault or climb clips, so these use its closest poses as
+    // stand-ins (tucked jump for the vault, the take-off reach and a
+    // crouch step for the climb). A pack with real ones ("Vault",
+    // "Climb") is picked up by name; Locomotion moves the capsule either
+    // way, the clips only provide the pose.
+    auto pick = [&](std::initializer_list<const char*> names) {
+        for (const char* n : names)
+            if (int c = s.find(n); c >= 0) return c;
+        return -1;
+    };
+    m_stVault = m_anim->addClipState("vault", pick({ "Vault", "Jump_Loop" }), true, 1.4f);
+    m_stClimbUp = m_anim->addClipState("climb_up", pick({ "Climb_Up", "Climb", "Jump_Start" }), false, 0.7f);
+    m_stClimbOver = m_anim->addClipState("climb_over", pick({ "Climb_Over", "Crouch_Fwd_Loop" }), true, 1.3f);
     m_anim->play(m_stMove, 0.0f);
     kke::log::get(name())->info("character: {} bones, {} clips", d->bones.size(), d->animations.size());
 }
@@ -290,7 +329,7 @@ void ShowcaseModule::onEvent(const SDL_Event& e) {
     case SDLK_E: forcePush(); break;
     case SDLK_R:
         spawnCrates();
-        m_rigid->world().teleportCharacter(m_player, m_spawn);
+        m_loco->teleport(m_spawn);
         break;
     case SDLK_F1:
         m_showPanels = !m_showPanels;
@@ -343,40 +382,53 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     m_rig.settings.pivotHeight += (target - m_rig.settings.pivotHeight) * std::min(1.0f, 10.0f * dt);
     m_rig.settings.eyeHeight = m_rig.settings.pivotHeight + 0.15f;
 
-    // Input -> desired velocity, relative to the camera.
-    glm::vec3 move(0.0f);
+    // Input -> actions for the movement layer (camera-relative). What
+    // "go up" becomes (vault, climb or jump) is Locomotion's call, from
+    // what its sensors see in front of the character.
+    kke::Locomotion::Input in;
     if (m_captured) {
         const bool* keys = SDL_GetKeyboardState(nullptr);
-        if (keys[SDL_SCANCODE_W]) move += m_rig.forward();
-        if (keys[SDL_SCANCODE_S]) move -= m_rig.forward();
-        if (keys[SDL_SCANCODE_D]) move += m_rig.right();
-        if (keys[SDL_SCANCODE_A]) move -= m_rig.right();
+        if (keys[SDL_SCANCODE_W]) in.move += m_rig.forward();
+        if (keys[SDL_SCANCODE_S]) in.move -= m_rig.forward();
+        if (keys[SDL_SCANCODE_D]) in.move += m_rig.right();
+        if (keys[SDL_SCANCODE_A]) in.move -= m_rig.right();
+        in.move.y = 0.0f;
+        if (glm::length(in.move) > 1e-3f) in.move = glm::normalize(in.move);
         m_sprint = keys[SDL_SCANCODE_LSHIFT];
         m_walk = keys[SDL_SCANCODE_LALT];
     }
-    float speed = m_crouch ? kCrouchSpeed : m_sprint ? kSprintSpeed : m_walk ? kWalkSpeed : kJogSpeed;
-    if (glm::length(move) > 1e-3f) move = glm::normalize(move) * speed;
-    kke::RigidWorld::CharacterInput in;
-    in.move = move;
-    in.jump = m_jumpQueued && w.characterOnGround(m_player) && !m_crouch;
-    in.jumpSpeed = 5.2f;
-    if (in.jump && m_anim) m_anim->play(m_stJump, 0.08f, true);
+    if (m_autopilot) {
+        // Down the lane at a run, sprinting for the tall ledge; "go up"
+        // whenever the sensors see something (a player's timing).
+        m_autopilotTime += dt;
+        in.move = glm::vec3(0, 0, -1);
+        const glm::vec3 at = w.characterPosition(m_player);
+        m_sprint = at.z < 14.5f && at.y > 1.0f; // on the block: sprint for the ledge
+        const auto& ls = m_loco->settings();
+        if (m_loco->state() == kke::Locomotion::State::Ground &&
+            m_loco->probe(in.move, m_sprint ? ls.sprintSensor : ls.walkSensor).kind != kke::Locomotion::Obstacle::Kind::None)
+            m_jumpQueued = true;
+        if (at.z < 7.0f || m_autopilotTime > 20.0f) { // end of the lane: again
+            m_loco->teleport(glm::vec3(20.0f, 0.05f, 28.0f));
+            m_autopilotTime = 0.0f;
+        }
+    }
+    in.fast = m_sprint && !m_crouch;
+    in.slow = m_walk;
+    in.crouch = m_crouch;
+    in.goUp = m_jumpQueued;
     m_jumpQueued = false;
-    w.setCharacterInput(m_player, in);
+    if (m_rig.mode == kke::CameraRig::Mode::FirstPerson) m_loco->setFacing(m_rig.forward());
+    m_loco->update(in, dt);
+    if (m_loco->jumped() && m_anim) m_anim->play(m_stJump, 0.08f, true);
 
     const glm::vec3 feet = w.characterPosition(m_player);
-    const glm::vec3 vel = w.characterVelocity(m_player);
-    const float groundSpeed = glm::length(glm::vec2(vel.x, vel.z));
-    // Face where we're going (third person), or where we look (first).
-    if (m_rig.mode == kke::CameraRig::Mode::FirstPerson) m_facing = m_rig.yaw;
-    else if (groundSpeed > 0.3f) {
-        float target = glm::degrees(std::atan2(vel.x, -vel.z));
-        float diff = std::remainder(target - m_facing, 360.0f);
-        m_facing += diff * std::min(1.0f, 12.0f * dt);
-    }
-    if (feet.y < -20.0f) w.teleportCharacter(m_player, m_spawn); // fell out of the world
+    // Face where Locomotion says (it turns at a limited rate, squares up
+    // to obstacles), or where we look in first person.
+    m_facing = m_rig.mode == kke::CameraRig::Mode::FirstPerson ? m_rig.yaw : m_loco->facingYaw();
+    if (feet.y < -20.0f) m_loco->teleport(m_spawn); // fell out of the world
 
-    updateAnimation(dt, groundSpeed, w.characterOnGround(m_player));
+    updateAnimation(dt);
     if (m_charInstance) {
         // The mannequin faces -Z, like the rig at yaw 0.
         glm::mat4 t = glm::rotate(glm::translate(glm::mat4(1.0f), feet), glm::radians(-m_facing), glm::vec3(0, 1, 0));
@@ -401,23 +453,35 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     m_app->lighting().ambientColor = glm::vec3(m_ambient);
 }
 
-void ShowcaseModule::updateAnimation(float dt, float speed, bool grounded) {
+void ShowcaseModule::updateAnimation(float dt) {
     if (!m_anim) return;
+    using State = kke::Locomotion::State;
     const int cur = m_anim->current();
-    if (!grounded) {
-        m_airTime += dt;
-        // Walking off a ledge (not a jump): fall after a moment.
+    const float speed = m_loco->groundSpeed();
+    switch (m_loco->state()) {
+    case State::Vault:
+        if (cur != m_stVault) m_anim->play(m_stVault, 0.08f);
+        break;
+    case State::Climb:
+        // Hands up the wall first, then the step over the edge.
+        if (m_loco->traversalProgress() < 0.6f) { if (cur != m_stClimbUp) m_anim->play(m_stClimbUp, 0.1f); }
+        else if (cur != m_stClimbOver) m_anim->play(m_stClimbOver, 0.15f);
+        break;
+    case State::Air:
         if (cur == m_stJump && m_anim->finished()) m_anim->play(m_stFall, 0.15f);
-        else if (cur != m_stJump && cur != m_stFall && m_airTime > 0.2f) m_anim->play(m_stFall, 0.2f);
-    } else {
-        if ((cur == m_stFall || (cur == m_stJump && m_airTime > 0.15f)) && m_airTime > 0.35f) m_anim->play(m_stLand, 0.06f);
-        m_airTime = 0.0f;
+        // Walked off an edge (not a jump): fall after a moment.
+        else if (cur != m_stJump && cur != m_stFall && m_loco->stateTime() > 0.15f) m_anim->play(m_stFall, 0.2f);
+        break;
+    case State::Ground: {
+        if (m_loco->landed() && m_loco->fallHeight() > 0.6f) m_anim->play(m_stLand, 0.06f);
         const int ground = m_crouch ? m_stCrouch : m_stMove;
         const bool landing = m_anim->current() == m_stLand && !m_anim->finished() && speed < 1.0f;
         const bool jumping = m_anim->current() == m_stJump && m_anim->stateTime() < 0.2f;
-        if (!landing && !jumping && m_anim->current() != ground) m_anim->play(ground, 0.2f);
+        if (!landing && !jumping && m_anim->current() != ground) m_anim->play(ground, m_loco->landed() ? 0.12f : 0.2f);
+        break;
     }
-    m_anim->setParameter(speed);
+    }
+    m_anim->setParameter(speed); // measured speed: legs match the ground, in turns too
     m_anim->update(dt);
     if (std::vector<glm::mat4>* locals = m_models->boneLocals(m_charInstance)) kke::poseToLocals(m_anim->pose(), *locals);
 }
@@ -459,9 +523,26 @@ void ShowcaseModule::renderUi() {
     if (m_wantCrouch != m_crouch) ImGui::TextColored(ImVec4(1, 0.8f, 0.3f, 1), "No room to stand up");
     ImGui::Text("Rigid bodies %zu (%zu awake), %.2f ms", w.bodyCount(), w.activeBodyCount(), w.lastStepMs());
     if (ImGui::CollapsingHeader("Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::TextUnformatted("WASD move, Shift sprint, Alt walk, Space jump,\nC crouch, mouse look, wheel zoom, V first/third person\n"
+        ImGui::TextUnformatted("WASD move, Shift sprint, Alt walk, Space jump / vault / climb,\nC crouch, mouse look, wheel zoom, V first/third person\n"
                                "Left click / F shoot (breaks the yard), right click / E push\n"
                                "R reset crates + player, F1 engine panels, Esc mouse");
+    }
+    if (ImGui::CollapsingHeader("Movement")) {
+        static const char* kStates[] = { "ground", "air", "vault", "climb" };
+        static const char* kKinds[] = { "nothing", "vault", "climb" };
+        ImGui::Text("State: %s", kStates[static_cast<int>(m_loco->state())]);
+        const kke::Locomotion::Sensor& sensor = m_sprint ? m_loco->settings().sprintSensor : m_loco->settings().walkSensor;
+        kke::Locomotion::Obstacle ahead = m_loco->probe(m_loco->facing(), sensor);
+        ImGui::Text("Ahead: %s (%.2f m high, %.2f m deep)", kKinds[static_cast<int>(ahead.kind)], ahead.height,
+                    ahead.depth > 100.0f ? 0.0f : ahead.depth);
+        kke::Locomotion::Settings& ms = m_loco->settings();
+        ImGui::SliderFloat("Turn rate", &ms.turnRate, 90.0f, 1440.0f, "%.0f deg/s");
+        ImGui::SliderFloat("Sprint turn rate", &ms.sprintTurnRate, 90.0f, 1440.0f, "%.0f deg/s");
+        ImGui::SliderFloat("Speed in sharp turns", &ms.turnSpeedFactor, 0.2f, 1.0f);
+        ImGui::SliderFloat("Air steering", &ms.airAcceleration, 0.0f, 20.0f, "%.1f m/s2");
+        ImGui::SliderFloat("Vault clearance", &ms.vaultClearance, 0.0f, 0.6f, "%.2f m");
+        ImGui::SliderFloat("Climb time", &ms.climbTime, 0.3f, 2.0f, "%.2f s");
+        ImGui::TextWrapped("Parkour lane at x = 20: fence and low wall (vault), block (climb), 2.1 m ledge (sprint, then climb), 3 m wall (no).");
     }
     if (ImGui::CollapsingHeader("Lighting")) {
         ImGui::SliderFloat("Sun direction", &m_sunAzimuth, -180.0f, 180.0f, "%.0f deg");

@@ -2,6 +2,7 @@
 
 #include "kke/Animator.h"
 #include "kke/CameraRig.h"
+#include "kke/Locomotion.h"
 #include "kke/Module.h"
 #include "kke/RigidWorld.h"
 #include "kke/SphereImpostors.h"
@@ -42,7 +43,8 @@ private:
     void spawnCrates();
     void spawnBreakables();
     void setupPlayer();
-    void updateAnimation(float dt, float speed, bool grounded);
+    void buildParkourLane(std::vector<kke::Vertex>& v, std::vector<uint32_t>& i);
+    void updateAnimation(float dt);
     void shoot();
     void forcePush();
     void setCaptured(bool on);
@@ -64,18 +66,23 @@ private:
 
     // Player.
     kke::RigidWorld::CharacterId m_player = 0;
+    std::unique_ptr<kke::Locomotion> m_loco;      // vault/climb, turning, air control
     kke::CameraRig m_rig;
     float m_facing = 0.0f;          // degrees, the body's yaw
     bool m_captured = false;
     bool m_crouch = false, m_wantCrouch = false, m_walk = false, m_sprint = false;
     bool m_jumpQueued = false;
+    // KKE_DEMO_AUTOPILOT=1: runs the parkour lane by itself (screenshots,
+    // checking the vault/climb feel without touching the keyboard).
+    bool m_autopilot = false;
+    float m_autopilotTime = 0.0f;
     glm::vec3 m_spawn{0.0f, 0.05f, 6.0f};
     kke::ModelModule::ModelId m_charModel = 0;
     kke::ModelModule::InstanceId m_charInstance = 0;
     std::unique_ptr<kke::AnimationSet> m_animSet;
     std::unique_ptr<kke::Animator> m_anim;
     int m_stMove = -1, m_stCrouch = -1, m_stJump = -1, m_stFall = -1, m_stLand = -1;
-    float m_airTime = 0.0f;
+    int m_stVault = -1, m_stClimbUp = -1, m_stClimbOver = -1;
 
     // Lighting panel.
     float m_sunAzimuth = 35.0f, m_sunElevation = 50.0f, m_sunIntensity = 1.0f, m_ambient = 0.25f;
