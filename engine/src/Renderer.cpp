@@ -302,6 +302,23 @@ static void setFullViewport(VkCommandBuffer cmd, VkExtent2D e) {
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 }
 
+void Renderer::beginView(const VkRect2D& rect, bool clear) {
+    VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
+    VkViewport viewport{ static_cast<float>(rect.offset.x), static_cast<float>(rect.offset.y), static_cast<float>(rect.extent.width),
+                         static_cast<float>(rect.extent.height), 0.0f, 1.0f };
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+    vkCmdSetScissor(cmd, 0, 1, &rect);
+    if (!clear || rect.extent.width == 0 || rect.extent.height == 0) return;
+    VkClearAttachment att[2]{};
+    att[0].aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    att[0].colorAttachment = 0;
+    att[0].clearValue.color = { { m_clearLinear.r, m_clearLinear.g, m_clearLinear.b, 1.0f } };
+    att[1].aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    att[1].clearValue.depthStencil = { 1.0f, 0 };
+    VkClearRect cr{ rect, 0, 1 };
+    vkCmdClearAttachments(cmd, 2, att, 1, &cr);
+}
+
 void Renderer::beginRenderPass() {
     VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
 
@@ -331,7 +348,11 @@ void Renderer::beginRenderPass() {
 }
 
 void Renderer::beginOverlayPass() {
-    if (!m_inScenePass) return;
+    if (!m_inScenePass) {
+        // Same pass continues: only undo a split-screen view's viewport.
+        setFullViewport(m_commandBuffers[m_currentFrame], m_swapChain->extent());
+        return;
+    }
     m_inScenePass = false;
     VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
     vkCmdEndRenderPass(cmd);

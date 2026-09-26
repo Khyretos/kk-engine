@@ -94,6 +94,29 @@ private:
     };
     kke::NetModule* m_net = nullptr;
     std::map<uint8_t, Avatar> m_avatars;
+
+    // Split screen (ACTION_PLAN.md 1.3, SplitScreen.cpp): players 2-4 on
+    // this machine, each with a controller, a character, a camera and a
+    // part of the window. Player 1 keeps the keyboard and mouse (and any
+    // controller nobody else has). A player without a controller runs
+    // the parkour lane on its own, so split screen can be tried alone.
+    struct LocalPlayer {
+        kke::RigidWorld::CharacterId id = 0;
+        std::unique_ptr<kke::Locomotion> loco;
+        kke::CameraRig rig;
+        kke::Camera camera;
+        kke::ModelModule::InstanceId instance = 0;
+        std::unique_ptr<kke::Animator> anim;
+        uint32_t pad = 0; // device ref; 0 = none (runs the lane)
+        bool crouch = false, jumpQueued = false;
+        float runTime = 0.0f; // on the lane: seconds since the start (< 0 = waiting)
+    };
+    void setLocalPlayers(int count);
+    void assignControllers();
+    void updateLocalPlayers(float dt);
+    std::vector<LocalPlayer> m_locals;
+    bool m_splitSideBySide = true;
+    bool m_overhead = false; // picture-in-picture: player 1 seen from above
     std::vector<glm::mat4> m_avatarCapsules; // no character model: boxes
     glm::vec3 m_lastFeet{0.0f};
 

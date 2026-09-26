@@ -35,6 +35,10 @@ struct FixedUpdateContext {
 // Per-frame GPU-side context handed to Module::render()/Module::compute().
 // Everything a module needs to draw is here — it should never need to reach
 // back into Application/Renderer internals to get a camera matrix.
+// Split screen / picture-in-picture: at most this many views per frame
+// (Application::views()).
+constexpr uint32_t kMaxViews = 4;
+
 struct RenderContext {
     VkCommandBuffer cmd;
     glm::mat4 view;
@@ -67,6 +71,14 @@ struct RenderContext {
     // Which of Renderer::kMaxFramesInFlight slots this frame uses — see
     // Renderer::currentFrameIndex() for when per-frame copies are needed.
     uint32_t frameIndex = 0;
+    // Split screen: render() runs once per view, each with its own
+    // camera, into its own part of the image (viewport and scissor
+    // already set). A module that writes per-frame GPU data in render()
+    // which depends on the camera (culled instance lists, camera-facing
+    // quads) keeps one copy per view, indexed by viewIndex, or the
+    // last view's data would be what every view draws.
+    uint32_t viewIndex = 0;
+    uint32_t viewCount = 1;
 };
 
 // Passed to Module::renderShadow() — a real, separate, depth-only pass

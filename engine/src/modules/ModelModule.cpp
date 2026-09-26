@@ -7,6 +7,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <map>
 #include <tuple>
@@ -461,7 +462,7 @@ void ModelModule::buildBatches(const Frustum& f, std::vector<Batch>& out, std::v
         Batch b{ key.model, key.tex, key.overlay, static_cast<uint32_t>(data.size()), static_cast<uint32_t>(list.size()) };
         for (Instance* inst : list) {
             data.push_back({ inst->transform, glm::vec4(inst->tint, 1.0f) });
-            if (markDrawn) inst->batchedFrame = m_frame;
+            if (markDrawn) inst->batchedFrame = m_viewPass;
         }
         out.push_back(b);
     }
@@ -552,24 +553,29 @@ void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
 }
 
 void ModelModule::render(const RenderContext& ctx) {
-    m_drawCalls = 0;
-    m_culled = 0;
+    // Split screen: once per view; the stats add up the views.
+    if (ctx.viewIndex == 0) {
+        m_drawCalls = 0;
+        m_culled = 0;
+        m_instancedCount = 0;
+    }
+    m_viewPass = m_frame * kMaxViews + ctx.viewIndex;
+    const int pass = 1 + static_cast<int>(std::min(ctx.viewIndex, kMaxViews - 1));
     // Frustum culling (docs/OPTIMIZATION.md #23): an instance entirely outside
     // the view is neither skinned, uploaded nor drawn.
     const Frustum frustum = Frustum::fromViewProj(ctx.proj * ctx.view);
     VkDescriptorSet overlay = m_overlaySet ? m_overlaySet : ctx.defaultMaterialTextureDescriptorSet;
     VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, ctx.defaultMaterialTextureDescriptorSet, overlay };
     const VkShaderStageFlags pcStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-    m_instancedCount = 0;
     if (m_showMeshes) {
         // Instancing (docs/OPTIMIZATION.md #25): 2+ visible copies of the same
         // rigid model (same texture/overlay) are one draw per mesh part.
         buildBatches(frustum, m_batches, m_instanceData, true);
-        uploadInstances(1, ctx.frameIndex, m_instanceData);
+        uploadInstances(pass, ctx.frameIndex, m_instanceData);
         if (!m_batches.empty()) {
             m_instancedPipeline->bind(ctx.cmd);
             vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_instancedPipeline->layout(), 0, 4, sets, 0, nullptr);
-            VkBuffer ib = m_instanceBuffers[1][ctx.frameIndex]->handle();
+            VkBuffer ib = m_instanceBuffers[pass][ctx.frameIndex]->handle();
             VkDescriptorSet bound = ctx.defaultMaterialTextureDescriptorSet;
             for (const Batch& b : m_batches) {
                 const LoadedModel& lm = *m_models[b.model];
@@ -599,7 +605,7 @@ void ModelModule::render(const RenderContext& ctx) {
         for (auto& [id, inst] : m_instances) {
             if (!inst.visible) continue;
             if (!mightBeVisible(inst, frustum)) { ++m_culled; continue; }
-            if (inst.batchedFrame == m_frame) continue; // drawn instanced above
+            if (inst.batchedFrame == m_viewPass) continue; // drawn instanced above
             skinInstance(inst, ctx.frameIndex);
             uploadDeformed(inst, ctx.frameIndex);
             const LoadedModel& lm = *m_models[inst.model];

@@ -74,15 +74,17 @@ void DebugDrawModule::render(const RenderContext& ctx) {
             m_scratch.insert(m_scratch.end(), { v0, v1, v2, v0, v2, v3 });
         }
     }
-    uint32_t f = ctx.frameIndex;
-    if (m_capacity[f] < m_scratch.size()) {
-        m_capacity[f] = std::max<size_t>(m_scratch.size() * 3 / 2, 1024);
-        m_buffers[f] = std::make_unique<Buffer>(m_app->device(), m_capacity[f] * sizeof(Vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                                                VMA_MEMORY_USAGE_CPU_TO_GPU);
+    const uint32_t f = ctx.frameIndex;
+    auto& buffer = m_buffers[std::min(ctx.viewIndex, kMaxViews - 1)][f];
+    size_t& capacity = m_capacity[std::min(ctx.viewIndex, kMaxViews - 1)][f];
+    if (capacity < m_scratch.size()) {
+        capacity = std::max<size_t>(m_scratch.size() * 3 / 2, 1024);
+        buffer = std::make_unique<Buffer>(m_app->device(), capacity * sizeof(Vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                                          VMA_MEMORY_USAGE_CPU_TO_GPU);
     }
-    m_buffers[f]->upload(m_scratch.data(), m_scratch.size() * sizeof(Vertex));
+    buffer->upload(m_scratch.data(), m_scratch.size() * sizeof(Vertex));
     glm::mat4 viewProj = ctx.proj * ctx.view;
-    VkBuffer vb = m_buffers[f]->handle();
+    VkBuffer vb = buffer->handle();
     VkDeviceSize off = 0;
     uint32_t first = 0;
     for (int layer = 0; layer < 2; ++layer) {

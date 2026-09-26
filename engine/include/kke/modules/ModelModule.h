@@ -158,7 +158,7 @@ private:
         float clipTime = 0.0f, clipSpeed = 1.0f;
         bool clipLoop = true;
         uint64_t skinnedFrame = ~0ull;
-        uint64_t batchedFrame = ~0ull; // drawn instanced this frame (see render())
+        uint64_t batchedFrame = ~0ull; // drawn instanced in this view this frame (see render())
     };
     // Per-instance data for the instanced pipelines (binding 1).
     struct InstanceGpu { glm::mat4 model; glm::vec4 tint; };
@@ -195,8 +195,11 @@ private:
     bool m_instancing = true;
     std::unique_ptr<Pipeline> m_instancedPipeline, m_instancedShadowPipeline;
     // [pass: 0 shadow, 1 main][frame in flight]
-    std::unique_ptr<Buffer> m_instanceBuffers[2][Renderer::kMaxFramesInFlight];
-    size_t m_instanceCapacity[2][Renderer::kMaxFramesInFlight] = {};
+    // Instance lists: [0] the shadow pass, [1 + view] each split-screen
+    // view (each culls against its own camera).
+    std::unique_ptr<Buffer> m_instanceBuffers[1 + kMaxViews][Renderer::kMaxFramesInFlight];
+    size_t m_instanceCapacity[1 + kMaxViews][Renderer::kMaxFramesInFlight] = {};
+    uint64_t m_viewPass = 0; // m_frame and the view: which draw batchedFrame means
     std::vector<Batch> m_batches;
     std::vector<InstanceGpu> m_instanceData;
 };

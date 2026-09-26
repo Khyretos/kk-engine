@@ -1,5 +1,5 @@
 # kke_demo: the walkable showcase (ACTION_PLAN.md P1).
-add_executable(kke_demo main.cpp ShowcaseModule.cpp StressTest.cpp)
+add_executable(kke_demo main.cpp ShowcaseModule.cpp StressTest.cpp SplitScreen.cpp)
 target_link_libraries(kke_demo PRIVATE kke_engine)
 engine_copy_runtime_file(kke_demo ${CMAKE_CURRENT_SOURCE_DIR}/game.json marketplace/showcase/game.json)
 # Lua scripts (ScriptModule). The copy in bin/scripts/ is what runs; set

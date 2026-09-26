@@ -440,10 +440,39 @@ void Application::run() {
         }
         m_stepRequested = false; // consumed whether or not we were actually paused
 
-        glm::mat4 view = glm::lookAt(m_camera.position, m_camera.target, m_camera.up);
-        glm::mat4 proj = glm::perspective(glm::radians(m_camera.fovDegrees), m_renderer->aspectRatio(),
-                                           m_camera.nearPlane, m_camera.farPlane);
-        proj[1][1] *= -1.0f; // Vulkan's clip space Y is flipped relative to GLM's assumption.
+        // The views drawn this frame: split screen / picture-in-picture
+        // (views()), or camera() over the whole window.
+        struct DrawView {
+            Camera camera;
+            ViewRect rect;
+            glm::mat4 view, proj;
+            float aspect;
+            LightingBuffer* lighting;
+        };
+        std::array<DrawView, kMaxViews> drawViews;
+        uint32_t viewCount = 0;
+        const VkExtent2D sceneExtent = m_renderer->renderExtent();
+        auto addView = [&](const Camera& c, const ViewRect& r) {
+            DrawView& d = drawViews[viewCount];
+            d.camera = c;
+            d.rect = r;
+            d.aspect = viewAspect(r, sceneExtent);
+            d.view = glm::lookAt(c.position, c.target, c.up);
+            d.proj = glm::perspective(glm::radians(c.fovDegrees), d.aspect, c.nearPlane, c.farPlane);
+            d.proj[1][1] *= -1.0f; // Vulkan's clip space Y is flipped relative to GLM's assumption.
+            if (viewCount == 0) {
+                d.lighting = m_lightingBuffer.get();
+            } else {
+                while (m_viewLighting.size() < viewCount) m_viewLighting.push_back(std::make_unique<LightingBuffer>(m_renderer->device()));
+                d.lighting = m_viewLighting[viewCount - 1].get();
+            }
+            ++viewCount;
+        };
+        if (m_views.empty()) addView(m_camera, ViewRect{});
+        for (const View& v : m_views)
+            if (viewCount < kMaxViews) addView(v.camera, v.rect);
+        const glm::mat4& view = drawViews[0].view;
+        const glm::mat4& proj = drawViews[0].proj;
 
         // Real shadow mapping (see kke::ShadowMap) — computed from the
         // key light (lights[0]) only, framed around a fixed scene
@@ -458,19 +487,16 @@ void Application::run() {
             m_lighting.lights[0].direction, glm::vec3(0.0f, 0.0f, 0.0f), 15.0f);
 
         RenderContext renderCtx{};
-        renderCtx.view = view;
-        renderCtx.proj = proj;
-        renderCtx.cameraPos = m_camera.position;
-        renderCtx.aspectRatio = m_renderer->aspectRatio();
         renderCtx.renderPass = m_renderer->renderPass();
-        renderCtx.lightingDescriptorSet = m_lightingBuffer->descriptorSet();
         renderCtx.shadowMapDescriptorSet = m_shadowMapDescriptorSet;
         renderCtx.defaultMaterialTextureDescriptorSet = m_defaultTextureDescriptorSet;
+        renderCtx.viewCount = viewCount;
 
         // Once per frame, before any module's render() might bind and
-        // draw using it — every lit module shares this same one buffer
-        // and descriptor set (see LightingBuffer.h).
-        m_lightingBuffer->update(m_lighting, m_camera.position, lightViewProj, proj * view);
+        // draw using it — every lit module shares one buffer and
+        // descriptor set per view (see LightingBuffer.h).
+        for (uint32_t i = 0; i < viewCount; ++i)
+            drawViews[i].lighting->update(m_lighting, drawViews[i].camera.position, lightViewProj, drawViews[i].proj * drawViews[i].view);
 
         // ImGui's NewFrame() (inside beginFrame()) must only be called
         // for a frame that will also reach Render() — calling it here,
@@ -523,7 +549,7 @@ void Application::run() {
             }
             m_shadowMap->endRenderPass(cmd);
 
-            PrepassContext prepassCtx{ cmd, view, proj, m_camera.position, m_renderer->renderExtent(), m_lightingBuffer->descriptorSet(),
+            PrepassContext prepassCtx{ cmd, view, proj, drawViews[0].camera.position, sceneExtent, m_lightingBuffer->descriptorSet(),
                                        m_renderer->currentFrameIndex() };
             for (Module* m : m_initOrder) {
                 safeInvoke(m, "prepass", [&] { m->prepass(prepassCtx); });
@@ -532,9 +558,28 @@ void Application::run() {
             m_renderer->beginRenderPass();
             renderCtx.cmd = cmd;
             renderCtx.frameIndex = m_renderer->currentFrameIndex();
-            for (Module* m : m_initOrder) {
-                safeInvoke(m, "render", [&] { m->render(renderCtx); });
+            for (uint32_t i = 0; i < viewCount; ++i) {
+                const DrawView& d = drawViews[i];
+                renderCtx.view = d.view;
+                renderCtx.proj = d.proj;
+                renderCtx.cameraPos = d.camera.position;
+                renderCtx.aspectRatio = d.aspect;
+                renderCtx.lightingDescriptorSet = d.lighting->descriptorSet();
+                renderCtx.viewIndex = i;
+                // The first view's part was cleared with the pass; later
+                // ones may sit over it (picture-in-picture).
+                if (viewCount > 1) m_renderer->beginView(viewPixels(d.rect, sceneExtent), i > 0);
+                for (Module* m : m_initOrder) {
+                    safeInvoke(m, "render", [&] { m->render(renderCtx); });
+                }
             }
+            // The overlay covers the whole window with the first camera.
+            renderCtx.view = view;
+            renderCtx.proj = proj;
+            renderCtx.cameraPos = drawViews[0].camera.position;
+            renderCtx.aspectRatio = m_renderer->aspectRatio();
+            renderCtx.lightingDescriptorSet = m_lightingBuffer->descriptorSet();
+            renderCtx.viewIndex = 0;
             m_renderer->beginOverlayPass();
             for (Module* m : m_initOrder) {
                 safeInvoke(m, "renderOverlay", [&] { m->renderOverlay(renderCtx); });

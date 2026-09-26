@@ -309,7 +309,9 @@ void FluidSurfaceRenderer::prepass(const PrepassContext& ctx, const std::vector<
 }
 
 void FluidSurfaceRenderer::draw(const RenderContext& ctx) {
-    if (!m_hasContent) return;
+    // The prepass drew the whole window from the first view's camera:
+    // with split screen that image fits none of the views.
+    if (!m_hasContent || ctx.viewCount > 1) return;
     m_compositePipeline->bind(ctx.cmd);
     VkDescriptorSet sets[2] = { ctx.lightingDescriptorSet, m_sampleSet };
     vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_compositePipeline->layout(), 0, 2, sets, 0, nullptr);

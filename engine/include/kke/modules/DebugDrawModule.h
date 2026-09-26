@@ -40,8 +40,9 @@ private:
     struct Line { glm::vec3 a, b, color; float thickness; };
     std::vector<Line> m_lines[2]; // [0] depth-tested, [1] on top
     std::vector<Vertex> m_scratch;
-    std::unique_ptr<Buffer> m_buffers[Renderer::kMaxFramesInFlight];
-    size_t m_capacity[Renderer::kMaxFramesInFlight] = {};
+    // Per split-screen view (the quads face each view's camera) and frame.
+    std::unique_ptr<Buffer> m_buffers[kMaxViews][Renderer::kMaxFramesInFlight];
+    size_t m_capacity[kMaxViews][Renderer::kMaxFramesInFlight] = {};
     std::unique_ptr<Pipeline> m_pipeline, m_pipelineOnTop;
     Application* m_app = nullptr;
 };

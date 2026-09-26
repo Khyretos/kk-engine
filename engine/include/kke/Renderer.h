@@ -97,6 +97,10 @@ public:
     // Background colour, sRGB-authored (converted to linear for the sRGB
     // swapchain). Default: near-black blue.
     void setClearColor(const glm::vec3& srgb);
+    // Inside the scene pass: clear color and depth of one part of the
+    // image only (a picture-in-picture view drawn over another) and
+    // point the viewport and scissor at it.
+    void beginView(const VkRect2D& rect, bool clear);
     bool vsync() const;
 
 private:

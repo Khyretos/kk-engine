@@ -199,6 +199,8 @@ void ShowcaseModule::init(kke::Application& app) {
         m_rig.yaw = -90.0f;
         m_rig.pitch = 8.0f;
     }
+    if (const char* sp = std::getenv("KKE_SPLIT"); sp && *sp) setLocalPlayers(std::atoi(sp));
+    if (const char* pip = std::getenv("KKE_OVERHEAD"); pip && *pip && *pip != '0') m_overhead = true;
     if (const char* st = std::getenv("KKE_STRESS_TEST"); st && *st && *st != '0') {
         m_stressQuitAtEnd = true;
         startStressTest();
@@ -531,6 +533,11 @@ void ShowcaseModule::useCharacter(const std::string& asset) {
     for (auto& [id, a] : m_avatars)
         if (a.instance) m_models->remove(a.instance);
     m_avatars.clear(); // respawned with the new model and rig next frame
+    for (LocalPlayer& p : m_locals) {
+        if (p.instance) m_models->remove(p.instance);
+        p.instance = 0;
+        p.anim.reset();
+    }
     m_charModel = model;
     m_character = model == m_ualModel ? std::string() : asset;
     m_charInstance = m_models->spawn(m_charModel, glm::mat4(1.0f));
@@ -904,6 +911,7 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
         auto h = w.raycast(from, d, maxD);
         return h.hit ? h.distance : maxD;
     }, m_app->camera());
+    updateLocalPlayers(dt);
 
     // Lighting from the panel.
     kke::Light& sun = m_app->lighting().lights[0];
@@ -1211,6 +1219,17 @@ void ShowcaseModule::renderUi() {
         ImGui::SliderFloat("Sun strength", &m_sunIntensity, 0.0f, 3.0f);
         ImGui::ColorEdit3("Sun colour", &m_sunColor.x);
         ImGui::SliderFloat("Ambient", &m_ambient, 0.0f, 1.0f);
+    }
+    if (ImGui::CollapsingHeader("Split screen")) {
+        int players = static_cast<int>(m_locals.size()) + 1;
+        if (ImGui::SliderInt("Players", &players, 1, static_cast<int>(kke::kMaxViews))) setLocalPlayers(players);
+        ImGui::Checkbox("Two players side by side (off: stacked)", &m_splitSideBySide);
+        ImGui::Checkbox("Overhead view (picture-in-picture)", &m_overhead);
+        ImGui::TextUnformatted("Player 1: keyboard and mouse, and any controller nobody else has.");
+        for (size_t i = 0; i < m_locals.size(); ++i) {
+            const kke::InputDevices::Device* d = m_locals[i].pad ? m_input->devices().find(m_locals[i].pad) : nullptr;
+            ImGui::Text("Player %zu: %s", i + 2, d ? d->label().c_str() : "no controller, runs the lane");
+        }
     }
     if (ImGui::CollapsingHeader("Camera")) {
         bool third = m_rig.mode == kke::CameraRig::Mode::ThirdPerson;

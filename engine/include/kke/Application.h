@@ -6,6 +6,7 @@
 #include "kke/Module.h"
 #include "kke/EngineError.h"
 #include "kke/LightingBuffer.h"
+#include "kke/Viewports.h"
 #include "kke/ResourceGovernor.h"
 #include "kke/ShadowMap.h"
 #include "kke/Texture.h"
@@ -176,6 +177,17 @@ public:
     Renderer& renderer() { return *m_renderer; }
     VulkanDevice& device() { return m_renderer->device(); }
     Camera& camera() { return m_camera; }
+    // Split screen / picture-in-picture (ACTION_PLAN.md 1.3): each view
+    // is a camera drawn into its part of the window (kke/Viewports.h for
+    // the usual layouts), in order, so a picture-in-picture goes last.
+    // Empty (the default) = one view of camera() over the whole window.
+    // Only the first kMaxViews are drawn. Screen-space effects that need
+    // a prepass (FluidSurface) follow the first view only.
+    struct View {
+        Camera camera;
+        ViewRect rect;
+    };
+    std::vector<View>& views() { return m_views; }
     Lighting& lighting() { return m_lighting; }
     LightingBuffer& lightingBuffer() { return *m_lightingBuffer; }
     // The shadow map sampler's descriptor SET LAYOUT (not the set
@@ -280,6 +292,10 @@ private:
     Camera m_camera;
     Lighting m_lighting;
     std::unique_ptr<LightingBuffer> m_lightingBuffer;
+    std::vector<View> m_views;
+    // Views after the first: each its own lighting block (camera position
+    // and view-projection differ per view).
+    std::vector<std::unique_ptr<LightingBuffer>> m_viewLighting;
     // Real shadow mapping infrastructure -- see kke::ShadowMap's own
     // class comment for the full scope (single directional light, one
     // shadow-casting pass, no PCF/soft shadows yet). The descriptor set

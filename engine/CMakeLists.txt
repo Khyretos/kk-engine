@@ -29,6 +29,7 @@ set(ENGINE_SOURCES
     src/AnimRig.cpp
     src/ResourceGovernor.cpp
     src/FrameStats.cpp
+    src/Viewports.cpp
     src/CameraRig.cpp
     src/SceneFile.cpp
     src/net/BitStream.cpp

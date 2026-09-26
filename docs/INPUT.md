@@ -120,6 +120,27 @@ custom layout. Back and prev/next are the game's to interpret.
 `assignDevices(player, {refs})` gives each player their devices. A binding
 to "any gamepad" then means "any of *this player's* gamepads".
 
+Drawing: `Application::views()` takes one camera per player, each drawn
+into its part of the window (`kke/Viewports.h`: `splitScreen(1..4)`,
+side by side or stacked for two, quarters for three and four, and
+`pictureInPicture(corner)` for a small view over the others, like a map
+or a rear-view mirror). Empty means the one camera over the whole
+window, as before. Every module's `render()` runs once per view with
+that view's camera, viewport and `RenderContext::viewIndex`; a module
+that writes camera-dependent GPU data in `render()` keeps one copy per
+view (ModelModule's culled instance lists, DebugDraw's camera-facing
+lines). The UI overlay covers the whole window once. Limits: at most 4
+views, and the screen-space liquid surface (`FluidSurface`, melt demo)
+draws only without split screen.
+
+In `kke_demo` (Split screen panel, or `KKE_SPLIT=2..4`): players 2-4 each
+take the next controller, in the order they were plugged in; player 1
+keeps the keyboard, mouse and every controller nobody else took. A
+player without a controller runs the parkour lane on their own, so split
+screen can be seen without any controllers. Extra players play in third
+person without foot/hand IK (like network players). "Overhead view"
+(`KKE_OVERHEAD=1`) adds a picture-in-picture of player 1 from above.
+
 ## Testing without hardware
 
 `KKE_VIRTUAL_INPUT=hosas,pad` attaches two identical virtual flight sticks
