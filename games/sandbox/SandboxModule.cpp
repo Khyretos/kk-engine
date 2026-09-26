@@ -8,6 +8,7 @@
 #include "kke/Material.h"
 #include "kke/SceneLoader.h"
 #include "kke/modules/AudioModule.h"
+#include "kke/modules/OrbitCameraModule.h"
 #if KKE_ENABLE_JOLT
 #include "kke/modules/RigidBodyModule.h"
 #endif
@@ -65,6 +66,9 @@ constexpr int kBreakMaterialCount = static_cast<int>(sizeof(kBreakMaterials) / s
 // and a policy). Past the cap the oldest ball is removed — a thrown ball
 // that's been lying around is the least interesting object in the scene.
 constexpr size_t kMaxBalls = 6;
+
+// The bat swings at a person this close to where you clicked the ground.
+constexpr float kBatAutoAimMeters = 1.2f;
 
 const glm::vec3 kSelectColor(1.0f, 0.75f, 0.1f);
 const glm::vec3 kHoverColor(0.55f, 0.8f, 1.0f);
@@ -134,6 +138,10 @@ void SandboxModule::init(kke::Application& app) {
         if (std::strcmp(mode, "build") == 0) m_mode = Mode::Build;
         else if (std::strcmp(mode, "play") != 0) kke::log::get(name())->warn("KKE_SANDBOX_MODE='{}' is not 'play' or 'build'; starting in play", mode);
     }
+    // Gamepads: the ones plugged in now arrive as SDL_EVENT_GAMEPAD_ADDED.
+    m_gamepadSubsystem = SDL_InitSubSystem(SDL_INIT_GAMEPAD);
+    if (!m_gamepadSubsystem) kke::log::get(name())->warn("no gamepad support: {}", SDL_GetError());
+    if (const char* replay = std::getenv("KKE_SANDBOX_REPLAY"); replay && *replay) loadReplay(replay);
     const char* base = SDL_GetBasePath();
     std::string folder = kke::findAssetFolder("assets/synty", { "KKE_ASSETS_DIR", "KKE_SYNTY_DIR" }, base ? base : "", &m_searched);
     if (!folder.empty()) openAssetFolder(folder);
@@ -153,6 +161,7 @@ void SandboxModule::init(kke::Application& app) {
     // (with KKE_SANDBOX_LAYOUT: converts an old layout, and the automated
     // round-trip check in tests/sandbox_roundtrip.sh).
     if (const char* save = std::getenv("KKE_SANDBOX_SAVE")) saveLayout(save);
+    setMode(m_mode); // the camera limits that go with it
 }
 
 void SandboxModule::setEnginePanels(std::vector<kke::Module*> panels) {
@@ -801,6 +810,8 @@ void SandboxModule::update(const kke::UpdateContext& ctx) {
     // Play mode drags from the palette into the world, and ImGui keeps the
     // mouse while its button is held, so there "free" means not over a window.
     const bool play = m_mode == Mode::Play;
+    updateReplay(ctx.dt);
+    if (play) updatePad(ctx.dt);
     bool mouseFree = play ? !mouseOverUi() : !ImGui::GetIO().WantCaptureMouse && !m_app->uiCapturesMouse();
 
     // Ground grid around the camera target, snapped so it doesn't swim.
@@ -904,7 +915,37 @@ void SandboxModule::update(const kke::UpdateContext& ctx) {
 
 void SandboxModule::onEvent(const SDL_Event& event) {
     ImGuiIO& io = ImGui::GetIO();
+    if (event.type == SDL_EVENT_GAMEPAD_ADDED) {
+        openGamepad(event.gdevice.which);
+        return;
+    }
+    if (event.type == SDL_EVENT_GAMEPAD_REMOVED) {
+        for (SDL_Gamepad*& pad : m_pads) {
+            if (pad && SDL_GetGamepadID(pad) == event.gdevice.which) {
+                SDL_CloseGamepad(pad);
+                pad = nullptr;
+            }
+        }
+        std::erase(m_pads, nullptr);
+        return;
+    }
     if (m_mode == Mode::Play) {
+        // Touch: one finger is the mouse (SDL's emulation); a second one
+        // means the view is being turned or zoomed (OrbitCameraModule), so
+        // whatever the first was dragging is dropped back.
+        if (event.type == SDL_EVENT_FINGER_DOWN) {
+            m_touches.fingerDown(event.tfinger.fingerID, glm::vec2(event.tfinger.x, event.tfinger.y));
+            if (m_touches.multiTouch()) dropFingerDrag();
+            return;
+        }
+        if (event.type == SDL_EVENT_FINGER_UP || event.type == SDL_EVENT_FINGER_CANCELED) {
+            m_touches.fingerUp(event.tfinger.fingerID);
+            return;
+        }
+        if (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || event.type == SDL_EVENT_GAMEPAD_BUTTON_UP) {
+            padButton(event.gbutton.button, event.gbutton.down);
+            return;
+        }
         // Simple mode: click or drag, nothing to remember. Placing that
         // started with a press (on a palette picture, or on something in
         // the world to pick it up) ends where the mouse is let go.
@@ -918,7 +959,7 @@ void SandboxModule::onEvent(const SDL_Event& event) {
             return;
         }
         if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT) {
-            if (mouseOverUi()) return;
+            if (mouseOverUi() || m_touches.multiTouch()) return;
             if (m_tool == Tool::Place) commitPlacement(false);
             else if (m_tool == Tool::Bat) swingBat();
             else if (m_tool == Tool::Shoot) throwBall();
@@ -1975,6 +2016,12 @@ void SandboxModule::setMode(Mode mode) {
     m_drag = Handle::None;
     clearSelection();
     m_mode = mode;
+    // Play keeps the view above the ground whatever fingers or sticks do;
+    // the editor may look from anywhere.
+    if (auto* camera = m_app->getModule<kke::OrbitCameraModule>()) {
+        if (mode == Mode::Play) camera->setPitchLimits(-1.45f, -0.12f);
+        else camera->setPitchLimits(-1.52f, 1.52f);
+    }
 }
 
 bool SandboxModule::mouseOverUi() const {
@@ -2017,6 +2064,20 @@ void SandboxModule::swingBat() {
         const float t = kke::rayPlaneY(ray, 0.0f);
         if (t < 0.0f || t > m_app->camera().farPlane) return;
         target = ray.at(t);
+        // Forgiving aim for fingers and thumbsticks: a person standing
+        // near the spot is who you meant.
+        float nearest = kBatAutoAimMeters;
+        for (const Object& o : m_objects) {
+            if (!o.character || o.ragdoll) continue;
+            glm::vec3 mn, mx;
+            worldBounds(o, mn, mx);
+            const glm::vec3 foot((mn.x + mx.x) * 0.5f, mn.y, (mn.z + mx.z) * 0.5f);
+            const float d = glm::length(glm::vec2(foot.x - target.x, foot.z - target.z));
+            if (d < nearest) {
+                nearest = d;
+                target = foot;
+            }
+        }
     }
     const glm::vec3 forward = target - m_app->camera().position;
     if (!m_swing.start(m_swing.pivotFor(target, forward), forward)) return;
@@ -2124,6 +2185,7 @@ void SandboxModule::playPaletteUi() {
     const ImU32 frameCol = ImGui::GetColorU32(ImGuiCol_FrameBg), hoverCol = ImGui::GetColorU32(ImGuiCol_HeaderHovered),
                 activeCol = ImGui::GetColorU32(ImGuiCol_HeaderActive), textCol = ImGui::GetColorU32(ImGuiCol_Text);
     bool first = true;
+    m_paletteCells.clear();
     // One picture: an asset's thumbnail, or a big word. Returns the button
     // state; `on` draws it highlighted (the tool in hand).
     struct Press { bool pressed, released; };
@@ -2134,6 +2196,7 @@ void SandboxModule::playPaletteUi() {
         const ImVec2 p = ImGui::GetCursorScreenPos();
         ImGui::InvisibleButton("cell", ImVec2(cell, cell + lineH));
         const Press r{ ImGui::IsItemActivated(), ImGui::IsItemDeactivated() };
+        m_paletteCells.emplace_back(p.x + cell * 0.5f, p.y + cell * 0.5f);
         const ImVec2 imgMax(p.x + cell, p.y + cell);
         draw->AddRectFilled(p, imgMax, on ? activeCol : (ImGui::IsItemHovered() ? hoverCol : frameCol), 10.0f * s);
         bool drawn = false;
@@ -2190,6 +2253,238 @@ void SandboxModule::playPaletteUi() {
     }
     if (picture("build", "Build", nullptr, "Tools", false).pressed) setMode(Mode::Build);
     ImGui::End();
+
+    // The gamepad's cursor: phones and TVs draw no mouse pointer, so while
+    // a pad is in use the cursor is a big ring (filled while A is held).
+    if (static_cast<double>(SDL_GetTicks()) / 1000.0 - m_padLastUsed < 5.0) {
+        const ImVec2 c = ImGui::GetIO().MousePos;
+        ImDrawList* fg = ImGui::GetForegroundDrawList();
+        fg->AddCircle(c, 15.0f * s, IM_COL32(20, 20, 30, 220), 0, 6.0f * s);
+        fg->AddCircle(c, 15.0f * s, IM_COL32(255, 230, 120, 255), 0, 3.0f * s);
+        if (m_padPressing) fg->AddCircleFilled(c, 8.0f * s, IM_COL32(255, 230, 120, 255));
+    }
+}
+
+// ---------------------------------------------------------------- touch and gamepads
+
+void SandboxModule::dropFingerDrag() {
+    if (!m_dropOnRelease) return;
+    if (m_tool == Tool::Place) cancelPlacing(); // a moved piece goes back where it was
+    m_dropOnRelease = false;
+}
+
+void SandboxModule::openGamepad(SDL_JoystickID id) {
+    for (SDL_Gamepad* pad : m_pads)
+        if (SDL_GetGamepadID(pad) == id) return;
+    SDL_Gamepad* pad = SDL_OpenGamepad(id);
+    if (!pad) {
+        kke::log::get(name())->warn("could not open gamepad {}: {}", id, SDL_GetError());
+        return;
+    }
+    const char* padName = SDL_GetGamepadName(pad);
+    kke::log::get(name())->info("gamepad: {}", padName ? padName : "(unnamed)");
+    m_pads.push_back(pad);
+}
+
+void SandboxModule::warpPointer(const glm::vec2& p) {
+    m_padCursor = p;
+    SDL_WarpMouseInWindow(m_app->window().handle(), p.x, p.y);
+}
+
+// The same event a mouse click makes, so the palette (ImGui), dragging
+// and the bat can't tell a gamepad from a mouse.
+void SandboxModule::pointerButton(bool down) {
+    SDL_Window* window = m_app->window().handle();
+    SDL_Event e{};
+    e.type = down ? SDL_EVENT_MOUSE_BUTTON_DOWN : SDL_EVENT_MOUSE_BUTTON_UP;
+    e.button.timestamp = SDL_GetTicksNS();
+    e.button.windowID = SDL_GetWindowID(window);
+    e.button.which = 0; // not SDL_TOUCH_MOUSEID: ImGui treats it as a mouse
+    e.button.button = SDL_BUTTON_LEFT;
+    e.button.down = down;
+    e.button.clicks = 1;
+    const auto& mouse = m_app->window().mouseState();
+    e.button.x = mouse.x;
+    e.button.y = mouse.y;
+    if (!SDL_PushEvent(&e)) kke::log::get(name())->warn("gamepad press lost: {}", SDL_GetError());
+    m_padPressing = down;
+}
+
+void SandboxModule::padButton(uint8_t button, bool down) {
+    m_padLastUsed = static_cast<double>(SDL_GetTicks()) / 1000.0;
+    if (m_padCursor.x < 0.0f) {
+        const auto& mouse = m_app->window().mouseState();
+        m_padCursor = glm::vec2(mouse.x, mouse.y);
+    }
+    switch (button) {
+    case SDL_GAMEPAD_BUTTON_SOUTH: // A: press, hold and move to drag, let go to drop
+        if (down != m_padPressing) pointerButton(down);
+        break;
+    case SDL_GAMEPAD_BUTTON_EAST:  // B: put it back / back to the hand
+        if (!down) break;
+        if (m_padPressing) pointerButton(false);
+        if (m_tool == Tool::Place) cancelPlacing();
+        m_tool = Tool::Select;
+        m_dropOnRelease = false;
+        break;
+    case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:
+    case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
+    case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:
+    case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: {
+        if (!down) break;
+        const bool right = button == SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER || button == SDL_GAMEPAD_BUTTON_DPAD_RIGHT;
+        const int cell = kke::stepPaletteCell(m_paletteCells, m_padCursor, right ? 1 : -1);
+        if (cell >= 0) warpPointer(m_paletteCells[static_cast<size_t>(cell)]);
+        break;
+    }
+    case SDL_GAMEPAD_BUTTON_NORTH: // Y: everyone up
+        if (down) standEveryoneUp();
+        break;
+    case SDL_GAMEPAD_BUTTON_START:
+        if (down) setMode(Mode::Build);
+        break;
+    default:
+        break;
+    }
+}
+
+void SandboxModule::updatePad(float dt) {
+    SDL_Gamepad* pad = m_pads.empty() ? nullptr : m_pads.front();
+    if (!pad) return;
+    auto axis = [&](SDL_GamepadAxis a) { return static_cast<float>(SDL_GetGamepadAxis(pad, a)) / 32767.0f; };
+    int w = 1, h = 1;
+    SDL_GetWindowSize(m_app->window().handle(), &w, &h);
+    const glm::vec2 step = kke::padPointerStep({ axis(SDL_GAMEPAD_AXIS_LEFTX), axis(SDL_GAMEPAD_AXIS_LEFTY) }, dt, static_cast<float>(h));
+    if (step.x != 0.0f || step.y != 0.0f) {
+        if (m_padCursor.x < 0.0f) {
+            const auto& mouse = m_app->window().mouseState();
+            m_padCursor = glm::vec2(mouse.x, mouse.y);
+        }
+        const glm::vec2 p = glm::clamp(m_padCursor + step, glm::vec2(0.0f), glm::vec2(static_cast<float>(w - 1), static_cast<float>(h - 1)));
+        warpPointer(p);
+        m_padLastUsed = static_cast<double>(SDL_GetTicks()) / 1000.0;
+    }
+    // Right stick turns the view, the triggers zoom (right in, left out).
+    if (auto* camera = m_app->getModule<kke::OrbitCameraModule>()) {
+        auto dead = [](float v) { return std::abs(v) < 0.2f ? 0.0f : (v - std::copysign(0.2f, v)) / 0.8f; };
+        const float rx = dead(axis(SDL_GAMEPAD_AXIS_RIGHTX)), ry = dead(axis(SDL_GAMEPAD_AXIS_RIGHTY));
+        const float zoom = axis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) - axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
+        if (rx != 0.0f || ry != 0.0f || std::abs(zoom) > 0.1f)
+            camera->nudge(rx * 2.2f * dt, -ry * 1.6f * dt, 1.0f + zoom * 1.5f * dt);
+    }
+}
+
+// A replay: one step per line, "<seconds> <what...>", in time order.
+//   0.5 finger down <id> <x> <y>     (x, y: 0..1 of the window; also move, up)
+//   1.0 pad attach                    (a virtual gamepad the next lines drive)
+//   1.2 pad axis <leftx|lefty|rightx|righty> <-1..1>
+//   1.4 pad button <a|b|x|y|lb|rb|start|left|right> <0|1>
+// Pushed as the same SDL events real hardware makes, except that SDL's
+// touch-to-mouse emulation doesn't run for pushed finger events.
+bool SandboxModule::loadReplay(const std::string& path) {
+    std::ifstream in(path);
+    if (!in) {
+        kke::log::get(name())->error("replay '{}' can't be read", path);
+        return false;
+    }
+    std::vector<ReplayStep> steps;
+    std::string text;
+    int lineNo = 0;
+    while (std::getline(in, text)) {
+        ++lineNo;
+        if (text.empty() || text[0] == '#') continue;
+        std::istringstream ls(text);
+        ReplayStep st;
+        st.line = lineNo;
+        bool ok = static_cast<bool>(ls >> st.time >> st.kind >> st.what);
+        if (ok && st.kind == "finger") ok = static_cast<bool>(ls >> st.finger >> st.x >> st.y) && (st.what == "down" || st.what == "move" || st.what == "up");
+        else if (ok && st.kind == "pad" && (st.what == "axis" || st.what == "button")) ok = static_cast<bool>(ls >> st.name >> st.value);
+        else if (ok) ok = st.kind == "pad" && st.what == "attach";
+        if (!ok) {
+            kke::log::get(name())->error("replay '{}' line {}: can't read '{}'", path, lineNo, text);
+            return false;
+        }
+        steps.push_back(std::move(st));
+    }
+    std::stable_sort(steps.begin(), steps.end(), [](const ReplayStep& a, const ReplayStep& b) { return a.time < b.time; });
+    m_replay = std::move(steps);
+    m_replayNext = 0;
+    m_replayTime = 0.0f;
+    kke::log::get(name())->info("replay '{}': {} steps", path, m_replay.size());
+    return true;
+}
+
+void SandboxModule::updateReplay(float dt) {
+    if (m_replayNext >= m_replay.size()) return;
+    m_replayTime += dt;
+    SDL_Window* window = m_app->window().handle();
+    while (m_replayNext < m_replay.size() && m_replay[m_replayNext].time <= m_replayTime) {
+        const ReplayStep& st = m_replay[m_replayNext++];
+        if (st.kind == "finger") {
+            SDL_Event e{};
+            e.type = st.what == "down" ? SDL_EVENT_FINGER_DOWN : st.what == "up" ? SDL_EVENT_FINGER_UP : SDL_EVENT_FINGER_MOTION;
+            e.tfinger.timestamp = SDL_GetTicksNS();
+            e.tfinger.touchID = 1;
+            e.tfinger.fingerID = st.finger;
+            e.tfinger.x = st.x;
+            e.tfinger.y = st.y;
+            e.tfinger.pressure = st.what == "up" ? 0.0f : 1.0f;
+            e.tfinger.windowID = SDL_GetWindowID(window);
+            if (!SDL_PushEvent(&e)) kke::log::get(name())->warn("replay line {}: {}", st.line, SDL_GetError());
+            continue;
+        }
+        if (st.what == "attach") {
+            if (m_replayPad) continue;
+            SDL_VirtualJoystickDesc d;
+            SDL_INIT_INTERFACE(&d);
+            d.type = SDL_JOYSTICK_TYPE_GAMEPAD;
+            d.name = "KKE replay gamepad";
+            d.naxes = SDL_GAMEPAD_AXIS_COUNT;
+            d.nbuttons = SDL_GAMEPAD_BUTTON_COUNT;
+            for (int button = 0; button <= SDL_GAMEPAD_BUTTON_DPAD_RIGHT; ++button) d.button_mask |= 1u << button;
+            d.axis_mask = (1u << SDL_GAMEPAD_AXIS_COUNT) - 1u;
+            m_replayPadId = SDL_AttachVirtualJoystick(&d);
+            m_replayPad = m_replayPadId ? SDL_OpenJoystick(m_replayPadId) : nullptr;
+            if (!m_replayPad) {
+                kke::log::get(name())->error("replay line {}: virtual gamepad failed: {}", st.line, SDL_GetError());
+                continue;
+            }
+            // Triggers rest at the bottom of the axis (0 would read half pulled).
+            SDL_SetJoystickVirtualAxis(m_replayPad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER, SDL_JOYSTICK_AXIS_MIN);
+            SDL_SetJoystickVirtualAxis(m_replayPad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, SDL_JOYSTICK_AXIS_MIN);
+            continue;
+        }
+        if (!m_replayPad) {
+            kke::log::get(name())->error("replay line {}: 'pad attach' must come first", st.line);
+            continue;
+        }
+        if (st.what == "axis") {
+            static const std::pair<const char*, SDL_GamepadAxis> axes[] = { { "leftx", SDL_GAMEPAD_AXIS_LEFTX }, { "lefty", SDL_GAMEPAD_AXIS_LEFTY },
+                                                                            { "rightx", SDL_GAMEPAD_AXIS_RIGHTX }, { "righty", SDL_GAMEPAD_AXIS_RIGHTY } };
+            const auto* a = std::find_if(std::begin(axes), std::end(axes), [&](const auto& x) { return st.name == x.first; });
+            if (a == std::end(axes)) { kke::log::get(name())->error("replay line {}: unknown axis '{}'", st.line, st.name); continue; }
+            SDL_SetJoystickVirtualAxis(m_replayPad, a->second, static_cast<Sint16>(std::clamp(st.value, -1.0f, 1.0f) * 32767.0f));
+        } else {
+            static const std::pair<const char*, SDL_GamepadButton> buttons[] = {
+                { "a", SDL_GAMEPAD_BUTTON_SOUTH }, { "b", SDL_GAMEPAD_BUTTON_EAST }, { "x", SDL_GAMEPAD_BUTTON_WEST }, { "y", SDL_GAMEPAD_BUTTON_NORTH },
+                { "lb", SDL_GAMEPAD_BUTTON_LEFT_SHOULDER }, { "rb", SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER }, { "start", SDL_GAMEPAD_BUTTON_START },
+                { "left", SDL_GAMEPAD_BUTTON_DPAD_LEFT }, { "right", SDL_GAMEPAD_BUTTON_DPAD_RIGHT } };
+            const auto* b = std::find_if(std::begin(buttons), std::end(buttons), [&](const auto& x) { return st.name == x.first; });
+            if (b == std::end(buttons)) { kke::log::get(name())->error("replay line {}: unknown button '{}'", st.line, st.name); continue; }
+            SDL_SetJoystickVirtualButton(m_replayPad, b->second, st.value > 0.5f);
+        }
+    }
+}
+
+void SandboxModule::shutdown() {
+    for (SDL_Gamepad* pad : m_pads) SDL_CloseGamepad(pad);
+    m_pads.clear();
+    if (m_replayPad) SDL_CloseJoystick(m_replayPad);
+    if (m_replayPadId) SDL_DetachVirtualJoystick(m_replayPadId);
+    m_replayPad = nullptr;
+    m_replayPadId = 0;
+    if (m_gamepadSubsystem) SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
+    m_gamepadSubsystem = false;
 }
 
 void SandboxModule::renderUi() {

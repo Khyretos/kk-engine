@@ -82,6 +82,53 @@ gives Jolt a floor and a static box around every placed piece, so people
 land on the ground, tumble over boxes and slump against barrels. A build
 without Jolt has no ragdolls: the bat still swings and the hint says so.
 
+### Fingers and controllers
+
+A child is as likely to hold a phone or a gamepad as a mouse, so Simple
+mode is built to work with all three.
+
+| | Finger | Gamepad |
+|---|---|---|
+| Point | where you touch | left stick moves a big ring cursor |
+| Drag a picture out, move a thing | touch, slide, let go | hold A, move the stick, let go |
+| Tap / swing the bat | tap | A |
+| Next / previous picture | | RB / LB (or D-pad right / left) |
+| Put it back, drop the tool | | B |
+| Turn the view | two fingers drag (and twist) | right stick |
+| Zoom | pinch | triggers (right in, left out) |
+| Get up | the Up! picture | Y |
+| Grown-up tools | the Tools picture | Start |
+
+- One finger is the mouse (SDL's touch-to-mouse), so everything above
+  that works with a mouse works with a finger. Two fingers belong to the
+  camera (`kke::TouchGestures` in `OrbitCameraModule`); a second finger
+  landing drops whatever the first was dragging back where it came from.
+- The gamepad drives the same pointer: the stick moves the real mouse
+  position and A sends real mouse presses, so the palette, dragging and
+  the bat can't tell it apart. The ring is drawn because phones and TVs
+  show no mouse pointer. Cursor speed has a dead zone and a curve
+  (`kke::padPointerStep`); LB/RB jump along the palette
+  (`kke::stepPaletteCell`).
+- The bat aims itself: a tap or press on the ground within 1.2 m of a
+  standing person swings at them, because fingers and thumbsticks are
+  less exact than a mouse.
+- The view can't go below the ground or level with it in Play mode
+  (`OrbitCameraModule::setPitchLimits`).
+- Checked headless with replays of the real SDL events
+  (`KKE_SANDBOX_REPLAY`, `tests/sandbox_replays/`): a virtual gamepad
+  places a person, takes the bat and knocks them over; two fake fingers
+  zoom and turn the view. Pushed finger events skip SDL's touch-to-mouse
+  step, so one-finger dragging is only checked through the mouse path it
+  becomes; real hardware has to confirm the feel (docs/HARDWARE_TESTS.md HW-016).
+
+### On an iPhone
+
+There is no iOS build yet ([#56](https://github.com/Khyretos/kk-engine/issues/56)): the renderer needs MoltenVK
+(Vulkan on Metal), the build needs a Mac or GitHub's macOS runners, and
+installing needs Xcode with an Apple ID or TestFlight. Jolt runs there,
+so the bat and ragdolls would too; FEMFX (breakables, the thrown ball) is
+x86-only until its SIMDe port.
+
 ## What makes Simple mode simple
 
 Rules for anything added to the Simple palette:

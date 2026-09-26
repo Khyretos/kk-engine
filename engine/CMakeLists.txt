@@ -22,6 +22,7 @@ set(ENGINE_SOURCES
     src/Picking.cpp
     src/DrawOrder.cpp
     src/PlayBlocks.cpp
+    src/TouchGestures.cpp
     src/VoxelTets.cpp
     src/InteriorColor.cpp
     src/FracturePattern.cpp
@@ -119,6 +120,7 @@ set(ENGINE_HEADERS
     include/kke/AssetCatalog.h
     include/kke/Picking.h
     include/kke/PlayBlocks.h
+    include/kke/TouchGestures.h
     include/kke/VoxelTets.h
     include/kke/InteriorColor.h
     include/kke/FracturePattern.h

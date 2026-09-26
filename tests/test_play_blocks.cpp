@@ -187,3 +187,29 @@ TEST(PlayBlocks, EveryHitKnocksOver) {
     EXPECT_LT(hit.degrees, swing.settings().startDegrees + 5.0f);
     EXPECT_GE(glm::length(glm::vec2(hit.push.x, hit.push.z)), swing.settings().minPushSpeed - 1e-3f);
 }
+
+TEST(PlayBlocks, PadPointerDeadzoneCurveAndScreenScale) {
+    EXPECT_EQ(kke::padPointerStep({ 0.15f, 0.0f }, 0.016f, 720.0f), glm::vec2(0.0f)) << "drift inside the deadzone";
+    EXPECT_EQ(kke::padPointerStep({ 1.0f, 0.0f }, 0.0f, 720.0f), glm::vec2(0.0f));
+    const glm::vec2 full = kke::padPointerStep({ 1.0f, 0.0f }, 1.0f, 720.0f);
+    EXPECT_NEAR(full.x, 900.0f, 1e-2f);
+    EXPECT_NEAR(full.y, 0.0f, 1e-5f);
+    const glm::vec2 half = kke::padPointerStep({ 0.0f, 0.6f }, 1.0f, 720.0f);
+    EXPECT_GT(half.y, 0.0f);
+    EXPECT_LT(half.y, 900.0f * 0.3f) << "small tilts move slowly (curve)";
+    // A 1440-pixel screen is crossed in the same time: twice the pixels.
+    EXPECT_NEAR(kke::padPointerStep({ 1.0f, 0.0f }, 1.0f, 1440.0f).x, 1800.0f, 1e-1f);
+    // Past full tilt (diagonal of a square gate) doesn't go faster.
+    EXPECT_NEAR(glm::length(kke::padPointerStep({ 1.0f, 1.0f }, 1.0f, 720.0f)), 900.0f, 1e-1f);
+}
+
+TEST(PlayBlocks, ShoulderButtonsStepThroughThePalette) {
+    const std::vector<glm::vec2> cells{ { 100, 650 }, { 184, 650 }, { 268, 650 } };
+    EXPECT_EQ(kke::stepPaletteCell({}, { 0, 0 }, 1), -1);
+    EXPECT_EQ(kke::stepPaletteCell(cells, { 640, 200 }, 1), 0) << "from the world: the first cell";
+    EXPECT_EQ(kke::stepPaletteCell(cells, { 640, 200 }, -1), 2) << "or the last";
+    EXPECT_EQ(kke::stepPaletteCell(cells, { 105, 640 }, 1), 1);
+    EXPECT_EQ(kke::stepPaletteCell(cells, { 184, 650 }, -1), 0);
+    EXPECT_EQ(kke::stepPaletteCell(cells, { 268, 650 }, 1), 0) << "wraps";
+    EXPECT_EQ(kke::stepPaletteCell(cells, { 100, 650 }, -1), 2);
+}

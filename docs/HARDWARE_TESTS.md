@@ -40,6 +40,19 @@ them): a `.txt` to read and a `.json` for analysis, including your CPU,
 GPU, driver, RAM, OS and build type. Paste either file back instead of
 log lines.
 
+### HW-016 · Play mode with a controller and a touchscreen (dev box)
+`./sandbox` opens in Play mode. With a gamepad plugged in: left stick
+moves the ring cursor, RB/LB jump along the pictures, hold A on Person
+and move the stick up, let go; RB to the bat, A, then A near the person.
+Right stick turns, triggers zoom, Y stands them up, B drops the tool.
+If you have a touchscreen (laptop or monitor): drag Person out with a
+finger, tap the bat, tap the person; two fingers drag to turn, pinch to
+zoom, and a second finger while dragging should put the piece back.
+**Send back:** is the cursor speed right (too fast / too slow for
+aiming)? Does anything need two tries? Which controller did you use?
+For touch: does the palette feel big enough under a finger?
+**Result:** —
+
 ### HW-015 · End-user stress test (dev box, and the laptop if you can)
 `KKE_STRESS_TEST=1 ./kke_demo` (or the showcase's Performance panel →
 "Run stress test"). Runs 36 s by itself (walk, crate rain, impacts),
