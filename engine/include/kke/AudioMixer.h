@@ -10,6 +10,8 @@
 
 namespace kke {
 
+class Reverb;
+
 // Mono PCM, float -1..1. Every sound the mixer plays is one of these:
 // synthesized impacts (kke::ImpactSynth) or decoded files (AudioModule).
 struct SoundBuffer {
@@ -24,6 +26,14 @@ using SoundHandle = std::shared_ptr<const SoundBuffer>;
 enum class SoundCategory : uint8_t { Impact, Footstep, Voice, Ambient, Ui, Music, Alert, Count };
 const char* soundCategoryName(SoundCategory c);
 
+// How spatial sounds reach the two ears (docs/AUDIO.md "Binaural"):
+// Stereo pans between the speakers (constant power); Binaural is for
+// headphones: each ear hears the sound a little later and darker when it
+// faces away (a spherical head: Woodworth's delay and Brown & Duda's head
+// shadow), which gives real left/right and a better sense of front/back.
+enum class SpatialMode : uint8_t { Stereo, Binaural };
+const char* spatialModeName(SpatialMode m);
+
 struct VoiceDesc {
     SoundHandle sound;
     glm::vec3 position{0.0f};
@@ -35,6 +45,7 @@ struct VoiceDesc {
     bool loop = false;
     SoundCategory category = SoundCategory::Impact;
     uint32_t material = 0;        // game/audio material id, for captions and the visualizer
+    float reverbSend = 1.0f;      // how much of it the room echoes (spatial sounds only), 0..1
 };
 
 // The ears. forward/up need not be normalized.
@@ -66,7 +77,10 @@ struct ActiveSound {
 // ~200 lines of plain loops: per voice a constant-power pan, an inverse-
 // distance gain, and a one-pole low-pass whose cutoff drops as the path to
 // the listener gets blocked (walls muffle highs first) and as the sound
-// moves behind the listener (a cheap front/back cue). miniaudio only
+// moves behind the listener (a cheap front/back cue). Spatial voices also
+// feed one room reverb (kke::Reverb, set from the ray-traced room probe),
+// and in Binaural mode each ear gets its own delay and head shadow
+// instead of the pan. miniaudio only
 // supplies the output device (AudioModule).
 //
 // Budget (docs/OPTIMIZATION.md rule 5): at most maxVoices at once; a new sound
@@ -81,6 +95,7 @@ struct ActiveSound {
 class AudioMixer {
 public:
     explicit AudioMixer(int sampleRate = 48000, int maxVoices = 32);
+    ~AudioMixer();
 
     int sampleRate() const { return m_sampleRate; }
     int maxVoices() const { return m_maxVoices; }
@@ -93,6 +108,16 @@ public:
     void setPosition(uint32_t id, const glm::vec3& position);
     // 0..1: how much of the sound gets through to the listener (occlusion).
     void setTransmission(uint32_t id, float transmission);
+    // The sound goes around a wall: it is heard from the direction of `via`
+    // (a door, a window), as far away as the path `pathLength` through it.
+    void setVia(uint32_t id, const glm::vec3& via, float pathLength);
+    void clearVia(uint32_t id);
+
+    // The room the listener is in (kke::probeRoom): the reverb every
+    // spatial sound is sent to. wet 0 = outdoors, no reverb.
+    void setRoom(float rt60, float damping, float wet, float preDelay);
+    void setSpatialMode(SpatialMode m);
+    SpatialMode spatialMode() const;
 
     void setListener(const Listener& l);
     Listener listener() const;
@@ -114,6 +139,18 @@ public:
     struct Spatial { float gain = 1.0f, pan = 0.0f, azimuth = 0.0f, distance = 0.0f; bool behind = false; };
     static Spatial spatialize(const Listener& l, const glm::vec3& pos, float minDistance, float maxDistance);
 
+    // Binaural pieces, public for tests. Interaural time difference
+    // (Woodworth): how much later the far ear hears a source at `azimuth`.
+    static float interauralDelay(float azimuth, float headRadius = kHeadRadius);
+    // Head shadow (Brown & Duda 1998) for an ear `angle` radians away from
+    // the source (0 = facing it, pi = opposite side): a one-pole shelf that
+    // lifts highs up to +6 dB facing the sound and cuts them ~-20 dB behind
+    // the head. y = b0 x + b1 x[-1] - a1 y[-1].
+    struct Shelf { float b0 = 1.0f, b1 = 0.0f, a1 = 0.0f; };
+    static Shelf headShadow(float angle, int sampleRate, float headRadius = kHeadRadius);
+    static constexpr float kHeadRadius = 0.0875f;  // m, an average adult head
+    static constexpr int kItdSamples = 64;         // delay line per voice: > 0.66 ms at 96 kHz
+
 private:
     struct Voice {
         uint32_t id = 0;
@@ -125,8 +162,16 @@ private:
         float prevGainL = 0.0f, prevGainR = 0.0f; // ramped per block: no clicks when a sound moves
         bool started = false;
         float estLoudness = 0.0f;                 // for stealing, before the first mix
+        bool viaActive = false;
+        glm::vec3 via{0.0f};
+        float pathLength = 0.0f;
+        float hist[kItdSamples] = {};             // binaural: recent samples, for the far ear's delay
+        int histIdx = 0;
+        float prevDelay[2] = {0.0f, 0.0f};        // binaural: per ear, in samples
+        float shelfX[2] = {0.0f, 0.0f}, shelfY[2] = {0.0f, 0.0f};
     };
     float estimate(const VoiceDesc& d) const;
+    glm::vec3 heardAt(const Voice& v) const;   // where the ears place it (the opening it comes through)
 
     int m_sampleRate;
     int m_maxVoices;
@@ -135,6 +180,9 @@ private:
     Listener m_listener;
     uint32_t m_nextId = 1;
     uint64_t m_dropped = 0, m_stolen = 0;
+    SpatialMode m_mode = SpatialMode::Stereo;
+    std::unique_ptr<Reverb> m_reverb;
+    std::vector<float> m_send;                    // this block's reverb send (mono)
 };
 
 } // namespace kke

@@ -33,6 +33,7 @@ struct AudioMaterial {
     float noiseDecay = 0.006f;                // seconds (time constant)
     float noiseCutoff = 6000.0f;              // Hz; darker noise = softer material
     float transmission = 0.4f;                // occlusion: fraction of sound through a wall of this, 0..1
+    float absorption = 0.1f;                  // reverb: fraction of sound a surface of this soaks up per bounce, 0..1
 };
 
 // Material ids -> AudioMaterial. The ids are the same ones RigidWorld
@@ -61,6 +62,29 @@ struct ImpactParams {
 // One impact as mono PCM. Pure function: same inputs, same samples.
 SoundBuffer synthesizeImpact(const AudioMaterial& material, const ImpactParams& params, int sampleRate = 48000);
 
+// One footstep on `ground` (docs/AUDIO.md "Footsteps"): a heel strike and
+// a toe roll on the ground's own modes, struck softly (a shoe, not a
+// rock: darker, shorter), plus a scuff of the ground's noise (long for
+// dirt and gravel, a tick for stone). Quieter than impacts. Pure function.
+struct FootstepParams {
+    float intensity = 0.5f;   // 0..1: walking softly .. sprinting
+    uint32_t seed = 1;
+};
+SoundBuffer synthesizeFootstep(const AudioMaterial& ground, const FootstepParams& params, int sampleRate = 48000);
+
+// UI earcons (docs/AUDIO.md "Accessibility"): short tones that say what
+// just happened in a menu without looking. Distinct in pitch and shape:
+// focus is a soft blip, activate rises, back falls, error buzzes low.
+enum class Earcon : uint8_t { Focus, Activate, Back, Error, ToggleOn, ToggleOff, Tick, Count };
+const char* earconName(Earcon e);
+SoundBuffer synthesizeEarcon(Earcon e, int sampleRate = 48000);
+
+// A navigation ping (docs/AUDIO.md "Accessibility"): what's around you,
+// by ear. A wall `distance` metres away (of `range`) pings from its
+// direction, higher the closer it is, with a touch of its material's
+// ring; nothing within range is a soft, airy "open" sound instead.
+SoundBuffer synthesizePing(float distance, float range, bool open, const AudioMaterial& material, int sampleRate = 48000);
+
 // The audio material for a physics Material (its audioMaterial, or a
 // guess from density/stiffness/metallic/roughness when that's -1).
 uint32_t audioMaterialFor(const Material& m);
@@ -77,6 +101,8 @@ public:
     ImpactBank(const AudioMaterialTable& table, int sampleRate = 48000, int levels = 4, int variants = 4);
 
     SoundHandle get(uint32_t material, float intensity, uint32_t seed);
+    // Footsteps on `material`, cached the same way (levels x variants).
+    SoundHandle getFootstep(uint32_t material, float intensity, uint32_t seed);
     size_t cachedCount() const { return m_cache.size(); }
     size_t cachedBytes() const;
     void clear() { m_cache.clear(); }

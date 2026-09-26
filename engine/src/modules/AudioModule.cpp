@@ -73,6 +73,8 @@ void AudioModule::init(Application& app) {
         }
     }
     if (const char* t = std::getenv("KKE_AUDIO_TOUR"); t && *t && *t != '0') tour = true;
+    if (const char* b = std::getenv("KKE_AUDIO_BINAURAL"); b && *b && *b != '0') settings.spatial = SpatialMode::Binaural;
+    m_mixer->setSpatialMode(settings.spatial);
     log->info("Audio ready: {} Hz, {} voices, output: {}", settings.sampleRate, settings.maxVoices, m_deviceName);
 
 #if KKE_ENABLE_JOLT
@@ -87,6 +89,14 @@ void AudioModule::init(Application& app) {
             // The sounding object itself is usually hit right at the end.
             if (!hit.hit || hit.distance > dist - 0.7f) return 1.0f;
             return m_materials.get(hit.material).transmission;
+        };
+    }
+    if (!roomRay) {
+        roomRay = [this](const glm::vec3& from, const glm::vec3& dir, float maxDistance) -> AcousticRay {
+            auto* rb = m_app ? m_app->getModule<RigidBodyModule>() : nullptr;
+            if (!rb) return {};
+            const RigidWorld::RayHit hit = rb->world().raycast(from, dir, maxDistance);
+            return AcousticRay{hit.hit, hit.distance, hit.material, hit.normal};
         };
     }
 #endif
@@ -106,6 +116,123 @@ uint32_t AudioModule::playImpact(const glm::vec3& position, uint32_t material, f
     const uint32_t id = m_mixer->play(d);
     if (id) m_tracked[id] = Tracked{0.0f};
     return id;
+}
+
+uint32_t AudioModule::playFootstep(const glm::vec3& position, uint32_t material, float intensity, uint32_t seed, float gain) {
+    if (!m_mixer || intensity <= 0.0f) return 0;
+    if (seed == 0) seed = m_seedCounter++;
+    VoiceDesc d;
+    d.sound = m_bank->getFootstep(material, intensity, seed);
+    d.position = position;
+    d.gain = gain;
+    d.minDistance = 1.0f;
+    d.maxDistance = 25.0f;
+    d.priority = 0.6f; // an impact nearby matters more than a step
+    d.category = SoundCategory::Footstep;
+    d.material = material;
+    const uint32_t id = m_mixer->play(d);
+    if (id) {
+        m_tracked[id] = Tracked{0.0f};
+        ++m_footsteps;
+    }
+    return id;
+}
+
+uint32_t AudioModule::playEarcon(Earcon e, float gain) {
+    if (!m_mixer || !settings.earcons || e >= Earcon::Count) return 0;
+    SoundHandle& h = m_earcons[size_t(e)];
+    if (!h) h = std::make_shared<SoundBuffer>(synthesizeEarcon(e, settings.sampleRate));
+    VoiceDesc d;
+    d.sound = h;
+    d.spatial = false;
+    d.gain = gain;
+    d.priority = 2.0f; // the menu must always answer
+    d.category = SoundCategory::Ui;
+    d.reverbSend = 0.0f;
+    return m_mixer->play(d);
+}
+
+void AudioModule::ping() {
+    if (!m_mixer) return;
+    const Listener l = m_mixer->listener();
+    glm::vec3 fwd(l.forward.x, 0.0f, l.forward.z);
+    if (glm::dot(fwd, fwd) < 1e-8f) fwd = glm::vec3(0, 0, -1);
+    fwd = glm::normalize(fwd);
+    const glm::vec3 right = glm::normalize(glm::cross(fwd, glm::vec3(0, 1, 0)));
+    const int n = std::max(1, settings.pingRays);
+    const float range = std::max(1.0f, settings.pingRange);
+    m_pings.clear();
+    for (int i = 0; i < n; ++i) {
+        const float az = glm::two_pi<float>() * float(i) / float(n);
+        const glm::vec3 dir = fwd * std::cos(az) + right * std::sin(az);
+        const AcousticRay r = roomRay ? roomRay(l.position, dir, range) : AcousticRay{};
+        const bool open = !r.hit || r.distance >= range;
+        const float dist = open ? range : r.distance;
+        auto sound = std::make_shared<SoundBuffer>(synthesizePing(dist, range, open, m_materials.get(r.material), settings.sampleRate));
+        // The ping sits where the wall is (open: a few metres out), no
+        // closer than 1 m so the direction stays clear.
+        m_pings.push_back({0.07f * float(i), l.position + dir * std::clamp(open ? 4.0f : dist, 1.0f, 6.0f), std::move(sound)});
+    }
+}
+
+void AudioModule::updatePings(float dt) {
+    for (auto it = m_pings.begin(); it != m_pings.end();) {
+        it->in -= dt;
+        if (it->in > 0.0f) { ++it; continue; }
+        VoiceDesc d;
+        d.sound = it->sound;
+        d.position = it->position;
+        d.minDistance = 8.0f; // a cue, not a sound in the world: no falloff
+        d.maxDistance = 60.0f;
+        d.priority = 2.0f;
+        d.category = SoundCategory::Alert;
+        d.reverbSend = 0.3f;
+        m_mixer->play(d);
+        it = m_pings.erase(it);
+    }
+}
+
+void AudioModule::updateRoom(float dt) {
+    if (!settings.reverb) {
+        m_mixer->setRoom(0.3f, 0.5f, 0.0f, 0.0f);
+        return;
+    }
+    if ((m_roomProbeIn -= dt) > 0.0f) return;
+    m_roomProbeIn = settings.roomProbeInterval;
+    if (!roomRay) return;
+    m_room = probeRoom(m_mixer->listener().position, roomRay, m_materials);
+    m_mixer->setRoom(m_room.rt60, m_room.damping, m_room.wet, m_room.preDelay);
+}
+
+bool AudioModule::findOpening(const glm::vec3& listener, const glm::vec3& source, glm::vec3& via, float& pathLength) const {
+    if (m_room.openings.empty() || !occlusionQuery) return false;
+    glm::vec3 toSource = source - listener;
+    toSource.y = 0.0f;
+    const float flat = glm::length(toSource);
+    if (flat < 1e-3f) return false;
+    toSource /= flat;
+    // The openings most in the sound's direction first; 3 of them, 2
+    // distances each: at most 6 rays per occluded sound per recheck.
+    std::vector<glm::vec3> dirs = m_room.openings;
+    std::sort(dirs.begin(), dirs.end(), [&](const glm::vec3& a, const glm::vec3& b) { return glm::dot(a, toSource) > glm::dot(b, toSource); });
+    bool found = false;
+    float best = 0.0f;
+    for (size_t i = 0; i < std::min<size_t>(3, dirs.size()); ++i) {
+        if (glm::dot(dirs[i], toSource) < -0.2f) break; // behind you: not the way the sound comes
+        for (float k : {3.0f, 6.0f}) {
+            const glm::vec3 p = listener + dirs[i] * k;
+            if (occlusionQuery(listener, p) < 0.99f) continue; // the opening isn't that far out
+            if (occlusionQuery(p, source) < 0.99f) continue;
+            const float len = k + glm::length(source - p);
+            if (!found || len < best) {
+                found = true;
+                best = len;
+                via = p;
+            }
+        }
+    }
+    pathLength = best;
+    return found;
 }
 
 void AudioModule::handleContacts() {
@@ -176,7 +303,18 @@ void AudioModule::updateOcclusion(float dt) {
         Tracked t = m_tracked.count(s.id) ? m_tracked[s.id] : Tracked{};
         t.recheckIn -= dt;
         if (s.spatial && t.recheckIn <= 0.0f) {
-            m_mixer->setTransmission(s.id, settings.occlusion && occlusionQuery ? occlusionQuery(l.position, s.position) : 1.0f);
+            float through = settings.occlusion && occlusionQuery ? occlusionQuery(l.position, s.position) : 1.0f;
+            glm::vec3 via;
+            float path = 0.0f;
+            if (through < 0.99f && settings.openings && findOpening(l.position, s.position, via, path)) {
+                // Around the wall through the opening: from its direction,
+                // a little duller (it bent round an edge), the longer way.
+                m_mixer->setVia(s.id, via, path);
+                through = std::max(through, 0.7f);
+            } else {
+                m_mixer->clearVia(s.id);
+            }
+            m_mixer->setTransmission(s.id, through);
             t.recheckIn = 0.1f;
         }
         still[s.id] = t;
@@ -207,6 +345,8 @@ void AudioModule::update(const UpdateContext& ctx) {
         playImpact(l.position + (fwd * std::cos(az) + right * std::sin(az)) * 4.0f, it->first, 0.8f);
         ++m_tourStep;
     }
+    updateRoom(ctx.dt);
+    updatePings(ctx.dt);
     updateOcclusion(ctx.dt);
 
     if (!m_deviceRunning) {
@@ -254,6 +394,21 @@ void AudioModule::renderUi() {
         ImGui::TreePop();
     }
     ImGui::Checkbox("Occlusion (walls muffle)", &settings.occlusion);
+    ImGui::Checkbox("Room reverb (ray traced)", &settings.reverb);
+    ImGui::SameLine();
+    ImGui::Checkbox("Openings", &settings.openings);
+    ImGui::Text("Room: %.0f%% enclosed, RT60 %.2f s, wet %.2f, %zu openings", double(m_room.enclosure * 100.0f), double(m_room.rt60),
+                double(m_room.wet), m_room.openings.size());
+    int mode = int(settings.spatial);
+    const char* modes[] = {spatialModeName(SpatialMode::Stereo), spatialModeName(SpatialMode::Binaural)};
+    if (ImGui::Combo("Spatial", &mode, modes, 2)) {
+        settings.spatial = SpatialMode(mode);
+        m_mixer->setSpatialMode(settings.spatial);
+    }
+    ImGui::Checkbox("UI sounds", &settings.earcons);
+    ImGui::SameLine();
+    if (ImGui::Button("Ping surroundings")) ping();
+    ImGui::Text("Footsteps: %llu", (unsigned long long)m_footsteps);
     ImGui::Checkbox("Sound tour (materials around you)", &tour);
     if (auto* vis = m_app->getModule<SoundVisualizerModule>()) {
         ImGui::Checkbox("Show sounds on screen", &vis->settings.enabled);

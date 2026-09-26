@@ -4,6 +4,7 @@
 #include "kke/AssetCatalog.h"
 #include "kke/FracturePattern.h"
 #include "kke/Log.h"
+#include "kke/modules/AudioModule.h"
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/SettingsModule.h"
@@ -543,6 +544,8 @@ void ShowcaseModule::useCharacter(const std::string& asset) {
     m_charInstance = m_models->spawn(m_charModel, glm::mat4(1.0f));
     m_models->setOverlayEnabled(m_charInstance, false);
     buildAnimator();
+    m_steps = kke::CharacterFootsteps();
+    m_steps.bind(m_rigData);
     m_feet = kke::FootPlacer(m_rigData, kke::findChain(m_rigData, "thigh_l", "calf_l", "foot_l"),
                              kke::findChain(m_rigData, "thigh_r", "calf_r", "foot_r"), [&] {
                                  for (size_t b = 0; b < m_rigData.bones.size(); ++b)
@@ -627,6 +630,12 @@ void ShowcaseModule::applyIk(float dt) {
         return true;
     };
     m_feet.apply(m_rigData, pose, kke::FootPlacer::SurfaceQuery(ground), dt, m_footWeight);
+    // Step sounds where the (placed) feet actually come down.
+    if (m_steps.bound()) {
+        const glm::vec3 v = w.characterVelocity(m_player);
+        m_steps.update(kke::poseToModel(m_rigData, pose), toWorld, w, m_app->getModule<kke::AudioModule>(), glm::length(glm::vec2(v.x, v.z)),
+                       st == State::Ground && w.characterOnGround(m_player), dt);
+    }
 
     // Hands: on the top edge during the first part of a vault or climb,
     // where the stand-in clips have no hand plant of their own.

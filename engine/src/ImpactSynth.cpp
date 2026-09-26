@@ -28,6 +28,7 @@ AudioMaterialTable::AudioMaterialTable() {
     stone.noiseDecay = 0.018f;
     stone.noiseCutoff = 5000.0f;
     stone.transmission = 0.1f;
+    stone.absorption = 0.03f;
     m_materials[Stone] = stone;
 
     AudioMaterial wood;
@@ -41,6 +42,7 @@ AudioMaterialTable::AudioMaterialTable() {
     wood.noiseDecay = 0.012f;
     wood.noiseCutoff = 3500.0f;
     wood.transmission = 0.35f;
+    wood.absorption = 0.1f;
     m_materials[Wood] = wood;
 
     AudioMaterial metal;
@@ -54,6 +56,7 @@ AudioMaterialTable::AudioMaterialTable() {
     metal.noiseDecay = 0.004f;
     metal.noiseCutoff = 8000.0f;
     metal.transmission = 0.15f;
+    metal.absorption = 0.05f;
     m_materials[Metal] = metal;
 
     AudioMaterial glass;
@@ -67,6 +70,7 @@ AudioMaterialTable::AudioMaterialTable() {
     glass.noiseDecay = 0.003f;
     glass.noiseCutoff = 12000.0f;
     glass.transmission = 0.5f;
+    glass.absorption = 0.04f;
     m_materials[Glass] = glass;
 
     AudioMaterial rubber;
@@ -80,6 +84,7 @@ AudioMaterialTable::AudioMaterialTable() {
     rubber.noiseDecay = 0.02f;
     rubber.noiseCutoff = 600.0f;
     rubber.transmission = 0.3f;
+    rubber.absorption = 0.5f;
     m_materials[Rubber] = rubber;
 
     AudioMaterial dirt;
@@ -93,6 +98,7 @@ AudioMaterialTable::AudioMaterialTable() {
     dirt.noiseDecay = 0.04f;
     dirt.noiseCutoff = 1500.0f;
     dirt.transmission = 0.05f;
+    dirt.absorption = 0.45f;
     m_materials[Dirt] = dirt;
 
     AudioMaterial plastic = def;
@@ -208,6 +214,161 @@ SoundBuffer synthesizeImpact(const AudioMaterial& m, const ImpactParams& p, int 
     return out;
 }
 
+namespace {
+// Two one-pole low-passes: -12 dB/octave, as the contact noise above.
+struct Lowpass2 {
+    float a = 0.0f, s1 = 0.0f, s2 = 0.0f;
+    Lowpass2(float cutoff, int sampleRate) : a(1.0f - std::exp(-glm::two_pi<float>() * cutoff / float(sampleRate))) {}
+    float operator()(float x) {
+        s1 += a * (x - s1);
+        s2 += a * (s1 - s2);
+        return s2;
+    }
+};
+
+void normalizePeak(SoundBuffer& b, float target) {
+    float peak = 0.0f;
+    for (float s : b.samples) peak = std::max(peak, std::fabs(s));
+    if (peak > 0.0f)
+        for (float& s : b.samples) s *= target / peak;
+}
+
+void trimTail(SoundBuffer& b) {
+    size_t last = b.samples.size();
+    while (last > 0 && std::fabs(b.samples[last - 1]) < 1e-4f) --last;
+    b.samples.resize(std::max<size_t>(last, 1));
+}
+} // namespace
+
+SoundBuffer synthesizeFootstep(const AudioMaterial& ground, const FootstepParams& p, int sampleRate) {
+    const float intensity = std::clamp(p.intensity, 0.0f, 1.0f);
+    Rng rng(p.seed * 2246822519u + 0x5bd1e995u);
+    // A shoe is a soft striker: the ground's modes ring shorter and darker
+    // than when a rock hits it.
+    AudioMaterial soft = ground;
+    soft.noiseCutoff *= 0.45f;
+    soft.brightness *= 0.7f;
+    soft.decay *= 0.5f;
+    ImpactParams heel;
+    heel.intensity = 0.25f + 0.5f * intensity;
+    heel.size = 1.6f;
+    heel.seed = p.seed * 3u + 1u;
+    ImpactParams toe = heel;
+    toe.intensity = 0.15f + 0.35f * intensity;
+    toe.size = 1.3f;
+    toe.seed = p.seed * 3u + 2u;
+    const SoundBuffer h = synthesizeImpact(soft, heel, sampleRate);
+    const SoundBuffer t = synthesizeImpact(soft, toe, sampleRate);
+    // Faster steps roll from heel to toe quicker.
+    const float toeDelay = (0.055f + 0.03f * rng.unit()) * (1.2f - 0.4f * intensity);
+    const size_t toeAt = size_t(toeDelay * float(sampleRate));
+    // The scuff: the ground's own noise colour, long for loose ground
+    // (dirt's noiseDecay is 40 ms: a crunch), a tick for stone.
+    const float scuffLen = 0.03f + ground.noiseDecay * 4.0f;
+    const size_t scuffN = size_t(scuffLen * float(sampleRate));
+    SoundBuffer out;
+    out.sampleRate = sampleRate;
+    out.samples.assign(std::max({h.samples.size(), toeAt + t.samples.size(), scuffN}), 0.0f);
+    for (size_t k = 0; k < h.samples.size(); ++k) out.samples[k] += h.samples[k] * 0.8f;
+    for (size_t k = 0; k < t.samples.size(); ++k) out.samples[toeAt + k] += t.samples[k] * 0.45f;
+    Lowpass2 lp(ground.noiseCutoff * 0.35f, sampleRate);
+    const float level = ground.noise * 0.35f * (0.5f + intensity);
+    const size_t attack = std::max<size_t>(1, size_t(sampleRate) / 200); // 5 ms
+    for (size_t k = 0; k < scuffN; ++k) {
+        const float env = k < attack ? float(k) / float(attack) : std::exp(-3.0f * float(k - attack) / float(scuffN));
+        out.samples[k] += lp(rng.signedUnit()) * level * env * 3.0f;
+    }
+    normalizePeak(out, 0.1f + 0.5f * intensity);
+    trimTail(out);
+    return out;
+}
+
+const char* earconName(Earcon e) {
+    switch (e) {
+    case Earcon::Focus: return "Focus";
+    case Earcon::Activate: return "Activate";
+    case Earcon::Back: return "Back";
+    case Earcon::Error: return "Error";
+    case Earcon::ToggleOn: return "Toggle on";
+    case Earcon::ToggleOff: return "Toggle off";
+    case Earcon::Tick: return "Tick";
+    case Earcon::Count: break;
+    }
+    return "?";
+}
+
+SoundBuffer synthesizeEarcon(Earcon e, int sampleRate) {
+    // Each earcon is one or two notes: {start s, length s, from Hz, to Hz,
+    // level, harmonics (odd, for the buzz)}.
+    struct Note { float at, len, f0, f1, level; int odd; };
+    std::vector<Note> notes;
+    switch (e) {
+    case Earcon::Focus: notes = {{0.0f, 0.035f, 1320.0f, 1320.0f, 0.35f, 0}}; break;
+    case Earcon::Activate: notes = {{0.0f, 0.045f, 880.0f, 880.0f, 0.5f, 0}, {0.05f, 0.06f, 1320.0f, 1320.0f, 0.5f, 0}}; break;
+    case Earcon::Back: notes = {{0.0f, 0.045f, 1320.0f, 1320.0f, 0.5f, 0}, {0.05f, 0.06f, 880.0f, 880.0f, 0.5f, 0}}; break;
+    case Earcon::Error: notes = {{0.0f, 0.07f, 220.0f, 220.0f, 0.5f, 3}, {0.1f, 0.07f, 220.0f, 220.0f, 0.5f, 3}}; break;
+    case Earcon::ToggleOn: notes = {{0.0f, 0.08f, 660.0f, 990.0f, 0.45f, 0}}; break;
+    case Earcon::ToggleOff: notes = {{0.0f, 0.08f, 990.0f, 660.0f, 0.45f, 0}}; break;
+    case Earcon::Tick: notes = {{0.0f, 0.012f, 2000.0f, 2000.0f, 0.3f, 0}}; break;
+    case Earcon::Count: break;
+    }
+    SoundBuffer out;
+    out.sampleRate = sampleRate;
+    float end = 0.0f;
+    for (const Note& n : notes) end = std::max(end, n.at + n.len);
+    out.samples.assign(size_t((end + 0.005f) * float(sampleRate)) + 1, 0.0f);
+    for (const Note& n : notes) {
+        const size_t start = size_t(n.at * float(sampleRate)), len = size_t(n.len * float(sampleRate));
+        const size_t attack = std::max<size_t>(1, size_t(sampleRate) / 400); // 2.5 ms: no click
+        double phase = 0.0;
+        for (size_t k = 0; k < len && start + k < out.samples.size(); ++k) {
+            const float u = float(k) / float(len);
+            const double f = double(n.f0 + (n.f1 - n.f0) * u);
+            phase += glm::two_pi<double>() * f / double(sampleRate);
+            float x = float(std::sin(phase));
+            for (int h = 3; h <= n.odd * 2 + 1 && n.odd; h += 2) x += float(std::sin(phase * h)) / float(h);
+            const float env = (k < attack ? float(k) / float(attack) : 1.0f) * (1.0f - u) * (1.0f - u);
+            out.samples[start + k] += x * env * n.level;
+        }
+    }
+    return out;
+}
+
+SoundBuffer synthesizePing(float distance, float range, bool open, const AudioMaterial& material, int sampleRate) {
+    SoundBuffer out;
+    out.sampleRate = sampleRate;
+    const float len = open ? 0.18f : 0.09f;
+    const size_t n = size_t(len * float(sampleRate));
+    out.samples.assign(n, 0.0f);
+    Rng rng(uint32_t(distance * 1000.0f) + (open ? 7u : 3u));
+    if (open) {
+        // Nothing there: a soft breath of high noise, rising and falling.
+        Lowpass2 lp(4000.0f, sampleRate);
+        for (size_t k = 0; k < n; ++k) {
+            const float u = float(k) / float(n);
+            out.samples[k] = lp(rng.signedUnit()) * std::sin(glm::pi<float>() * u) * 0.5f;
+        }
+        normalizePeak(out, 0.2f);
+        return out;
+    }
+    // Closer = higher: 2.4 kHz at arm's length down to 500 Hz at the edge
+    // of the range, on a log scale (pitch is heard logarithmically).
+    const float x = std::clamp(distance / std::max(0.1f, range), 0.0f, 1.0f);
+    const double f = 2400.0 * std::pow(500.0 / 2400.0, double(x));
+    // A little of the surface's own ring: glass pings bright, dirt dull.
+    const float ring = std::clamp(material.decay * 2.0f, 0.1f, 1.0f);
+    const float ratio = material.modeRatios.size() > 1 ? material.modeRatios[1] : 2.0f;
+    const size_t attack = std::max<size_t>(1, size_t(sampleRate) / 1000);
+    for (size_t k = 0; k < n; ++k) {
+        const float t = float(k) / float(sampleRate);
+        const float env = (k < attack ? float(k) / float(attack) : 1.0f) * std::exp(-t / (0.02f + 0.03f * ring));
+        const double ph = glm::two_pi<double>() * f * double(t);
+        out.samples[k] = float(std::sin(ph) + 0.3 * double(ring) * std::sin(ph * double(ratio))) * env;
+    }
+    normalizePeak(out, 0.4f);
+    return out;
+}
+
 ImpactBank::ImpactBank(const AudioMaterialTable& table, int sampleRate, int levels, int variants)
     : m_table(table), m_sampleRate(sampleRate), m_levels(std::max(1, levels)), m_variants(std::max(1, variants)) {}
 
@@ -221,6 +382,20 @@ SoundHandle ImpactBank::get(uint32_t material, float intensity, uint32_t seed) {
     p.intensity = (float(level) + 0.75f) / float(m_levels);
     p.seed = uint32_t(key * 0x9E3779B97F4A7C15ull >> 32) + 1u;
     auto buf = std::make_shared<SoundBuffer>(synthesizeImpact(m_table.get(material), p, m_sampleRate));
+    m_cache.emplace(key, buf);
+    return buf;
+}
+
+SoundHandle ImpactBank::getFootstep(uint32_t material, float intensity, uint32_t seed) {
+    const int level = std::clamp(int(std::clamp(intensity, 0.0f, 1.0f) * float(m_levels)), 0, m_levels - 1);
+    const int variant = int(seed % uint32_t(m_variants));
+    const uint64_t key = (1ull << 63) | (uint64_t(material) << 32) | (uint64_t(level) << 16) | uint64_t(variant);
+    auto it = m_cache.find(key);
+    if (it != m_cache.end()) return it->second;
+    FootstepParams p;
+    p.intensity = (float(level) + 0.75f) / float(m_levels);
+    p.seed = uint32_t(key * 0x9E3779B97F4A7C15ull >> 32) + 1u;
+    auto buf = std::make_shared<SoundBuffer>(synthesizeFootstep(m_table.get(material), p, m_sampleRate));
     m_cache.emplace(key, buf);
     return buf;
 }

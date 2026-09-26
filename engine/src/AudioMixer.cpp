@@ -1,5 +1,7 @@
 #include "kke/AudioMixer.h"
 
+#include "kke/RoomAcoustics.h"
+
 #include <glm/gtc/constants.hpp>
 
 #include <algorithm>
@@ -20,9 +22,44 @@ const char* soundCategoryName(SoundCategory c) {
     }
 }
 
+const char* spatialModeName(SpatialMode m) {
+    switch (m) {
+        case SpatialMode::Stereo: return "Stereo (speakers)";
+        case SpatialMode::Binaural: return "Binaural (headphones)";
+        default: return "?";
+    }
+}
+
 AudioMixer::AudioMixer(int sampleRate, int maxVoices)
-    : m_sampleRate(std::max(8000, sampleRate)), m_maxVoices(std::max(1, maxVoices)) {
+    : m_sampleRate(std::max(8000, sampleRate)), m_maxVoices(std::max(1, maxVoices)),
+      m_reverb(std::make_unique<Reverb>(m_sampleRate)) {
     m_voices.reserve(size_t(m_maxVoices));
+}
+
+AudioMixer::~AudioMixer() = default;
+
+float AudioMixer::interauralDelay(float azimuth, float headRadius) {
+    // Woodworth: the far ear's path wraps around the head, (a/c)(theta +
+    // sin theta) for a lateral angle theta. Front and back mirror (the
+    // cone of confusion); the head shadow and the behind low-pass tell
+    // them apart.
+    const float lateral = std::asin(std::clamp(std::sin(azimuth), -1.0f, 1.0f));
+    const float t = std::fabs(lateral);
+    return headRadius / 343.0f * (t + std::sin(t));
+}
+
+AudioMixer::Shelf AudioMixer::headShadow(float angle, int sampleRate, float headRadius) {
+    constexpr float alphaMin = 0.1f, thetaMin = 150.0f * glm::pi<float>() / 180.0f;
+    const float theta = std::clamp(angle, 0.0f, thetaMin);
+    const float alpha = (1.0f + alphaMin * 0.5f) + (1.0f - alphaMin * 0.5f) * std::cos(theta / thetaMin * glm::pi<float>());
+    // H(s) = (alpha s + beta) / (s + beta), beta = 2c/a, bilinear transform.
+    const float beta = 2.0f * 343.0f / headRadius;
+    const float k = 2.0f * float(sampleRate);
+    Shelf sh;
+    sh.b0 = (alpha * k + beta) / (k + beta);
+    sh.b1 = (beta - alpha * k) / (k + beta);
+    sh.a1 = (beta - k) / (k + beta);
+    return sh;
 }
 
 AudioMixer::Spatial AudioMixer::spatialize(const Listener& l, const glm::vec3& pos, float minDistance, float maxDistance) {
@@ -51,6 +88,15 @@ AudioMixer::Spatial AudioMixer::spatialize(const Listener& l, const glm::vec3& p
     s.pan = std::clamp(x, -1.0f, 1.0f);
     s.behind = z < 0.0f;
     return s;
+}
+
+glm::vec3 AudioMixer::heardAt(const Voice& v) const {
+    if (!v.viaActive) return v.desc.position;
+    // From the opening's direction, as far away as the whole path.
+    const glm::vec3 d = v.via - m_listener.position;
+    const float len = glm::length(d);
+    if (len < 1e-3f) return v.desc.position;
+    return m_listener.position + d / len * std::max(v.pathLength, len);
 }
 
 float AudioMixer::estimate(const VoiceDesc& d) const {
@@ -112,6 +158,36 @@ void AudioMixer::setTransmission(uint32_t id, float transmission) {
     for (Voice& v : m_voices) if (v.id == id) v.transmission = std::clamp(transmission, 0.0f, 1.0f);
 }
 
+void AudioMixer::setVia(uint32_t id, const glm::vec3& via, float pathLength) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    for (Voice& v : m_voices)
+        if (v.id == id) {
+            v.viaActive = true;
+            v.via = via;
+            v.pathLength = std::max(0.0f, pathLength);
+        }
+}
+
+void AudioMixer::clearVia(uint32_t id) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    for (Voice& v : m_voices) if (v.id == id) v.viaActive = false;
+}
+
+void AudioMixer::setRoom(float rt60, float damping, float wet, float preDelay) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_reverb->setRoom(rt60, damping, wet, preDelay);
+}
+
+void AudioMixer::setSpatialMode(SpatialMode m) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_mode = m;
+}
+
+SpatialMode AudioMixer::spatialMode() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_mode;
+}
+
 void AudioMixer::setListener(const Listener& l) {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_listener = l;
@@ -141,7 +217,7 @@ std::vector<ActiveSound> AudioMixer::activeSounds() const {
         a.category = v.desc.category;
         a.material = v.desc.material;
         if (v.desc.spatial) {
-            Spatial s = spatialize(m_listener, v.desc.position, v.desc.minDistance, v.desc.maxDistance);
+            Spatial s = spatialize(m_listener, heardAt(v), v.desc.minDistance, v.desc.maxDistance);
             a.azimuth = s.azimuth;
             a.distance = s.distance;
         }
@@ -165,33 +241,63 @@ void AudioMixer::mix(float* out, int frames) {
     if (frames <= 0) return;
     std::fill(out, out + size_t(frames) * 2, 0.0f);
     std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_send.size() < size_t(frames)) m_send.resize(size_t(frames));
+    std::fill(m_send.begin(), m_send.begin() + frames, 0.0f);
     const float twoPiOverRate = glm::two_pi<float>() / float(m_sampleRate);
+    const bool binaural = m_mode == SpatialMode::Binaural;
+    const float invFrames = 1.0f / float(frames);
     for (Voice& v : m_voices) {
         const SoundBuffer& buf = *v.desc.sound;
         float gain = v.desc.gain * masterGain * categoryGain[size_t(v.desc.category)];
-        float pan = 0.0f;
+        float pan = 0.0f, azimuth = 0.0f, distanceGain = 1.0f;
         bool behind = false;
         if (v.desc.spatial) {
-            Spatial s = spatialize(m_listener, v.desc.position, v.desc.minDistance, v.desc.maxDistance);
-            gain *= s.gain;
+            Spatial s = spatialize(m_listener, heardAt(v), v.desc.minDistance, v.desc.maxDistance);
+            distanceGain = s.gain;
             pan = s.pan;
+            azimuth = s.azimuth;
             behind = s.behind;
         }
         // Occlusion: less energy through, and walls eat the highs first.
         const float t = v.transmission;
-        gain *= t;
+        // The room hears the sound too, and more evenly than the ears do:
+        // far sounds are mostly reverb (the send falls off slower than the
+        // direct path).
+        const float send = v.desc.spatial ? gain * v.desc.reverbSend * std::sqrt(distanceGain * t) : 0.0f;
+        gain *= distanceGain * t;
         float cutoff = 400.0f + 17600.0f * t * t;
         if (behind) cutoff = std::min(cutoff, 7000.0f); // head shadow: the cheapest front/back cue
         const float a = 1.0f - std::exp(-twoPiOverRate * cutoff);
-        const float angle = (pan + 1.0f) * glm::quarter_pi<float>();
-        const float gl = gain * std::cos(angle), gr = gain * std::sin(angle);
-        if (!v.started) { v.prevGainL = gl; v.prevGainR = gr; v.started = true; }
+
+        // Per-ear gains and, in binaural mode, delays and shelves.
+        float gl, gr;
+        float delay[2] = {0.0f, 0.0f};
+        Shelf shelf[2];
+        const bool ears = binaural && v.desc.spatial;
+        if (ears) {
+            gl = gr = gain * glm::root_two<float>() * 0.5f; // same loudness as the centre of the stereo pan
+            const float itd = interauralDelay(azimuth) * float(m_sampleRate);
+            (pan > 0.0f ? delay[0] : delay[1]) = std::min(itd, float(kItdSamples - 2));
+            const float side = std::sin(azimuth); // +1 = right
+            shelf[0] = headShadow(std::acos(std::clamp(-side, -1.0f, 1.0f)), m_sampleRate);
+            shelf[1] = headShadow(std::acos(std::clamp(side, -1.0f, 1.0f)), m_sampleRate);
+        } else {
+            const float angle = (pan + 1.0f) * glm::quarter_pi<float>();
+            gl = gain * std::cos(angle);
+            gr = gain * std::sin(angle);
+        }
+        if (!v.started) {
+            v.prevGainL = gl;
+            v.prevGainR = gr;
+            v.prevDelay[0] = delay[0];
+            v.prevDelay[1] = delay[1];
+            v.started = true;
+        }
 
         const double step = double(buf.sampleRate) / double(m_sampleRate);
         const size_t n = buf.samples.size();
         double pos = double(v.cursor) / 65536.0;
         float peak = 0.0f;
-        const float invFrames = 1.0f / float(frames);
         for (int f = 0; f < frames; ++f) {
             size_t i0 = size_t(pos);
             if (i0 >= n) {
@@ -206,19 +312,45 @@ void AudioMixer::mix(float* out, int frames) {
             const float k = float(f) * invFrames;
             const float l = v.prevGainL + (gl - v.prevGainL) * k;
             const float r = v.prevGainR + (gr - v.prevGainR) * k;
-            out[2 * f] += v.lpState * l;
-            out[2 * f + 1] += v.lpState * r;
-            peak = std::max(peak, std::fabs(v.lpState) * std::max(l, r));
+            float outL = v.lpState, outR = v.lpState;
+            if (ears) {
+                v.hist[v.histIdx] = v.lpState;
+                float e[2];
+                for (int ch = 0; ch < 2; ++ch) {
+                    // Fractional delay, ramped across the block (a moving
+                    // source glides instead of clicking).
+                    const float d = v.prevDelay[ch] + (delay[ch] - v.prevDelay[ch]) * k;
+                    const int di = int(d);
+                    const float df = d - float(di);
+                    const float s0 = v.hist[(v.histIdx - di + kItdSamples) % kItdSamples];
+                    const float s1 = v.hist[(v.histIdx - di - 1 + 2 * kItdSamples) % kItdSamples];
+                    const float in = s0 + (s1 - s0) * df;
+                    const float y = shelf[ch].b0 * in + shelf[ch].b1 * v.shelfX[ch] - shelf[ch].a1 * v.shelfY[ch];
+                    v.shelfX[ch] = in;
+                    v.shelfY[ch] = y;
+                    e[ch] = y;
+                }
+                v.histIdx = (v.histIdx + 1) % kItdSamples;
+                outL = e[0];
+                outR = e[1];
+            }
+            out[2 * f] += outL * l;
+            out[2 * f + 1] += outR * r;
+            m_send[size_t(f)] += v.lpState * send;
+            peak = std::max(peak, std::max(std::fabs(outL * l), std::fabs(outR * r)));
             pos += step;
         }
         v.cursor = size_t(pos * 65536.0);
         v.prevGainL = gl;
         v.prevGainR = gr;
+        v.prevDelay[0] = delay[0];
+        v.prevDelay[1] = delay[1];
         v.lastPeak = peak;
     }
     m_voices.erase(std::remove_if(m_voices.begin(), m_voices.end(),
                                   [](const Voice& v) { return !v.desc.loop && double(v.cursor) / 65536.0 >= double(v.desc.sound->samples.size()); }),
                    m_voices.end());
+    m_reverb->process(m_send.data(), out, frames);
     for (int i = 0; i < frames * 2; ++i) out[i] = softLimit(out[i]);
 }
 

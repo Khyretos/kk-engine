@@ -6,6 +6,7 @@
 #include "kke/SceneLoader.h"
 #include "kke/CameraRig.h"
 #include "kke/FrameStats.h"
+#include "kke/Footsteps.h"
 #include "kke/ResourceGovernor.h"
 #include "kke/Locomotion.h"
 #include "kke/Module.h"
@@ -193,6 +194,7 @@ private:
     std::vector<std::string> m_characters; // SK_ assets in the catalog
     kke::ModelData m_rigData;              // the character's bones + its clips
     kke::FootPlacer m_feet;
+    kke::CharacterFootsteps m_steps;       // step sounds from the feet (docs/AUDIO.md)
     kke::TwoBoneChain m_armL, m_armR;
     bool m_footIk = true, m_handIk = true;
     float m_footWeight = 0.0f, m_handWeight = 0.0f;

@@ -3,6 +3,7 @@
 #include "kke/AudioMixer.h"
 #include "kke/ImpactSynth.h"
 #include "kke/Module.h"
+#include "kke/RoomAcoustics.h"
 
 #include <functional>
 #include <memory>
@@ -27,6 +28,13 @@ namespace kke {
 // - Occlusion: one ray per playing sound from the listener, re-cast every
 //   0.1 s; a wall in between lets through its material's `transmission`
 //   and muffles the highs. Replaceable: set occlusionQuery.
+// - Room: a few dozen rays around the listener every 0.25 s
+//   (kke::probeRoom) set the reverb: a stone hall rings, a padded room
+//   is dry, a field has none. An occluded sound that has a way around the
+//   wall (an opening the probe found) is heard from the opening.
+// - Footsteps (playFootstep, fed by kke::CharacterFootsteps), UI earcons
+//   (playEarcon, fed by UiModule) and navigation pings (ping(), bound to
+//   an action): docs/AUDIO.md "Accessibility".
 // - Listener: the Application camera, unless listenerOverride is set.
 class AudioModule : public Module {
 public:
@@ -39,6 +47,13 @@ public:
         int maxImpactsPerFrame = 8;      // strongest first
         float pairCooldown = 0.08f;      // s between sounds from the same two bodies
         bool occlusion = true;
+        bool reverb = true;              // ray-traced room reverb
+        bool openings = true;            // occluded sounds come through doors/windows the probe found
+        float roomProbeInterval = 0.25f; // s
+        SpatialMode spatial = SpatialMode::Stereo; // KKE_AUDIO_BINAURAL=1 starts in Binaural
+        bool earcons = true;             // UI sounds on focus/click/change
+        float pingRange = 12.0f;         // m, navigation pings
+        int pingRays = 8;                // around you, one ping each
     };
 
     AudioModule();
@@ -60,6 +75,20 @@ public:
     // An impact sound of `material` at `position`. intensity 0..1.
     uint32_t playImpact(const glm::vec3& position, uint32_t material, float intensity, uint32_t seed = 0, float gain = 1.0f);
     uint32_t play(const VoiceDesc& desc) { return m_mixer->play(desc); }
+    // A footstep on `material` (kke::CharacterFootsteps calls this).
+    uint32_t playFootstep(const glm::vec3& position, uint32_t material, float intensity, uint32_t seed = 0, float gain = 0.8f);
+    // A UI sound, centred (not spatial).
+    uint32_t playEarcon(Earcon e, float gain = 0.6f);
+    // Navigation pings: `pingRays` rays around the listener, level with it;
+    // each wall within pingRange pings from its direction, higher the
+    // closer; a direction with nothing in range sounds "open". Staggered
+    // clockwise from straight ahead, 70 ms apart.
+    void ping();
+
+    // The listener's room, as last probed.
+    const RoomAcoustics& room() const { return m_room; }
+    // What the room probe and pings cast. Jolt by default; replaceable.
+    AcousticRayFn roomRay;
 
     // Decodes WAV / FLAC / MP3 (miniaudio) to mono at the mixer's rate.
     // Null on failure (logged).
@@ -81,10 +110,15 @@ public:
 private:
     struct Device;
     struct Tracked { float recheckIn = 0.0f; };
+    struct PendingPing { float in; glm::vec3 position; SoundHandle sound; };
 
     void handleContacts();
     void handleBreaks();
     void updateOcclusion(float dt);
+    void updateRoom(float dt);
+    void updatePings(float dt);
+    // A point by an opening that `source` can be heard through, or false.
+    bool findOpening(const glm::vec3& listener, const glm::vec3& source, glm::vec3& via, float& pathLength) const;
 
     Application* m_app = nullptr;
     std::unique_ptr<AudioMixer> m_mixer;
@@ -103,6 +137,11 @@ private:
     uint64_t m_impactsPlayed = 0, m_impactsSkipped = 0, m_breaksPlayed = 0;
     float m_tourTimer = 0.0f;
     int m_tourStep = 0;
+    RoomAcoustics m_room;
+    float m_roomProbeIn = 0.0f;
+    std::vector<PendingPing> m_pings;
+    SoundHandle m_earcons[size_t(Earcon::Count)];
+    uint64_t m_footsteps = 0;
 };
 
 } // namespace kke

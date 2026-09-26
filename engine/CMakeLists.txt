@@ -41,6 +41,8 @@ set(ENGINE_SOURCES
     src/modules/InputModule.cpp
     src/AudioMixer.cpp
     src/ImpactSynth.cpp
+    src/Footsteps.cpp
+    src/RoomAcoustics.cpp
     src/modules/AudioModule.cpp
     src/modules/SoundVisualizerModule.cpp
     src/ParticleFluid.cpp
@@ -110,6 +112,8 @@ set(ENGINE_HEADERS
     include/kke/FloatingBodies.h
     include/kke/OceanRenderer.h
     include/kke/FluidSurface.h
+    include/kke/Footsteps.h
+    include/kke/RoomAcoustics.h
     include/kke/TetMeshAsset.h
     include/kke/LightingBuffer.h
     include/kke/ShadowMap.h
