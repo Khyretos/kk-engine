@@ -23,7 +23,7 @@ namespace kke::net {
 //   velocity  +-64 m/s per axis, 1/128 m/s steps
 //   rotation  smallest-three quaternion, ~0.001 per component
 //   yaw       0..360 degrees, 1024 steps (0.35 degrees)
-constexpr uint16_t kProtocolVersion = 3; // 2: Spawn, Despawn, Break (#28); 3: join password (#42)
+constexpr uint16_t kProtocolVersion = 4; // 2: Spawn, Despawn, Break (#28); 3: join password (#42); 4: Voice
 constexpr size_t kMaxPlayers = 32;
 constexpr size_t kMaxNameLength = 24;
 constexpr size_t kMaxGameIdLength = 32;
@@ -36,6 +36,7 @@ constexpr uint32_t kMaxBodyId = 65535;
 constexpr size_t kMaxSpawnBytes = 256;    // a spawned object's description (game-defined)
 constexpr size_t kMaxBordersPerBreak = 1024; // more go in several Break messages
 constexpr uint32_t kMaxChunkId = 65535;
+constexpr size_t kMaxVoiceBytes = 256;     // one Opus frame (20 ms at up to ~100 kbit/s)
 
 constexpr float kWorldXZ = 4096.0f;
 constexpr float kWorldYMin = -512.0f, kWorldYMax = 1536.0f;
@@ -55,6 +56,7 @@ enum class MessageType : uint8_t {
     Spawn,           // server -> clients (reliable): an object the host made (a script's body)
     Despawn,         // server -> clients (reliable): it's gone
     Break,           // server -> clients (reliable): these borders of a breakable broke
+    Voice,           // either way (unreliable): 20 ms of someone's voice, Opus-coded
     Count
 };
 
@@ -126,6 +128,16 @@ struct BreakMsg {
     uint16_t id = 0;
     uint32_t seed = 0;
     std::vector<std::pair<uint16_t, uint16_t>> borders;
+};
+// Voice chat (docs/NETWORKING.md "Voice"): one Opus frame. A client sends
+// its own; the server passes it to whoever should hear it (VoiceRules),
+// with `speaker` set to who really said it.
+enum class VoiceChannel : uint8_t { Proximity = 0, Team = 1, All = 2 };
+struct VoiceMsg {
+    uint8_t speaker = 0;       // filled in by the server, never trusted from a client
+    VoiceChannel channel = VoiceChannel::Proximity;
+    uint16_t seq = 0;          // per speaker, +1 per frame (gaps: lost, conceal them)
+    std::vector<uint8_t> data;
 };
 struct PlayerStateMsg {
     uint32_t timeMs = 0;       // sender's clock
@@ -211,6 +223,14 @@ template <typename Stream> void serialize(Stream& s, BreakMsg& m) {
         s.integer(a, 0, kMaxChunkId);
         s.integer(b, 0, kMaxChunkId);
     }
+}
+template <typename Stream> void serialize(Stream& s, VoiceMsg& m) {
+    s.integer(m.speaker, 0, kMaxPlayers);
+    uint8_t channel = static_cast<uint8_t>(m.channel);
+    s.integer(channel, 0, 2);
+    m.channel = static_cast<VoiceChannel>(channel);
+    s.integer(m.seq, 0, 65535);
+    s.bytes(m.data, kMaxVoiceBytes);
 }
 template <typename Stream> void serialize(Stream& s, PlayerStateMsg& m) {
     s.bits(m.timeMs, 32);

@@ -81,7 +81,7 @@ that range in the firewall to play across machines.
     snapshots like the level's; `Despawn` removes them.
   - *Breaks*: `Break` messages carry which borders of a breakable broke on
     the host (below).
-  - *Robustness*: protocol version (now 3) and game id checked at join,
+  - *Robustness*: protocol version (now 4) and game id checked at join,
     then the server's password if it has one (compared in constant time;
     `KKE_NET_PASSWORD`, or the panel's Password field) and its access list
     (`NetServer::admit`: bans, allow list), a full server says so, silent peers time out, clients sending bad
@@ -253,3 +253,39 @@ capsule doesn't; the honest fall after a refusal passes.
   a client's pane cracks half a round trip after the hit.
 - FEMFX objects that aren't breakables (a thrown ball, soft bodies) aren't
   in snapshots: each machine simulates its own copy.
+
+## Voice
+
+Voice chat is built in (`kke::VoiceModule`, `KKE_ENABLE_VOICE`, on by
+default), with nothing to sign up for:
+
+- **Codec**: Opus (BSD), 48 kHz mono, 20 ms frames at 24 kbit/s by default,
+  with in-band forward error correction: a single lost packet is rebuilt
+  from the next one. `Voice` messages go on the unreliable channel.
+- **Talking**: push-to-talk (the `voice.talk` action, **B** by default,
+  rebindable like any action), voice activated (a gate that follows the
+  room's noise floor, with a short hangover so word ends aren't cut), or
+  open mic. "Hear myself" in the Voice panel tests the microphone.
+- **Who hears it** is decided by the server (`net::VoiceRules`, set on
+  `NetModule::voiceRules` by a host): **Nearby** (proximity: within
+  `proximityRange`, 40 m by default, and heard from where the speaker
+  stands), **Team** (a `team(playerId)` function; unset = everyone), or
+  **Everyone** (heard like a radio, not from a place). The server stamps
+  who spoke (a client can't pretend to be someone else), caps each
+  speaker at 60 packets a second, and never gives out anyone's address:
+  all voice goes through it. `kke_server`'s console has `mute` / `unmute`.
+- **Hearing**: each speaker has a jitter buffer (60 ms cushion, reorders,
+  drops what arrives after its turn, conceals up to 100 ms of loss) and a
+  live `AudioStream` voice in the mixer (category Voice), so voices are
+  placed, occluded and reverberated like any other sound. Mute or set
+  the volume of anyone locally; `speaking(id)` lets a game draw a
+  speaker icon.
+- `KKE_VOICE=off` keeps the microphone closed; `KKE_VOICE_TONE=440` sends
+  a test tone instead of the microphone, to check a connection with
+  nobody talking.
+
+Checked end to end: two kke_demo instances, the host sending a tone, the
+client (at 7 fps under a software GPU) played 1188 frames with nothing
+skipped. Tests: test_voice.cpp (jitter buffer, voice gate, streamed mixer
+voices, routing, flood cap, Opus round trip with a lost frame).
+

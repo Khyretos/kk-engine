@@ -128,6 +128,13 @@ public:
     void addSpawnListener(std::function<void(const net::SpawnMsg&)> listener) { m_spawnListeners.push_back(std::move(listener)); }
     void addDespawnListener(std::function<void(uint16_t id)> listener) { m_despawnListeners.push_back(std::move(listener)); }
 
+    // --- voice chat (docs/NETWORKING.md "Voice"; kke::VoiceModule captures and plays)
+    // One Opus frame of ours; the server decides who hears it.
+    void sendVoice(net::VoiceChannel channel, uint16_t seq, const std::vector<uint8_t>& opusFrame);
+    // Voice for us to play (speaker = their player id).
+    void addVoiceListener(std::function<void(const net::VoiceMsg&)> listener) { m_voiceListeners.push_back(std::move(listener)); }
+    net::VoiceRules voiceRules; // host: proximity range, channels, team, server mutes
+
     // --- movement checks (host)
     bool checkMoves = true;
     net::MoveCheckSettings moveCheckSettings;
@@ -183,6 +190,7 @@ private:
     std::map<uint8_t, double> m_moveLogAt;      // player -> when a refusal was last logged
     PhysicsModule* m_physics = nullptr;         // FEMFX, for breakables (null without it)
     std::vector<std::function<void(const net::GameEventMsg&)>> m_listeners;
+    std::vector<std::function<void(const net::VoiceMsg&)>> m_voiceListeners;
     void dispatchEvent(const net::GameEventMsg& e);
     std::map<uint8_t, RigidWorld::BodyId> m_capsules; // remote player -> kinematic capsule
 

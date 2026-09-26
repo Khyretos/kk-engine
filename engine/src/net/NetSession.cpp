@@ -355,10 +355,56 @@ void NetServer::receive(Client& c, const NetEvent& e) {
             bad(c, "event");
         }
         break;
+    case MessageType::Voice:
+        if (auto m = decode<VoiceMsg>(*type, e.data.data(), e.data.size())) {
+            if (m_now - c.voiceWindow >= 1.0) { c.voiceWindow = m_now; c.voiceInWindow = 0; }
+            if (++c.voiceInWindow > voice.maxPacketsPerSecond) return; // flooding: dropped
+            m->speaker = c.id; // whatever it claimed
+            routeVoice(*m, c.hasState ? &c.accepted.position : nullptr);
+        } else {
+            bad(c, "voice");
+        }
+        break;
     default:
         bad(c, "server-only message from a client");
         break;
     }
+}
+
+bool VoiceRules::reaches(VoiceChannel channel, uint8_t speaker, const glm::vec3* speakerPos, uint8_t listener, const glm::vec3* listenerPos) const {
+    if (!enabled || speaker == listener || muted.count(speaker)) return false;
+    switch (channel) {
+    case VoiceChannel::Proximity:
+        return speakerPos && listenerPos && glm::length(*speakerPos - *listenerPos) <= proximityRange;
+    case VoiceChannel::Team:
+        return allowTeam && (!team || team(speaker) == team(listener));
+    case VoiceChannel::All:
+        return allowAll;
+    }
+    return false;
+}
+
+void NetServer::sendVoice(const VoiceMsg& m) {
+    if (m_config.dedicated) return; // no player of its own
+    VoiceMsg copy = m;
+    copy.speaker = 0;
+    if (copy.data.size() > kMaxVoiceBytes) copy.data.resize(kMaxVoiceBytes);
+    routeVoice(copy, m_hasLocal ? &m_local.position : nullptr);
+}
+
+void NetServer::routeVoice(const VoiceMsg& m, const glm::vec3* speakerPos) {
+    std::vector<uint8_t> bytes;
+    for (const Client& o : m_clients) {
+        if (!o.id || o.peer == kNoPeer || !voice.reaches(m.channel, m.speaker, speakerPos, o.id, o.hasState ? &o.accepted.position : nullptr)) continue;
+        if (bytes.empty()) {
+            VoiceMsg copy = m;
+            bytes = encode(MessageType::Voice, copy);
+        }
+        m_transport.send(o.peer, Channel::Unreliable, bytes);
+        ++m_voiceRelayed;
+    }
+    // The host's own ears (not on a dedicated server).
+    if (!m_config.dedicated && onVoice && voice.reaches(m.channel, m.speaker, speakerPos, 0, m_hasLocal ? &m_local.position : nullptr)) onVoice(m);
 }
 
 void NetServer::update(double now) {
@@ -509,6 +555,12 @@ void NetClient::sendEvent(uint16_t kind, const std::vector<uint8_t>& payload) {
     m_transport.send(m_server, Channel::Reliable, encode(MessageType::GameEvent, e));
 }
 
+void NetClient::sendVoice(VoiceChannel channel, uint16_t seq, const std::vector<uint8_t>& opusFrame) {
+    if (m_status != Status::Connected || opusFrame.empty() || opusFrame.size() > kMaxVoiceBytes) return;
+    VoiceMsg m{ 0, channel, seq, opusFrame };
+    m_transport.send(m_server, Channel::Unreliable, encode(MessageType::Voice, m));
+}
+
 void NetClient::receive(const NetEvent& e) {
     const std::optional<MessageType> type = peekType(e.data.data(), e.data.size());
     if (!type) { ++m_badPackets; return; }
@@ -567,6 +619,11 @@ void NetClient::receive(const NetEvent& e) {
     case MessageType::Break:
         if (auto m = decode<BreakMsg>(*type, d, n); m && e.channel == Channel::Reliable) {
             if (onBreak) onBreak(*m);
+        } else ++m_badPackets;
+        break;
+    case MessageType::Voice:
+        if (auto m = decode<VoiceMsg>(*type, d, n)) {
+            if (m->speaker != m_playerId && onVoice) onVoice(*m);
         } else ++m_badPackets;
         break;
     case MessageType::Snapshot:
