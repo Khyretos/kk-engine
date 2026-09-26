@@ -151,6 +151,8 @@ private:
     glm::vec3 m_moveDir{0.0f, 0.0f, -1.0f}; // direction of travel (unit, horizontal)
     float m_speed = 0.0f;                   // commanded ground speed
     float m_measuredSpeed = 0.0f;
+    glm::vec3 m_lastFeet{0.0f};
+    bool m_haveLastFeet = false;
     float m_lastTurnSign = 1.0f;
     glm::vec3 m_facing{0.0f, 0.0f, -1.0f};
 

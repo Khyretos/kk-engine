@@ -171,8 +171,12 @@ void Locomotion::update(const Input& in, float dt) {
     if (dt <= 0.0f) return;
     m_jumped = m_landed = false;
     m_stateTime += dt;
-    const glm::vec3 vel = m_world.characterVelocity(m_id);
-    m_measuredSpeed = glm::length(glm::vec2(vel.x, vel.z));
+    // Speed from how far the feet really moved: running into a wall is
+    // standing still (the controller's velocity still says "running").
+    const glm::vec3 feetNow = m_world.characterPosition(m_id);
+    if (m_haveLastFeet) m_measuredSpeed = glm::length(glm::vec2(feetNow.x - m_lastFeet.x, feetNow.z - m_lastFeet.z)) / dt;
+    m_lastFeet = feetNow;
+    m_haveLastFeet = true;
     // Queued input: "go up" pressed a moment too early still counts.
     m_buffer = in.goUp ? m_settings.jumpBuffer : std::max(0.0f, m_buffer - dt);
 
@@ -189,6 +193,8 @@ void Locomotion::teleport(const glm::vec3& feet) {
     m_world.setCharacterKinematic(m_id, false);
     m_world.teleportCharacter(m_id, feet);
     m_world.setCharacterInput(m_id, RigidWorld::CharacterInput{});
+    m_haveLastFeet = false;
+    m_measuredSpeed = 0.0f;
     m_speed = 0.0f;
     m_buffer = 0.0f;
     m_sinceGrounded = 0.0f;

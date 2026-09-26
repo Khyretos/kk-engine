@@ -265,3 +265,41 @@ TEST(Locomotion, BufferedJumpFiresOnLanding) {
     }
     EXPECT_TRUE(jumped);
 }
+
+// kke_demo's parkour lane end to end, at 60 fps and at a slow 15 fps:
+// vault the fence and the low wall, climb the block, drop off, sprint and
+// climb the 2.1 m ledge. "Go up" is pressed whenever the sensors see
+// something, as the demo's autopilot does.
+TEST(Locomotion, ParkourLaneEndToEnd) {
+    Course c;
+    c.box({ 0, 0.005f, 17.0f }, { 2.6f, 0.005f, 11.5f });
+    c.box({ 0, 0.5f, 24.0f }, { 2.5f, 0.5f, 0.15f });
+    c.box({ 0, 0.3f, 20.5f }, { 2.5f, 0.3f, 0.25f });
+    c.box({ 0, 0.75f, 16.0f }, { 2.5f, 0.75f, 1.2f });
+    c.box({ 0, 1.05f, 9.5f }, { 2.5f, 1.05f, 1.5f });
+    c.spawn({ 0, 0.05f, 28.0f });
+    Locomotion loco(c.world, c.player);
+    for (float dt : { 1.0f / 60.0f, 1.0f / 15.0f }) {
+        loco.teleport({ 0, 0.05f, 28.0f });
+        int vaults = 0, climbs = 0;
+        Locomotion::State last = loco.state();
+        for (int i = 0; i < int(20 / dt) && c.feet().z > 8.5f; ++i) {
+            Locomotion::Input in = forward();
+            in.fast = c.feet().z < 14.8f;
+            const auto& ls = loco.settings();
+            in.goUp = loco.state() == Locomotion::State::Ground &&
+                      loco.probe(in.move, in.fast ? ls.sprintSensor : ls.walkSensor).kind != Locomotion::Obstacle::Kind::None;
+            loco.update(in, dt);
+            c.world.step(dt);
+            if (loco.state() != last) {
+                vaults += loco.state() == Locomotion::State::Vault;
+                climbs += loco.state() == Locomotion::State::Climb;
+                last = loco.state();
+            }
+        }
+        EXPECT_EQ(vaults, 2) << "dt " << dt;
+        EXPECT_EQ(climbs, 2) << "dt " << dt;
+        EXPECT_LE(c.feet().z, 8.5f) << "dt " << dt;
+        EXPECT_NEAR(c.feet().y, 2.1f, 0.1f) << "dt " << dt; // on top of the ledge
+    }
+}

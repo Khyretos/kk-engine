@@ -433,7 +433,7 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
         m_autopilotTime += dt;
         in.move = glm::vec3(0, 0, -1);
         const glm::vec3 at = w.characterPosition(m_player);
-        m_sprint = at.z < 14.5f && at.y > 1.0f; // on the block: sprint for the ledge
+        m_sprint = at.z < 14.8f; // past the block: sprint, the 2.1 m ledge needs it
         const auto& ls = m_loco->settings();
         if (m_loco->state() == kke::Locomotion::State::Ground &&
             m_loco->probe(in.move, m_sprint ? ls.sprintSensor : ls.walkSensor).kind != kke::Locomotion::Obstacle::Kind::None)
