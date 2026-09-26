@@ -1,6 +1,6 @@
 # Builds for the platforms the main CI doesn't cover. Manual only (Actions
 # tab -> "Platforms" -> Run workflow), so a platform that doesn't build yet
-# never sends failure emails for normal pushes. See SCALING.md section D.
+# never sends failure emails for normal pushes. See docs/SCALING.md section D.
 name: Platforms
 
 on:

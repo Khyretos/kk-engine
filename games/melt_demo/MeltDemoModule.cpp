@@ -16,7 +16,7 @@ namespace {
 
 constexpr uint8_t kLava = 0;
 constexpr uint8_t kMelt = 1;
-constexpr size_t kMaxParticles = 3000;   // the liquid budget (OPTIMIZATION.md rule 5)
+constexpr size_t kMaxParticles = 3000;   // the liquid budget (docs/OPTIMIZATION.md rule 5)
 constexpr float kParticleRadius = 0.03f;
 const glm::vec3 kSpout(0.0f, 1.5f, 0.0f);
 

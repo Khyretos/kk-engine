@@ -70,6 +70,6 @@ TEST(EscapeRmlText, HandlesUnicodeTextUnchanged) {
     // untouched — this function only escapes five specific ASCII
     // characters and must not corrupt anything else, since game titles
     // are exactly where non-English text and emoji are expected to
-    // appear (see README "Default fonts").
+    // appear (see docs/HISTORY.md "Default fonts").
     EXPECT_EQ(escapeRmlText("Kreative Kompas 🎮"), "Kreative Kompas 🎮");
 }

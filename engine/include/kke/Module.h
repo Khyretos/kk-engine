@@ -123,7 +123,7 @@ struct ModuleDependency {
 // The plug-in boundary for everything that isn't core frame plumbing:
 // gameplay, a grid, particles, a destruction sim, a networking client...
 // Each is a Module. Application owns a list of them and drives their
-// lifecycle. See the README's "Adding a module" and "Cross-module
+// lifecycle. See docs/HISTORY.md's "Adding a module" and "Cross-module
 // communication" sections for worked examples.
 //
 // A module that doesn't render anything (e.g. a NetworkModule that just

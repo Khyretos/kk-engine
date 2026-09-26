@@ -38,7 +38,7 @@ struct FmScene;
 namespace kke {
 
 // Wraps AMD FEMFX's FmScene lifecycle as a real kke::Module — see
-// README "Physics: AMD FEMFX integration" for what FEMFX is, why it was
+// docs/HISTORY.md "Physics: AMD FEMFX integration" for what FEMFX is, why it was
 // chosen, and the ~30 fixes that were needed just to get it building on
 // Linux at all before this module could exist.
 //
@@ -311,7 +311,7 @@ public:
     // breaks its own way, and the same world breaks the same way on
     // every run (and, later, on every client of a multiplayer game).
     uint32_t fractureWorldSeed() const { return m_fractureWorldSeed; }
-    // Debris budget (OPTIMIZATION.md rule 5): at most this many pieces of
+    // Debris budget (docs/OPTIMIZATION.md rule 5): at most this many pieces of
     // broken breakables at once. Past it the oldest *sleeping* piece is
     // removed (then the oldest piece). FEMFX costs ~0.15-0.2 ms per awake
     // body on one core (tools/physics_lab volcano), so this is the knob

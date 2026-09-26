@@ -11,7 +11,7 @@
 
 namespace kke {
 
-// The audio engine as a module (ACTION_PLAN.md 2.2, AUDIO.md).
+// The audio engine as a module (ACTION_PLAN.md 2.2, docs/AUDIO.md).
 //
 // - Output: miniaudio (public domain / MIT-0) opens the platform's device
 //   and pulls blocks from kke::AudioMixer on its own thread. No device (CI,

@@ -343,7 +343,7 @@ void PhysicsModule::init(Application& app) {
     // hardware_concurrency() reports every core in the machine, ignoring
     // CPU affinity — so a process pinned to one core (taskset, a
     // container CPU limit, or the min-spec emulation in
-    // PERFORMANCE_NOTES.md) would still start one worker per core, all
+    // docs/PERFORMANCE_NOTES.md) would still start one worker per core, all
     // fighting over the same core. Count the cores we may actually use.
     cpu_set_t affinity;
     if (sched_getaffinity(0, sizeof(affinity), &affinity) == 0) {
@@ -433,7 +433,7 @@ void PhysicsModule::init(Application& app) {
     //   - Every piece paid a box-vs-mesh contact test every step.
     // With the plane alone, settled scenes sleep completely and the
     // physics step for the same 475-piece pile drops from ~95 ms to
-    // ~0.2 ms (1-core min-spec emulation, see PERFORMANCE_NOTES.md).
+    // ~0.2 ms (1-core min-spec emulation, see docs/PERFORMANCE_NOTES.md).
     // Objects rest at the same height as before (0.0020 above y=0).
     {
         AMD::FmSceneControlParams controlParams = AMD::FmGetSceneControlParams(*m_scene);
@@ -1136,7 +1136,7 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshInternal(const TetMeshDat
     // ever went up. FEMFX's own defaults (max speed < 2.0, average speed
     // < 0.15 for 20 consecutive steps) put settled objects and debris to
     // sleep; a collision with something awake wakes their island again.
-    // This is the "Sleeping" state from PERFORMANCE_NOTES.md's RayFire/
+    // This is the "Sleeping" state from docs/PERFORMANCE_NOTES.md's RayFire/
     // Chaos research, and FEMFX already had it built in.
     AMD::FmEnableSleeping(m_scene, obj->tetMesh, true);
 
@@ -2022,7 +2022,7 @@ void PhysicsModule::spawnScene(Scene scene) {
         // it shatter any differently than "Rubber" would have, despite
         // real, distinct fractureStressThreshold values sitting right
         // there on m_selectedMaterial the whole time -- confirmed via
-        // real testing after the fix (see README "Real fracture
+        // real testing after the fix (see docs/HISTORY.md "Real fracture
         // support"), not assumed correct from the code alone.
         Material material = m_selectedMaterial;
 
@@ -2202,7 +2202,7 @@ void PhysicsModule::spawnScene(Scene scene) {
         // Deliberately far higher than any real impact in this demo
         // should reach -- the point of this scene is bouncing, not
         // fracturing, so this is set to a value real testing (see
-        // README "Real fracture support") confirmed doesn't trigger
+        // docs/HISTORY.md "Real fracture support") confirmed doesn't trigger
         // under this same drop.
         rubber.fractureStressThreshold = 1000000.0f; // matches MaterialGridModule's own retuned rubber preset -- see that preset's own comment for the full account of why this needed real margin above rubber's own measured stress range
         rubber.plasticYieldThreshold = 4000.0f;

@@ -12,7 +12,7 @@ namespace kke {
 // store one. Produced at runtime by kke::voxelizeToTets (VoxelTets.h);
 // the file format is kept for asset cooking — saving pre-built tet
 // meshes so props don't need voxelizing at load time. (The offline CGAL
-// tool that used to write these files was removed; see README.)
+// tool that used to write these files was removed; see docs/HISTORY.md.)
 struct TetMeshData {
     std::vector<glm::vec3> vertices;
     std::vector<std::array<uint32_t, 4>> tets;

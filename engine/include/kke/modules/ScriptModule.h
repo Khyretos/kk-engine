@@ -13,7 +13,7 @@ namespace kke {
 
 class DynamicMeshRenderer;
 
-// Lua gameplay scripts in a game, Garry's Mod style (SCRIPTING.md).
+// Lua gameplay scripts in a game, Garry's Mod style (docs/SCRIPTING.md).
 //
 // Loads every *.lua in a folder (default "scripts/", or KKE_SCRIPTS_DIR),
 // in name order, and reloads a file the moment it changes on disk: edit,

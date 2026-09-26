@@ -12,7 +12,7 @@ same scene.
   the course". `KKE_SCENE=town_block ./kke_demo` starts in one.
   `KKE_DEMO_AUTOPILOT=1` sprints from the spawn toward -Z and vaults or
   climbs whatever is in the way.
-- Building one: the sandbox (`games/sandbox`, README "Sandbox") saves
+- Building one: the sandbox (`games/sandbox`, HISTORY.md "Sandbox") saves
   kke.scene files, by default `scenes/sandbox.scene.json`, with spawn,
   sun, ambient, point lights, per-object collision, texture variants and
   breakable materials. `SceneFile::save()` writes the same format back

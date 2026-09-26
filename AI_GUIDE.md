@@ -7,9 +7,9 @@ AI agent (Claude, a fork of this project's model, or anything else) reading
 this to orient yourself: start here, then check `ROADMAP.md` (what
 actually works right now, by system), `BUGS.md` (specific defects
 already found, before you go looking for new ones or re-find an old one),
-and `HARDWARE_TESTS.md` (what's waiting on, or has come back from, real
+and `docs/HARDWARE_TESTS.md` (what's waiting on, or has come back from, real
 hardware),
-then go to `README.md` for full depth/reasoning on any specific topic.
+then go to `docs/HISTORY.md` for full depth/reasoning on any specific topic.
 
 ## What this engine is, in one paragraph
 
@@ -21,18 +21,18 @@ accessibility (non-programmers scripting games, programmers writing C++
 modules, teams doing both) while staying fully open-source and close to
 the hardware. It is built iteratively, in small verified slices, across
 many sessions — there is no expectation this is "finished" at any point
-you read this; check the README's Roadmap section for current state.
+you read this; check `ROADMAP.md` for current state.
 
 ## Non-negotiable rules for working on this codebase
 
 1. **If you have tool access (can execute code, build, run), every
    change must actually build and run before you claim it works.** This
    project's entire history is "write code → build → run headlessly
-   (Xvfb + lavapipe, see README) → screenshot or log-inspect → only then
+   (Xvfb + lavapipe, see docs/HISTORY.md) → screenshot or log-inspect → only then
    call it done." Do not describe a feature as working from reading the
    code alone. For pure-logic code (no GPU/window involved), write a
    real GoogleTest unit test in `tests/` instead of a manual check —
-   see README "Test suite & coverage" for the two-tier strategy (unit
+   see docs/HISTORY.md "Test suite & coverage" for the two-tier strategy (unit
    tests + enforced 85% floor for pure logic; build-and-run verification
    for Vulkan/GPU code) and don't blur the two. Run `./build/bin/kke_tests`
    before claiming any change to `GameManifest`/`MarketplaceIndex`/
@@ -44,7 +44,7 @@ you read this; check the README's Roadmap section for current state.
    was verified. Don't go quiet about the limitation and hope it isn't
    noticed. Instead: propose the change, explain what it should do and
    why, and hand the person exact, runnable commands to build and test
-   it themselves (the same commands this guide and the README already
+   it themselves (the same commands this guide and docs/HISTORY.md already
    use — `cmake -B build ...`, `./build/bin/kke_tests`, the Xvfb/lavapipe
    headless run, what output or screenshot to expect if it worked). Walk
    them through reading the result, the same way you'd walk through
@@ -69,11 +69,11 @@ you read this; check the README's Roadmap section for current state.
 3. **Small, independent slices.** Don't try to build an entire system
    (e.g. "the physics module") in one pass. Land the smallest piece that
    builds, runs, and proves one thing, note what's deferred, and stop.
-   This is a deliberate process choice (see README intro), not a
+   This is a deliberate process choice (see docs/HISTORY.md intro), not a
    limitation to work around.
 4. **No closed-source dependencies, ever.** Every library this engine
    pulls in must be genuinely open-source (see the Stack table in
-   README.md for what's already vetted). This is a hard constraint, not
+   docs/HISTORY.md for what's already vetted). This is a hard constraint, not
    a preference, because of the Roblox-marketplace-like ambition — a
    closed dependency anywhere would compromise that.
 5. **Check `BUGS.md` and `ROADMAP.md` before starting work, and update
@@ -93,7 +93,7 @@ you read this; check the README's Roadmap section for current state.
    concrete example of what letting this slide costs (a fix
    rediscovered as a "new" bug in a different module, and a README
    section that confidently claimed two different things that had
-   already stopped being true). `README.md`'s own "Immediate next
+   already stopped being true). `docs/HISTORY.md`'s own "Immediate next
    slices" remains the fuller narrative/reasoning trail and is still
    worth adding to for the "why," but it is not a substitute for the
    structured, queryable state these two files keep.
@@ -107,7 +107,7 @@ you read this; check the README's Roadmap section for current state.
      `kke/Capabilities.h`, discovered via `Application::findCapability<T>()`.
    Don't add a fourth pattern without a clear reason; these three cover
    everything built so far, including the harder cases (destruction ↔
-   networking, see README).
+   networking, see docs/HISTORY.md).
 
 ## How the work is split, and the min-spec baseline
 
@@ -115,7 +115,7 @@ The person driving this project has asked for a clear split: **the AI
 does the design, code, and every measurement the sandbox can make; the
 person does anything that needs real hardware** (a real GPU, many cores,
 real feel). Whenever a change can only be confirmed on real hardware,
-add an entry to `HARDWARE_TESTS.md` with exact commands and exactly what
+add an entry to `docs/HARDWARE_TESTS.md` with exact commands and exactly what
 to send back, instead of claiming it works or silently skipping it.
 
 **Every performance claim is made against a min-spec baseline: 1 CPU
@@ -124,7 +124,7 @@ physics thread pool respects CPU affinity) and report peak memory from
 `/usr/bin/time -v`. State results as "works on min-spec with these
 limits," then separately what a real machine is expected to do. For
 physics, use the scripted benchmark (`KKE_PHYSICS_BENCH=<ticks>
-./physics_demo`, see `PERFORMANCE_NOTES.md`) so numbers are comparable
+./physics_demo`, see `docs/PERFORMANCE_NOTES.md`) so numbers are comparable
 across machines and across changes — measure before and after.
 
 Commit directly to `main` for now — this is a WIP proof of concept, and
@@ -132,17 +132,17 @@ the person has said branches/PRs start once it reaches alpha.
 
 ## Performance is a design constraint, not a phase
 
-Read `OPTIMIZATION.md` before touching anything on a hot path (physics,
+Read `docs/OPTIMIZATION.md` before touching anything on a hot path (physics,
 rendering, skinning, UI updates). The short version: budgets per system,
 measure before and after with the benchmark reports in `benchmark/`,
 prefer doing less work over doing work faster, no per-frame heap
-allocation, and **every optimization gets a row in OPTIMIZATION.md's log
+allocation, and **every optimization gets a row in docs/OPTIMIZATION.md's log
 with its reasoning and numbers** — complex code is fine where measured,
 unexplained complex code is not.
 
 ## Where to actually look
 
-Don't re-read every file — the README has two tables built exactly for
+Don't re-read every file — docs/HISTORY.md has two tables built exactly for
 fast orientation:
 - **"Where the rendering code actually lives"** — which file to open for
   any given rendering concept (simplest draw call, compute-into-graphics,
@@ -157,7 +157,7 @@ Repo layout worth knowing before you start: `engine/` is the engine
 itself (forked as-is by any game); `games/<name>/` is a self-contained
 "game folder" — `games/kke_demo_game/` is the current one and also the
 template to copy for a new one. Every game folder needs a `game.json`
-(schema in README "Game folder convention & marketplace"). If your
+(schema in docs/HISTORY.md "Game folder convention & marketplace"). If your
 change concerns marketplace/import behavior specifically, read that
 section's sandboxing caveat before writing anything — it's the single
 most important unresolved constraint in the whole project, and nothing
@@ -252,7 +252,7 @@ DISPLAY=:99 SDL_VIDEODRIVER=x11 ./build/bin/kke_demo
 
 This runs against Mesa's `lavapipe` software Vulkan device — no real GPU
 needed, which is exactly why it's usable inside a sandboxed AI coding
-session. Use `xdotool` (see README/session history) to simulate mouse
+session. Use `xdotool` (see docs/HISTORY.md) to simulate mouse
 input for interactive features, and `import -window root` (ImageMagick)
 to capture a screenshot for visual verification. A stale `imgui.ini` in
 the run directory will silently override window positions/collapsed state

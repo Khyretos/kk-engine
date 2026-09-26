@@ -96,7 +96,7 @@ const char* kMaterialGridRml = R"(
         /* Narrower than this module's first version (740px -> 440px,
            cards 110px -> 78px) — the original width assumed this panel
            had the full bottom row to itself, which was true in
-           physics_demo but not once kke_demo (see README "Complete
+           physics_demo but not once kke_demo (see docs/HISTORY.md "Complete
            kke_demo showcase") needed to fit this beside
            LightingControlsModule's own panel on the same screen. */
         .gridpanel { position: absolute; left: 40dp; top: 500dp; width: 460dp; max-width: 92%; background-color: #1a1d2e; padding: 14dp; pointer-events: auto; }

@@ -16,7 +16,7 @@
 #include <vector>
 
 // The sandbox: finds your asset packs, lets you build with them and break
-// what you built. See SandboxModule.h and README "Sandbox".
+// what you built. See SandboxModule.h and docs/HISTORY.md "Sandbox".
 int main() {
     try {
         kke::Application app("Kreative Kompas Engine - Sandbox", 1280, 720);

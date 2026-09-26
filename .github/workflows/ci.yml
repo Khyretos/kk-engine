@@ -1,6 +1,6 @@
 name: CI
 
-# Runs on every push and pull request — see README "Test suite &
+# Runs on every push and pull request — see docs/HISTORY.md "Test suite &
 # coverage" for the reasoning behind this pipeline's shape: unit tests
 # cover pure logic (manifest parsing, marketplace dedup, text escaping)
 # with an enforced 85% line-coverage floor; Vulkan/GPU-touching code

@@ -21,7 +21,7 @@ struct Material;
 // (inharmonic, bell-like, slow decay), wood's modes die in ~0.1 s, stone
 // is mostly the noise burst, rubber is a low thud. Different ratios,
 // decays and noise colours are what let a blind player tell materials
-// apart by ear (AUDIO.md "Accessibility"), with no sample library at all.
+// apart by ear (docs/AUDIO.md "Accessibility"), with no sample library at all.
 struct AudioMaterial {
     std::string name = "Default";
     float baseFrequency = 520.0f;             // Hz of the lowest mode

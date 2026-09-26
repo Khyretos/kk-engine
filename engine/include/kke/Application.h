@@ -82,7 +82,7 @@ struct Lighting {
 
 // Recorded when a module throws during any lifecycle call — see
 // Application::run()'s per-module try/catch and "Debugging" in the
-// README for the full reasoning. Kept in call order, oldest first.
+// docs/HISTORY.md for the full reasoning. Kept in call order, oldest first.
 //
 // friendlyMessage and technicalMessage are ALWAYS both populated,
 // regardless of what was actually thrown: a module that throws a plain
@@ -122,7 +122,7 @@ struct BrokenModuleInfo {
 //                            each other if both present, fine alone if
 //                            not" case (see kke/Capabilities.h).
 //
-// See the README's "Cross-module communication" section for the worked
+// See docs/HISTORY.md's "Cross-module communication" section for the worked
 // networking/destruction example.
 class Application {
 public:

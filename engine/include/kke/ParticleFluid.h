@@ -52,7 +52,7 @@ struct FluidMaterial {
 // `solidifyTemperature` a particle is solid: heavily damped and moving
 // with its neighbours (crust), but still falling if unsupported.
 //
-// Performance (OPTIMIZATION.md): particles are counting-sorted by grid
+// Performance (docs/OPTIMIZATION.md): particles are counting-sorted by grid
 // cell every step, so neighbours are contiguous in memory and the
 // neighbour search touches 27 small ranges — O(n), no allocations after
 // warm-up, single-threaded. ~2,000 particles fit in ~3 ms on one core.
@@ -71,7 +71,7 @@ public:
     const Params& params() const { return m_params; }
 
     // Adds a particle; returns false (and drops it) at the capacity cap —
-    // the fluid's budget (OPTIMIZATION.md rule 5).
+    // the fluid's budget (docs/OPTIMIZATION.md rule 5).
     bool add(const glm::vec3& position, const glm::vec3& velocity, float temperature, uint8_t material = 0);
     void clear();
     // Removes particles for which `pred(index)` is true (order not kept).

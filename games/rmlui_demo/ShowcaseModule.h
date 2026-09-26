@@ -29,7 +29,7 @@ namespace kke_demo {
 // styles live), programmers own the model.
 //
 // What each screen demonstrates is listed at the top of its .rml file's
-// <style> block and in README "The demo suite".
+// <style> block and in docs/HISTORY.md "The demo suite".
 class ShowcaseModule : public kke::Module {
 public:
     const char* name() const override { return "UiShowcase"; }

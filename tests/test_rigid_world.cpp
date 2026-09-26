@@ -192,7 +192,7 @@ TEST(RigidWorld, ManyBodiesSleepWhenSettled) {
     EXPECT_LT(w.activeBodyCount(), 10u); // settled piles sleep
 }
 
-// The scaling claim in SCALING.md: rigid bodies cost microseconds each.
+// The scaling claim in docs/SCALING.md: rigid bodies cost microseconds each.
 // 1,000 boxes raining down, one thread: the busiest step stays well
 // inside a 60 Hz frame. (Generous bound: CI machines vary.)
 TEST(RigidWorld, AThousandFallingBoxesFitAFrameOnOneThread) {

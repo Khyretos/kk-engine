@@ -1,4 +1,4 @@
-# Unit tests for this engine's pure-logic code — see README "Test suite &
+# Unit tests for this engine's pure-logic code — see docs/HISTORY.md "Test suite &
 # coverage" for why Vulkan/GPU-touching code is deliberately NOT covered
 # here, and stays verified by actually building and running the engine
 # headlessly instead.

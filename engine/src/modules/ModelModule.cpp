@@ -65,7 +65,7 @@ void ModelModule::init(Application& app) {
     shadowConfig.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ShadowPushConstants) };
     m_shadowPipeline = std::make_unique<Pipeline>(app.device(), app.shadowMap().renderPass(), "shaders/shadow.vert.spv", "shaders/shadow.frag.spv", shadowConfig);
 
-    // Instanced variants (OPTIMIZATION.md #25): kke::Vertex at binding 0,
+    // Instanced variants (docs/OPTIMIZATION.md #25): kke::Vertex at binding 0,
     // InstanceGpu (model matrix + tint) per instance at binding 1.
     {
         auto binding0 = Vertex::bindingDescription();
@@ -554,7 +554,7 @@ void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
 void ModelModule::render(const RenderContext& ctx) {
     m_drawCalls = 0;
     m_culled = 0;
-    // Frustum culling (OPTIMIZATION.md #23): an instance entirely outside
+    // Frustum culling (docs/OPTIMIZATION.md #23): an instance entirely outside
     // the view is neither skinned, uploaded nor drawn.
     const Frustum frustum = Frustum::fromViewProj(ctx.proj * ctx.view);
     VkDescriptorSet overlay = m_overlaySet ? m_overlaySet : ctx.defaultMaterialTextureDescriptorSet;
@@ -562,7 +562,7 @@ void ModelModule::render(const RenderContext& ctx) {
     const VkShaderStageFlags pcStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     m_instancedCount = 0;
     if (m_showMeshes) {
-        // Instancing (OPTIMIZATION.md #25): 2+ visible copies of the same
+        // Instancing (docs/OPTIMIZATION.md #25): 2+ visible copies of the same
         // rigid model (same texture/overlay) are one draw per mesh part.
         buildBatches(frustum, m_batches, m_instanceData, true);
         uploadInstances(1, ctx.frameIndex, m_instanceData);

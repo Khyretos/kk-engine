@@ -33,7 +33,7 @@ class Application;
 //                  occludes it.
 // Cost: one small offscreen pass + 2 blur dispatches per iteration at
 // screen resolution (render at half resolution is the obvious knob for
-// min-spec — see OPTIMIZATION.md backlog). Targets are recreated when the
+// min-spec — see docs/OPTIMIZATION.md backlog). Targets are recreated when the
 // window size changes.
 class FluidSurfaceRenderer {
 public:

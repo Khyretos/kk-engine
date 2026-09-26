@@ -1,7 +1,7 @@
 add_executable(kke_basics main.cpp CubeModule.cpp DestructionModule.cpp NetworkModule.cpp)
 target_link_libraries(kke_basics PRIVATE kke_engine)
 
-# Bundled default fonts (see README "Default fonts / font fallback chain")
+# Bundled default fonts (see docs/HISTORY.md "Default fonts / font fallback chain")
 # — copied next to the executable, same relative-path convention as
 # shaders. engine_copy_runtime_file is shared across every game's
 # CMakeLists.txt (see its own definition, root CMakeLists.txt, for why
@@ -10,7 +10,7 @@ engine_copy_runtime_file(kke_basics ${CMAKE_SOURCE_DIR}/assets/fonts/NotoSans-Re
 engine_copy_runtime_file(kke_basics ${CMAKE_SOURCE_DIR}/assets/fonts/NotoColorEmoji.ttf assets/fonts/NotoColorEmoji.ttf)
 
 # A minimal local "marketplace" directory for MarketplaceUiModule to scan
-# at runtime — see README "Game folder convention & marketplace".
+# at runtime — see docs/HISTORY.md "Game folder convention & marketplace".
 engine_copy_runtime_file(kke_basics ${CMAKE_CURRENT_SOURCE_DIR}/game.json marketplace/kke_demo_game/game.json)
 
 engine_add_shader(kke_basics ${CMAKE_SOURCE_DIR}/shaders/cube.vert)

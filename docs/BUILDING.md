@@ -2,7 +2,7 @@
 
 This document exists because a real person, on real hardware (AMD
 Radeon RX 9070XT + Ryzen 7 9800X3D, Arch Linux), tried to build this
-engine following only the README and hit several real, undocumented
+engine following only HISTORY.md and hit several real, undocumented
 gaps: missing system packages, a Boost detection quirk, and a Vulkan
 crash that only showed up on real hardware, not the sandbox this
 engine was originally built in. Everything below was written to close
@@ -34,7 +34,7 @@ sudo apt-get install -y \
 # showed up as a bare, symbol-less segfault deep inside the graphics
 # driver, with nothing actionable to go on, until these were finally
 # installed and turned it into an exact, specific error message
-# instead. See README "Immediate next slices" for the full account of
+# instead. See HISTORY.md "Immediate next slices" for the full account of
 # what that one install uncovered (three real bugs, not just one).
 sudo apt-get install -y vulkan-validationlayers
 
@@ -173,7 +173,7 @@ sudo cmake --install . --prefix /usr/local/
 sudo ldconfig   # do not skip this -- the layer won't be found without it
 ```
 
-See README "GPU profiler (VulkanProfiler) integration" for what's
+See HISTORY.md "GPU profiler (VulkanProfiler) integration" for what's
 actually verified to work once it's installed, and what's honestly
 still incomplete (`vkGetProfilerFrameDataEXT` querying real per-frame
 data is written but disabled behind a separate, off-by-default flag
@@ -230,7 +230,7 @@ FEMFX` or SDL3's vendored source specifically, that's a regression
 worth reporting, not something to ignore. Warnings from your own game
 code, if you're writing one, are not suppressed -- that's deliberate.
 
-**Something else** -- check README "What's not done yet" sections
+**Something else** -- check HISTORY.md "What's not done yet" sections
 throughout (each major feature area has one) before assuming a gap is
 a bug; several genuine, honestly-documented limitations exist (no
 GPU-based physics, single-shape-only content pipeline, no dynamic

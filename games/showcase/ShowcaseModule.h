@@ -78,7 +78,7 @@ private:
     void readActions(float dt);
     void resetCourse(); // crates back (asks the host when we're a client)
 
-    // Multiplayer (kke::NetModule, NETWORKING.md): our player's state out,
+    // Multiplayer (kke::NetModule, docs/NETWORKING.md): our player's state out,
     // everyone else's drawn with our character model and their own
     // animator; crates and the platform are the host's. Shots are events.
     void replicateBodies();

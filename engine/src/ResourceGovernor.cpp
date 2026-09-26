@@ -14,7 +14,7 @@ unsigned usableCpuCount() {
 #if defined(__linux__)
     // hardware_concurrency() counts every core in the machine, ignoring
     // CPU affinity (taskset, container limits, the min-spec emulation in
-    // PERFORMANCE_NOTES.md).
+    // docs/PERFORMANCE_NOTES.md).
     cpu_set_t affinity;
     if (sched_getaffinity(0, sizeof(affinity), &affinity) == 0) n = static_cast<unsigned>(CPU_COUNT(&affinity));
 #endif

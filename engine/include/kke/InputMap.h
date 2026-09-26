@@ -28,7 +28,7 @@ namespace kke {
 //
 // Pure logic: it reads source values through InputState (InputDevices in
 // the engine, a fake in tests), so every rule here is unit-tested.
-// See INPUT.md.
+// See docs/INPUT.md.
 
 enum class SourceKind : uint8_t {
     None,

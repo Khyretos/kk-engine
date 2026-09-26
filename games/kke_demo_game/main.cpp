@@ -22,7 +22,7 @@
 
 // This is the whole demo: create an Application, add the modules you want,
 // run it. Nothing engine-specific happens here — everything that draws or
-// simulates something is a Module (see kke/Module.h and the README's
+// simulates something is a Module (see kke/Module.h and docs/HISTORY.md's
 // "Adding a module" / "Cross-module communication" sections).
 //
 // DestructionModule and NetworkModule find each other through
@@ -36,7 +36,7 @@ int main() {
 
         // Best-effort hardware check against this game's own
         // developer-declared requirements (game.json's "requirements"
-        // section) — see README "Estimated hardware requirements" for
+        // section) — see docs/HISTORY.md "Estimated hardware requirements" for
         // why this is developer-declared rather than automatically
         // inferred, and why it only ever warns, never blocks. Reuses the
         // same game.json copy already placed at marketplace/kke_demo_game/
@@ -51,7 +51,7 @@ int main() {
             if (!check.meetsMinimum) {
                 logger->warn("This device is below '{}' minimum stated requirements. "
                              "The game will still run — this is informational, not a block "
-                             "(see README 'Estimated hardware requirements').", manifest.title);
+                             "(see docs/HISTORY.md 'Estimated hardware requirements').", manifest.title);
             } else if (check.warnings.empty()) {
                 logger->info("Hardware check: this device meets '{}' recommended requirements.", manifest.title);
             }

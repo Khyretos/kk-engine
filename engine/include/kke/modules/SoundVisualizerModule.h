@@ -11,7 +11,7 @@ namespace kke {
 
 class AudioModule;
 
-// Sound made visible, for deaf and hard-of-hearing players (AUDIO.md
+// Sound made visible, for deaf and hard-of-hearing players (docs/AUDIO.md
 // "Accessibility"). Every playing sound becomes a mark on a ring around
 // the screen centre, in the direction it comes from (top = ahead), sized
 // by loudness, coloured by category, drawn hollow when it comes through a

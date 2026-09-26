@@ -1,6 +1,6 @@
 # Android (arm64-v8a) native build environment for KKE: NDK r27c + CMake.
 # Builds the engine and games as shared libraries. Packaging an APK needs
-# SDL3's Android Java project on top (next step, see SCALING.md), and the
+# SDL3's Android Java project on top (next step, see docs/SCALING.md), and the
 # FEMFX physics module needs its AVX code ported (SIMDe) before it builds
 # for ARM: until then configure with -DKKE_ENABLE_FEMFX=OFF.
 FROM ubuntu:24.04

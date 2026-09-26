@@ -12,7 +12,7 @@ namespace kke_demo {
 // This is the module to copy when starting a new gameplay system: it owns
 // its own GPU resources (mesh + pipeline), updates its own state each
 // frame, and draws itself — nothing about it is special-cased by the
-// engine. See the README's "Adding a module" section for the walkthrough.
+// engine. See docs/HISTORY.md's "Adding a module" section for the walkthrough.
 class CubeModule : public kke::Module {
 public:
     const char* name() const override { return "Cube"; }

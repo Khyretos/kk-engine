@@ -20,7 +20,7 @@ namespace kke {
 //
 // Built-in "ui" context actions (ui.up/down/left/right/accept/back/
 // prev/next) drive RmlUi navigation from a controller (UiModule reads
-// them); remap them like any other action. See INPUT.md.
+// them); remap them like any other action. See docs/INPUT.md.
 class InputModule : public Module {
 public:
     explicit InputModule(std::string path = "input.json", int players = 1);

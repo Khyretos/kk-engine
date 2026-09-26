@@ -12,7 +12,7 @@ namespace kke {
 // player's inputs *mean* this frame, given where the character is.
 //
 // Built on the principles from PointDown's controller and parkour series
-// (see MOVEMENT.md for the notes and which video each rule comes from):
+// (see docs/MOVEMENT.md for the notes and which video each rule comes from):
 //
 //  - Input actions are not moves. The game sends abstract actions (move,
 //    fast, go up, crouch); each state translates them into a move, and the

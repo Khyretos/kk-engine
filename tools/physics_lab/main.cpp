@@ -15,7 +15,7 @@
 //   kke_physics_lab volcano [seconds] [threads] [rocksPerSecond] [maxRocks]
 //       Worst-case "run from the erupting volcano" load: breakable rocks
 //       raining onto the ground at a fixed rate, debris kept under a
-//       budget (oldest pieces removed), timed per step. See SCALING.md.
+//       budget (oldest pieces removed), timed per step. See docs/SCALING.md.
 #include "AMD_FEMFX.h"
 #include "kke/BreakGraph.h"
 #include "kke/ParticleFluid.h"
@@ -552,7 +552,7 @@ int runShoot(const std::string& which, float speed) {
 // "Run from the erupting volcano": breakable boulders (0.5-1.4 m, 8-14
 // Voronoi pieces each) thrown from a crater at `rate` per second onto a
 // 40 x 40 m play area, plus a lava flow of `lavaCount` particles, for
-// `seconds`. Debris budget (OPTIMIZATION.md rule 5): at most `maxBodies`
+// `seconds`. Debris budget (docs/OPTIMIZATION.md rule 5): at most `maxBodies`
 // FEMFX bodies; past that, the oldest sleeping piece goes, then the
 // oldest piece. Reports step time per second of simulated time.
 int runVolcano(float seconds, int threads, float rate, int maxBodies, int lavaCount) {

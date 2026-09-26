@@ -22,7 +22,7 @@
 // everything down to nearly invisible. This demo instead gives the
 // camera its own distance/angle suited to the real scale, and asks
 // PhysicsModule to render at that real scale (renderScale=1.0) rather
-// than fight the mismatch. See README "Physics: AMD FEMFX integration"
+// than fight the mismatch. See docs/HISTORY.md "Physics: AMD FEMFX integration"
 // for how this
 // simulation itself was built and verified — this file is just the
 // demo-specific setup: camera placement and how many objects to drop.
@@ -62,7 +62,7 @@ int main() {
         app.addModule<kke::AudioModule>(); // impacts and breaks make sound
         app.addModule<kke::SoundVisualizerModule>();
 
-        // A real demonstration of multi-light support (see README
+        // A real demonstration of multi-light support (see docs/HISTORY.md
         // "Lighting"), not just a single hardcoded light left at its
         // default -- a cool-toned fill light from roughly the
         // opposite side of the default warm key light, low intensity,

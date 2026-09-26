@@ -31,7 +31,7 @@ windows)
     cp -r "$bld/bin/." "$out/"
     ;;
 android)
-    # FEMFX is x86-AVX only until its SIMDe port (SCALING.md): off for ARM.
+    # FEMFX is x86-AVX only until its SIMDe port (docs/SCALING.md): off for ARM.
     cmake -S "$src" -B "$bld" -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DKKE_ENABLE_FEMFX="${FEMFX:-OFF}" \
         -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
         -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 -DKKE_ENABLE_TESTS=OFF

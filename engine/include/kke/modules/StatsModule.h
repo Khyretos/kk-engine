@@ -13,7 +13,7 @@ namespace kke {
 //
 // Also shows real per-draw-call GPU profiling data when
 // KKE_ENABLE_GPU_PROFILER is on and VulkanProfiler is actually installed
-// (see README "GPU profiler (VulkanProfiler) integration") — pulled via
+// (see docs/HISTORY.md "GPU profiler (VulkanProfiler) integration") — pulled via
 // VulkanDevice::queryGpuProfilerFrameSummary(), which calls the layer's
 // own vkGetProfilerFrameDataEXT. Silently omitted (not an error) when the
 // profiler isn't active, exactly like the rest of this engine treats an

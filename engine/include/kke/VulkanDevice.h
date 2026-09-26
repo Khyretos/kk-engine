@@ -7,7 +7,7 @@
 #include <cstdint>
 
 #if KKE_ENABLE_GPU_PROFILER
-// VulkanProfiler's extension header (see README "GPU profiler
+// VulkanProfiler's extension header (see docs/HISTORY.md "GPU profiler
 // (VulkanProfiler) integration") — only required when this build option
 // is actually on. A default build never needs this header to exist, so
 // it never needs the layer installed just to compile.
@@ -56,7 +56,7 @@ public:
 
     // True only if KKE_ENABLE_GPU_PROFILER was set at build time AND the
     // VulkanProfiler layer was actually found installed at instance
-    // creation — see README "GPU profiler (VulkanProfiler) integration".
+    // creation — see docs/HISTORY.md "GPU profiler (VulkanProfiler) integration".
     // Code that wants to call vkGetProfilerFrameDataEXT (StatsModule,
     // once that slice lands) should check this first rather than assume
     // the layer is present just because the build option was on.

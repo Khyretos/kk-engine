@@ -15,15 +15,15 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # Options — every "lego piece" can be toggled independently.
 # ---------------------------------------------------------------------------
 option(KKE_ENABLE_VALIDATION "Enable Vulkan validation layers in debug" ON)
-option(ENGINE_ENABLE_LUA "Lua 5.4 gameplay scripting (kke::ScriptVM, ScriptModule; SCRIPTING.md)" ON)
-option(KKE_ENABLE_NET "Networking over ENet (MIT): kke::NetModule host/join, LAN discovery (NETWORKING.md). Off = offline only; the loopback transport and replication logic still build." ON)
+option(ENGINE_ENABLE_LUA "Lua 5.4 gameplay scripting (kke::ScriptVM, ScriptModule; docs/SCRIPTING.md)" ON)
+option(KKE_ENABLE_NET "Networking over ENet (MIT): kke::NetModule host/join, LAN discovery (docs/NETWORKING.md). Off = offline only; the loopback transport and replication logic still build." ON)
 option(ENGINE_HEADLESS_TEST "Build the headless smoke-test target" ON)
 option(KKE_ENABLE_TESTS "Build the unit test suite (tests/)" ON)
 option(KKE_ENABLE_JOLT "Build the Jolt Physics rigid-body/collision layer (MIT): static world collision, rigid bodies, character controller. See ACTION_PLAN.md 1.1." ON)
-option(KKE_ENABLE_FEMFX "Build the vendored, patched AMD FEMFX deformable-physics library. See README 'Physics: AMD FEMFX integration'." OFF)
-option(KKE_ENABLE_COVERAGE "Instrument builds for code coverage (gcc/clang --coverage). See README 'Test suite & coverage'." OFF)
+option(KKE_ENABLE_FEMFX "Build the vendored, patched AMD FEMFX deformable-physics library. See docs/HISTORY.md 'Physics: AMD FEMFX integration'." OFF)
+option(KKE_ENABLE_COVERAGE "Instrument builds for code coverage (gcc/clang --coverage). See docs/HISTORY.md 'Test suite & coverage'." OFF)
 option(KKE_WARNINGS_AS_ERRORS "GCC/Clang: fail the build on any -Wall -Wextra warning in the engine, games, tools or tests (third-party code excluded). CI turns this on." OFF)
-option(KKE_ENABLE_GPU_PROFILER "Request the VulkanProfiler layer (VK_LAYER_PROFILER_unified) at instance creation if installed. See README 'GPU profiler (VulkanProfiler) integration'." OFF)
+option(KKE_ENABLE_GPU_PROFILER "Request the VulkanProfiler layer (VK_LAYER_PROFILER_unified) at instance creation if installed. See docs/HISTORY.md 'GPU profiler (VulkanProfiler) integration'." OFF)
 
 if(KKE_ENABLE_COVERAGE)
     if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -101,7 +101,7 @@ set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
 # SDL 3.4 fails the configure when an optional X11 extension is missing
 # (3.2 skipped it quietly). Screensaver (old-X-server screensaver
 # inhibit) and XTest (synthetic input) aren't used by the engine.
-# libudev (joystick hot-plug) and dbus should be installed: see README.
+# libudev (joystick hot-plug) and dbus should be installed: see docs/HISTORY.md.
 set(SDL_X11_XSCRNSAVER OFF CACHE BOOL "" FORCE)
 set(SDL_X11_XTEST OFF CACHE BOOL "" FORCE)      # synthetic input injection: not needed
 FetchContent_Declare(
@@ -233,7 +233,7 @@ FetchContent_MakeAvailable(rmlui)
 # nlohmann/json — the engine's one JSON library. Foundational rather than
 # optional: game.json manifests, the marketplace index, and (eventually)
 # save data are all specified to be JSON — see GameManifest.h and the
-# README's "Game folder convention & marketplace" section.
+# docs/HISTORY.md's "Game folder convention & marketplace" section.
 # ---------------------------------------------------------------------------
 FetchContent_Declare(
     nlohmann_json
@@ -285,7 +285,7 @@ endif()
 # PipeWire/JACK, WASAPI, CoreAudio, AAudio/OpenSL, Web Audio) plus WAV/
 # FLAC/MP3 decoding. Public domain / MIT-0, one .c/.h pair. Only the
 # device and decoders are used: mixing is our own (kke::AudioMixer,
-# AUDIO.md), so the engine/node-graph/resource-manager parts are compiled
+# docs/AUDIO.md), so the engine/node-graph/resource-manager parts are compiled
 # out. Falls back to its null device when there's no sound card.
 # ---------------------------------------------------------------------------
 FetchContent_Declare(
@@ -309,7 +309,7 @@ endif()
 
 # ---------------------------------------------------------------------------
 # GoogleTest — the unit test framework for this engine's pure-logic code
-# (manifest parsing, marketplace dedup, text-escaping — see README "Test
+# (manifest parsing, marketplace dedup, text-escaping — see docs/HISTORY.md "Test
 # suite & coverage"). Deliberately NOT used to unit-test Vulkan/GPU code;
 # that stays verified the way it already has been, by actually building
 # and running the engine headlessly against lavapipe.
@@ -333,7 +333,7 @@ if(KKE_ENABLE_TESTS)
 endif()
 
 # ---------------------------------------------------------------------------
-# Lua 5.4 — gameplay scripting (kke::ScriptVM, ScriptModule; SCRIPTING.md).
+# Lua 5.4 — gameplay scripting (kke::ScriptVM, ScriptModule; docs/SCRIPTING.md).
 # MIT licensed, ~30 C files. Compiled as C++ on purpose: Lua then raises
 # errors as C++ exceptions instead of longjmp, so an error thrown inside
 # an engine binding unwinds its C++ objects properly.
@@ -360,7 +360,7 @@ if(ENGINE_ENABLE_LUA)
 endif()
 
 # ---------------------------------------------------------------------------
-# ENet 1.3.18 — the default network transport (NETWORKING.md). MIT, plain C,
+# ENet 1.3.18 — the default network transport (docs/NETWORKING.md). MIT, plain C,
 # every OS. Built from its sources here (its own CMakeLists predates the
 # CMake versions we require); the HAS_* feature macros are what its
 # configure script would find on any current Linux/macOS libc.
@@ -481,7 +481,7 @@ endfunction()
 # ---------------------------------------------------------------------------
 # Jolt Physics — rigid bodies, collision, character controller (MIT).
 # FEMFX stays for deformable/breakable hero objects; Jolt carries the rest
-# (the world's collision, rocks, debris, players): SCALING.md.
+# (the world's collision, rocks, debris, players): docs/SCALING.md.
 # ---------------------------------------------------------------------------
 if(KKE_ENABLE_JOLT)
     set(TARGET_UNIT_TESTS OFF CACHE BOOL "" FORCE)
@@ -520,7 +520,7 @@ endif()
 
 # FEMFX (if enabled) must be added before engine/, since engine's own
 # CMakeLists.txt links against the femfx target — found by actually
-# hitting this ordering issue rather than assuming it, see README
+# hitting this ordering issue rather than assuming it, see docs/HISTORY.md
 # "Physics: AMD FEMFX integration."
 if(KKE_ENABLE_FEMFX)
     add_subdirectory(external/FEMFX)
@@ -542,7 +542,7 @@ add_subdirectory(engine)
 # (The CGAL-based offline tetrahedralizer that used to live in tools/ was
 # removed on 2026-09-26: kke::voxelizeToTets does the job at runtime on any
 # mesh, including open ones CGAL rejects, and CGAL's GPL licence was a risk
-# for an engine that powers a marketplace. See README "Content pipeline".)
+# for an engine that powers a marketplace. See docs/HISTORY.md "Content pipeline".)
 
 # The physics multithreading benchmark — links femfx directly (not
 # kke_engine), so it only needs KKE_ENABLE_FEMFX. See tools/physics_benchmark/
@@ -562,7 +562,7 @@ endif()
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # Games — each subdirectory of games/ is a self-contained "game folder"
-# (see README "Game folder convention & marketplace"). Only one is built
+# (see docs/HISTORY.md "Game folder convention & marketplace"). Only one is built
 # by default right now; a real multi-game build (or marketplace-driven
 # discovery) is tracked in the Roadmap, not implemented yet — this single
 # add_subdirectory is today's honest state, not a placeholder pretending

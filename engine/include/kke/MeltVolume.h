@@ -18,7 +18,7 @@ class ParticleFluid;
 // molten wax). It "feels" like melting, which is the brief; it isn't a
 // thermodynamics solver.
 //
-// Choices (OPTIMIZATION.md):
+// Choices (docs/OPTIMIZATION.md):
 //  - Latent heat, the cheap way: a voxel at its melting point can't get
 //    hotter; extra heat goes into losing density instead. That one rule
 //    is why melting looks gradual and eats inward from the contact.

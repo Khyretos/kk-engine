@@ -34,7 +34,7 @@ namespace kke {
 // See kke::LightingControlsModule for a real, working example: a
 // genuinely useful panel (not test boxes) that any demo can opt into.
 //
-// Deliberately NOT in this slice (see README "Roadmap"):
+// Deliberately NOT in this slice (see docs/HISTORY.md "Roadmap"):
 //   - Real image-file decoding (<img>, background-image: url(...)) —
 //     RmlVulkanRenderInterface::LoadTexture is still a stub; this needs
 //     stb_image, which is a separate, independent piece of work.

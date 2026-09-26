@@ -226,18 +226,18 @@ void UiModule::init(Application& app) {
     m_initialised = true;
 
     // The default fallback font every game gets even if it never loads
-    // its own — see README "Default fonts / font fallback chain." A game
+    // its own — see docs/HISTORY.md "Default fonts / font fallback chain." A game
     // that wants its own typography just calls Rml::LoadFontFace() again
     // with a different family before/after this; RmlUi keeps both
     // registered and CSS font-family selects between them normally.
     if (!Rml::LoadFontFace("assets/fonts/NotoSans-Regular.ttf")) {
         std::cerr << "[ui] warning: failed to load bundled NotoSans-Regular.ttf — "
-                     "text will not render. Check the working directory (see README)." << std::endl;
+                     "text will not render. Check the working directory (see docs/HISTORY.md)." << std::endl;
     }
     // Loaded as a fallback face: RmlUi uses it for any character missing
     // from Noto Sans, which is exactly how emoji end up alongside normal
     // text without the document needing to say anything special. Verified
-    // to render in genuine color (not grayscale-tinted) — see README
+    // to render in genuine color (not grayscale-tinted) — see docs/HISTORY.md
     // "Default fonts" for how that was actually confirmed, not assumed.
     // Bold/Italic are optional extra faces of the same family: without
     // them `font-weight: bold` silently renders the regular face.
@@ -307,7 +307,7 @@ void UiModule::renderOverlay(const RenderContext& ctx) {
     // RenderContext only carries what 3D drawing needs (view/proj/etc),
     // not pixel dimensions, so we ask the context for its own size --
     // which we set once at creation and don't currently update on window
-    // resize (see README "Roadmap").
+    // resize (see docs/HISTORY.md "Roadmap").
     Rml::Vector2i size = m_context->GetDimensions();
     m_renderInterface->beginFrame(ctx.cmd, glm::vec2(static_cast<float>(size.x), static_cast<float>(size.y)));
     m_context->Render();

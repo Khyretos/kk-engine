@@ -13,7 +13,7 @@ namespace kke::net {
 
 // What moves bytes between game instances, behind one small interface so
 // the replication code (NetSession.h) never knows which one it runs on
-// (NETWORKING.md "Layers"):
+// (docs/NETWORKING.md "Layers"):
 //   EnetTransport     ENet over UDP (MIT): LAN, several instances on one
 //                     PC, host-a-game over the internet with a forwarded
 //                     port. The default.

@@ -104,7 +104,7 @@ BakedFracture bakeFracture(const TetMeshData& mesh, const FractureSeedOptions& o
 // Measured: ~2% of a broken cube's surface hung on the wrong piece,
 // now ~0.6% (tests/test_interior_fill.cpp). Cuts add ~60% triangles to
 // a pillar with 40 pieces and ~10 ms; the sandbox subdivides half as
-// finely as before to pay for it (OPTIMIZATION.md #30, #31).
+// finely as before to pay for it (docs/OPTIMIZATION.md #30, #31).
 // Stops adding triangles at `maxTriangles`. Returns the piece of each
 // output triangle, for embedTrianglesInPieces().
 std::vector<uint32_t> splitSoupAtPieces(TriangleSoup& soup, const TetMeshData& mesh, const std::vector<uint32_t>& chunkOfTet,

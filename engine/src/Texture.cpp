@@ -19,7 +19,7 @@ namespace kke {
 
 namespace {
 
-// Mip chain on the CPU (OPTIMIZATION.md log #14). Each level is a 2x2
+// Mip chain on the CPU (docs/OPTIMIZATION.md log #14). Each level is a 2x2
 // box filter of the one above, averaged in *linear* light: averaging
 // sRGB bytes directly darkens every mip (a black/white checker would fade
 // to 0.5 sRGB = 0.21 linear instead of 0.5). Two small lookup tables keep
@@ -206,7 +206,7 @@ void Texture::createFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32
     samplerInfo.unnormalizedCoordinates = VK_FALSE;
     samplerInfo.compareEnable = VK_FALSE;
     // Trilinear: smooth between mips. No anisotropy yet (it's an optional
-    // device feature; worth enabling where present, see OPTIMIZATION.md).
+    // device feature; worth enabling where present, see docs/OPTIMIZATION.md).
     samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
     samplerInfo.minLod = 0.0f;
     samplerInfo.maxLod = static_cast<float>(mipLevels);

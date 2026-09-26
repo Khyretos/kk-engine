@@ -223,4 +223,4 @@ the 1-core sandbox emulation needs 21 ms average. Settled pile: 0.06 ms.
 Only one run came back (step avg 1.40 ms, same as HW-001), so the thread
 count most likely didn't change. Superseded by HW-010.
 
-`VK_EXT_layer_settings` crash — are recorded in INSTRUCTIONS.md.)
+`VK_EXT_layer_settings` crash — are recorded in BUILDING.md.)

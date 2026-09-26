@@ -22,6 +22,6 @@
       "vram_mb": 128,
       "vulkan_api_version": "1.0"
     },
-    "notes": "Best-effort, developer-declared estimates -- see README 'Estimated hardware requirements'. This demo is UI-only content; the 3D backdrop (grid) is trivial to render."
+    "notes": "Best-effort, developer-declared estimates -- see docs/HISTORY.md 'Estimated hardware requirements'. This demo is UI-only content; the 3D backdrop (grid) is trivial to render."
   }
 }

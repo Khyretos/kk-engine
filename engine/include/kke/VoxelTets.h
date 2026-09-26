@@ -12,7 +12,7 @@ namespace kke {
 // Turns any triangle mesh into a tetrahedral volume that FEMFX can
 // simulate, at runtime, in milliseconds — the engine's answer to "make
 // this prop breakable". It replaces the offline CGAL tool for gameplay
-// purposes (see README "Content pipeline").
+// purposes (see docs/HISTORY.md "Content pipeline").
 //
 // How (the N64 way — a coarse grid, not exact geometry):
 //   1. Mark every grid cell a triangle passes through (triangles are

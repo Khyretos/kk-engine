@@ -18,7 +18,7 @@ namespace kke {
 //
 // This class only builds and persists the index — it does not copy
 // files, watch directories, or render a marketplace UI. Those are each
-// their own future piece (see README "Game folder convention &
+// their own future piece (see docs/HISTORY.md "Game folder convention &
 // marketplace").
 class MarketplaceIndex {
 public:

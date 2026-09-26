@@ -16,7 +16,7 @@
     {
       "name": "everything",
       "displayName": "Everything enabled",
-      "description": "Every optional piece this engine has, on at once: FEMFX physics, GPU profiling, and Lua scripting. This is what most people actively developing the engine itself want -- see INSTRUCTIONS.md for the system packages this needs first.",
+      "description": "Every optional piece this engine has, on at once: FEMFX physics, GPU profiling, and Lua scripting. This is what most people actively developing the engine itself want -- see docs/BUILDING.md for the system packages this needs first.",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {

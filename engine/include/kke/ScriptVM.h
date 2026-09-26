@@ -13,7 +13,7 @@ struct lua_State;
 namespace kke {
 
 // One sandboxed Lua 5.4 state for gameplay scripts, Garry's Mod style
-// (SCRIPTING.md): scripts register callbacks with hook.Add, schedule with
+// (docs/SCRIPTING.md): scripts register callbacks with hook.Add, schedule with
 // timer.Simple / timer.Create, and call whatever the engine binds
 // (physics.*, audio.*, input.*, ...). Pure logic, no GPU: tested in
 // tests/test_script_vm.cpp. ScriptModule puts one in a game.

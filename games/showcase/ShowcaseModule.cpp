@@ -59,7 +59,7 @@ void appendBox(const glm::mat4& m, const glm::vec3& half, const glm::vec3& color
 }
 
 #if KKE_ENABLE_NET
-// Game events (NetModule::sendEvent), serialized the NETWORKING.md way:
+// Game events (NetModule::sendEvent), serialized the docs/NETWORKING.md way:
 // one function per message for both directions.
 enum EventKind : uint16_t { kEventShoot = 1, kEventPush = 2, kEventReset = 3 };
 struct ShotEvent { glm::vec3 from{0.0f}, dir{0.0f, 0.0f, -1.0f}; };

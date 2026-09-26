@@ -21,6 +21,6 @@
       "vram_mb": 128,
       "vulkan_api_version": "1.0"
     },
-    "notes": "Best-effort, developer-declared estimates -- see README 'Estimated hardware requirements'. RmlUi's glyph-atlas textures are the main driver here; no 3D content in this demo at all."
+    "notes": "Best-effort, developer-declared estimates -- see docs/HISTORY.md 'Estimated hardware requirements'. RmlUi's glyph-atlas textures are the main driver here; no 3D content in this demo at all."
   }
 }

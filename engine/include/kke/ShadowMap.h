@@ -10,7 +10,7 @@ class VulkanDevice;
 
 // A real, working single-directional-light shadow map — the first
 // concrete piece of "shadows/PBR," the one item this project's own
-// README had flagged as genuinely unstarted since the multi-light
+// docs/HISTORY.md had flagged as genuinely unstarted since the multi-light
 // Blinn-Phong lighting slice. Deliberately scoped narrow rather than
 // generalized to every light and every object at once: this owns one
 // depth-only render target, computed from the scene's key light only
@@ -18,7 +18,7 @@ class VulkanDevice;
 // that explicitly implement Module::renderShadow() actually cast one.
 // A real, working single-caster proof is worth more than a half-built
 // system that tries to cover every case at once and gets none of them
-// fully right — see README "Immediate next slices" for what's
+// fully right — see docs/HISTORY.md "Immediate next slices" for what's
 // deliberately still out of scope (point-light shadows, multiple
 // shadow casters generalized across every module, cascaded/multiple
 // shadow maps for large scenes). Soft shadow edges (3x3 PCF) are real
@@ -44,7 +44,7 @@ public:
     // light, framed around a scene region (center + radius) rather than
     // the whole world — a directional light's shadow needs *some*
     // finite orthographic box, and this project doesn't have a real
-    // scene-bounds system yet (see README), so callers pass in a
+    // scene-bounds system yet (see docs/HISTORY.md), so callers pass in a
     // reasonable, hand-picked region themselves (e.g. CubeModule passes
     // its own cube's position and a small radius covering it and the
     // ground beneath).

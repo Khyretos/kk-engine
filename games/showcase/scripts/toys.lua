@@ -1,4 +1,4 @@
--- toys.lua: a small Garry's Mod-style script for kke_demo (SCRIPTING.md).
+-- toys.lua: a small Garry's Mod-style script for kke_demo (docs/SCRIPTING.md).
 -- Edit and save this file while the demo runs: it reloads by itself, and
 -- the towers and balls it made are replaced, not duplicated.
 --

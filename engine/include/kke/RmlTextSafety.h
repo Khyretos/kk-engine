@@ -17,7 +17,7 @@ namespace kke {
 // once a marketplace might import third-party game folders, eventual
 // chat messages, or any other string whose author isn't this engine's
 // own trusted code. This is the concrete implementation of the security
-// rule the README's "Game folder convention & marketplace" section
+// rule docs/HISTORY.md's "Game folder convention & marketplace" section
 // requires rather than just states.
 std::string escapeRmlText(const std::string& untrustedText);
 

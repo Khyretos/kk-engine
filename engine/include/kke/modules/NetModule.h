@@ -15,7 +15,7 @@ namespace kke {
 class RigidBodyModule;
 namespace net { class EnetTransport; class ConditionedTransport; }
 
-// Multiplayer for a game (NETWORKING.md): host a game (your game is the
+// Multiplayer for a game (docs/NETWORKING.md): host a game (your game is the
 // server, you play in it), join one by address or from the LAN list, or
 // stay offline. Owns the transport (ENet) and a NetServer or NetClient;
 // the game tells it about its player and its bodies and draws the others.

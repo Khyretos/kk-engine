@@ -14,7 +14,7 @@ namespace kke::net {
 
 // Replication for action games: one authoritative server (a dedicated
 // process, or the host's game: "host = client + server in one process"),
-// any number of clients (NETWORKING.md "Model"). Pure logic over an
+// any number of clients (docs/NETWORKING.md "Model"). Pure logic over an
 // ITransport: no GPU, no physics engine, so tests run a server and clients
 // in one process on a LoopbackNetwork with lag and loss.
 //

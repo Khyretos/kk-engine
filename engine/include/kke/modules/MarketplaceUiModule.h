@@ -20,7 +20,7 @@ namespace kke {
 // itself.
 //
 // HONEST LIMITATIONS, matching the rest of this integration's state:
-//   - Non-interactive. RmlUi has no input wiring yet (see README
+//   - Non-interactive. RmlUi has no input wiring yet (see docs/HISTORY.md
 //     Roadmap "RmlUi slice 4") — nothing can be clicked, so there is no
 //     "launch this game" button, just a static list.
 //   - Scans once, at init. No live refresh if the marketplace directory
@@ -28,7 +28,7 @@ namespace kke {
 //   - Every manifest field is passed through kke::escapeRmlText before
 //     being placed in the generated markup — game.json content is
 //     exactly the kind of "not this engine's own trusted code" input
-//     that rule exists for (see README's marketplace security note).
+//     that rule exists for (see docs/HISTORY.md's marketplace security note).
 class MarketplaceUiModule : public Module {
 public:
     explicit MarketplaceUiModule(std::string marketplaceDirectory);

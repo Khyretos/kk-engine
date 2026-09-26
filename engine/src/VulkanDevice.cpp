@@ -22,7 +22,7 @@ const std::vector<const char*> kValidationLayers = {
     "VK_LAYER_KHRONOS_validation"
 };
 
-// lstalmir/VulkanProfiler — see README "GPU profiler (VulkanProfiler)
+// lstalmir/VulkanProfiler — see docs/HISTORY.md "GPU profiler (VulkanProfiler)
 // integration" for the full story: what this layer actually is, how it
 // was verified, and what's still not done. Not built/installed by this
 // repo — it's a separate system-level Vulkan layer, same as the
@@ -125,7 +125,7 @@ void VulkanDevice::createInstance(bool enableValidation) {
         log::get("VulkanDevice")->info("GPU profiler layer '{}' found and will be enabled", kGpuProfilerLayerName);
     } else {
         log::get("VulkanDevice")->warn(
-            "KKE_ENABLE_GPU_PROFILER is on but layer '{}' isn't installed — see README "
+            "KKE_ENABLE_GPU_PROFILER is on but layer '{}' isn't installed — see docs/HISTORY.md "
             "'GPU profiler (VulkanProfiler) integration' for how to build/install it. Continuing without it.",
             kGpuProfilerLayerName);
     }
@@ -467,7 +467,7 @@ VulkanDevice::GpuProfilerFrameSummary VulkanDevice::queryGpuProfilerFrameSummary
         // "duration" isn't documented with explicit units in
         // VkProfilerEXT.h; inferred as milliseconds from matching this
         // engine's own timestamp-query GPU timing and the layer's own
-        // overlay display convention (see README) — not an assumption
+        // overlay display convention (see docs/HISTORY.md) — not an assumption
         // taken from an authoritative doc string, worth remembering if
         // the numbers ever look off by 1000x.
         summary.frameDurationMs = data.frame.duration;

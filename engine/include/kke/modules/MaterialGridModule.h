@@ -43,7 +43,7 @@ public:
     // parameters — added for the exact same reason: this module and
     // LightingControlsModule originally hardcoded the identical
     // screen position, which only became a real problem once a
-    // single demo (kke_demo, see README "Complete kke_demo showcase")
+    // single demo (kke_demo, see docs/HISTORY.md "Complete kke_demo showcase")
     // needed both at once.
     explicit MaterialGridModule(float left = 40.0f, float top = 500.0f);
     void init(Application& app) override;

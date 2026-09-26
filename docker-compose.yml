@@ -2,7 +2,7 @@
 #
 #   docker compose run --rm linux      # -> dist/linux    (+ runs the unit tests)
 #   docker compose run --rm windows    # -> dist/windows  (MinGW-w64 cross build, tests under Wine)
-#   docker compose run --rm android    # -> dist/android  (arm64-v8a .so files; see SCALING.md: FEMFX needs the SIMDe port first)
+#   docker compose run --rm android    # -> dist/android  (arm64-v8a .so files; see docs/SCALING.md: FEMFX needs the SIMDe port first)
 #
 # The source tree is mounted, not copied: edit on the host, rebuild in the
 # container. Build trees go to build-docker/<platform>/ (git-ignored).

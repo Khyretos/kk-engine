@@ -11,7 +11,7 @@
 namespace kke::net {
 
 // Bit-packed serialization, in the style of Glenn Fiedler's `serialize`
-// library (BSD-3; NETWORKING.md): each message has ONE function that both
+// library (BSD-3; docs/NETWORKING.md): each message has ONE function that both
 // writes and reads it, templated on the stream, so the two directions can
 // never disagree:
 //

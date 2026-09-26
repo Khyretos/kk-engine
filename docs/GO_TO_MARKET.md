@@ -27,7 +27,7 @@ What no free engine gives you in one package today:
 | Runs on a 1-core, 2 GB machine with no GPU (software Vulkan) | Stress test + physics benchmark numbers (PERFORMANCE_NOTES.md, audit 2026-09-26) |
 | Garry's Mod-style Lua scripting with hot reload | `ScriptVM` / `ScriptModule` (SCRIPTING.md) |
 | Accessibility built in (sound visualiser, captions, left-handed mirror, any controller incl. HOSAS and Steam Controller gyro) | AUDIO.md, INPUT.md |
-| Lego modules: a game is a list of `addModule<>()` calls | README "Architecture" |
+| Lego modules: a game is a list of `addModule<>()` calls | HISTORY.md "Architecture" |
 
 **Who it's for, in order:**
 1. Hobby and indie devs who want physics toys, sandbox and destruction games

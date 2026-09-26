@@ -139,7 +139,7 @@ math(EXPR BUILD_SECONDS "${T3} - ${T2}")
 
 # Counted directly from the captured output — a real, checkable number
 # for "is this build genuinely clean," not just a pass/fail exit code.
-# See README "Real hardware findings, fixed" for why a clean build
+# See docs/HISTORY.md "Real hardware findings, fixed" for why a clean build
 # (zero warnings) is treated as a real, verified property of this
 # project, not an aspiration.
 set(BUILD_FULL_OUTPUT "${BUILD_OUTPUT}${BUILD_ERROR}")

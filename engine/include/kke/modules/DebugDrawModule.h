@@ -16,7 +16,7 @@ namespace kke {
 // they're drawn this frame (and stay while the simulation is paused).
 // Used by editors and tools — selection boxes, placement grids, gizmos.
 //
-// Performance (see OPTIMIZATION.md): every line of a frame is expanded
+// Performance (see docs/OPTIMIZATION.md): every line of a frame is expanded
 // into one camera-facing quad (6 vertices) in a single vertex buffer per
 // frame in flight, drawn with one call per layer (depth-tested, and
 // "on top"). Buffers grow to the high-water mark and are reused; nothing

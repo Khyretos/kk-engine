@@ -4,7 +4,7 @@ namespace kke {
 
 // The shared, engine-level material concept every deformable/destructible
 // object reads from — not FEMFX-specific vocabulary, deliberately, so a
-// future second physics backend (or the melting/MPM track — see README
+// future second physics backend (or the melting/MPM track — see docs/HISTORY.md
 // "Physics: AMD FEMFX integration") shares the same idea of "what a
 // material's numbers mean" rather than each system inventing its own.
 //

@@ -15,7 +15,7 @@ namespace kke {
 // Jiggle physics: secondary motion on top of animation. Soft parts
 // (breasts, bellies, glutes, hair, tails, antennae, cloth tips) lag,
 // overshoot and settle when the body they hang from moves. Pure CPU, no
-// GPU types; tested in tests/test_jiggle.cpp. See JIGGLE.md.
+// GPU types; tested in tests/test_jiggle.cpp. See docs/JIGGLE.md.
 //
 // Three pieces, cheapest first:
 //   JiggleRig  - bones. A chain of bones becomes a chain of verlet points

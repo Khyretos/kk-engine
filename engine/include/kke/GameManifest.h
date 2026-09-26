@@ -5,7 +5,7 @@
 
 namespace kke {
 
-// The parsed contents of a "game folder"'s game.json — see the README's
+// The parsed contents of a "game folder"'s game.json — see docs/HISTORY.md's
 // "Game folder convention & marketplace" section for the full spec and
 // the fork-a-game-folder workflow this supports.
 //

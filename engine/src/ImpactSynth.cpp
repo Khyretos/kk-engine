@@ -13,7 +13,7 @@ AudioMaterialTable::AudioMaterialTable() {
     // Mode ratios: metal = free bar (1, 2.76, 5.40, 8.93, 13.34); glass =
     // thin plate/cup; wood and stone = measured-ish plank/slab ratios with
     // heavy damping. Tuned by ear against the tests' separation checks,
-    // not taken from a paper: easy to change, see AUDIO.md.
+    // not taken from a paper: easy to change, see docs/AUDIO.md.
     AudioMaterial def;
     m_materials[Default] = def;
 

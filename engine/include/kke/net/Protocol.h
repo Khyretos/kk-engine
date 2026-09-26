@@ -12,7 +12,7 @@
 
 namespace kke::net {
 
-// The engine's wire protocol, version kProtocolVersion (NETWORKING.md
+// The engine's wire protocol, version kProtocolVersion (docs/NETWORKING.md
 // "Messages"). Every message starts with its MessageType (5 bits) and has
 // one serialize() for both directions (BitStream.h). A peer with another
 // version is turned away at the Hello, never mis-decoded.

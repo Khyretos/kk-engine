@@ -198,7 +198,7 @@ vec3 shadeSurface(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 po
 
     // Ambient: ubo.ambient times albedo, not a real irradiance
     // environment map -- a deliberate, documented simplification (see
-    // README "What's still ahead for lighting"). Real image-based
+    // docs/HISTORY.md "What's still ahead for lighting"). Real image-based
     // ambient lighting needs a captured/generated environment map plus
     // irradiance convolution and a prefiltered specular mip chain,
     // none of which exist yet; this is a flat stand-in so ambient-only

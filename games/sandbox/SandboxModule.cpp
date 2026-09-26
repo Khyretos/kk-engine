@@ -56,7 +56,7 @@ const BreakMaterial kBreakMaterials[] = {
 };
 constexpr int kBreakMaterialCount = static_cast<int>(sizeof(kBreakMaterials) / sizeof(kBreakMaterials[0]));
 
-// Budgets (OPTIMIZATION.md rule 5: everything that can pile up gets a cap
+// Budgets (docs/OPTIMIZATION.md rule 5: everything that can pile up gets a cap
 // and a policy). Past the cap the oldest ball is removed — a thrown ball
 // that's been lying around is the least interesting object in the scene.
 constexpr size_t kMaxBalls = 6;
@@ -192,7 +192,7 @@ kke::ModelModule::ModelId SandboxModule::loadAsset(const std::string& assetName,
     kke::ModelLoadOptions opts = kke::packLoadOptions(m_catalog, *asset);
     opts.loadAnimations = true;
     // Synchronous: a Synty FBX loads in a few ms and ModelModule caches
-    // it. Streaming/time-sliced loading is in OPTIMIZATION.md's backlog.
+    // it. Streaming/time-sliced loading is in docs/OPTIMIZATION.md's backlog.
     return m_models->load(asset->path, opts);
 }
 
@@ -288,7 +288,7 @@ kke::Ray SandboxModule::mouseRay() const {
 
 // Brute force over every object's bounds: a slab test is ~20 flops, so
 // even 2,000 objects is well under 0.1 ms. A grid/BVH is in the
-// OPTIMIZATION.md backlog for when levels outgrow that.
+// docs/OPTIMIZATION.md backlog for when levels outgrow that.
 uint32_t SandboxModule::pickObject() const {
     kke::Ray ray = mouseRay();
     float best = 1e30f;
@@ -1111,7 +1111,7 @@ void SandboxModule::makeBreakable(Object& o) {
         // tets. Half a cell used to be needed so whole triangles could
         // follow the pieces; the cut below does that exactly now, so a
         // breakable prop carries ~2.5x fewer triangles than before (fewer
-        // points to move and upload while it's awake; OPTIMIZATION.md #31).
+        // points to move and upload while it's awake; docs/OPTIMIZATION.md #31).
         // Props that only dent keep half a cell: the dents show better.
         const float maxEdge = std::max({ vox.cellSize3.x, vox.cellSize3.y, vox.cellSize3.z }) * (opts.fracture ? 1.0f : 0.5f);
         kke::subdivideSoup(soup, maxEdge, budgetPerPart);
@@ -1152,7 +1152,7 @@ void SandboxModule::makeBreakable(Object& o) {
 
 // Redraws breakable props from their physics tets. Skipped once an
 // object is asleep and its last pose was drawn: a settled pile of
-// debris costs nothing here (OPTIMIZATION.md rule 1).
+// debris costs nothing here (docs/OPTIMIZATION.md rule 1).
 void SandboxModule::updateBreakables() {
 #if KKE_ENABLE_FEMFX
     auto* physics = m_app->getModule<kke::PhysicsModule>();

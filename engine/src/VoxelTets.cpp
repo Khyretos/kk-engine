@@ -328,7 +328,7 @@ TetEmbedding embedPoints(const TetMeshData& mesh, const std::vector<glm::vec3>& 
     // cell, found for every empty cell up front by one BFS. O(1) per
     // point. The previous 1-tet-size bins plus a ring search cost ~9 us
     // per point (~110 ms for a 12,000-point pillar); this is ~20x faster
-    // (OPTIMIZATION.md log #15, #30).
+    // (docs/OPTIMIZATION.md log #15, #30).
     const size_t n = mesh.tets.size();
     std::vector<glm::mat3> inv(n);
     std::vector<glm::vec3> origin(n), bmin(n), bmax(n);

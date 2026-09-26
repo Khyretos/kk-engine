@@ -59,7 +59,7 @@ void StatsModule::renderUi() {
 
     // Real per-draw-call GPU profiling, when VulkanProfiler is actually
     // active — see kke::VulkanDevice::queryGpuProfilerFrameSummary() and
-    // README "GPU profiler (VulkanProfiler) integration".
+    // docs/HISTORY.md "GPU profiler (VulkanProfiler) integration".
     //
     // DISABLED BY DEFAULT, on purpose: calling this reproducibly
     // segfaults *inside the layer's own compiled code*
@@ -74,7 +74,7 @@ void StatsModule::renderUi() {
     // own debug symbols/source stepping, which is out of scope for a
     // guess-and-check fix. Flip KKE_QUERY_GPU_PROFILER_DATA on locally
     // to re-attempt this once that's understood, or if a newer layer
-    // version fixes it — see README for the full incident writeup.
+    // version fixes it — see docs/HISTORY.md for the full incident writeup.
 #ifdef KKE_QUERY_GPU_PROFILER_DATA
     ++m_frameCount;
     if (m_frameCount > 3) {

@@ -18,7 +18,7 @@ namespace kke {
 // breakable objects and costs ~0.15-0.2 ms per awake body per step on one
 // core; a level's static collision, hundreds of rocks and debris pieces,
 // and the players themselves need a rigid-body engine that costs a few
-// microseconds per body (SCALING.md). FEMFX stays for the hero objects.
+// microseconds per body (docs/SCALING.md). FEMFX stays for the hero objects.
 class RigidWorld {
 public:
     using BodyId = uint32_t;

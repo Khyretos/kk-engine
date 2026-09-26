@@ -20,7 +20,7 @@ struct SoundBuffer {
 using SoundHandle = std::shared_ptr<const SoundBuffer>;
 
 // What a sound *is*, for the accessibility visualizer and captions, and
-// for per-category volume. Every sound carries one (AUDIO.md).
+// for per-category volume. Every sound carries one (docs/AUDIO.md).
 enum class SoundCategory : uint8_t { Impact, Footstep, Voice, Ambient, Ui, Music, Alert, Count };
 const char* soundCategoryName(SoundCategory c);
 
@@ -69,7 +69,7 @@ struct ActiveSound {
 // moves behind the listener (a cheap front/back cue). miniaudio only
 // supplies the output device (AudioModule).
 //
-// Budget (OPTIMIZATION.md rule 5): at most maxVoices at once; a new sound
+// Budget (docs/OPTIMIZATION.md rule 5): at most maxVoices at once; a new sound
 // steals the quietest voice (loudness x priority) or is dropped if it
 // would be the quietest itself.
 //
@@ -77,7 +77,7 @@ struct ActiveSound {
 // game thread, mix() from the audio device's thread; one mutex guards the
 // voice list. The lock is held for one block (~5 ms of audio) at a time;
 // a lock-free command queue is the known next step if that ever shows up
-// in a profile (AUDIO.md).
+// in a profile (docs/AUDIO.md).
 class AudioMixer {
 public:
     explicit AudioMixer(int sampleRate = 48000, int maxVoices = 32);
