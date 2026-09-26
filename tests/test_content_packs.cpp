@@ -143,7 +143,7 @@ TEST(ContentPacks, ManifestRejectsMistakesWithAReason) {
     bad(R"({"id": "x", "title": "x", "dependencies": ["x"]})");
     bad(R"({"id": "x", "title": "x", "game_version": "soon"})");
     bad(R"({"id": "x", "title": "x", "public_key": "abc"})");
-    bad(R"({"id": "x", "title": "x", "title": 5})");
+    bad(R"({"id": "x", "title": ["x"]})");
     EXPECT_NE(bad(R"({"id": "x", "title": "x", "entitlement": "e"})").find("DLC"), std::string::npos)
         << "a mod can't claim an entitlement";
 }

@@ -2,6 +2,8 @@
 
 #include "kke/PackSeal.h"
 
+#include <nlohmann/json.hpp>
+
 #include <cstdint>
 #include <filesystem>
 #include <map>
@@ -15,7 +17,7 @@ namespace kke::packs {
 
 // Content packs: DLC and mods (docs/MODDING.md).
 //
-// A pack is a folder with a pack.json at its root whose other files mirror
+// A pack is a folder with a pack.json (or pack.yml) at its root whose other files mirror
 // the game's own data folder: a pack that ships scripts/weapons/axe.lua
 // adds (or replaces) the game's scripts/weapons/axe.lua. That is the
 // convention Nexus Mods and Vortex expect (an archive's root is the
@@ -101,11 +103,15 @@ struct PackManifest {
 };
 
 constexpr const char* kManifestFile = "pack.json";
+constexpr const char* kManifestStem = "pack"; // pack.json, pack.yml or pack.yaml (kke/DataFile.h)
 
 // Parses a pack.json; false with `error` (naming the file) when it's not
 // valid JSON, misses id/title, or has a bad version or dependency.
 bool parseManifest(const std::string& json, PackManifest& out, std::string* error = nullptr);
-bool loadManifest(const std::filesystem::path& packFolder, PackManifest& out, std::string* error = nullptr);
+bool parseManifestData(const nlohmann::json& data, PackManifest& out, std::string* error = nullptr);
+// pack.json, pack.yml or pack.yaml; when there's more than one and they
+// differ, the newest wins and `warning` says so (kke/DataFile.h).
+bool loadManifest(const std::filesystem::path& packFolder, PackManifest& out, std::string* error = nullptr, std::string* warning = nullptr);
 std::string toJson(const PackManifest& m);
 
 // Something a scan or a resolve wants the player (or modder) to know.
@@ -126,7 +132,7 @@ struct SearchRoot {
 std::vector<PackManifest> discover(const std::vector<SearchRoot>& roots, std::vector<Problem>* problems = nullptr);
 
 // The player's choices: which packs are on, and the mod load order.
-// mods.json: {"format": "kke-modlist-1", "packs": [{"id": "...", "enabled": true}, ...]}
+// mods.json (or mods.yml): {"format": "kke-modlist-1", "packs": [{"id": "...", "enabled": true}, ...]}
 // Packs it doesn't mention are on, after the listed ones, by id: a new
 // download or Workshop subscription just works, as in Vortex and Factorio.
 struct ModList {
@@ -144,8 +150,12 @@ struct ModList {
 
     std::string toJson() const;
     static bool fromJson(const std::string& json, ModList& out, std::string* error = nullptr);
+    // JSON or YAML by the file's extension; datafile::saveTarget() says
+    // which of mods.json / mods.yml the player already has.
     bool save(const std::filesystem::path& file, std::string* error = nullptr) const;
-    // A missing file is an empty list (not an error).
+    // `file` names the list (".../mods.json"); mods.yml or mods.yaml next
+    // to it work the same, the newest winning when they differ. None at
+    // all is an empty list (not an error).
     static bool load(const std::filesystem::path& file, ModList& out, std::string* error = nullptr);
 };
 
@@ -213,7 +223,7 @@ public:
     Mount(const std::filesystem::path& baseRoot, const MountPlan& plan);
 
     // Layers added later win. Indexes the folder's files straight away
-    // (symlinks aren't followed; pack.json and kke.seal at a pack's root
+    // (symlinks aren't followed; pack.json/.yml and kke.seal at a pack's root
     // are the pack's own and aren't mounted).
     void addLayer(const std::string& id, const std::filesystem::path& root, bool isPack = true);
 
