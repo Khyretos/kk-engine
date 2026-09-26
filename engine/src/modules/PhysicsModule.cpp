@@ -1473,7 +1473,9 @@ void PhysicsModule::fixedUpdate(const FixedUpdateContext& ctx) {
     }
 
     double stepStart = nowSeconds();
+    sampleExternalContacts();
     AMD::FmUpdateScene(m_scene, ctx.fixedDt);
+    measureExternalContacts(ctx.fixedDt);
     ++m_physicsTick;
     collectImpacts(ctx.fixedDt);
     updateBreakables();
@@ -2578,6 +2580,7 @@ void PhysicsModule::shutdown() {
     std::vector<RagdollHandle> ragdolls;
     for (auto& [h, rd] : m_ragdolls) ragdolls.push_back(h);
     for (RagdollHandle h : ragdolls) destroyRagdoll(h);
+    destroyExternalProxies();
 
     if (m_scene) {
         AMD::FmDestroyScene(m_scene);

@@ -120,6 +120,21 @@ public:
     // Closest hit, front or back face; the normal faces the ray's origin.
     RayHit raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance) const;
 
+    // A body as an oriented box (exact for boxes, the shape's bounds for
+    // spheres, capsules and hulls): what the FEMFX bridge mirrors.
+    struct BodyBox {
+        BodyId id = 0;
+        Motion motion = Motion::Static;
+        glm::vec3 center{0.0f};
+        glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec3 halfExtents{0.5f};
+        glm::vec3 velocity{0.0f}, angularVelocity{0.0f};
+        float mass = 0.0f; // 0 = static or kinematic (immovable)
+    };
+    // Bodies whose bounds overlap the world box min..max (triangle-mesh
+    // bodies left out: a level mesh isn't a box). Appends to `out`.
+    void bodiesInBox(const glm::vec3& min, const glm::vec3& max, std::vector<BodyBox>& out) const;
+
     CharacterId addCharacter(const CharacterDesc& desc);
     void removeCharacter(CharacterId id);
     void setCharacterInput(CharacterId id, const CharacterInput& input);
@@ -132,6 +147,8 @@ public:
     // under a low ceiling).
     bool setCharacterHeight(CharacterId id, float height);
     float characterHeight(CharacterId id) const;
+    float characterRadius(CharacterId id) const;
+    std::vector<CharacterId> characterIds() const;
     // Scripted moves (vaults, climbs): a kinematic character is not
     // simulated by step(); the caller places it with moveCharacter() along
     // a path it has already checked for room (capsuleFits). Turning it back

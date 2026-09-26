@@ -6,6 +6,7 @@
 #include "kke/Log.h"
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/RigidBodyModule.h"
+#include "kke/modules/PhysicsBridgeModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/SettingsModule.h"
 #if KKE_ENABLE_NET
@@ -36,6 +37,8 @@ namespace {
 constexpr float kWalkSpeed = 1.6f, kJogSpeed = 3.6f, kSprintSpeed = 6.2f, kCrouchSpeed = 1.4f;
 // UAL2 clips the demo plays: vault and climbs (in place, lift removed).
 constexpr const char* kTraversalClips[] = { "SafetyVault", "ClimbUp_1m", "ClimbUp_2m" };
+// The breaking yard (glass, plank, stone wall).
+const glm::vec3 kYard(14.0f, 0.0f, -6.0f);
 // Climbs up walls this high (m) or more take the 2 m clip.
 constexpr float kClimbHighFrom = 1.6f;
 
@@ -202,6 +205,14 @@ void ShowcaseModule::init(kke::Application& app) {
     }
     if (const char* sp = std::getenv("KKE_SPLIT"); sp && *sp) setLocalPlayers(std::atoi(sp));
     if (const char* pip = std::getenv("KKE_OVERHEAD"); pip && *pip && *pip != '0') m_overhead = true;
+    if (const char* b = std::getenv("KKE_DEMO_BRIDGE"); b && *b && *b != '0') {
+        m_demoBridge = 0.0f;
+        m_loco->teleport(kYard + glm::vec3(0.0f, 0.05f, 3.2f));
+        m_rig.yaw = 0.0f;
+        m_rig.pitch = -20.0f;
+    }
+    if (const char* b = std::getenv("KKE_BRIDGE"); b && *b == '0')
+        if (auto* bridge = m_app->getModule<kke::PhysicsBridgeModule>()) bridge->enabled = false;
     if (const char* st = std::getenv("KKE_STRESS_TEST"); st && *st && *st != '0') {
         m_stressQuitAtEnd = true;
         startStressTest();
@@ -268,6 +279,7 @@ void ShowcaseModule::buildLevel() {
     for (glm::vec2 c : { glm::vec2(-1, -1), glm::vec2(1, -1), glm::vec2(1, 1), glm::vec2(-1, 1) })
         addStaticBox({ { 10.0f + c.x * 1.4f, 0.6f, 6.0f + c.y * 1.4f }, { 0.1f, 0.6f, 0.1f }, wall }, v, idx);
     buildParkourLane(v, idx);
+    buildPool(v, idx);
     // Breaking yard floor marker.
     addStaticBox({ { 14.0f, 0.01f, -6.0f }, { 5.5f, 0.01f, 4.5f }, glm::vec3(0.3f, 0.3f, 0.25f) }, v, idx);
     m_level->upload(v, idx);
@@ -391,6 +403,19 @@ void ShowcaseModule::spawnCrates() {
         d.position = glm::vec3(-2.0f + k * 1.6f, 0.6f, 10.0f);
         m_crates.push_back({ m_rigid->world().add(d), d.halfExtents, 2 });
     }
+    spawnPoolFloaters(n);
+    // Small crates under the breaking yard's glass: with FEMFX and the
+    // bridge (PhysicsBridgeModule) the shards land on them and knock them
+    // about.
+    m_yardCratesFirst = m_crates.size();
+    for (const glm::vec3 at : { glm::vec3(-0.3f, 0.15f, -0.2f), glm::vec3(0.3f, 0.15f, -0.2f), glm::vec3(0.0f, 0.15f, 0.3f) }) {
+        kke::RigidWorld::BodyDesc d;
+        d.halfExtents = glm::vec3(0.15f);
+        d.density = 250.0f;
+        d.position = kYard + at;
+        d.material = 2;
+        m_crates.push_back({ m_rigid->world().add(d), d.halfExtents, n++ % 2 });
+    }
     replicateBodies();
 }
 
@@ -421,7 +446,7 @@ void ShowcaseModule::spawnBreakables() {
     // The breaking yard: glass on two supports, a plank bridge, a stone
     // wall (FEMFX, Voronoi pieces; shoot them with F). Supports are Jolt
     // static boxes too, so the player collides with them.
-    const glm::vec3 yard(14.0f, 0.0f, -6.0f);
+    const glm::vec3 yard = kYard;
     kke::Material stone;
     stone.density = 2500.0f; stone.stiffness = 3.0e7f; stone.poissonsRatio = 0.25f;
     stone.fractureStressThreshold = 1.0e5f; stone.roughness = 0.9f; stone.textureId = 1;
@@ -439,7 +464,9 @@ void ShowcaseModule::spawnBreakables() {
         d.motion = kke::RigidWorld::Motion::Static;
         d.halfExtents = size * 0.5f;
         d.position = at;
-        m_rigid->world().add(d);
+        const kke::RigidWorld::BodyId id = m_rigid->world().add(d);
+        // It's a FEMFX block too: FEMFX mustn't see a second one in the same place.
+        if (auto* bridge = m_app->getModule<kke::PhysicsBridgeModule>()) bridge->ignore(id);
     };
     block({ 0.3f, 0.5f, 1.2f }, yard + glm::vec3(-0.9f, 0.25f, 0.0f));
     block({ 0.3f, 0.5f, 1.2f }, yard + glm::vec3(0.9f, 0.25f, 0.0f));
@@ -741,6 +768,26 @@ void ShowcaseModule::shoot() {
     forcePush();
 }
 
+void ShowcaseModule::updateBridgeDemo(float dt) {
+    const float before = m_demoBridge;
+    m_demoBridge += dt;
+    auto at = [&](float mark) { return before < mark && m_demoBridge >= mark; };
+    kke::RigidWorld& w = m_rigid->world();
+    if (at(3.0f)) { // once the glass has settled and is armed to break
+        m_yardCratesStart.clear();
+        for (size_t i = m_yardCratesFirst; i < m_yardCratesFirst + 3 && i < m_crates.size(); ++i) m_yardCratesStart.push_back(w.position(m_crates[i].body));
+        spawnBall(kYard + glm::vec3(0.1f, 2.5f, 0.05f), glm::vec3(0, -1, 0));
+    }
+    if (at(7.0f)) {
+        std::string moved;
+        for (size_t k = 0; k < m_yardCratesStart.size(); ++k) {
+            const glm::vec3 d = w.position(m_crates[m_yardCratesFirst + k].body) - m_yardCratesStart[k];
+            moved += fmt::format("{}crate {}: {:.3f} m", k ? ", " : "", k + 1, glm::length(d));
+        }
+        kke::log::get(name())->info("bridge demo: after the glass broke, {}", moved);
+    }
+}
+
 void ShowcaseModule::spawnBall(const glm::vec3& from, const glm::vec3& dir) {
 #if KKE_ENABLE_FEMFX
     if (m_femfx) {
@@ -813,6 +860,7 @@ void ShowcaseModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
 #endif
     glm::vec3 p(-14.0f + 5.0f * std::sin(m_platformTime * 0.5f), 0.6f + 1.2f * (0.5f + 0.5f * std::sin(m_platformTime * 0.35f)), 6.0f);
     m_rigid->world().moveKinematic(m_platform, p, glm::quat(1, 0, 0, 0), ctx.fixedDt);
+    floatBodies(ctx.fixedDt);
 }
 
 void ShowcaseModule::update(const kke::UpdateContext& ctx) {
@@ -874,8 +922,11 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
             m_demoHang = 0.0f;
         }
     }
-    in.fast = m_sprint && !m_crouch;
-    in.slow = m_walk;
+    // Wading through the pool: no running.
+    const bool wading = inPool(w.characterPosition(m_player));
+    if (m_demoBridge >= 0.0f) updateBridgeDemo(dt);
+    in.fast = m_sprint && !m_crouch && !wading;
+    in.slow = m_walk || wading;
     in.crouch = hanging ? m_wantCrouch != m_crouch : m_crouch;
     in.goUp = m_jumpQueued;
     m_jumpQueued = false;
@@ -1088,6 +1139,7 @@ void ShowcaseModule::batchCrates() {
 
 void ShowcaseModule::render(const kke::RenderContext& ctx) {
     m_level->draw(ctx, glm::mat4(1.0f), 0.0f, 0.85f);
+    drawPool(ctx);
     for (const SceneEntry& e : m_scenes)
         if (e.ground) e.ground->draw(ctx, glm::mat4(1.0f), 0.0f, 0.95f);
     kke::RigidWorld& w = m_rigid->world();

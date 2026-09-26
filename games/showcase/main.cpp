@@ -15,6 +15,7 @@
 #include "kke/modules/StatsModule.h"
 #include "kke/modules/UiModule.h"
 #if KKE_ENABLE_FEMFX
+#include "kke/modules/PhysicsBridgeModule.h"
 #include "kke/modules/PhysicsModule.h"
 #endif
 
@@ -59,6 +60,8 @@ int main() {
         auto& physics = app.addModule<kke::PhysicsModule>(/*renderScale=*/1.0f, /*initialObjectCount=*/0);
         physics.setDrawGround(false);
         panels.push_back(&physics);
+        // FEMFX pieces and Jolt bodies meet (shards knock the crates about).
+        panels.push_back(&app.addModule<kke::PhysicsBridgeModule>());
 #endif
         auto& showcase = app.addModule<kke_showcase::ShowcaseModule>();
 #if KKE_ENABLE_LUA
