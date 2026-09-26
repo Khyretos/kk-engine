@@ -465,9 +465,9 @@ void NetServer::update(double now) {
 void NetServer::sendSnapshot(Client& c) {
     SnapshotMsg s;
     s.serverTimeMs = timeMs();
-    if (m_hasLocal) s.players.push_back({ 0, m_local });
+    if (m_hasLocal && (!sendPlayer || sendPlayer(c.id, 0))) s.players.push_back({ 0, m_local });
     for (const Client& o : m_clients)
-        if (o.id && o.id != c.id && o.hasState) s.players.push_back({ o.id, o.accepted });
+        if (o.id && o.id != c.id && o.hasState && (!sendPlayer || sendPlayer(c.id, o.id))) s.players.push_back({ o.id, o.accepted });
     // Bits: header 5+32+6+8, player ~120, body ~130 asleep / ~175 awake.
     int64_t budget = static_cast<int64_t>(m_config.snapshotBytes) * 8 - 51 - static_cast<int64_t>(s.players.size()) * 120;
     std::vector<std::pair<float, const NetBodyState*>> order;
@@ -632,10 +632,23 @@ void NetClient::receive(const NetEvent& e) {
             // fills in its time slot (Timeline keeps order).
             const double t = m->serverTimeMs / 1000.0;
             m_clock.observe(t, m_now);
-            if (!m_haveSnapshot || static_cast<int32_t>(m->serverTimeMs - m_lastSnapshotMs) > 0) m_lastSnapshotMs = m->serverTimeMs;
+            const bool newest = !m_haveSnapshot || static_cast<int32_t>(m->serverTimeMs - m_lastSnapshotMs) > 0;
+            const uint32_t previousNewest = m_lastSnapshotMs;
+            const bool hadSnapshot = m_haveSnapshot;
+            if (newest) m_lastSnapshotMs = m->serverTimeMs;
             m_haveSnapshot = true;
-            for (const SnapshotMsg::Player& p : m->players)
-                if (p.id != m_playerId) m_players[p.id].states.push(t, p.state);
+            for (const SnapshotMsg::Player& p : m->players) {
+                if (p.id == m_playerId) continue;
+                Player& pl = m_players[p.id];
+                if (newest) {
+                    // Back after the server hid it (fog of war): start
+                    // fresh rather than glide from where it was last seen.
+                    if (pl.everIn && hadSnapshot && pl.lastInMs != previousNewest) pl.states.clear();
+                    pl.lastInMs = m->serverTimeMs;
+                    pl.everIn = true;
+                }
+                pl.states.push(t, p.state);
+            }
             for (const NetBodyState& b : m->bodies) m_bodies[b.id].push(t, b);
         } else ++m_badPackets;
         break;
@@ -709,7 +722,9 @@ std::vector<RemotePlayer> NetClient::players(double now) const {
         r.id = id;
         r.name = p.name;
         r.character = p.character;
-        if (!p.states.empty() && m_clock.valid()) {
+        // Left out of the newest snapshot: the server is hiding it.
+        const bool hidden = p.everIn && p.lastInMs != m_lastSnapshotMs;
+        if (!hidden && !p.states.empty() && m_clock.valid()) {
             r.state = interpolate(p.states, renderTime(now), m_config.maxExtrapolation);
             r.hasState = true;
         }
