@@ -46,6 +46,18 @@ Mesh::Mesh(VulkanDevice& device, const std::vector<Vertex>& vertices, const std:
                                    VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
 }
 
+Mesh::Mesh(VulkanDevice& device, const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices, Memory memory)
+    : m_indexCount(static_cast<uint32_t>(indices.size())) {
+    if (memory == Memory::DeviceLocal) {
+        *this = Mesh(device, vertices, indices);
+        return;
+    }
+    m_vertexBuffer = std::make_unique<Buffer>(device, sizeof(Vertex) * vertices.size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    m_vertexBuffer->upload(vertices.data(), sizeof(Vertex) * vertices.size());
+    m_indexBuffer = std::make_unique<Buffer>(device, sizeof(uint32_t) * indices.size(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    m_indexBuffer->upload(indices.data(), sizeof(uint32_t) * indices.size());
+}
+
 void Mesh::bind(VkCommandBuffer cmd) const {
     VkBuffer buffers[] = { m_vertexBuffer->handle() };
     VkDeviceSize offsets[] = { 0 };

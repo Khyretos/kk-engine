@@ -107,6 +107,7 @@ std::vector<kke::ModuleDependency> SandboxModule::dependencies() const {
 void SandboxModule::init(kke::Application& app) {
     m_app = &app;
     m_models = app.getModule<kke::ModelModule>();
+    m_thumbs = app.getModule<kke::ThumbnailModule>();
     m_debug = app.getModule<kke::DebugDrawModule>();
     auto providers = app.findCapability<kke::IRagdollPhysics>();
     m_ragdolls = providers.empty() ? nullptr : providers.front();
@@ -1444,6 +1445,19 @@ void SandboxModule::assetBrowserUi() {
         m_filterDirty = false;
     }
     ImGui::Text("%zu assets - click one, then click in the world", m_filtered.size());
+    if (m_thumbs) {
+        ImGui::Checkbox("Pictures", &m_gridView);
+        if (m_gridView) {
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            ImGui::SliderFloat("##size", &m_thumbSize, 48.0f, 128.0f, "size %.0f");
+        }
+        if (m_gridView) {
+            assetGridUi(s);
+            ImGui::End();
+            return;
+        }
+    }
     ImGui::BeginChild("list", ImVec2(0, 0), ImGuiChildFlags_Borders);
     // Clipper: only the visible rows are submitted, so a 3,000-asset
     // catalog costs the same as a 30-asset one.
@@ -1461,6 +1475,70 @@ void SandboxModule::assetBrowserUi() {
     }
     ImGui::EndChild();
     ImGui::End();
+}
+
+// Thumbnails in rows, the name under each. Only the rows on screen are
+// submitted (and only their pictures asked for), so a 3,000-asset pack
+// scrolls like a 30-asset one while the pictures fill in.
+void SandboxModule::assetGridUi(float s) {
+    ImGui::BeginChild("grid", ImVec2(0, 0), ImGuiChildFlags_Borders);
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float cell = m_thumbSize * s;
+    const float lineH = ImGui::GetTextLineHeight();
+    const ImVec2 cellSize(cell, cell + lineH + style.ItemInnerSpacing.y);
+    const float avail = ImGui::GetContentRegionAvail().x;
+    const int columns = std::max(1, static_cast<int>((avail + style.ItemSpacing.x) / (cell + style.ItemSpacing.x)));
+    const int count = static_cast<int>(m_filtered.size());
+    const int rows = (count + columns - 1) / columns;
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    const ImU32 frameCol = ImGui::GetColorU32(ImGuiCol_FrameBg), hoverCol = ImGui::GetColorU32(ImGuiCol_HeaderHovered),
+                activeCol = ImGui::GetColorU32(ImGuiCol_HeaderActive), textCol = ImGui::GetColorU32(ImGuiCol_Text),
+                dimCol = ImGui::GetColorU32(ImGuiCol_TextDisabled);
+    ImGuiListClipper clipper;
+    clipper.Begin(rows, cellSize.y + style.ItemSpacing.y);
+    while (clipper.Step()) {
+        for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
+            for (int col = 0; col < columns; ++col) {
+                const int i = row * columns + col;
+                if (i >= count) break;
+                const kke::CatalogAsset* a = m_filtered[static_cast<size_t>(i)];
+                if (col > 0) ImGui::SameLine();
+                ImGui::PushID(i);
+                const ImVec2 p = ImGui::GetCursorScreenPos();
+                const bool clicked = ImGui::InvisibleButton("cell", cellSize);
+                const bool hovered = ImGui::IsItemHovered();
+                const bool active = m_tool == Tool::Place && !m_movingId && m_placeAsset == a->name && m_placePack == a->pack;
+                const ImVec2 imgMax(p.x + cell, p.y + cell);
+                draw->AddRectFilled(p, imgMax, active ? activeCol : (hovered ? hoverCol : frameCol), 4.0f * s);
+                const kke::ThumbnailModule::View v = m_thumbs->get(a->path, a->pack, [&] { return kke::packLoadOptions(m_catalog, *a); });
+                if (v.state == kke::ThumbnailModule::State::Ready) {
+                    draw->AddImage(v.texture, p, imgMax, v.uv0, v.uv1);
+                } else {
+                    const char* mark = v.state == kke::ThumbnailModule::State::Failed   ? "!"
+                                       : v.state == kke::ThumbnailModule::State::NoMesh ? "(anim)"
+                                                                                       : "...";
+                    const ImVec2 ts = ImGui::CalcTextSize(mark);
+                    draw->AddText(ImVec2(p.x + (cell - ts.x) * 0.5f, p.y + (cell - ts.y) * 0.5f),
+                                  v.state == kke::ThumbnailModule::State::Failed ? IM_COL32(255, 120, 80, 255) : dimCol, mark);
+                }
+                // The name, cut to the cell.
+                const ImVec2 textPos(p.x, p.y + cell + style.ItemInnerSpacing.y);
+                draw->PushClipRect(textPos, ImVec2(p.x + cell, textPos.y + lineH), true);
+                const float tw = ImGui::CalcTextSize(a->name.c_str()).x;
+                draw->AddText(ImVec2(tw < cell ? p.x + (cell - tw) * 0.5f : p.x, textPos.y), textCol, a->name.c_str());
+                draw->PopClipRect();
+                if (hovered) {
+                    if (v.error)
+                        ImGui::SetTooltip("%s\n%s / %s\nNo picture: %s", a->name.c_str(), a->pack.c_str(), a->category.c_str(), v.error->c_str());
+                    else
+                        ImGui::SetTooltip("%s\n%s / %s", a->name.c_str(), a->pack.c_str(), a->category.c_str());
+                }
+                if (clicked) beginPlacing(a->name, m_placeYaw, 0, a->pack);
+                ImGui::PopID();
+            }
+        }
+    }
+    ImGui::EndChild();
 }
 
 void SandboxModule::inspectorUi() {

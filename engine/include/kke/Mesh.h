@@ -35,7 +35,14 @@ struct Vertex {
 // A GPU-resident mesh: vertex + index buffer, ready to bind and draw.
 class Mesh {
 public:
+    // Device-local buffers, copied through a staging buffer (the upload
+    // waits for the GPU queue to be idle: fine at load time, a hitch mid-game).
     Mesh(VulkanDevice& device, const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices);
+    // Host-visible buffers written directly: no copy and no wait, a little
+    // slower to draw. For short-lived meshes made while the game runs
+    // (thumbnails, previews).
+    enum class Memory { DeviceLocal, HostVisible };
+    Mesh(VulkanDevice& device, const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices, Memory memory);
 
     void bind(VkCommandBuffer cmd) const;
     void draw(VkCommandBuffer cmd) const;
