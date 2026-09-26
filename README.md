@@ -348,6 +348,14 @@ cmake --workflow --preset everything   # configures AND builds, every optional f
 cd build/bin && ./kke_demo
 ```
 
+`kke_demo` is the walkable showcase (`games/showcase/`, needs
+`KKE_ENABLE_JOLT`, on by default): click to control, WASD/Shift/Alt/Space/C
+to move, mouse to look, V first/third person, F or left click shoots the
+breaking yard, E or right click pushes crates, R resets, F1 shows the engine
+panels. The character is Quaternius' Universal Animation Library mannequin
+(CC0): put `UAL1_Standard.fbx` in `assets/animations/` (git-ignored, 23 MB),
+or the character is a box. The old building-block demo is `kke_basics`.
+
 `cmake --workflow --preset default` matches this project's actual
 default option values (no FEMFX, no tetrahedralizer, no GPU profiler,
 no Lua) if you want the smaller, faster build instead. Both need

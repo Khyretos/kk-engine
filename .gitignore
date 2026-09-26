@@ -15,3 +15,8 @@ assets/synty/
 # docker-compose cross builds (docker/build.sh)
 build-docker/
 dist/
+
+# Character animations (Quaternius UAL, CC0) are big (23 MB): download
+# them into assets/animations/ instead of committing them.
+assets/animations/*.fbx
+assets/animations/*.glb

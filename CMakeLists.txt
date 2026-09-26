@@ -472,6 +472,9 @@ endif()
 # to be more general than it is.
 # ---------------------------------------------------------------------------
 add_subdirectory(games/kke_demo_game)
+if(KKE_ENABLE_JOLT)
+    add_subdirectory(games/showcase)
+endif()
 
 # A dedicated physics demo, not another module bolted onto
 # kke_demo_game — see games/physics_demo/main.cpp's own comment for

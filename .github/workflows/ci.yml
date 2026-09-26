@@ -67,7 +67,7 @@ jobs:
           # Synty-based demos have no assets in CI; they must still start
           # and show their "assets not found" UI instead of crashing.
           failed=0
-          for demo in kke_demo physics_demo melt_demo sea_demo sandbox rmlui_demo synty_demo; do
+          for demo in kke_demo kke_basics physics_demo melt_demo sea_demo sandbox rmlui_demo synty_demo; do
             [ -x "./$demo" ] || { echo "== $demo: not built, skipped"; continue; }
             set +e
             DISPLAY=:99 SDL_VIDEODRIVER=x11 timeout 8 "./$demo" > "run_$demo.log" 2>&1

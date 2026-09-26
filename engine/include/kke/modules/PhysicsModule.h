@@ -279,6 +279,13 @@ public:
     // set up a scene without clicking through ImGui.
     enum class Scene { GlassSheet, Brick, RubberBall, CarCrash, LavaMelt, FracturableCube, PlasticCube, BreakTest };
     void spawnScene(Scene scene);
+    // Builds a w x h x d box of tets, bakes a fracture pattern into it
+    // (kke::bakeFracture, `pattern` = FracturePattern) and spawns it as a
+    // breakable: the brick and glass scenes, and any game's breakable
+    // walls/panes. armSeconds > 0: settle, then arm (see TetSpawnOptions).
+    ObjectHandle spawnPatternedBox(const glm::ivec3& cells, const glm::vec3& size, const glm::vec3& position, const Material& material,
+                                   int pattern, float chunkSize, int cellsPerCluster, const glm::vec3& velocity, float armSeconds = 0.0f,
+                                   const glm::vec3* impactPoint = nullptr);
 
     // The world's fracture seed (see kke::fractureSeed): every breakable
     // this module builds mixes it with its own handle, so each object
@@ -585,11 +592,7 @@ private:
     uint32_t m_debrisRemoved = 0;
     void enforceDebrisBudget();
     bool m_startScenesDone = false; // KKE_PHYSICS_SCENES, see fixedUpdate()
-    // Builds a w x h x d box of tets, bakes a fracture pattern into it
-    // (kke::bakeFracture) and spawns it: the brick and glass scenes.
-    ObjectHandle spawnPatternedBox(const glm::ivec3& cells, const glm::vec3& size, const glm::vec3& position, const Material& material,
-                                   int pattern, float chunkSize, int cellsPerCluster, const glm::vec3& velocity, float armSeconds = 0.0f,
-                                   const glm::vec3* impactPoint = nullptr);
+
     // Scene::BreakTest: ticks until the balls drop, and where.
     int m_breakTestTicks = -1;
     std::vector<glm::vec3> m_breakTestTargets;

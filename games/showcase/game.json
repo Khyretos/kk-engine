@@ -1,0 +1,16 @@
+{
+  "id": "engine.kke.showcase",
+  "title": "KKE Showcase",
+  "description": "Walk around a small level with an animated character and try every engine system: Jolt collision and rigid bodies, the camera rig, animation blending, FEMFX breakables, lighting.",
+  "version": "0.2.0",
+  "icon": "",
+  "banner": "",
+  "tags": ["demo", "engine-sample", "showcase"],
+  "engine_version": "0.1.0",
+  "modules": ["RigidBodies", "Models", "Physics", "Showcase", "DebugControl", "Stats"],
+  "requirements": {
+    "minimum": { "vram_mb": 256, "vulkan_api_version": "1.0" },
+    "recommended": { "vram_mb": 1024, "vulkan_api_version": "1.2" },
+    "notes": "Developer estimates. Runs on the 1-core software-GPU floor at low FPS."
+  }
+}
