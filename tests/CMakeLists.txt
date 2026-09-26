@@ -26,6 +26,9 @@ add_executable(kke_tests
     test_animator.cpp
     test_anim_rig.cpp
     test_climb_wall.cpp
+    test_combat.cpp
+    test_sidekick.cpp
+    test_mesh_lod.cpp
     test_resource_governor.cpp
     test_hardware_target.cpp
     test_frame_stats.cpp

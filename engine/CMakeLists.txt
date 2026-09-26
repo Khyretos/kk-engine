@@ -34,6 +34,9 @@ set(ENGINE_SOURCES
     src/AnimRig.cpp
     src/ClimbWall.cpp
     src/Climber.cpp
+    src/Combat.cpp
+    src/Sidekick.cpp
+    src/MeshLod.cpp
     src/ResourceGovernor.cpp
     src/HardwareTarget.cpp
     src/FrameStats.cpp
@@ -231,6 +234,7 @@ target_include_directories(kke_engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 target_link_libraries(kke_engine PRIVATE yaml-cpp::yaml-cpp) # kke/DataFile.h only
+target_link_libraries(kke_engine PRIVATE meshoptimizer) # kke/MeshLod.h only
 
 target_link_libraries(kke_engine PUBLIC
     volk
