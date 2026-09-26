@@ -42,11 +42,21 @@ namespace kke {
 //    character stops where the ledge ends or turns the corner with it),
 //    "go up" climbs (or, pushing away from the wall, jumps back off it),
 //    crouch lets go.
+//  - Ledge leaps: hanging, "go up" with sideways input jumps across a
+//    gap to the next edge that way (higher or lower); with input into the
+//    wall and nothing to climb onto, it leaps up to an edge above. The
+//    target is found and checked before the leap; the body follows an arc
+//    (PointDown's ledge-leap parabola) and hangs on arrival.
+//  - Wall run: jumping fast alongside a wall, holding the run, runs along
+//    it for a moment (lighter gravity, a little rise at the start). "Go
+//    up" kicks off it (wall jump; the next wall can catch you again),
+//    letting go of the stick or crouch drops off, and the run ends where
+//    the wall does, keeping the momentum.
 //
 // Pure logic on RigidWorld (no GPU), unit-tested in tests/test_locomotion.cpp.
 class Locomotion {
 public:
-    enum class State : uint8_t { Ground, Air, Vault, Climb, Hang };
+    enum class State : uint8_t { Ground, Air, Vault, Climb, Hang, Leap, WallRun };
 
     // What the game asks for this frame (from InputMap actions).
     struct Input {
@@ -99,6 +109,19 @@ public:
         float regrabDelay = 0.4f;     // after letting go, no grab for this long
         float cornerTime = 0.3f;      // moving around a corner of the ledge
         float jumpBackSpeed = 3.5f;   // m/s away from the wall (up: jumpSpeed * 0.8)
+        // Ledge leaps (from a hang, to another edge).
+        float leapReach = 2.2f;       // m sideways, from the hands to the next edge
+        float leapUp = 1.3f, leapDown = 1.0f; // how much higher / lower that edge may be
+        float leapOvershoot = 0.3f;   // the arc's peak above the higher end
+        float leapTime = 0.45f;
+        // Wall run.
+        float wallRunMinSpeed = 4.0f; // horizontal m/s to start one
+        float wallRunReach = 0.45f;   // wall this far past the capsule's side
+        float wallRunTime = 1.1f;     // longest run
+        float wallRunGravity = 7.0f;  // m/s^2 on the wall
+        float wallRunLift = 2.0f;     // m/s up as it starts
+        float wallJumpSpeed = 4.5f;   // m/s away from the wall (up: jumpSpeed * 0.85)
+        float wallRunCooldown = 0.35f; // before the same wall catches you again
     };
 
     // What area awareness found in one direction.
@@ -123,7 +146,7 @@ public:
 
     State state() const { return m_state; }
     float stateTime() const { return m_stateTime; }
-    // 0..1 through a vault or climb.
+    // 0..1 through a vault, climb or ledge leap.
     float traversalProgress() const;
     // Measured horizontal speed: drive the blend space with this, so the
     // legs match the ground, including in turns and against walls.
@@ -140,6 +163,8 @@ public:
     // character's right), and the top edge the hands hold (world space).
     float shimmySpeed() const { return m_state == State::Hang ? m_shimmy : 0.0f; }
     glm::vec3 hangEdge() const { return m_hangEdge; }
+    // Wall running: which side the wall is on (+1 right, -1 left), else 0.
+    float wallRunSide() const { return m_state == State::WallRun ? m_wallSide : 0.0f; }
 
     // Area awareness, one direction, with a given sensor (public for tests
     // and debug drawing).
@@ -165,6 +190,15 @@ private:
     bool tryHang(const Input& in);
     void letGo();
     void jumpBack();
+    // Ledge leaps: the edge to leap to from the hang, toward `side` (unit,
+    // along the wall) or straight up (side = 0). False = none in reach.
+    bool findLeap(const glm::vec3& side, glm::vec3& outFeet, glm::vec3& outEdge, glm::vec3& outNormal) const;
+    bool tryLeap(const glm::vec3& side);
+    void updateLeap();
+    // Wall run.
+    bool tryWallRun(const Input& in);
+    void updateWallRun(const Input& in, float dt);
+    void leaveWall(const glm::vec3& velocity, bool jumped);
     // At the end of the edge while shimmying toward `side` (unit, along
     // the wall): the hang spot around the corner, outside (the wall
     // turns away) or inside (a wall ahead). False = a real end.
@@ -212,6 +246,13 @@ private:
     float m_shimmy = 0.0f, m_regrab = 0.0f;
     float m_holdSign = 0.0f; // shimmy direction kept while the input is held (around corners)
     float m_enterTime = 0.0f; // how long the current pull-in takes
+
+    // Ledge leap in flight (m_start -> m_hangFeet, then hang from m_hangEdge).
+    glm::vec3 m_leapNormal{0.0f};
+
+    // Wall run.
+    glm::vec3 m_wallNormal{0.0f}, m_wallAlong{0.0f}, m_lastWall{0.0f};
+    float m_wallSpeed = 0.0f, m_wallVy = 0.0f, m_wallSide = 0.0f, m_wallCooldown = 0.0f;
 };
 
 } // namespace kke
