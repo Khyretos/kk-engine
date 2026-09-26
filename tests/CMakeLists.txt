@@ -21,13 +21,14 @@ add_executable(kke_tests
     test_break_graph.cpp
     test_animator.cpp
     test_camera_rig.cpp
+    test_scene_file.cpp
     test_input_map.cpp
     test_input_devices.cpp
     test_floating_bodies.cpp
 )
 target_link_libraries(kke_tests PRIVATE kke_engine GTest::gtest_main)
 if(KKE_ENABLE_JOLT)
-    target_sources(kke_tests PRIVATE test_rigid_world.cpp)
+    target_sources(kke_tests PRIVATE test_rigid_world.cpp test_locomotion.cpp)
 endif()
 target_compile_definitions(kke_tests PRIVATE KKE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 

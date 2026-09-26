@@ -9,6 +9,8 @@
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/Collision/CastResult.h>
+#include <Jolt/Physics/Collision/CollideShape.h>
+#include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
@@ -102,6 +104,7 @@ struct RigidWorld::Impl : public JPH::ContactListener {
         JPH::Ref<JPH::CharacterVirtual> ch;
         CharacterDesc desc;
         CharacterInput input;
+        bool kinematic = false;
     };
     std::unordered_map<CharacterId, Character> characters;
     CharacterId nextCharacter = 1;
@@ -250,14 +253,22 @@ RigidWorld::RayHit RigidWorld::raycast(const glm::vec3& origin, const glm::vec3&
     RayHit out;
     glm::vec3 dir = glm::length(direction) > 1e-9f ? glm::normalize(direction) : glm::vec3(0, -1, 0);
     JPH::RRayCast ray(toJR(origin), toJ(dir * maxDistance));
-    JPH::RayCastResult r;
-    if (!m->system.GetNarrowPhaseQuery().CastRay(ray, r)) return out;
+    // Hit both sides of triangles, like the character does: Synty meshes
+    // are often open or flipped, and a ray that slips through a back face
+    // would say "nothing there" in front of a wall the capsule can't pass.
+    JPH::RayCastSettings settings;
+    settings.SetBackFaceMode(JPH::EBackFaceMode::CollideWithBackFaces);
+    JPH::ClosestHitCollisionCollector<JPH::CastRayCollector> closest;
+    m->system.GetNarrowPhaseQuery().CastRay(ray, settings, closest);
+    if (!closest.HadHit()) return out;
+    const JPH::RayCastResult& r = closest.mHit;
     out.hit = true;
     out.body = r.mBodyID.GetIndexAndSequenceNumber();
     out.distance = r.mFraction * maxDistance;
     out.point = origin + dir * out.distance;
     JPH::BodyLockRead lock(m->system.GetBodyLockInterface(), r.mBodyID);
     if (lock.Succeeded()) out.normal = toG(lock.GetBody().GetWorldSpaceSurfaceNormal(r.mSubShapeID2, ray.GetPointOnRay(r.mFraction)));
+    if (glm::dot(out.normal, dir) > 0.0f) out.normal = -out.normal; // a back face: the side the ray came from
     return out;
 }
 
@@ -338,11 +349,45 @@ void RigidWorld::teleportCharacter(CharacterId id, const glm::vec3& feet) {
     it->second.ch->SetLinearVelocity(JPH::Vec3::sZero());
 }
 
+void RigidWorld::setCharacterKinematic(CharacterId id, bool kinematic) {
+    auto it = m->characters.find(id);
+    if (it != m->characters.end()) it->second.kinematic = kinematic;
+}
+
+bool RigidWorld::characterKinematic(CharacterId id) const {
+    auto it = m->characters.find(id);
+    return it != m->characters.end() && it->second.kinematic;
+}
+
+void RigidWorld::moveCharacter(CharacterId id, const glm::vec3& feet) {
+    auto it = m->characters.find(id);
+    if (it != m->characters.end()) it->second.ch->SetPosition(toJR(feet));
+}
+
+void RigidWorld::setCharacterVelocity(CharacterId id, const glm::vec3& velocity) {
+    auto it = m->characters.find(id);
+    if (it != m->characters.end()) it->second.ch->SetLinearVelocity(toJ(velocity));
+}
+
+bool RigidWorld::capsuleFits(const glm::vec3& feet, float height, float radius) const {
+    JPH::RefConst<JPH::Shape> shape = characterShape(height, radius);
+    // CollideShape places the shape by its centre of mass, not its origin.
+    JPH::CollideShapeSettings settings;
+    settings.mActiveEdgeMode = JPH::EActiveEdgeMode::CollideOnlyWithActive;
+    settings.mMaxSeparationDistance = 0.0f;
+    JPH::AnyHitCollisionCollector<JPH::CollideShapeCollector> hit;
+    m->system.GetNarrowPhaseQuery().CollideShape(shape, JPH::Vec3::sReplicate(1.0f), JPH::RMat44::sTranslation(toJR(feet) + shape->GetCenterOfMass()), settings, JPH::RVec3::sZero(),
+                                                  hit, m->system.GetDefaultBroadPhaseLayerFilter(Layers::kMoving),
+                                                  m->system.GetDefaultLayerFilter(Layers::kMoving));
+    return !hit.HadHit();
+}
+
 void RigidWorld::step(float dt) {
     if (dt <= 0.0f) return;
     auto t0 = std::chrono::steady_clock::now();
     const JPH::Vec3 gravity = m->system.GetGravity();
     for (auto& [id, c] : m->characters) {
+        if (c.kinematic) continue; // placed by the caller (vaults, climbs)
         JPH::CharacterVirtual& ch = *c.ch;
         ch.UpdateGroundVelocity();
         const bool grounded = ch.GetGroundState() == JPH::CharacterVirtual::EGroundState::OnGround;
@@ -354,9 +399,9 @@ void RigidWorld::step(float dt) {
             v = ch.GetGroundVelocity() + move;
             if (c.input.jump) v += JPH::Vec3(0.0f, c.input.jumpSpeed, 0.0f);
         } else {
-            // In the air: keep the fall, some steering (30%/step blend).
+            // In the air: keep the fall, some steering (airSteer).
             JPH::Vec3 horizontal(current.GetX(), 0.0f, current.GetZ());
-            horizontal = horizontal + (move - horizontal) * std::min(1.0f, 10.0f * dt);
+            horizontal = horizontal + (move - horizontal) * std::min(1.0f, c.input.airSteer * dt);
             v = horizontal + JPH::Vec3(0.0f, current.GetY(), 0.0f);
         }
         v += gravity * dt;

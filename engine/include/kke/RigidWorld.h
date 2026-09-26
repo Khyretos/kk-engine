@@ -80,6 +80,11 @@ public:
         glm::vec3 move{0.0f};                // desired horizontal velocity, m/s (y ignored)
         bool jump = false;
         float jumpSpeed = 5.0f;
+        // In the air, how fast the horizontal velocity blends toward `move`
+        // (per second). The default steers a little; a very large value
+        // hands air control to the caller, who then sends the exact
+        // horizontal velocity it wants (kke::Locomotion does).
+        float airSteer = 10.0f;
     };
 
     RigidWorld();
@@ -103,6 +108,7 @@ public:
     // Kinematic bodies: move there over the next step (pushes things).
     void moveKinematic(BodyId body, const glm::vec3& position, const glm::quat& rotation, float dt);
 
+    // Closest hit, front or back face; the normal faces the ray's origin.
     RayHit raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance) const;
 
     CharacterId addCharacter(const CharacterDesc& desc);
@@ -117,6 +123,17 @@ public:
     // under a low ceiling).
     bool setCharacterHeight(CharacterId id, float height);
     float characterHeight(CharacterId id) const;
+    // Scripted moves (vaults, climbs): a kinematic character is not
+    // simulated by step(); the caller places it with moveCharacter() along
+    // a path it has already checked for room (capsuleFits). Turning it back
+    // off hands it to the controller again with `setCharacterVelocity`.
+    void setCharacterKinematic(CharacterId id, bool kinematic);
+    bool characterKinematic(CharacterId id) const;
+    void moveCharacter(CharacterId id, const glm::vec3& feet); // keeps velocity
+    void setCharacterVelocity(CharacterId id, const glm::vec3& velocity);
+    // Would an upright capsule (feet at `feet`) fit without touching
+    // anything? For checking a vault's landing spot or a ledge's top.
+    bool capsuleFits(const glm::vec3& feet, float height, float radius) const;
 
     // Advances characters then bodies by dt (fixed step recommended).
     void step(float dt);

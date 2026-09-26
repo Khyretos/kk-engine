@@ -24,6 +24,7 @@ set(ENGINE_SOURCES
     src/BreakGraph.cpp
     src/Animator.cpp
     src/CameraRig.cpp
+    src/SceneFile.cpp
     src/InputMap.cpp
     src/InputDevices.cpp
     src/modules/InputModule.cpp
@@ -145,7 +146,7 @@ else()
 endif()
 
 if(KKE_ENABLE_JOLT)
-    target_sources(kke_engine PRIVATE src/RigidWorld.cpp src/modules/RigidBodyModule.cpp)
+    target_sources(kke_engine PRIVATE src/RigidWorld.cpp src/Locomotion.cpp src/SceneLoader.cpp src/modules/RigidBodyModule.cpp)
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_JOLT=1)
     target_link_libraries(kke_engine PUBLIC Jolt)
 else()

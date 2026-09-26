@@ -1,0 +1,402 @@
+{
+  "format": "kke.scene",
+  "version": 1,
+  "name": "Town block",
+  "description": "A street from POLYGON Town: houses and a shop on one side, front yards on the other. White picket fences, a hedge and cardboard boxes are vaultable, the porch deck is climbable, the tall wooden back fence is a wall. Everything is found by the movement sensors; nothing is marked up.",
+  "packs": [
+    "PolygonTown_Source_Files"
+  ],
+  "spawn": {
+    "position": [
+      -10,
+      0.05,
+      9
+    ],
+    "yaw": 0
+  },
+  "ground": {
+    "size": [
+      60,
+      60
+    ],
+    "color": [
+      0.33,
+      0.45,
+      0.27
+    ]
+  },
+  "objects": [
+    {
+      "asset": "SM_Env_Grass_01",
+      "position": [
+        -22.5,
+        0,
+        -22.5
+      ],
+      "collision": "none",
+      "grid": {
+        "count": [
+          10,
+          4
+        ],
+        "step": [
+          5,
+          5
+        ]
+      }
+    },
+    {
+      "asset": "SM_Env_Grass_01",
+      "position": [
+        -22.5,
+        0,
+        7.5
+      ],
+      "collision": "none",
+      "grid": {
+        "count": [
+          10,
+          4
+        ],
+        "step": [
+          5,
+          5
+        ]
+      }
+    },
+    {
+      "asset": "SM_Env_Path_01",
+      "position": [
+        -22.5,
+        0,
+        -2.5
+      ],
+      "collision": "none",
+      "grid": {
+        "count": [
+          10,
+          1
+        ],
+        "step": [
+          5,
+          5
+        ]
+      }
+    },
+    {
+      "asset": "SM_Env_Road_01",
+      "position": [
+        -22.5,
+        0.01,
+        2.5
+      ],
+      "collision": "none",
+      "grid": {
+        "count": [
+          10,
+          1
+        ],
+        "step": [
+          5,
+          5
+        ]
+      }
+    },
+    {
+      "asset": "SM_Env_Road_SpeedBump_01",
+      "position": [
+        4,
+        0.01,
+        2.5
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Bld_House_Preset_03",
+      "position": [
+        -15,
+        0,
+        -13
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Bld_House_Preset_05",
+      "position": [
+        1,
+        0,
+        -13
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Bld_Shop_01",
+      "position": [
+        16,
+        0,
+        -12
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Bld_Shop_Concrete_01",
+      "position": [
+        16,
+        0,
+        -12
+      ],
+      "collision": "none"
+    },
+    {
+      "asset": "SM_Bld_House_Preset_02",
+      "position": [
+        -14,
+        0,
+        17
+      ],
+      "yaw": 180,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Bld_House_Deck_01",
+      "position": [
+        12,
+        0,
+        12
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Bld_House_Deck_Rail_01",
+      "position": [
+        12,
+        0.9,
+        13.2
+      ],
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Env_Fence_White_Straight_01",
+      "position": [
+        -21.25,
+        0,
+        5.5
+      ],
+      "collision": "box",
+      "grid": {
+        "count": [
+          6,
+          1
+        ],
+        "step": [
+          2.5,
+          0
+        ]
+      }
+    },
+    {
+      "asset": "SM_Env_Fence_White_Gate_01",
+      "position": [
+        -5.9,
+        0,
+        5.5
+      ],
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Env_Fence_White_Straight_01",
+      "position": [
+        -3.4,
+        0,
+        5.5
+      ],
+      "collision": "box",
+      "grid": {
+        "count": [
+          2,
+          1
+        ],
+        "step": [
+          2.5,
+          0
+        ]
+      }
+    },
+    {
+      "asset": "SM_Env_Hedge_03",
+      "position": [
+        5,
+        0,
+        6.2
+      ],
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Env_Hedge_01",
+      "position": [
+        16,
+        0,
+        6.4
+      ],
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Env_Fence_Wood_Straight_01",
+      "position": [
+        -23.75,
+        0,
+        24
+      ],
+      "collision": "box",
+      "grid": {
+        "count": [
+          20,
+          1
+        ],
+        "step": [
+          2.5,
+          0
+        ]
+      }
+    },
+    {
+      "asset": "SM_Prop_CardboardBox_01",
+      "position": [
+        -8,
+        0,
+        10
+      ],
+      "yaw": 15,
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Prop_CardboardBox_02",
+      "position": [
+        -7.4,
+        0,
+        10.8
+      ],
+      "yaw": -20,
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Prop_CardboardBox_03",
+      "position": [
+        -7.8,
+        0,
+        11.5
+      ],
+      "yaw": 40,
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Prop_Barrel_01",
+      "position": [
+        9,
+        0,
+        -5
+      ],
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Prop_Barrel_01",
+      "position": [
+        9.8,
+        0,
+        -5.4
+      ],
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Prop_Cart_01",
+      "position": [
+        20,
+        0,
+        -4.5
+      ],
+      "yaw": 30,
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Prop_LampStanding_01",
+      "position": [
+        -2,
+        0,
+        -4
+      ],
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Prop_LampStanding_01",
+      "position": [
+        12,
+        0,
+        -4
+      ],
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Env_Tree_01",
+      "position": [
+        -19,
+        0,
+        12
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Env_Tree_Tall_01",
+      "position": [
+        0,
+        0,
+        14
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Env_Tree_Pine_01",
+      "position": [
+        22,
+        0,
+        15
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Env_Tree_02",
+      "position": [
+        -24,
+        0,
+        -5
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Env_Tree_03",
+      "position": [
+        24,
+        0,
+        -5
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Env_Tree_Tall_02",
+      "position": [
+        8,
+        0,
+        20
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Env_Grass_Patch_04",
+      "position": [
+        3,
+        0.05,
+        16
+      ],
+      "collision": "none"
+    }
+  ]
+}
