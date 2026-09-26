@@ -198,4 +198,38 @@ bool SqliteStore::transaction(const std::function<bool()>& fn) {
     return false;
 }
 
+bool SqliteStore::backup(const std::string& path) {
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    if (!m_db) return fail("backup");
+    if (m_depth > 0) {
+        setError("backup: not inside a transaction");
+        return false;
+    }
+    // VACUUM INTO writes a compact, consistent copy while the store stays
+    // usable; to a temporary name, so a failed copy never replaces a good one.
+    const std::string temp = path + ".part";
+    std::error_code ec;
+    const std::filesystem::path p(path);
+    if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path(), ec);
+    std::filesystem::remove(temp, ec);
+    sqlite3_stmt* s = nullptr;
+    if (sqlite3_prepare_v2(m_db, "VACUUM INTO ?1", -1, &s, nullptr) != SQLITE_OK) return fail("backup");
+    bindText(s, 1, temp);
+    const int rc = sqlite3_step(s);
+    sqlite3_finalize(s);
+    if (rc != SQLITE_DONE) {
+        fail(("backup to " + path).c_str());
+        std::filesystem::remove(temp, ec);
+        return false;
+    }
+    std::filesystem::rename(temp, path, ec);
+    if (ec) {
+        setError("backup: " + path + ": " + ec.message());
+        std::filesystem::remove(temp, ec);
+        return false;
+    }
+    setError({});
+    return true;
+}
+
 } // namespace kke::storage

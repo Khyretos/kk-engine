@@ -12,6 +12,9 @@
 //               playerId() = 0, players(), send(name, data [, player])
 //   server.*    name(), say(text), kick(player, reason), score(board,
 //               player, score), top(board [, n])
+//   store.*     save, load, add, remove, keys: the server's store, in the
+//               game's own collection, as a host's scripts save
+//               (kke/ScriptStore.h; docs/SCRIPTING.md "Saving")
 //
 // What a script spawns is replicated as the in-game host does it
 // (docs/NETWORKING.md "Spawned objects"): every client builds its own
@@ -28,6 +31,7 @@
 //
 // Built with KKE_ENABLE_NET and Lua.
 
+#include "kke/ScriptStore.h"
 #include "kke/ScriptVM.h"
 #include "kke/net/NetSession.h"
 
@@ -53,6 +57,8 @@ public:
         RigidWorld* world = nullptr;             // physics.* (stepped by the caller)
         Leaderboard* leaderboards = nullptr;     // server.score / server.top
         std::string serverName;
+        storage::Store* store = nullptr;         // store.* (the server's store)
+        std::string game;                        // whose collection in it ("lua.<game>")
         std::function<void(uint8_t id, const std::string& reason)> kick;
     };
 
@@ -112,6 +118,7 @@ private:
     net::NetServer& m_net;
     Services m_services;
     std::unique_ptr<ScriptVM> m_vm;
+    std::unique_ptr<ScriptStore> m_store;
     std::vector<std::string> m_files;
     std::vector<Body> m_bodies;
     std::map<uint8_t, std::string> m_names;   // players here

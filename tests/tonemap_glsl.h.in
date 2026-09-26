@@ -1,0 +1,4 @@
+// Generated from shaders/tonemap.glsl by tests/CMakeLists.txt.
+#pragma once
+
+inline constexpr char kTonemapGlsl[] = R"kke_glsl(@KKE_TONEMAP_GLSL@)kke_glsl";

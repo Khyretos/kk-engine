@@ -2,8 +2,8 @@
 
 #include <gtest/gtest.h>
 
-#include <fstream>
-#include <sstream>
+#include "tonemap_glsl.h"
+
 #include <string>
 
 // The enum's values are what the shaders read (LightingUBO.toneParams.x),
@@ -19,11 +19,7 @@ TEST(ToneMapper, ValuesMatchTheShader) {
     EXPECT_EQ(static_cast<int>(kke::ToneMapper::ACES), 1);
     EXPECT_EQ(static_cast<int>(kke::ToneMapper::Reinhard), 2);
 
-    std::ifstream file(std::string(KKE_SOURCE_DIR) + "/shaders/tonemap.glsl");
-    ASSERT_TRUE(file.good());
-    std::stringstream ss;
-    ss << file.rdbuf();
-    const std::string src = ss.str();
+    const std::string src = kTonemapGlsl;
     EXPECT_NE(src.find("if (op == 1) return toneMapAces(c);"), std::string::npos);
     EXPECT_NE(src.find("if (op == 2) return c / (c + vec3(1.0));"), std::string::npos);
     EXPECT_NE(src.find("return toneMapAgX(c);"), std::string::npos);

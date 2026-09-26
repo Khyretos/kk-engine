@@ -1,5 +1,7 @@
 #pragma once
 
+#include "kke/storage/Store.h"
+
 #include <cstdint>
 #include <map>
 #include <optional>
@@ -9,7 +11,8 @@
 namespace kke::server {
 
 // The leaderboard role (docs/SERVER_HOSTING.md): named boards, each a
-// player's best score, kept in saveDir/leaderboards.json. Higher is
+// player's best score, kept in the server's store (docs/STORAGE.md; a
+// saveDir/leaderboards.json from before is imported once). Higher is
 // better unless a board is set lower-is-better (race times).
 //
 // Games talk to it with game events (kEventLeaderboard* below): a query
@@ -47,6 +50,10 @@ public:
     bool fromJson(const std::string& text, std::vector<std::string>& errors);
     bool load(const std::string& path, std::vector<std::string>& errors);
     bool save(const std::string& path, std::string* error = nullptr); // clears dirty
+    // The same JSON as one value in a store (collection "server", key
+    // "leaderboards"). load: false with `exists` = false when it isn't there.
+    bool load(storage::Store& store, std::vector<std::string>& errors, bool* exists = nullptr);
+    bool save(storage::Store& store, std::string* error = nullptr); // clears dirty
 
 private:
     struct Board {

@@ -295,6 +295,23 @@ void ScriptModule::bindAll() {
     bindScenes();
     bindNet();
     bindReplication();
+    bindStore();
+}
+
+void ScriptModule::bindStore() {
+    if (!m_sharedStore) {
+        std::string game = storeGame;
+#if KKE_ENABLE_NET
+        if (game.empty())
+            if (auto* net = m_app->getModule<NetModule>()) game = net->gameId();
+#endif
+        std::string url = storeUrl;
+        if (const char* env = std::getenv("KKE_SCRIPT_STORE"); env && *env) url = env;
+        m_store = std::make_unique<ScriptStore>(url, game);
+    } else {
+        m_store = std::make_unique<ScriptStore>(*m_sharedStore, storeGame);
+    }
+    m_store->bind(*m_vm);
 }
 
 void ScriptModule::fixedUpdate(const FixedUpdateContext& ctx) {

@@ -38,6 +38,10 @@ Read `scripts/targets.lua` from top to bottom; it's about 150 lines.
   sound where it broke.
 - **The clock** is `timer.Create("targets.clock", 0.1, 0, fn)`: a timer
   that repeats forever until `timer.Remove` stops it.
+- **Saving:** the best score survives quitting the game:
+  `store.load("targets.best", 0)` when the script starts (0 the first
+  time), `store.save("targets.best", best)` when it improves. It lands in
+  `save/scripts.db` next to the game.
 - **Sharing:** the best score and the target positions go into `shared`,
   the one table every script can read (each script's own globals are
   private). Another script can start a round with

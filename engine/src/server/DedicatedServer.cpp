@@ -2,6 +2,11 @@
 
 #include "kke/net/Protocol.h"
 #include "kke/net/ScriptSpawns.h"
+#include "kke/PackSeal.h"
+#include "kke/server/RelayService.h"
+#include "kke/server/ServerFiles.h"
+
+#include <nlohmann/json.hpp>
 
 #if KKE_ENABLE_LUA
 #include "kke/server/ServerScripts.h"
@@ -17,8 +22,12 @@
 #include "kke/net/Visibility.h"
 #endif
 
+#include <nlohmann/json.hpp>
+
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
+#include <ctime>
 #include <filesystem>
 #include <sstream>
 
@@ -44,6 +53,38 @@ std::vector<std::string> words(const std::string& line, size_t max, std::string&
     return out;
 }
 
+// "20260926-211500" (UTC): backups sort by name in time order.
+std::string stamp() {
+    const std::time_t t = std::time(nullptr);
+    char buf[32] = {};
+    if (const std::tm* u = std::gmtime(&t)) std::strftime(buf, sizeof(buf), "%Y%m%d-%H%M%S", u);
+    return buf;
+}
+
+std::string toJson(const DedicatedServer::PlayerRecord& r) {
+    nlohmann::json j{ { "name", r.name }, { "firstSeen", r.firstSeen }, { "lastSeen", r.lastSeen }, { "visits", r.visits },
+                      { "playSeconds", static_cast<uint64_t>(r.playSeconds) } };
+    if (r.hasPosition) j["position"] = { r.position.x, r.position.y, r.position.z };
+    return j.dump();
+}
+
+std::optional<DedicatedServer::PlayerRecord> playerFromJson(const std::string& text) {
+    const nlohmann::json j = nlohmann::json::parse(text, nullptr, false);
+    if (j.is_discarded() || !j.is_object()) return std::nullopt;
+    DedicatedServer::PlayerRecord r;
+    r.name = j.value("name", std::string());
+    r.firstSeen = j.value("firstSeen", uint64_t(0));
+    r.lastSeen = j.value("lastSeen", uint64_t(0));
+    r.visits = j.value("visits", uint32_t(0));
+    r.playSeconds = static_cast<double>(j.value("playSeconds", uint64_t(0)));
+    if (const auto p = j.find("position"); p != j.end() && p->is_array() && p->size() == 3 &&
+                                          std::all_of(p->begin(), p->end(), [](const nlohmann::json& v) { return v.is_number(); })) {
+        r.position = glm::vec3((*p)[0].get<float>(), (*p)[1].get<float>(), (*p)[2].get<float>());
+        r.hasPosition = true;
+    }
+    return r;
+}
+
 std::vector<uint8_t> text(const std::string& s) {
     return { s.begin(), s.begin() + static_cast<std::ptrdiff_t>(std::min(s.size(), net::kMaxEventBytes)) };
 }
@@ -56,7 +97,14 @@ DedicatedServer::DedicatedServer(ServerConfig config, net::ITransport& transport
 DedicatedServer::~DedicatedServer() { stop(); }
 
 std::string DedicatedServer::accessPath() const { return (std::filesystem::path(m_config.saveDir) / "access.json").string(); }
+std::string DedicatedServer::joinCode() const { return m_relayHost ? m_relayHost->joinText() : std::string(); }
+
+std::string DedicatedServer::relayedAddress(const std::string& host, uint16_t port) const {
+    return m_relayHost ? m_relayHost->realAddress(host, port) : std::string();
+}
+
 std::string DedicatedServer::leaderboardPath() const { return (std::filesystem::path(m_config.saveDir) / "leaderboards.json").string(); }
+std::string DedicatedServer::backupDir() const { return (std::filesystem::path(m_config.saveDir) / "backups").string(); }
 
 bool DedicatedServer::start(std::vector<std::string>& errors) {
     const size_t before = errors.size();
@@ -78,8 +126,25 @@ bool DedicatedServer::start(std::vector<std::string>& errors) {
     }
     std::vector<std::string> fileProblems;
     m_access.load(accessPath(), fileProblems);
-    if (m_config.hasRole("leaderboard")) m_leaderboards.load(leaderboardPath(), fileProblems);
+    if (m_config.hasRole("leaderboard") && m_store) {
+        bool inStore = false;
+        m_leaderboards.load(*m_store, fileProblems, &inStore);
+        // Leaderboards used to be a file; the first start with a store takes it in.
+        if (!inStore && std::filesystem::exists(leaderboardPath())) {
+            std::string error;
+            if (m_leaderboards.load(leaderboardPath(), fileProblems) && m_leaderboards.save(*m_store, &error)) {
+                std::error_code rec;
+                std::filesystem::rename(leaderboardPath(), leaderboardPath() + ".imported", rec);
+                info("leaderboards: imported " + leaderboardPath() + " into the store" + (rec ? "" : " (the file is now leaderboards.json.imported)"));
+            } else if (!error.empty()) {
+                fileProblems.push_back(error);
+            }
+        }
+    }
     for (const std::string& p : fileProblems) warning(p);
+    m_backups = m_store && m_config.backups > 0 && m_store->canBackup();
+    if (m_store && m_config.backups > 0 && !m_store->canBackup())
+        info(std::string("backups: a ") + m_store->backendName() + " store is backed up with the database's own tools, not by the server");
 
     if (m_config.hasRole("physics") || (m_config.hasRole("scripts") && !m_config.scene.empty())) {
 #if KKE_ENABLE_JOLT
@@ -119,12 +184,23 @@ bool DedicatedServer::start(std::vector<std::string>& errors) {
     if (errors.size() != before) return false;
 
     if (m_config.hasGameSocket()) {
+        // Encrypted, always: the key stays the same across restarts, so
+        // players (and relays) can recognise this server.
+        std::string keyError;
+        const std::string keyPath = (std::filesystem::path(m_config.saveDir) / "server.key").string();
+        if (!net::ServerIdentity::loadOrCreate(keyPath, m_identity, &keyError)) {
+            errors.push_back("encryption key: " + keyError);
+            return false;
+        }
+        info("encryption: every connection; this server's key is " + m_identity.fingerprint());
+        m_secure = std::make_unique<net::SecureTransport>(m_transport);
+        m_secure->setIdentity(m_identity);
         net::NetConfig nc;
         nc.gameId = m_config.game;
         nc.maxPlayers = m_config.maxPlayers;
         nc.password = m_config.password;
         nc.dedicated = true;
-        m_net = std::make_unique<net::NetServer>(m_transport, nc);
+        m_net = std::make_unique<net::NetServer>(*m_secure, nc);
         std::string error;
         if (!m_net->start(m_config.port, m_config.name, {}, &error)) {
             errors.push_back("UDP port " + std::to_string(m_config.port) + ": " + error);
@@ -146,6 +222,8 @@ bool DedicatedServer::start(std::vector<std::string>& errors) {
 #endif
             if (m_visibility && !joined) m_visibility->forget(id);
             if (!joined) m_net->voice.muted.erase(id); // the next player with this id starts unmuted
+            if (joined) seePlayer(id);
+            else savePlayer(id, true);
             info("player " + std::to_string(id) + (joined ? " joined from " + m_net->address(id) : " left") + " (" + std::to_string(m_net->clientCount()) +
                  "/" + std::to_string(m_config.maxPlayers) + ")");
             if (joined && !m_config.motd.empty()) m_net->sendEventTo(id, net::kEventServerMessage, text(m_config.motd));
@@ -165,6 +243,8 @@ bool DedicatedServer::start(std::vector<std::string>& errors) {
         sv.world = m_world.get();
         sv.leaderboards = m_config.hasRole("leaderboard") ? &m_leaderboards : nullptr;
         sv.serverName = m_config.name;
+        sv.store = m_store.get();
+        sv.game = m_config.game;
         sv.kick = [this](uint8_t id, const std::string& reason) { m_net->kick(id, reason); };
         m_scripts = std::make_unique<ServerScripts>(m_config.scripts, *m_net, std::move(sv));
         m_scripts->log = [this](const std::string& s) { info(s); };
@@ -181,6 +261,58 @@ bool DedicatedServer::start(std::vector<std::string>& errors) {
         info("scripts: " + std::to_string(files.size()) + " from '" + m_config.scripts + "'" + (list.empty() ? " (none: sv_*.lua, sh_*.lua)" : ": " + list));
     }
 #endif
+    if (m_config.hasRole("relay")) {
+        m_relayService = std::make_unique<RelayService>();
+        m_relayService->log = [this](const std::string& s) { info(s); };
+        std::string error;
+        if (!m_relayService->start(m_config.relayPort, m_config.relaySlots, &error)) {
+            errors.push_back(error);
+            return false;
+        }
+        info("relay: listening on UDP port " + std::to_string(m_config.relayPort) + ", " + std::to_string(m_config.relaySlots) + " players at once on " +
+             std::to_string(m_config.relayPort + 1) + "-" + std::to_string(m_config.relayPort + m_config.relaySlots));
+    }
+    if (!m_config.relay.empty() && m_net) {
+        if (!m_raw) {
+            errors.push_back("relay: join codes need the game's UDP socket (kke_server gives it; this transport has none)");
+            return false;
+        }
+        m_relayHost = std::make_unique<net::RelayHost>(*m_raw);
+        m_relayHost->log = [this](const std::string& s) { info(s); };
+        // The code from last time, so the one players saved keeps working.
+        const std::string path = (std::filesystem::path(m_config.saveDir) / "relay.json").string();
+        net::RelayHost::Saved saved;
+        bool haveSaved = false;
+        std::string text;
+        if (readFile(path, text)) {
+            const auto j = nlohmann::json::parse(text, nullptr, false);
+            if (j.is_object() && j.contains("code") && j["code"].is_string() && j.contains("secret") && j["secret"].is_string() &&
+                seal::fromHex(j["secret"].get<std::string>(), saved.secret)) {
+                saved.code = j["code"].get<std::string>();
+                haveSaved = true;
+            } else {
+                warning(path + ": damaged; a new join code will be made");
+            }
+        }
+        m_relayHost->onCode = [this, path](const std::string&) {
+            const net::RelayHost::Saved now = m_relayHost->saved();
+            nlohmann::json j{ { "code", now.code }, { "secret", seal::toHex(now.secret) } };
+            std::string error;
+            if (!writeFileAtomic(path, j.dump(2) + "\n", &error)) warning("relay: can't keep the join code: " + error);
+            std::error_code ec;
+            std::filesystem::permissions(path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write, std::filesystem::perm_options::replace, ec);
+            if (m_publisher) m_publisher->setEntry(directoryEntry());
+        };
+        m_raw->onRaw = [this](const std::string& host, uint16_t port, const std::vector<uint8_t>& data) {
+            if (m_relayHost) m_relayHost->onDatagram(host, port, data);
+        };
+        std::string error;
+        if (!m_relayHost->start({ m_config.relay }, m_config.game, m_identity.publicKey, haveSaved ? &saved : nullptr, &error)) {
+            errors.push_back("relay: " + error);
+            return false;
+        }
+        info("relay: asking " + m_config.relay + " for a join code");
+    }
     if (m_config.hasRole("directory")) {
         m_directory = std::make_unique<DirectoryService>();
         m_directory->log = [this](const std::string& s) { info(s); };
@@ -221,6 +353,7 @@ DirectoryEntry DedicatedServer::directoryEntry() const {
 void DedicatedServer::update(double now) {
     if (!m_started) return;
     if (m_nextSave == 0) m_nextSave = now + kAutosaveSeconds;
+    if (m_nextBackup == 0) m_nextBackup = now + m_config.backupMinutes * 60.0;
 #if KKE_ENABLE_LUA
     if (m_scripts) {
         // Fixed ticks, as a game's: the Tick hook, then the world steps.
@@ -244,13 +377,104 @@ void DedicatedServer::update(double now) {
         m_visibility->update(now, players);
     }
     if (m_net) m_net->update(now);
+    if (m_relayHost) m_relayHost->update(now);
+    if (m_relayService) m_relayService->update(now);
     if (m_directory) m_directory->update(now);
     if (m_publisher) m_publisher->update(now);
+    if (now >= m_nextTrack) {
+        m_nextTrack = now + 1.0;
+        trackPositions();
+    }
     if (now >= m_nextSave) {
         m_nextSave = now + kAutosaveSeconds;
         std::string error;
-        if (m_leaderboards.dirty() && !m_leaderboards.save(leaderboardPath(), &error)) warning("autosave: " + error);
+        if (m_store && m_leaderboards.dirty() && !m_leaderboards.save(*m_store, &error)) warning("autosave: " + error);
+        for (const auto& [id, p] : m_present) savePlayer(id, false);
     }
+    if (m_backups && now >= m_nextBackup) {
+        m_nextBackup = now + m_config.backupMinutes * 60.0;
+        std::string error;
+        const std::string path = backup(&error);
+        if (path.empty()) warning("backup: " + error);
+        else info("backup: " + path);
+    }
+}
+
+void DedicatedServer::trackPositions() {
+    if (!m_net) return;
+    for (const net::RemotePlayer& p : m_net->players(m_now))
+        if (auto it = m_present.find(p.id); it != m_present.end() && p.hasState) {
+            it->second.position = p.state.position;
+            it->second.hasPosition = true;
+        }
+}
+
+std::optional<DedicatedServer::PlayerRecord> DedicatedServer::playerRecord(const std::string& name) {
+    if (!m_store) return std::nullopt;
+    const std::string key = foldName(name);
+    if (!storage::Store::validKey(key)) return std::nullopt;
+    const std::optional<std::string> v = m_store->get("players", key);
+    return v ? playerFromJson(*v) : std::nullopt;
+}
+
+void DedicatedServer::seePlayer(uint8_t id) {
+    std::string name;
+    for (const net::RemotePlayer& p : m_net->players(m_now))
+        if (p.id == id) name = p.name;
+    m_present[id] = Present{ name, m_now };
+    if (!m_store || !storage::Store::validKey(foldName(name))) return;
+    PlayerRecord r = playerRecord(name).value_or(PlayerRecord{});
+    const uint64_t t = unixTime();
+    if (r.visits == 0) r.firstSeen = t;
+    r.name = name;
+    r.lastSeen = t;
+    ++r.visits;
+    if (!m_store->put("players", foldName(name), toJson(r))) warning("players: " + m_store->lastError());
+}
+
+void DedicatedServer::savePlayer(uint8_t id, bool leaving) {
+    auto it = m_present.find(id);
+    if (it == m_present.end()) return;
+    Present& p = it->second;
+    if (m_store && storage::Store::validKey(foldName(p.name))) {
+        PlayerRecord r = playerRecord(p.name).value_or(PlayerRecord{});
+        r.name = p.name;
+        r.lastSeen = unixTime();
+        if (r.firstSeen == 0) r.firstSeen = r.lastSeen;
+        r.playSeconds += std::max(0.0, m_now - p.since);
+        if (p.hasPosition) {
+            r.position = p.position;
+            r.hasPosition = true;
+        }
+        if (!m_store->put("players", foldName(p.name), toJson(r))) warning("players: " + m_store->lastError());
+    }
+    p.since = m_now;
+    if (leaving) m_present.erase(it);
+}
+
+std::string DedicatedServer::backup(std::string* error) {
+    auto fail = [&](const std::string& e) {
+        if (error) *error = e;
+        return std::string();
+    };
+    if (!m_store) return fail("no store");
+    if (!m_store->canBackup()) return fail(std::string("a ") + m_store->backendName() + " store is backed up with the database's own tools");
+    const std::string path = (std::filesystem::path(backupDir()) / ("server-" + stamp() + ".db")).string();
+    if (!m_store->backup(path)) return fail(m_store->lastError());
+    pruneBackups();
+    return path;
+}
+
+void DedicatedServer::pruneBackups() {
+    std::error_code ec;
+    std::vector<std::filesystem::path> files;
+    for (const auto& e : std::filesystem::directory_iterator(backupDir(), ec)) {
+        const std::string n = e.path().filename().string();
+        if (e.is_regular_file() && n.rfind("server-", 0) == 0 && n.size() > 3 && n.compare(n.size() - 3, 3, ".db") == 0) files.push_back(e.path());
+    }
+    std::sort(files.begin(), files.end()); // oldest first: the names are times
+    const size_t keep = std::max<size_t>(1, m_config.backups);
+    for (size_t i = 0; i + keep < files.size(); ++i) std::filesystem::remove(files[i], ec);
 }
 
 void DedicatedServer::onEvent(const net::GameEventMsg& e) {
@@ -309,7 +533,9 @@ int DedicatedServer::findPlayer(const std::string& idOrName) const {
 bool DedicatedServer::save(std::string* error) {
     std::string e;
     bool ok = m_access.save(accessPath(), &e);
-    if (ok && m_config.hasRole("leaderboard")) ok = m_leaderboards.save(leaderboardPath(), &e);
+    if (ok && m_config.hasRole("leaderboard") && m_store) ok = m_leaderboards.save(*m_store, &e);
+    if (ok)
+        for (const auto& [id, p] : m_present) savePlayer(id, false);
     if (!ok && error) *error = e;
     return ok;
 }
@@ -328,8 +554,13 @@ std::string DedicatedServer::command(const std::string& line) {
 
     if (cmd == "help")
         return std::string("status | players | kick <id|name> [reason] | ban <id|name|address> [reason] | unban <name|address> | bans | admin <name> | "
-                           "allow <name> | say <text> | mute <id|name> | unmute <id|name> | top <board> | save | stop") +
-               (m_config.hasRole("scripts") ? " | scripts | reload [file] | lua <code>" : "");
+                           "allow <name> | say <text> | mute <id|name> | unmute <id|name> | top <board> | seen <name> | save | backup | stop") +
+               (m_config.hasRole("scripts") ? " | scripts | reload [file] | lua <code>" : "") + (m_config.relay.empty() ? "" : " | code");
+    if (cmd == "code") {
+        if (m_config.relay.empty()) return "no join code: set a relay (\"relay\" in server.json, KKE_SERVER_RELAY, --relay)";
+        const std::string code = joinCode();
+        return code.empty() ? "no join code yet: waiting for relay " + m_config.relay : "join code: " + code + " (players type it in Multiplayer)";
+    }
 #if KKE_ENABLE_LUA
     if (cmd == "scripts" || cmd == "reload" || cmd == "lua") {
         if (!m_scripts) return "this server has no scripts role";
@@ -346,6 +577,10 @@ std::string DedicatedServer::command(const std::string& line) {
         if (m_scripts) s += "; " + std::to_string(m_scripts->scripts().size()) + " scripts, " + std::to_string(m_scripts->bodyCount()) + " bodies";
 #endif
         if (m_store) s += std::string("; storage: ") + m_store->backendName();
+        if (m_relayHost) s += "; join code: " + (joinCode().empty() ? std::string("waiting for the relay") : joinCode());
+        if (m_relayService && m_relayService->core())
+            s += "; relay: " + std::to_string(m_relayService->core()->servers()) + " servers, " + std::to_string(m_relayService->core()->sessions()) +
+                 " players relayed";
         return s;
     }
     if (cmd == "players") {
@@ -424,6 +659,36 @@ std::string DedicatedServer::command(const std::string& line) {
         for (const Leaderboard::Entry& e : m_leaderboards.top(arg, 10)) s += (s.empty() ? "" : "\n") + std::to_string(rank++) + ". " + e.name + "  " + std::to_string(e.score);
         return s.empty() ? "'" + arg + "' has no scores" : s;
     }
+    if (cmd == "seen") {
+        if (arg.empty()) return "usage: seen <name>";
+        const std::string name = arg + (tail.empty() ? "" : " " + tail);
+        const std::optional<PlayerRecord> r = playerRecord(name);
+        if (!r) return "'" + name + "' hasn't been here" + (m_store && !m_store->lastError().empty() ? " (" + m_store->lastError() + ")" : "");
+        const uint64_t now = unixTime();
+        auto ago = [&](uint64_t t) {
+            const uint64_t d = now > t ? now - t : 0;
+            if (d < 120) return std::to_string(d) + " s ago";
+            if (d < 7200) return std::to_string(d / 60) + " min ago";
+            if (d < 172800) return std::to_string(d / 3600) + " h ago";
+            return std::to_string(d / 86400) + " days ago";
+        };
+        std::string s = r->name + ": " + std::to_string(r->visits) + (r->visits == 1 ? " visit" : " visits") + ", played " +
+                        std::to_string(static_cast<uint64_t>(r->playSeconds) / 60) + " min, first " + ago(r->firstSeen) + ", last " + ago(r->lastSeen);
+        for (const auto& [id, p] : m_present)
+            if (foldName(p.name) == foldName(name)) s += " (here now, player " + std::to_string(id) + ")";
+        if (r->hasPosition) {
+            char pos[96];
+            std::snprintf(pos, sizeof(pos), "; left at %.1f, %.1f, %.1f", static_cast<double>(r->position.x), static_cast<double>(r->position.y),
+                          static_cast<double>(r->position.z));
+            s += pos;
+        }
+        return s;
+    }
+    if (cmd == "backup") {
+        std::string error;
+        const std::string path = backup(&error);
+        return path.empty() ? "no backup: " + error : "backed up to " + path;
+    }
     if (cmd == "save") {
         std::string error;
         return save(&error) ? "saved to " + m_config.saveDir : "not saved: " + error;
@@ -442,6 +707,13 @@ void DedicatedServer::stop(const std::string& reason) {
     if (m_scripts) m_scripts->shutdown(); // their Shutdown hook, while the players are still here
     m_scripts.reset();
 #endif
+    trackPositions();
+    while (!m_present.empty()) savePlayer(m_present.begin()->first, true); // before the kicks: they may not report leaving
+    if (m_relayHost) m_relayHost->stop(); // the code is free at once, not in 30 s
+    m_relayHost.reset();
+    if (m_raw) m_raw->onRaw = nullptr;
+    if (m_relayService) m_relayService->stop();
+    m_relayService.reset();
     if (m_net) {
         for (const net::RemotePlayer& p : m_net->players(m_now)) m_net->kick(p.id, reason);
         // Flush the goodbyes before the socket closes.
@@ -450,12 +722,18 @@ void DedicatedServer::stop(const std::string& reason) {
         m_net->stop();
         m_net.reset();
     }
+    m_secure.reset();
     if (m_publisher) m_publisher->stop();
     m_publisher.reset();
     if (m_directory) m_directory->stop();
     m_directory.reset();
     std::string error;
     if (!save(&error)) warning("on stop: " + error);
+    if (m_backups) {
+        const std::string path = backup(&error);
+        if (path.empty()) warning("backup on stop: " + error);
+        else info("backup: " + path);
+    }
     m_visibility.reset();
     m_moveCheck.reset();
     m_world.reset();

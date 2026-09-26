@@ -1,6 +1,9 @@
 #include "kke/storage/MemoryStore.h"
 
+#include "kke/storage/SqliteStore.h"
+
 #include <charconv>
+#include <filesystem>
 #include <limits>
 
 namespace kke::storage {
@@ -82,6 +85,39 @@ bool MemoryStore::transaction(const std::function<bool()>& fn) {
         if (lastError().empty()) setError("the transaction was called off");
     }
     return ok;
+}
+
+bool MemoryStore::backup(const std::string& path) {
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    const std::string temp = path + ".part";
+    std::error_code ec;
+    std::filesystem::remove(temp, ec);
+    bool ok = false;
+    {
+        SqliteStore copy;
+        std::string error;
+        if (!copy.open(temp, &error)) {
+            setError("backup: " + error);
+            return false;
+        }
+        ok = copy.transaction([&] {
+            for (const auto& [ck, value] : m_data)
+                if (!copy.put(ck.first, ck.second, value)) return false;
+            return true;
+        });
+        if (!ok) setError("backup: " + copy.lastError());
+    }
+    if (ok) std::filesystem::rename(temp, path, ec);
+    if (ok && ec) {
+        setError("backup: " + path + ": " + ec.message());
+        ok = false;
+    }
+    if (!ok) {
+        std::filesystem::remove(temp, ec);
+        return false;
+    }
+    setError({});
+    return true;
 }
 
 } // namespace kke::storage
