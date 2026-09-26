@@ -1,4 +1,4 @@
-add_executable(rmlui_demo main.cpp ShowcaseModule.cpp BackdropModule.cpp)
+add_executable(rmlui_demo main.cpp ShowcaseModule.cpp BackdropModule.cpp InputScreen.cpp)
 target_link_libraries(rmlui_demo PRIVATE kke_engine RmlUi::Debugger)
 
 foreach(font NotoSans-Regular.ttf NotoSans-Bold.ttf NotoSans-Italic.ttf NotoColorEmoji.ttf)

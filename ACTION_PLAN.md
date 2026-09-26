@@ -22,6 +22,7 @@ Detailed design notes live in the linked files; this is the index.
 | 1.6 | **Resource governor**: frame cap, physics/worker thread cap, render scale, "use everything" toggle, all in Settings | "Run with what it needs; take everything only if the user says so" | ⬜ |
 | 1.7 | **Built-in stress test + benchmark log for end users** (like the build log: hardware + fps/frame times, one file) | Must always ship with the engine | 🔨 partly (physics benchmark exists; needs a graphics+physics scene and one report) |
 | 1.8 | Natural fracture, seeds, debris budget, culling, instancing | Done this session (BUGS 045-051, OPTIMIZATION 21-25) | ✅ |
+| 1.9 | **Input system** (asked for: every controller type, identical HOSAS sticks, Steam Controller gyro/paddles, input tester in RmlUi, controller menu navigation, Tarkov-style robust binding, left-handed) | Hardcoded keys block left-handed players; controllers are table stakes | ✅ `InputMap` + `InputDevices` + `InputModule` (17 tests), RmlUi Input screen, UI navigation, kke_demo on actions, left-handed mirror, virtual devices in CI. See INPUT.md. Next: per-player device assignment UI for split screen, gyro calibration/"ratchet" button, rumble on impacts |
 
 ## P2 — The systems that make it a platform
 

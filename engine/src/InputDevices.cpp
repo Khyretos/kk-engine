@@ -676,6 +676,19 @@ void InputDevices::beginCapture(const CaptureOptions& options) {
     m_captureMotion = glm::vec2(0.0f);
     m_captureRest.clear();
     m_captureRestPad.clear();
+    m_captureIgnore.clear();
+    // Buttons already down (pad A that clicked "bind") don't count until
+    // they've been released.
+    for (const Device& d : m_devices) {
+        if (!d.connected || !d.joystick) continue;
+        for (int b = 0; b < SDL_GAMEPAD_BUTTON_COUNT; ++b)
+            if (d.padButtons[b]) m_captureIgnore.push_back({ SourceKind::GamepadButton, 0, b, 0 });
+        for (int b = 0; b < d.numButtons; ++b)
+            if (d.buttons[b]) m_captureIgnore.push_back({ SourceKind::JoyButton, d.ref, b, 0 });
+        for (int h = 0; h < d.numHats; ++h)
+            for (int dir = 0; dir < 4; ++dir)
+                if (d.hats[h] & (1 << dir)) m_captureIgnore.push_back({ SourceKind::JoyHat, d.ref, h * 4 + dir, 0 });
+    }
     // Rest positions: raw triggers and some throttles rest at -1 or
     // anywhere, so "moved" means moved from here.
     for (const Device& d : m_devices) {
@@ -733,6 +746,13 @@ void InputDevices::captureTick() {
                 }
         }
     }
+    // Held-at-start inputs: forget them once released, never capture them.
+    m_captureIgnore.erase(std::remove_if(m_captureIgnore.begin(), m_captureIgnore.end(),
+                                         [&](const InputSource& s) { return std::find(now.begin(), now.end(), s) == now.end(); }),
+                          m_captureIgnore.end());
+    now.erase(std::remove_if(now.begin(), now.end(),
+                             [&](const InputSource& s) { return std::find(m_captureIgnore.begin(), m_captureIgnore.end(), s) != m_captureIgnore.end(); }),
+              now.end());
     // Presses in order; the first release finishes the combination.
     for (const InputSource& s : now)
         if (!isDown(s)) m_captureDown.push_back(s);

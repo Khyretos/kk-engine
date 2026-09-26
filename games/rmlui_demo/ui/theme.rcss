@@ -155,3 +155,15 @@ scrollbarvertical sliderarrowdec, scrollbarvertical sliderarrowinc { height: 0; 
     margin-left: -210dp; z-index: 51;
     animation: 0.3s back-out slide-up;
 }
+
+/* Controller / keyboard navigation: anything clickable can take focus
+   (Enter / pad A clicks it) and arrows / D-pad / stick move between
+   controls spatially (RmlUi's nav). The focus ring shows where you are. */
+button, .button, .tab, .menu-item, .slot, .binding, .chip, .device, [data-event-click],
+input.checkbox, input.radio, input.range, input.text, select { tab-index: auto; nav: auto; }
+/* Focus ring. Not box-shadow: our Vulkan RmlUi renderer doesn't
+   implement RmlUi's layer/filter path (BUGS.md BUG-052), so a box-shadow
+   paints the element white and a copy at the screen origin. */
+button:focus, .button:focus, .slot:focus, .binding:focus, .chip:focus, .device:focus,
+input.checkbox:focus, input.range:focus, select:focus selectvalue { border-color: #ffcf5c; }
+.tab:focus, .menu-item:focus, .add:focus, [data-event-click]:focus { background-color: #34427a; color: #ffffff; }

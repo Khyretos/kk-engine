@@ -26,6 +26,7 @@ set(ENGINE_SOURCES
     src/CameraRig.cpp
     src/InputMap.cpp
     src/InputDevices.cpp
+    src/modules/InputModule.cpp
     src/ParticleFluid.cpp
     src/MeltVolume.cpp
     src/SphereImpostors.cpp

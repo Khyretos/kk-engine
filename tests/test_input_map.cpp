@@ -350,3 +350,33 @@ TEST(InputMap, RestoreDefaultsPerAction) {
     m.restoreDefaults();
     EXPECT_EQ(m.bindings()[m.bindingsFor("use")[0]].source, key(8));
 }
+
+#include "kke/modules/InputModule.h"
+
+TEST(InputModule, LeftHandedMirrorKeepsDirections) {
+    kke::InputMap m;
+    kke::InputModule::defineCharacterActions(m);
+    kke::InputModule::mirrorKeyboard(m);
+    FakeState st;
+    double t = 0.0;
+    auto step = [&] { t += 1.0 / 60.0; m.update(st, t); };
+    // K is left of L (the mirrored S): moving left.
+    st.set(SourceKind::Key, SDL_SCANCODE_K, 1.0f);
+    step();
+    EXPECT_LT(m.axis2("move").x, -0.9f);
+    st.set(SourceKind::Key, SDL_SCANCODE_K, 0.0f);
+    st.set(SourceKind::Key, SDL_SCANCODE_O, 1.0f); // mirrored W: forward
+    step();
+    EXPECT_GT(m.axis2("move").y, 0.9f);
+    st.set(SourceKind::Key, SDL_SCANCODE_O, 0.0f);
+    // Right Shift sprints; Left Shift no longer does.
+    st.set(SourceKind::Key, SDL_SCANCODE_LSHIFT, 1.0f);
+    step();
+    EXPECT_FALSE(m.held("sprint"));
+    st.set(SourceKind::Key, SDL_SCANCODE_RSHIFT, 1.0f);
+    step();
+    EXPECT_TRUE(m.held("sprint"));
+    // Mirroring twice is the identity.
+    EXPECT_EQ(kke::InputModule::mirrorScancode(kke::InputModule::mirrorScancode(SDL_SCANCODE_Q)), SDL_SCANCODE_Q);
+    EXPECT_EQ(kke::InputModule::mirrorScancode(SDL_SCANCODE_F1), SDL_SCANCODE_F1);
+}

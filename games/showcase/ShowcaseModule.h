@@ -10,7 +10,7 @@
 #include <memory>
 #include <vector>
 
-namespace kke { class RigidBodyModule; class PhysicsModule; }
+namespace kke { class RigidBodyModule; class PhysicsModule; class InputModule; }
 
 namespace kke_showcase {
 
@@ -46,11 +46,18 @@ private:
     void shoot();
     void forcePush();
     void setCaptured(bool on);
+    void readActions(float dt);
 
     kke::Application* m_app = nullptr;
     kke::RigidBodyModule* m_rigid = nullptr;
     kke::PhysicsModule* m_femfx = nullptr;
     kke::ModelModule* m_models = nullptr;
+    kke::InputModule* m_input = nullptr;
+    glm::vec2 m_moveInput{0.0f};
+    bool m_swallowFire = false;
+    float m_fireCooldown = 0.0f;
+    float m_mouseSensitivity = 0.12f; // degrees per pixel
+    float m_stickSpeed = 200.0f;      // degrees per second at full stick
     std::unique_ptr<kke::DynamicMeshRenderer> m_level, m_capsule;
     // Unit cubes, one per colour (the renderer colours by vertex).
     std::vector<std::unique_ptr<kke::DynamicMeshRenderer>> m_cubes;

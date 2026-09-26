@@ -4,6 +4,8 @@
 #include "kke/Log.h"
 #include "kke/modules/SettingsModule.h"
 #include "kke/modules/UiModule.h"
+#include "kke/modules/InputModule.h"
+#include "InputScreen.h"
 
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/DataModelHandle.h>
@@ -20,8 +22,8 @@ namespace kke_demo {
 
 namespace {
 
-const char* kScreens[] = { "menu", "settings", "inventory", "hud", "dialog", "loading" };
-const char* kDocumentFiles[] = { "main_menu.rml", "settings.rml", "inventory.rml", "hud.rml", "dialog.rml", "loading.rml" };
+const char* kScreens[] = { "menu", "settings", "input", "inventory", "hud", "dialog", "loading" };
+const char* kDocumentFiles[] = { "main_menu.rml", "settings.rml", "input.rml", "inventory.rml", "hud.rml", "dialog.rml", "loading.rml" };
 
 int rarityRank(const std::string& r) {
     if (r == "legendary") return 5;
@@ -65,6 +67,7 @@ std::vector<kke::ModuleDependency> ShowcaseModule::dependencies() const {
     return {
         { std::type_index(typeid(kke::UiModule)), true, "loads and shows RmlUi documents" },
         { std::type_index(typeid(kke::SettingsModule)), true, "the settings screen edits and applies EngineSettings" },
+        { std::type_index(typeid(InputScreen)), true, "creates the 'input' data model before input.rml loads" },
     };
 }
 
@@ -760,6 +763,27 @@ void ShowcaseModule::updateLoading(float dt) {
 void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     float dt = std::min(ctx.dt, 0.1f);
 
+    // Controller: B = back (like Esc), LB/RB = previous/next screen.
+    if (auto* input = m_app->getModule<kke::InputModule>()) {
+        const kke::InputMap& m = input->map(0);
+        auto* is = m_app->getModule<InputScreen>();
+        if (!(is && is->capturing())) {
+            if (m.pressed("ui.back")) {
+                if (m_showCredits || m_showQuit) {
+                    m_showCredits = m_showQuit = false;
+                    m_menuModel.DirtyAllVariables();
+                } else {
+                    setScreen("menu");
+                }
+            }
+            const int n = static_cast<int>(std::size(kScreens));
+            int cur = 0;
+            while (cur < n && m_screen != kScreens[cur]) ++cur;
+            if (m.pressed("ui.next")) setScreen(kScreens[(cur + 1) % n]);
+            if (m.pressed("ui.prev")) setScreen(kScreens[(cur + n - 1) % n]);
+        }
+    }
+
     // Live preview: anything a settings control changed gets applied now.
     static kke::EngineSettings lastApplied = m_settings->settings();
     if (m_settings->settings() != lastApplied) {
@@ -818,6 +842,8 @@ void ShowcaseModule::onEvent(const SDL_Event& event) {
         return;
     }
     if (key == SDLK_ESCAPE) {
+        // Esc while rebinding cancels the capture, not the screen.
+        if (auto* is = m_app->getModule<InputScreen>(); is && is->capturing()) return;
         if (m_showCredits || m_showQuit) {
             m_showCredits = m_showQuit = false;
             m_menuModel.DirtyAllVariables();

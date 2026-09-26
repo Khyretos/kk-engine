@@ -356,6 +356,16 @@ panels. The character is Quaternius' Universal Animation Library mannequin
 (CC0): put `UAL1_Standard.fbx` in `assets/animations/` (git-ignored, 23 MB),
 or the character is a box. The old building-block demo is `kke_basics`.
 
+**Input** (see [INPUT.md](INPUT.md)): every control is an action you can
+rebind to anything: keys, mouse, gamepads (incl. paddles and gyro), HOTAS
+and other raw joysticks, identical twins (HOSAS) kept apart by USB port,
+with Tarkov-style press/hold/tap/double-tap/toggle triggers and chords.
+The RmlUi demo's **Input** tab tests every peripheral live and edits the
+bindings (saved to `input.json`, shared by the demos); `kke_demo` has a
+left-handed key mirror. On Linux install `libudev-dev` (controller
+hot-plug) and `libdbus-1-dev` before configuring, or SDL builds without
+them.
+
 `cmake --workflow --preset default` matches this project's actual
 default option values (no FEMFX, no tetrahedralizer, no GPU profiler,
 no Lua) if you want the smaller, faster build instead. Both need

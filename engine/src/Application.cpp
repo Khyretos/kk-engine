@@ -342,6 +342,10 @@ void Application::run() {
         // Rendering below always runs regardless of m_paused — only
         // simulation (fixedUpdate/update/compute) is gated here.
         bool advancingThisFrame = !m_paused || m_stepRequested;
+        {
+            UpdateContext frameCtx{ dt, totalTime };
+            for (Module* m : m_initOrder) safeInvoke(m, "frameStart", [&] { m->frameStart(frameCtx); });
+        }
 
         if (!m_paused) {
             // Cap how much simulation time a single slow frame can inject
@@ -485,6 +489,8 @@ void Application::run() {
 
             m_renderer->endFrame();
         }
+
+        for (Module* m : m_initOrder) safeInvoke(m, "frameEnd", [&] { m->frameEnd(); });
 
         if (m_frameRateLimit > 0.0f) {
             auto frameEnd = lastFrameTime + std::chrono::duration<double>(1.0 / m_frameRateLimit);
