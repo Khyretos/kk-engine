@@ -234,7 +234,9 @@ TEST(Jiggle, AddedBoneTakesNearbySkinAndChangesNothingAtRest) {
     const auto posed = kke::poseToModel(m, p);
     for (size_t i = 0; i < m.meshes[0].vertices.size(); ++i) {
         const float moved = glm::length(skinned(m, m.meshes[0].vertices[i], posed) - before[i]);
-        if (glm::length(before[i] - centre) > 0.16f) EXPECT_LT(moved, 1e-4f);
+        if (glm::length(before[i] - centre) > 0.16f) {
+            EXPECT_LT(moved, 1e-4f);
+        }
     }
 }
 
@@ -366,7 +368,9 @@ TEST(Jiggle, JellyNeverSwallowsBalls) {
             ASSERT_TRUE(finite(b.pos));
             const bool over = std::abs(b.pos.x) < 0.3f && std::abs(b.pos.z) < 0.3f;
             // Dents, never more than ~20 cm into a 50 cm jelly.
-            if (over) EXPECT_GT(b.pos.y - b.radius, 0.3f) << "ball swallowed at frame " << f << " y " << b.pos.y << " r " << b.radius << " vy " << b.vel.y << " deform " << jelly.deformation();
+            if (over) {
+                EXPECT_GT(b.pos.y - b.radius, 0.3f) << "ball swallowed at frame " << f << " y " << b.pos.y << " r " << b.radius << " vy " << b.vel.y << " deform " << jelly.deformation();
+            }
         }
     }
 }

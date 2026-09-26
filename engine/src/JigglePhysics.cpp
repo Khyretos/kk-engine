@@ -509,7 +509,7 @@ HumanoidJiggleSetup addHumanoidSoftTissue(ModelData& model, const HumanoidSoftTi
         const float r = 0.085f * k;
         for (int side = 0; side < 2; ++side) {
             const float sign = side == 0 ? 1.0f : -1.0f;
-            glm::vec3 front;
+            glm::vec3 front(0.0f);
             if (!extreme(chest, sign, y - 0.2f * k, y + 0.12f * k, fwd, false, front)) {
                 out.missing.push_back(side == 0 ? "left chest skin" : "right chest skin");
                 continue;
@@ -537,7 +537,7 @@ HumanoidJiggleSetup addHumanoidSoftTissue(ModelData& model, const HumanoidSoftTi
         const float r = 0.095f * k;
         for (int side = 0; side < 2; ++side) {
             const float sign = side == 0 ? 1.0f : -1.0f;
-            glm::vec3 back;
+            glm::vec3 back(0.0f);
             if (!extreme(pelvis, sign, y - 0.2f * k, y + 0.04f * k, -fwd, true, back)) {
                 out.missing.push_back(side == 0 ? "left glute skin" : "right glute skin");
                 continue;

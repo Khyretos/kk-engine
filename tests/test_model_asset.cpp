@@ -203,6 +203,8 @@ TEST(ModelAsset, SyntyCharacterIfInstalled) {
     EXPECT_LT(height, 2.2f);
     EXPECT_NEAR(m.boundsMin.y, 0.0f, 0.1f); // feet on the ground
     for (const auto& bone : m.bones) {
-        if (bone.parent >= 0) EXPECT_LT(bone.parent, &bone - m.bones.data()); // parents first
+        if (bone.parent >= 0) {
+            EXPECT_LT(bone.parent, &bone - m.bones.data()); // parents first
+        }
     }
 }

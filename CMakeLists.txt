@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.25)
 project(kreative_kompas_engine LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -21,6 +21,7 @@ option(KKE_ENABLE_TESTS "Build the unit test suite (tests/)" ON)
 option(KKE_ENABLE_JOLT "Build the Jolt Physics rigid-body/collision layer (MIT): static world collision, rigid bodies, character controller. See ACTION_PLAN.md 1.1." ON)
 option(KKE_ENABLE_FEMFX "Build the vendored, patched AMD FEMFX deformable-physics library. See README 'Physics: AMD FEMFX integration'." OFF)
 option(KKE_ENABLE_COVERAGE "Instrument builds for code coverage (gcc/clang --coverage). See README 'Test suite & coverage'." OFF)
+option(KKE_WARNINGS_AS_ERRORS "GCC/Clang: fail the build on any -Wall -Wextra warning in the engine, games, tools or tests (third-party code excluded). CI turns this on." OFF)
 option(KKE_ENABLE_GPU_PROFILER "Request the VulkanProfiler layer (VK_LAYER_PROFILER_unified) at instance creation if installed. See README 'GPU profiler (VulkanProfiler) integration'." OFF)
 
 if(KKE_ENABLE_COVERAGE)
@@ -86,6 +87,7 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
     GIT_TAG        v3.1.0
     GIT_SHALLOW    TRUE
+    SYSTEM
 )
 FetchContent_MakeAvailable(vma)
 
@@ -145,7 +147,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(stb)
 add_library(stb INTERFACE)
-target_include_directories(stb INTERFACE ${stb_SOURCE_DIR})
+target_include_directories(stb SYSTEM INTERFACE ${stb_SOURCE_DIR})
 
 # ---------------------------------------------------------------------------
 # Dear ImGui — debug UI. Core + SDL3/Vulkan backends only (no demo-app cruft).
@@ -219,6 +221,10 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/mikke89/RmlUi.git
     GIT_TAG        6.3
     GIT_SHALLOW    TRUE
+    # Makes data-for lists update before their rows (see the script for the
+    # bug: "Data array index out of bounds" warnings when a list shrinks).
+    PATCH_COMMAND  ${CMAKE_COMMAND} -DRMLUI_SOURCE_DIR=<SOURCE_DIR> -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patch_rmlui.cmake
+    UPDATE_DISCONNECTED TRUE
 )
 FetchContent_MakeAvailable(rmlui)
 
@@ -484,6 +490,17 @@ endif()
 # "Physics: AMD FEMFX integration."
 if(KKE_ENABLE_FEMFX)
     add_subdirectory(external/FEMFX)
+endif()
+
+# Everything below is this project's own code: full warnings, and every
+# one of them is fixed, not silenced. Third-party code above keeps its
+# own flags, and its headers are SYSTEM includes so they don't warn in
+# our translation units.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-Wall -Wextra)
+    if(KKE_WARNINGS_AS_ERRORS)
+        add_compile_options(-Werror)
+    endif()
 endif()
 
 add_subdirectory(engine)

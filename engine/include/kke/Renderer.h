@@ -2,6 +2,7 @@
 
 #include "kke/VulkanDevice.h"
 #include "kke/SwapChain.h"
+#include "kke/FrameRetireQueue.h"
 
 #include <glm/glm.hpp>
 #include <memory>
@@ -82,6 +83,13 @@ public:
     // previous use, but not with the other one.
     static constexpr int kMaxFramesInFlight = 2;
     uint32_t currentFrameIndex() const { return m_currentFrame; }
+    // Keeps a GPU resource alive until every frame that may reference it
+    // has finished on the GPU, then drops it. Use when an object that owns
+    // buffers is removed mid-game (a fracture piece, a despawned model):
+    //   renderer.retire(std::move(myBuffer));   // any unique_ptr/shared_ptr
+    template <class T>
+    void retire(std::unique_ptr<T> resource) { m_retired.retire(m_recordedFrames, std::shared_ptr<T>(std::move(resource))); }
+    void retire(std::shared_ptr<void> resource) { m_retired.retire(m_recordedFrames, std::move(resource)); }
     // Changes present mode; the swapchain is rebuilt at the start of the
     // next beginFrame() (never mid-frame, while a command buffer that
     // references the old one is being recorded).
@@ -115,6 +123,9 @@ private:
     std::vector<bool> m_timestampPoolHasData;
 
     uint32_t m_currentFrame = 0;
+    // Frames recorded so far (successful beginFrame() calls).
+    uint64_t m_recordedFrames = 0;
+    FrameRetireQueue m_retired;
     bool m_recreatePending = false;
     uint32_t m_currentImageIndex = 0;
     float m_lastGpuFrameTimeMs = -1.0f;

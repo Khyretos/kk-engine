@@ -101,7 +101,7 @@ struct Binding {
 struct ActionDef {
     std::string id;           // "move", "jump", "ui.accept"
     std::string label;        // shown in the bindings screen
-    std::string category;     // groups in the bindings screen ("Movement", "Combat", "Menus")
+    std::string category{};   // groups in the bindings screen ("Movement", "Combat", "Menus")
     std::string context = "game";
     ActionType type = ActionType::Button;
     bool clamp = true;        // clamp the summed value to -1..1 (length 1 for 2D); off for mouse look

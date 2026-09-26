@@ -571,10 +571,10 @@ void ShowcaseModule::readActions(float dt) {
 // Shoots a heavy FEMFX ball from the camera (breaks the yard's glass,
 // wood and stone) and knocks any Jolt body the view points at.
 void ShowcaseModule::shoot() {
-    const kke::Camera& cam = m_app->camera();
-    glm::vec3 dir = glm::normalize(cam.target - cam.position);
 #if KKE_ENABLE_FEMFX
     if (m_femfx) {
+        const kke::Camera& cam = m_app->camera();
+        glm::vec3 dir = glm::normalize(cam.target - cam.position);
         kke::Material iron;
         iron.density = 7800.0f; iron.stiffness = 2.0e7f; iron.poissonsRatio = 0.3f;
         iron.fractureStressThreshold = 1.0e12f; iron.metallic = 0.9f; iron.roughness = 0.35f; iron.textureId = 2;

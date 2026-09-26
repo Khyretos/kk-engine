@@ -23,7 +23,7 @@ public:
     // rather than fight the defaults with a render-side scale hack.
     explicit OrbitCameraModule(float initialDistance = 3.5f, float initialPitch = 0.5f,
                                 float initialYaw = -0.6f, glm::vec3 initialTarget = glm::vec3(0.0f))
-        : m_distance(initialDistance), m_pitch(initialPitch), m_yaw(initialYaw), m_target(initialTarget) {}
+        : m_yaw(initialYaw), m_pitch(initialPitch), m_distance(initialDistance), m_target(initialTarget) {}
 
     const char* name() const override { return "OrbitCamera"; }
 

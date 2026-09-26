@@ -182,27 +182,6 @@ CrackedCube crackedCube(uint32_t seed) {
 float triArea(const kke::TriangleSoup& s, size_t t) {
     return 0.5f * glm::length(glm::cross(s.positions[t * 3 + 1] - s.positions[t * 3], s.positions[t * 3 + 2] - s.positions[t * 3]));
 }
-// Per piece: area of its tets' faces on the outside of the whole cube,
-// i.e. exactly the surface that piece should carry.
-std::map<uint32_t, double> exteriorAreaPerPiece(const kke::TetMeshData& m, const std::vector<uint32_t>& chunk) {
-    std::map<std::array<uint32_t, 3>, int> use;
-    for (const auto& t : m.tets)
-        for (int f = 0; f < 4; ++f) {
-            auto k = faceOf(t, f);
-            std::sort(k.begin(), k.end());
-            ++use[k];
-        }
-    std::map<uint32_t, double> area;
-    for (size_t t = 0; t < m.tets.size(); ++t)
-        for (int f = 0; f < 4; ++f) {
-            auto face = faceOf(m.tets[t], f);
-            auto k = face;
-            std::sort(k.begin(), k.end());
-            if (use[k] != 1) continue;
-            area[chunk[t]] += 0.5 * glm::length(glm::cross(m.vertices[face[1]] - m.vertices[face[0]], m.vertices[face[2]] - m.vertices[face[0]]));
-        }
-    return area;
-}
 // Share of the surface glued to the wrong piece: the lips (surface
 // hanging past a piece's crack face) and, on the neighbour, the holes
 // they leave. Measured by sampling 6 points in every triangle.

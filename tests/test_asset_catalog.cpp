@@ -145,12 +145,16 @@ TEST(AssetCatalog, FindsAtlasesWithoutTheUsualName) {
     ASSERT_EQ(c.packs.size(), 3u);
     for (const auto& p : c.packs) {
         std::string t = fs::path(p.defaultTexture).filename().string();
-        if (p.name == "Bare") EXPECT_EQ(t, "Texture_01.png");
+        if (p.name == "Bare") {
+            EXPECT_EQ(t, "Texture_01.png");
+        }
         if (p.name == "Nature") {
             EXPECT_EQ(t, "PolygonNature_01.png");
             EXPECT_EQ(p.defaultTexture.find(".mayaSwatches"), std::string::npos);
         }
-        if (p.name == "Pumpkin") EXPECT_EQ(t, "POLYGON_Pumpkin_Tex.png");
+        if (p.name == "Pumpkin") {
+            EXPECT_EQ(t, "POLYGON_Pumpkin_Tex.png");
+        }
     }
     fs::remove_all(root);
 }
@@ -213,7 +217,17 @@ TEST(AssetCatalog, RealSyntyPackIfInstalled) {
     ASSERT_FALSE(c.packs.empty());
     EXPECT_GT(c.assets.size(), 400u);
     EXPECT_FALSE(c.filter("", "Characters", "").empty());
-    for (const auto& p : c.packs) EXPECT_FALSE(p.defaultTexture.empty()) << p.name;
+    // Every pack that ships an image has a default texture. Packs with no
+    // images at all (Quaternius' animals: material colours only) have none.
+    for (const auto& p : c.packs) {
+        bool hasImage = false;
+        for (const auto& e : fs::recursive_directory_iterator(p.root, fs::directory_options::skip_permission_denied)) {
+            std::string ext = e.path().extension().string();
+            std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+            if (ext == ".png" || ext == ".tga" || ext == ".jpg") { hasImage = true; break; }
+        }
+        EXPECT_EQ(p.defaultTexture.empty(), !hasImage) << p.name;
+    }
 }
 
 TEST(AssetCatalog, FindAssetFolderSearchesEnvThenParents) {

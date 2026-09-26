@@ -449,7 +449,11 @@ on actual hardware, not anticipated in advance:
   in AMD's own threading code — are suppressed narrowly at the target
   level, not blanket-silenced. Verified with a full clean rebuild of
   both the `default` and `everything` presets: genuinely zero
-  warnings, down from 30+.
+  warnings, down from 30+. (2026-09-26: that was with the compiler's
+  default warnings only. Our own code now builds with `-Wall -Wextra`,
+  every warning that turned up was fixed rather than silenced, and
+  CI's plain build uses `-DKKE_WARNINGS_AS_ERRORS=ON` so a new one fails
+  the build. See BUGS.md BUG-058.)
 - **No single-command build** — `CMakePresets.json` added (see above).
 
 ### Headless smoke test (what we used to verify this milestone)

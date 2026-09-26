@@ -32,6 +32,8 @@ add_executable(kke_tests
     test_audio.cpp
     test_logo_mesh.cpp
     test_jiggle.cpp
+    test_rml_data_binding.cpp
+    test_frame_retire_queue.cpp
 )
 target_link_libraries(kke_tests PRIVATE kke_engine GTest::gtest_main)
 if(KKE_ENABLE_JOLT)

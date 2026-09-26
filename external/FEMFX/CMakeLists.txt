@@ -32,7 +32,9 @@ file(GLOB FEMFX_SOURCES
 
 add_library(femfx STATIC ${FEMFX_SOURCES})
 
-target_include_directories(femfx PUBLIC
+# SYSTEM: AMD's headers aren't ours to change; keep their warnings out of
+# the engine's -Wall -Wextra build.
+target_include_directories(femfx SYSTEM PUBLIC
     ${FEMFX_INC_DIR}
     ${FEMFX_VECTORMATH_DIR}
 )

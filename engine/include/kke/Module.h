@@ -148,28 +148,28 @@ public:
     // render pass) exists — this is where you create pipelines, buffers,
     // and any other GPU resources this module owns. Called in dependency
     // order (dependencies first).
-    virtual void init(Application& app) {}
+    virtual void init(Application& /*app*/) {}
 
     // Every frame, right after that frame's events and before anything
     // else, paused or not (input: InputModule polls devices and evaluates
     // bindings here, so menus keep working while the game is paused).
-    virtual void frameStart(const UpdateContext& ctx) {}
+    virtual void frameStart(const UpdateContext& /*ctx*/) {}
     // Every frame after rendering (InputModule clears per-frame deltas).
     virtual void frameEnd() {}
 
     // Called at a fixed tick rate (see FixedUpdateContext) — deterministic
     // simulation goes here, not in update().
-    virtual void fixedUpdate(const FixedUpdateContext& ctx) {}
+    virtual void fixedUpdate(const FixedUpdateContext& /*ctx*/) {}
 
     // Called once per frame, before any rendering, at the variable render
     // frame rate. CPU-side work that's fine drifting with frame rate.
-    virtual void update(const UpdateContext& ctx) {}
+    virtual void update(const UpdateContext& /*ctx*/) {}
 
     // Called once per frame, before the render pass begins. This is the
     // only place it's legal to record compute dispatches or the barriers
     // that follow them (e.g. ParticleModule's simulation step) — Vulkan
     // doesn't allow compute work inside a graphics render pass.
-    virtual void compute(VkCommandBuffer cmd) {}
+    virtual void compute(VkCommandBuffer /*cmd*/) {}
 
     // Called for every raw SDL event, before update()/fixedUpdate() for
     // that frame — the same events DebugUi already sees for ImGui, now
@@ -180,7 +180,7 @@ public:
     // Window::mouseState() once per frame instead, which is simpler for
     // "what's the net drag this frame" than reconstructing it from
     // individual motion events.
-    virtual void onEvent(const SDL_Event& event) {}
+    virtual void onEvent(const SDL_Event& /*event*/) {}
 
     // Whether Application calls this module's renderUi(). Lets a game
     // hide engine debug panels it doesn't want on screen (the sandbox
@@ -192,18 +192,18 @@ public:
     // Called every drawn frame (paused or not) between the shadow pass and
     // the main render pass, outside any render pass: record your own
     // offscreen passes/compute here. Default no-op.
-    virtual void prepass(const PrepassContext& ctx) {}
+    virtual void prepass(const PrepassContext& /*ctx*/) {}
 
     // Called once per frame, with the render pass already active. Bind a
     // pipeline, push constants, and issue draw calls here.
-    virtual void render(const RenderContext& ctx) {}
+    virtual void render(const RenderContext& /*ctx*/) {}
 
     // Called once per frame after every render(), at the window's full
     // resolution, over the finished 3D image: HUDs and menus go here so
     // they stay sharp when the render scale (resource governor) draws
     // the 3D part smaller. Same pipelines work: the pass is compatible
     // with render()'s. Depth starts cleared.
-    virtual void renderOverlay(const RenderContext& ctx) {}
+    virtual void renderOverlay(const RenderContext& /*ctx*/) {}
 
     // Called once per frame, before render() — a real, separate,
     // depth-only pass (see ShadowRenderContext's own comment, and
@@ -215,7 +215,7 @@ public:
     // but through a much simpler pipeline (see shadow.vert/frag): no
     // lighting, no textures, no descriptor sets at all, just position
     // transformed into light space.
-    virtual void renderShadow(const ShadowRenderContext& ctx) {}
+    virtual void renderShadow(const ShadowRenderContext& /*ctx*/) {}
 
     // Called once per frame, before the render pass begins, to build any
     // ImGui:: panels this module wants on screen (stats, debug toggles...).

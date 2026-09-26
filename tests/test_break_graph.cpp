@@ -82,6 +82,8 @@ TEST(BreakGraph, BordersToOtherBodiesAreIgnored) {
     // neighbour in the same body, so nothing new breaks.
     auto onlyPiece0 = [&](uint32_t t) { return chunk[t] == 0; };
     for (uint32_t t = 0; t < g.tetCount(); ++t)
-        if (chunk[t] == 0) EXPECT_FALSE(g.report(t, 1e9f, onlyPiece0));
+        if (chunk[t] == 0) {
+            EXPECT_FALSE(g.report(t, 1e9f, onlyPiece0));
+        }
     EXPECT_EQ(g.brokenBorderCount(), 0u);
 }

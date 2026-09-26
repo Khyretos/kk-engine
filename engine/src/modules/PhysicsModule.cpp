@@ -542,7 +542,7 @@ void PhysicsModule::init(Application& app) {
             return glm::vec3(v, v, v);
         });
         // 4: Glass -- light, smooth, faint blue tint gradient.
-        makeTexture([&](uint32_t x, uint32_t y) {
+        makeTexture([&](uint32_t, uint32_t y) {
             float grad = static_cast<float>(y) / kTexSize * 0.1f;
             return glm::vec3(0.82f + grad, 0.88f + grad, 0.92f + grad);
         });
@@ -804,6 +804,9 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnBreakablePart(ObjectHandle bh, c
     return h;
 }
 
+// Ticks a freshly split part can't break again (why: updateBreakables()).
+constexpr int kBreakGrace = 8;
+
 void PhysicsModule::splitBreakablePart(ObjectHandle bh, ObjectHandle ph) {
     Breakable& b = m_breakables.at(bh);
     auto pit = m_objects.find(ph);
@@ -823,7 +826,7 @@ void PhysicsModule::splitBreakablePart(ObjectHandle bh, ObjectHandle ph) {
     }
     for (const auto& g : groups) {
         ObjectHandle h = spawnBreakablePart(bh, g, ph, glm::vec3(0.0f));
-        if (h != kInvalidHandle) m_objects[h]->breakGrace = 8; // kBreakGrace, see updateBreakables()
+        if (h != kInvalidHandle) m_objects[h]->breakGrace = kBreakGrace;
     }
     ++b.breaks;
     removeObject(ph);
@@ -902,7 +905,7 @@ void PhysicsModule::updateBreakables() {
         //    cascaded into every piece - all-or-nothing. With both, the
         //    damage grows with the hit (a 0.8 m stone crate: 1 piece at
         //    12 m/s, 7 at 18, all 19 at 30).
-        constexpr int kBreakWindow = 2, kBreakGrace = 8;
+        constexpr int kBreakWindow = 2;
         std::vector<ObjectHandle> overloaded;
         for (ObjectHandle ph : b.parts) {
             SpawnedTet& part = *m_objects[ph];
@@ -1339,6 +1342,9 @@ void PhysicsModule::removeObject(ObjectHandle handle) {
     }
     AMD::FmRemoveTetMeshBufferFromScene(m_scene, it->second->sceneBufferId);
     AMD::FmDestroyTetMeshBuffer(it->second->tetMeshBuffer);
+    // The last frames in flight may still draw from these (a piece that
+    // splits is removed mid-game): free them once the GPU is done.
+    for (auto& vb : it->second->vertexBuffers) m_app->renderer().retire(std::move(vb));
     m_objects.erase(it);
 }
 

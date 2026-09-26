@@ -366,6 +366,7 @@ VoronoiCut cutAlongVoronoi(const TetMeshData& mesh, const FractureSeeds& seeds) 
                 dvec3 N[3];
                 int k = 0;
                 for (const dvec3& n : surfaceNormals[v]) {
+                    if (k == 3) break; // already spans space: nothing is tangent
                     dvec3 u = n;
                     for (int i = 0; i < k; ++i) u -= N[i] * glm::dot(u, N[i]);
                     double ul = glm::length(u);
@@ -381,9 +382,9 @@ VoronoiCut cutAlongVoronoi(const TetMeshData& mesh, const FractureSeeds& seeds) 
                 }
             }
             if (m == 0) continue; // a corner: stays put
-            glm::dmat3 A(1.0); // unused dimensions: identity, zero right side
+            glm::dmat3 A(0.0); // unused dimensions: identity, zero right side
             dvec3 rhs(0.0);
-            for (int i = 0; i < m; ++i) A[i][i] = 1e-3;
+            for (int i = 0; i < 3; ++i) A[i][i] = i < m ? 1e-3 : 1.0;
             for (int i = 1; i < nc; ++i) {
                 dvec3 n = s[cs[i]] - s[cs[0]];
                 double nl = glm::length(n);

@@ -27,6 +27,7 @@ Renderer::Renderer(Window& window) : m_window(window) {
 
 Renderer::~Renderer() {
     vkDeviceWaitIdle(m_device->device());
+    m_retired.releaseAll();
     for (uint32_t i = 0; i < kMaxFramesInFlight; ++i) destroySceneTarget(i);
     if (m_scenePass) vkDestroyRenderPass(m_device->device(), m_scenePass, nullptr);
     for (int i = 0; i < kMaxFramesInFlight; ++i) {
@@ -129,6 +130,12 @@ bool Renderer::beginFrame() {
     }
 
     vkResetFences(m_device->device(), 1, &m_inFlightFences[m_currentFrame]);
+
+    // This slot's fence covered frame m_recordedFrames - 1 (the previous
+    // use of this slot, kMaxFramesInFlight frames ago); queue order means
+    // everything before it is done too. Frames are numbered from 1.
+    ++m_recordedFrames;
+    if (m_recordedFrames > kMaxFramesInFlight) m_retired.releaseCompleted(m_recordedFrames - kMaxFramesInFlight);
 
     VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
     vkResetCommandBuffer(cmd, 0);

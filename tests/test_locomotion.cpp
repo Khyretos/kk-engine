@@ -203,7 +203,9 @@ TEST(Locomotion, ReversalKeepsItsTurningSide) {
         c.world.step(kDt);
         const float side = loco.facing().x;
         if (i == 3) firstSide = side;
-        if (i > 3 && std::abs(firstSide) > 0.05f) EXPECT_GT(side * firstSide, 0.0f) << "flipped sides at frame " << i;
+        if (i > 3 && std::abs(firstSide) > 0.05f) {
+            EXPECT_GT(side * firstSide, 0.0f) << "flipped sides at frame " << i;
+        }
     }
 }
 

@@ -269,21 +269,23 @@ ModelData loadModel(const std::string& path, const ModelLoadOptions& options) {
                                 }
                                 if (skin) {
                                     const ufbx_skin_vertex& sv = skin->vertices.data[mesh->vertex_indices.data[ix]];
-                                    // Keep the 4 strongest influences, renormalized.
-                                    std::array<std::pair<float, int>, 8> infl{};
-                                    uint32_t n = std::min<uint32_t>(sv.num_weights, 8);
-                                    for (uint32_t w = 0; w < n; ++w) {
+                                    // Keep the 4 strongest influences (of any number), renormalized.
+                                    std::array<std::pair<float, int>, 4> top{}; // strongest first
+                                    for (uint32_t w = 0; w < sv.num_weights; ++w) {
                                         const ufbx_skin_weight& sw = skin->weights.data[sv.weight_begin + w];
                                         int bone = sw.cluster_index < clusterToBone.size() ? clusterToBone[sw.cluster_index] : -1;
-                                        infl[w] = { bone >= 0 ? static_cast<float>(sw.weight) : 0.0f, std::max(bone, 0) };
+                                        std::pair<float, int> cand{ bone >= 0 ? static_cast<float>(sw.weight) : 0.0f, std::max(bone, 0) };
+                                        if (cand.first <= top[3].first) continue;
+                                        size_t k = 3;
+                                        for (; k > 0 && top[k - 1].first < cand.first; --k) top[k] = top[k - 1];
+                                        top[k] = cand;
                                     }
-                                    std::sort(infl.begin(), infl.begin() + n, [](auto& a, auto& b) { return a.first > b.first; });
                                     float total = 0.0f;
-                                    for (uint32_t w = 0; w < std::min<uint32_t>(n, 4); ++w) total += infl[w].first;
+                                    for (const auto& t : top) total += t.first;
                                     for (uint32_t w = 0; w < 4; ++w) {
-                                        bool used = w < n && total > 0.0f;
-                                        v.joints[w] = used ? static_cast<uint32_t>(infl[w].second) : 0u;
-                                        v.weights[w] = used ? infl[w].first / total : 0.0f;
+                                        bool used = total > 0.0f;
+                                        v.joints[w] = used ? static_cast<uint32_t>(top[w].second) : 0u;
+                                        v.weights[w] = used ? top[w].first / total : 0.0f;
                                     }
                                     if (total <= 0.0f) v.weights[0] = 1.0f; // unweighted vertex: follow bone 0
                                 }

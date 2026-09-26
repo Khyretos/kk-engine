@@ -44,7 +44,7 @@ jobs:
       # --- Plain build: this is what a contributor/CI should catch first,
       # fast, before paying for a second coverage-instrumented build. ---
       - name: Configure (plain)
-        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DKKE_WARNINGS_AS_ERRORS=ON
 
       - name: Build (plain)
         run: cmake --build build -j

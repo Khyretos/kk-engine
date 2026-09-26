@@ -29,7 +29,9 @@ const std::vector<const char*> kValidationLayers = {
 // validation layer above. This constant, the availability check, and
 // the enable logic below all work correctly whether or not it's
 // actually installed, exactly like validation layers already do.
+#if KKE_ENABLE_GPU_PROFILER
 const char* kGpuProfilerLayerName = "VK_LAYER_PROFILER_unified";
+#endif
 
 const std::vector<const char*> kDeviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME

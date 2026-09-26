@@ -829,7 +829,19 @@ namespace AMD
             return;
         }
 
-        fread(tetMesh, sizeof(*tetMesh), 1, fp);
+        // kk-engine patch: every read is checked. A short header read used
+        // to go on and allocate arrays from uninitialised counts.
+        if (fread(tetMesh, sizeof(*tetMesh), 1, fp) != 1)
+        {
+            fprintf(stderr, "FmReadTetMesh: '%s' has no complete tet mesh header\n", filename);
+            fclose(fp);
+            return;
+        }
+        bool complete = true;
+        auto readArray = [fp, &complete](void* dst, size_t elementSize, size_t count)
+        {
+            complete = complete && fread(dst, elementSize, count, fp) == count;
+        };
         tetMesh->solverData = NULL;
 
         tetMesh->vertsNeighbors = new FmVertNeighbors[tetMesh->maxVerts];
@@ -878,52 +890,56 @@ namespace AMD
         tetMesh->bvh.mortonCodesSorted = new int[tetMesh->maxExteriorFaces];
         tetMesh->bvh.primIndicesSorted = new int[tetMesh->maxExteriorFaces];
 
-        fread(tetMesh->vertsNeighbors, sizeof(*tetMesh->vertsNeighbors), tetMesh->maxVerts, fp);
-        fread(tetMesh->vertsMass, sizeof(*tetMesh->vertsMass), tetMesh->maxVerts, fp);
-        fread(tetMesh->vertsFlags, sizeof(*tetMesh->vertsFlags), tetMesh->maxVerts, fp);
-        fread(tetMesh->vertsIndex0, sizeof(*tetMesh->vertsIndex0), tetMesh->maxVerts, fp);
-        fread(tetMesh->vertsRestPos, sizeof(*tetMesh->vertsRestPos), tetMesh->maxVerts, fp);
-        fread(tetMesh->vertsPos, sizeof(*tetMesh->vertsPos), tetMesh->maxVerts, fp);
-        fread(tetMesh->vertsVel, sizeof(*tetMesh->vertsVel), tetMesh->maxVerts, fp);
-        fread(tetMesh->vertsExtForce, sizeof(*tetMesh->vertsExtForce), tetMesh->maxVerts, fp);
-        fread(tetMesh->vertsTetValues, sizeof(*tetMesh->vertsTetValues), tetMesh->maxVerts, fp);
-        fread(tetMesh->vertConnectivity.incidentTets, sizeof(*tetMesh->vertConnectivity.incidentTets), tetMesh->vertConnectivity.numIncidentTets, fp);
+        readArray(tetMesh->vertsNeighbors, sizeof(*tetMesh->vertsNeighbors), tetMesh->maxVerts);
+        readArray(tetMesh->vertsMass, sizeof(*tetMesh->vertsMass), tetMesh->maxVerts);
+        readArray(tetMesh->vertsFlags, sizeof(*tetMesh->vertsFlags), tetMesh->maxVerts);
+        readArray(tetMesh->vertsIndex0, sizeof(*tetMesh->vertsIndex0), tetMesh->maxVerts);
+        readArray(tetMesh->vertsRestPos, sizeof(*tetMesh->vertsRestPos), tetMesh->maxVerts);
+        readArray(tetMesh->vertsPos, sizeof(*tetMesh->vertsPos), tetMesh->maxVerts);
+        readArray(tetMesh->vertsVel, sizeof(*tetMesh->vertsVel), tetMesh->maxVerts);
+        readArray(tetMesh->vertsExtForce, sizeof(*tetMesh->vertsExtForce), tetMesh->maxVerts);
+        readArray(tetMesh->vertsTetValues, sizeof(*tetMesh->vertsTetValues), tetMesh->maxVerts);
+        readArray(tetMesh->vertConnectivity.incidentTets, sizeof(*tetMesh->vertConnectivity.incidentTets), tetMesh->vertConnectivity.numIncidentTets);
 
-        fread(tetMesh->tetsMass, sizeof(*tetMesh->tetsMass), tetMesh->numTets, fp);
-        fread(tetMesh->tetsFrictionCoeff, sizeof(*tetMesh->tetsFrictionCoeff), tetMesh->numTets, fp);
-        fread(tetMesh->tetsFlags, sizeof(*tetMesh->tetsFlags), tetMesh->numTets, fp);
-        fread(tetMesh->tetsShapeParams, sizeof(*tetMesh->tetsShapeParams), tetMesh->numTets, fp);        
-        fread(tetMesh->tetsRestDensity, sizeof(*tetMesh->tetsRestDensity), tetMesh->numTets, fp);
-        fread(tetMesh->tetsMaxUnconstrainedSolveIterations, sizeof(*tetMesh->tetsMaxUnconstrainedSolveIterations), tetMesh->numTets, fp);
-        fread(tetMesh->tetsStressMaterialParams, sizeof(*tetMesh->tetsStressMaterialParams), tetMesh->numTets, fp);
-        fread(tetMesh->tetsDeformationMaterialParams, sizeof(*tetMesh->tetsDeformationMaterialParams), tetMesh->numTets, fp);
-        fread(tetMesh->tetsStrainMag, sizeof(*tetMesh->tetsStrainMag), tetMesh->numTets, fp);
-        fread(tetMesh->tetsIndex0, sizeof(*tetMesh->tetsIndex0), tetMesh->numTets, fp);
-        fread(tetMesh->tetsRotation, sizeof(*tetMesh->tetsRotation), tetMesh->numTets, fp);
-        fread(tetMesh->tetsFaceIncidentTetIds, sizeof(*tetMesh->tetsFaceIncidentTetIds), tetMesh->numTets, fp);
-        fread(tetMesh->tetsVertIds, sizeof(*tetMesh->tetsVertIds), tetMesh->numTets, fp);
-        fread(tetMesh->tetsStiffness, sizeof(*tetMesh->tetsStiffness), tetMesh->numTets, fp);
+        readArray(tetMesh->tetsMass, sizeof(*tetMesh->tetsMass), tetMesh->numTets);
+        readArray(tetMesh->tetsFrictionCoeff, sizeof(*tetMesh->tetsFrictionCoeff), tetMesh->numTets);
+        readArray(tetMesh->tetsFlags, sizeof(*tetMesh->tetsFlags), tetMesh->numTets);
+        readArray(tetMesh->tetsShapeParams, sizeof(*tetMesh->tetsShapeParams), tetMesh->numTets);        
+        readArray(tetMesh->tetsRestDensity, sizeof(*tetMesh->tetsRestDensity), tetMesh->numTets);
+        readArray(tetMesh->tetsMaxUnconstrainedSolveIterations, sizeof(*tetMesh->tetsMaxUnconstrainedSolveIterations), tetMesh->numTets);
+        readArray(tetMesh->tetsStressMaterialParams, sizeof(*tetMesh->tetsStressMaterialParams), tetMesh->numTets);
+        readArray(tetMesh->tetsDeformationMaterialParams, sizeof(*tetMesh->tetsDeformationMaterialParams), tetMesh->numTets);
+        readArray(tetMesh->tetsStrainMag, sizeof(*tetMesh->tetsStrainMag), tetMesh->numTets);
+        readArray(tetMesh->tetsIndex0, sizeof(*tetMesh->tetsIndex0), tetMesh->numTets);
+        readArray(tetMesh->tetsRotation, sizeof(*tetMesh->tetsRotation), tetMesh->numTets);
+        readArray(tetMesh->tetsFaceIncidentTetIds, sizeof(*tetMesh->tetsFaceIncidentTetIds), tetMesh->numTets);
+        readArray(tetMesh->tetsVertIds, sizeof(*tetMesh->tetsVertIds), tetMesh->numTets);
+        readArray(tetMesh->tetsStiffness, sizeof(*tetMesh->tetsStiffness), tetMesh->numTets);
 
-        fread(tetMesh->exteriorFaces, sizeof(*tetMesh->exteriorFaces), tetMesh->maxExteriorFaces, fp);
+        readArray(tetMesh->exteriorFaces, sizeof(*tetMesh->exteriorFaces), tetMesh->maxExteriorFaces);
 
         if (tetMesh->tetsToFracture)
         {
-            fread(tetMesh->tetsToFracture, sizeof(*tetMesh->tetsToFracture), tetMesh->numTets, fp);
-            fread(tetMesh->tetsFractureMaterialParams, sizeof(*tetMesh->tetsFractureMaterialParams), tetMesh->numTets, fp);
+            readArray(tetMesh->tetsToFracture, sizeof(*tetMesh->tetsToFracture), tetMesh->numTets);
+            readArray(tetMesh->tetsFractureMaterialParams, sizeof(*tetMesh->tetsFractureMaterialParams), tetMesh->numTets);
         }
 
         if (tetMesh->tetsPlasticity)
         {
-            fread(tetMesh->tetsPlasticity, sizeof(*tetMesh->tetsPlasticity), tetMesh->numTets, fp);
-            fread(tetMesh->tetsPlasticityMaterialParams, sizeof(*tetMesh->tetsPlasticityMaterialParams), tetMesh->numTets, fp);
+            readArray(tetMesh->tetsPlasticity, sizeof(*tetMesh->tetsPlasticity), tetMesh->numTets);
+            readArray(tetMesh->tetsPlasticityMaterialParams, sizeof(*tetMesh->tetsPlasticityMaterialParams), tetMesh->numTets);
         }
 
-        fread(tetMesh->bvh.nodes, sizeof(*tetMesh->bvh.nodes), maxBvhNodes, fp);
-        fread(tetMesh->bvh.primBoxes, sizeof(*tetMesh->bvh.primBoxes), tetMesh->maxExteriorFaces, fp);
-        fread(tetMesh->bvh.mortonCodesSorted, sizeof(*tetMesh->bvh.mortonCodesSorted), tetMesh->maxExteriorFaces, fp);
-        fread(tetMesh->bvh.primIndicesSorted, sizeof(*tetMesh->bvh.primIndicesSorted), tetMesh->maxExteriorFaces, fp);
+        readArray(tetMesh->bvh.nodes, sizeof(*tetMesh->bvh.nodes), maxBvhNodes);
+        readArray(tetMesh->bvh.primBoxes, sizeof(*tetMesh->bvh.primBoxes), tetMesh->maxExteriorFaces);
+        readArray(tetMesh->bvh.mortonCodesSorted, sizeof(*tetMesh->bvh.mortonCodesSorted), tetMesh->maxExteriorFaces);
+        readArray(tetMesh->bvh.primIndicesSorted, sizeof(*tetMesh->bvh.primIndicesSorted), tetMesh->maxExteriorFaces);
 
         fclose(fp);
+        if (!complete)
+        {
+            fprintf(stderr, "FmReadTetMesh: '%s' is truncated; mesh data is incomplete\n", filename);
+        }
     }
 
     void FmFreeTetMeshData(FmTetMesh* tetMesh)

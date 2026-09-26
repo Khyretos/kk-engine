@@ -75,7 +75,6 @@ bool strictSuperset(const std::vector<InputSource>& big, const std::vector<Input
         if (std::find(big.begin(), big.end(), s) == big.end()) return false;
     return true;
 }
-bool isPulse(Trigger t) { return t == Trigger::Tap || t == Trigger::DoubleTap || t == Trigger::Release; }
 } // namespace
 
 std::vector<size_t> InputMap::conflicts(size_t index) const {

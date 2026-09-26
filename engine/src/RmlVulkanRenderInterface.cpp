@@ -43,7 +43,7 @@ struct GradientPushConstants {
 } // namespace
 
 RmlVulkanRenderInterface::RmlVulkanRenderInterface(VulkanDevice& device, VkRenderPass renderPass, bool stencilAvailable)
-    : m_device(device), m_stencilAvailable(stencilAvailable) {
+    : m_stencilAvailable(stencilAvailable), m_device(device) {
     // --- Descriptor set layout: one combined image sampler, fragment-only ---
     VkDescriptorSetLayoutBinding binding{};
     binding.binding = 0;
