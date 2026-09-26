@@ -158,6 +158,20 @@ NetBodyState interpolate(const Timeline<NetBodyState>& line, double time, double
 constexpr uint16_t kEventBodiesReset = 0xFF00; // the replicated body set changed: forget old bodies
 constexpr uint16_t kEventServerMessage = 0xFF01; // a line from the server to show (its MOTD, "say"): UTF-8 text
 
+// Who hears a voice (docs/NETWORKING.md "Voice"). The server decides, so
+// a player never gets voice they shouldn't, nor anyone's address.
+struct VoiceRules {
+    bool enabled = true;
+    float proximityRange = 40.0f;          // m: past it a proximity voice isn't even sent
+    bool allowTeam = true, allowAll = true; // which channels players may use
+    // A player's team; unset = everyone is on one team.
+    std::function<int(uint8_t playerId)> team;
+    std::set<uint8_t> muted;               // speakers the server silenced (admin mute)
+    size_t maxPacketsPerSecond = 60;       // per speaker; 50 is 20 ms frames
+    // `speakerPos`/`listenerPos` null: not known yet (no state), so not near.
+    bool reaches(VoiceChannel channel, uint8_t speaker, const glm::vec3* speakerPos, uint8_t listener, const glm::vec3* listenerPos) const;
+};
+
 // ------------------------------------------------------------------ server
 
 class NetServer {
@@ -193,6 +207,9 @@ public:
     // is fine. A new `seed` for the same id starts a fresh set.
     void breakBorders(uint16_t id, uint32_t seed, const std::vector<std::pair<uint16_t, uint16_t>>& borders);
     void forgetBreaks(uint16_t id);
+    // The host's own voice (player 0), routed like a client's.
+    void sendVoice(const VoiceMsg& m);
+    size_t voiceRelayed() const { return m_voiceRelayed; }
     size_t spawnCount() const { return m_spawns.size(); }
 
     void update(double now);
@@ -212,6 +229,8 @@ public:
     // player's first state.
     std::function<bool(uint8_t id, const NetPlayerState& from, const NetPlayerState& to, double dt)> checkMove;
     std::function<void(const GameEventMsg&)> onEvent;          // from a client
+    std::function<void(const VoiceMsg&)> onVoice;              // a client's voice the host should hear
+    VoiceRules voice;
     std::function<void(uint8_t id, bool joined)> onPlayer;
     // Asked at every join after version, game and password: "" lets the
     // player in, anything else is the reason they're turned away (a ban,
@@ -234,6 +253,8 @@ private:
         size_t badPackets = 0;
         double eventWindow = 0.0;
         size_t eventsInWindow = 0;
+        double voiceWindow = 0.0;
+        size_t voiceInWindow = 0;
         std::map<uint16_t, float> priority; // body id -> accumulated priority
         std::map<uint16_t, bool> sentSleeping;
     };
@@ -247,6 +268,7 @@ private:
     void sendSnapshot(Client& c);
     void broadcastReliable(const std::vector<uint8_t>& data, int exceptPlayer);
     void correct(Client& c);
+    void routeVoice(const VoiceMsg& m, const glm::vec3* speakerPos);
     void sendBreaks(PeerId peer, uint16_t id, uint32_t seed, const std::vector<std::pair<uint16_t, uint16_t>>& borders, int exceptPlayer);
     uint32_t timeMs() const { return static_cast<uint32_t>((m_now - m_start) * 1000.0); }
 
@@ -264,6 +286,7 @@ private:
     std::vector<NetBodyState> m_bodies;
     std::vector<Client> m_clients;
     size_t m_badPackets = 0, m_corrections = 0;
+    size_t m_voiceRelayed = 0;
 };
 
 // ------------------------------------------------------------------ client
@@ -284,6 +307,8 @@ public:
 
     void setLocalState(const NetPlayerState& state) { m_local = state; m_hasLocal = true; }
     void sendEvent(uint16_t kind, const std::vector<uint8_t>& payload);
+    // Our voice: one Opus frame on `channel` (unreliable; the server decides who hears it).
+    void sendVoice(VoiceChannel channel, uint16_t seq, const std::vector<uint8_t>& opusFrame);
 
     void update(double now);
 
@@ -300,6 +325,7 @@ public:
     std::function<void(const SpawnMsg&)> onSpawn;              // build your copy
     std::function<void(uint16_t id)> onDespawn;                // remove it
     std::function<void(const BreakMsg&)> onBreak;              // break your copy along these borders
+    std::function<void(const VoiceMsg&)> onVoice;              // someone's voice for us (speaker = their id)
 
 private:
     struct Player { std::string name, character; Timeline<NetPlayerState> states; };

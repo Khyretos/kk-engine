@@ -5,6 +5,9 @@
 #include "kke/modules/ModelModule.h"
 #if KKE_ENABLE_NET
 #include "kke/modules/NetModule.h"
+#if KKE_ENABLE_NET && KKE_ENABLE_VOICE
+#include "kke/modules/VoiceModule.h"
+#endif
 #endif
 #include "kke/modules/RigidBodyModule.h"
 #if KKE_ENABLE_LUA
@@ -53,6 +56,10 @@ int main() {
         // RmlUi: documents made by Lua scripts (ui.*), e.g. break-the-targets' HUD.
         app.addModule<kke::UiModule>();
         panels.push_back(&app.addModule<kke::AudioModule>());
+#if KKE_ENABLE_NET && KKE_ENABLE_VOICE
+        // Voice chat: hold B to talk to players near you (KKE_VOICE=off: no microphone).
+        panels.push_back(&app.addModule<kke::VoiceModule>());
+#endif
         // Overlay stays on when panels are hidden; on by default here so the
         // demo shows it (a saved accessibility.json wins).
         app.addModule<kke::SoundVisualizerModule>().settings.enabled = true;

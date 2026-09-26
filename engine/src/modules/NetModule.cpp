@@ -120,6 +120,8 @@ bool NetModule::host(uint16_t port, std::string* error) {
         m_enet = raw;
         m_server = std::move(server);
         m_server->onEvent = [this](const net::GameEventMsg& e) { dispatchEvent(e); };
+        m_server->onVoice = [this](const net::VoiceMsg& m) { for (const auto& l : m_voiceListeners) l(m); };
+        m_server->voice = voiceRules;
         if (m_rigid) {
             m_moveCheck = std::make_unique<net::WorldMoveCheck>(m_rigid->world(), [this](RigidWorld::BodyId b) {
                 return std::any_of(m_capsules.begin(), m_capsules.end(), [b](const auto& kv) { return kv.second == b; });
@@ -189,6 +191,7 @@ bool NetModule::join(const std::string& address, uint16_t port, std::string* err
     m_client->onSpawn = [this](const net::SpawnMsg& m) { onSpawnMsg(m); };
     m_client->onDespawn = [this](uint16_t id) { onDespawnMsg(id); };
     m_client->onBreak = [this](const net::BreakMsg& m) { applyBreak(m); };
+    m_client->onVoice = [this](const net::VoiceMsg& m) { for (const auto& l : m_voiceListeners) l(m); };
     m_role = Role::Client;
     applyFollowers();
     m_status = "joining " + address + ":" + std::to_string(port);
@@ -502,7 +505,13 @@ void NetModule::syncRemoteCapsules(float dt) {
     }
 }
 
+void NetModule::sendVoice(net::VoiceChannel channel, uint16_t seq, const std::vector<uint8_t>& opusFrame) {
+    if (m_server) m_server->sendVoice(net::VoiceMsg{ 0, channel, seq, opusFrame });
+    else if (m_client) m_client->sendVoice(channel, seq, opusFrame);
+}
+
 void NetModule::update(const UpdateContext&) {
+    if (m_server) m_server->voice = voiceRules; // the host may change them while playing
     const double t = now();
     if (m_transport) m_transport->conditions = simulated;
     if (m_server) {

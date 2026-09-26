@@ -17,6 +17,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 option(KKE_ENABLE_VALIDATION "Enable Vulkan validation layers in debug" ON)
 option(ENGINE_ENABLE_LUA "Lua 5.4 gameplay scripting (kke::ScriptVM, ScriptModule; docs/SCRIPTING.md)" ON)
 option(KKE_ENABLE_NET "Networking over ENet (MIT): kke::NetModule host/join, LAN discovery (docs/NETWORKING.md). Off = offline only; the loopback transport and replication logic still build." ON)
+option(KKE_ENABLE_VOICE "Voice chat: Opus (BSD) codec, VoiceModule (docs/NETWORKING.md \"Voice\"). Needs KKE_ENABLE_NET." ON)
 option(ENGINE_HEADLESS_TEST "Build the headless smoke-test target" ON)
 option(KKE_ENABLE_TESTS "Build the unit test suite (tests/)" ON)
 option(KKE_ENABLE_BENCHMARKS "Build kke_bench, the headless benchmark suite (benchmarks/, docs/BENCHMARKS.md)" ON)
@@ -397,6 +398,25 @@ if(KKE_ENABLE_NET)
         target_compile_definitions(kke_enet PRIVATE HAS_FCNTL=1 HAS_POLL=1 HAS_GETADDRINFO=1 HAS_GETNAMEINFO=1
                                    HAS_INET_PTON=1 HAS_INET_NTOP=1 HAS_MSGHDR_FLAGS=1 HAS_SOCKLEN_T=1)
     endif()
+endif()
+
+# ---------------------------------------------------------------------------
+# Opus — the voice chat codec (BSD-3, https://opus-codec.org): 48 kHz mono,
+# 20 ms frames, in-band FEC. Only the library; its tests and tools are off.
+# ---------------------------------------------------------------------------
+if(KKE_ENABLE_NET AND KKE_ENABLE_VOICE)
+    set(OPUS_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+    set(OPUS_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
+    set(OPUS_INSTALL_PKG_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+    set(OPUS_INSTALL_CMAKE_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+        opus
+        GIT_REPOSITORY https://github.com/xiph/opus.git
+        GIT_TAG        v1.5.2
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_MakeAvailable(opus)
+    set_target_properties(opus PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
 
 # ---------------------------------------------------------------------------
