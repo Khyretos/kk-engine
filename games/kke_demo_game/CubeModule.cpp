@@ -128,8 +128,7 @@ void CubeModule::init(kke::Application& app) {
     // different, smaller push constant layout, and critically a
     // different render pass (the shadow map's own depth-only one, not
     // the swapchain's).
-    kke::PipelineConfig shadowConfig;
-    shadowConfig.cullMode = VK_CULL_MODE_NONE;
+    kke::PipelineConfig shadowConfig = kke::ShadowMap::casterConfig();
     shadowConfig.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ShadowPushConstants) };
     m_shadowPipeline = std::make_unique<kke::Pipeline>(
         app.device(), app.shadowMap().renderPass(),

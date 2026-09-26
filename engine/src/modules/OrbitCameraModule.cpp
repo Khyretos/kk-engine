@@ -45,8 +45,14 @@ void OrbitCameraModule::update(const UpdateContext& ctx) {
     if (!uiWantsMouse && orbitButton) {
         m_yaw += mouse.deltaX * m_orbitSensitivity * m_sensitivityScale;
         m_pitch -= mouse.deltaY * m_orbitSensitivity * m_sensitivityScale * (m_invertY ? -1.0f : 1.0f);
-        constexpr float kPitchLimit = glm::half_pi<float>() - 0.05f;
-        m_pitch = std::clamp(m_pitch, -kPitchLimit, kPitchLimit);
+        m_pitch = std::clamp(m_pitch, m_minPitch, m_maxPitch);
+    }
+
+    // Two fingers: drag turns the view, pinch zooms, twist spins it.
+    if (const TouchGestures::Frame t = m_touches.take(); t.active) {
+        nudge(t.pan.x * m_touchOrbitSensitivity * m_sensitivityScale - t.twist,
+              -t.pan.y * m_touchOrbitSensitivity * m_sensitivityScale * (m_invertY ? -1.0f : 1.0f),
+              t.pinch > 1e-3f ? 1.0f / t.pinch : 1.0f);
     }
 
     if (m_autoOrbit) {
@@ -89,6 +95,44 @@ void OrbitCameraModule::update(const UpdateContext& ctx) {
     }
 
     camera.position = camera.target - forward * m_distance;
+}
+
+void OrbitCameraModule::setPitchLimits(float minPitch, float maxPitch) {
+    constexpr float kPole = glm::half_pi<float>() - 0.05f;
+    m_minPitch = std::clamp(std::min(minPitch, maxPitch), -kPole, kPole);
+    m_maxPitch = std::clamp(std::max(minPitch, maxPitch), -kPole, kPole);
+    m_pitch = std::clamp(m_pitch, m_minPitch, m_maxPitch);
+}
+
+void OrbitCameraModule::nudge(float yawRadians, float pitchRadians, float zoomFactor) {
+    m_yaw += yawRadians;
+    m_pitch = std::clamp(m_pitch + pitchRadians, m_minPitch, m_maxPitch);
+    if (zoomFactor > 0.0f) m_distance = std::clamp(m_distance * zoomFactor, m_minDistance, m_maxDistance);
+}
+
+void OrbitCameraModule::onEvent(const SDL_Event& event) {
+    switch (event.type) {
+    case SDL_EVENT_FINGER_DOWN:
+    case SDL_EVENT_FINGER_MOTION:
+    case SDL_EVENT_FINGER_UP: {
+        // SDL gives 0..1 of the window; pixels keep pinch and twist unskewed.
+        int w = 1, h = 1;
+        SDL_GetWindowSize(m_app->window().handle(), &w, &h);
+        const glm::vec2 pos(event.tfinger.x * static_cast<float>(w), event.tfinger.y * static_cast<float>(h));
+        if (event.type == SDL_EVENT_FINGER_DOWN) m_touches.fingerDown(event.tfinger.fingerID, pos);
+        else if (event.type == SDL_EVENT_FINGER_MOTION) m_touches.fingerMove(event.tfinger.fingerID, pos);
+        else m_touches.fingerUp(event.tfinger.fingerID);
+        break;
+    }
+    case SDL_EVENT_FINGER_CANCELED:
+        m_touches.fingerUp(event.tfinger.fingerID);
+        break;
+    case SDL_EVENT_WINDOW_FOCUS_LOST:
+        m_touches.clear();
+        break;
+    default:
+        break;
+    }
 }
 
 void OrbitCameraModule::renderUi() {

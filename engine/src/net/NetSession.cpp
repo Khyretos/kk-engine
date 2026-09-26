@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 
 namespace kke::net {
 
@@ -80,6 +81,19 @@ namespace {
 
 bool finite(const glm::vec3& v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); }
 
+// Compares every byte whatever the first difference (no timing hint of
+// how much of a password was right).
+bool sameSecret(const std::string& a, const std::string& b) {
+    unsigned diff = static_cast<unsigned>(a.size() ^ b.size());
+    const size_t n = std::max(a.size(), b.size());
+    for (size_t i = 0; i < n; ++i) {
+        const unsigned char x = i < a.size() ? static_cast<unsigned char>(a[i]) : 0;
+        const unsigned char y = i < b.size() ? static_cast<unsigned char>(b[i]) : 0;
+        diff |= static_cast<unsigned>(x ^ y);
+    }
+    return diff == 0;
+}
+
 template <typename Msg>
 void sendMsg(ITransport& t, PeerId peer, Channel ch, MessageType type, Msg msg) {
     t.send(peer, ch, encode(type, msg));
@@ -147,6 +161,7 @@ void NetServer::drop(Client& c, const std::string& reason) {
     m_transport.disconnect(c.peer);
     c.peer = kNoPeer;
     if (c.id) {
+        authority.forget(c.id);
         PlayerInfoMsg left{ c.id, false, c.name, c.character };
         broadcastReliable(encode(MessageType::PlayerInfo, left), c.id);
         if (onPlayer) onPlayer(c.id, false);
@@ -168,20 +183,81 @@ void NetServer::sendEvent(uint16_t kind, const std::vector<uint8_t>& payload, in
     broadcastReliable(encode(MessageType::GameEvent, e), exceptPlayer);
 }
 
+void NetServer::sendEventTo(uint8_t playerId, uint16_t kind, const std::vector<uint8_t>& payload) {
+    Client* c = byId(playerId);
+    if (!c || c->peer == kNoPeer) return;
+    GameEventMsg e{ 0, kind, payload };
+    if (e.payload.size() > kMaxEventBytes) e.payload.resize(kMaxEventBytes);
+    sendMsg(m_transport, c->peer, Channel::Reliable, MessageType::GameEvent, e);
+}
+
+std::string NetServer::address(uint8_t playerId) const {
+    for (const Client& c : m_clients)
+        if (c.id == playerId && playerId) return m_transport.address(c.peer);
+    return {};
+}
+
 void NetServer::relayEvent(const GameEventMsg& e) {
     GameEventMsg copy = e;
     broadcastReliable(encode(MessageType::GameEvent, copy), e.fromPlayer);
 }
 
+void NetServer::spawn(const SpawnMsg& m, bool persistent) {
+    SpawnMsg copy = m;
+    if (copy.desc.size() > kMaxSpawnBytes) copy.desc.resize(kMaxSpawnBytes);
+    broadcastReliable(encode(MessageType::Spawn, copy), -1);
+    if (persistent) m_spawns[copy.id] = std::move(copy);
+    else m_spawns.erase(copy.id);
+}
+
+void NetServer::despawn(uint16_t id) {
+    m_spawns.erase(id);
+    m_breaks.erase(id);
+    DespawnMsg m{ id };
+    broadcastReliable(encode(MessageType::Despawn, m), -1);
+}
+
+// One Break message per kMaxBordersPerBreak borders; to one peer, or
+// (kNoPeer) to every client.
+void NetServer::sendBreaks(PeerId peer, uint16_t id, uint32_t seed, const std::vector<std::pair<uint16_t, uint16_t>>& borders, int exceptPlayer) {
+    for (size_t first = 0; first < borders.size(); first += kMaxBordersPerBreak) {
+        BreakMsg m{ id, seed, {} };
+        const size_t last = std::min(borders.size(), first + kMaxBordersPerBreak);
+        m.borders.assign(borders.begin() + static_cast<std::ptrdiff_t>(first), borders.begin() + static_cast<std::ptrdiff_t>(last));
+        const std::vector<uint8_t> data = encode(MessageType::Break, m);
+        if (peer != kNoPeer) m_transport.send(peer, Channel::Reliable, data);
+        else broadcastReliable(data, exceptPlayer);
+    }
+}
+
+void NetServer::breakBorders(uint16_t id, uint32_t seed, const std::vector<std::pair<uint16_t, uint16_t>>& borders) {
+    BreakSet& set = m_breaks[id];
+    if (set.seed != seed) set = BreakSet{ seed, {} };
+    std::vector<std::pair<uint16_t, uint16_t>> fresh;
+    for (auto [a, b] : borders) {
+        if (a == b) continue; // not a border
+        if (a > b) std::swap(a, b);
+        if (set.borders.insert({ a, b }).second) fresh.push_back({ a, b });
+    }
+    if (!fresh.empty()) sendBreaks(kNoPeer, id, seed, fresh, -1);
+}
+
+void NetServer::forgetBreaks(uint16_t id) { m_breaks.erase(id); }
+
 void NetServer::handleHello(Client& c, const HelloMsg& m) {
     std::string reason;
     if (c.id != 0) return; // a second Hello: ignore
+    const size_t slots = m_config.dedicated ? m_config.maxPlayers : m_config.maxPlayers - 1; // the host's own player takes one
     if (m.version != kProtocolVersion)
         reason = "version mismatch: server speaks protocol " + std::to_string(kProtocolVersion) + ", you " + std::to_string(m.version);
     else if (m.gameId != m_config.gameId)
         reason = "this server runs '" + m_config.gameId + "', not '" + m.gameId + "'";
-    else if (clientCount() + 1 >= m_config.maxPlayers)
+    else if (!sameSecret(m.password, m_config.password))
+        reason = m.password.empty() ? "this server needs a password" : "wrong password";
+    else if (clientCount() >= slots)
         reason = "server is full (" + std::to_string(m_config.maxPlayers) + " players)";
+    else if (admit)
+        reason = admit(m.name, m_transport.address(c.peer));
     if (!reason.empty()) return drop(c, reason);
     uint8_t id = 1;
     while (byId(id)) ++id;
@@ -191,12 +267,17 @@ void NetServer::handleHello(Client& c, const HelloMsg& m) {
     WelcomeMsg w{ id, static_cast<uint8_t>(m_config.maxPlayers), m_config.snapshotHz, timeMs() };
     sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::Welcome, w);
     // Who's here already (the host, then the other clients), then tell
-    // them about the new one.
-    sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::PlayerInfo, PlayerInfoMsg{ 0, true, m_hostName, m_hostCharacter });
+    // them about the new one. A dedicated server has no player of its own.
+    if (!m_config.dedicated) sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::PlayerInfo, PlayerInfoMsg{ 0, true, m_hostName, m_hostCharacter });
     for (const Client& o : m_clients)
         if (o.id && o.id != id) sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::PlayerInfo, PlayerInfoMsg{ o.id, true, o.name, o.character });
     PlayerInfoMsg joined{ id, true, c.name, c.character };
     broadcastReliable(encode(MessageType::PlayerInfo, joined), id);
+    // What was made and broken before they came (reliable and ordered:
+    // a spawn arrives before the breaks of the breakable it makes).
+    for (auto& [sid, spawnMsg] : m_spawns) sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::Spawn, spawnMsg);
+    for (const auto& [bid, set] : m_breaks)
+        sendBreaks(c.peer, bid, set.seed, std::vector<std::pair<uint16_t, uint16_t>>(set.borders.begin(), set.borders.end()), -1);
     // A newcomer gets every body soon: high starting priority.
     for (const NetBodyState& b : m_bodies) c.priority[b.id] = 10.0f;
     if (onPlayer) onPlayer(id, true);
@@ -205,9 +286,14 @@ void NetServer::handleHello(Client& c, const HelloMsg& m) {
 void NetServer::handleState(Client& c, const PlayerStateMsg& m) {
     const NetPlayerState& s = m.state;
     if (!finite(s.position) || !finite(s.velocity)) return bad(c, "non-finite state");
+    const Authority moveAuthority = authority.authority(c.id, Action::Move);
+    if (moveAuthority == Authority::Server) return; // the server moves this player, not its client
     if (c.hasState) {
         const int32_t delta = static_cast<int32_t>(m.timeMs - c.acceptedTimeMs);
         if (delta <= 0) return; // old or duplicate (reordered): the newer one is already in
+    }
+    if (c.hasState && moveAuthority == Authority::Checked) {
+        const int32_t delta = static_cast<int32_t>(m.timeMs - c.acceptedTimeMs);
         // The client's clock may not run faster than ours (+ slack): it
         // can't buy itself more distance by claiming more time passed.
         const double dt = std::min(delta / 1000.0, (m_now - c.acceptedAt) + 0.25);
@@ -216,13 +302,10 @@ void NetServer::handleState(Client& c, const PlayerStateMsg& m) {
         const bool teleport = (s.flags & kPlayerTeleported) != 0 && m_now - c.lastTeleport >= limits.teleportCooldown;
         const bool ok = teleport || (horizontal <= limits.horizontalSpeed * dt + limits.slack &&
                                      d.y <= limits.riseSpeed * dt + limits.slack && -d.y <= limits.fallSpeed * dt + limits.slack);
-        if (!ok) {
-            if (m_now - c.lastCorrection > 0.5) {
-                sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::Correction, CorrectionMsg{ c.accepted.position });
-                c.lastCorrection = m_now;
-                ++m_corrections;
-            }
-            return;
+        if (!ok) return correct(c);
+        if (!teleport && checkMove && !checkMove(c.id, c.accepted, s, dt)) {
+            ++m_refusedMoves;
+            return correct(c);
         }
         if (teleport) c.lastTeleport = m_now;
     }
@@ -232,6 +315,15 @@ void NetServer::handleState(Client& c, const PlayerStateMsg& m) {
     c.acceptedTimeMs = m.timeMs;
     c.acceptedAt = m_now;
     c.hasState = true;
+}
+
+// Back to the last move that passed (at most twice a second: the states
+// already on their way from before it arrives are refused too).
+void NetServer::correct(Client& c) {
+    if (m_now - c.lastCorrection <= 0.5) return;
+    sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::Correction, CorrectionMsg{ c.accepted.position });
+    c.lastCorrection = m_now;
+    ++m_corrections;
 }
 
 void NetServer::receive(Client& c, const NetEvent& e) {
@@ -253,6 +345,11 @@ void NetServer::receive(Client& c, const NetEvent& e) {
             if (++c.eventsInWindow > m_config.maxEventsPerSecond) return; // flooding: dropped
             if (m->kind >= kEventBodiesReset) return bad(c, "reserved event");
             m->fromPlayer = c.id; // whatever it claimed
+            const Authority eventAuthority = authority.authority(c.id, Action::Event);
+            if (eventAuthority == Authority::Server || (eventAuthority == Authority::Checked && checkEvent && !checkEvent(c.id, *m))) {
+                ++m_refusedEvents;
+                return;
+            }
             if (onEvent) onEvent(*m);
         } else {
             bad(c, "event");
@@ -290,6 +387,7 @@ void NetServer::update(double now) {
                 PlayerInfoMsg left{ id, false, c->name, c->character };
                 c->id = 0; // erased with the others below
                 if (id) {
+                    authority.forget(id);
                     broadcastReliable(encode(MessageType::PlayerInfo, left), -1);
                     if (onPlayer) onPlayer(id, false);
                 }
@@ -455,6 +553,22 @@ void NetClient::receive(const NetEvent& e) {
             else if (onEvent) onEvent(*m);
         } else ++m_badPackets;
         break;
+    case MessageType::Spawn:
+        if (auto m = decode<SpawnMsg>(*type, d, n); m && e.channel == Channel::Reliable) {
+            if (onSpawn) onSpawn(*m);
+        } else ++m_badPackets;
+        break;
+    case MessageType::Despawn:
+        if (auto m = decode<DespawnMsg>(*type, d, n); m && e.channel == Channel::Reliable) {
+            m_bodies.erase(m->id);
+            if (onDespawn) onDespawn(m->id);
+        } else ++m_badPackets;
+        break;
+    case MessageType::Break:
+        if (auto m = decode<BreakMsg>(*type, d, n); m && e.channel == Channel::Reliable) {
+            if (onBreak) onBreak(*m);
+        } else ++m_badPackets;
+        break;
     case MessageType::Snapshot:
         if (auto m = decode<SnapshotMsg>(*type, d, n)) {
             // Unreliable packets can arrive late: an older snapshot still
@@ -489,7 +603,7 @@ void NetClient::update(double now) {
         if (e.peer != m_server) continue;
         switch (e.type) {
         case NetEvent::Type::Connected: {
-            HelloMsg h{ kProtocolVersion, m_config.gameId, m_name, m_character };
+            HelloMsg h{ kProtocolVersion, m_config.gameId, m_name, m_character, m_config.password };
             sendMsg(m_transport, m_server, Channel::Reliable, MessageType::Hello, h);
             m_statusText = "saying hello";
             break;

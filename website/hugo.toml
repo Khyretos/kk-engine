@@ -1,0 +1,47 @@
+# engine.kreative-kompas.com: the Kreative Kompas Engine showcase
+# (website/README.md). The feature showcase is data/features.yaml; devlog
+# posts are content/devlog/*.md.
+baseURL = "https://engine.kreative-kompas.com/"
+languageCode = "en"
+title = "Kreative Kompas Engine"
+enableRobotsTXT = true
+disableKinds = ["taxonomy", "term"]
+
+[params]
+  description = "A modular, open-source Vulkan game engine in C++17 with Lua scripting. Runs on a single core with no GPU, scales up from there."
+  tagline = "Direct your creativity."
+  github = "https://github.com/Khyretos/kk-engine"
+  releases = "https://github.com/Khyretos/kk-engine/releases"
+  kofi = "https://ko-fi.com/khyretos"
+  docs = "/docs/"
+  author = "Kees Rodriguez"
+  authorSite = "https://kees.kreative-kompas.com/"
+
+[markup.goldmark.renderer]
+  unsafe = true
+
+[markup.highlight]
+  style = "dracula"
+  noClasses = true
+
+[menus]
+  [[menus.main]]
+    name = "Features"
+    url = "/#features"
+    weight = 10
+  [[menus.main]]
+    name = "Showcase"
+    url = "/showcase/"
+    weight = 20
+  [[menus.main]]
+    name = "Get started"
+    url = "/#start"
+    weight = 30
+  [[menus.main]]
+    name = "Docs"
+    url = "/docs/"
+    weight = 40
+  [[menus.main]]
+    name = "Devlog"
+    url = "/devlog/"
+    weight = 50

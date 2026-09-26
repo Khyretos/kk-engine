@@ -114,6 +114,17 @@ after 0.4 s. Keys aren't bound to ui.* by default because the keyboard
 already reaches RmlUi directly (arrows, Enter, Tab, Esc); add them for a
 custom layout. Back and prev/next are the game's to interpret.
 
+## Touch screens
+
+One finger is the mouse: SDL's touch-to-mouse emulation turns it into
+mouse motion and left-button events, so ImGui, RmlUi and click/drag code
+work with a finger unchanged. Two fingers are gestures:
+`kke::TouchGestures` (`kke/TouchGestures.h`) turns raw
+`SDL_EVENT_FINGER_*` into two-finger drag, pinch and twist, and
+`OrbitCameraModule` uses them (drag turns the view, pinch zooms, twist
+spins it). The sandbox's Play mode also plays with a gamepad as a
+pointer; see docs/PLAY_TO_MAKE.md "Fingers and controllers".
+
 ## Split screen
 
 `InputModule(path, players)` creates one map per player;

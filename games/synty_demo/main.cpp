@@ -9,6 +9,12 @@
 #if KKE_ENABLE_FEMFX
 #include "kke/modules/PhysicsModule.h"
 #endif
+#if KKE_ENABLE_JOLT
+#include "kke/modules/RigidBodyModule.h"
+#endif
+#if KKE_ENABLE_FEMFX && KKE_ENABLE_JOLT
+#include "kke/modules/PhysicsBridgeModule.h"
+#endif
 
 #include <iostream>
 #include <vector>
@@ -36,6 +42,15 @@ int main() {
         auto& physics = app.addModule<kke::PhysicsModule>(/*renderScale=*/1.0f, /*initialObjectCount=*/0);
         physics.setDrawGround(false);
         panels.push_back(&physics);
+#endif
+#if KKE_ENABLE_JOLT
+        // Jolt ragdolls (joint limits, limbs that collide) win over FEMFX's
+        // when both are present; the scene gives Jolt its floor and walls.
+        panels.push_back(&app.addModule<kke::RigidBodyModule>());
+#endif
+#if KKE_ENABLE_FEMFX && KKE_ENABLE_JOLT
+        // Jolt ragdolls and FEMFX glass meet (the G key).
+        panels.push_back(&app.addModule<kke::PhysicsBridgeModule>());
 #endif
         auto& scene = app.addModule<kke_demo::SyntySceneModule>();
         panels.push_back(&app.addModule<kke::DebugControlModule>());

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "kke/net/Authority.h"
 #include "kke/net/Protocol.h"
 #include "kke/net/Transport.h"
 
@@ -7,6 +8,7 @@
 #include <deque>
 #include <functional>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -29,14 +31,24 @@ namespace kke::net {
 //             bodies that matter most for each client (priority
 //             accumulator, awake before asleep, one packet's budget), and
 //             clients show them interpolated the same way.
-//   Events    reliable, game-defined (a shot, a push, a break's seed):
-//             clients send them to the server, which applies them and
-//             relays them.
+//   Events    reliable, game-defined (a shot, a push): clients send them
+//             to the server, which applies them and relays them.
+//   Spawns    objects the host makes while playing (a server script's
+//             bodies and breakables): each client builds its own copy
+//             from a small description; late joiners get the ones still
+//             there. Their bodies then travel in snapshots like any other.
+//   Breaks    which borders of a breakable broke on the host (kke::
+//             BreakGraph): clients break their copy along the same
+//             borders, so everyone sees the same pieces. Kept for late
+//             joiners too.
 //
 // Why owner-predicted players rather than server-side input replay: the
 // character's traversal state machine (kke::Locomotion: vault, climb,
 // hang) can't yet be rewound and replayed, and co-op / sandbox games
-// don't need it. Competitive games will get input replay (issue #28).
+// don't need it. The server does check every move: speed limits here,
+// and through `checkMove` whatever the game adds (NetModule: no walking
+// through walls, no flying; kke/net/WorldMoveCheck.h). Input replay for
+// competitive games is issue #28.
 
 struct NetConfig {
     std::string gameId = "kke";     // clients of another game are turned away
@@ -50,6 +62,8 @@ struct NetConfig {
     double connectTimeout = 10.0;   // client: no Welcome by then: give up
     size_t maxBadPackets = 20;      // malformed packets before a kick
     size_t maxEventsPerSecond = 60; // per client; more are dropped
+    std::string password;           // server: required to join ("" = none); client: what it sends
+    bool dedicated = false;         // server: no player of its own (kke_server), all slots for clients
 };
 
 // How far a player may move between two of its states (server check).
@@ -143,6 +157,7 @@ NetBodyState interpolate(const Timeline<NetBodyState>& line, double time, double
 
 // Reserved event kinds (games use 0 .. 0xFEFF).
 constexpr uint16_t kEventBodiesReset = 0xFF00; // the replicated body set changed: forget old bodies
+constexpr uint16_t kEventServerMessage = 0xFF01; // a line from the server to show (its MOTD, "say"): UTF-8 text
 
 // ------------------------------------------------------------------ server
 
@@ -165,6 +180,21 @@ public:
     // A client's event to everyone else (the game decides what to relay).
     void relayEvent(const GameEventMsg& e);
     void kick(uint8_t playerId, const std::string& reason);
+    // Host -> one client (a reply: a leaderboard, a chat line to one player).
+    void sendEventTo(uint8_t playerId, uint16_t kind, const std::vector<uint8_t>& payload);
+    std::string address(uint8_t playerId) const; // where a client is (bans, logs)
+
+    // Objects made at run time (see Spawns above). `persistent`: also
+    // sent to players who join later, until despawn(). Ids are the game's
+    // (NetModule uses 0x8000 and up), unique among live spawns.
+    void spawn(const SpawnMsg& m, bool persistent = true);
+    void despawn(uint16_t id); // also forgets its breaks
+    // Borders of breakable `id` that broke here, as (piece, piece) pairs;
+    // ones already sent are skipped, so passing the whole set each time
+    // is fine. A new `seed` for the same id starts a fresh set.
+    void breakBorders(uint16_t id, uint32_t seed, const std::vector<std::pair<uint16_t, uint16_t>>& borders);
+    void forgetBreaks(uint16_t id);
+    size_t spawnCount() const { return m_spawns.size(); }
 
     void update(double now);
 
@@ -174,10 +204,31 @@ public:
     PeerStats stats(uint8_t playerId) const;
     size_t badPackets() const { return m_badPackets; }
     size_t corrections() const { return m_corrections; }
+    size_t refusedMoves() const { return m_refusedMoves; } // by checkMove
+    size_t refusedEvents() const { return m_refusedEvents; } // by authority or checkEvent
+
+    // Who decides what, per player role (kke/net/Authority.h,
+    // docs/ANTI_CHEAT.md): a Server-authority move or event from a client
+    // is dropped, a Client-authority move skips the checks, Checked is
+    // the speed limits + checkMove / checkEvent. Roles are forgotten when
+    // a player leaves.
+    AuthorityPolicy authority;
+    // An event from a player whose events are Checked: may it happen?
+    // false = dropped (onEvent never sees it). Unset = allowed.
+    std::function<bool(uint8_t id, const GameEventMsg&)> checkEvent;
 
     MovementLimits limits;
+    // A move that passed the speed limits: may the player go from `from`
+    // to `to` in `dt` seconds? false = refused (the client is corrected
+    // back to `from`). Not asked for teleports the limits allow, nor for a
+    // player's first state.
+    std::function<bool(uint8_t id, const NetPlayerState& from, const NetPlayerState& to, double dt)> checkMove;
     std::function<void(const GameEventMsg&)> onEvent;          // from a client
     std::function<void(uint8_t id, bool joined)> onPlayer;
+    // Asked at every join after version, game and password: "" lets the
+    // player in, anything else is the reason they're turned away (a ban,
+    // an allow list; kke::ServerAccess).
+    std::function<std::string(const std::string& name, const std::string& address)> admit;
 
 private:
     struct Client {
@@ -207,10 +258,16 @@ private:
     void drop(Client& c, const std::string& reason);
     void sendSnapshot(Client& c);
     void broadcastReliable(const std::vector<uint8_t>& data, int exceptPlayer);
+    void correct(Client& c);
+    void sendBreaks(PeerId peer, uint16_t id, uint32_t seed, const std::vector<std::pair<uint16_t, uint16_t>>& borders, int exceptPlayer);
     uint32_t timeMs() const { return static_cast<uint32_t>((m_now - m_start) * 1000.0); }
 
     ITransport& m_transport;
     NetConfig m_config;
+    struct BreakSet { uint32_t seed = 0; std::set<std::pair<uint16_t, uint16_t>> borders; };
+    std::map<uint16_t, SpawnMsg> m_spawns;  // persistent ones, for late joiners
+    std::map<uint16_t, BreakSet> m_breaks;
+    size_t m_refusedMoves = 0, m_refusedEvents = 0;
     bool m_running = false, m_started = false;
     double m_now = 0.0, m_start = 0.0, m_nextSnapshot = 0.0;
     std::string m_hostName, m_hostCharacter;
@@ -252,6 +309,9 @@ public:
     std::function<void(const GameEventMsg&)> onEvent;
     std::function<void(const glm::vec3&)> onCorrection;        // the server put us here
     std::function<void(uint8_t id, bool joined)> onPlayer;
+    std::function<void(const SpawnMsg&)> onSpawn;              // build your copy
+    std::function<void(uint16_t id)> onDespawn;                // remove it
+    std::function<void(const BreakMsg&)> onBreak;              // break your copy along these borders
 
 private:
     struct Player { std::string name, character; Timeline<NetPlayerState> states; };

@@ -7,6 +7,10 @@
 #if KKE_ENABLE_FEMFX
 #include "kke/modules/PhysicsModule.h"
 #endif
+#if KKE_ENABLE_JOLT
+#include "kke/modules/RigidBodyModule.h"
+#endif
+
 #include <imgui.h>
 
 #include <cmath>
@@ -62,9 +66,9 @@ void SyntySceneModule::init(kke::Application& app) {
     m_app = &app;
     m_models = app.getModule<kke::ModelModule>();
     // Optional and loosely coupled: any module implementing
-    // IRagdollPhysics (FEMFX's PhysicsModule today) enables ragdolls.
-    auto ragdollProviders = app.findCapability<kke::IRagdollPhysics>();
-    m_physics = ragdollProviders.empty() ? nullptr : ragdollProviders.front();
+    // IRagdollPhysics enables ragdolls; Jolt's (RigidBodyModule) is
+    // preferred over FEMFX's when both are there.
+    m_physics = kke::bestRagdollPhysics(app.findCapability<kke::IRagdollPhysics>());
     const char* base = SDL_GetBasePath();
     m_packDir = kke::findAssetFolder("assets/synty", { "KKE_ASSETS_DIR", "KKE_SYNTY_DIR" }, base ? base : "", &m_searched);
     if (!m_packDir.empty()) m_catalog = kke::AssetCatalog::scan(m_packDir);
@@ -109,6 +113,8 @@ void SyntySceneModule::init(kke::Application& app) {
     place("StaticMeshes/SM_Generic_Small_Rocks_01.fbx", glm::vec3(6.0f, 0, 5.5f));
     place("StaticMeshes/SM_Prop_FlagPole_01.fbx", glm::vec3(0.0f, 0, -8.0f));
 
+    addJoltLevel();
+
     // --- characters in a row, each doing something different
     struct Spec { const char* file; const char* label; const char* behavior; };
     const Spec specs[] = {
@@ -126,6 +132,36 @@ void SyntySceneModule::init(kke::Application& app) {
         c.position = glm::vec3((i - 1.5f) * 1.6f, 0.0f, 0.0f);
         c.instance = m_models->spawn(c.model, glm::translate(glm::mat4(1.0f), c.position));
         if (c.behavior == "clip") m_models->playAnimation(c.instance, 0, true);
+        m_characters.push_back(c);
+    }
+    // Animals, if a Quaternius Farm Animals pack is there too (any
+    // Quaternius-named rig works): they ragdoll with animal joint limits.
+    struct AnimalSpec { const char* file; const char* label; glm::vec3 at; float yaw, scale, mass; };
+    const AnimalSpec animals[] = {
+        { "Horse.fbx", "Horse (Quaternius)", { -3.5f, 0.0f, -4.5f }, 70.0f, 0.3f, 500.0f },
+        { "Pug.fbx", "Pug (Quaternius)", { 3.2f, 0.0f, -3.0f }, -60.0f, 0.2f, 8.0f },
+    };
+    for (const AnimalSpec& a : animals) {
+        if (!m_catalog.find(fs::path(a.file).stem().string())) continue;
+        Character c;
+        c.label = a.label;
+        c.behavior = "clip";
+        c.animal = true;
+        c.mass = a.mass;
+        c.model = load(a.file);
+        if (!c.model) continue;
+        c.position = a.at;
+        glm::mat4 t = glm::translate(glm::mat4(1.0f), c.position);
+        t = glm::rotate(t, glm::radians(a.yaw), glm::vec3(0, 1, 0));
+        c.instance = m_models->spawn(c.model, glm::scale(t, glm::vec3(a.scale)));
+        // An idle clip if it has one.
+        if (const kke::ModelData* d = m_models->model(c.model)) {
+            for (size_t i = 0; i < d->animations.size(); ++i)
+                if (d->animations[i].name.find("Idle") != std::string::npos) {
+                    m_models->playAnimation(c.instance, static_cast<int>(i), true);
+                    break;
+                }
+        }
         m_characters.push_back(c);
     }
     if (m_selected >= static_cast<int>(m_characters.size())) m_selected = 0;
@@ -179,7 +215,60 @@ void SyntySceneModule::update(const kke::UpdateContext& ctx) {
             rotateBone(c, "UpperArm_L", glm::vec3(0, 0, -65));
             rotateBone(c, "UpperArm_R", glm::vec3(0, 0, -65));
         }
+        blendToAnimation(c, ctx.dt);
     }
+}
+
+namespace {
+constexpr float kStandUpSeconds = 0.6f;
+}
+
+// The pose the character's locals (clip, procedural, hand-posed) give
+// right now, blended in from the ragdoll pose it stood up from.
+void SyntySceneModule::blendToAnimation(Character& c, float dt) {
+    if (c.blendAge < 0.0f) return;
+    const kke::ModelData* d = m_models->model(c.model);
+    const std::vector<glm::mat4>* locals = m_models->boneLocals(c.instance);
+    if (!d || !locals || locals->size() != d->bones.size()) {
+        c.blendAge = -1.0f;
+        m_models->setBoneWorldOverride(c.instance, {});
+        return;
+    }
+    c.blendAge += dt;
+    const float w = kke::blendWeight(c.blendAge, kStandUpSeconds);
+    if (w >= 1.0f) {
+        c.blendAge = -1.0f;
+        c.blendFrom.clear();
+        m_models->setBoneWorldOverride(c.instance, {}); // the animation drives it again
+        return;
+    }
+    std::vector<glm::mat4> animated(d->bones.size());
+    for (size_t b = 0; b < animated.size(); ++b) {
+        const int p = d->bones[b].parent;
+        animated[b] = p >= 0 ? animated[p] * (*locals)[b] : (*locals)[b];
+    }
+    m_models->setBoneWorldOverride(c.instance, kke::blendPoses(c.blendFrom, animated, w));
+}
+
+// Jolt only sees what it's given: the floor (top at y = 0, like FEMFX's
+// ground) and the level's two walls, as boxes. Without them a Jolt
+// ragdoll would fall forever.
+void SyntySceneModule::addJoltLevel() {
+#if KKE_ENABLE_JOLT
+    auto* rigid = m_app->getModule<kke::RigidBodyModule>();
+    if (!rigid) return;
+    kke::RigidWorld& w = rigid->world();
+    auto box = [&](glm::vec3 center, glm::vec3 half) {
+        kke::RigidWorld::BodyDesc b;
+        b.motion = kke::RigidWorld::Motion::Static;
+        b.position = center;
+        b.halfExtents = half;
+        if (w.add(b) == kke::RigidWorld::kNoBody) kke::log::get(name())->warn("Jolt refused a level box at ({}, {}, {})", center.x, center.y, center.z);
+    };
+    box(glm::vec3(0.0f, -0.5f, 0.0f), glm::vec3(30.0f, 0.5f, 30.0f));
+    box(glm::vec3(0.0f, 1.5f, -10.1f), glm::vec3(10.0f, 1.5f, 0.1f));
+    box(glm::vec3(-10.1f, 1.5f, -5.0f), glm::vec3(0.1f, 1.5f, 5.0f));
+#endif
 }
 
 void SyntySceneModule::ragdoll(Character& c, const glm::vec3& push) {
@@ -191,7 +280,10 @@ void SyntySceneModule::ragdoll(Character& c, const glm::vec3& push) {
     std::vector<glm::mat4> world = m_models->boneWorld(c.instance);
     for (glm::mat4& w : world) w = instance * w;
     std::string missing;
-    c.ragdollDesc = kke::buildHumanoidRagdoll(*d, world, 70.0f, &missing);
+    // Realistic joint limits come with the builders; a game can change
+    // any of them here (c.ragdollDesc.findJoint("knee_l")->... or
+    // scaleLimits) before the ragdoll is created.
+    c.ragdollDesc = c.animal ? kke::buildQuadrupedRagdoll(*d, world, c.mass, &missing) : kke::buildHumanoidRagdoll(*d, world, c.mass, &missing);
     if (c.ragdollDesc.bodies.empty()) {
         kke::log::get(name())->warn("'{}' can't ragdoll: skeleton has no '{}' bone", c.label, missing);
         return;
@@ -200,15 +292,18 @@ void SyntySceneModule::ragdoll(Character& c, const glm::vec3& push) {
     c.ragdoll = m_physics->createRagdoll(c.ragdollDesc, glm::vec3(0.0f));
     if (!c.ragdoll) return;
     // Shove the upper body harder than the legs so it topples, not slides.
-    for (const char* body : { "torso", "head" }) m_physics->pushRagdollBody(c.ragdoll, c.ragdollDesc.findBody(body), push);
+    for (const char* body : { c.animal ? "chest" : "torso", "head" }) m_physics->pushRagdollBody(c.ragdoll, c.ragdollDesc.findBody(body), push);
     m_physics->pushRagdollBody(c.ragdoll, c.ragdollDesc.findBody("pelvis"), push * 0.4f);
     c.behaviorBeforeRagdoll = c.behavior;
     c.behavior = "ragdoll";
+    c.blendAge = -1.0f; // knocked down again while getting up
+    c.blendFrom.clear();
 }
 
 // Stands a glass pane 1.8 m in front of the character (away from the
-// camera) and throws the character through it: a ragdoll (FEMFX rigid
-// bodies) hitting a fracturable FEMFX deformable body. This one needs the
+// camera) and throws the character through it: a ragdoll (Jolt limbs
+// through PhysicsBridgeModule, or FEMFX rigid bodies) hitting a
+// fracturable FEMFX deformable body. This one needs the
 // concrete PhysicsModule for the pane — the ragdoll itself only goes
 // through IRagdollPhysics.
 void SyntySceneModule::throughGlass(Character& c) {
@@ -237,9 +332,25 @@ void SyntySceneModule::throughGlass(Character& c) {
 
 void SyntySceneModule::standUp(Character& c) {
     if (!c.ragdoll) return;
+    // Get up where the body landed, facing the way it was: move the
+    // character there, then blend from the lying pose (now relative to
+    // the new spot) back to its animation.
+    std::vector<glm::mat4> bodies;
+    const kke::ModelData* d = m_models->model(c.model);
+    const int pelvis = c.ragdollDesc.findBody("pelvis");
+    if (d && pelvis >= 0 && m_physics->ragdollBodyTransforms(c.ragdoll, bodies)) {
+        glm::mat4 t = m_models->transform(c.instance);
+        const glm::vec3 landed(bodies[pelvis][3]);
+        t[3] = glm::vec4(landed.x, t[3].y, landed.z, 1.0f);
+        m_models->setTransform(c.instance, t);
+        c.blendFrom = kke::poseFromRagdoll(*d, c.binding, bodies, glm::inverse(t));
+        c.blendAge = 0.0f;
+        m_models->setBoneWorldOverride(c.instance, c.blendFrom);
+    } else {
+        m_models->setBoneWorldOverride(c.instance, {});
+    }
     m_physics->destroyRagdoll(c.ragdoll);
     c.ragdoll = 0;
-    m_models->setBoneWorldOverride(c.instance, {});
     c.behavior = c.behaviorBeforeRagdoll;
 }
 
@@ -286,7 +397,7 @@ void SyntySceneModule::renderUi() {
         ImGui::TextWrapped("R: ragdoll selected   Shift+R: everyone   T: stand up   G: through a glass pane\n"
                            "(physics body boxes: Physics panel)");
     } else {
-        ImGui::TextDisabled("Ragdolls need a physics module (build with -DKKE_ENABLE_FEMFX=ON)");
+        ImGui::TextDisabled("Ragdolls need a physics module (Jolt or FEMFX)");
     }
     for (int i = 0; i < static_cast<int>(m_characters.size()); ++i) {
         if (ImGui::RadioButton(m_characters[i].label.c_str(), m_selected == i)) {

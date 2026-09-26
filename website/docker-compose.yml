@@ -1,0 +1,18 @@
+# engine.kreative-kompas.com: the showcase and the docs in one container.
+#
+#   cd website && docker compose up -d --build     # http://localhost:8080
+#
+# Put your reverse proxy (Caddy, Traefik, nginx) in front of port 8080 for
+# the domain and HTTPS. Rebuild after pulling to publish changes.
+services:
+  website:
+    build:
+      context: ..
+      dockerfile: website/Dockerfile
+      args:
+        SITE_URL: https://engine.kreative-kompas.com/
+    image: kke-website
+    container_name: kke-website
+    ports:
+      - "8080:8080"
+    restart: unless-stopped

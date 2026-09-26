@@ -38,8 +38,7 @@ void BackdropModule::init(kke::Application& app) {
     config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), app.materialTextureSetLayout() };
     m_pipeline = std::make_unique<kke::Pipeline>(app.device(), app.renderer().renderPass(),
                                                  "shaders/cube.vert.spv", "shaders/cube.frag.spv", config);
-    kke::PipelineConfig shadowConfig;
-    shadowConfig.cullMode = VK_CULL_MODE_NONE;
+    kke::PipelineConfig shadowConfig = kke::ShadowMap::casterConfig();
     shadowConfig.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ShadowPushConstants) };
     m_shadowPipeline = std::make_unique<kke::Pipeline>(app.device(), app.shadowMap().renderPass(),
                                                        "shaders/shadow.vert.spv", "shaders/shadow.frag.spv", shadowConfig);

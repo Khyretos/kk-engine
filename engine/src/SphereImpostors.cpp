@@ -46,8 +46,7 @@ DynamicMeshRenderer::DynamicMeshRenderer(Application& app) : m_app(app) {
     config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPush) };
     config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), app.materialTextureSetLayout() };
     m_pipeline = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/cube.vert.spv", "shaders/glow.frag.spv", config);
-    PipelineConfig shadow;
-    shadow.cullMode = VK_CULL_MODE_NONE;
+    PipelineConfig shadow = ShadowMap::casterConfig();
     shadow.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ShadowPush) };
     m_shadowPipeline = std::make_unique<Pipeline>(app.device(), app.shadowMap().renderPass(), "shaders/shadow.vert.spv", "shaders/shadow.frag.spv", shadow);
 }

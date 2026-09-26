@@ -1,0 +1,14 @@
+<header class="site-header">
+  <div class="wrap header-row">
+    <a class="brand" href="{{ "/" | relURL }}">
+      <img src="{{ "images/logo.png" | relURL }}" alt="" width="36" height="36">
+      <span class="gradient-text">Kreative Kompas</span><span class="brand-sub">Engine</span>
+    </a>
+    <button class="menu-toggle" aria-label="Menu" aria-expanded="false"><i class="fa-solid fa-bars"></i></button>
+    <nav class="nav">
+      {{ range site.Menus.main }}<a href="{{ .URL | relURL }}">{{ .Name }}</a>{{ end }}
+      <button class="theme-toggle" aria-label="Light or dark"><i class="fa-solid fa-moon"></i><i class="fa-solid fa-sun"></i></button>
+      <a class="btn btn-small btn-primary" href="{{ site.Params.github }}"><i class="fa-brands fa-github"></i> GitHub</a>
+    </nav>
+  </div>
+</header>

@@ -158,9 +158,12 @@ private:
     void endHook(int nargs);
     void pushArg(double v);
     void pushArg(float v) { pushArg(double(v)); }
-    void pushArg(int v) { pushArg(double(v)); }
-    void pushArg(uint32_t v) { pushArg(double(v)); }
-    void pushArg(uint64_t v) { pushArg(double(v)); }
+    // Whole numbers go in as Lua integers: an id passed to a hook ("Break")
+    // must satisfy the bindings' integer checks (breakable.pieces(id)).
+    void pushArg(int v) { pushInteger(v); }
+    void pushArg(uint32_t v) { pushInteger(static_cast<int64_t>(v)); }
+    void pushArg(uint64_t v) { pushInteger(static_cast<int64_t>(v)); }
+    void pushInteger(int64_t v);
     void pushArg(bool v);
     void pushArg(const std::string& v);
     void pushArg(const char* v) { pushArg(std::string(v)); }

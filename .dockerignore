@@ -1,0 +1,11 @@
+# Only what website/Dockerfile needs goes into the build context (the build
+# trees and fetched dependencies are gigabytes). The cross-build images in
+# docker/ use that folder as their context, so this doesn't affect them.
+*
+!website/
+!docs/
+!mkdocs.yml
+!tools/docs_site/
+!engine/src/
+!games/template/
+**/__pycache__

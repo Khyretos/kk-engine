@@ -86,6 +86,7 @@ private:
     MeltMaterial m_material;
     std::vector<float> m_density, m_temp, m_meltAccum, m_scratch;
     std::vector<float> m_distance;    // signed distance per voxel (negative inside), rebuilt when density changes
+    std::vector<float> m_distIn, m_distOut; // rebuildDistance()'s padded working grids, kept between rebuilds
     bool m_distanceDirty = true;
     void rebuildDistance();
     float m_initialSolid = 0.0f;

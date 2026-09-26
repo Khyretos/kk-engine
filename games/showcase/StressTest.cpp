@@ -31,7 +31,7 @@ constexpr int kRainCrates = 300;
 constexpr float kRainPerSecond = 30.0f;
 constexpr float kShotsPerSecond = 4.0f;
 const glm::vec3 kRainCenter(0.0f, 0.0f, -2.0f);
-const glm::vec3 kYard(14.0f, 0.0f, -6.0f); // ShowcaseModule::spawnBreakables
+using layout::kYard; // ShowcaseModule::spawnBreakables
 
 double nowSeconds() {
     return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -207,6 +207,16 @@ void ShowcaseModule::finishStressTest() {
         { "femfx", "not built" },
 #endif
     };
+    // What was running (the audit asked for it: a report must say which
+    // modules its numbers include) and any VRAM cap (docs/BENCHMARKS.md).
+    std::string modules;
+    for (const kke::Module* m : m_app->findCapability<kke::Module>()) {
+        if (!modules.empty()) modules += ", ";
+        modules += m->name();
+    }
+    r.config.emplace_back("modules", modules);
+    const char* vram = std::getenv("KKE_VRAM_BUDGET_MB");
+    r.config.emplace_back("vram_budget_mb", vram && *vram ? vram : "none (whole GPU)");
     m_stressStats.fill(r);
     r.results.emplace_back("peak_rss_mb", kke::peakResidentMemoryMb());
     const char* dirEnv = std::getenv("KKE_BENCH_DIR");

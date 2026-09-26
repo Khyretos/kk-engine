@@ -1,0 +1,50 @@
+name: Feature request
+description: Something the engine should do that it doesn't yet.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check [ROADMAP.md](https://github.com/Khyretos/kk-engine/blob/main/ROADMAP.md) and the open issues first: it may already be planned. Rough ideas are welcome in Discussions (Ideas) too.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you want to make
+      description: The game, scene or tool you're building, and what's stopping you today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What the engine should do
+      description: How you'd like it to work, from the point of view of someone using it (a Lua call, a module, a setting, an editor panel).
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: How you work around it now
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Rendering
+        - Physics / destruction
+        - Animation / movement
+        - Audio
+        - Input
+        - Networking
+        - Scripting (Lua)
+        - Editor / sandbox
+        - UI
+        - Tooling / build
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Contributing
+      options:
+        - label: I'd like to work on this myself (see CONTRIBUTING.md).

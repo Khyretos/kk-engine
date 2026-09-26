@@ -4,6 +4,8 @@
 #include <vk_mem_alloc.h>
 #include <glm/glm.hpp>
 
+#include "kke/Pipeline.h"
+
 namespace kke {
 
 class VulkanDevice;
@@ -48,7 +50,19 @@ public:
     // reasonable, hand-picked region themselves (e.g. CubeModule passes
     // its own cube's position and a small radius covering it and the
     // ground beneath).
-    static glm::mat4 computeLightViewProj(const glm::vec3& lightDirection, const glm::vec3& sceneCenter, float sceneRadius);
+    //
+    // With a shadowMapResolution, the centre is snapped to whole shadow
+    // texels along the light's axes: a region that follows the camera
+    // then slides in texel steps, so shadow edges stay put instead of
+    // shimmering as the camera moves (docs/RENDERING_PRINCIPLES.md §5).
+    static glm::mat4 computeLightViewProj(const glm::vec3& lightDirection, const glm::vec3& sceneCenter, float sceneRadius,
+                                          uint32_t shadowMapResolution = 0);
+
+    // Starting config for a shadow-caster pipeline: no culling (thin and
+    // open meshes still cast), and slope-scaled depth bias so the lit
+    // side of a surface doesn't shadow itself (acne) without the large
+    // constant bias that detaches shadows from their casters.
+    static PipelineConfig casterConfig();
 
     void beginRenderPass(VkCommandBuffer cmd);
     void endRenderPass(VkCommandBuffer cmd);

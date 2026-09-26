@@ -129,6 +129,57 @@ the player hit a one-frame window.
   `ShimmyAlongTheEdgeAndAroundTheCorner`, `ShimmyStopsWhereTheTopStepsUp`,
   `ShimmyIntoAnInsideCorner`, `JumpBackOffAHang`.
 
+## Ledge leaps (*Ledge actions*, IMSFMmekFxg)
+
+- **Sideways**: hanging, "go up" with the stick pushed along the wall
+  leaps to the next edge that way. The search walks along the wall past
+  the end of the current edge (the part shimmying covers is skipped) and
+  takes the nearest edge within 2.2 m that is up to 1.3 m higher or 1 m
+  lower. It lands a body width in from that edge's end, so the hands
+  aren't on a corner.
+- **Up**: with the stick into the wall (or no stick), "go up" climbs if
+  there is room on top. If there isn't (a thin wall, a sill), it leaps up
+  to an edge above on the same wall, up to 1.3 m higher.
+- The target is found and checked before the leap, including room for
+  the body there and at the middle of the arc. The body moves
+  kinematically for 0.45 s: evenly along the ground, on a parabola in
+  height that peaks about 0.3 m above the higher end (PointDown's
+  ledge-leap parabola). It hangs on arrival. Hand IK reaches for the new
+  edge in the last 40%.
+- No target (nothing in reach, no room) means no leap. A sideways "go up"
+  then climbs if it can, as before.
+- Tests: `Locomotion.LeapsSidewaysAcrossAGapToAHigherEdge`,
+  `LeapsUpToAnEdgeAbove`.
+
+## Wall run
+
+- **Start**: in the air, going at least 4 m/s, still holding the run,
+  with a vertical wall at the hips and head within 0.45 m of the
+  capsule's side, and running along it rather than into it (the wall is
+  within 60 degrees of parallel). At least 0.35 m off the ground, so a
+  wall beside a kerb doesn't count.
+- **On the wall**: the body moves kinematically along the wall at the
+  entry speed, with the wall's normal re-read each step (gently curved
+  walls work). Height follows a lighter gravity (7 m/s² instead of 9.8),
+  starting with 70% of the take-off's vertical speed, so a run arcs up
+  about a metre and comes down. It lasts at most 1.1 s.
+- **Ends**: "go up" is a wall jump (4.5 m/s off the wall, 85% of a jump
+  up, 80% of the run kept). Letting go of the stick or crouching drops
+  off. Where the wall ends, the runner flies on with the momentum.
+  Something in the way stops the run. Landing on the floor keeps the run
+  going on the ground. The same wall can't catch you again for 0.35 s,
+  but another wall can, so wall-to-wall chains work.
+- Animation: UAL2's `WallRun_L_Loop` / `WallRun_R_Loop` by wall side
+  (`Locomotion::wallRunSide()`). The camera's shoulder moves to the open
+  side during the run, because over the wall shoulder the spring arm
+  would pull in behind the head.
+- Tests: `Locomotion.JumpingAlongAWallRunsOnIt`,
+  `WallJumpKicksOffTheWall`, `SlowJumpNextToAWallIsNoWallRun`.
+- kke_demo: the trick course at x = 26 has a 12 m wall to run along, a
+  row of thin pillars with 1 m gaps and rising tops for leaps, and a thin
+  wall under a beam for the leap up. `KKE_DEMO_TRICKS=1 ./kke_demo` plays
+  through all of them.
+
 ## Vault and climb (*Parkour ep3*, rhzwhJPb-jQ; *Ledge actions*)
 
 - The capsule becomes **kinematic** for the move (`RigidWorld::
@@ -204,8 +255,6 @@ speed); it's for authored moves such as a real vault clip.
 
 ## Not done yet (next)
 
-- Ledge-to-ledge leaps (*Ledge actions*),
-  wall run.
 - CCD for longer chains (*IK fundamentals with CCD*, 8pX6LeZdpOo); the
   legs and arms use the analytic two-bone solve.
 - Animation layering (upper body over locomotion; *Animation layering

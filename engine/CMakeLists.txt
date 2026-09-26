@@ -20,6 +20,8 @@ set(ENGINE_SOURCES
     src/BenchmarkReport.cpp
     src/AssetCatalog.cpp
     src/Picking.cpp
+    src/PlayBlocks.cpp
+    src/TouchGestures.cpp
     src/VoxelTets.cpp
     src/InteriorColor.cpp
     src/FracturePattern.cpp
@@ -31,6 +33,7 @@ set(ENGINE_SOURCES
     src/FrameStats.cpp
     src/Viewports.cpp
     src/PhysicsBridge.cpp
+    src/PhysicsWorld.cpp
     src/Buoyancy.cpp
     src/CameraRig.cpp
     src/SceneFile.cpp
@@ -38,6 +41,16 @@ set(ENGINE_SOURCES
     src/net/Protocol.cpp
     src/net/Transport.cpp
     src/net/NetSession.cpp
+    src/net/ScriptSpawns.cpp
+    src/server/ServerConfig.cpp
+    src/server/ServerFiles.cpp
+    src/server/ServerAccess.cpp
+    src/server/Leaderboard.cpp
+    src/server/Directory.cpp
+    src/net/Authority.cpp
+    src/InputSanity.cpp
+    src/PackSeal.cpp
+    src/DevTools.cpp
     src/InputMap.cpp
     src/InputDevices.cpp
     src/modules/InputModule.cpp
@@ -61,6 +74,7 @@ set(ENGINE_SOURCES
     src/LightingBuffer.cpp
     src/ShadowMap.cpp
     src/Texture.cpp
+    src/TextureMips.cpp
     src/MarketplaceIndex.cpp
     src/RmlTextSafety.cpp
     src/Log.cpp
@@ -76,6 +90,7 @@ set(ENGINE_SOURCES
     src/modules/DebugControlModule.cpp
     src/modules/PhysicsModule.cpp
     src/modules/PhysicsModuleBridge.cpp
+    src/modules/PhysicsModuleRubble.cpp
     src/modules/SettingsModule.cpp
     src/modules/ModelModule.cpp
     src/modules/ThumbnailModule.cpp
@@ -108,6 +123,8 @@ set(ENGINE_HEADERS
     include/kke/BenchmarkReport.h
     include/kke/AssetCatalog.h
     include/kke/Picking.h
+    include/kke/PlayBlocks.h
+    include/kke/TouchGestures.h
     include/kke/VoxelTets.h
     include/kke/InteriorColor.h
     include/kke/FracturePattern.h
@@ -191,12 +208,20 @@ target_link_libraries(kke_engine PUBLIC
     ufbx
     spdlog::spdlog
     kke_miniaudio
+    kke_monocypher
 )
 
 target_compile_definitions(kke_engine PUBLIC
     VK_NO_PROTOTYPES              # volk owns all Vulkan function pointers
     GLFW_INCLUDE_NONE
 )
+
+# Shipping builds compile the developer tools out (kke/DevTools.h).
+if(KKE_SHIPPING)
+    target_compile_definitions(kke_engine PUBLIC KKE_DEV_TOOLS=0)
+else()
+    target_compile_definitions(kke_engine PUBLIC KKE_DEV_TOOLS=1)
+endif()
 
 if(KKE_ENABLE_VALIDATION)
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_VALIDATION=1)
@@ -205,7 +230,8 @@ else()
 endif()
 
 if(KKE_ENABLE_JOLT)
-    target_sources(kke_engine PRIVATE src/RigidWorld.cpp src/Locomotion.cpp src/SceneLoader.cpp src/modules/RigidBodyModule.cpp src/modules/PhysicsBridgeModule.cpp)
+    target_sources(kke_engine PRIVATE src/RigidWorld.cpp src/Locomotion.cpp src/SceneLoader.cpp src/modules/RigidBodyModule.cpp src/modules/PhysicsBridgeModule.cpp
+        src/net/WorldMoveCheck.cpp)
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_JOLT=1)
     target_link_libraries(kke_engine PUBLIC Jolt)
 else()
@@ -213,7 +239,7 @@ else()
 endif()
 
 if(KKE_ENABLE_NET)
-    target_sources(kke_engine PRIVATE src/net/EnetTransport.cpp)
+    target_sources(kke_engine PRIVATE src/net/EnetTransport.cpp src/server/DirectoryNet.cpp src/server/DedicatedServer.cpp)
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_NET=1)
     target_link_libraries(kke_engine PUBLIC kke_enet)
     if(KKE_ENABLE_JOLT)
@@ -224,7 +250,7 @@ else()
 endif()
 
 if(ENGINE_ENABLE_LUA)
-    target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/modules/ScriptModule.cpp src/modules/ScriptBindings.cpp)
+    target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/modules/ScriptModule.cpp src/modules/ScriptBindings.cpp src/modules/ScriptReplication.cpp)
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_LUA=1)
     target_link_libraries(kke_engine PUBLIC lua_lib)
 else()
@@ -269,6 +295,7 @@ endif()
 target_compile_definitions(kke_engine PRIVATE KKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}")
 if(WIN32)
     target_link_libraries(kke_engine PUBLIC psapi) # peak memory in benchmark reports
+    target_link_libraries(kke_engine PUBLIC bcrypt) # secure random for kke/PackSeal.h key generation
 endif()
 
 # Hot CPU loops stay optimized in Debug builds too (same reasoning as
@@ -276,6 +303,6 @@ endif()
 # fracture setup are pure number crunching, 5-20x slower at -O0, and
 # nobody steps through them in a debugger. docs/OPTIMIZATION.md log #15.
 if(NOT MSVC)
-    set_source_files_properties(src/Texture.cpp src/VoxelTets.cpp src/InteriorColor.cpp src/FracturePattern.cpp src/VoronoiFracture.cpp src/ParticleFluid.cpp src/MeltVolume.cpp src/JigglePhysics.cpp src/Ocean.cpp src/FloatingBodies.cpp
+    set_source_files_properties(src/Texture.cpp src/TextureMips.cpp src/VoxelTets.cpp src/InteriorColor.cpp src/FracturePattern.cpp src/VoronoiFracture.cpp src/ParticleFluid.cpp src/MeltVolume.cpp src/JigglePhysics.cpp src/Ocean.cpp src/FloatingBodies.cpp
         PROPERTIES COMPILE_OPTIONS "$<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>")
 endif()

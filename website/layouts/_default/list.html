@@ -1,0 +1,20 @@
+{{ define "main" }}
+<section class="page-hero small">
+  <div class="blobs" aria-hidden="true"><span></span><span></span><span></span></div>
+  <div class="wrap">
+    <h1><span class="gradient-text animated">{{ .Title }}</span></h1>
+    {{ with .Content }}<div class="section-lead">{{ . }}</div>{{ end }}
+  </div>
+</section>
+<section class="section">
+  <div class="wrap narrow">
+    {{ range .Pages.ByDate.Reverse }}
+    <a class="post-row reveal" href="{{ .RelPermalink }}">
+      <time>{{ .Date.Format "2 January 2006" }}</time>
+      <h2>{{ .Title }}</h2>
+      <p>{{ .Summary | plainify | truncate 220 }}</p>
+    </a>
+    {{ end }}
+  </div>
+</section>
+{{ end }}

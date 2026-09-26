@@ -1,0 +1,264 @@
+# The feature showcase. Each entry is one section on /showcase/ and one card
+# on the home page, in this order. To add or update a feature: edit its
+# entry and drop images in static/media/ (webp, ~1280 px wide).
+#
+#   id:       anchor (/showcase/#id)
+#   title, icon (Font Awesome class), accent (CSS colour), tagline
+#   summary:  one or two sentences
+#   points:   what you get, one line each
+#   media:    images (first one is the card image) with captions; add
+#             video: media/x.webm to play a clip there instead
+#   sounds:   optional audio clips with labels (play buttons)
+#   demo:     the executable that shows it
+#   docs:     a page under /docs/ (the MkDocs site)
+
+- id: modules
+  title: Built from lego pieces
+  icon: fa-solid fa-cubes
+  accent: "#bf4eff"
+  tagline: A game is a list of modules.
+  summary: >-
+    Every system is a module you plug into an application: rendering,
+    physics, audio, UI, networking, your own gameplay. Take only what your
+    game needs; a module that crashes is isolated instead of taking the
+    game down with it.
+  points:
+    - Clear lifecycle (init, fixed update, update, render, UI, shutdown)
+    - Fixed-timestep simulation with pause and frame stepping
+    - Per-module fault isolation, async logging, a thread pool
+    - Runs on a single-core minimum spec and scales up
+  media:
+    - { src: media/starter-game.webp, caption: "The starter template: a player, a level and crates, from a short main.cpp and one Lua file" }
+    - { src: media/basics.webp, caption: "The building blocks: marketplace, lighting and debug panels as independent modules" }
+  demo: starter_game
+  docs: tutorials/getting-started/
+  code: |
+    kke::Application app("My Game", 1280, 720);
+    app.addModule<kke::RigidBodyModule>();
+    app.addModule<kke::ScriptModule>("scripts");
+    app.addModule<PlayerModule>();
+    app.run();
+
+- id: scripting
+  title: Lua that reloads while you play
+  icon: fa-solid fa-scroll
+  accent: "#ff9f1c"
+  tagline: Save the file. See it in the game.
+  summary: >-
+    Lua 5.4 with Garry's Mod-style hooks and timers. Save a script and the
+    running game reloads it in half a second, removing everything the old
+    version made. Scripts are sandboxed, so marketplace content can't touch
+    your files.
+  points:
+    - hook.Add, timer.Create, Vec math, familiar to GMod and Roblox creators
+    - Physics, models, breakables, UI, scenes, audio, input and net from Lua
+    - Errors show file and line and never stop the game
+    - Endless loops and runaway memory are stopped per script
+  media:
+    - { src: media/lua-targets.webp, caption: "Break the targets: a whole game with a HUD, a timer and a results screen, in one Lua file" }
+    - { src: media/lua-bodies.webp, caption: "Bodies spawned from a script, drawn as one batched mesh" }
+  demo: kke_demo (press T)
+  docs: SCRIPTING/
+  code: |
+    hook.Add("Think", "coins", function()
+      local middle = player.position() + Vec(0, 0.9, 0)
+      for id, pos in pairs(coins) do
+        if (pos - middle):length() < 0.9 then collect(id) end
+      end
+    end)
+
+- id: movement
+  title: Parkour-grade movement
+  icon: fa-solid fa-person-running
+  accent: "#2ec4b6"
+  tagline: Press jump. The world decides what that means.
+  summary: >-
+    Built on PointDown's movement principles: the same "go up" is a jump
+    in the open, a vault over a fence and a climb onto a ledge. Nothing in
+    the level is marked up; the character reads the geometry.
+  points:
+    - Vault, climb, ledge hang, shimmy, corners and jumping off walls
+    - Speed and direction handled separately, no instant 180s
+    - Three floor tiers, so kerbs don't trigger a fall animation
+    - Animation blending, foot and hand IK, ragdolls
+  media:
+    - { src: media/vault-climb.webp, caption: "Vaulting and climbing on the parkour lane" }
+    - { src: media/ledge-hang.webp, caption: "Hanging from a ledge and shimmying along it" }
+    - { src: media/parkour.webp, caption: "The autopilot running the lane, frame by frame" }
+  demo: kke_demo
+  docs: MOVEMENT/
+
+- id: destruction
+  title: Things really break
+  icon: fa-solid fa-burst
+  accent: "#ff4d6d"
+  tagline: Glass shatters, wood splinters, stone crumbles.
+  summary: >-
+    AMD FEMFX deformable bodies bend, dent and fracture by material, with
+    Voronoi, shard, splinter and radial patterns. Jolt handles thousands of
+    rigid bodies, and the two meet so shards knock crates about.
+  points:
+    - Plasticity: metal dents and stays dented
+    - Fracture patterns per material, pieces that keep their interior colour
+    - Jolt rigid bodies, world collision and a character controller
+    - A bridge between deformable pieces and rigid bodies
+  media:
+    - { src: media/glass-shatter.webp, video: media/glass-shatter.webm, caption: "Glass panes, a stone block and a plank hit by iron balls (tutorial 2, recorded in the engine)" }
+    - { src: media/crate-rain.webp, caption: "The stress test: crate rain and breakables at an uncapped frame rate" }
+  demo: kke_demo, physics_demo
+  docs: PHYSICS_BRIDGE/
+
+- id: jiggle
+  title: Jiggle physics
+  icon: fa-solid fa-cheese
+  accent: "#f15bb5"
+  tagline: Jelly that wobbles. Characters that bounce.
+  summary: >-
+    Soft bodies from lattice shape matching, drawn translucent with light
+    scattering inside, and soft-tissue bones on characters that follow
+    their motion.
+  points:
+    - Jelly with flavours, fruit inside and dents that recover
+    - Translucent rendering with Fresnel and subsurface light
+    - Soft-tissue bones on animated characters
+  media:
+    - { src: media/jelly.webp, caption: "Translucent jelly with balls bouncing off it" }
+    - { src: media/jiggle-body.webp, caption: "Soft-tissue bones on a jogging character" }
+  demo: jiggle_demo
+  docs: JIGGLE/
+
+- id: simulation
+  title: Liquids, melting and oceans
+  icon: fa-solid fa-water
+  accent: "#00bbf9"
+  tagline: Pour lava on ice. Drive a boat through the swell.
+  summary: >-
+    Particle liquids with temperature melt voxel solids (ice, wax,
+    chocolate, aluminium). A Gerstner ocean floats whatever you throw in by
+    its density.
+  points:
+    - Position-based fluids with heat transfer
+    - Meltable solids that turn into liquid
+    - Gerstner waves, buoyancy at sample points, foam and spray
+  media:
+    - { src: media/sea.webp, caption: "A boat on the swell; foam and wood ride high, iron sinks" }
+    - { src: media/melt.webp, caption: "Lava pouring onto a block, melting it" }
+  demo: sea_demo, melt_demo
+
+- id: rendering
+  title: Vulkan from the ground up
+  icon: fa-solid fa-mountain-sun
+  accent: "#fee440"
+  tagline: Close to the hardware, fine on a laptop.
+  summary: >-
+    Vulkan with volk and VMA, physically based materials, soft shadow maps,
+    GPU particles and instancing, with frustum culling and mip maps. It
+    even runs on a software renderer when there's no GPU.
+  points:
+    - PBR (Cook-Torrance), up to four lights, soft shadows
+    - GPU compute particles, instanced models, frustum culling
+    - FBX and OBJ import, skinning, asset packs loaded as they are
+  media:
+    - { src: media/town-block.webp, caption: "A town block built from an asset pack" }
+    - { src: media/forest-trail.webp, caption: "A forest trail scene" }
+    - { src: media/synty-run.webp, caption: "Characters from asset packs, retargeted onto the engine's animations" }
+  demo: kke_demo, synty_demo
+  docs: SCENES/
+
+- id: ui
+  title: Game UI in HTML and CSS
+  icon: fa-solid fa-window-restore
+  accent: "#9b5de5"
+  tagline: Menus you can style like a web page.
+  summary: >-
+    RmlUi on a custom Vulkan backend for game UI (menus, settings,
+    inventory, HUD, dialogue) and Dear ImGui for developer panels. Player
+    settings, rebinding and colour emoji included.
+  points:
+    - RmlUi documents, from C++ or from Lua (ui.open, ui.text, ui.onClick)
+    - Settings, inventory drag and drop, HUD and dialogue screens
+    - ImGui panels for every engine system (F1)
+  media:
+    - { src: media/rmlui.webp, caption: "The UI showcase: main menu, settings, inventory and HUD" }
+  demo: rmlui_demo
+
+- id: audio
+  title: Sound you can see
+  icon: fa-solid fa-wave-square
+  accent: "#00f5d4"
+  tagline: Every impact synthesized. Every sound shown.
+  summary: >-
+    Impacts are synthesized from the materials that met and how hard, then
+    placed in 3D and muffled behind walls. A sound visualizer shows where
+    sounds come from, for deaf and hard-of-hearing players.
+  points:
+    - Own mixer on miniaudio, 3D sound, occlusion, room acoustics
+    - Impact synthesis per material, no sample library needed
+    - A sound visualizer and a "ping" that lets you hear the walls
+  media:
+    - { src: media/sound-visualizer.webp, caption: "The sound visualizer showing impacts around the player" }
+  sounds:
+    - { src: media/impact-glass.ogg, label: Glass }
+    - { src: media/impact-metal.ogg, label: Metal }
+    - { src: media/impact-wood.ogg, label: Wood }
+    - { src: media/impact-stone.ogg, label: Stone }
+    - { src: media/impact-rubber.ogg, label: Rubber }
+    - { src: media/impact-plastic.ogg, label: Plastic }
+    - { src: media/impact-dirt.ogg, label: Dirt }
+    - { src: media/behind-wall.ogg, label: Behind a wooden wall }
+  demo: kke_demo
+  docs: AUDIO/
+
+- id: input
+  title: Any controller, any player
+  icon: fa-solid fa-gamepad
+  accent: "#fb5607"
+  tagline: Rebind everything. Play four on one screen.
+  summary: >-
+    Rebindable actions for keyboard, mouse, gamepads (paddles, gyro), HOTAS
+    and twin sticks, with hold, tap, double-tap, toggle and chords, and
+    split screen for up to four players.
+  points:
+    - Actions, not keys; a left-handed preset in one call
+    - Hold, tap, double-tap, toggle triggers and chords
+    - Split screen for four players, each with their own controller
+  media:
+    - { src: media/split-screen.webp, caption: "Four players in split screen" }
+  demo: kke_demo (KKE_SPLIT=4)
+  docs: INPUT/
+
+- id: networking
+  title: Play together
+  icon: fa-solid fa-network-wired
+  accent: "#3a86ff"
+  tagline: Host, join, find games on your network.
+  summary: >-
+    Host and join over ENet with LAN discovery. The host's physics is the
+    truth; players are replicated with a compact bit-packed protocol, and
+    you can test lag, jitter and packet loss on your own machine.
+  points:
+    - Host/join, LAN discovery, server-authoritative physics
+    - Bit-packed state, events and corrections
+    - Lag, jitter and loss simulation built in
+  media:
+    - { src: media/networking.webp, caption: "Host and guest: the guest pushes a box, the host sees it too" }
+  demo: kke_demo (KKE_NET=host / join)
+  docs: NETWORKING/
+
+- id: sandbox
+  title: A sandbox for your asset packs
+  icon: fa-solid fa-shapes
+  accent: "#8ac926"
+  tagline: Browse, place, break, save.
+  summary: >-
+    Point the sandbox at your asset packs: browse every model with
+    thumbnails, build a level on a grid, make props breakable, throw
+    things at them, and save the level.
+  points:
+    - Asset catalog for Synty-style packs (never shipped with the engine)
+    - Grid placement, move, rotate, duplicate, delete
+    - Level save and load, a marketplace index of games
+  media:
+    - { src: media/sandbox.webp, caption: "The sandbox's asset browser with thumbnails" }
+  demo: sandbox
+  docs: SCENES/

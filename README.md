@@ -48,6 +48,9 @@ What is solid, partial or not started yet, system by system:
 
 ## Quick start
 
+To just try the demos, download a Windows or Linux build from
+[Releases](https://github.com/Khyretos/kk-engine/releases), unpack it and run
+`kke_demo` ([docs/RELEASES.md](docs/RELEASES.md)). To build from source on
 Linux (Debian/Ubuntu shown; Arch and troubleshooting are in
 [docs/BUILDING.md](docs/BUILDING.md)):
 
@@ -56,7 +59,9 @@ sudo apt-get install -y build-essential cmake ninja-build git \
     libvulkan-dev vulkan-tools mesa-vulkan-drivers glslang-tools \
     libdrm-dev libxkbcommon-dev libx11-dev libxext-dev libxrandr-dev \
     libxcursor-dev libxi-dev libxinerama-dev libwayland-dev \
-    libfreetype-dev pkg-config libudev-dev libdbus-1-dev
+    libfreetype-dev pkg-config libudev-dev libdbus-1-dev \
+    libgl1-mesa-dev libegl1-mesa-dev libasound2-dev libdecor-0-dev \
+    libexpat1-dev libxml2-dev
 
 git clone https://github.com/Khyretos/kk-engine.git
 cd kk-engine
@@ -105,6 +110,12 @@ skips it for one run.
 
 ## Writing a game
 
+The quickest start is the starter template: `tools/new_game my_game`
+copies it (a character you can walk, jump and climb with, and a level in
+Lua), and [the tutorials](https://khyretos.github.io/kk-engine/tutorials/)
+grow it into a small game ([Make your own game](docs/tutorials/getting-started.md)).
+Under the hood a game is a list of modules:
+
 ```cpp
 #include "kke/Application.h"
 #include "kke/modules/GridModule.h"
@@ -129,6 +140,7 @@ example per system; Lua scripting is covered in
 
 | Document | Contents |
 |---|---|
+| [Docs site](https://khyretos.github.io/kk-engine/) | Getting started, tutorials, guides and the Lua API reference, searchable |
 | [ROADMAP.md](ROADMAP.md) | Current state of every system and the next gap in each |
 | [BUGS.md](BUGS.md) | Every defect found, its cause and fix |
 | [ACTION_PLAN.md](ACTION_PLAN.md) | Everything asked for, in priority order |
@@ -144,7 +156,17 @@ cmake --build build --target kke_tests && ./build/bin/kke_tests
 ```
 
 CI builds on every push with warnings treated as errors and runs the unit
-test suite plus a headless smoke test on lavapipe.
+test suite plus a headless smoke test on lavapipe. Pushing a `v*` tag builds,
+tests and publishes Windows and Linux downloads ([docs/RELEASES.md](docs/RELEASES.md)).
+A second workflow runs the benchmark suite on every push to `main` and
+tracks the numbers over time ([docs/BENCHMARKS.md](docs/BENCHMARKS.md)).
+
+## Contributing
+
+Issues, pull requests and questions are welcome: start with
+[CONTRIBUTING.md](CONTRIBUTING.md). Everyone follows the
+[Code of Conduct](CODE_OF_CONDUCT.md); security problems go through
+[SECURITY.md](SECURITY.md).
 
 ## Support
 

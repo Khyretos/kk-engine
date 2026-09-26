@@ -1,7 +1,9 @@
 #include "kke/modules/ScriptModule.h"
 
 #include "kke/Application.h"
+#include "kke/DevTools.h"
 #include "kke/Log.h"
+#include "kke/net/ScriptSpawns.h"
 #include "kke/SphereImpostors.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/AudioModule.h"
@@ -82,7 +84,7 @@ void ScriptModule::log(const std::string& source, const std::string& text) {
 
 void ScriptModule::init(Application& app) {
     m_app = &app;
-    if (const char* d = std::getenv("KKE_SCRIPTS_DIR"); d && *d) m_dir = d;
+    if (const char* d = dev::env("KKE_SCRIPTS_DIR"); d && *d) m_dir = d;
     m_vm = std::make_unique<ScriptVM>();
     m_vm->printSink = [this](const std::string& src, const std::string& text) { log(src, text); };
     m_vm->onUnload = [this](const std::string& source) { releaseScript(source); };
@@ -115,7 +117,9 @@ void ScriptModule::scanFolder(bool reloadChanged) {
             f.ok = m_vm->runFile(path);
             m_files.push_back(f);
             if (reloadChanged) log(path, "loaded");
-        } else if (reloadChanged && mtime != it->mtime) {
+        } else if (dev::kEnabled && reloadChanged && mtime != it->mtime) {
+            // Hot reload is a developer tool: a shipping build runs the
+            // scripts it started with (kke/DevTools.h).
             it->mtime = mtime;
             it->ok = m_vm->reloadFile(path);
             log(path, it->ok ? "reloaded" : "reload failed (see error above)");
@@ -232,6 +236,11 @@ void ScriptModule::bindAll() {
             const RigidWorld::BodyId id = rbm->world().add(d);
             if (id == RigidWorld::kNoBody) return luaL_error(L, "physics: body limit reached");
             m_bodies.push_back({id, src, sphere, sphere ? glm::vec3(d.radius) : d.halfExtents, color});
+            // Kept for multiplayer: an sv_ script's body is built on every client (ScriptReplication.cpp).
+            m_bodies.back().netDesc = script_net::encode(script_net::BodySpawn{sphere, d.motion == RigidWorld::Motion::Static, d.position, d.velocity,
+                                                                               d.halfExtents, d.radius, d.density, d.friction, d.restitution,
+                                                                               d.material, color});
+            replicate(m_bodies.back());
             lua_pushinteger(L, lua_Integer(id));
             return 1;
         };
@@ -246,6 +255,8 @@ void ScriptModule::bindAll() {
         vm.registerFunction("physics", "sphere", [spawn](lua_State* L) { return spawn(L, true); });
         vm.registerFunction("physics", "remove", [this, rbm, owned](lua_State* L) {
             const uint32_t id = owned(L, 1);
+            for (const Body& b : m_bodies)
+                if (b.id == id) unreplicate(b.netId);
             rbm->world().remove(id);
             m_bodies.erase(std::remove_if(m_bodies.begin(), m_bodies.end(), [&](const Body& b) { return b.id == id; }), m_bodies.end());
             return 0;
@@ -283,6 +294,7 @@ void ScriptModule::bindAll() {
     bindUi();
     bindScenes();
     bindNet();
+    bindReplication();
 }
 
 void ScriptModule::fixedUpdate(const FixedUpdateContext& ctx) {
@@ -296,7 +308,9 @@ void ScriptModule::update(const UpdateContext& ctx) {
         m_inited = true;
         m_vm->callHook("Init");
     }
-    bool rescan = (m_scanTimer -= ctx.dt) <= 0.0;
+    // Polling for edits (hot reload) is compiled out of shipping builds;
+    // a change of network role below still rescans.
+    bool rescan = dev::kEnabled && (m_scanTimer -= ctx.dt) <= 0.0;
 #if KKE_ENABLE_NET
     // Hosting, joining or leaving changes which scripts run here (sv_*).
     if (auto* net = m_app->getModule<NetModule>(); net && net->authority() != m_authority) {
@@ -305,6 +319,7 @@ void ScriptModule::update(const UpdateContext& ctx) {
         rescan = true;
     }
 #endif
+    syncNetRole();
     if (rescan) {
         m_scanTimer = 0.5; // hot reload: poll modification times twice a second
         scanFolder(true);
@@ -418,12 +433,15 @@ void ScriptModule::renderUi() {
     }
     ImGui::SameLine();
     ImGui::SetNextItemWidth(-1);
+    // The Lua console: compiled out of shipping builds (kke/DevTools.h).
+    if constexpr (dev::kEnabled) {
     if (ImGui::InputTextWithHint("##lua", "Lua, e.g. print(camera.position())  (Enter runs)", m_consoleInput, sizeof(m_consoleInput),
                                  ImGuiInputTextFlags_EnterReturnsTrue)) {
         m_console.push_back("> " + std::string(m_consoleInput));
         m_vm->runString(m_consoleInput, m_consoleTarget);
         m_consoleInput[0] = 0;
         ImGui::SetKeyboardFocusHere(-1);
+    }
     }
     ImGui::End();
 }

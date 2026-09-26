@@ -10,6 +10,8 @@
 #include "kke/ResourceGovernor.h"
 #include "kke/Buoyancy.h"
 #include "kke/Locomotion.h"
+#include "LavaStation.h"
+#include "Layout.h"
 #include "kke/Ocean.h"
 #include "kke/OceanRenderer.h"
 #include "kke/Module.h"
@@ -17,11 +19,15 @@
 #include "kke/SphereImpostors.h"
 #include "kke/modules/ModelModule.h"
 
+#include <RmlUi/Core/DataModelHandle.h>
+
 #include <map>
+#include <string>
 #include <memory>
 #include <vector>
 
-namespace kke { class RigidBodyModule; class PhysicsModule; class InputModule; class NetModule; }
+namespace kke { class RigidBodyModule; class PhysicsModule; class InputModule; class NetModule; class UiModule; }
+namespace Rml { class ElementDocument; }
 
 namespace kke_showcase {
 
@@ -39,9 +45,11 @@ public:
     void fixedUpdate(const kke::FixedUpdateContext& ctx) override;
     void update(const kke::UpdateContext& ctx) override;
     void render(const kke::RenderContext& ctx) override;
+    void prepass(const kke::PrepassContext& ctx) override;
     void renderShadow(const kke::ShadowRenderContext& ctx) override;
     void renderUi() override;
     void onEvent(const SDL_Event& event) override;
+    void frameStart(const kke::UpdateContext& ctx) override; // the pause menu works while paused
 
     // Modules whose panels F1 shows/hides.
     void setEnginePanels(std::vector<kke::Module*> panels) { m_panels = std::move(panels); }
@@ -61,6 +69,7 @@ private:
         kke::Locomotion::State state = kke::Locomotion::State::Ground;
         float speed = 0.0f, progress = 0.0f, stateTime = 0.0f, fallHeight = 0.0f;
         float obstacleHeight = 0.0f; // vault / climb: the top above the feet
+        float wallSide = 0.0f;       // wall run: +1 wall on the right, -1 left
         bool crouch = false, landed = false, jumped = false;
     };
     void addAnimatorStates(kke::Animator& a);
@@ -128,6 +137,10 @@ private:
     std::vector<kke::RigidWorld::BodyBox> m_poolBodies;
     std::vector<kke::BuoyancyPoint> m_buoyancy;
     float m_poolTime = 0.0f;
+    // The lava station (LavaStation.cpp): a basin where lava melts a block.
+    void buildLava(std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx);
+    bool lavaWatched() const;
+    std::unique_ptr<LavaStation> m_lava;
 
     void setLocalPlayers(int count);
     void assignControllers();
@@ -199,6 +212,26 @@ private:
     glm::vec3 m_autopilotStart{0.0f};
     float m_autopilotEndZ = 0.0f;
     float m_demoHang = -1.0f; // KKE_DEMO_HANG: seconds into the script, -1 = off
+    // RmlUi HUD (station hints, what the character is doing) and pause
+    // menu (Hud.cpp, ui/showcase_*.rml).
+    void buildHud();
+    void updateHud(float dt);
+    void setMenuOpen(bool open);
+    struct HudState {
+        std::string move, speed, station, stationText, stationLive;
+        bool trick = false, panels = false, online = false;
+        int players = 1;
+    };
+    HudState m_hud;
+    kke::UiModule* m_ui = nullptr;
+    Rml::ElementDocument* m_hudDoc = nullptr;
+    Rml::ElementDocument* m_pauseDoc = nullptr;
+    Rml::DataModelHandle m_hudModel;
+    bool m_menuOpen = false, m_pausedByMenu = false;
+    float m_menuAt = 0.0f; // KKE_MENU: seconds until it opens
+    float m_shoulder = 0.45f;   // camera shoulder offset (m, + = right); moves off a wall being run along
+    float m_demoTricks = -1.0f; // KKE_DEMO_TRICKS: wall run, ledge leaps (same)
+    void buildTrickCourse(std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx);
     // KKE_DEMO_BRIDGE: an iron ball dropped on the yard's glass; logs how
     // far the shards knocked the crates under it (FEMFX <-> Jolt bridge).
     float m_demoBridge = -1.0f;
@@ -228,6 +261,7 @@ private:
     int m_stVault = -1, m_stClimbUp = -1, m_stClimbOver = -1, m_stHang = -1;
     // Real clips (UAL2), posed by the move's progress; -1 = stand-ins.
     int m_stVaultClip = -1, m_stClimbLow = -1, m_stClimbHigh = -1;
+    int m_stWallRunL = -1, m_stWallRunR = -1;
 
     struct SceneEntry {
         std::string path;

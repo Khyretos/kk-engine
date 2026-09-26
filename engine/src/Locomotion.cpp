@@ -71,6 +71,7 @@ void Locomotion::setFacing(const glm::vec3& dir) {
 }
 
 float Locomotion::traversalProgress() const {
+    if (m_state == State::Leap) return std::clamp(m_stateTime / std::max(1e-3f, m_settings.leapTime), 0.0f, 1.0f);
     if (m_state != State::Vault && m_state != State::Climb) return 0.0f;
     return m_duration > 0.0f ? std::clamp(m_stateTime / m_duration, 0.0f, 1.0f) : 1.0f;
 }
@@ -209,7 +210,8 @@ void Locomotion::update(const Input& in, float dt) {
     const glm::vec3 feetNow = m_world.characterPosition(m_id);
     const double simNow = m_world.simulatedTime();
     const float moved = float(simNow - m_lastSimTime);
-    const bool scripted = m_state == State::Vault || m_state == State::Climb || m_state == State::Hang;
+    const bool scripted = m_state == State::Vault || m_state == State::Climb || m_state == State::Hang || m_state == State::Leap ||
+                          m_state == State::WallRun;
     const float over = scripted ? dt : moved;
     if (m_haveLastFeet && over > 0.0f) m_measuredSpeed = glm::length(glm::vec2(feetNow.x - m_lastFeet.x, feetNow.z - m_lastFeet.z)) / over;
     m_lastFeet = feetNow;
@@ -219,8 +221,17 @@ void Locomotion::update(const Input& in, float dt) {
     m_buffer = in.goUp ? m_settings.jumpBuffer : std::max(0.0f, m_buffer - dt);
 
     m_regrab = std::max(0.0f, m_regrab - dt);
+    m_wallCooldown = std::max(0.0f, m_wallCooldown - dt);
     if (m_state == State::Vault || m_state == State::Climb) {
         updateTraversal(dt);
+        return;
+    }
+    if (m_state == State::Leap) {
+        updateLeap();
+        return;
+    }
+    if (m_state == State::WallRun) {
+        updateWallRun(in, dt);
         return;
     }
     if (m_state == State::Hang) {
@@ -390,6 +401,7 @@ void Locomotion::updateAir(const Input& in, float dt, bool grounded) {
     // Grab a ledge in front while rising slowly or falling.
     if (vel.y < 1.5f && (m_buffer > 0.0f || glm::length(flat(in.move)) > 0.5f) && tryTraversal(in, s.airSensor, true)) return;
     if (vel.y < 1.5f && m_buffer <= 0.0f && glm::length(flat(in.move)) > 0.5f && tryHang(in)) return;
+    if (tryWallRun(in)) return;
 
     // Air control is a small acceleration added to the flight, capped at
     // the take-off speed (PointDown MM2): it corrects a jump, it doesn't
@@ -651,6 +663,10 @@ void Locomotion::updateHang(const Input& in, float dt) {
             jumpBack();
             return;
         }
+        // Pushing sideways: leap across to the next edge that way.
+        const glm::vec3 alongWall = glm::normalize(glm::cross(-n, glm::vec3(0, 1, 0)));
+        const float sideways = glm::dot(flat(in.move), alongWall);
+        if (std::abs(sideways) > 0.5f && tryLeap(alongWall * (sideways > 0.0f ? 1.0f : -1.0f))) return;
         // Climb up from here: the same checked climb as from the ground.
         Sensor reach{ s.radius + 0.5f, s.hangReach + 0.3f };
         Obstacle o = probe(-n, reach);
@@ -659,6 +675,8 @@ void Locomotion::updateHang(const Input& in, float dt) {
             startTraversal(State::Climb, o);
             return;
         }
+        // Nothing to stand on up there: an edge above to leap up to.
+        if (tryLeap(glm::vec3(0.0f))) return;
     }
     // Shimmy: the sideways part of the input, one checked step at a time.
     // Around a corner the same held input keeps going the same way along
@@ -693,6 +711,226 @@ void Locomotion::updateHang(const Input& in, float dt) {
         }
     }
     m_world.moveCharacter(m_id, feet);
+}
+
+// ---------------------------------------------------------------------------
+// Ledge leaps
+// ---------------------------------------------------------------------------
+
+bool Locomotion::findLeap(const glm::vec3& side, glm::vec3& outFeet, glm::vec3& outEdge, glm::vec3& outNormal) const {
+    const Settings& s = m_settings;
+    const glm::vec3 n = m_obstacle.normal;
+    const float topY = m_hangEdge.y;
+    auto fits = [&](const glm::vec3& f) { return m_world.capsuleFits(f + glm::vec3(0, 0.02f, 0), s.height, s.radius); };
+    // The top under a point on the wall's line, from above the highest
+    // edge in reach down to the lowest.
+    auto topAt = [&](const glm::vec3& edgePoint, float& y) {
+        const glm::vec3 over = edgePoint - n * 0.12f;
+        const float from = topY + s.leapUp + 0.3f;
+        RigidWorld::RayHit h = m_world.raycast(glm::vec3(over.x, from, over.z), glm::vec3(0, -1, 0), s.leapUp + s.leapDown + 0.6f);
+        if (!h.hit || h.distance < 0.02f || h.normal.y < 0.64f) return false;
+        y = h.point.y;
+        return y >= topY - s.leapDown && y <= topY + s.leapUp;
+    };
+    if (glm::length(side) < 0.5f) {
+        // Straight up: an edge above this one, on the same wall.
+        float y = 0.0f;
+        if (!topAt(m_hangEdge, y) || y < topY + 0.4f) return false;
+        const glm::vec3 feet = m_hangFeet + glm::vec3(0.0f, y - topY, 0.0f);
+        return findEdge(feet, n, y, outFeet, outEdge, outNormal) && fits(outFeet);
+    }
+    // Sideways: past the end of this edge (shimmying covers the rest),
+    // the nearest edge within reach.
+    const float step = 0.15f;
+    bool gap = false;
+    for (float d = step; d <= s.leapReach + 1e-3f; d += step) {
+        glm::vec3 f, e, nn;
+        const glm::vec3 feet = m_hangFeet + side * d;
+        if (!gap) {
+            if (findEdge(feet, n, topY, f, e, nn)) continue; // still this ledge
+            gap = true;
+        }
+        float y = 0.0f;
+        if (!topAt(m_hangEdge + side * d, y)) continue;
+        if (d < 0.4f && std::abs(y - topY) < s.hangTopTolerance) continue; // a crack, not a gap
+        if (findEdge(feet + glm::vec3(0.0f, y - topY, 0.0f), n, y, f, e, nn) && fits(f)) {
+            // Nudge in a little so the hands land on the edge, not its end.
+            glm::vec3 f2, e2, n2;
+            const glm::vec3 inward = f + side * (s.radius + 0.1f);
+            if (findEdge(inward, nn, e.y, f2, e2, n2) && fits(f2)) { f = f2; e = e2; nn = n2; }
+            outFeet = f;
+            outEdge = e;
+            outNormal = nn;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Locomotion::tryLeap(const glm::vec3& side) {
+    glm::vec3 feet, edge, n;
+    if (!findLeap(side, feet, edge, n)) return false;
+    // Room along the way: the body at the middle of the arc.
+    const Settings& s = m_settings;
+    const glm::vec3 from = m_world.characterPosition(m_id);
+    const glm::vec3 mid = glm::mix(from, feet, 0.5f) + glm::vec3(0.0f, s.leapOvershoot * 0.5f, 0.0f);
+    if (!m_world.capsuleFits(mid, s.height, s.radius)) return false;
+    m_start = from;
+    m_hangFeet = feet;
+    m_hangEdge = edge;
+    m_leapNormal = n;
+    m_buffer = 0.0f;
+    m_shimmy = 0.0f;
+    m_jumped = true;
+    enter(State::Leap);
+    return true;
+}
+
+void Locomotion::updateLeap() {
+    const Settings& s = m_settings;
+    const float t = traversalProgress();
+    // Horizontal at a steady pace; height a parabola in t through both
+    // ends that rises about leapOvershoot above the higher one (in time,
+    // not distance, so a leap straight up works the same way).
+    const float dy = m_hangFeet.y - m_start.y;
+    const float lift = s.leapOvershoot + std::max(dy, 0.0f) * 0.5f;
+    glm::vec3 p = glm::mix(m_start, m_hangFeet, t);
+    p.y = m_start.y + dy * t + 4.0f * lift * t * (1.0f - t);
+    m_facing = -m_leapNormal;
+    m_world.moveCharacter(m_id, p);
+    if (t >= 1.0f) {
+        m_obstacle.normal = m_leapNormal;
+        m_obstacle.target = m_hangEdge;
+        m_start = m_hangFeet;
+        m_enterTime = 1e-3f; // already there
+        m_holdSign = 0.0f;
+        m_world.moveCharacter(m_id, m_hangFeet);
+        enter(State::Hang);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Wall run
+// ---------------------------------------------------------------------------
+
+bool Locomotion::tryWallRun(const Input& in) {
+    const Settings& s = m_settings;
+    const glm::vec3 vel = m_world.characterVelocity(m_id);
+    const glm::vec3 h = flat(vel);
+    const float speed = glm::length(h);
+    if (speed < s.wallRunMinSpeed || vel.y < -3.0f || m_stateTime < 0.08f) return false;
+    const glm::vec3 wish = flat(in.move);
+    if (glm::length(wish) < 0.5f) return false;
+    const glm::vec3 dir = h / speed;
+    if (glm::dot(glm::normalize(wish), dir) < 0.5f) return false; // still asking to run that way
+    const glm::vec3 feet = m_world.characterPosition(m_id);
+    // Off the ground a little: not a wall beside a kerb.
+    if (m_world.raycast(feet + glm::vec3(0, 0.05f, 0), glm::vec3(0, -1, 0), 0.35f).hit) return false;
+    const glm::vec3 right(-dir.z, 0.0f, dir.x);
+    for (float sideSign : { 1.0f, -1.0f }) {
+        const glm::vec3 look = right * sideSign;
+        // A wall beside the body, at the hips and the head both.
+        RigidWorld::RayHit hip = m_world.raycast(feet + glm::vec3(0, 0.9f, 0), look, s.radius + s.wallRunReach);
+        if (!hip.hit || std::abs(hip.normal.y) > 0.3f) continue;
+        RigidWorld::RayHit head = m_world.raycast(feet + glm::vec3(0, 1.6f, 0), look, s.radius + s.wallRunReach + 0.2f);
+        if (!head.hit || std::abs(head.normal.y) > 0.3f) continue;
+        glm::vec3 n = glm::normalize(flat(hip.normal));
+        if (std::abs(glm::dot(dir, n)) > 0.5f) continue; // running into it, not along it
+        if (m_wallCooldown > 0.0f && glm::dot(n, m_lastWall) > 0.9f) continue; // the wall just left
+        m_wallNormal = n;
+        m_wallAlong = glm::normalize(dir - n * glm::dot(dir, n));
+        m_wallSpeed = std::max(speed, s.wallRunMinSpeed);
+        m_wallVy = std::max(s.wallRunLift, vel.y * 0.7f); // carries most of the take-off up the wall
+        m_wallSide = sideSign;
+        m_facing = m_wallAlong;
+        m_moveDir = m_wallAlong;
+        m_world.setCharacterKinematic(m_id, true);
+        m_world.setCharacterVelocity(m_id, glm::vec3(0.0f));
+        enter(State::WallRun);
+        return true;
+    }
+    return false;
+}
+
+void Locomotion::leaveWall(const glm::vec3& velocity, bool jumped) {
+    const glm::vec3 feet = m_world.characterPosition(m_id);
+    m_world.setCharacterKinematic(m_id, false);
+    m_world.setCharacterVelocity(m_id, velocity);
+    RigidWorld::CharacterInput ci;
+    ci.move = flat(velocity);
+    ci.airSteer = 1e6f;
+    m_world.setCharacterInput(m_id, ci);
+    m_speed = glm::length(flat(velocity));
+    if (m_speed > 0.1f) m_moveDir = flat(velocity) / m_speed;
+    m_airEntrySpeed = m_speed;
+    m_airPeak = feet.y;
+    m_jumped = jumped;
+    m_jumpedFromGround = true;
+    m_sinceGrounded = m_settings.coyoteTime + 1.0f;
+    m_lastWall = m_wallNormal;
+    m_wallCooldown = m_settings.wallRunCooldown;
+    m_buffer = 0.0f;
+    enter(State::Air);
+}
+
+void Locomotion::updateWallRun(const Input& in, float dt) {
+    const Settings& s = m_settings;
+    const glm::vec3 n = m_wallNormal;
+    const glm::vec3 along = m_wallAlong;
+    const glm::vec3 up(0.0f, 1.0f, 0.0f);
+    // Wall jump: off the wall, up, keeping most of the run.
+    if (m_buffer > 0.0f) {
+        const glm::vec3 v = n * s.wallJumpSpeed + along * (m_wallSpeed * 0.8f) + up * (s.jumpSpeed * 0.85f);
+        m_facing = glm::normalize(flat(v));
+        leaveWall(v, true);
+        return;
+    }
+    // Let go of the stick, or crouch: drop off.
+    if (in.crouch || glm::length(flat(in.move)) < 0.3f) {
+        leaveWall(along * m_wallSpeed + n * s.dropPush + up * std::min(m_wallVy, 0.0f), false);
+        return;
+    }
+    // Too long on the wall: gravity wins.
+    if (m_stateTime > s.wallRunTime) {
+        leaveWall(along * m_wallSpeed * 0.8f + n * s.dropPush + up * std::min(m_wallVy, 0.0f), false);
+        return;
+    }
+    m_wallVy -= s.wallRunGravity * dt;
+    const glm::vec3 feet = m_world.characterPosition(m_id);
+    glm::vec3 next = feet + along * (m_wallSpeed * dt) + up * (m_wallVy * dt);
+    // Landing: the floor comes up under the feet.
+    if (m_wallVy <= 0.0f) {
+        RigidWorld::RayHit floor = m_world.raycast(feet + glm::vec3(0, 0.05f, 0), up * -1.0f, 0.1f - m_wallVy * dt);
+        if (floor.hit && floor.normal.y > 0.7f) {
+            m_world.moveCharacter(m_id, glm::vec3(next.x, floor.point.y + 0.005f, next.z));
+            m_world.setCharacterKinematic(m_id, false);
+            m_world.setCharacterVelocity(m_id, along * m_wallSpeed);
+            m_speed = m_wallSpeed;
+            m_moveDir = along;
+            m_landed = true;
+            m_fallHeight = 0.0f;
+            m_sinceGrounded = 0.0f;
+            m_lastWall = n;
+            m_wallCooldown = s.wallRunCooldown;
+            enter(State::Ground);
+            return;
+        }
+    }
+    // The wall still there beside the next spot? Then keep the body its
+    // radius off it (the wall may bend a little).
+    RigidWorld::RayHit wall = m_world.raycast(next + glm::vec3(0, 0.9f, 0), -n, s.radius + s.wallRunReach + 0.1f);
+    if (!wall.hit || std::abs(wall.normal.y) > 0.3f || glm::dot(glm::normalize(flat(wall.normal)), n) < 0.8f) {
+        leaveWall(along * m_wallSpeed + up * m_wallVy, false); // the wall ended: fly on
+        return;
+    }
+    const glm::vec3 onWall = wall.point + n * (s.radius + 0.05f);
+    next += n * glm::dot(onWall - next, n);
+    if (!m_world.capsuleFits(next + glm::vec3(0, 0.02f, 0), s.height, s.radius)) {
+        leaveWall(n * s.dropPush + up * std::min(m_wallVy, 0.0f), false); // something in the way
+        return;
+    }
+    m_facing = along;
+    m_world.moveCharacter(m_id, next);
 }
 
 } // namespace kke

@@ -7,11 +7,17 @@
 #include "kke/VoronoiFracture.h"
 #include "kke/Material.h"
 #include "kke/SceneLoader.h"
+#include "kke/modules/AudioModule.h"
+#include "kke/modules/OrbitCameraModule.h"
+#if KKE_ENABLE_JOLT
+#include "kke/modules/RigidBodyModule.h"
+#endif
 #if KKE_ENABLE_FEMFX
 #include "kke/modules/PhysicsModule.h"
 #endif
 
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <imgui.h>
 #include <nlohmann/json.hpp>
 
@@ -61,6 +67,9 @@ constexpr int kBreakMaterialCount = static_cast<int>(sizeof(kBreakMaterials) / s
 // that's been lying around is the least interesting object in the scene.
 constexpr size_t kMaxBalls = 6;
 
+// The bat swings at a person this close to where you clicked the ground.
+constexpr float kBatAutoAimMeters = 1.2f;
+
 const glm::vec3 kSelectColor(1.0f, 0.75f, 0.1f);
 const glm::vec3 kHoverColor(0.55f, 0.8f, 1.0f);
 const glm::vec3 kGhostColor(0.55f, 1.0f, 0.55f); // placement outline
@@ -109,11 +118,30 @@ void SandboxModule::init(kke::Application& app) {
     m_models = app.getModule<kke::ModelModule>();
     m_thumbs = app.getModule<kke::ThumbnailModule>();
     m_debug = app.getModule<kke::DebugDrawModule>();
-    auto providers = app.findCapability<kke::IRagdollPhysics>();
-    m_ragdolls = providers.empty() ? nullptr : providers.front();
+    // The best ragdolls on offer: Jolt's (joint limits, colliding limbs)
+    // over FEMFX's when both are there.
+    m_ragdolls = kke::bestRagdollPhysics(app.findCapability<kke::IRagdollPhysics>());
+    if (kke::RigidWorld* w = rigidWorld()) {
+        // The floor Jolt ragdolls land on: top at y = 0, where pieces stand.
+        kke::RigidWorld::BodyDesc floor;
+        floor.motion = kke::RigidWorld::Motion::Static;
+        floor.position = glm::vec3(0.0f, -0.5f, 0.0f);
+        floor.halfExtents = glm::vec3(200.0f, 0.5f, 200.0f);
+        if (w->add(floor) == kke::RigidWorld::kNoBody) kke::log::get(name())->warn("Jolt refused the floor: ragdolls will fall through");
+    }
 #if KKE_ENABLE_FEMFX
     m_hasFemfx = app.getModule<kke::PhysicsModule>() != nullptr;
 #endif
+    m_blocks = kke::defaultPlayBlocks();
+    m_blockAssets.assign(m_blocks.size(), {});
+    if (const char* mode = std::getenv("KKE_SANDBOX_MODE")) {
+        if (std::strcmp(mode, "build") == 0) m_mode = Mode::Build;
+        else if (std::strcmp(mode, "play") != 0) kke::log::get(name())->warn("KKE_SANDBOX_MODE='{}' is not 'play' or 'build'; starting in play", mode);
+    }
+    // Gamepads: the ones plugged in now arrive as SDL_EVENT_GAMEPAD_ADDED.
+    m_gamepadSubsystem = SDL_InitSubSystem(SDL_INIT_GAMEPAD);
+    if (!m_gamepadSubsystem) kke::log::get(name())->warn("no gamepad support: {}", SDL_GetError());
+    if (const char* replay = std::getenv("KKE_SANDBOX_REPLAY"); replay && *replay) loadReplay(replay);
     const char* base = SDL_GetBasePath();
     std::string folder = kke::findAssetFolder("assets/synty", { "KKE_ASSETS_DIR", "KKE_SYNTY_DIR" }, base ? base : "", &m_searched);
     if (!folder.empty()) openAssetFolder(folder);
@@ -133,6 +161,7 @@ void SandboxModule::init(kke::Application& app) {
     // (with KKE_SANDBOX_LAYOUT: converts an old layout, and the automated
     // round-trip check in tests/sandbox_roundtrip.sh).
     if (const char* save = std::getenv("KKE_SANDBOX_SAVE")) saveLayout(save);
+    setMode(m_mode); // the camera limits that go with it
 }
 
 void SandboxModule::setEnginePanels(std::vector<kke::Module*> panels) {
@@ -142,8 +171,14 @@ void SandboxModule::setEnginePanels(std::vector<kke::Module*> panels) {
 
 void SandboxModule::openAssetFolder(const std::string& folder) {
     clearAll();
+    if (m_bat) m_models->remove(m_bat);
+    m_bat = 0;
+    m_batModel = 0;
     m_catalog = kke::AssetCatalog::scan(folder);
     m_assetFolder = m_catalog.assets.empty() ? std::string() : folder;
+    // The palette shows only the blocks whose assets these packs have.
+    for (size_t i = 0; i < m_blocks.size(); ++i)
+        m_blockAssets[i] = kke::availableAssets(m_blocks[i], [&](const std::string& n) { return m_catalog.find(n) != nullptr; });
     m_filterPack.clear();
     m_filterCategory.clear();
     m_filterDirty = true;
@@ -216,6 +251,39 @@ glm::mat4 SandboxModule::objectTransform(const Object& o) const {
 
 void SandboxModule::applyTransform(Object& o) {
     m_models->setTransform(o.instance, objectTransform(o));
+    syncCollider(o);
+}
+
+kke::RigidWorld* SandboxModule::rigidWorld() const {
+#if KKE_ENABLE_JOLT
+    if (auto* rb = m_app->getModule<kke::RigidBodyModule>()) return &rb->world();
+#endif
+    return nullptr;
+}
+
+void SandboxModule::dropCollider(Object& o) {
+    if (o.collider == kke::RigidWorld::kNoBody) return;
+    if (kke::RigidWorld* w = rigidWorld()) w->remove(o.collider);
+    o.collider = kke::RigidWorld::kNoBody;
+}
+
+// A static box of the piece's world bounds, rebuilt whenever it moves (a
+// rotated box's bounds change shape). Boxes, not meshes: this is only what
+// knocked-over people land on, and 2,000 boxes cost Jolt nothing.
+void SandboxModule::syncCollider(Object& o) {
+    dropCollider(o);
+    kke::RigidWorld* w = rigidWorld();
+    if (!w || o.character || o.proxy) return;
+    glm::vec3 mn, mx;
+    worldBounds(o, mn, mx);
+    const glm::vec3 half = glm::max((mx - mn) * 0.5f, glm::vec3(0.01f));
+    kke::RigidWorld::BodyDesc b;
+    b.motion = kke::RigidWorld::Motion::Static;
+    b.position = (mn + mx) * 0.5f;
+    b.halfExtents = half;
+    b.material = kke::AudioMaterialTable::Wood;
+    o.collider = w->add(b);
+    if (o.collider == kke::RigidWorld::kNoBody) kke::log::get(name())->warn("Jolt refused the collider of '{}'", o.asset);
 }
 
 SandboxModule::Object* SandboxModule::spawnObject(const std::string& asset, const glm::vec3& position, float yawDegrees, uint32_t id,
@@ -238,6 +306,7 @@ SandboxModule::Object* SandboxModule::spawnObject(const std::string& asset, cons
     o.character = !d->bones.empty() && d->meshes.size() > 0 && resolve(asset, pack)->skinned;
     if (o.character && !d->animations.empty()) m_models->playAnimation(o.instance, 0, true);
     m_objects.push_back(std::move(o));
+    syncCollider(m_objects.back());
     return &m_objects.back();
 }
 
@@ -250,6 +319,7 @@ void SandboxModule::removeObject(uint32_t id) {
     auto it = std::find_if(m_objects.begin(), m_objects.end(), [&](const Object& o) { return o.id == id; });
     if (it == m_objects.end()) return;
     if (it->ragdoll && m_ragdolls) m_ragdolls->destroyRagdoll(it->ragdoll);
+    dropCollider(*it);
 #if KKE_ENABLE_FEMFX
     if (it->proxy) if (auto* p = m_app->getModule<kke::PhysicsModule>()) p->removeObject(it->proxy);
 #endif
@@ -591,7 +661,7 @@ void SandboxModule::commitPlacement(bool keepPlacing) {
     }
     pushUndo();
     if (Object* o = spawnObject(m_placeAsset, m_ghostPos, m_placeYaw, 0, m_placePack)) {
-        select(o->id, false);
+        if (m_mode == Mode::Build) select(o->id, false); // Play mode has no selection
         o->texture = m_models->textureOverride(m_ghost);
         m_models->setTextureOverride(o->instance, o->texture);
     }
@@ -736,8 +806,13 @@ void SandboxModule::drawGizmo() {
 
 // ---------------------------------------------------------------- frame
 
-void SandboxModule::update(const kke::UpdateContext&) {
-    bool mouseFree = !ImGui::GetIO().WantCaptureMouse && !m_app->uiCapturesMouse();
+void SandboxModule::update(const kke::UpdateContext& ctx) {
+    // Play mode drags from the palette into the world, and ImGui keeps the
+    // mouse while its button is held, so there "free" means not over a window.
+    const bool play = m_mode == Mode::Play;
+    updateReplay(ctx.dt);
+    if (play) updatePad(ctx.dt);
+    bool mouseFree = play ? !mouseOverUi() : !ImGui::GetIO().WantCaptureMouse && !m_app->uiCapturesMouse();
 
     // Ground grid around the camera target, snapped so it doesn't swim.
     glm::vec3 target = m_app->camera().target;
@@ -759,10 +834,13 @@ void SandboxModule::update(const kke::UpdateContext&) {
 
     // Level markers: the player spawn (arrow = facing) and point lights,
     // which light the sandbox too (slots 2-3; 0-1 are the sun and sky).
+    // Play mode hides the markers (editor things); the lights still light.
     {
         const glm::vec3 fwd(std::sin(glm::radians(m_spawnYaw)), 0.0f, -std::cos(glm::radians(m_spawnYaw)));
-        m_debug->box(m_spawn + glm::vec3(-0.3f, 0.0f, -0.3f), m_spawn + glm::vec3(0.3f, 1.8f, 0.3f), kSpawnColor, 0.02f);
-        m_debug->line(m_spawn + glm::vec3(0, 0.05f, 0), m_spawn + glm::vec3(0, 0.05f, 0) + fwd, kSpawnColor, 0.03f);
+        if (!play) {
+            m_debug->box(m_spawn + glm::vec3(-0.3f, 0.0f, -0.3f), m_spawn + glm::vec3(0.3f, 1.8f, 0.3f), kSpawnColor, 0.02f);
+            m_debug->line(m_spawn + glm::vec3(0, 0.05f, 0), m_spawn + glm::vec3(0, 0.05f, 0) + fwd, kSpawnColor, 0.03f);
+        }
         kke::Lighting& lighting = m_app->lighting();
         for (int i = 0; i < 2; ++i) {
             kke::Light& l = lighting.lights[2 + i];
@@ -772,7 +850,7 @@ void SandboxModule::update(const kke::UpdateContext&) {
             l.position = m_pointLights[i].position;
             l.color = m_pointLights[i].color;
             l.intensity = m_pointLights[i].intensity;
-            m_debug->cross(l.position, i == m_selectedLight ? 0.5f : 0.3f, kLightColor);
+            if (!play) m_debug->cross(l.position, i == m_selectedLight ? 0.5f : 0.3f, kLightColor);
         }
     }
 
@@ -781,6 +859,11 @@ void SandboxModule::update(const kke::UpdateContext&) {
         m_hovered = 0;
     } else if (m_tool == Tool::Place) {
         m_ghostValid = mouseFree && placementPoint(m_ghostPos, m_movingId);
+        // Play mode: new people turn to look at you.
+        if (play && m_ghostValid && !m_movingId) {
+            const kke::CatalogAsset* a = resolve(m_placeAsset, m_placePack);
+            if (a && a->skinned) m_placeYaw = kke::yawToFace(m_ghostPos, m_app->camera().position);
+        }
         m_models->setVisible(m_ghost, m_ghostValid);
         if (m_ghostValid) {
             if (const kke::ModelData* d = m_models->model(m_ghostModel)) {
@@ -803,15 +886,20 @@ void SandboxModule::update(const kke::UpdateContext&) {
             }
         }
         m_hovered = 0;
+    } else if (m_tool == Tool::Bat) {
+        m_hovered = 0;
+        glm::vec3 aim;
+        if (mouseFree && !m_swing.active() && placementPoint(aim, 0)) m_debug->cross(aim, 0.35f, glm::vec3(1.0f, 0.85f, 0.2f));
     } else if (m_tool == Tool::Shoot) {
         m_hovered = 0;
         // Aim marker where the ball is heading (first hit: ground or object).
         glm::vec3 aim;
         if (mouseFree && placementPoint(aim, 0)) m_debug->cross(aim, 0.3f, glm::vec3(1.0f, 0.35f, 0.25f));
     } else {
-        m_hoverHandle = mouseFree ? hoverHandle() : Handle::None;
+        m_hoverHandle = mouseFree && !play ? hoverHandle() : Handle::None;
         m_hovered = mouseFree && m_hoverHandle == Handle::None ? pickObject() : 0;
     }
+    updateBat(ctx.dt);
 
     for (const Object& o : m_objects) {
         const bool selected = isSelected(o.id);
@@ -827,6 +915,84 @@ void SandboxModule::update(const kke::UpdateContext&) {
 
 void SandboxModule::onEvent(const SDL_Event& event) {
     ImGuiIO& io = ImGui::GetIO();
+    if (event.type == SDL_EVENT_GAMEPAD_ADDED) {
+        openGamepad(event.gdevice.which);
+        return;
+    }
+    if (event.type == SDL_EVENT_GAMEPAD_REMOVED) {
+        for (SDL_Gamepad*& pad : m_pads) {
+            if (pad && SDL_GetGamepadID(pad) == event.gdevice.which) {
+                SDL_CloseGamepad(pad);
+                pad = nullptr;
+            }
+        }
+        std::erase(m_pads, nullptr);
+        return;
+    }
+    if (m_mode == Mode::Play) {
+        // Touch: one finger is the mouse (SDL's emulation); a second one
+        // means the view is being turned or zoomed (OrbitCameraModule), so
+        // whatever the first was dragging is dropped back.
+        if (event.type == SDL_EVENT_FINGER_DOWN) {
+            m_touches.fingerDown(event.tfinger.fingerID, glm::vec2(event.tfinger.x, event.tfinger.y));
+            if (m_touches.multiTouch()) dropFingerDrag();
+            return;
+        }
+        if (event.type == SDL_EVENT_FINGER_UP || event.type == SDL_EVENT_FINGER_CANCELED) {
+            m_touches.fingerUp(event.tfinger.fingerID);
+            return;
+        }
+        if (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || event.type == SDL_EVENT_GAMEPAD_BUTTON_UP) {
+            padButton(event.gbutton.button, event.gbutton.down);
+            return;
+        }
+        // Simple mode: click or drag, nothing to remember. Placing that
+        // started with a press (on a palette picture, or on something in
+        // the world to pick it up) ends where the mouse is let go.
+        if (event.type == SDL_EVENT_MOUSE_BUTTON_UP && event.button.button == SDL_BUTTON_LEFT) {
+            if (m_dropOnRelease && m_tool == Tool::Place) {
+                if (!mouseOverUi()) commitPlacement(false);
+                else if (m_movingId) cancelPlacing(); // carried back onto the palette: put it back
+                // else: a tap on a palette picture, the next click places it
+            }
+            m_dropOnRelease = false;
+            return;
+        }
+        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT) {
+            if (mouseOverUi() || m_touches.multiTouch()) return;
+            if (m_tool == Tool::Place) commitPlacement(false);
+            else if (m_tool == Tool::Bat) swingBat();
+            else if (m_tool == Tool::Shoot) throwBall();
+            else if (Object* o = find(pickObject())) {
+                beginPlacing(o->asset, o->yawDegrees, o->id, o->pack);
+                m_dropOnRelease = true;
+            }
+            return;
+        }
+        if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat || io.WantTextInput) return;
+        switch (event.key.key) {
+        case SDLK_ESCAPE:
+            if (m_tool == Tool::Place) cancelPlacing();
+            m_tool = Tool::Select;
+            break;
+        case SDLK_SPACE:
+            if (m_tool == Tool::Bat) swingBat();
+            break;
+        case SDLK_Z:
+            if (event.key.mod & SDL_KMOD_CTRL) undo();
+            break;
+        case SDLK_F1:
+            m_showEnginePanels = !m_showEnginePanels;
+            for (kke::Module* m : m_enginePanels) m->setUiVisible(m_showEnginePanels);
+            break;
+        case SDLK_F2:
+            setMode(Mode::Build);
+            break;
+        default:
+            break;
+        }
+        return;
+    }
     if (event.type == SDL_EVENT_MOUSE_BUTTON_UP && event.button.button == SDL_BUTTON_LEFT && m_drag != Handle::None) {
         m_drag = Handle::None;
         if (!m_dragMoved && !m_undo.empty()) m_undo.pop_back(); // a click on a handle is not an edit
@@ -906,6 +1072,9 @@ void SandboxModule::onEvent(const SDL_Event& event) {
     case SDLK_F1:
         m_showEnginePanels = !m_showEnginePanels;
         for (kke::Module* m : m_enginePanels) m->setUiVisible(m_showEnginePanels);
+        break;
+    case SDLK_F2:
+        setMode(Mode::Play);
         break;
     case SDLK_F:
         throwBall();
@@ -1087,6 +1256,7 @@ void SandboxModule::makeBreakable(Object& o) {
     // 3 mm up so it doesn't start inside the ground plane; the render mesh
     // follows the tets, so the drop is invisible.
     o.proxy = physics->spawnTetMeshWithOptions(vox.mesh, center + glm::vec3(0.0f, 0.003f, 0.0f), material, opts);
+    if (o.proxy) dropCollider(o); // it moves and breaks now: a static box would be in the way
     if (!o.proxy) {
         m_status = "Physics is full (object limit reached) - delete something first";
         return;
@@ -1191,6 +1361,7 @@ void SandboxModule::restoreProp(Object& o) {
     o.restNormals.clear();
     m_models->setDeformedVertices(o.instance, {}, {});
     m_models->setVisible(o.instance, true);
+    syncCollider(o); // solid again
 }
 
 // A heavy rubber-ish ball from the camera toward the mouse cursor.
@@ -1658,7 +1829,7 @@ void SandboxModule::inspectorUi() {
         if (ImGui::Button("Delete")) deleteSelection();
         o = find(m_selected);
         if (o && o->character) {
-            if (!m_ragdolls) ImGui::TextDisabled("Ragdolls need a physics module (FEMFX build)");
+            if (!m_ragdolls) ImGui::TextDisabled("Ragdolls need a physics module (Jolt or FEMFX)");
             else if (ImGui::Button(o->ragdoll ? "Stand up (K)" : "Ragdoll (K)")) {
                 SDL_Event e{};
                 e.type = SDL_EVENT_KEY_DOWN;
@@ -1836,9 +2007,494 @@ void SandboxModule::lightsUi() {
     }
 }
 
+// ---------------------------------------------------------------- play mode (Simple)
+
+void SandboxModule::setMode(Mode mode) {
+    if (m_tool == Tool::Place) cancelPlacing();
+    m_tool = Tool::Select;
+    m_dropOnRelease = false;
+    m_drag = Handle::None;
+    clearSelection();
+    m_mode = mode;
+    // Play keeps the view above the ground whatever fingers or sticks do;
+    // the editor may look from anywhere.
+    if (auto* camera = m_app->getModule<kke::OrbitCameraModule>()) {
+        if (mode == Mode::Play) camera->setPitchLimits(-1.45f, -0.12f);
+        else camera->setPitchLimits(-1.52f, 1.52f);
+    }
+}
+
+bool SandboxModule::mouseOverUi() const {
+    // AllowWhenBlockedByActiveItem: while a palette picture is held down
+    // (being dragged out) ImGui otherwise reports no window as hovered.
+    return ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) ||
+           m_app->uiCapturesMouse();
+}
+
+void SandboxModule::placeBlock(size_t block) {
+    if (block >= m_blocks.size()) return;
+    const std::string asset = kke::chooseAsset(m_blocks[block], m_blockAssets[block], m_lookPick++);
+    if (asset.empty()) return;
+    beginPlacing(asset, 0.0f);
+}
+
+void SandboxModule::standEveryoneUp() {
+    for (Object& o : m_objects)
+        if (o.ragdoll) standUp(o);
+}
+
+// Aims at the person under the mouse (else the ground there) and swings
+// from the camera's side, so the bat's sweet spot passes through them.
+void SandboxModule::swingBat() {
+    if (m_swing.active()) return;
+    const kke::Ray ray = mouseRay();
+    glm::vec3 target(0.0f);
+    float best = 1e30f;
+    for (const Object& o : m_objects) {
+        if (!o.character || o.ragdoll) continue;
+        glm::vec3 mn, mx;
+        worldBounds(o, mn, mx);
+        const float t = kke::rayAabb(ray, mn, mx);
+        if (t >= 0.0f && t < best) {
+            best = t;
+            target = glm::vec3((mn.x + mx.x) * 0.5f, mn.y, (mn.z + mx.z) * 0.5f);
+        }
+    }
+    if (best >= 1e30f) {
+        const float t = kke::rayPlaneY(ray, 0.0f);
+        if (t < 0.0f || t > m_app->camera().farPlane) return;
+        target = ray.at(t);
+        // Forgiving aim for fingers and thumbsticks: a person standing
+        // near the spot is who you meant.
+        float nearest = kBatAutoAimMeters;
+        for (const Object& o : m_objects) {
+            if (!o.character || o.ragdoll) continue;
+            glm::vec3 mn, mx;
+            worldBounds(o, mn, mx);
+            const glm::vec3 foot((mn.x + mx.x) * 0.5f, mn.y, (mn.z + mx.z) * 0.5f);
+            const float d = glm::length(glm::vec2(foot.x - target.x, foot.z - target.z));
+            if (d < nearest) {
+                nearest = d;
+                target = foot;
+            }
+        }
+    }
+    const glm::vec3 forward = target - m_app->camera().position;
+    if (!m_swing.start(m_swing.pivotFor(target, forward), forward)) return;
+    m_swingHits.clear();
+    // The bat model, loaded on the first swing. Without it the bat is a
+    // thick line: the swing and the hits don't depend on the model.
+    if (!m_batModel && !m_blocks.empty()) {
+        for (size_t i = 0; i < m_blocks.size(); ++i) {
+            if (m_blocks[i].kind != kke::PlayBlockKind::Tool || m_blockAssets[i].empty()) continue;
+            m_batModel = loadAsset(m_blockAssets[i].front());
+            if (const kke::ModelData* d = m_batModel ? m_models->model(m_batModel) : nullptr) {
+                std::vector<glm::vec3> points;
+                for (const kke::ModelMesh& mesh : d->meshes)
+                    for (const kke::ModelVertex& v : mesh.vertices) points.push_back(v.position);
+                m_batAxis = kke::findLongAxis(points);
+                m_bat = m_models->spawn(m_batModel);
+                m_models->setVisible(m_bat, false);
+            }
+            break;
+        }
+    }
+}
+
+void SandboxModule::updateBat(float dt) {
+    if (!m_swing.active()) return;
+    const bool stillOut = m_swing.update(dt);
+    {   // sweep() only hits over what this update swung through
+        for (Object& o : m_objects) {
+            if (!o.character || o.ragdoll || std::find(m_swingHits.begin(), m_swingHits.end(), o.id) != m_swingHits.end()) continue;
+            // The body, not its bounds: a T-posed character's bounds are
+            // mostly air between its outstretched arms.
+            glm::vec3 mn, mx;
+            worldBounds(o, mn, mx);
+            const glm::vec3 c = (mn + mx) * 0.5f, half(std::min(0.3f, (mx.x - mn.x) * 0.5f), 0.0f, std::min(0.3f, (mx.z - mn.z) * 0.5f));
+            const kke::BatSwing::Hit hit = m_swing.sweep(glm::vec3(c.x - half.x, mn.y, c.z - half.z), glm::vec3(c.x + half.x, mx.y, c.z + half.z));
+            if (!hit.hit) continue;
+            m_swingHits.push_back(o.id);
+            if (auto* audio = m_app->getModule<kke::AudioModule>())
+                audio->playImpact(hit.point, kke::AudioMaterialTable::Wood, 1.0f, o.id);
+            if (!m_ragdolls) {
+                m_status = "Knocking people over needs a physics module (ragdolls)";
+                continue;
+            }
+            kke::log::get(name())->info("bat hit '{}' at {:.0f} deg: push ({:.1f}, {:.1f}, {:.1f}) m/s", o.asset, hit.degrees,
+                                        hit.push.x, hit.push.y, hit.push.z);
+            ragdoll(o, hit.push);
+        }
+    }
+    // Draw the bat along the swing, tipped a little down.
+    const kke::SwingSettings& st = m_swing.settings();
+    const glm::vec3 dir = glm::normalize(m_swing.direction() + glm::vec3(0.0f, -0.2f, 0.0f));
+    const glm::vec3 hands = m_swing.pivot() + dir * st.innerReach;
+    if (m_bat && m_batAxis.length > 0.0f) {
+        const glm::mat4 t = glm::translate(glm::mat4(1.0f), hands) * glm::mat4_cast(glm::quat(m_batAxis.axis, dir)) *
+                            glm::translate(glm::mat4(1.0f), -m_batAxis.handle);
+        m_models->setTransform(m_bat, t);
+        m_models->setVisible(m_bat, stillOut);
+    } else if (stillOut) {
+        m_debug->line(hands, m_swing.pivot() + dir * st.reach, glm::vec3(0.75f, 0.5f, 0.25f), 0.05f);
+    }
+}
+
+void SandboxModule::modeSwitchUi() {
+    const float s = ImGui::GetFontSize() / 13.0f;
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + 8 * s), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+    ImGui::Begin("Mode", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                                  ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
+    if (ImGui::Button("Back to Play (F2)")) setMode(Mode::Play);
+    ImGui::End();
+}
+
+// The Simple palette: one row of big pictures along the bottom. Press one
+// and drag it into the world (or tap it, then click where it goes); the
+// bat is held instead and swings on every click.
+void SandboxModule::playPaletteUi() {
+    const float s = ImGui::GetFontSize() / 13.0f;
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + vp->WorkSize.y - 10 * s), ImGuiCond_Always, ImVec2(0.5f, 1.0f));
+    ImGui::SetNextWindowBgAlpha(0.8f);
+    ImGui::Begin("Play", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                                  ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar);
+    ImGui::SetWindowFontScale(1.4f);
+
+    bool anyone = false, anyoneStanding = false, anyoneDown = false;
+    for (const Object& o : m_objects) {
+        if (!o.character) continue;
+        anyone = true;
+        (o.ragdoll ? anyoneDown : anyoneStanding) = true;
+    }
+    const char* hint = m_assetFolder.empty()          ? "No asset packs found. Press Build to pick a folder."
+                       : m_tool == Tool::Place         ? "Let go where it should go!"
+                       : m_tool == Tool::Bat && anyoneDown && !anyoneStanding ? "Everyone fell over! Press Get up."
+                       : m_tool == Tool::Bat && !anyoneStanding ? "Bring a person, then click them to swing!"
+                       : m_tool == Tool::Bat           ? (m_ragdolls ? "Click someone to bonk them!" : "Click to swing (falling over needs Jolt physics)")
+                       : m_tool == Tool::Shoot         ? "Click to throw a ball!"
+                       : !anyone                       ? "Drag a person into the world!"
+                       : anyoneDown                    ? "Press Get up to try again, or grab the bat!"
+                                                       : "Grab the bat and bonk them!";
+    ImGui::TextUnformatted(hint);
+
+    const float cell = 76.0f * s;
+    const float lineH = ImGui::GetTextLineHeight();
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    const ImU32 frameCol = ImGui::GetColorU32(ImGuiCol_FrameBg), hoverCol = ImGui::GetColorU32(ImGuiCol_HeaderHovered),
+                activeCol = ImGui::GetColorU32(ImGuiCol_HeaderActive), textCol = ImGui::GetColorU32(ImGuiCol_Text);
+    bool first = true;
+    m_paletteCells.clear();
+    // One picture: an asset's thumbnail, or a big word. Returns the button
+    // state; `on` draws it highlighted (the tool in hand).
+    struct Press { bool pressed, released; };
+    auto picture = [&](const char* id, const char* label, const kke::CatalogAsset* asset, const char* word, bool on) -> Press {
+        if (!first) ImGui::SameLine();
+        first = false;
+        ImGui::PushID(id);
+        const ImVec2 p = ImGui::GetCursorScreenPos();
+        ImGui::InvisibleButton("cell", ImVec2(cell, cell + lineH));
+        const Press r{ ImGui::IsItemActivated(), ImGui::IsItemDeactivated() };
+        m_paletteCells.emplace_back(p.x + cell * 0.5f, p.y + cell * 0.5f);
+        const ImVec2 imgMax(p.x + cell, p.y + cell);
+        draw->AddRectFilled(p, imgMax, on ? activeCol : (ImGui::IsItemHovered() ? hoverCol : frameCol), 10.0f * s);
+        bool drawn = false;
+        if (asset && m_thumbs) {
+            const kke::ThumbnailModule::View v = m_thumbs->get(asset->path, asset->pack, [&] { return kke::packLoadOptions(m_catalog, *asset); });
+            if (v.state == kke::ThumbnailModule::State::Ready) {
+                draw->AddImage(v.texture, p, imgMax, v.uv0, v.uv1);
+                drawn = true;
+            }
+        }
+        if (!drawn) {
+            const char* big = word ? word : label;
+            const ImVec2 ts = ImGui::CalcTextSize(big);
+            draw->AddText(ImVec2(p.x + (cell - ts.x) * 0.5f, p.y + (cell - ts.y) * 0.5f), textCol, big);
+        }
+        const float tw = ImGui::CalcTextSize(label).x;
+        draw->AddText(ImVec2(p.x + (cell - tw) * 0.5f, p.y + cell), textCol, label);
+        ImGui::PopID();
+        return r;
+    };
+
+    if (!m_assetFolder.empty()) {
+        if (picture("grab", "Grab", nullptr, "Hand", m_tool == Tool::Select).pressed) {
+            if (m_tool == Tool::Place) cancelPlacing();
+            m_tool = Tool::Select;
+        }
+        for (size_t i = 0; i < m_blocks.size(); ++i) {
+            const kke::PlayBlock& b = m_blocks[i];
+            if (m_blockAssets[i].empty()) continue; // not in these packs
+            const kke::CatalogAsset* a = m_catalog.find(m_blockAssets[i].front());
+            const bool tool = b.kind == kke::PlayBlockKind::Tool;
+            const bool on = tool ? m_tool == Tool::Bat
+                                 : m_tool == Tool::Place && !m_movingId &&
+                                       std::find(m_blockAssets[i].begin(), m_blockAssets[i].end(), m_placeAsset) != m_blockAssets[i].end();
+            const Press pr = picture(b.id.c_str(), b.label.c_str(), a, nullptr, on);
+            if (!pr.pressed) continue;
+            if (m_tool == Tool::Place) cancelPlacing();
+            if (tool) {
+                m_tool = m_tool == Tool::Bat ? Tool::Select : Tool::Bat;
+            } else {
+                placeBlock(i);
+                m_dropOnRelease = true; // dragged out: let go in the world to drop it
+            }
+        }
+        if (m_hasFemfx && picture("throw", "Throw", nullptr, "Ball!", m_tool == Tool::Shoot).pressed) {
+            if (m_tool == Tool::Place) cancelPlacing();
+            m_tool = m_tool == Tool::Shoot ? Tool::Select : Tool::Shoot;
+        }
+        if (anyoneDown && picture("getup", "Get up", nullptr, "Up!", false).pressed) standEveryoneUp();
+        if (!m_objects.empty() && picture("clear", "Clear", nullptr, "Empty", false).pressed) {
+            pushUndo();
+            clearAll();
+        }
+    }
+    if (picture("build", "Build", nullptr, "Tools", false).pressed) setMode(Mode::Build);
+    ImGui::End();
+
+    // The gamepad's cursor: phones and TVs draw no mouse pointer, so while
+    // a pad is in use the cursor is a big ring (filled while A is held).
+    if (static_cast<double>(SDL_GetTicks()) / 1000.0 - m_padLastUsed < 5.0) {
+        const ImVec2 c = ImGui::GetIO().MousePos;
+        ImDrawList* fg = ImGui::GetForegroundDrawList();
+        fg->AddCircle(c, 15.0f * s, IM_COL32(20, 20, 30, 220), 0, 6.0f * s);
+        fg->AddCircle(c, 15.0f * s, IM_COL32(255, 230, 120, 255), 0, 3.0f * s);
+        if (m_padPressing) fg->AddCircleFilled(c, 8.0f * s, IM_COL32(255, 230, 120, 255));
+    }
+}
+
+// ---------------------------------------------------------------- touch and gamepads
+
+void SandboxModule::dropFingerDrag() {
+    if (!m_dropOnRelease) return;
+    if (m_tool == Tool::Place) cancelPlacing(); // a moved piece goes back where it was
+    m_dropOnRelease = false;
+}
+
+void SandboxModule::openGamepad(SDL_JoystickID id) {
+    for (SDL_Gamepad* pad : m_pads)
+        if (SDL_GetGamepadID(pad) == id) return;
+    SDL_Gamepad* pad = SDL_OpenGamepad(id);
+    if (!pad) {
+        kke::log::get(name())->warn("could not open gamepad {}: {}", id, SDL_GetError());
+        return;
+    }
+    const char* padName = SDL_GetGamepadName(pad);
+    kke::log::get(name())->info("gamepad: {}", padName ? padName : "(unnamed)");
+    m_pads.push_back(pad);
+}
+
+void SandboxModule::warpPointer(const glm::vec2& p) {
+    m_padCursor = p;
+    SDL_WarpMouseInWindow(m_app->window().handle(), p.x, p.y);
+}
+
+// The same event a mouse click makes, so the palette (ImGui), dragging
+// and the bat can't tell a gamepad from a mouse.
+void SandboxModule::pointerButton(bool down) {
+    SDL_Window* window = m_app->window().handle();
+    SDL_Event e{};
+    e.type = down ? SDL_EVENT_MOUSE_BUTTON_DOWN : SDL_EVENT_MOUSE_BUTTON_UP;
+    e.button.timestamp = SDL_GetTicksNS();
+    e.button.windowID = SDL_GetWindowID(window);
+    e.button.which = 0; // not SDL_TOUCH_MOUSEID: ImGui treats it as a mouse
+    e.button.button = SDL_BUTTON_LEFT;
+    e.button.down = down;
+    e.button.clicks = 1;
+    const auto& mouse = m_app->window().mouseState();
+    e.button.x = mouse.x;
+    e.button.y = mouse.y;
+    if (!SDL_PushEvent(&e)) kke::log::get(name())->warn("gamepad press lost: {}", SDL_GetError());
+    m_padPressing = down;
+}
+
+void SandboxModule::padButton(uint8_t button, bool down) {
+    m_padLastUsed = static_cast<double>(SDL_GetTicks()) / 1000.0;
+    if (m_padCursor.x < 0.0f) {
+        const auto& mouse = m_app->window().mouseState();
+        m_padCursor = glm::vec2(mouse.x, mouse.y);
+    }
+    switch (button) {
+    case SDL_GAMEPAD_BUTTON_SOUTH: // A: press, hold and move to drag, let go to drop
+        if (down != m_padPressing) pointerButton(down);
+        break;
+    case SDL_GAMEPAD_BUTTON_EAST:  // B: put it back / back to the hand
+        if (!down) break;
+        if (m_padPressing) pointerButton(false);
+        if (m_tool == Tool::Place) cancelPlacing();
+        m_tool = Tool::Select;
+        m_dropOnRelease = false;
+        break;
+    case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:
+    case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
+    case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:
+    case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: {
+        if (!down) break;
+        const bool right = button == SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER || button == SDL_GAMEPAD_BUTTON_DPAD_RIGHT;
+        const int cell = kke::stepPaletteCell(m_paletteCells, m_padCursor, right ? 1 : -1);
+        if (cell >= 0) warpPointer(m_paletteCells[static_cast<size_t>(cell)]);
+        break;
+    }
+    case SDL_GAMEPAD_BUTTON_NORTH: // Y: everyone up
+        if (down) standEveryoneUp();
+        break;
+    case SDL_GAMEPAD_BUTTON_START:
+        if (down) setMode(Mode::Build);
+        break;
+    default:
+        break;
+    }
+}
+
+void SandboxModule::updatePad(float dt) {
+    SDL_Gamepad* pad = m_pads.empty() ? nullptr : m_pads.front();
+    if (!pad) return;
+    auto axis = [&](SDL_GamepadAxis a) { return static_cast<float>(SDL_GetGamepadAxis(pad, a)) / 32767.0f; };
+    int w = 1, h = 1;
+    SDL_GetWindowSize(m_app->window().handle(), &w, &h);
+    const glm::vec2 step = kke::padPointerStep({ axis(SDL_GAMEPAD_AXIS_LEFTX), axis(SDL_GAMEPAD_AXIS_LEFTY) }, dt, static_cast<float>(h));
+    if (step.x != 0.0f || step.y != 0.0f) {
+        if (m_padCursor.x < 0.0f) {
+            const auto& mouse = m_app->window().mouseState();
+            m_padCursor = glm::vec2(mouse.x, mouse.y);
+        }
+        const glm::vec2 p = glm::clamp(m_padCursor + step, glm::vec2(0.0f), glm::vec2(static_cast<float>(w - 1), static_cast<float>(h - 1)));
+        warpPointer(p);
+        m_padLastUsed = static_cast<double>(SDL_GetTicks()) / 1000.0;
+    }
+    // Right stick turns the view, the triggers zoom (right in, left out).
+    if (auto* camera = m_app->getModule<kke::OrbitCameraModule>()) {
+        auto dead = [](float v) { return std::abs(v) < 0.2f ? 0.0f : (v - std::copysign(0.2f, v)) / 0.8f; };
+        const float rx = dead(axis(SDL_GAMEPAD_AXIS_RIGHTX)), ry = dead(axis(SDL_GAMEPAD_AXIS_RIGHTY));
+        const float zoom = axis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) - axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
+        if (rx != 0.0f || ry != 0.0f || std::abs(zoom) > 0.1f)
+            camera->nudge(rx * 2.2f * dt, -ry * 1.6f * dt, 1.0f + zoom * 1.5f * dt);
+    }
+}
+
+// A replay: one step per line, "<seconds> <what...>", in time order.
+//   0.5 finger down <id> <x> <y>     (x, y: 0..1 of the window; also move, up)
+//   1.0 pad attach                    (a virtual gamepad the next lines drive)
+//   1.2 pad axis <leftx|lefty|rightx|righty> <-1..1>
+//   1.4 pad button <a|b|x|y|lb|rb|start|left|right> <0|1>
+// Pushed as the same SDL events real hardware makes, except that SDL's
+// touch-to-mouse emulation doesn't run for pushed finger events.
+bool SandboxModule::loadReplay(const std::string& path) {
+    std::ifstream in(path);
+    if (!in) {
+        kke::log::get(name())->error("replay '{}' can't be read", path);
+        return false;
+    }
+    std::vector<ReplayStep> steps;
+    std::string text;
+    int lineNo = 0;
+    while (std::getline(in, text)) {
+        ++lineNo;
+        if (text.empty() || text[0] == '#') continue;
+        std::istringstream ls(text);
+        ReplayStep st;
+        st.line = lineNo;
+        bool ok = static_cast<bool>(ls >> st.time >> st.kind >> st.what);
+        if (ok && st.kind == "finger") ok = static_cast<bool>(ls >> st.finger >> st.x >> st.y) && (st.what == "down" || st.what == "move" || st.what == "up");
+        else if (ok && st.kind == "pad" && (st.what == "axis" || st.what == "button")) ok = static_cast<bool>(ls >> st.name >> st.value);
+        else if (ok) ok = st.kind == "pad" && st.what == "attach";
+        if (!ok) {
+            kke::log::get(name())->error("replay '{}' line {}: can't read '{}'", path, lineNo, text);
+            return false;
+        }
+        steps.push_back(std::move(st));
+    }
+    std::stable_sort(steps.begin(), steps.end(), [](const ReplayStep& a, const ReplayStep& b) { return a.time < b.time; });
+    m_replay = std::move(steps);
+    m_replayNext = 0;
+    m_replayTime = 0.0f;
+    kke::log::get(name())->info("replay '{}': {} steps", path, m_replay.size());
+    return true;
+}
+
+void SandboxModule::updateReplay(float dt) {
+    if (m_replayNext >= m_replay.size()) return;
+    m_replayTime += dt;
+    SDL_Window* window = m_app->window().handle();
+    while (m_replayNext < m_replay.size() && m_replay[m_replayNext].time <= m_replayTime) {
+        const ReplayStep& st = m_replay[m_replayNext++];
+        if (st.kind == "finger") {
+            SDL_Event e{};
+            e.type = st.what == "down" ? SDL_EVENT_FINGER_DOWN : st.what == "up" ? SDL_EVENT_FINGER_UP : SDL_EVENT_FINGER_MOTION;
+            e.tfinger.timestamp = SDL_GetTicksNS();
+            e.tfinger.touchID = 1;
+            e.tfinger.fingerID = st.finger;
+            e.tfinger.x = st.x;
+            e.tfinger.y = st.y;
+            e.tfinger.pressure = st.what == "up" ? 0.0f : 1.0f;
+            e.tfinger.windowID = SDL_GetWindowID(window);
+            if (!SDL_PushEvent(&e)) kke::log::get(name())->warn("replay line {}: {}", st.line, SDL_GetError());
+            continue;
+        }
+        if (st.what == "attach") {
+            if (m_replayPad) continue;
+            SDL_VirtualJoystickDesc d;
+            SDL_INIT_INTERFACE(&d);
+            d.type = SDL_JOYSTICK_TYPE_GAMEPAD;
+            d.name = "KKE replay gamepad";
+            d.naxes = SDL_GAMEPAD_AXIS_COUNT;
+            d.nbuttons = SDL_GAMEPAD_BUTTON_COUNT;
+            for (int button = 0; button <= SDL_GAMEPAD_BUTTON_DPAD_RIGHT; ++button) d.button_mask |= 1u << button;
+            d.axis_mask = (1u << SDL_GAMEPAD_AXIS_COUNT) - 1u;
+            m_replayPadId = SDL_AttachVirtualJoystick(&d);
+            m_replayPad = m_replayPadId ? SDL_OpenJoystick(m_replayPadId) : nullptr;
+            if (!m_replayPad) {
+                kke::log::get(name())->error("replay line {}: virtual gamepad failed: {}", st.line, SDL_GetError());
+                continue;
+            }
+            // Triggers rest at the bottom of the axis (0 would read half pulled).
+            SDL_SetJoystickVirtualAxis(m_replayPad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER, SDL_JOYSTICK_AXIS_MIN);
+            SDL_SetJoystickVirtualAxis(m_replayPad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, SDL_JOYSTICK_AXIS_MIN);
+            continue;
+        }
+        if (!m_replayPad) {
+            kke::log::get(name())->error("replay line {}: 'pad attach' must come first", st.line);
+            continue;
+        }
+        if (st.what == "axis") {
+            static const std::pair<const char*, SDL_GamepadAxis> axes[] = { { "leftx", SDL_GAMEPAD_AXIS_LEFTX }, { "lefty", SDL_GAMEPAD_AXIS_LEFTY },
+                                                                            { "rightx", SDL_GAMEPAD_AXIS_RIGHTX }, { "righty", SDL_GAMEPAD_AXIS_RIGHTY } };
+            const auto* a = std::find_if(std::begin(axes), std::end(axes), [&](const auto& x) { return st.name == x.first; });
+            if (a == std::end(axes)) { kke::log::get(name())->error("replay line {}: unknown axis '{}'", st.line, st.name); continue; }
+            SDL_SetJoystickVirtualAxis(m_replayPad, a->second, static_cast<Sint16>(std::clamp(st.value, -1.0f, 1.0f) * 32767.0f));
+        } else {
+            static const std::pair<const char*, SDL_GamepadButton> buttons[] = {
+                { "a", SDL_GAMEPAD_BUTTON_SOUTH }, { "b", SDL_GAMEPAD_BUTTON_EAST }, { "x", SDL_GAMEPAD_BUTTON_WEST }, { "y", SDL_GAMEPAD_BUTTON_NORTH },
+                { "lb", SDL_GAMEPAD_BUTTON_LEFT_SHOULDER }, { "rb", SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER }, { "start", SDL_GAMEPAD_BUTTON_START },
+                { "left", SDL_GAMEPAD_BUTTON_DPAD_LEFT }, { "right", SDL_GAMEPAD_BUTTON_DPAD_RIGHT } };
+            const auto* b = std::find_if(std::begin(buttons), std::end(buttons), [&](const auto& x) { return st.name == x.first; });
+            if (b == std::end(buttons)) { kke::log::get(name())->error("replay line {}: unknown button '{}'", st.line, st.name); continue; }
+            SDL_SetJoystickVirtualButton(m_replayPad, b->second, st.value > 0.5f);
+        }
+    }
+}
+
+void SandboxModule::shutdown() {
+    for (SDL_Gamepad* pad : m_pads) SDL_CloseGamepad(pad);
+    m_pads.clear();
+    if (m_replayPad) SDL_CloseJoystick(m_replayPad);
+    if (m_replayPadId) SDL_DetachVirtualJoystick(m_replayPadId);
+    m_replayPad = nullptr;
+    m_replayPadId = 0;
+    if (m_gamepadSubsystem) SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
+    m_gamepadSubsystem = false;
+}
+
 void SandboxModule::renderUi() {
+    if (m_mode == Mode::Play) {
+        playPaletteUi();
+        return;
+    }
     assetBrowserUi();
     inspectorUi();
+    modeSwitchUi();
 }
 
 } // namespace kke_sandbox

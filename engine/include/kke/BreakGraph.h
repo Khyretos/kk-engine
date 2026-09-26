@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <functional>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace kke {
@@ -45,6 +46,13 @@ public:
 
     bool isBroken(uint32_t chunkA, uint32_t chunkB) const;
     size_t brokenBorderCount() const { return m_broken.size(); }
+    // Every broken border as (smaller, larger) piece ids, sorted: what a
+    // multiplayer host sends (kke::net::BreakMsg).
+    std::vector<std::pair<uint32_t, uint32_t>> brokenBorders() const;
+    // Breaks the border between two pieces because someone else said so
+    // (a network client following its host). False when the pieces don't
+    // touch (not a border of this object) or it was already broken.
+    bool breakBorder(uint32_t chunkA, uint32_t chunkB);
 
     // Splits a body's tets into groups that still hold together (joined
     // by an unbroken border, or in the same piece). Groups are ordered by
@@ -58,6 +66,7 @@ private:
     std::vector<uint8_t> m_border, m_exterior;
     std::vector<float> m_strength, m_threshold;
     std::unordered_set<uint64_t> m_broken;
+    std::unordered_set<uint64_t> m_borders; // every pair of pieces that touch
 };
 
 } // namespace kke

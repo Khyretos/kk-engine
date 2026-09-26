@@ -169,6 +169,11 @@ void LoopbackTransport::poll(std::vector<NetEvent>& out) {
     }
 }
 
+std::string LoopbackTransport::address(PeerId peer) const {
+    auto it = m_peers.find(peer);
+    return it == m_peers.end() ? std::string() : "loopback:" + std::to_string(it->second.port);
+}
+
 PeerStats LoopbackTransport::stats(PeerId peer) const {
     auto it = m_peers.find(peer);
     if (it == m_peers.end()) return {};

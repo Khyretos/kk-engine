@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <unordered_map>
 
 namespace kke {
@@ -78,52 +79,61 @@ void MeltVolume::rebuildDistance() {
     // Chamfer distance transform (Borgefors), in voxel units: distance of
     // each voxel centre to the nearest voxel of the other kind, two sweeps
     // with 3x3x3 neighbourhood weights (1, sqrt2, sqrt3). Solid voxels get
-    // negative values. ~14k voxels: well under a millisecond, and only
-    // after something melted.
-    const size_t n = m_density.size();
-    std::vector<float> in(n), out(n);
+    // negative values. Runs on a copy padded by one voxel each side (the
+    // outside is empty), so the sweeps need no bounds checks, with the 13
+    // neighbour offsets and weights worked out once: ~0.3 ms for 24^3.
+    const glm::ivec3 P = m_dims + 2;
+    const size_t n = static_cast<size_t>(P.x) * P.y * P.z;
     const float big = 1e6f;
-    for (size_t v = 0; v < n; ++v) {
-        bool solid = m_density[v] > 0.5f;
-        in[v] = solid ? big : 0.0f;   // distance to nearest empty (for solids)
-        out[v] = solid ? 0.0f : big;  // distance to nearest solid (for empties)
-    }
+    m_distIn.assign(n, 0.0f);  // distance to nearest empty (for solids); outside is empty
+    m_distOut.assign(n, big);  // distance to nearest solid (for empties)
+    auto pid = [&](int x, int y, int z) { return (static_cast<size_t>(z + 1) * P.y + (y + 1)) * P.x + (x + 1); };
+    for (int z = 0; z < m_dims.z; ++z)
+        for (int y = 0; y < m_dims.y; ++y)
+            for (int x = 0; x < m_dims.x; ++x) {
+                const bool solid = m_density[idx(x, y, z)] > 0.5f;
+                m_distIn[pid(x, y, z)] = solid ? big : 0.0f;
+                m_distOut[pid(x, y, z)] = solid ? 0.0f : big;
+            }
+    // The already-visited half of the 3x3x3 neighbourhood (forward order).
+    std::ptrdiff_t offset[13];
+    float weight[13];
+    int k = 0;
+    for (int dz = -1; dz <= 0; ++dz)
+        for (int dy = -1; dy <= 1; ++dy)
+            for (int dx = -1; dx <= 1; ++dx) {
+                if (dz == 0 && (dy > 0 || (dy == 0 && dx >= 0))) continue;
+                offset[k] = (static_cast<std::ptrdiff_t>(dz) * P.y + dy) * P.x + dx;
+                weight[k] = std::sqrt(static_cast<float>(dx * dx + dy * dy + dz * dz));
+                ++k;
+            }
     auto sweep = [&](std::vector<float>& d, bool forward) {
-        const int s = forward ? 1 : -1;
-        const int z0 = forward ? 0 : m_dims.z - 1, z1 = forward ? m_dims.z : -1;
-        const int y0 = forward ? 0 : m_dims.y - 1, y1 = forward ? m_dims.y : -1;
-        const int x0 = forward ? 0 : m_dims.x - 1, x1 = forward ? m_dims.x : -1;
-        for (int z = z0; z != z1; z += s)
-            for (int y = y0; y != y1; y += s)
-                for (int x = x0; x != x1; x += s) {
-                    float& cur = d[idx(x, y, z)];
+        float* data = d.data();
+        const std::ptrdiff_t s = forward ? 1 : -1;
+        for (int zi = 0; zi < m_dims.z; ++zi)
+            for (int yi = 0; yi < m_dims.y; ++yi) {
+                const int z = forward ? zi : m_dims.z - 1 - zi, y = forward ? yi : m_dims.y - 1 - yi;
+                size_t v = pid(forward ? 0 : m_dims.x - 1, y, z);
+                for (int xi = 0; xi < m_dims.x; ++xi, v += s) {
+                    float cur = data[v];
                     if (cur == 0.0f) continue;
-                    for (int dz = -1; dz <= 0; ++dz)
-                        for (int dy = -1; dy <= 1; ++dy)
-                            for (int dx = -1; dx <= 1; ++dx) {
-                                // Only already-visited neighbours in this sweep order.
-                                if (dz == 0 && (dy > 0 || (dy == 0 && dx >= 0))) continue;
-                                int xx = x + dx * s, yy = y + dy * s, zz = z + dz * s;
-                                if (xx < 0 || yy < 0 || zz < 0 || xx >= m_dims.x || yy >= m_dims.y || zz >= m_dims.z) {
-                                    // Outside the grid is empty: counts as distance 0 for "in".
-                                    if (&d == &in) cur = std::min(cur, std::sqrt(float(dx * dx + dy * dy + dz * dz)));
-                                    continue;
-                                }
-                                float w = std::sqrt(float(dx * dx + dy * dy + dz * dz));
-                                cur = std::min(cur, d[idx(xx, yy, zz)] + w);
-                            }
+                    for (int j = 0; j < 13; ++j) cur = std::min(cur, data[v + s * offset[j]] + weight[j]);
+                    data[v] = cur;
                 }
+            }
     };
-    sweep(in, true);
-    sweep(in, false);
-    sweep(out, true);
-    sweep(out, false);
-    m_distance.resize(n);
-    for (size_t v = 0; v < n; ++v) {
-        bool solid = m_density[v] > 0.5f;
-        // Surface sits half a voxel from the boundary voxel centre.
-        m_distance[v] = solid ? -(in[v] - 0.5f) * m_cell : (out[v] - 0.5f) * m_cell;
-    }
+    sweep(m_distIn, true);
+    sweep(m_distIn, false);
+    sweep(m_distOut, true);
+    sweep(m_distOut, false);
+    m_distance.resize(m_density.size());
+    for (int z = 0; z < m_dims.z; ++z)
+        for (int y = 0; y < m_dims.y; ++y)
+            for (int x = 0; x < m_dims.x; ++x) {
+                const size_t v = idx(x, y, z), p = pid(x, y, z);
+                // Surface sits half a voxel from the boundary voxel centre.
+                m_distance[v] = m_density[v] > 0.5f ? -(m_distIn[p] - 0.5f) * m_cell : (m_distOut[p] - 0.5f) * m_cell;
+            }
     m_distanceDirty = false;
 }
 
@@ -155,19 +165,21 @@ size_t MeltVolume::step(float dt, ParticleFluid& fluid) {
     const float reach = fluid.params().radius + m_cell * 1.5f;
     const int span = static_cast<int>(std::ceil(reach / m_cell));
     const float k = std::min(0.5f, 15.0f * dt);
+    const float reach2 = reach * reach;
     for (size_t i = 0; i < pos.size(); ++i) {
         glm::ivec3 c = glm::ivec3(glm::floor((pos[i] - m_origin) / m_cell));
         // Search every voxel within `reach` (was +-1 cell, shorter than the
         // reach itself: particles resting on the top face never touched the
-        // top layer and heat only got in where they dug in).
-        for (int dz = -span; dz <= span; ++dz)
-            for (int dy = -span; dy <= span; ++dy)
-                for (int dx = -span; dx <= span; ++dx) {
-                    int x = c.x + dx, y = c.y + dy, z = c.z + dz;
-                    if (x < 0 || y < 0 || z < 0 || x >= m_dims.x || y >= m_dims.y || z >= m_dims.z) continue;
+        // top layer and heat only got in where they dug in), clipped to
+        // the grid: most of a pool is nowhere near the block.
+        const glm::ivec3 lo = glm::max(c - span, glm::ivec3(0)), hi = glm::min(c + span, m_dims - 1);
+        for (int z = lo.z; z <= hi.z; ++z)
+            for (int y = lo.y; y <= hi.y; ++y)
+                for (int x = lo.x; x <= hi.x; ++x) {
                     size_t v = idx(x, y, z);
                     if (m_density[v] < 0.05f) continue;
-                    if (glm::length(center(x, y, z) - pos[i]) > reach) continue;
+                    const glm::vec3 d = center(x, y, z) - pos[i];
+                    if (glm::dot(d, d) > reach2) continue;
                     float q = k * (temps[i] - m_temp[v]) * 0.25f;
                     m_temp[v] += q / mat.heatCapacity;
                     temps[i] -= q / mat.liquidHeatCapacity;
@@ -206,12 +218,16 @@ size_t MeltVolume::step(float dt, ParticleFluid& fluid) {
                 if (m_density[v] <= 0.0f || m_temp[v] <= mat.meltingPoint) continue;
                 float excess = m_temp[v] - mat.meltingPoint;
                 float lost = std::min(m_density[v], excess * mat.meltRate);
+                const bool wasSolid = m_density[v] > 0.5f;
                 m_density[v] -= lost;
                 m_temp[v] = mat.meltingPoint; // the heat went into melting
                 if (m_density[v] < 0.02f) m_density[v] = 0.0f;
                 m_meltAccum[v] += lost;
                 m_dirty = true;
-                m_distanceDirty = true;
+                // The distance field only sees solid (> 0.5) or not: most
+                // steps melt a little without flipping a voxel, and skip
+                // the rebuild (2-3 ms of a 3 ms step before).
+                if (wasSolid != (m_density[v] > 0.5f)) m_distanceDirty = true;
                 while (m_meltAccum[v] >= particleShare) {
                     m_meltAccum[v] -= particleShare;
                     glm::vec3 jitter(std::fmod(v * 0.618f, 1.0f) - 0.5f, 0.0f, std::fmod(v * 0.382f, 1.0f) - 0.5f);

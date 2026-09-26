@@ -24,11 +24,14 @@ std::string guidString(SDL_GUID guid) {
     return buf;
 }
 
+#if defined(__linux__)
+// Only the Linux sysfs port-path lookup below uses this.
 bool isHidInstance(const std::string& c) {
     // "0003:046D:C21D.0005": bus:vendor:product.instance (the instance
     // number changes on every plug, so the port path stops before it).
     return c.size() == 19 && c[4] == ':' && c[9] == ':' && c[14] == '.';
 }
+#endif
 
 const char* kPadButtonNames[] = { "A",           "B",       "X",        "Y",        "Back",      "Guide",   "Start",
                                   "L3",          "R3",      "LB",       "RB",       "D-pad Up",  "D-pad Down",

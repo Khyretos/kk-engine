@@ -19,10 +19,12 @@ option(ENGINE_ENABLE_LUA "Lua 5.4 gameplay scripting (kke::ScriptVM, ScriptModul
 option(KKE_ENABLE_NET "Networking over ENet (MIT): kke::NetModule host/join, LAN discovery (docs/NETWORKING.md). Off = offline only; the loopback transport and replication logic still build." ON)
 option(ENGINE_HEADLESS_TEST "Build the headless smoke-test target" ON)
 option(KKE_ENABLE_TESTS "Build the unit test suite (tests/)" ON)
+option(KKE_ENABLE_BENCHMARKS "Build kke_bench, the headless benchmark suite (benchmarks/, docs/BENCHMARKS.md)" ON)
 option(KKE_ENABLE_JOLT "Build the Jolt Physics rigid-body/collision layer (MIT): static world collision, rigid bodies, character controller. See ACTION_PLAN.md 1.1." ON)
 option(KKE_ENABLE_FEMFX "Build the vendored, patched AMD FEMFX deformable-physics library. See docs/HISTORY.md 'Physics: AMD FEMFX integration'." OFF)
 option(KKE_ENABLE_COVERAGE "Instrument builds for code coverage (gcc/clang --coverage). See docs/HISTORY.md 'Test suite & coverage'." OFF)
 option(KKE_WARNINGS_AS_ERRORS "GCC/Clang: fail the build on any -Wall -Wextra warning in the engine, games, tools or tests (third-party code excluded). CI turns this on." OFF)
+option(KKE_SHIPPING "Shipping build of a game: compiles out the developer tools players must not reach (debug panels, the Lua console, script hot reload, debug environment switches such as virtual input). See docs/ANTI_CHEAT.md." OFF)
 option(KKE_ENABLE_GPU_PROFILER "Request the VulkanProfiler layer (VK_LAYER_PROFILER_unified) at instance creation if installed. See docs/HISTORY.md 'GPU profiler (VulkanProfiler) integration'." OFF)
 
 if(KKE_ENABLE_COVERAGE)
@@ -74,7 +76,9 @@ endif()
 FetchContent_Declare(
     volk
     GIT_REPOSITORY https://github.com/zeux/volk.git
-    GIT_TAG        1.3.270
+    # 1.4.304: first release whose cmake_minimum_required has a policy
+    # range, so CMake 4 doesn't warn "Compatibility with CMake < 3.10".
+    GIT_TAG        vulkan-sdk-1.4.304.0
     GIT_SHALLOW    TRUE
 )
 set(VOLK_STATIC_DEFINES "")
@@ -104,12 +108,18 @@ set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
 # libudev (joystick hot-plug) and dbus should be installed: see docs/HISTORY.md.
 set(SDL_X11_XSCRNSAVER OFF CACHE BOOL "" FORCE)
 set(SDL_X11_XTEST OFF CACHE BOOL "" FORCE)      # synthetic input injection: not needed
+# Sound goes through miniaudio (AudioModule), never SDL: without this SDL
+# probes for ALSA/PulseAudio/JACK at configure time and warns when the dev
+# packages are missing, for a subsystem nobody calls.
+set(SDL_AUDIO OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
     SDL3
     GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
     GIT_TAG        release-3.4.16
     GIT_SHALLOW    TRUE
 )
+# SDL's Wayland protocol XML needs wayland-scanner 1.26+ (see the file).
+include(cmake/wayland_scanner.cmake)
 FetchContent_MakeAvailable(SDL3)
 
 # SDL3's own vendored source produces occasional warnings depending on
@@ -132,7 +142,7 @@ endif()
 FetchContent_Declare(
     glm
     GIT_REPOSITORY https://github.com/g-truc/glm.git
-    GIT_TAG        1.0.1
+    GIT_TAG        1.0.3 # 1.0.2+: no CMake < 3.10 deprecation warning
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(glm)
@@ -202,7 +212,7 @@ if(NOT Freetype_FOUND AND NOT FREETYPE_FOUND)
     FetchContent_Declare(
         freetype
         GIT_REPOSITORY https://github.com/freetype/freetype.git
-        GIT_TAG        VER-2-13-3
+        GIT_TAG        VER-2-14-3 # 2.14: no CMake < 3.10 deprecation warning
         GIT_SHALLOW    TRUE
         OVERRIDE_FIND_PACKAGE
     )
@@ -279,6 +289,24 @@ if(NOT TARGET ufbx)
     # FBX parser, and a Debug -O0 parse of a big pack is needlessly slow.
     target_compile_options(ufbx PRIVATE $<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>)
 endif()
+
+# ---------------------------------------------------------------------------
+# Monocypher — BLAKE2b hashing and EdDSA signatures for sealed game data
+# (kke/PackSeal.h, docs/ANTI_CHEAT.md). BSD-2 / CC0, one .c/.h pair, no
+# dependencies, constant-time. Always optimized: hashing a whole pack at
+# -O0 would make startup checks needlessly slow.
+# ---------------------------------------------------------------------------
+FetchContent_Declare(
+    monocypher
+    GIT_REPOSITORY https://github.com/LoupVaillant/Monocypher.git
+    GIT_TAG        4.0.2
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(monocypher)
+add_library(kke_monocypher STATIC ${monocypher_SOURCE_DIR}/src/monocypher.c)
+target_include_directories(kke_monocypher SYSTEM PUBLIC ${monocypher_SOURCE_DIR}/src)
+set_target_properties(kke_monocypher PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_compile_options(kke_monocypher PRIVATE $<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>)
 
 # ---------------------------------------------------------------------------
 # miniaudio — audio output device on every platform (ALSA/PulseAudio/
@@ -551,7 +579,14 @@ add_subdirectory(engine)
 # here — this tool is what lets that be measured honestly on whatever
 # hardware actually has more than one.
 add_subdirectory(tools/model_info)
+add_subdirectory(tools/seal)
+if(KKE_ENABLE_BENCHMARKS)
+    add_subdirectory(benchmarks)
+endif()
 add_subdirectory(tools/audio_preview)
+if(KKE_ENABLE_NET)
+    add_subdirectory(tools/kke_server)
+endif()
 if(KKE_ENABLE_FEMFX)
     add_subdirectory(tools/physics_benchmark)
     add_subdirectory(tools/physics_lab)
@@ -600,6 +635,13 @@ add_subdirectory(games/sea_demo)
 # (the sound's rays hit them), so it needs Jolt.
 if(KKE_ENABLE_JOLT)
     add_subdirectory(games/audio_demo)
+endif()
+
+# The starter template (docs/tutorials/getting-started.md), and games made
+# from it with tools/new_game, which lists them in games/my_games.cmake.
+if(KKE_ENABLE_JOLT AND ENGINE_ENABLE_LUA)
+    add_subdirectory(games/template)
+    include(games/my_games.cmake)
 endif()
 
 # ---------------------------------------------------------------------------

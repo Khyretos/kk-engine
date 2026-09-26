@@ -39,12 +39,21 @@ private:
         kke::ModelModule::ModelId model = 0;
         std::string behavior; // "clip", "wave", "breathe", "pose"
         glm::vec3 position{0.0f};
+        // Four legs (buildQuadrupedRagdoll) and how heavy, for ragdolls.
+        bool animal = false;
+        float mass = 70.0f;
         // Ragdoll state (0 = standing, driven by animation/posing).
         kke::IRagdollPhysics::RagdollHandle ragdoll = 0;
         kke::RagdollDesc ragdollDesc;
         kke::RagdollSkinBinding binding;
         std::string behaviorBeforeRagdoll;
+        // Standing up: the last ragdoll pose (model space) blends back to
+        // the animated one over kStandUpSeconds. < 0 = not blending.
+        std::vector<glm::mat4> blendFrom;
+        float blendAge = -1.0f;
     };
+    void blendToAnimation(Character& c, float dt);
+    void addJoltLevel(); // floor and walls for Jolt ragdolls
     void ragdoll(Character& c, const glm::vec3& push);
     void standUp(Character& c);
     kke::IRagdollPhysics* m_physics = nullptr; // optional: whatever module offers ragdolls

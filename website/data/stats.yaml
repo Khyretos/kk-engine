@@ -1,0 +1,5 @@
+# The numbers under the hero (home page). Update them as the engine grows.
+- { value: 12, suffix: "", label: "demo games" }
+- { value: 20, suffix: "+", label: "engine modules" }
+- { value: 1, suffix: " core", label: "minimum CPU" }
+- { value: 0, suffix: "", label: "GPUs required" }

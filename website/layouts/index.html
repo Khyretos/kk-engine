@@ -1,0 +1,125 @@
+{{ define "main" }}
+<section class="hero" id="top">
+  <div class="blobs" aria-hidden="true"><span></span><span></span><span></span></div>
+  <canvas class="stars" aria-hidden="true"></canvas>
+  <div class="wrap hero-grid">
+    <div class="hero-text reveal">
+      <p class="eyebrow"><i class="fa-solid fa-compass"></i> Open source · MIT · C++17 · Vulkan · Lua</p>
+      <h1><span class="gradient-text animated">Kreative Kompas</span><br>Engine</h1>
+      <p class="lead">A game engine for <span class="typed" data-words="walking, running and climbing|things that really break|jelly that wobbles|lava that melts ice|Lua that reloads as you type|playing together|a single core with no GPU"></span><span class="caret">|</span></p>
+      <p class="muted">{{ site.Params.description }}</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="#start"><i class="fa-solid fa-rocket"></i> Make your first game</a>
+        <a class="btn btn-outline" href="{{ "showcase/" | relURL }}"><i class="fa-solid fa-play"></i> See it in action</a>
+      </div>
+      <div class="hero-icons" aria-hidden="true">
+        <i class="fa-solid fa-cubes"></i><i class="fa-solid fa-person-running"></i><i class="fa-solid fa-burst"></i><i class="fa-solid fa-water"></i><i class="fa-solid fa-wave-square"></i><i class="fa-solid fa-gamepad"></i><i class="fa-solid fa-network-wired"></i>
+      </div>
+    </div>
+    <div class="hero-video reveal">
+      <div class="glow-ring" aria-hidden="true"></div>
+      <video autoplay muted loop playsinline poster="{{ "media/intro-poster.webp" | relURL }}">
+        <source src="{{ "media/intro.mp4" | relURL }}" type="video/mp4">
+      </video>
+      <p class="caption">Every KKE game opens with this intro, rendered by the engine itself.</p>
+    </div>
+  </div>
+</section>
+
+<section class="stats">
+  <div class="wrap stats-grid">
+    {{ range site.Data.stats }}
+    <div class="stat reveal"><span class="stat-value" data-count="{{ .value }}">{{ .value }}</span><span class="stat-suffix">{{ .suffix }}</span><span class="stat-label">{{ .label }}</span></div>
+    {{ end }}
+  </div>
+</section>
+
+<section class="section" id="features">
+  <div class="wrap">
+    <h2 class="section-title reveal">Everything a game needs, <span class="gradient-text">one lego piece at a time</span></h2>
+    <p class="section-lead reveal">Each system is a module. Plug in the ones your game uses; each card opens its part of the showcase.</p>
+    <div class="card-grid">
+      {{ range $i, $f := site.Data.features }}
+      <a class="card reveal" style="--accent: {{ $f.accent }}; --delay: {{ mul (mod $i 3) 80 }}ms" href="{{ "showcase/" | relURL }}#{{ $f.id }}">
+        <div class="card-img"><img src="{{ (index $f.media 0).src | relURL }}" alt="" loading="lazy" decoding="async"></div>
+        <div class="card-body">
+          <i class="{{ $f.icon }} card-icon"></i>
+          <h3>{{ $f.title }}</h3>
+          <p>{{ $f.tagline }}</p>
+        </div>
+      </a>
+      {{ end }}
+    </div>
+  </div>
+</section>
+
+<section class="section alt" id="start">
+  <div class="wrap two-col">
+    <div class="reveal">
+      <h2 class="section-title left">From clone to <span class="gradient-text">your own game</span></h2>
+      <ol class="steps">
+        <li><strong>Build the engine.</strong> One command after the system packages; every library is fetched from source.</li>
+        <li><strong>Copy the starter template.</strong> A character that walks, jumps, vaults and climbs, in a level written in Lua.</li>
+        <li><strong>Change it while it runs.</strong> Save a script and the game reloads it. No rebuild.</li>
+      </ol>
+      <div class="cta">
+        <a class="btn btn-primary" href="{{ "docs/tutorials/getting-started/" | relURL }}"><i class="fa-solid fa-book-open"></i> Getting started</a>
+        <a class="btn btn-outline" href="{{ "docs/tutorials/" | relURL }}"><i class="fa-solid fa-graduation-cap"></i> Tutorials</a>
+      </div>
+    </div>
+    <div class="terminal reveal">
+      <div class="terminal-bar"><span></span><span></span><span></span><em>bash</em></div>
+<pre><code><span class="c"># build everything once</span>
+git clone {{ site.Params.github }}.git
+cd kk-engine
+cmake --workflow --preset default
+
+<span class="c"># your own game, from the starter template</span>
+tools/new_game my_game
+cmake --build build
+cd build/bin && ./my_game
+
+<span class="c"># then edit games/my_game/scripts/game.lua</span>
+<span class="c"># and watch it reload while you play</span></code></pre>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="ai">
+  <div class="wrap narrow reveal">
+    <div class="notice">
+      <i class="fa-solid fa-robot"></i>
+      <div>
+        <h3>Built by AI, in the open</h3>
+        <p>KKE's code is written by Claude (Anthropic) working directly in the repository, in small slices that are built, run and verified with screenshots, logs and tests before they count as done. Every decision is in the <a href="{{ site.Params.github }}">history</a>. Read it and question it like any codebase you didn't write yourself.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section alt" id="latest">
+  <div class="wrap">
+    <h2 class="section-title reveal">From the <span class="gradient-text">devlog</span></h2>
+    <div class="post-grid">
+      {{ range first 3 (where site.RegularPages "Section" "devlog") }}
+      <a class="post-card reveal" href="{{ .RelPermalink }}">
+        <time>{{ .Date.Format "2 January 2006" }}</time>
+        <h3>{{ .Title }}</h3>
+        <p>{{ .Summary | plainify | truncate 160 }}</p>
+      </a>
+      {{ end }}
+    </div>
+  </div>
+</section>
+
+<section class="section cta-band">
+  <div class="wrap narrow center reveal">
+    <h2>Help KKE exist</h2>
+    <p>It's free and MIT-licensed, built by one person with an AI. Star it, try it, tell us what breaks, or buy a coffee.</p>
+    <div class="cta center">
+      <a class="btn btn-primary" href="{{ site.Params.github }}"><i class="fa-solid fa-star"></i> Star on GitHub</a>
+      <a class="btn btn-outline" href="{{ site.Params.kofi }}"><i class="fa-solid fa-mug-hot"></i> Ko-fi</a>
+    </div>
+  </div>
+</section>
+{{ end }}

@@ -1,5 +1,6 @@
 #include "kke/Application.h"
 #include "kke/LogoIntro.h"
+#include "kke/DevTools.h"
 
 #include <cstdlib>
 #include "kke/Log.h"
@@ -8,6 +9,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <chrono>
+#include <filesystem>
+#include <system_error>
 #include <thread>
 #include <queue>
 #include <stdexcept>
@@ -15,12 +18,42 @@
 
 namespace kke {
 
+namespace {
+
+// Shaders, fonts and game manifests are opened by relative path
+// ("shaders/x.spv"), i.e. relative to the working directory. That holds
+// when a game is started from its own folder (build/bin, or a double-click
+// on Windows), but not from a desktop launcher or `./build/bin/kke_demo`
+// in the repo root. When the working directory has no shaders/ folder
+// and the executable's own folder does, switch to the executable's folder
+// (docs/RELEASES.md). Returns what happened, for the log.
+std::string enterRuntimeDirectory() {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    if (fs::is_directory("shaders", ec)) return {};
+    const char* base = SDL_GetBasePath();
+    if (!base) return std::string("no shaders/ folder here and the executable's folder is unknown: ") + SDL_GetError();
+    const fs::path exeDir(reinterpret_cast<const char8_t*>(base));
+    if (!fs::is_directory(exeDir / "shaders", ec)) return "no shaders/ folder here or next to the executable (" + std::string(base) + ")";
+    fs::current_path(exeDir, ec);
+    if (ec) return "could not switch to the executable's folder " + std::string(base) + ": " + ec.message();
+    return "working directory set to the executable's folder " + std::string(base);
+}
+
+// Filled before the logger exists (see the constructor), logged after.
+std::string g_runtimeDirNote;
+
+} // namespace
+
 Application::Application(const std::string& title, uint32_t width, uint32_t height, float fixedUpdateHz)
-    : m_window(title, width, height), m_fixedDt(1.0f / fixedUpdateHz) {
+    // The working directory is fixed before the window (the first member)
+    // exists, so every relative path the engine opens afterwards resolves.
+    : m_window((g_runtimeDirNote = enterRuntimeDirectory(), title), width, height), m_fixedDt(1.0f / fixedUpdateHz) {
     log::init(title);
+    if (!g_runtimeDirNote.empty()) log::get("Application")->info("{}", g_runtimeDirNote);
     {
         EngineSettings defaults;
-        if (const char* all = std::getenv("KKE_USE_EVERYTHING"); all && *all == '1') defaults.performance.useEverything = true;
+        if (const char* all = dev::env("KKE_USE_EVERYTHING"); all && *all == '1') defaults.performance.useEverything = true;
         setResourceBudget(computeBudget(defaults, usableCpuCount()));
     }
     m_renderer = std::make_unique<Renderer>(m_window);
@@ -143,6 +176,8 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
 
     m_debugUi = std::make_unique<DebugUi>(m_window, m_renderer->device(), m_renderer->renderPass(),
                                            m_renderer->swapChainImageCount());
+    // Shipping builds start (and stay) with the developer panels hidden.
+    m_debugUi->setVisible(dev::kEnabled);
 }
 
 Application::~Application() {
@@ -308,7 +343,7 @@ void Application::resolveInitOrder() {
 }
 
 void Application::playIntro() {
-    if (const char* skip = std::getenv("KKE_SKIP_INTRO"); skip && *skip && *skip != '0') return;
+    if (dev::flag("KKE_SKIP_INTRO")) return;
     std::unique_ptr<LogoIntro> intro;
     try {
         intro = std::make_unique<LogoIntro>(*this);
@@ -319,7 +354,7 @@ void Application::playIntro() {
     }
     // KKE_INTRO_AT=<seconds>: freeze the intro at that moment (screenshots).
     float freezeAt = -1.0f;
-    if (const char* at = std::getenv("KKE_INTRO_AT"); at && *at) freezeAt = static_cast<float>(std::atof(at));
+    if (const char* at = dev::env("KKE_INTRO_AT"); at && *at) freezeAt = static_cast<float>(std::atof(at));
 
     auto last = std::chrono::high_resolution_clock::now();
     bool playing = true, skipped = false;
@@ -369,7 +404,7 @@ void Application::run() {
     // KKE_HIDE_UI=1: start with every module's panels hidden (clean
     // screenshots and recordings; modules that toggle panels, e.g. F1 in
     // the sandbox, can still show them).
-    if (const char* hide = std::getenv("KKE_HIDE_UI"); hide && *hide && *hide != '0')
+    if (dev::flag("KKE_HIDE_UI"))
         for (Module* m : m_initOrder) m->setUiVisible(false);
 
     auto startTime = std::chrono::high_resolution_clock::now();
@@ -475,16 +510,14 @@ void Application::run() {
         const glm::mat4& proj = drawViews[0].proj;
 
         // Real shadow mapping (see kke::ShadowMap) — computed from the
-        // key light (lights[0]) only, framed around a fixed scene
-        // region near the origin (radius 15) rather than any real
-        // scene-bounds tracking, which this project doesn't have yet.
-        // 15 was chosen to comfortably cover both kke_demo's cube and
-        // physics_demo's ground plane + falling objects without the
-        // shadow map's resolution being spread so thin the shadow
-        // edges turn visibly blocky — checked against a real
-        // screenshot, not picked blindly.
+        // key light (lights[0]) only, over a 15 m radius around what the
+        // first view's camera looks at, so shadows follow the player
+        // through a level bigger than that. 15 keeps the texels dense
+        // enough that edges don't turn blocky (checked against a
+        // screenshot). The centre is snapped to shadow texels so the
+        // edges don't shimmer as the camera moves.
         glm::mat4 lightViewProj = ShadowMap::computeLightViewProj(
-            m_lighting.lights[0].direction, glm::vec3(0.0f, 0.0f, 0.0f), 15.0f);
+            m_lighting.lights[0].direction, drawViews[0].camera.target, 15.0f, m_shadowMap->resolution());
 
         RenderContext renderCtx{};
         renderCtx.renderPass = m_renderer->renderPass();
@@ -513,8 +546,11 @@ void Application::run() {
         // so they only ever run for a frame guaranteed to complete.
         if (m_renderer->beginFrame()) {
             m_debugUi->beginFrame();
-            for (Module* m : m_initOrder) {
-                if (m->uiVisible()) safeInvoke(m, "renderUi", [&] { m->renderUi(); });
+            // Developer panels: compiled out of shipping builds (kke/DevTools.h).
+            if constexpr (dev::kEnabled) {
+                for (Module* m : m_initOrder) {
+                    if (m->uiVisible()) safeInvoke(m, "renderUi", [&] { m->renderUi(); });
+                }
             }
 
             VkCommandBuffer cmd = m_renderer->currentCommandBuffer();
@@ -543,14 +579,22 @@ void Application::run() {
             shadowCtx.renderPass = m_shadowMap->renderPass();
             shadowCtx.lightViewProj = lightViewProj;
             shadowCtx.frameIndex = m_renderer->currentFrameIndex();
-            m_shadowMap->beginRenderPass(cmd);
-            for (Module* m : m_initOrder) {
-                safeInvoke(m, "renderShadow", [&] { m->renderShadow(shadowCtx); });
+            // A full-screen opaque menu hides the 3D view (setSceneCovered):
+            // the shadow pass and render() are skipped. The scene pass
+            // still begins, so its clear and the overlay are unchanged;
+            // prepass() still runs (thumbnails for that very menu are made
+            // there) and scene-only prepass work checks sceneCovered.
+            const bool drawScene = !m_sceneCovered;
+            if (drawScene) {
+                m_shadowMap->beginRenderPass(cmd);
+                for (Module* m : m_initOrder) {
+                    safeInvoke(m, "renderShadow", [&] { m->renderShadow(shadowCtx); });
+                }
+                m_shadowMap->endRenderPass(cmd);
             }
-            m_shadowMap->endRenderPass(cmd);
 
             PrepassContext prepassCtx{ cmd, view, proj, drawViews[0].camera.position, sceneExtent, m_lightingBuffer->descriptorSet(),
-                                       m_renderer->currentFrameIndex() };
+                                       m_renderer->currentFrameIndex(), m_sceneCovered };
             for (Module* m : m_initOrder) {
                 safeInvoke(m, "prepass", [&] { m->prepass(prepassCtx); });
             }
@@ -558,7 +602,7 @@ void Application::run() {
             m_renderer->beginRenderPass();
             renderCtx.cmd = cmd;
             renderCtx.frameIndex = m_renderer->currentFrameIndex();
-            for (uint32_t i = 0; i < viewCount; ++i) {
+            for (uint32_t i = 0; drawScene && i < viewCount; ++i) {
                 const DrawView& d = drawViews[i];
                 renderCtx.view = d.view;
                 renderCtx.proj = d.proj;

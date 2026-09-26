@@ -59,6 +59,9 @@ PeerId peerId(const ENetPeer* p) { return static_cast<PeerId>(reinterpret_cast<u
 
 } // namespace
 
+bool enetRetain() { return retain(); }
+void enetRelease() { release(); }
+
 EnetTransport::EnetTransport() {
     if (!retain()) m_port = 0; // every call then fails with a reason
     else m_initialized = true;
@@ -187,6 +190,14 @@ void EnetTransport::poll(std::vector<NetEvent>& out) {
         }
     }
     enet_host_flush(m_host);
+}
+
+std::string EnetTransport::address(PeerId peer) const {
+    auto it = m_peers.find(peer);
+    if (it == m_peers.end()) return {};
+    char ip[64] = {};
+    if (enet_address_get_host_ip(&it->second->address, ip, sizeof ip) != 0) return {};
+    return ip;
 }
 
 PeerStats EnetTransport::stats(PeerId peer) const {

@@ -4,13 +4,17 @@
 #include "kke/Capabilities.h"
 #include "kke/Module.h"
 #include "kke/Picking.h"
+#include "kke/PlayBlocks.h"
 #include "kke/Ragdoll.h"
+#include "kke/RigidWorld.h"
 #include "kke/SceneFile.h"
+#include "kke/TouchGestures.h"
 #include "kke/VoxelTets.h"
 #include "kke/modules/DebugDrawModule.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/ThumbnailModule.h"
 
+#include <SDL3/SDL.h>
 #include <glm/glm.hpp>
 #include <string>
 #include <vector>
@@ -26,6 +30,20 @@ namespace kke_sandbox {
 // characters, turn props into breakable physics objects, throw balls at
 // everything.
 //
+// It opens in Play mode (docs/PLAY_TO_MAKE.md "Simple"): no panels, just a
+// row of big pictures to drag people and things out of, a bat to bonk
+// them with (they ragdoll) and a "Build" button that opens the full editor
+// described above. F2 switches between the two; KKE_SANDBOX_MODE=build
+// starts in the editor.
+//
+// Play mode works the same with a finger (one finger is the mouse; two
+// turn and pinch-zoom the view, and drop whatever the first was dragging)
+// and with a gamepad: left stick moves a cursor, A presses (hold and move
+// to drag), B cancels, LB/RB or the D-pad jump along the palette, Y stands
+// everyone up, right stick turns the view, triggers zoom.
+// KKE_SANDBOX_REPLAY=file plays timed touches and gamepad input into it
+// (tests/sandbox_replays/; format in loadReplay()).
+//
 // Deliberately written against engine building blocks only (AssetCatalog,
 // ModelModule, DebugDrawModule, Picking, IRagdollPhysics, PhysicsModule),
 // so it doubles as the reference for how a game uses them. The physics
@@ -38,6 +56,7 @@ public:
     void update(const kke::UpdateContext& ctx) override;
     void renderUi() override;
     void onEvent(const SDL_Event& event) override;
+    void shutdown() override;
 
     // Scan a folder of packs (also used by the "Use this folder" field).
     void openAssetFolder(const std::string& folder);
@@ -53,8 +72,13 @@ public:
     // toggle (F1) so the sandbox's own UI stays readable.
     void setEnginePanels(std::vector<kke::Module*> panels);
 
+    // Play: the Simple-mode palette only. Build: the full editor.
+    enum class Mode { Play, Build };
+    void setMode(Mode mode);
+    Mode mode() const { return m_mode; }
+
 private:
-    enum class Tool { Select, Place, Shoot };
+    enum class Tool { Select, Place, Shoot, Bat };
     enum class Gizmo { Move, Rotate, Scale };
     enum class Handle { None, X, Y, Z, Ring, Scale };
 
@@ -76,6 +100,8 @@ private:
         kke::IRagdollPhysics::RagdollHandle ragdoll = 0;
         kke::RagdollDesc ragdollDesc;
         kke::RagdollSkinBinding binding;
+        // Jolt collision (a static box of its bounds) so ragdolls land on it.
+        kke::RigidWorld::BodyId collider = kke::RigidWorld::kNoBody;
         // Breakable (props): a FEMFX tet volume voxelized from the prop's
         // own mesh; the prop's vertices are glued to it (embedding) and
         // drawn deformed every frame the physics is awake.
@@ -105,6 +131,11 @@ private:
     glm::mat4 objectTransform(const kke::ModelData& model, const glm::vec3& position, float yawDegrees, float scale = 1.0f) const;
     glm::mat4 objectTransform(const Object& o) const;
     void applyTransform(Object& o);
+    // Jolt, when present: the floor, and a static box per placed piece
+    // (people excluded: they're what gets knocked over).
+    kke::RigidWorld* rigidWorld() const;
+    void syncCollider(Object& o);
+    void dropCollider(Object& o);
     Object* spawnObject(const std::string& asset, const glm::vec3& position, float yawDegrees, uint32_t id = 0, const std::string& pack = {});
     void removeObject(uint32_t id);
     void clearAll();
@@ -160,6 +191,26 @@ private:
     void assetGridUi(float uiScale);
     void inspectorUi();
     void folderNotFoundUi();
+
+    // Play mode (Simple): the palette, dragging blocks into the world,
+    // picking placed things up again, and the bat.
+    void playPaletteUi();
+    void modeSwitchUi();
+    bool mouseOverUi() const;      // over any ImGui window, even mid-drag
+    void placeBlock(size_t block); // start placing (the ghost follows the mouse)
+    void swingBat();
+    void updateBat(float dt);
+    void standEveryoneUp();
+
+    // Touch and gamepads (Play mode).
+    void openGamepad(SDL_JoystickID id);
+    void updatePad(float dt);
+    void padButton(uint8_t button, bool down);
+    void pointerButton(bool down);        // a left mouse press/release at the cursor
+    void warpPointer(const glm::vec2& p); // moves the real mouse (SDL fakes it where it can't)
+    void dropFingerDrag();                // a second finger landed: let go of what the first was dragging
+    bool loadReplay(const std::string& path);
+    void updateReplay(float dt);
 
     kke::Application* m_app = nullptr;
     kke::ModelModule* m_models = nullptr;
@@ -244,6 +295,40 @@ private:
     char m_layoutPath[512] = "sandbox.scene.json";
     std::vector<kke::Module*> m_enginePanels;
     bool m_showEnginePanels = false;
+
+    // Play mode
+    Mode m_mode = Mode::Play;
+    std::vector<kke::PlayBlock> m_blocks;
+    std::vector<std::vector<std::string>> m_blockAssets; // per block: its assets that are on disk
+    uint32_t m_lookPick = 0;         // turns through the character looks
+    bool m_dropOnRelease = false;    // placing by dragging: letting go of the mouse drops it
+    kke::BatSwing m_swing;
+    kke::ModelModule::ModelId m_batModel = 0;
+    kke::ModelModule::InstanceId m_bat = 0;
+    kke::LongAxis m_batAxis;
+    std::vector<uint32_t> m_swingHits; // characters this swing already knocked over
+
+    // Touch and gamepads
+    kke::TouchGestures m_touches;        // only to know when a second finger lands
+    std::vector<SDL_Gamepad*> m_pads;
+    bool m_gamepadSubsystem = false;
+    glm::vec2 m_padCursor{-1.0f};        // where the gamepad's cursor is (window points); x < 0: not placed yet
+    double m_padLastUsed = -1e9;         // seconds; the cursor is drawn while a pad is in use
+    bool m_padPressing = false;
+    std::vector<glm::vec2> m_paletteCells; // centres, left to right, from the last palette drawn
+    struct ReplayStep {
+        float time = 0.0f;
+        int line = 0;
+        std::string kind, what;          // "finger" down/move/up, "pad" attach/axis/button
+        std::string name;                // pad axis or button name
+        uint64_t finger = 0;
+        float x = 0.0f, y = 0.0f, value = 0.0f;
+    };
+    std::vector<ReplayStep> m_replay;
+    size_t m_replayNext = 0;
+    float m_replayTime = 0.0f;
+    SDL_Joystick* m_replayPad = nullptr; // a virtual gamepad the replay drives
+    SDL_JoystickID m_replayPadId = 0;
 };
 
 } // namespace kke_sandbox

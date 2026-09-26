@@ -22,10 +22,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-test-and-coverage:
+  # Shipping builds (-DKKE_SHIPPING=ON, docs/ANTI_CHEAT.md) compile the
+  # developer tools out: this keeps that configuration building with zero
+  # warnings and its tests passing (DevTools.* checks the debug switches
+  # really are ignored).
+  shipping-build:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            cmake ninja-build \
+            libvulkan-dev glslang-tools spirv-tools \
+            libfreetype-dev libudev-dev libdbus-1-dev \
+            libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev \
+            pkg-config libgl1-mesa-dev libegl1-mesa-dev \
+            libasound2-dev libdecor-0-dev libexpat1-dev libxml2-dev
+
+      - name: Configure (shipping)
+        run: cmake -B build-ship -G Ninja -DCMAKE_BUILD_TYPE=Release -DKKE_SHIPPING=ON -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_VALIDATION=OFF -DKKE_ENABLE_BENCHMARKS=OFF
+
+      - name: Build (shipping)
+        run: cmake --build build-ship -j --target kke_tests starter_game sandbox kke_seal
+
+      - name: Run unit tests (shipping)
+        run: ./build-ship/bin/kke_tests
+
+  build-test-and-coverage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
 
       - name: Install system dependencies
         run: |
@@ -39,7 +69,8 @@ jobs:
             xvfb xdotool imagemagick lcov \
             libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
             libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev \
-            pkg-config libgl1-mesa-dev libegl1-mesa-dev
+            pkg-config libgl1-mesa-dev libegl1-mesa-dev \
+            libasound2-dev libdecor-0-dev libexpat1-dev libxml2-dev
 
       # --- Plain build: this is what a contributor/CI should catch first,
       # fast, before paying for a second coverage-instrumented build. ---
@@ -67,7 +98,7 @@ jobs:
           # Synty-based demos have no assets in CI; they must still start
           # and show their "assets not found" UI instead of crashing.
           failed=0
-          for demo in kke_demo kke_basics physics_demo melt_demo sea_demo sandbox rmlui_demo synty_demo; do
+          for demo in kke_demo kke_basics physics_demo melt_demo sea_demo sandbox rmlui_demo synty_demo starter_game; do
             [ -x "./$demo" ] || { echo "== $demo: not built, skipped"; continue; }
             set +e
             # Virtual HOSAS pair + gamepad (SDL virtual joysticks), moving:
@@ -129,7 +160,45 @@ jobs:
 
       - name: Upload coverage HTML report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-report
           path: coverage_html/
+
+  # Optimized builds warn where Debug doesn't (GCC's -Warray-bounds and
+  # friends only run with the optimizer), and third-party code is outside
+  # -Werror: this job builds Release and fails on any warning in the
+  # configure or build log, whoever's code it is in. The Release workflow
+  # (release.yml) packages this same configuration.
+  release-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            cmake ninja-build glslang-tools spirv-tools \
+            libvulkan-dev libfreetype-dev libudev-dev libdbus-1-dev \
+            libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev \
+            pkg-config libgl1-mesa-dev libegl1-mesa-dev \
+            libasound2-dev libdecor-0-dev libexpat1-dev libxml2-dev
+
+      - name: Configure (Release, FEMFX)
+        run: |
+          set -o pipefail
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DKKE_ENABLE_FEMFX=ON \
+            -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_VALIDATION=OFF 2>&1 | tee configure.log
+
+      - name: Build (Release)
+        run: |
+          set -o pipefail
+          cmake --build build -j 2>&1 | tee build.log
+
+      - name: No warnings anywhere
+        run: tools/ci/check_warnings.sh configure.log build.log
+
+      - name: Unit tests (Release)
+        run: ./build/bin/kke_tests --gtest_brief=1

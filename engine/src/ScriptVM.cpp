@@ -490,6 +490,7 @@ size_t ScriptVM::hookCount(const std::string& event) const {
 }
 
 void ScriptVM::pushArg(double v) { lua_pushnumber(m_L, v); }
+void ScriptVM::pushInteger(int64_t v) { lua_pushinteger(m_L, static_cast<lua_Integer>(v)); }
 void ScriptVM::pushArg(bool v) { lua_pushboolean(m_L, v); }
 void ScriptVM::pushArg(const std::string& v) { lua_pushlstring(m_L, v.data(), v.size()); }
 

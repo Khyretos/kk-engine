@@ -2,12 +2,16 @@
 
 #include "kke/Module.h"
 #include "kke/Capabilities.h"
+#include "kke/TouchGestures.h"
 #include <glm/glm.hpp>
 
 namespace kke {
 
 // A generic mouse-driven orbit camera: left-drag to orbit, right-drag to
-// pan, scroll to zoom, plus an "auto-orbit" toggle. Lives in the engine
+// pan, scroll to zoom, plus an "auto-orbit" toggle. On touch screens two
+// fingers turn the view (drag), zoom (pinch) and spin it (twist); one
+// finger stays the game's (SDL delivers it as the mouse). Gamepads go
+// through nudge(). Lives in the engine
 // core (not app/) because essentially every 3D demo wants some version of
 // this — it's a building block, not example content.
 //
@@ -29,6 +33,7 @@ public:
 
     void init(Application& app) override;
     void update(const UpdateContext& ctx) override;
+    void onEvent(const SDL_Event& event) override;
     void renderUi() override;
     void onSettingsChanged(const EngineSettings& settings) override;
 
@@ -41,6 +46,9 @@ public:
     enum class Controls { Viewer, Editor };
     void setControls(Controls c) { m_controls = c; }
     void setDistanceLimits(float minDistance, float maxDistance) { m_minDistance = minDistance; m_maxDistance = maxDistance; }
+    // Radians; negative looks down. E.g. (-1.45, -0.12) keeps the view
+    // above the ground and never quite level (a toy box, not a flight).
+    void setPitchLimits(float minPitch, float maxPitch);
     // Follow something (the view angles and distance stay the user's).
     void setTarget(const glm::vec3& target);
     glm::vec3 target() const;
@@ -49,6 +57,10 @@ public:
     float distance() const { return m_distance; }
     float pitch() const { return m_pitch; }
     float yaw() const { return m_yaw; }
+    // Turn (radians) and zoom (factor on the distance, < 1 = closer) from
+    // anything that isn't the mouse: a gamepad's right stick, a script.
+    void nudge(float yawRadians, float pitchRadians, float zoomFactor = 1.0f);
+    const TouchGestures& touches() const { return m_touches; }
 
 private:
     Application* m_app = nullptr;
@@ -61,6 +73,7 @@ private:
     Controls m_controls = Controls::Viewer;
     float m_minDistance = 0.5f;
     float m_maxDistance = 30.0f;
+    float m_minPitch = -(1.5707963f - 0.05f), m_maxPitch = 1.5707963f - 0.05f; // clear of the poles
 
     bool m_autoOrbit = false;
     float m_autoOrbitSpeedDegPerSec = 20.0f;
@@ -70,6 +83,8 @@ private:
     float m_zoomSensitivity = 0.3f;
     float m_sensitivityScale = 1.0f; // from EngineSettings::controls.mouseSensitivity
     bool m_invertY = false;
+    TouchGestures m_touches;
+    float m_touchOrbitSensitivity = 0.004f; // radians per pixel the two fingers move
 };
 
 } // namespace kke
