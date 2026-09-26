@@ -240,6 +240,15 @@ public:
     void setFrameRateLimit(float fps) { m_frameRateLimit = fps; }
     float frameRateLimit() const { return m_frameRateLimit; }
 
+    // Set while a full-screen, fully opaque UI (pause menu, marketplace,
+    // settings) hides the whole 3D view: the shadow pass, prepass() and
+    // render() are skipped, so the frame costs only the clear and the
+    // overlay/UI. Simulation (update, fixedUpdate, compute) keeps running.
+    // Anything partly see-through must leave this off.
+    // docs/RENDERING_PRINCIPLES.md §9, issue #40.
+    void setSceneCovered(bool covered) { m_sceneCovered = covered; }
+    bool sceneCovered() const { return m_sceneCovered; }
+
     // The resource governor's budget (kke/ResourceGovernor.h). Starts
     // governed from default settings (KKE_USE_EVERYTHING=1 lifts it);
     // SettingsModule replaces it from the player's settings. Modules read
@@ -337,6 +346,7 @@ private:
     bool m_introEnabled = true;
     bool m_uiCapturesMouse = false;
     float m_frameRateLimit = 0.0f;
+    bool m_sceneCovered = false;
     ResourceBudget m_budget;
     float m_effectiveLimit = 0.0f;
     bool m_stepRequested = false;

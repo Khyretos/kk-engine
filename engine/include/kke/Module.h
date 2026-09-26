@@ -109,6 +109,10 @@ struct PrepassContext {
     VkExtent2D extent;    // main framebuffer size in pixels
     VkDescriptorSet lightingDescriptorSet;
     uint32_t frameIndex = 0;
+    // True while a full-screen opaque UI hides the 3D view
+    // (Application::setSceneCovered): skip work that only feeds render().
+    // Offscreen work the UI itself needs (thumbnails) still runs.
+    bool sceneCovered = false;
 };
 
 // A dependency one module declares on another, by concrete type. Declaring

@@ -76,7 +76,9 @@ endif()
 FetchContent_Declare(
     volk
     GIT_REPOSITORY https://github.com/zeux/volk.git
-    GIT_TAG        1.3.270
+    # 1.4.304: first release whose cmake_minimum_required has a policy
+    # range, so CMake 4 doesn't warn "Compatibility with CMake < 3.10".
+    GIT_TAG        vulkan-sdk-1.4.304.0
     GIT_SHALLOW    TRUE
 )
 set(VOLK_STATIC_DEFINES "")
@@ -140,7 +142,7 @@ endif()
 FetchContent_Declare(
     glm
     GIT_REPOSITORY https://github.com/g-truc/glm.git
-    GIT_TAG        1.0.1
+    GIT_TAG        1.0.3 # 1.0.2+: no CMake < 3.10 deprecation warning
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(glm)
@@ -210,7 +212,7 @@ if(NOT Freetype_FOUND AND NOT FREETYPE_FOUND)
     FetchContent_Declare(
         freetype
         GIT_REPOSITORY https://github.com/freetype/freetype.git
-        GIT_TAG        VER-2-13-3
+        GIT_TAG        VER-2-14-3 # 2.14: no CMake < 3.10 deprecation warning
         GIT_SHALLOW    TRUE
         OVERRIDE_FIND_PACKAGE
     )

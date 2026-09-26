@@ -305,6 +305,14 @@ All three are spatial and per-frame: no temporal filter, no dithering.
    cutoff and foliage thins out and vanishes with distance. Unit-tested
    (`tests/test_texture_mips.cpp`).
 
+**Also:** `Application::setSceneCovered(true)` for full-screen opaque
+menus (#40): the shadow pass and every module's `render()` are skipped,
+so a menu frame costs a clear plus the UI. `prepass()` still runs (the
+marketplace's thumbnails are rendered there) with
+`PrepassContext::sceneCovered` set, and scene-only prepass work (fluid
+surfaces in the showcase and melt demo) returns early. Checked headless
+in the Synty demo: 0 draw calls, UI intact, validation clean.
+
 **Later the same day:** shadow map quality (#38). The shadow map is
 sampled with a depth-compare sampler (each of the 9 PCF taps is a
 hardware bilinear comparison), casters get slope-scaled depth bias from
@@ -325,6 +333,6 @@ in #20.
 6. Front-to-back sorting, measured prepass, overdraw view. (#37)
 7. Shadow map quality: compare sampler, slope bias, stable projection. (done, #38)
 8. Texture compression at asset cooking. (#39)
-9. Don't render the 3D scene behind opaque menus. (#40)
+9. Don't render the 3D scene behind opaque menus. (done, #40)
 10. LODs by screen size (#23); probe-based, stable ambient and GI
     (#20, #21).
