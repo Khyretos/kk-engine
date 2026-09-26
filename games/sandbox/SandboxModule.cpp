@@ -9,6 +9,7 @@
 #include "kke/SceneLoader.h"
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/OrbitCameraModule.h"
+#include "kke/modules/UiModule.h"
 #if KKE_ENABLE_JOLT
 #include "kke/modules/RigidBodyModule.h"
 #endif
@@ -110,6 +111,7 @@ std::vector<kke::ModuleDependency> SandboxModule::dependencies() const {
     return {
         { std::type_index(typeid(kke::ModelModule)), true, "loads and draws the placed assets" },
         { std::type_index(typeid(kke::DebugDrawModule)), true, "selection boxes, grid, placement preview" },
+        { std::type_index(typeid(kke::UiModule)), false, "the node graph editor (Look, in Play mode)" },
     };
 }
 
@@ -134,6 +136,7 @@ void SandboxModule::init(kke::Application& app) {
 #endif
     m_blocks = kke::defaultPlayBlocks();
     m_blockAssets.assign(m_blocks.size(), {});
+    initGraphs(); // before a level loads: levels carry graphs
     if (const char* mode = std::getenv("KKE_SANDBOX_MODE")) {
         if (std::strcmp(mode, "build") == 0) m_mode = Mode::Build;
         else if (std::strcmp(mode, "play") != 0) kke::log::get(name())->warn("KKE_SANDBOX_MODE='{}' is not 'play' or 'build'; starting in play", mode);
@@ -324,6 +327,7 @@ void SandboxModule::removeObject(uint32_t id) {
     if (it->proxy) if (auto* p = m_app->getModule<kke::PhysicsModule>()) p->removeObject(it->proxy);
 #endif
     m_models->remove(it->instance);
+    if (!it->graph.empty()) m_graphsDirty = true; // its graph stops
     m_objects.erase(it);
     std::erase(m_selection, id);
     if (m_selected == id) m_selected = m_selection.empty() ? 0 : m_selection.back();
@@ -437,7 +441,9 @@ SandboxModule::Snapshot SandboxModule::snapshot() const {
     Snapshot s;
     s.reserve(m_objects.size());
     for (const Object& o : m_objects)
-        s.push_back({ o.id, o.asset, o.pack, o.texture, o.position, o.yawDegrees, o.scale, o.collision, o.fractureSeed, o.proxy ? o.breakMaterial : -1 });
+        if (o.owner.empty()) // what graphs bring out comes and goes with them
+            s.push_back({ o.id, o.asset, o.pack, o.texture, o.position, o.yawDegrees, o.scale, o.collision, o.fractureSeed,
+                          o.proxy ? o.breakMaterial : -1, o.graph });
     return s;
 }
 
@@ -458,7 +464,7 @@ void SandboxModule::restore(const Snapshot& s) {
     m_drag = Handle::None;
     std::vector<uint32_t> gone;
     for (const Object& o : m_objects)
-        if (std::none_of(s.begin(), s.end(), [&](const ObjectState& st) { return st.id == o.id; })) gone.push_back(o.id);
+        if (o.owner.empty() && std::none_of(s.begin(), s.end(), [&](const ObjectState& st) { return st.id == o.id; })) gone.push_back(o.id);
     for (uint32_t id : gone) removeObject(id);
     size_t missing = 0;
     for (const ObjectState& st : s) {
@@ -466,6 +472,10 @@ void SandboxModule::restore(const Snapshot& s) {
         if (!o) {
             o = spawnObject(st.asset, st.position, st.yawDegrees, st.id, st.pack);
             if (!o) { ++missing; continue; }
+        }
+        if (o->graph.toJson() != st.graph.toJson()) {
+            o->graph = st.graph;
+            m_graphsDirty = true;
         }
         if (o->ragdoll) continue;
         const bool moved = o->position != st.position || o->yawDegrees != st.yawDegrees || o->scale != st.scale;
@@ -662,6 +672,7 @@ void SandboxModule::commitPlacement(bool keepPlacing) {
     pushUndo();
     if (Object* o = spawnObject(m_placeAsset, m_ghostPos, m_placeYaw, 0, m_placePack)) {
         if (m_mode == Mode::Build) select(o->id, false); // Play mode has no selection
+        queuePlaced(o->id, o->position);
         o->texture = m_models->textureOverride(m_ghost);
         m_models->setTextureOverride(o->instance, o->texture);
     }
@@ -900,6 +911,7 @@ void SandboxModule::update(const kke::UpdateContext& ctx) {
         m_hovered = mouseFree && m_hoverHandle == Handle::None ? pickObject() : 0;
     }
     updateBat(ctx.dt);
+    updateGraphs(ctx.dt);
 
     for (const Object& o : m_objects) {
         const bool selected = isSelected(o.id);
@@ -933,13 +945,27 @@ void SandboxModule::onEvent(const SDL_Event& event) {
         // Touch: one finger is the mouse (SDL's emulation); a second one
         // means the view is being turned or zoomed (OrbitCameraModule), so
         // whatever the first was dragging is dropped back.
+        // Fingers on the node graph editor move and zoom it instead.
+        int w = 1, h = 1;
+        SDL_GetWindowSize(m_app->window().handle(), &w, &h);
+        const glm::vec2 finger(event.tfinger.x * static_cast<float>(w), event.tfinger.y * static_cast<float>(h)); // window points
         if (event.type == SDL_EVENT_FINGER_DOWN) {
-            m_touches.fingerDown(event.tfinger.fingerID, glm::vec2(event.tfinger.x, event.tfinger.y));
+            if (m_touches.fingers() == 0) m_graphTouch = graphEditorContains(finger);
+            if (auto* camera = m_app->getModule<kke::OrbitCameraModule>()) camera->setTouchGestures(!m_graphTouch);
+            m_touches.fingerDown(event.tfinger.fingerID, finger);
             if (m_touches.multiTouch()) dropFingerDrag();
+            return;
+        }
+        if (event.type == SDL_EVENT_FINGER_MOTION) {
+            m_touches.fingerMove(event.tfinger.fingerID, finger);
             return;
         }
         if (event.type == SDL_EVENT_FINGER_UP || event.type == SDL_EVENT_FINGER_CANCELED) {
             m_touches.fingerUp(event.tfinger.fingerID);
+            if (m_touches.fingers() == 0 && m_graphTouch) {
+                m_graphTouch = false;
+                if (auto* camera = m_app->getModule<kke::OrbitCameraModule>()) camera->setTouchGestures(true);
+            }
             return;
         }
         if (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || event.type == SDL_EVENT_GAMEPAD_BUTTON_UP) {
@@ -950,6 +976,18 @@ void SandboxModule::onEvent(const SDL_Event& event) {
         // started with a press (on a palette picture, or on something in
         // the world to pick it up) ends where the mouse is let go.
         if (event.type == SDL_EVENT_MOUSE_BUTTON_UP && event.button.button == SDL_BUTTON_LEFT) {
+            // Pressed on a thing with the hand and let go without moving:
+            // a tap, which graphs hear as "When tapped". It stays put.
+            if (m_tapThing && m_dropOnRelease && m_tool == Tool::Place && m_movingId == m_tapThing &&
+                glm::length(glm::vec2(event.button.x, event.button.y) - m_tapStart) < 8.0f) {
+                const uint32_t tapped = m_tapThing;
+                m_tapThing = 0;
+                m_dropOnRelease = false;
+                cancelPlacing();
+                if (const Object* o = find(tapped)) queueClicked(tapped, o->position);
+                return;
+            }
+            m_tapThing = 0;
             if (m_dropOnRelease && m_tool == Tool::Place) {
                 if (!mouseOverUi()) commitPlacement(false);
                 else if (m_movingId) cancelPlacing(); // carried back onto the palette: put it back
@@ -963,13 +1001,19 @@ void SandboxModule::onEvent(const SDL_Event& event) {
             if (m_tool == Tool::Place) commitPlacement(false);
             else if (m_tool == Tool::Bat) swingBat();
             else if (m_tool == Tool::Shoot) throwBall();
-            else if (Object* o = find(pickObject())) {
+            else if (m_tool == Tool::Look) {
+                openThingGraph(pickObject()); // the ground: the level's own graph
+                m_tool = Tool::Select;
+            } else if (Object* o = find(pickObject())) {
+                m_tapThing = o->id;
+                m_tapStart = glm::vec2(event.button.x, event.button.y);
                 beginPlacing(o->asset, o->yawDegrees, o->id, o->pack);
                 m_dropOnRelease = true;
             }
             return;
         }
         if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat || io.WantTextInput) return;
+        if (graphEditorKey(event.key.key)) return;
         switch (event.key.key) {
         case SDLK_ESCAPE:
             if (m_tool == Tool::Place) cancelPlacing();
@@ -1129,6 +1173,7 @@ void SandboxModule::ragdoll(Object& o, const glm::vec3& push) {
     // Shove the upper body harder than the legs so it topples, not slides.
     for (const char* body : { "torso", "head" }) m_ragdolls->pushRagdollBody(o.ragdoll, o.ragdollDesc.findBody(body), push);
     m_ragdolls->pushRagdollBody(o.ragdoll, o.ragdollDesc.findBody("pelvis"), push * 0.4f);
+    queueFellOver(o.id);
 }
 
 void SandboxModule::standUp(Object& o) {
@@ -1136,6 +1181,7 @@ void SandboxModule::standUp(Object& o) {
     m_ragdolls->destroyRagdoll(o.ragdoll);
     o.ragdoll = 0;
     m_models->setBoneWorldOverride(o.instance, {});
+    queueStoodUp(o.id);
 }
 
 // Turns a placed prop into a physics object with its own shape and look:
@@ -1411,7 +1457,10 @@ kke::SceneFile SandboxModule::toScene() const {
     // puts it), 20 m past the furthest object, at least 40 x 40 m.
     float reach = std::max(std::fabs(m_spawn.x), std::fabs(m_spawn.z));
     std::set<std::string> packs;
+    std::vector<const Object*> saved;
     for (const Object& o : m_objects) {
+        if (!o.owner.empty()) continue; // a graph brings it out again
+        saved.push_back(&o);
         glm::vec3 mn, mx;
         worldBounds(o, mn, mx);
         reach = std::max({ reach, std::fabs(mn.x), std::fabs(mx.x), std::fabs(mn.z), std::fabs(mx.z) });
@@ -1427,6 +1476,7 @@ kke::SceneFile SandboxModule::toScene() const {
         if (!o.texture.empty()) so.texture = std::filesystem::path(o.texture).filename().string();
         if (o.proxy && o.breakMaterial >= 0) so.breakable = kBreakSceneNames[o.breakMaterial];
         so.fractureSeed = o.fractureSeed;
+        so.graph = o.graph;
         scene.objects.push_back(std::move(so));
         packs.insert(o.pack);
     }
@@ -1442,12 +1492,13 @@ kke::SceneFile SandboxModule::toScene() const {
     // Name the pack per object only where the list would pick another
     // pack's same-named model.
     for (size_t i = 0; i < scene.objects.size(); ++i) {
-        const kke::CatalogAsset* picked = m_catalog.find(m_objects[i].asset, scene.packs);
-        if (picked && picked->pack != m_objects[i].pack) scene.objects[i].pack = m_objects[i].pack;
+        const kke::CatalogAsset* picked = m_catalog.find(saved[i]->asset, scene.packs);
+        if (picked && picked->pack != saved[i]->pack) scene.objects[i].pack = saved[i]->pack;
     }
     const float size = std::max(40.0f, 2.0f * (std::ceil(reach) + 20.0f));
     scene.groundSize = glm::vec2(size);
     scene.groundColor = glm::vec3(0.36f, 0.38f, 0.36f);
+    graphsToScene(scene);
     return scene;
 }
 
@@ -1468,6 +1519,7 @@ bool SandboxModule::saveLayout(const std::string& path) {
 void SandboxModule::fromScene(const kke::SceneFile& scene) {
     clearAll();
     clearSelection();
+    graphsFromScene(scene);
     m_undo.clear();
     m_redo.clear();
     std::snprintf(m_levelName, sizeof(m_levelName), "%s", scene.name.empty() ? "Sandbox level" : scene.name.c_str());
@@ -1504,6 +1556,7 @@ void SandboxModule::fromScene(const kke::SceneFile& scene) {
                 o->scale = so.scale.x;
                 o->collision = so.collision;
                 o->fractureSeed = so.fractureSeed;
+                o->graph = so.graph;
                 if (const kke::CatalogPack* pack = packOf(so.asset, so.pack); pack && !so.texture.empty()) {
                     for (const std::string& v : pack->textureVariants)
                         if (std::filesystem::path(v).filename() == so.texture) { o->texture = v; m_models->setTextureOverride(o->instance, v); }
@@ -2010,6 +2063,7 @@ void SandboxModule::lightsUi() {
 // ---------------------------------------------------------------- play mode (Simple)
 
 void SandboxModule::setMode(Mode mode) {
+    if (mode != Mode::Play) closeGraphEditor(); // Look is a Play mode tool
     if (m_tool == Tool::Place) cancelPlacing();
     m_tool = Tool::Select;
     m_dropOnRelease = false;
@@ -2079,8 +2133,13 @@ void SandboxModule::swingBat() {
             }
         }
     }
+    swingBatAt(target);
+}
+
+bool SandboxModule::swingBatAt(const glm::vec3& target) {
+    if (m_swing.active()) return false;
     const glm::vec3 forward = target - m_app->camera().position;
-    if (!m_swing.start(m_swing.pivotFor(target, forward), forward)) return;
+    if (!m_swing.start(m_swing.pivotFor(target, forward), forward)) return false;
     m_swingHits.clear();
     // The bat model, loaded on the first swing. Without it the bat is a
     // thick line: the swing and the hits don't depend on the model.
@@ -2099,6 +2158,7 @@ void SandboxModule::swingBat() {
             break;
         }
     }
+    return true;
 }
 
 void SandboxModule::updateBat(float dt) {
@@ -2115,14 +2175,21 @@ void SandboxModule::updateBat(float dt) {
             const kke::BatSwing::Hit hit = m_swing.sweep(glm::vec3(c.x - half.x, mn.y, c.z - half.z), glm::vec3(c.x + half.x, mx.y, c.z + half.z));
             if (!hit.hit) continue;
             m_swingHits.push_back(o.id);
+            kke::log::get(name())->info("bat hit '{}' at {:.0f} deg: push ({:.1f}, {:.1f}, {:.1f}) m/s", o.asset, hit.degrees,
+                                        hit.push.x, hit.push.y, hit.push.z);
+            // What a hit does is the bat's recipe, a node graph ("when it
+            // hits someone: knock them over, wooden bonk"; Look inside the
+            // bat to change it). Without Lua the bat does that itself.
+            if (lookAvailable()) {
+                queueHit(o.id, hit.point, hit.push);
+                continue;
+            }
             if (auto* audio = m_app->getModule<kke::AudioModule>())
                 audio->playImpact(hit.point, kke::AudioMaterialTable::Wood, 1.0f, o.id);
             if (!m_ragdolls) {
                 m_status = "Knocking people over needs a physics module (ragdolls)";
                 continue;
             }
-            kke::log::get(name())->info("bat hit '{}' at {:.0f} deg: push ({:.1f}, {:.1f}, {:.1f}) m/s", o.asset, hit.degrees,
-                                        hit.push.x, hit.push.y, hit.push.z);
             ragdoll(o, hit.push);
         }
     }
@@ -2169,6 +2236,7 @@ void SandboxModule::playPaletteUi() {
         (o.ragdoll ? anyoneDown : anyoneStanding) = true;
     }
     const char* hint = m_assetFolder.empty()          ? "No asset packs found. Press Build to pick a folder."
+                       : m_tool == Tool::Look          ? "Tap a thing or a picture to look inside. Tap the ground for the whole level."
                        : m_tool == Tool::Place         ? "Let go where it should go!"
                        : m_tool == Tool::Bat && anyoneDown && !anyoneStanding ? "Everyone fell over! Press Get up."
                        : m_tool == Tool::Bat && !anyoneStanding ? "Bring a person, then click them to swing!"
@@ -2233,6 +2301,11 @@ void SandboxModule::playPaletteUi() {
                                        std::find(m_blockAssets[i].begin(), m_blockAssets[i].end(), m_placeAsset) != m_blockAssets[i].end();
             const Press pr = picture(b.id.c_str(), b.label.c_str(), a, nullptr, on);
             if (!pr.pressed) continue;
+            if (m_tool == Tool::Look) {
+                openRecipe(b.id); // what every one of these does
+                m_tool = Tool::Select;
+                continue;
+            }
             if (m_tool == Tool::Place) cancelPlacing();
             if (tool) {
                 m_tool = m_tool == Tool::Bat ? Tool::Select : Tool::Bat;
@@ -2244,6 +2317,10 @@ void SandboxModule::playPaletteUi() {
         if (m_hasFemfx && picture("throw", "Throw", nullptr, "Ball!", m_tool == Tool::Shoot).pressed) {
             if (m_tool == Tool::Place) cancelPlacing();
             m_tool = m_tool == Tool::Shoot ? Tool::Select : Tool::Shoot;
+        }
+        if (lookAvailable() && picture("look", "Look", nullptr, "Inside", m_tool == Tool::Look).pressed) {
+            if (m_tool == Tool::Place) cancelPlacing();
+            m_tool = m_tool == Tool::Look ? Tool::Select : Tool::Look;
         }
         if (anyoneDown && picture("getup", "Get up", nullptr, "Up!", false).pressed) standEveryoneUp();
         if (!m_objects.empty() && picture("clear", "Clear", nullptr, "Empty", false).pressed) {
@@ -2316,6 +2393,7 @@ void SandboxModule::padButton(uint8_t button, bool down) {
         const auto& mouse = m_app->window().mouseState();
         m_padCursor = glm::vec2(mouse.x, mouse.y);
     }
+    if (graphEditorPadButton(button, down)) return; // B closes it, X removes, Y shows everything
     switch (button) {
     case SDL_GAMEPAD_BUTTON_SOUTH: // A: press, hold and move to drag, let go to drop
         if (down != m_padPressing) pointerButton(down);
@@ -2364,11 +2442,13 @@ void SandboxModule::updatePad(float dt) {
         warpPointer(p);
         m_padLastUsed = static_cast<double>(SDL_GetTicks()) / 1000.0;
     }
-    // Right stick turns the view, the triggers zoom (right in, left out).
+    // Right stick turns the view, the triggers zoom (right in, left out);
+    // over the node graph editor they move and zoom the graph instead.
+    auto dead = [](float v) { return std::abs(v) < 0.2f ? 0.0f : (v - std::copysign(0.2f, v)) / 0.8f; };
+    const float rx = dead(axis(SDL_GAMEPAD_AXIS_RIGHTX)), ry = dead(axis(SDL_GAMEPAD_AXIS_RIGHTY));
+    const float zoom = axis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) - axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
+    if (graphEditorPadSticks(dt, glm::vec2(rx, ry), std::abs(zoom) > 0.1f ? zoom : 0.0f)) return;
     if (auto* camera = m_app->getModule<kke::OrbitCameraModule>()) {
-        auto dead = [](float v) { return std::abs(v) < 0.2f ? 0.0f : (v - std::copysign(0.2f, v)) / 0.8f; };
-        const float rx = dead(axis(SDL_GAMEPAD_AXIS_RIGHTX)), ry = dead(axis(SDL_GAMEPAD_AXIS_RIGHTY));
-        const float zoom = axis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) - axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
         if (rx != 0.0f || ry != 0.0f || std::abs(zoom) > 0.1f)
             camera->nudge(rx * 2.2f * dt, -ry * 1.6f * dt, 1.0f + zoom * 1.5f * dt);
     }
@@ -2477,6 +2557,7 @@ void SandboxModule::updateReplay(float dt) {
 }
 
 void SandboxModule::shutdown() {
+    shutdownGraphs();
     for (SDL_Gamepad* pad : m_pads) SDL_CloseGamepad(pad);
     m_pads.clear();
     if (m_replayPad) SDL_CloseJoystick(m_replayPad);
@@ -2488,6 +2569,7 @@ void SandboxModule::shutdown() {
 }
 
 void SandboxModule::renderUi() {
+    graphUi();
     if (m_mode == Mode::Play) {
         playPaletteUi();
         return;

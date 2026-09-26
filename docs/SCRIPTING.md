@@ -91,6 +91,40 @@ error naming the id. Each kind has a per-script budget
 (`ScriptModule::max*PerScript`: 2,000 bodies and models, 64 breakables,
 16 documents, 4 scenes).
 
+### Play blocks (`play`)
+
+The building blocks of play-to-make ([PLAY_TO_MAKE.md](PLAY_TO_MAKE.md)),
+bound by `kke::bindPlayBlocks` (`kke/PlayScript.h`) wherever a game gives
+them a world: today the sandbox, where the node graph (Look) runs on them.
+Things are numbers (ids), blocks are palette ids (`"person"`, `"bat"`,
+`"box"`), sounds are `bonk`, `wood`, `stone`, `metal`, `glass`, `rubber`,
+`dirt`, `plastic`.
+
+| Function | Does |
+|---|---|
+| `play.spawn(block, pos [, yaw])` → thing | brings a thing out; it belongs to the script and goes when the script unloads (200 per script) |
+| `play.remove(thing)` | takes it away |
+| `play.ragdoll(thing [, push])` / `play.standUp(thing)` / `play.isDown(thing)` | knocks a person over (push in m/s, at most 20), stands them up, asks |
+| `play.swing(thing)` | swings the bat at it |
+| `play.sound(name [, pos])` | plays a sound, at a place if given |
+| `play.say(text)` | shows text on screen for a few seconds |
+| `play.addScore(points)` → score / `play.score()` | points |
+| `play.position(thing)` / `play.blockOf(thing)` / `play.blocks()` | where it is, what it is, every block id |
+
+Events (each gets one table):
+
+```lua
+hook.Add("Hit", "my.id", function(e) end)      -- e.target, e.by ("bat"), e.point, e.push, e.block
+hook.Add("Clicked", "my.id", function(e) end)  -- e.thing, e.point, e.block (tapped with the hand)
+hook.Add("Placed", "my.id", function(e) end)   -- e.thing, e.point, e.block (put down in the world)
+hook.Add("FellOver", "my.id", function(e) end) -- e.thing, e.block
+hook.Add("StoodUp", "my.id", function(e) end)  -- e.thing, e.block
+```
+
+Bindings registered with a `kke::ApiFunction` (label, doc, typed
+parameters; `kke/LuaApi.h`) and events described with `describeEvent`
+become node graph blocks automatically.
+
 A table exists only when its module is in the game (no RigidBodyModule,
 no `physics`). Script bodies are drawn by ScriptModule as one batched
 mesh with shadows.

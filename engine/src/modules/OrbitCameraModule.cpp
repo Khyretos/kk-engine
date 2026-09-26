@@ -49,7 +49,7 @@ void OrbitCameraModule::update(const UpdateContext& ctx) {
     }
 
     // Two fingers: drag turns the view, pinch zooms, twist spins it.
-    if (const TouchGestures::Frame t = m_touches.take(); t.active) {
+    if (const TouchGestures::Frame t = m_touches.take(); t.active && m_touchGestures) {
         nudge(t.pan.x * m_touchOrbitSensitivity * m_sensitivityScale - t.twist,
               -t.pan.y * m_touchOrbitSensitivity * m_sensitivityScale * (m_invertY ? -1.0f : 1.0f),
               t.pinch > 1e-3f ? 1.0f / t.pinch : 1.0f);

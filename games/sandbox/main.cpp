@@ -7,6 +7,7 @@
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/StatsModule.h"
 #include "kke/modules/ThumbnailModule.h"
+#include "kke/modules/UiModule.h"
 #if KKE_ENABLE_JOLT
 #include "kke/modules/RigidBodyModule.h"
 #endif
@@ -56,6 +57,8 @@ int main() {
         physics.setDrawGround(false); // the sandbox draws a grid; placed floor tiles are the visible ground
         panels.push_back(&physics);
 #endif
+        // RmlUi: the node graph editor (Look, in Play mode).
+        app.addModule<kke::UiModule>();
         auto& sandbox = app.addModule<kke_sandbox::SandboxModule>();
         panels.push_back(&app.addModule<kke::DebugControlModule>());
         panels.push_back(&app.addModule<kke::StatsModule>());

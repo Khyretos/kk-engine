@@ -60,6 +60,9 @@ public:
     // Turn (radians) and zoom (factor on the distance, < 1 = closer) from
     // anything that isn't the mouse: a gamepad's right stick, a script.
     void nudge(float yawRadians, float pitchRadians, float zoomFactor = 1.0f);
+    // Two-finger turning and zooming on or off (a game can claim a gesture
+    // for its own UI, e.g. the sandbox's node graph).
+    void setTouchGestures(bool enabled) { m_touchGestures = enabled; }
     const TouchGestures& touches() const { return m_touches; }
 
 private:
@@ -85,6 +88,7 @@ private:
     bool m_invertY = false;
     TouchGestures m_touches;
     float m_touchOrbitSensitivity = 0.004f; // radians per pixel the two fingers move
+    bool m_touchGestures = true;
 };
 
 } // namespace kke
