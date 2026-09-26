@@ -49,6 +49,7 @@ add_executable(kke_tests
     test_texture_mips.cpp
     test_shadow_projection.cpp
     test_draw_order.cpp
+    test_tone_mapper.cpp
     test_jiggle.cpp
     test_rml_data_binding.cpp
     test_frame_retire_queue.cpp
