@@ -127,12 +127,72 @@ settings; a server runs any mix.
 | `leaderboard` | Named boards: each player's best score, top 10 per reply, kept in the server's store ("Saves" below). Other servers using one leaderboard server is #46 | built |
 | `directory` | A server list: servers with `"public": true` register and send a heartbeat; games ask it for the list. Anyone can run one (a friend group, a modding community, a studio) | built (the game's Network panel lists its servers; see below) |
 | `scripts` | The game's server scripts (`sv_*.lua`, `sh_*.lua`) run headless: what they spawn shows up for every player, `net.send` works both ways, scores go on the leaderboards from the server's side | built (#43) |
-| `relay` | Join by code through NAT: both sides reach the relay, the relay forwards (and tries a hole punch first) | next (#44) |
+| `relay` | Join codes: servers register and get a short code; players type it; the relay introduces them for a hole punch and passes packets on when that fails. Anyone can run one | built (#44) |
 | `rollback` / `lockstep` | Input relay and checksums for rollback (fighting) and lockstep (RTS) games | planned (#28) |
 | `persistence` | Players and leaderboards in the store, backups on a schedule: every server does it ("Saves" below). World saves | next (#45) |
 
 The `players`, `physics`, `leaderboard` and `scripts` roles share the
 game port; a server with only `directory` has no players at all.
+
+## Join codes
+
+Like Core Keeper's Game ID: the server gets a short code, players type it,
+and nobody opens a port on their router. The difference: the **relay** that
+makes it work is a `kke_server` role anyone can run (a friend with a VPS,
+a community, a studio), not a Steam or PlayFab service.
+
+```sh
+./kke_server --roles relay                                   # on a machine with open UDP 27970-28034
+./kke_server --name "Kees's world" --relay relay.example.org # at home: prints "join code K7M-Q2P@relay.example.org"
+```
+
+Players type `K7M-Q2P@relay.example.org` in the Multiplayer panel's
+Address box (or just `K7M-Q2P` when their game has the relay set:
+`KKE_NET_RELAY`, or the game's own default), or `KKE_NET=join:K7M-Q2P@relay.example.org`.
+A game that hosts gets a code the same way when a relay is set.
+
+What happens (`kke/net/Relay.h`, `kke/server/RelayService.h`):
+
+1. The server registers with the relay from its game socket every 10 s.
+   The relay answers with a code and remembers where the server's
+   router is. The code is kept in `saveDir/relay.json`, so it stays the
+   same across restarts (and the relay's restarts).
+2. A player's game asks the relay for the code. The relay tells it where
+   the server is and the server's encryption key, and tells the server
+   who is coming.
+3. Both send a few small packets at each other at once. Most home
+   routers then let them talk directly (a UDP hole punch): the relay is
+   out of the picture.
+4. If nothing gets through in 1.5 s (strict routers, many mobile
+   networks), the player connects to the relay, which passes every
+   packet on through a port of its own for that player
+   (`relayPort + 1` and up, `relaySlots` of them, 64 by default).
+
+The relay can't read or change the game: the traffic is encrypted end to
+end with the server's key ("Encryption" in docs/NETWORKING.md), and the
+player checks that key against the one the relay gave. Trusting a relay
+means trusting it to give the right key and address, so play through
+relays you (or your community) run.
+
+| Setting | Variable | Flag | Meaning |
+|---|---|---|---|
+| `relay` | `KKE_SERVER_RELAY` | `--relay HOST[:PORT]` | get a join code from this relay |
+| `relayPort` | `KKE_SERVER_RELAY_PORT` | `--relay-port N` | the relay role's port (27970) |
+| `relaySlots` | `KKE_SERVER_RELAY_SLOTS` | `--relay-slots N` | players relayed at once, one UDP port each above `relayPort` (64) |
+
+Console: `code` shows the join code. A relay's `status` shows how many
+servers it knows and how many players it is relaying.
+
+| Datagram | From → to | Carries |
+|---|---|---|
+| Register | server → relay | game, a secret (only its owner can keep or free a code), the code it had, its key |
+| Registered | relay → server | the code, the address the relay sees |
+| Lookup | player → relay | the code, the game; padded to 200 bytes |
+| Found / Refused | relay → player | a token, the server's address and key / why not |
+| Introduce | relay → server | the token, the player's address, their slot port |
+| Punch | player ↔ server | the token (the hole punch) |
+| Open | server → slot port | the token: opens the server's router toward the relay |
+| Bye | server → relay | the secret: the code is free at once |
 
 ## Scripts
 
@@ -253,9 +313,20 @@ Designed in from the first piece; hardened as the parts grow.
   and reported, the rest still counts.
 - **The Docker image** runs as an unprivileged user and holds no asset
   packs.
-- **Encryption and connect tokens** (yojimbo, ACTION_PLAN.md) for games
-  that need them: planned with the relay (#44). Until then traffic is
-  plain UDP, like Valheim's and Necesse's direct connections.
+- **Encryption**: every connection, always (docs/NETWORKING.md
+  "Encryption"): X25519 + XChaCha20-Poly1305, the server's key in
+  `saveDir/server.key` (owner-only), its fingerprint in the log. The
+  password travels encrypted.
+- **Relays** (the `relay` role): a code is only good while its server is
+  registered, and only its server (holding the secret from its first
+  Register) can keep, move or free it. Lookups are rate-limited per
+  address and must be padded, and every answer is smaller, so a relay
+  can't be used to guess codes quickly or as an amplifier. Only a player
+  who looked a code up gets a relay port, packets go only between that
+  player and that server (the server opens its side with the join's
+  token), each port has a bandwidth cap, and a slot idle for 30 s is
+  freed. The relay never holds a key to the game traffic. Relayed
+  players show up with their own address (bans by address still work).
 
 ## Docker
 
@@ -272,8 +343,9 @@ docker compose -f docker/server/docker-compose.yml down      # stop cleanly
 The compose file sets the name, password, player count, roles and MOTD as
 variables, keeps everything in `docker/server/data` (`server.json` there is
 read too), and has a commented-out `directory` service for your own
-server list. Open UDP 27960 on the router or firewall for players from
-outside (27950 for a directory).
+server list, and a commented-out `relay` service. Open UDP 27960 on the
+router or firewall for players from outside (27950 for a directory,
+27970-28034 for a relay), or skip that with a join code (`KKE_SERVER_RELAY`).
 
 Several servers on one machine: copy the service, change the name, the
 host port and the data folder. A directory is the same image with
@@ -290,7 +362,7 @@ host port and the data folder. A directory is the same image with
 | Directory list in the game's Network panel | #42 | built |
 | Server-side physics bodies | #42 | next |
 | Headless Lua on the server (`scripts` role) | #43 | built |
-| Relay + join codes (self-hostable, no port forwarding) | #44 | planned |
+| Relay + join codes (self-hostable, no port forwarding), encryption for every connection | #44 | built |
 | Persistence: players, leaderboards in the store; rotating backups | #45 | built |
 | Persistence: world state (server scripts save with `store.*`; automatic world saves next) | #45 | next |
 | Roles served by another server (shared leaderboard etc.) | #46 | planned |

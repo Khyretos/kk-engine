@@ -10,6 +10,7 @@
 
 #if KKE_ENABLE_NET
 #include "kke/net/NetSession.h"
+#include "kke/net/SecureTransport.h"
 #include "kke/net/Transport.h"
 #include "kke/server/DedicatedServer.h"
 #include "kke/server/DirectoryNet.h"
@@ -331,6 +332,7 @@ struct World {
     LoopbackTransport serverT{ net };
     std::unique_ptr<DedicatedServer> server;
     std::vector<std::unique_ptr<LoopbackTransport>> clientT;
+    std::vector<std::unique_ptr<SecureTransport>> clientSecure; // a server's connections are always encrypted
     std::vector<std::unique_ptr<NetClient>> clients;
     std::vector<std::vector<GameEventMsg>> events;
     double now = 0;
@@ -344,7 +346,8 @@ struct World {
         NetConfig nc;
         nc.password = password;
         clientT.push_back(std::make_unique<LoopbackTransport>(net));
-        clients.push_back(std::make_unique<NetClient>(*clientT.back(), nc));
+        clientSecure.push_back(std::make_unique<SecureTransport>(*clientT.back()));
+        clients.push_back(std::make_unique<NetClient>(*clientSecure.back(), nc));
         events.emplace_back();
         const size_t i = events.size() - 1;
         clients.back()->onEvent = [this, i](const GameEventMsg& e) { events[i].push_back(e); };
