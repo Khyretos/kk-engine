@@ -174,6 +174,7 @@ void ShowcaseModule::updateLocalPlayers(float dt) {
         m.stateTime = loco.stateTime();
         m.fallHeight = loco.fallHeight();
         m.obstacleHeight = loco.lastObstacle().height;
+        m.wallSide = loco.wallRunSide();
         m.crouch = p.crouch;
         m.landed = loco.landed();
         m.jumped = loco.jumped();

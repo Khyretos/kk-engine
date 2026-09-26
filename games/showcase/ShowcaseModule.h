@@ -63,6 +63,7 @@ private:
         kke::Locomotion::State state = kke::Locomotion::State::Ground;
         float speed = 0.0f, progress = 0.0f, stateTime = 0.0f, fallHeight = 0.0f;
         float obstacleHeight = 0.0f; // vault / climb: the top above the feet
+        float wallSide = 0.0f;       // wall run: +1 wall on the right, -1 left
         bool crouch = false, landed = false, jumped = false;
     };
     void addAnimatorStates(kke::Animator& a);
@@ -205,6 +206,9 @@ private:
     glm::vec3 m_autopilotStart{0.0f};
     float m_autopilotEndZ = 0.0f;
     float m_demoHang = -1.0f; // KKE_DEMO_HANG: seconds into the script, -1 = off
+    float m_shoulder = 0.45f;   // camera shoulder offset (m, + = right); moves off a wall being run along
+    float m_demoTricks = -1.0f; // KKE_DEMO_TRICKS: wall run, ledge leaps (same)
+    void buildTrickCourse(std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx);
     // KKE_DEMO_BRIDGE: an iron ball dropped on the yard's glass; logs how
     // far the shards knocked the crates under it (FEMFX <-> Jolt bridge).
     float m_demoBridge = -1.0f;
@@ -234,6 +238,7 @@ private:
     int m_stVault = -1, m_stClimbUp = -1, m_stClimbOver = -1, m_stHang = -1;
     // Real clips (UAL2), posed by the move's progress; -1 = stand-ins.
     int m_stVaultClip = -1, m_stClimbLow = -1, m_stClimbHigh = -1;
+    int m_stWallRunL = -1, m_stWallRunR = -1;
 
     struct SceneEntry {
         std::string path;

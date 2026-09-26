@@ -37,6 +37,8 @@ namespace {
 constexpr float kWalkSpeed = 1.6f, kJogSpeed = 3.6f, kSprintSpeed = 6.2f, kCrouchSpeed = 1.4f;
 // UAL2 clips the demo plays: vault and climbs (in place, lift removed).
 constexpr const char* kTraversalClips[] = { "SafetyVault", "ClimbUp_1m", "ClimbUp_2m" };
+// Wall run loops (UAL2): played as they are, the capsule does the moving.
+constexpr const char* kWallRunClips[] = { "WallRun_L_Loop", "WallRun_R_Loop" };
 // The breaking yard (glass, plank, stone wall).
 const glm::vec3 kYard(14.0f, 0.0f, -6.0f);
 // Climbs up walls this high (m) or more take the 2 m clip.
@@ -204,6 +206,12 @@ void ShowcaseModule::init(kke::Application& app) {
         m_rig.yaw = -90.0f;
         m_rig.pitch = 8.0f;
     }
+    if (const char* tr = std::getenv("KKE_DEMO_TRICKS"); tr && *tr && *tr != '0') {
+        m_demoTricks = 0.0f;
+        m_loco->teleport(glm::vec3(25.3f, 0.05f, 27.0f));
+        m_loco->setFacing(glm::vec3(0, 0, -1));
+        m_rig.yaw = 0.0f;
+    }
     if (const char* sp = std::getenv("KKE_SPLIT"); sp && *sp) setLocalPlayers(std::atoi(sp));
     if (const char* pip = std::getenv("KKE_OVERHEAD"); pip && *pip && *pip != '0') m_overhead = true;
     if (const char* b = std::getenv("KKE_DEMO_BRIDGE"); b && *b && *b != '0') {
@@ -280,6 +288,7 @@ void ShowcaseModule::buildLevel() {
     for (glm::vec2 c : { glm::vec2(-1, -1), glm::vec2(1, -1), glm::vec2(1, 1), glm::vec2(-1, 1) })
         addStaticBox({ { 10.0f + c.x * 1.4f, 0.6f, 6.0f + c.y * 1.4f }, { 0.1f, 0.6f, 0.1f }, wall }, v, idx);
     buildParkourLane(v, idx);
+    buildTrickCourse(v, idx);
     buildPool(v, idx);
     buildLava(v, idx);
     // Breaking yard floor marker.
@@ -307,6 +316,23 @@ void ShowcaseModule::buildParkourLane(std::vector<kke::Vertex>& v, std::vector<u
     addStaticBox({ { x, 0.75f, 16.0f }, { 2.5f, 0.75f, 1.2f }, block }, v, idx);        // 1.5 m block: climb
     addStaticBox({ { x, 1.05f, 9.5f }, { 2.5f, 1.05f, 1.5f }, block }, v, idx);         // 2.1 m ledge: sprint + climb
     addStaticBox({ { x - 4.0f, 1.5f, 12.0f }, { 0.3f, 1.5f, 4.0f }, tall }, v, idx);    // 3 m wall: no
+}
+
+// Next to the lane (x = 26): a 12 m wall to run along (sprint beside
+// it, jump), and a row of thin pillars, too thin to stand on, with 1 m
+// gaps between rising tops: hang from one and leap to the next. At the
+// end a thin wall under a beam: from its top, leap up to the beam.
+void ShowcaseModule::buildTrickCourse(std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx) {
+    const glm::vec3 wall(0.62f, 0.5f, 0.42f), pillar(0.52f, 0.47f, 0.55f), beam(0.4f, 0.36f, 0.32f);
+    const float x = 26.2f, t = 0.2f; // face at x = 26
+    addStaticBox({ { x, 1.75f, 17.0f }, { t, 1.75f, 6.0f }, wall }, v, idx);   // wall run, z 11..23
+    addStaticBox({ { x, 1.45f, 7.2f }, { t, 1.45f, 0.8f }, pillar }, v, idx);  // top 2.9: too high to vault
+    addStaticBox({ { x, 1.6f, 4.8f }, { t, 1.6f, 0.6f }, pillar }, v, idx);    // top 3.2
+    addStaticBox({ { x, 1.75f, 2.5f }, { t, 1.75f, 0.7f }, pillar }, v, idx);  // top 3.5
+    addStaticBox({ { x, 1.2f, -1.2f }, { t, 1.2f, 1.6f }, pillar }, v, idx);   // thin wall, top 2.4
+    addStaticBox({ { x, 3.35f, -1.2f }, { t, 0.25f, 1.6f }, beam }, v, idx);   // beam 3.1..3.6 over it
+    addStaticBox({ { x, 1.8f, -2.95f }, { t, 1.8f, 0.15f }, beam }, v, idx);   // its posts
+    addStaticBox({ { x, 1.8f, 0.55f }, { t, 1.8f, 0.15f }, beam }, v, idx);
 }
 
 void ShowcaseModule::findScenes() {
@@ -521,6 +547,8 @@ void ShowcaseModule::setupPlayer() {
         std::erase_if(ual2->animations, [](const kke::ModelAnimation& a) {
             for (const char* keep : kTraversalClips)
                 if (a.name.find(keep) != std::string::npos) return false;
+            for (const char* keep : kWallRunClips)
+                if (a.name.find(keep) != std::string::npos) return false;
             return true;
         });
         ual2->meshes.clear();
@@ -643,6 +671,10 @@ void ShowcaseModule::addAnimatorStates(kke::Animator& a) {
     m_stVaultClip = real("SafetyVault", "vault_clip");
     m_stClimbLow = real("ClimbUp_1m", "climb_low");
     m_stClimbHigh = real("ClimbUp_2m", "climb_high");
+    // Wall run: UAL2's loops (the wall on the left / right), else the sprint.
+    auto loop = [&](const char* clip, const char* state) { return a.addClipState(state, pick({ clip, "Sprint_Loop" }), true); };
+    m_stWallRunL = loop("WallRun_L_Loop", "wall_run_l");
+    m_stWallRunR = loop("WallRun_R_Loop", "wall_run_r");
 }
 
 void ShowcaseModule::applyIk(float dt) {
@@ -675,8 +707,10 @@ void ShowcaseModule::applyIk(float dt) {
     }
 
     // Hands: on the top edge during the first part of a vault or climb,
-    // where the stand-in clips have no hand plant of their own.
-    const bool reach = m_handIk && (st == State::Hang || (st == State::Climb && m_loco->traversalProgress() < 0.7f) ||
+    // where the stand-in clips have no hand plant of their own, and
+    // reaching for the next edge at the end of a ledge leap.
+    const bool reach = m_handIk && (st == State::Hang || (st == State::Leap && m_loco->traversalProgress() > 0.6f) ||
+                                    (st == State::Climb && m_loco->traversalProgress() < 0.7f) ||
                                     (st == State::Vault && m_loco->traversalProgress() < 0.45f));
     m_handWeight += ((reach ? 1.0f : 0.0f) - m_handWeight) * (1.0f - std::exp(-18.0f * dt));
     if (m_handWeight > 0.01f) {
@@ -684,7 +718,7 @@ void ShowcaseModule::applyIk(float dt) {
         const glm::vec3 in = -o.normal;
         const glm::vec3 side(in.z, 0.0f, -in.x);
         // Hanging (and shimmying) the edge is where the hands are now.
-        const glm::vec3 grip = st == State::Hang ? m_loco->hangEdge() : glm::vec3(o.face.x, o.target.y, o.face.z);
+        const glm::vec3 grip = st == State::Hang || st == State::Leap ? m_loco->hangEdge() : glm::vec3(o.face.x, o.target.y, o.face.z);
         const glm::vec3 edge(grip.x + in.x * 0.08f, grip.y + 0.02f, grip.z + in.z * 0.08f);
         const std::vector<glm::mat4> world = kke::poseToModel(m_rigData, pose);
         for (int i = 0; i < 2; ++i) {
@@ -944,6 +978,31 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
             m_demoHang = 0.0f;
         }
     }
+    if (m_demoTricks >= 0.0f) {
+        // KKE_DEMO_TRICKS=1: a wall run with a wall jump, then the pillar
+        // row's ledge leaps and the leap up to the beam.
+        m_demoTricks += dt;
+        const float t = m_demoTricks;
+        auto at = [&](float mark) { return t >= mark && t - dt < mark; };
+        in.move = glm::vec3(0.0f);
+        m_sprint = t < 3.0f;
+        if (t < 2.4f) in.move = glm::vec3(0, 0, -1);                          // run along the wall
+        if (at(1.0f) || at(1.7f)) m_jumpQueued = true;                        // onto it, then off it
+        if (at(3.0f)) { m_loco->teleport(glm::vec3(25.3f, 0.05f, 7.4f)); m_loco->setFacing(glm::vec3(1, 0, 0)); m_rig.yaw = 60.0f; }
+        if (t > 3.0f && t < 4.0f) in.move = glm::vec3(1, 0, 0);
+        if (at(3.3f)) m_jumpQueued = true;                                    // hang on the first pillar
+        if (t > 4.5f && t < 6.6f) in.move = glm::vec3(0, 0, -1);              // shimmy along, leap to the next
+        if (at(5.2f) || at(6.1f)) m_jumpQueued = true;                        // pillar, and the next
+        if (at(9.5f)) { m_loco->teleport(glm::vec3(25.3f, 0.05f, -1.2f)); m_loco->setFacing(glm::vec3(1, 0, 0)); m_rig.yaw = 60.0f; }
+        if (t > 9.5f && t < 12.0f) in.move = glm::vec3(1, 0, 0);
+        if (at(9.8f) || at(11.2f)) m_jumpQueued = true;                       // hang, then leap up
+        if (t > 13.5f) {
+            m_demoTricks = 0.0f;
+            m_loco->teleport(glm::vec3(25.3f, 0.05f, 27.0f));
+            m_loco->setFacing(glm::vec3(0, 0, -1));
+            m_rig.yaw = 0.0f;
+        }
+    }
     // Wading through the pool: no running.
     const bool wading = inPool(w.characterPosition(m_player));
     if (m_demoBridge >= 0.0f) updateBridgeDemo(dt);
@@ -962,11 +1021,11 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
                                     m_loco->state() == kke::Locomotion::State::Vault ? "vault" : "climb", w.characterPosition(m_player).z, o.height,
                                     o.depth > 100.0f ? 0.0f : o.depth);
     }
-    if (m_demoHang >= 0.0f && m_loco->state() != before) {
-        static const char* const names[] = { "ground", "air", "vault", "climb", "hang" };
+    if ((m_demoHang >= 0.0f || m_demoTricks >= 0.0f) && m_loco->state() != before) {
+        static const char* const names[] = { "ground", "air", "vault", "climb", "hang", "leap", "wall run" };
         const glm::vec3 f = w.characterPosition(m_player);
-        kke::log::get(name())->info("hang demo: {} at {:.2f} {:.2f} {:.2f} ({:.1f} s)", names[static_cast<int>(m_loco->state())], f.x, f.y, f.z,
-                                    m_demoHang);
+        kke::log::get(name())->info("{} demo: {} at {:.2f} {:.2f} {:.2f} ({:.1f} s)", m_demoHang >= 0.0f ? "hang" : "tricks",
+                                    names[static_cast<int>(m_loco->state())], f.x, f.y, f.z, m_demoHang >= 0.0f ? m_demoHang : m_demoTricks);
     }
     if (m_loco->jumped() && m_anim) m_anim->play(m_stJump, 0.08f, true);
 
@@ -988,7 +1047,19 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
         applyIk(dt);
     }
 
-    // Camera (collides with the level through Jolt ray casts).
+    // Camera (collides with the level through Jolt ray casts). Running
+    // along a wall, the shoulder moves to the open side: over the wall
+    // shoulder the spring arm would pull in to the back of the head.
+    {
+        float shoulder = m_shoulder;
+        if (const float side = m_loco->wallRunSide(); side != 0.0f) {
+            const glm::vec3 f = m_loco->facing();
+            const glm::vec3 open = -glm::vec3(-f.z, 0.0f, f.x) * side; // away from the wall
+            shoulder = std::abs(m_shoulder) * (glm::dot(m_rig.right(), open) >= 0.0f ? 1.0f : -1.0f);
+        }
+        float& cur = m_rig.settings.shoulderOffset;
+        cur += (shoulder - cur) * (1.0f - std::exp(-8.0f * dt));
+    }
     m_rig.update(dt, feet, [&w](const glm::vec3& from, const glm::vec3& d, float maxD) {
         auto h = w.raycast(from, d, maxD);
         return h.hit ? h.distance : maxD;
@@ -1015,6 +1086,7 @@ void ShowcaseModule::updateAnimation(float dt) {
     m.stateTime = m_loco->stateTime();
     m.fallHeight = m_loco->fallHeight();
     m.obstacleHeight = m_loco->lastObstacle().height;
+    m.wallSide = m_loco->wallRunSide();
     m.crouch = m_crouch;
     m.landed = m_loco->landed();
     animate(*m_anim, m, dt);
@@ -1031,6 +1103,14 @@ void ShowcaseModule::animate(kke::Animator& a, const MotionInfo& m, float dt) {
             a.setProgress(m.progress);
         } else if (cur != m_stVault) a.play(m_stVault, 0.08f);
         break;
+    case State::Leap: // between two edges: the tucked fall pose, then the hang
+        if (cur != m_stFall) a.play(m_stFall, 0.1f);
+        break;
+    case State::WallRun: {
+        const int run = m.wallSide < 0.0f ? m_stWallRunL : m_stWallRunR;
+        if (cur != run) a.play(run, 0.1f);
+        break;
+    }
     case State::Hang:
         // No hang clip in the UAL sets: the fall pose (legs down), slowed,
         // with hand IK on the edge. A pack with "Hang_Idle" is used by name.
@@ -1078,8 +1158,10 @@ void ShowcaseModule::sendNetState(const glm::vec3& feet) {
     st.speed = m_loco->groundSpeed();
     st.progress = m_loco->traversalProgress();
     // Vault / climb: the obstacle's height (which clip); else the fall.
+    // Wall run: which side the wall is on.
     const bool traversing = m_loco->state() == kke::Locomotion::State::Vault || m_loco->state() == kke::Locomotion::State::Climb;
-    st.aux = traversing ? m_loco->lastObstacle().height : m_loco->fallHeight();
+    st.aux = traversing ? m_loco->lastObstacle().height
+           : m_loco->state() == kke::Locomotion::State::WallRun ? m_loco->wallRunSide() : m_loco->fallHeight();
     st.flags = m_crouch ? kFlagCrouch : 0;
     // Resets, scene visits and falling out of the world: a jump the
     // server's speed check should allow (and viewers shouldn't smooth).
@@ -1120,7 +1202,7 @@ void ShowcaseModule::updateAvatars(float dt) {
             a.anim = std::make_unique<kke::Animator>(*m_animSet);
             addAnimatorStates(*a.anim);
         }
-        const State now = static_cast<State>(std::min<int>(s.state, static_cast<int>(State::Hang)));
+        const State now = static_cast<State>(std::min<int>(s.state, static_cast<int>(State::WallRun)));
         MotionInfo m;
         m.state = now;
         m.speed = s.speed;
@@ -1138,6 +1220,7 @@ void ShowcaseModule::updateAvatars(float dt) {
         m.stateTime = a.stateTime;
         m.fallHeight = s.aux;
         m.obstacleHeight = s.aux;
+        m.wallSide = s.aux;
         animate(*a.anim, m, dt);
         m_models->setTransform(a.instance, glm::rotate(glm::translate(glm::mat4(1.0f), s.position), glm::radians(m_modelYaw - s.yaw), glm::vec3(0, 1, 0)));
         if (std::vector<glm::mat4>* locals = m_models->boneLocals(a.instance)) kke::poseToLocals(a.anim->pose(), *locals);
@@ -1198,8 +1281,14 @@ void ShowcaseModule::renderUi() {
     ImGui::TextWrapped("%s", m_status.c_str());
     ImGui::Text("%.0f FPS", m_fps);
     kke::RigidWorld& w = m_rigid->world();
-    glm::vec3 v = w.characterVelocity(m_player);
-    ImGui::Text("Speed %.1f m/s  %s", glm::length(glm::vec2(v.x, v.z)), m_loco->state() == kke::Locomotion::State::Hang ? "hanging" : w.characterOnGround(m_player) ? "on ground" : "in the air");
+    const kke::Locomotion::State ls = m_loco->state();
+    // Measured: scripted moves (wall run, vault) have no physics velocity.
+    ImGui::Text("Speed %.1f m/s  %s", m_loco->groundSpeed(),
+                ls == kke::Locomotion::State::Hang      ? "hanging"
+                : ls == kke::Locomotion::State::Leap    ? "leaping"
+                : ls == kke::Locomotion::State::WallRun ? "wall running"
+                : w.characterOnGround(m_player)         ? "on ground"
+                                                        : "in the air");
     const glm::vec3 feet = w.characterPosition(m_player);
     ImGui::Text("At %.1f %.1f %.1f, %s (%.1f m)", feet.x, feet.y, feet.z, m_crouch ? "crouched" : "standing", w.characterHeight(m_player));
     if (m_wantCrouch != m_crouch) ImGui::TextColored(ImVec4(1, 0.8f, 0.3f, 1), "No room to stand up");
@@ -1330,7 +1419,7 @@ void ShowcaseModule::renderUi() {
         bool third = m_rig.mode == kke::CameraRig::Mode::ThirdPerson;
         if (ImGui::Checkbox("Third person (V)", &third)) m_rig.mode = third ? kke::CameraRig::Mode::ThirdPerson : kke::CameraRig::Mode::FirstPerson;
         ImGui::SliderFloat("Arm length", &m_rig.settings.armLength, 1.5f, 10.0f);
-        ImGui::SliderFloat("Shoulder", &m_rig.settings.shoulderOffset, -1.0f, 1.0f);
+        ImGui::SliderFloat("Shoulder", &m_shoulder, -1.0f, 1.0f);
         ImGui::SliderFloat("Lag", &m_rig.settings.positionLag, 0.0f, 30.0f);
         ImGui::SliderFloat("Field of view", &m_rig.settings.fovDegrees, 40.0f, 100.0f);
     }
