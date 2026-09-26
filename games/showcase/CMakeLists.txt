@@ -12,7 +12,7 @@ if(ENGINE_ENABLE_LUA)
     endforeach()
 endif()
 # RmlUi (UiModule): script documents (ui.* in Lua) and the HUD.
-foreach(font NotoSans-Regular.ttf NotoSans-Bold.ttf NotoColorEmoji.ttf)
+foreach(font NotoSans-Regular.ttf NotoSans-Bold.ttf NotoSans-Italic.ttf NotoColorEmoji.ttf)
     engine_copy_runtime_file(kke_demo ${CMAKE_SOURCE_DIR}/assets/fonts/${font} assets/fonts/${font})
 endforeach()
 foreach(shader rml_ui.vert rml_ui.frag rml_gradient.frag)
@@ -28,3 +28,6 @@ foreach(f showcase_hud.rml showcase_pause.rml) # prefixed: rmlui_demo has a hud.
     engine_copy_runtime_file(kke_demo ${CMAKE_CURRENT_SOURCE_DIR}/ui/${f} ui/${f})
 endforeach()
 engine_copy_runtime_file(kke_demo ${CMAKE_SOURCE_DIR}/games/rmlui_demo/ui/theme.rcss ui/theme.rcss)
+# Synty art around the stations: a scene placed on the course itself. It
+# names pack assets only; without the packs the course stays plain.
+engine_copy_runtime_file(kke_demo ${CMAKE_CURRENT_SOURCE_DIR}/course_art.scene.json course/course_art.scene.json)
