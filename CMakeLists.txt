@@ -111,6 +111,8 @@ FetchContent_Declare(
     GIT_TAG        release-3.4.16
     GIT_SHALLOW    TRUE
 )
+# SDL's Wayland protocol XML needs wayland-scanner 1.26+ (see the file).
+include(cmake/wayland_scanner.cmake)
 FetchContent_MakeAvailable(SDL3)
 
 # SDL3's own vendored source produces occasional warnings depending on
