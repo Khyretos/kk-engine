@@ -51,6 +51,13 @@ public:
     // All of `fn`'s writes happen, or none do (fn returned false, or a
     // write failed). Other threads' calls wait until it's done.
     virtual bool transaction(const std::function<bool()>& fn) = 0;
+    // A copy of everything, as one SQLite file at `path` (replaced when
+    // it's there; written to a temporary name first, so a copy that
+    // fails halfway never replaces a good one). SQLite and memory stores
+    // can; a Valkey or PostgreSQL server is backed up with its own tools
+    // (RDB snapshots, pg_dump), and this says so in lastError().
+    virtual bool backup(const std::string& path);
+    virtual bool canBackup() const { return false; }
 
     // The last failure's reason ("" after a success), for this store.
     std::string lastError() const;

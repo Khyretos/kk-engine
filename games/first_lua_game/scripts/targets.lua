@@ -27,7 +27,7 @@ local hud = ui and ui.load("targets_hud.rml")
 local state = "idle"   -- idle, playing, done
 local score, shots, broken = 0, 0, 0
 local timeLeft = 0
-local best = 0
+local best = store and store.load("targets.best", 0) or 0 -- kept between runs (store.*, docs/SCRIPTING.md "Saving")
 local targets = {}     -- breakable id -> { kind, pos } (false once broken)
 local pedestals = {}   -- breakable ids of the (unbreakable) iron pedestals
 local left = 0
@@ -51,7 +51,10 @@ end
 local function finish(title)
   state = "done"
   timer.Remove("targets.clock")
-  if score > best then best = score end
+  if score > best then
+    best = score
+    if store then store.save("targets.best", best) end
+  end
   shared.targetsBest = best -- other scripts can read it (scripts share on purpose, through `shared`)
   if hud then
     ui.text(hud, "result-title", title)

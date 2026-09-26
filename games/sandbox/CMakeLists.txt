@@ -1,4 +1,4 @@
-add_executable(sandbox main.cpp SandboxModule.cpp)
+add_executable(sandbox main.cpp SandboxModule.cpp PlayScripting.cpp GraphEditor.cpp)
 target_link_libraries(sandbox PRIVATE kke_engine)
 
 engine_copy_runtime_file(sandbox ${CMAKE_CURRENT_SOURCE_DIR}/game.json marketplace/sandbox/game.json)

@@ -16,6 +16,7 @@
 
 #include <SDL3/SDL.h>
 #include <glm/glm.hpp>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -41,6 +42,10 @@ namespace kke_sandbox {
 // and with a gamepad: left stick moves a cursor, A presses (hold and move
 // to drag), B cancels, LB/RB or the D-pad jump along the palette, Y stands
 // everyone up, right stick turns the view, triggers zoom.
+// "Look" (the magnifier in Play mode) opens the node graph inside a thing,
+// a palette block (its recipe: the bat is a graph) or, on the ground, the
+// level's own graph: docs/PLAY_TO_MAKE.md "Intermediate", PlayScripting.cpp.
+//
 // KKE_SANDBOX_REPLAY=file plays timed touches and gamepad input into it
 // (tests/sandbox_replays/; format in loadReplay()).
 //
@@ -50,6 +55,8 @@ namespace kke_sandbox {
 // parts are optional: without FEMFX it is still a working level editor.
 class SandboxModule : public kke::Module {
 public:
+    SandboxModule();
+    ~SandboxModule() override;
     const char* name() const override { return "Sandbox"; }
     std::vector<kke::ModuleDependency> dependencies() const override;
     void init(kke::Application& app) override;
@@ -78,7 +85,7 @@ public:
     Mode mode() const { return m_mode; }
 
 private:
-    enum class Tool { Select, Place, Shoot, Bat };
+    enum class Tool { Select, Place, Shoot, Bat, Look };
     enum class Gizmo { Move, Rotate, Scale };
     enum class Handle { None, X, Y, Z, Ring, Scale };
 
@@ -110,6 +117,9 @@ private:
         std::vector<glm::vec3> restNormals;
         std::vector<size_t> partOffsets;      // where each mesh part starts in the arrays above
         bool settled = false;                 // last frame's vertices already match a sleeping object
+        // Node graphs (PlayScripting.cpp)
+        kke::NodeGraph graph;                 // what this one thing does
+        std::string owner;                    // the graph that brought it out ("" = placed by hand, saved)
     };
 
     // What undo/redo restores: the saved part of each object.
@@ -121,6 +131,7 @@ private:
         kke::SceneObject::Collision collision;
         uint32_t fractureSeed;
         int breakMaterial;                    // -1: not breakable right now
+        kke::NodeGraph graph;
     };
     using Snapshot = std::vector<ObjectState>;
 
@@ -201,6 +212,37 @@ private:
     void swingBat();
     void updateBat(float dt);
     void standEveryoneUp();
+
+    // Node graphs (PlayScripting.cpp): the play blocks in Lua, recipes
+    // (the bat's graph), each thing's own graph and the level's, the
+    // editor, and the events that drive them.
+    struct PlayGraphs;
+    void initGraphs();
+    void updateGraphs(float dt);
+    void shutdownGraphs();
+    void graphUi();                            // the score and what graphs say
+    void openThingGraph(uint32_t thing);       // 0 = the level's graph
+    void openRecipe(const std::string& block);
+    bool graphEditorOpen() const;
+    void closeGraphEditor();                   // keeps what was made
+    bool graphEditorKey(SDL_Keycode key);      // Esc, Delete: true if the editor took it
+    bool graphEditorPadButton(uint8_t button, bool down);
+    bool graphEditorPadSticks(float dt, const glm::vec2& rightStick, float zoom); // true: the editor took them
+    void graphsToScene(kke::SceneFile& scene) const;
+    void graphsFromScene(const kke::SceneFile& scene);
+    bool graphEditorContains(const glm::vec2& point) const;
+    bool lookAvailable() const;                // Lua is built in and the editor has an RmlUi context
+    std::string blockOf(const std::string& asset) const;
+    std::vector<std::string> playBlockIds() const;
+    // Events for graphs and scripts, fired at the next update.
+    void queueHit(uint32_t target, const glm::vec3& point, const glm::vec3& push);
+    void queueClicked(uint32_t thing, const glm::vec3& point);
+    void queuePlaced(uint32_t thing, const glm::vec3& point);
+    void queueFellOver(uint32_t thing);
+    void queueStoodUp(uint32_t thing);
+    // Swings the bat so its sweet spot passes through `target` (the foot of
+    // whoever is there, or a spot on the ground).
+    bool swingBatAt(const glm::vec3& target);
 
     // Touch and gamepads (Play mode).
     void openGamepad(SDL_JoystickID id);
@@ -329,6 +371,12 @@ private:
     float m_replayTime = 0.0f;
     SDL_Joystick* m_replayPad = nullptr; // a virtual gamepad the replay drives
     SDL_JoystickID m_replayPadId = 0;
+
+    std::unique_ptr<PlayGraphs> m_graphs;
+    bool m_graphsDirty = true;          // things came or went: graphs to (un)load
+    bool m_graphTouch = false;          // a two-finger gesture on the graph editor
+    glm::vec2 m_tapStart{0.0f};         // a press with the hand: a tap is a click
+    uint32_t m_tapThing = 0;
 };
 
 } // namespace kke_sandbox

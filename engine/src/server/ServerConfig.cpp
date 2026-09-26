@@ -39,13 +39,13 @@ bool parseBool(const std::string& s, bool& out) {
 } // namespace
 
 const std::vector<std::string>& ServerConfig::knownRoles() {
-    static const std::vector<std::string> roles{ "players", "physics", "leaderboard", "directory" };
+    static const std::vector<std::string> roles{ "players", "physics", "leaderboard", "scripts", "directory", "relay" };
     return roles;
 }
 
 bool ServerConfig::hasRole(const std::string& role) const { return std::find(roles.begin(), roles.end(), role) != roles.end(); }
 
-bool ServerConfig::hasGameSocket() const { return hasRole("players") || hasRole("physics") || hasRole("leaderboard"); }
+bool ServerConfig::hasGameSocket() const { return hasRole("players") || hasRole("physics") || hasRole("leaderboard") || hasRole("scripts"); }
 
 bool splitHostPort(const std::string& s, std::string& host, uint16_t& port) {
     const size_t colon = s.rfind(':');
@@ -92,11 +92,17 @@ bool ServerConfig::loadJson(const std::string& text, std::vector<std::string>& e
     str("motd", motd);
     list("roles", roles);
     str("scene", scene);
+    str("scripts", scripts);
     str("saveDir", saveDir);
     str("storage", storage);
     list("directories", directories);
     num("directoryPort", directoryPort, 1, 65535);
+    str("relay", relay);
+    num("relayPort", relayPort, 1, 65535);
+    num("relaySlots", relaySlots, 1, 1000);
     num("tickRate", tickRate, 10, 240);
+    num("backups", backups, 0, 1000);
+    num("backupMinutes", backupMinutes, 1, 10080);
     if (j.contains("public")) {
         if (j["public"].is_boolean()) isPublic = j["public"].get<bool>();
         else errors.push_back("server.json \"public\": expected true or false");
@@ -110,7 +116,8 @@ bool ServerConfig::loadJson(const std::string& text, std::vector<std::string>& e
         else errors.push_back("server.json \"fogOfWar\": expected true or false");
     }
     static const std::vector<std::string> keys{ "name", "game", "port", "maxPlayers", "password", "motd", "roles", "scene", "saveDir",
-                                                "directories", "directoryPort", "tickRate", "public", "clientScores", "fogOfWar", "storage" };
+                                                "directories", "directoryPort", "tickRate", "public", "clientScores", "fogOfWar", "storage",
+                                                "scripts", "relay", "relayPort", "relaySlots", "backups", "backupMinutes" };
     for (auto it = j.begin(); it != j.end(); ++it)
         if (std::find(keys.begin(), keys.end(), it.key()) == keys.end())
             errors.push_back("server.json \"" + it.key() + "\": not a setting (a typo?)");
@@ -147,9 +154,26 @@ bool ServerConfig::applyEnv(const std::function<const char*(const char*)>& geten
     if (const char* v = get("KKE_SERVER_MOTD")) motd = v;
     if (const char* v = get("KKE_SERVER_ROLES")) roles = splitList(v);
     if (const char* v = get("KKE_SERVER_SCENE")) scene = v;
+    if (const char* v = get("KKE_SERVER_SCRIPTS")) scripts = v;
+    if (const char* v = get("KKE_SERVER_RELAY")) relay = v;
+    portVar("KKE_SERVER_RELAY_PORT", relayPort);
+    if (const char* v = get("KKE_SERVER_RELAY_SLOTS")) {
+        uint16_t n = 0;
+        if (parsePort(v, n) && n <= 1000) relaySlots = n;
+        else errors.push_back(std::string("KKE_SERVER_RELAY_SLOTS='") + v + "': expected 1 to 1000");
+    }
     if (const char* v = get("KKE_SERVER_SAVE_DIR")) saveDir = v;
     if (const char* v = get("KKE_SERVER_STORAGE")) storage = v;
     if (const char* v = get("KKE_SERVER_DIRECTORIES")) directories = splitList(v);
+    auto countVar = [&](const char* key, uint16_t& out, unsigned lo, unsigned hi) {
+        const char* v = get(key);
+        if (!v) return;
+        uint16_t n = 0;
+        if ((parsePort(v, n) || std::string(v) == "0") && n >= lo && n <= hi) out = n;
+        else errors.push_back(std::string(key) + "='" + v + "': expected " + std::to_string(lo) + " to " + std::to_string(hi));
+    };
+    countVar("KKE_SERVER_BACKUPS", backups, 0, 1000);
+    countVar("KKE_SERVER_BACKUP_MINUTES", backupMinutes, 1, 10080);
     portVar("KKE_SERVER_DIRECTORY_PORT", directoryPort);
     if (const char* v = get("KKE_SERVER_PUBLIC"); v && !parseBool(v, isPublic)) errors.push_back(std::string("KKE_SERVER_PUBLIC='") + v + "': expected true or false");
     if (const char* v = get("KKE_SERVER_CLIENT_SCORES"); v && !parseBool(v, clientScores))
@@ -174,8 +198,9 @@ bool ServerConfig::applyArgs(const std::vector<std::string>& args, std::vector<s
         std::string v;
         if (a == "--name") { if (value(v)) name = v; }
         else if (a == "--game") { if (value(v)) game = v; }
-        else if (a == "--port" || a == "--directory-port") {
-            if (value(v) && !parsePort(v, a == "--port" ? port : directoryPort)) errors.push_back(a + " " + v + ": expected a port, 1 to 65535");
+        else if (a == "--port" || a == "--directory-port" || a == "--relay-port") {
+            uint16_t& target = a == "--port" ? port : a == "--directory-port" ? directoryPort : relayPort;
+            if (value(v) && !parsePort(v, target)) errors.push_back(a + " " + v + ": expected a port, 1 to 65535");
         } else if (a == "--max-players") {
             uint16_t n = 0;
             if (value(v)) {
@@ -186,9 +211,27 @@ bool ServerConfig::applyArgs(const std::vector<std::string>& args, std::vector<s
         else if (a == "--motd") { if (value(v)) motd = v; }
         else if (a == "--roles") { if (value(v)) roles = splitList(v); }
         else if (a == "--scene") { if (value(v)) scene = v; }
+        else if (a == "--scripts") { if (value(v)) scripts = v; }
+        else if (a == "--relay") { if (value(v)) relay = v; }
+        else if (a == "--relay-slots") {
+            uint16_t n = 0;
+            if (value(v)) {
+                if (parsePort(v, n) && n <= 1000) relaySlots = n;
+                else errors.push_back("--relay-slots " + v + ": expected 1 to 1000");
+            }
+        }
         else if (a == "--save-dir") { if (value(v)) saveDir = v; }
         else if (a == "--storage") { if (value(v)) storage = v; }
         else if (a == "--directory") { if (value(v)) directories.push_back(v); }
+        else if (a == "--backups" || a == "--backup-minutes") {
+            if (value(v)) {
+                const bool count = a == "--backups";
+                uint16_t n = 0;
+                const bool parsed = parsePort(v, n) || (count && v == "0");
+                if (parsed && (count ? n <= 1000 : n >= 1 && n <= 10080)) (count ? backups : backupMinutes) = n;
+                else errors.push_back(a + " " + v + (count ? ": expected 0 to 1000" : ": expected 1 to 10080 (a week)"));
+            }
+        }
         else if (a == "--public") isPublic = true;
         else if (a == "--client-scores") clientScores = true;
         else if (a == "--fog-of-war") fogOfWar = true;
@@ -203,14 +246,30 @@ bool ServerConfig::validate(std::vector<std::string>& errors) const {
     if (name.empty() || name.size() > 24) errors.push_back("name: 1 to 24 characters");
     if (game.empty() || game.size() > 32) errors.push_back("game: 1 to 32 characters");
     if (password.size() > 64) errors.push_back("password: at most 64 characters");
-    if (roles.empty()) errors.push_back("roles: at least one (players, physics, leaderboard, directory)");
+    std::string known;
+    for (const std::string& r : knownRoles()) known += (known.empty() ? "" : ", ") + r;
+    if (roles.empty()) errors.push_back("roles: at least one (" + known + ")");
     for (const std::string& r : roles)
-        if (std::find(knownRoles().begin(), knownRoles().end(), r) == knownRoles().end())
-            errors.push_back("roles: '" + r + "' isn't one (players, physics, leaderboard, directory)");
+        if (std::find(knownRoles().begin(), knownRoles().end(), r) == knownRoles().end()) errors.push_back("roles: '" + r + "' isn't one (" + known + ")");
     const bool game_ = hasGameSocket();
     if (hasRole("physics") && scene.empty()) errors.push_back("roles: physics needs a scene (the level whose walls it checks moves against)");
     if (fogOfWar && !hasRole("physics")) errors.push_back("fogOfWar: needs the physics role (the level's walls decide who sees whom)");
     if (hasRole("directory") && game_ && directoryPort == port) errors.push_back("directoryPort: must differ from port (both are UDP sockets)");
+    if (hasRole("relay")) {
+        // The relay's port and the slots above it.
+        const unsigned lo = relayPort, hi = static_cast<unsigned>(relayPort) + relaySlots;
+        if (hi > 65535) errors.push_back("relayPort + relaySlots: past port 65535");
+        if (game_ && port >= lo && port <= hi) errors.push_back("relayPort: the relay uses UDP " + std::to_string(lo) + "-" + std::to_string(hi) + ", which takes port");
+        if (hasRole("directory") && directoryPort >= lo && directoryPort <= hi)
+            errors.push_back("relayPort: the relay uses UDP " + std::to_string(lo) + "-" + std::to_string(hi) + ", which takes directoryPort");
+    }
+    if (!relay.empty()) {
+        std::string h;
+        uint16_t p = 0;
+        if (!game_) errors.push_back("relay: only a server players join gets a join code (add the players role)");
+        if (relay.find(':') != std::string::npos && !splitHostPort(relay, h, p)) errors.push_back("relay: '" + relay + "' isn't host or host:port");
+    }
+    if (hasRole("scripts") && scripts.empty()) errors.push_back("scripts: the scripts role needs a folder (default scripts)");
     if (isPublic && directories.empty()) errors.push_back("public: true, but no directories to register with");
     for (const std::string& d : directories) {
         std::string h;
@@ -239,9 +298,15 @@ std::string ServerConfig::describe() const {
         }
         out += "\n  storage: " + shown;
     }
+    out += "\n  backups: " + (backups ? std::to_string(backups) + " kept, every " + std::to_string(backupMinutes) + " min" : std::string("off"));
     if (!scene.empty()) out += "\n  scene: " + scene;
+    if (hasRole("scripts")) out += "\n  scripts: " + scripts;
     if (fogOfWar) out += "\n  fog of war: players are sent only who they could see or hear";
     if (hasRole("directory")) out += "\n  directory on UDP port " + std::to_string(directoryPort);
+    if (hasRole("relay"))
+        out += "\n  relay on UDP port " + std::to_string(relayPort) + " (players relayed on " + std::to_string(relayPort + 1) + "-" +
+               std::to_string(relayPort + relaySlots) + ")";
+    if (!relay.empty()) out += "\n  join code from relay " + relay;
     if (isPublic) out += "\n  public, listed on: " + d;
     if (hasRole("leaderboard")) out += std::string("\n  leaderboard: ") + (clientScores ? "players may send scores" : "scores from the server only");
     return out;
@@ -256,17 +321,25 @@ std::string ServerConfig::usage() {
            "  --max-players N       1 to 32 (default 16)\n"
            "  --password TEXT       required to join\n"
            "  --motd TEXT           message to each player who joins\n"
-           "  --roles a,b           players, physics, leaderboard, directory\n"
+           "  --roles a,b           players, physics, leaderboard, scripts, directory, relay\n"
            "  --scene FILE          level collision for the physics role\n"
+           "  --scripts DIR         the game's server scripts (sv_*.lua, sh_*.lua; default scripts)\n"
            "  --save-dir DIR        access list, leaderboards (default save)\n"
            "  --public              register with the directories below\n"
            "  --directory HOST:PORT a directory to register with (repeatable)\n"
            "  --directory-port N    UDP port of this server's directory role (default 27950)\n"
            "  --client-scores       leaderboard: players may send their own scores\n"
+           "  --relay HOST[:PORT]   get a join code from this relay: players join without port forwarding\n"
+           "  --relay-port N        UDP port of this server's relay role (default 27970)\n"
+           "  --relay-slots N       relay role: players relayed at once, one UDP port each above it (default 64)\n"
            "  --fog-of-war          physics: send each player only who they could see or hear\n"
            "  --storage URL         sqlite:FILE (default save/server.db), valkey://HOST:PORT, postgres://...\n"
+           "  --backups N           copies of the store kept in SAVE_DIR/backups (default 5, 0 = none)\n"
+           "  --backup-minutes N    how often one is made (default 60)\n"
            "Environment: KKE_SERVER_NAME, _GAME, _PORT, _MAX_PLAYERS, _PASSWORD, _MOTD, _ROLES,\n"
-           "  _SCENE, _SAVE_DIR, _DIRECTORIES, _DIRECTORY_PORT, _PUBLIC, _CLIENT_SCORES, _FOG_OF_WAR, _STORAGE\n"
+           "  _SCENE, _SCRIPTS, _SAVE_DIR, _DIRECTORIES, _DIRECTORY_PORT, _PUBLIC, _CLIENT_SCORES,\n"
+           "  _FOG_OF_WAR, _STORAGE, _RELAY, _RELAY_PORT, _RELAY_SLOTS,\n"
+           "  _BACKUPS, _BACKUP_MINUTES\n"
            "  (flags win over them).\n";
 }
 

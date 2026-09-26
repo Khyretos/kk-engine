@@ -12,6 +12,7 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <thread>
 
 using namespace kke::storage;
@@ -146,6 +147,36 @@ TEST(SqliteStore, KeepsDataAcrossReopensAndNestedTransactions) {
     EXPECT_EQ(*again.get("world", "seed"), "1234");
     EXPECT_EQ(*again.get("world", "outer"), "yes");
     EXPECT_FALSE(again.get("world", "inner"));
+}
+
+TEST(StoreBackup, SqliteAndMemoryCopyEverythingIntoOneFile) {
+    for (const std::string kind : { "memory", "sqlite" }) {
+        SCOPED_TRACE(kind);
+        auto store = openStore(kind == "memory" ? "memory:" : "sqlite:" + tempDb("backup_source.db"));
+        ASSERT_TRUE(store);
+        EXPECT_TRUE(store->canBackup());
+        ASSERT_TRUE(store->put("players", "kees", "{\"gold\": 3}"));
+        ASSERT_TRUE(store->put("world", "day", std::string("\0bin", 4)));
+        const std::string path = tempDb("backup_" + kind + ".db");
+        { std::ofstream(path) << "an older backup"; } // replaced, not appended to
+        ASSERT_TRUE(store->backup(path)) << store->lastError();
+        EXPECT_FALSE(std::filesystem::exists(path + ".part"));
+        auto copy = openStore("sqlite:" + path);
+        ASSERT_TRUE(copy);
+        EXPECT_EQ(copy->get("players", "kees").value_or(""), "{\"gold\": 3}");
+        EXPECT_EQ(copy->get("world", "day").value_or(""), std::string("\0bin", 4));
+        // The store goes on as before.
+        EXPECT_TRUE(store->put("players", "ann", "{}"));
+    }
+    // Inside a transaction a SQLite store can't copy itself: said, not crashed.
+    auto store = openStore("sqlite:" + tempDb("backup_tx.db"));
+    ASSERT_TRUE(store);
+    bool refused = false;
+    store->transaction([&] {
+        refused = !store->backup(tempDb("backup_tx_copy.db"));
+        return true;
+    });
+    EXPECT_TRUE(refused);
 }
 
 TEST(OpenStore, ExplainsWhatItCantOpen) {

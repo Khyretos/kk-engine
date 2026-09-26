@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <typeindex>
+#include <vector>
 
 namespace kke {
 
@@ -60,6 +61,12 @@ void VoiceModule::init(Application& app) {
             log->info("Sending a {} Hz tone instead of the microphone (KKE_VOICE_TONE)", m_toneHz);
         }
     }
+    auto envOff = [](const char* name) {
+        const char* v = std::getenv(name);
+        return v && (std::strcmp(v, "off") == 0 || std::strcmp(v, "0") == 0);
+    };
+    if (envOff("KKE_VOICE_NOISE")) settings.noiseSuppression = false;
+    if (envOff("KKE_VOICE_ECHO")) settings.echoCancellation = false;
     const char* env = std::getenv("KKE_VOICE");
     const bool off = env && (std::strcmp(env, "off") == 0 || std::strcmp(env, "0") == 0);
     if (const char* a = std::getenv("KKE_AUDIO"); a && (std::strcmp(a, "off") == 0 || std::strcmp(a, "0") == 0)) settings.openMicrophone = false;
@@ -85,8 +92,20 @@ void VoiceModule::init(Application& app) {
             log->warn("No microphone; voice chat listens only");
         }
     }
+    if (m_captureRunning) {
+        m_cleaner = std::make_unique<voice::VoiceCleaner>();
+        // The echo canceller needs what the speakers play, sample for sample at our rate.
+        if (auto* audio = app.getModule<AudioModule>(); audio && audio->mixer().sampleRate() == voice::kSampleRate) {
+            m_played = std::make_shared<AudioStream>(8 * voice::kFrameSamples);
+            audio->mixer().setOutputTap(m_played);
+        } else if (settings.echoCancellation) {
+            log->info("No echo cancellation: it needs the audio output at {} Hz", voice::kSampleRate);
+            settings.echoCancellation = false;
+        }
+    }
     if (auto* net = app.getModule<NetModule>()) net->addVoiceListener([this](const net::VoiceMsg& m) { onVoice(m); });
-    log->info("Voice chat ready: Opus {} kbit/s, microphone: {}", settings.bitrate / 1000, m_captureName);
+    log->info("Voice chat ready: Opus {} kbit/s, microphone: {}{}{}", settings.bitrate / 1000, m_captureName,
+              m_cleaner && settings.noiseSuppression ? ", noise suppression" : "", m_cleaner && settings.echoCancellation ? ", echo cancellation" : "");
 }
 
 void VoiceModule::shutdown() {
@@ -101,6 +120,10 @@ void VoiceModule::shutdown() {
     if (m_capture && m_captureRunning) ma_device_uninit(&m_capture->device);
     m_captureRunning = false;
     m_capture.reset();
+    if (m_played)
+        if (auto* audio = m_app ? m_app->getModule<AudioModule>() : nullptr) audio->mixer().setOutputTap(nullptr);
+    m_played.reset();
+    m_cleaner.reset();
     clearSpeakers();
 }
 
@@ -150,13 +173,30 @@ void VoiceModule::sendCaptured() {
     const bool online = net && net->role() != NetModule::Role::Offline;
     auto* input = m_app->getModule<InputModule>();
     const bool held = pushToTalk || (input && input->map(0).action("voice.talk") && input->map(0).held("voice.talk"));
-    float frame[voice::kFrameSamples];
+    float frame[voice::kFrameSamples], played[voice::kFrameSamples];
     m_talking = false;
+    // The speakers' output is read in step with the microphone; if it got
+    // ahead (the game hitched), the oldest goes, so the echo canceller's
+    // reference stays within its reach.
+    if (m_played && m_played->buffered() > size_t(4 * voice::kFrameSamples) + m_captured->buffered()) {
+        std::vector<float> drop(m_played->buffered() - 2 * voice::kFrameSamples - m_captured->buffered());
+        m_played->read(drop.data(), drop.size());
+    }
     // Everything the microphone gave since last frame, 20 ms at a time.
     while (m_captured->buffered() >= size_t(voice::kFrameSamples)) {
         m_captured->read(frame, voice::kFrameSamples);
         if (settings.inputGain != 1.0f)
             for (float& x : frame) x = std::clamp(x * settings.inputGain, -1.0f, 1.0f);
+        const float* reference = nullptr;
+        if (m_played && m_played->buffered() >= size_t(voice::kFrameSamples)) {
+            m_played->read(played, voice::kFrameSamples);
+            reference = played;
+        }
+        if (m_cleaner && m_toneHz <= 0.0f) { // (a test tone isn't noise to take out)
+            m_cleaner->noiseSuppression = settings.noiseSuppression;
+            m_cleaner->echoCancellation = settings.echoCancellation && m_played;
+            m_cleaner->process(frame, reference);
+        }
         const bool voiced = m_vad.process(frame, voice::kFrameSamples, voice::kFrameSeconds);
         const bool send = settings.mode == TalkMode::Open || (settings.mode == TalkMode::PushToTalk && held) ||
                           (settings.mode == TalkMode::VoiceActivated && voiced);
@@ -292,6 +332,16 @@ void VoiceModule::renderUi() {
     ImGui::SliderFloat("Mic volume", &settings.inputGain, 0.0f, 4.0f);
     ImGui::SliderFloat("Voices volume", &settings.outputGain, 0.0f, 2.0f);
     ImGui::Checkbox("Hear myself (mic test)", &hearMyself);
+    if (m_cleaner) {
+        ImGui::Checkbox("Noise suppression", &settings.noiseSuppression);
+        ImGui::BeginDisabled(!m_played);
+        ImGui::Checkbox("Echo cancellation", &settings.echoCancellation);
+        ImGui::EndDisabled();
+        if (settings.echoCancellation && m_played) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("-%.0f dB", static_cast<double>(m_cleaner->echoReductionDb()));
+        }
+    }
     const float level = std::clamp((m_vad.levelDb() + 60.0f) / 60.0f, 0.0f, 1.0f);
     ImGui::ProgressBar(level, ImVec2(-1, 0), m_talking ? "talking" : "");
     if (auto* net = m_app->getModule<NetModule>()) {

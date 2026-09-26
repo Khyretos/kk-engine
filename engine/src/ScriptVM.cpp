@@ -460,6 +460,12 @@ void ScriptVM::unload(const std::string& source) {
     if (onUnload) onUnload(source);
 }
 
+bool ScriptVM::reloadString(const std::string& code, const std::string& source) {
+    unload(source);
+    m_stopped.erase(std::remove(m_stopped.begin(), m_stopped.end(), source), m_stopped.end());
+    return runString(code, source);
+}
+
 bool ScriptVM::reloadFile(const std::string& path) {
     unload(path);
     m_stopped.erase(std::remove(m_stopped.begin(), m_stopped.end(), path), m_stopped.end());
@@ -685,6 +691,17 @@ bool ScriptVM::decodeValue(lua_State* L, const std::string& bytes, std::string& 
         return false;
     }
     return true;
+}
+
+void ScriptVM::registerFunction(const ApiFunction& api, Fn fn) {
+    registerFunction(api.table, api.name, std::move(fn));
+    std::erase_if(m_apiFunctions, [&](const ApiFunction& f) { return f.table == api.table && f.name == api.name; });
+    m_apiFunctions.push_back(api);
+}
+
+void ScriptVM::describeEvent(const ApiEvent& event) {
+    std::erase_if(m_apiEvents, [&](const ApiEvent& e) { return e.name == event.name; });
+    m_apiEvents.push_back(event);
 }
 
 void ScriptVM::registerFunction(const std::string& table, const std::string& name, Fn fn) {

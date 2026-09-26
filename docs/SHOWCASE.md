@@ -22,6 +22,13 @@ and the HUD agree.
 | Low roof | (10, 6) | Crouch (C) to get under it |
 | Stairs, ramp, too-steep slope, pillars | around (-8, -4) and (8, -10) | Steps, slopes the controller walks, a slope it slides off, and the camera's spring arm |
 
+With POLYGON Nature and POLYGON Town installed, Synty art dresses the
+course around the stations (`course_art.scene.json`, list in
+[SCENES.md](SCENES.md)): a volcanic corner at the lava, a park pond at the
+pool, a work yard at the breaking yard, hedges, pines, mountains and a town
+beyond the walls. It stays out of the paths the stations need. Without the
+packs the course is the plain boxes it is built from.
+
 The **Scenes** panel visits Synty-built levels far from the course
 ([SCENES.md](SCENES.md)).
 
@@ -54,12 +61,16 @@ The **Scenes** panel visits Synty-built levels far from the course
 | `KKE_SCENE=town_block` | Starts in a Synty scene |
 | `KKE_DEMO_AUTOPILOT=1` | The character (and extra split-screen players) run the parkour lane on their own |
 | `KKE_BRIDGE=0` | Turns the FEMFX-Jolt bridge off, to compare |
+| `KKE_COURSE_ART=0` | Leaves the Synty art off the course, to compare |
 | `KKE_STRESS_TEST=1` | The stress test ([BENCHMARKS.md](BENCHMARKS.md)) |
 
 ## Assets
 
 The course itself is built from boxes in code, so it needs no asset pack.
 What it loads:
+
+- Optional: the course art (POLYGON Nature, POLYGON Town), listed asset by
+  asset in [SCENES.md](SCENES.md).
 
 - The character and its animations: Quaternius' Universal Animation
   Library (CC0), volumes 1 and 2 (`assets/animations/`, fetched, not

@@ -57,6 +57,8 @@ bool osRandom(uint8_t* out, size_t size, std::string* error) {
 
 } // namespace
 
+bool randomBytes(uint8_t* out, size_t size, std::string* error) { return osRandom(out, size, error); }
+
 std::string toHex(const uint8_t* data, size_t size) {
     static const char* digits = "0123456789abcdef";
     std::string s(size * 2, '0');

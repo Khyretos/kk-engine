@@ -82,6 +82,37 @@ SM_Tree_Birch_03 ×2, SM_Tree_Log_01, SM_Tree_Pine_01 ×2, SM_Tree_Pine_02 ×2,
 SM_Tree_Pine_Small_01 ×2, SM_Tree_PolyPine_01 ×2, SM_Tree_Round_02 ×2,
 SM_Tree_Stump_01
 
+## Showcase course art (`games/showcase/course_art.scene.json`)
+
+Packs: **POLYGON Nature** and **POLYGON Town**. 108 instances of 37 assets,
+placed on `kke_demo`'s course itself (not a separate level), around the
+stations: a rock heap, dead trees, ash and torches at the lava; reeds, a
+bench, deckchairs, a lamp and a tree at the pool; barrels, boxes, a cart
+and a shed at the breaking yard; hedges along the north wall; pines behind
+the trick wall; pines and mountains beyond the walls, houses, a shop and a
+church to the south and east. It loads only when every asset is installed
+(otherwise the course stays plain boxes); `KKE_COURSE_ART=0` leaves it out.
+
+POLYGON Nature: SM_Plant_Bush_01 ×2, SM_Plant_Fern_01 ×4,
+SM_Plant_Flowers_01 ×6, SM_Plant_Grass_03 ×15, SM_Plant_Reeds_01 ×2,
+SM_Plant_Reeds_02, SM_Prop_TorchStick_01 ×2, SM_Rock_Pile_01,
+SM_Rock_Pile_Curved_01, SM_Rock_Small_01 ×2, SM_Terrain_DustPile_Long_01,
+SM_Terrain_DustPile_Small_01, SM_Terrain_Mountain_01,
+SM_Terrain_Mountain_02, SM_Terrain_Mountain_03, SM_Tree_Birch_01 ×2,
+SM_Tree_Dead_01, SM_Tree_Dead_02, SM_Tree_Pine_01 ×3,
+SM_Tree_Pine_Large_01 ×16, SM_Tree_PolyPine_01 ×18, SM_Tree_Round_01
+
+POLYGON Town: SM_Bld_Church_01, SM_Bld_GardenShed_01,
+SM_Bld_House_Preset_01, SM_Bld_House_Preset_04, SM_Bld_Shop_02,
+SM_Env_Hedge_01 ×7, SM_Env_Tree_Tall_01 ×2, SM_Prop_Barrel_01 ×2,
+SM_Prop_CardboardBox_01, SM_Prop_CardboardBox_03, SM_Prop_Cart_01,
+SM_Prop_Deckchair_01 ×2, SM_Prop_ParkBench_01, SM_Prop_Pool_Float_Ring_01,
+SM_Prop_Streetlamp_01 ×2
+
+Two assets looked wrong on the engine's loader and were swapped out:
+SM_Plant_FlowerPatch_01 (flat squares of the atlas) and
+SM_Tree_Willow_Medium_01 (untextured, grey leaves).
+
 ## Things the packs taught the engine
 
 - **Same names, different packs.** POLYGON City and POLYGON Town both

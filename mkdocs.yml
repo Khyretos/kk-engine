@@ -88,6 +88,7 @@ nav:
       - Networking: NETWORKING.md
       - Anti-cheat: ANTI_CHEAT.md
       - Kreative DRM: DRM.md
+      - DLC and mods: MODDING.md
       - Scenes: SCENES.md
       - Jiggle physics: JIGGLE.md
       - Physics bridge: PHYSICS_BRIDGE.md
@@ -99,6 +100,7 @@ nav:
       - Benchmarks: BENCHMARKS.md
       - Performance notes: PERFORMANCE_NOTES.md
       - Scaling and platforms: SCALING.md
+      - Dependencies and licences: DEPENDENCIES.md
       - Hardware tests: HARDWARE_TESTS.md
   - Project:
       - Devlog: devlog/index.md

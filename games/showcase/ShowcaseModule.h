@@ -79,6 +79,10 @@ private:
     void findScenes();
     void visitScene(size_t index);
     void scanCatalog();
+    // Synty art around the stations (course_art.scene.json, loaded on the
+    // course itself): only when its packs are installed, else the course
+    // stays plain boxes. KKE_COURSE_ART=0 leaves it out.
+    void dressCourse();
     // Who you play: "" = the UAL mannequin, else a Synty SK_ character
     // (by asset name) wearing the UAL clips, retargeted.
     void useCharacter(const std::string& asset);
@@ -273,6 +277,7 @@ private:
         std::unique_ptr<kke::DynamicMeshRenderer> ground;
     };
     std::vector<SceneEntry> m_scenes;
+    kke::LoadedScene m_courseArt;
     kke::AssetCatalog m_catalog;
     bool m_catalogScanned = false;
     std::string m_assetDir;

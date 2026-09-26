@@ -10,6 +10,7 @@
 
 #if KKE_ENABLE_NET
 #include "kke/net/NetSession.h"
+#include "kke/net/SecureTransport.h"
 #include "kke/net/Transport.h"
 #include "kke/server/DedicatedServer.h"
 #include "kke/server/DirectoryNet.h"
@@ -17,9 +18,11 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <thread>
 
@@ -329,6 +332,7 @@ struct World {
     LoopbackTransport serverT{ net };
     std::unique_ptr<DedicatedServer> server;
     std::vector<std::unique_ptr<LoopbackTransport>> clientT;
+    std::vector<std::unique_ptr<SecureTransport>> clientSecure; // a server's connections are always encrypted
     std::vector<std::unique_ptr<NetClient>> clients;
     std::vector<std::vector<GameEventMsg>> events;
     double now = 0;
@@ -342,7 +346,8 @@ struct World {
         NetConfig nc;
         nc.password = password;
         clientT.push_back(std::make_unique<LoopbackTransport>(net));
-        clients.push_back(std::make_unique<NetClient>(*clientT.back(), nc));
+        clientSecure.push_back(std::make_unique<SecureTransport>(*clientT.back()));
+        clients.push_back(std::make_unique<NetClient>(*clientSecure.back(), nc));
         events.emplace_back();
         const size_t i = events.size() - 1;
         clients.back()->onEvent = [this, i](const GameEventMsg& e) { events[i].push_back(e); };
@@ -463,10 +468,88 @@ TEST(DedicatedServer, LeaderboardAnswersQueriesAndGuardsScores) {
     ASSERT_EQ(w2.server->leaderboards().top("race", 5).size(), 1u);
     EXPECT_EQ(w2.server->leaderboards().top("race", 5)[0].name, "Bob");
     w2.server->stop();
+    // Kept in the server's store (sqlite:<saveDir>/server.db by default).
+    auto store = kke::storage::openStore("sqlite:" + open.saveDir + "/server.db");
+    ASSERT_TRUE(store);
     Leaderboard saved;
     std::vector<std::string> errors;
-    ASSERT_TRUE(saved.load(open.saveDir + "/leaderboards.json", errors));
+    ASSERT_TRUE(saved.load(*store, errors));
     EXPECT_EQ(saved.top("race", 1).size(), 1u);
+}
+
+TEST(DedicatedServer, ImportsAnOldLeaderboardFileOnce) {
+    ServerConfig c = testConfig("dedicated_board_import");
+    c.roles = { "players", "leaderboard" };
+    Leaderboard old;
+    old.submit("race", "Ann", 42, 1);
+    ASSERT_TRUE(old.save(c.saveDir + "/leaderboards.json"));
+    {
+        World w(c);
+        ASSERT_EQ(w.server->leaderboards().top("race", 1).size(), 1u);
+        EXPECT_EQ(w.server->leaderboards().top("race", 1)[0].score, 42);
+    }
+    EXPECT_FALSE(std::filesystem::exists(c.saveDir + "/leaderboards.json"));
+    EXPECT_TRUE(std::filesystem::exists(c.saveDir + "/leaderboards.json.imported"));
+    World again(c); // from the store now
+    EXPECT_EQ(again.server->leaderboards().top("race", 1).size(), 1u);
+}
+
+TEST(DedicatedServer, RemembersPlayersVisitsTimeAndPlace) {
+    ServerConfig c = testConfig("dedicated_players");
+    c.backups = 0;
+    World w(c);
+    NetClient& ann = w.join("Ann");
+    w.run(0.5);
+    NetPlayerState st;
+    st.position = glm::vec3(3.0f, 0.0f, -2.0f);
+    ann.setLocalState(st);
+    w.run(2.0);
+    auto here = w.server->playerRecord("ANN");
+    ASSERT_TRUE(here);
+    EXPECT_EQ(here->name, "Ann");
+    EXPECT_EQ(here->visits, 1u);
+    EXPECT_NE(w.server->command("seen ann").find("here now"), std::string::npos);
+    ann.disconnect();
+    w.run(1.0);
+    auto left = w.server->playerRecord("ann");
+    ASSERT_TRUE(left);
+    EXPECT_GE(left->playSeconds, 2.0);
+    ASSERT_TRUE(left->hasPosition);
+    EXPECT_NEAR(left->position.x, 3.0f, 0.3f);
+    EXPECT_NE(w.server->command("seen Ann").find("1 visit,"), std::string::npos);
+    EXPECT_NE(w.server->command("seen Nobody").find("hasn't been here"), std::string::npos);
+    NetClient& back = w.join("ann");
+    w.run(0.5);
+    ASSERT_EQ(back.status(), NetClient::Status::Connected);
+    EXPECT_EQ(w.server->playerRecord("Ann")->visits, 2u);
+    EXPECT_EQ(w.server->playerRecord("Ann")->name, "ann"); // as last spelled
+}
+
+TEST(DedicatedServer, BacksUpTheStoreAndKeepsTheNewest) {
+    ServerConfig c = testConfig("dedicated_backup");
+    c.backups = 2;
+    const std::string dir = c.saveDir + "/backups";
+    std::filesystem::create_directories(dir);
+    for (const char* old : { "server-20000101-000000.db", "server-20000102-000000.db", "server-20000103-000000.db" }) std::ofstream(dir + "/" + old) << "old";
+    World w(c);
+    ASSERT_TRUE(w.server->store()->put("world", "day", "7"));
+    std::string error;
+    const std::string path = w.server->backup(&error);
+    ASSERT_FALSE(path.empty()) << error;
+    EXPECT_NE(w.server->command("backup").find("backed up to"), std::string::npos);
+    std::vector<std::string> left;
+    for (const auto& e : std::filesystem::directory_iterator(dir)) left.push_back(e.path().filename().string());
+    std::sort(left.begin(), left.end());
+    ASSERT_EQ(left.size(), 2u); // the newest two: the old one from 2000-01-03 and ours
+    EXPECT_EQ(left[0], "server-20000103-000000.db");
+    auto copy = kke::storage::openStore("sqlite:" + path);
+    ASSERT_TRUE(copy);
+    EXPECT_EQ(copy->get("world", "day").value_or(""), "7");
+    // A memory: store backs up as a SQLite file too.
+    ServerConfig mem = testConfig("dedicated_backup_mem");
+    mem.storage = "memory:";
+    World m(mem);
+    EXPECT_NE(m.server->command("backup").find("backed up to"), std::string::npos);
 }
 
 TEST(DedicatedServer, PassesPlayersEventsOnToTheOthers) {
