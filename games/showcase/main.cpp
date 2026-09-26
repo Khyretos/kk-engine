@@ -1,9 +1,11 @@
 #include "kke/Application.h"
+#include "kke/modules/AudioModule.h"
 #include "kke/modules/DebugControlModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/modules/SettingsModule.h"
+#include "kke/modules/SoundVisualizerModule.h"
 #include "kke/modules/StatsModule.h"
 #if KKE_ENABLE_FEMFX
 #include "kke/modules/PhysicsModule.h"
@@ -31,6 +33,10 @@ int main() {
         std::vector<kke::Module*> panels;
         panels.push_back(&app.addModule<kke::RigidBodyModule>());
         app.addModule<kke::ModelModule>();
+        panels.push_back(&app.addModule<kke::AudioModule>());
+        // Overlay stays on when panels are hidden; on by default here so the
+        // demo shows it (a saved accessibility.json wins).
+        app.addModule<kke::SoundVisualizerModule>().settings.enabled = true;
 #if KKE_ENABLE_FEMFX
         auto& physics = app.addModule<kke::PhysicsModule>(/*renderScale=*/1.0f, /*initialObjectCount=*/0);
         physics.setDrawGround(false);

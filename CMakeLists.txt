@@ -274,6 +274,33 @@ if(NOT TARGET ufbx)
 endif()
 
 # ---------------------------------------------------------------------------
+# miniaudio — audio output device on every platform (ALSA/PulseAudio/
+# PipeWire/JACK, WASAPI, CoreAudio, AAudio/OpenSL, Web Audio) plus WAV/
+# FLAC/MP3 decoding. Public domain / MIT-0, one .c/.h pair. Only the
+# device and decoders are used: mixing is our own (kke::AudioMixer,
+# AUDIO.md), so the engine/node-graph/resource-manager parts are compiled
+# out. Falls back to its null device when there's no sound card.
+# ---------------------------------------------------------------------------
+FetchContent_Declare(
+    miniaudio
+    GIT_REPOSITORY https://github.com/mackron/miniaudio.git
+    GIT_TAG        0.11.22
+    GIT_SHALLOW    TRUE
+    SOURCE_SUBDIR  kke-no-cmake # fetch only: its own CMakeLists builds examples/tests we don't want
+)
+FetchContent_MakeAvailable(miniaudio)
+add_library(kke_miniaudio STATIC ${miniaudio_SOURCE_DIR}/miniaudio.c)
+target_include_directories(kke_miniaudio PUBLIC ${miniaudio_SOURCE_DIR})
+target_compile_definitions(kke_miniaudio PUBLIC MA_NO_ENGINE MA_NO_RESOURCE_MANAGER MA_NO_NODE_GRAPH MA_NO_ENCODING MA_NO_GENERATION)
+set_target_properties(kke_miniaudio PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_compile_options(kke_miniaudio PRIVATE $<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>)
+find_package(Threads REQUIRED)
+target_link_libraries(kke_miniaudio PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
+if(UNIX AND NOT APPLE)
+    target_link_libraries(kke_miniaudio PUBLIC m)
+endif()
+
+# ---------------------------------------------------------------------------
 # GoogleTest — the unit test framework for this engine's pure-logic code
 # (manifest parsing, marketplace dedup, text-escaping — see README "Test
 # suite & coverage"). Deliberately NOT used to unit-test Vulkan/GPU code;
@@ -461,6 +488,7 @@ add_subdirectory(engine)
 # here — this tool is what lets that be measured honestly on whatever
 # hardware actually has more than one.
 add_subdirectory(tools/model_info)
+add_subdirectory(tools/audio_preview)
 if(KKE_ENABLE_FEMFX)
     add_subdirectory(tools/physics_benchmark)
     add_subdirectory(tools/physics_lab)

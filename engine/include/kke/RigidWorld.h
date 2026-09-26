@@ -56,6 +56,7 @@ public:
         BodyId body = kNoBody;
         glm::vec3 point{0.0f}, normal{0.0f, 1.0f, 0.0f};
         float distance = 0.0f;
+        uint32_t material = 0;               // BodyDesc::material of the body hit (audio occlusion)
     };
 
     // A new contact between two bodies (or a body and a character's

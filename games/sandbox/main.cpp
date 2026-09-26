@@ -1,4 +1,6 @@
 #include "kke/Application.h"
+#include "kke/modules/AudioModule.h"
+#include "kke/modules/SoundVisualizerModule.h"
 #include "kke/modules/DebugControlModule.h"
 #include "kke/modules/DebugDrawModule.h"
 #include "kke/modules/ModelModule.h"
@@ -39,6 +41,8 @@ int main() {
 #if KKE_ENABLE_FEMFX
         // Real units, nothing spawned at start; it draws the ground slab.
         auto& physics = app.addModule<kke::PhysicsModule>(/*renderScale=*/1.0f, /*initialObjectCount=*/0);
+        app.addModule<kke::AudioModule>(); // impacts and breaks make sound
+        app.addModule<kke::SoundVisualizerModule>();
         physics.setDrawGround(false); // the sandbox draws a grid; placed floor tiles are the visible ground
         panels.push_back(&physics);
 #endif

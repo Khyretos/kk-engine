@@ -1,4 +1,6 @@
 #include "kke/Application.h"
+#include "kke/modules/AudioModule.h"
+#include "kke/modules/SoundVisualizerModule.h"
 #include "kke/Log.h"
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/UiModule.h"
@@ -57,6 +59,8 @@ int main() {
         // happening," spread out (see PhysicsModule::init()'s own
         // spawn loop) so they don't all land in one overlapping pile.
         app.addModule<kke::PhysicsModule>(/*renderScale=*/1.0f, /*initialObjectCount=*/6);
+        app.addModule<kke::AudioModule>(); // impacts and breaks make sound
+        app.addModule<kke::SoundVisualizerModule>();
 
         // A real demonstration of multi-light support (see README
         // "Lighting"), not just a single hardcoded light left at its

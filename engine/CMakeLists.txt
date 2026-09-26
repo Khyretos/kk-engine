@@ -31,6 +31,10 @@ set(ENGINE_SOURCES
     src/InputMap.cpp
     src/InputDevices.cpp
     src/modules/InputModule.cpp
+    src/AudioMixer.cpp
+    src/ImpactSynth.cpp
+    src/modules/AudioModule.cpp
+    src/modules/SoundVisualizerModule.cpp
     src/ParticleFluid.cpp
     src/MeltVolume.cpp
     src/SphereImpostors.cpp
@@ -135,6 +139,7 @@ target_link_libraries(kke_engine PUBLIC
     nlohmann_json::nlohmann_json
     ufbx
     spdlog::spdlog
+    kke_miniaudio
 )
 
 target_compile_definitions(kke_engine PUBLIC

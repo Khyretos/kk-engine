@@ -796,6 +796,15 @@ void PhysicsModule::splitBreakablePart(ObjectHandle bh, ObjectHandle ph) {
     auto groups = b.graph.groups(tets, [&](uint32_t t) { return b.partOfTet[t] == ph; });
     pit->second->breakPending = -1;
     if (groups.size() < 2) return; // cracked, but still one piece
+    {
+        const AMD::FmVector3 lo = AMD::FmGetMinPosition(*pit->second->tetMesh), hi = AMD::FmGetMaxPosition(*pit->second->tetMesh);
+        BreakEvent e;
+        e.position = glm::vec3((lo.x + hi.x) * 0.5f, (lo.y + hi.y) * 0.5f, (lo.z + hi.z) * 0.5f) * m_renderScale;
+        e.material = b.material;
+        e.newPieces = uint32_t(groups.size() - 1);
+        e.size = std::max({hi.x - lo.x, hi.y - lo.y, hi.z - lo.z}) * m_renderScale;
+        m_frameBreaks.push_back(e);
+    }
     for (const auto& g : groups) {
         ObjectHandle h = spawnBreakablePart(bh, g, ph, glm::vec3(0.0f));
         if (h != kInvalidHandle) m_objects[h]->breakGrace = 8; // kBreakGrace, see updateBreakables()
@@ -1406,6 +1415,15 @@ void PhysicsModule::fixedUpdate(const FixedUpdateContext& ctx) {
         std::vector<ObjectHandle> runaways;
         for (auto& [handle, obj] : m_objects) {
             const uint32_t numPieces = AMD::FmGetNumTetMeshes(*obj->tetMeshBuffer);
+            if (obj->fracturable && numPieces > obj->loggedPieces && obj->loggedPieces > 0) {
+                const AMD::FmVector3 lo = AMD::FmGetMinPosition(*obj->tetMesh), hi = AMD::FmGetMaxPosition(*obj->tetMesh);
+                BreakEvent e;
+                e.position = glm::vec3((lo.x + hi.x) * 0.5f, (lo.y + hi.y) * 0.5f, (lo.z + hi.z) * 0.5f) * m_renderScale;
+                e.material = obj->material;
+                e.newPieces = numPieces - obj->loggedPieces;
+                e.size = std::max({hi.x - lo.x, hi.y - lo.y, hi.z - lo.z}) * m_renderScale;
+                m_frameBreaks.push_back(e);
+            }
             if (obj->fracturable && numPieces != obj->loggedPieces) {
                 log::get(name())->info("object {} has split into {} pieces", handle, numPieces);
                 obj->loggedPieces = numPieces;

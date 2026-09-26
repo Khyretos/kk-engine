@@ -267,7 +267,10 @@ RigidWorld::RayHit RigidWorld::raycast(const glm::vec3& origin, const glm::vec3&
     out.distance = r.mFraction * maxDistance;
     out.point = origin + dir * out.distance;
     JPH::BodyLockRead lock(m->system.GetBodyLockInterface(), r.mBodyID);
-    if (lock.Succeeded()) out.normal = toG(lock.GetBody().GetWorldSpaceSurfaceNormal(r.mSubShapeID2, ray.GetPointOnRay(r.mFraction)));
+    if (lock.Succeeded()) {
+        out.normal = toG(lock.GetBody().GetWorldSpaceSurfaceNormal(r.mSubShapeID2, ray.GetPointOnRay(r.mFraction)));
+        out.material = static_cast<uint32_t>(lock.GetBody().GetUserData());
+    }
     if (glm::dot(out.normal, dir) > 0.0f) out.normal = -out.normal; // a back face: the side the ray came from
     return out;
 }

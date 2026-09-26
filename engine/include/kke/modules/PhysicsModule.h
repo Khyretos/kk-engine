@@ -143,9 +143,21 @@ public:
     explicit PhysicsModule(float renderScale = 0.02f, int initialObjectCount = 1)
         : m_renderScale(renderScale), m_initialObjectCount(initialObjectCount) {}
 
+    // Something broke this frame: a Breakable split, or a fracturable
+    // object lost pieces. For sounds (AudioModule), particles, and the
+    // networking layer. Cleared at the start of every frame.
+    struct BreakEvent {
+        glm::vec3 position{0.0f};   // world, centre of the part that broke
+        Material material;
+        uint32_t newPieces = 0;
+        float size = 1.0f;          // m, largest extent of what broke
+    };
+    const std::vector<BreakEvent>& frameBreaks() const { return m_frameBreaks; }
+
     const char* name() const override { return "Physics"; }
 
     void init(Application& app) override;
+    void frameStart(const UpdateContext&) override { m_frameBreaks.clear(); }
     void fixedUpdate(const FixedUpdateContext& ctx) override;
     void render(const RenderContext& ctx) override;
     void renderShadow(const ShadowRenderContext& ctx) override;
@@ -558,6 +570,7 @@ private:
     Application* m_app = nullptr;         // needed by spawnTetrahedron() if called after init(), e.g. from renderUi()
 
     std::unordered_map<ObjectHandle, std::unique_ptr<SpawnedTet>> m_objects;
+    std::vector<BreakEvent> m_frameBreaks;
     ObjectHandle m_nextHandle = 1; // 0 is kInvalidHandle
 
     // Render bridge — this is genuinely the simplest possible version,

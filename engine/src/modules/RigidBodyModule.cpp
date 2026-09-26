@@ -22,9 +22,13 @@ void RigidBodyModule::init(Application& app) {
     log::get(name())->info("Jolt rigid-body world ready ({} max bodies)", m_settings.maxBodies);
 }
 
+void RigidBodyModule::frameStart(const UpdateContext&) { m_frameContacts.clear(); }
+
 void RigidBodyModule::fixedUpdate(const FixedUpdateContext& ctx) {
     if (paused) return;
     m_world->step(ctx.fixedDt);
+    std::vector<RigidWorld::Contact> c = m_world->takeContacts();
+    m_frameContacts.insert(m_frameContacts.end(), c.begin(), c.end());
     const double ms = m_world->lastStepMs();
     m_msAvg = m_msAvg * 0.95 + ms * 0.05;
     m_msMax = std::max(m_msMax * 0.995, ms);

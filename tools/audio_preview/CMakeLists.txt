@@ -1,0 +1,2 @@
+add_executable(kke_audio_preview main.cpp)
+target_link_libraries(kke_audio_preview PRIVATE kke_engine)

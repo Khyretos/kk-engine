@@ -69,6 +69,12 @@ struct Material {
     // Material had before this field existed), same as any object
     // whose material doesn't set this explicitly.
     int textureId = -1;
+
+    // How it sounds: an id in kke::AudioMaterialTable (ImpactSynth.h), or
+    // -1 to let the audio engine guess from the numbers above (metallic ->
+    // metal, glassy -> glass, soft -> rubber, dense -> stone, light ->
+    // wood). Same reasoning as the PBR fields: one material, one place.
+    int audioMaterial = -1;
 };
 
 } // namespace kke

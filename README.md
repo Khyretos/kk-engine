@@ -168,6 +168,7 @@ just "it compiles."
 | Images       | [stb](https://github.com/nothings/stb)      | fetched, not consumed yet — no texture loading until there's a texture |
 | Scripting    | Lua 5.4                                      | fetched behind `ENGINE_ENABLE_LUA` (OFF by default), not consumed yet |
 | Particles    | custom (GPU compute, see below)              | see "Why a custom particle system" |
+| Audio output | [miniaudio](https://github.com/mackron/miniaudio) 0.11.22 (public domain / MIT-0) | output device on every OS, WAV/FLAC/MP3 decoding; mixing, 3D, occlusion and impact synthesis are our own — see [AUDIO.md](AUDIO.md) |
 
 All dependencies are fetched from source via CMake `FetchContent` — same
 version on every platform, no system package hunting.

@@ -29,8 +29,8 @@ Detailed design notes live in the linked files; this is the index.
 | # | Item | Notes | Status |
 |---|---|---|---|
 | 2.1 | **Networking module** | See "Networking" below: transport + rollback + voice, many peers per PC, dockerized server, lots of tests | ⬜ |
-| 2.2 | **Audio engine** | See "Audio" below: physics-driven sound, occlusion by material, accessibility | ⬜ |
-| 2.3 | **Accessibility layer** | Sound visualization for deaf players (direction, intensity, material tags, user-tunable), audio cues + material-distinct sounds for blind players, captions, remappable input, contrast/size | ⬜ |
+| 2.2 | **Audio engine** | See AUDIO.md: miniaudio output, own mixer (3D pan, distance, occlusion low-pass, voice budget), modal-synthesis impacts per material, Jolt contacts + FEMFX breaks make sound, wall occlusion by ray, sound visualizer + captions for deaf players | 🔨 core ✅ (`AudioMixer`, `ImpactSynth`, `AudioModule`, `SoundVisualizerModule`; 17 tests; in kke_demo, physics_demo, sandbox; `kke_audio_preview` writes WAVs). Next: footsteps, FEMFX impacts, reverb, HRTF |
+| 2.3 | **Accessibility layer** | Sound visualization for deaf players (direction, intensity, material tags, user-tunable), audio cues + material-distinct sounds for blind players, captions, remappable input, contrast/size | 🔨 sound visualizer + captions, tunable and saved (AUDIO.md); rest ⬜ |
 | 2.4 | **Benchmark images + BENCHMARKS.md** | See "Hardware profiles" below | ⬜ |
 | 2.5 | Cross-platform: Windows (MinGW in Docker: in progress; MSVC CI), Android (FEMFX SIMDe port), macOS/iOS (CI runners), Web (WebGPU backend) | SCALING.md §D | 🔨 |
 | 2.6 | **Animation demo**: blend trees, state machines, IK (two-bone, look-at, foot placement), root motion, retargeting across Synty characters | Uses the Universal Animation Library you sent | ⬜ |
@@ -160,8 +160,10 @@ deaf players see sound, tuned to taste).
 - **Spatialization**: HRTF (Steam Audio is Apache-2.0 since 2024 and does
   HRTF, occlusion, transmission through materials, reflections/reverb from
   scene geometry; the alternative is our own raycast approach).
-- **Vercidium**: this development environment's network policy blocks
-  vercidium.com, so its docs couldn't be read here (not guessed at).
+- **Vercidium** (read 2026-09-26, see AUDIO.md): not FOSS (free for
+  non-commercial use, A$300 per commercial game, source only on the
+  Studio licence), so not a dependency. Earlier this environment's
+  network policy blocked vercidium.com.
   Vercidium is known for ray-traced audio (rays between sound and
   listener for occlusion, reverb and panning from geometry). Before
   relying on it: licence (must be FOSS-compatible for a marketplace
@@ -190,7 +192,7 @@ The audio links, checked:
   its successor (omg-audio, Rust/WASM) adds wall transmission and
   diffraction. Reference for the accessibility visualizer and for
   transmission by material.
-- **Vercidium**: blocked here (see above).
+- **Vercidium**: read, not FOSS (see above and AUDIO.md).
 
 So: miniaudio for output, our own ray-traced propagation (occlusion,
 transmission by material, reverb, openings) on Jolt ray casts, Steam
