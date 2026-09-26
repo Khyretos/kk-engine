@@ -566,6 +566,8 @@ void Locomotion::startHang(const Obstacle& o) {
     m_hangFeet = feet;
     m_hangEdge = edge;
     m_shimmy = 0.0f;
+    m_holdSign = 0.0f;
+    m_enterTime = 0.0f;
     m_speed = 0.0f;
     m_world.setCharacterKinematic(m_id, true);
     m_world.setCharacterVelocity(m_id, glm::vec3(0.0f));
@@ -585,13 +587,57 @@ void Locomotion::letGo() {
     enter(State::Air);
 }
 
+void Locomotion::jumpBack() {
+    const Settings& s = m_settings;
+    const glm::vec3 n = m_obstacle.normal;
+    const glm::vec3 feet = m_world.characterPosition(m_id);
+    m_world.setCharacterKinematic(m_id, false);
+    m_world.setCharacterVelocity(m_id, n * s.jumpBackSpeed + glm::vec3(0.0f, s.jumpSpeed * 0.8f, 0.0f));
+    m_facing = n;
+    m_moveDir = n;
+    m_speed = s.jumpBackSpeed;
+    m_airEntrySpeed = s.jumpBackSpeed;
+    m_airPeak = feet.y;
+    m_jumped = true;
+    m_jumpedFromGround = true;
+    m_sinceGrounded = s.coyoteTime + 1.0f;
+    m_regrab = s.regrabDelay;
+    m_buffer = 0.0f;
+    m_shimmy = 0.0f;
+    enter(State::Air);
+}
+
+bool Locomotion::turnCorner(const glm::vec3& side, glm::vec3& outFeet, glm::vec3& outEdge, glm::vec3& outNormal) const {
+    const Settings& s = m_settings;
+    const glm::vec3 n = m_obstacle.normal;
+    const float topY = m_hangEdge.y;
+    const glm::vec3 feet = m_hangFeet;
+    auto fits = [&](const glm::vec3& f) { return m_world.capsuleFits(f + glm::vec3(0, 0.02f, 0), s.height, s.radius); };
+    // Inside corner: a wall straight ahead along the edge.
+    const glm::vec3 chest(feet.x, topY - 0.3f, feet.z);
+    RigidWorld::RayHit ahead = m_world.raycast(chest, side, s.radius + 0.35f);
+    if (ahead.hit && std::abs(ahead.normal.y) < 0.64f) {
+        glm::vec3 hn = flat(ahead.normal);
+        if (glm::length(hn) > 1e-3f && glm::dot(glm::normalize(hn), -side) > 0.7f) {
+            hn = glm::normalize(hn);
+            if (findEdge(feet, hn, topY, outFeet, outEdge, outNormal) && fits(outFeet)) return true;
+        }
+        return false; // blocked by something that isn't a ledge
+    }
+    // Outside corner: past the end, the wall's side face.
+    const glm::vec3 around = feet + side * (s.radius + 0.1f) - n * (s.radius + 0.35f);
+    if (findEdge(around, side, topY, outFeet, outEdge, outNormal) && fits(outFeet)) return true;
+    return false;
+}
+
 void Locomotion::updateHang(const Input& in, float dt) {
     const Settings& s = m_settings;
     const glm::vec3 n = m_obstacle.normal;
     m_facing = -n;
-    // Pull in to the hang position first.
-    if (m_stateTime < s.hangEnterTime) {
-        const float u = smooth(m_stateTime / s.hangEnterTime);
+    // Pull in to the hang position first (after a grab or a corner).
+    const float pull = m_enterTime > 0.0f ? m_enterTime : s.hangEnterTime;
+    if (m_stateTime < pull) {
+        const float u = smooth(m_stateTime / pull);
         m_world.moveCharacter(m_id, glm::mix(m_start, m_hangFeet, u));
         return;
     }
@@ -600,6 +646,11 @@ void Locomotion::updateHang(const Input& in, float dt) {
         return;
     }
     if (m_buffer > 0.0f) {
+        // Pushing away from the wall: jump back off it.
+        if (glm::dot(flat(in.move), n) > 0.5f) {
+            jumpBack();
+            return;
+        }
         // Climb up from here: the same checked climb as from the ground.
         Sensor reach{ s.radius + 0.5f, s.hangReach + 0.3f };
         Obstacle o = probe(-n, reach);
@@ -610,8 +661,14 @@ void Locomotion::updateHang(const Input& in, float dt) {
         }
     }
     // Shimmy: the sideways part of the input, one checked step at a time.
+    // Around a corner the same held input keeps going the same way along
+    // the ledge, though it no longer points along the new wall.
     const glm::vec3 right = glm::normalize(glm::cross(-n, glm::vec3(0, 1, 0)));
-    const float side = glm::dot(flat(in.move), right);
+    const float amount = glm::length(flat(in.move));
+    float side = glm::dot(flat(in.move), right);
+    if (amount < 0.2f) m_holdSign = 0.0f;
+    else if (std::abs(side) > 0.2f) m_holdSign = side > 0.0f ? 1.0f : -1.0f;
+    else if (m_holdSign != 0.0f && amount > 0.5f) side = m_holdSign * amount;
     m_shimmy = 0.0f;
     glm::vec3 feet = m_hangFeet;
     if (std::abs(side) > 0.2f) {
@@ -624,6 +681,15 @@ void Locomotion::updateHang(const Input& in, float dt) {
             m_obstacle.normal = nn;
             m_shimmy = v;
             feet = f;
+        } else if (turnCorner(right * (v > 0.0f ? 1.0f : -1.0f), f, e, nn)) {
+            m_start = m_world.characterPosition(m_id);
+            m_hangFeet = f;
+            m_hangEdge = e;
+            m_obstacle.normal = nn;
+            m_shimmy = v;
+            m_enterTime = s.cornerTime;
+            enter(State::Hang);
+            return;
         }
     }
     m_world.moveCharacter(m_id, feet);

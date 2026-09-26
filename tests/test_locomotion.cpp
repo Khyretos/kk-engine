@@ -513,7 +513,9 @@ TEST(Locomotion, JumpAtAHighWallHangsFromTheTop) {
     EXPECT_NEAR(c.feet().y, 3.0f - loco.settings().hangReach, 0.05f);
 }
 
-TEST(Locomotion, ShimmyAlongTheEdgeStopsWhereItEnds) {
+// Along the edge, then around the wall's outside corner onto its side
+// face, still holding the same input.
+TEST(Locomotion, ShimmyAlongTheEdgeAndAroundTheCorner) {
     HangCourse c;
     c.spawn({ 0, 0.01f, 0 });
     Locomotion loco(c.world, c.player);
@@ -522,13 +524,70 @@ TEST(Locomotion, ShimmyAlongTheEdgeStopsWhereItEnds) {
     c.run(loco, sideways(1.0f), 1.0f); // facing -Z, +X is the character's right
     EXPECT_NEAR(c.feet().x, loco.settings().shimmySpeed * 1.0f, 0.15f);
     EXPECT_GT(loco.shimmySpeed(), 0.5f);
-    c.run(loco, sideways(1.0f), 5.0f); // far past the end of the 6 m wall
+    c.run(loco, sideways(1.0f), 4.0f); // past the end of the 6 m wall
+    ASSERT_EQ(loco.state(), Locomotion::State::Hang);
+    const float r = loco.settings().radius;
+    EXPECT_NEAR(c.feet().x, 3.0f + r + 0.05f, 0.05f); // on the side face (x = 3)
+    EXPECT_LT(c.feet().z, -1.5f);
+    EXPECT_NEAR(loco.facing().x, -1.0f, 0.05f);
+    EXPECT_NEAR(c.feet().y, 3.0f - loco.settings().hangReach, 0.05f);
+    c.run(loco, sideways(1.0f), 3.0f); // keeps going along the side face to its far end
+    EXPECT_EQ(loco.state(), Locomotion::State::Hang);
+    EXPECT_GT(c.feet().x, 3.0f);
+}
+
+// Where the top steps up (a taller block continues the wall) the ledge
+// ends: the character stops instead of shimmying into it.
+TEST(Locomotion, ShimmyStopsWhereTheTopStepsUp) {
+    HangCourse c;
+    c.box({ 4.5f, 2.0f, -2.0f }, { 1.5f, 2.0f, 0.5f }); // 4 m tall, x 3..6
+    c.spawn({ 0, 0.01f, 0 });
+    Locomotion loco(c.world, c.player);
+    jumpToHang(c, loco);
+    ASSERT_EQ(loco.state(), Locomotion::State::Hang);
+    c.run(loco, sideways(1.0f), 5.0f);
     EXPECT_EQ(loco.state(), Locomotion::State::Hang);
     EXPECT_GT(c.feet().x, 2.5f);
     EXPECT_LT(c.feet().x, 3.05f);
-    EXPECT_NEAR(c.feet().y, 3.0f - loco.settings().hangReach, 0.05f);
+    EXPECT_NEAR(loco.facing().z, -1.0f, 0.05f);
     c.run(loco, sideways(-1.0f), 1.0f); // and back
     EXPECT_LT(c.feet().x, 2.2f);
+}
+
+// An L of two 3 m walls: shimmying into the inside corner turns onto the
+// wall ahead.
+TEST(Locomotion, ShimmyIntoAnInsideCorner) {
+    HangCourse c;
+    c.box({ 2.5f, 1.5f, 0.0f }, { 0.5f, 1.5f, 1.5f }); // face at x = 2, z -1.5..1.5
+    c.spawn({ 0, 0.01f, 0 });
+    Locomotion loco(c.world, c.player);
+    jumpToHang(c, loco);
+    ASSERT_EQ(loco.state(), Locomotion::State::Hang);
+    c.run(loco, sideways(1.0f), 3.0f);
+    ASSERT_EQ(loco.state(), Locomotion::State::Hang);
+    const float r = loco.settings().radius;
+    EXPECT_NEAR(c.feet().x, 2.0f - r - 0.05f, 0.05f);
+    EXPECT_NEAR(loco.facing().x, 1.0f, 0.05f);
+    EXPECT_GT(c.feet().z, -1.5f + r); // along the new wall, away from the corner
+}
+
+// "Go up" while pushing away from the wall jumps back off it.
+TEST(Locomotion, JumpBackOffAHang) {
+    HangCourse c;
+    c.spawn({ 0, 0.01f, 0 });
+    Locomotion loco(c.world, c.player);
+    jumpToHang(c, loco);
+    ASSERT_EQ(loco.state(), Locomotion::State::Hang);
+    Locomotion::Input away;
+    away.move = glm::vec3(0, 0, 1);
+    away.goUp = true;
+    c.run(loco, away, 0.05f);
+    EXPECT_EQ(loco.state(), Locomotion::State::Air);
+    EXPECT_TRUE(loco.facing().z > 0.9f);
+    away.goUp = false;
+    c.run(loco, away, 2.0f);
+    EXPECT_EQ(loco.state(), Locomotion::State::Ground);
+    EXPECT_GT(c.feet().z, 0.3f); // well away from the wall
 }
 
 TEST(Locomotion, ClimbUpFromAHang) {

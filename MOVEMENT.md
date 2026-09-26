@@ -107,6 +107,14 @@ the player hit a one-frame window.
   than 15 cm, or the capsule wouldn't fit, the character stops: it never
   shimmies off the end or through a side wall. The wall normal is
   re-read each step, so gently curved walls work.
+- **Corners**: where the edge ends, an outside corner (the wall turns
+  away) or an inside corner (a wall ahead) with a top at the same height
+  is followed: the character moves around it over 0.3 s and hangs from
+  the new face. The held input keeps going the same way along the ledge,
+  even though it no longer points along the new wall. A top that steps
+  up or down is a real end.
+- **Jump back**: "go up" while pushing away from the wall jumps off it
+  (3.5 m/s out, 80% of a jump up), facing away, with no re-grab for 0.4 s.
 - **Climb up**: "go up" runs the normal checked climb from the hang (so
   a thin wall with no room on top can be hung from but not climbed).
 - **Let go**: crouch. A small push off the wall, no coyote jump, and no
@@ -114,10 +122,12 @@ the player hit a one-frame window.
 - Animation: no hang clip in the UAL sets, so kke_demo uses the fall
   pose slowed down with hand IK on the edge; a pack with `Hang_Idle` is
   picked up by name. `KKE_DEMO_HANG=1 ./kke_demo` runs a jump, hang,
-  shimmy and climb attempt at the lane's 3 m wall by itself.
+  shimmy around the wall's end and a jump back at the lane's 3 m wall by itself.
 - Tests: `Locomotion.JumpAtAHighWallHangsFromTheTop`,
   `ShimmyAlongTheEdgeStopsWhereItEnds`, `ClimbUpFromAHang`,
-  `CrouchLetsGoAndDoesNotRegrab`, `HangsFromAThinWallItCannotStandOn`.
+  `CrouchLetsGoAndDoesNotRegrab`, `HangsFromAThinWallItCannotStandOn`,
+  `ShimmyAlongTheEdgeAndAroundTheCorner`, `ShimmyStopsWhereTheTopStepsUp`,
+  `ShimmyIntoAnInsideCorner`, `JumpBackOffAHang`.
 
 ## Vault and climb (*Parkour ep3*, rhzwhJPb-jQ; *Ledge actions*)
 
@@ -180,7 +190,7 @@ speed); it's for authored moves such as a real vault clip.
 
 ## Not done yet (next)
 
-- Ledge corners (shimmy around them), ledge-to-ledge leaps, jump-back off a hang (*Ledge actions*),
+- Ledge-to-ledge leaps (*Ledge actions*),
   wall run.
 - CCD for longer chains (*IK fundamentals with CCD*, 8pX6LeZdpOo); the
   legs and arms use the analytic two-bone solve.

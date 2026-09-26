@@ -39,7 +39,9 @@ namespace kke {
 //  - Ledges (*Ledge actions*): catching a high edge in the air without
 //    pressing "go up" hangs from it. Hanging, sideways input shimmies
 //    along the edge (each step re-checks the wall and the top, so the
-//    character stops where the ledge ends), "go up" climbs, crouch lets go.
+//    character stops where the ledge ends or turns the corner with it),
+//    "go up" climbs (or, pushing away from the wall, jumps back off it),
+//    crouch lets go.
 //
 // Pure logic on RigidWorld (no GPU), unit-tested in tests/test_locomotion.cpp.
 class Locomotion {
@@ -95,6 +97,8 @@ public:
         float hangTopTolerance = 0.15f; // how much the top may step while shimmying
         float dropPush = 0.8f;        // m/s away from the wall when letting go
         float regrabDelay = 0.4f;     // after letting go, no grab for this long
+        float cornerTime = 0.3f;      // moving around a corner of the ledge
+        float jumpBackSpeed = 3.5f;   // m/s away from the wall (up: jumpSpeed * 0.8)
     };
 
     // What area awareness found in one direction.
@@ -160,6 +164,11 @@ private:
     // top, a ledge too high to climb straight): hang from it.
     bool tryHang(const Input& in);
     void letGo();
+    void jumpBack();
+    // At the end of the edge while shimmying toward `side` (unit, along
+    // the wall): the hang spot around the corner, outside (the wall
+    // turns away) or inside (a wall ahead). False = a real end.
+    bool turnCorner(const glm::vec3& side, glm::vec3& outFeet, glm::vec3& outEdge, glm::vec3& outNormal) const;
     // Where the edge is from a hanging position `feet` (feet placed for it,
     // edge point, wall normal); false = no hangable edge there.
     bool findEdge(const glm::vec3& feet, const glm::vec3& normal, float topY, glm::vec3& outFeet, glm::vec3& outEdge,
@@ -201,6 +210,8 @@ private:
     // Hanging.
     glm::vec3 m_hangFeet{0.0f}, m_hangEdge{0.0f};
     float m_shimmy = 0.0f, m_regrab = 0.0f;
+    float m_holdSign = 0.0f; // shimmy direction kept while the input is held (around corners)
+    float m_enterTime = 0.0f; // how long the current pull-in takes
 };
 
 } // namespace kke

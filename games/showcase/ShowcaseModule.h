@@ -127,6 +127,7 @@ private:
     glm::vec3 m_autopilotStart{0.0f};
     float m_autopilotEndZ = 0.0f;
     float m_demoHang = -1.0f; // KKE_DEMO_HANG: seconds into the script, -1 = off
+    glm::vec3 m_demoAway{0.0f};
     glm::vec3 m_spawn{0.0f, 0.05f, 6.0f};
     kke::ModelModule::ModelId m_charModel = 0;
     kke::ModelModule::InstanceId m_charInstance = 0;

@@ -674,14 +674,17 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
         }
     }
     if (m_demoHang >= 0.0f) {
-        // KKE_DEMO_HANG=1: jump at the 3 m wall, hang, shimmy along it,
-        // climb up (screenshots of the ledge moves, and a quick check).
+        // KKE_DEMO_HANG=1: jump at the 3 m wall, hang, shimmy along it and
+        // around its end, jump back off (screenshots of the ledge moves).
         m_demoHang += dt;
         const float t = m_demoHang;
-        in.move = t < 1.6f ? glm::vec3(-1, 0, 0) : t > 2.2f && t < 4.2f ? glm::vec3(0, 0, -1) : glm::vec3(0.0f);
+        in.move = t < 1.6f ? glm::vec3(-1, 0, 0) : t > 2.2f && t < 6.5f ? glm::vec3(0, 0, -1) : glm::vec3(0.0f);
         auto at = [&](float mark) { return t >= mark && t - dt < mark; };
-        if (at(0.3f) || at(5.0f)) m_jumpQueued = true;
-        if (t > 8.0f) {
+        if (at(0.3f)) m_jumpQueued = true;
+        if (at(6.9f)) m_demoAway = -m_loco->facing();         // away from the wall...
+        if (t > 6.9f && t < 7.5f) in.move = m_demoAway;
+        if (at(7.0f)) m_jumpQueued = true;                    // ...and jump: off the ledge
+        if (t > 10.0f) {
             m_loco->teleport(glm::vec3(17.2f, 0.05f, 12.0f));
             m_demoHang = 0.0f;
         }
@@ -882,7 +885,7 @@ void ShowcaseModule::renderUi() {
         ImGui::SliderFloat("Air steering", &ms.airAcceleration, 0.0f, 20.0f, "%.1f m/s2");
         ImGui::SliderFloat("Vault clearance", &ms.vaultClearance, 0.0f, 0.6f, "%.2f m");
         ImGui::SliderFloat("Climb time", &ms.climbTime, 0.3f, 2.0f, "%.2f s");
-        ImGui::TextWrapped("Parkour lane at x = 20: fence and low wall (vault), block (climb), 2.1 m ledge (sprint, then climb), 3 m wall (jump at it to hang: A/D shimmy, Space climb, C let go).");
+        ImGui::TextWrapped("Parkour lane at x = 20: fence and low wall (vault), block (climb), 2.1 m ledge (sprint, then climb), 3 m wall (jump at it to hang: A/D shimmy, also round corners, Space climb, back + Space jump off, C let go).");
     }
     if (ImGui::CollapsingHeader("Performance")) {
         const kke::ResourceBudget& b = m_app->resourceBudget();
