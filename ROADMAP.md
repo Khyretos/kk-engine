@@ -169,6 +169,9 @@ limitations. 🔴 Not started / stub.
   GPU, many cores, the min-spec emulation, how it looks and feels), with
   exact commands and what to send back. The AI side does the code and
   sandbox measurements; this is the human side's list.
+- **`GO_TO_MARKET.md`** — the free-only plan for launching and funding
+  the engine, with the launch gate (which milestones must be closed).
+  Open work is tracked as GitHub issues labelled `M1`/`M2`/`M3`.
 - **`README.md`**'s own "Immediate next slices" — the fuller narrative
   of *how* and *why*, kept for depth/reasoning. Not a replacement for
   the files above, which exist specifically so that depth doesn't

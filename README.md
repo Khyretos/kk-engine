@@ -2,6 +2,10 @@
   <img src="assets/branding/banner.png" alt="Kreative Kompas Engine: direct your creativity" width="100%">
 </p>
 
+<p align="center">
+  <a href="https://ko-fi.com/khyretos"><img src="https://img.shields.io/badge/Ko--fi-support%20KKE-FF5E5B?logo=ko-fi&logoColor=white" alt="Support KKE on Ko-fi"></a>
+</p>
+
 # <img src="assets/branding/logo-128.png" alt="" height="40" align="top"> Kreative Kompas Engine (KKE)
 
 A bare-bones, modular Vulkan game engine built from "lego pieces" — each
@@ -29,6 +33,11 @@ freezes it at that second (screenshots). The logo is also every window's
 icon (Linux/Windows via SDL3) and the Windows `.exe` icon. Sources and how
 to regenerate the 3D outlines: `assets/README.md` → Branding. Not done yet:
 a macOS `.icns` + bundle `Info.plist`.
+
+**Support and plans:** KKE is built by one person. If you want to help it
+exist, [Ko-fi](https://ko-fi.com/khyretos) is the place. How the engine
+will reach people (free-only launch plan, funding ladder) is in
+`GO_TO_MARKET.md`; open work is tracked as GitHub issues by milestone.
 
 **For AI agents working on this codebase** (this one, a fork, a future
 model): read `AI_GUIDE.md` first. It's a short, model-agnostic orientation
