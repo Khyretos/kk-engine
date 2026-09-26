@@ -8,6 +8,7 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | Document | Contents |
 |---|---|
 | [BUILDING.md](BUILDING.md) | System packages, build presets, running each demo, troubleshooting |
+| [DEPENDENCIES.md](DEPENDENCIES.md) | Every third-party library, tool, font and asset: version, licence, and what the licence asks of games shipped with KKE |
 | [RELEASES.md](RELEASES.md) | Downloadable Windows and Linux builds: how a tag becomes a release |
 | [tutorials/](tutorials/index.md) | Make your own game from the starter template, then walk, break, pick up and add sound |
 | [HISTORY.md](HISTORY.md) | The development log: the original README, kept whole |
