@@ -486,3 +486,15 @@ TEST(ContentPacks, SessionContentComparesWhatEveryoneNeeds) {
     ASSERT_EQ(d.extra.size(), 1u);
     EXPECT_EQ(d.extra[0].id, "cheats");
 }
+
+TEST(ContentPacks, TextParsersTakeYamlToo) {
+    packs::PackManifest m;
+    std::string error;
+    ASSERT_TRUE(packs::parseManifest("id: axe\ntitle: Axe\nversion: 1.10\ndependencies: [lib >= 1]\n", m, &error)) << error;
+    EXPECT_EQ(m.version, "1.10");
+    ASSERT_EQ(m.dependencies.size(), 1u);
+    packs::ModList list;
+    ASSERT_TRUE(packs::ModList::fromJson("format: kke-modlist-1\npacks:\n  - {id: axe, enabled: false}\n", list, &error)) << error;
+    EXPECT_FALSE(list.enabled("axe"));
+    EXPECT_FALSE(packs::ModList::fromJson("just words", list, &error));
+}
