@@ -22,6 +22,7 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [SERVER_HOSTING.md](SERVER_HOSTING.md) | Running a server: kke_server, Docker, roles, directories, security |
 | [ANTI_CHEAT.md](ANTI_CHEAT.md) | Fair games without invasive software: shipping builds, server authority, fog of war, game rules, input checks, sealed data |
 | [DRM.md](DRM.md) | Kreative DRM: optional, offline-after-activation licences the developer controls |
+| [MODDING.md](MODDING.md) | DLC and mods: pack.json, load order, Nexus Mods / Steam Workshop / mod.io, playing together with one copy |
 | [SCRIPTING.md](SCRIPTING.md) | Lua gameplay scripts |
 | [PLAY_TO_MAKE.md](PLAY_TO_MAKE.md) | Make the game while playing it: Simple, node graph and Lua levels |
 | [SCENES.md](SCENES.md) | Levels built from asset packs |

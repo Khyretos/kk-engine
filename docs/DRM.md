@@ -78,6 +78,13 @@ kke_license verify license.json <public-key-hex> com.example.mygame
 kke_license issue com.example.mygame UNLOCK --key dev.key --unlock-all > unlock.json   # end of life
 ```
 
+## DLC
+
+A licence's `dlc` extra lists the DLC the player bought
+(`--extra dlc=frost,maps`); the content pack loader reads it with
+`kke::packs::Entitlements::fromLicenseExtra` and only mounts DLC the player
+owns, or that the host of their session shares. See [MODDING.md](MODDING.md).
+
 ## What's next
 
 The activation service itself, as a role of the dedicated server

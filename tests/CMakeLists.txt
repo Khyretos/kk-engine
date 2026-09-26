@@ -56,6 +56,7 @@ add_executable(kke_tests
     test_frame_retire_queue.cpp
     test_anti_cheat.cpp
     test_fair_play.cpp
+    test_content_packs.cpp
 )
 target_link_libraries(kke_tests PRIVATE kke_engine GTest::gtest_main)
 if(KKE_ENABLE_JOLT)

@@ -60,6 +60,7 @@ set(ENGINE_SOURCES
     src/License.cpp
     src/InputSanity.cpp
     src/PackSeal.cpp
+    src/ContentPacks.cpp
     src/DevTools.cpp
     src/InputMap.cpp
     src/InputDevices.cpp
@@ -154,6 +155,7 @@ set(ENGINE_HEADERS
     include/kke/ShadowMap.h
     include/kke/Texture.h
     include/kke/MarketplaceIndex.h
+    include/kke/ContentPacks.h
     include/kke/RmlTextSafety.h
     include/kke/Log.h
     include/kke/HardwareCheck.h
