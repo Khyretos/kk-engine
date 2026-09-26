@@ -2,6 +2,7 @@
 
 #include "kke/Application.h"
 #include "kke/Log.h"
+#include "kke/modules/PhysicsModule.h"
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/net/EnetTransport.h"
 
@@ -50,7 +51,11 @@ NetModule::NetModule(const net::NetConfig& config) : m_config(config) {}
 NetModule::~NetModule() { leave(); }
 
 std::vector<ModuleDependency> NetModule::dependencies() const {
-    return { { typeid(RigidBodyModule), false, "replicated bodies and remote players' capsules live in its world" } };
+    return { { typeid(RigidBodyModule), false, "replicated bodies and remote players' capsules live in its world" },
+#if KKE_ENABLE_FEMFX
+             { typeid(PhysicsModule), false, "FEMFX breakables break the same way for every player" },
+#endif
+    };
 }
 
 double NetModule::now() const {
@@ -61,6 +66,9 @@ double NetModule::now() const {
 void NetModule::init(Application& app) {
     m_app = &app;
     m_rigid = app.getModule<RigidBodyModule>();
+#if KKE_ENABLE_FEMFX
+    m_physics = app.getModule<PhysicsModule>();
+#endif
     if (const char* n = std::getenv("KKE_NET_NAME"); n && *n) playerName = n;
     simulated.latencyMs = envFloat("KKE_NET_LAG", 0.0f);
     simulated.jitterMs = envFloat("KKE_NET_JITTER", 0.0f);
@@ -110,7 +118,30 @@ bool NetModule::host(uint16_t port, std::string* error) {
         m_enet = raw;
         m_server = std::move(server);
         m_server->onEvent = [this](const net::GameEventMsg& e) { dispatchEvent(e); };
+        if (m_rigid) {
+            m_moveCheck = std::make_unique<net::WorldMoveCheck>(m_rigid->world(), [this](RigidWorld::BodyId b) {
+                return std::any_of(m_capsules.begin(), m_capsules.end(), [b](const auto& kv) { return kv.second == b; });
+            });
+            m_server->checkMove = [this](uint8_t id, const net::NetPlayerState& from, const net::NetPlayerState& to, double dt) {
+                if (!checkMoves || !m_moveCheck) return true;
+                m_moveCheck->settings = moveCheckSettings;
+                const net::WorldMoveCheck::Verdict v = m_moveCheck->check(id, from, to, dt);
+                if (v == net::WorldMoveCheck::Verdict::Ok) return true;
+                double& last = m_moveLogAt[id];
+                if (now() - last > 5.0) { // one line per player per 5 s, however many states get refused
+                    last = now();
+                    log::get(name())->warn("Player {} {}: sent back to ({:.1f}, {:.1f}, {:.1f})", id,
+                                           v == net::WorldMoveCheck::Verdict::ThroughWall ? "moved through a wall" : "is flying",
+                                           from.position.x, from.position.y, from.position.z);
+                }
+                return false;
+            };
+        }
+        // Whatever broke before hosting is news to the clients too.
+        for (auto& [id, b] : m_breakables) b.sentBorders = 0;
         m_server->onPlayer = [this](uint8_t id, bool joined) {
+            if (!joined && m_moveCheck) m_moveCheck->forget(id);
+            if (!joined) m_moveLogAt.erase(id);
             log::get(name())->info("Player {} {} ({} connected)", id, joined ? "joined" : "left", m_server->clientCount());
             if (m_enet) m_enet->setDiscoveryInfo(discoveryInfo());
             if (onPlayer) onPlayer(id, joined);
@@ -119,6 +150,7 @@ bool NetModule::host(uint16_t port, std::string* error) {
         m_role = Role::Host;
         m_status = "hosting on port " + std::to_string(p);
         m_search.reset();
+        applyFollowers();
         log::get(name())->info("Hosting '{}' on UDP port {} ({})", playerName, p, m_transport->backendName());
         return true;
     }
@@ -146,7 +178,11 @@ bool NetModule::join(const std::string& address, uint16_t port, std::string* err
     m_client->onEvent = [this](const net::GameEventMsg& e) { dispatchEvent(e); };
     m_client->onCorrection = [this](const glm::vec3& p) { if (onCorrection) onCorrection(p); };
     m_client->onPlayer = [this](uint8_t id, bool joined) { if (onPlayer) onPlayer(id, joined); };
+    m_client->onSpawn = [this](const net::SpawnMsg& m) { onSpawnMsg(m); };
+    m_client->onDespawn = [this](uint16_t id) { onDespawnMsg(id); };
+    m_client->onBreak = [this](const net::BreakMsg& m) { applyBreak(m); };
     m_role = Role::Client;
+    applyFollowers();
     m_status = "joining " + address + ":" + std::to_string(port);
     m_search.reset();
     log::get(name())->info("Joining {}:{} as '{}'", address, port, playerName);
@@ -170,6 +206,10 @@ void NetModule::leave() {
     m_role = Role::Offline;
     m_status = "offline";
     m_remote.clear();
+    m_moveCheck.reset();
+    m_moveLogAt.clear();
+    dropSpawned();
+    applyFollowers();
     if (m_rigid) {
         RigidWorld& w = m_rigid->world();
         for (auto& [id, body] : m_capsules) w.remove(body);
@@ -190,17 +230,168 @@ void NetModule::setLocalPlayer(const net::NetPlayerState& state) {
 }
 
 uint16_t NetModule::replicateBody(RigidWorld::BodyId body) {
-    const auto id = static_cast<uint16_t>(m_bodies.size());
-    m_bodies.push_back(body);
+    if (m_nextLevelBody >= kFirstSpawnId) {
+        log::get(name())->error("replicateBody: more than {} level bodies; body {} is not replicated", kFirstSpawnId, body);
+        return kFirstSpawnId - 1;
+    }
+    const uint16_t id = m_nextLevelBody++;
+    m_bodies[id] = body;
     return id;
 }
 
 void NetModule::clearBodies() {
-    m_bodies.clear();
+    std::erase_if(m_bodies, [](const auto& kv) { return kv.first < kFirstSpawnId; });
+    m_nextLevelBody = 0;
     if (m_server) {
         m_server->setBodies({});
         m_server->sendEvent(net::kEventBodiesReset, {});
     }
+}
+
+// ------------------------------------------------------------------ breakables
+
+uint16_t NetModule::replicateBreakable(uint32_t handle) {
+    if (m_nextLevelBreakable >= kFirstSpawnId) {
+        log::get(name())->error("replicateBreakable: more than {} level breakables; breakable {} is not replicated", kFirstSpawnId, handle);
+        return kFirstSpawnId - 1;
+    }
+    const uint16_t id = m_nextLevelBreakable++;
+    bindSpawnedBreakable(id, handle);
+    return id;
+}
+
+void NetModule::clearBreakables() {
+    for (auto it = m_breakables.begin(); it != m_breakables.end();) {
+        if (it->first >= kFirstSpawnId) { ++it; continue; }
+        if (m_server) m_server->forgetBreaks(it->first);
+        it = m_breakables.erase(it);
+    }
+    std::erase_if(m_pendingBreaks, [](const auto& kv) { return kv.first < kFirstSpawnId; });
+    m_nextLevelBreakable = 0;
+}
+
+void NetModule::bindSpawnedBreakable(uint16_t id, uint32_t handle) {
+    NetBreakable& b = m_breakables[id];
+    b = NetBreakable{ handle, 0, false };
+    applyFollowers();
+    // Breaks that came before we had it (a late joiner's level loading
+    // after the host's messages): apply them now.
+    auto pending = m_pendingBreaks.find(id);
+    if (pending != m_pendingBreaks.end()) {
+        const std::vector<net::BreakMsg> msgs = std::move(pending->second);
+        m_pendingBreaks.erase(pending);
+        for (const net::BreakMsg& m : msgs) applyBreak(m);
+    }
+}
+
+void NetModule::applyFollowers() {
+#if KKE_ENABLE_FEMFX
+    if (!m_physics) return;
+    for (const auto& [id, b] : m_breakables) m_physics->setBreakableFollower(b.handle, m_role == Role::Client);
+#endif
+}
+
+// Host, each frame: a breakable with more broken borders than last time
+// sends its borders (the server skips the ones it already sent).
+void NetModule::pollBreaks() {
+#if KKE_ENABLE_FEMFX
+    if (!m_physics || !m_server) return;
+    for (auto& [id, b] : m_breakables) {
+        const size_t count = m_physics->brokenBorderCount(b.handle);
+        if (count == b.sentBorders) continue;
+        b.sentBorders = count;
+        std::vector<std::pair<uint16_t, uint16_t>> borders;
+        for (const auto& [p, q] : m_physics->brokenBorders(b.handle)) {
+            if (p > net::kMaxChunkId || q > net::kMaxChunkId) {
+                log::get(name())->error("breakable {}: piece id {} doesn't fit the network message; that border isn't sent", b.handle, std::max(p, q));
+                continue;
+            }
+            borders.push_back({ static_cast<uint16_t>(p), static_cast<uint16_t>(q) });
+        }
+        m_server->breakBorders(id, m_physics->breakableSeed(b.handle), borders);
+    }
+#endif
+}
+
+void NetModule::applyBreak(const net::BreakMsg& m) {
+    auto it = m_breakables.find(m.id);
+    if (it == m_breakables.end()) {
+        // Not ours yet (its spawn or our level comes later): keep it, within reason.
+        if (m_pendingBreaks.size() >= 1024 && !m_pendingBreaks.count(m.id)) {
+            log::get(name())->error("breaks for breakable {}: 1024 unknown breakables already waiting; dropped", m.id);
+            return;
+        }
+        m_pendingBreaks[m.id].push_back(m);
+        return;
+    }
+#if KKE_ENABLE_FEMFX
+    if (!m_physics) return;
+    NetBreakable& b = it->second;
+    const uint32_t seed = m_physics->breakableSeed(b.handle);
+    if (seed != m.seed) {
+        // Baked with other pieces (another fracture seed, or another
+        // object in that slot): its borders mean nothing here.
+        if (!b.seedWarned)
+            log::get(name())->error("breakable {} (network {}) was built with fracture seed {}, the host's with {}: it won't follow the host's breaks",
+                                    b.handle, m.id, seed, m.seed);
+        b.seedWarned = true;
+        return;
+    }
+    std::vector<std::pair<uint32_t, uint32_t>> borders(m.borders.begin(), m.borders.end());
+    m_physics->applyBrokenBorders(b.handle, borders);
+#endif
+}
+
+// ------------------------------------------------------------------ spawned objects
+
+uint16_t NetModule::spawn(uint16_t kind, const std::vector<uint8_t>& desc, bool persistent) {
+    if (!m_server) return 0;
+    if (desc.size() > net::kMaxSpawnBytes) {
+        log::get(name())->error("spawn: a {}-byte description (kind {}) is over the {}-byte limit; not sent", desc.size(), kind, net::kMaxSpawnBytes);
+        return 0;
+    }
+    if (m_spawned.size() >= 65536u - kFirstSpawnId) {
+        log::get(name())->error("spawn: all {} spawn ids are in use; kind {} not sent", 65536u - kFirstSpawnId, kind);
+        return 0;
+    }
+    while (m_spawned.count(m_nextSpawn)) m_nextSpawn = m_nextSpawn == 0xFFFF ? kFirstSpawnId : static_cast<uint16_t>(m_nextSpawn + 1);
+    const uint16_t id = m_nextSpawn;
+    m_nextSpawn = m_nextSpawn == 0xFFFF ? kFirstSpawnId : static_cast<uint16_t>(m_nextSpawn + 1);
+    m_spawned.insert(id);
+    m_server->spawn(net::SpawnMsg{ id, kind, desc }, persistent);
+    return id;
+}
+
+void NetModule::despawn(uint16_t id) {
+    if (m_server && m_spawned.erase(id)) m_server->despawn(id);
+    m_bodies.erase(id);
+    m_breakables.erase(id);
+}
+
+void NetModule::bindSpawnedBody(uint16_t id, RigidWorld::BodyId body) { m_bodies[id] = body; }
+
+void NetModule::onSpawnMsg(const net::SpawnMsg& m) {
+    if (m.id < kFirstSpawnId) {
+        log::get(name())->error("the host spawned object {} in the level's id range; ignored", m.id);
+        return;
+    }
+    if (m_bodies.count(m.id) || m_breakables.count(m.id)) onDespawnMsg(m.id); // the id was reused: the old one is gone
+    for (const auto& listener : m_spawnListeners) listener(m);
+}
+
+void NetModule::onDespawnMsg(uint16_t id) {
+    m_bodies.erase(id);
+    m_breakables.erase(id);
+    m_pendingBreaks.erase(id);
+    for (const auto& listener : m_despawnListeners) listener(id);
+}
+
+void NetModule::dropSpawned() {
+    std::erase_if(m_bodies, [](const auto& kv) { return kv.first >= kFirstSpawnId; });
+    std::erase_if(m_breakables, [](const auto& kv) { return kv.first >= kFirstSpawnId; });
+    m_pendingBreaks.clear();
+    m_spawned.clear();
+    m_nextSpawn = kFirstSpawnId;
 }
 
 void NetModule::sendEvent(uint16_t kind, const std::vector<uint8_t>& payload) {
@@ -236,9 +427,8 @@ void NetModule::driveClientBodies(float dt) {
     const float lead = static_cast<float>(m_config.interpolationDelay);
     const float blend = 1.0f - std::exp(-kSteerRate * dt);
     net::NetBodyState s;
-    for (size_t i = 0; i < m_bodies.size(); ++i) {
-        if (!m_client->body(static_cast<uint16_t>(i), t, s)) continue;
-        const RigidWorld::BodyId b = m_bodies[i];
+    for (const auto& [id, b] : m_bodies) {
+        if (!m_client->body(id, t, s)) continue;
         const glm::vec3 target = s.sleeping ? s.position : s.position + s.velocity * lead;
         const glm::vec3 err = target - w.position(b);
         const glm::quat q = w.rotation(b);
@@ -312,17 +502,18 @@ void NetModule::update(const UpdateContext&) {
             RigidWorld& w = m_rigid->world();
             std::vector<net::NetBodyState> bodies;
             bodies.reserve(m_bodies.size());
-            for (size_t i = 0; i < m_bodies.size(); ++i) {
+            for (const auto& [id, body] : m_bodies) {
                 net::NetBodyState s;
-                s.id = static_cast<uint16_t>(i);
-                s.position = w.position(m_bodies[i]);
-                s.rotation = w.rotation(m_bodies[i]);
-                s.velocity = w.velocity(m_bodies[i]);
-                s.sleeping = !w.isActive(m_bodies[i]);
+                s.id = id;
+                s.position = w.position(body);
+                s.rotation = w.rotation(body);
+                s.velocity = w.velocity(body);
+                s.sleeping = !w.isActive(body);
                 bodies.push_back(s);
             }
             m_server->setBodies(bodies);
         }
+        pollBreaks();
         m_server->update(t);
         m_remote = m_server->players(t);
     } else if (m_client) {
@@ -442,7 +633,12 @@ void NetModule::renderUi() {
             }
             ImGui::EndTable();
         }
-        if (m_server) ImGui::Text("Corrections sent: %zu, bad packets: %zu", m_server->corrections(), m_server->badPackets());
+        if (m_server) {
+            ImGui::Text("Corrections sent: %zu, bad packets: %zu", m_server->corrections(), m_server->badPackets());
+            ImGui::Checkbox("Check moves (walls, flying)", &checkMoves);
+            if (m_moveCheck) ImGui::Text("Refused: %zu through walls, %zu flying", m_moveCheck->throughWalls, m_moveCheck->flying);
+            ImGui::Text("Spawned objects: %zu, breakables: %zu", m_spawned.size(), m_breakables.size());
+        }
     }
     if (ImGui::CollapsingHeader("Simulate a bad connection")) {
         ImGui::SliderFloat("Lag (ms, one way)", &simulated.latencyMs, 0.0f, 500.0f, "%.0f");

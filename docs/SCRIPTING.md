@@ -32,6 +32,23 @@ tests: `tests/test_script_vm.cpp`. Examples, both in kke_demo:
   scripts by themselves. (Same prefixes as Garry's Mod; `cl_`/`sh_` run
   everywhere today.)
 
+### Multiplayer
+
+What an `sv_` script spawns while hosting shows up on every player's
+machine: `physics.box`/`physics.sphere` bodies (moving with the host's,
+like the level's crates), `breakable.box` (breaking into the host's
+pieces) and `breakable.ball` (thrown the same way; players who join
+later don't see old throws). Removing one, or reloading the script,
+removes it everywhere; what an `sv_` script made before you started
+hosting goes out when you do. On a client these objects belong to
+"(host)" in the Scripts panel and go away when you leave. Their `Break`
+hook fires on clients too (with the client's own id for it).
+
+Scripts that aren't `sv_` run on every machine already, so what they
+spawn stays local (each machine makes its own). Other state crosses with
+`net.send`. How it works: docs/NETWORKING.md "Spawned objects" and
+"Breakables".
+
 ## The API
 
 Events, like GMod's `hook`:
@@ -127,9 +144,9 @@ mesh with shadows.
 
 ## Next
 
-1. Replicate what server scripts spawn to clients (today a host's script
-   bodies and breakables exist on the host only; state crosses with
-   `net.send`). Needs spawn messages in NetModule (docs/NETWORKING.md).
+1. Replicating a script body moved by `setVelocity`/`impulse` on a client
+   (today the host's copy wins, as with the level's crates), and models
+   (`models.spawn`) and UI a server script opens.
 2. Character bindings (the player's position, teleport, animation).
 3. `breakable.position`: FEMFX objects don't expose their centre yet.
 4. Hot-reloading `.rml` files a script loaded, like `.lua` files.

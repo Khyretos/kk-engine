@@ -2,6 +2,7 @@
 
 #include "kke/Application.h"
 #include "kke/Log.h"
+#include "kke/net/ScriptSpawns.h"
 #include "kke/SphereImpostors.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/AudioModule.h"
@@ -232,6 +233,11 @@ void ScriptModule::bindAll() {
             const RigidWorld::BodyId id = rbm->world().add(d);
             if (id == RigidWorld::kNoBody) return luaL_error(L, "physics: body limit reached");
             m_bodies.push_back({id, src, sphere, sphere ? glm::vec3(d.radius) : d.halfExtents, color});
+            // Kept for multiplayer: an sv_ script's body is built on every client (ScriptReplication.cpp).
+            m_bodies.back().netDesc = script_net::encode(script_net::BodySpawn{sphere, d.motion == RigidWorld::Motion::Static, d.position, d.velocity,
+                                                                               d.halfExtents, d.radius, d.density, d.friction, d.restitution,
+                                                                               d.material, color});
+            replicate(m_bodies.back());
             lua_pushinteger(L, lua_Integer(id));
             return 1;
         };
@@ -246,6 +252,8 @@ void ScriptModule::bindAll() {
         vm.registerFunction("physics", "sphere", [spawn](lua_State* L) { return spawn(L, true); });
         vm.registerFunction("physics", "remove", [this, rbm, owned](lua_State* L) {
             const uint32_t id = owned(L, 1);
+            for (const Body& b : m_bodies)
+                if (b.id == id) unreplicate(b.netId);
             rbm->world().remove(id);
             m_bodies.erase(std::remove_if(m_bodies.begin(), m_bodies.end(), [&](const Body& b) { return b.id == id; }), m_bodies.end());
             return 0;
@@ -283,6 +291,7 @@ void ScriptModule::bindAll() {
     bindUi();
     bindScenes();
     bindNet();
+    bindReplication();
 }
 
 void ScriptModule::fixedUpdate(const FixedUpdateContext& ctx) {
@@ -305,6 +314,7 @@ void ScriptModule::update(const UpdateContext& ctx) {
         rescan = true;
     }
 #endif
+    syncNetRole();
     if (rescan) {
         m_scanTimer = 0.5; // hot reload: poll modification times twice a second
         scanFolder(true);

@@ -2,7 +2,10 @@
 
 Multiplayer v1 (issue #2): host a game or join one, on a LAN or on one PC.
 You see the other players walk, jump, vault and climb, you push the same
-crates, and you see their shots. The plan behind it, and what comes after
+crates, and you see their shots. v2 (issue #28, first part): breakables
+break into the same pieces for everyone, what the host's scripts spawn
+appears for everyone, and the host refuses moves through walls and
+flights. The plan behind it, and what comes after
 it, is in ACTION_PLAN.md "Networking (2.1)".
 
 ## Try it
@@ -70,9 +73,17 @@ that range in the firewall to play across machines.
     clock onto ours.
   - *Events*: reliable, game-defined messages (a shot, a push). The server
     receives a client's event and decides whether to apply and relay it.
-  - *Robustness*: protocol version and game id checked at join, a full
-    server says so, silent peers time out, clients sending bad packets or
-    too many events are dropped.
+  - *Spawned objects*: things the host makes while playing (a server
+    script's crate or breakable) are `Spawn` messages: an id, a kind and
+    the builder's own description (up to 256 bytes). Each client builds
+    its copy; late joiners get the ones still there (a thrown ball is
+    "transient" and isn't thrown again for them). Bodies then travel in
+    snapshots like the level's; `Despawn` removes them.
+  - *Breaks*: `Break` messages carry which borders of a breakable broke on
+    the host (below).
+  - *Robustness*: protocol version (now 2) and game id checked at join, a
+    full server says so, silent peers time out, clients sending bad
+    packets, server-only messages or too many events are dropped.
 - **NetModule** (`kke/modules/NetModule.h`): the engine module that ties
   it to a game. The game registers its replicated Jolt bodies in the same
   order on every machine (`replicateBody`), gives its player's state each
@@ -102,15 +113,74 @@ host and guest agree on where it stops to within 1 cm; with 80 ms lag each
 way, 20 ms jitter and 5% loss both ends still agree within 1 cm. Under lag
 a push feels heavier (the host's copy pulls back until it catches up).
 
+### Breakables
+
+FEMFX isn't deterministic across machines, so simulating each copy and
+hoping isn't enough: one player's shot would crack the glass on one
+screen and leave it whole on another. What *is* the same everywhere is
+how a breakable is cut: its pieces are baked from a fracture seed
+(`kke::bakeFracture`), and it breaks KKE's own way, border by border
+(`kke::BreakGraph`, PhysicsModule "Breakable"). So:
+
+- The host's breakables break from their stresses as always. Each frame
+  NetModule asks each replicated one how many borders are broken
+  (a cheap count) and, when that changes, sends the new borders as
+  `(piece, piece)` pairs with the breakable's seed.
+- A client's copies are *followers*: they never break on their own, only
+  along the borders the host sends. Same pieces, same borders, same
+  result: the pieces the client sees are the host's. Where the debris
+  then flies is each machine's own (cosmetic, like before).
+- A client whose copy was baked with another seed (another object in that
+  slot, a changed world seed) logs an error and leaves it alone instead
+  of breaking it wrongly.
+- Late joiners get every border broken so far, and breaks for a breakable
+  they don't have yet wait until it's there.
+- Leaving a game makes them break on their own again.
+
+Games call `replicateBreakable(handle)` for the level's breakables, in the
+same order on every machine (kke_demo does it for the breaking yard);
+script breakables are handled for you. Measured with two `kke_demo`
+windows: the host's script drops a ball on a glass pane, the host's pane
+breaks along 80 borders into 35 pieces, the guest's along the same 80 into
+the same 35; the yard's stone wall, 6 borders and 2 pieces on both.
+
+A break reaches a client about half a round trip after it happened (plus
+the reliable channel's resend if a packet was lost), so on a client a
+pane cracks a moment after the ball hits it.
+
+### Movement checks
+
+The server always checked moves against speed limits. With the level in
+its own physics world, the host now also refuses (and sends the player
+back to where it last was legitimately) a move that
+
+- **goes through a wall**: the path from the last accepted position to
+  the new one, 0.5 m above the feet, crosses static level geometry. The
+  straight line or "up, over, down" must be clear, so stairs, vaults and
+  ledge climbs pass; crates and other players don't count;
+- **flies**: with nothing to stand on (0.6 m below) or hold (a wall or
+  ledge beside you, for climbs, hangs and wall runs), it has either risen
+  more than 3 m, or it has been in the air over 1.5 s without falling as
+  (a third of) gravity would make it. Standing on a crate counts; your
+  own stand-in capsule doesn't.
+
+`kke/net/WorldMoveCheck.h` has the rules and `MoveCheckSettings` the
+numbers (`NetModule::moveCheckSettings`; a glider or jetpack game turns
+the fall rule off with `minFallGravity = 0`). The Network panel shows the
+refusals and has a switch; the log gets one line per player per 5 s.
+Any game can add its own rule through `NetServer::checkMove`.
+
 ### Why players are owner-predicted, not replayed
 
 The standard for competitive shooters is server-side input replay: the
 client sends inputs, the server runs them, the client rewinds and replays
 its unacknowledged inputs when a correction arrives. That needs a player
 simulation that can be rewound. `kke::Locomotion` (vault, climb, hang,
-shimmy) can't be yet, and co-op and sandbox games don't need it, so v1
-trusts the owner's movement within speed limits. Input replay for
-competitive games is issue #28.
+shimmy) can't be yet, and co-op and sandbox games don't need it, so the
+owner moves its player and the host checks the moves (speed limits,
+walls, flying: above). That catches blatant cheats; small ones (running a
+little fast inside the slack) need input replay, which is still open in
+issue #28.
 
 ## In kke_demo
 
@@ -120,9 +190,11 @@ competitive games is issue #28.
   they're boxes.
 - Crates and the moving platform are the host's. R on a client asks the
   host to reset them.
-- Shots: everyone sees every FEMFX ball. The breakables themselves are
-  cosmetic per machine for now (FEMFX isn't deterministic across
-  machines); seed-based break events are the plan (SCALING.md §2C).
+- Shots: everyone sees every FEMFX ball. The breaking yard's glass,
+  plank and stone wall break on the host and in the same pieces for
+  everyone (Breakables above).
+- Scripts: what `sv_*.lua` spawns shows up for everyone (docs/SCRIPTING.md
+  "Multiplayer").
 
 ## Tests
 
@@ -143,15 +215,34 @@ competitive games is issue #28.
 - Real UDP: two ENet hosts on one PC, LAN discovery finds the host, a
   client joins and both see each other.
 
+v2 adds (in the same file): `Spawn`, `Despawn` and `Break` round trips
+and fuzzing, script spawn descriptions (damaged or out-of-range ones
+refused), spawns reaching clients and only the persistent ones reaching
+late joiners, breaks sent once and replayed to late joiners (2500 borders
+split over several messages), a client sending server-only messages
+kicked, and the game's move check refusing and correcting.
+
+`tests/test_break_graph.cpp`: a follower given the host's borders ends up
+with the host's pieces; borders that don't exist can't be broken.
+
+`tests/test_move_check.cpp`: walking, jumping and a 30 m fall pass; through
+a wall is refused; a vault, a ledge climb and five seconds hanging pass;
+rising or hovering in the open is flying; a crate holds you up, your own
+capsule doesn't; the honest fall after a refusal passes.
+
 `tests/test_rigid_world.cpp`: bodies switch between dynamic and kinematic
 (kinematic ones hold still and push, dynamic again they fall).
 
 ## Not yet
 
-- Input replay for competitive games (#28), rollback for fighting games,
-  lockstep for RTS (ACTION_PLAN.md).
+- Input replay for competitive games (#28: needs a rewindable
+  kke::Locomotion), rollback for fighting games, lockstep for RTS
+  (ACTION_PLAN.md).
 - Dedicated server process and Docker image; secure connect tokens
   (yojimbo), internet P2P with NAT traversal (GameNetworkingSockets).
 - Voice chat (Opus).
 - Several local players per connection (couch + online).
-- Replicated breakables (seed-based FEMFX break events).
+- Breaking on a client before the host says so (predicted breaks): today
+  a client's pane cracks half a round trip after the hit.
+- FEMFX objects that aren't breakables (a thrown ball, soft bodies) aren't
+  in snapshots: each machine simulates its own copy.

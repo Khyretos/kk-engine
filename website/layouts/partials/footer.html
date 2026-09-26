@@ -1,0 +1,14 @@
+<footer class="site-footer">
+  <div class="wrap footer-row">
+    <div>
+      <a class="brand" href="{{ "/" | relURL }}"><img src="{{ "images/logo.png" | relURL }}" alt="" width="28" height="28"><span class="gradient-text">Kreative Kompas Engine</span></a>
+      <p class="muted">MIT licence. Written by Claude (Anthropic) in the open, directed by <a href="{{ site.Params.authorSite }}">{{ site.Params.author }}</a>.</p>
+    </div>
+    <div class="footer-links">
+      <a href="{{ site.Params.github }}"><i class="fa-brands fa-github"></i> Source</a>
+      <a href="{{ site.Params.docs | relURL }}"><i class="fa-solid fa-book"></i> Docs</a>
+      <a href="{{ "devlog/" | relURL }}"><i class="fa-solid fa-newspaper"></i> Devlog</a>
+      <a href="{{ site.Params.kofi }}"><i class="fa-solid fa-mug-hot"></i> Ko-fi</a>
+    </div>
+  </div>
+</footer>

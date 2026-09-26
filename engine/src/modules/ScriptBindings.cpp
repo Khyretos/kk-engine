@@ -17,6 +17,7 @@
 
 #include "kke/Application.h"
 #include "kke/Log.h"
+#include "kke/net/ScriptSpawns.h"
 #include "kke/RmlTextSafety.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/UiModule.h"
@@ -320,6 +321,15 @@ void ScriptModule::bindBreakables() {
             return 2;
         }
         m_breakables.push_back({h, src});
+        {
+            Breakable& made = m_breakables.back();
+            made.netKind = script_net::kSpawnBreakableBox;
+            made.netDesc = script_net::encode(script_net::BreakableBoxSpawn{cells, size, ScriptVM::fieldVec3(L, 1, "pos", glm::vec3(0, 1, 0)),
+                                                                            ScriptVM::fieldVec3(L, 1, "velocity", glm::vec3(0.0f)), p.m, int(pattern),
+                                                                            std::max(0.05f, ScriptVM::fieldNumber(L, 1, "chunk", p.chunk)),
+                                                                            std::max(0.0f, ScriptVM::fieldNumber(L, 1, "arm", 3.0f)), femfx->breakableSeed(h)});
+            replicate(made);
+        }
         lua_pushinteger(L, lua_Integer(h));
         return 1;
     });
@@ -334,14 +344,17 @@ void ScriptModule::bindBreakables() {
         if (hasMaterial) m = preset(L, 1, "breakable.ball").m;
         else { m.density = 7800.0f; m.stiffness = 2.0e8f; m.fractureStressThreshold = 1.0e12f; m.metallic = 1.0f; m.roughness = 0.35f; m.textureId = 2; }
         const float r = std::clamp(ScriptVM::fieldNumber(L, 1, "radius", 0.15f), 0.03f, 2.0f);
-        const PhysicsModule::ObjectHandle h = femfx->spawnFracturableTetMesh(PhysicsModule::buildSphere(3, r), ScriptVM::fieldVec3(L, 1, "pos", glm::vec3(0, 1, 0)), m,
-                                                                            ScriptVM::fieldVec3(L, 1, "velocity", glm::vec3(0.0f)));
+        const glm::vec3 pos = ScriptVM::fieldVec3(L, 1, "pos", glm::vec3(0, 1, 0)), velocity = ScriptVM::fieldVec3(L, 1, "velocity", glm::vec3(0.0f));
+        const PhysicsModule::ObjectHandle h = femfx->spawnFracturableTetMesh(PhysicsModule::buildSphere(3, r), pos, m, velocity);
         if (h == PhysicsModule::kInvalidHandle) {
             lua_pushnil(L);
             lua_pushstring(L, "the FEMFX scene is full");
             return 2;
         }
         m_breakables.push_back({h, src});
+        m_breakables.back().netKind = script_net::kSpawnBall;
+        m_breakables.back().netDesc = script_net::encode(script_net::BallSpawn{r, pos, velocity, m});
+        replicate(m_breakables.back());
         lua_pushinteger(L, lua_Integer(h));
         return 1;
     });
@@ -353,7 +366,9 @@ void ScriptModule::bindBreakables() {
         return m_breakables.front();
     };
     vm.registerFunction("breakable", "remove", [this, femfx, owned](lua_State* L) {
-        const uint32_t h = owned(L, 1, "breakable.remove").handle;
+        Breakable& gone = owned(L, 1, "breakable.remove");
+        const uint32_t h = gone.handle;
+        unreplicate(gone.netId);
         femfx->removeObject(h);
         m_breakables.erase(std::remove_if(m_breakables.begin(), m_breakables.end(), [&](const Breakable& b) { return b.handle == h; }), m_breakables.end());
         return 0;
@@ -693,6 +708,11 @@ void ScriptModule::dispatchNet() {
 // ---------------------------------------------------------------- cleanup
 void ScriptModule::releaseScript(const std::string& source) {
     auto mine = [&](const std::string& s) { return s == source; };
+    // Replicated ones: gone on the clients too.
+    for (const Body& b : m_bodies)
+        if (mine(b.source)) unreplicate(b.netId);
+    for (const Breakable& b : m_breakables)
+        if (mine(b.source)) unreplicate(b.netId);
 #if KKE_ENABLE_JOLT
     auto* rb = m_app->getModule<RigidBodyModule>();
     for (const Body& b : m_bodies)
