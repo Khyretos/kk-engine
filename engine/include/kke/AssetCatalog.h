@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+#include <system_error>
 #include <string>
 #include <vector>
 
@@ -47,12 +49,34 @@ struct CatalogPack {
     size_t assetCount = 0;
 };
 
+// A file or folder the scan could not read, even after retrying.
+struct CatalogScanError {
+    std::string path;
+    std::string message; // the OS error, e.g. "Input/output error (after 4 attempts)"
+};
+
+struct CatalogScanOptions {
+    // Reads that fail with a transient error (I/O error on a network
+    // share, busy, timed out, interrupted, stale handle) are retried this
+    // many times in total, waiting firstRetryDelayMs, then twice that...
+    int attempts = 4;
+    int firstRetryDelayMs = 25;
+    // Tests only: return an error to make listing `dir` fail on this
+    // attempt (1-based), as if the file system had.
+    std::function<std::error_code(const std::string& dir, int attempt)> injectListingError;
+};
+
 struct AssetCatalog {
     std::vector<CatalogPack> packs;
     std::vector<CatalogAsset> assets;   // sorted by pack, category, name
+    // Everything that couldn't be read. Each one is also logged as a
+    // warning; the rest of the scan carries on without it. Empty when the
+    // scan saw every file.
+    std::vector<CatalogScanError> errors;
 
-    // Never throws; a missing/empty folder gives an empty catalog.
-    static AssetCatalog scan(const std::string& root);
+    // Never throws; a missing/empty folder gives an empty catalog (no
+    // error: findAssetFolder() decides whether a folder exists).
+    static AssetCatalog scan(const std::string& root, const CatalogScanOptions& options = {});
 
     const CatalogPack* pack(const std::string& name) const;
     // Every category present, in a stable, friendly order.

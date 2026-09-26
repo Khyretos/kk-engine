@@ -207,8 +207,96 @@ TEST(AssetCatalog, MissingOrEmptyFolderIsEmptyNotAnError) {
     fs::remove_all(root);
     fs::create_directories(root / "Stuff");
     EXPECT_TRUE(kke::AssetCatalog::scan(root.string()).assets.empty());
+    EXPECT_TRUE(kke::AssetCatalog::scan(root.string()).errors.empty());
+    EXPECT_TRUE(kke::AssetCatalog::scan("/no/such/folder").errors.empty());
     fs::remove_all(root);
 }
+
+// A read that fails once on a network share (EIO) is retried, and the
+// scan is exactly what it would have been without the hiccup.
+TEST(AssetCatalog, TransientReadErrorsAreRetried) {
+    fs::path root = makeUserLayout();
+    const kke::AssetCatalog clean = kke::AssetCatalog::scan(root.string());
+    kke::CatalogScanOptions o;
+    o.firstRetryDelayMs = 1;
+    int injected = 0;
+    o.injectListingError = [&](const std::string& dir, int attempt) {
+        if (attempt == 1 && fs::path(dir).filename() == "Textures") {
+            ++injected;
+            return std::make_error_code(std::errc::io_error);
+        }
+        return std::error_code{};
+    };
+    const kke::AssetCatalog c = kke::AssetCatalog::scan(root.string(), o);
+    EXPECT_GE(injected, 2); // both packs' Textures folders
+    EXPECT_TRUE(c.errors.empty());
+    ASSERT_EQ(c.packs.size(), clean.packs.size());
+    for (size_t i = 0; i < c.packs.size(); ++i) {
+        EXPECT_EQ(c.packs[i].defaultTexture, clean.packs[i].defaultTexture) << c.packs[i].name;
+        EXPECT_EQ(c.packs[i].textureVariants, clean.packs[i].textureVariants) << c.packs[i].name;
+    }
+    EXPECT_EQ(c.assets.size(), clean.assets.size());
+    fs::remove_all(root);
+}
+
+// A folder that keeps failing is reported (path + reason) and the rest of
+// the pack is still scanned, instead of the scan silently stopping there.
+TEST(AssetCatalog, PersistentReadErrorIsReportedAndScanContinues) {
+    fs::path root = makeUserLayout();
+    kke::CatalogScanOptions o;
+    o.attempts = 3;
+    o.firstRetryDelayMs = 1;
+    int tries = 0;
+    o.injectListingError = [&](const std::string& dir, int) {
+        if (fs::path(dir) == root / "POLYGON_Town" / "Textures") {
+            ++tries;
+            return std::make_error_code(std::errc::io_error);
+        }
+        return std::error_code{};
+    };
+    const kke::AssetCatalog c = kke::AssetCatalog::scan(root.string(), o);
+    EXPECT_EQ(tries, 3);
+    ASSERT_EQ(c.errors.size(), 1u);
+    EXPECT_EQ(fs::path(c.errors[0].path), root / "POLYGON_Town" / "Textures");
+    EXPECT_NE(c.errors[0].message.find("after 3 attempts"), std::string::npos) << c.errors[0].message;
+    // Everything else is still there, including Town's models.
+    EXPECT_NE(c.find("SM_Bld_House_01"), nullptr);
+    EXPECT_NE(c.find("SK_Character_Father_01"), nullptr);
+    ASSERT_NE(c.pack("POLYGON_Prototype"), nullptr);
+    EXPECT_FALSE(c.pack("POLYGON_Prototype")->defaultTexture.empty());
+    fs::remove_all(root);
+}
+
+// Errors that won't go away (permission denied, not found) aren't retried.
+TEST(AssetCatalog, PermanentErrorsAreNotRetried) {
+    fs::path root = makeUserLayout();
+    kke::CatalogScanOptions o;
+    o.firstRetryDelayMs = 1;
+    int tries = 0;
+    o.injectListingError = [&](const std::string& dir, int) {
+        if (fs::path(dir).filename() != "OBJ") return std::error_code{};
+        ++tries;
+        return std::make_error_code(std::errc::permission_denied);
+    };
+    const kke::AssetCatalog c = kke::AssetCatalog::scan(root.string(), o);
+    EXPECT_EQ(c.errors.size(), 2u); // Prototype/OBJ and Town/OBJ, once each
+    EXPECT_EQ(tries, 2);
+    EXPECT_EQ(c.find("SM_Prop_OnlyObj_01"), nullptr); // lived only in the unreadable folder
+    fs::remove_all(root);
+}
+
+#if !defined(_WIN32)
+// A link pointing nowhere is reported, not skipped as if it weren't there.
+TEST(AssetCatalog, BrokenLinkIsReported) {
+    fs::path root = makeUserLayout();
+    fs::create_symlink(root / "gone.fbx", root / "POLYGON_Town/FBX/SM_Prop_Missing_01.fbx");
+    const kke::AssetCatalog c = kke::AssetCatalog::scan(root.string());
+    ASSERT_EQ(c.errors.size(), 1u);
+    EXPECT_NE(c.errors[0].path.find("SM_Prop_Missing_01"), std::string::npos);
+    EXPECT_NE(c.find("SM_Bld_House_01"), nullptr);
+    fs::remove_all(root);
+}
+#endif
 
 TEST(AssetCatalog, RealSyntyPackIfInstalled) {
     fs::path root = fs::path(KKE_SOURCE_DIR) / "assets/synty";
