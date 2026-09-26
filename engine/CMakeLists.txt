@@ -22,6 +22,8 @@ set(ENGINE_SOURCES
     src/Picking.cpp
     src/DrawOrder.cpp
     src/PlayBlocks.cpp
+    src/PlayScript.cpp
+    src/NodeGraph.cpp
     src/TouchGestures.cpp
     src/VoxelTets.cpp
     src/InteriorColor.cpp
