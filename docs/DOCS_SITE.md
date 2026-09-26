@@ -2,7 +2,8 @@
 
 <https://khyretos.github.io/kk-engine/> is built from this folder with
 [MkDocs](https://www.mkdocs.org/) and the Material theme, by
-`.github/workflows/docs.yml`, on every push to `main`. It's free: GitHub
+`.github/workflows/docs.yml` on every push to `main`, which pushes the
+built site to the `gh-pages` branch. It's free: GitHub
 Pages on a public repository.
 
 ## Working on it
@@ -31,6 +32,5 @@ mkdocs build --strict  # what CI runs: any warning fails the build
 ## First deployment
 
 GitHub Pages has to be switched on once: repository **Settings > Pages >
-Build and deployment > Source: GitHub Actions**. The workflow tries to do
-it by itself; if its first run fails at "Configure Pages", flip that
-setting and re-run it.
+Build and deployment > Source: Deploy from a branch**, branch `gh-pages`,
+folder `/ (root)`. From then on every push to `main` updates the site.
