@@ -17,6 +17,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 option(KKE_ENABLE_VALIDATION "Enable Vulkan validation layers in debug" ON)
 option(ENGINE_ENABLE_LUA "Lua 5.4 gameplay scripting (kke::ScriptVM, ScriptModule; docs/SCRIPTING.md)" ON)
 option(KKE_ENABLE_NET "Networking over ENet (MIT): kke::NetModule host/join, LAN discovery (docs/NETWORKING.md). Off = offline only; the loopback transport and replication logic still build." ON)
+option(KKE_ENABLE_STEAM_AUDIO "Steam Audio (Apache-2.0, Valve) as an optional HRTF backend for headphones: measured HRTFs with elevation, custom SOFA files (docs/AUDIO.md \"Steam Audio\"). Downloads the 150 MB SDK once (Linux and Windows x64) and puts libphonon next to the games." OFF)
 option(KKE_ENABLE_VOICE "Voice chat: Opus (BSD) codec, VoiceModule (docs/NETWORKING.md \"Voice\"). Needs KKE_ENABLE_NET." ON)
 option(ENGINE_HEADLESS_TEST "Build the headless smoke-test target" ON)
 option(KKE_ENABLE_TESTS "Build the unit test suite (tests/)" ON)
@@ -438,6 +439,52 @@ if(KKE_ENABLE_NET AND KKE_ENABLE_VOICE)
     )
     FetchContent_MakeAvailable(opus)
     set_target_properties(opus PROPERTIES POSITION_INDEPENDENT_CODE ON)
+endif()
+
+# ---------------------------------------------------------------------------
+# Steam Audio (Apache-2.0, https://github.com/ValveSoftware/steam-audio): the
+# prebuilt SDK, only for its HRTF (kke::SteamAudioSpatializer). Its own
+# licence isn't in the SDK zip; it is fetched next to it (pinned by hash) so
+# packages can carry it. libphonon is copied into bin/ and found there
+# ($ORIGIN) by every game, in the build tree and in packages alike.
+# ---------------------------------------------------------------------------
+if(KKE_ENABLE_STEAM_AUDIO)
+    if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+        message(FATAL_ERROR "KKE_ENABLE_STEAM_AUDIO: the Steam Audio SDK only ships 64-bit x86 libraries for Linux and Windows")
+    endif()
+    FetchContent_Declare(
+        steamaudio
+        URL      https://github.com/ValveSoftware/steam-audio/releases/download/v4.6.1/steamaudio_4.6.1.zip
+        URL_HASH SHA256=e9c56314f1066f631f193b0cb0ad886bd32daa3a9758b39c25a614ca453149a7
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    FetchContent_MakeAvailable(steamaudio)
+    set(_kke_sa_license ${steamaudio_SOURCE_DIR}/LICENSE.md)
+    if(NOT EXISTS ${_kke_sa_license})
+        file(DOWNLOAD https://raw.githubusercontent.com/ValveSoftware/steam-audio/v4.6.1/LICENSE.md ${_kke_sa_license}
+             EXPECTED_HASH SHA256=cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30 STATUS _kke_sa_status)
+        list(GET _kke_sa_status 0 _kke_sa_code)
+        if(NOT _kke_sa_code EQUAL 0)
+            file(REMOVE ${_kke_sa_license})
+            message(FATAL_ERROR "KKE_ENABLE_STEAM_AUDIO: could not download Steam Audio's LICENSE.md: ${_kke_sa_status}")
+        endif()
+    endif()
+    add_library(kke_steamaudio SHARED IMPORTED GLOBAL)
+    if(WIN32)
+        set(_kke_sa_lib ${steamaudio_SOURCE_DIR}/lib/windows-x64/phonon.dll)
+        set_target_properties(kke_steamaudio PROPERTIES IMPORTED_LOCATION ${_kke_sa_lib}
+                              IMPORTED_IMPLIB ${steamaudio_SOURCE_DIR}/lib/windows-x64/phonon.lib)
+    else()
+        set(_kke_sa_lib ${steamaudio_SOURCE_DIR}/lib/linux-x64/libphonon.so)
+        set_target_properties(kke_steamaudio PROPERTIES IMPORTED_LOCATION ${_kke_sa_lib} IMPORTED_SONAME libphonon.so)
+        # Next to the executable, in the build tree and in packages.
+        target_link_options(kke_steamaudio INTERFACE "LINKER:-rpath,$ORIGIN")
+    endif()
+    if(NOT EXISTS ${_kke_sa_lib})
+        message(FATAL_ERROR "KKE_ENABLE_STEAM_AUDIO: ${_kke_sa_lib} is missing from the SDK")
+    endif()
+    target_include_directories(kke_steamaudio SYSTEM INTERFACE ${steamaudio_SOURCE_DIR}/include)
+    file(COPY ${_kke_sa_lib} DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 endif()
 
 # ---------------------------------------------------------------------------

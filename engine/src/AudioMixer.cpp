@@ -27,6 +27,7 @@ const char* spatialModeName(SpatialMode m) {
     switch (m) {
         case SpatialMode::Stereo: return "Stereo (speakers)";
         case SpatialMode::Binaural: return "Binaural (headphones)";
+        case SpatialMode::Hrtf: return "HRTF (headphones, measured)";
         default: return "?";
     }
 }
@@ -129,6 +130,7 @@ uint32_t AudioMixer::play(const VoiceDesc& desc) {
             if (l < q) { q = l; quietest = i; }
         }
         if (est <= q) { ++m_dropped; return 0; }
+        if (m_spatializer) m_spatializer->release(m_voices[quietest].id);
         m_voices[quietest] = v;
         ++m_stolen;
         return v.id;
@@ -139,11 +141,14 @@ uint32_t AudioMixer::play(const VoiceDesc& desc) {
 
 void AudioMixer::stop(uint32_t id) {
     std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_spatializer) m_spatializer->release(id);
     m_voices.erase(std::remove_if(m_voices.begin(), m_voices.end(), [&](const Voice& v) { return v.id == id; }), m_voices.end());
 }
 
 void AudioMixer::stopAll() {
     std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_spatializer)
+        for (const Voice& v : m_voices) m_spatializer->release(v.id);
     m_voices.clear();
 }
 
@@ -201,6 +206,18 @@ void AudioMixer::setEchoes(const std::vector<EchoTap>& taps) {
 void AudioMixer::setSpatialMode(SpatialMode m) {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_mode = m;
+}
+
+void AudioMixer::setSpatializer(std::shared_ptr<Spatializer> sp) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_spatializer)
+        for (const Voice& v : m_voices) m_spatializer->release(v.id);
+    m_spatializer = std::move(sp);
+}
+
+bool AudioMixer::hasSpatializer() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_spatializer != nullptr;
 }
 
 SpatialMode AudioMixer::spatialMode() const {
@@ -265,7 +282,13 @@ void AudioMixer::mix(float* out, int frames) {
     if (m_send.size() < size_t(frames)) m_send.resize(size_t(frames));
     std::fill(m_send.begin(), m_send.begin() + frames, 0.0f);
     const float twoPiOverRate = glm::two_pi<float>() / float(m_sampleRate);
-    const bool binaural = m_mode == SpatialMode::Binaural;
+    const bool useHrtf = m_mode == SpatialMode::Hrtf && m_spatializer;
+    const bool binaural = m_mode == SpatialMode::Binaural || (m_mode == SpatialMode::Hrtf && !m_spatializer);
+    glm::vec3 lFwd = glm::dot(m_listener.forward, m_listener.forward) > 1e-12f ? glm::normalize(m_listener.forward) : glm::vec3(0, 0, -1);
+    glm::vec3 lRight = glm::cross(lFwd, m_listener.up);
+    lRight = glm::dot(lRight, lRight) > 1e-12f ? glm::normalize(lRight) : glm::vec3(1, 0, 0);
+    const glm::vec3 lUp = glm::cross(lRight, lFwd);
+    if (useHrtf && m_hrtfBlock.size() < size_t(frames)) m_hrtfBlock.resize(size_t(frames));
     const float invFrames = 1.0f / float(frames);
     static const SoundBuffer kSilence{ { 0.0f }, 48000 };
     for (Voice& v : m_voices) {
@@ -294,7 +317,8 @@ void AudioMixer::mix(float* out, int frames) {
         const float send = v.desc.spatial ? gain * v.desc.reverbSend * std::sqrt(distanceGain * t) : 0.0f;
         gain *= distanceGain * t;
         float cutoff = 400.0f + 17600.0f * t * t;
-        if (behind) cutoff = std::min(cutoff, 7000.0f); // head shadow: the cheapest front/back cue
+        const bool hrtf = useHrtf && v.desc.spatial;
+        if (behind && !hrtf) cutoff = std::min(cutoff, 7000.0f); // head shadow: the cheapest front/back cue (an HRTF has its own)
         if (airAbsorption && v.desc.spatial) cutoff = std::min(cutoff, airCutoff(distance));
         const float a = 1.0f - std::exp(-twoPiOverRate * cutoff);
 
@@ -310,6 +334,8 @@ void AudioMixer::mix(float* out, int frames) {
             const float side = std::sin(azimuth); // +1 = right
             shelf[0] = headShadow(std::acos(std::clamp(-side, -1.0f, 1.0f)), m_sampleRate);
             shelf[1] = headShadow(std::acos(std::clamp(side, -1.0f, 1.0f)), m_sampleRate);
+        } else if (hrtf) {
+            gl = gr = gain; // the HRTF places it; this is only its loudness
         } else {
             const float angle = (pan + 1.0f) * glm::quarter_pi<float>();
             gl = gain * std::cos(angle);
@@ -327,7 +353,8 @@ void AudioMixer::mix(float* out, int frames) {
         const size_t n = buf.samples.size();
         double pos = double(v.cursor) / 65536.0;
         float peak = 0.0f;
-        for (int f = 0; f < frames; ++f) {
+        int f = 0;
+        for (; f < frames; ++f) {
             float x;
             if (streamed) {
                 x = m_streamBlock[size_t(f)];
@@ -343,6 +370,13 @@ void AudioMixer::mix(float* out, int frames) {
                 x = buf.samples[i0] + (buf.samples[i1] - buf.samples[i0]) * frac;
             }
             v.lpState += a * (x - v.lpState);
+            if (hrtf) {
+                m_hrtfBlock[size_t(f)] = v.lpState;
+                m_send[size_t(f)] += v.lpState * send;
+                peak = std::max(peak, std::fabs(v.lpState) * gl);
+                pos += step;
+                continue;
+            }
             const float k = float(f) * invFrames;
             const float l = v.prevGainL + (gl - v.prevGainL) * k;
             const float r = v.prevGainR + (gr - v.prevGainR) * k;
@@ -374,6 +408,14 @@ void AudioMixer::mix(float* out, int frames) {
             peak = std::max(peak, std::max(std::fabs(outL * l), std::fabs(outR * r)));
             pos += step;
         }
+        if (hrtf) {
+            std::fill(m_hrtfBlock.begin() + f, m_hrtfBlock.begin() + frames, 0.0f); // the sound ended inside this block
+            const glm::vec3 d = heardAt(v) - m_listener.position;
+            const float len = glm::length(d);
+            const glm::vec3 local = len > 1e-4f ? glm::vec3(glm::dot(d, lRight), glm::dot(d, lUp), -glm::dot(d, lFwd)) / len
+                                                : glm::vec3(0.0f, 0.0f, -1.0f);
+            m_spatializer->process(v.id, m_hrtfBlock.data(), frames, local, v.prevGainL, gl, out);
+        }
         v.cursor = size_t(pos * 65536.0);
         v.prevGainL = gl;
         v.prevGainR = gr;
@@ -382,9 +424,11 @@ void AudioMixer::mix(float* out, int frames) {
         v.lastPeak = peak;
     }
     m_voices.erase(std::remove_if(m_voices.begin(), m_voices.end(),
-                                  [](const Voice& v) {
-                                      if (v.desc.stream) return v.desc.stream->finished();
-                                      return !v.desc.loop && double(v.cursor) / 65536.0 >= double(v.desc.sound->samples.size());
+                                  [this](const Voice& v) {
+                                      const bool done = v.desc.stream ? v.desc.stream->finished()
+                                                                      : !v.desc.loop && double(v.cursor) / 65536.0 >= double(v.desc.sound->samples.size());
+                                      if (done && m_spatializer) m_spatializer->release(v.id);
+                                      return done;
                                   }),
                    m_voices.end());
     mixEchoes(out, frames);

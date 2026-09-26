@@ -112,7 +112,8 @@ private:
     InstanceId m_walker = 0, m_circler = 0, m_earsMarker = 0;
     float m_nextStep = 0.0f, m_nextTick = 0.0f, m_nextPing = 0.0f;
     int m_stepCount = 0;
-    bool m_binauralBefore = false, m_forcedBinaural = false;
+    kke::SpatialMode m_modeBefore = kke::SpatialMode::Stereo;
+    bool m_forcedBinaural = false;
     bool m_tour = false, m_exitAfterTour = false;
     float m_tourLeft = 0.0f;
     int m_uiFrames = 0;
