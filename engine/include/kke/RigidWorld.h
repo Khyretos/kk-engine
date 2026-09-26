@@ -139,6 +139,9 @@ public:
     // Advances characters then bodies by dt (fixed step recommended).
     void step(float dt);
     double lastStepMs() const;
+    // Seconds simulated by step() so far. Code that runs per rendered frame
+    // measures motion against this: between steps nothing has moved.
+    double simulatedTime() const;
 
     // Contacts since the last call.
     std::vector<Contact> takeContacts();

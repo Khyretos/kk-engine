@@ -111,6 +111,7 @@ struct RigidWorld::Impl : public JPH::ContactListener {
     std::mutex contactMutex;
     std::vector<Contact> contacts;
     double stepMs = 0.0;
+    double simulatedTime = 0.0;
 
     JPH::BodyInterface& bodies() { return system.GetBodyInterface(); }
     const JPH::BodyInterface& bodies() const { return system.GetBodyInterface(); }
@@ -427,10 +428,12 @@ void RigidWorld::step(float dt) {
     // One collision step per 1/60 s (more for bigger steps).
     const int collisionSteps = std::max(1, static_cast<int>(std::ceil(dt * 60.0f - 0.01f)));
     m->system.Update(dt, collisionSteps, m->temp.get(), m->jobs.get());
+    m->simulatedTime += dt;
     m->stepMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
 }
 
 double RigidWorld::lastStepMs() const { return m->stepMs; }
+double RigidWorld::simulatedTime() const { return m->simulatedTime; }
 
 std::vector<RigidWorld::Contact> RigidWorld::takeContacts() {
     std::lock_guard<std::mutex> lock(m->contactMutex);

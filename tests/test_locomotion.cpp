@@ -402,3 +402,62 @@ TEST(Locomotion, LandingOnARampStaysFinite) {
     EXPECT_NEAR(c.feet().x, settled.x, 0.01f);
     EXPECT_NEAR(c.feet().y, settled.y, 0.01f);
 }
+
+// The demo runs physics at a fixed 60 Hz (fixedUpdate) and Locomotion once
+// per rendered frame (update). At 144 fps most frames have no physics step,
+// so the feet hadn't moved and the measured speed read 0 (idle), then 2.4x
+// on the frame that did step: the animation flashed between idle and walk.
+// A jittery ~60 fps (0, 1 or 2 steps a frame) did the same.
+namespace {
+
+struct FrameResult {
+    float minSpeed = 1e9f, maxSpeed = 0.0f, distance = 0.0f;
+};
+
+// Walks forward for 3 s of rendered frames of `frameDt(i)` seconds, with
+// physics on a 60 Hz accumulator exactly like Application::run.
+template <class FrameDt>
+FrameResult walkWithFixedPhysics(Locomotion::Input in, FrameDt frameDt) {
+    Course c;
+    c.spawn({ 0, 0, 0 });
+    Locomotion loco(c.world, c.player);
+    FrameResult r;
+    float accumulator = 0.0f, t = 0.0f;
+    glm::vec3 start{};
+    for (int i = 0; t < 3.0f; ++i) {
+        const float dt = frameDt(i);
+        t += dt;
+        accumulator += dt;
+        while (accumulator >= kDt) {
+            c.world.step(kDt);
+            accumulator -= kDt;
+        }
+        loco.update(in, dt);
+        if (t < 1.0f) { start = c.feet(); continue; } // up to speed first
+        r.minSpeed = std::min(r.minSpeed, loco.groundSpeed());
+        r.maxSpeed = std::max(r.maxSpeed, loco.groundSpeed());
+    }
+    r.distance = glm::length(glm::vec2(c.feet().x - start.x, c.feet().z - start.z));
+    return r;
+}
+
+} // namespace
+
+TEST(Locomotion, MeasuredSpeedIsSteadyWhenFramesOutpacePhysics) {
+    Locomotion::Input walk = forward();
+    walk.slow = true;
+    const float v = Locomotion::Settings{}.walkSpeed;
+    const FrameResult r = walkWithFixedPhysics(walk, [](int) { return 1.0f / 144.0f; });
+    EXPECT_GT(r.minSpeed, v * 0.9f) << "read as standing still between physics steps";
+    EXPECT_LT(r.maxSpeed, v * 1.1f);
+    EXPECT_NEAR(r.distance, v * 2.0f, v * 2.0f * 0.1f) << "commanded speed was held back";
+}
+
+TEST(Locomotion, MeasuredSpeedIsSteadyWithJitteryFrames) {
+    const float v = Locomotion::Settings{}.runSpeed;
+    // Around 60 fps, but frames land on either side of the physics tick.
+    const FrameResult r = walkWithFixedPhysics(forward(), [](int i) { return (i % 3 == 0 ? 0.6f : 1.2f) / 60.0f; });
+    EXPECT_GT(r.minSpeed, v * 0.9f);
+    EXPECT_LT(r.maxSpeed, v * 1.1f);
+    EXPECT_NEAR(r.distance, v * 2.0f, v * 2.0f * 0.1f);
+}

@@ -201,9 +201,19 @@ void Locomotion::update(const Input& in, float dt) {
     m_stateTime += dt;
     // Speed from how far the feet really moved: running into a wall is
     // standing still (the controller's velocity still says "running").
+    // Physics moves the feet on its own fixed tick, not once per frame, so
+    // the distance is over the time simulated since the last frame; a frame
+    // with no physics step keeps the last reading instead of reading 0
+    // (which flashed the animation between idle and walk). Vaults and
+    // climbs move the feet here every frame, so they use the frame time.
     const glm::vec3 feetNow = m_world.characterPosition(m_id);
-    if (m_haveLastFeet) m_measuredSpeed = glm::length(glm::vec2(feetNow.x - m_lastFeet.x, feetNow.z - m_lastFeet.z)) / dt;
+    const double simNow = m_world.simulatedTime();
+    const float moved = float(simNow - m_lastSimTime);
+    const bool scripted = m_state == State::Vault || m_state == State::Climb;
+    const float over = scripted ? dt : moved;
+    if (m_haveLastFeet && over > 0.0f) m_measuredSpeed = glm::length(glm::vec2(feetNow.x - m_lastFeet.x, feetNow.z - m_lastFeet.z)) / over;
     m_lastFeet = feetNow;
+    m_lastSimTime = simNow;
     m_haveLastFeet = true;
     // Queued input: "go up" pressed a moment too early still counts.
     m_buffer = in.goUp ? m_settings.jumpBuffer : std::max(0.0f, m_buffer - dt);

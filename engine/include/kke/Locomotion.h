@@ -153,6 +153,7 @@ private:
     float m_speed = 0.0f;                   // commanded ground speed
     float m_measuredSpeed = 0.0f;
     glm::vec3 m_lastFeet{0.0f};
+    double m_lastSimTime = 0.0;
     bool m_haveLastFeet = false;
     float m_lastTurnSign = 1.0f;
     glm::vec3 m_facing{0.0f, 0.0f, -1.0f};

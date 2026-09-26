@@ -78,7 +78,9 @@ the player hit a one-frame window.
   last turn direction wins inside ±12° of 180°.
 - **The animation follows the measured speed**: the blend space gets how
   far the feet actually moved, not the requested speed. Legs slow down in
-  turns and stop against walls.
+  turns and stop against walls. It is measured over the time physics simulated
+  since the last frame (physics steps at 60 Hz, frames don't), so a frame
+  between two physics steps doesn't read as standing still (BUG-054).
 
 ## Jumping and the air (*Jump & Fall control*, MM2, vPFAh2T8Ipg)
 
