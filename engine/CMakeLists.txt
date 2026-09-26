@@ -23,6 +23,7 @@ set(ENGINE_SOURCES
     src/VoronoiFracture.cpp
     src/BreakGraph.cpp
     src/Animator.cpp
+    src/AnimRig.cpp
     src/CameraRig.cpp
     src/SceneFile.cpp
     src/InputMap.cpp

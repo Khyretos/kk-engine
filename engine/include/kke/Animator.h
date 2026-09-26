@@ -46,14 +46,28 @@ public:
     // Pose at `time` seconds (wrapped when looping, clamped otherwise).
     void sample(int clip, float time, bool loop, Pose& out) const;
 
+    // Root motion (Unreal's "root motion from animation", as data): the
+    // horizontal travel of `bone` (the root, or the pelvis for clips made
+    // in place-less style) moves out of every clip into a track, so the
+    // clip plays in place and the game decides where the capsule goes.
+    // `model` gives the bone's parents (assumed not animated).
+    void extractRootMotion(const ModelData& model, int bone);
+    bool hasRootMotion() const { return m_rootBone >= 0; }
+    // Model-space travel between two clip times (seconds, unwrapped:
+    // a looping clip adds a whole cycle's travel per wrap).
+    glm::vec3 rootTravel(int clip, float from, float to, bool loop) const;
+
 private:
     struct Clip {
         std::string name;
         float duration = 0.0f, sampleRate = 30.0f;
         std::vector<Pose> frames;
+        std::vector<glm::vec3> root; // travel since frame 0, per frame (root motion)
     };
+    glm::vec3 rootAt(const Clip& c, float time) const; // time within [0, duration]
     std::vector<Clip> m_clips;
     Pose m_rest;
+    int m_rootBone = -1;
 };
 
 // Clips spread along one parameter (usually speed): idle at 0, walk at
@@ -86,6 +100,10 @@ public:
 
     void update(float dt);
     const Pose& pose() const { return m_pose; }
+    // Model-space root travel during the last update(), from clip states
+    // (blend spaces are locomotion: the controller moves those). Zero
+    // unless the set has root motion.
+    glm::vec3 rootMotion() const { return m_rootDelta; }
 
 private:
     struct State {
@@ -105,6 +123,7 @@ private:
     float m_phase = 0.0f, m_prevPhase = 0.0f;
     float m_fade = 0.0f, m_fadeLength = 0.0f;
     float m_param = 0.0f;
+    glm::vec3 m_rootDelta{0.0f};
     Pose m_pose, m_scratchA, m_scratchB;
 };
 

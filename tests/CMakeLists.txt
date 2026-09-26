@@ -20,6 +20,7 @@ add_executable(kke_tests
     test_voronoi_fracture.cpp
     test_break_graph.cpp
     test_animator.cpp
+    test_anim_rig.cpp
     test_camera_rig.cpp
     test_scene_file.cpp
     test_input_map.cpp

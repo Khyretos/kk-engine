@@ -88,6 +88,45 @@ void AnimationSet::sample(int clip, float time, bool loop, Pose& out) const {
     blendPoses(c.frames[f0], c.frames[f1], f - static_cast<float>(f0), out);
 }
 
+void AnimationSet::extractRootMotion(const ModelData& model, int bone) {
+    if (bone < 0 || bone >= static_cast<int>(model.bones.size()) || m_rootBone >= 0) return;
+    m_rootBone = bone;
+    // The parents' rest transform takes the bone's local travel to model space.
+    glm::mat4 parent(1.0f);
+    std::vector<int> chain;
+    for (int p = model.bones[bone].parent; p >= 0; p = model.bones[p].parent) chain.push_back(p);
+    for (auto it = chain.rbegin(); it != chain.rend(); ++it) parent = parent * model.bones[*it].localRest;
+    const glm::mat4 toLocal = glm::inverse(parent);
+    for (Clip& c : m_clips) {
+        c.root.clear();
+        if (c.frames.empty()) continue;
+        const glm::vec3 start = glm::vec3(parent * glm::vec4(c.frames[0][bone].t, 1.0f));
+        for (Pose& f : c.frames) {
+            glm::vec3 p = glm::vec3(parent * glm::vec4(f[bone].t, 1.0f));
+            const glm::vec3 travel(p.x - start.x, 0.0f, p.z - start.z);
+            c.root.push_back(travel);
+            f[bone].t = glm::vec3(toLocal * glm::vec4(p - travel, 1.0f));
+        }
+    }
+}
+
+glm::vec3 AnimationSet::rootAt(const Clip& c, float t) const {
+    if (c.root.empty()) return glm::vec3(0.0f);
+    const float f = t * c.sampleRate;
+    const size_t last = c.root.size() - 1;
+    const size_t f0 = std::min(static_cast<size_t>(std::max(0.0f, f)), last);
+    const size_t f1 = std::min(f0 + 1, last);
+    return glm::mix(c.root[f0], c.root[f1], glm::clamp(f - static_cast<float>(f0), 0.0f, 1.0f));
+}
+
+glm::vec3 AnimationSet::rootTravel(int clip, float from, float to, bool loop) const {
+    if (clip < 0 || clip >= static_cast<int>(m_clips.size()) || m_clips[clip].root.empty()) return glm::vec3(0.0f);
+    const Clip& c = m_clips[clip];
+    if (!loop || c.duration <= 0.0f) return rootAt(c, clipTime(to, c.duration, false)) - rootAt(c, clipTime(from, c.duration, false));
+    const float cycles = std::floor(to / c.duration) - std::floor(from / c.duration);
+    return rootAt(c, clipTime(to, c.duration, true)) - rootAt(c, clipTime(from, c.duration, true)) + cycles * c.root.back();
+}
+
 Animator::Animator(const AnimationSet& set) : m_set(&set), m_pose(set.restPose()) {}
 
 int Animator::addClipState(const std::string& name, int clip, bool loop, float speed) {
@@ -181,17 +220,25 @@ void Animator::update(float dt) {
         }
     };
     const State& cur = m_states[m_current];
+    auto travel = [&](const State& s, float before, float after) {
+        return s.clip >= 0 ? m_set->rootTravel(s.clip, before * s.speed, after * s.speed, s.loop) : glm::vec3(0.0f);
+    };
+    const float curBefore = m_time;
     advance(cur, m_time, m_phase);
+    m_rootDelta = travel(cur, curBefore, m_time);
     evaluate(cur, m_time, m_phase, m_scratchA);
     if (m_previous >= 0 && m_fade < m_fadeLength) {
         const State& prev = m_states[m_previous];
+        const float prevBefore = m_prevTime;
         advance(prev, m_prevTime, m_prevPhase);
+        const glm::vec3 prevDelta = travel(prev, prevBefore, m_prevTime);
         evaluate(prev, m_prevTime, m_prevPhase, m_scratchB);
         m_fade += dt;
         // Smoothstep: no visible "kink" at the start and end of a fade.
         float w = std::clamp(m_fade / std::max(1e-6f, m_fadeLength), 0.0f, 1.0f);
         w = w * w * (3.0f - 2.0f * w);
         blendPoses(m_scratchB, m_scratchA, w, m_pose);
+        m_rootDelta = glm::mix(prevDelta, m_rootDelta, w);
     } else {
         m_previous = -1;
         m_pose = m_scratchA;

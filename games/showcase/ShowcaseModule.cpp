@@ -230,15 +230,20 @@ void ShowcaseModule::findScenes() {
     }
 }
 
+void ShowcaseModule::scanCatalog() {
+    if (m_catalogScanned) return;
+    const char* base = SDL_GetBasePath();
+    m_assetDir = kke::findAssetFolder("assets/synty", { "KKE_ASSETS_DIR", "KKE_SYNTY_DIR" }, base ? base : "");
+    if (!m_assetDir.empty()) m_catalog = kke::AssetCatalog::scan(m_assetDir);
+    m_catalogScanned = true;
+    for (const kke::CatalogAsset& a : m_catalog.assets)
+        if (a.skinned && a.name.rfind("SK_Character", 0) == 0) m_characters.push_back(a.name);
+}
+
 void ShowcaseModule::visitScene(size_t index) {
     SceneEntry& e = m_scenes[index];
     if (!e.isLoaded) {
-        if (!m_catalogScanned) {
-            const char* base = SDL_GetBasePath();
-            m_assetDir = kke::findAssetFolder("assets/synty", { "KKE_ASSETS_DIR", "KKE_SYNTY_DIR" }, base ? base : "");
-            if (!m_assetDir.empty()) m_catalog = kke::AssetCatalog::scan(m_assetDir);
-            m_catalogScanned = true;
-        }
+        scanCatalog();
         e.loaded = kke::loadScene(e.file, m_catalog, *m_models, &m_rigid->world(), e.origin);
         if (e.file.groundSize.x > 0.0f) {
             std::vector<kke::Vertex> v;
@@ -340,12 +345,65 @@ void ShowcaseModule::setupPlayer() {
         kke::log::get(name())->warn("animation library not found (assets/animations/UAL1_Standard.fbx): the character is a box");
         return;
     }
-    m_charModel = m_models->load(file);
-    const kke::ModelData* d = m_charModel ? m_models->model(m_charModel) : nullptr;
+    m_ualModel = m_models->load(file);
+    const kke::ModelData* d = m_ualModel ? m_models->model(m_ualModel) : nullptr;
     if (!d || d->animations.empty()) return;
+    const char* who = std::getenv("KKE_CHARACTER"); // e.g. SK_Character_Father_01
+    useCharacter(who ? who : "");
+}
+
+void ShowcaseModule::useCharacter(const std::string& asset) {
+    const kke::ModelData* ual = m_ualModel ? m_models->model(m_ualModel) : nullptr;
+    if (!ual) return;
+    kke::ModelModule::ModelId model = m_ualModel;
+    if (!asset.empty()) {
+        scanCatalog();
+        const kke::CatalogAsset* a = m_catalog.find(asset);
+        if (!a) {
+            kke::log::get(name())->warn("character '{}' not in the asset catalog", asset);
+            return;
+        }
+        model = m_models->load(a->path, kke::packLoadOptions(m_catalog, *a));
+    }
+    const kke::ModelData* d = model ? m_models->model(model) : nullptr;
+    if (!d || d->bones.empty()) {
+        kke::log::get(name())->warn("character '{}' has no skeleton", asset);
+        return;
+    }
+    // The rig: this character's bones, and the UAL clips made for them.
+    m_rigData = kke::ModelData{};
+    m_rigData.bones = d->bones;
+    if (model == m_ualModel) {
+        m_rigData.animations = ual->animations;
+    } else {
+        kke::BoneMatch match = kke::matchBones(*ual, *d);
+        m_rigData.animations = kke::retargetAnimations(*ual, *d, match);
+        std::string missing;
+        for (const std::string& n : match.unmatchedTarget) missing += (missing.empty() ? "" : ", ") + n;
+        kke::log::get(name())->info("'{}': {} of {} bones take the UAL clips{}{}", asset, match.matched, d->bones.size(),
+                                    missing.empty() ? "" : "; at rest: ", missing);
+    }
+    if (m_charInstance) m_models->remove(m_charInstance);
+    m_charModel = model;
+    m_character = model == m_ualModel ? std::string() : asset;
     m_charInstance = m_models->spawn(m_charModel, glm::mat4(1.0f));
     m_models->setOverlayEnabled(m_charInstance, false);
-    m_animSet = std::make_unique<kke::AnimationSet>(*d);
+    buildAnimator();
+    m_feet = kke::FootPlacer(m_rigData, kke::findChain(m_rigData, "thigh_l", "calf_l", "foot_l"),
+                             kke::findChain(m_rigData, "thigh_r", "calf_r", "foot_r"), [&] {
+                                 for (size_t b = 0; b < m_rigData.bones.size(); ++b)
+                                     if (kke::canonicalBoneName(m_rigData.bones[b].name) == "pelvis") return static_cast<int>(b);
+                                 return -1;
+                             }());
+    const glm::vec3 fwd = kke::modelForward(m_rigData);
+    m_modelYaw = 180.0f - glm::degrees(std::atan2(fwd.x, fwd.z));
+    m_armL = kke::findChain(m_rigData, "upperarm_l", "lowerarm_l", "hand_l");
+    m_armR = kke::findChain(m_rigData, "upperarm_r", "lowerarm_r", "hand_r");
+}
+
+void ShowcaseModule::buildAnimator() {
+    m_anim.reset();
+    m_animSet = std::make_unique<kke::AnimationSet>(m_rigData);
     m_anim = std::make_unique<kke::Animator>(*m_animSet);
     const kke::AnimationSet& s = *m_animSet;
     m_stMove = m_anim->addBlendState("move", { { { s.find("|Idle_Loop"), 0.0f },
@@ -359,9 +417,10 @@ void ShowcaseModule::setupPlayer() {
     // Vault and climb: the Universal Animation Library "Standard" set has
     // no vault or climb clips, so these use its closest poses as
     // stand-ins (tucked jump for the vault, the take-off reach and a
-    // crouch step for the climb). A pack with real ones ("Vault",
-    // "Climb") is picked up by name; Locomotion moves the capsule either
-    // way, the clips only provide the pose.
+    // crouch step for the climb), and hand IK puts the hands on the edge.
+    // A pack with real ones ("Vault", "Climb") is picked up by name;
+    // Locomotion moves the capsule either way, the clips only provide
+    // the pose.
     auto pick = [&](std::initializer_list<const char*> names) {
         for (const char* n : names)
             if (int c = s.find(n); c >= 0) return c;
@@ -371,7 +430,57 @@ void ShowcaseModule::setupPlayer() {
     m_stClimbUp = m_anim->addClipState("climb_up", pick({ "Climb_Up", "Climb", "Jump_Start" }), false, 0.7f);
     m_stClimbOver = m_anim->addClipState("climb_over", pick({ "Climb_Over", "Crouch_Fwd_Loop" }), true, 1.3f);
     m_anim->play(m_stMove, 0.0f);
-    kke::log::get(name())->info("character: {} bones, {} clips", d->bones.size(), d->animations.size());
+    kke::log::get(name())->info("character: {} bones, {} clips", m_rigData.bones.size(), m_rigData.animations.size());
+}
+
+void ShowcaseModule::applyIk(float dt) {
+    std::vector<glm::mat4>* locals = m_models->boneLocals(m_charInstance);
+    if (!locals || !m_anim) return;
+    kke::Pose pose = m_anim->pose();
+    using State = kke::Locomotion::State;
+    const kke::Locomotion::State st = m_loco->state();
+    const glm::mat4 toWorld = m_models->transform(m_charInstance);
+    const glm::mat4 toModel = glm::inverse(toWorld);
+    const float k = 1.0f - std::exp(-10.0f * dt);
+
+    // Feet: on the ground only (in the air they'd reach for the floor).
+    m_footWeight += ((m_footIk && st == State::Ground ? 1.0f : 0.0f) - m_footWeight) * k;
+    kke::RigidWorld& w = m_rigid->world();
+    auto ground = [&](const glm::vec3& from, glm::vec3& hit) {
+        const glm::vec3 start = glm::vec3(toWorld * glm::vec4(from, 1.0f));
+        kke::RigidWorld::RayHit h = w.raycast(start, glm::vec3(0, -1, 0), 1.2f);
+        if (!h.hit || h.normal.y < 0.5f) return false;
+        hit = glm::vec3(toModel * glm::vec4(h.point, 1.0f));
+        return true;
+    };
+    m_feet.apply(m_rigData, pose, ground, dt, m_footWeight);
+
+    // Hands: on the top edge during the first part of a vault or climb,
+    // where the stand-in clips have no hand plant of their own.
+    const bool reach = m_handIk && ((st == State::Climb && m_loco->traversalProgress() < 0.7f) ||
+                                    (st == State::Vault && m_loco->traversalProgress() < 0.45f));
+    m_handWeight += ((reach ? 1.0f : 0.0f) - m_handWeight) * (1.0f - std::exp(-18.0f * dt));
+    if (m_handWeight > 0.01f) {
+        const kke::Locomotion::Obstacle& o = m_loco->lastObstacle();
+        const glm::vec3 in = -o.normal;
+        const glm::vec3 side(in.z, 0.0f, -in.x);
+        const glm::vec3 edge(o.face.x + in.x * 0.08f, o.target.y + 0.02f, o.face.z + in.z * 0.08f);
+        const std::vector<glm::mat4> world = kke::poseToModel(m_rigData, pose);
+        for (int i = 0; i < 2; ++i) {
+            const kke::TwoBoneChain& arm = i == 0 ? m_armL : m_armR;
+            if (!arm.valid()) continue;
+            // Shoulder-width apart along the edge; which side is which
+            // comes from where the shoulders are.
+            const glm::vec3 shoulder = glm::vec3(toWorld * world[arm.upper][3]);
+            const float s = glm::dot(shoulder - edge, side) > 0.0f ? 1.0f : -1.0f;
+            const glm::vec3 hand = edge + side * (0.22f * s);
+            const glm::vec3 elbow = glm::vec3(toWorld * world[arm.lower][3]);
+            const glm::vec3 pole = elbow - in * 0.3f + side * (0.3f * s) - glm::vec3(0, 0.2f, 0);
+            kke::solveTwoBone(m_rigData, pose, arm, glm::vec3(toModel * glm::vec4(hand, 1.0f)),
+                              glm::vec3(toModel * glm::vec4(pole, 1.0f)), m_handWeight);
+        }
+    }
+    kke::poseToLocals(pose, *locals);
 }
 
 void ShowcaseModule::setCaptured(bool on) {
@@ -531,10 +640,12 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
 
     updateAnimation(dt);
     if (m_charInstance) {
-        // The mannequin faces -Z, like the rig at yaw 0.
-        glm::mat4 t = glm::rotate(glm::translate(glm::mat4(1.0f), feet), glm::radians(-m_facing), glm::vec3(0, 1, 0));
+        // Turn the model so it faces -Z (UAL's mannequin already does;
+        // Synty characters face +Z), then like the rig at yaw 0.
+        glm::mat4 t = glm::rotate(glm::translate(glm::mat4(1.0f), feet), glm::radians(m_modelYaw - m_facing), glm::vec3(0, 1, 0));
         m_models->setTransform(m_charInstance, t);
         m_models->setVisible(m_charInstance, m_rig.mode != kke::CameraRig::Mode::FirstPerson);
+        applyIk(dt);
     }
 
     // Camera (collides with the level through Jolt ray casts).
@@ -584,7 +695,6 @@ void ShowcaseModule::updateAnimation(float dt) {
     }
     m_anim->setParameter(speed); // measured speed: legs match the ground, in turns too
     m_anim->update(dt);
-    if (std::vector<glm::mat4>* locals = m_models->boneLocals(m_charInstance)) kke::poseToLocals(m_anim->pose(), *locals);
 }
 
 void ShowcaseModule::render(const kke::RenderContext& ctx) {
@@ -682,6 +792,20 @@ void ShowcaseModule::renderUi() {
         ImGui::SliderFloat("Vault clearance", &ms.vaultClearance, 0.0f, 0.6f, "%.2f m");
         ImGui::SliderFloat("Climb time", &ms.climbTime, 0.3f, 2.0f, "%.2f s");
         ImGui::TextWrapped("Parkour lane at x = 20: fence and low wall (vault), block (climb), 2.1 m ledge (sprint, then climb), 3 m wall (no).");
+    }
+    if (ImGui::CollapsingHeader("Character")) {
+        ImGui::Checkbox("Feet on the ground (foot IK)", &m_footIk);
+        ImGui::Checkbox("Hands on edges (hand IK)", &m_handIk);
+        ImGui::Text("Hips lowered %.2f m", -m_feet.pelvisOffset());
+        scanCatalog();
+        const char* current = m_character.empty() ? "UAL mannequin" : m_character.c_str();
+        if (ImGui::BeginCombo("Character", current)) {
+            if (ImGui::Selectable("UAL mannequin", m_character.empty())) useCharacter("");
+            for (const std::string& c : m_characters)
+                if (ImGui::Selectable(c.c_str(), c == m_character)) useCharacter(c);
+            ImGui::EndCombo();
+        }
+        ImGui::TextWrapped("Synty characters wear the UAL clips, retargeted by bone name.");
     }
     if (ImGui::CollapsingHeader("Lighting")) {
         ImGui::SliderFloat("Sun direction", &m_sunAzimuth, -180.0f, 180.0f, "%.0f deg");

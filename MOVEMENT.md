@@ -119,18 +119,47 @@ the climb. States look up `Vault`, `Climb_Up` and `Climb_Over` clips by name
 first, so a pack that has them (Quaternius' full UAL, for example) drops
 in without code changes.
 
+After the Animator, two small modifiers run in a fixed order
+(`engine/include/kke/AnimRig.h`, PointDown's *SkeletonModifier3D* idea):
+
+- **Feet on the ground.** Each foot keeps its animated lift above the
+  ground under it, the hips drop when one foot has to go lower than the
+  capsule's floor (stairs, slopes, rock), and analytic two-bone IK bends
+  the legs. Smoothed over frames, and off in the air.
+- **Hands on the edge.** During the first part of a vault or climb, the
+  hands go to the top edge the probe found, shoulder-width apart, with
+  the elbows bending out and back. It stands in for the hand plant the
+  stand-in clips don't have.
+
+**Any Synty character can wear the UAL clips.** Bones pair up by name
+(UAL and Synty both follow the Unreal mannequin, give or take case and
+Synty's `indexFinger`/`finger`), and each paired bone copies the source's
+rotation change from its rest pose, turned by the difference in facing
+(UAL faces -Z, Synty +Z); the pelvis travel scales with leg length. The
+match logs which bones stayed at rest (Synty's eyes, eyebrows and toes).
+*Importing animated 3D characters* (a0_JVEY7sbY) puts it as a contract: a
+clip only means something for the skeleton it was made for, so a
+mismatch should be visible, not silent. Try it in kke_demo's Character
+panel, or `KKE_CHARACTER=SK_Character_Father_01 ./kke_demo`.
+
+**Root motion** is available as data: `AnimationSet::extractRootMotion`
+moves a bone's horizontal travel out of the clips into a track, the clip
+plays in place, and `Animator::rootMotion()` reports the travel each
+update for the game to apply. Locomotion clips don't use it (the
+controller moves the capsule, and the blend space follows the measured
+speed); it's for authored moves such as a real vault clip.
+
 ## Not done yet (next)
 
 - Ledge hang and shimmy, corners, ledge-to-ledge leaps (*Ledge actions*),
   wall run.
-- Two-bone / CCD IK to put the hands on the edge and the feet on the ground
-  (*IK fundamentals with CCD*, 8pX6LeZdpOo; *SkeletonModifier3D*,
-  xpoPfUKI9tw: modifiers run after the animation in a fixed order, and
-  each is small).
+- Foot rotation to match slopes, and CCD for longer chains (*IK
+  fundamentals with CCD*, 8pX6LeZdpOo); the legs and arms use the
+  analytic two-bone solve.
 - Animation layering (upper body over locomotion; *Animation layering
   pipelines*, Fsa2wxyQvzM, blocked below).
-- Root-motion extraction as data (velocity tracks) for authored vaults
-  (*Root motion once and for all*).
+- Rest-pose matching for retargeting between skeletons whose rest poses
+  differ a lot (A-pose vs T-pose arms); UAL and Synty are close enough.
 
 ## Transcripts
 
@@ -139,5 +168,6 @@ about a dozen requests, so these videos didn't come through: *God Tier 3D
 Character Controller* (qIf5YQ8qJng), *Detect climbable ledges*
 (yxWxHfjNpa4), *Animation layering pipelines* (Fsa2wxyQvzM), *Post-start
 melee attack redirection* (WGZ-QG-0cpw), *Use professional AAA practices*
-(FgO5edghqRE), *Importing animated 3D characters* (a0_JVEY7sbY). Their principles overlap with the videos above; retrying
+(FgO5edghqRE). *Importing animated 3D characters* (a0_JVEY7sbY) came
+through on a retry. Their principles overlap with the videos above; retrying
 from another network would complete the set.

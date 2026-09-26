@@ -52,6 +52,21 @@ void addCollision(const SceneObject& o, const ModelData& model, const glm::mat4&
 
 } // namespace
 
+ModelLoadOptions packLoadOptions(const AssetCatalog& catalog, const CatalogAsset& asset) {
+    ModelLoadOptions opts;
+    opts.loadAnimations = false;
+    if (const CatalogPack* pack = catalog.pack(asset.pack)) {
+        opts.textureSearchPaths = pack->textureDirs;
+        // Some meshes point at another pack's atlas: use this one's.
+        opts.fallbackTexture = pack->defaultTexture;
+        opts.assetTexture = catalog.namedTexture(asset);
+        opts.atlasForUntextured = !pack->defaultTexture.empty();
+        const CatalogAsset* a = &asset; // the catalog outlives the load
+        opts.textureForMaterial = [&catalog, a](const std::string& m) { return catalog.namedTexture(*a, m); };
+    }
+    return opts;
+}
+
 LoadedScene loadScene(const SceneFile& scene, const AssetCatalog& catalog, ModelModule& models, RigidWorld* world, const glm::vec3& origin) {
     LoadedScene out;
     out.origin = origin;
@@ -64,18 +79,7 @@ LoadedScene loadScene(const SceneFile& scene, const AssetCatalog& catalog, Model
         else {
             const CatalogAsset* asset = catalog.find(o.asset, scene.packs);
             if (asset) {
-                const CatalogPack* pack = catalog.pack(asset->pack);
-                ModelLoadOptions opts;
-                opts.loadAnimations = false;
-                if (pack) {
-                    opts.textureSearchPaths = pack->textureDirs;
-                    // Some meshes point at another pack's atlas: use this one's.
-                    opts.fallbackTexture = pack->defaultTexture;
-                    opts.assetTexture = catalog.namedTexture(*asset);
-                    opts.atlasForUntextured = !pack->defaultTexture.empty();
-                    opts.textureForMaterial = [&catalog, asset](const std::string& m) { return catalog.namedTexture(*asset, m); };
-                }
-                id = models.load(asset->path, opts);
+                id = models.load(asset->path, packLoadOptions(catalog, *asset));
             }
             loaded[o.asset] = id;
             if (!id) out.missing.push_back(o.asset);

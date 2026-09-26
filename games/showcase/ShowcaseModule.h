@@ -1,5 +1,6 @@
 #pragma once
 
+#include "kke/AnimRig.h"
 #include "kke/Animator.h"
 #include "kke/AssetCatalog.h"
 #include "kke/SceneLoader.h"
@@ -51,6 +52,13 @@ private:
     // its own spot far from the course.
     void findScenes();
     void visitScene(size_t index);
+    void scanCatalog();
+    // Who you play: "" = the UAL mannequin, else a Synty SK_ character
+    // (by asset name) wearing the UAL clips, retargeted.
+    void useCharacter(const std::string& asset);
+    void buildAnimator();
+    // Feet on the ground, hands on the edge (after the Animator).
+    void applyIk(float dt);
     void shoot();
     void forcePush();
     void setCaptured(bool on);
@@ -94,6 +102,15 @@ private:
     glm::vec3 m_spawn{0.0f, 0.05f, 6.0f};
     kke::ModelModule::ModelId m_charModel = 0;
     kke::ModelModule::InstanceId m_charInstance = 0;
+    kke::ModelModule::ModelId m_ualModel = 0;
+    std::string m_character;               // "" = mannequin
+    std::vector<std::string> m_characters; // SK_ assets in the catalog
+    kke::ModelData m_rigData;              // the character's bones + its clips
+    kke::FootPlacer m_feet;
+    kke::TwoBoneChain m_armL, m_armR;
+    bool m_footIk = true, m_handIk = true;
+    float m_footWeight = 0.0f, m_handWeight = 0.0f;
+    float m_modelYaw = 0.0f; // turns the model to face -Z
     std::unique_ptr<kke::AnimationSet> m_animSet;
     std::unique_ptr<kke::Animator> m_anim;
     int m_stMove = -1, m_stCrouch = -1, m_stJump = -1, m_stFall = -1, m_stLand = -1;
