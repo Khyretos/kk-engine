@@ -1,5 +1,6 @@
 #include "kke/Application.h"
 #include "kke/LogoIntro.h"
+#include "kke/DevTools.h"
 
 #include <cstdlib>
 #include "kke/Log.h"
@@ -52,7 +53,7 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
     if (!g_runtimeDirNote.empty()) log::get("Application")->info("{}", g_runtimeDirNote);
     {
         EngineSettings defaults;
-        if (const char* all = std::getenv("KKE_USE_EVERYTHING"); all && *all == '1') defaults.performance.useEverything = true;
+        if (const char* all = dev::env("KKE_USE_EVERYTHING"); all && *all == '1') defaults.performance.useEverything = true;
         setResourceBudget(computeBudget(defaults, usableCpuCount()));
     }
     m_renderer = std::make_unique<Renderer>(m_window);
@@ -175,6 +176,8 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
 
     m_debugUi = std::make_unique<DebugUi>(m_window, m_renderer->device(), m_renderer->renderPass(),
                                            m_renderer->swapChainImageCount());
+    // Shipping builds start (and stay) with the developer panels hidden.
+    m_debugUi->setVisible(dev::kEnabled);
 }
 
 Application::~Application() {
@@ -340,7 +343,7 @@ void Application::resolveInitOrder() {
 }
 
 void Application::playIntro() {
-    if (const char* skip = std::getenv("KKE_SKIP_INTRO"); skip && *skip && *skip != '0') return;
+    if (dev::flag("KKE_SKIP_INTRO")) return;
     std::unique_ptr<LogoIntro> intro;
     try {
         intro = std::make_unique<LogoIntro>(*this);
@@ -351,7 +354,7 @@ void Application::playIntro() {
     }
     // KKE_INTRO_AT=<seconds>: freeze the intro at that moment (screenshots).
     float freezeAt = -1.0f;
-    if (const char* at = std::getenv("KKE_INTRO_AT"); at && *at) freezeAt = static_cast<float>(std::atof(at));
+    if (const char* at = dev::env("KKE_INTRO_AT"); at && *at) freezeAt = static_cast<float>(std::atof(at));
 
     auto last = std::chrono::high_resolution_clock::now();
     bool playing = true, skipped = false;
@@ -401,7 +404,7 @@ void Application::run() {
     // KKE_HIDE_UI=1: start with every module's panels hidden (clean
     // screenshots and recordings; modules that toggle panels, e.g. F1 in
     // the sandbox, can still show them).
-    if (const char* hide = std::getenv("KKE_HIDE_UI"); hide && *hide && *hide != '0')
+    if (dev::flag("KKE_HIDE_UI"))
         for (Module* m : m_initOrder) m->setUiVisible(false);
 
     auto startTime = std::chrono::high_resolution_clock::now();
@@ -543,8 +546,11 @@ void Application::run() {
         // so they only ever run for a frame guaranteed to complete.
         if (m_renderer->beginFrame()) {
             m_debugUi->beginFrame();
-            for (Module* m : m_initOrder) {
-                if (m->uiVisible()) safeInvoke(m, "renderUi", [&] { m->renderUi(); });
+            // Developer panels: compiled out of shipping builds (kke/DevTools.h).
+            if constexpr (dev::kEnabled) {
+                for (Module* m : m_initOrder) {
+                    if (m->uiVisible()) safeInvoke(m, "renderUi", [&] { m->renderUi(); });
+                }
             }
 
             VkCommandBuffer cmd = m_renderer->currentCommandBuffer();

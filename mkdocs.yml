@@ -86,6 +86,7 @@ nav:
       - Input: INPUT.md
       - Audio: AUDIO.md
       - Networking: NETWORKING.md
+      - Anti-cheat: ANTI_CHEAT.md
       - Scenes: SCENES.md
       - Jiggle physics: JIGGLE.md
       - Physics bridge: PHYSICS_BRIDGE.md

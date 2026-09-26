@@ -1,5 +1,6 @@
 #include "kke/modules/InputModule.h"
 
+#include "kke/DevTools.h"
 #include "kke/Log.h"
 
 #include <nlohmann/json.hpp>
@@ -171,6 +172,9 @@ void InputModule::mirrorKeyboard(InputMap& m) {
 
 void InputModule::init(Application&) {
     m_devices.init();
+    m_sanity.onFinding = [this](const InputSanity::Finding& f) {
+        log::get(name())->info("input sanity: {} on control {:#x}: {}", toString(f.kind), f.control, f.detail);
+    };
     // Device names/swaps load now (bindings load in commitDefaults(), after
     // the game has defined its actions).
     std::ifstream f(m_path);
@@ -183,8 +187,11 @@ void InputModule::init(Application&) {
         }
     }
     commitDefaults(); // UI actions; games call it again after adding theirs
-    if (const char* v = std::getenv("KKE_VIRTUAL_INPUT"); v && *v) attachVirtualDevices(v);
-    if (const char* a = std::getenv("KKE_VIRTUAL_INPUT_ANIMATE")) m_animateVirtual = *a && *a != '0';
+    // Virtual devices are a developer tool (headless tests, recordings):
+    // a shipping build never creates them (kke/DevTools.h), so they
+    // can't be used to inject input.
+    if (const char* v = dev::env("KKE_VIRTUAL_INPUT"); v && *v) attachVirtualDevices(v);
+    m_animateVirtual = dev::flag("KKE_VIRTUAL_INPUT_ANIMATE");
 }
 
 void InputModule::attachVirtualDevices(const std::string& spec) {
@@ -308,11 +315,48 @@ void InputModule::frameStart(const UpdateContext& ctx) {
     if (m_animateVirtual) animateVirtualDevices(ctx.totalTime);
     m_devices.poll();
     for (auto& m : m_maps) m->update(m_devices, m_now);
+    m_sanity.update(static_cast<double>(SDL_GetTicksNS()) * 1e-9); // same clock as event timestamps
 }
 
 void InputModule::frameEnd() { m_devices.endFrame(); }
 
-void InputModule::onEvent(const SDL_Event& event) { m_devices.handleEvent(event); }
+uint32_t InputModule::sanityControl(const SDL_Event& e) {
+    switch (e.type) {
+    case SDL_EVENT_KEY_DOWN:
+    case SDL_EVENT_KEY_UP: return (1u << 28) | (static_cast<uint32_t>(e.key.scancode) & 0xFFFFu);
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+    case SDL_EVENT_MOUSE_BUTTON_UP: return (2u << 28) | e.button.button;
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+    case SDL_EVENT_GAMEPAD_BUTTON_UP: return (3u << 28) | ((static_cast<uint32_t>(e.gbutton.which) & 0xFFFu) << 8) | e.gbutton.button;
+    case SDL_EVENT_GAMEPAD_AXIS_MOTION: return (4u << 28) | ((static_cast<uint32_t>(e.gaxis.which) & 0xFFFu) << 8) | e.gaxis.axis;
+    default: return 0;
+    }
+}
+
+void InputModule::onEvent(const SDL_Event& event) {
+    m_devices.handleEvent(event);
+    // OS timestamps (ns), not frame times: frames would make every human
+    // look machine-regular (kke/InputSanity.h).
+    const double t = static_cast<double>(event.common.timestamp) * 1e-9;
+    switch (event.type) {
+    case SDL_EVENT_KEY_DOWN:
+    case SDL_EVENT_KEY_UP:
+        if (!event.key.repeat) m_sanity.button(sanityControl(event), event.type == SDL_EVENT_KEY_DOWN, t);
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        m_sanity.button(sanityControl(event), event.type == SDL_EVENT_MOUSE_BUTTON_DOWN, t);
+        break;
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+    case SDL_EVENT_GAMEPAD_BUTTON_UP:
+        m_sanity.button(sanityControl(event), event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN, t);
+        break;
+    case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+        m_sanity.axis(sanityControl(event), static_cast<float>(event.gaxis.value) / 32767.0f, t);
+        break;
+    default: break;
+    }
+}
 
 void InputModule::shutdown() {
     for (Virtual& v : m_virtual) {

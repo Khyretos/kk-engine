@@ -161,6 +161,7 @@ void NetServer::drop(Client& c, const std::string& reason) {
     m_transport.disconnect(c.peer);
     c.peer = kNoPeer;
     if (c.id) {
+        authority.forget(c.id);
         PlayerInfoMsg left{ c.id, false, c.name, c.character };
         broadcastReliable(encode(MessageType::PlayerInfo, left), c.id);
         if (onPlayer) onPlayer(c.id, false);
@@ -285,9 +286,14 @@ void NetServer::handleHello(Client& c, const HelloMsg& m) {
 void NetServer::handleState(Client& c, const PlayerStateMsg& m) {
     const NetPlayerState& s = m.state;
     if (!finite(s.position) || !finite(s.velocity)) return bad(c, "non-finite state");
+    const Authority moveAuthority = authority.authority(c.id, Action::Move);
+    if (moveAuthority == Authority::Server) return; // the server moves this player, not its client
     if (c.hasState) {
         const int32_t delta = static_cast<int32_t>(m.timeMs - c.acceptedTimeMs);
         if (delta <= 0) return; // old or duplicate (reordered): the newer one is already in
+    }
+    if (c.hasState && moveAuthority == Authority::Checked) {
+        const int32_t delta = static_cast<int32_t>(m.timeMs - c.acceptedTimeMs);
         // The client's clock may not run faster than ours (+ slack): it
         // can't buy itself more distance by claiming more time passed.
         const double dt = std::min(delta / 1000.0, (m_now - c.acceptedAt) + 0.25);
@@ -339,6 +345,11 @@ void NetServer::receive(Client& c, const NetEvent& e) {
             if (++c.eventsInWindow > m_config.maxEventsPerSecond) return; // flooding: dropped
             if (m->kind >= kEventBodiesReset) return bad(c, "reserved event");
             m->fromPlayer = c.id; // whatever it claimed
+            const Authority eventAuthority = authority.authority(c.id, Action::Event);
+            if (eventAuthority == Authority::Server || (eventAuthority == Authority::Checked && checkEvent && !checkEvent(c.id, *m))) {
+                ++m_refusedEvents;
+                return;
+            }
             if (onEvent) onEvent(*m);
         } else {
             bad(c, "event");
@@ -376,6 +387,7 @@ void NetServer::update(double now) {
                 PlayerInfoMsg left{ id, false, c->name, c->character };
                 c->id = 0; // erased with the others below
                 if (id) {
+                    authority.forget(id);
                     broadcastReliable(encode(MessageType::PlayerInfo, left), -1);
                     if (onPlayer) onPlayer(id, false);
                 }

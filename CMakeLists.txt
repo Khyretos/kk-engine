@@ -24,6 +24,7 @@ option(KKE_ENABLE_JOLT "Build the Jolt Physics rigid-body/collision layer (MIT):
 option(KKE_ENABLE_FEMFX "Build the vendored, patched AMD FEMFX deformable-physics library. See docs/HISTORY.md 'Physics: AMD FEMFX integration'." OFF)
 option(KKE_ENABLE_COVERAGE "Instrument builds for code coverage (gcc/clang --coverage). See docs/HISTORY.md 'Test suite & coverage'." OFF)
 option(KKE_WARNINGS_AS_ERRORS "GCC/Clang: fail the build on any -Wall -Wextra warning in the engine, games, tools or tests (third-party code excluded). CI turns this on." OFF)
+option(KKE_SHIPPING "Shipping build of a game: compiles out the developer tools players must not reach (debug panels, the Lua console, script hot reload, debug environment switches such as virtual input). See docs/ANTI_CHEAT.md." OFF)
 option(KKE_ENABLE_GPU_PROFILER "Request the VulkanProfiler layer (VK_LAYER_PROFILER_unified) at instance creation if installed. See docs/HISTORY.md 'GPU profiler (VulkanProfiler) integration'." OFF)
 
 if(KKE_ENABLE_COVERAGE)
@@ -288,6 +289,24 @@ if(NOT TARGET ufbx)
     # FBX parser, and a Debug -O0 parse of a big pack is needlessly slow.
     target_compile_options(ufbx PRIVATE $<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>)
 endif()
+
+# ---------------------------------------------------------------------------
+# Monocypher — BLAKE2b hashing and EdDSA signatures for sealed game data
+# (kke/PackSeal.h, docs/ANTI_CHEAT.md). BSD-2 / CC0, one .c/.h pair, no
+# dependencies, constant-time. Always optimized: hashing a whole pack at
+# -O0 would make startup checks needlessly slow.
+# ---------------------------------------------------------------------------
+FetchContent_Declare(
+    monocypher
+    GIT_REPOSITORY https://github.com/LoupVaillant/Monocypher.git
+    GIT_TAG        4.0.2
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(monocypher)
+add_library(kke_monocypher STATIC ${monocypher_SOURCE_DIR}/src/monocypher.c)
+target_include_directories(kke_monocypher SYSTEM PUBLIC ${monocypher_SOURCE_DIR}/src)
+set_target_properties(kke_monocypher PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_compile_options(kke_monocypher PRIVATE $<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>)
 
 # ---------------------------------------------------------------------------
 # miniaudio — audio output device on every platform (ALSA/PulseAudio/
@@ -560,6 +579,7 @@ add_subdirectory(engine)
 # here — this tool is what lets that be measured honestly on whatever
 # hardware actually has more than one.
 add_subdirectory(tools/model_info)
+add_subdirectory(tools/seal)
 if(KKE_ENABLE_BENCHMARKS)
     add_subdirectory(benchmarks)
 endif()
