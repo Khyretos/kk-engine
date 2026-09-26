@@ -41,6 +41,14 @@ public:
     enum class Controls { Viewer, Editor };
     void setControls(Controls c) { m_controls = c; }
     void setDistanceLimits(float minDistance, float maxDistance) { m_minDistance = minDistance; m_maxDistance = maxDistance; }
+    // Follow something (the view angles and distance stay the user's).
+    void setTarget(const glm::vec3& target);
+    glm::vec3 target() const;
+    // Jump to a view (e.g. when a demo switches scenes). Angles in radians.
+    void setView(const glm::vec3& target, float distance, float pitch, float yaw);
+    float distance() const { return m_distance; }
+    float pitch() const { return m_pitch; }
+    float yaw() const { return m_yaw; }
 
 private:
     Application* m_app = nullptr;

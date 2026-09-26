@@ -15,6 +15,22 @@ void OrbitCameraModule::init(Application& app) {
     app.camera().target = m_target;
 }
 
+// Before init() only the starting target exists; after it, the camera's
+// own target is the live one (panning moves it).
+void OrbitCameraModule::setTarget(const glm::vec3& target) {
+    m_target = target;
+    if (m_app) m_app->camera().target = target;
+}
+
+glm::vec3 OrbitCameraModule::target() const { return m_app ? m_app->camera().target : m_target; }
+
+void OrbitCameraModule::setView(const glm::vec3& target, float distance, float pitch, float yaw) {
+    setTarget(target);
+    m_distance = std::clamp(distance, m_minDistance, m_maxDistance);
+    m_pitch = pitch;
+    m_yaw = yaw;
+}
+
 void OrbitCameraModule::update(const UpdateContext& ctx) {
     Camera& camera = m_app->camera();
     const auto& mouse = m_app->window().mouseState();

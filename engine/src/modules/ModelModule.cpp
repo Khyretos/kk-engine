@@ -118,14 +118,25 @@ ModelModule::ModelId ModelModule::load(const std::string& path, const ModelLoadO
         return 0;
     }
     if (auto it = m_modelByPath.find(path); it != m_modelByPath.end()) return it->second;
-
-    auto loaded = std::make_unique<LoadedModel>();
+    ModelData data;
     try {
-        loaded->data = loadModel(path, options);
+        data = loadModel(path, options);
     } catch (const std::exception& e) {
         log::get(name())->error("{}", e.what());
         return 0;
     }
+    return add(std::move(data), path);
+}
+
+ModelModule::ModelId ModelModule::add(ModelData modelData, const std::string& key) {
+    if (!m_app) {
+        log::get(name())->error("add('{}') called before init()", key);
+        return 0;
+    }
+    if (auto it = m_modelByPath.find(key); it != m_modelByPath.end()) return it->second;
+    const std::string& path = key;
+    auto loaded = std::make_unique<LoadedModel>();
+    loaded->data = std::move(modelData);
     const ModelData& data = loaded->data;
     for (const ModelMaterial& mat : data.materials) {
         GpuMaterial gm{ mat.baseColor, mat.metallic, mat.roughness, textureSetFor(mat.albedoTexture) };
@@ -247,6 +258,13 @@ void ModelModule::playAnimation(InstanceId id, int clip, bool loop, float speed)
     inst.clipSpeed = speed;
     if (inst.clip < 0) {
         for (size_t b = 0; b < data.bones.size(); ++b) inst.locals[b] = data.bones[b].localRest;
+    }
+}
+
+void ModelModule::setSkinJiggle(InstanceId id, std::vector<SkinJiggleOffset> zones) {
+    if (auto it = m_instances.find(id); it != m_instances.end()) {
+        it->second.skinJiggle = std::move(zones);
+        it->second.skinnedFrame = ~0ull;
     }
 }
 
@@ -395,6 +413,7 @@ void ModelModule::skinInstance(Instance& inst, uint32_t frameIndex) {
         for (size_t v = 0; v < src.vertices.size(); ++v) {
             glm::vec3 p, n;
             skinVertex(src.vertices[v], skin, p, n);
+            if (!inst.skinJiggle.empty()) p += skinJiggleDisplacement(inst.skinJiggle, p);
             sb.cpu[v] = Vertex{ p, src.vertices[v].position, n, src.vertices[v].uv }; // overlay: bind pose
         }
         sb.vertices[frameIndex]->upload(sb.cpu.data(), sb.cpu.size() * sizeof(Vertex));

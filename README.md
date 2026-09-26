@@ -1487,6 +1487,15 @@ Honest limits: the sea is opaque (no refraction, underwater parts
 hidden), bodies are boxes (Synty boats/props as floaters: next), no
 FEMFX objects float yet, spray is simple ballistic particles.
 
+### `games/jiggle_demo` — jiggle physics
+
+`cd build/bin && ./jiggle_demo` (`Tab` switches scenes). A strawberry
+jelly with balls raining onto it (they dent it, it throws them back), and
+a Synty character given curves and soft-tissue bones that jiggle as she
+jogs, jumps and stops on UAL clips, with an optional twin without jiggle
+to compare. Engine pieces: `kke::JiggleRig`, `kke::JiggleSkin`,
+`kke::JellyBody`, `kke::addHumanoidSoftTissue` — see [JIGGLE.md](JIGGLE.md).
+
 ### `games/melt_demo` — pour lava, melt things
 
 `cd build/bin && ./melt_demo` (`KKE_MELT_PRESET=0..3` picks the block).

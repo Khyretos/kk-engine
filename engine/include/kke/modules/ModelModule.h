@@ -2,6 +2,7 @@
 
 #include "kke/Module.h"
 #include "kke/Buffer.h"
+#include "kke/JigglePhysics.h"
 #include "kke/Mesh.h"
 #include "kke/ModelAsset.h"
 #include "kke/Pipeline.h"
@@ -49,6 +50,10 @@ public:
     // failure logs the reason and returns 0 — a missing prop shouldn't
     // take the whole game down.
     ModelId load(const std::string& path, const ModelLoadOptions& options = {});
+    // Registers model data made or edited in code (e.g. a character given
+    // soft-tissue bones by kke::addJiggleBone) under `key`, as if loaded
+    // from a file of that name. Same key again returns the first one.
+    ModelId add(ModelData data, const std::string& key);
     const ModelData* model(ModelId id) const;
 
     InstanceId spawn(ModelId model, const glm::mat4& transform = glm::mat4(1.0f));
@@ -83,6 +88,9 @@ public:
     // Drive the skeleton from outside (e.g. physics) with model-space bone
     // transforms; empty vector clears the override.
     void setBoneWorldOverride(InstanceId instance, std::vector<glm::mat4> world);
+    // Jiggle on the skin itself (kke::JiggleSkin::offsets()): displaces
+    // skinned vertices near each zone after skinning. Empty clears.
+    void setSkinJiggle(InstanceId instance, std::vector<SkinJiggleOffset> zones);
 
     // Draw a (non-skinned) instance from caller-supplied world-space
     // vertices instead of mesh + transform: one position/normal vector per
@@ -141,6 +149,7 @@ private:
         // skinned only
         std::vector<glm::mat4> locals;
         std::vector<glm::mat4> worldOverride;
+        std::vector<SkinJiggleOffset> skinJiggle;
         std::vector<SkinnedBuffers> skinned; // one per skinned mesh of the model
         std::vector<SkinnedBuffers> deformed; // one per mesh part while setDeformedVertices is active
         uint64_t deformVersion = 0;

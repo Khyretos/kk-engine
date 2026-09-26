@@ -108,3 +108,21 @@ SM_Tree_Stump_01
 - **Sheets, not solids.** `SM_Terrain_RiverSide_01` is a surface whose
   near edge hangs at head height with nothing below it, so it can't be
   climbed; the trail uses `SM_Rock_Tile_03` instead.
+
+## Jiggle demo, body scene (`games/jiggle_demo`)
+
+Not a scene file: the demo loads one character by name and reshapes it in
+code (`kke::addHumanoidSoftTissue`: bust +6 cm, glutes +5 cm, hips +3 cm,
+two breast and two glute bones, belly and thigh skin zones).
+
+- Character: **POLYGON Fantasy Characters**, `SK_Character_Female_Gypsy`
+  (falls back to `SK_Character_Female_Peasant_01`, then POLYGON City
+  Characters `SK_Character_HipsterGirl`; `KKE_JIGGLE_CHARACTER` picks any).
+  Texture: the pack's own atlas via `packLoadOptions`.
+- Clips: Quaternius Universal Animation Library,
+  `assets/animations/UAL1_Standard.fbx` (Idle_Loop, Walk_Loop,
+  Jog_Fwd_Loop, Sprint_Loop, Jump_Start, Jump_Loop, Jump_Land), retargeted.
+- The jelly scene uses no assets.
+
+Put the pack in `assets/synty/POLYGON_Fantasy_Characters/` (a symlink to
+the shared cache works) or set `KKE_ASSETS_DIR`.

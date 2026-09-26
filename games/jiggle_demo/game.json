@@ -1,0 +1,9 @@
+{
+  "id": "engine.kke.jiggle_demo",
+  "title": "KKE Jiggle Demo",
+  "description": "Jiggle physics: a jelly on a plate with balls bouncing off it (lattice shape matching), and a Synty character given soft-tissue bones that jiggle as she jogs, jumps and stops. The character scene needs a Synty character pack in assets/synty/ (never committed).",
+  "version": "0.1.0",
+  "tags": ["demo", "physics", "jiggle", "soft body", "animation"],
+  "engine_version": "0.3",
+  "modules": ["Models", "OrbitCamera", "UI"]
+}
