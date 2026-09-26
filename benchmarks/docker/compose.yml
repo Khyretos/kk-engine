@@ -59,6 +59,18 @@ services:
     memswap_limit: 16g
     environment: { <<: *software-gpu, KKE_PROFILE: high-8c-16g }
 
+  # Steam Deck-sized: 4 cores / 8 threads, 16 GB shared with a 1 GB
+  # default GPU carve-out, on the steam-deck hardware target
+  # (docs/PLATFORMS.md). Core count and memory match; the speed of a
+  # lavapipe container does not, so treat its fps as a floor, and run
+  # kke_bench on a real Deck for the numbers that matter.
+  steam-deck:
+    <<: *bench
+    cpuset: "0-7"
+    mem_limit: 16g
+    memswap_limit: 16g
+    environment: { <<: *software-gpu, KKE_PROFILE: steam-deck, KKE_TARGET: steam-deck, KKE_VRAM_BUDGET_MB: "1024" }
+
   # Real GPUs passed through (whole machine otherwise).
   intel-arc:
     <<: *bench

@@ -1,5 +1,7 @@
 #include "kke/Thumbnails.h"
 
+#include "kke/Platform.h"
+
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
@@ -33,11 +35,7 @@ std::string envOr(const char* name) {
 
 std::string defaultThumbnailCacheRoot() {
     if (std::string v = envOr("KKE_THUMBNAIL_CACHE"); !v.empty()) return v;
-#ifdef _WIN32
-    if (std::string v = envOr("LOCALAPPDATA"); !v.empty()) return v + "\\kk-engine\\thumbnails";
-#endif
-    if (std::string v = envOr("XDG_CACHE_HOME"); !v.empty()) return v + "/kk-engine/thumbnails";
-    if (std::string v = envOr("HOME"); !v.empty()) return v + "/.cache/kk-engine/thumbnails";
+    if (std::string v = platform::userCacheDir(); !v.empty()) return v + "/kk-engine/thumbnails";
     return {};
 }
 

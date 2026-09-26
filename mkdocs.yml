@@ -100,7 +100,8 @@ nav:
       - Rendering principles: RENDERING_PRINCIPLES.md
       - Benchmarks: BENCHMARKS.md
       - Performance notes: PERFORMANCE_NOTES.md
-      - Scaling and platforms: SCALING.md
+      - Platforms and hardware targets: PLATFORMS.md
+      - Scaling: SCALING.md
       - Dependencies and licences: DEPENDENCIES.md
       - Hardware tests: HARDWARE_TESTS.md
   - Project:

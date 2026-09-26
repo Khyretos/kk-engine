@@ -31,7 +31,7 @@ public:
     void apply();            // push settings() into the engine (live)
     bool save();             // write settings() to disk; it becomes saved()
     void revert();           // settings() = saved(), then apply()
-    void resetToDefaults();  // settings() = defaults, then apply() (not saved until save())
+    void resetToDefaults();  // settings() = the hardware target's defaults, then apply() (not saved until save())
     bool hasUnsavedChanges() const { return m_settings != m_saved; }
     const std::string& path() const { return m_path; }
 

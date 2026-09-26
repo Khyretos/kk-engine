@@ -2,6 +2,8 @@
 // process memory. Kept apart from BenchmarkReport.cpp so the pure part
 // stays trivially unit-testable.
 #include "kke/BenchmarkReport.h"
+#include "kke/HardwareTarget.h"
+#include "kke/Platform.h"
 
 #include <SDL3/SDL.h>
 #include <volk.h>
@@ -11,14 +13,6 @@
 #include <fstream>
 #include <string>
 
-#if defined(_WIN32)
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <psapi.h>
-#else
-#include <unistd.h>
-#include <sys/resource.h>
-#endif
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
 #if defined(_MSC_VER)
 #include <intrin.h>
@@ -80,35 +74,15 @@ std::string versionString(uint32_t v) {
 
 } // namespace
 
-std::string hostNameForFileName() {
-#if defined(_WIN32)
-    if (const char* n = std::getenv("COMPUTERNAME")) return n;
-#else
-    char buf[256] = {};
-    if (gethostname(buf, sizeof(buf) - 1) == 0 && buf[0]) return buf;
-#endif
-    return "unknown-host";
-}
+std::string hostNameForFileName() { return platform::hostName(); }
 
-double peakResidentMemoryMb() {
-#if defined(_WIN32)
-    PROCESS_MEMORY_COUNTERS pmc{};
-    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) return pmc.PeakWorkingSetSize / (1024.0 * 1024.0);
-    return 0.0;
-#else
-    struct rusage usage{};
-    if (getrusage(RUSAGE_SELF, &usage) != 0) return 0.0;
-#if defined(__APPLE__)
-    return usage.ru_maxrss / (1024.0 * 1024.0); // bytes on macOS
-#else
-    return usage.ru_maxrss / 1024.0;            // kilobytes on Linux
-#endif
-#endif
-}
+double peakResidentMemoryMb() { return platform::peakResidentMemoryMb(); }
 
 std::vector<BenchmarkReport::KeyValue> collectSystemInfo(void* vkPhysicalDevice) {
     std::vector<BenchmarkReport::KeyValue> info;
     info.emplace_back("os", SDL_GetPlatform());
+    info.emplace_back("platform_backend", platform::backendName());
+    info.emplace_back("hardware_target", detectHardwareTarget().target->name);
     info.emplace_back("host", hostNameForFileName());
     info.emplace_back("cpu", cpuModel());
     info.emplace_back("cpu_logical_cores", std::to_string(SDL_GetNumLogicalCPUCores()));

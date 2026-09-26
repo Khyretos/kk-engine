@@ -3,6 +3,7 @@
 #if KKE_ENABLE_FEMFX
 
 #include "kke/Log.h"
+#include "kke/Platform.h"
 #include "kke/Application.h"
 #include "kke/VulkanCheck.h"
 #include "kke/BenchmarkReport.h"
@@ -12,9 +13,6 @@
 #include <imgui.h>
 #include <AMD_FEMFX.h>
 #include <cstdlib>
-#if defined(_WIN32)
-#include <malloc.h>
-#endif
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -31,9 +29,6 @@
 #include <map>
 #include <chrono>
 #include <SDL3/SDL.h>
-#if defined(__linux__)
-#include <sched.h>
-#endif
 
 // FEMFX declares these extern (FEMFXCommon.h) and expects the
 // application to define them — an allocator hook, the same pattern as
@@ -42,26 +37,9 @@
 // declares them (verified directly: qualifying these as AMD:: produced
 // a real compile error, "should have been declared inside 'AMD'",
 // which is what confirmed the declaration is global, not guessed).
-void* FmAlignedMalloc(size_t size, size_t alignment) {
-    // std::aligned_alloc requires size to be a multiple of alignment —
-    // a real C++17 requirement, not FEMFX's own. FEMFX always passes a
-    // type's natural alignment as the second argument, so rounding size
-    // up is correct and harmless regardless of what's being allocated.
-    size_t roundedSize = ((size + alignment - 1) / alignment) * alignment;
-    #if defined(_WIN32)
-    return _aligned_malloc(roundedSize, alignment); // no std::aligned_alloc in the Windows C runtime
-#else
-    return std::aligned_alloc(alignment, roundedSize);
-#endif
-}
+void* FmAlignedMalloc(size_t size, size_t alignment) { return kke::platform::alignedAlloc(size, alignment); }
 
-void FmAlignedFree(void* ptr) {
-#if defined(_WIN32)
-    _aligned_free(ptr);
-#else
-    std::free(ptr);
-#endif
-}
+void FmAlignedFree(void* ptr) { kke::platform::alignedFree(ptr); }
 
 namespace kke {
 
@@ -338,18 +316,11 @@ void PhysicsModule::init(Application& app) {
     // which the pool's own fallback path (see ThreadPool::submit)
     // handles as synchronous execution, not a degraded/broken
     // multithreaded path.
-    unsigned int hwThreads = std::thread::hardware_concurrency();
-#if defined(__linux__)
-    // hardware_concurrency() reports every core in the machine, ignoring
-    // CPU affinity — so a process pinned to one core (taskset, a
-    // container CPU limit, or the min-spec emulation in
-    // docs/PERFORMANCE_NOTES.md) would still start one worker per core, all
-    // fighting over the same core. Count the cores we may actually use.
-    cpu_set_t affinity;
-    if (sched_getaffinity(0, sizeof(affinity), &affinity) == 0) {
-        hwThreads = static_cast<unsigned int>(CPU_COUNT(&affinity));
-    }
-#endif
+    // Cores this process may use (affinity, container limits), not just
+    // what the machine has: a process pinned to one core (taskset, the
+    // min-spec emulation in docs/PERFORMANCE_NOTES.md) must not start one
+    // worker per core, all fighting over the same core.
+    unsigned int hwThreads = kke::platform::usableCpuCount();
     int numWorkers = (hwThreads == 0) ? 1 : static_cast<int>(hwThreads);
     // The resource governor's share of those (all of them only with
     // "use everything"); KKE_PHYSICS_THREADS still overrides.
@@ -362,7 +333,7 @@ void PhysicsModule::init(Application& app) {
     m_workerThreads = numWorkers;
     g_poolOwner = std::make_unique<ThreadPool>(numWorkers);
     g_pool = g_poolOwner.get();
-    log::get(name())->info("Task system: {} worker(s) (hardware_concurrency={})", numWorkers, hwThreads);
+    log::get(name())->info("Task system: {} worker(s) ({} usable cores)", numWorkers, hwThreads);
 
     // Sized for kMaxObjects (see PhysicsModule.h) plus the one ground
     // rigid body — generous-but-modest numbers, not derived from first

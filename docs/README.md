@@ -31,6 +31,7 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [OPTIMIZATION.md](OPTIMIZATION.md) | Performance rules, measured log and backlog |
 | [RENDERING_PRINCIPLES.md](RENDERING_PRINCIPLES.md) | Rendering doctrine: no dithering, a clean image every frame, what we took from Threat Interactive |
 | [PERFORMANCE_NOTES.md](PERFORMANCE_NOTES.md) | What RayFire and Chaos do for destruction at scale, and what KKE took from it |
+| [PLATFORMS.md](PLATFORMS.md) | What runs where, hardware targets (Steam Deck, phones...), build presets, consoles |
 | [SCALING.md](SCALING.md) | Worst cases, multiplayer limits and platform support |
 | [BENCHMARKS.md](BENCHMARKS.md) | The stress test, kke_bench, hardware profiles, tracked results |
 | [HARDWARE_TESTS.md](HARDWARE_TESTS.md) | Checks only real hardware can answer |

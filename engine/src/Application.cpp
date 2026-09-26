@@ -62,8 +62,19 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
     : m_window((g_runtimeDirNote = enterRuntimeDirectory(), title), width, height), m_fixedDt(1.0f / fixedUpdateHz) {
     log::init(title);
     if (!g_runtimeDirNote.empty()) log::get("Application")->info("{}", g_runtimeDirNote);
+    // A game may ship its own tiers or tune the built-in ones
+    // (targets.json / targets.yml next to the executable).
     {
-        EngineSettings defaults;
+        std::string error;
+        if (int n = loadHardwareTargetsFile("targets.json", &error); n > 0)
+            log::get("Application")->info("{} hardware target(s) from targets.json", n);
+        if (!error.empty()) log::get("Application")->warn("{}", error);
+    }
+    m_target = detectHardwareTarget();
+    log::get("Application")->info("Hardware target: {} ({}); platform backend: {}", m_target.target->name, m_target.reason,
+                                  platform::backendName());
+    {
+        EngineSettings defaults = targetDefaultSettings();
         if (const char* all = dev::env("KKE_USE_EVERYTHING"); all && *all == '1') defaults.performance.useEverything = true;
         setResourceBudget(computeBudget(defaults, usableCpuCount()));
     }
@@ -74,7 +85,7 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         // before any module creates one: the saved setting (settings.json
         // next to the executable, as SettingsModule writes it), off on a
         // software rasteriser (min-spec), KKE_MSAA=n overrides both.
-        EngineSettings saved = loadSettingsFile("settings.json");
+        EngineSettings saved = loadSettingsFile("settings.json", nullptr, targetDefaultSettings());
         saved.sanitize();
         int msaa = m_renderer->device().isSoftwareRasterizer() ? 1 : saved.graphics.msaa;
         if (const char* env = dev::env("KKE_MSAA"); env && *env) msaa = std::max(1, std::atoi(env));

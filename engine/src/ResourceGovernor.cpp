@@ -1,25 +1,12 @@
 #include "kke/ResourceGovernor.h"
 
-#include <algorithm>
-#include <thread>
+#include "kke/Platform.h"
 
-#if defined(__linux__)
-#include <sched.h>
-#endif
+#include <algorithm>
 
 namespace kke {
 
-unsigned usableCpuCount() {
-    unsigned n = std::thread::hardware_concurrency();
-#if defined(__linux__)
-    // hardware_concurrency() counts every core in the machine, ignoring
-    // CPU affinity (taskset, container limits, the min-spec emulation in
-    // docs/PERFORMANCE_NOTES.md).
-    cpu_set_t affinity;
-    if (sched_getaffinity(0, sizeof(affinity), &affinity) == 0) n = static_cast<unsigned>(CPU_COUNT(&affinity));
-#endif
-    return std::max(1u, n);
-}
+unsigned usableCpuCount() { return platform::usableCpuCount(); }
 
 ResourceBudget computeBudget(const EngineSettings& s, unsigned cores) {
     cores = std::max(1u, cores);

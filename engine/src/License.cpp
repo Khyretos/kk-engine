@@ -1,6 +1,7 @@
 #include "kke/License.h"
 
 #include "kke/DataFile.h"
+#include "kke/Platform.h"
 
 #include <monocypher.h>
 #include <nlohmann/json.hpp>
@@ -10,11 +11,6 @@
 #include <fstream>
 #include <sstream>
 
-#if defined(_WIN32)
-#include <windows.h>
-#elif defined(__APPLE__)
-#include <unistd.h> // gethostuuid
-#endif
 
 namespace kke::license {
 
@@ -26,33 +22,7 @@ void fail(std::string* error, const std::string& what) {
     if (error) *error = what;
 }
 
-std::string trim(std::string s) {
-    while (!s.empty() && (s.back() == '\n' || s.back() == '\r' || s.back() == ' ' || s.back() == '\0')) s.pop_back();
-    return s;
-}
-
-std::string rawMachineId() {
-#if defined(_WIN32)
-    char buf[128] = {};
-    DWORD size = sizeof(buf);
-    if (RegGetValueA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Cryptography", "MachineGuid", RRF_RT_REG_SZ | RRF_SUBKEY_WOW6464KEY, nullptr, buf,
-                     &size) == ERROR_SUCCESS)
-        return trim(buf);
-    return {};
-#elif defined(__APPLE__)
-    uuid_t id{};
-    const timespec wait{ 1, 0 };
-    if (gethostuuid(id, &wait) != 0) return {};
-    return seal::toHex(reinterpret_cast<const uint8_t*>(id), sizeof(id));
-#else
-    for (const char* path : { "/etc/machine-id", "/var/lib/dbus/machine-id" }) {
-        std::ifstream f(path);
-        std::string s;
-        if (f && std::getline(f, s) && !trim(s).empty()) return trim(s);
-    }
-    return {};
-#endif
-}
+std::string rawMachineId() { return platform::machineId(); }
 
 // Length-prefixed, so no field can run into the next.
 void field(std::string& out, const std::string& name, const std::string& value) {
