@@ -20,6 +20,7 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [OPTIMIZATION.md](OPTIMIZATION.md) | Performance rules, measured log and backlog |
 | [PERFORMANCE_NOTES.md](PERFORMANCE_NOTES.md) | What RayFire and Chaos do for destruction at scale, and what KKE took from it |
 | [SCALING.md](SCALING.md) | Worst cases, multiplayer limits and platform support |
+| [BENCHMARKS.md](BENCHMARKS.md) | The stress test, kke_bench, hardware profiles, tracked results |
 | [HARDWARE_TESTS.md](HARDWARE_TESTS.md) | Checks only real hardware can answer |
 | [GO_TO_MARKET.md](GO_TO_MARKET.md) | How KKE reaches people, and how it is funded |
 | [DOCS_SITE.md](DOCS_SITE.md) | The docs website: how it is built and published |

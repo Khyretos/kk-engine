@@ -19,6 +19,7 @@ option(ENGINE_ENABLE_LUA "Lua 5.4 gameplay scripting (kke::ScriptVM, ScriptModul
 option(KKE_ENABLE_NET "Networking over ENet (MIT): kke::NetModule host/join, LAN discovery (docs/NETWORKING.md). Off = offline only; the loopback transport and replication logic still build." ON)
 option(ENGINE_HEADLESS_TEST "Build the headless smoke-test target" ON)
 option(KKE_ENABLE_TESTS "Build the unit test suite (tests/)" ON)
+option(KKE_ENABLE_BENCHMARKS "Build kke_bench, the headless benchmark suite (benchmarks/, docs/BENCHMARKS.md)" ON)
 option(KKE_ENABLE_JOLT "Build the Jolt Physics rigid-body/collision layer (MIT): static world collision, rigid bodies, character controller. See ACTION_PLAN.md 1.1." ON)
 option(KKE_ENABLE_FEMFX "Build the vendored, patched AMD FEMFX deformable-physics library. See docs/HISTORY.md 'Physics: AMD FEMFX integration'." OFF)
 option(KKE_ENABLE_COVERAGE "Instrument builds for code coverage (gcc/clang --coverage). See docs/HISTORY.md 'Test suite & coverage'." OFF)
@@ -551,6 +552,9 @@ add_subdirectory(engine)
 # here — this tool is what lets that be measured honestly on whatever
 # hardware actually has more than one.
 add_subdirectory(tools/model_info)
+if(KKE_ENABLE_BENCHMARKS)
+    add_subdirectory(benchmarks)
+endif()
 add_subdirectory(tools/audio_preview)
 if(KKE_ENABLE_FEMFX)
     add_subdirectory(tools/physics_benchmark)
