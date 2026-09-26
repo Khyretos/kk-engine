@@ -291,7 +291,10 @@ void FluidSurfaceRenderer::prepass(const PrepassContext& ctx, const std::vector<
     mb.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
     for (int it = 0; it < std::max(1, m_settings.blurIterations); ++it) {
         for (int pass = 0; pass < 2; ++pass) {
-            BlurPush bp{ pass == 0 ? glm::ivec2(1, 0) : glm::ivec2(0, 1), projScale, m_settings.blurWorldRadius, m_settings.depthFalloff };
+            // Alternate H-then-V and V-then-H between iterations: always
+            // ending on the same direction left streaks along it.
+            const bool horizontal = (pass == 0) == (it % 2 == 0);
+            BlurPush bp{ horizontal ? glm::ivec2(1, 0) : glm::ivec2(0, 1), projScale, m_settings.blurWorldRadius, m_settings.depthFalloff };
             VkDescriptorSet set = pass == 0 ? m_blurAB : m_blurBA;
             vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipelineLayout, 0, 1, &set, 0, nullptr);
             vkCmdPushConstants(ctx.cmd, m_blurPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(bp), &bp);
