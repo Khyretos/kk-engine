@@ -34,7 +34,7 @@ jobs:
             cmake ninja-build \
             libvulkan-dev vulkan-tools mesa-vulkan-drivers \
             glslang-tools spirv-tools \
-            libfreetype-dev \
+            libfreetype-dev libudev-dev libdbus-1-dev \
             fonts-noto-core fonts-noto-color-emoji \
             xvfb xdotool imagemagick lcov \
             libx11-dev libxext-dev libxrandr-dev libxinerama-dev \

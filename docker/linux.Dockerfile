@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libvulkan-dev glslang-tools mesa-vulkan-drivers \
         libdrm-dev libxkbcommon-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
         libxi-dev libxinerama-dev libxss-dev libxtst-dev libwayland-dev wayland-protocols libegl-dev \
-        libfreetype-dev \
+        libfreetype-dev libudev-dev libdbus-1-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src

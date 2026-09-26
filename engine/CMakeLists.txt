@@ -24,6 +24,8 @@ set(ENGINE_SOURCES
     src/BreakGraph.cpp
     src/Animator.cpp
     src/CameraRig.cpp
+    src/InputMap.cpp
+    src/InputDevices.cpp
     src/ParticleFluid.cpp
     src/MeltVolume.cpp
     src/SphereImpostors.cpp

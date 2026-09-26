@@ -95,10 +95,16 @@ FetchContent_MakeAvailable(vma)
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL_STATIC ON CACHE BOOL "" FORCE)
 set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+# SDL 3.4 fails the configure when an optional X11 extension is missing
+# (3.2 skipped it quietly). Screensaver (old-X-server screensaver
+# inhibit) and XTest (synthetic input) aren't used by the engine.
+# libudev (joystick hot-plug) and dbus should be installed: see README.
+set(SDL_X11_XSCRNSAVER OFF CACHE BOOL "" FORCE)
+set(SDL_X11_XTEST OFF CACHE BOOL "" FORCE)      # synthetic input injection: not needed
 FetchContent_Declare(
     SDL3
     GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-    GIT_TAG        release-3.2.10
+    GIT_TAG        release-3.4.16
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(SDL3)
