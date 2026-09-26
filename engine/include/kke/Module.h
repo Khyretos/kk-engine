@@ -198,6 +198,13 @@ public:
     // pipeline, push constants, and issue draw calls here.
     virtual void render(const RenderContext& ctx) {}
 
+    // Called once per frame after every render(), at the window's full
+    // resolution, over the finished 3D image: HUDs and menus go here so
+    // they stay sharp when the render scale (resource governor) draws
+    // the 3D part smaller. Same pipelines work: the pass is compatible
+    // with render()'s. Depth starts cleared.
+    virtual void renderOverlay(const RenderContext& ctx) {}
+
     // Called once per frame, before render() — a real, separate,
     // depth-only pass (see ShadowRenderContext's own comment, and
     // kke::ShadowMap). Default no-op: most modules don't cast shadows

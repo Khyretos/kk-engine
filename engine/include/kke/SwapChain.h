@@ -32,6 +32,12 @@ public:
     VkFormat depthFormat() const { return m_depthFormat; }
     VkExtent2D extent() const { return m_extent; }
     VkRenderPass renderPass() const { return m_renderPass; }
+    // Compatible with renderPass(), but loads the colour instead of
+    // clearing it (starts in TRANSFER_DST layout, after a blit).
+    VkRenderPass overlayPass() const { return m_overlayPass; }
+    VkImage image(uint32_t index) const { return m_images[index]; }
+    // Swapchain images accept linear blits (render scale works).
+    bool canBlitTo() const { return m_canBlitTo; }
     VkFramebuffer framebuffer(uint32_t index) const { return m_framebuffers[index]; }
     size_t imageCount() const { return m_images.size(); }
     bool hasStencil() const { return m_hasStencil; }
@@ -51,6 +57,8 @@ private:
     std::vector<VkImageView> m_imageViews;
     std::vector<VkFramebuffer> m_framebuffers;
     VkRenderPass m_renderPass = VK_NULL_HANDLE;
+    VkRenderPass m_overlayPass = VK_NULL_HANDLE;
+    bool m_canBlitTo = false;
 
     VkImage m_depthImage = VK_NULL_HANDLE;
     VmaAllocation m_depthImageAllocation = VK_NULL_HANDLE;

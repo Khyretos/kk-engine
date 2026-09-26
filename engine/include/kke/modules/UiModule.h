@@ -64,7 +64,7 @@ public:
 
     void init(Application& app) override;
     void renderUi() override; // RmlUi layout/animation tick — see the .cpp for why not update()
-    void render(const RenderContext& ctx) override;
+    void renderOverlay(const RenderContext& ctx) override;
     void onEvent(const SDL_Event& event) override;
     // Controller navigation: the InputModule's ui.* actions become RmlUi
     // arrow/Enter/Tab keys (spatial navigation needs `nav: auto` in RCSS).

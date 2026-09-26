@@ -809,6 +809,7 @@ void ShowcaseModule::renderUi() {
             kke::EngineSettings::Performance& p = sm->settings().performance;
             bool changed = ImGui::Checkbox("Use everything (all cores, no caps)", &p.useEverything);
             changed |= ImGui::SliderFloat("Background frame cap", &p.backgroundFrameRate, 0.0f, 60.0f, "%.0f fps");
+            changed |= ImGui::SliderFloat("3D render scale", &p.renderScale, 0.5f, 1.0f, "%.2f");
             changed |= ImGui::SliderInt("Worker threads (0 = auto, restart)", &p.workerThreads, 0, static_cast<int>(kke::usableCpuCount()) * 2);
             if (changed) sm->apply();
             if (ImGui::Button("Save settings")) sm->save();

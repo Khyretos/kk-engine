@@ -28,6 +28,8 @@ void SwapChain::cleanup() {
 
     if (m_renderPass) vkDestroyRenderPass(dev, m_renderPass, nullptr);
     m_renderPass = VK_NULL_HANDLE;
+    if (m_overlayPass) vkDestroyRenderPass(dev, m_overlayPass, nullptr);
+    m_overlayPass = VK_NULL_HANDLE;
 
     if (m_depthImageView) vkDestroyImageView(dev, m_depthImageView, nullptr);
     m_depthImageView = VK_NULL_HANDLE;
@@ -110,6 +112,18 @@ void SwapChain::create() {
     createInfo.imageExtent = extent;
     createInfo.imageArrayLayers = 1;
     createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    // Render scale (Renderer::setRenderScale) blits a smaller 3D image
+    // onto the swapchain image, which needs it as a transfer target and
+    // the format to support linear-filtered blits.
+    {
+        VkFormatProperties fp{};
+        vkGetPhysicalDeviceFormatProperties(physical, chosenFormat.format, &fp);
+        const VkFormatFeatureFlags blit = VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT |
+                                          VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+        m_canBlitTo = (capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT) &&
+                      (fp.optimalTilingFeatures & blit) == blit;
+        if (m_canBlitTo) createInfo.imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    }
 
     const auto& qf = m_device.queueFamilies();
     uint32_t indices[] = { qf.graphics.value(), qf.present.value() };
@@ -257,6 +271,18 @@ void SwapChain::createRenderPass() {
     renderPassInfo.pDependencies = &dependency;
 
     VK_CHECK(vkCreateRenderPass(m_device.device(), &renderPassInfo, nullptr, &m_renderPass));
+
+    // The overlay pass: same attachments (so every pipeline made for
+    // renderPass() works in it), but the colour is kept, not cleared:
+    // it starts on the upscaled 3D image the blit left in the swapchain
+    // image. Depth is cleared again; the overlay (UI) doesn't depth-test
+    // against the scene.
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    // The dependency must stay identical for the passes to be compatible;
+    // Renderer::beginOverlayPass() orders the blit before it with a barrier.
+    attachments = { colorAttachment, depthAttachment };
+    VK_CHECK(vkCreateRenderPass(m_device.device(), &renderPassInfo, nullptr, &m_overlayPass));
 }
 
 void SwapChain::createFramebuffers() {

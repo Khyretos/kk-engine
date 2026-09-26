@@ -301,7 +301,7 @@ void UiModule::reloadStyleSheets() {
     log::get(name())->info("reloaded stylesheets for {} document(s)", m_context->GetNumDocuments());
 }
 
-void UiModule::render(const RenderContext& ctx) {
+void UiModule::renderOverlay(const RenderContext& ctx) {
     if (!m_context) return;
 
     // RenderContext only carries what 3D drawing needs (view/proj/etc),

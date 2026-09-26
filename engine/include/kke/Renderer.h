@@ -41,8 +41,22 @@ public:
     // full-viewport/scissor. Call after beginFrame(), before any draws.
     void beginRenderPass();
 
+    // Switches to full-resolution drawing for what goes on top of the 3D
+    // image (UI, debug overlay). With a render scale below 1 this ends
+    // the scaled 3D pass, upscales it onto the swapchain image and opens
+    // the overlay pass; at scale 1 it does nothing (one pass, no copy).
+    void beginOverlayPass();
+
     // Ends the render pass, submits, and presents.
     void endFrame();
+
+    // 3D resolution relative to the window (resource governor, 1.6).
+    // Clamped to 0.5..1; ignored (stays 1) when the swapchain can't be
+    // blitted to. Takes effect on the next frame.
+    void setRenderScale(float scale);
+    float renderScale() const { return m_renderScale; }
+    // Size of the 3D image: extent() times the render scale.
+    VkExtent2D renderExtent() const;
 
     VkCommandBuffer currentCommandBuffer() const { return m_commandBuffers[m_currentFrame]; }
     VkRenderPass renderPass() const { return m_swapChain->renderPass(); }
@@ -84,6 +98,10 @@ private:
     void createCommandBuffers();
     void createQueryPools();
     void recreateSwapChain();
+    bool scaled() const { return m_renderScale < 1.0f && m_swapChain->canBlitTo(); }
+    void createScenePass();
+    void ensureSceneTarget(uint32_t frame);
+    void destroySceneTarget(uint32_t frame);
 
     Window& m_window;
     std::unique_ptr<VulkanDevice> m_device;
@@ -100,6 +118,21 @@ private:
     bool m_recreatePending = false;
     uint32_t m_currentImageIndex = 0;
     float m_lastGpuFrameTimeMs = -1.0f;
+
+    // Render scale: the 3D pass draws into a smaller image per frame in
+    // flight, blitted up in beginOverlayPass(). Created on first use.
+    float m_renderScale = 1.0f;
+    bool m_inScenePass = false;
+    VkRenderPass m_scenePass = VK_NULL_HANDLE;
+    VkFormat m_scenePassFormats[2] = {};
+    struct SceneTarget {
+        VkExtent2D extent{};
+        VkImage color = VK_NULL_HANDLE, depth = VK_NULL_HANDLE;
+        VmaAllocation colorAlloc = VK_NULL_HANDLE, depthAlloc = VK_NULL_HANDLE;
+        VkImageView colorView = VK_NULL_HANDLE, depthView = VK_NULL_HANDLE;
+        VkFramebuffer framebuffer = VK_NULL_HANDLE;
+    };
+    SceneTarget m_sceneTargets[kMaxFramesInFlight];
 };
 
 } // namespace kke

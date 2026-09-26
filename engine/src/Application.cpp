@@ -23,6 +23,7 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         setResourceBudget(computeBudget(defaults, usableCpuCount()));
     }
     m_renderer = std::make_unique<Renderer>(m_window);
+    m_renderer->setRenderScale(m_budget.renderScale);
     m_lightingBuffer = std::make_unique<LightingBuffer>(m_renderer->device());
 
     // Real shadow mapping — see kke::ShadowMap's own class comment for
@@ -478,7 +479,7 @@ void Application::run() {
             }
             m_shadowMap->endRenderPass(cmd);
 
-            PrepassContext prepassCtx{ cmd, view, proj, m_camera.position, m_renderer->extent(), m_lightingBuffer->descriptorSet(),
+            PrepassContext prepassCtx{ cmd, view, proj, m_camera.position, m_renderer->renderExtent(), m_lightingBuffer->descriptorSet(),
                                        m_renderer->currentFrameIndex() };
             for (Module* m : m_initOrder) {
                 safeInvoke(m, "prepass", [&] { m->prepass(prepassCtx); });
@@ -489,6 +490,10 @@ void Application::run() {
             renderCtx.frameIndex = m_renderer->currentFrameIndex();
             for (Module* m : m_initOrder) {
                 safeInvoke(m, "render", [&] { m->render(renderCtx); });
+            }
+            m_renderer->beginOverlayPass();
+            for (Module* m : m_initOrder) {
+                safeInvoke(m, "renderOverlay", [&] { m->renderOverlay(renderCtx); });
             }
             m_debugUi->render(cmd);
 
@@ -515,6 +520,7 @@ void Application::run() {
 void Application::setResourceBudget(const ResourceBudget& budget) {
     m_budget = budget;
     m_frameRateLimit = budget.frameRateLimit;
+    if (m_renderer) m_renderer->setRenderScale(budget.renderScale);
     log::get("Governor")->info("budget: {} worker thread(s), frame cap {}, background cap {}, render scale {:.2f}{}", budget.workerThreads,
                                budget.frameRateLimit, budget.backgroundFrameRate, budget.renderScale,
                                budget.useEverything ? " (use everything)" : "");
