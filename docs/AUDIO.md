@@ -42,6 +42,8 @@ and what's next. Code: `kke/AudioMixer.h`, `kke/ImpactSynth.h`,
 - **Headphones mode.** Audio panel > Spatial > Binaural (or
   `KKE_AUDIO_BINAURAL=1`): each ear hears a sound slightly later and darker
   when it faces away, which gives real left/right and helps front/back.
+  Built with Steam Audio (`-DKKE_ENABLE_STEAM_AUDIO=ON`), **HRTF** uses
+  measured ears instead: sounds above and below you, too.
 - **Walls muffle.** Every wall between you and a sound counts, by its
   material and its thickness: a thin wood partition lets more through
   than a thick one, two walls less than one. Worked out when the sound
@@ -252,6 +254,36 @@ shadow: a one-pole shelf, H(s) = (α s + β)/(s + β) with β = 2c/a, lifting
 highs up to +6 dB for the ear facing the sound and cutting them ~20 dB for
 the one behind the head. No HRTF data sets, no licences.
 
+### Steam Audio
+
+Build with `-DKKE_ENABLE_STEAM_AUDIO=ON` (CMake downloads the SDK, v4.6.1,
+pinned by hash, and its licence; `libphonon` goes next to the games).
+Then the Audio panel's Spatial list has **HRTF (headphones, measured)**,
+the audio demo a "Steam Audio HRTF" button, and `KKE_AUDIO_HRTF=1` starts
+in it (`KKE_AUDIO_HRTF=my_ears.sofa` with your own measured HRTF, from a
+SOFA file). What it adds over Binaural: elevation (a sound above you
+sounds above you) and a measured front/back difference.
+
+How: the mixer hands each spatial voice's block (already distance-,
+occlusion- and air-filtered) to a `kke::Spatializer`
+(`AudioMixer::setSpatializer`) with its direction in the listener's
+space; `kke::SteamAudioSpatializer` runs one `IPLBinauralEffect` per voice
+on Steam Audio's default HRTF (RMS-normalized, then scaled to the
+built-in model's loudness so switching doesn't jump). Steam Audio works
+in 256-sample frames and the mixer's blocks can be any length, so each
+voice has a FIFO in and out: 5.3 ms of latency. The 32 effects are made
+up front; the audio thread never allocates. Room reverb, echoes and
+non-spatial sounds stay ours.
+
+If Steam Audio can't start (no `libphonon`, a bad SOFA file), the reason
+is logged once and the mode falls back to Binaural. Cost (kke_bench,
+debug build of the engine, Steam Audio's own release library):
+`audio_mix_32_voices_steam_audio` 1.24 ms per 10 ms of output with 32
+voices, against 0.83 ms for the same case with the built-in model.
+Tests: `tests/test_spatializer.cpp` (the interface with a fake, always;
+Steam Audio itself when built with it: right/left, elevation, loudness
+from five directions, overflow, a bad SOFA file).
+
 ### Footsteps
 
 `kke::FootstepDetector` finds steps in any animation: a foot that rose
@@ -303,17 +335,17 @@ next, with its lowest point at the floor. It sounds like stone.
   commercial game (Indie), source code only with the Studio licence.
   Every game made with KKE would need its own licence, so it can't be a
   dependency. The same techniques are being built here on Jolt instead.
-- **Steam Audio** (Apache-2.0): the optional high-end backend later
-  (measured HRTFs, reflections, transmission through geometry). The
-  built-in binaural mode covers headphones without it; Steam Audio would
-  add measured HRTFs and elevation.
+- **Steam Audio** (Apache-2.0): now the optional HRTF backend (below).
+  Its reflection and pathing simulation (baked probes, geometry export)
+  is not used: the ray-traced room above covers that at a fraction of
+  the cost and with no baking step.
 
 ## Next, in order
 
-1. Steam Audio as an optional backend (measured HRTFs, elevation,
-   reflections).
-2. Sliding/rolling loops from resting contacts; Doppler; a sound in
+1. Sliding/rolling loops from resting contacts; Doppler; a sound in
    another room getting that room's reverb (per-source rooms).
-3. Streaming music/ambience from files, per-category ducking.
-4. A "describe what I hear" mode (spoken captions).
-5. Lock-free command queue if the mixer lock ever shows up.
+2. Streaming music/ambience from files, per-category ducking.
+3. A "describe what I hear" mode (spoken captions).
+4. Lock-free command queue if the mixer lock ever shows up.
+5. A Steam Audio build in CI (today only the default build is tested
+   there; its tests run with the option on).

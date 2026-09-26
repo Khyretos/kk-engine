@@ -58,7 +58,10 @@ public:
         // sounds keep their last value a frame longer: the cost stays flat
         // however many sounds play.
         int maxRaysPerFrame = 160;
-        SpatialMode spatial = SpatialMode::Stereo; // KKE_AUDIO_BINAURAL=1 starts in Binaural
+        SpatialMode spatial = SpatialMode::Stereo; // KKE_AUDIO_BINAURAL=1 starts in Binaural, KKE_AUDIO_HRTF=1 in Hrtf
+        // Hrtf (Steam Audio builds): a SOFA file of measured HRTFs to use
+        // instead of Steam Audio's default. KKE_AUDIO_HRTF=file.sofa.
+        std::string hrtfSofaFile;
         bool earcons = true;             // UI sounds on focus/click/change
         float pingRange = 12.0f;         // m, navigation pings
         int pingRays = 8;                // around you, one ping each
@@ -75,6 +78,13 @@ public:
     void shutdown() override;
 
     AudioMixer& mixer() { return *m_mixer; }
+    // Stereo, Binaural or Hrtf. Hrtf starts Steam Audio the first time
+    // (KKE_ENABLE_STEAM_AUDIO builds); if it can't, the reason is logged
+    // and Binaural is used. Returns the mode now in use.
+    SpatialMode setSpatialMode(SpatialMode mode);
+    SpatialMode spatialMode() const { return settings.spatial; }
+    // Whether this build has an HRTF backend (Steam Audio) at all.
+    static bool hrtfAvailable();
     AudioMaterialTable& materials() { return m_materials; }
     ImpactBank& impacts() { return *m_bank; }
     bool deviceRunning() const { return m_deviceRunning; }
@@ -180,6 +190,7 @@ private:
     SoundHandle m_earcons[size_t(Earcon::Count)];
     uint64_t m_footsteps = 0;
     std::string m_recordPath;
+    bool m_hrtfFailed = false;
 };
 
 } // namespace kke

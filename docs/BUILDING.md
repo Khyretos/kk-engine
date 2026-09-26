@@ -121,7 +121,12 @@ cmake --build build -j
 ```
 
 Drop whichever `-D...=ON` flags you don't want -- everything defaults
-to `OFF`. See the root `CMakeLists.txt`'s own `option(...)` calls for
+to `OFF`.
+
+Headphone sound with Steam Audio's measured HRTF (docs/AUDIO.md
+"Steam Audio") is its own switch, not in any preset because the SDK is a
+150 MB download (Linux and Windows x64): add `-DKKE_ENABLE_STEAM_AUDIO=ON`.
+It puts `libphonon.so` / `phonon.dll` next to the games. See the root `CMakeLists.txt`'s own `option(...)` calls for
 the exact list and what each one gates.
 
 ### If Boost isn't found automatically (a known Arch/CGAL/CMake quirk)

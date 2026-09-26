@@ -57,7 +57,9 @@ const char* soundCategoryName(SoundCategory c);
 // headphones: each ear hears the sound a little later and darker when it
 // faces away (a spherical head: Woodworth's delay and Brown & Duda's head
 // shadow), which gives real left/right and a better sense of front/back.
-enum class SpatialMode : uint8_t { Stereo, Binaural };
+// Hrtf: a measured-HRTF backend (AudioMixer::setSpatializer, e.g.
+// kke::SteamAudioSpatializer) places each sound, elevation included.
+enum class SpatialMode : uint8_t { Stereo, Binaural, Hrtf };
 const char* spatialModeName(SpatialMode m);
 
 struct VoiceDesc {
@@ -100,6 +102,22 @@ struct ActiveSound {
     bool viaOpening = false;      // heard through a door/window (setVia), not straight through the wall
     SoundCategory category = SoundCategory::Impact;
     uint32_t material = 0;
+};
+
+// A backend that turns one voice's mono block into two ears (an HRTF),
+// for SpatialMode::Hrtf. Called from the mixer's thread, under its lock:
+// no allocation, no waiting. `voice` is the voice's id (per-voice filter
+// state); `direction` is where the sound is, unit, in the listener's own
+// space (+x right, +y up, -z ahead). Adds to `out` (interleaved stereo),
+// the gain gliding from gainFrom to gainTo over the block.
+class Spatializer {
+public:
+    virtual ~Spatializer() = default;
+    virtual const char* name() const = 0;
+    virtual void process(uint32_t voice, const float* mono, int frames, const glm::vec3& direction, float gainFrom, float gainTo,
+                         float* out) = 0;
+    // The voice has ended: its state may be reused.
+    virtual void release(uint32_t voice) = 0;
 };
 
 // A small software mixer: N mono voices -> interleaved stereo float.
@@ -160,8 +178,10 @@ public:
     // Distant sounds lose their highs in air (~22 kHz up close, ~5 kHz at 50 m).
     bool airAbsorption = true;
     static float airCutoff(float distance) { return 22000.0f / (1.0f + std::max(0.0f, distance) / 15.0f); }
-    void setSpatialMode(SpatialMode m);
+    void setSpatialMode(SpatialMode m);   // Hrtf without a spatializer set plays Binaural
     SpatialMode spatialMode() const;
+    void setSpatializer(std::shared_ptr<Spatializer> s);
+    bool hasSpatializer() const;
 
     void setListener(const Listener& l);
     Listener listener() const;
@@ -249,6 +269,8 @@ private:
     bool m_capturing = false;
     std::vector<float> m_capture;
     std::vector<float> m_streamBlock;             // this block of a streamed voice
+    std::shared_ptr<Spatializer> m_spatializer;
+    std::vector<float> m_hrtfBlock;               // one voice's filtered mono block, for the spatializer
 };
 
 } // namespace kke

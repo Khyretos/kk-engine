@@ -21,6 +21,9 @@
 
 #include "kke/AudioMixer.h"
 #include "kke/RoomAcoustics.h"
+#if KKE_ENABLE_STEAM_AUDIO
+#include "kke/SteamAudioSpatializer.h"
+#endif
 #include "kke/BenchmarkReport.h"
 #include "kke/FracturePattern.h"
 #include "kke/ImpactSynth.h"
@@ -47,6 +50,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <stdexcept>
 #include <vector>
 
 namespace {
@@ -236,6 +240,39 @@ std::vector<Case> makeCases() {
             return double((*out)[0]);
         });
     } });
+
+#if KKE_ENABLE_STEAM_AUDIO
+    // The full path with Steam Audio's HRTF in place of the built-in
+    // binaural model: 32 IPLBinauralEffects, 256-sample frames.
+    cases.push_back({ "audio_mix_32_voices_steam_audio", "Audio mixer: the full case with Steam Audio's HRTF on every voice, 10 ms", 400, [] {
+        auto m = std::make_shared<kke::AudioMixer>(48000, 32);
+        m->setRoom(1.2f, 0.4f, 0.3f, 0.02f);
+        std::string err;
+        auto sa = kke::SteamAudioSpatializer::create({}, &err);
+        if (!sa) throw std::runtime_error("Steam Audio: " + err);
+        m->setSpatializer(sa);
+        m->setSpatialMode(kke::SpatialMode::Hrtf);
+        const kke::AudioMaterialTable table;
+        Lcg r{ 5u };
+        for (int i = 0; i < 32; ++i) {
+            kke::ImpactParams ip;
+            ip.intensity = 0.5f + 0.5f * r.next();
+            ip.seed = uint32_t(i + 1);
+            auto buf = std::make_shared<kke::SoundBuffer>(kke::synthesizeImpact(table.get(uint32_t(1 + i % 7)), ip));
+            kke::VoiceDesc v;
+            v.sound = buf;
+            v.loop = true;
+            v.position = glm::vec3((r.next() - 0.5f) * 20.0f, r.next() * 3.0f, (r.next() - 0.5f) * 20.0f);
+            v.transmission = 0.2f + 0.6f * r.next();
+            m->play(v);
+        }
+        auto out = std::make_shared<std::vector<float>>(480 * 2);
+        return std::function<double()>([m, out] {
+            m->mix(out->data(), 480);
+            return double((*out)[0]);
+        });
+    } });
+#endif
 
     // Synthesizing impact sounds (modal synthesis) for every material:
     // the first hit of a new material/intensity pays this, later hits

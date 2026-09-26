@@ -110,7 +110,9 @@ cp "$repo/LICENSE" "$stage/LICENSE.txt"
         [ -n "$lic" ] || die "no licence file found for $1 in $2"
         # Licences a top-level file only points to: FreeType's FTL (its
         # LICENSE.TXT offers FTL or GPL) and the fmt copy bundled in spdlog.
-        for f in "$2/docs/FTL.TXT" "$2/include/spdlog/fmt/bundled/fmt.license.rst"; do
+        # Steam Audio's third-party notices (Intel IPP, FFTS, ...) sit
+        # beside its licence.
+        for f in "$2/docs/FTL.TXT" "$2/include/spdlog/fmt/bundled/fmt.license.rst" "$2/THIRDPARTY.md"; do
             if [ -f "$f" ]; then lic="$lic"$'\n'"$f"; fi
         done
         while IFS= read -r f; do

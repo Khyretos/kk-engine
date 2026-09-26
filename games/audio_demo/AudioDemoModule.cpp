@@ -238,7 +238,8 @@ void AudioDemoModule::buildWorld() {
             .tourSeconds = 10.0f;
     }
     station(Kind::Circle, "Around your head",
-            "A tick circling you. Binaural is switched on here: with headphones it moves behind you, not just left and right.",
+            "A tick circling you. Headphone sound is switched on here (Binaural, or Steam Audio's HRTF when this build has it): "
+            "it moves behind you, not just left and right.",
             {290.0f, kEar, 0.0f}, 8.0f, 0.0f);
     {
         const float x = 325.0f;
@@ -296,7 +297,7 @@ kke::Listener AudioDemoModule::listener() const {
 void AudioDemoModule::enter(int index) {
     if (m_current >= 0 && m_tour) logMeasured(m_stations[size_t(m_current)], m_measured);
     if (m_forcedBinaural) {
-        m_audio->mixer().setSpatialMode(m_binauralBefore ? kke::SpatialMode::Binaural : kke::SpatialMode::Stereo);
+        m_audio->setSpatialMode(m_modeBefore);
         m_forcedBinaural = false;
     }
     for (const Crate& c : m_crates) {
@@ -321,9 +322,11 @@ void AudioDemoModule::enter(int index) {
     m_nextPing = 0.8f;
     m_tourLeft = s.tourSeconds;
     if (s.kind == Kind::Circle) {
-        m_binauralBefore = m_audio->mixer().spatialMode() == kke::SpatialMode::Binaural;
-        m_audio->mixer().setSpatialMode(kke::SpatialMode::Binaural);
-        m_forcedBinaural = true;
+        m_modeBefore = m_audio->spatialMode();
+        if (m_modeBefore == kke::SpatialMode::Stereo) {
+            m_audio->setSpatialMode(kke::AudioModule::hrtfAvailable() ? kke::SpatialMode::Hrtf : kke::SpatialMode::Binaural);
+            m_forcedBinaural = true;
+        }
     }
     m_camera->setView(s.ears, s.cameraDistance, s.cameraPitch, s.cameraYaw);
     m_models->setTransform(m_earsMarker, glm::scale(glm::translate(glm::mat4(1.0f), s.ears), glm::vec3(0.25f, 0.3f, 0.25f)));
@@ -512,9 +515,17 @@ void AudioDemoModule::renderUi() {
     ImGui::Checkbox("Walls muffle", &set.occlusion);
     ImGui::SameLine();
     ImGui::Checkbox("Openings", &set.openings);
-    bool binaural = m_audio->mixer().spatialMode() == kke::SpatialMode::Binaural;
-    if (ImGui::Checkbox("Binaural (headphones)", &binaural)) {
-        m_audio->mixer().setSpatialMode(binaural ? kke::SpatialMode::Binaural : kke::SpatialMode::Stereo);
+    // Speakers, the built-in headphone model, or Steam Audio's measured HRTF.
+    int mode = int(m_audio->spatialMode());
+    bool changed = ImGui::RadioButton("Speakers", &mode, int(kke::SpatialMode::Stereo));
+    ImGui::SameLine();
+    changed |= ImGui::RadioButton("Binaural", &mode, int(kke::SpatialMode::Binaural));
+    if (kke::AudioModule::hrtfAvailable()) {
+        ImGui::SameLine();
+        changed |= ImGui::RadioButton("Steam Audio HRTF", &mode, int(kke::SpatialMode::Hrtf));
+    }
+    if (changed) {
+        m_audio->setSpatialMode(kke::SpatialMode(mode));
         m_forcedBinaural = false; // your choice now; leaving the station keeps it
     }
 

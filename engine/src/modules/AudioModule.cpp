@@ -2,6 +2,9 @@
 
 #include "kke/Application.h"
 #include "kke/Log.h"
+#if KKE_ENABLE_STEAM_AUDIO
+#include "kke/SteamAudioSpatializer.h"
+#endif
 #include "kke/WavFile.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/SoundVisualizerModule.h"
@@ -114,7 +117,11 @@ void AudioModule::init(Application& app) {
     }
     if (const char* t = std::getenv("KKE_AUDIO_TOUR"); t && *t && *t != '0') tour = true;
     if (const char* b = std::getenv("KKE_AUDIO_BINAURAL"); b && *b && *b != '0') settings.spatial = SpatialMode::Binaural;
-    m_mixer->setSpatialMode(settings.spatial);
+    if (const char* h = std::getenv("KKE_AUDIO_HRTF"); h && *h && std::strcmp(h, "0") != 0) {
+        settings.spatial = SpatialMode::Hrtf;
+        if (std::strcmp(h, "1") != 0) settings.hrtfSofaFile = h; // a SOFA file
+    }
+    setSpatialMode(settings.spatial);
     if (const char* r = std::getenv("KKE_AUDIO_RECORD"); r && *r) startRecording(r);
     log->info("Audio ready: {} Hz, {} voices, output: {}", settings.sampleRate, settings.maxVoices, m_deviceName);
 
@@ -171,6 +178,37 @@ void AudioModule::init(Application& app) {
         };
     }
 #endif
+}
+
+bool AudioModule::hrtfAvailable() { return KKE_ENABLE_STEAM_AUDIO != 0; }
+
+SpatialMode AudioModule::setSpatialMode(SpatialMode mode) {
+    if (mode == SpatialMode::Hrtf && !m_mixer->hasSpatializer()) {
+        std::string why = "this build has no HRTF backend (configure with -DKKE_ENABLE_STEAM_AUDIO=ON)";
+#if KKE_ENABLE_STEAM_AUDIO
+        if (!m_hrtfFailed) {
+            SteamAudioSpatializer::Settings ss;
+            ss.sampleRate = settings.sampleRate;
+            ss.maxVoices = settings.maxVoices;
+            ss.sofaFile = settings.hrtfSofaFile;
+            if (auto sp = SteamAudioSpatializer::create(ss, &why)) {
+                m_mixer->setSpatializer(sp);
+                log::get(name())->info("Steam Audio HRTF ready ({}), {} voices, {}-sample frames",
+                                       ss.sofaFile.empty() ? std::string("default HRTF") : ss.sofaFile, ss.maxVoices, ss.frameSize);
+            }
+        } else {
+            why = "Steam Audio failed to start earlier";
+        }
+#endif
+        if (!m_mixer->hasSpatializer()) {
+            if (!m_hrtfFailed) log::get(name())->warn("HRTF unavailable, using Binaural: {}", why);
+            m_hrtfFailed = true;
+            mode = SpatialMode::Binaural;
+        }
+    }
+    settings.spatial = mode;
+    m_mixer->setSpatialMode(mode);
+    return mode;
 }
 
 uint32_t AudioModule::playImpact(const glm::vec3& position, uint32_t material, float intensity, uint32_t seed, float gain) {
@@ -584,11 +622,8 @@ void AudioModule::renderUi() {
                 double(m_room.wet), m_room.openings.size());
     ImGui::Text("Rays last frame: %d (budget %d)", m_raysLastFrame, settings.maxRaysPerFrame);
     int mode = int(settings.spatial);
-    const char* modes[] = {spatialModeName(SpatialMode::Stereo), spatialModeName(SpatialMode::Binaural)};
-    if (ImGui::Combo("Spatial", &mode, modes, 2)) {
-        settings.spatial = SpatialMode(mode);
-        m_mixer->setSpatialMode(settings.spatial);
-    }
+    const char* modes[] = {spatialModeName(SpatialMode::Stereo), spatialModeName(SpatialMode::Binaural), spatialModeName(SpatialMode::Hrtf)};
+    if (ImGui::Combo("Spatial", &mode, modes, hrtfAvailable() ? 3 : 2)) setSpatialMode(SpatialMode(mode));
     ImGui::Checkbox("UI sounds", &settings.earcons);
     ImGui::SameLine();
     if (ImGui::Button("Ping surroundings")) ping();

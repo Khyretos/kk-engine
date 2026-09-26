@@ -1587,6 +1587,19 @@ softness counted); behind wood 0.30, glass 0.50, stone 0.07; the sound
 outside came through the door 5 times out of 5 (0 before the level ring
 and turning probes); 42 crate impacts; 18 footsteps.
 
+### Steam Audio as an optional HRTF backend (2026-09-26)
+
+`-DKKE_ENABLE_STEAM_AUDIO=ON` downloads Valve's Steam Audio SDK (v4.6.1,
+Apache-2.0, hash-pinned, licence fetched beside it) and adds
+`kke::SteamAudioSpatializer`: every spatial voice through its own
+`IPLBinauralEffect` on the default or a SOFA HRTF, behind a small
+`kke::Spatializer` interface in the mixer. Mode "HRTF" in the Audio panel
+and the audio demo, `KKE_AUDIO_HRTF=1|file.sofa`. Loudness matched to the
+built-in model (measured from five directions), 5.3 ms of latency from
+the frame FIFO, falls back to Binaural with the reason logged if it can't
+start. The audio demo's tour ran with it (headless, recorded); 7 tests.
+Off by default (a 150 MB download), and not in CI yet.
+
 ### `games/melt_demo` — pour lava, melt things
 
 `cd build/bin && ./melt_demo` (`KKE_MELT_PRESET=0..3` picks the block).
