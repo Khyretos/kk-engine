@@ -166,7 +166,7 @@ just "it compiles."
 | Logging | [spdlog](https://github.com/gabime/spdlog) 1.14.1 | async, non-blocking, colored, formatted logging — see "Logging" |
 | Physics | [AMD FEMFX](https://github.com/GPUOpen-Effects/FEMFX) (patched fork, vendored at `external/FEMFX/`) | deformable-material FEM physics — cloth/cushions, impact deformation, density-based destruction, melting. Opt-in via `KKE_ENABLE_FEMFX`. See "Physics: AMD FEMFX integration" |
 | Images       | [stb](https://github.com/nothings/stb)      | fetched, not consumed yet — no texture loading until there's a texture |
-| Scripting    | Lua 5.4                                      | fetched behind `ENGINE_ENABLE_LUA` (OFF by default), not consumed yet |
+| Scripting    | [Lua](https://www.lua.org) 5.4.7 (MIT), compiled as C++ | gameplay scripts, Garry's Mod-style hooks/timers, hot reload, sandboxed — see [SCRIPTING.md](SCRIPTING.md) |
 | Particles    | custom (GPU compute, see below)              | see "Why a custom particle system" |
 | Audio output | [miniaudio](https://github.com/mackron/miniaudio) 0.11.22 (public domain / MIT-0) | output device on every OS, WAV/FLAC/MP3 decoding; mixing, 3D, occlusion and impact synthesis are our own — see [AUDIO.md](AUDIO.md) |
 
@@ -368,8 +368,8 @@ hot-plug) and `libdbus-1-dev` before configuring, or SDL builds without
 them.
 
 `cmake --workflow --preset default` matches this project's actual
-default option values (no FEMFX, no tetrahedralizer, no GPU profiler,
-no Lua) if you want the smaller, faster build instead. Both need
+default option values (no FEMFX, no tetrahedralizer, no GPU profiler;
+Lua is on) if you want the smaller, faster build instead. Both need
 CMake 3.25+ for workflow presets specifically — `INSTRUCTIONS.md`
 covers the manual, flag-by-flag equivalent for older CMake.
 

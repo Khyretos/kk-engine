@@ -9,7 +9,7 @@
     {
       "name": "default",
       "displayName": "Default (core engine only)",
-      "description": "Matches this project's default CMake option values exactly -- no FEMFX, no GPU profiler, no Lua. The smallest, fastest build; only kke_demo/imgui_demo/rmlui_demo and the test suite.",
+      "description": "Matches this project's default CMake option values exactly -- no FEMFX, no GPU profiler (Jolt and Lua are on). The smallest, fastest build; only kke_demo/imgui_demo/rmlui_demo and the test suite.",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build"
     },

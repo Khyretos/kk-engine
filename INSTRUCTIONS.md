@@ -91,7 +91,7 @@ build below instead).
 
 A `default` preset also exists (`cmake --workflow --preset default`) --
 matches this project's actual default option values: no FEMFX, no
-tetrahedralizer, no GPU profiler, no Lua. Smaller and faster to build;
+tetrahedralizer, no GPU profiler (Lua is on). Smaller and faster to build;
 only the core engine, `kke_demo`, `imgui_demo`, `rmlui_demo`, and the
 test suite.
 

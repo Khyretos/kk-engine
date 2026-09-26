@@ -15,7 +15,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # Options — every "lego piece" can be toggled independently.
 # ---------------------------------------------------------------------------
 option(KKE_ENABLE_VALIDATION "Enable Vulkan validation layers in debug" ON)
-option(ENGINE_ENABLE_LUA "Build with Lua scripting support" OFF) # wired later
+option(ENGINE_ENABLE_LUA "Lua 5.4 gameplay scripting (kke::ScriptVM, ScriptModule; SCRIPTING.md)" ON)
 option(ENGINE_HEADLESS_TEST "Build the headless smoke-test target" ON)
 option(KKE_ENABLE_TESTS "Build the unit test suite (tests/)" ON)
 option(KKE_ENABLE_JOLT "Build the Jolt Physics rigid-body/collision layer (MIT): static world collision, rigid bodies, character controller. See ACTION_PLAN.md 1.1." ON)
@@ -326,18 +326,30 @@ if(KKE_ENABLE_TESTS)
 endif()
 
 # ---------------------------------------------------------------------------
-# Lua — scripting hooks. Off by default until the engine actually calls into it.
+# Lua 5.4 — gameplay scripting (kke::ScriptVM, ScriptModule; SCRIPTING.md).
+# MIT licensed, ~30 C files. Compiled as C++ on purpose: Lua then raises
+# errors as C++ exceptions instead of longjmp, so an error thrown inside
+# an engine binding unwinds its C++ objects properly.
 # ---------------------------------------------------------------------------
 if(ENGINE_ENABLE_LUA)
     FetchContent_Declare(
         lua
         URL https://www.lua.org/ftp/lua-5.4.7.tar.gz
+        URL_HASH SHA256=9fbf5e28ef86c69858f6d3d34eccc32e911c1a28b4120ff3e84aaa70cfbf1e30
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
     FetchContent_MakeAvailable(lua)
     file(GLOB LUA_CORE_SOURCES ${lua_SOURCE_DIR}/src/*.c)
-    list(FILTER LUA_CORE_SOURCES EXCLUDE REGEX ".*/(lua|luac)\\.c$")
+    list(FILTER LUA_CORE_SOURCES EXCLUDE REGEX ".*/(lua|luac|onelua)\\.c$")
+    set_source_files_properties(${LUA_CORE_SOURCES} PROPERTIES LANGUAGE CXX)
     add_library(lua_lib STATIC ${LUA_CORE_SOURCES})
     target_include_directories(lua_lib PUBLIC ${lua_SOURCE_DIR}/src)
+    set_target_properties(lua_lib PROPERTIES POSITION_INDEPENDENT_CODE ON LINKER_LANGUAGE CXX)
+    if(UNIX)
+        target_compile_definitions(lua_lib PRIVATE LUA_USE_POSIX)
+    endif()
+    # Always optimized: nobody steps through the Lua VM, and scripts run in it.
+    target_compile_options(lua_lib PRIVATE $<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>)
 endif()
 
 # ---------------------------------------------------------------------------

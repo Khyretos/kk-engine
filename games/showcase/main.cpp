@@ -4,6 +4,9 @@
 #include "kke/modules/InputModule.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/RigidBodyModule.h"
+#if KKE_ENABLE_LUA
+#include "kke/modules/ScriptModule.h"
+#endif
 #include "kke/modules/SettingsModule.h"
 #include "kke/modules/SoundVisualizerModule.h"
 #include "kke/modules/StatsModule.h"
@@ -43,6 +46,9 @@ int main() {
         panels.push_back(&physics);
 #endif
         auto& showcase = app.addModule<kke_showcase::ShowcaseModule>();
+#if KKE_ENABLE_LUA
+        panels.push_back(&app.addModule<kke::ScriptModule>("scripts")); // scripts/*.lua, hot-reloaded
+#endif
         panels.push_back(&app.addModule<kke::DebugControlModule>());
         panels.push_back(&app.addModule<kke::StatsModule>());
         for (kke::Module* p : panels) p->setUiVisible(false);
