@@ -449,4 +449,168 @@ BakedFracture bakeFracture(const TetMeshData& mesh, const FractureSeedOptions& o
     return b;
 }
 
+// ---------------------------------------------------------------- drawn surface
+
+std::vector<uint32_t> splitSoupAtPieces(TriangleSoup& soup, const TetMeshData& mesh, const std::vector<uint32_t>& chunkOfTet,
+                                        const FractureSeeds& seeds, size_t maxTriangles) {
+    struct Tri {
+        std::array<glm::vec3, 3> p, n;
+        std::array<glm::vec2, 3> uv;
+    };
+    std::vector<Tri> pending;
+    pending.reserve(soup.triangleCount());
+    for (size_t t = 0; t < soup.triangleCount(); ++t) {
+        Tri tri;
+        for (int k = 0; k < 3; ++k) {
+            tri.p[k] = soup.positions[t * 3 + k];
+            tri.n[k] = soup.normals[t * 3 + k];
+            tri.uv[k] = soup.uvs[t * 3 + k];
+        }
+        pending.push_back(tri);
+    }
+    std::vector<Tri> done;
+    std::vector<uint32_t> piece;
+    auto finish = [&]() {
+        TriangleSoup out;
+        for (const Tri& t : done)
+            for (int k = 0; k < 3; ++k) {
+                out.positions.push_back(t.p[k]);
+                out.normals.push_back(t.n[k]);
+                out.uvs.push_back(t.uv[k]);
+            }
+        soup = std::move(out);
+        return piece;
+    };
+    if (mesh.tets.empty() || chunkOfTet.size() != mesh.tets.size()) {
+        done = std::move(pending);
+        piece.assign(done.size(), 0);
+        return finish();
+    }
+
+    const glm::vec3 metric = seeds.metric;
+    // Linear blend of two corners (normal renormalised).
+    auto lerpVertex = [](const Tri& t, int a, int b, float s, glm::vec3& p, glm::vec3& n, glm::vec2& uv) {
+        p = glm::mix(t.p[a], t.p[b], s);
+        n = glm::mix(t.n[a], t.n[b], s);
+        const float len = glm::length(n);
+        n = len > 1e-12f ? n / len : t.n[a];
+        uv = glm::mix(t.uv[a], t.uv[b], s);
+    };
+    auto area2 = [](const glm::vec3& a, const glm::vec3& b, const glm::vec3& c) { return glm::length(glm::cross(b - a, c - a)); };
+
+    // Cut-off slivers under 1/10000 of the average input triangle are
+    // dropped: invisible, and their normals are float rounding noise
+    // (a back-facing sliver would be a pinhole).
+    float minArea2 = 0.0f;
+    for (const Tri& t : pending) minArea2 += area2(t.p[0], t.p[1], t.p[2]);
+    minArea2 = pending.empty() ? 0.0f : minArea2 / static_cast<float>(pending.size()) * 1e-4f;
+
+    // Two rounds: each cuts every mixed triangle once (a triangle over a
+    // corner where 3 pieces meet needs two cuts).
+    constexpr int kRounds = 2;
+    for (int round = 0; round <= kRounds && !pending.empty(); ++round) {
+        // Corners pulled 1% towards the centre, so a corner lying on a
+        // crack (every cut makes some) counts for the side it bounds.
+        std::vector<glm::vec3> probes;
+        probes.reserve(pending.size() * 4);
+        for (const Tri& t : pending) {
+            const glm::vec3 c = (t.p[0] + t.p[1] + t.p[2]) / 3.0f;
+            for (int k = 0; k < 3; ++k) probes.push_back(glm::mix(t.p[k], c, 0.01f));
+            probes.push_back(c);
+        }
+        const TetEmbedding at = embedPoints(mesh, probes);
+        std::vector<Tri> next;
+        for (size_t i = 0; i < pending.size(); ++i) {
+            const Tri& t = pending[i];
+            const uint32_t c0 = chunkOfTet[at.tet[i * 4]], c1 = chunkOfTet[at.tet[i * 4 + 1]], c2 = chunkOfTet[at.tet[i * 4 + 2]];
+            const uint32_t centre = chunkOfTet[at.tet[i * 4 + 3]];
+            const bool mixed = c0 != c1 || c1 != c2;
+            const bool full = done.size() + next.size() + (pending.size() - i) + 2 > maxTriangles;
+            if (!mixed || round == kRounds || full) {
+                done.push_back(t);
+                piece.push_back(mixed ? centre : c0);
+                continue;
+            }
+            const uint32_t a = c0, b = c0 != c1 ? c1 : c2;
+            float f[3];
+            bool neg = false, pos = false;
+            if (a < seeds.points.size() && b < seeds.points.size()) {
+                const glm::vec3 sa = seeds.points[a] * metric, sb = seeds.points[b] * metric;
+                for (int k = 0; k < 3; ++k) {
+                    const glm::vec3 q = t.p[k] * metric;
+                    f[k] = glm::dot(q - sa, q - sa) - glm::dot(q - sb, q - sb); // < 0: a's side
+                    neg |= f[k] < 0.0f;
+                    pos |= f[k] > 0.0f;
+                }
+            }
+            if (!(neg && pos)) {
+                // The border here isn't on the plane (a rough spot, or a
+                // lump moved to its neighbour): kept whole, with the piece
+                // under its centre - the old behaviour, now only there.
+                done.push_back(t);
+                piece.push_back(centre);
+                continue;
+            }
+            // Sutherland-Hodgman against the plane, both sides kept.
+            for (int side = 0; side < 2; ++side) {
+                glm::vec3 P[4], N[4];
+                glm::vec2 U[4];
+                int count = 0;
+                auto inside = [&](int k) { return side == 0 ? f[k] <= 0.0f : f[k] >= 0.0f; };
+                for (int k = 0; k < 3; ++k) {
+                    const int j = (k + 1) % 3;
+                    if (inside(k)) { P[count] = t.p[k]; N[count] = t.n[k]; U[count] = t.uv[k]; ++count; }
+                    if ((f[k] < 0.0f && f[j] > 0.0f) || (f[k] > 0.0f && f[j] < 0.0f)) {
+                        lerpVertex(t, k, j, f[k] / (f[k] - f[j]), P[count], N[count], U[count]);
+                        ++count;
+                    }
+                }
+                for (int k = 1; k + 1 < count; ++k) {
+                    if (area2(P[0], P[k], P[k + 1]) <= minArea2) continue; // sliver from a corner (nearly) on the plane
+                    Tri s;
+                    s.p = { P[0], P[k], P[k + 1] };
+                    s.n = { N[0], N[k], N[k + 1] };
+                    s.uv = { U[0], U[k], U[k + 1] };
+                    next.push_back(s);
+                }
+            }
+        }
+        pending = std::move(next);
+    }
+    return finish();
+}
+
+TetEmbedding embedTrianglesInPieces(const TetMeshData& mesh, const std::vector<glm::vec3>& soupPositions,
+                                    const std::vector<uint32_t>& chunkOfTet, const std::vector<uint32_t>& pieceOfTriangle) {
+    TetEmbedding e = embedTriangles(mesh, soupPositions);
+    if (chunkOfTet.size() != mesh.tets.size() || pieceOfTriangle.size() * 3 != soupPositions.size()) return e;
+    std::unordered_map<uint32_t, std::vector<uint32_t>> tetsOf; // piece -> tets, built on first need
+    for (size_t t = 0; t < pieceOfTriangle.size(); ++t) {
+        const uint32_t want = pieceOfTriangle[t];
+        if (chunkOfTet[e.tet[t * 3]] == want) continue;
+        if (tetsOf.empty())
+            for (uint32_t i = 0; i < chunkOfTet.size(); ++i) tetsOf[chunkOfTet[i]].push_back(i);
+        auto it = tetsOf.find(want);
+        if (it == tetsOf.end()) continue;
+        // Nearest tet of its own piece (by centre); corners extrapolate
+        // from it, exact under the piece's (affine-per-tet) motion.
+        const glm::vec3 c = (soupPositions[t * 3] + soupPositions[t * 3 + 1] + soupPositions[t * 3 + 2]) / 3.0f;
+        uint32_t best = it->second.front();
+        float bd = std::numeric_limits<float>::max();
+        for (uint32_t tet : it->second) {
+            const auto& id = mesh.tets[tet];
+            const glm::vec3 tc = (mesh.vertices[id[0]] + mesh.vertices[id[1]] + mesh.vertices[id[2]] + mesh.vertices[id[3]]) * 0.25f;
+            const float d = glm::dot(tc - c, tc - c);
+            if (d < bd) { bd = d; best = tet; }
+        }
+        const auto& id = mesh.tets[best];
+        for (int k = 0; k < 3; ++k) {
+            e.tet[t * 3 + k] = best;
+            e.weights[t * 3 + k] = barycentric(soupPositions[t * 3 + k], mesh.vertices[id[0]], mesh.vertices[id[1]], mesh.vertices[id[2]],
+                                               mesh.vertices[id[3]]);
+        }
+    }
+    return e;
+}
+
 } // namespace kke

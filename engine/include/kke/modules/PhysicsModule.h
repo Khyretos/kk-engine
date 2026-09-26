@@ -12,6 +12,7 @@
 #include "kke/Capabilities.h"
 #include "kke/Ragdoll.h"
 #include "kke/BreakGraph.h"
+#include "kke/InteriorColor.h"
 
 #include <glm/glm.hpp>
 #include <memory>
@@ -257,6 +258,10 @@ public:
         // (and fracture on) the object breaks KKE's way instead of by
         // FEMFX's own fracture - see Breakable below. tetFlags is ignored.
         std::vector<uint32_t> chunkOfTet;
+        // Colour of the insides (fresh crack faces): see kke/InteriorColor.h.
+        // Not set but texturePath is: worked out here from the texture as
+        // vertexUVs sample it. Neither: the surface look, darkened.
+        InteriorFill interior;
     };
     ObjectHandle spawnTetMeshWithOptions(const TetMeshData& mesh, const glm::vec3& position, const Material& material,
                                          const TetSpawnOptions& options);
@@ -473,6 +478,7 @@ private:
         std::vector<float> tetStrength;                  // per tet threshold multiplier (TetSpawnOptions)
         VkDescriptorSet textureSet = VK_NULL_HANDLE;     // image file texture (TetSpawnOptions), else the material's own
         std::vector<glm::vec2> vertexUVs;                // per original vertex (optional)
+        InteriorFill interior;                           // crack face colour (TetSpawnOptions::interior)
         std::vector<uint8_t> originalExterior;
         std::vector<glm::mat3> restInverse;
         // Part of a Breakable (below): which one, and the baked tet /
@@ -509,6 +515,7 @@ private:
         BreakGraph graph;                                 // pieces, borders, thresholds, broken borders
         std::vector<float> settleStress;                  // per baked tet, while arming
         std::vector<glm::vec2> vertexUVs;                 // per baked vertex (optional)
+        InteriorFill interior;                            // crack face colour, copied to every part
         std::vector<ObjectHandle> parts;
         std::vector<ObjectHandle> partOfTet;              // baked tet -> part
         std::vector<uint32_t> localOfTet;                 // baked tet -> tet index in that part
@@ -522,6 +529,8 @@ private:
         uint32_t breaks = 0;                              // split events so far
     };
     std::unordered_map<ObjectHandle, Breakable> m_breakables;
+    // TetSpawnOptions::interior, or worked out from its texture (invalid = none).
+    InteriorFill resolveInterior(const TetSpawnOptions& options, bool textured);
     ObjectHandle spawnBreakable(const TetMeshData& mesh, const glm::vec3& position, const Material& material, const TetSpawnOptions& options);
     // Spawns one part holding `tets` (baked ids). `from` = the part it
     // splits off (copies its current vertex state), or kInvalidHandle.

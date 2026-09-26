@@ -15,6 +15,7 @@ add_executable(kke_tests
     test_asset_catalog.cpp
     test_picking.cpp
     test_voxel_fracture.cpp
+    test_interior_fill.cpp
     test_particle_fluid.cpp
     test_melt_volume.cpp
     test_voronoi_fracture.cpp

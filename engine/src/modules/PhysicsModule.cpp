@@ -639,6 +639,19 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnPlasticTetMesh(const TetMeshData
     return spawnTetMeshInternal(mesh, position, material, /*enableFracture=*/false, initialVelocity, /*enablePlasticity=*/true);
 }
 
+InteriorFill PhysicsModule::resolveInterior(const TetSpawnOptions& options, bool textured) {
+    if (options.interior.valid) return textured ? options.interior : InteriorFill{};
+    if (!textured || options.texturePath.empty()) return {};
+    // No colour given: the texture's dominant colour where the tets
+    // sample it (vertexUVs), or over the whole image.
+    InteriorFill fill = interiorFillFromTexture(options.texturePath, options.vertexUVs);
+    if (!fill.valid)
+        log::get(name())->warn("'{}': couldn't work out an interior colour (unreadable or fully transparent); crack faces use the "
+                               "surface texture, darkened",
+                               options.texturePath);
+    return fill;
+}
+
 PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshWithOptions(const TetMeshData& mesh, const glm::vec3& position, const Material& material,
                                                                      const TetSpawnOptions& options) {
     if (options.fracture && !options.chunkOfTet.empty()) {
@@ -674,6 +687,7 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshWithOptions(const TetMesh
         }
         obj.textureSet = m_app->textureSet(options.texturePath); // shared engine cache
         if (obj.textureSet) obj.color = glm::vec3(1.0f); // the texture carries the color
+        obj.interior = resolveInterior(options, obj.textureSet != VK_NULL_HANDLE);
     }
     return h;
 }
@@ -702,6 +716,7 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnBreakable(const TetMeshData& mes
     b.drawOnlyCracks = options.drawOnlyCracks;
     b.vertexUVs = options.vertexUVs.size() == mesh.vertices.size() ? options.vertexUVs : std::vector<glm::vec2>{};
     b.textureSet = m_app->textureSet(options.texturePath);
+    b.interior = resolveInterior(options, b.textureSet != VK_NULL_HANDLE);
     // Textured (an image, or the material's own texture): shown as is,
     // not tinted by the debug palette.
     b.color = (b.textureSet || material.textureId >= 0) ? glm::vec3(1.0f) : kColorPalette[bh % (sizeof(kColorPalette) / sizeof(kColorPalette[0]))];
@@ -757,6 +772,7 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnBreakablePart(ObjectHandle bh, c
     part.bakedTetOf = tets;
     part.bakedVertOf = bakedVert;
     part.textureSet = b.textureSet;
+    part.interior = b.interior;
     part.color = b.color;
     if (!b.vertexUVs.empty()) {
         part.vertexUVs.resize(bakedVert.size());
@@ -1560,7 +1576,18 @@ void PhysicsModule::prepareRenderData(uint32_t frameIndex) {
                         return glm::vec2(r.x, r.y) * kTexelsPerMeter;
                     };
                     glm::vec2 ua = project(ra), ub = project(rb), uc = project(rc);
-                    if (!obj->vertexUVs.empty() && obj->drawOnlyCracks) {
+                    // Fresh crack faces (inside the object before it
+                    // broke) get the inner material: RayFire's "inner
+                    // material" - broken edges read as broken.
+                    const bool crack = obj->drawOnlyCracks || (!obj->originalExterior.empty() && tetId < obj->originalExterior.size() &&
+                                                               obj->breakable != kInvalidHandle && !(obj->originalExterior[tetId] & (1u << faceId)));
+                    glm::vec3 color = obj->color;
+                    if (crack && obj->interior.valid) {
+                        // One flat colour: the texture's dominant colour,
+                        // deeper (kke/InteriorColor.h).
+                        ua = ub = uc = obj->interior.uv;
+                        color = obj->interior.tint;
+                    } else if (!obj->vertexUVs.empty() && obj->drawOnlyCracks) {
                         // Per-vertex UVs of the original tet corners (same
                         // corner order in every piece).
                         const auto& ov = obj->tetVertIds[bufferTetOf[m][tetId]].ids;
@@ -1568,13 +1595,7 @@ void PhysicsModule::prepareRenderData(uint32_t frameIndex) {
                         ub = obj->vertexUVs[ov[(5 - faceId) % 4]];
                         uc = obj->vertexUVs[ov[(faceId + 2) % 4]];
                     }
-                    // Fresh crack faces (inside the object before it
-                    // broke) are a little darker: RayFire's "inner
-                    // material" - broken edges read as broken.
-                    glm::vec3 color = obj->color;
-                    if (!obj->originalExterior.empty() && tetId < obj->originalExterior.size() && obj->breakable != kInvalidHandle &&
-                        !(obj->originalExterior[tetId] & (1u << faceId)))
-                        color *= 0.72f;
+                    if (crack && !obj->interior.valid) color *= kInteriorDarken;
                     obj->cpuVerts.push_back({ a, color, n, ua });
                     obj->cpuVerts.push_back({ b, color, n, ub });
                     obj->cpuVerts.push_back({ c, color, n, uc });

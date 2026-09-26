@@ -2,6 +2,7 @@
 
 #include "kke/FracturePattern.h"
 #include "kke/TetMeshAsset.h"
+#include "kke/VoxelTets.h"
 
 #include <glm/glm.hpp>
 
@@ -89,5 +90,29 @@ struct BakedFracture {
     size_t pieces = 0;
 };
 BakedFracture bakeFracture(const TetMeshData& mesh, const FractureSeedOptions& options);
+
+// Makes a drawn surface (TriangleSoup glued with embedTriangles) break
+// cleanly along the pieces. Each triangle goes with one piece; one that
+// straddled a crack used to go whole with the piece under its centre,
+// so along every crack one piece had a lip of surface hanging past its
+// crack face and the other a notch through which you looked into its
+// back-face-culled inside: broken props looked hollow, their faces not
+// closing (user report). Here every triangle whose corners lie in
+// different pieces (the tets under them) is cut along the Voronoi plane
+// between those pieces, the plane the crack faces were snapped onto.
+// Where the border is too rough for its plane a triangle stays whole.
+// Measured: ~2% of a broken cube's surface hung on the wrong piece,
+// now ~0.6%; a Synty pillar gets ~50% more triangles and 30-90 ms more
+// setup when it is made breakable (tests/test_interior_fill.cpp).
+// Stops adding triangles at `maxTriangles`. Returns the piece of each
+// output triangle, for embedTrianglesInPieces().
+std::vector<uint32_t> splitSoupAtPieces(TriangleSoup& soup, const TetMeshData& mesh, const std::vector<uint32_t>& chunkOfTet,
+                                        const FractureSeeds& seeds, size_t maxTriangles);
+
+// embedTriangles(), but each triangle is glued to a tet of its own piece
+// (`pieceOfTriangle`): a triangle cut exactly at a crack can have its
+// centre just inside the neighbour's tets where the border is rough.
+TetEmbedding embedTrianglesInPieces(const TetMeshData& mesh, const std::vector<glm::vec3>& soupPositions,
+                                    const std::vector<uint32_t>& chunkOfTet, const std::vector<uint32_t>& pieceOfTriangle);
 
 } // namespace kke

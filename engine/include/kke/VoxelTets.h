@@ -21,7 +21,10 @@ namespace kke {
 //      can't reach is solid (the surface cells plus enclosed inside).
 //      This works on open, non-watertight meshes — Synty props are full
 //      of holes and overlapping parts, which break exact
-//      tetrahedralizers (CGAL needs a closed surface).
+//      tetrahedralizers (CGAL needs a closed surface). Where the flood
+//      leaks in through a hole (an open bottom), cells with surface
+//      ahead in 5 of the 6 axis directions still count as inside, so
+//      the volume stays solid instead of becoming a hollow shell.
 //   3. Each solid cell becomes 6 tetrahedra, split around one shared
 //      diagonal (Kuhn split), so neighbouring cells' faces match and
 //      the whole thing is one connected body.

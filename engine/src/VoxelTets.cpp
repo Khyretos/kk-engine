@@ -65,7 +65,43 @@ std::vector<uint8_t> solidMask(const std::vector<glm::vec3>& positions, const st
             stack.push_back(n);
         }
     }
-    // 3. Solid = not reached from outside.
+    // 3. Holes. The flood leaks in through any gap in the surface, and
+    // Synty props are full of them: pillars, crates and walls have no
+    // bottom (they stand on the ground), parts meet with slits between
+    // them. A leak left the volume a thin shell, and broken pieces were
+    // hollow inside. So a flooded cell still counts as inside when the
+    // surface blocks it along at least 5 of the 6 axis directions (one
+    // missing cap), the "enclosed from almost everywhere" rule of
+    // generalized winding numbers without their cost. A doorway, a pipe
+    // or an L-shaped notch sees out along 2+ directions and stays empty.
+    {
+        const size_t n = state.size();
+        std::vector<uint8_t> blocked(n, 0); // count of directions with surface ahead
+        auto scan = [&](int axis) {
+            const int u = (axis + 1) % 3, v = (axis + 2) % 3;
+            glm::ivec3 c(0);
+            for (c[u] = 0; c[u] < pd[u]; ++c[u]) {
+                for (c[v] = 0; c[v] < pd[v]; ++c[v]) {
+                    bool seen = false; // surface behind, in the - direction
+                    for (c[axis] = 0; c[axis] < pd[axis]; ++c[axis]) {
+                        const size_t i = index(c.x, c.y, c.z);
+                        if (state[i] == 1) seen = true;
+                        else if (seen) ++blocked[i];
+                    }
+                    seen = false; // the + direction
+                    for (c[axis] = pd[axis] - 1; c[axis] >= 0; --c[axis]) {
+                        const size_t i = index(c.x, c.y, c.z);
+                        if (state[i] == 1) seen = true;
+                        else if (seen) ++blocked[i];
+                    }
+                }
+            }
+        };
+        for (int axis = 0; axis < 3; ++axis) scan(axis);
+        for (size_t i = 0; i < n; ++i)
+            if (state[i] == 2 && blocked[i] >= 5) state[i] = 0;
+    }
+    // 4. Solid = not reached from outside.
     for (uint8_t& st : state) st = st == 2 ? 0 : 1;
     return state;
 }

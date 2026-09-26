@@ -3,6 +3,7 @@
 #include "kke/Application.h"
 #include "kke/Log.h"
 #include "kke/FracturePattern.h"
+#include "kke/InteriorColor.h"
 #include "kke/VoronoiFracture.h"
 #include "kke/Material.h"
 #if KKE_ENABLE_FEMFX
@@ -587,6 +588,25 @@ void SandboxModule::makeBreakable(Object& o) {
         opts.texturePath = o.texture;
         if (opts.texturePath.empty())
             for (const kke::ModelMaterial& m : d->materials) if (!m.albedoTexture.empty()) { opts.texturePath = m.albedoTexture; break; }
+        // The inside of every piece: one colour, the texture's dominant
+        // colour as this prop uses it (each triangle's UV centre, weighted
+        // by its area: a stone pillar with a bronze trim is stone inside),
+        // a little deeper. Per-vertex swatches made pieces patchy, and dark
+        // or cut-out texels read as holes.
+        if (!opts.texturePath.empty()) {
+            std::vector<glm::vec2> centres;
+            std::vector<float> areas;
+            for (size_t i = 0; i + 2 < tris.size(); i += 3) {
+                const uint32_t a = tris[i], b = tris[i + 1], c = tris[i + 2];
+                centres.push_back((uvs[a] + uvs[b] + uvs[c]) / 3.0f);
+                areas.push_back(0.5f * glm::length(glm::cross(points[b] - points[a], points[c] - points[a])));
+            }
+            opts.interior = kke::interiorFillFromTexture(opts.texturePath, centres, areas);
+            if (!opts.interior.valid)
+                kke::log::get(name())->warn("{}: no interior colour from '{}' (unreadable or fully transparent); pieces use the surface "
+                                            "texture inside",
+                                            o.asset, opts.texturePath);
+        }
     }
     // 3 mm up so it doesn't start inside the ground plane; the render mesh
     // follows the tets, so the drop is invisible.
@@ -599,6 +619,7 @@ void SandboxModule::makeBreakable(Object& o) {
     // soup (edges <= half a cell) glued triangle-by-triangle to the tets.
     std::vector<std::vector<kke::ModelVertex>> topology(d->meshes.size());
     std::vector<glm::vec3> soupPositions;
+    std::vector<uint32_t> pieceOfTriangle;
     o.restNormals.clear();
     o.partOffsets.clear();
     const size_t budgetPerPart = 12000 / std::max<size_t>(1, d->meshes.size());
@@ -612,6 +633,13 @@ void SandboxModule::makeBreakable(Object& o) {
             soup.uvs.push_back(v.uv);
         }
         kke::subdivideSoup(soup, std::max({ vox.cellSize3.x, vox.cellSize3.y, vox.cellSize3.z }) * 0.5f, budgetPerPart);
+        // Cut triangles that straddle a crack, so each piece's surface
+        // ends exactly at its crack face (no lip on one side, no hole
+        // into the other). Room for the cuts: +50% over the budget.
+        if (opts.fracture) {
+            std::vector<uint32_t> pieces = kke::splitSoupAtPieces(soup, vox.mesh, baked.cut.chunkOfTet, baked.seeds, budgetPerPart + budgetPerPart / 2);
+            pieceOfTriangle.insert(pieceOfTriangle.end(), pieces.begin(), pieces.end());
+        }
         o.partOffsets.push_back(soupPositions.size());
         for (size_t v = 0; v < soup.positions.size(); ++v) {
             kke::ModelVertex mv;
@@ -623,7 +651,8 @@ void SandboxModule::makeBreakable(Object& o) {
         soupPositions.insert(soupPositions.end(), soup.positions.begin(), soup.positions.end());
         o.restNormals.insert(o.restNormals.end(), soup.normals.begin(), soup.normals.end());
     }
-    o.embedding = kke::embedTriangles(vox.mesh, soupPositions);
+    o.embedding = opts.fracture ? kke::embedTrianglesInPieces(vox.mesh, soupPositions, baked.cut.chunkOfTet, pieceOfTriangle)
+                                : kke::embedTriangles(vox.mesh, soupPositions);
     m_models->setDeformedTopology(o.instance, topology);
     o.settled = false;
     const double ms = (SDL_GetPerformanceCounter() / static_cast<double>(SDL_GetPerformanceFrequency()) - start) * 1000.0;
