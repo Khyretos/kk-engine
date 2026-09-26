@@ -13,11 +13,13 @@ layout(location = 2) out vec3 fragPosWorld;
 layout(location = 3) out vec4 fragPosLightSpace;
 layout(location = 4) out vec2 fragMetallicRoughness;
 layout(location = 5) out vec2 fragUV;
+layout(location = 6) out vec3 fragOverlayPos;    // metres, in the object's rest shape
+layout(location = 7) out vec3 fragOverlayNormal;
 
 layout(push_constant) uniform PushConstants {
     mat4 model;
     vec4 material; // x metallic, y roughness, z overlay cell size in metres (0 = off), w overlay strength
-    vec4 tint;     // rgb multiplies the vertex color
+    vec4 tint;     // rgb: material colour x instance tint (sRGB); w: overlay scale for pre-transformed (deformed) vertices, 0 = from the model matrix
 } pc;
 
 struct GPULight { vec4 directionOrPosition; vec4 colorIntensity; };
@@ -32,7 +34,14 @@ layout(set = 0, binding = 0) uniform LightingUBO {
 void main() {
     vec4 worldPos = pc.model * vec4(inPosition, 1.0);
     gl_Position = lighting.viewProj * worldPos;
-    fragColor = inColor * pc.tint.rgb;
+    fragColor = pc.tint.rgb;
+    // inColor = this vertex's rest position in model space (see
+    // ModelModule's toVertex): the overlay is projected from it so it's
+    // glued to the object. Scaled to metres by the object's own scale.
+    vec3 scale = pc.tint.w > 0.0 ? vec3(pc.tint.w)
+                                 : vec3(length(pc.model[0].xyz), length(pc.model[1].xyz), length(pc.model[2].xyz));
+    fragOverlayPos = inColor * scale;
+    fragOverlayNormal = inNormal; // model space for rigid meshes; deformed parts pass their current one (close enough for the blend weights)
     fragPosWorld = worldPos.xyz;
     fragNormalWorld = normalize(mat3(pc.model) * inNormal);
     fragPosLightSpace = lighting.lightViewProj * worldPos;

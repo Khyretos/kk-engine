@@ -54,6 +54,8 @@ private:
         kke::ModelModule::InstanceId instance = 0;
         bool character = false;
         std::string texture;      // texture variant path, "" = the model's own
+        uint32_t fractureSeed = 0; // this object's own seed, mixed with the world's (kke::fractureSeed); 0 = its id
+        int breakMaterial = -1;    // kBreakMaterials index it was made breakable with (saved in layouts)
         // Ragdoll (characters)
         kke::IRagdollPhysics::RagdollHandle ragdoll = 0;
         kke::RagdollDesc ragdollDesc;
@@ -144,8 +146,9 @@ private:
     int m_breakMaterial = 0;           // index into kBreakMaterials (see .cpp)
     int m_patternOverride = 0;         // 0 = the material's own pattern, else FracturePattern + 1
     float m_chunkScale = 1.0f;         // multiplies the material's chunk size
-    int m_detailCells = 60;
-    float m_toughness = 1.0f;          // multiplies the material's fracture threshold            // voxel budget per prop (6 tets per cell)
+    int m_detailCells = 160;           // voxel budget per prop (6 tets per cell)
+    float m_toughness = 1.0f;          // multiplies the material's fracture threshold
+    uint32_t m_worldSeed = 1;          // the world's fracture seed (see kke::fractureSeed)
     std::string m_lastBreakStats;
     float m_ballSpeed = 18.0f;
     std::vector<uint32_t> m_balls;     // oldest first; capped (see throwBall)

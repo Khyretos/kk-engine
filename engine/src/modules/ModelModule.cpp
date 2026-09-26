@@ -12,12 +12,23 @@ namespace kke {
 
 namespace {
 // Matches model.vert/model.frag: material = (metallic, roughness, overlay
-// tile size in metres or 0, overlay strength); tint.rgb multiplies color.
+// tile size in metres or 0, overlay strength); tint.rgb = the material's
+// base colour times the instance tint (sRGB).
 struct PushConstants { glm::mat4 model; glm::vec4 material; glm::vec4 tint; };
 struct ShadowPushConstants { glm::mat4 lightViewProj; glm::mat4 model; };
 
-Vertex toVertex(const ModelVertex& v, const glm::vec3& color) {
-    return Vertex{ v.position, color, v.normal, v.uv };
+// The vertex colour slot carries the *overlay position*: where the vertex
+// sits in the object's own rest shape (model space). model.vert projects
+// the grid overlay from it, so the grid sticks to the object when it's
+// moved, rotated or broken, instead of sliding through it as the old
+// world-space projection did. The colour itself is a push constant.
+Vertex toVertex(const ModelVertex& v) {
+    return Vertex{ v.position, v.position, v.normal, v.uv };
+}
+
+// Uniform scale of a transform (Synty FBX imports carry 0.01-style scales).
+float instanceScale(const glm::mat4& t) {
+    return (glm::length(glm::vec3(t[0])) + glm::length(glm::vec3(t[1])) + glm::length(glm::vec3(t[2]))) / 3.0f;
 }
 } // namespace
 
@@ -106,7 +117,7 @@ ModelModule::ModelId ModelModule::load(const std::string& path, const ModelLoadO
             // applied per draw via the material, see render().
             std::vector<Vertex> verts;
             verts.reserve(m.vertices.size());
-            for (const ModelVertex& v : m.vertices) verts.push_back(toVertex(v, data.materials[m.material].baseColor));
+            for (const ModelVertex& v : m.vertices) verts.push_back(toVertex(v));
             gm.mesh = std::make_unique<Mesh>(m_app->device(), verts, m.indices);
         }
         loaded->meshes.push_back(std::move(gm));
@@ -269,7 +280,7 @@ void ModelModule::setDeformedVertices(InstanceId id, const std::vector<std::vect
             SkinnedBuffers sb;
             sb.cpu.resize(src.vertices.size());
             for (size_t v = 0; v < src.vertices.size(); ++v) {
-                sb.cpu[v] = toVertex(src.vertices[v], lm.data.materials[src.material].baseColor);
+                sb.cpu[v] = toVertex(src.vertices[v]);
             }
             for (auto& vb : sb.vertices) {
                 vb = std::make_unique<Buffer>(m_app->device(), sizeof(Vertex) * std::max<size_t>(1, src.vertices.size()),
@@ -299,12 +310,19 @@ void ModelModule::setDeformedTopology(InstanceId id, const std::vector<std::vect
     Instance& inst = it->second;
     const LoadedModel& lm = *m_models[inst.model];
     inst.deformed.clear();
+    const glm::mat4 toModel = glm::inverse(inst.transform);
     for (size_t m = 0; m < lm.data.meshes.size(); ++m) {
         const std::vector<ModelVertex>& src = m < parts.size() ? parts[m] : std::vector<ModelVertex>{};
         SkinnedBuffers sb;
-        const glm::vec3 color = lm.data.materials[lm.data.meshes[m].material].baseColor;
         sb.cpu.reserve(src.size());
-        for (const ModelVertex& v : src) sb.cpu.push_back(toVertex(v, color));
+        // Parts arrive in world space; the overlay position is the rest
+        // position in model space, so the grid stays where it was on the
+        // intact object once the parts start moving.
+        for (const ModelVertex& v : src) {
+            Vertex out = toVertex(v);
+            out.color = glm::vec3(toModel * glm::vec4(v.position, 1.0f));
+            sb.cpu.push_back(out);
+        }
         std::vector<uint32_t> indices(src.size());
         for (uint32_t i = 0; i < indices.size(); ++i) indices[i] = i;
         for (auto& vb : sb.vertices) {
@@ -345,11 +363,10 @@ void ModelModule::skinInstance(Instance& inst, uint32_t frameIndex) {
         if (!gm.skinned) continue;
         const ModelMesh& src = lm.data.meshes[gm.meshIndex];
         SkinnedBuffers& sb = inst.skinned[si++];
-        const glm::vec3 color = lm.data.materials[src.material].baseColor; // tint: push constant
         for (size_t v = 0; v < src.vertices.size(); ++v) {
             glm::vec3 p, n;
             skinVertex(src.vertices[v], skin, p, n);
-            sb.cpu[v] = Vertex{ p, color, n, src.vertices[v].uv };
+            sb.cpu[v] = Vertex{ p, src.vertices[v].position, n, src.vertices[v].uv }; // overlay: bind pose
         }
         sb.vertices[frameIndex]->upload(sb.cpu.data(), sb.cpu.size() * sizeof(Vertex));
     }
@@ -423,8 +440,11 @@ void ModelModule::render(const RenderContext& ctx) {
                     boundTexture = tex;
                 }
                 float tile = inst.overlay ? m_overlayTile : 0.0f;
+                // Deformed parts are already in world space (identity
+                // model matrix) but their overlay positions are in model
+                // space: overlayScale carries the object's scale for them.
                 PushConstants pc{ deformed ? glm::mat4(1.0f) : inst.transform, glm::vec4(mat.metallic, mat.roughness, tile, m_overlayStrength),
-                                  glm::vec4(inst.tint, 1.0f) };
+                                  glm::vec4(mat.color * inst.tint, deformed ? instanceScale(inst.transform) : 0.0f) };
                 vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), pcStages, 0, sizeof(pc), &pc);
                 if (deformed) {
                     SkinnedBuffers& sb = inst.deformed[gm.meshIndex];
@@ -473,7 +493,7 @@ void ModelModule::render(const RenderContext& ctx) {
             glm::vec3 z = glm::cross(x, y);
             float thick = std::clamp(len * 0.12f, 0.006f, 0.03f);
             glm::mat4 m(glm::vec4(x * thick, 0), glm::vec4(y * len, 0), glm::vec4(z * thick, 0), glm::vec4(a, 1));
-            PushConstants pc{ m, glm::vec4(0.0f, 1.0f, 0.0f, 0.0f), glm::vec4(1.0f) };
+            PushConstants pc{ m, glm::vec4(0.0f, 1.0f, 0.0f, 0.0f), glm::vec4(1.0f, 0.82f, 0.25f, 0.0f) };
             vkCmdPushConstants(ctx.cmd, m_bonePipeline->layout(), pcStages, 0, sizeof(pc), &pc);
             m_boneMesh->draw(ctx.cmd);
         }

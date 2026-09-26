@@ -40,6 +40,25 @@ them): a `.txt` to read and a `.json` for analysis, including your CPU,
 GPU, driver, RAM, OS and build type. Paste either file back instead of
 log lines.
 
+### HW-014 · Breaking things, again (dev box)
+Two parts.
+1. `KKE_PHYSICS_SCENES=breaktest ./physics_demo` (or the "Scene: Break
+   test" button): glass on two supports, a wooden plank as a bridge, a
+   stone wall; iron balls drop/fly at them after ~4 s. Glass should
+   shatter in a star around the hit, the plank snap into long splinters,
+   the wall lose irregular chunks. Change "Fracture seed" and run it
+   again: different pieces, same kind of break.
+2. `./sandbox`: `X` on props with each "Breaks as" material, shoot with
+   `2` + click or `F`. Nothing may break before it's hit; a hit at the
+   default 18 m/s should visibly break it; a 30-40 m/s hit (Ball speed)
+   should break more than an 18 m/s one. Walk around a broken prop: crack
+   faces from every side, nothing hollow. Move a prop around (G) with the
+   grid look on: the grid must stay stuck to it. "Reroll" gives one prop
+   new pieces; the World seed changes all of them; save + load keeps them.
+**Send back:** screenshots (before/after per material), FPS during and
+after a big break, anything that explodes, flies off or sinks.
+**Result:** —
+
 ### HW-013 · Sea demo (dev box)
 `cd build/bin && ./sea_demo`. Drive (arrows), throw things (click, 1-5),
 turn the wind up to 14 m/s. Does the boat feel like a boat (not too
@@ -47,7 +66,8 @@ twitchy, not too stiff)? Do the objects float/sink the way their names
 say? Any shimmering or "swimming" of the sea surface when the camera
 moves? FPS with 40 bodies in the water?
 **Send back:** screenshots or a short clip, FPS, and anything that feels off.
-**Result:** —
+**Result:** 2026-09-26, dev box: "seems good for now". ✅ for now; revisit
+with Synty props as floaters.
 
 ### HW-012 · Melt demo feel and speed (dev box)
 `cd build/bin && ./melt_demo`, then each block (`Block` combo or
@@ -62,7 +82,9 @@ with the raw particles — FPS with each, and does the smooth surface look
 like liquid (any flicker, streaks, halos at the edges)?
 **Send back:** a short screen recording or 3 screenshots per block, the
 panel numbers, and what feels off.
-**Result:** —
+**Result:** 2026-09-26, dev box: melting itself "feels correct", but the
+melt pooled inside an invisible cube before it flowed (BUG-049, fixed).
+Re-run: does melt run off the block from the first drop now?
 
 ### HW-011 · Sandbox with your packs (dev box, interactive)
 `cd build/bin && ./sandbox` with your packs in `assets/synty/` (or type
@@ -79,7 +101,10 @@ Anything that loads wrong (textures missing, pieces in the floor) or
 feels awkward is exactly what I need.
 **Send back:** screenshots, the saved `sandbox_layout.json`, the asset
 count line from the Assets panel, and log warnings.
-**Result:** —
+**Result:** 2026-09-26, dev box: placing/duplicating/selecting "perfectly
+fine"; breaking was not: every material broke into the same square
+pieces, seen from one side only, and the grid texture slid over moving
+objects (BUG-045..048, 050, 051, all fixed). Re-test as HW-014.
 
 ### HW-010 · Physics thread scaling, as one file (dev box)
 Replaces HW-003 (which only produced one line — `KKE_PHYSICS_THREADS`
@@ -90,7 +115,12 @@ cmake -P tools/run_physics_benchmarks.cmake
 ```
 Runs the benchmark at 1, 2, 4, 8, 16 threads (up to your core count).
 **Send back:** `benchmark/sweep_<time>/summary.txt`.
-**Result:** —
+**Result:** 2026-09-26, dev box: one run came back (8 threads,
+RelWithDebInfo): realtime 1.00x, step avg 3.86 ms, p99 5.88 ms, max
+12.6 ms, 481 pieces / 2,400 tets, 104 MB peak RSS, render prep 0.11 ms.
+Still no 1/2/4-thread comparison, so scaling is unknown. Note the scene
+changed since (brick and glass are now breakables with ~800 tets each,
+see OPTIMIZATION.md #21), so re-run the whole sweep.
 
 ### HW-002 · Same benchmark, Debug build (dev box)
 Same as HW-001 but from `build/` (`cmake --workflow --preset everything`).

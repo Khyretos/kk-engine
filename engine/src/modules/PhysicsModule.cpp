@@ -7,6 +7,7 @@
 #include "kke/VulkanCheck.h"
 #include "kke/BenchmarkReport.h"
 #include "kke/VulkanDevice.h"
+#include "kke/VoronoiFracture.h"
 
 #include <imgui.h>
 #include <AMD_FEMFX.h>
@@ -236,6 +237,27 @@ struct ShadowPushConstants { glm::mat4 lightViewProj; glm::mat4 model; };
 // volume) — just stretched near the cube's former corners. Cheaper and
 // simpler than true sphere tetrahedralization, and good enough
 // for a bouncing rubber ball.
+namespace {
+// kke::Material -> FmTetMaterialParams, the actual bridge.
+AMD::FmTetMaterialParams toFemfx(const Material& material) {
+    AMD::FmTetMaterialParams p;
+    p.restDensity = material.density;
+    p.youngsModulus = material.stiffness;
+    p.poissonsRatio = material.poissonsRatio;
+    p.plasticYieldThreshold = material.plasticYieldThreshold;
+    p.plasticCreep = material.plasticCreep;
+    p.fractureStressThreshold = material.fractureStressThreshold;
+    return p;
+}
+
+// xorshift, [0,1): portable, so a seed places things the same everywhere.
+struct Rng01 {
+    uint32_t s;
+    explicit Rng01(uint32_t seed) : s(seed ? seed : 1u) {}
+    float next() { s ^= s << 13; s ^= s >> 17; s ^= s << 5; return (s >> 8) * (1.0f / 16777216.0f); }
+};
+} // namespace
+
 TetMeshData PhysicsModule::buildSphere(int cells, float radius) {
     TetMeshData mesh = buildGridBox(cells, cells, cells, 2.0f, 2.0f, 2.0f); // unit cube [-1,1]^3
     for (glm::vec3& v : mesh.vertices) {
@@ -413,18 +435,15 @@ void PhysicsModule::init(Application& app) {
     // required.
     {
         PipelineConfig config;
-        // frontFace flipped from this project's own default (Clockwise)
-        // -- a real fix attempt, not the "just disable culling"
-        // workaround CubeModule/DestructionModule use elsewhere. Real
-        // backface culling matters for performance (every triangle
-        // rendered twice is real, measurable GPU cost this project can't
-        // afford right now -- see README/BUGS.md for the ongoing
-        // performance investigation), so this tests whether the actual
-        // winding mismatch can be fixed by flipping which winding
-        // Vulkan treats as "front" for this pipeline specifically,
-        // instead of disabling the optimization entirely.
+        // Back faces culled. FEMFX exterior faces come out counter-
+        // clockwise seen from outside (checked by hand on a grid tet:
+        // face 0's normal points away from corner 0), which is Vulkan's
+        // front face here (see BUG-040: the projection's Y flip and the
+        // framebuffer's Y-down cancel). Culling was off since an old
+        // "TEMPORARY DIAGNOSTIC", so every face was shaded twice and
+        // the inside of a piece showed through its cracks.
         config.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-        config.cullMode = VK_CULL_MODE_NONE; // TEMPORARY DIAGNOSTIC -- isolating whether this is a culling issue at all
+        config.cullMode = VK_CULL_MODE_BACK_BIT;
         config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PhysicsPushConstants) };
         config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), app.materialTextureSetLayout() };
         m_pipeline = std::make_unique<Pipeline>(
@@ -608,6 +627,13 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnPlasticTetMesh(const TetMeshData
 
 PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshWithOptions(const TetMeshData& mesh, const glm::vec3& position, const Material& material,
                                                                      const TetSpawnOptions& options) {
+    if (options.fracture && !options.chunkOfTet.empty()) {
+        if (options.chunkOfTet.size() != mesh.tets.size()) {
+            log::get(name())->error("spawnTetMeshWithOptions: {} chunk ids for {} tets", options.chunkOfTet.size(), mesh.tets.size());
+            return kInvalidHandle;
+        }
+        return spawnBreakable(mesh, position, material, options);
+    }
     if (!options.tetFlags.empty() && options.tetFlags.size() != mesh.tets.size()) {
         log::get(name())->error("spawnTetMeshWithOptions: {} tet flags for {} tets", options.tetFlags.size(), mesh.tets.size());
         return kInvalidHandle;
@@ -618,10 +644,214 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshWithOptions(const TetMesh
     if (h != kInvalidHandle) {
         SpawnedTet& obj = *m_objects[h];
         if (options.vertexUVs.size() == mesh.vertices.size()) obj.vertexUVs = options.vertexUVs;
+        if (options.tetStrength.size() == mesh.tets.size()) {
+            obj.tetStrength = options.tetStrength;
+            // Not arming: the real thresholds apply now (arming applies
+            // them itself, see fixedUpdate()).
+            if (options.fracture && !obj.armPending) {
+                AMD::FmTetMaterialParams p = toFemfx(material);
+                const float base = p.fractureStressThreshold;
+                for (uint t = 0; t < obj.numTets; ++t) {
+                    if (obj.tetStrength[t] == 1.0f) continue;
+                    p.fractureStressThreshold = base * obj.tetStrength[t];
+                    AMD::FmUpdateTetMaterialParams(m_scene, obj.tetMesh, t, p);
+                }
+            }
+        }
         obj.textureSet = m_app->textureSet(options.texturePath); // shared engine cache
         if (obj.textureSet) obj.color = glm::vec3(1.0f); // the texture carries the color
     }
     return h;
+}
+
+// ---------------------------------------------------------------- breakables
+// See PhysicsModule.h, struct Breakable, for why these don't use FEMFX's
+// own fracture, and kke/BreakGraph.h for the bookkeeping.
+
+namespace {
+// Parts never fracture inside FEMFX: an unreachable threshold. Fracture
+// stays *enabled* only because that is when FEMFX computes the per-tet
+// stress KKE reads (FmGetTetMaxStress, see external/FEMFX/KKE_FORK.md).
+constexpr float kNoFemfxFracture = 1.0e20f;
+} // namespace
+
+PhysicsModule::ObjectHandle PhysicsModule::spawnBreakable(const TetMeshData& mesh, const glm::vec3& position, const Material& material,
+                                                          const TetSpawnOptions& options) {
+    const ObjectHandle bh = m_nextHandle++;
+    Breakable& b = m_breakables[bh];
+    b.mesh = mesh;
+    b.origin = position;
+    b.graph = BreakGraph(mesh, options.chunkOfTet, options.tetStrength);
+    b.graph.arm(material.fractureStressThreshold);
+    b.material = material;
+    b.plastic = options.plastic;
+    b.drawOnlyCracks = options.drawOnlyCracks;
+    b.vertexUVs = options.vertexUVs.size() == mesh.vertices.size() ? options.vertexUVs : std::vector<glm::vec2>{};
+    b.textureSet = m_app->textureSet(options.texturePath);
+    // Textured (an image, or the material's own texture): shown as is,
+    // not tinted by the debug palette.
+    b.color = (b.textureSet || material.textureId >= 0) ? glm::vec3(1.0f) : kColorPalette[bh % (sizeof(kColorPalette) / sizeof(kColorPalette[0]))];
+    const size_t nt = mesh.tets.size();
+    b.restInverse.resize(nt);
+    for (uint32_t t = 0; t < nt; ++t) {
+        const auto& id = mesh.tets[t];
+        glm::mat3 dm(mesh.vertices[id[1]] - mesh.vertices[id[0]], mesh.vertices[id[2]] - mesh.vertices[id[0]], mesh.vertices[id[3]] - mesh.vertices[id[0]]);
+        b.restInverse[t] = std::fabs(glm::determinant(dm)) > 1e-18f ? glm::inverse(dm) : glm::mat3(1.0f);
+    }
+    b.partOfTet.assign(nt, kInvalidHandle);
+    b.localOfTet.assign(nt, 0);
+    if (options.armFractureAfterSeconds > 0.0f) {
+        b.armPending = true;
+        b.settleStress.assign(nt, 0.0f);
+        b.armMaxTicks = std::max(20u, static_cast<uint32_t>(options.armFractureAfterSeconds * 60.0f));
+    }
+    std::vector<uint32_t> all(nt);
+    for (uint32_t t = 0; t < nt; ++t) all[t] = t;
+    if (!spawnBreakablePart(bh, all, kInvalidHandle, options.velocity)) {
+        m_breakables.erase(bh);
+        return kInvalidHandle;
+    }
+    return bh;
+}
+
+PhysicsModule::ObjectHandle PhysicsModule::spawnBreakablePart(ObjectHandle bh, const std::vector<uint32_t>& tets, ObjectHandle from,
+                                                              const glm::vec3& velocity) {
+    Breakable& b = m_breakables.at(bh);
+    // Sub-mesh: the tets keep their corner order (so face numbers match
+    // the baked mesh), vertices renumbered.
+    TetMeshData sub;
+    std::unordered_map<uint32_t, uint32_t> local;
+    std::vector<uint32_t> bakedVert;
+    sub.tets.reserve(tets.size());
+    for (uint32_t t : tets) {
+        std::array<uint32_t, 4> ids{};
+        for (int k = 0; k < 4; ++k) {
+            uint32_t v = b.mesh.tets[t][k];
+            auto [it, fresh] = local.emplace(v, static_cast<uint32_t>(sub.vertices.size()));
+            if (fresh) { sub.vertices.push_back(b.mesh.vertices[v]); bakedVert.push_back(v); }
+            ids[k] = it->second;
+        }
+        sub.tets.push_back(ids);
+    }
+    Material m = b.material;
+    m.fractureStressThreshold = kNoFemfxFracture;
+    ObjectHandle h = spawnTetMeshInternal(sub, b.origin, m, true, velocity, b.plastic, nullptr, b.drawOnlyCracks, 0.0f);
+    if (h == kInvalidHandle) return kInvalidHandle;
+    SpawnedTet& part = *m_objects[h];
+    part.breakable = bh;
+    part.bakedTetOf = tets;
+    part.bakedVertOf = bakedVert;
+    part.textureSet = b.textureSet;
+    part.color = b.color;
+    if (!b.vertexUVs.empty()) {
+        part.vertexUVs.resize(bakedVert.size());
+        for (size_t v = 0; v < bakedVert.size(); ++v) part.vertexUVs[v] = b.vertexUVs[bakedVert[v]];
+    }
+    // Crack faces are the ones that were inside the *whole* object.
+    part.originalExterior.resize(tets.size());
+    for (size_t t = 0; t < tets.size(); ++t) part.originalExterior[t] = b.graph.originalExterior(tets[t]);
+    for (size_t t = 0; t < tets.size(); ++t) {
+        b.partOfTet[tets[t]] = h;
+        b.localOfTet[tets[t]] = static_cast<uint32_t>(t);
+    }
+    b.parts.push_back(h);
+
+    // Splitting off: start exactly where the old part's vertices are,
+    // moving as they were - nothing pops or stops.
+    auto fit = m_objects.find(from);
+    if (fit != m_objects.end()) {
+        const SpawnedTet& old = *fit->second;
+        std::unordered_map<uint32_t, uint32_t> oldLocal;
+        for (uint32_t v = 0; v < old.bakedVertOf.size(); ++v) oldLocal.emplace(old.bakedVertOf[v], v);
+        for (uint32_t v = 0; v < bakedVert.size(); ++v) {
+            auto o = oldLocal.find(bakedVert[v]);
+            if (o == oldLocal.end()) continue;
+            AMD::FmSetVertPosition(m_scene, part.tetMesh, v, AMD::FmGetVertPosition(*old.tetMesh, o->second));
+            AMD::FmSetVertVelocity(m_scene, part.tetMesh, v, AMD::FmGetVertVelocity(*old.tetMesh, o->second));
+        }
+    }
+    return h;
+}
+
+void PhysicsModule::splitBreakablePart(ObjectHandle bh, ObjectHandle ph) {
+    Breakable& b = m_breakables.at(bh);
+    auto pit = m_objects.find(ph);
+    if (pit == m_objects.end()) return;
+    const std::vector<uint32_t> tets = pit->second->bakedTetOf; // copy: the part goes away below
+    auto groups = b.graph.groups(tets, [&](uint32_t t) { return b.partOfTet[t] == ph; });
+    pit->second->breakPending = -1;
+    if (groups.size() < 2) return; // cracked, but still one piece
+    for (const auto& g : groups) {
+        ObjectHandle h = spawnBreakablePart(bh, g, ph, glm::vec3(0.0f));
+        if (h != kInvalidHandle) m_objects[h]->breakGrace = 8; // kBreakGrace, see updateBreakables()
+    }
+    ++b.breaks;
+    removeObject(ph);
+    log::get(name())->info("breakable {} split: {} broken borders, now {} pieces", bh, b.graph.brokenBorderCount(), b.parts.size());
+}
+
+void PhysicsModule::updateBreakables() {
+    for (auto& [bh, b] : m_breakables) {
+        if (b.armPending) {
+            // Settle, then arm (TetSpawnOptions::armFractureAfterSeconds):
+            // each border's threshold = material x strength + 1.25x the
+            // stress it carried at rest, so only an impact breaks it.
+            ++b.armAge;
+            bool settled = true;
+            for (ObjectHandle ph : b.parts) {
+                const SpawnedTet& part = *m_objects[ph];
+                settled &= AMD::FmIsTetMeshSleeping(*part.tetMesh);
+                for (uint32_t t = 0; t < part.bakedTetOf.size(); ++t) {
+                    uint32_t bt = part.bakedTetOf[t];
+                    // A decaying peak (x0.9 per tick): the stress of the
+                    // last ~20 ticks counts, the landing spike (5M on a
+                    // crate settling 3 mm, against 1e5 thresholds) is
+                    // forgotten by the time it arms. A plain peak made
+                    // such props unbreakable.
+                    b.settleStress[bt] = std::max(b.settleStress[bt] * 0.9f, AMD::FmGetTetMaxStress(*part.tetMesh, t));
+                }
+            }
+            if (b.armAge < 45 || (!settled && b.armAge < b.armMaxTicks)) continue;
+            b.graph.arm(b.material.fractureStressThreshold, b.settleStress);
+            std::vector<float> sorted;
+            for (size_t t = 0; t < b.settleStress.size(); ++t) if (b.graph.isBorderTet(static_cast<uint32_t>(t))) sorted.push_back(b.settleStress[t]);
+            std::sort(sorted.begin(), sorted.end());
+            auto pct = [&](float q) { return sorted.empty() ? 0.0f : sorted[std::min(sorted.size() - 1, static_cast<size_t>(q * sorted.size()))]; };
+            b.armPending = false;
+            b.settleStress = {};
+            log::get(name())->info("breakable {} armed after {} ticks: border resting stress median {:.0f}, p90 {:.0f}, max {:.0f}; base threshold {:.0f}", bh,
+                                   b.armAge, pct(0.5f), pct(0.9f), sorted.empty() ? 0.0f : sorted.back(), b.material.fractureStressThreshold);
+            continue;
+        }
+        // Two timings, both measured with tools/physics_lab ("shoot"):
+        //  - a part that gets overloaded splits kBreakWindow ticks later,
+        //    collecting every border overloaded meanwhile: an impact
+        //    builds up over a few steps, and splitting on its first
+        //    touch broke only the contact point;
+        //  - a freshly split part can't break for kBreakGrace ticks: the
+        //    swap itself (pieces released, touching along their new
+        //    faces) spikes the stress, and without a pause every break
+        //    cascaded into every piece - all-or-nothing. With both, the
+        //    damage grows with the hit (a 0.8 m stone crate: 1 piece at
+        //    12 m/s, 7 at 18, all 19 at 30).
+        constexpr int kBreakWindow = 2, kBreakGrace = 8;
+        std::vector<ObjectHandle> overloaded;
+        for (ObjectHandle ph : b.parts) {
+            SpawnedTet& part = *m_objects[ph];
+            if (part.breakGrace > 0) { --part.breakGrace; continue; }
+            if (AMD::FmIsTetMeshSleeping(*part.tetMesh) && part.breakPending < 0) continue; // stress only changes while awake
+            bool any = false;
+            auto same = [&](uint32_t t) { return b.partOfTet[t] == ph; };
+            for (uint32_t t = 0; t < part.bakedTetOf.size(); ++t) {
+                uint32_t bt = part.bakedTetOf[t];
+                if (b.graph.isBorderTet(bt)) any |= b.graph.report(bt, AMD::FmGetTetMaxStress(*part.tetMesh, t), same);
+            }
+            if (any && part.breakPending < 0) part.breakPending = kBreakWindow;
+            if (part.breakPending == 0) overloaded.push_back(ph);
+            if (part.breakPending > 0) --part.breakPending;
+        }
+        for (ObjectHandle ph : overloaded) splitBreakablePart(bh, ph);
+    }
 }
 
 PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshInternal(const TetMeshData& mesh, const glm::vec3& position, const Material& material, bool enableFracture,
@@ -753,14 +983,7 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshInternal(const TetMeshDat
     AMD::FmInitVertState(obj->tetMesh, obj->restPositions.data(), identity, AMD::FmInitVector3(0.0f), 1.0f,
                           AMD::FmInitVector3(initialVelocity.x, initialVelocity.y, initialVelocity.z));
 
-    // kke::Material -> FmTetMaterialParams, the actual bridge.
-    AMD::FmTetMaterialParams femfxMaterial;
-    femfxMaterial.restDensity = material.density;
-    femfxMaterial.youngsModulus = material.stiffness;
-    femfxMaterial.poissonsRatio = material.poissonsRatio;
-    femfxMaterial.plasticYieldThreshold = material.plasticYieldThreshold;
-    femfxMaterial.plasticCreep = material.plasticCreep;
-    femfxMaterial.fractureStressThreshold = material.fractureStressThreshold;
+    AMD::FmTetMaterialParams femfxMaterial = toFemfx(material);
     if (enableFracture && armFractureAfterSeconds > 0.0f) {
         // Unbreakable until armed (see TetSpawnOptions); fixedUpdate()
         // applies the real threshold after the delay.
@@ -865,6 +1088,33 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshInternal(const TetMeshDat
     return handle;
 }
 
+PhysicsModule::ObjectHandle PhysicsModule::spawnPatternedBox(const glm::ivec3& cells, const glm::vec3& size, const glm::vec3& position,
+                                                               const Material& material, int pattern, float chunkSize, int cellsPerCluster,
+                                                               const glm::vec3& velocity, float armSeconds, const glm::vec3* impactPoint) {
+    TetMeshData box = buildGridBox(cells.x, cells.y, cells.z, size.x, size.y, size.z);
+    FractureSeedOptions o;
+    o.pattern = static_cast<FracturePattern>(pattern);
+    o.chunkSize = chunkSize;
+    o.seed = fractureSeed(m_fractureWorldSeed, static_cast<uint32_t>(m_nextHandle));
+    o.cellsPerCluster = cellsPerCluster;
+    // Glass: the star centres somewhere near the middle (it lands flat,
+    // so there's no single impact point to aim for).
+    o.hasImpactPoint = true;
+    Rng01 r(o.seed);
+    o.impactPoint = impactPoint ? *impactPoint : glm::vec3((r.next() - 0.5f) * size.x * 0.4f, 0.0f, (r.next() - 0.5f) * size.z * 0.4f);
+    BakedFracture baked = bakeFracture(box, o);
+    TetSpawnOptions opts;
+    opts.fracture = true;
+    opts.velocity = velocity;
+    opts.chunkOfTet = baked.cut.chunkOfTet;
+    opts.armFractureAfterSeconds = armSeconds;
+    opts.tetStrength = std::move(baked.cut.tetStrength);
+    ObjectHandle h = spawnTetMeshWithOptions(baked.cut.mesh, position, material, opts);
+    log::get(name())->info("patterned box {}: {} tets, {} pieces ({}), seed {}", h, baked.cut.mesh.tets.size(), baked.pieces,
+                           fracturePatternName(o.pattern), o.seed);
+    return h;
+}
+
 PhysicsModule::ObjectHandle PhysicsModule::spawnFracturableBox(const glm::ivec3& cells, const glm::vec3& size, const glm::vec3& center,
                                                                  const Material& material, float yawDegrees, const glm::vec3& velocity) {
     TetMeshData box = buildGridBox(cells.x, cells.y, cells.z, size.x, size.y, size.z);
@@ -877,6 +1127,45 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnFracturableBox(const glm::ivec3&
 
 bool PhysicsModule::deformEmbedded(ObjectHandle handle, const TetEmbedding& embedding, const std::vector<glm::vec3>& restNormals,
                                    std::vector<glm::vec3>& outPositions, std::vector<glm::vec3>& outNormals) const {
+    auto bit = m_breakables.find(handle);
+    if (bit != m_breakables.end()) {
+        // Tets live in whichever part holds them now.
+        const Breakable& b = bit->second;
+        const size_t nt = b.mesh.tets.size();
+        struct TetNow { glm::vec3 x[4]; glm::mat3 normal; bool valid = false; };
+        static thread_local std::vector<TetNow> cacheB;
+        cacheB.assign(nt, TetNow{});
+        const size_t n = embedding.tet.size();
+        outPositions.resize(n);
+        outNormals.resize(n);
+        for (size_t i = 0; i < n; ++i) {
+            uint32_t t = std::min<uint32_t>(embedding.tet[i], static_cast<uint32_t>(nt - 1));
+            TetNow& c = cacheB[t];
+            if (!c.valid) {
+                c.valid = true;
+                auto pit = m_objects.find(b.partOfTet[t]);
+                if (pit == m_objects.end()) {
+                    for (auto& v : c.x) v = glm::vec3(0.0f);
+                    c.normal = glm::mat3(1.0f);
+                } else {
+                    const AMD::FmTetMesh& mesh = *pit->second->tetMesh;
+                    AMD::FmTetVertIds ids = AMD::FmGetTetVertIds(mesh, b.localOfTet[t]);
+                    for (int k = 0; k < 4; ++k) {
+                        AMD::FmVector3 p = AMD::FmGetVertPosition(mesh, ids.ids[k]);
+                        c.x[k] = glm::vec3(p.x, p.y, p.z) * m_renderScale;
+                    }
+                    glm::mat3 f = glm::mat3(c.x[1] - c.x[0], c.x[2] - c.x[0], c.x[3] - c.x[0]) * b.restInverse[t];
+                    c.normal = std::fabs(glm::determinant(f)) > 1e-12f ? glm::transpose(glm::inverse(f)) : glm::mat3(1.0f);
+                }
+            }
+            const glm::vec4& w = embedding.weights[i];
+            outPositions[i] = c.x[0] * w.x + c.x[1] * w.y + c.x[2] * w.z + c.x[3] * w.w;
+            glm::vec3 nrm = i < restNormals.size() ? c.normal * restNormals[i] : glm::vec3(0, 1, 0);
+            float len = glm::length(nrm);
+            outNormals[i] = len > 1e-12f ? nrm / len : glm::vec3(0, 1, 0);
+        }
+        return true;
+    }
     auto it = m_objects.find(handle);
     if (it == m_objects.end()) return false;
     const SpawnedTet& obj = *it->second;
@@ -922,6 +1211,12 @@ bool PhysicsModule::deformEmbedded(ObjectHandle handle, const TetEmbedding& embe
 }
 
 bool PhysicsModule::isObjectAsleep(ObjectHandle handle) const {
+    auto bit = m_breakables.find(handle);
+    if (bit != m_breakables.end()) {
+        for (ObjectHandle p : bit->second.parts)
+            if (!isObjectAsleep(p)) return false;
+        return true;
+    }
     auto it = m_objects.find(handle);
     if (it == m_objects.end()) return true;
     const uint numPieces = AMD::FmGetNumTetMeshes(*it->second->tetMeshBuffer);
@@ -933,6 +1228,8 @@ bool PhysicsModule::isObjectAsleep(ObjectHandle handle) const {
 }
 
 uint32_t PhysicsModule::pieceCount(ObjectHandle handle) const {
+    auto bit = m_breakables.find(handle);
+    if (bit != m_breakables.end()) return static_cast<uint32_t>(bit->second.parts.size());
     auto it = m_objects.find(handle);
     return it == m_objects.end() ? 0 : AMD::FmGetNumTetMeshes(*it->second->tetMeshBuffer);
 }
@@ -954,9 +1251,23 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetrahedron(const glm::vec3& pos
 }
 
 void PhysicsModule::removeObject(ObjectHandle handle) {
+    auto bit = m_breakables.find(handle);
+    if (bit != m_breakables.end()) {
+        std::vector<ObjectHandle> parts = bit->second.parts;
+        for (ObjectHandle p : parts) removeObject(p);
+        m_breakables.erase(handle);
+        return;
+    }
     auto it = m_objects.find(handle);
     if (it == m_objects.end()) {
         return; // no-op, not an error — see the header's own doc comment
+    }
+    if (it->second->breakable != kInvalidHandle) {
+        auto b = m_breakables.find(it->second->breakable);
+        if (b != m_breakables.end()) {
+            auto& parts = b->second.parts;
+            parts.erase(std::remove(parts.begin(), parts.end(), handle), parts.end());
+        }
     }
     AMD::FmRemoveTetMeshBufferFromScene(m_scene, it->second->sceneBufferId);
     AMD::FmDestroyTetMeshBuffer(it->second->tetMeshBuffer);
@@ -965,9 +1276,40 @@ void PhysicsModule::removeObject(ObjectHandle handle) {
 
 void PhysicsModule::fixedUpdate(const FixedUpdateContext& ctx) {
     if (m_benchTicks) benchTick(ctx.tickIndex);
+    if (m_breakTestTicks >= 0 && m_breakTestTicks-- == 0) {
+        Material iron;
+        iron.density = 7800.0f; iron.stiffness = 2.0e7f; iron.poissonsRatio = 0.3f;
+        iron.fractureStressThreshold = 1.0e12f; iron.metallic = 0.9f; iron.roughness = 0.35f; iron.textureId = 2;
+        for (const glm::vec3& t : m_breakTestTargets)
+            spawnTetMeshInternal(buildSphere(3, 0.18f), t + glm::vec3(0.0f, 2.5f, 0.0f), iron, true, glm::vec3(0.0f, -9.0f, 0.0f));
+        // The wall: thrown at from the front, not dropped on.
+        spawnTetMeshInternal(buildSphere(3, 0.18f), m_breakTestWallTarget + glm::vec3(0.0f, 0.0f, 2.5f), iron, true, glm::vec3(0.0f, 0.0f, -14.0f));
+    }
+    // KKE_PHYSICS_SCENES=brick,glass,... spawns demo scenes on the first
+    // tick (screenshots, sharing a setup, reproducing a report).
+    if (!m_startScenesDone) {
+        m_startScenesDone = true;
+        if (const char* list = std::getenv("KKE_PHYSICS_SCENES")) {
+            std::string all(list);
+            size_t start = 0;
+            while (start <= all.size()) {
+                size_t end = all.find(',', start);
+                std::string sceneName = all.substr(start, end == std::string::npos ? std::string::npos : end - start);
+                static const std::pair<const char*, Scene> kNames[] = {
+                    { "glass", Scene::GlassSheet }, { "brick", Scene::Brick }, { "ball", Scene::RubberBall }, { "car", Scene::CarCrash },
+                    { "lava", Scene::LavaMelt }, { "cube", Scene::FracturableCube }, { "plastic", Scene::PlasticCube },
+                    { "breaktest", Scene::BreakTest },
+                };
+                for (const auto& [n, sc] : kNames) if (sceneName == n) spawnScene(sc);
+                if (end == std::string::npos) break;
+                start = end + 1;
+            }
+        }
+    }
 
     double stepStart = nowSeconds();
     AMD::FmUpdateScene(m_scene, ctx.fixedDt);
+    updateBreakables();
     double stepMs = (nowSeconds() - stepStart) * 1000.0;
     for (auto& [handle, obj] : m_objects) {
         if (!obj->armPending) continue;
@@ -977,7 +1319,7 @@ void PhysicsModule::fixedUpdate(const FixedUpdateContext& ctx) {
         // landed (it slept 1 cm above the floor in one test), and a stale
         // sample armed it too weakly.
         for (uint t = 0; t < obj->numTets; ++t)
-            obj->settleStress[t] = std::max(obj->settleStress[t], AMD::FmGetTetMaxStress(*obj->tetMesh, t));
+            obj->settleStress[t] = std::max(obj->settleStress[t] * 0.9f, AMD::FmGetTetMaxStress(*obj->tetMesh, t)); // decaying peak, see updateBreakables()
         const bool settled = AMD::FmIsTetMeshSleeping(*obj->tetMesh);
         if (obj->armAge < 45 || (!settled && obj->armAge < obj->armMaxTicks)) continue;
         // Arm relative to the settled state (see TetSpawnOptions).
@@ -985,6 +1327,7 @@ void PhysicsModule::fixedUpdate(const FixedUpdateContext& ctx) {
         float restMax = 0.0f;
         for (uint t = 0; t < obj->numTets; ++t) {
             AMD::FmTetMaterialParams p = obj->armedParams;
+            if (t < obj->tetStrength.size()) p.fractureStressThreshold *= obj->tetStrength[t];
             p.fractureStressThreshold += kRestStressFactor * obj->settleStress[t];
             AMD::FmUpdateTetMaterialParams(m_scene, obj->tetMesh, t, p);
             restMax = std::max(restMax, obj->settleStress[t]);
@@ -1162,9 +1505,16 @@ void PhysicsModule::prepareRenderData(uint32_t frameIndex) {
                         ub = obj->vertexUVs[ov[(5 - faceId) % 4]];
                         uc = obj->vertexUVs[ov[(faceId + 2) % 4]];
                     }
-                    obj->cpuVerts.push_back({ a, obj->color, n, ua });
-                    obj->cpuVerts.push_back({ b, obj->color, n, ub });
-                    obj->cpuVerts.push_back({ c, obj->color, n, uc });
+                    // Fresh crack faces (inside the object before it
+                    // broke) are a little darker: RayFire's "inner
+                    // material" - broken edges read as broken.
+                    glm::vec3 color = obj->color;
+                    if (!obj->originalExterior.empty() && tetId < obj->originalExterior.size() && obj->breakable != kInvalidHandle &&
+                        !(obj->originalExterior[tetId] & (1u << faceId)))
+                        color *= 0.72f;
+                    obj->cpuVerts.push_back({ a, color, n, ua });
+                    obj->cpuVerts.push_back({ b, color, n, ub });
+                    obj->cpuVerts.push_back({ c, color, n, uc });
                 }
             }
             if (truncated) {
@@ -1652,13 +2002,10 @@ void PhysicsModule::spawnScene(Scene scene) {
         break;
     }
     case Scene::GlassSheet: {
-        // Thin and wide, not cube-shaped -- a real pane of glass, not
-        // a glass-colored cube. 6x2x6 cells (72 tets) gives real room
-        // for it to shatter into many small, convincing shards rather
-        // than a couple of big chunks, the same "not enough internal
-        // boundaries" problem the original single-tet fracture demo
-        // had.
-        TetMeshData sheet = buildGridBox(6, 2, 6, 2.0f, 0.15f, 2.0f);
+        // A 2 m pane, 0.15 m thick, breaking in a radial star
+        // (kke::FracturePattern::Radial): small shards near the impact,
+        // long wedges further out. 12x1x12 cells, 864 tets. It used to
+        // crack along every tet face (every piece a same-size triangle).
         Material glass;
         glass.density = 2500.0f;
         glass.stiffness = 7.0e7f;
@@ -1672,15 +2019,20 @@ void PhysicsModule::spawnScene(Scene scene) {
 
         float jitterX = static_cast<float>((m_nextHandle * 43) % 200) / 100.0f - 1.0f;
         float jitterZ = static_cast<float>((m_nextHandle * 71) % 200) / 100.0f - 1.0f;
-        spawnFracturableTetMesh(sheet, glm::vec3(jitterX * 2.0f, m_nextSpawnHeight + 3.0f, jitterZ * 2.0f), glass,
-                                 glm::vec3(0.0f, -20.0f, 0.0f));
+        // Breakables compare FEMFX's per-tet stress (Pa) at piece borders:
+        // ~400 in free fall with spikes to ~60k, 1e6-1e7 on a 20 m/s
+        // landing (tools/physics_lab). 150k: never in the air, always on
+        // landing.
+        glass.fractureStressThreshold = 1.5e5f;
+        spawnPatternedBox({ 12, 1, 12 }, { 2.0f, 0.15f, 2.0f }, glm::vec3(jitterX * 2.0f, m_nextSpawnHeight + 3.0f, jitterZ * 2.0f), glass,
+                          static_cast<int>(FracturePattern::Radial), 0.5f, 0, glm::vec3(0.0f, -20.0f, 0.0f));
         break;
     }
     case Scene::Brick: {
-        // Real 2:1:1 brick proportions, not a cube -- 4x2x2 cells (48
-        // tets) for real fracture room without this being noticeably
-        // more expensive than the existing fracturable cube.
-        TetMeshData brick = buildGridBox(4, 2, 2, 1.0f, 0.5f, 0.5f);
+        // 2:1:1 brick, breaking into irregular Voronoi chunks that
+        // first split into a few clusters, then crumble further on
+        // harder hits (kke::FracturePattern::Voronoi, 2 levels). 8x4x4
+        // cells, 768 tets. It used to crack along every tet face.
         Material stone;
         stone.density = 2500.0f;
         stone.stiffness = 3.0e7f;
@@ -1694,8 +2046,58 @@ void PhysicsModule::spawnScene(Scene scene) {
 
         float jitterX = static_cast<float>((m_nextHandle * 37) % 200) / 100.0f - 1.0f;
         float jitterZ = static_cast<float>((m_nextHandle * 53) % 200) / 100.0f - 1.0f;
-        spawnFracturableTetMesh(brick, glm::vec3(jitterX * 2.0f, m_nextSpawnHeight + 3.0f, jitterZ * 2.0f), stone,
-                                 glm::vec3(0.0f, -20.0f, 0.0f));
+        stone.fractureStressThreshold = 2.5e5f; // see the glass scene's comment
+        spawnPatternedBox({ 8, 4, 4 }, { 1.0f, 0.5f, 0.5f }, glm::vec3(jitterX * 2.0f, m_nextSpawnHeight + 3.0f, jitterZ * 2.0f), stone,
+                          static_cast<int>(FracturePattern::Voronoi), 0.25f, 3, glm::vec3(0.0f, -20.0f, 0.0f));
+        break;
+    }
+    case Scene::BreakTest: {
+        // Three breakables resting on the ground, armed once settled
+        // (thresholds relative to their resting stress), then an iron
+        // ball dropped on each: glass (radial star centred where its ball
+        // lands), a stone slab (Voronoi chunks in clusters) and a wooden
+        // plank (splinters along its length). Thresholds from
+        // tools/physics_lab "shoot". Seeds: the Fracture seed above.
+        Material glass;
+        glass.density = 2500.0f; glass.stiffness = 7.0e7f; glass.poissonsRatio = 0.22f;
+        glass.fractureStressThreshold = 1.0e5f; glass.roughness = 0.05f; glass.textureId = 4;
+        Material stone;
+        stone.density = 2500.0f; stone.stiffness = 3.0e7f; stone.poissonsRatio = 0.25f;
+        stone.fractureStressThreshold = 1.0e5f; stone.roughness = 0.9f; stone.textureId = 1;
+        Material wood;
+        wood.density = 600.0f; wood.stiffness = 1.0e7f; wood.poissonsRatio = 0.3f;
+        wood.fractureStressThreshold = 1.5e5f; wood.roughness = 0.75f; wood.textureId = 0;
+        // A clean stage: anything already lying there (the demo's
+        // starting tetrahedra) would rest on or knock the pieces.
+        {
+            std::vector<ObjectHandle> handles;
+            for (auto& [h, o] : m_objects) handles.push_back(h);
+            for (ObjectHandle h : handles) removeObject(h);
+            m_breakables.clear();
+        }
+        // Supports: plain, stiff, unbreakable stone blocks.
+        Material support = stone;
+        support.fractureStressThreshold = 1.0e12f;
+        auto block = [&](glm::vec3 size, glm::vec3 at) {
+            spawnTetMeshInternal(buildGridBox(2, 2, 2, size.x, size.y, size.z), at, support, false);
+        };
+        // Glass pane across two blocks; its star centres under its ball.
+        const glm::vec3 glassAt(-2.4f, 0.525f, 0.0f), glassHit(0.1f, 0.0f, -0.1f);
+        block({ 0.3f, 0.5f, 1.2f }, { -3.3f, 0.25f, 0.0f });
+        block({ 0.3f, 0.5f, 1.2f }, { -1.5f, 0.25f, 0.0f });
+        spawnPatternedBox({ 12, 1, 8 }, { 2.1f, 0.05f, 1.2f }, glassAt, glass, static_cast<int>(FracturePattern::Radial), 0.45f, 0,
+                          glm::vec3(0.0f), 3.0f, &glassHit);
+        // Wooden plank bridging two blocks: snaps into splinters.
+        block({ 0.3f, 0.5f, 0.6f }, { -1.05f, 0.25f, 2.2f });
+        block({ 0.3f, 0.5f, 0.6f }, { 1.05f, 0.25f, 2.2f });
+        spawnPatternedBox({ 16, 1, 2 }, { 2.4f, 0.12f, 0.3f }, { 0.0f, 0.561f, 2.2f }, wood, static_cast<int>(FracturePattern::Splinters), 0.35f, 0,
+                          glm::vec3(0.0f), 3.0f);
+        // Stone wall standing on its own, hit from the side.
+        spawnPatternedBox({ 8, 6, 2 }, { 1.4f, 1.0f, 0.25f }, { 2.4f, 0.501f, 0.0f }, stone, static_cast<int>(FracturePattern::Voronoi), 0.3f, 3,
+                          glm::vec3(0.0f), 3.0f);
+        m_breakTestTargets = { glassAt + glassHit, glm::vec3(0.0f, 0.62f, 2.2f) };
+        m_breakTestWallTarget = glm::vec3(2.3f, 0.55f, 0.0f);
+        m_breakTestTicks = 240; // after they've settled and armed (at most 3 s)
         break;
     }
     case Scene::RubberBall: {
@@ -1918,6 +2320,19 @@ void PhysicsModule::renderUi() {
     // selected in the Material Grid above, the same way a real,
     // purpose-built game level wouldn't let a settings panel silently
     // change what material its own set-piece is made of.
+    {
+        // World fracture seed: each object mixes in its own id, so every
+        // brick breaks differently, but the same seed replays the same
+        // breaks (kke::fractureSeed).
+        int seed = static_cast<int>(m_fractureWorldSeed);
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 7.0f);
+        if (ImGui::InputInt("Fracture seed", &seed)) m_fractureWorldSeed = static_cast<uint32_t>(std::max(seed, 0));
+        ImGui::SameLine();
+        if (ImGui::Button("New")) m_fractureWorldSeed = static_cast<uint32_t>(SDL_GetPerformanceCounter() & 0x7fffffff);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Brick: Voronoi chunks in 2 levels (big pieces first, then smaller).\nGlass: radial star around a point near the middle.");
+    }
+    if (ImGui::Button("Scene: Break test")) spawnScene(Scene::BreakTest);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Glass, stone and wood resting on the ground, then an iron ball dropped on each.");
     if (ImGui::Button("Scene: Glass Sheet")) spawnScene(Scene::GlassSheet);
     ImGui::SameLine();
     if (ImGui::Button("Scene: Brick")) spawnScene(Scene::Brick);
@@ -1942,6 +2357,7 @@ void PhysicsModule::renderUi() {
         for (ObjectHandle handle : handles) {
             removeObject(handle);
         }
+        m_breakables.clear();
     }
 
     ImGui::End();
@@ -1969,6 +2385,7 @@ void PhysicsModule::shutdown() {
     for (ObjectHandle handle : handles) {
         removeObject(handle);
     }
+    m_breakables.clear();
 
     std::vector<RagdollHandle> ragdolls;
     for (auto& [h, rd] : m_ragdolls) ragdolls.push_back(h);

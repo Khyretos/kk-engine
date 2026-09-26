@@ -3,6 +3,7 @@
 #include "kke/Application.h"
 #include "kke/Log.h"
 #include "kke/FracturePattern.h"
+#include "kke/VoronoiFracture.h"
 #include "kke/Material.h"
 #if KKE_ENABLE_FEMFX
 #include "kke/modules/PhysicsModule.h"
@@ -32,14 +33,22 @@ namespace {
 // presets from MaterialGridModule (see its comment and BUGS.md BUG-020
 // for how the fracture thresholds were found); textureId picks
 // PhysicsModule's matching texture, shown on fresh crack faces only.
-struct BreakMaterial { const char* name; kke::Material material; kke::FracturePattern pattern; float chunkSize; bool plastic; };
+struct BreakMaterial { const char* name; kke::Material material; kke::FracturePattern pattern; float chunkSize; int cellsPerCluster; bool plastic; };
+// Fracture thresholds are FEMFX's per-tet stress (Pa) at piece borders,
+// on top of each border's own resting stress (settle, then arm). Chosen
+// with tools/physics_lab "shoot" (a 0.8 m crate, the sandbox's ball):
+// nothing breaks at 12 m/s, the default 18 m/s ball breaks all four
+// clearly, and Toughness x1.25 turns stone into chipping (~7 of 19
+// pieces at 18 m/s). The response is steep: FEMFX's stress jumps ~4x
+// between a 12 and an 18 m/s hit. The old 2k-8k values sat
+// inside FEMFX's stress noise (~400 in free fall, spikes to 60k).
 const BreakMaterial kBreakMaterials[] = {
-    { "Wood (splinters)", []{ kke::Material m; m.density=600.0f;  m.stiffness=1.0e7f; m.poissonsRatio=0.30f; m.fractureStressThreshold=8000.0f; m.plasticYieldThreshold=6000.0f; m.plasticCreep=0.3f; m.metallic=0.0f; m.roughness=0.75f; m.textureId=0; return m; }(), kke::FracturePattern::Splinters, 0.35f, false },
-    { "Stone (chunks)",   []{ kke::Material m; m.density=2500.0f; m.stiffness=3.0e7f; m.poissonsRatio=0.25f; m.fractureStressThreshold=4000.0f; m.plasticYieldThreshold=3000.0f; m.plasticCreep=0.1f; m.metallic=0.0f; m.roughness=0.9f; m.textureId=1; return m; }(), kke::FracturePattern::Voronoi, 0.45f, false },
-    { "Glass (shatters)", []{ kke::Material m; m.density=2500.0f; m.stiffness=7.0e7f; m.poissonsRatio=0.22f; m.fractureStressThreshold=2000.0f; m.plasticYieldThreshold=1800.0f; m.plasticCreep=0.02f; m.metallic=0.0f; m.roughness=0.05f; m.textureId=4; return m; }(), kke::FracturePattern::Radial, 0.3f, false },
-    { "Ceramic (shards)", []{ kke::Material m; m.density=2300.0f; m.stiffness=5.0e7f; m.poissonsRatio=0.22f; m.fractureStressThreshold=2500.0f; m.plasticYieldThreshold=2400.0f; m.plasticCreep=0.02f; m.metallic=0.0f; m.roughness=0.3f; m.textureId=1; return m; }(), kke::FracturePattern::Shards, 0.1f, false },
+    { "Wood (splinters)", []{ kke::Material m; m.density=600.0f;  m.stiffness=1.0e7f; m.poissonsRatio=0.30f; m.fractureStressThreshold=1.2e5f; m.plasticYieldThreshold=6000.0f; m.plasticCreep=0.3f; m.metallic=0.0f; m.roughness=0.75f; m.textureId=0; return m; }(), kke::FracturePattern::Splinters, 0.35f, 0, false },
+    { "Stone (chunks)",   []{ kke::Material m; m.density=2500.0f; m.stiffness=3.0e7f; m.poissonsRatio=0.25f; m.fractureStressThreshold=8.0e4f; m.plasticYieldThreshold=3000.0f; m.plasticCreep=0.1f; m.metallic=0.0f; m.roughness=0.9f; m.textureId=1; return m; }(), kke::FracturePattern::Voronoi, 0.3f, 3, false },
+    { "Glass (shatters)", []{ kke::Material m; m.density=2500.0f; m.stiffness=7.0e7f; m.poissonsRatio=0.22f; m.fractureStressThreshold=8.0e4f; m.plasticYieldThreshold=1800.0f; m.plasticCreep=0.02f; m.metallic=0.0f; m.roughness=0.05f; m.textureId=4; return m; }(), kke::FracturePattern::Radial, 0.45f, 0, false },
+    { "Ceramic (shards)", []{ kke::Material m; m.density=2300.0f; m.stiffness=5.0e7f; m.poissonsRatio=0.22f; m.fractureStressThreshold=8.0e4f; m.plasticYieldThreshold=2400.0f; m.plasticCreep=0.02f; m.metallic=0.0f; m.roughness=0.3f; m.textureId=1; return m; }(), kke::FracturePattern::Shards, 0.3f, 0, false },
     // Metal dents instead of breaking: FEMFX plasticity, no fracture.
-    { "Metal (dents)",    []{ kke::Material m; m.density=7870.0f; m.stiffness=2.0e7f; m.poissonsRatio=0.30f; m.fractureStressThreshold=1.0e9f; m.plasticYieldThreshold=2000.0f; m.plasticCreep=0.5f; m.metallic=0.9f; m.roughness=0.35f; m.textureId=2; return m; }(), kke::FracturePattern::Solid, 1.0f, true },
+    { "Metal (dents)",    []{ kke::Material m; m.density=7870.0f; m.stiffness=2.0e7f; m.poissonsRatio=0.30f; m.fractureStressThreshold=1.0e9f; m.plasticYieldThreshold=2000.0f; m.plasticCreep=0.5f; m.metallic=0.9f; m.roughness=0.35f; m.textureId=2; return m; }(), kke::FracturePattern::Solid, 1.0f, 0, true },
 };
 constexpr int kBreakMaterialCount = static_cast<int>(sizeof(kBreakMaterials) / sizeof(kBreakMaterials[0]));
 
@@ -528,21 +537,36 @@ void SandboxModule::makeBreakable(Object& o) {
     const kke::FracturePattern pattern = m_patternOverride > 0 ? static_cast<kke::FracturePattern>(m_patternOverride - 1) : bm.pattern;
     const glm::vec3 size = mx - mn;
     const float maxDim = std::max({ size.x, size.y, size.z });
-    const float cell = std::clamp(maxDim / 6.0f, 0.06f, 0.4f);
+    // Pieces need several voxels each to have any shape: cells well
+    // under the chunk size (the budget grows them again for big props).
+    const float cell = std::clamp(std::min(maxDim / 8.0f, bm.chunkSize * m_chunkScale * 0.4f), 0.04f, 0.4f);
     kke::VoxelTetMesh vox = kke::voxelizeToTets(points, tris, cell, static_cast<size_t>(m_detailCells));
     if (vox.mesh.tets.empty()) return;
     // Hug the prop: pull the voxel surface onto the real triangles.
     kke::fitSurfaceToMesh(vox.mesh, points, tris, vox.cellSize * 0.75f);
-    const uint32_t seed = o.id * 2654435761u;
-    std::vector<uint32_t> chunks = kke::fractureChunks(vox.mesh, pattern, bm.chunkSize * m_chunkScale, seed);
-    if (pattern != kke::FracturePattern::Solid) kke::jitterInteriorVertices(vox.mesh, vox.cellSize * 0.12f, seed + 1);
+    // Pieces: a Voronoi diagram of the material's pattern, cut into the
+    // tet volume (kke/VoronoiFracture.h). Seed = the world's seed mixed
+    // with this object's own: every prop breaks its own way, and the
+    // same layout + seeds breaks the same way every time.
+    if (!o.fractureSeed) o.fractureSeed = o.id;
+    o.breakMaterial = std::clamp(m_breakMaterial, 0, kBreakMaterialCount - 1);
+    kke::FractureSeedOptions fo;
+    fo.pattern = pattern;
+    fo.chunkSize = bm.chunkSize * m_chunkScale;
+    fo.seed = kke::fractureSeed(m_worldSeed, o.fractureSeed);
+    fo.cellsPerCluster = bm.cellsPerCluster;
+    kke::BakedFracture baked = kke::bakeFracture(vox.mesh, fo);
+    vox.mesh = baked.cut.mesh; // same tets, border vertices on the Voronoi planes
 
     kke::Material material = bm.material;
     material.fractureStressThreshold *= m_toughness;
     kke::PhysicsModule::TetSpawnOptions opts;
     opts.fracture = pattern != kke::FracturePattern::Solid;
     opts.plastic = bm.plastic;
-    opts.tetFlags = kke::fractureFlagsFromChunks(vox.mesh, chunks);
+    if (opts.fracture) {
+        opts.chunkOfTet = baked.cut.chunkOfTet;
+        opts.tetStrength = baked.cut.tetStrength;
+    }
     opts.drawOnlyCracks = true;
     opts.armFractureAfterSeconds = 2.0f; // settle, then arm relative to resting stress (BUG-043)
     // Insides take the prop's own colours: each tet vertex gets the UV of
@@ -604,9 +628,9 @@ void SandboxModule::makeBreakable(Object& o) {
     o.settled = false;
     const double ms = (SDL_GetPerformanceCounter() / static_cast<double>(SDL_GetPerformanceFrequency()) - start) * 1000.0;
     char buf[256];
-    std::snprintf(buf, sizeof(buf), "%s: %zu cells (%.2fx%.2fx%.2f m), %zu tets, %zu chunks (%s), %zu triangles glued, %.1f ms",
-                  o.asset.c_str(), vox.solidCells, vox.cellSize3.x, vox.cellSize3.y, vox.cellSize3.z, vox.mesh.tets.size(), kke::chunkCount(chunks),
-                  kke::fracturePatternName(pattern), soupPositions.size() / 3, ms);
+    std::snprintf(buf, sizeof(buf), "%s: %zu cells (%.2fx%.2fx%.2f m), %zu tets, %zu pieces (%s, seed %u), %zu triangles glued, %.1f ms",
+                  o.asset.c_str(), vox.solidCells, vox.cellSize3.x, vox.cellSize3.y, vox.cellSize3.z, vox.mesh.tets.size(),
+                  opts.fracture ? baked.pieces : size_t(1), kke::fracturePatternName(pattern), fo.seed, soupPositions.size() / 3, ms);
     m_lastBreakStats = buf;
     m_status = o.asset + " is now " + bm.name + " - shoot it (2, then click)";
     kke::log::get(name())->info("breakable {}", m_lastBreakStats);
@@ -688,11 +712,14 @@ bool SandboxModule::saveLayout(const std::string& path) {
     nlohmann::json j;
     j["format"] = "kke-sandbox-layout";
     j["version"] = 1;
+    j["worldSeed"] = m_worldSeed;
     j["objects"] = nlohmann::json::array();
     for (const Object& o : m_objects) {
         nlohmann::json e = { { "asset", o.asset }, { "position", { o.position.x, o.position.y, o.position.z } }, { "yaw", o.yawDegrees } };
         // File name only, so a layout works on another machine's pack folder.
         if (!o.texture.empty()) e["texture"] = std::filesystem::path(o.texture).filename().string();
+        if (o.fractureSeed) e["fractureSeed"] = o.fractureSeed;
+        if (o.proxy && o.breakMaterial >= 0) e["breakable"] = kBreakMaterials[o.breakMaterial].name;
         j["objects"].push_back(e);
     }
     std::ofstream f(path);
@@ -712,6 +739,7 @@ bool SandboxModule::loadLayout(const std::string& path) {
         return false;
     }
     clearAll();
+    m_worldSeed = j.value("worldSeed", m_worldSeed);
     size_t missing = 0;
     for (const auto& e : j["objects"]) {
         std::string asset = e.value("asset", "");
@@ -722,6 +750,19 @@ bool SandboxModule::loadLayout(const std::string& path) {
         if (const kke::CatalogPack* pack = packOf(asset); pack && !tex.empty()) {
             for (const std::string& v : pack->textureVariants)
                 if (std::filesystem::path(v).filename() == tex) { o->texture = v; m_models->setTextureOverride(o->instance, v); }
+        }
+        o->fractureSeed = e.value("fractureSeed", 0u);
+        // Saved breakable: make it breakable again with the same material
+        // (and seeds, so the same pieces).
+        std::string breakable = e.value("breakable", "");
+        for (int i = 0; i < kBreakMaterialCount && m_hasFemfx; ++i) {
+            if (breakable != kBreakMaterials[i].name) continue;
+            const int keep = m_breakMaterial, keepPattern = m_patternOverride;
+            m_breakMaterial = i;
+            m_patternOverride = 0;
+            makeBreakable(*o);
+            m_breakMaterial = keep;
+            m_patternOverride = keepPattern;
         }
     }
     m_selected = 0;
@@ -875,6 +916,17 @@ void SandboxModule::inspectorUi() {
             } else if (ImGui::Button("Make breakable (X)")) {
                 makeBreakable(*o);
             }
+            if (m_hasFemfx) {
+                // The object's own fracture seed: same seed, same pieces.
+                ImGui::Text("Fracture seed %u", o->fractureSeed ? o->fractureSeed : o->id);
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Reroll")) {
+                    o->fractureSeed = (o->fractureSeed ? o->fractureSeed : o->id) * 747796405u + 2891336453u;
+                    if (!o->fractureSeed) o->fractureSeed = 1;
+                    if (o->proxy) { restoreProp(*o); makeBreakable(*o); } // re-bake with the new pieces
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("New pieces for this object. Mixed with the world seed below;\nsaved with the layout.");
+            }
         }
     } else {
         ImGui::TextDisabled("nothing - click an object");
@@ -888,10 +940,16 @@ void SandboxModule::inspectorUi() {
         const char* patterns[] = { "Material's own", "Shards", "Voronoi chunks", "Splinters", "Radial (glass)", "Solid (bends only)" };
         ImGui::Combo("Pattern", &m_patternOverride, patterns, 6);
         ImGui::SliderFloat("Chunk size", &m_chunkScale, 0.4f, 3.0f, "x%.1f");
-        ImGui::SliderInt("Detail (cells)", &m_detailCells, 15, 150);
+        ImGui::SliderInt("Detail (cells)", &m_detailCells, 30, 400);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Voxel budget per prop, 6 tetrahedra per cell.\nMore = closer shape and cleaner piece edges, more CPU.\n~160 is fine on one core while it's moving.");
         ImGui::SliderFloat("Toughness", &m_toughness, 0.2f, 5.0f, "x%.1f");
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Multiplies the material's fracture strength.\nProps arm 0.75-2 s after spawning, once settled:\nonly stress added by a hit can break them.");
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Voxel budget per prop, 6 tetrahedra per cell.\nMore = closer shape and smaller pieces, more CPU.\n~60 is fine on one core.");
+        {
+            int seed = static_cast<int>(m_worldSeed);
+            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 7.0f);
+            if (ImGui::InputInt("World seed", &seed)) m_worldSeed = static_cast<uint32_t>(std::max(seed, 0));
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Mixed with each object's own seed: a new world seed = every prop\nbreaks differently; the same seeds = the same breaks every time\n(what a multiplayer game sends instead of the debris).");
+        }
         if (!m_lastBreakStats.empty()) ImGui::TextDisabled("%s", m_lastBreakStats.c_str());
         if (ImGui::Button("Restore all props")) for (Object& o : m_objects) if (o.proxy) restoreProp(o);
         ImGui::SliderFloat("Ball speed", &m_ballSpeed, 5.0f, 40.0f, "%.0f m/s");

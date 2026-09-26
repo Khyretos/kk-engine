@@ -1,4 +1,6 @@
 #include "kke/Application.h"
+
+#include <cstdlib>
 #include "kke/Log.h"
 #include "kke/VulkanCheck.h"
 
@@ -314,6 +316,11 @@ void Application::run() {
         // eliminate it for code this engine doesn't control.
         safeInvoke(m, "init", [&] { m->init(*this); });
     }
+    // KKE_HIDE_UI=1: start with every module's panels hidden (clean
+    // screenshots and recordings; modules that toggle panels, e.g. F1 in
+    // the sandbox, can still show them).
+    if (const char* hide = std::getenv("KKE_HIDE_UI"); hide && *hide && *hide != '0')
+        for (Module* m : m_initOrder) m->setUiVisible(false);
 
     auto startTime = std::chrono::high_resolution_clock::now();
     auto lastFrameTime = startTime;

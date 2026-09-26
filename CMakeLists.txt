@@ -355,6 +355,7 @@ add_subdirectory(engine)
 # hardware actually has more than one.
 if(KKE_ENABLE_FEMFX)
     add_subdirectory(tools/physics_benchmark)
+    add_subdirectory(tools/physics_lab)
 endif()
 
 # ---------------------------------------------------------------------------

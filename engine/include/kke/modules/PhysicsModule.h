@@ -11,10 +11,12 @@
 #include "kke/Renderer.h"
 #include "kke/Capabilities.h"
 #include "kke/Ragdoll.h"
+#include "kke/BreakGraph.h"
 
 #include <glm/glm.hpp>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <cstdint>
 #include <vector>
 #include <string>
@@ -235,6 +237,14 @@ public:
         // Empty = the material's procedural texture with box-projected UVs.
         std::string texturePath;
         std::vector<glm::vec2> vertexUVs;
+        // Optional per-tet multiplier on the fracture threshold (e.g.
+        // kke::VoronoiCut::tetStrength: cracks inside a cluster tougher
+        // than cracks between clusters). Empty = 1 everywhere.
+        std::vector<float> tetStrength;
+        // Pre-baked pieces (kke::VoronoiCut::chunkOfTet): with this set
+        // (and fracture on) the object breaks KKE's way instead of by
+        // FEMFX's own fracture - see Breakable below. tetFlags is ignored.
+        std::vector<uint32_t> chunkOfTet;
     };
     ObjectHandle spawnTetMeshWithOptions(const TetMeshData& mesh, const glm::vec3& position, const Material& material,
                                          const TetSpawnOptions& options);
@@ -267,8 +277,15 @@ public:
     // from renderUi()'s buttons — the scripted benchmark below uses
     // these, and so will any future scripting layer (Lua) that wants to
     // set up a scene without clicking through ImGui.
-    enum class Scene { GlassSheet, Brick, RubberBall, CarCrash, LavaMelt, FracturableCube, PlasticCube };
+    enum class Scene { GlassSheet, Brick, RubberBall, CarCrash, LavaMelt, FracturableCube, PlasticCube, BreakTest };
     void spawnScene(Scene scene);
+
+    // The world's fracture seed (see kke::fractureSeed): every breakable
+    // this module builds mixes it with its own handle, so each object
+    // breaks its own way, and the same world breaks the same way on
+    // every run (and, later, on every client of a multiplayer game).
+    uint32_t fractureWorldSeed() const { return m_fractureWorldSeed; }
+    void setFractureWorldSeed(uint32_t seed) { m_fractureWorldSeed = seed; }
 
     // ---- IRagdollPhysics (see kke/Capabilities.h, kke/Ragdoll.h)
     // Bodies are FEMFX rigid boxes joined by glue (ball) constraints, with
@@ -425,11 +442,63 @@ private:
         uint32_t armAge = 0, armMaxTicks = 0;            // ticks since spawn, deadline
         AMD::FmTetMaterialParams armedParams{};          // the real material, applied when armed
         std::vector<float> settleStress;                 // per tet: peak stress while settling
+        std::vector<float> tetStrength;                  // per tet threshold multiplier (TetSpawnOptions)
         VkDescriptorSet textureSet = VK_NULL_HANDLE;     // image file texture (TetSpawnOptions), else the material's own
         std::vector<glm::vec2> vertexUVs;                // per original vertex (optional)
         std::vector<uint8_t> originalExterior;
         std::vector<glm::mat3> restInverse;
+        // Part of a Breakable (below): which one, and the baked tet /
+        // vertex each local tet / vertex is.
+        ObjectHandle breakable = kInvalidHandle;
+        std::vector<uint32_t> bakedTetOf, bakedVertOf;
+        int breakGrace = 0;     // ticks before a freshly split part may break (see updateBreakables())
+        int breakPending = -1;  // >= 0: overloaded, splits in this many ticks
     };
+
+    // An object with pre-baked pieces (TetSpawnOptions::chunkOfTet).
+    //
+    // Why not FEMFX's own fracture with "don't crack inside a piece" face
+    // flags? Measured with tools/physics_lab: every chunked brick dropped
+    // at 20 m/s blew up (pieces at FEMFX's 100 m/s failsafe, some NaN) -
+    // with perfect grid tets, with or without piece-piece collisions,
+    // with 4x substeps, 7x damping or 3x solver iterations. Its vertex-
+    // split fracture handles single-tet shards but not big pieces.
+    //
+    // So KKE breaks it itself, the Chaos / Blast way: the object is a set
+    // of plain FEMFX bodies ("parts"), at first one. Each step, the
+    // stress in tets on a piece border is compared with that border's
+    // threshold; overloaded borders break, and a part whose pieces are no
+    // longer all connected is swapped for one part per connected group,
+    // each starting from the old part's exact vertex positions and
+    // velocities (nothing pops or stops). Only the borders that were
+    // overloaded break: a corner can chip off and the rest stays whole.
+    // A break is an explicit event (which borders, which step) - the
+    // thing a multiplayer game sends instead of debris.
+    struct Breakable {
+        TetMeshData mesh;                                 // baked rest shape, spawn-local
+        glm::vec3 origin{0.0f};                           // spawn position
+        BreakGraph graph;                                 // pieces, borders, thresholds, broken borders
+        std::vector<float> settleStress;                  // per baked tet, while arming
+        std::vector<glm::vec2> vertexUVs;                 // per baked vertex (optional)
+        std::vector<ObjectHandle> parts;
+        std::vector<ObjectHandle> partOfTet;              // baked tet -> part
+        std::vector<uint32_t> localOfTet;                 // baked tet -> tet index in that part
+        std::vector<glm::mat3> restInverse;               // per baked tet
+        Material material;
+        bool plastic = false, drawOnlyCracks = false;
+        VkDescriptorSet textureSet = VK_NULL_HANDLE;
+        glm::vec3 color{1.0f};
+        bool armPending = false;
+        uint32_t armAge = 0, armMaxTicks = 0;
+        uint32_t breaks = 0;                              // split events so far
+    };
+    std::unordered_map<ObjectHandle, Breakable> m_breakables;
+    ObjectHandle spawnBreakable(const TetMeshData& mesh, const glm::vec3& position, const Material& material, const TetSpawnOptions& options);
+    // Spawns one part holding `tets` (baked ids). `from` = the part it
+    // splits off (copies its current vertex state), or kInvalidHandle.
+    ObjectHandle spawnBreakablePart(ObjectHandle breakable, const std::vector<uint32_t>& tets, ObjectHandle from, const glm::vec3& velocity);
+    void updateBreakables();
+    void splitBreakablePart(ObjectHandle breakable, ObjectHandle part);
 
     // Raised from the original 8 to a genuinely meaningful showcase
     // number, not a stress-test number either — see the class
@@ -442,7 +511,9 @@ private:
     // Raising this further just means raising the FmSceneSetupParams
     // fields in init() to match; nothing else about the design
     // changes.
-    static constexpr uint32_t kMaxObjects = 64;
+    // Each piece of a broken Breakable is its own FEMFX body, so this
+    // counts pieces too (a brick breaks into ~16).
+    static constexpr uint32_t kMaxObjects = 512;
     // Fracture pieces across the whole scene — each one is its own FEMFX
     // tet mesh. See init()'s comment on scene capacities.
     static constexpr uint32_t kMaxScenePieces = 4096;
@@ -500,6 +571,17 @@ private:
     // future work once there's more than one material worth choosing
     // between in a demo.
     float m_nextSpawnHeight = 5.0f;
+    uint32_t m_fractureWorldSeed = 1;
+    bool m_startScenesDone = false; // KKE_PHYSICS_SCENES, see fixedUpdate()
+    // Builds a w x h x d box of tets, bakes a fracture pattern into it
+    // (kke::bakeFracture) and spawns it: the brick and glass scenes.
+    ObjectHandle spawnPatternedBox(const glm::ivec3& cells, const glm::vec3& size, const glm::vec3& position, const Material& material,
+                                   int pattern, float chunkSize, int cellsPerCluster, const glm::vec3& velocity, float armSeconds = 0.0f,
+                                   const glm::vec3* impactPoint = nullptr);
+    // Scene::BreakTest: ticks until the balls drop, and where.
+    int m_breakTestTicks = -1;
+    std::vector<glm::vec3> m_breakTestTargets;
+    glm::vec3 m_breakTestWallTarget{0.0f};
 
     struct RagdollInstance {
         std::vector<AMD::FmRigidBody*> bodies;
