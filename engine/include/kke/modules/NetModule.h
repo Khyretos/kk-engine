@@ -53,7 +53,8 @@ namespace net { class EnetTransport; class ConditionedTransport; }
 // kDefaultPort up (16 ports), and the LAN search asks all of them.
 //
 // Start from the command line: KKE_NET=host | host:PORT | join:ADDRESS[:PORT],
-// KKE_NET_NAME=Kees. Feel a bad connection on a LAN: KKE_NET_LAG=ms,
+// KKE_NET_NAME=Kees, KKE_NET_PASSWORD=secret (to join one; hosting, to
+// require it). Feel a bad connection on a LAN: KKE_NET_LAG=ms,
 // KKE_NET_JITTER=ms, KKE_NET_LOSS=percent (also sliders in the panel).
 class NetModule : public Module {
 public:
@@ -153,6 +154,7 @@ private:
     net::NetConfig m_config;
     Role m_role = Role::Offline;
     std::string m_status = "offline";
+    std::string m_serverMessage; // the last kEventServerMessage (a dedicated server's MOTD, "say")
     std::unique_ptr<net::ConditionedTransport> m_transport;
     net::EnetTransport* m_enet = nullptr; // inside m_transport
     std::unique_ptr<net::NetServer> m_server;
@@ -186,6 +188,7 @@ private:
 
     // Panel
     char m_nameInput[32] = "Player";
+    char m_passwordInput[65] = "";
     char m_addressInput[128] = "127.0.0.1";
     int m_portInput = kDefaultPort;
     double m_statTime = 0.0;

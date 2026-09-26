@@ -1,0 +1,84 @@
+#pragma once
+
+// The heart of kke_server (docs/SERVER_HOSTING.md): a headless game server
+// with the roles its ServerConfig names, its access list, leaderboards and
+// console commands. kke_server's main() adds the config layers, signals
+// and stdin; tests drive this class directly over a LoopbackTransport.
+// Built with KKE_ENABLE_NET.
+
+#include "kke/net/NetSession.h"
+#include "kke/server/DirectoryNet.h"
+#include "kke/server/Leaderboard.h"
+#include "kke/server/ServerAccess.h"
+#include "kke/server/ServerConfig.h"
+
+#include <functional>
+#include <memory>
+#include <string>
+#include <vector>
+
+namespace kke {
+class RigidWorld;
+namespace net {
+class WorldMoveCheck;
+}
+} // namespace kke
+
+namespace kke::server {
+
+class DedicatedServer {
+public:
+    // `transport`: the game socket (an EnetTransport in kke_server);
+    // unused by a directory-only server. `assetsDir`: where the scene's
+    // models are (the physics role).
+    DedicatedServer(ServerConfig config, net::ITransport& transport, std::string assetsDir = {});
+    ~DedicatedServer();
+
+    // Loads the save folder's files and the scene, opens the sockets.
+    // false: it can't run; `errors` says why. Problems it can run with
+    // (a damaged ban entry) are logged as warnings.
+    bool start(std::vector<std::string>& errors);
+    void update(double now);
+    // Tells the players, saves, closes. Safe to call twice.
+    void stop(const std::string& reason = "the server is stopping");
+    bool stopRequested() const { return m_stopRequested; }
+
+    // One console line ("help" lists them); what to print back.
+    std::string command(const std::string& line);
+    bool save(std::string* error = nullptr);
+
+    std::function<void(const std::string& line)> log;  // info
+    std::function<void(const std::string& line)> warn; // something to look at
+
+    const ServerConfig& config() const { return m_config; }
+    net::NetServer* game() { return m_net.get(); }
+    ServerAccess& access() { return m_access; }
+    Leaderboard& leaderboards() { return m_leaderboards; }
+    const DirectoryService* directory() const { return m_directory.get(); }
+    size_t collisionBodies() const { return m_collisionBodies; }
+    DirectoryEntry directoryEntry() const; // what it tells directories
+
+private:
+    void onEvent(const net::GameEventMsg& e);
+    std::string accessPath() const;
+    std::string leaderboardPath() const;
+    int findPlayer(const std::string& idOrName) const; // -1: none
+    void info(const std::string& s) const { if (log) log(s); }
+    void warning(const std::string& s) const { if (warn) warn(s); else info(s); }
+
+    ServerConfig m_config;
+    net::ITransport& m_transport;
+    std::string m_assetsDir;
+    std::unique_ptr<net::NetServer> m_net;
+    ServerAccess m_access;
+    Leaderboard m_leaderboards;
+    std::unique_ptr<DirectoryService> m_directory;
+    std::unique_ptr<DirectoryPublisher> m_publisher;
+    std::unique_ptr<RigidWorld> m_world;
+    std::unique_ptr<net::WorldMoveCheck> m_moveCheck;
+    size_t m_collisionBodies = 0;
+    double m_now = 0, m_nextSave = 0;
+    bool m_started = false, m_stopRequested = false;
+};
+
+} // namespace kke::server

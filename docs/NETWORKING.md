@@ -81,9 +81,16 @@ that range in the firewall to play across machines.
     snapshots like the level's; `Despawn` removes them.
   - *Breaks*: `Break` messages carry which borders of a breakable broke on
     the host (below).
-  - *Robustness*: protocol version (now 2) and game id checked at join, a
-    full server says so, silent peers time out, clients sending bad
+  - *Robustness*: protocol version (now 3) and game id checked at join,
+    then the server's password if it has one (compared in constant time;
+    `KKE_NET_PASSWORD`, or the panel's Password field) and its access list
+    (`NetServer::admit`: bans, allow list), a full server says so, silent peers time out, clients sending bad
     packets, server-only messages or too many events are dropped.
+- **Dedicated servers**: `NetConfig::dedicated` gives all slots to
+  clients (no host player). `kke_server`, its roles, the directory and
+  Docker are in docs/SERVER_HOSTING.md. A server's text for players
+  (MOTD, `say`) is the event `kEventServerMessage`; NetModule logs it and
+  shows it in the panel.
 - **NetModule** (`kke/modules/NetModule.h`): the engine module that ties
   it to a game. The game registers its replicated Jolt bodies in the same
   order on every machine (`replicateBody`), gives its player's state each

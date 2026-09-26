@@ -28,7 +28,7 @@ Detailed design notes live in the linked files; this is the index.
 
 | # | Item | Notes | Status |
 |---|---|---|---|
-| 2.1 | **Networking module** | See "Networking" below: transport + rollback + voice, many peers per PC, dockerized server, lots of tests | 🔨 v1 ✅ (docs/NETWORKING.md): ENet transport behind `ITransport` (+ loopback and lag/jitter/loss simulation), bit-packed fuzz-tested protocol, authoritative host with owner-predicted players, server movement checks, snapshot interpolation, prioritised body snapshots, reliable events, LAN discovery, several hosts per PC; `NetModule` (Network panel, `KKE_NET=host`/`join:ADDRESS`) in kke_demo: players see each other walk and push the same crates. 19 tests. v2 part 1 ✅ (#28): breakables break into the host's pieces for everyone, host-spawned (script) objects replicated with late-join, host refuses moves through walls and flights; +13 tests. Next: input replay for competitive games (#28), dedicated server + Docker, voice, couch + online |
+| 2.1 | **Networking module** | See "Networking" below: transport + rollback + voice, many peers per PC, dockerized server, lots of tests | 🔨 v1 ✅ (docs/NETWORKING.md): ENet transport behind `ITransport` (+ loopback and lag/jitter/loss simulation), bit-packed fuzz-tested protocol, authoritative host with owner-predicted players, server movement checks, snapshot interpolation, prioritised body snapshots, reliable events, LAN discovery, several hosts per PC; `NetModule` (Network panel, `KKE_NET=host`/`join:ADDRESS`) in kke_demo: players see each other walk and push the same crates. 19 tests. v2 part 1 ✅ (#28): breakables break into the host's pieces for everyone, host-spawned (script) objects replicated with late-join, host refuses moves through walls and flights; +13 tests. Dedicated servers ✅ (#42, docs/SERVER_HOSTING.md): `kke_server` (settings file + env + flags, password, admin/ban/allow list, console, clean stop), roles physics / leaderboard / directory, self-hostable server directory, Docker image + compose; +20 tests. Next: input replay for competitive games (#28), headless Lua on the server (#43), relay + join codes (#44), saves (#45), shared roles (#46), voice, couch + online |
 | 2.2 | **Audio engine** | See docs/AUDIO.md: miniaudio output, own mixer (3D pan, distance, occlusion low-pass, voice budget), modal-synthesis impacts per material, Jolt contacts + FEMFX breaks make sound, wall occlusion by ray, sound visualizer + captions for deaf players | 🔨 core ✅ (`AudioMixer`, `ImpactSynth`, `AudioModule`, `SoundVisualizerModule`; 17 tests; in kke_demo, physics_demo, sandbox; `kke_audio_preview` writes WAVs). Next: footsteps, FEMFX impacts, reverb, HRTF |
 | 2.7 | **Lua gameplay scripting** (Garry's Mod style) | See docs/SCRIPTING.md: sandboxed Lua 5.4, hook/timer API, hot reload, console, physics/audio/input/camera bindings, error isolation, loop/memory limits | 🔨 core ✅ (`ScriptVM`, `ScriptModule`; 11 tests; kke_demo `scripts/toys.lua`). Next: model/FEMFX/UI/scene bindings, per-script environments, server-side scripts |
 | 2.3 | **Accessibility layer** | Sound visualization for deaf players (direction, intensity, material tags, user-tunable), audio cues + material-distinct sounds for blind players, captions, remappable input, contrast/size | 🔨 sound visualizer + captions, tunable and saved (docs/AUDIO.md); rest ⬜ |
@@ -123,6 +123,14 @@ About Valve's Proton (Windows games on Linux): our games are native on
 Linux, so it isn't needed; Windows builds of KKE games should still run
 under Proton (Wine: the Windows build's unit tests already run under
 Wine in `docker/windows.Dockerfile`).
+
+### Dedicated servers (2026-09-26)
+Designed in docs/SERVER_HOSTING.md after Valheim, Core Keeper, Necesse and
+7 Days to Die: one executable, one config file that the server never
+rewrites, a separate access file, remote admin off, a self-hostable
+directory and (next) relay so nothing needs a paid service. Built:
+`kke_server` with roles `players`, `physics`, `leaderboard`, `directory`,
+and `docker/server/`. Issues #41 (parent) to #46.
 
 ### Proposed layers (each a separate, replaceable module)
 1. **Transport interface** with backends: ENet (default), yojimbo

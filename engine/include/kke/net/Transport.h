@@ -76,6 +76,8 @@ public:
     // Non-blocking: sends what's queued, appends what arrived.
     virtual void poll(std::vector<NetEvent>& out) = 0;
     virtual PeerStats stats(PeerId peer) const = 0;
+    // Where a peer is, for bans and logs ("192.168.1.20"); "" if unknown.
+    virtual std::string address(PeerId peer) const { (void)peer; return {}; }
     virtual uint16_t port() const = 0;
     virtual void close() = 0;
     virtual const char* backendName() const = 0;
@@ -137,6 +139,7 @@ public:
     void disconnect(PeerId peer) override;
     void poll(std::vector<NetEvent>& out) override;
     PeerStats stats(PeerId peer) const override;
+    std::string address(PeerId peer) const override;
     uint16_t port() const override { return m_port; }
     void close() override;
     const char* backendName() const override { return "loopback"; }
@@ -171,6 +174,7 @@ public:
     void disconnect(PeerId peer) override { m_inner->disconnect(peer); }
     void poll(std::vector<NetEvent>& out) override;
     PeerStats stats(PeerId peer) const override;
+    std::string address(PeerId peer) const override { return m_inner->address(peer); }
     uint16_t port() const override { return m_inner->port(); }
     void close() override;
     const char* backendName() const override { return m_inner->backendName(); }
