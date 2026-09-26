@@ -23,6 +23,8 @@ set(ENGINE_SOURCES
     src/ParticleFluid.cpp
     src/MeltVolume.cpp
     src/SphereImpostors.cpp
+    src/Ocean.cpp
+    src/FloatingBodies.cpp
     src/SystemInfo.cpp
     src/TetMeshAsset.cpp
     src/LightingBuffer.cpp
@@ -75,6 +77,8 @@ set(ENGINE_HEADERS
     include/kke/ParticleFluid.h
     include/kke/MeltVolume.h
     include/kke/SphereImpostors.h
+    include/kke/Ocean.h
+    include/kke/FloatingBodies.h
     include/kke/TetMeshAsset.h
     include/kke/LightingBuffer.h
     include/kke/ShadowMap.h
@@ -174,6 +178,6 @@ endif()
 # fracture setup are pure number crunching, 5-20x slower at -O0, and
 # nobody steps through them in a debugger. OPTIMIZATION.md log #15.
 if(NOT MSVC)
-    set_source_files_properties(src/Texture.cpp src/VoxelTets.cpp src/FracturePattern.cpp src/ParticleFluid.cpp src/MeltVolume.cpp
+    set_source_files_properties(src/Texture.cpp src/VoxelTets.cpp src/FracturePattern.cpp src/ParticleFluid.cpp src/MeltVolume.cpp src/Ocean.cpp src/FloatingBodies.cpp
         PROPERTIES COMPILE_OPTIONS "$<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>")
 endif()
