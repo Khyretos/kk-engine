@@ -134,6 +134,36 @@ void SyntySceneModule::init(kke::Application& app) {
         if (c.behavior == "clip") m_models->playAnimation(c.instance, 0, true);
         m_characters.push_back(c);
     }
+    // Animals, if a Quaternius Farm Animals pack is there too (any
+    // Quaternius-named rig works): they ragdoll with animal joint limits.
+    struct AnimalSpec { const char* file; const char* label; glm::vec3 at; float yaw, scale, mass; };
+    const AnimalSpec animals[] = {
+        { "Horse.fbx", "Horse (Quaternius)", { -3.5f, 0.0f, -4.5f }, 70.0f, 0.3f, 500.0f },
+        { "Pug.fbx", "Pug (Quaternius)", { 3.2f, 0.0f, -3.0f }, -60.0f, 0.2f, 8.0f },
+    };
+    for (const AnimalSpec& a : animals) {
+        if (!m_catalog.find(fs::path(a.file).stem().string())) continue;
+        Character c;
+        c.label = a.label;
+        c.behavior = "clip";
+        c.animal = true;
+        c.mass = a.mass;
+        c.model = load(a.file);
+        if (!c.model) continue;
+        c.position = a.at;
+        glm::mat4 t = glm::translate(glm::mat4(1.0f), c.position);
+        t = glm::rotate(t, glm::radians(a.yaw), glm::vec3(0, 1, 0));
+        c.instance = m_models->spawn(c.model, glm::scale(t, glm::vec3(a.scale)));
+        // An idle clip if it has one.
+        if (const kke::ModelData* d = m_models->model(c.model)) {
+            for (size_t i = 0; i < d->animations.size(); ++i)
+                if (d->animations[i].name.find("Idle") != std::string::npos) {
+                    m_models->playAnimation(c.instance, static_cast<int>(i), true);
+                    break;
+                }
+        }
+        m_characters.push_back(c);
+    }
     if (m_selected >= static_cast<int>(m_characters.size())) m_selected = 0;
     if (!m_characters.empty()) {
         const kke::ModelData* d = m_models->model(m_characters[m_selected].model);
@@ -250,7 +280,10 @@ void SyntySceneModule::ragdoll(Character& c, const glm::vec3& push) {
     std::vector<glm::mat4> world = m_models->boneWorld(c.instance);
     for (glm::mat4& w : world) w = instance * w;
     std::string missing;
-    c.ragdollDesc = kke::buildHumanoidRagdoll(*d, world, 70.0f, &missing);
+    // Realistic joint limits come with the builders; a game can change
+    // any of them here (c.ragdollDesc.findJoint("knee_l")->... or
+    // scaleLimits) before the ragdoll is created.
+    c.ragdollDesc = c.animal ? kke::buildQuadrupedRagdoll(*d, world, c.mass, &missing) : kke::buildHumanoidRagdoll(*d, world, c.mass, &missing);
     if (c.ragdollDesc.bodies.empty()) {
         kke::log::get(name())->warn("'{}' can't ragdoll: skeleton has no '{}' bone", c.label, missing);
         return;
@@ -259,7 +292,7 @@ void SyntySceneModule::ragdoll(Character& c, const glm::vec3& push) {
     c.ragdoll = m_physics->createRagdoll(c.ragdollDesc, glm::vec3(0.0f));
     if (!c.ragdoll) return;
     // Shove the upper body harder than the legs so it topples, not slides.
-    for (const char* body : { "torso", "head" }) m_physics->pushRagdollBody(c.ragdoll, c.ragdollDesc.findBody(body), push);
+    for (const char* body : { c.animal ? "chest" : "torso", "head" }) m_physics->pushRagdollBody(c.ragdoll, c.ragdollDesc.findBody(body), push);
     m_physics->pushRagdollBody(c.ragdoll, c.ragdollDesc.findBody("pelvis"), push * 0.4f);
     c.behaviorBeforeRagdoll = c.behavior;
     c.behavior = "ragdoll";

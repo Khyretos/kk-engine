@@ -11,6 +11,7 @@
 #include "kke/Buoyancy.h"
 #include "kke/Locomotion.h"
 #include "LavaStation.h"
+#include "Layout.h"
 #include "kke/Ocean.h"
 #include "kke/OceanRenderer.h"
 #include "kke/Module.h"
@@ -18,11 +19,15 @@
 #include "kke/SphereImpostors.h"
 #include "kke/modules/ModelModule.h"
 
+#include <RmlUi/Core/DataModelHandle.h>
+
 #include <map>
+#include <string>
 #include <memory>
 #include <vector>
 
-namespace kke { class RigidBodyModule; class PhysicsModule; class InputModule; class NetModule; }
+namespace kke { class RigidBodyModule; class PhysicsModule; class InputModule; class NetModule; class UiModule; }
+namespace Rml { class ElementDocument; }
 
 namespace kke_showcase {
 
@@ -44,6 +49,7 @@ public:
     void renderShadow(const kke::ShadowRenderContext& ctx) override;
     void renderUi() override;
     void onEvent(const SDL_Event& event) override;
+    void frameStart(const kke::UpdateContext& ctx) override; // the pause menu works while paused
 
     // Modules whose panels F1 shows/hides.
     void setEnginePanels(std::vector<kke::Module*> panels) { m_panels = std::move(panels); }
@@ -206,6 +212,23 @@ private:
     glm::vec3 m_autopilotStart{0.0f};
     float m_autopilotEndZ = 0.0f;
     float m_demoHang = -1.0f; // KKE_DEMO_HANG: seconds into the script, -1 = off
+    // RmlUi HUD (station hints, what the character is doing) and pause
+    // menu (Hud.cpp, ui/showcase_*.rml).
+    void buildHud();
+    void updateHud(float dt);
+    void setMenuOpen(bool open);
+    struct HudState {
+        std::string move, speed, station, stationText, stationLive;
+        bool trick = false, panels = false, online = false;
+        int players = 1;
+    };
+    HudState m_hud;
+    kke::UiModule* m_ui = nullptr;
+    Rml::ElementDocument* m_hudDoc = nullptr;
+    Rml::ElementDocument* m_pauseDoc = nullptr;
+    Rml::DataModelHandle m_hudModel;
+    bool m_menuOpen = false, m_pausedByMenu = false;
+    float m_menuAt = 0.0f; // KKE_MENU: seconds until it opens
     float m_shoulder = 0.45f;   // camera shoulder offset (m, + = right); moves off a wall being run along
     float m_demoTricks = -1.0f; // KKE_DEMO_TRICKS: wall run, ledge leaps (same)
     void buildTrickCourse(std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx);

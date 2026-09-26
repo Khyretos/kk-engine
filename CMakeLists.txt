@@ -105,6 +105,10 @@ set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
 # libudev (joystick hot-plug) and dbus should be installed: see docs/HISTORY.md.
 set(SDL_X11_XSCRNSAVER OFF CACHE BOOL "" FORCE)
 set(SDL_X11_XTEST OFF CACHE BOOL "" FORCE)      # synthetic input injection: not needed
+# Sound goes through miniaudio (AudioModule), never SDL: without this SDL
+# probes for ALSA/PulseAudio/JACK at configure time and warns when the dev
+# packages are missing, for a subsystem nobody calls.
+set(SDL_AUDIO OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
     SDL3
     GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
