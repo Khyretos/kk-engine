@@ -12,6 +12,7 @@
 namespace kke {
 
 struct RagdollDesc;
+struct RagdollDrive;
 
 // Rigid bodies, world collision and the character controller, on Jolt
 // Physics (MIT; Horizon Forbidden West, Godot 4). Plain C++, no GPU, so
@@ -164,6 +165,11 @@ public:
     // Current hinge angle (degrees, as RagdollJoint measures it) of joint
     // `joint`; 0 for ball joints and unknown ids.
     float ragdollHingeAngle(RagdollId id, int joint) const;
+    // Active ragdoll (kke/ProceduralAnim.h): joint motors (position mode,
+    // torque scaled by strength; 0 = motor off) toward drive.targets, and
+    // the assist body's velocity pulled toward its target. False if the
+    // id is unknown or the drive doesn't match the ragdoll.
+    bool driveRagdoll(RagdollId id, const RagdollDrive& drive);
 
     CharacterId addCharacter(const CharacterDesc& desc);
     void removeCharacter(CharacterId id);
