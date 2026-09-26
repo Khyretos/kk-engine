@@ -126,6 +126,35 @@ TEST(AssetCatalog, SinglePackAsRootAndSourceFilesLayout) {
     fs::remove_all(root);
 }
 
+// Real packs Kees shared don't all say "_Texture_01": Pirates and the
+// small packs use a bare "Texture_01", Nature "PolygonNature_01" next to
+// ground/leaf detail textures, Pumpkin "POLYGON_Pumpkin_Tex". Maya's
+// .mayaSwatches thumbnails are never the atlas.
+TEST(AssetCatalog, FindsAtlasesWithoutTheUsualName) {
+    fs::path root = fs::temp_directory_path() / "kke_catalog_names";
+    fs::remove_all(root);
+    touch(root / "Bare/SM_Prop_Bow_01.fbx");
+    touch(root / "Bare/Texture_01.png");
+    touch(root / "Nature/FBX/SM_Env_Tree_01.fbx");
+    touch(root / "Nature/Textures/.mayaSwatches/PolygonNature_01.png");
+    touch(root / "Nature/Textures/Ground_Textures/Mud.png");
+    touch(root / "Nature/Textures/PolygonNature_01.png");
+    touch(root / "Pumpkin/SM_Prop_Pumpkin_01.fbx");
+    touch(root / "Pumpkin/POLYGON_Pumpkin_Tex.png");
+    auto c = kke::AssetCatalog::scan(root.string());
+    ASSERT_EQ(c.packs.size(), 3u);
+    for (const auto& p : c.packs) {
+        std::string t = fs::path(p.defaultTexture).filename().string();
+        if (p.name == "Bare") EXPECT_EQ(t, "Texture_01.png");
+        if (p.name == "Nature") {
+            EXPECT_EQ(t, "PolygonNature_01.png");
+            EXPECT_EQ(p.defaultTexture.find(".mayaSwatches"), std::string::npos);
+        }
+        if (p.name == "Pumpkin") EXPECT_EQ(t, "POLYGON_Pumpkin_Tex.png");
+    }
+    fs::remove_all(root);
+}
+
 TEST(AssetCatalog, MissingOrEmptyFolderIsEmptyNotAnError) {
     EXPECT_TRUE(kke::AssetCatalog::scan("/no/such/folder").packs.empty());
     fs::path root = fs::temp_directory_path() / "kke_catalog_empty";

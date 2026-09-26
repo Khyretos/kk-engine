@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <iterator>
 #include <map>
 #include <cstdlib>
 #include <regex>
@@ -128,15 +129,35 @@ AssetCatalog AssetCatalog::scan(const std::string& rootPath) {
                           n.find("_mask") != std::string::npos || n.find("metallic") != std::string::npos;
             if (helper) continue;
             if (n.find("grid") != std::string::npos) { pack.overlayTextures.push_back(img.string()); continue; }
-            // "..._texture_NN" or "..._texture_NN_X" (Town's _01_A, _01_B):
-            // a variant of the atlas.
-            static const std::regex kVariant(R"(_texture_\d+(_[a-z0-9]{1,3})?$)");
+            if (img.string().find(".mayaSwatches") != std::string::npos) continue; // Maya's thumbnails
+            // "..._texture_NN" or "..._texture_NN_X" (Town's _01_A, _01_B),
+            // or a bare "Texture_01" (small packs, Pirates): a variant of the atlas.
+            static const std::regex kVariant(R"((^|_)texture_\d+(_[a-z0-9]{1,3})?$)");
             if (std::regex_search(n, kVariant)) {
                 pack.textureVariants.push_back(img.string());
                 if (pack.defaultTexture.empty() && n.find("_texture_01") != std::string::npos) pack.defaultTexture = img.string();
             }
         }
         if (pack.defaultTexture.empty() && !pack.textureVariants.empty()) pack.defaultTexture = pack.textureVariants.front();
+        if (pack.defaultTexture.empty()) {
+            // Packs that don't follow the _Texture_01 naming (Nature's
+            // "PolygonNature_01", Pumpkin's "POLYGON_Pumpkin_Tex", a lone
+            // "Adults.png"): the atlas is the shallowest image, preferring
+            // atlas-like names over ground/leaf/grass detail textures.
+            int bestScore = 1 << 30;
+            for (const fs::path& img : images) {
+                std::string n = lower(img.stem().string());
+                if (img.string().find(".mayaSwatches") != std::string::npos || n.find("emission") != std::string::npos ||
+                    n.find("normal") != std::string::npos || n.find("_mask") != std::string::npos || n.find("grid") != std::string::npos)
+                    continue;
+                const fs::path rel = fs::relative(img, dir, ec);
+                const int depth = static_cast<int>(std::distance(rel.begin(), rel.end()));
+                int score = depth * 10;
+                if (n.find("polygon") != std::string::npos || n.find("tex") != std::string::npos) score -= 5;
+                if (n.find("_01") != std::string::npos) score -= 2;
+                if (score < bestScore) { bestScore = score; pack.defaultTexture = img.string(); }
+            }
+        }
 
         for (auto& [key, path] : byStem) {
             CatalogAsset a;
