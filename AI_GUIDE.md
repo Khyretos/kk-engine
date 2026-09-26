@@ -108,6 +108,14 @@ you read this; check `ROADMAP.md` for current state.
    Don't add a fourth pattern without a clear reason; these three cover
    everything built so far, including the harder cases (destruction ↔
    networking, see docs/HISTORY.md).
+7. **No dithering, ever, in rendering.** No ordered/Bayer or blue-noise
+   dither, no screen-door or stochastic (dither-based) transparency, no
+   checkerboard or interleaved effects that rely on TAA or a blur to hide
+   the pattern — however much faster it is. This is the project owner's
+   standing decision, not a default to revisit. Use real alternatives:
+   alpha test with coverage-preserving mips, sorted alpha blending, MSAA
+   alpha-to-coverage only with a non-dithered sample pattern, spatially
+   stable full-resolution effects. See docs/RENDERING_PRINCIPLES.md.
 
 ## How the work is split, and the min-spec baseline
 

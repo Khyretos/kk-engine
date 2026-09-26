@@ -354,6 +354,12 @@ void VulkanDevice::createLogicalDevice(bool enableValidation) {
     deviceFeatures.largePoints = supportedFeatures.largePoints;   // particle point-sprites use gl_PointSize > 1.0
     deviceFeatures.wideLines = supportedFeatures.wideLines;       // handy for future debug-line rendering
     m_largePointsSupported = (supportedFeatures.largePoints == VK_TRUE);
+    deviceFeatures.samplerAnisotropy = supportedFeatures.samplerAnisotropy; // kke::Texture's sampler
+    if (supportedFeatures.samplerAnisotropy == VK_TRUE) {
+        VkPhysicalDeviceProperties props{};
+        vkGetPhysicalDeviceProperties(m_physicalDevice, &props);
+        m_maxSamplerAnisotropy = props.limits.maxSamplerAnisotropy;
+    }
 
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

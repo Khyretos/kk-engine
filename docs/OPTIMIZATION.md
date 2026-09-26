@@ -101,7 +101,9 @@ stay under ~500 MB resident. Benchmarks report `peak_rss_mb` for this.
 | Spatial partitioning (grid / BVH) | 90s | Culling, picking, placement in the sandbox | backlog (brute force measured fine for now — log #12) |
 | Level of detail (mesh LOD, impostors) | 90s | Synty packs ship LODs in some packs; impostors for distant props | backlog |
 | Texture atlases | N64/PS1 | Synty packs are built around one atlas per pack — keep it that way: one texture bind for a whole pack | ✅ natural fit |
-| Mip mapping | 90s | All textures: less aliasing *and* less bandwidth | ✅ done (log #14) |
+| Mip mapping | 90s | All textures: less aliasing *and* less bandwidth | ✅ done (log #14); alpha coverage kept per mip (log #32) |
+| Anisotropic filtering | 2000s | All material textures | ✅ done (log #32) |
+| MSAA (forward, no G-buffer) | 2000s | Geometric edges; a setting, off on min-spec | backlog (#36) |
 | Texture compression (BCn/ASTC) | 2000s | Asset cooking step | backlog |
 | Vertex quantization (16-bit) | N64/PS1 | Static meshes: positions as int16 + per-mesh scale, normals as oct-encoded 2×8 bit | backlog |
 | Instanced draws | 2000s | Repeated props (Synty levels are 90% repeats) | backlog |
@@ -124,6 +126,7 @@ BUGS.md / PERFORMANCE_NOTES.md entry with full detail.
 
 | # | What | Why it works | Measured effect | Where |
 |---|---|---|---|---|
+| 32 | Anisotropic filtering (8x where supported), specular anti-aliasing from normal derivatives, coverage-preserving alpha mips | Image quality without temporal accumulation or dithering (RENDERING_PRINCIPLES.md): glancing-angle textures stay sharp, distant shiny surfaces stop sparkling, cutout foliage keeps its shape down the mip chain instead of vanishing | Coverage kept exactly in unit tests (1-in-4 stripes: plain mips 0% after two levels, fixed 25%); GPU cost not measured yet (AF is fixed-function; specular AA is a few ALU ops) | `kke::Texture`, `kke::TextureMips`, `pbr_common.glsl` |
 | 32 | Melt block: distance field rebuilt only when a voxel crosses solid/empty, on a padded grid with the 13 chamfer offsets and weights computed once; heat exchange clipped to the grid | Most steps melt a little without flipping a voxel; the old sweeps bounds-checked and took a `sqrt` for every neighbour of every voxel | 24^3 block under a 700-particle lava pour: 2.7-3.0 ms -> 0.65 ms per step (melt left after 15 s identical: 67 %) | `kke::MeltVolume::step`, `rebuildDistance` |
 | 31 | Breakable props: surface subdivided to 1 cell instead of half a cell, then cut exactly at the cracks | Half-cell triangles were only there so whole triangles could follow the pieces; `splitSoupAtPieces` now cuts them along the crack instead (BUG-055) | Synthetic 3.5 m pillar, 40 pieces: 11,880 glued triangles before the crack fix, 17,300 right after it, 8,640 now | `SandboxModule::makeBreakable` |
 | 30 | Point-in-tet lookup on a fine grid (1/3 tet size) with a BFS-filled "nearest covered cell" for points outside the volume | Each point tests only the 2-6 tets covering its cell, and stops at the first that contains it; outside points no longer ring-search 27 coarse bins | `embedPoints`, 12,000 surface points of a 756-tet pillar: 110 ms -> 5 ms; making it breakable (embed + crack cut): ~350 ms -> ~13 ms | `kke::embedPoints` (VoxelTets.cpp) |
@@ -185,7 +188,7 @@ BUGS.md / PERFORMANCE_NOTES.md entry with full detail.
 5. **Vertex quantization for static meshes** — half the vertex memory
    and bandwidth, the N64 way.
 6. **GPU skinning** — for crowds.
-7. **Asset cooking** — bake mips, compression, collision and fracture
+7. **Asset cooking** — bake mips, compression (#39), collision and fracture
    data at import, not at load.
 
 ## 6. How to add an entry

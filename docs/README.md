@@ -18,6 +18,7 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [SCRIPTING.md](SCRIPTING.md) | Lua gameplay scripts |
 | [SCENES.md](SCENES.md) | Levels built from asset packs |
 | [OPTIMIZATION.md](OPTIMIZATION.md) | Performance rules, measured log and backlog |
+| [RENDERING_PRINCIPLES.md](RENDERING_PRINCIPLES.md) | Rendering doctrine: no dithering, a clean image every frame, what we took from Threat Interactive |
 | [PERFORMANCE_NOTES.md](PERFORMANCE_NOTES.md) | What RayFire and Chaos do for destruction at scale, and what KKE took from it |
 | [SCALING.md](SCALING.md) | Worst cases, multiplayer limits and platform support |
 | [BENCHMARKS.md](BENCHMARKS.md) | The stress test, kke_bench, hardware profiles, tracked results |

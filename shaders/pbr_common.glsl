@@ -118,10 +118,33 @@ vec3 srgbToLinear(vec3 c) {
     return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c));
 }
 
+// Specular anti-aliasing (Kaplanyan & Tokuyoshi; the same constants as
+// Filament): where the normal changes a lot within one pixel (curved or
+// distant surfaces), a sharp highlight sparkles from frame to frame. The
+// normal's screen-space derivatives measure that spread; it is added to
+// the GGX roughness so the pixel shows the averaged highlight it covers.
+// Spatial and per-frame: no temporal accumulation, no dithering, no blur
+// of the image (docs/RENDERING_PRINCIPLES.md). Returns the extra alpha^2.
+// Derivatives: call it before any discard.
+float specularAAKernel(vec3 normalWorld) {
+    vec3 n = normalize(normalWorld);
+    vec3 du = dFdx(n);
+    vec3 dv = dFdy(n);
+    float variance = 0.15 * (dot(du, du) + dot(dv, dv));
+    return min(2.0 * variance, 0.2);
+}
+
+vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 posWorld, vec4 posLightSpace, float specAAKernel);
+
 // Full lighting for one surface point: PBR (GGX) for up to 4 lights,
 // shadow on light 0, flat ambient, Reinhard tone map. Shared by every
 // lit mesh shader (cube.frag, model.frag) so they can't drift apart.
+// Shaders that discard call shadeSurfaceAA with a kernel taken first.
 vec3 shadeSurface(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 posWorld, vec4 posLightSpace) {
+    return shadeSurfaceAA(albedo, metallicRoughness, normalWorld, posWorld, posLightSpace, specularAAKernel(normalWorld));
+}
+
+vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 posWorld, vec4 posLightSpace, float specAAKernel) {
     vec2 fragMetallicRoughness = metallicRoughness;
     vec3 fragNormalWorld = normalWorld;
     vec3 fragPosWorld = posWorld;
@@ -137,7 +160,9 @@ vec3 shadeSurface(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 po
     // actually wants (mirror-sharp metal vs. soft rough plastic) with
     // none of the near-zero instability.
     float metallic = clamp(fragMetallicRoughness.x, 0.0, 1.0);
-    float roughness = clamp(fragMetallicRoughness.y, 0.05, 0.95);
+    // Perceptual roughness r, GGX alpha = r^2, kernel adds to alpha^2 = r^4.
+    float r = clamp(fragMetallicRoughness.y, 0.0, 1.0);
+    float roughness = clamp(pow(r * r * r * r + specAAKernel, 0.25), 0.05, 0.95);
 
     vec3 N = normalize(fragNormalWorld);
     vec3 V = normalize(lighting.cameraPos.xyz - fragPosWorld);

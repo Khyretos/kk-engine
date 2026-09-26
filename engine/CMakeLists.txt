@@ -60,6 +60,7 @@ set(ENGINE_SOURCES
     src/LightingBuffer.cpp
     src/ShadowMap.cpp
     src/Texture.cpp
+    src/TextureMips.cpp
     src/MarketplaceIndex.cpp
     src/RmlTextSafety.cpp
     src/Log.cpp
@@ -275,6 +276,6 @@ endif()
 # fracture setup are pure number crunching, 5-20x slower at -O0, and
 # nobody steps through them in a debugger. docs/OPTIMIZATION.md log #15.
 if(NOT MSVC)
-    set_source_files_properties(src/Texture.cpp src/VoxelTets.cpp src/InteriorColor.cpp src/FracturePattern.cpp src/VoronoiFracture.cpp src/ParticleFluid.cpp src/MeltVolume.cpp src/JigglePhysics.cpp src/Ocean.cpp src/FloatingBodies.cpp
+    set_source_files_properties(src/Texture.cpp src/TextureMips.cpp src/VoxelTets.cpp src/InteriorColor.cpp src/FracturePattern.cpp src/VoronoiFracture.cpp src/ParticleFluid.cpp src/MeltVolume.cpp src/JigglePhysics.cpp src/Ocean.cpp src/FloatingBodies.cpp
         PROPERTIES COMPILE_OPTIONS "$<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>")
 endif()

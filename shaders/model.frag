@@ -41,6 +41,7 @@ vec3 triplanarOverlay(vec3 pos, vec3 n, float cellSize) {
 }
 
 void main() {
+    float specAA = specularAAKernel(fragNormalWorld); // before the discard: it takes derivatives
     vec4 texel = texture(albedoTexture, fragUV);
     // Cutout cards (leaves, ferns): transparent texels aren't there.
     if (texel.a < 0.5) discard;
@@ -50,5 +51,5 @@ void main() {
         vec3 overlay = triplanarOverlay(fragOverlayPos, normalize(fragOverlayNormal), cellSize);
         albedo *= mix(vec3(1.0), overlay, pc.material.w);
     }
-    outColor = vec4(shadeSurface(albedo, fragMetallicRoughness, fragNormalWorld, fragPosWorld, fragPosLightSpace), 1.0);
+    outColor = vec4(shadeSurfaceAA(albedo, fragMetallicRoughness, fragNormalWorld, fragPosWorld, fragPosLightSpace, specAA), 1.0);
 }

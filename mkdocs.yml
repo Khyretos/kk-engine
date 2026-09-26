@@ -90,6 +90,7 @@ nav:
   - Reference:
       - Lua API: reference/lua-api.md
       - Optimization: OPTIMIZATION.md
+      - Rendering principles: RENDERING_PRINCIPLES.md
       - Benchmarks: BENCHMARKS.md
       - Performance notes: PERFORMANCE_NOTES.md
       - Scaling and platforms: SCALING.md
