@@ -9,6 +9,7 @@
 #include "kke/modules/PhysicsBridgeModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/SettingsModule.h"
+#include "kke/modules/UiModule.h"
 #if KKE_ENABLE_NET
 #include "kke/modules/NetModule.h"
 #include "kke/net/BitStream.h"
@@ -40,7 +41,7 @@ constexpr const char* kTraversalClips[] = { "SafetyVault", "ClimbUp_1m", "ClimbU
 // Wall run loops (UAL2): played as they are, the capsule does the moving.
 constexpr const char* kWallRunClips[] = { "WallRun_L_Loop", "WallRun_R_Loop" };
 // The breaking yard (glass, plank, stone wall).
-const glm::vec3 kYard(14.0f, 0.0f, -6.0f);
+using layout::kYard;
 // Climbs up walls this high (m) or more take the 2 m clip.
 constexpr float kClimbHighFrom = 1.6f;
 
@@ -104,6 +105,7 @@ std::vector<kke::ModuleDependency> ShowcaseModule::dependencies() const {
     return { { std::type_index(typeid(kke::RigidBodyModule)), true, "collision, crates and the character controller" },
              { std::type_index(typeid(kke::InputModule)), true, "actions: keyboard/mouse, controllers, rebinding" },
              { std::type_index(typeid(kke::ModelModule)), true, "draws the animated character" },
+             { std::type_index(typeid(kke::UiModule)), false, "the HUD and the pause menu (RmlUi)" },
 #if KKE_ENABLE_NET
              { std::type_index(typeid(kke::NetModule)), false, "multiplayer: joins before the crates spawn, so they follow the host" },
 #endif
@@ -133,8 +135,9 @@ void ShowcaseModule::init(kke::Application& app) {
         kke::InputModule::defineCharacterActions(in);
         in.defineAction({ "reset", "Reset crates + player", "Showcase", "game" });
         in.defineAction({ "panels", "Engine panels", "Showcase", "game" });
+        in.defineAction({ "menu", "Pause menu", "Showcase", "ui" }); // Esc is fixed (see onEvent); "ui": works in the menu
         in.addBinding(kke::InputModule::bind("reset", kke::InputModule::key(SDL_SCANCODE_R)));
-        in.addBinding(kke::InputModule::bind("reset", kke::InputModule::pad(SDL_GAMEPAD_BUTTON_START)));
+        in.addBinding(kke::InputModule::bind("menu", kke::InputModule::pad(SDL_GAMEPAD_BUTTON_START)));
         in.addBinding(kke::InputModule::bind("panels", kke::InputModule::key(SDL_SCANCODE_F1)));
         in.addBinding(kke::InputModule::bind("panels", kke::InputModule::pad(SDL_GAMEPAD_BUTTON_BACK)));
         // Left-click shoots, but not the click that grabs the mouse (see onEvent).
@@ -172,7 +175,8 @@ void ShowcaseModule::init(kke::Application& app) {
     m_rig.yaw = 0.0f;
     m_rig.pitch = -12.0f;
     app.window().setQuitOnEscape(false);
-    m_status = "Click the view to control the character (Esc releases the mouse)";
+    m_status = "Click the view to control the character (Esc: menu)";
+    buildHud();
     findScenes();
     // KKE_SCENE=town_block (or a path): start in that scene.
     if (const char* want = std::getenv("KKE_SCENE"); want && *want)
@@ -747,12 +751,14 @@ void ShowcaseModule::setCaptured(bool on) {
 // lets it go (Esc stays fixed so you can never lock yourself out).
 void ShowcaseModule::onEvent(const SDL_Event& e) {
     ImGuiIO& io = ImGui::GetIO();
-    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !m_captured && !io.WantCaptureMouse && e.button.button == SDL_BUTTON_LEFT) {
+    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !m_captured && !m_menuOpen && !io.WantCaptureMouse && !m_app->uiCapturesMouse() &&
+        e.button.button == SDL_BUTTON_LEFT) {
         setCaptured(true);
         m_swallowFire = true; // this click grabbed the mouse; it isn't a shot
         return;
     }
-    if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_ESCAPE) setCaptured(false);
+    // Esc: the pause menu (and the mouse back), or out of it again.
+    if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_ESCAPE) setMenuOpen(!m_menuOpen);
 }
 
 // Everything else goes through the input map (rebindable, controllers,
@@ -760,7 +766,7 @@ void ShowcaseModule::onEvent(const SDL_Event& e) {
 void ShowcaseModule::readActions(float dt) {
     kke::InputMap& in = m_input->map(0);
     // Typing in an ImGui field: the game doesn't hear the keys.
-    in.setContextEnabled("game", !ImGui::GetIO().WantTextInput);
+    in.setContextEnabled("game", !ImGui::GetIO().WantTextInput && !m_menuOpen); // the menu has the controls
     const bool mouseLeft = m_input->devices().value({ kke::SourceKind::MouseButton, 0, SDL_BUTTON_LEFT, 0 }, nullptr) > 0.5f;
     if (!mouseLeft) m_swallowFire = false;
 
@@ -924,6 +930,7 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     updateStressTest(dt);
     batchCrates();
     if (m_lava) m_lava->update();
+    updateHud(dt);
     kke::RigidWorld& w = m_rigid->world();
 
     // Crouch: a 1.0 m capsule. Standing up waits until there's headroom.
@@ -1274,6 +1281,7 @@ void ShowcaseModule::renderShadow(const kke::ShadowRenderContext& ctx) {
 }
 
 void ShowcaseModule::renderUi() {
+    if (m_menuOpen) return; // the pause menu has the screen
     const float s = ImGui::GetFontSize() / 13.0f;
     ImGui::SetNextWindowPos(ImVec2(10 * s, 10 * s), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(300 * s, 0), ImGuiCond_FirstUseEver);
@@ -1294,8 +1302,8 @@ void ShowcaseModule::renderUi() {
     if (m_wantCrouch != m_crouch) ImGui::TextColored(ImVec4(1, 0.8f, 0.3f, 1), "No room to stand up");
     ImGui::Text("Rigid bodies %zu (%zu awake), %.2f ms", w.bodyCount(), w.activeBodyCount(), w.lastStepMs());
     if (ImGui::CollapsingHeader("Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::TextUnformatted("Keyboard: WASD move, Shift sprint, Alt walk, Space jump / vault / climb,\nC crouch / let go, mouse look, wheel zoom, V view, left click shoot, E push, R reset,\nF1 engine panels, Esc frees the mouse.\n"
-                               "Controller: left stick move, right stick look, A jump / vault / climb, B crouch,\nL3 sprint, RT shoot, Y push, R3 view, Start reset, Back panels.");
+        ImGui::TextUnformatted("Keyboard: WASD move, Shift sprint, Alt walk, Space jump / vault / climb,\nC crouch / let go, mouse look, wheel zoom, V view, left click shoot, E push, R reset,\nF1 engine panels, Esc menu (frees the mouse).\n"
+                               "Controller: left stick move, right stick look, A jump / vault / climb, B crouch,\nL3 sprint, RT shoot, Y push, R3 view, Start menu, Back panels.");
         ImGui::SliderFloat("Mouse sensitivity", &m_mouseSensitivity, 0.02f, 0.5f, "%.2f deg/px");
         ImGui::SliderFloat("Stick / gyro speed", &m_stickSpeed, 45.0f, 540.0f, "%.0f deg/s");
         if (ImGui::Button("Left-handed keys (mirror)")) kke::InputModule::mirrorKeyboard(m_input->map(0));

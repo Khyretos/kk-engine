@@ -1,0 +1,32 @@
+<rml>
+<head>
+    <title>Showcase HUD</title>
+    <link type="text/rcss" href="theme.rcss"/>
+    <style>
+        /* Over the game: nothing here takes clicks. */
+        body { pointer-events: none; }
+        #move { position: absolute; left: 24dp; bottom: 28dp; padding: 8dp 14dp; border-radius: 8dp;
+                background-color: #0b0f1ccc; border-left: 3dp #56628e; font-size: 15dp; }
+        #move .state { font-weight: bold; }
+        #move .speed { color: #aab3cc; margin-left: 10dp; }
+        #move.trick { border-left-color: #ffcf5c; }
+        #station { position: absolute; left: 50%; bottom: 28dp; width: 460dp; margin-left: -230dp; padding: 10dp 16dp;
+                   border-radius: 10dp; text-align: center; animation: 0.3s cubic-out slide-up; }
+        #station .name { font-size: 13dp; letter-spacing: 3dp; color: #ffcf5c; }
+        #station .text { font-size: 15dp; color: #e8ecf4; margin-top: 3dp; }
+        #station .live { font-size: 13dp; color: #aab3cc; margin-top: 3dp; }
+        #esc { position: absolute; right: 24dp; bottom: 28dp; font-size: 12dp; color: #8b93aa; }
+    </style>
+</head>
+<body data-model="demo">
+    <div id="move" data-class-trick="trick">
+        <span class="state">{{move}}</span><span class="speed">{{speed}}</span>
+    </div>
+    <div id="station" class="glass" data-if="station != ''">
+        <div class="name">{{station}}</div>
+        <div class="text">{{station_text}}</div>
+        <div class="live" data-if="station_live != ''">{{station_live}}</div>
+    </div>
+    <div id="esc"><span class="keycap">Esc</span> menu</div>
+</body>
+</rml>

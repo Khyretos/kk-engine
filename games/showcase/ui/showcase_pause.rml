@@ -1,0 +1,40 @@
+<rml>
+<head>
+    <title>Paused</title>
+    <link type="text/rcss" href="theme.rcss"/>
+    <style>
+        body { decorator: radial-gradient(circle farthest-corner at 30% 50%, #05070e55 20%, #05070ee6 100%); }
+        #menu { position: absolute; left: 8%; top: 22%; width: 380dp; animation: 0.25s cubic-out fade-in; }
+        #logo { font-size: 13dp; letter-spacing: 6dp; color: #ffcf5c; }
+        #title { font-size: 44dp; font-weight: bold; line-height: 48dp; margin: 4dp 0 18dp 0; }
+        .item { display: block; width: 300dp; padding: 11dp 20dp; margin: 5dp 0; font-size: 18dp; color: #d6dcef; cursor: pointer;
+                border-left: 3dp #00000000; border-radius: 0 6dp 6dp 0; nav: auto;
+                decorator: linear-gradient(90deg, #1b2440cc, #1b244000);
+                transition: padding-left border-color color 0.15s cubic-out; }
+        .item:hover, .item:focus-visible { padding-left: 32dp; color: #ffffff; border-left-color: #ffcf5c;
+                                           decorator: linear-gradient(90deg, #3a4a86ee, #3a4a8600); }
+        .item .hint { float: right; font-size: 12dp; color: #8b93aa; margin-top: 4dp; }
+        #players { display: block; margin: 5dp 0; padding: 8dp 20dp; font-size: 15dp; color: #aab3cc; }
+        #players button { width: 34dp; padding: 5dp 0; margin: 0 2dp; nav: auto; }
+        #players button.on { decorator: linear-gradient(180deg, #4f7cff, #3553c9); border-color: #7a9bff; }
+        #note { margin-top: 16dp; font-size: 13dp; color: #8b93aa; width: 340dp; }
+    </style>
+</head>
+<body data-model="demo">
+    <div id="menu">
+        <div id="logo">KREATIVE KOMPAS ENGINE</div>
+        <div id="title">Paused</div>
+        <div class="item" id="resume" data-event-click="resume()">Resume <span class="hint">Esc</span></div>
+        <div class="item" data-event-click="restart()">Back to the start <span class="hint">R</span></div>
+        <div id="players">Players
+            <button data-class-on="players == 1" data-event-click="set_players(1)">1</button>
+            <button data-class-on="players == 2" data-event-click="set_players(2)">2</button>
+            <button data-class-on="players == 3" data-event-click="set_players(3)">3</button>
+            <button data-class-on="players == 4" data-event-click="set_players(4)">4</button>
+        </div>
+        <div class="item" data-event-click="toggle_panels()">Engine panels <span class="hint">{{panels ? 'shown' : 'hidden'}}  F1</span></div>
+        <div class="item" data-event-click="quit()">Quit</div>
+        <div id="note" data-if="online">Online: the game keeps running while this menu is open.</div>
+    </div>
+</body>
+</rml>
