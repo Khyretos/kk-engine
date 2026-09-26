@@ -3,10 +3,10 @@
 <text x="36" y="16" font-size="13" font-weight="bold" fill="#222">stress.peak_rss_mb</text>
 <text x="604" y="16" text-anchor="end" fill="#666">lower is better</text>
 <line x1="36" y1="144" x2="604" y2="144" stroke="#ccc"/>
-<text x="32" y="40.0" text-anchor="end" fill="#666">351</text>
+<text x="32" y="40.0" text-anchor="end" fill="#666">354</text>
 <text x="32" y="144.0" text-anchor="end" fill="#666">0.0000</text>
 <text x="36" y="160" fill="#666">09e1a9e</text>
-<text x="604" y="160" text-anchor="end" fill="#666">cc93bb6</text>
-<path d="M36.0,66.8 L320.0,57.0 L604.0,50.1" fill="none" stroke="#2563eb" stroke-width="2"/>
-<g fill="#2563eb"><circle cx="36.0" cy="66.8" r="2.5"><title>09e1a9e: 251</title></circle><circle cx="320.0" cy="57.0" r="2.5"><title>c1360ad: 283</title></circle><circle cx="604.0" cy="50.1" r="2.5"><title>cc93bb6: 305</title></circle></g>
+<text x="604" y="160" text-anchor="end" fill="#666">0f9f717</text>
+<path d="M36.0,67.5 L225.3,57.8 L414.7,50.9 L604.0,50.1" fill="none" stroke="#2563eb" stroke-width="2"/>
+<g fill="#2563eb"><circle cx="36.0" cy="67.5" r="2.5"><title>09e1a9e: 251</title></circle><circle cx="225.3" cy="57.8" r="2.5"><title>c1360ad: 283</title></circle><circle cx="414.7" cy="50.9" r="2.5"><title>cc93bb6: 305</title></circle><circle cx="604.0" cy="50.1" r="2.5"><title>0f9f717: 308</title></circle></g>
 </svg>
