@@ -64,13 +64,13 @@ Cheap things that compound. None of them need the engine to be done.
 | # | Step | Who | Cost |
 |---|---|---|---|
 | 2.1 | Ko-fi link in the repo (`.github/FUNDING.yml` → GitHub's "Sponsor" button) and a README badge | Claude (done) | free |
-| 2.2 | Pick a licence (#13). Recommended: MIT. Without one, nobody can legally use the engine | **Kees** decides, Claude adds it | free |
+| 2.2 | Licence (#13): MIT, chosen by Kees 2026-09-26 | Claude (done) | free |
 | 2.3 | Claim the name everywhere so nobody else takes it: itch.io, YouTube, Bluesky, Mastodon (mastodon.gamedev.place), Reddit, a Discord server | **Kees** (accounts must be yours) | free |
 | 2.4 | Also enable GitHub Sponsors (0% fees, needs a Stripe/bank payout profile) and put it next to Ko-fi in FUNDING.yml | **Kees** signs up, Claude adds the line | free |
 | 2.5 | Start a devlog: one short post per month (what landed, one GIF). Claude drafts from `git log` + BUGS.md + headless captures; Kees posts it | Claude drafts, **Kees** posts | free |
 | 2.6 | Build a GIF/screenshot library: every time a visual feature lands, capture it headlessly (Xvfb + ffmpeg) and keep the best in `docs/media/` | Claude | free |
 | 2.7 | Record the good footage on a real GPU (lavapipe renders correctly but slowly; trailers need 60 fps). OBS is free | **Kees** records, Claude writes the shot list and edits notes | free |
-| 2.8 | Keep the repo private or public? Public early = stars and feedback accumulate before launch, and the devlog can link to it. Recommended: **public as soon as #13 (licence) lands** | **Kees** | free |
+| 2.8 | Keep the repo private or public? Public early = stars and feedback accumulate before launch, and the devlog can link to it. Recommended: **public now that the licence (#13) is in** | **Kees** | free |
 
 ## 3. Launch gate — when we go
 
@@ -160,5 +160,5 @@ or investor pitch has real numbers.
 
 ---
 
-_Status: plan written 2026-09-26. Pre-launch step 2.1 done; everything else
+_Status: plan written 2026-09-26. Pre-launch steps 2.1 (Ko-fi) and 2.2 (MIT licence) done; everything else
 waits on the milestones above._

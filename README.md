@@ -34,6 +34,11 @@ icon (Linux/Windows via SDL3) and the Windows `.exe` icon. Sources and how
 to regenerate the 3D outlines: `assets/README.md` → Branding. Not done yet:
 a macOS `.icns` + bundle `Info.plist`.
 
+**Licence:** MIT (see `LICENSE`). Vendored and fetched libraries keep
+their own licences (e.g. `external/FEMFX/`, fonts in `assets/fonts/`).
+The Kreative Kompas logo and banner are the project's branding; Synty
+packs are never part of the repo.
+
 **Support and plans:** KKE is built by one person. If you want to help it
 exist, [Ko-fi](https://ko-fi.com/khyretos) is the place. How the engine
 will reach people (free-only launch plan, funding ladder) is in
