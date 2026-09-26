@@ -335,6 +335,25 @@ FetchContent_MakeAvailable(yaml_cpp)
 set_target_properties(yaml-cpp PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # ---------------------------------------------------------------------------
+# meshoptimizer — mesh LODs for crowds (kke/MeshLod.h): welds duplicate
+# vertices and simplifies a character to a fraction of its triangles while
+# keeping each vertex's bone weights. MIT, Arseny Kapoulkine. Only used
+# inside the engine library (PRIVATE).
+# ---------------------------------------------------------------------------
+set(MESHOPT_BUILD_DEMO OFF CACHE BOOL "" FORCE)
+set(MESHOPT_BUILD_GLTFPACK OFF CACHE BOOL "" FORCE)
+set(MESHOPT_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    meshoptimizer
+    GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
+    GIT_TAG        v1.3
+    GIT_SHALLOW    TRUE
+    SYSTEM
+)
+FetchContent_MakeAvailable(meshoptimizer)
+set_target_properties(meshoptimizer PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# ---------------------------------------------------------------------------
 # miniaudio — audio output device on every platform (ALSA/PulseAudio/
 # PipeWire/JACK, WASAPI, CoreAudio, AAudio/OpenSL, Web Audio) plus WAV/
 # FLAC/MP3 decoding. Public domain / MIT-0, one .c/.h pair. Only the
