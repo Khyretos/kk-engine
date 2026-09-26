@@ -45,6 +45,10 @@ void EngineSettings::sanitize() {
         gameplay.difficulty = "normal";
     }
     gameplay.maxPhysicsStepsPerFrame = std::clamp(gameplay.maxPhysicsStepsPerFrame, 1, 8);
+    performance.workerThreads = std::clamp(performance.workerThreads, 0, 256);
+    performance.renderScale = std::clamp(performance.renderScale, 0.5f, 1.0f);
+    performance.backgroundFrameRate = std::clamp(performance.backgroundFrameRate, 0.0f, 240.0f);
+    if (performance.backgroundFrameRate > 0.0f && performance.backgroundFrameRate < 5.0f) performance.backgroundFrameRate = 5.0f;
 }
 
 bool EngineSettings::operator==(const EngineSettings& o) const {
@@ -58,7 +62,10 @@ bool EngineSettings::operator==(const EngineSettings& o) const {
            controls.keyBindings == o.controls.keyBindings &&
            gameplay.difficulty == o.gameplay.difficulty &&
            gameplay.maxPhysicsStepsPerFrame == o.gameplay.maxPhysicsStepsPerFrame &&
-           gameplay.showDamageNumbers == o.gameplay.showDamageNumbers && custom == o.custom;
+           gameplay.showDamageNumbers == o.gameplay.showDamageNumbers &&
+           performance.useEverything == o.performance.useEverything && performance.workerThreads == o.performance.workerThreads &&
+           performance.renderScale == o.performance.renderScale &&
+           performance.backgroundFrameRate == o.performance.backgroundFrameRate && custom == o.custom;
 }
 
 std::string settingsToJson(const EngineSettings& s) {
@@ -81,6 +88,10 @@ std::string settingsToJson(const EngineSettings& s) {
     j["gameplay"] = {
         {"difficulty", s.gameplay.difficulty}, {"maxPhysicsStepsPerFrame", s.gameplay.maxPhysicsStepsPerFrame},
         {"showDamageNumbers", s.gameplay.showDamageNumbers},
+    };
+    j["performance"] = {
+        {"useEverything", s.performance.useEverything}, {"workerThreads", s.performance.workerThreads},
+        {"renderScale", s.performance.renderScale}, {"backgroundFrameRate", s.performance.backgroundFrameRate},
     };
     j["custom"] = s.custom;
     return j.dump(2);
@@ -122,6 +133,11 @@ EngineSettings settingsFromJson(const std::string& text) {
     readIfPresent(gp, "difficulty", s.gameplay.difficulty);
     readIfPresent(gp, "maxPhysicsStepsPerFrame", s.gameplay.maxPhysicsStepsPerFrame);
     readIfPresent(gp, "showDamageNumbers", s.gameplay.showDamageNumbers);
+    const auto& pf = section(j, "performance");
+    readIfPresent(pf, "useEverything", s.performance.useEverything);
+    readIfPresent(pf, "workerThreads", s.performance.workerThreads);
+    readIfPresent(pf, "renderScale", s.performance.renderScale);
+    readIfPresent(pf, "backgroundFrameRate", s.performance.backgroundFrameRate);
     readIfPresent(j, "custom", s.custom);
     s.sanitize();
     return s;

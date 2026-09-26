@@ -17,6 +17,11 @@ namespace kke {
 Application::Application(const std::string& title, uint32_t width, uint32_t height, float fixedUpdateHz)
     : m_window(title, width, height), m_fixedDt(1.0f / fixedUpdateHz) {
     log::init(title);
+    {
+        EngineSettings defaults;
+        if (const char* all = std::getenv("KKE_USE_EVERYTHING"); all && *all == '1') defaults.performance.useEverything = true;
+        setResourceBudget(computeBudget(defaults, usableCpuCount()));
+    }
     m_renderer = std::make_unique<Renderer>(m_window);
     m_lightingBuffer = std::make_unique<LightingBuffer>(m_renderer->device());
 
@@ -492,11 +497,27 @@ void Application::run() {
 
         for (Module* m : m_initOrder) safeInvoke(m, "frameEnd", [&] { m->frameEnd(); });
 
-        if (m_frameRateLimit > 0.0f) {
-            auto frameEnd = lastFrameTime + std::chrono::duration<double>(1.0 / m_frameRateLimit);
+        // In the background the governor's cap wins (a paused game in
+        // another window shouldn't keep a core and the GPU busy).
+        float limit = m_frameRateLimit;
+        const SDL_WindowFlags flags = SDL_GetWindowFlags(m_window.handle());
+        const bool background = !(flags & SDL_WINDOW_INPUT_FOCUS) || (flags & SDL_WINDOW_MINIMIZED);
+        if (background && m_budget.backgroundFrameRate > 0.0f)
+            limit = limit > 0.0f ? std::min(limit, m_budget.backgroundFrameRate) : m_budget.backgroundFrameRate;
+        m_effectiveLimit = limit;
+        if (limit > 0.0f) {
+            auto frameEnd = lastFrameTime + std::chrono::duration<double>(1.0 / limit);
             std::this_thread::sleep_until(frameEnd);
         }
     }
+}
+
+void Application::setResourceBudget(const ResourceBudget& budget) {
+    m_budget = budget;
+    m_frameRateLimit = budget.frameRateLimit;
+    log::get("Governor")->info("budget: {} worker thread(s), frame cap {}, background cap {}, render scale {:.2f}{}", budget.workerThreads,
+                               budget.frameRateLimit, budget.backgroundFrameRate, budget.renderScale,
+                               budget.useEverything ? " (use everything)" : "");
 }
 
 VkDescriptorSet Application::textureSet(const std::string& path) {

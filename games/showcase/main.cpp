@@ -3,6 +3,7 @@
 #include "kke/modules/InputModule.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/RigidBodyModule.h"
+#include "kke/modules/SettingsModule.h"
 #include "kke/modules/StatsModule.h"
 #if KKE_ENABLE_FEMFX
 #include "kke/modules/PhysicsModule.h"
@@ -23,6 +24,9 @@ int main() {
         app.lighting().lights[1].color = glm::vec3(0.55f, 0.65f, 0.85f);
         app.lighting().lights[1].intensity = 0.3f;
 
+        // First, so the resource governor's budget (threads, frame caps)
+        // is set before physics starts its workers.
+        app.addModule<kke::SettingsModule>("settings.json");
         app.addModule<kke::InputModule>("input.json");
         std::vector<kke::Module*> panels;
         panels.push_back(&app.addModule<kke::RigidBodyModule>());

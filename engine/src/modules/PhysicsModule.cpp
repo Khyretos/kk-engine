@@ -351,6 +351,9 @@ void PhysicsModule::init(Application& app) {
     }
 #endif
     int numWorkers = (hwThreads == 0) ? 1 : static_cast<int>(hwThreads);
+    // The resource governor's share of those (all of them only with
+    // "use everything"); KKE_PHYSICS_THREADS still overrides.
+    numWorkers = std::max(1, std::min(numWorkers, app.resourceBudget().workerThreads));
     m_hardwareThreads = std::thread::hardware_concurrency();
     if (const char* forced = std::getenv("KKE_PHYSICS_THREADS")) {
         int n = std::atoi(forced);

@@ -48,6 +48,16 @@ struct EngineSettings {
         bool showDamageNumbers = true;
     } gameplay;
 
+    // The resource governor's inputs (kke/ResourceGovernor.h): by default
+    // the engine takes what it needs and leaves the rest of the machine
+    // alone; "use everything" lifts that.
+    struct Performance {
+        bool useEverything = false;
+        int workerThreads = 0;            // 0 = governor decides; takes effect on restart
+        float renderScale = 1.0f;         // 0.5..1: fewer pixels for the 3D view
+        float backgroundFrameRate = 15.0f; // cap while unfocused (0 = no cap)
+    } performance;
+
     // Game-specific extras, saved and loaded untouched.
     std::map<std::string, std::string> custom;
 

@@ -6,6 +6,7 @@
 #include "kke/Log.h"
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/modules/InputModule.h"
+#include "kke/modules/SettingsModule.h"
 #if KKE_ENABLE_FEMFX
 #include "kke/modules/PhysicsModule.h"
 #endif
@@ -61,6 +62,12 @@ void ShowcaseModule::init(kke::Application& app) {
     m_rigid = app.getModule<kke::RigidBodyModule>();
     m_models = app.getModule<kke::ModelModule>();
     m_input = app.getModule<kke::InputModule>();
+    // The showcase is a developer demo: its ImGui panel is the UI, so the
+    // "debug overlay" setting stays on here.
+    if (kke::SettingsModule* sm = app.getModule<kke::SettingsModule>()) {
+        sm->settings().graphics.showDebugOverlay = true;
+        sm->apply();
+    }
     {
         kke::InputMap& in = m_input->map(0);
         kke::InputModule::defineCharacterActions(in);
@@ -792,6 +799,20 @@ void ShowcaseModule::renderUi() {
         ImGui::SliderFloat("Vault clearance", &ms.vaultClearance, 0.0f, 0.6f, "%.2f m");
         ImGui::SliderFloat("Climb time", &ms.climbTime, 0.3f, 2.0f, "%.2f s");
         ImGui::TextWrapped("Parkour lane at x = 20: fence and low wall (vault), block (climb), 2.1 m ledge (sprint, then climb), 3 m wall (no).");
+    }
+    if (ImGui::CollapsingHeader("Performance")) {
+        const kke::ResourceBudget& b = m_app->resourceBudget();
+        ImGui::Text("%d worker thread(s) of %u cores, frame cap %s, now %.0f", b.workerThreads, kke::usableCpuCount(),
+                    b.frameRateLimit > 0.0f ? std::to_string(static_cast<int>(b.frameRateLimit)).c_str() : "vsync/none",
+                    m_app->effectiveFrameRateLimit());
+        if (kke::SettingsModule* sm = m_app->getModule<kke::SettingsModule>()) {
+            kke::EngineSettings::Performance& p = sm->settings().performance;
+            bool changed = ImGui::Checkbox("Use everything (all cores, no caps)", &p.useEverything);
+            changed |= ImGui::SliderFloat("Background frame cap", &p.backgroundFrameRate, 0.0f, 60.0f, "%.0f fps");
+            changed |= ImGui::SliderInt("Worker threads (0 = auto, restart)", &p.workerThreads, 0, static_cast<int>(kke::usableCpuCount()) * 2);
+            if (changed) sm->apply();
+            if (ImGui::Button("Save settings")) sm->save();
+        }
     }
     if (ImGui::CollapsingHeader("Character")) {
         ImGui::Checkbox("Feet on the ground (foot IK)", &m_footIk);

@@ -23,7 +23,7 @@ void SettingsModule::apply() {
     const auto& g = m_settings.graphics;
     if (m_app->window().isFullscreen() != g.fullscreen) m_app->window().setFullscreen(g.fullscreen);
     m_app->renderer().setVSync(g.vsync);
-    m_app->setFrameRateLimit(g.frameRateLimit);
+    m_app->setResourceBudget(computeBudget(m_settings, usableCpuCount())); // sets the frame cap too
     m_app->camera().fovDegrees = g.fieldOfView;
     m_app->lighting().shadowsEnabled = g.shadows;
     m_app->lighting().ambientColor = m_baseAmbient * g.brightness;

@@ -6,6 +6,7 @@
 #include "kke/Module.h"
 #include "kke/EngineError.h"
 #include "kke/LightingBuffer.h"
+#include "kke/ResourceGovernor.h"
 #include "kke/ShadowMap.h"
 #include "kke/Texture.h"
 
@@ -220,6 +221,16 @@ public:
     void setFrameRateLimit(float fps) { m_frameRateLimit = fps; }
     float frameRateLimit() const { return m_frameRateLimit; }
 
+    // The resource governor's budget (kke/ResourceGovernor.h). Starts
+    // governed from default settings (KKE_USE_EVERYTHING=1 lifts it);
+    // SettingsModule replaces it from the player's settings. Modules read
+    // workerThreads when they start; the frame caps apply every frame,
+    // with backgroundFrameRate while the window is unfocused or minimized.
+    void setResourceBudget(const ResourceBudget& budget);
+    const ResourceBudget& resourceBudget() const { return m_budget; }
+    // The cap the last frame actually used (0 = none).
+    float effectiveFrameRateLimit() const { return m_effectiveLimit; }
+
     // The ImGui developer overlay (Performance, Physics, Camera panels...).
     DebugUi& debugUi() { return *m_debugUi; }
     bool uiCapturesMouse() const { return m_uiCapturesMouse; }
@@ -301,6 +312,8 @@ private:
     bool m_paused = false;
     bool m_uiCapturesMouse = false;
     float m_frameRateLimit = 0.0f;
+    ResourceBudget m_budget;
+    float m_effectiveLimit = 0.0f;
     bool m_stepRequested = false;
 
     std::unordered_set<Module*> m_faultedModules; // see safeInvoke() — never called again once here

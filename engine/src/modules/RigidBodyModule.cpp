@@ -1,5 +1,6 @@
 #include "kke/modules/RigidBodyModule.h"
 
+#include "kke/Application.h"
 #include "kke/Log.h"
 
 #include <imgui.h>
@@ -11,9 +12,11 @@ namespace kke {
 
 RigidBodyModule::RigidBodyModule(const RigidWorld::Settings& settings) : m_settings(settings) {}
 
-void RigidBodyModule::init(Application&) {
-    // KKE_RIGID_THREADS caps Jolt's worker threads (resource governor,
-    // ACTION_PLAN.md 1.6; 0 = run on the calling thread only).
+void RigidBodyModule::init(Application& app) {
+    // Threads from the resource governor (Jolt's pool plus the calling
+    // thread), unless the game set a count. KKE_RIGID_THREADS overrides
+    // both (0 = run on the calling thread only).
+    if (m_settings.threads < 0) m_settings.threads = std::max(0, app.resourceBudget().workerThreads - 1);
     if (const char* t = std::getenv("KKE_RIGID_THREADS")) m_settings.threads = std::atoi(t);
     m_world = std::make_unique<RigidWorld>(m_settings);
     log::get(name())->info("Jolt rigid-body world ready ({} max bodies)", m_settings.maxBodies);
