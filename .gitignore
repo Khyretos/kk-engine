@@ -26,3 +26,4 @@ assets/animations/*.glb
 
 # The docs site (mkdocs build), see docs/DOCS_SITE.md
 site/
+__pycache__/
