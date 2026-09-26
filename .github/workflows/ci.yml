@@ -22,6 +22,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Every third-party library, tool, image, font and action must be listed,
+  # with its licence, in docs/DEPENDENCIES.md: this fails when one is added
+  # without its row.
+  dependencies:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Every dependency is in docs/DEPENDENCIES.md
+        run: python3 -W error tools/ci/check_dependencies.py
+
   # Shipping builds (-DKKE_SHIPPING=ON, docs/ANTI_CHEAT.md) compile the
   # developer tools out: this keeps that configuration building with zero
   # warnings and its tests passing (DevTools.* checks the debug switches

@@ -65,7 +65,9 @@ Everything CMake puts in `bin/` (demos, tools, compiled shaders, fonts,
 branding, game manifests) except the unit-test binary, logs, `imgui.ini` and
 link by-products, plus `README.txt`, `LICENSE.txt` and
 `THIRD_PARTY_LICENSES.txt` (the licence of every bundled library, collected
-from the build's `_deps/` and `external/FEMFX`).
+by `tools/packaging/third_party_licenses.sh` from the build's `_deps/`,
+`external/FEMFX`, the fonts, `LICENSES/` and, on Windows, the MinGW-w64
+runtime; the full list is [DEPENDENCIES.md](DEPENDENCIES.md)).
 
 **Paid art packs are never shipped.** Synty packs are found at run time from
 `assets/synty/` or `KKE_ASSETS_DIR` and are never copied into `bin/`;

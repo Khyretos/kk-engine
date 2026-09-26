@@ -16,6 +16,10 @@
 // AgX, as fitted by Benjamin Wrensch to Troy Sobotka's reference:
 // into a slightly desaturated working space, log2 encode over a fixed EV
 // range, a polynomial sigmoid, back out, then to linear.
+// Matrices, EV range and sigmoid coefficients from Wrensch's "Minimal AgX
+// Implementation", MIT License, Copyright (c) 2024 Missing Deadlines
+// (Benjamin Wrensch); full notice in LICENSES/AgX-minimal-MIT.txt
+// (docs/DEPENDENCIES.md).
 vec3 agxSigmoid(vec3 x) {
     vec3 x2 = x * x;
     vec3 x4 = x2 * x2;
@@ -39,6 +43,8 @@ vec3 toneMapAgX(vec3 c) {
     return pow(max(v, vec3(0.0)), vec3(2.2)); // the sigmoid's output is display-encoded
 }
 
+// ACES: Krzysztof Narkowicz's five-coefficient fit ("ACES Filmic Tone
+// Mapping Curve", 2016), credited in docs/DEPENDENCIES.md.
 vec3 toneMapAces(vec3 c) {
     c *= 0.6; // the fit expects this pre-scale to match the reference's exposure
     return clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0);

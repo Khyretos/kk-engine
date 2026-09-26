@@ -157,8 +157,10 @@ FetchContent_MakeAvailable(glm)
 FetchContent_Declare(
     stb
     GIT_REPOSITORY https://github.com/nothings/stb.git
-    GIT_TAG        master
-    GIT_SHALLOW    TRUE
+    # stb has no releases: pinned to a commit so every build compiles (and
+    # docs/DEPENDENCIES.md describes) the same code. No GIT_SHALLOW: a
+    # shallow clone can only check out a branch or tag.
+    GIT_TAG        2c980bb59875b0d32144a71867fbdebb2f77cd20 # master, 2026-08-01
 )
 FetchContent_MakeAvailable(stb)
 add_library(stb INTERFACE)
