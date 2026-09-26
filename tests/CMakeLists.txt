@@ -37,6 +37,7 @@ add_executable(kke_tests
     test_audio.cpp
     test_footsteps.cpp
     test_room_acoustics.cpp
+    test_thumbnails.cpp
     test_logo_mesh.cpp
     test_jiggle.cpp
     test_rml_data_binding.cpp

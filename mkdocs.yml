@@ -1,0 +1,101 @@
+# The docs site: https://khyretos.github.io/kk-engine/ (docs/DOCS_SITE.md).
+# Built from docs/ by .github/workflows/docs.yml on every push to main.
+# Locally: pip install -r tools/docs_site/requirements.txt && mkdocs serve
+site_name: Kreative Kompas Engine
+site_description: A modular, open-source Vulkan game engine in C++17, with Lua scripting.
+site_url: https://khyretos.github.io/kk-engine/
+repo_url: https://github.com/Khyretos/kk-engine
+repo_name: Khyretos/kk-engine
+edit_uri: edit/main/docs/
+copyright: MIT licence. KKE is written by Claude (Anthropic) working in the repository.
+
+docs_dir: docs
+# docs/README.md is the index for people browsing docs/ on GitHub; the site
+# has its own front page (index.md).
+exclude_docs: |
+  README.md
+
+hooks:
+  - tools/docs_site/hooks.py
+
+theme:
+  name: material
+  logo: https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png
+  favicon: https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep orange
+      accent: amber
+      toggle: { icon: material/weather-night, name: Dark mode }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep orange
+      accent: amber
+      toggle: { icon: material/weather-sunny, name: Light mode }
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.keys
+
+plugins:
+  - search
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/Khyretos/kk-engine
+    - icon: simple/kofi
+      link: https://ko-fi.com/khyretos
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Install and build: BUILDING.md
+      - Make your own game: tutorials/getting-started.md
+  - Tutorials:
+      - tutorials/index.md
+      - 1. Walk around: tutorials/01-walk-around.md
+      - 2. Break things: tutorials/02-break-things.md
+      - 3. Script a pickup: tutorials/03-pickups.md
+      - 4. Add sound: tutorials/04-sound.md
+  - Guides:
+      - Scripting in Lua: SCRIPTING.md
+      - Movement: MOVEMENT.md
+      - Input: INPUT.md
+      - Audio: AUDIO.md
+      - Networking: NETWORKING.md
+      - Scenes: SCENES.md
+      - Jiggle physics: JIGGLE.md
+      - Physics bridge: PHYSICS_BRIDGE.md
+  - Reference:
+      - Lua API: reference/lua-api.md
+      - Optimization: OPTIMIZATION.md
+      - Benchmarks: BENCHMARKS.md
+      - Performance notes: PERFORMANCE_NOTES.md
+      - Scaling and platforms: SCALING.md
+      - Hardware tests: HARDWARE_TESTS.md
+  - Project:
+      - Devlog: devlog/index.md
+      - Going to market: GO_TO_MARKET.md
+      - Development history: HISTORY.md
+      - This site: DOCS_SITE.md

@@ -56,6 +56,15 @@ void Buffer::upload(const void* data, VkDeviceSize size) {
     vmaUnmapMemory(m_device.allocator(), m_allocation);
 }
 
+void Buffer::download(void* out, VkDeviceSize size) const {
+    void* mapped = nullptr;
+    VK_CHECK(vmaMapMemory(m_device.allocator(), m_allocation, &mapped));
+    // Non-coherent memory needs the CPU's view refreshed first.
+    VK_CHECK(vmaInvalidateAllocation(m_device.allocator(), m_allocation, 0, size));
+    std::memcpy(out, mapped, static_cast<size_t>(size));
+    vmaUnmapMemory(m_device.allocator(), m_allocation);
+}
+
 Buffer Buffer::createDeviceLocal(VulkanDevice& device, const void* data, VkDeviceSize size, VkBufferUsageFlags usage) {
     Buffer staging(device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
     staging.upload(data, size);

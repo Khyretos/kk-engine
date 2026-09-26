@@ -299,7 +299,7 @@ ModelData loadModel(const std::string& path, const ModelLoadOptions& options) {
             }
         }
     }
-    if (model.meshes.empty()) throw std::runtime_error("loadModel: '" + path + "' contains no triangle meshes");
+    if (model.meshes.empty() && !options.allowNoMeshes) throw std::runtime_error("loadModel: '" + path + "' contains no triangle meshes");
 
     // ---- animations (skinned models only), sampled per bone
     if (options.loadAnimations && !model.bones.empty()) {

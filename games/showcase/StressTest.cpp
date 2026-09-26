@@ -207,6 +207,16 @@ void ShowcaseModule::finishStressTest() {
         { "femfx", "not built" },
 #endif
     };
+    // What was running (the audit asked for it: a report must say which
+    // modules its numbers include) and any VRAM cap (docs/BENCHMARKS.md).
+    std::string modules;
+    for (const kke::Module* m : m_app->findCapability<kke::Module>()) {
+        if (!modules.empty()) modules += ", ";
+        modules += m->name();
+    }
+    r.config.emplace_back("modules", modules);
+    const char* vram = std::getenv("KKE_VRAM_BUDGET_MB");
+    r.config.emplace_back("vram_budget_mb", vram && *vram ? vram : "none (whole GPU)");
     m_stressStats.fill(r);
     r.results.emplace_back("peak_rss_mb", kke::peakResidentMemoryMb());
     const char* dirEnv = std::getenv("KKE_BENCH_DIR");

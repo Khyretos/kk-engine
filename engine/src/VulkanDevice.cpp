@@ -7,6 +7,7 @@
 #include <VkProfilerEXT.h>
 #endif
 
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <set>
@@ -386,6 +387,24 @@ void VulkanDevice::createAllocator() {
     allocatorInfo.instance = m_instance;
     allocatorInfo.pVulkanFunctions = &vulkanFunctions;
     allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_2;
+
+    // KKE_VRAM_BUDGET_MB=512: behave as if the GPU had only that much
+    // video memory (docs/BENCHMARKS.md "Hardware profiles"). Docker can
+    // limit cores and RAM but not VRAM, so the low-end profiles cap VMA's
+    // device-local heaps instead: allocations past the cap fail exactly as
+    // they would on the smaller card, and VMA's budget queries report it.
+    VkPhysicalDeviceMemoryProperties memory{};
+    vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memory);
+    std::vector<VkDeviceSize> heapLimits(memory.memoryHeapCount, VK_WHOLE_SIZE);
+    if (const char* budget = std::getenv("KKE_VRAM_BUDGET_MB"); budget && *budget) {
+        const VkDeviceSize bytes = VkDeviceSize(std::strtoull(budget, nullptr, 10)) * 1024u * 1024u;
+        if (bytes > 0) {
+            for (uint32_t i = 0; i < memory.memoryHeapCount; ++i)
+                if (memory.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) heapLimits[i] = std::min(bytes, memory.memoryHeaps[i].size);
+            allocatorInfo.pHeapSizeLimit = heapLimits.data();
+            log::get("VulkanDevice")->info("VRAM budget: device-local heaps capped at {} MB (KKE_VRAM_BUDGET_MB)", bytes / (1024u * 1024u));
+        }
+    }
 
     VK_CHECK(vmaCreateAllocator(&allocatorInfo, &m_allocator));
 }

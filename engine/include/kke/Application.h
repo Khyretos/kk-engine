@@ -212,6 +212,7 @@ public:
     // separate descriptor set using the same materialTextureSetLayout()
     // instead of this one.
     VkDescriptorSet defaultTextureDescriptorSet() const { return m_defaultTextureDescriptorSet; }
+    VkDescriptorSet shadowMapDescriptorSet() const { return m_shadowMapDescriptorSet; }
     // The engine-wide image cache: loads an image file once (decode + mip
     // chain) and returns a descriptor set for materialTextureSetLayout().
     // Every module asking for the same path shares one GPU copy — a Synty

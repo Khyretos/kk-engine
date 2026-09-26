@@ -22,6 +22,9 @@ public:
     Buffer& operator=(Buffer&& other) noexcept;
 
     void upload(const void* data, VkDeviceSize size);
+    // Reads `size` bytes back from a host-visible buffer (e.g. a
+    // GPU_TO_CPU readback target), after the GPU is done writing it.
+    void download(void* out, VkDeviceSize size) const;
 
     VkBuffer handle() const { return m_buffer; }
 

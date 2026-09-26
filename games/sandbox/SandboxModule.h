@@ -9,6 +9,7 @@
 #include "kke/VoxelTets.h"
 #include "kke/modules/DebugDrawModule.h"
 #include "kke/modules/ModelModule.h"
+#include "kke/modules/ThumbnailModule.h"
 
 #include <glm/glm.hpp>
 #include <string>
@@ -156,11 +157,15 @@ private:
     const kke::CatalogPack* packOf(const std::string& asset, const std::string& pack = {}) const;
     void lookUi();
     void assetBrowserUi();
+    void assetGridUi(float uiScale);
     void inspectorUi();
     void folderNotFoundUi();
 
     kke::Application* m_app = nullptr;
     kke::ModelModule* m_models = nullptr;
+    kke::ThumbnailModule* m_thumbs = nullptr; // optional: the Assets panel shows a list without it
+    bool m_gridView = true;
+    float m_thumbSize = 88.0f;
     kke::DebugDrawModule* m_debug = nullptr;
     kke::IRagdollPhysics* m_ragdolls = nullptr;
     bool m_hasFemfx = false;

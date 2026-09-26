@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or help
+    url: https://github.com/Khyretos/kk-engine/discussions/categories/q-a
+    about: Ask how to build, use or extend the engine in Discussions (Q&A).
+  - name: Idea or early proposal
+    url: https://github.com/Khyretos/kk-engine/discussions/categories/ideas
+    about: Talk an idea through in Discussions before it becomes a feature request.
+  - name: Security vulnerability
+    url: https://github.com/Khyretos/kk-engine/security/advisories/new
+    about: Report it privately, never in a public issue (see SECURITY.md).

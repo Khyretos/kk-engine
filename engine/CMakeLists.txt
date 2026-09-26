@@ -79,6 +79,8 @@ set(ENGINE_SOURCES
     src/modules/PhysicsModuleRubble.cpp
     src/modules/SettingsModule.cpp
     src/modules/ModelModule.cpp
+    src/modules/ThumbnailModule.cpp
+    src/Thumbnails.cpp
     src/modules/DebugDrawModule.cpp
 )
 
@@ -119,6 +121,8 @@ set(ENGINE_HEADERS
     include/kke/FluidSurface.h
     include/kke/Footsteps.h
     include/kke/RoomAcoustics.h
+    include/kke/Thumbnails.h
+    include/kke/modules/ThumbnailModule.h
     include/kke/TetMeshAsset.h
     include/kke/LightingBuffer.h
     include/kke/ShadowMap.h

@@ -1,0 +1,117 @@
+name: Benchmarks
+
+# The headless benchmark suite (docs/BENCHMARKS.md): kke_bench's CPU cases
+# plus the showcase stress test under Xvfb + lavapipe, on a Release build.
+#
+# Pushes to main append the numbers to the history on the
+# `benchmark-data` branch (history.jsonl, a README with trend charts);
+# pull requests run a quick pass and only compare. Either way the job
+# summary shows each number against the recent median. Nothing here fails
+# on a slow number: shared runners are too noisy for that. It fails when
+# a benchmark crashes, doesn't report, or the build has a warning.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# One run per ref at a time. On main the history is appended in commit
+# order, so a newer push waits instead of cancelling a run mid-write.
+concurrency:
+  group: benchmarks-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: write
+
+jobs:
+  benchmarks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            cmake ninja-build \
+            libvulkan-dev vulkan-tools mesa-vulkan-drivers \
+            glslang-tools spirv-tools \
+            libfreetype-dev libudev-dev libdbus-1-dev \
+            fonts-noto-core xvfb \
+            libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev \
+            pkg-config libgl1-mesa-dev libegl1-mesa-dev
+
+      - name: Configure (Release, warnings are errors)
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_TESTS=OFF -DKKE_ENABLE_VALIDATION=OFF
+
+      - name: Build kke_bench and the showcase
+        run: cmake --build build -j --target kke_bench kke_demo
+
+      - name: kke_bench (headless CPU suite)
+        run: |
+          mode=""
+          [ "${{ github.event_name }}" = "pull_request" ] && mode="--quick"
+          ./build/bin/kke_bench $mode --out "$PWD/bench-out"
+
+      - name: Stress test (showcase, Xvfb + lavapipe)
+        run: |
+          Xvfb :99 -screen 0 1280x720x24 &
+          sleep 2
+          cd build/bin
+          rm -f imgui.ini
+          set +e
+          DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_SKIP_INTRO=1 KKE_AUDIO=off KKE_STRESS_TEST=1 KKE_BENCH_DIR="$GITHUB_WORKSPACE/bench-out" \
+            timeout 300 ./kke_demo > stress.log 2>&1
+          code=$?
+          set -e
+          tail -5 stress.log
+          if [ "$code" -ne 0 ] || grep -qi "Fatal error" stress.log; then
+            echo "stress test failed (exit $code)"; tail -60 stress.log; exit 1
+          fi
+          ls "$GITHUB_WORKSPACE"/bench-out/stress_*.json > /dev/null || { echo "stress test wrote no report"; tail -60 stress.log; exit 1; }
+
+      # The history lives on its own branch so these commits never touch
+      # main (seven people and agents push to main; a bot commit per push
+      # there would be noise and merge churn).
+      - name: Fetch the benchmark history
+        run: |
+          if git fetch --depth=1 origin benchmark-data 2>/dev/null; then
+            git worktree add history FETCH_HEAD
+          else
+            mkdir history
+          fi
+
+      - name: Compare (pull requests)
+        if: github.event_name == 'pull_request'
+        run: |
+          python3 benchmarks/track.py --dry-run --history history --commit "${{ github.sha }}" \
+            --date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --ref "${{ github.ref }}" bench-out/*.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record and compare (main)
+        if: github.event_name != 'pull_request'
+        run: |
+          python3 benchmarks/track.py --history history --commit "${{ github.sha }}" \
+            --date "$(git log -1 --format=%cI)" --ref "${{ github.ref }}" bench-out/*.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Push the history to the benchmark-data branch
+        if: github.event_name != 'pull_request'
+        run: |
+          cd history
+          [ -d .git ] || [ -f .git ] || { git init -q; git checkout -q --orphan benchmark-data; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Benchmarks for ${GITHUB_SHA::10}"
+          git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" HEAD:refs/heads/benchmark-data
+
+      - name: Upload the reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-reports
+          path: |
+            bench-out/
+            build/bin/stress.log
