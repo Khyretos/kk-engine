@@ -59,7 +59,9 @@ sudo apt-get install -y build-essential cmake ninja-build git \
     libvulkan-dev vulkan-tools mesa-vulkan-drivers glslang-tools \
     libdrm-dev libxkbcommon-dev libx11-dev libxext-dev libxrandr-dev \
     libxcursor-dev libxi-dev libxinerama-dev libwayland-dev \
-    libfreetype-dev pkg-config libudev-dev libdbus-1-dev
+    libfreetype-dev pkg-config libudev-dev libdbus-1-dev \
+    libgl1-mesa-dev libegl1-mesa-dev libasound2-dev libdecor-0-dev \
+    libexpat1-dev libxml2-dev
 
 git clone https://github.com/Khyretos/kk-engine.git
 cd kk-engine

@@ -73,11 +73,14 @@ through the person you clicked. Each frame the bat's segment (hands to
 tip) is swept through the angles it covered, so a fast swing on a slow
 frame still hits. What it hits gets the swing's speed at that point
 (capped at 9 m/s), a little away from you and up, and ragdolls through
-`kke::IRagdollPhysics`, so any physics module that ragdolls (FEMFX today,
-Jolt next) works without changes.
+`kke::IRagdollPhysics`, so any physics module that ragdolls works without
+changes; the sandbox picks the best one (`kke::bestRagdollPhysics`: Jolt,
+with joint limits and colliding limbs, over FEMFX).
 
-Ragdolls need a physics module: build with `--preset everything` (FEMFX)
-until the Jolt ragdolls land. Without one the bat still swings and says so.
+Ragdolls work in the default build (Jolt, `RigidBodyModule`). The sandbox
+gives Jolt a floor and a static box around every placed piece, so people
+land on the ground, tumble over boxes and slump against barrels. A build
+without Jolt has no ragdolls: the bat still swings and the hint says so.
 
 ## What makes Simple mode simple
 

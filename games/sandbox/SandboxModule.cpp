@@ -8,6 +8,9 @@
 #include "kke/Material.h"
 #include "kke/SceneLoader.h"
 #include "kke/modules/AudioModule.h"
+#if KKE_ENABLE_JOLT
+#include "kke/modules/RigidBodyModule.h"
+#endif
 #if KKE_ENABLE_FEMFX
 #include "kke/modules/PhysicsModule.h"
 #endif
@@ -111,8 +114,17 @@ void SandboxModule::init(kke::Application& app) {
     m_models = app.getModule<kke::ModelModule>();
     m_thumbs = app.getModule<kke::ThumbnailModule>();
     m_debug = app.getModule<kke::DebugDrawModule>();
-    auto providers = app.findCapability<kke::IRagdollPhysics>();
-    m_ragdolls = providers.empty() ? nullptr : providers.front();
+    // The best ragdolls on offer: Jolt's (joint limits, colliding limbs)
+    // over FEMFX's when both are there.
+    m_ragdolls = kke::bestRagdollPhysics(app.findCapability<kke::IRagdollPhysics>());
+    if (kke::RigidWorld* w = rigidWorld()) {
+        // The floor Jolt ragdolls land on: top at y = 0, where pieces stand.
+        kke::RigidWorld::BodyDesc floor;
+        floor.motion = kke::RigidWorld::Motion::Static;
+        floor.position = glm::vec3(0.0f, -0.5f, 0.0f);
+        floor.halfExtents = glm::vec3(200.0f, 0.5f, 200.0f);
+        if (w->add(floor) == kke::RigidWorld::kNoBody) kke::log::get(name())->warn("Jolt refused the floor: ragdolls will fall through");
+    }
 #if KKE_ENABLE_FEMFX
     m_hasFemfx = app.getModule<kke::PhysicsModule>() != nullptr;
 #endif
@@ -230,6 +242,39 @@ glm::mat4 SandboxModule::objectTransform(const Object& o) const {
 
 void SandboxModule::applyTransform(Object& o) {
     m_models->setTransform(o.instance, objectTransform(o));
+    syncCollider(o);
+}
+
+kke::RigidWorld* SandboxModule::rigidWorld() const {
+#if KKE_ENABLE_JOLT
+    if (auto* rb = m_app->getModule<kke::RigidBodyModule>()) return &rb->world();
+#endif
+    return nullptr;
+}
+
+void SandboxModule::dropCollider(Object& o) {
+    if (o.collider == kke::RigidWorld::kNoBody) return;
+    if (kke::RigidWorld* w = rigidWorld()) w->remove(o.collider);
+    o.collider = kke::RigidWorld::kNoBody;
+}
+
+// A static box of the piece's world bounds, rebuilt whenever it moves (a
+// rotated box's bounds change shape). Boxes, not meshes: this is only what
+// knocked-over people land on, and 2,000 boxes cost Jolt nothing.
+void SandboxModule::syncCollider(Object& o) {
+    dropCollider(o);
+    kke::RigidWorld* w = rigidWorld();
+    if (!w || o.character || o.proxy) return;
+    glm::vec3 mn, mx;
+    worldBounds(o, mn, mx);
+    const glm::vec3 half = glm::max((mx - mn) * 0.5f, glm::vec3(0.01f));
+    kke::RigidWorld::BodyDesc b;
+    b.motion = kke::RigidWorld::Motion::Static;
+    b.position = (mn + mx) * 0.5f;
+    b.halfExtents = half;
+    b.material = kke::AudioMaterialTable::Wood;
+    o.collider = w->add(b);
+    if (o.collider == kke::RigidWorld::kNoBody) kke::log::get(name())->warn("Jolt refused the collider of '{}'", o.asset);
 }
 
 SandboxModule::Object* SandboxModule::spawnObject(const std::string& asset, const glm::vec3& position, float yawDegrees, uint32_t id,
@@ -252,6 +297,7 @@ SandboxModule::Object* SandboxModule::spawnObject(const std::string& asset, cons
     o.character = !d->bones.empty() && d->meshes.size() > 0 && resolve(asset, pack)->skinned;
     if (o.character && !d->animations.empty()) m_models->playAnimation(o.instance, 0, true);
     m_objects.push_back(std::move(o));
+    syncCollider(m_objects.back());
     return &m_objects.back();
 }
 
@@ -264,6 +310,7 @@ void SandboxModule::removeObject(uint32_t id) {
     auto it = std::find_if(m_objects.begin(), m_objects.end(), [&](const Object& o) { return o.id == id; });
     if (it == m_objects.end()) return;
     if (it->ragdoll && m_ragdolls) m_ragdolls->destroyRagdoll(it->ragdoll);
+    dropCollider(*it);
 #if KKE_ENABLE_FEMFX
     if (it->proxy) if (auto* p = m_app->getModule<kke::PhysicsModule>()) p->removeObject(it->proxy);
 #endif
@@ -1168,6 +1215,7 @@ void SandboxModule::makeBreakable(Object& o) {
     // 3 mm up so it doesn't start inside the ground plane; the render mesh
     // follows the tets, so the drop is invisible.
     o.proxy = physics->spawnTetMeshWithOptions(vox.mesh, center + glm::vec3(0.0f, 0.003f, 0.0f), material, opts);
+    if (o.proxy) dropCollider(o); // it moves and breaks now: a static box would be in the way
     if (!o.proxy) {
         m_status = "Physics is full (object limit reached) - delete something first";
         return;
@@ -1272,6 +1320,7 @@ void SandboxModule::restoreProp(Object& o) {
     o.restNormals.clear();
     m_models->setDeformedVertices(o.instance, {}, {});
     m_models->setVisible(o.instance, true);
+    syncCollider(o); // solid again
 }
 
 // A heavy rubber-ish ball from the camera toward the mouse cursor.
@@ -1739,7 +1788,7 @@ void SandboxModule::inspectorUi() {
         if (ImGui::Button("Delete")) deleteSelection();
         o = find(m_selected);
         if (o && o->character) {
-            if (!m_ragdolls) ImGui::TextDisabled("Ragdolls need a physics module (FEMFX build)");
+            if (!m_ragdolls) ImGui::TextDisabled("Ragdolls need a physics module (Jolt or FEMFX)");
             else if (ImGui::Button(o->ragdoll ? "Stand up (K)" : "Ragdoll (K)")) {
                 SDL_Event e{};
                 e.type = SDL_EVENT_KEY_DOWN;
@@ -1997,9 +2046,12 @@ void SandboxModule::updateBat(float dt) {
     {   // sweep() only hits over what this update swung through
         for (Object& o : m_objects) {
             if (!o.character || o.ragdoll || std::find(m_swingHits.begin(), m_swingHits.end(), o.id) != m_swingHits.end()) continue;
+            // The body, not its bounds: a T-posed character's bounds are
+            // mostly air between its outstretched arms.
             glm::vec3 mn, mx;
             worldBounds(o, mn, mx);
-            const kke::BatSwing::Hit hit = m_swing.sweep(mn, mx);
+            const glm::vec3 c = (mn + mx) * 0.5f, half(std::min(0.3f, (mx.x - mn.x) * 0.5f), 0.0f, std::min(0.3f, (mx.z - mn.z) * 0.5f));
+            const kke::BatSwing::Hit hit = m_swing.sweep(glm::vec3(c.x - half.x, mn.y, c.z - half.z), glm::vec3(c.x + half.x, mx.y, c.z + half.z));
             if (!hit.hit) continue;
             m_swingHits.push_back(o.id);
             if (auto* audio = m_app->getModule<kke::AudioModule>())
@@ -2008,6 +2060,8 @@ void SandboxModule::updateBat(float dt) {
                 m_status = "Knocking people over needs a physics module (ragdolls)";
                 continue;
             }
+            kke::log::get(name())->info("bat hit '{}' at {:.0f} deg: push ({:.1f}, {:.1f}, {:.1f}) m/s", o.asset, hit.degrees,
+                                        hit.push.x, hit.push.y, hit.push.z);
             ragdoll(o, hit.push);
         }
     }
@@ -2057,7 +2111,7 @@ void SandboxModule::playPaletteUi() {
                        : m_tool == Tool::Place         ? "Let go where it should go!"
                        : m_tool == Tool::Bat && anyoneDown && !anyoneStanding ? "Everyone fell over! Press Get up."
                        : m_tool == Tool::Bat && !anyoneStanding ? "Bring a person, then click them to swing!"
-                       : m_tool == Tool::Bat           ? (m_ragdolls ? "Click someone to bonk them!" : "Click to swing (falling over needs the physics build)")
+                       : m_tool == Tool::Bat           ? (m_ragdolls ? "Click someone to bonk them!" : "Click to swing (falling over needs Jolt physics)")
                        : m_tool == Tool::Shoot         ? "Click to throw a ball!"
                        : !anyone                       ? "Drag a person into the world!"
                        : anyoneDown                    ? "Press Get up to try again, or grab the bat!"

@@ -53,6 +53,8 @@ public:
     // vkCmdWriteTimestamp results into real time for GPU profiling.
     double timestampPeriodNs() const { return m_timestampPeriodNs; }
     bool largePointsSupported() const { return m_largePointsSupported; }
+    // 1.0 when samplerAnisotropy isn't supported (and so not enabled).
+    float maxSamplerAnisotropy() const { return m_maxSamplerAnisotropy; }
 
     // True only if KKE_ENABLE_GPU_PROFILER was set at build time AND the
     // VulkanProfiler layer was actually found installed at instance
@@ -106,6 +108,7 @@ private:
 
     double m_timestampPeriodNs = 1.0;
     bool m_largePointsSupported = false;
+    float m_maxSamplerAnisotropy = 1.0f;
 
     bool m_validationEnabled = false;
     bool m_gpuProfilerEnabled = false;

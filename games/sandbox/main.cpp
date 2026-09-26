@@ -7,6 +7,9 @@
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/StatsModule.h"
 #include "kke/modules/ThumbnailModule.h"
+#if KKE_ENABLE_JOLT
+#include "kke/modules/RigidBodyModule.h"
+#endif
 
 #include "SandboxModule.h"
 #if KKE_ENABLE_FEMFX
@@ -40,11 +43,16 @@ int main() {
         // Before SandboxModule: its update() clears last frame's lines,
         // then the sandbox adds this frame's.
         app.addModule<kke::DebugDrawModule>();
+#if KKE_ENABLE_JOLT
+        // Jolt: ragdolls in every build (the bat in Play mode), landing on
+        // a floor and on the placed pieces (SandboxModule gives it those).
+        panels.push_back(&app.addModule<kke::RigidBodyModule>());
+#endif
+        panels.push_back(&app.addModule<kke::AudioModule>()); // bonks, ragdoll thuds, impacts and breaks
+        panels.push_back(&app.addModule<kke::SoundVisualizerModule>());
 #if KKE_ENABLE_FEMFX
         // Real units, nothing spawned at start; it draws the ground slab.
         auto& physics = app.addModule<kke::PhysicsModule>(/*renderScale=*/1.0f, /*initialObjectCount=*/0);
-        panels.push_back(&app.addModule<kke::AudioModule>()); // impacts and breaks make sound
-        panels.push_back(&app.addModule<kke::SoundVisualizerModule>());
         physics.setDrawGround(false); // the sandbox draws a grid; placed floor tiles are the visible ground
         panels.push_back(&physics);
 #endif

@@ -44,6 +44,17 @@ tools/packaging/package.sh --bin build/bin --platform linux \
     --version dev --out dist --deps build/_deps
 ```
 
+## Warnings in release builds
+
+Optimized builds warn where Debug doesn't (GCC's `-Warray-bounds` only runs
+with the optimizer), and `-Werror` covers only the engine's own code. So the
+CI workflow also has a **release-build** job, and both release jobs end the
+same way: `tools/ci/check_warnings.sh` fails on any compiler, linker or CMake
+warning in the configure and build logs, third-party code included. Fixed so
+far: RmlUi's `flat_map::operator[]` (cmake/patch_rmlui.cmake), and SDL's
+"XML failed validation" from Ubuntu's old wayland-scanner
+(cmake/wayland_scanner.cmake builds 1.26).
+
 ## What goes in a package
 
 Everything CMake puts in `bin/` (demos, tools, compiled shaders, fonts,

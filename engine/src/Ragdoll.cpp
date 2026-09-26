@@ -1,5 +1,7 @@
 #include "kke/Ragdoll.h"
 
+#include <glm/gtc/quaternion.hpp>
+
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -103,25 +105,48 @@ RagdollDesc buildHumanoidRagdoll(const ModelData& model, const std::vector<glm::
     int cR = add(segment("calf_r", caR, ftR, limb * 1.2f, m * 0.055f, forward, height * 0.03f));
     (void)spine1;
 
-    auto joint = [&](int a, int b, glm::vec3 at, bool hinge = false) {
+    // Limits (Jolt; FEMFX ignores them), in the build pose's frame.
+    auto ball = [&](int a, int b, glm::vec3 at, float swing, float twist, glm::vec3 axis = glm::vec3(0.0f)) {
         RagdollJoint j;
         j.bodyA = a;
         j.bodyB = b;
         j.anchor = at;
-        j.hinge = hinge;
-        j.hingeAxis = lateral;
+        j.swingDegrees = swing;
+        j.twistDegrees = twist;
+        j.swingAxis = axis;
         d.joints.push_back(j);
     };
-    joint(pelvisB, torso, spine2);
-    joint(torso, headB, neck);
-    joint(torso, uaL, upL);
-    joint(uaL, laL, loL);
-    joint(torso, uaR, upR);
-    joint(uaR, laR, loR);
-    joint(pelvisB, tL, thL);
-    joint(tL, cL, caL, /*hinge=*/true);
-    joint(pelvisB, tR, thR);
-    joint(tR, cR, caR, /*hinge=*/true);
+    // A hinge that bends from `a` (upper segment direction) toward the
+    // lower one, positive angles = more bend, up to `maxBend` degrees
+    // from straight; a hair past straight the other way.
+    auto hinge = [&](int bodyA, int bodyB, glm::vec3 at, glm::vec3 upper, glm::vec3 lower, glm::vec3 straightBendsToward, float maxBend) {
+        upper = glm::normalize(upper);
+        lower = glm::normalize(lower);
+        glm::vec3 axis = glm::cross(upper, lower);
+        if (glm::length(axis) < 0.05f) axis = glm::cross(upper, straightBendsToward); // (nearly) straight
+        if (glm::length(axis) < 1e-3f) axis = lateral;
+        axis = glm::normalize(axis);
+        const float bend = glm::degrees(std::atan2(glm::dot(glm::cross(upper, lower), axis), glm::dot(upper, lower)));
+        RagdollJoint j;
+        j.bodyA = bodyA;
+        j.bodyB = bodyB;
+        j.anchor = at;
+        j.hinge = true;
+        j.hingeAxis = axis;
+        j.hingeMinDegrees = -bend - 3.0f;
+        j.hingeMaxDegrees = maxBend - bend;
+        d.joints.push_back(j);
+    };
+    ball(pelvisB, torso, spine2, 30.0f, 25.0f, up);
+    ball(torso, headB, neck, 45.0f, 50.0f, up);
+    ball(torso, uaL, upL, 85.0f, 45.0f, lateral);
+    hinge(uaL, laL, loL, loL - upL, handL - loL, forward, 145.0f);
+    ball(torso, uaR, upR, 85.0f, 45.0f, -lateral);
+    hinge(uaR, laR, loR, loR - upR, handR - loR, forward, 145.0f);
+    ball(pelvisB, tL, thL, 70.0f, 30.0f, -up);
+    hinge(tL, cL, caL, caL - thL, ftL - caL, -forward, 150.0f);
+    ball(pelvisB, tR, thR, 70.0f, 30.0f, -up);
+    hinge(tR, cR, caR, caR - thR, ftR - caR, -forward, 150.0f);
     return d;
 }
 
@@ -172,6 +197,36 @@ std::vector<glm::mat4> poseFromRagdoll(const ModelData& model, const RagdollSkin
     }
     for (glm::mat4& w : world) w = worldToModel * w;
     return world;
+}
+
+std::vector<glm::mat4> blendPoses(const std::vector<glm::mat4>& from, const std::vector<glm::mat4>& to, float t) {
+    t = std::clamp(t, 0.0f, 1.0f);
+    std::vector<glm::mat4> out = to;
+    const size_t n = std::min(from.size(), to.size());
+    for (size_t i = 0; i < n; ++i) {
+        glm::vec3 scale(glm::length(glm::vec3(to[i][0])), glm::length(glm::vec3(to[i][1])), glm::length(glm::vec3(to[i][2])));
+        auto rotationOf = [](const glm::mat4& m) {
+            glm::mat3 r(m);
+            for (int c = 0; c < 3; ++c) {
+                const float len = glm::length(r[c]);
+                r[c] = len > 1e-12f ? r[c] / len : glm::vec3(0.0f);
+            }
+            return glm::quat_cast(r);
+        };
+        const glm::quat q = glm::slerp(rotationOf(from[i]), rotationOf(to[i]), t);
+        const glm::vec3 p = glm::mix(glm::vec3(from[i][3]), glm::vec3(to[i][3]), t);
+        glm::mat4 m = glm::mat4_cast(glm::normalize(q));
+        for (int c = 0; c < 3; ++c) m[c] *= scale[c];
+        m[3] = glm::vec4(p, 1.0f);
+        out[i] = m;
+    }
+    return out;
+}
+
+float blendWeight(float elapsed, float duration) {
+    if (duration <= 0.0f) return 1.0f;
+    const float x = std::clamp(elapsed / duration, 0.0f, 1.0f);
+    return x * x * (3.0f - 2.0f * x);
 }
 
 } // namespace kke

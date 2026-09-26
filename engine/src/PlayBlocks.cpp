@@ -96,7 +96,7 @@ bool BatSwing::start(const glm::vec3& pivot, const glm::vec3& forward) {
     m_phase = Phase::Swing;
     m_time = 0.0f;
     m_angle = m_prevAngle = m_settings.startDegrees;
-    m_angularSpeed = 0.0f;
+    m_sweptFrom = m_sweptTo = 0.0f;
     m_swept = false;
     return true;
 }
@@ -108,15 +108,22 @@ float BatSwing::angleAt(float t) const {
     return m_settings.startDegrees + (m_settings.endDegrees - m_settings.startDegrees) * eased;
 }
 
+float BatSwing::angularSpeedAt(float t) const {
+    const float d = std::max(m_settings.swingSeconds, 1e-4f);
+    const float u = std::clamp(t / d, 0.0f, 1.0f);
+    return (m_settings.endDegrees - m_settings.startDegrees) * 6.0f * u * (1.0f - u) / d; // d/dt of angleAt
+}
+
 bool BatSwing::update(float dt) {
     if (m_phase == Phase::Idle) return false;
-    dt = std::max(dt, 0.0f);
-    m_time += dt;
+    dt = std::clamp(dt, 0.0f, std::max(m_settings.maxStepSeconds, 1e-4f));
     m_prevAngle = m_angle;
     m_swept = m_phase == Phase::Swing;
     if (m_phase == Phase::Swing) {
-        m_angle = angleAt(m_time);
-        m_angularSpeed = dt > 0.0f ? (m_angle - m_prevAngle) / dt : 0.0f;
+        m_sweptFrom = m_time;
+        m_time += dt;
+        m_sweptTo = std::min(m_time, m_settings.swingSeconds);
+        m_angle = angleAt(m_sweptTo);
         if (m_time >= m_settings.swingSeconds) {
             // This update still hits (it covers the swing's last stretch);
             // the next one is the follow-through.
@@ -125,8 +132,7 @@ bool BatSwing::update(float dt) {
         }
         return true;
     }
-    m_angularSpeed = 0.0f;
-    m_prevAngle = m_angle;
+    m_time += dt;
     if (m_time >= m_settings.holdSeconds) {
         m_phase = Phase::Idle;
         return false;
@@ -144,11 +150,14 @@ BatSwing::Hit BatSwing::sweep(const glm::vec3& boxMin, const glm::vec3& boxMax) 
     // Only while swinging, and only over the angles covered since the
     // last update (a hold or a paused frame hits nothing).
     if (!m_swept) return out;
+    // Sampled in time (at most 4 degrees apart), so the push is the
+    // swing's own speed where it hit, however long the frame was.
     const float span = m_angle - m_prevAngle;
     const int steps = std::max(1, static_cast<int>(std::ceil(std::abs(span) / 4.0f)));
     const float length = m_settings.reach - m_settings.innerReach;
     for (int i = 0; i <= steps; ++i) {
-        const float deg = m_prevAngle + span * (static_cast<float>(i) / static_cast<float>(steps));
+        const float time = m_sweptFrom + (m_sweptTo - m_sweptFrom) * (static_cast<float>(i) / static_cast<float>(steps));
+        const float deg = angleAt(time);
         const glm::vec3 dir = direction(deg);
         Ray ray{ m_pivot + dir * m_settings.innerReach, dir };
         const float t = rayAabb(ray, boxMin, boxMax);
@@ -158,7 +167,9 @@ BatSwing::Hit BatSwing::sweep(const glm::vec3& boxMin, const glm::vec3& boxMax) 
         const float r = glm::radians(deg);
         const glm::vec3 tangent = (span >= 0.0f ? 1.0f : -1.0f) * (-m_forward * std::sin(r) + m_right * std::cos(r));
         const float radius = m_settings.innerReach + t;
-        const float speed = std::min(std::abs(glm::radians(m_angularSpeed)) * radius, m_settings.maxPushSpeed);
+        const float speed = std::clamp(std::abs(glm::radians(angularSpeedAt(time))) * radius, m_settings.minPushSpeed,
+                                       std::max(m_settings.minPushSpeed, m_settings.maxPushSpeed));
+        out.degrees = deg;
         out.push = glm::normalize(tangent + m_forward * 0.5f) * speed + glm::vec3(0.0f, m_settings.lift, 0.0f);
         return out;
     }

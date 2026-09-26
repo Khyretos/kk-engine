@@ -27,6 +27,17 @@ struct RagdollJoint {
     // Hinge joints only rotate about this axis (knees). Others are ball joints.
     bool hinge = false;
     glm::vec3 hingeAxis{1.0f, 0.0f, 0.0f}; // world space
+    // Limits, for physics that has them (Jolt: RigidBodyModule; FEMFX has
+    // none). Angles in degrees, measured from the pose the ragdoll was
+    // built in. Ball joints: bodyB swings at most `swingDegrees` away from
+    // `swingAxis` (world; zero = bodyB's direction from the anchor at
+    // build time) and twists at most +-`twistDegrees` about itself.
+    // Hinges: the angle about hingeAxis (right hand rule, bodyB relative
+    // to bodyA) stays within hingeMinDegrees..hingeMaxDegrees.
+    float swingDegrees = 60.0f;
+    float twistDegrees = 30.0f;
+    glm::vec3 swingAxis{0.0f};
+    float hingeMinDegrees = -150.0f, hingeMaxDegrees = 150.0f;
 };
 
 struct RagdollDesc {
@@ -62,5 +73,15 @@ RagdollSkinBinding bindSkeletonToRagdoll(const ModelData& model, const std::vect
 // instance transform) — ready for ModelModule::setBoneWorldOverride().
 std::vector<glm::mat4> poseFromRagdoll(const ModelData& model, const RagdollSkinBinding& binding,
                                        const std::vector<glm::mat4>& bodyWorld, const glm::mat4& worldToModel);
+
+// Blend back to animation: bone by bone, rotation slerped and position
+// lerped from `from` (e.g. the last ragdoll pose) to `to` (the animated
+// pose), t = 0..1 (clamped). Scale is taken from `to`. Poses of
+// different sizes blend over the common bones and take the rest from `to`.
+std::vector<glm::mat4> blendPoses(const std::vector<glm::mat4>& from, const std::vector<glm::mat4>& to, float t);
+
+// Smooth 0..1 weight for a blend that started `elapsed` seconds ago and
+// takes `duration` seconds (ease in and out; duration <= 0 = done).
+float blendWeight(float elapsed, float duration);
 
 } // namespace kke

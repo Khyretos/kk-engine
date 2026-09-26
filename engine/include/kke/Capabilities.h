@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace kke {
@@ -82,6 +83,53 @@ public:
     virtual bool ragdollBodyTransforms(RagdollHandle handle, std::vector<glm::mat4>& out) const = 0;
     // Adds a velocity change to one body (a punch, a bullet, an explosion).
     virtual void pushRagdollBody(RagdollHandle handle, int body, const glm::vec3& deltaVelocity) = 0;
+    // How good this module's ragdolls are, for picking one when several
+    // offer them: FEMFX 0 (no joint limits, limbs pass through each
+    // other), Jolt 1 (cone/twist limits, limbs collide).
+    virtual int ragdollQuality() const { return 0; }
+};
+
+// The best ragdoll provider among `providers` (e.g.
+// app.findCapability<IRagdollPhysics>()), or nullptr if there are none.
+inline IRagdollPhysics* bestRagdollPhysics(const std::vector<IRagdollPhysics*>& providers) {
+    IRagdollPhysics* best = nullptr;
+    for (IRagdollPhysics* p : providers)
+        if (p && (!best || p->ragdollQuality() > best->ragdollQuality())) best = p;
+    return best;
+}
+
+// Implemented by every physics module: FEMFX's PhysicsModule (soft,
+// breakable objects) and Jolt's RigidBodyModule (rigid bodies, the
+// character, ragdolls, debris). Game code that asks "what's there?" or
+// "blow this up" asks all of them through this (kke/PhysicsWorld.h:
+// kke::physicsRaycast(), kke::physicsBlast()), without knowing which
+// engine holds a thing. Issue #31.
+class IPhysicsWorld {
+public:
+    struct Stats {
+        size_t bodies = 0;   // what this engine simulates (FEMFX: pieces)
+        size_t awake = 0;
+        double stepMs = 0.0; // last (or recent average) step cost
+    };
+    struct Hit {
+        bool hit = false;
+        glm::vec3 point{0.0f}, normal{0.0f, 1.0f, 0.0f}; // normal faces the ray's origin
+        float distance = 0.0f;
+        uint64_t body = 0;   // engine-specific id (Jolt body id, FEMFX object handle)
+        const IPhysicsWorld* world = nullptr;
+    };
+    virtual ~IPhysicsWorld() = default;
+    virtual const char* physicsEngineName() const = 0;
+    virtual Stats physicsStats() const = 0;
+    // Closest hit along the ray, up to maxDistance (m).
+    virtual Hit physicsRaycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance) const = 0;
+    // A blast: everything movable within `radius` of `center` gets a
+    // velocity change away from it, `speed` m/s at the centre fading
+    // linearly to 0 at the radius. Wakes what it touches. Returns how many
+    // bodies (FEMFX: pieces) it pushed.
+    virtual size_t physicsBlast(const glm::vec3& center, float radius, float speed) = 0;
+    // World bounds of every movable thing overlapping min..max, appended.
+    virtual void physicsBoundsInBox(const glm::vec3& min, const glm::vec3& max, std::vector<std::pair<glm::vec3, glm::vec3>>& out) const = 0;
 };
 
 } // namespace kke
