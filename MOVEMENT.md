@@ -92,7 +92,32 @@ the player hit a one-frame window.
 - **Take-off is a glue window.** The last grounded frame may re-aim the run
   at the input, so a jump straight after a turn goes where you asked.
 - **Ledge grab in the air**: rising slowly or falling, steering into a wall
-  whose top is within reach turns into a climb.
+  whose top is within reach turns into a climb when "go up" is held, or
+  when the top is less than 1.5 m above the feet. Otherwise it hangs.
+
+## Ledge hang and shimmy (*Ledge actions*, IMSFMmekFxg)
+
+- **Grab**: in the air, steering into a wall whose top is 1.5-2.35 m
+  above the feet (and "go up" not held) hangs from it. That includes edges
+  the probe can't stand on, like a thin wall's top. The capsule is pulled
+  in over 0.15 s to 2.05 m below the top, square to the wall.
+- **Shimmy**: the sideways part of the input moves along the edge at
+  1.1 m/s. Every step re-finds the wall (at chest height) and the top
+  (just in from the face). Where either is gone, the top steps by more
+  than 15 cm, or the capsule wouldn't fit, the character stops: it never
+  shimmies off the end or through a side wall. The wall normal is
+  re-read each step, so gently curved walls work.
+- **Climb up**: "go up" runs the normal checked climb from the hang (so
+  a thin wall with no room on top can be hung from but not climbed).
+- **Let go**: crouch. A small push off the wall, no coyote jump, and no
+  re-grab for 0.4 s.
+- Animation: no hang clip in the UAL sets, so kke_demo uses the fall
+  pose slowed down with hand IK on the edge; a pack with `Hang_Idle` is
+  picked up by name. `KKE_DEMO_HANG=1 ./kke_demo` runs a jump, hang,
+  shimmy and climb attempt at the lane's 3 m wall by itself.
+- Tests: `Locomotion.JumpAtAHighWallHangsFromTheTop`,
+  `ShimmyAlongTheEdgeStopsWhereItEnds`, `ClimbUpFromAHang`,
+  `CrouchLetsGoAndDoesNotRegrab`, `HangsFromAThinWallItCannotStandOn`.
 
 ## Vault and climb (*Parkour ep3*, rhzwhJPb-jQ; *Ledge actions*)
 
@@ -155,7 +180,7 @@ speed); it's for authored moves such as a real vault clip.
 
 ## Not done yet (next)
 
-- Ledge hang and shimmy, corners, ledge-to-ledge leaps (*Ledge actions*),
+- Ledge corners (shimmy around them), ledge-to-ledge leaps, jump-back off a hang (*Ledge actions*),
   wall run.
 - CCD for longer chains (*IK fundamentals with CCD*, 8pX6LeZdpOo); the
   legs and arms use the analytic two-bone solve.

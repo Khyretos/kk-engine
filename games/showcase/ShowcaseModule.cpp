@@ -139,6 +139,13 @@ void ShowcaseModule::init(kke::Application& app) {
             m_loco->setFacing(glm::vec3(std::sin(glm::radians(yaw)), 0.0f, -std::cos(glm::radians(yaw))));
         }
     }
+    if (const char* h = std::getenv("KKE_DEMO_HANG"); h && *h && *h != '0') {
+        m_demoHang = 0.0f;
+        m_loco->teleport(glm::vec3(17.2f, 0.05f, 12.0f));
+        m_loco->setFacing(glm::vec3(-1, 0, 0));
+        m_rig.yaw = -90.0f;
+        m_rig.pitch = 8.0f;
+    }
     if (const char* st = std::getenv("KKE_STRESS_TEST"); st && *st && *st != '0') {
         m_stressQuitAtEnd = true;
         startStressTest();
@@ -451,6 +458,7 @@ void ShowcaseModule::buildAnimator() {
     };
     m_stVault = m_anim->addClipState("vault", pick({ "Vault", "Jump_Loop" }), true, 1.4f);
     m_stClimbUp = m_anim->addClipState("climb_up", pick({ "Climb_Up", "Climb", "Jump_Start" }), false, 0.7f);
+    m_stHang = m_anim->addClipState("hang", pick({ "Hang_Idle", "Hang", "Jump_Loop" }), true, 0.35f);
     m_stClimbOver = m_anim->addClipState("climb_over", pick({ "Climb_Over", "Crouch_Fwd_Loop" }), true, 1.3f);
     m_anim->play(m_stMove, 0.0f);
     kke::log::get(name())->info("character: {} bones, {} clips", m_rigData.bones.size(), m_rigData.animations.size());
@@ -481,14 +489,16 @@ void ShowcaseModule::applyIk(float dt) {
 
     // Hands: on the top edge during the first part of a vault or climb,
     // where the stand-in clips have no hand plant of their own.
-    const bool reach = m_handIk && ((st == State::Climb && m_loco->traversalProgress() < 0.7f) ||
+    const bool reach = m_handIk && (st == State::Hang || (st == State::Climb && m_loco->traversalProgress() < 0.7f) ||
                                     (st == State::Vault && m_loco->traversalProgress() < 0.45f));
     m_handWeight += ((reach ? 1.0f : 0.0f) - m_handWeight) * (1.0f - std::exp(-18.0f * dt));
     if (m_handWeight > 0.01f) {
         const kke::Locomotion::Obstacle& o = m_loco->lastObstacle();
         const glm::vec3 in = -o.normal;
         const glm::vec3 side(in.z, 0.0f, -in.x);
-        const glm::vec3 edge(o.face.x + in.x * 0.08f, o.target.y + 0.02f, o.face.z + in.z * 0.08f);
+        // Hanging (and shimmying) the edge is where the hands are now.
+        const glm::vec3 grip = st == State::Hang ? m_loco->hangEdge() : glm::vec3(o.face.x, o.target.y, o.face.z);
+        const glm::vec3 edge(grip.x + in.x * 0.08f, grip.y + 0.02f, grip.z + in.z * 0.08f);
         const std::vector<glm::mat4> world = kke::poseToModel(m_rigData, pose);
         for (int i = 0; i < 2; ++i) {
             const kke::TwoBoneChain& arm = i == 0 ? m_armL : m_armR;
@@ -608,7 +618,9 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     kke::RigidWorld& w = m_rigid->world();
 
     // Crouch: a 1.0 m capsule. Standing up waits until there's headroom.
-    if (m_wantCrouch != m_crouch && w.setCharacterHeight(m_player, m_wantCrouch ? 1.0f : 1.8f)) m_crouch = m_wantCrouch;
+    // Hanging, crouch means "let go" (below), not a smaller capsule.
+    const bool hanging = m_loco->state() == kke::Locomotion::State::Hang;
+    if (!hanging && m_wantCrouch != m_crouch && w.setCharacterHeight(m_player, m_wantCrouch ? 1.0f : 1.8f)) m_crouch = m_wantCrouch;
     const float target = m_crouch ? 0.85f : 1.5f;
     m_rig.settings.pivotHeight += (target - m_rig.settings.pivotHeight) * std::min(1.0f, 10.0f * dt);
     m_rig.settings.eyeHeight = m_rig.settings.pivotHeight + 0.15f;
@@ -641,9 +653,22 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
             m_autopilotTime = 0.0f;
         }
     }
+    if (m_demoHang >= 0.0f) {
+        // KKE_DEMO_HANG=1: jump at the 3 m wall, hang, shimmy along it,
+        // climb up (screenshots of the ledge moves, and a quick check).
+        m_demoHang += dt;
+        const float t = m_demoHang;
+        in.move = t < 1.6f ? glm::vec3(-1, 0, 0) : t > 2.2f && t < 4.2f ? glm::vec3(0, 0, -1) : glm::vec3(0.0f);
+        auto at = [&](float mark) { return t >= mark && t - dt < mark; };
+        if (at(0.3f) || at(5.0f)) m_jumpQueued = true;
+        if (t > 8.0f) {
+            m_loco->teleport(glm::vec3(17.2f, 0.05f, 12.0f));
+            m_demoHang = 0.0f;
+        }
+    }
     in.fast = m_sprint && !m_crouch;
     in.slow = m_walk;
-    in.crouch = m_crouch;
+    in.crouch = hanging ? m_wantCrouch != m_crouch : m_crouch;
     in.goUp = m_jumpQueued;
     m_jumpQueued = false;
     if (m_rig.mode == kke::CameraRig::Mode::FirstPerson) m_loco->setFacing(m_rig.forward());
@@ -655,6 +680,12 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
         kke::log::get(name())->info("autopilot: {} at z {:.1f} ({:.2f} m high, {:.2f} m deep)",
                                     m_loco->state() == kke::Locomotion::State::Vault ? "vault" : "climb", w.characterPosition(m_player).z, o.height,
                                     o.depth > 100.0f ? 0.0f : o.depth);
+    }
+    if (m_demoHang >= 0.0f && m_loco->state() != before) {
+        static const char* const names[] = { "ground", "air", "vault", "climb", "hang" };
+        const glm::vec3 f = w.characterPosition(m_player);
+        kke::log::get(name())->info("hang demo: {} at {:.2f} {:.2f} {:.2f} ({:.1f} s)", names[static_cast<int>(m_loco->state())], f.x, f.y, f.z,
+                                    m_demoHang);
     }
     if (m_loco->jumped() && m_anim) m_anim->play(m_stJump, 0.08f, true);
 
@@ -699,6 +730,11 @@ void ShowcaseModule::updateAnimation(float dt) {
     switch (m_loco->state()) {
     case State::Vault:
         if (cur != m_stVault) m_anim->play(m_stVault, 0.08f);
+        break;
+    case State::Hang:
+        // No hang clip in the UAL sets: the fall pose (legs down), slowed,
+        // with hand IK on the edge. A pack with "Hang_Idle" is used by name.
+        if (cur != m_stHang) m_anim->play(m_stHang, 0.12f);
         break;
     case State::Climb:
         // Hands up the wall first, then the step over the edge.
@@ -767,13 +803,13 @@ void ShowcaseModule::renderUi() {
     ImGui::Text("%.0f FPS", m_fps);
     kke::RigidWorld& w = m_rigid->world();
     glm::vec3 v = w.characterVelocity(m_player);
-    ImGui::Text("Speed %.1f m/s  %s", glm::length(glm::vec2(v.x, v.z)), w.characterOnGround(m_player) ? "on ground" : "in the air");
+    ImGui::Text("Speed %.1f m/s  %s", glm::length(glm::vec2(v.x, v.z)), m_loco->state() == kke::Locomotion::State::Hang ? "hanging" : w.characterOnGround(m_player) ? "on ground" : "in the air");
     const glm::vec3 feet = w.characterPosition(m_player);
     ImGui::Text("At %.1f %.1f %.1f, %s (%.1f m)", feet.x, feet.y, feet.z, m_crouch ? "crouched" : "standing", w.characterHeight(m_player));
     if (m_wantCrouch != m_crouch) ImGui::TextColored(ImVec4(1, 0.8f, 0.3f, 1), "No room to stand up");
     ImGui::Text("Rigid bodies %zu (%zu awake), %.2f ms", w.bodyCount(), w.activeBodyCount(), w.lastStepMs());
     if (ImGui::CollapsingHeader("Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::TextUnformatted("Keyboard: WASD move, Shift sprint, Alt walk, Space jump / vault / climb,\nC crouch, mouse look, wheel zoom, V view, left click shoot, E push, R reset,\nF1 engine panels, Esc frees the mouse.\n"
+        ImGui::TextUnformatted("Keyboard: WASD move, Shift sprint, Alt walk, Space jump / vault / climb,\nC crouch / let go, mouse look, wheel zoom, V view, left click shoot, E push, R reset,\nF1 engine panels, Esc frees the mouse.\n"
                                "Controller: left stick move, right stick look, A jump / vault / climb, B crouch,\nL3 sprint, RT shoot, Y push, R3 view, Start reset, Back panels.");
         ImGui::SliderFloat("Mouse sensitivity", &m_mouseSensitivity, 0.02f, 0.5f, "%.2f deg/px");
         ImGui::SliderFloat("Stick / gyro speed", &m_stickSpeed, 45.0f, 540.0f, "%.0f deg/s");
@@ -826,7 +862,7 @@ void ShowcaseModule::renderUi() {
         ImGui::SliderFloat("Air steering", &ms.airAcceleration, 0.0f, 20.0f, "%.1f m/s2");
         ImGui::SliderFloat("Vault clearance", &ms.vaultClearance, 0.0f, 0.6f, "%.2f m");
         ImGui::SliderFloat("Climb time", &ms.climbTime, 0.3f, 2.0f, "%.2f s");
-        ImGui::TextWrapped("Parkour lane at x = 20: fence and low wall (vault), block (climb), 2.1 m ledge (sprint, then climb), 3 m wall (no).");
+        ImGui::TextWrapped("Parkour lane at x = 20: fence and low wall (vault), block (climb), 2.1 m ledge (sprint, then climb), 3 m wall (jump at it to hang: A/D shimmy, Space climb, C let go).");
     }
     if (ImGui::CollapsingHeader("Performance")) {
         const kke::ResourceBudget& b = m_app->resourceBudget();

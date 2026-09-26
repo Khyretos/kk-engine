@@ -421,7 +421,7 @@ struct FrameResult {
 template <class FrameDt>
 FrameResult walkWithFixedPhysics(Locomotion::Input in, FrameDt frameDt) {
     Course c;
-    c.spawn({ 0, 0, 0 });
+    c.spawn({ 0, 0.01f, 0 });
     Locomotion loco(c.world, c.player);
     FrameResult r;
     float accumulator = 0.0f, t = 0.0f;
@@ -462,4 +462,105 @@ TEST(Locomotion, MeasuredSpeedIsSteadyWithJitteryFrames) {
     EXPECT_GT(r.minSpeed, v * 0.9f);
     EXPECT_LT(r.maxSpeed, v * 1.1f);
     EXPECT_NEAR(r.distance, v * 2.0f, v * 2.0f * 0.1f);
+}
+
+// Ledge hang (*Ledge actions*): a 3 m wall, 6 m wide. Jumping at it while
+// steering in (not holding "go up") catches the top and hangs.
+namespace {
+struct HangCourse : Course {
+    HangCourse() { box({ 0, 1.5f, -2.0f }, { 3.0f, 1.5f, 0.5f }); } // face at z = -1.5, top at 3.0
+};
+void jumpToHang(HangCourse& c, Locomotion& loco) {
+    Locomotion::Input in = forward();
+    in.goUp = true;
+    c.run(loco, in, 1.2f);
+}
+Locomotion::Input sideways(float x) {
+    Locomotion::Input in;
+    in.move = glm::vec3(x, 0, 0);
+    return in;
+}
+} // namespace
+
+TEST(Locomotion, JumpAtAHighWallHangsFromTheTop) {
+    HangCourse c;
+    c.spawn({ 0, 0.01f, 0 });
+    Locomotion loco(c.world, c.player);
+    jumpToHang(c, loco);
+    ASSERT_EQ(loco.state(), Locomotion::State::Hang) << "feet " << c.feet().y << " grabbed height " << loco.lastObstacle().height << " progress " << loco.traversalProgress();
+    EXPECT_NEAR(c.feet().y, 3.0f - loco.settings().hangReach, 0.05f);
+    EXPECT_NEAR(c.feet().z, -1.5f + loco.settings().radius + 0.05f, 0.05f);
+    EXPECT_NEAR(loco.hangEdge().y, 3.0f, 0.02f);
+    // It stays there with no input.
+    c.run(loco, Locomotion::Input{}, 2.0f);
+    EXPECT_EQ(loco.state(), Locomotion::State::Hang);
+    EXPECT_NEAR(c.feet().y, 3.0f - loco.settings().hangReach, 0.05f);
+}
+
+TEST(Locomotion, ShimmyAlongTheEdgeStopsWhereItEnds) {
+    HangCourse c;
+    c.spawn({ 0, 0.01f, 0 });
+    Locomotion loco(c.world, c.player);
+    jumpToHang(c, loco);
+    ASSERT_EQ(loco.state(), Locomotion::State::Hang);
+    c.run(loco, sideways(1.0f), 1.0f); // facing -Z, +X is the character's right
+    EXPECT_NEAR(c.feet().x, loco.settings().shimmySpeed * 1.0f, 0.15f);
+    EXPECT_GT(loco.shimmySpeed(), 0.5f);
+    c.run(loco, sideways(1.0f), 5.0f); // far past the end of the 6 m wall
+    EXPECT_EQ(loco.state(), Locomotion::State::Hang);
+    EXPECT_GT(c.feet().x, 2.5f);
+    EXPECT_LT(c.feet().x, 3.05f);
+    EXPECT_NEAR(c.feet().y, 3.0f - loco.settings().hangReach, 0.05f);
+    c.run(loco, sideways(-1.0f), 1.0f); // and back
+    EXPECT_LT(c.feet().x, 2.2f);
+}
+
+TEST(Locomotion, ClimbUpFromAHang) {
+    HangCourse c;
+    c.spawn({ 0, 0.01f, 0 });
+    Locomotion loco(c.world, c.player);
+    jumpToHang(c, loco);
+    ASSERT_EQ(loco.state(), Locomotion::State::Hang);
+    Locomotion::Input up;
+    up.goUp = true;
+    c.run(loco, up, 0.1f);
+    EXPECT_EQ(loco.state(), Locomotion::State::Climb);
+    c.run(loco, Locomotion::Input{}, 1.5f);
+    EXPECT_EQ(loco.state(), Locomotion::State::Ground);
+    EXPECT_NEAR(c.feet().y, 3.0f, 0.05f);
+    EXPECT_LT(c.feet().z, -1.5f);
+}
+
+TEST(Locomotion, CrouchLetsGoAndDoesNotRegrab) {
+    HangCourse c;
+    c.spawn({ 0, 0.01f, 0 });
+    Locomotion loco(c.world, c.player);
+    jumpToHang(c, loco);
+    ASSERT_EQ(loco.state(), Locomotion::State::Hang);
+    Locomotion::Input drop = forward(); // still steering into the wall
+    drop.crouch = true;
+    c.run(loco, drop, 0.05f);
+    EXPECT_EQ(loco.state(), Locomotion::State::Air);
+    c.run(loco, forward(), 1.5f);
+    EXPECT_EQ(loco.state(), Locomotion::State::Ground);
+    EXPECT_NEAR(c.feet().y, 0.0f, 0.05f);
+}
+// A 0.6 m thick, 3 m wall (the showcase lane's): too thin to stand on,
+// so there's no climb, but its top is an edge to hang from, at 15 fps.
+TEST(Locomotion, HangsFromAThinWallItCannotStandOn) {
+    Course c;
+    c.box({ 16.0f, 1.5f, 12.0f }, { 0.3f, 1.5f, 4.0f });
+    c.spawn({ 17.2f, 0.01f, 12.0f });
+    Locomotion loco(c.world, c.player);
+    Locomotion::Input in;
+    in.move = glm::vec3(-1, 0, 0);
+    const float dt = 1.0f / 15.0f;
+    for (int i = 0; i < 30; ++i) {
+        in.goUp = (i == 4);
+        loco.update(in, dt);
+        c.world.step(dt);
+    }
+    ASSERT_EQ(loco.state(), Locomotion::State::Hang);
+    EXPECT_NEAR(c.feet().y, 3.0f - loco.settings().hangReach, 0.05f);
+    EXPECT_NEAR(c.feet().x, 16.3f + loco.settings().radius + 0.05f, 0.05f);
 }

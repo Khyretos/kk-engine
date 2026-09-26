@@ -36,11 +36,15 @@ namespace kke {
 //    obstacle during a short correction window, and hands the momentum
 //    back at the end. Animations are pose providers only: no root motion
 //    decides where the capsule goes.
+//  - Ledges (*Ledge actions*): catching a high edge in the air without
+//    pressing "go up" hangs from it. Hanging, sideways input shimmies
+//    along the edge (each step re-checks the wall and the top, so the
+//    character stops where the ledge ends), "go up" climbs, crouch lets go.
 //
 // Pure logic on RigidWorld (no GPU), unit-tested in tests/test_locomotion.cpp.
 class Locomotion {
 public:
-    enum class State : uint8_t { Ground, Air, Vault, Climb };
+    enum class State : uint8_t { Ground, Air, Vault, Climb, Hang };
 
     // What the game asks for this frame (from InputMap actions).
     struct Input {
@@ -82,6 +86,15 @@ public:
         float vaultMinTime = 0.35f, vaultMaxTime = 0.8f;
         float climbTime = 0.85f;
         float correctionTime = 0.2f;                         // squaring up to the obstacle
+        // Ledge hang. A mid-air grab of a top at least hangMinHeight above
+        // the feet hangs (unless "go up" is held: then it climbs straight).
+        float hangMinHeight = 1.5f;
+        float hangReach = 2.05f;      // top above the feet while hanging (arms up)
+        float hangEnterTime = 0.15f;  // pulling in to the hang position
+        float shimmySpeed = 1.1f;     // m/s along the edge
+        float hangTopTolerance = 0.15f; // how much the top may step while shimmying
+        float dropPush = 0.8f;        // m/s away from the wall when letting go
+        float regrabDelay = 0.4f;     // after letting go, no grab for this long
     };
 
     // What area awareness found in one direction.
@@ -119,6 +132,10 @@ public:
     bool landed() const { return m_landed; }
     float fallHeight() const { return m_fallHeight; }
     const Obstacle& lastObstacle() const { return m_obstacle; }
+    // Hanging: signed shimmy speed along the edge (m/s, + = the
+    // character's right), and the top edge the hands hold (world space).
+    float shimmySpeed() const { return m_state == State::Hang ? m_shimmy : 0.0f; }
+    glm::vec3 hangEdge() const { return m_hangEdge; }
 
     // Area awareness, one direction, with a given sensor (public for tests
     // and debug drawing).
@@ -137,6 +154,16 @@ private:
     void updateGround(const Input& in, float dt, bool grounded);
     void updateAir(const Input& in, float dt, bool grounded);
     void updateTraversal(float dt);
+    void updateHang(const Input& in, float dt);
+    void startHang(const Obstacle& o);
+    // A mid-air grab of an edge the probe can't stand on (a thin wall's
+    // top, a ledge too high to climb straight): hang from it.
+    bool tryHang(const Input& in);
+    void letGo();
+    // Where the edge is from a hanging position `feet` (feet placed for it,
+    // edge point, wall normal); false = no hangable edge there.
+    bool findEdge(const glm::vec3& feet, const glm::vec3& normal, float topY, glm::vec3& outFeet, glm::vec3& outEdge,
+                  glm::vec3& outNormal) const;
     bool tryTraversal(const Input& in, const Sensor& sensor, bool inAir);
     void startTraversal(State s, const Obstacle& o);
     void enter(State s);
@@ -170,6 +197,10 @@ private:
     glm::vec3 m_startFacing{0.0f, 0.0f, -1.0f};
     glm::vec2 m_arc{0.0f};                  // vault parabola (a, b)
     float m_duration = 0.0f, m_exitSpeed = 0.0f;
+
+    // Hanging.
+    glm::vec3 m_hangFeet{0.0f}, m_hangEdge{0.0f};
+    float m_shimmy = 0.0f, m_regrab = 0.0f;
 };
 
 } // namespace kke

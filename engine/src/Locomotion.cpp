@@ -209,7 +209,7 @@ void Locomotion::update(const Input& in, float dt) {
     const glm::vec3 feetNow = m_world.characterPosition(m_id);
     const double simNow = m_world.simulatedTime();
     const float moved = float(simNow - m_lastSimTime);
-    const bool scripted = m_state == State::Vault || m_state == State::Climb;
+    const bool scripted = m_state == State::Vault || m_state == State::Climb || m_state == State::Hang;
     const float over = scripted ? dt : moved;
     if (m_haveLastFeet && over > 0.0f) m_measuredSpeed = glm::length(glm::vec2(feetNow.x - m_lastFeet.x, feetNow.z - m_lastFeet.z)) / over;
     m_lastFeet = feetNow;
@@ -218,8 +218,13 @@ void Locomotion::update(const Input& in, float dt) {
     // Queued input: "go up" pressed a moment too early still counts.
     m_buffer = in.goUp ? m_settings.jumpBuffer : std::max(0.0f, m_buffer - dt);
 
+    m_regrab = std::max(0.0f, m_regrab - dt);
     if (m_state == State::Vault || m_state == State::Climb) {
         updateTraversal(dt);
+        return;
+    }
+    if (m_state == State::Hang) {
+        updateHang(in, dt);
         return;
     }
     const bool grounded = m_world.characterOnGround(m_id);
@@ -236,6 +241,7 @@ void Locomotion::teleport(const glm::vec3& feet) {
     m_speed = 0.0f;
     m_buffer = 0.0f;
     m_sinceGrounded = 0.0f;
+    m_shimmy = 0.0f;
     enter(State::Ground);
 }
 
@@ -270,8 +276,17 @@ bool Locomotion::tryTraversal(const Input& in, const Sensor& sensor, bool inAir)
     if (glm::dot(look, -o.normal) < 0.55f) return false;
     if (inAir) {
         // A mid-air grab: hands must reach the top, and it can't be far below.
+        if (m_regrab > 0.0f) return false;
         if (o.height < 0.6f || o.kind == Obstacle::Kind::Vault) o.kind = Obstacle::Kind::Climb;
         if (o.height < 0.6f) return false;
+        // High and "go up" not pressed: hang from it.
+        if (o.height >= m_settings.hangMinHeight && m_buffer <= 0.0f) {
+            glm::vec3 feet, edge, n;
+            if (findEdge(m_world.characterPosition(m_id), o.normal, o.target.y, feet, edge, n)) {
+                startHang(o);
+                return true;
+            }
+        }
         const glm::vec3 feetThere = o.target;
         if (!m_world.capsuleFits(feetThere + glm::vec3(0, 0.02f, 0), m_settings.height, m_settings.radius)) return false;
     }
@@ -374,6 +389,7 @@ void Locomotion::updateAir(const Input& in, float dt, bool grounded) {
     const glm::vec3 vel = m_world.characterVelocity(m_id);
     // Grab a ledge in front while rising slowly or falling.
     if (vel.y < 1.5f && (m_buffer > 0.0f || glm::length(flat(in.move)) > 0.5f) && tryTraversal(in, s.airSensor, true)) return;
+    if (vel.y < 1.5f && m_buffer <= 0.0f && glm::length(flat(in.move)) > 0.5f && tryHang(in)) return;
 
     // Air control is a small acceleration added to the flight, capped at
     // the take-off speed (PointDown MM2): it corrects a jump, it doesn't
@@ -480,6 +496,137 @@ void Locomotion::updateTraversal(float) {
         m_sinceGrounded = 0.0f;
         enter(State::Ground);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Ledge hang and shimmy (*Ledge actions*)
+// ---------------------------------------------------------------------------
+
+bool Locomotion::findEdge(const glm::vec3& feet, const glm::vec3& normal, float topY, glm::vec3& outFeet, glm::vec3& outEdge,
+                          glm::vec3& outNormal) const {
+    const Settings& s = m_settings;
+    // The wall, at chest height below the top.
+    const glm::vec3 in = -normal;
+    const glm::vec3 chest(feet.x, topY - 0.3f, feet.z);
+    RigidWorld::RayHit wall = m_world.raycast(chest + normal * 0.2f, in, s.radius + 1.2f); // a grab starts up to a sensor reach away
+    if (!wall.hit || std::abs(wall.normal.y) > 0.64f) return false;
+    glm::vec3 n = flat(wall.normal);
+    if (glm::length(n) < 1e-3f) return false;
+    n = glm::normalize(n);
+    if (glm::dot(n, normal) < 0.7f) return false; // a corner, not the same wall
+    // The top, just in from the face.
+    const glm::vec3 over = wall.point - n * 0.12f;
+    RigidWorld::RayHit top = m_world.raycast(glm::vec3(over.x, topY + 0.5f, over.z), glm::vec3(0, -1, 0), 0.5f + s.hangTopTolerance + 0.3f);
+    if (!top.hit || top.normal.y < 0.64f || std::abs(top.point.y - topY) > s.hangTopTolerance) return false;
+    outNormal = n;
+    outEdge = glm::vec3(wall.point.x, top.point.y, wall.point.z);
+    outFeet = glm::vec3(wall.point.x, top.point.y - s.hangReach, wall.point.z) + n * (s.radius + 0.05f);
+    return true;
+}
+
+bool Locomotion::tryHang(const Input& in) {
+    const Settings& s = m_settings;
+    if (m_regrab > 0.0f) return false;
+    const glm::vec3 look = glm::normalize(flat(in.move));
+    const glm::vec3 feet = m_world.characterPosition(m_id);
+    // The wall below where a hangable top would be, then its top.
+    const glm::vec3 low = feet + glm::vec3(0.0f, s.hangMinHeight - 0.2f, 0.0f);
+    RigidWorld::RayHit wall = m_world.raycast(low, look, s.radius + s.airSensor.reach);
+    if (!wall.hit || std::abs(wall.normal.y) > 0.64f) return false;
+    glm::vec3 n = flat(wall.normal);
+    if (glm::length(n) < 1e-3f) return false;
+    n = glm::normalize(n);
+    if (glm::dot(look, -n) < 0.55f) return false; // heading into it, not along it
+    const float highest = s.hangReach + 0.3f;
+    const glm::vec3 over = wall.point - n * 0.12f;
+    RigidWorld::RayHit top = m_world.raycast(glm::vec3(over.x, feet.y + highest + 0.05f, over.z), glm::vec3(0, -1, 0),
+                                             highest + 0.05f - (s.hangMinHeight - 0.2f));
+    if (!top.hit || top.normal.y < 0.64f) return false;
+    const float h = top.point.y - feet.y;
+    if (h < s.hangMinHeight || h > highest) return false;
+    Obstacle o;
+    o.kind = Obstacle::Kind::Climb;
+    o.face = wall.point;
+    o.normal = n;
+    o.height = h;
+    o.target = glm::vec3(over.x, top.point.y, over.z);
+    glm::vec3 f, e, nn;
+    if (!findEdge(feet, n, top.point.y, f, e, nn)) return false;
+    startHang(o);
+    return true;
+}
+
+void Locomotion::startHang(const Obstacle& o) {
+    glm::vec3 feet, edge, n;
+    if (!findEdge(m_world.characterPosition(m_id), o.normal, o.target.y, feet, edge, n)) return;
+    m_obstacle = o;
+    m_obstacle.normal = n;
+    m_start = m_world.characterPosition(m_id);
+    m_startFacing = m_facing;
+    m_hangFeet = feet;
+    m_hangEdge = edge;
+    m_shimmy = 0.0f;
+    m_speed = 0.0f;
+    m_world.setCharacterKinematic(m_id, true);
+    m_world.setCharacterVelocity(m_id, glm::vec3(0.0f));
+    enter(State::Hang);
+}
+
+void Locomotion::letGo() {
+    const glm::vec3 feet = m_world.characterPosition(m_id);
+    m_world.setCharacterKinematic(m_id, false);
+    m_world.setCharacterVelocity(m_id, m_obstacle.normal * m_settings.dropPush);
+    m_airEntrySpeed = 0.0f;
+    m_airPeak = feet.y;
+    m_jumpedFromGround = true; // no coyote jump off a ledge you let go of
+    m_sinceGrounded = m_settings.coyoteTime + 1.0f;
+    m_regrab = m_settings.regrabDelay;
+    m_shimmy = 0.0f;
+    enter(State::Air);
+}
+
+void Locomotion::updateHang(const Input& in, float dt) {
+    const Settings& s = m_settings;
+    const glm::vec3 n = m_obstacle.normal;
+    m_facing = -n;
+    // Pull in to the hang position first.
+    if (m_stateTime < s.hangEnterTime) {
+        const float u = smooth(m_stateTime / s.hangEnterTime);
+        m_world.moveCharacter(m_id, glm::mix(m_start, m_hangFeet, u));
+        return;
+    }
+    if (in.crouch) {
+        letGo();
+        return;
+    }
+    if (m_buffer > 0.0f) {
+        // Climb up from here: the same checked climb as from the ground.
+        Sensor reach{ s.radius + 0.5f, s.hangReach + 0.3f };
+        Obstacle o = probe(-n, reach);
+        if (o.kind != Obstacle::Kind::None && m_world.capsuleFits(o.target + glm::vec3(0, 0.02f, 0), s.height, s.radius)) {
+            m_buffer = 0.0f;
+            startTraversal(State::Climb, o);
+            return;
+        }
+    }
+    // Shimmy: the sideways part of the input, one checked step at a time.
+    const glm::vec3 right = glm::normalize(glm::cross(-n, glm::vec3(0, 1, 0)));
+    const float side = glm::dot(flat(in.move), right);
+    m_shimmy = 0.0f;
+    glm::vec3 feet = m_hangFeet;
+    if (std::abs(side) > 0.2f) {
+        const float v = s.shimmySpeed * std::clamp(side, -1.0f, 1.0f);
+        const glm::vec3 next = m_hangFeet + right * (v * dt);
+        glm::vec3 f, e, nn;
+        if (findEdge(next, n, m_hangEdge.y, f, e, nn) && m_world.capsuleFits(f + glm::vec3(0, 0.02f, 0), s.height, s.radius)) {
+            m_hangFeet = f;
+            m_hangEdge = e;
+            m_obstacle.normal = nn;
+            m_shimmy = v;
+            feet = f;
+        }
+    }
+    m_world.moveCharacter(m_id, feet);
 }
 
 } // namespace kke

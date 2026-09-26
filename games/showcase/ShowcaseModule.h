@@ -126,6 +126,7 @@ private:
     float m_autopilotTime = 0.0f;
     glm::vec3 m_autopilotStart{0.0f};
     float m_autopilotEndZ = 0.0f;
+    float m_demoHang = -1.0f; // KKE_DEMO_HANG: seconds into the script, -1 = off
     glm::vec3 m_spawn{0.0f, 0.05f, 6.0f};
     kke::ModelModule::ModelId m_charModel = 0;
     kke::ModelModule::InstanceId m_charInstance = 0;
@@ -141,7 +142,7 @@ private:
     std::unique_ptr<kke::AnimationSet> m_animSet;
     std::unique_ptr<kke::Animator> m_anim;
     int m_stMove = -1, m_stCrouch = -1, m_stJump = -1, m_stFall = -1, m_stLand = -1;
-    int m_stVault = -1, m_stClimbUp = -1, m_stClimbOver = -1;
+    int m_stVault = -1, m_stClimbUp = -1, m_stClimbOver = -1, m_stHang = -1;
 
     struct SceneEntry {
         std::string path;
