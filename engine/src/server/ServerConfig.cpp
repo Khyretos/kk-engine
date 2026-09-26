@@ -106,8 +106,12 @@ bool ServerConfig::loadJson(const std::string& text, std::vector<std::string>& e
         if (j["clientScores"].is_boolean()) clientScores = j["clientScores"].get<bool>();
         else errors.push_back("server.json \"clientScores\": expected true or false");
     }
+    if (j.contains("fogOfWar")) {
+        if (j["fogOfWar"].is_boolean()) fogOfWar = j["fogOfWar"].get<bool>();
+        else errors.push_back("server.json \"fogOfWar\": expected true or false");
+    }
     static const std::vector<std::string> keys{ "name", "game", "port", "maxPlayers", "password", "motd", "roles", "scene", "saveDir",
-                                                "directories", "directoryPort", "tickRate", "public", "clientScores", "storage",
+                                                "directories", "directoryPort", "tickRate", "public", "clientScores", "fogOfWar", "storage",
                                                 "scripts" };
     for (auto it = j.begin(); it != j.end(); ++it)
         if (std::find(keys.begin(), keys.end(), it.key()) == keys.end())
@@ -153,6 +157,8 @@ bool ServerConfig::applyEnv(const std::function<const char*(const char*)>& geten
     if (const char* v = get("KKE_SERVER_PUBLIC"); v && !parseBool(v, isPublic)) errors.push_back(std::string("KKE_SERVER_PUBLIC='") + v + "': expected true or false");
     if (const char* v = get("KKE_SERVER_CLIENT_SCORES"); v && !parseBool(v, clientScores))
         errors.push_back(std::string("KKE_SERVER_CLIENT_SCORES='") + v + "': expected true or false");
+    if (const char* v = get("KKE_SERVER_FOG_OF_WAR"); v && !parseBool(v, fogOfWar))
+        errors.push_back(std::string("KKE_SERVER_FOG_OF_WAR='") + v + "': expected true or false");
     return errors.size() == before;
 }
 
@@ -189,6 +195,7 @@ bool ServerConfig::applyArgs(const std::vector<std::string>& args, std::vector<s
         else if (a == "--directory") { if (value(v)) directories.push_back(v); }
         else if (a == "--public") isPublic = true;
         else if (a == "--client-scores") clientScores = true;
+        else if (a == "--fog-of-war") fogOfWar = true;
         else if (a == "--config") { value(v); } // read before the layers are applied (kke_server's main)
         else errors.push_back(a + ": unknown option (--help lists them)");
     }
@@ -207,6 +214,7 @@ bool ServerConfig::validate(std::vector<std::string>& errors) const {
         if (std::find(knownRoles().begin(), knownRoles().end(), r) == knownRoles().end()) errors.push_back("roles: '" + r + "' isn't one (" + known + ")");
     const bool game_ = hasGameSocket();
     if (hasRole("physics") && scene.empty()) errors.push_back("roles: physics needs a scene (the level whose walls it checks moves against)");
+    if (fogOfWar && !hasRole("physics")) errors.push_back("fogOfWar: needs the physics role (the level's walls decide who sees whom)");
     if (hasRole("directory") && game_ && directoryPort == port) errors.push_back("directoryPort: must differ from port (both are UDP sockets)");
     if (hasRole("scripts") && scripts.empty()) errors.push_back("scripts: the scripts role needs a folder (default scripts)");
     if (isPublic && directories.empty()) errors.push_back("public: true, but no directories to register with");
@@ -239,8 +247,8 @@ std::string ServerConfig::describe() const {
     }
     if (!scene.empty()) out += "\n  scene: " + scene;
     if (hasRole("scripts")) out += "\n  scripts: " + scripts;
+    if (fogOfWar) out += "\n  fog of war: players are sent only who they could see or hear";
     if (hasRole("directory")) out += "\n  directory on UDP port " + std::to_string(directoryPort);
-
     if (isPublic) out += "\n  public, listed on: " + d;
     if (hasRole("leaderboard")) out += std::string("\n  leaderboard: ") + (clientScores ? "players may send scores" : "scores from the server only");
     return out;
@@ -263,11 +271,11 @@ std::string ServerConfig::usage() {
            "  --directory HOST:PORT a directory to register with (repeatable)\n"
            "  --directory-port N    UDP port of this server's directory role (default 27950)\n"
            "  --client-scores       leaderboard: players may send their own scores\n"
-
+           "  --fog-of-war          physics: send each player only who they could see or hear\n"
            "  --storage URL         sqlite:FILE (default save/server.db), valkey://HOST:PORT, postgres://...\n"
            "Environment: KKE_SERVER_NAME, _GAME, _PORT, _MAX_PLAYERS, _PASSWORD, _MOTD, _ROLES,\n"
            "  _SCENE, _SCRIPTS, _SAVE_DIR, _DIRECTORIES, _DIRECTORY_PORT, _PUBLIC, _CLIENT_SCORES,\n"
-           "  _STORAGE\n"
+           "  _FOG_OF_WAR, _STORAGE\n"
            "  (flags win over them).\n";
 }
 

@@ -4,6 +4,7 @@
 #include "kke/RigidWorld.h"
 #include "kke/net/NetSession.h"
 #include "kke/net/ScriptSpawns.h"
+#include "kke/net/Visibility.h"
 #include "kke/net/WorldMoveCheck.h"
 
 #include <functional>
@@ -141,6 +142,12 @@ public:
     net::MoveCheckSettings moveCheckSettings;
     size_t refusedMoves() const { return m_server ? m_server->refusedMoves() : 0; }
 
+    // --- fog of war (host; kke/net/Visibility.h, docs/ANTI_CHEAT.md): a
+    // client is only sent the players its player could see (through the
+    // static level) or hear. Off by default; competitive games turn it on.
+    bool fogOfWar = false;
+    net::VisibilitySettings visibilitySettings;
+
     net::LinkConditions simulated; // applied to what this game sends
 
 private:
@@ -188,6 +195,7 @@ private:
     std::vector<std::function<void(const net::SpawnMsg&)>> m_spawnListeners;
     std::vector<std::function<void(uint16_t)>> m_despawnListeners;
     std::unique_ptr<net::WorldMoveCheck> m_moveCheck;
+    std::unique_ptr<net::Visibility> m_visibility;
     std::map<uint8_t, double> m_moveLogAt;      // player -> when a refusal was last logged
     PhysicsModule* m_physics = nullptr;         // FEMFX, for breakables (null without it)
     std::vector<std::function<void(const net::GameEventMsg&)>> m_listeners;

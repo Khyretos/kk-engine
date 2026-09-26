@@ -9,6 +9,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <filesystem>
 #include <system_error>
@@ -18,6 +19,15 @@
 #include <string>
 
 namespace kke {
+
+std::optional<ToneMapper> parseToneMapper(const std::string& name) {
+    std::string lower(name);
+    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    if (lower == "agx") return ToneMapper::AgX;
+    if (lower == "aces") return ToneMapper::ACES;
+    if (lower == "reinhard") return ToneMapper::Reinhard;
+    return std::nullopt;
+}
 
 namespace {
 
@@ -71,6 +81,10 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         m_renderer->setMsaaSamples(static_cast<uint32_t>(msaa));
         log::get("Application")->info("MSAA {}x{}", m_renderer->msaaSamples(),
                                       m_renderer->device().isSoftwareRasterizer() ? " (software rasteriser)" : "");
+    }
+    if (const char* env = dev::env("KKE_TONEMAP"); env && *env) {
+        m_toneMapperOverride = parseToneMapper(env);
+        if (!m_toneMapperOverride) log::get("Application")->warn("KKE_TONEMAP={} is not agx, aces or reinhard; ignored", env);
     }
     m_lightingBuffer = std::make_unique<LightingBuffer>(m_renderer->device());
 
@@ -542,6 +556,7 @@ void Application::run() {
         // Once per frame, before any module's render() might bind and
         // draw using it — every lit module shares one buffer and
         // descriptor set per view (see LightingBuffer.h).
+        if (m_toneMapperOverride) m_lighting.toneMapper = *m_toneMapperOverride;
         for (uint32_t i = 0; i < viewCount; ++i)
             drawViews[i].lighting->update(m_lighting, drawViews[i].camera.position, lightViewProj, drawViews[i].proj * drawViews[i].view);
 

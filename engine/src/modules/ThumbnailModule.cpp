@@ -150,6 +150,7 @@ void ThumbnailModule::createGpu() {
     // from the right, generous ambient; no shadows (there is no floor).
     Lighting light;
     light.shadowsEnabled = false;
+    light.toneMapper = m_app->lighting().toneMapper; // thumbnails match the game's look
     light.ambientColor = glm::vec3(0.32f, 0.33f, 0.36f);
     light.lights[0].enabled = true;
     light.lights[0].isDirectional = true;

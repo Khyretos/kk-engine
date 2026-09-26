@@ -15,6 +15,7 @@
 #include <array>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <typeindex>
 #include <unordered_map>
@@ -59,6 +60,18 @@ struct Light {
 // LightingBuffer.h for exactly how that's laid out and why 4 was
 // chosen (a small, genuinely useful number for a first real multi-
 // light slice, not an arbitrary round number).
+// How lit shaders turn scene light (unbounded) into displayable colour
+// (shaders/tonemap.glsl). The values are what the shaders read, so keep the
+// order. AgX is the default: highlights desaturate towards white instead of
+// shifting hue. ACES gives more contrast (the "movie" look); Reinhard is the
+// engine's original curve. See docs/RENDERING_PRINCIPLES.md §7.
+enum class ToneMapper : int { AgX = 0, ACES = 1, Reinhard = 2 };
+
+// "agx", "aces" or "reinhard" (any case); nullopt for anything else. Used by
+// the KKE_TONEMAP override, which forces one curve over whatever the game
+// picked, to compare them.
+std::optional<ToneMapper> parseToneMapper(const std::string& name);
+
 struct Lighting {
     static constexpr int kMaxLights = 4;
     std::array<Light, kMaxLights> lights;
@@ -66,6 +79,9 @@ struct Lighting {
     // Light 0's shadow map is still rendered either way (so toggling is
     // instant), but lit shaders ignore it when this is false.
     bool shadowsEnabled = true;
+    ToneMapper toneMapper = ToneMapper::AgX;
+    // Multiplies scene light before tone mapping: > 1 brightens, < 1 darkens.
+    float exposure = 1.0f;
 
     Lighting() {
         // A sensible default so a demo that never touches lighting at
@@ -301,6 +317,7 @@ private:
     std::unique_ptr<DebugUi> m_debugUi;
     Camera m_camera;
     Lighting m_lighting;
+    std::optional<ToneMapper> m_toneMapperOverride; // KKE_TONEMAP
     std::unique_ptr<LightingBuffer> m_lightingBuffer;
     std::vector<View> m_views;
     // Views after the first: each its own lighting block (camera position

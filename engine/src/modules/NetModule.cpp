@@ -5,6 +5,7 @@
 #include "kke/modules/PhysicsModule.h"
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/net/EnetTransport.h"
+#include "kke/net/LevelSight.h"
 
 #include <imgui.h>
 
@@ -140,11 +141,14 @@ bool NetModule::host(uint16_t port, std::string* error) {
                 }
                 return false;
             };
+            m_visibility = std::make_unique<net::Visibility>(net::levelSight(m_rigid->world()));
+            m_server->sendPlayer = [this](uint8_t viewer, uint8_t subject) { return !fogOfWar || !m_visibility || m_visibility->visible(viewer, subject); };
         }
         // Whatever broke before hosting is news to the clients too.
         for (auto& [id, b] : m_breakables) b.sentBorders = 0;
         m_server->onPlayer = [this](uint8_t id, bool joined) {
             if (!joined && m_moveCheck) m_moveCheck->forget(id);
+            if (!joined && m_visibility) m_visibility->forget(id);
             if (!joined) m_moveLogAt.erase(id);
             log::get(name())->info("Player {} {} ({} connected)", id, joined ? "joined" : "left", m_server->clientCount());
             if (m_enet) m_enet->setDiscoveryInfo(discoveryInfo());
@@ -219,6 +223,7 @@ void NetModule::leave() {
     m_status = "offline";
     m_remote.clear();
     m_moveCheck.reset();
+    m_visibility.reset();
     m_moveLogAt.clear();
     dropSpawned();
     applyFollowers();
@@ -532,6 +537,14 @@ void NetModule::update(const UpdateContext&) {
             m_server->setBodies(bodies);
         }
         pollBreaks();
+        if (fogOfWar && m_visibility) {
+            m_visibility->settings = visibilitySettings;
+            std::vector<net::Visibility::Player> players;
+            if (m_hasLocal) players.push_back({ 0, m_local.position, m_local.velocity });
+            for (const net::RemotePlayer& p : m_server->players(t))
+                if (p.hasState) players.push_back({ p.id, p.state.position, p.state.velocity });
+            m_visibility->update(t, players);
+        }
         m_server->update(t);
         m_remote = m_server->players(t);
     } else if (m_client) {

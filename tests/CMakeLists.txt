@@ -49,10 +49,12 @@ add_executable(kke_tests
     test_texture_mips.cpp
     test_shadow_projection.cpp
     test_draw_order.cpp
+    test_tone_mapper.cpp
     test_jiggle.cpp
     test_rml_data_binding.cpp
     test_frame_retire_queue.cpp
     test_anti_cheat.cpp
+    test_fair_play.cpp
 )
 target_link_libraries(kke_tests PRIVATE kke_engine GTest::gtest_main)
 if(KKE_ENABLE_JOLT)

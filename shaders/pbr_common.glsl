@@ -16,10 +16,13 @@ layout(set = 0, binding = 0) uniform LightingUBO {
     vec4 cameraPos; // rgb = world-space camera position, for specular
     mat4 lightViewProj;
     mat4 viewProj; // see cube.vert's own comment on why this is here
+    vec4 toneParams; // x = tone mapper (tonemap.glsl), y = exposure
 } lighting;
 
 // A depth-compare sampler (kke::ShadowMap): texture() returns how lit.
 layout(set = 1, binding = 0) uniform sampler2DShadow shadowMap;
+
+#include "tonemap.glsl"
 // Set 2: the material's own albedo texture -- see kke::Texture and
 // kke::Application's own default 1x1 white texture (bound here for
 // any object that doesn't have a real one of its own, so this
@@ -128,7 +131,7 @@ float specularAAKernel(vec3 normalWorld) {
 vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 posWorld, vec4 posLightSpace, float specAAKernel);
 
 // Full lighting for one surface point: PBR (GGX) for up to 4 lights,
-// shadow on light 0, flat ambient, Reinhard tone map. Shared by every
+// shadow on light 0, flat ambient, tone map (tonemap.glsl). Shared by every
 // lit mesh shader (cube.frag, model.frag) so they can't drift apart.
 // Shaders that discard call shadeSurfaceAA with a kernel taken first.
 vec3 shadeSurface(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 posWorld, vec4 posLightSpace) {
@@ -223,14 +226,7 @@ vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 
     vec3 ambient = lighting.ambient.rgb * albedo;
 
     vec3 color = ambient + Lo;
-    // Reinhard tone mapping -- Lo can exceed 1.0 per-channel with
-    // strong lights/low roughness (a real, physically-expected PBR
-    // result, not a bug), and without compressing it back down first,
-    // those values would just clip to flat white instead of rolling
-    // off smoothly. A simple, standard choice, not a full filmic curve
-    // -- worth revisiting alongside real HDR/bloom if this engine ever
-    // adds either.
-    color = color / (color + vec3(1.0));
+    color = toneMap(color, lighting.toneParams);
 
     return color;
 }

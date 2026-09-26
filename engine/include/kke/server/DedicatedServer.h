@@ -22,6 +22,7 @@ namespace kke {
 class RigidWorld;
 namespace net {
 class WorldMoveCheck;
+class Visibility;
 }
 } // namespace kke
 
@@ -89,6 +90,7 @@ private:
 #if KKE_ENABLE_LUA
     std::unique_ptr<ServerScripts> m_scripts;
 #endif
+    std::unique_ptr<net::Visibility> m_visibility; // fogOfWar
     size_t m_collisionBodies = 0;
     double m_now = 0, m_nextSave = 0;
     double m_tickClock = -1; // the scripts role's fixed ticks: time simulated so far

@@ -5,13 +5,15 @@ system scan or anything else that reaches past the game itself.
 
 ## The short version
 
-Most cheating comes in through one of four doors. KKE closes each one
+Most cheating comes in through a handful of doors. KKE closes each one
 from inside the game and its server:
 
 | The cheat | What stops it | Where |
 |---|---|---|
 | Opening the developer menu, console or debug switches in a released game | Shipping builds don't contain them | `KKE_SHIPPING`, `kke/DevTools.h` |
 | A hacked client saying "I'm over there", "I hit him", "I have 9999 gold" | The server decides what matters and checks the rest | `kke/net/Authority.h`, [NETWORKING.md](NETWORKING.md) "Movement checks" |
+| Wallhacks, radar hacks: seeing players through walls | The server doesn't send players nobody could see or hear yet | `kke/net/Visibility.h`, `NetModule::fogOfWar` |
+| "I hit for a million", "I'm flying without a plane" | The game's own rules, stated as facts and checked on the server | `kke/GameRules.h` |
 | Rapid-fire controllers, macro keys, scripted adapters, input bots | Their timing is too perfect for a human hand; it gets flagged | `kke/InputSanity.h` |
 | Edited game files (a script with more damage, a level with a wall removed) | Data is sealed with the developer's signature; a changed file shows | `kke/PackSeal.h`, `kke_seal` |
 
@@ -130,6 +132,66 @@ The rules of thumb for a competitive game built on this:
    item theirs, is that spot reachable, is it too often).
 3. Send clients only what they may know (see the fog-of-war issue).
 
+## Fog of war
+
+The server knows everything; a client only needs to know what its player
+could see or hear. So each snapshot leaves out the players a client
+couldn't perceive yet, and a wallhack has nothing to draw (Valorant and
+CS2 do the same).
+
+```cpp
+net->fogOfWar = true;                        // NetModule, host side
+net->visibilitySettings.hearingRadius = 20;  // heard through walls within 20 m
+```
+
+`kke::net::Visibility` decides, for every pair of players, from rays
+through the host's static level (crates and players are no cover). It
+costs players no input delay: the server decides while it builds
+snapshots, which it does anyway. The costs it does have, and how they're
+kept small:
+
+- **Server CPU.** Pairs further apart than `maxDistance` are never sent
+  and cast no rays; pairs within `hearingRadius` are always sent (you'd
+  hear their footsteps); the rest are re-traced every 100 ms, not every
+  snapshot, with at most 24 rays a pair and usually one.
+- **Pop-in at corners.** Rays go from where the viewer's eye will be to
+  where the subject will be `lead` seconds from now (latency plus a
+  frame), and to the edges of a padded body, so someone running round a
+  corner is sent just before they appear, never after.
+- **Flicker.** A player stays sent for `keepVisible` (0.5 s) after
+  leaving sight.
+
+A client drops a player the moment the server stops sending it (it isn't
+left frozen where it was last seen) and starts it fresh when it's back.
+Grenades, projectiles and sounds by hearing range are next (#49).
+
+## Game rules
+
+The developer knows what's impossible in their game: nobody flies
+without a plane, a plane doesn't fly without fuel, no hit beats the best
+buffed attack. `kke::GameRules` lets them say so as plain facts, and the
+server checks every claim against them:
+
+```cpp
+kke::GameRules rules;
+rules.rule("flying needs a plane with fuel", { "flying == 1" }, { "in_plane == 1", "fuel > 0" });
+rules.rule("no hit above the best buffed attack", {}, { "damage <= max_damage" });
+rules.limit("gold in range", "gold", 0, 1'000'000);
+
+std::vector<kke::RuleViolation> broken;
+if (!rules.check({ { "flying", 1 }, { "in_plane", 1 }, { "fuel", 0 } }, &broken))
+    log("{}: {}", broken[0].rule, broken[0].detail); // "needs fuel > 0 (fuel = 0)"
+```
+
+A fact is a number the game fills in for the moment it checks (missing
+facts are 0, true and false are 1 and 0, and NaN never passes). A
+condition compares a fact with a number or with another fact, so rare
+multipliers work: the game puts the real ceiling for that hit in
+`max_damage`. Rules are data (`toJson` / `loadJson`), so the Lua,
+node-graph and drag-and-drop tiers can make the same rules (#59). A
+broken rule is evidence, counted per rule; what happens next (refuse the
+event, correct the player, flag them for review) is the game's call.
+
 ## Rigged controllers and macros
 
 A rapid-fire mod or a Cronus-style adapter doesn't need anything
@@ -195,7 +257,9 @@ the check out of the executable. Its weight is:
 
 Tracked in #48, with one issue each (label `area: anti-cheat`):
 
-- #49 Server fog of war: don't send players what they can't see.
+- #49 Fog of war for grenades, projectiles and sounds, and in kke_server (players done).
+- #59 Game rules in Lua, the node graph and drag-and-drop, checked on the server.
+- #58 Kreative DRM's activation service (see [DRM.md](DRM.md)).
 - #50 Server-authoritative movement from inputs for competitive games (with #28).
 - #51 Input sanity on the server, and clients reporting findings.
 - #52 Data digest in the join handshake; startup seal check in shipping builds.

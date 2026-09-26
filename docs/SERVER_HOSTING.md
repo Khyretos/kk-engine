@@ -55,6 +55,7 @@ setting it can't use rather than guessing.
   "directories": [],
   "public": false,
   "clientScores": false,
+  "fogOfWar": false,
   "storage": "sqlite:save/server.db"
 }
 ```
@@ -62,7 +63,7 @@ setting it can't use rather than guessing.
 Every setting also has a variable (`KKE_SERVER_NAME`, `_GAME`, `_PORT`,
 `_MAX_PLAYERS`, `_PASSWORD`, `_MOTD`, `_ROLES` as `a,b`, `_SCENE`,
 `_SAVE_DIR`, `_DIRECTORIES`, `_DIRECTORY_PORT`, `_PUBLIC`,
-`_CLIENT_SCORES`, `_STORAGE`) and a flag (`./kke_server --help`). `KKE_SERVER_CONFIG`
+`_CLIENT_SCORES`, `_FOG_OF_WAR`, `_STORAGE`) and a flag (`./kke_server --help`). `KKE_SERVER_CONFIG`
 or `--config` picks another file. For the `physics` role the models of the
 scene come from the asset folder (`KKE_ASSETS_DIR`, as for the games).
 
@@ -87,7 +88,7 @@ settings; a server runs any mix.
 | Role | What it does | Status |
 |---|---|---|
 | `players` | Joins, player states, snapshots, speed limits (docs/NETWORKING.md); passes each player's game events on to the others, as a host would; relays voice chat to whoever should hear it (nearby, team, everyone) | built |
-| `physics` | Owns the world: loads the scene's collision headlessly (`loadSceneCollision`) and refuses moves through walls and flights (`WorldMoveCheck`). Simulating replicated bodies on the server is next | built (collision + move checks) |
+| `physics` | Owns the world: loads the scene's collision headlessly (`loadSceneCollision`) and refuses moves through walls and flights (`WorldMoveCheck`). With `"fogOfWar": true` each player is only sent the players they could see or hear, so a wallhack has nothing to draw (docs/ANTI_CHEAT.md). Simulating replicated bodies on the server is next | built (collision + move checks) |
 | `leaderboard` | Named boards: each player's best score, top 10 per reply, kept in `saveDir/leaderboards.json`. Other servers using one leaderboard server is #46 | built |
 | `directory` | A server list: servers with `"public": true` register and send a heartbeat; games ask it for the list. Anyone can run one (a friend group, a modding community, a studio) | built (server side and `DirectoryBrowser`; the game's panel lists LAN games only so far) |
 | `scripts` | The game's server scripts (`sv_*.lua`, `sh_*.lua`) run headless: what they spawn shows up for every player, `net.send` works both ways, scores go on the leaderboards from the server's side | built (#43) |
