@@ -7,6 +7,8 @@
 // Built with KKE_ENABLE_NET.
 
 #include "kke/net/NetSession.h"
+#include "kke/net/Relay.h"
+#include "kke/net/SecureTransport.h"
 #include "kke/server/DirectoryNet.h"
 #include "kke/server/Leaderboard.h"
 #include "kke/server/ServerAccess.h"
@@ -29,6 +31,7 @@ class Visibility;
 namespace kke::server {
 
 class ServerScripts;
+class RelayService;
 
 class DedicatedServer {
 public:
@@ -37,6 +40,10 @@ public:
     // models are (the physics role).
     DedicatedServer(ServerConfig config, net::ITransport& transport, std::string assetsDir = {});
     ~DedicatedServer();
+
+    // The game socket's side door for join codes (config().relay): the
+    // EnetTransport in kke_server. Set before start().
+    void setRawSocket(net::RawSocket* socket) { m_raw = socket; }
 
     // Loads the save folder's files and the scene, opens the sockets.
     // false: it can't run; `errors` says why. Problems it can run with
@@ -67,6 +74,14 @@ public:
     // Where this server keeps data (config().storage); games and future roles (#45) use it.
     storage::Store* store() { return m_store.get(); }
     DirectoryEntry directoryEntry() const; // what it tells directories
+    // Every connection is encrypted (kke/net/SecureTransport.h) with this
+    // server's key, kept in saveDir/server.key.
+    const net::ServerIdentity& identity() const { return m_identity; }
+    // "K7M-Q2P@relay.example.org" once a relay gave one; "" before.
+    std::string joinCode() const;
+    // A relayed player's real address, by the relay port they come from.
+    std::string relayedAddress(const std::string& host, uint16_t port) const;
+    const RelayService* relay() const { return m_relayService.get(); } // the relay role
 
 private:
     void onEvent(const net::GameEventMsg& e);
@@ -78,6 +93,11 @@ private:
 
     ServerConfig m_config;
     net::ITransport& m_transport;
+    net::RawSocket* m_raw = nullptr;
+    net::ServerIdentity m_identity;
+    std::unique_ptr<net::SecureTransport> m_secure;       // over m_transport; the game's connections use it
+    std::unique_ptr<net::RelayHost> m_relayHost;          // our join code
+    std::unique_ptr<RelayService> m_relayService;         // the relay role
     std::string m_assetsDir;
     std::unique_ptr<net::NetServer> m_net;
     ServerAccess m_access;

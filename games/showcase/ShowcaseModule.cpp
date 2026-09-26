@@ -168,6 +168,7 @@ void ShowcaseModule::init(kke::Application& app) {
         m_capsule->upload(v, i);
     }
     buildLevel();
+    dressCourse();
     spawnCrates();
     spawnBreakables();
     setupPlayer();
