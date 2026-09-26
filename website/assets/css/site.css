@@ -227,6 +227,7 @@ html.dark .theme-toggle .fa-moon, html:not(.dark) .theme-toggle .fa-sun { displa
 .media { margin: 0; display: none; }
 .media.active { display: block; animation: fade 0.5s ease; }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+.media video { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
 .media img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; cursor: zoom-in; }
 .media figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 30px 18px 14px; color: #fff; font-size: 0.9rem;
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.75)); }
