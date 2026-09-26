@@ -4,6 +4,7 @@
 
 #include <libpq-fe.h>
 
+#include <cstdio>
 #include <limits>
 
 namespace kke::storage {
@@ -36,7 +37,22 @@ bool PostgresStore::open(const std::string& url, std::string* error) {
         close();
         return false;
     }
-    if (!exec("CREATE TABLE IF NOT EXISTS kke_kv (collection TEXT NOT NULL, key BYTEA NOT NULL, value BYTEA NOT NULL, PRIMARY KEY (collection, key))")) {
+    PQsetNoticeProcessor(m_conn, [](void* self, const char* message) {
+        std::string text = message ? message : "";
+        while (!text.empty() && (text.back() == '\n' || text.back() == ' ')) text.pop_back();
+        const auto* store = static_cast<const PostgresStore*>(self);
+        if (store->onNotice) store->onNotice("postgres: " + text);
+        else std::fprintf(stderr, "postgres: %s\n", text.c_str());
+    }, this);
+    // Made only when missing, so a second server on the same database
+    // doesn't get a "relation already exists, skipping" notice each start.
+    std::unique_ptr<Result> exists = run("SELECT to_regclass('kke_kv') IS NOT NULL", {}, false);
+    if (!exists) {
+        if (error) *error = "postgres: " + lastError();
+        close();
+        return false;
+    }
+    if (exists->value(0, 0) != "t" && !exec("CREATE TABLE IF NOT EXISTS kke_kv (collection TEXT NOT NULL, key BYTEA NOT NULL, value BYTEA NOT NULL, PRIMARY KEY (collection, key))")) {
         if (error) *error = "postgres: " + lastError();
         close();
         return false;

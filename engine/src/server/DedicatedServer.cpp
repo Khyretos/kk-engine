@@ -61,7 +61,10 @@ bool DedicatedServer::start(std::vector<std::string>& errors) {
         std::string error;
         m_store = storage::openStore(url, &error);
         if (!m_store) errors.push_back("storage: " + error);
-        else info(std::string("storage: ") + m_store->backendName());
+        else {
+            m_store->onNotice = [this](const std::string& m) { warning(m); };
+            info(std::string("storage: ") + m_store->backendName());
+        }
     }
     std::vector<std::string> fileProblems;
     m_access.load(accessPath(), fileProblems);

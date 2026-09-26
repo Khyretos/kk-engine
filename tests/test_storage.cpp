@@ -4,6 +4,9 @@
 
 #include "kke/storage/Store.h"
 #include "kke/storage/SqliteStore.h"
+#if KKE_ENABLE_POSTGRES
+#include "kke/storage/PostgresStore.h"
+#endif
 
 #include <gtest/gtest.h>
 
@@ -158,3 +161,21 @@ TEST(OpenStore, ExplainsWhatItCantOpen) {
     EXPECT_NE(error.find("KKE_ENABLE_VALKEY"), std::string::npos);
 #endif
 }
+
+#if KKE_ENABLE_POSTGRES
+// A second open of the same database (a second server, a restart) finds
+// the table and says nothing; notices reach onNotice, not stderr.
+TEST(Storage, PostgresReopenIsQuiet) {
+    const char* env = std::getenv("KKE_TEST_POSTGRES");
+    if (!env || !*env) GTEST_SKIP() << "set KKE_TEST_POSTGRES to a server to test it";
+    std::vector<std::string> notices;
+    for (int i = 0; i < 2; ++i) {
+        PostgresStore store;
+        store.onNotice = [&](const std::string& m) { notices.push_back(m); };
+        std::string error;
+        ASSERT_TRUE(store.open(env, &error)) << error;
+        EXPECT_TRUE(store.put("t", "k", "v")) << store.lastError();
+    }
+    EXPECT_TRUE(notices.empty()) << notices.front();
+}
+#endif

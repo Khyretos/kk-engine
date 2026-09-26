@@ -54,6 +54,9 @@ public:
 
     // The last failure's reason ("" after a success), for this store.
     std::string lastError() const;
+    // Messages from the database that aren't failures (a PostgreSQL
+    // NOTICE or WARNING), for the owner's log. Unset: written to stderr.
+    std::function<void(const std::string& message)> onNotice;
 
     // Collections: 1-64 of a-z 0-9 _ - . ; keys: 1-256 bytes; values: up to 16 MiB.
     static bool validCollection(const std::string& c);
