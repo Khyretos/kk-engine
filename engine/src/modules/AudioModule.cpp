@@ -18,6 +18,11 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#if defined(__linux__)
+#include <dlfcn.h>
+#include <cstdarg>
+#include <cstdio>
+#endif
 
 namespace kke {
 
@@ -30,6 +35,34 @@ void dataCallback(ma_device* device, void* output, const void*, ma_uint32 frameC
     auto* mixer = static_cast<AudioMixer*>(device->pUserData);
     mixer->mix(static_cast<float*>(output), int(frameCount));
 }
+
+#if defined(__linux__)
+// On a machine with libasound but no sound card (CI, containers, servers)
+// miniaudio's ALSA probe makes libasound print a dozen "ALSA lib ... cannot
+// find card '0'" lines straight to stderr before it falls back. Route
+// libasound's messages into the engine log at debug level instead; the
+// outcome (the device we got, or "running silent") is logged by init().
+__attribute__((format(printf, 5, 6)))
+void alsaMessage(const char* file, int line, const char* function, int err, const char* fmt, ...) {
+    char text[512];
+    va_list args;
+    va_start(args, fmt);
+    std::vsnprintf(text, sizeof(text), fmt, args);
+    va_end(args);
+    log::get("Audio")->debug("ALSA {}:{} {}: {} ({})", file, line, function, text, err);
+}
+
+void routeAlsaMessages() {
+    using Handler = void (*)(const char*, int, const char*, int, const char*, ...);
+    // Kept open: the handler is process-wide in libasound, which miniaudio
+    // opens (and may close) on its own.
+    static void* lib = dlopen("libasound.so.2", RTLD_NOW | RTLD_GLOBAL);
+    if (!lib) return; // no ALSA here: nothing to quiet
+    using SetHandler = int (*)(Handler);
+    if (auto set = reinterpret_cast<SetHandler>(dlsym(lib, "snd_lib_error_set_handler")))
+        set(&alsaMessage);
+}
+#endif
 } // namespace
 
 AudioModule::AudioModule() : AudioModule(Settings{}) {}
@@ -48,6 +81,9 @@ void AudioModule::init(Application& app) {
     const char* env = std::getenv("KKE_AUDIO");
     const bool wantDevice = settings.openDevice && !(env && (std::strcmp(env, "off") == 0 || std::strcmp(env, "0") == 0));
     if (wantDevice) {
+#if defined(__linux__)
+        routeAlsaMessages();
+#endif
         m_device = std::make_unique<Device>();
         ma_device_config cfg = ma_device_config_init(ma_device_type_playback);
         cfg.playback.format = ma_format_f32;
