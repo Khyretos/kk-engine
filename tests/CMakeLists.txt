@@ -15,6 +15,7 @@ add_executable(kke_tests
     test_asset_catalog.cpp
     test_picking.cpp
     test_play_blocks.cpp
+    test_orders.cpp
     test_node_graph.cpp
     test_touch_gestures.cpp
     test_voxel_fracture.cpp
@@ -27,6 +28,9 @@ add_executable(kke_tests
     test_anim_rig.cpp
     test_procedural_anim.cpp
     test_climb_wall.cpp
+    test_combat.cpp
+    test_sidekick.cpp
+    test_mesh_lod.cpp
     test_resource_governor.cpp
     test_hardware_target.cpp
     test_frame_stats.cpp
