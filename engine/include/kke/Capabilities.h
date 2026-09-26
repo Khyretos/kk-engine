@@ -72,6 +72,7 @@ public:
 // this, and reads body transforms back every frame — so swapping physics
 // engines doesn't touch the character side.
 struct RagdollDesc;
+struct RagdollDrive;
 class IRagdollPhysics {
 public:
     using RagdollHandle = uint32_t; // 0 = invalid
@@ -87,6 +88,11 @@ public:
     // offer them: FEMFX 0 (no joint limits, limbs pass through each
     // other), Jolt 1 (cone/twist limits, limbs collide).
     virtual int ragdollQuality() const { return 0; }
+    // Active ragdolls (kke/ProceduralAnim.h): joint motors pull the bodies
+    // toward drive.targets this step, as strong as drive.jointStrength.
+    // Stays in force until the next call. False = this physics has no
+    // motors (FEMFX): the ragdoll stays limp.
+    virtual bool driveRagdoll(RagdollHandle, const RagdollDrive&) { return false; }
 };
 
 // The best ragdoll provider among `providers` (e.g.
