@@ -43,7 +43,7 @@ jobs:
   linux:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install system dependencies
         run: |
@@ -107,7 +107,7 @@ jobs:
           done
           exit $failed
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: kk-engine-linux
           path: dist/*
@@ -116,7 +116,7 @@ jobs:
   windows:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install MinGW-w64 and tools
         run: |
@@ -141,7 +141,7 @@ jobs:
       - name: Package
         run: tools/packaging/package.sh --bin build/bin --platform windows --version "$VERSION" --out dist --deps build/_deps --strip x86_64-w64-mingw32-strip
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: kk-engine-windows
           path: dist/*
@@ -149,7 +149,7 @@ jobs:
 
       # The test binary is not part of the package; the next job runs it
       # on real Windows.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: kke-tests-windows
           path: build/bin/kke_tests.exe
@@ -159,10 +159,10 @@ jobs:
     needs: windows
     runs-on: windows-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: kke-tests-windows
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: kk-engine-windows
       # The tests run inside the unpacked package: that is where the DLLs
@@ -194,7 +194,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: kk-engine-*
           path: dist
