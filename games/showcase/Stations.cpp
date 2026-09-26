@@ -6,9 +6,15 @@
 
 #include "ShowcaseModule.h"
 #include "kke/Application.h"
+#include "kke/Log.h"
 #include "kke/modules/RigidBodyModule.h"
 
+#include <SDL3/SDL.h>
 #include <glm/gtc/matrix_transform.hpp>
+
+#include <cstdlib>
+#include <exception>
+#include <string>
 
 namespace kke_showcase {
 
@@ -117,6 +123,33 @@ bool ShowcaseModule::lavaWatched() const {
     for (const kke::Application::View& view : m_app->views())
         if (near(view.camera.position)) return true;
     return false;
+}
+
+// Synty art around the stations: a scene file placed on the course
+// itself (origin 0), so it names the same spots as layout::. Paid packs
+// are never shipped, so without them (CI, a fresh clone) the course stays
+// the plain boxes it was built from.
+void ShowcaseModule::dressCourse() {
+    if (const char* off = std::getenv("KKE_COURSE_ART"); off && *off == '0') return;
+    const char* base = SDL_GetBasePath();
+    const std::string path = kke::findAssetFolder("course", { "KKE_COURSE_DIR" }, base ? base : "") + "/course_art.scene.json";
+    kke::SceneFile art;
+    try {
+        art = kke::SceneFile::load(path);
+    } catch (const std::exception& e) {
+        kke::log::get(name())->info("course art not loaded: {}", e.what());
+        return;
+    }
+    scanCatalog();
+    // All or nothing: half the art would look like a bug.
+    for (const kke::SceneObject& o : art.objects)
+        if (!m_catalog.find(o.asset, art.packs)) {
+            std::string packs;
+            for (const std::string& p : art.packs) packs += (packs.empty() ? "" : ", ") + p;
+            kke::log::get(name())->info("course art: {} isn't installed (needs {}), so the course stays plain", o.asset, packs);
+            return;
+        }
+    m_courseArt = kke::loadScene(art, m_catalog, *m_models, &m_rigid->world());
 }
 
 } // namespace kke_showcase
