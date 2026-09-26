@@ -19,7 +19,6 @@ option(ENGINE_ENABLE_LUA "Build with Lua scripting support" OFF) # wired later
 option(ENGINE_HEADLESS_TEST "Build the headless smoke-test target" ON)
 option(KKE_ENABLE_TESTS "Build the unit test suite (tests/)" ON)
 option(KKE_ENABLE_FEMFX "Build the vendored, patched AMD FEMFX deformable-physics library. See README 'Physics: AMD FEMFX integration'." OFF)
-option(KKE_ENABLE_TETRAHEDRALIZER "Build the offline mesh-to-tetrahedra import tool (needs system CGAL — see tools/tetrahedralizer/README or the engine README's content-pipeline section). Deliberately never linked into kke_engine or any game runtime." OFF)
 option(KKE_ENABLE_COVERAGE "Instrument builds for code coverage (gcc/clang --coverage). See README 'Test suite & coverage'." OFF)
 option(KKE_ENABLE_GPU_PROFILER "Request the VulkanProfiler layer (VK_LAYER_PROFILER_unified) at instance creation if installed. See README 'GPU profiler (VulkanProfiler) integration'." OFF)
 
@@ -343,23 +342,13 @@ endif()
 
 add_subdirectory(engine)
 
-# ---------------------------------------------------------------------------
-# Tools — deliberately separate from the engine/game build graph. See
-# tools/tetrahedralizer/README.md and the engine README's "Content
-# pipeline: CGAL tetrahedralization" section for why: CGAL is GPL-
-# licensed, and this tool is the ONLY place in this whole repo that's
-# allowed to link it. Nothing in engine/ or games/ may depend on this
-# target or include any CGAL header, ever — that boundary is what lets
-# a game built with this engine ship fully closed-source despite this
-# tool existing at all.
-# ---------------------------------------------------------------------------
-if(KKE_ENABLE_TETRAHEDRALIZER)
-    add_subdirectory(tools/tetrahedralizer)
-endif()
+# (The CGAL-based offline tetrahedralizer that used to live in tools/ was
+# removed on 2026-09-26: kke::voxelizeToTets does the job at runtime on any
+# mesh, including open ones CGAL rejects, and CGAL's GPL licence was a risk
+# for an engine that powers a marketplace. See README "Content pipeline".)
 
 # The physics multithreading benchmark — links femfx directly (not
-# kke_engine), so it only needs KKE_ENABLE_FEMFX, not the
-# tetrahedralizer's separate CGAL gate. See tools/physics_benchmark/
+# kke_engine), so it only needs KKE_ENABLE_FEMFX. See tools/physics_benchmark/
 # main.cpp's own top comment for why this tool exists: this sandbox
 # has exactly 1 CPU core, so no real speedup could ever be measured
 # here — this tool is what lets that be measured honestly on whatever

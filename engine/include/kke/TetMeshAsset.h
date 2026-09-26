@@ -8,14 +8,11 @@
 
 namespace kke {
 
-// Plain data loaded from a .ktet.json file — the output format written
-// by tools/kke_tetrahedralizer (see that tool's own header comment and
-// README "Content pipeline: CGAL tetrahedralization"). Deliberately
-// has zero CGAL dependency, unlike the tool that produces these files:
-// this is exactly the boundary that lets a game's shipped runtime stay
-// closed-source despite CGAL (GPL) existing anywhere in this repo at
-// all — this loader, and everything downstream of it, only ever reads
-// plain floating-point data out of a JSON file.
+// A tetrahedral mesh as plain data, and the .ktet.json file format to
+// store one. Produced at runtime by kke::voxelizeToTets (VoxelTets.h);
+// the file format is kept for asset cooking — saving pre-built tet
+// meshes so props don't need voxelizing at load time. (The offline CGAL
+// tool that used to write these files was removed; see README.)
 struct TetMeshData {
     std::vector<glm::vec3> vertices;
     std::vector<std::array<uint32_t, 4>> tets;

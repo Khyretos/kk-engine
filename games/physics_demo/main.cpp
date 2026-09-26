@@ -21,7 +21,7 @@
 // camera its own distance/angle suited to the real scale, and asks
 // PhysicsModule to render at that real scale (renderScale=1.0) rather
 // than fight the mismatch. See README "Physics: AMD FEMFX integration"
-// and "Content pipeline: CGAL tetrahedralization" for how this
+// for how this
 // simulation itself was built and verified — this file is just the
 // demo-specific setup: camera placement and how many objects to drop.
 //

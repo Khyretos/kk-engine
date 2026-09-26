@@ -43,11 +43,10 @@ namespace kke {
 // just "one hardcoded falling tetrahedron": call spawnTetMesh() at any
 // time after init() has run (including at runtime, from ImGui — see
 // renderUi() for a live, working example of exactly that) to add
-// another object with its own shape, position, and kke::Material. As
-// of the CGAL content-pipeline work (see README "Content pipeline:
-// CGAL tetrahedralization"), "its own shape" is genuinely arbitrary —
-// spawnTetMesh() takes a kke::TetMeshData loaded from any
-// kke_tetrahedralizer output file, not just the one hardcoded
+// another object with its own shape, position, and kke::Material. "Its
+// own shape" is arbitrary: any kke::TetMeshData, typically built at
+// runtime from a render mesh by kke::voxelizeToTets (VoxelTets.h), or
+// loaded from a .ktet.json file, not just the one hardcoded
 // tetrahedron. spawnTetrahedron() still exists as a thin convenience
 // wrapper (builds a 4-vert/1-tet TetMeshData and calls spawnTetMesh())
 // — kept specifically because it's the same call the demo's starting
@@ -73,21 +72,11 @@ namespace kke {
 //     comment), so a real multi-tet imported mesh behaves as one
 //     connected deformable body, not a pile of separate tets that
 //     happen to share vertex positions.
-//   - No render-mesh-to-tetrahedra *skinning* bridge — each object's
-//     own simulated tet vertices are directly what gets rendered, with
-//     no separate higher-resolution render surface. FEMFX's own
-//     `RenderTetAssignment` sample is what real skinning (a detailed
-//     render mesh draped over a coarser simulation tet mesh) looks
-//     like — worth reading before building that; a CGAL-tetrahedralized
-//     mesh at reasonable quality settings is usually detailed enough
-//     to render directly, but a real skinning bridge is what a
-//     modeler-authored high-poly character would need.
-//   - kke_tetrahedralizer (the CGAL-based offline tool that produces
-//     the files spawnTetMesh() loads) currently only accepts OFF input
-//     and only the direct-CDT "already watertight" pipeline — no
-//     OBJ/FBX/glTF import and no voxel-grid robustness path for messy
-//     non-manifold input yet. See the tool's own header comment and
-//     the README's "Content pipeline" section.
+//   - Rendering: by default an object's own tet surface is what gets
+//     drawn. A detailed render mesh draped over the tets (a "skinning
+//     bridge") is available through deformEmbedded() +
+//     kke::embedTriangles, with drawOnlyCracks so only fresh crack faces
+//     come from the tets (see the sandbox's breakable props).
 //
 // THE FULL, HONEST DEBUGGING ACCOUNT from getting the first object
 // working at all — four distinct real issues found via gdb and direct

@@ -234,7 +234,7 @@ struct ShadowPushConstants { glm::mat4 lightViewProj; glm::mat4 model; };
 // (x' = x * sqrt(1 - y^2/2 - z^2/2 + y^2 z^2 / 3), and so on), which is
 // smooth and one-to-one, so every tetrahedron stays valid (positive
 // volume) — just stretched near the cube's former corners. Cheaper and
-// simpler than true sphere tetrahedralization (CGAL), and good enough
+// simpler than true sphere tetrahedralization, and good enough
 // for a bouncing rubber ball.
 TetMeshData PhysicsModule::buildSphere(int cells, float radius) {
     TetMeshData mesh = buildGridBox(cells, cells, cells, 2.0f, 2.0f, 2.0f); // unit cube [-1,1]^3
@@ -1941,32 +1941,6 @@ void PhysicsModule::renderUi() {
         }
         for (ObjectHandle handle : handles) {
             removeObject(handle);
-        }
-    }
-
-    ImGui::Separator();
-    ImGui::TextWrapped(
-        "Load a real tetrahedralized mesh from disk -- proves the "
-        "general spawnTetMesh() path, not just the single hardcoded "
-        "tetrahedron above. Path is temporarily hardcoded (no asset "
-        "browser yet) -- see kke_tetrahedralizer and README 'Content "
-        "pipeline: CGAL tetrahedralization'.");
-    if (ImGui::Button("Load /tmp/test_output.ktet.json")) {
-        try {
-            TetMeshData mesh = loadTetMeshFromFile("/tmp/test_output.ktet.json");
-            Material material;
-            material.density = 700.0f;
-            material.stiffness = 1.0e7f;
-            material.poissonsRatio = 0.3f;
-            material.plasticYieldThreshold = 0.0f;
-            material.fractureStressThreshold = 1.0e8f;
-            ObjectHandle handle = spawnTetMesh(mesh, glm::vec3(0.0f, m_nextSpawnHeight, 0.0f), material);
-            if (handle != kInvalidHandle) {
-                log::get(name())->info("Loaded and spawned mesh: {} verts, {} tets",
-                                        mesh.vertices.size(), mesh.tets.size());
-            }
-        } catch (const std::exception& e) {
-            log::get(name())->error("Load mesh failed: {}", e.what());
         }
     }
 

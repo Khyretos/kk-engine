@@ -94,13 +94,11 @@ yet — treat it as this project's memory, not aspirational marketing.
   engine's own CMake build. `kke::PhysicsModule` now exposes a real,
   general, runtime-callable spawn API (`spawnTetMesh()`/
   `spawnTetrahedron()`/`removeObject()`) that accepts genuinely
-  arbitrary tetrahedral meshes, not just one hardcoded shape. Paired
-  with a real content pipeline: `tools/tetrahedralizer` (CGAL, GPL,
-  strictly isolated from the game runtime — see "Content pipeline:
-  CGAL tetrahedralization") converts an arbitrary mesh into
-  tetrahedra offline; `kke::loadTetMeshFromFile()` (no CGAL) loads the
-  result at runtime. Verified genuinely end-to-end in a live session:
-  a real 401-tetrahedron mesh, produced entirely by the offline tool,
+  arbitrary tetrahedral meshes, not just one hardcoded shape. Meshes become
+  tetrahedra at runtime via `kke::voxelizeToTets` (the earlier offline
+  CGAL tool was removed — see "Content pipeline"); `.ktet.json` files
+  load with `kke::loadTetMeshFromFile()`. Verified genuinely end-to-end in a live session:
+  a real 401-tetrahedron mesh, produced by the (since removed) offline tool,
   spawned via this API, and observed falling under real gravity to a
   stable rest. Got there via `gdb`-traced debugging through four
   distinct real bugs in the physics integration alone (three fixed,
@@ -376,10 +374,8 @@ on actual hardware, not anticipated in advance:
   distinct failure mode from "layer not installed" — a layer can be
   *enumerable* without being *loadable*), the engine now retries once
   without it instead of crashing.
-- **A real Boost/CMake/CGAL detection quirk on Arch Linux** — Boost
-  was genuinely installed, but not found without manually passing
-  `-DBoost_INCLUDE_DIR=/usr/include`. The tetrahedralizer's
-  `CMakeLists.txt` now auto-detects that standard path as a fallback.
+- **A real Boost/CMake/CGAL detection quirk on Arch Linux** — (historical:
+  the CGAL tool it affected was removed on 2026-09-26.)
 - **Real, unnecessary build warnings** — two were genuine bugs, fixed
   properly rather than suppressed: this project's own earlier
   portability patch in `FEMFXTypes.h` was unconditionally redefining
@@ -1232,203 +1228,27 @@ through this struct into `FmTetMaterialParams`, and that whole path is
 now verified through an actual stable, 20+ second running simulation,
 not just mesh setup.
 
-## Content pipeline: CGAL tetrahedralization
+## Content pipeline: turning meshes into physics volumes
 
-Turning an arbitrary imported mesh into something FEMFX can actually
-simulate needs tetrahedralization — converting a surface mesh into a
-volume filled with tetrahedra. `tools/tetrahedralizer` (built only
-when `KKE_ENABLE_TETRAHEDRALIZER=ON`, never part of the default
-build) does this offline, and `kke::loadTetMeshFromFile()`
-(`engine/include/kke/TetMeshAsset.h`) loads its output into the
-running engine.
+FEMFX simulates tetrahedral meshes. The engine builds them **at runtime
+from any render mesh** with `kke::voxelizeToTets` (VoxelTets.h): the
+triangles are rasterized into a grid fitted to the mesh's bounds, the
+outside is flood-filled so open, non-watertight meshes (most Synty
+props) still produce a solid, each solid cell becomes 6 tetrahedra,
+and `kke::fitSurfaceToMesh` pulls the outer vertices onto the real
+surface. A typical prop takes ~12 ms end to end, including fracture
+patterns and gluing the render mesh on (see the sandbox).
+`.ktet.json` (`kke::loadTetMeshFromFile`, TetMeshAsset.h) stays as the
+on-disk format for cooked tet meshes, for when asset cooking lands.
 
-### Why CGAL, and why TetGen isn't used despite being the more
-obvious "just for tetrahedralization" choice
-
-Checked directly rather than assumed, since this project's hard
-constraint is no license fees, ever:
-
-| Library | License (verified directly) | Can handle non-convex, possibly-messy imported meshes? |
-|---|---|---|
-| **TetGen** | AGPLv3, or a paid commercial license from WIAS Berlin | Yes, but only clean/watertight input — no robustness path for messy real-world assets |
-| **CGAL** (`Mesh_3` package specifically — confirmed per-package, not just "CGAL is dual-licensed" in general) | GPL (not AGPL — no network-service clause) | Yes, including a voxel-grid pipeline for non-watertight/non-manifold input |
-| Qhull | Genuinely permissive (BSD-like) | **No** — confirmed directly: cannot do non-convex volume meshing at all, wrong tool regardless of license |
-| Fade3D | Free only for personal non-commercial research; paid license for any commercial use | Yes |
-| Houdini's Tetrahedralize SOP | Not a library — a node inside a separately-licensed, proprietary DCC application | N/A |
-
-TetGen was ruled out on *technical* grounds before licensing cost was
-even investigated: this engine's actual goal ("take the problem away
-from the user, handle any imported model") means robustness to messy,
-non-watertight input matters more than raw speed on already-clean
-input, and CGAL's `Mesh_3` covers everything TetGen offers plus that
-robustness path. Adding TetGen anyway would mean a second, *stricter*
-copyleft license for no net capability gain — so its actual commercial
-licensing cost was never priced out; it didn't need to be for this to
-be the right call.
-
-A real thesis (Ladhani, 2022, uploaded during this project and read in
-full) independently surveyed this same technical space — for
-navigation-mesh generation, a different application, but the actual
-tetrahedralization *technique* (constrained Delaunay tetrahedralization,
-direct-CDT vs. voxel-grid pipelines, sliver-tetrahedra quality issues)
-is the same operation either way. Real findings from it that shaped
-this design: generation is genuinely slow (their tests saw generation
-times reaching tens of minutes in adverse cases) — confirming this
-must stay a one-time, cached, offline step, never attempted at
-runtime; and CGAL's voxel pipeline has a documented "incorrect area"
-boundary-approximation error, tunable via `facet_distance`, worth
-knowing about before trusting a generated mesh's boundary blindly.
-
-### The architecture: why CGAL never touches the game runtime
-
-GPL's copyleft attaches to whatever gets *distributed* containing its
-code — not to data a GPL-licensed tool produces as output. (Not legal
-advice — I'm not a lawyer, and this is well-established common
-practice, not a guarantee for any specific situation. Worth a real
-look if this engine is ever used commercially.) So the architecture
-keeps a hard line: `tools/tetrahedralizer` links CGAL and is the
-*only* place in this entire repo allowed to; `engine/` and every
-`games/` runtime never link CGAL and only ever read the tool's plain
-JSON output through `kke::loadTetMeshFromFile()`. A developer's
-shipped, closed-source game is never affected by CGAL's license,
-despite CGAL existing in this repository at all.
-
-### Verified genuinely end-to-end, not just "should work"
-
-1. Installed CGAL 5.6 + Boost + GMP + MPFR from apt, wrote a minimal
-   standalone test *before* building anything around it — confirmed
-   402 real tetrahedra out of a test shape.
-2. Built `kke_tetrahedralizer` for real — hit and fixed two real
-   build issues (a CGAL/Eigen3 CMake target mismatch, a
-   `Weighted_point_3` vs. `Point_3` type error) — and ran it on a real
-   test mesh: **181 vertices, 401 tets**, written as valid, internally
-   -consistent JSON.
-3. Built `kke::loadTetMeshFromFile()` (7 real GoogleTest cases: valid
-   load, missing file, malformed JSON, missing keys, out-of-range
-   index, empty mesh, malformed vertex — all pass) and verified it
-   against the tool's *actual* output file, not just a hand-written
-   fixture: loaded back exactly 181 verts / 401 tets, matching
-   precisely.
-4. Generalized `PhysicsModule` from one hardcoded tetrahedron to
-   `spawnTetMesh(TetMeshData, position, material)` — real per-vertex
-   incident-tet connectivity computed for an arbitrary mesh, not the
-   old single-tet special case. `spawnTetrahedron()` now exists as a
-   thin wrapper over this general path, meaning this whole class's
-   prior verification history (the four gdb-traced bugs, the render-
-   scale debugging saga) now actually covers the general path, not a
-   separate untested case sitting next to it. Confirmed regression-
-   free: after the rewrite, the original demo object logged the exact
-   same numbers (0.2275 → 0.0020) as before it.
-5. **Clicked "Load mesh" in a real running session** and watched the
-   actual 401-tet mesh spawn, fall under real gravity (6.3981 → 1.3228
-   → 0.2244 → settling at 0.1852 — a different, and correctly
-   *different*, resting height than the simple tetrahedron's 0.0020,
-   since this vertex isn't at the bottom of a more complex shape),
-   and hold stable for a sustained 8+ seconds. Object count correctly
-   read "2 / 8" throughout.
-6. **Honest, real performance data point, not assumed**: frame rate
-   dropped from ~27 FPS to ~4 FPS with this one 401-tet object active,
-   on top of the existing single tetrahedron. Real, concrete evidence
-   for the already-documented "task system is genuinely single-
-   threaded" limitation — not a new problem, but no longer a
-   theoretical one either.
-
-### Repair pipeline — real robustness, verified against real defects, not assumed
-
-`kke_tetrahedralizer` no longer loads input directly into a
-`Polyhedron_3` (which requires the input to already be a valid
-oriented manifold, and hard-fails otherwise). It now reads input as a
-raw polygon soup and runs a real repair pipeline before any meshing
-step sees the data: `CGAL::Polygon_mesh_processing`'s own
-`repair_polygon_soup` (removes duplicate/degenerate elements),
-`orient_polygon_soup` (fixes inconsistent face winding),
-`polygon_soup_to_polygon_mesh`, `triangulate_faces` (Mesh_3's
-polyhedral domain requires purely triangular faces — quads and other
-n-gons are genuinely common in real-world models), and
-`stitch_borders` (closes small gaps by merging matching boundary
-edges).
-
-**Verified against real, deliberately-broken test meshes, not just
-described:**
-- A hand-built mesh with inconsistent face winding across adjacent
-  faces failed to even *parse* under the old direct-load approach.
-  Under the repair pipeline, it loads and meshes successfully.
-- A hand-built mesh using quad faces hit
-  `CGAL::Assertion_exception: "Your input polyhedron must be
-  triangulated!"` before `triangulate_faces` was added; succeeds after.
-- A mesh combining quad faces *and* bad winding — genuinely closed,
-  but with both defects at once — went through the full repair
-  pipeline and tetrahedralized cleanly into 236 verts / 612 tets.
-- **A mesh with a real, missing-geometry hole** (not a fixable winding
-  or triangulation defect — an actual gap `stitch_borders` has no
-  matching edge to close) was tested too, specifically to find the
-  failure mode's honest edge: feeding a non-closed polyhedron into
-  Mesh_3's polyhedral domain doesn't fail cleanly, it **segfaults**
-  deep inside CGAL's own CDT code. Found by actually triggering it,
-  not assumed. Fixed by adding an explicit `is_closed()` check that
-  refuses with a clear, actionable error instead — a real gap still
-  needs the voxel-grid pipeline (below), not a crash.
-- **Regression-checked**: the original clean test tetrahedron
-  produces the exact same output through the new repair-first pipeline
-  as it did before this rewrite — 181 verts, 401 tets, unchanged.
-
-### What's not done yet
-
-- **The full voxel-grid pipeline for genuinely missing geometry** —
-  `stitch_borders` only closes gaps where matching boundary edges
-  already exist; an actual hole (real geometry missing, not just a
-  fixable winding/triangulation defect) still correctly refuses rather
-  than crashing, but can't be tetrahedralized yet. This was the
-  original reason CGAL was chosen over TetGen and remains the biggest
-  real gap.
-- **`kke_tetrahedralizer` only accepts OFF input** — no OBJ/FBX/glTF
-  import yet (needs a separate model-import step, most likely via
-  assimp, feeding into this same repair pipeline).
-- **No asset browser or real content-pipeline integration** — the
-  demo's "Load mesh" button uses a hardcoded `/tmp/` path as a
-  deliberate, temporary stand-in.
-
-
-
-`PhysicsModule::spawnTetrahedron(position, material)` is a real,
-public, callable-at-runtime API — not a special-cased demo setup.
-`removeObject(handle)` takes an object back out. `PhysicsModule`
-dogfoods its own API for the demo's starting object (`init()` calls
-`spawnTetrahedron()` the same way anything else would), and
-`renderUi()` adds a live "Spawn tetrahedron" / "Clear all" pair of
-buttons as a working, visible example of calling it — this is also a
-direct answer to "I have no idea how to make a simple cube with
-collision": read `renderUi()`'s button handler for the actual,
-complete, minimal call.
-
-Verified by actually clicking the buttons in a running session, not
-just by reading the code: object count went 1 → 2 → 4 → 6 → 7 → 8
-across repeated clicks, matching exactly; two further clicks past the
-cap correctly logged `spawnTetrahedron: at cap (8), ignoring` and left
-the count at 8; "Clear all" correctly dropped it to 0 (confirmed via
-the UI's own live counter, since the periodic height log intentionally
-goes silent when there are zero objects — expected, not a bug); a
-fresh spawn after clearing worked cleanly, confirming no stale state
-survives a full add/remove round-trip. Multiple simultaneously-falling
-objects are visually distinguishable via a small fixed color palette
-cycled by handle (not tied to material — that's future work).
-
-**Honest current limits**, stated plainly rather than discovered
-later:
-- Every spawned object is the same fixed tetrahedron shape. "Spawn"
-  means "spawn this one shape with your choice of position and
-  material," not "spawn any mesh" — general mesh import and
-  tetrahedralization are both still unstarted (see "What's not done
-  yet" below).
-- Capped at 8 objects (`kMaxObjects` in `PhysicsModule.h`), a small
-  fixed number, not a stress-test scale — raising it is a one-line
-  change to that constant plus the `FmSceneSetupParams` fields in
-  `init()`. The task system is now real multithreading (see "Real
-  multithreading" below), not the synchronous stand-in this note
-  originally warned about — but a real stress-test demo (hundreds or
-  thousands of objects) is still separate, unstarted work, and this
-  sandbox's single CPU core means even the multithreading fix hasn't
-  been proven to help at scale here, only proven correct.
+**History:** until 2026-09-26 this section described `kke_tetrahedralizer`,
+an offline CGAL-based command-line tool that turned *closed* meshes
+into `.ktet.json`. It was removed: the runtime voxelizer handles every
+mesh it did plus the open ones it rejected, its only consumer was a
+hard-coded demo button, and CGAL's meshing code is GPL — a licensing
+risk for an engine meant to power a marketplace. It is in git history
+if a high-quality conforming tetrahedralization is ever needed as an
+offline cooking option.
 
 ## The demo suite
 
@@ -3304,7 +3124,7 @@ own intro for the discipline expected).
   API itself (position, material, runtime-callable) is real and
   general.
 - ~~**TetGen-based `.FEM` authoring without Houdini**~~ Resolved by
-  choosing CGAL instead — see "Content pipeline: CGAL
+  choosing CGAL instead — see "Content pipeline
   tetrahedralization" for the full technical and licensing reasoning.
   A real repair pipeline (soup repair, orientation fixing,
   triangulation, border stitching) now handles genuinely common real-

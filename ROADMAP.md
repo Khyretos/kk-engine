@@ -76,7 +76,7 @@ limitations. 🔴 Not started / stub.
 | Scene-scale robustness (many objects) | 🟢 | Verified up to ~57 simultaneous objects without falling through the ground — see `BUGS.md` BUG-005. Scene capacities are now sized for fracture pieces too (4096 pieces), and any FEMFX limit that is hit gets logged — see BUG-027. |
 | General box-shape generator | 🟢 | `PhysicsModule::buildGridBox(cellsX, cellsY, cellsZ, sizeX, sizeY, sizeZ)` — arbitrary per-axis cell counts and physical dimensions, used by every scene below. |
 | Purpose-built physics scenes | 🟢 | Five real scenes, each independently verified: **Glass Sheet** (shatters into ~13-58 real pieces depending on threshold tuning at time of test), **Brick** (real 2:1:1 proportions, breaks into chunks), **Rubber Ball** (honest approximation — a box, not a true tetrahedralized sphere, see its own in-code comment; bounces without fracturing), **Car Crash** (two real objects: a plastic-deforming "car" and a fracturable "wall"), **Lava Melt** (honest approximation — real plasticity under sustained real weight, not true phase-change physics; FEMFX has none). |
-| Real sphere / curved-shape tetrahedralization | 🔴 | Not started — would need real mesh-import machinery (see Content pipeline's own CGAL section) beyond the box generator. |
+| Real sphere / curved-shape tetrahedralization | 🟢 | `buildSphere` (spherified cube) and `kke::voxelizeToTets` + `fitSurfaceToMesh` for any mesh. |
 | Performance at scale | 🟡 | Much better, measured, not yet checked on real hardware. Sleeping works (settled piles cost ~0.2 ms/step), FEMFX always optimized, only exterior faces drawn, catch-up capped at 2 ticks/frame. Min-spec emulation (1 core): 0.6 → 11.0 FPS average over the scripted benchmark, with 6x more fracture pieces than before (the old build was silently capping fracture). Remaining gap: while a big break is still flying, cost scales with awake piece count (~55 ms/step for ~475 pieces on 1 core) — no debris budget yet. See `PERFORMANCE_NOTES.md` "Status" and `HARDWARE_TESTS.md` HW-001..HW-004. |
 | Network authority / reconciliation | 🔴 | Not started — see Networking section. |
 
@@ -110,7 +110,7 @@ limitations. 🔴 Not started / stub.
 |---|---|---|
 | Game manifest format (`game.json`) | 🟢 | Real parser, real unit-tested (`GameManifest`). |
 | Marketplace index (multi-game discovery) | 🟢 | Real, unit-tested (`MarketplaceIndex`). |
-| CGAL tetrahedralization pipeline | 🟢 | Real external tool (`kke_tetrahedralizer`) producing real `.ktet.json` assets loadable via `spawnTetMesh()`'s general path — see README "Content pipeline." |
+| Mesh -> physics volume (`kke::voxelizeToTets`) | 🟢 | Runtime, any mesh (open ones too), fitted to the surface; the offline CGAL tool was removed (GPL, superseded) — see README "Content pipeline". |
 | FBX/OBJ model import (`kke::loadModel`) | 🟢 | ufbx-based: meshes, materials, texture resolution, skeletons, skin weights, sampled clips. Unit-tested (incl. real Synty character when installed). |
 | Model rendering (`kke::ModelModule`) | 🟡 | Instances, PBR lit/textured, shadows, CPU skinning, clip playback, bone posing, bone overlay. Mip maps, texture variants per instance, world-space overlay (Synty Prototype grid). **Not yet:** GPU skinning (for crowds), frustum culling, instanced draws, normal maps. |
 | Synty packs | 🟡 | POLYGON Prototype verified (`games/synty_demo`). Loaded from git-ignored `assets/synty/` — see `assets/README.md`. Other packs untested (HARDWARE_TESTS.md HW-009). |

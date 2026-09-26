@@ -1,6 +1,5 @@
-// Tests for kke::loadTetMeshFromFile — the runtime side of the CGAL
-// content pipeline (see README "Content pipeline: CGAL
-// tetrahedralization"). Deliberately tests against real temporary
+// Tests for kke::loadTetMeshFromFile — the .ktet.json tet mesh format
+// (see TetMeshAsset.h). Deliberately tests against real temporary
 // files, matching test_game_manifest.cpp's own convention, and
 // includes one fixture written by hand to match the exact shape of a
 // real kke_tetrahedralizer output file, verified against the tool's
