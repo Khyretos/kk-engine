@@ -25,6 +25,7 @@ set(ENGINE_SOURCES
     src/Animator.cpp
     src/AnimRig.cpp
     src/ResourceGovernor.cpp
+    src/FrameStats.cpp
     src/CameraRig.cpp
     src/SceneFile.cpp
     src/InputMap.cpp

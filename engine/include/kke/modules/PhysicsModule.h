@@ -272,6 +272,8 @@ public:
     void removeObject(ObjectHandle handle);
 
     size_t objectCount() const { return m_objects.size(); }
+    // FEMFX step time, averaged over the last second (0 until then).
+    double lastStepMsAvg() const { return m_lastStepMsAvg; }
 
     // The purpose-built demo scenes, callable from code rather than only
     // from renderUi()'s buttons — the scripted benchmark below uses

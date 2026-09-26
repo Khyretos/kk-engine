@@ -127,6 +127,10 @@ void ShowcaseModule::init(kke::Application& app) {
         m_rig.yaw = 0.0f; // looking down the lane (-Z)
         m_status = "Autopilot";
     }
+    if (const char* st = std::getenv("KKE_STRESS_TEST"); st && *st && *st != '0') {
+        m_stressQuitAtEnd = true;
+        startStressTest();
+    }
 }
 
 void ShowcaseModule::addStaticBox(const Box& b, std::vector<kke::Vertex>& v, std::vector<uint32_t>& i) {
@@ -586,6 +590,7 @@ void ShowcaseModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
 void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     const float dt = ctx.dt;
     m_fps = m_fps * 0.95f + (dt > 0.0f ? 1.0f / dt : 0.0f) * 0.05f;
+    updateStressTest(dt);
     kke::RigidWorld& w = m_rigid->world();
 
     // Crouch: a 1.0 m capsule. Standing up waits until there's headroom.
@@ -813,6 +818,19 @@ void ShowcaseModule::renderUi() {
             changed |= ImGui::SliderInt("Worker threads (0 = auto, restart)", &p.workerThreads, 0, static_cast<int>(kke::usableCpuCount()) * 2);
             if (changed) sm->apply();
             if (ImGui::Button("Save settings")) sm->save();
+        }
+        ImGui::Separator();
+        if (m_stressActive) {
+            ImGui::TextUnformatted("Stress test running...");
+        } else {
+            if (ImGui::Button("Run stress test (36 s)")) startStressTest();
+            ImGui::SameLine();
+            ImGui::TextDisabled("walk, 300 crates, impacts; writes one report");
+        }
+        if (!m_stressReport.empty()) {
+            const kke::FrameStats::Summary all = m_stressStats.overall();
+            ImGui::Text("Last: %s, %.0f fps avg, %.0f fps 1%% low", kke::FrameStats::verdict(all), all.fpsAvg, all.low1Fps);
+            ImGui::TextWrapped("%s.txt", m_stressReport.c_str());
         }
     }
     if (ImGui::CollapsingHeader("Character")) {

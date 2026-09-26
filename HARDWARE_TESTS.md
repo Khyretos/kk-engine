@@ -40,6 +40,17 @@ them): a `.txt` to read and a `.json` for analysis, including your CPU,
 GPU, driver, RAM, OS and build type. Paste either file back instead of
 log lines.
 
+### HW-015 · End-user stress test (dev box, and the laptop if you can)
+`KKE_STRESS_TEST=1 ./kke_demo` (or the showcase's Performance panel →
+"Run stress test"). Runs 36 s by itself (walk, crate rain, impacts),
+then quits. Hands off the mouse while it runs. Run it once as is and
+once with "3D render scale" at 0.5 (Performance panel, then Save
+settings), so we see what render scale buys on a real GPU.
+**Send back:** the two `benchmark/stress_<time>_<host>.txt` files.
+Sandbox reference (4-core VM, software GPU): 20 fps avg, 11 fps 1% low,
+"too slow"; walk 29 fps, crates 18 fps, impacts 13 fps.
+**Result:** —
+
 ### HW-014 · Breaking things, again (dev box)
 Two parts.
 1. `KKE_PHYSICS_SCENES=breaktest ./physics_demo` (or the "Scene: Break

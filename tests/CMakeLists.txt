@@ -22,6 +22,7 @@ add_executable(kke_tests
     test_animator.cpp
     test_anim_rig.cpp
     test_resource_governor.cpp
+    test_frame_stats.cpp
     test_camera_rig.cpp
     test_scene_file.cpp
     test_input_map.cpp

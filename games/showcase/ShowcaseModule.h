@@ -5,6 +5,8 @@
 #include "kke/AssetCatalog.h"
 #include "kke/SceneLoader.h"
 #include "kke/CameraRig.h"
+#include "kke/FrameStats.h"
+#include "kke/ResourceGovernor.h"
 #include "kke/Locomotion.h"
 #include "kke/Module.h"
 #include "kke/RigidWorld.h"
@@ -63,6 +65,25 @@ private:
     void forcePush();
     void setCaptured(bool on);
     void readActions(float dt);
+
+    // End-user stress test (ACTION_PLAN.md 1.7, StressTest.cpp): a fixed
+    // script (walk, crate rain, breaking) at an uncapped frame rate, then
+    // one report: benchmark/stress_<time>_<host>.txt (+ .json). Panel
+    // button, or KKE_STRESS_TEST=1 (runs at start, quits when done).
+    void startStressTest();
+    void updateStressTest(float dt);
+    void finishStressTest();
+    void stressShoot(const glm::vec3& from, const glm::vec3& target);
+    bool m_stressActive = false, m_stressQuitAtEnd = false;
+    float m_stressTime = 0.0f, m_stressSpawn = 0.0f, m_stressShot = 0.0f;
+    int m_stressPhase = -1, m_stressShots = 0, m_stressRained = 0;
+    uint32_t m_stressRandom = 1;
+    size_t m_stressFirstCrate = 0; // crates from here on are the rain's
+    double m_stressLastTick = 0.0;
+    kke::FrameStats m_stressStats;
+    kke::ResourceBudget m_stressSavedBudget;
+    bool m_stressSavedVsync = false;
+    std::string m_stressReport; // last report written (path without extension)
 
     kke::Application* m_app = nullptr;
     kke::RigidBodyModule* m_rigid = nullptr;

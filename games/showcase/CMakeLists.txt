@@ -1,5 +1,5 @@
 # kke_demo: the walkable showcase (ACTION_PLAN.md P1).
-add_executable(kke_demo main.cpp ShowcaseModule.cpp)
+add_executable(kke_demo main.cpp ShowcaseModule.cpp StressTest.cpp)
 target_link_libraries(kke_demo PRIVATE kke_engine)
 engine_copy_runtime_file(kke_demo ${CMAKE_CURRENT_SOURCE_DIR}/game.json marketplace/showcase/game.json)
 foreach(shader model.vert model_instanced.vert shadow_instanced.vert model.frag shadow.vert shadow.frag cube.vert cube.frag glow.frag)

@@ -162,6 +162,12 @@ BUGS.md / PERFORMANCE_NOTES.md entry with full detail.
 
 ## 5. Backlog (ranked by expected win on min-spec)
 
+0. **Showcase crates as instanced draws** — the stress test's crate rain
+   (300 boxes) is drawn one `DynamicMeshRenderer` draw per crate, twice
+   (shadow + colour): 600 draws for one cube mesh. Draw them like
+   ModelModule's instanced rigid models (#25). Measure with the stress
+   test's `crates.*` numbers before and after.
+
 1. **Debris budget + hand-off to GPU particles** — worst-case physics cost
    is "many awake pieces right after a big break" (~55 ms/step for ~475
    pieces on 1 core).
