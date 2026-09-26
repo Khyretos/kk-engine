@@ -6,7 +6,7 @@
 <text x="32" y="40.0" text-anchor="end" fill="#666">25.22</text>
 <text x="32" y="144.0" text-anchor="end" fill="#666">0.0000</text>
 <text x="36" y="160" fill="#666">09e1a9e</text>
-<text x="604" y="160" text-anchor="end" fill="#666">3c58296</text>
-<path d="M36.0,50.1 L117.1,79.8 L198.3,78.1 L279.4,79.4 L360.6,78.3 L441.7,79.7 L522.9,77.5 L604.0,86.1" fill="none" stroke="#2563eb" stroke-width="2"/>
-<g fill="#2563eb"><circle cx="36.0" cy="50.1" r="2.5"><title>09e1a9e: 21.93</title></circle><circle cx="117.1" cy="79.8" r="2.5"><title>c1360ad: 15.00</title></circle><circle cx="198.3" cy="78.1" r="2.5"><title>cc93bb6: 15.38</title></circle><circle cx="279.4" cy="79.4" r="2.5"><title>0f9f717: 15.08</title></circle><circle cx="360.6" cy="78.3" r="2.5"><title>60ebebc: 15.33</title></circle><circle cx="441.7" cy="79.7" r="2.5"><title>b997491: 15.01</title></circle><circle cx="522.9" cy="77.5" r="2.5"><title>9e8a68a: 15.52</title></circle><circle cx="604.0" cy="86.1" r="2.5"><title>3c58296: 13.51</title></circle></g>
+<text x="604" y="160" text-anchor="end" fill="#666">17a3e38</text>
+<path d="M36.0,50.1 L107.0,79.8 L178.0,78.1 L249.0,79.4 L320.0,78.3 L391.0,79.7 L462.0,77.5 L533.0,86.1 L604.0,84.3" fill="none" stroke="#2563eb" stroke-width="2"/>
+<g fill="#2563eb"><circle cx="36.0" cy="50.1" r="2.5"><title>09e1a9e: 21.93</title></circle><circle cx="107.0" cy="79.8" r="2.5"><title>c1360ad: 15.00</title></circle><circle cx="178.0" cy="78.1" r="2.5"><title>cc93bb6: 15.38</title></circle><circle cx="249.0" cy="79.4" r="2.5"><title>0f9f717: 15.08</title></circle><circle cx="320.0" cy="78.3" r="2.5"><title>60ebebc: 15.33</title></circle><circle cx="391.0" cy="79.7" r="2.5"><title>b997491: 15.01</title></circle><circle cx="462.0" cy="77.5" r="2.5"><title>9e8a68a: 15.52</title></circle><circle cx="533.0" cy="86.1" r="2.5"><title>3c58296: 13.51</title></circle><circle cx="604.0" cy="84.3" r="2.5"><title>17a3e38: 13.93</title></circle></g>
 </svg>

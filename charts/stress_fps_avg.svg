@@ -6,7 +6,7 @@
 <text x="32" y="40.0" text-anchor="end" fill="#666">25.10</text>
 <text x="32" y="144.0" text-anchor="end" fill="#666">0.0000</text>
 <text x="36" y="160" fill="#666">09e1a9e</text>
-<text x="604" y="160" text-anchor="end" fill="#666">3c58296</text>
-<path d="M36.0,50.1 L117.1,68.6 L198.3,67.0 L279.4,70.1 L360.6,69.2 L441.7,71.4 L522.9,76.9 L604.0,85.5" fill="none" stroke="#2563eb" stroke-width="2"/>
-<g fill="#2563eb"><circle cx="36.0" cy="50.1" r="2.5"><title>09e1a9e: 21.82</title></circle><circle cx="117.1" cy="68.6" r="2.5"><title>c1360ad: 17.53</title></circle><circle cx="198.3" cy="67.0" r="2.5"><title>cc93bb6: 17.90</title></circle><circle cx="279.4" cy="70.1" r="2.5"><title>0f9f717: 17.17</title></circle><circle cx="360.6" cy="69.2" r="2.5"><title>60ebebc: 17.38</title></circle><circle cx="441.7" cy="71.4" r="2.5"><title>b997491: 16.87</title></circle><circle cx="522.9" cy="76.9" r="2.5"><title>9e8a68a: 15.59</title></circle><circle cx="604.0" cy="85.5" r="2.5"><title>3c58296: 13.59</title></circle></g>
+<text x="604" y="160" text-anchor="end" fill="#666">17a3e38</text>
+<path d="M36.0,50.1 L107.0,68.6 L178.0,67.0 L249.0,70.1 L320.0,69.2 L391.0,71.4 L462.0,76.9 L533.0,85.5 L604.0,84.7" fill="none" stroke="#2563eb" stroke-width="2"/>
+<g fill="#2563eb"><circle cx="36.0" cy="50.1" r="2.5"><title>09e1a9e: 21.82</title></circle><circle cx="107.0" cy="68.6" r="2.5"><title>c1360ad: 17.53</title></circle><circle cx="178.0" cy="67.0" r="2.5"><title>cc93bb6: 17.90</title></circle><circle cx="249.0" cy="70.1" r="2.5"><title>0f9f717: 17.17</title></circle><circle cx="320.0" cy="69.2" r="2.5"><title>60ebebc: 17.38</title></circle><circle cx="391.0" cy="71.4" r="2.5"><title>b997491: 16.87</title></circle><circle cx="462.0" cy="76.9" r="2.5"><title>9e8a68a: 15.59</title></circle><circle cx="533.0" cy="85.5" r="2.5"><title>3c58296: 13.59</title></circle><circle cx="604.0" cy="84.7" r="2.5"><title>17a3e38: 13.79</title></circle></g>
 </svg>
