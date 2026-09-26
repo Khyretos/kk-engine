@@ -32,6 +32,10 @@ git push origin v0.1.0-alpha
 4. publishes both archives as a Release. A tag with a `-` in it
    (`-alpha`, `-rc1`) becomes a pre-release.
 
+Without pushing a tag, the same release can be made from the Actions tab:
+run **Release** with the version (e.g. `v0.1.0-alpha`) and tick **publish**;
+GitHub creates the tag on that commit as it publishes.
+
 To try the pipeline without publishing anything, run the **Release**
 workflow by hand from the Actions tab: the archives are kept as run
 artifacts, and ticking **draft** also puts them in a draft release that only
