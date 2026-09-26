@@ -327,7 +327,14 @@ TEST(Climber, TheBotClimbsToTheSummitAndMantles) {
         const glm::vec3 p = w.holds()[static_cast<size_t>(bot.route().front())].position;
         ASSERT_TRUE(c.start(glm::vec3(p.x, 0.0f, w.surfaceZ(p.x, 1.0f) + 0.45f))) << "seed " << seed;
         float t = 0.0f;
-        for (; t < 240.0f && c.state() != Climber::State::Topped && c.state() != Climber::State::Fell; t += kDt) c.update(bot.think(c, kDt), kDt);
+        int lunges = 0;
+        for (; t < 240.0f && c.state() != Climber::State::Topped && c.state() != Climber::State::Fell; t += kDt) {
+            const bool wasLunging = c.handMove(0) == Climber::Move::Lunge || c.handMove(1) == Climber::Move::Lunge;
+            c.update(bot.think(c, kDt), kDt);
+            const bool lunging = c.handMove(0) == Climber::Move::Lunge || c.handMove(1) == Climber::Move::Lunge;
+            lunges += lunging && !wasLunging ? 1 : 0;
+        }
+        EXPECT_GT(lunges, 2) << "seed " << seed << ": fresh, it should lunge past holds";
         EXPECT_EQ(c.state(), Climber::State::Topped) << "seed " << seed << " stuck at y " << c.hips().y << " after " << t << " s";
         EXPECT_EQ(c.mantleLedge(), -1);
         EXPECT_NEAR(c.feet().y, w.summitY(), 0.05f);

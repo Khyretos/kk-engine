@@ -752,6 +752,11 @@ add_subdirectory(games/sea_demo)
 if(KKE_ENABLE_JOLT)
     add_subdirectory(games/audio_demo)
 endif()
+# Climb Race: a generated mountain face, climbed hold by hold, against a
+# rival (games/climb_race/README.md). Jolt: the rock and the climbers.
+if(KKE_ENABLE_JOLT)
+    add_subdirectory(games/climb_race)
+endif()
 
 # The starter template (docs/tutorials/getting-started.md), and games made
 # from it with tools/new_game, which lists them in games/my_games.cmake.

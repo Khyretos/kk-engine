@@ -197,6 +197,30 @@ the player hit a one-frame window.
 - At the end the momentum goes back to the controller, and the character
   is on the floor that the probe found (no "stand on thin air" snap).
 
+## Free climbing (`kke::ClimbWall`, `kke::Climber`; `games/climb_race`)
+
+Ledge hang is for edges you run into; free climbing is a whole rock face
+where you choose every hold.
+
+- **The wall** (`ClimbWall::generate(seed)`) is a height field over x, y:
+  bands of lean (an easy start, a forced overhang in the middle, a slab at
+  the top), fbm relief and buttresses. Ledges are boxes sticking out of the
+  rock. Holds (jug, crimp, sloper, edge) are placed along a drawn line that
+  is always climbable, then filled in around it. Same seed, same mountain.
+- **Reach** is `ClimbWall::reachDistance`: sideways and up count fully,
+  in and out of the rock a quarter. Routes, the climber and the bot all use it.
+- **The climber** (`kke::Climber`) is pure logic, with no physics. The
+  capsule is kinematic at `feet()` while climbing and goes back to
+  `kke::Locomotion` on a fall or at the top. The hands pick holds: a
+  bumper reaches precisely (1.55 m), a released trigger lunges up to
+  2.45 m, and both together snatch quickly. The body hangs under the
+  hands and the feet find holds under the hips. Stamina is the one
+  resource.
+- **The body** is IK only: the hang clip slowed down, with two-bone IK
+  putting each hand and foot exactly where `Climber` says.
+- Tests: `tests/test_climb_wall.cpp` covers 25 seeds climbable, reaches,
+  lunges, loose holds, stamina and the bot to the top.
+
 ## Animations
 
 The Universal Animation Library "Standard" set in `assets/animations/` has

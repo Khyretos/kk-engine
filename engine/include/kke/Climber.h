@@ -120,6 +120,7 @@ public:
     bool holdGone(int hold) const;
 
     Settings& settings() { return m_s; }
+    const Settings& settings() const { return m_s; }
     const ClimbWall& wall() const { return m_wall; }
 
 private:
@@ -184,12 +185,15 @@ public:
     float restUntil = 0.9f;
     // Seconds between moves when fresh (twice that when spent).
     float pause = 0.3f;
+    // Fresh, it lunges past holds it could reach one by one.
+    bool lunges = true;
     const std::vector<int>& route() const { return m_route; }
 
 private:
     int routeIndex(int hold) const;
     std::vector<int> m_route;
     float m_wait = 0.0f;
+    int m_lungeHand = -1, m_lungePick = -1; // a lunge being charged
 };
 
 } // namespace kke

@@ -198,7 +198,8 @@ void Climber::placeFeet(bool force) {
     const auto& holds = m_wall.holds();
     for (int f = 0; f < 2; ++f) {
         const float side = f == 0 ? -1.0f : 1.0f;
-        const glm::vec2 ideal(m_hips.x + side * 0.22f, m_hips.y - 0.8f);
+        // Feet up under the body, knees bent (not hanging straight).
+        const glm::vec2 ideal(m_hips.x + side * 0.25f, m_hips.y - 0.6f);
         int best = -1;
         float bestD = 1e9f;
         for (size_t i = 0; i < holds.size(); ++i) {
@@ -206,7 +207,7 @@ void Climber::placeFeet(bool force) {
             if (hd.kind == ClimbHold::Kind::Edge || holdGone(static_cast<int>(i))) continue;
             if (static_cast<int>(i) == m_foot[1 - f].hold || static_cast<int>(i) == m_hand[0].hold || static_cast<int>(i) == m_hand[1].hold) continue;
             const float dx = (hd.position.x - m_hips.x) * side, dy = m_hips.y - hd.position.y;
-            if (dx < -0.1f || dx > 0.6f || dy < 0.35f || dy > 1.15f) continue;
+            if (dx < -0.1f || dx > 0.6f || dy < 0.25f || dy > 0.95f) continue;
             const float d = glm::length(glm::vec2(hd.position.x, hd.position.y) - ideal);
             if (d < bestD) {
                 bestD = d;
@@ -430,6 +431,27 @@ Climber::Input ClimbBot::think(const Climber& c, float dt) {
     if (c.handMoving(0) || c.handMoving(1)) return in;
     const auto& holds = c.wall().holds();
     const int h0 = c.handHold(0), h1 = c.handHold(1);
+    // A lunge being charged: hold the trigger until the charge carries
+    // that far, then let go.
+    if (m_lungeHand >= 0) {
+        const int h = m_lungeHand;
+        const int anchorHold = c.handHold(1 - h);
+        if (anchorHold < 0 || c.holdGone(m_lungePick)) {
+            m_lungeHand = -1;
+            return in;
+        }
+        const Climber::Settings& s = c.settings();
+        const glm::vec3& target = holds[static_cast<size_t>(m_lungePick)].position;
+        const float d = ClimbWall::reachDistance(target, holds[static_cast<size_t>(anchorHold)].position);
+        const float need = std::clamp((d - s.span) / (s.lungeSpan - s.span) + 0.12f, 0.1f, 1.0f);
+        const glm::vec3 cur = c.hand(h);
+        const glm::vec2 dir(target.x - cur.x, target.y - cur.y);
+        in.aim = glm::length(dir) > 1e-3f ? glm::normalize(dir) : glm::vec2(0.0f, 1.0f);
+        in.pick[h] = m_lungePick;
+        if (c.charge(h) < need) in.power[h] = 1.0f;
+        else m_lungeHand = -1; // trigger let go: the lunge
+        return in;
+    }
     // Both hands on an edge: mantle when it's the top, or to rest.
     if (h0 >= 0 && h1 >= 0) {
         const ClimbHold& a = holds[static_cast<size_t>(h0)];
@@ -538,6 +560,23 @@ Climber::Input ClimbBot::think(const Climber& c, float dt) {
         }
         if (pick < 0) {
             in.reach[move] = true; // whatever the aim (up) finds
+            return in;
+        }
+    }
+    // Fresh and on the line: lunge past the next holds when one further
+    // along is within a lunge.
+    const int pickAt = routeIndex(pick);
+    if (lunges && pickAt >= 0 && c.staminaFraction() > 0.7f) {
+        const float far = c.settings().lungeSpan * 0.9f;
+        for (int i = static_cast<int>(m_route.size()) - 1; i > pickAt; --i) {
+            const int hold = m_route[static_cast<size_t>(i)];
+            const ClimbHold& h = holds[static_cast<size_t>(hold)];
+            if (h.kind == ClimbHold::Kind::Edge || c.holdGone(hold) || h.position.y < from.y) continue;
+            if (ClimbWall::reachDistance(h.position, from) > far) continue;
+            m_lungeHand = move;
+            m_lungePick = hold;
+            in.pick[move] = hold;
+            in.power[move] = 1.0f;
             return in;
         }
     }
