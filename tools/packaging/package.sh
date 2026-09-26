@@ -107,6 +107,13 @@ cp "$repo/LICENSE" "$stage/LICENSE.txt"
             sed -n '/^\* Copyright (C) 1994/,/^\*\*\*\*\*/p' "$2/src/lua.h" | grep . || die "no licence block found in $2/src/lua.h"
             return 0
         fi
+        if [ -z "$lic" ] && [ -f "$2/sqlite3.h" ]; then
+            # SQLite is public domain; its dedication heads sqlite3.h.
+            printf '\n\n==============================================================================\n%s (sqlite3.h, public domain)\n==============================================================================\n\n' "$1"
+            sed -n '2,/^\*\*\*\*\*/p' "$2/sqlite3.h" | grep -i "disclaims copyright" >/dev/null || die "no public-domain dedication found in $2/sqlite3.h"
+            sed -n '2,/^\*\*\*\*\*/p' "$2/sqlite3.h" | sed '$d'
+            return 0
+        fi
         [ -n "$lic" ] || die "no licence file found for $1 in $2"
         # Licences a top-level file only points to: FreeType's FTL (its
         # LICENSE.TXT offers FTL or GPL) and the fmt copy bundled in spdlog.
@@ -126,7 +133,8 @@ cp "$repo/LICENSE" "$stage/LICENSE.txt"
         for src in "$deps"/*-src; do
             [ -d "$src" ] || continue
             comp="$(basename "$src" -src)"
-            case "$comp" in googletest) continue ;; esac  # tests only, not shipped
+            # Tests and build-time tools only, not shipped.
+            case "$comp" in googletest|wayland_scanner_src) continue ;; esac
             add "$comp" "$src"
         done
     fi
