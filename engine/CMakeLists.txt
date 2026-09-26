@@ -25,6 +25,7 @@ set(ENGINE_SOURCES
     src/SphereImpostors.cpp
     src/Ocean.cpp
     src/FloatingBodies.cpp
+    src/OceanRenderer.cpp
     src/SystemInfo.cpp
     src/TetMeshAsset.cpp
     src/LightingBuffer.cpp
@@ -79,6 +80,7 @@ set(ENGINE_HEADERS
     include/kke/SphereImpostors.h
     include/kke/Ocean.h
     include/kke/FloatingBodies.h
+    include/kke/OceanRenderer.h
     include/kke/TetMeshAsset.h
     include/kke/LightingBuffer.h
     include/kke/ShadowMap.h

@@ -72,9 +72,13 @@ public:
     // next beginFrame() (never mid-frame, while a command buffer that
     // references the old one is being recorded).
     void setVSync(bool vsync);
+    // Background colour, sRGB-authored (converted to linear for the sRGB
+    // swapchain). Default: near-black blue.
+    void setClearColor(const glm::vec3& srgb);
     bool vsync() const;
 
 private:
+    glm::vec3 m_clearLinear{0.02f, 0.02f, 0.05f};
 
     void createSyncObjects();
     void createCommandBuffers();

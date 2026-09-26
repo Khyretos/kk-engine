@@ -40,6 +40,15 @@ them): a `.txt` to read and a `.json` for analysis, including your CPU,
 GPU, driver, RAM, OS and build type. Paste either file back instead of
 log lines.
 
+### HW-013 · Sea demo (dev box)
+`cd build/bin && ./sea_demo`. Drive (arrows), throw things (click, 1-5),
+turn the wind up to 14 m/s. Does the boat feel like a boat (not too
+twitchy, not too stiff)? Do the objects float/sink the way their names
+say? Any shimmering or "swimming" of the sea surface when the camera
+moves? FPS with 40 bodies in the water?
+**Send back:** screenshots or a short clip, FPS, and anything that feels off.
+**Result:** —
+
 ### HW-012 · Melt demo feel and speed (dev box)
 `cd build/bin && ./melt_demo`, then each block (`Block` combo or
 `KKE_MELT_PRESET=0..3`). In the sandbox it only reached ~8 FPS (software

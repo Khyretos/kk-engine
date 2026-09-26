@@ -80,3 +80,35 @@ TEST(FloatingBodies, WavesMoveFloatingThings) {
     EXPECT_GT(maxY - minY, 0.2f);                  // it bobs with the swell
     EXPECT_TRUE(std::isfinite(fb.bodies()[crate].position.x));
 }
+
+TEST(FloatingBodies, LongFlatHullStaysUpright) {
+    // The sea demo's boat: long, wide and low, light (hull + air). A narrow
+    // sample grid (5x2x4) once tipped it over (point height bug).
+    kke::OceanWaves o = calm();
+    kke::FloatingBodies fb;
+    size_t boat = fb.add(glm::vec3(1.6f, 0.35f, 0.6f), 280.0f, { 0, 0.2f, 0 });
+    simulate(fb, o, 10.0f);
+    glm::vec3 up = glm::mat3_cast(fb.bodies()[boat].orientation) * glm::vec3(0, 1, 0);
+    EXPECT_GT(up.y, 0.99f);
+    EXPECT_NEAR(fb.bodies()[boat].position.y, 0.35f - 0.7f * 280.0f / 1025.0f, 0.06f);
+}
+
+TEST(FloatingBodies, BallastedBoatRidesSwellWithoutCapsizing) {
+    // The sea demo's boat in its default 7 m/s wind swell for 20 s. Without
+    // heave damping it was launched 2.7 m off a crest and capsized; without
+    // a low centre of mass it heeled ~50 degrees.
+    kke::OceanWaves w;
+    w.setWind(7.0f, 0.4f, 0.6f);
+    kke::FloatingBodies fb;
+    size_t boat = fb.add(glm::vec3(1.6f, 0.35f, 0.6f), 280.0f, { 0, 0.2f, 0 });
+    fb.bodies()[boat].linearDrag = 0.8f;
+    fb.bodies()[boat].centerOfMassOffset = glm::vec3(0.0f, -0.3f, 0.0f);
+    float minUp = 1.0f, maxY = -1e9f;
+    for (float t = 0.0f; t < 20.0f; t += 1.0f / 60.0f) {
+        fb.step(1.0f / 60.0f, w, t);
+        minUp = std::min(minUp, (glm::mat3_cast(fb.bodies()[boat].orientation) * glm::vec3(0, 1, 0)).y);
+        maxY = std::max(maxY, fb.bodies()[boat].position.y);
+    }
+    EXPECT_GT(minUp, 0.8f);   // never heels past ~37 degrees
+    EXPECT_LT(maxY, 2.0f);    // never launched far above the crests (sum of amplitudes ~1.6 m)
+}

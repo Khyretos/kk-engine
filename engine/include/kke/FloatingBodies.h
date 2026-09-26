@@ -36,7 +36,17 @@ struct FloatingBody {
     glm::quat orientation{1.0f, 0.0f, 0.0f, 0.0f};
     glm::vec3 velocity{0.0f}, angularVelocity{0.0f};
     float linearDrag = 1.5f;           // 1/s at full submersion (water resistance)
-    float angularDrag = 0.8f;          // extra rotational damping in water
+    // Extra drag on *vertical* motion relative to the water: a real hull
+    // loses heave energy making waves (radiation damping). Without it a
+    // light boat bobs with a damping ratio of ~0.06 and gets launched off
+    // crests (measured: 2.7 m into the air, then capsized). 6/s gives
+    // ~0.3 for the demo boat.
+    float heaveDrag = 6.0f;
+    float angularDrag = 2.0f;          // extra rotational damping in water
+    // Where the weight acts, relative to the box centre (body space). A
+    // boat's ballast/keel sits low (e.g. -0.3 m): gravity then pulls it
+    // upright whenever it heels — real ballast, not a fake righting force.
+    glm::vec3 centerOfMassOffset{0.0f};
     bool alive = true;
 
     // derived by FloatingBodies::add()

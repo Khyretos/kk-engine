@@ -27,8 +27,8 @@ void OceanWaves::setWind(float speed, float dir, float choppiness) {
     // developed sea); amplitude ~ wavelength / 30, then a spread of
     // shorter, smaller waves around it.
     const float lambda0 = std::max(2.0f, 0.5f * speed * speed);
-    const float spread[kMaxWaves] = { 0.0f, 0.55f, -0.45f, 0.25f, -0.7f, 0.9f };
-    const float lengthScale[kMaxWaves] = { 1.0f, 0.62f, 0.45f, 0.31f, 0.22f, 0.14f };
+    const float spread[kMaxWaves] = { 0.0f, 0.55f, -0.45f, 0.9f };
+    const float lengthScale[kMaxWaves] = { 1.0f, 0.61f, 0.37f, 0.19f };
     for (int i = 0; i < kMaxWaves; ++i) {
         GerstnerWave w;
         float a = dir + spread[i] * 0.7f;
@@ -78,17 +78,14 @@ glm::vec3 OceanWaves::velocity(const glm::vec2& xz, float t) const {
 }
 
 void OceanWaves::toGpu(std::vector<glm::vec4>& out) const {
-    out.clear();
-    for (int i = 0; i < kMaxWaves; ++i) {
-        if (i < static_cast<int>(m_waves.size())) {
-            const GerstnerWave& w = m_waves[i];
-            WaveTerms tw = terms(w, m_waves.size());
-            out.push_back(glm::vec4(w.direction, tw.k, w.amplitude));
-            out.push_back(glm::vec4(tw.q, tw.omega, w.phase, 0.0f));
-        } else {
-            out.push_back(glm::vec4(0.0f));
-            out.push_back(glm::vec4(0.0f));
-        }
+    out.assign(7, glm::vec4(0.0f));
+    for (int i = 0; i < kMaxWaves && i < static_cast<int>(m_waves.size()); ++i) {
+        const GerstnerWave& w = m_waves[i];
+        WaveTerms tw = terms(w, m_waves.size());
+        out[i] = glm::vec4(w.direction, tw.k, w.amplitude);
+        out[4][i] = tw.q;
+        out[5][i] = tw.omega;
+        out[6][i] = w.phase;
     }
 }
 

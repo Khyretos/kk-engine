@@ -119,6 +119,7 @@ limitations. 🔴 Not started / stub.
 | Destructible Synty props | 🟢 | Any prop: voxelized + surface-fitted tets, material fracture patterns (splinters / Voronoi chunks / radial glass / shards / metal dents), prop's own mesh embedded and drawn deforming/breaking, settle-then-arm thresholds, runaway guard. **Not yet:** collision for static placed meshes, debris budget and faster debris sleep, impact-point-aware radial glass, sounds/particles on break. |
 | Liquids (`kke::ParticleFluid`) | 🟡 | PBF particle liquid with temperature, per-material viscosity/solidification, SDF colliders, budget; `games/melt_demo`. **Not yet:** smooth surface rendering (screen-space fluid), GPU compute path, two-way coupling with FEMFX bodies, water body / buoyancy (next: sea demo). |
 | Meltable solids (`kke::MeltVolume`) | 🟡 | Voxel density+temperature, latent-heat melting into liquid particles, marching-tetrahedra surface, chamfer SDF. **Not yet:** arbitrary shapes from meshes (voxelizer exists), refreezing into solid, burning/charring. |
+| Ocean + buoyancy (`kke::OceanWaves`, `kke::FloatingBodies`, `kke::OceanRenderer`) | 🟡 | Gerstner swell from wind (CPU = GPU), point-sampled Archimedes buoyancy with drag, heave damping, ballast; `games/sea_demo`. **Not yet:** refraction/underwater view, Synty props and FEMFX bodies as floaters, wakes/interactive ripples, shore/depth colour. |
 | Lua scripting | 🔴 | Fetched as a dependency, not called from any code yet. |
 
 ## Networking

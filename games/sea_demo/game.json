@@ -1,0 +1,9 @@
+{
+  "id": "engine.kke.sea_demo",
+  "title": "KKE Sea Demo",
+  "description": "Drive a boat over Gerstner swell and throw things overboard: foam and wood ride high, ice floats low, iron sinks. Buoyancy at sample points on an analytic ocean, the way many games do it.",
+  "version": "0.1.0",
+  "tags": ["demo", "water", "buoyancy", "ocean", "boat", "physics"],
+  "engine_version": "0.3",
+  "modules": ["SeaDemo", "OrbitCamera"]
+}

@@ -46,13 +46,17 @@ void FloatingBodies::step(float dt, const OceanWaves& ocean, float time) {
         if (!b.alive) continue;
         const glm::mat3 R = glm::mat3_cast(b.orientation);
         glm::vec3 force = b.force + gravity * b.mass;
-        glm::vec3 torque = b.torque;
+        glm::vec3 torque = b.torque + glm::cross(R * b.centerOfMassOffset, gravity * b.mass); // weight acts at the (possibly low) CoM
         b.force = b.torque = glm::vec3(0.0f);
 
         // Each sample point is a little cube of height pointHeight; the part
         // of it below the surface displaces water (smooth, so bodies don't
         // pop as points cross the surface).
-        const float pointHeight = 2.0f * b.halfExtents.y / std::max(1.0f, std::round(std::cbrt(static_cast<float>(b.samplePoints.size()))));
+        // The side of the little cube each point stands for. (This used the
+        // cube root of the *point count*, which is wrong for non-cubic
+        // grids: the boat's 5x2x4 grid got 0.2 m instead of 0.35 m, which
+        // skewed the buoyancy and tipped it over.)
+        const float pointHeight = std::cbrt(b.pointVolume);
         float submergedSum = 0.0f;
         const float perPointMass = b.mass / static_cast<float>(b.samplePoints.size());
         for (const glm::vec3& local : b.samplePoints) {
@@ -70,6 +74,7 @@ void FloatingBodies::step(float dt, const OceanWaves& ocean, float time) {
             const glm::vec3 pointVel = b.velocity + glm::cross(b.angularVelocity, r);
             const glm::vec3 rel = pointVel - ocean.velocity(xz, time);
             f -= rel * (b.linearDrag * perPointMass * frac);
+            f.y -= rel.y * (b.heaveDrag * perPointMass * frac);
             force += f;
             torque += glm::cross(r, f);
         }

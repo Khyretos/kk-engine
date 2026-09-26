@@ -26,7 +26,9 @@ struct GerstnerWave {
 
 class OceanWaves {
 public:
-    static constexpr int kMaxWaves = 6;   // must match shaders/ocean.vert
+    // 4 waves: what fits in the 128 bytes of push constants every Vulkan
+    // device guarantees (shaders/ocean.vert), so CPU and GPU match exactly.
+    static constexpr int kMaxWaves = 4;
 
     OceanWaves();                          // a pleasant default swell
     std::vector<GerstnerWave>& waves() { return m_waves; }
@@ -47,9 +49,9 @@ public:
     glm::vec3 normal(const glm::vec2& xz, float t) const;
     glm::vec3 velocity(const glm::vec2& xz, float t) const;
 
-    // Packed for a push-constant/uniform block: per wave
-    // vec4(dir.x, dir.y, k = 2 pi / wavelength, amplitude) and
-    // vec4(steepness/(k*amplitude*count) Q, omega, phase, 0).
+    // Packed for shaders/ocean.vert's push constants (7 vec4):
+    // out[0..3] = vec4(dir.x, dir.y, k = 2 pi / wavelength, amplitude) per wave,
+    // out[4] = Q per wave, out[5] = omega per wave, out[6] = phase per wave.
     void toGpu(std::vector<glm::vec4>& out) const;
 
 private:

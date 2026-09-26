@@ -1,0 +1,6 @@
+add_executable(sea_demo main.cpp SeaDemoModule.cpp)
+target_link_libraries(sea_demo PRIVATE kke_engine)
+engine_copy_runtime_file(sea_demo ${CMAKE_CURRENT_SOURCE_DIR}/game.json marketplace/sea_demo/game.json)
+foreach(shader cube.vert glow.frag impostor.vert impostor.frag shadow.vert shadow.frag ocean.vert ocean.frag sky.vert sky.frag)
+    engine_add_shader(sea_demo ${CMAKE_SOURCE_DIR}/shaders/${shader})
+endforeach()

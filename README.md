@@ -1582,6 +1582,33 @@ objects and ragdolls), so a crate on a broken one stays floating;
 debris is slow to fall asleep, which keeps one core busy (~10-20 ms/step
 for ~70 pieces) until it does — next on the physics list.
 
+### `games/sea_demo` — a boat, the sea, float or sink
+
+`cd build/bin && ./sea_demo`. Drive the boat with the **arrow keys**,
+**left-click** to throw things overboard (**1-5** picks: foam, wooden
+crate, sealed barrel, ice, iron), **C** toggles the follow camera, **R**
+resets. Wind speed, direction and choppiness shape the swell.
+
+How it works (the approach most games use — "feels right", cheap):
+- `kke::OceanWaves` — 4 Gerstner waves with real deep-water dispersion,
+  generated from wind. The CPU evaluates exactly what `ocean.vert` draws
+  (128 bytes of push constants, no textures), so floating things ride
+  the visible waves.
+- `kke::FloatingBodies` — rigid boxes sampled by points; each submerged
+  point gets Archimedes' buoyancy and drag against the moving water, at
+  the point, so tilting creates righting torque on its own. Density
+  decides: water is 1025 kg/m³. Heave damping (radiation damping, the
+  cheap way) and a low centre of mass (ballast) keep the boat from being
+  launched off crests or capsizing — both found by testing, see BUGS.md
+  BUG-044.
+- `kke::OceanRenderer` — camera-following grid (snapped so it doesn't
+  swim), Fresnel sky reflection, sun glint, crest foam, horizon haze,
+  gradient sky with a sun.
+
+Honest limits: the sea is opaque (no refraction, underwater parts
+hidden), bodies are boxes (Synty boats/props as floaters: next), no
+FEMFX objects float yet, spray is simple ballistic particles.
+
 ### `games/melt_demo` — pour lava, melt things
 
 `cd build/bin && ./melt_demo` (`KKE_MELT_PRESET=0..3` picks the block).
@@ -1602,6 +1629,8 @@ Engine pieces (reusable, unit-tested, render-agnostic):
   surface by marching *tetrahedra* (no lookup tables, watertight).
 - `kke::SphereImpostorRenderer` (lit sphere impostors with real depth and
   incandescent glow) and `kke::DynamicMeshRenderer` (CPU-updated meshes).
+  The liquid is drawn as overlapping spheres for now; screen-space fluid
+  rendering (a smooth continuous surface) is the next rendering task.
 
 Honest limits: liquid is drawn as overlapping spheres, not a smooth
 surface (screen-space fluid rendering is the upgrade); no steam/boiling;
