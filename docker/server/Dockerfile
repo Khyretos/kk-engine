@@ -15,14 +15,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libvulkan-dev glslang-tools \
         libdrm-dev libxkbcommon-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
         libxi-dev libxinerama-dev libxss-dev libxtst-dev libwayland-dev wayland-protocols libegl-dev \
-        libfreetype-dev libudev-dev libdbus-1-dev \
+        libfreetype-dev libudev-dev libdbus-1-dev libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY . .
 RUN cmake -S . -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release \
         -DKKE_ENABLE_NET=ON -DKKE_ENABLE_JOLT=ON -DKKE_ENABLE_FEMFX=OFF \
         -DKKE_ENABLE_TESTS=OFF -DKKE_ENABLE_BENCHMARKS=OFF -DENGINE_HEADLESS_TEST=OFF \
-        -DKKE_ENABLE_VALIDATION=OFF \
+        -DKKE_ENABLE_VALIDATION=OFF -DKKE_ENABLE_POSTGRES=ON -DKKE_ENABLE_VALKEY=ON \
     && cmake --build /build --target kke_server \
     && mkdir -p /out/lib \
     && cp /build/bin/kke_server /out/ \
@@ -30,7 +30,7 @@ RUN cmake -S . -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release \
 
 FROM ubuntu:24.04
 ARG DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends libfreetype6 \
+RUN apt-get update && apt-get install -y --no-install-recommends libfreetype6 libpq5 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --create-home --home-dir /data kke
 COPY --from=build /out/kke_server /opt/kke/kke_server

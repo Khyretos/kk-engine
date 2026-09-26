@@ -11,6 +11,7 @@
 #include "kke/server/Leaderboard.h"
 #include "kke/server/ServerAccess.h"
 #include "kke/server/ServerConfig.h"
+#include "kke/storage/Store.h"
 
 #include <functional>
 #include <memory>
@@ -56,6 +57,8 @@ public:
     Leaderboard& leaderboards() { return m_leaderboards; }
     const DirectoryService* directory() const { return m_directory.get(); }
     size_t collisionBodies() const { return m_collisionBodies; }
+    // Where this server keeps data (config().storage); games and future roles (#45) use it.
+    storage::Store* store() { return m_store.get(); }
     DirectoryEntry directoryEntry() const; // what it tells directories
 
 private:
@@ -73,6 +76,7 @@ private:
     ServerAccess m_access;
     Leaderboard m_leaderboards;
     std::unique_ptr<DirectoryService> m_directory;
+    std::unique_ptr<storage::Store> m_store;
     std::unique_ptr<DirectoryPublisher> m_publisher;
     std::unique_ptr<RigidWorld> m_world;
     std::unique_ptr<net::WorldMoveCheck> m_moveCheck;

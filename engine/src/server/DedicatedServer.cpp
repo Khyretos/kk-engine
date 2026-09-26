@@ -56,6 +56,13 @@ bool DedicatedServer::start(std::vector<std::string>& errors) {
     std::filesystem::create_directories(m_config.saveDir, ec);
     if (ec) errors.push_back("saveDir '" + m_config.saveDir + "': can't make it: " + ec.message());
 
+    {
+        const std::string url = m_config.storage.empty() ? "sqlite:" + (std::filesystem::path(m_config.saveDir) / "server.db").string() : m_config.storage;
+        std::string error;
+        m_store = storage::openStore(url, &error);
+        if (!m_store) errors.push_back("storage: " + error);
+        else info(std::string("storage: ") + m_store->backendName());
+    }
     std::vector<std::string> fileProblems;
     m_access.load(accessPath(), fileProblems);
     if (m_config.hasRole("leaderboard")) m_leaderboards.load(leaderboardPath(), fileProblems);
@@ -242,6 +249,7 @@ std::string DedicatedServer::command(const std::string& line) {
         if (m_net) s += ", " + std::to_string(m_net->badPackets()) + " bad packets, " + std::to_string(m_net->refusedMoves()) + " moves refused";
         if (m_directory) s += (m_net ? "; " : "") + std::string("directory: ") + std::to_string(m_directory->registry().size()) + " servers listed";
         if (m_config.hasRole("leaderboard")) s += "; " + std::to_string(m_leaderboards.boards().size()) + " leaderboards";
+        if (m_store) s += std::string("; storage: ") + m_store->backendName();
         return s;
     }
     if (cmd == "players") {
@@ -350,6 +358,7 @@ void DedicatedServer::stop(const std::string& reason) {
     if (!save(&error)) warning("on stop: " + error);
     m_moveCheck.reset();
     m_world.reset();
+    m_store.reset();
 }
 
 } // namespace kke::server

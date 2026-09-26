@@ -54,14 +54,15 @@ setting it can't use rather than guessing.
   "saveDir": "save",
   "directories": [],
   "public": false,
-  "clientScores": false
+  "clientScores": false,
+  "storage": "sqlite:save/server.db"
 }
 ```
 
 Every setting also has a variable (`KKE_SERVER_NAME`, `_GAME`, `_PORT`,
 `_MAX_PLAYERS`, `_PASSWORD`, `_MOTD`, `_ROLES` as `a,b`, `_SCENE`,
 `_SAVE_DIR`, `_DIRECTORIES`, `_DIRECTORY_PORT`, `_PUBLIC`,
-`_CLIENT_SCORES`) and a flag (`./kke_server --help`). `KKE_SERVER_CONFIG`
+`_CLIENT_SCORES`, `_STORAGE`) and a flag (`./kke_server --help`). `KKE_SERVER_CONFIG`
 or `--config` picks another file. For the `physics` role the models of the
 scene come from the asset folder (`KKE_ASSETS_DIR`, as for the games).
 

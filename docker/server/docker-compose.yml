@@ -20,12 +20,25 @@ services:
       KKE_SERVER_MAX_PLAYERS: "16"
       KKE_SERVER_ROLES: "players,leaderboard"
       KKE_SERVER_MOTD: "Welcome!"
+      # KKE_SERVER_STORAGE: "valkey://valkey:6379"   # or postgres://kke:change-me@postgres/kke (docs/STORAGE.md)
       # KKE_SERVER_PUBLIC: "true"               # list it on the directories below
       # KKE_SERVER_DIRECTORIES: "directory.example.org:27950"
     stdin_open: true   # the console, through docker attach
     tty: true
     restart: unless-stopped
     stop_grace_period: 15s
+
+  # Shared storage for several servers (docs/STORAGE.md). The default is a
+  # SQLite file in ./data/save, which needs neither of these.
+  # valkey:
+  #   image: valkey/valkey:8-alpine
+  #   volumes: [ "./valkey:/data" ]
+  #   restart: unless-stopped
+  # postgres:
+  #   image: postgres:17-alpine
+  #   volumes: [ "./postgres:/var/lib/postgresql/data" ]
+  #   environment: { POSTGRES_USER: kke, POSTGRES_PASSWORD: change-me, POSTGRES_DB: kke }
+  #   restart: unless-stopped
 
   # Your own server list, for friends, a community or a studio. Uncomment,
   # then point servers at it with KKE_SERVER_DIRECTORIES=<this host>:27950.

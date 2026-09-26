@@ -25,6 +25,7 @@ struct ServerConfig {
     bool isPublic = false;             // "public": register with `directories`
     uint16_t directoryPort = 27950;    // UDP, when this server has the directory role
     uint16_t tickRate = 60;            // server updates per second
+    std::string storage;               // where the server keeps data (docs/STORAGE.md); "" = sqlite:<saveDir>/server.db
     bool clientScores = false;         // leaderboard: players may send their own scores (easy to cheat; see the docs)
 
     bool hasRole(const std::string& role) const;
@@ -39,7 +40,7 @@ struct ServerConfig {
     bool applyEnv(const std::function<const char*(const char*)>& getenv, std::vector<std::string>& errors);
     // argv without the program name: --name X --port N --max-players N
     // --password X --game X --roles a,b --scene X --save-dir X --public
-    // --directory host:port (repeatable) --directory-port N --client-scores
+    // --directory host:port (repeatable) --directory-port N --client-scores --storage URL
     // --config path
     // (read by the caller first) --help.
     bool applyArgs(const std::vector<std::string>& args, std::vector<std::string>& errors);

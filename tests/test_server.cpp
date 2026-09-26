@@ -77,6 +77,7 @@ TEST(ServerConfig, ReportsEveryProblemInsteadOfGuessing) {
 TEST(ServerConfig, NeverShowsThePassword) {
     ServerConfig c;
     c.password = "hunter2";
+    c.storage = "postgres://kke:hunter2@db.example.org/kke";
     EXPECT_EQ(c.describe().find("hunter2"), std::string::npos);
     EXPECT_NE(c.describe().find("***"), std::string::npos);
 }
@@ -467,6 +468,25 @@ TEST(DedicatedServer, PassesPlayersEventsOnToTheOthers) {
     ASSERT_FALSE(w.events[1].empty());
     EXPECT_EQ(w.events[1].back().kind, 42);
     for (const GameEventMsg& e : w.events[0]) EXPECT_NE(e.kind, 42); // not echoed back
+}
+
+TEST(DedicatedServer, KeepsDataInItsStore) {
+    ServerConfig c = testConfig("dedicated_store");
+    {
+        World w(c);
+        ASSERT_NE(w.server->store(), nullptr);
+        EXPECT_STREQ(w.server->store()->backendName(), "sqlite");
+        EXPECT_TRUE(w.server->store()->put("world", "day", "12"));
+    }
+    World again(c); // a restart
+    EXPECT_EQ(*again.server->store()->get("world", "day"), "12");
+    ServerConfig bad = testConfig("dedicated_store_bad");
+    bad.storage = "ftp://nowhere";
+    LoopbackNetwork net;
+    LoopbackTransport t(net);
+    DedicatedServer s(bad, t);
+    std::vector<std::string> errors;
+    EXPECT_FALSE(s.start(errors));
 }
 
 TEST(DedicatedServer, RefusesToStartOnBadSettings) {

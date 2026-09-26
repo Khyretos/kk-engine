@@ -49,6 +49,9 @@ set(ENGINE_SOURCES
     src/server/Leaderboard.cpp
     src/server/Directory.cpp
     src/voice/JitterBuffer.cpp
+    src/storage/Store.cpp
+    src/storage/MemoryStore.cpp
+    src/storage/SqliteStore.cpp
     src/net/Authority.cpp
     src/InputSanity.cpp
     src/PackSeal.cpp
@@ -206,6 +209,7 @@ target_link_libraries(kke_engine PUBLIC
     imgui
     RmlUi::Core
     nlohmann_json::nlohmann_json
+    kke_sqlite
     ufbx
     spdlog::spdlog
     kke_miniaudio
@@ -259,6 +263,21 @@ if(KKE_ENABLE_NET)
 else()
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_NET=0)
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_VOICE=0)
+endif()
+
+if(KKE_ENABLE_VALKEY)
+    target_sources(kke_engine PRIVATE src/storage/ValkeyStore.cpp)
+    target_link_libraries(kke_engine PUBLIC kke_hiredis)
+    target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_VALKEY=1)
+else()
+    target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_VALKEY=0)
+endif()
+if(KKE_ENABLE_POSTGRES)
+    target_sources(kke_engine PRIVATE src/storage/PostgresStore.cpp)
+    target_link_libraries(kke_engine PUBLIC PostgreSQL::PostgreSQL)
+    target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_POSTGRES=1)
+else()
+    target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_POSTGRES=0)
 endif()
 
 if(ENGINE_ENABLE_LUA)

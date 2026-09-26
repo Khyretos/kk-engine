@@ -31,3 +31,5 @@ __pycache__/
 # kke_server data from docker/server/docker-compose.yml
 docker/server/data/
 docker/server/directory/
+docker/server/valkey/
+docker/server/postgres/

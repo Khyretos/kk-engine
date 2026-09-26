@@ -93,6 +93,7 @@ bool ServerConfig::loadJson(const std::string& text, std::vector<std::string>& e
     list("roles", roles);
     str("scene", scene);
     str("saveDir", saveDir);
+    str("storage", storage);
     list("directories", directories);
     num("directoryPort", directoryPort, 1, 65535);
     num("tickRate", tickRate, 10, 240);
@@ -105,7 +106,7 @@ bool ServerConfig::loadJson(const std::string& text, std::vector<std::string>& e
         else errors.push_back("server.json \"clientScores\": expected true or false");
     }
     static const std::vector<std::string> keys{ "name", "game", "port", "maxPlayers", "password", "motd", "roles", "scene", "saveDir",
-                                                "directories", "directoryPort", "tickRate", "public", "clientScores" };
+                                                "directories", "directoryPort", "tickRate", "public", "clientScores", "storage" };
     for (auto it = j.begin(); it != j.end(); ++it)
         if (std::find(keys.begin(), keys.end(), it.key()) == keys.end())
             errors.push_back("server.json \"" + it.key() + "\": not a setting (a typo?)");
@@ -143,6 +144,7 @@ bool ServerConfig::applyEnv(const std::function<const char*(const char*)>& geten
     if (const char* v = get("KKE_SERVER_ROLES")) roles = splitList(v);
     if (const char* v = get("KKE_SERVER_SCENE")) scene = v;
     if (const char* v = get("KKE_SERVER_SAVE_DIR")) saveDir = v;
+    if (const char* v = get("KKE_SERVER_STORAGE")) storage = v;
     if (const char* v = get("KKE_SERVER_DIRECTORIES")) directories = splitList(v);
     portVar("KKE_SERVER_DIRECTORY_PORT", directoryPort);
     if (const char* v = get("KKE_SERVER_PUBLIC"); v && !parseBool(v, isPublic)) errors.push_back(std::string("KKE_SERVER_PUBLIC='") + v + "': expected true or false");
@@ -179,6 +181,7 @@ bool ServerConfig::applyArgs(const std::vector<std::string>& args, std::vector<s
         else if (a == "--roles") { if (value(v)) roles = splitList(v); }
         else if (a == "--scene") { if (value(v)) scene = v; }
         else if (a == "--save-dir") { if (value(v)) saveDir = v; }
+        else if (a == "--storage") { if (value(v)) storage = v; }
         else if (a == "--directory") { if (value(v)) directories.push_back(v); }
         else if (a == "--public") isPublic = true;
         else if (a == "--client-scores") clientScores = true;
@@ -219,6 +222,15 @@ std::string ServerConfig::describe() const {
     if (hasGameSocket())
         out += ", game '" + game + "', UDP port " + std::to_string(port) + ", " + std::to_string(maxPlayers) + " players, password " + (password.empty() ? "none" : "***");
     out += "\n  roles: " + r + "\n  save folder: " + saveDir;
+    if (!storage.empty()) {
+        std::string shown = storage;
+        // postgres://user:password@host -> postgres://user:***@host
+        if (const size_t scheme = shown.find("://"), at = shown.rfind('@'); scheme != std::string::npos && at != std::string::npos && at > scheme) {
+            const size_t colon = shown.find(':', scheme + 3);
+            if (colon != std::string::npos && colon < at) shown.replace(colon + 1, at - colon - 1, "***");
+        }
+        out += "\n  storage: " + shown;
+    }
     if (!scene.empty()) out += "\n  scene: " + scene;
     if (hasRole("directory")) out += "\n  directory on UDP port " + std::to_string(directoryPort);
     if (isPublic) out += "\n  public, listed on: " + d;
@@ -242,8 +254,9 @@ std::string ServerConfig::usage() {
            "  --directory HOST:PORT a directory to register with (repeatable)\n"
            "  --directory-port N    UDP port of this server's directory role (default 27950)\n"
            "  --client-scores       leaderboard: players may send their own scores\n"
+           "  --storage URL         sqlite:FILE (default save/server.db), valkey://HOST:PORT, postgres://...\n"
            "Environment: KKE_SERVER_NAME, _GAME, _PORT, _MAX_PLAYERS, _PASSWORD, _MOTD, _ROLES,\n"
-           "  _SCENE, _SAVE_DIR, _DIRECTORIES, _DIRECTORY_PORT, _PUBLIC, _CLIENT_SCORES\n"
+           "  _SCENE, _SAVE_DIR, _DIRECTORIES, _DIRECTORY_PORT, _PUBLIC, _CLIENT_SCORES, _STORAGE\n"
            "  (flags win over them).\n";
 }
 

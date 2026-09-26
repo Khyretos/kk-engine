@@ -8,3 +8,5 @@ assets/synty/
 website/
 docker/server/data/
 docker/server/directory/
+docker/server/valkey/
+docker/server/postgres/

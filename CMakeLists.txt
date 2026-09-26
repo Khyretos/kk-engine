@@ -18,6 +18,8 @@ option(KKE_ENABLE_VALIDATION "Enable Vulkan validation layers in debug" ON)
 option(ENGINE_ENABLE_LUA "Lua 5.4 gameplay scripting (kke::ScriptVM, ScriptModule; docs/SCRIPTING.md)" ON)
 option(KKE_ENABLE_NET "Networking over ENet (MIT): kke::NetModule host/join, LAN discovery (docs/NETWORKING.md). Off = offline only; the loopback transport and replication logic still build." ON)
 option(KKE_ENABLE_VOICE "Voice chat: Opus (BSD) codec, VoiceModule (docs/NETWORKING.md \"Voice\"). Needs KKE_ENABLE_NET." ON)
+option(KKE_ENABLE_VALKEY "Storage on a Valkey/Redis server (hiredis, BSD; docs/STORAGE.md)" ON)
+option(KKE_ENABLE_POSTGRES "Storage in PostgreSQL (needs the system libpq, e.g. apt install libpq-dev; docs/STORAGE.md)" OFF)
 option(ENGINE_HEADLESS_TEST "Build the headless smoke-test target" ON)
 option(KKE_ENABLE_TESTS "Build the unit test suite (tests/)" ON)
 option(KKE_ENABLE_BENCHMARKS "Build kke_bench, the headless benchmark suite (benchmarks/, docs/BENCHMARKS.md)" ON)
@@ -419,6 +421,52 @@ if(KKE_ENABLE_NET)
         target_compile_definitions(kke_enet PRIVATE HAS_FCNTL=1 HAS_POLL=1 HAS_GETADDRINFO=1 HAS_GETNAMEINFO=1
                                    HAS_INET_PTON=1 HAS_INET_NTOP=1 HAS_MSGHDR_FLAGS=1 HAS_SOCKLEN_T=1)
     endif()
+endif()
+
+# ---------------------------------------------------------------------------
+# SQLite — the built-in store (kke::storage, docs/STORAGE.md): public
+# domain, one C file, nothing for players or server owners to install.
+# ---------------------------------------------------------------------------
+FetchContent_Declare(
+    sqlite
+    URL      https://www.sqlite.org/2025/sqlite-amalgamation-3500400.zip
+    URL_HASH SHA256=1d3049dd0f830a025a53105fc79fd2ab9431aea99e137809d064d8ee8356b032
+)
+FetchContent_MakeAvailable(sqlite)
+add_library(kke_sqlite STATIC ${sqlite_SOURCE_DIR}/sqlite3.c)
+target_include_directories(kke_sqlite SYSTEM PUBLIC ${sqlite_SOURCE_DIR})
+# Thread-safe, no loadable extensions (nothing outside the engine runs in
+# it), double-quoted strings off (a typo'd column name is an error).
+target_compile_definitions(kke_sqlite PRIVATE SQLITE_THREADSAFE=1 SQLITE_OMIT_LOAD_EXTENSION SQLITE_DQS=0 SQLITE_DEFAULT_WAL_SYNCHRONOUS=1)
+set_target_properties(kke_sqlite PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_compile_options(kke_sqlite PRIVATE $<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>)
+target_link_libraries(kke_sqlite PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
+
+# ---------------------------------------------------------------------------
+# hiredis — the Valkey/Redis client for kke::storage::ValkeyStore (BSD-3).
+# Its sources are compiled here directly: its own CMakeLists warns on
+# current CMake, and we want no warnings in the build log at all.
+# ---------------------------------------------------------------------------
+if(KKE_ENABLE_VALKEY)
+    FetchContent_Declare(
+        hiredis
+        GIT_REPOSITORY https://github.com/redis/hiredis.git
+        GIT_TAG        v1.2.0
+        GIT_SHALLOW    TRUE
+        SOURCE_SUBDIR  kke-no-cmake
+    )
+    FetchContent_MakeAvailable(hiredis)
+    add_library(kke_hiredis STATIC
+        ${hiredis_SOURCE_DIR}/alloc.c ${hiredis_SOURCE_DIR}/hiredis.c ${hiredis_SOURCE_DIR}/net.c
+        ${hiredis_SOURCE_DIR}/read.c ${hiredis_SOURCE_DIR}/sds.c ${hiredis_SOURCE_DIR}/sockcompat.c ${hiredis_SOURCE_DIR}/async.c)
+    target_include_directories(kke_hiredis SYSTEM PUBLIC ${hiredis_SOURCE_DIR})
+    set_target_properties(kke_hiredis PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    if(WIN32)
+        target_link_libraries(kke_hiredis PUBLIC ws2_32)
+    endif()
+endif()
+if(KKE_ENABLE_POSTGRES)
+    find_package(PostgreSQL REQUIRED)
 endif()
 
 # ---------------------------------------------------------------------------
