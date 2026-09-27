@@ -308,3 +308,81 @@ TEST(Hair, TiedHairGathersToItsTies) {
         EXPECT_LT(nearest, 1.5f) << "strand " << g << " ends away from every knot";
     }
 }
+
+// Braids, twists and locs: every drawn hair stays inside its braid's width,
+// the strands really cross (a three-strand braid's hairs go from one side to
+// the other), the shader's tangent matches the offset's change, and
+// cornrows stay on the scalp as the head turns.
+TEST(Hair, BraidsStayPlaitedAndCornrowsOnTheScalp) {
+    for (int strands = 1; strands <= 3; ++strands) {
+        const float width = 0.004f, turns = 10.0f;
+        float sideMin = 1.0f, sideMax = -1.0f;
+        for (int k = 0; k < 40; ++k) {
+            const glm::vec2 rope(float(k % 8) / 7.0f, float(k) * 2.4f);
+            const float phase = glm::two_pi<float>() * float(k % strands) / float(strands);
+            for (int i = 0; i <= 200; ++i) {
+                const float s = float(i) / 200.0f;
+                glm::vec3 change;
+                const glm::vec3 o = kke::HairStrands::plaitOffset(strands, width, turns, phase, rope, s, &change);
+                EXPECT_LE(glm::length(o), width * 1.001f) << strands;
+                if (rope.x == 0.0f) {
+                    sideMin = std::min(sideMin, o.x);
+                    sideMax = std::max(sideMax, o.x);
+                }
+                if (s > 0.01f && s < 0.9f) { // (the taper at the tip isn't in the change)
+                    const float h = 1e-3f;
+                    const glm::vec3 next = kke::HairStrands::plaitOffset(strands, width, turns, phase, rope, s + h);
+                    const glm::vec3 last = kke::HairStrands::plaitOffset(strands, width, turns, phase, rope, s - h);
+                    EXPECT_NEAR(glm::length((next - last) / (2.0f * h) - change), 0.0f, 0.02f * glm::length(change) + 1e-4f) << strands;
+                }
+            }
+        }
+        if (strands > 1) {
+            EXPECT_GT(sideMax - sideMin, 0.9f * width) << strands << ": strands don't cross";
+        }
+    }
+
+    kke::RigidWorld::Settings set;
+    set.threads = 0;
+    kke::RigidWorld world(set);
+    const glm::vec3 neck(0.0f, 1.5f, 0.0f), centre(0.0f, 1.62f, 0.0f);
+    kke::RigidWorld::BodyDesc b;
+    b.shape = kke::RigidWorld::Shape::Sphere;
+    b.motion = kke::RigidWorld::Motion::Kinematic;
+    b.clothOnly = true;
+    b.radius = 0.1f;
+    b.position = centre;
+    const auto body = world.add(b);
+    kke::HairDesc d;
+    ASSERT_TRUE(kke::hairstyleOnHead(d, "cornrows", centre, 0.1f, 160));
+    EXPECT_GE(d.roots.size(), 6u);
+    const auto hair = world.addHair(d);
+    const size_t per = size_t(kke::hairStrandVertices(d.style));
+    // The part of each row along the scalp (to the nape, then the tail
+    // hangs: where it leaves the scalp may lift).
+    const float lying = 0.1f + 3.0f * d.style.thickness;
+    const std::vector<glm::vec3> rest = kke::hairRestPose(d);
+    std::vector<bool> onScalp;
+    for (size_t i = 0; i < rest.size(); ++i) {
+        const size_t later = std::min(i + 3, (i / per + 1) * per - 1);
+        onScalp.push_back(glm::length(rest[i] - centre) < lying && glm::length(rest[later] - centre) < lying);
+    }
+    size_t rowPoints = 0;
+    for (size_t i = 0; i < onScalp.size(); ++i) rowPoints += onScalp[i] && i % per >= 2 ? 1 : 0;
+    EXPECT_GT(rowPoints, onScalp.size() / 2) << "cornrows mostly lie on the scalp";
+    std::vector<glm::vec3> p;
+    float lifted = 0.0f;
+    for (int f = 0; f < 180; ++f) {
+        const float t = float(f) / 60.0f;
+        const glm::quat q = glm::angleAxis(0.9f * std::sin(t * 2.5f), glm::vec3(0, 1, 0)) * glm::angleAxis(0.3f * std::sin(t * 1.7f), glm::vec3(1, 0, 0));
+        const glm::mat4 m = glm::translate(glm::mat4(1.0f), neck) * glm::mat4_cast(q) * glm::translate(glm::mat4(1.0f), -neck);
+        world.moveKinematic(body, glm::vec3(m * glm::vec4(centre, 1.0f)), q, 1.0f / 60.0f);
+        world.setHairJoint(hair, m);
+        world.step(1.0f / 60.0f);
+        ASSERT_TRUE(world.hairPositions(hair, p));
+        const glm::vec3 c = glm::vec3(m * glm::vec4(centre, 1.0f));
+        for (size_t i = 0; i < p.size() && i < onScalp.size(); ++i)
+            if (onScalp[i]) lifted = std::max(lifted, glm::length(p[i] - c) - 0.1f);
+    }
+    EXPECT_LT(lifted, 0.012f) << "cornrows came off the scalp";
+}

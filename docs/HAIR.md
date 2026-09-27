@@ -7,7 +7,7 @@ built on the GPU. The API is in [`kke/Hair.h`](../engine/include/kke/Hair.h),
 `RigidWorld::addHair` and [`kke/HairRenderer.h`](../engine/include/kke/HairRenderer.h).
 The demo is the Hair scene of [games/cloth_demo](../games/cloth_demo/README.md):
 a hairdresser's catalog of every hair type, 1A to 4C, and hairstyles
-from an afro to bantu knots.
+from an afro and bantu knots to box braids, cornrows and locs.
 
 ## Which solver, and why
 
@@ -126,6 +126,10 @@ hairstyle on a head: its type, where it grows, its cut and ties
 | `high-top fade` | hair only on top, standing straight up and cut flat (`lengths`); paint the fade on the scalp, from dark at the cut down to the skin |
 | `twist-out` | two-strand twists taken out: big defined coils, clumped |
 | `bantu knots` | parted into seven sections, each twisted and wound into a knot |
+| `box braids` | each part of the scalp a three-strand braid, long and heavy (with extensions), falling back from the face |
+| `cornrows` | three-strand braids flat on the scalp in rows from the hairline over the top to the nape, the ends hanging (6 to 14 rows: `guides / 16`) |
+| `locs` | each part one rope of matted hair, fuzzy and matte, slowly twisting |
+| `two-strand twists` | each part two strands twisted round each other |
 
 Any type name works too (`hairstyleOnHead(desc, "3a", ...)`), and it
 keeps `desc.style`'s colours. The parts to make your own:
@@ -136,9 +140,25 @@ keeps `desc.style`'s colours. The parts to make your own:
   scalp to it, then a `Puff` bursts out from it and a `Knot` winds into a
   knot `size` across. Give each root to its nearest tie (a large `reach`)
   and the parts fall between the ties by themselves.
+- `HairDesc::tiedTo`: which tie each root goes to, instead of the
+  nearest. Cornrows are a root at the hairline tied to a `Hang` tie at
+  the nape: the braid lies along the scalp to it, then hangs.
 - Your own `directions`: the high-top's point straight up.
 
-Box braids, cornrows and locs come next: they need plaited shapes.
+### Braids, twists and locs
+
+`HairStyle::plait` makes every guide one braid: its drawn hairs are laid
+in `plait` strands that cross over each other round the guide all the
+way to the tip (3: a braid, 2: a twist, 1: a loc's rope). `plaitRadius`
+is half the braid's width and `plaitTurns` how often the pattern repeats
+per metre (a three-strand braid's six crossings). The three strands run
+on one figure of eight, a third of the way round it apart, so each
+crosses over the middle and then under, as in a real braid; each strand
+is a rope of hairs that turns with it. Only the guides are simulated, so a
+braid swings as one piece, and its drawn hairs can't come out of it.
+Braids don't collide with each other (as loose hair doesn't); give them
+`thickness` as wide as the braid so they stay off the head by their
+width.
 
 ## Other presets
 
@@ -196,7 +216,8 @@ Coils are drawn round that curve. The CPU sends, with the guide points, a
 direction across each guide carried along it from the root (so a coil
 never flips as the head turns) and how stretched each guide is there (so
 a coil unwinds as it is pulled). A drawn hair gets as many points as its
-coils need, eight a turn, up to 97.
+coils need, eight a turn, up to 97. Plaits use the same frame: a hair's
+strand and its place in it, twelve points a turn, up to 161.
 
 `HairStrands::ribbons()` builds the same hairs on the CPU, for tests,
 exporting or a renderer of your own. It costs about 3 ms per 5,000 hairs,
@@ -239,9 +260,11 @@ and nodding in gusting wind, never asleep; this sandbox's 4-core VM):
 | One head, 200 strands of 3B ringlets | 3,200 | 0.41 |
 | One head, 200 strands of 4C coils | 2,000 | 0.22 |
 | One head, 200 strands in bantu knots | 4,000 | 0.54 |
+| One head, 160 box braids (50 cm) | 3,200 | 0.33 |
+| One head, cornrows (10 rows) | 260 | 0.03 |
 
-(The last three rows were measured in a later run on the same VM, which
-then took 0.155 ms for the first row.)
+(The last five rows were measured in later runs on the same VM, which
+then took 0.14 to 0.155 ms for the first row.)
 
 With the job system, each head's strands are split into soft bodies of 64
 guides, and Jolt steps them on separate threads. In the demo (4 threads),

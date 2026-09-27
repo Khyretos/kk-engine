@@ -214,7 +214,9 @@ std::vector<Case> makeCases() {
                                HairCase{ "hair_8x200_long", "Jolt hair: 8 heads of 200 long guide strands", 8, 200, "long" },
                                HairCase{ "hair_1x200_3b", "Jolt hair: one head, 200 guide strands, type 3B ringlets", 1, 200, "3b" },
                                HairCase{ "hair_1x200_4c", "Jolt hair: one head, 200 guide strands, type 4C coils", 1, 200, "4c" },
-                               HairCase{ "hair_1x200_bantu", "Jolt hair: one head, 200 guide strands, bantu knots", 1, 200, "bantu knots" } }) {
+                               HairCase{ "hair_1x200_bantu", "Jolt hair: one head, 200 guide strands, bantu knots", 1, 200, "bantu knots" },
+                               HairCase{ "hair_1x160_braids", "Jolt hair: one head, 160 box braids (50 cm)", 1, 160, "box braids" },
+                               HairCase{ "hair_1x160_cornrows", "Jolt hair: one head, cornrows (10 rows)", 1, 160, "cornrows" } }) {
         cases.push_back({ hc.name, hc.what, 240, [hc] {
             auto w = std::make_shared<kke::RigidWorld>([] {
                 kke::RigidWorld::Settings s;

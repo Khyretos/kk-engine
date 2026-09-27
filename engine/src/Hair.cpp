@@ -192,8 +192,11 @@ void hairScalp(HairDesc& desc, const glm::vec3& center, float radius, int count,
 
 namespace {
 
-// Which tie a root is gathered to: the nearest, if within its reach.
-int tieFor(const HairDesc& desc, const glm::vec3& root) {
+// Which tie a root is gathered to: as tiedTo says, else the nearest, if
+// within its reach.
+int tieFor(const HairDesc& desc, size_t g) {
+    if (g < desc.tiedTo.size()) return desc.tiedTo[g] >= 0 && size_t(desc.tiedTo[g]) < desc.ties.size() ? desc.tiedTo[g] : -1;
+    const glm::vec3 root = desc.roots[g];
     int best = -1;
     float bestD = 1e30f;
     for (size_t i = 0; i < desc.ties.size(); ++i) {
@@ -251,7 +254,13 @@ void tiedLine(const HairDesc& desc, const HairDesc::Tie& tie, size_t g, const gl
             continue;
         }
         const float u = d - over;
-        if (tie.shape == HairDesc::Tie::Shape::Puff) {
+        if (tie.shape == HairDesc::Tie::Shape::Hang) {
+            // Hanging down from there (a cornrow's tail), clear of the head.
+            glm::vec3 q = base + glm::normalize(desc.down) * u;
+            const glm::vec3 fromC = q - c;
+            if (onHead && glm::length(fromC) < clearance && glm::length(fromC) > 1e-6f) q = c + glm::normalize(fromC) * clearance;
+            line[size_t(i)] = q;
+        } else if (tie.shape == HairDesc::Tie::Shape::Puff) {
             // Bursting out every way from the tie (strands spread evenly
             // from straight up to just below level, turned the way each
             // came), into a ball.
@@ -299,7 +308,7 @@ std::vector<glm::vec3> hairRestPose(const HairDesc& desc) {
         out.push_back(root);
         glm::vec3 p = root + dir * follicle;
         line[0] = p;
-        const int tie = tieFor(desc, root);
+        const int tie = tieFor(desc, g);
         if (tie >= 0) {
             tiedLine(desc, desc.ties[size_t(tie)], g, p, segLen, line);
         } else {
@@ -368,6 +377,7 @@ bool hairstyleOnHead(HairDesc& desc, const std::string& name, const glm::vec3& c
     const glm::vec3 r = glm::cross(u, f);
     desc.lengths.clear();
     desc.ties.clear();
+    desc.tiedTo.clear();
     auto keepColours = [&] {
         desc.style.rootColor = root;
         desc.style.tipColor = tip;
@@ -477,6 +487,107 @@ bool hairstyleOnHead(HairDesc& desc, const std::string& name, const glm::vec3& c
         }
         desc.style.length = longest;
         for (const glm::vec3& p : desc.roots) desc.lengths.push_back((top - glm::dot(p, u)) / longest);
+    } else if (name == "box braids" || name == "locs" || name == "two-strand twists") {
+        // Each part of the scalp one braid, rope or twist, hanging.
+        desc.style = hairStyle("4c");
+        HairStyle& s = desc.style;
+        s.name = name;
+        s.coil = 0.0f;
+        s.shrinkage = 0.0f; // plaited, it can't shrink
+        s.stretch = 0.0f;
+        s.hold = 0.45f; // falling back from the face as styled, swinging below
+        s.gravity = 1.0f;
+        s.clump = 0.0f;
+        s.spread = 0.0f;
+        s.frizz = 0.0f;
+        s.hairWidth = 0.001f;
+        s.droop = 0.06f;
+        s.bend = 3.0f;
+        s.airDrag = 0.6f;
+        if (name == "box braids") { // with extensions: long and heavy
+            s.plait = 3;
+            s.plaitRadius = 0.0035f;
+            s.plaitTurns = 24.0f;
+            s.length = 0.5f;
+            s.segments = 18;
+            s.density = 0.012f;
+            s.hairsPerGuide = 30;
+            s.shine = 0.3f;
+        } else if (name == "locs") { // hair matted into ropes: fuzzy, matte, slowly twisting
+            s.plait = 1;
+            s.plaitRadius = 0.0045f;
+            s.plaitTurns = 8.0f;
+            s.length = 0.38f;
+            s.segments = 16;
+            s.density = 0.01f;
+            s.hairsPerGuide = 40;
+            s.frizz = 0.0008f;
+            s.shine = 0.08f;
+        } else { // two strands twisted round each other
+            s.plait = 2;
+            s.plaitRadius = 0.003f;
+            s.plaitTurns = 45.0f;
+            s.length = 0.25f;
+            s.segments = 14;
+            s.density = 0.006f;
+            s.hairsPerGuide = 30;
+            s.frizz = 0.0003f;
+            s.shine = 0.15f;
+            s.droop = 0.1f;
+            s.hold = 0.5f;
+        }
+        s.thickness = std::max(s.thickness, s.plaitRadius);
+        hairScalp(desc, center, radius, guides, 1.9f, u, f);
+        desc.comb = -f * 1.4f; // back off the face
+        for (glm::vec3& d : desc.directions) d = glm::normalize(d - f * (0.6f * std::max(glm::dot(d, f), 0.0f)));
+    } else if (name == "cornrows") {
+        // Braided flat to the scalp in rows from the hairline over the top
+        // to the nape (the hair fed in along the way), the ends hanging.
+        desc.style = hairStyle("4c");
+        HairStyle& s = desc.style;
+        s.name = name;
+        s.coil = 0.0f;
+        s.shrinkage = 0.0f;
+        s.stretch = 0.0f;
+        s.plait = 3;
+        s.plaitRadius = 0.0045f;
+        s.plaitTurns = 22.0f;
+        s.segments = 24;
+        s.density = 0.006f;
+        s.hold = 0.95f; // braided onto the scalp
+        s.bend = 2.0f;
+        s.clump = 0.0f;
+        s.spread = 0.0f;
+        s.frizz = 0.0f;
+        s.hairWidth = 0.001f;
+        s.hairsPerGuide = 30;
+        s.shine = 0.3f;
+        s.thickness = s.plaitRadius;
+        desc.roots.clear();
+        desc.directions.clear();
+        desc.headCenter = center;
+        desc.headRadius = radius;
+        desc.comb = glm::vec3(0.0f);
+        const int rows = std::clamp(guides / 16, 6, 14);
+        const float front = 0.95f, back = 2.0f, tail = 0.12f; // radians from the top to the hairline and the nape (under pi together: over the top)
+        const float clearance = radius + 1.5f * s.thickness;
+        for (int k = 0; k < rows; ++k) {
+            // Each row in a plane through the head's front-back axis, turned
+            // sideways (the rows fan out a little over the top).
+            const float side = (float(k) + 0.5f) / float(rows) * 2.0f - 1.0f;
+            const float beta = side * 1.15f;
+            const glm::vec3 across = r * std::sin(beta) + u * std::cos(beta); // the row's "up"
+            const glm::vec3 start = glm::normalize(across * std::cos(front) + f * std::sin(front));
+            const glm::vec3 end = glm::normalize(across * std::cos(back) - f * std::sin(back));
+            desc.roots.push_back(center + start * radius);
+            desc.directions.push_back(glm::normalize(glm::cross(glm::cross(start, end), start))); // along the row
+            HairDesc::Tie t;
+            t.at = center + end * radius;
+            t.shape = HairDesc::Tie::Shape::Hang;
+            desc.ties.push_back(t);
+            desc.tiedTo.push_back(k);
+        }
+        s.length = (front + back) * clearance + tail;
     } else {
         return false;
     }
@@ -484,6 +595,8 @@ bool hairstyleOnHead(HairDesc& desc, const std::string& name, const glm::vec3& c
     return true;
 }
 
-std::vector<std::string> hairstyleNames() { return { "afro", "puff", "high-top fade", "twist-out", "bantu knots" }; }
+std::vector<std::string> hairstyleNames() {
+    return { "afro", "puff", "high-top fade", "twist-out", "bantu knots", "box braids", "cornrows", "locs", "two-strand twists" };
+}
 
 } // namespace kke

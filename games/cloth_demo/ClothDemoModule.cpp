@@ -13,6 +13,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
+#include <utility>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -39,10 +40,11 @@ struct HairPage {
 const HairPage kHairPages[] = {
     { "Types 3 and 4", "types34", { "3a", "3b", "3c", "4a", "4b", "4c" } },
     { "Hairstyles", "styles", { "afro", "puff", "high-top fade", "twist-out", "bantu knots" } },
+    { "Braids and locs", "braids", { "box braids", "cornrows", "locs", "two-strand twists" } },
     { "Types 1 and 2", "types12", { "1a", "1b", "1c", "2a", "2b", "2c" } },
     { "Classic", "classic", { "long", "wavy", "curly", "short" } },
 };
-constexpr int kHairPageCount = 4;
+constexpr int kHairPageCount = 5;
 
 float rand01(uint32_t& s) {
     s ^= s << 13;
@@ -439,8 +441,8 @@ void ClothDemoModule::buildHair() {
         h->now = h->bind;
         // The hair first: the scalp is painted where it grows.
         kke::HairDesc d;
-        const bool coiled = kke::hairStyle(styles[size_t(i)]).coil > 0.0f || h->label == "afro" || h->label == "puff" || h->label == "twist-out" ||
-                            h->label == "bantu knots" || h->label == "high-top fade";
+        const auto& named = kke::hairstyleNames();
+        const bool coiled = kke::hairStyle(styles[size_t(i)]).coil > 0.0f || std::find(named.begin(), named.end(), h->label) != named.end();
         const int colour = coiled ? (i % 2 == 0 ? 0 : (i % 4 == 1 ? 3 : 1)) : i % 6;
         d.style.rootColor = colors[colour][0];
         d.style.tipColor = colors[colour][1];
@@ -472,16 +474,39 @@ void ClothDemoModule::buildHair() {
         {
             std::vector<kke::Vertex> v;
             std::vector<uint32_t> idx;
-            addCapsule(v, idx, centre, centre, radius, skin, 40);
+            addCapsule(v, idx, centre, centre, radius, skin, d.style.plait > 0 ? 112 : 40); // finer where parts and rows are painted
             // The scalp painted the hair's root colour where hair grows, so
             // no skin shows between the hairs (parts between sections do).
             // A fade is painted: short at the cut, down to the skin.
             float spacing = 0.0f;
             if (d.roots.size() > 1) spacing = std::sqrt(4.0f * radius * radius * 2.4f / float(d.roots.size())); // over most of the sphere
+            // Braids and locs: only under them (the parts between show), a
+            // cornrow all along its row.
+            std::vector<std::pair<glm::vec3, glm::vec3>> under; // the braids' pieces lying on the scalp
+            if (d.style.plait > 0) {
+                const std::vector<glm::vec3> rest = kke::hairRestPose(d);
+                const size_t per = size_t(kke::hairStrandVertices(d.style));
+                for (size_t k = 0; k + 1 < rest.size(); ++k) {
+                    if ((k + 1) % per == 0) continue; // the next guide
+                    const float lying = radius + 2.0f * d.style.thickness;
+                    if (glm::distance(rest[k], centre) < lying && glm::distance(rest[k + 1], centre) < lying) under.emplace_back(rest[k], rest[k + 1]);
+                }
+            }
             for (kke::Vertex& vx : v) {
                 float nearest = 1e9f;
-                for (const glm::vec3& r : d.roots) nearest = std::min(nearest, glm::distance(vx.position, r));
-                float cover = std::clamp((1.6f * spacing - nearest) / std::max(0.6f * spacing, 1e-4f), 0.0f, 1.0f);
+                float cover = 0.0f;
+                if (d.style.plait > 0) {
+                    for (const auto& [a, b] : under) {
+                        const glm::vec3 ab = b - a;
+                        const float t = std::clamp(glm::dot(vx.position - a, ab) / std::max(glm::dot(ab, ab), 1e-12f), 0.0f, 1.0f);
+                        nearest = std::min(nearest, glm::distance(vx.position, a + ab * t));
+                    }
+                    const float edge = 1.5f * d.style.thickness + 0.8f * d.style.plaitRadius;
+                    cover = std::clamp((edge - nearest) / 0.002f, 0.0f, 1.0f);
+                } else {
+                    for (const glm::vec3& r : d.roots) nearest = std::min(nearest, glm::distance(vx.position, r));
+                    cover = std::clamp((1.6f * spacing - nearest) / std::max(0.6f * spacing, 1e-4f), 0.0f, 1.0f);
+                }
                 if (h->label == "high-top fade") {
                     const float below = centre.y + radius * std::cos(0.95f) - vx.position.y; // under the cut
                     const bool face = vx.position.z - centre.z > 0.25f * radius && vx.position.y < centre.y + radius * std::cos(1.0f);

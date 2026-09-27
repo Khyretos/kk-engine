@@ -7,7 +7,8 @@ Six scenes of things that are soft and thin:
 - a hammock and a tennis net catching balls
 - a runner in a cape going through a curtain
 - a hair catalog: every hair type from 1A to 4C, and an afro, a puff, a
-  high-top fade, a twist-out and bantu knots, on heads turning in the wind
+  high-top fade, a twist-out, bantu knots, box braids, cornrows, locs and
+  two-strand twists, on heads turning in the wind
 - a stress test that shows what cloth costs
 
 Cloth never passes through cloth, not even through itself, and hair never
@@ -49,7 +50,7 @@ KKE_BENCHMARK=1 ./cloth_demo                              # tours every scene an
 | `KKE_CLOTH_WIND=<m/s>` | Wind speed (default 4, and 3 in the hair scene) |
 | `KKE_CLOTH_COUNT`, `KKE_CLOTH_RES` | Stress scene: sheets, vertices per side (default 16, 24) |
 | `KKE_HAIR_GUIDES`, `KKE_HAIR_PER_GUIDE` | Hair scene: guide strands per head, hairs drawn per guide (default 160, and 0 = as the style draws) |
-| `KKE_HAIR_SHOW=types34\|styles\|types12\|classic` | Hair scene: the catalog's page (default types 3 and 4) |
+| `KKE_HAIR_SHOW=types34\|styles\|braids\|types12\|classic` | Hair scene: the catalog's page (default types 3 and 4) |
 | `KKE_HAIR_STYLES=4c,afro` | Hair scene: exactly these heads, from `hairStyleNames()` and `hairstyleNames()` |
 | `KKE_CLOTH_GPU=0\|shared` | Search for cloth pairs on the CPU only, or on the graphics queue (docs/CLOTH.md, "On the GPU") |
 | `KKE_CLOTH_GPU_CHECK=1` | Search on the GPU and the CPU and log any difference |
@@ -89,7 +90,7 @@ the upload. F1 shows the engine's developer panels.
 | 3 | Nets | A hammock catching balls, and a tennis net stopping shots at 15 to 21 m/s. |
 | 4 | Cape | A runner with a satin cape running through a linen curtain. The cape is skinned to the body, and back-stops keep it off the back. |
 | 5 | Stress | Sheets of cotton over balls, dropped again every 5 s. Set the count and resolution in the panel. |
-| 6 | Hair | A hairdresser's catalog on heads that turn, nod and now and then shake, in gusting wind. Show picks the page: types 3A to 4C (ringlets to tight coils that shrink and spring), hairstyles (afro, puff, high-top fade, twist-out, bantu knots), types 1A to 2C, or the classic long, wavy, curly and short. Set the guides per head and the hairs drawn per guide in the panel. |
+| 6 | Hair | A hairdresser's catalog on heads that turn, nod and now and then shake, in gusting wind. Show picks the page: types 3A to 4C (ringlets to tight coils that shrink and spring), hairstyles (afro, puff, high-top fade, twist-out, bantu knots), braids and locs (box braids, cornrows, locs, two-strand twists), types 1A to 2C, or the classic long, wavy, curly and short. Set the guides per head and the hairs drawn per guide in the panel. |
 
 ## How it works
 
@@ -156,6 +157,10 @@ builds the hairs around the head's 160 guides (32 or 40 each), and for
 types 3 and 4 the coils round every hair. The head mesh paints the scalp
 the hair's root colour near every root, so no skin shows between hairs
 (but the parts between bantu knots do), and paints the high-top's fade.
+Under braids, cornrows and locs it paints only where they lie on the
+scalp (the rest pose's pieces within a braid's width of it), so the parts
+between them and the skin between cornrows show; those heads get a finer
+mesh for it.
 
 ### The panel and the input
 

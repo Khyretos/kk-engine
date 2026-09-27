@@ -11,7 +11,7 @@ struct HairGpu {
     uvec4 idx;    // x = guide, y = the neighbour it leans to, z = frizz phase (float bits)
     vec4 offset;  // xyz = offset from the guide (head space), w = how much of the neighbour
     vec4 color;   // rgb = tint, a = its length (fraction of the guide's)
-    vec4 coil;    // x = turns root to tip, y = phase, z = radius scale
+    vec4 coil;    // x = turns root to tip, y = phase, z = radius scale; plaits: z, w = where in its strand (HairStrands::Hair::rope)
 };
 
 layout(std430, set = HAIR_SET, binding = 0) readonly buffer Hairs { HairGpu hairs[]; };
@@ -20,11 +20,11 @@ layout(std430, set = HAIR_SET, binding = 0) readonly buffer Hairs { HairGpu hair
 layout(std430, set = HAIR_SET, binding = 1) readonly buffer Frame {
     mat4 head;      // the head's rotation now (offsets turn with it)
     vec4 counts;    // x = points drawn per hair, y = vertices per guide strand, z = drawn width (m), w = a pixel's size 1 m away
-    vec4 shape;     // x = clump, y = frizz (m), z = width in the shadow map (m)
+    vec4 shape;     // x = clump, y = frizz (m), z = width in the shadow map (m), w = plait strands (0 = none)
     vec4 rootColor; // sRGB
     vec4 tipColor;  // sRGB, a = shine
     vec4 look;      // x = highlight shift, y = roughness, z = every z-th hair is drawn (level of detail), w = width scale for it
-    vec4 coil;      // x = coil radius (m, 0 = none), y = zig-zag, z = pulled straight at (x rest length), w = guide points
+    vec4 coil;      // x = coil radius (plaits: half the braid's width; m, 0 = none), y = zig-zag, z = pulled straight at (x rest length), w = guide points
     vec4 headSphere; // xyz = the head's centre now, w = radius (0 = none): hairs stay out of it
     vec4 guides[];  // xyz, guide after guide, root first; then as many frames (HairStrands::frames)
 } frame;
@@ -79,8 +79,33 @@ vec3 across(vec3 t, vec3 toward) {
     return normalize(side);
 }
 
-// A coil around the hair's line at s (HairStrands::coilOffset, which
-// this mirrors): the offset and its change along s. t = the line's way.
+// A plait's offset across its line and its change along s
+// (HairStrands::plaitOffset, which this mirrors).
+vec2 plaitOffset(int strands, float width, float turns, float phase, vec2 rope, float s, out vec2 change) {
+    float da = 6.28318531 * turns;
+    float a = da * s + phase;
+    float taper = 1.0 - 0.4 * smoothstep(0.94, 1.0, s);
+    vec2 c = vec2(0.0), d = vec2(0.0);
+    float strand = width;
+    if (strands == 3) {
+        float r = width / 1.45;
+        c = r * vec2(sin(a), 0.5 * sin(2.0 * a));
+        d = r * da * vec2(cos(a), cos(2.0 * a));
+        strand = 0.45 * r;
+    } else if (strands == 2) {
+        float r = 0.5 * width;
+        c = r * vec2(cos(a), sin(a));
+        d = r * da * vec2(-sin(a), cos(a));
+        strand = r;
+    }
+    float ra = a + rope.y, rr = strand * rope.x;
+    change = (d + rr * da * vec2(-sin(ra), cos(ra))) * taper;
+    return (c + rr * vec2(cos(ra), sin(ra))) * taper;
+}
+
+// A coil around the hair's line at s, or its place in a plait
+// (HairStrands::coilOffset, which this mirrors): the offset and its
+// change along s. t = the line's way.
 vec3 coilOffset(HairGpu h, float s, vec3 t, out vec3 change) {
     change = vec3(0.0);
     if (frame.coil.x <= 0.0 || h.coil.x <= 0.0) return vec3(0.0);
@@ -91,6 +116,16 @@ vec3 coilOffset(HairGpu h, float s, vec3 t, out vec3 change) {
     int k = clamp(int(f), 0, segs - 1);
     int base = int(frame.coil.w + 0.5) + int(h.idx.x) * strand + 1;
     vec4 fr = mix(frame.guides[base + k], frame.guides[base + k + 1], clamp(f - float(k), 0.0, 1.0));
+    int plait = int(frame.shape.w + 0.5);
+    if (plait > 0) {
+        vec3 pn = fr.xyz - t * dot(fr.xyz, t);
+        pn = dot(pn, pn) > 1e-12 ? normalize(pn) : across(t, vec3(0.0, 1.0, 0.0));
+        vec3 pb = cross(t, pn);
+        vec2 dc;
+        vec2 o = plaitOffset(plait, frame.coil.x, h.coil.x, h.coil.y, h.coil.zw, s, dc);
+        change = pn * dc.x + pb * dc.y;
+        return pn * o.x + pb * o.y;
+    }
     // Pulled longer, a coil unwinds (the hair's own length stays).
     float pulled = frame.coil.z;
     float kk = max(fr.w, 1e-3);

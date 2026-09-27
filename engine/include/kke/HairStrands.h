@@ -29,7 +29,11 @@ public:
         float phase = 0.0f;            // frizz
         // Coils (HairStyle::coil): turns from root to tip at rest, where
         // they start, and this hair's share of coilRadius.
+        // Plaits (HairStyle::plait) use them too: the pattern's turns, its
+        // strand's place in it, and rope = where in its strand it lies
+        // (0 centre .. 1 edge, and at what angle).
         float coilTurns = 0.0f, coilPhase = 0.0f, coilScale = 1.0f;
+        glm::vec2 rope{0.0f};
     };
     void build(const HairDesc& desc);
     // guides: RigidWorld::hairPositions. head: the head's world matrix now.
@@ -41,10 +45,15 @@ public:
     // coils turn about it), w = how stretched the strand is there (1 =
     // its rest length). HairRenderer uploads it after the points.
     void frames(const std::vector<glm::vec3>& guides, const glm::mat4& head, std::vector<glm::vec4>& out) const;
-    // A coil around a hair's centre line at s (0 root .. 1 tip): the
-    // offset from the line and how the offset changes along s. t = the
-    // line's direction, frame = frames() at that point of its guide.
+    // A coil around a hair's centre line at s (0 root .. 1 tip), or its
+    // place in a plait: the offset from the line and how the offset
+    // changes along s. t = the line's direction, frame = frames() at that
+    // point of its guide.
     static glm::vec3 coilOffset(const HairStyle& style, const Hair& hair, float s, const glm::vec3& t, const glm::vec4& frame, glm::vec3* change = nullptr);
+    // A plait's offset across its line (x, y: along the frame's normal and
+    // binormal; z = 0) and its change along s: shaders/hair_common.glsl's
+    // plaitOffset. strands 1..3, width = HairStyle::plaitRadius.
+    static glm::vec3 plaitOffset(int strands, float width, float turns, float phase, const glm::vec2& rope, float s, glm::vec3* change = nullptr);
     // The head as a sphere now (xyz = centre, w = radius; 0 = none): drawn
     // hairs are kept out of it (HairDesc::headCenter, headRadius). Where
     // two guides a hair blends between go round the head on either side,

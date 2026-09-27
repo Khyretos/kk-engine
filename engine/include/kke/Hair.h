@@ -52,6 +52,12 @@ struct HairStyle {
     float definition = 0.5f;         // 0 = every hair coils on its own (a soft halo) .. 1 = a clump's hairs coil together (ringlets)
     float shrinkage = 0.0f;          // 0..0.9: how much shorter the hair rests than pulled straight (4C: 0.75);
                                      // strands can be pulled out to 1 / (1 - shrinkage) x their length and spring back
+    // --- plaits (box braids, cornrows, twists, locs): each guide is one
+    // braid; its drawn hairs are laid in `plait` strands that cross over
+    // each other around it all the way to the tip (on the GPU, as coils).
+    int plait = 0;                   // 0 = loose hair, 1 = one rope (locs), 2 = a two-strand twist, 3 = a three-strand braid
+    float plaitRadius = 0.004f;      // m: half the braid's width
+    float plaitTurns = 24.0f;        // per metre: a three-strand braid's pattern repeats (six crossings) this often
     // --- behaviour
     float density = 0.004f;          // kg per metre of the clump one guide stands for
     float stretch = 0.0f;            // softness along the strand
@@ -103,18 +109,21 @@ struct HairDesc {
     // Optional, one per root: its length as a fraction of style.length
     // (a cut: a flat top, layers). Empty = all full length.
     std::vector<float> lengths;
-    // Hair gathered and tied (a puff, a bun, bantu knots): every root
-    // within `reach` of a tie lies along the scalp to it, then a Puff
-    // bursts out from there in a ball and a Knot winds round into a
-    // knot `size` across.
+    // Hair gathered and tied (a puff, a bun, bantu knots, cornrows): every
+    // root within `reach` of a tie (or as tiedTo says) lies along the scalp
+    // to it, then a Puff bursts out from there in a ball, a Knot winds
+    // round into a knot `size` across and a Hang hangs down from it.
     struct Tie {
-        enum class Shape { Puff, Knot };
+        enum class Shape { Puff, Knot, Hang };
         glm::vec3 at{0.0f};          // on the scalp (bind pose, world)
         float reach = 1.0f;          // m, over the scalp
         float size = 0.03f;          // m: a knot's width
         Shape shape = Shape::Puff;
     };
     std::vector<Tie> ties;
+    // Optional, one per root: the tie it goes to (-1 = none). Empty = the
+    // nearest within reach.
+    std::vector<int> tiedTo;
     float wind = 1.0f;               // how much of RigidWorld::setWind reaches it
 };
 
@@ -128,8 +137,10 @@ void hairScalp(HairDesc& desc, const glm::vec3& center, float radius, int count,
 
 // A hairstyle on a head, as hairScalp() and more: its type, where it
 // grows, its cut and ties. "afro", "puff", "high-top fade", "twist-out",
-// "bantu knots" (hairstyleNames()); any hairStyleNames() name gives that
-// type grown out. Keeps desc.style's colours. False for unknown names.
+// "bantu knots", "box braids", "cornrows", "locs", "two-strand twists"
+// (hairstyleNames()); any hairStyleNames() name gives that type grown
+// out. Keeps desc.style's colours. `guides` is a hint: braids, cornrows
+// and locs have as many as the style has. False for unknown names.
 bool hairstyleOnHead(HairDesc& desc, const std::string& name, const glm::vec3& center, float radius, int guides,
                      const glm::vec3& up = glm::vec3(0, 1, 0), const glm::vec3& front = glm::vec3(0, 0, 1));
 std::vector<std::string> hairstyleNames();

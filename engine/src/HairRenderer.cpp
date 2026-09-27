@@ -21,7 +21,7 @@ struct HairGpu {
     uint32_t guide, other, phaseBits, pad;
     glm::vec4 offset; // xyz, w = blend
     glm::vec4 color;  // rgb tint, a = length
-    glm::vec4 coil;   // x = turns, y = phase, z = radius scale
+    glm::vec4 coil;   // x = turns, y = phase, z = radius scale (plaits: rope.x), w = rope.y
 };
 static_assert(sizeof(HairGpu) == 64);
 
@@ -125,7 +125,7 @@ void HairRenderer::build(const HairDesc& desc) {
         std::memcpy(&g.phaseBits, &h.phase, sizeof(float));
         g.offset = glm::vec4(h.offset, h.blend);
         g.color = glm::vec4(h.color, h.length);
-        g.coil = glm::vec4(h.coilTurns, h.coilPhase, h.coilScale, 0.0f);
+        g.coil = glm::vec4(h.coilTurns, h.coilPhase, desc.style.plait > 0 ? h.rope.x : h.coilScale, h.rope.y);
         gpu.push_back(g);
     }
     if (gpu.empty()) gpu.push_back(HairGpu{}); // a buffer can't be empty
@@ -144,12 +144,14 @@ void HairRenderer::update(const std::vector<glm::vec3>& guides, const glm::mat4&
     FrameHeader h;
     h.head = glm::mat4(glm::mat3(head));
     h.counts = glm::vec4(float(m_strands.pointsPerHair()), float(m_strands.strandVertices()), st.hairWidth, 0.0f);
-    h.shape = glm::vec4(st.clump, st.frizz, std::max(st.hairWidth * 3.0f, 0.004f), 0.0f);
+    h.shape = glm::vec4(st.clump, st.frizz, std::max(st.hairWidth * 3.0f, 0.004f), float(std::clamp(st.plait, 0, 3)));
     h.rootColor = glm::vec4(st.rootColor, 1.0f);
     h.tipColor = glm::vec4(st.tipColor, st.shine);
     h.look = glm::vec4(st.shift, 0.35f, float(m_stride), std::sqrt(float(m_stride)));
     h.headSphere = m_strands.headSphere(head);
-    h.coil = glm::vec4(st.coil > 0.0f ? st.coilRadius : 0.0f, st.zigzag, 1.0f / (1.0f - std::clamp(st.shrinkage, 0.0f, 0.9f)), float(guides.size()));
+    const bool coils = st.plait > 0 || st.coil > 0.0f;
+    h.coil = glm::vec4(st.plait > 0 ? st.plaitRadius : (st.coil > 0.0f ? st.coilRadius : 0.0f), st.zigzag,
+                       1.0f / (1.0f - std::clamp(st.shrinkage, 0.0f, 0.9f)), float(guides.size()));
     std::memcpy(m_frameBytes.data(), &h, sizeof(h));
     // What draw() needs to judge how big the hair is on screen.
     glm::vec3 lo(1e30f), hi(-1e30f);
@@ -171,7 +173,7 @@ void HairRenderer::update(const std::vector<glm::vec3>& guides, const glm::mat4&
         *p++ = 1.0f;
     }
     // Which way the coils turn and how far they are pulled out.
-    if (st.coil > 0.0f) m_strands.frames(guides, head, m_guideFrames);
+    if (coils) m_strands.frames(guides, head, m_guideFrames);
     else m_guideFrames.assign(guides.size(), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
     std::memcpy(p, m_guideFrames.data(), m_guideFrames.size() * sizeof(glm::vec4));
     ++m_version;

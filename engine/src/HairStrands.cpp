@@ -28,6 +28,37 @@ glm::vec3 perpendicular(const glm::vec3& d) {
 
 } // namespace
 
+glm::vec3 HairStrands::plaitOffset(int strands, float width, float turns, float phase, const glm::vec2& rope, float s, glm::vec3* change) {
+    // Its strand's centre: three strands on one figure of eight, a third of
+    // the way round it apart (each crosses over the middle, then under);
+    // two twist round each other; one (a loc) is the rope itself. Then
+    // where in its strand the hair lies, turning with it. The tip ends a
+    // little narrower (sealed).
+    const float da = glm::two_pi<float>() * turns;
+    const float a = da * s + phase;
+    const float taper = 1.0f - 0.4f * glm::smoothstep(0.94f, 1.0f, s);
+    float cx = 0.0f, cy = 0.0f, dx = 0.0f, dy = 0.0f, strand = width; // strand = one strand's radius
+    if (strands == 3) {
+        const float r = width / 1.45f; // strands this far from the middle, each 0.9 r across
+        cx = r * std::sin(a);
+        cy = 0.5f * r * std::sin(2.0f * a);
+        dx = r * da * std::cos(a);
+        dy = r * da * std::cos(2.0f * a);
+        strand = 0.45f * r;
+    } else if (strands == 2) {
+        const float r = 0.5f * width;
+        cx = r * std::cos(a);
+        cy = r * std::sin(a);
+        dx = -r * da * std::sin(a);
+        dy = r * da * std::cos(a);
+        strand = r;
+    }
+    const float ra = a + rope.y, rr = strand * rope.x;
+    const float x = cx + rr * std::cos(ra), y = cy + rr * std::sin(ra);
+    if (change) *change = glm::vec3((dx - rr * da * std::sin(ra)) * taper, (dy + rr * da * std::cos(ra)) * taper, 0.0f);
+    return glm::vec3(x * taper, y * taper, 0.0f);
+}
+
 void HairStrands::build(const HairDesc& desc) {
     m_style = desc.style;
     m_invBind = glm::inverse(desc.bindPose);
@@ -98,7 +129,22 @@ void HairStrands::build(const HairDesc& desc) {
             hair.length = 1.0f - 0.2f * rand01(uint32_t(g), uint32_t(h) * 3u + 1u);
             hair.color = glm::vec3(0.85f + 0.3f * rand01(uint32_t(g), uint32_t(h) * 3u + 2u));
             hair.phase = rand01(uint32_t(h), uint32_t(g) * 5u + 3u) * glm::two_pi<float>();
-            if (desc.style.coil > 0.0f && desc.style.coilRadius > 0.0f) {
+            if (desc.style.plait > 0) {
+                // A plait: its hairs in `plait` strands (each a rope of
+                // them, evenly filled) crossing over each other along the guide.
+                const int strands = std::min(desc.style.plait, 3);
+                const int inStrand = h / strands, perStrand = (per + strands - 1) / strands;
+                hair.offset = glm::vec3(0.0f);
+                hair.other = uint32_t(g);
+                hair.blend = 0.0f;
+                hair.length = 1.0f;
+                hair.coilTurns = desc.style.plaitTurns * restLength[g];
+                hair.coilPhase = glm::two_pi<float>() * float(h % strands) / float(strands);
+                hair.rope = glm::vec2(std::sqrt((float(inStrand) + 0.5f) / float(perStrand)), float(inStrand) * 2.39996f);
+                // Three points a crossing (up to a limit).
+                constexpr int kMostPoints = 161;
+                m_points = std::max(m_points, std::min(kMostPoints, int(std::ceil(hair.coilTurns * 12.0f)) + 1));
+            } else if (desc.style.coil > 0.0f && desc.style.coilRadius > 0.0f) {
                 // Defined: a clump's hairs coil together (a ringlet);
                 // undefined: each on its own, sizes varying.
                 const float loose = 1.0f - std::clamp(desc.style.definition, 0.0f, 1.0f);
@@ -149,6 +195,14 @@ void HairStrands::frames(const std::vector<glm::vec3>& guides, const glm::mat4& 
 glm::vec3 HairStrands::coilOffset(const HairStyle& style, const Hair& hair, float s, const glm::vec3& t, const glm::vec4& frame, glm::vec3* change) {
     if (change) *change = glm::vec3(0.0f);
     if (hair.coilTurns <= 0.0f) return glm::vec3(0.0f);
+    if (style.plait > 0) {
+        glm::vec3 n = glm::vec3(frame) - t * glm::dot(glm::vec3(frame), t);
+        n = glm::dot(n, n) > 1e-12f ? glm::normalize(n) : perpendicular(t);
+        const glm::vec3 b = glm::cross(t, n);
+        const glm::vec3 o = plaitOffset(std::min(style.plait, 3), style.plaitRadius, hair.coilTurns, hair.coilPhase, hair.rope, s, change);
+        if (change) *change = n * change->x + b * change->y;
+        return n * o.x + b * o.y;
+    }
     // Stretched k times its rest length, a coil unwinds: the hair's own
     // length stays the same, so its radius shrinks, to nothing when it is
     // pulled straight (1 / (1 - shrinkage) x).
