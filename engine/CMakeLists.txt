@@ -103,6 +103,8 @@ set(ENGINE_SOURCES
     src/MeltVolume.cpp
     src/JigglePhysics.cpp
     src/SphereImpostors.cpp
+    src/HairStrands.cpp
+    src/HairRenderer.cpp
     src/Ocean.cpp
     src/FloatingBodies.cpp
     src/OceanRenderer.cpp
@@ -329,7 +331,7 @@ else()
 endif()
 
 if(KKE_ENABLE_JOLT)
-    target_sources(kke_engine PRIVATE src/RigidWorld.cpp src/ClothSystem.cpp src/Cloth.cpp src/Locomotion.cpp src/SceneLoader.cpp src/modules/RigidBodyModule.cpp src/modules/PhysicsBridgeModule.cpp
+    target_sources(kke_engine PRIVATE src/RigidWorld.cpp src/ClothSystem.cpp src/Cloth.cpp src/Hair.cpp src/Locomotion.cpp src/SceneLoader.cpp src/modules/RigidBodyModule.cpp src/modules/PhysicsBridgeModule.cpp
         src/net/WorldMoveCheck.cpp src/net/LevelSight.cpp src/net/LocomotionReplay.cpp)
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_JOLT=1)
     target_link_libraries(kke_engine PUBLIC Jolt)

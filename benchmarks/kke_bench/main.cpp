@@ -39,6 +39,7 @@
 #include "kke/ScriptVM.h"
 #endif
 
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
@@ -162,6 +163,54 @@ std::vector<Case> makeCases() {
                 std::vector<glm::vec3> p;
                 w->clothPositions(ids->front(), p);
                 return double(p[p.size() / 2].y);
+            });
+        } });
+    }
+
+    // Hair (kke/Hair.h): guide strands on heads that turn and nod in a
+    // gusting wind, never asleep. One sample = one 60 Hz step of the whole
+    // world (Jolt's rod solve, head collision, wind). What's drawn around
+    // each guide is built on the GPU and costs nothing here.
+    struct HairCase { const char* name; const char* what; int heads, guides; const char* style; };
+    for (const HairCase hc : { HairCase{ "hair_1x100_straight", "Jolt hair: one head, 100 guide strands, straight 30 cm", 1, 100, "straight" },
+                               HairCase{ "hair_1x400_long", "Jolt hair: one head, 400 guide strands, long 55 cm", 1, 400, "long" },
+                               HairCase{ "hair_1x400_curly", "Jolt hair: one head, 400 guide strands, curly", 1, 400, "curly" },
+                               HairCase{ "hair_8x200_long", "Jolt hair: 8 heads of 200 long guide strands", 8, 200, "long" } }) {
+        cases.push_back({ hc.name, hc.what, 240, [hc] {
+            auto w = std::make_shared<kke::RigidWorld>([] {
+                kke::RigidWorld::Settings s;
+                s.threads = 0;
+                return s;
+            }());
+            struct Head { kke::RigidWorld::BodyId body; kke::RigidWorld::HairId hair; glm::vec3 neck; };
+            auto heads = std::make_shared<std::vector<Head>>();
+            for (int i = 0; i < hc.heads; ++i) {
+                const glm::vec3 neck(float(i) * 1.0f, 1.5f, 0.0f), centre = neck + glm::vec3(0.0f, 0.12f, 0.0f);
+                kke::RigidWorld::BodyDesc b;
+                b.shape = kke::RigidWorld::Shape::Sphere;
+                b.motion = kke::RigidWorld::Motion::Kinematic;
+                b.clothOnly = true;
+                b.radius = 0.1f;
+                b.position = centre;
+                kke::HairDesc d;
+                d.style = kke::hairStyle(hc.style);
+                kke::hairScalp(d, centre, 0.1f, hc.guides);
+                heads->push_back({ w->add(b), w->addHair(d), neck });
+            }
+            auto t = std::make_shared<float>(0.0f);
+            return std::function<double()>([w, heads, t] {
+                *t += 1.0f / 60.0f;
+                w->setWind(glm::vec3(3.0f * (0.6f + 0.4f * std::sin(*t * 1.3f)), 0.0f, 0.0f));
+                for (const Head& h : *heads) {
+                    const glm::quat q = glm::angleAxis(0.7f * std::sin(*t * 2.0f), glm::vec3(0, 1, 0)) * glm::angleAxis(0.2f * std::sin(*t * 1.3f), glm::vec3(1, 0, 0));
+                    const glm::mat4 m = glm::translate(glm::mat4(1.0f), h.neck) * glm::mat4_cast(q) * glm::translate(glm::mat4(1.0f), -h.neck);
+                    w->moveKinematic(h.body, glm::vec3(m * glm::vec4(h.neck + glm::vec3(0.0f, 0.12f, 0.0f), 1.0f)), q, 1.0f / 60.0f);
+                    w->setHairJoint(h.hair, m);
+                }
+                w->step(1.0f / 60.0f);
+                std::vector<glm::vec3> p;
+                w->hairPositions(heads->front().hair, p);
+                return double(p.back().y);
             });
         } });
     }

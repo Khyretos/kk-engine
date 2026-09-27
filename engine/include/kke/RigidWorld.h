@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kke/Cloth.h"
+#include "kke/Hair.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -230,7 +231,7 @@ public:
     using ClothId = uint32_t; // 0 = none
     ClothId addCloth(const ClothDesc& desc);
     void removeCloth(ClothId id);
-    size_t clothCount() const;
+    size_t clothCount() const;             // cloth only (not hair)
     bool clothPositions(ClothId id, std::vector<glm::vec3>& out) const;
     // Skinned or pinned cloth: the joints' world matrices, same order as
     // ClothDesc::bindPose (or one matrix moving every pin).
@@ -242,6 +243,18 @@ public:
     void setWind(const glm::vec3& velocity); // m/s, pushes on every cloth by its fabric's airDrag
     glm::vec3 wind() const;
     double lastClothMs() const;            // the engine's protection pass, last step (Jolt's own cloth solve is in lastStepMs)
+
+    // Hair (kke/Hair.h, docs/HAIR.md): guide strands as Jolt soft bodies,
+    // stepped with the cloth and blown by setWind. Positions are world
+    // space, hairStrandVertices(style) per guide, guide after guide.
+    using HairId = uint32_t; // 0 = none
+    HairId addHair(const HairDesc& desc);
+    void removeHair(HairId id);
+    size_t hairCount() const;
+    bool hairPositions(HairId id, std::vector<glm::vec3>& out) const;
+    void setHairJoint(HairId id, const glm::mat4& head); // the head's world matrix now (HairDesc::bindPose at rest)
+    void resetHair(HairId id);             // back to the rest pose, at rest
+    HairStats hairStats(HairId id) const;
 
     void step(float dt);
     double lastStepMs() const;

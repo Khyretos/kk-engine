@@ -157,11 +157,10 @@ Rules of thumb:
 
 ## The demo
 
-`./build/bin/cloth_demo`, scenes 1 to 5 (or `KKE_CLOTH_SCENE`): fabrics,
-bed, nets, cape, stress. `P` cycles Full, Basic and Off so you can see and
-time the difference. See [games/cloth_demo/README.md](../games/cloth_demo/README.md).
+`./build/bin/cloth_demo`, scenes 1 to 6 (or `KKE_CLOTH_SCENE`): fabrics,
+bed, nets, cape, stress, hair. `P` (X on a controller) cycles Full, Basic
+and Off so you can see and time the difference. See [games/cloth_demo/README.md](../games/cloth_demo/README.md).
 
 ## Hair
 
-Hair is a separate step, measured on its own (strands are rods, not
-sheets): see the ROADMAP.
+Hair is strands, not sheets, with its own page: [HAIR.md](HAIR.md).
