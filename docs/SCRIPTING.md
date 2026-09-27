@@ -98,6 +98,87 @@ end)
 - One handler per name (a second `net.handle` replaces it; `nil` removes
   it); reloading the script removes its handlers.
 
+### Synced tables
+
+State everyone should see (who is on which court, the score, the queue,
+the ranking) goes in a synced table: the `sv_` script keeps the rows,
+every player's scripts watch them. A watcher gets the rows once, then
+only what changed; a player who joins late or reconnects gets the rows
+as they are, with no code of your own.
+
+```lua
+-- sv_courts.lua
+local courts = net.table("courts")
+courts:set(3, { court = 3, players = { "Kees", "Ann" }, score = "0-0" })
+
+net.handle("point", function(data, from)
+    local row = courts:get(data.court)
+    row.score = data.score
+    courts:set(data.court, row) -- every watcher of court 3 gets an "update"
+    return true
+end)
+
+-- scoreboard.lua: on every machine
+local court3 = net.watch("courts", { court = 3 }, function(event, key, row, old)
+    if event == "insert" or event == "update" then print("court 3:", row.score) end
+    if event == "delete" then print("court 3 closed") end
+    -- "ready": the first rows are in; "error": row is nil, the third value says why
+end)
+```
+
+- Keys are whole numbers or text; a row is what `net.send` carries (a
+  table of plain values, about 400 bytes once encoded). `:set` replaces
+  the whole row.
+- A filter (`{ court = 3 }`) keeps the rows whose top-level fields are
+  equal (numbers compare by value: `3` and `3.0` match). Without one,
+  every row. When a row stops matching (the player moves to court 4)
+  its watcher gets a `"delete"`; the court 4 watcher an `"insert"`.
+- Changes are sent once a frame (a server tick), one per row however
+  often it changed; a view's `:rows()` and `:get(key)` read its copy.
+- Only where the `sv_` scripts run can a table change (`net.table` is
+  an error on a client); watching works everywhere, alone too.
+- A table belongs to the script that made it: reloading that script
+  empties it, and watchers see only what's different after it ran
+  again. A refused or failed `net.call` undoes its table changes too.
+- Limits: 64 tables, 4,096 rows each, 32 watches per player, 4 filter
+  fields. Every player may watch every table (per-player visibility is
+  planned).
+
+### Groups
+
+One server can hold many rooms at once, like the courts of a sport
+center: put each player in a group and they are only sent the players
+and balls of their own group, plus any groups they choose to watch.
+
+```lua
+-- sv_courts.lua
+net.handle("join_court", function(data, from)
+    net.setGroup(from, data.court)   -- 1 to 10: this court's players and ball
+    net.solid(from, true)
+    return true
+end)
+
+net.handle("spectate", function(data, from)
+    net.setGroup(from, 0)            -- the lobby
+    net.showGroups(from, { data.court }) -- and watch this court
+    net.solid(from, false)           -- walk through the ball, never touch it
+    return true
+end)
+
+local ball = physics.sphere { pos = Vec(0, 1, 0), radius = 0.033, group = 3 } -- court 3's ball
+```
+
+- `net.setGroup(player, group)`, `net.group(player)`,
+  `net.showGroups(player, { group, ... })` (up to 64; `{}` or nil:
+  none), `net.solid(player, yes)`. Groups are 0 to 65535, 0 by default;
+  players and bodies in no group are all in group 0.
+- Only where the `sv_` scripts run (a server, or the host's game); on a
+  client these are an error. `net.group` works everywhere.
+- A body's group is set when it's made (`physics.box{ ..., group = g }`,
+  `physics.sphere{ ... }`).
+- What groups hide is what is sent: everyone's physics is still one
+  world. Leaving forgets a player's group and makes it solid again.
+
 ## The API
 
 Events, like GMod's `hook`:
@@ -133,7 +214,7 @@ Vectors: `Vec(x, y, z)` with `+ - * /`, `:length()`, `:normalized()`,
 | `breakable` | FEMFX objects that really break. `box{pos, size, material, pattern, cells, chunk, velocity, arm}` → id (material `glass`, `stone`, `wood`, `ice`, `iron`; pattern `shards`, `voronoi`, `splinters`, `radial`, `solid`, default by material), `ball{pos, radius, velocity, material}` → id (iron by default: a projectile), `remove(id)`, `broken(id)`, `pieces(id)`, `count()`. The `Break` hook says when one breaks. |
 | `ui` | RmlUi documents. `open(rml)` / `load("file.rml")` (next to the scripts) → doc, `text(doc, id, text)` (plain text, shown as typed), `rml(doc, id, markup)`, `class(doc, id, name, on)`, `property(doc, id, name, value)`, `show(doc, bool)`, `close(doc)`, `onClick(doc, id, fn)` |
 | `scene` | `list()` → names in `scenes/`, `load(name, origin)` → scene, missing count (or nil + reason), `unload(scene)`, `spawnPoint(scene)` → pos, yaw |
-| `net` | `role()` (`"offline"`, `"host"`, `"client"`), `isServer()`, `connected()`, `playerId()`, `players()` → `{ {id, name}, ... }`, `send(name, data)`: from a client to the host, from the host to every client; `data` is nil, a boolean, number, string or a table of those (about 500 bytes encoded, one network event); `call(name, data [, function(ok, answer) end])` → sent? and `handle(name, function(data, from) end)`: a question to the host and its answer ("Calls" below) |
+| `net` | `role()` (`"offline"`, `"host"`, `"client"`), `isServer()`, `connected()`, `playerId()`, `players()` → `{ {id, name}, ... }`, `send(name, data)`: from a client to the host, from the host to every client; `data` is nil, a boolean, number, string or a table of those (about 500 bytes encoded, one network event); `call(name, data [, function(ok, answer) end])` → sent? and `handle(name, function(data, from) end)`: a question to the host and its answer ("Calls" below); `table(name)` → a synced table (host/server only: `:set(key, row)`, `:get(key)`, `:remove(key)`, `:rows()`, `:count()`, `:clear()`) and `watch(name [, filter] [, function(event, key, row, old) end])` → a view (`:rows()`, `:get(key)`, `:ready()`, `:count()`, `:stop()`) ("Synced tables" below) |
 | `store` | What outlives the session ("Saving" below): `save(name, value)` → true or false, reason; `load(name [, default])`; `add(name [, n])` → new count; `remove(name)`; `keys([prefix])` → names in order |
 
 Everything a script makes (bodies, models, breakables, documents,

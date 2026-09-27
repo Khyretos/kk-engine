@@ -23,7 +23,13 @@ std::vector<ModuleDependency> MarketplaceUiModule::dependencies() const {
 
 std::string MarketplaceUiModule::buildDocumentRml() const {
     std::ostringstream rml;
-    rml << R"(<rml><head><title>Marketplace</title></head>)"
+    // A scrolling box needs its scrollbar sized: RmlUi has no default, and
+    // without one the text beside it is laid out a word per line.
+    rml << R"(<rml><head><title>Marketplace</title><style>)"
+        << R"(scrollbarvertical { width: 8dp; } scrollbarvertical slidertrack { background-color: #00000000; })"
+        << R"(scrollbarvertical sliderbar { background-color: #3a4670; border-radius: 4dp; min-height: 24dp; })"
+        << R"(scrollbarvertical sliderarrowdec, scrollbarvertical sliderarrowinc { height: 0; })"
+        << R"(</style></head>)"
         << R"(<body style="position:absolute; left:0dp; top:0dp; width:100%; height:100%; font-family:Noto Sans; pointer-events:none;">)"
         // pointer-events:none is load-bearing, not decorative: without it,
         // this full-screen body swallowed every mouse hit-test across the
@@ -46,7 +52,12 @@ std::string MarketplaceUiModule::buildDocumentRml() const {
         // 820px/140px against that same 1600x900 reference design,
         // just expressed so RmlUi resolves it against whatever the
         // window's own current size actually is.
-        << R"(<div style="display:block; position:absolute; left:51.25%; top:15.56%; width:420dp; max-width:45%; background-color:#1a1d2e; padding:16dp; pointer-events:auto;">)"
+        //
+        // Now on the left edge, at most 45% wide and 90% tall (it
+        // scrolls): games put their own panel (DemoPanelModule) on the
+        // right, and at 51% the list covered it on a phone held upright,
+        // where the screen is only ~900dp wide.
+        << R"(<div style="display:block; position:absolute; left:12dp; top:12dp; width:45%; max-width:420dp; height:88%; overflow-y:auto; background-color:#1a1d2e; padding:16dp; pointer-events:auto;">)"
         // Confirmed and fixed: display:block was missing from every <p>
         // and <div> below. RmlUi has no built-in "p/div default to
         // block" rule the way a browser does — that behavior in

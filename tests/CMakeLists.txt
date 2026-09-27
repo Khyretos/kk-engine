@@ -54,6 +54,7 @@ add_executable(kke_tests
     test_input_replay.cpp
     test_server.cpp
     test_relay.cpp
+    test_synced_tables.cpp
     test_voice.cpp
     test_storage.cpp
     test_input_map.cpp

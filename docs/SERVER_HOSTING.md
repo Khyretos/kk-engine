@@ -72,7 +72,9 @@ scene come from the asset folder (`KKE_ASSETS_DIR`, as for the games).
 Players join with the game's Network panel (address and password, or a
 click in its **Internet servers** list, see below) or
 `KKE_NET=join:ADDRESS KKE_NET_PASSWORD=...`. A dedicated server has no
-player of its own, so all `maxPlayers` slots are for players.
+player of its own, so all `maxPlayers` slots are for players. It may be
+up to 254; past a few dozen, put players in groups (docs/SCRIPTING.md
+"Groups") so each is sent only its own court or room.
 
 Console (stdin, or `docker attach kke-server`): `help`, `status`,
 `players`, `kick <id|name> [reason]`, `ban <id|name|address> [reason]`,
@@ -218,8 +220,9 @@ game's `scripts/` folder next to the server, or point `"scripts"`
   everyone or one player; a player's `net.send` arrives in the
   `NetMessage` hook; `handle(name, fn)` answers the players'
   `net.call`, all or nothing: a refused or failed call's sends, spawns,
-  removes, kicks, scores and `store.*` saves never happen,
-  docs/SCRIPTING.md "Calls") and `server.*`: `name()`, `say(text)`,
+  removes, kicks, scores, synced table changes and `store.*` saves never
+  happen, docs/SCRIPTING.md "Calls"; `table(name)` keeps a synced table
+  the players watch, docs/SCRIPTING.md "Synced tables") and `server.*`: `name()`, `say(text)`,
   `kick(player, reason)`, `score(board, player, score)` (the cheat-proof
   way to post scores: the server decides them) and `top(board [, n])`.
   Breakables (FEMFX) aren't on the server yet.

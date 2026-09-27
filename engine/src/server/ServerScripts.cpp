@@ -167,6 +167,7 @@ void ServerScripts::update(double now, float dt) {
     }
     m_calls->update(now);
     m_vm->callHook("Think", dt);
+    m_tables->update(); // what this tick changed goes out
 #if KKE_ENABLE_JOLT
     if (RigidWorld* w = m_services.world) {
         std::vector<net::NetBodyState> states;
@@ -193,7 +194,8 @@ void ServerScripts::shutdown() {
     for (const std::string& f : m_files) m_vm->unload(f);
     m_vm->unload("console"); // what `lua` lines made
     m_files.clear();
-    m_calls.reset(); // its callbacks live in the vm
+    m_calls.reset(); // their callbacks live in the vm
+    m_tables.reset();
 #if KKE_ENABLE_JOLT
     if (RigidWorld* w = m_services.world)
         for (const auto& [id, body] : m_capsules) w->remove(body);
@@ -211,6 +213,7 @@ void ServerScripts::playerJoined(uint8_t id, const std::string& name) {
 void ServerScripts::playerLeft(uint8_t id) {
     const std::string name = m_names.count(id) ? m_names[id] : std::string();
     m_names.erase(id);
+    m_tables->playerLeft(id);
 #if KKE_ENABLE_JOLT
     if (auto it = m_capsules.find(id); it != m_capsules.end()) {
         if (m_services.world) m_services.world->remove(it->second);
@@ -224,6 +227,10 @@ void ServerScripts::playerLeft(uint8_t id) {
 void ServerScripts::netMessage(const net::GameEventMsg& e) {
     if (e.kind == script_net::kScriptCall) {
         m_calls->callReceived(e.fromPlayer, e.payload);
+        return;
+    }
+    if (e.kind == net::kTableSubscribe || e.kind == net::kTableUnsubscribe) {
+        m_tables->received(e.kind, e.fromPlayer, e.payload);
         return;
     }
     if (e.kind != script_net::kScriptEvent) return;
@@ -246,14 +253,16 @@ void ServerScripts::syncCapsules(float dt) {
     if (!w) return;
     const std::vector<net::RemotePlayer> players = m_net.players(m_time);
     for (auto it = m_capsules.begin(); it != m_capsules.end();) {
-        const bool present = std::any_of(players.begin(), players.end(), [&](const net::RemotePlayer& p) { return p.id == it->first && p.hasState; });
+        // A spectator (net.solid(player, false)) doesn't touch the ball.
+        const bool present = m_net.solid(it->first) &&
+                             std::any_of(players.begin(), players.end(), [&](const net::RemotePlayer& p) { return p.id == it->first && p.hasState; });
         if (present) { ++it; continue; }
         w->remove(it->second);
         it = m_capsules.erase(it);
     }
     const glm::quat upright(1.0f, 0.0f, 0.0f, 0.0f);
     for (const net::RemotePlayer& p : players) {
-        if (!p.hasState) continue;
+        if (!p.hasState || !m_net.solid(p.id)) continue;
         const glm::vec3 centre = p.state.position + glm::vec3(0.0f, kCapsuleCentre, 0.0f);
         auto it = m_capsules.find(p.id);
         if (it == m_capsules.end()) {
@@ -277,8 +286,11 @@ void ServerScripts::syncCapsules(float dt) {
 
 bool ServerScripts::runAtomically(const std::function<bool()>& run) {
     m_inCall = true;
+    m_tables->server().beginUndo();
     const bool ok = m_services.store ? m_services.store->transaction(run) : run();
     m_inCall = false;
+    if (ok) m_tables->server().endUndo();
+    else m_tables->server().rollback();
     std::vector<std::function<void()>> held = std::move(m_held);
     m_held.clear();
     if (ok) {
@@ -305,6 +317,7 @@ void ServerScripts::effect(std::function<void()> f) {
 
 void ServerScripts::release(const std::string& source) {
     if (m_calls) m_calls->release(source);
+    if (m_tables) m_tables->release(source);
     for (const Body& b : m_bodies) {
         if (b.source != source) continue;
         if (b.netId) m_net.despawn(b.netId);
@@ -433,6 +446,44 @@ void ServerScripts::bind() {
         return 1;
     });
 
+    // Groups (docs/NETWORKING.md "Groups"): rooms in one server, like courts.
+    auto playerArg = [this](lua_State* L, const char* what) {
+        const lua_Integer id = luaL_checkinteger(L, 1);
+        if (id < 1 || id > 255 || !m_names.count(uint8_t(id))) luaL_error(L, "%s: no player %d here", what, int(id));
+        return uint8_t(id);
+    };
+    auto groupArg = [](lua_State* L, int index, const char* what) {
+        const lua_Integer g = luaL_checkinteger(L, index);
+        if (g < 0 || g > 65535) luaL_error(L, "%s: a group is 0 to 65535", what);
+        return uint16_t(g);
+    };
+    vm.registerFunction("net", "setGroup", [this, playerArg, groupArg](lua_State* L) {
+        m_net.setGroup(playerArg(L, "net.setGroup"), groupArg(L, 2, "net.setGroup"));
+        return 0;
+    });
+    vm.registerFunction("net", "group", [this](lua_State* L) {
+        lua_pushinteger(L, m_net.group(uint8_t(std::clamp<lua_Integer>(luaL_checkinteger(L, 1), 0, 255))));
+        return 1;
+    });
+    vm.registerFunction("net", "showGroups", [this, playerArg, groupArg](lua_State* L) {
+        const uint8_t id = playerArg(L, "net.showGroups");
+        std::vector<uint16_t> groups;
+        if (!lua_isnoneornil(L, 2)) {
+            luaL_checktype(L, 2, LUA_TTABLE);
+            for (lua_Integer i = 1, n = lua_Integer(lua_rawlen(L, 2)); i <= n && i <= 64; ++i) {
+                lua_rawgeti(L, 2, i);
+                groups.push_back(groupArg(L, -1, "net.showGroups"));
+                lua_pop(L, 1);
+            }
+        }
+        m_net.showGroups(id, std::move(groups));
+        return 0;
+    });
+    vm.registerFunction("net", "solid", [this, playerArg](lua_State* L) {
+        m_net.setSolid(playerArg(L, "net.solid"), lua_toboolean(L, 2));
+        return 0;
+    });
+
     // server.*: what only a server script does.
     vm.registerFunction("server", "name", [this](lua_State* L) { lua_pushstring(L, m_services.serverName.c_str()); return 1; });
     vm.registerFunction("server", "say", [this](lua_State* L) {
@@ -503,6 +554,15 @@ void ServerScripts::bind() {
         else if (log) log(line);
     };
     m_calls->bind();
+    net::TableLimits limits;
+    limits.maxEventBytes = net::kMaxEventBytes;
+    m_tables = std::make_unique<ScriptTables>(vm, ScriptTables::Link{
+        [] { return true; },
+        [] { return false; },
+        {},
+        [this](int player, const std::vector<uint8_t>& bytes) { m_net.sendEventTo(uint8_t(player), net::kTableRows, bytes); },
+    }, limits);
+    m_tables->bind();
     bindPhysics();
     if (m_services.store) {
         m_store = std::make_unique<ScriptStore>(*m_services.store, m_services.game);
@@ -534,6 +594,7 @@ void ServerScripts::bindPhysics() {
         const bool isStatic = ScriptVM::fieldBool(L, 1, "static", false);
         if (isStatic) d.motion = RigidWorld::Motion::Static;
         const glm::vec3 color = ScriptVM::fieldVec3(L, 1, "color", glm::vec3(0.8f));
+        const auto group = uint16_t(std::clamp(ScriptVM::fieldNumber(L, 1, "group", 0.0f), 0.0f, 65535.0f));
         const RigidWorld::BodyId id = w->add(d);
         if (id == RigidWorld::kNoBody) return luaL_error(L, "physics: body limit reached");
         Body b{ id, src, 0, !isStatic };
@@ -545,7 +606,10 @@ void ServerScripts::bindPhysics() {
             m.kind = script_net::kSpawnBody;
             m.desc = script_net::encode(script_net::BodySpawn{ sphere, isStatic, d.position, d.velocity, d.halfExtents, d.radius, d.density, d.friction,
                                                                d.restitution, d.material, color });
-            effect([this, m = std::move(m)] { m_net.spawn(m, true); });
+            effect([this, group, m = std::move(m)] {
+                m_net.spawn(m, true);
+                if (group) m_net.setBodyGroup(m.id, group);
+            });
         }
         if (m_inCall) m_spawnedInCall.push_back(id);
         m_bodies.push_back(b);

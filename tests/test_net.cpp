@@ -187,6 +187,21 @@ TEST(NetProtocol, SnapshotRoundTripWithinQuantization) {
     }
 }
 
+TEST(NetProtocol, SnapshotSaysWhoIsThereButNotInIt) {
+    SnapshotMsg s;
+    s.present = { 3, 7, 200, kMaxPlayers };
+    const std::vector<uint8_t> bytes = encode(MessageType::Snapshot, s);
+    auto r = decode<SnapshotMsg>(MessageType::Snapshot, bytes.data(), bytes.size());
+    ASSERT_TRUE(r.has_value());
+    EXPECT_EQ(r->present, s.present);
+    SnapshotMsg none;
+    const std::vector<uint8_t> small = encode(MessageType::Snapshot, none);
+    auto n = decode<SnapshotMsg>(MessageType::Snapshot, small.data(), small.size());
+    ASSERT_TRUE(n.has_value());
+    EXPECT_TRUE(n->present.empty());
+    EXPECT_LT(small.size(), bytes.size()) << "nobody left out costs one bit";
+}
+
 TEST(NetProtocol, WrongTypeTruncatedAndTrailingJunkAreRejected) {
     HelloMsg h{ kProtocolVersion, "kke", "Kees", "SK_Character_Dummy" };
     std::vector<uint8_t> bytes = encode(MessageType::Hello, h);
@@ -677,6 +692,77 @@ TEST(NetSession, EventsReachTheServerAndAreRelayedWithTheSender) {
     ASSERT_EQ(onSender.size(), 1u) << "not its own event back, only the host's";
     EXPECT_EQ(onSender[0].kind, 13);
     EXPECT_EQ(onSender[0].fromPlayer, 0);
+}
+
+TEST(NetSession, AHundredPlayersAllKeepMovingForEveryone) {
+    NetConfig cfg;
+    cfg.maxPlayers = 128;
+    cfg.dedicated = true;
+    Match m(100, cfg);
+    m.run(1.0);
+    for (auto& c : m.clients) ASSERT_EQ(c->status(), NetClient::Status::Connected);
+    // Not every player fits a snapshot: each still arrives often, and a
+    // player left out of one snapshot is never shown as hidden.
+    size_t flickers = 0;
+    for (int f = 0; f < 120; ++f) {
+        for (size_t i = 0; i < m.clients.size(); ++i) m.clients[i]->setLocalState(walking(m.now, float(i)));
+        m.step();
+        if (f < 60) continue;
+        for (const RemotePlayer& p : m.clients[0]->players(m.now)) flickers += p.hasState ? 0 : 1;
+    }
+    const auto seen = m.clients[0]->players(m.now);
+    ASSERT_EQ(seen.size(), 99u);
+    EXPECT_EQ(flickers, 0u);
+    for (const RemotePlayer& p : seen) {
+        ASSERT_TRUE(p.hasState) << p.name;
+        EXPECT_NEAR(p.state.position.z, -3.0 * m.now, 0.9) << p.name << " is fresh";
+    }
+}
+
+TEST(NetSession, GroupsKeepCourtsApartAndSpectatorsWatch) {
+    NetConfig cfg;
+    cfg.dedicated = true;
+    Match m(3, cfg);
+    m.run(0.5);
+    const uint8_t a = m.clients[0]->playerId(), b = m.clients[1]->playerId(), fan = m.clients[2]->playerId();
+    m.server.setGroup(a, 1); // court 1
+    m.server.setGroup(b, 2); // court 2
+    m.server.setGroup(fan, 9); // the lobby
+    m.server.showGroups(fan, { 1 });
+    std::vector<NetBodyState> bodies(2);
+    bodies[0].id = 1; // court 1's ball
+    bodies[1].id = 2; // court 2's ball
+    m.server.setBodies(bodies);
+    m.server.setBodyGroup(1, 1);
+    m.server.setBodyGroup(2, 2);
+    m.server.setSolid(fan, false);
+    for (int f = 0; f < 60; ++f) {
+        for (size_t i = 0; i < 3; ++i) m.clients[i]->setLocalState(walking(m.now, float(i)));
+        m.step();
+    }
+    auto shown = [&](size_t viewer, uint8_t id) {
+        for (const RemotePlayer& p : m.clients[viewer]->players(m.now))
+            if (p.id == id) return p.hasState;
+        return false;
+    };
+    EXPECT_FALSE(shown(0, b)) << "another court";
+    EXPECT_FALSE(shown(0, fan)) << "the lobby";
+    EXPECT_TRUE(shown(2, a)) << "the spectator watches court 1";
+    EXPECT_FALSE(shown(2, b));
+    NetBodyState got;
+    EXPECT_TRUE(m.clients[0]->body(1, m.now, got));
+    EXPECT_FALSE(m.clients[0]->body(2, m.now, got)) << "court 2's ball";
+    EXPECT_TRUE(m.clients[2]->body(1, m.now, got));
+    EXPECT_FALSE(m.server.solid(fan)) << "spectators don't touch the ball";
+    EXPECT_TRUE(m.server.solid(a));
+    // Moving b to court 1 shows it there; leaving forgets its group.
+    m.server.setGroup(b, 1);
+    m.run(0.3);
+    EXPECT_TRUE(shown(0, b));
+    m.clients[2]->disconnect();
+    m.run(0.3);
+    EXPECT_EQ(m.server.group(fan), 0);
+    EXPECT_TRUE(m.server.solid(fan));
 }
 
 TEST(NetSession, LeavingIsSeenByEveryone) {

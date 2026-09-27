@@ -1,6 +1,7 @@
 #include "kke/server/ServerConfig.h"
 
 #include "kke/DataFile.h"
+#include "kke/net/Protocol.h"
 
 #include <nlohmann/json.hpp>
 
@@ -89,7 +90,7 @@ bool ServerConfig::loadJson(const std::string& text, std::vector<std::string>& e
     str("name", name);
     str("game", game);
     num("port", port, 1, 65535);
-    num("maxPlayers", maxPlayers, 1, 32);
+    num("maxPlayers", maxPlayers, 1, unsigned(net::kMaxPlayers));
     str("password", password);
     str("motd", motd);
     list("roles", roles);
@@ -151,8 +152,8 @@ bool ServerConfig::applyEnv(const std::function<const char*(const char*)>& geten
     portVar("KKE_SERVER_PORT", port);
     if (const char* v = get("KKE_SERVER_MAX_PLAYERS")) {
         uint16_t n = 0;
-        if (parsePort(v, n) && n <= 32) maxPlayers = n;
-        else errors.push_back(std::string("KKE_SERVER_MAX_PLAYERS='") + v + "': expected 1 to 32");
+        if (parsePort(v, n) && n >= 1 && n <= net::kMaxPlayers) maxPlayers = n;
+        else errors.push_back(std::string("KKE_SERVER_MAX_PLAYERS='") + v + "': expected 1 to " + std::to_string(net::kMaxPlayers));
     }
     // Empty is meaningful for a password ("no password"), so it is read as set.
     if (const char* v = getenv("KKE_SERVER_PASSWORD")) password = v;

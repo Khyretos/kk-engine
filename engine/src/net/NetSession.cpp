@@ -191,6 +191,7 @@ void NetServer::drop(Client& c, const std::string& reason) {
     c.peer = kNoPeer;
     if (c.id) {
         authority.forget(c.id);
+        forgetPlayer(c.id);
         PlayerInfoMsg left{ c.id, false, c.name, c.character };
         broadcastReliable(encode(MessageType::PlayerInfo, left), c.id);
         if (onPlayer) onPlayer(c.id, false);
@@ -206,6 +207,7 @@ void NetServer::dropGuest(Client& g, const std::string& reason, bool tellOwner) 
     if (!g.id) return;
     if (tellOwner) sendMsg(m_transport, owner, Channel::Reliable, MessageType::GuestAck, GuestAckMsg{ g.slot, 0, reason });
     authority.forget(g.id);
+    forgetPlayer(g.id);
     PlayerInfoMsg left{ g.id, false, g.name, g.character };
     const Client* main = byPeer(owner);
     broadcastReliable(encode(MessageType::PlayerInfo, left), main ? main->id : -1);
@@ -329,6 +331,7 @@ void NetServer::spawn(const SpawnMsg& m, bool persistent) {
 void NetServer::despawn(uint16_t id) {
     m_spawns.erase(id);
     m_breaks.erase(id);
+    m_bodyGroups.erase(id);
     DespawnMsg m{ id };
     broadcastReliable(encode(MessageType::Despawn, m), -1);
 }
@@ -570,6 +573,7 @@ void NetServer::update(double now) {
                 c->id = 0; // erased with the others below
                 if (id) {
                     authority.forget(id);
+                    forgetPlayer(id);
                     broadcastReliable(encode(MessageType::PlayerInfo, left), -1);
                     if (onPlayer) onPlayer(id, false);
                 }
@@ -621,9 +625,12 @@ const InputQueue* NetServer::inputs(uint8_t id) const {
     return nullptr;
 }
 
-// Players always; then bodies by accumulated priority until the packet's
-// budget is used. Awake bodies gain 1 per snapshot, sleeping ones 0.1, a
-// body that just fell asleep gets a boost so its resting pose arrives.
+// Players, then bodies by accumulated priority until the packet's budget
+// is used. Awake bodies gain 1 per snapshot, sleeping ones 0.1, a body that
+// just fell asleep gets a boost so its resting pose arrives. When the
+// players don't all fit (a lobby of 100), they get at most 60% of the
+// packet, most important first by their own accumulated priority; the
+// others are listed as present and come in a later snapshot.
 void NetServer::sendSnapshot(Client& c) {
     SnapshotMsg s;
     s.serverTimeMs = timeMs();
@@ -633,12 +640,50 @@ void NetServer::sendSnapshot(Client& c) {
     // Not the players on the client's own screen: it has them already.
     for (const Client& o : m_clients)
         if (o.id && o.peer != c.peer && o.hasState && mayShow(c, o.id)) s.players.push_back({ o.id, o.accepted });
-    // Bits: header 5+32+6+8, player ~125 + its extra bytes, body ~130 asleep / ~175 awake.
-    int64_t budget = static_cast<int64_t>(m_config.snapshotBytes) * 8 - 51;
-    for (const SnapshotMsg::Player& p : s.players) budget -= 125 + 8 * static_cast<int64_t>(p.state.extra.size());
+    // Bits: header 5+32+8+8+1, player ~127 + its extra bytes, body ~130 asleep / ~175 awake.
+    int64_t budget = static_cast<int64_t>(m_config.snapshotBytes) * 8 - 54;
+    auto playerCost = [](const SnapshotMsg::Player& p) { return 127 + 8 * static_cast<int64_t>(p.state.extra.size()); };
+    int64_t allPlayers = 0;
+    for (const SnapshotMsg::Player& p : s.players) allPlayers += playerCost(p);
+    if (allPlayers > budget * 6 / 10) {
+        const NetPlayerState* here = stateOf(c.id);
+        std::vector<std::pair<float, size_t>> order;
+        for (size_t i = 0; i < s.players.size(); ++i) {
+            const uint8_t id = s.players[i].id;
+            float w = 0.5f;
+            if (playerPriority) w = playerPriority(c.id, id);
+            else if (group(id) == group(c.id)) w = 2.0f;
+            else if (here) w = 1.0f / (1.0f + glm::length(s.players[i].state.position - here->position) / 20.0f);
+            float& p = c.playerPriority[id];
+            p += w;
+            order.push_back({ p, i });
+        }
+        std::sort(order.begin(), order.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+        // The present list costs about a bit per id up to the highest.
+        int64_t left = budget * 6 / 10 - 9 - static_cast<int64_t>(kMaxPlayers);
+        std::vector<SnapshotMsg::Player> sent;
+        for (const auto& [p, i] : order) {
+            const SnapshotMsg::Player& pl = s.players[i];
+            if (playerCost(pl) <= left) {
+                left -= playerCost(pl);
+                sent.push_back(pl);
+                c.playerPriority[pl.id] = 0.0f;
+            } else {
+                s.present.push_back(pl.id);
+            }
+        }
+        s.players = std::move(sent);
+        budget -= budget * 6 / 10 - left;
+    } else {
+        budget -= allPlayers;
+    }
     std::vector<std::pair<float, const NetBodyState*>> order;
     order.reserve(m_bodies.size());
     for (const NetBodyState& b : m_bodies) {
+        if (!m_bodyGroups.empty()) {
+            const auto g = m_bodyGroups.find(b.id);
+            if (!sees(c, g == m_bodyGroups.end() ? 0 : g->second)) continue;
+        }
         float& p = c.priority[b.id];
         p += b.sleeping ? 0.1f : 1.0f;
         auto sent = c.sentSleeping.find(b.id);
@@ -661,11 +706,63 @@ void NetServer::sendSnapshot(Client& c) {
     }
 }
 
+bool NetServer::sees(const Client& viewer, uint16_t g) const {
+    for (const Client& v : m_clients) {
+        if (v.peer != viewer.peer || !v.id) continue;
+        if (group(v.id) == g) return true;
+        const auto it = m_showing.find(v.id);
+        if (it != m_showing.end() && std::find(it->second.begin(), it->second.end(), g) != it->second.end()) return true;
+    }
+    return false;
+}
+
 bool NetServer::mayShow(const Client& viewer, uint8_t subject) const {
+    if ((!m_groups.empty() || !m_showing.empty()) && !sees(viewer, group(subject))) return false;
     if (!sendPlayer) return true;
     for (const Client& v : m_clients)
         if (v.peer == viewer.peer && v.id && sendPlayer(v.id, subject)) return true;
     return false;
+}
+
+void NetServer::setGroup(uint8_t player, uint16_t g) {
+    if (g == 0) m_groups.erase(player);
+    else m_groups[player] = g;
+}
+
+uint16_t NetServer::group(uint8_t player) const {
+    const auto it = m_groups.find(player);
+    return it == m_groups.end() ? 0 : it->second;
+}
+
+void NetServer::showGroups(uint8_t player, std::vector<uint16_t> groups) {
+    if (groups.empty()) m_showing.erase(player);
+    else m_showing[player] = std::move(groups);
+}
+
+void NetServer::setBodyGroup(uint16_t body, uint16_t g) {
+    if (g == 0) m_bodyGroups.erase(body);
+    else m_bodyGroups[body] = g;
+}
+
+void NetServer::setSolid(uint8_t player, bool isSolid) {
+    if (isSolid) m_ghosts.erase(player);
+    else m_ghosts.insert(player);
+}
+
+void NetServer::forgetPlayer(uint8_t id) {
+    m_groups.erase(id);
+    m_showing.erase(id);
+    m_ghosts.erase(id);
+    for (Client& c : m_clients) c.playerPriority.erase(id);
+}
+
+const NetPlayerState* NetServer::stateOf(uint8_t id) const {
+    if (id == 0) return m_hasLocal ? &m_local : nullptr;
+    for (const auto& [slot, g] : m_localGuests)
+        if (g.id == id) return g.hasState ? &g.state : nullptr;
+    for (const Client& c : m_clients)
+        if (c.id == id) return c.hasState ? &c.accepted : nullptr;
+    return nullptr;
 }
 
 std::vector<RemotePlayer> NetServer::players(double now) const {
@@ -909,6 +1006,16 @@ void NetClient::receive(const NetEvent& e) {
                 }
                 pl.states.push(t, p.state);
             }
+            // Still there, just not in this one: not hidden.
+            if (newest)
+                for (uint8_t id : m->present) {
+                    const auto it = m_players.find(id);
+                    if (it == m_players.end() || isOurs(id)) continue;
+                    Player& pl = it->second;
+                    if (pl.everIn && hadSnapshot && pl.lastInMs != previousNewest) pl.states.clear();
+                    pl.lastInMs = m->serverTimeMs;
+                    pl.everIn = true;
+                }
             for (const NetBodyState& b : m->bodies) m_bodies[b.id].push(t, b);
         } else ++m_badPackets;
         break;

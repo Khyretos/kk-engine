@@ -30,6 +30,13 @@ body { font-family: Noto Sans; color: #e8ecf4; pointer-events: none; width: 100%
 div { display: block; }
 #panel { position: absolute; max-height: 94%; overflow-y: auto; pointer-events: auto;
          padding: 6dp 10dp 8dp 10dp; border-radius: 10dp; background-color: #0e1322eb; border: 1dp #2f3a5c; font-size: 13dp; }
+/* The panel scrolls when taller than the screen; RmlUi has no default
+   scrollbar, and without a size the rows are laid out a word per line. */
+scrollbarvertical { width: 8dp; }
+scrollbarvertical slidertrack { background-color: #00000000; }
+scrollbarvertical sliderbar { background-color: #3a4670; border-radius: 4dp; min-height: 24dp; }
+scrollbarvertical sliderbar:hover { background-color: #5b6ca8; }
+scrollbarvertical sliderarrowdec, scrollbarvertical sliderarrowinc { height: 0; }
 .section { font-size: 12dp; letter-spacing: 2dp; color: #9fb4e0; margin-top: 8dp; padding: 3dp 4dp; border-radius: 5dp;
            cursor: pointer; background-color: #161d33; }
 .section:hover { background-color: #1d2742; }
@@ -43,6 +50,7 @@ div { display: block; }
 .button:hover { background-color: #34406a; }
 .button:active { background-color: #4f7cff; }
 .button.disabled { color: #5d6580; background-color: #1a2038; }
+.button.key { width: 22dp; padding: 5dp 0; margin: 2dp 2dp 0 0; text-align: center; }
 .toggle { padding: 3dp 4dp; cursor: pointer; border-radius: 5dp; }
 .toggle:hover { background-color: #1d2742; }
 .box { display: inline-block; width: 12dp; height: 12dp; margin-right: 7dp; vertical-align: -2dp; border-radius: 3dp;
@@ -257,6 +265,18 @@ bool FormPanel::button(const std::string& label, bool enabled) {
     return pressed;
 }
 
+bool FormPanel::key(const std::string& label) {
+    const size_t i = add(Kind::Key, label);
+    bool pressed = false;
+    for (const Event& e : take(i)) pressed |= e.start;
+    Row& r = m_rows[i];
+    r.label = label;
+    r.enabled = true;
+    return pressed;
+}
+
+void FormPanel::newline() { add(Kind::Break, {}); }
+
 bool FormPanel::toggle(const std::string& label, bool& value) {
     const size_t i = add(Kind::Toggle, label);
     bool changed = false;
@@ -411,6 +431,10 @@ std::string FormPanel::rowRml(size_t i) const {
     }
     case Kind::Button:
         return "<div class=\"button\" id=\"s" + n + "\"" + at + " data-part=\"press\">" + esc(r.label) + "</div>";
+    case Kind::Key:
+        return "<div class=\"button key\" id=\"s" + n + "\"" + at + " data-part=\"press\">" + esc(r.label) + "</div>";
+    case Kind::Break:
+        return "<div></div>";
     case Kind::Toggle:
         return "<div class=\"toggle\"" + at + " data-part=\"press\"><span class=\"box\" id=\"s" + n + "\"></span>" + esc(r.label) +
                "</div>";
@@ -444,7 +468,7 @@ void FormPanel::build() {
     for (size_t i = 0; i < m_rows.size(); ++i) {
         // Buttons flow side by side and tiles in rows, but pictures start
         // on a line of their own, under the buttons.
-        const auto inlineKind = [](Kind k) { return k == Kind::Button || k == Kind::Tile; };
+        const auto inlineKind = [](Kind k) { return k == Kind::Button || k == Kind::Key || k == Kind::Tile; };
         if (i > 0 && inlineKind(m_rows[i].kind) && inlineKind(m_rows[i - 1].kind) && m_rows[i].kind != m_rows[i - 1].kind)
             rml += "<div></div>";
         rml += rowRml(i);
@@ -494,10 +518,11 @@ void FormPanel::refresh() {
             }
             continue;
         }
-        const int state = r.kind == Kind::Button ? (r.enabled ? 1 : 0) : (r.on ? 1 : 0);
+        const bool isButton = r.kind == Kind::Button || r.kind == Kind::Key;
+        const int state = isButton ? (r.enabled ? 1 : 0) : (r.on ? 1 : 0);
         if (state == r.shownState) continue;
         r.shownState = state;
-        if (r.kind == Kind::Button) r.stateEl->SetClass("disabled", !r.enabled);
+        if (isButton) r.stateEl->SetClass("disabled", !r.enabled);
         else r.stateEl->SetClass("on", r.on);
     }
 }

@@ -44,9 +44,10 @@ const char* kLobbyRml = R"(
         div { display: block; }
         #shade { position: absolute; left: 0; right: 0; bottom: 0; height: 58%;
                  decorator: vertical-gradient(#05070f00 #05070fe0); }
-        #title { position: absolute; top: 5%; left: 0; width: 100%; text-align: center; }
-        #title .big { font-size: 54dp; font-weight: bold; letter-spacing: 3dp; color: #ffffff; }
-        #title .sub { font-size: 17dp; color: #d6dcea; margin-top: 4dp; }
+        #title { position: absolute; top: 5%; left: 4%; right: 4%; text-align: center; }
+        #title .big { font-size: 54dp; font-weight: bold; letter-spacing: 3dp; color: #ffffff;
+                      font-effect: shadow(0 3dp #000000aa); }
+        #title .sub { font-size: 17dp; color: #eef1f8; margin-top: 4dp; font-effect: outline(2dp #000000b0); }
         #title .sub img { font-size: 15dp; }
         #cards { position: absolute; left: 3%; right: 3%; bottom: 5%; height: 44%; }
         .card { position: absolute; bottom: 0; width: 22.5%; padding: 12dp 14dp 10dp 14dp; border-radius: 12dp;

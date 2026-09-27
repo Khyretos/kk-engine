@@ -164,11 +164,20 @@ public:
     void sendEvent(uint16_t kind, const std::vector<uint8_t>& payload);
     void relayEvent(const net::GameEventMsg& e); // host: pass a client's event on to the others
     void sendEventTo(uint8_t playerId, uint16_t kind, const std::vector<uint8_t>& payload); // host: to one player (a reply)
+    // Host: groups and solidity (net::NetServer "groups"; docs/NETWORKING.md
+    // "Groups"). No-ops elsewhere.
+    void setPlayerGroup(uint8_t playerId, uint16_t group);
+    uint16_t playerGroup(uint8_t playerId) const;
+    void showGroups(uint8_t playerId, std::vector<uint16_t> groups);
+    void setBodyGroup(uint16_t netId, uint16_t group);
+    void setSolid(uint8_t playerId, bool solid);
 
     std::function<void(const net::GameEventMsg&)> onEvent;
     // More receivers of the same events, for modules other than the game's
     // own (ScriptModule's net.* takes kScriptEventKind). Each sees every event.
     void addEventListener(std::function<void(const net::GameEventMsg&)> listener) { m_listeners.push_back(std::move(listener)); }
+    // The same for players coming and going (onPlayer is the game's own).
+    void addPlayerListener(std::function<void(uint8_t id, bool joined)> listener) { m_playerListeners.push_back(std::move(listener)); }
     static constexpr uint16_t kScriptEventKind = script_net::kScriptEvent; // Lua net.send (docs/SCRIPTING.md)
     std::function<void(const glm::vec3&)> onCorrection;
     std::function<void(uint8_t id, bool joined)> onPlayer;
@@ -305,6 +314,7 @@ private:
     std::map<uint8_t, double> m_moveLogAt;      // player -> when a refusal was last logged
     PhysicsModule* m_physics = nullptr;         // FEMFX, for breakables (null without it)
     std::vector<std::function<void(const net::GameEventMsg&)>> m_listeners;
+    std::vector<std::function<void(uint8_t, bool)>> m_playerListeners;
     std::vector<std::function<void(const net::VoiceMsg&)>> m_voiceListeners;
     void dispatchEvent(const net::GameEventMsg& e);
     std::map<uint8_t, RigidWorld::BodyId> m_capsules; // remote player -> kinematic capsule

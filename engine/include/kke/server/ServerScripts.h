@@ -10,10 +10,13 @@
 //               impulse, raycast, count          (a build with Jolt)
 //   net.*       role() = "server", isServer() = true, connected(),
 //               playerId() = 0, players(), send(name, data [, player]),
+//               table(name) / watch(name, filter, fn): synced tables
+//               (kke/ScriptTables.h),
 //               handle(name, fn): answers the players' net.call
 //               (kke/ScriptCalls.h). A handler's sends, spawns, removes,
 //               kicks, scores and store writes happen only if it
-//               succeeds; a refusal or an error undoes them.
+//               succeeds; a refusal or an error undoes them (and its
+//               synced table changes).
 //   server.*    name(), say(text), kick(player, reason), score(board,
 //               player, score), top(board [, n])
 //   store.*     save, load, add, remove, keys: the server's store, in the
@@ -37,6 +40,7 @@
 
 #include "kke/ScriptCalls.h"
 #include "kke/ScriptStore.h"
+#include "kke/ScriptTables.h"
 #include "kke/ScriptVM.h"
 #include "kke/net/NetSession.h"
 
@@ -85,7 +89,8 @@ public:
     void shutdown(); // Shutdown hook, then everything the scripts made goes
 
     // From the server: a player came or went; a script message or call
-    // arrived (kinds script_net::kScriptEvent, kScriptCall).
+    // arrived (kinds script_net::kScriptEvent, kScriptCall, and the synced
+    // tables' net::kTableSubscribe / kTableUnsubscribe).
     void playerJoined(uint8_t id, const std::string& name);
     void playerLeft(uint8_t id);
     void netMessage(const net::GameEventMsg& e);
@@ -130,6 +135,7 @@ private:
     std::unique_ptr<ScriptVM> m_vm;
     std::unique_ptr<ScriptStore> m_store;
     std::unique_ptr<ScriptCalls> m_calls;
+    std::unique_ptr<ScriptTables> m_tables;
     // Inside a net.call handler (runAtomically): what waits for success,
     // and what to undo on failure.
     bool m_inCall = false;

@@ -4,6 +4,7 @@
 
 #include "kke/ScriptCalls.h"
 #include "kke/ScriptStore.h"
+#include "kke/ScriptTables.h"
 #include "kke/ScriptVM.h"
 #include "kke/net/NetSession.h"
 #include "kke/net/ScriptSpawns.h"
@@ -290,6 +291,7 @@ namespace {
 struct Caller {
     kke::ScriptVM vm;
     std::unique_ptr<kke::ScriptCalls> calls;
+    std::unique_ptr<kke::ScriptTables> tables;
     std::vector<std::string> printed;
     Game& g;
     explicit Caller(Game& game) : g(game) {
@@ -306,15 +308,28 @@ struct Caller {
             {},
         });
         calls->bind();
+        tables = std::make_unique<kke::ScriptTables>(vm, kke::ScriptTables::Link{
+            [] { return false; },
+            [this] { return g.client && g.client->status() == NetClient::Status::Connected; },
+            [this](uint16_t kind, const std::vector<uint8_t>& bytes) { g.client->sendEvent(kind, bytes); },
+            {},
+        });
+        tables->bind();
     }
-    ~Caller() { calls.reset(); } // before the vm its callbacks live in
+    ~Caller() { // before the vm their callbacks live in
+        calls.reset();
+        tables.reset();
+    }
     void run(double seconds) {
         for (double t = 0; t < seconds; t += 1.0 / 60.0) {
             g.run(1.0 / 60.0);
-            for (const GameEventMsg& e : g.events)
+            for (const GameEventMsg& e : g.events) {
                 if (e.kind == kke::script_net::kScriptReply) calls->replyReceived(e.payload);
-            std::erase_if(g.events, [](const GameEventMsg& e) { return e.kind == kke::script_net::kScriptReply; });
+                if (e.kind == kke::net::kTableRows) tables->received(e.kind, 0, e.payload);
+            }
+            std::erase_if(g.events, [](const GameEventMsg& e) { return e.kind == kke::script_net::kScriptReply || e.kind == kke::net::kTableRows; });
             calls->update(g.now);
+            tables->update();
         }
     }
     bool said(const std::string& text) const { return std::find(printed.begin(), printed.end(), text) != printed.end(); }
@@ -444,4 +459,77 @@ TEST(ScriptCalls, DamagedBytesAreRefused) {
     longName.insert(longName.end(), 65, 'a');
     longName.push_back(0);
     EXPECT_FALSE(ScriptCalls::decodeCall(longName).has_value());
+}
+
+// net.table / net.watch (kke/ScriptTables.h): the server's rows reach a
+// player's script, filtered, then only as they change; a refused call's
+// changes never show.
+TEST(ServerScripts, ScriptsPutPlayersOnCourtsAndMakeSpectatorsGhosts) {
+    const std::string dir = tempDir("groups");
+    ServerConfig c = scriptsConfig(dir);
+    write(c.scripts + "/sv_courts.lua", R"lua(
+        net.handle("spectate", function(data, from)
+            net.setGroup(from, 9)
+            net.showGroups(from, { data.court })
+            net.solid(from, false)
+            return { group = net.group(from) }
+        end)
+        net.handle("bad", function(data, from) net.setGroup(from, 70000) end)
+    )lua");
+    Game g(c);
+    g.join("Kees");
+    Caller p(g);
+    p.run(0.5);
+    ASSERT_TRUE(p.vm.runString(R"lua(
+        net.call("spectate", { court = 1 }, function(ok, a) print("spectate", ok, a.group) end)
+        net.call("bad", {}, function(ok, why) print("bad", ok) end)
+    )lua", "player"));
+    p.run(0.5);
+    EXPECT_TRUE(p.said("spectate\ttrue\t9"));
+    EXPECT_TRUE(p.said("bad\tfalse")) << "a group past 65535 is an error";
+    // Players can't move themselves between groups.
+    EXPECT_FALSE(p.vm.runString("net.setGroup(1, 2)", "player"));
+}
+
+TEST(ServerScripts, PlayersWatchTheServersTables) {
+    const std::string dir = tempDir("tables");
+    ServerConfig c = scriptsConfig(dir);
+    write(c.scripts + "/sv_courts.lua", R"lua(
+        courts = net.table("courts")
+        courts:set(1, { court = 1, score = "0-0" })
+        courts:set(3, { court = 3, score = "0-0" })
+        net.handle("point", function(data, from)
+            local row = courts:get(data.court)
+            row.score = data.score
+            courts:set(data.court, row)
+            if data.cheat then return nil, "no" end
+            return true
+        end)
+    )lua");
+    Game g(c);
+    g.join("Kees");
+    Caller p(g);
+    ASSERT_TRUE(p.vm.runString(R"lua(
+        three = net.watch("courts", { court = 3 }, function(event, key, row, old)
+            print(event, key, row and row.score, old and old.score)
+        end)
+    )lua", "player"));
+    p.run(0.5);
+    EXPECT_TRUE(p.said("insert\t3\t0-0\tnil")) << (p.printed.empty() ? "nothing" : p.printed.front());
+    EXPECT_TRUE(p.said("ready\tnil\tnil\tnil") || p.said("ready"));
+    EXPECT_FALSE(p.said("insert\t1\t0-0\tnil")); // court 1 isn't watched
+    p.printed.clear();
+
+    ASSERT_TRUE(p.vm.runString(R"lua(
+        net.call("point", { court = 3, score = "15-0" })
+        net.call("point", { court = 3, score = "99-0", cheat = true })
+        net.call("point", { court = 1, score = "15-0" })
+    )lua", "player"));
+    p.run(0.5);
+    ASSERT_EQ(p.printed.size(), 1u) << p.printed.front();
+    EXPECT_EQ(p.printed[0], "update\t3\t15-0\t0-0");
+    ASSERT_TRUE(p.vm.runString("print('count', three:count(), three:get(3).score, three:ready())", "player"));
+    EXPECT_TRUE(p.said("count\t1\t15-0\ttrue"));
+    // Players only watch: changing a table is the server's.
+    EXPECT_FALSE(p.vm.runString("net.table('courts')", "player"));
 }

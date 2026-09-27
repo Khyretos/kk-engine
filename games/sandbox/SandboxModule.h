@@ -224,6 +224,7 @@ private:
     void assetGridUi();
     void inspectorUi();
     void folderNotFoundUi();
+    void folderKeyboardUi();
 
     // Play mode (Simple): the palette, dragging blocks into the world,
     // picking placed things up again, and the bat.
@@ -303,7 +304,8 @@ private:
     std::string m_search;
     std::string m_folderInput;
     float m_fps = 60.0f;  // smoothed, for the Sandbox panel
-    int m_assetPage = 0; // the Assets panel shows one page of pictures
+    int m_assetPage = 0;
+    bool m_keyShift = false; // the on-screen keyboard's next letter is a capital // the Assets panel shows one page of pictures
     std::vector<const kke::CatalogAsset*> m_filtered;
     bool m_filterDirty = true;
     std::string m_status;

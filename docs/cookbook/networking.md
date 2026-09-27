@@ -33,6 +33,10 @@ client can't cheat) and sends the totals to everyone.
 - Need an answer back ("can I join?", "did I win?")? `net.call` asks
   and an `sv_` script's `net.handle` answers; a refusal undoes what the
   handler did ([Scripting](../SCRIPTING.md) "Calls").
+- State everyone should see (scores, who's in which team) fits a synced
+  table: the `sv_` script's `net.table` keeps it, `net.watch` shows it
+  anywhere and is told what changed, late joiners included
+  ([Scripting](../SCRIPTING.md) "Synced tables").
 - `hook.Add("NetMessage", ...)` receives, with the message's name, its
   data and who sent it (`from`, a player id).
 - `net.role()` is `"host"`, `"client"` or `"offline"`. Playing alone, the

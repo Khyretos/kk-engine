@@ -316,6 +316,8 @@ void ScriptModule::bindAll() {
             m_bodies.back().netDesc = script_net::encode(script_net::BodySpawn{sphere, d.motion == RigidWorld::Motion::Static, d.position, d.velocity,
                                                                                d.halfExtents, d.radius, d.density, d.friction, d.restitution,
                                                                                d.material, color});
+            // A group (a court): only players who see that group are sent it (docs/NETWORKING.md "Groups").
+            m_bodies.back().group = uint16_t(std::clamp(ScriptVM::fieldNumber(L, 1, "group", 0.0f), 0.0f, 65535.0f));
             replicate(m_bodies.back());
             lua_pushinteger(L, lua_Integer(id));
             return 1;

@@ -61,6 +61,14 @@ const char* kPanelRml = R"(
         .box.on { background-color: #4f7cff; border-color: #cfd9ff; }
         .button { text-align: center; background-color: #28314f; margin-top: 3dp; }
         .hide { color: #8b93aa; }
+        /* The panel scrolls when it is taller than the screen; RmlUi has no
+           default scrollbar, and without a size the rows beside it are laid
+           out a word per line. */
+        scrollbarvertical { width: 8dp; }
+        scrollbarvertical slidertrack { background-color: #00000000; }
+        scrollbarvertical sliderbar { background-color: #3a4670; border-radius: 4dp; min-height: 24dp; }
+        scrollbarvertical sliderbar:hover { background-color: #5b6ca8; }
+        scrollbarvertical sliderarrowdec, scrollbarvertical sliderarrowinc { height: 0; }
         #crosshair { position: absolute; left: 50%; top: 50%; width: 10dp; height: 10dp; margin-left: -7dp; margin-top: -7dp;
                      border: 2dp #ffffffd0; border-radius: 7dp; display: none; }
     </style>

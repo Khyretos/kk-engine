@@ -648,7 +648,26 @@ void ScriptModule::bindNet() {
     m_calls->maxPayloadBytes = kke::net::kMaxEventBytes;
     m_calls->warn = [this](const std::string& line) { log::get(name())->warn("{}", line); };
     m_calls->bind();
+    // net.table / net.watch (kke/ScriptTables.h): the tables live where
+    // the sv_ scripts run; everyone watches.
+    kke::net::TableLimits limits;
+    limits.maxEventBytes = kke::net::kMaxEventBytes;
+    m_tables = std::make_unique<ScriptTables>(vm, ScriptTables::Link{
+        [net] { return net->role() != NetModule::Role::Client; },
+        [net] { return net->role() == NetModule::Role::Client && net->connected(); },
+        [net](uint16_t kind, const std::vector<uint8_t>& bytes) { net->sendEvent(kind, bytes); },
+        [net](int player, const std::vector<uint8_t>& bytes) { net->sendEventTo(uint8_t(player), kke::net::kTableRows, bytes); },
+    }, limits);
+    m_tables->warn = m_calls->warn;
+    m_tables->bind();
+    net->addPlayerListener([this](uint8_t id, bool joined) {
+        if (!joined) m_tables->playerLeft(id);
+    });
     net->addEventListener([this, net](const net::GameEventMsg& e) {
+        if (e.kind == kke::net::kTableSubscribe || e.kind == kke::net::kTableUnsubscribe || e.kind == kke::net::kTableRows) {
+            m_tables->received(e.kind, e.fromPlayer, e.payload);
+            return;
+        }
         if (e.kind == script_net::kScriptCall) {
             if (net->role() == NetModule::Role::Host) m_calls->callReceived(e.fromPlayer, e.payload);
             return;
@@ -691,6 +710,45 @@ void ScriptModule::bindNet() {
         }
         return 1;
     });
+    // Groups (docs/NETWORKING.md "Groups"): the host puts players in rooms.
+    auto hostOnly = [net](lua_State* L, const char* what) {
+        if (net->role() != NetModule::Role::Host) luaL_error(L, "%s: only the host puts players in groups", what);
+        const lua_Integer id = luaL_checkinteger(L, 1);
+        if (id < 0 || id > lua_Integer(kke::net::kMaxPlayers)) luaL_error(L, "%s: %d isn't a player id", what, int(id));
+        return uint8_t(id);
+    };
+    auto groupArg = [](lua_State* L, int index, const char* what) {
+        const lua_Integer g = luaL_checkinteger(L, index);
+        if (g < 0 || g > 65535) luaL_error(L, "%s: a group is 0 to 65535", what);
+        return uint16_t(g);
+    };
+    vm.registerFunction("net", "setGroup", [net, hostOnly, groupArg](lua_State* L) {
+        net->setPlayerGroup(hostOnly(L, "net.setGroup"), groupArg(L, 2, "net.setGroup"));
+        return 0;
+    });
+    vm.registerFunction("net", "group", [net](lua_State* L) {
+        lua_pushinteger(L, net->playerGroup(uint8_t(std::clamp<lua_Integer>(luaL_checkinteger(L, 1), 0, 255))));
+        return 1;
+    });
+    vm.registerFunction("net", "showGroups", [net, hostOnly, groupArg](lua_State* L) {
+        const uint8_t id = hostOnly(L, "net.showGroups");
+        std::vector<uint16_t> groups;
+        if (!lua_isnoneornil(L, 2)) {
+            luaL_checktype(L, 2, LUA_TTABLE);
+            for (lua_Integer i = 1, n = lua_Integer(lua_rawlen(L, 2)); i <= n && i <= 64; ++i) {
+                lua_rawgeti(L, 2, i);
+                groups.push_back(groupArg(L, -1, "net.showGroups"));
+                lua_pop(L, 1);
+            }
+        }
+        net->showGroups(id, std::move(groups));
+        return 0;
+    });
+    vm.registerFunction("net", "solid", [net, hostOnly](lua_State* L) {
+        const uint8_t id = hostOnly(L, "net.solid");
+        net->setSolid(id, lua_toboolean(L, 2));
+        return 0;
+    });
     // net.send(name, data): from a client to the host; from the host to
     // every client. The receiver's scripts get hook "NetMessage"(name, data, from).
     vm.registerFunction("net", "send", [this, net](lua_State* L) {
@@ -715,12 +773,17 @@ void ScriptModule::bindNet() {
 }
 
 bool ScriptModule::runCallAtomically(const std::function<bool()>& run) {
-    // The script store's writes and the net.sends are all or nothing;
-    // what else a game's handler changes (bodies, UI) stays as it is.
+    // The script store's writes, the synced tables and the net.sends are all
+    // or nothing; what else a game's handler changes (bodies, UI) stays.
     m_inCall = true;
+    if (m_tables) m_tables->server().beginUndo();
     storage::Store* store = m_store ? m_store->store() : nullptr;
     const bool ok = store ? store->transaction(run) : run();
     m_inCall = false;
+    if (m_tables) {
+        if (ok) m_tables->server().endUndo();
+        else m_tables->server().rollback();
+    }
     std::vector<std::vector<uint8_t>> held = std::move(m_heldSends);
     m_heldSends.clear();
 #if KKE_ENABLE_NET
@@ -739,6 +802,7 @@ void ScriptModule::dispatchNet() {
             if (m_callsOnline && !online) m_calls->disconnected("the connection to the server was lost");
             m_callsOnline = online;
             m_calls->update(m_time);
+            if (m_tables) m_tables->update();
         }
 #endif
     if (m_netInbox.empty()) return;
@@ -761,6 +825,7 @@ void ScriptModule::dispatchNet() {
 // ---------------------------------------------------------------- cleanup
 void ScriptModule::releaseScript(const std::string& source) {
     if (m_calls) m_calls->release(source);
+    if (m_tables) m_tables->release(source);
     auto mine = [&](const std::string& s) { return s == source; };
     // Replicated ones: gone on the clients too.
     for (const Body& b : m_bodies)
