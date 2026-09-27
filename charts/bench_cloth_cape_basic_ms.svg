@@ -3,10 +3,10 @@
 <text x="36" y="16" font-size="13" font-weight="bold" fill="#222">bench.cloth_cape_basic_ms</text>
 <text x="604" y="16" text-anchor="end" fill="#666">lower is better</text>
 <line x1="36" y1="144" x2="604" y2="144" stroke="#ccc"/>
-<text x="32" y="40.0" text-anchor="end" fill="#666">0.5814</text>
+<text x="32" y="40.0" text-anchor="end" fill="#666">0.5985</text>
 <text x="32" y="144.0" text-anchor="end" fill="#666">0.0000</text>
 <text x="36" y="160" fill="#666">37c0ad1</text>
-<text x="604" y="160" text-anchor="end" fill="#666">f313161</text>
-<path d="M36.0,51.3 L130.7,50.9 L225.3,82.5 L320.0,86.5 L414.7,86.6 L509.3,50.1 L604.0,70.6" fill="none" stroke="#2563eb" stroke-width="2"/>
-<g fill="#2563eb"><circle cx="36.0" cy="51.3" r="2.5"><title>37c0ad1: 0.4990</title></circle><circle cx="130.7" cy="50.9" r="2.5"><title>f15c3a1: 0.5013</title></circle><circle cx="225.3" cy="82.5" r="2.5"><title>f34abdd: 0.3311</title></circle><circle cx="320.0" cy="86.5" r="2.5"><title>be90a93: 0.3097</title></circle><circle cx="414.7" cy="86.6" r="2.5"><title>9b9ace6: 0.3091</title></circle><circle cx="509.3" cy="50.1" r="2.5"><title>1ac71ef: 0.5055</title></circle><circle cx="604.0" cy="70.6" r="2.5"><title>f313161: 0.3949</title></circle></g>
+<text x="604" y="160" text-anchor="end" fill="#666">5b0ce78</text>
+<path d="M36.0,54.0 L117.1,53.5 L198.3,84.3 L279.4,88.1 L360.6,88.2 L441.7,52.8 L522.9,72.7 L604.0,50.1" fill="none" stroke="#2563eb" stroke-width="2"/>
+<g fill="#2563eb"><circle cx="36.0" cy="54.0" r="2.5"><title>37c0ad1: 0.4990</title></circle><circle cx="117.1" cy="53.5" r="2.5"><title>f15c3a1: 0.5013</title></circle><circle cx="198.3" cy="84.3" r="2.5"><title>f34abdd: 0.3311</title></circle><circle cx="279.4" cy="88.1" r="2.5"><title>be90a93: 0.3097</title></circle><circle cx="360.6" cy="88.2" r="2.5"><title>9b9ace6: 0.3091</title></circle><circle cx="441.7" cy="52.8" r="2.5"><title>1ac71ef: 0.5055</title></circle><circle cx="522.9" cy="72.7" r="2.5"><title>f313161: 0.3949</title></circle><circle cx="604.0" cy="50.1" r="2.5"><title>5b0ce78: 0.5205</title></circle></g>
 </svg>
