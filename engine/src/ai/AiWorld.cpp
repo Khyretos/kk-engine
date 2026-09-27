@@ -1,6 +1,7 @@
 #include "kke/ai/AiWorld.h"
 
 #include "kke/DataFile.h"
+#include "kke/Orders.h"
 #include "kke/ai/NavMesh.h"
 
 #include <nlohmann/json.hpp>
@@ -748,6 +749,9 @@ void AiWorld::neighbours(const Agent& a, float radius, bool sameSpeciesOnly, std
     for (uint32_t id : m_query) {
         if (id == a.id) continue;
         const Agent& o = m_agents[m_index.at(id)];
+        // Disabled = carried, ragdolled, asleep: nothing to keep clear of
+        // (a dog bringing a ball back doesn't back away from it).
+        if (!o.enabled) continue;
         if (sameSpeciesOnly && o.species != a.species) continue;
         out.push_back({ o.position, o.velocity, m_species[size_t(o.species)].radius });
     }
@@ -990,13 +994,20 @@ void AiWorld::act(Agent& a, float dt) {
     } else if (behavior == "follow") {
         glm::vec3 leader;
         if (focusPos(a.order.target, leader)) {
+            // Beside and a little behind, on the side it is already on,
+            // and out of the leader's way (kke::followSlot): a companion
+            // never walks in front of whoever it follows.
+            const Agent* l = agent(a.order.target);
+            const glm::vec3 leaderVel = l ? l->velocity : glm::vec3(0.0f);
+            FollowSettings fs;
+            fs.distance = a.order.distance;
+            const glm::vec3 slot = followSlot(leader, leaderVel, l ? l->yaw : 0.0f, a.position, fs);
             const float d = flatDistance(a.position, leader);
-            if (d > a.order.distance) {
-                speed = d > a.order.distance * 3.0f || a.order.run ? s.runSpeed : s.walkSpeed * 1.2f;
+            const float toSlot = flatDistance(a.position, slot);
+            if (toSlot > 0.6f || inLeadersWay(leader, leaderVel, a.position, fs)) {
+                speed = d > a.order.distance * 3.0f || a.order.run || glm::length(leaderVel) > s.walkSpeed * 1.3f ? s.runSpeed : s.walkSpeed * 1.2f;
                 if (speed >= s.runSpeed) anim = "run";
-                // Aim a little short, so it stops beside the leader, not in it.
-                const glm::vec3 spot = leader + (a.position - leader) * (a.order.distance * 0.7f / std::max(d, 0.01f));
-                steer = followPath(a, spot, 0.5f, speed, dt);
+                steer = followPath(a, slot, 0.3f, speed, dt);
             } else {
                 steer = brake();
                 anim = "idle";

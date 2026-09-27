@@ -1,5 +1,6 @@
 // The AI core (kke/ai/*, docs/AI.md): steering, senses, utility
 // decisions, navmesh paths and whole-world scenarios on the farm species.
+#include "kke/Orders.h"
 #include "kke/ai/AiWorld.h"
 #include "kke/ai/Clips.h"
 #include "kke/ai/Learning.h"
@@ -355,6 +356,44 @@ TEST(AiWorld, OrdersWinAndReportArrival) {
     }
     EXPECT_TRUE(hasEvent(events, AiEvent::Kind::Arrived, 50, 60)) << w.describe(50);
     EXPECT_EQ(w.agent(50)->order.kind, Order::Kind::None);
+}
+
+TEST(AiWorld, FollowersKeepOutOfTheLeadersWay) {
+    // A dog told to follow the farmer, who walks off: it stays beside and
+    // behind, never on the path ahead of them (kke::followSlot).
+    AiWorld w(5);
+    ASSERT_TRUE(w.addActor(1, "farmer", { 0, 0, 0 }));
+    ASSERT_TRUE(w.addAgent(2, "dog", { 3, 0, 4 }, 180.0f)); // starts ahead of them
+    w.order(2, Order{ Order::Kind::Follow, 1, glm::vec3(0.0f), 1.8f, false });
+    int inTheWay = 0;
+    for (int i = 0; i < 450; ++i) {
+        const glm::vec3 at{ 0, 0, float(i) * 0.045f }, vel{ 0, 0, 1.35f };
+        w.setTransform(1, at, vel, 0.0f);
+        w.update(1.0f / 30.0f);
+        if (i > 150 && kke::inLeadersWay(at, vel, w.agent(2)->position)) ++inTheWay;
+    }
+    const glm::vec3 dog = w.agent(2)->position, farmer = w.agent(1)->position;
+    EXPECT_EQ(inTheWay, 0) << w.describe(2);
+    EXPECT_LT(flatDist(dog, farmer), 4.0f) << w.describe(2);
+    EXPECT_LT(dog.z, farmer.z + 0.3f) << "ahead of the farmer: " << w.describe(2);
+}
+
+TEST(AiWorld, CarriedThingsDontPushTheCarrier) {
+    // A ball in the dog's mouth (disabled) is not something to keep clear of.
+    AiWorld w(6);
+    Species ball;
+    ball.id = "ball";
+    ball.radius = 0.1f;
+    w.defineSpecies(ball);
+    ASSERT_TRUE(w.addAgent(2, "dog", { 0, 0, 0 }));
+    ASSERT_TRUE(w.addActor(3, "ball", { 0.05f, 0, 0.3f }));
+    w.setEnabled(3, false);
+    w.order(2, Order{ Order::Kind::Hold, 0, glm::vec3(0.0f), 1.0f, false });
+    for (int i = 0; i < 60; ++i) {
+        w.setTransform(3, w.agent(2)->position + glm::vec3(0.05f, 0, 0.3f), glm::vec3(0.0f), 0.0f);
+        w.update(1.0f / 30.0f);
+    }
+    EXPECT_LT(flatDist(w.agent(2)->position, { 0, 0, 0 }), 0.2f) << w.describe(2);
 }
 
 TEST(AiWorld, TeamsMakeFriendsAndEnemies) {

@@ -153,7 +153,7 @@ sit on top later; it would drive orders and inputs, not replace this.
 | Kind | Does | Ends |
 |---|---|---|
 | MoveTo | walks (or runs) to `position` | on arrival: `Arrived`, then holds there |
-| Follow | stays within `distance` of `target`, runs to catch up | when changed |
+| Follow | beside and a little behind `target` (`kke::followSlot`, kke/Orders.h), never in their way; runs to catch up | when changed |
 | Attack | goes for `target`, attacking in reach | target gone, or changed |
 | Hold | stays at `position`, faces and attacks what comes in reach; `focus` is the hostile it's watching (a shooter aims at it) | when changed |
 | Flee | runs from `target` (or `position`) | far enough |
@@ -163,7 +163,9 @@ sit on top later; it would drive orders and inputs, not replace this.
 companion is a species with the owner as a friend and a Follow order; a
 platoon is agents on one team given orders one by one or together (focus
 fire = the same Attack target for all). Group formations and cover are
-the platoon demo's to build on top of this.
+the platoon demo's to build on top of this (kke/Orders.h, kke/OrderBridge.h).
+Agents that are disabled (carried, ragdolled) are not kept clear of: a dog
+bringing a ball back doesn't back away from it.
 
 ## Navigation
 
