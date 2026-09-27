@@ -55,7 +55,7 @@ The actions are made in `MeltDemoModule::defineInput`
 | Turn the camera (`camera.orbit`) | left-drag | right stick |
 | Pan the camera | right-drag | no controller binding yet |
 | Zoom (`camera.zoom`) | mouse wheel | d-pad up (closer) / down (further) |
-| Settings panel (`panel.toggle`) | F3, or click it | View (Back) |
+| Settings panel (`panel.toggle`) | F3 or Esc, or click it | View (Back) |
 | Developer panels (ImGui) | F1, developer builds only | no controller binding yet |
 
 The camera uses the orbit camera's default `Viewer` controls (left-drag
@@ -75,6 +75,10 @@ A presses, B or Esc hands control back. On the keyboard it reads the
 arrows, Enter and Esc directly. While it is Active, player 1's `game`
 context is off, so A does not also toggle the pour and the d-pad does not
 zoom. The last row, "Hide panel", collapses it.
+Esc works like a pause menu: it opens the panel with the keyboard on
+it, and Esc again goes back to the game. So Esc does not close the
+window; the panel's "Quit" row, just above "Hide panel", does.
+`setEscapeMenu(false)` gives Esc back to a game that needs it.
 
 | Row | Kind | Range |
 |---|---|---|

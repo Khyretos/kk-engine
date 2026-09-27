@@ -71,7 +71,7 @@ The camera and panel actions come from the engine.
 | Turn your head (the camera) | left-drag | right stick (`camera.orbit`) |
 | Closer / further | mouse wheel | d-pad up / down (`camera.zoom`) |
 | Move the camera's target | right-drag | no controller binding |
-| Give the panel the controls (`panel.toggle`) | F3, or click the panel | View (Back) |
+| Give the panel the controls (`panel.toggle`) | F3 or Esc, or click the panel | View (Back) |
 | In the panel: choose a row / change it / press / leave | arrows, Enter, Esc | d-pad or left stick, A, B |
 | Developer panels (ImGui) | F1 (developer builds only) | no controller binding |
 
@@ -392,6 +392,10 @@ F3 gives it the controller and keyboard; B or Esc gives them back; the
 mouse can click it in any state. With a DemoPanelModule present, the
 engine's ImGui windows start hidden and F1 shows them (developer builds
 only).
+Esc works like a pause menu: it opens the panel with the keyboard on
+it, and Esc again goes back to the game. So Esc does not close the
+window; the panel's "Quit" row, just above "Hide panel", does.
+`setEscapeMenu(false)` gives Esc back to a game that needs it.
 
 ### The developer panels (F1)
 

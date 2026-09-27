@@ -71,9 +71,9 @@ The actions are made in `SyntySceneModule::defineInput`
 | Turn the camera (`camera.orbit`) | left-drag | right stick |
 | Pan the camera | right-drag | no controller binding yet |
 | Zoom (`camera.zoom`) | mouse wheel | d-pad up (closer) / down (further) |
-| Settings panel (`panel.toggle`) | F3, or click it | View (Back) |
+| Settings panel (`panel.toggle`) | F3 or Esc, or click it | View (Back) |
 | Engine developer panels (ImGui) | F1 | no controller binding yet |
-| Quit | Esc | none |
+| Quit | the panel's Quit row (Esc opens the panel) | the panel's Quit row |
 
 Notes from the code:
 
@@ -90,9 +90,6 @@ Notes from the code:
   (`setPadPan`) is not turned on, so the left stick does nothing here.
 - Button names are positions: on a PlayStation pad A is Cross, B is
   Circle, X is Square, Y is Triangle.
-- Esc closes the window (the engine's default; this demo does not call
-  `setQuitOnEscape(false)`). That includes pressing Esc to leave the
-  panel, so on the keyboard leave it with F3 instead.
 
 ### The "Characters" panel
 
@@ -104,6 +101,10 @@ it Active: up and down pick a row, left and right change it (hold to
 sweep), A presses, B hands control back. While it is Active, player 1's
 `game` context is off, so A does not also throw someone through glass.
 The last row, "Hide panel", collapses it.
+Esc works like a pause menu: it opens the panel with the keyboard on
+it, and Esc again goes back to the game. So Esc does not close the
+window; the panel's "Quit" row, just above "Hide panel", does.
+`setEscapeMenu(false)` gives Esc back to a game that needs it.
 
 `buildPanel` adds these rows, top to bottom:
 
@@ -395,8 +396,8 @@ cancels it.
 
 ### Through glass (FEMFX builds)
 
-`throughGlass` only exists when `KKE_ENABLE_FEMFX` is on; in other builds
-the function body is empty. It stands a breakable pane 1.8 m in front of
+`throughGlass` only exists when `KKE_ENABLE_FEMFX` is on (`kHasGlass`);
+in other builds there is no glass action, prompt or panel button at all. It stands a breakable pane 1.8 m in front of
 the selected character, away from the camera, centred 1.21 m up and
 turned to face the camera, then ragdolls the character into it:
 

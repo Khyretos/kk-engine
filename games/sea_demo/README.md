@@ -66,7 +66,7 @@ the "Boat" and "Sea" groups, all in the `game` input context.
 | Zoom (`camera.zoom`) | mouse wheel | d-pad up (closer) / down (further) |
 | Pan the camera | middle-drag | no controller binding yet |
 | Move the camera target | W A S D, Q / E down and up, Shift faster | no controller binding yet |
-| Settings panel (`panel.toggle`) | F3, or click it | View (Back) |
+| Settings panel (`panel.toggle`) | F3 or Esc, or click it | View (Back) |
 | Developer panels (ImGui) | F1, developer builds only | no controller binding yet |
 
 Notes from the code:
@@ -98,6 +98,10 @@ directly. While it is Active, player 1's `game` context is off, so the
 left stick that picks rows does not also steer the boat and the right
 stick and d-pad do not move the camera. The last row, "Hide panel",
 collapses it to its title.
+Esc works like a pause menu: it opens the panel with the keyboard on
+it, and Esc again goes back to the game. So Esc does not close the
+window; the panel's "Quit" row, just above "Hide panel", does.
+`setEscapeMenu(false)` gives Esc back to a game that needs it.
 
 The rows are:
 
