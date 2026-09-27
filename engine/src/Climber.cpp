@@ -22,7 +22,37 @@ bool Climber::usable(int hold, int h) const {
     if (hold < 0 || hold >= static_cast<int>(m_wall.holds().size()) || holdGone(hold)) return false;
     // Both hands may share a hold (matching it), but not fly to the same one.
     const Hand& other = m_hand[1 - h];
-    return !(other.move != Move::None && other.target == hold);
+    if (other.move != Move::None && other.target == hold) return false;
+    // The arms don't cross (canHang also keeps the hand on its side of the
+    // body the two would hang from).
+    return !crossesOver(h, hold);
+}
+
+// Sideways is along the face (x: the aim's right), not the body's facing,
+// which turns a little with the rock: the holds' depth (an overhang) must
+// not count as sideways.
+bool Climber::crossesOver(int h, int hold) const {
+    const Hand& other = m_hand[1 - h];
+    if (m_state != State::Climbing || other.hold < 0 || hold < 0) return false;
+    // The other hand's hold is at least out at its own shoulder, or the
+    // body's middle is further over still.
+    const float over = m_wall.holds()[static_cast<size_t>(hold)].position.x - m_wall.holds()[static_cast<size_t>(other.hold)].position.x;
+    return over * (h == kLeft ? -1.0f : 1.0f) < -(2.0f * m_s.shoulderHalf + m_s.crossReach);
+}
+
+float Climber::armPath(int h, const glm::vec3& wrist, const glm::vec3& hips) const {
+    const glm::vec3 own = shoulderAt(h, hips);
+    // Past the other shoulder the arm can't go straight: it goes round the
+    // front of the chest (just in front of the other shoulder), then on.
+    const float side = h == kLeft ? -1.0f : 1.0f;
+    const glm::vec3 other = shoulderAt(1 - h, hips);
+    if ((wrist.x - other.x) * side >= 0.0f) return glm::length(wrist - own);
+    const glm::vec3 round = other + m_facing * 0.15f;
+    return glm::length(round - own) + glm::length(wrist - round);
+}
+
+bool Climber::onItsSide(int h, const glm::vec3& point, const glm::vec3& hips) const {
+    return (point.x - hips.x) * (h == kLeft ? -1.0f : 1.0f) >= -(m_s.shoulderHalf + m_s.crossReach);
 }
 
 float Climber::handProgress(int h) const {
@@ -103,6 +133,9 @@ bool Climber::canHang(int h, int hold, int otherHold) const {
     const int n = static_cast<int>(holds.size());
     if (otherHold < 0 || hold < 0 || hold >= n || otherHold >= n) return true;
     const ClimbHold& a = holds[static_cast<size_t>(hold)];
+    const ClimbHold& b = holds[static_cast<size_t>(otherHold)];
+    // Never across the other hand.
+    if ((a.position.x - b.position.x) * (h == kLeft ? -1.0f : 1.0f) < -(2.0f * m_s.shoulderHalf + m_s.crossReach)) return false;
     // A ledge's lip stands out from the rock: a hand may go to it even when
     // the one below can't stay (it cuts loose and the climber hangs from
     // the lip, to match it and mantle), as long as it's in reach as
@@ -110,7 +143,6 @@ bool Climber::canHang(int h, int hold, int otherHold) const {
     if (a.kind == ClimbHold::Kind::Edge) return true;
     // Hang the body from both and see: every arm in reach (a little
     // short of where the lower hand would cut loose).
-    const ClimbHold& b = holds[static_cast<size_t>(otherHold)];
     glm::vec3 wrist[2];
     wrist[h] = wristAt(a.position, a.normal);
     wrist[1 - h] = wristAt(b.position, b.normal);
@@ -118,8 +150,10 @@ bool Climber::canHang(int h, int hold, int otherHold) const {
     hips.z = std::max(hips.z, m_wall.surfaceZ(hips.x, hips.y) + m_s.bodyOut);
     const bool use[2] = { true, true };
     fitWrists(hips, wrist, use);
-    for (int k = 0; k < 2; ++k)
-        if (glm::length(wrist[k] - shoulderAt(k, hips)) - m_s.armReach > m_s.cutLoose * 0.6f) return false;
+    for (int k = 0; k < 2; ++k) {
+        if (armPath(k, wrist[k], hips) - m_s.armReach > m_s.cutLoose * 0.6f) return false;
+        if (!onItsSide(k, wrist[k], hips)) return false;
+    }
     return true;
 }
 
@@ -180,6 +214,12 @@ void Climber::launch(int h, Move m, int target, const glm::vec2& aim, float reac
     hd.t = 0.0f;
     hd.duration = m == Move::Precise ? m_s.reachTime : m == Move::Quick ? m_s.quickTime : m_s.lungeTime;
     float cost = m == Move::Precise ? m_s.costPrecise : m == Move::Quick ? m_s.costQuick : m_s.costLungeMin + (m_s.costLungeMax - m_s.costLungeMin) * hd.charge;
+    // Matching (onto the hold the other hand is on) is a short, easy move:
+    // how a climber swaps hands to go on across, so it costs little.
+    if (target >= 0 && target == other.hold && m != Move::Lunge) {
+        cost = m_s.costPrecise * 0.5f;
+        hd.duration = std::min(hd.duration, m_s.quickTime * 1.5f);
+    }
     m_stamina -= cost;
     hd.charge = 0.0f;
     hd.charging = false;
@@ -692,6 +732,14 @@ Climber::Input ClimbBot::decide(const Climber& c, float dt) {
     if (at < 0)
         for (size_t i = 0; i < m_route.size(); ++i)
             if (holds[static_cast<size_t>(m_route[i])].position.y < from.y - 0.3f) at = static_cast<int>(i);
+    // The line's next hold: each hand works its own side, so the hand on
+    // that side goes (both hands on one hold: whichever that is).
+    const int nextOnLine = at + 1 < static_cast<int>(m_route.size()) ? m_route[static_cast<size_t>(at + 1)] : -1;
+    if (h0 >= 0 && h0 == h1 && nextOnLine >= 0) {
+        const float dx = holds[static_cast<size_t>(nextOnLine)].position.x - from.x;
+        move = dx < 0.0f ? Climber::kLeft : Climber::kRight;
+        stay = 1 - move;
+    }
     int pick = -1;
     // Following a way round worked out earlier (see below): the next
     // move of it, while it still fits.
@@ -712,14 +760,29 @@ Climber::Input ClimbBot::decide(const Climber& c, float dt) {
         return in;
     }
     // Resting on two jugs with feet on: shake out before going on.
-    if (h0 >= 0 && h1 >= 0 && c.drainRate() < 0.0f && c.staminaFraction() < restUntil) return in;
+    // Before a long steep stretch (nowhere to rest on it) it rests to full.
+    float ahead = 0.0f;
+    for (float up = 1.0f; up <= 7.0f; up += 1.0f) ahead = std::max(ahead, c.wall().leanAt(c.hips().y + up));
+    const float restTo = ahead > 5.0f ? std::max(restUntil, 0.99f) : restUntil;
+    if (h0 >= 0 && h1 >= 0 && c.drainRate() < 0.0f && c.staminaFraction() < restTo) return in;
     // Tired: make for a ledge's edge in reach, to stand on it and rest,
     // or else a jug to shake out on (not under an overhang: no rest there).
     const ClimbHold& anchorHold = holds[static_cast<size_t>(anchor)];
     const bool atLedge = anchorHold.kind == ClimbHold::Kind::Edge && anchorHold.ledge >= 0;
     if (c.staminaFraction() < restBelow || (atLedge && c.staminaFraction() < ledgeRestBelow)) {
         float best = 1e9f;
-        for (size_t i = 0; i < holds.size(); ++i) {
+        // One hand already on a ledge's lip: the other joins it there (the
+        // lip is the rest; both hands on it, the climber pulls up).
+        for (int k = 0; k < 2 && pick < 0; ++k) {
+            const int lip = c.handHold(k);
+            if (lip < 0 || lip == c.handHold(1 - k)) continue;
+            const ClimbHold& e = holds[static_cast<size_t>(lip)];
+            if (e.kind != ClimbHold::Kind::Edge || e.ledge < 0 || !c.canSpan(1 - k, lip)) continue;
+            pick = lip;
+            move = 1 - k;
+            from = e.position;
+        }
+        for (size_t i = 0; pick < 0 && i < holds.size(); ++i) {
             const ClimbHold& h = holds[i];
             if (h.kind != ClimbHold::Kind::Edge || h.ledge < 0 || static_cast<int>(i) == h0 || static_cast<int>(i) == h1) continue;
             const float d = ClimbWall::reachDistance(h.position, from);
@@ -770,6 +833,13 @@ Climber::Input ClimbBot::decide(const Climber& c, float dt) {
             from = from2;
         }
     }
+    // The next hold is over on the anchor's side, past it: this hand
+    // matches the anchor's hold, and the other one goes on from there.
+    // The same on an edge with nothing else of it on this hand's side:
+    // both hands on one lip is enough to pull up (or rest) on.
+    if (pick < 0 && c.handHold(move) != anchor && c.canSpan(move, anchor) &&
+        ((nextOnLine >= 0 && c.crossesOver(move, nextOnLine)) || anchorHold.kind == ClimbHold::Kind::Edge))
+        pick = anchor;
     if (pick < 0) {
         // Off the line (a rest took it aside): head back toward the
         // nearest point of it further up.
@@ -841,7 +911,9 @@ Climber::Input ClimbBot::decide(const Climber& c, float dt) {
         for (int i = last; i > pickAt; --i) { // not past a ledge where a rest is due
             const int hold = m_route[static_cast<size_t>(i)];
             const ClimbHold& h = holds[static_cast<size_t>(hold)];
-            if (h.kind == ClimbHold::Kind::Edge || hold == c.handHold(move) || hold == c.handHold(1 - move) || c.holdGone(hold) || h.position.y < from.y) continue;
+            if (h.kind == ClimbHold::Kind::Edge || hold == c.handHold(move) || hold == c.handHold(1 - move) || c.holdGone(hold) || h.position.y < from.y ||
+                c.crossesOver(move, hold))
+                continue;
             if (ClimbWall::reachDistance(h.position, from) > far) continue;
             m_lungeHand = move;
             m_lungePick = hold;

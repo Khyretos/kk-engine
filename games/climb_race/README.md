@@ -153,7 +153,15 @@ A 3, 2, 1 countdown, then GO. Walk to the rock and grab it. On the rock:
   as a jug, and you can mantle over them). Some holds are loose: they
   break off under a lunge and fall down the face.
 - **Matching**: both hands can share one hold, which is how you swap
-  hands on a big jug.
+  hands on a big jug. Matching is cheap (half a precise reach), so it is
+  also how you traverse: match, then lead with the other hand.
+- **Each hand works its own side**: the body is split down the middle.
+  Holds on your left are for the left hand, holds on your right for the
+  right hand, and holds near the middle (between the shoulders) for
+  either. A hand can cross in front of the chest a little past the other
+  shoulder (`crossReach`, 0.3 m) only when the arm really reaches around
+  the front, and never over the other hand's hold. Bots and online
+  climbers follow the same rules (they live in `kke::Climber`).
 - **Real arms**: the hands only go where the body can hang between them.
   A precise reach or a snatch only offers holds the body can hang from
   with the other hand where it is. A lunge can go further, and if the
@@ -442,6 +450,12 @@ How a move works:
   sets the reach, up to `lungeSpan` (2.45 m), 0.3 s, costs 6 to 16. A
   loose hold hit by a lunge breaks: the hand closes on nothing and the
   game gets `brokeHold()`.
+- **Sides** (`onItsSide(hand, point, hips)`, `crossesOver(hand, hold)`):
+  a hold counts as on a hand's side up to `shoulderHalf + crossReach`
+  past the middle, measured along the wall. Past the other shoulder the
+  arm is measured around the front of the chest, so a far cross is out of
+  reach. `canHang` and `usable` refuse holds that break these rules, and
+  `ClimbBot` traverses by matching.
 - **Mantle**: both hands on the same edge and pushing up. `mantleLedge()`
   says which ledge (-1 = the summit, which is the finish).
 

@@ -137,6 +137,7 @@ struct RigidWorld::Impl : public JPH::ContactListener {
         bool kinematic = false;
         bool manual = false; // stepped by stepCharacter() only (input replay)
         double time = 0.0;   // seconds simulated (characterTime)
+        glm::vec3 drawFrom{0.0f}; // feet before the latest physics step (characterDrawPosition)
     };
     void stepCharacter(Character& c, float dt);
     std::unordered_map<CharacterId, Character> characters;
@@ -672,6 +673,7 @@ RigidWorld::CharacterId RigidWorld::addCharacter(const CharacterDesc& d) {
     Impl::Character c;
     c.ch = new JPH::CharacterVirtual(&s, toJR(d.position), JPH::Quat::sIdentity(), 0, &m->system);
     c.desc = d;
+    c.drawFrom = d.position;
     CharacterId id = m->nextCharacter++;
     m->characters.emplace(id, std::move(c));
     return id;
@@ -726,6 +728,14 @@ glm::vec3 RigidWorld::characterPosition(CharacterId id) const {
     return glm::vec3(float(p.GetX()), float(p.GetY()), float(p.GetZ()));
 }
 
+glm::vec3 RigidWorld::characterDrawPosition(CharacterId id, float alpha) const {
+    auto it = m->characters.find(id);
+    if (it == m->characters.end()) return glm::vec3(0.0f);
+    const JPH::RVec3 p = it->second.ch->GetPosition();
+    const glm::vec3 now(float(p.GetX()), float(p.GetY()), float(p.GetZ()));
+    return glm::mix(it->second.drawFrom, now, std::clamp(alpha, 0.0f, 1.0f));
+}
+
 glm::vec3 RigidWorld::characterVelocity(CharacterId id) const {
     auto it = m->characters.find(id);
     return it == m->characters.end() ? glm::vec3(0.0f) : toG(it->second.ch->GetLinearVelocity());
@@ -741,6 +751,7 @@ void RigidWorld::teleportCharacter(CharacterId id, const glm::vec3& feet) {
     if (it == m->characters.end()) return;
     it->second.ch->SetPosition(toJR(feet));
     it->second.ch->SetLinearVelocity(JPH::Vec3::sZero());
+    it->second.drawFrom = feet; // no sweep from where it was
 }
 
 void RigidWorld::setCharacterKinematic(CharacterId id, bool kinematic) {
@@ -755,7 +766,12 @@ bool RigidWorld::characterKinematic(CharacterId id) const {
 
 void RigidWorld::moveCharacter(CharacterId id, const glm::vec3& feet) {
     auto it = m->characters.find(id);
-    if (it != m->characters.end()) it->second.ch->SetPosition(toJR(feet));
+    if (it == m->characters.end()) return;
+    const JPH::RVec3 was = it->second.ch->GetPosition();
+    it->second.ch->SetPosition(toJR(feet));
+    // Moved as it is (a snap to the floor, a kinematic climb): the drawn
+    // position moves with it, keeping whatever step it was between.
+    it->second.drawFrom += feet - glm::vec3(float(was.GetX()), float(was.GetY()), float(was.GetZ()));
 }
 
 void RigidWorld::setCharacterVelocity(CharacterId id, const glm::vec3& velocity) {
@@ -775,7 +791,11 @@ bool RigidWorld::characterManual(CharacterId id) const {
 
 void RigidWorld::stepCharacter(CharacterId id, float dt) {
     auto it = m->characters.find(id);
-    if (it != m->characters.end() && dt > 0.0f) m->stepCharacter(it->second, dt);
+    if (it == m->characters.end() || dt <= 0.0f) return;
+    m->stepCharacter(it->second, dt);
+    // Stepped by the caller (on its own clock): drawn where it is.
+    const JPH::RVec3 p = it->second.ch->GetPosition();
+    it->second.drawFrom = glm::vec3(float(p.GetX()), float(p.GetY()), float(p.GetZ()));
 }
 
 double RigidWorld::characterTime(CharacterId id) const {
@@ -898,8 +918,12 @@ void RigidWorld::step(float dt) {
     if (dt <= 0.0f) return;
     auto t0 = std::chrono::steady_clock::now();
     for (auto& [id, rd] : m->ragdolls) m->applyAssist(rd, dt);
-    for (auto& [id, c] : m->characters)
-        if (!c.manual) m->stepCharacter(c, dt);
+    for (auto& [id, c] : m->characters) {
+        if (c.manual) continue;
+        const JPH::RVec3 p = c.ch->GetPosition();
+        c.drawFrom = glm::vec3(float(p.GetX()), float(p.GetY()), float(p.GetZ()));
+        m->stepCharacter(c, dt);
+    }
     // One collision step per 1/60 s (more for bigger steps).
     const int collisionSteps = std::max(1, static_cast<int>(std::ceil(dt * 60.0f - 0.01f)));
     if (m->cloth) m->cloth->beginStep();

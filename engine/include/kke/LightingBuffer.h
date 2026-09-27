@@ -38,8 +38,10 @@ public:
     // given the real constraint, not an accident.
     // `sky` is the resolved sky (kke::SkyResolver); without one, the sky
     // is off and ambient is Lighting::ambientColor, flat.
+    // `shadowTile` is the part of the shadow map lightViewProj was drawn
+    // into (ShadowMap::tileRect: one tile per view in split screen).
     void update(const Lighting& lighting, const glm::vec3& cameraPos, const glm::mat4& lightViewProj, const glm::mat4& viewProj,
-                const SkyEnvironment* sky = nullptr);
+                const SkyEnvironment* sky = nullptr, const glm::vec4& shadowTile = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
 
     VkDescriptorSetLayout descriptorSetLayout() const { return m_setLayout; }
     VkDescriptorSet descriptorSet() const { return m_descriptorSet; }

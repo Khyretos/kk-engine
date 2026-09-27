@@ -9,37 +9,7 @@
 namespace kke {
 
 ShadowMap::ShadowMap(VulkanDevice& device, uint32_t resolution)
-    : m_device(device), m_resolution(resolution) {
-    // Depth image — same VMA-backed creation pattern already proven in
-    // SwapChain::createDepthResources(), just GPU-only depth used as a
-    // sampled texture afterward rather than the swapchain's own
-    // per-frame depth buffer, hence the extra SAMPLED_BIT usage flag.
-    VkImageCreateInfo imageInfo{};
-    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    imageInfo.imageType = VK_IMAGE_TYPE_2D;
-    imageInfo.extent = { m_resolution, m_resolution, 1 };
-    imageInfo.mipLevels = 1;
-    imageInfo.arrayLayers = 1;
-    imageInfo.format = m_format;
-    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    VmaAllocationCreateInfo allocInfo{};
-    allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-
-    VK_CHECK(vmaCreateImage(m_device.allocator(), &imageInfo, &allocInfo, &m_image, &m_allocation, nullptr));
-
-    VkImageViewCreateInfo viewInfo{};
-    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    viewInfo.image = m_image;
-    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    viewInfo.format = m_format;
-    viewInfo.subresourceRange = { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1 };
-    VK_CHECK(vkCreateImageView(m_device.device(), &viewInfo, nullptr, &m_imageView));
-
+    : m_device(device), m_tile(resolution), m_resolution(resolution) {
     // Depth-compare sampler: each lookup in computeShadow()
     // (pbr_common.glsl, a sampler2DShadow) returns the lit fraction of
     // the 2x2 texels around it, bilinearly weighted, so a 3x3 kernel of
@@ -127,6 +97,49 @@ ShadowMap::ShadowMap(VulkanDevice& device, uint32_t resolution)
     renderPassInfo.pDependencies = dependencies.data();
     VK_CHECK(vkCreateRenderPass(m_device.device(), &renderPassInfo, nullptr, &m_renderPass));
 
+    createTarget();
+}
+
+ShadowMap::~ShadowMap() {
+    VkDevice dev = m_device.device();
+    destroyTarget();
+    if (m_renderPass) vkDestroyRenderPass(dev, m_renderPass, nullptr);
+    if (m_sampler) vkDestroySampler(dev, m_sampler, nullptr);
+}
+
+// The depth image, its view and the framebuffer: m_resolution square
+// (a grid of tiles, one per view, when there are several).
+void ShadowMap::createTarget() {
+    // Depth image — same VMA-backed creation pattern already proven in
+    // SwapChain::createDepthResources(), just GPU-only depth used as a
+    // sampled texture afterward rather than the swapchain's own
+    // per-frame depth buffer, hence the extra SAMPLED_BIT usage flag.
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType = VK_IMAGE_TYPE_2D;
+    imageInfo.extent = { m_resolution, m_resolution, 1 };
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = 1;
+    imageInfo.format = m_format;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VmaAllocationCreateInfo allocInfo{};
+    allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+    VK_CHECK(vmaCreateImage(m_device.allocator(), &imageInfo, &allocInfo, &m_image, &m_allocation, nullptr));
+
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = m_image;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format = m_format;
+    viewInfo.subresourceRange = { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1 };
+    VK_CHECK(vkCreateImageView(m_device.device(), &viewInfo, nullptr, &m_imageView));
+
     VkFramebufferCreateInfo fbInfo{};
     fbInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
     fbInfo.renderPass = m_renderPass;
@@ -138,13 +151,41 @@ ShadowMap::ShadowMap(VulkanDevice& device, uint32_t resolution)
     VK_CHECK(vkCreateFramebuffer(m_device.device(), &fbInfo, nullptr, &m_framebuffer));
 }
 
-ShadowMap::~ShadowMap() {
+void ShadowMap::destroyTarget() {
     VkDevice dev = m_device.device();
     if (m_framebuffer) vkDestroyFramebuffer(dev, m_framebuffer, nullptr);
-    if (m_renderPass) vkDestroyRenderPass(dev, m_renderPass, nullptr);
-    if (m_sampler) vkDestroySampler(dev, m_sampler, nullptr);
     if (m_imageView) vkDestroyImageView(dev, m_imageView, nullptr);
     if (m_image) vmaDestroyImage(m_device.allocator(), m_image, m_allocation);
+    m_framebuffer = VK_NULL_HANDLE;
+    m_imageView = VK_NULL_HANDLE;
+    m_image = VK_NULL_HANDLE;
+    m_allocation = VK_NULL_HANDLE;
+}
+
+bool ShadowMap::setTiles(uint32_t tiles) {
+    const uint32_t grid = tiles <= 1 ? 1u : 2u; // kMaxViews is 4: at most 2 x 2
+    if (grid == m_grid) return false;
+    vkDeviceWaitIdle(m_device.device()); // frames in flight still sample the old image
+    destroyTarget();
+    m_grid = grid;
+    m_resolution = m_tile * grid;
+    createTarget();
+    return true;
+}
+
+glm::vec4 ShadowMap::tileRect(uint32_t tile) const {
+    const float size = 1.0f / static_cast<float>(m_grid);
+    const uint32_t t = tile % (m_grid * m_grid);
+    return { static_cast<float>(t % m_grid) * size, static_cast<float>(t / m_grid) * size, size, size };
+}
+
+void ShadowMap::beginTile(VkCommandBuffer cmd, uint32_t tile) {
+    const glm::vec4 r = tileRect(tile);
+    const float res = static_cast<float>(m_resolution);
+    VkViewport viewport{ r.x * res, r.y * res, static_cast<float>(m_tile), static_cast<float>(m_tile), 0.0f, 1.0f };
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+    VkRect2D scissor{ { static_cast<int32_t>(r.x * res), static_cast<int32_t>(r.y * res) }, { m_tile, m_tile } };
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
 }
 
 PipelineConfig ShadowMap::casterConfig() {
