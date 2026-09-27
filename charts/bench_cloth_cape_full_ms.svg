@@ -3,10 +3,10 @@
 <text x="36" y="16" font-size="13" font-weight="bold" fill="#222">bench.cloth_cape_full_ms</text>
 <text x="604" y="16" text-anchor="end" fill="#666">lower is better</text>
 <line x1="36" y1="144" x2="604" y2="144" stroke="#ccc"/>
-<text x="32" y="40.0" text-anchor="end" fill="#666">10.53</text>
+<text x="32" y="40.0" text-anchor="end" fill="#666">10.57</text>
 <text x="32" y="144.0" text-anchor="end" fill="#666">0.0000</text>
 <text x="36" y="160" fill="#666">37c0ad1</text>
-<text x="604" y="160" text-anchor="end" fill="#666">6dd27fd</text>
-<path d="M36.0,65.4 L107.0,65.7 L178.0,93.9 L249.0,87.1 L320.0,96.6 L391.0,65.2 L462.0,79.0 L533.0,65.7 L604.0,50.1" fill="none" stroke="#2563eb" stroke-width="2"/>
-<g fill="#2563eb"><circle cx="36.0" cy="65.4" r="2.5"><title>37c0ad1: 7.66</title></circle><circle cx="107.0" cy="65.7" r="2.5"><title>f15c3a1: 7.64</title></circle><circle cx="178.0" cy="93.9" r="2.5"><title>f34abdd: 4.88</title></circle><circle cx="249.0" cy="87.1" r="2.5"><title>be90a93: 5.54</title></circle><circle cx="320.0" cy="96.6" r="2.5"><title>9b9ace6: 4.63</title></circle><circle cx="391.0" cy="65.2" r="2.5"><title>1ac71ef: 7.68</title></circle><circle cx="462.0" cy="79.0" r="2.5"><title>f313161: 6.33</title></circle><circle cx="533.0" cy="65.7" r="2.5"><title>5b0ce78: 7.63</title></circle><circle cx="604.0" cy="50.1" r="2.5"><title>6dd27fd: 9.16</title></circle></g>
+<text x="604" y="160" text-anchor="end" fill="#666">48702ed</text>
+<path d="M36.0,65.7 L99.1,65.9 L162.2,94.1 L225.3,87.3 L288.4,96.7 L351.6,65.5 L414.7,79.3 L477.8,66.0 L540.9,50.4 L604.0,50.1" fill="none" stroke="#2563eb" stroke-width="2"/>
+<g fill="#2563eb"><circle cx="36.0" cy="65.7" r="2.5"><title>37c0ad1: 7.66</title></circle><circle cx="99.1" cy="65.9" r="2.5"><title>f15c3a1: 7.64</title></circle><circle cx="162.2" cy="94.1" r="2.5"><title>f34abdd: 4.88</title></circle><circle cx="225.3" cy="87.3" r="2.5"><title>be90a93: 5.54</title></circle><circle cx="288.4" cy="96.7" r="2.5"><title>9b9ace6: 4.63</title></circle><circle cx="351.6" cy="65.5" r="2.5"><title>1ac71ef: 7.68</title></circle><circle cx="414.7" cy="79.3" r="2.5"><title>f313161: 6.33</title></circle><circle cx="477.8" cy="66.0" r="2.5"><title>5b0ce78: 7.63</title></circle><circle cx="540.9" cy="50.4" r="2.5"><title>6dd27fd: 9.16</title></circle><circle cx="604.0" cy="50.1" r="2.5"><title>48702ed: 9.19</title></circle></g>
 </svg>

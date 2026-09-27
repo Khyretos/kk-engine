@@ -2,42 +2,45 @@
 
 Written by `benchmarks/track.py` from the Benchmarks workflow on every push to `main`; don't edit by hand. What the numbers mean: [docs/BENCHMARKS.md](https://github.com/Khyretos/kk-engine/blob/main/docs/BENCHMARKS.md).
 
-Latest: `6dd27fd572` (2026-09-27T15:54:16Z) on AMD EPYC 7763 64-Core Processor                , llvmpipe (LLVM 20.1.2, 256 bits). 76 run(s) tracked.
+Latest: `48702ed335` (2026-09-27T16:32:55Z) on INTEL(R) XEON(R) PLATINUM 8573C, llvmpipe (LLVM 20.1.2, 256 bits). 77 run(s) tracked.
 
 Every run is on a shared GitHub runner (4 vCPUs, lavapipe software Vulkan), so single points wobble; look for steps that stay.
 
 | Metric | Latest | Best | Runs |
 |---|---:|---:|---:|
-| `bench.audio_mix_32_voices_full_ms` | 0.1853 | 0.1096 | 70 |
-| `bench.audio_mix_32_voices_ms` | 0.0939 | 0.0614 | 76 |
-| `bench.cloth_16x24_basic_ms` | 4.64 | 2.91 | 20 |
-| `bench.cloth_16x24_full_ms` | 8.73 | 5.31 | 20 |
-| `bench.cloth_1x32_basic_ms` | 0.5283 | 0.3282 | 20 |
-| `bench.cloth_1x32_full_ms` | 1.08 | 0.6111 | 20 |
-| `bench.cloth_1x32_off_ms` | 0.5269 | 0.3291 | 20 |
-| `bench.cloth_1x64_basic_ms` | 2.23 | 1.38 | 20 |
-| `bench.cloth_1x64_full_ms` | 40.96 | 5.27 | 20 |
-| `bench.cloth_cape_basic_ms` | 0.4999 | 0.3091 | 9 |
-| `bench.cloth_cape_full_ms` | 9.16 | 4.63 | 9 |
-| `bench.fracture_bake_cube_ms` | 7.23 | 4.63 | 76 |
-| `bench.hair_1x100_straight_ms` | 0.2012 | 0.1071 | 15 |
-| `bench.hair_1x400_curly_ms` | 2.17 | 1.17 | 15 |
-| `bench.hair_1x400_long_ms` | 1.06 | 0.5540 | 15 |
-| `bench.hair_8x200_long_ms` | 4.16 | 2.16 | 15 |
-| `bench.impact_synth_8_materials_ms` | 1.03 | 0.9068 | 76 |
-| `bench.lua_think_50_hooks_ms` | 0.2766 | 0.1408 | 76 |
-| `bench.net_snapshot_256_bodies_ms` | 0.0855 | 0.0503 | 76 |
-| `bench.particle_fluid_2000_ms` | 3.95 | 2.58 | 76 |
-| `bench.rigid_crates_400_ms` | 1.60 | 0.9864 | 76 |
-| `bench.rigid_raycast_1000_ms` | 0.4941 | 0.3228 | 76 |
-| `stress.crates.fps_avg` | 10.77 | 22.85 | 76 |
-| `stress.crates.physics_avg_ms` | 0.4394 | 0.2847 | 76 |
-| `stress.fps_1pct_low` | 5.56 | 16.28 | 76 |
-| `stress.fps_avg` | 10.61 | 23.34 | 76 |
-| `stress.frame_p99_ms` | 119 | 57.86 | 76 |
-| `stress.impacts.fps_avg` | 9.06 | 19.00 | 76 |
-| `stress.peak_rss_mb` | 413 | 251 | 76 |
-| `stress.walk.fps_avg` | 12.27 | 29.14 | 76 |
+| `bench.audio_mix_32_voices_full_ms` | 0.1564 | 0.1096 | 71 |
+| `bench.audio_mix_32_voices_ms` | 0.0829 | 0.0614 | 77 |
+| `bench.cloth_16x24_basic_ms` | 4.04 | 2.91 | 21 |
+| `bench.cloth_16x24_full_ms` | 8.01 | 5.31 | 21 |
+| `bench.cloth_1x32_basic_ms` | 0.4632 | 0.3282 | 21 |
+| `bench.cloth_1x32_full_ms` | 0.9928 | 0.6111 | 21 |
+| `bench.cloth_1x32_off_ms` | 0.4585 | 0.3291 | 21 |
+| `bench.cloth_1x64_basic_ms` | 1.95 | 1.38 | 21 |
+| `bench.cloth_1x64_full_ms` | 41.87 | 5.27 | 21 |
+| `bench.cloth_cape_basic_ms` | 0.4317 | 0.3091 | 10 |
+| `bench.cloth_cape_full_ms` | 9.19 | 4.63 | 10 |
+| `bench.fracture_bake_cube_ms` | 7.08 | 4.63 | 77 |
+| `bench.hair_1x100_straight_ms` | 0.1641 | 0.1071 | 16 |
+| `bench.hair_1x200_3b_ms` | 0.4540 | 0.4540 | 1 |
+| `bench.hair_1x200_4c_ms` | 0.2404 | 0.2404 | 1 |
+| `bench.hair_1x200_bantu_ms` | 0.5872 | 0.5872 | 1 |
+| `bench.hair_1x400_curly_ms` | 1.69 | 1.17 | 16 |
+| `bench.hair_1x400_long_ms` | 0.8605 | 0.5540 | 16 |
+| `bench.hair_8x200_long_ms` | 3.46 | 2.16 | 16 |
+| `bench.impact_synth_8_materials_ms` | 1.43 | 0.9068 | 77 |
+| `bench.lua_think_50_hooks_ms` | 0.2493 | 0.1408 | 77 |
+| `bench.net_snapshot_256_bodies_ms` | 0.0981 | 0.0503 | 77 |
+| `bench.particle_fluid_2000_ms` | 4.12 | 2.58 | 77 |
+| `bench.rigid_crates_400_ms` | 1.58 | 0.9864 | 77 |
+| `bench.rigid_raycast_1000_ms` | 0.5113 | 0.3228 | 77 |
+| `stress.crates.fps_avg` | 11.94 | 22.85 | 77 |
+| `stress.crates.physics_avg_ms` | 0.4656 | 0.2847 | 77 |
+| `stress.fps_1pct_low` | 6.87 | 16.28 | 77 |
+| `stress.fps_avg` | 12.08 | 23.34 | 77 |
+| `stress.frame_p99_ms` | 103 | 57.86 | 77 |
+| `stress.impacts.fps_avg` | 10.05 | 19.00 | 77 |
+| `stress.peak_rss_mb` | 388 | 251 | 77 |
+| `stress.walk.fps_avg` | 14.69 | 29.14 | 77 |
 
 ![bench.audio_mix_32_voices_full_ms](charts/bench_audio_mix_32_voices_full_ms.svg)
 
@@ -64,6 +67,12 @@ Every run is on a shared GitHub runner (4 vCPUs, lavapipe software Vulkan), so s
 ![bench.fracture_bake_cube_ms](charts/bench_fracture_bake_cube_ms.svg)
 
 ![bench.hair_1x100_straight_ms](charts/bench_hair_1x100_straight_ms.svg)
+
+![bench.hair_1x200_3b_ms](charts/bench_hair_1x200_3b_ms.svg)
+
+![bench.hair_1x200_4c_ms](charts/bench_hair_1x200_4c_ms.svg)
+
+![bench.hair_1x200_bantu_ms](charts/bench_hair_1x200_bantu_ms.svg)
 
 ![bench.hair_1x400_curly_ms](charts/bench_hair_1x400_curly_ms.svg)
 
