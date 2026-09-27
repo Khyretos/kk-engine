@@ -51,6 +51,8 @@ KKE_BENCHMARK=1 ./cloth_demo                              # tours every scene an
 | `KKE_HAIR_GUIDES`, `KKE_HAIR_PER_GUIDE` | Hair scene: guide strands per head, hairs drawn per guide (default 160, and 0 = as the style draws) |
 | `KKE_HAIR_SHOW=types34\|styles\|types12\|classic` | Hair scene: the catalog's page (default types 3 and 4) |
 | `KKE_HAIR_STYLES=4c,afro` | Hair scene: exactly these heads, from `hairStyleNames()` and `hairstyleNames()` |
+| `KKE_CLOTH_GPU=0\|shared` | Search for cloth pairs on the CPU only, or on the graphics queue (docs/CLOTH.md, "On the GPU") |
+| `KKE_CLOTH_GPU_CHECK=1` | Search on the GPU and the CPU and log any difference |
 | `KKE_CLOTH_TOUR=1` | Visit every scene for 14 s each (on by itself under `KKE_BENCHMARK`) |
 
 Rebindings are saved to `cloth_demo_input.json` (the name passed to

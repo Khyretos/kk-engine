@@ -21,8 +21,14 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <unordered_map>
+#include <utility>
 #include <vector>
+
+namespace kke {
+class ClothGpu;
+}
 
 namespace kke::detail {
 
@@ -58,6 +64,8 @@ public:
     ClothStats stats(uint32_t id) const;
     void setWind(const glm::vec3& v);
     glm::vec3 wind() const { return m_wind; }
+    // Full protection's pair search on the GPU (null: the CPU).
+    void setGpu(std::shared_ptr<ClothGpu> gpu) { m_gpu = std::move(gpu); }
     double lastMs() const { return m_lastMs; }
     // Called by RigidWorld::step before Jolt's update. Returns how many
     // sub-steps to cut each collision step into: more than one while the
@@ -208,6 +216,26 @@ private:
     void parallel(uint32_t count, const std::function<void(uint32_t, uint32_t, Worker&)>& fn);
     Grid m_triGrid, m_edgeGrid;
     std::vector<Cloth*> m_active;
+    // The GPU's search (kke::ClothGpu): the queries packed for it, its
+    // answers, and every edge in a hash of its own (the CPU's holds only
+    // those near another surface, known only after the vertex queries).
+    std::shared_ptr<ClothGpu> m_gpu;
+    bool m_gpuCheck = false; // KKE_CLOTH_GPU_CHECK=1: the CPU searches too, and differences are logged
+    std::vector<uint32_t> m_gpuWords, m_gpuVt, m_gpuEe, m_gpuFlags;
+    std::vector<CellBox> m_vertBox, m_edgeAllBox;
+    Grid m_edgeAllGrid;
+    bool searchOnGpu(size_t triTotal, size_t edgeTotal, float cell);
+    void searchOnCpu(size_t triTotal, size_t edgeTotal, float cell);
+    std::vector<uint8_t> m_edgeLooked; // per edge: its patch is looked at
+    uint64_t m_gpuChecks = 0, m_gpuDiffered = 0;
+    // Seen from cell c only when it is the first cell (per axis) that the
+    // query's box (from qa) and this box both cover, and the box covers it
+    // (it is not in the bucket only by sharing a hash): once per pair,
+    // whichever cells they share, the same on the CPU and the GPU.
+    static bool firstShared(const glm::ivec3& c, const glm::ivec3& qa, const CellBox& box) {
+        if (glm::any(glm::lessThan(c, box.lo)) || glm::any(glm::greaterThan(c, box.hi))) return false;
+        return c == glm::max(qa, box.lo);
+    }
 };
 
 } // namespace kke::detail

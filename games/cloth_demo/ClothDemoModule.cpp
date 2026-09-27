@@ -2,6 +2,7 @@
 
 #include "kke/Application.h"
 #include "kke/BenchRecorder.h"
+#include "kke/ClothGpu.h"
 #include "kke/Log.h"
 #include "kke/modules/DemoPanelModule.h"
 #include "kke/modules/InputModule.h"
@@ -115,6 +116,7 @@ const char* protectionName(kke::ClothProtection p) {
 void ClothDemoModule::init(kke::Application& app) {
     m_app = &app;
     m_camera = app.getModule<kke::OrbitCameraModule>();
+    m_gpu = kke::ClothGpu::create(app.device());
     m_spheres = std::make_unique<kke::SphereImpostorRenderer>(app);
     m_floor = std::make_unique<kke::DynamicMeshRenderer>(app);
     {
@@ -166,6 +168,7 @@ void ClothDemoModule::clear() {
     m_app->renderer().retire(std::shared_ptr<void>(std::move(last)));
     // A new world per scene: nothing of the last one lingers in Jolt.
     m_world = std::make_unique<kke::RigidWorld>();
+    m_world->setClothGpu(m_gpu); // Full protection's pair search on the GPU, when it has a queue for it
     kke::RigidWorld::BodyDesc g;
     g.motion = kke::RigidWorld::Motion::Static;
     g.halfExtents = glm::vec3(30.0f, 0.5f, 30.0f);
@@ -883,6 +886,15 @@ void ClothDemoModule::buildPanel() {
             undone += st.crossingsUndone;
         }
         return "Cloth contacts " + std::to_string(contacts) + ", crossings undone " + std::to_string(undone);
+    });
+    cost.text([this] {
+        if (m_scene == Scene::Hair) return std::string();
+        if (!m_gpu) return std::string("Pair search on the CPU (this GPU has no compute queue of its own)");
+        const kke::ClothGpu::Stats st = m_gpu->stats();
+        char buf[160];
+        std::snprintf(buf, sizeof(buf), "Pair search on the GPU: %.2f ms a search (%llu searched, %llu left to the CPU)", st.lastMs,
+                      static_cast<unsigned long long>(st.searches), static_cast<unsigned long long>(st.declined));
+        return std::string(buf);
     });
 }
 

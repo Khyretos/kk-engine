@@ -197,7 +197,31 @@ fixing itself is under 5%). What keeps that down:
 
 What still costs: cloth that is really close to itself, like a blanket in
 a heap or a cape flapping into folds. A light cape in strong wind costs up
-to 20 times Basic. Moving the search to the GPU is the next step for that.
+to 20 times Basic. The search on the GPU (below) is for that.
+
+### On the GPU
+
+On a GPU with a queue for compute of its own (most desktop GPUs), the
+search for pairs runs there. The CPU still builds the grid and does the
+fixing; the GPU looks at every candidate pair at once, where the CPU goes
+through dozens per vertex for each real pair in a heap. It gives the same
+pairs as the CPU (sometimes one or two more, which the fixing then finds
+aren't touching), so nothing about clipping changes.
+
+The engine turns it on by itself (`RigidBodyModule`); a game with its own
+`RigidWorld` does `world.setClothGpu(kke::ClothGpu::create(app.device()))`.
+`create()` gives null where there is no such queue, and the CPU searches
+as before. The CPU also takes over for a step whenever there are more pairs
+than the GPU's buffers hold (they grow for the next one).
+
+| Variable | What |
+| --- | --- |
+| `KKE_CLOTH_GPU=0` | Search on the CPU only |
+| `KKE_CLOTH_GPU=shared` | Use the graphics queue (a GPU with one queue; the search then waits for the frame) |
+| `KKE_CLOTH_GPU_CHECK=1` | Search on both and log any difference (for testing; slow) |
+
+`ClothGpu::stats()` gives searches done, searches left to the CPU and the
+last one's time; the demo's panel shows them.
 
 Rules of thumb:
 

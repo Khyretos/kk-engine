@@ -14,6 +14,7 @@
 
 namespace kke {
 
+class ClothGpu;
 struct RagdollDesc;
 struct RagdollDrive;
 
@@ -253,6 +254,9 @@ public:
     void setWind(const glm::vec3& velocity); // m/s, pushes on every cloth by its fabric's airDrag
     glm::vec3 wind() const;
     double lastClothMs() const;            // the engine's protection pass, last step (Jolt's own cloth solve is in lastStepMs)
+    // Full protection's pair search on the GPU (kke/ClothGpu.h;
+    // ClothGpu::create(app.device()), null = the CPU, the default).
+    void setClothGpu(std::shared_ptr<ClothGpu> gpu);
 
     // Hair (kke/Hair.h, docs/HAIR.md): guide strands as Jolt soft bodies,
     // stepped with the cloth and blown by setWind. Positions are world

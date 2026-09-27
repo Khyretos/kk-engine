@@ -160,8 +160,12 @@ struct RigidWorld::Impl : public JPH::ContactListener {
     double stepMs = 0.0;
     double simulatedTime = 0.0;
     std::unique_ptr<detail::ClothSystem> cloth; // made on the first addCloth (it adds a step listener)
+    std::shared_ptr<ClothGpu> clothGpu;
     detail::ClothSystem& clothSystem() {
-        if (!cloth) cloth = std::make_unique<detail::ClothSystem>(system, Layers::kCloth, *temp, jobs.get(), settings.clothSubsteps);
+        if (!cloth) {
+            cloth = std::make_unique<detail::ClothSystem>(system, Layers::kCloth, *temp, jobs.get(), settings.clothSubsteps);
+            cloth->setGpu(clothGpu);
+        }
         return *cloth;
     }
 
@@ -957,6 +961,10 @@ ClothStats RigidWorld::clothStats(ClothId id) const { return m->cloth ? m->cloth
 void RigidWorld::setWind(const glm::vec3& velocity) { m->clothSystem().setWind(velocity); }
 glm::vec3 RigidWorld::wind() const { return m->cloth ? m->cloth->wind() : glm::vec3(0.0f); }
 double RigidWorld::lastClothMs() const { return m->cloth ? m->cloth->lastMs() : 0.0; }
+void RigidWorld::setClothGpu(std::shared_ptr<ClothGpu> gpu) {
+    m->clothGpu = std::move(gpu);
+    if (m->cloth) m->cloth->setGpu(m->clothGpu);
+}
 RigidWorld::HairId RigidWorld::addHair(const HairDesc& desc) { return m->clothSystem().addHair(desc); }
 void RigidWorld::removeHair(HairId id) {
     if (m->cloth) m->cloth->removeHair(id);

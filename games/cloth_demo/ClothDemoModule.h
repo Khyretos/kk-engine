@@ -109,6 +109,7 @@ private:
     kke::Application* m_app = nullptr;
     kke::OrbitCameraModule* m_camera = nullptr;
     std::unique_ptr<kke::RigidWorld> m_world;
+    std::shared_ptr<kke::ClothGpu> m_gpu; // null: the CPU searches
     std::unique_ptr<kke::SphereImpostorRenderer> m_spheres;
     std::unique_ptr<kke::DynamicMeshRenderer> m_floor;
     std::vector<std::unique_ptr<Piece>> m_cloth;

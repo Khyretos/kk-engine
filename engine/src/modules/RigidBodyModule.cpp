@@ -1,6 +1,7 @@
 #include "kke/modules/RigidBodyModule.h"
 
 #include "kke/Application.h"
+#include "kke/ClothGpu.h"
 #include "kke/Log.h"
 #include "kke/PhysicsBridge.h"
 #include "kke/PhysicsWorld.h"
@@ -10,6 +11,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <exception>
 
 namespace kke {
 
@@ -22,6 +24,13 @@ void RigidBodyModule::init(Application& app) {
     if (m_settings.threads < 0) m_settings.threads = std::max(0, app.resourceBudget().workerThreads - 1);
     if (const char* t = std::getenv("KKE_RIGID_THREADS")) m_settings.threads = std::atoi(t);
     m_world = std::make_unique<RigidWorld>(m_settings);
+    // Full cloth protection searches its pairs on the GPU when the GPU has
+    // a queue of its own for it (kke/ClothGpu.h); otherwise on the CPU.
+    try {
+        m_world->setClothGpu(ClothGpu::create(app.device()));
+    } catch (const std::exception& e) {
+        log::get(name())->info("cloth pairs are searched on the CPU: {}", e.what());
+    }
     log::get(name())->info("Jolt rigid-body world ready ({} max bodies)", m_settings.maxBodies);
 }
 
