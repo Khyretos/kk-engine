@@ -69,9 +69,9 @@ Notes from the code:
   touched (`InputModule::promptText`).
 - The fight starts from `InputModule::defineCharacterActions`, then clears
   the bindings of the actions a boxer does not use (jump, sprint, fire,
-  look and so on). `audio.ping` (Q, D-pad down) and `voice.talk` (B key)
-  keep their engine defaults; the AudioModule's accessibility ping still
-  answers Q.
+  look and so on), including `voice.talk`, since the duel has no voice
+  chat. `audio.ping` (Q, D-pad down) keeps its engine default and plays
+  the AudioModule's accessibility ping.
 - During the between-rounds pause only player 1's `duel.again` skips the
   wait; at the end of the match either player's does.
 

@@ -77,8 +77,9 @@ Notes from the code:
 - Button names are positions (SDL's `WEST`, `NORTH`, `SOUTH`), so on a
   PlayStation pad X is Square, Y is Triangle, A is Cross. The hint line
   shows the glyphs of the device last used.
-- `audio.ping` (Q, D-pad down) and `voice.talk` (B key) keep their engine
-  defaults from `defineCharacterActions`; Q plays the AudioModule's
+- `voice.talk` is cleared with the other unused character actions (the
+  horde has no voice chat). `audio.ping` (Q, D-pad down) keeps its engine
+  default from `defineCharacterActions` and plays the AudioModule's
   accessibility ping.
 
 ## How it plays
