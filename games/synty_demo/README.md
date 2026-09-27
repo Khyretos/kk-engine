@@ -72,7 +72,7 @@ The actions are made in `SyntySceneModule::defineInput`
 | Pan the camera | right-drag | no controller binding yet |
 | Zoom (`camera.zoom`) | mouse wheel | d-pad up (closer) / down (further) |
 | Settings panel (`panel.toggle`) | F3 or Esc, or click it | View (Back) |
-| Engine developer panels (ImGui) | F1 | no controller binding yet |
+| Engine developer panels (ImGui) | F1 | none (developer tools) |
 | Quit | the panel's Quit row (Esc opens the panel) | the panel's Quit row |
 
 Notes from the code:
@@ -150,18 +150,19 @@ way it faced before, and it goes back to what it was doing.
 
 1. `InputModule` (`synty_demo_input.json`)
 2. `UiModule` (RmlUi, for the panel)
-3. `OrbitCameraModule` (distance 9 m, pitch -0.35, yaw 2.85, target (0, 0.9, -1.5)), `setPadControls(true)`
-4. `ModelModule`: loads, skins and draws every FBX
-5. `PhysicsModule` (FEMFX), only with `KKE_ENABLE_FEMFX`: render scale 1,
+3. `AudioModule`, its panel hidden: it plays the mood's ambience loop
+4. `OrbitCameraModule` (distance 9 m, pitch -0.35, yaw 2.85, target (0, 0.9, -1.5)), `setPadControls(true)`
+5. `ModelModule`: loads, skins and draws every FBX
+6. `PhysicsModule` (FEMFX), only with `KKE_ENABLE_FEMFX`: render scale 1,
    no starting objects, and `setDrawGround(false)` because the level
    draws its own floor
-6. `RigidBodyModule` (Jolt), only with `KKE_ENABLE_JOLT`
-7. `PhysicsBridgeModule`, only when both are on: Jolt ragdoll limbs and
+7. `RigidBodyModule` (Jolt), only with `KKE_ENABLE_JOLT`
+8. `PhysicsBridgeModule`, only when both are on: Jolt ragdoll limbs and
    FEMFX glass push each other
-8. `kke_demo::SyntySceneModule`, the demo; it declares `ModelModule` as a
+9. `kke_demo::SyntySceneModule`, the demo; it declares `ModelModule` as a
    required dependency ("loads and draws the Synty FBX models")
-9. `DemoPanelModule("Characters")` with `setDeveloperPanelsKey(false)`
-10. `DebugControlModule` and `StatsModule`
+10. `DemoPanelModule("Characters")` with `setDeveloperPanelsKey(false)`
+11. `DebugControlModule` and `StatsModule`
 
 The camera, physics, bridge, debug control and stats modules are passed
 to `scene.setEnginePanels(...)`, which hides their ImGui windows until F1.
@@ -552,9 +553,8 @@ What happens when something is missing:
 
 The `morning` mood's sky picture (Qwantani Mid Morning, CC0 Poly Haven)
 and ambience (`meadow_day`) are fetched or shipped for every demo; they
-are not packs. Only `AudioModule` plays a mood's ambience, and this demo
-does not add one, so the meadow loop is not heard (sea_demo and melt_demo
-add one for this reason).
+are not packs. Only `AudioModule` plays a mood's ambience, so the demo
+adds one (with its panel hidden) and the meadow loop plays.
 
 ## Make a game like this
 

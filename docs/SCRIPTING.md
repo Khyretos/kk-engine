@@ -9,7 +9,7 @@ tests: `tests/test_script_vm.cpp`. Examples, both in kke_demo:
   with a score HUD, a timer and a results screen, in one file. Press T.
   Its README walks through it.
 - `games/showcase/scripts/toys.lua`: G builds a crate tower, B throws a
-  ball, N clears.
+  ball, N clears (on a pad: RB tower, View ball, hold View to clear).
 
 ## Using it
 

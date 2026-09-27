@@ -68,7 +68,7 @@ The pad buttons do exactly what a click at the crosshair would.
 | Zoom (`camera.zoom`) | mouse wheel | d-pad up (closer) / down (further) |
 | Move the camera target | WASD (Q / E down / up, Shift faster) | the left stick (above) |
 | Settings panel (`panel.toggle`) | F3 or Esc, or click it | View (Back) |
-| Engine developer panels (ImGui) | F1, developer builds only | no controller binding yet |
+| Engine developer panels (ImGui) | F1, developer builds only | none (developer tools) |
 | Quit | the panel's Quit row (Esc opens the panel) | the panel's Quit row |
 
 Notes from the code:
@@ -136,10 +136,12 @@ The panel lists each creature's gait, speed, head turn and state
 2. `RigidBodyModule` (Jolt)
 3. `InputModule` (`procedural_demo_input.json`)
 4. `UiModule` (RmlUi, for the panel)
-5. `OrbitCameraModule`, with `setPadControls(true)` and `setPadPan(true)`
-6. `procedural_demo::ProceduralDemoModule`
-7. `DemoPanelModule("Procedural animation")` with `setPadCrosshair(true)`
-8. `StatsModule`, its window hidden
+5. `AudioModule`, its panel hidden: it plays the mood's ambience loop
+   (`meadow_day`)
+6. `OrbitCameraModule`, with `setPadControls(true)` and `setPadPan(true)`
+7. `procedural_demo::ProceduralDemoModule`
+8. `DemoPanelModule("Procedural animation")` with `setPadCrosshair(true)`
+9. `StatsModule`, its window hidden
 
 `ProceduralDemoModule::init` builds the ground, makes the four creatures,
 places them, reads the `KKE_PROC_*` switches, and puts the orbit camera in
