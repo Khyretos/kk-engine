@@ -70,10 +70,13 @@ $leak"
 
 # --- Every demo must be there and executable. ---------------------------
 demos=()
-for d in kke_demo kke_basics sandbox physics_demo melt_demo jiggle_demo sea_demo imgui_demo rmlui_demo synty_demo audio_demo; do
+for d in kke_demo kke_basics sandbox physics_demo melt_demo jiggle_demo sea_demo imgui_demo rmlui_demo synty_demo audio_demo \
+         climb_race procedural_demo farm_demo pet_companion platoon duel goblin_horde cookbook kke_benchmark; do
     if [ -f "$stage/$d$exe" ]; then demos+=("$d"); fi
 done
 [ -f "$stage/kke_demo$exe" ] || die "kke_demo$exe is missing from $bin"
+[ -f "$stage/kke_benchmark$exe" ] || die "kke_benchmark$exe is missing from $bin (KKE_ENABLE_BENCHMARKS=OFF?)"
+[ -f "$stage/benchmark_suite.yaml" ] || die "benchmark_suite.yaml is missing from $bin"
 
 # --- Strip symbols (optional). -----------------------------------------
 if [ -n "$strip_tool" ]; then
@@ -121,6 +124,21 @@ cp "$repo/LICENSE" "$stage/LICENSE.txt"
     echo "Demos built on paid art packs (sandbox, synty_demo) show an 'assets not"
     echo "found' screen: those packs are not redistributable. Point KKE_ASSETS_DIR"
     echo "at your own copy of the packs to use them (docs/SCENES.md)."
+    echo
+    echo "BENCHMARK: how well does it run on this computer?"
+    echo "  1. Close other programs (and plug a laptop in)."
+    if [ "$platform" = windows ]; then
+        echo "  2. Double-click kke_benchmark.exe. A black window shows the progress."
+    else
+        echo "  2. Run ./kke_benchmark from a terminal in this folder."
+    fi
+    echo "  3. The demos open one after another and play by themselves, about"
+    echo "     10 minutes in all (kke_benchmark --quick: about 4). Don't touch"
+    echo "     the mouse or keyboard meanwhile."
+    echo "  4. At the end the benchmark-results folder opens. Send the file"
+    echo "     kke-benchmark-<date>_<time>.json from it back (the .txt next to"
+    echo "     it is the same result for you to read). It holds your CPU, GPU,"
+    echo "     driver, OS, RAM and computer name, nothing else about you."
     echo
     echo "Licence: MIT (LICENSE.txt). Bundled libraries: THIRD_PARTY_LICENSES.txt."
 } > "$stage/README.txt"

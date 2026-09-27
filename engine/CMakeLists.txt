@@ -18,6 +18,7 @@ set(ENGINE_SOURCES
     src/ModelAsset.cpp
     src/Ragdoll.cpp
     src/BenchmarkReport.cpp
+    src/BenchRecorder.cpp
     src/AssetCatalog.cpp
     src/Picking.cpp
     src/DrawOrder.cpp
@@ -161,6 +162,7 @@ set(ENGINE_HEADERS
     include/kke/ModelAsset.h
     include/kke/Ragdoll.h
     include/kke/BenchmarkReport.h
+    include/kke/BenchRecorder.h
     include/kke/AssetCatalog.h
     include/kke/Picking.h
     include/kke/PlayBlocks.h
@@ -423,6 +425,15 @@ endif()
 # Recorded in benchmark reports (kke/BenchmarkReport.h) so results from
 # Debug and Release builds are never confused with each other.
 target_compile_definitions(kke_engine PRIVATE KKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}")
+# ...and which code: the release name (the Release workflow passes the
+# tag) and the commit this build tree was configured at.
+set(KKE_VERSION_NAME "dev" CACHE STRING "Version name written into benchmark reports (the Release workflow sets the tag)")
+execute_process(COMMAND git rev-parse --short=10 HEAD WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                OUTPUT_VARIABLE _kke_commit OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET RESULT_VARIABLE _kke_commit_rc)
+if(NOT _kke_commit_rc EQUAL 0 OR _kke_commit STREQUAL "")
+    set(_kke_commit "unknown")
+endif()
+target_compile_definitions(kke_engine PRIVATE KKE_VERSION_NAME="${KKE_VERSION_NAME}" KKE_GIT_COMMIT="${_kke_commit}")
 
 # The hardware target a build starts on when KKE_TARGET isn't set
 # (kke/HardwareTarget.h). Empty = detect the device. The hardware presets

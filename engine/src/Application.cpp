@@ -4,6 +4,9 @@
 #include "kke/EngineSettings.h"
 #include "kke/LogoIntro.h"
 #include "kke/DevTools.h"
+#include "kke/BenchRecorder.h"
+#include "kke/BenchmarkReport.h"
+#include "kke/Platform.h"
 
 #include <cstdlib>
 #include "kke/Log.h"
@@ -14,6 +17,8 @@
 #include <cctype>
 #include <chrono>
 #include <filesystem>
+#include <fstream>
+#include <nlohmann/json.hpp>
 #include <system_error>
 #include <thread>
 #include <queue>
@@ -63,6 +68,7 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
     // exists, so every relative path the engine opens afterwards resolves.
     : m_window((g_runtimeDirNote = enterRuntimeDirectory(), title), width, height), m_fixedDt(1.0f / fixedUpdateHz) {
     log::init(title);
+    m_title = title;
     if (!g_runtimeDirNote.empty()) log::get("Application")->info("{}", g_runtimeDirNote);
     // A game may ship its own tiers or tune the built-in ones
     // (targets.json / targets.yml next to the executable).
@@ -290,6 +296,9 @@ Application::~Application() {
 // running exactly as if this one module didn't exist.
 void Application::safeInvoke(Module* m, const char* stage, const std::function<void()>& fn) {
     if (m_faultedModules.count(m)) return;
+    const bool timed = m_bench && !m_benchModuleIndex.empty();
+    const auto started = timed ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    const size_t brokenBefore = m_brokenModuleInfos.size();
 
     try {
         fn();
@@ -330,6 +339,12 @@ void Application::safeInvoke(Module* m, const char* stage, const std::function<v
         const char* message = "threw something that isn't a std::exception — no message available";
         m_brokenModuleInfos.push_back({ m->name(), stage, message, message, ErrorSource::Unknown, "", 0 });
         log::get(m->name())->error("disabled for the rest of this session after throwing a non-standard exception during {}()", stage);
+    }
+    if (timed) {
+        if (auto it = m_benchModuleIndex.find(m); it != m_benchModuleIndex.end())
+            m_bench->addModule(it->second, stage, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count());
+        if (m_brokenModuleInfos.size() > brokenBefore)
+            m_bench->addEvent(std::string("module ") + m->name() + " disabled in " + std::string(stage) + "(): " + m_brokenModuleInfos.back().friendlyMessage);
     }
 }
 
@@ -442,10 +457,70 @@ bool Application::setMood(const std::string& nameOrPath, std::string* error) {
     return true;
 }
 
+void Application::startBenchmark(const BenchOptions& options) {
+    m_bench = std::make_unique<BenchRecorder>(options);
+    log::get("Benchmark")->info("benchmark: {:.0f} s warm-up, then {:.0f} s measured{}", options.warmup, options.seconds,
+                                options.uncapped ? ", uncapped (no vsync, no frame cap)" : "");
+}
+
+void Application::writeBenchmarkReport() {
+    auto logger = log::get("Benchmark");
+    const BenchOptions& o = m_bench->options();
+    std::string name = o.name;
+    if (name.empty()) {
+        for (char c : m_title) name += std::isalnum(static_cast<unsigned char>(c)) ? static_cast<char>(std::tolower(static_cast<unsigned char>(c))) : '_';
+        name += "_" + timestampForFileName();
+    }
+    auto fromUtf8 = [](const std::string& u) { return std::filesystem::path(std::u8string(u.begin(), u.end())); };
+    auto toUtf8 = [](const std::filesystem::path& p) {
+        const std::u8string u = p.u8string();
+        return std::string(u.begin(), u.end());
+    };
+    const std::filesystem::path dir = o.dir.empty() ? std::filesystem::path("benchmark") : fromUtf8(o.dir);
+    std::vector<std::pair<std::string, std::string>> config;
+    config.emplace_back("game", m_title);
+    if (const char* item = SDL_getenv("KKE_BENCH_ITEM"); item && *item) config.emplace_back("suite_item", item);
+    const VkExtent2D extent = m_renderer->renderExtent();
+    config.emplace_back("render_resolution", std::to_string(extent.width) + "x" + std::to_string(extent.height));
+    config.emplace_back("render_scale", std::to_string(m_budget.renderScale).substr(0, 4));
+    config.emplace_back("msaa", std::to_string(m_renderer->msaaSamples()));
+    config.emplace_back("vsync", m_renderer->vsync() ? "on" : "off");
+    config.emplace_back("frame_cap", m_frameRateLimit > 0.0f ? std::to_string(static_cast<int>(m_frameRateLimit)) : "none");
+    config.emplace_back("worker_threads", std::to_string(m_budget.workerThreads));
+    config.emplace_back("fixed_update_hz", std::to_string(static_cast<int>(std::lround(1.0f / m_fixedDt))));
+    config.emplace_back("mood", m_mood->name.empty() ? "none" : m_mood->name);
+    std::vector<std::string> broken;
+    for (const BrokenModuleInfo& b : m_brokenModuleInfos)
+        broken.push_back(b.moduleName + " " + b.stage + "(): " + b.friendlyMessage +
+                         (b.technicalMessage != b.friendlyMessage ? " [" + b.technicalMessage + "]" : ""));
+    const nlohmann::json report = m_bench->toJson(collectSystemInfo(device().physicalDevice()), config, broken);
+
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    const std::filesystem::path file = dir / (name + ".json");
+    std::ofstream out(file, std::ios::binary);
+    out << report.dump(1) << "\n";
+    if (!out) {
+        logger->error("benchmark: could not write {}", toUtf8(file));
+        return;
+    }
+    const auto& sum = report["summary"];
+    logger->info("benchmark: {} frames, {:.1f} fps avg, {:.1f} fps 1% low, {} hitch(es), verdict {}; report {}", sum["frames"].get<int>(),
+                 sum["fps_avg"].get<double>(), sum["fps_1pct_low"].get<double>(), sum["hitches"]["count"].get<int>(),
+                 sum["verdict"].get<std::string>(), toUtf8(std::filesystem::absolute(file, ec)));
+}
+
 void Application::run() {
     resolveInitOrder();
-    if (m_introEnabled) playIntro();
+    // A benchmark measures the game, not the logo.
+    if (!m_bench)
+        if (auto options = BenchRecorder::fromEnvironment()) startBenchmark(*options);
+    if (m_introEnabled && !m_bench) playIntro();
+    using BenchClock = std::chrono::steady_clock;
+    auto msSince = [](BenchClock::time_point a, BenchClock::time_point b) { return std::chrono::duration<double, std::milli>(b - a).count(); };
+    std::vector<double> initMs;
     for (Module* m : m_initOrder) {
+        const auto initStart = BenchClock::now();
         // A module that throws during init() is disabled the same as any
         // other stage — see safeInvoke(). One real caveat worth stating:
         // if init() throws partway through creating GPU resources, this
@@ -458,6 +533,23 @@ void Application::run() {
         // on destruction. Fault isolation reduces this risk; it can't
         // eliminate it for code this engine doesn't control.
         safeInvoke(m, "init", [&] { m->init(*this); });
+        initMs.push_back(msSince(initStart, BenchClock::now()));
+    }
+    if (m_bench) {
+        std::vector<std::string> names;
+        for (Module* m : m_initOrder) {
+            m_benchModuleIndex[m] = static_cast<int>(names.size());
+            names.push_back(m->name());
+        }
+        m_bench->setModules(std::move(names), std::move(initMs));
+        for (const BrokenModuleInfo& b : m_brokenModuleInfos) m_bench->addEvent("module " + b.moduleName + " disabled in " + b.stage + "()");
+        if (m_bench->options().uncapped) {
+            ResourceBudget b = m_budget;
+            b.frameRateLimit = 0.0f;
+            b.backgroundFrameRate = 0.0f;
+            setResourceBudget(b);
+            m_renderer->setVSync(false);
+        }
     }
     // After init(): a game that picks its mood while starting up is overridden.
     if (!m_moodOverride.empty()) {
@@ -477,7 +569,17 @@ void Application::run() {
     float accumulator = 0.0f;
     uint64_t tickIndex = 0;
 
+    const BenchClock::time_point benchLoopStart = BenchClock::now();
+    BenchClock::time_point benchFrameStart{}, benchIdleEnd{}, benchLastRss{};
+    bool benchFrameOpen = false;
     while (m_window.pollEvents([this](const SDL_Event& e) {
+        if (m_bench) {
+            if (e.type == SDL_EVENT_WINDOW_FOCUS_LOST) m_bench->addEvent("window lost focus");
+            else if (e.type == SDL_EVENT_WINDOW_FOCUS_GAINED) m_bench->addEvent("window got focus back");
+            else if (e.type == SDL_EVENT_WINDOW_MINIMIZED) m_bench->addEvent("window minimized");
+            else if (e.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED)
+                m_bench->addEvent("window resized to " + std::to_string(e.window.data1) + "x" + std::to_string(e.window.data2));
+        }
         m_debugUi->processEvent(e);
         for (Module* m : m_initOrder) {
             safeInvoke(m, "onEvent", [&] { m->onEvent(e); });
@@ -487,6 +589,32 @@ void Application::run() {
         float dt = std::chrono::duration<float>(now - lastFrameTime).count();
         float totalTime = std::chrono::duration<float>(now - startTime).count();
         lastFrameTime = now;
+
+        // Benchmark: close the previous frame (its events were just
+        // polled), open this one.
+        const auto benchNow = BenchClock::now();
+        if (m_bench) {
+            if (benchFrameOpen) {
+                m_bench->addStage(BenchRecorder::Events, msSince(benchIdleEnd, benchNow));
+                double rss = 0.0;
+                if (msSince(benchLastRss, benchNow) >= 250.0) {
+                    rss = platform::residentMemoryMb();
+                    benchLastRss = benchNow;
+                }
+                m_bench->endFrame(msSince(benchFrameStart, benchNow), rss);
+                if (m_bench->done()) {
+                    SDL_Event quit{};
+                    quit.type = SDL_EVENT_QUIT;
+                    SDL_PushEvent(&quit);
+                }
+            } else {
+                m_bench->setLoadSeconds(std::chrono::duration<double>(benchNow - m_createdAt).count());
+            }
+            m_bench->beginFrame(std::chrono::duration<double>(benchNow - benchLoopStart).count(),
+                                std::chrono::duration<double, std::milli>(std::chrono::system_clock::now().time_since_epoch()).count());
+            benchFrameOpen = true;
+            benchFrameStart = benchNow;
+        }
 
         // --- Pause/step: see Application.h for the full reasoning.
         // Rendering below always runs regardless of m_paused — only
@@ -527,6 +655,7 @@ void Application::run() {
             }
         }
 
+        const auto benchAfterSimulate = BenchClock::now();
         if (advancingThisFrame) {
             // While stepping, dt itself is frozen (time isn't really
             // passing), so hand modules the fixed tick length instead of
@@ -539,6 +668,11 @@ void Application::run() {
             }
         }
         m_stepRequested = false; // consumed whether or not we were actually paused
+        const auto benchAfterUpdate = BenchClock::now();
+        if (m_bench) {
+            m_bench->addStage(BenchRecorder::Simulate, msSince(benchNow, benchAfterSimulate));
+            m_bench->addStage(BenchRecorder::Update, msSince(benchAfterSimulate, benchAfterUpdate));
+        }
 
         // The views drawn this frame: split screen / picture-in-picture
         // (views()), or camera() over the whole window.
@@ -613,7 +747,11 @@ void Application::run() {
         // Xvfb crashed a real running session), not by inspection alone.
         // Fixed by moving both calls inside the success branch below,
         // so they only ever run for a frame guaranteed to complete.
-        if (m_renderer->beginFrame()) {
+        const auto benchBeforeBegin = BenchClock::now();
+        const bool frameBegun = m_renderer->beginFrame();
+        const auto benchAfterBegin = BenchClock::now();
+        auto benchBeforeEnd = benchAfterBegin, benchAfterEnd = benchAfterBegin;
+        if (frameBegun) {
             m_debugUi->beginFrame();
             // Developer panels: compiled out of shipping builds (kke/DevTools.h).
             if constexpr (dev::kEnabled) {
@@ -700,7 +838,9 @@ void Application::run() {
             }
             m_debugUi->render(cmd);
 
+            benchBeforeEnd = BenchClock::now();
             m_renderer->endFrame();
+            benchAfterEnd = BenchClock::now();
         }
 
         for (Module* m : m_initOrder) safeInvoke(m, "frameEnd", [&] { m->frameEnd(); });
@@ -717,7 +857,16 @@ void Application::run() {
             auto frameEnd = lastFrameTime + std::chrono::duration<double>(1.0 / limit);
             std::this_thread::sleep_until(frameEnd);
         }
+        if (m_bench) {
+            benchIdleEnd = BenchClock::now();
+            m_bench->addStage(BenchRecorder::GpuWait, msSince(benchBeforeBegin, benchAfterBegin));
+            m_bench->addStage(BenchRecorder::Record, msSince(benchAfterUpdate, benchBeforeBegin) + msSince(benchAfterBegin, benchBeforeEnd));
+            m_bench->addStage(BenchRecorder::Present, msSince(benchBeforeEnd, benchAfterEnd));
+            m_bench->addStage(BenchRecorder::Idle, msSince(benchAfterEnd, benchIdleEnd));
+            m_bench->setFrameInfo(m_renderer->lastGpuFrameTimeMs(), static_cast<int>(m_fixedStepsLastFrame), static_cast<int>(m_maxFixedStepsPerFrame));
+        }
     }
+    if (m_bench) writeBenchmarkReport();
 }
 
 void Application::setResourceBudget(const ResourceBudget& budget) {

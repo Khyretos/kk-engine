@@ -4,7 +4,7 @@ KKE's promise is that a game made with it runs on a 1-core, 2 GB machine
 with no GPU. This page is the evidence: what is measured, how to measure
 it yourself, and the numbers so far.
 
-There are two benchmarks, and both write the same kind of report
+There are two engine benchmarks, and both write the same kind of report
 (`kke::BenchmarkReport`: a `.txt` for people and a `.json` for tools):
 
 | | What it measures | Run it |
@@ -14,6 +14,74 @@ There are two benchmarks, and both write the same kind of report
 
 Reports go to `benchmark/` (or `$KKE_BENCH_DIR`). Use a Release build
 for numbers you compare; Debug is several times slower.
+
+## Benchmark for everyone: kke_benchmark
+
+The question the two above can't answer is "does every demo run, and how
+well, on *this* machine?". `kke_benchmark` answers it on anyone's
+computer. It ships in every download next to the demos, so the steps
+for a friend are: unpack, double-click `kke_benchmark` (on Linux, run
+`./kke_benchmark` in a terminal), leave the mouse alone for about ten
+minutes, send back the `.json` file from the `benchmark-results` folder
+that opens at the end. README.txt in the download says the same.
+
+It plays every demo in [`benchmarks/suite.yaml`](../benchmarks/suite.yaml)
+one after the other, each in its own process with its own autopilot or bot
+mode, so nobody has to play and a demo that crashes, hangs or can't start
+is recorded as that while the rest still run. Each demo measures itself
+(`kke/BenchRecorder.h`): after a 3 s warm-up, 20 s uncapped (no vsync, no
+frame cap).
+
+```bash
+./kke_benchmark                      # every demo, about 10 minutes
+./kke_benchmark --quick              # fewer demos, 8 s each, about 4 minutes
+./kke_benchmark --only duel,sea_demo # just these (ids: --list)
+./kke_benchmark --seconds 60         # longer runs catch rarer hitches
+```
+
+Owners of the Synty packs can set `KKE_ASSETS_DIR` first; the results say
+per demo whether it ran on Synty art or on stand-in blocks.
+
+### The results file
+
+`benchmark-results/kke-benchmark-<date>_<time>.json` (plus a `.txt` of the
+same for people, and `run_<stamp>/` with each demo's full log and report):
+
+| Key | What |
+|---|---|
+| `system` | OS and version, CPU, usable cores, RAM, GPU, type, VRAM, driver name and version, Vulkan version, display, engine version and commit, build type |
+| `vulkan` | Whether a Vulkan driver exists, every GPU it lists, and a plain-words `problem` when none can run the demos |
+| `demos[].status` | `ok`, `broken_modules` (ran, but a module threw and was switched off), `ended_early`, `crashed`, `hung`, `no_report`, `missing` (not in this download), `failed_to_start` |
+| `demos[].exit` | The exit code in words: an illegal instruction (the CPU lacks AVX2), access violation, missing DLL, killed... |
+| `demos[].log` | Warning and error counts, every distinct warning/error text with how often it came, and the last 80 log lines when the demo didn't finish |
+| `demos[].report.summary` | fps average, 1% and 0.1% lows, frame time avg/p50/p95/p99/max, GPU time, verdict, `sim_behind_frames` (frames where the fixed-step simulation hit its cap and fell behind real time), memory at start/peak/end, hitch counts |
+| `demos[].report.load_s` | From the process starting to its first frame |
+| `demos[].report.stages_ms` | Where a frame's time goes: `events`, `simulate` (fixed ticks), `update`, `gpu_wait` (waiting for the GPU to free a frame), `record` (building the frame), `present` (submit + present), `idle` |
+| `demos[].report.modules` | Every module's cost per frame, its worst frame, its worst single call and which call that was, and its `init()` time |
+| `demos[].report.per_second` | One row per second: fps, frame avg/max, GPU, each stage, memory, hitches |
+| `demos[].report.hitches` | Every hitch (up to 200): when (seconds and wall-clock time), how long against the median, severity (`minor` < 50 ms, `major` < 250 ms, `freeze`), a `cause` in words (the stage that grew and the module call that dominated it), the stage split, the three most expensive calls, GPU time, memory change, window events that frame, and `log_near`: the log lines written within a second of it |
+
+A **hitch** is a frame slower than both twice the median of the last 61
+frames and that median + 8 ms, so a steady 25 fps is slow but not
+hitchy, and a single 40 ms frame at 144 fps is caught.
+
+To read results, or compare them (two engine versions on one machine
+show the gains, several machines show who struggles where):
+
+```bash
+python3 benchmarks/results.py kke-benchmark-X.json               # one machine
+python3 benchmarks/results.py old.json new.json                  # side by side, % change
+python3 benchmarks/results.py --hitches kke-benchmark-X.json     # every hitch with its cause
+```
+
+Any game can record itself the same way without the launcher:
+`KKE_BENCHMARK=20 ./my_game` writes `benchmark/<game>_<stamp>.json` and
+quits (`KKE_BENCH_WARMUP`, `KKE_BENCH_DIR`, `KKE_BENCH_NAME`,
+`KKE_BENCH_VSYNC=1` to keep vsync). A launcher that can't set
+environment variables, such as an Android activity, calls
+`Application::startBenchmark()` before `run()`. A game can add its own
+markers with `app.benchmark()->addEvent("wave 3")`, so a hitch says what
+the game was doing.
 
 ## kke_bench cases
 

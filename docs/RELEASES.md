@@ -9,7 +9,9 @@ Release with ready-to-run builds of the engine's demos:
 | `kk-engine-<version>-linux-x86_64.tar.gz` | Linux, 64-bit, glibc 2.39+ (Ubuntu 24.04, Debian 13, Fedora 40 or newer) |
 
 Each archive has a `.sha256` next to it. Unpack it anywhere and start
-`kke_demo` (double-click on Windows). Both need a CPU with AVX2 and a Vulkan
+`kke_demo` (double-click on Windows). `kke_benchmark` in the same folder plays every
+demo by itself and writes one results file to send back
+([BENCHMARKS.md](BENCHMARKS.md#benchmark-for-everyone-kke_benchmark)). Both need a CPU with AVX2 and a Vulkan
 1.3 GPU driver. README.txt inside the archive says the same for players.
 
 ## Making a release
