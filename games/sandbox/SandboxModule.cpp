@@ -1808,9 +1808,33 @@ void SandboxModule::folderNotFoundUi() {
     p.text("No asset packs found. Extract your packs (any layout, e.g. POLYGON_Town/{Characters,FBX,Textures}) into assets/synty/, "
            "set KKE_ASSETS_DIR, or type a folder below. Assets are never committed to git: they're licensed per user.");
     p.textField("Folder", m_folderInput);
+    if (!m_pads.empty()) folderKeyboardUi(); // a pad can't type: keys on screen
     if (p.button("Use this folder")) openAssetFolder(m_folderInput);
     if (p.section("Places searched", false))
         for (const std::string& place : m_searched) p.text(place, FormPanel::Tone::Muted);
+}
+
+// The one place the sandbox asks for typing is the asset folder, when no
+// packs were found; with a controller there's no keyboard, so this puts
+// one on screen (only here, only while a pad is connected). The pad's
+// pointer and A press the keys.
+void SandboxModule::folderKeyboardUi() {
+    FormPanel& p = m_assetsPanel;
+    static const char* const kRows[] = { "1234567890", "qwertyuiop", "asdfghjkl", "zxcvbnm", "/\\._-~:" };
+    for (const char* row : kRows) {
+        for (const char* c = row; *c; ++c) {
+            const char ch = m_keyShift && *c >= 'a' && *c <= 'z' ? static_cast<char>(*c - 'a' + 'A') : *c;
+            if (p.key(std::string(1, ch))) {
+                m_folderInput += ch;
+                m_keyShift = false; // one capital, like a phone's keyboard
+            }
+        }
+        p.newline();
+    }
+    if (p.button(m_keyShift ? "SHIFT" : "Shift")) m_keyShift = !m_keyShift;
+    if (p.button("Space")) m_folderInput += ' ';
+    if (p.button("Delete", !m_folderInput.empty())) m_folderInput.pop_back();
+    if (p.button("Clear", !m_folderInput.empty())) m_folderInput.clear();
 }
 
 void SandboxModule::assetBrowserUi() {

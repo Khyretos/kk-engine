@@ -55,7 +55,9 @@ It needs asset packs to show anything useful. It looks in
 `KKE_SYNTY_DIR` (`kke::findAssetFolder` in `init()`). With nothing
 found, Play mode says "No asset packs found. Press Build to pick a
 folder." and the Assets panel lists every place it searched and takes a
-path.
+path. With a controller connected it also shows a keyboard on screen
+(`folderKeyboardUi()`), the only place the sandbox needs typing: point
+at a key and press A.
 
 Environment variables (all read in `SandboxModule::init()` or
 `initGraphs()`):

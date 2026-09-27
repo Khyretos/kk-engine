@@ -61,6 +61,10 @@ public:
     void text(const std::string& text, Tone tone = Tone::Normal);
     // Buttons that follow each other sit side by side.
     bool button(const std::string& label, bool enabled = true);
+    // A small square button, for an on-screen keyboard's keys; newline()
+    // starts the next row.
+    bool key(const std::string& label);
+    void newline();
     bool toggle(const std::string& label, bool& value);
     // < value >: the arrows step, a click on the value steps forward.
     bool choice(const std::string& label, int& index, const std::vector<std::string>& options);
@@ -90,7 +94,7 @@ public:
 
 private:
     friend class FormPanelListener;
-    enum class Kind { Section, Text, Button, Toggle, Choice, Slider, Number, Colour, TextField, Tile };
+    enum class Kind { Section, Text, Button, Key, Break, Toggle, Choice, Slider, Number, Colour, TextField, Tile };
     enum class Part { Press, Minus, Plus, Bar, Text };
     struct Event {
         size_t row = 0;
