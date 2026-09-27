@@ -291,7 +291,7 @@ void RigidWorld::remove(BodyId body) {
 }
 
 // Rigid bodies only: characters' cloth colliders and the cloth itself aren't counted.
-size_t RigidWorld::bodyCount() const { return m->system.GetNumBodies() - m->characters.size() - clothCount(); }
+size_t RigidWorld::bodyCount() const { return m->system.GetNumBodies() - m->characters.size() - (m->cloth ? m->cloth->count() : 0); }
 size_t RigidWorld::activeBodyCount() const { return m->system.GetNumActiveBodies(JPH::EBodyType::RigidBody); }
 bool RigidWorld::isActive(BodyId body) const { return m->bodies().IsActive(JPH::BodyID(body)); }
 
@@ -915,7 +915,7 @@ RigidWorld::ClothId RigidWorld::addCloth(const ClothDesc& desc) { return m->clot
 void RigidWorld::removeCloth(ClothId id) {
     if (m->cloth) m->cloth->remove(id);
 }
-size_t RigidWorld::clothCount() const { return m->cloth ? m->cloth->count() : 0; }
+size_t RigidWorld::clothCount() const { return m->cloth ? m->cloth->clothCount() : 0; }
 bool RigidWorld::clothPositions(ClothId id, std::vector<glm::vec3>& out) const { return m->cloth && m->cloth->positions(id, out); }
 void RigidWorld::setClothJoints(ClothId id, const std::vector<glm::mat4>& joints) {
     if (m->cloth) m->cloth->setJoints(id, joints);
@@ -931,6 +931,19 @@ ClothStats RigidWorld::clothStats(ClothId id) const { return m->cloth ? m->cloth
 void RigidWorld::setWind(const glm::vec3& velocity) { m->clothSystem().setWind(velocity); }
 glm::vec3 RigidWorld::wind() const { return m->cloth ? m->cloth->wind() : glm::vec3(0.0f); }
 double RigidWorld::lastClothMs() const { return m->cloth ? m->cloth->lastMs() : 0.0; }
+RigidWorld::HairId RigidWorld::addHair(const HairDesc& desc) { return m->clothSystem().addHair(desc); }
+void RigidWorld::removeHair(HairId id) {
+    if (m->cloth) m->cloth->removeHair(id);
+}
+size_t RigidWorld::hairCount() const { return m->cloth ? m->cloth->hairCount() : 0; }
+bool RigidWorld::hairPositions(HairId id, std::vector<glm::vec3>& out) const { return m->cloth && m->cloth->hairPositions(id, out); }
+void RigidWorld::setHairJoint(HairId id, const glm::mat4& head) {
+    if (m->cloth) m->cloth->setHairJoint(id, head);
+}
+void RigidWorld::resetHair(HairId id) {
+    if (m->cloth) m->cloth->resetHair(id);
+}
+HairStats RigidWorld::hairStats(HairId id) const { return m->cloth ? m->cloth->hairStats(id) : HairStats{}; }
 double RigidWorld::simulatedTime() const { return m->simulatedTime; }
 
 std::vector<RigidWorld::Contact> RigidWorld::takeContacts() {

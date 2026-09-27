@@ -24,6 +24,7 @@ constexpr float kAirDensity = 1.225f; // kg/m^3
 constexpr float kAssumedStep = 1.0f / 60.0f; // RigidWorld's collision step length
 constexpr uint8_t kTangledSteps = 16;         // Cloth::undoneStreak at which a vertex is let go
 constexpr int kMaxPasses = 4;                 // protection narrow-phase passes per step, at most
+constexpr size_t kHairPart = 64;              // guide strands per hair soft body
 
 JPH::Vec3 toJ(const glm::vec3& v) { return JPH::Vec3(v.x, v.y, v.z); }
 glm::vec3 toG(JPH::Vec3Arg v) { return glm::vec3(v.GetX(), v.GetY(), v.GetZ()); }
@@ -274,6 +275,194 @@ uint32_t ClothSystem::add(const ClothDesc& d) {
     return id;
 }
 
+// Hair: every guide strand a chain of vertices held by distance
+// constraints (stretch along it, bend across two and three segments). The
+// root and the follicle vertex are skinned hard to the head, so the strand
+// leaves the scalp the way it grows; the rest may swing as far as `hold`
+// lets them from their styled place.
+uint32_t ClothSystem::addHair(const HairDesc& d) {
+    const size_t per = size_t(hairStrandVertices(d.style));
+    const std::vector<glm::vec3> rest = hairRestPose(d);
+    const size_t guides = rest.size() / per;
+    if (d.roots.empty() || guides == 0) return 0;
+    // Parts of neighbouring guides (hairScalp lists them crown to nape):
+    // each part is its own soft body, so Jolt steps them on separate
+    // threads, and their bounds stay tight.
+    std::vector<uint32_t> parts;
+    const size_t count = (guides + kHairPart - 1) / kHairPart;
+    for (size_t k = 0; k < count; ++k) {
+        const size_t first = k * guides / count, last = (k + 1) * guides / count;
+        const uint32_t part = addHairPart(d, rest, first, last - first);
+        if (part) parts.push_back(part);
+    }
+    if (parts.empty()) return 0;
+    const uint32_t id = m_next++;
+    m_hairs.emplace(id, std::move(parts));
+    return id;
+}
+
+uint32_t ClothSystem::addHairPart(const HairDesc& d, const std::vector<glm::vec3>& all, size_t firstGuide, size_t guideCount) {
+    const HairStyle& st = d.style;
+    const uint32_t per = uint32_t(hairStrandVertices(st));
+    const std::vector<glm::vec3> rest(all.begin() + long(firstGuide * per), all.begin() + long((firstGuide + guideCount) * per));
+    const size_t n = rest.size();
+    const uint32_t guides = uint32_t(guideCount);
+    Cloth c;
+    c.hair = true;
+    c.strandVerts = per;
+    c.level = ClothProtection::Basic; // strands don't collide with each other (kke/Hair.h)
+    c.fabric.name = "hair";
+    c.fabric.airDrag = st.airDrag;
+    c.hairWidth = st.width;
+    c.wind = std::max(0.0f, d.wind);
+    c.thickness = st.thickness;
+    c.rest = rest;
+    c.bindPose = { d.bindPose };
+
+    glm::vec3 centroid(0.0f);
+    for (const glm::vec3& p : rest) centroid += p;
+    centroid /= float(n);
+
+    // Lumped masses: half of each neighbouring segment's length.
+    std::vector<float> mass(n, 0.0f);
+    std::vector<float> arc(n, 0.0f); // along the strand from the follicle
+    for (uint32_t g = 0; g < guides; ++g) {
+        const uint32_t b = g * per;
+        for (uint32_t k = 0; k + 1 < per; ++k) {
+            const float len = glm::length(rest[b + k + 1] - rest[b + k]);
+            mass[b + k] += 0.5f * len * st.density;
+            mass[b + k + 1] += 0.5f * len * st.density;
+            if (k >= 1) arc[b + k + 1] = arc[b + k] + len;
+        }
+    }
+    float meanMass = 0.0f;
+    for (float& m : mass) {
+        m = std::max(m, 1e-7f);
+        meanMass += m;
+    }
+    meanMass /= float(n);
+
+    JPH::Ref<JPH::SoftBodySharedSettings> s = new JPH::SoftBodySharedSettings;
+    s->mVertices.resize(n);
+    for (size_t i = 0; i < n; ++i) {
+        const glm::vec3 local = rest[i] - centroid;
+        const bool pinned = i % per < 2;
+        s->mVertices[i] = JPH::SoftBodySharedSettings::Vertex(JPH::Float3(local.x, local.y, local.z), JPH::Float3(0, 0, 0), pinned ? 0.0f : 1.0f / mass[i]);
+    }
+    // Softness -> XPBD compliance as for Fabric: one sub-step fixes
+    // 2 / (2 + softness) of the error. Roots are stiffer than tips.
+    // Stretch: each segment. Bend: across two segments (and three in a
+    // curl, which holds a spiral's turn). Distances only, no orientation:
+    // Jolt's Cosserat rods were tried first, but nothing turns the first
+    // rod's twist with the head (Jolt has no way to set a rod's
+    // orientation), so a quick head turn could flip a strand's rest curve
+    // from down to up.
+    const float sub = kAssumedStep / float(std::max(1, st.iterations));
+    const float scale = sub * sub / meanMass;
+    const float stiffRoot = std::clamp(st.stiffRoot, 0.0f, 1.0f);
+    for (uint32_t g = 0; g < guides; ++g) {
+        const uint32_t b = g * per;
+        for (uint32_t k = 0; k + 1 < per; ++k) {
+            const float along = per > 3 ? float(k) / float(per - 3) : 1.0f;
+            const float bend = st.bend * glm::mix(stiffRoot, 1.0f, std::min(along, 1.0f)) * scale;
+            if (k >= 1) s->mEdgeConstraints.emplace_back(b + k, b + k + 1, st.stretch * scale); // root to follicle: both on the head
+            if (k + 2 < per) s->mEdgeConstraints.emplace_back(b + k, b + k + 2, bend);
+            if (st.curl > 0.0f && k + 3 < per) s->mEdgeConstraints.emplace_back(b + k, b + k + 3, bend);
+        }
+        // Tethers from the follicle: never longer than maxStretch x the
+        // length along the strand (a curl may be pulled out, not through).
+        for (uint32_t k = 2; k < per; ++k)
+            s->mLRAConstraints.emplace_back(b + 1, b + k, std::max(1.0f, st.maxStretch) * arc[b + k]);
+    }
+    s->CalculateEdgeLengths();
+
+    const glm::mat4 toLocal = glm::translate(glm::mat4(1.0f), -centroid);
+    s->mInvBindMatrices.emplace_back(0u, toJ(glm::inverse(toLocal * d.bindPose)));
+    const float hold = std::clamp(st.hold, 0.0f, 1.0f);
+    for (uint32_t i = 0; i < n; ++i) {
+        JPH::SoftBodySharedSettings::Skinned sk;
+        sk.mVertex = i;
+        if (i % per < 2) {
+            sk.mMaxDistance = 0.0f;
+        } else if (hold > 0.0f) {
+            sk.mMaxDistance = std::max(arc[i] * (1.0f - hold), st.thickness);
+        } else {
+            continue;
+        }
+        sk.mWeights[0] = JPH::SoftBodySharedSettings::SkinWeight(0, 1.0f);
+        s->mSkinnedConstraints.push_back(sk);
+    }
+    c.skinned = true;
+    s->Optimize();
+
+    JPH::SoftBodyCreationSettings cs(s, JPH::RVec3(centroid.x, centroid.y, centroid.z), JPH::Quat::sIdentity(), m_layer);
+    cs.mNumIterations = uint32_t(std::max(1, st.iterations));
+    cs.mLinearDamping = st.damping;
+    cs.mFriction = st.friction;
+    cs.mGravityFactor = st.gravity;
+    cs.mVertexRadius = st.thickness;
+    const uint32_t id = m_next++;
+    cs.mUserData = id;
+    cs.mAllowSleeping = true;
+    JPH::BodyInterface& bi = m_system.GetBodyInterface();
+    c.body = bi.CreateAndAddSoftBody(cs, JPH::EActivation::Activate);
+    if (c.body.IsInvalid()) return 0;
+    c.stats.vertices = uint32_t(n);
+    m_cloths.emplace(id, std::move(c));
+    setJoints(id, { d.bindPose }, true);
+    return id;
+}
+
+size_t ClothSystem::clothCount() const {
+    return size_t(std::count_if(m_cloths.begin(), m_cloths.end(), [](const auto& e) { return !e.second.hair; }));
+}
+
+bool ClothSystem::hairPositions(uint32_t id, std::vector<glm::vec3>& out) const {
+    auto it = m_hairs.find(id);
+    if (it == m_hairs.end()) return false;
+    out.clear();
+    std::vector<glm::vec3> part;
+    for (uint32_t p : it->second) {
+        if (!positions(p, part)) return false;
+        out.insert(out.end(), part.begin(), part.end());
+    }
+    return true;
+}
+
+void ClothSystem::setHairJoint(uint32_t id, const glm::mat4& head) {
+    auto it = m_hairs.find(id);
+    if (it == m_hairs.end()) return;
+    for (uint32_t p : it->second) setJoints(p, { head });
+}
+
+void ClothSystem::resetHair(uint32_t id) {
+    auto it = m_hairs.find(id);
+    if (it == m_hairs.end()) return;
+    for (uint32_t p : it->second) reset(p);
+}
+
+void ClothSystem::removeHair(uint32_t id) {
+    auto it = m_hairs.find(id);
+    if (it == m_hairs.end()) return;
+    for (uint32_t p : it->second) remove(p);
+    m_hairs.erase(it);
+}
+
+HairStats ClothSystem::hairStats(uint32_t id) const {
+    auto it = m_hairs.find(id);
+    if (it == m_hairs.end()) return {};
+    HairStats h;
+    h.sleeping = true;
+    for (uint32_t p : it->second) {
+        auto c = m_cloths.find(p);
+        if (c == m_cloths.end()) continue;
+        h.vertices += c->second.stats.vertices;
+        h.guides += c->second.strandVerts ? c->second.stats.vertices / c->second.strandVerts : 0;
+        h.sleeping = h.sleeping && !m_system.GetBodyInterface().IsActive(c->second.body);
+    }
+    return h;
+}
+
 void ClothSystem::remove(uint32_t id) {
     auto it = m_cloths.find(id);
     if (it == m_cloths.end()) return;
@@ -321,6 +510,7 @@ void ClothSystem::setProtection(uint32_t id, ClothProtection level) {
     auto it = m_cloths.find(id);
     if (it == m_cloths.end()) return;
     Cloth& c = it->second;
+    if (c.hair) return; // hair has one level (kke/Hair.h)
     c.level = level;
     c.prevValid = false;
     // The vertex radius is live; the tethers and back-stops are built in
@@ -864,6 +1054,32 @@ bool ClothSystem::testVertexTriangle(Cloth& c, uint32_t v, Cloth& o, uint32_t tr
     return crossed;
 }
 
+// Air on a strand: each segment a cylinder `hairWidth` wide, pushed by the
+// air's velocity across it (drag along a hair is tiny). Implicit like
+// air(): never more than the relative speed across the segment.
+void ClothSystem::airOnStrands(Cloth& c, float dt) {
+    if (c.fabric.airDrag <= 0.0f || c.strandVerts < 2) return;
+    const glm::vec3 wind = m_wind * c.wind;
+    const size_t n = c.pos.size();
+    for (size_t b = 0; b + c.strandVerts <= n; b += c.strandVerts)
+        for (size_t i = b + 1; i + 1 < b + c.strandVerts; ++i) {
+            const glm::vec3 seg = c.pos[i + 1] - c.pos[i];
+            const float len = glm::length(seg);
+            if (len < 1e-7f) continue;
+            const glm::vec3 t = seg / len;
+            glm::vec3 rel = 0.5f * (c.vel[i] + c.vel[i + 1]) - wind;
+            rel -= t * glm::dot(rel, t);
+            const float speed = glm::length(rel);
+            if (speed < 1e-6f) continue;
+            // Force = 0.5 rho Cd (width x length) |v| v, Cd ~ 1.2 for a cylinder, half to each end.
+            const float k = 0.5f * kAirDensity * 1.2f * c.fabric.airDrag * c.hairWidth * len * speed * dt * 0.5f;
+            for (size_t v : { i, i + 1 }) {
+                const float f = std::min(1.0f, k * c.invMass[v]);
+                c.vel[v] -= rel * f;
+            }
+        }
+}
+
 // Called from Jolt's worker threads while it steps: only reads m_cloths
 // (which nothing changes during a step).
 JPH::SoftBodyValidateResult ClothSystem::OnSoftBodyContactValidate(const JPH::Body& softBody, const JPH::Body&, JPH::SoftBodyContactSettings& settings) {
@@ -884,11 +1100,14 @@ void ClothSystem::OnStep(const JPH::PhysicsStepListenerContext& ctx) {
     if (!m_protectedAfterStep) protectAll(locks);
     m_protectedAfterStep = false;
     for (auto& [id, c] : m_cloths) {
-        if (c.fabric.airDrag <= 0.0f || c.tris.empty()) continue;
+        if (c.fabric.airDrag <= 0.0f || (c.tris.empty() && !c.hair)) continue;
         JPH::Body* body = locks.TryGetBody(c.body);
         if (!body || !body->IsActive()) continue;
         load(c, *body);
-        air(c, ctx.mDeltaTime);
+        if (c.hair)
+            airOnStrands(c, ctx.mDeltaTime);
+        else
+            air(c, ctx.mDeltaTime);
         store(c, *body);
     }
     m_stepMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();

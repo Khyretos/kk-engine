@@ -3,12 +3,13 @@
 #include "kke/Application.h"
 #include "kke/BenchRecorder.h"
 #include "kke/Log.h"
+#include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/InputModule.h"
 #include "kke/modules/OrbitCameraModule.h"
 
 #include <SDL3/SDL.h>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include <imgui.h>
 
 #include <algorithm>
 #include <chrono>
@@ -23,8 +24,8 @@ namespace {
 using Clock = std::chrono::steady_clock;
 double msSince(Clock::time_point t0) { return std::chrono::duration<double, std::milli>(Clock::now() - t0).count(); }
 
-const char* kSceneNames[] = { "Fabrics", "Bed", "Nets", "Cape", "Stress" };
-constexpr int kSceneCount = 5;
+const char* kSceneNames[] = { "Fabrics", "Bed", "Nets", "Cape", "Stress", "Hair" };
+constexpr int kSceneCount = 6;
 constexpr float kTourSeconds = 14.0f;
 
 float rand01(uint32_t& s) {
@@ -111,6 +112,8 @@ void ClothDemoModule::init(kke::Application& app) {
     if (const char* e = std::getenv("KKE_CLOTH_WIND")) m_windSpeed = float(std::atof(e));
     if (const char* e = std::getenv("KKE_CLOTH_COUNT")) m_stressCount = std::clamp(std::atoi(e), 1, 400);
     if (const char* e = std::getenv("KKE_CLOTH_RES")) m_stressRes = std::clamp(std::atoi(e), 4, 128);
+    if (const char* e = std::getenv("KKE_HAIR_GUIDES")) m_hairGuides = std::clamp(std::atoi(e), 8, 4000);
+    if (const char* e = std::getenv("KKE_HAIR_PER_GUIDE")) m_hairsPerGuide = std::clamp(std::atoi(e), 1, 256);
     m_tour = app.benchmark() != nullptr;
     if (const char* e = std::getenv("KKE_CLOTH_TOUR")) m_tour = *e == '1';
     Scene start = Scene::Fabrics;
@@ -119,6 +122,8 @@ void ClothDemoModule::init(kke::Application& app) {
             if (SDL_strcasecmp(e, kSceneNames[i]) == 0) start = Scene(i);
     }
     setScene(start);
+    defineInput();
+    buildPanel();
 }
 
 void ClothDemoModule::clear() {
@@ -126,6 +131,7 @@ void ClothDemoModule::clear() {
     m_solids.clear();
     m_balls.clear();
     m_runner.reset();
+    m_heads.clear();
     // A new world per scene: nothing of the last one lingers in Jolt.
     m_world = std::make_unique<kke::RigidWorld>();
     kke::RigidWorld::BodyDesc g;
@@ -208,9 +214,19 @@ void ClothDemoModule::setScene(Scene s) {
     case Scene::Nets: buildNets(); break;
     case Scene::Cape: buildCape(); break;
     case Scene::Stress: buildStress(); break;
+    case Scene::Hair: buildHair(); break;
     }
     const std::string what = std::string("cloth scene ") + kSceneNames[int(s)] + ", protection " + protectionName(m_protection);
-    kke::log::get(name())->info("{}: {} cloths", what, m_cloth.size());
+    if (s == Scene::Hair) {
+        size_t guides = 0, hairs = 0;
+        for (auto& h : m_heads) {
+            guides += m_world->hairStats(h->hair).guides;
+            hairs += h->drawn->hairs();
+        }
+        kke::log::get(name())->info("hair scene: {} heads, {} guide strands, {} hairs drawn", m_heads.size(), guides, hairs);
+    } else {
+        kke::log::get(name())->info("{}: {} cloths", what, m_cloth.size());
+    }
     if (kke::BenchRecorder* b = m_app->benchmark()) b->addEvent(what);
 }
 
@@ -348,8 +364,118 @@ void ClothDemoModule::buildStress() {
     if (m_camera) m_camera->setView(glm::vec3(0.0f, 0.5f, 0.0f), 3.0f + float(side) * 2.4f, -0.6f, 0.5f);
 }
 
+// Four heads on shoulders, each with a style, turning and nodding in the
+// wind. The head is a sphere only cloth and hair collide with; the
+// shoulders are solid.
+void ClothDemoModule::buildHair() {
+    // KKE_HAIR_STYLES=long,curly picks the heads (hairStyleNames()).
+    std::vector<std::string> styles = { "long", "wavy", "curly", "short" };
+    if (const char* e = std::getenv("KKE_HAIR_STYLES")) {
+        styles.clear();
+        std::string list = e;
+        for (size_t at = 0; at <= list.size();) {
+            const size_t comma = std::min(list.find(',', at), list.size());
+            if (comma > at) styles.push_back(list.substr(at, comma - at));
+            at = comma + 1;
+        }
+        if (styles.empty()) styles.push_back("long");
+    }
+    const glm::vec3 colors[][2] = { { { 0.09f, 0.05f, 0.03f }, { 0.2f, 0.12f, 0.07f } },   // dark brown
+                                    { { 0.45f, 0.3f, 0.14f }, { 0.78f, 0.6f, 0.36f } },   // blond
+                                    { { 0.05f, 0.04f, 0.04f }, { 0.12f, 0.09f, 0.08f } }, // black
+                                    { { 0.35f, 0.1f, 0.04f }, { 0.6f, 0.22f, 0.08f } } }; // red
+    const glm::vec3 skin(0.8f, 0.64f, 0.52f), shirt(0.3f, 0.34f, 0.4f);
+    const float radius = 0.1f;
+    const int count = int(styles.size());
+    for (int i = 0; i < count; ++i) {
+        auto h = std::make_unique<Head>();
+        const float x = (float(i) - float(count - 1) * 0.5f) * 0.9f;
+        const glm::vec3 centre(x, 1.62f, 0.0f);
+        h->neck = glm::vec3(x, 1.5f, 0.0f);
+        h->phase = float(i) * 1.7f;
+        h->label = styles[size_t(i)];
+        h->bind = glm::mat4(1.0f);
+        h->now = h->bind;
+        // Shoulders and neck (solid), the head (moves).
+        addSolidBox(glm::vec3(x, 1.33f, 0.0f), glm::vec3(0.21f, 0.07f, 0.11f), shirt, 0.8f);
+        addSolidBox(glm::vec3(x, 0.63f, 0.0f), glm::vec3(0.05f, 0.63f, 0.05f), glm::vec3(0.25f), 0.6f);
+        kke::RigidWorld::BodyDesc hb;
+        hb.shape = kke::RigidWorld::Shape::Sphere;
+        hb.motion = kke::RigidWorld::Motion::Kinematic;
+        hb.clothOnly = true;
+        hb.radius = radius;
+        hb.position = centre;
+        h->collider = m_world->add(hb);
+        kke::RigidWorld::BodyDesc nb;
+        nb.shape = kke::RigidWorld::Shape::Capsule;
+        nb.motion = kke::RigidWorld::Motion::Static;
+        nb.clothOnly = true;
+        nb.radius = 0.045f;
+        nb.halfHeight = 0.06f;
+        nb.position = glm::vec3(x, 1.45f, 0.0f);
+        m_world->add(nb);
+        h->mesh = std::make_unique<kke::DynamicMeshRenderer>(*m_app);
+        {
+            std::vector<kke::Vertex> v;
+            std::vector<uint32_t> idx;
+            addCapsule(v, idx, centre, centre, radius, skin, 28);
+            // The scalp painted the hair's root colour where hair grows (as
+            // hairScalp picks roots), so no skin shows between the hairs.
+            for (kke::Vertex& vx : v) {
+                const glm::vec3 d = glm::normalize(vx.position - centre);
+                const float fromUp = std::acos(std::clamp(d.y, -1.0f, 1.0f));
+                const bool face = d.z > 0.25f && fromUp > 1.0f;
+                const float edge = std::clamp((1.9f - fromUp) / 0.15f, 0.0f, 1.0f) * (face ? 0.0f : 1.0f);
+                vx.color = glm::mix(skin, colors[i % 4][0], edge * 0.9f);
+            }
+            for (float side : { -1.0f, 1.0f }) // eyes
+                addCapsule(v, idx, centre + glm::vec3(side * 0.035f, 0.015f, radius * 0.9f), centre + glm::vec3(side * 0.035f, 0.015f, radius * 0.9f), 0.012f,
+                           glm::vec3(0.1f), 8);
+            addCapsule(v, idx, centre + glm::vec3(0.0f, -0.02f, radius * 0.95f), centre + glm::vec3(0.0f, -0.02f, radius * 0.95f), 0.018f, skin, 10); // nose
+            addCapsule(v, idx, glm::vec3(x, 1.43f, 0.0f), glm::vec3(x, 1.53f, 0.0f), 0.045f, skin, 14);                                        // neck
+            h->mesh->upload(v, idx);
+        }
+        kke::HairDesc d;
+        d.style = kke::hairStyle(styles[size_t(i)]);
+        d.style.rootColor = colors[i % 4][0];
+        d.style.tipColor = colors[i % 4][1];
+        d.style.hairsPerGuide = m_hairsPerGuide;
+        d.bindPose = h->bind;
+        kke::hairScalp(d, centre, radius, m_hairGuides);
+        h->hair = m_world->addHair(d);
+        h->drawn = std::make_unique<kke::HairRenderer>(*m_app);
+        h->drawn->build(d);
+        m_heads.push_back(std::move(h));
+    }
+    if (!std::getenv("KKE_CLOTH_WIND")) m_windSpeed = 3.0f;
+    m_gusts = true;
+    stepHeads(0.0f);
+    if (m_camera) m_camera->setView(glm::vec3(0.12f * float(count), 1.45f, 0.0f), 0.9f + 0.6f * float(count), -0.1f, glm::pi<float>() + 0.15f); // the panel is on the right
+}
+
+// The heads look around: slow turns and nods, now and then a quick shake.
+void ClothDemoModule::stepHeads(float dt) {
+    for (auto& hp : m_heads) {
+        Head& h = *hp;
+        const float t = m_sceneTime + h.phase;
+        const float shake = std::pow(std::max(0.0f, std::sin(t * 0.45f)), 12.0f) * std::sin(t * 9.0f) * 0.3f;
+        const float yaw = m_headMotion * (0.7f * std::sin(t * 0.8f) + shake);
+        const float nod = m_headMotion * (0.22f * std::sin(t * 1.3f + 0.5f));
+        const float tilt = m_headMotion * (0.12f * std::sin(t * 0.6f + 2.0f));
+        h.now = glm::translate(glm::mat4(1.0f), h.neck) * glm::rotate(glm::mat4(1.0f), yaw, glm::vec3(0, 1, 0)) *
+                glm::rotate(glm::mat4(1.0f), nod, glm::vec3(1, 0, 0)) * glm::rotate(glm::mat4(1.0f), tilt, glm::vec3(0, 0, 1)) *
+                glm::translate(glm::mat4(1.0f), -h.neck) * h.bind;
+        const glm::vec3 centre = glm::vec3(h.now * glm::vec4(h.neck + glm::vec3(0.0f, 0.12f, 0.0f), 1.0f));
+        const glm::quat rot = glm::quat_cast(glm::mat3(h.now));
+        if (dt > 0.0f) m_world->moveKinematic(h.collider, centre, rot, dt);
+        else m_world->setTransform(h.collider, centre, rot);
+        m_world->setHairJoint(h.hair, h.now);
+    }
+}
+
 void ClothDemoModule::redrop() {
     for (auto& p : m_cloth) m_world->resetCloth(p->id);
+    for (auto& h : m_heads) m_world->resetHair(h->hair);
     for (const Ball& b : m_balls) m_world->remove(b.body);
     m_balls.clear();
     m_sceneTime = 0.0f;
@@ -418,7 +544,7 @@ void ClothDemoModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
     // Wind: steady, or gusting (two slow waves and a flutter).
     float speed = m_windSpeed;
     if (m_gusts) speed *= 0.55f + 0.3f * std::sin(m_time * 0.7f) + 0.15f * std::sin(m_time * 2.3f + 1.0f);
-    const bool windy = m_scene == Scene::Fabrics || m_scene == Scene::Cape;
+    const bool windy = m_scene == Scene::Fabrics || m_scene == Scene::Cape || m_scene == Scene::Hair;
     m_world->setWind(windy ? glm::vec3(std::sin(m_windYaw), 0.0f, std::cos(m_windYaw)) * speed : glm::vec3(0.0f));
 
     if (m_scene == Scene::Bed) {
@@ -461,6 +587,7 @@ void ClothDemoModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
         m_world->setClothJoints(m_cloth.front()->id, { m_runner->torso });
     }
     if (m_scene == Scene::Stress && m_sceneTime > 5.0f) redrop();
+    stepHeads(dt);
     m_world->step(dt);
     m_stepMs = m_stepMs * 0.95 + m_world->lastStepMs() * 0.05;
     m_protectMs = m_protectMs * 0.95 + m_world->lastClothMs() * 0.05;
@@ -507,19 +634,29 @@ void ClothDemoModule::updateMeshes(const glm::vec3& cameraPos) {
 }
 
 void ClothDemoModule::update(const kke::UpdateContext&) {
+    readInput();
     const kke::Camera& cam = m_app->camera();
     int w = 0, h = 0;
     m_app->window().getFramebufferSize(w, h);
     m_pixelAngle = 2.0f * std::tan(glm::radians(cam.fovDegrees) * 0.5f) / float(std::max(h, 1));
     updateMeshes(cam.position);
+    const auto t0 = Clock::now();
+    for (auto& h : m_heads) {
+        m_world->hairPositions(h->hair, h->guides);
+        h->drawn->update(h->guides, h->now);
+    }
+    m_hairUploadMs = m_hairUploadMs * 0.95 + msSince(t0) * 0.05;
 }
 
 void ClothDemoModule::render(const kke::RenderContext& ctx) {
-    m_viewProj = ctx.proj * ctx.view;
     m_floor->draw(ctx, glm::mat4(1.0f), 0.0f, 0.95f);
     for (Solid& s : m_solids) s.mesh->draw(ctx, glm::mat4(1.0f), 0.0f, s.roughness);
     for (auto& p : m_cloth) p->mesh3d->drawCloth(ctx, p->fabric);
     if (m_runner) m_runner->body->draw(ctx, glm::mat4(1.0f), 0.0f, 0.7f);
+    for (auto& h : m_heads) {
+        h->mesh->draw(ctx, h->now * glm::inverse(h->bind), 0.0f, 0.6f);
+        h->drawn->draw(ctx);
+    }
     m_sphereScratch.clear();
     for (const Ball& b : m_balls) m_sphereScratch.push_back({ m_world->position(b.body), b.radius, b.color, 0.0f, 0.45f });
     if (!m_sphereScratch.empty()) m_spheres->draw(ctx, m_sphereScratch);
@@ -529,95 +666,165 @@ void ClothDemoModule::renderShadow(const kke::ShadowRenderContext& ctx) {
     for (Solid& s : m_solids) s.mesh->drawShadow(ctx);
     for (auto& p : m_cloth) p->mesh3d->drawShadow(ctx);
     if (m_runner) m_runner->body->drawShadow(ctx);
+    const glm::vec3 towardsLight = -m_app->lighting().lights[0].direction;
+    for (auto& h : m_heads) {
+        h->mesh->drawShadow(ctx, h->now * glm::inverse(h->bind));
+        h->drawn->drawShadow(ctx, towardsLight);
+    }
 }
 
-void ClothDemoModule::onEvent(const SDL_Event& event) {
-    if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat || ImGui::GetIO().WantTextInput) return;
-    switch (event.key.key) {
-    case SDLK_TAB: setScene(Scene((int(m_scene) + 1) % kSceneCount)); break;
-    case SDLK_1: setScene(Scene::Fabrics); break;
-    case SDLK_2: setScene(Scene::Bed); break;
-    case SDLK_3: setScene(Scene::Nets); break;
-    case SDLK_4: setScene(Scene::Cape); break;
-    case SDLK_5: setScene(Scene::Stress); break;
-    case SDLK_R: redrop(); break;
-    case SDLK_P:
+void ClothDemoModule::defineInput() {
+    auto* in = m_app->getModule<kke::InputModule>();
+    if (!in) return;
+    using IM = kke::InputModule;
+    kke::InputMap& m = in->map(0);
+    auto action = [&](const char* id, const char* label, SDL_Scancode key, SDL_GamepadButton pad) {
+        m.defineAction({ id, label, "Cloth" });
+        m.addBinding(IM::bind(id, IM::key(key)));
+        if (pad != SDL_GAMEPAD_BUTTON_INVALID) m.addBinding(IM::bind(id, IM::pad(pad)));
+    };
+    action("cloth.scene", "Next scene", SDL_SCANCODE_TAB, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
+    action("cloth.scene_back", "Previous scene", SDL_SCANCODE_GRAVE, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+    action("cloth.redrop", "Drop again", SDL_SCANCODE_R, SDL_GAMEPAD_BUTTON_SOUTH);
+    action("cloth.protection", "Clipping protection: Full, Basic, Off", SDL_SCANCODE_P, SDL_GAMEPAD_BUTTON_WEST);
+    action("cloth.gusts", "Gusts on / off", SDL_SCANCODE_G, SDL_GAMEPAD_BUTTON_NORTH);
+    // Keys 1-6 pick a scene directly (a controller steps with the shoulders).
+    for (int i = 0; i < kSceneCount; ++i) {
+        const std::string id = "cloth.scene" + std::to_string(i + 1);
+        m.defineAction({ id, kSceneNames[i], "Cloth" });
+        m.addBinding(IM::bind(id, IM::key(static_cast<SDL_Scancode>(SDL_SCANCODE_1 + i))));
+    }
+    in->commitDefaults();
+}
+
+void ClothDemoModule::readInput() {
+    auto* in = m_app->getModule<kke::InputModule>();
+    if (!in) return;
+    const kke::InputMap& m = in->map(0);
+    for (int i = 0; i < kSceneCount; ++i)
+        if (m.pressed("cloth.scene" + std::to_string(i + 1))) setScene(Scene(i));
+    if (m.pressed("cloth.scene")) setScene(Scene((int(m_scene) + 1) % kSceneCount));
+    if (m.pressed("cloth.scene_back")) setScene(Scene((int(m_scene) + kSceneCount - 1) % kSceneCount));
+    if (m.pressed("cloth.redrop")) redrop();
+    if (m.pressed("cloth.gusts")) m_gusts = !m_gusts;
+    if (m.pressed("cloth.protection") && m_scene != Scene::Hair) {
         m_protection = m_protection == kke::ClothProtection::Full ? kke::ClothProtection::Basic
                        : m_protection == kke::ClothProtection::Basic ? kke::ClothProtection::Off : kke::ClothProtection::Full;
         applyProtection();
-        break;
-    case SDLK_G: m_gusts = !m_gusts; break;
-    default: break;
     }
 }
 
-void ClothDemoModule::renderUi() {
-    const float s = ImGui::GetFontSize() / 13.0f;
-    ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 370 * s, 10 * s), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(360 * s, 0), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Cloth");
-    int scene = int(m_scene);
-    if (ImGui::Combo("Scene (1-5, Tab)", &scene, kSceneNames, kSceneCount)) setScene(Scene(scene));
-    ImGui::Checkbox("Tour the scenes", &m_tour);
-    int prot = int(m_protection);
-    const char* prots[] = { "Off", "Basic", "Full" };
-    if (ImGui::Combo("Clipping protection (P)", &prot, prots, 3)) {
-        m_protection = kke::ClothProtection(prot);
-        applyProtection();
-    }
-    ImGui::TextDisabled(m_protection == kke::ClothProtection::Full    ? "Cloth can't pass through cloth, not even itself."
-                        : m_protection == kke::ClothProtection::Basic ? "Collides with the world; cloth can pass through cloth."
-                                                                      : "Raw Jolt: no thickness, no tethers, no back-stops.");
-    if (ImGui::Button("Drop again (R)")) redrop();
-    if (m_scene == Scene::Fabrics || m_scene == Scene::Cape) {
-        ImGui::SliderFloat("Wind m/s", &m_windSpeed, 0.0f, 15.0f, "%.1f");
-        ImGui::SliderAngle("Wind from", &m_windYaw, -180.0f, 180.0f);
-        ImGui::Checkbox("Gusts (G)", &m_gusts);
-    }
-    if (m_scene == Scene::Nets) ImGui::Checkbox("Balls and shots", &m_rain);
-    if (m_scene == Scene::Cape && m_runner) ImGui::SliderFloat("Run speed m/s", &m_runner->speed, 0.0f, 8.0f, "%.1f");
-    if (m_scene == Scene::Stress) {
-        bool rebuild = ImGui::SliderInt("Sheets", &m_stressCount, 1, 100);
-        rebuild |= ImGui::SliderInt("Vertices per side", &m_stressRes, 8, 64);
-        if (rebuild && ImGui::IsItemDeactivatedAfterEdit()) setScene(Scene::Stress);
-        if (ImGui::Button("Rebuild")) setScene(Scene::Stress);
-    }
-    ImGui::SeparatorText("Cost");
-    uint32_t verts = 0, tris = 0, contacts = 0, undone = 0, asleep = 0;
-    for (auto& p : m_cloth) {
-        const kke::ClothStats st = m_world->clothStats(p->id);
-        verts += st.vertices;
-        tris += st.triangles;
-        contacts += st.selfContacts;
-        undone += st.crossingsUndone;
-        asleep += st.sleeping ? 1u : 0u;
-    }
-    ImGui::Text("%zu cloths (%u asleep), %u vertices, %u triangles", m_cloth.size(), asleep, verts, tris);
-    ImGui::Text("Physics step: %.2f ms (cloth protection %.2f ms)", m_stepMs, m_protectMs);
-    ImGui::Text("Mesh rebuild: %.2f ms", m_meshMs);
-    ImGui::Text("Cloth contacts %u, crossings undone %u", contacts, undone);
-    ImGui::End();
+// The settings (RmlUi, kke::DemoPanelModule): View on a controller or F3
+// opens them, the mouse just clicks. Rows for other scenes hide.
+void ClothDemoModule::buildPanel() {
+    auto* panel = m_app->getModule<kke::DemoPanelModule>();
+    if (!panel) return;
+    using Panel = kke::DemoPanelModule;
+    auto is = [this](Scene a) { return [this, a] { return m_scene == a; }; };
+    auto cloth = [this] { return m_scene != Scene::Hair; };
 
-    // Fabric names under the drapes and hammocks.
-    const glm::mat4 vp = m_viewProj;
-    ImDrawList* dl = ImGui::GetBackgroundDrawList();
-    const ImVec2 size = ImGui::GetIO().DisplaySize;
-    for (auto& p : m_cloth) {
-        if (p->label.empty() || p->pos.empty()) continue;
-        glm::vec3 lo(1e9f);
-        glm::vec3 centre(0.0f);
-        for (const glm::vec3& v : p->pos) {
-            lo = glm::min(lo, v);
-            centre += v;
+    auto& top = panel->section("Cloth and hair");
+    top.choice("Scene", Panel::Ref<int>([this] {
+                   m_sceneIndex = int(m_scene);
+                   return &m_sceneIndex;
+               }),
+               std::vector<std::string>(kSceneNames, kSceneNames + kSceneCount), [this] { setScene(Scene(m_sceneIndex)); });
+    top.hint("{cloth.scene} next scene  {cloth.redrop} drop again", "{cloth.scene_back} {cloth.scene} scene  {cloth.redrop} drop again");
+    top.text([this] {
+        switch (m_scene) {
+        case Scene::Fabrics: return std::string("Left to right: silk, cotton, denim, wool, leather, satin.");
+        case Scene::Bed: return std::string("A wool blanket, then a silk sheet, then a denim throw.");
+        case Scene::Nets: return std::string("A hammock catching balls, a tennis net stopping shots.");
+        case Scene::Cape: return std::string("A satin cape on a runner, through a linen curtain.");
+        case Scene::Stress: return std::string("Sheets of cotton over balls, dropped again every 5 s.");
+        case Scene::Hair: return std::string("Long, wavy, curly and short hair on turning heads.");
         }
-        centre /= float(p->pos.size());
-        const glm::vec4 c = vp * glm::vec4(centre.x, lo.y - 0.12f, centre.z, 1.0f);
-        if (c.w <= 0.0f) continue;
-        const ImVec2 at((c.x / c.w * 0.5f + 0.5f) * size.x, (c.y / c.w * 0.5f + 0.5f) * size.y);
-        const ImVec2 ts = ImGui::CalcTextSize(p->label.c_str());
-        dl->AddText(ImVec2(at.x - ts.x * 0.5f + 1, at.y + 1), IM_COL32(0, 0, 0, 200), p->label.c_str());
-        dl->AddText(ImVec2(at.x - ts.x * 0.5f, at.y), IM_COL32(255, 255, 255, 255), p->label.c_str());
-    }
+        return std::string();
+    });
+    top.choice("Clipping protection", Panel::Ref<int>([this] {
+                   m_protectionIndex = int(m_protection);
+                   return m_scene == Scene::Hair ? nullptr : &m_protectionIndex;
+               }),
+               { "Off", "Basic", "Full" }, [this] {
+                   m_protection = kke::ClothProtection(m_protectionIndex);
+                   applyProtection();
+               });
+    top.note("{cloth.protection} changes it. Full: cloth can't pass through cloth, not even itself. Basic: through the world, not other cloth. Off: raw Jolt.")
+        .showIf(cloth);
+    top.button("Drop again", [this] { redrop(); });
+    top.toggle("Tour the scenes", &m_tour);
+
+    auto& wind = panel->section("Wind");
+    wind.sectionIf([this] { return m_scene == Scene::Fabrics || m_scene == Scene::Cape || m_scene == Scene::Hair; });
+    wind.slider("Wind", &m_windSpeed, 0.0f, 15.0f, "%.1f m/s", {}, 0.5f);
+    wind.slider("Wind from", &m_windDegrees, -180.0f, 180.0f, "%.0f deg", [this] { m_windYaw = glm::radians(m_windDegrees); }, 5.0f);
+    wind.toggle("Gusts", &m_gusts);
+
+    auto& nets = panel->section("Nets");
+    nets.sectionIf(is(Scene::Nets));
+    nets.toggle("Balls and shots", &m_rain);
+
+    auto& cape = panel->section("Cape");
+    cape.sectionIf(is(Scene::Cape));
+    cape.slider("Run speed", Panel::Ref<float>([this] { return m_runner ? &m_runner->speed : nullptr; }), 0.0f, 8.0f, "%.1f m/s", {}, 0.5f);
+
+    auto& stress = panel->section("Stress");
+    stress.sectionIf(is(Scene::Stress));
+    stress.slider("Sheets", &m_stressCount, 1, 100);
+    stress.slider("Vertices per side", &m_stressRes, 8, 64);
+    stress.button("Rebuild", [this] { setScene(Scene::Stress); });
+
+    auto& hair = panel->section("Hair");
+    hair.sectionIf(is(Scene::Hair));
+    hair.slider("Head motion", &m_headMotion, 0.0f, 2.0f, "%.1f", {}, 0.1f);
+    hair.slider("Guide strands per head", &m_hairGuides, 16, 1000);
+    hair.slider("Hairs drawn per guide", &m_hairsPerGuide, 1, 128);
+    hair.button("Rebuild", [this] { setScene(Scene::Hair); });
+    hair.note("Guides are simulated; the hairs drawn around them are built on the GPU.");
+
+    auto& cost = panel->section("Cost");
+    cost.text([this] {
+        if (m_scene == Scene::Hair) {
+            size_t guides = 0, verts = 0, hairs = 0;
+            for (auto& h : m_heads) {
+                const kke::HairStats st = m_world->hairStats(h->hair);
+                guides += st.guides;
+                verts += st.vertices;
+                hairs += h->drawn->hairs();
+            }
+            char buf[256];
+            std::snprintf(buf, sizeof(buf), "%zu guide strands (%zu vertices), %zu hairs drawn", guides, verts, hairs);
+            return std::string(buf);
+        }
+        uint32_t verts = 0, tris = 0, asleep = 0;
+        for (auto& p : m_cloth) {
+            const kke::ClothStats st = m_world->clothStats(p->id);
+            verts += st.vertices;
+            tris += st.triangles;
+            asleep += st.sleeping ? 1u : 0u;
+        }
+        char buf[256];
+        std::snprintf(buf, sizeof(buf), "%zu cloths (%u asleep), %u vertices, %u triangles", m_cloth.size(), asleep, verts, tris);
+        return std::string(buf);
+    });
+    cost.text([this] {
+        char buf[256];
+        if (m_scene == Scene::Hair)
+            std::snprintf(buf, sizeof(buf), "Physics step %.2f ms (hair and all), guides to the GPU %.2f ms", m_stepMs, m_hairUploadMs);
+        else
+            std::snprintf(buf, sizeof(buf), "Physics step %.2f ms (protection %.2f ms), meshes %.2f ms", m_stepMs, m_protectMs, m_meshMs);
+        return std::string(buf);
+    });
+    cost.text([this] {
+        if (m_scene == Scene::Hair) return std::string();
+        uint32_t contacts = 0, undone = 0;
+        for (auto& p : m_cloth) {
+            const kke::ClothStats st = m_world->clothStats(p->id);
+            contacts += st.selfContacts;
+            undone += st.crossingsUndone;
+        }
+        return "Cloth contacts " + std::to_string(contacts) + ", crossings undone " + std::to_string(undone);
+    });
 }
 
 } // namespace kke_cloth

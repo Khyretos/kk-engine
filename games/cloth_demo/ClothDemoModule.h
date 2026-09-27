@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kke/Cloth.h"
+#include "kke/HairRenderer.h"
 #include "kke/Module.h"
 #include "kke/RigidWorld.h"
 #include "kke/SphereImpostors.h"
@@ -15,8 +16,8 @@ class OrbitCameraModule;
 
 namespace kke_cloth {
 
-// Cloth (kke/Cloth.h, docs/CLOTH.md), five scenes (1-5, Tab, or
-// KKE_CLOTH_SCENE=fabrics|bed|nets|cape|stress):
+// Cloth and hair (kke/Cloth.h, kke/Hair.h, docs/CLOTH.md, docs/HAIR.md),
+// six scenes (1-6, Tab, or KKE_CLOTH_SCENE=fabrics|bed|nets|cape|stress|hair):
 //  - Fabrics: silk, cotton, denim, wool, leather and satin, each dropped
 //    on a little table and hanging as a banner in gusty wind.
 //  - Bed: a wool blanket, a silk sheet and a denim throw dropped on a bed:
@@ -26,6 +27,8 @@ namespace kke_cloth {
 //    running through a curtain.
 //  - Stress: N sheets over balls (KKE_CLOTH_COUNT, KKE_CLOTH_RES) to
 //    measure what cloth costs.
+//  - Hair: four heads (long, wavy, curly, short) turning and nodding in
+//    the wind; KKE_HAIR_GUIDES and KKE_HAIR_PER_GUIDE set the cost.
 // KKE_CLOTH_PROTECTION=full|basic|off, KKE_CLOTH_TOUR=1 (cycles the scenes;
 // on by itself under KKE_BENCHMARK), KKE_CLOTH_WIND=<m/s>.
 class ClothDemoModule : public kke::Module {
@@ -36,10 +39,8 @@ public:
     void update(const kke::UpdateContext& ctx) override;
     void render(const kke::RenderContext& ctx) override;
     void renderShadow(const kke::ShadowRenderContext& ctx) override;
-    void renderUi() override;
-    void onEvent(const SDL_Event& event) override;
 
-    enum class Scene { Fabrics, Bed, Nets, Cape, Stress };
+    enum class Scene { Fabrics, Bed, Nets, Cape, Stress, Hair };
 
 private:
     struct Piece {
@@ -69,6 +70,18 @@ private:
         std::unique_ptr<kke::DynamicMeshRenderer> body;
     };
 
+    struct Head {
+        kke::RigidWorld::BodyId collider{};  // the head, a sphere only cloth and hair feel
+        kke::RigidWorld::HairId hair = 0;
+        glm::vec3 neck{0.0f};                // it turns about here
+        glm::mat4 bind{1.0f}, now{1.0f};
+        float phase = 0.0f;
+        std::string label;
+        std::vector<glm::vec3> guides;
+        std::unique_ptr<kke::HairRenderer> drawn;
+        std::unique_ptr<kke::DynamicMeshRenderer> mesh; // bind pose; drawn with now * inverse(bind)
+    };
+
     void setScene(Scene s);
     void clear();
     Piece& addCloth(const kke::ClothDesc& desc, const std::string& label);
@@ -80,10 +93,15 @@ private:
     void buildNets();
     void buildCape();
     void buildStress();
+    void buildHair();
+    void stepHeads(float dt);
     void redrop();
     void stepRunner(float dt);
     void updateMeshes(const glm::vec3& cameraPos);
     void applyProtection();
+    void defineInput();
+    void readInput();
+    void buildPanel();
 
     kke::Application* m_app = nullptr;
     kke::OrbitCameraModule* m_camera = nullptr;
@@ -94,6 +112,10 @@ private:
     std::vector<Solid> m_solids;
     std::vector<Ball> m_balls;
     std::unique_ptr<Runner> m_runner;
+    std::vector<std::unique_ptr<Head>> m_heads;
+    int m_hairGuides = 160, m_hairsPerGuide = 32;
+    float m_headMotion = 1.0f;
+    double m_hairUploadMs = 0.0;
     Scene m_scene = Scene::Fabrics;
     kke::ClothProtection m_protection = kke::ClothProtection::Full;
 
@@ -103,10 +125,11 @@ private:
     int m_stressCount = 16, m_stressRes = 24;
     uint32_t m_rng = 0x2545f491u;
     std::vector<kke::SphereImpostorRenderer::Sphere> m_sphereScratch;
+    int m_sceneIndex = 0, m_protectionIndex = 2; // the panel's choices
+    float m_windDegrees = 20.0f;
     // Measured, smoothed: whole physics step, the protection pass, the mesh rebuild.
     double m_stepMs = 0.0, m_protectMs = 0.0, m_meshMs = 0.0;
     float m_pixelAngle = 0.001f; // radians per pixel (thread width)
-    glm::mat4 m_viewProj{1.0f};  // last frame's, for the labels
 };
 
 } // namespace kke_cloth

@@ -1,10 +1,12 @@
 #pragma once
 
-// Private to kke::RigidWorld: the cloth it owns (Jolt soft bodies) and the
-// engine's clipping protection pass, run before every Jolt step.
-// kke/Cloth.h and docs/CLOTH.md describe what it does.
+// Private to kke::RigidWorld: the cloth and hair it owns (Jolt soft
+// bodies), air drag and wind on them, and the engine's clipping protection
+// pass, run before every Jolt step. kke/Cloth.h, kke/Hair.h, docs/CLOTH.md
+// and docs/HAIR.md describe what it does.
 
 #include "kke/Cloth.h"
+#include "kke/Hair.h"
 
 #include <Jolt/Jolt.h>
 
@@ -33,8 +35,19 @@ public:
     ClothSystem& operator=(const ClothSystem&) = delete;
 
     uint32_t add(const ClothDesc& desc);
+    // Hair: guide strands (chains of distance constraints), in soft bodies of up to
+    // kHairPart guides each (Jolt steps each body on its own thread).
+    uint32_t addHair(const HairDesc& desc);
     void remove(uint32_t id);
-    size_t count() const { return m_cloths.size(); }
+    size_t count() const { return m_cloths.size(); } // soft bodies: cloth and hair parts
+    size_t hairCount() const { return m_hairs.size(); }
+    size_t clothCount() const;
+    bool isHair(uint32_t id) const { return m_hairs.count(id) != 0; }
+    bool hairPositions(uint32_t id, std::vector<glm::vec3>& out) const;
+    void setHairJoint(uint32_t id, const glm::mat4& head);
+    void resetHair(uint32_t id);
+    void removeHair(uint32_t id);
+    HairStats hairStats(uint32_t id) const;
     bool positions(uint32_t id, std::vector<glm::vec3>& out) const;
     // hard: snap every skinned vertex onto its skinned position (creation, reset).
     void setJoints(uint32_t id, const std::vector<glm::mat4>& joints, bool hard = false);
@@ -89,6 +102,11 @@ private:
         uint32_t triBase = 0;                // first triangle's index in the pass's triangle arrays
         std::vector<uint32_t> edges;         // every edge once, pairs of vertices
         uint32_t edgeBase = 0;               // first edge's index in the pass's edge arrays
+        // Hair: strands of `strandVerts` vertices (root, follicle, segments);
+        // the air pushes on each segment as a cylinder `hairWidth` wide.
+        bool hair = false;
+        uint32_t strandVerts = 0;
+        float hairWidth = 0.0f;
     };
     // Cells an item's swept bounds cover (empty: skip it).
     struct CellBox {
@@ -103,7 +121,9 @@ private:
     };
     void load(Cloth& c, JPH::Body& body);
     void store(Cloth& c, JPH::Body& body);
+    uint32_t addHairPart(const HairDesc& desc, const std::vector<glm::vec3>& rest, size_t first, size_t count);
     void air(Cloth& c, float dt);
+    void airOnStrands(Cloth& c, float dt);
     void protectAll(const JPH::BodyLockInterface& locks); // load, protect(), store every Full cloth
     void protect();
     void shapeTriangles(); // triN, triNPrev, triSphere of every active cloth
@@ -119,6 +139,7 @@ private:
     JPH::TempAllocator& m_temp;
     std::unordered_map<uint32_t, Cloth> m_cloths;
     uint32_t m_next = 1;
+    std::unordered_map<uint32_t, std::vector<uint32_t>> m_hairs; // hair id -> its parts (ids in m_cloths)
     glm::vec3 m_wind{0.0f};
     float m_dt = 1.0f / 60.0f; // this collision step (OnStep), for friction
     uint16_t m_pass = 0;       // protect(): the narrow-phase pass running (1-based)
