@@ -1,0 +1,167 @@
+# Cloth
+
+Capes, flags, curtains, blankets, sheets, tablecloths and nets. Cloth lives
+in a `kke::RigidWorld` next to the rigid bodies and characters, so it drapes
+over boxes, catches balls and gets pushed aside by people walking through it.
+The API is in [`kke/Cloth.h`](../engine/include/kke/Cloth.h) and
+`RigidWorld::addCloth`. The demo is [games/cloth_demo](../games/cloth_demo/README.md).
+
+## Which solver, and why
+
+Cloth is simulated by **Jolt Physics' soft bodies**, the same MIT library
+that already runs the rigid bodies. Its cloth solver is position-based
+(XPBD) with stretch, shear and bend constraints, long-range tethers,
+skinned back-stops and vertex-against-shape collision with CCD.
+
+**FEMFX was looked at and not used for cloth.** FEMFX solves volumes made
+of tetrahedra (jelly, rubber, breakable hero objects). A sheet of cloth has
+no volume. Built from tetrahedra it would need paper-thin elements, which
+are slow and unstable. FEMFX stays the engine's tool for deformable solids
+([PHYSICS_BRIDGE.md](PHYSICS_BRIDGE.md)).
+
+What Jolt doesn't have, the engine adds: collisions of cloth with itself
+and with other cloth (the part that stops clipping), air drag and wind,
+friction between fabrics, and fabric presets that look and move like the
+real thing.
+
+## Making cloth
+
+```cpp
+#include "kke/RigidWorld.h"
+
+kke::ClothDesc curtain;
+curtain.mesh = kke::clothGrid(glm::vec3(0, 2.4f, 0), 1.6f, 2.2f, 24, 32);   // hangs down
+curtain.fabric = kke::clothFabric("linen");
+for (int c = 0; c < curtain.mesh.columns; ++c)
+    curtain.pinned.push_back(kke::clothGridIndex(curtain.mesh, c, 0));      // on the rod
+kke::RigidWorld::ClothId id = world.addCloth(curtain);
+
+// every frame, after world.step(dt):
+world.clothPositions(id, positions);          // one per mesh vertex, world space
+```
+
+- `clothGrid(center, width, height, columns, rows, right, down)` makes a
+  rectangle. `down = (0,-1,0)` hangs it like a curtain, `down = (0,0,1)`
+  lays it flat like a sheet. UVs are in metres.
+- `clothNet(...)` is the same grid as threads only (a hammock, a tennis
+  net). `ClothDesc::contactMass` makes a net feel as heavy as its frame
+  holds it (a tennis net: about 5 kg), so a ball stops instead of
+  punching through.
+- `pinned` vertices don't move. With `setClothJoints(id, {matrix})` they
+  follow a moving joint (a flag on a moving pole).
+- A cape or skirt: give `skin` (up to four joints and weights per vertex)
+  and `bindPose`, then call `setClothJoints` with the joints' world
+  matrices every frame. `maxDistance` says how far a vertex may swing from
+  its skinned place; back-stops keep it from going behind the body.
+- `setWind(velocity)` blows on every cloth. `ClothDesc::wind` scales it
+  per cloth (0 for cloth indoors).
+- `RigidWorld::BodyDesc::clothOnly` makes a body only cloth sees: the arms
+  and legs of a mannequin, a cape's body proxy.
+- Characters (`addCharacter`) carry a collider only cloth sees, so walking
+  into a curtain pushes it aside. Rays and character queries ignore cloth.
+
+Drawing: `DynamicMeshRenderer::drawCloth(ctx, fabric)` (in
+`kke/SphereImpostors.h`) draws the mesh two-sided with the fabric's look
+(`shaders/cloth.frag`). The cloth demo shows how it rebuilds the mesh each
+frame from `clothPositions` and `clothNormals`.
+
+## Fabrics
+
+`clothFabric(name)` gives a tuned preset. Copy it and change what you like.
+
+| Preset | Feels like | Looks like |
+| --- | --- | --- |
+| `silk` | very light (60 g/m²), floats down slowly, drapes in soft folds | satin weave, gloss along the threads |
+| `satin` | light, slippery, flowing | satin weave, strong thread gloss |
+| `cotton` | the default: 150 g/m², ordinary folds | plain weave, matte |
+| `linen` | a little stiffer than cotton, crisp folds | plain weave |
+| `denim` | heavy (450 g/m²), stiff, few big folds | twill (the diagonal ribs, white weft) |
+| `wool` | heavy, soft, thick (16 mm), grips | knitted loops, fuzzy sheen at the edges |
+| `fleece` | thick and soft | fuzzy, strong sheen |
+| `leather` | heavy and stiff, barely stretches | smooth, no weave |
+| `canvas` | stiff, heavy | coarse plain weave |
+| `net` | threads, light, springy | drawn as threads |
+| `rubber` | stretchy, bouncy | smooth, no weave |
+
+How the numbers work: `density` is real (kg/m²). `stretch`, `shear` and
+`bend` are **softness**: 0 is as stiff as the solver can make it, 1 means
+each solver sub-step fixes about two thirds of the error, 100 about 2%
+(very floppy). Softness is scaled by each vertex's mass and the sub-step,
+so a fabric feels the same at any mesh resolution. `airDrag` scales air
+resistance (it is what makes silk float and a flag fly), `thickness` is
+the collision radius of every vertex, `maxStretch` caps how far the
+tethers let it stretch. The look fields (`color`, `roughness`, `sheen`,
+`weave`, `weaveScale`, `fuzz`, `specular`) only change how it's drawn.
+
+The weave fades to its average colour where a thread is smaller than a
+pixel, so fabric never shimmers in the distance (no dithering, no
+temporal tricks).
+
+## No clipping: protection levels
+
+Clipping (cloth through a body, through other cloth or through itself) is
+off by default. `ClothDesc::protection` (or `setClothProtection` at run
+time) picks how hard the engine works at it:
+
+| Level | What it does | When to pick it |
+| --- | --- | --- |
+| **Full** (default) | Everything below, plus cloth against cloth and against itself: every vertex kept `thickness` from every triangle, every edge from every edge, with friction. Anything that went through between two steps is put back on the side it came from (continuous: fast folds don't slip through), the pass repeats until nothing is crossed, and it runs once more after every step so what's drawn is clean. | Anything the camera looks at: capes, blankets, a bed, curtains people walk through. |
+| **Basic** | Vertices are balls of `thickness` (cloth rests *on* things), tethers stop it being stretched through a collider, back-stops keep capes off the body. No cloth-against-cloth. | Lots of background cloth that never folds onto itself or other cloth: distant flags, awnings. |
+| **Off** | Raw Jolt, no extras. | You're measuring, or the cloth is tiny and far away. |
+
+What Full has been checked against (`tests/test_cloth.cpp` and runs of the
+demo scenes, counting exactly how many edges pass through triangles):
+
+- A sheet dropped on a sheet, and a denim throw dropped from a metre onto a
+  silk sheet on a wool blanket: **zero crossings at every moment**.
+- The six fabrics dropped over a ball and flown as banners in gusty wind,
+  in 12 one-minute runs with different starting points and winds: never
+  unstable, never crumpled up.
+
+**Known limit.** Where layers are squeezed between a hard edge and each
+other while sliding (the demo's bed: silk slides over the wool blanket at
+the mattress edge while a denim throw lands on it), a hard landing can
+leave a few hundred of the silk sheet's 1,900 edges through the throw for
+about two seconds before the pass sorts them out, and the throw can end up
+under the blanket. The cause is the rigid collision (Jolt) and the cloth
+collision (the engine) taking turns instead of being solved together.
+Solving them together means changing Jolt's soft-body solver; that is the
+next step if it matters in your game.
+
+## What it costs
+
+`kke_bench --filter cloth_` (one thread, the solver's 6 sub-steps, 60 steps a
+second; this sandbox's 4-core VM, so a desktop is faster):
+
+| Case | Off | Basic | Full |
+| --- | --- | --- | --- |
+| One 32 x 32 sheet over a ball (1,024 vertices) | 0.43 ms | 0.40 ms | 1.00 ms |
+| One 64 x 64 blanket over a ball (4,096 vertices) | | 1.84 ms | 8.7 ms (p95 21 ms: it crumples onto itself a lot) |
+| 16 sheets of 24 x 24 (9,216 vertices) | | 3.6 ms | 9.4 ms |
+
+With the job system (the demo, 4 threads): the Fabrics scene (12 cloths,
+7,944 vertices) steps in about 7 ms, the stress scene (16 sheets) in about
+6 ms, the bed (3 layers, 3,624 vertices, all touching) in 10-12 ms.
+
+Rules of thumb:
+
+- Full costs 2 to 4 times Basic, most of it where cloth touches cloth. A
+  cloth lying alone costs little more than Basic.
+- Cloth that stops moving falls asleep and costs almost nothing (it still
+  stops other cloth as an obstacle).
+- Vertex count matters most. A cape is fine at 16 x 20; a blanket at 32 x
+  32; go higher only for a hero close-up.
+- `lastClothMs()` is the engine's pass (air, protection); `lastStepMs()`
+  the whole physics step. `clothStats(id)` gives contacts and undone
+  crossings per step.
+
+## The demo
+
+`./build/bin/cloth_demo`, scenes 1 to 5 (or `KKE_CLOTH_SCENE`): fabrics,
+bed, nets, cape, stress. `P` cycles Full, Basic and Off so you can see and
+time the difference. See [games/cloth_demo/README.md](../games/cloth_demo/README.md).
+
+## Hair
+
+Hair is a separate step, measured on its own (strands are rods, not
+sheets): see the ROADMAP.

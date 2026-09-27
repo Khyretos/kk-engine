@@ -121,6 +121,7 @@ nav:
       - Jiggle physics: JIGGLE.md
       - Physics bridge: PHYSICS_BRIDGE.md
       - Ragdolls: RAGDOLLS.md
+      - Cloth: CLOTH.md
   - Reference:
       - Lua API: reference/lua-api.md
       - JSON or YAML data files: DATA_FILES.md

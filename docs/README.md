@@ -24,6 +24,7 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [COMBAT.md](COMBAT.md) | Melee combat and crowds: attacks, blocks, parries, poise, hordes that wait their turn |
 | [JIGGLE.md](JIGGLE.md) | Jiggle physics for bones, skin and soft bodies |
 | [PHYSICS_BRIDGE.md](PHYSICS_BRIDGE.md) | How FEMFX deformable pieces and Jolt rigid bodies and characters meet |
+| [CLOTH.md](CLOTH.md) | Cloth: capes, flags, blankets, nets; fabric presets, no-clipping protection levels, what it costs |
 | [RAGDOLLS.md](RAGDOLLS.md) | Humanoid and animal ragdolls, their joint limits and how to override them |
 | [NETWORKING.md](NETWORKING.md) | Transport, protocol, authority and replication |
 | [STORAGE.md](STORAGE.md) | Saving data: SQLite built in, Valkey and PostgreSQL optional |

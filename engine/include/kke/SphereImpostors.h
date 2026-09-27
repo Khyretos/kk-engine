@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kke/Buffer.h"
+#include "kke/Cloth.h"
 #include "kke/Mesh.h"
 #include "kke/Module.h"
 #include "kke/Pipeline.h"
@@ -62,6 +63,10 @@ public:
     // uv.x = density (absorption; 0 = clear, ~2-6 = jelly), uv.y =
     // milkiness (0 = clear, 1 = opaque-ish, like panna cotta).
     void drawTranslucent(const RenderContext& ctx, const glm::mat4& model = glm::mat4(1.0f), float roughness = 0.08f);
+    // Fabric (cloth.frag): two-sided, woven, with sheen and thread gloss
+    // from the Fabric (kke/Cloth.h). Per vertex: color = sRGB albedo
+    // (usually fabric.color), normal, uv = cloth coordinates in metres.
+    void drawCloth(const RenderContext& ctx, const Fabric& fabric, const glm::mat4& model = glm::mat4(1.0f));
 
 private:
     struct FrameBuffers { std::unique_ptr<Buffer> vertices, indices; size_t vCap = 0, iCap = 0; uint64_t version = 0; };
@@ -69,6 +74,7 @@ private:
     Application& m_app;
     std::unique_ptr<Pipeline> m_pipeline, m_shadowPipeline;
     std::unique_ptr<Pipeline> m_absorbPipeline, m_lightPipeline; // drawTranslucent(), made on first use
+    std::unique_ptr<Pipeline> m_clothPipeline;                   // drawCloth(), made on first use
     void bindAndDraw(const RenderContext& ctx, Pipeline& pipeline, const glm::mat4& model, float metallic, float roughness);
     FrameBuffers m_frames[Renderer::kMaxFramesInFlight];
     std::vector<Vertex> m_vertices;

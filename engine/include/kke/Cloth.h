@@ -27,10 +27,16 @@ namespace kke {
 //  - Tethers (long-range attachments) to the pinned vertices: cloth can't
 //    stretch past its length, so it can't be yanked through a collider.
 //  - Self and cloth-vs-cloth collision (Jolt has none): every vertex is
-//    kept `thickness` away from the triangles of every Full-protected
-//    cloth, and a vertex that crossed a triangle between two steps is put
-//    back on the side it came from (continuous, so fast folds don't pass
-//    through either). A blanket folds on itself, never through itself.
+//    kept `thickness` away from the triangles, and every edge from the
+//    edges, of every Full-protected cloth, with friction between them. A
+//    vertex or edge that went through between two steps is put back on
+//    the side it came from (continuous, so fast folds don't pass through
+//    either), repeating until nothing is left crossed (a throw landing on
+//    a sheet on a blanket), and once more after each step, so what's
+//    drawn has every crossing undone. A blanket folds on itself, never
+//    through itself. Limit: a very hard hit on a stack of thin layers can
+//    leave a few crossings for a moment (the pass sorts them out over the
+//    next steps); docs/CLOTH.md has the measurements.
 //  - Skinned cloth (a cape on a character) gets back-stops: a vertex can't
 //    go behind the body surface under its skinned position.
 //  - Characters (RigidWorld::addCharacter) carry a collider only cloth
@@ -115,6 +121,12 @@ struct ClothDesc {
     float backStop = 0.02f;          // m behind the skinned surface a vertex may go before it's pushed out
     uint32_t pinJoint = 0;
     float gravity = 1.0f;            // multiple of world gravity
+    float wind = 1.0f;               // how much of RigidWorld::setWind reaches it (0 = indoors, sheltered)
+    // How heavy the cloth is to things that hit it, kg (0 = its own weight).
+    // A net or a trampoline held by its frame stops a ball through tension
+    // across the whole sheet, which the solver's per-vertex contacts can't
+    // see: give it the mass it should feel like (a tennis net: ~5 kg).
+    float contactMass = 0.0f;
 };
 
 struct ClothStats {

@@ -1,0 +1,9 @@
+{
+  "id": "engine.kke.cloth_demo",
+  "title": "KKE Cloth Demo",
+  "description": "Cloth on Jolt soft bodies with the engine's clipping protection: silk, cotton, denim, wool, leather and satin draped and blowing in the wind, a blanket, sheet and throw piled on a bed, a hammock and a tennis net catching balls, a runner's cape and a curtain, and a stress scene that measures what cloth costs.",
+  "version": "0.1.0",
+  "tags": ["demo", "physics", "cloth", "soft body", "benchmark"],
+  "engine_version": "0.3",
+  "modules": ["OrbitCamera", "UI"]
+}

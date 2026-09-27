@@ -160,7 +160,7 @@ struct RigidWorld::Impl : public JPH::ContactListener {
     double simulatedTime = 0.0;
     std::unique_ptr<detail::ClothSystem> cloth; // made on the first addCloth (it adds a step listener)
     detail::ClothSystem& clothSystem() {
-        if (!cloth) cloth = std::make_unique<detail::ClothSystem>(system, Layers::kCloth, *temp);
+        if (!cloth) cloth = std::make_unique<detail::ClothSystem>(system, Layers::kCloth, *temp, jobs.get());
         return *cloth;
     }
 
