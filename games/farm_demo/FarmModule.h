@@ -40,13 +40,12 @@ public:
     void onEvent(const SDL_Event& event) override;
 
 private:
-    // How one kind of animal looks: which model, how big, which clips.
+    // How one kind of animal looks: which model and how big. Its clips
+    // are picked by name (kke::ai::clipForAnim).
     struct Look {
         kke::ModelModule::ModelId model = 0;
         float scale = 1.0f;
-        float yawOffset = 0.0f;          // model's own facing vs +Z
-        std::map<std::string, int> clips; // ai anim name -> clip index
-        std::map<std::string, float> clipSpeed;
+        float yawOffset = 0.0f; // model's own facing vs +Z
     };
     struct Animal {
         kke::ai::AgentId id = 0;

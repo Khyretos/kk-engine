@@ -1,4 +1,5 @@
 #include "kke/NodeGraph.h"
+#include "kke/PlayBlocks.h"
 
 #include <nlohmann/json.hpp>
 
@@ -693,6 +694,16 @@ NodeGraph playBlockRecipe(const std::string& blockId) {
             { knock, ">", bonk, ">" },
             { hit, "point", bonk, "pos" },
         };
+    }
+    // An animal is a thing that is that species on the AI core:
+    // When put down -> Be a "sheep" (ai.add; its Who is `me`).
+    for (const PlayBlock& b : defaultPlayBlocks()) {
+        if (b.id != blockId || b.species.empty()) continue;
+        g.name = b.label;
+        const int placed = g.add("event:Placed", { 0.0f, 0.0f });
+        const int be = g.add("call:ai.add", { 320.0f, 0.0f });
+        g.find(be)->values["species"] = b.species;
+        g.links = { { placed, ">", be, ">" } };
     }
     return g;
 }

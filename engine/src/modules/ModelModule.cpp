@@ -283,12 +283,25 @@ void ModelModule::drawStandalone(VkCommandBuffer cmd, ModelId id, const glm::mat
     for (GpuMesh& gm : lm.meshes) {
         if (!gm.mesh) {
             // Skinned parts are drawn from per-instance skinned copies;
-            // standalone they need their bind pose once.
+            // standalone they need their rest pose once. Skinned, not the
+            // raw vertices: those are in the mesh's own space, which is
+            // only the model's in some packs (Quaternius' animals are
+            // turned and 100x apart, and would miss the thumbnail).
             const ModelMesh& m = lm.data.meshes[gm.meshIndex];
             if (m.vertices.empty() || m.indices.empty()) continue;
+            std::vector<glm::mat4> skin;
+            if (!lm.data.bones.empty()) {
+                std::vector<glm::mat4> locals(lm.data.bones.size());
+                for (size_t b = 0; b < locals.size(); ++b) locals[b] = lm.data.bones[b].localRest;
+                skin = computeSkinMatrices(lm.data, locals);
+            }
             std::vector<Vertex> verts;
             verts.reserve(m.vertices.size());
-            for (const ModelVertex& v : m.vertices) verts.push_back(toVertex(v));
+            for (const ModelVertex& v : m.vertices) {
+                ModelVertex posed = v;
+                if (!skin.empty() && v.weights != glm::vec4(0.0f)) skinVertex(v, skin, posed.position, posed.normal);
+                verts.push_back(toVertex(posed));
+            }
             gm.mesh = std::make_unique<Mesh>(m_app->device(), verts, m.indices, Mesh::Memory::HostVisible);
         }
         const GpuMaterial& mat = lm.materials[gm.material];

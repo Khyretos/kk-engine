@@ -13,12 +13,17 @@ std::vector<PlayBlock> defaultPlayBlocks() {
                        { "SK_Character_Jock", "SK_Character_Tourist", "SK_Character_FireFighter", "SK_Character_Paramedic",
                          "SK_Character_Grandpa", "SK_Character_Grandma", "SK_Character_HipsterGirl", "SK_Character_PunkGuy",
                          "SK_Character_SummerGirl", "SK_Character_Roadworker", "SK_Character_Hotdog", "SK_Character_Female_Druid" },
-                       true });
-    blocks.push_back({ "bat", "Bat", PlayBlockKind::Tool, { "SM_Prop_Bat_01" }, false });
-    blocks.push_back({ "crate", "Box", PlayBlockKind::Prop, { "SM_Prop_Crate_01", "SM_Prop_Crate_02", "SM_Prop_Barrel_01" }, false });
-    blocks.push_back({ "barrel", "Barrel", PlayBlockKind::Prop, { "SM_Prop_Barrel_01" }, false });
-    blocks.push_back({ "ball", "Ball", PlayBlockKind::Prop, { "SM_Primitive_SoccerBall_01", "SM_Prop_Bowling_Ball_01" }, false });
-    blocks.push_back({ "cone", "Cone", PlayBlockKind::Prop, { "SM_Primitive_Cone_01" }, false });
+                       true, 1.0f, {} });
+    blocks.push_back({ "bat", "Bat", PlayBlockKind::Tool, { "SM_Prop_Bat_01" }, false, 1.0f, {} });
+    blocks.push_back({ "crate", "Box", PlayBlockKind::Prop, { "SM_Prop_Crate_01", "SM_Prop_Crate_02", "SM_Prop_Barrel_01" }, false, 1.0f, {} });
+    blocks.push_back({ "barrel", "Barrel", PlayBlockKind::Prop, { "SM_Prop_Barrel_01" }, false, 1.0f, {} });
+    blocks.push_back({ "ball", "Ball", PlayBlockKind::Prop, { "SM_Primitive_SoccerBall_01", "SM_Prop_Bowling_Ball_01" }, false, 1.0f, {} });
+    blocks.push_back({ "cone", "Cone", PlayBlockKind::Prop, { "SM_Primitive_Cone_01" }, false, 1.0f, {} });
+    // Quaternius' animals are a few metres tall as made; the scales make them life size.
+    blocks.push_back({ "sheep", "Sheep", PlayBlockKind::Animal, { "Sheep" }, false, 0.23f, "sheep" });
+    blocks.push_back({ "cow", "Cow", PlayBlockKind::Animal, { "Cow" }, false, 0.3f, "cow" });
+    blocks.push_back({ "pig", "Pig", PlayBlockKind::Animal, { "Pig" }, false, 0.2f, "pig" });
+    blocks.push_back({ "horse", "Horse", PlayBlockKind::Animal, { "Horse" }, false, 0.28f, "horse" });
     return blocks;
 }
 

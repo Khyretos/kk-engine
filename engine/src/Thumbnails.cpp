@@ -16,7 +16,7 @@ namespace kke {
 namespace {
 // Bump when thumbnails are framed or lit differently: old cache files
 // stop matching and are made again.
-constexpr uint32_t kThumbnailVersion = 1;
+constexpr uint32_t kThumbnailVersion = 2; // 2: skinned models drawn in their rest pose
 
 uint64_t fnv1a(const void* data, size_t n, uint64_t h = 0xcbf29ce484222325ull) {
     const auto* p = static_cast<const unsigned char*>(data);

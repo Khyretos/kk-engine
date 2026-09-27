@@ -13,11 +13,14 @@
 #include "kke/Log.h"
 #include "kke/NodeGraph.h"
 #include "kke/PlayScript.h"
+#include "kke/ai/AiWorld.h"
+#include "kke/ai/Clips.h"
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/UiModule.h"
 #if KKE_ENABLE_LUA
 #include "kke/ScriptVM.h"
+#include "kke/ai/AiScript.h"
 
 #include <lua.h>
 #endif
@@ -61,7 +64,10 @@ struct SandboxModule::PlayGraphs {
                 if (s.m_blockAssets[i].empty()) continue;
                 const kke::PlayBlock& b = s.m_blocks[i];
                 out.push_back({ b.id, b.label,
-                                b.kind == kke::PlayBlockKind::Character ? "character" : b.kind == kke::PlayBlockKind::Tool ? "tool" : "prop" });
+                                b.kind == kke::PlayBlockKind::Character ? "character"
+                                : b.kind == kke::PlayBlockKind::Tool    ? "tool"
+                                : b.kind == kke::PlayBlockKind::Animal  ? "animal"
+                                                                        : "prop" });
             }
             return out;
         }
@@ -192,6 +198,10 @@ struct SandboxModule::PlayGraphs {
     bool scored = false;
     std::vector<std::pair<std::string, int>> ran;
 
+    // Animals and the people they see (ai.add from the animal recipes).
+    kke::ai::AiWorld ai{ 2026 };
+    std::map<uint32_t, std::string> animPlaying; // thing -> the AI anim its model shows
+
 #if KKE_ENABLE_LUA
     std::unique_ptr<kke::ScriptVM> vm;
     std::unique_ptr<World> world;
@@ -236,6 +246,13 @@ void SandboxModule::initGraphs() {
     g.vm = std::make_unique<kke::ScriptVM>();
     g.world = std::make_unique<PlayGraphs::World>(*this, g);
     kke::bindPlayBlocks(*g.vm, *g.world);
+    // ai.* before the node library is made, so the animal recipes' nodes exist.
+    kke::ai::bindAi(*g.vm, g.ai, [this](uint32_t id, glm::vec3& at) {
+        const Object* o = find(id);
+        if (!o) return false;
+        at = o->position;
+        return true;
+    });
     // What just ran, for the editor to light up (kke::CompileOptions::trace).
     g.vm->registerFunction("graph", "ran", [this](lua_State* L) {
         if (m_graphs->ran.size() < 512) m_graphs->ran.emplace_back(m_graphs->vm->currentSource(), int(lua_tointeger(L, 1)));
@@ -505,6 +522,7 @@ void SandboxModule::updateGraphs(float dt) {
         }
     }
     vm.updateTimers(g.now);
+    updateAnimals(dt);
 
     // Things graphs took away.
     std::vector<uint32_t> removing;
@@ -524,6 +542,64 @@ void SandboxModule::updateGraphs(float dt) {
         if (source == g.editingSource) g.editor.ran(node);
     g.ran.clear();
 #endif
+}
+
+const kke::PlayBlock* SandboxModule::blockFor(const std::string& asset) const {
+    const std::string id = blockOf(asset);
+    for (const kke::PlayBlock& b : m_blocks)
+        if (b.id == id) return &b;
+    return nullptr;
+}
+
+void SandboxModule::animalNoise(const glm::vec3& at, float loudness) {
+    if (m_graphs) m_graphs->ai.makeNoise({ at, loudness, 0, 0 });
+}
+
+void SandboxModule::updateAnimals(float dt) {
+    if (!m_graphs) return;
+    PlayGraphs& g = *m_graphs;
+    kke::ai::AiWorld& ai = g.ai;
+    const bool play = m_mode == Mode::Play;
+
+    // Gone things leave the AI; people are what the animals see.
+    std::vector<uint32_t> gone;
+    for (const kke::ai::Agent& a : ai.agents())
+        if (!find(a.id)) gone.push_back(a.id);
+    for (uint32_t id : gone) {
+        ai.remove(id);
+        g.animPlaying.erase(id);
+    }
+    for (const Object& o : m_objects)
+        if (o.character && !ai.has(o.id)) ai.addActor(o.id, "farmer", o.position);
+
+    // In Build (or while carried) the thing leads: the AI takes it from where it is.
+    for (const Object& o : m_objects) {
+        const kke::ai::Agent* a = ai.agent(o.id);
+        if (a && (a->actor || !play || o.id == m_movingId || g.animPlaying.count(o.id) == 0))
+            ai.setTransform(o.id, o.position, glm::vec3(0.0f), o.yawDegrees);
+    }
+    if (!play) return;
+    ai.update(dt);
+    const std::vector<kke::ai::AiEvent> events = ai.takeEvents();
+#if KKE_ENABLE_LUA
+    if (g.vm) kke::ai::fireAiEvents(*g.vm, events); // "Spotted", "Scared", ... for the graphs
+#endif
+
+    // Then the animal follows its mind: position, facing and the clip for what it's doing.
+    for (Object& o : m_objects) {
+        const kke::ai::Agent* a = ai.agent(o.id);
+        if (!a || a->actor || o.id == m_movingId) continue;
+        o.position = a->position;
+        o.yawDegrees = a->yaw;
+        m_models->setTransform(o.instance, objectTransform(o));
+        std::string& playing = g.animPlaying[o.id];
+        if (a->anim == playing) continue;
+        playing = a->anim;
+        if (const kke::ModelData* d = m_models->model(o.model)) {
+            const kke::ai::ClipChoice c = kke::ai::clipForAnim(*d, a->anim);
+            m_models->playAnimation(o.instance, c.clip, a->anim != "attack", c.speed);
+        }
+    }
 }
 
 // What graphs say, and the score once there is one: big, at the top.

@@ -214,9 +214,13 @@ same thing at all three levels:
   event a *when* node, automatically (the node library is built from the
   Lua API): *When it gets scared → Make a noise*, *When tapped → Follow
   (me)*. Categories: Minds, Orders, Senses.
-- **Simple:** palette animals will be recipes of those nodes (*Sheep* = a
-  thing with `ai.add(me, "sheep")`), so "look inside" opens a real graph.
-  They come next, in the sandbox palette.
+- **Simple:** the sandbox palette's Sheep, Cow, Pig and Horse
+  (`PlayBlockKind::Animal`, see [PLAY_TO_MAKE.md](PLAY_TO_MAKE.md)) are
+  recipes of those nodes. *When put down → Be a "sheep"* is `ai.add(me,
+  "sheep")`, so "look inside" opens a real graph. In Play the sandbox runs
+  the AI and moves each animal. People are what the animals see, and the
+  bat's swing is a noise they hear. `kke::ai::clipForAnim`
+  (`kke/ai/Clips.h`) picks each model's clip for what it is doing.
 
 ## The farm demo
 

@@ -3,6 +3,7 @@
 #include "kke/Application.h"
 #include "kke/Log.h"
 #include "kke/ModelAsset.h"
+#include "kke/ai/Clips.h"
 #include "kke/modules/InputModule.h"
 
 #include <SDL3/SDL.h>
@@ -267,11 +268,7 @@ bool FarmModule::makeLook(const std::string& species, Look& look) {
     if (species == "dog" || species == "fox") {
         look.model = loadDog(species == "dog" ? "GermanShepherd" : "Fox");
         look.scale = species == "fox" ? 0.8f : 1.0f;
-        if (!look.model) return false;
-        const kke::ModelData* d = m_models->model(look.model);
-        for (size_t i = 0; i < d->animations.size(); ++i) look.clips[d->animations[i].name] = int(i);
-        look.clipSpeed["run"] = 1.0f;
-        return true;
+        return look.model != 0;
     }
     for (const Spec& s : specs) {
         if (species != s.species) continue;
@@ -281,19 +278,7 @@ bool FarmModule::makeLook(const std::string& species, Look& look) {
         opts.loadAnimations = true;
         look.model = m_models->load(asset->path, opts);
         if (!look.model) return false;
-        look.scale = s.scale;
-        const kke::ModelData* d = m_models->model(look.model);
-        auto clip = [&](const char* part) {
-            for (size_t i = 0; i < d->animations.size(); ++i)
-                if (d->animations[i].name.find(part) != std::string::npos) return int(i);
-            return -1;
-        };
-        const int idle = clip("|Idle"), walk = clip("|Walk"), slow = clip("WalkSlow"), run = clip("|Run"), jump = clip("|Jump");
-        // Sheep and pigs only come with Idle and Jump: they hop along.
-        look.clips["idle"] = idle;
-        look.clips["walk"] = slow >= 0 ? slow : walk >= 0 ? walk : jump;
-        look.clips["run"] = run >= 0 ? run : jump;
-        if (look.clips["walk"] == jump) look.clipSpeed["walk"] = 0.7f;
+        look.scale = s.scale; // Quaternius' animals are made a few metres tall
         return true;
     }
     return false;
@@ -359,24 +344,12 @@ void FarmModule::setupAi() {
     kke::log::get(name())->info("farm: {} animals", m_animals.size());
 }
 
-void FarmModule::showAnim(kke::ModelModule::InstanceId instance, const Look& look, const std::string& animIn, std::string& playing) {
-    if (!instance) return;
-    std::string anim = animIn;
-    auto has = [&](const std::string& a) {
-        auto it = look.clips.find(a);
-        return it != look.clips.end() && it->second >= 0;
-    };
-    if (!has(anim)) {
-        // Close enough: an eating sheep without an eat clip stands.
-        if (anim == "sniff" && has("eat")) anim = "eat";
-        else if (anim == "attack" && has("run")) anim = "run";
-        else anim = "idle";
-    }
-    if (anim == playing) return;
+void FarmModule::showAnim(kke::ModelModule::InstanceId instance, const Look& look, const std::string& anim, std::string& playing) {
+    const kke::ModelData* d = instance ? m_models->model(look.model) : nullptr;
+    if (!d || anim == playing) return;
     playing = anim;
-    auto speed = look.clipSpeed.find(anim);
-    const bool loop = anim != "attack" && anim != "bark";
-    m_models->playAnimation(instance, has(anim) ? look.clips.at(anim) : -1, loop, speed == look.clipSpeed.end() ? 1.0f : speed->second);
+    const kke::ai::ClipChoice c = kke::ai::clipForAnim(*d, anim);
+    m_models->playAnimation(instance, c.clip, anim != "attack" && anim != "bark", c.speed);
 }
 
 void FarmModule::updatePlayer(float dt) {

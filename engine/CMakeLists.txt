@@ -57,6 +57,7 @@ set(ENGINE_SOURCES
     src/ai/Species.cpp
     src/ai/AiWorld.cpp
     src/ai/AiScript.cpp
+    src/ai/Clips.cpp
     src/net/BitStream.cpp
     src/net/Protocol.cpp
     src/net/Transport.cpp

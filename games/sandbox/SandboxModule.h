@@ -101,6 +101,7 @@ private:
         kke::ModelModule::ModelId model = 0;
         kke::ModelModule::InstanceId instance = 0;
         bool character = false;
+        bool animal = false;      // an Animal block: moved by the AI, not a collider or a ragdoll
         std::string texture;      // texture variant path, "" = the model's own
         uint32_t fractureSeed = 0; // this object's own seed, mixed with the world's (kke::fractureSeed); 0 = its id
         int breakMaterial = -1;    // kBreakMaterials index it was made breakable with (saved in layouts)
@@ -257,6 +258,12 @@ private:
     void queuePlaced(uint32_t thing, const glm::vec3& point);
     void queueFellOver(uint32_t thing);
     void queueStoodUp(uint32_t thing);
+    // Animals (PlayBlockKind::Animal) live on the AI core (kke::ai) once
+    // their recipe adds them: in Play they move themselves, in Build they
+    // stay where they are put. People are what they see.
+    void updateAnimals(float dt);
+    void animalNoise(const glm::vec3& at, float loudness); // the bat's whoosh: animals hear it
+    const kke::PlayBlock* blockFor(const std::string& asset) const;
     // Swings the bat so its sweet spot passes through `target` (the foot of
     // whoever is there, or a spot on the ground).
     bool swingBatAt(const glm::vec3& target);

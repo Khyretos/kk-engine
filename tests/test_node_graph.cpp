@@ -3,10 +3,12 @@
 // in the same ScriptVM as scripts, and errors map back to nodes.
 
 #include "kke/NodeGraph.h"
+#include "kke/PlayBlocks.h"
 #include "kke/PlayScript.h"
 #include "kke/SceneFile.h"
 #if KKE_ENABLE_LUA
 #include "kke/ScriptVM.h"
+#include "kke/ai/AiScript.h"
 
 #include "FakePlayWorld.h"
 
@@ -341,6 +343,40 @@ TEST(NodeGraphLua, BlockRecipeAppliesToEveryThingOfThatBlock) {
     EXPECT_EQ(world.ragdolls[0].first, b);
     EXPECT_EQ(world.ragdolls[1].first, a);
     EXPECT_TRUE(vm.errors().empty()) << vm.errors().front().message;
+}
+
+TEST(NodeGraphLua, AnimalRecipeMakesItThatAnimal) {
+    // The palette's Sheep is "When put down -> Be a sheep": each sheep put
+    // down joins the AI as a sheep, nothing else does.
+    ScriptVM vm;
+    FakeWorld world;
+    ai::AiWorld minds;
+    bindPlayBlocks(vm, world);
+    ai::bindAi(vm, minds, [&](uint32_t id, glm::vec3& at) {
+        if (!world.exists(id)) return false;
+        at = world.position(id);
+        return true;
+    });
+    const NodeLibrary lib = NodeLibrary::fromApi(vm.apiFunctions(), vm.apiEvents());
+    const NodeGraph recipe = playBlockRecipe("sheep");
+    ASSERT_FALSE(recipe.empty());
+    const Loaded l = load(vm, recipe, opts("graph:recipe:sheep", 0, "sheep"));
+    ASSERT_TRUE(l.ran) << l.compiled.lua;
+    const uint32_t sheep = world.add("sheep", glm::vec3(3.0f, 0.0f, 4.0f)), box = world.add("crate");
+    firePlayPlaced(vm, box, glm::vec3(0.0f), "crate");
+    firePlayPlaced(vm, sheep, glm::vec3(3.0f, 0.0f, 4.0f), "sheep");
+    EXPECT_TRUE(vm.errors().empty()) << vm.errors().front().message;
+    EXPECT_FALSE(minds.has(box));
+    ASSERT_TRUE(minds.has(sheep));
+    EXPECT_EQ(minds.speciesOf(sheep)->id, "sheep");
+    EXPECT_EQ(minds.agent(sheep)->position, glm::vec3(3.0f, 0.0f, 4.0f));
+    // Every animal block has one, and it only needs the ai.* nodes.
+    for (const PlayBlock& b : defaultPlayBlocks()) {
+        if (b.kind != PlayBlockKind::Animal) continue;
+        const CompiledGraph c = compileGraph(playBlockRecipe(b.id), lib, opts("graph:recipe:" + b.id, 0, b.id));
+        EXPECT_TRUE(c.ok()) << b.id;
+        EXPECT_NE(c.lua.find("\"" + b.species + "\""), std::string::npos) << c.lua;
+    }
 }
 
 TEST(NodeGraphLua, TimersWaitsAndLoops) {
