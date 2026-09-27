@@ -52,6 +52,8 @@ public:
     bool isHair(uint32_t id) const { return m_hairs.count(id) != 0; }
     bool hairPositions(uint32_t id, std::vector<glm::vec3>& out) const;
     void setHairJoint(uint32_t id, const glm::mat4& head);
+    void setHairMotion(uint32_t id, float motion); // RigidWorld::setHairMotion
+    float hairMotion(uint32_t id) const;
     void resetHair(uint32_t id);
     void removeHair(uint32_t id);
     HairStats hairStats(uint32_t id) const;
@@ -126,6 +128,9 @@ private:
         // Hair: strands of `strandVerts` vertices (root, follicle, segments);
         // the air pushes on each segment as a cylinder `hairWidth` wide.
         bool hair = false;
+        float hairMotion = 1.0f;             // setHairMotion: 1 natural .. 0 solid (not simulated)
+        bool hairFree = false;               // hold 0: hangs free at natural
+        int baseIterations = 6;              // the style's, before hairMotion
         uint32_t strandVerts = 0;
         float hairWidth = 0.0f;
     };
@@ -159,7 +164,8 @@ private:
     uint32_t addHairPart(const HairDesc& desc, const std::vector<glm::vec3>& rest, size_t first, size_t count);
     void air(Cloth& c, float dt);
     void airOnStrands(Cloth& c, float dt);
-    void protectAll(const JPH::BodyLockInterface& locks); // load, protect(), store every Full cloth
+    void protectAll(const JPH::BodyLockInterface& locks);
+    void setHairMotionOf(Cloth& c, float motion); // load, protect(), store every Full cloth
     void protect();
     void shapeTriangles(); // triN, triNPrev, triSphere of every active cloth
     bool nearInTopology(const Cloth& c, uint32_t v, uint32_t tri) const;

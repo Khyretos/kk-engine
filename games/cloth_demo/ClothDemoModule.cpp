@@ -132,6 +132,8 @@ void ClothDemoModule::init(kke::Application& app) {
     if (const char* e = std::getenv("KKE_CLOTH_COUNT")) m_stressCount = std::clamp(std::atoi(e), 1, 400);
     if (const char* e = std::getenv("KKE_CLOTH_RES")) m_stressRes = std::clamp(std::atoi(e), 4, 128);
     if (const char* e = std::getenv("KKE_HAIR_GUIDES")) m_hairGuides = std::clamp(std::atoi(e), 8, 4000);
+    if (const char* e = std::getenv("KKE_HAIR_MOTION")) m_hairMotion = std::clamp(float(std::atof(e)), 0.0f, 1.0f);
+    if (const char* e = std::getenv("KKE_HAIR_DETAIL")) m_hairDetail = std::clamp(float(std::atof(e)), 0.05f, 1.0f);
     if (const char* e = std::getenv("KKE_HAIR_PER_GUIDE")) m_hairsPerGuide = std::clamp(std::atoi(e), 0, 256);
     if (const char* e = std::getenv("KKE_HAIR_SHOW")) {
         for (int i = 0; i < kHairPageCount; ++i)
@@ -528,6 +530,7 @@ void ClothDemoModule::buildHair() {
     }
     if (!std::getenv("KKE_CLOTH_WIND")) m_windSpeed = 3.0f;
     m_gusts = true;
+    applyHairSettings();
     stepHeads(0.0f);
     if (m_camera) m_camera->setView(glm::vec3(0.1f * float(count), 1.5f, 0.0f), 0.8f + 0.55f * float(count), -0.1f, glm::pi<float>() + 0.15f); // the panel is on the right
 }
@@ -727,6 +730,17 @@ void ClothDemoModule::update(const kke::UpdateContext&) {
     m_hairUploadMs = m_hairUploadMs * 0.95 + msSince(t0) * 0.05;
 }
 
+void ClothDemoModule::compute(VkCommandBuffer cmd) {
+    for (auto& h : m_heads) h->drawn->compute(cmd); // the hairs' points, before the passes draw them
+}
+
+void ClothDemoModule::applyHairSettings() {
+    for (auto& h : m_heads) {
+        m_world->setHairMotion(h->hair, m_hairMotion);
+        h->drawn->setDetail(m_hairDetail);
+    }
+}
+
 void ClothDemoModule::render(const kke::RenderContext& ctx) {
     m_floor->draw(ctx, glm::mat4(1.0f), 0.0f, 0.95f);
     for (Solid& s : m_solids) s.mesh->draw(ctx, glm::mat4(1.0f), 0.0f, s.roughness);
@@ -863,6 +877,8 @@ void ClothDemoModule::buildPanel() {
     for (const HairPage& p : kHairPages) pages.push_back(p.name);
     hair.choice("Show", &m_hairShow, pages, [this] { setScene(Scene::Hair); });
     hair.slider("Head motion", &m_headMotion, 0.0f, 2.0f, "%.1f", {}, 0.1f);
+    hair.slider("Hair physics (0 solid, 1 natural)", &m_hairMotion, 0.0f, 1.0f, "%.2f", [this] { applyHairSettings(); }, 0.05f);
+    hair.slider("Hair detail (share drawn)", &m_hairDetail, 0.05f, 1.0f, "%.2f", [this] { applyHairSettings(); }, 0.05f);
     hair.slider("Guide strands per head", &m_hairGuides, 16, 1000);
     hair.slider("Hairs drawn per guide (0: the style's)", &m_hairsPerGuide, 0, 128);
     hair.button("Rebuild", [this] { setScene(Scene::Hair); });

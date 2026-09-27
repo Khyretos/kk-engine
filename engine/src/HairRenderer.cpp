@@ -1,6 +1,7 @@
 #include "kke/HairRenderer.h"
 
 #include "kke/Application.h"
+#include "kke/ShaderUtils.h"
 #include "kke/ShadowMap.h"
 #include "kke/VulkanCheck.h"
 #include "kke/VulkanDevice.h"
@@ -43,19 +44,41 @@ struct HairRenderer::Shared {
     VkDevice device = VK_NULL_HANDLE;
     VkDescriptorSetLayout setLayout = VK_NULL_HANDLE;
     std::unique_ptr<Pipeline> pipeline, shadowPipeline;
+    VkPipelineLayout pointsLayout = VK_NULL_HANDLE;
+    VkPipeline pointsPipeline = VK_NULL_HANDLE; // hair_points.comp
     Shared(Application& app) : device(app.device().device()) {
-        VkDescriptorSetLayoutBinding b[2]{};
-        for (uint32_t i = 0; i < 2; ++i) {
+        // The hairs, the frame (header, guides, frames), the built points.
+        VkDescriptorSetLayoutBinding b[3]{};
+        for (uint32_t i = 0; i < 3; ++i) {
             b[i].binding = i;
             b[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
             b[i].descriptorCount = 1;
-            b[i].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+            b[i].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
         }
         VkDescriptorSetLayoutCreateInfo li{};
         li.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        li.bindingCount = 2;
+        li.bindingCount = 3;
         li.pBindings = b;
         VK_CHECK(vkCreateDescriptorSetLayout(device, &li, nullptr, &setLayout));
+        VkPushConstantRange push{ VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(uint32_t) };
+        VkPipelineLayoutCreateInfo pl{};
+        pl.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pl.setLayoutCount = 1;
+        pl.pSetLayouts = &setLayout;
+        pl.pushConstantRangeCount = 1;
+        pl.pPushConstantRanges = &push;
+        VK_CHECK(vkCreatePipelineLayout(device, &pl, nullptr, &pointsLayout));
+        VkShaderModule module = loadShaderModule(app.device(), "shaders/hair_points.comp.spv");
+        VkComputePipelineCreateInfo cp{};
+        cp.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+        cp.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        cp.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        cp.stage.module = module;
+        cp.stage.pName = "main";
+        cp.layout = pointsLayout;
+        const VkResult r = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &cp, nullptr, &pointsPipeline);
+        vkDestroyShaderModule(device, module, nullptr);
+        VK_CHECK(r);
         PipelineConfig c;
         c.useVertexInput = false;       // hair.vert builds every vertex from the buffers
         c.cullMode = VK_CULL_MODE_NONE; // ribbons face the camera, either winding
@@ -71,6 +94,8 @@ struct HairRenderer::Shared {
     ~Shared() {
         pipeline.reset();
         shadowPipeline.reset();
+        if (pointsPipeline) vkDestroyPipeline(device, pointsPipeline, nullptr);
+        if (pointsLayout) vkDestroyPipelineLayout(device, pointsLayout, nullptr);
         if (setLayout) vkDestroyDescriptorSetLayout(device, setLayout, nullptr);
     }
     Shared(const Shared&) = delete;
@@ -90,7 +115,7 @@ HairRenderer::HairRenderer(Application& app) : m_app(app) {
         }
     }
     VkDevice dev = m_app.device().device();
-    VkDescriptorPoolSize size{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2 * Renderer::kMaxFramesInFlight };
+    VkDescriptorPoolSize size{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3 * Renderer::kMaxFramesInFlight };
     VkDescriptorPoolCreateInfo pi{};
     pi.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     pi.maxSets = Renderer::kMaxFramesInFlight;
@@ -111,6 +136,7 @@ HairRenderer::~HairRenderer() {
     VkDevice dev = m_app.device().device();
     for (FrameData& f : m_frames) f.buffer.reset();
     m_hairBuffer.reset();
+    m_points.reset();
     if (m_pool) vkDestroyDescriptorPool(dev, m_pool, nullptr);
 }
 
@@ -133,6 +159,11 @@ void HairRenderer::build(const HairDesc& desc) {
     // frees it once those frames are done.
     if (m_hairBuffer) m_app.renderer().retire(std::move(m_hairBuffer));
     m_hairBuffer = std::make_unique<Buffer>(Buffer::createDeviceLocal(m_app.device(), gpu.data(), gpu.size() * sizeof(HairGpu), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
+    // Every hair's points, built each frame by compute() (16 bytes a point).
+    if (m_points) m_app.renderer().retire(std::move(m_points));
+    const size_t points = std::max<size_t>(gpu.size() * size_t(std::max(m_strands.pointsPerHair(), 2)), 1);
+    m_points = std::make_unique<Buffer>(m_app.device(), points * 16, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+    m_built = false;
     for (FrameData& f : m_frames) f.bound = false;
     ++m_version;
 }
@@ -193,9 +224,11 @@ void HairRenderer::prepare(uint32_t frame) {
         f.version = m_version;
     }
     if (!f.bound) {
-        VkDescriptorBufferInfo infos[2] = { { m_hairBuffer->handle(), 0, VK_WHOLE_SIZE }, { f.buffer->handle(), 0, VK_WHOLE_SIZE } };
-        VkWriteDescriptorSet w[2]{};
-        for (uint32_t i = 0; i < 2; ++i) {
+        VkDescriptorBufferInfo infos[3] = { { m_hairBuffer->handle(), 0, VK_WHOLE_SIZE },
+                                            { f.buffer->handle(), 0, VK_WHOLE_SIZE },
+                                            { m_points->handle(), 0, VK_WHOLE_SIZE } };
+        VkWriteDescriptorSet w[3]{};
+        for (uint32_t i = 0; i < 3; ++i) {
             w[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             w[i].dstSet = f.set;
             w[i].dstBinding = i;
@@ -203,7 +236,7 @@ void HairRenderer::prepare(uint32_t frame) {
             w[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
             w[i].pBufferInfo = &infos[i];
         }
-        vkUpdateDescriptorSets(m_app.device().device(), 2, w, 0, nullptr);
+        vkUpdateDescriptorSets(m_app.device().device(), 3, w, 0, nullptr);
         f.bound = true;
     }
 }
@@ -229,7 +262,9 @@ void HairRenderer::chooseDetail(float pixel, const glm::vec3& camera) {
     const float area = 3.14159265f * std::max(m_radius * m_radius, 1e-6f);
     const float layers = float(m_strands.hairs()) * wide * m_strandLength / area;
     const uint32_t most = uint32_t(std::max(m_strands.style().hairsPerGuide, 1));
-    const uint32_t stride = std::clamp(uint32_t(layers / kLayers), 1u, most);
+    // setDetail: at most that share of the hairs, at any distance.
+    const uint32_t least = uint32_t(std::lround(1.0f / std::clamp(m_detail, 0.05f, 1.0f)));
+    const uint32_t stride = std::clamp(std::max(uint32_t(layers / kLayers), least), 1u, most);
     if (stride == m_stride) return;
     m_stride = stride;
     FrameHeader* h = reinterpret_cast<FrameHeader*>(m_frameBytes.data());
@@ -238,16 +273,47 @@ void HairRenderer::chooseDetail(float pixel, const glm::vec3& camera) {
     ++m_version;
 }
 
-void HairRenderer::draw(const RenderContext& ctx) {
+void HairRenderer::compute(VkCommandBuffer cmd) {
     if (!m_hairBuffer || m_frameBytes.empty() || vertexCount() == 0) return;
-    // A pixel's size one metre from the camera, for the shader's minimum width.
-    const VkExtent2D e = m_app.renderer().renderExtent();
-    const float pixel = 2.0f / (std::max(std::fabs(ctx.proj[1][1]), 1e-4f) * float(std::max(e.height, 1u)));
-    if (reinterpret_cast<const FrameHeader*>(m_frameBytes.data())->counts.w != pixel) {
-        reinterpret_cast<FrameHeader*>(m_frameBytes.data())->counts.w = pixel;
-        ++m_version;
+    // The level of detail as the last draw saw the camera (it has to be
+    // settled before the points are built).
+    if (m_lastPixel > 0.0f) {
+        if (reinterpret_cast<const FrameHeader*>(m_frameBytes.data())->counts.w != m_lastPixel) {
+            reinterpret_cast<FrameHeader*>(m_frameBytes.data())->counts.w = m_lastPixel;
+            ++m_version;
+        }
+        chooseDetail(m_lastPixel, m_lastCamera);
     }
-    chooseDetail(pixel, ctx.cameraPos);
+    const uint32_t frame = m_app.renderer().currentFrameIndex();
+    prepare(frame);
+    // After the last frame's passes read the points (on this queue, in
+    // order), before this frame's do.
+    VkMemoryBarrier before{};
+    before.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &before, 0, nullptr, 0, nullptr);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_shared->pointsPipeline);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_shared->pointsLayout, 0, 1, &m_frames[frame].set, 0, nullptr);
+    const uint32_t total = uint32_t(drawnHairs()) * uint32_t(m_strands.pointsPerHair());
+    vkCmdPushConstants(cmd, m_shared->pointsLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(total), &total);
+    vkCmdDispatch(cmd, (total + 63) / 64, 1, 1);
+    VkMemoryBarrier after{};
+    after.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+    after.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    after.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 0, 1, &after, 0, nullptr, 0, nullptr);
+    m_built = true;
+    m_builtStride = m_stride;
+}
+
+void HairRenderer::setDetail(float detail) { m_detail = std::clamp(detail, 0.05f, 1.0f); }
+
+void HairRenderer::draw(const RenderContext& ctx) {
+    // A pixel's size one metre from the camera, for the shader's minimum
+    // width and the level of detail (compute() uses it next frame).
+    const VkExtent2D e = m_app.renderer().renderExtent();
+    m_lastPixel = 2.0f / (std::max(std::fabs(ctx.proj[1][1]), 1e-4f) * float(std::max(e.height, 1u)));
+    m_lastCamera = ctx.cameraPos;
+    if (!ready()) return;
     prepare(ctx.frameIndex);
     m_shared->pipeline->bind(ctx.cmd);
     VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, m_frames[ctx.frameIndex].set };
@@ -255,8 +321,14 @@ void HairRenderer::draw(const RenderContext& ctx) {
     vkCmdDraw(ctx.cmd, vertexCount(), 1, 0, 0);
 }
 
+bool HairRenderer::ready() const {
+    // Only points compute() built this frame's way (never on the first
+    // frame: nothing is built yet).
+    return m_hairBuffer && !m_frameBytes.empty() && vertexCount() > 0 && m_built && m_builtStride == m_stride;
+}
+
 void HairRenderer::drawShadow(const ShadowRenderContext& ctx, const glm::vec3& towardsLight) {
-    if (!m_hairBuffer || m_frameBytes.empty() || vertexCount() == 0) return;
+    if (!ready()) return;
     prepare(ctx.frameIndex);
     m_shared->shadowPipeline->bind(ctx.cmd);
     VkDescriptorSet set = m_frames[ctx.frameIndex].set;

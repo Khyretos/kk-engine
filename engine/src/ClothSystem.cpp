@@ -148,7 +148,7 @@ ClothSystem::~ClothSystem() {
     m_system.SetSoftBodyContactListener(nullptr);
     JPH::BodyInterface& bi = m_system.GetBodyInterface();
     for (auto& [id, c] : m_cloths) {
-        bi.RemoveBody(c.body);
+        if (bi.IsAdded(c.body)) bi.RemoveBody(c.body);
         bi.DestroyBody(c.body);
     }
 }
@@ -420,17 +420,15 @@ uint32_t ClothSystem::addHairPart(const HairDesc& d, const std::vector<glm::vec3
 
     const glm::mat4 toLocal = glm::translate(glm::mat4(1.0f), -centroid);
     s->mInvBindMatrices.emplace_back(0u, toJ(glm::inverse(toLocal * d.bindPose)));
+    // Every vertex is skinned: as far from its styled place as `hold` lets
+    // it (hanging free, hold 0: its length, which setHairMotion lifts at
+    // natural), setHairMotion scaling it down to none (solid).
     const float hold = std::clamp(st.hold, 0.0f, 1.0f);
+    c.hairFree = hold <= 0.0f;
     for (uint32_t i = 0; i < n; ++i) {
         JPH::SoftBodySharedSettings::Skinned sk;
         sk.mVertex = i;
-        if (i % per < 2) {
-            sk.mMaxDistance = 0.0f;
-        } else if (hold > 0.0f) {
-            sk.mMaxDistance = std::max(arc[i] * (1.0f - hold), st.thickness);
-        } else {
-            continue;
-        }
+        sk.mMaxDistance = i % per < 2 ? 0.0f : std::max(arc[i] * (1.0f - hold), st.thickness);
         sk.mWeights[0] = JPH::SoftBodySharedSettings::SkinWeight(0, 1.0f);
         s->mSkinnedConstraints.push_back(sk);
     }
@@ -438,7 +436,7 @@ uint32_t ClothSystem::addHairPart(const HairDesc& d, const std::vector<glm::vec3
     s->Optimize();
 
     JPH::SoftBodyCreationSettings cs(s, JPH::RVec3(centroid.x, centroid.y, centroid.z), JPH::Quat::sIdentity(), m_layer);
-    c.iterations = std::max(1, st.iterations);
+    c.iterations = c.baseIterations = std::max(1, st.iterations);
     cs.mNumIterations = uint32_t((c.iterations + m_sub - 1) / m_sub);
     cs.mLinearDamping = st.damping;
     cs.mFriction = st.friction;
@@ -452,6 +450,7 @@ uint32_t ClothSystem::addHairPart(const HairDesc& d, const std::vector<glm::vec3
     if (c.body.IsInvalid()) return 0;
     c.stats.vertices = uint32_t(n);
     m_cloths.emplace(id, std::move(c));
+    setHairMotionOf(m_cloths.at(id), 1.0f);
     setJoints(id, { d.bindPose }, true);
     return id;
 }
@@ -475,7 +474,49 @@ bool ClothSystem::hairPositions(uint32_t id, std::vector<glm::vec3>& out) const 
 void ClothSystem::setHairJoint(uint32_t id, const glm::mat4& head) {
     auto it = m_hairs.find(id);
     if (it == m_hairs.end()) return;
-    for (uint32_t p : it->second) setJoints(p, { head });
+    for (uint32_t p : it->second) {
+        auto c = m_cloths.find(p);
+        // Solid: not simulated, every vertex put where the style has it.
+        const bool solid = c != m_cloths.end() && c->second.hairMotion <= 0.0f;
+        setJoints(p, { head }, solid);
+    }
+}
+
+void ClothSystem::setHairMotion(uint32_t id, float motion) {
+    auto it = m_hairs.find(id);
+    if (it == m_hairs.end()) return;
+    for (uint32_t p : it->second) {
+        auto ci = m_cloths.find(p);
+        if (ci != m_cloths.end()) setHairMotionOf(ci->second, motion);
+    }
+}
+
+void ClothSystem::setHairMotionOf(Cloth& c, float motion) {
+    motion = std::clamp(motion, 0.0f, 1.0f);
+    c.hairMotion = motion;
+    // Less motion: held closer to the style (the square: gently at first),
+    // and fewer solver iterations (a third of them near solid).
+    c.iterations = std::max(1, int(std::lround(float(c.baseIterations) * (0.34f + 0.66f * motion))));
+    const float reach = motion >= 1.0f ? (c.hairFree ? 1000.0f : 1.0f) : motion * motion;
+    {
+        JPH::BodyLockWrite lock(m_system.GetBodyLockInterface(), c.body);
+        if (!lock.Succeeded()) return;
+        JPH::SoftBodyMotionProperties* mp = softOf(lock.GetBody());
+        mp->SetSkinnedMaxDistanceMultiplier(reach);
+        mp->SetNumIterations(uint32_t((c.iterations + m_sub - 1) / m_sub));
+    }
+    // Solid: out of the world (nothing wakes it, nothing is solved), its
+    // vertices put where the style has them every setHairJoint.
+    JPH::BodyInterface& bi = m_system.GetBodyInterface();
+    if (motion <= 0.0f && bi.IsAdded(c.body)) bi.RemoveBody(c.body);
+    else if (motion > 0.0f && !bi.IsAdded(c.body)) bi.AddBody(c.body, JPH::EActivation::Activate);
+}
+
+float ClothSystem::hairMotion(uint32_t id) const {
+    auto it = m_hairs.find(id);
+    if (it == m_hairs.end() || it->second.empty()) return 1.0f;
+    auto c = m_cloths.find(it->second.front());
+    return c == m_cloths.end() ? 1.0f : c->second.hairMotion;
 }
 
 void ClothSystem::resetHair(uint32_t id) {
@@ -510,7 +551,7 @@ void ClothSystem::remove(uint32_t id) {
     auto it = m_cloths.find(id);
     if (it == m_cloths.end()) return;
     JPH::BodyInterface& bi = m_system.GetBodyInterface();
-    bi.RemoveBody(it->second.body);
+    if (bi.IsAdded(it->second.body)) bi.RemoveBody(it->second.body); // (solid hair is out of the world)
     bi.DestroyBody(it->second.body);
     m_cloths.erase(it);
 }
@@ -543,6 +584,7 @@ void ClothSystem::setJoints(uint32_t id, const std::vector<glm::mat4>& joints, b
     std::vector<JPH::Mat44> rel(c.bindPose.size(), JPH::Mat44::sIdentity());
     for (size_t j = 0; j < rel.size(); ++j) rel[j] = toJ(toCom * joints[std::min(j, joints.size() - 1)]);
     softOf(b)->SkinVertices(com, rel.data(), uint32_t(rel.size()), hard, m_temp);
+    if (c.hair && c.hairMotion <= 0.0f) return; // solid hair stays asleep: nothing to simulate
     if (!b.IsActive()) {
         lock.ReleaseLock();
         m_system.GetBodyInterface().ActivateBody(c.body);
@@ -587,7 +629,7 @@ void ClothSystem::reset(uint32_t id) {
     }
     c.prevValid = false;
     if (c.skinned) setJoints(id, c.bindPose, true);
-    m_system.GetBodyInterface().ActivateBody(c.body);
+    if (!c.hair || c.hairMotion > 0.0f) m_system.GetBodyInterface().ActivateBody(c.body);
 }
 
 ClothStats ClothSystem::stats(uint32_t id) const {

@@ -50,6 +50,8 @@ KKE_BENCHMARK=1 ./cloth_demo                              # tours every scene an
 | `KKE_CLOTH_WIND=<m/s>` | Wind speed (default 4, and 3 in the hair scene) |
 | `KKE_CLOTH_COUNT`, `KKE_CLOTH_RES` | Stress scene: sheets, vertices per side (default 16, 24) |
 | `KKE_HAIR_GUIDES`, `KKE_HAIR_PER_GUIDE` | Hair scene: guide strands per head, hairs drawn per guide (default 160, and 0 = as the style draws) |
+| `KKE_HAIR_MOTION=0..1` | Hair scene: hair physics, 1 natural (default), 0 solid (no simulation) |
+| `KKE_HAIR_DETAIL=0.05..1` | Hair scene: the share of hairs drawn (default 1), for phones and slow GPUs |
 | `KKE_HAIR_SHOW=types34\|styles\|braids\|types12\|classic` | Hair scene: the catalog's page (default types 3 and 4) |
 | `KKE_HAIR_STYLES=4c,afro` | Hair scene: exactly these heads, from `hairStyleNames()` and `hairstyleNames()` |
 | `KKE_CLOTH_GPU=0\|shared` | Search for cloth pairs on the CPU only, or on the graphics queue (docs/CLOTH.md, "On the GPU") |
@@ -79,7 +81,9 @@ The settings panel (RmlUi, on the right) has the scene, the protection,
 the wind, each scene's own settings, and a Cost section. The Cost section
 shows the physics step, the protection pass and the mesh rebuild, the
 contacts and undone crossings, and for hair the guide and hair counts and
-the upload. F1 shows the engine's developer panels.
+the upload. The hair scene also has "Hair physics" (1 natural, 0 solid:
+no simulation, the hair turns with the head as styled) and "Hair detail"
+(the share of hairs drawn), both live, for slower devices. F1 shows the engine's developer panels.
 
 ## The scenes
 
@@ -205,6 +209,7 @@ turns the actions into scene changes, drops and toggles.
 | `contactMass` 8 and 5 kg | `buildNets` | how hard the hammock and net stop balls |
 | `maxDistance` 2, `backStop` 0.01 | `buildCape` | how far the cape may swing, how close to the back it may come |
 | `m_hairGuides` 160, `m_hairsPerGuide` 0 (the style's) | panel, `KKE_HAIR_*` | simulation cost against how full the hair looks |
+| `m_hairMotion` 1, `m_hairDetail` 1 | panel, `KKE_HAIR_MOTION`, `KKE_HAIR_DETAIL` | CPU and GPU cost against how the hair moves and how full it is |
 | shake and turn amplitudes | `stepHeads` | how hard the heads move (the panel's Head motion scales them) |
 | gust waves | `fixedUpdate` | how the wind varies |
 

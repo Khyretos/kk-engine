@@ -17,14 +17,16 @@ class Application;
 
 // Draws a head of hair on the GPU (docs/HAIR.md): each frame only the
 // simulated guide strands are uploaded (RigidWorld::hairPositions, a few
-// kilobytes); the vertex shader (shaders/hair.vert) builds every drawn
-// hair around them as a camera-facing ribbon, and hair.frag shades it as
-// a round fibre with two highlights. It casts shadows too.
+// kilobytes); a compute pass (shaders/hair_points.comp) builds every drawn
+// hair's points around them once, and the vertex shaders (hair.vert,
+// hair_shadow.vert) make each a camera-facing ribbon. hair.frag shades it
+// as a round fibre with two highlights. It casts shadows too.
 //
 //   HairRenderer hair(app);
 //   hair.build(desc);                                    // once, and when the style changes
 //   world.hairPositions(id, guides);                     // every frame, after world.step
 //   hair.update(guides, headMatrix);
+//   hair.compute(cmd);                                   // in Module::compute()
 //   hair.draw(ctx);  hair.drawShadow(shadowCtx);         // in render() / renderShadow()
 //
 // While a frame may still draw it, destroy it through renderer().retire()
@@ -38,6 +40,14 @@ public:
 
     void build(const HairDesc& desc);
     void update(const std::vector<glm::vec3>& guides, const glm::mat4& head);
+    // Builds the hairs' points for this frame (before any render pass:
+    // Module::compute). Nothing is drawn until it has run once.
+    void compute(VkCommandBuffer cmd);
+    // At most this share of the hairs drawn (0.05 .. 1, default 1), each
+    // wider so the hair stays as full: for slower GPUs and phones. Far
+    // away heads draw fewer by themselves (level of detail).
+    void setDetail(float detail);
+    float detail() const { return m_detail; }
     void draw(const RenderContext& ctx);
     void drawShadow(const ShadowRenderContext& ctx, const glm::vec3& towardsLight);
     size_t hairs() const { return m_strands.hairs(); }
@@ -60,10 +70,17 @@ private:
     void prepare(uint32_t frame);
     uint32_t vertexCount() const;
     void chooseDetail(float pixel, const glm::vec3& camera);
+    bool ready() const;
 
     Application& m_app;
     HairStrands m_strands;
     std::unique_ptr<Buffer> m_hairBuffer;
+    std::unique_ptr<Buffer> m_points; // every hair's built points (hair_points.comp), one set shared by the frames
+    bool m_built = false;             // compute() has run since build()
+    uint32_t m_builtStride = 0;       // the level of detail it built
+    float m_detail = 1.0f;
+    float m_lastPixel = 0.0f;         // from the last draw(), for the next compute()
+    glm::vec3 m_lastCamera{0.0f};
     std::vector<float> m_frameBytes; // header + guides, as uploaded
     std::vector<glm::vec4> m_guideFrames; // scratch: the guides' frames (HairStrands::frames)
     uint64_t m_version = 0;

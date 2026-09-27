@@ -29,6 +29,41 @@ layout(std430, set = HAIR_SET, binding = 1) readonly buffer Frame {
     vec4 guides[];  // xyz, guide after guide, root first; then as many frames (HairStrands::frames)
 } frame;
 
+// Every drawn hair's points, built once a frame by hair_points.comp:
+// xyz = the centre, w = its direction (packTangent's bits).
+#ifdef HAIR_POINTS_WRITE
+layout(std430, set = HAIR_SET, binding = 2) writeonly buffer Points { vec4 points[]; };
+#else
+layout(std430, set = HAIR_SET, binding = 2) readonly buffer Points { vec4 points[]; };
+#endif
+
+// A unit direction in 32 bits (octahedral, 16 bits a component).
+uint packTangent(vec3 t) {
+    t /= abs(t.x) + abs(t.y) + abs(t.z);
+    vec2 o = t.z >= 0.0 ? t.xy : (1.0 - abs(t.yx)) * vec2(t.x >= 0.0 ? 1.0 : -1.0, t.y >= 0.0 ? 1.0 : -1.0);
+    return packSnorm2x16(o);
+}
+vec3 unpackTangent(uint bits) {
+    vec2 o = unpackSnorm2x16(bits);
+    vec3 t = vec3(o, 1.0 - abs(o.x) - abs(o.y));
+    float f = max(-t.z, 0.0);
+    t.xy += vec2(t.x >= 0.0 ? -f : f, t.y >= 0.0 ? -f : f);
+    return normalize(t);
+}
+
+#ifndef HAIR_POINTS_WRITE
+// A drawn hair's point as hair_points.comp built it: the centre, the
+// direction and s (0 root .. 1 tip).
+void builtPoint(int hair, int point, out vec3 p, out vec3 t, out float s) {
+    int pts = int(frame.counts.x + 0.5);
+    int drawn = hair / int(frame.look.z + 0.5);
+    vec4 v = points[drawn * pts + point];
+    p = v.xyz;
+    t = unpackTangent(floatBitsToUint(v.w));
+    s = float(point) / float(pts - 1);
+}
+#endif
+
 // Six vertices (two triangles) per segment of every hair.
 void hairCorner(int vertexIndex, out int hair, out int point, out float side) {
     int pts = int(frame.counts.x + 0.5);

@@ -971,6 +971,10 @@ void RigidWorld::removeHair(HairId id) {
 }
 size_t RigidWorld::hairCount() const { return m->cloth ? m->cloth->hairCount() : 0; }
 bool RigidWorld::hairPositions(HairId id, std::vector<glm::vec3>& out) const { return m->cloth && m->cloth->hairPositions(id, out); }
+void RigidWorld::setHairMotion(HairId id, float motion) {
+    if (m->cloth) m->cloth->setHairMotion(id, motion);
+}
+float RigidWorld::hairMotion(HairId id) const { return m->cloth ? m->cloth->hairMotion(id) : 1.0f; }
 void RigidWorld::setHairJoint(HairId id, const glm::mat4& head) {
     if (m->cloth) m->cloth->setHairJoint(id, head);
 }

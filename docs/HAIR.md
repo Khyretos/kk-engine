@@ -61,6 +61,7 @@ world.setHairJoint(id, headMatrixNow);
 // every frame, after it:
 world.hairPositions(id, guides);
 drawn.update(guides, headMatrixNow);
+// compute(cmd): drawn.compute(cmd);   (builds the hairs, before any render pass)
 // render(): drawn.draw(ctx);  renderShadow(): drawn.drawShadow(ctx, towardsTheSun);
 ```
 
@@ -195,11 +196,15 @@ highlight's shift along the hair).
 ## How it is drawn
 
 `HairRenderer` uploads only the guide points each frame (for 160 guides,
-about 40 KB). The vertex shader (`shaders/hair.vert`, `hair_common.glsl`)
-builds every drawn hair from its guide, a neighbouring guide it leans
+about 40 KB). Once a frame, a compute pass (`compute(cmd)`,
+`shaders/hair_points.comp`, `hair_common.glsl`) builds every drawn hair's
+points from its guide, a neighbouring guide it leans
 towards (so the gaps between clumps fill as guides move apart) and its own
 offset, which turns with the head. Each hair follows a smooth curve through
-its guide's points (Catmull-Rom), so curls stay round. Each is a ribbon
+its guide's points (Catmull-Rom), so curls stay round. It writes each
+point once (16 bytes: the position and a packed direction); the vertex
+shaders, for the picture and for the shadow, only read them, so a point
+is no longer built again for every vertex and every pass. Each is a ribbon
 facing the camera, never thinner than most of a pixel, so it can't flicker
 in and out between pixels. There is no dithering, no alpha and no temporal
 trick; MSAA smooths the edges.
@@ -287,6 +292,24 @@ so the hair looks as full; every guide keeps its share. Close up (the
 demo's camera) all of them are drawn. `drawnHairs()` says how many the
 last frame drew. Pipelines are shared by every `HairRenderer`, so a new
 head costs no shader compiling.
+
+### Slower devices: natural to solid, and detail
+
+Two live settings trade looks for speed, per head:
+
+- `world.setHairMotion(id, motion)`: 1 is natural (the style as made).
+  Less holds each guide closer to its styled shape and gives the solver
+  fewer iterations (down to a third). 0 is solid: the hair is taken out
+  of the simulation and turns with the head exactly as styled, so it costs
+  nothing on the CPU. A game can lower it for crowds, far away heads, or
+  a phone; the cloth demo's panel has it as "Hair physics".
+- `drawn.setDetail(share)`: at most this share of the hairs is drawn
+  (0.05 to 1), each wider by the square root so the hair looks as full.
+  Distance lowers it further by itself (below). The demo's "Hair detail".
+
+The test `Hair.MotionGoesFromNaturalToSolid` checks that solid hair does
+not move from its style, half moves less than natural, and that solid
+steps at under a third of natural's cost.
 
 Rules of thumb:
 
