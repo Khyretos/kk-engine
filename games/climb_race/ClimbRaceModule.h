@@ -10,13 +10,16 @@
 #include "kke/RigidWorld.h"
 #include "kke/modules/ModelModule.h"
 
+#include "Ghost.h"
 #include "Mountains.h"
 #include "Progress.h"
 #include "NetRace.h"
 
 #include <RmlUi/Core/DataModelHandle.h>
 
+#include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -121,6 +124,8 @@ private:
         int falls = 0;
         int medal = -1;             // this race's medal (players; -1 none)
         bool out = false;           // Elimination: out of this race (lets go, watches)
+        bool ghost = false;         // Time trial: the best run, played back (remote: posed from it)
+        Ghost run;                  // players: this race, recorded (the next ghost if it's the best)
         float hitCooldown = 0.0f;   // Rockfall: s before another rock counts
         float hitFlash = 0.0f;      // Rockfall: s left of "hit by a rock!"
         bool newBest = false;       // ... and it's their best on this mountain
@@ -189,12 +194,14 @@ private:
         glm::vec3 tint{1.0f};
         int netId = -1;          // online: its network player
         bool remote = false;     // online: another machine plays it
+        bool ghost = false;      // Time trial: the ghost of the best run
     };
     std::vector<Entry> wantedRoster() const;
     void buildRacers(const std::vector<Entry>& roster);
     void removeRacer(Racer& r);
     void applyLooks();
     int humans() const;
+    int faces() const;
     kke::Camera& cameraOf(Racer& r);
 
     RacerInput readPlayer(Racer& r, float dt);
@@ -283,8 +290,8 @@ private:
 
     // Party modes (Modes.cpp, DESIGN.md "Party modes"): the start menu's
     // Mode row (the host's, online).
-    enum class Mode : uint8_t { Race, Rockfall, Elimination };
-    static constexpr int kModes = 3;
+    enum class Mode : uint8_t { Race, Rockfall, Elimination, TimeTrial };
+    static constexpr int kModes = 4;
     Mode m_mode = Mode::Race;
     Mode chosenMode() const;
     void setupModes();                     // the Mode row, KKE_CLIMB_MODE
@@ -294,6 +301,14 @@ private:
     void spawnRock(int lane, const glm::vec3& above);
     void eliminate(Racer& r);              // Elimination: out (the host decides online)
     bool isDone(const Racer& r) const { return r.finished || r.out; }
+    // Time trial (Modes.cpp): the ghost of the best run on this mountain.
+    std::optional<Ghost> m_ghost;          // for m_mountain (none yet: the ghost's face stays empty)
+    float m_raceTime = 0.0f;               // s since the start (what the ghost plays back)
+    std::filesystem::path ghostFile(const Mountain& m) const;
+    void loadGhost();
+    void updateGhosts(float dt);
+    void recordRuns();                     // the players' runs, a pose a frame
+    netrace::Pose poseOf(const Racer& r) const; // world space, as drawn (Net.cpp)
     struct Rock {
         kke::RigidWorld::BodyId body = kke::RigidWorld::kNoBody;
         float age = 0.0f;

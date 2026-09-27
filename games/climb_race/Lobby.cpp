@@ -199,6 +199,13 @@ void ClimbRaceModule::recordFinish(Racer& r) {
     r.medal = res.medal;
     r.newBest = res.newBest;
     saveProgress();
+    // The best run yet: the ghost to race next time (Time trial).
+    if (res.newBest && !r.run.empty()) {
+        r.run.setTime(r.time);
+        r.run.name = r.name;
+        std::string error;
+        if (!r.run.save(ghostFile(m_mountain), &error)) kke::log::get(name())->warn("time trial: could not save the ghost: {}", error);
+    }
     kke::log::get(name())->info("{}: {} on {}{}{}", r.name, clockText(r.time), m_mountain.name, res.medal >= 0 ? std::string(", ") + medalName(res.medal) : std::string(),
                                 res.newBest ? ", a new best" : "");
     if (!res.opened.empty()) {
@@ -259,10 +266,11 @@ void ClimbRaceModule::buildRacers(const std::vector<Entry>& roster) {
     for (size_t i = 0; i < roster.size(); ++i) {
         const Entry& e = roster[i];
         Racer r;
-        r.lane = std::min(static_cast<int>(i), static_cast<int>(m_lanes.size()) - 1);
+        r.lane = e.ghost ? 0 : std::min(static_cast<int>(i), static_cast<int>(m_lanes.size()) - 1); // the ghost climbs through player 1
         r.seat = e.seat;
-        r.bot = !e.remote && (e.seat < 0 || m_autopilot);
-        r.remote = e.remote;
+        r.bot = !e.remote && !e.ghost && (e.seat < 0 || m_autopilot);
+        r.remote = e.remote || e.ghost; // posed from elsewhere: another machine, or the ghost
+        r.ghost = e.ghost;
         r.netId = e.netId;
         r.mouse = e.seat >= 0 && (!l ? e.seat == 0 : l->seat(e.seat).device != kke::Lobby::Device::Pad);
         r.difficulty = e.difficulty;
@@ -301,6 +309,11 @@ void ClimbRaceModule::applyLooks() {
     }
 }
 
+// One face per climber; the ghost climbs on player 1's (its body passes through).
+int ClimbRaceModule::faces() const {
+    return std::max(1, static_cast<int>(std::count_if(m_racers.begin(), m_racers.end(), [](const Racer& r) { return !r.ghost; })));
+}
+
 int ClimbRaceModule::humans() const {
     return static_cast<int>(std::count_if(m_racers.begin(), m_racers.end(), [](const Racer& r) { return r.seat >= 0; }));
 }
@@ -319,7 +332,7 @@ void ClimbRaceModule::updateLobby(float dt) {
     // Another mountain picked: it rises behind the line-up.
     if (const Mountain m = chosenMountain(); keyOf(m) != m_builtKey) {
         useMountain(m);
-        buildMountain(static_cast<int>(m_racers.size())); // every climber on the new rock
+        buildMountain(faces()); // every climber on the new rock
     }
 
     // The camera in front of the mountain, looking at the line-up.
@@ -368,15 +381,23 @@ void ClimbRaceModule::startFromLobby() {
     if (fromMenu) m_lobby->save();
     if (m_lobby) m_lobby->close();
     if (netHost()) syncNetPlayers(); // the CPU climbers get their ids before the race is sent
-    const std::vector<Entry> roster = netHost() ? onlineRoster() : wantedRoster();
+    std::vector<Entry> roster = netHost() ? onlineRoster() : wantedRoster();
+    // Time trial (offline): one more face, for the ghost of the best run.
+    if (chosenMode() == Mode::TimeTrial && !netHost()) {
+        Entry ghost;
+        ghost.name = "Ghost";
+        ghost.tint = glm::vec3(0.85f, 0.95f, 1.0f);
+        ghost.ghost = true;
+        roster.push_back(std::move(ghost));
+    }
     bool same = !netHost() && roster.size() == m_racers.size();
     for (size_t i = 0; same && i < roster.size(); ++i) same = roster[i].seat == m_racers[i].seat;
     if (!same) buildRacers(roster);
     applyLooks();
     // One face per climber.
-    if (const Mountain m = chosenMountain(); keyOf(m) != m_builtKey || m_lanes.size() != m_racers.size()) {
+    if (const Mountain m = chosenMountain(); keyOf(m) != m_builtKey || static_cast<int>(m_lanes.size()) != faces()) {
         useMountain(m);
-        buildMountain(static_cast<int>(m_racers.size()));
+        buildMountain(faces());
     }
     if (m_lobby) {
         m_lobby->applyInput();
@@ -389,9 +410,9 @@ void ClimbRaceModule::startFromLobby() {
     resetRace();
     if (m_howtoFirst) showHowTo(true);
     m_howtoFirst = false;
-    const int online = static_cast<int>(std::count_if(m_racers.begin(), m_racers.end(), [](const Racer& r) { return r.remote; }));
+    const int online = static_cast<int>(std::count_if(m_racers.begin(), m_racers.end(), [](const Racer& r) { return r.remote && !r.ghost; }));
     kke::log::get(name())->info("race: {} climbers: {} playing here, {} online, {} CPU, on {} (seed {})", m_racers.size(), humans(), online,
-                                static_cast<int>(m_racers.size()) - humans() - online, m_mountain.name, m_mountain.desc.seed);
+                                faces() - humans() - online, m_mountain.name, m_mountain.desc.seed);
 }
 
 void ClimbRaceModule::backToLobby() {

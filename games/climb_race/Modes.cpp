@@ -7,6 +7,8 @@
 //                leader, the more come.
 //   Elimination  every 30 s the lowest climber still in is out: they let
 //                go and watch. The last one in, or the first to the top, wins.
+//   Time trial   race the ghost of the best run on this mountain (Ghost.h),
+//                on the face next to yours. Offline only (online it's a Race).
 //
 // Online, each machine drops the same rocks (same seed each race) and
 // counts hits on its own climbers; the host alone decides who's out.
@@ -29,7 +31,7 @@ namespace climb_race {
 
 namespace {
 
-const char* const kModeNames[] = { "Race", "Rockfall", "Elimination" };
+const char* const kModeNames[] = { "Race", "Rockfall", "Elimination", "Time trial" };
 constexpr float kElimEvery = 30.0f;  // s between eliminations
 constexpr float kRockHit = 35.0f;    // stamina a rock costs
 constexpr float kRockLife = 9.0f;    // s before a rock is cleared away
@@ -104,7 +106,72 @@ void ClimbRaceModule::startMode() {
         r.out = false;
         r.hitCooldown = r.hitFlash = 0.0f;
     }
+    m_raceTime = 0.0f;
+    for (Racer& r : m_racers) r.run.clear();
+    loadGhost();
     kke::log::get(name())->info("mode: {}", kModeNames[static_cast<int>(m_mode)]);
+}
+
+std::filesystem::path ClimbRaceModule::ghostFile(const Mountain& m) const {
+    return std::filesystem::path(m_progressPath).parent_path() / "climb_race_ghosts" / (m.id + ".ghost");
+}
+
+void ClimbRaceModule::loadGhost() {
+    m_ghost.reset();
+    const bool wanted = std::any_of(m_racers.begin(), m_racers.end(), [](const Racer& r) { return r.ghost; });
+    if (wanted && m_mountain.id != "random") {
+        std::string error;
+        m_ghost = Ghost::load(ghostFile(m_mountain), &error);
+        if (!error.empty()) kke::log::get(name())->warn("time trial: {}", error);
+    }
+    for (Racer& r : m_racers) {
+        if (!r.ghost) continue;
+        r.name = m_ghost ? "Ghost of " + m_ghost->name.substr(0, m_ghost->name.find(" (")) : std::string("Ghost (none yet)");
+        r.finished = !m_ghost; // no ghost: nothing to wait for
+        if (r.model) m_models->setVisible(r.model, m_ghost.has_value());
+    }
+}
+
+// The players' runs, for the next ghost: every local player, while climbing.
+void ClimbRaceModule::recordRuns() {
+    if (m_phase != Phase::Racing || m_mountain.id == "random") return;
+    for (Racer& r : m_racers) {
+        if (r.seat < 0 || r.remote || isDone(r)) continue;
+        netrace::Pose p = poseOf(r);
+        const glm::vec3 off = m_lanes[static_cast<size_t>(r.lane)]->offset; // into the mountain's own space
+        p.feet -= off;
+        p.hips -= off;
+        for (int h = 0; h < 2; ++h) {
+            p.grip[h] -= off;
+            p.foot[h] -= off;
+        }
+        r.run.record(r.time, p);
+    }
+}
+
+void ClimbRaceModule::updateGhosts(float dt) {
+    if (m_phase == Phase::Racing) m_raceTime += dt;
+    for (Racer& r : m_racers) {
+        if (!r.ghost || !m_ghost) continue;
+        netrace::Pose p = m_ghost->at(m_raceTime);
+        const glm::vec3 off = m_lanes[static_cast<size_t>(r.lane)]->offset;
+        p.feet += off;
+        p.hips += off;
+        for (int h = 0; h < 2; ++h) {
+            p.grip[h] += off;
+            p.foot[h] += off;
+        }
+        r.netStateTime = p.loco == r.netLoco && p.climbing == r.net.climbing ? r.netStateTime + dt : 0.0f;
+        r.netLoco = p.loco;
+        r.net = p;
+        m_rigid->world().moveCharacter(r.id, p.feet);
+        if (!r.finished && m_phase == Phase::Racing && m_raceTime >= m_ghost->time()) {
+            r.finished = true;
+            r.time = m_ghost->time();
+            if (m_winner.empty()) m_winner = r.name;
+            kke::log::get(name())->info("{} topped out in {:.2f} s", r.name, r.time);
+        }
+    }
 }
 
 void ClimbRaceModule::spawnRock(int lane, const glm::vec3& above) {

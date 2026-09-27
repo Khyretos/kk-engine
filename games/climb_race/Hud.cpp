@@ -205,6 +205,8 @@ void ClimbRaceModule::updateHud(float) {
         banner = m_countdown > 2.0f ? "3" : m_countdown > 1.0f ? "2" : "1";
         sub = m_mode == Mode::Rockfall      ? "Race to the summit. Watch out for falling rocks!"
             : m_mode == Mode::Elimination ? "Race to the summit. Every 30 seconds the lowest climber is out!"
+            : m_mode == Mode::TimeTrial && m_ghost ? "Beat your ghost: " + m_ghost->name + ", " + clock(m_ghost->time())
+            : m_mode == Mode::TimeTrial && !netClient() && !netHost() ? "No ghost yet: set a time and it races you next time"
                                           : "Race to the summit";
     } else if (m_phase == Phase::Racing && you->time < 0.8f && !you->finished) {
         banner = "GO";

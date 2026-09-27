@@ -303,7 +303,7 @@ void ClimbRaceModule::buildMountain(int lanes) {
     // New walls: every climber holds on to the old one, so they start again.
     for (size_t i = 0; i < m_racers.size(); ++i) {
         Racer& r = m_racers[i];
-        r.lane = std::min(static_cast<int>(i), lanes - 1);
+        r.lane = r.ghost ? 0 : std::min(static_cast<int>(i), lanes - 1); // the ghost climbs through player 1
         r.climber = makeClimber(r.lane);
         makeBrain(r);
     }
@@ -653,13 +653,13 @@ void ClimbRaceModule::update(const kke::UpdateContext& ctx) {
             startFromLobby();
             if (fresh) {
                 nextMountain();
-                buildMountain(static_cast<int>(m_racers.size()));
+                buildMountain(faces());
                 resetRace();
             }
         } else {
             if (fresh) {
                 nextMountain();
-                buildMountain(static_cast<int>(m_racers.size()));
+                buildMountain(faces());
             }
             resetRace();
         }
@@ -677,6 +677,8 @@ void ClimbRaceModule::update(const kke::UpdateContext& ctx) {
     if (!stopped) {
         for (Racer& r : m_racers)
             if (!r.remote) updateRacer(r, dt);
+        recordRuns();
+        updateGhosts(dt);
         updateMode(dt);
     }
     if (m_phase == Phase::Racing && !stopped) {
