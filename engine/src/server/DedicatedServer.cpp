@@ -4,6 +4,7 @@
 
 #include "kke/net/Protocol.h"
 #include "kke/net/ScriptSpawns.h"
+#include "kke/net/SyncedTables.h"
 #include "kke/PackSeal.h"
 #include "kke/server/RelayService.h"
 #include "kke/server/ServerFiles.h"
@@ -484,13 +485,20 @@ void DedicatedServer::pruneBackups() {
 void DedicatedServer::onEvent(const net::GameEventMsg& e) {
     const bool board = e.kind == kEventLeaderboardSubmit || e.kind == kEventLeaderboardQuery || e.kind == kEventLeaderboardReply;
 #if KKE_ENABLE_LUA
-    if (m_scripts && (e.kind == script_net::kScriptEvent || e.kind == script_net::kScriptCall)) {
-        // A client's net.send and net.call are for the server's scripts, as they are for a host's.
+    if (m_scripts && (e.kind == script_net::kScriptEvent || e.kind == script_net::kScriptCall || e.kind == net::kTableSubscribe ||
+                      e.kind == net::kTableUnsubscribe)) {
+        // A client's net.send, net.call and net.watch are for the server's scripts, as they are for a host's.
         m_scripts->netMessage(e);
         return;
     }
 #endif
-    if (e.kind == script_net::kScriptReply) return; // answers go from the server, never between players
+    if (e.kind == script_net::kScriptReply || e.kind == net::kTableRows || e.kind == net::kTableUnsubscribe)
+        return; // from the server, or for its scripts: never passed between players
+    if (e.kind == net::kTableSubscribe) {
+        if (const auto s = net::tables_wire::decodeSubscribe(e.payload, net::TableLimits{}))
+            m_net->sendEventTo(e.fromPlayer, net::kTableRows, net::tables_wire::error(s->sub, "this server runs no scripts, so it has no synced tables"));
+        return;
+    }
     if (e.kind == script_net::kScriptCall) {
 #if KKE_ENABLE_LUA
         // Not a message for the others: say at once that nothing here answers it.

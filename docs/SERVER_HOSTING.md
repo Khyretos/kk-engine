@@ -218,8 +218,9 @@ game's `scripts/` folder next to the server, or point `"scripts"`
   everyone or one player; a player's `net.send` arrives in the
   `NetMessage` hook; `handle(name, fn)` answers the players'
   `net.call`, all or nothing: a refused or failed call's sends, spawns,
-  removes, kicks, scores and `store.*` saves never happen,
-  docs/SCRIPTING.md "Calls") and `server.*`: `name()`, `say(text)`,
+  removes, kicks, scores, synced table changes and `store.*` saves never
+  happen, docs/SCRIPTING.md "Calls"; `table(name)` keeps a synced table
+  the players watch, docs/SCRIPTING.md "Synced tables") and `server.*`: `name()`, `say(text)`,
   `kick(player, reason)`, `score(board, player, score)` (the cheat-proof
   way to post scores: the server decides them) and `top(board [, n])`.
   Breakables (FEMFX) aren't on the server yet.

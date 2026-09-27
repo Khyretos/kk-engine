@@ -22,7 +22,8 @@
 //   server is busy, no answer in `timeoutSeconds`, or the connection went.
 // - All or nothing: a handler runs inside the owner's `atomically`. On
 //   kke_server that is a store transaction plus holding back what the
-//   handler sends, spawns, removes and scores until it succeeded; a
+//   handler sends, spawns, removes and scores (and its synced table
+//   changes) until it succeeded; a
 //   refusal or an error undoes all of it. Lua variables it changed are not
 //   undone: check first, then change.
 // - Where the handlers live (a server, the host's game, an offline game)

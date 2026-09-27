@@ -116,6 +116,15 @@ join a new one (and is told nothing it could use).
     (`kke/ScriptCalls.h`, docs/SCRIPTING.md "Calls"). A server without
     scripts answers "nothing answers" at once rather than passing the
     call on.
+  - *Synced tables*: the server's scripts keep tables of keyed rows
+    (`net.table`); a player's `net.watch` subscribes to one, whole or
+    filtered on fields (court == 3), with `kTableSubscribe`. The server
+    sends the matching rows, "ready", then per tick only the inserts,
+    updates and deletes (`kTableRows`, packed into as few reliable
+    events as fit). Reconnecting or a new host re-subscribes and shows
+    only the differences. SpacetimeDB's tables and subscriptions,
+    without SQL (`kke/net/SyncedTables.h`, `kke/ScriptTables.h`,
+    docs/SCRIPTING.md "Synced tables").
   - *Spawned objects*: things the host makes while playing (a server
     script's crate or breakable) are `Spawn` messages: an id, a kind and
     the builder's own description (up to 256 bytes). Each client builds

@@ -5,6 +5,7 @@
 #include "kke/SceneLoader.h"
 #include "kke/ScriptCalls.h"
 #include "kke/ScriptStore.h"
+#include "kke/ScriptTables.h"
 #include "kke/ScriptVM.h"
 #include "kke/modules/ModelModule.h"
 
@@ -147,7 +148,8 @@ private:
 
     Application* m_app = nullptr;
     std::unique_ptr<ScriptVM> m_vm;
-    std::unique_ptr<ScriptCalls> m_calls; // net.call / net.handle (after m_vm: it goes first)
+    std::unique_ptr<ScriptCalls> m_calls;   // net.call / net.handle (after m_vm: they go first)
+    std::unique_ptr<ScriptTables> m_tables; // net.table / net.watch
     // Inside a net.call handler: the net.sends that wait for it to succeed.
     bool m_inCall = false;
     std::vector<std::vector<uint8_t>> m_heldSends;

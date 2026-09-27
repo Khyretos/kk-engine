@@ -167,6 +167,7 @@ void ServerScripts::update(double now, float dt) {
     }
     m_calls->update(now);
     m_vm->callHook("Think", dt);
+    m_tables->update(); // what this tick changed goes out
 #if KKE_ENABLE_JOLT
     if (RigidWorld* w = m_services.world) {
         std::vector<net::NetBodyState> states;
@@ -193,7 +194,8 @@ void ServerScripts::shutdown() {
     for (const std::string& f : m_files) m_vm->unload(f);
     m_vm->unload("console"); // what `lua` lines made
     m_files.clear();
-    m_calls.reset(); // its callbacks live in the vm
+    m_calls.reset(); // their callbacks live in the vm
+    m_tables.reset();
 #if KKE_ENABLE_JOLT
     if (RigidWorld* w = m_services.world)
         for (const auto& [id, body] : m_capsules) w->remove(body);
@@ -211,6 +213,7 @@ void ServerScripts::playerJoined(uint8_t id, const std::string& name) {
 void ServerScripts::playerLeft(uint8_t id) {
     const std::string name = m_names.count(id) ? m_names[id] : std::string();
     m_names.erase(id);
+    m_tables->playerLeft(id);
 #if KKE_ENABLE_JOLT
     if (auto it = m_capsules.find(id); it != m_capsules.end()) {
         if (m_services.world) m_services.world->remove(it->second);
@@ -224,6 +227,10 @@ void ServerScripts::playerLeft(uint8_t id) {
 void ServerScripts::netMessage(const net::GameEventMsg& e) {
     if (e.kind == script_net::kScriptCall) {
         m_calls->callReceived(e.fromPlayer, e.payload);
+        return;
+    }
+    if (e.kind == net::kTableSubscribe || e.kind == net::kTableUnsubscribe) {
+        m_tables->received(e.kind, e.fromPlayer, e.payload);
         return;
     }
     if (e.kind != script_net::kScriptEvent) return;
@@ -277,8 +284,11 @@ void ServerScripts::syncCapsules(float dt) {
 
 bool ServerScripts::runAtomically(const std::function<bool()>& run) {
     m_inCall = true;
+    m_tables->server().beginUndo();
     const bool ok = m_services.store ? m_services.store->transaction(run) : run();
     m_inCall = false;
+    if (ok) m_tables->server().endUndo();
+    else m_tables->server().rollback();
     std::vector<std::function<void()>> held = std::move(m_held);
     m_held.clear();
     if (ok) {
@@ -305,6 +315,7 @@ void ServerScripts::effect(std::function<void()> f) {
 
 void ServerScripts::release(const std::string& source) {
     if (m_calls) m_calls->release(source);
+    if (m_tables) m_tables->release(source);
     for (const Body& b : m_bodies) {
         if (b.source != source) continue;
         if (b.netId) m_net.despawn(b.netId);
@@ -503,6 +514,15 @@ void ServerScripts::bind() {
         else if (log) log(line);
     };
     m_calls->bind();
+    net::TableLimits limits;
+    limits.maxEventBytes = net::kMaxEventBytes;
+    m_tables = std::make_unique<ScriptTables>(vm, ScriptTables::Link{
+        [] { return true; },
+        [] { return false; },
+        {},
+        [this](int player, const std::vector<uint8_t>& bytes) { m_net.sendEventTo(uint8_t(player), net::kTableRows, bytes); },
+    }, limits);
+    m_tables->bind();
     bindPhysics();
     if (m_services.store) {
         m_store = std::make_unique<ScriptStore>(*m_services.store, m_services.game);

@@ -187,6 +187,7 @@ bool NetModule::host(uint16_t port, std::string* error) {
             log::get(name())->info("Player {} {} ({} connected)", id, joined ? "joined" : "left", m_server->clientCount());
             if (m_enet) m_enet->setDiscoveryInfo(discoveryInfo());
             if (onPlayer) onPlayer(id, joined);
+            for (const auto& listener : m_playerListeners) listener(id, joined);
         };
         for (const auto& [slot, g] : m_localGuests)
             if (!m_server->addLocalGuest(static_cast<uint8_t>(slot), g.name, g.character))
@@ -265,7 +266,10 @@ bool NetModule::join(const std::string& address, uint16_t port, std::string* err
         dispatchEvent(e);
     };
     m_client->onCorrection = [this](const glm::vec3& p) { if (onCorrection) onCorrection(p); };
-    m_client->onPlayer = [this](uint8_t id, bool joined) { if (onPlayer) onPlayer(id, joined); };
+    m_client->onPlayer = [this](uint8_t id, bool joined) {
+        if (onPlayer) onPlayer(id, joined);
+        for (const auto& listener : m_playerListeners) listener(id, joined);
+    };
     m_client->onGuestCorrection = [this](uint8_t slot, const glm::vec3& p) { if (onLocalCorrection) onLocalCorrection(slot, p); };
     m_client->onGuest = [this](uint8_t slot, uint8_t id, const std::string& reason) {
         auto it = m_localGuests.find(slot);

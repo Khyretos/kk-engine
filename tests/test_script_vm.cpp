@@ -1,5 +1,6 @@
 #include "kke/ScriptCalls.h"
 #include "kke/ScriptStore.h"
+#include "kke/ScriptTables.h"
 #include "kke/ScriptVM.h"
 #include "kke/modules/ScriptModule.h"
 
@@ -488,6 +489,59 @@ TEST(ScriptCalls, UnansweredCallsTimeOut) {
     EXPECT_FALSE(vm.runString("net.call('', 1)"));
     EXPECT_FALSE(vm.runString("net.call('x', function() end)"));
     EXPECT_FALSE(vm.runString("net.call('x', string.rep('a', 600))"));
+}
+
+// ---------------------------------------------------------------- net.table / net.watch (kke/ScriptTables.h)
+
+TEST(ScriptTables, AloneTheSameScriptsWork) {
+    // Offline or hosting, the tables are here and watching them is local.
+    ScriptVM vm;
+    ScriptTables tables(vm, ScriptTables::Link{ [] { return true; }, [] { return false; }, {}, {} });
+    tables.bind();
+    vm.onUnload = [&](const std::string& source) { tables.release(source); };
+    const std::string rules = R"(
+        local t = net.table("scores")
+        t:set("kees", { team = "red", points = 3 })
+        t:set("ann", { team = "blue", points = 1 })
+        t:set(7, { team = "red", points = 7.0 })
+    )";
+    ASSERT_TRUE(vm.runString(rules, "sv_rules"));
+    ASSERT_TRUE(vm.runString(R"(
+        log = {}
+        red = net.watch("scores", { team = "red" }, function(event, key, row)
+            log[#log + 1] = event .. " " .. tostring(key) .. (row and (" " .. row.points) or "")
+        end)
+    )"));
+    tables.update();
+    ASSERT_TRUE(vm.runString("n, ready, seven = #log, red:ready(), red:get(7).points"));
+    EXPECT_EQ(globalNumber(vm, "n"), 3); // two reds and ready
+    EXPECT_TRUE(globalBool(vm, "ready"));
+    EXPECT_EQ(globalNumber(vm, "seven"), 7);
+    // Filter values match however the number was written (7 and 7.0).
+    ASSERT_TRUE(vm.runString("sevens = net.watch('scores', { points = 7 }) "));
+    tables.update();
+    ASSERT_TRUE(vm.runString("nsev = sevens:count()"));
+    EXPECT_EQ(globalNumber(vm, "nsev"), 1);
+
+    // Reloading the rules empties and refills the table: watchers see
+    // only what's different.
+    ASSERT_TRUE(vm.runString("log = {}"));
+    ASSERT_TRUE(vm.reloadString(R"(
+        local t = net.table("scores")
+        t:set("kees", { team = "red", points = 4 })
+        t:set(7, { team = "red", points = 7.0 })
+    )", "sv_rules"));
+    tables.update();
+    ASSERT_TRUE(vm.runString("n, first = #log, log[1]"));
+    EXPECT_EQ(globalNumber(vm, "n"), 1);
+    EXPECT_EQ(globalString(vm, "first"), "update kees 4");
+
+    // Bad use says so.
+    EXPECT_FALSE(vm.runString("net.table('scores'):set({}, 1)"));
+    EXPECT_FALSE(vm.runString("net.table('scores'):set(1, string.rep('x', 500))"));
+    EXPECT_FALSE(vm.runString("net.watch('scores', { a = {} })"));
+    ASSERT_TRUE(vm.runString("red:stop()"));
+    EXPECT_FALSE(vm.runString("red:count()"));
 }
 
 // ---------------------------------------------------------------- store.* (kke/ScriptStore.h)

@@ -648,7 +648,26 @@ void ScriptModule::bindNet() {
     m_calls->maxPayloadBytes = kke::net::kMaxEventBytes;
     m_calls->warn = [this](const std::string& line) { log::get(name())->warn("{}", line); };
     m_calls->bind();
+    // net.table / net.watch (kke/ScriptTables.h): the tables live where
+    // the sv_ scripts run; everyone watches.
+    kke::net::TableLimits limits;
+    limits.maxEventBytes = kke::net::kMaxEventBytes;
+    m_tables = std::make_unique<ScriptTables>(vm, ScriptTables::Link{
+        [net] { return net->role() != NetModule::Role::Client; },
+        [net] { return net->role() == NetModule::Role::Client && net->connected(); },
+        [net](uint16_t kind, const std::vector<uint8_t>& bytes) { net->sendEvent(kind, bytes); },
+        [net](int player, const std::vector<uint8_t>& bytes) { net->sendEventTo(uint8_t(player), kke::net::kTableRows, bytes); },
+    }, limits);
+    m_tables->warn = m_calls->warn;
+    m_tables->bind();
+    net->addPlayerListener([this](uint8_t id, bool joined) {
+        if (!joined) m_tables->playerLeft(id);
+    });
     net->addEventListener([this, net](const net::GameEventMsg& e) {
+        if (e.kind == kke::net::kTableSubscribe || e.kind == kke::net::kTableUnsubscribe || e.kind == kke::net::kTableRows) {
+            m_tables->received(e.kind, e.fromPlayer, e.payload);
+            return;
+        }
         if (e.kind == script_net::kScriptCall) {
             if (net->role() == NetModule::Role::Host) m_calls->callReceived(e.fromPlayer, e.payload);
             return;
@@ -715,12 +734,17 @@ void ScriptModule::bindNet() {
 }
 
 bool ScriptModule::runCallAtomically(const std::function<bool()>& run) {
-    // The script store's writes and the net.sends are all or nothing;
-    // what else a game's handler changes (bodies, UI) stays as it is.
+    // The script store's writes, the synced tables and the net.sends are all
+    // or nothing; what else a game's handler changes (bodies, UI) stays.
     m_inCall = true;
+    if (m_tables) m_tables->server().beginUndo();
     storage::Store* store = m_store ? m_store->store() : nullptr;
     const bool ok = store ? store->transaction(run) : run();
     m_inCall = false;
+    if (m_tables) {
+        if (ok) m_tables->server().endUndo();
+        else m_tables->server().rollback();
+    }
     std::vector<std::vector<uint8_t>> held = std::move(m_heldSends);
     m_heldSends.clear();
 #if KKE_ENABLE_NET
@@ -739,6 +763,7 @@ void ScriptModule::dispatchNet() {
             if (m_callsOnline && !online) m_calls->disconnected("the connection to the server was lost");
             m_callsOnline = online;
             m_calls->update(m_time);
+            if (m_tables) m_tables->update();
         }
 #endif
     if (m_netInbox.empty()) return;
@@ -761,6 +786,7 @@ void ScriptModule::dispatchNet() {
 // ---------------------------------------------------------------- cleanup
 void ScriptModule::releaseScript(const std::string& source) {
     if (m_calls) m_calls->release(source);
+    if (m_tables) m_tables->release(source);
     auto mine = [&](const std::string& s) { return s == source; };
     // Replicated ones: gone on the clients too.
     for (const Body& b : m_bodies)

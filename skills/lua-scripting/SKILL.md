@@ -129,6 +129,7 @@ models.move(inst, pos [, yaw])   models.play(inst, "Walk", true)   models.remove
 -- Other
 kke.time()   kke.dt()   print(...)            -- print shows in the log and the F1 Scripts console
 net.role()   net.send(name, data)             -- games with multiplayer (NetModule): docs/cookbook/networking.md
+net.table(name):set(key, row)   net.watch(name, { field = value }, function(event, key, row, old) end) -- state everyone sees (docs/SCRIPTING.md "Synced tables")
 net.call(name, data, function(ok, answer) end)   net.handle(name, function(data, from) return answer end) -- ask the host, get an answer (docs/SCRIPTING.md "Calls")
 breakable.box{pos, size, material = "glass"}  -- things that shatter (FEMFX builds)
 ```

@@ -69,6 +69,7 @@ set(ENGINE_SOURCES
     src/net/ScriptSpawns.cpp
     src/net/SecureTransport.cpp
     src/net/Relay.cpp
+    src/net/SyncedTables.cpp
     src/server/ServerConfig.cpp
     src/server/ServerFiles.cpp
     src/server/ServerAccess.cpp
@@ -385,7 +386,7 @@ else()
 endif()
 
 if(ENGINE_ENABLE_LUA)
-    target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/ScriptCalls.cpp src/ScriptStore.cpp src/modules/ScriptModule.cpp src/modules/ScriptBindings.cpp src/modules/ScriptReplication.cpp)
+    target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/ScriptCalls.cpp src/ScriptTables.cpp src/ScriptStore.cpp src/modules/ScriptModule.cpp src/modules/ScriptBindings.cpp src/modules/ScriptReplication.cpp)
     if(KKE_ENABLE_NET)
         target_sources(kke_engine PRIVATE src/server/ServerScripts.cpp)
     endif()
