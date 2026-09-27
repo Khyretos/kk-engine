@@ -19,7 +19,7 @@ int main() {
     try {
         kke::Application app("Platoon", 1280, 720);
         // A clear, cool morning in the field (assets/moods/morning.yaml).
-        app.setMood("morning");
+        app.setMood("clear_day");
 
         app.addModule<kke::SettingsModule>("settings.json");
         app.addModule<kke::InputModule>("platoon_input.json");

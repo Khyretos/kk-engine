@@ -13,7 +13,7 @@ int main() {
     try {
         kke::Application app("Kreative Kompas Engine - Farm", 1280, 720);
         // Morning on the farm (assets/moods/morning.yaml).
-        app.setMood("morning");
+        app.setMood("clear_day");
         app.camera().farPlane = 300.0f;
         app.camera().fovDegrees = 55.0f;
         app.addModule<kke::InputModule>("farm_input.json");

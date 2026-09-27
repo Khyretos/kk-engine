@@ -289,8 +289,8 @@ with `KKE_MOOD=<name>`.
 | `sea_demo` | `clear_day` | Kloofendal 48d Partly Cloudy | `meadow_day` |
 | `audio_demo` | `clear_day` | Kloofendal 48d Partly Cloudy | `meadow_day` |
 | `procedural_demo` | `morning` | Qwantani Mid Morning | `meadow_day` |
-| `farm_demo` | `morning` | Qwantani Mid Morning | `meadow_day` |
-| `platoon` | `morning` | Qwantani Mid Morning | `meadow_day` |
+| `farm_demo` | `clear_day` | Kloofendal 48d Partly Cloudy | `meadow_day` |
+| `platoon` | `clear_day` | Kloofendal 48d Partly Cloudy | `meadow_day` |
 | `climb_race` | `golden_hour` | Qwantani Late Afternoon | `wind_soft` |
 | `synty_demo` | `morning` | Qwantani Mid Morning | `meadow_day` |
 | `goblin_horde` | `sunset` | Qwantani Sunset | `wind_soft` |
