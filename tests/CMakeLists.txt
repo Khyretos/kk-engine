@@ -29,6 +29,10 @@ add_executable(kke_tests
     test_anim_rig.cpp
     test_procedural_anim.cpp
     test_climb_wall.cpp
+    test_climb_mountains.cpp
+    ${CMAKE_SOURCE_DIR}/games/climb_race/Mountains.cpp
+    ${CMAKE_SOURCE_DIR}/games/climb_race/NetRace.cpp
+    ${CMAKE_SOURCE_DIR}/games/climb_race/Progress.cpp
     test_combat.cpp
     test_sidekick.cpp
     test_mesh_lod.cpp
@@ -104,6 +108,9 @@ foreach(f ${KKE_COOKBOOK_FILES})
 endforeach()
 configure_file(cookbook_recipes.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/cookbook_recipes.h @ONLY)
 target_include_directories(kke_tests PRIVATE ${CMAKE_SOURCE_DIR}/games/cookbook)
+# Climb Race's mountain files and race setup (test_climb_mountains.cpp).
+target_include_directories(kke_tests PRIVATE ${CMAKE_SOURCE_DIR}/games/climb_race)
+target_compile_definitions(kke_tests PRIVATE KKE_CLIMB_MOUNTAINS_DIR="${CMAKE_SOURCE_DIR}/games/climb_race/mountains")
 
 # The shipped moods (assets/moods/), built in the same way for test_sky.cpp.
 file(GLOB KKE_MOOD_FILES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/assets/moods/*.yaml)

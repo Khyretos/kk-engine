@@ -63,6 +63,11 @@ struct ClimbWallDesc {
     float routeStep = 1.2f;    // m, longest step on the guaranteed route
     float margin = 1.6f;       // m from the sides kept free of holds
     float looseChance = 0.06f; // of the holds off the route
+    // The hold mix: extra weight for jugs or crimps (0 = the usual mix,
+    // which follows the lean: more jugs on overhangs, more crimps on
+    // slabs). 0.5 makes jugs a lot more common; negative, rarer.
+    float jugBias = 0.0f;
+    float crimpBias = 0.0f;
     int ledges = 3;            // rest ledges between the base and the summit
 };
 

@@ -61,9 +61,11 @@ float fbm(float x, float y, uint32_t seed, int octaves) {
 
 glm::vec3 holdColor(ClimbHold::Kind k) {
     switch (k) {
-    case ClimbHold::Kind::Jug: return { 0.95f, 0.52f, 0.12f };
-    case ClimbHold::Kind::Crimp: return { 0.18f, 0.45f, 0.95f };
-    case ClimbHold::Kind::Sloper: return { 0.28f, 0.78f, 0.32f };
+    // Green = good (jugs), orange = hard (crimps), blue = hardest (slopers),
+    // as the how-to-play screen and the HUD say.
+    case ClimbHold::Kind::Jug: return { 0.28f, 0.78f, 0.32f };
+    case ClimbHold::Kind::Crimp: return { 0.95f, 0.52f, 0.12f };
+    case ClimbHold::Kind::Sloper: return { 0.18f, 0.45f, 0.95f };
     case ClimbHold::Kind::Edge: return { 0.55f, 0.5f, 0.45f };
     }
     return { 1.0f, 1.0f, 1.0f };
@@ -287,6 +289,8 @@ void ClimbWall::placeHolds() {
         float jug = lean > 5.0f ? 0.5f : lean < -5.0f ? 0.25f : 0.35f;
         float crimp = lean < -5.0f ? 0.35f : 0.4f;
         if (onRoute) jug += 0.1f;
+        jug = std::max(0.02f, jug + d.jugBias);
+        crimp = std::max(0.02f, crimp + d.crimpBias);
         const float p = rng.unit() * (jug + crimp + 0.25f);
         return p < jug ? ClimbHold::Kind::Jug : p < jug + crimp ? ClimbHold::Kind::Crimp : ClimbHold::Kind::Sloper;
     };

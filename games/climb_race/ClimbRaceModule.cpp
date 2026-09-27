@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <typeindex>
 
 namespace climb_race {
@@ -80,7 +81,7 @@ void ClimbRaceModule::init(kke::Application& app) {
     m_net = app.getModule<kke::NetModule>();
     m_lobby = app.getModule<kke::LobbyModule>();
 
-    m_seed = static_cast<uint32_t>(envFloat("KKE_CLIMB_SEED", 7.0f));
+    m_randomSeed = static_cast<uint32_t>(envFloat("KKE_CLIMB_SEED", 7.0f));
     m_autopilot = envOn("KKE_CLIMB_AUTOPILOT");
     m_botPause = envFloat("KKE_CLIMB_BOT_PAUSE", -1.0f);
     m_defaultCpus = std::clamp(static_cast<int>(envFloat("KKE_CLIMB_CPUS", 1.0f)), 0, kke::Lobby::kMaxCpus);
@@ -107,7 +108,7 @@ void ClimbRaceModule::init(kke::Application& app) {
         in.defineAction({ "reach.right", "Right hand: reach (with power held: quick)", "Climbing", "game" });
         in.defineAction({ "letgo", "Let go of the rock", "Climbing", "game" });
         in.defineAction({ "race.again", "Race again", "Race", "game" });
-        in.defineAction({ "race.new", "New mountain", "Race", "game" });
+        in.defineAction({ "race.new", "Next mountain", "Race", "game" });
         in.defineAction({ "menu", "Back to the menu (players, CPU climbers)", "Race", "game" });
         in.defineAction({ "panels", "Developer panels", "Game", "game" });
         in.defineAction({ "help", "How to play", "Race", "game" });
@@ -161,14 +162,15 @@ void ClimbRaceModule::init(kke::Application& app) {
     app.window().setQuitOnEscape(false); // Esc frees the mouse
     loadCharacter();
     buildScenery();
-    setupLobby();
+    loadMountainList();
+    loadProgress();
+    setupLobby(); // the Mountain row, and KKE_CLIMB_MOUNTAIN / KKE_CLIMB_SEED
     setupNet();
     const std::vector<Entry> roster = wantedRoster();
-    buildMountain(m_seed, static_cast<int>(roster.size()));
+    useMountain(chosenMountain());
+    buildMountain(static_cast<int>(roster.size()));
     buildRacers(roster);
     buildHud();
-    kke::log::get(name())->info("mountain {}: {} m, {} holds per face, {} ledges", m_seed, m_lanes[0]->wall->summitY(),
-                                m_lanes[0]->wall->holds().size(), m_lanes[0]->wall->ledges().size());
     // Without the menu (or asked to skip it): straight into a race.
     if (!m_lobby || !m_lobby->isOpen()) startFromLobby();
 }
@@ -194,17 +196,39 @@ void ClimbRaceModule::clearMountain() {
     for (auto& lane : m_lanes) {
         for (kke::RigidWorld::BodyId b : lane->bodies) w.remove(b);
         for (Loose& l : lane->loose) w.remove(l.body);
+        // Frames still in flight draw its meshes: they go once those are done.
+        m_app->renderer().retire(std::move(lane));
     }
     m_lanes.clear();
 }
 
-void ClimbRaceModule::buildMountain(uint32_t seed, int lanes) {
+void ClimbRaceModule::loadMountainList() {
+    const char* base = SDL_GetBasePath();
+    const std::filesystem::path folder = std::filesystem::path(base ? base : "") / "mountains";
+    std::vector<std::string> problems;
+    m_mountains = loadMountains(folder, problems);
+    // A mountain file with a mistake in it still loads; say what's wrong.
+    for (const std::string& p : problems) kke::log::get(name())->warn("mountains: {}", p);
+    kke::log::get(name())->info("{} mountains in {}", m_mountains.size(), folder.generic_string());
+}
+
+void ClimbRaceModule::useMountain(const Mountain& m) {
+    m_mountain = m;
+    if (!m.mood.empty() && m.mood != m_builtMood) {
+        m_builtMood = m.mood;
+        m_app->setMood(m.mood);
+    }
+}
+
+void ClimbRaceModule::buildMountain(int lanes) {
     clearMountain();
-    m_seed = seed;
-    kke::ClimbWallDesc desc;
-    desc.seed = seed;
+    const kke::ClimbWallDesc& desc = m_mountain.desc;
+    const uint32_t seed = desc.seed;
     kke::RigidWorld& w = m_rigid->world();
     const kke::ClimbWall generated = kke::ClimbWall::generate(desc);
+    m_builtKey = keyOf(m_mountain);
+    kke::log::get(name())->info("mountain {} (seed {}): {} m, {} holds per face, {} ledges, {} faces", m_mountain.name, seed,
+                                generated.summitY(), generated.holds().size(), generated.ledges().size(), std::max(lanes, 1));
     lanes = std::max(lanes, 1);
     const glm::vec3 flags[6] = { { 0.2f, 0.6f, 1.0f }, { 1.0f, 0.5f, 0.1f }, { 0.4f, 0.85f, 0.3f }, { 0.8f, 0.4f, 1.0f }, { 1.0f, 0.85f, 0.2f }, { 1.0f, 0.4f, 0.55f } };
     for (int li = 0; li < lanes; ++li) {
@@ -245,7 +269,8 @@ void ClimbRaceModule::buildMountain(uint32_t seed, int lanes) {
         appendBox(top + glm::vec3(0.45f, 2.7f, 0.0f), { 0.45f, 0.28f, 0.02f }, flags[li % 6], v, idx);
         // To the next face: a dark gully at the back, so there's no sky
         // between them (the faces' own sides are rock).
-        if (li + 1 < lanes) appendBox({ kLaneX, 22.0f, -15.0f }, { kLaneX - 7.4f, 22.0f, 3.5f }, { 0.22f, 0.2f, 0.19f }, v, idx);
+        const float gully = (wall.summitY() + 1.0f) * 0.5f; // up to just over the summit
+        if (li + 1 < lanes) appendBox({ kLaneX, gully, -15.0f }, { kLaneX - 7.4f, gully, 3.5f }, { 0.22f, 0.2f, 0.19f }, v, idx);
         lane->mesh = std::make_unique<kke::DynamicMeshRenderer>(*m_app);
         lane->mesh->upload(v, idx);
 
@@ -289,6 +314,7 @@ void ClimbRaceModule::resetRace() {
     m_phase = Phase::Countdown;
     m_countdown = 3.0f;
     m_winner.clear();
+    m_opened.clear();
     // Loose holds back on the rock.
     kke::RigidWorld& w = m_rigid->world();
     for (auto& lane : m_lanes)
@@ -315,6 +341,8 @@ void ClimbRaceModule::resetRace() {
         r.finished = false;
         r.regrab = 0.0f;
         r.falls = 0;
+        r.medal = -1;
+        r.newBest = false;
         r.wasClimbing = false;
     }
 }
@@ -536,7 +564,7 @@ void ClimbRaceModule::updateRacer(Racer& r, float dt) {
                 if (m_winner.empty()) m_winner = r.name;
                 kke::log::get(name())->info("{} topped out in {:.2f} s", r.name, r.time);
                 netFinished(r);
-                if (!r.bot && (m_best <= 0.0f || r.time < m_best)) m_best = r.time;
+                recordFinish(r);
             }
             break;
         case kke::Climber::State::Off: break;
@@ -590,7 +618,7 @@ void ClimbRaceModule::update(const kke::UpdateContext& ctx) {
         updateHud(dt);
         return;
     }
-    // Any player: race again, a new mountain, the menu, or how to play.
+    // Any player: race again, the next mountain, the menu, or how to play.
     bool again = false, fresh = false, menu = false, help = false, start = false;
     for (int p = 0; p < m_input->players(); ++p) {
         kke::InputMap& in = m_input->map(p);
@@ -621,11 +649,15 @@ void ClimbRaceModule::update(const kke::UpdateContext& ctx) {
             m_rosterChanged = false;
             startFromLobby();
             if (fresh) {
-                buildMountain(m_seed + 1, static_cast<int>(m_racers.size()));
+                nextMountain();
+                buildMountain(static_cast<int>(m_racers.size()));
                 resetRace();
             }
         } else {
-            if (fresh) buildMountain(m_seed + 1, static_cast<int>(m_racers.size()));
+            if (fresh) {
+                nextMountain();
+                buildMountain(static_cast<int>(m_racers.size()));
+            }
             resetRace();
         }
     }

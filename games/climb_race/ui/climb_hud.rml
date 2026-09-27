@@ -112,7 +112,7 @@
                 <div class="card">
                     <div class="step">IF YOU SLIP</div>
                     <div class="title">Try again</div>
-                    <div class="body"><prompt action="letgo"/> lets go. Fall off and you can grab the rock again straight away.<br/><prompt action="race.again"/> race again · <prompt action="race.new"/> new mountain · <prompt action="menu"/> menu</div>
+                    <div class="body"><prompt action="letgo"/> lets go. Fall off and you can grab the rock again straight away.<br/><prompt action="race.again"/> race again · <prompt action="race.new"/> next mountain · <prompt action="menu"/> menu</div>
                 </div>
             </div>
             <div class="go"><prompt action="jump" label="Start"/>

@@ -415,6 +415,11 @@ void Climber::recover(float perSecond, float dt) {
     m_stamina = std::min(m_s.maxStamina, m_stamina + perSecond * dt);
 }
 
+void Climber::knock(float cost) {
+    if (!climbing()) return;
+    m_stamina = std::max(0.0f, m_stamina - std::max(0.0f, cost));
+}
+
 void Climber::tryMantle(const Input& in) {
     const auto& holds = m_wall.holds();
     const int a = m_hand[0].hold, b = m_hand[1].hold;

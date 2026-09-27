@@ -58,6 +58,8 @@ std::string hexColour(const glm::vec3& c) {
 
 } // namespace
 
+std::string ClimbRaceModule::clockText(float seconds) { return clock(seconds); }
+
 void ClimbRaceModule::buildHud() {
     auto* ui = m_app->getModule<kke::UiModule>();
     if (!ui || !ui->context()) return;
@@ -143,8 +145,8 @@ void ClimbRaceModule::updateHud(float) {
         std::snprintf(buf, sizeof(buf), "%.1f / %.0f m", static_cast<double>(std::max(0.0f, y)), static_cast<double>(c.wall().summitY()));
         h.height = buf;
         const bool resting = c.climbing() && c.drainRate() < 0.0f;
-        h.status = r.finished ? "topped out"
-                 : c.state() == kke::Climber::State::Mantle ? "mantling"
+        h.status = r.finished ? (r.medal >= 0 ? std::string("topped out: ") + medalName(r.medal) : std::string("topped out"))
+                 : c.state() == kke::Climber::State::Mantle ? std::string("mantling")
                  : resting ? "shaking out"
                  : c.climbing() ? (c.drainRate() > 8.0f ? "pumped" : "climbing")
                  : r.loco->state() == kke::Locomotion::State::Air ? "falling"
@@ -205,8 +207,14 @@ void ClimbRaceModule::updateHud(float) {
     } else if (m_phase == Phase::Finished) {
         banner = m_winner == you->name && players.size() <= 1 ? "You win" : m_winner + " wins";
         sub = (players.size() > 1 ? you->name + " " : std::string("Your time ")) + clock(you->time);
-        if (m_best > 0.0f) sub += "  ·  best " + clock(m_best);
-        sub += "  ·  {race.again} race again  ·  {race.new} new mountain  ·  {menu} menu";
+        if (you->finished && you->medal >= 0) sub += std::string("  ·  ") + medalName(you->medal) + " medal";
+        if (you->finished && you->newBest) {
+            sub += "  ·  a new best!";
+        } else if (const std::string rec = recordText(m_mountain); !rec.empty()) {
+            sub += "  ·  " + rec;
+        }
+        if (!m_opened.empty()) sub += "  ·  " + m_opened + " is open!";
+        sub += "  ·  {race.again} race again  ·  {race.new} next mountain  ·  {menu} menu";
     }
     // Button prompts: the buttons of the device player 1 is using.
     const int p1 = players.empty() ? 0 : std::max(0, players[0]->player);

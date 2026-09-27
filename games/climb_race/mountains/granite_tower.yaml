@@ -1,0 +1,17 @@
+# A Climb Race mountain (see games/climb_race/Mountains.h for every key).
+# The face Climb Race always had: slab, wall and overhang.
+name: Granite Tower
+about: The classic face. Slab, wall, then a big overhang.
+order: 3
+mood: golden_hour
+seed: 7
+height: 36
+ledges: 3
+overhang: 22
+slab: 24
+holds: 1.1
+jugs: 0
+crimps: 0
+loose: 0.06
+step: 1.2
+medals: [75, 115, 190]

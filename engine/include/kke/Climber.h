@@ -102,6 +102,9 @@ public:
     // Standing (not climbing): stamina comes back at `perSecond`.
     void recover(float perSecond, float dt);
     void resetStamina() { m_stamina = m_s.maxStamina; }
+    // Something hit the climber (a falling rock): `cost` stamina at once.
+    // At zero they fall on the next update, as when they tire out.
+    void knock(float cost);
 
     State state() const { return m_state; }
     bool climbing() const { return m_state == State::Climbing || m_state == State::Mantle; }

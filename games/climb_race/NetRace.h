@@ -14,6 +14,8 @@
 
 #include "kke/net/Protocol.h"
 
+#include "Mountains.h"
+
 #include <glm/glm.hpp>
 
 #include <cstdint>
@@ -63,7 +65,9 @@ struct Seat {
     glm::vec3 tint{1.0f};
 };
 struct Setup {
-    uint32_t seed = 7;
+    // The mountain, whole (its generator knobs exactly, so every machine
+    // builds the same rock even from a mountain file only the host has).
+    Mountain mountain;
     uint32_t round = 0;           // +1 each restart: a new countdown for everyone
     uint8_t difficulty = 1;       // the host's CPU racers (display only)
     std::vector<Seat> seats;

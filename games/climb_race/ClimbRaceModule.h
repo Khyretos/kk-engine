@@ -10,6 +10,8 @@
 #include "kke/RigidWorld.h"
 #include "kke/modules/ModelModule.h"
 
+#include "Mountains.h"
+#include "Progress.h"
 #include "NetRace.h"
 
 #include <RmlUi/Core/DataModelHandle.h>
@@ -117,6 +119,8 @@ private:
         bool wasClimbing = false;
         float fallStartY = 0.0f;
         int falls = 0;
+        int medal = -1;             // this race's medal (players; -1 none)
+        bool newBest = false;       // ... and it's their best on this mountain
         // Online (Net.cpp): its player in the game, and whether another
         // machine plays it (then it's posed from what that machine sends).
         int netId = -1;             // network player id (-1: offline)
@@ -155,7 +159,16 @@ private:
         bool mantle = false;         // jump: over the edge
     };
 
-    void buildMountain(uint32_t seed, int lanes);
+    // The mountains (Mountains.h, mountains/*.yaml): the one picked in
+    // the menu (or Random), built as one face per climber.
+    void loadMountainList();
+    Mountain chosenMountain() const;       // the menu's Mountain row
+    void useMountain(const Mountain& m);   // m_mountain and its mood (build it next)
+    void nextMountain();                   // Y: the next one (Random: a new seed)
+    void pickMountainFromEnv();            // KKE_CLIMB_MOUNTAIN, KKE_CLIMB_SEED
+    int mountainPick() const;              // index into m_mountains (size() = Random)
+    void setMountainPick(int pick);
+    void buildMountain(int lanes);
     void clearMountain();
     void buildScenery();
     void resetRace();
@@ -240,7 +253,25 @@ private:
     bool m_wasOnline = false;
     std::string m_lastNetStatus;
 
-    uint32_t m_seed = 7;
+    std::vector<Mountain> m_mountains;     // in tour order
+    Mountain m_mountain;                   // the one being climbed
+    std::string m_builtMood;               // the mood last applied
+    std::string m_builtKey;                // the mountain the lanes are (id and seed)
+    static std::string keyOf(const Mountain& m);
+    int m_mountainPick = 0;                // no menu: the pick (m_mountains.size() = Random)
+    // The tour (Progress.h): best times, medals, which mountains are open.
+    Progress m_progress;
+    std::string m_progressPath = "climb_race_progress.json";
+    std::vector<int> m_menuMountains;      // the Mountain row's choices: indices into m_mountains (size() = Random)
+    int m_forcedMountain = -1;             // KKE_CLIMB_MOUNTAIN picked a closed one: in the row anyway
+    std::string m_opened;                  // this race opened that mountain (its name, for the results)
+    void loadProgress();
+    void saveProgress();
+    void refreshMountainRow(int keep);     // the open mountains (after a finish opened one); `keep` stays picked
+    void recordFinish(Racer& r);           // a player topped out: best time, medal, next mountain
+    std::string recordText(const Mountain& m) const; // "best 0:19.13, gold" ("" = never finished)
+    static std::string clockText(float seconds); // "1:05.20"
+    uint32_t m_randomSeed = 7;             // Random's seed (KKE_CLIMB_SEED)
     std::vector<std::unique_ptr<Lane>> m_lanes;
     std::vector<Racer> m_racers;
     kke::Camera m_overview; // three players: the fourth quarter's view of the whole race
@@ -250,7 +281,7 @@ private:
     enum class Phase { Lobby, Countdown, Racing, Finished };
     Phase m_phase = Phase::Lobby;
     float m_countdown = 3.0f;
-    float m_best = 0.0f;       // best time on this mountain (0 = none yet)
+    float m_best = 0.0f;       // Random: best time on this mountain this session (0 = none yet)
     std::string m_winner;
     bool m_autopilot = false, m_captured = false;
     // How to play: up before the first race (KKE_CLIMB_INTRO=0 skips it,

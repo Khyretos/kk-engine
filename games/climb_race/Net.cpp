@@ -146,7 +146,7 @@ std::vector<ClimbRaceModule::Entry> ClimbRaceModule::onlineRoster() const {
 
 void ClimbRaceModule::sendSetup() {
     netrace::Setup s;
-    s.seed = m_seed;
+    s.mountain = m_mountain;
     s.round = m_round;
     for (const Racer& r : m_racers) {
         if (r.netId < 0) continue;
@@ -160,7 +160,7 @@ void ClimbRaceModule::sendSetup() {
         if (r.remote) m_netPending.push_back(r.netId);
     m_netHold = !m_netPending.empty();
     m_netHeld = 0.0f;
-    kke::log::get(name())->info("online race {}: {} climbers on mountain {}", s.round, s.seats.size(), s.seed);
+    kke::log::get(name())->info("online race {}: {} climbers on {} (seed {})", s.round, s.seats.size(), s.mountain.name, s.mountain.desc.seed);
 }
 
 // A client: the host's race. Our own racers are this screen's seats (by
@@ -198,7 +198,10 @@ void ClimbRaceModule::applySetup(const netrace::Setup& s) {
         m_lobby->save();
         m_lobby->close();
     }
-    if (s.seed != m_seed || m_lanes.size() != roster.size()) buildMountain(s.seed, static_cast<int>(roster.size()));
+    if (keyOf(s.mountain) != m_builtKey || m_lanes.size() != roster.size()) {
+        useMountain(s.mountain);
+        buildMountain(static_cast<int>(roster.size()));
+    }
     buildRacers(roster);
     if (m_lobby) {
         m_lobby->applyInput();
@@ -214,7 +217,8 @@ void ClimbRaceModule::applySetup(const netrace::Setup& s) {
         if (!r.remote && r.netId >= 0) ready.players.push_back(static_cast<uint8_t>(r.netId));
     m_net->sendEvent(netrace::kEventReady, netrace::encode(ready));
     m_netHold = true;
-    kke::log::get(name())->info("online race {}: {} climbers on mountain {} ({} of them here)", s.round, roster.size(), s.seed, humans());
+    kke::log::get(name())->info("online race {}: {} climbers on {} (seed {}, {} of them here)", s.round, roster.size(), s.mountain.name,
+                                s.mountain.desc.seed, humans());
 }
 
 void ClimbRaceModule::onNetEvent(const kke::net::GameEventMsg& e) {
@@ -281,7 +285,10 @@ std::string ClimbRaceModule::netStatus() const {
     }
     const kke::Lobby::Option* mode = m_lobby ? m_lobby->lobby().option("net.mode") : nullptr;
     if (mode && mode->value == kModeJoin) return m_net->statusText() == "offline" ? "Looking for games on this network and this PC..." : m_net->statusText();
-    return "Pick your climber. Another controller? Press {a} on it to join.";
+    // Offline: the mountain picked, then how to join.
+    const std::string record = recordText(m_mountain);
+    return m_mountain.name + (record.empty() ? std::string() : " (" + record + ")") + ": " + m_mountain.about +
+           " Another controller? Press {a} on it to join.";
 }
 
 void ClimbRaceModule::updateNet(float dt) {

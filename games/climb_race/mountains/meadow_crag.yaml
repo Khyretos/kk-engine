@@ -1,0 +1,16 @@
+# A Climb Race mountain (see games/climb_race/Mountains.h for every key).
+name: Meadow Crag
+about: Two ledges to rest on and a first steep wall.
+order: 2
+mood: clear_day
+seed: 11
+height: 20
+ledges: 2
+overhang: 8
+slab: 24
+holds: 1.25
+jugs: 0.3
+crimps: -0.1
+loose: 0.02
+step: 1.1
+medals: [40, 70, 110]

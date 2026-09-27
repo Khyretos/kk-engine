@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 namespace climb_race::netrace {
 
@@ -23,6 +24,7 @@ constexpr float kLimbRange = 4.0f, kLimbStep = 1.0f / 1024.0f;
 constexpr float kHipsRange = 2.0f, kHipsStep = 1.0f / 512.0f;
 constexpr size_t kMaxSeats = 16;
 constexpr size_t kMaxSeatName = kke::net::kMaxNameLength;
+constexpr size_t kMaxMountainText = 40;
 
 // A unit vector as a point on the octahedron, unfolded onto a square.
 glm::vec2 octEncode(const glm::vec3& n) {
@@ -65,8 +67,29 @@ template <typename Stream> void serialize(Stream& s, Limbs& m) {
     }
 }
 
+// A float bit for bit (the rock generator must get the host's numbers exactly).
+template <typename Stream> void exact(Stream& s, float& v) {
+    uint32_t b = 0;
+    if constexpr (Stream::kWriting) std::memcpy(&b, &v, sizeof(b));
+    uint32_t lo = b & 0xffffu, hi = b >> 16;
+    s.bits(lo, 16);
+    s.bits(hi, 16);
+    b = lo | (hi << 16);
+    if constexpr (Stream::kReading) std::memcpy(&v, &b, sizeof(v));
+}
+template <typename Stream> void serialize(Stream& s, Mountain& m) {
+    s.string(m.id, kMaxMountainText);
+    s.string(m.name, kMaxMountainText);
+    s.string(m.mood, kMaxMountainText);
+    kke::ClimbWallDesc& d = m.desc;
+    s.integer(d.seed, 0, 0x7fffffff);
+    s.integer(d.ledges, 0, 15);
+    for (float* f : { &d.height, &d.maxOverhang, &d.maxSlab, &d.density, &d.jugBias, &d.crimpBias, &d.looseChance, &d.routeStep, &m.medals[0],
+                      &m.medals[1], &m.medals[2] })
+        exact(s, *f);
+}
 template <typename Stream> void serialize(Stream& s, Setup& m) {
-    s.integer(m.seed, 0, 0x7fffffff);
+    serialize(s, m.mountain);
     s.integer(m.round, 0, 0x7fffffff);
     s.integer(m.difficulty, 0, 7);
     uint32_t n = static_cast<uint32_t>(std::min(m.seats.size(), kMaxSeats));

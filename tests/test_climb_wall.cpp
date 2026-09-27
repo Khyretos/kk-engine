@@ -317,6 +317,20 @@ TEST(Climber, LetGoFalls) {
     EXPECT_TRUE(r.c.fell());
 }
 
+TEST(Climber, AKnockCostsStaminaAndAHardOneFalls) {
+    Rig r;
+    ASSERT_TRUE(r.c.start(r.base()));
+    r.run({}, 0.2f);
+    const float before = r.c.stamina();
+    r.c.knock(30.0f);
+    EXPECT_NEAR(r.c.stamina(), before - 30.0f, 1e-3f);
+    r.run({}, 0.1f);
+    EXPECT_TRUE(r.c.climbing());
+    r.c.knock(1000.0f);
+    r.c.update({}, kDt);
+    EXPECT_EQ(r.c.state(), Climber::State::Fell);
+}
+
 TEST(Climber, TheBotClimbsToTheSummitAndMantles) {
     for (uint32_t seed = 1; seed <= 40; ++seed) {
         ClimbWall w = wall(seed);

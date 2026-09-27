@@ -1,0 +1,16 @@
+# A Climb Race mountain (see games/climb_race/Mountains.h for every key).
+name: Crumble Peak
+about: Loose rock everywhere. Lunge and the hold may come with you.
+order: 5
+mood: overcast
+seed: 42
+height: 30
+ledges: 3
+overhang: 18
+slab: 22
+holds: 1.3
+jugs: 0.1
+crimps: 0
+loose: 0.3
+step: 1.2
+medals: [80, 120, 200]

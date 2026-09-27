@@ -1,0 +1,17 @@
+# A Climb Race mountain (see games/climb_race/Mountains.h for every key).
+# Copy this file, change a few numbers, and it's a new mountain in the menu.
+name: Pebble Hill
+about: A gentle slab covered in big green holds. Start here.
+order: 1
+mood: morning
+seed: 3
+height: 12        # metres to the summit
+ledges: 1         # shelves to stand and rest on
+overhang: 0       # steepest lean past vertical, degrees
+slab: 28          # most it leans back, degrees
+holds: 1.4        # holds per square metre
+jugs: 0.6         # more big green holds
+crimps: -0.25     # fewer thin orange ones
+loose: 0          # nothing breaks off
+step: 1.0         # longest step on the always-climbable line, metres
+medals: [25, 35, 55]     # gold, silver, bronze: seconds to the top

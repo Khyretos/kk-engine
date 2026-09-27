@@ -1,0 +1,16 @@
+# A Climb Race mountain (see games/climb_race/Mountains.h for every key).
+name: Cloud Spire
+about: The long one. Small holds, four ledges, pace yourself.
+order: 6
+mood: misty_morning
+seed: 99
+height: 46
+ledges: 4
+overhang: 24
+slab: 20
+holds: 1.0
+jugs: -0.1
+crimps: 0.35
+loose: 0.08
+step: 1.25
+medals: [100, 165, 275]

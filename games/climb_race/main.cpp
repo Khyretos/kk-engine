@@ -18,7 +18,8 @@
 int main() {
     try {
         kke::Application app("Climb Race", 1280, 720);
-        // Late afternoon sun raking across the rock face (assets/moods/golden_hour.yaml).
+        // Late afternoon sun raking across the rock face (assets/moods/golden_hour.yaml);
+        // each mountain then sets its own (mountains/*.yaml, "mood:").
         app.setMood("golden_hour");
 
         app.addModule<kke::SettingsModule>("settings.json");

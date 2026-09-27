@@ -351,7 +351,19 @@ ModelModule::InstanceId ModelModule::spawn(ModelId modelId, const glm::mat4& tra
     return id;
 }
 
-void ModelModule::remove(InstanceId id) { m_instances.erase(id); }
+void ModelModule::remove(InstanceId id) {
+    const auto it = m_instances.find(id);
+    if (it == m_instances.end()) return;
+    // Frames still in flight may draw its skinned vertex buffers: they go
+    // once those frames are done (removing a character mid-game).
+    Instance& inst = it->second;
+    if (m_app && (!inst.skinned.empty() || !inst.deformed.empty())) {
+        auto buffers = std::make_shared<std::vector<SkinnedBuffers>>(std::move(inst.skinned));
+        for (SkinnedBuffers& b : inst.deformed) buffers->push_back(std::move(b));
+        m_app->renderer().retire(std::shared_ptr<void>(std::move(buffers)));
+    }
+    m_instances.erase(it);
+}
 
 void ModelModule::setTransform(InstanceId id, const glm::mat4& t) {
     if (auto it = m_instances.find(id); it != m_instances.end()) it->second.transform = t;

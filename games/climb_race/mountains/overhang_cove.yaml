@@ -1,0 +1,16 @@
+# A Climb Race mountain (see games/climb_race/Mountains.h for every key).
+name: Overhang Cove
+about: Steep all the way. Big holds, but your arms burn.
+order: 4
+mood: sunset
+seed: 21
+height: 26
+ledges: 2
+overhang: 32
+slab: 6
+holds: 1.2
+jugs: 0.4
+crimps: -0.15
+loose: 0.04
+step: 1.2
+medals: [40, 60, 100]

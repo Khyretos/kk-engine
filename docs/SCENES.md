@@ -291,7 +291,7 @@ with `KKE_MOOD=<name>`.
 | `procedural_demo` | `morning` | Qwantani Mid Morning | `meadow_day` |
 | `farm_demo` | `clear_day` | Kloofendal 48d Partly Cloudy | `meadow_day` |
 | `platoon` | `clear_day` | Kloofendal 48d Partly Cloudy | `meadow_day` |
-| `climb_race` | `golden_hour` | Qwantani Late Afternoon | `wind_soft` |
+| `climb_race` | each mountain's own (`games/climb_race/mountains/`): `morning`, `clear_day`, `golden_hour` (Granite Tower, Random), `sunset`, `overcast`, `misty_morning` | as the mood | as the mood |
 | `synty_demo` | `morning` | Qwantani Mid Morning | `meadow_day` |
 | `goblin_horde` | `sunset` | Qwantani Sunset | `wind_soft` |
 | `duel` | `arena_night` | Qwantani Night | `night_crickets` |

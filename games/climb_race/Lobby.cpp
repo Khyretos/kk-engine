@@ -7,6 +7,7 @@
 #include "ClimbRaceModule.h"
 
 #include "kke/Application.h"
+#include "kke/DataFile.h"
 #include "kke/DevTools.h"
 #include "kke/Log.h"
 #include "kke/modules/InputModule.h"
@@ -18,6 +19,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <filesystem>
 
 namespace climb_race {
 
@@ -48,7 +50,10 @@ constexpr float kCpuBack = 3.5f;
 } // namespace
 
 void ClimbRaceModule::setupLobby() {
-    if (!m_lobby) return;
+    if (!m_lobby) {
+        pickMountainFromEnv();
+        return;
+    }
     kke::Lobby& l = m_lobby->lobby();
     kke::Lobby::LookField names{ "name", "Name", {}, {} };
     for (const char* n : kNames) names.choices.push_back(n);
@@ -60,6 +65,10 @@ void ClimbRaceModule::setupLobby() {
     }
     l.addLookField(std::move(colours));
     l.setCpuCount(1); // a rival, unless last time said otherwise
+    // Which mountain: the open ones of the tour, in order, then Random
+    // (a new one each time). Finishing one opens the next.
+    l.addOption({ "mountain", "Mountain", { "Random" }, 0, true, {}, {} });
+    refreshMountainRow(m_mountainPick);
     m_lobby->load();
     m_lobby->setTitle("CLIMB RACE", "Pick your climber. Another controller? Press {a} on it to join.");
     l.onJoin = [this](int seat) {
@@ -67,12 +76,134 @@ void ClimbRaceModule::setupLobby() {
         m_rosterChanged = true;
         m_lobby->lobby().toast(m_lobby->lobby().seatName(seat) + " joins the next race: " + m_input->promptText("{race.again}") + " to race again now", 6.0f);
     };
+    pickMountainFromEnv();
     // Straight into a race: demos, tests, and the old switches.
     const char* lobbyVar = kke::dev::env("KKE_CLIMB_LOBBY");
     if (m_autopilot || m_rockfall >= 0.0f || (lobbyVar && std::strcmp(lobbyVar, "0") == 0)) {
         l.setCpuCount(m_defaultCpus);
         for (int i = 0; i < kke::Lobby::kMaxCpus; ++i) l.setCpuDifficulty(i, 2); // Hard, the rival it always was
         m_lobby->close();
+    }
+}
+
+// KKE_CLIMB_MOUNTAIN=<file name or name> picks a mountain; KKE_CLIMB_SEED
+// alone picks Random on that seed (as the game always did).
+void ClimbRaceModule::pickMountainFromEnv() {
+    int pick = -1;
+    if (const char* want = kke::dev::env("KKE_CLIMB_MOUNTAIN")) {
+        for (size_t i = 0; i < m_mountains.size(); ++i)
+            if (m_mountains[i].id == want || m_mountains[i].name == want) pick = static_cast<int>(i);
+        if (std::strcmp(want, "random") == 0) pick = static_cast<int>(m_mountains.size());
+        if (pick < 0) kke::log::get(name())->warn("KKE_CLIMB_MOUNTAIN: no mountain called '{}'", want);
+    } else if (kke::dev::env("KKE_CLIMB_SEED")) {
+        pick = static_cast<int>(m_mountains.size());
+    }
+    if (pick >= 0) setMountainPick(pick);
+}
+
+// Same key, same rock: the id and every knob of the generator.
+std::string ClimbRaceModule::keyOf(const Mountain& m) {
+    const kke::ClimbWallDesc& d = m.desc;
+    return fmt::format("{}#{}#{}#{}#{}#{}#{}#{}#{}#{}#{}", m.id, d.seed, d.ledges, d.height, d.maxOverhang, d.maxSlab, d.density, d.jugBias,
+                       d.crimpBias, d.looseChance, d.routeStep);
+}
+
+void ClimbRaceModule::setMountainPick(int pick) {
+    const int count = static_cast<int>(m_mountains.size());
+    pick = std::clamp(pick, 0, count);
+    if (pick < count && !m_progress.isOpen(m_mountains, static_cast<size_t>(pick))) m_forcedMountain = pick; // asked for by name: in the row too
+    refreshMountainRow(pick);
+}
+
+int ClimbRaceModule::mountainPick() const {
+    const kke::Lobby::Option* o = m_lobby ? m_lobby->lobby().option("mountain") : nullptr;
+    if (o && o->value >= 0 && o->value < static_cast<int>(m_menuMountains.size())) return m_menuMountains[static_cast<size_t>(o->value)];
+    return m_mountainPick;
+}
+
+void ClimbRaceModule::refreshMountainRow(int keep) {
+    const int count = static_cast<int>(m_mountains.size());
+    m_menuMountains.clear();
+    for (int i = 0; i < count; ++i)
+        if (m_progress.isOpen(m_mountains, static_cast<size_t>(i)) || i == m_forcedMountain) m_menuMountains.push_back(i);
+    m_menuMountains.push_back(count); // Random
+    const auto at = std::find(m_menuMountains.begin(), m_menuMountains.end(), keep);
+    const size_t row = at == m_menuMountains.end() ? 0 : static_cast<size_t>(at - m_menuMountains.begin());
+    m_mountainPick = m_menuMountains[row];
+    kke::Lobby::Option* o = m_lobby ? m_lobby->lobby().option("mountain") : nullptr;
+    if (!o) return;
+    o->choices.clear();
+    for (int i : m_menuMountains) o->choices.push_back(i < count ? m_mountains[static_cast<size_t>(i)].name : std::string("Random"));
+    o->value = static_cast<int>(row);
+}
+
+Mountain ClimbRaceModule::chosenMountain() const {
+    const int pick = mountainPick();
+    if (pick >= 0 && pick < static_cast<int>(m_mountains.size())) return m_mountains[static_cast<size_t>(pick)];
+    return randomMountain(m_randomSeed);
+}
+
+// After a race (Y / N): the next open mountain of the tour, round again
+// after the last; on Random, another random one.
+void ClimbRaceModule::nextMountain() {
+    const int pick = mountainPick(), count = static_cast<int>(m_mountains.size());
+    std::vector<int> tour;
+    for (int i : m_menuMountains)
+        if (i < count) tour.push_back(i);
+    if (pick >= count || tour.empty()) {
+        ++m_randomSeed;
+    } else {
+        const auto at = std::find(tour.begin(), tour.end(), pick);
+        const size_t next = at == tour.end() ? 0 : (static_cast<size_t>(at - tour.begin()) + 1) % tour.size();
+        setMountainPick(tour[next]);
+    }
+    useMountain(chosenMountain());
+}
+
+void ClimbRaceModule::loadProgress() {
+    if (const char* path = kke::dev::env("KKE_CLIMB_PROGRESS")) m_progressPath = path;
+    m_progress.openAll = kke::dev::flag("KKE_CLIMB_ALL");
+    nlohmann::json j;
+    std::string error;
+    bool exists = false;
+    if (kke::datafile::loadPath(m_progressPath, j, &error, &exists)) m_progress.load(j);
+    else if (exists) kke::log::get(name())->warn("could not read {} (starting the tour again): {}", m_progressPath, error);
+}
+
+void ClimbRaceModule::saveProgress() {
+    std::string error;
+    if (!kke::datafile::saveFile(kke::datafile::saveTarget(std::filesystem::path(m_progressPath)), m_progress.save(), &error))
+        kke::log::get(name())->warn("could not save {}: {}", m_progressPath, error);
+}
+
+std::string ClimbRaceModule::recordText(const Mountain& m) const {
+    const Progress::Record* r = m_progress.record(m.id);
+    const float best = m.id == "random" ? m_best : r ? r->best : 0.0f;
+    if (best <= 0.0f) return "";
+    std::string text = "best " + clockText(best);
+    if (r && r->medal >= 0) text += std::string(", ") + medalName(r->medal);
+    return text;
+}
+
+// A player on this screen topped out: their time counts for the tour.
+void ClimbRaceModule::recordFinish(Racer& r) {
+    if (r.seat < 0) return; // CPU climbers and other screens' players earn nothing here
+    if (m_mountain.id == "random") {
+        r.newBest = m_best <= 0.0f || r.time < m_best;
+        if (r.newBest) m_best = r.time;
+        return;
+    }
+    const Progress::Result res = m_progress.finish(m_mountains, m_mountain, r.time);
+    r.medal = res.medal;
+    r.newBest = res.newBest;
+    saveProgress();
+    kke::log::get(name())->info("{}: {} on {}{}{}", r.name, clockText(r.time), m_mountain.name, res.medal >= 0 ? std::string(", ") + medalName(res.medal) : std::string(),
+                                res.newBest ? ", a new best" : "");
+    if (!res.opened.empty()) {
+        for (const Mountain& m : m_mountains)
+            if (m.id == res.opened) m_opened = m.name;
+        refreshMountainRow(mountainPick());
+        kke::log::get(name())->info("{} is open", m_opened);
     }
 }
 
@@ -183,6 +314,11 @@ void ClimbRaceModule::updateLobby(float dt) {
     for (size_t i = 0; same && i < roster.size(); ++i) same = roster[i].seat == m_racers[i].seat;
     if (!same) buildRacers(roster);
     applyLooks();
+    // Another mountain picked: it rises behind the line-up.
+    if (const Mountain m = chosenMountain(); keyOf(m) != m_builtKey) {
+        useMountain(m);
+        buildMountain(static_cast<int>(m_racers.size())); // every climber on the new rock
+    }
 
     // The camera in front of the mountain, looking at the line-up.
     m_app->views().clear();
@@ -236,7 +372,10 @@ void ClimbRaceModule::startFromLobby() {
     if (!same) buildRacers(roster);
     applyLooks();
     // One face per climber.
-    if (m_lanes.size() != m_racers.size()) buildMountain(m_seed, static_cast<int>(m_racers.size()));
+    if (const Mountain m = chosenMountain(); keyOf(m) != m_builtKey || m_lanes.size() != m_racers.size()) {
+        useMountain(m);
+        buildMountain(static_cast<int>(m_racers.size()));
+    }
     if (m_lobby) {
         m_lobby->applyInput();
         for (Racer& r : m_racers)
@@ -249,8 +388,8 @@ void ClimbRaceModule::startFromLobby() {
     if (m_howtoFirst) showHowTo(true);
     m_howtoFirst = false;
     const int online = static_cast<int>(std::count_if(m_racers.begin(), m_racers.end(), [](const Racer& r) { return r.remote; }));
-    kke::log::get(name())->info("race: {} climbers: {} playing here, {} online, {} CPU, on mountain {}", m_racers.size(), humans(), online,
-                                static_cast<int>(m_racers.size()) - humans() - online, m_seed);
+    kke::log::get(name())->info("race: {} climbers: {} playing here, {} online, {} CPU, on {} (seed {})", m_racers.size(), humans(), online,
+                                static_cast<int>(m_racers.size()) - humans() - online, m_mountain.name, m_mountain.desc.seed);
 }
 
 void ClimbRaceModule::backToLobby() {
