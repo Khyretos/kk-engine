@@ -145,10 +145,18 @@ const std::vector<Step>& steps() {
 } // namespace
 
 ProceduralDemoModule::ProceduralDemoModule() = default;
-ProceduralDemoModule::~ProceduralDemoModule() {
+ProceduralDemoModule::~ProceduralDemoModule() = default;
+
+// The ragdolls go while the physics module still exists: modules are
+// destroyed after every shutdown(), not in dependency order, so doing this
+// in the destructor crashed on quitting with a ragdoll down.
+void ProceduralDemoModule::shutdown() {
     if (m_rigid)
         for (Creature& c : m_creatures)
-            if (c.handle) m_rigid->destroyRagdoll(c.handle);
+            if (c.handle) {
+                m_rigid->destroyRagdoll(c.handle);
+                c.handle = 0;
+            }
 }
 
 std::vector<kke::ModuleDependency> ProceduralDemoModule::dependencies() const {

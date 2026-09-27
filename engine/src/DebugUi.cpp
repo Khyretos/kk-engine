@@ -53,6 +53,21 @@ DebugUi::DebugUi(Window& window, VulkanDevice& device, VkRenderPass renderPass, 
         c = ImVec4(toLinear(c.x), toLinear(c.y), toLinear(c.z), c.w);
     }
 
+    // The desktop's or phone's text scale (a phone reports its pixel
+    // density: about 3 on a 1440p phone, where ImGui's 13 px font was a
+    // smudge). Pixel density itself (Retina, Wayland scaling) ImGui's SDL
+    // backend already handles through the framebuffer scale, so only the
+    // content scale on top of it is applied: a font rasterised at that size
+    // (crisp, unlike FontGlobalScale) and every padding and spacing with it.
+    const float density = SDL_GetWindowPixelDensity(window.handle());
+    const float scale = density > 0.0f ? SDL_GetWindowDisplayScale(window.handle()) / density : 1.0f;
+    if (scale > 1.01f) {
+        ImFontConfig font;
+        font.SizePixels = std::round(13.0f * scale);
+        ImGui::GetIO().Fonts->AddFontDefault(&font);
+        ImGui::GetStyle().ScaleAllSizes(scale);
+    }
+
     VkInstance instance = device.instance();
     ImGui_ImplVulkan_LoadFunctions(imguiVulkanLoader, &instance);
 

@@ -371,11 +371,13 @@ void UiModule::init(Application& app) {
     std::cout << "[ui] RmlUi initialised with real Vulkan rendering (text via glyph textures, <img>/background-image via stb_image, both real now -- see RmlVulkanRenderInterface.h)" << std::endl;
 }
 
-// The window height at which 1dp == 1px (times m_uiScale). Documents
-// were designed against 1600x900; scaling by height rather than width
-// keeps text size tied to how much vertical room there is, which is
-// what makes a HUD or menu read the same at 720p, 1080p and 4K. The
-// lower clamp stops text becoming unreadable in a small window.
+// The window's short side at which 1dp == 1px (times m_uiScale). Documents
+// were designed against 1600x900; scaling by the short side (the height
+// on a PC) keeps text size tied to how much room there is, which is what
+// makes a HUD or menu read the same at 720p, 1080p and 4K. A phone held
+// upright has its long side as height: scaling by that made the UI 2.2x
+// too big for the narrow width. The lower clamp stops text becoming
+// unreadable in a small window.
 static constexpr float kReferenceHeight = 900.0f;
 
 // RmlUi's layout, animations, transitions and hover state all advance in
@@ -391,7 +393,8 @@ void UiModule::renderUi() {
         m_context->SetDimensions(Rml::Vector2i(static_cast<int>(extent.width), static_cast<int>(extent.height)));
     }
     m_pixelsPerPoint = m_app->window().pixelsPerPoint();
-    float ratio = std::max(0.6f, static_cast<float>(extent.height) / kReferenceHeight) * m_uiScale;
+    const float shortSide = static_cast<float>(std::min(extent.width, extent.height));
+    float ratio = std::max(0.6f, shortSide / kReferenceHeight) * m_uiScale;
     if (std::abs(ratio - m_dpRatio) > 1e-3f || std::abs(m_context->GetDensityIndependentPixelRatio() - ratio) > 1e-3f) {
         m_dpRatio = ratio;
         m_context->SetDensityIndependentPixelRatio(ratio);

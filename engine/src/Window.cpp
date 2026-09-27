@@ -4,7 +4,10 @@
 #include <stb_image.h>
 
 #include <cstddef>
+#include <cstdio>
+#include <cstdlib>
 #include <stdexcept>
+#include <string_view>
 
 namespace kke {
 
@@ -12,7 +15,37 @@ namespace kke {
 extern const unsigned char kEngineIconPng[];
 extern const std::size_t kEngineIconPngSize;
 
+namespace {
+
+// Which ways a phone or tablet screen may turn (only Android and iOS read
+// the hint). Games are laid out for landscape, so that's the default, either
+// way round; KKE_ORIENTATION=portrait or =any overrides it (the benchmark
+// app runs every demo both ways). Without the hint SDL lets a resizable
+// window follow the phone into portrait.
+const char* orientationHint() {
+    const char* env = std::getenv("KKE_ORIENTATION");
+    const std::string_view choice = env ? env : "";
+    if (choice == "portrait") return "Portrait PortraitUpsideDown";
+    if (choice == "any") return "LandscapeLeft LandscapeRight Portrait PortraitUpsideDown";
+    return "LandscapeLeft LandscapeRight";
+}
+
+// KKE_WINDOW=WIDTHxHEIGHT opens the window at that size instead of the
+// game's own, e.g. KKE_WINDOW=720x1600 to see a phone held upright on a PC.
+void sizeFromEnvironment(uint32_t& width, uint32_t& height) {
+    const char* env = std::getenv("KKE_WINDOW");
+    unsigned w = 0, h = 0;
+    if (env && std::sscanf(env, "%ux%u", &w, &h) == 2 && w >= 64 && h >= 64) {
+        width = w;
+        height = h;
+    }
+}
+
+} // namespace
+
 Window::Window(const std::string& title, uint32_t width, uint32_t height) {
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, orientationHint());
+    sizeFromEnvironment(width, height);
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         throw std::runtime_error(std::string("SDL_Init failed: ") + SDL_GetError());
     }

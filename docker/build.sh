@@ -36,10 +36,13 @@ android)
     cmake -S "$src" -B "$bld" -G Ninja -DCMAKE_BUILD_TYPE=Release -DKKE_ENABLE_FEMFX=OFF \
         -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
         -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON \
-        -DKKE_ENABLE_TESTS=OFF -DKKE_ENABLE_VALIDATION=OFF
+        -DKKE_ENABLE_TESTS=OFF -DKKE_ENABLE_VALIDATION=OFF ${KKE_VERSION_NAME:+"-DKKE_VERSION_NAME=$KKE_VERSION_NAME"}
     cmake --build "$bld" -j "$jobs"
-    python3 "$src/android/build_apk.py" --build "$bld" --out "$out/kke-demos.apk"
-    python3 "$src/android/build_apk.py" --build "$bld" --benchmark --out "$out/kke-benchmark.apk"
+    # KKE_COOKED: cooked art for a PRIVATE with-art build (bake_with_art.sh --android).
+    apk_args=() suffix=""
+    if [ -n "${KKE_COOKED:-}" ]; then apk_args=(--cooked "$KKE_COOKED"); suffix="-with-art"; fi
+    python3 "$src/android/build_apk.py" --build "$bld" "${apk_args[@]}" --out "$out/kke-demos$suffix.apk"
+    python3 "$src/android/build_apk.py" --build "$bld" --benchmark "${apk_args[@]}" --out "$out/kke-benchmark$suffix.apk"
     ;;
 *)
     echo "unknown platform '$platform' (linux | windows | android)" >&2

@@ -6,6 +6,7 @@
 #include "kke/DevTools.h"
 #include "kke/BenchRecorder.h"
 #include "kke/BenchmarkReport.h"
+#include "kke/Picking.h"
 #include "kke/Platform.h"
 
 #include <cstdlib>
@@ -701,8 +702,7 @@ void Application::run() {
             d.rect = r;
             d.aspect = viewAspect(r, sceneExtent);
             d.view = glm::lookAt(c.position, c.target, c.up);
-            d.proj = glm::perspective(glm::radians(c.fovDegrees), d.aspect, c.nearPlane, c.farPlane);
-            d.proj[1][1] *= -1.0f; // Vulkan's clip space Y is flipped relative to GLM's assumption.
+            d.proj = engineProjection(c.fovDegrees, d.aspect, c.nearPlane, c.farPlane); // Vulkan's flipped Y, tall screens
             if (viewCount == 0) {
                 d.lighting = m_lightingBuffer.get();
             } else {

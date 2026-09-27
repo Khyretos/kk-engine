@@ -17,6 +17,7 @@ On your own PC, with the packs extracted somewhere:
 ```bash
 tools/packaging/bake_with_art.sh --assets /path/to/your/synty/packs
 tools/packaging/bake_with_art.sh --assets /path/to/your/synty/packs --windows   # also the Windows zip (Docker)
+tools/packaging/bake_with_art.sh --assets /path/to/your/synty/packs --android   # also the phone APKs (Docker, docs/ANDROID.md)
 ```
 
 It needs a screen: step 3 opens every demo for a few seconds. When it

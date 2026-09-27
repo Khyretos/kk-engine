@@ -48,6 +48,7 @@ public:
     const char* name() const override { return "ProceduralDemo"; }
     std::vector<kke::ModuleDependency> dependencies() const override;
     void init(kke::Application& app) override;
+    void shutdown() override;
     void update(const kke::UpdateContext& ctx) override;
     void render(const kke::RenderContext& ctx) override;
     void renderShadow(const kke::ShadowRenderContext& ctx) override;

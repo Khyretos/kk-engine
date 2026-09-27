@@ -169,6 +169,9 @@ def main():
     ap.add_argument("--version-code", type=int, default=0, help="default: the number of commits")
     ap.add_argument("--keystore", default="", help="keystore to sign with (password in $KKE_ANDROID_KEYSTORE_PASSWORD)")
     ap.add_argument("--key-alias", default="kke", help="key alias in --keystore")
+    ap.add_argument("--cooked", default="",
+                    help="art cooked with kke_cook for this build's key (tools/packaging/bake_with_art.sh --android): "
+                         "added under assets/; for PRIVATE builds only, never a public release")
     args = ap.parse_args()
 
     build = Path(args.build).resolve()
@@ -279,6 +282,23 @@ def main():
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, dest)
         bundle.append((path.stat().st_size, rel))
+    if args.cooked:
+        # Cooked art (docs/COOKED_ART.md), like package.sh --cooked: under
+        # assets/, and every file must be cooked (KKECOOK2), never raw art.
+        cooked = Path(args.cooked).resolve()
+        if not cooked.is_dir():
+            die(f"--cooked folder '{cooked}' does not exist")
+        for path in sorted(cooked.rglob("*")):
+            if not path.is_file():
+                continue
+            with open(path, "rb") as f:
+                if f.read(8) != b"KKECOOK2":
+                    die(f"--cooked holds a file that isn't cooked art: {path}")
+            rel = "assets/" + path.relative_to(cooked).as_posix()
+            dest = assets / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, dest)
+            bundle.append((path.stat().st_size, rel))
     licences = subprocess.run([str(REPO / "tools/packaging/third_party_licenses.sh"), "--platform", "android", "--deps", str(build / "_deps")],
                               capture_output=True, text=True)
     if licences.returncode != 0:

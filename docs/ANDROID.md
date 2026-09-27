@@ -43,14 +43,18 @@ Each game in an APK is its own library (`lib<game>.so`) with the engine
 inside. Picking a game starts it in its own process, so a game always
 starts fresh; leaving it ends that process and returns to the list.
 
-Paid art packs (Synty) are never put in an APK (the packer refuses);
-demos built on them show their "assets not found" screen.
+Paid art packs (Synty) are never put in a public APK (the packer refuses
+raw art); demos built on them show their "assets not found" screen. For
+your own phone and friends, `tools/packaging/bake_with_art.sh --android`
+makes private APKs with the art cooked in (below).
 
 ## The benchmark app
 
 KKE Benchmark runs the same suite as `kke_benchmark` on a PC
 (docs/BENCHMARKS.md, `benchmarks/suite.yaml`): **Run the benchmark**
-(every demo) or **Quick run**. Each demo starts on its own, plays by
+(every demo) or **Quick run**. Every demo runs twice: all of them
+sideways (landscape) first, then all of them upright (portrait); the
+screen turns by itself. Each demo starts on its own, plays by
 itself for its measured time and closes; a demo that crashes or hangs
 (it gets its time plus the suite's `load_timeout`) is recorded as such
 and the next one starts. At the end:
@@ -68,7 +72,7 @@ Step by step:
    KKE Benchmark.
 3. Tap **Run the benchmark**. The demos open one after another, each
    plays by itself for a short while; don't touch the screen. The whole
-   run takes about ten minutes. (**Quick run** is shorter, for trying it out.)
+   run takes about twenty minutes (every demo sideways, then upright). (**Quick run** is shorter, for trying it out.)
 4. When it's done the share menu opens: pick mail, a chat app or a cloud
    drive and send the file to whoever asked for it. Missed it? Tap
    **Send the results**, or find the file in `Downloads/KKE Benchmark`.
@@ -83,6 +87,19 @@ and `logs/<id>.log`.
 ```
 python3 android/build_apk.py --build build-android-arm64 --benchmark --out dist/android/kke-benchmark.apk
 ```
+
+## Screen orientation
+
+Games are laid out for landscape, so they turn to landscape (either way
+round) whatever way the phone is held. `KKE_ORIENTATION=portrait` starts
+a game upright instead and `KKE_ORIENTATION=any` lets it follow the phone;
+the benchmark app uses both to test every demo both ways.
+
+To see a phone's layout on a PC, open a game at a phone's shape and with
+the phone settings: `KKE_WINDOW=720x1600 KKE_TARGET=android ./build/bin/duel`
+(upright) or `KKE_WINDOW=1600x720` (sideways). Menus (RmlUi) are sized from
+the screen's short side, and the F1 developer panels (ImGui) from the
+screen's pixel density, so both read the same on a phone as on a PC.
 
 ## Controls
 
@@ -125,6 +142,20 @@ adb logcat -s SDL kke
 The engine's log (stdout and stderr) goes to logcat with the tag `kke`,
 at each line's own level; with `KKE_LOG_FILE` set it is also written to
 that file (the benchmark app does this per demo).
+
+## With the Synty art (private builds)
+
+The same bake that makes a private PC download with the demos' Synty art
+(docs/COOKED_ART.md) makes phone APKs too, built in Docker:
+
+```
+tools/packaging/bake_with_art.sh --assets ~/Synty --android
+# -> dist/kk-engine-demos-friends-<date>-with-art-android-arm64.apk
+#    dist/kk-engine-benchmark-friends-<date>-with-art-android-arm64.apk
+```
+
+The art goes in cooked for that bake's key, like the PC download. Send
+these to friends directly; never upload them to a public release.
 
 ## Signing
 
