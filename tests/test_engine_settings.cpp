@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <stdexcept>
 
 using kke::EngineSettings;
 

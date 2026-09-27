@@ -9,6 +9,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <algorithm>
 
 using namespace kke::ai;
 

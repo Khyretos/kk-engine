@@ -6,6 +6,7 @@
 #include "kke/VulkanDevice.h"
 
 #include <cmath>
+#include <algorithm>
 
 namespace kke {
 

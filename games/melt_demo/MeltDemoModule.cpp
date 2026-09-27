@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <cmath>
 
 namespace kke_melt {
 

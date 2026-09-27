@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
+#include <system_error>
 
 namespace kke::net {
 

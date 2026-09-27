@@ -17,6 +17,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <typeindex>
+#include <algorithm>
 
 namespace kke_demo {
 

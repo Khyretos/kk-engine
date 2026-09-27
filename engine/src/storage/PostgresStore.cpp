@@ -6,6 +6,7 @@
 
 #include <cstdio>
 #include <limits>
+#include <algorithm>
 
 namespace kke::storage {
 

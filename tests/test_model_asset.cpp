@@ -7,6 +7,8 @@
 
 #include <filesystem>
 #include <fstream>
+#include <stdexcept>
+#include <iterator>
 
 namespace fs = std::filesystem;
 

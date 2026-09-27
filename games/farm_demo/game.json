@@ -1,0 +1,9 @@
+{
+  "id": "engine.kke.farm_demo",
+  "title": "KKE Farm",
+  "description": "You are a dog on a farm. Sheep graze and bolt as a flock when you run at them, cows come to have a look, pigs root in their pen, horses spook and a fox keeps its distance: every animal runs on the AI core (senses, needs, utility decisions, navmesh). Needs POLYGON Farm, POLYGON Dogs and Quaternius' Farm Animals in assets/synty/ (never committed).",
+  "version": "0.1.0",
+  "tags": ["demo", "ai", "animals", "wildlife", "navmesh"],
+  "engine_version": "0.3",
+  "modules": ["Models", "Input", "Farm"]
+}

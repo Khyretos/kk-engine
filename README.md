@@ -93,6 +93,7 @@ Actions. Platforms, hardware targets and consoles: [docs/PLATFORMS.md](docs/PLAT
 | `melt_demo` | Pour lava on ice, wax, chocolate and aluminium and watch them melt |
 | `sea_demo` | Drive a boat over the swell; foam floats, iron sinks |
 | `jiggle_demo` | Jelly on a plate and soft-tissue bones on a jogging character |
+| `farm_demo` | You are a dog on a farm; sheep, cows, pigs, horses and a fox react to you (AI core) |
 | `audio_demo` | Every audio case, one station each: rooms, a great hall, walls of wood, glass and stone, a sound round through a door, crates, footsteps, binaural, pings (headphones recommended) |
 | `climb_race` | Race a rival up a generated mountain: pick each hold with the triggers and bumpers, manage stamina, IK hands and feet, loose rock falls; split screen with F2 |
 | `synty_demo` | Synty POLYGON models loaded straight from FBX, skinned and animated |
@@ -116,6 +117,10 @@ The quickest start is the starter template: `tools/new_game my_game`
 copies it (a character you can walk, jump and climb with, and a level in
 Lua), and [the tutorials](https://khyretos.github.io/kk-engine/tutorials/)
 grow it into a small game ([Make your own game](docs/tutorials/getting-started.md)).
+[The cookbook](https://khyretos.github.io/kk-engine/cookbook/) has recipes for
+the rest, from your own controls and cameras to A*, flocking and IK, each
+one run by CI. Any AI assistant can help too: [AGENTS.md](AGENTS.md) and
+its skills teach it the engine, whatever its size.
 Under the hood a game is a list of modules:
 
 ```cpp
@@ -142,7 +147,7 @@ example per system; Lua scripting is covered in
 
 | Document | Contents |
 |---|---|
-| [Docs site](https://khyretos.github.io/kk-engine/) | Getting started, tutorials, guides and the Lua API reference, searchable |
+| [Docs site](https://khyretos.github.io/kk-engine/) | Getting started, tutorials, the cookbook, guides and the Lua API reference, searchable |
 | [ROADMAP.md](ROADMAP.md) | Current state of every system and the next gap in each |
 | [BUGS.md](BUGS.md) | Every defect found, its cause and fix |
 | [ACTION_PLAN.md](ACTION_PLAN.md) | Everything asked for, in priority order |
@@ -150,7 +155,8 @@ example per system; Lua scripting is covered in
 | [docs/](docs/README.md) | Design notes per system: audio, input, movement, networking, scripting, optimization, scaling and more |
 | [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) | Every third-party library, tool and asset, its licence and what it asks of your game |
 | [docs/HISTORY.md](docs/HISTORY.md) | The development log: how each system was built and verified |
-| [AI_GUIDE.md](AI_GUIDE.md) | Rules for AI agents working on this codebase |
+| [AGENTS.md](AGENTS.md) | For AI assistants helping you make a game: skills any model can follow ([how to use them](https://khyretos.github.io/kk-engine/AI_ASSISTANTS/)) |
+| [AI_GUIDE.md](AI_GUIDE.md) | Rules for AI agents working on the engine itself |
 
 ## Tests and CI
 

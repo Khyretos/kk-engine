@@ -63,7 +63,7 @@ Events, like GMod's `hook`:
 ```lua
 hook.Add("Think", "my.id", function(dt) end)      -- every frame
 hook.Add("Tick", "my.id", function(dt, tick) end) -- fixed 60 Hz
-hook.Add("Contact", "my.id", function(c) end)     -- c.a, c.b, c.speed, c.materialA, c.materialB, c.pos
+hook.Add("Contact", "my.id", function(c) end)     -- two bodies (not the player): c.a, c.b, c.speed, c.materialA, c.materialB, c.pos
 hook.Add("Break", "my.id", function(id) end)      -- a breakable this script made came apart
 hook.Add("NetMessage", "my.id", function(name, data, from) end) -- net.send from another machine
 hook.Add("Init", "my.id", function() end)         -- once, after all scripts loaded
