@@ -6,7 +6,7 @@
 <text x="32" y="40.0" text-anchor="end" fill="#666">0.0647</text>
 <text x="32" y="144.0" text-anchor="end" fill="#666">0.0000</text>
 <text x="36" y="160" fill="#666">01eec85</text>
-<text x="604" y="160" text-anchor="end" fill="#666">ef5c691</text>
-<path d="M36.0,50.1 L225.3,50.7 L414.7,51.0 L604.0,69.4" fill="none" stroke="#2563eb" stroke-width="2"/>
-<g fill="#2563eb"><circle cx="36.0" cy="50.1" r="2.5"><title>01eec85: 0.0563</title></circle><circle cx="225.3" cy="50.7" r="2.5"><title>d15ebcd: 0.0559</title></circle><circle cx="414.7" cy="51.0" r="2.5"><title>417c735: 0.0557</title></circle><circle cx="604.0" cy="69.4" r="2.5"><title>ef5c691: 0.0447</title></circle></g>
+<text x="604" y="160" text-anchor="end" fill="#666">9b18274</text>
+<path d="M36.0,50.1 L178.0,50.7 L320.0,51.0 L462.0,69.4 L604.0,51.2" fill="none" stroke="#2563eb" stroke-width="2"/>
+<g fill="#2563eb"><circle cx="36.0" cy="50.1" r="2.5"><title>01eec85: 0.0563</title></circle><circle cx="178.0" cy="50.7" r="2.5"><title>d15ebcd: 0.0559</title></circle><circle cx="320.0" cy="51.0" r="2.5"><title>417c735: 0.0557</title></circle><circle cx="462.0" cy="69.4" r="2.5"><title>ef5c691: 0.0447</title></circle><circle cx="604.0" cy="51.2" r="2.5"><title>9b18274: 0.0556</title></circle></g>
 </svg>
