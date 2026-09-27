@@ -1,5 +1,6 @@
 // Ragdolls on Jolt (RigidWorld::addRagdoll, issue #31): limits, limb
 // self-collision, settling, cleanup.
+#include "kke/ProceduralAnim.h"
 #include "kke/Ragdoll.h"
 #include "kke/RigidWorld.h"
 #include "RagdollTestRigs.h"
@@ -303,4 +304,66 @@ TEST(RigidWorld, MassOverridesDensity) {
     ASSERT_NE(b, kke::RigidWorld::kNoBody);
     w.addImpulse(b, glm::vec3(4.0f, 0, 0), w.position(b));
     EXPECT_NEAR(w.velocity(b).x, 2.0f, 1e-3f);
+}
+
+// Active ragdolls (kke/ProceduralAnim.h): joint motors toward a pose.
+TEST(JoltRagdoll, MotorsHoldAJointAtItsTarget) {
+    kke::RigidWorld w(single());
+    const kke::RagdollDesc d = humanoid(glm::vec3(0, 20, 0)); // falling freely: only the motors bend it
+    auto id = w.addRagdoll(d, glm::vec3(0.0f));
+    ASSERT_NE(id, 0u);
+    const int knee = jointTo(d, "calf_l");
+    ASSERT_GE(knee, 0);
+    const kke::RagdollJoint& j = d.joints[knee];
+    kke::RagdollDrive drive;
+    for (const auto& b : d.bodies) drive.targets.push_back(b.transform);
+    drive.jointStrength.assign(d.joints.size(), 1.0f);
+    // The calf bent 60 degrees about the knee.
+    const glm::mat4 bend = glm::translate(glm::mat4(1.0f), j.anchor) * glm::mat4_cast(glm::angleAxis(glm::radians(60.0f), glm::normalize(j.hingeAxis))) *
+                           glm::translate(glm::mat4(1.0f), -j.anchor);
+    drive.targets[j.bodyB] = bend * drive.targets[j.bodyB];
+    for (int i = 0; i < 90; ++i) {
+        ASSERT_TRUE(w.driveRagdoll(id, drive));
+        w.step(1.0f / 60.0f);
+    }
+    EXPECT_NEAR(w.ragdollHingeAngle(id, knee), 60.0f, 8.0f);
+    // Strength 0: the motor lets go (and a mismatched drive is refused).
+    drive.jointStrength.assign(d.joints.size(), 0.0f);
+    EXPECT_TRUE(w.driveRagdoll(id, drive));
+    drive.jointStrength.pop_back();
+    EXPECT_FALSE(w.driveRagdoll(id, drive));
+    EXPECT_FALSE(w.driveRagdoll(12345, drive));
+}
+
+TEST(JoltRagdoll, ActiveRagdollStaysStandingAndLimpOneFalls) {
+    for (bool active : { true, false }) {
+        kke::RigidWorld w(single());
+        ground(w);
+        const kke::RagdollDesc d = humanoid(glm::vec3(0, 0.02f, 0));
+        auto id = w.addRagdoll(d, glm::vec3(0.0f));
+        ASSERT_NE(id, 0u);
+        kke::ActiveRagdoll a(d);
+        std::vector<glm::mat4> start;
+        for (const auto& b : d.bodies) start.push_back(b.transform);
+        a.setTargets(start);
+        // A light shove, so it goes Active and has something to recover from.
+        const int torso = d.findBody("torso");
+        a.hit(torso, glm::vec3(0, 0, 1.0f));
+        w.addVelocity(w.ragdollBodies(id)[torso], glm::vec3(0, 0, 1.0f));
+        std::vector<glm::mat4> now;
+        for (int i = 0; i < 180; ++i) {
+            ASSERT_TRUE(w.ragdollTransforms(id, now));
+            a.update(1.0f / 60.0f, now);
+            if (active && a.physical()) w.driveRagdoll(id, a.drive());
+            w.step(1.0f / 60.0f);
+        }
+        ASSERT_TRUE(w.ragdollTransforms(id, now));
+        const float head = now[static_cast<size_t>(d.findBody("head"))][3].y;
+        if (active) {
+            EXPECT_GT(head, 1.4f) << "the active ragdoll should still be standing";
+            EXPECT_EQ(a.state(), kke::ActiveRagdoll::State::Animated); // recovered and handed back
+        } else {
+            EXPECT_LT(head, 0.8f) << "without motors it should have fallen";
+        }
+    }
 }

@@ -34,8 +34,12 @@ set(ENGINE_SOURCES
     src/BreakGraph.cpp
     src/Animator.cpp
     src/AnimRig.cpp
+    src/ProceduralAnim.cpp
     src/ClimbWall.cpp
     src/Climber.cpp
+    src/Combat.cpp
+    src/Sidekick.cpp
+    src/MeshLod.cpp
     src/ResourceGovernor.cpp
     src/HardwareTarget.cpp
     src/FrameStats.cpp
@@ -45,6 +49,13 @@ set(ENGINE_SOURCES
     src/Buoyancy.cpp
     src/CameraRig.cpp
     src/SceneFile.cpp
+    src/ai/Steering.cpp
+    src/ai/Perception.cpp
+    src/ai/Utility.cpp
+    src/ai/NavMesh.cpp
+    src/ai/Species.cpp
+    src/ai/AiWorld.cpp
+    src/ai/AiScript.cpp
     src/net/BitStream.cpp
     src/net/Protocol.cpp
     src/net/Transport.cpp
@@ -235,6 +246,7 @@ target_include_directories(kke_engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 target_link_libraries(kke_engine PRIVATE yaml-cpp::yaml-cpp) # kke/DataFile.h only
+target_link_libraries(kke_engine PRIVATE meshoptimizer) # kke/MeshLod.h only
 
 target_link_libraries(kke_engine PUBLIC
     volk
@@ -246,6 +258,7 @@ target_link_libraries(kke_engine PUBLIC
     RmlUi::Core
     nlohmann_json::nlohmann_json
     kke_sqlite
+    kke_recast
     ufbx
     spdlog::spdlog
     kke_miniaudio

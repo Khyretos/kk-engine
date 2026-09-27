@@ -41,6 +41,7 @@ public:
     void destroyRagdoll(RagdollHandle handle) override;
     bool ragdollBodyTransforms(RagdollHandle handle, std::vector<glm::mat4>& out) const override;
     void pushRagdollBody(RagdollHandle handle, int body, const glm::vec3& deltaVelocity) override;
+    bool driveRagdoll(RagdollHandle handle, const RagdollDrive& drive) override;
     int ragdollQuality() const override { return 1; }
 
     // ---- IPhysicsWorld (kke/PhysicsWorld.h)

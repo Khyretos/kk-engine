@@ -16,6 +16,7 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [INPUT.md](INPUT.md) | Rebindable actions, devices, triggers and chords |
 | [COMMANDS.md](COMMANDS.md) | Orders for companions and squads: selection, formations, radial wheel, Lua and nodes |
 | [MOVEMENT.md](MOVEMENT.md) | How characters move, and the animation principles behind it |
+| [AI.md](AI.md) | The AI core: senses, needs, utility decisions, steering, navmesh, orders, `ai.*` in Lua |
 | [JIGGLE.md](JIGGLE.md) | Jiggle physics for bones, skin and soft bodies |
 | [RAGDOLLS.md](RAGDOLLS.md) | Humanoid and animal ragdolls, their joint limits and how to override them |
 | [NETWORKING.md](NETWORKING.md) | Transport, protocol, authority and replication |
