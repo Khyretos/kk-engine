@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
@@ -732,7 +733,7 @@ void ClothDemoModule::buildPanel() {
     top.hint("{cloth.scene} next scene  {cloth.redrop} drop again", "{cloth.scene_back} {cloth.scene} scene  {cloth.redrop} drop again");
     top.text([this] {
         switch (m_scene) {
-        case Scene::Fabrics: return std::string("Left to right: silk, cotton, denim, wool, leather, satin.");
+        case Scene::Fabrics: return std::string("Left to right: satin, leather, wool, denim, cotton, silk.");
         case Scene::Bed: return std::string("A wool blanket, then a silk sheet, then a denim throw.");
         case Scene::Nets: return std::string("A hammock catching balls, a tennis net stopping shots.");
         case Scene::Cape: return std::string("A satin cape on a runner, through a linen curtain.");

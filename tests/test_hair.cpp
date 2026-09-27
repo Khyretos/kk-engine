@@ -5,6 +5,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 
 namespace {

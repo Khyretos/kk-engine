@@ -121,7 +121,7 @@ nav:
           - Melting: demos/melt_demo.md
           - Sea: demos/sea_demo.md
           - Jiggle: demos/jiggle_demo.md
-          - Cloth: demos/cloth_demo.md
+          - Cloth and hair: demos/cloth_demo.md
           - Sound: demos/audio_demo.md
           - Synty characters and ragdolls: demos/synty_demo.md
       - Showcases and tools:
@@ -154,6 +154,7 @@ nav:
       - Physics bridge: PHYSICS_BRIDGE.md
       - Ragdolls: RAGDOLLS.md
       - Cloth: CLOTH.md
+      - Hair: HAIR.md
   - Reference:
       - Lua API: reference/lua-api.md
       - JSON or YAML data files: DATA_FILES.md
