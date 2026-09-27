@@ -91,16 +91,17 @@ def looks_like_paid_art(rel):
 BENCHMARK_COLLECTOR = "kke_benchmark"
 
 
-def benchmark_suite(bin_dir):
+SUITE = REPO / "benchmarks" / "suite.yaml"
+
+
+def benchmark_suite():
     """The benchmark suite (benchmarks/suite.yaml) as JSON with every
     default filled in, for BenchmarkActivity."""
     try:
         import yaml
     except ImportError:
         die("--benchmark needs PyYAML (apt install python3-yaml) to read the benchmark suite")
-    path = bin_dir / "benchmark" / "benchmark_suite.yaml"
-    if not path.is_file():
-        path = REPO / "benchmarks" / "suite.yaml"
+    path = SUITE
     suite = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     defaults = suite.get("defaults") or {}
     demos = []
@@ -268,6 +269,8 @@ def main():
         if not path.is_file():
             continue
         rel = path.relative_to(bin_dir).as_posix()
+        if rel.startswith("benchmark/"):
+            continue  # the desktop benchmark's folder (a stale one in an old build tree); the suite is added below
         if rel.endswith((".log", ".part")) or path.name == "imgui.ini" or is_elf(path):
             continue  # run logs, and the host-side tools the build also made
         if looks_like_paid_art(rel):
@@ -280,13 +283,18 @@ def main():
                               capture_output=True, text=True)
     if licences.returncode != 0:
         die("third_party_licenses.sh failed:\n" + licences.stderr)
-    for name, text in (("THIRD_PARTY_LICENSES.txt", licences.stdout), ("LICENSE.txt", (REPO / "LICENSE").read_text(encoding="utf-8"))):
+    texts = [("THIRD_PARTY_LICENSES.txt", licences.stdout), ("LICENSE.txt", (REPO / "LICENSE").read_text(encoding="utf-8"))]
+    if args.benchmark:
+        # Unpacked with the rest, for kke_benchmark --collect --suite.
+        texts.append(("benchmark/benchmark_suite.yaml", SUITE.read_text(encoding="utf-8")))
+    for name, text in texts:
+        (assets / name).parent.mkdir(parents=True, exist_ok=True)
         (assets / name).write_text(text, encoding="utf-8")
         bundle.append((len(text.encode("utf-8")), name))
     build_id = f"{version_name} {version_code} {git('rev-parse', 'HEAD') or 'unknown'}"
     (assets / "kke_bundle.txt").write_text(f"bundle {build_id}\n" + "".join(f"{size} {rel}\n" for size, rel in bundle), encoding="utf-8")
     if args.benchmark:
-        (assets / "kke_suite.json").write_text(json.dumps(benchmark_suite(bin_dir), indent=1), encoding="utf-8")
+        (assets / "kke_suite.json").write_text(json.dumps(benchmark_suite(), indent=1), encoding="utf-8")
     (assets / "kke_games.txt").write_text("".join(f"{g}\t{game_title(bin_dir, g)}\n" for g in games), encoding="utf-8")
 
     # --- Link, then add the code and the native libraries ----------------
