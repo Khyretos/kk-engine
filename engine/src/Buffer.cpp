@@ -53,6 +53,8 @@ void Buffer::upload(const void* data, VkDeviceSize size) {
     void* mapped = nullptr;
     VK_CHECK(vmaMapMemory(m_device.allocator(), m_allocation, &mapped));
     std::memcpy(mapped, data, static_cast<size_t>(size));
+    // Non-coherent memory needs the write made visible to the GPU.
+    VK_CHECK(vmaFlushAllocation(m_device.allocator(), m_allocation, 0, size));
     vmaUnmapMemory(m_device.allocator(), m_allocation);
 }
 

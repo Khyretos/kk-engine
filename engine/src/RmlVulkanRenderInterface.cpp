@@ -368,10 +368,16 @@ Rml::CompiledGeometryHandle RmlVulkanRenderInterface::CompileGeometry(
     auto geometry = std::make_unique<CompiledGeometry>();
     geometry->indexCount = static_cast<uint32_t>(indices.size());
 
-    geometry->vertexBuffer = std::make_unique<Buffer>(Buffer::createDeviceLocal(
-        m_device, vertices.data(), sizeof(Rml::Vertex) * vertices.size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT));
-    geometry->indexBuffer = std::make_unique<Buffer>(Buffer::createDeviceLocal(
-        m_device, indices.data(), sizeof(int) * indices.size(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
+    // Host-visible, written directly: RmlUi compiles geometry again every
+    // time a text changes (a live number: every frame), and a device-local
+    // buffer's staging copy waited for the GPU to go idle each time, so the
+    // CPU sat through the whole previous frame's GPU work.
+    const VkDeviceSize vertexBytes = sizeof(Rml::Vertex) * vertices.size();
+    const VkDeviceSize indexBytes = sizeof(int) * indices.size();
+    geometry->vertexBuffer = std::make_unique<Buffer>(m_device, vertexBytes, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    geometry->vertexBuffer->upload(vertices.data(), vertexBytes);
+    geometry->indexBuffer = std::make_unique<Buffer>(m_device, indexBytes, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    geometry->indexBuffer->upload(indices.data(), indexBytes);
 
     uintptr_t handle = m_nextGeometryHandle++;
     m_geometry[handle] = std::move(geometry);
