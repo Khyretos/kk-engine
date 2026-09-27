@@ -90,7 +90,7 @@ Environment variables (all read in `SandboxModule::init()` or
 | Pan the view | middle-drag, WASD, Q/E down/up, Shift faster | | no controller binding yet |
 | Get everyone up | the Get up picture | same | Y |
 | Undo | Ctrl+Z | | no controller binding yet |
-| Open the editor (Build) | the Build picture, or F2 | the Build picture | Start |
+| Open the editor (Build) | the Build picture, or F2 | the Build picture | Start (Start again comes back) |
 | Engine debug panels | F1 | | |
 
 Camera controls come from `OrbitCameraModule` in `Editor` mode
@@ -116,34 +116,34 @@ so the left button is free for the palette and the bat.
 
 ### Build mode (the editor)
 
-Build mode is keyboard and mouse only: gamepad buttons and sticks are
-only read in Play mode (`update()` calls `updatePad()` only when `play`
-is true, and the gamepad cases in `onEvent()` sit in the Play branch).
-**No controller binding yet** for anything below, and a player who
-presses Start in Play mode has no controller way back.
+On a controller Build mode works like Play: the left stick moves the
+pointer (a ring) and A is its left button, so the panels, the gizmo and
+placing work as with a mouse (`updatePad()` runs in both modes); the
+other buttons are the editor's keys (`buildPadButton()`). Anything
+without a button is a panel control the pointer can press.
 
-| Action | Mouse / keyboard |
-|---|---|
-| Pick an asset to place | click it in the Assets panel |
-| Place | click in the world (Shift+click keeps placing) |
-| Rotate while placing | R / Shift+R, Ctrl+wheel |
-| Select | click (Shift+click adds or removes); Ctrl+A selects all |
-| Gizmo mode | Tab cycles move, rotate, scale (or the radio buttons) |
-| Drag a gizmo handle | left-drag; hold Shift for no snapping |
-| Move the selection (follows the mouse) | G |
-| Rotate the selection by the step | R / Shift+R |
-| Duplicate | Ctrl+D (the copies follow the mouse; Esc takes them away) |
-| Delete | Delete or Backspace |
-| Undo / redo | Ctrl+Z / Ctrl+Y or Ctrl+Shift+Z (100 steps) |
-| Ragdoll or stand up the selected person | K |
-| Make the selected prop breakable, or restore it (FEMFX) | X |
-| Select tool / Shoot tool (FEMFX) | 1 / 2 |
-| Throw a ball at the cursor (FEMFX) | F or Space, or click with the Shoot tool |
-| Save / load the level | Ctrl+S / Ctrl+L |
-| Stop placing, stop shooting, clear the selection | Esc |
-| Back to Play | F2, or "Back to Play (F2)" at the top |
-| Engine debug panels | F1 |
-| Camera | right-drag orbit, middle-drag pan, wheel zoom, WASD/QE move, Shift faster |
+| Action | Mouse / keyboard | Controller |
+|---|---|---|
+| Pick an asset to place | click it in the Assets panel | point at it, A |
+| Place | click in the world (Shift+click keeps placing) | A |
+| Rotate while placing | R / Shift+R, Ctrl+wheel | RB / LB |
+| Select | click (Shift+click adds or removes); Ctrl+A selects all | A |
+| Gizmo mode | Tab cycles move, rotate, scale (or the radio buttons) | D-pad up |
+| Drag a gizmo handle | left-drag; hold Shift for no snapping | hold A and move |
+| Move the selection (follows the mouse) | G | the Move button in the inspector |
+| Rotate the selection by the step | R / Shift+R | RB / LB |
+| Duplicate | Ctrl+D (the copies follow the mouse; Esc takes them away) | Y |
+| Delete | Delete or Backspace | X |
+| Undo / redo | Ctrl+Z / Ctrl+Y or Ctrl+Shift+Z (100 steps) | D-pad left / right |
+| Ragdoll or stand up the selected person | K | the inspector's button |
+| Make the selected prop breakable, or restore it (FEMFX) | X | the inspector's button |
+| Select tool / Shoot tool (FEMFX) | 1 / 2 | the inspector's buttons |
+| Throw a ball at the cursor (FEMFX) | F or Space, or click with the Shoot tool | A with the Shoot tool |
+| Save / load the level | Ctrl+S / Ctrl+L | the inspector's buttons |
+| Stop placing, stop shooting, clear the selection | Esc | B |
+| Back to Play | F2, or "Back to Play" at the top | Start |
+| Engine debug panels | F1 | none: a developer tool, keyboard only |
+| Camera | right-drag orbit, middle-drag pan, wheel zoom, WASD/QE move, Shift faster | right stick turns, triggers zoom |
 
 ## How it plays
 
@@ -491,9 +491,11 @@ the AI's animation name). See [docs/AI.md](../../docs/AI.md).
   1.4 pad button <a|b|x|y|lb|rb|start|left|right> <0|1>
   ```
 
-  The two replays in `tests/sandbox_replays/` place a person with a
-  gamepad, take the bat and knock them over, and zoom and turn the view
-  with two fingers. Pushed finger events skip SDL's touch-to-mouse step,
+  The replays in `tests/sandbox_replays/` place a person with a
+  gamepad, take the bat and knock them over (`gamepad_bat`), go from
+  Build to Play and back with Start and move the pointer and the view
+  (`gamepad_build`), and zoom and turn the view with two fingers
+  (`touch_gestures`). Pushed finger events skip SDL's touch-to-mouse step,
   so one-finger dragging is only checked through the mouse path.
 
 ### Saving and loading
@@ -725,13 +727,14 @@ Pitfalls the code shows:
 | [GraphEditor.cpp](GraphEditor.cpp) | The RmlUi editor: the RCSS and RML, the `<graphwires>` element, the event listener, dragging, wiring, the "what fits" menu, fit and zoom, "Show Lua". |
 | [CMakeLists.txt](CMakeLists.txt) | The `sandbox` executable, `game.json` copy, shaders. |
 | [game.json](game.json) | The marketplace manifest (id `engine.kke.sandbox`). |
-| `../../tests/sandbox_replays/` | `gamepad_bat.replay`, `touch_gestures.replay`. |
+| `../../tests/sandbox_replays/` | `gamepad_bat.replay`, `gamepad_build.replay`, `touch_gestures.replay`. |
 | `../../tests/test_play_blocks.cpp`, `../../tests/test_node_graph.cpp` | Unit tests for the bat, pad pointer, palette stepping, graphs and compiling. |
 
 ## Known limitations and issues
 
-- **Build mode has no controller support**, and Start (Play to Build) has
-  no controller way back.
+- **Build mode's panels are ImGui**, driven on a controller by the
+  pointer. Moving them to RmlUi (the rule for what players use) is the
+  next step.
 - **Barrel reports as Box.** `SM_Prop_Barrel_01` is listed in both the
   Box (`crate`) and Barrel blocks, and `blockOf()` returns the first
   match, so a barrel dragged from the Barrel picture is block `crate` to

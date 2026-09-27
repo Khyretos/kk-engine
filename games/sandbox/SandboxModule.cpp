@@ -837,7 +837,7 @@ void SandboxModule::update(const kke::UpdateContext& ctx) {
     // mouse while its button is held, so there "free" means not over a window.
     const bool play = m_mode == Mode::Play;
     updateReplay(ctx.dt);
-    if (play) updatePad(ctx.dt);
+    updatePad(ctx.dt); // the pad pointer, view and zoom, in Play and Build
     bool mouseFree = play ? !mouseOverUi() : !ImGui::GetIO().WantCaptureMouse && !m_app->uiCapturesMouse();
 
     // Ground grid around the camera target, snapped so it doesn't swim.
@@ -1058,6 +1058,10 @@ void SandboxModule::onEvent(const SDL_Event& event) {
         default:
             break;
         }
+        return;
+    }
+    if (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || event.type == SDL_EVENT_GAMEPAD_BUTTON_UP) {
+        buildPadButton(event.gbutton.button, event.gbutton.down);
         return;
     }
     if (event.type == SDL_EVENT_MOUSE_BUTTON_UP && event.button.button == SDL_BUTTON_LEFT && m_drag != Handle::None) {
@@ -2385,7 +2389,7 @@ void SandboxModule::modeSwitchUi() {
     ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + 8 * s), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
     ImGui::Begin("Mode", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
                                   ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
-    if (ImGui::Button("Back to Play (F2)")) setMode(Mode::Play);
+    if (ImGui::Button("Back to Play (F2, Start)")) setMode(Mode::Play);
     ImGui::End();
 }
 
@@ -2502,15 +2506,70 @@ void SandboxModule::playPaletteUi() {
     }
     if (picture("build", "Build", nullptr, "Tools", false).pressed) setMode(Mode::Build);
     ImGui::End();
+}
 
-    // The gamepad's cursor: phones and TVs draw no mouse pointer, so while
-    // a pad is in use the cursor is a big ring (filled while A is held).
-    if (static_cast<double>(SDL_GetTicks()) / 1000.0 - m_padLastUsed < 5.0) {
-        const ImVec2 c = ImGui::GetIO().MousePos;
-        ImDrawList* fg = ImGui::GetForegroundDrawList();
-        fg->AddCircle(c, 15.0f * s, IM_COL32(20, 20, 30, 220), 0, 6.0f * s);
-        fg->AddCircle(c, 15.0f * s, IM_COL32(255, 230, 120, 255), 0, 3.0f * s);
-        if (m_padPressing) fg->AddCircleFilled(c, 8.0f * s, IM_COL32(255, 230, 120, 255));
+// The gamepad's cursor, in Play and Build: phones and TVs draw no mouse
+// pointer, so while a pad is in use the cursor is a big ring (filled
+// while A is held).
+void SandboxModule::padCursorUi() {
+    if (static_cast<double>(SDL_GetTicks()) / 1000.0 - m_padLastUsed >= 5.0) return;
+    const float s = ImGui::GetFontSize() / 13.0f;
+    const ImVec2 c = ImGui::GetIO().MousePos;
+    ImDrawList* fg = ImGui::GetForegroundDrawList();
+    fg->AddCircle(c, 15.0f * s, IM_COL32(20, 20, 30, 220), 0, 6.0f * s);
+    fg->AddCircle(c, 15.0f * s, IM_COL32(255, 230, 120, 255), 0, 3.0f * s);
+    if (m_padPressing) fg->AddCircleFilled(c, 8.0f * s, IM_COL32(255, 230, 120, 255));
+}
+
+// Build mode on a controller: the left stick is the mouse pointer and A
+// its left button (the same as in Play), so the panels, the gizmo and
+// placing work as with a mouse; the other buttons are the editor's keys.
+void SandboxModule::buildPadButton(uint8_t button, bool down) {
+    m_padLastUsed = static_cast<double>(SDL_GetTicks()) / 1000.0;
+    if (m_padCursor.x < 0.0f) {
+        const auto& mouse = m_app->window().mouseState();
+        m_padCursor = glm::vec2(mouse.x, mouse.y);
+    }
+    if (button == SDL_GAMEPAD_BUTTON_SOUTH) { // A: click, hold to drag
+        if (down != m_padPressing) pointerButton(down);
+        return;
+    }
+    if (!down) return;
+    switch (button) {
+    case SDL_GAMEPAD_BUTTON_EAST: // B: like Esc
+        if (m_padPressing) pointerButton(false);
+        if (m_tool == Tool::Place) cancelPlacing();
+        else if (m_tool == Tool::Shoot) m_tool = Tool::Select;
+        else clearSelection();
+        break;
+    case SDL_GAMEPAD_BUTTON_WEST: // X: delete
+        if (m_tool == Tool::Select) deleteSelection();
+        break;
+    case SDL_GAMEPAD_BUTTON_NORTH: // Y: duplicate
+        duplicateSelection();
+        break;
+    case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: // LB / RB: turn (R / Shift+R)
+    case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: {
+        const float step = button == SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER ? m_rotateStep : -m_rotateStep;
+        if (m_tool == Tool::Place) m_placeYaw += step;
+        else rotateSelection(step);
+        break;
+    }
+    case SDL_GAMEPAD_BUTTON_DPAD_UP: // the gizmo: move -> rotate -> scale (Tab)
+        m_gizmo = m_gizmo == Gizmo::Move ? Gizmo::Rotate : m_gizmo == Gizmo::Rotate ? Gizmo::Scale : Gizmo::Move;
+        break;
+    case SDL_GAMEPAD_BUTTON_DPAD_LEFT: // undo / redo (Ctrl+Z / Ctrl+Y)
+        undo();
+        break;
+    case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
+        redo();
+        break;
+    case SDL_GAMEPAD_BUTTON_START: // back to Play (F2)
+        if (m_padPressing) pointerButton(false);
+        setMode(Mode::Play);
+        break;
+    default:
+        break;
     }
 }
 
@@ -2590,7 +2649,7 @@ void SandboxModule::padButton(uint8_t button, bool down) {
     case SDL_GAMEPAD_BUTTON_NORTH: // Y: everyone up
         if (down) standEveryoneUp();
         break;
-    case SDL_GAMEPAD_BUTTON_START:
+    case SDL_GAMEPAD_BUTTON_START: // the editor; Start again comes back (buildPadButton)
         if (down) setMode(Mode::Build);
         break;
     default:
@@ -2744,11 +2803,12 @@ void SandboxModule::renderUi() {
     graphUi();
     if (m_mode == Mode::Play) {
         playPaletteUi();
-        return;
+    } else {
+        assetBrowserUi();
+        inspectorUi();
+        modeSwitchUi();
     }
-    assetBrowserUi();
-    inspectorUi();
-    modeSwitchUi();
+    padCursorUi();
 }
 
 } // namespace kke_sandbox
