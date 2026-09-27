@@ -6,6 +6,12 @@
 #include <glm/glm.hpp>
 #include <string>
 #include <unordered_map>
+#include <vector>
+
+namespace Rml {
+class Element;
+class ElementDocument;
+} // namespace Rml
 
 namespace kke {
 
@@ -24,6 +30,10 @@ class AudioModule;
 //
 // A separate module from AudioModule on purpose: its overlay has to stay
 // on when engine panels are hidden, and a game can swap it for its own.
+// The overlay is RmlUi (needs a UiModule), drawn in frameStart: it shows
+// with the ImGui developer panels hidden, in shipping builds, and whatever
+// setUiVisible says (that hides only the settings window). The settings
+// window itself is still ImGui ("Customize..." in the Audio panel).
 class SoundVisualizerModule : public Module {
 public:
     struct Settings {
@@ -49,7 +59,9 @@ public:
     explicit SoundVisualizerModule(std::string settingsPath = "accessibility.json");
     const char* name() const override { return "SoundVisualizer"; }
     void init(Application& app) override;
+    void frameStart(const UpdateContext& ctx) override;
     void renderUi() override;
+    void shutdown() override;
 
     Settings settings;
     bool showPanel = false;
@@ -62,7 +74,9 @@ public:
     static glm::vec2 ringPoint(float azimuth, glm::vec2 center, float radius);
 
 private:
-    void drawOverlay();
+    void drawOverlay(float dt);
+    bool makeDocument();
+    Rml::Element* pooled(std::vector<Rml::Element*>& pool, size_t index, const char* cls);
     void drawPanel();
 
     Application* m_app = nullptr;
@@ -70,6 +84,13 @@ private:
     struct Mark { ActiveSound sound; float level = 0.0f; };
     std::unordered_map<uint32_t, Mark> m_marks;
     std::string m_path;
+    Rml::ElementDocument* m_doc = nullptr;
+    Rml::Element* m_marksEl = nullptr;
+    Rml::Element* m_bottomEl = nullptr;
+    std::vector<Rml::Element*> m_bars, m_captionEls; // reused every frame; extras hidden
+    size_t m_barsShown = 0, m_captionsShown = 0;
+    std::string m_bottomShown;
+    bool m_noUiLogged = false;
 };
 
 } // namespace kke

@@ -1,4 +1,5 @@
 #include "kke/Application.h"
+#include "kke/modules/AudioModule.h"
 #include "kke/modules/DebugControlModule.h"
 #include "kke/modules/DemoPanelModule.h"
 #include "kke/modules/InputModule.h"
@@ -20,6 +21,8 @@ int main() {
         // settings panel is RmlUi (kke::DemoPanelModule).
         app.addModule<kke::InputModule>("melt_demo_input.json");
         app.addModule<kke::UiModule>();
+        // Plays the mood's ambience loop (the mood names it; BUG-079).
+        app.addModule<kke::AudioModule>().setUiVisible(false);
         app.addModule<kke::OrbitCameraModule>(/*distance=*/2.8f, /*pitch=*/-0.35f, /*yaw=*/0.6f, glm::vec3(0.0f, 0.45f, 0.0f))
             .setPadControls(true); // right stick turns, d-pad zooms
         app.addModule<kke_melt::MeltDemoModule>();
