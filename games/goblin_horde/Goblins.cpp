@@ -78,12 +78,18 @@ void HordeModule::loadGoblins() {
     std::vector<fs::path> sk;
     std::map<std::string, fs::path> clipPath;
     std::error_code ec;
-    for (const char* pack : { "SIDEKICK_Goblin_Fighters", "ANIMATION_Goblin_Locomotion" }) {
+    // A pack that isn't there is the player's choice (info, and said once);
+    // an asset missing from a pack that is there is a warning.
+    bool havePack[2] = { false, false };
+    const char* packs[2] = { "SIDEKICK_Goblin_Fighters", "ANIMATION_Goblin_Locomotion" };
+    for (int i = 0; i < 2; ++i) {
+        const char* pack = packs[i];
         const fs::path root = fs::path(packDir) / pack;
         if (!fs::exists(root, ec)) {
-            log->warn("{} not found under {}: the goblins need it", pack, packDir);
+            log->info("{} not found under {}: the goblins need it", pack, packDir);
             continue;
         }
+        havePack[i] = true;
         for (auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec); it != fs::recursive_directory_iterator();
              it.increment(ec)) {
             const fs::path& p = it->path();
@@ -102,7 +108,7 @@ void HordeModule::loadGoblins() {
     for (const ClipFile& c : kClips) {
         auto it = clipPath.find(c.tag);
         if (it == clipPath.end()) {
-            log->warn("goblin clip {} not found (ANIMATION_Goblin_Locomotion)", c.file);
+            if (havePack[1]) log->warn("goblin clip {} not found (ANIMATION_Goblin_Locomotion)", c.file);
             continue;
         }
         try {
@@ -177,7 +183,8 @@ void HordeModule::loadGoblins() {
             if (kke::canonicalBoneName(v.rig.bones[b].name) == spine) v.spine = static_cast<int>(b);
         m_variants.push_back(std::move(v));
     }
-    if (m_variants.empty()) log->warn("no goblin could be loaded (SIDEKICK_Goblin_Fighters): the goblins are invisible");
+    if (m_variants.empty() && havePack[0]) log->warn("no goblin could be loaded (SIDEKICK_Goblin_Fighters): the goblins are invisible");
+    else if (m_variants.empty()) log->info("no SIDEKICK_Goblin_Fighters pack: the goblins are invisible, the waves still come");
 }
 
 HordeModule::Goblin* HordeModule::goblinByCombatant(kke::CombatantId id) {

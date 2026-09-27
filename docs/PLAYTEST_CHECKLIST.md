@@ -127,6 +127,7 @@ Build mode (F2)
 - [ ] Place, rotate, move, scale with the gizmo; grid snap feels right; Shift turns snapping off.
 - [ ] Make a prop breakable, shoot it: pieces break along natural cracks, no hollow faces, no exploding pieces.
 - [ ] Save the level, quit, load it: everything comes back, including the Mood.
+- [ ] With only a controller: pick an asset in the Assets panel, place it, change its size with `+` (hold A), undo with d-pad left, and get back to Play with Start.
 
 **Fix:**
 
