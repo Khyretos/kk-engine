@@ -25,7 +25,33 @@
         #banner { position: absolute; top: 34%; left: 0; width: 100%; text-align: center; }
         #banner .big { font-size: 72dp; font-weight: bold; color: #ffffff; }
         #banner .sub { font-size: 18dp; color: #e8ecf4; margin-top: 6dp; }
-        #hint { position: absolute; left: 0; bottom: 18dp; width: 100%; text-align: center; font-size: 13dp; color: #aab3cc; }
+        #hint { position: absolute; left: 8%; bottom: 14dp; width: 84%; padding: 6dp 10dp; border-radius: 8dp; background-color: #0b0f1cbb;
+                text-align: center; font-size: 13dp; color: #cfd6e6; }
+        #hint img { font-size: 15dp; } /* prompt glyphs are 1.6em */
+
+        /* How to play: over everything, before the race and on the help button. */
+        #howto { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background-color: #05070ef2; }
+        #howto .sheet { position: absolute; left: 50%; top: 50%; width: 960dp; margin-left: -480dp; height: 560dp; margin-top: -290dp; }
+        #howto h1 { display: block; font-size: 44dp; font-weight: bold; color: #ffffff; text-align: center; letter-spacing: 4dp; }
+        #howto .tagline { font-size: 17dp; color: #cfd6e6; text-align: center; margin: 4dp 0 22dp 0; }
+        #howto .cards { display: flex; flex-wrap: wrap; justify-content: space-between; }
+        #howto .card { box-sizing: border-box; width: 308dp; height: 190dp; margin-bottom: 16dp; padding: 14dp 16dp; border-radius: 12dp; background-color: #141b2e;
+                       border-top: 3dp #56a8ff; }
+        #howto .card.stamina { border-top-color: #6fe39a; }
+        #howto .card.over { border-top-color: #ffcf5c; }
+        #howto .step { font-size: 12dp; letter-spacing: 2dp; color: #7f8aa8; }
+        #howto .title { font-size: 20dp; font-weight: bold; color: #ffffff; margin: 2dp 0 8dp 0; }
+        #howto .body { font-size: 14dp; color: #cfd6e6; line-height: 1.35; }
+        #howto .body img { font-size: 19dp; }
+        #howto .l { color: #5cf2ff; font-weight: bold; }
+        #howto .r { color: #ff6fd8; font-weight: bold; }
+        #howto .jug { color: #6fe39a; font-weight: bold; }
+        #howto .crimp { color: #ffae5c; font-weight: bold; }
+        #howto .sloper { color: #7aa8ff; font-weight: bold; }
+        #howto .go { position: absolute; left: 0; bottom: 0; width: 100%; text-align: center; font-size: 20dp; color: #ffffff; }
+        #howto .go img { font-size: 26dp; }
+        #howto .later { font-size: 13dp; color: #7f8aa8; margin-top: 6dp; }
+        #howto .later img { font-size: 16dp; }
     </style>
 </head>
 <body data-model="climb">
@@ -53,10 +79,52 @@
         <div class="bar"><div class="fill" data-style-width="p2.stamina" data-style-background-color="p2.stamina_color"></div></div>
         <div class="status">{{p2.status}}</div>
     </div>
-    <div id="banner" data-if="banner != ''">
+    <div id="banner" data-if="banner != '' && !howto">
         <div class="big">{{banner}}</div>
-        <div class="sub">{{sub}}</div>
+        <div class="sub" data-rml="sub"></div>
     </div>
-    <div id="hint">{{hint}}</div>
+    <div id="hint" data-if="!howto" data-rml="hint"></div>
+
+    <div id="howto" data-if="howto">
+        <div class="sheet">
+            <h1>CLIMB RACE</h1>
+            <div class="tagline">Race your rival up the mountain. First over the top wins.</div>
+            <div class="cards">
+                <div class="card">
+                    <div class="step">1 · GET ON</div>
+                    <div class="title">Grab the rock</div>
+                    <div class="body">Walk up to the wall with <prompt action="move"/> and grab it with <prompt action="reach.left"/> or <prompt action="reach.right"/>.</div>
+                </div>
+                <div class="card">
+                    <div class="step">2 · CHOOSE</div>
+                    <div class="title">Pick a hold</div>
+                    <div class="body"><prompt action="move"/> points where you want to go. The hold your <span class="l">left hand</span> would take lights up light blue, your <span class="r">right hand</span>'s pink.</div>
+                </div>
+                <div class="card">
+                    <div class="step">3 · REACH</div>
+                    <div class="title">Move a hand</div>
+                    <div class="body"><prompt action="reach.left"/> <prompt action="reach.right"/> reach, slow and easy.<br/>Hold <prompt action="grab.left"/> <prompt action="grab.right"/> and let go to lunge further. A big lunge lets go of the other hand!</div>
+                </div>
+                <div class="card stamina">
+                    <div class="step">4 · BREATHE</div>
+                    <div class="title">Save your strength</div>
+                    <div class="body">Hanging tires your arms. <span class="jug">Green</span> holds are easy, <span class="crimp">orange</span> and <span class="sloper">blue</span> are hard. Two green holds or a ledge let you rest. Run out and you fall.</div>
+                </div>
+                <div class="card over">
+                    <div class="step">5 · OVER THE TOP</div>
+                    <div class="title">Pull yourself up</div>
+                    <div class="body">Both hands on an edge, then <prompt action="jump"/> to climb onto it. Ledges on the way are places to rest.</div>
+                </div>
+                <div class="card">
+                    <div class="step">IF YOU SLIP</div>
+                    <div class="title">Try again</div>
+                    <div class="body"><prompt action="letgo"/> lets go. Fall off and you can grab the rock again straight away.<br/><prompt action="race.again"/> race again · <prompt action="race.new"/> new mountain</div>
+                </div>
+            </div>
+            <div class="go"><prompt action="jump" label="Start"/>
+                <div class="later"><prompt action="help" label="shows this again"/></div>
+            </div>
+        </div>
+    </div>
 </body>
 </rml>

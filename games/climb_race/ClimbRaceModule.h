@@ -162,6 +162,11 @@ private:
     float m_best = 0.0f;       // best time on this mountain (0 = none yet)
     std::string m_winner;
     bool m_split = false, m_autopilot = false, m_captured = false;
+    // How to play: up when the game starts (KKE_CLIMB_INTRO=0 skips it,
+    // =1 forces it; headless runs skip it) and on the help button. The
+    // race waits while it's up.
+    bool m_howto = false;
+    void showHowTo(bool on);
     float m_botPause = 0.45f;
     float m_quitAfter = -1.0f, m_clock = 0.0f, m_reportAt = 0.0f;
     float m_rockfall = -1.0f; // KKE_CLIMB_ROCKFALL: seconds until it starts (-1 = off)
@@ -202,6 +207,7 @@ private:
         PlayerHud p[2];
         std::string banner, sub, hint;
         bool split = false;
+        bool howto = false;         // the how-to-play screen is up
     };
     Hud m_hud;
     Rml::DataModelHandle m_hudModel;

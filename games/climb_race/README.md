@@ -11,6 +11,9 @@ that break off and fall), and split screen.
 
 On foot it plays like any third-person game: left stick / WASD to walk,
 right stick / mouse to look, A / Space to jump. Walk up to the rock and grab.
+A how-to-play screen opens first (A / Space starts); Y / H shows it again at
+any time. The hint line at the bottom always says what to press next, with
+the button glyphs of the pad you are using.
 
 | On the rock | Controller | Mouse and keyboard |
 |---|---|---|
@@ -20,6 +23,7 @@ right stick / mouse to look, A / Space to jump. Walk up to the rock and grab.
 | Quick snatch: fast, costs more | hold a trigger + press its bumper | hold a mouse button + Q / E |
 | Over an edge (both hands on it) | A | Space |
 | Let go | B | C |
+| How to play | Y | H |
 | Race again / new mountain | Start / Back | R / N |
 | Split screen (second controller plays the right wall) | | F2 |
 
@@ -30,6 +34,11 @@ on a ledge. At zero you fall. Holds: green = jug, orange = crimp, blue =
 sloper, the ledge lips are edges. Some holds are loose and break under a
 lunge.
 
+Both hands can share one hold (match on it), which is how you swap hands on
+a big jug. The arms have a real length: the hands only go where the body can
+hang between them, and if you pull one hand so far that the other arm can't
+stay on, the lower hand cuts loose. Grab again quickly.
+
 ## Switches (headless / demos)
 
 | Variable | Effect |
@@ -39,7 +48,9 @@ lunge.
 | `KKE_CLIMB_SPLIT=1` | Start in split screen. |
 | `KKE_CLIMB_BOT_PAUSE=<s>` | The rival's breath between moves (default 0.45). |
 | `KKE_CLIMB_ROCKFALL=1` | Every loose hold on your face comes off two seconds in; where they land is logged. |
-| `KKE_CLIMB_QUIT=<s>` | Quit after that long, logging both heights every 5 s. |
+| `KKE_CLIMB_QUIT=<s>` | Quit after that long, logging both heights every 5 s and, at the end, how far the hands sat from their holds. |
+| `KKE_CLIMB_INTRO=0/1` | Force the how-to-play screen off or on (it is off in headless runs). |
+| `KKE_CLIMB_CLOSEUP=1` | The camera sits close to your hands, to check the grip. |
 
 `KKE_SKIP_INTRO=1 KKE_CLIMB_AUTOPILOT=1 KKE_CLIMB_QUIT=110 ./climb_race`
 races both bots to the top (seed 7: about 55 s).

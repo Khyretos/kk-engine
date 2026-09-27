@@ -100,6 +100,7 @@ void ClimbRaceModule::init(kke::Application& app) {
         in.defineAction({ "race.new", "New mountain", "Race", "game" });
         in.defineAction({ "split", "Split screen (two players)", "Race", "game" });
         in.defineAction({ "panels", "Developer panels", "Game", "game" });
+        in.defineAction({ "help", "How to play", "Race", "game" });
         auto trigger = [&](const char* action, SDL_GamepadAxis axis) {
             kke::Binding b = IM::bind(action, IM::padAxis(axis, 1), kke::Trigger::Continuous);
             b.deadzone = 0.05f;
@@ -121,6 +122,8 @@ void ClimbRaceModule::init(kke::Application& app) {
         in.addBinding(IM::bind("race.new", IM::key(SDL_SCANCODE_N)));
         in.addBinding(IM::bind("split", IM::key(SDL_SCANCODE_F2)));
         in.addBinding(IM::bind("panels", IM::key(SDL_SCANCODE_F1)));
+        in.addBinding(IM::bind("help", IM::key(SDL_SCANCODE_H)));
+        in.addBinding(IM::bind("help", IM::pad(SDL_GAMEPAD_BUTTON_NORTH)));
     }
     m_input->setPlayers(1);
     m_input->commitDefaults();
@@ -152,6 +155,10 @@ void ClimbRaceModule::init(kke::Application& app) {
     buildHud();
     setSplit(envOn("KKE_CLIMB_SPLIT"));
     resetRace();
+    // How to play first, unless nobody's there to read it.
+    const char* intro = std::getenv("KKE_CLIMB_INTRO");
+    const bool headless = m_autopilot || m_quitAfter > 0.0f || m_rockfall >= 0.0f;
+    showHowTo(intro && *intro ? *intro == '1' : !headless);
     kke::log::get(name())->info("mountain {}: {} m, {} holds per face, {} ledges; the rival {}", m_seed,
                                 m_lanes[0]->wall->summitY(), m_lanes[0]->wall->holds().size(), m_lanes[0]->wall->ledges().size(),
                                 m_autopilot ? "and you both climb by yourselves" : "climbs by itself");
@@ -326,6 +333,18 @@ void ClimbRaceModule::resetRace() {
         r.falls = 0;
         r.wasClimbing = false;
     }
+}
+
+void ClimbRaceModule::showHowTo(bool on) {
+    m_howto = on;
+    // Closing it doesn't also jump: the press that closed it is used up.
+    for (Racer& r : m_racers) r.jumpQueued = false;
+    if (on && m_captured) {
+        m_captured = false;
+        SDL_SetWindowRelativeMouseMode(m_app->window().handle(), false);
+    }
+    m_hud.howto = on;
+    if (m_hudModel) m_hudModel.DirtyVariable("howto");
 }
 
 void ClimbRaceModule::setSplit(bool on) {
@@ -585,6 +604,24 @@ void ClimbRaceModule::update(const kke::UpdateContext& ctx) {
     const float dt = ctx.dt;
     kke::InputMap& p1 = m_input->map(0);
     if (p1.pressed("panels")) m_app->debugUi().setVisible(!m_app->debugUi().visible());
+    // How to play: any player's help button opens it; jump (or help again)
+    // closes it. The race stands still meanwhile.
+    bool helpPressed = false, startPressed = false;
+    for (int p = 0; p < (m_split ? 2 : 1); ++p) {
+        helpPressed = helpPressed || m_input->map(p).pressed("help");
+        startPressed = startPressed || m_input->map(p).pressed("jump");
+    }
+    if (m_howto) {
+        if (helpPressed || startPressed) showHowTo(false);
+        for (Racer& r : m_racers) animateBody(r, dt);
+        updateCamera(m_racers[0], dt, m_app->camera());
+        updateHud(dt);
+        return;
+    }
+    if (helpPressed) {
+        showHowTo(true);
+        return;
+    }
     if (p1.pressed("split")) setSplit(!m_split);
     if (m_split) assignControllers();
     if (p1.pressed("race.new") || (m_phase == Phase::Finished && m_split && m_input->map(1).pressed("race.new"))) {

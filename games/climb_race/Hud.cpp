@@ -5,6 +5,7 @@
 #include "ClimbRaceModule.h"
 
 #include "kke/Log.h"
+#include "kke/modules/InputModule.h"
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/modules/UiModule.h"
 
@@ -72,6 +73,7 @@ void ClimbRaceModule::buildHud() {
     c.Bind("sub", &m_hud.sub);
     c.Bind("hint", &m_hud.hint);
     c.Bind("split", &m_hud.split);
+    c.Bind("howto", &m_hud.howto);
     m_hudModel = c.GetModelHandle();
 
     const char* base = SDL_GetBasePath();
@@ -136,14 +138,27 @@ void ClimbRaceModule::updateHud(float) {
         banner = m_winner == you.name ? (m_split ? "Player 1 wins" : "You win") : m_winner + " wins";
         sub = "Your time " + clock(you.time);
         if (m_best > 0.0f) sub += "  ·  best " + clock(m_best);
-        sub += "  ·  R (Start) race again  ·  N (Back) new mountain";
+        sub += "  ·  {race.again} race again  ·  {race.new} new mountain";
     }
+    // Button prompts: pictures of the buttons on the device in use.
+    auto prompt = [this](const std::string& text) { return m_input ? m_input->promptText(text, 0) : text; };
     set(m_hud.banner, banner, "banner");
-    set(m_hud.sub, sub, "sub");
+    set(m_hud.sub, prompt(sub), "sub");
     const kke::Climber& c = *m_racers[0].climber;
-    const std::string hint = c.climbing() ? "LB / RB (Q / E) reach  ·  hold LT / RT (mouse) and let go to lunge  ·  both: quick snatch  ·  A (Space) over an edge  ·  B (C) let go"
-                                          : "walk to the rock and grab it: LB / RB (Q / E) or LT / RT (mouse buttons)  ·  F2 split screen";
-    set(m_hud.hint, hint, "hint");
+    std::string hint;
+    if (c.climbing()) {
+        const bool edge = c.handHold(0) >= 0 && c.handHold(1) >= 0 &&
+                          c.wall().holds()[static_cast<size_t>(c.handHold(0))].kind == kke::ClimbHold::Kind::Edge &&
+                          c.wall().holds()[static_cast<size_t>(c.handHold(1))].kind == kke::ClimbHold::Kind::Edge;
+        const bool freeHand = (c.handHold(0) < 0 && !c.handMoving(0)) || (c.handHold(1) < 0 && !c.handMoving(1));
+        hint = edge       ? "{jump} pull yourself up onto the edge"
+             : freeHand   ? "A hand let go: {move} aim and {reach.left} {reach.right} grab again, quick!"
+             : c.staminaFraction() < 0.3f ? "Tired! Rest on two green holds or a ledge  ·  {letgo} let go"
+                                          : "{move} aim  ·  {reach.left} {reach.right} reach  ·  hold and let go {grab.left} {grab.right} to lunge  ·  {help} how to play";
+    } else {
+        hint = "{move} walk to the rock  ·  {reach.left} {reach.right} grab it  ·  {help} how to play";
+    }
+    set(m_hud.hint, prompt(hint), "hint");
 }
 
 } // namespace climb_race
