@@ -48,7 +48,6 @@ public:
         std::string slotLabel, slotType; // equipment slots only
         bool empty() const { return icon.empty(); }
     };
-    struct Binding { std::string action, label, key; };
     struct Ability { std::string icon, name; float cooldown = 0.0f, maxCooldown = 1.0f; float manaCost = 0.0f; };
     struct Blip { std::string kind; float x = 50.0f, y = 50.0f, vx = 0.0f, vy = 0.0f; };
     struct Quest { std::string title, step; bool done = false; };
@@ -77,6 +76,7 @@ private:
     // Inventory helpers. Slot ids are "b<N>" (bag) or "e<N>" (equipment).
     Item* slotById(const std::string& id);
     void moveItem(const std::string& from, const std::string& to);
+    void useItem(const std::string& id); // drink or eat a consumable (double-click, pad X, U)
     void recomputeWeight();
     void showInventoryToast(const std::string& text);
 
@@ -92,7 +92,6 @@ private:
     void sendChat();
 
     // Settings helpers
-    void syncBindingsFromSettings();
 
     kke::Application* m_app = nullptr;
     kke::UiModule* m_ui = nullptr;
@@ -114,15 +113,13 @@ private:
 
     // settings
     Rml::DataModelHandle m_settingsModel;
-    std::vector<Binding> m_bindings;
-    int m_capturing = -1;
     std::string m_settingsPath;
 
     // inventory
     Rml::DataModelHandle m_invModel;
     std::vector<Item> m_bag, m_equipment;
     std::vector<std::string> m_filters{ "All", "Weapon", "Armor", "Consumable", "Material" };
-    std::string m_filter = "All", m_selected;
+    std::string m_filter = "All", m_selected, m_hovered; // m_hovered: under the mouse or the focus
     Item m_detail;
     float m_weight = 0.0f, m_maxWeight = 80.0f;
     int m_gold = 1250;

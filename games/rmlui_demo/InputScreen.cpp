@@ -3,6 +3,7 @@
 #include "kke/Application.h"
 #include "kke/Log.h"
 #include "kke/modules/InputModule.h"
+#include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/UiModule.h"
 
 #include <RmlUi/Core/Context.h>
@@ -101,6 +102,28 @@ void InputScreen::defineGameActions() {
     add(ammoPad);
     add(InputModule::bind("inventory", InputModule::key(SDL_SCANCODE_TAB)));
     add(InputModule::bind("inventory", InputModule::pad(SDL_GAMEPAD_BUTTON_BACK)));
+
+    // The inventory's "use" (drink, eat) for the focused item: pad X or U
+    // (the mouse double-clicks). A ui action, so it works on the menus.
+    m.defineAction({ "inv.use", "Use item", "Inventory", "ui" });
+    add(InputModule::bind("inv.use", InputModule::key(SDL_SCANCODE_U)));
+    add(InputModule::bind("inv.use", InputModule::pad(SDL_GAMEPAD_BUTTON_WEST)));
+
+    // The 3D view behind the menus on a controller: the right stick turns
+    // it and the triggers zoom (RT closer, LT further). The d-pad and the
+    // left stick move the menu focus, so the camera leaves them alone:
+    // camera.zoom is defined here first, and camera.pan gets no pad binding.
+    if (auto* camera = m_app->getModule<kke::OrbitCameraModule>()) {
+        m.defineAction({ "camera.zoom", "Camera closer / further", "Camera", "game", kke::ActionType::Axis1D, true });
+        Binding in = InputModule::bind("camera.zoom", InputModule::padAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER), Trigger::Continuous);
+        Binding out = InputModule::bind("camera.zoom", InputModule::padAxis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER), Trigger::Continuous);
+        in.deadzone = out.deadzone = 0.1f;
+        out.scale = -1.0f;
+        add(in);
+        add(out);
+        camera->setPadControls(true);
+        m.clearBindings("camera.pan");
+    }
     m_input->commitDefaults();
 }
 
