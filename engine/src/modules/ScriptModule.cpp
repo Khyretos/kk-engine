@@ -203,12 +203,65 @@ void ScriptModule::bindAll() {
                     if (sc == SDL_SCANCODE_UNKNOWN) return luaL_error(L, "input.define: unknown key name '%s'", lua_tostring(L, 3));
                     map.addBinding(InputModule::bind(id, InputModule::key(sc)));
                 }
+                // A controller button too ("a", "rb", "rt", "dpad_up"...), so
+                // the action works on a pad and its prompt shows a pad glyph.
+                if (lua_isstring(L, 4)) {
+                    const std::string pad = lua_tostring(L, 4);
+                    if (const int b = ButtonPrompts::padButtonFromName(pad); b >= 0)
+                        map.addBinding(InputModule::bind(id, InputModule::pad(static_cast<SDL_GamepadButton>(b))));
+                    else if (const int a = ButtonPrompts::padAxisFromName(pad); a >= 0 && (a == SDL_GAMEPAD_AXIS_LEFT_TRIGGER || a == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER))
+                        map.addBinding(InputModule::bind(id, InputModule::padAxis(static_cast<SDL_GamepadAxis>(a), 1)));
+                    else
+                        return luaL_error(L, "input.define: unknown controller button '%s' (a, b, x, y, lb, rb, lt, rt, start, back, ls, rs, dpad_up...)", pad.c_str());
+                }
             }
             return 0;
         });
         vm.registerFunction("input", "pressed", [in](lua_State* L) { lua_pushboolean(L, in->map(0).pressed(luaL_checkstring(L, 1))); return 1; });
         vm.registerFunction("input", "held", [in](lua_State* L) { lua_pushboolean(L, in->map(0).held(luaL_checkstring(L, 1))); return 1; });
         vm.registerFunction("input", "value", [in](lua_State* L) { lua_pushnumber(L, in->map(0).state(luaL_checkstring(L, 1)).value); return 1; });
+        // Button prompts (kke/ButtonPrompts.h): what the player is holding,
+        // and pictures of the buttons to press on it.
+        auto playerArg = [in](lua_State* L, int idx) {
+            const int p = static_cast<int>(luaL_optinteger(L, idx, 1)) - 1;
+            if (p < 0 || p >= in->players()) luaL_error(L, "player %d: this game has %d local player(s)", p + 1, in->players());
+            return p;
+        };
+        vm.registerFunction("input", "style", [in, playerArg](lua_State* L) {
+            lua_pushstring(L, toString(in->promptStyle(playerArg(L, 1))));
+            return 1;
+        });
+        vm.registerFunction("input", "glyph", [in, playerArg](lua_State* L) {
+            const std::string name = luaL_checkstring(L, 1);
+            int player = 0;
+            PromptStyle style{};
+            if (lua_type(L, 2) == LUA_TSTRING) {
+                if (!promptStyleFromString(lua_tostring(L, 2), style)) return luaL_error(L, "input.glyph: unknown style '%s'", lua_tostring(L, 2));
+            } else {
+                player = playerArg(L, 2);
+                style = in->promptStyle(player);
+            }
+            const InputMap& m = in->map(player);
+            const ButtonPrompts& bp = in->prompts();
+            const std::vector<ButtonPrompts::Glyph> g = m.action(name) ? bp.actionGlyphs(style, m, name) : bp.namedGlyphs(style, name);
+            if (g.empty() || g.back().file.empty()) {
+                lua_pushnil(L);
+                lua_pushstring(L, g.empty() ? "nothing bound for this device" : g.back().text.c_str());
+                return 2;
+            }
+            lua_pushstring(L, (bp.root() + "/" + g.back().file).c_str());
+            return 1;
+        });
+        vm.registerFunction("input", "prompt", [in, playerArg](lua_State* L) {
+            const std::string name = luaL_checkstring(L, 1);
+            const std::string label = luaL_optstring(L, 2, "");
+            lua_pushstring(L, in->promptRml(name, label, playerArg(L, 3)).c_str());
+            return 1;
+        });
+        vm.registerFunction("input", "promptText", [in, playerArg](lua_State* L) {
+            lua_pushstring(L, in->promptText(luaL_checkstring(L, 1), playerArg(L, 2)).c_str());
+            return 1;
+        });
     }
 
     // audio.*
@@ -392,6 +445,12 @@ void ScriptModule::update(const UpdateContext& ctx) {
         }
     }
 #endif
+    if (auto* in = m_app->getModule<InputModule>(); in && in->promptSerial() != m_promptSerial) {
+        // The player switched devices (or a game forced a style): prompts
+        // built as markup need redoing. <prompt> elements redo themselves.
+        m_promptSerial = in->promptSerial();
+        m_vm->callHook("InputStyle", std::string(toString(in->promptStyle(0))));
+    }
     m_vm->callHook("Think", ctx.dt);
     // Per-script CPU time this frame, smoothed for the panel.
     for (const auto& [source, total] : m_vm->cpuTimes()) {

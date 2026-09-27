@@ -58,6 +58,12 @@ namespace server { class DirectoryBrowser; }
 // Several games on one PC: hosts take the first free port from
 // kDefaultPort up (16 ports), and the LAN search asks all of them.
 //
+//   Several players   split screen online (like Halo): addLocalPlayer(slot,
+//   on one screen:    name) for each extra player at this screen, then
+//                     setLocalPlayer(slot, state) each frame. Everyone else
+//                     sees them as players of their own; they share this
+//                     game's connection, events and voice.
+//
 //   Input replay:     competitive games (docs/NETWORKING.md "Input
 //                     replay"): with `inputReplay` on when hosting, clients
 //                     send inputs and the host runs their kke::Locomotion
@@ -122,6 +128,20 @@ public:
 
     // --- the game's side
     void setLocalPlayer(const net::NetPlayerState& state);
+
+    // --- more players on this screen (split screen online; docs/NETWORKING.md
+    // "Several players on one screen"). Slot 1 .. kMaxLocalPlayers - 1:
+    // another player here, in the game you host or join (now, or when you
+    // do). Not with input replay (one player per connection there).
+    static constexpr int kMaxLocalPlayers = static_cast<int>(net::kMaxLocalPlayers);
+    void addLocalPlayer(int slot, const std::string& who, const std::string& character = "");
+    void removeLocalPlayer(int slot);
+    void setLocalPlayer(int slot, const net::NetPlayerState& state); // slot 0: the same as setLocalPlayer(state)
+    // The player id that slot has in the game (slot 0: localPlayerId());
+    // 0 for a guest until the host gave it one, or offline.
+    uint8_t localPlayerId(int slot) const;
+    bool isLocalPlayer(uint8_t playerId) const; // one of this screen's players (in a game)
+    std::function<void(int slot, const glm::vec3&)> onLocalCorrection; // the host put a guest back there
     const std::vector<net::RemotePlayer>& remotePlayers() const { return m_remote; }
     // A body the same on every machine; returns its network id. Call in
     // the same order everywhere (e.g. right after spawning a level's crates).
@@ -240,6 +260,12 @@ private:
 
     net::NetPlayerState m_local;
     bool m_hasLocal = false;
+    struct LocalGuest {
+        std::string name, character;
+        net::NetPlayerState state;
+        bool hasState = false;
+    };
+    std::map<int, LocalGuest> m_localGuests; // slot -> another player on this screen
     std::vector<net::RemotePlayer> m_remote;
     std::map<uint16_t, RigidWorld::BodyId> m_bodies; // network id -> body
     uint16_t m_nextLevelBody = 0;

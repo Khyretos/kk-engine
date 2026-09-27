@@ -10,6 +10,13 @@ The Kreative Kompas logo and banner (Kreative Kompas's own, committed):
   Windows `.exe` files the same icon.
 - `logo-512.png`, `logo-1024.png`, `banner.png` — README and store art.
 
+## Button prompts — `assets/prompts/xelu/`
+
+Xelu's Free Controller & Key Prompts (CC0, committed): the glyphs the
+engine's button prompts show for keyboard, Xbox, PlayStation, Switch,
+Steam Deck and touch. See [prompts/xelu/README.md](prompts/xelu/README.md)
+and docs/INPUT.md "Button prompts".
+
 ## Licensed art packs (Synty etc.) — `assets/synty/`
 
 Paid asset packs are licensed per user and **must never be committed**

@@ -745,17 +745,20 @@ void PlatoonModule::updateHud(float dt) {
                       { "Squad: " + std::to_string(living(false).size()) + " of 6 standing, " + std::to_string(hp) + " health",
                         living(false).size() >= 4 ? "#6fe39a" : "#ff8a7a" },
                       { "Enemies left: " + std::to_string(living(true).size()), "#aab3cc" } });
-    m_hud->setButtons({ { "👥", "Everyone", "Space", false },
-                        { "✋", "Hold", "H", false },
-                        { "🛡", "Cover", "C", false },
-                        { "🎯", "Attack", "tap", m_armed == kke::OrderKind::Attack },
-                        { "💥", "Focus fire", "tap", m_armed == kke::OrderKind::FocusFire },
-                        { "🔄", "Regroup", "R", false },
-                        { "🔷", kke::formationName(m_formation), "G", false } });
+    // Prompt text: {action} shows that button on the device in use.
+    m_hud->setButtons({ { "👥", "Everyone", "{rts.all}", false },
+                        { "✋", "Hold", "{rts.hold}", false },
+                        { "🛡", "Cover", "{rts.cover}", false },
+                        { "🎯", "Attack", "{touch:tap}", m_armed == kke::OrderKind::Attack },
+                        { "💥", "Focus fire", "{touch:tap}", m_armed == kke::OrderKind::FocusFire },
+                        { "🔄", "Regroup", "{rts.regroup}", false },
+                        { "🔷", kke::formationName(m_formation), "{rts.formation}", false } });
     m_hud->setHint(m_cmd.padActive()
-                       ? "Left stick pan · right stick turn/zoom · A select · RB order at the ring (LT: focus fire) · hold LB: order wheel · D-pad: all, next, regroup"
-                       : "Click or drag: select · right click: order (Ctrl: focus fire / hold there, Shift: queue) · hold Tab: order wheel · "
-                         "WASD pan, Q/E turn, wheel zoom · 1-3 groups (Ctrl+1-9 store) · tap: select, tap again: order");
+                       ? "{move} pan · {look.rate} turn/zoom · {rts.select} select · {cmd.context} order at the ring ({cmd.force} focus fire) · "
+                         "hold {cmd.wheel} order wheel · {rts.all}{rts.next}{rts.regroup} all, next, regroup"
+                       : "{mouse:left} click or drag: select · {cmd.context} order ({cmd.force} focus fire / hold there, {cmd.queue} queue) · "
+                         "hold {cmd.wheel} order wheel · {move} pan, {rts.left}{rts.right} turn, {camera.zoom} zoom · {rts.group1}{rts.group2}{rts.group3} groups "
+                         "(Ctrl+1-9 store) · {touch:tap} select, tap again: order");
     m_hud->update(f, dt);
 }
 

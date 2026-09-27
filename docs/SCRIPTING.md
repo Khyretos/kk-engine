@@ -66,6 +66,7 @@ hook.Add("Tick", "my.id", function(dt, tick) end) -- fixed 60 Hz
 hook.Add("Contact", "my.id", function(c) end)     -- two bodies (not the player): c.a, c.b, c.speed, c.materialA, c.materialB, c.pos
 hook.Add("Break", "my.id", function(id) end)      -- a breakable this script made came apart
 hook.Add("NetMessage", "my.id", function(name, data, from) end) -- net.send from another machine
+hook.Add("InputStyle", "my.id", function(style) end) -- the player switched devices ("xbox", "keyboard", "touch"...): redo prompts built with input.promptText
 hook.Add("Init", "my.id", function() end)         -- once, after all scripts loaded
 hook.Add("Shutdown", "my.id", function() end)
 hook.Remove("Think", "my.id")
@@ -83,7 +84,7 @@ Vectors: `Vec(x, y, z)` with `+ - * /`, `:length()`, `:normalized()`,
 | `kke` | `log(...)`, `time()`, `dt()` (and plain `print`) |
 | `physics` | `box{pos, size, density, material, color, velocity, bounce, friction, static}` / `sphere{pos, radius, ...}` → id; `remove(id)`, `position(id)`, `velocity(id)`, `setVelocity(id, v)`, `impulse(id, v [, point])`, `raycast(from, dir [, maxDist])` → `{pos, normal, distance, body, material}` or nil, `count()` |
 | `audio` | `impact(pos, material, intensity)` (material id or name), `materials()` → `{Stone = 1, Wood = 2, ...}` |
-| `input` | `define(id, label, defaultKey)`, `pressed(id)`, `held(id)`, `value(id)`; actions show up in the rebinding screen like any other |
+| `input` | `define(id, label, defaultKey [, padButton])` (pad button names: `"a"`, `"b"`, `"x"`, `"y"`, `"lb"`, `"rb"`, `"lt"`, `"rt"`, `"start"`, `"back"`, `"dpad_up"`...), `pressed(id)`, `held(id)`, `value(id)`; actions show up in the rebinding screen like any other. Button prompts ([INPUT.md](INPUT.md) "Button prompts"): `style([player])` → `"keyboard"`, `"xbox"`, `"playstation"`, `"switch"`, `"steamdeck"`, `"steamcontroller"` or `"touch"`, the device the player uses now; `prompt(action or button [, label, player])` → RML with the button's picture (for `ui.rml`); `promptText("{jump} jump, {sprint} run" [, player])` → RML; `glyph(action or button [, player or style])` → the picture's path (for your own `<img>`), or nil + why. In documents, `<prompt action="jump" label="Jump"/>` redraws by itself. |
 | `camera` | `position()`, `target()`, `forward()` |
 | `mood` | The sky, sun, fog, colour look and ambience in one go ([MOODS.md](MOODS.md)): `set(name)` → true, or false and the reason (`"clear_day"`, `"golden_hour"`, `"sunset"`, `"night"`, `"misty_morning"`, ... or a mood file of the game's own in `moods/`), `current()` → name, `list()` → names |
 | `models` | `load(name)` → model (an asset name from an installed pack, e.g. `"SM_Prop_Crate_01"`, or a path inside the game's folder; nil + reason if missing), `spawn(model, {pos, yaw, scale, tint})` → instance, `move(inst, pos [, yaw, scale])`, `remove(inst)`, `tint(inst, Vec)`, `visible(inst, bool)`, `play(inst, clip [, loop, speed])` (clip name or number; nil stops), `clips(model)` → names, `bounds(model)` → min, max |

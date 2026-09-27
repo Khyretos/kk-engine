@@ -91,6 +91,14 @@ public:
     float uiScale() const { return m_uiScale; }
     float dpRatio() const { return m_dpRatio; }
 
+    // <prompt action="jump" label="Jump"/> in any document shows the
+    // button for that action on the device the player is using, and
+    // changes by itself when they switch (kke/ButtonPrompts.h). Other
+    // forms: <prompt button="a"/> ("key:Space", "touch:tap", ...),
+    // <prompt text="{jump} jump, {sprint} run"/>, and player="2" for
+    // split screen. Needs an InputModule; without one it shows the label.
+    class PromptInstancer;
+
     // Reloads every open document's stylesheet from disk — bound to F5
     // (and Ctrl+R) so .rcss edits show up without restarting.
     void reloadStyleSheets();
@@ -114,6 +122,7 @@ private:
     // UI sounds (docs/AUDIO.md "Accessibility"): focus, click and change
     // in any document of the context play an AudioModule earcon.
     std::unique_ptr<Rml::EventListener> m_earcons;
+    std::unique_ptr<PromptInstancer> m_prompts;
     bool m_initialised = false;
     Application* m_app = nullptr; // needed each frame in update() to detect window resize
 

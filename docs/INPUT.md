@@ -114,6 +114,75 @@ after 0.4 s. Keys aren't bound to ui.* by default because the keyboard
 already reaches RmlUi directly (arrows, Enter, Tab, Esc); add them for a
 custom layout. Back and prev/next are the game's to interpret.
 
+## Button prompts
+
+Prompts show a picture of the button to press, on the device the player
+is actually using: Space on the keyboard, A on an Xbox pad, Cross on a
+DualSense, B (same place) on a Switch pad, the Deck's own buttons on a
+Steam Deck, a tap on a touch screen. Pick up another device and every
+prompt changes by itself. The pictures are **Xelu's Free Controller &
+Key Prompts** (CC0, by Nicolae "Xelu" Berbece; `assets/prompts/xelu/`,
+imported by `tools/prompts/import_xelu.sh`).
+
+![The same prompts on each device](cookbook/media/prompts.jpg)
+
+| Piece | What it does | Where |
+|---|---|---|
+| `kke::ButtonPrompts` | Action or button -> glyph files and RmlUi markup; pure mapping, unit-tested | `engine/include/kke/ButtonPrompts.h`, `tests/test_button_prompts.cpp` |
+| `InputModule::promptStyle(player)` | Which glyphs each player sees: follows the device they touched last | `kke/modules/InputModule.h` |
+| `<prompt>` | RmlUi element for any document; redraws when the device changes | `UiModule` |
+| `input.prompt`, `input.promptText`, `input.glyph`, `input.style`, `InputStyle` hook | The same for Lua | [SCRIPTING.md](SCRIPTING.md) |
+
+**Which device.** A key, a mouse click or a real mouse push means
+keyboard; a pad button, or a stick or trigger pushed past half, means that
+pad's make (SDL's pad type; the Deck and the Steam Controller by their
+USB ids; any pad SDL can't name gets Xbox glyphs); a finger on the screen
+means touch. In split screen each player follows the devices assigned to
+them. Phones start as touch, a Steam Deck as the Deck, everything else as
+keyboard. `KKE_PROMPT_STYLE=xbox|playstation|switch|steamdeck|steamcontroller|keyboard|touch`
+forces one (developer builds; screenshots); games can offer the same as a
+setting with `InputModule::forcePromptStyle`.
+
+**Which button.** A prompt for an action shows its binding for that
+device, so rebinding changes the prompt: modifiers first (Ctrl + S), an
+axis the keyboard drives shows its keys (W A S D), a stick shows the
+stick. An action with nothing bound on that device shows nothing. `ui.*`
+actions on the keyboard show the keys RmlUi answers to (Enter, Esc,
+arrows, Tab). On touch, an action shows a tap unless the game names a
+gesture (`prompts().setTouchGesture("jump", "swipe_up")`). Buttons that
+aren't actions have names: `a b x y` (by position, so `a` is Cross on a
+DualSense and B on a Switch), `lb rb lt rt ls rs start back guide
+dpad_up ... l4 r4 l5 r5`, `key:Space`, `mouse:left`, `touch:tap`
+(`hold`, `double_tap`, `swipe_up`, `zoom_in`, ...).
+
+In RML:
+
+```html
+<prompt action="jump" label="Jump"/>
+<prompt button="a" label="Join"/>             <!-- "press A to join" -->
+<prompt text="{jump} jump, hold {sprint} to run"/>
+<prompt action="ui.accept" label="Ready" player="2"/>
+```
+
+In C++ (a HUD bound with `data-rml="hint"` instead of `{{hint}}`):
+
+```cpp
+auto* in = app.getModule<kke::InputModule>();
+hud.hint = in->promptText("{move} move  ·  {jump} jump  ·  hold {sprint} to run");
+// A pad that was just plugged in, before it belongs to anyone:
+kke::PromptStyle s = kke::InputModule::promptStyleFor(device);
+std::string join = in->prompts().rml(in->prompts().namedGlyphs(s, "a"), "Press to join");
+```
+
+Glyphs are 1.6em square, inline with the text. To make them bigger
+without changing the text, give the images a font size:
+`#hint img { font-size: 15dp; }` draws them 24dp high.
+Keys without a picture (F13, `\`) are drawn as key caps
+(`.kke-prompt-key`). The engine copies the keyboard (dark and light),
+Xbox Series, PS5, Switch, Steam Deck, Steam Controller and gesture sets
+next to every game; the pack's other sets (PS3/PS4, Xbox 360/One, Wii,
+Stadia, Luna, VR, arrows) stay in the repository for games that want them.
+
 ## Touch screens
 
 One finger is the mouse: SDL's touch-to-mouse emulation turns it into

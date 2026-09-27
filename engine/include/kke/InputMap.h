@@ -138,6 +138,7 @@ public:
     bool contextEnabled(const std::string& context) const;
     // Devices this map listens to for "any device" sources (split screen).
     void setDevices(std::vector<uint32_t> devices) { m_devices = std::move(devices); }
+    const std::vector<uint32_t>& devices() const { return m_devices; }
 
     // Evaluates every binding. `now` in seconds (monotonic).
     void update(const InputState& state, double now);

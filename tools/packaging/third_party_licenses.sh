@@ -73,6 +73,7 @@ fi
 # Code and assets kept in this repository.
 add "AMD FEMFX" "$repo/external/FEMFX"
 add "Noto fonts (assets/fonts)" "$repo/assets/fonts"
+add "Xelu's Free Controller & Key Prompts (assets/prompts/xelu, CC0)" "$repo/assets/prompts/xelu"
 for f in "$repo"/LICENSES/*.txt; do
     [ -f "$f" ] || continue
     banner "$(basename "$f" .txt)" "LICENSES/$(basename "$f")"

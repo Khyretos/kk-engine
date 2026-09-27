@@ -112,7 +112,7 @@ join a new one (and is told nothing it could use).
     snapshots like the level's; `Despawn` removes them.
   - *Breaks*: `Break` messages carry which borders of a breakable broke on
     the host (below).
-  - *Robustness*: protocol version (now 5) and game id checked at join,
+  - *Robustness*: protocol version (now 6) and game id checked at join,
     then the server's password if it has one (compared in constant time;
     `KKE_NET_PASSWORD`, or the panel's Password field) and its access list
     (`NetServer::admit`: bans, allow list), a full server says so, silent peers time out, clients sending bad
@@ -275,6 +275,40 @@ bodies near you are the host's, so pushing one is predicted only as far
 as your copy of it goes. Everything else (events, voice, spawns, breaks)
 works as with owner prediction.
 
+## Several players on one screen
+
+Split screen online, like Halo: two (or more) people on one couch join
+someone else's game from one machine, and the host can have friends on
+its couch too. Up to 8 players share one connection (slot 0 is the
+game's own player, slots 1 to 7 are guests); each is a player of its own
+for everyone else, with its own id, name, state and movement checks.
+
+```cpp
+net.addLocalPlayer(1, "Sam");            // before or after host() / join()
+// each frame, like setLocalPlayer(state) for the first one:
+net.setLocalPlayer(1, samState);
+net.localPlayerId(1);                    // its id in the game (0 until the host gave one)
+net.isLocalPlayer(id);                   // one of this screen's? (don't draw it as a remote)
+net.removeLocalPlayer(1);                // Sam puts the controller down
+```
+
+- On the wire (protocol 6): a client's `Guest` message asks for a player
+  in a slot, the host's `GuestAck` gives its id or says why not (the game
+  is full, a ban, input replay). `PlayerState` and `Correction` carry the
+  slot. A host's own guests need no messages (`NetServer::addLocalGuest`).
+- Guests count toward `maxPlayers`, so a full game turns the next guest
+  or joiner away; the host's LAN and directory entries count them too.
+- Nobody is sent their own screen's players in snapshots; the fog of war
+  shows a player to a screen when any of its players can see it.
+- Guests share their connection's events (the event's `fromPlayer` is
+  the connection's first player) and voice (one microphone per machine).
+- A guest leaving costs only it; the connection going takes its guests
+  with it; kicking a guest tells its owner and keeps the connection.
+- `NetPlayerState::extra` (up to 24 bytes, the game's own) travels with
+  every state: Climb Race puts where the hands and feet are in it.
+- Not with input replay yet: there each connection plays one player, and
+  a guest is refused with the reason.
+
 ## In kke_demo
 
 - Players: the local character model, with its own animator per remote
@@ -319,6 +353,14 @@ late joiners, breaks sent once and replayed to late joiners (2500 borders
 split over several messages), a client sending server-only messages
 kicked, and the game's move check refusing and correcting.
 
+Several players on one screen adds: a client with two guests and a host
+with one, where everyone sees everyone else (the extra bytes too), nobody
+gets their own screen's players, a guest leaving and a connection going;
+guests filling a server so a late joiner is turned away, a kicked guest's
+owner told and still connected; guests refused under input replay; a
+guest's impossible move corrected by its slot, not the first player's.
+The fuzz test covers `Guest`, `GuestAck` and states with extra bytes.
+
 `tests/test_break_graph.cpp`: a follower given the host's borders ends up
 with the host's pieces; borders that don't exist can't be broken.
 
@@ -351,7 +393,6 @@ stopped by the host's, and a cheat's fast clock buys nothing.
   shooter saw).
 - Remembering a server's key per address (so a plain-address join can
   warn when it changes); a relay per region picked by ping.
-- Several local players per connection (couch + online).
 - Breaking on a client before the host says so (predicted breaks): today
   a client's pane cracks half a round trip after the hit.
 - FEMFX objects that aren't breakables (a thrown ball, soft bodies) aren't

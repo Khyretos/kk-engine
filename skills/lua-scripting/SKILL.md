@@ -93,6 +93,13 @@ input.define("id", "Label in settings", "Key")   -- keyboard key names: "E", "Sp
 input.pressed("id")  -- true on the one frame it went down
 input.held("id")     -- true every frame it's down
 input.value("id")    -- 0..1 (or -1..1 for an axis)
+input.define("id", "Label", "G", "rb")  -- 4th: controller button ("a","b","x","y","lb","rb","lt","rt","start","dpad_up"...)
+-- Button prompts: a picture of the button on the device in use (keyboard, Xbox, PlayStation, Switch, Deck, touch)
+ui.rml(doc, "hint", input.promptText("{jump} jump  {id} do the thing"))  -- {action} or {a}, {key:Space}, {touch:tap}
+ui.rml(doc, "hint", input.prompt("jump", "Jump"))   -- one prompt with a label
+input.style()        -- "keyboard", "xbox", "playstation", "switch", "steamdeck", "steamcontroller", "touch"
+hook.Add("InputStyle", "my.prompts", function(style) end)  -- device changed: redo promptText hints
+-- In an .rml file: <prompt action="jump" label="Jump"/> redraws by itself. Never write "Press E" in text.
 -- Built-in actions you can read too: "jump", "sprint", "crouch", "fire", "aim", "interact"
 
 -- Camera and player (starter game)
@@ -140,6 +147,7 @@ game's `scripts/` folder, then change it.
 | build with loops; rebuild on a key | `pyramid.lua` |
 | your own key, hold to charge | `throw.lua` |
 | toggle on press vs. while held | `toggle.lua` |
+| show which button to press (pictures per device) | `prompts.lua` |
 | steer something relative to the camera | `roll_ball.lua` |
 | a follower (pet, companion, homing) | `pet.lua` |
 | enemy or platform moving between points | `patrol.lua` |

@@ -165,20 +165,20 @@ void ShowcaseModule::updateHud(float dt) {
         text = "Vault the wall and wade in. Crates, planks and a raft float; steel sinks.";
     } else if (within(p, kYard, 7.0f, 6.0f)) {
         station = "BREAKING YARD";
-        text = "Shoot (left click, RT) at the glass, the plank and the stone wall.";
+        text = "Shoot {fire} at the glass, the plank and the stone wall.";
     } else if (within(p, kCratePile, 3.5f, 3.5f)) {
         station = "CRATES";
-        text = "Push them (E, right click) or shoot them over.";
+        text = "Push them {interact} or shoot them over {fire}.";
     } else if (p.x > kTrickX - 3.0f && p.z > -4.0f && p.z < 25.0f) {
         station = "TRICK COURSE";
-        text = p.z > 10.0f ? "Sprint beside the wall and jump to run along it. Jump again to kick off."
-                           : "Jump to hang from a pillar. Jump with left or right leaps to the next; at the thin wall, jump leaps up.";
+        text = p.z > 10.0f ? "Sprint {sprint} beside the wall and jump {jump} to run along it. Jump again to kick off."
+                           : "Jump {jump} to hang from a pillar. Jump with left or right leaps to the next; at the thin wall, jump leaps up.";
     } else if (std::abs(p.x - kLaneX) < 3.0f && p.z > 5.0f && p.z < 29.0f) {
         station = "PARKOUR LANE";
         text = "Run at it: vault the fences, climb the blocks, sprint for the high ledge.";
     } else if (within(p, kLowRoof, 2.5f, 2.5f)) {
         station = "LOW ROOF";
-        text = "Crouch (C) to get under it.";
+        text = "Crouch {crouch} to get under it.";
     } else if (within(p, kPlatform, 7.0f, 3.0f)) {
         station = "MOVING PLATFORM";
         text = "Stand on it: it carries you.";
@@ -192,7 +192,9 @@ void ShowcaseModule::updateHud(float dt) {
     set(m_hud.move, move, "move");
     set(m_hud.speed, speedText, "speed");
     set(m_hud.station, station, "station");
-    set(m_hud.stationText, text, "station_text");
+    // Station text is prompt text: {action} shows that button on the device in use.
+    const kke::InputModule* input = m_app->getModule<kke::InputModule>();
+    set(m_hud.stationText, input ? input->promptText(text) : text, "station_text");
     set(m_hud.stationLive, live, "station_live");
     if (m_hud.trick != trick) {
         m_hud.trick = trick;

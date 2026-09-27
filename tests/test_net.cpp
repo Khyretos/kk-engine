@@ -174,6 +174,7 @@ TEST(NetProtocol, SnapshotRoundTripWithinQuantization) {
     EXPECT_NEAR(q.yaw, 271.0f, 0.4f);
     EXPECT_EQ(q.state, 3);
     EXPECT_EQ(q.flags, 0x05);
+    EXPECT_TRUE(q.extra.empty());
     ASSERT_EQ(r->bodies.size(), 40u);
     for (size_t i = 0; i < 40; ++i) {
         EXPECT_EQ(r->bodies[i].id, s.bodies[i].id);
@@ -221,6 +222,14 @@ TEST(NetProtocol, FuzzedPacketsNeverCrashTheDecoders) {
         seeds.push_back(encode(MessageType::Spawn, sp));
         BreakMsg br{ 3, 77, { { 1, 2 }, { 2, 5 }, { 9, 40 } } };
         seeds.push_back(encode(MessageType::Break, br));
+        GuestMsg g{ 2, true, "Guest", "Char" };
+        seeds.push_back(encode(MessageType::Guest, g));
+        GuestAckMsg ga{ 2, 7, "full" };
+        seeds.push_back(encode(MessageType::GuestAck, ga));
+        NetPlayerState withExtra;
+        withExtra.extra = { 1, 2, 3, 4, 5, 6 };
+        PlayerStateMsg pe{ 5, withExtra, 3 };
+        seeds.push_back(encode(MessageType::PlayerState, pe));
     }
     size_t accepted = 0;
     for (int i = 0; i < 20000; ++i) {
@@ -242,7 +251,17 @@ TEST(NetProtocol, FuzzedPacketsNeverCrashTheDecoders) {
         accepted += decode<PlayerInfoMsg>(MessageType::PlayerInfo, d, n).has_value();
         accepted += decode<CorrectionMsg>(MessageType::Correction, d, n).has_value();
         accepted += decode<GameEventMsg>(MessageType::GameEvent, d, n).has_value();
-        accepted += decode<PlayerStateMsg>(MessageType::PlayerState, d, n).has_value();
+        if (auto ps = decode<PlayerStateMsg>(MessageType::PlayerState, d, n)) {
+            ++accepted;
+            EXPECT_LE(ps->state.extra.size(), kMaxPlayerExtraBytes);
+            EXPECT_LT(ps->slot, kMaxLocalPlayers);
+        }
+        if (auto g = decode<GuestMsg>(MessageType::Guest, d, n)) {
+            ++accepted;
+            EXPECT_GE(g->slot, 1);
+            EXPECT_LT(g->slot, kMaxLocalPlayers);
+        }
+        accepted += decode<GuestAckMsg>(MessageType::GuestAck, d, n).has_value();
         if (auto s = decode<SnapshotMsg>(MessageType::Snapshot, d, n)) {
             ++accepted;
             EXPECT_LE(s->bodies.size(), kMaxBodiesPerSnapshot);
@@ -673,6 +692,148 @@ TEST(NetSession, LeavingIsSeenByEveryone) {
     EXPECT_EQ(seen.back().first, leaver);
     EXPECT_FALSE(seen.back().second);
     EXPECT_EQ(m.clients[1]->players(m.now).size(), 1u); // only the host left
+}
+
+// Split screen online: a client with two guests (three players on one
+// connection) and a host with one. Everyone sees everyone else, nobody is
+// sent the players on their own screen, the game's extra bytes arrive,
+// and a guest leaving or its connection going takes only what it should.
+TEST(NetSession, SeveralPlayersOnOneConnection) {
+    Match m(2);
+    std::vector<std::pair<uint8_t, uint8_t>> acks; // slot, id
+    m.clients[0]->onGuest = [&](uint8_t slot, uint8_t id, const std::string&) { acks.push_back({ slot, id }); };
+    m.clients[0]->addGuest(1, "Couch 2", ""); // before the Welcome: joins right after it
+    m.run(0.3);
+    m.clients[0]->addGuest(2, "Couch 3", "");
+    const uint8_t hostGuest = m.server.addLocalGuest(1, "Host 2", "");
+    m.run(0.3);
+    ASSERT_EQ(acks.size(), 2u);
+    const uint8_t g1 = m.clients[0]->guestId(1), g2 = m.clients[0]->guestId(2);
+    ASSERT_NE(g1, 0);
+    ASSERT_NE(g2, 0);
+    ASSERT_NE(hostGuest, 0);
+    const std::set<uint8_t> ids{ m.clients[0]->playerId(), m.clients[1]->playerId(), g1, g2, hostGuest };
+    EXPECT_EQ(ids.size(), 5u) << "every player has an id of its own";
+    EXPECT_EQ(m.server.clientCount(), 4u); // two clients, two guests (the host's own aren't clients)
+
+    for (double t = 0; t < 1.5; t += 1.0 / 60.0) {
+        m.server.setLocalState(walking(m.now, 0.0f));
+        m.server.setLocalGuestState(1, walking(m.now, 2.0f));
+        m.clients[0]->setLocalState(walking(m.now, 5.0f));
+        NetPlayerState s1 = walking(m.now, 6.0f);
+        s1.extra = { 11, 22, 33 };
+        m.clients[0]->setGuestState(1, s1);
+        m.clients[0]->setGuestState(2, walking(m.now, 7.0f));
+        m.clients[1]->setLocalState(walking(m.now, 10.0f));
+        m.step();
+    }
+    // The other client sees all six others: host, host guest, client 0 and its two guests.
+    const auto seen = m.clients[1]->players(m.now);
+    ASSERT_EQ(seen.size(), 5u);
+    for (const RemotePlayer& p : seen) {
+        ASSERT_TRUE(p.hasState) << p.name;
+        if (p.id == g1) {
+            EXPECT_EQ(p.name, "Couch 2");
+            EXPECT_NEAR(p.state.position.x, 6.0f, 0.01f);
+            EXPECT_EQ(p.state.extra, (std::vector<uint8_t>{ 11, 22, 33 }));
+        }
+        if (p.id == g2) {
+            EXPECT_NEAR(p.state.position.x, 7.0f, 0.01f);
+        }
+        if (p.id == hostGuest) {
+            EXPECT_NEAR(p.state.position.x, 2.0f, 0.01f);
+        }
+    }
+    // Client 0 is never shown its own screen's players.
+    const auto own = m.clients[0]->players(m.now);
+    EXPECT_EQ(own.size(), 3u); // host, host guest, the other client
+    for (const RemotePlayer& p : own) EXPECT_TRUE(p.id != g1 && p.id != g2) << p.name;
+    // The host sees the clients and their guests.
+    EXPECT_EQ(m.server.players(m.now).size(), 4u);
+
+    // A guest leaves: only it goes.
+    std::vector<std::pair<int, bool>> changes;
+    m.clients[1]->onPlayer = [&](uint8_t id, bool j) { changes.push_back({ id, j }); };
+    m.clients[0]->removeGuest(2);
+    m.run(0.3);
+    ASSERT_EQ(changes.size(), 1u);
+    EXPECT_EQ(changes[0].first, g2);
+    EXPECT_FALSE(changes[0].second);
+    EXPECT_EQ(m.server.clientCount(), 3u);
+    EXPECT_EQ(m.clients[0]->status(), NetClient::Status::Connected);
+
+    // The connection goes: its own player and its guest with it.
+    changes.clear();
+    m.clients[0]->disconnect();
+    m.run(0.3);
+    EXPECT_EQ(m.server.clientCount(), 1u);
+    EXPECT_EQ(changes.size(), 2u);
+    EXPECT_EQ(m.clients[1]->players(m.now).size(), 2u); // the host and its guest
+}
+
+TEST(NetSession, GuestsCountTowardAFullServerAndAKickedGuestIsTold) {
+    NetConfig cfg;
+    cfg.maxPlayers = 3; // the host + two
+    Match m(1, cfg);
+    std::string refused;
+    std::vector<uint8_t> ids;
+    m.clients[0]->onGuest = [&](uint8_t, uint8_t id, const std::string& why) {
+        ids.push_back(id);
+        if (!id) refused = why;
+    };
+    m.clients[0]->addGuest(1, "Two", "");
+    m.clients[0]->addGuest(2, "Three", "");
+    m.run(0.5);
+    ASSERT_EQ(ids.size(), 2u);
+    EXPECT_NE(m.clients[0]->guestId(1), 0);
+    EXPECT_EQ(m.clients[0]->guestId(2), 0);
+    EXPECT_NE(refused.find("full"), std::string::npos) << refused;
+    // A late joiner finds no room either.
+    NetClient& late = m.addClient();
+    m.run(0.5);
+    EXPECT_EQ(late.status(), NetClient::Status::Rejected);
+    // Kick the guest: its owner is told, the connection stays.
+    const uint8_t guest = m.clients[0]->guestId(1);
+    m.server.kick(guest, "kicked");
+    m.run(0.3);
+    EXPECT_EQ(m.clients[0]->guestId(1), 0);
+    EXPECT_EQ(m.clients[0]->status(), NetClient::Status::Connected);
+    EXPECT_EQ(m.server.clientCount(), 1u);
+}
+
+TEST(NetSession, GuestsAreRefusedUnderInputReplay) {
+    NetConfig cfg;
+    cfg.inputReplay = true;
+    Match m(1, cfg);
+    std::string refused;
+    m.clients[0]->onGuest = [&](uint8_t, uint8_t id, const std::string& why) { if (!id) refused = why; };
+    m.clients[0]->addGuest(1, "Two", "");
+    m.run(0.5);
+    EXPECT_EQ(m.clients[0]->guestId(1), 0);
+    EXPECT_NE(refused.find("input replay"), std::string::npos) << refused;
+    EXPECT_EQ(m.server.clientCount(), 1u);
+}
+
+// A guest's move is checked like anyone's: the correction names its slot.
+TEST(NetSession, AGuestsImpossibleMoveIsCorrectedByItsSlot) {
+    Match m(1);
+    m.clients[0]->addGuest(1, "Two", "");
+    m.run(0.3);
+    ASSERT_NE(m.clients[0]->guestId(1), 0);
+    int mainCorrections = 0;
+    std::vector<uint8_t> slots;
+    m.clients[0]->onCorrection = [&](const glm::vec3&) { ++mainCorrections; };
+    m.clients[0]->onGuestCorrection = [&](uint8_t slot, const glm::vec3&) { slots.push_back(slot); };
+    for (double t = 0; t < 1.0; t += 1.0 / 60.0) {
+        m.clients[0]->setLocalState(walking(m.now, 0.0f));
+        NetPlayerState s = walking(m.now, 3.0f);
+        if (t > 0.5) s.position.x += 50.0f; // 50 m in a frame
+        m.clients[0]->setGuestState(1, s);
+        m.step();
+    }
+    EXPECT_EQ(mainCorrections, 0);
+    ASSERT_FALSE(slots.empty());
+    EXPECT_EQ(slots.front(), 1);
 }
 
 #if KKE_ENABLE_NET

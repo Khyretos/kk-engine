@@ -6,6 +6,7 @@
 
 #include "kke/Application.h"
 #include "kke/Log.h"
+#include "kke/modules/InputModule.h"
 #include "kke/modules/UiModule.h"
 
 #include <RmlUi/Core/Context.h>
@@ -102,16 +103,21 @@ void DuelModule::updateHud() {
         break;
     case Phase::MatchOver:
         banner = m_roundWinner + " wins";
-        sub = "R (Start) for a rematch";
+        sub = "{duel.again} for a rematch";
         break;
     }
     set(m_hud.banner, banner, "banner");
-    set(m_hud.sub, sub, "sub");
+    // Button prompts: pictures of the buttons on the device each player uses.
+    const kke::InputModule* in = m_app->getModule<kke::InputModule>();
+    auto prompt = [in](const std::string& text, int player = 0) { return in ? in->promptText(text, player) : text; };
+    set(m_hud.sub, prompt(sub), "sub");
     set(m_hud.round, "Round " + std::to_string(m_round), "round");
+    const std::string moves = "{move} move  {duel.light} jab  {duel.heavy} uppercut  {duel.kick} knee  {duel.block} block";
     const std::string hint = m_twoPlayers
-                                 ? "P1: WASD, J jab, K uppercut, L knee, Shift block, Space dodge  ·  P2: arrows, 1 2 3, 0 block, Enter dodge  ·  F2 back to the bot"
-                                 : "WASD move  ·  J / left mouse jab  ·  K / right mouse uppercut  ·  L knee  ·  Shift block (just in time: parry)  ·  "
-                                   "Space dodge  ·  F2 two players";
+                                 ? "P1 " + prompt(moves + "  {duel.dodge} dodge", 0) + "  ·  P2 " + prompt(moves + "  {duel.dodge} dodge", 1) +
+                                       prompt("  ·  {duel.two} back to the bot")
+                                 : prompt("{move} move  ·  {duel.light} jab  ·  {duel.heavy} uppercut  ·  {duel.kick} knee  ·  "
+                                          "{duel.block} block (just in time: parry)  ·  {duel.dodge} dodge  ·  {duel.two} two players");
     set(m_hud.hint, hint, "hint");
 }
 
