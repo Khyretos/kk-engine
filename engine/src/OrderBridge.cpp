@@ -78,6 +78,10 @@ void AiOrderBridge::apply(uint32_t unit, const UnitOrder& o) {
         a.kind = ai::Order::Kind::Interact;
         a.target = o.target ? o.target : o.issuer;
         a.distance = 1.0f;
+        if (const ai::Agent* by = m_world.agent(a.target)) {
+            const glm::vec3 d = by->position - agent->position;
+            a.run = glm::length(glm::vec2(d.x, d.z)) > runBeyond;
+        }
         break;
     case OrderKind::Drop:
         if (drop) drop(unit);

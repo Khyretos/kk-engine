@@ -919,6 +919,13 @@ endif()
 if(KKE_ENABLE_JOLT)
     add_subdirectory(games/procedural_demo)
 endif()
+# The command demos (docs/COMMANDS.md): a pet you tell what to do, and a
+# platoon. Jolt for the characters, Lua for order.* scripts.
+if(KKE_ENABLE_JOLT AND ENGINE_ENABLE_LUA)
+    add_subdirectory(games/command_kit)
+    add_subdirectory(games/pet_companion)
+endif()
+
 # Duel: a one-on-one fist fight on kke::Combatant (games/duel/README.md).
 # Jolt: the ring, the fighters and knockdown ragdolls.
 if(KKE_ENABLE_JOLT)

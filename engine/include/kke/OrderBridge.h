@@ -42,7 +42,7 @@ public:
     std::function<void(uint32_t unit, uint32_t by)> petStart;                  // unset: done on arrival
 
     float followDistance = 2.0f;
-    float runBeyond = 8.0f;       // Move / Regroup: run when the slot is farther than this
+    float runBeyond = 8.0f;       // Move, Regroup, Pet: run when it is farther than this
     float fetchReach = 0.5f;      // Interact distance for the thing to fetch
 
     // Every frame after AiWorld::update, with the events it gave (the game
