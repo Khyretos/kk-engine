@@ -158,11 +158,11 @@ void SandboxModule::init(kke::Application& app) {
     // scenes/*.scene.json), so a level built here is playable there.
     const std::string scenes = kke::findAssetFolder("scenes", { "KKE_SCENES_DIR" }, base ? base : "");
     if (!scenes.empty())
-        std::snprintf(m_layoutPath, sizeof(m_layoutPath), "%s", (std::filesystem::path(scenes) / "sandbox.scene.json").string().c_str());
+        m_layoutPath = (std::filesystem::path(scenes) / "sandbox.scene.json").string();
     // Optional: KKE_SANDBOX_LAYOUT=file.json loads a layout at startup
     // (used by the automated screenshot tests, handy for sharing scenes).
     if (const char* layout = std::getenv("KKE_SANDBOX_LAYOUT")) {
-        std::snprintf(m_layoutPath, sizeof(m_layoutPath), "%s", layout);
+        m_layoutPath = layout;
         loadLayout(layout);
     }
     // KKE_SANDBOX_SAVE=file.scene.json saves the level right after startup
@@ -172,6 +172,7 @@ void SandboxModule::init(kke::Application& app) {
     if (auto* ui = app.getModule<kke::UiModule>(); ui && ui->context()) {
         m_palette.attach(ui->context(), app.window().pixelsPerPoint());
         m_palette.onPress = [this](const std::string& id) { palettePressed(id); };
+        for (FormPanel* p : { &m_assetsPanel, &m_toolsPanel, &m_modePanel }) p->attach(ui->context(), app.window().pixelsPerPoint());
     } else {
         kke::log::get(name())->warn("no RmlUi context: Play mode has no palette");
     }
@@ -201,7 +202,7 @@ void SandboxModule::openAssetFolder(const std::string& folder) {
         kke::log::get(name())->warn("{}", m_status);
         return;
     }
-    std::snprintf(m_folderInput, sizeof(m_folderInput), "%s", folder.c_str());
+    m_folderInput = folder;
     m_variant = 0;
     m_overlay = 1; // the pack's first grid, if it has one: Synty's Prototype look
     applyLook();
@@ -844,8 +845,9 @@ void SandboxModule::update(const kke::UpdateContext& ctx) {
     // mouse while its button is held, so there "free" means not over a window.
     const bool play = m_mode == Mode::Play;
     updateReplay(ctx.dt);
+    if (ctx.dt > 0.0f) m_fps += (1.0f / ctx.dt - m_fps) * std::min(1.0f, ctx.dt * 2.0f); // shown in the panel, smoothed
     updatePad(ctx.dt); // the pad pointer, view and zoom, in Play and Build
-    bool mouseFree = play ? !mouseOverUi() : !ImGui::GetIO().WantCaptureMouse && !m_app->uiCapturesMouse();
+    bool mouseFree = play ? !mouseOverUi() : !ImGui::GetIO().WantCaptureMouse && !m_app->uiCapturesMouse() && !mouseOverUi();
 
     // Ground grid around the camera target, snapped so it doesn't swim.
     glm::vec3 target = m_app->camera().target;
@@ -1078,7 +1080,7 @@ void SandboxModule::onEvent(const SDL_Event& event) {
         return;
     }
     if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT) {
-        if (io.WantCaptureMouse || m_app->uiCapturesMouse()) return;
+        if (io.WantCaptureMouse || m_app->uiCapturesMouse() || mouseOverUi()) return;
         bool shift = (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
         if (m_tool == Tool::Place) commitPlacement(/*keepPlacing=*/shift);
         else if (m_tool == Tool::Shoot) throwBall();
@@ -1093,8 +1095,15 @@ void SandboxModule::onEvent(const SDL_Event& event) {
     // WantTextInput, not WantCaptureKeyboard: ImGui claims the keyboard
     // whenever one of its windows has focus (e.g. right after clicking an
     // asset), which silently swallowed F/Del/R. Only typing into a text
-    // field should block the shortcuts (BUG-041).
-    if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat || io.WantTextInput) return;
+    // field should block the shortcuts (BUG-041). A text field in the
+    // panels has the keyboard the same way; Enter or Esc gives it back.
+    if (event.type == SDL_EVENT_KEY_DOWN && (m_assetsPanel.typing() || m_toolsPanel.typing()) &&
+        (event.key.key == SDLK_RETURN || event.key.key == SDLK_KP_ENTER || event.key.key == SDLK_ESCAPE)) {
+        m_assetsPanel.blur();
+        m_toolsPanel.blur();
+        return;
+    }
+    if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat || typingInUi()) return;
     bool ctrl = (event.key.mod & SDL_KMOD_CTRL) != 0;
     bool shift = (event.key.mod & SDL_KMOD_SHIFT) != 0;
     Object* sel = find(m_selected);
@@ -1687,7 +1696,7 @@ void SandboxModule::fromScene(const kke::SceneFile& scene) {
     graphsFromScene(scene);
     m_undo.clear();
     m_redo.clear();
-    std::snprintf(m_levelName, sizeof(m_levelName), "%s", scene.name.empty() ? "Sandbox level" : scene.name.c_str());
+    m_levelName = scene.name.empty() ? "Sandbox level" : scene.name;
     m_levelDescription = scene.description.empty() ? "Built in the sandbox" : scene.description;
     m_spawn = scene.spawn;
     m_spawnYaw = scene.spawnYaw;
@@ -1795,444 +1804,385 @@ bool SandboxModule::loadLayout(const std::string& path) {
 // ---------------------------------------------------------------- UI
 
 void SandboxModule::folderNotFoundUi() {
-    ImGui::TextWrapped("No asset packs found. Extract your packs (any layout, e.g. POLYGON_Town/{Characters,FBX,Textures}) "
-                       "into assets/synty/, set KKE_ASSETS_DIR, or type a folder below. Assets are never committed to git: "
-                       "they're licensed per user.");
-    ImGui::InputText("##folder", m_folderInput, sizeof(m_folderInput));
-    ImGui::SameLine();
-    if (ImGui::Button("Use this folder")) openAssetFolder(m_folderInput);
-    if (ImGui::TreeNode("Places searched")) {
-        for (const std::string& p : m_searched) ImGui::BulletText("%s", p.c_str());
-        ImGui::TreePop();
-    }
+    FormPanel& p = m_assetsPanel;
+    p.text("No asset packs found. Extract your packs (any layout, e.g. POLYGON_Town/{Characters,FBX,Textures}) into assets/synty/, "
+           "set KKE_ASSETS_DIR, or type a folder below. Assets are never committed to git: they're licensed per user.");
+    p.textField("Folder", m_folderInput);
+    if (p.button("Use this folder")) openAssetFolder(m_folderInput);
+    if (p.section("Places searched", false))
+        for (const std::string& place : m_searched) p.text(place, FormPanel::Tone::Muted);
 }
 
 void SandboxModule::assetBrowserUi() {
-    const float s = ImGui::GetFontSize() / 13.0f; // scale fixed sizes with the UI font
-    ImGui::SetNextWindowPos(ImVec2(10 * s, 10 * s), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(330 * s, 520 * s), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Assets");
+    FormPanel& p = m_assetsPanel;
     if (m_assetFolder.empty()) {
         folderNotFoundUi();
-        if (!m_status.empty()) ImGui::TextColored(ImVec4(1, 0.7f, 0.3f, 1), "%s", m_status.c_str());
-        ImGui::End();
+        if (!m_status.empty()) p.text(m_status, FormPanel::Tone::Warn);
         return;
     }
-    ImGui::TextDisabled("%s", m_status.c_str());
-    auto combo = [&](const char* label, std::string& value, const std::vector<std::string>& options) {
-        if (ImGui::BeginCombo(label, value.empty() ? "All" : value.c_str())) {
-            if (ImGui::Selectable("All", value.empty())) { value.clear(); m_filterDirty = true; }
-            for (const std::string& o : options) {
-                if (ImGui::Selectable(o.c_str(), value == o)) { value = o; m_filterDirty = true; }
-            }
-            ImGui::EndCombo();
+    p.text(m_status, FormPanel::Tone::Muted);
+    auto filter = [&](const char* label, std::string& value, const std::vector<std::string>& options) {
+        std::vector<std::string> all{ "All" };
+        all.insert(all.end(), options.begin(), options.end());
+        int index = 0;
+        for (size_t i = 0; i < options.size(); ++i)
+            if (options[i] == value) index = static_cast<int>(i) + 1;
+        if (p.choice(label, index, all)) {
+            value = index == 0 ? std::string() : all[static_cast<size_t>(index)];
+            m_filterDirty = true;
         }
     };
     std::vector<std::string> packNames;
-    for (const kke::CatalogPack& p : m_catalog.packs) packNames.push_back(p.name);
-    combo("Pack", m_filterPack, packNames);
-    combo("Category", m_filterCategory, m_catalog.categories());
-    if (ImGui::InputTextWithHint("##search", "Search...", m_search, sizeof(m_search))) m_filterDirty = true;
+    for (const kke::CatalogPack& pack : m_catalog.packs) packNames.push_back(pack.name);
+    filter("Pack", m_filterPack, packNames);
+    filter("Category", m_filterCategory, m_catalog.categories());
+    if (p.textField("Search", m_search)) m_filterDirty = true;
     if (m_filterDirty) {
         m_filtered = m_catalog.filter(m_filterPack, m_filterCategory, m_search);
         m_filterDirty = false;
+        m_assetPage = 0;
     }
-    ImGui::Text("%zu assets - click one, then click in the world", m_filtered.size());
-    if (m_thumbs) {
-        ImGui::Checkbox("Pictures", &m_gridView);
-        if (m_gridView) {
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            ImGui::SliderFloat("##size", &m_thumbSize, 48.0f, 128.0f, "size %.0f");
-        }
-        if (m_gridView) {
-            assetGridUi(s);
-            ImGui::End();
-            return;
-        }
-    }
-    ImGui::BeginChild("list", ImVec2(0, 0), ImGuiChildFlags_Borders);
-    // Clipper: only the visible rows are submitted, so a 3,000-asset
-    // catalog costs the same as a 30-asset one.
-    ImGuiListClipper clipper;
-    clipper.Begin(static_cast<int>(m_filtered.size()));
-    while (clipper.Step()) {
-        for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
-            const kke::CatalogAsset* a = m_filtered[i];
-            ImGui::PushID(i);
-            bool active = m_tool == Tool::Place && !m_movingId && m_placeAsset == a->name && m_placePack == a->pack;
-            if (ImGui::Selectable(a->name.c_str(), active)) beginPlacing(a->name, m_placeYaw, 0, a->pack);
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s\n%s / %s", a->path.c_str(), a->pack.c_str(), a->category.c_str());
-            ImGui::PopID();
-        }
-    }
-    ImGui::EndChild();
-    ImGui::End();
+    assetGridUi();
 }
 
-// Thumbnails in rows, the name under each. Only the rows on screen are
-// submitted (and only their pictures asked for), so a 3,000-asset pack
-// scrolls like a 30-asset one while the pictures fill in.
-void SandboxModule::assetGridUi(float s) {
-    ImGui::BeginChild("grid", ImVec2(0, 0), ImGuiChildFlags_Borders);
-    const ImGuiStyle& style = ImGui::GetStyle();
-    const float cell = m_thumbSize * s;
-    const float lineH = ImGui::GetTextLineHeight();
-    const ImVec2 cellSize(cell, cell + lineH + style.ItemInnerSpacing.y);
-    const float avail = ImGui::GetContentRegionAvail().x;
-    const int columns = std::max(1, static_cast<int>((avail + style.ItemSpacing.x) / (cell + style.ItemSpacing.x)));
+// One page of pictures, the name under each. A page at a time keeps a
+// 3,000-asset catalog as cheap as a 30-asset one: only the pictures on
+// the page are asked for, and they fill in as they are made.
+void SandboxModule::assetGridUi() {
+    FormPanel& p = m_assetsPanel;
+    constexpr int kPage = 12;
     const int count = static_cast<int>(m_filtered.size());
-    const int rows = (count + columns - 1) / columns;
-    ImDrawList* draw = ImGui::GetWindowDrawList();
-    const ImU32 frameCol = ImGui::GetColorU32(ImGuiCol_FrameBg), hoverCol = ImGui::GetColorU32(ImGuiCol_HeaderHovered),
-                activeCol = ImGui::GetColorU32(ImGuiCol_HeaderActive), textCol = ImGui::GetColorU32(ImGuiCol_Text),
-                dimCol = ImGui::GetColorU32(ImGuiCol_TextDisabled);
-    ImGuiListClipper clipper;
-    clipper.Begin(rows, cellSize.y + style.ItemSpacing.y);
-    while (clipper.Step()) {
-        for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
-            for (int col = 0; col < columns; ++col) {
-                const int i = row * columns + col;
-                if (i >= count) break;
-                const kke::CatalogAsset* a = m_filtered[static_cast<size_t>(i)];
-                if (col > 0) ImGui::SameLine();
-                ImGui::PushID(i);
-                const ImVec2 p = ImGui::GetCursorScreenPos();
-                const bool clicked = ImGui::InvisibleButton("cell", cellSize);
-                const bool hovered = ImGui::IsItemHovered();
-                const bool active = m_tool == Tool::Place && !m_movingId && m_placeAsset == a->name && m_placePack == a->pack;
-                const ImVec2 imgMax(p.x + cell, p.y + cell);
-                draw->AddRectFilled(p, imgMax, active ? activeCol : (hovered ? hoverCol : frameCol), 4.0f * s);
-                const kke::ThumbnailModule::View v = m_thumbs->get(a->path, a->pack, [&] { return kke::packLoadOptions(m_catalog, *a); });
-                if (v.state == kke::ThumbnailModule::State::Ready) {
-                    draw->AddImage(v.texture, p, imgMax, v.uv0, v.uv1);
-                } else {
-                    const char* mark = v.state == kke::ThumbnailModule::State::Failed   ? "!"
-                                       : v.state == kke::ThumbnailModule::State::NoMesh ? "(anim)"
-                                                                                       : "...";
-                    const ImVec2 ts = ImGui::CalcTextSize(mark);
-                    draw->AddText(ImVec2(p.x + (cell - ts.x) * 0.5f, p.y + (cell - ts.y) * 0.5f),
-                                  v.state == kke::ThumbnailModule::State::Failed ? IM_COL32(255, 120, 80, 255) : dimCol, mark);
-                }
-                // The name, cut to the cell.
-                const ImVec2 textPos(p.x, p.y + cell + style.ItemInnerSpacing.y);
-                draw->PushClipRect(textPos, ImVec2(p.x + cell, textPos.y + lineH), true);
-                const float tw = ImGui::CalcTextSize(a->name.c_str()).x;
-                draw->AddText(ImVec2(tw < cell ? p.x + (cell - tw) * 0.5f : p.x, textPos.y), textCol, a->name.c_str());
-                draw->PopClipRect();
-                if (hovered) {
-                    if (v.error)
-                        ImGui::SetTooltip("%s\n%s / %s\nNo picture: %s", a->name.c_str(), a->pack.c_str(), a->category.c_str(), v.error->c_str());
-                    else
-                        ImGui::SetTooltip("%s\n%s / %s", a->name.c_str(), a->pack.c_str(), a->category.c_str());
-                }
-                if (clicked) beginPlacing(a->name, m_placeYaw, 0, a->pack);
-                ImGui::PopID();
-            }
-        }
+    const int pages = std::max(1, (count + kPage - 1) / kPage);
+    m_assetPage = std::clamp(m_assetPage, 0, pages - 1);
+    p.text(std::to_string(count) + " assets: click one, then click in the world");
+    if (pages > 1) {
+        p.text("Page " + std::to_string(m_assetPage + 1) + " of " + std::to_string(pages), FormPanel::Tone::Muted);
+        if (p.button("< Back", m_assetPage > 0)) --m_assetPage;
+        if (p.button("Next >", m_assetPage + 1 < pages)) ++m_assetPage;
     }
-    ImGui::EndChild();
+    const int end = std::min(count, (m_assetPage + 1) * kPage);
+    for (int i = m_assetPage * kPage; i < end; ++i) {
+        const kke::CatalogAsset* a = m_filtered[static_cast<size_t>(i)];
+        std::string mark;
+        const std::string image = paletteImage(a, &mark);
+        const bool active = m_tool == Tool::Place && !m_movingId && m_placeAsset == a->name && m_placePack == a->pack;
+        if (p.tile(a->name, image, mark, active)) beginPlacing(a->name, m_placeYaw, 0, a->pack);
+    }
 }
 
 void SandboxModule::inspectorUi() {
-    const float s = ImGui::GetFontSize() / 13.0f;
-    ImGuiIO& io = ImGui::GetIO();
-    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - 340 * s, 10 * s), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(330 * s, 0), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Sandbox");
-    ImGui::Text("%zu objects, %zu draw calls (%zu culled), %.0f FPS", m_objects.size(), m_models->drawCallsLastFrame(), m_models->culledLastFrame(), io.Framerate);
-    if (ImGui::Checkbox("Engine panels (F1)", &m_showEnginePanels))
+    FormPanel& p = m_toolsPanel;
+    using Tone = FormPanel::Tone;
+    const bool pad = static_cast<double>(SDL_GetTicks()) / 1000.0 - m_padLastUsed < 5.0;
+    char line[160];
+    std::snprintf(line, sizeof(line), "%zu objects, %zu draw calls (%zu culled), %.0f FPS", m_objects.size(),
+                  m_models->drawCallsLastFrame(), m_models->culledLastFrame(), static_cast<double>(m_fps));
+    p.text(line, Tone::Muted);
+    if (p.toggle("Developer panels (F1)", m_showEnginePanels))
         for (kke::Module* m : m_enginePanels) m->setUiVisible(m_showEnginePanels);
-    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextWrapped("Camera: right-drag orbit, middle-drag pan, wheel zoom, WASD/QE move");
-    ImGui::PopStyleColor();
-    int tool = m_tool == Tool::Shoot ? 2 : (m_tool == Tool::Place ? 1 : 0);
-    if (ImGui::RadioButton("Select (1)", tool == 0)) { cancelPlacing(); m_tool = Tool::Select; }
-    ImGui::SameLine();
-    ImGui::BeginDisabled(true);
-    ImGui::RadioButton("Place", tool == 1);
-    ImGui::EndDisabled();
-    ImGui::SameLine();
-    ImGui::BeginDisabled(!m_hasFemfx);
-    if (ImGui::RadioButton("Shoot (2)", tool == 2)) { cancelPlacing(); m_tool = Tool::Shoot; }
-    ImGui::EndDisabled();
-    if (m_tool == Tool::Shoot) {
-        ImGui::TextColored(ImVec4(1, 0.5f, 0.35f, 1), "Click: fire a ball at the cursor   Esc: stop");
-    } else if (m_tool == Tool::Place) {
-        ImGui::TextColored(ImVec4(0.55f, 1, 0.55f, 1), m_movingId ? "Moving: %s" : "Placing: %s", m_placeAsset.c_str());
-        ImGui::TextWrapped("Click: place (Shift+click: keep placing)   R / Ctrl+wheel: rotate   Esc: stop");
-    } else {
-        ImGui::TextWrapped("Click: select (Shift: add)   drag the gizmo   Tab: move/rotate/scale gizmo   G: move   R: rotate   "
-                           "Ctrl+D: duplicate   Del: delete   Ctrl+A: all   Ctrl+Z / Ctrl+Y: undo / redo");
-        int g = static_cast<int>(m_gizmo);
-        ImGui::RadioButton("Move", &g, 0);
-        ImGui::SameLine();
-        ImGui::RadioButton("Rotate", &g, 1);
-        ImGui::SameLine();
-        ImGui::RadioButton("Scale", &g, 2);
-        m_gizmo = static_cast<Gizmo>(g);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Hold Shift while dragging for no snapping");
-    }
-    ImGui::BeginDisabled(m_undo.empty());
-    if (ImGui::Button("Undo")) undo();
-    ImGui::EndDisabled();
-    ImGui::SameLine();
-    ImGui::BeginDisabled(m_redo.empty());
-    if (ImGui::Button("Redo")) redo();
-    ImGui::EndDisabled();
-    ImGui::SameLine();
-    ImGui::TextDisabled("%zu / %zu steps", m_undo.size(), m_redo.size());
-    const char* snaps[] = { "Off", "0.25 m", "0.5 m", "1 m", "2.5 m", "5 m" };
-    const float snapValues[] = { 0.0f, 0.25f, 0.5f, 1.0f, 2.5f, 5.0f };
-    int snapIndex = 0;
-    for (int i = 0; i < 6; ++i) if (std::fabs(m_snap - snapValues[i]) < 1e-4f) snapIndex = i;
-    if (ImGui::Combo("Grid snap", &snapIndex, snaps, 6)) m_snap = snapValues[snapIndex];
-    ImGui::SliderFloat("Rotate step", &m_rotateStep, 5.0f, 90.0f, "%.0f deg");
+    p.text(pad ? "View: right stick turns, triggers zoom. Left stick moves the pointer, A clicks."
+               : "View: right-drag orbit, middle-drag pan, wheel zoom, WASD/QE move",
+           Tone::Muted);
 
-    ImGui::SeparatorText("Selected");
-    if (m_selection.size() > 1) {
-        ImGui::Text("%zu objects (the brighter box is the one shown below)", m_selection.size());
-        if (ImGui::Button("Delete all selected")) deleteSelection();
+    if (p.section("Tools")) {
+        if (m_tool == Tool::Place) {
+            p.text((m_movingId ? "Moving: " : "Placing: ") + m_placeAsset, Tone::Good);
+            p.text(pad ? "A: put it down   LB / RB: turn   B: stop"
+                       : "Click: place (Shift+click: keep placing)   R / Ctrl+wheel: rotate   Esc: stop",
+                   Tone::Muted);
+            if (p.button("Stop placing")) cancelPlacing();
+        } else {
+            if (m_hasFemfx) {
+                int tool = m_tool == Tool::Shoot ? 1 : 0;
+                if (p.choice("Tool", tool, { "Select (1)", "Shoot (2)" })) m_tool = tool ? Tool::Shoot : Tool::Select;
+            }
+            if (m_tool == Tool::Shoot) {
+                p.text(pad ? "A: fire a ball at the pointer   B: stop" : "Click: fire a ball at the cursor   Esc: stop", Tone::Warn);
+            } else {
+                p.text(pad ? "A: select, hold on the gizmo to drag   X: delete   Y: duplicate   LB / RB: turn   "
+                             "d-pad up: gizmo   d-pad left / right: undo / redo"
+                           : "Click: select (Shift: add)   drag the gizmo (Shift: no snapping)   Tab: gizmo   G: move   R: rotate   "
+                             "Ctrl+D: duplicate   Del: delete   Ctrl+A: all   Ctrl+Z / Ctrl+Y: undo / redo",
+                       Tone::Muted);
+                int g = static_cast<int>(m_gizmo);
+                if (p.choice("Gizmo", g, { "Move", "Rotate", "Scale" })) m_gizmo = static_cast<Gizmo>(g);
+            }
+        }
+        if (p.button("Undo", !m_undo.empty())) undo();
+        if (p.button("Redo", !m_redo.empty())) redo();
+        p.text(std::to_string(m_undo.size()) + " / " + std::to_string(m_redo.size()) + " steps", Tone::Muted);
+        const std::vector<std::string> snaps = { "Off", "0.25 m", "0.5 m", "1 m", "2.5 m", "5 m" };
+        const float snapValues[] = { 0.0f, 0.25f, 0.5f, 1.0f, 2.5f, 5.0f };
+        int snapIndex = 0;
+        for (int i = 0; i < 6; ++i)
+            if (std::fabs(m_snap - snapValues[i]) < 1e-4f) snapIndex = i;
+        if (p.choice("Grid snap", snapIndex, snaps)) m_snap = snapValues[snapIndex];
+        p.slider("Rotate step", m_rotateStep, 5.0f, 90.0f, "%.0f deg", 5.0f);
     }
-    if (Object* o = find(m_selected)) {
-        ImGui::Text("%s", o->asset.c_str());
-        ImGui::TextDisabled("at (%.2f, %.2f, %.2f), %.0f deg, x%.2f", o->position.x, o->position.y, o->position.z, o->yawDegrees, o->scale);
-        if (!o->proxy && !o->ragdoll) {
-            // Typed edits: one undo step per field edit, taken when it starts.
-            glm::vec3 pos = o->position;
-            float yaw = o->yawDegrees, scale = o->scale;
-            bool changed = ImGui::DragFloat3("Position", &pos.x, 0.05f);
-            if (ImGui::IsItemActivated()) pushUndo();
-            changed |= ImGui::DragFloat("Yaw", &yaw, 1.0f, -360.0f, 360.0f, "%.0f deg");
-            if (ImGui::IsItemActivated()) pushUndo();
-            changed |= ImGui::DragFloat("Scale", &scale, 0.01f, 0.05f, 20.0f, "x%.2f");
-            if (ImGui::IsItemActivated()) pushUndo();
-            if (changed) {
-                o->position = glm::vec3(pos.x, std::max(pos.y, 0.0f), pos.z);
-                o->yawDegrees = yaw;
-                o->scale = std::clamp(scale, 0.05f, 20.0f);
-                applyTransform(*o);
+
+    if (p.section("Selected")) {
+        if (m_selection.size() > 1) {
+            p.text(std::to_string(m_selection.size()) + " objects (the brighter box is the one shown below)");
+            if (p.button("Delete all selected")) deleteSelection();
+        }
+        if (Object* o = find(m_selected)) {
+            p.text(o->asset);
+            if (!o->proxy && !o->ragdoll) {
+                // Typed edits: one undo step per edit, taken when it starts.
+                glm::vec3 pos = o->position;
+                float yaw = o->yawDegrees, scale = o->scale;
+                const float move = m_snap > 0.0f ? m_snap : 0.1f;
+                bool started = false, s = false, changed = false;
+                changed |= p.number("X", pos.x, move, "%.2f m", &s);
+                started |= s;
+                changed |= p.number("Height", pos.y, move, "%.2f m", &s);
+                started |= s;
+                changed |= p.number("Z", pos.z, move, "%.2f m", &s);
+                started |= s;
+                changed |= p.number("Turn", yaw, m_rotateStep, "%.0f deg", &s);
+                started |= s;
+                changed |= p.number("Size", scale, 0.05f, "x%.2f", &s);
+                started |= s;
+                if (started) pushUndo();
+                if (changed) {
+                    o->position = glm::vec3(pos.x, std::max(pos.y, 0.0f), pos.z);
+                    o->yawDegrees = yaw;
+                    o->scale = std::clamp(scale, 0.05f, 20.0f);
+                    applyTransform(*o);
+                }
+            } else {
+                char at[96];
+                std::snprintf(at, sizeof(at), "at (%.2f, %.2f, %.2f), %.0f deg, x%.2f", static_cast<double>(o->position.x),
+                              static_cast<double>(o->position.y), static_cast<double>(o->position.z), static_cast<double>(o->yawDegrees),
+                              static_cast<double>(o->scale));
+                p.text(at, Tone::Muted);
             }
-        }
-        if (!o->character) {
-            const char* collisions[] = { "Mesh (exact)", "Box (bounds, cheap)", "None" };
-            int c = static_cast<int>(o->collision);
-            if (ImGui::Combo("Collision", &c, collisions, 3)) {
-                pushUndo();
-                for (Object* s : selectedObjects()) if (!s->character) s->collision = static_cast<kke::SceneObject::Collision>(c);
-                o->collision = static_cast<kke::SceneObject::Collision>(c);
+            if (!o->character) {
+                int c = static_cast<int>(o->collision);
+                if (p.choice("Collision", c, { "Mesh (exact)", "Box (cheap)", "None" })) {
+                    pushUndo();
+                    for (Object* sel : selectedObjects())
+                        if (!sel->character) sel->collision = static_cast<kke::SceneObject::Collision>(c);
+                    o->collision = static_cast<kke::SceneObject::Collision>(c);
+                }
+                p.text("How games that load this level collide with it (Jolt): mesh for buildings, floors and stairs; box for props; "
+                       "none for grass. Applies to every selected object.",
+                       Tone::Muted);
             }
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("How the games that load this level collide with it (Jolt):\nmesh for buildings, floors and stairs; box for props;\n"
-                                  "none for grass and decoration. Applies to every selected object.");
-        }
-        if (const kke::ModelData* d = m_models->model(o->model)) {
-            glm::vec3 size = d->boundsMax - d->boundsMin;
-            ImGui::TextDisabled("%.2f x %.2f x %.2f m, %zu tris, %zu bones", size.x, size.y, size.z, d->triangleCount(), d->bones.size());
-        }
-        if (const kke::CatalogPack* pack = packOf(o->asset, o->pack); pack && pack->textureVariants.size() > 1) {
-            std::string current = o->texture.empty() ? "Model's own" : std::filesystem::path(o->texture).stem().string();
-            if (ImGui::BeginCombo("Texture", current.c_str())) {
-                if (ImGui::Selectable("Model's own", o->texture.empty())) { pushUndo(); o->texture.clear(); m_models->setTextureOverride(o->instance, ""); }
-                for (const std::string& v : pack->textureVariants) {
-                    if (ImGui::Selectable(std::filesystem::path(v).stem().string().c_str(), o->texture == v)) {
+            if (const kke::ModelData* d = m_models->model(o->model)) {
+                const glm::vec3 size = d->boundsMax - d->boundsMin;
+                char dims[128];
+                std::snprintf(dims, sizeof(dims), "%.2f x %.2f x %.2f m, %zu tris, %zu bones", static_cast<double>(size.x),
+                              static_cast<double>(size.y), static_cast<double>(size.z), d->triangleCount(), d->bones.size());
+                p.text(dims, Tone::Muted);
+            }
+            if (const kke::CatalogPack* pack = packOf(o->asset, o->pack); pack && pack->textureVariants.size() > 1) {
+                std::vector<std::string> names{ "Model's own" };
+                int current = 0;
+                for (size_t i = 0; i < pack->textureVariants.size(); ++i) {
+                    names.push_back(std::filesystem::path(pack->textureVariants[i]).stem().string());
+                    if (o->texture == pack->textureVariants[i]) current = static_cast<int>(i) + 1;
+                }
+                if (p.choice("Texture", current, names)) {
+                    pushUndo();
+                    o->texture = current == 0 ? std::string() : pack->textureVariants[static_cast<size_t>(current - 1)];
+                    m_models->setTextureOverride(o->instance, o->texture);
+                }
+            }
+            if (p.button("Move (G)")) beginPlacing(o->asset, o->yawDegrees, o->id, o->pack);
+            if (p.button("Duplicate")) duplicateSelection();
+            if (p.button("Delete")) deleteSelection();
+            o = find(m_selected);
+            if (o && o->character) {
+                if (!m_ragdolls) p.text("Ragdolls need a physics module (Jolt or FEMFX)", Tone::Muted);
+                else if (p.button(o->ragdoll ? "Stand up (K)" : "Ragdoll (K)")) {
+                    SDL_Event e{};
+                    e.type = SDL_EVENT_KEY_DOWN;
+                    e.key.key = SDLK_K;
+                    onEvent(e);
+                }
+            } else if (o) {
+                if (!m_hasFemfx) {
+                    p.text("Breakable props need FEMFX (-DKKE_ENABLE_FEMFX=ON)", Tone::Muted);
+                } else {
+                    if (o->proxy) {
+                        if (p.button("Restore prop (X)")) {
+                            pushUndo();
+                            restoreProp(*o);
+                        }
+                    } else if (p.button("Make breakable (X)")) {
                         pushUndo();
-                        o->texture = v;
-                        m_models->setTextureOverride(o->instance, v);
+                        makeBreakable(*o);
+                    }
+                    p.text("Breakable props are saved as breakable: games make them breakable too", Tone::Muted);
+                    // The object's own fracture seed: same seed, same pieces.
+                    p.text("Fracture seed " + std::to_string(o->fractureSeed ? o->fractureSeed : o->id));
+                    if (p.button("New pieces")) {
+                        o->fractureSeed = (o->fractureSeed ? o->fractureSeed : o->id) * 747796405u + 2891336453u;
+                        if (!o->fractureSeed) o->fractureSeed = 1;
+                        if (o->proxy) { // re-bake with the new pieces
+                            restoreProp(*o);
+                            makeBreakable(*o);
+                        }
                     }
                 }
-                ImGui::EndCombo();
             }
+        } else {
+            p.text(pad ? "nothing: move the pointer onto an object and press A" : "nothing: click an object", Tone::Muted);
         }
-        if (ImGui::Button("Move (G)")) beginPlacing(o->asset, o->yawDegrees, o->id, o->pack);
-        ImGui::SameLine();
-        if (ImGui::Button("Duplicate")) duplicateSelection();
-        ImGui::SameLine();
-        if (ImGui::Button("Delete")) deleteSelection();
-        o = find(m_selected);
-        if (o && o->character) {
-            if (!m_ragdolls) ImGui::TextDisabled("Ragdolls need a physics module (Jolt or FEMFX)");
-            else if (ImGui::Button(o->ragdoll ? "Stand up (K)" : "Ragdoll (K)")) {
-                SDL_Event e{};
-                e.type = SDL_EVENT_KEY_DOWN;
-                e.key.key = SDLK_K;
-                onEvent(e);
-            }
-        } else if (o) {
-            if (!m_hasFemfx) ImGui::TextDisabled("Breakable props need FEMFX (-DKKE_ENABLE_FEMFX=ON)");
-            else if (o->proxy) {
-                if (ImGui::Button("Restore prop (X)")) { pushUndo(); restoreProp(*o); }
-            } else if (ImGui::Button("Make breakable (X)")) {
-                pushUndo();
-                makeBreakable(*o);
-            }
-            if (m_hasFemfx) ImGui::TextDisabled("Breakable props are saved as breakable: games make them breakable too");
-            if (m_hasFemfx) {
-                // The object's own fracture seed: same seed, same pieces.
-                ImGui::Text("Fracture seed %u", o->fractureSeed ? o->fractureSeed : o->id);
-                ImGui::SameLine();
-                if (ImGui::SmallButton("Reroll")) {
-                    o->fractureSeed = (o->fractureSeed ? o->fractureSeed : o->id) * 747796405u + 2891336453u;
-                    if (!o->fractureSeed) o->fractureSeed = 1;
-                    if (o->proxy) { restoreProp(*o); makeBreakable(*o); } // re-bake with the new pieces
-                }
-                if (ImGui::IsItemHovered()) ImGui::SetTooltip("New pieces for this object. Mixed with the world seed below;\nsaved with the layout.");
-            }
-        }
-    } else {
-        ImGui::TextDisabled("nothing - click an object");
     }
 
-    if (m_hasFemfx) {
-        ImGui::SeparatorText("Physics toys");
-        const char* names[kBreakMaterialCount];
-        for (int i = 0; i < kBreakMaterialCount; ++i) names[i] = kBreakMaterials[i].name;
-        ImGui::Combo("Breaks as", &m_breakMaterial, names, kBreakMaterialCount);
-        const char* patterns[] = { "Material's own", "Shards", "Voronoi chunks", "Splinters", "Radial (glass)", "Solid (bends only)" };
-        ImGui::Combo("Pattern", &m_patternOverride, patterns, 6);
-        ImGui::SliderFloat("Chunk size", &m_chunkScale, 0.4f, 3.0f, "x%.1f");
-        ImGui::SliderInt("Detail (cells)", &m_detailCells, 30, 400);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Voxel budget per prop, 6 tetrahedra per cell.\nMore = closer shape and cleaner piece edges, more CPU.\n~160 is fine on one core while it's moving.");
-        ImGui::SliderFloat("Toughness", &m_toughness, 0.2f, 5.0f, "x%.1f");
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Multiplies the material's fracture strength.\nProps arm 0.75-2 s after spawning, once settled:\nonly stress added by a hit can break them.");
-        {
-            int seed = static_cast<int>(m_worldSeed);
-            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 7.0f);
-            if (ImGui::InputInt("World seed", &seed)) m_worldSeed = static_cast<uint32_t>(std::max(seed, 0));
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Mixed with each object's own seed: a new world seed = every prop\nbreaks differently; the same seeds = the same breaks every time\n(what a multiplayer game sends instead of the debris).");
-        }
-        if (!m_lastBreakStats.empty()) ImGui::TextDisabled("%s", m_lastBreakStats.c_str());
-        if (ImGui::Button("Restore all props")) for (Object& o : m_objects) if (o.proxy) restoreProp(o);
-        ImGui::SliderFloat("Ball speed", &m_ballSpeed, 5.0f, 40.0f, "%.0f m/s");
-        ImGui::TextWrapped("Shoot tool (2) or F / Space: throw a ball at the cursor (max %zu, oldest removed)", kMaxBalls);
+    if (m_hasFemfx && p.section("Physics toys", false)) {
+        std::vector<std::string> names;
+        for (int i = 0; i < kBreakMaterialCount; ++i) names.emplace_back(kBreakMaterials[i].name);
+        p.choice("Breaks as", m_breakMaterial, names);
+        p.choice("Pattern", m_patternOverride, { "Material's own", "Shards", "Voronoi chunks", "Splinters", "Radial (glass)", "Solid (bends only)" });
+        p.slider("Chunk size", m_chunkScale, 0.4f, 3.0f, "x%.1f", 0.1f);
+        p.slider("Detail (cells)", m_detailCells, 30, 400);
+        p.text("Voxel budget per prop, 6 tetrahedra per cell: more is a closer shape and cleaner edges, and more CPU. "
+               "About 160 is fine on one core while it moves.",
+               Tone::Muted);
+        p.slider("Toughness", m_toughness, 0.2f, 5.0f, "x%.1f", 0.1f);
+        p.text("Multiplies the material's strength. Props arm 0.75-2 s after they appear, once settled: only a hit breaks them.",
+               Tone::Muted);
+        float seed = static_cast<float>(m_worldSeed);
+        if (p.number("World seed", seed, 1.0f, "%.0f")) m_worldSeed = static_cast<uint32_t>(std::max(seed, 0.0f));
+        p.text("Mixed with each object's own seed: a new world seed breaks every prop differently, the same seeds break them "
+               "the same way every time (what a multiplayer game sends instead of the debris).",
+               Tone::Muted);
+        if (!m_lastBreakStats.empty()) p.text(m_lastBreakStats, Tone::Muted);
+        if (p.button("Restore all props"))
+            for (Object& o : m_objects)
+                if (o.proxy) restoreProp(o);
+        p.slider("Ball speed", m_ballSpeed, 5.0f, 40.0f, "%.0f m/s", 1.0f);
+        p.text("Shoot tool (2) or F / Space: throw a ball at the cursor (max " + std::to_string(kMaxBalls) + ", oldest removed)",
+               Tone::Muted);
     }
 
     lookUi();
 
     lightsUi();
 
-    ImGui::SeparatorText("Level");
-    ImGui::InputText("Name", m_levelName, sizeof(m_levelName));
-    ImGui::InputText("File", m_layoutPath, sizeof(m_layoutPath));
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("A kke.scene file. Saved in scenes/, kke_demo lists it in its Scenes panel\n(walk it with collision). Older sandbox layouts load too.");
-    if (ImGui::Button("Save (Ctrl+S)")) saveLayout(m_layoutPath);
-    ImGui::SameLine();
-    if (ImGui::Button("Load (Ctrl+L)")) loadLayout(m_layoutPath);
-    ImGui::SameLine();
-    if (ImGui::Button("Clear")) { pushUndo(); clearAll(); clearSelection(); }
-    if (!m_status.empty()) ImGui::TextWrapped("%s", m_status.c_str());
-    ImGui::End();
+    if (p.section("Level")) {
+        p.textField("Name", m_levelName);
+        p.textField("File", m_layoutPath);
+        p.text("A kke.scene file in scenes/: kke_demo lists it in its Scenes panel (walk it with collision). "
+               "Older sandbox layouts load too.",
+               Tone::Muted);
+        if (p.button("Save (Ctrl+S)")) saveLayout(m_layoutPath);
+        if (p.button("Load (Ctrl+L)")) loadLayout(m_layoutPath);
+        if (p.button("Clear")) {
+            pushUndo();
+            clearAll();
+            clearSelection();
+        }
+        if (!m_status.empty()) p.text(m_status);
+    }
 }
 
 void SandboxModule::lookUi() {
     // Variants/overlays of the first pack that has them.
     const kke::CatalogPack* pack = nullptr;
-    for (const kke::CatalogPack& p : m_catalog.packs) if (!p.textureVariants.empty() || !p.overlayTextures.empty()) { pack = &p; break; }
-    if (!pack) return;
-    ImGui::SeparatorText("Look");
-    if (pack->textureVariants.size() > 1) {
-        auto label = [&](int i) { return std::filesystem::path(pack->textureVariants[i]).stem().string(); };
-        m_variant = std::clamp(m_variant, 0, static_cast<int>(pack->textureVariants.size()) - 1);
-        if (ImGui::BeginCombo("New objects", m_variant == 0 ? "Model's own" : label(m_variant).c_str())) {
-            for (int i = 0; i < static_cast<int>(pack->textureVariants.size()); ++i) {
-                if (ImGui::Selectable(i == 0 ? "Model's own" : label(i).c_str(), m_variant == i)) {
-                    m_variant = i;
-                    if (m_ghost && !m_movingId) m_models->setTextureOverride(m_ghost, i ? pack->textureVariants[i] : "");
-                }
-            }
-            ImGui::EndCombo();
+    for (const kke::CatalogPack& cp : m_catalog.packs)
+        if (!cp.textureVariants.empty() || !cp.overlayTextures.empty()) {
+            pack = &cp;
+            break;
         }
-        if (ImGui::Button("Apply to all objects")) {
+    FormPanel& p = m_toolsPanel;
+    if (!pack || !p.section("Look", false)) return;
+    if (pack->textureVariants.size() > 1) {
+        std::vector<std::string> names;
+        for (size_t i = 0; i < pack->textureVariants.size(); ++i)
+            names.push_back(i == 0 ? "Model's own" : std::filesystem::path(pack->textureVariants[i]).stem().string());
+        m_variant = std::clamp(m_variant, 0, static_cast<int>(pack->textureVariants.size()) - 1);
+        if (p.choice("New objects", m_variant, names) && m_ghost && !m_movingId)
+            m_models->setTextureOverride(m_ghost, m_variant ? pack->textureVariants[static_cast<size_t>(m_variant)] : "");
+        if (p.button("Apply to all objects")) {
             pushUndo();
             for (Object& o : m_objects) {
                 const kke::CatalogPack* op = packOf(o.asset, o.pack);
                 if (op != pack) continue;
-                o.texture = m_variant ? pack->textureVariants[m_variant] : "";
+                o.texture = m_variant ? pack->textureVariants[static_cast<size_t>(m_variant)] : "";
                 m_models->setTextureOverride(o.instance, o.texture);
             }
         }
     }
     if (!pack->overlayTextures.empty()) {
-        bool changed = false;
-        std::string current = m_overlay == 0 ? "None" : std::filesystem::path(pack->overlayTextures[m_overlay - 1]).stem().string();
-        if (ImGui::BeginCombo("World grid", current.c_str())) {
-            if (ImGui::Selectable("None", m_overlay == 0)) { m_overlay = 0; changed = true; }
-            for (int i = 0; i < static_cast<int>(pack->overlayTextures.size()); ++i) {
-                if (ImGui::Selectable(std::filesystem::path(pack->overlayTextures[i]).stem().string().c_str(), m_overlay == i + 1)) {
-                    m_overlay = i + 1;
-                    changed = true;
-                }
-            }
-            ImGui::EndCombo();
-        }
-        changed |= ImGui::SliderFloat("Grid tile", &m_overlayTile, 0.5f, 8.0f, "%.1f m");
-        changed |= ImGui::SliderFloat("Grid strength", &m_overlayStrength, 0.0f, 1.0f);
+        std::vector<std::string> names{ "None" };
+        for (const std::string& t : pack->overlayTextures) names.push_back(std::filesystem::path(t).stem().string());
+        bool changed = p.choice("World grid", m_overlay, names);
+        changed |= p.slider("Grid tile", m_overlayTile, 0.5f, 8.0f, "%.1f m", 0.5f);
+        changed |= p.slider("Grid strength", m_overlayStrength, 0.0f, 1.0f, "%.2f", 0.05f);
         if (changed) applyLook();
     }
 }
 
 // Where the player starts and the level's lights (saved with the scene).
 void SandboxModule::lightsUi() {
-    ImGui::SeparatorText("Spawn and lights");
-    if (ImGui::Button("Spawn here")) {
+    FormPanel& p = m_toolsPanel;
+    using Tone = FormPanel::Tone;
+    if (!p.section("Spawn and lights", false)) return;
+    if (p.button("Spawn here")) {
         const glm::vec3 t = m_app->camera().target;
         m_spawn = glm::vec3(t.x, 0.0f, t.z);
         const glm::vec3 d = t - m_app->camera().position;
         m_spawnYaw = glm::degrees(std::atan2(d.x, -d.z)); // face the way the camera looks
     }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Player start at the camera's focus point, facing the way the camera looks (cyan box)");
-    ImGui::SameLine();
-    ImGui::TextDisabled("(%.1f, %.1f, %.1f) %.0f deg", m_spawn.x, m_spawn.y, m_spawn.z, m_spawnYaw);
+    char at[128];
+    std::snprintf(at, sizeof(at), "Player start (%.1f, %.1f, %.1f), %.0f deg: the cyan box. Spawn here puts it at the view's centre, "
+                  "facing the way the view looks.",
+                  static_cast<double>(m_spawn.x), static_cast<double>(m_spawn.y), static_cast<double>(m_spawn.z),
+                  static_cast<double>(m_spawnYaw));
+    p.text(at, Tone::Muted);
     // The mood sets sky, sun, fog and look together (docs/MOODS.md); the
-    // sliders below then fine-tune the sun and are saved with the level.
+    // rows below then fine-tune the sun and are saved with the level.
     if (m_moodNames.empty()) m_moodNames = kke::listMoods();
     const std::string current = m_app->mood().name;
-    if (ImGui::BeginCombo("Mood", current.empty() ? "(none)" : current.c_str())) {
-        for (const std::string& name : m_moodNames)
-            if (ImGui::Selectable(name.c_str(), name == current)) {
-                std::string error;
-                if (!m_app->setMood(name, &error)) m_status = error;
-            }
-        ImGui::EndCombo();
+    std::vector<std::string> moods = m_moodNames;
+    int mood = -1;
+    for (size_t i = 0; i < moods.size(); ++i)
+        if (moods[i] == current) mood = static_cast<int>(i);
+    if (mood < 0) {
+        moods.insert(moods.begin(), current.empty() ? "(none)" : current);
+        mood = 0;
     }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Sky, sun, haze, colours and background sound in one go");
+    if (p.choice("Mood", mood, moods) && moods[static_cast<size_t>(mood)] != current && moods[static_cast<size_t>(mood)] != "(none)") {
+        std::string error;
+        if (!m_app->setMood(moods[static_cast<size_t>(mood)], &error)) m_status = error;
+    }
+    p.text("Sky, sun, haze, colours and background sound in one go", Tone::Muted);
     kke::Lighting& lighting = m_app->lighting();
-    glm::vec3 dir = lighting.lights[0].direction;
+    const glm::vec3 dir = lighting.lights[0].direction;
     float azimuth = glm::degrees(std::atan2(-dir.x, -dir.z)), elevation = glm::degrees(std::asin(std::clamp(-dir.y, -1.0f, 1.0f)));
-    bool sun = ImGui::SliderFloat("Sun direction", &azimuth, -180.0f, 180.0f, "%.0f deg");
-    sun |= ImGui::SliderFloat("Sun height", &elevation, 5.0f, 90.0f, "%.0f deg");
+    bool sun = p.slider("Sun direction", azimuth, -180.0f, 180.0f, "%.0f deg", 5.0f);
+    sun |= p.slider("Sun height", elevation, 5.0f, 90.0f, "%.0f deg", 2.0f);
     if (sun) {
         const float az = glm::radians(azimuth), el = glm::radians(elevation);
         lighting.lights[0].direction = -glm::normalize(glm::vec3(std::cos(el) * std::sin(az), std::sin(el), std::cos(el) * std::cos(az)));
     }
-    ImGui::ColorEdit3("Sun colour", &lighting.lights[0].color.x, ImGuiColorEditFlags_NoInputs);
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6.0f);
-    ImGui::SliderFloat("##sunI", &lighting.lights[0].intensity, 0.0f, 3.0f, "%.2f");
-    ImGui::ColorEdit3("Ambient", &lighting.ambientColor.x, ImGuiColorEditFlags_NoInputs);
+    p.colour("Sun colour", lighting.lights[0].color);
+    p.slider("Sun strength", lighting.lights[0].intensity, 0.0f, 3.0f, "%.2f", 0.05f);
+    p.colour("Ambient", lighting.ambientColor);
     for (int i = 0; i < static_cast<int>(m_pointLights.size()); ++i) {
-        ImGui::PushID(i);
-        kke::SceneLight& l = m_pointLights[i];
-        if (ImGui::Selectable(("Light " + std::to_string(i + 1)).c_str(), m_selectedLight == i, 0, ImVec2(ImGui::GetFontSize() * 4.0f, 0))) m_selectedLight = i;
-        ImGui::SameLine();
-        ImGui::ColorEdit3("##c", &l.color.x, ImGuiColorEditFlags_NoInputs);
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 5.0f);
-        ImGui::SliderFloat("##i", &l.intensity, 0.0f, 10.0f, "%.1f");
-        ImGui::SameLine();
-        if (ImGui::SmallButton("here")) l.position = m_app->camera().target + glm::vec3(0.0f, 2.5f, 0.0f);
-        ImGui::SameLine();
-        if (ImGui::SmallButton("x")) {
+        kke::SceneLight& l = m_pointLights[static_cast<size_t>(i)];
+        p.text("Light " + std::to_string(i + 1), m_selectedLight == i ? Tone::Good : Tone::Normal);
+        p.colour("Colour", l.color);
+        p.slider("Strength", l.intensity, 0.0f, 10.0f, "%.1f", 0.2f);
+        bool moved = p.number("X", l.position.x, 0.25f, "%.2f m");
+        moved |= p.number("Height", l.position.y, 0.25f, "%.2f m");
+        moved |= p.number("Z", l.position.z, 0.25f, "%.2f m");
+        if (moved) m_selectedLight = i;
+        if (p.button("Here")) {
+            l.position = m_app->camera().target + glm::vec3(0.0f, 2.5f, 0.0f);
+            m_selectedLight = i;
+        }
+        if (p.button("Remove")) {
             m_pointLights.erase(m_pointLights.begin() + i);
             m_selectedLight = -1;
-            ImGui::PopID();
             break;
         }
-        if (i == m_selectedLight) ImGui::DragFloat3("Position", &l.position.x, 0.05f);
-        ImGui::PopID();
     }
-    if (m_pointLights.size() < 2 && ImGui::Button("Add point light")) {
+    if (m_pointLights.size() < 2 && p.button("Add point light")) {
         kke::SceneLight l;
         l.position = m_app->camera().target + glm::vec3(0.0f, 2.5f, 0.0f);
         l.color = glm::vec3(1.0f, 0.8f, 0.55f);
@@ -2267,7 +2217,12 @@ bool SandboxModule::mouseOverUi() const {
     const auto& mouse = m_app->window().mouseState();
     const glm::vec2 p(mouse.x, mouse.y);
     return ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) ||
-           m_palette.contains(p) || graphEditorContains(p);
+           m_palette.contains(p) || graphEditorContains(p) || m_assetsPanel.contains(p) || m_toolsPanel.contains(p) ||
+           m_modePanel.contains(p);
+}
+
+bool SandboxModule::typingInUi() const {
+    return ImGui::GetIO().WantTextInput || m_assetsPanel.typing() || m_toolsPanel.typing();
 }
 
 void SandboxModule::placeBlock(size_t block) {
@@ -2394,13 +2349,7 @@ void SandboxModule::updateBat(float dt) {
 }
 
 void SandboxModule::modeSwitchUi() {
-    const float s = ImGui::GetFontSize() / 13.0f;
-    const ImGuiViewport* vp = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + 8 * s), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
-    ImGui::Begin("Mode", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-                                  ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
-    if (ImGui::Button("Back to Play (F2, Start)")) setMode(Mode::Play);
-    ImGui::End();
+    if (m_modePanel.button("Back to Play (F2, Start)")) setMode(Mode::Play);
 }
 
 // The Simple palette: one row of big pictures along the bottom (RmlUi,
@@ -2498,9 +2447,14 @@ void SandboxModule::palettePressed(const std::string& id) {
 
 // RmlUi shows pictures from files: the thumbnail's PNG in the cache
 // folder, once ThumbnailModule has it (made or read back from disk).
-std::string SandboxModule::paletteImage(const kke::CatalogAsset* asset) {
+std::string SandboxModule::paletteImage(const kke::CatalogAsset* asset, std::string* mark) {
+    if (mark) *mark = asset ? asset->category : std::string();
     if (!asset || !m_thumbs) return {};
     const kke::ThumbnailModule::View v = m_thumbs->get(asset->path, asset->pack, [&] { return kke::packLoadOptions(m_catalog, *asset); });
+    if (mark && v.state != kke::ThumbnailModule::State::Ready)
+        *mark = v.state == kke::ThumbnailModule::State::Failed   ? "no picture"
+                : v.state == kke::ThumbnailModule::State::NoMesh ? "animation"
+                                                                 : "...";
     if (v.state != kke::ThumbnailModule::State::Ready || !m_thumbs->settings.diskCache) return {};
     const std::string& root = m_thumbs->settings.cacheRoot;
     const std::string file = kke::thumbnailCacheFile(root.empty() ? kke::defaultThumbnailCacheRoot() : root, asset->pack, asset->path);
@@ -2603,7 +2557,7 @@ void SandboxModule::warpPointer(const glm::vec2& p) {
     SDL_WarpMouseInWindow(m_app->window().handle(), p.x, p.y);
 }
 
-// The same event a mouse click makes, so the palette (ImGui), dragging
+// The same event a mouse click makes, so the palette and panels (RmlUi), dragging
 // and the bat can't tell a gamepad from a mouse.
 void SandboxModule::pointerButton(bool down) {
     SDL_Window* window = m_app->window().handle();
@@ -2683,6 +2637,15 @@ void SandboxModule::updatePad(float dt) {
     const float rx = dead(axis(SDL_GAMEPAD_AXIS_RIGHTX)), ry = dead(axis(SDL_GAMEPAD_AXIS_RIGHTY));
     const float zoom = axis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) - axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
     if (graphEditorPadSticks(dt, glm::vec2(rx, ry), std::abs(zoom) > 0.1f ? zoom : 0.0f)) return;
+    // Over a Build panel the right stick scrolls it instead.
+    if (m_mode != Mode::Play && (rx != 0.0f || ry != 0.0f)) {
+        const auto& mouse = m_app->window().mouseState();
+        for (FormPanel* p : { &m_assetsPanel, &m_toolsPanel }) {
+            if (!p->contains(glm::vec2(mouse.x, mouse.y))) continue;
+            p->scroll(ry * 700.0f * dt); // sideways does nothing here: the view stays put
+            return;
+        }
+    }
     if (auto* camera = m_app->getModule<kke::OrbitCameraModule>()) {
         if (rx != 0.0f || ry != 0.0f || std::abs(zoom) > 0.1f)
             camera->nudge(rx * 2.2f * dt, -ry * 1.6f * dt, 1.0f + zoom * 1.5f * dt);
@@ -2793,6 +2756,9 @@ void SandboxModule::updateReplay(float dt) {
 
 void SandboxModule::shutdown() {
     m_palette.detach(); // RmlUi goes down after us
+    m_assetsPanel.detach();
+    m_toolsPanel.detach();
+    m_modePanel.detach();
     shutdownGraphs();
     for (SDL_Gamepad* pad : m_pads) SDL_CloseGamepad(pad);
     m_pads.clear();
@@ -2807,10 +2773,17 @@ void SandboxModule::shutdown() {
 void SandboxModule::renderUi() {
     graphUi();
     updatePalette();
-    if (m_mode != Mode::Play) {
+    const bool build = m_mode != Mode::Play;
+    FormPanel* panels[] = { &m_assetsPanel, &m_toolsPanel, &m_modePanel };
+    for (FormPanel* p : panels) p->setVisible(build);
+    if (build) {
+        const auto& mouse = m_app->window().mouseState();
+        const double now = static_cast<double>(SDL_GetTicks()) / 1000.0;
+        for (FormPanel* p : panels) p->begin(now, glm::vec2(mouse.x, mouse.y), mouse.leftButtonDown);
         assetBrowserUi();
         inspectorUi();
         modeSwitchUi();
+        for (FormPanel* p : panels) p->end();
     }
     padCursorUi();
 }

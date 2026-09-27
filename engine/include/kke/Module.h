@@ -16,6 +16,12 @@ class Application;
 struct UpdateContext {
     float dt;         // seconds since last frame (variable)
     float totalTime;  // seconds since Application started
+    // How far this frame is between the last fixed tick and the next one
+    // (0..1). Physics moves in fixed ticks; a screen faster than the tick
+    // rate shows things at the same place for two frames, then a jump (a
+    // double image on a moving object). Draw them between their last two
+    // ticks by this much: RigidWorld::characterDrawPosition.
+    float alpha = 1.0f;
 };
 
 // Fixed-rate timing handed to Module::fixedUpdate(). Runs at a constant
@@ -95,6 +101,11 @@ struct ShadowRenderContext {
     VkRenderPass renderPass;
     glm::mat4 lightViewProj;
     uint32_t frameIndex = 0; // same as RenderContext::frameIndex
+    // Split screen draws the shadow pass once per view (each into its own
+    // tile of the map, with its own lightViewProj), like render(): 0 is the
+    // first of the frame. Per-frame work belongs with viewIndex 0, and
+    // anything written for the GPU per call needs its own buffer per view.
+    uint32_t viewIndex = 0;
 };
 
 // Handed to Module::prepass(): every drawn frame, after the shadow pass
@@ -221,7 +232,7 @@ public:
     // with render()'s. Depth starts cleared.
     virtual void renderOverlay(const RenderContext& /*ctx*/) {}
 
-    // Called once per frame, before render() — a real, separate,
+    // Called before render() every frame (once per view in split screen): a real, separate,
     // depth-only pass (see ShadowRenderContext's own comment, and
     // kke::ShadowMap). Default no-op: most modules don't cast shadows
     // and shouldn't need to think about this at all. Override only for

@@ -476,8 +476,8 @@ fetch archives by name.
 
 | Pack | Files used | Without it |
 |---|---|---|
-| SIDEKICK Goblin Fighters (`SIDEKICK_Goblin_Fighters`) | `GoblinFighter_01` to `_05` `.sk` part lists, their parts and `T_GoblinFighter_0NColorMap` colour maps | a warning; the waves still come but the goblins are invisible |
-| ANIMATION Goblin Locomotion (`ANIMATION_Goblin_Locomotion`), Sidekick versions | `A_MOD_GBL_Idle_Standing_Neut`, `A_MOD_GBL_Walk_F_Neut`, `A_MOD_GBL_Run_F_Neut`, `A_MOD_GBL_Sprint_F_Neut`, `A_MOD_GBL_Idle_Fidget_Swipe_Neut` (the attack), `A_MOD_GBL_Idle_Fidget_Menacing_Neut` (waiting) | a warning per missing clip; goblins slide in their rest pose or fall back to another clip |
+| SIDEKICK Goblin Fighters (`SIDEKICK_Goblin_Fighters`) | `GoblinFighter_01` to `_05` `.sk` part lists, their parts and `T_GoblinFighter_0NColorMap` colour maps | an info line (a warning only if the pack is there but no goblin loads); the waves still come but the goblins are invisible |
+| ANIMATION Goblin Locomotion (`ANIMATION_Goblin_Locomotion`), Sidekick versions | `A_MOD_GBL_Idle_Standing_Neut`, `A_MOD_GBL_Walk_F_Neut`, `A_MOD_GBL_Run_F_Neut`, `A_MOD_GBL_Sprint_F_Neut`, `A_MOD_GBL_Idle_Fidget_Swipe_Neut` (the attack), `A_MOD_GBL_Idle_Fidget_Menacing_Neut` (waiting) | a warning per missing clip when the pack is there (nothing when it is not); goblins slide in their rest pose or fall back to another clip |
 | POLYGON Fantasy Characters (`POLYGON_Fantasy_Characters`) | `SK_Character_Male_King` (else `SK_Character_Male_Rouge_01`, `SK_Character_Male_Peasant_01`), `SM_Prop_SwordOrnate_01` | info line; the king is the UAL mannequin in gold, without a sword |
 
 If no asset folder exists at all, the game logs at info ("goblins can't be

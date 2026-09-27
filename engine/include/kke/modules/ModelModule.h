@@ -239,8 +239,10 @@ private:
     // [pass: 0 shadow, 1 main][frame in flight]
     // Instance lists: [0] the shadow pass, [1 + view] each split-screen
     // view (each culls against its own camera).
-    std::unique_ptr<Buffer> m_instanceBuffers[1 + kMaxViews][Renderer::kMaxFramesInFlight];
-    size_t m_instanceCapacity[1 + kMaxViews][Renderer::kMaxFramesInFlight] = {};
+    // One instance buffer per pass and frame in flight: the views' passes
+    // (0 .. kMaxViews-1), then their shadow passes (kMaxViews + view).
+    std::unique_ptr<Buffer> m_instanceBuffers[2 * kMaxViews][Renderer::kMaxFramesInFlight];
+    size_t m_instanceCapacity[2 * kMaxViews][Renderer::kMaxFramesInFlight] = {};
     uint64_t m_viewPass = 0; // m_frame and the view: which draw batchedFrame means
     std::vector<Batch> m_batches;
     std::vector<InstanceGpu> m_instanceData;

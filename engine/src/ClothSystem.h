@@ -98,9 +98,18 @@ private:
         ClothStats stats;
         JPH::Body* stepBody = nullptr;       // this step's body when awake (OnStep only)
         std::vector<glm::vec3> triN, triNPrev; // per triangle, this pass: unit normal now and at the last pass
-        std::vector<glm::vec4> triSphere;    // per triangle, this pass: bounding sphere (centre, radius)
+        std::vector<glm::vec4> triSphere;    // per triangle, this pass: bounding sphere (centre, radius), now and at the last pass
+        std::vector<glm::vec3> triMove;      // per triangle, this pass: how far its centroid moved since the last pass
+        std::vector<glm::vec3> triMixed;     // per triangle, this step: the cross term of its normal now and at the last pass (unit)
         uint32_t triBase = 0;                // first triangle's index in the pass's triangle arrays
         std::vector<uint32_t> edges;         // every edge once, pairs of vertices
+        // Patches: small pieces of the surface (kPatchTriangles triangles
+        // grown from a seed across shared edges), for skipping the parts of
+        // the pass that can't find anything (ClothSystem::markPatches).
+        uint32_t patches = 0;
+        std::vector<uint32_t> triPatch, vertPatch, edgePatch; // the patch each is part of
+        std::vector<uint8_t> vertLooked;     // scratch, this step: part of a patch the broad phase looks at
+        std::vector<uint32_t> patchNearStart, patchNear;      // per patch: the patches sharing an edge with it (CSR)
         uint32_t edgeBase = 0;               // first edge's index in the pass's edge arrays
         // Hair: strands of `strandVerts` vertices (root, follicle, segments);
         // the air pushes on each segment as a cylinder `hairWidth` wide.
@@ -130,6 +139,7 @@ private:
     bool nearInTopology(const Cloth& c, uint32_t v, uint32_t tri) const;
     bool edgesNear(const Cloth& c, uint32_t e, uint32_t f) const;
     static bool edgesApart(const Cloth& c, uint32_t e, const Cloth& o, uint32_t f, float gap);
+    static bool edgesFar(const Cloth& c, uint32_t e, const Cloth& o, uint32_t f, float gap);
     // Both return true when they undid a crossing.
     bool testVertexTriangle(Cloth& c, uint32_t v, Cloth& o, uint32_t tri);
     bool testEdgeEdge(Cloth& c, uint32_t e, Cloth& o, uint32_t f);
@@ -147,6 +157,7 @@ private:
     double m_stepMs = 0.0, m_lastMs = 0.0;
     // Protection scratch, reused.
     std::vector<CellBox> m_triBox, m_edgeBox;
+    std::vector<glm::vec3> m_triLo, m_triHi;        // per triangle: swept bounds + thickness
     std::vector<uint32_t> m_triCloth;               // per triangle (all active cloths): index in m_active
     std::vector<uint32_t> m_edgeCloth;              // per edge: index in m_active
     std::vector<glm::vec3> m_edgeLo, m_edgeHi;      // per edge: swept bounds + thickness
@@ -156,6 +167,26 @@ private:
     std::vector<VtPair> m_vtPairs;                  // this step's broad phase
     std::vector<EePair> m_eePairs;
     std::vector<uint32_t> m_vertBase;               // first vertex of each active cloth in the pass's vertex numbering
+    // Patches of every active cloth, numbered through (m_patchBase per
+    // cloth): this step's bounds and normal cones, and which pairs of them
+    // the broad phase has to look at (a bit matrix).
+    std::vector<uint32_t> m_patchBase;
+    std::vector<glm::vec3> m_patchLo, m_patchHi;
+    std::vector<glm::vec4> m_patchCone;             // axis, half-angle (radians)
+    std::vector<uint8_t> m_patchLooked;             // in any pair the broad phase looks at
+    std::vector<uint64_t> m_patchPairs;             // bit a * total + b: look for contacts between patches a and b
+    std::vector<uint32_t> m_edgePatch;              // per edge (pass-wide): its patch (pass-wide)
+    std::vector<glm::vec3> m_patchSum;              // scratch: sum of each patch's normals
+    std::vector<float> m_patchLowest;               // scratch: the lowest cosine from each patch's axis (-2: no cone)
+    uint32_t m_patchTotal = 0;
+    bool m_allPairs = false;                        // too many patches for the bit matrix: look at every pair
+    static void buildPatches(Cloth& c);
+    void markPatches();
+    bool patchPair(uint32_t a, uint32_t b) const {
+        if (m_allPairs) return true;
+        const uint64_t bit = uint64_t(a) * m_patchTotal + b;
+        return (m_patchPairs[bit >> 6] >> (bit & 63)) & 1u;
+    }
     struct Worker {                                 // one thread's broad-phase scratch and results
         std::vector<uint32_t> stamp;
         std::vector<VtPair> vt;
