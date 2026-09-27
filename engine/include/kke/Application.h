@@ -8,6 +8,7 @@
 #include "kke/LightingBuffer.h"
 #include "kke/Viewports.h"
 #include "kke/ResourceGovernor.h"
+#include "kke/HardwareTarget.h"
 #include "kke/ShadowMap.h"
 #include "kke/Texture.h"
 
@@ -275,6 +276,13 @@ public:
     // The cap the last frame actually used (0 = none).
     float effectiveFrameRateLimit() const { return m_effectiveLimit; }
 
+    // The hardware target this device runs as (kke/HardwareTarget.h),
+    // chosen once at startup: KKE_TARGET, the build's KKE_DEFAULT_TARGET,
+    // or the recognised device. Its settings are the defaults a missing
+    // settings.json key falls back to.
+    const HardwareTarget& hardwareTarget() const { return *m_target.target; }
+    EngineSettings targetDefaultSettings() const { return settingsForTarget(*m_target.target); }
+
     // The ImGui developer overlay (Performance, Physics, Camera panels...).
     DebugUi& debugUi() { return *m_debugUi; }
     bool uiCapturesMouse() const { return m_uiCapturesMouse; }
@@ -365,6 +373,7 @@ private:
     float m_frameRateLimit = 0.0f;
     bool m_sceneCovered = false;
     ResourceBudget m_budget;
+    TargetChoice m_target;
     float m_effectiveLimit = 0.0f;
     bool m_stepRequested = false;
 

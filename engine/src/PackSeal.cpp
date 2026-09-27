@@ -1,6 +1,7 @@
 #include "kke/PackSeal.h"
 
 #include "kke/DataFile.h"
+#include "kke/Platform.h"
 
 #include <monocypher.h>
 #include <nlohmann/json.hpp>
@@ -10,16 +11,6 @@
 #include <sstream>
 #include <system_error>
 
-#if defined(_WIN32)
-#include <windows.h>
-#include <bcrypt.h>
-#elif defined(__APPLE__)
-#include <stdlib.h> // arc4random_buf
-#else
-#include <sys/random.h>
-#include <cerrno>
-#include <cstring>
-#endif
 
 namespace kke::seal {
 
@@ -31,31 +22,7 @@ void fail(std::string* error, const std::string& what) {
     if (error) *error = what;
 }
 
-bool osRandom(uint8_t* out, size_t size, std::string* error) {
-#if defined(_WIN32)
-    if (BCryptGenRandom(nullptr, out, static_cast<ULONG>(size), BCRYPT_USE_SYSTEM_PREFERRED_RNG) != 0) {
-        fail(error, "BCryptGenRandom failed");
-        return false;
-    }
-    return true;
-#elif defined(__APPLE__)
-    (void)error;
-    arc4random_buf(out, size);
-    return true;
-#else
-    size_t got = 0;
-    while (got < size) {
-        const ssize_t n = getrandom(out + got, size - got, 0);
-        if (n < 0) {
-            if (errno == EINTR) continue;
-            fail(error, std::string("getrandom failed: ") + std::strerror(errno));
-            return false;
-        }
-        got += static_cast<size_t>(n);
-    }
-    return true;
-#endif
-}
+bool osRandom(uint8_t* out, size_t size, std::string* error) { return platform::secureRandom(out, size, error); }
 
 } // namespace
 

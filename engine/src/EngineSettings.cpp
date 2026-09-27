@@ -100,13 +100,13 @@ std::string settingsToJson(const EngineSettings& s) {
     return j.dump(2);
 }
 
-EngineSettings settingsFromJson(const std::string& text) {
+EngineSettings settingsFromJson(const std::string& text, const EngineSettings& defaults) {
     std::string why;
     nlohmann::json j;
     if (!datafile::parseAny(text, j, &why)) throw std::runtime_error("settings: invalid JSON or YAML: " + why);
     if (!j.is_object()) throw std::runtime_error("settings: top level must be an object");
 
-    EngineSettings s;
+    EngineSettings s = defaults;
     const auto& g = section(j, "graphics");
     readIfPresent(g, "fullscreen", s.graphics.fullscreen);
     readIfPresent(g, "vsync", s.graphics.vsync);
@@ -144,18 +144,18 @@ EngineSettings settingsFromJson(const std::string& text) {
     return s;
 }
 
-EngineSettings loadSettingsFile(const std::string& path, std::string* errorOut) {
+EngineSettings loadSettingsFile(const std::string& path, std::string* errorOut, const EngineSettings& defaults) {
     std::string text;
     std::filesystem::path used;
     if (!datafile::readText(path, text, nullptr, &used)) {
         if (errorOut) *errorOut = "no settings file at '" + path + "' (using defaults)";
-        return EngineSettings{};
+        return defaults;
     }
     try {
-        return settingsFromJson(text);
+        return settingsFromJson(text, defaults);
     } catch (const std::exception& e) {
         if (errorOut) *errorOut = used.generic_string() + ": " + e.what();
-        return EngineSettings{};
+        return defaults;
     }
 }
 

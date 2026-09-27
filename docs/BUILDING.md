@@ -104,6 +104,11 @@ tetrahedralizer, no GPU profiler (Lua is on). Smaller and faster to build;
 only the core engine, `kke_demo`, `imgui_demo`, `rmlui_demo`, and the
 test suite.
 
+Hardware presets build for one kind of device: `steam-deck`,
+`handheld-pc`, `low-end-pc` and `android-arm64` (for example
+`cmake --workflow --preset steam-deck`). What each one changes, and how a
+game picks its settings per device, is in [PLATFORMS.md](PLATFORMS.md).
+
 ### Building manually, without presets
 
 Equivalent to the `everything` preset, spelled out -- useful if your

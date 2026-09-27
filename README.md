@@ -81,7 +81,7 @@ every platform. Run demos from `build/bin/`: shaders, fonts and each game's
 
 Windows (MinGW cross build) and Android builds run in Docker
 (`docker compose run --rm windows`); macOS and MSVC builds run on GitHub
-Actions. Platform status: [docs/SCALING.md](docs/SCALING.md).
+Actions. Platforms, hardware targets and consoles: [docs/PLATFORMS.md](docs/PLATFORMS.md).
 
 ## Demos
 

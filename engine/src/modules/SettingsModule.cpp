@@ -10,7 +10,7 @@ void SettingsModule::init(Application& app) {
     m_app = &app;
     m_baseAmbient = app.lighting().ambientColor;
     std::string error;
-    m_settings = loadSettingsFile(m_path, &error);
+    m_settings = loadSettingsFile(m_path, &error, app.targetDefaultSettings());
     if (!error.empty()) log::get(name())->info("{}", error);
     else log::get(name())->info("loaded settings from '{}'", m_path);
     m_saved = m_settings;
@@ -51,7 +51,9 @@ void SettingsModule::revert() {
 }
 
 void SettingsModule::resetToDefaults() {
-    m_settings = EngineSettings{};
+    // "Defaults" means this device's defaults: a Steam Deck resets to
+    // the Steam Deck preset, not to desktop settings.
+    m_settings = m_app ? m_app->targetDefaultSettings() : EngineSettings{};
     apply();
 }
 

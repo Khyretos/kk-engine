@@ -15,7 +15,9 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [HISTORY.md](HISTORY.md) | The development log: the original README, kept whole |
 | [AUDIO.md](AUDIO.md) | The audio engine: mixer, 3D sound, occlusion, impact synthesis, accessibility |
 | [INPUT.md](INPUT.md) | Rebindable actions, devices, triggers and chords |
+| [COMMANDS.md](COMMANDS.md) | Orders for companions and squads: selection, formations, radial wheel, Lua and nodes |
 | [MOVEMENT.md](MOVEMENT.md) | How characters move, and the animation principles behind it |
+| [AI.md](AI.md) | The AI core: senses, needs, utility decisions, steering, navmesh, orders, `ai.*` in Lua |
 | [JIGGLE.md](JIGGLE.md) | Jiggle physics for bones, skin and soft bodies |
 | [RAGDOLLS.md](RAGDOLLS.md) | Humanoid and animal ragdolls, their joint limits and how to override them |
 | [NETWORKING.md](NETWORKING.md) | Transport, protocol, authority and replication |
@@ -32,6 +34,7 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [OPTIMIZATION.md](OPTIMIZATION.md) | Performance rules, measured log and backlog |
 | [RENDERING_PRINCIPLES.md](RENDERING_PRINCIPLES.md) | Rendering doctrine: no dithering, a clean image every frame, what we took from Threat Interactive |
 | [PERFORMANCE_NOTES.md](PERFORMANCE_NOTES.md) | What RayFire and Chaos do for destruction at scale, and what KKE took from it |
+| [PLATFORMS.md](PLATFORMS.md) | What runs where, hardware targets (Steam Deck, phones...), build presets, consoles |
 | [SCALING.md](SCALING.md) | Worst cases, multiplayer limits and platform support |
 | [BENCHMARKS.md](BENCHMARKS.md) | The stress test, kke_bench, hardware profiles, tracked results |
 | [HARDWARE_TESTS.md](HARDWARE_TESTS.md) | Checks only real hardware can answer |

@@ -78,12 +78,16 @@ struct EngineSettings {
 // JSON <-> settings. Loading is forgiving on purpose: missing keys keep
 // their defaults and unknown keys are ignored, so settings files from an
 // older or newer build still load. Only unparseable JSON is an error.
+// `defaults` is what a missing key falls back to: plain EngineSettings{}
+// or the hardware target's preset (kke/HardwareTarget.h), so a Steam Deck
+// starts on Steam Deck settings and the player's saved choices still win.
 std::string settingsToJson(const EngineSettings& settings);
-EngineSettings settingsFromJson(const std::string& json); // throws std::runtime_error on invalid JSON
+EngineSettings settingsFromJson(const std::string& json, const EngineSettings& defaults = EngineSettings{}); // throws std::runtime_error on invalid JSON
 
 // File helpers. loadSettingsFile returns defaults (and never throws) if
 // the file is missing or unreadable — a first run has no file yet.
-EngineSettings loadSettingsFile(const std::string& path, std::string* errorOut = nullptr);
+EngineSettings loadSettingsFile(const std::string& path, std::string* errorOut = nullptr,
+                                const EngineSettings& defaults = EngineSettings{});
 bool saveSettingsFile(const EngineSettings& settings, const std::string& path);
 
 } // namespace kke

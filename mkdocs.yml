@@ -102,7 +102,9 @@ nav:
       - Play to make: PLAY_TO_MAKE.md
       - Scripting in Lua: SCRIPTING.md
       - Movement: MOVEMENT.md
+      - AI (animals, enemies, companions): AI.md
       - Input: INPUT.md
+      - Commands and orders: COMMANDS.md
       - Audio: AUDIO.md
       - Networking: NETWORKING.md
       - Anti-cheat: ANTI_CHEAT.md
@@ -119,7 +121,8 @@ nav:
       - Rendering principles: RENDERING_PRINCIPLES.md
       - Benchmarks: BENCHMARKS.md
       - Performance notes: PERFORMANCE_NOTES.md
-      - Scaling and platforms: SCALING.md
+      - Platforms and hardware targets: PLATFORMS.md
+      - Scaling: SCALING.md
       - Dependencies and licences: DEPENDENCIES.md
       - Hardware tests: HARDWARE_TESTS.md
   - Project:

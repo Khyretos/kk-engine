@@ -23,6 +23,8 @@ set(ENGINE_SOURCES
     src/DrawOrder.cpp
     src/PlayBlocks.cpp
     src/PlayScript.cpp
+    src/Orders.cpp
+    src/OrderScript.cpp
     src/NodeGraph.cpp
     src/TouchGestures.cpp
     src/VoxelTets.cpp
@@ -32,9 +34,14 @@ set(ENGINE_SOURCES
     src/BreakGraph.cpp
     src/Animator.cpp
     src/AnimRig.cpp
+    src/ProceduralAnim.cpp
     src/ClimbWall.cpp
     src/Climber.cpp
+    src/Combat.cpp
+    src/Sidekick.cpp
+    src/MeshLod.cpp
     src/ResourceGovernor.cpp
+    src/HardwareTarget.cpp
     src/FrameStats.cpp
     src/Viewports.cpp
     src/PhysicsBridge.cpp
@@ -42,6 +49,13 @@ set(ENGINE_SOURCES
     src/Buoyancy.cpp
     src/CameraRig.cpp
     src/SceneFile.cpp
+    src/ai/Steering.cpp
+    src/ai/Perception.cpp
+    src/ai/Utility.cpp
+    src/ai/NavMesh.cpp
+    src/ai/Species.cpp
+    src/ai/AiWorld.cpp
+    src/ai/AiScript.cpp
     src/net/BitStream.cpp
     src/net/Protocol.cpp
     src/net/Transport.cpp
@@ -141,6 +155,8 @@ set(ENGINE_HEADERS
     include/kke/AssetCatalog.h
     include/kke/Picking.h
     include/kke/PlayBlocks.h
+    include/kke/Orders.h
+    include/kke/OrderScript.h
     include/kke/TouchGestures.h
     include/kke/VoxelTets.h
     include/kke/InteriorColor.h
@@ -155,6 +171,8 @@ set(ENGINE_HEADERS
     include/kke/Footsteps.h
     include/kke/RoomAcoustics.h
     include/kke/Thumbnails.h
+    include/kke/Platform.h
+    include/kke/HardwareTarget.h
     include/kke/modules/ThumbnailModule.h
     include/kke/TetMeshAsset.h
     include/kke/LightingBuffer.h
@@ -182,7 +200,20 @@ set(ENGINE_HEADERS
     include/kke/Material.h
 )
 
-add_library(kke_engine STATIC ${ENGINE_SOURCES} ${ENGINE_HEADERS})
+# The OS services SDL3 doesn't cover (kke/Platform.h, docs/PLATFORMS.md)
+# come from one backend folder. The public one covers desktop and mobile;
+# a licensed console developer points this at their private backend.
+set(KKE_PLATFORM_BACKEND_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/desktop" CACHE PATH
+    "Folder with the kke::platform backend (a backend.cmake plus its sources). See docs/PLATFORMS.md.")
+if(NOT EXISTS "${KKE_PLATFORM_BACKEND_DIR}/backend.cmake")
+    message(FATAL_ERROR "KKE_PLATFORM_BACKEND_DIR='${KKE_PLATFORM_BACKEND_DIR}' has no backend.cmake (see docs/PLATFORMS.md)")
+endif()
+include("${KKE_PLATFORM_BACKEND_DIR}/backend.cmake")
+if(NOT KKE_PLATFORM_BACKEND_SOURCES)
+    message(FATAL_ERROR "${KKE_PLATFORM_BACKEND_DIR}/backend.cmake did not set KKE_PLATFORM_BACKEND_SOURCES")
+endif()
+
+add_library(kke_engine STATIC ${ENGINE_SOURCES} ${ENGINE_HEADERS} ${KKE_PLATFORM_BACKEND_SOURCES})
 
 # The Kreative Kompas logo as the window/taskbar icon: the PNG is embedded
 # into the engine at configure time (re-run automatically when it changes),
@@ -215,6 +246,7 @@ target_include_directories(kke_engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 target_link_libraries(kke_engine PRIVATE yaml-cpp::yaml-cpp) # kke/DataFile.h only
+target_link_libraries(kke_engine PRIVATE meshoptimizer) # kke/MeshLod.h only
 
 target_link_libraries(kke_engine PUBLIC
     volk
@@ -226,6 +258,7 @@ target_link_libraries(kke_engine PUBLIC
     RmlUi::Core
     nlohmann_json::nlohmann_json
     kke_sqlite
+    kke_recast
     ufbx
     spdlog::spdlog
     kke_miniaudio
@@ -351,10 +384,14 @@ endif()
 # Recorded in benchmark reports (kke/BenchmarkReport.h) so results from
 # Debug and Release builds are never confused with each other.
 target_compile_definitions(kke_engine PRIVATE KKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}")
-if(WIN32)
-    target_link_libraries(kke_engine PUBLIC psapi) # peak memory in benchmark reports
-    target_link_libraries(kke_engine PUBLIC bcrypt) # secure random for kke/PackSeal.h key generation
-    target_link_libraries(kke_engine PUBLIC advapi32) # MachineGuid for kke/License.h
+
+# The hardware target a build starts on when KKE_TARGET isn't set
+# (kke/HardwareTarget.h). Empty = detect the device. The hardware presets
+# in CMakePresets.json set it (steam-deck, handheld-pc, desktop-low).
+set(KKE_DEFAULT_TARGET "" CACHE STRING "Hardware target this build defaults to (steam-deck, handheld-pc, desktop-low, android, ios, desktop); empty = detect. docs/PLATFORMS.md")
+target_compile_definitions(kke_engine PRIVATE KKE_DEFAULT_TARGET="${KKE_DEFAULT_TARGET}")
+if(KKE_PLATFORM_BACKEND_LIBRARIES)
+    target_link_libraries(kke_engine PUBLIC ${KKE_PLATFORM_BACKEND_LIBRARIES})
 endif()
 
 # Hot CPU loops stay optimized in Debug builds too (same reasoning as

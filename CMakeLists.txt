@@ -335,6 +335,25 @@ FetchContent_MakeAvailable(yaml_cpp)
 set_target_properties(yaml-cpp PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # ---------------------------------------------------------------------------
+# meshoptimizer — mesh LODs for crowds (kke/MeshLod.h): welds duplicate
+# vertices and simplifies a character to a fraction of its triangles while
+# keeping each vertex's bone weights. MIT, Arseny Kapoulkine. Only used
+# inside the engine library (PRIVATE).
+# ---------------------------------------------------------------------------
+set(MESHOPT_BUILD_DEMO OFF CACHE BOOL "" FORCE)
+set(MESHOPT_BUILD_GLTFPACK OFF CACHE BOOL "" FORCE)
+set(MESHOPT_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    meshoptimizer
+    GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
+    GIT_TAG        v1.3
+    GIT_SHALLOW    TRUE
+    SYSTEM
+)
+FetchContent_MakeAvailable(meshoptimizer)
+set_target_properties(meshoptimizer PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# ---------------------------------------------------------------------------
 # miniaudio — audio output device on every platform (ALSA/PulseAudio/
 # PipeWire/JACK, WASAPI, CoreAudio, AAudio/OpenSL, Web Audio) plus WAV/
 # FLAC/MP3 decoding. Public domain / MIT-0, one .c/.h pair. Only the
@@ -444,6 +463,37 @@ if(KKE_ENABLE_NET)
         target_compile_definitions(kke_enet PRIVATE HAS_FCNTL=1 HAS_POLL=1 HAS_GETADDRINFO=1 HAS_GETNAMEINFO=1
                                    HAS_INET_PTON=1 HAS_INET_NTOP=1 HAS_MSGHDR_FLAGS=1 HAS_SOCKLEN_T=1)
     endif()
+endif()
+
+# ---------------------------------------------------------------------------
+# Recast & Detour (recastnavigation, zlib): navigation meshes and path
+# finding for the AI core (kke::ai::NavMesh, docs/AI.md). Only the four
+# runtime libraries are compiled, directly (its own CMake also builds the
+# demo and tests).
+# ---------------------------------------------------------------------------
+FetchContent_Declare(
+    recastnavigation
+    GIT_REPOSITORY https://github.com/recastnavigation/recastnavigation.git
+    GIT_TAG        v1.6.0
+    GIT_SHALLOW    TRUE
+    SOURCE_SUBDIR  kke-not-a-dir # sources only; see above
+)
+FetchContent_MakeAvailable(recastnavigation)
+file(GLOB KKE_RECAST_SOURCES
+    ${recastnavigation_SOURCE_DIR}/Recast/Source/*.cpp
+    ${recastnavigation_SOURCE_DIR}/Detour/Source/*.cpp
+    ${recastnavigation_SOURCE_DIR}/DetourCrowd/Source/*.cpp
+    ${recastnavigation_SOURCE_DIR}/DetourTileCache/Source/*.cpp)
+add_library(kke_recast STATIC ${KKE_RECAST_SOURCES})
+target_include_directories(kke_recast SYSTEM PUBLIC
+    ${recastnavigation_SOURCE_DIR}/Recast/Include
+    ${recastnavigation_SOURCE_DIR}/Detour/Include
+    ${recastnavigation_SOURCE_DIR}/DetourCrowd/Include
+    ${recastnavigation_SOURCE_DIR}/DetourTileCache/Include)
+set_target_properties(kke_recast PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# Optimized even in Debug: building a navmesh at -O0 takes seconds.
+if(NOT MSVC)
+    target_compile_options(kke_recast PRIVATE $<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>)
 endif()
 
 # ---------------------------------------------------------------------------
