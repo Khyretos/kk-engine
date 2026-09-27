@@ -1,0 +1,60 @@
+<rml>
+<head>
+    <title>Command HUD</title>
+    <link type="text/rcss" href="theme.rcss"/>
+    <style>
+        /* Over the game: only the buttons take clicks and taps. */
+        body { pointer-events: none; }
+        #status { position: absolute; left: 20dp; top: 18dp; width: 330dp; padding: 12dp 16dp; border-radius: 10dp;
+                  background-color: #0b0f1ccc; border-left: 3dp #ffcf5c; }
+        #status .title { font-size: 13dp; letter-spacing: 2dp; color: #aab3cc; margin-bottom: 4dp; }
+        #status .line { font-size: 15dp; margin-top: 3dp; }
+        #bar { position: absolute; left: 0; bottom: 34dp; width: 100%; text-align: center; pointer-events: auto; }
+        .btn { display: inline-block; width: 84dp; margin: 0 5dp; padding: 8dp 0 6dp 0; border-radius: 14dp;
+               background-color: #151a2bdd; border: 2dp #2f3a5c; text-align: center; }
+        .btn:hover { background-color: #26304ddd; border-color: #56a8ff; }
+        .btn:active { background-color: #56a8ff; }
+        .btn.on { border-color: #ffcf5c; }
+        .btn .icon { font-size: 30dp; }
+        .btn .label { font-size: 13dp; color: #e8ecf4; }
+        .btn .key { font-size: 11dp; color: #8b93aa; }
+        #reticle { position: absolute; left: 50%; top: 50%; width: 14dp; height: 14dp; margin-left: -7dp; margin-top: -7dp;
+                   border: 2dp #ffffffcc; border-radius: 7dp; }
+        #box { position: absolute; border: 1dp #56a8ff; background-color: #56a8ff33; }
+        #wheel { position: absolute; width: 0; height: 0; }
+        #wheel .hub { position: absolute; left: -26dp; top: -26dp; width: 52dp; height: 52dp; border-radius: 26dp;
+                      background-color: #0b0f1ccc; border: 2dp #56a8ff; }
+        #wheel .item { position: absolute; width: 96dp; margin-left: -48dp; margin-top: -34dp; padding: 6dp 0; border-radius: 12dp;
+                       background-color: #0b0f1cdd; border: 2dp #2f3a5c; text-align: center; }
+        #wheel .item.picked { background-color: #56a8ff; border-color: #ffffff; }
+        #wheel .item .icon { font-size: 26dp; }
+        #wheel .item .label { font-size: 12dp; }
+        #toast { position: absolute; top: 22%; left: 0; width: 100%; text-align: center; font-size: 30dp; font-weight: bold; color: #ffffff; }
+        #hint { position: absolute; left: 0; bottom: 8dp; width: 100%; text-align: center; font-size: 12dp; color: #aab3cc; }
+    </style>
+</head>
+<body data-model="cmd">
+    <div id="status">
+        <div class="title">{{title}}</div>
+        <div class="line" data-for="l : lines" data-style-color="l.color">{{l.text}}</div>
+    </div>
+    <div id="reticle" data-if="reticle"></div>
+    <div id="box" data-if="box" data-style-left="box_left" data-style-top="box_top" data-style-width="box_width" data-style-height="box_height"></div>
+    <div id="wheel" data-if="wheel_open" data-style-left="wheel_left" data-style-top="wheel_top">
+        <div class="hub"></div>
+        <div class="item" data-for="it : items" data-class-picked="it.picked" data-style-left="it.left" data-style-top="it.top">
+            <div class="icon">{{it.icon}}</div>
+            <div class="label">{{it.label}}</div>
+        </div>
+    </div>
+    <div id="toast" data-if="toast != ''">{{toast}}</div>
+    <div id="bar">
+        <div class="btn" data-for="b, i : buttons" data-class-on="b.on" data-event-click="press(i)">
+            <div class="icon">{{b.icon}}</div>
+            <div class="label">{{b.label}}</div>
+            <div class="key">{{b.key}}</div>
+        </div>
+    </div>
+    <div id="hint">{{hint}}</div>
+</body>
+</rml>

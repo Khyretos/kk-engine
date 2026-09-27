@@ -48,6 +48,13 @@ std::vector<ApiFunction> playApiFunctions() {
         fn("remove", "Take away", "Things", "Removes a thing from the world", { param("thing", Thing, "What") }),
         fn("ragdoll", "Knock over", "People", "Makes a person fall over, pushed this way (metres per second)",
            { param("thing", Thing, "Who"), param("push", Vec, "Push", "Vec(0, 1, 0)") }),
+        fn("stagger", "Shove", "People",
+           "Shoves a person, who tries to keep their feet (a big shove still knocks them over; metres per second)",
+           { param("thing", Thing, "Who"), param("push", Vec, "Push", "Vec(2, 0, 0)") }),
+        fn("lookAt", "Look at", "People", "A person keeps looking at a thing (nothing = at you); in Lua `at` can also be a place",
+           { param("thing", Thing, "Who"), param("at", Thing, "At what", "nil") }),
+        fn("lookAway", "Look away", "People", "A person stops looking at something and looks ahead again",
+           { param("thing", Thing, "Who") }),
         fn("standUp", "Stand up", "People", "Stands a person up again", { param("thing", Thing, "Who") }),
         fn("swing", "Swing the bat at", "People", "The bat swings through someone (they get a Hit)", { param("thing", Thing, "Who") }),
         fn("sound", "Play sound", "Sound", "Plays a sound, at a place if given",
@@ -129,6 +136,32 @@ void bindPlayBlocks(ScriptVM& vm, IPlayWorld& world) {
                 lua_pushboolean(L, w->ragdoll(thingArg(L, 1), push));
                 return 1;
             };
+        } else if (n == "stagger") {
+            f = [w](lua_State* L) {
+                glm::vec3 push = lua_isnoneornil(L, 2) ? glm::vec3(2.0f, 0.0f, 0.0f) : ScriptVM::toVec3(L, 2);
+                const float len = glm::length(push);
+                if (!std::isfinite(len)) push = glm::vec3(0.0f);
+                else if (len > 20.0f) push *= 20.0f / len;
+                lua_pushboolean(L, w->stagger(thingArg(L, 1), push));
+                return 1;
+            };
+        } else if (n == "lookAt") {
+            f = [w](lua_State* L) {
+                uint32_t at = 0;
+                glm::vec3 point(NAN);
+                if (lua_isinteger(L, 2)) {
+                    at = thingArg(L, 2);
+                    if (!at) { lua_pushboolean(L, 0); return 1; }
+                } else if (!lua_isnoneornil(L, 2)) {
+                    point = ScriptVM::toVec3(L, 2);
+                    if (!std::isfinite(point.x) || !std::isfinite(point.y) || !std::isfinite(point.z))
+                        return luaL_error(L, "play.lookAt: the place must be real numbers");
+                }
+                lua_pushboolean(L, w->lookAt(thingArg(L, 1), at, point));
+                return 1;
+            };
+        } else if (n == "lookAway") {
+            f = [w](lua_State* L) { lua_pushboolean(L, w->lookAway(thingArg(L, 1))); return 1; };
         } else if (n == "standUp") {
             f = [w](lua_State* L) { lua_pushboolean(L, w->standUp(thingArg(L, 1))); return 1; };
         } else if (n == "swing") {

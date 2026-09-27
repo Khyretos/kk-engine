@@ -385,7 +385,7 @@ TEST(ProceduralAnim, ActiveRagdollStaggersAndRecovers) {
     EXPECT_LT(a.jointStrength(0), a.jointStrength(1));
     const kke::RagdollDrive drive = a.drive();
     EXPECT_EQ(drive.targets.size(), 3u);
-    EXPECT_EQ(drive.assistBody, 0);
+    EXPECT_EQ(drive.assistBodies, std::vector<int>{ 0 });
     EXPECT_GT(drive.assist, 0.0f);
     // Still standing where the animation wants it: recovers, then hands back.
     const auto bodies = transforms(d);
@@ -436,4 +436,26 @@ TEST(ProceduralAnim, TargetsFromPoseInvertTheSkin) {
     const auto skinned = kke::poseFromRagdoll(m, binding, targets, glm::mat4(1.0f));
     for (int c = 0; c < 4; ++c)
         for (int r = 0; r < 4; ++r) EXPECT_NEAR(skinned[0][c][r], moved[c][r], 1e-4f);
+}
+
+TEST(ProceduralAnim, PoseFromModelUndoesPoseToModel) {
+    kke::ModelData model;
+    model.bones.resize(3);
+    model.bones[1].parent = 0;
+    model.bones[2].parent = 1;
+    kke::Pose pose(3);
+    pose[0].t = glm::vec3(1, 2, 3);
+    pose[0].r = glm::angleAxis(0.4f, glm::normalize(glm::vec3(1, 1, 0)));
+    pose[1].t = glm::vec3(0, 0.5f, 0);
+    pose[1].r = glm::angleAxis(-1.2f, glm::vec3(0, 0, 1));
+    pose[1].s = glm::vec3(1.5f);
+    pose[2].t = glm::vec3(0.2f, 0.4f, 0);
+    pose[2].r = glm::angleAxis(2.5f, glm::normalize(glm::vec3(0, 1, 1)));
+    const kke::Pose back = kke::poseFromModel(model, kke::poseToModel(model, pose));
+    ASSERT_EQ(back.size(), 3u);
+    for (size_t b = 0; b < 3; ++b) {
+        EXPECT_LT(glm::length(back[b].t - pose[b].t), 1e-4f) << b;
+        EXPECT_LT(glm::length(back[b].s - pose[b].s), 1e-4f) << b;
+        EXPECT_GT(std::abs(glm::dot(back[b].r, pose[b].r)), 0.9999f) << b;
+    }
 }

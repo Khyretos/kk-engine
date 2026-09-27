@@ -255,6 +255,29 @@ TEST(NodeGraphLua, EveryPlayFunctionIsDocumented) {
     EXPECT_EQ(vm.apiEvents().size(), playApiEvents().size());
 }
 
+TEST(NodeGraphLua, ShoveAndLookAtWorkWithAnyWorld) {
+    // A world without joint motors or look-at (the defaults): a shove
+    // knocks them over, looking does nothing, and neither is an error.
+    ScriptVM vm;
+    FakeWorld world;
+    bindPlayBlocks(vm, world);
+    const uint32_t person = world.add("person");
+    ASSERT_TRUE(vm.reloadString("play.say(tostring(play.stagger(1, Vec(2, 0, 0))))\n"
+                                "play.say(tostring(play.lookAt(1)))\n"
+                                "play.say(tostring(play.lookAt(1, Vec(0, 1, 5))))\n"
+                                "play.say(tostring(play.lookAway(1)))\n",
+                                "test"))
+        << vm.errors().back().message;
+    EXPECT_EQ(world.said, (std::vector<std::string>{ "true", "false", "false", "false" }));
+    ASSERT_EQ(world.ragdolls.size(), 1u);
+    EXPECT_EQ(world.ragdolls[0].first, person);
+    EXPECT_EQ(world.ragdolls[0].second, glm::vec3(2, 0, 0));
+    // They are nodes too.
+    const NodeLibrary lib = NodeLibrary::fromApi(vm.apiFunctions(), vm.apiEvents());
+    for (const char* node : { "call:play.stagger", "call:play.lookAt", "call:play.lookAway" })
+        EXPECT_NE(lib.find(node), nullptr) << node;
+}
+
 TEST(NodeGraphLua, BatRecipeKnocksOverWhoTheBatHits) {
     ScriptVM vm;
     FakeWorld world;

@@ -345,9 +345,17 @@ void ModelModule::setBoneWorldOverride(InstanceId id, std::vector<glm::mat4> wor
     if (auto it = m_instances.find(id); it != m_instances.end()) it->second.worldOverride = std::move(world);
 }
 
+void ModelModule::setPoseModifier(InstanceId id, PoseModifier modifier) {
+    auto it = m_instances.find(id);
+    if (it == m_instances.end()) return;
+    it->second.modifier = std::move(modifier);
+    it->second.modified.clear();
+}
+
 std::vector<glm::mat4> ModelModule::currentBoneWorld(const Instance& inst) const {
     const ModelData& data = m_models.at(inst.model)->data;
     if (inst.worldOverride.size() == data.bones.size()) return inst.worldOverride;
+    if (inst.modified.size() == data.bones.size()) return inst.modified;
     std::vector<glm::mat4> world(data.bones.size());
     for (size_t b = 0; b < data.bones.size(); ++b) {
         int p = data.bones[b].parent;
@@ -362,6 +370,18 @@ std::vector<glm::mat4> ModelModule::boneWorld(InstanceId id) const {
 }
 
 void ModelModule::update(const UpdateContext& ctx) {
+    advanceClips(ctx);
+    // Procedural layers on top of whatever the clip left.
+    for (auto& [id, inst] : m_instances) {
+        if (!inst.modifier || !inst.worldOverride.empty() || inst.locals.empty()) continue;
+        inst.modified.clear();
+        std::vector<glm::mat4> world = currentBoneWorld(inst);
+        inst.modifier(world, ctx.dt);
+        inst.modified = std::move(world);
+    }
+}
+
+void ModelModule::advanceClips(const UpdateContext& ctx) {
     for (auto& [id, inst] : m_instances) {
         if (inst.clip < 0 || !inst.worldOverride.empty()) continue;
         const ModelAnimation& anim = m_models[inst.model]->data.animations[inst.clip];

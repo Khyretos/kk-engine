@@ -55,6 +55,11 @@ void blendPosesMasked(const Pose& base, const Pose& layer, const BoneMask& mask,
 // `base`, times weight * mask. `out` may be `base`.
 void addPose(const Pose& base, const Pose& additive, const Pose& reference, const BoneMask& mask, float weight, Pose& out);
 
+// The inverse of poseToModel: model-space bone transforms (what
+// ModelModule::boneWorld and its pose modifiers hand you) back to a
+// per-bone local pose, so the layers here can work on them.
+Pose poseFromModel(const ModelData& model, const std::vector<glm::mat4>& modelSpace);
+
 // =====================================================================
 // Look-at and aim
 
@@ -352,7 +357,9 @@ struct RagdollDrive {
     std::vector<float> jointStrength;   // per joint, 0 = limp .. 1 = full muscle
     float torquePerKg = 40.0f;          // full-strength motor torque: N*m per kg of the joint's heavier body
     float frequency = 8.0f;             // Hz: how stiffly a joint springs toward its target
-    int assistBody = -1;                // a body pulled straight onto its target ("hand of god"), usually the pelvis
+    // Bodies pulled straight onto their targets ("hand of god"), weight
+    // included: the pelvis for a person, pelvis and chest for an animal.
+    std::vector<int> assistBodies;
     float assist = 0.0f;                // 0..1 how hard
 };
 
@@ -367,9 +374,10 @@ struct ActiveRagdollSettings {
     float balanceRecover = 0.8f;   // per second
     float fallTilt = 55.0f;        // degrees the torso may lean from its target before falling
     float fallDrop = 0.35f;        // share of the pelvis's height it may sink before falling
-    float calmSeconds = 0.6f;      // steady this long at full strength = back to Animated
+    float calmSeconds = 0.6f;      // steady this long at full strength = blend back to the clip
+    float calmTilt = 35.0f;        // degrees of lean from the target that still count as standing
     float getUpDelay = 1.6f;       // seconds lying down before GettingUp
-    float getUpSeconds = 0.6f;     // blend from the ragdoll back to the clip
+    float getUpSeconds = 0.6f;     // blend from the ragdoll back to the clip (after a fall or a stagger)
 };
 
 // Hit reactions and balance on top of a ragdoll whose joints have motors
@@ -377,7 +385,7 @@ struct ActiveRagdollSettings {
 //
 //   Animated -- hit() --> Active: the ragdoll follows the animation with
 //                         muscles weakened around the hit, which recover
-//   Active   -- steady --> Animated (hand back to clips, blendPoses)
+//   Active   -- steady --> GettingUp (blend back to the clip) --> Animated
 //   Active   -- off balance --> Fallen (limp) -- getUpDelay --> GettingUp
 //
 // The game owns the ragdoll (IRagdollPhysics::createRagdoll when this goes
@@ -433,8 +441,9 @@ private:
     std::vector<int> m_bodyJoint;           // per body: the joint that moves it (bodyB), -1 = root
     std::vector<std::vector<int>> m_adjacent; // per joint: joints sharing a body
     int m_pelvis = -1, m_torso = -1;
+    bool m_fourLegged = false;
     float m_restPelvisHeight = 1.0f;
-    float m_balance = 1.0f, m_time = 0.0f, m_calm = 0.0f;
+    float m_balance = 1.0f, m_time = 0.0f, m_calm = 0.0f, m_lastTilt = 0.0f;
 };
 
 // Body world transforms for a pose: the inverse of poseFromRagdoll, body

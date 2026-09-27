@@ -5,6 +5,7 @@
 #include "kke/Module.h"
 #include "kke/Picking.h"
 #include "kke/PlayBlocks.h"
+#include "kke/ProceduralAnim.h"
 #include "kke/Ragdoll.h"
 #include "kke/RigidWorld.h"
 #include "kke/SceneFile.h"
@@ -108,6 +109,16 @@ private:
         kke::IRagdollPhysics::RagdollHandle ragdoll = 0;
         kke::RagdollDesc ragdollDesc;
         kke::RagdollSkinBinding binding;
+        // A shove they are trying to stand through (play.stagger): the
+        // ragdoll above runs on joint motors toward the pose they had.
+        kke::ActiveRagdoll active;
+        glm::vec3 staggerFrom{0.0f};          // pelvis (world) when shoved
+        std::vector<glm::mat4> standPose;     // their bones (model space) when shoved: what they get up into
+        // Looking at something (play.lookAt), a layer on the playing clip.
+        kke::LookAt look;
+        bool looking = false;
+        uint32_t lookThing = 0;               // 0 = lookPoint, or you if that isn't finite
+        glm::vec3 lookPoint{0.0f};
         // Jolt collision (a static box of its bounds) so ragdolls land on it.
         kke::RigidWorld::BodyId collider = kke::RigidWorld::kNoBody;
         // Breakable (props): a FEMFX tet volume voxelized from the prop's
@@ -191,6 +202,12 @@ private:
 
     void ragdoll(Object& o, const glm::vec3& push);
     void standUp(Object& o);
+    bool makeRagdoll(Object& o);        // builds and creates o.ragdoll from the current pose
+    bool stagger(Object& o, const glm::vec3& push);
+    void updateStaggers(float dt);
+    void lookAt(Object& o, uint32_t thing, const glm::vec3& point);
+    void lookAway(Object& o);
+    bool isDown(const Object& o) const { return o.ragdoll && (!o.active.valid() || o.active.state() == kke::ActiveRagdoll::State::Fallen); }
     void makeBreakable(Object& o);
     void restoreProp(Object& o);
     void updateBreakables();

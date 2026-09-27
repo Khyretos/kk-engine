@@ -1,0 +1,9 @@
+{
+  "id": "kke.procedural_demo",
+  "title": "Procedural Animation",
+  "description": "A spider, a beetle, a dog and a person with no animation clips: every step is planned on the ground under them. Call them over, watch them look at you, and give them a shove.",
+  "version": "0.1.0",
+  "tags": ["demo", "animation", "procedural", "ik", "ragdoll", "physics"],
+  "engine_version": "0.3",
+  "modules": ["Settings", "RigidBodies", "OrbitCamera", "ProceduralDemo", "Stats"]
+}

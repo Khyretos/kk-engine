@@ -144,6 +144,25 @@ void addPose(const Pose& base, const Pose& additive, const Pose& reference, cons
     }
 }
 
+Pose poseFromModel(const ModelData& model, const std::vector<glm::mat4>& modelSpace) {
+    Pose pose(model.bones.size());
+    for (size_t b = 0; b < model.bones.size() && b < modelSpace.size(); ++b) {
+        const int p = model.bones[b].parent;
+        const glm::mat4 local = p >= 0 && size_t(p) < modelSpace.size() ? glm::inverse(modelSpace[size_t(p)]) * modelSpace[b] : modelSpace[b];
+        BoneTRS& trs = pose[b];
+        trs.t = glm::vec3(local[3]);
+        trs.s = glm::vec3(glm::length(glm::vec3(local[0])), glm::length(glm::vec3(local[1])), glm::length(glm::vec3(local[2])));
+        glm::mat3 r(glm::vec3(local[0]) / std::max(trs.s.x, 1e-8f), glm::vec3(local[1]) / std::max(trs.s.y, 1e-8f),
+                    glm::vec3(local[2]) / std::max(trs.s.z, 1e-8f));
+        if (glm::determinant(r) < 0.0f) { // mirrored: put the flip in the scale
+            trs.s.x = -trs.s.x;
+            r[0] = -r[0];
+        }
+        trs.r = glm::normalize(glm::quat_cast(r));
+    }
+    return pose;
+}
+
 // =====================================================================
 // LookAt
 
@@ -863,7 +882,10 @@ ActiveRagdoll::ActiveRagdoll(const RagdollDesc& desc, const Settings& settings) 
     }
     m_pelvis = desc.findBody("pelvis");
     m_torso = desc.findBody("torso");
-    if (m_torso < 0) m_torso = desc.findBody("chest");
+    if (m_torso < 0) {
+        m_torso = desc.findBody("chest");
+        m_fourLegged = m_torso >= 0; // buildQuadrupedRagdoll's names
+    }
     if (m_pelvis < 0) m_pelvis = 0;
     m_targets.resize(nb);
     for (size_t b = 0; b < nb; ++b) m_targets[b] = desc.bodies[b].transform;
@@ -964,10 +986,13 @@ void ActiveRagdoll::update(float dt, const std::vector<glm::mat4>& bodyWorld) {
         enter(State::Fallen);
         return;
     }
-    bool strong = m_balance >= 0.999f && tilt < 12.0f;
-    for (float s : m_strength) strong = strong && s >= 0.999f;
-    m_calm = strong ? m_calm + dt : 0.0f;
-    if (m_calm >= m_s.calmSeconds) enter(State::Animated);
+    // Steady: full strength, upright enough, and no longer swaying.
+    const float sway = std::abs(tilt - m_lastTilt) / dt;
+    m_lastTilt = tilt;
+    bool steady = m_balance >= 0.999f && tilt < m_s.calmTilt && sway < 15.0f;
+    for (float s : m_strength) steady = steady && s >= 0.999f;
+    m_calm = steady ? m_calm + dt : 0.0f;
+    if (m_calm >= m_s.calmSeconds) enter(State::GettingUp); // blends back to the clip
 }
 
 RagdollDrive ActiveRagdoll::drive() const {
@@ -975,7 +1000,8 @@ RagdollDrive ActiveRagdoll::drive() const {
     if (!physical()) return d;
     d.targets = m_targets;
     d.jointStrength = m_strength;
-    d.assistBody = m_pelvis;
+    d.assistBodies = { m_pelvis };
+    if (m_fourLegged) d.assistBodies.push_back(m_torso); // held front and back, like it stands
     d.assist = m_state == State::Active ? m_s.balanceAssist * m_balance : 0.0f;
     return d;
 }

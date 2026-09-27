@@ -127,9 +127,13 @@ struct RigidWorld::Impl : public JPH::ContactListener {
         std::vector<JPH::Ref<JPH::Constraint>> joints; // per RagdollDesc joint
         std::vector<float> mass;                         // per body
         std::vector<std::pair<int, int>> jointBodies;    // per joint: bodyA, bodyB
+        // driveRagdoll's assist, applied before every step until the next drive.
+        std::vector<std::pair<int, glm::mat4>> assisted; // body, target
+        float assist = 0.0f;
         JPH::Ref<JPH::GroupFilterTable> filter;
     };
     std::unordered_map<RagdollId, Ragdoll> ragdolls;
+    void applyAssist(Ragdoll& rd, float dt);
     RagdollId nextRagdoll = 1;
     std::mutex contactMutex;
     std::vector<Contact> contacts;
@@ -600,27 +604,14 @@ bool RigidWorld::driveRagdoll(RagdollId id, const RagdollDrive& drive) {
             if (state != JPH::EMotorState::Off) h->SetTargetOrientationBS(toJ(q));
         }
     }
-    // The assist: the body's velocity pulled toward what reaches its
-    // target in `reach` seconds (what keeps a hit character standing).
+    // The assist is applied before every physics step (RigidWorld::step),
+    // so it pulls as hard at 20 fps as at 144.
     const float assist = std::clamp(drive.assist, 0.0f, 1.0f);
-    if (assist > 0.0f && drive.assistBody >= 0 && static_cast<size_t>(drive.assistBody) < nb) {
-        const JPH::BodyID body(rd.bodies[drive.assistBody]);
-        JPH::RVec3 pos;
-        JPH::Quat rot;
-        m->bodies().GetPositionAndRotation(body, pos, rot);
-        const glm::vec3 p(float(pos.GetX()), float(pos.GetY()), float(pos.GetZ()));
-        const glm::quat r(rot.GetW(), rot.GetX(), rot.GetY(), rot.GetZ());
-        const glm::mat4& t = drive.targets[drive.assistBody];
-        constexpr float reach = 0.15f, share = 0.35f;
-        const glm::vec3 wantV = (glm::vec3(t[3]) - p) / reach;
-        glm::quat err = glm::normalize(rotationOf(t) * glm::inverse(r));
-        if (err.w < 0.0f) err = -err;
-        const float angle = 2.0f * std::acos(std::clamp(err.w, -1.0f, 1.0f));
-        const glm::vec3 axis = glm::vec3(err.x, err.y, err.z);
-        const glm::vec3 wantW = glm::length(axis) > 1e-6f ? glm::normalize(axis) * (angle / reach) : glm::vec3(0.0f);
-        const glm::vec3 v = toG(m->bodies().GetLinearVelocity(body)), w = toG(m->bodies().GetAngularVelocity(body));
-        m->bodies().SetLinearAndAngularVelocity(body, toJ(glm::mix(v, wantV, assist * share)), toJ(glm::mix(w, wantW, assist * share)));
-    }
+    rd.assist = assist;
+    rd.assisted.clear();
+    if (assist > 0.0f)
+        for (int b : drive.assistBodies)
+            if (b >= 0 && static_cast<size_t>(b) < nb) rd.assisted.emplace_back(b, drive.targets[b]);
     if (anyMotor || assist > 0.0f)
         for (BodyId b : rd.bodies) m->bodies().ActivateBody(JPH::BodyID(b));
     return true;
@@ -841,9 +832,35 @@ void RigidWorld::Impl::stepCharacter(Character& c, float dt) {
     c.input.jump = false; // one jump per press
 }
 
+// Each assisted body's velocity pulled toward what reaches its target in
+// `reach` seconds (what keeps a hit character standing), plus what
+// gravity takes away in a step, so it holds its height instead of sagging.
+void RigidWorld::Impl::applyAssist(Ragdoll& rd, float dt) {
+    if (rd.assist <= 0.0f) return;
+    constexpr float reach = 0.15f, share = 0.35f;
+    const glm::vec3 gravity = toG(system.GetGravity());
+    for (const auto& [index, target] : rd.assisted) {
+        const JPH::BodyID body(rd.bodies[index]);
+        JPH::RVec3 pos;
+        JPH::Quat rot;
+        bodies().GetPositionAndRotation(body, pos, rot);
+        const glm::vec3 p(float(pos.GetX()), float(pos.GetY()), float(pos.GetZ()));
+        const glm::quat r(rot.GetW(), rot.GetX(), rot.GetY(), rot.GetZ());
+        const glm::vec3 wantV = (glm::vec3(target[3]) - p) / reach - gravity * dt / share;
+        glm::quat err = glm::normalize(rotationOf(target) * glm::inverse(r));
+        if (err.w < 0.0f) err = -err;
+        const float angle = 2.0f * std::acos(std::clamp(err.w, -1.0f, 1.0f));
+        const glm::vec3 axis(err.x, err.y, err.z);
+        const glm::vec3 wantW = glm::length(axis) > 1e-6f ? glm::normalize(axis) * (angle / reach) : glm::vec3(0.0f);
+        const glm::vec3 v = toG(bodies().GetLinearVelocity(body)), w = toG(bodies().GetAngularVelocity(body));
+        bodies().SetLinearAndAngularVelocity(body, toJ(glm::mix(v, wantV, rd.assist * share)), toJ(glm::mix(w, wantW, rd.assist * share)));
+    }
+}
+
 void RigidWorld::step(float dt) {
     if (dt <= 0.0f) return;
     auto t0 = std::chrono::steady_clock::now();
+    for (auto& [id, rd] : m->ragdolls) m->applyAssist(rd, dt);
     for (auto& [id, c] : m->characters)
         if (!c.manual) m->stepCharacter(c, dt);
     // One collision step per 1/60 s (more for bigger steps).

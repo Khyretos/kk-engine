@@ -10,6 +10,8 @@
 #include "kke/Texture.h"
 
 #include <glm/glm.hpp>
+
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -103,6 +105,13 @@ public:
     // Drive the skeleton from outside (e.g. physics) with model-space bone
     // transforms; empty vector clears the override.
     void setBoneWorldOverride(InstanceId instance, std::vector<glm::mat4> world);
+    // A procedural layer on top of the clip (kke/ProceduralAnim.h: look-at,
+    // foot placement, ...): called in update() with the pose the clip (or
+    // boneLocals) gives, as model-space bone transforms, and the frame's dt;
+    // what it leaves there is what's skinned and what boneWorld() returns.
+    // Not called while a world override is set. nullptr removes it.
+    using PoseModifier = std::function<void(std::vector<glm::mat4>& modelSpaceBones, float dt)>;
+    void setPoseModifier(InstanceId instance, PoseModifier modifier);
     // Jiggle on the skin itself (kke::JiggleSkin::offsets()): displaces
     // skinned vertices near each zone after skinning. Empty clears.
     void setSkinJiggle(InstanceId instance, std::vector<SkinJiggleOffset> zones);
@@ -164,6 +173,8 @@ private:
         // skinned only
         std::vector<glm::mat4> locals;
         std::vector<glm::mat4> worldOverride;
+        PoseModifier modifier;
+        std::vector<glm::mat4> modified;   // the modifier's result this frame
         std::vector<SkinJiggleOffset> skinJiggle;
         std::vector<SkinnedBuffers> skinned; // one per skinned mesh of the model
         std::vector<SkinnedBuffers> deformed; // one per mesh part while setDeformedVertices is active
@@ -191,6 +202,7 @@ private:
     void skinInstance(Instance& inst, uint32_t frameIndex);
     void uploadDeformed(Instance& inst, uint32_t frameIndex);
     std::vector<glm::mat4> currentBoneWorld(const Instance& inst) const;
+    void advanceClips(const UpdateContext& ctx);
     // False only when the instance certainly can't be seen through `f`.
     bool mightBeVisible(const Instance& inst, const struct Frustum& f) const;
 

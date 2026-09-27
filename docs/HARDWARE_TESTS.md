@@ -67,7 +67,7 @@ crackles or pumps when you turn the camera?
 **Send back:** station by station, "right" or what's off; and, if you can,
 `KKE_AUDIO_DEMO_TOUR=1 KKE_AUDIO_RECORD=tour.wav ./audio_demo` and the
 WAV it writes.
-**Result:** —
+**Result:** Passed 2026-09-27. Kees listened to the recorded tours on headphones: "it sounds very good ... perfectly balanced". Real sound files come later.
 
 ### HW-016 · Play mode with a controller and a touchscreen (dev box)
 `./sandbox` opens in Play mode. With a gamepad plugged in: left stick

@@ -1,0 +1,9 @@
+{
+  "id": "kke.pet_companion",
+  "title": "Pet Companion",
+  "description": "You and a dog in a garden. Tell it to come, sit, stay, fetch, drop it or go somewhere, pet it, and throw its ball, with a mouse, a controller or a finger.",
+  "version": "0.1.0",
+  "tags": ["demo", "ai", "companion", "orders", "touch"],
+  "engine_version": "0.3",
+  "modules": ["Settings", "Input", "RigidBodies", "Models", "UI", "Audio", "Scripts", "Pet", "Stats"]
+}
