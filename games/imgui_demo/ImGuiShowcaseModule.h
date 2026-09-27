@@ -22,6 +22,9 @@ class ImGuiShowcaseModule : public kke::Module {
 public:
     const char* name() const override { return "ImGuiShowcase"; }
     void renderUi() override;
+
+private:
+    bool m_demoPlaced = false; // phone-sized screens: ShowDemoWindow() moved into view once
 };
 
 } // namespace kke_demo

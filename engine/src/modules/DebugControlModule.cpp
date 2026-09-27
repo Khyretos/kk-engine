@@ -2,6 +2,7 @@
 #include "kke/Application.h"
 
 #include <imgui.h>
+#include "kke/ImGuiPlacement.h"
 
 namespace kke {
 
@@ -10,8 +11,7 @@ void DebugControlModule::init(Application& app) {
 }
 
 void DebugControlModule::renderUi() {
-    ImGui::SetNextWindowPos(ImVec2(340, 250), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(340, 0), ImGuiCond_FirstUseEver);
+    placeNextDebugWindow(ImVec2(340, 250), ImVec2(340, 0));
     ImGui::Begin("Debug Control");
 
     bool paused = m_app->isPaused();
@@ -37,8 +37,7 @@ void DebugControlModule::renderUi() {
     if (!broken.empty()) {
         ImGui::PushStyleColor(ImGuiCol_TitleBg, ImVec4(0.5f, 0.05f, 0.05f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_TitleBgActive, ImVec4(0.6f, 0.1f, 0.1f, 1.0f));
-        ImGui::SetNextWindowPos(ImVec2(340, 400), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(420, 0), ImGuiCond_FirstUseEver);
+        placeNextDebugWindow(ImVec2(340, 400), ImVec2(420, 0));
         ImGui::Begin("/!\\ Emergency Log");
         ImGui::TextWrapped(
             "The module(s) below threw an error and have been disabled "

@@ -8,6 +8,7 @@
 #include <glm/gtc/constants.hpp>
 #include <algorithm>
 #include <cmath>
+#include "kke/ImGuiPlacement.h"
 
 namespace kke {
 
@@ -197,8 +198,7 @@ void OrbitCameraModule::onEvent(const SDL_Event& event) {
 }
 
 void OrbitCameraModule::renderUi() {
-    ImGui::SetNextWindowPos(ImVec2(340, 110), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(300, 0), ImGuiCond_FirstUseEver);
+    placeNextDebugWindow(ImVec2(340, 110), ImVec2(300, 0));
     ImGui::Begin("Camera");
     if (m_controls == Controls::Editor) ImGui::TextWrapped("Right-drag: orbit   Middle-drag: pan   Scroll: zoom\nWASD: move   Q/E: down/up   Shift: faster");
     else ImGui::TextWrapped("Left-drag: orbit   Right-drag: pan   Scroll: zoom");

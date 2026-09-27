@@ -42,6 +42,12 @@ DebugUi::DebugUi(Window& window, VulkanDevice& device, VkRenderPass renderPass, 
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
+#if defined(__ANDROID__)
+    // A phone turns between portrait and landscape, and the panels are
+    // placed for the screen they open on: a saved layout from the other
+    // orientation would put them off screen or squeeze them.
+    ImGui::GetIO().IniFilename = nullptr;
+#endif
     ImGui::StyleColorsDark();
     // ImGui's style colors are sRGB values, but its Vulkan backend writes
     // them unconverted into this engine's sRGB swapchain, which encodes

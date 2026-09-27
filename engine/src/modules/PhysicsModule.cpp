@@ -30,6 +30,7 @@
 #include <map>
 #include <chrono>
 #include <SDL3/SDL.h>
+#include "kke/ImGuiPlacement.h"
 
 // FEMFX declares these extern (FEMFXCommon.h) and expects the
 // application to define them — an allocator hook, the same pattern as
@@ -2541,8 +2542,7 @@ void PhysicsModule::renderUi() {
     // plastic cube") on one row genuinely needed more room than 300px
     // gave them, confirmed by a real screenshot showing the third
     // button clipped off entirely rather than just wrapping.
-    ImGui::SetNextWindowPos(ImVec2(320, 10), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(420, 400), ImGuiCond_FirstUseEver);
+    placeNextDebugWindow(ImVec2(320, 10), ImVec2(420, 400));
     ImGui::Begin("Physics");
 
     ImGui::Text("Objects: %zu / %u", m_objects.size(), kMaxObjects);
