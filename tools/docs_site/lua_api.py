@@ -54,7 +54,9 @@ def _descriptions(root):
         for line in f:
             m = DOC_ROW.match(line)
             if m:
-                out[m.group(1)] = m.group(2)
+                # The reference lives one folder down (reference/): relative
+                # links from SCRIPTING.md ("[MOODS.md](MOODS.md)") go up one.
+                out[m.group(1)] = re.sub(r"\]\((?![a-z]+:|/|#|\.\./)([^)]+)\)", r"](../\1)", m.group(2))
     return out
 
 

@@ -33,6 +33,7 @@ add_executable(kke_tests
     ${CMAKE_SOURCE_DIR}/games/climb_race/Mountains.cpp
     ${CMAKE_SOURCE_DIR}/games/climb_race/NetRace.cpp
     ${CMAKE_SOURCE_DIR}/games/climb_race/Progress.cpp
+    ${CMAKE_SOURCE_DIR}/games/climb_race/Ghost.cpp
     test_combat.cpp
     test_sidekick.cpp
     test_mesh_lod.cpp
