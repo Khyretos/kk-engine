@@ -1333,8 +1333,14 @@ void ShowcaseModule::renderShadow(const kke::ShadowRenderContext& ctx) {
 void ShowcaseModule::renderUi() {
     if (m_menuOpen) return; // the pause menu has the screen
     const float s = ImGui::GetFontSize() / 13.0f;
-    ImGui::SetNextWindowPos(ImVec2(10 * s, 10 * s), ImGuiCond_FirstUseEver);
+    // On a narrow screen (a phone held upright, a small window) the score
+    // bar reaches the left edge: start under it, folded (a tap on the
+    // title opens it).
+    const ImVec2 screen = ImGui::GetIO().DisplaySize;
+    const bool narrow = screen.x < 1100.0f * s;
+    ImGui::SetNextWindowPos(ImVec2(10 * s, (narrow ? 80.0f : 10.0f) * s), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(300 * s, 0), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowCollapsed(narrow, ImGuiCond_FirstUseEver);
     ImGui::Begin("KKE Showcase");
     ImGui::TextWrapped("%s", m_status.c_str());
     ImGui::Text("%.0f FPS", m_fps);

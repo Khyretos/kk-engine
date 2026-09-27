@@ -30,6 +30,13 @@ body { font-family: Noto Sans; color: #e8ecf4; pointer-events: none; width: 100%
 div { display: block; }
 #panel { position: absolute; max-height: 94%; overflow-y: auto; pointer-events: auto;
          padding: 6dp 10dp 8dp 10dp; border-radius: 10dp; background-color: #0e1322eb; border: 1dp #2f3a5c; font-size: 13dp; }
+/* The panel scrolls when taller than the screen; RmlUi has no default
+   scrollbar, and without a size the rows are laid out a word per line. */
+scrollbarvertical { width: 8dp; }
+scrollbarvertical slidertrack { background-color: #00000000; }
+scrollbarvertical sliderbar { background-color: #3a4670; border-radius: 4dp; min-height: 24dp; }
+scrollbarvertical sliderbar:hover { background-color: #5b6ca8; }
+scrollbarvertical sliderarrowdec, scrollbarvertical sliderarrowinc { height: 0; }
 .section { font-size: 12dp; letter-spacing: 2dp; color: #9fb4e0; margin-top: 8dp; padding: 3dp 4dp; border-radius: 5dp;
            cursor: pointer; background-color: #161d33; }
 .section:hover { background-color: #1d2742; }

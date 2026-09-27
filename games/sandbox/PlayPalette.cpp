@@ -29,6 +29,10 @@ div { display: block; }
 #bar { display: inline-block; pointer-events: auto;
        padding: 10dp 12dp 8dp 12dp; background-color: #ffffffe6; border: 2dp #d5d9e3; border-radius: 22dp;
        white-space: nowrap; text-align: center; }
+/* On a phone held upright the pictures wrap onto more rows instead of
+   running off the side. A set width, not max-width: RmlUi shrinks an
+   inline-block that doesn't fit to its narrowest (one picture a row). */
+@media (orientation: portrait) { #bar { width: 92%; white-space: normal; } }
 #hint { font-size: 19dp; font-weight: bold; color: #2b2f3a; margin: 0 4dp 8dp 4dp; }
 .cell { display: inline-block; width: 92dp; margin: 0 4dp; vertical-align: top; }
 .pic { width: 92dp; height: 92dp; border-radius: 16dp; background-color: #eef0f5; border: 3dp #e0e3ec;
