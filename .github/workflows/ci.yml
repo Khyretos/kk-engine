@@ -134,6 +134,16 @@ jobs:
       - name: Cookbook recipes run headless
         run: DISPLAY=:99 python3 -W error tools/docs_site/run_recipes.py --bin build/bin
 
+      # The checker AI assistants are told to use (AGENTS.md): it must pass
+      # on a clean game and fail on a broken script.
+      - name: tools/check_game passes and fails correctly
+        run: |
+          DISPLAY=:99 python3 -W error tools/check_game starter_game --seconds 5
+          mkdir -p /tmp/broken && echo 'local t = nil; print(t.x)' > /tmp/broken/broken.lua
+          if DISPLAY=:99 python3 -W error tools/check_game starter_game --scripts /tmp/broken --seconds 5; then
+            echo "check_game said OK for a broken script"; exit 1
+          fi
+
       # --- Coverage build: separate build directory, deliberately not
       # reusing the plain one (mixing instrumented and non-instrumented
       # objects corrupts gcov data). ---

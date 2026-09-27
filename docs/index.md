@@ -55,6 +55,8 @@ What is solid, partial or not started yet, system by system, is in the
 4. [The cookbook](cookbook/index.md): recipes from your first script to
    cameras, pathfinding, flocking, IK and multiplayer.
 5. [Scripting in Lua](SCRIPTING.md) and the [Lua API reference](reference/lua-api.md).
+6. [With an AI assistant](AI_ASSISTANTS.md): any assistant, large or
+   small, can help you make a game here.
 
 ## Support KKE
 
