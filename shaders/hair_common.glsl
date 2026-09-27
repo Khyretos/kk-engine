@@ -22,7 +22,7 @@ layout(std430, set = HAIR_SET, binding = 1) readonly buffer Frame {
     vec4 shape;     // x = clump, y = frizz (m), z = width in the shadow map (m)
     vec4 rootColor; // sRGB
     vec4 tipColor;  // sRGB, a = shine
-    vec4 look;      // x = highlight shift, y = roughness
+    vec4 look;      // x = highlight shift, y = roughness, z = every z-th hair is drawn (level of detail), w = width scale for it
     vec4 guides[];  // xyz, guide after guide, root first
 } frame;
 
@@ -32,6 +32,7 @@ void hairCorner(int vertexIndex, out int hair, out int point, out float side) {
     int perHair = (pts - 1) * 6;
     hair = vertexIndex / perHair;
     int r = vertexIndex - hair * perHair;
+    hair *= int(frame.look.z + 0.5);
     int seg = r / 6;
     int c = r - seg * 6;
     // corners 0 1 2 / 1 3 2 of the quad (point, point + 1) x (left, right)

@@ -26,6 +26,9 @@ class Application;
 //   world.hairPositions(id, guides);                     // every frame, after world.step
 //   hair.update(guides, headMatrix);
 //   hair.draw(ctx);  hair.drawShadow(shadowCtx);         // in render() / renderShadow()
+//
+// While a frame may still draw it, destroy it through renderer().retire()
+// (as the cloth demo does when it changes scene).
 class HairRenderer {
 public:
     explicit HairRenderer(Application& app);
@@ -38,6 +41,9 @@ public:
     void draw(const RenderContext& ctx);
     void drawShadow(const ShadowRenderContext& ctx, const glm::vec3& towardsLight);
     size_t hairs() const { return m_strands.hairs(); }
+    // Hairs the last draw() drew: fewer than hairs() when the head is small
+    // on screen (level of detail, docs/HAIR.md).
+    size_t drawnHairs() const;
     const HairStrands& strands() const { return m_strands; }
 
 private:
@@ -48,19 +54,25 @@ private:
         VkDescriptorSet set = VK_NULL_HANDLE;
         bool bound = false;
     };
-    void createPipelines();
+    // The descriptor set layout and pipelines, shared by every HairRenderer
+    // of an application (compiling them per head took about 20 ms each).
+    struct Shared;
     void prepare(uint32_t frame);
     uint32_t vertexCount() const;
+    void chooseDetail(float pixel, const glm::vec3& camera);
 
     Application& m_app;
     HairStrands m_strands;
     std::unique_ptr<Buffer> m_hairBuffer;
     std::vector<float> m_frameBytes; // header + guides, as uploaded
     uint64_t m_version = 0;
+    glm::vec3 m_centre{0.0f};      // the guides' bounds, from update()
+    float m_radius = 0.0f;
+    float m_strandLength = 0.0f;   // a guide's mean length
+    uint32_t m_stride = 1;         // level of detail: every m_stride-th hair is drawn
     FrameData m_frames[Renderer::kMaxFramesInFlight];
-    VkDescriptorSetLayout m_setLayout = VK_NULL_HANDLE;
+    std::shared_ptr<Shared> m_shared;
     VkDescriptorPool m_pool = VK_NULL_HANDLE;
-    std::unique_ptr<Pipeline> m_pipeline, m_shadowPipeline;
 };
 
 } // namespace kke

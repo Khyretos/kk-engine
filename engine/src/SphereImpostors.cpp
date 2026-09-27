@@ -1,9 +1,33 @@
 #include "kke/SphereImpostors.h"
 
 #include "kke/Application.h"
+
 #include <algorithm>
+#include <map>
+#include <mutex>
+#include <string>
+#include <tuple>
 
 namespace kke {
+
+namespace {
+
+// Pipelines every DynamicMeshRenderer of an application shares, per render
+// pass: compiling them for each mesh took about 15 ms a mesh, so a scene
+// of twenty meshes hitched when it was built.
+template <typename Make>
+std::shared_ptr<Pipeline> sharedPipeline(Application& app, VkRenderPass pass, const char* what, Make make) {
+    static std::mutex lock;
+    static std::map<std::tuple<Application*, VkRenderPass, std::string>, std::weak_ptr<Pipeline>> cache;
+    const std::lock_guard<std::mutex> hold(lock);
+    std::weak_ptr<Pipeline>& slot = cache[{ &app, pass, what }];
+    if (std::shared_ptr<Pipeline> p = slot.lock()) return p;
+    std::shared_ptr<Pipeline> p = make();
+    slot = p;
+    return p;
+}
+
+} // namespace
 
 SphereImpostorRenderer::SphereImpostorRenderer(Application& app) : m_app(app) {
     PipelineConfig config;
@@ -44,14 +68,18 @@ struct ShadowPush { glm::mat4 lightViewProj; glm::mat4 model; };
 } // namespace
 
 DynamicMeshRenderer::DynamicMeshRenderer(Application& app) : m_app(app) {
-    PipelineConfig config;
-    config.cullMode = VK_CULL_MODE_NONE; // generated surfaces: winding not guaranteed consistent
-    config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPush) };
-    config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), app.materialTextureSetLayout() };
-    m_pipeline = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/cube.vert.spv", "shaders/glow.frag.spv", config);
-    PipelineConfig shadow = ShadowMap::casterConfig();
-    shadow.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ShadowPush) };
-    m_shadowPipeline = std::make_unique<Pipeline>(app.device(), app.shadowMap().renderPass(), "shaders/shadow.vert.spv", "shaders/shadow.frag.spv", shadow);
+    m_pipeline = sharedPipeline(app, app.renderer().renderPass(), "mesh", [&app] {
+        PipelineConfig config;
+        config.cullMode = VK_CULL_MODE_NONE; // generated surfaces: winding not guaranteed consistent
+        config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPush) };
+        config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), app.materialTextureSetLayout() };
+        return std::make_shared<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/cube.vert.spv", "shaders/glow.frag.spv", config);
+    });
+    m_shadowPipeline = sharedPipeline(app, app.shadowMap().renderPass(), "mesh shadow", [&app] {
+        PipelineConfig shadow = ShadowMap::casterConfig();
+        shadow.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ShadowPush) };
+        return std::make_shared<Pipeline>(app.device(), app.shadowMap().renderPass(), "shaders/shadow.vert.spv", "shaders/shadow.frag.spv", shadow);
+    });
 }
 
 void DynamicMeshRenderer::upload(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices) {
@@ -87,22 +115,30 @@ void DynamicMeshRenderer::drawTranslucent(const RenderContext& ctx, const glm::m
         // Front faces only (CCW seen from outside, like every closed mesh
         // here), depth tested against the opaque scene but not written,
         // so it never hides what's behind it from itself.
-        PipelineConfig c;
-        c.cullMode = VK_CULL_MODE_BACK_BIT;
-        c.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-        c.depthWriteEnable = false;
-        c.blendEnable = true;
-        c.customColorBlend = true;
-        c.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPush) };
-        c.descriptorSetLayouts = { m_app.lightingBuffer().descriptorSetLayout(), m_app.shadowMapSetLayout(), m_app.materialTextureSetLayout() };
-        c.srcColorBlendFactor = VK_BLEND_FACTOR_ZERO; // behind *= transmittance
-        c.dstColorBlendFactor = VK_BLEND_FACTOR_SRC_COLOR;
-        m_absorbPipeline = std::make_unique<Pipeline>(m_app.device(), m_app.renderer().renderPass(), "shaders/cube.vert.spv",
-                                                      "shaders/translucent_absorb.frag.spv", c);
-        c.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // behind += light from the surface
-        c.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
-        m_lightPipeline = std::make_unique<Pipeline>(m_app.device(), m_app.renderer().renderPass(), "shaders/cube.vert.spv",
-                                                     "shaders/translucent_light.frag.spv", c);
+        Application& app = m_app;
+        auto config = [&app](VkBlendFactor src, VkBlendFactor dst) {
+            PipelineConfig c;
+            c.cullMode = VK_CULL_MODE_BACK_BIT;
+            c.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+            c.depthWriteEnable = false;
+            c.blendEnable = true;
+            c.customColorBlend = true;
+            c.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPush) };
+            c.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), app.materialTextureSetLayout() };
+            c.srcColorBlendFactor = src;
+            c.dstColorBlendFactor = dst;
+            return c;
+        };
+        m_absorbPipeline = sharedPipeline(app, app.renderer().renderPass(), "mesh absorb", [&] {
+            // behind *= transmittance
+            return std::make_shared<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/cube.vert.spv", "shaders/translucent_absorb.frag.spv",
+                                              config(VK_BLEND_FACTOR_ZERO, VK_BLEND_FACTOR_SRC_COLOR));
+        });
+        m_lightPipeline = sharedPipeline(app, app.renderer().renderPass(), "mesh light", [&] {
+            // behind += light from the surface
+            return std::make_shared<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/cube.vert.spv", "shaders/translucent_light.frag.spv",
+                                              config(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE));
+        });
     }
     bindAndDraw(ctx, *m_absorbPipeline, model, 0.0f, roughness);
     bindAndDraw(ctx, *m_lightPipeline, model, 0.0f, roughness);
@@ -111,11 +147,14 @@ void DynamicMeshRenderer::drawTranslucent(const RenderContext& ctx, const glm::m
 void DynamicMeshRenderer::drawCloth(const RenderContext& ctx, const Fabric& fabric, const glm::mat4& model) {
     if (m_indices.empty()) return;
     if (!m_clothPipeline) {
-        PipelineConfig c;
-        c.cullMode = VK_CULL_MODE_NONE; // both sides of a sheet are seen
-        c.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ClothPush) };
-        c.descriptorSetLayouts = { m_app.lightingBuffer().descriptorSetLayout(), m_app.shadowMapSetLayout(), m_app.materialTextureSetLayout() };
-        m_clothPipeline = std::make_unique<Pipeline>(m_app.device(), m_app.renderer().renderPass(), "shaders/cube.vert.spv", "shaders/cloth.frag.spv", c);
+        Application& app = m_app;
+        m_clothPipeline = sharedPipeline(app, app.renderer().renderPass(), "mesh cloth", [&app] {
+            PipelineConfig c;
+            c.cullMode = VK_CULL_MODE_NONE; // both sides of a sheet are seen
+            c.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ClothPush) };
+            c.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), app.materialTextureSetLayout() };
+            return std::make_shared<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/cube.vert.spv", "shaders/cloth.frag.spv", c);
+        });
     }
     ensureUploaded(ctx.frameIndex);
     FrameBuffers& fb = m_frames[ctx.frameIndex];

@@ -799,15 +799,16 @@ void ClothDemoModule::buildPanel() {
     auto& cost = panel->section("Cost");
     cost.text([this] {
         if (m_scene == Scene::Hair) {
-            size_t guides = 0, verts = 0, hairs = 0;
+            size_t guides = 0, verts = 0, hairs = 0, drawn = 0;
             for (auto& h : m_heads) {
                 const kke::HairStats st = m_world->hairStats(h->hair);
                 guides += st.guides;
                 verts += st.vertices;
                 hairs += h->drawn->hairs();
+                drawn += h->drawn->drawnHairs();
             }
             char buf[256];
-            std::snprintf(buf, sizeof(buf), "%zu guide strands (%zu vertices), %zu hairs drawn", guides, verts, hairs);
+            std::snprintf(buf, sizeof(buf), "%zu guide strands (%zu vertices), %zu of %zu hairs drawn", guides, verts, drawn, hairs);
             return std::string(buf);
         }
         uint32_t verts = 0, tris = 0, asleep = 0;
