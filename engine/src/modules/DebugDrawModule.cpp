@@ -3,6 +3,7 @@
 #include "kke/Application.h"
 
 #include <cmath>
+#include <algorithm>
 
 namespace kke {
 

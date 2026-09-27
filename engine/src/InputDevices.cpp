@@ -9,6 +9,9 @@
 #include <cstdlib>
 #include <filesystem>
 #include <sstream>
+#include <cstdio>
+#include <system_error>
+#include <tuple>
 
 namespace kke {
 

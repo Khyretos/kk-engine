@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 #include <glm/gtc/matrix_transform.hpp>
+#include <cmath>
 
 TEST(Picking, CenterOfScreenLooksAtTarget) {
     glm::mat4 view = glm::lookAt(glm::vec3(0, 5, 10), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));

@@ -153,7 +153,9 @@ cmake -B build -G Ninja -DKKE_ENABLE_TETRAHEDRALIZER=ON -DBoost_INCLUDE_DIR=/usr
 **Run from inside `build/bin`, not the repository root.** Shaders,
 fonts, and each demo's `game.json` all get copied next to the compiled
 executable at build time -- relative paths inside the engine assume
-you're running from there.
+you're running from there. With the `everything-release` preset the
+folder is `build-release/bin` instead (each preset's `binaryDir`, plus
+`/bin`).
 
 ```bash
 cd build/bin
@@ -246,7 +248,11 @@ with your exact GPU/driver combination.
 **Build warnings** -- a genuinely clean build (compiler warnings, not
 CMake messages) is expected now; if you see warnings from `external/
 FEMFX` or SDL3's vendored source specifically, that's a regression
-worth reporting, not something to ignore. Warnings from your own game
+worth reporting, not something to ignore. Newer compilers (GCC 15/16)
+include fewer standard headers through other headers, so a file must
+include what it uses; `python3 tools/ci/check_std_includes.py` (a CI job)
+catches a missing `#include <algorithm>` and similar before a GCC 16 user
+does. Warnings from your own game
 code, if you're writing one, are not suppressed -- that's deliberate.
 
 **Something else** -- check HISTORY.md "What's not done yet" sections

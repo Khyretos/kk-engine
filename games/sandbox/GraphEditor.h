@@ -7,6 +7,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <utility>
 
 namespace Rml {
 class Context;

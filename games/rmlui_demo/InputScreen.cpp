@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <typeindex>
+#include <cstdio>
 
 namespace kke_demo {
 

@@ -6,6 +6,8 @@
 
 #include <filesystem>
 #include <limits>
+#include <algorithm>
+#include <system_error>
 
 namespace kke::storage {
 

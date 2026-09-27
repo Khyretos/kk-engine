@@ -1,6 +1,7 @@
 #include "kke/SphereImpostors.h"
 
 #include "kke/Application.h"
+#include <algorithm>
 
 namespace kke {
 

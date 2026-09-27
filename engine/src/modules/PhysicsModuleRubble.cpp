@@ -14,6 +14,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cfloat>
 
 namespace kke {

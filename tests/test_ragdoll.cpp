@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
+#include <algorithm>
 
 namespace {
 
