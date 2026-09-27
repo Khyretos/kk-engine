@@ -165,3 +165,13 @@ two breast and two glute bones, belly and thigh skin zones).
 
 Put the pack in `assets/synty/POLYGON_Fantasy_Characters/` (a symlink to
 the shared cache works) or set `KKE_ASSETS_DIR`.
+
+## Duel (`games/duel`)
+
+No Synty packs. Fighters: Quaternius Universal Animation Library (CC0), the
+mannequin and clips from `assets/animations/UAL1_Standard.fbx` (Idle_Loop,
+Walk_*_Loop, Punch_Cross, Hit_Chest, Hit_Head, Death01, Roll, Dance_Loop)
+and, when present, UAL 2's melee clips (`UAL2.fbx`: Melee_Hook,
+Melee_Uppercut, Melee_Knee, Hit_Knockback, LayToIdle, Walk_Fwd/Bwd/L/R_Loop)
+from `assets/animations/` or `KKE_ASSETS_DIR/Universal Animation Library 2/Unity/`.
+The ring, gym and benches are boxes built in code.

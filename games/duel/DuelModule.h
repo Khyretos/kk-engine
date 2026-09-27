@@ -7,6 +7,7 @@
 #include "kke/Module.h"
 #include "kke/Ragdoll.h"
 #include "kke/RigidWorld.h"
+#include "kke/ai/AiWorld.h"
 #include "kke/modules/ModelModule.h"
 
 #include <RmlUi/Core/DataModelHandle.h>
@@ -123,6 +124,10 @@ private:
     kke::IRagdollPhysics* m_ragdolls = nullptr;
 
     kke::CombatWorld m_combat;
+    // Tactics for the bots (SparringBot, data/boxer.yml); a player is an actor.
+    kke::ai::AiWorld m_ai;
+    void syncAi();
+    void thinkAi(float dt);
     Fighter m_fighters[2];
     std::unique_ptr<kke::DynamicMeshRenderer> m_arena, m_block;
 

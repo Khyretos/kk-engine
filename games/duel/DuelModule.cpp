@@ -147,6 +147,13 @@ void DuelModule::init(kke::Application& app) {
     app.camera().farPlane = 120.0f;
     app.camera().fovDegrees = 50.0f;
     loadCharacter();
+    {
+        // The bots' tactics are data (data/boxer.yml or .json).
+        const char* base = SDL_GetBasePath();
+        std::string error;
+        if (m_ai.loadSpecies(std::string(base ? base : "") + "data/boxer.yml", &error) == 0)
+            kke::log::get(name())->error("data/boxer.yml: {} (the bot will stand still)", error);
+    }
     buildArena();
     spawnFighters();
     buildHud();
@@ -241,6 +248,7 @@ void DuelModule::setTwoPlayers(bool on) {
     red.name = m_twoPlayers ? "Player 2" : "Red";
     if (red.bot && !red.brain) red.brain = std::make_unique<SparringBot>(m_seed * 7919u + 1u, SparringBot::skillFor(m_level));
     if (!red.bot) red.brain.reset();
+    syncAi();
     // Devices: the keyboard serves both (different keys); with two
     // controllers each player has one, with one it's player 2's.
     std::vector<uint32_t> pads, rest;
@@ -263,6 +271,39 @@ void DuelModule::setTwoPlayers(bool on) {
     }
     m_input->assignDevices(0, one);
     m_input->assignDevices(1, two);
+}
+
+void DuelModule::syncAi() {
+    // Agents for the bots, actors (seen, not steered) for players.
+    // Re-added each round, so nothing is remembered across rounds.
+    const SparringBot::Skill skill = SparringBot::skillFor(m_level);
+    for (int i = 0; i < 2; ++i) {
+        const Fighter& f = m_fighters[i];
+        const kke::ai::AgentId id = kke::ai::AgentId(i + 1);
+        m_ai.remove(id);
+        const glm::vec3 at = m_rigid->world().characterPosition(f.body);
+        const bool ok = f.bot ? m_ai.addAgent(id, "boxer", at, i == 0 ? 180.0f : 0.0f) : m_ai.addActor(id, "boxer", at);
+        if (!ok) continue;
+        m_ai.setTeam(id, uint32_t(i + 1));
+        if (f.bot) m_ai.setMood(id, { 0.9f, 0.0f, skill.aggression, 0.0f });
+    }
+}
+
+void DuelModule::thinkAi(float dt) {
+    kke::RigidWorld& w = m_rigid->world();
+    for (int i = 0; i < 2; ++i) {
+        Fighter& f = m_fighters[i];
+        const kke::ai::AgentId id = kke::ai::AgentId(i + 1);
+        const float yaw = glm::degrees(std::atan2(f.facing.x, f.facing.z));
+        m_ai.setTransform(id, w.characterPosition(f.body), w.characterVelocity(f.body), yaw);
+        if (f.bot && f.brain) f.brain->sense(m_ai, id, m_combat.get(f.id), m_combat.get(m_fighters[1 - i].id), dt);
+    }
+    m_ai.update(dt);
+    for (const kke::ai::AiEvent& e : m_ai.takeEvents()) {
+        if (e.kind != kke::ai::AiEvent::Kind::Attack || e.who < 1 || e.who > 2) continue;
+        Fighter& f = m_fighters[e.who - 1];
+        if (f.bot && f.brain) f.brain->strike();
+    }
 }
 
 void DuelModule::startRound(bool newMatch) {
@@ -292,6 +333,7 @@ void DuelModule::startRound(bool newMatch) {
     m_phase = Phase::Intro;
     m_phaseTime = 0.0f;
     m_roundWinner.clear();
+    syncAi();
 }
 
 void DuelModule::onEvent(const SDL_Event&) {}
@@ -325,7 +367,7 @@ void DuelModule::updateFighter(Fighter& f, Fighter& other, float dt) {
     const float distance = glm::length(glm::vec2(otherFeet.x - feet.x, otherFeet.z - feet.z));
 
     Intent in;
-    if (m_phase == Phase::Fight) in = f.bot ? f.brain->think(c, oc, distance, dt) : readPlayer(f);
+    if (m_phase == Phase::Fight) in = f.bot ? f.brain->think(m_ai, kke::ai::AgentId(f.corner + 1), c, oc, f.facing, distance, dt) : readPlayer(f);
     f.intent = in;
 
     using S = kke::Combatant::State;
@@ -525,6 +567,7 @@ void DuelModule::update(const kke::UpdateContext& ctx) {
         break;
     }
 
+    if (m_phase == Phase::Fight) thinkAi(dt);
     updateFighter(m_fighters[0], m_fighters[1], dt);
     updateFighter(m_fighters[1], m_fighters[0], dt);
     for (const kke::HitEvent& e : m_combat.step(dt)) onHit(e);
@@ -540,9 +583,10 @@ void DuelModule::update(const kke::UpdateContext& ctx) {
                 const kke::Combatant& c = m_combat.get(m_fighters[i].id);
                 const Tally& t = m_tally[i];
                 kke::log::get(name())->info("t {:.0f} s: {} health {:.0f} stamina {:.0f} wins {}; landed {}, blocked {}, parried {}, guard breaks {}, "
-                                            "knockdowns {}",
+                                            "knockdowns {}{}{}",
                                             m_clock, m_fighters[i].name, c.health(), c.stamina(), m_fighters[i].wins, t.hits, t.blocks, t.parries,
-                                            t.guardBreaks, t.knockdowns);
+                                            t.guardBreaks, t.knockdowns, m_fighters[i].brain ? "; tactic " : "",
+                                            m_fighters[i].brain ? m_fighters[i].brain->tactic() : std::string());
             }
         }
         if (m_clock >= m_quitAfter) {
