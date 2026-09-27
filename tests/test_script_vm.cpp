@@ -1,3 +1,4 @@
+#include "kke/ScriptCalls.h"
 #include "kke/ScriptStore.h"
 #include "kke/ScriptVM.h"
 #include "kke/modules/ScriptModule.h"
@@ -417,6 +418,76 @@ TEST(ScriptModule, ServerScriptsRunOnlyWhereThePhysicsIsTheTruth) {
     EXPECT_TRUE(ScriptModule::runsHere("scripts/toys.lua", false));
     EXPECT_TRUE(ScriptModule::runsHere("C:/game/scripts/sv_rules.lua", true));
     EXPECT_TRUE(ScriptModule::runsHere("scripts/sv_folder/rules.lua", false)); // the file name decides, not the folder
+}
+
+// ---------------------------------------------------------------- net.call (kke/ScriptCalls.h)
+
+TEST(ScriptCalls, AGameAnswersItsOwnCallsOnTheNextUpdate) {
+    // Offline or hosting: the same script works as it would online.
+    ScriptVM vm;
+    int undone = 0;
+    ScriptCalls calls(vm, ScriptCalls::Link{
+        [] { return true; }, {}, {}, [] { return 0; },
+        [&](const std::function<bool()>& run) {
+            const bool ok = run();
+            undone += !ok;
+            return ok;
+        },
+    });
+    calls.bind();
+    ASSERT_TRUE(vm.runString(R"(
+        net.handle("double", function(n, from) if n < 0 then return nil, "negative" end return n * 2, from end)
+    )", "sv_rules"));
+    ASSERT_TRUE(vm.runString(R"(
+        net.call("double", 21, function(ok, v) answer = v end)
+        net.call("double", -1, function(ok, why) refused = why end)
+        sent = net.call("double", 1)
+        early = answer
+    )"));
+    EXPECT_TRUE(globalBool(vm, "sent"));
+    EXPECT_EQ(globalString(vm, "early"), ""); // not yet: answers come on update
+    calls.update(1.0);
+    EXPECT_EQ(globalNumber(vm, "answer"), 42);
+    EXPECT_EQ(globalString(vm, "refused"), "negative");
+    EXPECT_EQ(undone, 1);
+    EXPECT_EQ(calls.waiting(), 0u);
+
+    // The handler's script unloaded: nobody answers any more.
+    vm.onUnload = [&](const std::string& source) { calls.release(source); };
+    vm.unload("sv_rules");
+    EXPECT_EQ(calls.handlers(), 0u);
+    ASSERT_TRUE(vm.runString(R"(net.call("double", 1, function(ok, why) gone = why end))"));
+    calls.update(2.0);
+    EXPECT_EQ(globalString(vm, "gone"), "no handler for 'double' on the server");
+}
+
+TEST(ScriptCalls, UnansweredCallsTimeOut) {
+    ScriptVM vm;
+    std::vector<std::vector<uint8_t>> sent;
+    ScriptCalls calls(vm, ScriptCalls::Link{
+        [] { return false; },
+        [&](const std::vector<uint8_t>& bytes) { sent.push_back(bytes); return true; },
+        {}, [] { return 1; }, {},
+    });
+    calls.bind();
+    calls.update(100.0);
+    ASSERT_TRUE(vm.runString(R"(net.call("slow", { x = 1 }, function(ok, why) late = why end))"));
+    ASSERT_EQ(sent.size(), 1u);
+    const auto call = ScriptCalls::decodeCall(sent[0]);
+    ASSERT_TRUE(call.has_value());
+    EXPECT_EQ(call->name, "slow");
+    calls.update(100.0 + calls.timeoutSeconds - 0.5);
+    EXPECT_EQ(calls.waiting(), 1u);
+    calls.update(100.0 + calls.timeoutSeconds + 0.5);
+    EXPECT_EQ(globalString(vm, "late"), "no answer from the server");
+    // An answer after that is ignored.
+    calls.replyReceived(ScriptCalls::encodeReply({ call->id, ScriptCalls::Status::Ok, ScriptVM::encodeString("hi") }));
+    calls.update(200.0);
+    EXPECT_EQ(globalString(vm, "late"), "no answer from the server");
+    // Bad arguments are the script's error, as with net.send.
+    EXPECT_FALSE(vm.runString("net.call('', 1)"));
+    EXPECT_FALSE(vm.runString("net.call('x', function() end)"));
+    EXPECT_FALSE(vm.runString("net.call('x', string.rep('a', 600))"));
 }
 
 // ---------------------------------------------------------------- store.* (kke/ScriptStore.h)

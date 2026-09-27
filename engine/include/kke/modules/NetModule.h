@@ -163,6 +163,7 @@ public:
     void clearBodies();
     void sendEvent(uint16_t kind, const std::vector<uint8_t>& payload);
     void relayEvent(const net::GameEventMsg& e); // host: pass a client's event on to the others
+    void sendEventTo(uint8_t playerId, uint16_t kind, const std::vector<uint8_t>& payload); // host: to one player (a reply)
 
     std::function<void(const net::GameEventMsg&)> onEvent;
     // More receivers of the same events, for modules other than the game's

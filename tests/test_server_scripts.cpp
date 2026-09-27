@@ -2,6 +2,9 @@
 // sv_ scripts run headless, what they spawn reaches every client, and
 // net.send works both ways, over a loopback network.
 
+#include "kke/ScriptCalls.h"
+#include "kke/ScriptStore.h"
+#include "kke/ScriptVM.h"
 #include "kke/net/NetSession.h"
 #include "kke/net/ScriptSpawns.h"
 #include "kke/net/SecureTransport.h"
@@ -11,6 +14,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -275,4 +279,169 @@ TEST(ServerScripts, SaveInTheServersStoreAcrossRestarts) {
     again.run(0.1);
     EXPECT_TRUE(again.logged("day 2"));
     EXPECT_TRUE(again.server->store()->get("lua.racer", "world.day").has_value()); // the game's own collection
+}
+
+// net.call / net.handle (kke/ScriptCalls.h): a player's script asks, the
+// server's answers, refuses or fails, and a failed handler leaves nothing
+// behind (docs/SCRIPTING.md "Calls").
+namespace {
+
+// A player's side of it: a ScriptVM with net.call over the game's client.
+struct Caller {
+    kke::ScriptVM vm;
+    std::unique_ptr<kke::ScriptCalls> calls;
+    std::vector<std::string> printed;
+    Game& g;
+    explicit Caller(Game& game) : g(game) {
+        vm.printSink = [this](const std::string&, const std::string& text) { printed.push_back(text); };
+        calls = std::make_unique<kke::ScriptCalls>(vm, kke::ScriptCalls::Link{
+            [] { return false; },
+            [this](const std::vector<uint8_t>& bytes) {
+                if (!g.client || g.client->status() != NetClient::Status::Connected) return false;
+                g.client->sendEvent(kke::script_net::kScriptCall, bytes);
+                return true;
+            },
+            {},
+            [] { return 1; },
+            {},
+        });
+        calls->bind();
+    }
+    ~Caller() { calls.reset(); } // before the vm its callbacks live in
+    void run(double seconds) {
+        for (double t = 0; t < seconds; t += 1.0 / 60.0) {
+            g.run(1.0 / 60.0);
+            for (const GameEventMsg& e : g.events)
+                if (e.kind == kke::script_net::kScriptReply) calls->replyReceived(e.payload);
+            std::erase_if(g.events, [](const GameEventMsg& e) { return e.kind == kke::script_net::kScriptReply; });
+            calls->update(g.now);
+        }
+    }
+    bool said(const std::string& text) const { return std::find(printed.begin(), printed.end(), text) != printed.end(); }
+};
+
+} // namespace
+
+TEST(ServerScripts, CallsGetAnAnswerOrARefusal) {
+    const std::string dir = tempDir("calls");
+    ServerConfig c = scriptsConfig(dir);
+    write(c.scripts + "/sv_courts.lua", R"lua(
+        local seats = 0
+        net.handle("join_court", function(data, from)
+            if data.court ~= 3 then return nil, "there is no court " .. data.court end
+            seats = seats + 1
+            return { seat = seats, player = from }
+        end)
+        net.handle("broken", function() error("oops") end)
+    )lua");
+    Game g(c);
+    g.join("Kees");
+    Caller p(g);
+    p.run(0.5);
+    ASSERT_TRUE(p.vm.runString(R"lua(
+        net.call("join_court", { court = 3 }, function(ok, a) print("join", ok, a.seat, a.player) end)
+        net.call("join_court", { court = 9 }, function(ok, why) print("court 9", ok, why) end)
+        net.call("broken", {}, function(ok, why) print("broken", ok, why) end)
+        net.call("nobody", {}, function(ok, why) print("nobody", ok, why) end)
+    )lua", "player"));
+    EXPECT_EQ(p.calls->waiting(), 4u);
+    p.run(0.5);
+    EXPECT_TRUE(p.said("join\ttrue\t1\t1")) << (p.printed.empty() ? "" : p.printed.front());
+    EXPECT_TRUE(p.said("court 9\tfalse\tthere is no court 9"));
+    EXPECT_TRUE(p.said("broken\tfalse\tthe server's handler for 'broken' failed"));
+    EXPECT_TRUE(p.said("nobody\tfalse\tno handler for 'nobody' on the server"));
+    EXPECT_EQ(p.calls->waiting(), 0u);
+    // The handler's error is in the server's log, not sent to the player.
+    bool logged = false;
+    for (const std::string& w : g.warnings) logged |= w.find("oops") != std::string::npos;
+    EXPECT_TRUE(logged);
+}
+
+TEST(ServerScripts, ARefusedCallUndoesWhatItDid) {
+    const std::string dir = tempDir("calls_undo");
+    ServerConfig c = scriptsConfig(dir);
+    write(c.scripts + "/sv_undo.lua", R"lua(
+        net.handle("try", function(data, from)
+            physics.box{ pos = Vec(0, 5, 0) }
+            net.send("made_a_box", {})
+            server.score("wins", from, 7)
+            store.save("court", data.court)
+            if data.keep then return true end
+            return nil, "changed my mind"
+        end)
+    )lua");
+    Game g(c);
+    g.join("Kees");
+    Caller p(g);
+    p.run(0.5);
+    const size_t spawnsBefore = g.spawns.size();
+    const std::string collection = kke::ScriptStore::collectionFor(g.server->config().game);
+    ASSERT_TRUE(p.vm.runString(R"lua(net.call("try", { court = 3 }, function(ok, why) print("try", ok, why) end))lua", "player"));
+    p.run(0.5);
+    EXPECT_TRUE(p.said("try\tfalse\tchanged my mind"));
+    EXPECT_EQ(g.spawns.size(), spawnsBefore);
+    EXPECT_EQ(g.server->scripts()->bodyCount(), 0u);
+    EXPECT_TRUE(g.server->leaderboards().top("wins", 1).empty());
+    EXPECT_FALSE(g.server->store()->get(collection, "court").has_value());
+    for (const GameEventMsg& e : g.events)
+        EXPECT_FALSE(e.kind == kke::script_net::kScriptEvent && std::string(e.payload.begin(), e.payload.begin() + 10) == "made_a_box");
+
+    // The same call kept: all of it happens.
+    ASSERT_TRUE(p.vm.runString(R"lua(net.call("try", { court = 4, keep = true }, function(ok) print("kept", ok) end))lua", "player"));
+    p.run(0.5);
+    EXPECT_TRUE(p.said("kept\ttrue"));
+    EXPECT_EQ(g.spawns.size(), spawnsBefore + 1);
+    EXPECT_EQ(g.server->scripts()->bodyCount(), 1u);
+    ASSERT_EQ(g.server->leaderboards().top("wins", 1).size(), 1u);
+    EXPECT_TRUE(g.server->store()->get(collection, "court").has_value());
+    bool sent = false;
+    for (const GameEventMsg& e : g.events)
+        sent |= e.kind == kke::script_net::kScriptEvent && e.payload.size() >= 10 && std::string(e.payload.begin(), e.payload.begin() + 10) == "made_a_box";
+    EXPECT_TRUE(sent);
+}
+
+TEST(ServerScripts, CallsWithoutAnAnswerStillEnd) {
+    // A server with no scripts says so at once; a lost connection answers too.
+    const std::string dir = tempDir("calls_none");
+    ServerConfig c = scriptsConfig(dir);
+    c.roles = { "players" };
+    Game g(c);
+    g.join("Kees");
+    Caller p(g);
+    p.run(0.5);
+    ASSERT_TRUE(p.vm.runString(R"lua(net.call("anything", 1, function(ok, why) print(ok, why) end))lua", "player"));
+    p.run(0.5);
+    EXPECT_TRUE(p.said("false\tthis server runs no scripts, so nothing answers 'anything'"));
+
+    ASSERT_TRUE(p.vm.runString(R"lua(net.call("anything", 1, function(ok, why) print("gone", ok, why) end))lua", "player"));
+    p.calls->disconnected("the connection to the server was lost");
+    EXPECT_TRUE(p.said("gone\tfalse\tthe connection to the server was lost"));
+
+    // Not connected: nothing is sent and false comes back at once.
+    g.client->disconnect();
+    p.run(0.2);
+    ASSERT_TRUE(p.vm.runString(R"lua(print("sent", net.call("anything", 1, function() end)))lua", "player"));
+    EXPECT_TRUE(p.said("sent\tfalse"));
+}
+
+TEST(ScriptCalls, DamagedBytesAreRefused) {
+    using kke::ScriptCalls;
+    const auto call = ScriptCalls::encodeCall({ 7, "join", "x" });
+    const auto back = ScriptCalls::decodeCall(call);
+    ASSERT_TRUE(back.has_value());
+    EXPECT_EQ(back->id, 7u);
+    EXPECT_EQ(back->name, "join");
+    EXPECT_EQ(back->value, "x");
+    const auto reply = ScriptCalls::decodeReply(ScriptCalls::encodeReply({ 9, ScriptCalls::Status::Refused, "y" }));
+    ASSERT_TRUE(reply.has_value());
+    EXPECT_EQ(reply->status, ScriptCalls::Status::Refused);
+    EXPECT_FALSE(ScriptCalls::decodeCall({ 1, 0, 0, 0 }).has_value());          // no name
+    EXPECT_FALSE(ScriptCalls::decodeCall({ 1, 0, 0, 0, 0, 1 }).has_value());    // an empty name
+    EXPECT_FALSE(ScriptCalls::decodeCall({ 1, 0, 0, 0, 'a', 'b' }).has_value()); // no end to the name
+    EXPECT_FALSE(ScriptCalls::decodeReply({ 1, 0, 0, 0, 9 }).has_value());      // no such status
+    EXPECT_FALSE(ScriptCalls::decodeReply({ 1, 0 }).has_value());
+    std::vector<uint8_t> longName(4, 0);
+    longName.insert(longName.end(), 65, 'a');
+    longName.push_back(0);
+    EXPECT_FALSE(ScriptCalls::decodeCall(longName).has_value());
 }
