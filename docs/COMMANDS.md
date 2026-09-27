@@ -12,7 +12,10 @@ player giving **orders**. The engine splits that in two:
   and report back when it is done or failed.
 
 The pet companion (`games/pet_companion`) and platoon (`games/platoon`)
-demos show both halves together.
+demos show both halves together: the pug and every soldier are AI core
+agents, ordered through `AiOrderBridge` (below). In the platoon, formations,
+cover spots and the hit rolls stay in the game; the AI moves and decides
+who to shoot.
 
 ## Orders
 

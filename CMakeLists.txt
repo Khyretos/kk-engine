@@ -924,6 +924,7 @@ endif()
 if(KKE_ENABLE_JOLT AND ENGINE_ENABLE_LUA)
     add_subdirectory(games/command_kit)
     add_subdirectory(games/pet_companion)
+    add_subdirectory(games/platoon)
 endif()
 
 # Duel: a one-on-one fist fight on kke::Combatant (games/duel/README.md).

@@ -1,0 +1,9 @@
+{
+  "id": "kke.platoon",
+  "title": "Platoon",
+  "description": "Command a squad of six across a training ground: formations, hold position, take cover, attack a target, focus fire and regroup, for everyone or one soldier at a time, with a mouse, a controller or a finger.",
+  "version": "0.1.0",
+  "tags": ["demo", "ai", "rts", "orders", "touch"],
+  "engine_version": "0.3",
+  "modules": ["Settings", "Input", "RigidBodies", "Models", "UI", "Audio", "Scripts", "Platoon", "Stats"]
+}
