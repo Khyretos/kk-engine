@@ -41,11 +41,16 @@ float computeShadow(vec4 posLightSpace) {
 
     float ref = projCoords.z - 0.0005;
     vec2 texelSize = 1.0 / vec2(textureSize(shadowMap, 0));
+    // This view's own tile of the map (split screen: one per view). The
+    // taps stay inside it, so no view reads another's shadows.
+    vec2 tileMin = lighting.shadowTile.xy + texelSize * 1.5;
+    vec2 tileMax = lighting.shadowTile.xy + lighting.shadowTile.zw - texelSize * 1.5;
+    shadowUV = lighting.shadowTile.xy + shadowUV * lighting.shadowTile.zw;
 
     float litSum = 0.0;
     for (int dy = -1; dy <= 1; ++dy) {
         for (int dx = -1; dx <= 1; ++dx) {
-            litSum += texture(shadowMap, vec3(shadowUV + vec2(dx, dy) * texelSize, ref));
+            litSum += texture(shadowMap, vec3(clamp(shadowUV + vec2(dx, dy) * texelSize, tileMin, tileMax), ref));
         }
     }
     return litSum / 9.0;

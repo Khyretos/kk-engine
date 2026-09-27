@@ -266,7 +266,9 @@ TEST(Climber, LooseHoldsBreakUnderALunge) {
     // Any loose hold within a lunge of the right hand (search the whole wall's lower part).
     int loose = -1;
     for (size_t i = 0; i < r.w.holds().size(); ++i)
-        if (r.w.holds()[i].loose && kke::ClimbWall::reachDistance(r.w.holds()[i].position, pivot) < r.c.settings().lungeSpan - 0.05f) loose = static_cast<int>(i);
+        if (r.w.holds()[i].loose && kke::ClimbWall::reachDistance(r.w.holds()[i].position, pivot) < r.c.settings().lungeSpan - 0.05f &&
+            !r.c.crossesOver(0, static_cast<int>(i)))
+            loose = static_cast<int>(i);
     if (loose < 0) GTEST_SKIP() << "no loose hold near the start on this seed";
     Climber::Input in;
     in.pick[0] = loose;
@@ -400,7 +402,9 @@ TEST(Climber, ABodyHangsBetweenTheHandsOrNot) {
     int nearHold = -1, farHold = -1;
     for (size_t i = 0; i < r.w.holds().size(); ++i) {
         const ClimbHold& h = r.w.holds()[i];
-        if (h.kind == ClimbHold::Kind::Edge || static_cast<int>(i) == right) continue;
+        if (h.kind == ClimbHold::Kind::Edge || static_cast<int>(i) == right || r.c.crossesOver(Climber::kLeft, static_cast<int>(i)) ||
+            h.position.x > at.x)
+            continue; // the left hand's side
         const float d = glm::length(h.position - at);
         if (nearHold < 0 && d > 0.3f && d < 0.8f) nearHold = static_cast<int>(i);
         if (farHold < 0 && d > 1.9f && d < 2.4f) farHold = static_cast<int>(i);
@@ -415,6 +419,40 @@ TEST(Climber, ABodyHangsBetweenTheHandsOrNot) {
     in.reach[Climber::kLeft] = true;
     r.c.update(in, kDt);
     EXPECT_FALSE(r.c.handMoving(Climber::kLeft));
+}
+
+TEST(Climber, EachHandWorksItsOwnSide) {
+    // A hold well over on the right, within the arms' length: the right
+    // hand takes it, the left one doesn't reach across the body for it
+    // (nor behind the back).
+    Rig r;
+    ASSERT_TRUE(r.mount());
+    const int right = r.c.handHold(Climber::kRight);
+    const glm::vec3 at = r.w.holds()[static_cast<size_t>(right)].position;
+    int over = -1;
+    for (size_t i = 0; i < r.w.holds().size(); ++i) {
+        const glm::vec3 p = r.w.holds()[i].position;
+        const float dx = p.x - at.x;
+        if (static_cast<int>(i) != right && dx > 0.45f && dx < 0.9f && std::abs(p.y - at.y) < 0.6f) {
+            over = static_cast<int>(i);
+            break;
+        }
+    }
+    ASSERT_GE(over, 0);
+    EXPECT_FALSE(r.c.canSpan(Climber::kLeft, over)) << "the left arm would cross over the right one";
+    Climber::Input in;
+    in.pick[Climber::kLeft] = over;
+    in.reach[Climber::kLeft] = true;
+    r.c.update(in, kDt);
+    EXPECT_FALSE(r.c.handMoving(Climber::kLeft));
+    // Between the shoulders, either hand may go; past the other shoulder,
+    // only that side's hand.
+    const Climber::Settings& s = r.c.settings();
+    const glm::vec3 hips = r.c.hips();
+    EXPECT_TRUE(r.c.onItsSide(Climber::kLeft, hips + glm::vec3(s.shoulderHalf, 0.6f, 0.0f), hips));
+    EXPECT_TRUE(r.c.onItsSide(Climber::kRight, hips + glm::vec3(-s.shoulderHalf, 0.6f, 0.0f), hips));
+    EXPECT_FALSE(r.c.onItsSide(Climber::kLeft, hips + glm::vec3(s.shoulderHalf + s.crossReach + 0.1f, 0.6f, 0.0f), hips));
+    EXPECT_TRUE(r.c.onItsSide(Climber::kRight, hips + glm::vec3(0.5f, 0.6f, 0.0f), hips));
 }
 
 TEST(Climber, StaminaMattersOnTheWayUp) {

@@ -365,7 +365,11 @@ void ClimbRaceModule::updateLobby(float dt) {
         feet.y = 0.05f;
         glm::vec3 face = cam.position - feet;
         face.y = 0.0f;
-        if (glm::length(w.characterPosition(r.id) - feet) > 0.05f) r.loco->teleport(feet);
+        // Only when its spot moved: the height is the floor's (it drops the
+        // last few cm onto it), and putting it back up each frame made it
+        // bob up and down, a shake on screen.
+        const glm::vec3 at = w.characterPosition(r.id);
+        if (glm::length(glm::vec2(at.x - feet.x, at.z - feet.z)) > 0.05f) r.loco->teleport(feet);
         r.loco->setFacing(glm::normalize(face));
         r.loco->update(kke::Locomotion::Input{}, dt);
         r.climber->recover(30.0f, dt); // fresh for the start

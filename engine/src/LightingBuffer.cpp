@@ -45,8 +45,9 @@ struct LightingUBOData {
     glm::vec4 fogColor;
     glm::vec4 fogParams;
     glm::vec4 ambientSH[9];
+    glm::vec4 shadowTile; // this view's tile of the shadow map: x, y (top left), width, height in 0..1
 };
-static_assert(sizeof(LightingUBOData) == 4 * 2 * 16 + 2 * 16 + 2 * 64 + 11 * 16 + 9 * 16, "must match shaders/lighting_ubo.glsl");
+static_assert(sizeof(LightingUBOData) == 4 * 2 * 16 + 2 * 16 + 2 * 64 + 11 * 16 + 9 * 16 + 16, "must match shaders/lighting_ubo.glsl");
 
 } // namespace
 
@@ -114,8 +115,9 @@ LightingBuffer::~LightingBuffer() {
 }
 
 void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos, const glm::mat4& lightViewProj, const glm::mat4& viewProj,
-                            const SkyEnvironment* sky) {
+                            const SkyEnvironment* sky, const glm::vec4& shadowTile) {
     LightingUBOData data{};
+    data.shadowTile = shadowTile;
     for (int i = 0; i < Lighting::kMaxLights; ++i) {
         const Light& src = lighting.lights[i];
         GPULight& dst = data.lights[i];

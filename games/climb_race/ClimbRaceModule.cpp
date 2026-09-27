@@ -617,7 +617,7 @@ void ClimbRaceModule::updateCamera(Racer& r, float dt, kke::Camera& out) {
     }
     r.rig.settings.armLength += ((climbing ? m_climbCamera : 4.0f) - r.rig.settings.armLength) * (1.0f - std::exp(-3.0f * dt));
     r.rig.settings.shoulderOffset = climbing ? 0.0f : 0.45f;
-    const glm::vec3 feet = w.characterPosition(r.id);
+    const glm::vec3 feet = w.characterDrawPosition(r.id, m_app->fixedAlpha()); // with the body, not a step behind or ahead of it
     r.rig.update(dt, feet, [&w](const glm::vec3& from, const glm::vec3& dir, float maxDist) {
         const auto hit = w.raycast(from, dir, maxDist);
         return hit.hit ? hit.distance : maxDist;
@@ -842,7 +842,7 @@ void ClimbRaceModule::render(const kke::RenderContext& ctx) {
     }
     if (!m_charModel)
         for (const Racer& r : m_racers) {
-            const glm::vec3 feet = w.characterPosition(r.id);
+            const glm::vec3 feet = w.characterDrawPosition(r.id, m_app->fixedAlpha());
             const float yaw = bodyInput(r).yaw;
             m_capsule->draw(ctx, glm::rotate(glm::translate(glm::mat4(1.0f), feet), glm::radians(-yaw), glm::vec3(0, 1, 0)), 0.0f, 0.6f);
         }
@@ -858,7 +858,8 @@ void ClimbRaceModule::renderShadow(const kke::ShadowRenderContext& ctx) {
     if (!m_charModel)
         for (const Racer& r : m_racers) {
             const float yaw = bodyInput(r).yaw;
-            m_capsule->drawShadow(ctx, glm::rotate(glm::translate(glm::mat4(1.0f), w.characterPosition(r.id)), glm::radians(-yaw), glm::vec3(0, 1, 0)));
+            m_capsule->drawShadow(ctx, glm::rotate(glm::translate(glm::mat4(1.0f), w.characterDrawPosition(r.id, m_app->fixedAlpha())), glm::radians(-yaw),
+                                                   glm::vec3(0, 1, 0)));
         }
 }
 

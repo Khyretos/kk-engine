@@ -157,19 +157,7 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         allocInfo.pSetLayouts = &m_shadowMapSetLayout;
         VK_CHECK(vkAllocateDescriptorSets(m_renderer->device().device(), &allocInfo, &m_shadowMapDescriptorSet));
 
-        VkDescriptorImageInfo imageInfo{};
-        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfo.imageView = m_shadowMap->imageView();
-        imageInfo.sampler = m_shadowMap->sampler();
-
-        VkWriteDescriptorSet write{};
-        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write.dstSet = m_shadowMapDescriptorSet;
-        write.dstBinding = 0;
-        write.descriptorCount = 1;
-        write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        write.pImageInfo = &imageInfo;
-        vkUpdateDescriptorSets(m_renderer->device().device(), 1, &write, 0, nullptr);
+        writeShadowMapDescriptor();
     }
 
     // The material albedo texture's own descriptor infrastructure (set
@@ -354,6 +342,22 @@ void Application::safeInvoke(Module* m, const char* stage, const std::function<v
         if (m_brokenModuleInfos.size() > brokenBefore)
             m_bench->addEvent(std::string("module ") + m->name() + " disabled in " + std::string(stage) + "(): " + m_brokenModuleInfos.back().friendlyMessage);
     }
+}
+
+void Application::writeShadowMapDescriptor() {
+    VkDescriptorImageInfo imageInfo{};
+    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    imageInfo.imageView = m_shadowMap->imageView();
+    imageInfo.sampler = m_shadowMap->sampler();
+
+    VkWriteDescriptorSet write{};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = m_shadowMapDescriptorSet;
+    write.dstBinding = 0;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    write.pImageInfo = &imageInfo;
+    vkUpdateDescriptorSets(m_renderer->device().device(), 1, &write, 0, nullptr);
 }
 
 void Application::resolveInitOrder() {
@@ -671,7 +675,8 @@ void Application::run() {
             // a real wall-clock delta — a well-defined, reproducible
             // "one step" rather than an arbitrary tiny number.
             float effectiveDt = m_paused ? m_fixedDt : dt;
-            UpdateContext updateCtx{ effectiveDt, totalTime };
+            m_fixedAlpha = m_paused ? 1.0f : std::clamp(accumulator / m_fixedDt, 0.0f, 1.0f);
+            UpdateContext updateCtx{ effectiveDt, totalTime, m_fixedAlpha };
             for (Module* m : m_initOrder) {
                 safeInvoke(m, "update", [&] { m->update(updateCtx); });
             }
@@ -718,14 +723,20 @@ void Application::run() {
         const glm::mat4& proj = drawViews[0].proj;
 
         // Real shadow mapping (see kke::ShadowMap) — computed from the
-        // key light (lights[0]) only, over a 15 m radius around what the
-        // first view's camera looks at, so shadows follow the player
-        // through a level bigger than that. 15 keeps the texels dense
-        // enough that edges don't turn blocky (checked against a
-        // screenshot). The centre is snapped to shadow texels so the
-        // edges don't shimmer as the camera moves.
-        glm::mat4 lightViewProj = ShadowMap::computeLightViewProj(
-            m_lighting.lights[0].direction, drawViews[0].camera.target, 15.0f, m_shadowMap->resolution());
+        // key light (lights[0]) only, over a 15 m radius around what each
+        // view's camera looks at, so shadows follow the player through a
+        // level bigger than that. 15 keeps the texels dense enough that
+        // edges don't turn blocky (checked against a screenshot). The
+        // centre is snapped to shadow texels so the edges don't shimmer as
+        // the camera moves. Split screen: every view gets its own tile of
+        // the map, framed on its own camera, so one player's camera never
+        // moves another player's shadows.
+        if (m_shadowMap->setTiles(viewCount)) writeShadowMapDescriptor();
+        std::array<glm::mat4, kMaxViews> lightViewProjs;
+        for (uint32_t i = 0; i < viewCount; ++i)
+            lightViewProjs[i] = ShadowMap::computeLightViewProj(m_lighting.lights[0].direction, drawViews[i].camera.target, 15.0f,
+                                                                m_shadowMap->tileResolution());
+        const glm::mat4& lightViewProj = lightViewProjs[0];
 
         RenderContext renderCtx{};
         renderCtx.renderPass = m_renderer->renderPass();
@@ -741,7 +752,8 @@ void Application::run() {
         if (m_lighting.sky.kind != Sky::Kind::None && !m_skyRenderer) m_skyRenderer = std::make_unique<SkyRenderer>(*this);
         if (m_skyRenderer) skyEnv = &m_skyRenderer->prepare(m_lighting.sky, m_lighting.fog, m_lighting.ambientColor);
         for (uint32_t i = 0; i < viewCount; ++i)
-            drawViews[i].lighting->update(m_lighting, drawViews[i].camera.position, lightViewProj, drawViews[i].proj * drawViews[i].view, skyEnv);
+            drawViews[i].lighting->update(m_lighting, drawViews[i].camera.position, lightViewProjs[i], drawViews[i].proj * drawViews[i].view, skyEnv,
+                                          m_shadowMap->tileRect(i));
 
         // ImGui's NewFrame() (inside beginFrame()) must only be called
         // for a frame that will also reach Render() — calling it here,
@@ -803,8 +815,13 @@ void Application::run() {
             const bool drawScene = !m_sceneCovered;
             if (drawScene) {
                 m_shadowMap->beginRenderPass(cmd);
-                for (Module* m : m_initOrder) {
-                    safeInvoke(m, "renderShadow", [&] { m->renderShadow(shadowCtx); });
+                for (uint32_t i = 0; i < viewCount; ++i) {
+                    if (viewCount > 1) m_shadowMap->beginTile(cmd, i);
+                    shadowCtx.lightViewProj = lightViewProjs[i];
+                    shadowCtx.viewIndex = i;
+                    for (Module* m : m_initOrder) {
+                        safeInvoke(m, "renderShadow", [&] { m->renderShadow(shadowCtx); });
+                    }
                 }
                 m_shadowMap->endRenderPass(cmd);
             }

@@ -81,6 +81,13 @@ public:
         // other hand caught something far above) lets go: a cut loose.
         float cutLoose = 0.08f;
         float pullSpeed = 4.0f;     // m/s: the body pulled up to a hand that caught a hold out of reach
+        // Each hand works its own half of the body. Between the shoulders
+        // is the middle, where either hand goes; a hand crosses in front of
+        // the chest to at most this far past the other shoulder, and only
+        // if the arm is long enough to go round the front of it. Further
+        // over is the other hand's: no arm reaches behind the back or over
+        // the other shoulder.
+        float crossReach = 0.3f;
     };
 
     struct Input {
@@ -143,6 +150,15 @@ public:
     bool canSpan(int h, int hold) const;
     // The same with the other hand on `otherHold` (planning a move ahead).
     bool canHang(int h, int hold, int otherHold) const;
+    // Can hand h take `point` with the body's middle at `hips`: on its own
+    // side, in the middle, or no further than Settings::crossReach past
+    // the other shoulder?
+    bool onItsSide(int h, const glm::vec3& point, const glm::vec3& hips) const;
+    // Would hand h have to reach over past the other hand's shoulder to
+    // take `hold` (the other hand on its hold)? Such a hold is the other
+    // hand's: this one can match the other hand's hold first, then the
+    // other hand goes.
+    bool crossesOver(int h, int hold) const;
     // How far hand h can reach from its pivot at the current charge.
     float reachNow(int h) const;
 
@@ -189,6 +205,9 @@ private:
     void land(int h);
     void updateBody(float dt, bool fast);
     glm::vec3 shoulderAt(int h, const glm::vec3& hips) const;
+    // How much arm it takes from hand h's shoulder to `wrist` (round the
+    // front of the chest when the wrist is past the other shoulder).
+    float armPath(int h, const glm::vec3& wrist, const glm::vec3& hips) const;
     // Moves `hips` as little as it can so every hand on the rock (and, with
     // `reaching`, every hand on its way to it) is within reach of its
     // shoulder, and stays off the rock.

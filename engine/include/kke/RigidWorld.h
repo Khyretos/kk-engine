@@ -179,6 +179,11 @@ public:
     void removeCharacter(CharacterId id);
     void setCharacterInput(CharacterId id, const CharacterInput& input);
     glm::vec3 characterPosition(CharacterId id) const; // feet
+    // Where to draw it: the feet between the last two physics steps, by
+    // `alpha` (UpdateContext::alpha). Characters step at the physics rate;
+    // drawn at their raw position on a faster screen they stand still one
+    // frame and jump the next (a double image while running).
+    glm::vec3 characterDrawPosition(CharacterId id, float alpha) const;
     glm::vec3 characterVelocity(CharacterId id) const;
     bool characterOnGround(CharacterId id) const;
     void teleportCharacter(CharacterId id, const glm::vec3& feet);

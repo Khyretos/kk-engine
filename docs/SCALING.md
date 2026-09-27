@@ -94,7 +94,10 @@ raining onto the ground, one thread: **1.56 ms per step on average,
   extend), UI per viewport, one input device per player (SDL3 has
   gamepads).
 - Cost: roughly 4x the draw calls and fragment work at 1/4 resolution
-  each; shadows can be shared if the shadow map covers all players.
+  each. Shadows: in split screen the shadow map becomes a 2x2 atlas, one
+  tile per view, each centred on that view's camera target but always lit
+  from the sun, so one player's camera never moves another's shadows
+  (`ShadowMap::setTiles`, `ShadowRenderContext::viewIndex`).
   Instancing and LODs matter much more here, since 4 views multiply
   every draw call.
 - On min-spec: 2 views, not 4.
