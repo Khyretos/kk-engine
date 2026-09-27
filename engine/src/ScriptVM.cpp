@@ -529,6 +529,21 @@ bool ScriptVM::callRef(int r, const std::string& source, const std::function<int
     return resume(nargs, 0, source);
 }
 
+bool ScriptVM::callRefResults(int r, const std::string& source, const std::function<int(lua_State*)>& push, int nresults,
+                              const std::function<void(lua_State*)>& read) {
+    if (!m_L || r <= 0) return false;
+    lua_rawgeti(m_L, LUA_REGISTRYINDEX, r);
+    if (!lua_isfunction(m_L, -1)) {
+        lua_pop(m_L, 1);
+        return false;
+    }
+    const int nargs = push ? push(m_L) : 0;
+    if (!resume(nargs, nresults, source)) return false;
+    if (read) read(m_L);
+    lua_pop(m_L, nresults);
+    return true;
+}
+
 namespace {
 
 constexpr int kMaxEncodeDepth = 16;
@@ -680,6 +695,14 @@ bool ScriptVM::encodeValue(lua_State* L, int index, std::string& out, std::strin
         return false;
     }
     return true;
+}
+
+std::string ScriptVM::encodeString(const std::string& text) {
+    std::string out(1, char(kTagString));
+    const auto n = uint32_t(text.size());
+    out.append(reinterpret_cast<const char*>(&n), sizeof n);
+    out += text;
+    return out;
 }
 
 bool ScriptVM::decodeValue(lua_State* L, const std::string& bytes, std::string& error) {

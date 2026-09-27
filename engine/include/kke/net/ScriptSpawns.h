@@ -25,6 +25,11 @@ constexpr uint16_t kSpawnBody = 0x4C01;          // physics.box / physics.sphere
 constexpr uint16_t kSpawnBreakableBox = 0x4C02;  // breakable.box
 constexpr uint16_t kSpawnBall = 0x4C03;          // breakable.ball (transient: a throw)
 
+// Lua net.call (kke/ScriptCalls.h): a call to the server and its answer
+// to the one player that made it. Game events, like kScriptEvent.
+constexpr uint16_t kScriptCall = 0x4C04;
+constexpr uint16_t kScriptReply = 0x4C05;
+
 struct BodySpawn {
     bool sphere = false;
     bool isStatic = false;

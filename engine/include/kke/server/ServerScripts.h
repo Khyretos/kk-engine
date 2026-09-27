@@ -9,7 +9,11 @@
 //   physics.*   box, sphere, remove, position, velocity, setVelocity,
 //               impulse, raycast, count          (a build with Jolt)
 //   net.*       role() = "server", isServer() = true, connected(),
-//               playerId() = 0, players(), send(name, data [, player])
+//               playerId() = 0, players(), send(name, data [, player]),
+//               handle(name, fn): answers the players' net.call
+//               (kke/ScriptCalls.h). A handler's sends, spawns, removes,
+//               kicks, scores and store writes happen only if it
+//               succeeds; a refusal or an error undoes them.
 //   server.*    name(), say(text), kick(player, reason), score(board,
 //               player, score), top(board [, n])
 //   store.*     save, load, add, remove, keys: the server's store, in the
@@ -31,6 +35,7 @@
 //
 // Built with KKE_ENABLE_NET and Lua.
 
+#include "kke/ScriptCalls.h"
 #include "kke/ScriptStore.h"
 #include "kke/ScriptVM.h"
 #include "kke/net/NetSession.h"
@@ -79,8 +84,8 @@ public:
     void update(double now, float dt);
     void shutdown(); // Shutdown hook, then everything the scripts made goes
 
-    // From the server: a player came or went; a script message arrived
-    // (kind script_net::kScriptEvent).
+    // From the server: a player came or went; a script message or call
+    // arrived (kinds script_net::kScriptEvent, kScriptCall).
     void playerJoined(uint8_t id, const std::string& name);
     void playerLeft(uint8_t id);
     void netMessage(const net::GameEventMsg& e);
@@ -110,6 +115,11 @@ private:
     void bind();
     void bindPhysics();
     void release(const std::string& source); // everything `source` made
+    // Runs a net.call handler all or nothing (ScriptCalls::Link::atomically).
+    bool runAtomically(const std::function<bool()>& run);
+    // What a script does to the world outside: now, or, inside a call,
+    // once the call succeeded.
+    void effect(std::function<void()> f);
     void syncCapsules(float dt);
     void report();                           // new VM errors -> warn
     uint16_t nextNetId();
@@ -119,6 +129,13 @@ private:
     Services m_services;
     std::unique_ptr<ScriptVM> m_vm;
     std::unique_ptr<ScriptStore> m_store;
+    std::unique_ptr<ScriptCalls> m_calls;
+    // Inside a net.call handler (runAtomically): what waits for success,
+    // and what to undo on failure.
+    bool m_inCall = false;
+    std::vector<std::function<void()>> m_held;
+    std::vector<uint32_t> m_spawnedInCall;
+    std::unique_ptr<Leaderboard> m_boardsBefore;
     std::vector<std::string> m_files;
     std::vector<Body> m_bodies;
     std::map<uint8_t, std::string> m_names;   // players here
