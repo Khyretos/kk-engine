@@ -546,8 +546,8 @@ the reason in the status line.
   on touch screens and gamepads") and the comment on `pointerButton()`:
   sending real mouse events means the palette, dragging and the bat
   "can't tell a gamepad from a mouse", so there is one input path to
-  test. The trade-off is that Build mode, which is not built on that
-  path, has no controller support.
+  test. Build mode later got the same treatment (`buildPadButton`): the
+  stick drives the pointer and the buttons send the editor's keys.
 - **The bat aims itself.** A tap on the ground within 1.2 m of a standing
   person swings at them; the commit message says "fingers and thumbsticks
   are less exact than a mouse".
