@@ -122,6 +122,7 @@ nav:
           - Sea: demos/sea_demo.md
           - Jiggle: demos/jiggle_demo.md
           - Sound: demos/audio_demo.md
+          - Synty characters and ragdolls: demos/synty_demo.md
       - Showcases and tools:
           - kke_demo showcase: demos/showcase.md
           - Sandbox: demos/sandbox.md
