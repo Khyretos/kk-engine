@@ -38,6 +38,8 @@ void SphereImpostorRenderer::draw(const RenderContext& ctx, const std::vector<Sp
 
 namespace {
 struct MeshPush { glm::mat4 model; float metallic; float roughness; };
+// cloth.frag's push block: MeshPush, padding, then the fabric (vertex and fragment stages).
+struct ClothPush { glm::mat4 model; float metallic, roughness, pad0, pad1; glm::vec4 sheen, weave; };
 struct ShadowPush { glm::mat4 lightViewProj; glm::mat4 model; };
 } // namespace
 
@@ -104,6 +106,30 @@ void DynamicMeshRenderer::drawTranslucent(const RenderContext& ctx, const glm::m
     }
     bindAndDraw(ctx, *m_absorbPipeline, model, 0.0f, roughness);
     bindAndDraw(ctx, *m_lightPipeline, model, 0.0f, roughness);
+}
+
+void DynamicMeshRenderer::drawCloth(const RenderContext& ctx, const Fabric& fabric, const glm::mat4& model) {
+    if (m_indices.empty()) return;
+    if (!m_clothPipeline) {
+        PipelineConfig c;
+        c.cullMode = VK_CULL_MODE_NONE; // both sides of a sheet are seen
+        c.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ClothPush) };
+        c.descriptorSetLayouts = { m_app.lightingBuffer().descriptorSetLayout(), m_app.shadowMapSetLayout(), m_app.materialTextureSetLayout() };
+        m_clothPipeline = std::make_unique<Pipeline>(m_app.device(), m_app.renderer().renderPass(), "shaders/cube.vert.spv", "shaders/cloth.frag.spv", c);
+    }
+    ensureUploaded(ctx.frameIndex);
+    FrameBuffers& fb = m_frames[ctx.frameIndex];
+    m_clothPipeline->bind(ctx.cmd);
+    VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, ctx.defaultMaterialTextureDescriptorSet };
+    vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_clothPipeline->layout(), 0, 3, sets, 0, nullptr);
+    ClothPush pc{ model, 0.0f, fabric.roughness, 0.0f, 0.0f, glm::vec4(fabric.sheenColor, fabric.sheen),
+                  glm::vec4(float(fabric.weave), fabric.weaveScale, fabric.fuzz, fabric.specular) };
+    vkCmdPushConstants(ctx.cmd, m_clothPipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
+    VkBuffer vb = fb.vertices->handle();
+    VkDeviceSize off = 0;
+    vkCmdBindVertexBuffers(ctx.cmd, 0, 1, &vb, &off);
+    vkCmdBindIndexBuffer(ctx.cmd, fb.indices->handle(), 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(ctx.cmd, static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
 }
 
 void DynamicMeshRenderer::bindAndDraw(const RenderContext& ctx, Pipeline& pipeline, const glm::mat4& model, float metallic, float roughness) {

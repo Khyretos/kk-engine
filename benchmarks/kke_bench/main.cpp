@@ -115,6 +115,57 @@ std::vector<Case> makeCases() {
         });
     } });
 
+    // Cloth (kke/Cloth.h): sheets of cotton dropped over spheres on a
+    // floor, re-dropped every 2 s so they never fall asleep. One sample =
+    // one 60 Hz step of the whole world. The protection level is in the
+    // name: full (self and cloth-vs-cloth collision), basic, off.
+    struct ClothCase { const char* name; const char* what; int pieces, res; kke::ClothProtection level; };
+    for (const ClothCase cc : { ClothCase{ "cloth_1x32_full", "Jolt cloth: one 32x32 sheet draping a sphere, Full protection", 1, 32, kke::ClothProtection::Full },
+                                ClothCase{ "cloth_1x32_basic", "Jolt cloth: one 32x32 sheet draping a sphere, Basic protection", 1, 32, kke::ClothProtection::Basic },
+                                ClothCase{ "cloth_1x32_off", "Jolt cloth: one 32x32 sheet draping a sphere, no protection", 1, 32, kke::ClothProtection::Off },
+                                ClothCase{ "cloth_16x24_full", "Jolt cloth: 16 sheets of 24x24 draping spheres, Full protection", 16, 24, kke::ClothProtection::Full },
+                                ClothCase{ "cloth_16x24_basic", "Jolt cloth: 16 sheets of 24x24 draping spheres, Basic protection", 16, 24, kke::ClothProtection::Basic },
+                                ClothCase{ "cloth_1x64_full", "Jolt cloth: one 64x64 blanket draping a sphere, Full protection", 1, 64, kke::ClothProtection::Full },
+                                ClothCase{ "cloth_1x64_basic", "Jolt cloth: one 64x64 blanket draping a sphere, Basic protection", 1, 64, kke::ClothProtection::Basic } }) {
+        cases.push_back({ cc.name, cc.what, 240, [cc] {
+            auto w = std::make_shared<kke::RigidWorld>([] {
+                kke::RigidWorld::Settings s;
+                s.threads = 0;
+                return s;
+            }());
+            kke::RigidWorld::BodyDesc g;
+            g.motion = kke::RigidWorld::Motion::Static;
+            g.halfExtents = glm::vec3(30.0f, 0.5f, 30.0f);
+            g.position = glm::vec3(0.0f, -0.5f, 0.0f);
+            w->add(g);
+            auto ids = std::make_shared<std::vector<kke::RigidWorld::ClothId>>();
+            const int side = int(std::ceil(std::sqrt(float(cc.pieces))));
+            for (int i = 0; i < cc.pieces; ++i) {
+                const glm::vec3 at(float(i % side) * 2.5f, 0.0f, float(i / side) * 2.5f);
+                kke::RigidWorld::BodyDesc ball;
+                ball.shape = kke::RigidWorld::Shape::Sphere;
+                ball.motion = kke::RigidWorld::Motion::Static;
+                ball.radius = 0.4f;
+                ball.position = at + glm::vec3(0.0f, 0.4f, 0.0f);
+                w->add(ball);
+                kke::ClothDesc d;
+                d.mesh = kke::clothGrid(at + glm::vec3(0.0f, 1.2f, 0.0f), 1.6f, 1.6f, cc.res, cc.res, glm::vec3(1, 0, 0), glm::vec3(0, 0, 1));
+                d.fabric = kke::clothFabric("cotton");
+                d.protection = cc.level;
+                ids->push_back(w->addCloth(d));
+            }
+            auto steps = std::make_shared<int>(0);
+            return std::function<double()>([w, ids, steps] {
+                if (++*steps % 120 == 0)
+                    for (auto id : *ids) w->resetCloth(id);
+                w->step(1.0f / 60.0f);
+                std::vector<glm::vec3> p;
+                w->clothPositions(ids->front(), p);
+                return double(p[p.size() / 2].y);
+            });
+        } });
+    }
+
     // Raycasts into a settled pile: what picking, audio occlusion and the
     // camera spring arm pay per query.
     cases.push_back({ "rigid_raycast_1000", "Jolt: 1000 raycasts into a settled pile of 400 crates", 200, [] {

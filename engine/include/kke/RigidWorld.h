@@ -1,5 +1,7 @@
 #pragma once
 
+#include "kke/Cloth.h"
+
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -48,6 +50,7 @@ public:
         float mass = 0.0f;                   // kg; > 0 overrides density (inertia still from the shape)
         float friction = 0.6f, restitution = 0.1f;
         uint32_t material = 0;               // game-defined id, reported in contacts (sounds, effects)
+        bool clothOnly = false;              // seen only by cloth: a moving mannequin's arms, a cape's body proxy
     };
 
     struct Settings {
@@ -221,6 +224,25 @@ public:
     bool capsuleFits(const glm::vec3& feet, float height, float radius) const;
 
     // Advances characters then bodies by dt (fixed step recommended).
+    // Cloth (kke/Cloth.h, docs/CLOTH.md): Jolt soft bodies stepped with
+    // everything else, plus the engine's clipping protection. Positions
+    // are world space, one per ClothDesc::mesh vertex.
+    using ClothId = uint32_t; // 0 = none
+    ClothId addCloth(const ClothDesc& desc);
+    void removeCloth(ClothId id);
+    size_t clothCount() const;
+    bool clothPositions(ClothId id, std::vector<glm::vec3>& out) const;
+    // Skinned or pinned cloth: the joints' world matrices, same order as
+    // ClothDesc::bindPose (or one matrix moving every pin).
+    void setClothJoints(ClothId id, const std::vector<glm::mat4>& joints);
+    void setClothProtection(ClothId id, ClothProtection level);
+    ClothProtection clothProtection(ClothId id) const;
+    void resetCloth(ClothId id);           // back to the rest pose, at rest
+    ClothStats clothStats(ClothId id) const;
+    void setWind(const glm::vec3& velocity); // m/s, pushes on every cloth by its fabric's airDrag
+    glm::vec3 wind() const;
+    double lastClothMs() const;            // the engine's protection pass, last step (Jolt's own cloth solve is in lastStepMs)
+
     void step(float dt);
     double lastStepMs() const;
     // Seconds simulated by step() so far. Code that runs per rendered frame

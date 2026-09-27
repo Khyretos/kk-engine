@@ -989,6 +989,12 @@ if(KKE_ENABLE_JOLT AND ENGINE_ENABLE_LUA)
     add_subdirectory(games/platoon)
 endif()
 
+# Cloth: fabrics, a bed, nets and a cape on Jolt soft bodies with the
+# engine's clipping protection (games/cloth_demo/README.md, docs/CLOTH.md).
+if(KKE_ENABLE_JOLT)
+    add_subdirectory(games/cloth_demo)
+endif()
+
 # Duel: a one-on-one fist fight on kke::Combatant (games/duel/README.md).
 # Jolt: the ring, the fighters and knockdown ragdolls.
 if(KKE_ENABLE_JOLT)
