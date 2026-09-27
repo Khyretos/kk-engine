@@ -35,6 +35,7 @@ PAGES = [
     ("cookbook/networking.md", "Multiplayer: host scripts and player scripts"),
     ("cookbook/play-to-make.md", "One idea at every level: pictures, node graph, Lua"),
     ("cookbook/cpp.md", "C++: modules, Lua bindings, tests"),
+    ("demos/index.md", "Which demo to start from for each kind of game; each demo's page explains how it is built and why"),
     ("SCRIPTING.md", "The Lua API in full"),
     ("PLAY_TO_MAKE.md", "The design: a five-year-old can make a game"),
 ]

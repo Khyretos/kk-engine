@@ -35,7 +35,7 @@ new **Mountain** row; "Random" keeps today's endless seeds.
 |---|---|---|---|
 | 1 | Pebble Hill | 12 m | The basics: a leaning-back slab covered in jugs, one ledge |
 | 2 | Meadow Crag | 20 m | Resting: two ledges, a first vertical band |
-| 3 | Granite Tower | 30 m | The classic face (today's mountain): slab, wall, overhang |
+| 3 | Granite Tower | 36 m | The classic face (today's mountain): slab, wall, overhang |
 | 4 | Overhang Cove | 26 m | Steep rock: lunges and jugs, stamina matters |
 | 5 | Crumble Peak | 30 m | Loose rock everywhere: a lunge can break the hold |
 | 6 | Cloud Spire | 46 m | The long one: crimps, four ledges, pacing |
@@ -67,7 +67,7 @@ A **Mode** row in the start menu (the host's, online):
 | Mode | Rules |
 |---|---|
 | Race | Today's game: first over the summit wins. |
-| Time trial | Race your best run: its ghost climbs next to you (recorded poses, played back on the next face). Medals count here too. |
+| Time trial | Race your best run: its ghost climbs on player 1's face (recorded poses, played back there). Medals count here too. |
 | Rockfall | Rocks tumble down every face from the summit (Jolt bodies). A hit costs a chunk of stamina (`kke::Climber::knock`); the higher the leader, the more come. First to the top wins. |
 | Elimination | Every 30 s the lowest climber is out (they watch the leaders). Last one climbing, or the first to top, wins. |
 

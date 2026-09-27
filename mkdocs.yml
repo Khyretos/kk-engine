@@ -99,6 +99,29 @@ nav:
       - Multiplayer: cookbook/networking.md
       - Play to make: cookbook/play-to-make.md
       - C++: cookbook/cpp.md
+  # Pages made from games/<demo>/README.md by tools/docs_site/hooks.py.
+  - Demos:
+      - demos/index.md
+      - Start here:
+          - Starter game: demos/template.md
+          - First Lua game: demos/first_lua_game.md
+          - Cookbook player: demos/cookbook.md
+      - Games:
+          - Climb Race: demos/climb_race.md
+          - Duel: demos/duel.md
+          - Goblin Horde: demos/goblin_horde.md
+      - AI and companions:
+          - Farm: demos/farm_demo.md
+          - Pet companion: demos/pet_companion.md
+          - Platoon: demos/platoon.md
+          - Command kit: demos/command_kit.md
+          - Procedural animation: demos/procedural_demo.md
+      - Showcases and tools:
+          - kke_demo showcase: demos/showcase.md
+          - Sandbox: demos/sandbox.md
+          - RmlUi demo: demos/rmlui_demo.md
+          - ImGui demo: demos/imgui_demo.md
+          - kke_basics: demos/kke_demo_game.md
   - Guides:
       - Play to make: PLAY_TO_MAKE.md
       - Scripting in Lua: SCRIPTING.md
