@@ -5,10 +5,9 @@
     <style>
         /* Over the game: nothing here takes clicks. */
         body { pointer-events: none; }
-        .player { position: absolute; left: 24dp; top: 20dp; width: 300dp; padding: 12dp 16dp; border-radius: 10dp;
+        /* One panel per player, in the top left corner of their view. */
+        .player { position: absolute; width: 280dp; padding: 12dp 16dp; margin: 20dp 0 0 24dp; border-radius: 10dp;
                   background-color: #0b0f1ccc; border-left: 3dp #56a8ff; }
-        .player.two { left: 50%; margin-left: 24dp; border-left-color: #ff9a4a; }
-        .player.rival { left: auto; right: 24dp; width: 220dp; border-left-color: #ff9a4a; }
         .player .name { font-size: 12dp; letter-spacing: 2dp; color: #aab3cc; }
         .player .time { font-size: 30dp; font-weight: bold; color: #ffffff; }
         .player .height { font-size: 14dp; color: #cfd6e6; }
@@ -22,41 +21,39 @@
         .hand.l { color: #5cf2ff; }
         .hand.r { color: #ff6fd8; }
         .status { font-size: 13dp; color: #ffcf5c; margin-top: 4dp; }
+        /* The CPU climbers, highest first. */
+        #rivals { position: absolute; right: 24dp; top: 30%; width: 200dp; padding: 8dp 12dp; border-radius: 10dp; background-color: #0b0f1ccc; }
+        .rival { display: block; font-size: 14dp; color: #e8ecf4; padding: 2dp 0; }
+        .rival .dot { display: inline-block; width: 10dp; height: 10dp; border-radius: 5dp; margin-right: 8dp; }
+        .rival .h { float: right; color: #aab3cc; }
+        .rival .s { color: #ffcf5c; font-size: 12dp; margin-left: 6dp; }
         #banner { position: absolute; top: 34%; left: 0; width: 100%; text-align: center; }
         #banner .big { font-size: 72dp; font-weight: bold; color: #ffffff; }
         #banner .sub { font-size: 18dp; color: #e8ecf4; margin-top: 6dp; }
         #hint { position: absolute; left: 0; bottom: 18dp; width: 100%; text-align: center; font-size: 13dp; color: #aab3cc; }
+        #hint img, #banner .sub img { font-size: 15dp; } /* prompt glyphs are 1.6em */
     </style>
 </head>
 <body data-model="climb">
-    <div class="player" data-class-low="p1.low">
-        <div class="name">{{p1.name}}</div>
-        <div class="time">{{p1.time}}</div>
-        <div class="height">{{p1.height}}</div>
-        <div class="bar"><div class="fill" data-style-width="p1.stamina" data-style-background-color="p1.stamina_color"></div></div>
-        <div class="stamina">stamina {{p1.stamina}}</div>
-        <div class="hands"><span class="hand l">L {{p1.left}}</span><span class="hand r">R {{p1.right}}</span></div>
-        <div class="status">{{p1.status}}</div>
+    <div data-if="racing">
+        <div data-for="p : players" class="player" data-class-low="p.low" data-style-left="p.x" data-style-top="p.y"
+             data-style-border-left-color="p.accent">
+            <div class="name">{{p.name}}</div>
+            <div class="time">{{p.time}}</div>
+            <div class="height">{{p.height}}</div>
+            <div class="bar"><div class="fill" data-style-width="p.stamina" data-style-background-color="p.stamina_color"></div></div>
+            <div class="stamina">stamina {{p.stamina}}</div>
+            <div class="hands"><span class="hand l">L {{p.left}}</span><span class="hand r">R {{p.right}}</span></div>
+            <div class="status">{{p.status}}</div>
+        </div>
+        <div id="rivals" data-if="rivals.size > 0">
+            <div data-for="r : rivals" class="rival"><span class="dot" data-style-background-color="r.accent"></span>{{r.name}}<span class="s">{{r.status}}</span><span class="h">{{r.height}}</span></div>
+        </div>
+        <div id="banner" data-if="banner != ''">
+            <div class="big">{{banner}}</div>
+            <div class="sub" data-rml="sub"></div>
+        </div>
+        <div id="hint" data-rml="hint"></div>
     </div>
-    <div class="player two" data-if="split" data-class-low="p2.low">
-        <div class="name">{{p2.name}}</div>
-        <div class="time">{{p2.time}}</div>
-        <div class="height">{{p2.height}}</div>
-        <div class="bar"><div class="fill" data-style-width="p2.stamina" data-style-background-color="p2.stamina_color"></div></div>
-        <div class="stamina">stamina {{p2.stamina}}</div>
-        <div class="hands"><span class="hand l">L {{p2.left}}</span><span class="hand r">R {{p2.right}}</span></div>
-        <div class="status">{{p2.status}}</div>
-    </div>
-    <div class="player rival" data-if="!split">
-        <div class="name">{{p2.name}}</div>
-        <div class="height">{{p2.height}}</div>
-        <div class="bar"><div class="fill" data-style-width="p2.stamina" data-style-background-color="p2.stamina_color"></div></div>
-        <div class="status">{{p2.status}}</div>
-    </div>
-    <div id="banner" data-if="banner != ''">
-        <div class="big">{{banner}}</div>
-        <div class="sub">{{sub}}</div>
-    </div>
-    <div id="hint">{{hint}}</div>
 </body>
 </rml>

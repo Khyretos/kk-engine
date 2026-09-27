@@ -5,6 +5,7 @@
 #include "kke/SphereImpostors.h"
 #include "kke/Viewports.h"
 #include "kke/modules/InputModule.h"
+#include "kke/modules/LobbyModule.h"
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/modules/UiModule.h"
 
@@ -65,7 +66,8 @@ std::vector<kke::ModuleDependency> ClimbRaceModule::dependencies() const {
     return { { std::type_index(typeid(kke::RigidBodyModule)), true, "the rock, the ledges and the climbers' bodies (Jolt)" },
              { std::type_index(typeid(kke::InputModule)), true, "the grab controls, rebindable" },
              { std::type_index(typeid(kke::ModelModule)), false, "the climbers' animated bodies" },
-             { std::type_index(typeid(kke::UiModule)), false, "the HUD: stamina, clock, hands" } };
+             { std::type_index(typeid(kke::UiModule)), false, "the HUD: stamina, clock, hands" },
+             { std::type_index(typeid(kke::LobbyModule)), false, "the start menu: players join, pick a look, set the CPU climbers" } };
 }
 
 void ClimbRaceModule::init(kke::Application& app) {
@@ -73,18 +75,20 @@ void ClimbRaceModule::init(kke::Application& app) {
     m_rigid = app.getModule<kke::RigidBodyModule>();
     m_input = app.getModule<kke::InputModule>();
     m_models = app.getModule<kke::ModelModule>();
+    m_lobby = app.getModule<kke::LobbyModule>();
 
     m_seed = static_cast<uint32_t>(envFloat("KKE_CLIMB_SEED", 7.0f));
     m_autopilot = envOn("KKE_CLIMB_AUTOPILOT");
-    m_botPause = envFloat("KKE_CLIMB_BOT_PAUSE", m_botPause);
+    m_botPause = envFloat("KKE_CLIMB_BOT_PAUSE", -1.0f);
+    m_defaultCpus = std::clamp(static_cast<int>(envFloat("KKE_CLIMB_CPUS", 1.0f)), 0, kke::Lobby::kMaxCpus);
     m_quitAfter = envFloat("KKE_CLIMB_QUIT", -1.0f);
     if (envOn("KKE_CLIMB_ROCKFALL")) m_rockfall = 1.0f;
 
     // Controls: the usual character actions (move, look, jump, sprint),
     // and the four grab buttons. Left side of the pad (or the mouse's
     // left button, Q) is the left hand, right side the right hand.
-    for (int p = 0; p < 2; ++p) {
-        if (p == 1) m_input->setPlayers(2);
+    for (int p = 0; p < kke::Lobby::kMaxSeats; ++p) {
+        m_input->setPlayers(p + 1);
         kke::InputMap& in = m_input->map(p);
         kke::InputModule::defineCharacterActions(in);
         // Those buttons are the hands here.
@@ -97,7 +101,7 @@ void ClimbRaceModule::init(kke::Application& app) {
         in.defineAction({ "letgo", "Let go of the rock", "Climbing", "game" });
         in.defineAction({ "race.again", "Race again", "Race", "game" });
         in.defineAction({ "race.new", "New mountain", "Race", "game" });
-        in.defineAction({ "split", "Split screen (two players)", "Race", "game" });
+        in.defineAction({ "menu", "Back to the menu (players, CPU climbers)", "Race", "game" });
         in.defineAction({ "panels", "Developer panels", "Game", "game" });
         auto trigger = [&](const char* action, SDL_GamepadAxis axis) {
             kke::Binding b = IM::bind(action, IM::padAxis(axis, 1), kke::Trigger::Continuous);
@@ -116,9 +120,10 @@ void ClimbRaceModule::init(kke::Application& app) {
         in.addBinding(IM::bind("letgo", IM::key(SDL_SCANCODE_C)));
         in.addBinding(IM::bind("race.again", IM::pad(SDL_GAMEPAD_BUTTON_START)));
         in.addBinding(IM::bind("race.again", IM::key(SDL_SCANCODE_R)));
-        in.addBinding(IM::bind("race.new", IM::pad(SDL_GAMEPAD_BUTTON_BACK)));
+        in.addBinding(IM::bind("race.new", IM::pad(SDL_GAMEPAD_BUTTON_NORTH)));
         in.addBinding(IM::bind("race.new", IM::key(SDL_SCANCODE_N)));
-        in.addBinding(IM::bind("split", IM::key(SDL_SCANCODE_F2)));
+        in.addBinding(IM::bind("menu", IM::pad(SDL_GAMEPAD_BUTTON_BACK)));
+        in.addBinding(IM::bind("menu", IM::key(SDL_SCANCODE_M)));
         in.addBinding(IM::bind("panels", IM::key(SDL_SCANCODE_F1)));
     }
     m_input->setPlayers(1);
@@ -146,14 +151,15 @@ void ClimbRaceModule::init(kke::Application& app) {
     app.window().setQuitOnEscape(false); // Esc frees the mouse
     loadCharacter();
     buildScenery();
-    buildMountain(m_seed);
-    spawnRacers();
+    setupLobby();
+    const std::vector<Entry> roster = wantedRoster();
+    buildMountain(m_seed, static_cast<int>(roster.size()));
+    buildRacers(roster);
     buildHud();
-    setSplit(envOn("KKE_CLIMB_SPLIT"));
-    resetRace();
-    kke::log::get(name())->info("mountain {}: {} m, {} holds per face, {} ledges; the rival {}", m_seed,
-                                m_lanes[0]->wall->summitY(), m_lanes[0]->wall->holds().size(), m_lanes[0]->wall->ledges().size(),
-                                m_autopilot ? "and you both climb by yourselves" : "climbs by itself");
+    kke::log::get(name())->info("mountain {}: {} m, {} holds per face, {} ledges", m_seed, m_lanes[0]->wall->summitY(),
+                                m_lanes[0]->wall->holds().size(), m_lanes[0]->wall->ledges().size());
+    // Without the menu (or asked to skip it): straight into a race.
+    if (!m_lobby || !m_lobby->isOpen()) startFromLobby();
 }
 
 void ClimbRaceModule::buildScenery() {
@@ -161,16 +167,13 @@ void ClimbRaceModule::buildScenery() {
     std::vector<kke::Vertex> v;
     std::vector<uint32_t> idx;
     // The meadow in front of the mountain.
-    const glm::vec3 groundHalf(70.0f, 0.5f, 60.0f), groundCenter(0.0f, -0.5f, 20.0f);
+    const glm::vec3 groundHalf(130.0f, 0.5f, 60.0f), groundCenter(0.0f, -0.5f, 20.0f);
     appendBox(groundCenter, groundHalf, { 0.3f, 0.42f, 0.24f }, v, idx);
     kke::RigidWorld::BodyDesc d;
     d.motion = kke::RigidWorld::Motion::Static;
     d.halfExtents = groundHalf;
     d.position = groundCenter;
     m_scenery.push_back(w.add(d));
-    // Between the two faces: a dark gully at the back, so there's no sky
-    // between them (the faces' own sides are rock).
-    appendBox({ 0.0f, 22.0f, -15.0f }, { kLaneX - 7.4f, 22.0f, 3.5f }, { 0.22f, 0.2f, 0.19f }, v, idx);
     m_ground = std::make_unique<kke::DynamicMeshRenderer>(*m_app);
     m_ground->upload(v, idx);
 }
@@ -184,16 +187,20 @@ void ClimbRaceModule::clearMountain() {
     m_lanes.clear();
 }
 
-void ClimbRaceModule::buildMountain(uint32_t seed) {
+void ClimbRaceModule::buildMountain(uint32_t seed, int lanes) {
     clearMountain();
     m_seed = seed;
     kke::ClimbWallDesc desc;
     desc.seed = seed;
     kke::RigidWorld& w = m_rigid->world();
-    for (int li = 0; li < 2; ++li) {
+    const kke::ClimbWall generated = kke::ClimbWall::generate(desc);
+    lanes = std::max(lanes, 1);
+    const glm::vec3 flags[6] = { { 0.2f, 0.6f, 1.0f }, { 1.0f, 0.5f, 0.1f }, { 0.4f, 0.85f, 0.3f }, { 0.8f, 0.4f, 1.0f }, { 1.0f, 0.85f, 0.2f }, { 1.0f, 0.4f, 0.55f } };
+    for (int li = 0; li < lanes; ++li) {
         auto lane = std::make_unique<Lane>();
-        lane->wall = std::make_unique<kke::ClimbWall>(kke::ClimbWall::generate(desc));
-        lane->offset = glm::vec3(li == 0 ? -kLaneX : kLaneX, 0.0f, 0.0f);
+        lane->wall = std::make_unique<kke::ClimbWall>(generated);
+        // Side by side, 20 m apart, centred on x = 0 (two faces: -10 and 10).
+        lane->offset = glm::vec3((static_cast<float>(li) - static_cast<float>(lanes - 1) * 0.5f) * 2.0f * kLaneX, 0.0f, 0.0f);
         const kke::ClimbWall& wall = *lane->wall;
         kke::ClimbMesh rock = wall.buildMesh();
 
@@ -224,7 +231,10 @@ void ClimbRaceModule::buildMountain(uint32_t seed) {
         appendBox({ 0.0f, 0.01f, wall.surfaceZ(0.0f, 0.5f) + kStartOut }, { 6.0f, 0.02f, 0.08f }, { 0.95f, 0.95f, 0.9f }, v, idx);
         const glm::vec3 top(x0 * 0.3f, wall.summitY(), wall.summitZ() - 2.0f);
         appendBox(top + glm::vec3(0.0f, 1.5f, 0.0f), { 0.05f, 1.5f, 0.05f }, { 0.8f, 0.8f, 0.8f }, v, idx);
-        appendBox(top + glm::vec3(0.45f, 2.7f, 0.0f), { 0.45f, 0.28f, 0.02f }, li == 0 ? glm::vec3(0.2f, 0.6f, 1.0f) : glm::vec3(1.0f, 0.5f, 0.1f), v, idx);
+        appendBox(top + glm::vec3(0.45f, 2.7f, 0.0f), { 0.45f, 0.28f, 0.02f }, flags[li % 6], v, idx);
+        // To the next face: a dark gully at the back, so there's no sky
+        // between them (the faces' own sides are rock).
+        if (li + 1 < lanes) appendBox({ kLaneX, 22.0f, -15.0f }, { kLaneX - 7.4f, 22.0f, 3.5f }, { 0.22f, 0.2f, 0.19f }, v, idx);
         lane->mesh = std::make_unique<kke::DynamicMeshRenderer>(*m_app);
         lane->mesh->upload(v, idx);
 
@@ -255,39 +265,12 @@ void ClimbRaceModule::buildMountain(uint32_t seed) {
         m_lanes.push_back(std::move(lane));
     }
     // New walls: every climber holds on to the old one, so they start again.
-    for (Racer& r : m_racers) {
+    for (size_t i = 0; i < m_racers.size(); ++i) {
+        Racer& r = m_racers[i];
+        r.lane = std::min(static_cast<int>(i), lanes - 1);
         r.climber = std::make_unique<kke::Climber>(*m_lanes[static_cast<size_t>(r.lane)]->wall);
-        if (r.bot) {
-            r.brain = std::make_unique<kke::ClimbBot>(m_lanes[static_cast<size_t>(r.lane)]->wall->line());
-            r.brain->pause = botPause(r);
-        }
+        makeBrain(r);
     }
-}
-
-void ClimbRaceModule::spawnRacers() {
-    kke::RigidWorld& w = m_rigid->world();
-    for (int i = 0; i < 2; ++i) {
-        Racer r;
-        r.lane = i;
-        r.player = i;
-        r.bot = i == 1 || m_autopilot;
-        r.name = i == 0 ? (m_autopilot ? "You (autopilot)" : "You") : "Rival";
-        r.tint = i == 0 ? glm::vec3(0.55f, 0.75f, 1.0f) : glm::vec3(1.0f, 0.7f, 0.45f);
-        kke::RigidWorld::CharacterDesc cd;
-        cd.position = glm::vec3(0.0f);
-        r.id = w.addCharacter(cd);
-        r.loco = std::make_unique<kke::Locomotion>(w, r.id);
-        r.climber = std::make_unique<kke::Climber>(*m_lanes[static_cast<size_t>(i)]->wall);
-        if (r.bot) {
-            r.brain = std::make_unique<kke::ClimbBot>(m_lanes[static_cast<size_t>(i)]->wall->line());
-            r.brain->pause = botPause(r);
-        }
-        r.rig.mode = kke::CameraRig::Mode::ThirdPerson;
-        r.rig.settings.armLength = 4.2f;
-        r.rig.pitch = -5.0f;
-        m_racers.push_back(std::move(r));
-    }
-    for (Racer& r : m_racers) setupBody(r);
 }
 
 void ClimbRaceModule::resetRace() {
@@ -311,10 +294,7 @@ void ClimbRaceModule::resetRace() {
         const float x = wall.holds()[static_cast<size_t>(wall.line().front())].position.x;
         const glm::vec3 feet(x, 0.05f, wall.surfaceZ(x, 0.5f) + kStartOut);
         r.climber = std::make_unique<kke::Climber>(wall);
-        if (r.bot) {
-            r.brain = std::make_unique<kke::ClimbBot>(wall.line());
-            r.brain->pause = botPause(r);
-        }
+        makeBrain(r);
         r.loco->teleport(toWorld(r, feet));
         r.loco->setFacing(glm::vec3(0, 0, -1));
         r.rig.yaw = 0.0f;
@@ -327,50 +307,41 @@ void ClimbRaceModule::resetRace() {
     }
 }
 
-void ClimbRaceModule::setSplit(bool on) {
-    m_split = on;
-    m_input->setPlayers(on ? 2 : 1);
-    assignControllers();
-    if (!on) m_app->views().clear();
-    m_hud.split = on;
-    if (m_hudModel) m_hudModel.DirtyVariable("split");
-}
-
-// Split screen: the second controller plugged in is player 2 (the rival's
-// face); without one the rival stays a bot. Player 1 keeps the keyboard,
-// the mouse and every other device.
-void ClimbRaceModule::assignControllers() {
-    if (m_racers.size() < 2) return;
-    std::vector<uint32_t> pads;
-    for (const auto& d : m_input->devices().devices())
-        if (d.connected && d.kind == kke::InputDevices::Kind::Gamepad) pads.push_back(d.ref);
-    Racer& two = m_racers[1];
-    const uint32_t pad = m_split && pads.size() >= 2 ? pads[1] : 0;
-    const bool human = pad != 0;
-    if (human == two.bot) {
-        two.bot = !human;
-        two.name = human ? "Player 2" : "Rival";
-        if (two.bot) {
-            two.brain = std::make_unique<kke::ClimbBot>(m_lanes[1]->wall->line());
-            two.brain->pause = botPause(two);
-        } else {
-            two.brain.reset();
-        }
+// The CPU climbers' brain, from their difficulty: how long they breathe
+// between moves, whether they lunge, and how tired they let themselves get.
+void ClimbRaceModule::makeBrain(Racer& r) {
+    if (!r.bot) {
+        r.brain.reset();
+        return;
     }
-    if (m_split) {
-        m_input->assignDevices(1, pad ? std::vector<uint32_t>{ pad } : std::vector<uint32_t>{});
-        std::vector<uint32_t> rest;
-        if (pad)
-            for (const auto& d : m_input->devices().devices())
-                if (d.ref != pad) rest.push_back(d.ref);
-        m_input->assignDevices(0, std::move(rest));
-    } else {
-        m_input->assignDevices(0, {});
+    r.brain = std::make_unique<kke::ClimbBot>(m_lanes[static_cast<size_t>(r.lane)]->wall->line());
+    kke::ClimbBot& b = *r.brain;
+    switch (std::clamp(r.difficulty, 0, 3)) {
+    case 0: // Easy: slow, never lunges, rests early and long
+        b.pause = 1.0f;
+        b.lunges = false;
+        b.restBelow = 0.55f;
+        b.restUntil = 0.97f;
+        break;
+    case 1: // Normal
+        b.pause = 0.6f;
+        break;
+    case 2: // Hard
+        b.pause = 0.42f;
+        break;
+    default: // Expert: quick, and pushes on tired
+        b.pause = 0.26f;
+        b.restBelow = 0.35f;
+        b.restUntil = 0.8f;
+        break;
     }
+    if (m_botPause >= 0.0f) b.pause = m_botPause;
+    r.pause = b.pause;
 }
 
 void ClimbRaceModule::onEvent(const SDL_Event& e) {
-    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !m_captured && !m_app->uiCapturesMouse() && e.button.button == SDL_BUTTON_LEFT) {
+    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !m_captured && m_phase != Phase::Lobby && !m_app->uiCapturesMouse() &&
+        e.button.button == SDL_BUTTON_LEFT) {
         m_captured = true;
         SDL_SetWindowRelativeMouseMode(m_app->window().handle(), true);
     }
@@ -384,8 +355,8 @@ ClimbRaceModule::RacerInput ClimbRaceModule::readPlayer(Racer& r, float dt) {
     RacerInput ri;
     kke::InputMap& in = m_input->map(r.player);
     const glm::vec2 move = in.axis2("move");
-    // Look: the mouse while it's captured (player 1), a stick any time.
-    if (r.player == 0 && m_captured) ri.look += in.axis2("look") * m_mouseSensitivity;
+    // Look: the mouse while it's captured (the keyboard player), a stick any time.
+    if (r.mouse && m_captured) ri.look += in.axis2("look") * m_mouseSensitivity;
     const glm::vec2 rate = in.axis2("look.rate");
     ri.look += glm::vec2(rate.x * m_stickSpeed * dt, rate.y * m_stickSpeed * 0.7f * dt);
 
@@ -407,7 +378,7 @@ ClimbRaceModule::RacerInput ClimbRaceModule::readPlayer(Racer& r, float dt) {
     ri.climb.letGo = in.pressed("letgo");
     ri.mantle = ri.loco.goUp;
     // Mouse players aim with the crosshair when WASD is let go.
-    if (r.player == 0 && m_captured && glm::length(move) < 0.1f && r.crosshair >= 0) ri.climb.pick[0] = ri.climb.pick[1] = r.crosshair;
+    if (r.mouse && m_captured && glm::length(move) < 0.1f && r.crosshair >= 0) ri.climb.pick[0] = ri.climb.pick[1] = r.crosshair;
     ri.grab = ri.climb.reach[0] || ri.climb.reach[1] || ri.climb.power[0] > 0.3f || ri.climb.power[1] > 0.3f;
     return ri;
 }
@@ -584,13 +555,37 @@ void ClimbRaceModule::update(const kke::UpdateContext& ctx) {
     const float dt = ctx.dt;
     kke::InputMap& p1 = m_input->map(0);
     if (p1.pressed("panels")) m_app->debugUi().setVisible(!m_app->debugUi().visible());
-    if (p1.pressed("split")) setSplit(!m_split);
-    if (m_split) assignControllers();
-    if (p1.pressed("race.new") || (m_phase == Phase::Finished && m_split && m_input->map(1).pressed("race.new"))) {
-        buildMountain(m_seed + 1);
-        resetRace();
-    } else if (p1.pressed("race.again")) {
-        resetRace();
+    if (m_phase == Phase::Lobby) {
+        updateLobby(dt);
+        updateHud(dt);
+        return;
+    }
+    // Any player: race again, a new mountain, or the menu.
+    bool again = false, fresh = false, menu = false;
+    for (int p = 0; p < m_input->players(); ++p) {
+        kke::InputMap& in = m_input->map(p);
+        again = again || in.pressed("race.again");
+        fresh = fresh || in.pressed("race.new");
+        menu = menu || in.pressed("menu");
+    }
+    if (menu && m_lobby) {
+        backToLobby();
+        updateHud(dt);
+        return;
+    }
+    if (fresh || again) {
+        // Someone joined during the race: they're in this one.
+        if (m_rosterChanged) {
+            m_rosterChanged = false;
+            startFromLobby();
+            if (fresh) {
+                buildMountain(m_seed + 1, static_cast<int>(m_racers.size()));
+                resetRace();
+            }
+        } else {
+            if (fresh) buildMountain(m_seed + 1, static_cast<int>(m_racers.size()));
+            resetRace();
+        }
     }
 
     if (m_phase == Phase::Countdown) {
@@ -598,29 +593,58 @@ void ClimbRaceModule::update(const kke::UpdateContext& ctx) {
         if (m_countdown <= 0.0f) m_phase = Phase::Racing;
     }
     // The crosshair's hold for mouse aiming (last frame's camera).
-    {
-        Racer& r = m_racers[0];
-        r.crosshair = m_captured ? crosshairHold(r, m_app->camera(), r.crosshairOut) : -1;
-    }
+    for (Racer& r : m_racers) r.crosshair = r.mouse && m_captured ? crosshairHold(r, cameraOf(r), r.crosshairOut) : -1;
     for (Racer& r : m_racers) updateRacer(r, dt);
-    if (m_phase == Phase::Racing && std::all_of(m_racers.begin(), m_racers.end(), [](const Racer& r) { return r.finished; }))
-        m_phase = Phase::Finished;
-    if (m_phase == Phase::Racing && !m_racers[0].bot && m_racers[0].finished) m_phase = Phase::Finished; // you're done: results
+    if (m_phase == Phase::Racing) {
+        // Every player at the top (or everyone, in a race of bots): results.
+        bool playersDone = true, allDone = true, anyPlayer = false;
+        for (const Racer& r : m_racers) {
+            allDone = allDone && r.finished;
+            if (r.seat >= 0 && !r.bot) {
+                anyPlayer = true;
+                playersDone = playersDone && r.finished;
+            }
+        }
+        if (allDone || (anyPlayer && playersDone)) m_phase = Phase::Finished;
+    }
 
     for (Racer& r : m_racers) animateBody(r, dt);
-    // Cameras: player 1 is the engine's camera; split screen adds player 2's.
-    updateCamera(m_racers[0], dt, m_app->camera());
-    if (m_split) {
-        kke::Camera& two = m_racers[1].camera;
-        two.fovDegrees = m_app->camera().fovDegrees;
-        two.nearPlane = m_app->camera().nearPlane;
-        two.farPlane = m_app->camera().farPlane;
-        updateCamera(m_racers[1], dt, two);
-        std::vector<kke::Application::View>& views = m_app->views();
-        views.clear();
-        const std::vector<kke::ViewRect> rects = kke::splitScreen(2, true);
-        views.push_back({ m_app->camera(), rects[0] });
-        views.push_back({ two, rects[1] });
+    // Cameras: player 1 is the engine's camera; split screen adds the others'.
+    std::vector<Racer*> views;
+    for (Racer& r : m_racers)
+        if (r.seat >= 0) views.push_back(&r);
+    std::sort(views.begin(), views.end(), [](const Racer* a, const Racer* b) { return a->player < b->player; });
+    std::vector<kke::Application::View>& appViews = m_app->views();
+    appViews.clear();
+    if (views.empty()) {
+        updateCamera(m_racers[0], dt, m_app->camera());
+    } else {
+        const std::vector<kke::ViewRect> rects = kke::splitScreen(static_cast<int>(views.size()), true);
+        for (size_t i = 0; i < views.size(); ++i) {
+            kke::Camera& cam = cameraOf(*views[i]);
+            if (&cam != &m_app->camera()) {
+                cam.fovDegrees = m_app->camera().fovDegrees;
+                cam.nearPlane = m_app->camera().nearPlane;
+                cam.farPlane = m_app->camera().farPlane;
+            }
+            updateCamera(*views[i], dt, cam);
+            if (views.size() > 1) appViews.push_back({ cam, rects[i] });
+        }
+        // Three players: the empty quarter watches the whole mountain,
+        // rising with the leader.
+        if (views.size() == 3) {
+            float leader = 0.0f;
+            for (const Racer& r : m_racers) leader = std::max(leader, m_rigid->world().characterPosition(r.id).y);
+            const float span = 2.0f * kLaneX * static_cast<float>(m_lanes.size());
+            kke::Camera& wide = m_overview;
+            wide.fovDegrees = m_app->camera().fovDegrees;
+            wide.nearPlane = 0.5f;
+            wide.farPlane = m_app->camera().farPlane;
+            const float lift = std::max(8.0f, leader * 0.8f + 6.0f);
+            wide.position = glm::vec3(0.0f, lift + 4.0f, std::max(32.0f, span * 0.4f + 8.0f));
+            wide.target = glm::vec3(0.0f, lift, 0.0f);
+            appViews.push_back({ wide, kke::splitScreen(4, true)[3] });
+        }
     }
     updateHud(dt);
     updateRockfall(dt);
@@ -677,7 +701,7 @@ void ClimbRaceModule::render(const kke::RenderContext& ctx) {
     // lunge charges (bigger with the charge); red = the crosshair's hold
     // is out of reach.
     for (const Racer& r : m_racers) {
-        if (r.bot && !m_split && &r != &m_racers[0]) continue;
+        if (r.seat < 0) continue; // players' markers only
         const kke::Climber& c = *r.climber;
         if (!c.climbing()) continue;
         const kke::ClimbWall& wall = c.wall();

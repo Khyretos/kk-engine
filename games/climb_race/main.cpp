@@ -3,6 +3,7 @@
 #include "kke/Application.h"
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/InputModule.h"
+#include "kke/modules/LobbyModule.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/modules/SettingsModule.h"
@@ -35,6 +36,7 @@ int main() {
         app.addModule<kke::ModelModule>();
         app.addModule<kke::UiModule>();
         app.addModule<kke::AudioModule>().setUiVisible(false);
+        app.addModule<kke::LobbyModule>("climb_race_lobby.json");
         app.addModule<climb_race::ClimbRaceModule>();
         app.addModule<kke::StatsModule>().setUiVisible(false);
         app.run();

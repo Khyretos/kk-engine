@@ -34,12 +34,15 @@ void ClimbRaceModule::loadCharacter() {
         kke::log::get(name())->warn("animation library not found (assets/animations/UAL1_Standard.fbx): the climbers are blocks");
         return;
     }
-    m_charModel = m_models->load(file);
-    const kke::ModelData* d = m_charModel ? m_models->model(m_charModel) : nullptr;
-    if (!d || d->bones.empty() || d->animations.empty()) {
-        m_charModel = 0;
-        return;
-    }
+    const kke::ModelModule::ModelId loaded = m_models->load(file);
+    const kke::ModelData* d = loaded ? m_models->model(loaded) : nullptr;
+    if (!d || d->bones.empty() || d->animations.empty()) return;
+    // The mannequin is orange; a light grey copy takes each climber's
+    // colour from the menu (the tint multiplies), with its joints kept dark.
+    kke::ModelData grey = *d;
+    for (kke::ModelMaterial& m : grey.materials) m.baseColor = m.name.find("Joint") != std::string::npos ? glm::vec3(0.12f) : glm::vec3(0.8f);
+    m_charModel = m_models->add(std::move(grey), "climb_race/climber");
+    d = m_models->model(m_charModel);
     m_rigData = kke::ModelData{};
     m_rigData.bones = d->bones;
     m_rigData.animations = d->animations;

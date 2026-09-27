@@ -132,11 +132,13 @@
   points:
     - Seeded rock faces with ledges and a line that can always be climbed
     - Hands and feet placed on the holds with IK
-    - A rival climber bot, and split screen for a second player
+    - A start menu: controllers press A to join, up to four players in split screen, 0 to 5 CPU climbers from Easy to Expert
     - Loose holds fall on Jolt and land on the ledges below
   media:
     - { src: media/climb-race.webp, caption: "Split screen on an overhang, you and the rival" }
     - { src: media/climb-rockfall.webp, caption: "At the foot of the face: coloured holds, stamina on the HUD" }
+    - { src: media/climb-lobby.webp, caption: "The start menu: controllers press A to join, player 1 sets the CPU climbers" }
+    - { src: media/climb-split-three.webp, caption: "Three players and three CPU climbers; the fourth quarter watches the mountain" }
   demo: climb_race
   docs: MOVEMENT/
 

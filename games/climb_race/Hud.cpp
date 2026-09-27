@@ -5,6 +5,8 @@
 #include "ClimbRaceModule.h"
 
 #include "kke/Log.h"
+#include "kke/Viewports.h"
+#include "kke/modules/InputModule.h"
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/modules/UiModule.h"
 
@@ -47,6 +49,13 @@ std::string handText(const kke::Climber& c, int h) {
     return hold < 0 ? "free" : kke::holdKindName(c.wall().holds()[static_cast<size_t>(hold)].kind);
 }
 
+std::string hexColour(const glm::vec3& c) {
+    char buf[16];
+    auto b = [](float v) { return static_cast<int>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f)); };
+    std::snprintf(buf, sizeof(buf), "#%02x%02x%02x", b(c.r), b(c.g), b(c.b));
+    return buf;
+}
+
 } // namespace
 
 void ClimbRaceModule::buildHud() {
@@ -64,14 +73,25 @@ void ClimbRaceModule::buildHud() {
         p.RegisterMember("right", &PlayerHud::right);
         p.RegisterMember("height", &PlayerHud::height);
         p.RegisterMember("status", &PlayerHud::status);
+        p.RegisterMember("x", &PlayerHud::x);
+        p.RegisterMember("y", &PlayerHud::y);
+        p.RegisterMember("accent", &PlayerHud::accent);
         p.RegisterMember("low", &PlayerHud::low);
     }
-    c.Bind("p1", &m_hud.p[0]);
-    c.Bind("p2", &m_hud.p[1]);
+    c.RegisterArray<std::vector<PlayerHud>>();
+    if (auto r = c.RegisterStruct<RivalHud>()) {
+        r.RegisterMember("name", &RivalHud::name);
+        r.RegisterMember("height", &RivalHud::height);
+        r.RegisterMember("accent", &RivalHud::accent);
+        r.RegisterMember("status", &RivalHud::status);
+    }
+    c.RegisterArray<std::vector<RivalHud>>();
+    c.Bind("players", &m_hud.players);
+    c.Bind("rivals", &m_hud.rivals);
     c.Bind("banner", &m_hud.banner);
     c.Bind("sub", &m_hud.sub);
     c.Bind("hint", &m_hud.hint);
-    c.Bind("split", &m_hud.split);
+    c.Bind("racing", &m_hud.racing);
     m_hudModel = c.GetModelHandle();
 
     const char* base = SDL_GetBasePath();
@@ -92,57 +112,111 @@ void ClimbRaceModule::updateHud(float) {
         field = value;
         m_hudModel.DirtyVariable(var);
     };
-    for (size_t i = 0; i < m_racers.size() && i < 2; ++i) {
-        const Racer& r = m_racers[i];
+    const bool racing = m_phase != Phase::Lobby;
+    if (m_hud.racing != racing) {
+        m_hud.racing = racing;
+        m_hudModel.DirtyVariable("racing");
+    }
+    char buf[64];
+    // A panel per player, in the top left corner of their view.
+    std::vector<const Racer*> players;
+    for (const Racer& r : m_racers)
+        if (r.seat >= 0) players.push_back(&r);
+    std::sort(players.begin(), players.end(), [](const Racer* a, const Racer* b) { return a->player < b->player; });
+    const std::vector<kke::ViewRect> rects = kke::splitScreen(std::max(1, static_cast<int>(players.size())), true);
+    std::vector<PlayerHud> next;
+    for (size_t i = 0; i < players.size(); ++i) {
+        const Racer& r = *players[i];
         const kke::Climber& c = *r.climber;
-        PlayerHud& h = m_hud.p[i];
-        PlayerHud next = h;
-        next.name = r.name;
-        next.time = clock(r.time);
+        PlayerHud h;
+        h.name = r.name;
+        h.time = clock(r.time);
         const float s = c.staminaFraction();
-        char buf[64];
         std::snprintf(buf, sizeof(buf), "%d%%", static_cast<int>(std::round(s * 100.0f)));
-        next.stamina = buf;
-        next.staminaColor = s > 0.5f ? "#6fe39a" : s > 0.25f ? "#ffcf5c" : "#ff6b5c";
-        next.low = s < 0.25f && c.climbing();
-        next.left = handText(c, 0);
-        next.right = handText(c, 1);
+        h.stamina = buf;
+        h.staminaColor = s > 0.5f ? "#6fe39a" : s > 0.25f ? "#ffcf5c" : "#ff6b5c";
+        h.low = s < 0.25f && c.climbing();
+        h.left = handText(c, 0);
+        h.right = handText(c, 1);
         const float y = w.characterPosition(r.id).y;
         std::snprintf(buf, sizeof(buf), "%.1f / %.0f m", static_cast<double>(std::max(0.0f, y)), static_cast<double>(c.wall().summitY()));
-        next.height = buf;
+        h.height = buf;
         const bool resting = c.climbing() && c.drainRate() < 0.0f;
-        next.status = r.finished ? "topped out"
-                    : c.state() == kke::Climber::State::Mantle ? "mantling"
-                    : resting ? "shaking out"
-                    : c.climbing() ? (c.drainRate() > 8.0f ? "pumped" : "climbing")
-                    : r.loco->state() == kke::Locomotion::State::Air ? "falling"
-                    : y > 1.0f ? "resting on a ledge"
-                    : "on the ground";
-        if (next.name != h.name || next.time != h.time || next.stamina != h.stamina || next.staminaColor != h.staminaColor || next.low != h.low ||
-            next.left != h.left || next.right != h.right || next.height != h.height || next.status != h.status) {
-            h = next;
-            m_hudModel.DirtyVariable(i == 0 ? "p1" : "p2");
-        }
+        h.status = r.finished ? "topped out"
+                 : c.state() == kke::Climber::State::Mantle ? "mantling"
+                 : resting ? "shaking out"
+                 : c.climbing() ? (c.drainRate() > 8.0f ? "pumped" : "climbing")
+                 : r.loco->state() == kke::Locomotion::State::Air ? "falling"
+                 : y > 1.0f ? "resting on a ledge"
+                 : "on the ground";
+        const kke::ViewRect& v = rects[std::min(i, rects.size() - 1)];
+        std::snprintf(buf, sizeof(buf), "%.2f%%", static_cast<double>(v.x * 100.0f));
+        h.x = buf;
+        std::snprintf(buf, sizeof(buf), "%.2f%%", static_cast<double>(v.y * 100.0f));
+        h.y = buf;
+        h.accent = hexColour(r.tint);
+        next.push_back(std::move(h));
+    }
+    bool dirty = next.size() != m_hud.players.size();
+    for (size_t i = 0; !dirty && i < next.size(); ++i) {
+        const PlayerHud &a = next[i], &b = m_hud.players[i];
+        dirty = a.name != b.name || a.time != b.time || a.stamina != b.stamina || a.staminaColor != b.staminaColor || a.low != b.low ||
+                a.left != b.left || a.right != b.right || a.height != b.height || a.status != b.status || a.x != b.x || a.y != b.y ||
+                a.accent != b.accent;
+    }
+    if (dirty) {
+        m_hud.players = std::move(next);
+        m_hudModel.DirtyVariable("players");
+    }
+
+    // Everyone else, highest first.
+    std::vector<const Racer*> order;
+    for (const Racer& r : m_racers)
+        if (r.seat < 0) order.push_back(&r);
+    std::stable_sort(order.begin(), order.end(),
+                     [&w](const Racer* a, const Racer* b) { return w.characterPosition(a->id).y > w.characterPosition(b->id).y; });
+    std::vector<RivalHud> rivals;
+    for (const Racer* r : order) {
+        RivalHud h;
+        h.name = r->name;
+        std::snprintf(buf, sizeof(buf), "%.0f m", static_cast<double>(std::max(0.0f, w.characterPosition(r->id).y)));
+        h.height = buf;
+        h.accent = hexColour(r->tint);
+        h.status = r->finished ? "top" : "";
+        rivals.push_back(std::move(h));
+    }
+    dirty = rivals.size() != m_hud.rivals.size();
+    for (size_t i = 0; !dirty && i < rivals.size(); ++i)
+        dirty = rivals[i].name != m_hud.rivals[i].name || rivals[i].height != m_hud.rivals[i].height || rivals[i].status != m_hud.rivals[i].status ||
+                rivals[i].accent != m_hud.rivals[i].accent;
+    if (dirty) {
+        m_hud.rivals = std::move(rivals);
+        m_hudModel.DirtyVariable("rivals");
     }
 
     std::string banner, sub;
+    const Racer* you = players.empty() ? &m_racers[0] : players[0];
     if (m_phase == Phase::Countdown) {
         banner = m_countdown > 2.0f ? "3" : m_countdown > 1.0f ? "2" : "1";
         sub = "Race to the summit";
-    } else if (m_phase == Phase::Racing && m_racers[0].time < 0.8f && !m_racers[0].finished) {
+    } else if (m_phase == Phase::Racing && you->time < 0.8f && !you->finished) {
         banner = "GO";
     } else if (m_phase == Phase::Finished) {
-        const Racer& you = m_racers[0];
-        banner = m_winner == you.name ? (m_split ? "Player 1 wins" : "You win") : m_winner + " wins";
-        sub = "Your time " + clock(you.time);
+        banner = m_winner == you->name && players.size() <= 1 ? "You win" : m_winner + " wins";
+        sub = (players.size() > 1 ? you->name + " " : std::string("Your time ")) + clock(you->time);
         if (m_best > 0.0f) sub += "  ·  best " + clock(m_best);
-        sub += "  ·  R (Start) race again  ·  N (Back) new mountain";
+        sub += "  ·  {race.again} race again  ·  {race.new} new mountain  ·  {menu} menu";
     }
-    set(m_hud.banner, banner, "banner");
-    set(m_hud.sub, sub, "sub");
-    const kke::Climber& c = *m_racers[0].climber;
-    const std::string hint = c.climbing() ? "LB / RB (Q / E) reach  ·  hold LT / RT (mouse) and let go to lunge  ·  both: quick snatch  ·  A (Space) over an edge  ·  B (C) let go"
-                                          : "walk to the rock and grab it: LB / RB (Q / E) or LT / RT (mouse buttons)  ·  F2 split screen";
+    // Button prompts: the buttons of the device player 1 is using.
+    const int p1 = players.empty() ? 0 : std::max(0, players[0]->player);
+    auto prompt = [this, p1](const std::string& text) { return m_input->promptText(text, p1); };
+    set(m_hud.banner, racing ? banner : std::string(), "banner");
+    set(m_hud.sub, racing ? prompt(sub) : std::string(), "sub");
+    const kke::Climber& c = *you->climber;
+    const std::string hint = !racing ? std::string()
+                           : c.climbing() ? prompt("{reach.left} {reach.right} reach  ·  hold {grab.left} {grab.right} and let go to lunge  ·  both: quick snatch  ·  "
+                                                   "{jump} over an edge  ·  {letgo} let go")
+                                          : prompt("walk to the rock and grab it: {reach.left} {reach.right} or {grab.left} {grab.right}  ·  {menu} menu");
     set(m_hud.hint, hint, "hint");
 }
 

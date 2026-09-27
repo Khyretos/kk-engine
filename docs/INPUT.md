@@ -221,10 +221,17 @@ screen can be seen without any controllers. Extra players play in third
 person without foot/hand IK (like network players). "Overhead view"
 (`KKE_OVERHEAD=1`) adds a picture-in-picture of player 1 from above.
 
+Games that start on a menu let the players join themselves instead:
+`kke::LobbyModule` ([LOBBY.md](LOBBY.md)) seats each controller that
+presses A, shows "press A to join" when one is plugged in, and assigns
+the devices with `applyInput()`.
+
 ## Testing without hardware
 
 `KKE_VIRTUAL_INPUT=hosas,pad` attaches two identical virtual flight sticks
-and a virtual gamepad with gyro (SDL virtual joysticks);
+and a virtual gamepad with gyro (SDL virtual joysticks; `pad,pad,pad`
+attaches three gamepads); `KKE_VIRTUAL_INPUT_LATE=<s>:<spec>` plugs them
+in s seconds in, to test hot-plugging;
 `KKE_VIRTUAL_INPUT_ANIMATE=1` moves them (sticks sweep, buttons cycle,
 gyro turns; the pad avoids menu buttons). CI runs every demo this way.
 `KKE_LEFT_HANDED=1` starts `kke_demo` mirrored.
