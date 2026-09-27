@@ -25,6 +25,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <system_error>
 #include <utility>
 #include <iterator>
 #if defined(__linux__)

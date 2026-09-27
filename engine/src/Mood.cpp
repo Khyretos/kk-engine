@@ -8,6 +8,7 @@
 #include <cctype>
 #include <set>
 #include <sstream>
+#include <system_error>
 
 namespace kke {
 
