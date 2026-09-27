@@ -7,3 +7,4 @@ foreach(shader model.vert model_instanced.vert shadow_instanced.vert model.frag 
 endforeach()
 # The Synty pack itself is found at runtime (assets/synty/ or KKE_SYNTY_DIR)
 # rather than copied here — it's large, and licensed per user.
+kke_use_ui(synty_demo)

@@ -236,7 +236,10 @@ void InputModule::init(Application&) {
             if (eq != std::string::npos) {
                 step.value = static_cast<float>(std::atof(control.substr(eq + 1).c_str()));
                 control = control.substr(0, eq);
-                step.axis = ButtonPrompts::padAxisFromName(control);
+                // SDL's names (leftx, lefty, rightx, righty, lefttrigger,
+                // righttrigger), or the prompt names (lt, rt, ...).
+                step.axis = SDL_GetGamepadAxisFromString(control.c_str());
+                if (step.axis == SDL_GAMEPAD_AXIS_INVALID) step.axis = ButtonPrompts::padAxisFromName(control);
             } else {
                 step.button = ButtonPrompts::padButtonFromName(control);
             }

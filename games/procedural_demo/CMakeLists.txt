@@ -8,3 +8,4 @@ engine_copy_runtime_file(procedural_demo ${CMAKE_CURRENT_SOURCE_DIR}/game.json m
 foreach(shader cube.vert cube.frag glow.frag shadow.vert shadow.frag)
     engine_add_shader(procedural_demo ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()
+kke_use_ui(procedural_demo)

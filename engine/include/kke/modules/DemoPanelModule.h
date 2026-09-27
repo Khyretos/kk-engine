@@ -91,6 +91,10 @@ public:
         // Left/right (or a click) cycles; wraps around.
         Section& choice(std::string label, int* value, std::vector<std::string> options, std::function<void()> onChange = {});
         Section& choice(std::string label, Ref<int> value, std::vector<std::string> options, std::function<void()> onChange = {});
+        // Options that change while the game runs (the bones of whichever
+        // character is selected): asked for every frame the row shows.
+        Section& choice(std::string label, Ref<int> value, std::function<std::vector<std::string>()> options,
+                        std::function<void()> onChange = {});
         Section& toggle(std::string label, bool* value, std::function<void()> onChange = {});
         Section& toggle(std::string label, Ref<bool> value, std::function<void()> onChange = {});
         Section& button(std::string label, std::function<void()> onPress);
@@ -129,6 +133,10 @@ public:
     void setVisible(bool visible);
     void setTitle(std::string title);
     void setWidth(float dp) { m_width = dp; m_dirty = true; }
+    // A small crosshair in the middle of the screen while the player uses
+    // a controller: what "click" means without a mouse (the demo acts on
+    // the middle of the screen).
+    void setPadCrosshair(bool enabled) { m_crosshair = enabled; }
     // F1 shows and hides the ImGui developer panels (on by default; call
     // before init to keep them as they are).
     void setDeveloperPanelsKey(bool enabled) { m_devPanelsKey = enabled; }
@@ -149,6 +157,7 @@ private:
         float min = 0.0f, max = 1.0f, step = 0.0f;
         std::string format;
         std::vector<std::string> options;
+        std::function<std::vector<std::string>()> optionsFn;
         std::function<void()> onChange;
         std::function<bool()> visible;
         // Built document: the row, its value text and a slider's fill.
@@ -191,6 +200,7 @@ private:
     bool m_visible = true;
     bool m_docShown = true;
     bool m_devPanelsKey = true;
+    bool m_crosshair = false, m_crosshairShown = false;
     bool m_dirty = true;
     size_t m_focus = 0;
     Rml::ElementDocument* m_doc = nullptr;

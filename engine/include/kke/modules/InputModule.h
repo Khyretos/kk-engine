@@ -94,7 +94,8 @@ public:
     // (hot-plugging: "controller connected" prompts);
     // KKE_VIRTUAL_PAD_SCRIPT="3:back,3.6:dpad_down,4:leftx=1,5:leftx=0"
     // plays presses on the first virtual pad (<seconds>:<button> taps it
-    // for 0.3 s; <seconds>:<axis>=<value> sets a stick or trigger until
+    // for 0.3 s; <seconds>:<axis>=<value> sets leftx, lefty, rightx,
+    // righty, lt or rt until
     // the next change): driving a game's menus and controls headless.
     // Used by CI and screenshots. Developer builds only: shipping
     // builds ignore these variables (kke/DevTools.h).

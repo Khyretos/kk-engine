@@ -71,6 +71,11 @@ public:
     // right stick for something else keep it.
     void setPadControls(bool enabled);
     bool padControls() const { return m_padControls; }
+    // With pad controls: the left stick also moves the point the camera
+    // looks at across the ground (camera.pan), for demos where the stick
+    // isn't driving anything else and the player aims with the middle of
+    // the screen (kke::DemoPanelModule::setPadCrosshair).
+    void setPadPan(bool enabled) { m_padPan = enabled; }
     const TouchGestures& touches() const { return m_touches; }
 
 private:
@@ -98,6 +103,7 @@ private:
     float m_touchOrbitSensitivity = 0.004f; // radians per pixel the two fingers move
     bool m_touchGestures = true;
     bool m_padControls = false;
+    bool m_padPan = false;
     void definePadActions();
 };
 

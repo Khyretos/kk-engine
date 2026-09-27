@@ -29,6 +29,13 @@ void OrbitCameraModule::definePadActions() {
         InputMap& m = input->map(p);
         if (!m.action("camera.orbit")) m.defineAction({ "camera.orbit", "Turn the camera", "Camera", "game", ActionType::Axis2D, true });
         if (!m.action("camera.zoom")) m.defineAction({ "camera.zoom", "Camera closer / further", "Camera", "game", ActionType::Axis1D, true });
+        if (!m.action("camera.pan")) m.defineAction({ "camera.pan", "Move the camera", "Camera", "game", ActionType::Axis2D, true });
+        if (m.bindingsFor("camera.pan").empty()) {
+            Binding b = InputModule::bind("camera.pan", InputModule::padAxis(SDL_GAMEPAD_AXIS_LEFTX), Trigger::Continuous);
+            b.sourceY = InputModule::padAxis(SDL_GAMEPAD_AXIS_LEFTY);
+            b.deadzone = 0.2f;
+            m.addBinding(b);
+        }
         if (m.bindingsFor("camera.orbit").empty()) {
             Binding b = InputModule::bind("camera.orbit", InputModule::padAxis(SDL_GAMEPAD_AXIS_RIGHTX), Trigger::Continuous);
             b.sourceY = InputModule::padAxis(SDL_GAMEPAD_AXIS_RIGHTY);
@@ -129,6 +136,18 @@ void OrbitCameraModule::update(const UpdateContext& ctx) {
         if (keys[SDL_SCANCODE_Q]) move.y -= 1.0f;
         float speed = std::max(2.0f, m_distance) * (keys[SDL_SCANCODE_LSHIFT] ? 3.0f : 1.0f);
         camera.target += move * speed * ctx.dt;
+    }
+
+    // The left stick moves the target across the ground (setPadPan).
+    if (m_padControls && m_padPan) {
+        if (auto* input = m_app->getModule<InputModule>()) {
+            const glm::vec2 pan = input->map(0).axis2("camera.pan");
+            if (pan.x != 0.0f || pan.y != 0.0f) {
+                const glm::vec3 flatForward = glm::normalize(glm::vec3(forward.x, 0.0f, forward.z));
+                const glm::vec3 flatRight = glm::normalize(glm::vec3(right.x, 0.0f, right.z));
+                camera.target += (flatRight * pan.x - flatForward * pan.y) * std::max(2.0f, m_distance) * 0.6f * ctx.dt;
+            }
+        }
     }
 
     if (!uiWantsMouse) {

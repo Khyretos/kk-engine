@@ -58,9 +58,12 @@ const char* kPanelRml = R"(
         .box.on { background-color: #4f7cff; border-color: #cfd9ff; }
         .button { text-align: center; background-color: #28314f; margin-top: 3dp; }
         .hide { color: #8b93aa; }
+        #crosshair { position: absolute; left: 50%; top: 50%; width: 10dp; height: 10dp; margin-left: -7dp; margin-top: -7dp;
+                     border: 2dp #ffffffd0; border-radius: 7dp; display: none; }
     </style>
 </head>
 <body>
+    <div id="crosshair"></div>
     <div id="panel">
         <div id="title"></div>
         <div id="hint"></div>
@@ -167,6 +170,17 @@ DemoPanelModule::Section& DemoPanelModule::Section::choice(std::string label, Re
     r.label = std::move(label);
     r.i = std::move(value);
     r.options = std::move(options);
+    r.onChange = std::move(onChange);
+    return add(std::move(r));
+}
+
+DemoPanelModule::Section& DemoPanelModule::Section::choice(std::string label, Ref<int> value, std::function<std::vector<std::string>()> options,
+                                                           std::function<void()> onChange) {
+    Row r;
+    r.kind = Row::Kind::Choice;
+    r.label = std::move(label);
+    r.i = std::move(value);
+    r.optionsFn = std::move(options);
     r.onChange = std::move(onChange);
     return add(std::move(r));
 }
@@ -507,6 +521,7 @@ void DemoPanelModule::change(size_t index, int direction) {
         }
         break;
     case Row::Kind::Choice:
+        if (r.optionsFn) r.options = r.optionsFn();
         if (int* v = r.i ? r.i() : nullptr) {
             *v = cycle(*v, static_cast<int>(r.options.size()), direction);
             if (r.onChange) r.onChange();
@@ -697,6 +712,11 @@ void DemoPanelModule::refresh() {
     // The hint under the title: how to reach the panel from the device
     // the player is holding.
     const bool keyboard = !m_input || m_input->promptStyle() == PromptStyle::Keyboard;
+    const bool crosshair = m_crosshair && !keyboard && m_state != State::Active;
+    if (crosshair != m_crosshairShown) {
+        m_crosshairShown = crosshair;
+        if (Rml::Element* c = m_doc->GetElementById("crosshair")) c->SetProperty("display", crosshair ? "block" : "none");
+    }
     std::string hint;
     if (m_state == State::Active)
         hint = keyboard ? "{key:Up}{key:Down} choose  {key:Left}{key:Right} change  {key:Enter} press  {key:Escape} back to the game"
@@ -750,6 +770,7 @@ void DemoPanelModule::refresh() {
             break;
         }
         case Row::Kind::Choice: {
+            if (r.optionsFn) r.options = r.optionsFn();
             const int v = *r.i();
             shown = v >= 0 && v < static_cast<int>(r.options.size()) ? escapeRmlText(r.options[static_cast<size_t>(v)]) : "-";
             break;

@@ -51,7 +51,6 @@ public:
     void update(const kke::UpdateContext& ctx) override;
     void render(const kke::RenderContext& ctx) override;
     void renderShadow(const kke::ShadowRenderContext& ctx) override;
-    void renderUi() override;
     void onEvent(const SDL_Event& event) override;
 
 private:
@@ -113,7 +112,12 @@ private:
     void hit(Creature& c, const glm::vec3& point, const glm::vec3& push);
     void updatePhysical(Creature& c, float dt);
 
-    void click(float mouseX, float mouseY, bool hard);
+    // groundOnly: call everyone there, never hit (the pad's call button).
+    void click(float mouseX, float mouseY, bool hard, bool groundOnly);
+    void defineInput();
+    void readInput();
+    void buildPanel();
+    static kke::Gait gaitOf(int index); // 0 auto, 1 walk, 2 trot, 3 gallop
     void appendCreature(const Creature& c, std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx) const;
 
     kke::Application* m_app = nullptr;
@@ -126,6 +130,7 @@ private:
     glm::vec3 m_flag{0.0f};
     float m_flagTime = -1.0f;
     kke::Gait m_dogGait = kke::Gait::Auto;
+    int m_gaitIndex = 0; // the panel's view of m_dogGait
     int m_focus = -1;
     float m_time = 0.0f, m_quitAfter = -1.0f, m_hitAt = -1.0f, m_hitSpeed = 3.0f, m_logTimer = 0.0f;
     bool m_hitDone = false, m_trace = false;

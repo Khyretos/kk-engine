@@ -2,6 +2,8 @@
 
 #include "kke/Application.h"
 #include "kke/Log.h"
+#include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/InputModule.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #if KKE_ENABLE_FEMFX
@@ -11,7 +13,6 @@
 #include "kke/modules/RigidBodyModule.h"
 #endif
 
-#include <imgui.h>
 
 #include <cmath>
 #include <cstdlib>
@@ -77,6 +78,8 @@ void SyntySceneModule::init(kke::Application& app) {
         kke::log::get(name())->info("Synty POLYGON Prototype pack not found. Put the extracted pack folder(s) in assets/synty/ "
                                     "(e.g. assets/synty/POLYGON_Prototype/Characters/...) or set KKE_ASSETS_DIR.");
         m_packDir.clear();
+        defineInput();
+        buildPanel(); // says what's missing and where it looked
         return;
     }
     kke::log::get(name())->info("asset folder '{}': {} pack(s), {} assets", m_packDir, m_catalog.packs.size(), m_catalog.assets.size());
@@ -171,6 +174,8 @@ void SyntySceneModule::init(kke::Application& app) {
         m_poseEuler.assign(d ? d->bones.size() : 0, glm::vec3(0.0f));
     }
     kke::log::get(name())->info("scene: {} props, {} characters", m_propCount, m_characters.size());
+    defineInput();
+    buildPanel();
 }
 
 // Rotates a bone relative to its rest pose, in the bone's own local axes.
@@ -188,6 +193,7 @@ void SyntySceneModule::rotateBone(Character& c, const char* boneName, glm::vec3 
 }
 
 void SyntySceneModule::update(const kke::UpdateContext& ctx) {
+    readInput();
     m_time += ctx.dt;
     m_models->setShowBones(m_showBones);
     std::vector<glm::mat4> bodies;
@@ -356,97 +362,166 @@ void SyntySceneModule::standUp(Character& c) {
 }
 
 void SyntySceneModule::onEvent(const SDL_Event& event) {
+    // Shift+R ragdolls everyone (the pad does it from the panel); the
+    // rest are actions (defineInput) so a controller does them too.
     if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat) return;
-    if (event.key.key == SDLK_B) m_showBones = !m_showBones;
     if (event.key.key == SDLK_F1) {
         m_showEnginePanels = !m_showEnginePanels;
         for (kke::Module* m : m_enginePanels) m->setUiVisible(m_showEnginePanels);
     }
-    if (event.key.key == SDLK_R && !m_characters.empty()) {
-        // Shift+R: everyone; R: the selected character. Pushed away from
-        // the camera so you see them fall.
-        glm::vec3 away = m_app->camera().target - m_app->camera().position;
-        away.y = 0.0f;
-        away = glm::length(away) > 1e-3f ? glm::normalize(away) : glm::vec3(0, 0, -1);
-        bool all = (event.key.mod & SDL_KMOD_SHIFT) != 0;
-        for (int i = 0; i < static_cast<int>(m_characters.size()); ++i) {
-            if (all || i == m_selected) ragdoll(m_characters[i], away * 4.0f + glm::vec3(0, 1.0f, 0));
-        }
-    }
-    if (event.key.key == SDLK_T) for (Character& c : m_characters) standUp(c);
-    if (event.key.key == SDLK_G && !m_characters.empty()) throughGlass(m_characters[m_selected]);
+    if (event.key.key == SDLK_R && (event.key.mod & SDL_KMOD_SHIFT)) ragdollAll(true);
 }
 
-void SyntySceneModule::renderUi() {
-    ImGui::SetNextWindowPos(ImVec2(10, 170), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(360, 0), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Characters");
+void SyntySceneModule::defineInput() {
+    auto* in = m_app->getModule<kke::InputModule>();
+    if (!in) return;
+    using IM = kke::InputModule;
+    kke::InputMap& m = in->map(0);
+    auto action = [&](const char* id, const char* label, SDL_Scancode key, SDL_GamepadButton pad) {
+        m.defineAction({ id, label, "Characters" });
+        m.addBinding(IM::bind(id, IM::key(key)));
+        m.addBinding(IM::bind(id, IM::pad(pad)));
+    };
+    action("synty.ragdoll", "Ragdoll the selected character", SDL_SCANCODE_R, SDL_GAMEPAD_BUTTON_WEST);
+    action("synty.stand", "Everyone stands up", SDL_SCANCODE_T, SDL_GAMEPAD_BUTTON_NORTH);
+    action("synty.glass", "Through a glass pane", SDL_SCANCODE_G, SDL_GAMEPAD_BUTTON_SOUTH);
+    action("synty.bones", "Show bones", SDL_SCANCODE_B, SDL_GAMEPAD_BUTTON_LEFT_STICK);
+    action("synty.prev", "Previous character", SDL_SCANCODE_LEFTBRACKET, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+    action("synty.next", "Next character", SDL_SCANCODE_RIGHTBRACKET, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
+    in->commitDefaults();
+}
+
+void SyntySceneModule::readInput() {
+    auto* in = m_app->getModule<kke::InputModule>();
+    if (!in) return;
+    const kke::InputMap& m = in->map(0);
+    if (m.pressed("synty.bones")) m_showBones = !m_showBones;
+    if (m_characters.empty()) return;
+    // Shift+R is "everyone" (onEvent); plain R is the selected one.
+    if (m.pressed("synty.ragdoll") && !(SDL_GetModState() & SDL_KMOD_SHIFT)) ragdollAll(false);
+    if (m.pressed("synty.stand"))
+        for (Character& c : m_characters) standUp(c);
+    if (m.pressed("synty.glass")) throughGlass(m_characters[size_t(m_selected)]);
+    const int n = static_cast<int>(m_characters.size());
+    if (m.pressed("synty.prev")) select((m_selected + n - 1) % n);
+    if (m.pressed("synty.next")) select((m_selected + 1) % n);
+}
+
+void SyntySceneModule::select(int index) {
+    m_selected = index;
+    const kke::ModelData* d = m_models->model(m_characters[size_t(index)].model);
+    m_poseEuler.assign(d ? d->bones.size() : 0, glm::vec3(0.0f));
+}
+
+// Pushed away from the camera, so you see them fall.
+void SyntySceneModule::ragdollAll(bool everyone) {
+    glm::vec3 away = m_app->camera().target - m_app->camera().position;
+    away.y = 0.0f;
+    away = glm::length(away) > 1e-3f ? glm::normalize(away) : glm::vec3(0, 0, -1);
+    for (int i = 0; i < static_cast<int>(m_characters.size()); ++i)
+        if (everyone || i == m_selected) ragdoll(m_characters[size_t(i)], away * 4.0f + glm::vec3(0, 1.0f, 0));
+}
+
+// The panel (RmlUi, kke::DemoPanelModule): View on a controller or F3
+// gives it the controller, the mouse just clicks. F1 still shows the
+// engine's ImGui developer panels.
+void SyntySceneModule::buildPanel() {
+    auto* panel = m_app->getModule<kke::DemoPanelModule>();
+    if (!panel) return;
+    auto& s = panel->section("Characters");
     if (m_packDir.empty()) {
-        ImGui::TextWrapped("Synty POLYGON Prototype pack not found.\n\nPut your extracted pack folder(s) inside assets/synty/ "
-                           "(any layout: assets/synty/POLYGON_Prototype/Characters/... works), or set KKE_ASSETS_DIR to the "
-                           "folder that contains them. Never committed to git: Synty assets are licensed per user.\n\nLooked in:");
-        for (const std::string& p : m_searched) ImGui::BulletText("%s", p.c_str());
-        ImGui::End();
+        s.text("Synty POLYGON Prototype pack not found.");
+        s.note("Put your extracted pack folder(s) inside assets/synty/ (any layout: assets/synty/POLYGON_Prototype/Characters/... works), "
+               "or set KKE_ASSETS_DIR to the folder that contains them. Never committed to git: Synty assets are licensed per user.");
+        std::string looked = "Looked in:";
+        for (const std::string& p : m_searched) looked += " " + p;
+        s.note(looked);
         return;
     }
-    ImGui::Text("%zu props, %zu characters, %zu draw calls, %zu culled", m_propCount, m_characters.size(), m_models->drawCallsLastFrame(), m_models->culledLastFrame());
-    ImGui::Checkbox("Show bones (B)", &m_showBones);
-    ImGui::SameLine();
-    if (ImGui::Checkbox("Engine panels (F1)", &m_showEnginePanels))
-        for (kke::Module* m : m_enginePanels) m->setUiVisible(m_showEnginePanels);
-    if (m_physics) {
-        ImGui::TextWrapped("R: ragdoll selected   Shift+R: everyone   T: stand up   G: through a glass pane\n"
-                           "(physics body boxes: Physics panel)");
-    } else {
-        ImGui::TextDisabled("Ragdolls need a physics module (Jolt or FEMFX)");
-    }
-    for (int i = 0; i < static_cast<int>(m_characters.size()); ++i) {
-        if (ImGui::RadioButton(m_characters[i].label.c_str(), m_selected == i)) {
-            m_selected = i;
-            const kke::ModelData* d = m_models->model(m_characters[i].model);
-            m_poseEuler.assign(d ? d->bones.size() : 0, glm::vec3(0.0f));
-        }
-    }
-    if (m_characters.empty()) {
-        ImGui::End();
-        return;
-    }
-    Character& c = m_characters[m_selected];
-    const kke::ModelData* d = m_models->model(c.model);
-    if (!d) {
-        ImGui::End();
-        return;
-    }
-    ImGui::Separator();
-    ImGui::Text("%zu bones, %zu animation clip(s), %zu triangles", d->bones.size(), d->animations.size(), d->triangleCount());
-    if (!d->animations.empty() && ImGui::Button(c.behavior == "clip" ? "Restart clip" : "Play FBX clip")) {
+    s.hint("{synty.ragdoll} ragdoll  Shift+{synty.ragdoll} everyone  {synty.stand} stand up  {synty.glass} through glass  "
+           "{synty.prev}{synty.next} who  {synty.bones} bones  F1 developer panels",
+           "{synty.ragdoll} ragdoll  {synty.stand} stand up  {synty.glass} through glass  {synty.prev}{synty.next} who  "
+           "{synty.bones} bones  {camera.orbit} look  {camera.zoom} zoom");
+    s.text([this] {
+        char buf[160];
+        std::snprintf(buf, sizeof(buf), "%zu props, %zu characters, %zu draw calls, %zu culled", m_propCount, m_characters.size(),
+                      m_models->drawCallsLastFrame(), m_models->culledLastFrame());
+        return std::string(buf);
+    });
+    s.toggle("Show bones", &m_showBones);
+    auto physics = [this] { return m_physics != nullptr && !m_characters.empty(); };
+    s.button("Ragdoll the selected one", [this] { ragdollAll(false); }).showIf(physics);
+    s.button("Ragdoll everyone", [this] { ragdollAll(true); }).showIf(physics);
+    s.button("Everyone stands up", [this] {
+        for (Character& c : m_characters) standUp(c);
+    }).showIf(physics);
+    s.button("Through a glass pane", [this] { throughGlass(m_characters[size_t(m_selected)]); }).showIf(physics);
+    s.note("Ragdolls need a physics module (Jolt or FEMFX).").showIf([this] { return m_physics == nullptr; });
+    if (m_characters.empty()) return;
+
+    std::vector<std::string> labels;
+    for (const Character& c : m_characters) labels.push_back(c.label);
+    s.choice("Character", kke::DemoPanelModule::Ref<int>([this] {
+                 m_selectedIndex = m_selected;
+                 return &m_selectedIndex;
+             }),
+             labels, [this] { select(m_selectedIndex); });
+    auto model = [this]() -> const kke::ModelData* { return m_models->model(m_characters[size_t(m_selected)].model); };
+    s.text([this, model] {
+        const kke::ModelData* d = model();
+        if (!d) return std::string();
+        char buf[120];
+        std::snprintf(buf, sizeof(buf), "%zu bones, %zu animation clip(s), %zu triangles", d->bones.size(), d->animations.size(), d->triangleCount());
+        return std::string(buf);
+    });
+    s.button("Play the FBX clip", [this, model] {
+        const kke::ModelData* d = model();
+        if (!d || d->animations.empty()) return;
+        Character& c = m_characters[size_t(m_selected)];
         c.behavior = "clip";
         m_models->playAnimation(c.instance, 0, true);
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Rest pose")) {
+    }).showIf([model] {
+        const kke::ModelData* d = model();
+        return d && !d->animations.empty();
+    });
+    s.button("Rest pose (pose bones)", [this, model] {
+        const kke::ModelData* d = model();
+        if (!d) return;
+        Character& c = m_characters[size_t(m_selected)];
         c.behavior = "pose";
         m_models->playAnimation(c.instance, -1);
         m_poseEuler.assign(d->bones.size(), glm::vec3(0.0f));
-    }
-    if (c.behavior == "pose" && !d->bones.empty()) {
-        ImGui::TextWrapped("Pose a bone (rotation relative to rest, in the bone's own axes):");
-        m_selectedBone = std::min(m_selectedBone, static_cast<int>(d->bones.size()) - 1);
-        if (ImGui::BeginCombo("Bone", d->bones[m_selectedBone].name.c_str())) {
-            for (int b = 0; b < static_cast<int>(d->bones.size()); ++b) {
-                if (ImGui::Selectable(d->bones[b].name.c_str(), b == m_selectedBone)) m_selectedBone = b;
-            }
-            ImGui::EndCombo();
-        }
-        if (m_poseEuler.size() != d->bones.size()) m_poseEuler.assign(d->bones.size(), glm::vec3(0.0f));
-        glm::vec3& e = m_poseEuler[m_selectedBone];
-        // Three statements, not ||, so all three sliders are always drawn.
-        const bool changedX = ImGui::SliderFloat("X", &e.x, -180, 180);
-        const bool changedY = ImGui::SliderFloat("Y", &e.y, -180, 180);
-        const bool changedZ = ImGui::SliderFloat("Z", &e.z, -180, 180);
-        if (changedX || changedY || changedZ) rotateBone(c, d->bones[m_selectedBone].name.c_str(), e);
-    }
-    ImGui::End();
+    });
+    // Posing: a bone, then its rotation relative to rest in its own axes.
+    auto posing = [this, model] {
+        const kke::ModelData* d = model();
+        return d && !d->bones.empty() && m_characters[size_t(m_selected)].behavior == "pose";
+    };
+    s.choice("Bone", kke::DemoPanelModule::Ref<int>([this, posing, model]() -> int* {
+                 if (!posing()) return nullptr;
+                 m_selectedBone = std::min(m_selectedBone, static_cast<int>(model()->bones.size()) - 1);
+                 return &m_selectedBone;
+             }),
+             std::function<std::vector<std::string>()>([model] {
+                 std::vector<std::string> names;
+                 if (const kke::ModelData* d = model())
+                     for (const auto& b : d->bones) names.push_back(b.name);
+                 return names;
+             }));
+    auto axis = [this, posing, model](int component) {
+        return kke::DemoPanelModule::Ref<float>([this, posing, model, component]() -> float* {
+            if (!posing()) return nullptr;
+            if (m_poseEuler.size() != model()->bones.size()) m_poseEuler.assign(model()->bones.size(), glm::vec3(0.0f));
+            return &m_poseEuler[size_t(m_selectedBone)][component];
+        });
+    };
+    auto pose = [this, model] {
+        Character& c = m_characters[size_t(m_selected)];
+        rotateBone(c, model()->bones[size_t(m_selectedBone)].name.c_str(), m_poseEuler[size_t(m_selectedBone)]);
+    };
+    s.slider("X", axis(0), -180.0f, 180.0f, "%.0f deg", pose, 5.0f);
+    s.slider("Y", axis(1), -180.0f, 180.0f, "%.0f deg", pose, 5.0f);
+    s.slider("Z", axis(2), -180.0f, 180.0f, "%.0f deg", pose, 5.0f);
 }
 
 } // namespace kke_demo
