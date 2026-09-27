@@ -88,9 +88,9 @@ struct SandboxModule::PlayGraphs {
         bool exists(uint32_t id) const override { return thing(id) != nullptr; }
         bool ragdoll(uint32_t id, const glm::vec3& push) override {
             Object* o = thing(id);
-            if (!o || !o->character || o->ragdoll) return false;
+            if (!o || !o->character || s.isDown(*o)) return false;
             s.ragdoll(*o, push);
-            return o->ragdoll != 0;
+            return s.isDown(*o);
         }
         bool standUp(uint32_t id) override {
             Object* o = thing(id);
@@ -100,7 +100,23 @@ struct SandboxModule::PlayGraphs {
         }
         bool isDown(uint32_t id) const override {
             const Object* o = thing(id);
-            return o && o->ragdoll;
+            return o && s.isDown(*o);
+        }
+        bool stagger(uint32_t id, const glm::vec3& push) override {
+            Object* o = thing(id);
+            return o && s.stagger(*o, push);
+        }
+        bool lookAt(uint32_t id, uint32_t at, const glm::vec3& point) override {
+            Object* o = thing(id);
+            if (!o || !o->character || (at && !thing(at))) return false;
+            s.lookAt(*o, at, point);
+            return o->looking;
+        }
+        bool lookAway(uint32_t id) override {
+            Object* o = thing(id);
+            if (!o || !o->looking) return false;
+            s.lookAway(*o);
+            return true;
         }
         bool swingAt(uint32_t id) override {
             Object* o = thing(id);

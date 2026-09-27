@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+"""Runs a game for a few seconds and says whether its scripts work.
+
+Made for checking a change without playing: by you, by CI, or by an AI
+assistant that can run commands but can't see a window (docs/AI_ASSISTANTS.md).
+
+    tools/check_game starter_game                  # the game's own scripts
+    tools/check_game my_game --scripts path/to/dir # another scripts folder
+    tools/check_game my_game --shot look.jpg       # and a screenshot
+    tools/check_game my_game --keys "space w"      # press keys while it runs
+
+It prints what the scripts printed, every warning and error, then one
+last line: "OK" or "FAILED". Exit code 0 means no errors. Build the game
+first (cmake --build build --target my_game). With no DISPLAY it starts
+Xvfb itself, so it works on a server with no screen (software Vulkan,
+lavapipe, is enough).
+"""
+
+import argparse
+import os
+import pathlib
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+LINE = re.compile(r"^\[[^\]]*\]\[[^\]]*\]\[(?P<who>[^\]]*)\]\[[^\]]*\]\[(?P<level>[a-z]+)\]: (?P<text>.*)$")
+# Warnings that are about the machine, not the game.
+MACHINE = ("validation layers requested but not available",)
+
+
+def start_display():
+    """Starts Xvfb on a free display when there is no screen; returns the
+    process (or None when a display already exists)."""
+    if os.environ.get("DISPLAY"):
+        return None
+    if not shutil.which("Xvfb"):
+        sys.exit("check_game: no DISPLAY and no Xvfb (install xvfb, or run it on a desktop)")
+    for n in range(99, 120):
+        if not pathlib.Path(f"/tmp/.X11-unix/X{n}").exists():
+            xvfb = subprocess.Popen(["Xvfb", f":{n}", "-screen", "0", "1280x720x24"],
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            os.environ["DISPLAY"] = f":{n}"
+            time.sleep(1.0)
+            return xvfb
+    sys.exit("check_game: no free X display between :99 and :119")
+
+
+def press(keys, env):
+    """Presses each key (xdotool names: w, space, Return, ...) for a moment."""
+    if not shutil.which("xdotool"):
+        print("check_game: --keys needs xdotool; skipped")
+        return
+    for key in keys.split():
+        subprocess.run(["xdotool", "keydown", key], env=env, check=False)
+        time.sleep(0.4)
+        subprocess.run(["xdotool", "keyup", key], env=env, check=False)
+        time.sleep(0.3)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("game", nargs="?", default="starter_game", help="the game's target name (default starter_game)")
+    ap.add_argument("--bin", default=str(ROOT / "build" / "bin"), help="where the built games are")
+    ap.add_argument("--scripts", help="run this scripts folder instead of the game's own")
+    ap.add_argument("--seconds", type=float, default=8, help="how long to run (default 8)")
+    ap.add_argument("--keys", help="keys to press after 3 s, space-separated (needs xdotool)")
+    ap.add_argument("--shot", help="save a screenshot here (.jpg or .png) just before it stops")
+    args = ap.parse_args()
+
+    binary = pathlib.Path(args.bin) / args.game
+    if not binary.exists():
+        sys.exit(f"check_game: {binary} not found; build it first: cmake --build build --target {args.game}")
+
+    xvfb = start_display()
+    env = dict(os.environ, KKE_SKIP_INTRO="1", SDL_VIDEODRIVER=os.environ.get("SDL_VIDEODRIVER", "x11"))
+    if args.scripts:
+        env["KKE_SCRIPTS_DIR"] = str(pathlib.Path(args.scripts).resolve())
+    try:
+        with tempfile.TemporaryFile(mode="w+") as log:
+            proc = subprocess.Popen([str(binary)], cwd=binary.parent, env=env, stdout=log, stderr=subprocess.STDOUT)
+            started = time.monotonic()
+            try:
+                if args.keys:
+                    time.sleep(3)
+                    press(args.keys, env)
+                time.sleep(max(0.0, args.seconds - (time.monotonic() - started) - (0.5 if args.shot else 0)))
+                if args.shot:
+                    subprocess.run(["import", "-window", "root", args.shot], env=env, check=True)
+                    time.sleep(0.5)
+                exited = proc.poll()
+            finally:
+                proc.terminate()
+                try:
+                    proc.wait(10)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+            log.seek(0)
+            text = log.read()
+    finally:
+        if xvfb:
+            xvfb.terminate()
+            xvfb.wait()
+
+    printed, warnings, errors = [], [], []
+    for raw in text.splitlines():
+        m = LINE.match(raw)
+        if not m:
+            if "Fatal error" in raw or "Segmentation fault" in raw:
+                errors.append(raw)
+            continue
+        level, who, said = m["level"], m["who"], m["text"]
+        if level in ("error", "critical"):
+            errors.append(f"{who}: {said}")
+        elif level == "warning" and not any(s in said for s in MACHINE):
+            warnings.append(f"{who}: {said}")
+        elif who == "Scripts" and level == "info" and re.match(r"[\w./-]+\.lua: ", said):
+            printed.append(said)
+
+    for title, lines in (("printed by scripts", printed), ("warnings", warnings), ("errors", errors)):
+        if lines:
+            print(f"-- {title} ({len(lines)}):")
+            print("\n".join("  " + line for line in lines[-40:]))
+    if exited is not None and exited != 0:
+        errors.append(f"the game stopped by itself with exit code {exited}")
+        print(f"-- the game stopped by itself with exit code {exited}; last lines:")
+        print("\n".join("  " + line for line in text.splitlines()[-15:]))
+    if args.shot:
+        print(f"-- screenshot: {args.shot}")
+    print("FAILED" if errors else f"OK: {args.game} ran {args.seconds:g} s with no errors" +
+          (f" ({len(warnings)} warning(s) to fix)" if warnings else ""))
+    return 1 if errors else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

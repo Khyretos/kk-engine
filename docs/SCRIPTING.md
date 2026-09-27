@@ -63,7 +63,7 @@ Events, like GMod's `hook`:
 ```lua
 hook.Add("Think", "my.id", function(dt) end)      -- every frame
 hook.Add("Tick", "my.id", function(dt, tick) end) -- fixed 60 Hz
-hook.Add("Contact", "my.id", function(c) end)     -- c.a, c.b, c.speed, c.materialA, c.materialB, c.pos
+hook.Add("Contact", "my.id", function(c) end)     -- two bodies (not the player): c.a, c.b, c.speed, c.materialA, c.materialB, c.pos
 hook.Add("Break", "my.id", function(id) end)      -- a breakable this script made came apart
 hook.Add("NetMessage", "my.id", function(name, data, from) end) -- net.send from another machine
 hook.Add("Init", "my.id", function() end)         -- once, after all scripts loaded
@@ -114,6 +114,8 @@ Things are numbers (ids), blocks are palette ids (`"person"`, `"bat"`,
 | `play.remove(thing)` | takes it away |
 | `play.ragdoll(thing [, push])` / `play.standUp(thing)` / `play.isDown(thing)` | knocks a person over (push in m/s, at most 20), stands them up, asks |
 | `play.swing(thing)` | swings the bat at it |
+| `play.stagger(thing [, push])` | shoves a person, who tries to keep their feet (joint motors); a big shove (about 4 m/s and up) still knocks them over and they get up by themselves ([PROCEDURAL_ANIMATION.md](PROCEDURAL_ANIMATION.md)) |
+| `play.lookAt(thing [, at])` / `play.lookAway(thing)` | a person keeps turning their head toward `at` (a thing, a `Vec` place, or you when left out), on top of whatever they play; `lookAway` stops |
 | `play.sound(name [, pos])` | plays a sound, at a place if given |
 | `play.say(text)` | shows text on screen for a few seconds |
 | `play.addScore(points)` → score / `play.score()` | points |

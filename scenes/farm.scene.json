@@ -1,0 +1,843 @@
+{
+  "format": "kke.scene",
+  "version": 1,
+  "name": "Farm",
+  "description": "The wildlife demo farm (games/farm_demo): a sheep meadow and a cow pasture with gates, a pig pen by the barn, a farmhouse, a well, an orchard and woods where a fox lives. Fences and buildings are real obstacles on the navmesh the animals walk on.",
+  "packs": [
+    "POLYGON_Farm"
+  ],
+  "spawn": {
+    "position": [
+      0,
+      0,
+      8
+    ],
+    "yaw": 180
+  },
+  "ground": {
+    "size": [
+      170,
+      170
+    ],
+    "color": [
+      0.34,
+      0.5,
+      0.24
+    ]
+  },
+  "sun": {
+    "direction": [
+      -0.45,
+      -0.8,
+      -0.35
+    ],
+    "color": [
+      1.0,
+      0.95,
+      0.85
+    ],
+    "intensity": 2.0
+  },
+  "ambient": [
+    0.24,
+    0.25,
+    0.28
+  ],
+  "objects": [
+    {
+      "asset": "SM_Prop_Fence_Wood_01",
+      "position": [
+        -38.75,
+        0,
+        0
+      ],
+      "collision": "mesh",
+      "grid": {
+        "count": [
+          5,
+          1
+        ],
+        "step": [
+          2.5,
+          0
+        ]
+      }
+    },
+    {
+      "asset": "SM_Prop_Fence_Wood_01",
+      "position": [
+        -21.25,
+        0,
+        0
+      ],
+      "collision": "mesh",
+      "grid": {
+        "count": [
+          5,
+          1
+        ],
+        "step": [
+          2.5,
+          0
+        ]
+      }
+    },
+    {
+      "asset": "SM_Prop_Fence_Wood_01",
+      "position": [
+        -38.75,
+        0,
+        30
+      ],
+      "collision": "mesh",
+      "grid": {
+        "count": [
+          12,
+          1
+        ],
+        "step": [
+          2.5,
+          0
+        ]
+      }
+    },
+    {
+      "asset": "SM_Prop_Fence_Wood_01",
+      "position": [
+        -40,
+        0,
+        28.75
+      ],
+      "yaw": 90,
+      "collision": "mesh",
+      "grid": {
+        "count": [
+          12,
+          1
+        ],
+        "step": [
+          2.5,
+          0
+        ]
+      }
+    },
+    {
+      "asset": "SM_Prop_Fence_Wood_01",
+      "position": [
+        -10,
+        0,
+        11.25
+      ],
+      "yaw": 90,
+      "collision": "mesh",
+      "grid": {
+        "count": [
+          5,
+          1
+        ],
+        "step": [
+          2.5,
+          0
+        ]
+      }
+    },
+    {
+      "asset": "SM_Prop_Fence_Wood_01",
+      "position": [
+        -10,
+        0,
+        28.75
+      ],
+      "yaw": 90,
+      "collision": "mesh",
+      "grid": {
+        "count": [
+          5,
+          1
+        ],
+        "step": [
+          2.5,
+          0
+        ]
+      }
+    },
+    {
+      "asset": "SM_Prop_Trough_01",
+      "position": [
+        -25,
+        0,
+        22
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Prop_Hay_Bale_Round_01",
+      "position": [
+        -36,
+        0,
+        26
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Prop_Hay_Bale_Round_01",
+      "position": [
+        -34.5,
+        0,
+        27
+      ],
+      "yaw": 40,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Env_Tree_Apple_Grown_01",
+      "position": [
+        -33,
+        0,
+        8
+      ],
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Prop_Fence_Wire_01",
+      "position": [
+        12.5,
+        0,
+        0
+      ],
+      "collision": "mesh",
+      "grid": {
+        "count": [
+          3,
+          1
+        ],
+        "step": [
+          5,
+          0
+        ]
+      }
+    },
+    {
+      "asset": "SM_Prop_Fence_Wire_01",
+      "position": [
+        32.5,
+        0,
+        0
+      ],
+      "collision": "mesh",
+      "grid": {
+        "count": [
+          3,
+          1
+        ],
+        "step": [
+          5,
+          0
+        ]
+      }
+    },
+    {
+      "asset": "SM_Prop_Fence_Wire_01",
+      "position": [
+        12.5,
+        0,
+        35
+      ],
+      "collision": "mesh",
+      "grid": {
+        "count": [
+          7,
+          1
+        ],
+        "step": [
+          5,
+          0
+        ]
+      }
+    },
+    {
+      "asset": "SM_Prop_Fence_Wire_01",
+      "position": [
+        10,
+        0,
+        32.5
+      ],
+      "yaw": 90,
+      "collision": "mesh",
+      "grid": {
+        "count": [
+          7,
+          1
+        ],
+        "step": [
+          5,
+          0
+        ]
+      }
+    },
+    {
+      "asset": "SM_Prop_Fence_Wire_01",
+      "position": [
+        45,
+        0,
+        32.5
+      ],
+      "yaw": 90,
+      "collision": "mesh",
+      "grid": {
+        "count": [
+          7,
+          1
+        ],
+        "step": [
+          5,
+          0
+        ]
+      }
+    },
+    {
+      "asset": "SM_Prop_Trough_01",
+      "position": [
+        30,
+        0,
+        28
+      ],
+      "yaw": 90,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Env_Tree_Large_01",
+      "position": [
+        38,
+        0,
+        10
+      ],
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Prop_Hay_Bale_Square_01",
+      "position": [
+        14,
+        0,
+        31
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Bld_Barn_01",
+      "position": [
+        -20,
+        0,
+        -25
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Bld_Silo_01",
+      "position": [
+        -33,
+        0,
+        -27
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Bld_Farmhouse_01",
+      "position": [
+        22,
+        0,
+        -28
+      ],
+      "yaw": 180,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Prop_Windmill_01",
+      "position": [
+        -2,
+        0,
+        -48
+      ],
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Prop_Well_01",
+      "position": [
+        8,
+        0,
+        -14
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Veh_Tractor_01",
+      "position": [
+        32,
+        0,
+        -12
+      ],
+      "yaw": 35,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Prop_Hay_Bale_Round_01",
+      "position": [
+        -10.5,
+        0,
+        -18
+      ],
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Prop_Hay_Bale_Round_01",
+      "position": [
+        -11,
+        0,
+        -16.5
+      ],
+      "yaw": 30,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Prop_Hay_Bale_Square_01",
+      "position": [
+        -28,
+        0,
+        -15
+      ],
+      "yaw": 20,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Prop_Fence_Wood_Round_01",
+      "position": [
+        -3.75,
+        0,
+        -32
+      ],
+      "collision": "mesh",
+      "grid": {
+        "count": [
+          4,
+          1
+        ],
+        "step": [
+          2.5,
+          0
+        ]
+      }
+    },
+    {
+      "asset": "SM_Prop_Fence_Wood_Round_01",
+      "position": [
+        -3.75,
+        0,
+        -22
+      ],
+      "collision": "mesh",
+      "grid": {
+        "count": [
+          2,
+          1
+        ],
+        "step": [
+          2.5,
+          0
+        ]
+      }
+    },
+    {
+      "asset": "SM_Prop_Fence_Wood_Round_01",
+      "position": [
+        2.5,
+        0,
+        -22
+      ],
+      "collision": "mesh",
+      "grid": {
+        "count": [
+          2,
+          1
+        ],
+        "step": [
+          2.5,
+          0
+        ]
+      }
+    },
+    {
+      "asset": "SM_Prop_Fence_Wood_Round_01",
+      "position": [
+        -5,
+        0,
+        -23.25
+      ],
+      "yaw": 90,
+      "collision": "mesh",
+      "grid": {
+        "count": [
+          4,
+          1
+        ],
+        "step": [
+          2.5,
+          0
+        ]
+      }
+    },
+    {
+      "asset": "SM_Prop_Fence_Wood_Round_01",
+      "position": [
+        5,
+        0,
+        -23.25
+      ],
+      "yaw": 90,
+      "collision": "mesh",
+      "grid": {
+        "count": [
+          4,
+          1
+        ],
+        "step": [
+          2.5,
+          0
+        ]
+      }
+    },
+    {
+      "asset": "SM_Prop_Hay_Pile_01",
+      "position": [
+        -2,
+        0,
+        -29
+      ],
+      "collision": "none"
+    },
+    {
+      "asset": "SM_Prop_Trough_01",
+      "position": [
+        2.5,
+        0,
+        -29
+      ],
+      "yaw": 90,
+      "collision": "mesh"
+    },
+    {
+      "asset": "SM_Env_Tree_Apple_Grown_01",
+      "position": [
+        14,
+        0,
+        -50
+      ],
+      "collision": "box",
+      "grid": {
+        "count": [
+          4,
+          2
+        ],
+        "step": [
+          7,
+          7
+        ]
+      }
+    },
+    {
+      "asset": "SM_Env_Tree_Pear_Grown_01",
+      "position": [
+        17.5,
+        0,
+        -46.5
+      ],
+      "collision": "box",
+      "grid": {
+        "count": [
+          3,
+          1
+        ],
+        "step": [
+          7,
+          0
+        ]
+      }
+    },
+    {
+      "asset": "SM_Generic_Tree_Patch_01",
+      "position": [
+        -60,
+        0,
+        55
+      ],
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Generic_Tree_Patch_02",
+      "position": [
+        -45,
+        0,
+        62
+      ],
+      "yaw": 70,
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Generic_Tree_Patch_01",
+      "position": [
+        60,
+        0,
+        -58
+      ],
+      "yaw": 120,
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Generic_Tree_Patch_02",
+      "position": [
+        -62,
+        0,
+        -40
+      ],
+      "yaw": 20,
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Generic_Tree_01",
+      "position": [
+        -55,
+        0,
+        20
+      ],
+      "yaw": 335,
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Generic_Tree_02",
+      "position": [
+        -58,
+        0,
+        5
+      ],
+      "yaw": 314,
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Generic_Tree_03",
+      "position": [
+        -50,
+        0,
+        -10
+      ],
+      "yaw": 10,
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Generic_Tree_04",
+      "position": [
+        55,
+        0,
+        30
+      ],
+      "yaw": 25,
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Generic_Tree_01",
+      "position": [
+        58,
+        0,
+        50
+      ],
+      "yaw": 46,
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Generic_Tree_03",
+      "position": [
+        50,
+        0,
+        60
+      ],
+      "yaw": 350,
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Generic_Tree_02",
+      "position": [
+        -20,
+        0,
+        58
+      ],
+      "yaw": 220,
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Generic_Tree_04",
+      "position": [
+        0,
+        0,
+        62
+      ],
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Generic_Tree_01",
+      "position": [
+        20,
+        0,
+        58
+      ],
+      "yaw": 140,
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Generic_Tree_02",
+      "position": [
+        62,
+        0,
+        0
+      ],
+      "yaw": 74,
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Generic_Tree_03",
+      "position": [
+        -40,
+        0,
+        45
+      ],
+      "yaw": 80,
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Generic_Tree_04",
+      "position": [
+        40,
+        0,
+        -35
+      ],
+      "yaw": 280,
+      "collision": "box"
+    },
+    {
+      "asset": "SM_Generic_Mountains_Grass_01",
+      "position": [
+        -85,
+        0,
+        0
+      ],
+      "collision": "none",
+      "scale": [
+        2,
+        1.5,
+        2
+      ]
+    },
+    {
+      "asset": "SM_Generic_Mountains_Grass_01",
+      "position": [
+        85,
+        0,
+        10
+      ],
+      "yaw": 40,
+      "collision": "none",
+      "scale": [
+        2,
+        1.5,
+        2
+      ]
+    },
+    {
+      "asset": "SM_Generic_Mountains_Grass_01",
+      "position": [
+        0,
+        0,
+        88
+      ],
+      "yaw": 90,
+      "collision": "none",
+      "scale": [
+        2,
+        1.5,
+        2
+      ]
+    },
+    {
+      "asset": "SM_Generic_Mountains_Grass_01",
+      "position": [
+        10,
+        0,
+        -88
+      ],
+      "yaw": 200,
+      "collision": "none",
+      "scale": [
+        2,
+        1.5,
+        2
+      ]
+    },
+    {
+      "asset": "SM_Generic_Mountains_Grass_01",
+      "position": [
+        -80,
+        0,
+        -80
+      ],
+      "yaw": 30,
+      "collision": "none",
+      "scale": [
+        2,
+        1.5,
+        2
+      ]
+    },
+    {
+      "asset": "SM_Generic_Mountains_Grass_01",
+      "position": [
+        80,
+        0,
+        80
+      ],
+      "yaw": 120,
+      "collision": "none",
+      "scale": [
+        2,
+        1.5,
+        2
+      ]
+    },
+    {
+      "asset": "SM_Generic_Mountains_Grass_01",
+      "position": [
+        -80,
+        0,
+        80
+      ],
+      "yaw": 300,
+      "collision": "none",
+      "scale": [
+        2,
+        1.5,
+        2
+      ]
+    },
+    {
+      "asset": "SM_Generic_Mountains_Grass_01",
+      "position": [
+        80,
+        0,
+        -80
+      ],
+      "yaw": 250,
+      "collision": "none",
+      "scale": [
+        2,
+        1.5,
+        2
+      ]
+    }
+  ]
+}

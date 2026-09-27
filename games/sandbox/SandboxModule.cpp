@@ -835,13 +835,21 @@ void SandboxModule::update(const kke::UpdateContext& ctx) {
 
     updateBreakables();
 
+    if (m_ragdolls) updateStaggers(ctx.dt);
     // Ragdolls drive their characters' skeletons.
     std::vector<glm::mat4> bodies;
     for (Object& o : m_objects) {
         if (o.ragdoll && m_ragdolls && m_ragdolls->ragdollBodyTransforms(o.ragdoll, bodies)) {
             const kke::ModelData* d = m_models->model(o.model);
             glm::mat4 worldToModel = glm::inverse(m_models->transform(o.instance));
-            m_models->setBoneWorldOverride(o.instance, kke::poseFromRagdoll(*d, o.binding, bodies, worldToModel));
+            std::vector<glm::mat4> pose = kke::poseFromRagdoll(*d, o.binding, bodies, worldToModel);
+            if (o.active.state() == kke::ActiveRagdoll::State::GettingUp && o.standPose.size() == pose.size()) {
+                // Back into the pose they had, from however they ended up.
+                kke::Pose blended;
+                kke::blendPoses(kke::poseFromModel(*d, pose), kke::poseFromModel(*d, o.standPose), o.active.getUpBlend(), blended);
+                pose = kke::poseToModel(*d, blended);
+            }
+            m_models->setBoneWorldOverride(o.instance, std::move(pose));
         }
     }
 
@@ -1156,10 +1164,10 @@ void SandboxModule::onEvent(const SDL_Event& event) {
 
 // ---------------------------------------------------------------- physics toys
 
-void SandboxModule::ragdoll(Object& o, const glm::vec3& push) {
-    if (!m_ragdolls || o.ragdoll) return;
+bool SandboxModule::makeRagdoll(Object& o) {
+    if (!m_ragdolls || o.ragdoll) return false;
     const kke::ModelData* d = m_models->model(o.model);
-    if (!d) return;
+    if (!d) return false;
     glm::mat4 instance = m_models->transform(o.instance);
     std::vector<glm::mat4> world = m_models->boneWorld(o.instance);
     for (glm::mat4& w : world) w = instance * w;
@@ -1167,11 +1175,22 @@ void SandboxModule::ragdoll(Object& o, const glm::vec3& push) {
     o.ragdollDesc = kke::buildHumanoidRagdoll(*d, world, 70.0f, &missing);
     if (o.ragdollDesc.bodies.empty()) {
         m_status = o.asset + " can't ragdoll: no '" + missing + "' bone";
-        return;
+        return false;
     }
     o.binding = kke::bindSkeletonToRagdoll(*d, world, o.ragdollDesc);
     o.ragdoll = m_ragdolls->createRagdoll(o.ragdollDesc, glm::vec3(0.0f));
-    if (!o.ragdoll) return;
+    return o.ragdoll != 0;
+}
+
+void SandboxModule::ragdoll(Object& o, const glm::vec3& push) {
+    if (!m_ragdolls) return;
+    if (o.ragdoll && o.active.valid() && !isDown(o)) {
+        // Staggering: this one takes them off their feet.
+        o.active.knockOut();
+        m_ragdolls->driveRagdoll(o.ragdoll, o.active.drive());
+    } else if (o.ragdoll || !makeRagdoll(o)) {
+        return;
+    }
     // Shove the upper body harder than the legs so it topples, not slides.
     for (const char* body : { "torso", "head" }) m_ragdolls->pushRagdollBody(o.ragdoll, o.ragdollDesc.findBody(body), push);
     m_ragdolls->pushRagdollBody(o.ragdoll, o.ragdollDesc.findBody("pelvis"), push * 0.4f);
@@ -1180,10 +1199,129 @@ void SandboxModule::ragdoll(Object& o, const glm::vec3& push) {
 
 void SandboxModule::standUp(Object& o) {
     if (!o.ragdoll || !m_ragdolls) return;
+    const bool wasDown = isDown(o);
     m_ragdolls->destroyRagdoll(o.ragdoll);
     o.ragdoll = 0;
+    o.active = {};
     m_models->setBoneWorldOverride(o.instance, {});
-    queueStoodUp(o.id);
+    if (wasDown) queueStoodUp(o.id);
+}
+
+// A shove they try to stay up through: a ragdoll on joint motors that
+// hold the pose they had (kke::ActiveRagdoll). A small one staggers them
+// and they settle back into their animation where they ended up; a big
+// one (or a physics without motors) knocks them over.
+bool SandboxModule::stagger(Object& o, const glm::vec3& push) {
+    if (!o.character || !m_ragdolls) return false;
+    if (o.ragdoll) {
+        if (!o.active.valid() || isDown(o)) return false; // already down
+        o.active.hit(o.ragdollDesc.findBody("torso"), push);
+        m_ragdolls->pushRagdollBody(o.ragdoll, o.ragdollDesc.findBody("torso"), push);
+        return true;
+    }
+    const std::vector<glm::mat4> local = m_models->boneWorld(o.instance);
+    if (!makeRagdoll(o)) return false;
+    o.active = kke::ActiveRagdoll(o.ragdollDesc);
+    o.standPose = local;
+    std::vector<glm::mat4> world = local;
+    const glm::mat4 instance = m_models->transform(o.instance);
+    for (glm::mat4& w : world) w = instance * w;
+    o.active.setTargets(o.binding, world);
+    const int pelvis = o.ragdollDesc.findBody("pelvis"), torso = o.ragdollDesc.findBody("torso");
+    o.active.hit(torso, push);
+    if (!m_ragdolls->driveRagdoll(o.ragdoll, o.active.drive())) {
+        // No joint motors here: an ordinary fall.
+        o.active = {};
+        for (const char* body : { "torso", "head" }) m_ragdolls->pushRagdollBody(o.ragdoll, o.ragdollDesc.findBody(body), push);
+        queueFellOver(o.id);
+        return true;
+    }
+    std::vector<glm::mat4> bodies;
+    o.staggerFrom = pelvis >= 0 && m_ragdolls->ragdollBodyTransforms(o.ragdoll, bodies) && size_t(pelvis) < bodies.size()
+                        ? glm::vec3(bodies[size_t(pelvis)][3])
+                        : glm::vec3(0.0f);
+    m_ragdolls->pushRagdollBody(o.ragdoll, torso, push);
+    m_ragdolls->pushRagdollBody(o.ragdoll, pelvis, push * 0.4f);
+    return true;
+}
+
+// Each frame for the shoved: motors toward the pose they had; a fall is
+// an ordinary ragdoll until they get up by themselves; once steady they
+// go back to their animation where the stagger left them.
+void SandboxModule::updateStaggers(float dt) {
+    std::vector<glm::mat4> bodies;
+    for (Object& o : m_objects) {
+        if (!o.ragdoll || !o.active.valid() || !m_ragdolls->ragdollBodyTransforms(o.ragdoll, bodies)) continue;
+        const bool wasDown = isDown(o);
+        const kke::ActiveRagdoll::State before = o.active.state();
+        o.active.update(dt, bodies);
+        if (!wasDown && isDown(o)) queueFellOver(o.id);
+        if (o.active.state() == kke::ActiveRagdoll::State::GettingUp && before != o.active.state()) {
+            // Steady, or getting up: they stand where the stagger took them
+            // (the skeleton blends into it below, in the ragdoll loop).
+            const int pelvis = o.ragdollDesc.findBody("pelvis");
+            if (pelvis >= 0 && size_t(pelvis) < bodies.size()) {
+                const glm::vec3 moved = glm::vec3(bodies[size_t(pelvis)][3]) - o.staggerFrom;
+                o.position += glm::vec3(moved.x, 0.0f, moved.z);
+                m_models->setTransform(o.instance, objectTransform(o));
+            }
+            if (before == kke::ActiveRagdoll::State::Fallen) queueStoodUp(o.id);
+        }
+        if (o.active.state() == kke::ActiveRagdoll::State::Animated) {
+            m_ragdolls->destroyRagdoll(o.ragdoll);
+            o.ragdoll = 0;
+            o.active = {};
+            o.standPose.clear();
+            m_models->setBoneWorldOverride(o.instance, {});
+            continue;
+        }
+        m_ragdolls->driveRagdoll(o.ragdoll, o.active.drive());
+    }
+}
+
+void SandboxModule::lookAt(Object& o, uint32_t thing, const glm::vec3& point) {
+    const kke::ModelData* d = m_models->model(o.model);
+    if (!d) return;
+    if (!o.look.valid()) o.look = kke::LookAt::humanoid(*d);
+    if (!o.look.valid()) return;
+    o.lookThing = thing;
+    o.lookPoint = point;
+    if (o.looking) return;
+    o.looking = true;
+    const uint32_t id = o.id;
+    m_models->setPoseModifier(o.instance, [this, id](std::vector<glm::mat4>& bones, float dt) {
+        Object* self = find(id);
+        if (!self) return;
+        const kke::ModelData* model = m_models->model(self->model);
+        if (!model) return;
+        const glm::mat4 toModel = glm::inverse(m_models->transform(self->instance));
+        glm::vec3 at(NAN);
+        if (self->looking) {
+            if (const Object* other = self->lookThing ? find(self->lookThing) : nullptr) {
+                glm::vec3 mn, mx;
+                worldBounds(*other, mn, mx);
+                at = glm::vec3((mn.x + mx.x) * 0.5f, other->character ? mn.y + (mx.y - mn.y) * 0.9f : (mn.y + mx.y) * 0.5f,
+                               (mn.z + mx.z) * 0.5f);
+            } else if (std::isfinite(self->lookPoint.x) && std::isfinite(self->lookPoint.y) && std::isfinite(self->lookPoint.z)) {
+                at = self->lookPoint;
+            } else if (!self->lookThing) {
+                at = m_app->camera().position;
+            }
+        }
+        const bool has = std::isfinite(at.x);
+        const glm::vec3 target = has ? glm::vec3(toModel * glm::vec4(at, 1.0f)) : glm::vec3(0.0f);
+        kke::Pose pose = kke::poseFromModel(*model, bones);
+        self->look.apply(*model, pose, has ? &target : nullptr, dt);
+        bones = kke::poseToModel(*model, pose);
+        // Looked away and back to straight ahead: the layer is done.
+        if (!self->looking && std::abs(self->look.yawDegrees()) < 0.5f && std::abs(self->look.pitchDegrees()) < 0.5f)
+            m_models->setPoseModifier(self->instance, nullptr);
+    });
+}
+
+void SandboxModule::lookAway(Object& o) {
+    // The layer stays until the head has come back round (see lookAt).
+    o.looking = false;
 }
 
 // Turns a placed prop into a physics object with its own shape and look:
@@ -2108,7 +2246,7 @@ void SandboxModule::swingBat() {
     glm::vec3 target(0.0f);
     float best = 1e30f;
     for (const Object& o : m_objects) {
-        if (!o.character || o.ragdoll) continue;
+        if (!o.character || isDown(o)) continue;
         glm::vec3 mn, mx;
         worldBounds(o, mn, mx);
         const float t = kke::rayAabb(ray, mn, mx);
@@ -2125,7 +2263,7 @@ void SandboxModule::swingBat() {
         // near the spot is who you meant.
         float nearest = kBatAutoAimMeters;
         for (const Object& o : m_objects) {
-            if (!o.character || o.ragdoll) continue;
+            if (!o.character || isDown(o)) continue;
             glm::vec3 mn, mx;
             worldBounds(o, mn, mx);
             const glm::vec3 foot((mn.x + mx.x) * 0.5f, mn.y, (mn.z + mx.z) * 0.5f);
@@ -2169,7 +2307,7 @@ void SandboxModule::updateBat(float dt) {
     const bool stillOut = m_swing.update(dt);
     {   // sweep() only hits over what this update swung through
         for (Object& o : m_objects) {
-            if (!o.character || o.ragdoll || std::find(m_swingHits.begin(), m_swingHits.end(), o.id) != m_swingHits.end()) continue;
+            if (!o.character || isDown(o) || std::find(m_swingHits.begin(), m_swingHits.end(), o.id) != m_swingHits.end()) continue;
             // The body, not its bounds: a T-posed character's bounds are
             // mostly air between its outstretched arms.
             glm::vec3 mn, mx;
@@ -2236,7 +2374,7 @@ void SandboxModule::playPaletteUi() {
     for (const Object& o : m_objects) {
         if (!o.character) continue;
         anyone = true;
-        (o.ragdoll ? anyoneDown : anyoneStanding) = true;
+        (isDown(o) ? anyoneDown : anyoneStanding) = true;
     }
     const char* hint = m_assetFolder.empty()          ? "No asset packs found. Press Build to pick a folder."
                        : m_tool == Tool::Look          ? "Tap a thing or a picture to look inside. Tap the ground for the whole level."

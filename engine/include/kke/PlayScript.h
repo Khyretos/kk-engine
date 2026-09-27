@@ -25,6 +25,7 @@ class ScriptVM;
 //   play.say(text)                            play.addScore(n) -> score
 //   play.score() -> n                         play.position(thing) -> Vec
 //   play.blockOf(thing) -> block              play.isDown(thing) -> bool
+//   play.stagger(thing [, push])              play.lookAt(thing [, at]) / play.lookAway(thing)
 //   play.blocks() -> { {id=, label=, kind=}, ... }
 //
 // Events (hook.Add(name, id, function(e) ... end), one table each):
@@ -51,6 +52,15 @@ public:
     virtual bool standUp(uint32_t thing) = 0;
     virtual bool isDown(uint32_t thing) const = 0;
     virtual bool swingAt(uint32_t thing) = 0;                        // the bat swings through them
+    // A shove a person tries to stay up through (kke::ActiveRagdoll,
+    // docs/PROCEDURAL_ANIMATION.md); a big one still knocks them over.
+    // Worlds without joint motors just knock them over.
+    virtual bool stagger(uint32_t thing, const glm::vec3& push) { return ragdoll(thing, push); }
+    // A person keeps turning their head (and a little of the spine) toward
+    // `atThing` if not 0, else the place `at` if finite, else you (the
+    // camera); lookAway ends it.
+    virtual bool lookAt(uint32_t /*thing*/, uint32_t /*atThing*/, const glm::vec3& /*at*/) { return false; }
+    virtual bool lookAway(uint32_t /*thing*/) { return false; }
     virtual void sound(const std::string& name, const glm::vec3& position) = 0;
     virtual void say(const std::string& text) = 0;
     virtual double addScore(double points) = 0; // returns the new score

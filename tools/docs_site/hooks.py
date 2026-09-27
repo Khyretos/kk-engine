@@ -5,6 +5,8 @@
   Markdown reads right on GitHub and on the site.
 - The Lua API reference (reference/lua-api.md) is generated at build time
   from the engine's bindings (lua_api.py).
+- llms.txt and llms-full.txt, for AI assistants, are generated at the
+  site's root (llms.py).
 """
 
 import os
@@ -15,6 +17,7 @@ import sys
 from mkdocs.structure.files import File
 
 sys.path.insert(0, os.path.dirname(__file__))
+import llms  # noqa: E402
 import lua_api  # noqa: E402
 
 REPO = "https://github.com/Khyretos/kk-engine"
@@ -76,4 +79,7 @@ def on_page_markdown(markdown, page, config, files):
 
 def on_files(files, config):
     files.append(File.generated(config, "reference/lua-api.md", content=lua_api.render(ROOT)))
+    site = config["site_url"] or llms.SITE
+    files.append(File.generated(config, "llms.txt", content=llms.llms_txt(site if site.endswith("/") else site + "/")))
+    files.append(File.generated(config, "llms-full.txt", content=llms.llms_full_txt()))
     return files

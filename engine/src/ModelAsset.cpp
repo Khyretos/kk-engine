@@ -185,10 +185,9 @@ ModelData loadModel(const std::string& path, const ModelLoadOptions& options) {
             for (const ufbx_node* n = skin->clusters.data[c]->bone_node; n && !n->is_root; n = n->parent) boneNodes.insert(n);
         }
     }
-    // No skin at all (an animation-only file: Synty's Sidekick and Goblin
-    // Locomotion clips): the skeleton is the nodes marked as bones (FBX
-    // LimbNodes), with their ancestors.
-    if (boneNodes.empty()) {
+    // An animation-only file (allowNoMeshes) has no skin to name its bones:
+    // take the skeleton nodes themselves, so its clips load by bone name.
+    if (boneNodes.empty() && options.allowNoMeshes) {
         for (size_t i = 0; i < scene->nodes.count; ++i) {
             const ufbx_node* node = scene->nodes.data[i];
             if (!node->bone) continue;
