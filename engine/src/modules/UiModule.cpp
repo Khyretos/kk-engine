@@ -17,6 +17,8 @@
 #include <RmlUi/Core/Factory.h>
 
 #include <chrono>
+#include <filesystem>
+#include <system_error>
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>
@@ -259,6 +261,16 @@ void UiModule::EngineSystemInterface::ActivateKeyboard(Rml::Vector2f caretPositi
 
 void UiModule::EngineSystemInterface::DeactivateKeyboard() {
     if (window) SDL_StopTextInput(window);
+}
+
+void UiModule::EngineSystemInterface::JoinPath(Rml::String& translatedPath, const Rml::String& documentPath, const Rml::String& path) {
+    std::error_code ec;
+    const std::filesystem::path p(path);
+    if (p.is_absolute() && std::filesystem::is_regular_file(p, ec)) {
+        translatedPath = path;
+        return;
+    }
+    Rml::SystemInterface::JoinPath(translatedPath, documentPath, path);
 }
 
 double UiModule::EngineSystemInterface::GetElapsedTime() {

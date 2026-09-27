@@ -15,10 +15,14 @@
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/ThumbnailModule.h"
 
+#include "FormPanel.h"
+#include "PlayPalette.h"
+
 #include <SDL3/SDL.h>
 #include <glm/glm.hpp>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace kke_sandbox {
@@ -217,16 +221,20 @@ private:
     const kke::CatalogPack* packOf(const std::string& asset, const std::string& pack = {}) const;
     void lookUi();
     void assetBrowserUi();
-    void assetGridUi(float uiScale);
+    void assetGridUi();
     void inspectorUi();
     void folderNotFoundUi();
 
     // Play mode (Simple): the palette, dragging blocks into the world,
     // picking placed things up again, and the bat.
-    void playPaletteUi();
+    void updatePalette();                       // Play mode's row of pictures (PlayPalette, RmlUi)
+    void palettePressed(const std::string& id); // a picture was pressed
+    // Its thumbnail PNG once on disk; mark: what to show until then.
+    std::string paletteImage(const kke::CatalogAsset* asset, std::string* mark = nullptr);
     void padCursorUi();
     void modeSwitchUi();
-    bool mouseOverUi() const;      // over any ImGui window, even mid-drag
+    bool mouseOverUi() const;      // over a panel, the palette or an ImGui window, even mid-drag
+    bool typingInUi() const;       // a text field has the keyboard
     void placeBlock(size_t block); // start placing (the ghost follows the mouse)
     void swingBat();
     void updateBat(float dt);
@@ -283,8 +291,6 @@ private:
     kke::Application* m_app = nullptr;
     kke::ModelModule* m_models = nullptr;
     kke::ThumbnailModule* m_thumbs = nullptr; // optional: the Assets panel shows a list without it
-    bool m_gridView = true;
-    float m_thumbSize = 88.0f;
     kke::DebugDrawModule* m_debug = nullptr;
     kke::IRagdollPhysics* m_ragdolls = nullptr;
     bool m_hasFemfx = false;
@@ -294,8 +300,9 @@ private:
     std::vector<std::string> m_searched;
     kke::AssetCatalog m_catalog;
     std::string m_filterPack, m_filterCategory;
-    char m_search[64] = {};
-    char m_folderInput[512] = {};
+    std::string m_search;
+    std::string m_folderInput;
+    int m_assetPage = 0; // the Assets panel shows one page of pictures
     std::vector<const kke::CatalogAsset*> m_filtered;
     bool m_filterDirty = true;
     std::string m_status;
@@ -327,7 +334,7 @@ private:
     float m_spawnYaw = 180.0f;
     std::vector<kke::SceneLight> m_pointLights; // drawn as markers, lit in slots 2-3
     int m_selectedLight = -1;
-    char m_levelName[128] = "Sandbox level";
+    std::string m_levelName = "Sandbox level";
     std::string m_levelDescription = "Built in the sandbox";
 
     // Placement
@@ -361,7 +368,7 @@ private:
     std::string m_lastBreakStats;
     float m_ballSpeed = 18.0f;
     std::vector<uint32_t> m_balls;     // oldest first; capped (see throwBall)
-    char m_layoutPath[512] = "sandbox.scene.json";
+    std::string m_layoutPath = "sandbox.scene.json";
     std::vector<kke::Module*> m_enginePanels;
     bool m_showEnginePanels = false;
 
@@ -385,6 +392,13 @@ private:
     double m_padLastUsed = -1e9;         // seconds; the cursor is drawn while a pad is in use
     bool m_padPressing = false;
     std::vector<glm::vec2> m_paletteCells; // centres, left to right, from the last palette drawn
+    PlayPalette m_palette;
+    // Build mode's panels (RmlUi): the asset pictures, the tools and
+    // settings, and the way back to Play.
+    FormPanel m_assetsPanel{ "assets", "left: 10dp; top: 10dp; width: 300dp;" };
+    FormPanel m_toolsPanel{ "sandbox", "right: 10dp; top: 10dp; width: 340dp;" };
+    FormPanel m_modePanel{ "mode", "left: 50%; top: 8dp; width: 200dp; margin-left: -110dp; text-align: center;" };
+    std::unordered_map<std::string, bool> m_thumbOnDisk; // thumbnail PNGs known to be written
     struct ReplayStep {
         float time = 0.0f;
         int line = 0;
