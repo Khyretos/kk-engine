@@ -66,6 +66,8 @@ void RigidBodyModule::pushRagdollBody(RagdollHandle handle, int body, const glm:
     m_world->addVelocity(bodies[body], deltaVelocity);
 }
 
+bool RigidBodyModule::driveRagdoll(RagdollHandle handle, const RagdollDrive& drive) { return m_world->driveRagdoll(handle, drive); }
+
 IPhysicsWorld::Stats RigidBodyModule::physicsStats() const {
     Stats s;
     s.bodies = m_world->bodyCount();

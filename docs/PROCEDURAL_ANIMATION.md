@@ -5,9 +5,8 @@ find the ground, animals with any number of legs that walk, trot and gallop
 without a single walk clip, heads that turn toward what they notice, and
 bodies that stagger when hit and catch themselves (or don't).
 
-> **Status (2026-09-26):** the API below is the contract and is landing in
-> stages; the header is published first so games (farm wildlife, pets) can
-> build against it.
+> **Status (2026-09-27):** the engine side (everything below except the
+> play-to-make blocks and the demo) is on main and tested.
 
 Everything lives in [`kke/ProceduralAnim.h`](../engine/include/kke/ProceduralAnim.h)
 (the reference) on top of what was already there:

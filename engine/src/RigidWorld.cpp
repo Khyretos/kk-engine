@@ -1,5 +1,6 @@
 #include "kke/RigidWorld.h"
 
+#include "kke/ProceduralAnim.h"
 #include "kke/Ragdoll.h"
 
 #include <Jolt/Jolt.h>
@@ -123,6 +124,8 @@ struct RigidWorld::Impl : public JPH::ContactListener {
     struct Ragdoll {
         std::vector<BodyId> bodies;
         std::vector<JPH::Ref<JPH::Constraint>> joints; // per RagdollDesc joint
+        std::vector<float> mass;                         // per body
+        std::vector<std::pair<int, int>> jointBodies;    // per joint: bodyA, bodyB
         JPH::Ref<JPH::GroupFilterTable> filter;
     };
     std::unordered_map<RagdollId, Ragdoll> ragdolls;
@@ -456,6 +459,7 @@ RigidWorld::RagdollId RigidWorld::addRagdoll(const RagdollDesc& desc, const glm:
         JPH::BodyID body = m->bodies().CreateAndAddBody(bcs, JPH::EActivation::Activate);
         if (body.IsInvalid()) return fail("body");
         rd.bodies.push_back(body.GetIndexAndSequenceNumber());
+        rd.mass.push_back(std::max(0.1f, b.mass));
     }
     for (const RagdollJoint& j : desc.joints) {
         const glm::vec3 centerB(desc.bodies[j.bodyB].transform[3]);
@@ -521,6 +525,7 @@ RigidWorld::RagdollId RigidWorld::addRagdoll(const RagdollDesc& desc, const glm:
         JPH::TwoBodyConstraint* c = m->bodies().CreateConstraint(settings, JPH::BodyID(rd.bodies[j.bodyA]), JPH::BodyID(rd.bodies[j.bodyB]));
         if (!c) return fail("joint");
         rd.joints.emplace_back(c);
+        rd.jointBodies.emplace_back(j.bodyA, j.bodyB);
         m->system.AddConstraint(c);
     }
     m->ragdolls.emplace(id, std::move(rd));
@@ -556,6 +561,68 @@ float RigidWorld::ragdollHingeAngle(RagdollId id, int joint) const {
     const JPH::Constraint* c = it->second.joints[joint].GetPtr();
     if (c->GetSubType() != JPH::EConstraintSubType::Hinge) return 0.0f;
     return glm::degrees(static_cast<const JPH::HingeConstraint*>(c)->GetCurrentAngle());
+}
+
+bool RigidWorld::driveRagdoll(RagdollId id, const RagdollDrive& drive) {
+    auto it = m->ragdolls.find(id);
+    if (it == m->ragdolls.end()) return false;
+    Impl::Ragdoll& rd = it->second;
+    const size_t nb = rd.bodies.size(), nj = rd.joints.size();
+    if (drive.targets.size() != nb || drive.jointStrength.size() != nj) return false;
+    bool anyMotor = false;
+    for (size_t j = 0; j < nj; ++j) {
+        const float strength = std::clamp(drive.jointStrength[j], 0.0f, 1.0f);
+        const auto [a, b] = rd.jointBodies[j];
+        // Body B relative to body A, as the animation has them (Jolt's
+        // SetTargetOrientationBS: R_B = R_A * q), like JPH::Ragdoll does.
+        const glm::quat q = glm::normalize(glm::inverse(rotationOf(drive.targets[a])) * rotationOf(drive.targets[b]));
+        const float torque = drive.torquePerKg * std::max(rd.mass[a], rd.mass[b]) * strength;
+        const JPH::EMotorState state = strength > 1e-3f ? JPH::EMotorState::Position : JPH::EMotorState::Off;
+        anyMotor = anyMotor || state != JPH::EMotorState::Off;
+        JPH::Constraint* c = rd.joints[j].GetPtr();
+        auto setMotor = [&](JPH::MotorSettings& ms) {
+            ms.mSpringSettings.mFrequency = std::max(0.1f, drive.frequency);
+            ms.mSpringSettings.mDamping = 1.0f;
+            ms.SetTorqueLimit(torque);
+        };
+        if (c->GetSubType() == JPH::EConstraintSubType::SwingTwist) {
+            auto* st = static_cast<JPH::SwingTwistConstraint*>(c);
+            setMotor(st->GetSwingMotorSettings());
+            setMotor(st->GetTwistMotorSettings());
+            st->SetSwingMotorState(state);
+            st->SetTwistMotorState(state);
+            if (state != JPH::EMotorState::Off) st->SetTargetOrientationBS(toJ(q));
+        } else if (c->GetSubType() == JPH::EConstraintSubType::Hinge) {
+            auto* h = static_cast<JPH::HingeConstraint*>(c);
+            setMotor(h->GetMotorSettings());
+            h->SetMotorState(state);
+            if (state != JPH::EMotorState::Off) h->SetTargetOrientationBS(toJ(q));
+        }
+    }
+    // The assist: the body's velocity pulled toward what reaches its
+    // target in `reach` seconds (what keeps a hit character standing).
+    const float assist = std::clamp(drive.assist, 0.0f, 1.0f);
+    if (assist > 0.0f && drive.assistBody >= 0 && static_cast<size_t>(drive.assistBody) < nb) {
+        const JPH::BodyID body(rd.bodies[drive.assistBody]);
+        JPH::RVec3 pos;
+        JPH::Quat rot;
+        m->bodies().GetPositionAndRotation(body, pos, rot);
+        const glm::vec3 p(float(pos.GetX()), float(pos.GetY()), float(pos.GetZ()));
+        const glm::quat r(rot.GetW(), rot.GetX(), rot.GetY(), rot.GetZ());
+        const glm::mat4& t = drive.targets[drive.assistBody];
+        constexpr float reach = 0.15f, share = 0.35f;
+        const glm::vec3 wantV = (glm::vec3(t[3]) - p) / reach;
+        glm::quat err = glm::normalize(rotationOf(t) * glm::inverse(r));
+        if (err.w < 0.0f) err = -err;
+        const float angle = 2.0f * std::acos(std::clamp(err.w, -1.0f, 1.0f));
+        const glm::vec3 axis = glm::vec3(err.x, err.y, err.z);
+        const glm::vec3 wantW = glm::length(axis) > 1e-6f ? glm::normalize(axis) * (angle / reach) : glm::vec3(0.0f);
+        const glm::vec3 v = toG(m->bodies().GetLinearVelocity(body)), w = toG(m->bodies().GetAngularVelocity(body));
+        m->bodies().SetLinearAndAngularVelocity(body, toJ(glm::mix(v, wantV, assist * share)), toJ(glm::mix(w, wantW, assist * share)));
+    }
+    if (anyMotor || assist > 0.0f)
+        for (BodyId b : rd.bodies) m->bodies().ActivateBody(JPH::BodyID(b));
+    return true;
 }
 
 namespace {

@@ -17,6 +17,7 @@ add_executable(kke_tests
     test_play_blocks.cpp
     test_orders.cpp
     test_node_graph.cpp
+    test_ai.cpp
     test_touch_gestures.cpp
     test_voxel_fracture.cpp
     test_interior_fill.cpp
@@ -26,6 +27,7 @@ add_executable(kke_tests
     test_break_graph.cpp
     test_animator.cpp
     test_anim_rig.cpp
+    test_procedural_anim.cpp
     test_climb_wall.cpp
     test_combat.cpp
     test_sidekick.cpp

@@ -58,18 +58,21 @@ void addPose(const Pose& base, const Pose& additive, const Pose& reference, cons
 // =====================================================================
 // Look-at and aim
 
+// LookAt::Settings.
+struct LookAtSettings {
+    float maxYaw = 80.0f;       // degrees left/right, the whole chain together
+    float maxPitch = 50.0f;     // degrees up/down
+    float giveUpYaw = 130.0f;   // target further round than this: look forward again
+    float speed = 6.0f;         // 1/s: how fast the head turns toward where it wants
+};
+
 // Turns a chain of bones (spine to head, or neck to head for an animal)
 // so the last one faces a target, each bone taking its share of the turn.
 // Yaw and pitch are limited and smoothed, and a target far behind is
 // dropped (the head comes back to forward instead of snapping round).
 class LookAt {
 public:
-    struct Settings {
-        float maxYaw = 80.0f;       // degrees left/right, the whole chain together
-        float maxPitch = 50.0f;     // degrees up/down
-        float giveUpYaw = 130.0f;   // target further round than this: look forward again
-        float speed = 6.0f;         // 1/s: how fast the head turns toward where it wants
-    };
+    using Settings = LookAtSettings;
     struct Link {
         int bone = -1;
         float share = 1.0f;         // relative; the shares are normalised
@@ -187,6 +190,21 @@ struct LegDesc {
 // (the spider's feet spread wider than its hips).
 std::vector<LegDesc> makeLegs(int count, float length, float width, float hipHeight);
 
+// ProceduralGait::Settings.
+struct GaitSettings {
+    Gait gait = Gait::Auto;
+    float stepHeight = 0.25f;  // swing arc, as a share of leg length
+    float strideScale = 0.8f;  // longest ground stride of one foot, as a share of leg length
+    float cycleFast = 0.2f;    // shortest cycle, in pendulum periods of the leg (2 pi sqrt(L / g))
+    float cycleSlow = 0.6f;    // longest cycle, likewise
+    float resettle = 0.12f;    // standing still: a foot further than this share of leg length from rest steps back
+    float bodyFollow = 1.0f;   // 0..1 how much the body pitches/rolls to the feet
+    float bob = 0.04f;         // body lift at push-off, as a share of leg length
+    float lean = 0.5f;         // 0..1 leaning into turns (1 = like a cyclist)
+    float maxTilt = 25.0f;     // degrees of pitch or roll, at most
+    float smoothing = 10.0f;   // 1/s for the body's height and tilt
+};
+
 // Plans footsteps and the body's sway for a creature whose controller
 // moves it (velocity, turning); nothing here moves the creature itself.
 // Each foot stays planted in the world until its turn in the gait, then
@@ -201,19 +219,7 @@ public:
     // and normal. False = no ground there.
     using SurfaceQuery = std::function<bool(const glm::vec3& from, glm::vec3& hit, glm::vec3& normal)>;
 
-    struct Settings {
-        Gait gait = Gait::Auto;
-        float stepHeight = 0.25f;  // swing arc, as a share of leg length
-        float strideScale = 0.8f;  // longest ground stride of one foot, as a share of leg length
-        float cycleFast = 0.2f;    // shortest cycle, in pendulum periods of the leg (2 pi sqrt(L / g))
-        float cycleSlow = 0.6f;    // longest cycle, likewise
-        float resettle = 0.12f;    // standing still: a foot further than this share of leg length from rest steps back
-        float bodyFollow = 1.0f;   // 0..1 how much the body pitches/rolls to the feet
-        float bob = 0.04f;         // body lift at push-off, as a share of leg length
-        float lean = 0.5f;         // 0..1 leaning into turns (1 = like a cyclist)
-        float maxTilt = 25.0f;     // degrees of pitch or roll, at most
-        float smoothing = 10.0f;   // 1/s for the body's height and tilt
-    };
+    using Settings = GaitSettings;
 
     struct Foot {
         glm::vec3 position{0.0f};         // world
@@ -241,6 +247,8 @@ public:
     // The body as drawn: `body` from update() raised or lowered to the
     // ground under the feet, bobbing, pitched, rolled and leaning.
     const glm::mat4& bodyPose() const { return m_bodyPose; }
+    // The body as the controller had it in the last update().
+    const glm::mat4& body() const { return m_body; }
     // World knee position of leg i (for drawing a creature from primitives).
     glm::vec3 knee(int i) const;
 
@@ -253,6 +261,7 @@ public:
 private:
     struct LegState {
         glm::vec3 from{0.0f};  // where the swing started
+        glm::vec3 ground{0.0f}; // the foot's point on the ground (no swing arc)
         float swingTime = 0.0f, swingLength = 0.0f;
         float lastPhase = 0.0f; // the leg's own phase last update, to see it cross into swing
     };
@@ -265,11 +274,12 @@ private:
     std::vector<LegState> m_state;
     Settings m_s;
     GaitPattern m_pattern;
+    Gait m_wanted = Gait::Walk;
     float m_phase = 0.0f, m_cycle = 1.0f;
     float m_hipHeight = 0.5f, m_legLength = 0.5f;
     bool m_moving = false;
     float m_height = 0.0f, m_pitch = 0.0f, m_roll = 0.0f, m_bobNow = 0.0f;
-    glm::mat4 m_bodyPose{1.0f};
+    glm::mat4 m_body{1.0f}, m_bodyPose{1.0f};
 };
 
 // ---------------------------------------------------------------------
@@ -295,6 +305,16 @@ void applyGait(const ModelData& model, Pose& pose, const std::vector<TwoBoneChai
 // ---------------------------------------------------------------------
 // Clip-driven legs on uneven ground (FootPlacer for any number of legs)
 
+// LegPlacer::Settings.
+struct LegPlacerSettings {
+    float maxDrop = 0.4f;     // metres the body may go down
+    float maxRaise = 0.4f;    // metres a foot may go up
+    float probeUp = 0.5f;     // ground ray starts this far above the foot
+    float smoothing = 12.0f;  // 1/s
+    float bodyFollow = 1.0f;  // 0..1 how much the body pitches/rolls to the ground
+    float maxTilt = 25.0f;    // degrees
+};
+
 // Each foot keeps its animated height above the ground under it; the
 // body drops as far as the lowest foot needs and pitches / rolls to the
 // ground; two-bone IK bends the legs. For animals playing walk and run
@@ -303,14 +323,7 @@ class LegPlacer {
 public:
     using SurfaceQuery = FootPlacer::SurfaceQuery; // model space
 
-    struct Settings {
-        float maxDrop = 0.4f;     // metres the body may go down (scaled to the rig's hip height if <= 0)
-        float maxRaise = 0.4f;    // metres a foot may go up
-        float probeUp = 0.5f;     // ground ray starts this far above the foot
-        float smoothing = 12.0f;  // 1/s
-        float bodyFollow = 1.0f;  // 0..1 how much the body pitches/rolls to the ground
-        float maxTilt = 25.0f;    // degrees
-    };
+    using Settings = LegPlacerSettings;
 
     LegPlacer() = default;
     LegPlacer(std::vector<TwoBoneChain> legs, int bodyBone, const Settings& settings = Settings{});
@@ -343,6 +356,22 @@ struct RagdollDrive {
     float assist = 0.0f;                // 0..1 how hard
 };
 
+// ActiveRagdoll::Settings.
+struct ActiveRagdollSettings {
+    float recoverPerSecond = 0.9f; // muscle strength regained per second
+    float hitWeakening = 0.12f;    // strength lost per m/s of push at the body hit
+    int hitSpread = 2;             // joints away from the hit that also weaken (halving each step)
+    float minStrength = 0.15f;     // a hit never takes a joint below this (0 = can go limp)
+    float balanceAssist = 1.0f;    // pull on the pelvis toward the animation at full balance
+    float balanceLoss = 0.25f;     // balance lost per m/s of push anywhere
+    float balanceRecover = 0.8f;   // per second
+    float fallTilt = 55.0f;        // degrees the torso may lean from its target before falling
+    float fallDrop = 0.35f;        // share of the pelvis's height it may sink before falling
+    float calmSeconds = 0.6f;      // steady this long at full strength = back to Animated
+    float getUpDelay = 1.6f;       // seconds lying down before GettingUp
+    float getUpSeconds = 0.6f;     // blend from the ragdoll back to the clip
+};
+
 // Hit reactions and balance on top of a ragdoll whose joints have motors
 // (Jolt: RigidBodyModule; FEMFX ragdolls have none and stay limp).
 //
@@ -358,20 +387,7 @@ class ActiveRagdoll {
 public:
     enum class State { Animated, Active, Fallen, GettingUp };
 
-    struct Settings {
-        float recoverPerSecond = 0.9f; // muscle strength regained per second
-        float hitWeakening = 0.12f;    // strength lost per m/s of push at the body hit
-        int hitSpread = 2;             // joints away from the hit that also weaken (halving each step)
-        float minStrength = 0.15f;     // a hit never takes a joint below this (0 = can go limp)
-        float balanceAssist = 1.0f;    // pull on the pelvis toward the animation at full balance
-        float balanceLoss = 0.25f;     // balance lost per m/s of push anywhere
-        float balanceRecover = 0.8f;   // per second
-        float fallTilt = 55.0f;        // degrees the torso may lean from its target before falling
-        float fallDrop = 0.35f;        // share of the pelvis's height it may sink before falling
-        float calmSeconds = 0.6f;      // steady this long at full strength = back to Animated
-        float getUpDelay = 1.6f;       // seconds lying down before GettingUp
-        float getUpSeconds = 0.6f;     // blend from the ragdoll back to the clip
-    };
+    using Settings = ActiveRagdollSettings;
 
     ActiveRagdoll() = default;
     ActiveRagdoll(const RagdollDesc& desc, const Settings& settings = Settings{});
