@@ -45,7 +45,7 @@ namespace pet_companion {
 // (kke::IntentReader turned into soft AI orders: it trots along when you
 // walk, comes to look at what you look at, waits for a pat when you walk
 // up to it, fetches a ball you throw without being told), it never stands
-// in your way (it steps off the path you are about to walk), and it shows
+// in your way (the core's Follow keeps it off your path), and it shows
 // how it feels (it jumps for joy after a good fetch or a pat).
 //
 // Headless: KKE_PET_DEMO=1 plays through every order by itself and logs

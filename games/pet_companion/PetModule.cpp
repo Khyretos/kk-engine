@@ -428,8 +428,8 @@ void PetModule::grab(Ball& b) {
     if (b.body != kke::RigidWorld::kNoBody) m_rigid->world().remove(b.body);
     b.body = kke::RigidWorld::kNoBody;
     b.held = Ball::Held::Dog;
-    // A ball in a mouth or a hand isn't a thing on the lawn (and mustn't push the dog away).
-    m_ai.remove(b.id);
+    // A ball in a mouth or a hand isn't a thing on the lawn: the AI stops seeing it.
+    m_ai.setEnabled(b.id, false);
 }
 
 void PetModule::release(Ball& b, const glm::vec3& velocity) {
@@ -445,7 +445,8 @@ void PetModule::release(Ball& b, const glm::vec3& velocity) {
         b.body = m_rigid->world().add(d);
     }
     b.held = Ball::Held::No;
-    if (!m_ai.has(b.id)) m_ai.addActor(b.id, "ball", b.pos);
+    m_ai.setTransform(b.id, b.pos, glm::vec3(0.0f), 0.0f);
+    m_ai.setEnabled(b.id, true);
 }
 
 void PetModule::playerSay(const std::string& text) { m_hud->toast(text, 1.2f); }
@@ -588,14 +589,6 @@ void PetModule::updateDog(float dt) {
     if (m_joyTime > 0.0f) m_joyTime -= dt;
     glm::vec3 want = flat(a->desiredVelocity);
     if (sitting || m_joyTime > 0.0f) want = glm::vec3(0.0f);
-    // Never in your way: it steps off the path you're about to walk (not
-    // while chasing a ball or told to stay).
-    const bool mayDodge = !sitting && now != kke::OrderKind::Stay && !(now == kke::OrderKind::Fetch && !m_bridge->carrying(kDog));
-    if (mayDodge && kke::inLeadersWay(me, myVel, dog)) {
-        const glm::vec3 right(-myVel.z, 0.0f, myVel.x);
-        const float side = glm::dot(dog - me, right) >= 0.0f ? 1.0f : -1.0f;
-        want += glm::normalize(right) * (side * 3.0f);
-    }
     kke::RigidWorld::CharacterInput ci;
     ci.move = want;
     w.setCharacterInput(m_dogChar, ci);
