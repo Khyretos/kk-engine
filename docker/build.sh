@@ -2,7 +2,7 @@
 # Builds KKE for one platform inside its container (see docker-compose.yml).
 #   build.sh linux    -> dist/linux    (all games, tools, tests; tests are run)
 #   build.sh windows  -> dist/windows  (cross-compiled with MinGW-w64)
-#   build.sh android  -> dist/android  (arm64-v8a native libraries)
+#   build.sh android  -> dist/android  (kke-demos.apk, arm64-v8a)
 # Build trees live in build-docker/<platform>/ so they survive container
 # runs and never mix with your own build/ directory.
 set -euo pipefail
@@ -31,12 +31,14 @@ windows)
     cp -r "$bld/bin/." "$out/"
     ;;
 android)
-    # FEMFX is x86-AVX only until its SIMDe port (docs/SCALING.md): off for ARM.
-    cmake -S "$src" -B "$bld" -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DKKE_ENABLE_FEMFX="${FEMFX:-OFF}" \
+    # The android-arm64 preset's settings (FEMFX off until its SIMDe port,
+    # docs/SCALING.md), then the APK (docs/ANDROID.md).
+    cmake -S "$src" -B "$bld" -G Ninja -DCMAKE_BUILD_TYPE=Release -DKKE_ENABLE_FEMFX=OFF \
         -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
-        -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 -DKKE_ENABLE_TESTS=OFF
+        -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON \
+        -DKKE_ENABLE_TESTS=OFF -DKKE_ENABLE_VALIDATION=OFF
     cmake --build "$bld" -j "$jobs"
-    find "$bld" -name '*.so' -exec cp {} "$out/" \;
+    python3 "$src/android/build_apk.py" --build "$bld" --out "$out/kke-demos.apk"
     ;;
 *)
     echo "unknown platform '$platform' (linux | windows | android)" >&2

@@ -132,7 +132,7 @@ How games of this kind do it (Roblox, Fortnite, Rust, Valheim):
 |---|---|---|---|
 | Windows | Vulkan | none known | MinGW cross build in Docker (this session), MSVC in CI next |
 | Linux | Vulkan | none | Docker + CI (working) |
-| Android | Vulkan | **FEMFX is x86-AVX only** (Vectormath, SoA collision, solver) | SIMDe (MIT, header-only) maps AVX to NEON; APK packaging via SDL3's Android project |
+| Android | Vulkan | **FEMFX is x86-AVX only** (Vectormath, SoA collision, solver) | SIMDe (MIT, header-only) maps AVX to NEON; the APK already builds ([ANDROID.md](ANDROID.md)) |
 | macOS / iOS | MoltenVK (Vulkan on Metal) | Apple SDK can't be containerized (licence); FEMFX AVX (Apple Silicon is ARM) | GitHub Actions macOS runners; SIMDe as for Android |
 | Browser | **no Vulkan in browsers** | needs a WebGPU renderer; FEMFX threads need SharedArrayBuffer (cross-origin isolation) | a render-backend layer (Vulkan + WebGPU) + Emscripten; SIMDe -> WASM SIMD; the largest item on this list |
 

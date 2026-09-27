@@ -397,7 +397,13 @@ void VulkanDevice::createAllocator() {
     allocatorInfo.device = m_device;
     allocatorInfo.instance = m_instance;
     allocatorInfo.pVulkanFunctions = &vulkanFunctions;
-    allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_2;
+    // The version the device really has, up to the 1.2 the instance asks
+    // for: many phones stop at Vulkan 1.1, and VMA must not call 1.2
+    // functions there.
+    VkPhysicalDeviceProperties props{};
+    vkGetPhysicalDeviceProperties(m_physicalDevice, &props);
+    allocatorInfo.vulkanApiVersion = std::min<uint32_t>(VK_API_VERSION_1_2, VK_MAKE_API_VERSION(0, VK_API_VERSION_MAJOR(props.apiVersion),
+                                                                                             VK_API_VERSION_MINOR(props.apiVersion), 0));
 
     // KKE_VRAM_BUDGET_MB=512: behave as if the GPU had only that much
     // video memory (docs/BENCHMARKS.md "Hardware profiles"). Docker can

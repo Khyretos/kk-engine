@@ -3,8 +3,9 @@
 What a game made with kk-engine can run on today, what needs more work,
 and what consoles take. Short version:
 
-- **Windows, Linux and Steam Deck work now.** Android builds compile;
-  iOS and macOS are planned ([#56](https://github.com/Khyretos/kk-engine/issues/56),
+- **Windows, Linux and Steam Deck work now.** Android builds an
+  installable APK of every demo ([ANDROID.md](ANDROID.md)); iOS and macOS
+  are planned ([#56](https://github.com/Khyretos/kk-engine/issues/56),
   [#26](https://github.com/Khyretos/kk-engine/issues/26)).
 - **Consoles need a licence from the console maker.** That's not something
   an open-source engine can get around, but the engine is laid out so a
@@ -24,7 +25,7 @@ and what consoles take. Short version:
 | Steam Deck | ✅ works (it's Linux) | Vulkan | `cmake --workflow --preset steam-deck` |
 | PC handhelds (ROG Ally, Legion Go, MSI Claw) | ✅ works (Windows or Linux) | Vulkan | `cmake --workflow --preset handheld-pc` |
 | Old / low-end PCs | ✅ works | Vulkan, or software (lavapipe) | `cmake --workflow --preset low-end-pc` |
-| Android (arm64) | 🟡 native libraries build; no APK yet; no FEMFX (Jolt physics only) | Vulkan | `cmake --preset android-arm64` or `docker compose run --rm android` |
+| Android (arm64) | 🟡 APK builds in CI; touch-only controls and FEMFX not yet (Jolt physics only) | Vulkan | `cmake --workflow --preset android-arm64` + `android/build_apk.py`, or `docker compose run --rm android` ([ANDROID.md](ANDROID.md)) |
 | iPhone / iPad | 🟡 planned, [#56](https://github.com/Khyretos/kk-engine/issues/56) | Vulkan via MoltenVK | needs a Mac or GitHub's macOS runners |
 | macOS | 🟡 planned, [#26](https://github.com/Khyretos/kk-engine/issues/26) | Vulkan via MoltenVK | GitHub's macOS runners |
 | Web browser | 🔴 needs a WebGPU renderer | — | [#26](https://github.com/Khyretos/kk-engine/issues/26) |

@@ -4,6 +4,9 @@
 #include <spdlog/details/console_globals.h>
 #include <spdlog/details/registry.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
+#if defined(__ANDROID__)
+#include <spdlog/sinks/android_sink.h>
+#endif
 
 #include <cstdio>
 #include <cstdlib>
@@ -35,6 +38,24 @@ bool g_exited = false;
 void shutdownAtExit() {
     g_exited = true;
     spdlog::shutdown();
+}
+
+// Android sends stdout nowhere: there the log goes to logcat, tagged
+// "kke" (adb logcat -s kke, docs/ANDROID.md).
+std::shared_ptr<spdlog::logger> makeSyncLogger(const std::string& name) {
+#if defined(__ANDROID__)
+    return spdlog::android_logger_mt(name, "kke");
+#else
+    return spdlog::stdout_color_mt(name);
+#endif
+}
+
+std::shared_ptr<spdlog::logger> makeAsyncLogger(const std::string& name) {
+#if defined(__ANDROID__)
+    return spdlog::create_async_nb<spdlog::sinks::android_sink_mt>(name, std::string("kke"));
+#else
+    return spdlog::create_async_nb<spdlog::sinks::stdout_color_sink_mt>(name);
+#endif
 }
 
 void registerExitShutdown() {
@@ -70,12 +91,12 @@ std::shared_ptr<spdlog::logger> get(const std::string& moduleName) {
     // After the exit-time shutdown (a static destructor logging), no new
     // worker thread: log synchronously.
     if (g_exited) {
-        auto logger = spdlog::stdout_color_mt(moduleName);
+        auto logger = makeSyncLogger(moduleName);
         logger->set_pattern(g_pattern);
         return logger;
     }
     registerExitShutdown();
-    auto logger = spdlog::create_async_nb<spdlog::sinks::stdout_color_sink_mt>(moduleName);
+    auto logger = makeAsyncLogger(moduleName);
     logger->set_pattern(g_pattern);
     // The registry gives new loggers the global level (spdlog::set_level);
     // spdlog::get_level() would dereference the default logger, which

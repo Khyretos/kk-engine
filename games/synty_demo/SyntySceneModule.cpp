@@ -440,8 +440,11 @@ void SyntySceneModule::renderUi() {
         }
         if (m_poseEuler.size() != d->bones.size()) m_poseEuler.assign(d->bones.size(), glm::vec3(0.0f));
         glm::vec3& e = m_poseEuler[m_selectedBone];
-        bool changed = ImGui::SliderFloat("X", &e.x, -180, 180) | ImGui::SliderFloat("Y", &e.y, -180, 180) | ImGui::SliderFloat("Z", &e.z, -180, 180);
-        if (changed) rotateBone(c, d->bones[m_selectedBone].name.c_str(), e);
+        // Three statements, not ||, so all three sliders are always drawn.
+        const bool changedX = ImGui::SliderFloat("X", &e.x, -180, 180);
+        const bool changedY = ImGui::SliderFloat("Y", &e.y, -180, 180);
+        const bool changedZ = ImGui::SliderFloat("Z", &e.z, -180, 180);
+        if (changedX || changedY || changedZ) rotateBone(c, d->bones[m_selectedBone].name.c_str(), e);
     }
     ImGui::End();
 }

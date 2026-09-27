@@ -67,6 +67,21 @@ std::string hostName();
 // Linux: $XDG_CACHE_HOME or ~/.cache. Windows: %LOCALAPPDATA%.
 std::string userCacheDir();
 
+// Where the game's own files (shaders/, assets/, ui/, ...) are when they
+// don't sit next to the executable, "" when they do (every desktop).
+// Android keeps them inside the APK, where the engine can't open them by
+// path: the first start after an install or update unpacks them into the
+// app's private storage and returns that folder (docs/ANDROID.md). On a
+// problem *note (when given) says what went wrong; otherwise it says what
+// was done, for the log. Call it from the main thread, before anything
+// opens a file.
+std::string bundledFilesDir(std::string* note = nullptr);
+
+// Android discards stdout and stderr: from this call on, their lines go
+// to logcat (tag "kke"), so a game's "Fatal error: ..." is still seen.
+// Does nothing elsewhere. Safe to call more than once.
+void captureConsoleOutput();
+
 // Aligned heap memory; free it with alignedFree(), never free().
 void* alignedAlloc(size_t size, size_t alignment);
 void alignedFree(void* ptr);

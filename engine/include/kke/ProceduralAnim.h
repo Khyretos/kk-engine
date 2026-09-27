@@ -442,7 +442,6 @@ private:
     std::vector<std::vector<int>> m_adjacent; // per joint: joints sharing a body
     int m_pelvis = -1, m_torso = -1;
     bool m_fourLegged = false;
-    float m_restPelvisHeight = 1.0f;
     float m_balance = 1.0f, m_time = 0.0f, m_calm = 0.0f, m_lastTilt = 0.0f;
 };
 

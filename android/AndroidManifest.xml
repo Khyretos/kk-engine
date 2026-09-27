@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The APK's manifest. android/build_apk.py fills in the placeholders in at-signs
+     (package, label, version, which activity starts first). See
+     docs/ANDROID.md. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="@PACKAGE@"
+    android:versionCode="@VERSION_CODE@"
+    android:versionName="@VERSION_NAME@"
+    android:installLocation="auto">
+
+    <!-- Vulkan 1.0.3 or newer: every renderer path in the engine is Vulkan. -->
+    <uses-feature android:name="android.hardware.vulkan.version" android:version="0x400003" android:required="true" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.gamepad" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+    <uses-feature android:name="android.hardware.type.pc" android:required="false" />
+
+    <!-- Online play (ENet over UDP) and gamepad rumble. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <application android:label="@LABEL@"
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="true"
+        android:extractNativeLibs="true"
+        android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+        android:enableOnBackInvokedCallback="false"
+        android:hardwareAccelerated="true">
+
+        <!-- Lists the games when the APK holds more than one. -->
+        <activity android:name="com.kreativekompas.kke.LauncherActivity"
+            android:label="@LABEL@"
+            android:exported="@LAUNCHER_EXPORTED@">
+            @LAUNCHER_INTENT@
+        </activity>
+
+        <!-- One game. Its own process, so each start is a clean one: the
+             engine and SDL are linked into every game library. -->
+        <activity android:name="com.kreativekompas.kke.GameActivity"
+            android:label="@LABEL@"
+            android:process=":game"
+            android:launchMode="singleTask"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="layoutDirection|locale|grammaticalGender|fontScale|fontWeightAdjustment|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:preferMinimalPostProcessing="true"
+            android:exported="@GAME_EXPORTED@">
+            <meta-data android:name="kke.game" android:value="@DEFAULT_GAME@" />
+            @GAME_INTENT@
+        </activity>
+    </application>
+</manifest>

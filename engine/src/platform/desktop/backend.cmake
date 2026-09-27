@@ -10,6 +10,10 @@ if(WIN32)
     # bcrypt: secureRandom(); advapi32: machineId() (MachineGuid);
     # psapi: peakResidentMemoryMb().
     set(KKE_PLATFORM_BACKEND_LIBRARIES bcrypt advapi32 psapi)
+elseif(ANDROID)
+    # android: the APK's AssetManager, for unpacking the game's files
+    # (bundledFilesDir()); log: logcat (captureConsoleOutput()).
+    set(KKE_PLATFORM_BACKEND_LIBRARIES android log)
 else()
     set(KKE_PLATFORM_BACKEND_LIBRARIES "")
 endif()
