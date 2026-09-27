@@ -13,6 +13,7 @@
 #include <imgui.h>
 #include <AMD_FEMFX.h>
 #include <cstdlib>
+#include <iterator>
 #include <stdexcept>
 #include <string>
 #include <vector>

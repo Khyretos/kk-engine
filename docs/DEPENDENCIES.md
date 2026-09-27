@@ -73,7 +73,7 @@ shown. "Key" is the name the dependency check looks for.
 | Monocypher | `monocypher` | 4.0.2 | Signatures and hashing for sealed data, anti-cheat and Kreative DRM | BSD-2-Clause or CC0-1.0 | Nothing under the CC0 option |
 | miniaudio | `miniaudio` | 0.11.22 | Audio mixing and output | Public domain (Unlicense) or MIT-0 | Nothing |
 | Lua | `lua` | 5.4.7 | Gameplay scripting | MIT | Keep the copyright notice |
-| SQLite | `sqlite` | 3.50.4 | Built-in save and storage database | Public domain | Nothing |
+| SQLite | `sqlite` | 3.53.4 | Built-in save and storage database | Public domain | Nothing |
 | Jolt Physics | `JoltPhysics` | v5.6.0 | Rigid bodies, collision, character controller, ragdolls (`KKE_ENABLE_JOLT`, on by default) | MIT | Keep the copyright notice |
 
 ## Optional modules

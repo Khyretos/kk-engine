@@ -36,6 +36,16 @@ jobs:
       - name: Every dependency is in docs/DEPENDENCIES.md
         run: python3 -W error tools/ci/check_dependencies.py
 
+  # Every std:: name must come from a header the file includes. CI's GCC 13
+  # still pulls many headers in through others; GCC 15/16 (Arch, Fedora)
+  # don't, so a missing #include <algorithm> builds here and fails there.
+  std-includes:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Every standard name has its header included
+        run: python3 -W error tools/ci/check_std_includes.py
+
   # Shipping builds (-DKKE_SHIPPING=ON, docs/ANTI_CHEAT.md) compile the
   # developer tools out: this keeps that configuration building with zero
   # warnings and its tests passing (DevTools.* checks the debug switches

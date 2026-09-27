@@ -9,6 +9,8 @@
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
+#include <algorithm>
+#include <cstdio>
 
 namespace kke {
 

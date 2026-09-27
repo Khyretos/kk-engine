@@ -15,6 +15,8 @@
 #include <fstream>
 #include <memory>
 #include <random>
+#include <algorithm>
+#include <system_error>
 
 using namespace kke::net;
 using kke::InputSanity;

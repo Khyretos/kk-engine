@@ -1,4 +1,5 @@
 #include <map>
+#include <algorithm>
 #include "kke/MeltVolume.h"
 #include "kke/ParticleFluid.h"
 

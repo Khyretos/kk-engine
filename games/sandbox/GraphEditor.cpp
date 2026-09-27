@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstdio>
 #include <sstream>
+#include <cstdlib>
 
 namespace kke_sandbox {
 

@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <stdexcept>
 
 using namespace kke;
 

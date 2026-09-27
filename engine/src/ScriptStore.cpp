@@ -4,6 +4,7 @@
 #include <lua.h>
 
 #include <cmath>
+#include <utility>
 
 namespace kke {
 

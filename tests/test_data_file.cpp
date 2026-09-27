@@ -16,6 +16,7 @@
 #include <fstream>
 #include <random>
 #include <sstream>
+#include <system_error>
 
 namespace datafile = kke::datafile;
 namespace fs = std::filesystem;
