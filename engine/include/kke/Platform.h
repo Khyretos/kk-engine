@@ -77,9 +77,12 @@ std::string userCacheDir();
 // opens a file.
 std::string bundledFilesDir(std::string* note = nullptr);
 
-// Android discards stdout and stderr: from this call on, their lines go
-// to logcat (tag "kke"), so a game's "Fatal error: ..." is still seen.
-// Does nothing elsewhere. Safe to call more than once.
+// Android discards stdout and stderr, where the engine log goes: from
+// this call on, their lines go to logcat (tag "kke", at the line's own
+// level), so the log and a game's "Fatal error: ..." are still seen. When
+// KKE_LOG_FILE names a file, every line is appended there too (the
+// Android benchmark keeps each demo's log that way). Does nothing
+// elsewhere. Safe to call more than once.
 void captureConsoleOutput();
 
 // Aligned heap memory; free it with alignedFree(), never free().

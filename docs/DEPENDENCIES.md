@@ -152,6 +152,7 @@ you build with them.
 | Vulkan SDK | `humbletim/setup-vulkan-sdk` | LunarG's SDK: mostly Apache-2.0 | `platforms.yml` only |
 | Android NDK r27c, SDK command-line tools (aapt2, d8, zipalign, apksigner; platform 35) | `dl.google.com` | **Android SDK License Agreement** (Google's terms, not open source); its C++ runtime is Apache-2.0 with LLVM exception | `docker/android.Dockerfile`, CI's `android` job; `android/build_apk.py` makes the APK with them (docs/ANDROID.md). Only the C++ runtime ends up in an APK. See [Things to watch](#things-to-watch) |
 | OpenJDK 17 | `openjdk-17-jdk-headless` | GPL-2.0 with the Classpath Exception | Compiles the APK's Java (SDL's activity and `android/java/`); nothing of it ships |
+| PyYAML | `python3-yaml` | MIT | `android/build_apk.py --benchmark` reads the benchmark suite (benchmarks/suite.yaml) with it; nothing of it ships |
 | glslang, SPIRV-Tools | `glslang-tools`, `spirv-tools` | BSD-3-Clause / Apache-2.0 | Compile shaders to SPIR-V |
 | Wine | `wine64` | LGPL-2.1 | Runs Windows tests in the Windows build container |
 | Build-machine packages (Ubuntu 24.04) | `ca-certificates`, `curl`, `git`, `pkg-config`, `unzip`, `zip`, `python3`, `xvfb`, `xauth`, `xdotool`, `imagemagick`, `lcov`, `vulkan-tools`, `mesa-vulkan-drivers`, `fonts-noto-core`, `fonts-noto-color-emoji` | Various open-source licences (see each package's `/usr/share/doc/<package>/copyright`) | Fetching, packaging, headless test runs, screenshots, coverage |

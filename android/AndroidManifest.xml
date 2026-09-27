@@ -40,7 +40,6 @@
         <activity android:name="com.kreativekompas.kke.GameActivity"
             android:label="@LABEL@"
             android:process=":game"
-            android:launchMode="singleTask"
             android:screenOrientation="sensorLandscape"
             android:configChanges="layoutDirection|locale|grammaticalGender|fontScale|fontWeightAdjustment|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
             android:preferMinimalPostProcessing="true"
@@ -48,5 +47,20 @@
             <meta-data android:name="kke.game" android:value="@DEFAULT_GAME@" />
             @GAME_INTENT@
         </activity>
+
+        <!-- The benchmark app: runs every demo and shares the results. -->
+        <activity android:name="com.kreativekompas.kke.BenchmarkActivity"
+            android:label="@LABEL@"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:exported="@BENCHMARK_EXPORTED@">
+            @BENCHMARK_INTENT@
+        </activity>
+
+        <!-- Lends the benchmark's results file to the app it is shared with. -->
+        <provider android:name="com.kreativekompas.kke.ResultsProvider"
+            android:authorities="@PACKAGE@.results"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>
