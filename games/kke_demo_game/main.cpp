@@ -33,6 +33,11 @@
 int main() {
     try {
         kke::Application app("Kreative Kompas Engine - Demo", 1600, 900);
+        // A calm neutral backdrop for a test bench (assets/moods/studio.yaml).
+        app.setMood("studio");
+        // The lighting panel (LightingControlsModule) sets a flat ambient
+        // with its slider and presets: keep that in charge of the fill.
+        app.lighting().sky.lightsScene = false;
 
         // Best-effort hardware check against this game's own
         // developer-declared requirements (game.json's "requirements"

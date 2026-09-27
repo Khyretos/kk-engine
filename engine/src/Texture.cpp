@@ -70,7 +70,56 @@ void Texture::createFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32
             h = nh;
         }
     }
-    VkDeviceSize dataSize = chain.size();
+    createImage(chain.data(), chain.size(), VK_FORMAT_R8G8B8A8_SRGB, width, height, mipLevels, regions);
+
+    // LINEAR + REPEAT -- real defaults for a material texture, not
+    // RmlVulkanRenderInterface's own CLAMP_TO_BORDER (appropriate
+    // there for UI images that should never tile; wrong here, where a
+    // texture mapped across a mesh's UVs commonly needs to repeat).
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.compareEnable = VK_FALSE;
+    // Trilinear, plus anisotropic filtering where the device has it:
+    // floors and walls seen at a glancing angle stay sharp instead of
+    // dropping to a blurry mip (docs/RENDERING_PRINCIPLES.md). 8x is
+    // near free on any GPU with the feature; 16x adds little more.
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    if (m_device.maxSamplerAnisotropy() > 1.0f) {
+        samplerInfo.anisotropyEnable = VK_TRUE;
+        samplerInfo.maxAnisotropy = std::min(8.0f, m_device.maxSamplerAnisotropy());
+    }
+    samplerInfo.minLod = 0.0f;
+    samplerInfo.maxLod = static_cast<float>(mipLevels);
+    VK_CHECK(vkCreateSampler(m_device.device(), &samplerInfo, nullptr, &m_sampler));
+}
+
+Texture::Texture(VulkanDevice& device, const uint16_t* halfRgba, uint32_t width, uint32_t height, HalfFloatSky) : m_device(device) {
+    VkBufferImageCopy region{};
+    region.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+    region.imageExtent = { width, height, 1 };
+    createImage(halfRgba, static_cast<size_t>(width) * height * 4 * sizeof(uint16_t), VK_FORMAT_R16G16B16A16_SFLOAT, width, height, 1, { region });
+
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;        // round the horizon
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE; // not over the poles
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.maxLod = 0.0f;
+    VK_CHECK(vkCreateSampler(m_device.device(), &samplerInfo, nullptr, &m_sampler));
+}
+
+void Texture::createImage(const void* data, size_t size, VkFormat format, uint32_t width, uint32_t height, uint32_t mipLevels,
+                          const std::vector<VkBufferImageCopy>& regions) {
+    VkDeviceSize dataSize = size;
 
     // Same real staging-buffer-upload-then-GPU-only-image pattern
     // already proven in RmlVulkanRenderInterface::createTextureFromPixels
@@ -79,7 +128,7 @@ void Texture::createFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32
     // sequence: staging buffer, GPU image, transition to transfer-dst,
     // copy, transition to shader-read.
     Buffer staging(m_device, dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
-    staging.upload(chain.data(), dataSize);
+    staging.upload(data, dataSize);
 
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -87,7 +136,7 @@ void Texture::createFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32
     imageInfo.extent = { width, height, 1 };
     imageInfo.mipLevels = mipLevels;
     imageInfo.arrayLayers = 1;
-    imageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+    imageInfo.format = format;
     imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     imageInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -155,35 +204,9 @@ void Texture::createFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     viewInfo.image = m_image;
     viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    viewInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+    viewInfo.format = format;
     viewInfo.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, mipLevels, 0, 1 };
     VK_CHECK(vkCreateImageView(m_device.device(), &viewInfo, nullptr, &m_imageView));
-
-    // LINEAR + REPEAT -- real defaults for a material texture, not
-    // RmlVulkanRenderInterface's own CLAMP_TO_BORDER (appropriate
-    // there for UI images that should never tile; wrong here, where a
-    // texture mapped across a mesh's UVs commonly needs to repeat).
-    VkSamplerCreateInfo samplerInfo{};
-    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    samplerInfo.magFilter = VK_FILTER_LINEAR;
-    samplerInfo.minFilter = VK_FILTER_LINEAR;
-    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerInfo.unnormalizedCoordinates = VK_FALSE;
-    samplerInfo.compareEnable = VK_FALSE;
-    // Trilinear, plus anisotropic filtering where the device has it:
-    // floors and walls seen at a glancing angle stay sharp instead of
-    // dropping to a blurry mip (docs/RENDERING_PRINCIPLES.md). 8x is
-    // near free on any GPU with the feature; 16x adds little more.
-    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    if (m_device.maxSamplerAnisotropy() > 1.0f) {
-        samplerInfo.anisotropyEnable = VK_TRUE;
-        samplerInfo.maxAnisotropy = std::min(8.0f, m_device.maxSamplerAnisotropy());
-    }
-    samplerInfo.minLod = 0.0f;
-    samplerInfo.maxLod = static_cast<float>(mipLevels);
-    VK_CHECK(vkCreateSampler(m_device.device(), &samplerInfo, nullptr, &m_sampler));
 }
 
 Texture::~Texture() {

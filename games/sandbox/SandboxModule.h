@@ -297,6 +297,7 @@ private:
     std::vector<const kke::CatalogAsset*> m_filtered;
     bool m_filterDirty = true;
     std::string m_status;
+    std::vector<std::string> m_moodNames; // for the Mood picker, listed once
 
     // Level
     std::vector<Object> m_objects;

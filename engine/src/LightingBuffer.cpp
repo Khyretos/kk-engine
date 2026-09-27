@@ -4,6 +4,7 @@
 #include "kke/VulkanCheck.h"
 
 #include <glm/glm.hpp>
+#include <algorithm>
 #include <cstring>
 
 namespace kke {
@@ -32,7 +33,20 @@ struct LightingUBOData {
                          // real per-object metallic/roughness within the 128-byte guaranteed-minimum
                          // push constant limit)
     glm::vec4 toneParams; // x = tone mapper (0 AgX, 1 ACES, 2 Reinhard -- shaders/tonemap.glsl), y = exposure
+    // The sky, fog and look (kke/Sky.h); shaders/lighting_ubo.glsl names each.
+    glm::vec4 lookSlope;
+    glm::vec4 lookOffset;
+    glm::vec4 lookPower;
+    glm::vec4 skyZenith;
+    glm::vec4 skyHorizon;
+    glm::vec4 skyGround;
+    glm::vec4 sunDisc;
+    glm::vec4 sunGlow;
+    glm::vec4 fogColor;
+    glm::vec4 fogParams;
+    glm::vec4 ambientSH[9];
 };
+static_assert(sizeof(LightingUBOData) == 4 * 2 * 16 + 2 * 16 + 2 * 64 + 11 * 16 + 9 * 16, "must match shaders/lighting_ubo.glsl");
 
 } // namespace
 
@@ -99,7 +113,8 @@ LightingBuffer::~LightingBuffer() {
     if (m_setLayout) vkDestroyDescriptorSetLayout(m_device.device(), m_setLayout, nullptr);
 }
 
-void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos, const glm::mat4& lightViewProj, const glm::mat4& viewProj) {
+void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos, const glm::mat4& lightViewProj, const glm::mat4& viewProj,
+                            const SkyEnvironment* sky) {
     LightingUBOData data{};
     for (int i = 0; i < Lighting::kMaxLights; ++i) {
         const Light& src = lighting.lights[i];
@@ -120,6 +135,31 @@ void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos
     data.lightViewProj = lightViewProj;
     data.viewProj = viewProj;
     data.toneParams = glm::vec4(static_cast<float>(lighting.toneMapper), lighting.exposure, 0.0f, 0.0f);
+
+    const ColorGrade& g = lighting.grade;
+    data.lookSlope = glm::vec4(g.slope, g.saturation);
+    data.lookOffset = glm::vec4(g.offset, g.isIdentity() ? 0.0f : 1.0f);
+    data.lookPower = glm::vec4(g.power, 0.0f);
+
+    SkySH flat;
+    if (!sky) flat = SkySH::constant(lighting.ambientColor);
+    const SkySH& sh = sky ? sky->ambient : flat;
+    for (int i = 0; i < 9; ++i) data.ambientSH[i] = glm::vec4(sh.c[i], 0.0f);
+    if (sky) {
+        // Shaders that take one ambient colour (translucent, fluid) get the average.
+        data.ambient = glm::vec4(sky->ambientAverage, data.ambient.a);
+        data.skyZenith = glm::vec4(sky->zenith, static_cast<float>(sky->kind));
+        data.skyHorizon = glm::vec4(sky->horizon, sky->horizonFalloff);
+        data.skyGround = glm::vec4(sky->ground, sky->yawRadians);
+        data.sunDisc = glm::vec4(sky->sunDisc, sky->sunCosRadius);
+        data.sunGlow = glm::vec4(sky->sunGlow, sky->imageScale);
+        data.fogColor = glm::vec4(sky->fogColor, 0.0f);
+    } else {
+        data.fogColor = glm::vec4(lighting.fog.color, 0.0f);
+    }
+    const Fog& f = lighting.fog;
+    if (f.enabled) data.fogColor.a = std::max(f.density, 0.0f);
+    data.fogParams = glm::vec4(f.heightFalloff, f.height, std::clamp(f.maxOpacity, 0.0f, 1.0f), f.sunScatter);
 
     m_buffer->upload(&data, sizeof(data));
 }

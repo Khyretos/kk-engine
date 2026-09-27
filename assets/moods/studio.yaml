@@ -1,0 +1,23 @@
+# A soft neutral backdrop for tools and viewers: nothing to distract.
+title: Studio
+description: A calm grey-blue gradient, even light from above, true colours.
+sky:
+  zenith: "#5a6778"
+  horizon: "#9aa4b2"
+  ground: "#3b3f46"
+  horizonFalloff: 1.5
+  sunDisc: 0
+  sunGlow: 0
+  ambientStrength: 0.7
+sun:
+  azimuth: 130
+  elevation: 55
+  color: "#ffffff"
+  intensity: 2.6
+fill:
+  color: "#c9d6ff"
+  intensity: 0.35
+look:
+  saturation: 1.1
+  power: 1.08
+exposure: 1.0

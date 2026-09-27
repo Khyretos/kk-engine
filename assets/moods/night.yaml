@@ -1,0 +1,20 @@
+# Moonlight: blue, quiet, still readable.
+title: Night
+description: A starry sky, cool moonlight, dark but never black.
+sky:
+  image: night              # Poly Haven "Qwantani Night (Pure Sky)", CC0
+  intensity: 0.12
+  ambientStrength: 1.5
+sun:                         # the moon
+  azimuth: 150
+  elevation: 45
+  color: "#9fb4ff"
+  intensity: 0.7
+fog:
+  density: 0.004
+  heightFalloff: 0.05
+  maxOpacity: 0.8
+  sunScatter: 0.2
+look: cool
+exposure: 1.8
+ambience: night_crickets

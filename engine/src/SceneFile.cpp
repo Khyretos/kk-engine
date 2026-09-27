@@ -61,6 +61,10 @@ SceneFile SceneFile::parse(const std::string& text, const std::string& sourceNam
         s.spawnYaw = j["spawn"].value("yaw", 0.0f);
     }
     s.worldSeed = j.value("worldSeed", 0u);
+    if (j.contains("mood")) {
+        if (!j["mood"].is_string()) throw std::runtime_error(sourceName + ": \"mood\" must be a mood's name, e.g. \"golden_hour\"");
+        s.mood = j["mood"].get<std::string>();
+    }
     if (j.contains("sun")) {
         const nlohmann::json& sun = j["sun"];
         s.hasSun = true;
@@ -143,6 +147,7 @@ std::string SceneFile::toJson() const {
     if (groundSize.x > 0.0f || groundSize.y > 0.0f)
         j["ground"] = { { "size", { num(groundSize.x), num(groundSize.y) } }, { "color", arr(groundColor) } };
     if (worldSeed) j["worldSeed"] = worldSeed;
+    if (!mood.empty()) j["mood"] = mood;
     if (hasSun) j["sun"] = { { "direction", arr(sunDirection) }, { "color", arr(sunColor) }, { "intensity", num(sunIntensity) } };
     if (hasAmbient) j["ambient"] = arr(ambient);
     if (!lights.empty()) {

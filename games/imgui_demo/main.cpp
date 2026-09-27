@@ -19,6 +19,8 @@
 int main() {
     try {
         kke::Application app("Kreative Kompas Engine - ImGui Demo", 1280, 720);
+        // A calm neutral backdrop for a test bench (assets/moods/studio.yaml).
+        app.setMood("studio");
 
         app.addModule<kke::GridModule>();
         app.addModule<kke::OrbitCameraModule>();

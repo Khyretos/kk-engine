@@ -77,6 +77,7 @@ shown. "Key" is the name the dependency check looks for.
 | SQLite | `sqlite` | 3.53.4 | Built-in save and storage database | Public domain | Nothing |
 | Recast & Detour (recastnavigation) | `recastnavigation` | v1.6.0 | Navigation meshes and path finding for the AI core (`kke::ai::NavMesh`, [AI.md](AI.md)) | zlib | Nothing for binaries (don't misrepresent authorship; mark altered source) |
 | genann | `genann` | v1.1.1 | The small neural network behind teaching animals by example (`kke::ai::LearnedPolicy`, [AI.md](AI.md)) | zlib | Nothing for binaries (don't misrepresent authorship; mark altered source) |
+| Poly Haven sky images | `polyhaven-skies` | 2K "pure sky" HDRIs, pinned by SHA-256 in `cmake/skies.cmake` | The moods' image skies (`clear_day`, `sunset`, `night`, ...; [MOODS.md](MOODS.md)). Downloaded at configure time (`KKE_FETCH_SKIES`, on), copied to `assets/skies/`, not in the repository | CC0 (public domain) | Nothing (credited in each mood file and in [MOODS.md](MOODS.md)) |
 | Jolt Physics | `JoltPhysics` | v5.6.0 | Rigid bodies, collision, character controller, ragdolls (`KKE_ENABLE_JOLT`, on by default) | MIT | Keep the copyright notice |
 
 ## Optional modules
@@ -104,6 +105,12 @@ Each one is a CMake option; the default is in brackets.
 | ACES fit (Krzysztof Narkowicz, "ACES Filmic Tone Mapping Curve", 2016) | | `shaders/tonemap.glsl` | Published as a formula on his blog, no licence stated | A five-number curve fit; formulas like this are generally not treated as copyrightable (our reading, not verified). Credited in the shader and here |
 | Universal Animation Library mannequin (Quaternius) | `UAL1_Standard.fbx` | `assets/animations/`, not in downloads | CC0 (public domain) | Nothing |
 | Test texture | `test_icon.png` | `assets/textures/` | The project's own (MIT) | |
+| Moods ([MOODS.md](MOODS.md)) | `arena_night.yaml`, `cave.yaml`, `clear_day.yaml`, `dusk.yaml`, `golden_hour.yaml`, `misty_morning.yaml`, `morning.yaml`, `night.yaml`, `noon.yaml`, `overcast.yaml`, `playful.yaml`, `stormy.yaml`, `studio.yaml`, `sunset.yaml` | `assets/moods/`, shipped with the demos | The project's own (MIT) | |
+| "Amb Morning Sounds (perfect loop)" by Kresiek The Furry, OpenGameArt | `meadow_day.flac` | `assets/ambience/`, shipped with the demos; mono, 32 kHz, level-matched | CC0 (public domain) | Nothing |
+| "Crickets ambient noise (loopable)" by Wolfgang_, OpenGameArt | `night_crickets.flac` | `assets/ambience/`, same | CC0 (public domain) | Nothing |
+| "Park ambiences" (wind) by Thimras, OpenGameArt | `wind_soft.flac` | `assets/ambience/`, same; a 40 s cut crossfaded into a loop | CC0 (public domain) | Nothing |
+| "Wind whoosh loop" by SketchMan3, OpenGameArt | `wind_strong.flac` | `assets/ambience/`, same | CC0 (public domain) | Nothing |
+| "Loopable dungeon ambience" by JaggedStone, OpenGameArt | `cave_drips.flac` | `assets/ambience/`, same | CC0 (public domain) | Nothing |
 | Kreative Kompas logo and banner | | `assets/branding/` | The project's branding (README "Licence"); our reading is that the MIT grant doesn't cover it | Games may say "made with KKE" but shouldn't use the logo as their own |
 
 **Paid art (Synty packs) is never in the repository or a download**: those

@@ -9,7 +9,6 @@ namespace kke {
 
 namespace {
 struct OceanPush { glm::vec4 data[8]; };
-struct SkyPush { glm::mat4 invViewProj; glm::vec4 sunDir; };
 } // namespace
 
 OceanRenderer::OceanRenderer(Application& app, int cells, float extent) : m_cellSize(extent / static_cast<float>(cells)) {
@@ -32,21 +31,6 @@ OceanRenderer::OceanRenderer(Application& app, int cells, float extent) : m_cell
     oc.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(OceanPush) };
     oc.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout() };
     m_ocean = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/ocean.vert.spv", "shaders/ocean.frag.spv", oc);
-
-    PipelineConfig sc;
-    sc.useVertexInput = false;
-    sc.cullMode = VK_CULL_MODE_NONE;
-    sc.depthTestEnable = false;
-    sc.depthWriteEnable = false;
-    sc.pushConstantRange = { VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SkyPush) };
-    m_sky = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/sky.vert.spv", "shaders/sky.frag.spv", sc);
-}
-
-void OceanRenderer::drawSky(const RenderContext& ctx, const glm::vec3& sunDirection) {
-    m_sky->bind(ctx.cmd);
-    SkyPush pc{ glm::inverse(ctx.proj * ctx.view), glm::vec4(glm::normalize(sunDirection), 0.0f) };
-    vkCmdPushConstants(ctx.cmd, m_sky->layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
-    vkCmdDraw(ctx.cmd, 3, 1, 0, 0);
 }
 
 void OceanRenderer::drawOcean(const RenderContext& ctx, const OceanWaves& waves, float time, const glm::vec3& cameraPos) {

@@ -99,6 +99,10 @@ input.value("id")    -- 0..1 (or -1..1 for an axis)
 camera.position()   camera.target()   camera.forward()
 player.position()   player.teleport(Vec(0,1,0))   player.facing()   -- inside hooks only
 
+-- Mood: sky, sun, fog, colour look and background sound in one go (docs/MOODS.md)
+mood.set("golden_hour")   -- or "clear_day", "sunset", "dusk", "night", "misty_morning", "stormy", "playful", ...
+mood.current()   mood.list()
+
 -- Sound
 local M = audio.materials()   -- M.Stone, M.Wood, M.Metal, M.Glass, ...: give bodies material = M.Wood
 audio.impact(pos, M.Metal, 0.8)   -- play one now (loudness 0..1)

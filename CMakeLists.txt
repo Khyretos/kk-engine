@@ -855,6 +855,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     endif()
 endif()
 
+include(cmake/skies.cmake)
 add_subdirectory(engine)
 
 # (The CGAL-based offline tetrahedralizer that used to live in tools/ was

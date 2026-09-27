@@ -4,6 +4,7 @@
 #include <vk_mem_alloc.h>
 #include <string>
 #include <cstdint>
+#include <vector>
 
 namespace kke {
 
@@ -32,6 +33,11 @@ class Texture {
 public:
     Texture(VulkanDevice& device, const std::string& filePath);
     Texture(VulkanDevice& device, const uint8_t* rgbaPixels, uint32_t width, uint32_t height);
+    // Linear HDR light as RGBA half floats (VK_FORMAT_R16G16B16A16_SFLOAT):
+    // one level, wrapping sideways and clamped top and bottom, the way an
+    // equirectangular sky is sampled (kke::SkyRenderer).
+    struct HalfFloatSky {};
+    Texture(VulkanDevice& device, const uint16_t* halfRgba, uint32_t width, uint32_t height, HalfFloatSky);
     ~Texture();
 
     Texture(const Texture&) = delete;
@@ -42,6 +48,8 @@ public:
 
 private:
     void createFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32_t height);
+    void createImage(const void* data, size_t dataSize, VkFormat format, uint32_t width, uint32_t height, uint32_t mipLevels,
+                     const std::vector<VkBufferImageCopy>& regions);
 
     VulkanDevice& m_device;
     VkImage m_image = VK_NULL_HANDLE;

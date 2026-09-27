@@ -272,3 +272,29 @@ These run the same with or without any asset pack: `climb_race`,
 `rmlui_demo`, `imgui_demo`, `kke_basics`, `starter_game` and `cookbook`.
 `kke_demo` dresses its course with the art listed under "Showcase course
 art" above when the packs are there, and plays the same without them.
+
+## Moods
+
+Every demo sets a mood ([MOODS.md](MOODS.md)): the sky, sun, fog, colour
+look and background sound. The skies are CC0 pictures from Poly Haven,
+fetched by the build; the sounds are CC0 loops from OpenGameArt in
+`assets/ambience/`. Neither is a pack: every demo has them. Try another
+with `KKE_MOOD=<name>`.
+
+| Demo | Mood | Sky picture | Sound |
+|---|---|---|---|
+| `kke_demo` (showcase course) | `clear_day` | Kloofendal 48d Partly Cloudy | `meadow_day` |
+| `sandbox` | `clear_day` | Kloofendal 48d Partly Cloudy | `meadow_day` |
+| `pet_companion` | `clear_day` | Kloofendal 48d Partly Cloudy | `meadow_day` |
+| `sea_demo` | `clear_day` | Kloofendal 48d Partly Cloudy | `meadow_day` |
+| `audio_demo` | `clear_day` | Kloofendal 48d Partly Cloudy | `meadow_day` |
+| `procedural_demo` | `morning` | Qwantani Mid Morning | `meadow_day` |
+| `farm_demo` | `morning` | Qwantani Mid Morning | `meadow_day` |
+| `platoon` | `morning` | Qwantani Mid Morning | `meadow_day` |
+| `climb_race` | `golden_hour` | Qwantani Late Afternoon | `wind_soft` |
+| `synty_demo` | `golden_hour` | Qwantani Late Afternoon | `wind_soft` |
+| `goblin_horde` | `sunset` | Qwantani Sunset | `wind_soft` |
+| `duel` | `arena_night` | Qwantani Night | `night_crickets` |
+| `melt_demo` | `dusk` | Qwantani Dusk 2 | `night_crickets` |
+| `starter_game` (and every new game), `cookbook`, `jiggle_demo` | `playful` | gradient | none |
+| `physics_demo`, `kke_basics`, `rmlui_demo`, `imgui_demo` | `studio` | gradient | none |

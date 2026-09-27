@@ -1,0 +1,20 @@
+# The hour before sunset: warm light raking across everything.
+title: Golden hour
+description: Low, warm sun, long shadows, a soft golden haze.
+sky:
+  image: late_afternoon     # Poly Haven "Qwantani Late Afternoon (Pure Sky)", CC0
+  ambientStrength: 0.3
+sun:
+  azimuth: 140
+  intensity: 2.4
+fill:
+  color: "#8ea7d6"
+  intensity: 0.2
+fog:
+  density: 0.0018
+  heightFalloff: 0.05
+  maxOpacity: 0.85
+  sunScatter: 1.2
+look: golden
+exposure: 0.95
+ambience: wind_soft

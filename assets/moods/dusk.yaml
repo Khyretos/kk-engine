@@ -1,0 +1,22 @@
+# After the sun has gone: blue hour.
+title: Dusk
+description: The sun just down, a deep blue sky with a warm band at the horizon.
+sky:
+  image: dusk               # Poly Haven "Qwantani Dusk 2 (Pure Sky)", CC0
+  intensity: 0.45
+  ambientStrength: 0.9
+sun:
+  azimuth: 135
+  elevation: 6
+  color: "#ffb27a"
+  intensity: 1.0
+fill:
+  color: "#6f86c8"
+  intensity: 0.35
+fog:
+  density: 0.006
+  heightFalloff: 0.05
+  maxOpacity: 0.9
+look: cool
+exposure: 1.5
+ambience: night_crickets

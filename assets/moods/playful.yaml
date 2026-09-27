@@ -1,0 +1,27 @@
+# A bright, cartoony gradient sky: no picture, just colour. For toy
+# worlds, tests and anything with plain coloured blocks.
+title: Playful
+description: A clean blue gradient sky with a bright sun, crisp colours.
+sky:
+  zenith: "#2a66d6"
+  horizon: "#9ccaf6"
+  ground: "#6a7d5a"
+  horizonFalloff: 2.5
+  sunColor: "#fff1d6"
+  sunSize: 1.2
+  sunGlow: 0.5
+  ambientStrength: 0.35
+sun:
+  azimuth: 130
+  elevation: 50
+  color: "#fff4e0"
+  intensity: 2.4
+fill:
+  color: "#9db8ff"
+  intensity: 0.2
+fog:
+  density: 0.0008
+  heightFalloff: 0.03
+  maxOpacity: 0.6
+look: punchy
+exposure: 0.95

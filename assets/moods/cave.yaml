@@ -1,0 +1,25 @@
+# Inside or underground: no sky, dark air, light from one side.
+title: Cave
+description: A dark, warm-black backdrop with thick air; the key light does the work.
+sky:
+  zenith: "#101216"
+  horizon: "#1c1a18"
+  ground: "#0c0b0a"
+  sunDisc: 0
+  sunGlow: 0
+  ambientStrength: 1.0
+sun:
+  azimuth: 60
+  elevation: 55
+  color: "#ffcf96"
+  intensity: 2.2
+fog:
+  density: 0.03
+  heightFalloff: 0.02
+  maxOpacity: 0.9
+  sunScatter: 0.3
+look:
+  saturation: 1.1
+  power: 1.1
+exposure: 1.2
+ambience: cave_drips

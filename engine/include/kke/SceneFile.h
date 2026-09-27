@@ -91,6 +91,10 @@ struct SceneFile {
     glm::vec3 groundColor{0.35f, 0.42f, 0.3f};
     std::vector<SceneObject> objects;
     uint32_t worldSeed = 0;         // 0 = not set
+    // The scene's mood ("mood": "golden_hour", kke/Mood.h): sky, sun,
+    // fog and look. Empty = the game keeps its own. A loader applies it
+    // first, then any "sun" and "ambient" below on top.
+    std::string mood;
     // Sun and ambient are optional: has* false = the game keeps its own.
     bool hasSun = false;
     glm::vec3 sunDirection{-0.4f, -1.0f, -0.3f}; // towards the ground, normalized on load

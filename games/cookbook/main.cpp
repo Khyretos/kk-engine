@@ -22,16 +22,8 @@
 int main() {
     try {
         kke::Application app("KKE Cookbook", 1280, 720);
-        kke::Lighting& light = app.lighting();
-        light.lights[0].enabled = true;
-        light.lights[0].direction = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f));
-        light.lights[0].intensity = 2.0f;
-        light.lights[1].enabled = true;
-        light.lights[1].direction = glm::normalize(glm::vec3(0.6f, -0.3f, 0.5f));
-        light.lights[1].color = glm::vec3(0.55f, 0.65f, 0.85f);
-        light.lights[1].intensity = 0.3f;
-        light.ambientColor = glm::vec3(0.2f);
-        light.toneMapper = kke::ToneMapper::AgX;
+        // A bright cartoon sky behind every recipe (assets/moods/playful.yaml).
+        app.setMood("playful");
 
         app.addModule<kke::SettingsModule>("settings.json");
         app.addModule<kke::InputModule>("input.json");

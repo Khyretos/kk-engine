@@ -1,0 +1,20 @@
+# The sun on the horizon, the sky on fire.
+title: Sunset
+description: Orange sun low on the horizon, purple shadows.
+sky:
+  image: sunset             # Poly Haven "Qwantani Sunset (Pure Sky)", CC0
+  ambientStrength: 0.35
+sun:
+  azimuth: 130
+  intensity: 2.0
+fill:
+  color: "#7d86c9"
+  intensity: 0.3
+fog:
+  density: 0.002
+  heightFalloff: 0.05
+  maxOpacity: 0.9
+  sunScatter: 1.5
+look: golden
+exposure: 1.05
+ambience: wind_soft

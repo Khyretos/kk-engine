@@ -1,0 +1,17 @@
+# Fog lying in the low ground, the sun breaking through.
+title: Misty morning
+description: Thick ground fog that thins with height, a pale sun.
+sky:
+  image: misty_morning      # Poly Haven "Kloofendal Misty Morning (Pure Sky)", CC0
+  ambientStrength: 0.5
+sun:
+  azimuth: 115
+  intensity: 1.6
+fog:
+  density: 0.03
+  heightFalloff: 0.18
+  maxOpacity: 0.95
+  sunScatter: 1.0
+look: faded
+exposure: 1.0
+ambience: meadow_day

@@ -5,24 +5,11 @@
 // byte-for-byte -- see engine/src/LightingBuffer.cpp for the CPU side
 // this is fed from, and Application.h for Light/Lighting, the
 // game-facing API that ultimately fills this in.
-struct GPULight {
-    vec4 directionOrPosition; // xyz = direction or position; w = 1.0 if positional (point), 0.0 if directional
-    vec4 colorIntensity;      // rgb = color; a = intensity (<=0 means disabled)
-};
-
-layout(set = 0, binding = 0) uniform LightingUBO {
-    GPULight lights[4];
-    vec4 ambient;   // rgb = ambient color
-    vec4 cameraPos; // rgb = world-space camera position, for specular
-    mat4 lightViewProj;
-    mat4 viewProj; // see cube.vert's own comment on why this is here
-    vec4 toneParams; // x = tone mapper (tonemap.glsl), y = exposure
-} lighting;
+#include "lighting_ubo.glsl"
 
 // A depth-compare sampler (kke::ShadowMap): texture() returns how lit.
 layout(set = 1, binding = 0) uniform sampler2DShadow shadowMap;
 
-#include "tonemap.glsl"
 // Set 2: the material's own albedo texture -- see kke::Texture and
 // kke::Application's own default 1x1 white texture (bound here for
 // any object that doesn't have a real one of its own, so this
@@ -131,7 +118,7 @@ float specularAAKernel(vec3 normalWorld) {
 vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 posWorld, vec4 posLightSpace, float specAAKernel);
 
 // Full lighting for one surface point: PBR (GGX) for up to 4 lights,
-// shadow on light 0, flat ambient, tone map (tonemap.glsl). Shared by every
+// shadow on light 0, ambient from the sky, fog, tone map and look. Shared by every
 // lit mesh shader (cube.frag, model.frag) so they can't drift apart.
 // Shaders that discard call shadeSurfaceAA with a kernel taken first.
 vec3 shadeSurface(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 posWorld, vec4 posLightSpace) {
@@ -215,18 +202,18 @@ vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 
         Lo += (kD * albedo / PI + specular) * radiance * NdotL * thisLightShadow;
     }
 
-    // Ambient: ubo.ambient times albedo, not a real irradiance
-    // environment map -- a deliberate, documented simplification (see
-    // docs/HISTORY.md "What's still ahead for lighting"). Real image-based
-    // ambient lighting needs a captured/generated environment map plus
-    // irradiance convolution and a prefiltered specular mip chain,
-    // none of which exist yet; this is a flat stand-in so ambient-only
-    // surfaces don't read as pure black, same role the old Blinn-Phong
-    // shader's ambient term played.
-    vec3 ambient = lighting.ambient.rgb * albedo;
+    // Ambient: light from the sky (kke::Sky::lightsScene) as spherical
+    // harmonics (kke::SkySH), so a surface facing up takes the sky's blue
+    // and one facing down the ground's bounce. With no sky it is the flat
+    // Lighting::ambientColor exactly (a constant has only the first term).
+    // Diffuse only: reflections of the sky need a prefiltered environment
+    // map, which doesn't exist yet (docs/HISTORY.md, "What's still ahead
+    // for lighting").
+    vec3 ambient = ambientIrradiance(N) * albedo;
 
     vec3 color = ambient + Lo;
-    color = toneMap(color, lighting.toneParams);
+    color = applyFog(color, fragPosWorld);
+    color = displayColor(color);
 
     return color;
 }

@@ -11,9 +11,8 @@
 int main() {
     try {
         kke::Application app("Kreative Kompas Engine - Melt Demo", 1280, 720);
-        app.lighting().lights[0].direction = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f));
-        app.lighting().lights[0].intensity = 2.0f;
-        app.lighting().ambientColor = glm::vec3(0.18f);
+        // Blue hour: the hot, glowing melt reads best against a darker sky (assets/moods/dusk.yaml).
+        app.setMood("dusk");
         app.addModule<kke::OrbitCameraModule>(/*distance=*/2.8f, /*pitch=*/-0.35f, /*yaw=*/0.6f, glm::vec3(0.0f, 0.45f, 0.0f));
         app.addModule<kke_melt::MeltDemoModule>();
         app.addModule<kke::DebugControlModule>().setUiVisible(false);

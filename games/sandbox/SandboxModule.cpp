@@ -7,6 +7,7 @@
 #include "kke/InteriorColor.h"
 #include "kke/VoronoiFracture.h"
 #include "kke/Material.h"
+#include "kke/Mood.h"
 #include "kke/SceneLoader.h"
 #include "kke/ai/Clips.h"
 #include "kke/modules/AudioModule.h"
@@ -1596,6 +1597,7 @@ kke::SceneFile SandboxModule::toScene() const {
     scene.spawn = m_spawn;
     scene.spawnYaw = m_spawnYaw;
     scene.worldSeed = m_worldSeed;
+    scene.mood = m_app->mood().name;
     const kke::Lighting& lighting = m_app->lighting();
     scene.hasSun = true;
     scene.sunDirection = lighting.lights[0].direction;
@@ -1679,6 +1681,8 @@ void SandboxModule::fromScene(const kke::SceneFile& scene) {
     m_spawn = scene.spawn;
     m_spawnYaw = scene.spawnYaw;
     if (scene.worldSeed) m_worldSeed = scene.worldSeed;
+    std::string moodError;
+    if (!scene.mood.empty() && !m_app->setMood(scene.mood, &moodError)) kke::log::get(name())->warn("{}", moodError);
     kke::Lighting& lighting = m_app->lighting();
     if (scene.hasSun) {
         lighting.lights[0].direction = scene.sunDirection;
@@ -2169,6 +2173,19 @@ void SandboxModule::lightsUi() {
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Player start at the camera's focus point, facing the way the camera looks (cyan box)");
     ImGui::SameLine();
     ImGui::TextDisabled("(%.1f, %.1f, %.1f) %.0f deg", m_spawn.x, m_spawn.y, m_spawn.z, m_spawnYaw);
+    // The mood sets sky, sun, fog and look together (docs/MOODS.md); the
+    // sliders below then fine-tune the sun and are saved with the level.
+    if (m_moodNames.empty()) m_moodNames = kke::listMoods();
+    const std::string current = m_app->mood().name;
+    if (ImGui::BeginCombo("Mood", current.empty() ? "(none)" : current.c_str())) {
+        for (const std::string& name : m_moodNames)
+            if (ImGui::Selectable(name.c_str(), name == current)) {
+                std::string error;
+                if (!m_app->setMood(name, &error)) m_status = error;
+            }
+        ImGui::EndCombo();
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Sky, sun, haze, colours and background sound in one go");
     kke::Lighting& lighting = m_app->lighting();
     glm::vec3 dir = lighting.lights[0].direction;
     float azimuth = glm::degrees(std::atan2(-dir.x, -dir.z)), elevation = glm::degrees(std::asin(std::clamp(-dir.y, -1.0f, 1.0f)));

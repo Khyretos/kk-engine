@@ -6,6 +6,7 @@
 #include "kke/Module.h"
 #include "kke/EngineError.h"
 #include "kke/LightingBuffer.h"
+#include "kke/Sky.h"
 #include "kke/Viewports.h"
 #include "kke/ResourceGovernor.h"
 #include "kke/HardwareTarget.h"
@@ -24,6 +25,9 @@
 #include <vector>
 
 namespace kke {
+
+class SkyRenderer;
+struct Mood;
 
 // A basic orbit-style camera. Not a module itself — nearly every module
 // wants to read the camera, so it lives on Application directly rather
@@ -83,6 +87,12 @@ struct Lighting {
     ToneMapper toneMapper = ToneMapper::AgX;
     // Multiplies scene light before tone mapping: > 1 brightens, < 1 darkens.
     float exposure = 1.0f;
+    // The sky, the air and the colour look (kke/Sky.h). All off by default;
+    // a kke::Mood (Mood.h) sets them together. With a sky that lights the
+    // scene, it replaces ambientColor as the fill light.
+    Sky sky;
+    Fog fog;
+    ColorGrade grade;
 
     Lighting() {
         // A sensible default so a demo that never touches lighting at
@@ -206,6 +216,15 @@ public:
     };
     std::vector<View>& views() { return m_views; }
     Lighting& lighting() { return m_lighting; }
+    // A mood (kke/Mood.h): sky, sun, fill light, fog, look and exposure
+    // from one data file in assets/moods ("golden_hour", "night", ...) or
+    // the game's own moods/ folder, or a path. False (logged, and with
+    // `error`) when it can't be found or read; the lighting is unchanged.
+    // KKE_MOOD=<name> replaces whatever the game picks, to try moods
+    // on any game without editing it.
+    bool setMood(const std::string& nameOrPath, std::string* error = nullptr);
+    // The mood last set (name empty before any), e.g. for AudioModule's ambience.
+    const Mood& mood() const { return *m_mood; }
     LightingBuffer& lightingBuffer() { return *m_lightingBuffer; }
     // The shadow map sampler's descriptor SET LAYOUT (not the set
     // itself -- that's bound automatically via RenderContext, see
@@ -331,6 +350,10 @@ private:
     // Views after the first: each its own lighting block (camera position
     // and view-projection differ per view).
     std::vector<std::unique_ptr<LightingBuffer>> m_viewLighting;
+    // Draws m_lighting.sky; made the first time a sky is switched on.
+    std::unique_ptr<SkyRenderer> m_skyRenderer;
+    std::unique_ptr<Mood> m_mood;
+    std::string m_moodOverride; // KKE_MOOD
     // Real shadow mapping infrastructure -- see kke::ShadowMap's own
     // class comment for the full scope (single directional light, one
     // shadow-casting pass, no PCF/soft shadows yet). The descriptor set

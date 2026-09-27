@@ -36,6 +36,7 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [SCENES.md](SCENES.md) | Levels built from asset packs |
 | [SHOWCASE.md](SHOWCASE.md) | kke_demo: the stations, controls, HUD and demo scripts |
 | [OPTIMIZATION.md](OPTIMIZATION.md) | Performance rules, measured log and backlog |
+| [MOODS.md](MOODS.md) | Moods: sky (gradient or CC0 HDR picture), sun, fog, colour look and ambience from one YAML file; which ones ship |
 | [RENDERING_PRINCIPLES.md](RENDERING_PRINCIPLES.md) | Rendering doctrine: no dithering, a clean image every frame, what we took from Threat Interactive |
 | [PERFORMANCE_NOTES.md](PERFORMANCE_NOTES.md) | What RayFire and Chaos do for destruction at scale, and what KKE took from it |
 | [PLATFORMS.md](PLATFORMS.md) | What runs where, hardware targets (Steam Deck, phones...), build presets, consoles |

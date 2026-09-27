@@ -106,6 +106,9 @@ set(ENGINE_SOURCES
     src/SystemInfo.cpp
     src/TetMeshAsset.cpp
     src/LightingBuffer.cpp
+    src/Sky.cpp
+    src/SkyRenderer.cpp
+    src/Mood.cpp
     src/ShadowMap.cpp
     src/Texture.cpp
     src/TextureMips.cpp
@@ -239,12 +242,14 @@ if(WIN32)
     target_sources(kke_engine INTERFACE ${CMAKE_SOURCE_DIR}/assets/branding/kk-engine.rc)
 endif()
 
-# The startup intro (kke::LogoIntro) runs in every game, so its shaders and
-# the title font ship with the engine rather than with each game.
-foreach(shader logo.vert logo.frag logo_backdrop.vert logo_backdrop.frag logo_text.vert logo_text.frag)
+# The startup intro (kke::LogoIntro) and the sky (kke::SkyRenderer) can run
+# in every game, so their shaders and the title font ship with the engine
+# rather than with each game.
+foreach(shader logo.vert logo.frag logo_backdrop.vert logo_backdrop.frag logo_text.vert logo_text.frag sky.vert sky.frag)
     engine_add_shader(kke_engine ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()
 engine_copy_runtime_file(kke_engine ${CMAKE_SOURCE_DIR}/assets/fonts/NotoSans-Bold.ttf assets/fonts/NotoSans-Bold.ttf)
+kke_add_moods(kke_engine) # assets/moods and the CC0 skies (cmake/skies.cmake)
 
 target_include_directories(kke_engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -404,6 +409,6 @@ endif()
 # fracture setup are pure number crunching, 5-20x slower at -O0, and
 # nobody steps through them in a debugger. docs/OPTIMIZATION.md log #15.
 if(NOT MSVC)
-    set_source_files_properties(src/Texture.cpp src/TextureMips.cpp src/VoxelTets.cpp src/InteriorColor.cpp src/FracturePattern.cpp src/VoronoiFracture.cpp src/ParticleFluid.cpp src/MeltVolume.cpp src/JigglePhysics.cpp src/Ocean.cpp src/FloatingBodies.cpp
+    set_source_files_properties(src/Sky.cpp src/Texture.cpp src/TextureMips.cpp src/VoxelTets.cpp src/InteriorColor.cpp src/FracturePattern.cpp src/VoronoiFracture.cpp src/ParticleFluid.cpp src/MeltVolume.cpp src/JigglePhysics.cpp src/Ocean.cpp src/FloatingBodies.cpp
         PROPERTIES COMPILE_OPTIONS "$<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>")
 endif()
