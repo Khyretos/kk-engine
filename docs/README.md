@@ -19,7 +19,10 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [COMMANDS.md](COMMANDS.md) | Orders for companions and squads: selection, formations, radial wheel, Lua and nodes |
 | [MOVEMENT.md](MOVEMENT.md) | How characters move, and the animation principles behind it |
 | [AI.md](AI.md) | The AI core: senses, needs, utility decisions, steering, navmesh, orders, `ai.*` in Lua |
+| [PROCEDURAL_ANIMATION.md](PROCEDURAL_ANIMATION.md) | Animation without clips: gaits for any number of legs, look-at, FABRIK IK, active ragdolls that stagger and get up |
+| [COMBAT.md](COMBAT.md) | Melee combat and crowds: attacks, blocks, parries, poise, hordes that wait their turn |
 | [JIGGLE.md](JIGGLE.md) | Jiggle physics for bones, skin and soft bodies |
+| [PHYSICS_BRIDGE.md](PHYSICS_BRIDGE.md) | How FEMFX deformable pieces and Jolt rigid bodies and characters meet |
 | [RAGDOLLS.md](RAGDOLLS.md) | Humanoid and animal ragdolls, their joint limits and how to override them |
 | [NETWORKING.md](NETWORKING.md) | Transport, protocol, authority and replication |
 | [STORAGE.md](STORAGE.md) | Saving data: SQLite built in, Valkey and PostgreSQL optional |

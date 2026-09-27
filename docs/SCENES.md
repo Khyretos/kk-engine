@@ -225,3 +225,50 @@ Not a scene file: the fort, trees and rubble are boxes built in code.
 
 Put the packs in `assets/synty/` (symlinks to the shared cache work) or set
 `KKE_ASSETS_DIR`.
+
+## Synty demo (`games/synty_demo`)
+
+Not a scene file: the room is placed in code.
+
+- Level and props: **POLYGON Prototype**, `SM_Buildings_Floor_5x5_01`,
+  `SM_Buildings_Wall_5x3_01`, `SM_Buildings_WallDoor_5x3_01`,
+  `SM_Buildings_Stairs_1x3_01`, `SM_Buildings_Column_1x3_01`,
+  `SM_Prop_Crate_01`, `SM_Prop_Crate_02`, `SM_Prop_Crate_Question_01`,
+  `SM_Prop_Barrel_01`, `SM_Prop_Barrier_01`, `SM_Prop_Chest_Wood_01`,
+  `SM_Prop_Cone_01`, `SM_Prop_FlagPole_01`, `SM_Generic_Tree_01` to `_03`,
+  `SM_Generic_Small_Rocks_01`, and the pack's grid overlay texture.
+- Characters: **POLYGON Prototype**, `SK_Character_Dummy_Male_01`,
+  `SK_Character_Dummy_Female_01`, `SK_Character_Male_Face_01`,
+  `SK_Character_Female_Face_01`.
+- Optional animals: **Quaternius Farm Animals** (CC0), `Horse`, `Pug`.
+
+Without the Prototype pack the demo shows its "pack not found" message.
+
+## Pet Companion (`games/pet_companion`)
+
+Not a scene file: the garden is placed in code, and built from blocks when
+the packs are missing.
+
+- **POLYGON Town**: `SM_Env_Fence_Wood_Straight_01`, `SM_Prop_Doghouse_01`,
+  `SM_Env_Tree_01`, `SM_Env_Tree_02`, `SM_Env_Hedge_01`, `SM_Prop_Barrel_01`,
+  `SM_Env_Grass_01`, `SM_Item_Ball_Soccer_01`.
+- The dog: **Quaternius Farm Animals** (CC0), `Pug`.
+- The player: the UAL mannequin (`assets/animations/UAL1_Standard.fbx`).
+
+## Platoon (`games/platoon`)
+
+Not a scene file: the training ground is placed in code, and the cover is
+built from blocks when the pack is missing.
+
+- **POLYGON Prototype**: `SM_Prop_Crate_01`, `SM_Prop_Crate_02`,
+  `SM_Prop_Crate_03`, `SM_Prop_Barrier_01`.
+- Soldiers on both sides: the UAL mannequin
+  (`assets/animations/UAL1_Standard.fbx`).
+
+## Demos that use no packs
+
+These run the same with or without any asset pack: `climb_race`,
+`procedural_demo`, `physics_demo`, `melt_demo`, `sea_demo`, `audio_demo`,
+`rmlui_demo`, `imgui_demo`, `kke_basics`, `starter_game` and `cookbook`.
+`kke_demo` dresses its course with the art listed under "Showcase course
+art" above when the packs are there, and plays the same without them.

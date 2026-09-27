@@ -105,14 +105,18 @@ nav:
       - Movement: MOVEMENT.md
       - AI (animals, enemies, companions): AI.md
       - Melee combat and crowds: COMBAT.md
+      - Procedural animation: PROCEDURAL_ANIMATION.md
       - Input: INPUT.md
       - Commands and orders: COMMANDS.md
       - Audio: AUDIO.md
       - Networking: NETWORKING.md
+      - Hosting a server: SERVER_HOSTING.md
+      - Saving data: STORAGE.md
       - Anti-cheat: ANTI_CHEAT.md
       - Kreative DRM: DRM.md
       - DLC and mods: MODDING.md
       - Scenes: SCENES.md
+      - The kke_demo showcase: SHOWCASE.md
       - Jiggle physics: JIGGLE.md
       - Physics bridge: PHYSICS_BRIDGE.md
       - Ragdolls: RAGDOLLS.md
@@ -130,5 +134,6 @@ nav:
   - Project:
       - Devlog: devlog/index.md
       - Going to market: GO_TO_MARKET.md
+      - Downloadable builds: RELEASES.md
       - Development history: HISTORY.md
       - This site: DOCS_SITE.md

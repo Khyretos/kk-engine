@@ -94,6 +94,9 @@ Actions. Platforms, hardware targets and consoles: [docs/PLATFORMS.md](docs/PLAT
 | `sea_demo` | Drive a boat over the swell; foam floats, iron sinks |
 | `jiggle_demo` | Jelly on a plate and soft-tissue bones on a jogging character |
 | `farm_demo` | You are a dog on a farm; sheep, cows, pigs, horses and a fox react to you (AI core) |
+| `procedural_demo` | A spider, a beetle, a dog and a person walking over hills with no animation clips: procedural gaits, look-at, FABRIK, and active ragdolls that stagger, fall and get up |
+| `pet_companion` | You and a pug in a garden: come, sit, stay, fetch and pet it with mouse, controller or touch; it reads what you do and never gets in your way (AI core, orders) |
+| `platoon` | Command a squad of six against a dug-in enemy: select, formations, take cover, focus fire, an order wheel; both sides run on the AI core |
 | `audio_demo` | Every audio case, one station each: rooms, a great hall, walls of wood, glass and stone, a sound round through a door, crates, footsteps, binaural, pings (headphones recommended) |
 | `climb_race` | Race a rival up a generated mountain: pick each hold with the triggers and bumpers, manage stamina, IK hands and feet, loose rock falls; split screen with F2 |
 | `duel` | A one-on-one fist fight in a ring, best of three: jab, uppercut, knee, block and parry, dodge; knockdowns are ragdolls. Against a bot on the AI core, or F2 for two players |
@@ -104,8 +107,8 @@ Actions. Platforms, hardware targets and consoles: [docs/PLATFORMS.md](docs/PLAT
 | `kke_basics` | The original building-block demo: cube, grid, particles, orbit camera |
 
 The character in `kke_demo` is Quaternius' Universal Animation Library
-mannequin (CC0): put `UAL1_Standard.fbx` in `assets/animations/`, and
-`UAL2.fbx` next to it for the real vault and climb clips. Demos
+mannequin (CC0), `assets/animations/UAL1_Standard.fbx`, which is in the
+repository; put `UAL2.fbx` next to it for the real vault and climb clips. Demos
 that use Synty packs need your own copy in `assets/synty/`; paid packs are
 never part of this repo ([assets/README.md](assets/README.md)).
 

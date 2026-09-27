@@ -172,7 +172,7 @@ you build with them.
 |---|---|---|---|
 | Hugo (extended) 0.134.3 | `gohugoio/hugo` | Apache-2.0 | Builds the showcase site |
 | MkDocs, Material for MkDocs, PyMdown Extensions | `mkdocs`, `mkdocs-material`, `pymdown-extensions` | BSD-2-Clause, MIT, MIT | Build the docs site |
-| Inter and JetBrains Mono (Google Fonts) | `fonts.googleapis.com`, `fonts.gstatic.com` | SIL Open Font License 1.1 | Loaded from Google's servers. See [Things to watch](#things-to-watch) |
+| Inter and JetBrains Mono (Fontsource 5.3.0 variable, latin) | `website/static/fonts/` | SIL Open Font License 1.1 | Served from the site itself; licence texts next to the font files |
 | Font Awesome Free 6.5.1 | `font-awesome` | Icons CC BY 4.0, fonts OFL-1.1, code MIT | Loaded from cdnjs; the attribution CC BY asks for is in the CSS file's header |
 
 ## Things to watch
@@ -185,10 +185,10 @@ you build with them.
 - **Android NDK**: downloading it means accepting Google's Android SDK
   License Agreement. That governs the developer's use of the toolkit; the
   runtime it adds to a game (libc++) is Apache-2.0 with the LLVM exception.
-- **Google Fonts on the website**: loading fonts from Google's servers
-  sends visitors' IP addresses to Google. A German court (LG München I,
-  2022) found that a GDPR violation without consent. Serving the two font
-  families from the site itself avoids it; worth doing before launch.
+- **Website fonts** are served from the site itself, not Google Fonts:
+  loading them from Google's servers would send visitors' IP addresses to
+  Google, which a German court (LG München I, 2022) found a GDPR violation
+  without consent. Keep it that way when changing fonts.
 - **FreeType on Windows** is compiled in, so the FreeType credit must stay
   in the documentation (it is at the top of `THIRD_PARTY_LICENSES.txt`).
 - **Synty packs and other paid art**: never commit, never package

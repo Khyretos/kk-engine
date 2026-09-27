@@ -1,3 +1,20 @@
+/* Inter and JetBrains Mono (SIL OFL 1.1, static/fonts/*-OFL.txt) are served
+   from this site, not Google's, so visitors' IPs go nowhere else. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("../fonts/inter-latin-wght.woff2") format("woff2-variations"), url("../fonts/inter-latin-wght.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("../fonts/jetbrains-mono-latin-wght.woff2") format("woff2-variations"), url("../fonts/jetbrains-mono-latin-wght.woff2") format("woff2");
+}
+
 /* engine.kreative-kompas.com. Colours follow the Kreative Kompas brand
    (the logo's violet and orange) and kees.kreative-kompas.com's "electric"
    purple. Dark by default; html:not(.dark) is the light theme. */

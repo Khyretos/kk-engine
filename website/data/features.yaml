@@ -119,6 +119,27 @@
   demo: kke_demo
   docs: MOVEMENT/
 
+- id: climbing
+  title: Free climbing on generated rock
+  icon: fa-solid fa-mountain
+  accent: "#c77dff"
+  tagline: Pick every hold yourself.
+  summary: >-
+    A race up a generated mountain where each reach is your choice: a slow
+    precise reach, a lunge you charge with the trigger, or a quick snatch.
+    Stamina drains on bad holds and overhangs, and loose rock breaks off
+    and falls as physics.
+  points:
+    - Seeded rock faces with ledges and a line that can always be climbed
+    - Hands and feet placed on the holds with IK
+    - A rival climber bot, and split screen for a second player
+    - Loose holds fall on Jolt and land on the ledges below
+  media:
+    - { src: media/climb-race.webp, caption: "Split screen on an overhang, you and the rival" }
+    - { src: media/climb-rockfall.webp, caption: "At the foot of the face: coloured holds, stamina on the HUD" }
+  demo: climb_race
+  docs: MOVEMENT/
+
 - id: destruction
   title: Things really break
   icon: fa-solid fa-burst
@@ -178,6 +199,67 @@
     - { src: media/duel.webp, caption: "Duel: a one-on-one fist fight against a bot on the AI core" }
   demo: goblin_horde
   docs: COMBAT/
+
+- id: ai
+  title: Animals and enemies that think
+  icon: fa-solid fa-brain
+  accent: "#06d6a0"
+  tagline: They see, hear, get hungry and decide.
+  summary: >-
+    One AI core for every creature: senses, needs, utility decisions,
+    steering and a navmesh. Sheep scatter from a barking dog, a cow comes to
+    look, a fox keeps its distance, and animals can learn by watching you.
+  points:
+    - Sight, hearing, needs and moods feed one decision per agent
+    - Flocks, herds, followers and squads on the same steering
+    - Teach an animal by example (a small neural network, runs locally)
+    - The same blocks in Lua, the node graph and the sandbox palette
+  media:
+    - { src: media/farm-sheep.webp, caption: "The farm: sheep run from the dog, then calm down" }
+    - { src: media/sandbox-animals.webp, caption: "Drag a sheep, cow, pig or horse into the sandbox and it lives its own life" }
+  demo: farm_demo, sandbox
+  docs: AI/
+
+- id: procedural-animation
+  title: Animation without clips
+  icon: fa-solid fa-spider
+  accent: "#ffbe0b"
+  tagline: Any number of legs, any ground.
+  summary: >-
+    Gaits worked out from the creature's size and speed place every foot
+    on the ground under it. Heads look at what matters, tails wag with
+    FABRIK, and a hit makes an active ragdoll stagger, fall and get up.
+  points:
+    - Procedural gaits for two, four, six or eight legs
+    - Look-at, FABRIK chains, layers on top of any clip
+    - Active ragdolls on Jolt motors: stagger, fall, get up
+    - Shove, Look at and Look away blocks for Lua and nodes
+  media:
+    - { src: media/procedural-creatures.webp, caption: "A spider, a beetle, a dog and a person, not one animation clip" }
+    - { src: media/procedural-dog.webp, caption: "The dog and the beetle over the hills" }
+  demo: procedural_demo
+  docs: PROCEDURAL_ANIMATION/
+
+- id: orders
+  title: Give orders to a pet or a platoon
+  icon: fa-solid fa-flag
+  accent: "#ef476f"
+  tagline: Point, and they go.
+  summary: >-
+    One command layer for companions and squads: select, order, queue,
+    pick a formation from a wheel. It works with a mouse, a controller or a
+    finger, and hands the orders to the AI core to carry out.
+  points:
+    - Selection by click, box, groups, reticle or tap
+    - Line, wedge, column and circle formations; take cover, focus fire
+    - A radial order wheel on every input device
+    - The same order.* functions in Lua and the node graph
+  media:
+    - { src: media/pet-fetch.webp, caption: "Pet Companion: the pug fetches its ball" }
+    - { src: media/platoon-wedge.webp, caption: "Platoon: six soldiers moving in a wedge" }
+    - { src: media/platoon-focus.webp, caption: "Focus fire drops the first enemy" }
+  demo: pet_companion, platoon
+  docs: COMMANDS/
 
 - id: simulation
   title: Liquids, melting and oceans
