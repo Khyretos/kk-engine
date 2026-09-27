@@ -2,29 +2,29 @@
 
 Written by `benchmarks/track.py` from the Benchmarks workflow on every push to `main`; don't edit by hand. What the numbers mean: [docs/BENCHMARKS.md](https://github.com/Khyretos/kk-engine/blob/main/docs/BENCHMARKS.md).
 
-Latest: `8cc7549213` (2026-09-27T08:18:39Z) on AMD EPYC 7763 64-Core Processor                , llvmpipe (LLVM 20.1.2, 256 bits). 39 run(s) tracked.
+Latest: `b8da1483fc` (2026-09-27T08:19:32Z) on AMD EPYC 9V74 80-Core Processor                , llvmpipe (LLVM 20.1.2, 256 bits). 40 run(s) tracked.
 
 Every run is on a shared GitHub runner (4 vCPUs, lavapipe software Vulkan), so single points wobble; look for steps that stay.
 
 | Metric | Latest | Best | Runs |
 |---|---:|---:|---:|
-| `bench.audio_mix_32_voices_full_ms` | 0.1897 | 0.1120 | 33 |
-| `bench.audio_mix_32_voices_ms` | 0.0943 | 0.0614 | 39 |
-| `bench.fracture_bake_cube_ms` | 7.23 | 4.67 | 39 |
-| `bench.impact_synth_8_materials_ms` | 1.05 | 0.9118 | 39 |
-| `bench.lua_think_50_hooks_ms` | 0.3141 | 0.1466 | 39 |
-| `bench.net_snapshot_256_bodies_ms` | 0.0885 | 0.0512 | 39 |
-| `bench.particle_fluid_2000_ms` | 3.90 | 2.58 | 39 |
-| `bench.rigid_crates_400_ms` | 1.59 | 0.9864 | 39 |
-| `bench.rigid_raycast_1000_ms` | 0.4931 | 0.3228 | 39 |
-| `stress.crates.fps_avg` | 10.63 | 22.85 | 39 |
-| `stress.crates.physics_avg_ms` | 0.4365 | 0.3066 | 39 |
-| `stress.fps_1pct_low` | 5.33 | 16.28 | 39 |
-| `stress.fps_avg` | 10.81 | 23.34 | 39 |
-| `stress.frame_p99_ms` | 110 | 57.86 | 39 |
-| `stress.impacts.fps_avg` | 9.26 | 19.00 | 39 |
-| `stress.peak_rss_mb` | 392 | 251 | 39 |
-| `stress.walk.fps_avg` | 12.90 | 29.14 | 39 |
+| `bench.audio_mix_32_voices_full_ms` | 0.1928 | 0.1120 | 34 |
+| `bench.audio_mix_32_voices_ms` | 0.1039 | 0.0614 | 40 |
+| `bench.fracture_bake_cube_ms` | 7.91 | 4.67 | 40 |
+| `bench.impact_synth_8_materials_ms` | 1.22 | 0.9118 | 40 |
+| `bench.lua_think_50_hooks_ms` | 0.2768 | 0.1466 | 40 |
+| `bench.net_snapshot_256_bodies_ms` | 0.0859 | 0.0512 | 40 |
+| `bench.particle_fluid_2000_ms` | 4.37 | 2.58 | 40 |
+| `bench.rigid_crates_400_ms` | 1.75 | 0.9864 | 40 |
+| `bench.rigid_raycast_1000_ms` | 0.4590 | 0.3228 | 40 |
+| `stress.crates.fps_avg` | 10.97 | 22.85 | 40 |
+| `stress.crates.physics_avg_ms` | 0.4901 | 0.3066 | 40 |
+| `stress.fps_1pct_low` | 5.59 | 16.28 | 40 |
+| `stress.fps_avg` | 10.86 | 23.34 | 40 |
+| `stress.frame_p99_ms` | 111 | 57.86 | 40 |
+| `stress.impacts.fps_avg` | 9.31 | 19.00 | 40 |
+| `stress.peak_rss_mb` | 414 | 251 | 40 |
+| `stress.walk.fps_avg` | 12.57 | 29.14 | 40 |
 
 ![bench.audio_mix_32_voices_full_ms](charts/bench_audio_mix_32_voices_full_ms.svg)
 
