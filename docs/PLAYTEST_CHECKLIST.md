@@ -47,7 +47,7 @@ Do these once per demo as you go through the list below.
 
 *Threads: Climbing race demo, Climbing hands and how-to-play, Start menu
 and joining players, Online play with local players, Climb Race flagship
-game (still adding party modes; its notes go to that thread).*
+game (its notes go to that thread).*
 
 Start menu
 - [ ] Climbers stand in front of the mountain, each above their player card.
@@ -66,6 +66,13 @@ Climbing
 - [ ] The finish (mantle over the summit) and results screen read clearly; the next mountain opens.
 - [ ] CPU climbers of each difficulty feel different (Easy slow, Expert quick).
 - [ ] Split screen with 2, 3 and 4 players: each view follows its climber; with 3 the fourth quarter shows the whole mountain.
+
+Party modes and results (Mode row)
+- [ ] Rockfall: rocks come at each climber more often as the leader climbs; a hit reads clearly and costs stamina.
+- [ ] Elimination: every 30 s the lowest climber lets go; it's clear who is out and why.
+- [ ] Time trial: the pale ghost repeats your best run; beating it replaces it.
+- [ ] The results list (times or heights, medals, new bests, falls) is easy to read.
+- [ ] Grabs, broken holds, falls, rocks, the countdown and medals each have a sound that fits.
 
 Online (needs two PCs, or two copies on one PC)
 - [ ] Host from the menu; the other copy finds it (LAN) or joins by address.
