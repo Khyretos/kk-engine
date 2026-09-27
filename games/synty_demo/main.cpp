@@ -1,4 +1,5 @@
 #include "kke/Application.h"
+#include "kke/modules/AudioModule.h"
 #include "kke/modules/DebugControlModule.h"
 #include "kke/modules/DemoPanelModule.h"
 #include "kke/modules/InputModule.h"
@@ -35,6 +36,8 @@ int main() {
         // the demo's panel is RmlUi (kke::DemoPanelModule).
         app.addModule<kke::InputModule>("synty_demo_input.json");
         app.addModule<kke::UiModule>();
+        // Plays the mood's ambience loop (BUG-086).
+        app.addModule<kke::AudioModule>().setUiVisible(false);
         std::vector<kke::Module*> panels;
         auto& camera = app.addModule<kke::OrbitCameraModule>(/*distance=*/9.0f, /*pitch=*/-0.35f, /*yaw=*/2.85f, glm::vec3(0.0f, 0.9f, -1.5f));
         camera.setPadControls(true); // right stick turns, d-pad zooms

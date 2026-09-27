@@ -58,6 +58,7 @@ public:
 
     explicit SoundVisualizerModule(std::string settingsPath = "accessibility.json");
     const char* name() const override { return "SoundVisualizer"; }
+    std::vector<ModuleDependency> dependencies() const override;
     void init(Application& app) override;
     void frameStart(const UpdateContext& ctx) override;
     void renderUi() override;

@@ -1,6 +1,7 @@
 // Procedural animation demo: creatures walking without clips, looking at
 // you and reacting to hits (see ProceduralDemoModule.h and README.md).
 #include "kke/Application.h"
+#include "kke/modules/AudioModule.h"
 #include "kke/modules/DemoPanelModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/OrbitCameraModule.h"
@@ -26,6 +27,8 @@ int main() {
         // the crosshair: the left stick moves the view, the right one turns it.
         app.addModule<kke::InputModule>("procedural_demo_input.json");
         app.addModule<kke::UiModule>();
+        // Plays the mood's ambience loop (BUG-086).
+        app.addModule<kke::AudioModule>().setUiVisible(false);
         auto& camera = app.addModule<kke::OrbitCameraModule>(6.5f, -0.4f, -0.6f, glm::vec3(0.5f, 0.3f, 0.0f));
         camera.setPadControls(true);
         camera.setPadPan(true);

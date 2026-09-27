@@ -27,6 +27,14 @@ namespace kke {
 
 SoundVisualizerModule::SoundVisualizerModule(std::string settingsPath) : m_path(std::move(settingsPath)) {}
 
+// Optional, but when they are there they start first and stop last: the
+// overlay is a document in the UiModule's context (closing it after
+// RmlUi shut down crashed on exit).
+std::vector<ModuleDependency> SoundVisualizerModule::dependencies() const {
+    return { { std::type_index(typeid(AudioModule)), false, "what it shows" },
+             { std::type_index(typeid(UiModule)), false, "draws the ring and captions" } };
+}
+
 void SoundVisualizerModule::init(Application& app) {
     m_app = &app;
     m_audio = app.getModule<AudioModule>();

@@ -6,9 +6,9 @@
 --   B  throw a rubber ball where you're looking
 --   N  clear everything this script made
 
-input.define("toys.tower", "Build a crate tower", "G")
-input.define("toys.ball", "Throw a ball", "B")
-input.define("toys.clear", "Clear toys", "N")
+input.define("toys.tower", "Build a crate tower", "G", "rb")
+input.define("toys.ball", "Throw a ball", "B", "dpad_right")
+input.define("toys.clear", "Clear toys", "N", "back")
 
 local M = audio and audio.materials() or {}
 local spawned = {}

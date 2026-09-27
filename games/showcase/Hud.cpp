@@ -40,6 +40,7 @@ void ShowcaseModule::buildHud() {
     c.Bind("trick", &m_hud.trick);
     c.Bind("station", &m_hud.station);
     c.Bind("station_text", &m_hud.stationText);
+    c.Bind("menu_hint", &m_hud.menuHint);
     c.Bind("station_live", &m_hud.stationLive);
     c.Bind("panels", &m_hud.panels);
     c.Bind("online", &m_hud.online);
@@ -113,9 +114,19 @@ void ShowcaseModule::setMenuOpen(bool open) {
 // Before the game's update, paused or not: the menu's own buttons.
 void ShowcaseModule::frameStart(const kke::UpdateContext&) {
     if (!m_input) return;
-    kke::InputMap& in = m_input->map(0);
-    if (in.pressed("menu")) setMenuOpen(!m_menuOpen);
-    else if (m_menuOpen && in.pressed("ui.back")) setMenuOpen(false);
+    // Any player's Start opens or closes it (split screen: players 2-4
+    // too), and any player's B closes it.
+    for (int p = 0; p < m_input->players(); ++p) {
+        kke::InputMap& in = m_input->map(p);
+        if (in.pressed("menu")) {
+            setMenuOpen(!m_menuOpen);
+            break;
+        }
+        if (m_menuOpen && in.pressed("ui.back")) {
+            setMenuOpen(false);
+            break;
+        }
+    }
 }
 
 namespace {
@@ -196,6 +207,9 @@ void ShowcaseModule::updateHud(float dt) {
     const kke::InputModule* input = m_app->getModule<kke::InputModule>();
     set(m_hud.stationText, input ? input->promptText(text) : text, "station_text");
     set(m_hud.stationLive, live, "station_live");
+    // "Esc menu" on the keyboard, "(Start) menu" on a controller.
+    const bool keys = !input || input->promptStyle() == kke::PromptStyle::Keyboard;
+    set(m_hud.menuHint, keys ? "<span class=\"keycap\">Esc</span> menu" : input->promptText("{menu} menu"), "menu_hint");
     if (m_hud.trick != trick) {
         m_hud.trick = trick;
         m_hudModel.DirtyVariable("trick");

@@ -140,10 +140,28 @@ void ShowcaseModule::init(kke::Application& app) {
         in.defineAction({ "reset", "Reset crates + player", "Showcase", "game" });
         in.defineAction({ "panels", "Engine panels", "Showcase", "game" });
         in.defineAction({ "menu", "Pause menu", "Showcase", "ui" }); // Esc is fixed (see onEvent); "ui": works in the menu
-        in.addBinding(kke::InputModule::bind("reset", kke::InputModule::key(SDL_SCANCODE_R)));
-        in.addBinding(kke::InputModule::bind("menu", kke::InputModule::pad(SDL_GAMEPAD_BUTTON_START)));
-        in.addBinding(kke::InputModule::bind("panels", kke::InputModule::key(SDL_SCANCODE_F1)));
-        in.addBinding(kke::InputModule::bind("panels", kke::InputModule::pad(SDL_GAMEPAD_BUTTON_BACK)));
+        using IM = kke::InputModule;
+        in.addBinding(IM::bind("reset", IM::key(SDL_SCANCODE_R)));
+        in.addBinding(IM::bind("reset", IM::pad(SDL_GAMEPAD_BUTTON_WEST)));
+        in.addBinding(IM::bind("menu", IM::pad(SDL_GAMEPAD_BUTTON_START)));
+        // The engine panels are developer tools: F1 only (View is a toy).
+        in.addBinding(IM::bind("panels", IM::key(SDL_SCANCODE_F1)));
+        // A controller's zoom is the d-pad up / down, held; the wheel's
+        // camera.zoom is one step per notch, so they are separate actions.
+        in.defineAction({ "zoom.pad", "Camera distance (controller)", "Camera", "game", kke::ActionType::Axis1D });
+        kke::Binding zoomIn = IM::bind("zoom.pad", IM::pad(SDL_GAMEPAD_BUTTON_DPAD_UP), kke::Trigger::Continuous);
+        kke::Binding zoomOut = IM::bind("zoom.pad", IM::pad(SDL_GAMEPAD_BUTTON_DPAD_DOWN), kke::Trigger::Continuous);
+        zoomOut.scale = -1.0f;
+        in.addBinding(zoomIn);
+        in.addBinding(zoomOut);
+        // So the d-pad down moves the ping to the left, and push-to-talk
+        // is T and LB (B is the Lua toys' ball, V the view: BUG-065).
+        in.clearBindings("audio.ping");
+        in.addBinding(IM::bind("audio.ping", IM::key(SDL_SCANCODE_Q)));
+        in.addBinding(IM::bind("audio.ping", IM::pad(SDL_GAMEPAD_BUTTON_DPAD_LEFT)));
+        in.clearBindings("voice.talk");
+        in.addBinding(IM::bind("voice.talk", IM::key(SDL_SCANCODE_T)));
+        in.addBinding(IM::bind("voice.talk", IM::pad(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)));
         // Left-click shoots, but not the click that grabs the mouse (see onEvent).
         m_input->commitDefaults();
         if (const char* lefty = std::getenv("KKE_LEFT_HANDED"); lefty && *lefty == '1') kke::InputModule::mirrorKeyboard(in);
@@ -788,6 +806,7 @@ void ShowcaseModule::readActions(float dt) {
     m_rig.addLook(rate.x * m_stickSpeed * dt, rate.y * m_stickSpeed * 0.7f * dt);
     if (in.axis("camera.zoom") != 0.0f && m_captured)
         m_rig.settings.armLength = std::clamp(m_rig.settings.armLength - in.axis("camera.zoom") * 0.4f, 1.5f, 10.0f);
+    if (const float z = in.axis("zoom.pad"); z != 0.0f) m_rig.settings.armLength = std::clamp(m_rig.settings.armLength - z * 4.0f * dt, 1.5f, 10.0f);
     if (in.pressed("camera.toggle"))
         m_rig.mode = m_rig.mode == kke::CameraRig::Mode::ThirdPerson ? kke::CameraRig::Mode::FirstPerson : kke::CameraRig::Mode::ThirdPerson;
 
@@ -801,10 +820,10 @@ void ShowcaseModule::readActions(float dt) {
     const bool fireOk = !(mouseLeft && (!m_captured || m_swallowFire));
     m_fireCooldown -= dt;
     if (fireOk && in.held("fire") && (in.pressed("fire") || m_fireCooldown <= 0.0f)) {
-        shoot();
+        shoot(m_app->camera());
         m_fireCooldown = 0.25f;
     }
-    if (in.pressed("interact")) forcePush();
+    if (in.pressed("interact")) forcePush(m_app->camera());
     if (in.pressed("reset")) {
         resetCourse();
         m_loco->teleport(m_spawn);
@@ -817,15 +836,14 @@ void ShowcaseModule::readActions(float dt) {
 
 // Shoots a heavy FEMFX ball from the camera (breaks the yard's glass,
 // wood and stone) and knocks any Jolt body the view points at.
-void ShowcaseModule::shoot() {
-    const kke::Camera& cam = m_app->camera();
+void ShowcaseModule::shoot(const kke::Camera& cam) {
     const glm::vec3 dir = glm::normalize(cam.target - cam.position);
     const glm::vec3 from = cam.position + dir * 1.0f;
     spawnBall(from, dir);
 #if KKE_ENABLE_NET
     if (m_net) m_net->sendEvent(kEventShoot, pack(ShotEvent{ from, dir })); // everyone sees the ball
 #endif
-    forcePush();
+    forcePush(cam);
 }
 
 void ShowcaseModule::updateBridgeDemo(float dt) {
@@ -870,8 +888,8 @@ void ShowcaseModule::spawnBall(const glm::vec3& from, const glm::vec3& dir) {
 #endif
 }
 
-void ShowcaseModule::forcePush() {
-    const kke::Camera& cam = m_app->camera();
+// Along `cam`'s view: player 1's, or a split-screen player's own.
+void ShowcaseModule::forcePush(const kke::Camera& cam) {
     glm::vec3 dir = glm::normalize(cam.target - cam.position);
     auto hit = m_rigid->world().raycast(cam.position, dir, 30.0f);
     if (!hit.hit) return;
@@ -1333,8 +1351,9 @@ void ShowcaseModule::renderUi() {
     if (m_wantCrouch != m_crouch) ImGui::TextColored(ImVec4(1, 0.8f, 0.3f, 1), "No room to stand up");
     ImGui::Text("Rigid bodies %zu (%zu awake), %.2f ms", w.bodyCount(), w.activeBodyCount(), w.lastStepMs());
     if (ImGui::CollapsingHeader("Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::TextUnformatted("Keyboard: WASD move, Shift sprint, Alt walk, Space jump / vault / climb,\nC crouch / let go, mouse look, wheel zoom, V view, left click shoot, E push, R reset,\nF1 engine panels, Esc menu (frees the mouse).\n"
-                               "Controller: left stick move, right stick look, A jump / vault / climb, B crouch,\nL3 sprint, RT shoot, Y push, R3 view, Start menu, Back panels.");
+        ImGui::TextUnformatted("Keyboard: WASD move, Shift sprint, Alt walk, Space jump / vault / climb,\nC crouch / let go, mouse look, wheel zoom, V view, left click shoot, E push, R reset,\nQ ping, T talk, G/B/N toys, F1 engine panels, Esc menu (frees the mouse).\n"
+                               "Controller: left stick move, right stick look, A jump / vault / climb, B crouch,\nL3 sprint, RT shoot, Y push, X reset, R3 view, d-pad up/down zoom,\n"
+                               "d-pad left ping, LB talk, RB/d-pad right/View toys, Start menu.");
         ImGui::SliderFloat("Mouse sensitivity", &m_mouseSensitivity, 0.02f, 0.5f, "%.2f deg/px");
         ImGui::SliderFloat("Stick / gyro speed", &m_stickSpeed, 45.0f, 540.0f, "%.0f deg/s");
         if (ImGui::Button("Left-handed keys (mirror)")) kke::InputModule::mirrorKeyboard(m_input->map(0));

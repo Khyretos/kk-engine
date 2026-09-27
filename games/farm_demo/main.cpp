@@ -1,6 +1,7 @@
 // The wildlife farm: you are a dog, and the animals around you live their
 // own lives on the AI core (see FarmModule.h, README.md, docs/AI.md).
 #include "kke/Application.h"
+#include "kke/modules/AudioModule.h"
 #include "kke/modules/DemoPanelModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/ModelModule.h"
@@ -20,6 +21,8 @@ int main() {
         app.camera().fovDegrees = 55.0f;
         app.addModule<kke::InputModule>("farm_input.json");
         app.addModule<kke::UiModule>();
+        // Plays the mood's ambience loop (BUG-086).
+        app.addModule<kke::AudioModule>().setUiVisible(false);
         app.addModule<kke::ModelModule>();
         // The HUD and settings (RmlUi). F1 is the farm's "what they think".
         app.addModule<kke::DemoPanelModule>("Farm").setDeveloperPanelsKey(false);

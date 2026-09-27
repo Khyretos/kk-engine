@@ -27,6 +27,7 @@ private:
     int m_material = 0;
     int m_scene = 0;
     int m_debris = 200;
+    int m_seed = 1; // the panel's copy of the world fracture seed
 };
 
 } // namespace kke_physics_demo

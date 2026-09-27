@@ -67,6 +67,14 @@ void PhysicsDemoModule::init(kke::Application& app) {
     s.button("Spawn scene", [this] { spawnChosenScene(); });
     s.button("Clear all", [physics] { physics->clearAll(); });
     s.slider("Debris budget", &m_debris, 0, 500, [this, physics] { physics->setDebrisBudget(static_cast<uint32_t>(m_debris)); });
+    // The world's fracture seed (was only in the ImGui Physics window,
+    // BUG-082): the same seed breaks the same way again (HW-014).
+    s.slider("Fracture seed", kke::DemoPanelModule::Ref<int>([this, physics] {
+                 m_seed = static_cast<int>(physics->fractureWorldSeed());
+                 return &m_seed;
+             }),
+             1, 999, [this, physics] { physics->setFractureWorldSeed(static_cast<uint32_t>(m_seed)); });
+    s.button("New fracture seed", [physics] { physics->setFractureWorldSeed(1u + static_cast<uint32_t>(SDL_GetPerformanceCounter() % 999u)); });
     s.note("Most broken pieces kept at once (0 = no limit). Past it the oldest sleeping piece goes. Each awake piece costs about "
            "0.2 ms per step on one core.");
     s.text([physics] {
