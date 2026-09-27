@@ -87,14 +87,67 @@ void ClimbRaceModule::setupBody(Racer& r) {
     a.play(m_stMove, 0.0f);
 }
 
+ClimbRaceModule::BodyInput ClimbRaceModule::bodyInput(const Racer& r) const {
+    BodyInput b;
+    const kke::RigidWorld& w = m_rigid->world();
+    b.feet = w.characterPosition(r.id);
+    if (r.remote) {
+        // Online: what its own machine sent (Net.cpp keeps the jump and
+        // landing flags from the state's changes).
+        const netrace::Pose& p = r.net;
+        b.yaw = p.yaw;
+        const float rad = glm::radians(p.yaw);
+        b.in = glm::vec3(std::sin(rad), 0.0f, -std::cos(rad));
+        b.climbing = p.climbing;
+        b.mantle = p.mantle;
+        b.mantleProgress = p.mantleProgress;
+        b.loco = static_cast<kke::Locomotion::State>(std::min<uint8_t>(p.loco, static_cast<uint8_t>(kke::Locomotion::State::WallRun)));
+        b.stateTime = r.netStateTime;
+        b.groundSpeed = p.groundSpeed;
+        b.fallHeight = p.fallHeight;
+        b.jumped = r.netJumped;
+        b.landed = r.netLanded;
+        for (int s = 0; s < 2; ++s) {
+            b.hand[s] = p.hand[s];
+            b.foot[s] = p.foot[s];
+        }
+        return b;
+    }
+    const kke::Climber& c = *r.climber;
+    b.climbing = c.climbing();
+    b.mantle = c.state() == kke::Climber::State::Mantle;
+    b.mantleProgress = b.mantle ? c.mantleProgress() : 0.0f;
+    b.yaw = b.climbing ? yawOf(c.facing()) : r.loco->facingYaw();
+    b.in = b.climbing ? c.facing() : r.loco->facing();
+    b.loco = r.loco->state();
+    b.stateTime = r.loco->stateTime();
+    b.groundSpeed = r.loco->groundSpeed();
+    b.fallHeight = r.loco->fallHeight();
+    b.jumped = r.loco->jumped();
+    b.landed = r.loco->landed();
+    const glm::vec3 up(0.0f, 1.0f, 0.0f);
+    const glm::vec3 right = glm::normalize(glm::cross(b.in, up)); // the climber's right
+    for (int s = 0; s < 2; ++s) {
+        const float side = s == 0 ? -1.0f : 1.0f;
+        if (b.climbing) {
+            b.hand[s] = toWorld(r, c.hand(s));
+        } else {
+            // Locomotion's own ledge hang: shoulder-width on the edge.
+            b.hand[s] = r.loco->hangEdge() + right * (0.22f * side) + b.in * 0.08f + up * 0.02f;
+        }
+        b.foot[s] = toWorld(r, c.foot(s));
+    }
+    return b;
+}
+
 void ClimbRaceModule::animateBody(Racer& r, float dt) {
     if (!r.model || !r.anim) return;
     kke::RigidWorld& w = m_rigid->world();
     kke::Animator& a = *r.anim;
-    const kke::Climber& c = *r.climber;
-    const bool climbing = c.climbing();
-    const glm::vec3 feet = w.characterPosition(r.id);
-    const float yaw = climbing ? yawOf(c.facing()) : r.loco->facingYaw();
+    const BodyInput b = bodyInput(r);
+    const bool climbing = b.climbing;
+    const glm::vec3 feet = b.feet;
+    const float yaw = b.yaw;
     const glm::mat4 xf = glm::rotate(glm::translate(glm::mat4(1.0f), feet), glm::radians(m_modelYaw - yaw), glm::vec3(0, 1, 0));
     m_models->setTransform(r.model, xf);
 
@@ -102,13 +155,13 @@ void ClimbRaceModule::animateBody(Racer& r, float dt) {
     using LS = kke::Locomotion::State;
     const int cur = a.current();
     if (climbing) {
-        const int want = c.state() == kke::Climber::State::Mantle && c.mantleProgress() > 0.45f ? m_stTop : m_stHang;
+        const int want = b.mantle && b.mantleProgress > 0.45f ? m_stTop : m_stHang;
         if (cur != want) a.play(want, 0.15f);
     } else {
-        const LS st = r.loco->state();
-        if (r.loco->jumped()) a.play(m_stJump, 0.08f, true);
+        const LS st = b.loco;
+        if (b.jumped) a.play(m_stJump, 0.08f, true);
         if (st == LS::Ground) {
-            if (r.loco->landed() && r.loco->fallHeight() > 0.6f) a.play(m_stLand, 0.06f);
+            if (b.landed && b.fallHeight > 0.6f) a.play(m_stLand, 0.06f);
             const bool landing = a.current() == m_stLand && !a.finished();
             const bool jumping = a.current() == m_stJump && a.stateTime() < 0.2f;
             if (!landing && !jumping && a.current() != m_stMove) a.play(m_stMove, 0.2f);
@@ -116,11 +169,11 @@ void ClimbRaceModule::animateBody(Racer& r, float dt) {
             if (cur != m_stHang) a.play(m_stHang, 0.12f);
         } else if (cur == m_stJump && a.finished()) {
             a.play(m_stFall, 0.15f);
-        } else if (cur != m_stJump && cur != m_stFall && r.loco->stateTime() > 0.15f) {
+        } else if (cur != m_stJump && cur != m_stFall && b.stateTime > 0.15f) {
             a.play(m_stFall, 0.2f);
         }
     }
-    a.setParameter(r.loco->groundSpeed());
+    a.setParameter(b.groundSpeed);
     a.update(dt);
 
     std::vector<glm::mat4>* locals = m_models->boneLocals(r.model);
@@ -131,7 +184,7 @@ void ClimbRaceModule::animateBody(Racer& r, float dt) {
     const float k = 1.0f - std::exp(-12.0f * dt);
 
     // Feet on the ground when walking about.
-    const bool ground = !climbing && r.loco->state() == LS::Ground;
+    const bool ground = !climbing && b.loco == LS::Ground;
     r.footWeight += ((ground ? 1.0f : 0.0f) - r.footWeight) * k;
     auto groundQuery = [&](const glm::vec3& from, glm::vec3& hit, glm::vec3& normal) {
         const glm::vec3 start = glm::vec3(xf * glm::vec4(from, 1.0f));
@@ -144,27 +197,20 @@ void ClimbRaceModule::animateBody(Racer& r, float dt) {
     if (m_feet.valid() && r.footWeight > 0.01f) m_feet.apply(m_rigData, pose, kke::FootPlacer::SurfaceQuery(groundQuery), dt, r.footWeight);
 
     // On the rock: hands on their holds (or on their way), feet on theirs.
-    const float mantle = c.state() == kke::Climber::State::Mantle ? c.mantleProgress() : 0.0f;
-    const float armGoal = climbing ? 1.0f - std::clamp((mantle - 0.55f) / 0.3f, 0.0f, 1.0f) : r.loco->state() == LS::Hang ? 1.0f : 0.0f;
+    const float mantle = b.mantle ? b.mantleProgress : 0.0f;
+    const float armGoal = climbing ? 1.0f - std::clamp((mantle - 0.55f) / 0.3f, 0.0f, 1.0f) : b.loco == LS::Hang ? 1.0f : 0.0f;
     const float legGoal = climbing ? 1.0f - std::clamp((mantle - 0.25f) / 0.3f, 0.0f, 1.0f) : 0.0f;
     r.armWeight += (armGoal - r.armWeight) * k;
     r.legWeight += (legGoal - r.legWeight) * k;
     if (r.armWeight > 0.01f || r.legWeight > 0.01f) {
-        const glm::vec3 in = climbing ? c.facing() : r.loco->facing(); // into the rock
+        const glm::vec3 in = b.in; // into the rock
         const glm::vec3 up(0.0f, 1.0f, 0.0f);
         const glm::vec3 right = glm::normalize(glm::cross(in, up)); // the climber's right
         const std::vector<glm::mat4> bones = kke::poseToModel(m_rigData, pose);
         for (int s = 0; s < 2; ++s) {
             const float side = s == 0 ? -1.0f : 1.0f;
             if (m_arm[s].valid() && r.armWeight > 0.01f) {
-                glm::vec3 hand;
-                if (climbing) {
-                    hand = toWorld(r, c.hand(s));
-                } else {
-                    // Locomotion's own ledge hang: shoulder-width on the edge.
-                    const glm::vec3 edge = r.loco->hangEdge();
-                    hand = edge + right * (0.22f * side) + in * 0.08f + up * 0.02f;
-                }
+                const glm::vec3 hand = b.hand[s];
                 const glm::vec3 shoulder = glm::vec3(xf * bones[static_cast<size_t>(m_arm[s].upper)][3]);
                 // Elbows down and out, away from the rock.
                 const glm::vec3 pole = shoulder - up * 0.5f + right * (0.45f * side) - in * 0.25f;
@@ -172,7 +218,7 @@ void ClimbRaceModule::animateBody(Racer& r, float dt) {
             }
             if (m_leg[s].valid() && r.legWeight > 0.01f) {
                 // The ankle sits a little out from the foothold and above it.
-                const glm::vec3 foot = toWorld(r, c.foot(s)) - in * 0.1f + up * 0.07f;
+                const glm::vec3 foot = b.foot[s] - in * 0.1f + up * 0.07f;
                 const glm::vec3 hip = glm::vec3(xf * bones[static_cast<size_t>(m_leg[s].upper)][3]);
                 // Knees toward the rock and a little out, like a frog.
                 const glm::vec3 pole = hip + in * 0.6f + right * (0.35f * side) - up * 0.2f;

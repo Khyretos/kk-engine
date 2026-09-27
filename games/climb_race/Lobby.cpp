@@ -81,6 +81,9 @@ std::vector<ClimbRaceModule::Entry> ClimbRaceModule::wantedRoster() const {
     std::vector<bool> nameUsed(kNameCount, false), colourUsed(kColourCount, false);
     int cpus = m_defaultCpus;
     std::vector<int> difficulty(static_cast<size_t>(kke::Lobby::kMaxCpus), 1);
+    for (const std::string& taken : onlineNames())
+        for (int i = 0; i < kNameCount; ++i)
+            if (taken == kNames[i]) nameUsed[static_cast<size_t>(i)] = true;
     if (m_lobby) {
         const kke::Lobby& l = m_lobby->lobby();
         for (int seat : l.joinedSeats()) {
@@ -95,6 +98,7 @@ std::vector<ClimbRaceModule::Entry> ClimbRaceModule::wantedRoster() const {
         nameUsed[0] = colourUsed[0] = true;
         out.push_back({ 0, 2, "You", kColours[0].rgb });
     }
+    if (!m_netName.empty()) out[0].name = m_netName; // the name it joins with, on every screen
     if (m_autopilot) out[0].name += " (autopilot)";
     // The CPU climbers take the names and colours nobody picked.
     for (int i = 0; i < cpus; ++i) {
@@ -124,7 +128,9 @@ void ClimbRaceModule::buildRacers(const std::vector<Entry>& roster) {
         Racer r;
         r.lane = std::min(static_cast<int>(i), static_cast<int>(m_lanes.size()) - 1);
         r.seat = e.seat;
-        r.bot = e.seat < 0 || m_autopilot;
+        r.bot = !e.remote && (e.seat < 0 || m_autopilot);
+        r.remote = e.remote;
+        r.netId = e.netId;
         r.mouse = e.seat >= 0 && (!l ? e.seat == 0 : l->seat(e.seat).device != kke::Lobby::Device::Pad);
         r.difficulty = e.difficulty;
         r.name = e.name;
@@ -132,6 +138,7 @@ void ClimbRaceModule::buildRacers(const std::vector<Entry>& roster) {
         kke::RigidWorld::CharacterDesc cd;
         cd.position = glm::vec3(static_cast<float>(i), 0.0f, 12.0f);
         r.id = w.addCharacter(cd);
+        if (r.remote) w.setCharacterKinematic(r.id, true); // placed where its machine says
         r.loco = std::make_unique<kke::Locomotion>(w, r.id);
         r.climber = std::make_unique<kke::Climber>(*m_lanes[static_cast<size_t>(r.lane)]->wall);
         r.rig.mode = kke::CameraRig::Mode::ThirdPerson;
@@ -214,11 +221,17 @@ void ClimbRaceModule::updateLobby(float dt) {
 }
 
 void ClimbRaceModule::startFromLobby() {
+    if (netClient()) {
+        // In someone else's game: they start it (applySetup).
+        if (m_lobby) m_lobby->lobby().toast("The host starts the race", 3.0f);
+        return;
+    }
     const bool fromMenu = m_lobby && m_lobby->isOpen();
     if (fromMenu) m_lobby->save();
     if (m_lobby) m_lobby->close();
-    const std::vector<Entry> roster = wantedRoster();
-    bool same = roster.size() == m_racers.size();
+    if (netHost()) syncNetPlayers(); // the CPU climbers get their ids before the race is sent
+    const std::vector<Entry> roster = netHost() ? onlineRoster() : wantedRoster();
+    bool same = !netHost() && roster.size() == m_racers.size();
     for (size_t i = 0; same && i < roster.size(); ++i) same = roster[i].seat == m_racers[i].seat;
     if (!same) buildRacers(roster);
     applyLooks();
@@ -233,8 +246,9 @@ void ClimbRaceModule::startFromLobby() {
     }
     m_rosterChanged = false;
     resetRace();
-    kke::log::get(name())->info("race: {} climbers: {} playing, {} CPU, on mountain {}", m_racers.size(), humans(),
-                                static_cast<int>(m_racers.size()) - humans(), m_seed);
+    const int online = static_cast<int>(std::count_if(m_racers.begin(), m_racers.end(), [](const Racer& r) { return r.remote; }));
+    kke::log::get(name())->info("race: {} climbers: {} playing here, {} online, {} CPU, on mountain {}", m_racers.size(), humans(), online,
+                                static_cast<int>(m_racers.size()) - humans() - online, m_seed);
 }
 
 void ClimbRaceModule::backToLobby() {

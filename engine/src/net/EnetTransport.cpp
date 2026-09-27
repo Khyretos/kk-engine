@@ -3,6 +3,7 @@
 #include <enet/enet.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <mutex>
 
@@ -235,9 +236,21 @@ PeerStats EnetTransport::stats(PeerId peer) const {
 
 void EnetTransport::close() {
     if (!m_host) return;
+    // Gracefully first: what's queued (a goodbye) arrives before the
+    // disconnect (disconnect_now alone can make the other side drop it),
+    // and each side hears the other's answer. A moment at most.
+    for (auto& [id, peer] : m_peers) enet_peer_disconnect_later(peer, 0);
+    size_t left = m_peers.size();
+    const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(250);
+    ENetEvent e;
+    while (left > 0 && std::chrono::steady_clock::now() < until && enet_host_service(m_host, &e, 10) >= 0) {
+        if (e.type == ENET_EVENT_TYPE_DISCONNECT) --left;
+        else if (e.type == ENET_EVENT_TYPE_RECEIVE) enet_packet_destroy(e.packet);
+        e.type = ENET_EVENT_TYPE_NONE;
+    }
     for (auto& [id, peer] : m_peers) {
         peer->data = nullptr;
-        enet_peer_disconnect_now(peer, 0); // tells the other side right away
+        if (peer->state != ENET_PEER_STATE_DISCONNECTED) enet_peer_disconnect_now(peer, 0); // no answer: tell it right away
     }
     m_peers.clear();
     enet_host_flush(m_host);

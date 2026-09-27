@@ -10,6 +10,8 @@
 #include "kke/RigidWorld.h"
 #include "kke/modules/ModelModule.h"
 
+#include "NetRace.h"
+
 #include <RmlUi/Core/DataModelHandle.h>
 
 #include <memory>
@@ -20,6 +22,7 @@ namespace kke {
 class DynamicMeshRenderer;
 class InputModule;
 class LobbyModule;
+class NetModule;
 class RigidBodyModule;
 class UiModule;
 } // namespace kke
@@ -111,7 +114,30 @@ private:
         bool wasClimbing = false;
         float fallStartY = 0.0f;
         int falls = 0;
+        // Online (Net.cpp): its player in the game, and whether another
+        // machine plays it (then it's posed from what that machine sends).
+        int netId = -1;             // network player id (-1: offline)
+        int netSlot = -1;           // ours: NetModule's local player slot (0 = the first)
+        bool remote = false;
+        netrace::Pose net;          // remote: the newest pose
+        uint8_t netLoco = 0;        // remote: its loco state last frame (jumps and landings from the changes)
+        float netStateTime = 0.0f;
+        bool netJumped = false, netLanded = false;
     };
+    // What the body is drawn from (Body.cpp): the local climber and
+    // Locomotion, or (online) the pose another machine sent.
+    struct BodyInput {
+        glm::vec3 feet{0.0f};
+        float yaw = 0.0f;
+        glm::vec3 in{0.0f, 0.0f, -1.0f}; // facing: into the rock
+        bool climbing = false, mantle = false;
+        float mantleProgress = 0.0f;
+        kke::Locomotion::State loco = kke::Locomotion::State::Ground;
+        float stateTime = 0.0f, groundSpeed = 0.0f, fallHeight = 0.0f;
+        bool jumped = false, landed = false;
+        glm::vec3 hand[2]{}, foot[2]{}; // world: where the IK puts them (hands also on a ledge hang)
+    };
+    BodyInput bodyInput(const Racer& r) const;
     struct RacerInput {
         kke::Locomotion::Input loco;
         kke::Climber::Input climb;
@@ -136,6 +162,8 @@ private:
         int seat = -1, difficulty = 1;
         std::string name;
         glm::vec3 tint{1.0f};
+        int netId = -1;          // online: its network player
+        bool remote = false;     // online: another machine plays it
     };
     std::vector<Entry> wantedRoster() const;
     void buildRacers(const std::vector<Entry>& roster);
@@ -151,6 +179,23 @@ private:
     void updateCamera(Racer& r, float dt, kke::Camera& out);
     int crosshairHold(const Racer& r, const kke::Camera& cam, bool& outOfReach) const;
     void dropLoose(Lane& lane, int hold, const glm::vec3& push);
+
+    // Online (Net.cpp): Host and Join in the lobby, the host's race setup,
+    // everyone's climbers.
+    void setupNet();
+    void updateNet(float dt);         // before the racers move: events, remote racers
+    void sendNet();                   // after: our racers' poses
+    void onNetEvent(const kke::net::GameEventMsg& e);
+    void applySetup(const netrace::Setup& s);
+    void sendSetup();
+    void syncNetPlayers();            // our lobby seats -> NetModule's local players
+    std::vector<Entry> onlineRoster() const; // host: ours (wantedRoster) + everyone else's
+    std::vector<std::string> onlineNames() const; // host: the other screens' players, so the CPU climbers pick other names
+    bool netClient() const;           // in someone else's game
+    bool netHost() const;
+    void netFinished(Racer& r);
+    void netLoose(int lane, int hold, const glm::vec3& push);
+    std::string netStatus() const;
 
     // The character (Body.cpp).
     void loadCharacter();
@@ -169,6 +214,19 @@ private:
     kke::InputModule* m_input = nullptr;
     kke::ModelModule* m_models = nullptr;
     kke::LobbyModule* m_lobby = nullptr;
+    kke::NetModule* m_net = nullptr;
+    uint32_t m_round = 0, m_sentRound = 0; // races started (resetRace); the host sends each one
+    uint32_t m_netRound = 0;               // the online race's number (the host's m_round)
+    float m_netSearchAt = 0.0f;            // Join: when to ask the LAN again (m_netTime)
+    float m_netTime = 0.0f;
+    std::string m_netName;                 // KKE_NET_NAME: player 1's name, here and online                // s, also in the menu (m_clock stops there)
+    int m_netWait = 0;                     // KKE_CLIMB_WAIT: the host starts once that many others are in
+    bool m_netHold = false;                // the countdown waits for every machine (Ready / Go)
+    float m_netHeld = 0.0f;                // host: seconds waited
+    std::vector<int> m_netPending;         // host: racers whose machine hasn't said it's ready
+    bool m_netApplying = false;            // a remote racer's event is being applied: don't send it back
+    bool m_wasOnline = false;
+    std::string m_lastNetStatus;
 
     uint32_t m_seed = 7;
     std::vector<std::unique_ptr<Lane>> m_lanes;

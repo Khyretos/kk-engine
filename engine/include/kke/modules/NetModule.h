@@ -122,6 +122,18 @@ public:
     // answer arrives over the next frames (directoryServers()).
     bool browseDirectory(const std::string& directory, std::string* error = nullptr);
     const std::vector<server::DirectoryEntry>& directoryServers() const;
+    // Games on the LAN and on this PC (the panel's Search LAN, for a
+    // game's own menu): searchLan() asks, answers come in over the next
+    // second. Offline only (hosting or joining stops the search).
+    struct LanGame {
+        std::string address;
+        uint16_t port = 0;
+        std::string hostName, players; // "2/8"
+        bool ours = false;             // this game (the others can't be joined)
+    };
+    void searchLan();
+    bool searchingLan() const;
+    std::vector<LanGame> lanGames() const;
     std::string relay;               // "host[:port]": join codes (hosting gets one; joining one asks here unless it names a relay)
     std::string joinCode() const;    // while hosting with a relay: "K7M-Q2P@relay" once it gave one
     std::string playerCharacter;     // what others should draw you as ("" = the game's default)
@@ -222,6 +234,10 @@ public:
     net::VisibilitySettings visibilitySettings;
 
     net::LinkConditions simulated; // applied to what this game sends
+    // Other players get a kinematic capsule in the local Jolt world (they
+    // block you and push crates). Off for a game whose players never meet
+    // (Climb Race: every climber on a face of their own).
+    bool standIns = true;
 
 private:
     void openTransport();

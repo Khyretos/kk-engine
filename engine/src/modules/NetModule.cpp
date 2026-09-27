@@ -766,7 +766,7 @@ void NetModule::syncRemoteCapsules(float dt) {
     // Input replay: players don't block each other (the host's characters
     // don't collide with one another), so a client's prediction may not
     // bump into stand-ins the host doesn't have either.
-    const bool replay = m_hostingReplay || (m_client && m_client->inputReplay());
+    const bool replay = m_hostingReplay || (m_client && m_client->inputReplay()) || !standIns;
     for (auto it = m_capsules.begin(); it != m_capsules.end();) {
         const bool present = !replay && !m_replayed.count(it->first) &&
                              std::any_of(m_remote.begin(), m_remote.end(), [&](const net::RemotePlayer& p) { return p.id == it->first && p.hasState; });
@@ -867,7 +867,10 @@ void NetModule::update(const UpdateContext& ctx) {
         } else if (status == net::NetClient::Status::Rejected || status == net::NetClient::Status::Disconnected) {
             std::string why = m_client->statusText();
             if (m_secure && !m_secure->failure().empty()) why = m_secure->failure(); // the encryption said why
-            if (before != status) log::get(name())->warn("Left the game: {}", why);
+            if (before != status) {
+                if (m_client->endedByServer()) log::get(name())->info("Left the game: {}", why); // the host ended it or kicked us: not a fault
+                else log::get(name())->warn("Left the game: {}", why);
+            }
             leave();
             m_status = why.empty() ? "disconnected" : why;
         }
@@ -891,26 +894,49 @@ void NetModule::update(const UpdateContext& ctx) {
     }
 }
 
-void NetModule::lanSearchUi() {
-    if (ImGui::Button("Search LAN")) {
-        m_search = std::make_unique<net::EnetTransport>();
-        m_search->discover(kDefaultPort, static_cast<uint16_t>(kDefaultPort + kPortRange - 1));
-        m_searchUntil = now() + 1.0;
-    }
-    if (!m_search) return;
-    ImGui::SameLine();
-    ImGui::TextDisabled(now() < m_searchUntil ? "searching..." : "%zu found", m_search->lanGames().size());
+void NetModule::searchLan() {
+    if (m_role != Role::Offline) return;
+    m_search = std::make_unique<net::EnetTransport>();
+    m_search->discover(kDefaultPort, static_cast<uint16_t>(kDefaultPort + kPortRange - 1));
+    m_searchUntil = now() + 1.0;
+}
+
+bool NetModule::searchingLan() const { return m_search && now() < m_searchUntil; }
+
+std::vector<NetModule::LanGame> NetModule::lanGames() const {
+    std::vector<LanGame> out;
+    if (!m_search) return out;
     for (const auto& g : m_search->lanGames()) {
         // info = "name|players/max|gameId"
-        std::string hostName = g.info, players, game;
+        LanGame l;
+        l.address = g.address;
+        l.port = g.port;
+        l.hostName = g.info;
+        std::string game;
         if (size_t a = g.info.find('|'); a != std::string::npos) {
-            hostName = g.info.substr(0, a);
+            l.hostName = g.info.substr(0, a);
             const size_t b = g.info.find('|', a + 1);
-            players = g.info.substr(a + 1, b == std::string::npos ? std::string::npos : b - a - 1);
+            l.players = g.info.substr(a + 1, b == std::string::npos ? std::string::npos : b - a - 1);
             if (b != std::string::npos) game = g.info.substr(b + 1);
         }
+        l.ours = game == m_config.gameId;
+        out.push_back(std::move(l));
+    }
+    std::stable_partition(out.begin(), out.end(), [](const LanGame& g) { return g.ours; });
+    return out;
+}
+
+void NetModule::lanSearchUi() {
+    if (ImGui::Button("Search LAN")) searchLan();
+    if (!m_search) return;
+    ImGui::SameLine();
+    const std::vector<LanGame> games = lanGames();
+    ImGui::TextDisabled(searchingLan() ? "searching..." : "%zu found", games.size());
+    for (const LanGame& g : games) {
+        const std::string& hostName = g.hostName;
+        const std::string& players = g.players;
         ImGui::PushID(static_cast<int>(g.port) ^ static_cast<int>(std::hash<std::string>{}(g.address)));
-        const bool ours = game == m_config.gameId;
+        const bool ours = g.ours;
         ImGui::BeginDisabled(!ours);
         if (ImGui::SmallButton("Join")) {
             const std::string address = g.address;

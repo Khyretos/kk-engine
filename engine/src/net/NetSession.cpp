@@ -123,6 +123,9 @@ bool NetServer::start(uint16_t port, const std::string& hostName, const std::str
 
 void NetServer::stop() {
     if (!m_running) return;
+    // Say goodbye, so a player can tell the game ended from a lost connection.
+    for (const Client& c : m_clients)
+        if (c.slot == 0 && c.id) sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::Reject, RejectMsg{ "the host ended the game" });
     m_transport.close();
     m_clients.clear();
     m_running = false;
@@ -702,6 +705,7 @@ bool NetClient::connect(const std::string& address, uint16_t port, const std::st
     m_name = name.substr(0, kMaxNameLength);
     m_character = character.substr(0, kMaxCharacterLength);
     m_status = Status::Connecting;
+    m_endedByServer = false;
     m_statusText = "connecting to " + address + ":" + std::to_string(port);
     m_started = false; // timers start at the next update()
     return true;
@@ -831,6 +835,7 @@ void NetClient::receive(const NetEvent& e) {
         break;
     case MessageType::Reject:
         if (auto m = decode<RejectMsg>(*type, d, n)) {
+            m_endedByServer = m_status == Status::Connected;
             m_status = Status::Rejected;
             m_statusText = m->reason;
         } else ++m_badPackets;

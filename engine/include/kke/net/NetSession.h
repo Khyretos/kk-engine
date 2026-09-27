@@ -372,6 +372,9 @@ public:
     void disconnect();
     Status status() const { return m_status; }
     const std::string& statusText() const { return m_statusText; }
+    // Rejected after we were in: the host ended the game or kicked us, and
+    // said so (statusText has why). Not a lost connection.
+    bool endedByServer() const { return m_endedByServer; }
     uint8_t playerId() const { return m_playerId; }
 
     void setLocalState(const NetPlayerState& state) { m_local = state; m_hasLocal = true; }
@@ -432,6 +435,7 @@ private:
     NetConfig m_config;
     Status m_status = Status::Idle;
     std::string m_statusText;
+    bool m_endedByServer = false;
     PeerId m_server = kNoPeer;
     std::string m_name, m_character;
     uint8_t m_playerId = 0;

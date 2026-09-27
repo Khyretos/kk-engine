@@ -68,8 +68,10 @@ m_lobby->open();
   adds levels (the game decides what each one means).
 - `addOption({ id, label, choices, value, visible, onPress, onChange })`
   adds a row to player 1's settings, before Start: with choices it's a
-  value (left / right), without it's an action (A presses it). Networking
-  adds "Host game" and "Join game" this way.
+  value (left / right), without it's an action (A presses it). Climb Race
+  adds Online (Off / Join / Host), Game and Join this way
+  (games/climb_race/Net.cpp, docs/NETWORKING.md "In Climb Race"). Set
+  `visible` to show a row only when it applies; `setTitle` redraws them.
 - `onJoin` / `onLeave` are called with the seat.
 - The title and the subtitle take button prompts: `{a}`, `{start}`,
   `{jump}` (ButtonPrompts::format).

@@ -22,6 +22,10 @@ address, or Search LAN (every game on the network and on this PC, with its
 player count; click Join). The panel shows each player's round trip, loss
 and your bandwidth, and has sliders to simulate a bad connection.
 
+Climb Race has it in its start menu: **Online: Host** on one machine,
+**Online: Join** on the other, pick the game and press Join, with up to
+four players on each screen (games/climb_race/README.md "Online").
+
 | Variable | Meaning |
 |---|---|
 | `KKE_NET` | `host`, `host:PORT`, `join:ADDRESS`, `join:ADDRESS:PORT` or `join:CODE[@RELAY]` |
@@ -309,6 +313,34 @@ net.removeLocalPlayer(1);                // Sam puts the controller down
 - Not with input replay yet: there each connection plays one player, and
   a guest is refused with the reason.
 
+## In Climb Race
+
+A whole game on top of the above (games/climb_race/Net.cpp, NetRace.h),
+and a template for a menu-driven one:
+
+- The start menu (docs/LOBBY.md) gets three rows with `lobby().addOption`:
+  Online (Off / Join / Host), Game (what `NetModule::searchLan()` found:
+  `lanGames()` gives address, port, host name, players and whether it's
+  this game) and Join. Host calls `host()`, Join calls `join(address, port)`.
+- Every lobby seat is a player: the first is NetModule's own, the others
+  `addLocalPlayer(slot, name, character)`, with the colour as the
+  character ("#5aa6ff"). The host's CPU climbers are host guests too, so
+  they're players everyone sees.
+- The host decides the race with game events (base 0x4300): Setup (the
+  mountain, and which player climbs which face), Ready and Go (the
+  countdown waits for every machine), Finish and Loose (a hold came off).
+- Each climber's pose is its NetPlayerState: feet, facing, state (on foot,
+  climbing, mantling) and, in `extra`, the hands and feet relative to it
+  (12 values at 1/2048 m).
+- `standIns = false`: the game draws the other players itself (a climber
+  on the right face), so NetModule makes no capsules for them.
+  `checkMoves = false`: a mantle over an edge looks like going through the
+  rock to the wall check; the speed limits still apply.
+
+When a host quits, it tells every player ("the host ended the game")
+before it closes, so they log it as news, not the warning a lost
+connection gets.
+
 ## In kke_demo
 
 - Players: the local character model, with its own animator per remote
@@ -360,6 +392,8 @@ guests filling a server so a late joiner is turned away, a kicked guest's
 owner told and still connected; guests refused under input replay; a
 guest's impossible move corrected by its slot, not the first player's.
 The fuzz test covers `Guest`, `GuestAck` and states with extra bytes.
+The host ending the game tells its players so (`endedByServer()`), which
+is not a lost connection.
 
 `tests/test_break_graph.cpp`: a follower given the host's borders ends up
 with the host's pieces; borders that don't exist can't be broken.

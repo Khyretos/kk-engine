@@ -694,6 +694,20 @@ TEST(NetSession, LeavingIsSeenByEveryone) {
     EXPECT_EQ(m.clients[1]->players(m.now).size(), 1u); // only the host left
 }
 
+// The host closing the game says so: a player can tell that from a lost
+// connection (the one gets an info line, the other a warning).
+TEST(NetSession, TheHostEndingTheGameIsToldNotLost) {
+    Match m(1);
+    m.run(0.5);
+    ASSERT_EQ(m.clients[0]->status(), NetClient::Status::Connected);
+    EXPECT_FALSE(m.clients[0]->endedByServer());
+    m.server.stop();
+    m.run(0.3);
+    EXPECT_EQ(m.clients[0]->status(), NetClient::Status::Rejected);
+    EXPECT_TRUE(m.clients[0]->endedByServer());
+    EXPECT_EQ(m.clients[0]->statusText(), "the host ended the game");
+}
+
 // Split screen online: a client with two guests (three players on one
 // connection) and a host with one. Everyone sees everyone else, nobody is
 // sent the players on their own screen, the game's extra bytes arrive,

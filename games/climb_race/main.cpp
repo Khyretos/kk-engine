@@ -5,6 +5,7 @@
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
 #include "kke/modules/ModelModule.h"
+#include "kke/modules/NetModule.h"
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/modules/SettingsModule.h"
 #include "kke/modules/StatsModule.h"
@@ -37,6 +38,11 @@ int main() {
         app.addModule<kke::UiModule>();
         app.addModule<kke::AudioModule>().setUiVisible(false);
         app.addModule<kke::LobbyModule>("climb_race_lobby.json");
+        // Online: Host / Join in the start menu (or KKE_NET=host, KKE_NET=join:ADDRESS).
+        kke::net::NetConfig net;
+        net.gameId = "climb_race";
+        net.maxPlayers = 16; // every climber a player: up to 4 at each screen, and the host's CPU climbers
+        app.addModule<kke::NetModule>(net);
         app.addModule<climb_race::ClimbRaceModule>();
         app.addModule<kke::StatsModule>().setUiVisible(false);
         app.run();

@@ -5,6 +5,7 @@
 #include "kke/SphereImpostors.h"
 #include "kke/Viewports.h"
 #include "kke/modules/InputModule.h"
+#include "kke/modules/NetModule.h"
 #include "kke/modules/LobbyModule.h"
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/modules/UiModule.h"
@@ -67,7 +68,8 @@ std::vector<kke::ModuleDependency> ClimbRaceModule::dependencies() const {
              { std::type_index(typeid(kke::InputModule)), true, "the grab controls, rebindable" },
              { std::type_index(typeid(kke::ModelModule)), false, "the climbers' animated bodies" },
              { std::type_index(typeid(kke::UiModule)), false, "the HUD: stamina, clock, hands" },
-             { std::type_index(typeid(kke::LobbyModule)), false, "the start menu: players join, pick a look, set the CPU climbers" } };
+             { std::type_index(typeid(kke::LobbyModule)), false, "the start menu: players join, pick a look, set the CPU climbers" },
+             { std::type_index(typeid(kke::NetModule)), false, "online races: Host / Join in the start menu" } };
 }
 
 void ClimbRaceModule::init(kke::Application& app) {
@@ -75,6 +77,7 @@ void ClimbRaceModule::init(kke::Application& app) {
     m_rigid = app.getModule<kke::RigidBodyModule>();
     m_input = app.getModule<kke::InputModule>();
     m_models = app.getModule<kke::ModelModule>();
+    m_net = app.getModule<kke::NetModule>();
     m_lobby = app.getModule<kke::LobbyModule>();
 
     m_seed = static_cast<uint32_t>(envFloat("KKE_CLIMB_SEED", 7.0f));
@@ -152,6 +155,7 @@ void ClimbRaceModule::init(kke::Application& app) {
     loadCharacter();
     buildScenery();
     setupLobby();
+    setupNet();
     const std::vector<Entry> roster = wantedRoster();
     buildMountain(m_seed, static_cast<int>(roster.size()));
     buildRacers(roster);
@@ -274,6 +278,7 @@ void ClimbRaceModule::buildMountain(uint32_t seed, int lanes) {
 }
 
 void ClimbRaceModule::resetRace() {
+    ++m_round;
     m_phase = Phase::Countdown;
     m_countdown = 3.0f;
     m_winner.clear();
@@ -482,7 +487,10 @@ void ClimbRaceModule::updateRacer(Racer& r, float dt) {
             ri.climb.reach[0] = true;
         }
         c.update(ri.climb, dt);
-        if (c.brokeHold() >= 0) dropLoose(*m_lanes[static_cast<size_t>(r.lane)], c.brokeHold(), c.facing() * -1.5f);
+        if (c.brokeHold() >= 0) {
+            dropLoose(*m_lanes[static_cast<size_t>(r.lane)], c.brokeHold(), c.facing() * -1.5f);
+            netLoose(r.lane, c.brokeHold(), c.facing() * -1.5f);
+        }
         switch (c.state()) {
         case kke::Climber::State::Climbing:
         case kke::Climber::State::Mantle:
@@ -507,6 +515,7 @@ void ClimbRaceModule::updateRacer(Racer& r, float dt) {
                 r.finished = true;
                 if (m_winner.empty()) m_winner = r.name;
                 kke::log::get(name())->info("{} topped out in {:.2f} s", r.name, r.time);
+                netFinished(r);
                 if (!r.bot && (m_best <= 0.0f || r.time < m_best)) m_best = r.time;
             }
             break;
@@ -555,6 +564,7 @@ void ClimbRaceModule::update(const kke::UpdateContext& ctx) {
     const float dt = ctx.dt;
     kke::InputMap& p1 = m_input->map(0);
     if (p1.pressed("panels")) m_app->debugUi().setVisible(!m_app->debugUi().visible());
+    updateNet(dt);
     if (m_phase == Phase::Lobby) {
         updateLobby(dt);
         updateHud(dt);
@@ -573,6 +583,7 @@ void ClimbRaceModule::update(const kke::UpdateContext& ctx) {
         updateHud(dt);
         return;
     }
+    if (netClient()) fresh = again = false; // online, the host starts each race
     if (fresh || again) {
         // Someone joined during the race: they're in this one.
         if (m_rosterChanged) {
@@ -589,12 +600,13 @@ void ClimbRaceModule::update(const kke::UpdateContext& ctx) {
     }
 
     if (m_phase == Phase::Countdown) {
-        m_countdown -= dt;
+        if (!m_netHold) m_countdown -= dt; // online: until every machine is at the line
         if (m_countdown <= 0.0f) m_phase = Phase::Racing;
     }
     // The crosshair's hold for mouse aiming (last frame's camera).
     for (Racer& r : m_racers) r.crosshair = r.mouse && m_captured ? crosshairHold(r, cameraOf(r), r.crosshairOut) : -1;
-    for (Racer& r : m_racers) updateRacer(r, dt);
+    for (Racer& r : m_racers)
+        if (!r.remote) updateRacer(r, dt);
     if (m_phase == Phase::Racing) {
         // Every player at the top (or everyone, in a race of bots): results.
         bool playersDone = true, allDone = true, anyPlayer = false;
@@ -609,6 +621,7 @@ void ClimbRaceModule::update(const kke::UpdateContext& ctx) {
     }
 
     for (Racer& r : m_racers) animateBody(r, dt);
+    sendNet();
     // Cameras: player 1 is the engine's camera; split screen adds the others'.
     std::vector<Racer*> views;
     for (Racer& r : m_racers)
@@ -656,7 +669,7 @@ void ClimbRaceModule::update(const kke::UpdateContext& ctx) {
             for (const Racer& r : m_racers)
                 kke::log::get(name())->info("t {:.0f} s: {} at {:.1f} m, stamina {:.0f}%, {}", m_clock, r.name,
                                             m_rigid->world().characterPosition(r.id).y, r.climber->staminaFraction() * 100.0f,
-                                            r.finished ? "finished" : r.climber->climbing() ? "climbing" : "on foot");
+                                            r.finished ? "finished" : bodyInput(r).climbing ? "climbing" : "on foot");
         }
         if (m_clock >= m_quitAfter) {
             SDL_Event quit{};
@@ -723,7 +736,7 @@ void ClimbRaceModule::render(const kke::RenderContext& ctx) {
     if (!m_charModel)
         for (const Racer& r : m_racers) {
             const glm::vec3 feet = w.characterPosition(r.id);
-            const float yaw = r.climber->climbing() ? yawOf(r.climber->facing()) : r.loco->facingYaw();
+            const float yaw = bodyInput(r).yaw;
             m_capsule->draw(ctx, glm::rotate(glm::translate(glm::mat4(1.0f), feet), glm::radians(-yaw), glm::vec3(0, 1, 0)), 0.0f, 0.6f);
         }
 }
@@ -736,7 +749,7 @@ void ClimbRaceModule::renderShadow(const kke::ShadowRenderContext& ctx) {
     }
     if (!m_charModel)
         for (const Racer& r : m_racers) {
-            const float yaw = r.climber->climbing() ? yawOf(r.climber->facing()) : r.loco->facingYaw();
+            const float yaw = bodyInput(r).yaw;
             m_capsule->drawShadow(ctx, glm::rotate(glm::translate(glm::mat4(1.0f), w.characterPosition(r.id)), glm::radians(-yaw), glm::vec3(0, 1, 0)));
         }
 }
