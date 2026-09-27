@@ -127,6 +127,12 @@ public:
     int ref(lua_State* L, int index);
     void unref(int ref);
     bool callRef(int ref, const std::string& source, const std::function<int(lua_State*)>& push = {});
+    // The same, keeping what the function returns: `read` gets the state
+    // with its first `nresults` values on top (missing ones are nil) and
+    // must leave the stack as it found it. False when it errored (reported
+    // like any other) or `ref` isn't a function; `read` isn't called then.
+    bool callRefResults(int ref, const std::string& source, const std::function<int(lua_State*)>& push, int nresults,
+                        const std::function<void(lua_State*)>& read);
 
     // A Lua value as bytes and back (net messages): nil, booleans, numbers,
     // strings and tables of those, nested up to 16 deep, at most `maxBytes`.
@@ -134,6 +140,8 @@ public:
     // or for bytes that aren't a valid encoding (they came off the network).
     static bool encodeValue(lua_State* L, int index, std::string& out, std::string& error, size_t maxBytes = 1024);
     static bool decodeValue(lua_State* L, const std::string& bytes, std::string& error);
+    // A string as encodeValue writes it, without a Lua state.
+    static std::string encodeString(const std::string& text);
 
     // print() and log output.
     std::function<void(const std::string& source, const std::string& text)> printSink;

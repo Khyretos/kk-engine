@@ -38,14 +38,14 @@ KKE_SKIP_INTRO=1 ./climb_race     # skip the engine's logo intro
 
 Run it from `build/bin`: the mountains (`mountains/*.yaml`), the HUD
 (`ui/climb_hud.rml`) and the fonts are copied there by the build and found
-next to the executable. The saved files (see "Saving" below) are written
-relative to the folder you start it from.
+next to the executable. The tour and the ghosts (see "Saving" below) are
+saved next to the executable too; the menu, settings and controls files
+are written relative to the folder you start it from.
 
 It also needs `KKE_ENABLE_NET` (on by default): main.cpp always adds
 `kke::NetModule`, and `engine/CMakeLists.txt` only compiles NetModule.cpp
-when networking is on, so with `-DKKE_ENABLE_NET=OFF` Climb Race does not
-link. (The root CMakeLists.txt only checks `KKE_ENABLE_JOLT` for it: a
-known gap.)
+when networking is on, so with `-DKKE_ENABLE_NET=OFF` the root
+CMakeLists.txt leaves Climb Race out of the build.
 
 The climbers' bodies are the UAL mannequin
 (`assets/animations/UAL1_Standard.fbx`, see "Assets"). Without it the game
@@ -683,7 +683,7 @@ opened it refreshes the Mountain row and plays a tone.
 
 | File | What | Where |
 |---|---|---|
-| `climb_race_progress.json` (or `.yml`) | best time, medal, finishes per mountain | the working directory, or `KKE_CLIMB_PROGRESS` |
+| `climb_race_progress.json` (or `.yml`) | best time, medal, finishes per mountain | next to the executable, or `KKE_CLIMB_PROGRESS` |
 | `climb_race_ghosts/<id>.ghost` | the best run per mountain | next to the progress file |
 | `climb_race_lobby.json` (or `.yml`) | the menu's looks and settings | LobbyModule |
 | `climb_race_input.json` | rebound controls | InputModule |
@@ -914,7 +914,7 @@ Switches (environment variables), for demos, headless runs and tests:
 | `KKE_CLIMB_MOUNTAIN=<name>` | Which mountain: its file name (`crumble_peak`) or name, or `random`. A closed one is put in the row anyway. |
 | `KKE_CLIMB_MODE=<mode>` | `race`, `rockfall`, `elimination` or `time trial`, whatever the menu says. |
 | `KKE_CLIMB_ALL=1` | Every mountain open, whatever the saved tour says (not saved). |
-| `KKE_CLIMB_PROGRESS=<file>` | Where the tour is saved (default `climb_race_progress.json`). |
+| `KKE_CLIMB_PROGRESS=<file>` | Where the tour is saved (default `climb_race_progress.json` next to the executable). |
 | `KKE_CLIMB_SEED=<n>` | Random, on that seed (default 7, Granite Tower's rock). |
 | `KKE_CLIMB_LOBBY=0` | No menu: straight into a race, you and `KKE_CLIMB_CPUS=<n>` CPU climbers (default 1, on Hard). |
 | `KKE_CLIMB_AUTOPILOT=1` | No menu, and you climb by yourself too (`kke::ClimbBot`). |

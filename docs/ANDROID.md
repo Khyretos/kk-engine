@@ -49,11 +49,12 @@ and the next one starts. At the end:
   a cloud drive. Nothing is sent by itself. **Send the results** opens
   the menu again.
 
-The file is kke_benchmark's results file (`--collect`) once the
-benchmark supports that on Android; until then it is a zip of the run:
-`runs.json` (each demo's status and time), `reports/<id>.json` (each
-demo's own measurements, format `kke-benchmark-game/1`, with the phone's
-system details) and `logs/<id>.log` (each demo's full log).
+The file is the same results file `kke_benchmark` writes on a PC
+(`kke-benchmark-<date>_<time>.json`, docs/BENCHMARKS.md): the app runs
+the demos, then `kke_benchmark --collect` (inside the APK) puts their
+reports and logs together. If that step fails, the run goes out as a zip
+instead: `runs.json` (each demo's status and time), `reports/<id>.json`
+and `logs/<id>.log`.
 
 ```
 python3 android/build_apk.py --build build-android-arm64 --benchmark --out dist/android/kke-benchmark.apk
