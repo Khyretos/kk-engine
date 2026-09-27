@@ -9,6 +9,7 @@
 #include "kke/Material.h"
 #include "kke/Mood.h"
 #include "kke/SceneLoader.h"
+#include "kke/Thumbnails.h"
 #include "kke/ai/Clips.h"
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/OrbitCameraModule.h"
@@ -168,6 +169,12 @@ void SandboxModule::init(kke::Application& app) {
     // (with KKE_SANDBOX_LAYOUT: converts an old layout, and the automated
     // round-trip check in tests/sandbox_roundtrip.sh).
     if (const char* save = std::getenv("KKE_SANDBOX_SAVE")) saveLayout(save);
+    if (auto* ui = app.getModule<kke::UiModule>(); ui && ui->context()) {
+        m_palette.attach(ui->context(), app.window().pixelsPerPoint());
+        m_palette.onPress = [this](const std::string& id) { palettePressed(id); };
+    } else {
+        kke::log::get(name())->warn("no RmlUi context: Play mode has no palette");
+    }
     setMode(m_mode); // the camera limits that go with it
 }
 
@@ -2254,10 +2261,13 @@ void SandboxModule::setMode(Mode mode) {
 }
 
 bool SandboxModule::mouseOverUi() const {
-    // AllowWhenBlockedByActiveItem: while a palette picture is held down
-    // (being dragged out) ImGui otherwise reports no window as hovered.
+    // Where the pointer is, not what was pressed: a picture pressed on the
+    // palette and dragged out is over the world when it is let go
+    // (RmlUi's own "mouse interacting" stays on while the press lasts).
+    const auto& mouse = m_app->window().mouseState();
+    const glm::vec2 p(mouse.x, mouse.y);
     return ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) ||
-           m_app->uiCapturesMouse();
+           m_palette.contains(p) || graphEditorContains(p);
 }
 
 void SandboxModule::placeBlock(size_t block) {
@@ -2393,18 +2403,16 @@ void SandboxModule::modeSwitchUi() {
     ImGui::End();
 }
 
-// The Simple palette: one row of big pictures along the bottom. Press one
-// and drag it into the world (or tap it, then click where it goes); the
-// bat is held instead and swings on every click.
-void SandboxModule::playPaletteUi() {
-    const float s = ImGui::GetFontSize() / 13.0f;
-    const ImGuiViewport* vp = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + vp->WorkSize.y - 10 * s), ImGuiCond_Always, ImVec2(0.5f, 1.0f));
-    ImGui::SetNextWindowBgAlpha(0.8f);
-    ImGui::Begin("Play", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-                                  ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar);
-    ImGui::SetWindowFontScale(1.4f);
-
+// The Simple palette: one row of big pictures along the bottom (RmlUi,
+// PlayPalette). Press one and drag it into the world (or tap it, then
+// click where it goes); the bat is held instead and swings on every click.
+void SandboxModule::updatePalette() {
+    const bool play = m_mode == Mode::Play;
+    m_palette.setVisible(play);
+    if (!play) {
+        m_paletteCells.clear();
+        return;
+    }
     bool anyone = false, anyoneStanding = false, anyoneDown = false;
     for (const Object& o : m_objects) {
         if (!o.character) continue;
@@ -2421,91 +2429,87 @@ void SandboxModule::playPaletteUi() {
                        : !anyone                       ? "Drag a person into the world!"
                        : anyoneDown                    ? "Press Get up to try again, or grab the bat!"
                                                        : "Grab the bat and bonk them!";
-    ImGui::TextUnformatted(hint);
-
-    const float cell = 76.0f * s;
-    const float lineH = ImGui::GetTextLineHeight();
-    ImDrawList* draw = ImGui::GetWindowDrawList();
-    const ImU32 frameCol = ImGui::GetColorU32(ImGuiCol_FrameBg), hoverCol = ImGui::GetColorU32(ImGuiCol_HeaderHovered),
-                activeCol = ImGui::GetColorU32(ImGuiCol_HeaderActive), textCol = ImGui::GetColorU32(ImGuiCol_Text);
-    bool first = true;
-    m_paletteCells.clear();
-    // One picture: an asset's thumbnail, or a big word. Returns the button
-    // state; `on` draws it highlighted (the tool in hand).
-    struct Press { bool pressed, released; };
-    auto picture = [&](const char* id, const char* label, const kke::CatalogAsset* asset, const char* word, bool on) -> Press {
-        if (!first) ImGui::SameLine();
-        first = false;
-        ImGui::PushID(id);
-        const ImVec2 p = ImGui::GetCursorScreenPos();
-        ImGui::InvisibleButton("cell", ImVec2(cell, cell + lineH));
-        const Press r{ ImGui::IsItemActivated(), ImGui::IsItemDeactivated() };
-        m_paletteCells.emplace_back(p.x + cell * 0.5f, p.y + cell * 0.5f);
-        const ImVec2 imgMax(p.x + cell, p.y + cell);
-        draw->AddRectFilled(p, imgMax, on ? activeCol : (ImGui::IsItemHovered() ? hoverCol : frameCol), 10.0f * s);
-        bool drawn = false;
-        if (asset && m_thumbs) {
-            const kke::ThumbnailModule::View v = m_thumbs->get(asset->path, asset->pack, [&] { return kke::packLoadOptions(m_catalog, *asset); });
-            if (v.state == kke::ThumbnailModule::State::Ready) {
-                draw->AddImage(v.texture, p, imgMax, v.uv0, v.uv1);
-                drawn = true;
-            }
-        }
-        if (!drawn) {
-            const char* big = word ? word : label;
-            const ImVec2 ts = ImGui::CalcTextSize(big);
-            draw->AddText(ImVec2(p.x + (cell - ts.x) * 0.5f, p.y + (cell - ts.y) * 0.5f), textCol, big);
-        }
-        const float tw = ImGui::CalcTextSize(label).x;
-        draw->AddText(ImVec2(p.x + (cell - tw) * 0.5f, p.y + cell), textCol, label);
-        ImGui::PopID();
-        return r;
-    };
-
+    std::vector<PlayPalette::Cell> cells;
     if (!m_assetFolder.empty()) {
-        if (picture("grab", "Grab", nullptr, "Hand", m_tool == Tool::Select).pressed) {
-            if (m_tool == Tool::Place) cancelPlacing();
-            m_tool = Tool::Select;
-        }
+        cells.push_back({ "grab", "Grab", "Hand", "", m_tool == Tool::Select });
         for (size_t i = 0; i < m_blocks.size(); ++i) {
             const kke::PlayBlock& b = m_blocks[i];
             if (m_blockAssets[i].empty()) continue; // not in these packs
-            const kke::CatalogAsset* a = m_catalog.find(m_blockAssets[i].front());
-            const bool tool = b.kind == kke::PlayBlockKind::Tool;
-            const bool on = tool ? m_tool == Tool::Bat
-                                 : m_tool == Tool::Place && !m_movingId &&
-                                       std::find(m_blockAssets[i].begin(), m_blockAssets[i].end(), m_placeAsset) != m_blockAssets[i].end();
-            const Press pr = picture(b.id.c_str(), b.label.c_str(), a, nullptr, on);
-            if (!pr.pressed) continue;
-            if (m_tool == Tool::Look) {
-                openRecipe(b.id); // what every one of these does
-                m_tool = Tool::Select;
-                continue;
-            }
-            if (m_tool == Tool::Place) cancelPlacing();
-            if (tool) {
-                m_tool = m_tool == Tool::Bat ? Tool::Select : Tool::Bat;
-            } else {
-                placeBlock(i);
-                m_dropOnRelease = true; // dragged out: let go in the world to drop it
-            }
+            const bool on = b.kind == kke::PlayBlockKind::Tool
+                                ? m_tool == Tool::Bat
+                                : m_tool == Tool::Place && !m_movingId &&
+                                      std::find(m_blockAssets[i].begin(), m_blockAssets[i].end(), m_placeAsset) != m_blockAssets[i].end();
+            cells.push_back({ "block:" + std::to_string(i), b.label, "", paletteImage(m_catalog.find(m_blockAssets[i].front())), on });
         }
-        if (m_hasFemfx && picture("throw", "Throw", nullptr, "Ball!", m_tool == Tool::Shoot).pressed) {
-            if (m_tool == Tool::Place) cancelPlacing();
-            m_tool = m_tool == Tool::Shoot ? Tool::Select : Tool::Shoot;
+        if (m_hasFemfx) cells.push_back({ "throw", "Throw", "Ball!", "", m_tool == Tool::Shoot });
+        if (lookAvailable()) cells.push_back({ "look", "Look", "Inside", "", m_tool == Tool::Look });
+        if (anyoneDown) cells.push_back({ "getup", "Get up", "Up!", "", false });
+        if (!m_objects.empty()) cells.push_back({ "clear", "Clear", "Empty", "", false });
+    }
+    cells.push_back({ "build", "Build", "Tools", "", false });
+    m_palette.set(hint, cells);
+    m_paletteCells = m_palette.cellCentres();
+}
+
+void SandboxModule::palettePressed(const std::string& id) {
+    if (m_mode != Mode::Play) return;
+    if (id == "build") {
+        setMode(Mode::Build);
+        return;
+    }
+    if (id == "getup") {
+        standEveryoneUp();
+        return;
+    }
+    if (id == "clear") {
+        pushUndo();
+        clearAll();
+        return;
+    }
+    // A tool: pressing it again puts it down.
+    auto toggle = [this](Tool t) {
+        if (m_tool == Tool::Place) cancelPlacing();
+        m_tool = m_tool == t ? Tool::Select : t;
+    };
+    if (id == "grab") {
+        if (m_tool == Tool::Place) cancelPlacing();
+        m_tool = Tool::Select;
+    } else if (id == "throw") {
+        toggle(Tool::Shoot);
+    } else if (id == "look") {
+        toggle(Tool::Look);
+    } else if (id.rfind("block:", 0) == 0) {
+        const size_t i = static_cast<size_t>(std::atoi(id.c_str() + 6));
+        if (i >= m_blocks.size()) return;
+        if (m_tool == Tool::Look) {
+            openRecipe(m_blocks[i].id); // what every one of these does
+            m_tool = Tool::Select;
+            return;
         }
-        if (lookAvailable() && picture("look", "Look", nullptr, "Inside", m_tool == Tool::Look).pressed) {
-            if (m_tool == Tool::Place) cancelPlacing();
-            m_tool = m_tool == Tool::Look ? Tool::Select : Tool::Look;
-        }
-        if (anyoneDown && picture("getup", "Get up", nullptr, "Up!", false).pressed) standEveryoneUp();
-        if (!m_objects.empty() && picture("clear", "Clear", nullptr, "Empty", false).pressed) {
-            pushUndo();
-            clearAll();
+        if (m_tool == Tool::Place) cancelPlacing();
+        if (m_blocks[i].kind == kke::PlayBlockKind::Tool) {
+            m_tool = m_tool == Tool::Bat ? Tool::Select : Tool::Bat;
+        } else {
+            placeBlock(i);
+            m_dropOnRelease = true; // dragged out: let go in the world to drop it
         }
     }
-    if (picture("build", "Build", nullptr, "Tools", false).pressed) setMode(Mode::Build);
-    ImGui::End();
+}
+
+// RmlUi shows pictures from files: the thumbnail's PNG in the cache
+// folder, once ThumbnailModule has it (made or read back from disk).
+std::string SandboxModule::paletteImage(const kke::CatalogAsset* asset) {
+    if (!asset || !m_thumbs) return {};
+    const kke::ThumbnailModule::View v = m_thumbs->get(asset->path, asset->pack, [&] { return kke::packLoadOptions(m_catalog, *asset); });
+    if (v.state != kke::ThumbnailModule::State::Ready || !m_thumbs->settings.diskCache) return {};
+    const std::string& root = m_thumbs->settings.cacheRoot;
+    const std::string file = kke::thumbnailCacheFile(root.empty() ? kke::defaultThumbnailCacheRoot() : root, asset->pack, asset->path);
+    bool& known = m_thumbOnDisk[file];
+    if (!known) {
+        std::error_code ec;
+        known = std::filesystem::exists(file, ec); // written on a worker thread: look again next frame
+    }
+    return known ? file : std::string();
 }
 
 // The gamepad's cursor, in Play and Build: phones and TVs draw no mouse
@@ -2788,6 +2792,7 @@ void SandboxModule::updateReplay(float dt) {
 }
 
 void SandboxModule::shutdown() {
+    m_palette.detach(); // RmlUi goes down after us
     shutdownGraphs();
     for (SDL_Gamepad* pad : m_pads) SDL_CloseGamepad(pad);
     m_pads.clear();
@@ -2801,9 +2806,8 @@ void SandboxModule::shutdown() {
 
 void SandboxModule::renderUi() {
     graphUi();
-    if (m_mode == Mode::Play) {
-        playPaletteUi();
-    } else {
+    updatePalette();
+    if (m_mode != Mode::Play) {
         assetBrowserUi();
         inspectorUi();
         modeSwitchUi();

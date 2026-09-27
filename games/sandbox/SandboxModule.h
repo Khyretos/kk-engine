@@ -15,10 +15,13 @@
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/ThumbnailModule.h"
 
+#include "PlayPalette.h"
+
 #include <SDL3/SDL.h>
 #include <glm/glm.hpp>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace kke_sandbox {
@@ -223,7 +226,9 @@ private:
 
     // Play mode (Simple): the palette, dragging blocks into the world,
     // picking placed things up again, and the bat.
-    void playPaletteUi();
+    void updatePalette();                       // Play mode's row of pictures (PlayPalette, RmlUi)
+    void palettePressed(const std::string& id); // a picture was pressed
+    std::string paletteImage(const kke::CatalogAsset* asset); // its thumbnail PNG, once on disk
     void padCursorUi();
     void modeSwitchUi();
     bool mouseOverUi() const;      // over any ImGui window, even mid-drag
@@ -385,6 +390,8 @@ private:
     double m_padLastUsed = -1e9;         // seconds; the cursor is drawn while a pad is in use
     bool m_padPressing = false;
     std::vector<glm::vec2> m_paletteCells; // centres, left to right, from the last palette drawn
+    PlayPalette m_palette;
+    std::unordered_map<std::string, bool> m_thumbOnDisk; // thumbnail PNGs known to be written
     struct ReplayStep {
         float time = 0.0f;
         int line = 0;

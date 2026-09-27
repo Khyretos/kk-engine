@@ -113,6 +113,11 @@ private:
         // SDL_StopTextInput(), so without these, typing did nothing.
         void ActivateKeyboard(Rml::Vector2f caretPosition, float lineHeight) override;
         void DeactivateKeyboard() override;
+        // RmlUi reads "/x" as relative to the program's folder and drops
+        // the slash. A path that is a real absolute file on this machine
+        // (a thumbnail or screenshot in the user's cache, <img src>) is
+        // kept as it is; everything else joins the RmlUi way.
+        void JoinPath(Rml::String& translatedPath, const Rml::String& documentPath, const Rml::String& path) override;
         SDL_Window* window = nullptr;
     };
 

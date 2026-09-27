@@ -17,7 +17,7 @@ builds all three on one set of building blocks:
 
 | Tier | Who it is for | How you make things here | Where it lives |
 |---|---|---|---|
-| **Simple** | A child, a first-timer | Drag pictures out of the palette, click with the bat | `playPaletteUi()` in [SandboxModule.cpp](SandboxModule.cpp) |
+| **Simple** | A child, a first-timer | Drag pictures out of the palette, click with the bat | `updatePalette()` / `palettePressed()` in [SandboxModule.cpp](SandboxModule.cpp), drawn by [PlayPalette.cpp](PlayPalette.cpp) (RmlUi) |
 | **Intermediate** | Creative people who don't code | The node graph behind a block, a thing or the level (the Look tool) | [GraphEditor.cpp](GraphEditor.cpp), [PlayScripting.cpp](PlayScripting.cpp) |
 | **Advanced** | Programmers | Plain Lua calling the same `play.*` functions | [kke/PlayScript.h](../../engine/include/kke/PlayScript.h), [docs/SCRIPTING.md](../../docs/SCRIPTING.md) |
 
@@ -477,8 +477,8 @@ the AI's animation name). See [docs/AI.md](../../docs/AI.md).
   `kke::padPointerStep` turns the left stick into a pointer step (dead
   zone 0.2, curve 2, 900 px/s on a 720 px tall screen, scaled to the
   window), and `SDL_WarpMouseInWindow` moves the mouse. A sends real
-  mouse button events (`pointerButton()`), so ImGui, dragging and the bat
-  cannot tell a pad from a mouse. A ring is drawn for 5 s after the pad
+  mouse button events (`pointerButton()`), so RmlUi, ImGui, dragging and
+  the bat cannot tell a pad from a mouse. A ring is drawn for 5 s after the pad
   was last used, because phones and TVs show no mouse pointer. LB / RB
   jump along the palette (`kke::stepPaletteCell`).
 - **Replays.** `KKE_SANDBOX_REPLAY=file` reads one step per line and
@@ -536,7 +536,9 @@ the reason in the status line.
   second list to keep in sync.
 - **The graph editor is RmlUi, not ImGui.** PLAY_TO_MAKE.md says it is
   RmlUi "so it is also there in shipping builds and on touch screens".
-  The rest of the editor (Build mode) is ImGui, the developer UI.
+  So is the Play palette (`PlayPalette`). Build mode's panels are still
+  ImGui; they move to RmlUi next (what players use is RmlUi,
+  docs/DEMO_PANEL.md).
 - **Drawflow's look, ported by hand.** Drawflow is a JavaScript library;
   the header comment says its look and way of working were ported, not
   its code.
@@ -707,9 +709,15 @@ Pitfalls the code shows:
   remove it after the scripts ran (`g.removing`).
 - **Gate shortcuts on `WantTextInput`, not `WantCaptureKeyboard`**
   (BUG-041).
-- **ImGui keeps the mouse while a button is held**, so a drag from the
-  palette into the world needs `ImGuiHoveredFlags_AllowWhenBlockedByActiveItem`
-  to know when the pointer left the palette (`mouseOverUi()`).
+- **"Over the UI" means where the pointer is, not what was pressed.**
+  RmlUi (like ImGui) keeps the mouse while a press lasts, so a picture
+  dragged out of the palette would never be let go "in the world".
+  `mouseOverUi()` asks the palette and the graph editor whether the
+  pointer is on them (`contains()`), and ImGui whether a window is under
+  it.
+- **RmlUi element offsets leave out transforms.** The palette is centred
+  with a full-width row and `text-align: center`, not `translateX(-50%)`,
+  so `contains()` and `cellCentres()` match what is drawn.
 - **Add `DebugDrawModule` before your module**, or your lines are cleared
   the frame you draw them.
 - **The same asset in two blocks** reports the first block in
@@ -721,11 +729,12 @@ Pitfalls the code shows:
 |---|---|
 | [main.cpp](main.cpp) | Creates the app, sets the mood, adds the modules in order, hands the engine panels to the sandbox. |
 | [SandboxModule.h](SandboxModule.h) | The `SandboxModule` class: modes, tools, the `Object` record, undo snapshots, every member and what it is for. |
-| [SandboxModule.cpp](SandboxModule.cpp) | Asset folder, placing, picking, selection, gizmo, undo/redo, the frame, input for both modes, ragdolls, stagger, look-at, breakables, balls, save/load, the ImGui panels, the Play palette, the bat, gamepad, touch and replays. |
+| [SandboxModule.cpp](SandboxModule.cpp) | Asset folder, placing, picking, selection, gizmo, undo/redo, the frame, input for both modes, ragdolls, stagger, look-at, breakables, balls, save/load, the Build mode ImGui panels, what the Play palette holds and does, the bat, gamepad, touch and replays. |
+| [PlayPalette.h](PlayPalette.h), [PlayPalette.cpp](PlayPalette.cpp) | The Play palette in RmlUi: the row of pictures (thumbnail PNGs from the cache, or a big word), the hint line, presses, `contains()` and `cellCentres()`. |
 | [PlayScripting.cpp](PlayScripting.cpp) | The node graphs: `IPlayWorld` over the sandbox, the Lua VM, recipes, level and thing graphs, live reload, events, errors, animals, the score and speech bubbles. |
 | [GraphEditor.h](GraphEditor.h) | The `GraphEditor` interface and how it is meant to be used with mouse, finger and gamepad. |
 | [GraphEditor.cpp](GraphEditor.cpp) | The RmlUi editor: the RCSS and RML, the `<graphwires>` element, the event listener, dragging, wiring, the "what fits" menu, fit and zoom, "Show Lua". |
-| [CMakeLists.txt](CMakeLists.txt) | The `sandbox` executable, `game.json` copy, shaders. |
+| [CMakeLists.txt](CMakeLists.txt) | The `sandbox` executable (with `PlayPalette.cpp`), `game.json` copy, shaders. |
 | [game.json](game.json) | The marketplace manifest (id `engine.kke.sandbox`). |
 | `../../tests/sandbox_replays/` | `gamepad_bat.replay`, `gamepad_build.replay`, `touch_gestures.replay`. |
 | `../../tests/test_play_blocks.cpp`, `../../tests/test_node_graph.cpp` | Unit tests for the bat, pad pointer, palette stepping, graphs and compiling. |
