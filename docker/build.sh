@@ -2,7 +2,7 @@
 # Builds KKE for one platform inside its container (see docker-compose.yml).
 #   build.sh linux    -> dist/linux    (all games, tools, tests; tests are run)
 #   build.sh windows  -> dist/windows  (cross-compiled with MinGW-w64)
-#   build.sh android  -> dist/android  (kke-demos.apk, arm64-v8a)
+#   build.sh android  -> dist/android  (kke-demos.apk, kke-benchmark.apk; arm64-v8a)
 # Build trees live in build-docker/<platform>/ so they survive container
 # runs and never mix with your own build/ directory.
 set -euo pipefail
@@ -39,6 +39,7 @@ android)
         -DKKE_ENABLE_TESTS=OFF -DKKE_ENABLE_VALIDATION=OFF
     cmake --build "$bld" -j "$jobs"
     python3 "$src/android/build_apk.py" --build "$bld" --out "$out/kke-demos.apk"
+    python3 "$src/android/build_apk.py" --build "$bld" --benchmark --out "$out/kke-benchmark.apk"
     ;;
 *)
     echo "unknown platform '$platform' (linux | windows | android)" >&2

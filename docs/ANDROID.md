@@ -24,7 +24,8 @@ the new APK was signed with a different key: uninstall the old one first.
 | APK | What it holds |
 |---|---|
 | `kk-engine-<version>-android-arm64.apk` (Releases) | Every demo, with a list to pick one from |
-| a single-game APK (`--game NAME`) | One game that starts straight away, like the benchmark |
+| `kk-engine-benchmark-<version>-android-arm64.apk` (Releases) | **KKE Benchmark**: plays every demo and sends back the results (below) |
+| a single-game APK (`--game NAME`) | One game that starts straight away |
 
 Each game in an APK is its own library (`lib<game>.so`) with the engine
 inside. Picking a game starts it in its own process, so a game always
@@ -32,6 +33,31 @@ starts fresh; leaving it ends that process and returns to the list.
 
 Paid art packs (Synty) are never put in an APK (the packer refuses);
 demos built on them show their "assets not found" screen.
+
+## The benchmark app
+
+KKE Benchmark runs the same suite as `kke_benchmark` on a PC
+(docs/BENCHMARKS.md, `benchmarks/suite.yaml`): **Run the benchmark**
+(every demo) or **Quick run**. Each demo starts on its own, plays by
+itself for its measured time and closes; a demo that crashes or hangs
+(it gets its time plus the suite's `load_timeout`) is recorded as such
+and the next one starts. At the end:
+
+- the results are saved as one file in the app, and a copy goes to
+  `Downloads/KKE Benchmark` (Android 10+);
+- the phone's share menu opens, so the file can be sent by mail, chat or
+  a cloud drive. Nothing is sent by itself. **Send the results** opens
+  the menu again.
+
+The file is kke_benchmark's results file (`--collect`) once the
+benchmark supports that on Android; until then it is a zip of the run:
+`runs.json` (each demo's status and time), `reports/<id>.json` (each
+demo's own measurements, format `kke-benchmark-game/1`, with the phone's
+system details) and `logs/<id>.log` (each demo's full log).
+
+```
+python3 android/build_apk.py --build build-android-arm64 --benchmark --out dist/android/kke-benchmark.apk
+```
 
 ## Controls
 
@@ -71,6 +97,10 @@ adb install -r dist/android/kke-demos.apk
 adb logcat -s SDL kke
 ```
 
+The engine's log (stdout and stderr) goes to logcat with the tag `kke`,
+at each line's own level; with `KKE_LOG_FILE` set it is also written to
+that file (the benchmark app does this per demo).
+
 ## Signing
 
 A phone only installs an update over an app signed with the same key.
@@ -100,7 +130,11 @@ base64 -w0 kke-release.keystore   # -> the ANDROID_KEYSTORE_BASE64 secret
   fetches, not copied into this repository) creates the window and the
   Vulkan surface and calls the game's ordinary `main()`.
   `android/java/.../GameActivity.java` tells it which library to load;
-  `LauncherActivity.java` is the list of games.
+  `LauncherActivity.java` is the list of games; `BenchmarkActivity.java`
+  runs the benchmark, passing each demo its settings as environment
+  variables (GameActivity sets them before the library loads), and
+  `ResultsProvider.java` lends the results file to the app it's shared
+  with.
 - **Game files are unpacked once.** The build's `bin/` folder (shaders,
   fonts, moods, UI, scripts) is stored in the APK's assets with a list of
   its files, `kke_bundle.txt`. The engine can't open files inside an APK

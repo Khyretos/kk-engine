@@ -257,7 +257,7 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.2.12479018" "platforms;android-35" "build-tools;35.0.0" > /dev/null
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ninja-build
+          sudo apt-get install -y -qq ninja-build python3-yaml
 
       - name: Configure (android-arm64)
         run: |
@@ -281,12 +281,13 @@ jobs:
             ks=(--keystore "$RUNNER_TEMP/kke.keystore")
           fi
           python3 android/build_apk.py --build build-android-arm64 --out dist/kke-demos-android-arm64.apk "${ks[@]}" 2>&1 | tee apk.log
+          python3 android/build_apk.py --build build-android-arm64 --benchmark --out dist/kke-benchmark-android-arm64.apk "${ks[@]}" 2>&1 | tee -a apk.log
 
       - name: No warnings anywhere
         run: tools/ci/check_warnings.sh configure.log build.log apk.log
 
       - uses: actions/upload-artifact@v6
         with:
-          name: kke-demos-android-arm64
+          name: kke-android-arm64
           path: dist/*.apk
           if-no-files-found: error
