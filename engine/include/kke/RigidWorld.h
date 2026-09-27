@@ -268,6 +268,13 @@ public:
     bool hairPositions(HairId id, std::vector<glm::vec3>& out) const;
     void setHairJoint(HairId id, const glm::mat4& head); // the head's world matrix now (HairDesc::bindPose at rest)
     void resetHair(HairId id);             // back to the rest pose, at rest
+    // How much it moves, live: 1 = natural (the style as made), less =
+    // held closer to its styled shape with fewer solver iterations (a
+    // third at most), 0 = solid: not simulated at all, it turns with the
+    // head as styled (no physics cost). For slower devices, crowds, far
+    // away heads.
+    void setHairMotion(HairId id, float motion);
+    float hairMotion(HairId id) const;
     HairStats hairStats(HairId id) const;
 
     void step(float dt);

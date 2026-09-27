@@ -17,7 +17,7 @@ void main() {
     float side, s;
     hairCorner(gl_VertexIndex, hair, point, side);
     vec3 p, t;
-    hairCentre(hair, point, p, t, s);
+    builtPoint(hair, point, p, t, s);
     vec3 view = lighting.cameraPos.xyz - p;
     // Tapers to the tip, never thinner than most of a pixel (thinner
     // ribbons would flicker in and out between pixels).

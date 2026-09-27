@@ -15,7 +15,7 @@ void main() {
     float side, s;
     hairCorner(gl_VertexIndex, hair, point, side);
     vec3 p, t;
-    hairCentre(hair, point, p, t, s);
+    builtPoint(hair, point, p, t, s);
     vec3 world = p + across(t, pc.lightDir.xyz) * (side * 0.5 * frame.look.w * frame.shape.z * (1.0 - 0.6 * s));
     gl_Position = pc.lightViewProj * vec4(world, 1.0);
 }

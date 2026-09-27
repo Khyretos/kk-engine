@@ -386,3 +386,54 @@ TEST(Hair, BraidsStayPlaitedAndCornrowsOnTheScalp) {
     }
     EXPECT_LT(lifted, 0.012f) << "cornrows came off the scalp";
 }
+
+// setHairMotion: solid hair turns with the head exactly as styled and
+// costs nothing to simulate; in between it stays closer to its style than
+// natural hair; back to natural, it swings again.
+TEST(Hair, MotionGoesFromNaturalToSolid) {
+    auto run = [](float motion, float& drift, double& ms) {
+        kke::RigidWorld::Settings set;
+        set.threads = 0;
+        kke::RigidWorld world(set);
+        const glm::vec3 neck(0.0f, 1.5f, 0.0f), centre(0.0f, 1.62f, 0.0f);
+        kke::RigidWorld::BodyDesc b;
+        b.shape = kke::RigidWorld::Shape::Sphere;
+        b.motion = kke::RigidWorld::Motion::Kinematic;
+        b.clothOnly = true;
+        b.radius = 0.1f;
+        b.position = centre;
+        const auto body = world.add(b);
+        kke::HairDesc d;
+        d.style = kke::hairStyle("long");
+        kke::hairScalp(d, centre, 0.1f, 200);
+        const auto hair = world.addHair(d);
+        world.setHairMotion(hair, motion);
+        EXPECT_FLOAT_EQ(world.hairMotion(hair), motion);
+        const std::vector<glm::vec3> rest = kke::hairRestPose(d);
+        std::vector<glm::vec3> p;
+        drift = 0.0f;
+        ms = 0.0;
+        for (int f = 0; f < 120; ++f) {
+            const float t = float(f) / 60.0f;
+            const glm::quat q = glm::angleAxis(0.9f * std::sin(t * 2.5f), glm::vec3(0, 1, 0));
+            const glm::mat4 m = glm::translate(glm::mat4(1.0f), neck) * glm::mat4_cast(q) * glm::translate(glm::mat4(1.0f), -neck);
+            world.moveKinematic(body, glm::vec3(m * glm::vec4(centre, 1.0f)), q, 1.0f / 60.0f);
+            world.setHairJoint(hair, m);
+            world.step(1.0f / 60.0f);
+            ms += world.lastStepMs();
+            ASSERT_TRUE(world.hairPositions(hair, p));
+            ASSERT_EQ(p.size(), rest.size());
+            for (size_t i = 0; i < p.size(); ++i) drift = std::max(drift, glm::distance(p[i], glm::vec3(m * glm::vec4(rest[i], 1.0f))));
+        }
+    };
+    float solid, half, natural;
+    double solidMs, halfMs, naturalMs;
+    run(0.0f, solid, solidMs);
+    run(0.4f, half, halfMs);
+    run(1.0f, natural, naturalMs);
+    EXPECT_LT(solid, 1e-4f) << "solid hair is where the style has it";
+    EXPECT_LT(half, natural * 0.8f) << "less motion: closer to the style";
+    EXPECT_GT(natural, 0.05f) << "natural hair swings";
+    EXPECT_LT(solidMs, naturalMs * 0.3) << "solid hair costs little";
+    EXPECT_LT(halfMs, naturalMs) << "less motion: cheaper";
+}

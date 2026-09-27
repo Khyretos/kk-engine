@@ -1,0 +1,24 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+// Every drawn hair's points, once a frame (kke::HairRenderer::compute):
+// the curve through its guide, its coils or its place in a braid, kept out
+// of the head. hair.vert and hair_shadow.vert then only read them, where
+// each used to build every point six times over, for each pass.
+#define HAIR_SET 0
+#define HAIR_POINTS_WRITE
+#include "hair_common.glsl"
+
+layout(local_size_x = 64) in;
+
+layout(push_constant) uniform Push { uint total; } push; // drawn hairs x points per hair
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= push.total) return;
+    int pts = int(frame.counts.x + 0.5);
+    int drawn = int(i) / pts, point = int(i) - drawn * pts;
+    vec3 p, t;
+    float s;
+    hairCentre(drawn * int(frame.look.z + 0.5), point, p, t, s);
+    points[i] = vec4(p, uintBitsToFloat(packTangent(t)));
+}

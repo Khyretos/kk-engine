@@ -40,6 +40,7 @@ public:
     void init(kke::Application& app) override;
     void fixedUpdate(const kke::FixedUpdateContext& ctx) override;
     void update(const kke::UpdateContext& ctx) override;
+    void compute(VkCommandBuffer cmd) override;
     void render(const kke::RenderContext& ctx) override;
     void renderShadow(const kke::ShadowRenderContext& ctx) override;
 
@@ -120,6 +121,9 @@ private:
     int m_hairGuides = 160, m_hairsPerGuide = 0; // 0 = as many as the style draws
     int m_hairShow = 0;                          // the catalog's page (kHairPages)
     float m_headMotion = 1.0f;
+    float m_hairMotion = 1.0f;                   // RigidWorld::setHairMotion: 1 natural .. 0 solid
+    float m_hairDetail = 1.0f;                   // HairRenderer::setDetail: the share of hairs drawn
+    void applyHairSettings();
     double m_hairUploadMs = 0.0;
     Scene m_scene = Scene::Fabrics;
     kke::ClothProtection m_protection = kke::ClothProtection::Full;
