@@ -4,6 +4,7 @@
 #include "kke/Log.h"
 #include "kke/Picking.h"
 #include "kke/SphereImpostors.h"
+#include "kke/modules/DemoPanelModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/RigidBodyModule.h"
@@ -104,12 +105,28 @@ void PlatoonModule::init(kke::Application& app) {
     quick("rts.left", "Turn the view left", SDL_SCANCODE_Q, SDL_GAMEPAD_BUTTON_INVALID);
     quick("rts.right", "Turn the view right", SDL_SCANCODE_E, SDL_GAMEPAD_BUTTON_INVALID);
     quick("panels", "Developer panels", SDL_SCANCODE_F1, SDL_GAMEPAD_BUTTON_INVALID);
+    // Groups: 1-9 recall, with cmd.force held (Ctrl / LT) they store. On a
+    // controller hold RT (rts.groups) and the d-pad is groups 1-4 (up,
+    // right, down, left) instead of its usual orders.
     for (int g = 1; g <= 9; ++g) {
         const std::string id = "rts.group" + std::to_string(g);
         in.defineAction({ id, "Group " + std::to_string(g) + " (Ctrl: store)", "Orders", "game" });
         in.addBinding(IM::bind(id, IM::key(SDL_Scancode(SDL_SCANCODE_1 + g - 1))));
     }
+    in.defineAction({ "rts.groups", "Hold: the d-pad picks groups 1-4", "Orders", "game" });
+    kke::Binding rt = IM::bind("rts.groups", IM::padAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, 1), kke::Trigger::Continuous);
+    rt.threshold = 0.4f;
+    in.addBinding(rt);
+    const SDL_GamepadButton groupPad[] = { SDL_GAMEPAD_BUTTON_DPAD_UP, SDL_GAMEPAD_BUTTON_DPAD_RIGHT, SDL_GAMEPAD_BUTTON_DPAD_DOWN,
+                                           SDL_GAMEPAD_BUTTON_DPAD_LEFT };
+    for (int g = 1; g <= 4; ++g) in.addBinding(IM::bind("rts.group" + std::to_string(g), IM::pad(groupPad[g - 1])));
+    // The settings panel (kke::DemoPanelModule) opens with Start or F3 here:
+    // View is rts.formation. Esc opens it too, with a Quit row.
+    in.defineAction({ "panel.toggle", "Settings panel", "Menus", "panel" });
+    in.addBinding(IM::bind("panel.toggle", IM::pad(SDL_GAMEPAD_BUTTON_START)));
+    in.addBinding(IM::bind("panel.toggle", IM::key(SDL_SCANCODE_F3)));
     m_input->commitDefaults();
+    buildPanel();
 
     m_scenery = std::make_unique<command_kit::Scenery>(app, *m_models, *m_rigid);
     buildField();
@@ -383,6 +400,65 @@ void PlatoonModule::takeCover(const glm::vec3* near) {
     m_hud->toast(placed ? "Take cover!" : "No cover left", 1.4f);
 }
 
+// The controller's select: a tap selects what's under the ring (a click);
+// held, a box grows around the ring and selects everyone in it when let
+// go (the mouse's drag-box). With cmd.queue held it adds, as a drag does.
+void PlatoonModule::padSelect(kke::InputMap& in, command_kit::CommandInput::Frame& f, float dt) {
+    if (f.wheelOpen) {
+        m_padSelectHeld = -1.0f;
+        return;
+    }
+    if (in.pressed("rts.select")) m_padSelectHeld = 0.0f;
+    if (m_padSelectHeld < 0.0f) return;
+    const glm::vec2 c = f.pointer;
+    const float grow = std::max(0.0f, m_padSelectHeld - 0.3f);
+    const glm::vec2 half(std::min(40.0f + 420.0f * grow, 600.0f), std::min(30.0f + 300.0f * grow, 420.0f));
+    if (in.held("rts.select")) {
+        m_padSelectHeld += dt;
+        if (grow > 0.0f) {
+            f.dragging = true;
+            f.boxA = c - half;
+            f.boxB = c + half;
+        }
+        return;
+    }
+    // Let go.
+    if (grow > 0.0f) {
+        f.boxDone = true;
+        f.boxA = c - half;
+        f.boxB = c + half;
+    } else {
+        f.click = true;
+        f.touch = false;
+    }
+    m_padSelectHeld = -1.0f;
+}
+
+// The settings panel (RmlUi, kke::DemoPanelModule, right side, folded):
+// Start or F3 opens it, Esc too (with Quit). The same things the HUD bar
+// does, reachable by controller row by row.
+void PlatoonModule::buildPanel() {
+    auto* panel = m_app->getModule<kke::DemoPanelModule>();
+    if (!panel) return;
+    auto& s = panel->section("Platoon");
+    m_formationIndex = int(m_formation);
+    s.choice("Formation", kke::DemoPanelModule::Ref<int>([this] {
+                 m_formationIndex = int(m_formation);
+                 return &m_formationIndex;
+             }),
+             std::vector<std::string>{ kke::formationName(kke::Formation::Line), kke::formationName(kke::Formation::Wedge),
+                                       kke::formationName(kke::Formation::Column), kke::formationName(kke::Formation::Circle) },
+             [this] { m_formation = kke::Formation(m_formationIndex); });
+    s.button("Select everyone", [this] { selectAll(); });
+    s.button("Hold position", [this] { give(kke::OrderKind::Stay); });
+    s.button("Take cover", [this] { takeCover(); });
+    s.button("Regroup", [this] { give(kke::OrderKind::Regroup); });
+    s.hint("Groups: Ctrl+1-9 stores the selection, 1-9 brings it back.",
+           "Groups: hold {rts.groups} and press the d-pad (up, right, down, left) for groups 1-4; hold {cmd.force} too to store.");
+    s.note("Attack and Focus fire are orders at the ring: {cmd.context} (with {cmd.force} for focus fire) or the order wheel ({cmd.wheel}).");
+    panel->setState(kke::DemoPanelModule::State::Collapsed);
+}
+
 void PlatoonModule::cycleFormation() {
     m_formation = kke::Formation((int(m_formation) + 1) % 4);
     m_hud->toast(std::string("Formation: ") + kke::formationName(m_formation), 1.2f);
@@ -624,7 +700,8 @@ void PlatoonModule::update(const kke::UpdateContext& ctx) {
     kke::InputMap& in = m_input->map(0);
     if (in.pressed("panels")) m_app->debugUi().setVisible(!m_app->debugUi().visible());
 
-    const command_kit::CommandInput::Frame& f = m_cmd.update(in, *m_app, false, dt);
+    command_kit::CommandInput::Frame f = m_cmd.update(in, *m_app, false, dt);
+    padSelect(in, f, dt);
     if (f.click) click(f);
     if (f.boxDone) {
         std::vector<kke::ScreenUnit> mine;
@@ -642,21 +719,19 @@ void PlatoonModule::update(const kke::UpdateContext& ctx) {
     }
     if (f.wheelGiven >= 0) giveWheel(f.wheelGiven, f.wheelTarget);
     if (!f.wheelOpen) {
-        if (in.pressed("rts.select")) {
-            command_kit::CommandInput::Frame at = f;
-            at.touch = false;
-            click(at);
-        }
-        if (in.pressed("rts.all")) selectAll();
-        if (in.pressed("rts.next")) cycleSelection(1);
-        if (in.pressed("rts.prev")) cycleSelection(-1);
+        // With RT held the d-pad is groups (above), not these orders.
+        const bool groups = in.held("rts.groups");
+        if (in.pressed("rts.all") && !groups) selectAll();
+        if (in.pressed("rts.next") && !groups) cycleSelection(1);
+        if (in.pressed("rts.prev") && !groups) cycleSelection(-1);
         if (in.pressed("rts.hold")) give(kke::OrderKind::Stay);
         if (in.pressed("rts.cover")) takeCover();
-        if (in.pressed("rts.regroup")) give(kke::OrderKind::Regroup);
+        if (in.pressed("rts.regroup") && !groups) give(kke::OrderKind::Regroup);
         if (in.pressed("rts.formation")) cycleFormation();
-        const bool store = SDL_GetModState() & SDL_KMOD_CTRL;
+        const bool store = in.held("cmd.force"); // Ctrl or LT
         for (int g = 1; g <= 9; ++g)
-            if (in.pressed("rts.group" + std::to_string(g))) {
+            // The d-pad is bound to groups 1-4 too: only with RT held.
+            if (in.pressed("rts.group" + std::to_string(g)) && (g > 4 || groups || !m_cmd.padActive())) {
                 if (store) {
                     m_selection.storeGroup(g);
                     m_hud->toast("Group " + std::to_string(g) + " stored", 1.0f);
@@ -754,8 +829,9 @@ void PlatoonModule::updateHud(float dt) {
                         { "🔄", "Regroup", "{rts.regroup}", false },
                         { "🔷", kke::formationName(m_formation), "{rts.formation}", false } });
     m_hud->setHint(m_cmd.padActive()
-                       ? "{move} pan · {look.rate} turn/zoom · {rts.select} select · {cmd.context} order at the ring ({cmd.force} focus fire) · "
-                         "hold {cmd.wheel} order wheel · {rts.all}{rts.next}{rts.regroup} all, next, regroup"
+                       ? "{move} pan · {look.rate} turn/zoom · {rts.select} select, hold: select an area · {cmd.context} order at the ring "
+                         "({cmd.force} focus fire) · hold {cmd.wheel} order wheel · {rts.all}{rts.next}{rts.regroup} all, next, regroup · "
+                         "hold {rts.groups} + d-pad: groups 1-4 ({cmd.force} too: store) · {panel.toggle} menu"
                        : "{mouse:left} click or drag: select · {cmd.context} order ({cmd.force} focus fire / hold there, {cmd.queue} queue) · "
                          "hold {cmd.wheel} order wheel · {move} pan, {rts.left}{rts.right} turn, {camera.zoom} zoom · {rts.group1}{rts.group2}{rts.group3} groups "
                          "(Ctrl+1-9 store) · {touch:tap} select, tap again: order");

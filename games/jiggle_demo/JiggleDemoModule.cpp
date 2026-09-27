@@ -11,7 +11,6 @@
 
 #include <SDL3/SDL.h>
 #include <glm/gtc/matrix_transform.hpp>
-#include <imgui.h>
 
 #include <algorithm>
 #include <chrono>
@@ -202,7 +201,7 @@ void JiggleDemoModule::setupBodies() {
     const std::string ualFile = animDir.empty() ? std::string() : (std::filesystem::path(animDir) / "UAL1_Standard.fbx").string();
     if (ualFile.empty() || !std::filesystem::exists(ualFile)) {
         m_bodyStatus = "Animation library not found (assets/animations/UAL1_Standard.fbx).";
-        log->warn("{}", m_bodyStatus);
+        log->info("{}", m_bodyStatus); // optional download; the panel says so too
         return;
     }
     std::vector<std::string> searched;
@@ -232,7 +231,8 @@ void JiggleDemoModule::setupBodies() {
     // The shape and the soft-tissue bones first, then the clips (the new
     // bones have no UAL counterpart and stay at rest in them).
     const kke::HumanoidJiggleSetup setup = kke::addHumanoidSoftTissue(body, m_tissue);
-    for (const std::string& m : setup.missing) log->warn("'{}': soft tissue: no {}", asset->name, m);
+    // A character without a breast or belly bone just jiggles less: info.
+    for (const std::string& m : setup.missing) log->info("'{}': soft tissue: no {}", asset->name, m);
     const kke::BoneMatch match = kke::matchBones(ual, body);
     m_rig = kke::ModelData{};
     m_rig.bones = body.bones;
@@ -342,8 +342,14 @@ void JiggleDemoModule::updateBodies(float dt) {
             if (m_sideView) {
                 // From outside the circle, looking at her side (and so across
                 // the direction she runs: where lag and bounce show best).
-                m_camera->setView(want, m_camera->distance(), m_camera->pitch(), std::atan2(-std::cos(a), -std::sin(a)));
+                // Turning the camera (mouse or right stick) since the last
+                // frame moves the view around her, kept relative to her side.
+                if (m_sideViewSet) m_sideYawOffset += std::remainder(m_camera->yaw() - m_sideYaw, 6.2831853f);
+                m_sideYaw = std::atan2(-std::cos(a), -std::sin(a)) + m_sideYawOffset;
+                m_sideViewSet = true;
+                m_camera->setView(want, m_camera->distance(), m_camera->pitch(), m_sideYaw);
             } else {
+                m_sideViewSet = false;
                 m_camera->setTarget(want);
             }
         }
@@ -391,20 +397,6 @@ void JiggleDemoModule::renderShadow(const kke::ShadowRenderContext& ctx) {
     if (m_scene == Scene::Jelly) m_jellyMesh->drawShadow(ctx);
 }
 
-void JiggleDemoModule::onEvent(const SDL_Event& event) {
-    // Keys 1-5 pick a move directly; everything else is an action
-    // (defineInput) so a controller does it too.
-    if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat || ImGui::GetIO().WantTextInput) return;
-    switch (event.key.key) {
-    case SDLK_1: m_move = Move::Idle; break;
-    case SDLK_2: m_move = Move::Walk; break;
-    case SDLK_3: m_move = Move::Jog; break;
-    case SDLK_4: m_move = Move::Sprint; break;
-    case SDLK_5: m_move = Move::Tour; break;
-    default: break;
-    }
-}
-
 void JiggleDemoModule::defineInput() {
     auto* in = m_app->getModule<kke::InputModule>();
     if (!in) return;
@@ -421,6 +413,14 @@ void JiggleDemoModule::defineInput() {
     action("jiggle.squish", "Squish", SDL_SCANCODE_P, SDL_GAMEPAD_BUTTON_NORTH);
     action("jiggle.reset", "Reset the jelly", SDL_SCANCODE_R, SDL_GAMEPAD_BUTTON_EAST);
     action("jiggle.move", "Next move", SDL_SCANCODE_M, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
+    // Keys 1-5 pick a move directly (keyboard shortcuts, rebindable; a
+    // controller steps through them with jiggle.move).
+    const char* moves[] = { "Idle", "Walk", "Jog", "Sprint", "Tour" };
+    for (int i = 0; i < 5; ++i) {
+        const std::string id = "jiggle.move" + std::to_string(i + 1);
+        m.defineAction({ id, moves[i], "Jiggle" });
+        m.addBinding(IM::bind(id, IM::key(static_cast<SDL_Scancode>(SDL_SCANCODE_1 + i))));
+    }
     in->commitDefaults();
 }
 
@@ -428,6 +428,8 @@ void JiggleDemoModule::readInput() {
     auto* in = m_app->getModule<kke::InputModule>();
     if (!in) return;
     const kke::InputMap& m = in->map(0);
+    for (int k = 0; k < 5; ++k)
+        if (m.pressed("jiggle.move" + std::to_string(k + 1))) m_move = static_cast<Move>(k);
     if (m.pressed("jiggle.scene")) setScene(m_scene == Scene::Jelly ? Scene::Body : Scene::Jelly);
     if (m.pressed("jiggle.go")) {
         if (m_scene == Scene::Jelly) m_rain = !m_rain;

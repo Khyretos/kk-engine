@@ -52,13 +52,13 @@ The executable is `platoon` ([CMakeLists.txt](CMakeLists.txt)). The root
 
 | Action | Mouse and keyboard | Controller | Touch |
 |---|---|---|---|
-| Select one soldier | left click it | A with the reticle on it | tap it (each tap adds or removes) |
+| Select one soldier | left click it | tap A with the reticle on it | tap it (each tap adds or removes) |
 | Add or remove from the selection | Shift + click | none | tap |
-| Select by box | drag with the left button (Shift adds) | none | drag |
+| Select by box | drag with the left button (Shift adds) | hold A: a box grows around the reticle, let go to select | drag |
 | Select everyone | Space, or the Everyone button | D-pad up | the Everyone button |
 | Next / previous soldier (the camera jumps there) | . / , | D-pad right / left | none |
-| Recall group 1 to 9 (1 = all, 2 = Alpha, 3 = Bravo) | 1 to 9 | none | none |
-| Store the selection as a group | Ctrl + 1 to 9 | none | none |
+| Recall group 1 to 9 (1 = all, 2 = Alpha, 3 = Bravo) | 1 to 9 | groups 1 to 4: hold RT, then d-pad up, right, down, left | none |
+| Store the selection as a group | Ctrl + 1 to 9 | hold LT and RT, then the d-pad | none |
 | Context order at the pointer | right click | RB (at the reticle) | tap the ground or an enemy with soldiers selected |
 | Focus fire (on an enemy) / hold there (on the ground) | Ctrl + right click | hold LT + RB | the Focus fire button, then tap an enemy |
 | Queue after the current order | Shift + right click | none | none |
@@ -71,8 +71,9 @@ The executable is `platoon` ([CMakeLists.txt](CMakeLists.txt)). The root
 | Pan the camera | WASD | left stick | no touch binding yet |
 | Turn the camera | Q / E | right stick left / right | no touch binding yet |
 | Zoom | mouse wheel | right stick up / down | no touch binding yet |
-| Developer panels | F1 | no controller binding yet | none |
-| Quit | Esc | none | none |
+| Menu (formation, the HUD's orders, Quit) | F3 or Esc | Start | none |
+| Developer panels | F1 | none (developer tools) | none |
+| Quit | Esc, then Quit | Start, then Quit | none |
 
 What the context order does depends on what is under the pointer
 (`kke::contextOrder`): an enemy is Attack (Focus fire with the force
@@ -80,10 +81,12 @@ modifier), one of your soldiers is Follow them, the ground is Go there
 (Hold there with the force modifier). Soldiers never fetch.
 
 The HUD bar buttons are clickable with the mouse and tappable; a
-controller reaches the same orders through its buttons and the wheel. All
-game actions are rebindable and saved to `platoon_input.json`, except the
-Ctrl held for storing groups, which is read straight from SDL. Esc closes
-the game (the engine default; the platoon does not turn it off).
+controller reaches the same orders through its buttons, the wheel and the
+menu (`kke::DemoPanelModule`, right side, folded until Start, F3 or Esc
+opens it). All game actions are rebindable and saved to
+`platoon_input.json`; storing a group uses `cmd.force` (Ctrl, LT) as the
+modifier. Esc opens the menu rather than quitting; its Quit row ends the
+game.
 
 ## How it plays
 

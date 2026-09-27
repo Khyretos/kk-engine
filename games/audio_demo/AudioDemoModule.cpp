@@ -424,6 +424,7 @@ void AudioDemoModule::tickStation(float dt) {
 void AudioDemoModule::measure() {
     // Everything playing is this station's: entering one stops the rest.
     for (const kke::ActiveSound& a : m_audio->mixer().activeSounds()) {
+        if (a.id == m_audio->ambienceVoice()) continue; // the mood's loop, not the station's
         const bool first = m_seen.insert(a.id).second;
         if (first) {
             ++m_measured.sounds;
@@ -514,7 +515,7 @@ void AudioDemoModule::readInput() {
     if (m.pressed("audio.prev")) enter(m_current - 1);
     if (m.pressed("audio.next")) enter(m_current + 1);
     if (m.pressed("audio.again")) enter(m_current);
-    if (m.pressed("audio.ping")) m_audio->ping();
+    // audio.ping is AudioModule's own action: it pings on the press itself.
 }
 
 // The demo's panel (RmlUi, kke::DemoPanelModule): View on a controller or
@@ -523,7 +524,8 @@ void AudioDemoModule::buildPanel() {
     auto* panel = m_app->getModule<kke::DemoPanelModule>();
     if (!panel) return;
     auto& s = panel->section("Audio demo");
-    s.text("{audio.prev} {audio.next} station  {audio.again} again  {camera.orbit} turn your head  {camera.zoom} zoom");
+    s.hint("{audio.prev} {audio.next} station  {audio.again} again  left-drag turns your head, the wheel zooms",
+           "{audio.prev} {audio.next} station  {audio.again} again  {camera.orbit} turn your head  {camera.zoom} zoom");
     std::vector<std::string> titles;
     for (const Station& st : m_stations) titles.push_back(st.title);
     m_stationIndex = std::max(m_current, 0);

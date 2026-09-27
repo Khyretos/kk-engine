@@ -212,7 +212,7 @@ private:
     bool m_escapeMenu = true;
     bool m_crosshair = false, m_crosshairShown = false;
     bool m_dirty = true;
-    size_t m_focus = 0;
+    size_t m_focus = SIZE_MAX; // none yet: the first time Active, the first row that does something
     Rml::ElementDocument* m_doc = nullptr;
     Rml::Element* m_hint = nullptr;
     Rml::Element* m_titleEl = nullptr;

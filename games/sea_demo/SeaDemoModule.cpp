@@ -186,6 +186,8 @@ void SeaDemoModule::update(const kke::UpdateContext&) {
         const kke::InputMap& m = in->map(0);
         if (m.pressed("sea.throw")) throwObject(m_kind, false);
         if (m.pressed("sea.next")) m_kind = (m_kind + 1) % kKindCount;
+        for (int k = 0; k < kKindCount; ++k)
+            if (m.pressed("sea.kind" + std::to_string(k + 1))) m_kind = k;
         if (m.pressed("sea.follow")) m_followBoat = !m_followBoat;
         if (m.pressed("sea.reset")) reset();
     }
@@ -227,8 +229,6 @@ void SeaDemoModule::onEvent(const SDL_Event& event) {
         throwObject(m_kind, true);
         return;
     }
-    if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat || ImGui::GetIO().WantTextInput) return;
-    if (event.key.key >= SDLK_1 && event.key.key < SDLK_1 + kKindCount) m_kind = static_cast<int>(event.key.key - SDLK_1);
 }
 
 void SeaDemoModule::defineInput() {
@@ -262,6 +262,13 @@ void SeaDemoModule::defineInput() {
     m.addBinding(IM::bind("sea.follow", IM::pad(SDL_GAMEPAD_BUTTON_RIGHT_STICK)));
     m.addBinding(IM::bind("sea.reset", IM::key(SDL_SCANCODE_R)));
     m.addBinding(IM::bind("sea.reset", IM::pad(SDL_GAMEPAD_BUTTON_WEST)));
+    // Keys 1-5 pick what to throw (keyboard shortcuts, rebindable; a
+    // controller steps through them with sea.next).
+    for (int k = 0; k < kKindCount; ++k) {
+        const std::string id = "sea.kind" + std::to_string(k + 1);
+        m.defineAction({ id, kKinds[k].name, "Sea" });
+        m.addBinding(IM::bind(id, IM::key(static_cast<SDL_Scancode>(SDL_SCANCODE_1 + k))));
+    }
     in->commitDefaults();
 }
 

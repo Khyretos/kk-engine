@@ -1,5 +1,6 @@
 #include "kke/Application.h"
 #include "kke/Renderer.h"
+#include "kke/modules/AudioModule.h"
 #include "kke/modules/DebugControlModule.h"
 #include "kke/modules/DemoPanelModule.h"
 #include "kke/modules/InputModule.h"
@@ -23,6 +24,8 @@ int main() {
         // the settings panel is RmlUi (kke::DemoPanelModule).
         app.addModule<kke::InputModule>("sea_demo_input.json");
         app.addModule<kke::UiModule>();
+        // Plays the mood's ambience loop (the mood names it; BUG-079).
+        app.addModule<kke::AudioModule>().setUiVisible(false);
         // Sea module first: its update() moves the camera target before the
         // orbit camera positions itself.
         app.addModule<kke_sea::SeaDemoModule>();

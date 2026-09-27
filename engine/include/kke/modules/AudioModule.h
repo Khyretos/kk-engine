@@ -135,6 +135,10 @@ public:
     // How loud the mood's ambience loop plays (Application::setMood,
     // assets/ambience), before the Ambient category's gain. 0 = off.
     float ambienceGain = 0.5f;
+    // The mood's ambience loop's voice id (0 when none plays), so a game
+    // counting its own sounds in mixer().activeSounds() can leave it out.
+    // mixer().stopAll() stops it too; it starts again on the next update.
+    uint32_t ambienceVoice() const { return m_ambienceVoice; }
 
     // Decodes WAV / FLAC / MP3 (miniaudio) to mono at the mixer's rate.
     // Null on failure (logged).
@@ -187,6 +191,7 @@ private:
     // The mood's looping background sound (Mood::ambience).
     std::string m_ambienceName;
     uint32_t m_ambienceVoice = 0;
+    bool m_ambienceFailed = false; // no file / can't load: don't retry every frame
     AudioMaterialTable m_materials;
     std::unique_ptr<ImpactBank> m_bank;
     std::unique_ptr<Device> m_device;

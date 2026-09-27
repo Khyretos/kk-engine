@@ -94,7 +94,8 @@ public:
     // (hot-plugging: "controller connected" prompts);
     // KKE_VIRTUAL_PAD_SCRIPT="3:back,3.6:dpad_down,4:leftx=1,5:leftx=0"
     // plays presses on the first virtual pad (<seconds>:<button> taps it
-    // for 0.3 s; <seconds>:<axis>=<value> sets leftx, lefty, rightx,
+    // for 0.3 s, <seconds>:<button>*<hold> holds it that long;
+    // <seconds>:<axis>=<value> sets leftx, lefty, rightx,
     // righty, lt or rt until
     // the next change): driving a game's menus and controls headless.
     // Used by CI and screenshots. Developer builds only: shipping
@@ -117,7 +118,7 @@ private:
     void defineUiActions(InputMap& m);
     void animateVirtualDevices(float t);
     void playPadScript(double now);
-    struct PadStep { double at = 0.0; int button = -1, axis = -1; float value = 0.0f; };
+    struct PadStep { double at = 0.0; int button = -1, axis = -1; float value = 0.0f, hold = 0.3f; };
     std::vector<PadStep> m_padScript; // KKE_VIRTUAL_PAD_SCRIPT, in time order
     std::vector<std::pair<double, int>> m_padReleases; // (time, button) of scripted taps
     struct Virtual { SDL_JoystickID id = 0; SDL_Joystick* joy = nullptr; bool pad = false; int index = 0; };

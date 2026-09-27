@@ -588,11 +588,16 @@ void AudioModule::update(const UpdateContext& ctx) {
 
 void AudioModule::updateAmbience() {
     const std::string& want = ambienceGain > 0.0f ? m_app->mood().ambience : std::string();
-    if (want == m_ambienceName) return;
+    // Same mood: nothing to do while its loop plays. When something stopped
+    // it (a game calling mixer().stopAll() between scenes), start it again.
+    if (want == m_ambienceName && (want.empty() || m_ambienceFailed || (m_ambienceVoice && m_mixer->isPlaying(m_ambienceVoice))))
+        return;
     m_ambienceName = want;
+    m_ambienceFailed = false;
     if (m_ambienceVoice) m_mixer->stop(m_ambienceVoice);
     m_ambienceVoice = 0;
     if (want.empty()) return;
+    m_ambienceFailed = true; // until the loop is playing
     // assets/ambience/<name>.flac (or .wav, .mp3): the engine's CC0 loops,
     // or a game's own of the same name.
     std::string path;
@@ -619,6 +624,7 @@ void AudioModule::updateAmbience() {
     d.category = SoundCategory::Ambient;
     d.reverbSend = 0.0f;  // already recorded in its own space
     m_ambienceVoice = m_mixer->play(d);
+    m_ambienceFailed = m_ambienceVoice == 0;
 }
 
 void AudioModule::startRecording(const std::string& path) {
