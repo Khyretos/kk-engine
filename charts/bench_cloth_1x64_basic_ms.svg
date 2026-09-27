@@ -6,7 +6,7 @@
 <text x="32" y="40.0" text-anchor="end" fill="#666">2.60</text>
 <text x="32" y="144.0" text-anchor="end" fill="#666">0.0000</text>
 <text x="36" y="160" fill="#666">c34ca0a</text>
-<text x="604" y="160" text-anchor="end" fill="#666">08f89a3</text>
-<path d="M36.0,51.0 L107.0,51.4 L178.0,84.3 L249.0,50.1 L320.0,50.2 L391.0,60.9 L462.0,51.3 L533.0,60.7 L604.0,69.6" fill="none" stroke="#2563eb" stroke-width="2"/>
-<g fill="#2563eb"><circle cx="36.0" cy="51.0" r="2.5"><title>c34ca0a: 2.24</title></circle><circle cx="107.0" cy="51.4" r="2.5"><title>3a66f47: 2.23</title></circle><circle cx="178.0" cy="84.3" r="2.5"><title>92a4b38: 1.44</title></circle><circle cx="249.0" cy="50.1" r="2.5"><title>aa5835f: 2.26</title></circle><circle cx="320.0" cy="50.2" r="2.5"><title>1eb5f22: 2.26</title></circle><circle cx="391.0" cy="60.9" r="2.5"><title>1ea8b6d: 2.00</title></circle><circle cx="462.0" cy="51.3" r="2.5"><title>d7e2dba: 2.23</title></circle><circle cx="533.0" cy="60.7" r="2.5"><title>6daf1b7: 2.00</title></circle><circle cx="604.0" cy="69.6" r="2.5"><title>08f89a3: 1.79</title></circle></g>
+<text x="604" y="160" text-anchor="end" fill="#666">688fc03</text>
+<path d="M36.0,51.0 L99.1,51.4 L162.2,84.3 L225.3,50.1 L288.4,50.2 L351.6,60.9 L414.7,51.3 L477.8,60.7 L540.9,69.6 L604.0,50.5" fill="none" stroke="#2563eb" stroke-width="2"/>
+<g fill="#2563eb"><circle cx="36.0" cy="51.0" r="2.5"><title>c34ca0a: 2.24</title></circle><circle cx="99.1" cy="51.4" r="2.5"><title>3a66f47: 2.23</title></circle><circle cx="162.2" cy="84.3" r="2.5"><title>92a4b38: 1.44</title></circle><circle cx="225.3" cy="50.1" r="2.5"><title>aa5835f: 2.26</title></circle><circle cx="288.4" cy="50.2" r="2.5"><title>1eb5f22: 2.26</title></circle><circle cx="351.6" cy="60.9" r="2.5"><title>1ea8b6d: 2.00</title></circle><circle cx="414.7" cy="51.3" r="2.5"><title>d7e2dba: 2.23</title></circle><circle cx="477.8" cy="60.7" r="2.5"><title>6daf1b7: 2.00</title></circle><circle cx="540.9" cy="69.6" r="2.5"><title>08f89a3: 1.79</title></circle><circle cx="604.0" cy="50.5" r="2.5"><title>688fc03: 2.25</title></circle></g>
 </svg>
