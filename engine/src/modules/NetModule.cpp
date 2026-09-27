@@ -124,7 +124,7 @@ void NetModule::init(Application& app) {
 void NetModule::shutdown() { leave(); }
 
 std::string NetModule::discoveryInfo() const {
-    const size_t players = 1 + (m_server ? m_server->clientCount() : 0);
+    const size_t players = 1 + m_localGuests.size() + (m_server ? m_server->clientCount() : 0);
     return playerName + "|" + std::to_string(players) + "/" + std::to_string(m_config.maxPlayers) + "|" + m_config.gameId;
 }
 
@@ -184,6 +184,9 @@ bool NetModule::host(uint16_t port, std::string* error) {
             if (m_enet) m_enet->setDiscoveryInfo(discoveryInfo());
             if (onPlayer) onPlayer(id, joined);
         };
+        for (const auto& [slot, g] : m_localGuests)
+            if (!m_server->addLocalGuest(static_cast<uint8_t>(slot), g.name, g.character))
+                log::get(name())->warn("Local player {} ({}): no room in this game", slot + 1, g.name);
         m_enet->setDiscoveryInfo(discoveryInfo());
         m_role = Role::Host;
         m_hostingReplay = config.inputReplay;
@@ -259,6 +262,14 @@ bool NetModule::join(const std::string& address, uint16_t port, std::string* err
     };
     m_client->onCorrection = [this](const glm::vec3& p) { if (onCorrection) onCorrection(p); };
     m_client->onPlayer = [this](uint8_t id, bool joined) { if (onPlayer) onPlayer(id, joined); };
+    m_client->onGuestCorrection = [this](uint8_t slot, const glm::vec3& p) { if (onLocalCorrection) onLocalCorrection(slot, p); };
+    m_client->onGuest = [this](uint8_t slot, uint8_t id, const std::string& reason) {
+        auto it = m_localGuests.find(slot);
+        const std::string who = it != m_localGuests.end() ? it->second.name : std::string("?");
+        if (id) log::get(name())->info("Local player {} ({}) joined as player {}", slot + 1, who, id);
+        else log::get(name())->warn("Local player {} ({}) is not in the game: {}", slot + 1, who, reason);
+    };
+    for (const auto& [slot, g] : m_localGuests) m_client->addGuest(static_cast<uint8_t>(slot), g.name, g.character);
     m_client->onSpawn = [this](const net::SpawnMsg& m) { onSpawnMsg(m); };
     m_client->onDespawn = [this](uint16_t id) { onDespawnMsg(id); };
     m_client->onBreak = [this](const net::BreakMsg& m) { applyBreak(m); };
@@ -459,6 +470,60 @@ void NetModule::runReplayedPlayers(double frameDt) {
 void NetModule::setLocalPlayer(const net::NetPlayerState& state) {
     m_local = state;
     m_hasLocal = true;
+}
+
+void NetModule::addLocalPlayer(int slot, const std::string& who, const std::string& character) {
+    if (slot <= 0 || slot >= kMaxLocalPlayers) {
+        log::get(name())->error("addLocalPlayer: slot {} (1 .. {})", slot, kMaxLocalPlayers - 1);
+        return;
+    }
+    if (auto it = m_localGuests.find(slot); it != m_localGuests.end() && it->second.name == who && it->second.character == character)
+        return; // already in
+    if (m_server) m_server->removeLocalGuest(static_cast<uint8_t>(slot)); // someone else had that slot
+    LocalGuest& g = m_localGuests[slot];
+    g.name = who;
+    g.character = character;
+    g.hasState = false;
+    if (m_server) {
+        if (m_server->addLocalGuest(static_cast<uint8_t>(slot), g.name, g.character)) log::get(name())->info("Local player {} ({}) joined", slot + 1, g.name);
+        else log::get(name())->warn("Local player {} ({}): no room in this game", slot + 1, g.name);
+        if (m_enet) m_enet->setDiscoveryInfo(discoveryInfo());
+    } else if (m_client) {
+        m_client->addGuest(static_cast<uint8_t>(slot), g.name, g.character);
+    }
+}
+
+void NetModule::removeLocalPlayer(int slot) {
+    if (m_localGuests.erase(slot) == 0) return;
+    if (m_server) {
+        m_server->removeLocalGuest(static_cast<uint8_t>(slot));
+        if (m_enet) m_enet->setDiscoveryInfo(discoveryInfo());
+    }
+    if (m_client) m_client->removeGuest(static_cast<uint8_t>(slot));
+}
+
+void NetModule::setLocalPlayer(int slot, const net::NetPlayerState& state) {
+    if (slot == 0) return setLocalPlayer(state);
+    auto it = m_localGuests.find(slot);
+    if (it == m_localGuests.end()) return;
+    it->second.state = state;
+    it->second.hasState = true;
+}
+
+uint8_t NetModule::localPlayerId(int slot) const {
+    if (slot == 0) return localPlayerId();
+    if (slot < 0 || slot >= kMaxLocalPlayers) return 0;
+    if (m_server) return m_server->localGuestId(static_cast<uint8_t>(slot));
+    return m_client ? m_client->guestId(static_cast<uint8_t>(slot)) : 0;
+}
+
+bool NetModule::isLocalPlayer(uint8_t playerId) const {
+    if (m_client) return m_client->isOurs(playerId);
+    if (!m_server) return false;
+    if (playerId == 0) return true;
+    for (const auto& [slot, g] : m_localGuests)
+        if (m_server->localGuestId(static_cast<uint8_t>(slot)) == playerId) return true;
+    return false;
 }
 
 uint16_t NetModule::replicateBody(RigidWorld::BodyId body) {
@@ -756,6 +821,8 @@ void NetModule::update(const UpdateContext& ctx) {
     }
     if (m_server) {
         if (m_hasLocal) m_server->setLocalState(m_local);
+        for (const auto& [slot, g] : m_localGuests)
+            if (g.hasState) m_server->setLocalGuestState(static_cast<uint8_t>(slot), g.state);
         if (m_rigid) {
             RigidWorld& w = m_rigid->world();
             std::vector<net::NetBodyState> bodies;
@@ -776,6 +843,9 @@ void NetModule::update(const UpdateContext& ctx) {
             m_visibility->settings = visibilitySettings;
             std::vector<net::Visibility::Player> players;
             if (m_hasLocal) players.push_back({ 0, m_local.position, m_local.velocity });
+            for (const auto& [slot, g] : m_localGuests)
+                if (const uint8_t id = m_server->localGuestId(static_cast<uint8_t>(slot)); id && g.hasState)
+                    players.push_back({ id, g.state.position, g.state.velocity });
             for (const net::RemotePlayer& p : m_server->players(t))
                 if (p.hasState) players.push_back({ p.id, p.state.position, p.state.velocity });
             m_visibility->update(t, players);
@@ -785,6 +855,8 @@ void NetModule::update(const UpdateContext& ctx) {
         m_remote = m_server->players(t);
     } else if (m_client) {
         if (m_hasLocal) m_client->setLocalState(m_local);
+        for (const auto& [slot, g] : m_localGuests)
+            if (g.hasState) m_client->setGuestState(static_cast<uint8_t>(slot), g.state);
         const auto before = m_client->status();
         m_client->update(t);
         m_remote = m_client->players(t);
@@ -949,6 +1021,11 @@ void NetModule::renderUi() {
     } else {
         if (ImGui::Button(m_role == Role::Host ? "Stop hosting" : "Leave")) leave();
         ImGui::Text("Up %.1f kbit/s, down %.1f kbit/s", m_upKbps, m_downKbps);
+        for (const auto& [slot, g] : m_localGuests) {
+            const uint8_t id = localPlayerId(slot);
+            if (id) ImGui::Text("On this screen: %u %s", id, g.name.c_str());
+            else ImGui::TextDisabled("On this screen: %s (not in the game)", g.name.c_str());
+        }
         if (m_client) {
             const auto st = m_client->stats();
             ImGui::Text("Host: RTT %.0f ms, loss %.1f%%", st.rttMs, st.lossPercent);

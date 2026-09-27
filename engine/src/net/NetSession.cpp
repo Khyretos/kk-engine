@@ -130,8 +130,30 @@ void NetServer::stop() {
 
 NetServer::Client* NetServer::byPeer(PeerId peer) {
     if (peer == kNoPeer) return nullptr;
-    for (Client& c : m_clients) if (c.peer == peer) return &c;
+    for (Client& c : m_clients) if (c.peer == peer && c.slot == 0) return &c;
     return nullptr;
+}
+
+NetServer::Client* NetServer::guestOf(PeerId peer, uint8_t slot) {
+    if (peer == kNoPeer || slot == 0) return nullptr;
+    for (Client& c : m_clients) if (c.peer == peer && c.slot == slot && c.id) return &c;
+    return nullptr;
+}
+
+uint8_t NetServer::freeId() const {
+    for (int id = 1; id <= static_cast<int>(kMaxPlayers); ++id) {
+        const auto used = [id](const auto& p) { return p.id == id; };
+        if (std::none_of(m_clients.begin(), m_clients.end(), used) &&
+            std::none_of(m_localGuests.begin(), m_localGuests.end(), [id](const auto& kv) { return kv.second.id == id; }))
+            return static_cast<uint8_t>(id);
+    }
+    return 0;
+}
+
+// Player slots left: the host's own player and its guests take theirs.
+size_t NetServer::freeSlots() const {
+    const size_t taken = clientCount() + m_localGuests.size() + (m_config.dedicated ? 0 : 1);
+    return taken >= m_config.maxPlayers ? 0 : m_config.maxPlayers - taken;
 }
 
 NetServer::Client* NetServer::byId(uint8_t id) {
@@ -157,6 +179,10 @@ void NetServer::bad(Client& c, const char* what) {
 // (erased at the end of update(), so pointers stay valid meanwhile).
 void NetServer::drop(Client& c, const std::string& reason) {
     if (c.peer == kNoPeer) return;
+    if (c.slot != 0) return dropGuest(c, reason, true); // the connection stays
+    // Its guests go with it (they share the connection).
+    for (Client& g : m_clients)
+        if (g.peer == c.peer && g.slot != 0) dropGuest(g, reason, false);
     sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::Reject, RejectMsg{ reason });
     m_transport.disconnect(c.peer);
     c.peer = kNoPeer;
@@ -168,13 +194,100 @@ void NetServer::drop(Client& c, const std::string& reason) {
     }
 }
 
+// One guest leaves (it asked, the server kicked it, or its connection
+// went): everyone else hears it left; its owner, when asked, why.
+void NetServer::dropGuest(Client& g, const std::string& reason, bool tellOwner) {
+    if (g.peer == kNoPeer || g.slot == 0) return;
+    const PeerId owner = g.peer;
+    g.peer = kNoPeer; // erased at the end of update()
+    if (!g.id) return;
+    if (tellOwner) sendMsg(m_transport, owner, Channel::Reliable, MessageType::GuestAck, GuestAckMsg{ g.slot, 0, reason });
+    authority.forget(g.id);
+    PlayerInfoMsg left{ g.id, false, g.name, g.character };
+    const Client* main = byPeer(owner);
+    broadcastReliable(encode(MessageType::PlayerInfo, left), main ? main->id : -1);
+    if (onPlayer) onPlayer(g.id, false);
+}
+
+void NetServer::handleGuest(Client& c, const GuestMsg& m) {
+    Client* existing = guestOf(c.peer, m.slot);
+    if (!m.present) {
+        if (existing) dropGuest(*existing, "left", false);
+        return;
+    }
+    if (existing) return; // asked twice (it already has its id)
+    std::string reason;
+    if (m_config.inputReplay)
+        reason = "input replay: one player per connection";
+    else if (freeSlots() == 0)
+        reason = "server is full (" + std::to_string(m_config.maxPlayers) + " players)";
+    else if (admit)
+        reason = admit(m.name, m_transport.address(c.peer));
+    const uint8_t id = reason.empty() ? freeId() : 0;
+    if (reason.empty() && !id) reason = "no player id left";
+    if (!reason.empty()) {
+        sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::GuestAck, GuestAckMsg{ m.slot, 0, reason });
+        return;
+    }
+    Client g;
+    g.peer = c.peer;
+    g.slot = m.slot;
+    g.id = id;
+    g.name = m.name.empty() ? "Player " + std::to_string(id) : m.name;
+    g.character = m.character;
+    g.connectedAt = m_now;
+    sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::GuestAck, GuestAckMsg{ m.slot, id, {} });
+    PlayerInfoMsg joined{ id, true, g.name, g.character };
+    broadcastReliable(encode(MessageType::PlayerInfo, joined), c.id);
+    m_clients.push_back(std::move(g)); // `c` may move: not used after this
+    if (onPlayer) onPlayer(id, true);
+}
+
+uint8_t NetServer::addLocalGuest(uint8_t slot, const std::string& name, const std::string& character) {
+    if (m_config.dedicated || slot == 0 || slot >= kMaxLocalPlayers) return 0;
+    if (auto it = m_localGuests.find(slot); it != m_localGuests.end()) return it->second.id;
+    if (freeSlots() == 0) return 0;
+    const uint8_t id = freeId();
+    if (!id) return 0;
+    LocalGuest g;
+    g.id = id;
+    g.name = name.empty() ? "Player " + std::to_string(id) : name.substr(0, kMaxNameLength);
+    g.character = character.substr(0, kMaxCharacterLength);
+    m_localGuests[slot] = g;
+    PlayerInfoMsg joined{ id, true, g.name, g.character };
+    broadcastReliable(encode(MessageType::PlayerInfo, joined), -1);
+    return id;
+}
+
+void NetServer::removeLocalGuest(uint8_t slot) {
+    auto it = m_localGuests.find(slot);
+    if (it == m_localGuests.end()) return;
+    PlayerInfoMsg left{ it->second.id, false, it->second.name, it->second.character };
+    broadcastReliable(encode(MessageType::PlayerInfo, left), -1);
+    m_localGuests.erase(it);
+}
+
+void NetServer::setLocalGuestState(uint8_t slot, const NetPlayerState& state) {
+    auto it = m_localGuests.find(slot);
+    if (it == m_localGuests.end()) return;
+    it->second.state = state;
+    it->second.hasState = true;
+}
+
+uint8_t NetServer::localGuestId(uint8_t slot) const {
+    auto it = m_localGuests.find(slot);
+    return it == m_localGuests.end() ? 0 : it->second.id;
+}
+
 void NetServer::kick(uint8_t playerId, const std::string& reason) {
     if (Client* c = byId(playerId)) drop(*c, reason);
 }
 
+// To every connection once (guests share their owner's); `exceptPlayer`
+// is a connection's own player id.
 void NetServer::broadcastReliable(const std::vector<uint8_t>& data, int exceptPlayer) {
     for (const Client& c : m_clients)
-        if (c.id != 0 && c.peer != kNoPeer && static_cast<int>(c.id) != exceptPlayer) m_transport.send(c.peer, Channel::Reliable, data);
+        if (c.id != 0 && c.slot == 0 && c.peer != kNoPeer && static_cast<int>(c.id) != exceptPlayer) m_transport.send(c.peer, Channel::Reliable, data);
 }
 
 void NetServer::sendEvent(uint16_t kind, const std::vector<uint8_t>& payload, int exceptPlayer) {
@@ -247,20 +360,19 @@ void NetServer::forgetBreaks(uint16_t id) { m_breaks.erase(id); }
 void NetServer::handleHello(Client& c, const HelloMsg& m) {
     std::string reason;
     if (c.id != 0) return; // a second Hello: ignore
-    const size_t slots = m_config.dedicated ? m_config.maxPlayers : m_config.maxPlayers - 1; // the host's own player takes one
     if (m.version != kProtocolVersion)
         reason = "version mismatch: server speaks protocol " + std::to_string(kProtocolVersion) + ", you " + std::to_string(m.version);
     else if (m.gameId != m_config.gameId)
         reason = "this server runs '" + m_config.gameId + "', not '" + m.gameId + "'";
     else if (!sameSecret(m.password, m_config.password))
         reason = m.password.empty() ? "this server needs a password" : "wrong password";
-    else if (clientCount() >= slots)
+    else if (freeSlots() == 0)
         reason = "server is full (" + std::to_string(m_config.maxPlayers) + " players)";
     else if (admit)
         reason = admit(m.name, m_transport.address(c.peer));
     if (!reason.empty()) return drop(c, reason);
-    uint8_t id = 1;
-    while (byId(id)) ++id;
+    const uint8_t id = freeId();
+    if (!id) return drop(c, "no player id left");
     c.id = id;
     c.name = m.name.empty() ? "Player " + std::to_string(id) : m.name;
     c.character = m.character;
@@ -269,6 +381,8 @@ void NetServer::handleHello(Client& c, const HelloMsg& m) {
     // Who's here already (the host, then the other clients), then tell
     // them about the new one. A dedicated server has no player of its own.
     if (!m_config.dedicated) sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::PlayerInfo, PlayerInfoMsg{ 0, true, m_hostName, m_hostCharacter });
+    for (const auto& [slot, g] : m_localGuests)
+        sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::PlayerInfo, PlayerInfoMsg{ g.id, true, g.name, g.character });
     for (const Client& o : m_clients)
         if (o.id && o.id != id) sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::PlayerInfo, PlayerInfoMsg{ o.id, true, o.name, o.character });
     PlayerInfoMsg joined{ id, true, c.name, c.character };
@@ -283,7 +397,10 @@ void NetServer::handleHello(Client& c, const HelloMsg& m) {
     if (onPlayer) onPlayer(id, true);
 }
 
-void NetServer::handleState(Client& c, const PlayerStateMsg& m) {
+void NetServer::handleState(Client& owner, const PlayerStateMsg& m) {
+    Client* player = m.slot == 0 ? &owner : guestOf(owner.peer, m.slot);
+    if (!player) return; // a guest not (yet, or no longer) in: its states are late or early, not bad
+    Client& c = *player;
     const NetPlayerState& s = m.state;
     if (m_config.inputReplay) return bad(c, "a player state under input replay"); // the server moves this player
     if (!finite(s.position) || !finite(s.velocity)) return bad(c, "non-finite state");
@@ -322,7 +439,7 @@ void NetServer::handleState(Client& c, const PlayerStateMsg& m) {
 // already on their way from before it arrives are refused too).
 void NetServer::correct(Client& c) {
     if (m_now - c.lastCorrection <= 0.5) return;
-    sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::Correction, CorrectionMsg{ c.accepted.position });
+    sendMsg(m_transport, c.peer, Channel::Reliable, MessageType::Correction, CorrectionMsg{ c.accepted.position, c.slot });
     c.lastCorrection = m_now;
     ++m_corrections;
 }
@@ -355,6 +472,10 @@ void NetServer::receive(Client& c, const NetEvent& e) {
         } else {
             bad(c, "event");
         }
+        break;
+    case MessageType::Guest:
+        if (auto m = decode<GuestMsg>(*type, e.data.data(), e.data.size()); m && e.channel == Channel::Reliable) handleGuest(c, *m);
+        else bad(c, "guest");
         break;
     case MessageType::Input:
         if (!m_config.inputReplay) return bad(c, "inputs without input replay");
@@ -405,7 +526,7 @@ void NetServer::sendVoice(const VoiceMsg& m) {
 void NetServer::routeVoice(const VoiceMsg& m, const glm::vec3* speakerPos) {
     std::vector<uint8_t> bytes;
     for (const Client& o : m_clients) {
-        if (!o.id || o.peer == kNoPeer || !voice.reaches(m.channel, m.speaker, speakerPos, o.id, o.hasState ? &o.accepted.position : nullptr)) continue;
+        if (!o.id || o.slot != 0 || o.peer == kNoPeer || !voice.reaches(m.channel, m.speaker, speakerPos, o.id, o.hasState ? &o.accepted.position : nullptr)) continue;
         if (bytes.empty()) {
             VoiceMsg copy = m;
             bytes = encode(MessageType::Voice, copy);
@@ -437,6 +558,8 @@ void NetServer::update(double now) {
             break;
         }
         case NetEvent::Type::Disconnected:
+            for (Client& g : m_clients)
+                if (g.peer == e.peer && g.slot != 0) dropGuest(g, "left", false);
             if (Client* c = byPeer(e.peer)) {
                 c->peer = kNoPeer; // gone: nothing more is sent to it
                 const uint8_t id = c->id;
@@ -465,7 +588,7 @@ void NetServer::update(double now) {
         const double interval = 1.0 / std::max<uint16_t>(1, m_config.snapshotHz);
         m_nextSnapshot = std::max(m_nextSnapshot + interval, now);
         for (Client& c : m_clients)
-            if (c.id && c.peer != kNoPeer) sendSnapshot(c);
+            if (c.id && c.slot == 0 && c.peer != kNoPeer) sendSnapshot(c);
     }
 }
 
@@ -501,11 +624,15 @@ const InputQueue* NetServer::inputs(uint8_t id) const {
 void NetServer::sendSnapshot(Client& c) {
     SnapshotMsg s;
     s.serverTimeMs = timeMs();
-    if (m_hasLocal && (!sendPlayer || sendPlayer(c.id, 0))) s.players.push_back({ 0, m_local });
+    if (m_hasLocal && mayShow(c, 0)) s.players.push_back({ 0, m_local });
+    for (const auto& [slot, g] : m_localGuests)
+        if (g.hasState && mayShow(c, g.id)) s.players.push_back({ g.id, g.state });
+    // Not the players on the client's own screen: it has them already.
     for (const Client& o : m_clients)
-        if (o.id && o.id != c.id && o.hasState && (!sendPlayer || sendPlayer(c.id, o.id))) s.players.push_back({ o.id, o.accepted });
-    // Bits: header 5+32+6+8, player ~120, body ~130 asleep / ~175 awake.
-    int64_t budget = static_cast<int64_t>(m_config.snapshotBytes) * 8 - 51 - static_cast<int64_t>(s.players.size()) * 120;
+        if (o.id && o.peer != c.peer && o.hasState && mayShow(c, o.id)) s.players.push_back({ o.id, o.accepted });
+    // Bits: header 5+32+6+8, player ~125 + its extra bytes, body ~130 asleep / ~175 awake.
+    int64_t budget = static_cast<int64_t>(m_config.snapshotBytes) * 8 - 51;
+    for (const SnapshotMsg::Player& p : s.players) budget -= 125 + 8 * static_cast<int64_t>(p.state.extra.size());
     std::vector<std::pair<float, const NetBodyState*>> order;
     order.reserve(m_bodies.size());
     for (const NetBodyState& b : m_bodies) {
@@ -529,6 +656,13 @@ void NetServer::sendSnapshot(Client& c) {
         sendMsg(m_transport, c.peer, Channel::Unreliable, MessageType::InputAck, InputAckMsg{ c.ackTick, c.accepted });
         c.ackPending = false;
     }
+}
+
+bool NetServer::mayShow(const Client& viewer, uint8_t subject) const {
+    if (!sendPlayer) return true;
+    for (const Client& v : m_clients)
+        if (v.peer == viewer.peer && v.id && sendPlayer(v.id, subject)) return true;
+    return false;
 }
 
 std::vector<RemotePlayer> NetServer::players(double now) const {
@@ -589,6 +723,54 @@ void NetClient::disconnect() {
     m_bodies.clear();
     m_clock.reset();
     m_haveSnapshot = false;
+    // Guests stay registered: a later connect() brings them in again.
+    for (auto& [slot, g] : m_guests) {
+        g.id = 0;
+        g.asked = false;
+    }
+}
+
+void NetClient::askGuest(uint8_t slot, Guest& g) {
+    if (m_status != Status::Connected || g.asked) return;
+    sendMsg(m_transport, m_server, Channel::Reliable, MessageType::Guest, GuestMsg{ slot, true, g.name, g.character });
+    g.asked = true;
+}
+
+void NetClient::addGuest(uint8_t slot, const std::string& name, const std::string& character) {
+    if (slot == 0 || slot >= kMaxLocalPlayers) return;
+    Guest& g = m_guests[slot];
+    if (g.asked && g.name == name && g.character == character) return;
+    if (g.asked) removeGuest(slot); // someone else in that slot now
+    Guest& fresh = m_guests[slot];
+    fresh.name = name.substr(0, kMaxNameLength);
+    fresh.character = character.substr(0, kMaxCharacterLength);
+    askGuest(slot, fresh);
+}
+
+void NetClient::removeGuest(uint8_t slot) {
+    auto it = m_guests.find(slot);
+    if (it == m_guests.end()) return;
+    if (it->second.asked && m_status == Status::Connected)
+        sendMsg(m_transport, m_server, Channel::Reliable, MessageType::Guest, GuestMsg{ slot, false, {}, {} });
+    m_guests.erase(it);
+}
+
+void NetClient::setGuestState(uint8_t slot, const NetPlayerState& state) {
+    auto it = m_guests.find(slot);
+    if (it == m_guests.end()) return;
+    it->second.state = state;
+    it->second.hasState = true;
+}
+
+uint8_t NetClient::guestId(uint8_t slot) const {
+    auto it = m_guests.find(slot);
+    return it == m_guests.end() ? 0 : it->second.id;
+}
+
+bool NetClient::isOurs(uint8_t playerId) const {
+    if (m_status != Status::Connected) return false;
+    if (playerId == m_playerId) return true;
+    return std::any_of(m_guests.begin(), m_guests.end(), [playerId](const auto& kv) { return kv.second.id && kv.second.id == playerId; });
 }
 
 void NetClient::sendEvent(uint16_t kind, const std::vector<uint8_t>& payload) {
@@ -629,6 +811,17 @@ void NetClient::receive(const NetEvent& e) {
             m_clock.observe(m->serverTimeMs / 1000.0, m_now);
             m_inputReplay = m->inputReplay;
             m_tickHz = m->tickHz;
+            for (auto& [slot, g] : m_guests) askGuest(slot, g); // the other players on this screen
+        } else ++m_badPackets;
+        break;
+    case MessageType::GuestAck:
+        if (auto m = decode<GuestAckMsg>(*type, d, n); m && e.channel == Channel::Reliable) {
+            auto it = m_guests.find(m->slot);
+            if (it == m_guests.end() || !it->second.asked) break; // removed meanwhile
+            it->second.id = m->playerId;
+            if (!m->playerId) it->second.asked = false; // refused or removed: addGuest may ask again
+            else m_players.erase(m->playerId);          // never drawn as someone else
+            if (onGuest) onGuest(m->slot, m->playerId, m->reason);
         } else ++m_badPackets;
         break;
     case MessageType::InputAck:
@@ -644,7 +837,7 @@ void NetClient::receive(const NetEvent& e) {
         break;
     case MessageType::PlayerInfo:
         if (auto m = decode<PlayerInfoMsg>(*type, d, n)) {
-            if (m->playerId == m_playerId && m_status == Status::Connected) break; // ourselves
+            if (isOurs(m->playerId)) break; // ourselves
             if (m->present) {
                 Player& p = m_players[m->playerId];
                 p.name = m->name;
@@ -657,7 +850,8 @@ void NetClient::receive(const NetEvent& e) {
         break;
     case MessageType::Correction:
         if (auto m = decode<CorrectionMsg>(*type, d, n)) {
-            if (onCorrection) onCorrection(m->position);
+            if (m->slot == 0 && onCorrection) onCorrection(m->position);
+            else if (m->slot != 0 && onGuestCorrection) onGuestCorrection(m->slot, m->position);
         } else ++m_badPackets;
         break;
     case MessageType::GameEvent:
@@ -699,7 +893,7 @@ void NetClient::receive(const NetEvent& e) {
             if (newest) m_lastSnapshotMs = m->serverTimeMs;
             m_haveSnapshot = true;
             for (const SnapshotMsg::Player& p : m->players) {
-                if (p.id == m_playerId) continue;
+                if (isOurs(p.id)) continue;
                 Player& pl = m_players[p.id];
                 if (newest) {
                     // Back after the server hid it (fog of war): start
@@ -747,6 +941,10 @@ void NetClient::update(double now) {
             }
             m_server = kNoPeer;
             m_players.clear();
+            for (auto& [slot, g] : m_guests) {
+                g.id = 0;
+                g.asked = false;
+            }
             return;
         case NetEvent::Type::Received:
             receive(e);
@@ -766,9 +964,15 @@ void NetClient::update(double now) {
     }
     if (m_status == Status::Connected && m_hasLocal && !m_inputReplay && now >= m_nextSend) {
         m_nextSend = std::max(m_nextSend + 1.0 / std::max<uint16_t>(1, m_config.stateHz), now);
-        PlayerStateMsg m{ timeMs(), m_local };
+        PlayerStateMsg m{ timeMs(), m_local, 0 };
         sendMsg(m_transport, m_server, Channel::Unreliable, MessageType::PlayerState, m);
         m_local.flags &= static_cast<uint8_t>(~kPlayerTeleported); // sent once
+        for (auto& [slot, g] : m_guests) {
+            if (!g.id || !g.hasState) continue;
+            PlayerStateMsg gm{ timeMs(), g.state, slot };
+            sendMsg(m_transport, m_server, Channel::Unreliable, MessageType::PlayerState, gm);
+            g.state.flags &= static_cast<uint8_t>(~kPlayerTeleported);
+        }
     }
 }
 
