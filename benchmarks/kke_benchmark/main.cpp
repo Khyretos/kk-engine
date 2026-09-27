@@ -500,7 +500,8 @@ int main(int argc, char** argv) {
         if (wait) {
             std::printf("\nPress Enter to close this window.\n");
             std::fflush(stdout);
-            std::getchar();
+            for (int c = std::getchar(); c != '\n' && c != EOF; c = std::getchar()) {
+            }
         }
         return code;
     };
