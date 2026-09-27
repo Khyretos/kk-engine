@@ -302,6 +302,7 @@ private:
     std::string m_filterPack, m_filterCategory;
     std::string m_search;
     std::string m_folderInput;
+    float m_fps = 60.0f;  // smoothed, for the Sandbox panel
     int m_assetPage = 0; // the Assets panel shows one page of pictures
     std::vector<const kke::CatalogAsset*> m_filtered;
     bool m_filterDirty = true;

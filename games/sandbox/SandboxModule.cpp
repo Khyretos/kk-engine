@@ -845,6 +845,7 @@ void SandboxModule::update(const kke::UpdateContext& ctx) {
     // mouse while its button is held, so there "free" means not over a window.
     const bool play = m_mode == Mode::Play;
     updateReplay(ctx.dt);
+    if (ctx.dt > 0.0f) m_fps += (1.0f / ctx.dt - m_fps) * std::min(1.0f, ctx.dt * 2.0f); // shown in the panel, smoothed
     updatePad(ctx.dt); // the pad pointer, view and zoom, in Play and Build
     bool mouseFree = play ? !mouseOverUi() : !ImGui::GetIO().WantCaptureMouse && !m_app->uiCapturesMouse() && !mouseOverUi();
 
@@ -1875,7 +1876,7 @@ void SandboxModule::inspectorUi() {
     const bool pad = static_cast<double>(SDL_GetTicks()) / 1000.0 - m_padLastUsed < 5.0;
     char line[160];
     std::snprintf(line, sizeof(line), "%zu objects, %zu draw calls (%zu culled), %.0f FPS", m_objects.size(),
-                  m_models->drawCallsLastFrame(), m_models->culledLastFrame(), static_cast<double>(ImGui::GetIO().Framerate));
+                  m_models->drawCallsLastFrame(), m_models->culledLastFrame(), static_cast<double>(m_fps));
     p.text(line, Tone::Muted);
     if (p.toggle("Developer panels (F1)", m_showEnginePanels))
         for (kke::Module* m : m_enginePanels) m->setUiVisible(m_showEnginePanels);
@@ -2556,7 +2557,7 @@ void SandboxModule::warpPointer(const glm::vec2& p) {
     SDL_WarpMouseInWindow(m_app->window().handle(), p.x, p.y);
 }
 
-// The same event a mouse click makes, so the palette (ImGui), dragging
+// The same event a mouse click makes, so the palette and panels (RmlUi), dragging
 // and the bat can't tell a gamepad from a mouse.
 void SandboxModule::pointerButton(bool down) {
     SDL_Window* window = m_app->window().handle();
@@ -2637,11 +2638,11 @@ void SandboxModule::updatePad(float dt) {
     const float zoom = axis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) - axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
     if (graphEditorPadSticks(dt, glm::vec2(rx, ry), std::abs(zoom) > 0.1f ? zoom : 0.0f)) return;
     // Over a Build panel the right stick scrolls it instead.
-    if (m_mode != Mode::Play && ry != 0.0f) {
+    if (m_mode != Mode::Play && (rx != 0.0f || ry != 0.0f)) {
         const auto& mouse = m_app->window().mouseState();
         for (FormPanel* p : { &m_assetsPanel, &m_toolsPanel }) {
             if (!p->contains(glm::vec2(mouse.x, mouse.y))) continue;
-            p->scroll(ry * 700.0f * dt);
+            p->scroll(ry * 700.0f * dt); // sideways does nothing here: the view stays put
             return;
         }
     }
