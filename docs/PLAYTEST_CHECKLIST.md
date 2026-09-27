@@ -23,9 +23,9 @@ cd build-release/bin
 Keep the terminal visible: a **warning or error in the log is a bug**
 even when the game looks fine, so copy any `[warn]`/`[error]` line onto
 the Fix line of the section you were in. Have a controller plugged in and try
-it everywhere. Known gap: `sea_demo`, `melt_demo`, `jiggle_demo`,
-`physics_demo`, `audio_demo` and `synty_demo` don't read a controller yet
-(controller support for every demo is its own task next). Demos marked *(Synty)* need your packs in `KKE_ASSETS_DIR`
+it everywhere. `sea_demo`, `melt_demo`, `jiggle_demo`, `physics_demo`
+and `audio_demo` now have a settings panel ([DEMO_PANEL.md](DEMO_PANEL.md)):
+View or F3 gives it the controller. Demos marked *(Synty)* need your packs in `KKE_ASSETS_DIR`
 (or `assets/synty/`); without them they say so on screen and in the log.
 
 ---
