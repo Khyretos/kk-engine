@@ -234,7 +234,13 @@ Rules of thumb:
 - Heaps and layers pressed together cost up to 3 times more again while
   they run in sub-steps. `clothSubsteps` trades that against clipping.
 - Cloth that stops moving falls asleep and costs almost nothing (it still
-  stops other cloth as an obstacle).
+  stops other cloth as an obstacle). Under Full protection it sleeps once
+  it has stayed put for a second (on average under 6 mm/s, no vertex over
+  3 cm/s, measured over half seconds), even while the pass keeps nudging
+  layers resting on each other apart by a fraction of a millimetre, which
+  Jolt's own sleep test never lets rest. The demo's bed, three covers
+  down: 80 ms a step before, 0.1 ms once they sleep. A body landing on it
+  wakes it; another cloth landing on it rests on it as on a solid.
 - Vertex count matters most. A cape is fine at 16 x 20; a blanket at 32 x
   32; go higher only for a hero close-up.
 - `lastClothMs()` is the engine's pass (air, protection); `lastStepMs()`

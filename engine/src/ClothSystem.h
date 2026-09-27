@@ -109,6 +109,9 @@ private:
         std::vector<glm::mat4> bindPose;
         bool skinned = false;                // has Jolt skinned constraints
         bool prevValid = false;
+        std::vector<glm::vec3> settleFrom;   // settle(): pos at the start of this window
+        uint32_t settledFor = 0;             // settle(): updates into this window
+        uint8_t stillWindows = 0;            // settle(): windows in a row it stayed put
         ClothStats stats;
         JPH::Body* stepBody = nullptr;       // this step's body when awake (OnStep only)
         std::vector<glm::vec3> triN, triNPrev; // per triangle, this pass: unit normal now and at the last pass
@@ -164,8 +167,9 @@ private:
     uint32_t addHairPart(const HairDesc& desc, const std::vector<glm::vec3>& rest, size_t first, size_t count);
     void air(Cloth& c, float dt);
     void airOnStrands(Cloth& c, float dt);
-    void protectAll(const JPH::BodyLockInterface& locks);
-    void setHairMotionOf(Cloth& c, float motion); // load, protect(), store every Full cloth
+    void protectAll(const JPH::BodyLockInterface& locks); // load, protect(), store every Full cloth
+    void setHairMotionOf(Cloth& c, float motion);
+    bool settle(Cloth& c);                                // has it stayed put long enough to sleep?
     void protect();
     void shapeTriangles(); // triN, triNPrev, triSphere of every active cloth
     bool nearInTopology(const Cloth& c, uint32_t v, uint32_t tri) const;

@@ -315,6 +315,59 @@ TEST(Cloth, CharactersPushCurtainsAsideAndRaysIgnoreCloth) {
     EXPECT_GT(pushed, 0.1f);
 }
 
+TEST(Cloth, LayersOnABedFallAsleepAndWakeForABall) {
+    // A cotton sheet over a wool blanket over a mattress: the pass keeps nudging the
+    // layers apart by a fraction of a millimetre, which Jolt's own sleep
+    // test never lets rest. Settled, they must sleep (and cost nothing);
+    // a ball dropped on them must wake them and land on top.
+    kke::RigidWorld w(single());
+    ground(w);
+    kke::RigidWorld::BodyDesc mattress;
+    mattress.motion = kke::RigidWorld::Motion::Static;
+    mattress.halfExtents = glm::vec3(0.6f, 0.15f, 0.5f);
+    mattress.position = glm::vec3(0.0f, 0.15f, 0.0f);
+    w.add(mattress);
+    kke::ClothDesc blanket;
+    blanket.mesh = kke::clothGrid(glm::vec3(0.0f, 0.5f, 0.0f), 1.4f, 1.4f, 24, 24, glm::vec3(1, 0, 0), glm::vec3(0, 0, 1));
+    blanket.fabric = kke::clothFabric("wool");
+    const auto a = w.addCloth(blanket);
+    kke::ClothDesc sheet;
+    sheet.mesh = kke::clothGrid(glm::vec3(0.0f, 0.7f, 0.0f), 1.0f, 1.0f, 18, 18, glm::normalize(glm::vec3(1, 0, 0.3f)), glm::normalize(glm::vec3(-0.3f, 0, 1)));
+    sheet.fabric = kke::clothFabric("cotton");
+    const auto b = w.addCloth(sheet);
+    bool slept = false;
+    for (int i = 0; i < 20 * 60 && !slept; ++i) {
+        w.step(1.0f / 60.0f);
+        slept = w.clothStats(a).sleeping && w.clothStats(b).sleeping;
+    }
+    ASSERT_TRUE(slept) << "settled layers should fall asleep";
+    w.step(1.0f / 60.0f);
+    EXPECT_LT(w.lastClothMs(), 0.5) << "sleeping cloth should cost (almost) nothing";
+
+    kke::RigidWorld::BodyDesc ball;
+    ball.shape = kke::RigidWorld::Shape::Sphere;
+    ball.radius = 0.1f;
+    ball.position = glm::vec3(0.0f, 1.0f, 0.0f);
+    const auto id = w.add(ball);
+    bool woke = false;
+    for (int i = 0; i < 90; ++i) {
+        w.step(1.0f / 60.0f);
+        woke = woke || !w.clothStats(b).sleeping;
+    }
+    EXPECT_TRUE(woke) << "a ball landing on the sheet should wake it";
+    // On the covers: the sheet under the ball stays under it, and the ball
+    // doesn't sink into the mattress more than Jolt's penetration slop.
+    const glm::vec3 at = w.position(id);
+    EXPECT_GT(at.y, 0.3f + 0.1f - 0.025f) << "the ball sank into the mattress";
+    std::vector<glm::vec3> under;
+    w.clothPositions(b, under);
+    for (const glm::vec3& p : under) {
+        if (glm::length(glm::vec2(p.x - at.x, p.z - at.z)) < 0.05f) {
+            EXPECT_LT(p.y, at.y) << "the ball went through the sheet";
+        }
+    }
+}
+
 TEST(Cloth, RemoveAndReset) {
     kke::RigidWorld w(single());
     ground(w);

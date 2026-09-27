@@ -47,6 +47,17 @@ constexpr float kFlatEnough = 1.5f;
 // at a time: fixed all at once afterwards, the solver springs back from
 // the fix and the layers work their way through each other.
 constexpr uint32_t kCalmUpdates = 30; // updates with no crossing undone before sub-steps stop
+// A cloth under Full protection is put to sleep once it has stayed put
+// for a second: over each half second, on average it moved less than
+// kSettledMean and no vertex more than kSettledMost (net, so a vertex
+// trembling in place counts as still). Jolt's own test (every vertex under
+// 0.17 m/s at every step) never passes for layers resting on each other,
+// which the pass keeps nudging apart by a fraction of a millimetre, so a
+// settled bed cost as much as a falling one.
+constexpr float kSettledMean = 0.006f;     // m/s
+constexpr float kSettledMost = 0.03f;      // m/s
+constexpr uint32_t kSettleWindow = 30;     // updates
+constexpr uint32_t kSettledWindows = 2;
 constexpr float kMostPerPass = 3.0f;  // the pass moves a vertex at most this x (thickness + a tenth of an edge)
 
 // Sets a flag other worker threads may set too. The Android NDK's libc++
@@ -1794,14 +1805,15 @@ void ClothSystem::protectAll(const JPH::BodyLockInterface& locks) {
     m_active.clear();
     for (auto& [id, c] : m_cloths) {
         c.stepBody = nullptr;
-        if (c.level != ClothProtection::Full) continue;
         JPH::Body* body = locks.TryGetBody(c.body);
         if (!body) continue;
+        if (c.level != ClothProtection::Full) continue;
         load(c, *body);
         if (body->IsActive()) {
             c.stepBody = body;
         } else {
             // Asleep: still an obstacle for the others, but nothing of it moves.
+            c.settleFrom.clear();
             std::fill(c.invMass.begin(), c.invMass.end(), 0.0f);
             std::fill(c.vel.begin(), c.vel.end(), glm::vec3(0.0f));
         }
@@ -1816,7 +1828,10 @@ void ClothSystem::protectAll(const JPH::BodyLockInterface& locks) {
         m_active.push_back(&c);
     }
     if (m_active.empty()) return;
+    // Nothing awake, nothing moves: no crossing can start.
+    if (std::none_of(m_active.begin(), m_active.end(), [](const Cloth* c) { return c->stepBody != nullptr; })) return;
     protect();
+    std::vector<JPH::BodyID> sleep;
     for (Cloth* c : m_active) {
         if (c->stats.crossingsUndone > 0) m_undid = true;
         for (size_t i = 0; i < c->pos.size(); ++i) {
@@ -1839,10 +1854,44 @@ void ClothSystem::protectAll(const JPH::BodyLockInterface& locks) {
             const float l2 = glm::dot(d, d);
             if (l2 > reach * reach) c->pos[i] = c->solved[i] + d * (reach / std::sqrt(l2));
         }
+        if (m_between && c->stepBody && settle(*c)) {
+            c->settleFrom.clear();
+            sleep.push_back(c->body);
+        }
         if (c->stepBody) store(*c, *c->stepBody);
         c->prev = c->pos;
         c->prevValid = true;
     }
+    if (!sleep.empty()) m_system.GetBodyInterfaceNoLock().DeactivateBodies(sleep.data(), int(sleep.size())); // between updates
+}
+
+// Once an update, after the pass: has it stayed put long enough?
+bool ClothSystem::settle(Cloth& c) {
+    const size_t n = c.pos.size();
+    if (c.settleFrom.size() != n) {
+        c.settleFrom = c.pos;
+        c.settledFor = 0;
+        c.stillWindows = 0;
+        return false;
+    }
+    if (++c.settledFor < kSettleWindow) return c.stillWindows >= kSettledWindows;
+    double sum = 0.0;
+    float most = 0.0f;
+    size_t moving = 0;
+    for (size_t i = 0; i < n; ++i) {
+        if (c.invMass[i] <= 0.0f) continue;
+        const float d = glm::length(c.pos[i] - c.settleFrom[i]);
+        sum += d;
+        most = std::max(most, d);
+        ++moving;
+    }
+    const float window = float(kSettleWindow) * kAssumedStep;
+    const float mean = moving ? float(sum / double(moving)) : 0.0f;
+    const bool still = mean < kSettledMean * window && most < kSettledMost * window;
+    c.stillWindows = still ? uint8_t(std::min<uint32_t>(c.stillWindows + 1u, 255u)) : uint8_t(0);
+    c.settleFrom = c.pos;
+    c.settledFor = 0;
+    return c.stillWindows >= kSettledWindows;
 }
 
 } // namespace kke::detail
