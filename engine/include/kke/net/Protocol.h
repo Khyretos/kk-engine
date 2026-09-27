@@ -26,10 +26,11 @@ namespace kke::net {
 //   velocity  +-64 m/s per axis, 1/128 m/s steps
 //   rotation  smallest-three quaternion, ~0.001 per component
 //   yaw       0..360 degrees, 1024 steps (0.35 degrees)
-constexpr uint16_t kProtocolVersion = 8; // 2: Spawn, Despawn, Break (#28); 3: join password (#42); 4: Voice; 5: Input, InputAck (#28);
+constexpr uint16_t kProtocolVersion = 9; // 2: Spawn, Despawn, Break (#28); 3: join password (#42); 4: Voice; 5: Input, InputAck (#28);
                                          // 6: several players per connection (Guest, GuestAck), NetPlayerState::extra;
                                          // 7: extra up to 32 bytes; 8: up to 254 players, snapshots say who is
-                                         // there but not in this one (Snapshot::present)
+                                         // there but not in this one (Snapshot::present); 9: script bodies can be
+                                         // glass or invisible (script_net::BodySpawn::look)
 constexpr size_t kMaxPlayers = 254;       // ids 1..254 (a sport center's lobby: ~100 people)
 constexpr size_t kMaxNameLength = 24;
 constexpr size_t kMaxGameIdLength = 32;

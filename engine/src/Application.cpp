@@ -925,6 +925,9 @@ void Application::run() {
                 for (Module* m : m_initOrder) {
                     safeInvoke(m, "render", [&] { m->render(renderCtx); });
                 }
+                for (Module* m : m_initOrder) {
+                    safeInvoke(m, "renderTranslucent", [&] { m->renderTranslucent(renderCtx); });
+                }
             }
             // The overlay covers the whole window with the first camera.
             renderCtx.view = view;

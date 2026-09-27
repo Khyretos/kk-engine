@@ -225,6 +225,12 @@ public:
     // pipeline, push constants, and issue draw calls here.
     virtual void render(const RenderContext& /*ctx*/) {}
 
+    // Called once per view after every module's render(): see-through
+    // surfaces (glass, water, jelly; DynamicMeshRenderer::drawTranslucent)
+    // go here so every opaque thing behind them is already drawn, whichever
+    // module drew it. Default no-op.
+    virtual void renderTranslucent(const RenderContext& /*ctx*/) {}
+
     // Called once per frame after every render(), at the window's full
     // resolution, over the finished 3D image: HUDs and menus go here so
     // they stay sharp when the render scale (resource governor) draws
