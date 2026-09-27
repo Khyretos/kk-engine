@@ -70,6 +70,12 @@ local function finish(title)
 end
 
 local function start()
+  -- Breakables come from FEMFX; a build without it has no `breakable`.
+  if not breakable then
+    show("hint", "This build has no FEMFX, so there are no targets to break.")
+    print("targets: no FEMFX in this build (configure with KKE_ENABLE_FEMFX=ON)")
+    return
+  end
   clear()
   score, shots, broken = 0, 0, 0
   timeLeft = ROUND_SECONDS
@@ -121,9 +127,16 @@ local function start()
   print("round started: " .. left .. " targets")
 end
 
-hook.Add("Think", "targets.input", function()
+-- Shots are counted the way kke_demo fires them: once on the press, then
+-- every 0.25 s while "fire" is held.
+local shotWait = 0
+hook.Add("Think", "targets.input", function(dt)
   if input.pressed("targets.start") then start() end
-  if state == "playing" and input.pressed("fire") then shots = shots + 1 end
+  shotWait = shotWait - dt
+  if state == "playing" and input.held("fire") and (input.pressed("fire") or shotWait <= 0) then
+    shots = shots + 1
+    shotWait = 0.25
+  end
 end)
 
 -- A script breakable came apart (the engine checks every frame).
@@ -145,4 +158,4 @@ if hud then ui.onClick(hud, "again", start) end
 -- Other scripts (or the console) can start a round: hook.Run("TargetsStart")
 hook.Add("TargetsStart", "targets.start", start)
 refresh()
-print("press T to play break-the-targets")
+print("press T (d-pad right on a controller) to play break-the-targets")

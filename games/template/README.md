@@ -59,9 +59,9 @@ actions, so they can be rebound and saved in `input.json`.
 | Look | mouse | right stick |
 | Jump (vault a fence, climb a block in front of you) | Space | A |
 | Sprint | Left Shift (hold) | click the left stick (toggle) |
-| Walk | Left Alt (hold) | no controller binding |
+| Walk | Left Alt (hold) | push the left stick part of the way (the speed follows the stick) |
 | First or third person | V | click the right stick |
-| Developer panels (Scripts panel and console, stats) | F1 | no controller binding |
+| Developer panels (Scripts panel and console, stats) | F1 | none: a developer tool, keyboard only |
 | Let go of the mouse | Esc | (not needed) |
 
 ## How it plays
