@@ -476,8 +476,10 @@ void ModelModule::update(const UpdateContext& ctx) {
 }
 
 void ModelModule::advanceClips(const UpdateContext& ctx) {
+    // Clips keep playing under a world override: a stand-up blends the
+    // override from the ragdoll pose to boneLocals(), which has to move.
     for (auto& [id, inst] : m_instances) {
-        if (inst.clip < 0 || !inst.worldOverride.empty()) continue;
+        if (inst.clip < 0) continue;
         const ModelAnimation& anim = m_models[inst.model]->data.animations[inst.clip];
         inst.clipTime += ctx.dt * inst.clipSpeed;
         if (inst.clipTime > anim.duration) inst.clipTime = inst.clipLoop && anim.duration > 0.0f ? std::fmod(inst.clipTime, anim.duration) : anim.duration;

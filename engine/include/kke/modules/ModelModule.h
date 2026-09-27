@@ -107,7 +107,9 @@ public:
     // Model-space transform of each bone, for effects or a ragdoll to read.
     std::vector<glm::mat4> boneWorld(InstanceId instance) const;
     // Drive the skeleton from outside (e.g. physics) with model-space bone
-    // transforms; empty vector clears the override.
+    // transforms; empty vector clears the override. The clip keeps
+    // advancing boneLocals() underneath, so a blend from the override back
+    // to the animation (a ragdoll standing up) sees it play.
     void setBoneWorldOverride(InstanceId instance, std::vector<glm::mat4> world);
     // A procedural layer on top of the clip (kke/ProceduralAnim.h: look-at,
     // foot placement, ...): called in update() with the pose the clip (or
