@@ -25,6 +25,16 @@ constexpr float kAssumedStep = 1.0f / 60.0f; // RigidWorld's collision step leng
 constexpr uint8_t kTangledSteps = 16;         // Cloth::undoneStreak at which a vertex is let go
 constexpr int kMaxPasses = 4;                 // protection narrow-phase passes per step, at most
 
+// Sets a flag other worker threads may set too. The Android NDK's libc++
+// has no std::atomic_ref yet; the builtin is the same relaxed store.
+void setFlag(uint8_t& flag) {
+#if defined(__cpp_lib_atomic_ref)
+    std::atomic_ref<uint8_t>(flag).store(1, std::memory_order_relaxed);
+#else
+    __atomic_store_n(&flag, uint8_t(1), __ATOMIC_RELAXED);
+#endif
+}
+
 JPH::Vec3 toJ(const glm::vec3& v) { return JPH::Vec3(v.x, v.y, v.z); }
 glm::vec3 toG(JPH::Vec3Arg v) { return glm::vec3(v.GetX(), v.GetY(), v.GetZ()); }
 JPH::Mat44 toJ(const glm::mat4& m) {
@@ -586,7 +596,7 @@ void ClothSystem::protect() {
                             const glm::vec3 apart = c.rest[v] - o.rest[t[0]];
                             if (&o != &c || glm::dot(apart, apart) > 9.0f * c.meanEdge * c.meanEdge) {
                                 for (uint8_t* flag : { &c.nearOther[v], &o.nearOther[t[0]], &o.nearOther[t[1]], &o.nearOther[t[2]] })
-                                    std::atomic_ref<uint8_t>(*flag).store(1, std::memory_order_relaxed);
+                                    setFlag(*flag);
                             }
                             if (d2 > reach * reach) continue;
                             w.vt.push_back({ uint32_t(ci), v, gt });

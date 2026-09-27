@@ -7,6 +7,18 @@ That covers nearly every phone sold since 2019.
 The APK is **sideloaded**: you send people a link, they download it and
 install it. Google Play publishing isn't set up (yet).
 
+## Getting the APK
+
+- **From a release** (for friends): the Releases page has
+  `kk-engine-<version>-android-arm64.apk` (the demos) and
+  `kk-engine-benchmark-<version>-android-arm64.apk` (the benchmark).
+- **From the latest build** (needs a GitHub login): on the repository's
+  **Actions** tab, open **CI**, click the newest run with a green tick,
+  and under **Artifacts** at the bottom download **kke-android-arm64**. It
+  is a zip holding `kke-demos.apk` and `kke-benchmark.apk`: unzip it (the
+  phone's Files app can, or unzip on a PC and copy the APK to the phone
+  over USB or a cloud drive).
+
 ## Installing an APK on a phone
 
 1. Download the `.apk` on the phone (from a GitHub Release or a link
@@ -48,6 +60,18 @@ and the next one starts. At the end:
 - the phone's share menu opens, so the file can be sent by mail, chat or
   a cloud drive. Nothing is sent by itself. **Send the results** opens
   the menu again.
+
+Step by step:
+
+1. Install `kke-benchmark.apk` (above). It shows up as **KKE Benchmark**.
+2. Plug the phone in or charge it well, close other apps, and open
+   KKE Benchmark.
+3. Tap **Run the benchmark**. The demos open one after another, each
+   plays by itself for a short while; don't touch the screen. The whole
+   run takes about ten minutes. (**Quick run** is shorter, for trying it out.)
+4. When it's done the share menu opens: pick mail, a chat app or a cloud
+   drive and send the file to whoever asked for it. Missed it? Tap
+   **Send the results**, or find the file in `Downloads/KKE Benchmark`.
 
 The file is the same results file `kke_benchmark` writes on a PC
 (`kke-benchmark-<date>_<time>.json`, docs/BENCHMARKS.md): the app runs
