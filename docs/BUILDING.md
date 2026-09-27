@@ -159,7 +159,7 @@ folder is `build-release/bin` instead (each preset's `binaryDir`, plus
 
 ```bash
 cd build/bin
-./kke_demo          # the general building-block showcase
+./kke_demo          # the walkable showcase: every system in one small level
 ./imgui_demo        # every Dear ImGui widget, via its own built-in demo window
 ./rmlui_demo        # real <input>/<select>/<tabset>/<progress> RmlUi elements
 ./physics_demo      # needs KKE_ENABLE_FEMFX=ON -- several deformable objects falling under real gravity
