@@ -78,6 +78,34 @@ finger, and all of them are rebindable actions (`docs/INPUT.md`).
   let go to give, back to the middle to cancel), and the big picture
   buttons along the bottom give an order with one tap.
 
+## Carried out by the AI core: `AiOrderBridge`
+
+`kke::AiOrderBridge` (`kke/OrderBridge.h`) joins the two halves: every new
+board order becomes an `ai::Order` for that agent in the `AiWorld`, and the
+AI's `Arrived` events become done.
+
+| Board order | AI order | Done when |
+|---|---|---|
+| move, regroup | `MoveTo` its formation slot (runs when far) | it arrives (then it holds there) |
+| follow | `Follow` at `followDistance` | never: it stands until replaced |
+| stay | `Hold` the spot (or where it stands) | never |
+| sit | `Hold` where it is; the game shows it sitting | never |
+| attack, focus | `Attack` the target | the game calls `targetGone` |
+| fetch | `Interact` the thing, then `Interact` the issuer | the `deliver` hook ran |
+| pet | `Interact` the issuer | the game says the pat is over |
+| drop | (the `drop` hook) | at once |
+| free | `clearOrder`: back to its own wants | at once |
+
+The game supplies only what it alone can do: `pickUp` (take the thing into
+a mouth or a hand; false fails the fetch), `deliver`, `drop` and
+`petStart`. Units that aren't agents are left alone, so a scripted unit
+can still answer with `order.done`. Call `bridge.handle(world.takeEvents())`
+after `AiWorld::update` every frame.
+
+`order.*` (this page) is what the player tells a unit; `ai.*`
+(`docs/AI.md`) is the brain underneath. Use `order.*` for anything the
+player could have said, so the HUD, the events and the bridge all see it.
+
 ## Reading the player (companions)
 
 A good companion acts before it is told. `IntentReader` watches the
@@ -86,6 +114,12 @@ standing a while (`idle`), walking, running (with where they will be in a
 moment), looking at something for a moment (`looking`), or walking up to
 something (`approaching`, e.g. the pet itself: it wants petting). The
 brain decides what to do with it.
+
+In the pet demo, with no order standing, what the player seems to be doing
+becomes a *soft* AI order (never a board order): walking or running, it
+follows; looking at something, it goes to have a look; walking up to the
+dog, it holds still for a pat; standing about, it clears the order and the
+dog lives its own life (sniffing, resting, watching you).
 
 `followSlot` says where a follower should be so it never blocks the
 player: to one side and a little behind, on the side it is already on (so

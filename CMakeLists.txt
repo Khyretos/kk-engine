@@ -901,6 +901,12 @@ endif()
 if(KKE_ENABLE_JOLT)
     add_subdirectory(games/climb_race)
 endif()
+# The command demos (docs/COMMANDS.md): a pet you tell what to do, and a
+# platoon. Jolt for the characters, Lua for order.* scripts.
+if(KKE_ENABLE_JOLT AND ENGINE_ENABLE_LUA)
+    add_subdirectory(games/command_kit)
+    add_subdirectory(games/pet_companion)
+endif()
 
 # The starter template (docs/tutorials/getting-started.md), and games made
 # from it with tools/new_game, which lists them in games/my_games.cmake.
