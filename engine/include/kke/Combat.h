@@ -126,6 +126,9 @@ public:
     void getUp();
     // Everything back to full (a new round).
     void reset();
+    // Health back, up to the maximum (a potion, a breather between waves).
+    // Nothing for the dead.
+    void heal(float amount);
 
     // ---- what the game draws and animates from
     CombatantId id() const { return m_id; }

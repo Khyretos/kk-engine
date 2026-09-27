@@ -70,6 +70,21 @@ TEST(AssetCatalog, FindsSideBySidePacks) {
     fs::remove_all(root);
 }
 
+TEST(AssetCatalog, OnlyPacksSkipsTheRest) {
+    fs::path root = makeUserLayout();
+    kke::CatalogScanOptions o;
+    o.onlyPacks = { "POLYGON_Town", "NotThere" };
+    auto c = kke::AssetCatalog::scan(root.string(), o);
+    ASSERT_EQ(c.packs.size(), 1u);
+    EXPECT_EQ(c.packs[0].name, "POLYGON_Town");
+    EXPECT_NE(c.find("SM_Bld_House_01"), nullptr);
+    EXPECT_EQ(c.find("SM_Prop_Crate_01"), nullptr);
+    // A root that is itself one pack isn't filtered away.
+    o.onlyPacks = { "Something_Else" };
+    EXPECT_EQ(kke::AssetCatalog::scan((root / "POLYGON_Town").string(), o).packs.size(), 1u);
+    fs::remove_all(root);
+}
+
 TEST(AssetCatalog, PrefersFbxOverObjDuplicates) {
     fs::path root = makeUserLayout();
     auto c = kke::AssetCatalog::scan(root.string());

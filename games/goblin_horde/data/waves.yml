@@ -1,0 +1,14 @@
+# The waves. goblins: how many in the wave; atOnce: alive at the same time
+# (never more than KKE_HORDE_MAX); speed and health: multipliers on the
+# goblin species (goblin.yml) and CombatStats::grunt().
+# After the last one the list repeats its last wave, bigger each time.
+# JSON works the same (waves.json).
+attackers: 4        # goblins that go at the king at once; the rest wait their turn
+breather: 4         # seconds between waves
+waves:
+  - { goblins: 6,   atOnce: 6,  speed: 0.9 }
+  - { goblins: 12,  atOnce: 10 }
+  - { goblins: 24,  atOnce: 18, speed: 1.05 }
+  - { goblins: 40,  atOnce: 30, speed: 1.1, health: 1.2 }
+  - { goblins: 80,  atOnce: 50, speed: 1.15, health: 1.3 }
+  - { goblins: 150, atOnce: 60, speed: 1.2, health: 1.5 }

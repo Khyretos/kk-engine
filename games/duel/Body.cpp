@@ -15,6 +15,7 @@
 #include <SDL3/SDL.h>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -27,29 +28,6 @@ namespace fs = std::filesystem;
 namespace {
 
 constexpr float kGetUpTime = 0.9f; // s of the get-up clip (Combatant's knockdown covers it)
-
-// Another file's clips for this skeleton, bone by bone by name (UAL 1 and
-// UAL 2 share a skeleton; this doesn't assume they list it in one order).
-void appendClips(kke::ModelData& rig, const kke::ModelData& src) {
-    std::unordered_map<std::string, size_t> srcBone;
-    for (size_t b = 0; b < src.bones.size(); ++b) srcBone.emplace(src.bones[b].name, b);
-    std::vector<int> from(rig.bones.size(), -1);
-    for (size_t b = 0; b < rig.bones.size(); ++b)
-        if (auto it = srcBone.find(rig.bones[b].name); it != srcBone.end()) from[b] = static_cast<int>(it->second);
-    for (const kke::ModelAnimation& a : src.animations) {
-        kke::ModelAnimation out;
-        out.name = a.name;
-        out.duration = a.duration;
-        out.sampleRate = a.sampleRate;
-        out.frames.resize(a.frames.size());
-        for (size_t f = 0; f < a.frames.size(); ++f) {
-            out.frames[f].resize(rig.bones.size());
-            for (size_t b = 0; b < rig.bones.size(); ++b)
-                out.frames[f][b] = from[b] >= 0 ? a.frames[f][static_cast<size_t>(from[b])] : rig.bones[b].localRest;
-        }
-        rig.animations.push_back(std::move(out));
-    }
-}
 
 std::string firstExisting(std::initializer_list<std::string> paths) {
     std::error_code ec;
@@ -90,7 +68,7 @@ void DuelModule::loadCharacter() {
         try {
             kke::ModelLoadOptions o;
             o.allowNoMeshes = true;
-            appendClips(m_rigData, kke::loadModel(ual2, o));
+            kke::appendClipsByBoneName(m_rigData, kke::loadModel(ual2, o));
             m_meleeClips = true;
         } catch (const std::exception& e) {
             kke::log::get(name())->warn("UAL2.fbx: {}", e.what());

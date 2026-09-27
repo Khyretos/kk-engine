@@ -36,10 +36,14 @@ namespace kke {
 //   auto& models = app.addModule<kke::ModelModule>();   // before init
 //   ModelId tree = models.load("assets/synty/.../SM_Tree.fbx");
 //   models.spawn(tree, glm::translate(glm::mat4(1), {3, 0, 0}));
+class SkinWorkers;
+
 class ModelModule : public Module {
 public:
     using ModelId = uint32_t;     // 0 = invalid
     using InstanceId = uint32_t;  // 0 = invalid
+    ModelModule();
+    ~ModelModule() override;
 
     const char* name() const override { return "Models"; }
     void init(Application& app) override;
@@ -200,6 +204,11 @@ private:
 
     VkDescriptorSet textureSetFor(const std::string& path);
     void skinInstance(Instance& inst, uint32_t frameIndex);
+    // Skins every visible skinned instance not yet skinned this frame, on
+    // the worker threads (a crowd of characters is the CPU's biggest job
+    // here until skinning moves to the GPU); the draw loops then find them
+    // done.
+    void skinVisible(const struct Frustum& f, uint32_t frameIndex);
     void uploadDeformed(Instance& inst, uint32_t frameIndex);
     std::vector<glm::mat4> currentBoneWorld(const Instance& inst) const;
     void advanceClips(const UpdateContext& ctx);
@@ -233,6 +242,8 @@ private:
     uint64_t m_viewPass = 0; // m_frame and the view: which draw batchedFrame means
     std::vector<Batch> m_batches;
     std::vector<InstanceGpu> m_instanceData;
+    std::unique_ptr<SkinWorkers> m_skinWorkers;
+    std::vector<Instance*> m_toSkin;
 };
 
 } // namespace kke

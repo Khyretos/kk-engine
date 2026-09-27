@@ -192,6 +192,7 @@ AssetCatalog AssetCatalog::scan(const std::string& rootPath, const CatalogScanOp
         }
         std::string name = entry.path().filename().string();
         if (isAssetTypeFolder(name)) rootIsPack = true;
+        else if (!options.onlyPacks.empty() && std::find(options.onlyPacks.begin(), options.onlyPacks.end(), name) == options.onlyPacks.end()) continue;
         else if (containsModels(walker, entry.path())) packDirs.push_back(entry.path());
     }
     if (rootIsPack || packDirs.empty()) {

@@ -1,0 +1,43 @@
+<rml>
+<head>
+    <title>Goblin Horde HUD</title>
+    <link type="text/rcss" href="theme.rcss"/>
+    <style>
+        body { pointer-events: none; }
+        #king { position: absolute; top: 18dp; left: 20dp; width: 34%; padding: 10dp 14dp; border-radius: 10dp; background-color: #140e08cc; border-left: 3dp #e8b64c; }
+        .name { font-size: 14dp; font-weight: bold; letter-spacing: 2dp; color: #f4ead8; }
+        .bar { height: 16dp; margin-top: 8dp; border-radius: 4dp; background-color: #3a2c1c; }
+        .bar.thin { height: 7dp; margin-top: 5dp; }
+        .fill { height: 100%; border-radius: 4dp; }
+        .health .fill { background-color: #d9463a; }
+        .low .health .fill { animation: 0.4s linear infinite alternate blink; }
+        @keyframes blink { from { opacity: 1; } to { opacity: 0.4; } }
+        .stamina .fill { background-color: #ffcf5c; }
+        #wave { position: absolute; top: 18dp; right: 20dp; padding: 10dp 16dp; border-radius: 10dp; background-color: #140e08cc; text-align: right; }
+        #wave .big { font-size: 22dp; font-weight: bold; color: #f4ead8; }
+        #wave .small { font-size: 14dp; color: #b9d98a; margin-top: 2dp; }
+        #wave .kills { font-size: 14dp; color: #e8b64c; margin-top: 2dp; }
+        #banner { position: absolute; top: 30%; left: 0; width: 100%; text-align: center; }
+        #banner .big { font-size: 64dp; font-weight: bold; color: #ffffff; }
+        #banner .sub { font-size: 18dp; color: #f4ead8; margin-top: 6dp; }
+        #hint { position: absolute; left: 8%; bottom: 14dp; width: 84%; padding: 6dp 10dp; border-radius: 8dp; background-color: #140e08bb; text-align: center; font-size: 13dp; color: #e6dccb; }
+    </style>
+</head>
+<body data-model="horde">
+    <div id="king" data-class-low="low">
+        <span class="name">THE KING</span>
+        <div class="bar health"><div class="fill" data-style-width="health"></div></div>
+        <div class="bar thin stamina"><div class="fill" data-style-width="stamina"></div></div>
+    </div>
+    <div id="wave">
+        <div class="big">{{wave}}</div>
+        <div class="small">{{left}}</div>
+        <div class="kills">{{kills}}</div>
+    </div>
+    <div id="banner" data-if="banner != ''">
+        <div class="big">{{banner}}</div>
+        <div class="sub">{{sub}}</div>
+    </div>
+    <div id="hint">{{hint}}</div>
+</body>
+</rml>

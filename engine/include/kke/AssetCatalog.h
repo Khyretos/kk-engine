@@ -61,6 +61,10 @@ struct CatalogScanOptions {
     // many times in total, waiting firstRetryDelayMs, then twice that...
     int attempts = 4;
     int firstRetryDelayMs = 25;
+    // Only these top-level pack folders (by folder name); empty = all. A
+    // game that needs two packs out of a big shared cache skips walking
+    // the rest (a 70-pack cache takes most of a minute on a network share).
+    std::vector<std::string> onlyPacks;
     // Tests only: return an error to make listing `dir` fail on this
     // attempt (1-based), as if the file system had.
     std::function<std::error_code(const std::string& dir, int attempt)> injectListingError;

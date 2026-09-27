@@ -104,6 +104,7 @@ nav:
       - Scripting in Lua: SCRIPTING.md
       - Movement: MOVEMENT.md
       - AI (animals, enemies, companions): AI.md
+      - Melee combat and crowds: COMBAT.md
       - Input: INPUT.md
       - Commands and orders: COMMANDS.md
       - Audio: AUDIO.md

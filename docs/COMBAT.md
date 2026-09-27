@@ -22,7 +22,7 @@ horde demo (one against many, sweeping attacks).
   Presets: `fighter()`, `grunt()` (a small, fragile crowd enemy).
 - **`Combatant`**: the state machine. Idle → Windup → Active → Recovery,
   plus Stunned, Dodging, Knockdown and Dead. `attack(desc)`,
-  `setBlocking`, `dodge`, `getUp`, `canAct`, `windupLeft` (what an AI
+  `setBlocking`, `dodge`, `getUp`, `heal`, `canAct`, `windupLeft` (what an AI
   reads to react), the bars and their fractions.
 - **`CombatWorld`**: all combatants in teams. `add(team, stats)`,
   `step(dt)` resolves every active strike against capsules (a uniform grid,
