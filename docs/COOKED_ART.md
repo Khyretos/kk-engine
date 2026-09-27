@@ -24,15 +24,17 @@ finishes, the archives are in `dist/`, named `*-with-art*`. Send them to
 friends directly (a chat, a private link).
 
 **Never** upload a `-with-art` archive to the public GitHub release or
-commit it, and never commit `.kke-art.key` (both are in `.gitignore`).
+commit it, and never commit `.kke-art.key` or `.kke-art.build` (all are
+in `.gitignore`).
 
 ## What the script does
 
-1. **Key.** Makes `.kke-art.key` (32 random bytes from `/dev/urandom`,
-   as 64 hex digits) at the repo root once; any configure makes one if
-   it's missing. Builds carry the key compiled in (`build/.../generated/kke_art_key.h`, only
-   visible to `engine/src/CookedFile.cpp`). Keep the file: art cooked
-   with one key only loads in builds made with the same key.
+1. **Keys.** Makes `.kke-art.key` at the repo root once: the checkout's
+   secret, 32 bytes from `/dev/urandom` as 64 hex digits. Then writes a
+   new `.kke-art.build` (a 16-byte id) for this bake. The build's key is
+   SHA3-256 over both, so every bake gets its own key and art from one
+   bake doesn't load in another's builds. The Linux and Windows builds
+   of one bake share the id, so they read the same cooked art.
 2. **Build.** A Release build with FEMFX in `build-art/`.
 3. **Trace.** Runs `kke_benchmark --seconds 3` with `KKE_ASSETS_DIR` set
    and `KKE_ASSET_TRACE=<file>`, which makes the engine write down every
@@ -49,19 +51,53 @@ commit it, and never commit `.kke-art.key` (both are in `.gitignore`).
 
 ## The cooked format
 
-Same file name as the original. Contents: `KKECOOK1` (8 bytes), a random
-24-byte nonce, a 16-byte MAC, then the file encrypted with
-XChaCha20-Poly1305 (Monocypher's `crypto_aead_lock`). Every loader
-(models, textures, interior colours, Sidekick `.sk`) reads files through
-`kke::cooked::readAssetFile` (`kke/CookedFile.h`), which returns plain
-files unchanged and decrypts cooked ones, so the game code doesn't know
-the difference. A build with another key (anyone else's checkout, the
-public release) reports a cooked file as unreadable and falls back to
-stand-ins, like a missing pack.
+Same file name as the original. Contents: `KKECOOK2` (8 bytes), the
+bake's 8-byte build tag, a random 24-byte nonce, a 16-byte MAC, then the
+file encrypted with XChaCha20-Poly1305 (Monocypher's
+`crypto_aead_lock`, the build tag as authenticated data so a file can't
+be relabelled). Every loader (models, textures, interior colours,
+Sidekick `.sk`) reads files through `kke::cooked::readAssetFile`
+(`kke/CookedFile.h`), which returns plain files unchanged and decrypts
+cooked ones, so game code doesn't know the difference. A build from
+another bake, another checkout or the public release refuses a cooked
+file ("cooked for another build") and falls back to stand-ins, like a
+missing pack.
 
-This is not DRM against a determined attacker (the key is in the
-executable); it makes the art data only this game reads, which is what
-the licence asks of a shipped game.
+## How far the protection goes
+
+What it does, all with standard parts (SHA3 in CMake, Monocypher, no
+extra libraries):
+
+- **No raw art in the download.** Every model and texture is encrypted;
+  the packager refuses a download holding a raw one.
+- **The secret stays home.** `.kke-art.key` is only read at configure
+  time on your PC. The executable holds the bake's derived key, never
+  the secret, so one cracked download says nothing about the next.
+- **The key isn't stored whole.** CMake writes it as two halves (the key
+  XOR a mask, `build/engine/generated/kke_art_key.h`). They're joined in
+  a local buffer only while a file is being decrypted and wiped
+  (`crypto_wipe`) right after. The halves are read through `volatile` so
+  the compiler can't join them at build time; a search of the built
+  executables for the key finds nothing.
+- **A key per bake.** A leaked key opens one bake's download, not the
+  others.
+
+What it deliberately doesn't do: no anti-debugger tricks, no
+self-destruct, no checks that kill the game, nothing that runs outside
+the game. Those break on real PCs, set off antivirus and only bother
+honest players (the same reason as [ANTI_CHEAT.md](ANTI_CHEAT.md)).
+
+What no protection can stop: to draw the art the game has to hand plain
+meshes and textures to the GPU, and a graphics debugger such as RenderDoc
+can capture them from there. That is true of every Unity, Unreal and AAA
+game. The licence asks that you don't hand out the source files in a
+form anyone can lift out, and this does that.
+
+File names and the names inside the files (meshes, bones) are kept.
+Names on disk are how the engine finds art (AssetCatalog, the Synty
+folder search), and bone names are how animations are matched to
+characters. Inside a cooked file they're encrypted with everything
+else, so stripping them wouldn't make the art harder to get at.
 
 ## Tools
 

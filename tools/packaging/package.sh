@@ -6,7 +6,7 @@
 #
 # --cooked DIR: art cooked with kke_cook (docs/COOKED_ART.md) to add under
 # assets/ (DIR/synty -> assets/synty, ...). Such a package is private: only
-# builds from the same checkout (the same .kke-art.key) can read the art.
+# the builds of the same bake (the same .kke-art.key and .kke-art.build) can read it.
 #
 # Output: <out>/kk-engine-<version>-<platform>-x86_64.{tar.gz|zip} plus a
 # .sha256 next to it. The archive holds one folder with the demos, their
@@ -68,7 +68,7 @@ done
 # none of that is built into bin/ by CMake, so anything found here came
 # from a local asset folder and must not go out.
 # Cooked art (--cooked) comes in now, so the check below sees it too: a
-# cooked file starts with KKECOOK1 and is let through, anything else isn't.
+# cooked file starts with KKECOOK2 and is let through, anything else isn't.
 if [ -n "$cooked" ]; then
     [ -d "$cooked" ] || die "--cooked folder '$cooked' does not exist"
     mkdir -p "$stage/assets"
@@ -77,7 +77,7 @@ fi
 leak="$(cd "$stage" && find . -type f \( -ipath '*synty*' -o -ipath '*polygon*' -o -ipath '*/SourceFiles/*' \
     -o -iname '*.fbx' -o -iname '*.unitypackage' -o -iname '*.prefab' -o -iname '*.controller' -o -iname '*.mat' \) \
     ! -path "./synty_demo$exe" ! -path './marketplace/synty_demo/game.json' -print |
-    while IFS= read -r f; do [ "$(head -c 8 "$f")" = KKECOOK1 ] || echo "$f"; done)"
+    while IFS= read -r f; do [ "$(head -c 8 "$f")" = KKECOOK2 ] || echo "$f"; done)"
 [ -z "$leak" ] || die "refusing to package paid/third-party art found in $bin:
 $leak"
 
