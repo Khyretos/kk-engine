@@ -79,7 +79,7 @@ The demo's actions are made in `PhysicsDemoModule::init`
 | Turn the camera | left-drag | right stick (`camera.orbit`) |
 | Closer / further | mouse wheel | d-pad up / down (`camera.zoom`) |
 | Move the camera's target | right-drag | no controller binding |
-| Give the panel the controls (`panel.toggle`) | F3, or click the panel | View (Back) |
+| Give the panel the controls (`panel.toggle`) | F3 or Esc, or click the panel | View (Back) |
 | In the panel: choose a row / change it / press / leave | arrows, Enter, Esc | d-pad or left stick, A, B |
 | Developer panels (ImGui) | F1 (developer builds only) | no controller binding |
 
@@ -93,6 +93,9 @@ Notes from the code:
 - All five demo actions and both camera actions are in the `game` input
   context, so they rest while the panel is Active. Enter then presses the
   highlighted row instead of spawning a scene.
+- Esc works like a pause menu: it opens the panel with the keyboard on
+  it, and Esc again goes back to the game. Esc does not close the window;
+  the panel's "Quit" row, just above "Hide panel", does.
 - The right stick and d-pad come from
   `OrbitCameraModule::setPadControls(true)` in [main.cpp](main.cpp).
 

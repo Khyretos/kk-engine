@@ -67,9 +67,9 @@ The pad buttons do exactly what a click at the crosshair would.
 | Pan the camera (`camera.pan`) | middle drag | left stick |
 | Zoom (`camera.zoom`) | mouse wheel | d-pad up (closer) / down (further) |
 | Move the camera target | WASD (Q / E down / up, Shift faster) | the left stick (above) |
-| Settings panel (`panel.toggle`) | F3, or click it | View (Back) |
+| Settings panel (`panel.toggle`) | F3 or Esc, or click it | View (Back) |
 | Engine developer panels (ImGui) | F1, developer builds only | no controller binding yet |
-| Quit | Esc | none |
+| Quit | the panel's Quit row (Esc opens the panel) | the panel's Quit row |
 
 Notes from the code:
 
@@ -85,9 +85,6 @@ Notes from the code:
   frame, which overrides panning.
 - Button names are positions: on a PlayStation pad A is Cross, X is
   Square, Y is Triangle.
-- Esc closes the window (the engine's default; the demo does not call
-  `setQuitOnEscape(false)`). That includes pressing Esc to leave the
-  panel, so on the keyboard leave it with F3 instead.
 
 On a touch screen, two fingers turn and zoom the camera (the
 `OrbitCameraModule` default).
@@ -102,6 +99,10 @@ game keeping the controls; the mouse can click and drag any row.
 down pick a row, left and right change it, A presses, B hands control
 back. While it is Active, player 1's `game` context is off, so the sticks
 and A, X and Y rest. The last row, "Hide panel", collapses it.
+Esc works like a pause menu: it opens the panel with the keyboard on
+it, and Esc again goes back to the game. So Esc does not close the
+window; the panel's "Quit" row, just above "Hide panel", does.
+`setEscapeMenu(false)` gives Esc back to a game that needs it.
 
 `buildPanel` adds one section, "Procedural animation":
 
