@@ -506,6 +506,26 @@ if(NOT MSVC)
 endif()
 
 # ---------------------------------------------------------------------------
+# genann (zlib): a small feed-forward neural network in one C file, with
+# backpropagation. Teaching animals by example trains it on the device
+# (kke::ai::LearnedPolicy, docs/AI.md "Teaching by example").
+# ---------------------------------------------------------------------------
+FetchContent_Declare(
+    genann
+    GIT_REPOSITORY https://github.com/codeplea/genann.git
+    GIT_TAG        v1.1.1
+    GIT_SHALLOW    TRUE
+    SOURCE_SUBDIR  kke-not-a-dir # one C file, compiled below
+)
+FetchContent_MakeAvailable(genann)
+add_library(kke_genann STATIC ${genann_SOURCE_DIR}/genann.c)
+target_include_directories(kke_genann SYSTEM PUBLIC ${genann_SOURCE_DIR})
+set_target_properties(kke_genann PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(NOT MSVC)
+    target_link_libraries(kke_genann PRIVATE m)
+endif()
+
+# ---------------------------------------------------------------------------
 # SQLite — the built-in store (kke::storage, docs/STORAGE.md): public
 # domain, one C file, nothing for players or server owners to install.
 # ---------------------------------------------------------------------------

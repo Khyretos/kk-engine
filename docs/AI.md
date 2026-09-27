@@ -213,7 +213,7 @@ same thing at all three levels:
 - **Intermediate:** every documented `ai.*` binding is a node and every
   event a *when* node, automatically (the node library is built from the
   Lua API): *When it gets scared → Make a noise*, *When tapped → Follow
-  (me)*. Categories: Minds, Orders, Senses.
+  (me)*. Categories: Minds, Orders, Senses, Learning.
 - **Simple:** the sandbox palette's Sheep, Cow, Pig and Horse
   (`PlayBlockKind::Animal`, see [PLAY_TO_MAKE.md](PLAY_TO_MAKE.md)) are
   recipes of those nodes. *When put down → Be a "sheep"* is `ai.add(me,
@@ -231,6 +231,38 @@ gets a `homeRadius` and there are water and grain places. The navmesh is
 built from the scene's own meshes. F1 shows each animal's action, score,
 fear, hunger and animation. `KKE_FARM_AUTOPILOT=1` runs it headless.
 
+## Teaching by example
+
+An animal can learn what you show it: this is imitation learning, done on
+the device. `kke/ai/Learning.h` has the full description.
+
+1. **Show.** `world.teach(id, "rest")` (Lua `ai.teach(thing, "rest")`,
+   node *Show what to do*) records one example for that animal's species:
+   the numbers its considerations read right now (fear, food, alone,
+   tiredness, custom inputs, ...) and the action you picked.
+2. **Learn.** `world.learn("cow")` (`ai.learn("cow")`, *Learn from what it
+   was shown*) trains a small neural network on every example so far. It
+   is [genann](https://github.com/codeplea/genann), with one hidden layer
+   of 8 and sigmoid outputs, and takes milliseconds. It returns how many
+   examples it now gets right.
+3. **Lean.** From then on, each think adds `learnedWeight × probability` to
+   every action that already scores above 0. With the default weight of
+   1.5, a clearly taught action beats a mild instinct. It doesn't beat
+   orders (weight 3) or strong fear (flee, 2), and it never makes an
+   animal do something that makes no sense right now.
+
+`world.unlearn("cow")` (`ai.unlearn`) goes back to instinct and keeps the
+examples. `LearnedPolicy::save` / `load` write the examples and the
+weights as JSON or YAML (`kke.ai.policy` v1). `world.setPolicy` puts a
+loaded one back. Training is reproducible: the start weights and the
+shuffle come from the world's seed, not `rand()`.
+
+In the farm demo, Tab picks a lesson, E shows it to the nearest animal,
+and L lets every kind that was shown something learn from it.
+Reinforcement learning, where an animal learns from rewards instead of
+from examples, is not built yet. It would use the same features and
+actions.
+
 ## Performance
 
 Perception runs 10 times a second and decisions 4 times a second per
@@ -239,9 +271,8 @@ use a uniform grid (`SpatialGrid`).
 
 ## Not yet
 
-- Learning: an optional training module (imitation of the player's
-  demonstrations, small on-device models) is planned on top of the same
-  inputs and actions.
+- Learning from rewards (reinforcement learning). Teaching by example
+  (above) is built.
 - Tiled / dynamic navmeshes (DetourTileCache is compiled in, not wrapped
   yet), off-mesh links for jumps and ladders, per-area costs (mud, water).
 - Crowds of hundreds on one path (DetourCrowd is compiled in; steering and

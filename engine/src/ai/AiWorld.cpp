@@ -37,7 +37,7 @@ const std::string& behaviorOf(const UtilityAction& a) { return a.behavior.empty(
 
 } // namespace
 
-AiWorld::AiWorld(uint64_t seed) : m_rng(seed ? seed : 1) {
+AiWorld::AiWorld(uint64_t seed) : m_rng(seed ? seed : 1), m_seed(seed ? seed : 1) {
     for (Species& s : builtinSpecies()) defineSpecies(std::move(s));
 }
 
@@ -512,6 +512,72 @@ const Place* AiWorld::nearestPlace(const Agent& a, const std::vector<std::string
     return best;
 }
 
+// ---------------------------------------------------------------- teaching
+
+LearnedPolicy& AiWorld::policyFor(int species) {
+    const Species& s = m_species[size_t(species)];
+    std::vector<std::string> actions;
+    for (const UtilityAction& a : s.actions) actions.push_back(a.name);
+    LearnedPolicy& p = m_policies[species];
+    if (p.actions() != actions) {
+        // What the species' own considerations read (orders aside: they
+        // weigh in on their own), in a fixed order.
+        std::vector<std::string> features;
+        for (const UtilityAction& a : s.actions)
+            for (const Consideration& c : a.considerations)
+                if (c.input.rfind("order_", 0) != 0) features.push_back(c.input);
+        std::sort(features.begin(), features.end());
+        features.erase(std::unique(features.begin(), features.end()), features.end());
+        p.setup(std::move(features), std::move(actions));
+    }
+    return p;
+}
+
+std::vector<float> AiWorld::learnedFeatures(const Agent& a, const LearnedPolicy& p) const {
+    std::vector<float> f;
+    f.reserve(p.features().size());
+    for (const std::string& n : p.features()) f.push_back(computeInput(a, n));
+    return f;
+}
+
+bool AiWorld::teach(AgentId id, const std::string& action) {
+    const Agent* a = agent(id);
+    if (!a || a->actor) return false;
+    LearnedPolicy& p = policyFor(a->species);
+    const auto it = std::find(p.actions().begin(), p.actions().end(), action);
+    if (it == p.actions().end()) return false;
+    return p.addExample(learnedFeatures(*a, p), int(it - p.actions().begin()));
+}
+
+LearnedPolicy::Result AiWorld::learn(const std::string& species, int epochs) {
+    const int s = speciesIndex(species);
+    if (s < 0) return {};
+    return policyFor(s).train(epochs, 0.5f, m_seed ^ uint64_t(s + 1)); // the same lesson learns the same way
+}
+
+void AiWorld::unlearn(const std::string& species, bool examples) {
+    const int s = speciesIndex(species);
+    auto it = s < 0 ? m_policies.end() : m_policies.find(s);
+    if (it == m_policies.end()) return;
+    it->second.forget();
+    if (examples) it->second.clearExamples();
+}
+
+const LearnedPolicy* AiWorld::policy(const std::string& species) const {
+    const int s = speciesIndex(species);
+    auto it = s < 0 ? m_policies.end() : m_policies.find(s);
+    return it == m_policies.end() ? nullptr : &it->second;
+}
+
+bool AiWorld::setPolicy(const std::string& species, LearnedPolicy policy) {
+    const int s = speciesIndex(species);
+    if (s < 0) return false;
+    const LearnedPolicy& fitted = policyFor(s);
+    if (policy.actions() != fitted.actions() || policy.features() != fitted.features()) return false;
+    m_policies[s] = std::move(policy);
+    return true;
+}
+
 float AiWorld::input(AgentId id, const std::string& name) const {
     const Agent* a = agent(id);
     return a ? computeInput(*a, name) : 0.0f;
@@ -617,7 +683,13 @@ void AiWorld::think(Agent& a) {
     const Species& s = m_species[size_t(a.species)];
     if (a.cooldownUntil.size() != s.actions.size()) a.cooldownUntil.assign(s.actions.size(), 0.0f);
     const InputFn inputs = [this, &a](const std::string& n) { return computeInput(a, n); };
-    const Choice c = chooseAction(s.actions, inputs, a.action, [&](int i) { return float(m_time) < a.cooldownUntil[size_t(i)]; });
+    // What it was taught, as a lean on top of its instincts.
+    std::vector<float> lean;
+    if (auto it = m_policies.find(a.species); it != m_policies.end() && it->second.trained() && learnedWeight > 0.0f) {
+        lean = it->second.predict(learnedFeatures(a, it->second));
+        for (float& v : lean) v *= learnedWeight;
+    }
+    const Choice c = chooseAction(s.actions, inputs, a.action, [&](int i) { return float(m_time) < a.cooldownUntil[size_t(i)]; }, lean);
     const int previous = a.action;
     const std::string prevBehavior = previous >= 0 ? behaviorOf(s.actions[size_t(previous)]) : std::string("idle");
     a.actionScore = c.score;

@@ -10,6 +10,7 @@
 #include "kke/ai/NavMesh.h"
 #include "kke/modules/ModelModule.h"
 
+#include <array>
 #include <map>
 #include <memory>
 #include <string>
@@ -62,6 +63,8 @@ private:
     void spawnAnimal(const std::string& species, const glm::vec3& at, float yaw);
     void updatePlayer(float dt);
     void updateCamera(float dt);
+    void teachNearest();
+    void learnAll();
     void showAnim(kke::ModelModule::InstanceId instance, const Look& look, const std::string& anim, std::string& playing);
 
     kke::Application* m_app = nullptr;
@@ -103,6 +106,10 @@ private:
     bool m_showNav = false;
     std::unique_ptr<kke::DynamicMeshRenderer> m_navMesh;
     std::vector<std::string> m_log; // recent events, newest last
+
+    // Teaching by example (docs/AI.md): what E shows the nearest animal.
+    static constexpr std::array<const char*, 7> kLessons{ "graze", "rest", "investigate", "watch", "regroup", "flee", "wander" };
+    size_t m_lesson = 0;
 };
 
 } // namespace farm

@@ -28,6 +28,8 @@ namespace kke::ai {
 //   ai.need(thing, need) -> n              ai.doing(thing) -> action name
 //   ai.knows(thing, other) -> bool         ai.setTeam(thing, team)
 //   ai.feel(thing, other, attitude)        ai.setInput(thing, name, value)
+//   ai.teach(thing, action) -> bool        ai.learn(species) -> share right
+//   ai.unlearn(species)
 //   ai.species() -> { "sheep", ... }       ai.defineSpecies{ id = "wolf", ... }
 //
 // Events (hook.Add(name, id, function(e) ... end)):

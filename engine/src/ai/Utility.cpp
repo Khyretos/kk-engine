@@ -78,12 +78,13 @@ std::vector<float> scoreAll(const std::vector<UtilityAction>& actions, const Inp
 }
 
 Choice chooseAction(const std::vector<UtilityAction>& actions, const InputFn& inputs, int current,
-                    const std::function<bool(int)>& blocked) {
+                    const std::function<bool(int)>& blocked, const std::vector<float>& bonus) {
     Choice best;
     for (int i = 0; i < int(actions.size()); ++i) {
         if (blocked && blocked(i)) continue;
         float s = scoreAction(actions[size_t(i)], inputs);
         if (s <= 0.0f) continue;
+        if (size_t(i) < bonus.size()) s += bonus[size_t(i)];
         if (i == current) s *= 1.0f + actions[size_t(i)].momentum;
         if (s > best.score) best = { i, s };
     }

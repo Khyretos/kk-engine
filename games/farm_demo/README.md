@@ -20,6 +20,9 @@ scene itself when the level loads.
 | Shift | run |
 | Space | bark |
 | Left click / Esc | capture / release the mouse to look around |
+| Tab | next lesson (graze, rest, investigate, watch, regroup, flee, wander) |
+| E | show the nearest animal the lesson: "in a moment like this, do that" |
+| L | every kind you showed something learns from it (docs/AI.md "Teaching by example") |
 | F1 | show what each animal is thinking (action, score, fear, hunger, animation) |
 | F2 | draw the navmesh |
 

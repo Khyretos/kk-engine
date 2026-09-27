@@ -76,6 +76,7 @@ shown. "Key" is the name the dependency check looks for.
 | Lua | `lua` | 5.4.7 | Gameplay scripting | MIT | Keep the copyright notice |
 | SQLite | `sqlite` | 3.53.4 | Built-in save and storage database | Public domain | Nothing |
 | Recast & Detour (recastnavigation) | `recastnavigation` | v1.6.0 | Navigation meshes and path finding for the AI core (`kke::ai::NavMesh`, [AI.md](AI.md)) | zlib | Nothing for binaries (don't misrepresent authorship; mark altered source) |
+| genann | `genann` | v1.1.1 | The small neural network behind teaching animals by example (`kke::ai::LearnedPolicy`, [AI.md](AI.md)) | zlib | Nothing for binaries (don't misrepresent authorship; mark altered source) |
 | Jolt Physics | `JoltPhysics` | v5.6.0 | Rigid bodies, collision, character controller, ragdolls (`KKE_ENABLE_JOLT`, on by default) | MIT | Keep the copyright notice |
 
 ## Optional modules

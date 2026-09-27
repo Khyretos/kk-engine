@@ -91,9 +91,11 @@ struct Choice {
 };
 
 // Picks the best action. `current` (or -1) gets its momentum bonus;
-// `blocked(i)` true skips an action (cooling down).
+// `blocked(i)` true skips an action (cooling down). `bonus` (one per
+// action, or empty) is added to the score of actions that already score
+// above 0: what a LearnedPolicy leans towards.
 Choice chooseAction(const std::vector<UtilityAction>& actions, const InputFn& inputs, int current,
-                    const std::function<bool(int)>& blocked = {});
+                    const std::function<bool(int)>& blocked = {}, const std::vector<float>& bonus = {});
 
 // Every action's score (for debug overlays and the node editor's "why").
 std::vector<float> scoreAll(const std::vector<UtilityAction>& actions, const InputFn& inputs);

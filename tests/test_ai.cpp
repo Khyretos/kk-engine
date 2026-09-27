@@ -2,6 +2,7 @@
 // decisions, navmesh paths and whole-world scenarios on the farm species.
 #include "kke/ai/AiWorld.h"
 #include "kke/ai/Clips.h"
+#include "kke/ai/Learning.h"
 #include "kke/ai/NavMesh.h"
 
 #include <gtest/gtest.h>
@@ -510,6 +511,25 @@ TEST(AiLua, EveryAiFunctionIsDocumented) {
     EXPECT_EQ(f.vm.apiEvents().size(), aiApiEvents().size());
 }
 
+TEST(AiLua, ScriptsTeachAndLearn) {
+    LuaFarm f;
+    f.things[5] = { 0, 0, 0 };
+    ASSERT_TRUE(f.vm.runString(R"(
+        assert(ai.add(5, "sheep"))
+        assert(not ai.teach(5, "fly"))
+        for i = 1, 12 do
+            ai.setNeed(5, "tiredness", i % 2)
+            assert(ai.teach(5, (i % 2 == 1) and "rest" or "graze"))
+        end
+        local right = ai.learn("sheep")
+        assert(right >= 0 and right <= 1, "share right " .. tostring(right))
+        ai.unlearn("sheep")
+    )", "teach")) << f.vm.errors().back().message;
+    ASSERT_NE(f.world.policy("sheep"), nullptr);
+    EXPECT_EQ(f.world.policy("sheep")->exampleCount(), 12u);
+    EXPECT_FALSE(f.world.policy("sheep")->trained());
+}
+
 TEST(AiLua, ScriptsGiveMindsOrdersAndHearEvents) {
     LuaFarm f;
     f.things[5] = { 0, 0, 0 };
@@ -608,4 +628,101 @@ TEST(AiClips, PicksAModelsClipForWhatTheAnimalDoes) {
     EXPECT_EQ(clipForAnim(dog, "idle").clip, 1);
     EXPECT_EQ(clipForAnim(dog, "eat").clip, 4);
     EXPECT_EQ(clipForAnim(withClips({}), "idle").clip, -1);
+}
+
+// ---------------------------------------------------------------- teaching by example
+
+namespace {
+// x and y in [0, 1): "b" when x > y, else "a".
+LearnedPolicy taughtXY(uint64_t seed) {
+    LearnedPolicy p;
+    p.setup({ "x", "y" }, { "a", "b" });
+    uint64_t s = 42;
+    auto r = [&] {
+        s = s * 6364136223846793005ull + 1442695040888963407ull;
+        return float((s >> 33) % 1000) / 1000.0f;
+    };
+    for (int i = 0; i < 80; ++i) {
+        const float x = r(), y = r();
+        if (std::abs(x - y) < 0.05f) continue; // no coin flips in the lesson
+        p.addExample({ x, y }, x > y ? 1 : 0);
+    }
+    p.train(400, 0.5f, seed);
+    return p;
+}
+} // namespace
+
+TEST(AiLearning, LearnsWhatItIsShown) {
+    const LearnedPolicy p = taughtXY(7);
+    ASSERT_TRUE(p.trained());
+    EXPECT_EQ(p.best({ 0.9f, 0.1f }), "b");
+    EXPECT_EQ(p.best({ 0.1f, 0.8f }), "a");
+    const std::vector<float> probs = p.predict({ 0.8f, 0.2f });
+    ASSERT_EQ(probs.size(), 2u);
+    EXPECT_NEAR(probs[0] + probs[1], 1.0f, 1e-5f);
+    EXPECT_GT(probs[1], 0.7f);
+    EXPECT_TRUE(p.predict({ 0.5f }).empty()); // wrong size
+    EXPECT_TRUE(LearnedPolicy().predict({ 0.5f, 0.5f }).empty()); // untrained
+}
+
+TEST(AiLearning, SameExamplesAndSeedSameNetwork) {
+    EXPECT_EQ(taughtXY(3).toJson(), taughtXY(3).toJson());
+    EXPECT_NE(taughtXY(3).toJson()["weights"], taughtXY(4).toJson()["weights"]);
+}
+
+TEST(AiLearning, SavesAndLoadsAsJsonOrYaml) {
+    const LearnedPolicy p = taughtXY(5);
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "kke_ai_learning";
+    std::filesystem::create_directories(dir);
+    for (const char* name : { "policy.json", "policy.yml" }) {
+        std::string error;
+        ASSERT_TRUE(p.save(dir / name, &error)) << error;
+        LearnedPolicy back;
+        ASSERT_TRUE(back.load(dir / name, &error)) << error;
+        EXPECT_EQ(back.exampleCount(), p.exampleCount());
+        EXPECT_EQ(back.predict({ 0.7f, 0.3f }), p.predict({ 0.7f, 0.3f })) << name;
+    }
+    LearnedPolicy bad;
+    std::string error;
+    EXPECT_FALSE(bad.fromJson(nlohmann::json{ { "format", "kke.ai.policy" }, { "features", { "x" } }, { "actions", { "a" } }, { "weights", { 1.0 } } }, &error));
+    EXPECT_NE(error.find("weights"), std::string::npos) << error;
+    std::filesystem::remove_all(dir);
+}
+
+TEST(AiLearning, ATaughtAnimalLeansTowardsWhatItWasShown) {
+    // Two things it could do: "left" when x is high, "right" when y is.
+    // It is taught the opposite, and after learning it does as taught.
+    AiWorld w(9);
+    Species s;
+    s.id = "pupil";
+    UtilityAction left{ "left", "idle", 1.0f, { { "x", Curve::linear() } } };
+    UtilityAction right{ "right", "idle", 1.0f, { { "y", Curve::linear() } } };
+    s.actions = { left, right };
+    w.defineSpecies(s);
+    ASSERT_TRUE(w.addAgent(1, "pupil", glm::vec3(0.0f)));
+    auto situation = [&](float x, float y) {
+        w.setInput(1, "x", x);
+        w.setInput(1, "y", y);
+        for (int i = 0; i < 8; ++i) w.update(0.1f);
+        return w.actionName(1);
+    };
+    EXPECT_EQ(situation(0.8f, 0.3f), "left");
+    EXPECT_FALSE(w.teach(1, "fly")); // not one of its actions
+    EXPECT_FALSE(w.teach(99, "left"));
+    for (int i = 0; i < 40; ++i) {
+        const float x = 0.2f + 0.6f * float(i % 10) / 10.0f, y = 0.8f - 0.6f * float(i % 10) / 10.0f + (i < 20 ? 0.05f : -0.05f);
+        if (std::abs(x - y) < 0.05f) continue;
+        w.setInput(1, "x", x);
+        w.setInput(1, "y", y);
+        ASSERT_TRUE(w.teach(1, x > y ? "right" : "left"));
+    }
+    const LearnedPolicy::Result r = w.learn("pupil");
+    EXPECT_GE(r.accuracy, 0.9f);
+    ASSERT_NE(w.policy("pupil"), nullptr);
+    EXPECT_EQ(w.policy("pupil")->features(), (std::vector<std::string>{ "x", "y" }));
+    EXPECT_EQ(situation(0.8f, 0.3f), "right");
+    EXPECT_EQ(situation(0.3f, 0.8f), "left");
+    w.unlearn("pupil");
+    EXPECT_EQ(situation(0.8f, 0.3f), "left"); // instincts again
+    EXPECT_GT(w.policy("pupil")->exampleCount(), 30u); // what it was shown is kept
 }

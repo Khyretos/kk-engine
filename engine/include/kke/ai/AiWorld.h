@@ -1,5 +1,6 @@
 #pragma once
 
+#include "kke/ai/Learning.h"
 #include "kke/ai/Perception.h"
 #include "kke/ai/Steering.h"
 #include "kke/ai/Utility.h"
@@ -284,6 +285,24 @@ public:
     // Ground height at x, z (when there's no NavMesh). False = keep y.
     std::function<bool(float x, float z, float& y)> groundHeight;
 
+    // ---- Teaching by example (kke/ai/Learning.h, docs/AI.md)
+    // An example for the agent's species: what it senses right now, and
+    // `action` (one of the species' action names) as what it should do.
+    // False when the agent or the action is unknown.
+    bool teach(AgentId id, const std::string& action);
+    // Trains the species on its examples; from then on its agents lean
+    // towards what they were taught (learnedWeight).
+    LearnedPolicy::Result learn(const std::string& species, int epochs = 400);
+    // Drops the training (and with `examples`, what was shown too).
+    void unlearn(const std::string& species, bool examples = false);
+    const LearnedPolicy* policy(const std::string& species) const;
+    // Replaces a species' policy (one loaded from a file). False when its
+    // actions aren't the species' own.
+    bool setPolicy(const std::string& species, LearnedPolicy policy);
+    // How far the prediction moves the choice: added to each action's
+    // utility score as weight x probability (orders weigh 3, fear's flee 2).
+    float learnedWeight = 1.5f;
+
     // ---- Running
     float perceptionInterval = 0.1f; // seconds (staggered across agents)
     float thinkInterval = 0.25f;
@@ -316,12 +335,16 @@ private:
     const Awareness* strongest(const Agent& a, Attitude kind, float* score = nullptr) const;
     const Place* nearestPlace(const Agent& a, const std::vector<std::string>& kinds, float maxDistance) const;
     float computeInput(const Agent& a, const std::string& name) const;
+    LearnedPolicy& policyFor(int species); // made (and fitted to its actions) on first use
+    std::vector<float> learnedFeatures(const Agent& a, const LearnedPolicy& p) const;
     void emit(AiEvent e) { m_events.push_back(std::move(e)); }
     void neighbours(const Agent& a, float radius, bool sameSpeciesOnly, std::vector<Neighbour>& out) const;
 
     uint64_t m_rng;
+    uint64_t m_seed; // as made: training seeds come from it
     double m_time = 0.0;
     std::vector<Species> m_species;
+    std::unordered_map<int, LearnedPolicy> m_policies; // by species index
     std::vector<Agent> m_agents;
     std::unordered_map<AgentId, size_t> m_index;
     std::vector<Place> m_places;

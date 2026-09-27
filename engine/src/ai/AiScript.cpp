@@ -74,6 +74,13 @@ std::vector<ApiFunction> aiApiFunctions() {
            { param("thing", Thing, "Who"), param("other", Thing, "About whom"), param("attitude", Text, "Feeling", "\"friendly\"") }),
         fn("setInput", "Set a feeling", "Minds", "A number its own decisions can use (\"health\", \"loyalty\", ...)",
            { param("thing", Thing, "Who"), param("name", Text, "Name", "\"health\""), param("value", Number, "Value", "1") }),
+        fn("teach", "Show what to do", "Learning", "\"In a moment like this, do that\": one example for its kind (graze, flee, rest, ...)",
+           { param("thing", Thing, "Who"), param("action", Text, "Do", "\"graze\"") }, param("ok", Bool, "Worked")),
+        fn("learn", "Learn from what it was shown", "Learning",
+           "Its kind learns from every example so far and from now on leans towards it. How many it gets right (0 to 1)",
+           { param("species", Text, "Kind", "\"sheep\"") }, param("right", Number, "Gets right")),
+        fn("unlearn", "Forget what it learned", "Learning", "Back to its instincts (the examples are kept)",
+           { param("species", Text, "Kind", "\"sheep\"") }),
         // Lists and tables aren't something a node can hold: Lua only.
         fn("species", "", "", "Every species id: { \"sheep\", \"cow\", ... }", {}),
         fn("defineSpecies", "", "", "Adds or changes a species from a table (the same keys as a species file, docs/AI.md)", {}),
@@ -326,6 +333,21 @@ void bindAi(ScriptVM& vm, AiWorld& world, LocateFn locate) {
                 const double v = luaL_optnumber(L, 3, 1.0);
                 lua_pushboolean(L, w->setInput(thingArg(L, 1), luaL_checkstring(L, 2), std::isfinite(v) ? float(v) : 0.0f));
                 return 1;
+            };
+        } else if (n == "teach") {
+            f = [w](lua_State* L) {
+                lua_pushboolean(L, w->teach(thingArg(L, 1), luaL_checkstring(L, 2)));
+                return 1;
+            };
+        } else if (n == "learn") {
+            f = [w](lua_State* L) {
+                lua_pushnumber(L, double(w->learn(luaL_checkstring(L, 1)).accuracy));
+                return 1;
+            };
+        } else if (n == "unlearn") {
+            f = [w](lua_State* L) {
+                w->unlearn(luaL_checkstring(L, 1));
+                return 0;
             };
         } else if (n == "species") {
             f = [w](lua_State* L) {

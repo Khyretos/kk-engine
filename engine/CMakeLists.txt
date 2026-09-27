@@ -58,6 +58,7 @@ set(ENGINE_SOURCES
     src/ai/AiWorld.cpp
     src/ai/AiScript.cpp
     src/ai/Clips.cpp
+    src/ai/Learning.cpp
     src/net/BitStream.cpp
     src/net/Protocol.cpp
     src/net/Transport.cpp
@@ -262,6 +263,7 @@ target_link_libraries(kke_engine PUBLIC
     nlohmann_json::nlohmann_json
     kke_sqlite
     kke_recast
+    kke_genann
     ufbx
     spdlog::spdlog
     kke_miniaudio

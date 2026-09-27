@@ -101,6 +101,14 @@ void FarmModule::init(kke::Application& app) {
     in.addBinding(IM::bind("farm.debug", IM::key(SDL_SCANCODE_F1)));
     in.addBinding(IM::bind("farm.debug", IM::pad(SDL_GAMEPAD_BUTTON_BACK)));
     in.addBinding(IM::bind("farm.nav", IM::key(SDL_SCANCODE_F2)));
+    // Teaching by example: pick a lesson, show it to the nearest animal
+    // ("interact": E), then let them learn.
+    in.defineAction({ "farm.lesson", "Next lesson", "Farm", "game" });
+    in.defineAction({ "farm.learn", "Let them learn", "Farm", "game" });
+    in.addBinding(IM::bind("farm.lesson", IM::key(SDL_SCANCODE_TAB)));
+    in.addBinding(IM::bind("farm.lesson", IM::pad(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)));
+    in.addBinding(IM::bind("farm.learn", IM::key(SDL_SCANCODE_L)));
+    in.addBinding(IM::bind("farm.learn", IM::pad(SDL_GAMEPAD_BUTTON_DPAD_UP)));
     m_input->commitDefaults();
 
     m_rig.mode = kke::CameraRig::Mode::ThirdPerson;
@@ -440,6 +448,9 @@ void FarmModule::update(const kke::UpdateContext& ctx) {
     kke::InputMap& in = m_input->map(0);
     if (in.pressed("farm.debug")) m_showDebug = !m_showDebug;
     if (in.pressed("farm.nav")) m_showNav = !m_showNav;
+    if (in.pressed("farm.lesson")) m_lesson = (m_lesson + 1) % kLessons.size();
+    if (in.pressed("interact")) teachNearest();
+    if (in.pressed("farm.learn")) learnAll();
 
     updatePlayer(dt);
     if (!m_lineup) m_ai.update(dt);
@@ -488,12 +499,56 @@ void FarmModule::render(const kke::RenderContext& ctx) {
 
 void FarmModule::renderShadow(const kke::ShadowRenderContext&) {}
 
+// Shows the nearest animal the lesson: "in a moment like this, do that".
+void FarmModule::teachNearest() {
+    const kke::ai::Agent* best = nullptr;
+    float bestDist = 10.0f;
+    for (const Animal& a : m_animals) {
+        const kke::ai::Agent* ag = m_ai.agent(a.id);
+        if (!ag) continue;
+        const float d = glm::length(glm::vec2(ag->position.x - m_pos.x, ag->position.z - m_pos.z));
+        if (d < bestDist) {
+            bestDist = d;
+            best = ag;
+        }
+    }
+    const std::string lesson = kLessons[m_lesson];
+    if (!best) {
+        m_log.push_back("Nobody near enough to show (" + lesson + ")");
+        return;
+    }
+    const kke::ai::Species* s = m_ai.speciesOf(best->id);
+    const std::string who = s ? s->label : "?";
+    if (!s || !m_ai.teach(best->id, lesson)) {
+        m_log.push_back(who + " can't " + lesson);
+        return;
+    }
+    const kke::ai::LearnedPolicy* p = m_ai.policy(s->id);
+    m_log.push_back("Showed the " + who + ": " + lesson + " (" + std::to_string(p ? p->exampleCount() : 0) + " shown)");
+}
+
+// Every kind that was shown something learns from it.
+void FarmModule::learnAll() {
+    bool any = false;
+    for (const std::string& id : m_ai.speciesIds()) {
+        const kke::ai::LearnedPolicy* p = m_ai.policy(id);
+        if (!p || p->exampleCount() == 0) continue;
+        any = true;
+        const kke::ai::LearnedPolicy::Result r = m_ai.learn(id);
+        const kke::ai::Species* s = m_ai.species(id);
+        m_log.push_back((s ? s->label : id) + " learned from " + std::to_string(p->exampleCount()) + " (" +
+                        std::to_string(int(std::lround(r.accuracy * 100.0f))) + "% right)");
+    }
+    if (!any) m_log.push_back("Show them something first (E)");
+}
+
 void FarmModule::renderUi() {
     ImGui::SetNextWindowPos(ImVec2(12, 12), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowBgAlpha(0.55f);
     ImGui::Begin("Farm", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
     ImGui::TextUnformatted("You're the dog. WASD / stick: move, Shift: run, Space: bark");
     ImGui::TextUnformatted("Click to look around (Esc lets go). F1: what they think, F2: where they walk");
+    ImGui::Text("Teach: lesson '%s' (Tab), E: show the nearest animal, L: let them learn", kLessons[m_lesson]);
     if (!m_status.empty()) ImGui::TextWrapped("%s", m_status.c_str());
     for (const std::string& l : m_log) ImGui::BulletText("%s", l.c_str());
     if (m_showDebug) {
