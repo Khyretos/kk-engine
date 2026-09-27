@@ -2,6 +2,8 @@
 
 #include "kke/Application.h"
 #include "kke/Log.h"
+#include "kke/RmlTextSafety.h"
+#include "kke/modules/InputModule.h"
 #include "kke/modules/UiModule.h"
 
 #include <RmlUi/Core/Context.h>
@@ -88,9 +90,14 @@ bool CommandHud::build(const std::string& title) {
     return true;
 }
 
+std::string CommandHud::prompts(const std::string& text) const {
+    const kke::InputModule* in = m_app.getModule<kke::InputModule>();
+    return in ? in->promptText(text) : kke::escapeRmlText(text);
+}
+
 void CommandHud::setButtons(std::vector<Button> buttons) {
     std::vector<ButtonView> next;
-    for (Button& b : buttons) next.push_back({ std::move(b.icon), std::move(b.label), std::move(b.key), b.on });
+    for (Button& b : buttons) next.push_back({ std::move(b.icon), std::move(b.label), prompts(b.key), b.on });
     bool same = next.size() == m_buttons.size();
     for (size_t i = 0; same && i < next.size(); ++i)
         same = next[i].icon == m_buttons[i].icon && next[i].label == m_buttons[i].label && next[i].key == m_buttons[i].key &&
@@ -112,7 +119,8 @@ void CommandHud::setLines(std::vector<Line> lines) {
     if (m_model) m_model.DirtyVariable("lines");
 }
 
-void CommandHud::setHint(const std::string& hint) {
+void CommandHud::setHint(const std::string& text) {
+    const std::string hint = prompts(text);
     if (hint == m_hint) return;
     m_hint = hint;
     if (m_model) m_model.DirtyVariable("hint");

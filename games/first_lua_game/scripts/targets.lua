@@ -21,7 +21,7 @@ local KINDS = {
   { material = "ice",   sound = "Glass", size = Vec(0.5, 0.5, 0.5), points = 80 },
 }
 
-input.define("targets.start", "Start break-the-targets", "T")
+input.define("targets.start", "Start break-the-targets", "T", "dpad_right") -- T on the keyboard, d-pad right on a controller
 
 local hud = ui and ui.load("targets_hud.rml")
 local state = "idle"   -- idle, playing, done
@@ -63,7 +63,7 @@ local function finish(title)
     ui.text(hud, "result-shots", string.format("%d targets with %d shots (%d%%)", broken, shots, accuracy))
     ui.text(hud, "result-best", "Best: " .. best)
     ui.class(hud, "results", "shown", true)
-    show("hint", "Press T to play again.")
+    ui.rml(hud, "hint", '<prompt action="targets.start" label="play again"/>') -- the button picture for the device in use
   end
   print(string.format("round over: %d points, %d/%d targets, %d shots", score, broken, TARGETS, shots))
   refresh()

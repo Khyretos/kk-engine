@@ -31,6 +31,7 @@
         #wheel .item .label { font-size: 12dp; }
         #toast { position: absolute; top: 22%; left: 0; width: 100%; text-align: center; font-size: 30dp; font-weight: bold; color: #ffffff; }
         #hint { position: absolute; left: 0; bottom: 8dp; width: 100%; text-align: center; font-size: 12dp; color: #aab3cc; }
+        #hint img, .btn .key img { font-size: 14dp; } /* prompt glyphs are 1.6em */
     </style>
 </head>
 <body data-model="cmd">
@@ -52,9 +53,9 @@
         <div class="btn" data-for="b, i : buttons" data-class-on="b.on" data-event-click="press(i)">
             <div class="icon">{{b.icon}}</div>
             <div class="label">{{b.label}}</div>
-            <div class="key">{{b.key}}</div>
+            <div class="key" data-rml="b.key"></div>
         </div>
     </div>
-    <div id="hint">{{hint}}</div>
+    <div id="hint" data-rml="hint"></div>
 </body>
 </rml>

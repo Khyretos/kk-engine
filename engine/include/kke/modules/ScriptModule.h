@@ -169,6 +169,7 @@ private:
     double m_time = 0.0, m_scanTimer = 0.0;
     float m_dt = 0.0f;
     bool m_inited = false;
+    uint32_t m_promptSerial = 0; // InputModule::promptSerial() last told to scripts (InputStyle hook)
     std::vector<std::string> m_console;
     char m_consoleInput[512] = {};
     std::string m_consoleTarget = "console"; // which script's globals the console line runs in

@@ -24,6 +24,9 @@ namespace command_kit {
 class CommandHud {
 public:
     struct Line { std::string text, color = "#e8ecf4"; };
+    // `key` and the hint are prompt text: "{pet.come}" shows the button
+    // for that action on the device in use (kke/ButtonPrompts.h), "{touch:tap}"
+    // a gesture; the rest is plain text.
     struct Button { std::string icon, label, key; bool on = false; };
     struct WheelItem { std::string icon, label; };
 
@@ -46,6 +49,8 @@ public:
     struct LineView { std::string text, color = "#e8ecf4"; };
 
 private:
+    std::string prompts(const std::string& text) const; // prompt text -> RML
+
     kke::Application& m_app;
     Rml::DataModelHandle m_model;
     Rml::ElementDocument* m_doc = nullptr;

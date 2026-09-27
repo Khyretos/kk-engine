@@ -1,11 +1,13 @@
 #pragma once
 
+#include "kke/ButtonPrompts.h"
 #include "kke/InputDevices.h"
 #include "kke/InputSanity.h"
 #include "kke/InputMap.h"
 #include "kke/Module.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -38,6 +40,27 @@ public:
     void setPlayers(int count);
     // Split screen: which devices player `p` listens to (empty = all).
     void assignDevices(int player, std::vector<uint32_t> devices);
+
+    // Button prompts (kke/ButtonPrompts.h): which glyphs player `p` should
+    // see, following the device they touched last (a key or the mouse:
+    // keyboard; a pad button or a stick pushed past half: that pad's make;
+    // a finger on the screen: touch). Starts as touch on phones, as the
+    // Deck on a Steam Deck, else keyboard. promptSerial() changes whenever
+    // any player's style does. KKE_PROMPT_STYLE=xbox|playstation|switch|
+    // steamdeck|steamcontroller|keyboard|touch forces one (developer
+    // builds; games can offer the same as a setting with forcePromptStyle).
+    PromptStyle promptStyle(int player = 0) const;
+    uint32_t promptSerial() const { return m_promptSerial; }
+    void forcePromptStyle(std::optional<PromptStyle> style);
+    ButtonPrompts& prompts() { return m_prompts; }
+    const ButtonPrompts& prompts() const { return m_prompts; }
+    // The style of one device (for "press A to join" under a pad that
+    // was just plugged in, before it belongs to anyone).
+    static PromptStyle promptStyleFor(const InputDevices::Device& d);
+    // Markup for an action as player `p` sees it right now (see
+    // ButtonPrompts::rml / format).
+    std::string promptRml(const std::string& action, const std::string& label = {}, int player = 0) const;
+    std::string promptText(const std::string& text, int player = 0) const;
 
     void commitDefaults();
     bool save() const;
@@ -88,6 +111,14 @@ private:
     struct Virtual { SDL_JoystickID id = 0; SDL_Joystick* joy = nullptr; bool pad = false; int index = 0; };
     std::vector<Virtual> m_virtual;
     bool m_animateVirtual = false;
+
+    void notePromptDevice(uint32_t deviceRef, bool keyboardOrMouse, PromptStyle style);
+    void setPromptStyle(int player, PromptStyle style);
+    ButtonPrompts m_prompts;
+    std::vector<PromptStyle> m_promptStyles;
+    std::optional<PromptStyle> m_forcedStyle;
+    uint32_t m_promptSerial = 0;
+    bool m_promptTouched = false; // a real input has set the style (else the start-up guess may change)
 
     std::string m_path;
     InputDevices m_devices;

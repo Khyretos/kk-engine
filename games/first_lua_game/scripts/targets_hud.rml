@@ -26,14 +26,15 @@
         <span>Score <span id="score" class="big">0</span></span>
         <span>Time <span id="time" class="big">-</span></span>
         <span>Targets <span id="left" class="big">-</span></span>
-        <span id="hint">Press T to start. Shoot the blocks (left mouse).</span>
+        <!-- <prompt> shows the button on whatever the player holds: a key, a pad button, a tap -->
+        <span id="hint"><prompt action="targets.start" label="start"/> <prompt action="fire" label="shoot the blocks"/></span>
     </div>
     <div id="results">
         <h1 id="result-title">Time!</h1>
         <p id="result-score"></p>
         <p id="result-shots"></p>
         <p id="result-best"></p>
-        <button id="again">Play again (T)</button>
+        <button id="again"><prompt action="targets.start" label="Play again"/></button>
     </div>
 </body>
 </rml>

@@ -5,6 +5,7 @@
 
 #include "kke/Application.h"
 #include "kke/Log.h"
+#include "kke/modules/InputModule.h"
 #include "kke/modules/UiModule.h"
 
 #include <RmlUi/Core/Context.h>
@@ -90,14 +91,19 @@ void HordeModule::updateHud() {
         break;
     case Phase::Overrun:
         banner = "Overrun";
-        sub = "Wave " + std::to_string(m_wave) + ", " + std::to_string(m_kills) + " goblins slain. R (Start) to try again";
+        sub = "Wave " + std::to_string(m_wave) + ", " + std::to_string(m_kills) + " goblins slain. {horde.again} to try again";
         break;
     }
     set(m_hud.banner, banner, "banner");
-    set(m_hud.sub, sub, "sub");
+    // Button prompts: pictures of the buttons on the device in use.
+    const kke::InputModule* in = m_app->getModule<kke::InputModule>();
+    auto prompt = [in](const std::string& text) { return in ? in->promptText(text) : text; };
+    set(m_hud.sub, prompt(sub), "sub");
+    const bool keyboard = !in || in->promptStyle() == kke::PromptStyle::Keyboard;
     set(m_hud.hint,
-        m_captured ? "WASD move  ·  left mouse slash  ·  right mouse great swing  ·  Shift block (just in time: parry)  ·  Space roll  ·  Esc frees the mouse"
-                   : "Click to take the mouse  ·  WASD move  ·  left mouse slash  ·  right mouse great swing  ·  Shift block  ·  Space roll",
+        prompt(std::string(keyboard && !m_captured ? "{mouse:left} take the mouse  ·  " : "") +
+               "{move} move  ·  {horde.slash} slash  ·  {horde.heavy} great swing  ·  {horde.block} block (just in time: parry)  ·  {horde.roll} roll" +
+               (keyboard && m_captured ? "  ·  {key:Escape} frees the mouse" : "")),
         "hint");
 }
 

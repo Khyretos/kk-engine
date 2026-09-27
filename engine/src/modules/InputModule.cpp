@@ -29,6 +29,7 @@ void InputModule::setPlayers(int count) {
         }
         m_maps.push_back(std::move(m));
     }
+    m_promptStyles.resize(m_maps.size(), m_promptStyles.empty() ? PromptStyle::Keyboard : m_promptStyles.front());
     m_maps.resize(static_cast<size_t>(count));
 }
 
@@ -177,6 +178,16 @@ void InputModule::mirrorKeyboard(InputMap& m) {
 
 void InputModule::init(Application&) {
     m_devices.init();
+#if defined(SDL_PLATFORM_ANDROID) || defined(SDL_PLATFORM_IOS)
+    for (PromptStyle& s : m_promptStyles) s = PromptStyle::Touch;
+#endif
+    if (dev::kEnabled) {
+        if (const char* forced = std::getenv("KKE_PROMPT_STYLE"); forced && *forced) {
+            PromptStyle s{};
+            if (promptStyleFromString(forced, s)) forcePromptStyle(s);
+            else log::get(name())->warn("KKE_PROMPT_STYLE='{}' is not a prompt style (keyboard, xbox, playstation, switch, steamdeck, steamcontroller, touch)", forced);
+        }
+    }
     m_sanity.onFinding = [this](const InputSanity::Finding& f) {
         log::get(name())->info("input sanity: {} on control {:#x}: {}", toString(f.kind), f.control, f.detail);
     };
@@ -329,6 +340,13 @@ void InputModule::frameStart(const UpdateContext& ctx) {
     m_now = ctx.totalTime;
     if (m_animateVirtual) animateVirtualDevices(ctx.totalTime);
     m_devices.poll();
+    if (!m_promptTouched) {
+        // Until someone presses something, a Steam Deck's own controls are
+        // the best guess on a Deck.
+        for (const InputDevices::Device& d : m_devices.devices())
+            if (d.connected && d.kind == InputDevices::Kind::Gamepad && promptStyleFor(d) == PromptStyle::SteamDeck)
+                for (int p = 0; p < players(); ++p) setPromptStyle(p, PromptStyle::SteamDeck);
+    }
     for (auto& m : m_maps) m->update(m_devices, m_now);
     m_sanity.update(static_cast<double>(SDL_GetTicksNS()) * 1e-9); // same clock as event timestamps
 }
@@ -371,6 +389,86 @@ void InputModule::onEvent(const SDL_Event& event) {
         break;
     default: break;
     }
+
+    // Button prompts follow the device that was just used.
+    switch (event.type) {
+    case SDL_EVENT_KEY_DOWN:
+        if (!event.key.repeat) notePromptDevice(0, true, PromptStyle::Keyboard);
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        if (event.button.which != SDL_TOUCH_MOUSEID) notePromptDevice(0, true, PromptStyle::Keyboard);
+        break;
+    case SDL_EVENT_MOUSE_WHEEL:
+        if (event.wheel.which != SDL_TOUCH_MOUSEID) notePromptDevice(0, true, PromptStyle::Keyboard);
+        break;
+    case SDL_EVENT_MOUSE_MOTION:
+        // A real push of the mouse, not a jitter or a finger's emulated one.
+        if (event.motion.which != SDL_TOUCH_MOUSEID && std::abs(event.motion.xrel) + std::abs(event.motion.yrel) > 6.0f)
+            notePromptDevice(0, true, PromptStyle::Keyboard);
+        break;
+    case SDL_EVENT_FINGER_DOWN: notePromptDevice(0, false, PromptStyle::Touch); break;
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+    case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
+        const SDL_JoystickID which = event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ? event.gbutton.which : event.gaxis.which;
+        if (event.type == SDL_EVENT_GAMEPAD_AXIS_MOTION && std::abs(static_cast<int>(event.gaxis.value)) < 16384) break;
+        for (const InputDevices::Device& d : m_devices.devices())
+            if (d.connected && d.kind == InputDevices::Kind::Gamepad && d.sdlId == which) notePromptDevice(d.ref, false, promptStyleFor(d));
+        break;
+    }
+    default: break;
+    }
+}
+
+PromptStyle InputModule::promptStyleFor(const InputDevices::Device& d) {
+    const SDL_GamepadType type = d.gamepad ? SDL_GetGamepadType(d.gamepad) : SDL_GetGamepadTypeForID(d.sdlId);
+    return promptStyleForPad(static_cast<int>(type), d.vendor, d.product);
+}
+
+void InputModule::notePromptDevice(uint32_t deviceRef, bool keyboardOrMouse, PromptStyle style) {
+    m_promptTouched = true;
+    for (int p = 0; p < players(); ++p) {
+        const std::vector<uint32_t>& mine = m_maps[static_cast<size_t>(p)]->devices();
+        bool listens = mine.empty() || (deviceRef != 0 && std::find(mine.begin(), mine.end(), deviceRef) != mine.end());
+        if (!listens && (keyboardOrMouse || style == PromptStyle::Touch)) {
+            // Split screen: the keyboard/mouse and the screen belong to
+            // whoever was given a keyboard or mouse.
+            for (uint32_t ref : mine)
+                if (const InputDevices::Device* d = m_devices.find(ref); d && (d->kind == InputDevices::Kind::Keyboard || d->kind == InputDevices::Kind::Mouse))
+                    listens = true;
+        }
+        if (listens) setPromptStyle(p, style);
+    }
+}
+
+void InputModule::setPromptStyle(int player, PromptStyle style) {
+    PromptStyle& s = m_promptStyles[static_cast<size_t>(player)];
+    if (s == style) return;
+    s = style;
+    ++m_promptSerial;
+}
+
+PromptStyle InputModule::promptStyle(int player) const {
+    if (m_forcedStyle) return *m_forcedStyle;
+    return m_promptStyles[static_cast<size_t>(std::clamp(player, 0, players() - 1))];
+}
+
+void InputModule::forcePromptStyle(std::optional<PromptStyle> style) {
+    if (style == m_forcedStyle) return;
+    m_forcedStyle = style;
+    ++m_promptSerial;
+}
+
+std::string InputModule::promptRml(const std::string& action, const std::string& label, int player) const {
+    const int p = std::clamp(player, 0, players() - 1);
+    const InputMap& m = *m_maps[static_cast<size_t>(p)];
+    const PromptStyle style = promptStyle(p);
+    std::vector<ButtonPrompts::Glyph> g = m.action(action) ? m_prompts.actionGlyphs(style, m, action) : m_prompts.namedGlyphs(style, action);
+    return m_prompts.rml(g, label);
+}
+
+std::string InputModule::promptText(const std::string& text, int player) const {
+    const int p = std::clamp(player, 0, players() - 1);
+    return m_prompts.format(promptStyle(p), *m_maps[static_cast<size_t>(p)], text);
 }
 
 void InputModule::shutdown() {

@@ -48,6 +48,7 @@ SPECIAL = {
     "patrol.lua": {"camera": ("0 7 11", "0 0 0.5")},
     "net_scores": {"skip_shot": "nothing to see until someone presses J"},
     "throw.lua": {"skip_shot": "nothing to see until someone throws"},
+    "prompts.lua": {"skip_shot": "media/prompts.jpg is six prompt styles side by side (KKE_PROMPT_STYLE)"},
     "glass.lua": {"skip_shot": "needs a FEMFX build"},
     "caterpillar.lua": {"shot": 6},
     "rain.lua": {"shot": 6},

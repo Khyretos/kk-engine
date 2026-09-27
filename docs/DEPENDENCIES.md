@@ -103,6 +103,7 @@ Each one is a CMake option; the default is in brackets.
 | AgX tone mapping (Benjamin Wrensch's minimal AgX) | `AgX-minimal-MIT.txt` | `shaders/tonemap.glsl`, notice in [LICENSES/](../LICENSES/AgX-minimal-MIT.txt) | MIT | Keep the notice (in the shader and in every download) |
 | ACES fit (Krzysztof Narkowicz, "ACES Filmic Tone Mapping Curve", 2016) | | `shaders/tonemap.glsl` | Published as a formula on his blog, no licence stated | A five-number curve fit; formulas like this are generally not treated as copyrightable (our reading, not verified). Credited in the shader and here |
 | Universal Animation Library mannequin (Quaternius) | `UAL1_Standard.fbx` | `assets/animations/`, not in downloads | CC0 (public domain) | Nothing |
+| Xelu's Free Controller & Key Prompts (Nicolae "Xelu" Berbece, Those Awesome Guys) | `xelu` | `assets/prompts/xelu/` (641 PNGs; the sets `kke::ButtonPrompts` shows ship next to every game) | CC0 (public domain), stated in the pack's [LICENSE.txt](../assets/prompts/xelu/LICENSE.txt) | Nothing (credit welcome; we credit him in the licence file, [INPUT.md](INPUT.md) and here) |
 | Test texture | `test_icon.png` | `assets/textures/` | The project's own (MIT) | |
 | Kreative Kompas logo and banner | | `assets/branding/` | The project's branding (README "Licence"); our reading is that the MIT grant doesn't cover it | Games may say "made with KKE" but shouldn't use the logo as their own |
 

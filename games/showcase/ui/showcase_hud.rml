@@ -24,7 +24,7 @@
     </div>
     <div id="station" class="glass" data-if="station != ''">
         <div class="name">{{station}}</div>
-        <div class="text">{{station_text}}</div>
+        <div class="text" data-rml="station_text"></div>
         <div class="live" data-if="station_live != ''">{{station_live}}</div>
     </div>
     <div id="esc"><span class="keycap">Esc</span> menu</div>

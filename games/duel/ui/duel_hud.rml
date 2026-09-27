@@ -23,6 +23,7 @@
         #banner .big { font-size: 72dp; font-weight: bold; color: #ffffff; }
         #banner .sub { font-size: 18dp; color: #e8ecf4; margin-top: 6dp; }
         #hint { position: absolute; left: 10%; bottom: 14dp; width: 80%; padding: 6dp 10dp; border-radius: 8dp; background-color: #0b0f1cbb; text-align: center; font-size: 13dp; color: #cfd6e6; }
+        #hint img { font-size: 15dp; } /* prompt glyphs are 1.6em */
     </style>
 </head>
 <body data-model="duel">
@@ -41,8 +42,8 @@
     </div>
     <div id="banner" data-if="banner != ''">
         <div class="big">{{banner}}</div>
-        <div class="sub">{{sub}}</div>
+        <div class="sub" data-rml="sub"></div>
     </div>
-    <div id="hint">{{hint}}</div>
+    <div id="hint" data-rml="hint"></div>
 </body>
 </rml>
