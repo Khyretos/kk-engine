@@ -175,3 +175,26 @@ and, when present, UAL 2's melee clips (`UAL2.fbx`: Melee_Hook,
 Melee_Uppercut, Melee_Knee, Hit_Knockback, LayToIdle, Walk_Fwd/Bwd/L/R_Loop)
 from `assets/animations/` or `KKE_ASSETS_DIR/Universal Animation Library 2/Unity/`.
 The ring, gym and benches are boxes built in code.
+
+## Goblin Horde (`games/goblin_horde`)
+
+Not a scene file: the fort, trees and rubble are boxes built in code.
+
+- Goblins: **SIDEKICK Goblin Fighters**, `GoblinFighter_01` to `_05`
+  (`.sk` part lists under `SidekickCharacters/Characters/GoblinFighters/`,
+  parts from `Resources/Meshes`, colour maps `T_GoblinFighter_0NColorMap`).
+  Tongue, teeth and eyebrow parts are left out. Simplified to 20% at load.
+- Goblin clips: **ANIMATION Goblin Locomotion**, Sidekick versions
+  (`Animations/Sidekick/Neutral/...`): `A_MOD_GBL_Idle_Standing_Neut`,
+  `Walk_F_Neut`, `Run_F_Neut`, `Sprint_F_Neut`, `Idle_Fidget_Swipe_Neut`
+  (the attack), `Idle_Fidget_Menacing_Neut` (waiting their turn).
+- The king: **POLYGON Fantasy Characters**, `SK_Character_Male_King`
+  (falls back to `SK_Character_Male_Rouge_01`, `SK_Character_Male_Peasant_01`,
+  then the UAL mannequin) with `SM_Prop_SwordOrnate_01` in his right hand.
+- The king's clips: Quaternius UAL 1 (`Sword_Idle`, `Walk_Loop`,
+  `Jog_Fwd_Loop`, `Sprint_Loop`, `Roll`, `Hit_Chest`, `Death01`) and UAL 2
+  (`Sword_Regular_A`, `Sword_Regular_B`, `Sword_Heavy_A`, `Sword_Block`,
+  `Hit_Knockback`, `LayToIdle`), retargeted.
+
+Put the packs in `assets/synty/` (symlinks to the shared cache work) or set
+`KKE_ASSETS_DIR`.

@@ -210,6 +210,24 @@ TEST(Combat, SweepHitsAHordeSingleHitsOne) {
     EXPECT_EQ(hits, 1u);
 }
 
+TEST(Combat, HealUpToTheMaximumNotTheDead) {
+    CombatWorld w;
+    const CombatantId hero = w.add(0, CombatStats::fighter());
+    const CombatantId foe = w.add(1, CombatStats::fighter());
+    w.get(hero).place({ 0, 0, 0 }, { 0, 0, 1 });
+    w.get(foe).place({ 0, 0, 1.0f }, { 0, 0, -1 });
+    w.get(foe).attack(AttackDesc::heavy());
+    for (float t = 0.0f; t < 1.5f; t += kDt) w.step(kDt);
+    Combatant& c = w.get(hero);
+    ASSERT_LT(c.health(), c.stats().maxHealth);
+    c.heal(5.0f);
+    EXPECT_NEAR(c.health(), c.stats().maxHealth - AttackDesc::heavy().damage + 5.0f, 1e-3f);
+    c.heal(1000.0f);
+    EXPECT_FLOAT_EQ(c.health(), c.stats().maxHealth);
+    c.heal(-50.0f); // not a way to hurt
+    EXPECT_FLOAT_EQ(c.health(), c.stats().maxHealth);
+}
+
 TEST(Combat, CapsuleDistance) {
     float h = 0.0f;
     EXPECT_NEAR(kke::distanceToCapsule({ 1, 1, 0 }, { 0, 0, 0 }, 0.3f, 1.8f, &h), 0.7f, 1e-5f);

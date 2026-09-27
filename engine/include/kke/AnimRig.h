@@ -109,4 +109,12 @@ BoneMatch matchBones(const ModelData& source, const ModelData& target);
 // Every source clip as a clip for the target skeleton.
 std::vector<ModelAnimation> retargetAnimations(const ModelData& source, const ModelData& target, const BoneMatch& match);
 
+// Adds `source`'s clips to `rig` when both use the same skeleton but the
+// files list the bones in a different order or with extras (a second
+// animation library for the same mannequin, animation-only FBX files for
+// a Sidekick character): each rig bone takes the source bone of the same
+// name, bones the source lacks stay at rest. No retargeting: use
+// retargetAnimations for a different skeleton. Returns the clips added.
+size_t appendClipsByBoneName(ModelData& rig, const ModelData& source);
+
 } // namespace kke

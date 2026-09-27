@@ -339,4 +339,27 @@ std::vector<ModelAnimation> retargetAnimations(const ModelData& source, const Mo
     return out;
 }
 
+size_t appendClipsByBoneName(ModelData& rig, const ModelData& source) {
+    std::unordered_map<std::string, size_t> sourceBone;
+    for (size_t b = 0; b < source.bones.size(); ++b) sourceBone.emplace(source.bones[b].name, b);
+    std::vector<int> from(rig.bones.size(), -1);
+    for (size_t b = 0; b < rig.bones.size(); ++b)
+        if (auto it = sourceBone.find(rig.bones[b].name); it != sourceBone.end()) from[b] = static_cast<int>(it->second);
+    for (const ModelAnimation& a : source.animations) {
+        ModelAnimation out;
+        out.name = a.name;
+        out.duration = a.duration;
+        out.sampleRate = a.sampleRate;
+        out.frames.resize(a.frames.size());
+        for (size_t f = 0; f < a.frames.size(); ++f) {
+            out.frames[f].resize(rig.bones.size());
+            for (size_t b = 0; b < rig.bones.size(); ++b)
+                out.frames[f][b] = from[b] >= 0 && static_cast<size_t>(from[b]) < a.frames[f].size() ? a.frames[f][static_cast<size_t>(from[b])]
+                                                                                                    : rig.bones[b].localRest;
+        }
+        rig.animations.push_back(std::move(out));
+    }
+    return source.animations.size();
+}
+
 } // namespace kke

@@ -105,6 +105,21 @@ TEST(Sidekick, RealGoblinFighter) {
     printf("goblin: %zu triangles, %zu vertices; crowd copy %zu triangles, %zu vertices\n", m.triangleCount(), m.meshes[0].vertices.size(),
            lod.triangleCount(), lod.meshes[0].vertices.size());
     EXPECT_LT(lod.triangleCount(), m.triangleCount() / 4);
+
+    // The Goblin Locomotion clips are animation-only files (no mesh, no
+    // skin): their skeleton comes from the bone nodes, by the same names.
+    const std::filesystem::path clip = std::filesystem::path(dir) /
+                                       "ANIMATION_Goblin_Locomotion/Assets/Synty/AnimationGoblinLocomotion/Animations/Sidekick/Neutral/Locomotion/Walk/"
+                                       "A_MOD_GBL_Walk_F_Neut.fbx";
+    if (!std::filesystem::exists(clip)) return;
+    kke::ModelLoadOptions animOnly;
+    animOnly.allowNoMeshes = true;
+    const kke::ModelData walk = kke::loadModel(clip.string(), animOnly);
+    ASSERT_FALSE(walk.animations.empty());
+    EXPECT_GE(walk.findBone("pelvis"), 0);
+    int shared = 0;
+    for (const kke::ModelBone& b : m.bones) shared += walk.findBone(b.name) >= 0 ? 1 : 0;
+    EXPECT_GE(shared, 60) << "of " << m.bones.size();
 }
 
 } // namespace

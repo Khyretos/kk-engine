@@ -158,6 +158,27 @@
   demo: jiggle_demo
   docs: JIGGLE/
 
+- id: combat
+  title: Melee combat and hordes
+  icon: fa-solid fa-khanda
+  accent: "#e8b64c"
+  tagline: One on one, or one against sixty.
+  summary: >-
+    Fighting that reads well: wind-ups you can see, blocks that cost
+    stamina, parries timed to the moment, heavy hits that knock you down
+    into a ragdoll. The same rules scale to a horde that surrounds you,
+    waits its turn and breaks and runs.
+  points:
+    - Attacks with wind-up, strike and recovery; stamina, poise, parries
+    - Opponents and crowds driven by the engine AI core, tuned in a data file
+    - Synty SIDEKICK modular characters, simplified for crowds
+    - Two players on one screen in the duel
+  media:
+    - { src: media/goblin-horde.webp, caption: "Goblin Horde: four go at the king, the rest wait their turn" }
+    - { src: media/duel.webp, caption: "Duel: a one-on-one fist fight against a bot on the AI core" }
+  demo: goblin_horde
+  docs: COMBAT/
+
 - id: simulation
   title: Liquids, melting and oceans
   icon: fa-solid fa-water
