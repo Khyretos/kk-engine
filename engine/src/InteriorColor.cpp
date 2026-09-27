@@ -1,4 +1,5 @@
 #include "kke/InteriorColor.h"
+#include "kke/CookedFile.h"
 
 #include <stb_image.h>
 
@@ -191,7 +192,10 @@ InteriorFill interiorFillFromTexture(const std::string& path, const std::vector<
         auto it = cache.find(path);
         if (it == cache.end()) {
             int w = 0, h = 0, channels = 0;
-            stbi_uc* pixels = path.empty() ? nullptr : stbi_load(path.c_str(), &w, &h, &channels, 4);
+            std::vector<uint8_t> bytes; // through kke::cooked: cooked art too (docs/COOKED_ART.md)
+            stbi_uc* pixels = path.empty() || !cooked::readAssetFile(path, bytes)
+                                  ? nullptr
+                                  : stbi_load_from_memory(bytes.data(), static_cast<int>(bytes.size()), &w, &h, &channels, 4);
             Image shrunk;
             if (pixels) {
                 shrunk = shrink(pixels, w, h, 256);

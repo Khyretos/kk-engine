@@ -1,4 +1,5 @@
 #include "kke/Sidekick.h"
+#include "kke/CookedFile.h"
 
 #include "kke/DataFile.h"
 
@@ -45,12 +46,10 @@ SidekickCharacter readSidekickCharacter(const std::string& skFile, const std::ve
     // A .sk file is YAML with an extension the loader doesn't know.
     std::string text;
     {
-        FILE* f = std::fopen(skFile.c_str(), "rb");
-        if (!f) throw std::runtime_error("readSidekickCharacter: can't open '" + skFile + "'");
-        char buf[4096];
-        size_t n;
-        while ((n = std::fread(buf, 1, sizeof(buf), f)) > 0) text.append(buf, n);
-        std::fclose(f);
+        std::vector<uint8_t> bytes; // through kke::cooked: cooked art too (docs/COOKED_ART.md)
+        std::string readError;
+        if (!cooked::readAssetFile(skFile, bytes, &readError)) throw std::runtime_error("readSidekickCharacter: " + readError);
+        text.assign(bytes.begin(), bytes.end());
     }
     nlohmann::json doc;
     std::string error;

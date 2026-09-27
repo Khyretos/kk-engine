@@ -11,6 +11,10 @@ benchmark/
 
 # Paid/licensed art packs (e.g. Synty) are never committed — see assets/README.md
 assets/synty/
+# The key cooked Synty art is encrypted with (docs/COOKED_ART.md), and art
+# cooked with it: both only ever go into a private package.
+.kke-art.key
+cooked-art/
 # Their thumbnails are renders of the same packs (kke::ThumbnailModule keeps
 # them in the user's cache folder; this catches KKE_THUMBNAIL_CACHE=./thumbnails).
 thumbnails/

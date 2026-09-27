@@ -151,6 +151,7 @@ nav:
       - Moods (sky, fog, look): MOODS.md
       - Rendering principles: RENDERING_PRINCIPLES.md
       - Benchmarks: BENCHMARKS.md
+      - Cooked art (private builds with Synty art): COOKED_ART.md
       - Performance notes: PERFORMANCE_NOTES.md
       - Platforms and hardware targets: PLATFORMS.md
       - Android: ANDROID.md

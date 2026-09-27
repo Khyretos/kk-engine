@@ -39,10 +39,30 @@ frame cap).
 ./kke_benchmark --quick              # fewer demos, 8 s each, about 4 minutes
 ./kke_benchmark --only duel,sea_demo # just these (ids: --list)
 ./kke_benchmark --seconds 60         # longer runs catch rarer hitches
+./kke_benchmark --suite my_suite.yaml # another list of demos (any path)
 ```
 
 Owners of the Synty packs can set `KKE_ASSETS_DIR` first; the results say
-per demo whether it ran on Synty art or on stand-in blocks.
+per demo whether it ran on Synty art or on stand-in blocks. To send
+friends a download *with* the art, bake a private one:
+[COOKED_ART.md](COOKED_ART.md).
+
+**Collect mode** is for launchers that start the demos themselves (the
+Android app can't spawn processes): they run each demo with the same
+`KKE_BENCH_*` variables, then hand the folder to `kke_benchmark`, which
+writes the usual results file without running anything:
+
+```bash
+kke_benchmark --collect RUN_DIR --suite FILE [--out DIR] [--only ids] [--seconds S] --no-wait --no-open
+```
+
+`RUN_DIR/runs.json` lists what was run:
+`[{"id": "duel", "status": "ok", "wall_s": 31.2, "exit_code": 0}, ...]`
+(status one of the statuses below; `exit_code` may be null). Each demo's
+report is `RUN_DIR/reports/<id>.json` and its log `RUN_DIR/logs/<id>.log`
+(both optional: a missing report reads as `no_report`, a demo absent from
+runs.json as `missing`). Results go to `--out`, by default RUN_DIR's
+parent folder.
 
 ### The results file
 
