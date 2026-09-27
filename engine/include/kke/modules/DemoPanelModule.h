@@ -2,10 +2,12 @@
 
 #include "kke/Module.h"
 
+#include <cstdint>
 #include <deque>
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace Rml {
@@ -140,6 +142,12 @@ public:
     // F1 shows and hides the ImGui developer panels (on by default; call
     // before init to keep them as they are).
     void setDeveloperPanelsKey(bool enabled) { m_devPanelsKey = enabled; }
+    // Esc works like a pause menu (on by default): it opens the panel and
+    // goes back out, instead of quitting the game (the window's
+    // quit-on-Esc is turned off), and the panel gets a "Quit" row so
+    // keyboard and controller players can still leave. Call before init;
+    // off keeps Esc and the window as the game set them.
+    void setEscapeMenu(bool enabled) { m_escapeMenu = enabled; }
 
     // Pure helpers, public for the tests.
     static float stepValue(float value, float min, float max, float step, int direction);
@@ -196,10 +204,12 @@ private:
     std::deque<Section> m_sections;
     std::vector<Row> m_rows;
     size_t m_hideRow = 0;              // the "Hide panel" row, always last
+    size_t m_quitRow = SIZE_MAX;       // "Quit" just above it (setEscapeMenu), or none
     State m_state = State::Open;
     bool m_visible = true;
     bool m_docShown = true;
     bool m_devPanelsKey = true;
+    bool m_escapeMenu = true;
     bool m_crosshair = false, m_crosshairShown = false;
     bool m_dirty = true;
     size_t m_focus = 0;

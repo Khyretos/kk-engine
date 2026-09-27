@@ -262,6 +262,15 @@ void DemoPanelModule::init(Application& app) {
         }
     }
     if (m_devPanelsKey) app.debugUi().setVisible(false); // F1 shows them (onEvent)
+    if (m_escapeMenu) {
+        app.window().setQuitOnEscape(false); // Esc opens and closes the panel (onEvent)
+        Row quit;
+        quit.kind = Row::Kind::Button;
+        quit.label = "Quit";
+        quit.onChange = [this] { m_app->window().requestClose(); };
+        m_rows.push_back(std::move(quit));
+        m_quitRow = m_rows.size() - 1;
+    }
     // The last row of every panel.
     Row hide;
     hide.kind = Row::Kind::Button;
@@ -336,6 +345,7 @@ std::vector<size_t> DemoPanelModule::order() const {
     std::vector<size_t> out;
     for (const Section& s : m_sections)
         for (size_t r : s.m_rows) out.push_back(r);
+    if (m_quitRow != SIZE_MAX) out.push_back(m_quitRow);
     out.push_back(m_hideRow);
     return out;
 }
@@ -413,6 +423,10 @@ void DemoPanelModule::build() {
                 break;
             }
         }
+    }
+    if (m_quitRow != SIZE_MAX) {
+        open(m_quitRow, "button hide");
+        rml += escapeRmlText(m_rows[m_quitRow].label) + "</div>";
     }
     open(m_hideRow, "button hide");
     rml += escapeRmlText(m_rows[m_hideRow].label) + "</div>";
@@ -638,6 +652,13 @@ void DemoPanelModule::onEvent(const SDL_Event& e) {
     // Developer builds only: shipping builds never show the ImGui panels.
     if (dev::kEnabled && m_devPanelsKey && m_app && e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_F1)
         m_app->debugUi().setVisible(!m_app->debugUi().visible());
+    // Esc is the pause-menu key (setEscapeMenu): it opens the panel with
+    // the keyboard on it; while Active it goes back (below).
+    if (m_escapeMenu && e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_ESCAPE && m_state != State::Active &&
+        m_visible && uiVisible()) {
+        setState(State::Active);
+        return;
+    }
     if (e.type != SDL_EVENT_KEY_DOWN || m_state != State::Active || !m_visible) return;
     // The keyboard reaches the panel directly (ui.* are pad-only by
     // default, see InputModule::defineUiActions); key repeat repeats.

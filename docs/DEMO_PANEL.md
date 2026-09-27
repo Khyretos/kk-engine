@@ -57,6 +57,12 @@ a row and then calls the row's `onChange`.
 `game` input context is off, so the stick that picks rows doesn't also
 drive the boat. The last row, "Hide panel", collapses it.
 
+Esc works like a pause menu: it opens the panel with the keyboard on it,
+and Esc again goes back to the game. Because of that the panel turns the
+window's quit-on-Esc off and adds a "Quit" row above "Hide panel", so
+nobody is stuck in a game with no way out. A game that wants Esc for
+itself calls `setEscapeMenu(false)` before `init`.
+
 With a DemoPanelModule the engine's ImGui windows (Performance, Camera,
 Physics...) start hidden: F1 shows them, in developer builds only
 (`setDeveloperPanelsKey(false)` for a game that handles F1 itself).

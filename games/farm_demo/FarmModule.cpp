@@ -8,7 +8,7 @@
 
 #include <SDL3/SDL.h>
 #include <glm/gtc/matrix_transform.hpp>
-#include <imgui.h>
+#include "kke/modules/DemoPanelModule.h"
 
 #include <algorithm>
 #include <cmath>
@@ -99,7 +99,8 @@ void FarmModule::init(kke::Application& app) {
     in.addBinding(IM::bind("bark", IM::key(SDL_SCANCODE_SPACE)));
     in.addBinding(IM::bind("bark", IM::pad(SDL_GAMEPAD_BUTTON_SOUTH)));
     in.addBinding(IM::bind("farm.debug", IM::key(SDL_SCANCODE_F1)));
-    in.addBinding(IM::bind("farm.debug", IM::pad(SDL_GAMEPAD_BUTTON_BACK)));
+    // On a controller View opens the settings panel (kke::DemoPanelModule),
+    // which has both switches; F1 and F2 stay as keyboard shortcuts.
     in.addBinding(IM::bind("farm.nav", IM::key(SDL_SCANCODE_F2)));
     // Teaching by example: pick a lesson, show it to the nearest animal
     // ("interact": E), then let them learn.
@@ -117,9 +118,13 @@ void FarmModule::init(kke::Application& app) {
     m_rig.settings.shoulderOffset = 0.0f;
     m_rig.pitch = -14.0f;
 
-    if (!loadLevel()) return;
+    if (!loadLevel()) {
+        buildPanel(); // still shows m_status: what's missing and where to put it
+        return;
+    }
     buildNavMesh();
     setupAi();
+    buildPanel();
 }
 
 bool FarmModule::loadLevel() {
@@ -544,21 +549,28 @@ void FarmModule::learnAll() {
     if (!any) m_log.push_back("Show them something first (E)");
 }
 
-void FarmModule::renderUi() {
-    ImGui::SetNextWindowPos(ImVec2(12, 12), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowBgAlpha(0.55f);
-    ImGui::Begin("Farm", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
-    ImGui::TextUnformatted("You're the dog. WASD / stick: move, Shift: run, Space: bark");
-    ImGui::TextUnformatted("Click to look around (Esc lets go). F1: what they think, F2: where they walk");
-    ImGui::Text("Teach: lesson '%s' (Tab), E: show the nearest animal, L: let them learn", kLessons[m_lesson]);
-    if (!m_status.empty()) ImGui::TextWrapped("%s", m_status.c_str());
-    for (const std::string& l : m_log) ImGui::BulletText("%s", l.c_str());
-    if (m_showDebug) {
-        ImGui::Separator();
-        ImGui::Text("navmesh: %s", m_navStatus.c_str());
-        for (const Animal& a : m_animals) ImGui::TextUnformatted(m_ai.describe(a.id).c_str());
-    }
-    ImGui::End();
+// The farm's panel (RmlUi, kke::DemoPanelModule) is the HUD: controls as
+// button prompts for the device in use, what just happened, and the two
+// switches. View on a controller or F3 opens it; F1 and F2 still toggle.
+void FarmModule::buildPanel() {
+    auto* panel = m_app->getModule<kke::DemoPanelModule>();
+    if (!panel) return;
+    auto& s = panel->section("Farm");
+    s.text("You're the dog. {move} move  {sprint} run  {bark} bark  {look.rate} look");
+    s.hint("Click to look around; Esc lets go of the mouse.", "");
+    s.showIf([this] { return m_input->promptStyle() == kke::PromptStyle::Keyboard; });
+    s.text([this] { return std::string("Lesson: ") + kLessons[m_lesson] + ".  {farm.lesson} next lesson"; });
+    s.text("{interact} show the nearest animal  {farm.learn} let them learn");
+    s.text([this] { return m_status; }).showIf([this] { return !m_status.empty(); });
+    // What just happened, newest last: one row per line of m_log (six kept).
+    for (size_t i = 0; i < 6; ++i)
+        s.text([this, i] { return i < m_log.size() ? m_log[i] : std::string(); }).showIf([this, i] { return i < m_log.size(); });
+    s.heading("See inside");
+    s.toggle("What they think", &m_showDebug);
+    s.toggle("Where they walk", &m_showNav);
+    s.text([this] { return "navmesh: " + m_navStatus; }).showIf([this] { return m_showDebug; });
+    for (size_t i = 0; i < m_animals.size(); ++i)
+        s.text([this, i] { return m_ai.describe(m_animals[i].id); }).showIf([this] { return m_showDebug; });
 }
 
 void FarmModule::onEvent(const SDL_Event& e) {
@@ -566,6 +578,8 @@ void FarmModule::onEvent(const SDL_Event& e) {
         m_captured = true;
         SDL_SetWindowRelativeMouseMode(m_app->window().handle(), true);
     } else if (e.type == SDL_EVENT_KEY_DOWN && e.key.scancode == SDL_SCANCODE_ESCAPE && m_captured) {
+        // Esc lets go of the mouse and opens the panel (its Quit row ends
+        // the game; kke::DemoPanelModule::setEscapeMenu).
         m_captured = false;
         SDL_SetWindowRelativeMouseMode(m_app->window().handle(), false);
     }

@@ -57,24 +57,27 @@ Any value other than empty or `0` turns a switch on (`envOn` in
 | Run | hold Left Shift | click the left stick (toggles) |
 | Look around | move the mouse after a left click captures it | right stick |
 | Bark | Space | A (south) |
-| Show what the animals think (F1 panel) | F1 | View / Back |
-| Draw the navmesh | F2 | no controller binding yet |
+| Open the panel (settings, the two switches below, Quit) | F3 or Esc | View / Back |
+| Show what the animals think | F1, or "What they think" in the panel | "What they think" in the panel |
+| Draw the navmesh | F2, or "Where they walk" in the panel | "Where they walk" in the panel |
 | Next lesson (graze, rest, investigate, watch, regroup, flee, wander) | Tab | D-pad right |
 | Show the nearest animal the lesson | E | Y (north) |
 | Let every species that was shown something learn | L | D-pad up |
-| Quit | Esc | none |
+| Quit | Esc, then Quit | View, then Quit |
 
 All of these are rebindable actions in the `InputModule`; the user's
 bindings are saved to `farm_input.json`. Esc releases the mouse in
-`FarmModule::onEvent`, but the window also closes on Esc, because the farm
-never calls `window().setQuitOnEscape(false)` (see "Make a game like this").
+`FarmModule::onEvent` and opens the panel like a pause menu; it no longer
+quits, because `kke::DemoPanelModule` turns the window's quit-on-Esc off
+and adds a Quit row ([docs/DEMO_PANEL.md](../../docs/DEMO_PANEL.md)).
 
 ## How it plays
 
 There is no goal, score or end. You walk around and watch how each species
-reacts to you. The small panel in the top left (Dear ImGui) lists the
+reacts to you. The panel in the top left (RmlUi, `kke::DemoPanelModule`) lists the
 controls, the current lesson, and the last six things that happened ("sheep
-runs from you", "cow comes to see you", "Woof!"). F1 adds one line per
+runs from you", "cow comes to see you", "Woof!"), with button prompts for
+the device you use. F1 (or "What they think") adds one line per
 animal from `AiWorld::describe`: its action, score, fear, hunger and
 animation.
 
@@ -111,8 +114,8 @@ Each frame, `FarmModule::update`:
 6. Copies each agent's position, yaw and `anim` onto its model.
 7. `updateCamera(dt)`.
 
-`render` draws the ground quad and, when on, the navmesh; `renderUi` draws
-the ImGui panel.
+`render` draws the ground quad and, when on, the navmesh; the HUD is the
+RmlUi panel `buildPanel` fills once in `init` (its text rows read live values).
 
 ### The level
 
@@ -301,7 +304,6 @@ in [docs/AI.md](../../docs/AI.md), "Teaching by example".
   says why: it is the normal case in CI and for anyone without the packs,
   and the panel already says so. A pack that is there but missing one asset
   still warns.
-- **The HUD is Dear ImGui**, a developer-style panel, not an RmlUi game UI.
 
 ## Tuning
 
@@ -374,8 +376,8 @@ What happens when a pack is missing:
    to `games/my_games.cmake`, which `tools/new_game` uses). If your game is
    mostly Lua, start with `tools/new_game <name>` instead and add the AI
    from C++ later.
-2. Call `app.window().setQuitOnEscape(false)` in `init` if Esc should only
-   release the mouse (the farm does not, so Esc quits).
+2. Keep the `DemoPanelModule`: it is the HUD, and Esc opens it instead of
+   quitting (`setEscapeMenu(false)` gives Esc back to your game).
 3. Make your level a scene file ([docs/SCENES.md](../../docs/SCENES.md))
    and mark what blocks walking with `collision`. The navmesh follows.
 4. Pick species. Use the built-in ones, tweak one field like `setupAi`
@@ -407,7 +409,7 @@ Pitfalls the code shows:
 |---|---|
 | [main.cpp](main.cpp) | the app, the mood and camera settings, the module list |
 | [FarmModule.h](FarmModule.h) | the module class, its data (animals, looks, dog state, lessons) |
-| [FarmModule.cpp](FarmModule.cpp) | input actions, level and navmesh, species and herds, dog, camera, teaching, ImGui panel |
+| [FarmModule.cpp](FarmModule.cpp) | input actions, level and navmesh, species and herds, dog, camera, teaching, the RmlUi panel (`buildPanel`) |
 | [CMakeLists.txt](CMakeLists.txt) | the `farm_demo` executable, copies `game.json`, the scene file and shaders |
 | [game.json](game.json) | the marketplace entry (id, title, tags, modules) |
 | [../../scenes/farm.scene.json](../../scenes/farm.scene.json) | the level: objects, spawn, sun, ground |

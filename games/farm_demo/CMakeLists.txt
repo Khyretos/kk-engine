@@ -10,3 +10,4 @@ endforeach()
 # The farm, the animals and the dog come from POLYGON Farm, POLYGON Dogs
 # and Quaternius' Farm Animals, found at runtime (assets/synty/ or
 # KKE_ASSETS_DIR); none of them is in the repository.
+kke_use_ui(farm_demo)

@@ -15,6 +15,7 @@
 
 
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <typeindex>
@@ -307,6 +308,14 @@ void SyntySceneModule::ragdoll(Character& c, const glm::vec3& push) {
     c.blendFrom.clear();
 }
 
+// The glass pane is a FEMFX fracturable body: a build without FEMFX has
+// no "through glass" (no action, no prompt, no button).
+#if KKE_ENABLE_FEMFX
+constexpr bool kHasGlass = true;
+#else
+constexpr bool kHasGlass = false;
+#endif
+
 // Stands a glass pane 1.8 m in front of the character (away from the
 // camera) and throws the character through it: a ragdoll (Jolt limbs
 // through PhysicsBridgeModule, or FEMFX rigid bodies) hitting a
@@ -384,7 +393,7 @@ void SyntySceneModule::defineInput() {
     };
     action("synty.ragdoll", "Ragdoll the selected character", SDL_SCANCODE_R, SDL_GAMEPAD_BUTTON_WEST);
     action("synty.stand", "Everyone stands up", SDL_SCANCODE_T, SDL_GAMEPAD_BUTTON_NORTH);
-    action("synty.glass", "Through a glass pane", SDL_SCANCODE_G, SDL_GAMEPAD_BUTTON_SOUTH);
+    if (kHasGlass) action("synty.glass", "Through a glass pane", SDL_SCANCODE_G, SDL_GAMEPAD_BUTTON_SOUTH);
     action("synty.bones", "Show bones", SDL_SCANCODE_B, SDL_GAMEPAD_BUTTON_LEFT_STICK);
     action("synty.prev", "Previous character", SDL_SCANCODE_LEFTBRACKET, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
     action("synty.next", "Next character", SDL_SCANCODE_RIGHTBRACKET, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
@@ -401,7 +410,7 @@ void SyntySceneModule::readInput() {
     if (m.pressed("synty.ragdoll") && !(SDL_GetModState() & SDL_KMOD_SHIFT)) ragdollAll(false);
     if (m.pressed("synty.stand"))
         for (Character& c : m_characters) standUp(c);
-    if (m.pressed("synty.glass")) throughGlass(m_characters[size_t(m_selected)]);
+    if (kHasGlass && m.pressed("synty.glass")) throughGlass(m_characters[size_t(m_selected)]);
     const int n = static_cast<int>(m_characters.size());
     if (m.pressed("synty.prev")) select((m_selected + n - 1) % n);
     if (m.pressed("synty.next")) select((m_selected + 1) % n);
@@ -438,10 +447,11 @@ void SyntySceneModule::buildPanel() {
         s.note(looked);
         return;
     }
-    s.hint("{synty.ragdoll} ragdoll  Shift+{synty.ragdoll} everyone  {synty.stand} stand up  {synty.glass} through glass  "
-           "{synty.prev}{synty.next} who  {synty.bones} bones  F1 developer panels",
-           "{synty.ragdoll} ragdoll  {synty.stand} stand up  {synty.glass} through glass  {synty.prev}{synty.next} who  "
-           "{synty.bones} bones  {camera.orbit} look  {camera.zoom} zoom");
+    const std::string glass = kHasGlass ? "{synty.glass} through glass  " : "";
+    s.hint("{synty.ragdoll} ragdoll  Shift+{synty.ragdoll} everyone  {synty.stand} stand up  " + glass +
+               "{synty.prev}{synty.next} who  {synty.bones} bones  F1 developer panels",
+           "{synty.ragdoll} ragdoll  {synty.stand} stand up  " + glass + "{synty.prev}{synty.next} who  " +
+               "{synty.bones} bones  {camera.orbit} look  {camera.zoom} zoom");
     s.text([this] {
         char buf[160];
         std::snprintf(buf, sizeof(buf), "%zu props, %zu characters, %zu draw calls, %zu culled", m_propCount, m_characters.size(),
@@ -455,7 +465,7 @@ void SyntySceneModule::buildPanel() {
     s.button("Everyone stands up", [this] {
         for (Character& c : m_characters) standUp(c);
     }).showIf(physics);
-    s.button("Through a glass pane", [this] { throughGlass(m_characters[size_t(m_selected)]); }).showIf(physics);
+    if (kHasGlass) s.button("Through a glass pane", [this] { throughGlass(m_characters[size_t(m_selected)]); }).showIf(physics);
     s.note("Ragdolls need a physics module (Jolt or FEMFX).").showIf([this] { return m_physics == nullptr; });
     if (m_characters.empty()) return;
 
