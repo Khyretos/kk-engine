@@ -143,6 +143,8 @@ void SwapChain::create() {
                       (fp.optimalTilingFeatures & blit) == blit;
         if (m_canBlitTo) createInfo.imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     }
+    m_readable = m_wantReadable && (capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+    if (m_readable) createInfo.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
     const auto& qf = m_device.queueFamilies();
     uint32_t indices[] = { qf.graphics.value(), qf.present.value() };

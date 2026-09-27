@@ -22,6 +22,8 @@ struct BenchOptions {
     // the last second's frames and that median + hitchMinMs.
     double hitchFactor = 2.0;
     double hitchMinMs = 8.0;
+    // Pictures of the best and worst moments (KKE_BENCH_SHOTS=0: none).
+    bool screenshots = true;
 };
 
 // The per-game half of the benchmark (docs/BENCHMARKS.md "Benchmark for
@@ -91,6 +93,29 @@ public:
     // residentMb: platform::residentMemoryMb() (sampled; 0 = not sampled
     // this frame, keep the last value).
     void endFrame(double wallMs, double residentMb);
+
+    // --- Screenshots --------------------------------------------------------
+    // The recorder picks the moments worth a picture while it measures:
+    // the slowest frame, the slowest and the fastest whole second, and
+    // three views at 10%, 50% and 90% of the measured time. After
+    // endFrame(), takeShotRequests() hands over the new ones; the game
+    // captures its next frame for each (the scene a frame after the
+    // moment) and, once written, reports the file with shotSaved(). A
+    // later request of the same kind replaces an earlier one.
+    struct ShotRequest {
+        std::string kind;  // "worst-frame", "slowest-second", "fastest-second", "view-2-of-3"
+        std::string label; // for the file name: "worst-frame_352ms_at-43.4s"
+        double tSeconds = 0.0; // since measuring began
+        double value = 0.0;    // ms (worst-frame), fps (the seconds), 0 (views)
+    };
+    std::vector<ShotRequest> takeShotRequests();
+    // `file` relative to the report's folder ("shots/duel_view-1-of-3_at-2.0s.jpg").
+    void shotSaved(const ShotRequest& shot, const std::string& file);
+    // The frame now running copies or reads back a screenshot: it isn't
+    // measured (nor counted in stats, hitches or the moments above).
+    void excludeFrame() { m_excludeFrame = true; }
+    int excludedFrames() const { return m_excludedFrames; }
+    static constexpr int kMaxShotRequests = 40;
 
     // True while measuring (after the warm-up), and once the measured
     // time is over (the game should quit then).
@@ -174,6 +199,19 @@ private:
     };
     std::vector<Event> m_events;
     int m_eventCount = 0;
+
+    // Screenshots.
+    void pickShots(double tMeasured, double wallMs);
+    bool m_excludeFrame = false;
+    int m_excludedFrames = 0;
+    std::vector<ShotRequest> m_shotRequests;
+    int m_shotRequestCount = 0;
+    double m_shotWorstMs = 0.0, m_shotWorstAt = -1e9;
+    double m_shotSlowFps = 0.0, m_shotFastFps = 0.0, m_shotSlowAt = -1e9, m_shotFastAt = -1e9;
+    int m_second = 0, m_secondFrames = 0; // the whole second being counted
+    double m_secondStart = 0.0;
+    int m_viewsTaken = 0;
+    std::vector<std::pair<ShotRequest, std::string>> m_shots; // saved, one per kind
 };
 
 } // namespace kke

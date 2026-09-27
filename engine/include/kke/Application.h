@@ -16,6 +16,7 @@
 #include <glm/glm.hpp>
 #include <array>
 #include <chrono>
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -420,6 +421,11 @@ private:
     std::chrono::steady_clock::time_point m_createdAt = std::chrono::steady_clock::now();
     std::unique_ptr<BenchRecorder> m_bench;
     std::unordered_map<const Module*, int> m_benchModuleIndex; // filled once init() is done
+    // The benchmark's screenshots: requests waiting for their frame, and
+    // the newest picture of each kind (written with the report).
+    struct BenchShots;
+    std::unique_ptr<BenchShots> m_benchShots;
+    void writeBenchmarkShots(const std::filesystem::path& dir, const std::string& name);
 };
 
 } // namespace kke

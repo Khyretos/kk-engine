@@ -26,6 +26,12 @@ public:
     // Takes effect on the next recreate().
     void setVSync(bool vsync) { m_vsync = vsync; }
     bool vsync() const { return m_vsync; }
+    // Ask for images that can be copied from (screenshots: the benchmark's
+    // Renderer::requestCapture). Off by default: some mobile drivers
+    // store readable images less efficiently. Takes effect on recreate().
+    void setReadable(bool readable) { m_wantReadable = readable; }
+    // The current images can be copied from.
+    bool readable() const { return m_readable; }
 
     VkSwapchainKHR handle() const { return m_swapChain; }
     VkFormat imageFormat() const { return m_imageFormat; }
@@ -64,6 +70,7 @@ private:
     VkRenderPass m_renderPass = VK_NULL_HANDLE;
     VkRenderPass m_overlayPass = VK_NULL_HANDLE;
     bool m_canBlitTo = false;
+    bool m_wantReadable = false, m_readable = false;
     bool m_compositorRotates = false;
 
     VkImage m_depthImage = VK_NULL_HANDLE;
