@@ -2,40 +2,42 @@
 
 Written by `benchmarks/track.py` from the Benchmarks workflow on every push to `main`; don't edit by hand. What the numbers mean: [docs/BENCHMARKS.md](https://github.com/Khyretos/kk-engine/blob/main/docs/BENCHMARKS.md).
 
-Latest: `52d4ac4ba1` (2026-09-27T12:35:02Z) on AMD EPYC 9V74 80-Core Processor                , llvmpipe (LLVM 20.1.2, 256 bits). 67 run(s) tracked.
+Latest: `37c0ad1ada` (2026-09-27T12:52:10Z) on AMD EPYC 7763 64-Core Processor                , llvmpipe (LLVM 20.1.2, 256 bits). 68 run(s) tracked.
 
 Every run is on a shared GitHub runner (4 vCPUs, lavapipe software Vulkan), so single points wobble; look for steps that stay.
 
 | Metric | Latest | Best | Runs |
 |---|---:|---:|---:|
-| `bench.audio_mix_32_voices_full_ms` | 0.1866 | 0.1103 | 61 |
-| `bench.audio_mix_32_voices_ms` | 0.1041 | 0.0614 | 67 |
-| `bench.cloth_16x24_basic_ms` | 4.77 | 3.04 | 11 |
-| `bench.cloth_16x24_full_ms` | 9.87 | 5.94 | 11 |
-| `bench.cloth_1x32_basic_ms` | 0.5432 | 0.3387 | 11 |
-| `bench.cloth_1x32_full_ms` | 1.20 | 0.7056 | 11 |
-| `bench.cloth_1x32_off_ms` | 0.5430 | 0.3435 | 11 |
-| `bench.cloth_1x64_basic_ms` | 2.30 | 1.44 | 11 |
-| `bench.cloth_1x64_full_ms` | 8.52 | 5.27 | 11 |
-| `bench.fracture_bake_cube_ms` | 7.96 | 4.67 | 67 |
-| `bench.hair_1x100_straight_ms` | 0.1986 | 0.1564 | 6 |
-| `bench.hair_1x400_curly_ms` | 2.17 | 1.71 | 6 |
-| `bench.hair_1x400_long_ms` | 1.04 | 0.8139 | 6 |
-| `bench.hair_8x200_long_ms` | 4.06 | 3.19 | 6 |
-| `bench.impact_synth_8_materials_ms` | 1.22 | 0.9114 | 67 |
-| `bench.lua_think_50_hooks_ms` | 0.2677 | 0.1408 | 67 |
-| `bench.net_snapshot_256_bodies_ms` | 0.0912 | 0.0503 | 67 |
-| `bench.particle_fluid_2000_ms` | 4.33 | 2.58 | 67 |
-| `bench.rigid_crates_400_ms` | 1.73 | 0.9864 | 67 |
-| `bench.rigid_raycast_1000_ms` | 0.4551 | 0.3228 | 67 |
-| `stress.crates.fps_avg` | 10.90 | 22.85 | 67 |
-| `stress.crates.physics_avg_ms` | 0.4000 | 0.2847 | 67 |
-| `stress.fps_1pct_low` | 5.76 | 16.28 | 67 |
-| `stress.fps_avg` | 10.61 | 23.34 | 67 |
-| `stress.frame_p99_ms` | 117 | 57.86 | 67 |
-| `stress.impacts.fps_avg` | 8.93 | 19.00 | 67 |
-| `stress.peak_rss_mb` | 439 | 251 | 67 |
-| `stress.walk.fps_avg` | 12.28 | 29.14 | 67 |
+| `bench.audio_mix_32_voices_full_ms` | 0.1875 | 0.1103 | 62 |
+| `bench.audio_mix_32_voices_ms` | 0.0942 | 0.0614 | 68 |
+| `bench.cloth_16x24_basic_ms` | 4.66 | 3.04 | 12 |
+| `bench.cloth_16x24_full_ms` | 8.90 | 5.94 | 12 |
+| `bench.cloth_1x32_basic_ms` | 0.5281 | 0.3387 | 12 |
+| `bench.cloth_1x32_full_ms` | 1.02 | 0.7056 | 12 |
+| `bench.cloth_1x32_off_ms` | 0.5285 | 0.3435 | 12 |
+| `bench.cloth_1x64_basic_ms` | 2.23 | 1.44 | 12 |
+| `bench.cloth_1x64_full_ms` | 11.19 | 5.27 | 12 |
+| `bench.cloth_cape_basic_ms` | 0.4990 | 0.4990 | 1 |
+| `bench.cloth_cape_full_ms` | 7.66 | 7.66 | 1 |
+| `bench.fracture_bake_cube_ms` | 7.24 | 4.67 | 68 |
+| `bench.hair_1x100_straight_ms` | 0.2013 | 0.1564 | 7 |
+| `bench.hair_1x400_curly_ms` | 2.17 | 1.71 | 7 |
+| `bench.hair_1x400_long_ms` | 1.05 | 0.8139 | 7 |
+| `bench.hair_8x200_long_ms` | 4.26 | 3.19 | 7 |
+| `bench.impact_synth_8_materials_ms` | 1.04 | 0.9114 | 68 |
+| `bench.lua_think_50_hooks_ms` | 0.2937 | 0.1408 | 68 |
+| `bench.net_snapshot_256_bodies_ms` | 0.0877 | 0.0503 | 68 |
+| `bench.particle_fluid_2000_ms` | 3.88 | 2.58 | 68 |
+| `bench.rigid_crates_400_ms` | 1.60 | 0.9864 | 68 |
+| `bench.rigid_raycast_1000_ms` | 0.5045 | 0.3228 | 68 |
+| `stress.crates.fps_avg` | 10.73 | 22.85 | 68 |
+| `stress.crates.physics_avg_ms` | 0.4055 | 0.2847 | 68 |
+| `stress.fps_1pct_low` | 5.36 | 16.28 | 68 |
+| `stress.fps_avg` | 10.60 | 23.34 | 68 |
+| `stress.frame_p99_ms` | 118 | 57.86 | 68 |
+| `stress.impacts.fps_avg` | 9.00 | 19.00 | 68 |
+| `stress.peak_rss_mb` | 437 | 251 | 68 |
+| `stress.walk.fps_avg` | 12.38 | 29.14 | 68 |
 
 ![bench.audio_mix_32_voices_full_ms](charts/bench_audio_mix_32_voices_full_ms.svg)
 
@@ -54,6 +56,10 @@ Every run is on a shared GitHub runner (4 vCPUs, lavapipe software Vulkan), so s
 ![bench.cloth_1x64_basic_ms](charts/bench_cloth_1x64_basic_ms.svg)
 
 ![bench.cloth_1x64_full_ms](charts/bench_cloth_1x64_full_ms.svg)
+
+![bench.cloth_cape_basic_ms](charts/bench_cloth_cape_basic_ms.svg)
+
+![bench.cloth_cape_full_ms](charts/bench_cloth_cape_full_ms.svg)
 
 ![bench.fracture_bake_cube_ms](charts/bench_fracture_bake_cube_ms.svg)
 
