@@ -18,8 +18,9 @@ end)
 -- --8<-- [end:keys]
 
 -- --8<-- [start:path]
--- P: fly over the stairs and back, then carry on with third person.
-input.define("view.tour", "Camera tour", "P")
+-- P or the d-pad up: fly over the stairs and back, then carry on with
+-- third person.
+input.define("view.tour", "Camera tour", "P", "dpad_up")
 hook.Add("Think", "cameras.tour", function()
   if input.pressed("view.tour") then
     view.path({
@@ -33,13 +34,14 @@ end)
 -- --8<-- [end:path]
 
 -- --8<-- [start:shake]
--- K: a bump. Shake adds up, so a few quick presses make a big one.
-input.define("view.shake", "Shake the camera", "K")
+-- K or the d-pad left: a bump. Shake adds up, so a few quick presses make
+-- a big one.
+input.define("view.shake", "Shake the camera", "K", "dpad_left")
 hook.Add("Think", "cameras.shake", function()
   if input.pressed("view.shake") then view.shake(0.4) end
 end)
 -- --8<-- [end:shake]
 
 hook.Add("Init", "cameras.hello", function()
-  print("Cameras: 1-8 pick one, Tab cycles, P plays a camera path, K shakes.")
+  print("Cameras: 1-8 pick one, Tab or View cycles, P or d-pad up plays a camera path, K or d-pad left shakes.")
 end)

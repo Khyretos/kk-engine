@@ -57,9 +57,9 @@ Everywhere:
 | Back to the main menu, or close the Credits / Quit box | Esc | B |
 | Move the focus between controls | Arrow keys, Tab (RmlUi handles them directly) | D-pad or left stick (repeats after 0.4 s, then every 0.11 s) |
 | Press the focused control | Enter, or click it | A |
-| Show / hide the ImGui developer panels | F1 | no controller binding yet |
-| Reload every stylesheet from disk | F5 or Ctrl+R | no controller binding yet |
-| Turn the 3D view behind the menus | Left-drag orbit, right-drag pan, scroll zoom (it also turns by itself) | no controller binding yet |
+| Show / hide the ImGui developer panels | F1 | none: a developer tool, keyboard only |
+| Reload every stylesheet from disk | F5 or Ctrl+R | none: a developer tool, keyboard only |
+| Turn the 3D view behind the menus | Left-drag orbit, right-drag pan, scroll zoom (it also turns by itself) | Right stick turns, RT closer, LT further |
 
 Per screen:
 
@@ -67,12 +67,12 @@ Per screen:
 |---|---|---|---|
 | Main menu | Pick an entry | Click | Focus it, A |
 | Settings | Change a setting | Click, drag a slider, pick from the list | Focus it, A |
-| Settings | Rebind a key (Controls tab) | Click the key, then press a key; Esc cancels | no controller binding yet (keyboard keys only) |
+| Settings | Change keys and buttons (Controls tab) | "Change them" opens the Input screen | Focus it, A |
 | Input | Add a binding | Click "+ Add", then press the key, button, stick or combination | Focus "+ Add", A, then press anything |
 | Input | Cancel listening | Esc or the Cancel button | Focus Cancel, A |
-| Inventory | Move, equip, stack an item | Drag it to another slot | no controller binding yet (A only selects) |
-| Inventory | Drink a potion / eat | Double-click it | no controller binding yet |
-| Inventory | Inspect an item | Hover it | no controller binding yet (details follow the mouse only) |
+| Inventory | Move, equip, stack an item | Drag it to another slot, or click it and then the slot | Focus it, A, focus the slot, A (A on the same slot puts it back) |
+| Inventory | Drink a potion / eat | Double-click it, or U | Focus it, X |
+| Inventory | Inspect an item | Hover it, or move the focus to it | Focus it |
 | HUD | Use ability 1 to 6 | 1 to 6, or click the hotbar slot | Focus the slot, A |
 | Dialogue | Skip the typewriter | Space, or click the text | Focus the text, A |
 | Dialogue | Pick answer N | 1 to 9, or click it | Focus it, A |
@@ -106,10 +106,12 @@ UI, with enough fake game state behind it to feel real.
   things. "Left-handed keys" mirrors the keyboard, "Save" writes
   `input.json`.
 - **Inventory.** A 30-slot bag with 18 starting items and six equipment
-  slots. Drag items between slots; equipment slots refuse the wrong item
-  type; stackable items with the same name merge. Filter chips dim the
-  other categories, "Sort by rarity" reorders the bag, double-click a
-  consumable to use one. The weight bar turns red above 80% of 80 kg.
+  slots. Drag items between slots, or pick one (click or pad A) and then
+  the slot to put it in; equipment slots refuse the wrong item type;
+  stackable items with the same name merge. Filter chips dim the other
+  categories, "Sort by rarity" reorders the bag, double-click a
+  consumable (or U, or pad X on the focused one) to use one. The details
+  follow the mouse and the focus. The weight bar turns red above 80% of 80 kg.
 - **HUD.** Health, mana, stamina and XP bars; health has a pale "ghost"
   bar that lingers after a hit, then catches up. A hotbar with cooldown
   sweeps, floating damage numbers (25% crits, shown only when "Show
@@ -235,7 +237,7 @@ files in [ui/](ui/):
 | [theme.rcss](ui/theme.rcss) | shared | The base theme every document links: fonts, block elements, panels, buttons, form controls, tabs, scrollbars, animations, modals, focus rings. |
 | [nav.rml](ui/nav.rml) | the top bar | `pointer-events: none` on the body and `auto` on the bar, `data-class-active` for the current tab, a `@media` rule that hides labels on narrow windows. |
 | [main_menu.rml](ui/main_menu.rml) | Main menu | Staggered entrance (same `slide-right` animation, delays 0.05 s to 0.35 s), a `radial-gradient` vignette, modal boxes with `data-if`, assignments in events (`data-event-click="show_credits = true"`). |
-| [settings.rml](ui/settings.rml) | Settings | `<tabset>`, checkboxes (`data-checked`), sliders and a `<select>` (`data-value`), radio buttons, `data-for` over the key bindings, `data-attrif-disabled` on Revert, the `format()` filter on numbers. |
+| [settings.rml](ui/settings.rml) | Settings | `<tabset>`, checkboxes (`data-checked`), sliders and a `<select>` (`data-value`), radio buttons, a button that opens the Input screen (`data-event-click="go('input')"`), `data-attrif-disabled` on Revert, the `format()` filter on numbers. |
 | [input.rml](ui/input.rml) | Input | Lists inside lists (`a.bindings` inside `actions`), axis bars positioned with `data-style-left` / `data-style-width`, a capture overlay shown with `data-if="capturing"`. |
 | [inventory.rml](ui/inventory.rml) | Inventory | `drag: clone` on items, `:drag-hover` on slots, rarity borders with `data-class-*`, a `<progress>` weight bar, `data-attr-slot` so C++ can find the slot of a dropped element. |
 | [hud.rml](ui/hud.rml) | HUD | Bars sized with `data-style-width`, a `transition` on width for smooth bars, a `conic-gradient` radar that spins forever, floating damage numbers with a `float-up` animation, `pointer-events` so only the hotbar and buttons take clicks. |
@@ -367,17 +369,16 @@ That is the "live preview". "Apply & save" calls `apply()` and `save()`;
 `resetToDefaults()` (this device's defaults, so a Steam Deck resets to the
 Deck preset).
 
-The Audio tab binds the volume settings too. This demo does not add an
-`AudioModule`, so here they are only stored; in a game with an
-`AudioModule` they set the mixer's gains (BUG-060).
+The Audio tab binds the volume settings too. The demo adds an
+`AudioModule` (its ImGui panel hidden), which reads them and sets the
+mixer's gains (BUG-060).
 
-The Controls tab's key list edits
-`EngineSettings::controls.keyBindings`. When you click a key,
-`rebind(i)` sets `m_capturing`, and the next key press in
-`ShowcaseModule::onEvent()` is stored with `SDL_GetKeyName()`. This list
-is separate from the `InputModule` bindings on the Input screen; nothing
-in the engine reads `keyBindings` today. The Input screen is the real
-rebinding system.
+The Controls tab has mouse sensitivity and invert Y, and a "Change them"
+button that opens the Input screen: keys and buttons live in
+`InputModule` (`input.json`), for the keyboard, the mouse and every
+controller, and the Input screen edits them. (It used to show a separate
+key list stored in `EngineSettings::controls.keyBindings`, which nothing
+reads and which a controller could not edit: BUG-066.)
 
 ### The Input screen
 
@@ -444,6 +445,15 @@ attribute, so dropping on the count badge works too. `moveItem()` then:
    with the slot;
 4. recomputes the weight and dirties `bag`, `equipment` and `weight`.
 
+A controller cannot drag, so a click does the same move in two steps:
+`select(id)` remembers the first slot (`m_selected`, drawn with the
+`selected` class) and the second click calls `moveItem()` with both.
+Clicking the remembered slot again drops the choice. The slots also send
+`hover(id)` on `focus`, not only on `mouseover`, so the details panel
+follows the controller's focus, and `inv.use` (pad X, U; a `ui` context
+action from `InputScreen::defineGameActions()`) uses the item under the
+focus with `useItem()`, like a double-click.
+
 `shutdown()` removes the listener before closing the documents. Without
 that, RmlUi calls the listener after it is gone and the demo crashed on
 exit (BUGS.md BUG-025).
@@ -504,9 +514,20 @@ input.checkbox, input.radio, input.range, input.text, select { tab-index: auto; 
 `ShowcaseModule::update()` makes B go back to the menu (or close a modal)
 and LB / RB cycle the screens.
 
-What a controller cannot do yet in this demo: drag items in the
-inventory, see item details (they follow `mouseover`), rebind the
-Settings key list, type in the chat, or turn the camera.
+Two details keep the focus on the screen you are looking at.
+`setScreen()` shows the nav bar with `Rml::FocusFlag::None`, so the
+first press focuses the screen's first control instead of the "Main
+menu" tab, and `update()` pulls the nav bar back to the front each frame
+(focusing a control pulls its document forward, over the nav bar).
+
+The 3D view: `InputScreen::defineGameActions()` defines `camera.zoom` on
+the triggers before it calls `OrbitCameraModule::setPadControls(true)`,
+which then adds only the right stick for `camera.orbit`, and it clears
+the left stick from `camera.pan`: the d-pad and the left stick belong to
+the menus here.
+
+The one thing a controller cannot do in this demo is type in the chat:
+there is no on-screen keyboard yet.
 
 ### Button prompts
 

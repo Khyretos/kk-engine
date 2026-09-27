@@ -224,6 +224,7 @@ private:
     // Play mode (Simple): the palette, dragging blocks into the world,
     // picking placed things up again, and the bat.
     void playPaletteUi();
+    void padCursorUi();
     void modeSwitchUi();
     bool mouseOverUi() const;      // over any ImGui window, even mid-drag
     void placeBlock(size_t block); // start placing (the ghost follows the mouse)
@@ -272,6 +273,7 @@ private:
     void openGamepad(SDL_JoystickID id);
     void updatePad(float dt);
     void padButton(uint8_t button, bool down);
+    void buildPadButton(uint8_t button, bool down);
     void pointerButton(bool down);        // a left mouse press/release at the cursor
     void warpPointer(const glm::vec2& p); // moves the real mouse (SDL fakes it where it can't)
     void dropFingerDrag();                // a second finger landed: let go of what the first was dragging

@@ -23,8 +23,9 @@ script there.
 The targets are FEMFX breakables and the demo's shot is a FEMFX ball, so
 this game needs the FEMFX build: the `everything` preset
 (`KKE_ENABLE_FEMFX=ON`, see [docs/BUILDING.md](../../docs/BUILDING.md)).
-In the default build kke_demo has no `breakable` table, and pressing T
-gives a script error in the log and the Scripts panel.
+In the default build kke_demo has no `breakable` table; pressing T then
+says so on the HUD (`start()` checks `if not breakable`) instead of
+starting a round.
 
 ```sh
 cmake --workflow --preset everything
@@ -247,9 +248,10 @@ Pitfalls:
   can only change what it made itself.
 - Name timers and hooks with a prefix (`targets.clock`, `targets.hit`) so
   they do not clash with another script's.
-- `input.pressed("fire")` counts presses, not the shots kke_demo fires
-  while the button is held, so the accuracy shown assumes one click per
-  shot.
+- `input.pressed("fire")` counts presses, but kke_demo keeps firing (4
+  shots a second) while the button is held. The Think hook counts shots
+  the same way: one on the press, then one every 0.25 s while
+  `input.held("fire")`, so the accuracy matches what flew.
 
 ## Files
 

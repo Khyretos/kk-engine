@@ -50,6 +50,9 @@ private:
         // the animated one over kStandUpSeconds. < 0 = not blending.
         std::vector<glm::mat4> blendFrom;
         float blendAge = -1.0f;
+        // The pose sliders' angles per bone, kept per character so they
+        // still match the bones after switching away and back.
+        std::vector<glm::vec3> poseEuler;
     };
     void blendToAnimation(Character& c, float dt);
     void addJoltLevel(); // floor and walls for Jolt ragdolls
@@ -75,7 +78,6 @@ private:
     float m_time = 0.0f;
     int m_selected = 3;
     int m_selectedBone = 0;
-    std::vector<glm::vec3> m_poseEuler; // per bone of the posed character
     bool m_showBones = false;
     size_t m_propCount = 0;
     std::vector<kke::Module*> m_enginePanels;

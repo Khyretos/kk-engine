@@ -312,8 +312,9 @@ in the bone's own frame, not the world's.
   Z -65 so they hang down from the bind pose.
 - **Pose:** nothing every frame. The X, Y and Z sliders call `rotateBone`
   on the chosen bone when they change, and the result stays in the
-  locals. `m_poseEuler` holds the three angles for every bone of the
-  selected character; `select()` resets it to zero.
+  locals. Each `Character` keeps its own `poseEuler` (three angles per
+  bone), so after switching to another character and back the sliders
+  still show how its bones are turned (BUG-085).
 
 "Rest pose (pose bones)" calls `playAnimation(instance, -1)`, which stops
 the clip and resets every local to `localRest`, and sets the behaviour to
@@ -477,7 +478,10 @@ too.
 - **Stand up where you landed.** Commit 14fa5dc: "T stands a ragdoll up
   where its pelvis landed, blending from the lying pose back to its
   animation over 0.6 s", instead of snapping back to the spot it was
-  knocked from.
+  knocked from. The clip keeps playing under the override during those
+  0.6 s (`ModelModule::advanceClips` no longer skips an overridden
+  instance), so the blend lands on a moving animation, not a frozen one
+  (BUG-085).
 - **A morning sky.** Commit 3b2bd78 changed the mood from `golden_hour`
   to `morning` so the Prototype grid keeps its true colours.
 - **An RmlUi panel a controller can drive.** Commit a9d24ad replaced the

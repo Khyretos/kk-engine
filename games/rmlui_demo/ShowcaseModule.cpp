@@ -131,7 +131,10 @@ void ShowcaseModule::setScreen(const std::string& screen) {
         else doc->Hide();
     }
     if (m_nav) {
-        m_nav->Show();
+        // The nav bar is drawn on top but doesn't take the focus: the
+        // screen keeps it, so a controller's first press lands on the
+        // screen's first control, not on the "Main menu" tab.
+        m_nav->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
         m_nav->PullToFront();
     }
     if (screen == "loading") {
@@ -170,20 +173,6 @@ void ShowcaseModule::buildMenuModel() {
 
 // ------------------------------------------------------------------ settings
 
-void ShowcaseModule::syncBindingsFromSettings() {
-    static const std::pair<const char*, const char*> kLabels[] = {
-        {"move_forward", "Move forward"}, {"move_back", "Move back"}, {"move_left", "Strafe left"},
-        {"move_right", "Strafe right"}, {"jump", "Jump"}, {"interact", "Interact"},
-        {"inventory", "Open inventory"}, {"pause", "Pause menu"},
-    };
-    m_bindings.clear();
-    auto& keys = m_settings->settings().controls.keyBindings;
-    for (auto& [action, label] : kLabels) {
-        auto it = keys.find(action);
-        m_bindings.push_back({ action, label, it != keys.end() ? it->second : "—" });
-    }
-}
-
 void ShowcaseModule::buildSettingsModel() {
     Rml::DataModelConstructor c = m_ui->context()->CreateDataModel("settings");
     kke::EngineSettings& s = m_settings->settings();
@@ -210,19 +199,6 @@ void ShowcaseModule::buildSettingsModel() {
     c.Bind("path", &m_settingsPath);
     c.BindFunc("dirty", [this](Rml::Variant& v) { v = m_settings->hasUnsavedChanges(); });
 
-    if (auto b = c.RegisterStruct<Binding>()) {
-        b.RegisterMember("label", &Binding::label);
-        b.RegisterMember("key", &Binding::key);
-    }
-    c.RegisterArray<std::vector<Binding>>();
-    syncBindingsFromSettings();
-    c.Bind("bindings", &m_bindings);
-    c.Bind("capturing", &m_capturing);
-
-    c.BindEventCallback("rebind", [this](Rml::DataModelHandle h, Rml::Event&, const Rml::VariantList& args) {
-        m_capturing = argInt(args, 0);
-        h.DirtyVariable("capturing");
-    });
     c.BindEventCallback("save", [this](Rml::DataModelHandle h, Rml::Event&, const Rml::VariantList&) {
         m_settings->apply();
         m_settings->save();
@@ -230,12 +206,10 @@ void ShowcaseModule::buildSettingsModel() {
     });
     c.BindEventCallback("revert", [this](Rml::DataModelHandle h, Rml::Event&, const Rml::VariantList&) {
         m_settings->revert();
-        syncBindingsFromSettings();
         h.DirtyAllVariables();
     });
     c.BindEventCallback("reset_defaults", [this](Rml::DataModelHandle h, Rml::Event&, const Rml::VariantList&) {
         m_settings->resetToDefaults();
-        syncBindingsFromSettings();
         h.DirtyAllVariables();
     });
     c.BindEventCallback("go", &ShowcaseModule::onGo, this);
@@ -309,25 +283,35 @@ void ShowcaseModule::buildInventoryModel() {
     c.Bind("gold", &m_gold);
     c.Bind("toast", &m_invToast);
 
+    // hover follows the mouse and the focus (a controller or the arrow
+    // keys), so the details panel works without a mouse too.
     c.BindEventCallback("hover", [this](Rml::DataModelHandle h, Rml::Event&, const Rml::VariantList& args) {
-        if (Item* item = slotById(argString(args, 0)); item && !item->empty()) {
+        m_hovered = argString(args, 0);
+        if (Item* item = slotById(m_hovered); item && !item->empty()) {
             m_detail = *item;
             h.DirtyVariable("detail");
         }
     });
+    // Click (or pad A) an item to pick it up, then another slot to put it
+    // there: the same move as dragging, for a controller or the keyboard.
+    // Pressing the picked slot again puts it back.
     c.BindEventCallback("select", [this](Rml::DataModelHandle h, Rml::Event&, const Rml::VariantList& args) {
-        m_selected = argString(args, 0);
+        const std::string id = argString(args, 0);
+        const Item* picked = slotById(m_selected);
+        if (id == m_selected) {
+            m_selected.clear();
+        } else if (picked && !picked->empty()) {
+            const std::string from = m_selected;
+            m_selected.clear();
+            moveItem(from, id);
+        } else {
+            m_selected = id;
+            if (const Item* item = slotById(id); item && !item->empty()) showInventoryToast(item->name + ": pick a slot to move it to");
+        }
         h.DirtyVariable("selected");
     });
-    c.BindEventCallback("use", [this](Rml::DataModelHandle h, Rml::Event&, const Rml::VariantList& args) {
-        Item* item = slotById(argString(args, 0));
-        if (!item || item->category != "Consumable") return;
-        showInventoryToast("Used " + item->name + (item->name == "Health Potion" ? " — +40 health" : ""));
-        if (item->name == "Health Potion") m_hp = std::min<float>(static_cast<float>(m_maxHp), m_hp + 40.0f);
-        if (--item->count <= 0) *item = Item{};
-        recomputeWeight();
-        h.DirtyVariable("bag");
-        h.DirtyVariable("weight");
+    c.BindEventCallback("use", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
+        useItem(argString(args, 0));
     });
     c.BindEventCallback("sort", [this](Rml::DataModelHandle h, Rml::Event&, const Rml::VariantList&) {
         std::stable_sort(m_bag.begin(), m_bag.end(), [](const Item& a, const Item& b) {
@@ -389,6 +373,19 @@ void ShowcaseModule::DragDropListener::ProcessEvent(Rml::Event& event) {
     std::string from = slotIdOf(dragged);
     std::string to = slotIdOf(event.GetTargetElement());
     if (!from.empty() && !to.empty()) m_owner->moveItem(from, to);
+}
+
+void ShowcaseModule::useItem(const std::string& id) {
+    Item* item = slotById(id);
+    if (!item || item->category != "Consumable") return;
+    showInventoryToast("Used " + item->name + (item->name == "Health Potion" ? " — +40 health" : ""));
+    if (item->name == "Health Potion") m_hp = std::min<float>(static_cast<float>(m_maxHp), m_hp + 40.0f);
+    if (--item->count <= 0) *item = Item{};
+    if (id == m_selected) m_selected.clear();
+    recomputeWeight();
+    m_invModel.DirtyVariable("bag");
+    m_invModel.DirtyVariable("selected");
+    m_invModel.DirtyVariable("weight");
 }
 
 void ShowcaseModule::recomputeWeight() {
@@ -781,8 +778,15 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
             while (cur < n && m_screen != kScreens[cur]) ++cur;
             if (m.pressed("ui.next")) setScreen(kScreens[(cur + 1) % n]);
             if (m.pressed("ui.prev")) setScreen(kScreens[(cur + n - 1) % n]);
+            // Pad X or U uses the item under the focus (or the mouse).
+            if (m_screen == "inventory" && m.pressed("inv.use")) useItem(m_hovered);
         }
     }
+
+    // Focusing a control pulls its document to the front; keep the nav
+    // bar drawn over the screens (they have translucent backdrops). A
+    // no-op while it is already in front.
+    if (m_nav) m_nav->PullToFront();
 
     // Live preview: anything a settings control changed gets applied now.
     static kke::EngineSettings lastApplied = m_settings->settings();
@@ -821,19 +825,6 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
 void ShowcaseModule::onEvent(const SDL_Event& event) {
     if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat) return;
     SDL_Keycode key = event.key.key;
-
-    // Rebinding a key: the next key press (anything but Esc) becomes the binding.
-    if (m_capturing >= 0 && m_screen == "settings") {
-        if (key != SDLK_ESCAPE && m_capturing < static_cast<int>(m_bindings.size())) {
-            std::string keyName = SDL_GetKeyName(key);
-            m_bindings[m_capturing].key = keyName;
-            m_settings->settings().controls.keyBindings[m_bindings[m_capturing].action] = keyName;
-        }
-        m_capturing = -1;
-        m_settingsModel.DirtyVariable("bindings");
-        m_settingsModel.DirtyVariable("capturing");
-        return;
-    }
 
     if (key == SDLK_F1) {
         auto& s = m_settings->settings();

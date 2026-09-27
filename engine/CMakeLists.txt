@@ -456,28 +456,54 @@ endif()
 target_compile_definitions(kke_engine PRIVATE KKE_VERSION_NAME="${KKE_VERSION_NAME}" KKE_GIT_COMMIT="${_kke_commit}")
 
 # The key cooked art is encrypted with (kke/CookedFile.h, docs/COOKED_ART.md).
-# It lives in a git-ignored file so the public repository never holds it and
+# Two git-ignored files, so the public repository never holds either and
 # every build from one checkout (Linux, the Windows cross build in Docker)
-# shares it. Missing: made here. tools/packaging/bake_with_art.sh makes it
-# from the OS's secure random source first; CMake's RANDOM is weaker.
-set(KKE_ART_KEY_FILE "${CMAKE_SOURCE_DIR}/.kke-art.key" CACHE FILEPATH "Key file for cooked art (64 hex digits); made on first configure when missing")
-if(NOT EXISTS "${KKE_ART_KEY_FILE}")
-    string(RANDOM LENGTH 64 ALPHABET "0123456789abcdef" _kke_art_key)
-    file(WRITE "${KKE_ART_KEY_FILE}" "${_kke_art_key}\n")
-    message(STATUS "Cooked art: made a new key in ${KKE_ART_KEY_FILE}")
-endif()
-file(READ "${KKE_ART_KEY_FILE}" _kke_art_key)
-string(STRIP "${_kke_art_key}" _kke_art_key)
-if(NOT _kke_art_key MATCHES "^[0-9a-fA-F]+$")
-    message(FATAL_ERROR "${KKE_ART_KEY_FILE} must hold 64 hex digits")
-endif()
-string(LENGTH "${_kke_art_key}" _kke_art_key_len)
-if(NOT _kke_art_key_len EQUAL 64)
-    message(FATAL_ERROR "${KKE_ART_KEY_FILE} must hold 64 hex digits")
-endif()
-string(REGEX REPLACE "([0-9a-fA-F][0-9a-fA-F])" "0x\\1," _kke_art_key_bytes "${_kke_art_key}")
+# agrees on them:
+#   .kke-art.key    the checkout's master secret (64 hex digits), made once
+#   .kke-art.build  this bake's id (32 hex digits); bake_with_art.sh writes
+#                   a new one for every bake, so each download has its own key
+# Missing: made here. bake_with_art.sh makes both from the OS's secure
+# random source first; CMake's RANDOM is weaker.
+# The build's key is SHA3-256 over both, worked out here, so the master
+# secret never reaches a binary; the binary holds the key XOR a mask (also
+# derived here) and joins them only while decrypting (CookedFile.cpp).
+set(KKE_ART_KEY_FILE "${CMAKE_SOURCE_DIR}/.kke-art.key" CACHE FILEPATH "Master key file for cooked art (64 hex digits); made on first configure when missing")
+set(KKE_ART_BUILD_FILE "${CMAKE_SOURCE_DIR}/.kke-art.build" CACHE FILEPATH "Cooked-art build id file (32 hex digits); made on first configure when missing, new per bake")
+function(kke_read_hex_file file digits out)
+    if(NOT EXISTS "${file}")
+        string(RANDOM LENGTH ${digits} ALPHABET "0123456789abcdef" _hex)
+        file(WRITE "${file}" "${_hex}\n")
+        message(STATUS "Cooked art: made ${file}")
+    endif()
+    file(READ "${file}" _hex)
+    string(STRIP "${_hex}" _hex)
+    string(TOLOWER "${_hex}" _hex)
+    string(LENGTH "${_hex}" _len)
+    if(NOT _hex MATCHES "^[0-9a-f]+$" OR NOT _len EQUAL ${digits})
+        message(FATAL_ERROR "${file} must hold ${digits} hex digits")
+    endif()
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${file}")
+    set(${out} "${_hex}" PARENT_SCOPE)
+endfunction()
+kke_read_hex_file("${KKE_ART_KEY_FILE}" 64 _kke_art_master)
+kke_read_hex_file("${KKE_ART_BUILD_FILE}" 32 _kke_art_build)
+string(SHA3_256 _kke_art_key "kke-art-key/2\n${_kke_art_master}\n${_kke_art_build}")
+string(SHA3_256 _kke_art_mask "kke-art-mask/2\n${_kke_art_master}\n${_kke_art_build}")
+string(SHA3_256 _kke_art_tag "kke-art-tag/2\n${_kke_art_build}")
+set(_kke_art_masked "")
+set(_kke_art_mask_bytes "")
+foreach(_i RANGE 0 31)
+    math(EXPR _at "${_i} * 2")
+    string(SUBSTRING "${_kke_art_key}" ${_at} 2 _k)
+    string(SUBSTRING "${_kke_art_mask}" ${_at} 2 _m)
+    math(EXPR _x "0x${_k} ^ 0x${_m}" OUTPUT_FORMAT HEXADECIMAL)
+    string(APPEND _kke_art_masked "${_x},")
+    string(APPEND _kke_art_mask_bytes "0x${_m},")
+endforeach()
+string(SUBSTRING "${_kke_art_tag}" 0 16 _kke_art_tag)
+string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," _kke_art_tag_bytes "${_kke_art_tag}")
 file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/kke_art_key.h"
-     CONTENT "// Generated from KKE_ART_KEY_FILE; never commit.\n#pragma once\nstatic const unsigned char kKkeArtKey[32] = { @_kke_art_key_bytes@ };\n" @ONLY)
+     CONTENT "// Generated from KKE_ART_KEY_FILE and KKE_ART_BUILD_FILE (engine/CMakeLists.txt); never commit.\n#pragma once\nstatic const unsigned char kArtKeyMasked[32] = { @_kke_art_masked@ };\nstatic const unsigned char kArtKeyMask[32] = { @_kke_art_mask_bytes@ };\nstatic const unsigned char kArtBuildTag[8] = { @_kke_art_tag_bytes@ };\n" @ONLY)
 set_source_files_properties(src/CookedFile.cpp PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 # The hardware target a build starts on when KKE_TARGET isn't set

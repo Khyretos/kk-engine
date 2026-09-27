@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Bakes a PRIVATE download with the demos' Synty art in it, on your own PC
 # (docs/COOKED_ART.md). The art goes in cooked: same file names, contents
-# encrypted with this checkout's key (.kke-art.key), so the download holds
-# no FBX or texture anyone can lift out, and only these builds read it.
+# encrypted with a key made for this bake alone, so the download holds no
+# FBX or texture anyone can lift out, and only this bake's builds read it.
 #
 #   tools/packaging/bake_with_art.sh --assets DIR [--version NAME] [--windows] [--all-art] [--build DIR]
 #
@@ -13,7 +13,7 @@
 #                  demos load during a short benchmark run (much bigger)
 #   --build DIR    build folder (default: build-art)
 #
-# Steps: key (once) -> Release build -> a short kke_benchmark run with the
+# Steps: keys (a new one per bake) -> Release build -> a short kke_benchmark run with the
 # packs that records every art file the demos open (needs a screen) ->
 # kke_cook those files -> package.sh --cooked. Archives land in dist/.
 set -euo pipefail
@@ -37,16 +37,20 @@ done
 assets="$(cd "$assets" && pwd)"
 cd "$repo"
 
-# --- 1. The key: 32 bytes from the OS, made once, never committed. ------
+# --- 1. Keys: the checkout's secret (made once, never committed) and a
+# new id for this bake, so every bake's download has its own key
+# (docs/COOKED_ART.md). Both from the OS's secure random source.
 if [ ! -f .kke-art.key ]; then
     head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > .kke-art.key
     echo >> .kke-art.key
-    echo "made .kke-art.key (keep it: art cooked with it only works in builds from this checkout)"
+    echo "made .kke-art.key (the secret every bake's key comes from; keep it out of git)"
 fi
+head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n' > .kke-art.build
+echo >> .kke-art.build
 
 # --- 2. Build (Release, like the public downloads). ---------------------
 cmake -S . -B "$build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DKKE_ENABLE_FEMFX=ON -DKKE_ENABLE_VALIDATION=OFF \
-    "-DKKE_VERSION_NAME=$version" "-DKKE_ART_KEY_FILE=$repo/.kke-art.key"
+    "-DKKE_VERSION_NAME=$version" "-DKKE_ART_KEY_FILE=$repo/.kke-art.key" "-DKKE_ART_BUILD_FILE=$repo/.kke-art.build"
 cmake --build "$build"
 
 # --- 3. Which art files do the demos open? ------------------------------

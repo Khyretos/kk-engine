@@ -45,14 +45,14 @@ engine's standard character actions, as in the starter game.
 | Look | mouse | right stick |
 | Jump / vault / climb | Space | A |
 | Sprint | Left Shift (hold) | click the left stick (toggle) |
-| Walk | Left Alt (hold) | no controller binding |
-| Pick a camera | 1 to 8 | no controller binding |
+| Walk | Left Alt (hold) | push the left stick part of the way (the speed follows the stick) |
+| Pick a camera | 1 to 8 | View / Back cycles through them |
 | Next camera | Tab | View / Back |
 | First or third person | V | click the right stick |
 | Zoom the camera arm in / out | X / Z | RT / LT (analog) |
-| Play a camera path over the stairs | P | no controller binding |
-| Shake the camera | K | no controller binding |
-| Developer panels | F1 | no controller binding |
+| Play a camera path over the stairs | P | d-pad up |
+| Shake the camera | K | d-pad left |
+| Developer panels | F1 | none: a developer tool, keyboard only |
 
 [Bindings.h](Bindings.h) also defines `throw.charge` / `throw` (hold Q,
 release Q) and `level.reset` (Ctrl+R) as examples for

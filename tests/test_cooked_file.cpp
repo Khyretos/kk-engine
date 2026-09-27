@@ -16,7 +16,7 @@ TEST(CookedFile, RoundTripsAndHidesTheBytes) {
     ASSERT_TRUE(cooked::cook(plain, c));
     EXPECT_TRUE(cooked::isCooked(c));
     EXPECT_FALSE(cooked::isCooked(plain));
-    EXPECT_EQ(c.size(), plain.size() + 48);
+    EXPECT_EQ(c.size(), plain.size() + 56); // magic, build tag, nonce, MAC
     EXPECT_EQ(std::search(c.begin(), c.end(), plain.begin(), plain.begin() + 11), c.end()); // no plain text inside
     ASSERT_TRUE(cooked::uncook(c, back));
     EXPECT_EQ(back, plain);
@@ -29,10 +29,20 @@ TEST(CookedFile, RoundTripsAndHidesTheBytes) {
 TEST(CookedFile, DamageIsRefused) {
     std::vector<uint8_t> c, back;
     ASSERT_TRUE(cooked::cook(std::vector<uint8_t>(100, 7), c));
-    c[60] ^= 1;
+    c[70] ^= 1;
     std::string error;
     EXPECT_FALSE(cooked::uncook(c, back, &error));
-    EXPECT_NE(error.find("different key"), std::string::npos);
+    EXPECT_NE(error.find("damaged"), std::string::npos);
+    EXPECT_TRUE(back.empty());
+}
+
+TEST(CookedFile, AnotherBuildsArtIsRefused) {
+    std::vector<uint8_t> c, back;
+    ASSERT_TRUE(cooked::cook(std::vector<uint8_t>(100, 7), c));
+    c[8] ^= 1; // the build tag right after the magic
+    std::string error;
+    EXPECT_FALSE(cooked::uncook(c, back, &error));
+    EXPECT_NE(error.find("another build"), std::string::npos);
 }
 
 TEST(CookedFile, ReadAssetFileReadsPlainAndCookedAndTraces) {

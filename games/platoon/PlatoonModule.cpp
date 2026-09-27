@@ -827,11 +827,14 @@ void PlatoonModule::updateHud(float dt) {
                         living(false).size() >= 4 ? "#6fe39a" : "#ff8a7a" },
                       { "Enemies left: " + std::to_string(living(true).size()), "#aab3cc" } });
     // Prompt text: {action} shows that button on the device in use.
+    // Attack and Focus fire are armed by a tap or click, then given with
+    // the next one; a controller gives them at the ring directly.
+    const bool pad = m_cmd.padActive();
     m_hud->setButtons({ { "👥", "Everyone", "{rts.all}", false },
                         { "✋", "Hold", "{rts.hold}", false },
                         { "🛡", "Cover", "{rts.cover}", false },
-                        { "🎯", "Attack", "{touch:tap}", m_armed == kke::OrderKind::Attack },
-                        { "💥", "Focus fire", "{touch:tap}", m_armed == kke::OrderKind::FocusFire },
+                        { "🎯", "Attack", pad ? "{cmd.context}" : "{touch:tap}", m_armed == kke::OrderKind::Attack },
+                        { "💥", "Focus fire", pad ? "{cmd.force}+{cmd.context}" : "{touch:tap}", m_armed == kke::OrderKind::FocusFire },
                         { "🔄", "Regroup", "{rts.regroup}", false },
                         { "🔷", kke::formationName(m_formation), "{rts.formation}", false } });
     m_hud->setHint(m_cmd.padActive()

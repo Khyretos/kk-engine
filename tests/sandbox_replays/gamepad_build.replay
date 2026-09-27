@@ -1,0 +1,12 @@
+# Build mode with only a gamepad: Start to Play, Start back to Build, the
+# pointer ring moves left and the right stick turns the view.
+# KKE_SANDBOX_MODE=build KKE_SANDBOX_REPLAY=tests/sandbox_replays/gamepad_build.replay ./sandbox
+1.0 pad attach
+2.0 pad button start 1
+2.2 pad button start 0
+3.0 pad button start 1
+3.2 pad button start 0
+3.5 pad axis leftx -0.6
+4.5 pad axis leftx 0
+4.7 pad axis rightx 0.8
+5.2 pad axis rightx 0

@@ -170,10 +170,6 @@ void SyntySceneModule::init(kke::Application& app) {
         m_characters.push_back(c);
     }
     if (m_selected >= static_cast<int>(m_characters.size())) m_selected = 0;
-    if (!m_characters.empty()) {
-        const kke::ModelData* d = m_models->model(m_characters[m_selected].model);
-        m_poseEuler.assign(d ? d->bones.size() : 0, glm::vec3(0.0f));
-    }
     kke::log::get(name())->info("scene: {} props, {} characters", m_propCount, m_characters.size());
     defineInput();
     buildPanel();
@@ -417,9 +413,7 @@ void SyntySceneModule::readInput() {
 }
 
 void SyntySceneModule::select(int index) {
-    m_selected = index;
-    const kke::ModelData* d = m_models->model(m_characters[size_t(index)].model);
-    m_poseEuler.assign(d ? d->bones.size() : 0, glm::vec3(0.0f));
+    m_selected = index; // its pose angles travel with it (Character::poseEuler)
 }
 
 // Pushed away from the camera, so you see them fall.
@@ -500,7 +494,7 @@ void SyntySceneModule::buildPanel() {
         Character& c = m_characters[size_t(m_selected)];
         c.behavior = "pose";
         m_models->playAnimation(c.instance, -1);
-        m_poseEuler.assign(d->bones.size(), glm::vec3(0.0f));
+        c.poseEuler.assign(d->bones.size(), glm::vec3(0.0f));
     });
     // Posing: a bone, then its rotation relative to rest in its own axes.
     auto posing = [this, model] {
@@ -521,13 +515,14 @@ void SyntySceneModule::buildPanel() {
     auto axis = [this, posing, model](int component) {
         return kke::DemoPanelModule::Ref<float>([this, posing, model, component]() -> float* {
             if (!posing()) return nullptr;
-            if (m_poseEuler.size() != model()->bones.size()) m_poseEuler.assign(model()->bones.size(), glm::vec3(0.0f));
-            return &m_poseEuler[size_t(m_selectedBone)][component];
+            std::vector<glm::vec3>& euler = m_characters[size_t(m_selected)].poseEuler;
+            if (euler.size() != model()->bones.size()) euler.assign(model()->bones.size(), glm::vec3(0.0f));
+            return &euler[size_t(m_selectedBone)][component];
         });
     };
     auto pose = [this, model] {
         Character& c = m_characters[size_t(m_selected)];
-        rotateBone(c, model()->bones[size_t(m_selectedBone)].name.c_str(), m_poseEuler[size_t(m_selectedBone)]);
+        rotateBone(c, model()->bones[size_t(m_selectedBone)].name.c_str(), c.poseEuler[size_t(m_selectedBone)]);
     };
     s.slider("X", axis(0), -180.0f, 180.0f, "%.0f deg", pose, 5.0f);
     s.slider("Y", axis(1), -180.0f, 180.0f, "%.0f deg", pose, 5.0f);
