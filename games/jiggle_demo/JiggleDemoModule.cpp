@@ -212,7 +212,7 @@ void JiggleDemoModule::setupBodies() {
     if (!asset) {
         m_bodyStatus = "No female Synty character found. Put POLYGON Fantasy Characters (or City Characters) in assets/synty/ "
                        "or set KKE_ASSETS_DIR.";
-        log->warn("{}", m_bodyStatus);
+        log->info("{}", m_bodyStatus); // optional pack; the panel says so too
         return;
     }
     kke::ModelData ual, body;

@@ -163,7 +163,7 @@ bool FarmModule::loadLevel() {
     if (m_packDir.empty() || !m_catalog.find("SM_Bld_Barn_01")) {
         m_status = "POLYGON Farm isn't installed: put the extracted pack in assets/synty/ or set KKE_ASSETS_DIR (see README.md). "
                    "The animals still run on the bare field.";
-        log->warn("{}", m_status);
+        log->info("{}", m_status); // optional pack; the HUD says so too
     } else {
         m_loaded = kke::loadScene(m_scene, m_catalog, *m_models, nullptr);
         for (const std::string& m : m_loaded.missing) log->warn("farm: asset '{}' not found", m);

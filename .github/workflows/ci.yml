@@ -122,7 +122,7 @@ jobs:
           # Synty-based demos have no assets in CI; they must still start
           # and show their "assets not found" UI instead of crashing.
           failed=0
-          for demo in kke_demo kke_basics physics_demo melt_demo sea_demo sandbox rmlui_demo synty_demo starter_game cookbook audio_demo procedural_demo duel goblin_horde pet_companion platoon; do
+          for demo in kke_demo kke_basics physics_demo melt_demo sea_demo sandbox rmlui_demo imgui_demo synty_demo starter_game cookbook audio_demo procedural_demo duel goblin_horde pet_companion platoon climb_race farm_demo jiggle_demo; do
             [ -x "./$demo" ] || { echo "== $demo: not built, skipped"; continue; }
             set +e
             # Virtual HOSAS pair + gamepad (SDL virtual joysticks), moving:

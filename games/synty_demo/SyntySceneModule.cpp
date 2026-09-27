@@ -74,7 +74,7 @@ void SyntySceneModule::init(kke::Application& app) {
     m_packDir = kke::findAssetFolder("assets/synty", { "KKE_ASSETS_DIR", "KKE_SYNTY_DIR" }, base ? base : "", &m_searched);
     if (!m_packDir.empty()) m_catalog = kke::AssetCatalog::scan(m_packDir);
     if (m_packDir.empty() || !m_catalog.find("SM_Buildings_Floor_5x5_01")) {
-        kke::log::get(name())->warn("Synty POLYGON Prototype pack not found. Put the extracted pack folder(s) in assets/synty/ "
+        kke::log::get(name())->info("Synty POLYGON Prototype pack not found. Put the extracted pack folder(s) in assets/synty/ "
                                     "(e.g. assets/synty/POLYGON_Prototype/Characters/...) or set KKE_ASSETS_DIR.");
         m_packDir.clear();
         return;

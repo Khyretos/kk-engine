@@ -71,7 +71,7 @@ void HordeModule::loadGoblins() {
     const char* base = SDL_GetBasePath();
     const std::string packDir = kke::findAssetFolder("assets/synty", { "KKE_ASSETS_DIR", "KKE_SYNTY_DIR" }, base ? base : "");
     if (packDir.empty()) {
-        log->warn("no asset folder (assets/synty or KKE_ASSETS_DIR): goblins can't be shown, the waves still come");
+        log->info("no asset folder (assets/synty or KKE_ASSETS_DIR): goblins can't be shown, the waves still come");
         return;
     }
     // The .sk files and the clips, found by name anywhere under the packs.
