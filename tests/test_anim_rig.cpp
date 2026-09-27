@@ -4,6 +4,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <filesystem>
+#include <algorithm>
+#include <cmath>
 
 using kke::ModelData;
 using kke::Pose;

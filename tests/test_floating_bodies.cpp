@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <algorithm>
 
 namespace {
 // Calm water: no waves, surface at y = 0.

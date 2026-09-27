@@ -19,6 +19,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <system_error>
 
 using namespace kke::seal;
 

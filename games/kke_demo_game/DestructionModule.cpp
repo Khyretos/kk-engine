@@ -5,6 +5,7 @@
 #include <imgui.h>
 #include <cmath>
 #include <cstring>
+#include <algorithm>
 
 namespace kke_demo {
 

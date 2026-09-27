@@ -23,6 +23,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <system_error>
 
 namespace packs = kke::packs;
 namespace fs = std::filesystem;

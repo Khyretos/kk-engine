@@ -39,6 +39,7 @@
 #include <atomic>
 #include <set>
 #include <chrono>
+#include <utility>
 
 using namespace AMD;
 

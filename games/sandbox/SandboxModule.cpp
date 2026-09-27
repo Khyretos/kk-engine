@@ -33,6 +33,7 @@
 #include <set>
 #include <sstream>
 #include <typeindex>
+#include <stdexcept>
 
 namespace kke_sandbox {
 

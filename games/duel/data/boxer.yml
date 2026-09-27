@@ -1,0 +1,57 @@
+# The sparring bot's tactics, on the engine AI core (docs/AI.md): which
+# plan wins each moment is plain utility scoring over what the ring tells
+# it. The game (SparringBot.cpp) sets the inputs it reads:
+#   stamina, health   0..1, its own bars
+#   foe_open          1 while the opponent recovers from a swing or is stunned
+#   foe_guard         1 while the opponent blocks
+#   patience          0..1, drifts every couple of seconds (lower on hard)
+# and turns the winning action into footwork; the AI core's Attack events
+# (in reach, cooldown over) are when it throws. Blocks, parries and dodges
+# are reflexes timed in the game, not choices made here.
+# JSON works the same (boxer.json).
+species:
+  - id: boxer
+    label: Boxer
+    walkSpeed: 2.2
+    runSpeed: 2.2
+    acceleration: 14
+    radius: 0.35
+    attackRange: 0.45      # + both radii = 1.15 m, a punch's reach
+    attackCooldown: 0.45
+    fearDistance: 2.8
+    homeRadius: 6
+    needs: []
+    senses: { sightRange: 20, fovDegrees: 360, awarenessGain: 12, memorySeconds: 60 }
+    temperament: { boldness: 0.9, curiosity: 0, aggression: 0.7, sociability: 0 }
+    actions:
+      - name: punish          # it swung and missed, or is reeling: go in
+        behavior: fight
+        weight: 2.2
+        considerations:
+          - { input: foe_open, curve: step, threshold: 0.5 }
+          - { input: stamina, curve: step, threshold: 0.12 }
+      - name: breathe         # out of stamina: back off and let it come back
+        behavior: flee
+        weight: 1.8
+        momentum: 0.3
+        considerations:
+          - { input: stamina, curve: logistic, mid: 0.25, steepness: -14 }
+          - { input: threat, curve: linear }
+      - name: press           # walk them down and throw
+        behavior: fight
+        weight: 1.2
+        momentum: 0.15
+        considerations:
+          - { input: hostile, curve: linear }
+          - { input: stamina, curve: logistic, mid: 0.3, steepness: 12 }
+          - { input: patience, curve: linear, invert: true }
+      - name: circle          # stay just out of reach, look for an opening
+        behavior: watch
+        weight: 1.0
+        momentum: 0.15
+        considerations:
+          - { input: patience, curve: linear }
+          - { input: threat, curve: linear }
+      - name: idle
+        behavior: idle
+        weight: 0.1

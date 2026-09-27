@@ -7,6 +7,7 @@
 
 #include <cmath>
 #include <map>
+#include <algorithm>
 
 using kke::ModelData;
 using kke::Pose;

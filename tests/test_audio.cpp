@@ -7,6 +7,7 @@
 
 #include <cmath>
 #include <memory>
+#include <cstdio>
 
 using namespace kke;
 

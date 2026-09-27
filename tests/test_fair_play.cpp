@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <memory>
 #include <random>
+#include <system_error>
 
 using namespace kke::net;
 
