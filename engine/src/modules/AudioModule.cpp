@@ -24,6 +24,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <utility>
+#include <iterator>
 #if defined(__linux__)
 #include <dlfcn.h>
 #include <cstdarg>

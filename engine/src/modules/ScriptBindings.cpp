@@ -47,6 +47,7 @@
 #include <algorithm>
 #include <fstream>
 #include <sstream>
+#include <cstring>
 
 namespace kke {
 

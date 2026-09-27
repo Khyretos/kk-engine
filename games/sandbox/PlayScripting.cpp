@@ -28,6 +28,7 @@
 #include <cmath>
 #include <cstring>
 #include <map>
+#include <cstdio>
 
 namespace kke_sandbox {
 

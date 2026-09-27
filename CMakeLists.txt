@@ -124,7 +124,16 @@ FetchContent_Declare(
 )
 # SDL's Wayland protocol XML needs wayland-scanner 1.26+ (see the file).
 include(cmake/wayland_scanner.cmake)
+# CMake 4.4 added policy CMP0219 (macro arguments keep their backslashes)
+# and warns when a project that predates it passes backslashes through a
+# macro. SDL 3.4.16 does that in its ELF dlopen-notes check, and its C
+# snippet is written for the old behaviour (under NEW the escaped quotes
+# break the test program and the check wrongly fails). So SDL's
+# subproject gets OLD explicitly: same result as today, no warning.
+# Older CMake ignores the variable. Drop this once SDL sets the policy.
+set(CMAKE_POLICY_DEFAULT_CMP0219 OLD)
 FetchContent_MakeAvailable(SDL3)
+unset(CMAKE_POLICY_DEFAULT_CMP0219)
 
 # SDL3's own vendored source produces occasional warnings depending on
 # which platform backends get compiled (X11, Wayland, KMSDRM, etc. all
@@ -466,13 +475,47 @@ if(KKE_ENABLE_NET)
 endif()
 
 # ---------------------------------------------------------------------------
+# Recast & Detour (recastnavigation, zlib): navigation meshes and path
+# finding for the AI core (kke::ai::NavMesh, docs/AI.md). Only the four
+# runtime libraries are compiled, directly (its own CMake also builds the
+# demo and tests).
+# ---------------------------------------------------------------------------
+FetchContent_Declare(
+    recastnavigation
+    GIT_REPOSITORY https://github.com/recastnavigation/recastnavigation.git
+    GIT_TAG        v1.6.0
+    GIT_SHALLOW    TRUE
+    SOURCE_SUBDIR  kke-not-a-dir # sources only; see above
+)
+FetchContent_MakeAvailable(recastnavigation)
+file(GLOB KKE_RECAST_SOURCES
+    ${recastnavigation_SOURCE_DIR}/Recast/Source/*.cpp
+    ${recastnavigation_SOURCE_DIR}/Detour/Source/*.cpp
+    ${recastnavigation_SOURCE_DIR}/DetourCrowd/Source/*.cpp
+    ${recastnavigation_SOURCE_DIR}/DetourTileCache/Source/*.cpp)
+add_library(kke_recast STATIC ${KKE_RECAST_SOURCES})
+target_include_directories(kke_recast SYSTEM PUBLIC
+    ${recastnavigation_SOURCE_DIR}/Recast/Include
+    ${recastnavigation_SOURCE_DIR}/Detour/Include
+    ${recastnavigation_SOURCE_DIR}/DetourCrowd/Include
+    ${recastnavigation_SOURCE_DIR}/DetourTileCache/Include)
+set_target_properties(kke_recast PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# Optimized even in Debug: building a navmesh at -O0 takes seconds.
+if(NOT MSVC)
+    target_compile_options(kke_recast PRIVATE $<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>)
+endif()
+
+# ---------------------------------------------------------------------------
 # SQLite — the built-in store (kke::storage, docs/STORAGE.md): public
 # domain, one C file, nothing for players or server owners to install.
 # ---------------------------------------------------------------------------
 FetchContent_Declare(
     sqlite
-    URL      https://www.sqlite.org/2025/sqlite-amalgamation-3500400.zip
-    URL_HASH SHA256=1d3049dd0f830a025a53105fc79fd2ab9431aea99e137809d064d8ee8356b032
+    # 3.53.4: its strchr/strrchr results are const-correct, which GCC 15+
+    # (C23 by default, where glibc's strchr keeps the argument's const)
+    # needs; 3.50.4 warned with -Wdiscarded-qualifiers there.
+    URL      https://www.sqlite.org/2026/sqlite-amalgamation-3530400.zip
+    URL_HASH SHA256=1e71ddf93849c6a6ecf58b827c0692073d2dd7ee40196158068f7b29f422e87d
 )
 FetchContent_MakeAvailable(sqlite)
 add_library(kke_sqlite STATIC ${sqlite_SOURCE_DIR}/sqlite3.c)
@@ -859,6 +902,7 @@ add_subdirectory(games/synty_demo)
 add_subdirectory(games/sandbox)
 add_subdirectory(games/melt_demo)
 add_subdirectory(games/jiggle_demo)
+add_subdirectory(games/farm_demo)
 add_subdirectory(games/sea_demo)
 # Every audio case, one station each: walls and floors are Jolt bodies
 # (the sound's rays hit them), so it needs Jolt.
@@ -875,12 +919,19 @@ endif()
 if(KKE_ENABLE_JOLT)
     add_subdirectory(games/procedural_demo)
 endif()
+# Duel: a one-on-one fist fight on kke::Combatant (games/duel/README.md).
+# Jolt: the ring, the fighters and knockdown ragdolls.
+if(KKE_ENABLE_JOLT)
+    add_subdirectory(games/duel)
+endif()
 
 # The starter template (docs/tutorials/getting-started.md), and games made
 # from it with tools/new_game, which lists them in games/my_games.cmake.
 if(KKE_ENABLE_JOLT AND ENGINE_ENABLE_LUA)
     add_subdirectory(games/template)
     include(games/my_games.cmake)
+    # The cookbook (docs/cookbook/): cameras, animation and IK recipes.
+    add_subdirectory(games/cookbook)
 endif()
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 #include "kke/FrameStats.h"
 
 #include <gtest/gtest.h>
+#include <cmath>
 
 using kke::FrameStats;
 

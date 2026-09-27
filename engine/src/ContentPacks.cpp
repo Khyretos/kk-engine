@@ -7,6 +7,7 @@
 #include <cctype>
 #include <sstream>
 #include <tuple>
+#include <system_error>
 
 namespace kke::packs {
 

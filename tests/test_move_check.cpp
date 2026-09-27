@@ -1,6 +1,7 @@
 #include "kke/net/WorldMoveCheck.h"
 
 #include <gtest/gtest.h>
+#include <algorithm>
 
 using kke::RigidWorld;
 using kke::net::NetPlayerState;

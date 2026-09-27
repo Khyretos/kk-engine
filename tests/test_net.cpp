@@ -15,6 +15,7 @@
 #include <random>
 #include <set>
 #include <thread>
+#include <algorithm>
 
 using namespace kke::net;
 namespace script_net = kke::script_net;

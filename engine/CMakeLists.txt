@@ -25,6 +25,7 @@ set(ENGINE_SOURCES
     src/PlayScript.cpp
     src/Orders.cpp
     src/OrderScript.cpp
+    src/OrderBridge.cpp
     src/NodeGraph.cpp
     src/TouchGestures.cpp
     src/VoxelTets.cpp
@@ -49,6 +50,13 @@ set(ENGINE_SOURCES
     src/Buoyancy.cpp
     src/CameraRig.cpp
     src/SceneFile.cpp
+    src/ai/Steering.cpp
+    src/ai/Perception.cpp
+    src/ai/Utility.cpp
+    src/ai/NavMesh.cpp
+    src/ai/Species.cpp
+    src/ai/AiWorld.cpp
+    src/ai/AiScript.cpp
     src/net/BitStream.cpp
     src/net/Protocol.cpp
     src/net/Transport.cpp
@@ -150,6 +158,7 @@ set(ENGINE_HEADERS
     include/kke/PlayBlocks.h
     include/kke/Orders.h
     include/kke/OrderScript.h
+    include/kke/OrderBridge.h
     include/kke/TouchGestures.h
     include/kke/VoxelTets.h
     include/kke/InteriorColor.h
@@ -251,6 +260,7 @@ target_link_libraries(kke_engine PUBLIC
     RmlUi::Core
     nlohmann_json::nlohmann_json
     kke_sqlite
+    kke_recast
     ufbx
     spdlog::spdlog
     kke_miniaudio

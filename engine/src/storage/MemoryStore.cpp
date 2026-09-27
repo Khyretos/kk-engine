@@ -5,6 +5,7 @@
 #include <charconv>
 #include <filesystem>
 #include <limits>
+#include <system_error>
 
 namespace kke::storage {
 

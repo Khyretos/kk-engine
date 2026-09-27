@@ -57,6 +57,11 @@ markdown_extensions:
   - pymdownx.inlinehilite
   - pymdownx.superfences
   - pymdownx.keys
+  # The cookbook quotes real, CI-checked files (docs/cookbook/): recipes
+  # and regions of games/cookbook. A missing file fails the build.
+  - pymdownx.snippets:
+      base_path: ["."]
+      check_paths: true
 
 plugins:
   - search
@@ -73,16 +78,32 @@ nav:
   - Getting started:
       - Install and build: BUILDING.md
       - Make your own game: tutorials/getting-started.md
+      - Make games with an AI assistant: AI_ASSISTANTS.md
   - Tutorials:
       - tutorials/index.md
       - 1. Walk around: tutorials/01-walk-around.md
       - 2. Break things: tutorials/02-break-things.md
       - 3. Script a pickup: tutorials/03-pickups.md
       - 4. Add sound: tutorials/04-sound.md
+  - Cookbook:
+      - cookbook/index.md
+      - First steps: cookbook/first-steps.md
+      - Input: cookbook/input.md
+      - Moving things: cookbook/moving.md
+      - Cameras: cookbook/cameras.md
+      - Gameplay: cookbook/gameplay.md
+      - Algorithms: cookbook/algorithms.md
+      - Animation and IK: cookbook/animation.md
+      - Physics: cookbook/physics.md
+      - Sound: cookbook/audio.md
+      - Multiplayer: cookbook/networking.md
+      - Play to make: cookbook/play-to-make.md
+      - C++: cookbook/cpp.md
   - Guides:
       - Play to make: PLAY_TO_MAKE.md
       - Scripting in Lua: SCRIPTING.md
       - Movement: MOVEMENT.md
+      - AI (animals, enemies, companions): AI.md
       - Input: INPUT.md
       - Commands and orders: COMMANDS.md
       - Audio: AUDIO.md

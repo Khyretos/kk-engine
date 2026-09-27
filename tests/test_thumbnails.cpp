@@ -5,6 +5,8 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <algorithm>
+#include <cmath>
 
 using namespace kke;
 

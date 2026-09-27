@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <string>
 #include <vector>
+#include <cmath>
 
 namespace {
 bool writeWav(const std::string& path, const std::vector<float>& interleaved, int channels, int rate) {

@@ -7,6 +7,8 @@
 
 #include <filesystem>
 #include <fstream>
+#include <algorithm>
+#include <cctype>
 
 namespace {
 // setenv/unsetenv are POSIX; Windows has _putenv_s ("" removes it).

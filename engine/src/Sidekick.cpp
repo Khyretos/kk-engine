@@ -8,6 +8,10 @@
 #include <map>
 #include <stdexcept>
 #include <unordered_map>
+#include <cctype>
+#include <cstdio>
+#include <system_error>
+#include <utility>
 
 namespace fs = std::filesystem;
 

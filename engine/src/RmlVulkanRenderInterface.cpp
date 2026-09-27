@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <vector>
 #include <algorithm>
+#include <cmath>
 #include <glm/gtc/type_ptr.hpp>
 
 namespace kke {

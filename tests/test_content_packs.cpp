@@ -8,6 +8,8 @@
 #include <filesystem>
 #include <fstream>
 #include <random>
+#include <system_error>
+#include <iterator>
 
 namespace packs = kke::packs;
 namespace seal = kke::seal;

@@ -11,6 +11,8 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
+#include <memory>
+#include <system_error>
 
 namespace kke {
 
@@ -181,6 +183,15 @@ ModelData loadModel(const std::string& path, const ModelLoadOptions& options) {
         const ufbx_skin_deformer* skin = scene->skin_deformers.data[s];
         for (size_t c = 0; c < skin->clusters.count; ++c) {
             for (const ufbx_node* n = skin->clusters.data[c]->bone_node; n && !n->is_root; n = n->parent) boneNodes.insert(n);
+        }
+    }
+    // An animation-only file (allowNoMeshes) has no skin to name its bones:
+    // take the skeleton nodes themselves, so its clips load by bone name.
+    if (boneNodes.empty() && options.allowNoMeshes) {
+        for (size_t i = 0; i < scene->nodes.count; ++i) {
+            const ufbx_node* node = scene->nodes.data[i];
+            if (!node->bone) continue;
+            for (const ufbx_node* n = node; n && !n->is_root; n = n->parent) boneNodes.insert(n);
         }
     }
     std::unordered_map<const ufbx_node*, int> boneIndex;

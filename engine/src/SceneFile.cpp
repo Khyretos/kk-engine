@@ -11,6 +11,8 @@
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
+#include <system_error>
+#include <utility>
 
 namespace kke {
 

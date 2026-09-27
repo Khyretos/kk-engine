@@ -36,6 +36,16 @@ jobs:
       - name: Every dependency is in docs/DEPENDENCIES.md
         run: python3 -W error tools/ci/check_dependencies.py
 
+  # Every std:: name must come from a header the file includes. CI's GCC 13
+  # still pulls many headers in through others; GCC 15/16 (Arch, Fedora)
+  # don't, so a missing #include <algorithm> builds here and fails there.
+  std-includes:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Every standard name has its header included
+        run: python3 -W error tools/ci/check_std_includes.py
+
   # Shipping builds (-DKKE_SHIPPING=ON, docs/ANTI_CHEAT.md) compile the
   # developer tools out: this keeps that configuration building with zero
   # warnings and its tests passing (DevTools.* checks the debug switches
@@ -112,7 +122,7 @@ jobs:
           # Synty-based demos have no assets in CI; they must still start
           # and show their "assets not found" UI instead of crashing.
           failed=0
-          for demo in kke_demo kke_basics physics_demo melt_demo sea_demo sandbox rmlui_demo synty_demo starter_game audio_demo; do
+          for demo in kke_demo kke_basics physics_demo melt_demo sea_demo sandbox rmlui_demo synty_demo starter_game cookbook audio_demo procedural_demo; do
             [ -x "./$demo" ] || { echo "== $demo: not built, skipped"; continue; }
             set +e
             # Virtual HOSAS pair + gamepad (SDL virtual joysticks), moving:
@@ -127,6 +137,22 @@ jobs:
             fi
           done
           exit $failed
+
+      # The cookbook (docs/cookbook/): every Lua recipe runs in the starter
+      # game, and every camera in the cookbook game, for a few seconds each;
+      # any script error fails the step.
+      - name: Cookbook recipes run headless
+        run: DISPLAY=:99 python3 -W error tools/docs_site/run_recipes.py --bin build/bin
+
+      # The checker AI assistants are told to use (AGENTS.md): it must pass
+      # on a clean game and fail on a broken script.
+      - name: tools/check_game passes and fails correctly
+        run: |
+          DISPLAY=:99 python3 -W error tools/check_game starter_game --seconds 5
+          mkdir -p /tmp/broken && echo 'local t = nil; print(t.x)' > /tmp/broken/broken.lua
+          if DISPLAY=:99 python3 -W error tools/check_game starter_game --scripts /tmp/broken --seconds 5; then
+            echo "check_game said OK for a broken script"; exit 1
+          fi
 
       # --- Coverage build: separate build directory, deliberately not
       # reusing the plain one (mixing instrumented and non-instrumented

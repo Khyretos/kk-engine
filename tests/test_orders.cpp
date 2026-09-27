@@ -372,6 +372,145 @@ TEST(Orders, IntentReadsLookingApproachingAndIdle) {
     EXPECT_STREQ(kke::intentName(i.kind), "idle");
 }
 
+// ---------------------------------------------------------------- orders carried out by the AI core
+
+#include "kke/OrderBridge.h"
+
+namespace {
+
+// Runs the AI (it moves its agents itself here) until `done` or a limit.
+template <typename Done> int run(kke::ai::AiWorld& w, kke::AiOrderBridge& bridge, Done done, int frames = 900) {
+    for (int i = 0; i < frames; ++i) {
+        w.update(1.0f / 30.0f);
+        bridge.handle(w.takeEvents());
+        if (done()) return i;
+    }
+    return -1;
+}
+
+} // namespace
+
+TEST(OrderBridge, FetchGoesThereBringsItBackAndIsDone) {
+    kke::ai::AiWorld w(3);
+    kke::ai::Species ball;
+    ball.id = "ball";
+    ball.radius = 0.1f;
+    ball.scent = 0.0f;
+    w.defineSpecies(ball);
+    ASSERT_TRUE(w.addAgent(2, "dog", { 0, 0, 0 }));
+    ASSERT_TRUE(w.addActor(1, "farmer", { 0, 0, 2 }));
+    ASSERT_TRUE(w.addActor(10, "ball", { 9, 0, -6 }));
+    kke::OrderBoard board([&](uint32_t u) { return w.agent(u) ? w.agent(u)->position : glm::vec3(NAN); });
+    kke::AiOrderBridge bridge(board, w);
+    std::vector<std::string> log;
+    bridge.pickUp = [&](uint32_t unit, uint32_t thing) {
+        log.push_back("pick " + std::to_string(thing));
+        EXPECT_LT(glm::length(w.agent(unit)->position - w.agent(thing)->position), 1.2f);
+        return true;
+    };
+    bridge.deliver = [&](uint32_t unit, uint32_t thing, uint32_t to) {
+        log.push_back("deliver " + std::to_string(thing) + " to " + std::to_string(to));
+        EXPECT_LT(glm::length(w.agent(unit)->position - w.agent(to)->position), 2.0f);
+    };
+    bool ok = false;
+    board.listen({ {}, [&](uint32_t, const kke::UnitOrder& o, bool good) { ok = o.kind == kke::OrderKind::Fetch && good; } });
+    kke::Order fetch;
+    fetch.kind = kke::OrderKind::Fetch;
+    fetch.units = { 2 };
+    fetch.target = 10;
+    fetch.issuer = 1;
+    ASSERT_NE(board.issue(fetch), 0u);
+    EXPECT_EQ(w.agent(2)->order.kind, kke::ai::Order::Kind::Interact);
+    ASSERT_GE(run(w, bridge, [&] { return ok; }), 0) << w.describe(2);
+    EXPECT_EQ(log, (std::vector<std::string>{ "pick 10", "deliver 10 to 1" }));
+    EXPECT_EQ(board.currentKind(2), kke::OrderKind::None);
+    EXPECT_EQ(bridge.carrying(2), 0u);
+}
+
+TEST(OrderBridge, SquadMoveEndsInFormationAndOrdersMapOntoTheCore) {
+    kke::ai::AiWorld w(5);
+    for (uint32_t u = 1; u <= 4; ++u) ASSERT_TRUE(w.addAgent(u, "farmer", { float(u) * 1.5f, 0, 0 }));
+    ASSERT_TRUE(w.addAgent(9, "farmer", { 30, 0, 30 }));
+    for (uint32_t u = 1; u <= 4; ++u) w.setTeam(u, 1);
+    w.setTeam(9, 2);
+    kke::OrderBoard board([&](uint32_t u) { return w.agent(u)->position; });
+    kke::AiOrderBridge bridge(board, w);
+    int done = 0;
+    board.listen({ {}, [&](uint32_t, const kke::UnitOrder& o, bool good) { done += o.kind == kke::OrderKind::Move && good; } });
+    kke::Order move;
+    move.kind = kke::OrderKind::Move;
+    move.units = { 1, 2, 3, 4 };
+    move.point = { 4, 0, -10 };
+    move.hasPoint = true;
+    move.formation = kke::Formation::Line;
+    move.spacing = 2.0f;
+    board.issue(move);
+    ASSERT_GE(run(w, bridge, [&] { return done == 4; }), 0);
+    for (uint32_t a = 1; a <= 4; ++a)
+        for (uint32_t b = a + 1; b <= 4; ++b) EXPECT_GT(glm::length(w.agent(a)->position - w.agent(b)->position), 1.0f);
+    // Then they hold there, as the core does after MoveTo.
+    EXPECT_EQ(w.agent(1)->order.kind, kke::ai::Order::Kind::Hold);
+    // Focus fire: everyone on one target.
+    kke::Order focus;
+    focus.kind = kke::OrderKind::FocusFire;
+    focus.units = { 1, 2, 3, 4 };
+    focus.target = 9;
+    board.issue(focus);
+    for (uint32_t u = 1; u <= 4; ++u) {
+        EXPECT_EQ(w.agent(u)->order.kind, kke::ai::Order::Kind::Attack);
+        EXPECT_EQ(w.agent(u)->order.target, 9u);
+    }
+    // Sit and stay are holds; at ease clears the order; drop is done at once.
+    kke::Order sit;
+    sit.kind = kke::OrderKind::Sit;
+    sit.units = { 1 };
+    board.issue(sit);
+    EXPECT_EQ(w.agent(1)->order.kind, kke::ai::Order::Kind::Hold);
+    kke::Order easy;
+    easy.kind = kke::OrderKind::Free;
+    easy.units = { 1 };
+    board.issue(easy);
+    EXPECT_EQ(w.agent(1)->order.kind, kke::ai::Order::Kind::None);
+    int drops = 0;
+    bridge.drop = [&](uint32_t) { ++drops; };
+    kke::Order drop;
+    drop.kind = kke::OrderKind::Drop;
+    drop.units = { 2 };
+    board.issue(drop);
+    EXPECT_EQ(drops, 1);
+    EXPECT_EQ(board.currentKind(2), kke::OrderKind::None);
+    // A unit the AI doesn't know is left alone.
+    kke::Order other = sit;
+    other.units = { 77 };
+    EXPECT_NE(board.issue(other), 0u);
+    EXPECT_EQ(board.currentKind(77), kke::OrderKind::Sit);
+}
+
+TEST(OrderBridge, PetWaitsForTheGameToEndThePat) {
+    kke::ai::AiWorld w(8);
+    ASSERT_TRUE(w.addAgent(2, "dog", { 6, 0, 0 }));
+    ASSERT_TRUE(w.addActor(1, "farmer", { 0, 0, 0 }));
+    kke::OrderBoard board([&](uint32_t u) { return w.agent(u)->position; });
+    kke::AiOrderBridge bridge(board, w);
+    bool patting = false;
+    bridge.petStart = [&](uint32_t unit, uint32_t by) {
+        patting = true;
+        EXPECT_EQ(unit, 2u);
+        EXPECT_EQ(by, 1u);
+    };
+    kke::Order pet;
+    pet.kind = kke::OrderKind::Pet;
+    pet.units = { 2 };
+    pet.target = 1;
+    pet.issuer = 1;
+    board.issue(pet);
+    ASSERT_GE(run(w, bridge, [&] { return patting; }), 0) << w.describe(2);
+    EXPECT_EQ(board.currentKind(2), kke::OrderKind::Pet); // until the game says the pat is over
+    EXPECT_LT(glm::length(w.agent(2)->position - w.agent(1)->position), 1.6f);
+    board.complete(2, true);
+    EXPECT_EQ(board.currentKind(2), kke::OrderKind::None);
+}
+
 #if KKE_ENABLE_LUA
 #include "kke/NodeGraph.h"
 #include "kke/OrderScript.h"
