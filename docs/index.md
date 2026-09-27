@@ -52,7 +52,9 @@ What is solid, partial or not started yet, system by system, is in the
    template and run it.
 3. [The tutorials](tutorials/index.md): walk around, break things, script
    a pickup, add sound.
-4. [Scripting in Lua](SCRIPTING.md) and the [Lua API reference](reference/lua-api.md).
+4. [The cookbook](cookbook/index.md): recipes from your first script to
+   cameras, pathfinding, flocking, IK and multiplayer.
+5. [Scripting in Lua](SCRIPTING.md) and the [Lua API reference](reference/lua-api.md).
 
 ## Support KKE
 

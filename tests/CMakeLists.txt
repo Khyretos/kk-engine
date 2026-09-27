@@ -67,7 +67,7 @@ if(KKE_ENABLE_JOLT)
     target_sources(kke_tests PRIVATE test_rigid_world.cpp test_locomotion.cpp test_jolt_ragdoll.cpp test_move_check.cpp)
 endif()
 if(ENGINE_ENABLE_LUA)
-    target_sources(kke_tests PRIVATE test_script_vm.cpp)
+    target_sources(kke_tests PRIVATE test_script_vm.cpp test_cookbook.cpp)
     if(KKE_ENABLE_NET)
         target_sources(kke_tests PRIVATE test_server_scripts.cpp)
     endif()
@@ -81,6 +81,19 @@ file(READ ${CMAKE_SOURCE_DIR}/shaders/tonemap.glsl KKE_TONEMAP_GLSL)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/shaders/tonemap.glsl)
 configure_file(tonemap_glsl.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/tonemap_glsl.h @ONLY)
 target_include_directories(kke_tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
+
+# The cookbook's Lua recipes (docs/cookbook/recipes/), built in the same
+# way for test_cookbook.cpp: each must compile, and the play ones run.
+file(GLOB_RECURSE KKE_COOKBOOK_FILES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/docs/cookbook/recipes/*.lua)
+list(SORT KKE_COOKBOOK_FILES)
+set(KKE_COOKBOOK_RECIPES "")
+foreach(f ${KKE_COOKBOOK_FILES})
+    file(RELATIVE_PATH rel ${CMAKE_SOURCE_DIR}/docs/cookbook/recipes ${f})
+    file(READ ${f} lua)
+    string(APPEND KKE_COOKBOOK_RECIPES "    { \"${rel}\", R\"KKE_RECIPE(${lua})KKE_RECIPE\" },\n")
+endforeach()
+configure_file(cookbook_recipes.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/cookbook_recipes.h @ONLY)
+target_include_directories(kke_tests PRIVATE ${CMAKE_SOURCE_DIR}/games/cookbook)
 
 include(GoogleTest)
 # PRE_TEST: tests are listed when ctest runs, not at build time, so a

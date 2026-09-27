@@ -18,10 +18,10 @@ foreach(f ${GAME_SCRIPT_FILES})
     get_filename_component(fname ${f} NAME)
     engine_copy_runtime_file(${GAME_NAME} ${f} games/${GAME_NAME}/scripts/${fname})
 endforeach()
-foreach(font NotoSans-Regular.ttf NotoSans-Bold.ttf NotoColorEmoji.ttf)
+foreach(font NotoSans-Regular.ttf NotoSans-Bold.ttf NotoSans-Italic.ttf NotoColorEmoji.ttf)
     engine_copy_runtime_file(${GAME_NAME} ${CMAKE_SOURCE_DIR}/assets/fonts/${font} assets/fonts/${font})
 endforeach()
-foreach(shader cube.vert cube.frag shadow.vert shadow.frag model.vert model_instanced.vert shadow_instanced.vert model.frag
+foreach(shader cube.vert cube.frag glow.frag shadow.vert shadow.frag model.vert model_instanced.vert shadow_instanced.vert model.frag
                rml_ui.vert rml_ui.frag rml_gradient.frag)
     engine_add_shader(${GAME_NAME} ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()

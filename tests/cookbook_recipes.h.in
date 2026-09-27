@@ -1,0 +1,10 @@
+// Generated from docs/cookbook/recipes/ by tests/CMakeLists.txt: every
+// cookbook Lua recipe, built into kke_tests so the release workflow (which
+// runs the tests from a package, without the source tree) checks them too.
+#pragma once
+
+struct CookbookRecipe { const char* path; const char* lua; };
+
+inline const CookbookRecipe kCookbookRecipes[] = {
+@KKE_COOKBOOK_RECIPES@
+};
