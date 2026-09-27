@@ -78,6 +78,7 @@ nav:
   - Getting started:
       - Install and build: BUILDING.md
       - Make your own game: tutorials/getting-started.md
+      - Make games with an AI assistant: AI_ASSISTANTS.md
   - Tutorials:
       - tutorials/index.md
       - 1. Walk around: tutorials/01-walk-around.md

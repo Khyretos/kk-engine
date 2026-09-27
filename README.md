@@ -119,7 +119,8 @@ Lua), and [the tutorials](https://khyretos.github.io/kk-engine/tutorials/)
 grow it into a small game ([Make your own game](docs/tutorials/getting-started.md)).
 [The cookbook](https://khyretos.github.io/kk-engine/cookbook/) has recipes for
 the rest, from your own controls and cameras to A*, flocking and IK, each
-one run by CI.
+one run by CI. Any AI assistant can help too: [AGENTS.md](AGENTS.md) and
+its skills teach it the engine, whatever its size.
 Under the hood a game is a list of modules:
 
 ```cpp
@@ -154,7 +155,8 @@ example per system; Lua scripting is covered in
 | [docs/](docs/README.md) | Design notes per system: audio, input, movement, networking, scripting, optimization, scaling and more |
 | [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) | Every third-party library, tool and asset, its licence and what it asks of your game |
 | [docs/HISTORY.md](docs/HISTORY.md) | The development log: how each system was built and verified |
-| [AI_GUIDE.md](AI_GUIDE.md) | Rules for AI agents working on this codebase |
+| [AGENTS.md](AGENTS.md) | For AI assistants helping you make a game: skills any model can follow ([how to use them](https://khyretos.github.io/kk-engine/AI_ASSISTANTS/)) |
+| [AI_GUIDE.md](AI_GUIDE.md) | Rules for AI agents working on the engine itself |
 
 ## Tests and CI
 

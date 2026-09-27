@@ -1,5 +1,9 @@
 # AI_GUIDE.md
 
+> **Helping someone make a game** (Lua, a new game folder, explaining)?
+> Start at [AGENTS.md](AGENTS.md) and its skills instead. This file is
+> for changing the engine itself.
+
 This file exists so that **any** AI model — not just the one that wrote
 this codebase — can pick up Kreative Kompas Engine and start contributing
 correctly without re-deriving its architecture from scratch. If you are an
@@ -163,8 +167,8 @@ fast orientation:
 
 Repo layout worth knowing before you start: `engine/` is the engine
 itself (forked as-is by any game); `games/<name>/` is a self-contained
-"game folder" — `games/kke_demo_game/` is the current one and also the
-template to copy for a new one. Every game folder needs a `game.json`
+"game folder" — `games/template/` is the starter every new game copies
+(`tools/new_game NAME`), and `games/kke_demo_game/` the full demo. Every game folder needs a `game.json`
 (schema in docs/HISTORY.md "Game folder convention & marketplace"). If your
 change concerns marketplace/import behavior specifically, read that
 section's sandboxing caveat before writing anything — it's the single
