@@ -1,6 +1,6 @@
 # Climb Race (games/climb_race/README.md): a generated mountain, climbed hold
 # by hold (kke::ClimbWall, kke::Climber), against a rival.
-add_executable(climb_race main.cpp ClimbRaceModule.cpp Body.cpp Hud.cpp Lobby.cpp Net.cpp NetRace.cpp Mountains.cpp Progress.cpp)
+add_executable(climb_race main.cpp ClimbRaceModule.cpp Body.cpp Hud.cpp Lobby.cpp Net.cpp NetRace.cpp Mountains.cpp Progress.cpp Modes.cpp)
 target_link_libraries(climb_race PRIVATE kke_engine)
 engine_copy_runtime_file(climb_race ${CMAKE_CURRENT_SOURCE_DIR}/game.json marketplace/climb_race/game.json)
 engine_copy_runtime_file(climb_race ${CMAKE_CURRENT_SOURCE_DIR}/ui/climb_hud.rml ui/climb_hud.rml)

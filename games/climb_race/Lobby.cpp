@@ -52,6 +52,7 @@ constexpr float kCpuBack = 3.5f;
 void ClimbRaceModule::setupLobby() {
     if (!m_lobby) {
         pickMountainFromEnv();
+        setupModes();
         return;
     }
     kke::Lobby& l = m_lobby->lobby();
@@ -69,6 +70,7 @@ void ClimbRaceModule::setupLobby() {
     // (a new one each time). Finishing one opens the next.
     l.addOption({ "mountain", "Mountain", { "Random" }, 0, true, {}, {} });
     refreshMountainRow(m_mountainPick);
+    setupModes(); // the Mode row: Race, Rockfall, Elimination
     m_lobby->load();
     m_lobby->setTitle("CLIMB RACE", "Pick your climber. Another controller? Press {a} on it to join.");
     l.onJoin = [this](int seat) {
@@ -394,6 +396,7 @@ void ClimbRaceModule::startFromLobby() {
 
 void ClimbRaceModule::backToLobby() {
     showHowTo(false);
+    clearRocks();
     m_captured = false;
     SDL_SetWindowRelativeMouseMode(m_app->window().handle(), false);
     resetRace();

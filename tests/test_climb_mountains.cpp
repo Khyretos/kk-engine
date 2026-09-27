@@ -93,6 +93,7 @@ TEST(ClimbMountains, TheRaceSetupCarriesTheMountainExactly) {
     s.mountain = tour.back();
     s.mountain.desc.height = 33.3333f; // not a round number
     s.round = 4;
+    s.mode = 2; // Elimination
     s.seats.push_back({ 2, 1, false, "Pip", glm::vec3(0.2f, 0.4f, 0.6f) });
     const auto back = climb_race::netrace::decodeSetup(climb_race::netrace::encode(s));
     ASSERT_TRUE(back.has_value());
@@ -105,6 +106,7 @@ TEST(ClimbMountains, TheRaceSetupCarriesTheMountainExactly) {
     EXPECT_EQ(back->mountain.desc.crimpBias, s.mountain.desc.crimpBias);
     EXPECT_EQ(back->mountain.medals[2], s.mountain.medals[2]);
     EXPECT_EQ(back->round, 4u);
+    EXPECT_EQ(back->mode, 2);
     ASSERT_EQ(back->seats.size(), 1u);
     EXPECT_EQ(back->seats[0].name, "Pip");
 }

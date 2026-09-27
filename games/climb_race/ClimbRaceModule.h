@@ -120,6 +120,9 @@ private:
         float fallStartY = 0.0f;
         int falls = 0;
         int medal = -1;             // this race's medal (players; -1 none)
+        bool out = false;           // Elimination: out of this race (lets go, watches)
+        float hitCooldown = 0.0f;   // Rockfall: s before another rock counts
+        float hitFlash = 0.0f;      // Rockfall: s left of "hit by a rock!"
         bool newBest = false;       // ... and it's their best on this mountain
         // Online (Net.cpp): its player in the game, and whether another
         // machine plays it (then it's posed from what that machine sends).
@@ -277,6 +280,31 @@ private:
     kke::Camera m_overview; // three players: the fourth quarter's view of the whole race
     std::vector<kke::RigidWorld::BodyId> m_scenery;
     std::unique_ptr<kke::DynamicMeshRenderer> m_ground, m_markers[4];
+
+    // Party modes (Modes.cpp, DESIGN.md "Party modes"): the start menu's
+    // Mode row (the host's, online).
+    enum class Mode : uint8_t { Race, Rockfall, Elimination };
+    static constexpr int kModes = 3;
+    Mode m_mode = Mode::Race;
+    Mode chosenMode() const;
+    void setupModes();                     // the Mode row, KKE_CLIMB_MODE
+    void startMode();                      // a new race: rocks cleared, timers set
+    void updateMode(float dt);             // while racing
+    void clearRocks();
+    void spawnRock(int lane, const glm::vec3& above);
+    void eliminate(Racer& r);              // Elimination: out (the host decides online)
+    bool isDone(const Racer& r) const { return r.finished || r.out; }
+    struct Rock {
+        kke::RigidWorld::BodyId body = kke::RigidWorld::kNoBody;
+        float age = 0.0f;
+    };
+    std::vector<Rock> m_rocks;
+    std::unique_ptr<kke::DynamicMeshRenderer> m_rockMesh;
+    std::vector<float> m_rockTimers;       // per lane: s to its next rock
+    uint32_t m_rockRng = 1;
+    float m_elimTimer = 0.0f;              // s to the next elimination
+    std::string m_flash;                   // a line in the middle for a moment ("Juno is out!")
+    float m_flashTime = 0.0f;
 
     enum class Phase { Lobby, Countdown, Racing, Finished };
     Phase m_phase = Phase::Lobby;

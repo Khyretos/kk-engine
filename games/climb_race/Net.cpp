@@ -147,6 +147,7 @@ std::vector<ClimbRaceModule::Entry> ClimbRaceModule::onlineRoster() const {
 void ClimbRaceModule::sendSetup() {
     netrace::Setup s;
     s.mountain = m_mountain;
+    s.mode = static_cast<uint8_t>(m_mode);
     s.round = m_round;
     for (const Racer& r : m_racers) {
         if (r.netId < 0) continue;
@@ -209,8 +210,9 @@ void ClimbRaceModule::applySetup(const netrace::Setup& s) {
             if (r.seat >= 0) r.player = std::max(0, m_lobby->playerOf(r.seat));
     }
     m_rosterChanged = false;
+    m_mode = static_cast<Mode>(std::min<int>(s.mode, kModes - 1));
+    m_netRound = s.round; // before the reset: the rocks are seeded with it
     resetRace();
-    m_netRound = s.round;
     // At the line: the host starts everyone's countdown together (Go).
     netrace::Ready ready{ s.round, {} };
     for (const Racer& r : m_racers)
@@ -240,6 +242,14 @@ void ClimbRaceModule::onNetEvent(const kke::net::GameEventMsg& e) {
             m_netHold = false;
             kke::log::get(name())->info("online race {}: everyone at the line, go", m_netRound);
         }
+        return;
+    }
+    if (e.kind == netrace::kEventOut) {
+        // Elimination: the host says who's out, ours included.
+        const auto f = netrace::decodeFinish(e.payload);
+        if (!netClient() || e.fromPlayer != 0 || !f || f->round != m_netRound) return;
+        for (Racer& r : m_racers)
+            if (r.netId == f->player) eliminate(r);
         return;
     }
     if (e.kind != netrace::kEventFinish && e.kind != netrace::kEventLoose) return;

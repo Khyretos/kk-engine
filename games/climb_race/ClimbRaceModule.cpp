@@ -311,6 +311,7 @@ void ClimbRaceModule::buildMountain(int lanes) {
 
 void ClimbRaceModule::resetRace() {
     ++m_round;
+    if (!netClient()) m_mode = chosenMode(); // online, the host's (applySetup)
     m_phase = Phase::Countdown;
     m_countdown = 3.0f;
     m_winner.clear();
@@ -345,6 +346,7 @@ void ClimbRaceModule::resetRace() {
         r.newBest = false;
         r.wasClimbing = false;
     }
+    startMode();
 }
 
 // The CPU climbers' brain, from their difficulty: how long they breathe
@@ -521,11 +523,12 @@ void ClimbRaceModule::updateRacer(Racer& r, float dt) {
     RacerInput ri = r.bot ? readBot(r, dt) : readPlayer(r, dt);
     if (!r.bot) r.rig.addLook(ri.look.x, ri.look.y);
     r.idleLook = glm::length(ri.look) > 0.05f ? 0.0f : r.idleLook + dt;
-    const bool racing = m_phase == Phase::Racing && !r.finished;
+    const bool racing = m_phase == Phase::Racing && !isDone(r);
     if (!racing) {
         ri = RacerInput{};
         ri.look = glm::vec2(0.0f);
     }
+    if (r.out) ri.climb.letGo = true; // Elimination: off the rock, and watch
     r.regrab = std::max(0.0f, r.regrab - dt);
 
     if (c.climbing()) {
@@ -671,20 +674,23 @@ void ClimbRaceModule::update(const kke::UpdateContext& ctx) {
     }
     // The crosshair's hold for mouse aiming (last frame's camera).
     for (Racer& r : m_racers) r.crosshair = r.mouse && m_captured ? crosshairHold(r, cameraOf(r), r.crosshairOut) : -1;
-    if (!stopped)
+    if (!stopped) {
         for (Racer& r : m_racers)
             if (!r.remote) updateRacer(r, dt);
+        updateMode(dt);
+    }
     if (m_phase == Phase::Racing && !stopped) {
         // Every player at the top (or everyone, in a race of bots): results.
         bool playersDone = true, allDone = true, anyPlayer = false;
         for (const Racer& r : m_racers) {
-            allDone = allDone && r.finished;
+            allDone = allDone && isDone(r);
             if (r.seat >= 0 && !r.bot) {
                 anyPlayer = true;
-                playersDone = playersDone && r.finished;
+                playersDone = playersDone && isDone(r);
             }
         }
-        if (allDone || (anyPlayer && playersDone)) m_phase = Phase::Finished;
+        // Elimination goes on until one is left (updateMode), players out or not.
+        if (allDone || (anyPlayer && playersDone && m_mode != Mode::Elimination)) m_phase = Phase::Finished;
     }
 
     for (Racer& r : m_racers) animateBody(r, dt);
@@ -782,6 +788,7 @@ void ClimbRaceModule::render(const kke::RenderContext& ctx) {
         lane->mesh->draw(ctx, glm::translate(glm::mat4(1.0f), lane->offset), 0.0f, 0.85f);
         for (const Loose& l : lane->loose) l.mesh->draw(ctx, w.transform(l.body), 0.0f, 0.8f);
     }
+    for (const Rock& rock : m_rocks) m_rockMesh->draw(ctx, w.transform(rock.body), 0.0f, 0.85f);
     // Where each hand would go: cyan left, magenta right; gold while a
     // lunge charges (bigger with the charge); red = the crosshair's hold
     // is out of reach.
@@ -819,6 +826,7 @@ void ClimbRaceModule::renderShadow(const kke::ShadowRenderContext& ctx) {
         lane->mesh->drawShadow(ctx, glm::translate(glm::mat4(1.0f), lane->offset));
         for (const Loose& l : lane->loose) l.mesh->drawShadow(ctx, w.transform(l.body));
     }
+    for (const Rock& rock : m_rocks) m_rockMesh->drawShadow(ctx, w.transform(rock.body));
     if (!m_charModel)
         for (const Racer& r : m_racers) {
             const float yaw = bodyInput(r).yaw;

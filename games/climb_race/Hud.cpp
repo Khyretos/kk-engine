@@ -145,7 +145,9 @@ void ClimbRaceModule::updateHud(float) {
         std::snprintf(buf, sizeof(buf), "%.1f / %.0f m", static_cast<double>(std::max(0.0f, y)), static_cast<double>(c.wall().summitY()));
         h.height = buf;
         const bool resting = c.climbing() && c.drainRate() < 0.0f;
-        h.status = r.finished ? (r.medal >= 0 ? std::string("topped out: ") + medalName(r.medal) : std::string("topped out"))
+        h.status = r.out           ? std::string("out: watching")
+                 : r.hitFlash > 0.0f ? std::string("hit by a rock!")
+                 : r.finished ? (r.medal >= 0 ? std::string("topped out: ") + medalName(r.medal) : std::string("topped out"))
                  : c.state() == kke::Climber::State::Mantle ? std::string("mantling")
                  : resting ? "shaking out"
                  : c.climbing() ? (c.drainRate() > 8.0f ? "pumped" : "climbing")
@@ -185,7 +187,7 @@ void ClimbRaceModule::updateHud(float) {
         std::snprintf(buf, sizeof(buf), "%.0f m", static_cast<double>(std::max(0.0f, w.characterPosition(r->id).y)));
         h.height = buf;
         h.accent = hexColour(r->tint);
-        h.status = r->finished ? "top" : "";
+        h.status = r->finished ? "top" : r->out ? "out" : "";
         rivals.push_back(std::move(h));
     }
     dirty = rivals.size() != m_hud.rivals.size();
@@ -201,9 +203,20 @@ void ClimbRaceModule::updateHud(float) {
     const Racer* you = players.empty() ? &m_racers[0] : players[0];
     if (m_phase == Phase::Countdown) {
         banner = m_countdown > 2.0f ? "3" : m_countdown > 1.0f ? "2" : "1";
-        sub = "Race to the summit";
+        sub = m_mode == Mode::Rockfall      ? "Race to the summit. Watch out for falling rocks!"
+            : m_mode == Mode::Elimination ? "Race to the summit. Every 30 seconds the lowest climber is out!"
+                                          : "Race to the summit";
     } else if (m_phase == Phase::Racing && you->time < 0.8f && !you->finished) {
         banner = "GO";
+    } else if (m_phase == Phase::Racing && m_flashTime > 0.0f) {
+        banner = m_flash;
+    } else if (m_phase == Phase::Racing && m_mode == Mode::Elimination && !isDone(*you)) {
+        std::snprintf(buf, sizeof(buf), "The lowest climber is out in %d s", static_cast<int>(std::ceil(m_elimTimer)));
+        sub = buf;
+    } else if (m_phase == Phase::Finished && you->out) {
+        banner = m_winner.empty() ? std::string("Out!") : m_winner + " wins";
+        sub = (players.size() > 1 ? you->name : std::string("You")) + " went out at " + clock(you->time) +
+              "  ·  {race.again} race again  ·  {race.new} next mountain  ·  {menu} menu";
     } else if (m_phase == Phase::Finished) {
         banner = m_winner == you->name && players.size() <= 1 ? "You win" : m_winner + " wins";
         sub = (players.size() > 1 ? you->name + " " : std::string("Your time ")) + clock(you->time);
