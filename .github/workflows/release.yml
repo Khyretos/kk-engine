@@ -1,6 +1,6 @@
 # Downloadable builds (docs/RELEASES.md, issue #14).
 #
-# Pushing a tag like v0.1.0-alpha builds Linux and Windows packages of the
+# Pushing a tag like v0.1.0-alpha builds Linux, Windows and Android packages of the
 # engine's demos, tests them, and publishes them as a GitHub Release (a
 # pre-release when the tag has a '-' in it). Running the workflow by hand
 # (Actions tab -> "Release" -> Run workflow) builds and tests the same
@@ -240,8 +240,60 @@ jobs:
           .\kke_tests.exe --gtest_brief=1
           if ($LASTEXITCODE -ne 0) { throw "kke_tests failed with exit code $LASTEXITCODE" }
 
+  # The demos APK and the benchmark APK for Android phones
+  # (docs/ANDROID.md), signed with the
+  # project key when the repository has it (ANDROID_KEYSTORE_* secrets).
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Android NDK r27c and SDK packages
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.2.12479018" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build python3-yaml
+
+      - name: Configure
+        run: |
+          set -o pipefail
+          cmake --preset android-arm64 -DKKE_WARNINGS_AS_ERRORS=ON 2>&1 | tee configure.log
+
+      - name: Build
+        run: |
+          set -o pipefail
+          cmake --build build-android-arm64 -j 2>&1 | tee build.log
+
+      - name: APK
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KKE_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -o pipefail
+          ks=()
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/kke.keystore"
+            ks=(--keystore "$RUNNER_TEMP/kke.keystore")
+          fi
+          apk="dist/kk-engine-$VERSION-android-arm64.apk"
+          bench="dist/kk-engine-benchmark-$VERSION-android-arm64.apk"
+          python3 android/build_apk.py --build build-android-arm64 --out "$apk" --version-name "$VERSION" "${ks[@]}" 2>&1 | tee apk.log
+          python3 android/build_apk.py --build build-android-arm64 --benchmark --out "$bench" --version-name "$VERSION" "${ks[@]}" 2>&1 | tee -a apk.log
+          (cd dist && for f in *.apk; do sha256sum "$f" > "$f.sha256"; done)
+
+      - name: No warnings anywhere
+        run: tools/ci/check_warnings.sh configure.log build.log apk.log
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: kk-engine-android
+          path: dist/*
+          if-no-files-found: error
+
   release:
-    needs: [linux, windows-test]
+    needs: [linux, windows-test, android]
     if: github.event_name == 'push' || inputs.draft || inputs.publish
     runs-on: ubuntu-24.04
     permissions:
@@ -273,5 +325,5 @@ jobs:
             flags+=(--draft --target "$SHA")
           fi
           gh release create "$VERSION" dist/* --repo "$REPO" --title "Kreative Kompas Engine $VERSION" \
-            --notes "Downloadable builds of the engine's demos for Windows and Linux (x86_64, AVX2, Vulkan 1.3). Unpack the archive and run kke_demo, or benchmark/kke_benchmark to measure how well every demo runs on your PC. See README.txt inside the archive and docs/RELEASES.md." \
+            --notes "Downloadable builds of the engine's demos for Windows and Linux (x86_64, AVX2, Vulkan 1.3). Unpack the archive and run kke_demo, or benchmark/kke_benchmark to measure how well every demo runs on your PC. See README.txt inside the archive and docs/RELEASES.md. Android (arm64, Android 9+, Vulkan): install the .apk on the phone (docs/ANDROID.md)." \
             "${flags[@]}"

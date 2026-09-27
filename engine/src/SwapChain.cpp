@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <limits>
+#include <utility>
 
 namespace kke {
 
@@ -69,11 +70,16 @@ void SwapChain::create() {
     std::vector<VkPresentModeKHR> presentModes(presentModeCount);
     vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &presentModeCount, presentModes.data());
 
+    // An sRGB format, so the GPU encodes the final colours: BGRA on
+    // desktops, RGBA on Android, which offers no BGRA.
     VkSurfaceFormatKHR chosenFormat = formats[0];
-    for (const auto& f : formats) {
-        if (f.format == VK_FORMAT_B8G8R8A8_SRGB && f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-            chosenFormat = f;
-            break;
+    bool foundSrgb = false;
+    for (VkFormat wanted : { VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_R8G8B8A8_SRGB }) {
+        for (const auto& f : formats) {
+            if (!foundSrgb && f.format == wanted && f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+                chosenFormat = f;
+                foundSrgb = true;
+            }
         }
     }
 
@@ -96,6 +102,19 @@ void SwapChain::create() {
         m_window.getFramebufferSize(w, h);
         extent.width = std::clamp(static_cast<uint32_t>(w), capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
         extent.height = std::clamp(static_cast<uint32_t>(h), capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+    }
+
+    // Phones report the surface in their natural (portrait) orientation,
+    // with currentTransform saying how far the screen is turned. The engine
+    // draws upright and lets the compositor turn the image (IDENTITY), so
+    // a turned screen swaps width and height. Desktops report IDENTITY.
+    VkSurfaceTransformFlagBitsKHR transform = capabilities.currentTransform;
+    m_compositorRotates = false;
+    if ((capabilities.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) && transform != VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) {
+        if (transform & (VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR | VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR))
+            std::swap(extent.width, extent.height);
+        transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+        m_compositorRotates = true;
     }
 
     uint32_t imageCount = capabilities.minImageCount + 1;
@@ -135,8 +154,18 @@ void SwapChain::create() {
         createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     }
 
-    createInfo.preTransform = capabilities.currentTransform;
+    createInfo.preTransform = transform;
+    // Opaque where offered; Android's surfaces often offer only INHERIT.
     createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    if (!(capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR)) {
+        for (VkCompositeAlphaFlagBitsKHR a : { VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR, VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
+                                               VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR }) {
+            if (capabilities.supportedCompositeAlpha & a) {
+                createInfo.compositeAlpha = a;
+                break;
+            }
+        }
+    }
     createInfo.presentMode = chosenPresentMode;
     createInfo.clipped = VK_TRUE;
 

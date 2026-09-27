@@ -52,6 +52,7 @@ OUT_DIR` writes it locally).
 | `games/<name>/scripts/*.lua` | A game's Lua: level, rules, everything |
 | `docs/cookbook/` | Tested recipes from "hello" to A*, boids and IK, with screenshots |
 | `docs/tutorials/` | Step-by-step: make a game, then grow it |
+| `games/<demo>/README.md` | Each demo explained: how it works, why, how to make a game like it ([docs/demos](docs/demos/index.md) says which to start from) |
 | `docs/SCRIPTING.md` | The Lua API in full |
 | `tools/check_game` | Runs a game headless and reports script errors |
 | `engine/` | The engine (C++20, Vulkan). See [AI_GUIDE.md](AI_GUIDE.md) before changing it |

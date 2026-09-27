@@ -60,7 +60,7 @@ Your game folder:
 
 | File | What it is |
 |---|---|
-| `main.cpp` | The list of modules your game is made of, and the lights |
+| `main.cpp` | The list of modules your game is made of, and its mood (sky, light and fog, [MOODS.md](../MOODS.md)) |
 | `PlayerModule.cpp` | The player: movement, camera, and the `player` table for Lua |
 | `scripts/game.lua` | The level and the rules |
 | `game.json` | The manifest: name, description, tags (shown by the marketplace) |

@@ -28,6 +28,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <iterator>
 #include <typeindex>
 
 namespace kke_showcase {
@@ -1371,7 +1372,9 @@ void ShowcaseModule::renderUi() {
         if (ImGui::Button("Back to the course")) { m_loco->teleport(m_spawn); m_rig.yaw = 0.0f; }
     }
     if (ImGui::CollapsingHeader("Movement")) {
-        static const char* kStates[] = { "ground", "air", "vault", "climb" };
+        // One name per kke::Locomotion::State, in order.
+        static const char* kStates[] = { "ground", "air", "vault", "climb", "hang", "leap", "wall run" };
+        static_assert(std::size(kStates) == static_cast<size_t>(kke::Locomotion::State::WallRun) + 1);
         static const char* kKinds[] = { "nothing", "vault", "climb" };
         ImGui::Text("State: %s", kStates[static_cast<int>(m_loco->state())]);
         const kke::Locomotion::Sensor& sensor = m_sprint ? m_loco->settings().sprintSensor : m_loco->settings().walkSensor;

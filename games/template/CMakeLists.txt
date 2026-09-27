@@ -3,7 +3,7 @@
 # start.
 set(GAME_NAME starter_game)
 
-add_executable(${GAME_NAME} main.cpp PlayerModule.cpp)
+kke_add_game(${GAME_NAME} main.cpp PlayerModule.cpp)
 target_link_libraries(${GAME_NAME} PRIVATE kke_engine)
 # Scripts run straight from this folder while you develop (save a file and
 # the running game reloads it); the copy next to the executable is used

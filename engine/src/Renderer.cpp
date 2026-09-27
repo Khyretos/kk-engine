@@ -500,7 +500,8 @@ void Renderer::endFrame() {
 
     VkResult result = vkQueuePresentKHR(m_device->presentQueue(), &presentInfo);
 
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_window.wasResized()) {
+    const bool suboptimal = result == VK_SUBOPTIMAL_KHR && !m_swapChain->compositorRotates();
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || suboptimal || m_window.wasResized()) {
         m_window.clearResizedFlag();
         recreateSwapChain();
     } else if (result != VK_SUCCESS) {

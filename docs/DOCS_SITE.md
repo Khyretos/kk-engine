@@ -25,6 +25,11 @@ mkdocs build --strict  # what CI runs: any warning fails the build
   (`python3 tools/docs_site/lua_api.py` prints it). Descriptions come from
   the API table in [SCRIPTING.md](SCRIPTING.md): add a row there when you
   add a table.
+- **Demo pages** (`demos/<demo>.md`) are the demos' own
+  `games/<demo>/README.md`, added by `hooks.py`; their links are rewritten
+  so they work on the site too. A new demo with a README gets a page by
+  itself; add it to the Demos part of `nav:` and to
+  [demos/index.md](demos/index.md).
 - **The front page** is `index.md`; this folder's `README.md` is left out
   of the site.
 - **Devlog:** add a section to `devlog/index.md`, newest first.

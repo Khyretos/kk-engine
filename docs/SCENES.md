@@ -197,7 +197,10 @@ the shared cache works) or set `KKE_ASSETS_DIR`.
 
 No Synty packs. Fighters: Quaternius Universal Animation Library (CC0), the
 mannequin and clips from `assets/animations/UAL1_Standard.fbx` (Idle_Loop,
-Walk_*_Loop, Punch_Cross, Hit_Chest, Hit_Head, Death01, Roll, Dance_Loop)
+Walk_Loop, Punch_Jab, Punch_Cross, Hit_Chest, Hit_Head, Jump_Start,
+KipUp, Crouch_Idle_Loop, Dance_Loop, Yes: `Body.cpp` takes the first clip
+of each list that exists, so most of these are fallbacks for when UAL 2
+is missing)
 and, when present, UAL 2's melee clips (`UAL2.fbx`: Melee_Hook,
 Melee_Uppercut, Melee_Knee, Hit_Knockback, LayToIdle, Walk_Fwd/Bwd/L/R_Loop)
 from `assets/animations/` or `KKE_ASSETS_DIR/Universal Animation Library 2/Unity/`.

@@ -12,7 +12,7 @@ and the HUD agree.
 
 | Station | Where | What it shows |
 |---|---|---|
-| Crate pile | (4, -3) | Jolt rigid bodies: push them (E / right click) or shoot them over |
+| Crate pile | (4, -3) | Jolt rigid bodies: push them (E / Y) or shoot them over |
 | Breaking yard | (14, -6) | FEMFX glass, plank and stone wall that break for real, with crates under the glass that the shards push (FEMFX-Jolt bridge, [PHYSICS_BRIDGE.md](PHYSICS_BRIDGE.md)) |
 | Parkour lane | x = 20, z 28 to 5 | Vault the fences, climb the blocks, sprint for the 2.1 m ledge, hang from the 3 m wall. Nothing is marked up: `kke::Locomotion` reads the shapes |
 | Trick course | x = 26 | A 12 m wall to run along, thin pillars to leap between, and a thin wall under a beam for the leap up ([MOVEMENT.md](MOVEMENT.md)) |

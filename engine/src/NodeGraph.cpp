@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdio>
 #include <functional>
+#include <locale>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -299,8 +300,12 @@ bool parseNumber(const std::string& s, double& out) {
     const char* first = s.data() + a;
     const char* last = s.data() + b + 1;
     if (*first == '+') ++first;
-    auto r = std::from_chars(first, last, out);
-    return r.ec == std::errc() && r.ptr == last && std::isfinite(out);
+    // A classic-locale stream rather than std::from_chars: the Android
+    // NDK's libc++ has no floating-point from_chars yet.
+    std::istringstream in(std::string(first, last));
+    in.imbue(std::locale::classic());
+    in >> out;
+    return !in.fail() && in.peek() == std::char_traits<char>::eof() && std::isfinite(out);
 }
 
 std::string luaNumber(double v) {

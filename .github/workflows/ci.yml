@@ -242,3 +242,52 @@ jobs:
 
       - name: Unit tests (Release)
         run: ./build/bin/kke_tests --gtest_brief=1
+
+  # Every game built for Android (arm64, clang from the NDK: stricter than
+  # GCC in places) and packed into the demos APK, with zero warnings. The
+  # APK is kept as a run artifact for trying on a phone (docs/ANDROID.md).
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Android NDK r27c and SDK packages
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.2.12479018" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build python3-yaml
+
+      - name: Configure (android-arm64)
+        run: |
+          set -o pipefail
+          cmake --preset android-arm64 -DKKE_WARNINGS_AS_ERRORS=ON 2>&1 | tee configure.log
+
+      - name: Build (android-arm64)
+        run: |
+          set -o pipefail
+          cmake --build build-android-arm64 -j 2>&1 | tee build.log
+
+      - name: APK
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KKE_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -o pipefail
+          ks=()
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/kke.keystore"
+            ks=(--keystore "$RUNNER_TEMP/kke.keystore")
+          fi
+          python3 android/build_apk.py --build build-android-arm64 --out dist/kke-demos-android-arm64.apk "${ks[@]}" 2>&1 | tee apk.log
+          python3 android/build_apk.py --build build-android-arm64 --benchmark --out dist/kke-benchmark-android-arm64.apk "${ks[@]}" 2>&1 | tee -a apk.log
+
+      - name: No warnings anywhere
+        run: tools/ci/check_warnings.sh configure.log build.log apk.log
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: kke-android-arm64
+          path: dist/*.apk
+          if-no-files-found: error
