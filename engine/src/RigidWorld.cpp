@@ -1,5 +1,7 @@
 #include "kke/RigidWorld.h"
 
+#include "ClothSystem.h"
+
 #include "kke/ProceduralAnim.h"
 #include "kke/Ragdoll.h"
 
@@ -46,11 +48,19 @@ namespace kke {
 
 namespace {
 
-// Two object layers: things that never move, and everything else.
-// Static vs static pairs are never tested.
+// Object layers: things that never move, and everything else; static vs
+// static pairs are never tested. Cloth (soft bodies) collides with both
+// and with cloth colliders (a character's inner body, clothOnly bodies),
+// which nothing else sees. kQuery is never a body's layer: it's what
+// rays, overlap tests and characters ask with, so they see the solid
+// world and neither cloth nor cloth colliders (a curtain doesn't stop a
+// ray or a player; it moves out of the way).
 namespace Layers {
 constexpr JPH::ObjectLayer kStatic = 0;
 constexpr JPH::ObjectLayer kMoving = 1;
+constexpr JPH::ObjectLayer kCloth = 2;
+constexpr JPH::ObjectLayer kClothCollider = 3;
+constexpr JPH::ObjectLayer kQuery = 4;
 } // namespace Layers
 namespace BroadLayers {
 constexpr JPH::BroadPhaseLayer kStatic(0);
@@ -62,7 +72,7 @@ class BroadPhaseLayers final : public JPH::BroadPhaseLayerInterface {
 public:
     uint32_t GetNumBroadPhaseLayers() const override { return BroadLayers::kCount; }
     JPH::BroadPhaseLayer GetBroadPhaseLayer(JPH::ObjectLayer layer) const override {
-        return layer == Layers::kStatic ? BroadLayers::kStatic : BroadLayers::kMoving;
+        return layer == Layers::kStatic ? BroadLayers::kStatic : BroadLayers::kMoving; // cloth and its colliders move
     }
 #if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
     const char* GetBroadPhaseLayerName(JPH::BroadPhaseLayer layer) const override {
@@ -74,13 +84,22 @@ public:
 class ObjectVsBroadPhase final : public JPH::ObjectVsBroadPhaseLayerFilter {
 public:
     bool ShouldCollide(JPH::ObjectLayer layer, JPH::BroadPhaseLayer broad) const override {
-        return layer == Layers::kMoving || broad == BroadLayers::kMoving;
+        if (layer == Layers::kStatic || layer == Layers::kClothCollider) return broad == BroadLayers::kMoving;
+        return true;
     }
 };
 
 class ObjectPairs final : public JPH::ObjectLayerPairFilter {
 public:
-    bool ShouldCollide(JPH::ObjectLayer a, JPH::ObjectLayer b) const override { return a == Layers::kMoving || b == Layers::kMoving; }
+    bool ShouldCollide(JPH::ObjectLayer a, JPH::ObjectLayer b) const override {
+        if (a > b) std::swap(a, b);
+        switch (a) {
+        case Layers::kStatic: return b == Layers::kMoving || b == Layers::kCloth || b == Layers::kQuery;
+        case Layers::kMoving: return b == Layers::kMoving || b == Layers::kCloth || b == Layers::kQuery;
+        case Layers::kCloth: return b == Layers::kClothCollider;
+        default: return false;
+        }
+    }
 };
 
 JPH::Vec3 toJ(const glm::vec3& v) { return JPH::Vec3(v.x, v.y, v.z); }
@@ -139,6 +158,11 @@ struct RigidWorld::Impl : public JPH::ContactListener {
     std::vector<Contact> contacts;
     double stepMs = 0.0;
     double simulatedTime = 0.0;
+    std::unique_ptr<detail::ClothSystem> cloth; // made on the first addCloth (it adds a step listener)
+    detail::ClothSystem& clothSystem() {
+        if (!cloth) cloth = std::make_unique<detail::ClothSystem>(system, Layers::kCloth, *temp);
+        return *cloth;
+    }
 
     JPH::BodyInterface& bodies() { return system.GetBodyInterface(); }
     const JPH::BodyInterface& bodies() const { return system.GetBodyInterface(); }
@@ -178,6 +202,7 @@ RigidWorld::RigidWorld(const Settings& settings) : m(std::make_unique<Impl>()) {
 }
 
 RigidWorld::~RigidWorld() {
+    m->cloth.reset();
     m->characters.clear();
     for (auto& [id, rd] : m->ragdolls)
         for (auto& c : rd.joints) m->system.RemoveConstraint(c);
@@ -240,15 +265,17 @@ RigidWorld::BodyId RigidWorld::add(const BodyDesc& d) {
     if (!shape) return kNoBody;
     const JPH::EMotionType motion = d.motion == Motion::Static ? JPH::EMotionType::Static
                                     : d.motion == Motion::Kinematic ? JPH::EMotionType::Kinematic : JPH::EMotionType::Dynamic;
-    JPH::BodyCreationSettings bcs(shape, toJR(d.position), toJ(glm::normalize(d.rotation)), motion,
-                                  d.motion == Motion::Static ? Layers::kStatic : Layers::kMoving);
+    // A cloth-only collider moves only when told to (nothing else can push it).
+    const JPH::EMotionType bodyMotion = d.clothOnly && motion == JPH::EMotionType::Dynamic ? JPH::EMotionType::Kinematic : motion;
+    const JPH::ObjectLayer layer = d.clothOnly ? Layers::kClothCollider : d.motion == Motion::Static ? Layers::kStatic : Layers::kMoving;
+    JPH::BodyCreationSettings bcs(shape, toJR(d.position), toJ(glm::normalize(d.rotation)), bodyMotion, layer);
     bcs.mFriction = d.friction;
     bcs.mRestitution = d.restitution;
     bcs.mLinearVelocity = toJ(d.velocity);
     bcs.mAngularVelocity = toJ(d.angularVelocity);
     bcs.mUserData = d.material;
-    if (d.motion == Motion::Dynamic) bcs.mMotionQuality = JPH::EMotionQuality::LinearCast; // no tunnelling for fast rocks
-    if (d.mass > 0.0f && dynamic) {
+    if (bodyMotion == JPH::EMotionType::Dynamic) bcs.mMotionQuality = JPH::EMotionQuality::LinearCast; // no tunnelling for fast rocks
+    if (d.mass > 0.0f && dynamic && !d.clothOnly) {
         bcs.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
         bcs.mMassPropertiesOverride.mMass = d.mass;
     }
@@ -263,7 +290,8 @@ void RigidWorld::remove(BodyId body) {
     m->bodies().DestroyBody(id);
 }
 
-size_t RigidWorld::bodyCount() const { return m->system.GetNumBodies(); }
+// Rigid bodies only: characters' cloth colliders and the cloth itself aren't counted.
+size_t RigidWorld::bodyCount() const { return m->system.GetNumBodies() - m->characters.size() - clothCount(); }
 size_t RigidWorld::activeBodyCount() const { return m->system.GetNumActiveBodies(JPH::EBodyType::RigidBody); }
 bool RigidWorld::isActive(BodyId body) const { return m->bodies().IsActive(JPH::BodyID(body)); }
 
@@ -304,7 +332,8 @@ void RigidWorld::setTransform(BodyId body, const glm::vec3& position, const glm:
 
 void RigidWorld::bodiesInBox(const glm::vec3& min, const glm::vec3& max, std::vector<BodyBox>& out) const {
     JPH::AllHitCollisionCollector<JPH::CollideShapeBodyCollector> hits;
-    m->system.GetBroadPhaseQuery().CollideAABox(JPH::AABox(toJ(min), toJ(max)), hits);
+    m->system.GetBroadPhaseQuery().CollideAABox(JPH::AABox(toJ(min), toJ(max)), hits, m->system.GetDefaultBroadPhaseLayerFilter(Layers::kQuery),
+                                                m->system.GetDefaultLayerFilter(Layers::kQuery));
     for (const JPH::BodyID& id : hits.mHits) {
         JPH::BodyLockRead lock(m->system.GetBodyLockInterface(), id);
         if (!lock.Succeeded()) continue;
@@ -366,8 +395,10 @@ RigidWorld::RayHit RigidWorld::raycast(const glm::vec3& origin, const glm::vec3&
     JPH::RayCastSettings settings;
     settings.SetBackFaceMode(JPH::EBackFaceMode::CollideWithBackFaces);
     JPH::ClosestHitCollisionCollector<JPH::CastRayCollector> closest;
-    if (accept) m->system.GetNarrowPhaseQuery().CastRay(ray, settings, closest, {}, {}, AcceptBodies(accept));
-    else m->system.GetNarrowPhaseQuery().CastRay(ray, settings, closest);
+    const auto broad = m->system.GetDefaultBroadPhaseLayerFilter(Layers::kQuery);
+    const auto layers = m->system.GetDefaultLayerFilter(Layers::kQuery);
+    if (accept) m->system.GetNarrowPhaseQuery().CastRay(ray, settings, closest, broad, layers, AcceptBodies(accept));
+    else m->system.GetNarrowPhaseQuery().CastRay(ray, settings, closest, broad, layers);
     if (!closest.HadHit()) return out;
     const JPH::RayCastResult& r = closest.mHit;
     out.hit = true;
@@ -634,6 +665,10 @@ RigidWorld::CharacterId RigidWorld::addCharacter(const CharacterDesc& d) {
     s.mMaxStrength = d.pushStrength;
     s.mMass = d.mass;
     s.mSupportingVolume = JPH::Plane(JPH::Vec3::sAxisY(), -d.radius); // only the bottom sphere counts as feet
+    // An inner body only cloth collides with: walking into a curtain
+    // pushes it aside (nothing else sees it, see Layers).
+    s.mInnerBodyShape = s.mShape;
+    s.mInnerBodyLayer = Layers::kClothCollider;
     Impl::Character c;
     c.ch = new JPH::CharacterVirtual(&s, toJR(d.position), JPH::Quat::sIdentity(), 0, &m->system);
     c.desc = d;
@@ -653,9 +688,10 @@ bool RigidWorld::setCharacterHeight(CharacterId id, float height) {
     // Growing: refuse if the taller capsule would overlap anything
     // (a tiny tolerance so resting contacts don't count).
     const float tolerance = height > c.desc.height ? 0.01f : FLT_MAX;
-    if (!c.ch->SetShape(characterShape(height, c.desc.radius), tolerance, m->system.GetDefaultBroadPhaseLayerFilter(Layers::kMoving),
-                        m->system.GetDefaultLayerFilter(Layers::kMoving), {}, {}, *m->temp))
+    if (!c.ch->SetShape(characterShape(height, c.desc.radius), tolerance, m->system.GetDefaultBroadPhaseLayerFilter(Layers::kQuery),
+                        m->system.GetDefaultLayerFilter(Layers::kQuery), {}, {}, *m->temp))
         return false;
+    c.ch->SetInnerBodyShape(c.ch->GetShape());
     c.desc.height = height;
     return true;
 }
@@ -768,8 +804,9 @@ void RigidWorld::setCharacterState(CharacterId id, const CharacterState& state) 
     Impl::Character& c = it->second;
     // The capsule first (a crouch), with no room check: it was this size there.
     if (std::abs(state.height - c.desc.height) >= 1e-4f) {
-        c.ch->SetShape(characterShape(state.height, c.desc.radius), FLT_MAX, m->system.GetDefaultBroadPhaseLayerFilter(Layers::kMoving),
-                       m->system.GetDefaultLayerFilter(Layers::kMoving), {}, {}, *m->temp);
+        c.ch->SetShape(characterShape(state.height, c.desc.radius), FLT_MAX, m->system.GetDefaultBroadPhaseLayerFilter(Layers::kQuery),
+                       m->system.GetDefaultLayerFilter(Layers::kQuery), {}, {}, *m->temp);
+        c.ch->SetInnerBodyShape(c.ch->GetShape());
         c.desc.height = state.height;
     }
     JPH::StateRecorderImpl rec;
@@ -789,8 +826,8 @@ bool RigidWorld::capsuleFits(const glm::vec3& feet, float height, float radius) 
     settings.mMaxSeparationDistance = 0.0f;
     JPH::AnyHitCollisionCollector<JPH::CollideShapeCollector> hit;
     m->system.GetNarrowPhaseQuery().CollideShape(shape, JPH::Vec3::sReplicate(1.0f), JPH::RMat44::sTranslation(toJR(feet) + shape->GetCenterOfMass()), settings, JPH::RVec3::sZero(),
-                                                  hit, m->system.GetDefaultBroadPhaseLayerFilter(Layers::kMoving),
-                                                  m->system.GetDefaultLayerFilter(Layers::kMoving));
+                                                  hit, m->system.GetDefaultBroadPhaseLayerFilter(Layers::kQuery),
+                                                  m->system.GetDefaultLayerFilter(Layers::kQuery));
     return !hit.HadHit();
 }
 
@@ -827,8 +864,8 @@ void RigidWorld::Impl::stepCharacter(Character& c, float dt) {
     JPH::CharacterVirtual::ExtendedUpdateSettings eus;
     eus.mWalkStairsStepUp = JPH::Vec3(0.0f, c.desc.stepUp, 0.0f);
     eus.mStickToFloorStepDown = JPH::Vec3(0.0f, -0.5f, 0.0f);
-    ch.ExtendedUpdate(dt, gravity, eus, system.GetDefaultBroadPhaseLayerFilter(Layers::kMoving),
-                      system.GetDefaultLayerFilter(Layers::kMoving), {}, {}, *temp);
+    ch.ExtendedUpdate(dt, gravity, eus, system.GetDefaultBroadPhaseLayerFilter(Layers::kQuery),
+                      system.GetDefaultLayerFilter(Layers::kQuery), {}, {}, *temp);
     c.input.jump = false; // one jump per press
 }
 
@@ -865,12 +902,35 @@ void RigidWorld::step(float dt) {
         if (!c.manual) m->stepCharacter(c, dt);
     // One collision step per 1/60 s (more for bigger steps).
     const int collisionSteps = std::max(1, static_cast<int>(std::ceil(dt * 60.0f - 0.01f)));
+    if (m->cloth) m->cloth->beginStep();
     m->system.Update(dt, collisionSteps, m->temp.get(), m->jobs.get());
+    if (m->cloth) m->cloth->endStep();
     m->simulatedTime += dt;
     m->stepMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
 }
 
 double RigidWorld::lastStepMs() const { return m->stepMs; }
+
+RigidWorld::ClothId RigidWorld::addCloth(const ClothDesc& desc) { return m->clothSystem().add(desc); }
+void RigidWorld::removeCloth(ClothId id) {
+    if (m->cloth) m->cloth->remove(id);
+}
+size_t RigidWorld::clothCount() const { return m->cloth ? m->cloth->count() : 0; }
+bool RigidWorld::clothPositions(ClothId id, std::vector<glm::vec3>& out) const { return m->cloth && m->cloth->positions(id, out); }
+void RigidWorld::setClothJoints(ClothId id, const std::vector<glm::mat4>& joints) {
+    if (m->cloth) m->cloth->setJoints(id, joints);
+}
+void RigidWorld::setClothProtection(ClothId id, ClothProtection level) {
+    if (m->cloth) m->cloth->setProtection(id, level);
+}
+ClothProtection RigidWorld::clothProtection(ClothId id) const { return m->cloth ? m->cloth->protection(id) : ClothProtection::Off; }
+void RigidWorld::resetCloth(ClothId id) {
+    if (m->cloth) m->cloth->reset(id);
+}
+ClothStats RigidWorld::clothStats(ClothId id) const { return m->cloth ? m->cloth->stats(id) : ClothStats{}; }
+void RigidWorld::setWind(const glm::vec3& velocity) { m->clothSystem().setWind(velocity); }
+glm::vec3 RigidWorld::wind() const { return m->cloth ? m->cloth->wind() : glm::vec3(0.0f); }
+double RigidWorld::lastClothMs() const { return m->cloth ? m->cloth->lastMs() : 0.0; }
 double RigidWorld::simulatedTime() const { return m->simulatedTime; }
 
 std::vector<RigidWorld::Contact> RigidWorld::takeContacts() {
