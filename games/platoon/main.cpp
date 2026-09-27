@@ -2,6 +2,7 @@
 // mouse, a controller or a finger (README.md, docs/COMMANDS.md).
 #include "kke/Application.h"
 #include "kke/modules/AudioModule.h"
+#include "kke/modules/DemoPanelModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/RigidBodyModule.h"
@@ -33,6 +34,9 @@ int main() {
         const bool fromSource = std::filesystem::is_directory(GAME_SCRIPTS_SOURCE, ec);
         app.addModule<kke::ScriptModule>(fromSource ? GAME_SCRIPTS_SOURCE : GAME_SCRIPTS_INSTALLED);
         app.addModule<platoon::PlatoonModule>();
+        // Menu and settings (RmlUi): Start / F3 / Esc; F1 stays the game's own
+        // developer-panels key ("panels").
+        app.addModule<kke::DemoPanelModule>("Platoon", kke::DemoPanelModule::Side::Right).setDeveloperPanelsKey(false);
         app.addModule<kke::StatsModule>().setUiVisible(false);
         app.run();
     } catch (const std::exception& e) {
