@@ -35,11 +35,16 @@ Run any demo from `build/bin/` (building: [BUILDING.md](../BUILDING.md)).
 | A building or level-editing game, or a game made while playing | [Sandbox](../../games/sandbox/README.md) | [play to make](../PLAY_TO_MAKE.md) |
 | Menus, a HUD, settings, an inventory | [RmlUi demo](../../games/rmlui_demo/README.md) | [input](../INPUT.md) |
 | Debug panels and tools for yourself | [ImGui demo](../../games/imgui_demo/README.md) | |
+| Breakable, bendable, squashable things | [physics_demo](../../games/physics_demo/README.md) | [physics bridge](../PHYSICS_BRIDGE.md), [ragdolls](../RAGDOLLS.md) |
+| Lava, melting and pouring | [melt_demo](../../games/melt_demo/README.md) | |
+| Boats, water, floating and sinking | [sea_demo](../../games/sea_demo/README.md) | |
+| Soft bodies, jelly, jiggling characters | [jiggle_demo](../../games/jiggle_demo/README.md) | [jiggle physics](../JIGGLE.md) |
+| Sound that fills a place: rooms, walls, doors, footsteps | [audio_demo](../../games/audio_demo/README.md) | [audio](../AUDIO.md) |
+| A small tech demo with a settings panel a controller can drive | any of the five above | [the demo panel](../DEMO_PANEL.md) |
 | A game in plain C++ from the smallest pieces | [kke_basics](../../games/kke_demo_game/README.md) | [C++ cookbook](../cookbook/cpp.md) |
 
 ## Coming next
 
-These demos are being moved to RmlUi screens and full controller support
-first; their pages follow once that is done: `audio_demo`, `jiggle_demo`,
-`melt_demo`, `physics_demo`, `sea_demo` and `synty_demo`
-(the [source](../../games/) is in `games/`).
+`synty_demo` is being moved to an RmlUi panel and full controller
+support first; its page follows once that is done (the
+[source](../../games/synty_demo/) is in `games/`).

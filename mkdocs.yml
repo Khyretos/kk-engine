@@ -116,6 +116,12 @@ nav:
           - Platoon: demos/platoon.md
           - Command kit: demos/command_kit.md
           - Procedural animation: demos/procedural_demo.md
+      - Physics, water and sound:
+          - Physics (FEMFX): demos/physics_demo.md
+          - Melting: demos/melt_demo.md
+          - Sea: demos/sea_demo.md
+          - Jiggle: demos/jiggle_demo.md
+          - Sound: demos/audio_demo.md
       - Showcases and tools:
           - kke_demo showcase: demos/showcase.md
           - Sandbox: demos/sandbox.md
