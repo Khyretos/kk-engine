@@ -464,6 +464,33 @@ TEST(ScriptCalls, DamagedBytesAreRefused) {
 // net.table / net.watch (kke/ScriptTables.h): the server's rows reach a
 // player's script, filtered, then only as they change; a refused call's
 // changes never show.
+TEST(ServerScripts, ScriptsPutPlayersOnCourtsAndMakeSpectatorsGhosts) {
+    const std::string dir = tempDir("groups");
+    ServerConfig c = scriptsConfig(dir);
+    write(c.scripts + "/sv_courts.lua", R"lua(
+        net.handle("spectate", function(data, from)
+            net.setGroup(from, 9)
+            net.showGroups(from, { data.court })
+            net.solid(from, false)
+            return { group = net.group(from) }
+        end)
+        net.handle("bad", function(data, from) net.setGroup(from, 70000) end)
+    )lua");
+    Game g(c);
+    g.join("Kees");
+    Caller p(g);
+    p.run(0.5);
+    ASSERT_TRUE(p.vm.runString(R"lua(
+        net.call("spectate", { court = 1 }, function(ok, a) print("spectate", ok, a.group) end)
+        net.call("bad", {}, function(ok, why) print("bad", ok) end)
+    )lua", "player"));
+    p.run(0.5);
+    EXPECT_TRUE(p.said("spectate\ttrue\t9"));
+    EXPECT_TRUE(p.said("bad\tfalse")) << "a group past 65535 is an error";
+    // Players can't move themselves between groups.
+    EXPECT_FALSE(p.vm.runString("net.setGroup(1, 2)", "player"));
+}
+
 TEST(ServerScripts, PlayersWatchTheServersTables) {
     const std::string dir = tempDir("tables");
     ServerConfig c = scriptsConfig(dir);

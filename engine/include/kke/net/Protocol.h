@@ -5,6 +5,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <algorithm>
+#include <bitset>
 #include <cmath>
 #include <cstdint>
 #include <optional>
@@ -24,10 +26,11 @@ namespace kke::net {
 //   velocity  +-64 m/s per axis, 1/128 m/s steps
 //   rotation  smallest-three quaternion, ~0.001 per component
 //   yaw       0..360 degrees, 1024 steps (0.35 degrees)
-constexpr uint16_t kProtocolVersion = 7; // 2: Spawn, Despawn, Break (#28); 3: join password (#42); 4: Voice; 5: Input, InputAck (#28);
+constexpr uint16_t kProtocolVersion = 8; // 2: Spawn, Despawn, Break (#28); 3: join password (#42); 4: Voice; 5: Input, InputAck (#28);
                                          // 6: several players per connection (Guest, GuestAck), NetPlayerState::extra;
-                                         // 7: extra up to 32 bytes
-constexpr size_t kMaxPlayers = 32;
+                                         // 7: extra up to 32 bytes; 8: up to 254 players, snapshots say who is
+                                         // there but not in this one (Snapshot::present)
+constexpr size_t kMaxPlayers = 254;       // ids 1..254 (a sport center's lobby: ~100 people)
 constexpr size_t kMaxNameLength = 24;
 constexpr size_t kMaxGameIdLength = 32;
 constexpr size_t kMaxCharacterLength = 64;
@@ -197,6 +200,10 @@ struct SnapshotMsg {
     struct Player { uint8_t id; NetPlayerState state; };
     std::vector<Player> players;
     std::vector<NetBodyState> bodies;
+    // Players still there for this client but not in this snapshot (a big
+    // game sends far ones less often). Anyone in neither list is hidden
+    // from it (fog of war, another group).
+    std::vector<uint8_t> present;
 };
 
 template <typename Stream>
@@ -344,6 +351,25 @@ template <typename Stream> void serialize(Stream& s, SnapshotMsg& m) {
         m.bodies.resize(s.ok() ? bodies : 0);
     }
     for (NetBodyState& b : m.bodies) serialize(s, b);
+    // present: a bit per id up to the highest (none: one bit).
+    bool any = !m.present.empty();
+    s.boolean(any);
+    if (!any) return;
+    std::bitset<kMaxPlayers + 1> in;
+    uint32_t top = 1;
+    for (uint8_t id : m.present)
+        if (id >= 1 && id <= kMaxPlayers) {
+            in.set(id);
+            top = std::max<uint32_t>(top, id);
+        }
+    s.integer(top, 1, kMaxPlayers);
+    if constexpr (Stream::kReading) m.present.clear();
+    for (uint32_t id = 1; id <= top && s.ok(); ++id) {
+        bool bit = in.test(id);
+        s.boolean(bit);
+        if constexpr (Stream::kReading)
+            if (bit) m.present.push_back(static_cast<uint8_t>(id));
+    }
 }
 
 // Whole messages: the type, then the body. decode() returns nullopt for

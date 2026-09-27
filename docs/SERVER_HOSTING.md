@@ -72,7 +72,9 @@ scene come from the asset folder (`KKE_ASSETS_DIR`, as for the games).
 Players join with the game's Network panel (address and password, or a
 click in its **Internet servers** list, see below) or
 `KKE_NET=join:ADDRESS KKE_NET_PASSWORD=...`. A dedicated server has no
-player of its own, so all `maxPlayers` slots are for players.
+player of its own, so all `maxPlayers` slots are for players. It may be
+up to 254; past a few dozen, put players in groups (docs/SCRIPTING.md
+"Groups") so each is sent only its own court or room.
 
 Console (stdin, or `docker attach kke-server`): `help`, `status`,
 `players`, `kick <id|name> [reason]`, `ban <id|name|address> [reason]`,

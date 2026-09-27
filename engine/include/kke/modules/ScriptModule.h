@@ -112,7 +112,7 @@ public:
 private:
     struct ScriptFile { std::string path; std::filesystem::file_time_type mtime; bool ok = false; };
     // netId: its NetModule spawn id when replicated (0 = local only).
-    struct Body { uint32_t id; std::string source; bool sphere; glm::vec3 half; glm::vec3 color; uint16_t netId = 0; std::vector<uint8_t> netDesc{}; };
+    struct Body { uint32_t id; std::string source; bool sphere; glm::vec3 half; glm::vec3 color; uint16_t netId = 0; std::vector<uint8_t> netDesc{}; uint16_t group = 0; };
     struct ModelInstance { ModelModule::InstanceId id; std::string source; };
     struct Breakable { uint32_t handle; std::string source; bool broken = false; uint16_t netId = 0; uint16_t netKind = 0; std::vector<uint8_t> netDesc{}; };
     struct Document { int id; Rml::ElementDocument* doc; std::string source; };

@@ -144,6 +144,41 @@ end)
   fields. Every player may watch every table (per-player visibility is
   planned).
 
+### Groups
+
+One server can hold many rooms at once, like the courts of a sport
+center: put each player in a group and they are only sent the players
+and balls of their own group, plus any groups they choose to watch.
+
+```lua
+-- sv_courts.lua
+net.handle("join_court", function(data, from)
+    net.setGroup(from, data.court)   -- 1 to 10: this court's players and ball
+    net.solid(from, true)
+    return true
+end)
+
+net.handle("spectate", function(data, from)
+    net.setGroup(from, 0)            -- the lobby
+    net.showGroups(from, { data.court }) -- and watch this court
+    net.solid(from, false)           -- walk through the ball, never touch it
+    return true
+end)
+
+local ball = physics.sphere { pos = Vec(0, 1, 0), radius = 0.033, group = 3 } -- court 3's ball
+```
+
+- `net.setGroup(player, group)`, `net.group(player)`,
+  `net.showGroups(player, { group, ... })` (up to 64; `{}` or nil:
+  none), `net.solid(player, yes)`. Groups are 0 to 65535, 0 by default;
+  players and bodies in no group are all in group 0.
+- Only where the `sv_` scripts run (a server, or the host's game); on a
+  client these are an error. `net.group` works everywhere.
+- A body's group is set when it's made (`physics.box{ ..., group = g }`,
+  `physics.sphere{ ... }`).
+- What groups hide is what is sent: everyone's physics is still one
+  world. Leaving forgets a player's group and makes it solid again.
+
 ## The API
 
 Events, like GMod's `hook`:

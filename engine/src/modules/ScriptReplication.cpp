@@ -70,6 +70,7 @@ void ScriptModule::replicate(Body& b) {
     if (b.netDesc.empty() || !replicates(b.source)) return;
     auto* net = m_app->getModule<NetModule>();
     b.netId = net->spawn(script_net::kSpawnBody, b.netDesc);
+    if (b.netId && b.group) net->setBodyGroup(b.netId, b.group);
     // Static bodies never move: the description says it all.
     const auto desc = script_net::decodeBody(b.netDesc);
     if (b.netId && desc && !desc->isStatic) net->bindSpawnedBody(b.netId, b.id);

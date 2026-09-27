@@ -258,6 +258,25 @@ public:
     // when it's back.
     std::function<bool(uint8_t viewer, uint8_t subject)> sendPlayer;
 
+    // --- groups (docs/NETWORKING.md "Groups"): a big game in rooms, like
+    // the courts of a sport center. Every player (0 = the host) and every
+    // body is in a group, 0 by default. A client is sent the players and
+    // bodies of its own group and of the groups it shows (showGroups: a
+    // spectator in the lobby watching court 3); the rest are hidden from
+    // it. Forgotten when a player leaves.
+    void setGroup(uint8_t player, uint16_t group);
+    uint16_t group(uint8_t player) const;
+    void showGroups(uint8_t player, std::vector<uint16_t> groups);
+    void setBodyGroup(uint16_t body, uint16_t group); // a replicated body's (spawned ones too)
+    // Solid players push bodies (their capsule is in the world); a
+    // spectator shouldn't touch the ball. True by default.
+    void setSolid(uint8_t player, bool solid);
+    bool solid(uint8_t player) const { return !m_ghosts.count(player); }
+    // When a snapshot can't hold every player: how much `subject` matters
+    // to `viewer` (added up each snapshot until it's sent). Unset: the
+    // same group first, then by distance.
+    std::function<float(uint8_t viewer, uint8_t subject)> playerPriority;
+
     // --- input replay (NetConfig::inputReplay; kke/net/InputReplay.h)
     // Each server tick: inputTick() once, then for each client
     //   while (nextInput(id, in)) step its movement with `in`;
@@ -309,6 +328,7 @@ private:
         double voiceWindow = 0.0;
         size_t voiceInWindow = 0;
         std::map<uint16_t, float> priority; // body id -> accumulated priority
+        std::map<uint8_t, float> playerPriority; // player id -> the same, when not all fit
         std::map<uint16_t, bool> sentSleeping;
         InputQueue inputs;            // input replay
         uint32_t ackTick = 0;         // input replay: the input the state is after
@@ -352,6 +372,13 @@ private:
         bool hasState = false;
     };
     std::map<uint8_t, LocalGuest> m_localGuests; // slot -> the host's other players
+    std::map<uint8_t, uint16_t> m_groups;               // player -> group (absent: 0)
+    std::map<uint8_t, std::vector<uint16_t>> m_showing; // player -> other groups it's sent
+    std::map<uint16_t, uint16_t> m_bodyGroups;          // body -> group (absent: 0)
+    std::set<uint8_t> m_ghosts;                         // players that aren't solid
+    bool sees(const Client& viewer, uint16_t group) const; // any player on that screen
+    void forgetPlayer(uint8_t id);
+    const NetPlayerState* stateOf(uint8_t id) const;    // where a player is now, if known
     std::vector<NetBodyState> m_bodies;
     std::vector<Client> m_clients;
     size_t m_badPackets = 0, m_corrections = 0;

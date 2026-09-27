@@ -717,6 +717,24 @@ void NetModule::sendEventTo(uint8_t playerId, uint16_t kind, const std::vector<u
     if (m_server) m_server->sendEventTo(playerId, kind, payload);
 }
 
+void NetModule::setPlayerGroup(uint8_t playerId, uint16_t group) {
+    if (m_server) m_server->setGroup(playerId, group);
+}
+
+uint16_t NetModule::playerGroup(uint8_t playerId) const { return m_server ? m_server->group(playerId) : 0; }
+
+void NetModule::showGroups(uint8_t playerId, std::vector<uint16_t> groups) {
+    if (m_server) m_server->showGroups(playerId, std::move(groups));
+}
+
+void NetModule::setBodyGroup(uint16_t netId, uint16_t group) {
+    if (m_server) m_server->setBodyGroup(netId, group);
+}
+
+void NetModule::setSolid(uint8_t playerId, bool solid) {
+    if (m_server) m_server->setSolid(playerId, solid);
+}
+
 void NetModule::fixedUpdate(const FixedUpdateContext& ctx) {
     if (m_role == Role::Client) driveClientBodies(ctx.fixedDt);
     syncRemoteCapsules(ctx.fixedDt);
@@ -779,15 +797,17 @@ void NetModule::syncRemoteCapsules(float dt) {
     // don't collide with one another), so a client's prediction may not
     // bump into stand-ins the host doesn't have either.
     const bool replay = m_hostingReplay || (m_client && m_client->inputReplay()) || !standIns;
+    // A spectator (NetServer::setSolid false) mustn't touch the ball.
+    auto ghost = [this](uint8_t id) { return m_server && !m_server->solid(id); };
     for (auto it = m_capsules.begin(); it != m_capsules.end();) {
-        const bool present = !replay && !m_replayed.count(it->first) &&
+        const bool present = !replay && !m_replayed.count(it->first) && !ghost(it->first) &&
                              std::any_of(m_remote.begin(), m_remote.end(), [&](const net::RemotePlayer& p) { return p.id == it->first && p.hasState; });
         if (present) { ++it; continue; }
         w.remove(it->second);
         it = m_capsules.erase(it);
     }
     for (const net::RemotePlayer& p : m_remote) {
-        if (replay || !p.hasState) continue;
+        if (replay || !p.hasState || ghost(p.id)) continue;
         const glm::vec3 centre = p.state.position + glm::vec3(0.0f, kCapsuleCentre, 0.0f);
         auto it = m_capsules.find(p.id);
         if (it == m_capsules.end()) {

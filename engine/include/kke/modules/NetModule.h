@@ -164,6 +164,13 @@ public:
     void sendEvent(uint16_t kind, const std::vector<uint8_t>& payload);
     void relayEvent(const net::GameEventMsg& e); // host: pass a client's event on to the others
     void sendEventTo(uint8_t playerId, uint16_t kind, const std::vector<uint8_t>& payload); // host: to one player (a reply)
+    // Host: groups and solidity (net::NetServer "groups"; docs/NETWORKING.md
+    // "Groups"). No-ops elsewhere.
+    void setPlayerGroup(uint8_t playerId, uint16_t group);
+    uint16_t playerGroup(uint8_t playerId) const;
+    void showGroups(uint8_t playerId, std::vector<uint16_t> groups);
+    void setBodyGroup(uint16_t netId, uint16_t group);
+    void setSolid(uint8_t playerId, bool solid);
 
     std::function<void(const net::GameEventMsg&)> onEvent;
     // More receivers of the same events, for modules other than the game's

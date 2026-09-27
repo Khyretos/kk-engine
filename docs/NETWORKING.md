@@ -101,7 +101,11 @@ join a new one (and is told nothing it could use).
   - *Bodies*: the server's physics is the truth. Each snapshot is one UDP
     packet (1100 bytes); which bodies go in is decided per client by a
     priority accumulator: moving bodies gain priority faster than
-    sleeping ones, and every body is sent eventually.
+    sleeping ones, and every body is sent eventually. Players work the
+    same way once they fill more than 60% of the packet (up to 254 on a
+    server): the ones in your group first, then the nearest, and every
+    player is sent often. A player left out of one snapshot is listed
+    as still there in a few bits, so nobody blinks out.
   - *Interpolation*: everything that isn't yours is drawn 100 ms in the
     past, between two received states, so it moves smoothly through
     jitter and a lost packet or two. A `ClockOffset` maps the sender's
@@ -125,6 +129,17 @@ join a new one (and is told nothing it could use).
     only the differences. SpacetimeDB's tables and subscriptions,
     without SQL (`kke/net/SyncedTables.h`, `kke/ScriptTables.h`,
     docs/SCRIPTING.md "Synced tables").
+  - *Groups*: one server holding many rooms, like the ten courts of a
+    sport center. Every player and body is in a group (0 by default);
+    a client is sent the players and bodies of its group and of the
+    groups it shows, so a spectator in the lobby (group 9) can watch
+    court 3 without the other nine courts' traffic. A non-solid player
+    has no capsule in the server's physics, so spectators walk through
+    the ball and never move it (`NetServer::setGroup`, `showGroups`,
+    `setBodyGroup`, `setSolid`; in Lua `net.setGroup` and friends,
+    docs/SCRIPTING.md "Groups"). Hiding and priority are about what is
+    sent, not about cheating: fog of war (`sendPlayer`) still decides
+    on top.
   - *Spawned objects*: things the host makes while playing (a server
     script's crate or breakable) are `Spawn` messages: an id, a kind and
     the builder's own description (up to 256 bytes). Each client builds
@@ -133,7 +148,7 @@ join a new one (and is told nothing it could use).
     snapshots like the level's; `Despawn` removes them.
   - *Breaks*: `Break` messages carry which borders of a breakable broke on
     the host (below).
-  - *Robustness*: protocol version (now 7) and game id checked at join,
+  - *Robustness*: protocol version (now 8) and game id checked at join,
     then the server's password if it has one (compared in constant time;
     `KKE_NET_PASSWORD`, or the panel's Password field) and its access list
     (`NetServer::admit`: bans, allow list), a full server says so, silent peers time out, clients sending bad
@@ -411,6 +426,13 @@ guest's impossible move corrected by its slot, not the first player's.
 The fuzz test covers `Guest`, `GuestAck` and states with extra bytes.
 The host ending the game tells its players so (`endedByServer()`), which
 is not a lost connection.
+
+Groups add: a snapshot's "still there" list round trips; 100 players on
+one server all keep moving for everyone, fresh and never shown as
+hidden, though a snapshot holds only some of them; two courts don't see
+each other's players or ball, a spectator in the lobby sees the court it
+watches and is a ghost, moving a player shows it on its new court and
+leaving forgets its group.
 
 `tests/test_break_graph.cpp`: a follower given the host's borders ends up
 with the host's pieces; borders that don't exist can't be broken.
