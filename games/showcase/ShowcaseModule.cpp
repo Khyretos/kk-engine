@@ -155,12 +155,13 @@ void ShowcaseModule::init(kke::Application& app) {
         in.addBinding(zoomIn);
         in.addBinding(zoomOut);
         // So the d-pad down moves the ping to the left, and push-to-talk
-        // is T and LB (B is the Lua toys' ball, V the view: BUG-065).
+        // is P and LB (B is the Lua toys' ball, V the view, T the targets:
+        // BUG-065).
         in.clearBindings("audio.ping");
         in.addBinding(IM::bind("audio.ping", IM::key(SDL_SCANCODE_Q)));
         in.addBinding(IM::bind("audio.ping", IM::pad(SDL_GAMEPAD_BUTTON_DPAD_LEFT)));
         in.clearBindings("voice.talk");
-        in.addBinding(IM::bind("voice.talk", IM::key(SDL_SCANCODE_T)));
+        in.addBinding(IM::bind("voice.talk", IM::key(SDL_SCANCODE_P)));
         in.addBinding(IM::bind("voice.talk", IM::pad(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)));
         // Left-click shoots, but not the click that grabs the mouse (see onEvent).
         m_input->commitDefaults();
@@ -1351,9 +1352,9 @@ void ShowcaseModule::renderUi() {
     if (m_wantCrouch != m_crouch) ImGui::TextColored(ImVec4(1, 0.8f, 0.3f, 1), "No room to stand up");
     ImGui::Text("Rigid bodies %zu (%zu awake), %.2f ms", w.bodyCount(), w.activeBodyCount(), w.lastStepMs());
     if (ImGui::CollapsingHeader("Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::TextUnformatted("Keyboard: WASD move, Shift sprint, Alt walk, Space jump / vault / climb,\nC crouch / let go, mouse look, wheel zoom, V view, left click shoot, E push, R reset,\nQ ping, T talk, G/B/N toys, F1 engine panels, Esc menu (frees the mouse).\n"
+        ImGui::TextUnformatted("Keyboard: WASD move, Shift sprint, Alt walk, Space jump / vault / climb,\nC crouch / let go, mouse look, wheel zoom, V view, left click shoot, E push, R reset,\nQ ping, P talk, G/B/N toys, F1 engine panels, Esc menu (frees the mouse).\n"
                                "Controller: left stick move, right stick look, A jump / vault / climb, B crouch,\nL3 sprint, RT shoot, Y push, X reset, R3 view, d-pad up/down zoom,\n"
-                               "d-pad left ping, LB talk, RB/d-pad right/View toys, Start menu.");
+                               "d-pad left ping, LB talk, RB/View toys (hold View: clear), Start menu.");
         ImGui::SliderFloat("Mouse sensitivity", &m_mouseSensitivity, 0.02f, 0.5f, "%.2f deg/px");
         ImGui::SliderFloat("Stick / gyro speed", &m_stickSpeed, 45.0f, 540.0f, "%.0f deg/s");
         if (ImGui::Button("Left-handed keys (mirror)")) kke::InputModule::mirrorKeyboard(m_input->map(0));

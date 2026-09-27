@@ -4,11 +4,12 @@
 --
 --   G  build a tower of metal crates in front of you
 --   B  throw a rubber ball where you're looking
---   N  clear everything this script made
+--   N  clear everything this script made (or hold B a second)
+-- On a controller: RB tower, View ball, hold View a second to clear.
 
 input.define("toys.tower", "Build a crate tower", "G", "rb")
-input.define("toys.ball", "Throw a ball", "B", "dpad_right")
-input.define("toys.clear", "Clear toys", "N", "back")
+input.define("toys.ball", "Throw a ball (hold: clear)", "B", "back")
+input.define("toys.clear", "Clear toys", "N")
 
 local M = audio and audio.materials() or {}
 local spawned = {}
@@ -54,14 +55,26 @@ local function ball()
   }
 end
 
+local function clear()
+  for _, id in ipairs(spawned) do physics.remove(id) end
+  spawned = {}
+  print("cleared")
+end
+
+-- How long the ball button has been held: a second clears (a controller
+-- has no spare button for Clear).
+local ballHeld = 0
+
 hook.Add("Think", "toys.keys", function(dt)
   if input.pressed("toys.tower") then tower() end
   if input.pressed("toys.ball") then ball() end
-  if input.pressed("toys.clear") then
-    for _, id in ipairs(spawned) do physics.remove(id) end
-    spawned = {}
-    print("cleared")
+  if input.held("toys.ball") then
+    ballHeld = ballHeld + dt
+    if ballHeld >= 1 and ballHeld - dt < 1 then clear() end
+  else
+    ballHeld = 0
   end
+  if input.pressed("toys.clear") then clear() end
 end)
 
 -- Every hard hit, counted: contacts carry both bodies, speed, materials, point.
@@ -72,4 +85,4 @@ hook.Add("Contact", "toys.count", function(c)
   end
 end)
 
-print("toys.lua loaded: G tower, B ball, N clear")
+print("toys.lua loaded: G tower, B ball, N clear (controller: RB, View, hold View)")

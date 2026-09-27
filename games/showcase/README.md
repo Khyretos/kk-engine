@@ -88,12 +88,12 @@ is rebindable and saved in `input.json`.
 | Shoot | Left click (hold for 4 shots a second) | RT |
 | Push what you look at | E | Y |
 | First / third person | V | R3 |
-| Camera distance | Mouse wheel (while captured) | no controller binding yet |
-| Reset crates and player | R | no controller binding yet |
+| Camera distance | Mouse wheel (while captured) | D-pad up / down (hold) |
+| Reset crates and player | R | X |
 | Pause menu | Esc | Start |
-| Engine panels (ImGui) | F1 | Back |
-| Ping the surroundings (hear the walls) | Q | D-pad down |
-| Push to talk (voice builds) | B | no controller binding yet |
+| Engine panels (ImGui, developer tools) | F1 | none |
+| Ping the surroundings (hear the walls) | Q | D-pad left |
+| Push to talk (voice builds) | P (B is a toy) | LB |
 
 On a ledge: A/D (or the stick) shimmies along it and round corners, Space
 climbs up, back plus Space jumps off, C lets go. Jump with left or right
@@ -104,15 +104,16 @@ In the pause menu: the mouse, or the d-pad / left stick to move, A to
 press, B or Start to close. The keyboard reaches RmlUi directly (arrows,
 Enter, Tab), and Esc closes it.
 
-Players 2 to 4 (split screen) get a controller each and read only move,
-look, sprint, walk, crouch and jump from it. They cannot shoot, push or
-open the menu (see "Split screen" below).
+Players 2 to 4 (split screen) get a controller each: move, look, sprint,
+walk, crouch, jump, shoot (RT), push (Y), zoom (d-pad) and the pause menu
+(Start) all work from it; shots and pushes go along that player's own
+view.
 
 The Lua scripts add their own actions:
 
 | Script | Action | Keyboard | Controller |
 |---|---|---|---|
-| `toys.lua` | Build a crate tower / throw a ball / clear | G / B / N | no controller binding yet |
+| `toys.lua` | Build a crate tower / throw a ball / clear | G / B / N (or hold B) | RB / View / hold View a second |
 | `targets.lua` (from `games/first_lua_game`) | Start break-the-targets | T | D-pad right |
 
 ## How it plays
@@ -540,9 +541,10 @@ rectangles, player 1 uses the engine camera. With `m_overhead` a camera
 (`kke::pictureInPicture`). Up to `kke::kMaxViews` (4) views are drawn;
 each module's `render` runs once per view.
 
-Limits: players 2 to 4 only move, look, jump, sprint, walk and crouch.
-Their `reset` check exists but `reset` has no controller binding, and the
-menu only reads player 1's map.
+Players 2 to 4 also shoot, push (along their own camera: `shoot(p.camera)`,
+`forcePush(p.camera)`), zoom, reset themselves (X) and open or close the
+pause menu (`frameStart` reads every player's map). The Lua toys and the
+ping still read player 1's map only.
 
 ### Networking (NET builds)
 
