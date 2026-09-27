@@ -36,6 +36,7 @@ add_executable(kke_tests
     test_hardware_target.cpp
     test_frame_stats.cpp
     test_viewports.cpp
+    test_lobby.cpp
     test_physics_bridge.cpp
     test_physics_world.cpp
     test_buoyancy.cpp

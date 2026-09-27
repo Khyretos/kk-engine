@@ -19,6 +19,7 @@
 namespace kke {
 class DynamicMeshRenderer;
 class InputModule;
+class LobbyModule;
 class RigidBodyModule;
 class UiModule;
 } // namespace kke
@@ -26,27 +27,32 @@ namespace Rml { class ElementDocument; }
 
 namespace climb_race {
 
-// Climb Race: two identical generated rock faces side by side, like a
-// speed-climbing final. You start on the ground in front of yours; the
-// first to mantle over the summit wins. On the rock you choose each hold
-// yourself (kke::Climber): a bumper reaches precisely, a trigger held and
-// let go lunges (further the longer you hold), both together snatch
-// quickly. Stamina runs out on bad holds and overhangs; stand on a ledge
-// or hang on two jugs to get it back. Loose holds come off under a lunge
-// and fall down the face (Jolt bodies).
+// Climb Race: identical generated rock faces side by side, like a
+// speed-climbing final, one per climber. You start on the ground in front
+// of yours; the first to mantle over the summit wins. On the rock you
+// choose each hold yourself (kke::Climber): a bumper reaches precisely, a
+// trigger held and let go lunges (further the longer you hold), both
+// together snatch quickly. Stamina runs out on bad holds and overhangs;
+// stand on a ledge or hang on two jugs to get it back. Loose holds come
+// off under a lunge and fall down the face (Jolt bodies).
 //
-// The rival on the other face is kke::ClimbBot, or a second player with a
-// controller in split screen (F2). Walking, jumping and catching ledges
-// between climbs is kke::Locomotion; the body is the UAL mannequin with
-// two-bone IK on all four limbs.
+// It starts in the lobby (kke::LobbyModule): the climbers line up in front
+// of the mountain, every controller that presses A joins (up to four
+// players, split screen), each player picks a name and a colour, and
+// player 1 sets 0 to 5 CPU climbers (kke::ClimbBot) and how good each one
+// is. A controller that joins during a race is in from the next one.
+// Walking, jumping and catching ledges between climbs is kke::Locomotion;
+// the body is the UAL mannequin with two-bone IK on all four limbs.
 //
 // Headless / demo switches: KKE_CLIMB_SEED=<n> (the mountain),
-// KKE_CLIMB_AUTOPILOT=1 (you climb by yourself too), KKE_CLIMB_SPLIT=1
-// (split screen from the start), KKE_CLIMB_BOT_PAUSE=<s> (the rival's
-// breath between moves), KKE_CLIMB_QUIT=<s> (quit after that long, with a
-// log of both climbers' heights every few seconds), KKE_CLIMB_ROCKFALL=1
-// (every loose hold on your face comes off two seconds in: watch them bounce
-// down the rock and the ledges; where they came to rest is logged).
+// KKE_CLIMB_LOBBY=0 (straight into a race: you and KKE_CLIMB_CPUS=<n>
+// rivals, default 1), KKE_CLIMB_AUTOPILOT=1 (no lobby, and you climb by
+// yourself too), KKE_CLIMB_BOT_PAUSE=<s> (every CPU's breath between
+// moves), KKE_CLIMB_QUIT=<s> (quit after that long, with a log of every
+// climber's height every few seconds), KKE_CLIMB_ROCKFALL=1 (no lobby;
+// every loose hold on your face comes off two seconds in: watch them
+// bounce down the rock and the ledges; where they came to rest is logged).
+// KKE_LOBBY_JOIN=<n> joins n controllers in the lobby (see LobbyModule.h).
 class ClimbRaceModule : public kke::Module {
 public:
     ClimbRaceModule();
@@ -77,8 +83,12 @@ private:
     };
     struct Racer {
         int lane = 0;
-        int player = 0;             // input map; for a bot, the map it would use
+        int seat = -1;              // lobby seat (-1: a CPU climber)
+        int player = 0;             // input map (humans)
         bool bot = false;
+        bool mouse = false;         // plays with the mouse (look, crosshair)
+        int difficulty = 1;         // CPU climbers: the lobby's difficulty
+        float pause = 0.45f;        // CPU climbers: breath between moves
         std::string name;
         glm::vec3 tint{1.0f};
         kke::RigidWorld::CharacterId id = 0;
@@ -113,19 +123,34 @@ private:
         bool mantle = false;         // jump: over the edge
     };
 
-    void buildMountain(uint32_t seed);
+    void buildMountain(uint32_t seed, int lanes);
     void clearMountain();
     void buildScenery();
-    void spawnRacers();
     void resetRace();
-    void setSplit(bool on);
-    void assignControllers();
+
+    // The lobby (Lobby.cpp): the menu's fields, the climbers lined up
+    // behind it, and the race's roster from it.
+    void setupLobby();
+    void updateLobby(float dt);
+    void startFromLobby();
+    void backToLobby();
+    // The roster the lobby asks for now: who, in which seat, how good.
+    struct Entry {
+        int seat = -1, difficulty = 1;
+        std::string name;
+        glm::vec3 tint{1.0f};
+    };
+    std::vector<Entry> wantedRoster() const;
+    void buildRacers(const std::vector<Entry>& roster);
+    void removeRacer(Racer& r);
+    void applyLooks();
+    int humans() const;
+    kke::Camera& cameraOf(Racer& r);
 
     RacerInput readPlayer(Racer& r, float dt);
     RacerInput readBot(Racer& r, float dt);
     void updateRacer(Racer& r, float dt);
-    // The rival's breath between moves; your autopilot is a little quicker.
-    float botPause(const Racer& r) const { return r.lane == 0 ? m_botPause * 0.8f : m_botPause; }
+    void makeBrain(Racer& r);
     void updateCamera(Racer& r, float dt, kke::Camera& out);
     int crosshairHold(const Racer& r, const kke::Camera& cam, bool& outOfReach) const;
     void dropLoose(Lane& lane, int hold, const glm::vec3& push);
@@ -149,25 +174,30 @@ private:
     kke::RigidBodyModule* m_rigid = nullptr;
     kke::InputModule* m_input = nullptr;
     kke::ModelModule* m_models = nullptr;
+    kke::LobbyModule* m_lobby = nullptr;
 
     uint32_t m_seed = 7;
     std::vector<std::unique_ptr<Lane>> m_lanes;
     std::vector<Racer> m_racers;
+    kke::Camera m_overview; // three players: the fourth quarter's view of the whole race
     std::vector<kke::RigidWorld::BodyId> m_scenery;
     std::unique_ptr<kke::DynamicMeshRenderer> m_ground, m_markers[4];
 
-    enum class Phase { Countdown, Racing, Finished };
-    Phase m_phase = Phase::Countdown;
+    enum class Phase { Lobby, Countdown, Racing, Finished };
+    Phase m_phase = Phase::Lobby;
     float m_countdown = 3.0f;
     float m_best = 0.0f;       // best time on this mountain (0 = none yet)
     std::string m_winner;
-    bool m_split = false, m_autopilot = false, m_captured = false;
-    // How to play: up when the game starts (KKE_CLIMB_INTRO=0 skips it,
+    bool m_autopilot = false, m_captured = false;
+    // How to play: up before the first race (KKE_CLIMB_INTRO=0 skips it,
     // =1 forces it; headless runs skip it) and on the help button. The
     // race waits while it's up.
-    bool m_howto = false;
+    bool m_howto = false, m_howtoFirst = true;
+    float m_howtoAge = 0.0f; // s since it opened (the press that opened it doesn't close it)
     void showHowTo(bool on);
-    float m_botPause = 0.45f;
+    float m_botPause = -1.0f; // KKE_CLIMB_BOT_PAUSE (-1: from the difficulty)
+    int m_defaultCpus = 1;    // no lobby: KKE_CLIMB_CPUS
+    bool m_rosterChanged = false; // someone joined during a race
     float m_quitAfter = -1.0f, m_clock = 0.0f, m_reportAt = 0.0f;
     float m_rockfall = -1.0f; // KKE_CLIMB_ROCKFALL: seconds until it starts (-1 = off)
     void updateRockfall(float dt);
@@ -198,15 +228,20 @@ private:
     int m_stMove = -1, m_stJump = -1, m_stFall = -1, m_stLand = -1, m_stHang = -1, m_stTop = -1;
     std::unique_ptr<kke::DynamicMeshRenderer> m_capsule; // no character model: a block
 
-    // HUD.
+    // HUD: a panel per player (in the corner of their view), and the
+    // standings of every climber.
     struct PlayerHud {
-        std::string name, time, stamina = "100%", staminaColor = "#6fe39a", left, right, height, status;
+        std::string name, time, stamina = "100%", staminaColor = "#6fe39a", left, right, height, status, x, y, accent;
         bool low = false;
     };
+    struct RivalHud {
+        std::string name, height, accent, status;
+    };
     struct Hud {
-        PlayerHud p[2];
+        std::vector<PlayerHud> players;
+        std::vector<RivalHud> rivals;
         std::string banner, sub, hint;
-        bool split = false;
+        bool racing = false;
         bool howto = false;         // the how-to-play screen is up
     };
     Hud m_hud;
