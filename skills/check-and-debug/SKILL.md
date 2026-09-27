@@ -82,3 +82,14 @@ Say so once, then be the person's guide:
 4. Compare with the closest recipe in `docs/cookbook/recipes/`, which is
    known to work.
 5. Fix the cause, then check again with `tools/check_game`.
+
+## Slow, stuttering, or "it runs badly on my PC"
+
+- Measure one game: `KKE_BENCHMARK=20 ./build/bin/my_game` plays it for
+  3 + 20 s and writes `benchmark/<game>_<stamp>.json`: fps, 1% lows,
+  where each frame's time went, every module's cost, and each hitch with
+  its cause.
+- Someone sent a `kke-benchmark-*.json` from `kke_benchmark` (every demo
+  on their machine): `python3 benchmarks/results.py FILE.json` for the
+  table and problems, `--hitches` for every hitch, two files to compare
+  versions or machines. Keys: docs/BENCHMARKS.md "Benchmark for everyone".

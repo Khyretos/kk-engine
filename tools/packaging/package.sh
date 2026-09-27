@@ -70,23 +70,28 @@ $leak"
 
 # --- Every demo must be there and executable. ---------------------------
 demos=()
-for d in kke_demo kke_basics sandbox physics_demo melt_demo jiggle_demo sea_demo imgui_demo rmlui_demo synty_demo audio_demo; do
+for d in kke_demo kke_basics sandbox physics_demo melt_demo jiggle_demo sea_demo imgui_demo rmlui_demo synty_demo audio_demo \
+         climb_race procedural_demo farm_demo pet_companion platoon duel goblin_horde cookbook; do
     if [ -f "$stage/$d$exe" ]; then demos+=("$d"); fi
 done
 [ -f "$stage/kke_demo$exe" ] || die "kke_demo$exe is missing from $bin"
+# The benchmark has its own folder (benchmark/), next to the demos it runs.
+[ -f "$stage/benchmark/kke_benchmark$exe" ] || die "benchmark/kke_benchmark$exe is missing from $bin (KKE_ENABLE_BENCHMARKS=OFF?)"
+[ -f "$stage/benchmark/benchmark_suite.yaml" ] || die "benchmark/benchmark_suite.yaml is missing from $bin"
+rm -rf "$stage/benchmark/results" # a local run's results never ship
 
 # --- Strip symbols (optional). -----------------------------------------
 if [ -n "$strip_tool" ]; then
     command -v "$strip_tool" >/dev/null || die "strip tool '$strip_tool' not found"
     while IFS= read -r -d '' f; do
         "$strip_tool" --strip-unneeded "$f" || die "'$strip_tool' failed on $f"
-    done < <(find "$stage" -maxdepth 1 -type f \( -name "*$exe" -o -name '*.dll' \) $( [ -z "$exe" ] && echo "-perm -u+x" ) -print0)
+    done < <(find "$stage" "$stage/benchmark" -maxdepth 1 -type f \( -name "*$exe" -o -name '*.dll' \) $( [ -z "$exe" ] && echo "-perm -u+x" ) -print0)
 fi
 
 # --- Linux: every shared library the demos need must exist on the build
 # machine (a "not found" here means a user's machine would fail too). ---
 if [ "$platform" = linux ] && command -v ldd >/dev/null; then
-    for d in "${demos[@]}"; do
+    for d in "${demos[@]}" benchmark/kke_benchmark; do
         missing="$(ldd "$stage/$d" | grep 'not found' || true)"
         [ -z "$missing" ] || die "$d links against libraries that are not installed: $missing"
     done
@@ -121,6 +126,22 @@ cp "$repo/LICENSE" "$stage/LICENSE.txt"
     echo "Demos built on paid art packs (sandbox, synty_demo) show an 'assets not"
     echo "found' screen: those packs are not redistributable. Point KKE_ASSETS_DIR"
     echo "at your own copy of the packs to use them (docs/SCENES.md)."
+    echo
+    echo "BENCHMARK: how well does it run on this computer?"
+    echo "  1. Close other programs (and plug a laptop in)."
+    if [ "$platform" = windows ]; then
+        echo "  2. Open the benchmark folder and double-click kke_benchmark.exe."
+        echo "     A black window shows the progress."
+    else
+        echo "  2. Run ./benchmark/kke_benchmark from a terminal in this folder."
+    fi
+    echo "  3. The demos open one after another and play by themselves, about"
+    echo "     10 minutes in all (kke_benchmark --quick: about 4). Don't touch"
+    echo "     the mouse or keyboard meanwhile."
+    echo "  4. At the end benchmark/results opens. Send the file"
+    echo "     kke-benchmark-<date>_<time>.json from it back (the .txt next to"
+    echo "     it is the same result for you to read). It holds your CPU, GPU,"
+    echo "     driver, OS, RAM and computer name, nothing else about you."
     echo
     echo "Licence: MIT (LICENSE.txt). Bundled libraries: THIRD_PARTY_LICENSES.txt."
 } > "$stage/README.txt"

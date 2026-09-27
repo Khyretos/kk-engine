@@ -1,0 +1,130 @@
+# What kke_benchmark runs (docs/BENCHMARKS.md "Benchmark for everyone").
+# Copied next to the executables as benchmark_suite.yaml; a
+# benchmark_suite.json there works the same (kke/DataFile.h).
+#
+# Every demo starts with KKE_BENCHMARK set, plays by itself (the env
+# switches below are each demo's own autopilot or bot mode), is measured
+# for `seconds` after `warmup`, writes its report and quits.
+#
+#   id       report and log name
+#   exe      executable next to kke_benchmark (".exe" added on Windows)
+#   title    what the results call it
+#   seconds  measured time (default: defaults.seconds)
+#   warmup   unmeasured start (default: defaults.warmup)
+#   env      extra environment variables for this demo
+#   synty    true when the demo looks its best with Synty packs: without
+#            them it runs on stand-in art (blocks), which the results say
+#   quick    false = left out of a --quick run
+
+defaults:
+  seconds: 20
+  warmup: 3
+  # Longest a demo may take to load and start measuring before it counts
+  # as hung (a slow disk, a software GPU).
+  load_timeout: 120
+
+demos:
+  - id: kke_basics
+    exe: kke_basics
+    title: "Basics: cubes, destruction, lights"
+
+  - id: showcase_walk
+    exe: kke_demo
+    title: "Showcase: the course by autopilot"
+    env: { KKE_DEMO_AUTOPILOT: "1" }
+
+  - id: showcase_stress
+    exe: kke_demo
+    title: "Showcase: stress test (300 crates, impacts)"
+    # The stress test runs 36 s and ends the game itself.
+    seconds: 40
+    warmup: 2
+    env: { KKE_STRESS_TEST: "1" }
+
+  - id: physics_demo
+    exe: physics_demo
+    title: "Physics: rigid bodies and soft bodies"
+
+  - id: melt_demo
+    exe: melt_demo
+    title: "Melt: particle fluid"
+
+  - id: jiggle_demo
+    exe: jiggle_demo
+    title: "Jiggle: soft-body characters on tour"
+    env: { KKE_JIGGLE_MOVE: "4" }
+
+  - id: sea_demo
+    exe: sea_demo
+    title: "Sea: ocean and floating bodies"
+
+  - id: audio_demo
+    exe: audio_demo
+    title: "Audio: spatial sound tour"
+    env: { KKE_AUDIO_DEMO_TOUR: "1" }
+
+  - id: rmlui_demo
+    exe: rmlui_demo
+    title: "UI: RmlUi menus"
+    quick: false
+
+  - id: imgui_demo
+    exe: imgui_demo
+    title: "UI: Dear ImGui panels"
+    quick: false
+
+  - id: sandbox
+    exe: sandbox
+    title: "Sandbox: play mode"
+    synty: true
+    env: { KKE_SANDBOX_MODE: "play" }
+
+  - id: synty_demo
+    exe: synty_demo
+    title: "Synty scene"
+    synty: true
+    quick: false
+
+  - id: climb_race
+    exe: climb_race
+    title: "Climb Race: a race with 3 CPU climbers"
+    env: { KKE_CLIMB_AUTOPILOT: "1", KKE_CLIMB_CPUS: "3" }
+
+  - id: procedural_demo
+    exe: procedural_demo
+    title: "Procedural animation: gaits, look-at, a ragdoll hit"
+    env: { KKE_PROC_HIT: "10" }
+
+  - id: farm_demo
+    exe: farm_demo
+    title: "Farm: AI animals, farmer on autopilot"
+    synty: true
+    env: { KKE_FARM_AUTOPILOT: "1" }
+
+  - id: pet_companion
+    exe: pet_companion
+    title: "Pet companion: orders demo"
+    synty: true
+    env: { KKE_PET_DEMO: "1" }
+
+  - id: platoon
+    exe: platoon
+    title: "Platoon: squad orders demo"
+    synty: true
+    env: { KKE_PLATOON_DEMO: "1" }
+
+  - id: duel
+    exe: duel
+    title: "Duel: two bots fighting"
+    env: { KKE_DUEL_BOTS: "1" }
+
+  - id: goblin_horde
+    exe: goblin_horde
+    title: "Goblin horde: crowd AI and ragdolls, bot hero"
+    synty: true
+    env: { KKE_HORDE_BOT: "1" }
+
+  - id: cookbook
+    exe: cookbook
+    title: "Cookbook: Lua recipes"
+    quick: false
