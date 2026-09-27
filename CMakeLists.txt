@@ -870,6 +870,11 @@ endif()
 if(KKE_ENABLE_JOLT)
     add_subdirectory(games/climb_race)
 endif()
+# Duel: a one-on-one fist fight on kke::Combatant (games/duel/README.md).
+# Jolt: the ring, the fighters and knockdown ragdolls.
+if(KKE_ENABLE_JOLT)
+    add_subdirectory(games/duel)
+endif()
 
 # The starter template (docs/tutorials/getting-started.md), and games made
 # from it with tools/new_game, which lists them in games/my_games.cmake.

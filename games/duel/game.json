@@ -1,0 +1,9 @@
+{
+  "id": "kke.duel",
+  "title": "Duel",
+  "description": "A one-on-one fist fight in a ring, best of three. Jab, uppercut, knee, block (parry it just in time) and dodge; watch your stamina. Against a sparring bot or a friend on the same screen.",
+  "version": "0.1.0",
+  "tags": ["demo", "fighting", "combat", "ragdoll", "local-multiplayer"],
+  "engine_version": "0.3",
+  "modules": ["Settings", "Input", "RigidBodies", "Models", "UI", "Audio", "Duel", "Stats"]
+}
