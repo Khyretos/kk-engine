@@ -90,6 +90,9 @@ private:
         kke::ModelModule::InstanceId model = 0;
         std::unique_ptr<kke::Animator> anim;
         float armWeight = 0.0f, legWeight = 0.0f, footWeight = 0.0f;
+        float grip[2] = {};         // fingers closed on a hold (0 open .. 1 closed)
+        float handAim[2] = {};      // hand turned to its hold (0 = as animated)
+        struct { float worst = 0.0f, sum = 0.0f; int samples = 0; } gripError; // knuckles to hold, m
         float time = 0.0f;          // race clock
         bool finished = false;
         float regrab = 0.0f;        // after a fall: no grabbing for a moment
@@ -131,6 +134,9 @@ private:
     void loadCharacter();
     void setupBody(Racer& r);
     void animateBody(Racer& r, float dt);
+    // A climber on lane `lane`, with the body's proportions measured from
+    // the character's skeleton (so every hold it takes is one the arms reach).
+    std::unique_ptr<kke::Climber> makeClimber(int lane) const;
 
     // The HUD (Hud.cpp, ui/climb_hud.rml).
     void buildHud();
@@ -161,6 +167,7 @@ private:
     float m_rockfall = -1.0f; // KKE_CLIMB_ROCKFALL: seconds until it starts (-1 = off)
     void updateRockfall(float dt);
     float m_mouseSensitivity = 0.12f, m_stickSpeed = 200.0f;
+    float m_climbCamera = 4.6f; // m behind you on the rock (KKE_CLIMB_CLOSEUP: nearer, to see the hands)
 
     // Character: the UAL mannequin's bones and clips (retargeting not
     // needed: it's the clips' own skeleton).
@@ -170,6 +177,19 @@ private:
     float m_modelYaw = 0.0f;
     kke::TwoBoneChain m_arm[2], m_leg[2];
     kke::FootPlacer m_feet;
+    int m_pelvis = -1;
+    // Each hand as it is in the rest pose: which way the fingers point and
+    // which way the thumb side faces (model space), to turn it onto a hold;
+    // the finger bones, to close them around it.
+    struct HandRig {
+        glm::quat restModel{1.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec3 fingers{0.0f, 1.0f, 0.0f}, thumbSide{1.0f, 0.0f, 0.0f};
+        float knuckles = 0.09f;     // m from the wrist to the knuckles
+        int segment[4][3] = { { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 } }; // index, middle, ring, pinky
+        int thumb[3] = { -1, -1, -1 };
+    };
+    HandRig m_handRig[2];
+    kke::Climber::Settings m_climbSettings; // proportions from the skeleton
     int m_stMove = -1, m_stJump = -1, m_stFall = -1, m_stLand = -1, m_stHang = -1, m_stTop = -1;
     std::unique_ptr<kke::DynamicMeshRenderer> m_capsule; // no character model: a block
 

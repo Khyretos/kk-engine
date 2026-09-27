@@ -79,6 +79,7 @@ void ClimbRaceModule::init(kke::Application& app) {
     m_botPause = envFloat("KKE_CLIMB_BOT_PAUSE", m_botPause);
     m_quitAfter = envFloat("KKE_CLIMB_QUIT", -1.0f);
     if (envOn("KKE_CLIMB_ROCKFALL")) m_rockfall = 1.0f;
+    m_climbCamera = envFloat("KKE_CLIMB_CLOSEUP", m_climbCamera);
 
     // Controls: the usual character actions (move, look, jump, sprint),
     // and the four grab buttons. Left side of the pad (or the mouse's
@@ -256,7 +257,7 @@ void ClimbRaceModule::buildMountain(uint32_t seed) {
     }
     // New walls: every climber holds on to the old one, so they start again.
     for (Racer& r : m_racers) {
-        r.climber = std::make_unique<kke::Climber>(*m_lanes[static_cast<size_t>(r.lane)]->wall);
+        r.climber = makeClimber(r.lane);
         if (r.bot) {
             r.brain = std::make_unique<kke::ClimbBot>(m_lanes[static_cast<size_t>(r.lane)]->wall->line());
             r.brain->pause = botPause(r);
@@ -277,7 +278,7 @@ void ClimbRaceModule::spawnRacers() {
         cd.position = glm::vec3(0.0f);
         r.id = w.addCharacter(cd);
         r.loco = std::make_unique<kke::Locomotion>(w, r.id);
-        r.climber = std::make_unique<kke::Climber>(*m_lanes[static_cast<size_t>(i)]->wall);
+        r.climber = makeClimber(i);
         if (r.bot) {
             r.brain = std::make_unique<kke::ClimbBot>(m_lanes[static_cast<size_t>(i)]->wall->line());
             r.brain->pause = botPause(r);
@@ -310,7 +311,7 @@ void ClimbRaceModule::resetRace() {
         // At the start line, in front of the first hold of the line.
         const float x = wall.holds()[static_cast<size_t>(wall.line().front())].position.x;
         const glm::vec3 feet(x, 0.05f, wall.surfaceZ(x, 0.5f) + kStartOut);
-        r.climber = std::make_unique<kke::Climber>(wall);
+        r.climber = makeClimber(r.lane);
         if (r.bot) {
             r.brain = std::make_unique<kke::ClimbBot>(wall.line());
             r.brain->pause = botPause(r);
@@ -571,7 +572,7 @@ void ClimbRaceModule::updateCamera(Racer& r, float dt, kke::Camera& out) {
         r.rig.yaw += diff * (1.0f - std::exp(-2.0f * dt));
         r.rig.pitch += (12.0f - r.rig.pitch) * (1.0f - std::exp(-2.0f * dt));
     }
-    r.rig.settings.armLength += ((climbing ? 4.6f : 4.0f) - r.rig.settings.armLength) * (1.0f - std::exp(-3.0f * dt));
+    r.rig.settings.armLength += ((climbing ? m_climbCamera : 4.0f) - r.rig.settings.armLength) * (1.0f - std::exp(-3.0f * dt));
     r.rig.settings.shoulderOffset = climbing ? 0.0f : 0.45f;
     const glm::vec3 feet = w.characterPosition(r.id);
     r.rig.update(dt, feet, [&w](const glm::vec3& from, const glm::vec3& dir, float maxDist) {
@@ -635,6 +636,11 @@ void ClimbRaceModule::update(const kke::UpdateContext& ctx) {
                                             r.finished ? "finished" : r.climber->climbing() ? "climbing" : "on foot");
         }
         if (m_clock >= m_quitAfter) {
+            for (const Racer& r : m_racers)
+                if (r.gripError.samples > 0)
+                    kke::log::get(name())->info("{}: hands on their holds within {:.1f} cm on average, {:.1f} cm at worst ({} samples)", r.name,
+                                                r.gripError.sum / static_cast<float>(r.gripError.samples) * 100.0f, r.gripError.worst * 100.0f,
+                                                r.gripError.samples);
             SDL_Event quit{};
             quit.type = SDL_EVENT_QUIT;
             SDL_PushEvent(&quit);
