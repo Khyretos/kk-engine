@@ -6,6 +6,7 @@
 #include <imgui.h>
 #include <array>
 #include <vector>
+#include "kke/ImGuiPlacement.h"
 
 namespace kke {
 
@@ -180,7 +181,7 @@ void ParticleModule::render(const RenderContext& ctx) {
 }
 
 void ParticleModule::renderUi() {
-    ImGui::SetNextWindowPos(ImVec2(340, 10), ImGuiCond_FirstUseEver);
+    placeNextDebugWindow(ImVec2(340, 10));
     ImGui::Begin("Particles");
     ImGui::Text("%u particles, simulated entirely on the GPU", m_particleCount);
     ImGui::Checkbox("Paused", &m_paused);

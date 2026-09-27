@@ -7,6 +7,7 @@
 #include <numeric>
 #include <string>
 #include <vector>
+#include "kke/ImGuiPlacement.h"
 
 namespace kke {
 
@@ -45,8 +46,7 @@ void plotWithStats(const char* label, const std::deque<float>& samples, const ch
 } // namespace
 
 void StatsModule::renderUi() {
-    ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(320, 0), ImGuiCond_FirstUseEver);
+    placeNextDebugWindow(ImVec2(10, 10), ImVec2(320, 0));
     ImGui::Begin("Performance");
 
     float fps = m_lastDt > 0.0f ? 1.0f / m_lastDt : 0.0f;
