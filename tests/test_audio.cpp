@@ -1,5 +1,6 @@
 #include "kke/AudioMixer.h"
 #include "kke/ImpactSynth.h"
+#include "kke/modules/AudioModule.h"
 #include "kke/modules/SoundVisualizerModule.h"
 
 #include <gtest/gtest.h>
@@ -119,6 +120,31 @@ TEST(AudioMixer, OcclusionMuffles) {
     };
     const double clear = run(1.0f), walled = run(0.3f);
     EXPECT_LT(walled, clear * 0.3 * 0.3 * 0.5); // gain^2 would be 0.09; the filter takes at least half again
+}
+
+// The settings menu's volumes reach the mixer (they used to be stored
+// and never applied).
+TEST(AudioModule, PlayerVolumesSetMixerGains) {
+    AudioMixer m(48000, 2);
+    EngineSettings::Audio v;
+    v.master = 50;
+    v.music = 20;
+    v.effects = 70;
+    v.muteWhenUnfocused = true;
+    AudioModule::applyVolumes(m, v, true);
+    EXPECT_FLOAT_EQ(m.masterGain, 0.5f);
+    EXPECT_FLOAT_EQ(m.categoryGain[size_t(SoundCategory::Music)], 0.2f);
+    EXPECT_FLOAT_EQ(m.categoryGain[size_t(SoundCategory::Impact)], 0.7f);
+    EXPECT_FLOAT_EQ(m.categoryGain[size_t(SoundCategory::Ambient)], 0.7f);
+    EXPECT_FLOAT_EQ(m.categoryGain[size_t(SoundCategory::Voice)], 1.0f);
+    AudioModule::applyVolumes(m, v, false);
+    EXPECT_FLOAT_EQ(m.masterGain, 0.0f);
+    v.muteWhenUnfocused = false;
+    AudioModule::applyVolumes(m, v, false);
+    EXPECT_FLOAT_EQ(m.masterGain, 0.5f);
+    v.master = 250; // out of range from a hand-edited file
+    AudioModule::applyVolumes(m, v, true);
+    EXPECT_FLOAT_EQ(m.masterGain, 1.0f);
 }
 
 TEST(AudioMixer, VoiceBudgetStealsTheQuietest) {

@@ -390,6 +390,18 @@ else()
 endif()
 
 if(KKE_ENABLE_GPU_PROFILER)
+    # The option compiles against VulkanProfiler's extension header, which
+    # only a separate VulkanProfiler install provides (docs/BUILDING.md
+    # section 4). Say so at configure time instead of failing every
+    # Vulkan source file with "VkProfilerEXT.h: No such file".
+    find_path(KKE_VK_PROFILER_INCLUDE_DIR VkProfilerEXT.h
+        PATH_SUFFIXES include include/vulkan VkLayer_profiler_layer)
+    if(NOT KKE_VK_PROFILER_INCLUDE_DIR)
+        message(FATAL_ERROR "KKE_ENABLE_GPU_PROFILER is ON (the 'everything' presets) but VkProfilerEXT.h was not found. "
+            "Install VulkanProfiler (docs/BUILDING.md, section 4), set KKE_VK_PROFILER_INCLUDE_DIR to its include folder, "
+            "or configure with -DKKE_ENABLE_GPU_PROFILER=OFF.")
+    endif()
+    target_include_directories(kke_engine PUBLIC ${KKE_VK_PROFILER_INCLUDE_DIR})
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_GPU_PROFILER=1)
 else()
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_GPU_PROFILER=0)

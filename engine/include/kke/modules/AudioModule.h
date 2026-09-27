@@ -1,6 +1,8 @@
 #pragma once
 
 #include "kke/AudioMixer.h"
+#include "kke/Capabilities.h"
+#include "kke/EngineSettings.h"
 #include "kke/ImpactSynth.h"
 #include "kke/Module.h"
 #include "kke/RoomAcoustics.h"
@@ -38,7 +40,7 @@ namespace kke {
 //   (playEarcon, fed by UiModule) and navigation pings (ping(), bound to
 //   an action): docs/AUDIO.md "Accessibility".
 // - Listener: the Application camera, unless listenerOverride is set.
-class AudioModule : public Module {
+class AudioModule : public Module, public ISettingsListener {
 public:
     struct Settings {
         int sampleRate = 48000;
@@ -74,8 +76,17 @@ public:
     const char* name() const override { return "Audio"; }
     void init(Application& app) override;
     void update(const UpdateContext& ctx) override;
+    void onEvent(const SDL_Event& event) override;
     void renderUi() override;
     void shutdown() override;
+
+    // The player's volumes (EngineSettings::audio, applied by SettingsModule).
+    void onSettingsChanged(const EngineSettings& s) override;
+    // Sets the mixer's master and category gains from the player's
+    // volumes (0-100 each): music -> Music; effects -> impacts,
+    // footsteps, UI, alerts and ambience; voice chat follows master only.
+    // Everything is 0 while the window is unfocused if muteWhenUnfocused.
+    static void applyVolumes(AudioMixer& mixer, const EngineSettings::Audio& volumes, bool focused);
 
     AudioMixer& mixer() { return *m_mixer; }
     // Stereo, Binaural or Hrtf. Hrtf starts Steam Audio the first time
@@ -170,6 +181,9 @@ private:
 
     Application* m_app = nullptr;
     std::unique_ptr<AudioMixer> m_mixer;
+    // Full volume until a SettingsModule says otherwise.
+    EngineSettings::Audio m_volumes{100, 100, 100, false};
+    bool m_focused = true;
     // The mood's looping background sound (Mood::ambience).
     std::string m_ambienceName;
     uint32_t m_ambienceVoice = 0;

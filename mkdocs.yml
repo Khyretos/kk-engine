@@ -133,6 +133,7 @@ nav:
       - Scaling: SCALING.md
       - Dependencies and licences: DEPENDENCIES.md
       - Hardware tests: HARDWARE_TESTS.md
+      - Playtest checklist: PLAYTEST_CHECKLIST.md
   - Project:
       - Devlog: devlog/index.md
       - Going to market: GO_TO_MARKET.md
