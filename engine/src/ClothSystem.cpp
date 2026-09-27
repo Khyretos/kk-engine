@@ -1256,10 +1256,16 @@ void ClothSystem::searchOnCpu(size_t triTotal, size_t edgeTotal, float cell) {
             ++edgeBoxes;
         }
     }
-    const float edgeInv = 1.0f / std::max(cell, edgeBoxes ? float(edgeSized / double(edgeBoxes)) : cell);
+    // (Half as big again as the boxes: fewer cells per edge, measured fastest.)
+    const float edgeInv = 1.0f / (1.5f * std::max(cell, edgeBoxes ? float(edgeSized / double(edgeBoxes)) : cell));
     for (size_t ge = 0; ge < edgeTotal; ++ge)
         if (m_edgeBox[ge].valid() && !cellBox(m_edgeLo[ge], m_edgeHi[ge], edgeInv, m_edgeBox[ge].lo, m_edgeBox[ge].hi)) m_edgeBox[ge] = CellBox{};
     m_edgeGrid.build(m_edgeBox);
+    m_edgeGrid.packed.resize(m_edgeGrid.items.size());
+    for (size_t k = 0; k < m_edgeGrid.items.size(); ++k) {
+        const uint32_t ge = m_edgeGrid.items[k];
+        m_edgeGrid.packed[k] = Grid::Packed{ m_edgeLo[ge], ge, m_edgeHi[ge], m_edgeMoves[ge], m_edgeBox[ge].lo, 0u };
+    }
     parallel(uint32_t(edgeTotal), [&](uint32_t begin, uint32_t end, Worker& w) {
         w.stamp.assign(edgeTotal, UINT32_MAX);
         w.ee.clear();
@@ -1270,23 +1276,31 @@ void ClothSystem::searchOnCpu(size_t triTotal, size_t edgeTotal, float cell) {
             const CellBox& b = m_edgeBox[ge];
             Cloth& c = *m_active[m_edgeCloth[ge]];
             const uint32_t e = ge - c.edgeBase;
+            const glm::vec3 lo = m_edgeLo[ge], hi = m_edgeHi[ge];
             const size_t found = w.ee.size();
             for (int x = b.lo.x; x <= b.hi.x; ++x)
                 for (int y = b.lo.y; y <= b.hi.y; ++y)
                     for (int z = b.lo.z; z <= b.hi.z; ++z) {
                         const uint32_t h = hashCell(x, y, z) & m_edgeGrid.mask;
-                        for (uint32_t k = m_edgeGrid.start[h]; k < m_edgeGrid.start[h + 1]; ++k) {
-                            const uint32_t gf = m_edgeGrid.items[k];
-                            if (!firstShared(glm::ivec3(x, y, z), b.lo, m_edgeBox[gf])) continue;
+                        const Grid::Packed* p = m_edgeGrid.packed.data() + m_edgeGrid.start[h];
+                        const Grid::Packed* pe = m_edgeGrid.packed.data() + m_edgeGrid.start[h + 1];
+                        const glm::ivec3 here(x, y, z);
+                        for (; p != pe; ++p) {
                             // Each pair once: from the lower edge when both move.
-                            if ((m_edgeMoves[gf] == 3 && gf <= ge) || w.stamp[gf] == ge) continue;
+                            if (p->moves == 3 && p->index <= ge) continue;
+                            // Bounds apart (most of a bucket), read in a row.
+                            if (p->hi.x < lo.x || p->hi.y < lo.y || p->hi.z < lo.z || p->lo.x > hi.x || p->lo.y > hi.y || p->lo.z > hi.z) continue;
+                            // Seen from the first cell both cover only (firstShared: the
+                            // bounds overlapping, it is in both boxes).
+                            if (here != glm::max(b.lo, p->cell)) continue;
+                            const uint32_t gf = p->index;
+                            if (w.stamp[gf] == ge) continue;
                             w.stamp[gf] = ge;
-                            if (glm::any(glm::lessThan(m_edgeHi[gf], m_edgeLo[ge])) || glm::any(glm::greaterThan(m_edgeLo[gf], m_edgeHi[ge]))) continue;
                             if (!patchPair(m_edgePatch[ge], m_edgePatch[gf])) continue;
                             Cloth& o = *m_active[m_edgeCloth[gf]];
                             const uint32_t f = gf - o.edgeBase;
-                            if (edgesFar(c, e, o, f, 3.0f * std::max(c.thickness, o.thickness))) continue;
                             if (&o == &c && edgesNear(c, e, f)) continue;
+                            if (edgesFar(c, e, o, f, 3.0f * std::max(c.thickness, o.thickness))) continue;
                             if (edgesApart(c, e, o, f, 3.0f * std::max(c.thickness, o.thickness))) continue;
                             w.ee.push_back({ ge, gf });
                         }

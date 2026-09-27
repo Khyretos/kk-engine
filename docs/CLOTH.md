@@ -166,9 +166,9 @@ second; this sandbox's 4-core VM, so a desktop is faster; medians over 4 s):
 | Case | Off | Basic | Full, clothSubsteps 1 | Full (default: 6) |
 | --- | --- | --- | --- | --- |
 | One 32 x 32 sheet over a ball (1,024 vertices) | 0.41 ms | 0.43 ms | 0.82 ms | 0.92 ms |
-| One 64 x 64 blanket over a ball, piling on the floor (4,096 vertices) | | 1.4 ms | 10 ms (p95 19 ms) | 35 ms (p95 68 ms) |
+| One 64 x 64 blanket over a ball, piling on the floor (4,096 vertices) | | 1.4 ms | 10 ms (p95 19 ms) | 33 ms (p95 63 ms) |
 | 16 sheets of 24 x 24 (9,216 vertices) | | 3.4 ms | 6.6 ms | 6.9 ms |
-| A 32 x 32 wool cape on swinging shoulders in gusty wind | | 0.38 ms | 6.8 ms | 8.5 ms |
+| A 32 x 32 wool cape on swinging shoulders in gusty wind | | 0.38 ms | 6.8 ms | 7.2 ms |
 
 With the job system (the demo, 4 threads), the pass's search for pairs runs
 on every thread: the Fabrics scene (12 cloths, 7,944 vertices) steps in
@@ -194,6 +194,9 @@ fixing itself is under 5%). What keeps that down:
   every other.
 - **Grid cells as big as what's in them**, so cloth moving fast gets
   bigger cells. Nothing is left out of the search for moving fast.
+- **Edges' bounds sit next to them in the grid**, so the edge search
+  rejects most of a cell reading memory in a row (a third off the edge
+  search in a heap). The same for triangles was measured slower.
 
 What still costs: cloth that is really close to itself, like a blanket in
 a heap or a cape flapping into folds. A light cape in strong wind costs up

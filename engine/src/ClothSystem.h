@@ -139,6 +139,20 @@ private:
         std::vector<uint32_t> start, fill, items;
         uint32_t mask = 0;
         void build(const std::vector<CellBox>& boxes);
+        // Optional: what a query tests first, next to every entry in bucket
+        // order, so it rejects most of a bucket reading memory in a row
+        // (the edges' grid: its bounds, m_edgeMoves and CellBox lo; filled
+        // after build()). Measured: 30% off the edge search in a heap; the
+        // triangles' grid gained nothing (fewer candidates per bucket).
+        struct Packed {
+            glm::vec3 lo;
+            uint32_t index;
+            glm::vec3 hi;
+            uint32_t moves;
+            glm::ivec3 cell;
+            uint32_t unused;
+        };
+        std::vector<Packed> packed;
     };
     void load(Cloth& c, JPH::Body& body);
     void store(Cloth& c, JPH::Body& body);
