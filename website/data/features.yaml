@@ -134,10 +134,15 @@
     - Hands and feet placed on the holds with IK
     - A start menu: controllers press A to join, up to four players in split screen, 0 to 5 CPU climbers from Easy to Expert
     - Loose holds fall on Jolt and land on the ledges below
+    - "The flagship game: a tour of six mountains from Pebble Hill to Cloud Spire, each opening the next, with bronze, silver and gold times"
+    - "Party modes: Race, Rockfall, Elimination and a Time trial against the ghost of your best run"
   media:
     - { src: media/climb-race.webp, caption: "Split screen on an overhang, you and the rival" }
     - { src: media/climb-rockfall.webp, caption: "At the foot of the face: coloured holds, stamina on the HUD" }
     - { src: media/climb-lobby.webp, caption: "The start menu: controllers press A to join, player 1 sets the CPU climbers" }
+    - { src: media/climb-results.webp, caption: "Topped out on Pebble Hill: gold, a new best, and Meadow Crag opens" }
+    - { src: media/climb-mountains.webp, caption: "The Mountain row: the tour, your medals, and Random" }
+    - { src: media/climb-ghost.webp, caption: "Time trial: the ghost of your best run is in the rivals list" }
     - { src: media/climb-split-three.webp, caption: "Three players and three CPU climbers; the fourth quarter watches the mountain" }
   demo: climb_race
   docs: MOVEMENT/

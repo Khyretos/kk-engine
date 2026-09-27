@@ -401,7 +401,7 @@ void ClimbRaceModule::updateNet(float dt) {
     const std::vector<kke::net::RemotePlayer>& remote = m_net->remotePlayers();
     for (size_t i = m_racers.size(); i-- > 0;) {
         Racer& r = m_racers[i];
-        if (!r.remote) continue;
+        if (!r.remote || r.ghost) continue;
         const auto it = std::find_if(remote.begin(), remote.end(), [&r](const kke::net::RemotePlayer& p) { return p.id == r.netId; });
         if (it == remote.end()) {
             // Gone (left the game): their face stays empty.
@@ -428,7 +428,6 @@ void ClimbRaceModule::updateNet(float dt) {
 // Our racers' poses, for everyone else (after they moved and were posed).
 void ClimbRaceModule::sendNet() {
     if (!m_net || !m_net->connected() || m_phase == Phase::Lobby) return;
-    const kke::RigidWorld& w = m_rigid->world();
     int slot = -1;
     for (const Racer& r : m_racers) {
         if (r.remote || r.netId < 0) continue;
@@ -436,29 +435,34 @@ void ClimbRaceModule::sendNet() {
         for (int s = 0; s < kke::NetModule::kMaxLocalPlayers; ++s)
             if (m_net->localPlayerId(s) == r.netId && (s == 0 || r.netId != 0)) slot = s;
         if (slot < 0) continue;
-        const BodyInput b = bodyInput(r);
-        netrace::Pose p;
-        p.feet = b.feet;
-        p.yaw = b.yaw;
-        p.loco = static_cast<uint8_t>(b.loco);
-        p.climbing = b.climbing;
-        p.mantle = b.mantle;
-        p.finished = r.finished;
-        p.mantleProgress = b.mantleProgress;
-        p.groundSpeed = b.groundSpeed;
-        p.fallHeight = b.fallHeight;
-        p.velocity = w.characterVelocity(r.id);
-        for (int s = 0; s < 2; ++s) {
-            p.grip[s] = b.grip[s];
-            p.normal[s] = b.normal[s];
-            p.closed[s] = b.closed[s];
-            p.onRock[s] = b.onRock[s];
-            p.held[s] = b.held[s];
-            p.foot[s] = b.foot[s];
-        }
-        p.hips = b.hips;
-        m_net->setLocalPlayer(slot, netrace::toState(p));
+        m_net->setLocalPlayer(slot, netrace::toState(poseOf(r)));
     }
+}
+
+// A racer as it's drawn (world space): what goes online, and into a ghost.
+netrace::Pose ClimbRaceModule::poseOf(const Racer& r) const {
+    const BodyInput b = bodyInput(r);
+    netrace::Pose p;
+    p.feet = b.feet;
+    p.yaw = b.yaw;
+    p.loco = static_cast<uint8_t>(b.loco);
+    p.climbing = b.climbing;
+    p.mantle = b.mantle;
+    p.finished = r.finished;
+    p.mantleProgress = b.mantleProgress;
+    p.groundSpeed = b.groundSpeed;
+    p.fallHeight = b.fallHeight;
+    p.velocity = m_rigid->world().characterVelocity(r.id);
+    for (int s = 0; s < 2; ++s) {
+        p.grip[s] = b.grip[s];
+        p.normal[s] = b.normal[s];
+        p.closed[s] = b.closed[s];
+        p.onRock[s] = b.onRock[s];
+        p.held[s] = b.held[s];
+        p.foot[s] = b.foot[s];
+    }
+    p.hips = b.hips;
+    return p;
 }
 
 } // namespace climb_race

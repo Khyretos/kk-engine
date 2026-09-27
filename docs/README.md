@@ -44,5 +44,6 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [SCALING.md](SCALING.md) | Worst cases, multiplayer limits and platform support |
 | [BENCHMARKS.md](BENCHMARKS.md) | The stress test, kke_bench, hardware profiles, tracked results |
 | [HARDWARE_TESTS.md](HARDWARE_TESTS.md) | Checks only real hardware can answer |
+| [PLAYTEST_CHECKLIST.md](PLAYTEST_CHECKLIST.md) | Look-and-feel pass through every demo, with a box to tick per check |
 | [GO_TO_MARKET.md](GO_TO_MARKET.md) | How KKE reaches people, and how it is funded |
 | [DOCS_SITE.md](DOCS_SITE.md) | The docs website: how it is built and published |

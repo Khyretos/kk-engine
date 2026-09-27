@@ -29,7 +29,17 @@
         .rival .s { color: #ffcf5c; font-size: 12dp; margin-left: 6dp; }
         #banner { position: absolute; top: 34%; left: 0; width: 100%; text-align: center; }
         #banner .big { font-size: 72dp; font-weight: bold; color: #ffffff; }
-        #banner .sub { font-size: 18dp; color: #e8ecf4; margin-top: 6dp; }
+        #banner .sub { display: inline-block; font-size: 18dp; color: #e8ecf4; margin-top: 6dp; padding: 4dp 14dp; border-radius: 8dp;
+                       background-color: #0b0f1caa; }
+        /* The results: every climber, in finishing order. */
+        #results { position: absolute; left: 50%; top: 52%; width: 560dp; margin-left: -280dp; padding: 10dp 16dp; border-radius: 12dp;
+                   background-color: #0b0f1cdd; }
+        #results .row { display: block; font-size: 16dp; color: #e8ecf4; padding: 3dp 0; }
+        #results .place { display: inline-block; width: 34dp; color: #aab3cc; font-weight: bold; }
+        #results .dot { display: inline-block; width: 10dp; height: 10dp; border-radius: 5dp; margin-right: 8dp; }
+        #results .who { display: inline-block; width: 200dp; }
+        #results .what { display: inline-block; width: 110dp; font-weight: bold; }
+        #results .note { color: #ffcf5c; font-size: 14dp; }
         #hint { position: absolute; left: 8%; bottom: 14dp; width: 84%; padding: 6dp 10dp; border-radius: 8dp; background-color: #0b0f1cbb;
                 text-align: center; font-size: 13dp; color: #cfd6e6; }
         #hint img, #banner .sub img { font-size: 15dp; } /* prompt glyphs are 1.6em */
@@ -71,11 +81,14 @@
             <div class="status">{{p.status}}</div>
         </div>
         <div id="rivals" data-if="rivals.size > 0">
-            <div data-for="r : rivals" class="rival"><span class="dot" data-style-background-color="r.accent"></span>{{r.name}}<span class="s">{{r.status}}</span><span class="h">{{r.height}}</span></div>
+            <div data-for="r : rivals" class="rival"><span class="h">{{r.height}}</span><span class="dot" data-style-background-color="r.accent"></span>{{r.name}}<span class="s">{{r.status}}</span></div>
         </div>
         <div id="banner" data-if="banner != '' && !howto">
             <div class="big">{{banner}}</div>
-            <div class="sub" data-rml="sub"></div>
+            <div class="sub" data-if="sub != ''" data-rml="sub"></div>
+        </div>
+        <div id="results" data-if="results.size > 0 && !howto">
+            <div data-for="r : results" class="row"><span class="place">{{r.place}}</span><span class="dot" data-style-background-color="r.accent"></span><span class="who">{{r.name}}</span><span class="what">{{r.result}}</span><span class="note">{{r.note}}</span></div>
         </div>
         <div id="hint" data-if="!howto" data-rml="hint"></div>
     </div>

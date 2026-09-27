@@ -69,7 +69,7 @@ jobs:
         run: |
           set -o pipefail
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DKKE_ENABLE_FEMFX=ON -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_VALIDATION=OFF \
+            -DKKE_ENABLE_FEMFX=ON -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_VALIDATION=OFF "-DKKE_VERSION_NAME=$VERSION" \
             "-DCMAKE_EXE_LINKER_FLAGS=-static-libstdc++ -static-libgcc" 2>&1 | tee configure.log
 
       - name: Build
@@ -110,6 +110,17 @@ jobs:
               echo "== $demo: ok"
             fi
           done
+          # The benchmark people are sent: two short demos, one results file.
+          set +e
+          DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_AUDIO=off timeout 180 "$pkg/benchmark/kke_benchmark" --only kke_basics,showcase_walk --seconds 3 \
+            --no-wait --no-open --out "$RUNNER_TEMP/bench" > run_kke_benchmark.log 2>&1
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ] || ! ls "$RUNNER_TEMP"/bench/kke-benchmark-*.json > /dev/null 2>&1; then
+            echo "== kke_benchmark: FAILED (exit $code)"; tail -60 run_kke_benchmark.log; failed=1
+          else
+            echo "== kke_benchmark: ok"
+          fi
           exit $failed
 
       - uses: actions/upload-artifact@v6
@@ -139,7 +150,7 @@ jobs:
         run: |
           set -o pipefail
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DKKE_ENABLE_FEMFX=ON -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_VALIDATION=OFF \
+            -DKKE_ENABLE_FEMFX=ON -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_VALIDATION=OFF "-DKKE_VERSION_NAME=$VERSION" \
             -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake 2>&1 | tee configure.log
 
       - name: Build
@@ -206,6 +217,21 @@ jobs:
           Copy-Item kke_tests.exe $dir
           "PKG_DIR=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           Write-Output "$($zip.Name): complete"
+      # No Vulkan driver on the runner, so the demo can't start: this
+      # checks the launcher itself on Windows (starting a process, reading
+      # its log, writing the results file even when a demo fails).
+      - name: Benchmark launcher on Windows
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          Set-Location (Join-Path $env:PKG_DIR 'benchmark')
+          .\kke_benchmark.exe --only kke_basics --seconds 2 --no-wait --no-open --out bench
+          Write-Output "kke_benchmark exit code $LASTEXITCODE (3 = a demo could not run, expected without a GPU)"
+          if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 3) { throw "kke_benchmark failed with exit code $LASTEXITCODE" }
+          $results = Get-ChildItem bench\kke-benchmark-*.json
+          if (-not $results) { throw "kke_benchmark wrote no results file" }
+          Get-Content ($results[0].FullName -replace '\.json$', '.txt')
+          $global:LASTEXITCODE = 0
       - name: Unit tests on Windows
         timeout-minutes: 10  # a hang must fail the run, not hold it for 6 hours
         shell: pwsh
@@ -296,5 +322,5 @@ jobs:
             flags+=(--draft --target "$SHA")
           fi
           gh release create "$VERSION" dist/* --repo "$REPO" --title "Kreative Kompas Engine $VERSION" \
-            --notes "Downloadable builds of the engine's demos for Windows and Linux (x86_64, AVX2, Vulkan 1.3): unpack the archive and run kke_demo (README.txt inside, docs/RELEASES.md). Android (arm64, Android 9+, Vulkan): install the .apk on the phone (docs/ANDROID.md)." \
+            --notes "Downloadable builds of the engine's demos for Windows and Linux (x86_64, AVX2, Vulkan 1.3). Unpack the archive and run kke_demo, or benchmark/kke_benchmark to measure how well every demo runs on your PC. See README.txt inside the archive and docs/RELEASES.md. Android (arm64, Android 9+, Vulkan): install the .apk on the phone (docs/ANDROID.md)." \
             "${flags[@]}"

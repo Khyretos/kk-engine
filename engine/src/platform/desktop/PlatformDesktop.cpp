@@ -22,6 +22,7 @@
 #include <psapi.h>
 #else
 #include <sys/resource.h>
+#include <sys/utsname.h>
 #include <unistd.h>
 #endif
 #if defined(__APPLE__)
@@ -164,6 +165,60 @@ double peakResidentMemoryMb() {
     return static_cast<double>(usage.ru_maxrss) / (1024.0 * 1024.0); // bytes on macOS
 #else
     return static_cast<double>(usage.ru_maxrss) / 1024.0;            // kilobytes on Linux
+#endif
+#endif
+}
+
+double residentMemoryMb() {
+#if defined(_WIN32)
+    PROCESS_MEMORY_COUNTERS pmc{};
+    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) return static_cast<double>(pmc.WorkingSetSize) / (1024.0 * 1024.0);
+    return 0.0;
+#elif defined(__linux__)
+    // statm: size resident shared ... in pages.
+    std::ifstream in("/proc/self/statm");
+    unsigned long long size = 0, resident = 0;
+    if (!(in >> size >> resident)) return 0.0;
+    return static_cast<double>(resident) * static_cast<double>(sysconf(_SC_PAGESIZE)) / (1024.0 * 1024.0);
+#else
+    return 0.0;
+#endif
+}
+
+std::string osVersion() {
+#if defined(_WIN32)
+    // GetVersionEx reports what the manifest claims to support, not the
+    // real version; RtlGetVersion doesn't.
+    using RtlGetVersionFn = LONG(WINAPI*)(PRTL_OSVERSIONINFOW);
+    if (HMODULE ntdll = GetModuleHandleW(L"ntdll.dll")) {
+        auto fn = reinterpret_cast<RtlGetVersionFn>(reinterpret_cast<void*>(GetProcAddress(ntdll, "RtlGetVersion")));
+        RTL_OSVERSIONINFOW v{};
+        v.dwOSVersionInfoSize = sizeof(v);
+        if (fn && fn(&v) == 0) {
+            // Windows 11 still says 10.0; its builds start at 22000.
+            const char* name = v.dwMajorVersion == 10 && v.dwBuildNumber >= 22000 ? "Windows 11" : "Windows";
+            return std::string(name) + " " + std::to_string(v.dwMajorVersion) + "." + std::to_string(v.dwMinorVersion) + "." +
+                   std::to_string(v.dwBuildNumber);
+        }
+    }
+    return "Windows";
+#else
+    std::string pretty;
+#if defined(__linux__)
+    std::ifstream in("/etc/os-release");
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.rfind("PRETTY_NAME=", 0) != 0) continue;
+        pretty = line.substr(12);
+        if (pretty.size() >= 2 && pretty.front() == '"' && pretty.back() == '"') pretty = pretty.substr(1, pretty.size() - 2);
+    }
+#endif
+    struct utsname u{};
+    std::string kernel = uname(&u) == 0 ? std::string(u.sysname) + " " + u.release : SDL_GetPlatform();
+#if defined(__ANDROID__)
+    return "Android API " + std::to_string(SDL_GetAndroidSDKVersion()) + " (" + kernel + ")";
+#else
+    return pretty.empty() ? kernel : pretty + " (" + kernel + ")";
 #endif
 #endif
 }

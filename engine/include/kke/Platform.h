@@ -50,6 +50,15 @@ unsigned usableCpuCount();
 // Peak resident memory of this process in MiB, 0 if unknown.
 double peakResidentMemoryMb();
 
+// Resident memory of this process right now in MiB, 0 if unknown. Cheap
+// enough for a few calls a second, not for every allocation.
+double residentMemoryMb();
+
+// The operating system with its version, as a person would name it
+// ("Ubuntu 24.04.1 LTS (Linux 6.8.0-45-generic)", "Windows 10.0.22631"),
+// or SDL_GetPlatform() when nothing better is known.
+std::string osVersion();
+
 // The device's network name, "unknown-host" if there is none.
 std::string hostName();
 
