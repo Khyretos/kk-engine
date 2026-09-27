@@ -76,7 +76,7 @@ With Docker (nothing else to install):
 docker compose run --rm android      # -> dist/android/kke-demos.apk
 ```
 
-Or with the Android NDK r27c and SDK command-line tools installed
+Or with the Android NDK r28c and SDK command-line tools installed
 (`ANDROID_NDK_HOME` and `ANDROID_HOME` set; the SDK needs
 `platforms;android-35` and `build-tools;35.0.0`, and a JDK 17+):
 

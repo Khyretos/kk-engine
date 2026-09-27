@@ -1,4 +1,4 @@
-# Android (arm64-v8a) build environment for KKE: NDK r27c, the SDK's
+# Android (arm64-v8a) build environment for KKE: NDK r28c, the SDK's
 # command-line tools (build-tools 35, platform 35), a JDK, CMake.
 # `docker compose run --rm android` builds the engine and every game, then
 # packs them into dist/android/kke-demos.apk (android/build_apk.py,
@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         cmake ninja-build git ca-certificates curl unzip python3 python3-yaml openjdk-17-jdk-headless \
     && rm -rf /var/lib/apt/lists/*
 
-ARG NDK_VERSION=r27c
+ARG NDK_VERSION=r28c
 RUN curl -fsSL -o /tmp/ndk.zip https://dl.google.com/android/repository/android-ndk-${NDK_VERSION}-linux.zip \
     && unzip -q /tmp/ndk.zip -d /opt && rm /tmp/ndk.zip
 ENV ANDROID_NDK_HOME=/opt/android-ndk-${NDK_VERSION}

@@ -57,8 +57,8 @@ and what's next. Code: `kke/AudioMixer.h`, `kke/ImpactSynth.h`,
   linger (0.8 s default) so short impacts can be seen. Everything is
   adjustable and saved to `accessibility.json`: on/off, ring and mark
   size, opacity, quietest sound shown, how long marks stay, per-category
-  visibility and colour, captions. On by default in kke_demo, physics_demo
-  and sandbox.
+  visibility and colour, captions. On by default in kke_demo and audio_demo;
+  the sandbox has it in its panels, off until switched on.
 - **Works with no sound card.** miniaudio falls back to its null device;
   failing that the module mixes "silently" on the game thread, so the
   visualizer, logs and tests behave the same in CI and on servers.
