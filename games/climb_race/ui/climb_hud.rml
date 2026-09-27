@@ -5,10 +5,9 @@
     <style>
         /* Over the game: nothing here takes clicks. */
         body { pointer-events: none; }
-        .player { position: absolute; left: 24dp; top: 20dp; width: 300dp; padding: 12dp 16dp; border-radius: 10dp;
+        /* One panel per player, in the top left corner of their view. */
+        .player { position: absolute; width: 280dp; padding: 12dp 16dp; margin: 20dp 0 0 24dp; border-radius: 10dp;
                   background-color: #0b0f1ccc; border-left: 3dp #56a8ff; }
-        .player.two { left: 50%; margin-left: 24dp; border-left-color: #ff9a4a; }
-        .player.rival { left: auto; right: 24dp; width: 220dp; border-left-color: #ff9a4a; }
         .player .name { font-size: 12dp; letter-spacing: 2dp; color: #aab3cc; }
         .player .time { font-size: 30dp; font-weight: bold; color: #ffffff; }
         .player .height { font-size: 14dp; color: #cfd6e6; }
@@ -22,41 +21,104 @@
         .hand.l { color: #5cf2ff; }
         .hand.r { color: #ff6fd8; }
         .status { font-size: 13dp; color: #ffcf5c; margin-top: 4dp; }
+        /* The CPU climbers, highest first. */
+        #rivals { position: absolute; right: 24dp; top: 30%; width: 200dp; padding: 8dp 12dp; border-radius: 10dp; background-color: #0b0f1ccc; }
+        .rival { display: block; font-size: 14dp; color: #e8ecf4; padding: 2dp 0; }
+        .rival .dot { display: inline-block; width: 10dp; height: 10dp; border-radius: 5dp; margin-right: 8dp; }
+        .rival .h { float: right; color: #aab3cc; }
+        .rival .s { color: #ffcf5c; font-size: 12dp; margin-left: 6dp; }
         #banner { position: absolute; top: 34%; left: 0; width: 100%; text-align: center; }
         #banner .big { font-size: 72dp; font-weight: bold; color: #ffffff; }
         #banner .sub { font-size: 18dp; color: #e8ecf4; margin-top: 6dp; }
-        #hint { position: absolute; left: 0; bottom: 18dp; width: 100%; text-align: center; font-size: 13dp; color: #aab3cc; }
+        #hint { position: absolute; left: 8%; bottom: 14dp; width: 84%; padding: 6dp 10dp; border-radius: 8dp; background-color: #0b0f1cbb;
+                text-align: center; font-size: 13dp; color: #cfd6e6; }
+        #hint img, #banner .sub img { font-size: 15dp; } /* prompt glyphs are 1.6em */
+        /* How to play: over everything, before the race and on the help button. */
+        #howto { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background-color: #05070ef2; }
+        #howto .sheet { position: absolute; left: 50%; top: 50%; width: 960dp; margin-left: -480dp; height: 560dp; margin-top: -290dp; }
+        #howto h1 { display: block; font-size: 44dp; font-weight: bold; color: #ffffff; text-align: center; letter-spacing: 4dp; }
+        #howto .tagline { font-size: 17dp; color: #cfd6e6; text-align: center; margin: 4dp 0 22dp 0; }
+        #howto .cards { display: flex; flex-wrap: wrap; justify-content: space-between; }
+        #howto .card { box-sizing: border-box; width: 308dp; height: 190dp; margin-bottom: 16dp; padding: 14dp 16dp; border-radius: 12dp; background-color: #141b2e;
+                       border-top: 3dp #56a8ff; }
+        #howto .card.stamina { border-top-color: #6fe39a; }
+        #howto .card.over { border-top-color: #ffcf5c; }
+        #howto .step { font-size: 12dp; letter-spacing: 2dp; color: #7f8aa8; }
+        #howto .title { font-size: 20dp; font-weight: bold; color: #ffffff; margin: 2dp 0 8dp 0; }
+        #howto .body { font-size: 14dp; color: #cfd6e6; line-height: 1.35; }
+        #howto .body img { font-size: 19dp; }
+        #howto .l { color: #5cf2ff; font-weight: bold; }
+        #howto .r { color: #ff6fd8; font-weight: bold; }
+        #howto .jug { color: #6fe39a; font-weight: bold; }
+        #howto .crimp { color: #ffae5c; font-weight: bold; }
+        #howto .sloper { color: #7aa8ff; font-weight: bold; }
+        #howto .go { position: absolute; left: 0; bottom: 0; width: 100%; text-align: center; font-size: 20dp; color: #ffffff; }
+        #howto .go img { font-size: 26dp; }
+        #howto .later { font-size: 13dp; color: #7f8aa8; margin-top: 6dp; }
+        #howto .later img { font-size: 16dp; }
     </style>
 </head>
 <body data-model="climb">
-    <div class="player" data-class-low="p1.low">
-        <div class="name">{{p1.name}}</div>
-        <div class="time">{{p1.time}}</div>
-        <div class="height">{{p1.height}}</div>
-        <div class="bar"><div class="fill" data-style-width="p1.stamina" data-style-background-color="p1.stamina_color"></div></div>
-        <div class="stamina">stamina {{p1.stamina}}</div>
-        <div class="hands"><span class="hand l">L {{p1.left}}</span><span class="hand r">R {{p1.right}}</span></div>
-        <div class="status">{{p1.status}}</div>
+    <div data-if="racing">
+        <div data-for="p : players" class="player" data-class-low="p.low" data-style-left="p.x" data-style-top="p.y"
+             data-style-border-left-color="p.accent">
+            <div class="name">{{p.name}}</div>
+            <div class="time">{{p.time}}</div>
+            <div class="height">{{p.height}}</div>
+            <div class="bar"><div class="fill" data-style-width="p.stamina" data-style-background-color="p.stamina_color"></div></div>
+            <div class="stamina">stamina {{p.stamina}}</div>
+            <div class="hands"><span class="hand l">L {{p.left}}</span><span class="hand r">R {{p.right}}</span></div>
+            <div class="status">{{p.status}}</div>
+        </div>
+        <div id="rivals" data-if="rivals.size > 0">
+            <div data-for="r : rivals" class="rival"><span class="dot" data-style-background-color="r.accent"></span>{{r.name}}<span class="s">{{r.status}}</span><span class="h">{{r.height}}</span></div>
+        </div>
+        <div id="banner" data-if="banner != '' && !howto">
+            <div class="big">{{banner}}</div>
+            <div class="sub" data-rml="sub"></div>
+        </div>
+        <div id="hint" data-if="!howto" data-rml="hint"></div>
     </div>
-    <div class="player two" data-if="split" data-class-low="p2.low">
-        <div class="name">{{p2.name}}</div>
-        <div class="time">{{p2.time}}</div>
-        <div class="height">{{p2.height}}</div>
-        <div class="bar"><div class="fill" data-style-width="p2.stamina" data-style-background-color="p2.stamina_color"></div></div>
-        <div class="stamina">stamina {{p2.stamina}}</div>
-        <div class="hands"><span class="hand l">L {{p2.left}}</span><span class="hand r">R {{p2.right}}</span></div>
-        <div class="status">{{p2.status}}</div>
+    <div id="howto" data-if="howto">
+        <div class="sheet">
+            <h1>CLIMB RACE</h1>
+            <div class="tagline">Race the others up the mountain. First over the top wins.</div>
+            <div class="cards">
+                <div class="card">
+                    <div class="step">1 · GET ON</div>
+                    <div class="title">Grab the rock</div>
+                    <div class="body">Walk up to the wall with <prompt action="move"/> and grab it with <prompt action="reach.left"/> or <prompt action="reach.right"/>.</div>
+                </div>
+                <div class="card">
+                    <div class="step">2 · CHOOSE</div>
+                    <div class="title">Pick a hold</div>
+                    <div class="body"><prompt action="move"/> points where you want to go. The hold your <span class="l">left hand</span> would take lights up light blue, your <span class="r">right hand</span>'s pink.</div>
+                </div>
+                <div class="card">
+                    <div class="step">3 · REACH</div>
+                    <div class="title">Move a hand</div>
+                    <div class="body"><prompt action="reach.left"/> <prompt action="reach.right"/> reach, slow and easy.<br/>Hold <prompt action="grab.left"/> <prompt action="grab.right"/> and let go to lunge further. A big lunge lets go of the other hand!</div>
+                </div>
+                <div class="card stamina">
+                    <div class="step">4 · BREATHE</div>
+                    <div class="title">Save your strength</div>
+                    <div class="body">Hanging tires your arms. <span class="jug">Green</span> holds are easy, <span class="crimp">orange</span> and <span class="sloper">blue</span> are hard. Two green holds or a ledge let you rest. Run out and you fall.</div>
+                </div>
+                <div class="card over">
+                    <div class="step">5 · OVER THE TOP</div>
+                    <div class="title">Pull yourself up</div>
+                    <div class="body">Both hands on an edge, then <prompt action="jump"/> to climb onto it. Ledges on the way are places to rest.</div>
+                </div>
+                <div class="card">
+                    <div class="step">IF YOU SLIP</div>
+                    <div class="title">Try again</div>
+                    <div class="body"><prompt action="letgo"/> lets go. Fall off and you can grab the rock again straight away.<br/><prompt action="race.again"/> race again · <prompt action="race.new"/> new mountain · <prompt action="menu"/> menu</div>
+                </div>
+            </div>
+            <div class="go"><prompt action="jump" label="Start"/>
+                <div class="later"><prompt action="help" label="shows this again"/></div>
+            </div>
+        </div>
     </div>
-    <div class="player rival" data-if="!split">
-        <div class="name">{{p2.name}}</div>
-        <div class="height">{{p2.height}}</div>
-        <div class="bar"><div class="fill" data-style-width="p2.stamina" data-style-background-color="p2.stamina_color"></div></div>
-        <div class="status">{{p2.status}}</div>
-    </div>
-    <div id="banner" data-if="banner != ''">
-        <div class="big">{{banner}}</div>
-        <div class="sub">{{sub}}</div>
-    </div>
-    <div id="hint">{{hint}}</div>
 </body>
 </rml>

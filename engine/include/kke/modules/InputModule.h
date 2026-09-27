@@ -88,8 +88,10 @@ public:
 
     // Virtual devices (SDL virtual joysticks) for testing without
     // hardware: KKE_VIRTUAL_INPUT=hosas,pad attaches two identical flight
-    // sticks and a gamepad with gyro; KKE_VIRTUAL_INPUT_ANIMATE=1 moves
-    // them. Used by CI and screenshots. Developer builds only: shipping
+    // sticks and a gamepad with gyro (pad,pad,pad: three gamepads, for
+    // local multiplayer); KKE_VIRTUAL_INPUT_ANIMATE=1 moves them;
+    // KKE_VIRTUAL_INPUT_LATE=<s>:<spec> plugs <spec> in <s> seconds in
+    // (hot-plugging: "controller connected" prompts). Used by CI and screenshots. Developer builds only: shipping
     // builds ignore both variables (kke/DevTools.h).
     void attachVirtualDevices(const std::string& spec);
 
@@ -111,6 +113,8 @@ private:
     struct Virtual { SDL_JoystickID id = 0; SDL_Joystick* joy = nullptr; bool pad = false; int index = 0; };
     std::vector<Virtual> m_virtual;
     bool m_animateVirtual = false;
+    double m_lateAt = 0.0;
+    std::string m_lateSpec;
 
     void notePromptDevice(uint32_t deviceRef, bool keyboardOrMouse, PromptStyle style);
     void setPromptStyle(int player, PromptStyle style);

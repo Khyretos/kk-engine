@@ -89,6 +89,7 @@ set(ENGINE_SOURCES
     src/ButtonPrompts.cpp
     src/InputDevices.cpp
     src/modules/InputModule.cpp
+    src/Lobby.cpp
     src/AudioMixer.cpp
     src/ImpactSynth.cpp
     src/Footsteps.cpp
@@ -124,6 +125,7 @@ set(ENGINE_SOURCES
     src/modules/UiModule.cpp
     src/modules/MarketplaceUiModule.cpp
     src/modules/LightingControlsModule.cpp
+    src/modules/LobbyModule.cpp
     src/modules/MaterialGridModule.cpp
     src/modules/DebugControlModule.cpp
     src/modules/PhysicsModule.cpp

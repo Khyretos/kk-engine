@@ -318,7 +318,7 @@ TEST(Climber, LetGoFalls) {
 }
 
 TEST(Climber, TheBotClimbsToTheSummitAndMantles) {
-    for (uint32_t seed : { 4u, 9u, 21u }) {
+    for (uint32_t seed = 1; seed <= 40; ++seed) {
         ClimbWall w = wall(seed);
         Climber::Settings s;
         s.maxStamina = 1e6f; // this checks the route and the moves, not the rests
@@ -342,10 +342,71 @@ TEST(Climber, TheBotClimbsToTheSummitAndMantles) {
     }
 }
 
+TEST(Climber, TheArmsReachEveryHoldTheHandsAreOn) {
+    // What a game's IK draws is only right if the hands can be where the
+    // climber says: every hand on a hold within an arm of its shoulder,
+    // all the way up (the wrist, as a game puts it on the hold).
+    for (uint32_t seed : { 3u, 11u, 27u }) {
+        ClimbWall w = wall(seed);
+        Climber::Settings s;
+        s.maxStamina = 1e6f;
+        Climber c(w, s);
+        kke::ClimbBot bot(w.line());
+        const glm::vec3 p = w.holds()[static_cast<size_t>(bot.route().front())].position;
+        ASSERT_TRUE(c.start(glm::vec3(p.x, 0.0f, w.surfaceZ(p.x, 1.0f) + 0.45f)));
+        float worst = 0.0f, settle = 0.0f;
+        int cuts = 0;
+        for (float t = 0.0f; t < 240.0f && c.state() == Climber::State::Climbing; t += kDt) {
+            c.update(bot.think(c, kDt), kDt);
+            cuts += c.cutLoose() >= 0 ? 1 : 0;
+            if (c.state() != Climber::State::Climbing) break;
+            // A catch (a start, a lunge) pulls the body up to the hand: a
+            // few frames to get there.
+            settle = c.grabbed() || c.cutLoose() >= 0 ? 0.25f : std::max(0.0f, settle - kDt);
+            if (settle > 0.0f) continue;
+            for (int h = 0; h < 2; ++h) {
+                const int hold = c.handHold(h);
+                if (hold < 0) continue;
+                const ClimbHold& hd = w.holds()[static_cast<size_t>(hold)];
+                const float over = glm::length(c.wristAt(hd.position, hd.normal) - c.shoulder(h)) - s.armReach;
+                worst = std::max(worst, over);
+            }
+        }
+        EXPECT_EQ(c.state(), Climber::State::Mantle) << "seed " << seed;
+        EXPECT_LT(worst, s.cutLoose + 0.01f) << "seed " << seed << ": an arm stretched past its reach";
+        EXPECT_GT(cuts, 0) << "seed " << seed << ": fresh, the bot lunges, and a long lunge cuts the lower hand loose";
+    }
+}
+
+TEST(Climber, ABodyHangsBetweenTheHandsOrNot) {
+    Rig r;
+    ASSERT_TRUE(r.mount());
+    const int right = r.c.handHold(Climber::kRight);
+    const glm::vec3 at = r.w.holds()[static_cast<size_t>(right)].position;
+    int nearHold = -1, farHold = -1;
+    for (size_t i = 0; i < r.w.holds().size(); ++i) {
+        const ClimbHold& h = r.w.holds()[i];
+        if (h.kind == ClimbHold::Kind::Edge || static_cast<int>(i) == right) continue;
+        const float d = glm::length(h.position - at);
+        if (nearHold < 0 && d > 0.3f && d < 0.8f) nearHold = static_cast<int>(i);
+        if (farHold < 0 && d > 1.9f && d < 2.4f) farHold = static_cast<int>(i);
+    }
+    ASSERT_GE(nearHold, 0);
+    ASSERT_GE(farHold, 0);
+    EXPECT_TRUE(r.c.canSpan(Climber::kLeft, nearHold));
+    EXPECT_FALSE(r.c.canSpan(Climber::kLeft, farHold)) << "no body is two metres wide between its hands";
+    // A bumper won't take a hand where the body can't follow.
+    Climber::Input in;
+    in.pick[Climber::kLeft] = farHold;
+    in.reach[Climber::kLeft] = true;
+    r.c.update(in, kDt);
+    EXPECT_FALSE(r.c.handMoving(Climber::kLeft));
+}
+
 TEST(Climber, StaminaMattersOnTheWayUp) {
     // Every mountain, with real stamina: the bot has to pace itself (shake out on jugs,
     // stand on ledges); it still gets up, and it gets tired doing it.
-    for (uint32_t seed = 1; seed <= 12; ++seed) {
+    for (uint32_t seed = 1; seed <= 40; ++seed) {
         ClimbWall w = wall(seed);
         Climber c(w);
         kke::ClimbBot bot(w.line());

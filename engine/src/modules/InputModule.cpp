@@ -210,6 +210,15 @@ void InputModule::init(Application&) {
     // a shipping build never creates them (kke/DevTools.h), so they
     // can't be used to inject input.
     if (const char* v = dev::env("KKE_VIRTUAL_INPUT"); v && *v) attachVirtualDevices(v);
+    // KKE_VIRTUAL_INPUT_LATE=<s>:<spec>: plugged in <s> seconds in (hot-plug tests).
+    if (const char* v = dev::env("KKE_VIRTUAL_INPUT_LATE"); v && *v) {
+        const std::string late = v;
+        const size_t colon = late.find(':');
+        if (colon != std::string::npos) {
+            m_lateAt = std::atof(late.substr(0, colon).c_str());
+            m_lateSpec = late.substr(colon + 1);
+        }
+    }
     m_animateVirtual = dev::flag("KKE_VIRTUAL_INPUT_ANIMATE");
 }
 
@@ -252,7 +261,9 @@ void InputModule::attachVirtualDevices(const std::string& spec) {
         attach(false, 0);
         attach(false, 1);
     }
-    if (spec.find("pad") != std::string::npos) attach(true, 0);
+    // One gamepad per "pad" (pad,pad,pad: three, for local multiplayer).
+    int pads = 0;
+    for (size_t at = spec.find("pad"); at != std::string::npos; at = spec.find("pad", at + 3)) attach(true, pads++);
 }
 
 void InputModule::animateVirtualDevices(float t) {
@@ -338,6 +349,10 @@ bool InputModule::save() const {
 
 void InputModule::frameStart(const UpdateContext& ctx) {
     m_now = ctx.totalTime;
+    if (!m_lateSpec.empty() && m_now >= m_lateAt) {
+        attachVirtualDevices(m_lateSpec);
+        m_lateSpec.clear();
+    }
     if (m_animateVirtual) animateVirtualDevices(ctx.totalTime);
     m_devices.poll();
     if (!m_promptTouched) {

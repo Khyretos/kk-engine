@@ -107,6 +107,7 @@ nav:
       - Melee combat and crowds: COMBAT.md
       - Procedural animation: PROCEDURAL_ANIMATION.md
       - Input: INPUT.md
+      - Start menu and joining: LOBBY.md
       - Commands and orders: COMMANDS.md
       - Audio: AUDIO.md
       - Networking: NETWORKING.md
