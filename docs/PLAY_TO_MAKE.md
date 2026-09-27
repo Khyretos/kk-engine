@@ -50,6 +50,12 @@ along the bottom and one line of hint text.
 - **Person, Box, Barrel, Ball, Cone:** press a picture and drag it into the
   world; let go where it should stand. (Or tap it, then click the spot.)
   People turn to face you; every person dragged out looks different.
+- **Sheep, Cow, Pig, Horse:** animals, dragged out the same way. In Play
+  they live their own lives on the AI core ([AI.md](AI.md)): sheep graze
+  and stay together, cows wander, and a bat swing nearby is a noise they
+  hear and may run from. In Build they stay where they're put. Their
+  recipe is one real graph, *When put down → Be a "sheep"* (`ai.add`),
+  so Look shows it and it can be changed like any other.
 - **Grab (the hand):** press on anything in the world and drag it
   somewhere else.
 - **Bat:** click a person and the bat swings through them. They ragdoll,
@@ -62,9 +68,10 @@ along the bottom and one line of hint text.
   lights, save/load). F2 switches back and forth. `KKE_SANDBOX_MODE=build`
   starts in the editor.
 
-Only blocks whose assets are on disk appear. The Synty names each block
-looks for are in `kke::defaultPlayBlocks()` (POLYGON City Characters or
-Fantasy Characters for people, POLYGON Prototype for the bat and props).
+Only blocks whose assets are on disk appear. The asset names each block
+looks for are in `kke::defaultPlayBlocks()`: POLYGON City Characters or
+Fantasy Characters for people, POLYGON Prototype for the bat and props,
+and Quaternius' Farm Animals (CC0) for the animals.
 
 How the bat works (`kke::BatSwing`, tested in `tests/test_play_blocks.cpp`):
 a right-handed horizontal swing around a shoulder pivot, 0.26 s from the

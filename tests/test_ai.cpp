@@ -1,6 +1,7 @@
 // The AI core (kke/ai/*, docs/AI.md): steering, senses, utility
 // decisions, navmesh paths and whole-world scenarios on the farm species.
 #include "kke/ai/AiWorld.h"
+#include "kke/ai/Clips.h"
 #include "kke/ai/NavMesh.h"
 
 #include <gtest/gtest.h>
@@ -577,3 +578,34 @@ TEST(AiLua, NodeGraphWhenScaredMakeANoise) {
     EXPECT_TRUE(f.vm.errors().empty()) << f.vm.errors().back().message;
 }
 #endif
+
+// ---------------------------------------------------------------- clips
+
+namespace {
+kke::ModelData withClips(std::initializer_list<const char*> names) {
+    kke::ModelData d;
+    for (const char* n : names) d.animations.push_back({ n, 1.0f, 30.0f, {} });
+    return d;
+}
+} // namespace
+
+TEST(AiClips, PicksAModelsClipForWhatTheAnimalDoes) {
+    // Quaternius' cow: a slow walk for walking, the run for running.
+    const kke::ModelData cow = withClips({ "Armature|Death", "Armature|Idle", "Armature|Jump", "Armature|Run", "Armature|Walk", "Armature|WalkSlow" });
+    EXPECT_EQ(clipForAnim(cow, "idle").clip, 1);
+    EXPECT_EQ(clipForAnim(cow, "walk").clip, 5);
+    EXPECT_EQ(clipForAnim(cow, "run").clip, 3);
+    EXPECT_EQ(clipForAnim(cow, "eat").clip, 1);   // no eat clip: stands
+    EXPECT_EQ(clipForAnim(cow, "graze").clip, 1); // unknown name: idle
+    // Quaternius' sheep only has Idle and Jump: it hops, slower when walking.
+    const kke::ModelData sheep = withClips({ "Armature|Idle", "Armature|Jump" });
+    EXPECT_EQ(clipForAnim(sheep, "walk").clip, 1);
+    EXPECT_FLOAT_EQ(clipForAnim(sheep, "walk").speed, 0.7f);
+    EXPECT_EQ(clipForAnim(sheep, "run").clip, 1);
+    EXPECT_FLOAT_EQ(clipForAnim(sheep, "run").speed, 1.0f);
+    // Exact names win (clips appended under the AI's own names).
+    const kke::ModelData dog = withClips({ "rest", "idle", "walk", "run", "eat" });
+    EXPECT_EQ(clipForAnim(dog, "idle").clip, 1);
+    EXPECT_EQ(clipForAnim(dog, "eat").clip, 4);
+    EXPECT_EQ(clipForAnim(withClips({}), "idle").clip, -1);
+}

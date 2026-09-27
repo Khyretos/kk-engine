@@ -8,6 +8,7 @@
 #include "kke/VoronoiFracture.h"
 #include "kke/Material.h"
 #include "kke/SceneLoader.h"
+#include "kke/ai/Clips.h"
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/UiModule.h"
@@ -278,7 +279,7 @@ void SandboxModule::dropCollider(Object& o) {
 void SandboxModule::syncCollider(Object& o) {
     dropCollider(o);
     kke::RigidWorld* w = rigidWorld();
-    if (!w || o.character || o.proxy) return;
+    if (!w || o.character || o.animal || o.proxy) return;
     glm::vec3 mn, mx;
     worldBounds(o, mn, mx);
     const glm::vec3 half = glm::max((mx - mn) * 0.5f, glm::vec3(0.01f));
@@ -308,8 +309,16 @@ SandboxModule::Object* SandboxModule::spawnObject(const std::string& asset, cons
     o.yawDegrees = yawDegrees;
     o.model = model;
     o.instance = m_models->spawn(model, objectTransform(*d, position, yawDegrees));
-    o.character = !d->bones.empty() && d->meshes.size() > 0 && resolve(asset, pack)->skinned;
+    const kke::PlayBlock* block = blockFor(asset);
+    o.animal = block && block->kind == kke::PlayBlockKind::Animal;
+    if (block) o.scale = block->scale; // a loaded scene sets its own after this
+    if (o.scale != 1.0f) m_models->setTransform(o.instance, objectTransform(*d, position, yawDegrees, o.scale));
+    o.character = !o.animal && !d->bones.empty() && d->meshes.size() > 0 && resolve(asset, pack)->skinned;
     if (o.character && !d->animations.empty()) m_models->playAnimation(o.instance, 0, true);
+    if (o.animal) {
+        m_models->playAnimation(o.instance, kke::ai::clipForAnim(*d, "idle").clip, true);
+        m_models->setOverlayEnabled(o.instance, false); // its own colours, not the Prototype grid
+    }
     m_objects.push_back(std::move(o));
     syncCollider(m_objects.back());
     return &m_objects.back();
@@ -474,6 +483,7 @@ void SandboxModule::restore(const Snapshot& s) {
         if (!o) {
             o = spawnObject(st.asset, st.position, st.yawDegrees, st.id, st.pack);
             if (!o) { ++missing; continue; }
+            queuePlaced(o->id, st.position); // back in the world: its recipe runs again (an animal is that animal)
         }
         if (o->graph.toJson() != st.graph.toJson()) {
             o->graph = st.graph;
@@ -612,8 +622,10 @@ void SandboxModule::beginPlacing(const std::string& asset, float yawDegrees, uin
     } else {
         // The preview is the real model with its real texture; the green
         // outline (drawn in update()) marks it as not placed yet.
-        m_placeScale = 1.0f;
+        const kke::PlayBlock* block = blockFor(asset);
+        m_placeScale = block ? block->scale : 1.0f; // what spawnObject will give it
         m_ghost = m_models->spawn(model);
+        if (block && block->kind == kke::PlayBlockKind::Animal) m_models->setOverlayEnabled(m_ghost, false);
         if (const kke::CatalogPack* p = packOf(asset, pack); p && m_variant > 0 && m_variant < static_cast<int>(p->textureVariants.size()))
             m_models->setTextureOverride(m_ghost, p->textureVariants[m_variant]);
     }
@@ -1202,7 +1214,7 @@ void SandboxModule::makeBreakable(Object& o) {
 #if KKE_ENABLE_FEMFX
     auto* physics = m_app->getModule<kke::PhysicsModule>();
     const kke::ModelData* d = m_models->model(o.model);
-    if (!physics || !d || o.proxy || o.character) return;
+    if (!physics || !d || o.proxy || o.character || o.animal) return;
     const double start = SDL_GetPerformanceCounter() / static_cast<double>(SDL_GetPerformanceFrequency());
     const glm::mat4 t = objectTransform(o);
     const glm::mat3 rot(glm::transpose(glm::inverse(glm::mat3(t)))); // normals, also right when scaled
@@ -1559,6 +1571,7 @@ void SandboxModule::fromScene(const kke::SceneFile& scene) {
                 o->collision = so.collision;
                 o->fractureSeed = so.fractureSeed;
                 o->graph = so.graph;
+                queuePlaced(o->id, o->position); // a loaded level puts its things down: recipes run (an animal becomes that animal)
                 if (const kke::CatalogPack* pack = packOf(so.asset, so.pack); pack && !so.texture.empty()) {
                     for (const std::string& v : pack->textureVariants)
                         if (std::filesystem::path(v).filename() == so.texture) { o->texture = v; m_models->setTextureOverride(o->instance, v); }
@@ -2144,6 +2157,7 @@ bool SandboxModule::swingBatAt(const glm::vec3& target) {
     const glm::vec3 forward = target - m_app->camera().position;
     if (!m_swing.start(m_swing.pivotFor(target, forward), forward)) return false;
     m_swingHits.clear();
+    animalNoise(target, 12.0f); // the whoosh: animals nearby hear it and may run
     // The bat model, loaded on the first swing. Without it the bat is a
     // thick line: the swing and the hits don't depend on the model.
     if (!m_batModel && !m_blocks.empty()) {

@@ -38,7 +38,7 @@ TEST(PlayBlocks, DefaultPaletteHasAPersonAndABat) {
 }
 
 TEST(PlayBlocks, AvailableAssetsKeepOrderAndSkipMissing) {
-    kke::PlayBlock b{ "x", "X", kke::PlayBlockKind::Prop, { "a", "b", "c" }, false };
+    kke::PlayBlock b{ "x", "X", kke::PlayBlockKind::Prop, { "a", "b", "c" }, false, 1.0f, {} };
     auto have = kke::availableAssets(b, [](const std::string& n) { return n != "b"; });
     EXPECT_EQ(have, (std::vector<std::string>{ "a", "c" }));
     EXPECT_TRUE(kke::availableAssets(b, {}).empty());

@@ -168,7 +168,9 @@ bool valueToLua(const std::string& type, const std::string& text, std::string& l
 // ---------------------------------------------------------------- recipes
 
 // The graph a Simple palette block is made of ("Look inside"): the bat is
-// "when it hits someone -> knock them over, play a wooden bonk". Empty for
+// "when it hits someone -> knock them over, play a wooden bonk"; an animal
+// is "when put down -> be a sheep" (ai.add, so the graph needs the ai.*
+// nodes: kke::ai::bindAi before NodeLibrary::fromApi). Empty for
 // blocks with no behaviour of their own yet (people, props): their recipe
 // starts empty and whatever is added applies to every one of them.
 NodeGraph playBlockRecipe(const std::string& blockId);

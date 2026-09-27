@@ -19,6 +19,7 @@ enum class PlayBlockKind {
     Character, // placed in the world; ragdolls when hit
     Prop,      // placed in the world
     Tool,      // held: what a click does (the bat)
+    Animal,    // placed in the world; lives on the AI core in Play (kke::ai)
 };
 
 struct PlayBlock {
@@ -30,9 +31,16 @@ struct PlayBlock {
     // person dragged out looks different.
     std::vector<std::string> assets;
     bool randomAsset = false;
+    // Size it comes out at (some packs' animals are made metres tall).
+    float scale = 1.0f;
+    // Animals: its AiWorld species ("sheep"), which its recipe adds it as
+    // (playBlockRecipe: When put down -> Be a "sheep").
+    std::string species;
 };
 
-// The Simple palette: a person, a bat, a crate, a barrel, a ball, a cone.
+// The Simple palette: a person, a bat, a crate, a barrel, a ball, a cone,
+// and farm animals (a sheep, a cow, a pig, a horse: Quaternius' CC0 Farm
+// Animals).
 // Asset names are from the Synty packs the project uses (POLYGON City
 // Characters / Fantasy Characters, POLYGON Prototype); anyone without
 // them simply doesn't see those blocks (see availableAssets).
