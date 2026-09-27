@@ -59,10 +59,11 @@ root `CMakeLists.txt` only builds it when `KKE_ENABLE_JOLT` and
 | Order wheel | hold Tab or the middle button, or hold the left button half a second; the mouse picks | hold LB, the right stick picks, B cancels | hold a finger, drag to pick |
 | Force modifier (ground: stay there) | hold Left Ctrl | hold LT | none |
 | Come / Sit / Stay / Fetch | 1 / 2 / 3 / 4 | D-pad up / down / left / right | the buttons |
-| Drop it | 5 | no controller binding yet (use the wheel) | the Drop it button |
+| Drop it | 5 | X | the Drop it button |
 | Pick up / throw the ball | left click while the mouse is captured | RT | the Throw button |
-| Developer panels | F1 | no controller binding yet | none |
-| Every button on the HUD bar | click it | not reachable | tap it |
+| Navigation ping (hear the walls) | Q | View / Back | none |
+| Developer panels | F1 | none (developer tools) | none |
+| Every button on the HUD bar | click it | its button: the prompt under it (Pet is Y, Throw is RT) | tap it |
 
 What the context order does depends on what the pointer is on
 (`kke::contextOrder`): a ball is Fetch, the player is Follow, the ground is

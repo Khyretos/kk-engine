@@ -88,6 +88,12 @@ void PlatoonModule::init(kke::Application& app) {
     kke::InputMap& in = m_input->map(0);
     kke::InputModule::defineCharacterActions(in); // "move" pans, "look.rate" turns
     command_kit::CommandInput::defineActions(in);
+    // The character defaults the platoon doesn't use would fire on keys it
+    // does (Space jump vs rts.all, E interact vs rts.right, Q and the d-pad
+    // down audio.ping vs rts.left and rts.regroup, RT fire vs rts.groups:
+    // BUG-065). A top-down squad has nobody to walk or ping for.
+    for (const char* unused : { "jump", "sprint", "walk", "crouch", "fire", "aim", "interact", "camera.toggle", "audio.ping", "voice.talk" })
+        in.clearBindings(unused);
     using IM = kke::InputModule;
     auto quick = [&](const char* id, const char* label, SDL_Scancode key, SDL_GamepadButton pad) {
         in.defineAction({ id, label, "Orders", "game" });
