@@ -4,11 +4,12 @@
 # encrypted with a key made for this bake alone, so the download holds no
 # FBX or texture anyone can lift out, and only this bake's builds read it.
 #
-#   tools/packaging/bake_with_art.sh --assets DIR [--version NAME] [--windows] [--all-art] [--build DIR]
+#   tools/packaging/bake_with_art.sh --assets DIR [--version NAME] [--windows] [--android] [--all-art] [--build DIR]
 #
 #   --assets DIR   your extracted Synty packs (default: $KKE_ASSETS_DIR)
 #   --version      name in the archive (default: friends-<date>)
 #   --windows      also the Windows zip (cross-compiled in Docker: docker compose run --rm windows)
+#   --android      also the phone APKs, demos and benchmark (built in Docker: docker compose run --rm android)
 #   --all-art      cook every model and texture in the packs, not just what the
 #                  demos load during a short benchmark run (much bigger)
 #   --build DIR    build folder (default: build-art)
@@ -21,12 +22,13 @@ set -euo pipefail
 die() { echo "bake_with_art.sh: error: $*" >&2; exit 1; }
 
 repo="$(cd "$(dirname "$0")/../.." && pwd)"
-assets="${KKE_ASSETS_DIR:-}" version="friends-$(date +%Y%m%d)" windows=0 all_art=0 build="$repo/build-art"
+assets="${KKE_ASSETS_DIR:-}" version="friends-$(date +%Y%m%d)" windows=0 android=0 all_art=0 build="$repo/build-art"
 while [ $# -gt 0 ]; do
     case "$1" in
     --assets) assets="$2"; shift 2 ;;
     --version) version="$2"; shift 2 ;;
     --windows) windows=1; shift ;;
+    --android) android=1; shift ;;
     --all-art) all_art=1; shift ;;
     --build) build="$2"; shift 2 ;;
     *) die "unknown argument '$1' (see the top of this script)" ;;
@@ -82,6 +84,17 @@ if [ "$windows" = 1 ]; then
     docker compose run --rm windows
     tools/packaging/package.sh --bin dist/windows --platform windows --version "$version-with-art" --out dist \
         --deps build-docker/windows/_deps --cooked "$cooked"
+fi
+if [ "$android" = 1 ]; then
+    command -v docker > /dev/null || die "--android needs Docker (docker compose run --rm android)"
+    case "$cooked" in "$repo"/*) ;; *) die "--build must be inside the repository for --android (Docker only sees the repository)" ;; esac
+    # The container reads the same .kke-art.key and .kke-art.build from the
+    # repository, so the phone build decrypts this bake's art.
+    docker compose run --rm -e KKE_COOKED="/src/${cooked#"$repo"/}" -e KKE_VERSION_NAME="$version-with-art" android
+    mkdir -p dist
+    for apk in kke-demos kke-benchmark; do
+        cp "dist/android/$apk-with-art.apk" "dist/kk-engine-${apk#kke-}-$version-with-art-android-arm64.apk"
+    done
 fi
 
 echo

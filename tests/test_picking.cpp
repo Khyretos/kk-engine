@@ -73,3 +73,14 @@ TEST(Picking, FrustumCullsWhatIsOffScreen) {
     EXPECT_TRUE(f.intersectsAabb(glm::vec3(-100.0f, -1.0f, -1.0f), glm::vec3(100.0f, 1.0f, 1.0f)));  // straddles the view
     EXPECT_FALSE(f.intersectsAabb(glm::vec3(-0.5f, 40.0f, -0.5f), glm::vec3(0.5f, 41.0f, 0.5f)));   // above
 }
+
+TEST(Picking, TallScreenKeepsTheAngleAcross) {
+    // Wide: 60 degrees top to bottom. Tall (a phone upright): 60 degrees
+    // left to right, so the view grows upward instead of narrowing.
+    const float t = std::tan(glm::radians(30.0f));
+    const glm::mat4 wide = kke::engineProjection(60.0f, 16.0f / 9.0f, 0.1f, 100.0f);
+    EXPECT_NEAR(-wide[1][1], 1.0f / t, 1e-4f);
+    const glm::mat4 tall = kke::engineProjection(60.0f, 9.0f / 20.0f, 0.1f, 100.0f);
+    EXPECT_NEAR(tall[0][0], 1.0f / t, 1e-4f);
+    EXPECT_LT(-tall[1][1], 1.0f / t); // wider than 60 degrees top to bottom
+}

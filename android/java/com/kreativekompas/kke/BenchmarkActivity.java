@@ -54,6 +54,10 @@ import java.util.zip.ZipOutputStream;
  * otherwise everything goes into one zip. Either way the phone's share menu
  * opens so the results can be sent, and a copy goes to Downloads.
  *
+ * Every demo runs twice, first all of them in landscape, then all of them
+ * upright (KKE_ORIENTATION): a run's id is "<suite id>@landscape" or
+ * "<suite id>@portrait", and its report and log are named after it.
+ *
  * Reads assets/kke_suite.json, which android/build_apk.py makes from
  * benchmarks/suite.yaml.
  */
@@ -61,9 +65,10 @@ public class BenchmarkActivity extends Activity {
     private static final int REQUEST_DEMO = 1;
     private static final int REQUEST_COLLECT = 2;
     private static final String COLLECTOR = "kke_benchmark";
+    private static final String[] ORIENTATIONS = { "landscape", "portrait" };
 
     private JSONObject mSuite;
-    private JSONArray mDemos;       // the demos of this run (quick or full)
+    private JSONArray mDemos;       // the runs of this benchmark: each demo once per orientation
     private JSONArray mRuns;        // what happened to each one so far
     private File mRunDir;
     private File mResultsDir;
@@ -84,7 +89,7 @@ public class BenchmarkActivity extends Activity {
     private Button mFull;
     private Button mQuick;
     private Button mShare;
-    private File mResultFile;
+    private final List<File> mResultFiles = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -146,9 +151,10 @@ public class BenchmarkActivity extends Activity {
         column.addView(title);
 
         TextView about = new TextView(this);
-        about.setText("Plays every demo for a short while, one after the other, and measures how smoothly this phone runs it. "
+        about.setText("Plays every demo for a short while, one after the other, and measures how smoothly this phone runs it: "
+                + "all of them sideways first, then all of them upright (the screen turns by itself). "
                 + "Plug the phone in, keep it still and don't touch the screen while it runs. "
-                + "At the end you can send the results file (nothing is sent by itself).");
+                + "At the end you can send the results (nothing is sent by itself).");
         about.setPadding(0, pad / 2, 0, pad / 2);
         column.addView(about);
 
@@ -196,19 +202,24 @@ public class BenchmarkActivity extends Activity {
         mStatus.setText(text);
     }
 
+    // Each suite demo once per orientation, landscape ones first.
     private JSONArray demosFor(boolean quick) throws JSONException {
         JSONArray all = mSuite.getJSONArray("demos");
         JSONArray chosen = new JSONArray();
-        for (int i = 0; i < all.length(); i++) {
-            JSONObject d = new JSONObject(all.getJSONObject(i).toString());
-            if (quick) {
-                if (!d.optBoolean("quick", true)) {
-                    continue;
+        for (String orientation : ORIENTATIONS) {
+            for (int i = 0; i < all.length(); i++) {
+                JSONObject d = new JSONObject(all.getJSONObject(i).toString());
+                if (quick) {
+                    if (!d.optBoolean("quick", true)) {
+                        continue;
+                    }
+                    d.put("seconds", Math.min(d.getDouble("seconds"), 8.0));
+                    d.put("warmup", Math.min(d.getDouble("warmup"), 2.0));
                 }
-                d.put("seconds", Math.min(d.getDouble("seconds"), 8.0));
-                d.put("warmup", Math.min(d.getDouble("warmup"), 2.0));
+                d.put("orientation", orientation);
+                d.put("run", d.getString("id") + "@" + orientation);
+                chosen.put(d);
             }
-            chosen.put(d);
         }
         return chosen;
     }
@@ -244,7 +255,7 @@ public class BenchmarkActivity extends Activity {
         mRuns = new JSONArray();
         mNext = 0;
         mRunning = true;
-        mResultFile = null;
+        mResultFiles.clear();
         mFull.setEnabled(false);
         mQuick.setEnabled(false);
         mShare.setEnabled(false);
@@ -263,15 +274,17 @@ public class BenchmarkActivity extends Activity {
         try {
             JSONObject d = mDemos.getJSONObject(mNext);
             String id = d.getString("id");
+            String run = d.getString("run");
             String lib = d.optString("exe", id);
-            setStatus("[" + (mNext + 1) + "/" + mDemos.length() + "] " + d.optString("title", id));
+            setStatus("[" + (mNext + 1) + "/" + mDemos.length() + "] " + d.optString("title", id) + " (" + d.getString("orientation") + ")");
             if (!hasLibrary(lib)) {
-                record(id, "missing", 0.0);
+                // Built for PCs only (physics_demo needs FEMFX): not a failure.
+                record(run, "skipped", 0.0, "not built for this platform");
                 mNext++;
                 startNext();
                 return;
             }
-            String[] env = environment(d, id);
+            String[] env = environment(d, id, run);
             Intent intent = new Intent(this, GameActivity.class);
             intent.putExtra(GameActivity.EXTRA_GAME, lib);
             intent.putExtra(GameActivity.EXTRA_ENV, env);
@@ -288,15 +301,16 @@ public class BenchmarkActivity extends Activity {
 
     // What kke_benchmark gives each demo on a PC, plus the log file (a PC
     // launcher captures the demo's output; here the demo writes it).
-    private String[] environment(JSONObject d, String id) throws JSONException {
+    private String[] environment(JSONObject d, String id, String run) throws JSONException {
         List<String> env = new ArrayList<>();
         env.add("KKE_BENCHMARK=" + d.getDouble("seconds"));
         env.add("KKE_BENCH_WARMUP=" + d.getDouble("warmup"));
         env.add("KKE_BENCH_DIR=" + new File(mRunDir, "reports").getAbsolutePath());
-        env.add("KKE_BENCH_NAME=" + id);
+        env.add("KKE_BENCH_NAME=" + run);
         env.add("KKE_BENCH_ITEM=" + id);
+        env.add("KKE_ORIENTATION=" + d.getString("orientation"));
         env.add("KKE_SKIP_INTRO=1");
-        env.add("KKE_LOG_FILE=" + new File(new File(mRunDir, "logs"), id + ".log").getAbsolutePath());
+        env.add("KKE_LOG_FILE=" + new File(new File(mRunDir, "logs"), run + ".log").getAbsolutePath());
         JSONObject extra = d.optJSONObject("env");
         if (extra != null) {
             for (Iterator<String> keys = extra.keys(); keys.hasNext();) {
@@ -320,12 +334,15 @@ public class BenchmarkActivity extends Activity {
         }
     }
 
-    private void record(String id, String status, double wallSeconds) {
+    private void record(String id, String status, double wallSeconds, String reason) {
         try {
             JSONObject run = new JSONObject();
             run.put("id", id);
             run.put("status", status);
             run.put("wall_s", Math.round(wallSeconds * 10.0) / 10.0);
+            if (reason != null) {
+                run.put("reason", reason);
+            }
             mRuns.put(run);
             writeFile(new File(mRunDir, "runs.json"), mRuns.toString(1));
         } catch (JSONException | IOException e) {
@@ -340,9 +357,9 @@ public class BenchmarkActivity extends Activity {
             mHandler.removeCallbacks(mWatchdog);
             double wall = (SystemClock.elapsedRealtime() - mStartedAt) / 1000.0;
             try {
-                String id = mDemos.getJSONObject(mNext).getString("id");
-                boolean reported = new File(new File(mRunDir, "reports"), id + ".json").exists();
-                record(id, mHung ? "hung" : reported ? "ok" : "crashed", wall);
+                String run = mDemos.getJSONObject(mNext).getString("run");
+                boolean reported = new File(new File(mRunDir, "reports"), run + ".json").exists();
+                record(run, mHung ? "hung" : reported ? "ok" : "crashed", wall, null);
             } catch (JSONException e) {
                 setStatus("The benchmark suite is broken: " + e.getMessage());
             }
@@ -351,7 +368,15 @@ public class BenchmarkActivity extends Activity {
         } else if (requestCode == REQUEST_COLLECT) {
             File newest = newestResult();
             if (newest != null) {
-                done(newest);
+                List<File> files = new ArrayList<>();
+                files.add(newest);
+                // The screenshots of the best and worst moments, when kke_benchmark made them.
+                String stem = newest.getName().substring(0, newest.getName().length() - ".json".length());
+                File shots = new File(mResultsDir, stem + "-shots.zip");
+                if (shots.exists()) {
+                    files.add(shots);
+                }
+                done(files);
             } else {
                 zipAndFinish("kke_benchmark could not write the results file");
             }
@@ -398,7 +423,9 @@ public class BenchmarkActivity extends Activity {
             setStatus("Could not write the results: " + e.getMessage());
             return;
         }
-        done(zip);
+        List<File> files = new ArrayList<>();
+        files.add(zip);
+        done(files);
         if (problem != null) {
             setStatus(mStatus.getText() + "\n(" + problem + ")");
         }
@@ -426,16 +453,28 @@ public class BenchmarkActivity extends Activity {
         }
     }
 
-    private void done(File result) {
-        mResultFile = result;
+    private void done(List<File> results) {
+        mResultFiles.clear();
+        mResultFiles.addAll(results);
         int ok = 0;
+        int skipped = 0;
         for (int i = 0; i < mRuns.length(); i++) {
-            if ("ok".equals(mRuns.optJSONObject(i).optString("status"))) {
+            String status = mRuns.optJSONObject(i).optString("status");
+            if ("ok".equals(status)) {
                 ok++;
+            } else if ("skipped".equals(status)) {
+                skipped++;
             }
         }
-        String saved = saveToDownloads(result);
-        setStatus("Done: " + ok + " of " + mRuns.length() + " demos ran fine.\n" + result.getName()
+        String saved = null;
+        StringBuilder names = new StringBuilder();
+        for (File f : results) {
+            String s = saveToDownloads(f);
+            saved = saved != null ? saved : s;
+            names.append('\n').append(f.getName());
+        }
+        setStatus("Done: " + ok + " of " + (mRuns.length() - skipped) + " runs went fine"
+                + (skipped > 0 ? " (" + skipped + " skipped: not made for phones)" : "") + "." + names
                 + (saved != null ? "\nA copy is in " + saved + "." : ""));
         mFull.setEnabled(true);
         mQuick.setEnabled(true);
@@ -477,13 +516,23 @@ public class BenchmarkActivity extends Activity {
     }
 
     private void share() {
-        if (mResultFile == null) {
+        if (mResultFiles.isEmpty()) {
             return;
         }
-        Uri uri = ResultsProvider.uriFor(this, mResultFile);
-        Intent send = new Intent(Intent.ACTION_SEND);
-        send.setType(mimeType(mResultFile));
-        send.putExtra(Intent.EXTRA_STREAM, uri);
+        Intent send;
+        if (mResultFiles.size() == 1) {
+            send = new Intent(Intent.ACTION_SEND);
+            send.setType(mimeType(mResultFiles.get(0)));
+            send.putExtra(Intent.EXTRA_STREAM, ResultsProvider.uriFor(this, mResultFiles.get(0)));
+        } else {
+            ArrayList<Uri> uris = new ArrayList<>();
+            for (File f : mResultFiles) {
+                uris.add(ResultsProvider.uriFor(this, f));
+            }
+            send = new Intent(Intent.ACTION_SEND_MULTIPLE);
+            send.setType("*/*");
+            send.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
+        }
         send.putExtra(Intent.EXTRA_SUBJECT, "KKE benchmark: " + Build.MANUFACTURER + " " + Build.MODEL);
         send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         startActivity(Intent.createChooser(send, "Send the benchmark results"));

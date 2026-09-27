@@ -22,6 +22,9 @@ namespace kke {
 
 namespace {
 
+// The folded-up panel's width at most (dp): room for a title and its hint.
+constexpr float kCollapsedWidth = 200.0f;
+
 // The panel draws itself (no theme file): it has to look the same in
 // every game that adds it. Only the panel takes the mouse; the rest of
 // the screen stays the game's.
@@ -32,7 +35,7 @@ const char* kPanelRml = R"(
     <style>
         body { font-family: Noto Sans; color: #e8ecf4; pointer-events: none; width: 100%; height: 100%; }
         div { display: block; }
-        #panel { position: absolute; top: 12dp; max-height: 94%; overflow-y: auto; pointer-events: auto;
+        #panel { position: absolute; top: 12dp; max-height: 94%; max-width: 92%; overflow-y: auto; pointer-events: auto;
                  padding: 8dp 10dp 8dp 10dp; border-radius: 10dp; background-color: #0e1322e6; border: 1dp #2f3a5c; }
         #panel.active { border-color: #7a9bff; }
         #title { font-size: 14dp; font-weight: bold; letter-spacing: 1dp; color: #ffffff; padding: 2dp 4dp; cursor: pointer; }
@@ -439,7 +442,6 @@ void DemoPanelModule::build() {
     }
     if (m_titleEl) m_titleEl->SetInnerRML(escapeRmlText(m_title));
     if (m_doc) {
-        m_doc->GetElementById("panel")->SetProperty("width", std::to_string(static_cast<int>(m_width)) + "dp");
         m_doc->GetElementById("panel")->SetProperty(m_side == Side::Left ? "left" : "right", "12dp");
     }
     m_hintShown.clear();
@@ -449,7 +451,14 @@ void DemoPanelModule::build() {
 void DemoPanelModule::applyState() {
     if (!m_doc) return;
     Rml::Element* panel = m_doc->GetElementById("panel");
-    if (panel) panel->SetClass("active", m_state == State::Active);
+    if (panel) {
+        panel->SetClass("active", m_state == State::Active);
+        // Folded up it's only the title and one hint line, so it takes less
+        // room: on a narrow screen (a phone upright) it leaves the game's
+        // own corner panels alone.
+        const float width = m_state == State::Collapsed ? std::min(m_width, kCollapsedWidth) : m_width;
+        panel->SetProperty("width", std::to_string(static_cast<int>(width)) + "dp");
+    }
     if (m_rowsEl) m_rowsEl->SetProperty("display", m_state == State::Collapsed ? "none" : "block");
     for (size_t i = 0; i < m_rows.size(); ++i)
         if (m_rows[i].el) m_rows[i].el->SetClass("focused", m_state == State::Active && i == m_focus);

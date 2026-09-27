@@ -67,7 +67,7 @@ def one(data):
         hitches = (s.get("hitches") or {}).get("count")
         print(f"{d['id']:<18}{status:<16}{fmt(s.get('fps_avg')):>7}{fmt(s.get('fps_1pct_low')):>8}{fmt(frame.get('p99')):>8}"
               f"{fmt(gpu.get('avg')):>8}{'-' if hitches is None else hitches:>8}{fmt(frame.get('max')):>9}  {where}")
-    problems = [d for d in data["demos"] if d["status"] not in ("ok", "missing") or d["log"]["errors"]]
+    problems = [d for d in data["demos"] if d["status"] not in ("ok", "missing", "skipped") or d["log"]["errors"]]
     if problems:
         print("\nProblems")
         for d in problems:

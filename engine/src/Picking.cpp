@@ -9,7 +9,13 @@
 namespace kke {
 
 glm::mat4 engineProjection(float fovDegrees, float aspect, float nearPlane, float farPlane) {
-    glm::mat4 proj = glm::perspective(glm::radians(fovDegrees), aspect, nearPlane, farPlane);
+    // The field of view is vertical on a wide screen. On a tall one (a phone
+    // held upright) the same angle across would leave a narrow slit of the
+    // world, so there it is the horizontal angle instead: the view grows
+    // upward (the usual "vert+" rule), the same at a square screen either way.
+    float fovY = glm::radians(fovDegrees);
+    if (aspect > 0.0f && aspect < 1.0f) fovY = 2.0f * std::atan(std::tan(fovY * 0.5f) / aspect);
+    glm::mat4 proj = glm::perspective(fovY, aspect, nearPlane, farPlane);
     proj[1][1] *= -1.0f;
     return proj;
 }

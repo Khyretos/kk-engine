@@ -23,8 +23,8 @@ computer. It ships in every download in its own `benchmark/` folder,
 beside the demos it runs, so the steps for a friend are: unpack, open
 `benchmark/`, double-click `kke_benchmark` (on Linux, run
 `./benchmark/kke_benchmark` in a terminal), leave the mouse alone for
-about ten minutes, send back the `.json` file from the `results` folder
-that opens at the end. README.txt in the download says the same. In a
+about ten minutes, send back the `.json` file and the `-shots.zip` from
+the `results` folder that opens at the end. README.txt in the download says the same. In a
 build tree it is `bin/benchmark/kke_benchmark`.
 
 It plays every demo in [`benchmarks/suite.yaml`](../benchmarks/suite.yaml)
@@ -58,7 +58,11 @@ kke_benchmark --collect RUN_DIR --suite FILE [--out DIR] [--only ids] [--seconds
 
 `RUN_DIR/runs.json` lists what was run:
 `[{"id": "duel", "status": "ok", "wall_s": 31.2, "exit_code": 0}, ...]`
-(status one of the statuses below; `exit_code` may be null). Each demo's
+(status one of the statuses below; `exit_code` may be left out or null;
+`"skipped"` takes a `reason`). An id may be `<suite id>@<variant>` when
+one entry is run several ways (the phone runs `duel@portrait` and
+`duel@landscape`). Screenshots are read from `RUN_DIR/reports/shots/`
+(`KKE_BENCH_DIR/shots/`, where the recorder writes them). Each demo's
 report is `RUN_DIR/reports/<id>.json` and its log `RUN_DIR/logs/<id>.log`
 (both optional: a missing report reads as `no_report`, a demo absent from
 runs.json as `missing`). Results go to `--out`, by default RUN_DIR's
@@ -66,14 +70,17 @@ parent folder.
 
 ### The results file
 
-`benchmark/results/kke-benchmark-<date>_<time>.json` (plus a `.txt` of the
-same for people, and `run_<stamp>/` with each demo's full log and report):
+`benchmark/results/kke-benchmark-<date>_<time>.json`, plus a `.txt` of the
+same for people, `kke-benchmark-<date>_<time>-shots.zip` with each demo's
+screenshots, and `run_<stamp>/` with each demo's full log and report:
 
 | Key | What |
 |---|---|
 | `system` | OS and version, CPU, usable cores, RAM, GPU, type, VRAM, driver name and version, Vulkan version, display, engine version and commit, build type |
-| `vulkan` | Whether a Vulkan driver exists, every GPU it lists, and a plain-words `problem` when none can run the demos |
-| `demos[].status` | `ok`, `broken_modules` (ran, but a module threw and was switched off), `ended_early`, `crashed`, `hung`, `no_report`, `missing` (not in this download), `failed_to_start` |
+| `vulkan` | Whether a Vulkan driver exists, every GPU it lists (`usable`: Vulkan 1.1+, a graphics queue and swapchains, what the engine needs), and a plain-words `problem` when none can run the demos |
+| `demos[].status` | `ok`, `broken_modules` (ran, but a module threw and was switched off), `ended_early`, `crashed`, `hung`, `no_report`, `missing` (not in this download), `skipped` (the launcher didn't run it, with a `reason`), `failed_to_start` |
+| `demos[].variant` | Collect mode: the part after `@` in a run id (`duel@portrait` runs the `duel` entry in portrait); `suite_id` is the entry |
+| `screenshots_zip` | The zip of every demo's screenshots, next to this file |
 | `demos[].exit` | The exit code in words: an illegal instruction (the CPU lacks AVX2), access violation, missing DLL, killed... |
 | `demos[].log` | Warning and error counts, every distinct warning/error text with how often it came, and the last 80 log lines when the demo didn't finish |
 | `demos[].report.summary` | fps average, 1% and 0.1% lows, frame time avg/p50/p95/p99/max, GPU time, verdict, `sim_behind_frames` (frames where the fixed-step simulation hit its cap and fell behind real time), memory at start/peak/end, hitch counts |
@@ -81,7 +88,20 @@ same for people, and `run_<stamp>/` with each demo's full log and report):
 | `demos[].report.stages_ms` | Where a frame's time goes: `events`, `simulate` (fixed ticks), `update`, `gpu_wait` (waiting for the GPU to free a frame), `record` (building the frame), `present` (submit + present), `idle` |
 | `demos[].report.modules` | Every module's cost per frame, its worst frame, its worst single call and which call that was, and its `init()` time |
 | `demos[].report.per_second` | One row per second: fps, frame avg/max, GPU, each stage, memory, hitches |
+| `demos[].report.screenshots` | The pictures the demo took of itself: `kind` (`worst-frame`, `slowest-second`, `fastest-second`, `view-1-of-3`...), `file`, `t_s`, `value` (ms or fps) |
 | `demos[].report.hitches` | Every hitch (up to 200): when (seconds and wall-clock time), how long against the median, severity (`minor` < 50 ms, `major` < 250 ms, `freeze`), a `cause` in words (the stage that grew and the module call that dominated it), the stage split, the three most expensive calls, GPU time, memory change, window events that frame, and `log_near`: the log lines written within a second of it |
+
+**Screenshots.** Each demo pictures itself (3D and UI, what the player
+sees) at the moments that matter: the slowest frame, the slowest and the
+fastest whole second, and three views at 10%, 50% and 90% of the measured
+time. The moment is only known once it has happened, so the picture is of
+the next frame, a few milliseconds later. Names say what and when:
+`duel_worst-frame_352ms_at-43.4s.jpg`. A later record of the same kind
+replaces the earlier picture, so there are at most six per demo. The
+frames that copy or read back a picture aren't measured
+(`summary.screenshot_frames` counts them), and the JPEGs are written after
+measuring, so the pictures don't change the numbers. `KKE_BENCH_SHOTS=0`
+turns them off.
 
 A **hitch** is a frame slower than both twice the median of the last 61
 frames and that median + 8 ms, so a steady 25 fps is slow but not

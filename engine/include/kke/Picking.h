@@ -18,7 +18,8 @@ struct Ray {
 // `proj` must include the Vulkan Y flip, i.e. exactly what's rendered with.
 Ray screenToRay(const glm::vec2& pixel, const glm::vec2& viewport, const glm::mat4& view, const glm::mat4& proj);
 
-// Projection the engine renders with, for a given camera setup.
+// Projection the engine renders with, for a given camera setup: fovDegrees
+// is vertical, or horizontal on a screen taller than wide (vert+).
 glm::mat4 engineProjection(float fovDegrees, float aspect, float nearPlane, float farPlane);
 
 // Distance along the ray to the horizontal plane y = planeY, or a
