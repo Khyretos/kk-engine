@@ -88,6 +88,38 @@ def looks_like_paid_art(rel):
     return low.endswith((".fbx", ".unitypackage", ".prefab", ".controller", ".mat"))
 
 
+BENCHMARK_COLLECTOR = "kke_benchmark"
+
+
+def benchmark_suite(bin_dir):
+    """The benchmark suite (benchmarks/suite.yaml) as JSON with every
+    default filled in, for BenchmarkActivity."""
+    try:
+        import yaml
+    except ImportError:
+        die("--benchmark needs PyYAML (apt install python3-yaml) to read the benchmark suite")
+    path = bin_dir / "benchmark" / "benchmark_suite.yaml"
+    if not path.is_file():
+        path = REPO / "benchmarks" / "suite.yaml"
+    suite = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    defaults = suite.get("defaults") or {}
+    demos = []
+    for d in suite.get("demos") or []:
+        demos.append({
+            "id": d["id"],
+            "exe": d.get("exe", d["id"]),
+            "title": d.get("title", d["id"]),
+            "seconds": float(d.get("seconds", defaults.get("seconds", 20))),
+            "warmup": float(d.get("warmup", defaults.get("warmup", 3))),
+            "env": {str(k): str(v) for k, v in (d.get("env") or {}).items()},
+            "synty": bool(d.get("synty", False)),
+            "quick": bool(d.get("quick", True)),
+        })
+    if not demos:
+        die(f"{path} lists no demos")
+    return {"load_timeout": float(defaults.get("load_timeout", 120)), "demos": demos}
+
+
 def is_elf(path):
     with open(path, "rb") as f:
         return f.read(4) == b"\x7fELF"
@@ -128,6 +160,8 @@ def main():
     ap.add_argument("--build", required=True, help="the Android CMake build folder (build-android-arm64)")
     ap.add_argument("--out", required=True, help="the .apk to write")
     ap.add_argument("--game", action="append", default=[], help="a game to include (its CMake target); repeat for more; default: all")
+    ap.add_argument("--benchmark", action="store_true",
+                    help="the benchmark app: every game, started by the benchmark screen that runs the suite and shares the results")
     ap.add_argument("--label", default="", help="the app's name on the phone (default: the game's title, or 'KKE Demos')")
     ap.add_argument("--package", default="", help="Android package id (default: com.kreativekompas.kke.<game> or .demos)")
     ap.add_argument("--version-name", default="", help="default: git describe")
@@ -164,16 +198,26 @@ def main():
         die(f"{sdl_java} is missing: SDL's Java sources come with the SDL source the build fetched")
 
     available = sorted(p.name[3:-3] for p in lib_dir.glob("lib*.so"))
-    games = args.game or available
+    # kke_benchmark is not a game: in the benchmark app it only turns the
+    # demos' reports into the results file (BenchmarkActivity).
+    games = args.game or [g for g in available if g != BENCHMARK_COLLECTOR]
+    if args.benchmark and BENCHMARK_COLLECTOR in available and BENCHMARK_COLLECTOR not in games:
+        games.append(BENCHMARK_COLLECTOR)
     for g in games:
         if g not in available:
             die(f"no lib{g}.so in {lib_dir} (built: {', '.join(available)})")
     if not games:
         die(f"no games in {lib_dir}")
-    single = len(games) == 1
+    single = len(games) == 1 and not args.benchmark
 
-    label = args.label or (game_title(bin_dir, games[0]) if single else "KKE Demos")
-    package = args.package or ("com.kreativekompas.kke." + (re.sub(r"[^a-z0-9_]", "_", games[0].lower()) if single else "demos"))
+    if args.benchmark:
+        label, suffix = "KKE Benchmark", "benchmark"
+    elif single:
+        label, suffix = game_title(bin_dir, games[0]), re.sub(r"[^a-z0-9_]", "_", games[0].lower())
+    else:
+        label, suffix = "KKE Demos", "demos"
+    label = args.label or label
+    package = args.package or f"com.kreativekompas.kke.{suffix}"
     version_name = args.version_name or git("describe", "--tags", "--always") or "dev"
     version_code = args.version_code or int(git("rev-list", "--count", "HEAD") or "1")
 
@@ -184,17 +228,17 @@ def main():
 
     # --- Manifest -------------------------------------------------------
     launcher_intent = '<intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>'
+    start = "benchmark" if args.benchmark else "game" if single else "launcher"
     values = {
         "PACKAGE": package,
         "VERSION_CODE": str(version_code),
         "VERSION_NAME": version_name,
         "LABEL": label.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;"),
         "DEFAULT_GAME": games[0],
-        "LAUNCHER_EXPORTED": "false" if single else "true",
-        "LAUNCHER_INTENT": "" if single else launcher_intent,
-        "GAME_EXPORTED": "true" if single else "false",
-        "GAME_INTENT": launcher_intent if single else "",
     }
+    for activity in ("launcher", "game", "benchmark"):
+        values[f"{activity.upper()}_EXPORTED"] = "true" if activity == start else "false"
+        values[f"{activity.upper()}_INTENT"] = launcher_intent if activity == start else ""
     manifest = (HERE / "AndroidManifest.xml").read_text(encoding="utf-8")
     manifest = re.sub(r"@([A-Z_]+)@", lambda m: values[m.group(1)], manifest)
     (work / "AndroidManifest.xml").write_text(manifest, encoding="utf-8")
@@ -241,6 +285,8 @@ def main():
         bundle.append((len(text.encode("utf-8")), name))
     build_id = f"{version_name} {version_code} {git('rev-parse', 'HEAD') or 'unknown'}"
     (assets / "kke_bundle.txt").write_text(f"bundle {build_id}\n" + "".join(f"{size} {rel}\n" for size, rel in bundle), encoding="utf-8")
+    if args.benchmark:
+        (assets / "kke_suite.json").write_text(json.dumps(benchmark_suite(bin_dir), indent=1), encoding="utf-8")
     (assets / "kke_games.txt").write_text("".join(f"{g}\t{game_title(bin_dir, g)}\n" for g in games), encoding="utf-8")
 
     # --- Link, then add the code and the native libraries ----------------

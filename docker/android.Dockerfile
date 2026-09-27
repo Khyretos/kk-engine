@@ -7,7 +7,7 @@ FROM ubuntu:24.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        cmake ninja-build git ca-certificates curl unzip python3 openjdk-17-jdk-headless \
+        cmake ninja-build git ca-certificates curl unzip python3 python3-yaml openjdk-17-jdk-headless \
     && rm -rf /var/lib/apt/lists/*
 
 ARG NDK_VERSION=r27c

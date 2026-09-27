@@ -1,4 +1,5 @@
 #include "kke/ModelAsset.h"
+#include "kke/CookedFile.h"
 
 #include <ufbx.h>
 
@@ -99,8 +100,15 @@ ModelData loadModel(const std::string& path, const ModelLoadOptions& options) {
     opts.load_external_files = true;
     opts.ignore_missing_external_files = true;
 
+    // Through kke::cooked so cooked art (docs/COOKED_ART.md) loads too;
+    // the file name still resolves external files next to it.
+    std::vector<uint8_t> bytes;
+    std::string readError;
+    if (!cooked::readAssetFile(path, bytes, &readError)) throw std::runtime_error("loadModel: " + readError);
+    opts.filename.data = path.c_str();
+    opts.filename.length = path.size();
     ufbx_error error{};
-    ufbx_scene* scene = ufbx_load_file(path.c_str(), &opts, &error);
+    ufbx_scene* scene = ufbx_load_memory(bytes.data(), bytes.size(), &opts, &error);
     if (!scene) {
         throw std::runtime_error("loadModel: '" + path + "': " + std::string(error.description.data, error.description.length));
     }

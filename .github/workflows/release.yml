@@ -240,7 +240,8 @@ jobs:
           .\kke_tests.exe --gtest_brief=1
           if ($LASTEXITCODE -ne 0) { throw "kke_tests failed with exit code $LASTEXITCODE" }
 
-  # The demos APK for Android phones (docs/ANDROID.md), signed with the
+  # The demos APK and the benchmark APK for Android phones
+  # (docs/ANDROID.md), signed with the
   # project key when the repository has it (ANDROID_KEYSTORE_* secrets).
   android:
     runs-on: ubuntu-24.04
@@ -253,7 +254,7 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.2.12479018" "platforms;android-35" "build-tools;35.0.0" > /dev/null
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ninja-build
+          sudo apt-get install -y -qq ninja-build python3-yaml
 
       - name: Configure
         run: |
@@ -277,8 +278,10 @@ jobs:
             ks=(--keystore "$RUNNER_TEMP/kke.keystore")
           fi
           apk="dist/kk-engine-$VERSION-android-arm64.apk"
+          bench="dist/kk-engine-benchmark-$VERSION-android-arm64.apk"
           python3 android/build_apk.py --build build-android-arm64 --out "$apk" --version-name "$VERSION" "${ks[@]}" 2>&1 | tee apk.log
-          (cd dist && sha256sum "$(basename "$apk")" > "$(basename "$apk").sha256")
+          python3 android/build_apk.py --build build-android-arm64 --benchmark --out "$bench" --version-name "$VERSION" "${ks[@]}" 2>&1 | tee -a apk.log
+          (cd dist && for f in *.apk; do sha256sum "$f" > "$f.sha256"; done)
 
       - name: No warnings anywhere
         run: tools/ci/check_warnings.sh configure.log build.log apk.log

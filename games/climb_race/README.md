@@ -64,7 +64,7 @@ can be rebound (they are saved in `climb_race_input.json`).
 | Walk / run | left stick | WASD |
 | Look | right stick | mouse (click the view first to capture it) |
 | Sprint | click the left stick (toggle) | Left Shift (hold) |
-| Walk slowly | no controller binding | Left Alt (hold) |
+| Walk slowly | click the right stick (toggle) | Left Alt (hold) |
 | Jump | A | Space |
 | Grab the rock | LB / RB, or a trigger | Q / E, or a mouse button |
 
@@ -84,13 +84,15 @@ can be rebound (they are saved in `climb_race_input.json`).
 | Next mountain | Y | N |
 | Back to the menu (players, mountain, mode) | Back | M |
 | Developer panels (network, stats) | no controller binding | F1 |
+| Ping the surroundings (hear the walls) | no controller binding (the D-pad moves through the menu) | G |
 | Let go of the mouse | (none needed) | Esc |
 
 The left side of the pad (and the left mouse button, Q) is the left hand;
 the right side is the right hand. `init` gives all four player maps
 `InputModule::defineCharacterActions` (move, look, jump, sprint, walk and
 the rest), clears the bindings of `fire`, `aim`, `interact` and `crouch`
-(those buttons are the hands here), and adds `grab.left` / `grab.right`
+(those buttons are the hands here) and of `camera.toggle` and `audio.ping`
+(Q is a hand, so the ping moves to G; the right stick click walks), and adds `grab.left` / `grab.right`
 (1D axes: the triggers with a 0.05 dead zone, and the mouse buttons),
 `reach.left` / `reach.right`, `letgo`, `race.again`, `race.new`, `menu`,
 `panels` and `help`.

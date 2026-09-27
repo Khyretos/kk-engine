@@ -1,4 +1,5 @@
 #include "kke/Texture.h"
+#include "kke/CookedFile.h"
 #include "kke/TextureMips.h"
 #include "kke/VulkanDevice.h"
 #include "kke/VulkanCheck.h"
@@ -23,7 +24,11 @@ Texture::Texture(VulkanDevice& device, const std::string& filePath) : m_device(d
     // Forcing 4 channels (RGBA), same reasoning as
     // RmlVulkanRenderInterface::LoadTexture: matches this class's own
     // fixed VK_FORMAT_R8G8B8A8_SRGB exactly.
-    stbi_uc* pixels = stbi_load(filePath.c_str(), &width, &height, &channels, 4);
+    // Through kke::cooked so cooked art (docs/COOKED_ART.md) loads too.
+    std::vector<uint8_t> bytes;
+    std::string readError;
+    if (!cooked::readAssetFile(filePath, bytes, &readError)) throw std::runtime_error("kke::Texture: " + readError);
+    stbi_uc* pixels = stbi_load_from_memory(bytes.data(), static_cast<int>(bytes.size()), &width, &height, &channels, 4);
     if (!pixels) {
         throw std::runtime_error("kke::Texture: failed to load '" + filePath + "' (" +
                                   (stbi_failure_reason() ? stbi_failure_reason() : "unknown reason") + ")");

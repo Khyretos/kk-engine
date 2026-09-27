@@ -6,6 +6,7 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <iterator>
@@ -346,7 +347,9 @@ void captureConsoleOutput() {
         dup2(fds[1], STDOUT_FILENO);
         dup2(fds[1], STDERR_FILENO);
         close(fds[1]);
-        std::thread([fd = fds[0]] {
+        std::FILE* file = nullptr;
+        if (const char* path = SDL_getenv("KKE_LOG_FILE"); path && *path) file = std::fopen(path, "ab");
+        std::thread([fd = fds[0], file] {
             char buf[1024];
             std::string line;
             ssize_t n;
@@ -356,7 +359,18 @@ void captureConsoleOutput() {
                         line += buf[i];
                         continue;
                     }
-                    __android_log_write(ANDROID_LOG_INFO, "kke", line.c_str());
+                    // The engine's lines carry their level: "...][warning]: ".
+                    int priority = ANDROID_LOG_INFO;
+                    if (line.find("][warning]") != std::string::npos) priority = ANDROID_LOG_WARN;
+                    else if (line.find("][error]") != std::string::npos || line.find("][critical]") != std::string::npos ||
+                             line.find("Fatal error") != std::string::npos)
+                        priority = ANDROID_LOG_ERROR;
+                    __android_log_write(priority, "kke", line.c_str());
+                    if (file) {
+                        line += '\n';
+                        std::fwrite(line.data(), 1, line.size(), file);
+                        std::fflush(file); // the process may be killed at any moment (a hang)
+                    }
                     line.clear();
                 }
             }
