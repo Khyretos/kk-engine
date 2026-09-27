@@ -870,6 +870,11 @@ endif()
 if(KKE_ENABLE_JOLT)
     add_subdirectory(games/climb_race)
 endif()
+# Procedural animation: creatures with no clips, hit reactions on joint
+# motors (games/procedural_demo/README.md). Jolt: the ground and ragdolls.
+if(KKE_ENABLE_JOLT)
+    add_subdirectory(games/procedural_demo)
+endif()
 
 # The starter template (docs/tutorials/getting-started.md), and games made
 # from it with tools/new_game, which lists them in games/my_games.cmake.

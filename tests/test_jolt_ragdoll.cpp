@@ -365,3 +365,35 @@ TEST(JoltRagdoll, ActiveRagdollStaysStandingAndLimpOneFalls) {
         }
     }
 }
+
+TEST(JoltRagdoll, BallJointMotorsReachTheirTarget) {
+    kke::RigidWorld w(single());
+    const kke::RagdollDesc d = humanoid(glm::vec3(0, 20, 0)); // free fall: only the motors act
+    auto id = w.addRagdoll(d, glm::vec3(0.0f));
+    ASSERT_NE(id, 0u);
+    const int torso = d.findBody("torso"), pelvis = d.findBody("pelvis");
+    int spine = -1;
+    for (size_t j = 0; j < d.joints.size(); ++j)
+        if (d.joints[j].bodyA == pelvis && d.joints[j].bodyB == torso) spine = static_cast<int>(j);
+    ASSERT_GE(spine, 0);
+    kke::RagdollDrive drive;
+    for (const auto& b : d.bodies) drive.targets.push_back(b.transform);
+    drive.jointStrength.assign(d.joints.size(), 1.0f);
+    // Everything above the pelvis leans 30 degrees forward about the spine joint.
+    const glm::vec3 anchor = d.joints[spine].anchor;
+    const glm::mat4 lean = glm::translate(glm::mat4(1.0f), anchor) * glm::mat4_cast(glm::angleAxis(glm::radians(30.0f), glm::vec3(1, 0, 0))) *
+                           glm::translate(glm::mat4(1.0f), -anchor);
+    for (size_t b = 0; b < d.bodies.size(); ++b)
+        if (d.bodies[b].transform[3].y > anchor.y + 0.01f) drive.targets[b] = lean * drive.targets[b];
+    for (int i = 0; i < 120; ++i) {
+        ASSERT_TRUE(w.driveRagdoll(id, drive));
+        w.step(1.0f / 60.0f);
+    }
+    std::vector<glm::mat4> now;
+    ASSERT_TRUE(w.ragdollTransforms(id, now));
+    // The torso's orientation relative to the pelvis, compared with the target's.
+    auto rot = [](const glm::mat4& m) { return glm::quat_cast(glm::mat3(m)); };
+    const glm::quat got = glm::inverse(rot(now[pelvis])) * rot(now[torso]);
+    const glm::quat want = glm::inverse(rot(drive.targets[pelvis])) * rot(drive.targets[torso]);
+    EXPECT_LT(glm::degrees(glm::angle(glm::normalize(glm::inverse(want) * got))), 6.0f);
+}

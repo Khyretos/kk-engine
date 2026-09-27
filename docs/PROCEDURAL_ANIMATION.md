@@ -5,8 +5,9 @@ find the ground, animals with any number of legs that walk, trot and gallop
 without a single walk clip, heads that turn toward what they notice, and
 bodies that stagger when hit and catch themselves (or don't).
 
-> **Status (2026-09-27):** the engine side (everything below except the
-> play-to-make blocks and the demo) is on main and tested.
+> **Status (2026-09-27):** done: the engine side, the play-to-make blocks
+> (Shove, Look at, Look away) and `games/procedural_demo` are on main and
+> tested.
 
 Everything lives in [`kke/ProceduralAnim.h`](../engine/include/kke/ProceduralAnim.h)
 (the reference) on top of what was already there:
@@ -170,8 +171,8 @@ and both recover over time. Too far off balance (the torso leaning more than
 and it goes limp, lies there for `getUpDelay`, then blends back to the clip.
 
 ```
-Animated --hit()--> Active --steady for calmSeconds--> Animated
-                      \--off balance--> Fallen --getUpDelay--> GettingUp --> Animated
+Animated --hit()--> Active --steady for calmSeconds--> GettingUp --> Animated
+                      \--off balance--> Fallen --getUpDelay--/
 ```
 
 ```cpp
@@ -194,28 +195,76 @@ else if (handle) { ragdolls->destroyRagdoll(handle); handle = 0; }
 `IRagdollPhysics::driveRagdoll` is implemented by the Jolt module
 (`RigidBodyModule`): swing-twist and hinge motors in position mode, torque
 limited by strength (`torquePerKg` × the heavier body's mass at full
-strength), plus an optional pull on one body straight to its target
-(`assist`, the pelvis) that is what keeps a hit character on its feet and
-goes away when balance is lost. FEMFX ragdolls have no motors: there
+strength), plus an optional pull on a few bodies straight to their targets
+(`assistBodies` and `assist`: the pelvis, and the chest too on four legs,
+with gravity fed forward so it doesn't sag) that is what keeps a hit
+character on its feet and goes away when balance is lost. It is applied
+before every physics step, so it holds the same at 20 fps as at 144. FEMFX ragdolls have no motors: there
 `driveRagdoll` returns false and characters simply go limp.
+
+## On any model: `ModelModule::setPoseModifier`
+
+A skinned model playing a clip can have a procedural layer on top: the
+modifier gets the clip's pose as model-space bone matrices each frame and
+changes them, and that is what is skinned and what `boneWorld()` returns.
+`poseFromModel` turns the matrices into the per-bone pose the layers here
+take (and `poseToModel` back):
+
+```cpp
+models.setPoseModifier(instance, [&](std::vector<glm::mat4>& bones, float dt) {
+    kke::Pose pose = kke::poseFromModel(model, bones);
+    look.apply(model, pose, &targetInModelSpace, dt);
+    bones = kke::poseToModel(model, pose);
+});
+```
+
+It is skipped while a ragdoll (`setBoneWorldOverride`) drives the skeleton.
+
+## Driven by the AI
+
+`kke::ai::Agent` ([AI.md](AI.md)) already says what each animal wants, so a
+rig reads it rather than keeping its own state:
+
+| Agent field | Drives |
+| --- | --- |
+| `position`, `yaw`, `velocity` | `ProceduralGait::update(body, velocity, turnRate, ground, dt)`: the body frame from position and yaw, the gait (walk, trot, gallop) from the speed |
+| `anim` | the layer on top: `eat`/`drink`/`sniff` lower the head (`LookAt` at the ground in front), `rest` lowers the body (`GaitSettings`), `attack` is a lunge, `alert` holds still and looks |
+| `hasLookAt`, `lookAt` | `LookAt::apply` (neck and head), `nullptr` when `hasLookAt` is false |
+| `enabled = false` | ragdolled: hand the body to `ActiveRagdoll` and give it back on `Animated` |
+
+Turn rate is the change in `yaw` over the frame. A hit on an animal is
+`ActiveRagdoll::hit`; while it is `physical()` set `enabled = false` so the
+AI doesn't steer a body it doesn't control.
 
 ## Play-to-make
 
-Following [PLAY_TO_MAKE.md](PLAY_TO_MAKE.md), the same blocks are open at all
-three levels:
+Following [PLAY_TO_MAKE.md](PLAY_TO_MAKE.md), the same blocks are open at the
+node and Lua levels, and the Simple level gets them through its recipes:
 
-| Simple (drag and drop) | Node | Lua |
+| Node ("People") | Lua | What happens |
 | --- | --- | --- |
-| Bat a person: they stagger, catch themselves or fall | "Stagger" | `play.stagger(thing, push)` |
-| — | "Look at" | `play.lookAt(thing, target)` / `play.lookAt(thing)` to stop |
-| — | "Walk like" | `play.gait(thing, "trot")` |
+| "Shove" | `play.stagger(thing [, push])` | They stagger and try to keep their feet (joint motors toward the pose they had); a big shove (about 4 m/s and up) still knocks them over, and they get up again by themselves where they landed. `FellOver` / `StoodUp` fire as usual. The bat still knocks them flat, even mid-stagger. |
+| "Look at" | `play.lookAt(thing [, at])` | They keep turning head and upper spine toward `at`: a thing (followed as it moves), a place (`Vec`, Lua), or you (the camera) when left out. Works on top of whatever clip they play. |
+| "Look away" | `play.lookAway(thing)` | Back to looking ahead, smoothly. |
+
+A world without joint motors (a FEMFX-only build) makes Shove an ordinary
+knock-over, and Look at returns false; neither is an error, so a graph made
+in one build runs in any.
 
 ## Trying it
 
 `games/procedural_demo` (no Synty assets needed): a spider, a beetle, a dog
-and a biped built from the gait alone walk over bumpy ground after the
-target you click, watch the camera, and stagger when you hit them. See its
-README for keys and `KKE_PROC_*` switches.
+and a person, built from generated skeletons with no clips at all, walk over
+hills and a flight of steps. Click the ground and everyone comes to the
+flag; click the dog or the person to hit them (Shift for a hard hit that
+knocks them down; they get up again); click a bug and it runs off. 1 / 2 / 3
+make the dog walk, trot or gallop, 0 lets it pick by speed. See its
+[README](../games/procedural_demo/README.md) for the `KKE_PROC_*` switches.
+
+![The procedural demo](images/procedural_demo.png)
+
+In the sandbox, `play.stagger` and `play.lookAt` work on placed people
+(from a node graph or a Lua script).
 
 ## Tests
 
@@ -224,4 +273,7 @@ duty factors), Froude gait changes, feet staying planted while in stance,
 steps landing on raised ground, body pitch on a slope, look-at limits and
 give-up, FABRIK reach and bone lengths, masked and additive blending, the
 active ragdoll state machine, and the Jolt motor drive holding a limb on
-target (`tests/test_jolt_ragdoll.cpp`).
+target, a ball joint reaching its target, and a motor-driven character
+staying up where a limp one falls (`tests/test_jolt_ragdoll.cpp`). The play
+blocks are covered in `tests/test_node_graph.cpp`
+(`ShoveAndLookAtWorkWithAnyWorld`).
