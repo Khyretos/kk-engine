@@ -95,6 +95,25 @@ demos:
     title: "Procedural animation: gaits, look-at, a ragdoll hit"
     env: { KKE_PROC_HIT: "10" }
 
+  - id: cloth_stress
+    exe: cloth_demo
+    title: "Cloth: many sheets falling over balls"
+    env: { KKE_CLOTH_SCENE: "stress", KKE_CLOTH_TOUR: "0" }
+
+  - id: cloth_hair
+    exe: cloth_demo
+    title: "Hair: strands in the wind"
+    env: { KKE_CLOTH_SCENE: "hair", KKE_CLOTH_TOUR: "0" }
+
+  - id: cloth_tour
+    exe: cloth_demo
+    title: "Cloth and hair: all six scenes (14 s each)"
+    # The demo tours its scenes by itself under the benchmark, 14 s per
+    # scene from start-up; 84 s measured covers all six.
+    seconds: 84
+    warmup: 2
+    quick: false
+
   - id: farm_demo
     exe: farm_demo
     title: "Farm: AI animals, farmer on autopilot"
