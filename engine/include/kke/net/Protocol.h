@@ -24,7 +24,8 @@ namespace kke::net {
 //   velocity  +-64 m/s per axis, 1/128 m/s steps
 //   rotation  smallest-three quaternion, ~0.001 per component
 //   yaw       0..360 degrees, 1024 steps (0.35 degrees)
-constexpr uint16_t kProtocolVersion = 5; // 2: Spawn, Despawn, Break (#28); 3: join password (#42); 4: Voice; 5: Input, InputAck (#28)
+constexpr uint16_t kProtocolVersion = 6; // 2: Spawn, Despawn, Break (#28); 3: join password (#42); 4: Voice; 5: Input, InputAck (#28);
+                                         // 6: several players per connection (Guest, GuestAck), NetPlayerState::extra
 constexpr size_t kMaxPlayers = 32;
 constexpr size_t kMaxNameLength = 24;
 constexpr size_t kMaxGameIdLength = 32;
@@ -39,6 +40,8 @@ constexpr size_t kMaxBordersPerBreak = 1024; // more go in several Break message
 constexpr uint32_t kMaxChunkId = 65535;
 constexpr size_t kMaxVoiceBytes = 256;     // one Opus frame (20 ms at up to ~100 kbit/s)
 constexpr size_t kMaxInputsPerMsg = 16;    // the newest unacknowledged inputs, resent until acknowledged
+constexpr size_t kMaxLocalPlayers = 8;     // players on one connection (split screen online, a host's bots): slot 0 + 7 guests
+constexpr size_t kMaxPlayerExtraBytes = 24; // NetPlayerState::extra (game-defined, e.g. where the hands are)
 
 constexpr float kWorldXZ = 4096.0f;
 constexpr float kWorldYMin = -512.0f, kWorldYMax = 1536.0f;
@@ -61,6 +64,8 @@ enum class MessageType : uint8_t {
     Voice,           // either way (unreliable): 20 ms of someone's voice, Opus-coded
     Input,           // client -> server (unreliable): my newest inputs (input replay, kke/net/InputReplay.h)
     InputAck,        // server -> one client (unreliable): your player after your input N
+    Guest,           // client -> server (reliable): another player on this screen joins / leaves
+    GuestAck,        // server -> one client (reliable): that player's id, or why not
     Count
 };
 
@@ -76,6 +81,10 @@ struct NetPlayerState {
     float speed = 0.0f;        // 0..20 m/s, for the animation blend
     float progress = 0.0f;     // 0..1, e.g. how far into a vault
     float aux = 0.0f;          // 0..32, game-defined (fall height, ...)
+    // Up to kMaxPlayerExtraBytes of the game's own, sent with every state
+    // (a climber's hands and feet, an aim direction). Not interpolated:
+    // the nearer of the two samples, like `state` and `flags`.
+    std::vector<uint8_t> extra{};
 };
 // Flag bits the engine itself understands (the rest are the game's).
 constexpr uint8_t kPlayerTeleported = 1u << 7; // a legitimate jump in position (spawn, scene change)
@@ -116,7 +125,25 @@ struct PlayerInfoMsg {
     bool present = true;       // false: left
     std::string name, character;
 };
-struct CorrectionMsg { glm::vec3 position{0.0f}; };
+struct CorrectionMsg {
+    glm::vec3 position{0.0f};
+    uint8_t slot = 0;          // which of the connection's players (0 = its first)
+};
+// Several players on one connection (split screen online, docs/NETWORKING.md
+// "Several players on one screen"). Slot 0 is the connection's own player
+// (its Hello); slots 1.. are guests the client adds and removes while
+// connected. Each gets a player id of its own: everyone else sees them as
+// ordinary players.
+struct GuestMsg {
+    uint8_t slot = 1;          // 1 .. kMaxLocalPlayers - 1
+    bool present = true;       // false: that player left (the connection stays)
+    std::string name, character;
+};
+struct GuestAckMsg {
+    uint8_t slot = 1;
+    uint8_t playerId = 0;      // 0: refused (or removed by the server), see reason
+    std::string reason;
+};
 struct GameEventMsg {
     uint8_t fromPlayer = 0;    // filled in by the server, never trusted from a client
     uint16_t kind = 0;
@@ -162,6 +189,7 @@ struct InputAckMsg {
 struct PlayerStateMsg {
     uint32_t timeMs = 0;       // sender's clock
     NetPlayerState state;
+    uint8_t slot = 0;          // which of the connection's players (GuestMsg)
 };
 struct SnapshotMsg {
     uint32_t serverTimeMs = 0;
@@ -185,6 +213,7 @@ void serialize(Stream& s, NetPlayerState& p) {
     s.real(p.speed, 0.0f, 20.0f, 20.0f / 255.0f);
     s.real(p.progress, 0.0f, 1.0f, 1.0f / 63.0f);
     s.real(p.aux, 0.0f, 32.0f, 32.0f / 255.0f);
+    s.bytes(p.extra, kMaxPlayerExtraBytes);
 }
 
 template <typename Stream>
@@ -219,7 +248,21 @@ template <typename Stream> void serialize(Stream& s, PlayerInfoMsg& m) {
     s.string(m.name, kMaxNameLength);
     s.string(m.character, kMaxCharacterLength);
 }
-template <typename Stream> void serialize(Stream& s, CorrectionMsg& m) { serializePosition(s, m.position); }
+template <typename Stream> void serialize(Stream& s, CorrectionMsg& m) {
+    serializePosition(s, m.position);
+    s.integer(m.slot, 0, kMaxLocalPlayers - 1);
+}
+template <typename Stream> void serialize(Stream& s, GuestMsg& m) {
+    s.integer(m.slot, 1, kMaxLocalPlayers - 1);
+    s.boolean(m.present);
+    s.string(m.name, kMaxNameLength);
+    s.string(m.character, kMaxCharacterLength);
+}
+template <typename Stream> void serialize(Stream& s, GuestAckMsg& m) {
+    s.integer(m.slot, 1, kMaxLocalPlayers - 1);
+    s.integer(m.playerId, 0, kMaxPlayers);
+    s.string(m.reason, kMaxReasonLength);
+}
 template <typename Stream> void serialize(Stream& s, GameEventMsg& m) {
     s.integer(m.fromPlayer, 0, kMaxPlayers);
     s.integer(m.kind, 0, 65535);
@@ -280,6 +323,7 @@ template <typename Stream> void serialize(Stream& s, InputAckMsg& m) {
 template <typename Stream> void serialize(Stream& s, PlayerStateMsg& m) {
     s.bits(m.timeMs, 32);
     serialize(s, m.state);
+    s.integer(m.slot, 0, kMaxLocalPlayers - 1);
 }
 template <typename Stream> void serialize(Stream& s, SnapshotMsg& m) {
     s.bits(m.serverTimeMs, 32);

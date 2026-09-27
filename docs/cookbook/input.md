@@ -42,6 +42,32 @@ on and off, and holding sprint makes it glow brighter.
 
 [Download toggle.lua](recipes/toggle.lua){ .md-button }
 
+## Show which button to press
+
+Never write "press E": on a controller there is no E. A **prompt** is a
+picture of the button, on whatever the player is holding, and it changes
+the moment they pick up something else. Here are the same six prompts on
+a keyboard, an Xbox pad, a DualSense, a Switch pad, a Steam Deck and a
+touch screen (the pictures are Xelu's free prompts):
+
+![The same prompts on each device](media/prompts.jpg)
+
+```lua title="prompts.lua"
+--8<-- "docs/cookbook/recipes/prompts.lua"
+```
+
+[Download prompts.lua](recipes/prompts.lua){ .md-button }
+
+- `<prompt action="jump" label="Jump"/>` in a document needs no code at
+  all; `input.promptText("{jump} jump")` makes the same markup for
+  `ui.rml`, and `input.prompt("jump", "Jump")` makes one.
+- `{a}`, `{rb}`, `{key:Space}`, `{mouse:left}`, `{touch:tap}` name a
+  button that isn't an action ("press A to join").
+- Give your actions a controller button (`input.define`'s fourth
+  argument) or pads show nothing for them.
+- Try it without a controller: `KKE_PROMPT_STYLE=playstation` starts the
+  game showing PlayStation prompts.
+
 ## Binding in C++: pads, holds, chords and axes
 
 In C++ you get everything the bindings screen can do. The cookbook game

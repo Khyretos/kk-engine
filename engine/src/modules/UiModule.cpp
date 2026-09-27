@@ -4,6 +4,7 @@
 #include "kke/EngineSettings.h"
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/InputModule.h"
+#include "kke/RmlTextSafety.h"
 
 #include <RmlUi/Core/Core.h>
 #include <RmlUi/Core/Context.h>
@@ -12,6 +13,8 @@
 #include <RmlUi/Core/Elements/ElementFormControl.h>
 #include <RmlUi/Core/Input.h>
 #include <RmlUi/Core/Box.h>
+#include <RmlUi/Core/ElementInstancer.h>
+#include <RmlUi/Core/Factory.h>
 
 #include <chrono>
 #include <iostream>
@@ -56,6 +59,55 @@ private:
     Application& m_app;
 };
 } // namespace
+
+namespace {
+
+// <prompt>: rebuilt from its attributes whenever the markup would change
+// (the player picked up another device, a rebind, an attribute edit).
+class PromptElement : public Rml::Element {
+public:
+    using Rml::Element::Element;
+    void refresh(const InputModule* input) {
+        const std::string action = GetAttribute<Rml::String>("action", "");
+        const std::string button = GetAttribute<Rml::String>("button", "");
+        const std::string text = GetAttribute<Rml::String>("text", "");
+        const std::string label = GetAttribute<Rml::String>("label", "");
+        const int player = GetAttribute<int>("player", 1) - 1;
+        std::string markup;
+        if (!input) markup = escapeRmlText(label);
+        else if (!text.empty()) markup = input->promptText(text, player);
+        else markup = input->promptRml(action.empty() ? button : action, label, player);
+        if (markup != m_markup) {
+            m_markup = std::move(markup);
+            SetInnerRML(m_markup);
+        }
+    }
+
+private:
+    std::string m_markup;
+};
+
+} // namespace
+
+class UiModule::PromptInstancer : public Rml::ElementInstancer {
+public:
+    Rml::ElementPtr InstanceElement(Rml::Element*, const Rml::String& tag, const Rml::XMLAttributes&) override {
+        auto* e = new PromptElement(tag);
+        live.push_back(e);
+        return Rml::ElementPtr(e);
+    }
+    void ReleaseElement(Rml::Element* element) override {
+        live.erase(std::remove(live.begin(), live.end(), element), live.end());
+        delete element;
+    }
+    void refresh(const InputModule* input) {
+        // Copy: SetInnerRML may create or release prompts nested in labels.
+        const std::vector<Rml::Element*> now = live;
+        for (Rml::Element* e : now)
+            if (std::find(live.begin(), live.end(), e) != live.end()) static_cast<PromptElement*>(e)->refresh(input);
+    }
+    std::vector<Rml::Element*> live;
+};
 
 UiModule::UiModule() = default;
 UiModule::~UiModule() = default;
@@ -266,6 +318,8 @@ void UiModule::init(Application& app) {
         throw std::runtime_error("Rml::Initialise() failed");
     }
     m_initialised = true;
+    m_prompts = std::make_unique<PromptInstancer>();
+    Rml::Factory::RegisterElementInstancer("prompt", m_prompts.get());
 
     // The default fallback font every game gets even if it never loads
     // its own — see docs/HISTORY.md "Default fonts / font fallback chain." A game
@@ -330,6 +384,7 @@ void UiModule::renderUi() {
         m_dpRatio = ratio;
         m_context->SetDensityIndependentPixelRatio(ratio);
     }
+    if (m_prompts) m_prompts->refresh(m_app->getModule<InputModule>());
     m_context->Update();
     m_app->setUiCapturesMouse(m_context->IsMouseInteracting() || m_draggingSlider || m_draggingPanel);
 }
@@ -507,6 +562,7 @@ void UiModule::shutdown() {
         m_context = nullptr;
     }
     m_renderInterface.reset();
+    m_prompts.reset();
 }
 
 } // namespace kke

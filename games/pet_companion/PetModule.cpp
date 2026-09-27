@@ -866,16 +866,20 @@ void PetModule::updateHud(float dt) {
                       { you, "#aab3cc" },
                       { ballText, "#aab3cc" } });
     const kke::OrderKind k = o ? o->kind : kke::OrderKind::None;
-    m_hud->setButtons({ { "👋", "Come", "1", k == kke::OrderKind::Follow },
-                        { "🐕", "Sit", "2", k == kke::OrderKind::Sit },
-                        { "✋", "Stay", "3", k == kke::OrderKind::Stay },
-                        { "🎾", "Fetch", "4", k == kke::OrderKind::Fetch },
-                        { "👇", "Drop it", "5", k == kke::OrderKind::Drop },
-                        { "❤", "Pet", "E", k == kke::OrderKind::Pet },
-                        { "🥏", "Throw", "click", false } });
-    m_hud->setHint(m_cmd.padActive() ? "Left stick move · RB order at the ring · hold LB: order wheel · D-pad quick orders · Y pet · RT throw"
-                   : m_captured      ? "WASD move · right click: order at the ring · hold Tab: order wheel · 1-5 orders · E pet · click throw · Esc free the mouse"
-                                     : "Click or tap: order there (tap the dog to pet it) · hold: order wheel · Esc: look with the mouse");
+    // Prompt text: {action} shows that button on the device in use.
+    m_hud->setButtons({ { "👋", "Come", "{pet.come}", k == kke::OrderKind::Follow },
+                        { "🐕", "Sit", "{pet.sit}", k == kke::OrderKind::Sit },
+                        { "✋", "Stay", "{pet.stay}", k == kke::OrderKind::Stay },
+                        { "🎾", "Fetch", "{pet.fetch}", k == kke::OrderKind::Fetch },
+                        { "👇", "Drop it", "{pet.drop}", k == kke::OrderKind::Drop },
+                        { "❤", "Pet", "{interact}", k == kke::OrderKind::Pet },
+                        { "🥏", "Throw", "{fire}", false } });
+    const kke::PromptStyle style = m_input->promptStyle();
+    m_hud->setHint(style == kke::PromptStyle::Touch ? "{touch:tap} order there (tap the dog to pet it) · {touch:hold} order wheel"
+                   : m_cmd.padActive() || m_captured
+                       ? "{move} move · {cmd.context} order at the ring · hold {cmd.wheel} order wheel · {pet.come}{pet.sit}{pet.stay}{pet.fetch} "
+                         "quick orders · {interact} pet · {fire} throw · {pet.mouse} free the mouse"
+                       : "{mouse:left} order there (click the dog to pet it) · hold {cmd.wheel} order wheel · {pet.mouse} look with the mouse");
     m_hud->update(f, dt);
 }
 

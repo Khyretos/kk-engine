@@ -86,6 +86,7 @@ set(ENGINE_SOURCES
     src/DataFile.cpp
     src/DevTools.cpp
     src/InputMap.cpp
+    src/ButtonPrompts.cpp
     src/InputDevices.cpp
     src/modules/InputModule.cpp
     src/AudioMixer.cpp
@@ -245,6 +246,32 @@ foreach(shader logo.vert logo.frag logo_backdrop.vert logo_backdrop.frag logo_te
     engine_add_shader(kke_engine ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()
 engine_copy_runtime_file(kke_engine ${CMAKE_SOURCE_DIR}/assets/fonts/NotoSans-Bold.ttf assets/fonts/NotoSans-Bold.ttf)
+
+# Button prompt glyphs (kke/ButtonPrompts.h, Xelu's CC0 pack): the sets the
+# engine shows go next to every executable, as assets/prompts/xelu/<set>/.
+# The rest of the pack (older consoles, VR) stays in the repo for games
+# that want it.
+set(KKE_PROMPT_SETS keyboard_dark keyboard_light xbox_series ps5 switch steam_deck others/steam others/gestures)
+set(_kke_prompt_files ${CMAKE_SOURCE_DIR}/assets/prompts/xelu/LICENSE.txt)
+set(_kke_prompt_copy)
+foreach(set IN LISTS KKE_PROMPT_SETS)
+    file(GLOB _pngs CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/assets/prompts/xelu/${set}/*.png)
+    list(APPEND _kke_prompt_files ${_pngs})
+    list(APPEND _kke_prompt_copy COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/assets/prompts/xelu/${set} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets/prompts/xelu/${set})
+endforeach()
+set(_kke_prompt_stamp ${CMAKE_CURRENT_BINARY_DIR}/prompt_glyphs.stamp)
+add_custom_command(
+    OUTPUT ${_kke_prompt_stamp}
+    ${_kke_prompt_copy}
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/assets/prompts/xelu/LICENSE.txt
+        ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets/prompts/xelu/LICENSE.txt
+    COMMAND ${CMAKE_COMMAND} -E touch ${_kke_prompt_stamp}
+    DEPENDS ${_kke_prompt_files}
+    COMMENT "Copying button prompt glyphs"
+)
+add_custom_target(kke_prompt_glyphs DEPENDS ${_kke_prompt_stamp})
+add_dependencies(kke_engine kke_prompt_glyphs)
 
 target_include_directories(kke_engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include

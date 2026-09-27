@@ -12,6 +12,8 @@ It finds dependencies where they come in, and gives each one a key:
             pkg_check_modules(<VAR> ... <mod>) -> <mod>
   vendored  external/<dir>, LICENSES/<file>    -> <dir> / <file>
   assets    assets/<dir>/<file> (not branding) -> <file>
+            a pack: assets/<dir>/<pack>/... with its own
+            LICENSE.txt                        -> <pack>
   Docker    FROM <image>[:tag]                 -> <image>
   CI        uses: <owner>/<repo>@...           -> <owner>/<repo>
   packages  apt-get install / choco install    -> <package>
@@ -170,7 +172,11 @@ def main():
             web(path, read(path), found)
         if parts[0] == "assets" and len(parts) >= 3 and parts[1] != "branding" \
                 and not re.search(r"(README|LICEN[CS]E)", name, re.I):
-            found.setdefault(name, path)
+            # A pack (hundreds of files under one licence) is one entry.
+            if len(parts) >= 4 and os.path.isfile(os.path.join(ROOT, *parts[:3], "LICENSE.txt")):
+                found.setdefault(parts[2], os.path.join(*parts[:3]))
+            else:
+                found.setdefault(name, path)
         if parts[0] == "LICENSES" and len(parts) == 2:
             found.setdefault(name, path)
     external = os.path.join(ROOT, "external")
