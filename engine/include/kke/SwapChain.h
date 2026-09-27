@@ -38,6 +38,11 @@ public:
     VkImage image(uint32_t index) const { return m_images[index]; }
     // Swapchain images accept linear blits (render scale works).
     bool canBlitTo() const { return m_canBlitTo; }
+    // True when the screen is turned (a phone in landscape) and the system
+    // compositor rotates each frame for us. Presenting then reports
+    // VK_SUBOPTIMAL_KHR every frame, which is expected, not a reason to
+    // recreate the swapchain.
+    bool compositorRotates() const { return m_compositorRotates; }
     VkFramebuffer framebuffer(uint32_t index) const { return m_framebuffers[index]; }
     size_t imageCount() const { return m_images.size(); }
     bool hasStencil() const { return m_hasStencil; }
@@ -59,6 +64,7 @@ private:
     VkRenderPass m_renderPass = VK_NULL_HANDLE;
     VkRenderPass m_overlayPass = VK_NULL_HANDLE;
     bool m_canBlitTo = false;
+    bool m_compositorRotates = false;
 
     VkImage m_depthImage = VK_NULL_HANDLE;
     VmaAllocation m_depthImageAllocation = VK_NULL_HANDLE;

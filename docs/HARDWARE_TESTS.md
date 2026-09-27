@@ -164,7 +164,7 @@ break *before* you shoot it. Does it feel right? Watch FPS after big
 breaks (debris is slow to sleep).
 Anything that loads wrong (textures missing, pieces in the floor) or
 feels awkward is exactly what I need.
-**Send back:** screenshots, the saved `sandbox_layout.json`, the asset
+**Send back:** screenshots, the saved `scenes/sandbox.scene.json`, the asset
 count line from the Assets panel, and log warnings.
 **Result:** 2026-09-26, dev box: placing/duplicating/selecting "perfectly
 fine"; breaking was not: every material broke into the same square

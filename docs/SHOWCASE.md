@@ -12,7 +12,7 @@ and the HUD agree.
 
 | Station | Where | What it shows |
 |---|---|---|
-| Crate pile | (4, -3) | Jolt rigid bodies: push them (E / right click) or shoot them over |
+| Crate pile | (4, -3) | Jolt rigid bodies: push them (E / Y) or shoot them over |
 | Breaking yard | (14, -6) | FEMFX glass, plank and stone wall that break for real, with crates under the glass that the shards push (FEMFX-Jolt bridge, [PHYSICS_BRIDGE.md](PHYSICS_BRIDGE.md)) |
 | Parkour lane | x = 20, z 28 to 5 | Vault the fences, climb the blocks, sprint for the 2.1 m ledge, hang from the 3 m wall. Nothing is marked up: `kke::Locomotion` reads the shapes |
 | Trick course | x = 26 | A 12 m wall to run along, thin pillars to leap between, and a thin wall under a beam for the leap up ([MOVEMENT.md](MOVEMENT.md)) |
@@ -39,13 +39,37 @@ The **Scenes** panel visits Synty-built levels far from the course
   measured speed. Near a station it shows the station's hint, plus live
   numbers where there are some, such as how much of the lava block is left.
 - **Esc**, or **Start** on a controller, opens the pause menu
-  (`ui/showcase_pause.rml`). It has Resume, Back to the start, 1 to 4
-  players (split screen), engine panels and Quit. An offline game stops
-  while the menu is open. Online, the others keep playing. B on a
-  controller closes it, and the d-pad and A move through it.
-- F1 shows the engine's ImGui panels. The Showcase panel has the controls,
-  movement tuning, performance, character, lighting, lava and split screen
-  settings.
+  (`ui/showcase_pause.rml`). The HUD's corner shows the menu button for the
+  device you use. The menu has Resume, Back to the start, 1 to 4 players
+  (split screen), engine panels and Quit. An offline game stops while the
+  menu is open. Online, the others keep playing. B on a controller closes
+  it, and the d-pad and A move through it. In split screen any player's
+  Start opens it.
+- F1 shows the engine's ImGui panels (keyboard only: they are developer
+  tools). The Showcase panel has the controls, movement tuning,
+  performance, character, lighting, lava and split screen settings.
+
+## Controls
+
+| Action | Keyboard and mouse | Controller |
+|---|---|---|
+| Move, look | W A S D, mouse | Left stick, right stick |
+| Sprint, walk | Left Shift, Left Alt | L3 (toggle), tilt the stick a little |
+| Jump, vault, climb | Space | A |
+| Crouch, let go of a ledge | C | B |
+| Shoot, push | Left click, E | RT, Y |
+| First / third person | V | R3 |
+| Camera distance | Mouse wheel | D-pad up / down |
+| Reset crates and player | R | X |
+| Ping (hear the walls) | Q | D-pad left |
+| Push to talk (voice builds) | P | LB |
+| Lua toys: tower, ball, clear | G, B, N (or hold B) | RB, View, hold View a second |
+| Break-the-targets | T | D-pad right |
+| Pause menu | Esc | Start |
+
+Split-screen players 2 to 4 move, jump, crouch, shoot, push, reset and
+zoom with their own controller. The full list, and why each key is where
+it is, is in [games/showcase/README.md](../games/showcase/README.md).
 
 ## Scripted runs (screenshots, checks)
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "kke/Material.h"
 #include "kke/Module.h"
 
 // This entire module only exists when KKE_ENABLE_FEMFX is on — same
@@ -48,6 +49,12 @@ public:
     explicit MaterialGridModule(float left = 40.0f, float top = 500.0f);
     void init(Application& app) override;
     void shutdown() override;
+
+    // The same five materials for other UIs (a controller-driven panel,
+    // a script): wood, stone, iron, rubber, glass.
+    static int presetCount();
+    static const char* presetLabel(int index);
+    static Material presetMaterial(int index);
 
 private:
     class CardClickListener;

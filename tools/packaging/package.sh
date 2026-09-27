@@ -2,7 +2,11 @@
 # Packages a built bin/ folder into a downloadable archive (docs/RELEASES.md).
 #
 #   tools/packaging/package.sh --bin build/bin --platform linux|windows \
-#       --version v0.1.0-alpha --out dist [--deps build/_deps] [--strip <strip tool>]
+#       --version v0.1.0-alpha --out dist [--deps build/_deps] [--strip <strip tool>] [--cooked DIR]
+#
+# --cooked DIR: art cooked with kke_cook (docs/COOKED_ART.md) to add under
+# assets/ (DIR/synty -> assets/synty, ...). Such a package is private: only
+# builds from the same checkout (the same .kke-art.key) can read the art.
 #
 # Output: <out>/kk-engine-<version>-<platform>-x86_64.{tar.gz|zip} plus a
 # .sha256 next to it. The archive holds one folder with the demos, their
@@ -14,7 +18,7 @@ set -euo pipefail
 
 die() { echo "package.sh: error: $*" >&2; exit 1; }
 
-bin="" platform="" version="" out="" deps="" strip_tool=""
+bin="" platform="" version="" out="" deps="" strip_tool="" cooked=""
 while [ $# -gt 0 ]; do
     case "$1" in
     --bin) bin="$2"; shift 2 ;;
@@ -23,6 +27,7 @@ while [ $# -gt 0 ]; do
     --out) out="$2"; shift 2 ;;
     --deps) deps="$2"; shift 2 ;;
     --strip) strip_tool="$2"; shift 2 ;;
+    --cooked) cooked="$2"; shift 2 ;;
     *) die "unknown argument '$1'" ;;
     esac
 done
@@ -62,9 +67,17 @@ done
 # Synty packs arrive as FBX/Unity files under a synty/ or Polygon folder;
 # none of that is built into bin/ by CMake, so anything found here came
 # from a local asset folder and must not go out.
+# Cooked art (--cooked) comes in now, so the check below sees it too: a
+# cooked file starts with KKECOOK1 and is let through, anything else isn't.
+if [ -n "$cooked" ]; then
+    [ -d "$cooked" ] || die "--cooked folder '$cooked' does not exist"
+    mkdir -p "$stage/assets"
+    cp -r "$cooked/." "$stage/assets/"
+fi
 leak="$(cd "$stage" && find . -type f \( -ipath '*synty*' -o -ipath '*polygon*' -o -ipath '*/SourceFiles/*' \
     -o -iname '*.fbx' -o -iname '*.unitypackage' -o -iname '*.prefab' -o -iname '*.controller' -o -iname '*.mat' \) \
-    ! -path "./synty_demo$exe" ! -path './marketplace/synty_demo/game.json' -print)"
+    ! -path "./synty_demo$exe" ! -path './marketplace/synty_demo/game.json' -print |
+    while IFS= read -r f; do [ "$(head -c 8 "$f")" = KKECOOK1 ] || echo "$f"; done)"
 [ -z "$leak" ] || die "refusing to package paid/third-party art found in $bin:
 $leak"
 
@@ -123,9 +136,14 @@ cp "$repo/LICENSE" "$stage/LICENSE.txt"
     echo "Requirements: a 64-bit CPU with AVX2 (Intel Haswell / AMD Zen or newer)"
     echo "and a GPU driver with Vulkan 1.3 (any current NVIDIA, AMD or Intel driver)."
     echo
-    echo "Demos built on paid art packs (sandbox, synty_demo) show an 'assets not"
-    echo "found' screen: those packs are not redistributable. Point KKE_ASSETS_DIR"
-    echo "at your own copy of the packs to use them (docs/SCENES.md)."
+    if [ -n "$cooked" ]; then
+        echo "This is a PRIVATE build with the demos' art baked in. Please don't"
+        echo "share it further or upload it anywhere."
+    else
+        echo "Demos built on paid art packs (sandbox, synty_demo) show an 'assets not"
+        echo "found' screen: those packs are not redistributable. Point KKE_ASSETS_DIR"
+        echo "at your own copy of the packs to use them (docs/SCENES.md)."
+    fi
     echo
     echo "BENCHMARK: how well does it run on this computer?"
     echo "  1. Close other programs (and plug a laptop in)."

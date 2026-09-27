@@ -20,6 +20,12 @@
 //   kke_benchmark --list        print the demos and exit
 //   kke_benchmark --out DIR     results folder (default: results/ next to this program)
 //   kke_benchmark --no-wait     don't wait for Enter at the end
+//   kke_benchmark --suite FILE  another suite file than benchmark_suite.yaml next to it
+//   kke_benchmark --collect RUN_DIR
+//       don't run anything: write the results file from a run another
+//       launcher made (Android's): RUN_DIR/reports/<id>.json, RUN_DIR/logs/<id>.log
+//       and RUN_DIR/runs.json = [{"id", "status", "wall_s", "exit_code"}, ...].
+//       Results go to --out, default RUN_DIR's parent folder.
 
 #include "kke/BenchmarkReport.h"
 #include "kke/DataFile.h"
@@ -91,9 +97,15 @@ struct Suite {
     std::vector<Demo> demos;
 };
 
-bool loadSuite(const fs::path& dir, Suite& suite, std::string& error) {
+// benchmark_suite.yaml/.json in `dir`, or `file` when given (--suite).
+bool loadSuite(const fs::path& dir, const fs::path& file, Suite& suite, std::string& error) {
     kke::datafile::Loaded loaded;
-    if (!kke::datafile::load(dir, "benchmark_suite", loaded, &error)) return false;
+    if (!file.empty()) {
+        loaded.file = file;
+        if (!kke::datafile::loadFile(file, loaded.data, &error)) return false;
+    } else if (!kke::datafile::load(dir, "benchmark_suite", loaded, &error)) {
+        return false;
+    }
     const json& j = loaded.data;
     const json defaults = j.value("defaults", json::object());
     const double seconds = defaults.value("seconds", 20.0), warmup = defaults.value("warmup", 3.0);
@@ -459,7 +471,7 @@ int main(int argc, char** argv) {
     bool quick = false, list = false, wait = KKE_ISATTY(0) != 0, openFolder = true;
     double secondsOverride = -1.0;
     std::set<std::string> only;
-    std::string outArg;
+    std::string outArg, suiteArg, collectArg;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
         auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : std::string(); };
@@ -469,6 +481,8 @@ int main(int argc, char** argv) {
         else if (a == "--no-open") openFolder = false;
         else if (a == "--seconds") secondsOverride = std::atof(next().c_str());
         else if (a == "--out") outArg = next();
+        else if (a == "--suite") suiteArg = next();
+        else if (a == "--collect") collectArg = next();
         else if (a == "--only") {
             std::stringstream ss(next());
             for (std::string id; std::getline(ss, id, ',');)
@@ -486,7 +500,8 @@ int main(int argc, char** argv) {
         if (wait) {
             std::printf("\nPress Enter to close this window.\n");
             std::fflush(stdout);
-            std::getchar();
+            for (int c = std::getchar(); c != '\n' && c != EOF; c = std::getchar()) {
+            }
         }
         return code;
     };
@@ -499,8 +514,8 @@ int main(int argc, char** argv) {
     const fs::path demoDir = fs::is_directory(exeDir / "shaders", dirEc) ? exeDir : (exeDir / "..").lexically_normal();
     Suite suite;
     std::string error;
-    if (!loadSuite(exeDir, suite, error)) {
-        std::fprintf(stderr, "kke_benchmark: %s\n(benchmark_suite.yaml must be next to this program)\n", error.c_str());
+    if (!loadSuite(exeDir, suiteArg.empty() ? fs::path() : pathFromUtf8(suiteArg), suite, error)) {
+        std::fprintf(stderr, "kke_benchmark: %s\n(benchmark_suite.yaml must be next to this program, or use --suite)\n", error.c_str());
         return finish(1);
     }
     std::vector<Demo> demos;
@@ -524,7 +539,9 @@ int main(int argc, char** argv) {
 
     // Where results go: next to the program, or the user's app data folder
     // when that isn't writable (e.g. unpacked under Program Files).
-    fs::path outDir = outArg.empty() ? exeDir / "results" : pathFromUtf8(outArg);
+    const bool collecting = !collectArg.empty();
+    const fs::path collectDir = collecting ? pathFromUtf8(collectArg) : fs::path();
+    fs::path outDir = !outArg.empty() ? pathFromUtf8(outArg) : collecting ? (collectDir / "..").lexically_normal() : exeDir / "results";
     if (!writable(outDir)) {
         char* pref = SDL_GetPrefPath("Kreative Kompas", "KKE Benchmark");
         if (pref) {
@@ -537,7 +554,27 @@ int main(int argc, char** argv) {
         }
     }
     const std::string stamp = kke::timestampForFileName();
-    const fs::path runDir = outDir / ("run_" + stamp);
+    const fs::path runDir = collecting ? collectDir : outDir / ("run_" + stamp);
+    // --collect: what the other launcher saw of each demo.
+    std::map<std::string, RunResult> collected;
+    if (collecting) {
+        json runs;
+        std::string runsError;
+        if (!kke::datafile::loadFile(runDir / "runs.json", runs, &runsError) || !runs.is_array()) {
+            std::fprintf(stderr, "kke_benchmark: --collect needs %s: %s\n", utf8(runDir / "runs.json").c_str(), runsError.c_str());
+            return finish(1);
+        }
+        for (const json& r : runs) {
+            // Launchers write what they know; a missing or null field keeps its default.
+            if (!r.is_object() || !r.contains("id") || !r["id"].is_string()) continue;
+            RunResult rr;
+            if (r.contains("status") && r["status"].is_string()) rr.status = r["status"].get<std::string>();
+            else rr.status = "no_report";
+            if (r.contains("exit_code") && r["exit_code"].is_number_integer()) rr.exitCode = r["exit_code"].get<int>();
+            if (r.contains("wall_s") && r["wall_s"].is_number()) rr.wallSeconds = r["wall_s"].get<double>();
+            collected[r["id"].get<std::string>()] = rr;
+        }
+    }
     const fs::path reportDir = runDir / "reports", logDir = runDir / "logs";
     std::error_code ec;
     fs::create_directories(reportDir, ec);
@@ -551,8 +588,8 @@ int main(int argc, char** argv) {
     double total = 0.0;
     for (const Demo& d : demos) total += d.warmup + d.seconds + 5.0;
     std::printf("Kreative Kompas Engine benchmark\n\n");
-    std::printf("%zu demos, about %d minutes. Each opens its own window and plays by itself:\n", demos.size(), static_cast<int>(total / 60.0 + 0.99));
-    std::printf("please don't touch the mouse or keyboard, and keep other programs closed.\n");
+    if (!collecting) std::printf("%zu demos, about %d minutes. Each opens its own window and plays by itself:\n", demos.size(), static_cast<int>(total / 60.0 + 0.99));
+    if (!collecting) std::printf("please don't touch the mouse or keyboard, and keep other programs closed.\n");
     std::printf("Results go to %s\n\n", utf8(outDir).c_str());
 
     SDL_Init(SDL_INIT_VIDEO); // only for the display's size and refresh rate; fine if it fails
@@ -576,7 +613,16 @@ int main(int argc, char** argv) {
         std::printf("[%zu/%zu] %s\n", i + 1, demos.size(), d.title.c_str());
         std::fflush(stdout);
         const fs::path logFile = logDir / (d.id + ".log");
-        const RunResult r = runDemo(d, demoDir, reportDir, logFile, suite.loadTimeout);
+        RunResult r;
+        if (!collecting) {
+            r = runDemo(d, demoDir, reportDir, logFile, suite.loadTimeout);
+        } else if (auto it = collected.find(d.id); it != collected.end()) {
+            r = it->second;
+            // A report with a clean exit is "ok" whatever the launcher guessed.
+            if (r.status == "no_report" && fs::exists(reportDir / (d.id + ".json"), ec)) r.status = "ok";
+        } else {
+            r.status = "missing";
+        }
 
         json out;
         out["id"] = d.id;
@@ -605,7 +651,9 @@ int main(int argc, char** argv) {
             if (!differs.empty()) report["system_differs"] = differs;
             if (r.status == "ok" && !report.value("broken_modules", json::array()).empty()) out["status"] = "broken_modules";
             const double measured = report["summary"].value("seconds", 0.0);
-            if (out["status"] == "ok" && measured < d.seconds * 0.5) out["status"] = "ended_early";
+            // Against what the demo was asked to measure (its own record of it).
+            const double wanted = report.value("config", json::object()).value("measure_s", d.seconds);
+            if (out["status"] == "ok" && measured < wanted * 0.5) out["status"] = "ended_early";
         }
 
         // The log: warnings and errors (each distinct text once, with a

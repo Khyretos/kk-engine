@@ -1,8 +1,8 @@
 #include "CubeModule.h"
 #include "kke/Application.h"
 #include "kke/VulkanCheck.h"
+#include "kke/modules/DemoPanelModule.h"
 
-#include <imgui.h>
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace kke_demo {
@@ -25,6 +25,7 @@ struct ShadowPushConstants {
 
 void CubeModule::init(kke::Application& app) {
     m_device = app.device().device();
+    buildPanel(app);
     m_mesh = std::make_unique<kke::Mesh>(kke::Mesh::createCube(app.device()));
 
     // A real, generated procedural checkerboard, not a placeholder --
@@ -168,11 +169,14 @@ void CubeModule::renderShadow(const kke::ShadowRenderContext& ctx) {
     m_mesh->draw(ctx.cmd);
 }
 
-void CubeModule::renderUi() {
-    ImGui::SetNextWindowPos(ImVec2(10, 140), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Cube");
-    ImGui::Checkbox("Spinning", &m_spinning);
-    ImGui::SliderFloat("Spin speed", &m_spinSpeedDegPerSec, -180.0f, 180.0f);
+// The cube's rows in the settings panel (RmlUi, kke::DemoPanelModule):
+// the mouse, the keyboard (F3) and a controller (View) all reach them.
+void CubeModule::buildPanel(kke::Application& app) {
+    auto* panel = app.getModule<kke::DemoPanelModule>();
+    if (!panel) return;
+    auto& s = panel->section("Cube");
+    s.toggle("Spinning", &m_spinning);
+    s.slider("Spin speed", &m_spinSpeedDegPerSec, -180.0f, 180.0f, "%.0f deg/s");
     // Real, live PBR controls -- not fixed constants. Sliding
     // "Metallic" from 0 to 1 while watching the cube is the actual,
     // direct way to verify Cook-Torrance is doing something real:
@@ -180,9 +184,8 @@ void CubeModule::renderUi() {
     // the specular highlight color and the diffuse term should nearly
     // vanish; near 0.0, highlights stay a neutral white/light-source
     // color and the surface reads as a normal, colored dielectric.
-    ImGui::SliderFloat("Metallic", &m_metallic, 0.0f, 1.0f);
-    ImGui::SliderFloat("Roughness", &m_roughness, 0.0f, 1.0f);
-    ImGui::End();
+    s.slider("Metallic", &m_metallic, 0.0f, 1.0f);
+    s.slider("Roughness", &m_roughness, 0.0f, 1.0f);
 }
 
 void CubeModule::shutdown() {

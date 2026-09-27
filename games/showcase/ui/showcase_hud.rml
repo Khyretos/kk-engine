@@ -27,6 +27,6 @@
         <div class="text" data-rml="station_text"></div>
         <div class="live" data-if="station_live != ''">{{station_live}}</div>
     </div>
-    <div id="esc"><span class="keycap">Esc</span> menu</div>
+    <div id="esc" data-rml="menu_hint"></div>
 </body>
 </rml>

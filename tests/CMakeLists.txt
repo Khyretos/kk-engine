@@ -19,6 +19,7 @@ add_executable(kke_tests
     test_node_graph.cpp
     test_ai.cpp
     test_touch_gestures.cpp
+    test_demo_panel.cpp
     test_voxel_fracture.cpp
     test_interior_fill.cpp
     test_particle_fluid.cpp
@@ -41,6 +42,7 @@ add_executable(kke_tests
     test_hardware_target.cpp
     test_frame_stats.cpp
     test_bench_recorder.cpp
+    test_cooked_file.cpp
     test_viewports.cpp
     test_lobby.cpp
     test_physics_bridge.cpp

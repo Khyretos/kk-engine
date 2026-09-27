@@ -38,6 +38,7 @@ set(ENGINE_SOURCES
     src/AnimRig.cpp
     src/ProceduralAnim.cpp
     src/ClimbWall.cpp
+    src/CookedFile.cpp
     src/Climber.cpp
     src/Combat.cpp
     src/Sidekick.cpp
@@ -127,6 +128,7 @@ set(ENGINE_SOURCES
     src/modules/MarketplaceUiModule.cpp
     src/modules/LightingControlsModule.cpp
     src/modules/LobbyModule.cpp
+    src/modules/DemoPanelModule.cpp
     src/modules/MaterialGridModule.cpp
     src/modules/DebugControlModule.cpp
     src/modules/PhysicsModule.cpp
@@ -163,6 +165,7 @@ set(ENGINE_HEADERS
     include/kke/Ragdoll.h
     include/kke/BenchmarkReport.h
     include/kke/BenchRecorder.h
+    include/kke/CookedFile.h
     include/kke/AssetCatalog.h
     include/kke/Picking.h
     include/kke/PlayBlocks.h
@@ -206,6 +209,7 @@ set(ENGINE_HEADERS
     include/kke/modules/DebugDrawModule.h
     include/kke/modules/MarketplaceUiModule.h
     include/kke/modules/LightingControlsModule.h
+    include/kke/modules/DemoPanelModule.h
     include/kke/modules/MaterialGridModule.h
     include/kke/modules/DebugControlModule.h
     include/kke/modules/PhysicsModule.h
@@ -379,7 +383,7 @@ else()
 endif()
 
 if(ENGINE_ENABLE_LUA)
-    target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/ScriptStore.cpp src/modules/ScriptModule.cpp src/modules/ScriptBindings.cpp src/modules/ScriptReplication.cpp)
+    target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/ScriptCalls.cpp src/ScriptStore.cpp src/modules/ScriptModule.cpp src/modules/ScriptBindings.cpp src/modules/ScriptReplication.cpp)
     if(KKE_ENABLE_NET)
         target_sources(kke_engine PRIVATE src/server/ServerScripts.cpp)
     endif()
@@ -428,6 +432,8 @@ endif()
 
 if(WIN32)
     target_compile_definitions(kke_engine PUBLIC KKE_PLATFORM_WINDOWS=1)
+elseif(ANDROID)
+    target_compile_definitions(kke_engine PUBLIC KKE_PLATFORM_ANDROID=1)
 elseif(APPLE)
     target_compile_definitions(kke_engine PUBLIC KKE_PLATFORM_MACOS=1)
 else()
@@ -446,6 +452,31 @@ if(NOT _kke_commit_rc EQUAL 0 OR _kke_commit STREQUAL "")
     set(_kke_commit "unknown")
 endif()
 target_compile_definitions(kke_engine PRIVATE KKE_VERSION_NAME="${KKE_VERSION_NAME}" KKE_GIT_COMMIT="${_kke_commit}")
+
+# The key cooked art is encrypted with (kke/CookedFile.h, docs/COOKED_ART.md).
+# It lives in a git-ignored file so the public repository never holds it and
+# every build from one checkout (Linux, the Windows cross build in Docker)
+# shares it. Missing: made here. tools/packaging/bake_with_art.sh makes it
+# from the OS's secure random source first; CMake's RANDOM is weaker.
+set(KKE_ART_KEY_FILE "${CMAKE_SOURCE_DIR}/.kke-art.key" CACHE FILEPATH "Key file for cooked art (64 hex digits); made on first configure when missing")
+if(NOT EXISTS "${KKE_ART_KEY_FILE}")
+    string(RANDOM LENGTH 64 ALPHABET "0123456789abcdef" _kke_art_key)
+    file(WRITE "${KKE_ART_KEY_FILE}" "${_kke_art_key}\n")
+    message(STATUS "Cooked art: made a new key in ${KKE_ART_KEY_FILE}")
+endif()
+file(READ "${KKE_ART_KEY_FILE}" _kke_art_key)
+string(STRIP "${_kke_art_key}" _kke_art_key)
+if(NOT _kke_art_key MATCHES "^[0-9a-fA-F]+$")
+    message(FATAL_ERROR "${KKE_ART_KEY_FILE} must hold 64 hex digits")
+endif()
+string(LENGTH "${_kke_art_key}" _kke_art_key_len)
+if(NOT _kke_art_key_len EQUAL 64)
+    message(FATAL_ERROR "${KKE_ART_KEY_FILE} must hold 64 hex digits")
+endif()
+string(REGEX REPLACE "([0-9a-fA-F][0-9a-fA-F])" "0x\\1," _kke_art_key_bytes "${_kke_art_key}")
+file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/kke_art_key.h"
+     CONTENT "// Generated from KKE_ART_KEY_FILE; never commit.\n#pragma once\nstatic const unsigned char kKkeArtKey[32] = { @_kke_art_key_bytes@ };\n" @ONLY)
+set_source_files_properties(src/CookedFile.cpp PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 # The hardware target a build starts on when KKE_TARGET isn't set
 # (kke/HardwareTarget.h). Empty = detect the device. The hardware presets

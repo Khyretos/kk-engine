@@ -1,6 +1,6 @@
 # Duel (games/duel/README.md): a one-on-one fist fight on kke::Combatant,
 # against a sparring bot or a second player.
-add_executable(duel main.cpp DuelModule.cpp SparringBot.cpp Body.cpp Hud.cpp)
+kke_add_game(duel main.cpp DuelModule.cpp SparringBot.cpp Body.cpp Hud.cpp)
 target_link_libraries(duel PRIVATE kke_engine)
 engine_copy_runtime_file(duel ${CMAKE_CURRENT_SOURCE_DIR}/game.json marketplace/duel/game.json)
 engine_copy_runtime_file(duel ${CMAKE_CURRENT_SOURCE_DIR}/ui/duel_hud.rml ui/duel_hud.rml)

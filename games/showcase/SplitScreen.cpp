@@ -114,6 +114,18 @@ void ShowcaseModule::updateLocalPlayers(float dt) {
             wantCrouch = map.held("crouch");
             if (map.pressed("jump")) p.jumpQueued = true;
             if (map.pressed("reset")) loco.teleport(m_spawn + glm::vec3(1.2f * static_cast<float>(i + 1), 0.0f, 0.0f));
+            // Shoot and push along this player's own view (p.camera is last
+            // frame's: the same as the one on their screen).
+            p.fireCooldown -= dt;
+            if (map.held("fire") && (map.pressed("fire") || p.fireCooldown <= 0.0f)) {
+                shoot(p.camera);
+                p.fireCooldown = 0.25f;
+            }
+            if (map.pressed("interact")) forcePush(p.camera);
+            if (map.pressed("camera.toggle"))
+                p.rig.mode = p.rig.mode == kke::CameraRig::Mode::ThirdPerson ? kke::CameraRig::Mode::FirstPerson : kke::CameraRig::Mode::ThirdPerson;
+            if (const float z = map.axis("zoom.pad"); z != 0.0f)
+                p.rig.settings.armLength = std::clamp(p.rig.settings.armLength - z * 4.0f * dt, 1.5f, 10.0f);
         } else {
             // No controller: down the lane at a run, "go up" whenever
             // the sensors see something.

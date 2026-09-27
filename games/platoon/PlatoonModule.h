@@ -91,6 +91,8 @@ private:
     void give(kke::OrderKind kind, uint32_t target = 0, const glm::vec3* point = nullptr, bool queue = false);
     void takeCover(const glm::vec3* near = nullptr);
     void cycleFormation();
+    void padSelect(kke::InputMap& in, command_kit::CommandInput::Frame& f, float dt);
+    void buildPanel();
     void selectAll();
     void cycleSelection(int step);
     kke::PointerTarget pick(const glm::vec2& pointer) const;
@@ -119,6 +121,8 @@ private:
     std::unique_ptr<command_kit::HumanoidKit> m_kit;
     std::unique_ptr<command_kit::CommandHud> m_hud;
     command_kit::CommandInput m_cmd;
+    float m_padSelectHeld = -1.0f; // how long the controller's select is held, -1 = not
+    int m_formationIndex = 0;      // the panel's copy of m_formation
     std::unique_ptr<kke::DynamicMeshRenderer> m_ring, m_enemyRing, m_hpBack, m_hpFront, m_tracer, m_marker;
 
     kke::ai::AiWorld m_ai{ 3 };

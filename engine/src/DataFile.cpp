@@ -149,7 +149,7 @@ void warnOnce(const std::string& key, const std::string& message) {
 
 std::string versionKey(const std::vector<fs::path>& files) {
     std::string key;
-    for (const fs::path& f : files) key += f.string() + "@" + std::to_string(modified(f).time_since_epoch().count()) + "|";
+    for (const fs::path& f : files) key += f.string() + "@" + std::to_string(static_cast<long long>(modified(f).time_since_epoch().count())) + "|";
     return key;
 }
 

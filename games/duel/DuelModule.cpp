@@ -87,7 +87,8 @@ void DuelModule::init(kke::Application& app) {
     for (int p = 0; p < 2; ++p) {
         kke::InputMap& in = m_input->map(p);
         kke::InputModule::defineCharacterActions(in);
-        for (const char* a : { "jump", "sprint", "walk", "crouch", "fire", "aim", "interact", "camera.toggle", "camera.zoom", "look", "look.rate" })
+        // No voice chat here, so B (push-to-talk) stays free; Q is the ping.
+        for (const char* a : { "jump", "sprint", "walk", "crouch", "fire", "aim", "interact", "camera.toggle", "camera.zoom", "look", "look.rate", "voice.talk" })
             in.clearBindings(a);
         in.defineAction({ "duel.light", "Jab (quick, cheap)", "Fight", "game" });
         in.defineAction({ "duel.heavy", "Uppercut (slow, knocks down)", "Fight", "game" });

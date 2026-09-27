@@ -72,7 +72,7 @@ finger, and all of them are rebindable actions (`docs/INPUT.md`).
 - **Mouse and keyboard**: left click selects, drag selects a box, right
   click gives the context order, keys give the rest (each demo's README).
 - **Controller**: the reticle in the middle of the view is the pointer.
-  A gives the context order, the D-pad gives the four most used orders,
+  RB gives the context order, the D-pad gives the four most used orders,
   and holding LB opens the **radial wheel** with every order: tilt the
   right stick to pick, let go of LB to give it. Back in the middle keeps
   the pick, so a flick and a release is enough; B closes the wheel.

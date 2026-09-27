@@ -234,6 +234,14 @@ attaches three gamepads); `KKE_VIRTUAL_INPUT_LATE=<s>:<spec>` plugs them
 in s seconds in, to test hot-plugging;
 `KKE_VIRTUAL_INPUT_ANIMATE=1` moves them (sticks sweep, buttons cycle,
 gyro turns; the pad avoids menu buttons). CI runs every demo this way.
+`KKE_VIRTUAL_PAD_SCRIPT="8:back,9:dpad_down,9.6:dpad_right,12:leftx=1,13:leftx=0"`
+plays presses on the first virtual pad: `<seconds>:<button>` taps a
+button for 0.3 s (the names ButtonPrompts knows: `a`, `back`, `lb`,
+`dpad_down`, ...), `<seconds>:<button>*<hold>` holds it for `hold`
+seconds (`5:a*1.5`), `<seconds>:<axis>=<value>` holds a stick or trigger
+(`leftx`, `righty`, `rt`, ...) until the next change; a trigger's value
+goes from 0 (let go) to 1 (pulled all the way). That drives a
+game's menus and controls headless, for screenshots and checks.
 `KKE_LEFT_HANDED=1` starts `kke_demo` mirrored.
 
 ## Files

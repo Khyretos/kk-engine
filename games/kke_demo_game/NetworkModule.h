@@ -26,9 +26,9 @@ public:
 
     void init(kke::Application& app) override;
     void update(const kke::UpdateContext& ctx) override;
-    void renderUi() override;
 
 private:
+    void buildPanel(kke::Application& app);
     struct ReplicableStatus {
         kke::INetworkReplicable* replicable;
         std::string channelName;

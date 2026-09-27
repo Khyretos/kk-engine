@@ -99,6 +99,36 @@ nav:
       - Multiplayer: cookbook/networking.md
       - Play to make: cookbook/play-to-make.md
       - C++: cookbook/cpp.md
+  # Pages made from games/<demo>/README.md by tools/docs_site/hooks.py.
+  - Demos:
+      - demos/index.md
+      - Start here:
+          - Starter game: demos/template.md
+          - First Lua game: demos/first_lua_game.md
+          - Cookbook player: demos/cookbook.md
+      - Games:
+          - Climb Race: demos/climb_race.md
+          - Duel: demos/duel.md
+          - Goblin Horde: demos/goblin_horde.md
+      - AI and companions:
+          - Farm: demos/farm_demo.md
+          - Pet companion: demos/pet_companion.md
+          - Platoon: demos/platoon.md
+          - Command kit: demos/command_kit.md
+          - Procedural animation: demos/procedural_demo.md
+      - Physics, water and sound:
+          - Physics (FEMFX): demos/physics_demo.md
+          - Melting: demos/melt_demo.md
+          - Sea: demos/sea_demo.md
+          - Jiggle: demos/jiggle_demo.md
+          - Sound: demos/audio_demo.md
+          - Synty characters and ragdolls: demos/synty_demo.md
+      - Showcases and tools:
+          - kke_demo showcase: demos/showcase.md
+          - Sandbox: demos/sandbox.md
+          - RmlUi demo: demos/rmlui_demo.md
+          - ImGui demo: demos/imgui_demo.md
+          - kke_basics: demos/kke_demo_game.md
   - Guides:
       - Play to make: PLAY_TO_MAKE.md
       - Scripting in Lua: SCRIPTING.md
@@ -108,6 +138,7 @@ nav:
       - Procedural animation: PROCEDURAL_ANIMATION.md
       - Input: INPUT.md
       - Start menu and joining: LOBBY.md
+      - Settings panel: DEMO_PANEL.md
       - Commands and orders: COMMANDS.md
       - Audio: AUDIO.md
       - Networking: NETWORKING.md
@@ -129,8 +160,10 @@ nav:
       - Moods (sky, fog, look): MOODS.md
       - Rendering principles: RENDERING_PRINCIPLES.md
       - Benchmarks: BENCHMARKS.md
+      - Cooked art (private builds with Synty art): COOKED_ART.md
       - Performance notes: PERFORMANCE_NOTES.md
       - Platforms and hardware targets: PLATFORMS.md
+      - Android: ANDROID.md
       - Scaling: SCALING.md
       - Dependencies and licences: DEPENDENCIES.md
       - Hardware tests: HARDWARE_TESTS.md

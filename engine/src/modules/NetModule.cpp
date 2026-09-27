@@ -709,6 +709,10 @@ void NetModule::relayEvent(const net::GameEventMsg& e) {
     if (m_server) m_server->relayEvent(e);
 }
 
+void NetModule::sendEventTo(uint8_t playerId, uint16_t kind, const std::vector<uint8_t>& payload) {
+    if (m_server) m_server->sendEventTo(playerId, kind, payload);
+}
+
 void NetModule::fixedUpdate(const FixedUpdateContext& ctx) {
     if (m_role == Role::Client) driveClientBodies(ctx.fixedDt);
     syncRemoteCapsules(ctx.fixedDt);

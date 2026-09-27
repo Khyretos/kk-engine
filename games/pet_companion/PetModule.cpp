@@ -68,6 +68,11 @@ void PetModule::init(kke::Application& app) {
     kke::InputMap& in = m_input->map(0);
     kke::InputModule::defineCharacterActions(in);
     command_kit::CommandInput::defineActions(in);
+    // BUG-065: the d-pad down is Sit here, so audio.ping moves to View on a
+    // controller (Q stays); orders don't queue in the garden, so Left Shift
+    // is only sprint.
+    in.clearBindings("audio.ping");
+    in.clearBindings("cmd.queue");
     using IM = kke::InputModule;
     auto quick = [&](const char* id, const char* label, SDL_Scancode key, SDL_GamepadButton pad) {
         in.defineAction({ id, label, "Orders", "game" });
@@ -78,7 +83,9 @@ void PetModule::init(kke::Application& app) {
     quick("pet.sit", "Sit", SDL_SCANCODE_2, SDL_GAMEPAD_BUTTON_DPAD_DOWN);
     quick("pet.stay", "Stay", SDL_SCANCODE_3, SDL_GAMEPAD_BUTTON_DPAD_LEFT);
     quick("pet.fetch", "Fetch", SDL_SCANCODE_4, SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
-    quick("pet.drop", "Drop it", SDL_SCANCODE_5, SDL_GAMEPAD_BUTTON_INVALID);
+    quick("pet.drop", "Drop it", SDL_SCANCODE_5, SDL_GAMEPAD_BUTTON_WEST);
+    in.addBinding(IM::bind("audio.ping", IM::key(SDL_SCANCODE_Q)));
+    in.addBinding(IM::bind("audio.ping", IM::pad(SDL_GAMEPAD_BUTTON_BACK)));
     quick("pet.mouse", "Free the mouse / look with it", SDL_SCANCODE_ESCAPE, SDL_GAMEPAD_BUTTON_INVALID);
     quick("panels", "Developer panels", SDL_SCANCODE_F1, SDL_GAMEPAD_BUTTON_INVALID);
     m_input->commitDefaults();

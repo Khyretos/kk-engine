@@ -4,11 +4,13 @@
 #include "kke/Log.h"
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/UiModule.h"
-#include "kke/modules/MaterialGridModule.h"
 #include "kke/modules/DebugControlModule.h"
+#include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/InputModule.h"
 #include "kke/modules/StatsModule.h"
 #if KKE_ENABLE_FEMFX
 #include "kke/modules/PhysicsModule.h"
+#include "PhysicsDemoModule.h"
 #endif
 
 #include <iostream>
@@ -48,19 +50,23 @@ int main() {
         // falling objects landing on it, not the underside of
         // anything. Target sits slightly above the floor, roughly
         // where the objects actually land.
+        // Controls are actions (keyboard, mouse or controller, rebindable).
+        app.addModule<kke::InputModule>("physics_demo_input.json");
         app.addModule<kke::OrbitCameraModule>(
             /*initialDistance=*/15.0f,
             /*initialPitch=*/-0.4f,
             /*initialYaw=*/-0.6f,
             /*initialTarget=*/glm::vec3(0.0f, 1.0f, 1.0f)
-        );
+        ).setPadControls(true); // right stick turns, d-pad zooms
 
         // renderScale=1.0: real physics units, matching the camera
         // above rather than the 0.02 shrink kke_demo_game needs.
         // initialObjectCount=6: enough to be visibly "several things
         // happening," spread out (see PhysicsModule::init()'s own
         // spawn loop) so they don't all land in one overlapping pile.
-        app.addModule<kke::PhysicsModule>(/*renderScale=*/1.0f, /*initialObjectCount=*/6);
+        // Its own ImGui "Physics" window is a developer panel (F1 tools);
+        // players get the RmlUi panel below.
+        app.addModule<kke::PhysicsModule>(/*renderScale=*/1.0f, /*initialObjectCount=*/6).setUiVisible(false);
         app.addModule<kke::AudioModule>(); // impacts and breaks make sound
         app.addModule<kke::SoundVisualizerModule>();
 
@@ -77,8 +83,12 @@ int main() {
         fillLight.color = glm::vec3(0.55f, 0.65f, 0.85f); // cool blue-ish fill
         fillLight.intensity = 0.35f;
 
+        // The panel (RmlUi, kke::DemoPanelModule) replaces the mouse-only
+        // Material Grid: materials, scenes and the debris budget from a
+        // controller (View), the keyboard (F3) or the mouse.
         app.addModule<kke::UiModule>();
-        app.addModule<kke::MaterialGridModule>();
+        app.addModule<kke_physics_demo::PhysicsDemoModule>();
+        app.addModule<kke::DemoPanelModule>("Physics");
         app.addModule<kke::DebugControlModule>();
         app.addModule<kke::StatsModule>();
 

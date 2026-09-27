@@ -21,8 +21,7 @@ public:
     std::vector<kke::ModuleDependency> dependencies() const override;
     void init(kke::Application& app) override;
     void update(const kke::UpdateContext& ctx) override;
-    void renderUi() override;
-    void onEvent(const SDL_Event& event) override; // B toggles the bone view
+    void onEvent(const SDL_Event& event) override; // F1: developer panels, Shift+R: everyone falls
 
     // The pack's root folder (containing _SourceFiles/), or empty.
     const std::string& packDir() const { return m_packDir; }
@@ -61,6 +60,11 @@ private:
     kke::ModelModule::ModelId load(const std::string& relative);
     void place(const std::string& relative, glm::vec3 position, float yawDegrees = 0.0f, glm::vec3 scale = glm::vec3(1.0f));
     void rotateBone(Character& c, const char* bone, glm::vec3 eulerDegrees);
+    void defineInput();
+    void readInput();
+    void buildPanel();
+    void select(int index);
+    void ragdollAll(bool everyone);
 
     kke::Application* m_app = nullptr;
     kke::ModelModule* m_models = nullptr;
@@ -76,6 +80,7 @@ private:
     size_t m_propCount = 0;
     std::vector<kke::Module*> m_enginePanels;
     bool m_showEnginePanels = false;
+    int m_selectedIndex = 0; // the panel's view of m_selected
 };
 
 } // namespace kke_demo

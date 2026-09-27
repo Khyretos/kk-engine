@@ -12,10 +12,12 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [RELEASES.md](RELEASES.md) | Downloadable Windows and Linux builds: how a tag becomes a release |
 | [tutorials/](tutorials/index.md) | Make your own game from the starter template, then walk, break, pick up and add sound |
 | [cookbook/](cookbook/index.md) | Recipes from your first line of Lua to cameras, A*, flocking, IK and multiplayer, each run and pictured by CI |
+| [demos/](demos/index.md) | Every demo explained in depth (how it works, why, how to make a game like it), and which one to start from |
 | [AI_ASSISTANTS.md](AI_ASSISTANTS.md) | Making games with any AI assistant: AGENTS.md, the skills, llms.txt, tools/check_game |
 | [HISTORY.md](HISTORY.md) | The development log: the original README, kept whole |
 | [AUDIO.md](AUDIO.md) | The audio engine: mixer, 3D sound, occlusion, impact synthesis, accessibility |
 | [INPUT.md](INPUT.md) | Rebindable actions, devices, triggers and chords |
+| [DEMO_PANEL.md](DEMO_PANEL.md) | A settings panel for a demo or tool that works with a controller, the keyboard and the mouse |
 | [LOBBY.md](LOBBY.md) | The start menu: controllers press A to join, players pick a look, player 1 sets the CPU players |
 | [COMMANDS.md](COMMANDS.md) | Orders for companions and squads: selection, formations, radial wheel, Lua and nodes |
 | [MOVEMENT.md](MOVEMENT.md) | How characters move, and the animation principles behind it |

@@ -108,6 +108,14 @@ join a new one (and is told nothing it could use).
     clock onto ours.
   - *Events*: reliable, game-defined messages (a shot, a push). The server
     receives a client's event and decides whether to apply and relay it.
+  - *Calls*: a script's `net.call` is an event (`script_net::kScriptCall`)
+    with a request id; the server's `net.handle` runs it and answers that
+    player alone (`kScriptReply`) with the result or why not. A handler
+    runs all or nothing (a store transaction, with its sends and spawns
+    held back until it succeeds), the idea of SpacetimeDB's reducers
+    (`kke/ScriptCalls.h`, docs/SCRIPTING.md "Calls"). A server without
+    scripts answers "nothing answers" at once rather than passing the
+    call on.
   - *Spawned objects*: things the host makes while playing (a server
     script's crate or breakable) are `Spawn` messages: an id, a kind and
     the builder's own description (up to 256 bytes). Each client builds
@@ -441,7 +449,8 @@ default), with nothing to sign up for:
   with in-band forward error correction: a single lost packet is rebuilt
   from the next one. `Voice` messages go on the unreliable channel.
 - **Talking**: push-to-talk (the `voice.talk` action, **B** by default,
-  rebindable like any action), voice activated (a gate that follows the
+  rebindable like any action; kke_demo moves it to **P** and **LB**, since
+  B is one of its Lua toys), voice activated (a gate that follows the
   room's noise floor, with a short hangover so word ends aren't cut), or
   open mic. "Hear myself" in the Voice panel tests the microphone.
 - **Who hears it** is decided by the server (`net::VoiceRules`, set on

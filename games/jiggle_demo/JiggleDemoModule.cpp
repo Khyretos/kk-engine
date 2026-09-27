@@ -5,11 +5,12 @@
 #include "kke/AssetCatalog.h"
 #include "kke/Log.h"
 #include "kke/SceneLoader.h"
+#include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/InputModule.h"
 #include "kke/modules/OrbitCameraModule.h"
 
 #include <SDL3/SDL.h>
 #include <glm/gtc/matrix_transform.hpp>
-#include <imgui.h>
 
 #include <algorithm>
 #include <chrono>
@@ -107,6 +108,8 @@ void JiggleDemoModule::init(kke::Application& app) {
         if (m >= 0 && m <= static_cast<int>(Move::Tour)) m_move = static_cast<Move>(m);
     }
     setScene(start);
+    defineInput();
+    buildPanel();
 }
 
 void JiggleDemoModule::setScene(Scene s) {
@@ -198,7 +201,7 @@ void JiggleDemoModule::setupBodies() {
     const std::string ualFile = animDir.empty() ? std::string() : (std::filesystem::path(animDir) / "UAL1_Standard.fbx").string();
     if (ualFile.empty() || !std::filesystem::exists(ualFile)) {
         m_bodyStatus = "Animation library not found (assets/animations/UAL1_Standard.fbx).";
-        log->warn("{}", m_bodyStatus);
+        log->info("{}", m_bodyStatus); // optional download; the panel says so too
         return;
     }
     std::vector<std::string> searched;
@@ -228,7 +231,8 @@ void JiggleDemoModule::setupBodies() {
     // The shape and the soft-tissue bones first, then the clips (the new
     // bones have no UAL counterpart and stay at rest in them).
     const kke::HumanoidJiggleSetup setup = kke::addHumanoidSoftTissue(body, m_tissue);
-    for (const std::string& m : setup.missing) log->warn("'{}': soft tissue: no {}", asset->name, m);
+    // A character without a breast or belly bone just jiggles less: info.
+    for (const std::string& m : setup.missing) log->info("'{}': soft tissue: no {}", asset->name, m);
     const kke::BoneMatch match = kke::matchBones(ual, body);
     m_rig = kke::ModelData{};
     m_rig.bones = body.bones;
@@ -338,8 +342,14 @@ void JiggleDemoModule::updateBodies(float dt) {
             if (m_sideView) {
                 // From outside the circle, looking at her side (and so across
                 // the direction she runs: where lag and bounce show best).
-                m_camera->setView(want, m_camera->distance(), m_camera->pitch(), std::atan2(-std::cos(a), -std::sin(a)));
+                // Turning the camera (mouse or right stick) since the last
+                // frame moves the view around her, kept relative to her side.
+                if (m_sideViewSet) m_sideYawOffset += std::remainder(m_camera->yaw() - m_sideYaw, 6.2831853f);
+                m_sideYaw = std::atan2(-std::cos(a), -std::sin(a)) + m_sideYawOffset;
+                m_sideViewSet = true;
+                m_camera->setView(want, m_camera->distance(), m_camera->pitch(), m_sideYaw);
             } else {
+                m_sideViewSet = false;
                 m_camera->setTarget(want);
             }
         }
@@ -350,6 +360,8 @@ void JiggleDemoModule::updateBodies(float dt) {
 // ---------------------------------------------------------------------
 
 void JiggleDemoModule::update(const kke::UpdateContext& ctx) {
+    readInput();
+    m_sceneIndex = m_scene == Scene::Jelly ? 0 : 1;
     const float dt = std::min(ctx.dt, 0.1f);
     if (m_scene == Scene::Jelly) updateJelly(dt);
     else updateBodies(dt);
@@ -385,109 +397,157 @@ void JiggleDemoModule::renderShadow(const kke::ShadowRenderContext& ctx) {
     if (m_scene == Scene::Jelly) m_jellyMesh->drawShadow(ctx);
 }
 
-void JiggleDemoModule::onEvent(const SDL_Event& event) {
-    if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat || ImGui::GetIO().WantTextInput) return;
-    switch (event.key.key) {
-    case SDLK_TAB: setScene(m_scene == Scene::Jelly ? Scene::Body : Scene::Jelly); break;
-    case SDLK_SPACE:
+void JiggleDemoModule::defineInput() {
+    auto* in = m_app->getModule<kke::InputModule>();
+    if (!in) return;
+    using IM = kke::InputModule;
+    kke::InputMap& m = in->map(0);
+    auto action = [&](const char* id, const char* label, SDL_Scancode key, SDL_GamepadButton pad) {
+        m.defineAction({ id, label, "Jiggle" });
+        m.addBinding(IM::bind(id, IM::key(key)));
+        m.addBinding(IM::bind(id, IM::pad(pad)));
+    };
+    action("jiggle.scene", "Jelly / body", SDL_SCANCODE_TAB, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+    action("jiggle.go", "Rain balls on / off (jelly), jump (body)", SDL_SCANCODE_SPACE, SDL_GAMEPAD_BUTTON_SOUTH);
+    action("jiggle.ball", "Big ball", SDL_SCANCODE_B, SDL_GAMEPAD_BUTTON_WEST);
+    action("jiggle.squish", "Squish", SDL_SCANCODE_P, SDL_GAMEPAD_BUTTON_NORTH);
+    action("jiggle.reset", "Reset the jelly", SDL_SCANCODE_R, SDL_GAMEPAD_BUTTON_EAST);
+    action("jiggle.move", "Next move", SDL_SCANCODE_M, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
+    // Keys 1-5 pick a move directly (keyboard shortcuts, rebindable; a
+    // controller steps through them with jiggle.move).
+    const char* moves[] = { "Idle", "Walk", "Jog", "Sprint", "Tour" };
+    for (int i = 0; i < 5; ++i) {
+        const std::string id = "jiggle.move" + std::to_string(i + 1);
+        m.defineAction({ id, moves[i], "Jiggle" });
+        m.addBinding(IM::bind(id, IM::key(static_cast<SDL_Scancode>(SDL_SCANCODE_1 + i))));
+    }
+    in->commitDefaults();
+}
+
+void JiggleDemoModule::readInput() {
+    auto* in = m_app->getModule<kke::InputModule>();
+    if (!in) return;
+    const kke::InputMap& m = in->map(0);
+    for (int k = 0; k < 5; ++k)
+        if (m.pressed("jiggle.move" + std::to_string(k + 1))) m_move = static_cast<Move>(k);
+    if (m.pressed("jiggle.scene")) setScene(m_scene == Scene::Jelly ? Scene::Body : Scene::Jelly);
+    if (m.pressed("jiggle.go")) {
         if (m_scene == Scene::Jelly) m_rain = !m_rain;
         else jump();
-        break;
-    case SDLK_B: dropBall(0.16f, 2.2f); break;
-    case SDLK_P: m_jelly.poke(glm::vec3(0.0f, m_jelly.params().max.y, 0.0f), glm::vec3(0.0f, -6.0f, 0.0f), 0.35f); break;
-    case SDLK_R: resetJelly(); break;
-    case SDLK_1: m_move = Move::Idle; break;
-    case SDLK_2: m_move = Move::Walk; break;
-    case SDLK_3: m_move = Move::Jog; break;
-    case SDLK_4: m_move = Move::Sprint; break;
-    case SDLK_5: m_move = Move::Tour; break;
-    default: break;
+    }
+    if (m_scene == Scene::Jelly) {
+        if (m.pressed("jiggle.ball")) dropBall(0.16f, 2.2f);
+        if (m.pressed("jiggle.squish")) squish();
+        if (m.pressed("jiggle.reset")) resetJelly();
+    } else if (m.pressed("jiggle.move")) {
+        m_move = static_cast<Move>((static_cast<int>(m_move) + 1) % (static_cast<int>(Move::Tour) + 1));
     }
 }
 
-void JiggleDemoModule::renderUi() {
-    const float s = ImGui::GetFontSize() / 13.0f;
-    ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 350 * s, 10 * s), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(340 * s, 0), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Jiggle physics");
-    int scene = m_scene == Scene::Jelly ? 0 : 1;
-    if (ImGui::RadioButton("Jelly", scene == 0)) setScene(Scene::Jelly);
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Body", scene == 1)) setScene(Scene::Body);
-    ImGui::SameLine();
-    ImGui::TextDisabled("(Tab)");
-    ImGui::Separator();
-    if (m_scene == Scene::Jelly) {
-        kke::JellyBody::Params& p = m_jelly.params();
-        ImGui::Checkbox("Rain balls (Space)", &m_rain);
-        ImGui::SliderFloat("Every", &m_rainInterval, 0.15f, 2.0f, "%.2f s");
-        if (ImGui::Button("Big ball (B)")) dropBall(0.16f, 2.2f);
-        ImGui::SameLine();
-        if (ImGui::Button("Squish (P)")) m_jelly.poke(glm::vec3(0.0f, p.max.y, 0.0f), glm::vec3(0.0f, -6.0f, 0.0f), 0.35f);
-        ImGui::SameLine();
-        if (ImGui::Button("Reset (R)")) resetJelly();
-        ImGui::SliderFloat("Firmness", &p.stiffness, 0.03f, 1.0f, "%.2f");
-        ImGui::SliderInt("Iterations", &p.iterations, 1, 8);
-        ImGui::SliderFloat("Damping", &p.damping, 0.0f, 0.2f, "%.3f");
-        ImGui::SeparatorText("Look");
-        const char* looks[kLookCount];
-        for (int i = 0; i < kLookCount; ++i) looks[i] = kLooks[i].name;
-        if (ImGui::Combo("Flavour", &m_look, looks, kLookCount)) {
-            m_density = kLooks[m_look].density;
-            m_milkiness = kLooks[m_look].milkiness;
-        }
-        ImGui::Checkbox("Translucent", &m_translucent);
-        ImGui::SameLine();
-        ImGui::Checkbox("Fruit inside", &m_fruit);
-        ImGui::SliderFloat("Density", &m_density, 0.0f, 4.0f, "%.2f");
-        ImGui::SliderFloat("Milkiness", &m_milkiness, 0.0f, 1.0f, "%.2f");
-        ImGui::Separator();
-        ImGui::Text("Lattice: %zu particles, surface %zu triangles", m_jelly.particleCount(), m_jelly.surfaceIndices().size() / 3);
-        ImGui::Text("Balls: %zu   deformation %.1f mm", m_balls.size(), m_jelly.deformation() * 1000.0f);
-        ImGui::Text("Solve: %.3f ms per frame", m_jellyMs);
-    } else if (!m_bodiesReady) {
-        ImGui::TextWrapped("%s", m_bodyStatus.c_str());
-    } else {
-        ImGui::Text("%s", m_characterName.c_str());
-        if (ImGui::Checkbox("Twin without jiggle", &m_showTwin)) setScene(m_scene);
-        ImGui::TextDisabled("The twin runs half a lap behind with the same\nbody and clips, but no jiggle, to compare.");
-        const char* moves[] = { "Idle (1)", "Walk (2)", "Jog (3)", "Sprint (4)", "Tour (5)" };
-        int m = static_cast<int>(m_move);
-        if (ImGui::Combo("Move", &m, moves, 5)) m_move = static_cast<Move>(m);
-        if (ImGui::Button("Jump (Space)")) jump();
-        ImGui::Checkbox("Show points", &m_showPoints);
-        ImGui::SameLine();
-        ImGui::Checkbox("Camera follows", &m_follow);
-        if (m_follow) ImGui::Checkbox("Side view", &m_sideView);
-        Dancer* jig = nullptr;
-        for (Dancer& d : m_dancers)
-            if (d.jiggle) jig = &d;
-        if (jig && jig->rig.valid()) {
-            ImGui::SeparatorText("Breasts");
-            kke::JiggleSettings& b = jig->rig.settings(0);
-            ImGui::SliderFloat("Stiffness##b", &b.stiffness, 0.02f, 1.0f);
-            ImGui::SliderFloat("Soften##b", &b.soften, 0.0f, 1.0f);
-            ImGui::SliderFloat("Stretch##b", &b.stretch, 0.0f, 0.6f);
-            ImGui::SliderFloat("Drag##b", &b.drag, 0.0f, 0.6f);
-            ImGui::SliderFloat("Gravity##b", &b.gravity, 0.0f, 2.0f);
-            ImGui::SliderFloat("Blend##b", &b.blend, 0.0f, 1.0f);
-            // Both sides share the settings.
-            for (size_t c = 1; c < m_bones && c < 2; ++c) jig->rig.settings(c) = b;
-            if (m_bones >= 4) {
-                ImGui::SeparatorText("Glutes");
-                kke::JiggleSettings& g = jig->rig.settings(2);
-                ImGui::SliderFloat("Stiffness##g", &g.stiffness, 0.02f, 1.0f);
-                ImGui::SliderFloat("Drag##g", &g.drag, 0.0f, 0.6f);
-                ImGui::SliderFloat("Blend##g", &g.blend, 0.0f, 1.0f);
-                jig->rig.settings(3) = g;
-            }
-            ImGui::Separator();
-            ImGui::Text("%zu jiggle bones, %zu skin zones, %zu points", m_bones, m_zones, jig->rig.pointCount());
-            ImGui::Text("Jiggle + pose: %.1f us per frame%s", m_jiggleUs, jig->rig.sleeping() ? " (asleep)" : "");
-            ImGui::Text("Peak swing %.0f deg, stretch %.0f %%", m_swing, m_stretchNow * 100.0f);
-        }
-    }
-    ImGui::End();
+void JiggleDemoModule::squish() { m_jelly.poke(glm::vec3(0.0f, m_jelly.params().max.y, 0.0f), glm::vec3(0.0f, -6.0f, 0.0f), 0.35f); }
+
+kke::JiggleRig* JiggleDemoModule::jiggleRig() {
+    if (m_scene != Scene::Body || !m_bodiesReady) return nullptr;
+    for (Dancer& d : m_dancers)
+        if (d.jiggle && d.rig.valid()) return &d.rig;
+    return nullptr;
+}
+
+// The settings (RmlUi, kke::DemoPanelModule): View on a controller or F3
+// opens them, the mouse just clicks. Rows for the other scene hide.
+void JiggleDemoModule::buildPanel() {
+    auto* panel = m_app->getModule<kke::DemoPanelModule>();
+    if (!panel) return;
+    using Panel = kke::DemoPanelModule;
+    auto jelly = [this] { return m_scene == Scene::Jelly; };
+    auto body = [this] { return m_scene == Scene::Body; };
+
+    m_sceneIndex = m_scene == Scene::Jelly ? 0 : 1;
+    auto& top = panel->section("Jiggle physics");
+    top.choice("Scene", &m_sceneIndex, { "Jelly", "Body" }, [this] { setScene(m_sceneIndex == 0 ? Scene::Jelly : Scene::Body); });
+    top.text("{jiggle.scene} jelly / body").showIf(jelly);
+
+    auto& j = panel->section("Jelly");
+    j.sectionIf(jelly);
+    j.text("{jiggle.go} rain  {jiggle.ball} big ball  {jiggle.squish} squish  {jiggle.reset} reset");
+    j.toggle("Rain balls", &m_rain);
+    j.slider("Every", &m_rainInterval, 0.15f, 2.0f, "%.2f s", {}, 0.05f);
+    j.button("Big ball", [this] { dropBall(0.16f, 2.2f); });
+    j.button("Squish", [this] { squish(); });
+    j.button("Reset", [this] { resetJelly(); });
+    kke::JellyBody::Params& p = m_jelly.params();
+    j.slider("Firmness", &p.stiffness, 0.03f, 1.0f, "%.2f", {}, 0.01f);
+    j.slider("Iterations", &p.iterations, 1, 8);
+    j.slider("Damping", &p.damping, 0.0f, 0.2f, "%.3f", {}, 0.005f);
+    j.heading("Look");
+    std::vector<std::string> looks;
+    for (int i = 0; i < kLookCount; ++i) looks.push_back(kLooks[i].name);
+    j.choice("Flavour", &m_look, looks, [this] {
+        m_density = kLooks[m_look].density;
+        m_milkiness = kLooks[m_look].milkiness;
+    });
+    j.toggle("Translucent", &m_translucent);
+    j.toggle("Fruit inside", &m_fruit);
+    j.slider("Density", &m_density, 0.0f, 4.0f, "%.2f", {}, 0.1f);
+    j.slider("Milkiness", &m_milkiness, 0.0f, 1.0f, "%.2f", {}, 0.05f);
+    j.text([this] {
+        char buf[200];
+        std::snprintf(buf, sizeof(buf), "Lattice: %zu particles, surface %zu triangles. Balls: %zu, deformation %.1f mm. Solve: %.3f ms per frame",
+                      m_jelly.particleCount(), m_jelly.surfaceIndices().size() / 3, m_balls.size(),
+                      static_cast<double>(m_jelly.deformation() * 1000.0f), m_jellyMs);
+        return std::string(buf);
+    });
+
+    auto& b = panel->section("Body");
+    b.sectionIf(body);
+    b.text([this] { return m_bodiesReady ? m_characterName : m_bodyStatus; });
+    b.text("{jiggle.move} next move  {jiggle.go} jump").showIf([this] { return m_bodiesReady; });
+    b.toggle("Twin without jiggle", Panel::Ref<bool>([this] { return m_bodiesReady ? &m_showTwin : nullptr; }), [this] { setScene(m_scene); });
+    b.note("The twin runs half a lap behind with the same body and clips, but no jiggle, to compare.").showIf([this] { return m_bodiesReady; });
+    b.choice("Move", Panel::Ref<int>([this] {
+                 m_moveIndex = static_cast<int>(m_move);
+                 return m_bodiesReady ? &m_moveIndex : nullptr;
+             }),
+             { "Idle (1)", "Walk (2)", "Jog (3)", "Sprint (4)", "Tour (5)" }, [this] { m_move = static_cast<Move>(m_moveIndex); });
+    b.button("Jump", [this] { jump(); }).showIf([this] { return m_bodiesReady; });
+    b.toggle("Show points", Panel::Ref<bool>([this] { return m_bodiesReady ? &m_showPoints : nullptr; }));
+    b.toggle("Camera follows", Panel::Ref<bool>([this] { return m_bodiesReady ? &m_follow : nullptr; }));
+    b.toggle("Side view", Panel::Ref<bool>([this] { return m_bodiesReady && m_follow ? &m_sideView : nullptr; }));
+    // Both breasts share one setting, both glutes another: the rows edit
+    // the left one and copy it to the right.
+    auto zone = [this](size_t bone, float kke::JiggleSettings::*field) {
+        return Panel::Ref<float>([this, bone, field]() -> float* {
+            kke::JiggleRig* rig = jiggleRig();
+            if (!rig || bone >= m_bones) return nullptr;
+            return &(rig->settings(bone).*field);
+        });
+    };
+    auto share = [this] {
+        kke::JiggleRig* rig = jiggleRig();
+        if (!rig) return;
+        for (size_t c = 1; c < m_bones && c < 2; ++c) rig->settings(c) = rig->settings(0);
+        if (m_bones >= 4) rig->settings(3) = rig->settings(2);
+    };
+    b.heading("Breasts").showIf([this] { return jiggleRig() != nullptr; });
+    b.slider("Stiffness", zone(0, &kke::JiggleSettings::stiffness), 0.02f, 1.0f, "%.2f", share, 0.02f);
+    b.slider("Soften", zone(0, &kke::JiggleSettings::soften), 0.0f, 1.0f, "%.2f", share, 0.02f);
+    b.slider("Stretch", zone(0, &kke::JiggleSettings::stretch), 0.0f, 0.6f, "%.2f", share, 0.02f);
+    b.slider("Drag", zone(0, &kke::JiggleSettings::drag), 0.0f, 0.6f, "%.2f", share, 0.02f);
+    b.slider("Gravity", zone(0, &kke::JiggleSettings::gravity), 0.0f, 2.0f, "%.2f", share, 0.05f);
+    b.slider("Blend", zone(0, &kke::JiggleSettings::blend), 0.0f, 1.0f, "%.2f", share, 0.02f);
+    b.heading("Glutes").showIf([this] { return jiggleRig() != nullptr && m_bones >= 4; });
+    b.slider("Stiffness", zone(2, &kke::JiggleSettings::stiffness), 0.02f, 1.0f, "%.2f", share, 0.02f);
+    b.slider("Drag", zone(2, &kke::JiggleSettings::drag), 0.0f, 0.6f, "%.2f", share, 0.02f);
+    b.slider("Blend", zone(2, &kke::JiggleSettings::blend), 0.0f, 1.0f, "%.2f", share, 0.02f);
+    b.text([this] {
+        kke::JiggleRig* rig = jiggleRig();
+        if (!rig) return std::string();
+        char buf[240];
+        std::snprintf(buf, sizeof(buf), "%zu jiggle bones, %zu skin zones, %zu points. Jiggle + pose: %.1f us per frame%s. Peak swing %.0f deg, stretch %.0f%%",
+                      m_bones, m_zones, rig->pointCount(), m_jiggleUs, rig->sleeping() ? " (asleep)" : "", static_cast<double>(m_swing),
+                      static_cast<double>(m_stretchNow * 100.0f));
+        return std::string(buf);
+    }).showIf([this] { return jiggleRig() != nullptr; });
 }
 
 } // namespace kke_jiggle

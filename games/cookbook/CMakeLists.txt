@@ -3,7 +3,7 @@
 # regions of these files, and CI builds and runs it.
 set(GAME_NAME cookbook)
 
-add_executable(${GAME_NAME} main.cpp CookbookPlayer.cpp Mannequin.cpp)
+kke_add_game(${GAME_NAME} main.cpp CookbookPlayer.cpp Mannequin.cpp)
 target_link_libraries(${GAME_NAME} PRIVATE kke_engine)
 target_compile_definitions(${GAME_NAME} PRIVATE
     GAME_SCRIPTS_SOURCE="${CMAKE_CURRENT_SOURCE_DIR}/scripts"

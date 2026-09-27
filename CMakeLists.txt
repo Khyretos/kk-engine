@@ -620,10 +620,20 @@ if(KKE_ENABLE_NET AND KKE_ENABLE_VOICE)
         SOURCE_SUBDIR  kke-no-cmake
     )
     FetchContent_MakeAvailable(rnnoise speexdsp)
+    # rnn.c stops on an unknown layer type by writing through a null
+    # pointer (*(int*)0=0), which clang rightly reports: the optimiser may
+    # delete it rather than trap. The compiled copy calls abort() instead,
+    # the same intent spelled so it always happens.
+    file(READ ${rnnoise_SOURCE_DIR}/src/rnn.c _kke_rnn_c)
+    string(REPLACE "*(int*)0=0;" "abort();" _kke_rnn_c "${_kke_rnn_c}")
+    set(KKE_RNN_C ${CMAKE_BINARY_DIR}/rnnoise-patched/rnn.c)
+    file(WRITE ${KKE_RNN_C}.new "#include <stdlib.h>\n${_kke_rnn_c}")
+    configure_file(${KKE_RNN_C}.new ${KKE_RNN_C} COPYONLY)
     add_library(kke_rnnoise STATIC
-        ${rnnoise_SOURCE_DIR}/src/denoise.c ${rnnoise_SOURCE_DIR}/src/rnn.c ${rnnoise_SOURCE_DIR}/src/rnn_data.c
+        ${rnnoise_SOURCE_DIR}/src/denoise.c ${KKE_RNN_C} ${rnnoise_SOURCE_DIR}/src/rnn_data.c
         ${rnnoise_SOURCE_DIR}/src/pitch.c ${rnnoise_SOURCE_DIR}/src/kiss_fft.c ${rnnoise_SOURCE_DIR}/src/celt_lpc.c)
     target_include_directories(kke_rnnoise SYSTEM PUBLIC ${rnnoise_SOURCE_DIR}/include)
+    target_include_directories(kke_rnnoise PRIVATE ${rnnoise_SOURCE_DIR}/src) # for the patched rnn.c
     set_target_properties(kke_rnnoise PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_compile_options(kke_rnnoise PRIVATE $<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>)
     if(NOT WIN32)
@@ -713,7 +723,8 @@ endif()
 # ---------------------------------------------------------------------------
 # Shader compilation (GLSL -> SPIR-V at build time via glslc/glslangValidator)
 # ---------------------------------------------------------------------------
-find_program(GLSLC_EXECUTABLE glslc)
+# The Android NDK ships glslc, so an Android build needs no Vulkan SDK.
+find_program(GLSLC_EXECUTABLE glslc HINTS ${ANDROID_NDK}/shader-tools/${ANDROID_NDK_HOST_SYSTEM_NAME})
 find_program(GLSLANG_VALIDATOR_EXECUTABLE glslangValidator)
 
 # Shared by every game's CMakeLists.txt (originally duplicated as a
@@ -748,6 +759,19 @@ function(engine_copy_runtime_file TARGET SRC DEST_RELATIVE)
         add_custom_target(${copy_target_name} DEPENDS ${output_path})
     endif()
     add_dependencies(${TARGET} ${copy_target_name})
+endfunction()
+
+# A game's main target. On desktops it is an executable; on Android a game
+# is a shared library that SDL's Java activity loads and calls main() in
+# (android/, docs/ANDROID.md), so every game uses this instead of
+# add_executable and builds for both without changes.
+function(kke_add_game TARGET)
+    if(ANDROID)
+        add_library(${TARGET} SHARED ${ARGN})
+        set_target_properties(${TARGET} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/android-libs/${ANDROID_ABI})
+    else()
+        add_executable(${TARGET} ${ARGN})
+    endif()
 endfunction()
 
 # Shared GLSL included by several shaders (#include "pbr_common.glsl");
@@ -791,6 +815,21 @@ function(engine_add_shader TARGET SHADER_SOURCE)
         add_custom_target(${SHADER_TARGET_NAME} DEPENDS ${SHADER_OUTPUT})
     endif()
     add_dependencies(${TARGET} ${SHADER_TARGET_NAME})
+endfunction()
+
+# What a game needs next to its executable to show RmlUi screens
+# (kke::UiModule, kke::LobbyModule, kke::DemoPanelModule): the UI shaders
+# and the bundled Noto fonts. Button prompt glyphs are copied for every
+# game already (see engine/CMakeLists.txt).
+function(kke_use_ui TARGET)
+    foreach(shader rml_ui.vert rml_ui.frag rml_gradient.frag)
+        engine_add_shader(${TARGET} ${CMAKE_SOURCE_DIR}/shaders/${shader})
+    endforeach()
+    foreach(font NotoSans-Regular.ttf NotoSans-Bold.ttf NotoSans-Italic.ttf NotoColorEmoji.ttf)
+        if(EXISTS ${CMAKE_SOURCE_DIR}/assets/fonts/${font})
+            engine_copy_runtime_file(${TARGET} ${CMAKE_SOURCE_DIR}/assets/fonts/${font} assets/fonts/${font})
+        endif()
+    endforeach()
 endfunction()
 
 # ---------------------------------------------------------------------------
@@ -873,6 +912,7 @@ add_subdirectory(tools/model_info)
 add_subdirectory(tools/seal)
 add_subdirectory(tools/license)
 add_subdirectory(tools/packs)
+add_subdirectory(tools/cook)
 if(KKE_ENABLE_BENCHMARKS)
     add_subdirectory(benchmarks)
 endif()
@@ -931,8 +971,9 @@ if(KKE_ENABLE_JOLT)
     add_subdirectory(games/audio_demo)
 endif()
 # Climb Race: a generated mountain face, climbed hold by hold, against a
-# rival (games/climb_race/README.md). Jolt: the rock and the climbers.
-if(KKE_ENABLE_JOLT)
+# rival (games/climb_race/README.md). Jolt: the rock and the climbers;
+# networking: it always adds kke::NetModule (online races).
+if(KKE_ENABLE_JOLT AND KKE_ENABLE_NET)
     add_subdirectory(games/climb_race)
 endif()
 # Procedural animation: creatures with no clips, hit reactions on joint

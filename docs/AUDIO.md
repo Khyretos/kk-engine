@@ -57,8 +57,8 @@ and what's next. Code: `kke/AudioMixer.h`, `kke/ImpactSynth.h`,
   linger (0.8 s default) so short impacts can be seen. Everything is
   adjustable and saved to `accessibility.json`: on/off, ring and mark
   size, opacity, quietest sound shown, how long marks stay, per-category
-  visibility and colour, captions. On by default in kke_demo, physics_demo
-  and sandbox.
+  visibility and colour, captions. On by default in kke_demo and audio_demo;
+  the sandbox has it in its panels, off until switched on.
 - **Works with no sound card.** miniaudio falls back to its null device;
   failing that the module mixes "silently" on the game thread, so the
   visualizer, logs and tests behave the same in CI and on servers.
@@ -309,7 +309,11 @@ next, with its lowest point at the floor. It sounds like stone.
 
 - **Deaf / hard of hearing:** the visualizer above, plus captions. Every
   sound carries a category and a material so a game can filter or
-  describe it.
+  describe it. The ring and captions are RmlUi (the game needs a
+  UiModule), drawn every frame from `frameStart`: they stay up with the
+  developer panels hidden, in shipping builds, and when a game hides the
+  module's panel with `setUiVisible(false)`. Only its settings window is
+  ImGui ("Customize..." in the Audio panel).
 - **Blind / low vision:** materials are made to be told apart by ear
   (different mode ratios, ring times and noise), front/back gets a tone
   cue, walls audibly muffle, sounds come through the doorway they really

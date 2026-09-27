@@ -87,7 +87,7 @@ Actions. Platforms, hardware targets and consoles: [docs/PLATFORMS.md](docs/PLAT
 
 | Executable | What it shows |
 |---|---|
-| `kke_demo` | The walkable showcase: an animated character in a small level using every system. WASD/Shift/Space to move, V for first/third person, F to shoot, E to push, F1 for engine panels. `KKE_NET=host` / `KKE_NET=join:<ip>` for multiplayer |
+| `kke_demo` | The walkable showcase: an animated character in a small level using every system. WASD/Shift/Space to move, V for first/third person, left click or RT to shoot, E or Y to push, Esc or Start for the menu (it plays fully on a controller), F1 for engine panels. `KKE_NET=host` / `KKE_NET=join:<ip>` for multiplayer |
 | `sandbox` | Browse your asset packs, build a level on a grid, save and load it, make props breakable and throw things at them |
 | `physics_demo` | FEMFX deformable bodies, fracture and plasticity (needs the `everything` preset) |
 | `melt_demo` | Pour lava on ice, wax, chocolate and aluminium and watch them melt |

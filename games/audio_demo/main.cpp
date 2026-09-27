@@ -1,11 +1,14 @@
 #include "kke/Application.h"
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/DebugControlModule.h"
+#include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/InputModule.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/modules/SoundVisualizerModule.h"
 #include "kke/modules/StatsModule.h"
+#include "kke/modules/UiModule.h"
 
 #include "AudioDemoModule.h"
 
@@ -20,12 +23,18 @@ int main() {
         // A clear day in an open field, so the sounds are the story (assets/moods/clear_day.yaml).
         app.setMood("clear_day");
         app.camera().farPlane = 200.0f;
-        app.addModule<kke::OrbitCameraModule>(/*distance=*/9.0f, /*pitch=*/-0.55f, /*yaw=*/0.4f, glm::vec3(0.0f, 1.6f, 0.0f));
+        // Controls are actions (keyboard or controller, rebindable); the
+        // demo's panel is RmlUi (kke::DemoPanelModule, on the right).
+        app.addModule<kke::InputModule>("audio_demo_input.json");
+        app.addModule<kke::UiModule>();
+        app.addModule<kke::OrbitCameraModule>(/*distance=*/9.0f, /*pitch=*/-0.55f, /*yaw=*/0.4f, glm::vec3(0.0f, 1.6f, 0.0f))
+            .setPadControls(true); // right stick turns you, d-pad zooms
         app.addModule<kke::RigidBodyModule>();
         app.addModule<kke::ModelModule>();
         app.addModule<kke::AudioModule>();
         app.addModule<kke::SoundVisualizerModule>().settings.enabled = true;
         app.addModule<kke_audio_demo::AudioDemoModule>();
+        app.addModule<kke::DemoPanelModule>("Audio demo", kke::DemoPanelModule::Side::Right).setWidth(370.0f);
         app.addModule<kke::DebugControlModule>().setUiVisible(false);
         app.addModule<kke::StatsModule>();
         app.run();

@@ -3,7 +3,7 @@
 # third-party component that ends up in a download or image
 # (docs/DEPENDENCIES.md "What ships with a game").
 #
-#   tools/packaging/third_party_licenses.sh --platform linux|windows \
+#   tools/packaging/third_party_licenses.sh --platform linux|windows|android \
 #       [--deps build/_deps] > THIRD_PARTY_LICENSES.txt
 #
 # Used by tools/packaging/package.sh (release downloads) and
@@ -20,7 +20,7 @@ while [ $# -gt 0 ]; do
     *) die "unknown argument '$1'" ;;
     esac
 done
-case "$platform" in linux|windows) ;; *) die "--platform must be linux or windows" ;; esac
+case "$platform" in linux|windows|android) ;; *) die "--platform must be linux, windows or android" ;; esac
 [ -z "$deps" ] || [ -d "$deps" ] || die "--deps folder '$deps' does not exist"
 repo="$(cd "$(dirname "$0")/../.." && pwd)"
 

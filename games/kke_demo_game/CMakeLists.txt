@@ -1,4 +1,4 @@
-add_executable(kke_basics main.cpp CubeModule.cpp DestructionModule.cpp NetworkModule.cpp)
+kke_add_game(kke_basics main.cpp CubeModule.cpp DestructionModule.cpp NetworkModule.cpp)
 target_link_libraries(kke_basics PRIVATE kke_engine)
 
 # Bundled default fonts (see docs/HISTORY.md "Default fonts / font fallback chain")

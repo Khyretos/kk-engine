@@ -89,8 +89,8 @@ private:
     void buildAnimator();
     // Feet on the ground, hands on the edge (after the Animator).
     void applyIk(float dt);
-    void shoot();
-    void forcePush();
+    void shoot(const kke::Camera& cam);
+    void forcePush(const kke::Camera& cam);
     void setCaptured(bool on);
     void readActions(float dt);
     void resetCourse(); // crates back (asks the host when we're a client)
@@ -127,6 +127,7 @@ private:
         std::unique_ptr<kke::Animator> anim;
         uint32_t pad = 0; // device ref; 0 = none (runs the lane)
         bool crouch = false, jumpQueued = false;
+        float fireCooldown = 0.0f;
         float runTime = 0.0f; // on the lane: seconds since the start (< 0 = waiting)
     };
     // Stations (Stations.cpp). The pool: a walled basin of water (vault
@@ -223,7 +224,7 @@ private:
     void updateHud(float dt);
     void setMenuOpen(bool open);
     struct HudState {
-        std::string move, speed, station, stationText, stationLive;
+        std::string move, speed, station, stationText, stationLive, menuHint;
         bool trick = false, panels = false, online = false;
         int players = 1;
     };

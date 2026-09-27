@@ -164,7 +164,9 @@ void ClimbRaceModule::nextMountain() {
 }
 
 void ClimbRaceModule::loadProgress() {
+    // Next to the game, wherever it was started from (KKE_CLIMB_PROGRESS for tests).
     if (const char* path = kke::dev::env("KKE_CLIMB_PROGRESS")) m_progressPath = path;
+    else if (const char* base = SDL_GetBasePath()) m_progressPath = (std::filesystem::path(base) / "climb_race_progress.json").string();
     m_progress.openAll = kke::dev::flag("KKE_CLIMB_ALL");
     nlohmann::json j;
     std::string error;

@@ -288,6 +288,12 @@ void MaterialGridModule::shutdown() {
     m_listener = nullptr;
 }
 
+int MaterialGridModule::presetCount() { return kNumPresets; }
+
+const char* MaterialGridModule::presetLabel(int index) { return index >= 0 && index < kNumPresets ? kPresets[index].label : ""; }
+
+Material MaterialGridModule::presetMaterial(int index) { return index >= 0 && index < kNumPresets ? kPresets[index].material : Material{}; }
+
 } // namespace kke
 
 #endif // KKE_ENABLE_FEMFX

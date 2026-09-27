@@ -31,8 +31,6 @@ public:
     void update(const kke::UpdateContext& ctx) override;
     void render(const kke::RenderContext& ctx) override;
     void renderShadow(const kke::ShadowRenderContext& ctx) override;
-    void renderUi() override;
-    void onEvent(const SDL_Event& event) override;
 
 private:
     enum class Scene { Jelly, Body };
@@ -52,6 +50,12 @@ private:
     void setupBodies();
     void updateBodies(float dt);
     void jump();
+    void squish();
+    void defineInput();
+    void readInput();
+    void buildPanel();
+    kke::JiggleRig* jiggleRig();
+    int m_sceneIndex = 0, m_moveIndex = 0; // the panel's view of m_scene / m_move
 
     kke::Application* m_app = nullptr;
     kke::ModelModule* m_models = nullptr;
@@ -93,6 +97,9 @@ private:
     bool m_showPoints = false;
     bool m_showTwin = false;
     bool m_follow = true;
+    // Side view: the camera's yaw last set, and how far the player turned it.
+    float m_sideYaw = 0.0f, m_sideYawOffset = 0.0f;
+    bool m_sideViewSet = false;
     bool m_sideView = true;
     double m_jiggleUs = 0.0;
     float m_swing = 0.0f, m_stretchNow = 0.0f;

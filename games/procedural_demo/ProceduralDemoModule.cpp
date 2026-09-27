@@ -3,6 +3,8 @@
 #include "kke/Application.h"
 #include "kke/Log.h"
 #include "kke/SphereImpostors.h"
+#include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/InputModule.h"
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/RigidBodyModule.h"
 
@@ -13,6 +15,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <sstream>
 
@@ -401,6 +404,8 @@ void ProceduralDemoModule::init(kke::Application& app) {
 
     const std::string gait = envString("KKE_PROC_GAIT");
     if (!gait.empty()) m_dogGait = kke::gaitFromName(gait);
+    for (int g = 0; g < 4; ++g)
+        if (gaitOf(g) == m_dogGait) m_gaitIndex = g;
     const std::string focus = envString("KKE_PROC_FOCUS");
     for (size_t i = 0; i < m_creatures.size(); ++i)
         if (m_creatures[i].name == focus) m_focus = static_cast<int>(i);
@@ -421,6 +426,8 @@ void ProceduralDemoModule::init(kke::Application& app) {
         }
         m_orbit->setView(glm::vec3(0.5f, 0.3f, 0.0f), dist, glm::radians(pitch), glm::radians(yaw));
     }
+    defineInput();
+    buildPanel();
     kke::log::get(name())->info("{} creatures, no animation clips: click the ground to call them, click the dog or the person to hit",
                                 m_creatures.size());
 }
@@ -607,6 +614,7 @@ void ProceduralDemoModule::updatePhysical(Creature& c, float dt) {
 }
 
 void ProceduralDemoModule::update(const kke::UpdateContext& ctx) {
+    readInput();
     const float dt = std::min(ctx.dt, 1.0f / 20.0f);
     m_time += dt;
     for (Creature& c : m_creatures) {
@@ -690,31 +698,76 @@ void ProceduralDemoModule::renderShadow(const kke::ShadowRenderContext& ctx) {
     m_creatureMesh->drawShadow(ctx);
 }
 
-void ProceduralDemoModule::renderUi() {
-    const float s = ImGui::GetFontSize() / 13.0f;
-    ImGui::SetNextWindowPos(ImVec2(10 * s, 10 * s), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(300 * s, 0), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("Procedural animation")) {
-        ImGui::End();
-        return;
-    }
-    ImGui::TextWrapped("No animation clips: every step is planned. Click the ground to call everyone; click the dog or the person "
-                       "to hit them (Shift = hard); click a bug and it runs. Right-drag turns the view.");
-    ImGui::Text("Dog: 0 auto  1 walk  2 trot  3 gallop (now: %s)", kke::gaitName(m_dogGait));
-    ImGui::Separator();
-    for (const Creature& c : m_creatures) {
-        const char* state = !c.handle ? "" : c.active.state() == kke::ActiveRagdoll::State::Active ? " (staggering)"
-                                         : c.active.state() == kke::ActiveRagdoll::State::Fallen ? " (down)"
-                                                                                                  : " (getting up)";
-        ImGui::Text("%-7s %-7s %4.1f m/s  look %+4.0f deg%s", c.name.c_str(), kke::gaitName(c.gait.gait()), c.speed, c.look.yawDegrees(), state);
-    }
-    ImGui::End();
+void ProceduralDemoModule::defineInput() {
+    auto* in = m_app->getModule<kke::InputModule>();
+    if (!in) return;
+    using IM = kke::InputModule;
+    kke::InputMap& m = in->map(0);
+    // A controller aims with the middle of the screen (the panel's
+    // crosshair); the left stick moves the view there.
+    auto action = [&](const char* id, const char* label, SDL_GamepadButton pad) {
+        m.defineAction({ id, label, "Creatures" });
+        m.addBinding(IM::bind(id, IM::pad(pad)));
+    };
+    action("proc.call", "Call everyone to the middle of the screen", SDL_GAMEPAD_BUTTON_SOUTH);
+    action("proc.hit", "Hit what's in the middle of the screen", SDL_GAMEPAD_BUTTON_WEST);
+    action("proc.hard", "Hit it hard", SDL_GAMEPAD_BUTTON_NORTH);
+    m.defineAction({ "proc.gait", "Dog: next gait", "Creatures" });
+    m.addBinding(IM::bind("proc.gait", IM::key(SDL_SCANCODE_G)));
+    m.addBinding(IM::bind("proc.gait", IM::pad(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)));
+    in->commitDefaults();
 }
 
-void ProceduralDemoModule::click(float mouseX, float mouseY, bool hard) {
+void ProceduralDemoModule::readInput() {
+    auto* in = m_app->getModule<kke::InputModule>();
+    if (!in) return;
+    const kke::InputMap& m = in->map(0);
     int w = 0, h = 0;
-    SDL_Window* window = SDL_GetMouseFocus();
-    if (!window || !SDL_GetWindowSize(window, &w, &h) || w <= 0 || h <= 0) return;
+    SDL_GetWindowSize(m_app->window().handle(), &w, &h);
+    const float cx = float(w) * 0.5f, cy = float(h) * 0.5f;
+    if (m.pressed("proc.call")) click(cx, cy, false, true);
+    if (m.pressed("proc.hit")) click(cx, cy, false, false);
+    if (m.pressed("proc.hard")) click(cx, cy, true, false);
+    if (m.pressed("proc.gait")) {
+        m_gaitIndex = (m_gaitIndex + 1) % 4;
+        m_dogGait = gaitOf(m_gaitIndex);
+    }
+}
+
+// The panel (RmlUi, kke::DemoPanelModule) replaces the old ImGui HUD.
+void ProceduralDemoModule::buildPanel() {
+    auto* panel = m_app->getModule<kke::DemoPanelModule>();
+    if (!panel) return;
+    auto& s = panel->section("Procedural animation");
+    s.note("No animation clips: every step is planned.");
+    s.hint("{mouse:left} on the ground calls everyone; on the dog or the person hits them (Shift: hard); on a bug makes it run. "
+           "{mouse:right} drag turns the view. 0-3 or {proc.gait} dog gait",
+           "{proc.call} call everyone to the crosshair  {proc.hit} hit  {proc.hard} hit hard  {proc.gait} dog gait  "
+           "{camera.pan} move  {camera.orbit} turn  {camera.zoom} zoom");
+    s.choice("Dog gait", &m_gaitIndex, { "Auto", "Walk", "Trot", "Gallop" }, [this] { m_dogGait = gaitOf(m_gaitIndex); });
+    s.slider("Hit strength", &m_hitSpeed, 1.0f, 9.0f, "%.1f m/s", {}, 0.5f);
+    for (size_t i = 0; i < m_creatures.size(); ++i) {
+        s.text([this, i] {
+            const Creature& c = m_creatures[i];
+            const char* state = !c.handle ? "" : c.active.state() == kke::ActiveRagdoll::State::Active ? " (staggering)"
+                                             : c.active.state() == kke::ActiveRagdoll::State::Fallen ? " (down)"
+                                                                                                      : " (getting up)";
+            char buf[128];
+            std::snprintf(buf, sizeof(buf), "%s: %s, %.1f m/s, looking %+.0f deg%s", c.name.c_str(), kke::gaitName(c.gait.gait()),
+                          static_cast<double>(c.speed), static_cast<double>(c.look.yawDegrees()), state);
+            return std::string(buf);
+        });
+    }
+}
+
+kke::Gait ProceduralDemoModule::gaitOf(int index) {
+    const kke::Gait gaits[] = { kke::Gait::Auto, kke::Gait::Walk, kke::Gait::Trot, kke::Gait::Gallop };
+    return gaits[std::clamp(index, 0, 3)];
+}
+
+void ProceduralDemoModule::click(float mouseX, float mouseY, bool hard, bool groundOnly) {
+    int w = 0, h = 0;
+    if (!SDL_GetWindowSize(m_app->window().handle(), &w, &h) || w <= 0 || h <= 0) return;
     // Vulkan clip space: y down, depth 0..1 (the projection already flips y).
     const glm::vec2 ndc(2.0f * mouseX / float(w) - 1.0f, 2.0f * mouseY / float(h) - 1.0f);
     const glm::mat4 inv = glm::inverse(m_proj * m_view);
@@ -727,6 +780,7 @@ void ProceduralDemoModule::click(float mouseX, float mouseY, bool hard) {
     glm::vec3 point(0.0f);
     float bestT = 1e9f;
     for (Creature& c : m_creatures) {
+        if (groundOnly) break; // the pad's "call": never a hit
         if (c.world.size() != c.rig.bones.size()) continue;
         const glm::vec3 center = positionOf(c.world[static_cast<size_t>(c.body)]);
         const float radius = c.kind == Kind::Person ? 0.45f : c.kind == Kind::Dog ? 0.35f : 0.2f;
@@ -754,16 +808,17 @@ void ProceduralDemoModule::click(float mouseX, float mouseY, bool hard) {
 
 void ProceduralDemoModule::onEvent(const SDL_Event& event) {
     if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT) {
-        if (ImGui::GetCurrentContext() && ImGui::GetIO().WantCaptureMouse) return;
-        click(event.button.x, event.button.y, (SDL_GetModState() & SDL_KMOD_SHIFT) != 0);
+        if ((ImGui::GetCurrentContext() && ImGui::GetIO().WantCaptureMouse) || m_app->uiCapturesMouse()) return;
+        click(event.button.x, event.button.y, (SDL_GetModState() & SDL_KMOD_SHIFT) != 0, false);
     } else if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
         switch (event.key.key) {
-        case SDLK_0: m_dogGait = kke::Gait::Auto; break;
-        case SDLK_1: m_dogGait = kke::Gait::Walk; break;
-        case SDLK_2: m_dogGait = kke::Gait::Trot; break;
-        case SDLK_3: m_dogGait = kke::Gait::Gallop; break;
-        default: break;
+        case SDLK_0: m_gaitIndex = 0; break;
+        case SDLK_1: m_gaitIndex = 1; break;
+        case SDLK_2: m_gaitIndex = 2; break;
+        case SDLK_3: m_gaitIndex = 3; break;
+        default: return;
         }
+        m_dogGait = gaitOf(m_gaitIndex);
     }
 }
 

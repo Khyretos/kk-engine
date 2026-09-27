@@ -37,7 +37,6 @@ public:
     void update(const kke::UpdateContext& ctx) override;
     void render(const kke::RenderContext& ctx) override;
     void renderShadow(const kke::ShadowRenderContext& ctx) override;
-    void renderUi() override;
     void onEvent(const SDL_Event& event) override;
 
 private:
@@ -65,6 +64,7 @@ private:
     void updateCamera(float dt);
     void teachNearest();
     void learnAll();
+    void buildPanel();
     void showAnim(kke::ModelModule::InstanceId instance, const Look& look, const std::string& anim, std::string& playing);
 
     kke::Application* m_app = nullptr;

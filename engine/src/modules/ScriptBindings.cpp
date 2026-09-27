@@ -617,7 +617,7 @@ void ScriptModule::bindScenes() {
         return 0;
     });
     // scene.spawnPoint(id) -> position, yaw (degrees)
-    vm.registerFunction("scene", "spawnPoint", [this, owned](lua_State* L) {
+    vm.registerFunction("scene", "spawnPoint", [owned](lua_State* L) {
         const Scene& sc = owned(L, "scene.spawnPoint");
         ScriptVM::pushVec3(L, sc.spawn);
         lua_pushnumber(L, sc.spawnYaw);
@@ -632,7 +632,31 @@ void ScriptModule::bindNet() {
     auto* net = m_app->getModule<NetModule>();
     if (!net) return;
     ScriptVM& vm = *m_vm;
-    net->addEventListener([this](const net::GameEventMsg& e) {
+    // net.call / net.handle (kke/ScriptCalls.h): a host or an offline game
+    // answers its own calls and its clients'; a client asks the host.
+    m_calls = std::make_unique<ScriptCalls>(vm, ScriptCalls::Link{
+        [net] { return net->role() != NetModule::Role::Client; },
+        [net](const std::vector<uint8_t>& bytes) {
+            if (!net->connected()) return false;
+            net->sendEvent(script_net::kScriptCall, bytes);
+            return true;
+        },
+        [net](int player, const std::vector<uint8_t>& bytes) { net->sendEventTo(uint8_t(player), script_net::kScriptReply, bytes); },
+        [net] { return int(net->localPlayerId()); },
+        [this](const std::function<bool()>& run) { return runCallAtomically(run); },
+    });
+    m_calls->maxPayloadBytes = kke::net::kMaxEventBytes;
+    m_calls->warn = [this](const std::string& line) { log::get(name())->warn("{}", line); };
+    m_calls->bind();
+    net->addEventListener([this, net](const net::GameEventMsg& e) {
+        if (e.kind == script_net::kScriptCall) {
+            if (net->role() == NetModule::Role::Host) m_calls->callReceived(e.fromPlayer, e.payload);
+            return;
+        }
+        if (e.kind == script_net::kScriptReply) {
+            if (net->role() == NetModule::Role::Client) m_calls->replyReceived(e.payload);
+            return;
+        }
         if (e.kind != NetModule::kScriptEventKind) return;
         // name \0 value-bytes (ScriptVM::encodeValue); anything else is dropped.
         const auto zero = std::find(e.payload.begin(), e.payload.end(), uint8_t(0));
@@ -669,12 +693,12 @@ void ScriptModule::bindNet() {
     });
     // net.send(name, data): from a client to the host; from the host to
     // every client. The receiver's scripts get hook "NetMessage"(name, data, from).
-    vm.registerFunction("net", "send", [net](lua_State* L) {
+    vm.registerFunction("net", "send", [this, net](lua_State* L) {
         size_t len = 0;
         const char* name = luaL_checklstring(L, 1, &len);
         if (len == 0 || len > 64 || std::memchr(name, 0, len)) return luaL_error(L, "net.send: the name must be 1-64 characters");
         std::string bytes, err;
-        if (!ScriptVM::encodeValue(L, 2, bytes, err, 1024)) return luaL_error(L, "net.send: %s", err.c_str());
+        if (!ScriptVM::encodeValue(L, 2, bytes, err, kke::net::kMaxEventBytes - 1 - len)) return luaL_error(L, "net.send: %s", err.c_str());
         if (!net->connected() && net->role() != NetModule::Role::Host) {
             lua_pushboolean(L, 0);
             return 1;
@@ -682,14 +706,41 @@ void ScriptModule::bindNet() {
         std::vector<uint8_t> payload(name, name + len);
         payload.push_back(0);
         payload.insert(payload.end(), bytes.begin(), bytes.end());
-        net->sendEvent(NetModule::kScriptEventKind, payload);
+        if (m_inCall) m_heldSends.push_back(std::move(payload)); // sent once the call succeeded
+        else net->sendEvent(NetModule::kScriptEventKind, payload);
         lua_pushboolean(L, 1);
         return 1;
     });
 #endif
 }
 
+bool ScriptModule::runCallAtomically(const std::function<bool()>& run) {
+    // The script store's writes and the net.sends are all or nothing;
+    // what else a game's handler changes (bodies, UI) stays as it is.
+    m_inCall = true;
+    storage::Store* store = m_store ? m_store->store() : nullptr;
+    const bool ok = store ? store->transaction(run) : run();
+    m_inCall = false;
+    std::vector<std::vector<uint8_t>> held = std::move(m_heldSends);
+    m_heldSends.clear();
+#if KKE_ENABLE_NET
+    if (ok)
+        if (auto* net = m_app->getModule<NetModule>())
+            for (const auto& payload : held) net->sendEvent(NetModule::kScriptEventKind, payload);
+#endif
+    return ok;
+}
+
 void ScriptModule::dispatchNet() {
+#if KKE_ENABLE_NET
+    if (m_calls)
+        if (auto* net = m_app->getModule<NetModule>()) {
+            const bool online = net->role() == NetModule::Role::Client && net->connected();
+            if (m_callsOnline && !online) m_calls->disconnected("the connection to the server was lost");
+            m_callsOnline = online;
+            m_calls->update(m_time);
+        }
+#endif
     if (m_netInbox.empty()) return;
     auto inbox = std::move(m_netInbox);
     m_netInbox.clear();
@@ -709,6 +760,7 @@ void ScriptModule::dispatchNet() {
 
 // ---------------------------------------------------------------- cleanup
 void ScriptModule::releaseScript(const std::string& source) {
+    if (m_calls) m_calls->release(source);
     auto mine = [&](const std::string& s) { return s == source; };
     // Replicated ones: gone on the clients too.
     for (const Body& b : m_bodies)

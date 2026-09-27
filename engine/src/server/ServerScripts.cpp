@@ -165,6 +165,7 @@ void ServerScripts::update(double now, float dt) {
             return 3;
         });
     }
+    m_calls->update(now);
     m_vm->callHook("Think", dt);
 #if KKE_ENABLE_JOLT
     if (RigidWorld* w = m_services.world) {
@@ -192,6 +193,7 @@ void ServerScripts::shutdown() {
     for (const std::string& f : m_files) m_vm->unload(f);
     m_vm->unload("console"); // what `lua` lines made
     m_files.clear();
+    m_calls.reset(); // its callbacks live in the vm
 #if KKE_ENABLE_JOLT
     if (RigidWorld* w = m_services.world)
         for (const auto& [id, body] : m_capsules) w->remove(body);
@@ -220,6 +222,10 @@ void ServerScripts::playerLeft(uint8_t id) {
 }
 
 void ServerScripts::netMessage(const net::GameEventMsg& e) {
+    if (e.kind == script_net::kScriptCall) {
+        m_calls->callReceived(e.fromPlayer, e.payload);
+        return;
+    }
     if (e.kind != script_net::kScriptEvent) return;
     // name \0 value-bytes (ScriptVM::encodeValue); anything else is dropped.
     const auto zero = std::find(e.payload.begin(), e.payload.end(), uint8_t(0));
@@ -269,7 +275,36 @@ void ServerScripts::syncCapsules(float dt) {
 #endif
 }
 
+bool ServerScripts::runAtomically(const std::function<bool()>& run) {
+    m_inCall = true;
+    const bool ok = m_services.store ? m_services.store->transaction(run) : run();
+    m_inCall = false;
+    std::vector<std::function<void()>> held = std::move(m_held);
+    m_held.clear();
+    if (ok) {
+        for (const auto& f : held) f();
+    } else {
+        // Its spawns were never announced: they just go.
+        for (uint32_t id : m_spawnedInCall) {
+#if KKE_ENABLE_JOLT
+            if (m_services.world) m_services.world->remove(id);
+#endif
+            std::erase_if(m_bodies, [id](const Body& b) { return b.id == id; });
+        }
+        if (m_boardsBefore && m_services.leaderboards) *m_services.leaderboards = *m_boardsBefore;
+    }
+    m_spawnedInCall.clear();
+    m_boardsBefore.reset();
+    return ok;
+}
+
+void ServerScripts::effect(std::function<void()> f) {
+    if (m_inCall) m_held.push_back(std::move(f));
+    else f();
+}
+
 void ServerScripts::release(const std::string& source) {
+    if (m_calls) m_calls->release(source);
     for (const Body& b : m_bodies) {
         if (b.source != source) continue;
         if (b.netId) m_net.despawn(b.netId);
@@ -382,17 +417,17 @@ void ServerScripts::bind() {
         const char* name = luaL_checklstring(L, 1, &len);
         if (len == 0 || len > 64 || std::memchr(name, 0, len)) return luaL_error(L, "net.send: the name must be 1-64 characters");
         std::string bytes, err;
-        if (!ScriptVM::encodeValue(L, 2, bytes, err, 1024)) return luaL_error(L, "net.send: %s", err.c_str());
-        const std::vector<uint8_t> payload = scriptMessage(name, len, bytes);
+        if (!ScriptVM::encodeValue(L, 2, bytes, err, net::kMaxEventBytes - 1 - len)) return luaL_error(L, "net.send: %s", err.c_str());
+        std::vector<uint8_t> payload = scriptMessage(name, len, bytes);
         if (lua_isnoneornil(L, 3)) {
-            m_net.sendEvent(script_net::kScriptEvent, payload);
+            effect([this, payload = std::move(payload)] { m_net.sendEvent(script_net::kScriptEvent, payload); });
         } else {
             const lua_Integer to = luaL_checkinteger(L, 3);
             if (to < 1 || to > 255 || !m_names.count(uint8_t(to))) {
                 lua_pushboolean(L, 0);
                 return 1;
             }
-            m_net.sendEventTo(uint8_t(to), script_net::kScriptEvent, payload);
+            effect([this, to, payload = std::move(payload)] { m_net.sendEventTo(uint8_t(to), script_net::kScriptEvent, payload); });
         }
         lua_pushboolean(L, 1);
         return 1;
@@ -404,7 +439,7 @@ void ServerScripts::bind() {
         size_t len = 0;
         const char* text = luaL_checklstring(L, 1, &len);
         len = std::min(len, net::kMaxEventBytes);
-        m_net.sendEvent(net::kEventServerMessage, std::vector<uint8_t>(text, text + len));
+        effect([this, msg = std::vector<uint8_t>(text, text + len)] { m_net.sendEvent(net::kEventServerMessage, msg); });
         return 0;
     });
     vm.registerFunction("server", "kick", [this](lua_State* L) {
@@ -414,7 +449,7 @@ void ServerScripts::bind() {
             lua_pushboolean(L, 0);
             return 1;
         }
-        m_services.kick(uint8_t(id), reason);
+        effect([this, id, reason] { m_services.kick(uint8_t(id), reason); });
         lua_pushboolean(L, 1);
         return 1;
     });
@@ -434,6 +469,7 @@ void ServerScripts::bind() {
             if (!Leaderboard::validBoardName(board)) return luaL_error(L, "server.score: '%s' isn't a board name", board.c_str());
             if (player.empty() || score != score || score < -2147483648.0 || score > 2147483647.0)
                 return luaL_error(L, "server.score: needs a player and a whole number score");
+            if (m_inCall && !m_boardsBefore) m_boardsBefore = std::make_unique<Leaderboard>(*m_services.leaderboards);
             lua_pushboolean(L, m_services.leaderboards->submit(board, player, int32_t(score), unixTime()));
             return 1;
         });
@@ -454,6 +490,19 @@ void ServerScripts::bind() {
             return 1;
         });
     }
+    m_calls = std::make_unique<ScriptCalls>(vm, ScriptCalls::Link{
+        [] { return true; },
+        {},
+        [this](int player, const std::vector<uint8_t>& bytes) { m_net.sendEventTo(uint8_t(player), script_net::kScriptReply, bytes); },
+        [] { return 0; }, // the server, as the host is
+        [this](const std::function<bool()>& run) { return runAtomically(run); },
+    });
+    m_calls->maxPayloadBytes = net::kMaxEventBytes;
+    m_calls->warn = [this](const std::string& line) {
+        if (warn) warn(line);
+        else if (log) log(line);
+    };
+    m_calls->bind();
     bindPhysics();
     if (m_services.store) {
         m_store = std::make_unique<ScriptStore>(*m_services.store, m_services.game);
@@ -496,8 +545,9 @@ void ServerScripts::bindPhysics() {
             m.kind = script_net::kSpawnBody;
             m.desc = script_net::encode(script_net::BodySpawn{ sphere, isStatic, d.position, d.velocity, d.halfExtents, d.radius, d.density, d.friction,
                                                                d.restitution, d.material, color });
-            m_net.spawn(m, true);
+            effect([this, m = std::move(m)] { m_net.spawn(m, true); });
         }
+        if (m_inCall) m_spawnedInCall.push_back(id);
         m_bodies.push_back(b);
         lua_pushinteger(L, lua_Integer(id));
         return 1;
@@ -513,10 +563,12 @@ void ServerScripts::bindPhysics() {
     vm.registerFunction("physics", "sphere", [spawn](lua_State* L) { return spawn(L, true); });
     vm.registerFunction("physics", "remove", [this, w, owned](lua_State* L) {
         const uint32_t id = owned(L, 1);
-        for (const Body& b : m_bodies)
-            if (b.id == id && b.netId) m_net.despawn(b.netId);
-        w->remove(id);
-        std::erase_if(m_bodies, [id](const Body& b) { return b.id == id; });
+        effect([this, w, id] {
+            for (const Body& b : m_bodies)
+                if (b.id == id && b.netId) m_net.despawn(b.netId);
+            w->remove(id);
+            std::erase_if(m_bodies, [id](const Body& b) { return b.id == id; });
+        });
         return 0;
     });
     vm.registerFunction("physics", "position", [w, owned](lua_State* L) { ScriptVM::pushVec3(L, w->position(owned(L, 1))); return 1; });

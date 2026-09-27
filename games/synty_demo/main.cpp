@@ -1,9 +1,13 @@
 #include "kke/Application.h"
+#include "kke/modules/AudioModule.h"
 #include "kke/modules/DebugControlModule.h"
+#include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/InputModule.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/SettingsModule.h"
 #include "kke/modules/StatsModule.h"
+#include "kke/modules/UiModule.h"
 
 #include "SyntySceneModule.h"
 #if KKE_ENABLE_FEMFX
@@ -28,8 +32,16 @@ int main() {
         app.setMood("morning");
         app.camera().farPlane = 200.0f;
 
+        // Controls are actions (keyboard, mouse or controller, rebindable);
+        // the demo's panel is RmlUi (kke::DemoPanelModule).
+        app.addModule<kke::InputModule>("synty_demo_input.json");
+        app.addModule<kke::UiModule>();
+        // Plays the mood's ambience loop (BUG-086).
+        app.addModule<kke::AudioModule>().setUiVisible(false);
         std::vector<kke::Module*> panels;
-        panels.push_back(&app.addModule<kke::OrbitCameraModule>(/*distance=*/9.0f, /*pitch=*/-0.35f, /*yaw=*/2.85f, glm::vec3(0.0f, 0.9f, -1.5f)));
+        auto& camera = app.addModule<kke::OrbitCameraModule>(/*distance=*/9.0f, /*pitch=*/-0.35f, /*yaw=*/2.85f, glm::vec3(0.0f, 0.9f, -1.5f));
+        camera.setPadControls(true); // right stick turns, d-pad zooms
+        panels.push_back(&camera);
         app.addModule<kke::ModelModule>();
 #if KKE_ENABLE_FEMFX
         // Ragdolls (and anything else FEMFX: fracture, soft bodies). Real
@@ -48,6 +60,8 @@ int main() {
         panels.push_back(&app.addModule<kke::PhysicsBridgeModule>());
 #endif
         auto& scene = app.addModule<kke_demo::SyntySceneModule>();
+        // F1 (the engine's ImGui developer panels) is the scene's own switch.
+        app.addModule<kke::DemoPanelModule>("Characters").setDeveloperPanelsKey(false);
         panels.push_back(&app.addModule<kke::DebugControlModule>());
         panels.push_back(&app.addModule<kke::StatsModule>());
         scene.setEnginePanels(panels);

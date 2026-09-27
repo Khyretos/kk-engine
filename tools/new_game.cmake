@@ -48,6 +48,9 @@ replace_in("${DEST}/main.cpp" "app(\"Starter Game\"" "app(\"${TITLE}\"")
 replace_in("${DEST}/game.json" "\"local.starter_game\"" "\"local.${NAME}\"")
 replace_in("${DEST}/game.json" "\"Starter Game\"" "\"${TITLE}\"")
 
+# The template's README explains the template; the new game gets its own.
+file(WRITE "${DEST}/README.md" "# ${TITLE}\n\nMade from the starter game template. How the template works, file by file,\nand how to grow it into a whole game: [games/template/README.md](../template/README.md).\n")
+
 set(LIST "${ROOT}/games/my_games.cmake")
 file(APPEND "${LIST}" "add_subdirectory(\${CMAKE_SOURCE_DIR}/games/${NAME})\n")
 

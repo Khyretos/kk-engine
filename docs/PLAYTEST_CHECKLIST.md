@@ -23,9 +23,9 @@ cd build-release/bin
 Keep the terminal visible: a **warning or error in the log is a bug**
 even when the game looks fine, so copy any `[warn]`/`[error]` line onto
 the Fix line of the section you were in. Have a controller plugged in and try
-it everywhere. Known gap: `sea_demo`, `melt_demo`, `jiggle_demo`,
-`physics_demo`, `audio_demo` and `synty_demo` don't read a controller yet
-(controller support for every demo is its own task next). Demos marked *(Synty)* need your packs in `KKE_ASSETS_DIR`
+it everywhere. `sea_demo`, `melt_demo`, `jiggle_demo`, `physics_demo`
+and `audio_demo` now have a settings panel ([DEMO_PANEL.md](DEMO_PANEL.md)):
+View or F3 gives it the controller. Demos marked *(Synty)* need your packs in `KKE_ASSETS_DIR`
 (or `assets/synty/`); without them they say so on screen and in the log.
 
 ---
@@ -93,8 +93,10 @@ intro and banner.*
 - [ ] Wall run and ledge leaps feel responsive; landing never snaps or sinks into the ground.
 - [ ] Lava station, pool and breaking yard work; the Synty art around them looks placed, not floating *(Synty)*.
 - [ ] V switches first/third person; left click shoots; E pushes.
-- [ ] Controller: every action above works from a pad, and the menu (Esc / Start) is usable with it.
-- [ ] Split screen (`KKE_SPLIT=2 ./kke_demo`): the second player gets a pad and their own view.
+- [ ] Controller: every action above works from a pad (RT shoot, Y push, R3 view, X reset, d-pad up/down zoom, d-pad left ping), and the menu (Esc / Start) is usable with it. The HUD's corner shows Esc on the keyboard and the Start glyph on a pad.
+- [ ] Lua toys on the pad: RB builds a tower, View throws a ball, holding View a second clears. D-pad right starts break-the-targets.
+- [ ] Push-to-talk (voice builds): P or LB.
+- [ ] Split screen (`KKE_SPLIT=2 ./kke_demo`): the second player gets a pad and their own view, and can shoot (RT), push (Y), reset (X) and open the menu (Start) with it.
 - [ ] Multiplayer: `KKE_NET=host` on one copy, `KKE_NET=join:127.0.0.1` on another; both see each other move smoothly.
 - [ ] F1 engine panels open, can be dragged, and close again.
 - [ ] Voice chat echo/noise: see HW-018. The 1-core walk with sound: HW-019.
@@ -137,6 +139,7 @@ kk-engine work.* Detailed hardware checks: HW-005, HW-007, HW-014.
 - [ ] Glass shatters into shards, brick into chunks, rubber bounces, iron dents.
 - [ ] Broken pieces show solid inside faces along the cracks, from every side.
 - [ ] Piles settle and stop jittering; nothing sinks through the floor.
+- [ ] The panel's Fracture seed slider and New fracture seed button work from the controller; the same seed breaks the same way again (HW-014).
 
 **Fix:**
 
@@ -208,7 +211,8 @@ this only re-checks the ambience that came later.
 
 *Thread: Pet companion and platoon demos.*
 
-- [ ] Come, Sit, Stay, Fetch, Drop (1-5 or D-pad) each do what they say.
+- [ ] Come, Sit, Stay, Fetch, Drop (1-5, or the D-pad and X) each do what they say.
+- [ ] Q or View pings the surroundings; the d-pad down only makes the pug sit.
 - [ ] The order wheel (Tab / LB) is easy to use with mouse and controller.
 - [ ] Petting (E / Y) looks cute and reads as petting.
 - [ ] The pug never blocks your path or clips through you.

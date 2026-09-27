@@ -92,6 +92,9 @@ private:
     void measure();
     void logMeasured(const Station& s, const Measured& m) const;
     kke::Listener listener() const;
+    void defineInput();
+    void readInput();
+    void buildPanel();
 
     kke::Application* m_app = nullptr;
     kke::AudioModule* m_audio = nullptr;
@@ -117,6 +120,8 @@ private:
     bool m_tour = false, m_exitAfterTour = false;
     float m_tourLeft = 0.0f;
     int m_uiFrames = 0;
+    int m_stationIndex = 0, m_modeIndex = 0; // the panel's view of m_current and the spatial mode
+    std::vector<kke::SpatialMode> m_modes;   // the panel's choices of how to hear
 };
 
 } // namespace kke_audio_demo

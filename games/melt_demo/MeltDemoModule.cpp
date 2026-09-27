@@ -2,12 +2,14 @@
 
 #include "kke/Application.h"
 #include "kke/Mesh.h"
+#include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/InputModule.h"
 
 #include <SDL3/SDL.h>
-#include <imgui.h>
 
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
 #include <cstdlib>
 #include <cmath>
 
@@ -44,6 +46,7 @@ float rand01(uint32_t& s) {
 
 void MeltDemoModule::init(kke::Application& app) {
     m_app = &app;
+    defineInput();
     m_spheres = std::make_unique<kke::SphereImpostorRenderer>(app);
     m_surface = std::make_unique<kke::FluidSurfaceRenderer>(app);
     m_surface->settings().blurWorldRadius = kParticleRadius * 2.5f;
@@ -59,6 +62,7 @@ void MeltDemoModule::init(kke::Application& app) {
     // KKE_MELT_PRESET=0..3 picks the starting block (screenshots, sharing).
     if (const char* e = std::getenv("KKE_MELT_PRESET")) m_preset = std::clamp(std::atoi(e), 0, kPresetCount - 1);
     reset();
+    buildPanel();
 }
 
 void MeltDemoModule::reset() {
@@ -127,6 +131,7 @@ void MeltDemoModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
 }
 
 void MeltDemoModule::update(const kke::UpdateContext&) {
+    readInput();
     if (m_block->rebuildMesh()) {
         const BlockPreset& p = kPresets[m_preset];
         const auto& pos = m_block->meshPositions();
@@ -191,37 +196,70 @@ void MeltDemoModule::prepass(const kke::PrepassContext& ctx) {
 
 void MeltDemoModule::renderShadow(const kke::ShadowRenderContext& ctx) { m_blockMesh->drawShadow(ctx); }
 
-void MeltDemoModule::onEvent(const SDL_Event& event) {
-    if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat || ImGui::GetIO().WantTextInput) return;
-    if (event.key.key == SDLK_SPACE) m_pouring = !m_pouring;
-    if (event.key.key == SDLK_R) reset();
-    if (event.key.key == SDLK_L) m_smoothSurface = !m_smoothSurface;
+void MeltDemoModule::defineInput() {
+    auto* in = m_app->getModule<kke::InputModule>();
+    if (!in) return;
+    using IM = kke::InputModule;
+    kke::InputMap& m = in->map(0);
+    auto action = [&](const char* id, const char* label, SDL_Scancode key, SDL_GamepadButton pad) {
+        m.defineAction({ id, label, "Melt" });
+        m.addBinding(IM::bind(id, IM::key(key)));
+        m.addBinding(IM::bind(id, IM::pad(pad)));
+    };
+    action("melt.pour", "Pour lava on / off", SDL_SCANCODE_SPACE, SDL_GAMEPAD_BUTTON_SOUTH);
+    action("melt.reset", "Reset", SDL_SCANCODE_R, SDL_GAMEPAD_BUTTON_WEST);
+    action("melt.smooth", "Smooth liquid surface", SDL_SCANCODE_L, SDL_GAMEPAD_BUTTON_NORTH);
+    action("melt.block", "Next block", SDL_SCANCODE_B, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
+    in->commitDefaults();
 }
 
-void MeltDemoModule::renderUi() {
-    const float s = ImGui::GetFontSize() / 13.0f;
-    ImGui::SetNextWindowPos(ImVec2(10 * s, 10 * s), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(330 * s, 0), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Melt");
-    const char* names[kPresetCount];
-    for (int i = 0; i < kPresetCount; ++i) names[i] = kPresets[i].name;
-    if (ImGui::Combo("Block", &m_preset, names, kPresetCount)) reset();
-    ImGui::Checkbox("Pour lava (Space)", &m_pouring);
-    ImGui::Checkbox("Smooth liquid surface (L)", &m_smoothSurface);
-    if (m_smoothSurface) {
-        ImGui::SliderFloat("Smoothing", &m_surface->settings().blurWorldRadius, 0.01f, 0.2f, "%.2f m");
+// Keys and pad buttons (actions, rebindable in the input file).
+void MeltDemoModule::readInput() {
+    auto* in = m_app->getModule<kke::InputModule>();
+    if (!in) return;
+    const kke::InputMap& m = in->map(0);
+    if (m.pressed("melt.pour")) m_pouring = !m_pouring;
+    if (m.pressed("melt.reset")) reset();
+    if (m.pressed("melt.smooth")) m_smoothSurface = !m_smoothSurface;
+    if (m.pressed("melt.block")) {
+        m_preset = (m_preset + 1) % kPresetCount;
+        reset();
     }
-    ImGui::SliderFloat("Pour rate", &m_pourRate, 30.0f, 400.0f, "%.0f drops/s");
-    ImGui::SliderFloat("Lava temperature", &m_lavaTemperature, 800.0f, 1400.0f, "%.0f C");
-    if (ImGui::Button("Reset (R)")) reset();
-    ImGui::Separator();
-    ImGui::Text("Block left: %.0f %%", m_block->solidFraction() * 100.0f);
-    ImGui::Text("Liquid: %zu / %zu particles", m_fluid->size(), m_fluid->capacity());
-    if (m_fluid->size() >= m_fluid->capacity()) ImGui::TextColored(ImVec4(1, 0.6f, 0.3f, 1), "Liquid budget full - press R to reset");
-    ImGui::Text("Fluid %.2f ms, melt %.2f ms per step", m_fluidMs, m_meltMs);
-    ImGui::Text("Block surface: %zu triangles", m_meshTris);
-    ImGui::TextDisabled("Lava crusts over below 550 C. Ice turns to water\nthat chills the lava; wax and chocolate harden again\nas they cool; aluminium glows before it melts.");
-    ImGui::End();
+}
+
+// The settings (RmlUi, kke::DemoPanelModule): a controller opens them with
+// View, the keyboard with F3, the mouse just clicks.
+void MeltDemoModule::buildPanel() {
+    auto* panel = m_app->getModule<kke::DemoPanelModule>();
+    if (!panel) return;
+    auto& s = panel->section("Melt");
+    s.text("{melt.pour} pour  {melt.block} next block  {melt.smooth} smooth surface  {melt.reset} reset");
+    std::vector<std::string> names;
+    for (const BlockPreset& p : kPresets) names.push_back(p.name);
+    s.choice("Block", &m_preset, names, [this] { reset(); });
+    s.toggle("Pour lava", &m_pouring);
+    s.toggle("Smooth liquid surface", &m_smoothSurface);
+    s.slider("Smoothing", kke::DemoPanelModule::Ref<float>([this] { return m_surface ? &m_surface->settings().blurWorldRadius : nullptr; }), 0.01f,
+             0.2f, "%.2f m", {}, 0.01f)
+        .showIf([this] { return m_smoothSurface; });
+    s.slider("Pour rate", &m_pourRate, 30.0f, 400.0f, "%.0f drops/s", {}, 10.0f);
+    s.slider("Lava temperature", &m_lavaTemperature, 800.0f, 1400.0f, "%.0f C", {}, 20.0f);
+    s.button("Reset", [this] { reset(); });
+    s.separator();
+    s.text([this] {
+        char buf[200];
+        std::snprintf(buf, sizeof(buf), "Block left: %.0f%%. Liquid: %zu / %zu particles", static_cast<double>(m_block->solidFraction() * 100.0f),
+                      m_fluid->size(), m_fluid->capacity());
+        return std::string(buf);
+    });
+    s.text("Liquid budget full: reset to pour again").showIf([this] { return m_fluid && m_fluid->size() >= m_fluid->capacity(); });
+    s.text([this] {
+        char buf[160];
+        std::snprintf(buf, sizeof(buf), "Fluid %.2f ms, melt %.2f ms per step. Block surface: %zu triangles", m_fluidMs, m_meltMs, m_meshTris);
+        return std::string(buf);
+    });
+    s.note("Lava crusts over below 550 C. Ice turns to water that chills the lava; wax and chocolate harden again as they cool; "
+           "aluminium glows before it melts.");
 }
 
 } // namespace kke_melt
