@@ -6,7 +6,8 @@ Six scenes of things that are soft and thin:
 - a bed made of three layers of cloth
 - a hammock and a tennis net catching balls
 - a runner in a cape going through a curtain
-- four heads of hair turning in the wind
+- a hair catalog: every hair type from 1A to 4C, and an afro, a puff, a
+  high-top fade, a twist-out and bantu knots, on heads turning in the wind
 - a stress test that shows what cloth costs
 
 Cloth never passes through cloth, not even through itself, and hair never
@@ -47,8 +48,9 @@ KKE_BENCHMARK=1 ./cloth_demo                              # tours every scene an
 | `KKE_CLOTH_PROTECTION=full\|basic\|off` | Start with that protection |
 | `KKE_CLOTH_WIND=<m/s>` | Wind speed (default 4, and 3 in the hair scene) |
 | `KKE_CLOTH_COUNT`, `KKE_CLOTH_RES` | Stress scene: sheets, vertices per side (default 16, 24) |
-| `KKE_HAIR_GUIDES`, `KKE_HAIR_PER_GUIDE` | Hair scene: guide strands per head, hairs drawn per guide (default 160, 32) |
-| `KKE_HAIR_STYLES=long,curly` | Hair scene: which heads, from `hairStyleNames()` (default long, wavy, curly, short) |
+| `KKE_HAIR_GUIDES`, `KKE_HAIR_PER_GUIDE` | Hair scene: guide strands per head, hairs drawn per guide (default 160, and 0 = as the style draws) |
+| `KKE_HAIR_SHOW=types34\|styles\|types12\|classic` | Hair scene: the catalog's page (default types 3 and 4) |
+| `KKE_HAIR_STYLES=4c,afro` | Hair scene: exactly these heads, from `hairStyleNames()` and `hairstyleNames()` |
 | `KKE_CLOTH_TOUR=1` | Visit every scene for 14 s each (on by itself under `KKE_BENCHMARK`) |
 
 Rebindings are saved to `cloth_demo_input.json` (the name passed to
@@ -85,7 +87,7 @@ the upload. F1 shows the engine's developer panels.
 | 3 | Nets | A hammock catching balls, and a tennis net stopping shots at 15 to 21 m/s. |
 | 4 | Cape | A runner with a satin cape running through a linen curtain. The cape is skinned to the body, and back-stops keep it off the back. |
 | 5 | Stress | Sheets of cotton over balls, dropped again every 5 s. Set the count and resolution in the panel. |
-| 6 | Hair | Long, wavy, curly and short hair on four heads that turn, nod and now and then shake, in gusting wind. Set the guides per head and the hairs drawn per guide in the panel. |
+| 6 | Hair | A hairdresser's catalog on heads that turn, nod and now and then shake, in gusting wind. Show picks the page: types 3A to 4C (ringlets to tight coils that shrink and spring), hairstyles (afro, puff, high-top fade, twist-out, bantu knots), types 1A to 2C, or the classic long, wavy, curly and short. Set the guides per head and the hairs drawn per guide in the panel. |
 
 ## How it works
 
@@ -130,11 +132,15 @@ thread, facing the camera and at least a pixel wide.
 
 ### Hair
 
-`buildHair` makes a head per style. Each head is three things:
+`buildHair` makes a head per style on the catalog's page (the panel's
+Show: types 3 and 4, hairstyles, types 1 and 2, or the classic four), with
+skin tones and hair colours varied along the row. Each head is three
+things:
 
 - a kinematic sphere with `clothOnly` set: only cloth and hair feel it
 - a static neck capsule, and solid shoulders
-- a `HairDesc` whose roots come from `hairScalp` (160 guides, off the face)
+- a `HairDesc` from `hairstyleOnHead` (160 guides, off the face): the
+  type, and for a hairstyle its cut (`lengths`) and ties
 
 `stepHeads` turns each head about its neck (yaw, nod, tilt, and a quick
 shake now and then). It then moves the sphere with `moveKinematic` and
@@ -144,9 +150,10 @@ sphere and shoulders keep them out.
 
 Drawing: a `HairRenderer` per head is built once from the `HairDesc`. Every
 frame `update` passes it `hairPositions` and the head matrix, and the GPU
-builds the 5,120 hairs around the head's 160 guides. The head mesh paints
-the scalp the hair's root colour where hair grows, so no skin shows between
-hairs.
+builds the hairs around the head's 160 guides (32 or 40 each), and for
+types 3 and 4 the coils round every hair. The head mesh paints the scalp
+the hair's root colour near every root, so no skin shows between hairs
+(but the parts between bantu knots do), and paints the high-top's fade.
 
 ### The panel and the input
 
@@ -184,12 +191,13 @@ turns the actions into scene changes, drops and toggles.
 | What | Where | Effect |
 |---|---|---|
 | `clothFabric(...)` presets | [engine/src/Cloth.cpp](../../engine/src/Cloth.cpp) | density, stretch, shear, bend, drag, thickness, look of each fabric |
-| `hairStyle(...)` presets | [engine/src/Hair.cpp](../../engine/src/Hair.cpp) | length, segments, curl, bend, hold, drawn hairs of each style |
+| `hairStyle(...)` presets | [engine/src/Hair.cpp](../../engine/src/Hair.cpp) | length, segments, curl, coils, shrinkage, bend, hold, drawn hairs of each type |
+| `hairstyleOnHead(...)` | [engine/src/Hair.cpp](../../engine/src/Hair.cpp) | each hairstyle's type, cut and ties |
 | `drape.wind = 0.1` | `buildFabrics` | how sheltered the table drapes are |
 | grid sizes (28 x 28 drapes, 46 x 46 blanket...) | each `build*` | detail against cost (cost grows with vertices) |
 | `contactMass` 8 and 5 kg | `buildNets` | how hard the hammock and net stop balls |
 | `maxDistance` 2, `backStop` 0.01 | `buildCape` | how far the cape may swing, how close to the back it may come |
-| `m_hairGuides` 160, `m_hairsPerGuide` 32 | panel, `KKE_HAIR_*` | simulation cost against how full the hair looks |
+| `m_hairGuides` 160, `m_hairsPerGuide` 0 (the style's) | panel, `KKE_HAIR_*` | simulation cost against how full the hair looks |
 | shake and turn amplitudes | `stepHeads` | how hard the heads move (the panel's Head motion scales them) |
 | gust waves | `fixedUpdate` | how the wind varies |
 

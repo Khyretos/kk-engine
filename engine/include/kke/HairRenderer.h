@@ -65,6 +65,7 @@ private:
     HairStrands m_strands;
     std::unique_ptr<Buffer> m_hairBuffer;
     std::vector<float> m_frameBytes; // header + guides, as uploaded
+    std::vector<glm::vec4> m_guideFrames; // scratch: the guides' frames (HairStrands::frames)
     uint64_t m_version = 0;
     glm::vec3 m_centre{0.0f};      // the guides' bounds, from update()
     float m_radius = 0.0f;

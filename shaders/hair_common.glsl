@@ -6,11 +6,12 @@
 #ifndef KKE_HAIR_COMMON_GLSL
 #define KKE_HAIR_COMMON_GLSL
 
-// Mirrors HairRenderer's HairGpu (std430, 48 bytes).
+// Mirrors HairRenderer's HairGpu (std430, 64 bytes).
 struct HairGpu {
     uvec4 idx;    // x = guide, y = the neighbour it leans to, z = frizz phase (float bits)
     vec4 offset;  // xyz = offset from the guide (head space), w = how much of the neighbour
     vec4 color;   // rgb = tint, a = its length (fraction of the guide's)
+    vec4 coil;    // x = turns root to tip, y = phase, z = radius scale
 };
 
 layout(std430, set = HAIR_SET, binding = 0) readonly buffer Hairs { HairGpu hairs[]; };
@@ -23,7 +24,9 @@ layout(std430, set = HAIR_SET, binding = 1) readonly buffer Frame {
     vec4 rootColor; // sRGB
     vec4 tipColor;  // sRGB, a = shine
     vec4 look;      // x = highlight shift, y = roughness, z = every z-th hair is drawn (level of detail), w = width scale for it
-    vec4 guides[];  // xyz, guide after guide, root first
+    vec4 coil;      // x = coil radius (m, 0 = none), y = zig-zag, z = pulled straight at (x rest length), w = guide points
+    vec4 headSphere; // xyz = the head's centre now, w = radius (0 = none): hairs stay out of it
+    vec4 guides[];  // xyz, guide after guide, root first; then as many frames (HairStrands::frames)
 } frame;
 
 // Six vertices (two triangles) per segment of every hair.
@@ -70,20 +73,64 @@ vec3 hairPoint(HairGpu h, int i, out float s) {
     return p;
 }
 
+vec3 across(vec3 t, vec3 toward) {
+    vec3 side = cross(t, toward);
+    if (dot(side, side) < 1e-12) side = cross(t, abs(t.y) < 0.9 ? vec3(0, 1, 0) : vec3(1, 0, 0));
+    return normalize(side);
+}
+
+// A coil around the hair's line at s (HairStrands::coilOffset, which
+// this mirrors): the offset and its change along s. t = the line's way.
+vec3 coilOffset(HairGpu h, float s, vec3 t, out vec3 change) {
+    change = vec3(0.0);
+    if (frame.coil.x <= 0.0 || h.coil.x <= 0.0) return vec3(0.0);
+    // The guide's frame there: across it, and how stretched.
+    int strand = int(frame.counts.y + 0.5);
+    int segs = strand - 2;
+    float f = s * h.color.a * float(segs);
+    int k = clamp(int(f), 0, segs - 1);
+    int base = int(frame.coil.w + 0.5) + int(h.idx.x) * strand + 1;
+    vec4 fr = mix(frame.guides[base + k], frame.guides[base + k + 1], clamp(f - float(k), 0.0, 1.0));
+    // Pulled longer, a coil unwinds (the hair's own length stays).
+    float pulled = frame.coil.z;
+    float kk = max(fr.w, 1e-3);
+    float unwind = pulled > 1.0001 ? kk * sqrt(max((pulled / kk) * (pulled / kk) - 1.0, 0.0)) / sqrt(pulled * pulled - 1.0) : 1.0;
+    float grow = clamp(s * h.coil.x * 2.0, 0.0, 1.0);
+    float r = frame.coil.x * h.coil.z * unwind * grow;
+    vec3 n = fr.xyz - t * dot(fr.xyz, t);
+    n = dot(n, n) > 1e-12 ? normalize(n) : across(t, vec3(0.0, 1.0, 0.0));
+    vec3 b = cross(t, n);
+    float da = 6.28318531 * h.coil.x;
+    float a = da * s + h.coil.y;
+    float ca = cos(a), sa = sin(a);
+    vec3 spiral = n * ca + b * sa;
+    float th = 0.25 * a;
+    vec3 plane = n * cos(th) + b * sin(th), planeTurn = b * cos(th) - n * sin(th);
+    float tri = asin(clamp(sa, -1.0, 1.0)) * 0.63661977;
+    float z = clamp(frame.coil.y, 0.0, 1.0);
+    vec3 spiralD = (b * ca - n * sa) * da;
+    vec3 zigD = plane * ((ca >= 0.0 ? 1.0 : -1.0) * 0.63661977 * da) + planeTurn * (0.25 * da * tri);
+    change = r * mix(spiralD, zigD, z);
+    return r * mix(spiral, plane * tri, z);
+}
+
 // The hair's centre and direction at a corner.
 void hairCentre(int hairIndex, int point, out vec3 p, out vec3 t, out float s) {
     HairGpu h = hairs[hairIndex];
     float s0, s1;
     p = hairPoint(h, point, s);
     vec3 a = hairPoint(h, point - 1, s0), b = hairPoint(h, point + 1, s1);
-    t = b - a;
-    t = dot(t, t) > 1e-18 ? normalize(t) : vec3(0.0, -1.0, 0.0);
-}
-
-vec3 across(vec3 t, vec3 toward) {
-    vec3 side = cross(t, toward);
-    if (dot(side, side) < 1e-12) side = cross(t, abs(t.y) < 0.9 ? vec3(0, 1, 0) : vec3(1, 0, 0));
-    return normalize(side);
+    vec3 d = (b - a) / max(s1 - s0, 1e-6);
+    t = dot(d, d) > 1e-18 ? normalize(d) : vec3(0.0, -1.0, 0.0);
+    vec3 change;
+    p += coilOffset(h, s, t, change);
+    d += change;
+    t = dot(d, d) > 1e-18 ? normalize(d) : t;
+    // Out of the head (a hair blending between guides that go round it
+    // on either side would cut through it).
+    vec3 fromHead = p - frame.headSphere.xyz;
+    float l = length(fromHead);
+    if (frame.headSphere.w > 0.0 && l < frame.headSphere.w && l > 1e-9) p = frame.headSphere.xyz + fromHead * (frame.headSphere.w / l);
 }
 
 #endif

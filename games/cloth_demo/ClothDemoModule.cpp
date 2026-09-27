@@ -29,6 +29,20 @@ const char* kSceneNames[] = { "Fabrics", "Bed", "Nets", "Cape", "Stress", "Hair"
 constexpr int kSceneCount = 6;
 constexpr float kTourSeconds = 14.0f;
 
+// The hair catalog's pages: which heads (hairstyleOnHead names).
+struct HairPage {
+    const char* name;
+    const char* id; // KKE_HAIR_SHOW
+    std::vector<std::string> styles;
+};
+const HairPage kHairPages[] = {
+    { "Types 3 and 4", "types34", { "3a", "3b", "3c", "4a", "4b", "4c" } },
+    { "Hairstyles", "styles", { "afro", "puff", "high-top fade", "twist-out", "bantu knots" } },
+    { "Types 1 and 2", "types12", { "1a", "1b", "1c", "2a", "2b", "2c" } },
+    { "Classic", "classic", { "long", "wavy", "curly", "short" } },
+};
+constexpr int kHairPageCount = 4;
+
 float rand01(uint32_t& s) {
     s ^= s << 13;
     s ^= s >> 17;
@@ -114,7 +128,11 @@ void ClothDemoModule::init(kke::Application& app) {
     if (const char* e = std::getenv("KKE_CLOTH_COUNT")) m_stressCount = std::clamp(std::atoi(e), 1, 400);
     if (const char* e = std::getenv("KKE_CLOTH_RES")) m_stressRes = std::clamp(std::atoi(e), 4, 128);
     if (const char* e = std::getenv("KKE_HAIR_GUIDES")) m_hairGuides = std::clamp(std::atoi(e), 8, 4000);
-    if (const char* e = std::getenv("KKE_HAIR_PER_GUIDE")) m_hairsPerGuide = std::clamp(std::atoi(e), 1, 256);
+    if (const char* e = std::getenv("KKE_HAIR_PER_GUIDE")) m_hairsPerGuide = std::clamp(std::atoi(e), 0, 256);
+    if (const char* e = std::getenv("KKE_HAIR_SHOW")) {
+        for (int i = 0; i < kHairPageCount; ++i)
+            if (SDL_strcasecmp(e, kHairPages[i].id) == 0) m_hairShow = i;
+    }
     m_tour = app.benchmark() != nullptr;
     if (const char* e = std::getenv("KKE_CLOTH_TOUR")) m_tour = *e == '1';
     Scene start = Scene::Fabrics;
@@ -378,12 +396,12 @@ void ClothDemoModule::buildStress() {
     if (m_camera) m_camera->setView(glm::vec3(0.0f, 0.5f, 0.0f), 3.0f + float(side) * 2.4f, -0.6f, 0.5f);
 }
 
-// Four heads on shoulders, each with a style, turning and nodding in the
-// wind. The head is a sphere only cloth and hair collide with; the
-// shoulders are solid.
+// A page of the hair catalog: heads on shoulders in a row, each with a
+// hair type or style, turning and nodding in the wind. The head is a
+// sphere only cloth and hair collide with; the shoulders are solid.
 void ClothDemoModule::buildHair() {
-    // KKE_HAIR_STYLES=long,curly picks the heads (hairStyleNames()).
-    std::vector<std::string> styles = { "long", "wavy", "curly", "short" };
+    // KKE_HAIR_STYLES=4c,afro picks the heads (hairStyleNames(), hairstyleNames()).
+    std::vector<std::string> styles = kHairPages[std::clamp(m_hairShow, 0, kHairPageCount - 1)].styles;
     if (const char* e = std::getenv("KKE_HAIR_STYLES")) {
         styles.clear();
         std::string list = e;
@@ -394,22 +412,41 @@ void ClothDemoModule::buildHair() {
         }
         if (styles.empty()) styles.push_back("long");
     }
-    const glm::vec3 colors[][2] = { { { 0.09f, 0.05f, 0.03f }, { 0.2f, 0.12f, 0.07f } },   // dark brown
-                                    { { 0.45f, 0.3f, 0.14f }, { 0.78f, 0.6f, 0.36f } },   // blond
-                                    { { 0.05f, 0.04f, 0.04f }, { 0.12f, 0.09f, 0.08f } }, // black
-                                    { { 0.35f, 0.1f, 0.04f }, { 0.6f, 0.22f, 0.08f } } }; // red
-    const glm::vec3 skin(0.8f, 0.64f, 0.52f), shirt(0.3f, 0.34f, 0.4f);
+    // Hair colours (root, tip; sRGB) and skin tones, varied along the row.
+    const glm::vec3 colors[][2] = { { { 0.05f, 0.04f, 0.04f }, { 0.12f, 0.09f, 0.08f } },   // black
+                                    { { 0.09f, 0.05f, 0.03f }, { 0.2f, 0.12f, 0.07f } },    // dark brown
+                                    { { 0.45f, 0.3f, 0.14f }, { 0.78f, 0.6f, 0.36f } },     // blond
+                                    { { 0.06f, 0.04f, 0.03f }, { 0.3f, 0.14f, 0.07f } },    // off-black, auburn ends
+                                    { { 0.35f, 0.1f, 0.04f }, { 0.6f, 0.22f, 0.08f } },     // red
+                                    { { 0.16f, 0.1f, 0.06f }, { 0.36f, 0.24f, 0.14f } } };  // brown
+    const glm::vec3 skins[] = { { 0.36f, 0.22f, 0.15f }, { 0.8f, 0.64f, 0.52f }, { 0.55f, 0.36f, 0.24f },
+                                { 0.9f, 0.76f, 0.66f }, { 0.44f, 0.28f, 0.19f }, { 0.72f, 0.56f, 0.4f } };
+    const glm::vec3 shirt(0.3f, 0.34f, 0.4f);
     const float radius = 0.1f;
     const int count = int(styles.size());
     for (int i = 0; i < count; ++i) {
         auto h = std::make_unique<Head>();
-        const float x = (float(i) - float(count - 1) * 0.5f) * 0.9f;
+        const float x = (float(i) - float(count - 1) * 0.5f) * 0.8f;
         const glm::vec3 centre(x, 1.62f, 0.0f);
+        const glm::vec3 skin = skins[i % 6];
         h->neck = glm::vec3(x, 1.5f, 0.0f);
         h->phase = float(i) * 1.7f;
         h->label = styles[size_t(i)];
         h->bind = glm::mat4(1.0f);
         h->now = h->bind;
+        // The hair first: the scalp is painted where it grows.
+        kke::HairDesc d;
+        const bool coiled = kke::hairStyle(styles[size_t(i)]).coil > 0.0f || h->label == "afro" || h->label == "puff" || h->label == "twist-out" ||
+                            h->label == "bantu knots" || h->label == "high-top fade";
+        const int colour = coiled ? (i % 2 == 0 ? 0 : (i % 4 == 1 ? 3 : 1)) : i % 6;
+        d.style.rootColor = colors[colour][0];
+        d.style.tipColor = colors[colour][1];
+        d.bindPose = h->bind;
+        if (!kke::hairstyleOnHead(d, styles[size_t(i)], centre, radius, m_hairGuides)) {
+            kke::log::get(name())->warn("hair: no style '{}' (hairStyleNames(), hairstyleNames())", styles[size_t(i)]);
+            continue;
+        }
+        if (m_hairsPerGuide > 0) d.style.hairsPerGuide = m_hairsPerGuide;
         // Shoulders and neck (solid), the head (moves).
         addSolidBox(glm::vec3(x, 1.33f, 0.0f), glm::vec3(0.21f, 0.07f, 0.11f), shirt, 0.8f);
         addSolidBox(glm::vec3(x, 0.63f, 0.0f), glm::vec3(0.05f, 0.63f, 0.05f), glm::vec3(0.25f), 0.6f);
@@ -432,15 +469,22 @@ void ClothDemoModule::buildHair() {
         {
             std::vector<kke::Vertex> v;
             std::vector<uint32_t> idx;
-            addCapsule(v, idx, centre, centre, radius, skin, 28);
-            // The scalp painted the hair's root colour where hair grows (as
-            // hairScalp picks roots), so no skin shows between the hairs.
+            addCapsule(v, idx, centre, centre, radius, skin, 40);
+            // The scalp painted the hair's root colour where hair grows, so
+            // no skin shows between the hairs (parts between sections do).
+            // A fade is painted: short at the cut, down to the skin.
+            float spacing = 0.0f;
+            if (d.roots.size() > 1) spacing = std::sqrt(4.0f * radius * radius * 2.4f / float(d.roots.size())); // over most of the sphere
             for (kke::Vertex& vx : v) {
-                const glm::vec3 d = glm::normalize(vx.position - centre);
-                const float fromUp = std::acos(std::clamp(d.y, -1.0f, 1.0f));
-                const bool face = d.z > 0.25f && fromUp > 1.0f;
-                const float edge = std::clamp((1.9f - fromUp) / 0.15f, 0.0f, 1.0f) * (face ? 0.0f : 1.0f);
-                vx.color = glm::mix(skin, colors[i % 4][0], edge * 0.9f);
+                float nearest = 1e9f;
+                for (const glm::vec3& r : d.roots) nearest = std::min(nearest, glm::distance(vx.position, r));
+                float cover = std::clamp((1.6f * spacing - nearest) / std::max(0.6f * spacing, 1e-4f), 0.0f, 1.0f);
+                if (h->label == "high-top fade") {
+                    const float below = centre.y + radius * std::cos(0.95f) - vx.position.y; // under the cut
+                    const bool face = vx.position.z - centre.z > 0.25f * radius && vx.position.y < centre.y + radius * std::cos(1.0f);
+                    if (below > 0.0f && !face) cover = std::max(cover, 0.85f * std::clamp(1.0f - below / 0.07f, 0.0f, 1.0f));
+                }
+                vx.color = glm::mix(skin, d.style.rootColor, cover * 0.92f);
             }
             for (float side : { -1.0f, 1.0f }) // eyes
                 addCapsule(v, idx, centre + glm::vec3(side * 0.035f, 0.015f, radius * 0.9f), centre + glm::vec3(side * 0.035f, 0.015f, radius * 0.9f), 0.012f,
@@ -449,13 +493,6 @@ void ClothDemoModule::buildHair() {
             addCapsule(v, idx, glm::vec3(x, 1.43f, 0.0f), glm::vec3(x, 1.53f, 0.0f), 0.045f, skin, 14);                                        // neck
             h->mesh->upload(v, idx);
         }
-        kke::HairDesc d;
-        d.style = kke::hairStyle(styles[size_t(i)]);
-        d.style.rootColor = colors[i % 4][0];
-        d.style.tipColor = colors[i % 4][1];
-        d.style.hairsPerGuide = m_hairsPerGuide;
-        d.bindPose = h->bind;
-        kke::hairScalp(d, centre, radius, m_hairGuides);
         h->hair = m_world->addHair(d);
         h->drawn = std::make_unique<kke::HairRenderer>(*m_app);
         h->drawn->build(d);
@@ -464,7 +501,7 @@ void ClothDemoModule::buildHair() {
     if (!std::getenv("KKE_CLOTH_WIND")) m_windSpeed = 3.0f;
     m_gusts = true;
     stepHeads(0.0f);
-    if (m_camera) m_camera->setView(glm::vec3(0.12f * float(count), 1.45f, 0.0f), 0.9f + 0.6f * float(count), -0.1f, glm::pi<float>() + 0.15f); // the panel is on the right
+    if (m_camera) m_camera->setView(glm::vec3(0.1f * float(count), 1.5f, 0.0f), 0.8f + 0.55f * float(count), -0.1f, glm::pi<float>() + 0.15f); // the panel is on the right
 }
 
 // The heads look around: slow turns and nods, now and then a quick shake.
@@ -751,7 +788,11 @@ void ClothDemoModule::buildPanel() {
         case Scene::Nets: return std::string("A hammock catching balls, a tennis net stopping shots.");
         case Scene::Cape: return std::string("A satin cape on a runner, through a linen curtain.");
         case Scene::Stress: return std::string("Sheets of cotton over balls, dropped again every 5 s.");
-        case Scene::Hair: return std::string("Long, wavy, curly and short hair on turning heads.");
+        case Scene::Hair: {
+            std::string names;
+            for (const auto& h : m_heads) names += (names.empty() ? "" : ", ") + h->label;
+            return "A hair catalog, left to right: " + names + ".";
+        }
         }
         return std::string();
     });
@@ -790,9 +831,12 @@ void ClothDemoModule::buildPanel() {
 
     auto& hair = panel->section("Hair");
     hair.sectionIf(is(Scene::Hair));
+    std::vector<std::string> pages;
+    for (const HairPage& p : kHairPages) pages.push_back(p.name);
+    hair.choice("Show", &m_hairShow, pages, [this] { setScene(Scene::Hair); });
     hair.slider("Head motion", &m_headMotion, 0.0f, 2.0f, "%.1f", {}, 0.1f);
     hair.slider("Guide strands per head", &m_hairGuides, 16, 1000);
-    hair.slider("Hairs drawn per guide", &m_hairsPerGuide, 1, 128);
+    hair.slider("Hairs drawn per guide (0: the style's)", &m_hairsPerGuide, 0, 128);
     hair.button("Rebuild", [this] { setScene(Scene::Hair); });
     hair.note("Guides are simulated; the hairs drawn around them are built on the GPU.");
 

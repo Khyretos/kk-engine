@@ -42,6 +42,16 @@ struct HairStyle {
     float curlRadius = 0.012f;       // m
     bool helix = true;               // curls spiral (true) or wave in one plane (false)
     float droop = 0.06f;             // m: how soon a strand turns from the scalp towards `down`
+    // --- coils (types 3 and 4): drawn around every drawn hair on the GPU,
+    // far finer than the guides could hold. A coil unwinds as its guide is
+    // pulled longer (the hair's own length stays the same), so a stretched
+    // coil is thinner and longer and springs back.
+    float coil = 0.0f;               // turns per metre of hair as it rests (0 = none)
+    float coilRadius = 0.0f;         // m
+    float zigzag = 0.0f;             // 0 = round spirals .. 1 = sharp Z-shaped bends (type 4B)
+    float definition = 0.5f;         // 0 = every hair coils on its own (a soft halo) .. 1 = a clump's hairs coil together (ringlets)
+    float shrinkage = 0.0f;          // 0..0.9: how much shorter the hair rests than pulled straight (4C: 0.75);
+                                     // strands can be pulled out to 1 / (1 - shrinkage) x their length and spring back
     // --- behaviour
     float density = 0.004f;          // kg per metre of the clump one guide stands for
     float stretch = 0.0f;            // softness along the strand
@@ -68,8 +78,11 @@ struct HairStyle {
     float shift = 0.08f;             // highlight shift along the hair (cuticle tilt)
 };
 
-// Presets: "straight", "long", "wavy", "curly", "short", "fur", "gel".
-// Unknown names give straight.
+// Presets: every hair type of Andre Walker's chart, "1a" (fine, straight)
+// to "4c" (tight coils, 75% shrinkage) (docs/HAIR.md has the table), and
+// "straight", "long", "wavy", "curly", "short", "fur", "gel". Hairstyles
+// that need a shape as well (an afro, a puff, bantu knots) are
+// hairstyleOnHead(). Unknown names give straight.
 HairStyle hairStyle(const std::string& name);
 std::vector<std::string> hairStyleNames();
 
@@ -87,6 +100,21 @@ struct HairDesc {
     float headRadius = 0.0f;
     glm::vec3 down{0.0f, -1.0f, 0.0f}; // where the rest pose falls (gravity)
     glm::vec3 comb{0.0f};            // added to `down` for the rest pose: hairScalp combs it back, off the face
+    // Optional, one per root: its length as a fraction of style.length
+    // (a cut: a flat top, layers). Empty = all full length.
+    std::vector<float> lengths;
+    // Hair gathered and tied (a puff, a bun, bantu knots): every root
+    // within `reach` of a tie lies along the scalp to it, then a Puff
+    // bursts out from there in a ball and a Knot winds round into a
+    // knot `size` across.
+    struct Tie {
+        enum class Shape { Puff, Knot };
+        glm::vec3 at{0.0f};          // on the scalp (bind pose, world)
+        float reach = 1.0f;          // m, over the scalp
+        float size = 0.03f;          // m: a knot's width
+        Shape shape = Shape::Puff;
+    };
+    std::vector<Tie> ties;
     float wind = 1.0f;               // how much of RigidWorld::setWind reaches it
 };
 
@@ -97,6 +125,14 @@ struct HairDesc {
 // headRadius and comb (back, away from the face).
 void hairScalp(HairDesc& desc, const glm::vec3& center, float radius, int count, float crown = 1.9f,
                const glm::vec3& up = glm::vec3(0, 1, 0), const glm::vec3& front = glm::vec3(0, 0, 1), float hairline = 1.0f);
+
+// A hairstyle on a head, as hairScalp() and more: its type, where it
+// grows, its cut and ties. "afro", "puff", "high-top fade", "twist-out",
+// "bantu knots" (hairstyleNames()); any hairStyleNames() name gives that
+// type grown out. Keeps desc.style's colours. False for unknown names.
+bool hairstyleOnHead(HairDesc& desc, const std::string& name, const glm::vec3& center, float radius, int guides,
+                     const glm::vec3& up = glm::vec3(0, 1, 0), const glm::vec3& front = glm::vec3(0, 0, 1));
+std::vector<std::string> hairstyleNames();
 
 // Vertices per guide strand: the root, the follicle (both follow the head)
 // and one per segment.

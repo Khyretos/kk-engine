@@ -31,13 +31,32 @@ glm::vec3 perpendicular(const glm::vec3& d) {
 void HairStrands::build(const HairDesc& desc) {
     m_style = desc.style;
     m_invBind = glm::inverse(desc.bindPose);
+    m_headCenter = desc.headCenter;
+    m_headRadius = desc.headRadius;
     m_strand = hairStrandVertices(desc.style);
     m_points = 2 * (m_strand - 2) + 1; // the follicle to the tip, two per guide segment (a smooth curve through the guide)
     m_hairs.clear();
+    m_restSegment.clear();
+    m_rootAcross.clear();
     m_indexHairs = 0;
     const size_t guides = desc.roots.size();
     if (guides == 0) return;
     const glm::mat3 toHead(m_invBind);
+    // The guides at rest: how long each segment is (the coils unwind as
+    // it stretches) and which way is across each at the root.
+    const std::vector<glm::vec3> rest = hairRestPose(desc);
+    const size_t strand = size_t(m_strand);
+    std::vector<float> restLength(guides, 0.0f);
+    m_restSegment.resize(guides * (strand - 2));
+    for (size_t g = 0; g < guides; ++g) {
+        const glm::vec3* q = rest.data() + g * strand + 1; // from the follicle
+        for (size_t k = 0; k + 2 < strand; ++k) {
+            const float len = std::max(glm::distance(q[k + 1], q[k]), 1e-6f);
+            m_restSegment[g * (strand - 2) + k] = len;
+            restLength[g] += len;
+        }
+        m_rootAcross.push_back(glm::normalize(toHead * perpendicular(glm::normalize(q[1] - q[0] + glm::vec3(0.0f, 1e-7f, 0.0f)))));
+    }
     // Each guide's nearest neighbour sets how far its hairs spread.
     std::vector<uint32_t> nearest(guides, 0);
     std::vector<float> spacing(guides, 0.02f);
@@ -79,9 +98,84 @@ void HairStrands::build(const HairDesc& desc) {
             hair.length = 1.0f - 0.2f * rand01(uint32_t(g), uint32_t(h) * 3u + 1u);
             hair.color = glm::vec3(0.85f + 0.3f * rand01(uint32_t(g), uint32_t(h) * 3u + 2u));
             hair.phase = rand01(uint32_t(h), uint32_t(g) * 5u + 3u) * glm::two_pi<float>();
+            if (desc.style.coil > 0.0f && desc.style.coilRadius > 0.0f) {
+                // Defined: a clump's hairs coil together (a ringlet);
+                // undefined: each on its own, sizes varying.
+                const float loose = 1.0f - std::clamp(desc.style.definition, 0.0f, 1.0f);
+                hair.coilTurns = desc.style.coil * hair.length * restLength[g];
+                hair.coilPhase = (rand01(uint32_t(g), 11u) + loose * rand01(uint32_t(h), uint32_t(g) * 7u + 5u)) * glm::two_pi<float>();
+                hair.coilScale = 1.0f + loose * 0.5f * (rand01(uint32_t(g) * 3u + 1u, uint32_t(h)) - 0.5f);
+                // Enough points for every turn to stay round (up to a limit).
+                constexpr int kMostPoints = 97;
+                m_points = std::max(m_points, std::min(kMostPoints, int(std::ceil(hair.coilTurns * 8.0f)) + 1));
+            }
             m_hairs.push_back(hair);
         }
     }
+}
+
+glm::vec4 HairStrands::headSphere(const glm::mat4& head) const {
+    if (m_headRadius <= 0.0f) return glm::vec4(0.0f);
+    return glm::vec4(glm::vec3(head * m_invBind * glm::vec4(m_headCenter, 1.0f)), m_headRadius + 0.5f * m_style.hairWidth);
+}
+
+void HairStrands::frames(const std::vector<glm::vec3>& guides, const glm::mat4& head, std::vector<glm::vec4>& out) const {
+    out.resize(guides.size());
+    const size_t strand = size_t(std::max(m_strand, 3));
+    const size_t segs = strand - 2;
+    const size_t count = std::min(guides.size() / strand, m_rootAcross.size());
+    const glm::mat3 rot(head);
+    for (size_t g = 0; g < count; ++g) {
+        const glm::vec3* p = guides.data() + g * strand + 1; // from the follicle
+        glm::vec4* o = out.data() + g * strand + 1;
+        glm::vec3 n = rot * m_rootAcross[g];
+        for (size_t k = 0; k <= segs; ++k) {
+            glm::vec3 t = p[std::min(k + 1, segs)] - p[k > 0 ? k - 1 : 0];
+            const float tl = glm::length(t);
+            if (tl > 1e-9f) {
+                t /= tl;
+                const glm::vec3 m = n - t * glm::dot(n, t);
+                if (glm::dot(m, m) > 1e-12f) n = glm::normalize(m);
+            }
+            const size_t seg = std::min(k, segs - 1);
+            const float stretch = glm::distance(p[seg + 1], p[seg]) / m_restSegment[g * segs + seg];
+            o[k] = glm::vec4(n, stretch);
+        }
+        o[-1] = o[0]; // the root, as the follicle
+    }
+    for (size_t i = count * strand; i < out.size(); ++i) out[i] = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+}
+
+glm::vec3 HairStrands::coilOffset(const HairStyle& style, const Hair& hair, float s, const glm::vec3& t, const glm::vec4& frame, glm::vec3* change) {
+    if (change) *change = glm::vec3(0.0f);
+    if (hair.coilTurns <= 0.0f) return glm::vec3(0.0f);
+    // Stretched k times its rest length, a coil unwinds: the hair's own
+    // length stays the same, so its radius shrinks, to nothing when it is
+    // pulled straight (1 / (1 - shrinkage) x).
+    const float pulled = 1.0f / (1.0f - std::clamp(style.shrinkage, 0.0f, 0.9f));
+    const float k = std::max(frame.w, 1e-3f);
+    const float unwind = pulled > 1.0001f ? k * std::sqrt(std::max((pulled / k) * (pulled / k) - 1.0f, 0.0f)) / std::sqrt(pulled * pulled - 1.0f) : 1.0f;
+    const float grow = std::clamp(s * hair.coilTurns * 2.0f, 0.0f, 1.0f); // the first half turn grows in from the root
+    const float r = style.coilRadius * hair.coilScale * unwind * grow;
+    glm::vec3 n = glm::vec3(frame) - t * glm::dot(glm::vec3(frame), t);
+    n = glm::dot(n, n) > 1e-12f ? glm::normalize(n) : perpendicular(t);
+    const glm::vec3 b = glm::cross(t, n);
+    const float da = glm::two_pi<float>() * hair.coilTurns;
+    const float a = da * s + hair.coilPhase;
+    const float ca = std::cos(a), sa = std::sin(a);
+    // Round: a spiral. Zig-zag: a triangle wave whose plane turns a quarter
+    // of the way round each turn, so the bends go every way (4B).
+    const glm::vec3 spiral = n * ca + b * sa;
+    const float th = 0.25f * a;
+    const glm::vec3 plane = n * std::cos(th) + b * std::sin(th), planeTurn = b * std::cos(th) - n * std::sin(th);
+    const float tri = std::asin(std::clamp(sa, -1.0f, 1.0f)) * (2.0f / glm::pi<float>());
+    const float z = std::clamp(style.zigzag, 0.0f, 1.0f);
+    if (change) {
+        const glm::vec3 spiralD = (b * ca - n * sa) * da;
+        const glm::vec3 zigD = plane * ((ca >= 0.0f ? 1.0f : -1.0f) * (2.0f / glm::pi<float>()) * da) + planeTurn * (0.25f * da * tri);
+        *change = r * glm::mix(spiralD, zigD, z);
+    }
+    return r * glm::mix(spiral, plane * tri, z);
 }
 
 void HairStrands::ribbons(const std::vector<glm::vec3>& guides, const glm::mat4& head, const glm::vec3& camera, float pixel,
@@ -109,6 +203,7 @@ void HairStrands::ribbons(const std::vector<glm::vec3>& guides, const glm::mat4&
     }
     vertices.resize(m_hairs.size() * pts * 2);
     const glm::mat3 rot(head);
+    const glm::vec4 sphere = headSphere(head);
     const glm::vec3 root = m_style.rootColor, tip = m_style.tipColor; // sRGB
     m_line.resize(pts);
     Vertex* out = vertices.data();
@@ -141,6 +236,30 @@ void HairStrands::ribbons(const std::vector<glm::vec3>& guides, const glm::mat4&
                 p += m_style.frizz * s * glm::vec3(std::sin(w), std::cos(w * 1.3f), std::sin(w * 0.7f + 1.0f));
             }
             m_line[i] = p;
+        }
+        // Coils around the centre line.
+        if (hair.coilTurns > 0.0f) {
+            if (&hair == &m_hairs.front() || m_frames.size() != guides.size()) frames(guides, head, m_frames);
+            const glm::vec4* fr = m_frames.data() + size_t(hair.guide) * size_t(m_strand) + 1;
+            glm::vec3 prev = m_line[0];
+            for (size_t i = 0; i < pts; ++i) {
+                const float s = float(i) / float(pts - 1);
+                const float f = s * hair.length * float(segs);
+                const int k = std::clamp(int(f), 0, segs - 1);
+                const glm::vec4 frame = glm::mix(fr[k], fr[k + 1], std::clamp(f - float(k), 0.0f, 1.0f));
+                glm::vec3 t = m_line[std::min(i + 1, pts - 1)] - (i > 0 ? prev : m_line[0]);
+                t = glm::length(t) > 1e-9f ? glm::normalize(t) : glm::vec3(0, -1, 0);
+                prev = m_line[i];
+                m_line[i] += coilOffset(m_style, hair, s, t, frame);
+            }
+        }
+        // Out of the head.
+        if (sphere.w > 0.0f) {
+            for (glm::vec3& p : m_line) {
+                const glm::vec3 d = p - glm::vec3(sphere);
+                const float l = glm::length(d);
+                if (l < sphere.w && l > 1e-9f) p = glm::vec3(sphere) + d * (sphere.w / l);
+            }
         }
         for (size_t i = 0; i < pts; ++i) {
             const float s = float(i) / float(pts - 1);

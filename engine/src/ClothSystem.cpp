@@ -393,6 +393,7 @@ uint32_t ClothSystem::addHairPart(const HairDesc& d, const std::vector<glm::vec3
     const float sub = kAssumedStep / float(std::max(1, st.iterations));
     const float scale = sub * sub / meanMass;
     const float stiffRoot = std::clamp(st.stiffRoot, 0.0f, 1.0f);
+    const float pulledOut = 1.0f / (1.0f - std::clamp(st.shrinkage, 0.0f, 0.9f));
     for (uint32_t g = 0; g < guides; ++g) {
         const uint32_t b = g * per;
         for (uint32_t k = 0; k + 1 < per; ++k) {
@@ -403,9 +404,10 @@ uint32_t ClothSystem::addHairPart(const HairDesc& d, const std::vector<glm::vec3
             if (st.curl > 0.0f && k + 3 < per) s->mEdgeConstraints.emplace_back(b + k, b + k + 3, bend);
         }
         // Tethers from the follicle: never longer than maxStretch x the
-        // length along the strand (a curl may be pulled out, not through).
+        // length along the strand (a curl may be pulled out, not through),
+        // or, for shrinking coils, than the hair pulled straight.
         for (uint32_t k = 2; k < per; ++k)
-            s->mLRAConstraints.emplace_back(b + 1, b + k, std::max(1.0f, st.maxStretch) * arc[b + k]);
+            s->mLRAConstraints.emplace_back(b + 1, b + k, std::max(1.0f, st.maxStretch) * pulledOut * arc[b + k]);
     }
     s->CalculateEdgeLengths();
 

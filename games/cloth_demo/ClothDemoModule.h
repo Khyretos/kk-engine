@@ -27,8 +27,11 @@ namespace kke_cloth {
 //    running through a curtain.
 //  - Stress: N sheets over balls (KKE_CLOTH_COUNT, KKE_CLOTH_RES) to
 //    measure what cloth costs.
-//  - Hair: four heads (long, wavy, curly, short) turning and nodding in
-//    the wind; KKE_HAIR_GUIDES and KKE_HAIR_PER_GUIDE set the cost.
+//  - Hair: a hairdresser's catalog on heads turning and nodding in the
+//    wind, a page at a time (KKE_HAIR_SHOW=types34|styles|types12|classic):
+//    every Andre Walker type 1A to 4C, and hairstyles (afro, puff, high-top
+//    fade, twist-out, bantu knots); KKE_HAIR_GUIDES and KKE_HAIR_PER_GUIDE
+//    set the cost, KKE_HAIR_STYLES=4c,afro picks the heads.
 // KKE_CLOTH_PROTECTION=full|basic|off, KKE_CLOTH_TOUR=1 (cycles the scenes;
 // on by itself under KKE_BENCHMARK), KKE_CLOTH_WIND=<m/s>.
 class ClothDemoModule : public kke::Module {
@@ -113,7 +116,8 @@ private:
     std::vector<Ball> m_balls;
     std::unique_ptr<Runner> m_runner;
     std::vector<std::unique_ptr<Head>> m_heads;
-    int m_hairGuides = 160, m_hairsPerGuide = 32;
+    int m_hairGuides = 160, m_hairsPerGuide = 0; // 0 = as many as the style draws
+    int m_hairShow = 0;                          // the catalog's page (kHairPages)
     float m_headMotion = 1.0f;
     double m_hairUploadMs = 0.0;
     Scene m_scene = Scene::Fabrics;
