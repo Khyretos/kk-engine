@@ -127,12 +127,21 @@ std::vector<std::string> ClimbRaceModule::onlineNames() const {
 
 std::vector<ClimbRaceModule::Entry> ClimbRaceModule::onlineRoster() const {
     std::vector<Entry> out = wantedRoster();
-    int slot = 0;
-    for (Entry& e : out) {
-        e.netId = slot < kke::NetModule::kMaxLocalPlayers ? m_net->localPlayerId(slot) : 0;
-        if (slot > 0 && e.netId == 0) e.netId = -1; // no room online: it races here only
-        ++slot;
+    // Every climber here needs a network player, or the other machines build
+    // fewer faces than this one and the lanes stop matching: CPU climbers
+    // with no room online (the last ones of a full sofa) sit this race out.
+    std::vector<Entry> kept;
+    for (size_t slot = 0; slot < out.size(); ++slot) {
+        Entry& e = out[slot];
+        e.netId = slot < static_cast<size_t>(kke::NetModule::kMaxLocalPlayers) ? m_net->localPlayerId(static_cast<int>(slot)) : 0;
+        if (slot > 0 && e.netId == 0) e.netId = -1;
+        if (e.netId < 0 && e.seat < 0) continue;
+        kept.push_back(std::move(e));
     }
+    if (kept.size() < out.size())
+        kke::log::get(name())->info("online: {} CPU climbers sit this race out (room for {} climbers from one screen)", out.size() - kept.size(),
+                                    kke::NetModule::kMaxLocalPlayers);
+    out = std::move(kept);
     for (const kke::net::RemotePlayer& p : m_net->remotePlayers()) {
         Entry e;
         e.name = p.name;
