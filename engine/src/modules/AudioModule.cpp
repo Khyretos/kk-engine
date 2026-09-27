@@ -19,6 +19,7 @@
 #include <glm/gtc/constants.hpp>
 #include <imgui.h>
 #include <miniaudio.h>
+#include <SDL3/SDL.h>
 
 #include <algorithm>
 #include <cmath>
@@ -82,9 +83,34 @@ AudioModule::~AudioModule() {
     if (m_device && m_deviceRunning) ma_device_uninit(&m_device->device);
 }
 
+void AudioModule::applyVolumes(AudioMixer& mixer, const EngineSettings::Audio& volumes, bool focused) {
+    auto gain = [](int percent) { return std::clamp(percent, 0, 100) / 100.0f; };
+    const bool muted = volumes.muteWhenUnfocused && !focused;
+    mixer.masterGain = muted ? 0.0f : gain(volumes.master);
+    const float effects = gain(volumes.effects);
+    for (SoundCategory c : {SoundCategory::Impact, SoundCategory::Footstep, SoundCategory::Ambient, SoundCategory::Ui,
+                            SoundCategory::Alert}) {
+        mixer.categoryGain[size_t(c)] = effects;
+    }
+    mixer.categoryGain[size_t(SoundCategory::Music)] = gain(volumes.music);
+    mixer.categoryGain[size_t(SoundCategory::Voice)] = 1.0f;
+}
+
+void AudioModule::onSettingsChanged(const EngineSettings& s) {
+    m_volumes = s.audio;
+    if (m_mixer) applyVolumes(*m_mixer, m_volumes, m_focused);
+}
+
+void AudioModule::onEvent(const SDL_Event& event) {
+    if (event.type != SDL_EVENT_WINDOW_FOCUS_GAINED && event.type != SDL_EVENT_WINDOW_FOCUS_LOST) return;
+    m_focused = event.type == SDL_EVENT_WINDOW_FOCUS_GAINED;
+    if (m_mixer && m_volumes.muteWhenUnfocused) applyVolumes(*m_mixer, m_volumes, m_focused);
+}
+
 void AudioModule::init(Application& app) {
     m_app = &app;
     m_mixer = std::make_unique<AudioMixer>(settings.sampleRate, settings.maxVoices);
+    applyVolumes(*m_mixer, m_volumes, m_focused);
     m_bank = std::make_unique<ImpactBank>(m_materials, settings.sampleRate);
     auto log = log::get(name());
 

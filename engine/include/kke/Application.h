@@ -15,6 +15,7 @@
 
 #include <glm/glm.hpp>
 #include <array>
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -26,6 +27,8 @@
 
 namespace kke {
 
+class BenchRecorder;
+struct BenchOptions;
 class SkyRenderer;
 struct Mood;
 
@@ -334,9 +337,20 @@ public:
     // comment on that tradeoff). Everything else keeps running.
     const std::vector<BrokenModuleInfo>& brokenModules() const { return m_brokenModuleInfos; }
 
+    // --- Benchmark (kke/BenchRecorder.h, docs/BENCHMARKS.md) ---
+    // Started by KKE_BENCHMARK=<seconds> (tools/kke_benchmark sets it), or
+    // by calling startBenchmark() before run() (a launcher without
+    // environment variables, e.g. Android). The game runs as usual; run()
+    // records every frame, writes the report and ends when the time is up.
+    void startBenchmark(const BenchOptions& options);
+    // The running benchmark, nullptr when there is none. A game may call
+    // benchmark()->addEvent("wave 3") so hitches carry what it was doing.
+    BenchRecorder* benchmark() { return m_bench.get(); }
+
 private:
     void resolveInitOrder();
     void playIntro();
+    void writeBenchmarkReport();
     void safeInvoke(Module* m, const char* stage, const std::function<void()>& fn);
 
     Window m_window;
@@ -402,6 +416,10 @@ private:
 
     std::unordered_set<Module*> m_faultedModules; // see safeInvoke() — never called again once here
     std::vector<BrokenModuleInfo> m_brokenModuleInfos;
+    std::string m_title;
+    std::chrono::steady_clock::time_point m_createdAt = std::chrono::steady_clock::now();
+    std::unique_ptr<BenchRecorder> m_bench;
+    std::unordered_map<const Module*, int> m_benchModuleIndex; // filled once init() is done
 };
 
 } // namespace kke
