@@ -4,6 +4,7 @@
 #include "kke/modules/InputModule.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace command_kit {
 

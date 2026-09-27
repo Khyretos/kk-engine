@@ -15,6 +15,7 @@
 #include <SDL3/SDL.h>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
