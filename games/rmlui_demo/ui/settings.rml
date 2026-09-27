@@ -17,10 +17,6 @@
         .setting .control { display: inline-block; width: 60%; text-align: right; }
         .setting .value { display: inline-block; width: 52dp; text-align: right; color: #ffcf5c; }
         .setting input.range { width: 60%; }
-        .binding { display: inline-block; min-width: 110dp; padding: 5dp 10dp; border-radius: 5dp; text-align: center;
-                   background-color: #0d1120; border: 1dp #3a4670; cursor: pointer; }
-        .binding:hover { border-color: #7a9bff; }
-        .binding.capturing { border-color: #ffcf5c; color: #ffcf5c; animation: 1s sine-in-out infinite pulse; }
         #bottom {
             position: absolute; left: 18dp; right: 18dp; bottom: 14dp; height: 44dp;
             border-top: 1dp #2f3a5c; padding-top: 10dp;
@@ -84,7 +80,6 @@
 
         <tab>Audio</tab>
         <panel>
-            <div class="note">🔇 No audio module exists yet — these are saved and will be read by one when it does.</div>
             <div class="setting">
                 <span class="name">Master volume</span>
                 <span class="control"><input type="range" min="0" max="100" step="1" data-value="master"/><span class="value">{{ master }}%</span></span>
@@ -113,14 +108,9 @@
                 <span class="name">Invert Y axis</span>
                 <span class="control"><input type="checkbox" data-checked="invert_y"/></span>
             </div>
-            <h3>Key bindings — click one, then press a key (Esc cancels)</h3>
-            <div class="setting" data-for="b, i : bindings">
-                <span class="name">{{ b.label }}</span>
-                <span class="control">
-                    <span class="binding" data-class-capturing="capturing == i" data-event-click="rebind(i)">
-                        {{ capturing == i ? 'press a key…' : b.key }}
-                    </span>
-                </span>
+            <div class="setting">
+                <span class="name">Keys and buttons<span class="desc">Every action, for the keyboard, mouse and controllers, on the Input screen</span></span>
+                <span class="control"><button class="small" data-event-click="go('input')">Change them</button></span>
             </div>
         </panel>
 

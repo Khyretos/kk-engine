@@ -42,7 +42,9 @@ void CommandInput::onEvent(const SDL_Event& e) {
         m_pad = true;
         break;
     case SDL_EVENT_GAMEPAD_AXIS_MOTION:
-        if (std::abs(e.gaxis.value) > 12000) m_pad = true;
+        // Half a push, like InputModule's button prompts, so the reticle
+        // and the prompts switch to the controller together.
+        if (std::abs(e.gaxis.value) >= 16384) m_pad = true;
         break;
     case SDL_EVENT_MOUSE_MOTION:
         m_mouse = { e.motion.x, e.motion.y };

@@ -67,7 +67,7 @@
 </head>
 <body data-model="inv">
 <div id="window" class="panel glass">
-    <div class="title-bar">INVENTORY — drag items between slots · drop on equipment to equip · double-click a potion to drink</div>
+    <div class="title-bar">INVENTORY — drag an item, or pick it <prompt action="ui.accept"/> and pick a slot · equipment slots equip · double-click or <prompt action="inv.use"/> to drink</div>
     <div id="cols">
         <div id="equip" class="col">
             <h3>Equipped</h3>
@@ -75,7 +75,7 @@
                 <div class="slot" data-attr-slot="'e' + i" data-class-selected="selected == 'e' + i"
                      data-class-common="slot.rarity == 'common'" data-class-uncommon="slot.rarity == 'uncommon'"
                      data-class-rare="slot.rarity == 'rare'" data-class-epic="slot.rarity == 'epic'" data-class-legendary="slot.rarity == 'legendary'"
-                     data-event-mouseover="hover('e' + i)" data-event-click="select('e' + i)">
+                     data-event-mouseover="hover('e' + i)" data-event-focus="hover('e' + i)" data-event-click="select('e' + i)">
                     <div class="item" data-if="slot.icon != ''">{{ slot.icon }}</div>
                 </div>
                 <span class="label">{{ slot.slot_label }}</span>
@@ -92,7 +92,7 @@
                  data-class-selected="selected == 'b' + i"
                  data-class-common="slot.rarity == 'common'" data-class-uncommon="slot.rarity == 'uncommon'"
                  data-class-rare="slot.rarity == 'rare'" data-class-epic="slot.rarity == 'epic'" data-class-legendary="slot.rarity == 'legendary'"
-                 data-event-mouseover="hover('b' + i)" data-event-click="select('b' + i)" data-event-dblclick="use('b' + i)">
+                 data-event-mouseover="hover('b' + i)" data-event-focus="hover('b' + i)" data-event-click="select('b' + i)" data-event-dblclick="use('b' + i)">
                 <div class="item" data-if="slot.icon != ''">{{ slot.icon }}<span class="count" data-if="slot.count > 1">{{ slot.count }}</span></div>
             </div>
         </div>
@@ -109,7 +109,7 @@
                 <div class="stat">Value <span>{{ detail.value }} 🪙</span></div>
                 <div class="desc">“{{ detail.description }}”</div>
             </div>
-            <div class="muted" data-if="detail.icon == ''">Hover an item to inspect it.</div>
+            <div class="muted" data-if="detail.icon == ''">Point at an item, or move the focus to it, to inspect it.</div>
         </div>
     </div>
 

@@ -1,4 +1,5 @@
 #include "kke/Application.h"
+#include "kke/modules/AudioModule.h"
 #include "kke/modules/DebugControlModule.h"
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/SettingsModule.h"
@@ -28,6 +29,7 @@ int main() {
         app.addModule<kke::InputModule>("input.json");
         app.addModule<kke::UiModule>();
         app.addModule<kke::SettingsModule>("settings.json");
+        app.addModule<kke::AudioModule>().setUiVisible(false); // the Audio tab's volumes have a reader
         app.addModule<kke_demo::InputScreen>();
         app.addModule<kke_demo::ShowcaseModule>();
         app.addModule<kke::DebugControlModule>();
