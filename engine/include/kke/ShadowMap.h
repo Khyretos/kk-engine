@@ -67,14 +67,33 @@ public:
     void beginRenderPass(VkCommandBuffer cmd);
     void endRenderPass(VkCommandBuffer cmd);
 
+    // Several views (split screen): one tile of the map per view, each
+    // framed on its own camera, so no view's shadows depend on another's
+    // camera. 1 = the whole map, 2..4 = a 2 x 2 grid of tiles, each as
+    // big as the map was (the image grows; true when it was recreated, and
+    // the descriptor set that samples it must be written again).
+    bool setTiles(uint32_t tiles);
+    uint32_t tiles() const { return m_grid * m_grid; }
+    // Where tile `tile` is in the map: x, y (top left) and width, height
+    // in 0..1 texture coordinates.
+    glm::vec4 tileRect(uint32_t tile) const;
+    // Inside the render pass: draw into tile `tile` from here on.
+    void beginTile(VkCommandBuffer cmd, uint32_t tile);
+
     VkRenderPass renderPass() const { return m_renderPass; }
     VkImageView imageView() const { return m_imageView; }
     VkSampler sampler() const { return m_sampler; }
-    uint32_t resolution() const { return m_resolution; }
+    uint32_t resolution() const { return m_resolution; }   // the whole map, in texels
+    uint32_t tileResolution() const { return m_tile; }     // one tile (one view's shadows)
 
 private:
+    void createTarget();
+    void destroyTarget();
+
     VulkanDevice& m_device;
-    uint32_t m_resolution;
+    uint32_t m_tile;       // texels across one view's tile
+    uint32_t m_grid = 1;   // tiles across (1 or 2)
+    uint32_t m_resolution; // texels across the whole map: m_tile * m_grid
 
     VkImage m_image = VK_NULL_HANDLE;
     VmaAllocation m_allocation = VK_NULL_HANDLE;

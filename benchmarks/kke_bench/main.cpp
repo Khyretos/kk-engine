@@ -167,6 +167,42 @@ std::vector<Case> makeCases() {
         } });
     }
 
+    // A cape: a 32x32 sheet of wool pinned along its top edge to shoulders
+    // that swing round and back, in a gusting wind. Mostly gently curved,
+    // as a character's clothes are: what the protection level costs there.
+    for (const ClothCase cc : { ClothCase{ "cloth_cape_full", "Jolt cloth: a 32x32 cape on swinging shoulders in wind, Full protection", 1, 32, kke::ClothProtection::Full },
+                                ClothCase{ "cloth_cape_basic", "Jolt cloth: a 32x32 cape on swinging shoulders in wind, Basic protection", 1, 32, kke::ClothProtection::Basic } }) {
+        cases.push_back({ cc.name, cc.what, 240, [cc] {
+            auto w = std::make_shared<kke::RigidWorld>([] {
+                kke::RigidWorld::Settings s;
+                s.threads = 0;
+                return s;
+            }());
+            kke::RigidWorld::BodyDesc g;
+            g.motion = kke::RigidWorld::Motion::Static;
+            g.halfExtents = glm::vec3(30.0f, 0.5f, 30.0f);
+            g.position = glm::vec3(0.0f, -0.5f, 0.0f);
+            w->add(g);
+            kke::ClothDesc d;
+            d.mesh = kke::clothGrid(glm::vec3(0.0f, 1.0f, -0.15f), 0.8f, 1.0f, cc.res, cc.res, glm::vec3(1, 0, 0), glm::vec3(0, -1, 0));
+            for (int i = 0; i < cc.res; ++i) d.pinned.push_back(uint32_t(i)); // the top row
+            d.fabric = kke::clothFabric("wool");
+            d.protection = cc.level;
+            const auto id = std::make_shared<kke::RigidWorld::ClothId>(w->addCloth(d));
+            auto t = std::make_shared<float>(0.0f);
+            return std::function<double()>([w, id, t] {
+                *t += 1.0f / 60.0f;
+                const float turn = 1.2f * std::sin(*t * 2.1f);
+                w->setClothJoints(*id, { glm::rotate(glm::mat4(1.0f), turn, glm::vec3(0, 1, 0)) });
+                w->setWind(glm::vec3(2.0f + 2.0f * std::sin(*t * 0.7f), 0.0f, -3.0f));
+                w->step(1.0f / 60.0f);
+                std::vector<glm::vec3> p;
+                w->clothPositions(*id, p);
+                return double(p.back().y);
+            });
+        } });
+    }
+
     // Hair (kke/Hair.h): guide strands on heads that turn and nod in a
     // gusting wind, never asleep. One sample = one 60 Hz step of the whole
     // world (Jolt's rod solve, head collision, wind). What's drawn around

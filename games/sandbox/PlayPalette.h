@@ -46,6 +46,8 @@ public:
 
     void setVisible(bool visible);
     void set(const std::string& hint, const std::vector<Cell>& cells);
+    // What graphs say and the score, big at the top (empty: none).
+    void setWords(const std::string& said, const std::string& score);
 
     // Whether a point (window points, like SDL's mouse) is on the row.
     bool contains(const glm::vec2& point) const;
@@ -63,6 +65,7 @@ private:
     float m_ppp = 1.0f;
     bool m_visible = false;
     std::string m_shown; // the RML last built, to rebuild only on change
+    std::string m_words; // said + score shown
 };
 
 } // namespace kke_sandbox

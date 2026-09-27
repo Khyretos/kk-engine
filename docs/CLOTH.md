@@ -128,25 +128,57 @@ collision (the engine) taking turns instead of being solved together.
 Solving them together means changing Jolt's soft-body solver; that is the
 next step if it matters in your game.
 
+The same cause shows worse with two or three sheets draped over a ball
+together: the ball pushes the lower sheet out through the upper one every
+step, the pass puts it back, and after 8 steps of that the vertices are
+let go as "tangled" (so a real tangle can settle). From then the sheets
+stay through each other. Untangling instead of letting go (Baraff, Witkin
+and Kass, "Untangling Cloth", 2003) is the planned fix.
+
 ## What it costs
 
 `kke_bench --filter cloth_` (one thread, the solver's 6 sub-steps, 60 steps a
-second; this sandbox's 4-core VM, so a desktop is faster):
+second; this sandbox's 4-core VM, so a desktop is faster; medians over 4 s):
 
 | Case | Off | Basic | Full |
 | --- | --- | --- | --- |
-| One 32 x 32 sheet over a ball (1,024 vertices) | 0.43 ms | 0.40 ms | 1.00 ms |
-| One 64 x 64 blanket over a ball (4,096 vertices) | | 1.84 ms | 8.7 ms (p95 21 ms: it crumples onto itself a lot) |
-| 16 sheets of 24 x 24 (9,216 vertices) | | 3.6 ms | 9.4 ms |
+| One 32 x 32 sheet over a ball (1,024 vertices) | 0.35 ms | 0.42 ms | 0.94 ms |
+| One 64 x 64 blanket over a ball, piling on the floor (4,096 vertices) | | 1.74 ms | 9 ms (p95 19 ms) |
+| 16 sheets of 24 x 24 (9,216 vertices) | | 3.2 ms | 7.8 ms |
+| A 32 x 32 wool cape on swinging shoulders in gusty wind | | 0.33 ms | 7.1 ms |
 
-With the job system (the demo, 4 threads): the Fabrics scene (12 cloths,
-7,944 vertices) steps in about 7 ms, the stress scene (16 sheets) in about
-6 ms, the bed (3 layers, 3,624 vertices, all touching) in 10-12 ms.
+With the job system (the demo, 4 threads), the pass's search for pairs runs
+on every thread: the Fabrics scene (12 cloths, 7,944 vertices) steps in
+about 7 ms, the stress scene (16 sheets) in about 6 ms, the bed (3 layers,
+3,624 vertices, all touching) in 10-12 ms.
+
+Nearly all of Full's cost is finding which parts are near which (the
+fixing itself is under 5%). What keeps that down:
+
+- **Flat patches are skipped.** Each cloth is cut into patches of 32
+  triangles. A patch, or two or three neighbouring ones together, whose
+  normals all stay within 86 degrees of one direction for the whole step
+  can't pass through itself (Volino and Magnenat-Thalmann 1994, Provot
+  1997), so nothing in it is searched. A falling sheet or a gently curved
+  cape costs almost nothing. Only small pieces are skipped this way: a
+  scarf lying in a flat loop, end over start, has all its normals up and
+  can still go through itself.
+- **Only relative motion counts.** A vertex is compared with a triangle
+  (and an edge with an edge) by how far it moved relative to it, so a
+  cape swinging in one piece isn't treated as if every part could reach
+  every other.
+- **Grid cells as big as what's in them**, so cloth moving fast gets
+  bigger cells. Nothing is left out of the search for moving fast.
+
+What still costs: cloth that is really close to itself, like a blanket in
+a heap or a cape flapping into folds. A light cape in strong wind costs up
+to 20 times Basic. Moving the search to the GPU is the next step for that.
 
 Rules of thumb:
 
-- Full costs 2 to 4 times Basic, most of it where cloth touches cloth. A
-  cloth lying alone costs little more than Basic.
+- Full costs 2 to 4 times Basic for cloth lying or hanging, and up to 20
+  times for cloth folding onto itself all the time (a flapping cape, a
+  heap). A cloth lying alone costs little more than Basic.
 - Cloth that stops moving falls asleep and costs almost nothing (it still
   stops other cloth as an obstacle).
 - Vertex count matters most. A cape is fine at 16 x 20; a blanket at 32 x

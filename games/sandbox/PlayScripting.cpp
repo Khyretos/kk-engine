@@ -25,7 +25,6 @@
 #include <lua.h>
 #endif
 
-#include <imgui.h>
 
 #include <algorithm>
 #include <cmath>
@@ -602,30 +601,20 @@ void SandboxModule::updateAnimals(float dt) {
     }
 }
 
-// What graphs say, and the score once there is one: big, at the top.
+// What graphs say, and the score once there is one: big, at the top
+// (the Play palette's document, RmlUi).
 void SandboxModule::graphUi() {
-    if (!m_graphs) return;
-    const PlayGraphs& g = *m_graphs;
-    const bool saying = g.now < g.sayUntil && !g.said.empty();
-    if (!saying && !g.scored) return;
-    const float s = ImGui::GetFontSize() / 13.0f;
-    const ImGuiViewport* vp = ImGui::GetMainViewport();
-    ImDrawList* fg = ImGui::GetForegroundDrawList();
-    ImFont* font = ImGui::GetFont();
-    const float size = ImGui::GetFontSize() * 2.2f;
-    auto bubble = [&](const std::string& text, ImVec2 anchor, float alignX) {
-        const ImVec2 ts = font->CalcTextSizeA(size, FLT_MAX, 0.0f, text.c_str());
-        const ImVec2 p(anchor.x - ts.x * alignX, anchor.y);
-        const float pad = 10.0f * s;
-        fg->AddRectFilled(ImVec2(p.x - pad, p.y - pad * 0.5f), ImVec2(p.x + ts.x + pad, p.y + ts.y + pad * 0.5f), IM_COL32(255, 255, 255, 235), 14.0f * s);
-        fg->AddText(font, size, p, IM_COL32(35, 40, 52, 255), text.c_str());
-    };
-    if (saying) bubble(g.said, ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + 60.0f * s), 0.5f);
-    if (g.scored) {
-        char text[48];
-        std::snprintf(text, sizeof(text), "Score %g", g.score);
-        bubble(text, ImVec2(vp->WorkPos.x + vp->WorkSize.x - 20.0f * s, vp->WorkPos.y + 16.0f * s), 1.0f);
+    std::string said, score;
+    if (m_graphs && m_mode == Mode::Play) {
+        const PlayGraphs& g = *m_graphs;
+        if (g.now < g.sayUntil) said = g.said;
+        if (g.scored) {
+            char text[48];
+            std::snprintf(text, sizeof(text), "Score %g", g.score);
+            score = text;
+        }
     }
+    m_palette.setWords(said, score);
 }
 
 } // namespace kke_sandbox

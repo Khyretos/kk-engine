@@ -330,6 +330,9 @@ public:
     // Fixed ticks actually run during the most recent frame — so a stats
     // panel can show when the simulation is falling behind.
     uint32_t fixedStepsLastFrame() const { return m_fixedStepsLastFrame; }
+    // UpdateContext::alpha of the current frame, for code that draws
+    // outside update() (render, renderShadow).
+    float fixedAlpha() const { return m_fixedAlpha; }
 
     // --- Per-module error isolation ---
     // See run()'s per-module try/catch: a module that throws during any
@@ -350,6 +353,9 @@ public:
 
 private:
     void resolveInitOrder();
+    // Points the shadow map's descriptor set at its image (again after
+    // ShadowMap::setTiles recreated it).
+    void writeShadowMapDescriptor();
     void playIntro();
     void writeBenchmarkReport();
     void safeInvoke(Module* m, const char* stage, const std::function<void()>& fn);
@@ -400,6 +406,7 @@ private:
     float m_fixedDt;
     uint32_t m_maxFixedStepsPerFrame = 2;
     uint32_t m_fixedStepsLastFrame = 0;
+    float m_fixedAlpha = 1.0f;
 
     std::vector<std::unique_ptr<Module>> m_modules;
     std::vector<Module*> m_initOrder; // m_modules reordered so dependencies come first

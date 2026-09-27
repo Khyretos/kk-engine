@@ -30,6 +30,7 @@ layout(set = 0, binding = 0) uniform LightingUBO {
     vec4 fogColor;   // rgb = fog colour (already the sky's when it follows it), a = density (0 = no fog)
     vec4 fogParams;  // x = height falloff, y = fog height, z = max opacity, w = sun scatter
     vec4 ambientSH[9]; // ambient light, order-2 spherical harmonics (kke::SkySH)
+    vec4 shadowTile;   // this view's tile of the shadow map: xy = top left, zw = size (0..1); split screen has one per view
 } lighting;
 
 #include "tonemap.glsl"

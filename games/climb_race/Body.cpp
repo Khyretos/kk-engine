@@ -160,7 +160,9 @@ void ClimbRaceModule::setupBody(Racer& r) {
 ClimbRaceModule::BodyInput ClimbRaceModule::bodyInput(const Racer& r) const {
     BodyInput b;
     const kke::RigidWorld& w = m_rigid->world();
-    b.feet = w.characterPosition(r.id);
+    // Drawn between the last two physics steps (smooth on a screen faster
+    // than the physics).
+    b.feet = w.characterDrawPosition(r.id, m_app->fixedAlpha());
     if (r.remote) {
         // Online: what its own machine sent (Net.cpp keeps the jump and
         // landing flags from the state's changes).
@@ -336,8 +338,14 @@ void ClimbRaceModule::animateBody(Racer& r, float dt) {
                 if (!m_arm[s].valid() || r.armWeight <= 0.01f) continue;
                 const float side = s == 0 ? -1.0f : 1.0f;
                 const glm::vec3 shoulder = glm::vec3(xf * bones[static_cast<size_t>(m_arm[s].upper)][3]);
-                // Elbows down and out, away from the rock.
-                const glm::vec3 pole = shoulder - up * 0.5f + right * (0.45f * side) - in * 0.25f;
+                // Elbows down and out, away from the rock. A hand reaching
+                // over to the other side (Climber lets it go a little past
+                // the middle) passes in front of the chest: the elbow comes
+                // forward instead of out, so the arm never folds behind.
+                const glm::vec3 chest = m_arm[1 - s].valid() ? (glm::vec3(xf * bones[static_cast<size_t>(m_arm[1 - s].upper)][3]) + shoulder) * 0.5f
+                                                             : shoulder - right * (m_climbSettings.shoulderHalf * side);
+                const float across = std::clamp(-glm::dot(wrist[s] - chest, right) * side / 0.3f, 0.0f, 1.0f);
+                const glm::vec3 pole = shoulder - up * 0.5f + right * (0.45f * side * (1.0f - across)) - in * (0.25f + 0.35f * across);
                 kke::solveTwoBone(m_rigData, pose, m_arm[s], model(wrist[s]), model(pole), r.armWeight);
             }
             if (pass == 1 || !climbing || m_pelvis < 0) break;

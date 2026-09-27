@@ -8,6 +8,7 @@
 #include <Jolt/Physics/SoftBody/SoftBodyMotionProperties.h>
 #include <Jolt/Physics/SoftBody/SoftBodySharedSettings.h>
 
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
@@ -15,6 +16,7 @@
 #include <cfloat>
 #include <chrono>
 #include <cmath>
+#include <utility>
 
 namespace kke::detail {
 
@@ -25,6 +27,13 @@ constexpr float kAssumedStep = 1.0f / 60.0f; // RigidWorld's collision step leng
 constexpr uint8_t kTangledSteps = 16;         // Cloth::undoneStreak at which a vertex is let go
 constexpr int kMaxPasses = 4;                 // protection narrow-phase passes per step, at most
 constexpr size_t kHairPart = 64;              // guide strands per hair soft body
+constexpr uint32_t kPatchTriangles = 32;      // triangles per patch (ClothSystem::markPatches)
+constexpr int64_t kMaxBoxCells = 4096;       // cells one box may cover in the protection's grids
+constexpr uint32_t kMaxPatchBits = 8192;      // patches in all at most for the pair bit matrix (8 MB)
+// A connected piece of surface whose normals all stay within this of one
+// direction for the whole step can't pass through itself (Volino and
+// Magnenat-Thalmann 1994; Provot 1997): just under 90 degrees.
+constexpr float kFlatEnough = 1.5f;
 
 // Sets a flag other worker threads may set too. The Android NDK's libc++
 // has no std::atomic_ref yet; the builtin is the same relaxed store.
@@ -96,13 +105,16 @@ void closestSegments(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& 
 // Cells of the protection pass's hash covering box lo..hi, or false when
 // the box is not finite or spans more than maxCells (flung across the
 // room in one step: nothing sane to test).
-bool cellBox(const glm::vec3& lo, const glm::vec3& hi, float inv, int maxCells, glm::ivec3& a, glm::ivec3& b) {
+// The cells a box covers. Only a box that isn't finite, or covers more
+// than kMaxBoxCells (a cloth teleported by reset), is left out: anything
+// moving fast gets a bigger box, never a skipped one.
+bool cellBox(const glm::vec3& lo, const glm::vec3& hi, float inv, glm::ivec3& a, glm::ivec3& b) {
     if (!std::isfinite(lo.x + lo.y + lo.z + hi.x + hi.y + hi.z)) return false;
     auto cellOf = [inv](float v) { return int(std::clamp(std::floor(v * inv), -1.0e6f, 1.0e6f)); };
     a = glm::ivec3(cellOf(lo.x), cellOf(lo.y), cellOf(lo.z));
     b = glm::ivec3(cellOf(hi.x), cellOf(hi.y), cellOf(hi.z));
     const glm::ivec3 span = b - a + 1;
-    return span.x <= maxCells && span.y <= maxCells && span.z <= maxCells && span.x * span.y * span.z <= maxCells;
+    return int64_t(span.x) * span.y * span.z <= kMaxBoxCells;
 }
 
 uint32_t hashCell(int x, int y, int z) { return uint32_t(x) * 92837111u ^ uint32_t(y) * 689287499u ^ uint32_t(z) * 283923481u; }
@@ -275,6 +287,7 @@ uint32_t ClothSystem::add(const ClothDesc& d) {
                 c.edges.push_back(i);
                 c.edges.push_back(j);
             }
+    buildPatches(c);
     c.stats.vertices = uint32_t(n);
     c.stats.triangles = uint32_t(c.tris.size() / 3);
 
@@ -668,6 +681,235 @@ void ClothSystem::Grid::build(const std::vector<CellBox>& boxes) {
     }
 }
 
+// Patches: triangles grown breadth first from a seed across shared edges
+// until there are kPatchTriangles, so each is a small, compact piece of
+// the surface (a disc a few edges across).
+void ClothSystem::buildPatches(Cloth& c) {
+    const uint32_t nt = uint32_t(c.tris.size() / 3);
+    c.triPatch.assign(nt, UINT32_MAX);
+    c.patches = 0;
+    if (nt == 0) return;
+    // Triangles across each edge (edge key: lower vertex, higher vertex).
+    std::vector<std::pair<uint64_t, uint32_t>> byEdge;
+    byEdge.reserve(size_t(nt) * 3);
+    for (uint32_t t = 0; t < nt; ++t)
+        for (int k = 0; k < 3; ++k) {
+            const uint32_t a = c.tris[size_t(t) * 3 + size_t(k)], b = c.tris[size_t(t) * 3 + size_t((k + 1) % 3)];
+            byEdge.push_back({ uint64_t(std::min(a, b)) << 32 | std::max(a, b), t });
+        }
+    std::sort(byEdge.begin(), byEdge.end());
+    std::vector<uint32_t> nearStart(nt + 1, 0), near;
+    {
+        std::vector<std::vector<uint32_t>> lists(nt);
+        for (size_t i = 0; i < byEdge.size();) {
+            size_t j = i;
+            while (j < byEdge.size() && byEdge[j].first == byEdge[i].first) ++j;
+            for (size_t a = i; a < j; ++a)
+                for (size_t b = i; b < j; ++b)
+                    if (a != b) lists[byEdge[a].second].push_back(byEdge[b].second);
+            i = j;
+        }
+        for (uint32_t t = 0; t < nt; ++t) {
+            nearStart[t + 1] = nearStart[t] + uint32_t(lists[t].size());
+            near.insert(near.end(), lists[t].begin(), lists[t].end());
+        }
+    }
+    std::vector<uint32_t> queue;
+    for (uint32_t seed = 0; seed < nt; ++seed) {
+        if (c.triPatch[seed] != UINT32_MAX) continue;
+        const uint32_t patch = c.patches++;
+        queue.assign(1, seed);
+        c.triPatch[seed] = patch;
+        uint32_t size = 1;
+        for (size_t q = 0; q < queue.size() && size < kPatchTriangles; ++q)
+            for (uint32_t k = nearStart[queue[q]]; k < nearStart[queue[q] + 1] && size < kPatchTriangles; ++k) {
+                const uint32_t o = near[k];
+                if (c.triPatch[o] != UINT32_MAX) continue;
+                c.triPatch[o] = patch;
+                queue.push_back(o);
+                ++size;
+            }
+    }
+    // Neighbouring patches: sharing an edge.
+    std::vector<std::vector<uint32_t>> patchNear(c.patches);
+    for (uint32_t t = 0; t < nt; ++t)
+        for (uint32_t k = nearStart[t]; k < nearStart[t + 1]; ++k)
+            if (c.triPatch[near[k]] != c.triPatch[t]) patchNear[c.triPatch[t]].push_back(c.triPatch[near[k]]);
+    c.patchNearStart.assign(c.patches + 1, 0);
+    c.patchNear.clear();
+    for (uint32_t p = 0; p < c.patches; ++p) {
+        auto& l = patchNear[p];
+        std::sort(l.begin(), l.end());
+        l.erase(std::unique(l.begin(), l.end()), l.end());
+        c.patchNearStart[p + 1] = c.patchNearStart[p] + uint32_t(l.size());
+        c.patchNear.insert(c.patchNear.end(), l.begin(), l.end());
+    }
+    // Each vertex and edge goes with the patch of one triangle it is part of:
+    // it lies in that patch's surface, so what holds for the patch holds for it.
+    c.vertPatch.assign(c.rest.size(), UINT32_MAX); // UINT32_MAX: in no triangle (a net's threads)
+    for (uint32_t t = 0; t < nt; ++t)
+        for (int k = 0; k < 3; ++k) c.vertPatch[c.tris[size_t(t) * 3 + size_t(k)]] = c.triPatch[t];
+    c.edgePatch.assign(c.edges.size() / 2, 0);
+    for (size_t e = 0; e * 2 + 1 < c.edges.size(); ++e) {
+        const uint64_t key = uint64_t(std::min(c.edges[e * 2], c.edges[e * 2 + 1])) << 32 | std::max(c.edges[e * 2], c.edges[e * 2 + 1]);
+        const auto it = std::lower_bound(byEdge.begin(), byEdge.end(), std::make_pair(key, uint32_t(0)));
+        if (it != byEdge.end() && it->first == key) c.edgePatch[e] = c.triPatch[it->second];
+    }
+}
+
+namespace {
+
+// The narrowest cone (axis, half-angle) holding both cones.
+glm::vec4 mergeCones(const glm::vec4& a, const glm::vec4& b) {
+    if (a.w >= glm::pi<float>() || b.w >= glm::pi<float>()) return glm::vec4(0, 0, 1, glm::pi<float>());
+    const glm::vec3 aa(a), ba(b);
+    const float between = std::acos(std::clamp(glm::dot(aa, ba), -1.0f, 1.0f));
+    if (between + b.w <= a.w) return a;
+    if (between + a.w <= b.w) return b;
+    const float half = 0.5f * (a.w + b.w + between);
+    if (half >= glm::pi<float>() || between < 1e-6f) return glm::vec4(aa, std::min(half, glm::pi<float>()));
+    const float t = half - a.w; // turn a's axis this far towards b's
+    const glm::vec3 axis = (std::sin(between - t) * aa + std::sin(t) * ba) / std::sin(between);
+    return glm::vec4(glm::normalize(axis), half);
+}
+
+} // namespace
+
+// Which pairs of patches could touch this step (the rest of the pass
+// looks only at those). Pairs whose swept bounds don't meet can't. And a
+// patch, or two neighbouring patches, or two with a patch between them,
+// whose triangle normals all stay within kFlatEnough of one direction
+// for the whole step (at its start, its end, and the cross term between,
+// which bounds every normal in between) is a connected, gently curved
+// piece of cloth: it can't pass through itself (Volino and
+// Magnenat-Thalmann 1994, Provot 1997). Only small pieces are skipped this
+// way: a whole scarf lying in a flat loop, end over start, has all its
+// normals pointing up and can still pass through itself, so patches far
+// apart on the same cloth are always looked at when their bounds meet.
+void ClothSystem::markPatches() {
+    m_patchBase.resize(m_active.size() + 1);
+    m_patchBase[0] = 0;
+    for (size_t ci = 0; ci < m_active.size(); ++ci) m_patchBase[ci + 1] = m_patchBase[ci] + m_active[ci]->patches;
+    const uint32_t total = m_patchBase.back();
+    m_patchTotal = total;
+    m_patchLo.assign(total, glm::vec3(FLT_MAX));
+    m_patchHi.assign(total, glm::vec3(-FLT_MAX));
+    m_patchCone.assign(total, glm::vec4(0.0f));
+    m_patchLooked.assign(total, 0);
+    m_allPairs = total > kMaxPatchBits;
+    if (!m_allPairs) m_patchPairs.assign((size_t(total) * total + 63) / 64, 0);
+    std::vector<glm::vec3>& sum = m_patchSum;
+    sum.assign(total, glm::vec3(0.0f));
+    std::vector<float>& lowest = m_patchLowest;
+    lowest.assign(total, 1.0f);
+    // Bounds, and the sum of every normal the step's triangles have: at its
+    // start, its end, and the cross term of the two (the normal in between
+    // is a positive mix of the three, so a cone holding them holds it).
+    for (size_t ci = 0; ci < m_active.size(); ++ci) {
+        Cloth& c = *m_active[ci];
+        const size_t nt = c.tris.size() / 3;
+        c.triMixed.resize(nt);
+        for (size_t t = 0; t < nt; ++t) {
+            const uint32_t gp = m_patchBase[ci] + c.triPatch[t];
+            const uint32_t i0 = c.tris[t * 3], i1 = c.tris[t * 3 + 1], i2 = c.tris[t * 3 + 2];
+            glm::vec3 lo = glm::min(glm::min(c.pos[i0], c.prev[i0]), glm::min(glm::min(c.pos[i1], c.prev[i1]), glm::min(c.pos[i2], c.prev[i2])));
+            glm::vec3 hi = glm::max(glm::max(c.pos[i0], c.prev[i0]), glm::max(glm::max(c.pos[i1], c.prev[i1]), glm::max(c.pos[i2], c.prev[i2])));
+            m_patchLo[gp] = glm::min(m_patchLo[gp], lo);
+            m_patchHi[gp] = glm::max(m_patchHi[gp], hi);
+            const glm::vec3 mixed = glm::cross(c.prev[i1] - c.prev[i0], c.pos[i2] - c.pos[i0]) + glm::cross(c.pos[i1] - c.pos[i0], c.prev[i2] - c.prev[i0]);
+            const float ml = glm::length(mixed);
+            if (c.triN[t] == glm::vec3(0.0f) || ml < 1e-12f) {
+                lowest[gp] = -2.0f; // degenerate: no cone
+                c.triMixed[t] = glm::vec3(0.0f);
+                continue;
+            }
+            c.triMixed[t] = mixed / ml;
+            sum[gp] += c.triN[t] + c.triNPrev[t] + c.triMixed[t];
+        }
+        for (uint32_t p = 0; p < c.patches; ++p) {
+            const uint32_t gp = m_patchBase[ci] + p;
+            m_patchLo[gp] -= c.thickness;
+            m_patchHi[gp] += c.thickness;
+            const float l = glm::length(sum[gp]);
+            sum[gp] = l > 1e-6f ? sum[gp] / l : glm::vec3(0.0f);
+            if (l <= 1e-6f) lowest[gp] = -2.0f;
+        }
+        // Cones: the axis the mean normal, the half-angle the widest normal from it.
+        for (size_t t = 0; t < nt; ++t) {
+            const uint32_t gp = m_patchBase[ci] + c.triPatch[t];
+            const glm::vec3 axis = sum[gp];
+            lowest[gp] = std::min(lowest[gp], std::min(std::min(glm::dot(c.triN[t], axis), glm::dot(c.triNPrev[t], axis)), glm::dot(c.triMixed[t], axis)));
+        }
+    }
+    for (uint32_t gp = 0; gp < total; ++gp)
+        m_patchCone[gp] = lowest[gp] < -1.5f ? glm::vec4(0, 0, 1, glm::pi<float>()) : glm::vec4(sum[gp], std::acos(std::clamp(lowest[gp], -1.0f, 1.0f)));
+    auto look = [&](uint32_t a, uint32_t b) {
+        m_patchLooked[a] = m_patchLooked[b] = 1;
+        if (m_allPairs) return;
+        for (const uint64_t bit : { uint64_t(a) * total + b, uint64_t(b) * total + a }) m_patchPairs[bit >> 6] |= uint64_t(1) << (bit & 63);
+    };
+    // Sweep along x over every patch's bounds; pairs whose bounds meet.
+    thread_local std::vector<uint32_t> order;
+    order.resize(total);
+    for (uint32_t i = 0; i < total; ++i) order[i] = i;
+    std::sort(order.begin(), order.end(), [&](uint32_t a, uint32_t b) { return m_patchLo[a].x < m_patchLo[b].x; });
+    std::vector<uint32_t> clothOf(total);
+    for (size_t ci = 0; ci < m_active.size(); ++ci)
+        for (uint32_t gp = m_patchBase[ci]; gp < m_patchBase[ci + 1]; ++gp) clothOf[gp] = uint32_t(ci);
+    for (size_t i = 0; i < total; ++i) {
+        const uint32_t a = order[i];
+        // A patch on its own.
+        if (m_patchCone[a].w >= kFlatEnough) look(a, a);
+        for (size_t j = i + 1; j < total && m_patchLo[order[j]].x <= m_patchHi[a].x; ++j) {
+            const uint32_t b = order[j];
+            if (glm::any(glm::lessThan(m_patchHi[a], m_patchLo[b])) || glm::any(glm::lessThan(m_patchHi[b], m_patchLo[a]))) continue;
+            if (clothOf[a] == clothOf[b]) {
+                const Cloth& c = *m_active[clothOf[a]];
+                const uint32_t base = m_patchBase[clothOf[a]], la = a - base, lb = b - base;
+                const uint32_t* na0 = c.patchNear.data() + c.patchNearStart[la];
+                const uint32_t* na1 = c.patchNear.data() + c.patchNearStart[la + 1];
+                const glm::vec4 both = mergeCones(m_patchCone[a], m_patchCone[b]);
+                if (both.w < kFlatEnough) {
+                    // Neighbours, flat enough together.
+                    if (std::binary_search(na0, na1, lb)) continue;
+                    // A patch between them, the three flat enough together.
+                    bool flat = false;
+                    const uint32_t* nb0 = c.patchNear.data() + c.patchNearStart[lb];
+                    const uint32_t* nb1 = c.patchNear.data() + c.patchNearStart[lb + 1];
+                    for (const uint32_t* q = na0; q < na1 && !flat; ++q)
+                        if (std::binary_search(nb0, nb1, *q) && mergeCones(both, m_patchCone[base + *q]).w < kFlatEnough) flat = true;
+                    if (flat) continue;
+                }
+            }
+            look(a, b);
+        }
+    }
+    // Vertices in no triangle (a net's threads) are always looked at, and
+    // so is every patch within their reach.
+    for (size_t ci = 0; ci < m_active.size(); ++ci) {
+        const Cloth& c = *m_active[ci];
+        glm::vec3 lo(FLT_MAX), hi(-FLT_MAX);
+        for (size_t v = 0; v < c.pos.size(); ++v)
+            if (c.vertPatch[v] == UINT32_MAX) {
+                lo = glm::min(lo, glm::min(c.pos[v], c.prev[v]) - c.meanEdge - 3.0f * c.thickness);
+                hi = glm::max(hi, glm::max(c.pos[v], c.prev[v]) + c.meanEdge + 3.0f * c.thickness);
+            }
+        if (lo.x > hi.x) continue;
+        for (uint32_t gp = 0; gp < total; ++gp)
+            if (!glm::any(glm::lessThan(m_patchHi[gp], lo)) && !glm::any(glm::lessThan(hi, m_patchLo[gp]))) m_patchLooked[gp] = 1;
+    }
+    // Vertices of any patch looked at.
+    for (size_t ci = 0; ci < m_active.size(); ++ci) {
+        Cloth& c = *m_active[ci];
+        c.vertLooked.assign(c.pos.size(), 0);
+        for (size_t v = 0; v < c.pos.size(); ++v)
+            if (c.vertPatch[v] == UINT32_MAX) c.vertLooked[v] = 1;
+        for (size_t t = 0; t < c.tris.size() / 3; ++t)
+            if (m_patchLooked[m_patchBase[ci] + c.triPatch[t]])
+                for (int k = 0; k < 3; ++k) c.vertLooked[c.tris[t * 3 + size_t(k)]] = 1;
+    }
+}
+
 void ClothSystem::shapeTriangles() {
     for (Cloth* cp : m_active) {
         Cloth& c = *cp;
@@ -675,6 +917,7 @@ void ClothSystem::shapeTriangles() {
         c.triN.resize(nt);
         c.triNPrev.resize(nt);
         c.triSphere.resize(nt);
+        c.triMove.resize(nt);
         for (size_t t = 0; t < nt; ++t) {
             const uint32_t i0 = c.tris[t * 3], i1 = c.tris[t * 3 + 1], i2 = c.tris[t * 3 + 2];
             const glm::vec3 n = glm::cross(c.pos[i1] - c.pos[i0], c.pos[i2] - c.pos[i0]);
@@ -682,11 +925,17 @@ void ClothSystem::shapeTriangles() {
             const float nl = glm::length(n), npl = glm::length(np);
             c.triN[t] = nl > 1e-12f ? n / nl : glm::vec3(0.0f);
             c.triNPrev[t] = npl > 1e-12f ? np / npl : c.triN[t];
-            // Bounding sphere (centroid, farthest corner) for a cheap reject.
+            // Bounding sphere for a cheap reject: about the centroid, holding
+            // the triangle now and at the last pass (and so all the way
+            // between, seen from its moving centroid), and how far the
+            // centroid moved: only moving relative to it brings a vertex closer.
             const glm::vec3 centre = (c.pos[i0] + c.pos[i1] + c.pos[i2]) / 3.0f;
-            const float r2 = std::max(std::max(glm::dot(c.pos[i0] - centre, c.pos[i0] - centre), glm::dot(c.pos[i1] - centre, c.pos[i1] - centre)),
-                                      glm::dot(c.pos[i2] - centre, c.pos[i2] - centre));
+            const glm::vec3 centrePrev = (c.prev[i0] + c.prev[i1] + c.prev[i2]) / 3.0f;
+            float r2 = 0.0f;
+            for (const uint32_t i : { i0, i1, i2 })
+                r2 = std::max(r2, std::max(glm::dot(c.pos[i] - centre, c.pos[i] - centre), glm::dot(c.prev[i] - centrePrev, c.prev[i] - centrePrev)));
             c.triSphere[t] = glm::vec4(centre, std::sqrt(r2));
+            c.triMove[t] = centre - centrePrev;
         }
     }
 }
@@ -726,27 +975,51 @@ void ClothSystem::protect() {
         edgeTotal += c->edges.size() / 2;
     }
     if (cell <= 0.0f || triTotal == 0) return;
-    const float inv = 1.0f / cell;
 
     // --- Broad phase, once per step: who could touch whom ------------------
     // Everything's bounds swept from the last pass to now (+ thickness), in
     // a spatial hash; the pairs whose bounds meet are kept for the passes.
     shapeTriangles();
+    markPatches();
     m_triBox.resize(triTotal);
     m_triCloth.resize(triTotal);
+    m_triLo.resize(triTotal);
+    m_triHi.resize(triTotal);
+    double sized = 0.0;
+    size_t boxes = 0;
     size_t g = 0;
     for (size_t ci = 0; ci < m_active.size(); ++ci) {
         Cloth& c = *m_active[ci];
         c.triBase = uint32_t(g);
         for (size_t t = 0; t < c.tris.size() / 3; ++t, ++g) {
-            const uint32_t i0 = c.tris[t * 3], i1 = c.tris[t * 3 + 1], i2 = c.tris[t * 3 + 2];
-            const glm::vec3 lo = glm::min(glm::min(glm::min(c.pos[i0], c.prev[i0]), glm::min(c.pos[i1], c.prev[i1])), glm::min(c.pos[i2], c.prev[i2]));
-            const glm::vec3 hi = glm::max(glm::max(glm::max(c.pos[i0], c.prev[i0]), glm::max(c.pos[i1], c.prev[i1])), glm::max(c.pos[i2], c.prev[i2]));
             CellBox& box = m_triBox[g];
             m_triCloth[g] = uint32_t(ci);
-            if (c.triN[t] == glm::vec3(0.0f) || !cellBox(lo - c.thickness, hi + c.thickness, inv, 64, box.lo, box.hi)) box = CellBox{};
+            if (!m_patchLooked[m_patchBase[ci] + c.triPatch[t]]) {
+                box = CellBox{};
+                continue;
+            }
+            const uint32_t i0 = c.tris[t * 3], i1 = c.tris[t * 3 + 1], i2 = c.tris[t * 3 + 2];
+            if (c.triN[t] == glm::vec3(0.0f)) {
+                box = CellBox{};
+                continue;
+            }
+            m_triLo[g] = glm::min(glm::min(glm::min(c.pos[i0], c.prev[i0]), glm::min(c.pos[i1], c.prev[i1])), glm::min(c.pos[i2], c.prev[i2])) - c.thickness;
+            m_triHi[g] = glm::max(glm::max(glm::max(c.pos[i0], c.prev[i0]), glm::max(c.pos[i1], c.prev[i1])), glm::max(c.pos[i2], c.prev[i2])) + c.thickness;
+            box.lo = glm::ivec3(0);
+            box.hi = glm::ivec3(0); // valid for now: placed below
+            {
+                const glm::vec3 ext = m_triHi[g] - m_triLo[g];
+                sized += std::max(ext.x, std::max(ext.y, ext.z));
+            }
+            ++boxes;
         }
     }
+    // Cells about as big as the boxes (a box then covers a few cells, and a
+    // cell holds a few boxes); cloth moving fast gets bigger cells.
+    const float triCell = std::max(cell, boxes ? float(sized / double(boxes)) : cell);
+    const float inv = 1.0f / triCell;
+    for (size_t gt = 0; gt < triTotal; ++gt)
+        if (m_triBox[gt].valid() && !cellBox(m_triLo[gt], m_triHi[gt], inv, m_triBox[gt].lo, m_triBox[gt].hi)) m_triBox[gt] = CellBox{};
     m_triGrid.build(m_triBox);
     m_vertBase.resize(m_active.size() + 1);
     m_vertBase[0] = 0;
@@ -760,8 +1033,11 @@ void ClothSystem::protect() {
             Cloth& c = *m_active[ci];
             const uint32_t v = gv - m_vertBase[ci];
             if (c.invMass[v] <= 0.0f) continue; // pinned or asleep: others are pushed off it, from their side
+            if (!c.vertLooked[v]) continue;
+            const bool loose = c.vertPatch[v] == UINT32_MAX;
+            const uint32_t vp = loose ? 0u : m_patchBase[ci] + c.vertPatch[v];
             glm::ivec3 a, b;
-            if (!cellBox(glm::min(c.pos[v], c.prev[v]) - c.thickness, glm::max(c.pos[v], c.prev[v]) + c.thickness, inv, 27, a, b)) continue;
+            if (!cellBox(glm::min(c.pos[v], c.prev[v]) - c.thickness, glm::max(c.pos[v], c.prev[v]) + c.thickness, inv, a, b)) continue;
             for (int x = a.x; x <= b.x; ++x)
                 for (int y = a.y; y <= b.y; ++y)
                     for (int z = a.z; z <= b.z; ++z) {
@@ -773,9 +1049,10 @@ void ClothSystem::protect() {
                             Cloth& o = *m_active[m_triCloth[gt]];
                             const uint32_t tri = gt - o.triBase;
                             if (&o == &c && nearInTopology(c, v, tri)) continue;
-                            // Far from the triangle (with room for the passes to move things): skip.
+                            // Far from the triangle for how far it moved relative to it
+                            // (with room for the passes to move things): skip.
                             const glm::vec4& sph = o.triSphere[tri];
-                            const float reach = sph.w + 3.0f * std::max(c.thickness, o.thickness) + c.motion[v];
+                            const float reach = sph.w + 3.0f * std::max(c.thickness, o.thickness) + glm::length(c.pos[v] - c.prev[v] - o.triMove[tri]);
                             const glm::vec3 dc = c.pos[v] - glm::vec3(sph);
                             const float d2 = glm::dot(dc, dc);
                             // Within an edge of it: its edges may meet the triangle's (edge pass below).
@@ -789,6 +1066,9 @@ void ClothSystem::protect() {
                                     setFlag(*flag);
                             }
                             if (d2 > reach * reach) continue;
+                            // (The flags above are set whatever the patches: an edge of a
+                            // patch looked at may end at a vertex of one that isn't.)
+                            if (!loose && !patchPair(vp, m_patchBase[m_triCloth[gt]] + o.triPatch[tri])) continue;
                             w.vt.push_back({ uint32_t(ci), v, gt });
                         }
                     }
@@ -804,19 +1084,41 @@ void ClothSystem::protect() {
     m_edgeLo.resize(edgeTotal);
     m_edgeHi.resize(edgeTotal);
     m_edgeMoves.resize(edgeTotal);
+    m_edgePatch.resize(edgeTotal);
+    double edgeSized = 0.0;
+    size_t edgeBoxes = 0;
     g = 0;
     for (size_t ci = 0; ci < m_active.size(); ++ci) {
         Cloth& c = *m_active[ci];
         c.edgeBase = uint32_t(g);
         for (size_t k = 0; k + 1 < c.edges.size(); k += 2, ++g) {
             const uint32_t i0 = c.edges[k], i1 = c.edges[k + 1];
+            m_edgeCloth[g] = uint32_t(ci);
+            m_edgePatch[g] = m_patchBase[ci] + c.edgePatch[k / 2];
+            if (!m_patchLooked[m_edgePatch[g]]) {
+                m_edgeMoves[g] = 0;
+                m_edgeBox[g] = CellBox{};
+                continue;
+            }
             m_edgeLo[g] = glm::min(glm::min(c.pos[i0], c.prev[i0]), glm::min(c.pos[i1], c.prev[i1])) - c.thickness;
             m_edgeHi[g] = glm::max(glm::max(c.pos[i0], c.prev[i0]), glm::max(c.pos[i1], c.prev[i1])) + c.thickness;
-            m_edgeCloth[g] = uint32_t(ci);
             m_edgeMoves[g] = uint8_t((c.invMass[i0] > 0.0f || c.invMass[i1] > 0.0f ? 1 : 0) | (c.nearOther[i0] || c.nearOther[i1] ? 2 : 0));
-            if (!cellBox(m_edgeLo[g], m_edgeHi[g], inv, 27, m_edgeBox[g].lo, m_edgeBox[g].hi)) m_edgeBox[g] = CellBox{};
+            // Only edges near another surface can meet another edge: the rest
+            // stay out of the grid (it's what the queries would skip).
+            m_edgeBox[g] = CellBox{};
+            if (m_edgeMoves[g] & 2) {
+                m_edgeBox[g].lo = m_edgeBox[g].hi = glm::ivec3(0); // placed below
+                {
+                    const glm::vec3 ext = m_edgeHi[g] - m_edgeLo[g];
+                    edgeSized += std::max(ext.x, std::max(ext.y, ext.z));
+                }
+                ++edgeBoxes;
+            }
         }
     }
+    const float edgeInv = 1.0f / std::max(cell, edgeBoxes ? float(edgeSized / double(edgeBoxes)) : cell);
+    for (size_t ge = 0; ge < edgeTotal; ++ge)
+        if (m_edgeBox[ge].valid() && !cellBox(m_edgeLo[ge], m_edgeHi[ge], edgeInv, m_edgeBox[ge].lo, m_edgeBox[ge].hi)) m_edgeBox[ge] = CellBox{};
     m_edgeGrid.build(m_edgeBox);
     parallel(uint32_t(edgeTotal), [&](uint32_t begin, uint32_t end, Worker& w) {
         w.stamp.assign(edgeTotal, UINT32_MAX);
@@ -835,11 +1137,13 @@ void ClothSystem::protect() {
                         for (uint32_t k = m_edgeGrid.start[h]; k < m_edgeGrid.start[h + 1]; ++k) {
                             const uint32_t gf = m_edgeGrid.items[k];
                             // Each pair once: from the lower edge when both move.
-                            if ((m_edgeMoves[gf] == 3 && gf <= ge) || !(m_edgeMoves[gf] & 2) || w.stamp[gf] == ge) continue;
+                            if ((m_edgeMoves[gf] == 3 && gf <= ge) || w.stamp[gf] == ge) continue;
                             w.stamp[gf] = ge;
                             if (glm::any(glm::lessThan(m_edgeHi[gf], m_edgeLo[ge])) || glm::any(glm::greaterThan(m_edgeLo[gf], m_edgeHi[ge]))) continue;
+                            if (!patchPair(m_edgePatch[ge], m_edgePatch[gf])) continue;
                             Cloth& o = *m_active[m_edgeCloth[gf]];
                             const uint32_t f = gf - o.edgeBase;
+                            if (edgesFar(c, e, o, f, 3.0f * std::max(c.thickness, o.thickness))) continue;
                             if (&o == &c && edgesNear(c, e, f)) continue;
                             if (edgesApart(c, e, o, f, 3.0f * std::max(c.thickness, o.thickness))) continue;
                             w.ee.push_back({ ge, gf });
@@ -869,9 +1173,10 @@ void ClothSystem::protect() {
                 const uint32_t* t = &o.tris[size_t(tri) * 3];
                 if (c.movedIn[pr.vertex] != last && o.movedIn[t[0]] != last && o.movedIn[t[1]] != last && o.movedIn[t[2]] != last) continue;
             }
-            // Too far from the triangle now and at the last pass: can't touch or have crossed it.
+            // Too far from the triangle, for how far it moved relative to it:
+            // can't touch or have crossed it.
             const glm::vec4& sph = o.triSphere[tri];
-            const float reach = sph.w + std::max(c.thickness, o.thickness) + glm::length(c.pos[pr.vertex] - c.prev[pr.vertex]);
+            const float reach = sph.w + std::max(c.thickness, o.thickness) + glm::length(c.pos[pr.vertex] - c.prev[pr.vertex] - o.triMove[tri]);
             const glm::vec3 dc = c.pos[pr.vertex] - glm::vec3(sph);
             if (glm::dot(dc, dc) > reach * reach) continue;
             undone += testVertexTriangle(c, pr.vertex, o, tri) ? 1u : 0u;
@@ -900,6 +1205,26 @@ bool ClothSystem::edgesApart(const Cloth& c, uint32_t e, const Cloth& o, uint32_
     const float vol = glm::dot(o.pos[b0] - c.pos[a0], uab);
     const float volPrev = glm::dot(o.prev[b0] - c.prev[a0], glm::cross(c.prev[a1] - c.prev[a0], o.prev[b1] - o.prev[b0]));
     return vol * volPrev > 0.0f && vol * vol >= gap * gap * glm::dot(uab, uab);
+}
+
+// Too far apart now, for how far they moved relative to each other this
+// step, to have touched on the way: the distance between two segments
+// changes by at most the most any point of one moved relative to the other.
+bool ClothSystem::edgesFar(const Cloth& c, uint32_t e, const Cloth& o, uint32_t f, float gap) {
+    const uint32_t a0 = c.edges[size_t(e) * 2], a1 = c.edges[size_t(e) * 2 + 1];
+    const uint32_t b0 = o.edges[size_t(f) * 2], b1 = o.edges[size_t(f) * 2 + 1];
+    const glm::vec3 mb = 0.5f * ((o.pos[b0] - o.prev[b0]) + (o.pos[b1] - o.prev[b1]));
+    const float moved = std::max(glm::length(c.pos[a0] - c.prev[a0] - mb), glm::length(c.pos[a1] - c.prev[a1] - mb)) +
+                        0.5f * glm::length((o.pos[b0] - o.prev[b0]) - (o.pos[b1] - o.prev[b1]));
+    const float reach = gap + moved;
+    // First the midpoints (cheap): no closer than they are, less both half lengths.
+    const glm::vec3 ma = 0.5f * (c.pos[a0] + c.pos[a1]), mo = 0.5f * (o.pos[b0] + o.pos[b1]);
+    const float far = reach + 0.5f * (glm::length(c.pos[a1] - c.pos[a0]) + glm::length(o.pos[b1] - o.pos[b0]));
+    if (glm::dot(ma - mo, ma - mo) > far * far) return true;
+    float s, t;
+    closestSegments(c.pos[a0], c.pos[a1], o.pos[b0], o.pos[b1], s, t);
+    const glm::vec3 d = glm::mix(c.pos[a0], c.pos[a1], s) - glm::mix(o.pos[b0], o.pos[b1], t);
+    return glm::dot(d, d) > reach * reach;
 }
 
 bool ClothSystem::edgesNear(const Cloth& c, uint32_t e, uint32_t f) const {

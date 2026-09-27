@@ -106,8 +106,9 @@ void HairRenderer::build(const HairDesc& desc) {
         gpu.push_back(g);
     }
     if (gpu.empty()) gpu.push_back(HairGpu{}); // a buffer can't be empty
-    // The old buffer may still be read by a frame in flight.
-    vkDeviceWaitIdle(m_app.device().device());
+    // The old buffer may still be read by a frame in flight: the renderer
+    // frees it once those frames are done.
+    if (m_hairBuffer) m_app.renderer().retire(std::move(m_hairBuffer));
     m_hairBuffer = std::make_unique<Buffer>(Buffer::createDeviceLocal(m_app.device(), gpu.data(), gpu.size() * sizeof(HairGpu), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
     for (FrameData& f : m_frames) f.bound = false;
     ++m_version;

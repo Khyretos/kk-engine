@@ -696,7 +696,8 @@ void ModelModule::uploadInstances(int pass, uint32_t frameIndex, const std::vect
 }
 
 void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
-    ++m_frame; // renderShadow runs first each frame (see Application's frame loop)
+    if (ctx.viewIndex == 0) ++m_frame; // renderShadow runs first each frame (see Application's frame loop), once per view
+    const int pass = static_cast<int>(kMaxViews + std::min(ctx.viewIndex, kMaxViews - 1));
     m_shadowPipeline->bind(ctx.cmd);
     // Cull against the light's own frustum: things off camera still cast
     // shadows into view, things outside the shadow map can't.
@@ -705,12 +706,12 @@ void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
     // Instanced groups first; what they drew is skipped below.
     if (m_showMeshes) {
         buildBatches(lightFrustum, m_batches, m_instanceData, false);
-        uploadInstances(0, ctx.frameIndex, m_instanceData);
+        uploadInstances(pass, ctx.frameIndex, m_instanceData);
         if (!m_batches.empty()) {
             m_instancedShadowPipeline->bind(ctx.cmd);
             ShadowPushConstants pc{ ctx.lightViewProj, glm::mat4(1.0f) };
             vkCmdPushConstants(ctx.cmd, m_instancedShadowPipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
-            VkBuffer ib = m_instanceBuffers[0][ctx.frameIndex]->handle();
+            VkBuffer ib = m_instanceBuffers[pass][ctx.frameIndex]->handle();
             for (const Batch& b : m_batches) {
                 const LoadedModel& lm = *m_models[b.model];
                 VkDeviceSize off = sizeof(InstanceGpu) * b.first;
@@ -777,7 +778,7 @@ void ModelModule::render(const RenderContext& ctx) {
         m_instancedCount = 0;
     }
     m_viewPass = m_frame * kMaxViews + ctx.viewIndex;
-    const int pass = 1 + static_cast<int>(std::min(ctx.viewIndex, kMaxViews - 1));
+    const int pass = static_cast<int>(std::min(ctx.viewIndex, kMaxViews - 1));
     // Frustum culling (docs/OPTIMIZATION.md #23): an instance entirely outside
     // the view is neither skinned, uploaded nor drawn.
     const Frustum frustum = Frustum::fromViewProj(ctx.proj * ctx.view);

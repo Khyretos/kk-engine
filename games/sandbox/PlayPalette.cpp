@@ -9,6 +9,7 @@
 #include <RmlUi/Core/EventListener.h>
 
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace kke_sandbox {
@@ -38,9 +39,15 @@ div { display: block; }
 .pic img { width: 86dp; height: 86dp; }
 .word { display: block; line-height: 86dp; font-size: 22dp; font-weight: bold; color: #4a5268; }
 .label { font-size: 16dp; font-weight: bold; margin-top: 3dp; color: #2b2f3a; }
+/* What graphs say, and the score: big white bubbles at the top. */
+#sayrow { position: absolute; left: 0; right: 0; top: 48dp; text-align: center; }
+.bubble { display: inline-block; padding: 6dp 16dp; background-color: #ffffffeb; border-radius: 14dp;
+          font-size: 30dp; font-weight: bold; color: #232834; }
+.bubble.empty { display: none; }
+#scorerow { position: absolute; right: 20dp; top: 12dp; }
 </style>
 </head>
-<body><div id="row"><div id="bar"><div id="hint"></div><div id="cells"></div></div></div></body>
+<body><div id="sayrow"><div id="say" class="bubble empty"></div></div><div id="scorerow"><div id="score" class="bubble empty"></div></div><div id="row"><div id="bar"><div id="hint"></div><div id="cells"></div></div></div></body>
 </rml>)RML";
 
 std::string esc(const std::string& s) { return kke::escapeRmlText(s); }
@@ -120,6 +127,18 @@ void PlayPalette::set(const std::string& hint, const std::vector<Cell>& cells) {
     m_doc->GetElementById("hint")->SetInnerRML(esc(hint));
     m_doc->GetElementById("cells")->SetInnerRML(rml);
     m_doc->UpdateDocument(); // lay it out now, so cellCentres() is right this frame
+}
+
+void PlayPalette::setWords(const std::string& said, const std::string& score) {
+    if (!m_doc) return;
+    const std::string all = said + '\n' + score;
+    if (all == m_words) return;
+    m_words = all;
+    for (const auto& [id, text] : { std::pair<const char*, const std::string&>("say", said), { "score", score } }) {
+        Rml::Element* e = m_doc->GetElementById(id);
+        e->SetInnerRML(esc(text));
+        e->SetClass("empty", text.empty());
+    }
 }
 
 bool PlayPalette::contains(const glm::vec2& point) const {
