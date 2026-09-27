@@ -216,14 +216,22 @@ same thing at all three levels:
   (me)*. Categories: Minds, Orders, Senses.
 - **Simple:** palette animals will be recipes of those nodes (*Sheep* = a
   thing with `ai.add(me, "sheep")`), so "look inside" opens a real graph.
-  This comes with the farm demo and the sandbox palette.
+  They come next, in the sandbox palette.
+
+## The farm demo
+
+`games/farm_demo` ([README](../games/farm_demo/README.md)) is the whole core
+in one small game. You play a dog, and sheep, cows, pigs, horses and a fox
+live on built-in species. The level has only small tweaks: each species
+gets a `homeRadius` and there are water and grain places. The navmesh is
+built from the scene's own meshes. F1 shows each animal's action, score,
+fear, hunger and animation. `KKE_FARM_AUTOPILOT=1` runs it headless.
 
 ## Performance
 
 Perception runs 10 times a second and decisions 4 times a second per
 agent, spread over frames; movement runs every frame. Neighbour queries
-use a uniform grid (`SpatialGrid`). Budget the farm demo's numbers with
-`kke_bench`.
+use a uniform grid (`SpatialGrid`).
 
 ## Not yet
 

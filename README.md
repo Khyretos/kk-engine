@@ -93,6 +93,7 @@ Actions. Platforms, hardware targets and consoles: [docs/PLATFORMS.md](docs/PLAT
 | `melt_demo` | Pour lava on ice, wax, chocolate and aluminium and watch them melt |
 | `sea_demo` | Drive a boat over the swell; foam floats, iron sinks |
 | `jiggle_demo` | Jelly on a plate and soft-tissue bones on a jogging character |
+| `farm_demo` | You are a dog on a farm; sheep, cows, pigs, horses and a fox react to you (AI core) |
 | `audio_demo` | Every audio case, one station each: rooms, a great hall, walls of wood, glass and stone, a sound round through a door, crates, footsteps, binaural, pings (headphones recommended) |
 | `climb_race` | Race a rival up a generated mountain: pick each hold with the triggers and bumpers, manage stamina, IK hands and feet, loose rock falls; split screen with F2 |
 | `synty_demo` | Synty POLYGON models loaded straight from FBX, skinned and animated |

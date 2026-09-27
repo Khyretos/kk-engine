@@ -890,6 +890,7 @@ add_subdirectory(games/synty_demo)
 add_subdirectory(games/sandbox)
 add_subdirectory(games/melt_demo)
 add_subdirectory(games/jiggle_demo)
+add_subdirectory(games/farm_demo)
 add_subdirectory(games/sea_demo)
 # Every audio case, one station each: walls and floors are Jolt bodies
 # (the sound's rays hit them), so it needs Jolt.
