@@ -128,11 +128,24 @@ void ClothDemoModule::init(kke::Application& app) {
 }
 
 void ClothDemoModule::clear() {
+    // The last scene's meshes and hair may still be in use by frames in
+    // flight: the renderer frees them once those frames are done.
+    struct Last {
+        std::vector<std::unique_ptr<Piece>> cloth;
+        std::vector<Solid> solids;
+        std::unique_ptr<Runner> runner;
+        std::vector<std::unique_ptr<Head>> heads;
+    };
+    auto last = std::make_shared<Last>();
+    last->cloth = std::move(m_cloth);
+    last->solids = std::move(m_solids);
+    last->runner = std::move(m_runner);
+    last->heads = std::move(m_heads);
     m_cloth.clear();
     m_solids.clear();
-    m_balls.clear();
-    m_runner.reset();
     m_heads.clear();
+    m_balls.clear();
+    m_app->renderer().retire(std::shared_ptr<void>(std::move(last)));
     // A new world per scene: nothing of the last one lingers in Jolt.
     m_world = std::make_unique<kke::RigidWorld>();
     kke::RigidWorld::BodyDesc g;
