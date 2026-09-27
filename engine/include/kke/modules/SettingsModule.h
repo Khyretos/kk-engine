@@ -16,9 +16,9 @@ namespace kke {
 //   window fullscreen, swapchain VSync, frame-rate limit, camera FOV,
 //   shadows on/off, ambient brightness, the ImGui developer overlay,
 //   max physics catch-up steps — directly on Application;
-//   UI scale, mouse sensitivity/invert — through ISettingsListener, so
-//   those modules stay optional (see kke/Capabilities.h).
-// Audio values are stored but nothing plays sound yet.
+//   UI scale, mouse sensitivity/invert, audio volumes — through
+//   ISettingsListener, so those modules stay optional (see
+//   kke/Capabilities.h).
 class SettingsModule : public Module {
 public:
     explicit SettingsModule(std::string path = "settings.json") : m_path(std::move(path)) {}

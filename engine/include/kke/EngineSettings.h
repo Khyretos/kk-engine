@@ -28,8 +28,7 @@ struct EngineSettings {
     } graphics;
 
     struct Audio {
-        // Stored and shown in the menu; there is no audio module yet
-        // (see ROADMAP.md) — a future one reads these.
+        // Percent. AudioModule applies them (AudioModule::applyVolumes).
         int master = 80;
         int music = 60;
         int effects = 80;

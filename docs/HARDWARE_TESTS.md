@@ -40,6 +40,18 @@ them): a `.txt` to read and a `.json` for analysis, including your CPU,
 GPU, driver, RAM, OS and build type. Paste either file back instead of
 log lines.
 
+### HW-019 · Showcase walk on min-spec, with sound (dev box)
+The last check left from issue #12. With the Synty packs in place, start
+the showcase pinned to one core (the `systemd-run` line at the top, with
+`./kke_demo` instead of the benchmark) and walk the whole course: the
+parkour lane, the lava station, the pool and the breaking yard, with
+sound on.
+- Is it playable (roughly 30 fps or better) the whole way round?
+- Does the sound keep up: no crackles, gaps or late impacts?
+**Send back:** the lowest fps you saw (F1 → Performance) and where, and
+any `warn` lines from the log.
+**Result:** —
+
 ### HW-018 · Voice chat echo and noise, with speakers (dev box + a second PC or phone hotspot)
 Voice chat now cleans the microphone (docs/NETWORKING.md "Voice"). Only a
 real microphone and real speakers can check it. Host kke_demo on one PC
