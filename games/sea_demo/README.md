@@ -58,7 +58,7 @@ the "Boat" and "Sea" groups, all in the `game` input context.
 | Reverse, half strength (`sea.throttle`, negative) | Down arrow | left trigger |
 | Rudder (`sea.rudder`) | Left / Right arrows | left stick, sideways |
 | Throw (`sea.throw`) | left click: where the mouse points | A (south): at the middle of the screen |
-| Pick what to throw | 1 to 5 | the panel's "What" row |
+| Pick what to throw: foam, crate, barrel, ice, iron (`sea.kind1` to `sea.kind5`) | 1 to 5 | the panel's "What" row |
 | Next thing to throw (`sea.next`) | T | Y (north) |
 | Camera follows the boat on / off (`sea.follow`) | C | right stick click |
 | Reset (`sea.reset`) | R | X (west) |
@@ -77,9 +77,11 @@ Notes from the code:
   is pulled back to the boat every frame.
 - A click over a panel does not throw: `onEvent` checks
   `ImGui::GetIO().WantCaptureMouse` and `Application::uiCapturesMouse()`.
-- Keys 1 to 5 are read as raw key events in `onEvent`, not as actions, so
-  they cannot be rebound and have no pad equivalent. On a pad, `sea.next`
-  (Y) cycles through the same five things.
+- `sea.kind1` to `sea.kind5` are keyboard-only actions: `defineInput`
+  makes one per kind, named after it, and binds keys 1 to 5. They can be
+  rebound like the others and rest while the panel is Active. They have
+  no pad binding; on a pad, `sea.next` (Y) cycles through the same five
+  things.
 - `OrbitCameraModule::setPadControls(true)` in [main.cpp](main.cpp) adds
   `camera.orbit` and `camera.zoom`. Both are `game` actions.
 - Button names are positions (SDL's `SOUTH`, `NORTH`, `WEST`), so on a
@@ -152,12 +154,14 @@ water) and adds the modules in this order:
 
 1. `InputModule` (`sea_demo_input.json`): actions for keyboard, mouse and pads
 2. `UiModule`: RmlUi, which draws the settings panel
-3. `kke_sea::SeaDemoModule`: the game
-4. `OrbitCameraModule` (distance 12 m, pitch -0.3, yaw 2.2, target (0, 1, 0)),
+3. `AudioModule`, its ImGui window hidden: it plays the mood's ambience
+   loop (nothing else in the demo makes sound)
+4. `kke_sea::SeaDemoModule`: the game
+5. `OrbitCameraModule` (distance 12 m, pitch -0.3, yaw 2.2, target (0, 1, 0)),
    distance limits 2 to 80 m, `Controls::Editor`, `setPadControls(true)`
-5. `DemoPanelModule("Sea")`
-6. `DebugControlModule`, its ImGui window hidden
-7. `StatsModule`
+6. `DemoPanelModule("Sea")`
+7. `DebugControlModule`, its ImGui window hidden
+8. `StatsModule`
 
 The sea module comes before the camera on purpose; the comment in
 [main.cpp](main.cpp) says: "its update() moves the camera target before
@@ -172,10 +176,10 @@ Every frame the engine calls, in this order for this module:
 | Hook | What it does |
 |---|---|
 | `fixedUpdate` (fixed step) | reads throttle and rudder, applies the engine, rudder and keel forces to the boat, steps every floating body, spawns splashes, moves the spray |
-| `update` | reads the pressed actions (throw, next, follow, reset), eases the camera target toward the boat |
+| `update` | reads the pressed actions (throw, next, the five kinds, follow, reset), eases the camera target toward the boat |
 | `renderShadow` | the boat and every object into the shadow map |
 | `render` | the ocean, the boat and objects, the spray |
-| `onEvent` | left click throws at the mouse; keys 1 to 5 pick the kind |
+| `onEvent` | left click throws at the mouse |
 
 Physics runs in `fixedUpdate` so it takes the same steps at any frame
 rate. One-shot presses are read in `update`, which runs every rendered
@@ -412,14 +416,16 @@ game of this kind is C++ for now.
 ## Assets
 
 None. The boat and every object are boxes built in code, and the spray is
-drawn procedurally. The only file it loads is the mood's sky picture
-(Poly Haven "Kloofendal 48d Partly Cloudy (Pure Sky)", CC0), which the
-build fetches for every demo ([docs/SCENES.md](../../docs/SCENES.md)
+drawn procedurally. The only files it loads are the mood's: the sky
+picture (Poly Haven "Kloofendal 48d Partly Cloudy (Pure Sky)", CC0),
+which the build fetches for every demo, and the `meadow_day` ambience
+loop (`assets/ambience/meadow_day.flac`, CC0, in the repository), which
+the build copies next to every game ([docs/SCENES.md](../../docs/SCENES.md)
 "Moods"). No Synty pack is used.
 
-The `clear_day` mood also names an ambience loop (`meadow_day`), but only
-`AudioModule` plays mood ambience, and this demo does not add one, so it
-is silent.
+Only `AudioModule` plays mood ambience, which is why [main.cpp](main.cpp)
+adds one (BUG-079 in BUGS.md, fixed). Without the file it logs a warning
+and the sea is silent.
 
 ## Make a game like this
 
