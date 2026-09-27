@@ -42,6 +42,11 @@ namespace kke::net {
 //             BreakGraph): clients break their copy along the same
 //             borders, so everyone sees the same pieces. Kept for late
 //             joiners too.
+//   Guests    several players on one connection (split screen online,
+//             like Halo): a client adds guests in slots 1..7 (addGuest),
+//             the host its own (addLocalGuest). Each is a player with an
+//             id, a name and states of its own, checked like any other;
+//             they share the connection's events, voice and snapshots.
 //
 // Players come in two models (docs/NETWORKING.md "Input replay"):
 //   owner-predicted (default; co-op, sandbox): the client moves its
@@ -193,6 +198,12 @@ public:
     bool running() const { return m_running; }
 
     void setLocalState(const NetPlayerState& state) { m_local = state; m_hasLocal = true; }
+    // More players at the host's own screen (split screen), slots 1 ..
+    // kMaxLocalPlayers - 1. Returns the player id (0: no room left).
+    uint8_t addLocalGuest(uint8_t slot, const std::string& name, const std::string& character);
+    void removeLocalGuest(uint8_t slot);
+    void setLocalGuestState(uint8_t slot, const NetPlayerState& state);
+    uint8_t localGuestId(uint8_t slot) const;
     // Every replicated body as it is now (the server's physics). Ids are
     // the game's own, 0..65535, stable while the body lives.
     void setBodies(const std::vector<NetBodyState>& bodies) { m_bodies = bodies; }
@@ -222,9 +233,9 @@ public:
 
     void update(double now);
 
-    // The other players (clients), interpolated for `now`.
+    // The other players (clients and their guests), interpolated for `now`.
     std::vector<RemotePlayer> players(double now) const;
-    size_t clientCount() const;
+    size_t clientCount() const; // players on clients, guests included (the host's own are not)
     PeerStats stats(uint8_t playerId) const;
     size_t badPackets() const { return m_badPackets; }
     size_t corrections() const { return m_corrections; }
@@ -277,8 +288,11 @@ public:
     std::function<std::string(const std::string& name, const std::string& address)> admit;
 
 private:
+    // One per player: a connection's own (slot 0) and each of its guests
+    // (same peer, slot 1..). Only slot 0 is sent to, polled, rate limited.
     struct Client {
         PeerId peer = kNoPeer;
+        uint8_t slot = 0;             // 0: the connection's own player; 1..: a guest on it
         uint8_t id = 0;               // 0 until Hello
         std::string name, character;
         double connectedAt = 0.0;
@@ -300,8 +314,14 @@ private:
         uint32_t ackTick = 0;         // input replay: the input the state is after
         bool ackPending = false;
     };
-    Client* byPeer(PeerId peer);
+    Client* byPeer(PeerId peer);                  // the connection (slot 0)
+    Client* guestOf(PeerId peer, uint8_t slot);
     Client* byId(uint8_t id);
+    uint8_t freeId() const;
+    size_t freeSlots() const;
+    void handleGuest(Client& c, const GuestMsg& m);
+    void dropGuest(Client& g, const std::string& reason, bool tellOwner);
+    bool mayShow(const Client& viewer, uint8_t subject) const; // fog of war: any player on that screen sees it
     void receive(Client& c, const NetEvent& e);
     void handleHello(Client& c, const HelloMsg& m);
     void handleState(Client& c, const PlayerStateMsg& m);
@@ -325,6 +345,13 @@ private:
     std::string m_hostName, m_hostCharacter;
     NetPlayerState m_local;
     bool m_hasLocal = false;
+    struct LocalGuest {
+        uint8_t id = 0;
+        std::string name, character;
+        NetPlayerState state;
+        bool hasState = false;
+    };
+    std::map<uint8_t, LocalGuest> m_localGuests; // slot -> the host's other players
     std::vector<NetBodyState> m_bodies;
     std::vector<Client> m_clients;
     size_t m_badPackets = 0, m_corrections = 0;
@@ -348,6 +375,15 @@ public:
     uint8_t playerId() const { return m_playerId; }
 
     void setLocalState(const NetPlayerState& state) { m_local = state; m_hasLocal = true; }
+    // More players on this screen, slots 1 .. kMaxLocalPlayers - 1 (split
+    // screen online). May be called before connecting: they join right
+    // after the Welcome. guestId() is 0 until the server gives one
+    // (onGuest), and again after it refused or removed that player.
+    void addGuest(uint8_t slot, const std::string& name, const std::string& character);
+    void removeGuest(uint8_t slot);
+    void setGuestState(uint8_t slot, const NetPlayerState& state);
+    uint8_t guestId(uint8_t slot) const;
+    bool isOurs(uint8_t playerId) const; // our own player or one of our guests
     void sendEvent(uint16_t kind, const std::vector<uint8_t>& payload);
     // Input replay: the server said (at Welcome) it moves our player from
     // our inputs. Then send inputs each tick, not states (setLocalState
@@ -371,6 +407,9 @@ public:
 
     std::function<void(const GameEventMsg&)> onEvent;
     std::function<void(const glm::vec3&)> onCorrection;        // the server put us here
+    std::function<void(uint8_t slot, const glm::vec3&)> onGuestCorrection; // ... or that guest
+    // A guest got its id (id != 0), or was refused / removed (id 0, reason).
+    std::function<void(uint8_t slot, uint8_t id, const std::string& reason)> onGuest;
     std::function<void(uint8_t id, bool joined)> onPlayer;
     std::function<void(const SpawnMsg&)> onSpawn;              // build your copy
     std::function<void(uint16_t id)> onDespawn;                // remove it
@@ -404,6 +443,14 @@ private:
     NetPlayerState m_local;
     bool m_hasLocal = false;
     std::map<uint8_t, Player> m_players;
+    struct Guest {
+        std::string name, character;
+        uint8_t id = 0;
+        NetPlayerState state;
+        bool hasState = false, asked = false;
+    };
+    std::map<uint8_t, Guest> m_guests; // slot -> guest
+    void askGuest(uint8_t slot, Guest& g);
     std::map<uint16_t, Timeline<NetBodyState>> m_bodies;
     size_t m_badPackets = 0;
     bool m_inputReplay = false;
