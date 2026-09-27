@@ -63,6 +63,7 @@ Any value other than empty or `0` turns a switch on (`envOn` in
 | Next lesson (graze, rest, investigate, watch, regroup, flee, wander) | Tab | D-pad right |
 | Show the nearest animal the lesson | E | Y (north) |
 | Let every species that was shown something learn | L | D-pad up |
+| Ping the surroundings (hear the fences and the barn) | Q | D-pad down |
 | Quit | Esc, then Quit | View, then Quit |
 
 All of these are rebindable actions in the `InputModule`; the user's
@@ -93,9 +94,14 @@ how many examples it learned from and how many it now gets right.
 [main.cpp](main.cpp) builds the app and adds modules in this order:
 
 1. `InputModule("farm_input.json")`: actions and bindings.
-2. `ModelModule`: loads and draws the farm, the animals and the dog.
-3. `farm::FarmModule`: the game ([FarmModule.h](FarmModule.h)).
-4. `StatsModule` with its panel hidden.
+2. `UiModule`: RmlUi, for the panel.
+3. `AudioModule`, its panel hidden: it plays the mood's ambience loop
+   (`meadow_day`) and the ping.
+4. `ModelModule`: loads and draws the farm, the animals and the dog.
+5. `DemoPanelModule("Farm")` with `setDeveloperPanelsKey(false)`: the HUD
+   and settings. F1 is the farm's own "what they think".
+6. `farm::FarmModule`: the game ([FarmModule.h](FarmModule.h)).
+7. `StatsModule` with its panel hidden.
 
 It also sets the mood `clear_day`, a far plane of 300 m and a 55 degree
 field of view. `FarmModule::init` then does four things in order:

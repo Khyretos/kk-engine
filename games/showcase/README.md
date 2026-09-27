@@ -74,8 +74,11 @@ are read in `ShowcaseModule::init` unless noted:
 
 Player 1. The bindings come from `InputModule::defineCharacterActions`
 ([InputModule.cpp](../../engine/src/modules/InputModule.cpp)) plus four
-actions the showcase adds in `ShowcaseModule::init`. Everything except Esc
-is rebindable and saved in `input.json`.
+actions the showcase adds in `ShowcaseModule::init` (`reset`, `menu`,
+`panels` and `zoom.pad`, the d-pad's held zoom). `init` also moves the
+ping off the d-pad down and push-to-talk off B, which the showcase uses
+for other things (BUG-065). Everything except Esc is rebindable and
+saved in `input.json`.
 
 | Action | Keyboard and mouse | Controller |
 |---|---|---|
@@ -102,7 +105,9 @@ a wall run; jump again to kick off.
 
 In the pause menu: the mouse, or the d-pad / left stick to move, A to
 press, B or Start to close. The keyboard reaches RmlUi directly (arrows,
-Enter, Tab), and Esc closes it.
+Enter, Tab), and Esc closes it. The HUD's corner hint shows the menu
+button of the device in use: "Esc menu" on the keyboard, the Start glyph
+on a controller.
 
 Players 2 to 4 (split screen) get a controller each: move, look, sprint,
 walk, crouch, jump, shoot (RT), push (Y), zoom (d-pad) and the pause menu
@@ -494,9 +499,9 @@ line. "Back to the course" returns you.
 
 [Hud.cpp](Hud.cpp) uses RmlUi through `UiModule`. `buildHud` creates one
 data model, `"demo"`, and binds `HudState` fields to it (`move`, `speed`,
-`trick`, `station`, `station_text`, `station_live`, `panels`, `online`,
-`players`) plus five event callbacks (`resume`, `restart`, `set_players`,
-`toggle_panels`, `quit`). Both documents,
+`trick`, `station`, `station_text`, `menu_hint`, `station_live`,
+`panels`, `online`, `players`) plus five event callbacks (`resume`,
+`restart`, `set_players`, `toggle_panels`, `quit`). Both documents,
 [ui/showcase_hud.rml](ui/showcase_hud.rml) and
 [ui/showcase_pause.rml](ui/showcase_pause.rml), use that one model and
 share `theme.rcss` from `games/rmlui_demo/ui/`.
@@ -507,6 +512,8 @@ a word (Standing, Walking over 0.2 m/s, Running over 2.2, Sprinting over
 box your feet are in and picks its title and hint. The lava adds a live
 line ("Wax block, 40% left"). A small `set` lambda only marks a variable
 dirty when its text changed, so RmlUi does not re-lay-out every frame.
+`menu_hint` is the corner's menu prompt: an Esc keycap on the keyboard,
+`promptText("{menu} menu")` (the Start glyph) on a controller.
 
 Hints are written with action names in braces, such as
 `"Push them {interact} or shoot them over {fire}."`, and passed through
@@ -515,9 +522,9 @@ glyph of the device in use ([INPUT.md](../../docs/INPUT.md)).
 
 `setMenuOpen` shows the pause document modal, focuses Resume, releases
 the mouse, and pauses the `Application` only when not connected online.
-The menu is toggled from `frameStart` (the `menu` action: Start) and from
-`onEvent` (Esc), and `ui.back` (B) closes it. Esc is handled as a raw key,
-not an action, "so you can never lock yourself out".
+The menu is toggled from `frameStart` (the `menu` action: Start, read
+from every local player's map) and from `onEvent` (Esc), and `ui.back`
+(B, any player) closes it. Esc is handled as a raw key, not an action, "so you can never lock yourself out".
 
 ### Split screen
 
@@ -797,6 +804,9 @@ Pitfalls the code shows:
 - Screen-space effects (the fluid surface) are drawn for one view; give
   split screen a per-view fallback.
 - The mouse-capture click must not also count as a shot.
+- `defineCharacterActions` binds keys you may use for something else
+  (Q and the d-pad down ping, B talks). `clearBindings` the ones that
+  clash, then bind them where they fit, before `commitDefaults`.
 
 ## Files
 

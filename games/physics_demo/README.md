@@ -114,6 +114,11 @@ Grid. Its rows:
   Fracturable cube, Plastic cube.
 - **Spawn scene**, **Clear all**.
 - **Debris budget**: 0..500 pieces (starts at the module's 200).
+- **Fracture seed**: a slider, 1..999 (`PhysicsModule::fractureWorldSeed`,
+  1 by default), and **New fracture seed**, which picks a random one in
+  that range. The seed is read when a breakable spawns, so a change shows
+  on the next thing you spawn. Spawn the same scene with the same seed and
+  it breaks the same way again (HW-014).
 - A live line: objects, FEMFX step time (average and maximum over the
   last second), ticks per second, pieces and how many are awake, faces
   drawn, frames per second.
@@ -294,9 +299,10 @@ Two more ideas make breakables behave:
 - **A fracture seed.** Every breakable's pattern comes from the world's
   fracture seed mixed with its handle, so the same world breaks the same
   way on every run, and a network client can rebuild the host's pieces
-  ([docs/NETWORKING.md](../../docs/NETWORKING.md) "Breakables"). The seed
-  can be changed in the ImGui "Physics" window (F1); the RmlUi panel has
-  no row for it.
+  ([docs/NETWORKING.md](../../docs/NETWORKING.md) "Breakables"). The
+  panel's Fracture seed row and New fracture seed button change it, so
+  it can be set with a controller; the ImGui "Physics" window (F1) has
+  the same setting.
 
 ### The debris budget
 
@@ -361,8 +367,8 @@ what the ImGui panel shows. The slow-motion warning compares
 default): when physics cannot keep up the engine drops time instead of
 spiralling, so the game runs slower rather than freezing.
 
-The ImGui windows (the "Physics" window with extra buttons and the
-fracture seed, "Debug Control", "Performance") start hidden and F1 shows
+The ImGui windows (the "Physics" window with extra buttons and its own
+copy of the fracture seed, "Debug Control", "Performance") start hidden and F1 shows
 them in developer builds.
 
 ## Design decisions

@@ -120,7 +120,11 @@ exists, so saving [scripts/platoon.lua](scripts/platoon.lua) reloads it.
 `PlatoonModule::init`:
 
 1. Defines the actions: the character set (`move` pans, `look.rate` turns),
-   the command kit's, and the `rts.*` ones.
+   the command kit's, and the `rts.*` ones. It clears the bindings of the
+   character actions a top-down squad does not use (jump, sprint, walk,
+   crouch, fire, aim, interact, camera toggle, ping, push-to-talk), so
+   Space, E, Q, RT and the d-pad down only do their `rts.*` job
+   (BUG-065).
 2. Builds the field (`buildField`) and loads the mannequin kit.
 3. Defines the `soldier` species and the line-of-sight test.
 4. Adds six soldiers (team 1) and five enemies (team 2). Each enemy gets

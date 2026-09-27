@@ -123,7 +123,10 @@ reloads it while the game runs), else the copy next to the executable.
 
 1. Defines the actions: the character set (`defineCharacterActions`), the
    command kit's (`CommandInput::defineActions`), and the quick orders
-   (`pet.come` .. `pet.drop`, `pet.mouse`, `panels`). Turns off quit on Esc.
+   (`pet.come` .. `pet.drop`, `pet.mouse`, `panels`). The d-pad down is
+   Sit, so the ping's default bindings are cleared and it goes on Q and
+   View; `cmd.queue` loses its Left Shift, because Shift runs and orders
+   do not queue in the garden (BUG-065). Turns off quit on Esc.
 2. Builds the garden (`buildGarden`).
 3. Adds the player (a Jolt character with `kke::Locomotion` and a UAL
    mannequin `command_kit::Humanoid`) and the dog (a smaller Jolt

@@ -449,7 +449,8 @@ default), with nothing to sign up for:
   with in-band forward error correction: a single lost packet is rebuilt
   from the next one. `Voice` messages go on the unreliable channel.
 - **Talking**: push-to-talk (the `voice.talk` action, **B** by default,
-  rebindable like any action), voice activated (a gate that follows the
+  rebindable like any action; kke_demo moves it to **P** and **LB**, since
+  B is one of its Lua toys), voice activated (a gate that follows the
   room's noise floor, with a short hangover so word ends aren't cut), or
   open mic. "Hear myself" in the Voice panel tests the microphone.
 - **Who hears it** is decided by the server (`net::VoiceRules`, set on
