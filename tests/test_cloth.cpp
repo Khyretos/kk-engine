@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cfloat>
 #include <cmath>
+#include <cstdio>
 
 namespace {
 
@@ -205,6 +206,50 @@ TEST(Cloth, AThrowLandingOnASheetOnABlanketNeverGoesThrough) {
     EXPECT_GT(lowest(pt), lowest(ps)) << "the throw should lie on the sheet";
 }
 
+TEST(Cloth, SheetsDrapedTogetherOverABallStayApart) {
+    // Three sheets dropped together over a ball: the ball pushes the lower
+    // ones up into the upper ones at every step. With the pass running
+    // between the solver's sub-steps they stay apart; with it only after
+    // the step (clothSubsteps = 1) they work their way through each other.
+    auto drape = [](int substeps) {
+        kke::RigidWorld::Settings st = single();
+        st.clothSubsteps = substeps;
+        kke::RigidWorld w(st);
+        ground(w);
+        kke::RigidWorld::BodyDesc ball;
+        ball.shape = kke::RigidWorld::Shape::Sphere;
+        ball.motion = kke::RigidWorld::Motion::Static;
+        ball.radius = 0.4f;
+        ball.position = glm::vec3(0, 0.4f, 0);
+        w.add(ball);
+        const char* fabrics[] = { "silk", "cotton", "denim" };
+        std::vector<kke::ClothDesc> descs;
+        std::vector<kke::RigidWorld::ClothId> ids;
+        for (int i = 0; i < 3; ++i) {
+            kke::ClothDesc d;
+            const float a = 0.4f * float(i);
+            d.mesh = kke::clothGrid(glm::vec3(0.05f * float(i), 1.2f + 0.15f * float(i), 0), 1.6f, 1.6f, 20, 20, glm::vec3(std::cos(a), 0, std::sin(a)), glm::vec3(-std::sin(a), 0, std::cos(a)));
+            d.fabric = kke::clothFabric(fabrics[i]);
+            ids.push_back(w.addCloth(d));
+            descs.push_back(d);
+        }
+        std::vector<std::vector<glm::vec3>> p(3);
+        int total = 0;
+        for (int step = 0; step < 180; ++step) {
+            w.step(1.0f / 60.0f);
+            if (step % 15 != 14) continue;
+            for (int i = 0; i < 3; ++i) w.clothPositions(ids[size_t(i)], p[size_t(i)]);
+            for (int i = 0; i < 3; ++i)
+                for (int j = i + 1; j < 3; ++j) total += crossings(descs[size_t(i)].mesh, p[size_t(i)], descs[size_t(j)].mesh, p[size_t(j)]);
+        }
+        return total;
+    };
+    const int after = drape(1), between = drape(6);
+    std::printf("edges through the other sheets (sampled): %d with the pass after each step, %d between sub-steps\n", after, between);
+    EXPECT_LT(between * 20, after) << "sub-steps should keep the layers apart";
+    EXPECT_LT(between, 50);
+}
+
 TEST(Cloth, SilkFloatsDownSlowerThanDenim) {
     kke::RigidWorld w(single());
     auto drop = [&](const char* fabric, float x) {
@@ -286,3 +331,4 @@ TEST(Cloth, RemoveAndReset) {
     EXPECT_EQ(w.clothCount(), 0u);
     EXPECT_FALSE(w.clothPositions(id, p));
 }
+

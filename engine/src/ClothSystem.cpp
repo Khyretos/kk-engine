@@ -24,7 +24,7 @@ namespace {
 
 constexpr float kAirDensity = 1.225f; // kg/m^3
 constexpr float kAssumedStep = 1.0f / 60.0f; // RigidWorld's collision step length
-constexpr uint8_t kTangledSteps = 16;         // Cloth::undoneStreak at which a vertex is let go
+constexpr uint8_t kTangledSteps = 16;         // Cloth::undoneStreak at which a vertex is let go (no sub-steps only)
 constexpr int kMaxPasses = 4;                 // protection narrow-phase passes per step, at most
 constexpr size_t kHairPart = 64;              // guide strands per hair soft body
 constexpr uint32_t kPatchTriangles = 32;      // triangles per patch (ClothSystem::markPatches)
@@ -34,6 +34,14 @@ constexpr uint32_t kMaxPatchBits = 8192;      // patches in all at most for the 
 // direction for the whole step can't pass through itself (Volino and
 // Magnenat-Thalmann 1994; Provot 1997): just under 90 degrees.
 constexpr float kFlatEnough = 1.5f;
+// While the pass is undoing crossings, each collision step is cut in
+// RigidWorld::Settings::clothSubsteps and the pass runs between them, not
+// only after the solver's last sub-step. Layers a solid presses together
+// (sheets over a ball) are then kept apart as they are pressed, a little
+// at a time: fixed all at once afterwards, the solver springs back from
+// the fix and the layers work their way through each other.
+constexpr uint32_t kCalmUpdates = 30; // updates with no crossing undone before sub-steps stop
+constexpr float kMostPerPass = 3.0f;  // the pass moves a vertex at most this x (thickness + a tenth of an edge)
 
 // Sets a flag other worker threads may set too. The Android NDK's libc++
 // has no std::atomic_ref yet; the builtin is the same relaxed store.
@@ -121,8 +129,9 @@ uint32_t hashCell(int x, int y, int z) { return uint32_t(x) * 92837111u ^ uint32
 
 } // namespace
 
-ClothSystem::ClothSystem(JPH::PhysicsSystem& system, JPH::ObjectLayer layer, JPH::TempAllocator& temp, JPH::JobSystem* jobs)
+ClothSystem::ClothSystem(JPH::PhysicsSystem& system, JPH::ObjectLayer layer, JPH::TempAllocator& temp, JPH::JobSystem* jobs, int substeps)
     : m_system(system), m_layer(layer), m_temp(temp), m_jobs(jobs) {
+    m_substeps = std::clamp(substeps, 1, 16);
     m_system.AddStepListener(this);
     m_system.SetSoftBodyContactListener(this);
 }
@@ -251,7 +260,8 @@ uint32_t ClothSystem::add(const ClothDesc& d) {
     s->Optimize();
 
     JPH::SoftBodyCreationSettings cs(s, JPH::RVec3(centroid.x, centroid.y, centroid.z), JPH::Quat::sIdentity(), m_layer);
-    cs.mNumIterations = uint32_t(std::max(1, d.fabric.iterations));
+    c.iterations = std::max(1, d.fabric.iterations);
+    cs.mNumIterations = uint32_t((c.iterations + m_sub - 1) / m_sub);
     cs.mLinearDamping = d.fabric.damping;
     cs.mFriction = d.fabric.friction;
     cs.mGravityFactor = d.gravity;
@@ -419,7 +429,8 @@ uint32_t ClothSystem::addHairPart(const HairDesc& d, const std::vector<glm::vec3
     s->Optimize();
 
     JPH::SoftBodyCreationSettings cs(s, JPH::RVec3(centroid.x, centroid.y, centroid.z), JPH::Quat::sIdentity(), m_layer);
-    cs.mNumIterations = uint32_t(std::max(1, st.iterations));
+    c.iterations = std::max(1, st.iterations);
+    cs.mNumIterations = uint32_t((c.iterations + m_sub - 1) / m_sub);
     cs.mLinearDamping = st.damping;
     cs.mFriction = st.friction;
     cs.mGravityFactor = st.gravity;
@@ -941,9 +952,11 @@ void ClothSystem::shapeTriangles() {
 }
 
 // Runs fn over [0, count) in chunks, on Jolt's job system when there's
-// one and the pass runs between steps (endStep), else right here.
+// one, else right here. (From OnStep this runs inside one of Jolt's jobs;
+// waiting on a barrier there is fine: the waiting thread runs the
+// barrier's jobs itself.)
 void ClothSystem::parallel(uint32_t count, const std::function<void(uint32_t, uint32_t, Worker&)>& fn) {
-    const int threads = (m_jobs && m_between) ? std::max(1, m_jobs->GetMaxConcurrency()) : 1;
+    const int threads = m_jobs ? std::max(1, m_jobs->GetMaxConcurrency()) : 1;
     if (m_workers.size() < size_t(threads)) m_workers.resize(size_t(threads));
     for (Worker& w : m_workers) {
         w.vt.clear();
@@ -1264,7 +1277,7 @@ bool ClothSystem::testEdgeEdge(Cloth& c, uint32_t e, Cloth& o, uint32_t f) {
     glm::vec3 n;
     float gap;
     bool crossed = false;
-    const bool tangled = std::max(std::max(c.undoneStreak[a0], c.undoneStreak[a1]), std::max(o.undoneStreak[b0], o.undoneStreak[b1])) >= kTangledSteps;
+    const bool tangled = tangledAt(std::max(std::max(c.undoneStreak[a0], c.undoneStreak[a1]), std::max(o.undoneStreak[b0], o.undoneStreak[b1])));
     // Nearly parallel edges have no well-defined closest points to compare.
     const bool crossing = vol * volPrev <= 0.0f && uab2 > 0.04f * glm::dot(ua, ua) * glm::dot(ub, ub);
     if (crossing && lPrev > 1e-6f && !tangled && middle(sp) && middle(tp) && middle(s) && middle(t) && glm::dot(d, dPrev) < 0.0f) {
@@ -1328,7 +1341,7 @@ bool ClothSystem::testVertexTriangle(Cloth& c, uint32_t v, Cloth& o, uint32_t tr
         // Where along the step it met the plane, and was it inside the triangle then?
         const float k = sp / (sp - s);
         const glm::vec3 bc = barycentric(glm::mix(c.prev[v], p, k), glm::mix(pa, a, k), glm::mix(pb, b, k), glm::mix(pd, d, k));
-        if (inside(bc, 0.02f) && c.undoneStreak[v] < kTangledSteps) {
+        if (inside(bc, 0.02f) && !tangledAt(c.undoneStreak[v])) {
             side = sp > 0.0f ? 1.0f : -1.0f;
             crossed = true;
         }
@@ -1336,7 +1349,7 @@ bool ClothSystem::testVertexTriangle(Cloth& c, uint32_t v, Cloth& o, uint32_t tr
     if (!crossed) {
         if (std::fabs(s) >= thick) return false;
         if (!inside(barycentric(p, a, b, d), 0.0f)) return false;
-        const float ref = std::fabs(sp) > 1e-6f && c.undoneStreak[v] < kTangledSteps ? sp : s;
+        const float ref = std::fabs(sp) > 1e-6f && !tangledAt(c.undoneStreak[v]) ? sp : s;
         side = ref >= 0.0f ? 1.0f : -1.0f;
     }
     const glm::vec3 bc = glm::clamp(barycentric(p, a, b, d), glm::vec3(0.0f), glm::vec3(1.0f));
@@ -1448,6 +1461,30 @@ void ClothSystem::OnStep(const JPH::PhysicsStepListenerContext& ctx) {
     m_stepMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
 }
 
+int ClothSystem::beginStep() {
+    m_stepMs = 0.0;
+    m_undid = false;
+    for (auto& [id, c] : m_cloths) {
+        c.stats.selfContacts = 0;
+        c.stats.crossingsUndone = 0;
+    }
+    const int sub = m_calm < kCalmUpdates ? m_substeps : 1;
+    if (sub != m_sub) {
+        m_sub = sub;
+        setIterations();
+    }
+    return m_sub;
+}
+
+bool ClothSystem::tangledAt(uint8_t streak) const { return m_substeps == 1 && streak >= kTangledSteps; }
+
+// Each soft body's solver iterations spread over the m_sub sub-steps.
+void ClothSystem::setIterations() {
+    const JPH::BodyLockInterfaceNoLock& locks = m_system.GetBodyLockInterfaceNoLock(); // between updates
+    for (auto& [id, c] : m_cloths)
+        if (JPH::Body* body = locks.TryGetBody(c.body)) softOf(*body)->SetNumIterations(uint32_t((c.iterations + m_sub - 1) / m_sub));
+}
+
 void ClothSystem::endStep() {
     // The pass runs after the step too, so what's drawn (and what the game
     // reads) is the cloth with every crossing the step made already undone.
@@ -1457,6 +1494,7 @@ void ClothSystem::endStep() {
         protectAll(m_system.GetBodyLockInterfaceNoLock()); // between steps: nothing else touches the bodies
         m_between = false;
         m_protectedAfterStep = true;
+        m_calm = m_undid ? 0u : std::min(m_calm + 1u, 1u << 20);
         m_stepMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     }
     m_lastMs = m_stepMs;
@@ -1465,8 +1503,6 @@ void ClothSystem::endStep() {
 void ClothSystem::protectAll(const JPH::BodyLockInterface& locks) {
     m_active.clear();
     for (auto& [id, c] : m_cloths) {
-        c.stats.selfContacts = 0;
-        c.stats.crossingsUndone = 0;
         c.stepBody = nullptr;
         if (c.level != ClothProtection::Full) continue;
         JPH::Body* body = locks.TryGetBody(c.body);
@@ -1486,20 +1522,29 @@ void ClothSystem::protectAll(const JPH::BodyLockInterface& locks) {
         c.reach = c.motion;
         c.nearOther.assign(c.pos.size(), 0);
         c.undoneStreak.resize(c.pos.size(), 0);
-        c.undoneNow.assign(c.pos.size(), 0);
+        c.undoneNow.resize(c.pos.size(), 0);
         m_active.push_back(&c);
     }
     if (m_active.empty()) return;
     protect();
     for (Cloth* c : m_active) {
+        if (c->stats.crossingsUndone > 0) m_undid = true;
         for (size_t i = 0; i < c->pos.size(); ++i) {
-            c->undoneStreak[i] = c->undoneNow[i] ? uint8_t(std::min(255, c->undoneStreak[i] + 2)) : uint8_t(std::max(0, c->undoneStreak[i] - 1));
+            // (Counted once per update, however many sub-steps it has.)
+            if (m_between) {
+                c->undoneStreak[i] = c->undoneNow[i] ? uint8_t(std::min(255, c->undoneStreak[i] + 2)) : uint8_t(std::max(0, c->undoneStreak[i] - 1));
+                c->undoneNow[i] = 0;
+            }
             // However many contacts pile up on one vertex (a heap of cloth
             // on the floor), the pass moves it no further than the step
             // moved it or anything it touched, plus a little: enough to
             // undo any crossing, never enough to fight the solver and the
             // floor and feed energy into the heap.
-            const float reach = c->reach[i] + 3.0f * c->thickness;
+            // And never more than a few thicknesses in one pass, however
+            // fast things moved: a big jump stretches the fabric around it,
+            // the solver springs back from that, and between layers pressed
+            // together that can build up until the cloth flies apart.
+            const float reach = std::min(c->reach[i] + 3.0f * c->thickness, kMostPerPass * (c->thickness + 0.1f * c->meanEdge));
             const glm::vec3 d = c->pos[i] - c->solved[i];
             const float l2 = glm::dot(d, d);
             if (l2 > reach * reach) c->pos[i] = c->solved[i] + d * (reach / std::sqrt(l2));

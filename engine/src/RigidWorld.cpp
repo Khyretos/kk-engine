@@ -161,7 +161,7 @@ struct RigidWorld::Impl : public JPH::ContactListener {
     double simulatedTime = 0.0;
     std::unique_ptr<detail::ClothSystem> cloth; // made on the first addCloth (it adds a step listener)
     detail::ClothSystem& clothSystem() {
-        if (!cloth) cloth = std::make_unique<detail::ClothSystem>(system, Layers::kCloth, *temp, jobs.get());
+        if (!cloth) cloth = std::make_unique<detail::ClothSystem>(system, Layers::kCloth, *temp, jobs.get(), settings.clothSubsteps);
         return *cloth;
     }
 
@@ -924,9 +924,11 @@ void RigidWorld::step(float dt) {
         c.drawFrom = glm::vec3(float(p.GetX()), float(p.GetY()), float(p.GetZ()));
         m->stepCharacter(c, dt);
     }
-    // One collision step per 1/60 s (more for bigger steps).
-    const int collisionSteps = std::max(1, static_cast<int>(std::ceil(dt * 60.0f - 0.01f)));
-    if (m->cloth) m->cloth->beginStep();
+    // One collision step per 1/60 s (more for bigger steps), cut in
+    // sub-steps while cloth is being kept from going through cloth
+    // (ClothSystem::beginStep).
+    int collisionSteps = std::max(1, static_cast<int>(std::ceil(dt * 60.0f - 0.01f)));
+    if (m->cloth) collisionSteps *= m->cloth->beginStep();
     m->system.Update(dt, collisionSteps, m->temp.get(), m->jobs.get());
     if (m->cloth) m->cloth->endStep();
     m->simulatedTime += dt;
