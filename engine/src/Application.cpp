@@ -14,6 +14,7 @@
 #include "kke/VulkanCheck.h"
 
 #include <glm/gtc/matrix_transform.hpp>
+#include <stb_image_write.h>
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -471,8 +472,31 @@ bool Application::setMood(const std::string& nameOrPath, std::string* error) {
     return true;
 }
 
+struct Application::BenchShots {
+    std::vector<BenchRecorder::ShotRequest> requests; // index = capture tag
+    // The newest picture of each kind, in the order kinds first appeared.
+    std::vector<std::pair<BenchRecorder::ShotRequest, Renderer::FrameCapture>> latest;
+    void keep(uint64_t tag, Renderer::FrameCapture&& capture) {
+        if (tag >= requests.size()) return;
+        const BenchRecorder::ShotRequest& r = requests[tag];
+        for (auto& [req, cap] : latest) {
+            if (req.kind == r.kind) {
+                // Captures arrive in request order, so this one is newer.
+                req = r;
+                cap = std::move(capture);
+                return;
+            }
+        }
+        latest.emplace_back(r, std::move(capture));
+    }
+};
+
 void Application::startBenchmark(const BenchOptions& options) {
     m_bench = std::make_unique<BenchRecorder>(options);
+    if (options.screenshots) {
+        m_benchShots = std::make_unique<BenchShots>();
+        m_renderer->enableCapture();
+    }
     log::get("Benchmark")->info("benchmark: {:.0f} s warm-up, then {:.0f} s measured{}", options.warmup, options.seconds,
                                 options.uncapped ? ", uncapped (no vsync, no frame cap)" : "");
 }
@@ -507,10 +531,11 @@ void Application::writeBenchmarkReport() {
     for (const BrokenModuleInfo& b : m_brokenModuleInfos)
         broken.push_back(b.moduleName + " " + b.stage + "(): " + b.friendlyMessage +
                          (b.technicalMessage != b.friendlyMessage ? " [" + b.technicalMessage + "]" : ""));
-    const nlohmann::json report = m_bench->toJson(collectSystemInfo(device().physicalDevice()), config, broken);
-
     std::error_code ec;
     std::filesystem::create_directories(dir, ec);
+    if (m_benchShots) writeBenchmarkShots(dir, name);
+    const nlohmann::json report = m_bench->toJson(collectSystemInfo(device().physicalDevice()), config, broken);
+
     const std::filesystem::path file = dir / (name + ".json");
     std::ofstream out(file, std::ios::binary);
     out << report.dump(1) << "\n";
@@ -522,6 +547,38 @@ void Application::writeBenchmarkReport() {
     logger->info("benchmark: {} frames, {:.1f} fps avg, {:.1f} fps 1% low, {} hitch(es), verdict {}; report {}", sum["frames"].get<int>(),
                  sum["fps_avg"].get<double>(), sum["fps_1pct_low"].get<double>(), sum["hitches"]["count"].get<int>(),
                  sum["verdict"].get<std::string>(), toUtf8(std::filesystem::absolute(file, ec)));
+}
+
+// JPEG, quality 90: a phone's 3200x1440 PNG is ~5 MB, this ~1 MB.
+void Application::writeBenchmarkShots(const std::filesystem::path& dir, const std::string& name) {
+    auto logger = log::get("Benchmark");
+    const std::filesystem::path shots = dir / "shots";
+    std::error_code ec;
+    std::filesystem::create_directories(shots, ec);
+    // Pictures an earlier run under this name left behind.
+    const std::string prefix = name + "_";
+    for (const auto& e : std::filesystem::directory_iterator(shots, ec)) {
+        const std::u8string f = e.path().filename().u8string();
+        const std::string file(f.begin(), f.end());
+        if (file.rfind(prefix, 0) == 0 && e.path().extension() == ".jpg") std::filesystem::remove(e.path(), ec);
+    }
+    if (!m_renderer->canCapture()) {
+        logger->info("benchmark: no screenshots, this display's images can't be read back");
+        return;
+    }
+    for (const auto& [req, cap] : m_benchShots->latest) {
+        const std::string fileName = name + "_" + req.label + ".jpg";
+        const std::filesystem::path file = shots / std::filesystem::path(std::u8string(fileName.begin(), fileName.end()));
+        std::ofstream out(file, std::ios::binary);
+        auto write = [](void* ctx, void* data, int size) { static_cast<std::ofstream*>(ctx)->write(static_cast<const char*>(data), size); };
+        const int okEncode = stbi_write_jpg_to_func(write, &out, static_cast<int>(cap.width), static_cast<int>(cap.height), 4, cap.rgba.data(), 90);
+        if (!okEncode || !out) {
+            logger->error("benchmark: could not write screenshot {}", fileName);
+            continue;
+        }
+        m_bench->shotSaved(req, "shots/" + fileName);
+    }
+    logger->info("benchmark: {} screenshot(s) in {}", m_benchShots->latest.size(), shots.generic_string());
 }
 
 void Application::run() {
@@ -585,6 +642,7 @@ void Application::run() {
 
     const BenchClock::time_point benchLoopStart = BenchClock::now();
     BenchClock::time_point benchFrameStart{}, benchIdleEnd{}, benchLastRss{};
+    bool benchCopyThisFrame = false;
     bool benchFrameOpen = false;
     while (m_window.pollEvents([this](const SDL_Event& e) {
         if (m_bench) {
@@ -616,6 +674,13 @@ void Application::run() {
                     benchLastRss = benchNow;
                 }
                 m_bench->endFrame(msSince(benchFrameStart, benchNow), rss);
+                if (m_benchShots) {
+                    for (BenchRecorder::ShotRequest& r : m_bench->takeShotRequests()) {
+                        m_renderer->requestCapture(m_benchShots->requests.size());
+                        m_benchShots->requests.push_back(std::move(r));
+                        benchCopyThisFrame = true;
+                    }
+                }
                 if (m_bench->done()) {
                     SDL_Event quit{};
                     quit.type = SDL_EVENT_QUIT;
@@ -628,6 +693,9 @@ void Application::run() {
                                 std::chrono::duration<double, std::milli>(std::chrono::system_clock::now().time_since_epoch()).count());
             benchFrameOpen = true;
             benchFrameStart = benchNow;
+            // This frame copies a screenshot: not a measure of the game.
+            if (benchCopyThisFrame) m_bench->excludeFrame();
+            benchCopyThisFrame = false;
         }
 
         // --- Pause/step: see Application.h for the full reasoning.
@@ -770,6 +838,13 @@ void Application::run() {
         // so they only ever run for a frame guaranteed to complete.
         const auto benchBeforeBegin = BenchClock::now();
         const bool frameBegun = m_renderer->beginFrame();
+        if (m_benchShots) {
+            // beginFrame() read back an earlier frame's screenshot: this
+            // frame paid for the copy, so it isn't measured either.
+            std::vector<Renderer::FrameCapture> captures = m_renderer->takeCaptures();
+            if (!captures.empty()) m_bench->excludeFrame();
+            for (Renderer::FrameCapture& c : captures) m_benchShots->keep(c.tag, std::move(c));
+        }
         const auto benchAfterBegin = BenchClock::now();
         auto benchBeforeEnd = benchAfterBegin, benchAfterEnd = benchAfterBegin;
         if (frameBegun) {

@@ -120,3 +120,52 @@ TEST(BenchRecorder, ModuleCostIsPerFrameAndItsWorstCallIsNamed) {
     EXPECT_NEAR(ui["worst_call_ms"].get<double>(), 9.0, 1e-9);
     EXPECT_EQ(ui["worst_call"], "renderOverlay");
 }
+
+TEST(BenchRecorder, PicksTheMomentsWorthAScreenshot) {
+    BenchRecorder r = make(10.0, 0.0);
+    double t = feed(r, 300, 10.0, 0.0); // 3 s at 100 fps
+    t = feed(r, 1, 120.0, t);          // the worst frame
+    t = feed(r, 100, 20.0, t);         // 2 slow seconds at 50 fps
+    t = feed(r, 500, 10.0, t);         // back to 100 fps to the end
+    std::vector<BenchRecorder::ShotRequest> shots = r.takeShotRequests();
+    auto last = [&](const std::string& kind) {
+        const BenchRecorder::ShotRequest* found = nullptr;
+        for (const auto& s : shots)
+            if (s.kind == kind) found = &s;
+        return found;
+    };
+    ASSERT_NE(last("worst-frame"), nullptr);
+    EXPECT_NEAR(last("worst-frame")->value, 120.0, 1e-9);
+    EXPECT_EQ(last("worst-frame")->label, "worst-frame_120ms_at-3.0s");
+    ASSERT_NE(last("slowest-second"), nullptr);
+    EXPECT_NEAR(last("slowest-second")->value, 45.0, 1.0); // the 120 ms frame and 44 of 20 ms
+    ASSERT_NE(last("fastest-second"), nullptr);
+    EXPECT_NEAR(last("fastest-second")->value, 100.0, 3.0);
+    for (const char* view : { "view-1-of-3", "view-2-of-3", "view-3-of-3" }) EXPECT_NE(last(view), nullptr) << view;
+    EXPECT_LE(static_cast<int>(shots.size()), BenchRecorder::kMaxShotRequests);
+    EXPECT_TRUE(r.takeShotRequests().empty()); // handed over once
+
+    r.shotSaved(*last("worst-frame"), "shots/x_worst-frame_120ms_at-3.0s.jpg");
+    r.shotSaved(*last("view-1-of-3"), "shots/x_view-1-of-3_at-1.0s.jpg");
+    r.shotSaved(*last("worst-frame"), "shots/x_worst-frame_120ms_at-3.0s.jpg"); // a kind is listed once
+    const nlohmann::json j = r.toJson({}, {}, {});
+    ASSERT_EQ(j["screenshots"].size(), 2u);
+    EXPECT_EQ(j["screenshots"][0]["kind"], "worst-frame");
+    EXPECT_EQ(j["screenshots"][0]["file"], "shots/x_worst-frame_120ms_at-3.0s.jpg");
+}
+
+TEST(BenchRecorder, AScreenshotFrameIsNotMeasured) {
+    BenchRecorder r = make(10.0, 0.0);
+    double t = feed(r, 200, 10.0, 0.0);
+    r.beginFrame(t, 1.7e12 + t * 1000.0);
+    r.excludeFrame(); // this one copied a screenshot
+    r.endFrame(200.0, 100.0);
+    t += 0.2;
+    feed(r, 200, 10.0, t);
+    EXPECT_EQ(r.measuredFrames(), 400);
+    EXPECT_EQ(r.excludedFrames(), 1);
+    EXPECT_EQ(r.hitchCount(), 0);
+    const nlohmann::json j = r.toJson({}, {}, {});
+    EXPECT_EQ(j["summary"]["screenshot_frames"].get<int>(), 1);
+    EXPECT_NEAR(j["summary"]["frame_ms"]["max"].get<double>(), 10.0, 1e-9);
+}

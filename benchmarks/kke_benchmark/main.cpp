@@ -35,6 +35,7 @@
 #include <volk.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <chrono>
 #include <cmath>
@@ -45,6 +46,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <map>
 #include <set>
 #include <sstream>
@@ -157,7 +159,7 @@ VulkanProbe probeVulkan() {
     VkApplicationInfo app{};
     app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     app.pApplicationName = "kke_benchmark";
-    app.apiVersion = loaderVersion >= VK_API_VERSION_1_3 ? VK_API_VERSION_1_3 : loaderVersion;
+    app.apiVersion = loaderVersion >= VK_API_VERSION_1_2 ? VK_API_VERSION_1_2 : loaderVersion; // what the engine asks for
     VkInstanceCreateInfo ci{};
     ci.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     ci.pApplicationInfo = &app;
@@ -173,20 +175,34 @@ VulkanProbe probeVulkan() {
     if (count) vkEnumeratePhysicalDevices(p.instance, &count, devices.data());
     json gpus = json::array();
     int bestScore = -1;
-    bool any13 = false;
+    bool anyUsable = false;
     for (VkPhysicalDevice d : devices) {
         VkPhysicalDeviceProperties props{};
         vkGetPhysicalDeviceProperties(d, &props);
-        const bool v13 = props.apiVersion >= VK_API_VERSION_1_3;
-        any13 = any13 || v13;
+        // What VulkanDevice::isDeviceSuitable needs, minus the window: a
+        // graphics queue and the swapchain extension, on Vulkan 1.1 or
+        // newer (the engine asks for 1.2 and uses less where the GPU has
+        // less, e.g. Adreno drivers at 1.1).
+        uint32_t qCount = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(d, &qCount, nullptr);
+        std::vector<VkQueueFamilyProperties> queues(qCount);
+        if (qCount) vkGetPhysicalDeviceQueueFamilyProperties(d, &qCount, queues.data());
+        const bool graphics = std::any_of(queues.begin(), queues.end(), [](const VkQueueFamilyProperties& q) { return (q.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0; });
+        uint32_t extCount = 0;
+        vkEnumerateDeviceExtensionProperties(d, nullptr, &extCount, nullptr);
+        std::vector<VkExtensionProperties> exts(extCount);
+        if (extCount) vkEnumerateDeviceExtensionProperties(d, nullptr, &extCount, exts.data());
+        const bool swapchain = std::any_of(exts.begin(), exts.end(), [](const VkExtensionProperties& e) { return std::strcmp(e.extensionName, VK_KHR_SWAPCHAIN_EXTENSION_NAME) == 0; });
+        const bool usable = props.apiVersion >= VK_API_VERSION_1_1 && graphics && swapchain;
+        anyUsable = anyUsable || usable;
         json g;
         for (const auto& [k, v] : kke::collectSystemInfo(d))
             if (k.rfind("gpu", 0) == 0 || k == "vulkan_api_version") g[k] = v;
-        g["supports_vulkan_1_3"] = v13;
+        g["usable"] = usable;
         gpus.push_back(g);
-        const int score = (v13 ? 100 : 0) + (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ? 3
-                                             : props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ? 2
-                                             : props.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU ? 0 : 1);
+        const int score = (usable ? 100 : 0) + (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ? 3
+                                                : props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ? 2
+                                                : props.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU ? 0 : 1);
         if (score > bestScore) {
             bestScore = score;
             p.best = d;
@@ -194,7 +210,7 @@ VulkanProbe probeVulkan() {
     }
     p.info["gpus"] = gpus;
     if (devices.empty()) p.info["problem"] = "Vulkan found no GPU. Update the graphics driver.";
-    else if (!any13) p.info["problem"] = "No GPU here supports Vulkan 1.3, which the demos need. Updating the graphics driver often adds it.";
+    else if (!anyUsable) p.info["problem"] = "No GPU here has what the demos need (Vulkan 1.1 with graphics and a swapchain). Updating the graphics driver often adds it.";
     return p;
 }
 
@@ -204,6 +220,65 @@ struct LogLine {
     std::string level; // "info", "warning", "error", "critical", or "" (not an engine line)
     std::string text;  // the line without the time stamp
 };
+
+// A plain ZIP (stored, no compression: the pictures are JPEG already)
+// that every OS opens without extra software. ZIP spec (PKWARE APPNOTE):
+// a local header + data per file, then the central directory.
+uint32_t crc32Of(const std::string& data) {
+    static const auto table = [] {
+        std::array<uint32_t, 256> t{};
+        for (uint32_t i = 0; i < 256; ++i) {
+            uint32_t c = i;
+            for (int k = 0; k < 8; ++k) c = (c & 1) ? 0xEDB88320u ^ (c >> 1) : c >> 1;
+            t[i] = c;
+        }
+        return t;
+    }();
+    uint32_t c = 0xFFFFFFFFu;
+    for (unsigned char b : data) c = table[(c ^ b) & 0xFF] ^ (c >> 8);
+    return c ^ 0xFFFFFFFFu;
+}
+
+bool writeZip(const fs::path& zipFile, const std::vector<std::pair<std::string, fs::path>>& files) {
+    std::ofstream out(zipFile, std::ios::binary);
+    if (!out) return false;
+    auto u16 = [&](uint32_t v) { const char b[2] = { char(v & 0xFF), char((v >> 8) & 0xFF) }; out.write(b, 2); };
+    auto u32 = [&](uint32_t v) { u16(v & 0xFFFF); u16(v >> 16); };
+    const std::time_t now = std::time(nullptr);
+    std::tm tm{};
+#if defined(_WIN32)
+    localtime_s(&tm, &now);
+#else
+    localtime_r(&now, &tm);
+#endif
+    const uint32_t dosTime = uint32_t(tm.tm_hour << 11 | tm.tm_min << 5 | tm.tm_sec / 2);
+    const uint32_t dosDate = uint32_t(std::max(0, tm.tm_year - 80) << 9 | (tm.tm_mon + 1) << 5 | tm.tm_mday);
+    struct Entry {
+        std::string name;
+        uint32_t crc, size, offset;
+    };
+    std::vector<Entry> entries;
+    for (const auto& [name, path] : files) {
+        std::ifstream in(path, std::ios::binary);
+        const std::string data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        if (!in && !in.eof()) continue;
+        Entry e{ name, crc32Of(data), uint32_t(data.size()), uint32_t(out.tellp()) };
+        u32(0x04034b50); u16(20); u16(0x0800); u16(0); u16(dosTime); u16(dosDate); // version, UTF-8 names, stored
+        u32(e.crc); u32(e.size); u32(e.size); u16(uint32_t(name.size())); u16(0);
+        out.write(name.data(), std::streamsize(name.size()));
+        out.write(data.data(), std::streamsize(data.size()));
+        entries.push_back(e);
+    }
+    const uint32_t dirStart = uint32_t(out.tellp());
+    for (const Entry& e : entries) {
+        u32(0x02014b50); u16(20); u16(20); u16(0x0800); u16(0); u16(dosTime); u16(dosDate);
+        u32(e.crc); u32(e.size); u32(e.size); u16(uint32_t(e.name.size())); u16(0); u16(0); u16(0); u16(0); u32(0); u32(e.offset);
+        out.write(e.name.data(), std::streamsize(e.name.size()));
+    }
+    const uint32_t dirSize = uint32_t(out.tellp()) - dirStart;
+    u32(0x06054b50); u16(0); u16(0); u16(uint32_t(entries.size())); u16(uint32_t(entries.size())); u32(dirSize); u32(dirStart); u16(0);
+    return bool(out);
+}
 
 // What makes two log messages "the same" for counting: the text after the
 // "[engine][module][game][level]: " prefix, with hex handles and addresses
@@ -308,6 +383,7 @@ struct RunResult {
     std::string status; // ok, broken_modules, ended_early, crashed, hung, no_report, missing, failed_to_start
     int exitCode = 0;
     double wallSeconds = 0.0;
+    std::string reason; // why, for "skipped" (a launcher's: "not built for this platform")
 };
 
 RunResult runDemo(const Demo& d, const fs::path& exeDir, const fs::path& reportDir, const fs::path& logFile, double loadTimeout) {
@@ -426,7 +502,9 @@ std::string textSummary(const json& all) {
         std::string result = d["status"].get<std::string>();
         if (result == "ok" && sum.contains("verdict")) result = sum["verdict"].get<std::string>();
         std::string hitches = sum.contains("hitches") ? std::to_string(sum["hitches"]["count"].get<int>()) : "-";
-        t << pad(d["title"].get<std::string>(), 44) << pad(result, 16) << pad(num(sum.value("fps_avg", json())), 8)
+        std::string title = d["title"].get<std::string>();
+        if (d.contains("variant")) title += " (" + d["variant"].get<std::string>() + ")";
+        t << pad(title, 44) << pad(result, 16) << pad(num(sum.value("fps_avg", json())), 8)
           << pad(num(sum.value("fps_1pct_low", json())), 8)
           << pad(sum.contains("frame_ms") && sum["frame_ms"].is_object() ? num(sum["frame_ms"]["p99"]) : "-", 8) << pad(hitches, 9)
           << d["log"]["warnings"].get<int>() + d["log"]["errors"].get<int>() << "\n";
@@ -437,7 +515,7 @@ std::string textSummary(const json& all) {
     bool header = false;
     for (const json& d : all["demos"]) {
         const std::string st = d["status"].get<std::string>();
-        const bool bad = st != "ok";
+        const bool bad = st != "ok" && st != "skipped" && st != "missing";
         const json& r = d.contains("report") ? d["report"] : json::object();
         const json hitches = r.value("hitches", json::array());
         if (!bad && hitches.empty() && d["log"]["errors"].get<int>() == 0) continue;
@@ -445,7 +523,7 @@ std::string textSummary(const json& all) {
             t << "\nDetails\n";
             header = true;
         }
-        t << "\n* " << d["title"].get<std::string>() << ": " << st;
+        t << "\n* " << d["title"].get<std::string>() << (d.contains("variant") ? " (" + d["variant"].get<std::string>() + ")" : std::string()) << ": " << st;
         if (d.contains("exit")) t << " (" << d["exit"].get<std::string>() << ")";
         t << "\n";
         for (const auto& b : r.value("broken_modules", json::array())) t << "    broken: " << b.get<std::string>() << "\n";
@@ -467,7 +545,9 @@ std::string textSummary(const json& all) {
         if (bad)
             for (const auto& l : d["log"].value("tail", json::array())) t << "    | " << l.get<std::string>() << "\n";
     }
-    t << "\nPlease send the file " << all["results_file"].get<std::string>() << " (the .json next to this one) back.\n";
+    t << "\nPlease send the file " << all["results_file"].get<std::string>() << " (the .json next to this one)";
+    if (all.contains("screenshots_zip")) t << " and " << all["screenshots_zip"].get<std::string>() << " (its screenshots)";
+    t << " back.\n";
     return t.str();
 }
 
@@ -577,7 +657,9 @@ int main(int argc, char** argv) {
     const std::string stamp = kke::timestampForFileName();
     const fs::path runDir = collecting ? collectDir : outDir / ("run_" + stamp);
     // --collect: what the other launcher saw of each demo.
-    std::map<std::string, RunResult> collected;
+    // Run ids are a suite id, or "<suite id>@<variant>" when a launcher
+    // runs one entry several ways (the phone: @portrait and @landscape).
+    std::vector<std::pair<std::string, RunResult>> collected;
     if (collecting) {
         json runs;
         std::string runsError;
@@ -593,7 +675,8 @@ int main(int argc, char** argv) {
             else rr.status = "no_report";
             if (r.contains("exit_code") && r["exit_code"].is_number_integer()) rr.exitCode = r["exit_code"].get<int>();
             if (r.contains("wall_s") && r["wall_s"].is_number()) rr.wallSeconds = r["wall_s"].get<double>();
-            collected[r["id"].get<std::string>()] = rr;
+            if (r.contains("reason") && r["reason"].is_string()) rr.reason = r["reason"].get<std::string>();
+            collected.emplace_back(r["id"].get<std::string>(), rr);
         }
     }
     const fs::path reportDir = runDir / "reports", logDir = runDir / "logs";
@@ -628,30 +711,55 @@ int main(int argc, char** argv) {
 
     const auto runStart = std::chrono::steady_clock::now();
     json results = json::array();
+    // What to report: one run per demo here, or what the launcher ran.
+    struct Run {
+        const Demo* demo;
+        std::string id, variant;
+        RunResult result;
+        bool have = false;
+    };
+    std::vector<Run> runs;
+    for (const Demo& d : demos) {
+        bool any = false;
+        for (const auto& [id, rr] : collected) {
+            const size_t at = id.find('@');
+            if (id.substr(0, at) != d.id) continue;
+            runs.push_back({ &d, id, at == std::string::npos ? "" : id.substr(at + 1), rr, true });
+            any = true;
+        }
+        if (!any) runs.push_back({ &d, d.id, "", {}, false });
+    }
     int ok = 0, missing = 0;
-    for (size_t i = 0; i < demos.size(); ++i) {
-        const Demo& d = demos[i];
-        std::printf("[%zu/%zu] %s\n", i + 1, demos.size(), d.title.c_str());
+    for (size_t i = 0; i < runs.size(); ++i) {
+        const Demo& d = *runs[i].demo;
+        const std::string& id = runs[i].id;
+        std::printf("[%zu/%zu] %s%s\n", i + 1, runs.size(), d.title.c_str(), runs[i].variant.empty() ? "" : (" (" + runs[i].variant + ")").c_str());
         std::fflush(stdout);
-        const fs::path logFile = logDir / (d.id + ".log");
+        const fs::path logFile = logDir / (id + ".log");
+        const fs::path reportFile = reportDir / (id + ".json");
         RunResult r;
         if (!collecting) {
             r = runDemo(d, demoDir, reportDir, logFile, suite.loadTimeout);
-        } else if (auto it = collected.find(d.id); it != collected.end()) {
-            r = it->second;
+        } else if (runs[i].have) {
+            r = runs[i].result;
             // A report with a clean exit is "ok" whatever the launcher guessed.
-            if (r.status == "no_report" && fs::exists(reportDir / (d.id + ".json"), ec)) r.status = "ok";
+            if (r.status == "no_report" && fs::exists(reportFile, ec)) r.status = "ok";
         } else {
             r.status = "missing";
         }
 
         json out;
-        out["id"] = d.id;
+        out["id"] = id;
+        if (!runs[i].variant.empty()) {
+            out["suite_id"] = d.id;
+            out["variant"] = runs[i].variant;
+        }
         out["exe"] = d.exe;
         out["title"] = d.title;
         out["status"] = r.status;
         out["wall_s"] = std::round(r.wallSeconds * 10.0) / 10.0;
-        if (r.status != "missing") {
+        if (!r.reason.empty()) out["reason"] = r.reason;
+        if (r.status != "missing" && r.status != "skipped") {
             out["exit_code"] = r.exitCode;
             out["exit"] = exitMeaning(r.exitCode);
         }
@@ -663,7 +771,7 @@ int main(int argc, char** argv) {
         // The demo's own report: its system block is the launcher's, so
         // only what differs (e.g. the GPU it picked) is kept.
         json report;
-        if (fs::exists(reportDir / (d.id + ".json"), ec) && kke::datafile::loadFile(reportDir / (d.id + ".json"), report)) {
+        if (fs::exists(reportFile, ec) && kke::datafile::loadFile(reportFile, report)) {
             json differs = json::object();
             const json reportSystem = report.value("system", json::object());
             for (const auto& [k, v] : reportSystem.items())
@@ -724,9 +832,10 @@ int main(int argc, char** argv) {
             std::printf("    %s: %.0f fps, slowest 1%% %.0f fps, %d hitch(es)%s\n", s["verdict"].get<std::string>().c_str(), s["fps_avg"].get<double>(),
                         s["fps_1pct_low"].get<double>(), s["hitches"]["count"].get<int>(),
                         errors ? (", " + std::to_string(errors) + " error(s) in the log").c_str() : "");
-        } else if (st == "missing") {
+        } else if (st == "missing" || st == "skipped") {
             ++missing;
-            std::printf("    not in this download (%s%s not found), skipped\n", d.exe.c_str(), kExe);
+            if (st == "skipped") std::printf("    skipped: %s\n", r.reason.empty() ? "by the launcher" : r.reason.c_str());
+            else std::printf("    not in this download (%s%s not found), skipped\n", d.exe.c_str(), kExe);
         } else {
             std::printf("    %s%s\n", st.c_str(), out.contains("exit") ? (": " + out["exit"].get<std::string>()).c_str() : "");
         }
@@ -742,6 +851,24 @@ int main(int argc, char** argv) {
 
     const std::string name = "kke-benchmark-" + stamp;
     all["results_file"] = name + ".json";
+    // The demos' screenshots (BenchRecorder: best and worst moments, three
+    // views each), in one zip next to the results.
+    {
+        std::vector<std::pair<std::string, fs::path>> shots;
+        for (const json& d : results) {
+            if (!d.contains("report")) continue;
+            for (const json& shot : d["report"].value("screenshots", json::array())) {
+                const std::string file = shot.value("file", "");
+                const fs::path path = reportDir / pathFromUtf8(file);
+                if (!file.empty() && fs::exists(path, ec)) shots.emplace_back(utf8(path.filename()), path);
+            }
+        }
+        if (!shots.empty()) {
+            const std::string zipName = name + "-shots.zip";
+            if (writeZip(outDir / zipName, shots)) all["screenshots_zip"] = zipName;
+            else std::fprintf(stderr, "kke_benchmark: could not write %s\n", utf8(outDir / zipName).c_str());
+        }
+    }
     const fs::path jsonFile = outDir / (name + ".json"), textFile = outDir / (name + ".txt");
     {
         std::ofstream out(jsonFile, std::ios::binary);
@@ -753,7 +880,9 @@ int main(int argc, char** argv) {
         out << text;
     }
     std::printf("\n%s\n", text.c_str());
-    std::printf("Done: %d of %zu demos ran fine.\nResults: %s\n", ok, demos.size(), utf8(jsonFile).c_str());
+    std::printf("Done: %d of %zu demos ran fine%s.\nResults: %s\n", ok, runs.size(),
+                missing ? (" (" + std::to_string(missing) + " not run here)").c_str() : "", utf8(jsonFile).c_str());
+    if (all.contains("screenshots_zip")) std::printf("Screenshots: %s\n", utf8(outDir / all["screenshots_zip"].get<std::string>()).c_str());
     if (openFolder) {
 #if defined(_WIN32)
         std::string url = "file:///" + utf8(outDir);
@@ -764,5 +893,5 @@ int main(int argc, char** argv) {
         SDL_OpenURL(url.c_str());
     }
     SDL_Quit();
-    return finish(ok + missing == static_cast<int>(demos.size()) ? 0 : 3);
+    return finish(ok + missing == static_cast<int>(runs.size()) ? 0 : 3);
 }

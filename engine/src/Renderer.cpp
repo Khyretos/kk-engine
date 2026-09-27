@@ -8,6 +8,7 @@
 #include <array>
 #include <iostream>
 #include <stdexcept>
+#include <utility>
 
 namespace kke {
 
@@ -87,6 +88,116 @@ void Renderer::recreateSwapChain() {
     m_swapChain->recreate();
 }
 
+void Renderer::enableCapture() {
+    if (m_swapChain->readable()) return;
+    m_swapChain->setReadable(true);
+    m_recreatePending = true;
+}
+
+namespace {
+// Swapchain formats a capture can be turned into RGBA8 from by copying
+// bytes (and swapping red and blue for the BGRA ones).
+bool capturableFormat(VkFormat f, bool& bgra) {
+    switch (f) {
+    case VK_FORMAT_B8G8R8A8_UNORM:
+    case VK_FORMAT_B8G8R8A8_SRGB:
+        bgra = true;
+        return true;
+    case VK_FORMAT_R8G8B8A8_UNORM:
+    case VK_FORMAT_R8G8B8A8_SRGB:
+    case VK_FORMAT_A8B8G8R8_UNORM_PACK32:
+    case VK_FORMAT_A8B8G8R8_SRGB_PACK32:
+        bgra = false;
+        return true;
+    default:
+        return false;
+    }
+}
+} // namespace
+
+bool Renderer::canCapture() const {
+    bool bgra = false;
+    return m_swapChain->readable() && capturableFormat(m_swapChain->imageFormat(), bgra);
+}
+
+void Renderer::requestCapture(uint64_t tag) { m_captureRequests.push_back(tag); }
+
+std::vector<Renderer::FrameCapture> Renderer::takeCaptures() {
+    std::vector<FrameCapture> out;
+    out.swap(m_captured);
+    return out;
+}
+
+// After the frame's last pass: the swapchain image is in PRESENT_SRC.
+// Copy it to this slot's readback buffer and put it back for presenting.
+void Renderer::recordCapture(VkCommandBuffer cmd) {
+    const uint64_t tag = m_captureRequests.front();
+    m_captureRequests.erase(m_captureRequests.begin());
+    if (!canCapture()) return; // not readable (yet, or on this device): the request is dropped
+    CaptureSlot& slot = m_captureSlots[m_currentFrame];
+    const VkExtent2D e = m_swapChain->extent();
+    const VkDeviceSize size = VkDeviceSize(e.width) * e.height * 4;
+    if (!slot.buffer || slot.size < size) {
+        slot.buffer = std::make_unique<Buffer>(*m_device, size, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_TO_CPU);
+        slot.size = size;
+    }
+    slot.extent = e;
+    slot.format = m_swapChain->imageFormat();
+    slot.tag = tag;
+    slot.pending = true;
+
+    const VkImage image = m_swapChain->image(m_currentImageIndex);
+    VkImageMemoryBarrier b{};
+    b.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    b.srcQueueFamilyIndex = b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    b.image = image;
+    b.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+    b.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    b.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    b.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    b.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &b);
+
+    VkBufferImageCopy copy{};
+    copy.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+    copy.imageExtent = { e.width, e.height, 1 };
+    vkCmdCopyImageToBuffer(cmd, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, slot.buffer->handle(), 1, &copy);
+
+    b.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    b.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    b.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    b.dstAccessMask = 0;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &b);
+    // The host reads the buffer after the fence; make the copy visible to it.
+    VkBufferMemoryBarrier hb{};
+    hb.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+    hb.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    hb.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+    hb.srcQueueFamilyIndex = hb.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    hb.buffer = slot.buffer->handle();
+    hb.size = VK_WHOLE_SIZE;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 0, nullptr, 1, &hb, 0, nullptr);
+}
+
+void Renderer::collectCapture(uint32_t frame) {
+    CaptureSlot& slot = m_captureSlots[frame];
+    if (!slot.pending) return;
+    slot.pending = false;
+    bool bgra = false;
+    if (!capturableFormat(slot.format, bgra)) return;
+    FrameCapture c;
+    c.tag = slot.tag;
+    c.width = slot.extent.width;
+    c.height = slot.extent.height;
+    c.rgba.resize(size_t(c.width) * c.height * 4);
+    slot.buffer->download(c.rgba.data(), c.rgba.size());
+    for (size_t i = 0; i < c.rgba.size(); i += 4) {
+        if (bgra) std::swap(c.rgba[i], c.rgba[i + 2]);
+        c.rgba[i + 3] = 255;
+    }
+    m_captured.push_back(std::move(c));
+}
+
 void Renderer::setVSync(bool vsync) {
     if (vsync == m_swapChain->vsync()) return;
     m_swapChain->setVSync(vsync);
@@ -101,6 +212,7 @@ bool Renderer::beginFrame() {
         recreateSwapChain();
     }
     vkWaitForFences(m_device->device(), 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
+    collectCapture(m_currentFrame); // the fence says this slot's copy is done
 
     // The fence wait above guarantees this frame slot's prior GPU work (if
     // any) has fully completed, so reading its timestamp results here can't
@@ -470,6 +582,7 @@ void Renderer::endFrame() {
     // A frame with nothing drawn over the 3D image still needs it upscaled.
     beginOverlayPass();
     vkCmdEndRenderPass(cmd);
+    if (!m_captureRequests.empty()) recordCapture(cmd);
     vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_timestampPools[m_currentFrame], 1);
     VK_CHECK(vkEndCommandBuffer(cmd));
 

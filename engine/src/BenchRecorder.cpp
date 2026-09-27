@@ -87,6 +87,7 @@ std::optional<BenchRecorder::Options> BenchRecorder::fromEnvironment() {
     if (const char* d = SDL_getenv("KKE_BENCH_DIR"); d && *d) o.dir = d;
     if (const char* n = SDL_getenv("KKE_BENCH_NAME"); n && *n) o.name = n;
     if (const char* s = SDL_getenv("KKE_BENCH_VSYNC"); s && *s && std::strcmp(s, "0") != 0) o.uncapped = false;
+    if (const char* s = SDL_getenv("KKE_BENCH_SHOTS"); s && std::strcmp(s, "0") == 0) o.screenshots = false;
     return o;
 }
 
@@ -139,7 +140,10 @@ double BenchRecorder::rollingMedian() const {
 void BenchRecorder::endFrame(double wallMs, double residentMb) {
     if (residentMb <= 0.0) residentMb = m_lastResidentMb;
     const double median = rollingMedian();
-    const bool measured = m_measureStart >= 0.0 && !done();
+    const bool excluded = m_excludeFrame;
+    m_excludeFrame = false;
+    const bool measured = m_measureStart >= 0.0 && !done() && !excluded;
+    if (excluded && m_measureStart >= 0.0 && !done()) ++m_excludedFrames;
     m_lastT = m_frame.t + wallMs / 1000.0;
 
     if (measured) {
@@ -228,6 +232,11 @@ void BenchRecorder::endFrame(double wallMs, double residentMb) {
             if (m_hitches.size() < kMaxHitchesKept) m_hitches.push_back(std::move(h));
         }
         for (int s = 0; s < kStageCount; ++s) m_stageTotal[s] += m_frame.stageMs[s];
+        if (m_options.screenshots) pickShots(m_frame.t - m_measureStart, wallMs);
+    }
+    if (excluded) {
+        m_lastResidentMb = residentMb;
+        return; // a screenshot frame says nothing about the game's usual pace
     }
 
     // Every frame (warm-up too) primes the median, hitches included: a
@@ -237,6 +246,79 @@ void BenchRecorder::endFrame(double wallMs, double residentMb) {
     else m_recent[m_recentNext] = wallMs;
     m_recentNext = (m_recentNext + 1) % kWindow;
     m_lastResidentMb = residentMb;
+}
+
+// Called for each measured frame. tMeasured: when it began, in seconds
+// since measuring started.
+void BenchRecorder::pickShots(double tMeasured, double wallMs) {
+    auto request = [&](const std::string& kind, const char* valueFmt, double value, double at) {
+        if (m_shotRequestCount >= kMaxShotRequests) return;
+        ++m_shotRequestCount;
+        char buf[96];
+        std::string label = kind;
+        if (valueFmt) {
+            std::snprintf(buf, sizeof(buf), valueFmt, value);
+            label += "_";
+            label += buf;
+        }
+        std::snprintf(buf, sizeof(buf), "_at-%.1fs", at);
+        label += buf;
+        m_shotRequests.push_back({ kind, label, at, value });
+    };
+    // The slowest frame: each new record at least 10% worse than the last
+    // picture, at most one a second (the first second sets records often).
+    if (wallMs > m_shotWorstMs * 1.1 && tMeasured - m_shotWorstAt >= 1.0) {
+        m_shotWorstMs = wallMs;
+        m_shotWorstAt = tMeasured;
+        request("worst-frame", "%.0fms", wallMs, tMeasured);
+    }
+    // Whole seconds: the slowest and the fastest so far (3% apart from the
+    // last picture of that kind, so a steady game isn't pictured twice a second).
+    const int second = static_cast<int>(tMeasured);
+    if (second != m_second) {
+        const double span = tMeasured - m_secondStart;
+        if (m_secondFrames > 0 && span > 0.5) {
+            const double fps = m_secondFrames / span;
+            const double at = tMeasured; // the picture is of the frame right after that second
+            if ((m_shotSlowFps <= 0.0 || fps < m_shotSlowFps * 0.97) && tMeasured - m_shotSlowAt >= 1.0) {
+                m_shotSlowFps = fps;
+                m_shotSlowAt = tMeasured;
+                request("slowest-second", "%.0ffps", fps, at);
+            }
+            if (fps > m_shotFastFps * 1.03 && tMeasured - m_shotFastAt >= 1.0) {
+                m_shotFastFps = fps;
+                m_shotFastAt = tMeasured;
+                request("fastest-second", "%.0ffps", fps, at);
+            }
+        }
+        m_second = second;
+        m_secondStart = tMeasured;
+        m_secondFrames = 0;
+    }
+    ++m_secondFrames;
+    // Three views spread over the run: what the demo looks like.
+    static constexpr double kViewAt[3] = { 0.1, 0.5, 0.9 };
+    if (m_viewsTaken < 3 && tMeasured >= kViewAt[m_viewsTaken] * m_options.seconds) {
+        ++m_viewsTaken;
+        request("view-" + std::to_string(m_viewsTaken) + "-of-3", nullptr, 0.0, tMeasured);
+    }
+}
+
+std::vector<BenchRecorder::ShotRequest> BenchRecorder::takeShotRequests() {
+    std::vector<ShotRequest> out;
+    out.swap(m_shotRequests);
+    return out;
+}
+
+void BenchRecorder::shotSaved(const ShotRequest& shot, const std::string& file) {
+    for (auto& [s, f] : m_shots) {
+        if (s.kind == shot.kind) {
+            s = shot;
+            f = file;
+            return;
+        }
+    }
+    m_shots.emplace_back(shot, file);
 }
 
 const char* BenchRecorder::Hitch::severity() const {
@@ -268,6 +350,7 @@ nlohmann::json BenchRecorder::toJson(const std::vector<std::pair<std::string, st
     double total = 0.0;
     for (double ms : m_frameMs) total += ms;
     s["frames"] = m_frameMs.size();
+    s["screenshot_frames"] = m_excludedFrames; // not measured: they copied or read back a screenshot
     s["seconds"] = round3(total / 1000.0);
     s["fps_avg"] = round3(total > 0.0 ? 1000.0 * m_frameMs.size() / total : 0.0);
     s["fps_1pct_low"] = round3(lowFps(m_frameMs, 0.01));
@@ -376,6 +459,9 @@ nlohmann::json BenchRecorder::toJson(const std::vector<std::pair<std::string, st
     json events = json::array();
     for (const Event& e : m_events) events.push_back({ { "t_s", round3(e.t) }, { "what", e.what } });
     j["events"] = events;
+    json shots = json::array();
+    for (const auto& [shot, file] : m_shots) shots.push_back({ { "kind", shot.kind }, { "file", file }, { "t_s", std::round(shot.tSeconds * 10.0) / 10.0 }, { "value", std::round(shot.value * 10.0) / 10.0 } });
+    j["screenshots"] = shots;
     j["events_not_listed"] = m_eventCount - static_cast<int>(m_events.size());
     return j;
 }

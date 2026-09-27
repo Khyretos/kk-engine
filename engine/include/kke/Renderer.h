@@ -2,9 +2,12 @@
 
 #include "kke/VulkanDevice.h"
 #include "kke/SwapChain.h"
+#include "kke/Buffer.h"
 #include "kke/FrameRetireQueue.h"
 
 #include <glm/glm.hpp>
+#include <array>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -126,6 +129,24 @@ public:
     void beginView(const VkRect2D& rect, bool clear);
     bool vsync() const;
 
+    // Screenshots of what the player sees (3D and UI), for the benchmark's
+    // best/worst-moment pictures. enableCapture() makes the swapchain
+    // readable (rebuilt at the next beginFrame()); canCapture() says
+    // whether it worked (the surface allows it, 8-bit RGBA/BGRA format).
+    // requestCapture() copies the next frame endFrame() presents; the
+    // pixels arrive once the GPU has finished it, a frame or two later,
+    // through takeCaptures(). Each copy costs a transfer on the GPU and a
+    // memcpy of the image on the CPU, nothing else.
+    struct FrameCapture {
+        uint64_t tag = 0; // what requestCapture() was given
+        uint32_t width = 0, height = 0;
+        std::vector<uint8_t> rgba; // width * height * 4, top row first, alpha 255
+    };
+    void enableCapture();
+    bool canCapture() const;
+    void requestCapture(uint64_t tag);
+    std::vector<FrameCapture> takeCaptures();
+
 private:
     glm::vec3 m_clearLinear{0.02f, 0.02f, 0.05f};
 
@@ -158,6 +179,21 @@ private:
     FrameRetireQueue m_retired;
     bool m_recreatePending = false;
     uint32_t m_currentImageIndex = 0;
+
+    // Screenshots (requestCapture): one readback buffer per frame slot.
+    struct CaptureSlot {
+        std::unique_ptr<Buffer> buffer;
+        VkDeviceSize size = 0;
+        VkExtent2D extent{};
+        VkFormat format = VK_FORMAT_UNDEFINED;
+        uint64_t tag = 0;
+        bool pending = false;
+    };
+    std::array<CaptureSlot, kMaxFramesInFlight> m_captureSlots;
+    std::vector<uint64_t> m_captureRequests;
+    std::vector<FrameCapture> m_captured;
+    void recordCapture(VkCommandBuffer cmd);
+    void collectCapture(uint32_t frame);
     float m_lastGpuFrameTimeMs = -1.0f;
 
     // Render scale: the 3D pass draws into a smaller image per frame in
