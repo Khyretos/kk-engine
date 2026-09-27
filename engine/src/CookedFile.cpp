@@ -16,7 +16,30 @@
 namespace kke::cooked {
 
 namespace {
-constexpr size_t kNonce = 24, kMac = 16, kHeader = sizeof(kMagic) + kNonce + kMac;
+constexpr size_t kTag = sizeof(kArtBuildTag), kNonce = 24, kMac = 16, kHeader = sizeof(kMagic) + kTag + kNonce + kMac;
+static_assert(kTag == 8, "the build tag is 8 bytes (engine/CMakeLists.txt)");
+
+// This build's key, joined from its two halves only while it is used and
+// wiped after, so it never sits whole in the binary or in memory
+// (engine/CMakeLists.txt makes the halves).
+class BuildKey {
+public:
+    BuildKey() {
+        // Read through volatile, or the optimiser joins the halves at
+        // compile time and the whole key lands in the binary after all.
+        const volatile unsigned char* masked = kArtKeyMasked;
+        const volatile unsigned char* mask = kArtKeyMask;
+        for (size_t i = 0; i < sizeof(m_key); ++i) m_key[i] = static_cast<uint8_t>(masked[i] ^ mask[i]);
+    }
+    ~BuildKey() { crypto_wipe(m_key, sizeof(m_key)); }
+    BuildKey(const BuildKey&) = delete;
+    BuildKey& operator=(const BuildKey&) = delete;
+    const uint8_t* data() const { return m_key; }
+
+private:
+    uint8_t m_key[32];
+};
+static_assert(sizeof(kArtKeyMasked) == 32 && sizeof(kArtKeyMask) == 32, "the art key is 32 bytes");
 
 void trace(const std::string& path) {
     const char* file = SDL_getenv("KKE_ASSET_TRACE");
@@ -44,10 +67,14 @@ bool isCookedFile(const std::string& path) {
 bool cook(const std::vector<uint8_t>& plain, std::vector<uint8_t>& out, std::string* error) {
     out.assign(kHeader + plain.size(), 0);
     std::memcpy(out.data(), kMagic, sizeof(kMagic));
-    uint8_t* nonce = out.data() + sizeof(kMagic);
+    uint8_t* tag = out.data() + sizeof(kMagic);
+    std::memcpy(tag, kArtBuildTag, kTag);
+    uint8_t* nonce = tag + kTag;
     uint8_t* mac = nonce + kNonce;
     if (!seal::randomBytes(nonce, kNonce, error)) return false;
-    crypto_aead_lock(out.data() + kHeader, mac, kKkeArtKey, nonce, nullptr, 0, plain.data(), plain.size());
+    const BuildKey key;
+    // The tag is authenticated too: a file can't be relabelled for another build.
+    crypto_aead_lock(out.data() + kHeader, mac, key.data(), nonce, tag, kTag, plain.data(), plain.size());
     return true;
 }
 
@@ -56,12 +83,19 @@ bool uncook(const std::vector<uint8_t>& cooked, std::vector<uint8_t>& out, std::
         if (error) *error = "not a cooked file";
         return false;
     }
-    const uint8_t* nonce = cooked.data() + sizeof(kMagic);
+    const uint8_t* tag = cooked.data() + sizeof(kMagic);
+    const uint8_t* nonce = tag + kTag;
     const uint8_t* mac = nonce + kNonce;
+    if (std::memcmp(tag, kArtBuildTag, kTag) != 0) {
+        if (error) *error = "cooked for another build (each bake has its own key: cook and build together)";
+        return false;
+    }
     out.resize(cooked.size() - kHeader);
-    if (crypto_aead_unlock(out.data(), mac, kKkeArtKey, nonce, nullptr, 0, cooked.data() + kHeader, out.size()) != 0) {
+    const BuildKey key;
+    if (crypto_aead_unlock(out.data(), mac, key.data(), nonce, tag, kTag, cooked.data() + kHeader, out.size()) != 0) {
+        crypto_wipe(out.data(), out.size());
         out.clear();
-        if (error) *error = "cooked with a different key (another checkout's build) or damaged";
+        if (error) *error = "damaged, or cooked with another checkout's key";
         return false;
     }
     return true;
