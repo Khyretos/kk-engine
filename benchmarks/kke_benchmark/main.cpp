@@ -35,6 +35,7 @@
 #include <volk.h>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -203,6 +204,26 @@ struct LogLine {
     std::string level; // "info", "warning", "error", "critical", or "" (not an engine line)
     std::string text;  // the line without the time stamp
 };
+
+// What makes two log messages "the same" for counting: the text after the
+// "[engine][module][game][level]: " prefix, with hex handles and addresses
+// (Vulkan validation names every object by one) folded to "0x_".
+std::string messageKey(const std::string& text) {
+    const size_t colon = text.find("]: ");
+    const std::string body = colon == std::string::npos ? text : text.substr(colon + 3);
+    std::string key;
+    key.reserve(body.size());
+    for (size_t i = 0; i < body.size(); ++i) {
+        if (body[i] == '0' && i + 2 < body.size() && (body[i + 1] == 'x' || body[i + 1] == 'X') && std::isxdigit(static_cast<unsigned char>(body[i + 2]))) {
+            key += "0x_";
+            i += 2;
+            while (i + 1 < body.size() && std::isxdigit(static_cast<unsigned char>(body[i + 1]))) ++i;
+        } else {
+            key += body[i];
+        }
+    }
+    return key;
+}
 
 std::string stripAnsi(const std::string& s) {
     std::string out;
@@ -661,22 +682,20 @@ int main(int argc, char** argv) {
         const std::vector<LogLine> lines = readLog(logFile);
         int warnings = 0, errors = 0;
         std::map<std::string, int> seen;
+        std::vector<std::string> keys; // per entry of `messages`
         json messages = json::array();
         for (const LogLine& l : lines) {
             const bool isWarn = l.level == "warning", isErr = l.level == "error" || l.level == "critical";
             const bool fatal = l.text.find("Fatal error") != std::string::npos;
             if (!isWarn && !isErr && !fatal) continue;
             (isWarn ? warnings : errors)++;
-            // Dedupe on the text after the "[engine][module][game][level]: " prefix.
-            const size_t colon = l.text.find("]: ");
-            std::string key = colon == std::string::npos ? l.text : l.text.substr(colon + 3);
-            if (seen[key]++ == 0 && messages.size() < 60) messages.push_back({ { "level", isWarn ? "warning" : l.level.empty() ? "error" : l.level }, { "text", l.text } });
+            const std::string key = messageKey(l.text);
+            if (seen[key]++ == 0 && messages.size() < 60) {
+                messages.push_back({ { "level", isWarn ? "warning" : l.level.empty() ? "error" : l.level }, { "text", l.text } });
+                keys.push_back(key);
+            }
         }
-        for (json& m : messages) {
-            const std::string text = m["text"].get<std::string>();
-            const size_t colon = text.find("]: ");
-            m["count"] = seen[colon == std::string::npos ? text : text.substr(colon + 3)];
-        }
+        for (size_t i = 0; i < messages.size(); ++i) messages[i]["count"] = seen[keys[i]];
         json logOut = { { "file", utf8(fs::relative(logFile, outDir, ec)) }, { "lines", lines.size() }, { "warnings", warnings }, { "errors", errors }, { "messages", messages } };
         if (out["status"] != "ok") {
             json tail = json::array();
