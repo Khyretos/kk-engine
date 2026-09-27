@@ -956,8 +956,9 @@ if(KKE_ENABLE_JOLT)
     add_subdirectory(games/audio_demo)
 endif()
 # Climb Race: a generated mountain face, climbed hold by hold, against a
-# rival (games/climb_race/README.md). Jolt: the rock and the climbers.
-if(KKE_ENABLE_JOLT)
+# rival (games/climb_race/README.md). Jolt: the rock and the climbers;
+# networking: it always adds kke::NetModule (online races).
+if(KKE_ENABLE_JOLT AND KKE_ENABLE_NET)
     add_subdirectory(games/climb_race)
 endif()
 # Procedural animation: creatures with no clips, hit reactions on joint

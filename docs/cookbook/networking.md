@@ -29,7 +29,10 @@ client can't cheat) and sends the totals to everyone.
 
 - `net.send(name, data)` goes from a player to the host, or from the host
   to every player. `data` is a number, text, true/false, or a table of
-  those (up to 1 KB).
+  those (about 500 bytes once encoded).
+- Need an answer back ("can I join?", "did I win?")? `net.call` asks
+  and an `sv_` script's `net.handle` answers; a refusal undoes what the
+  handler did ([Scripting](../SCRIPTING.md) "Calls").
 - `hook.Add("NetMessage", ...)` receives, with the message's name, its
   data and who sent it (`from`, a player id).
 - `net.role()` is `"host"`, `"client"` or `"offline"`. Playing alone, the

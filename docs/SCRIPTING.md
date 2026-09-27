@@ -56,6 +56,48 @@ spawn stays local (each machine makes its own). Other state crosses with
 `net.send`. How it works: docs/NETWORKING.md "Spawned objects" and
 "Breakables".
 
+### Calls
+
+`net.send` is a message with no answer. When a player's script needs
+one ("can I join court 3?"), it calls, and an `sv_` script handles:
+
+```lua
+-- sv_courts.lua: runs where the truth is (the host, a server, or alone)
+local players = {}
+net.handle("join_court", function(data, from)
+    local court = players[data.court]
+    if not court then return nil, "there is no court " .. tostring(data.court) end
+    if #court >= 4 then return nil, "that court is full" end
+    court[#court + 1] = from
+    net.send("court", { court = data.court, players = court }) -- tell everyone
+    return { seat = #court }
+end)
+
+-- courts.lua: runs on every player's machine
+net.call("join_court", { court = 3 }, function(ok, answer)
+    if ok then print("my seat:", answer.seat) else print("no:", answer) end
+end)
+```
+
+- Every call gets exactly one answer, later (never inside `net.call`):
+  `ok` is true with what the handler returned, or false with why not:
+  the handler's own reason (`return nil, "why"`), `"no handler for
+  'name' on the server"`, `"the server's handler for 'name' failed"`
+  (a Lua error; the details are in the server's log, not sent to the
+  player), `"the server is busy"`, `"no answer from the server"` (after
+  10 s) or `"the connection to the server was lost"`.
+- `net.call` returns false, and never answers, when it can't be sent
+  (not connected). Without a callback it's sent all the same.
+- **All or nothing**: when a handler refuses or fails, what it did is
+  undone. On `kke_server` that is everything it sent, spawned, removed,
+  kicked, scored and saved (`store.*`); in a hosted game, its `net.send`s
+  and `store.*` saves (bodies and UI it changed stay). Lua variables are
+  never undone, so check first, then change (as above).
+- Offline or hosting, the `sv_` script is on this machine and answers
+  it on the next frame: the same code works alone and online.
+- One handler per name (a second `net.handle` replaces it; `nil` removes
+  it); reloading the script removes its handlers.
+
 ## The API
 
 Events, like GMod's `hook`:
@@ -91,7 +133,7 @@ Vectors: `Vec(x, y, z)` with `+ - * /`, `:length()`, `:normalized()`,
 | `breakable` | FEMFX objects that really break. `box{pos, size, material, pattern, cells, chunk, velocity, arm}` → id (material `glass`, `stone`, `wood`, `ice`, `iron`; pattern `shards`, `voronoi`, `splinters`, `radial`, `solid`, default by material), `ball{pos, radius, velocity, material}` → id (iron by default: a projectile), `remove(id)`, `broken(id)`, `pieces(id)`, `count()`. The `Break` hook says when one breaks. |
 | `ui` | RmlUi documents. `open(rml)` / `load("file.rml")` (next to the scripts) → doc, `text(doc, id, text)` (plain text, shown as typed), `rml(doc, id, markup)`, `class(doc, id, name, on)`, `property(doc, id, name, value)`, `show(doc, bool)`, `close(doc)`, `onClick(doc, id, fn)` |
 | `scene` | `list()` → names in `scenes/`, `load(name, origin)` → scene, missing count (or nil + reason), `unload(scene)`, `spawnPoint(scene)` → pos, yaw |
-| `net` | `role()` (`"offline"`, `"host"`, `"client"`), `isServer()`, `connected()`, `playerId()`, `players()` → `{ {id, name}, ... }`, `send(name, data)`: from a client to the host, from the host to every client; `data` is nil, a boolean, number, string or a table of those (up to 1 KB) |
+| `net` | `role()` (`"offline"`, `"host"`, `"client"`), `isServer()`, `connected()`, `playerId()`, `players()` → `{ {id, name}, ... }`, `send(name, data)`: from a client to the host, from the host to every client; `data` is nil, a boolean, number, string or a table of those (about 500 bytes encoded, one network event); `call(name, data [, function(ok, answer) end])` → sent? and `handle(name, function(data, from) end)`: a question to the host and its answer ("Calls" below) |
 | `store` | What outlives the session ("Saving" below): `save(name, value)` → true or false, reason; `load(name [, default])`; `add(name [, n])` → new count; `remove(name)`; `keys([prefix])` → names in order |
 
 Everything a script makes (bodies, models, breakables, documents,

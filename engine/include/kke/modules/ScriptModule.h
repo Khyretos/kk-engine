@@ -3,6 +3,7 @@
 #include "kke/AssetCatalog.h"
 #include "kke/Module.h"
 #include "kke/SceneLoader.h"
+#include "kke/ScriptCalls.h"
 #include "kke/ScriptStore.h"
 #include "kke/ScriptVM.h"
 #include "kke/modules/ModelModule.h"
@@ -138,6 +139,7 @@ private:
     void checkBreaks();
     void dispatchClicks();
     void dispatchNet();
+    bool runCallAtomically(const std::function<bool()>& run); // ScriptCalls::Link::atomically
     void scanFolder(bool reloadChanged);
     void log(const std::string& source, const std::string& text);
     const AssetCatalog& catalog(); // installed packs, scanned on first use
@@ -145,6 +147,11 @@ private:
 
     Application* m_app = nullptr;
     std::unique_ptr<ScriptVM> m_vm;
+    std::unique_ptr<ScriptCalls> m_calls; // net.call / net.handle (after m_vm: it goes first)
+    // Inside a net.call handler: the net.sends that wait for it to succeed.
+    bool m_inCall = false;
+    std::vector<std::vector<uint8_t>> m_heldSends;
+    bool m_callsOnline = false; // a client connected, last we looked
     std::unique_ptr<ScriptStore> m_store;
     storage::Store* m_sharedStore = nullptr;
     std::string m_dir;

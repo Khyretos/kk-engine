@@ -11,6 +11,7 @@
 #include <nlohmann/json.hpp>
 
 #if KKE_ENABLE_LUA
+#include "kke/ScriptCalls.h"
 #include "kke/server/ServerScripts.h"
 #endif
 
@@ -483,12 +484,23 @@ void DedicatedServer::pruneBackups() {
 void DedicatedServer::onEvent(const net::GameEventMsg& e) {
     const bool board = e.kind == kEventLeaderboardSubmit || e.kind == kEventLeaderboardQuery || e.kind == kEventLeaderboardReply;
 #if KKE_ENABLE_LUA
-    if (m_scripts && e.kind == script_net::kScriptEvent) {
-        // A client's net.send is for the server's scripts, as it is for a host's.
+    if (m_scripts && (e.kind == script_net::kScriptEvent || e.kind == script_net::kScriptCall)) {
+        // A client's net.send and net.call are for the server's scripts, as they are for a host's.
         m_scripts->netMessage(e);
         return;
     }
 #endif
+    if (e.kind == script_net::kScriptReply) return; // answers go from the server, never between players
+    if (e.kind == script_net::kScriptCall) {
+#if KKE_ENABLE_LUA
+        // Not a message for the others: say at once that nothing here answers it.
+        if (const auto call = ScriptCalls::decodeCall(e.payload))
+            m_net->sendEventTo(e.fromPlayer, script_net::kScriptReply,
+                               ScriptCalls::encodeReply({ call->id, ScriptCalls::Status::NoHandler,
+                                                          ScriptVM::encodeString("this server runs no scripts, so nothing answers '" + call->name + "'") }));
+#endif
+        return;
+    }
     if (!board) {
         // No game code on a plain server: a player's event goes to the others, as a host would pass it on.
         m_net->relayEvent(e);
