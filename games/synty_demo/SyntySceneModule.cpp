@@ -477,7 +477,7 @@ void SyntySceneModule::buildPanel() {
              }),
              labels, [this] { select(m_selectedIndex); });
     auto model = [this]() -> const kke::ModelData* { return m_models->model(m_characters[size_t(m_selected)].model); };
-    s.text([this, model] {
+    s.text([model] {
         const kke::ModelData* d = model();
         if (!d) return std::string();
         char buf[120];
