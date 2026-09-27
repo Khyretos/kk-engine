@@ -1,4 +1,4 @@
-add_executable(imgui_demo main.cpp ImGuiShowcaseModule.cpp)
+kke_add_game(imgui_demo main.cpp ImGuiShowcaseModule.cpp)
 target_link_libraries(imgui_demo PRIVATE kke_engine)
 
 engine_copy_runtime_file(imgui_demo ${CMAKE_CURRENT_SOURCE_DIR}/game.json marketplace/imgui_demo/game.json)

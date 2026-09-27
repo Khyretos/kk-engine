@@ -4,6 +4,7 @@
 #include "kke/EngineSettings.h"
 #include "kke/LogoIntro.h"
 #include "kke/DevTools.h"
+#include "kke/Platform.h"
 
 #include <cstdlib>
 #include "kke/Log.h"
@@ -43,6 +44,14 @@ namespace {
 std::string enterRuntimeDirectory() {
     namespace fs = std::filesystem;
     std::error_code ec;
+    platform::captureConsoleOutput();
+    // Android: the files come out of the APK into private storage first.
+    std::string note;
+    if (const std::string bundled = platform::bundledFilesDir(&note); !bundled.empty()) {
+        fs::current_path(fs::path(bundled), ec);
+        if (ec) return note + "; could not switch to " + bundled + ": " + ec.message();
+        return note;
+    }
     if (fs::is_directory("shaders", ec)) return {};
     const char* base = SDL_GetBasePath();
     if (!base) return std::string("no shaders/ folder here and the executable's folder is unknown: ") + SDL_GetError();
@@ -339,7 +348,8 @@ void Application::resolveInitOrder() {
         // typeid(*m) resolves through the vtable to the concrete type, so
         // this map key is the module's real type regardless of how it's
         // stored (unique_ptr<Module>).
-        m_moduleByType[std::type_index(typeid(*m))] = m.get();
+        const Module& module = *m; // named first: typeid of an expression with a call is flagged by clang
+        m_moduleByType[std::type_index(typeid(module))] = m.get();
     }
 
     std::unordered_map<Module*, std::vector<Module*>> dependents; // dependency -> [modules that need it]

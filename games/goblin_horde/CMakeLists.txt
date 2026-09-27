@@ -1,6 +1,6 @@
 # Goblin Horde (games/goblin_horde/README.md): hold a ruined fort against
 # waves of goblins; crowd AI on the engine AI core, melee on kke::Combat.
-add_executable(goblin_horde main.cpp HordeModule.cpp Hero.cpp Goblins.cpp Hud.cpp)
+kke_add_game(goblin_horde main.cpp HordeModule.cpp Hero.cpp Goblins.cpp Hud.cpp)
 target_link_libraries(goblin_horde PRIVATE kke_engine)
 engine_copy_runtime_file(goblin_horde ${CMAKE_CURRENT_SOURCE_DIR}/game.json marketplace/goblin_horde/game.json)
 engine_copy_runtime_file(goblin_horde ${CMAKE_CURRENT_SOURCE_DIR}/ui/horde_hud.rml ui/horde_hud.rml)

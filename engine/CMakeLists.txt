@@ -414,6 +414,8 @@ endif()
 
 if(WIN32)
     target_compile_definitions(kke_engine PUBLIC KKE_PLATFORM_WINDOWS=1)
+elseif(ANDROID)
+    target_compile_definitions(kke_engine PUBLIC KKE_PLATFORM_ANDROID=1)
 elseif(APPLE)
     target_compile_definitions(kke_engine PUBLIC KKE_PLATFORM_MACOS=1)
 else()

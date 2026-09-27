@@ -1,6 +1,6 @@
 # Platoon (games/platoon/README.md): command a squad with the engine's
 # orders (docs/COMMANDS.md); soldiers on both sides are AI core agents.
-add_executable(platoon main.cpp PlatoonModule.cpp)
+kke_add_game(platoon main.cpp PlatoonModule.cpp)
 target_link_libraries(platoon PRIVATE kke_command_kit)
 target_compile_definitions(platoon PRIVATE
     GAME_SCRIPTS_SOURCE="${CMAKE_CURRENT_SOURCE_DIR}/scripts"

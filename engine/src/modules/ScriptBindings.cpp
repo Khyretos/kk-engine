@@ -617,7 +617,7 @@ void ScriptModule::bindScenes() {
         return 0;
     });
     // scene.spawnPoint(id) -> position, yaw (degrees)
-    vm.registerFunction("scene", "spawnPoint", [this, owned](lua_State* L) {
+    vm.registerFunction("scene", "spawnPoint", [owned](lua_State* L) {
         const Scene& sc = owned(L, "scene.spawnPoint");
         ScriptVM::pushVec3(L, sc.spawn);
         lua_pushnumber(L, sc.spawnYaw);

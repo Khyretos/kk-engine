@@ -1,4 +1,4 @@
-add_executable(synty_demo main.cpp SyntySceneModule.cpp)
+kke_add_game(synty_demo main.cpp SyntySceneModule.cpp)
 target_link_libraries(synty_demo PRIVATE kke_engine)
 
 engine_copy_runtime_file(synty_demo ${CMAKE_CURRENT_SOURCE_DIR}/game.json marketplace/synty_demo/game.json)
