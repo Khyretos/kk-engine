@@ -15,14 +15,54 @@ namespace net = kke::net;
 // NetPlayerState::state: kke::Locomotion::State on foot (0..6), or these.
 constexpr uint8_t kStateClimbing = 8, kStateMantle = 9;
 constexpr uint8_t kFlagFinished = 1u << 0;
-// Hands and feet relative to the feet: +-4 m at 0.5 mm, 14 bits an axis
-// (4 x 42 bits = 21 of NetPlayerState's 24 extra bytes).
-constexpr float kLimbRange = 4.0f, kLimbStep = 1.0f / 2048.0f;
+// NetPlayerState::extra (32 bytes): hands and feet relative to the feet,
+// +-4 m at 1 mm (4 x 39 bits); the hips, +-2 m at 2 mm (33 bits); each
+// hand's rock normal (octahedral, 2 x 7 bits), grip (4 bits) and whether
+// it's on the rock and on a hold (2 bits). 229 bits, 29 bytes.
+constexpr float kLimbRange = 4.0f, kLimbStep = 1.0f / 1024.0f;
+constexpr float kHipsRange = 2.0f, kHipsStep = 1.0f / 512.0f;
 constexpr size_t kMaxSeats = 16;
 constexpr size_t kMaxSeatName = kke::net::kMaxNameLength;
 
-template <typename Stream> void serializeLimbs(Stream& s, glm::vec3 (&limbs)[4]) {
-    for (glm::vec3& l : limbs) s.vec3(l, kLimbRange, kLimbStep);
+// A unit vector as a point on the octahedron, unfolded onto a square.
+glm::vec2 octEncode(const glm::vec3& n) {
+    const float l1 = std::abs(n.x) + std::abs(n.y) + std::abs(n.z);
+    if (l1 < 1e-6f) return glm::vec2(0.0f);
+    glm::vec2 p = glm::vec2(n.x, n.z) / l1;
+    if (n.y < 0.0f) {
+        const glm::vec2 folded = (1.0f - glm::abs(glm::vec2(p.y, p.x))) * glm::vec2(p.x >= 0.0f ? 1.0f : -1.0f, p.y >= 0.0f ? 1.0f : -1.0f);
+        p = folded;
+    }
+    return p;
+}
+glm::vec3 octDecode(const glm::vec2& p) {
+    glm::vec3 n(p.x, 1.0f - std::abs(p.x) - std::abs(p.y), p.y);
+    if (n.y < 0.0f) {
+        const float x = n.x, z = n.z;
+        n.x = (1.0f - std::abs(z)) * (x >= 0.0f ? 1.0f : -1.0f);
+        n.z = (1.0f - std::abs(x)) * (z >= 0.0f ? 1.0f : -1.0f);
+    }
+    const float len = glm::length(n);
+    return len > 1e-6f ? n / len : glm::vec3(0.0f, 0.0f, 1.0f);
+}
+
+struct Limbs {
+    glm::vec3 at[4]{};   // grips, feet: relative to the feet
+    glm::vec3 hips{0.0f};
+    glm::vec2 normal[2]{};
+    float closed[2]{};
+    bool onRock[2]{}, held[2]{};
+};
+template <typename Stream> void serialize(Stream& s, Limbs& m) {
+    for (glm::vec3& l : m.at) s.vec3(l, kLimbRange, kLimbStep);
+    s.vec3(m.hips, kHipsRange, kHipsStep);
+    for (int h = 0; h < 2; ++h) {
+        s.real(m.normal[h].x, -1.0f, 1.0f, 1.0f / 63.0f);
+        s.real(m.normal[h].y, -1.0f, 1.0f, 1.0f / 63.0f);
+        s.real(m.closed[h], 0.0f, 1.0f, 1.0f / 15.0f);
+        s.boolean(m.onRock[h]);
+        s.boolean(m.held[h]);
+    }
 }
 
 template <typename Stream> void serialize(Stream& s, Setup& m) {
@@ -90,11 +130,19 @@ net::NetPlayerState toState(const Pose& p) {
     s.aux = std::clamp(p.fallHeight, 0.0f, 32.0f);
     // Hands and feet whenever the IK may use them: on the rock, and on
     // foot too (a ledge hang puts the hands on the edge).
-    glm::vec3 limbs[4] = { p.hand[0] - p.feet, p.hand[1] - p.feet, p.foot[0] - p.feet, p.foot[1] - p.feet };
-    for (glm::vec3& l : limbs) l = glm::clamp(l, glm::vec3(-kLimbRange), glm::vec3(kLimbRange));
+    Limbs l;
+    const glm::vec3 at[4] = { p.grip[0], p.grip[1], p.foot[0], p.foot[1] };
+    for (int i = 0; i < 4; ++i) l.at[i] = glm::clamp(at[i] - p.feet, glm::vec3(-kLimbRange), glm::vec3(kLimbRange));
+    l.hips = glm::clamp(p.hips - p.feet, glm::vec3(-kHipsRange), glm::vec3(kHipsRange));
+    for (int h = 0; h < 2; ++h) {
+        l.normal[h] = octEncode(p.normal[h]);
+        l.closed[h] = std::clamp(p.closed[h], 0.0f, 1.0f);
+        l.onRock[h] = p.onRock[h];
+        l.held[h] = p.held[h];
+    }
     {
         net::WriteStream w(s.extra);
-        serializeLimbs(w, limbs);
+        serialize(w, l);
     } // flushed
     return s;
 }
@@ -111,14 +159,25 @@ Pose fromState(const net::NetPlayerState& s) {
     p.groundSpeed = s.speed;
     p.mantleProgress = s.progress;
     p.fallHeight = s.aux;
-    glm::vec3 limbs[4]{};
+    Limbs l;
     net::ReadStream r(s.extra.data(), s.extra.size());
-    serializeLimbs(r, limbs);
-    if (!r.ok()) for (glm::vec3& l : limbs) l = glm::vec3(0.0f, 1.0f, 0.0f); // none sent: out of the way
-    p.hand[0] = p.feet + limbs[0];
-    p.hand[1] = p.feet + limbs[1];
-    p.foot[0] = p.feet + limbs[2];
-    p.foot[1] = p.feet + limbs[3];
+    serialize(r, l);
+    if (!r.ok()) { // none sent: out of the way
+        l = Limbs{};
+        for (glm::vec3& a : l.at) a = glm::vec3(0.0f, 1.0f, 0.0f);
+        l.hips = glm::vec3(0.0f, 1.0f, 0.0f);
+    }
+    p.grip[0] = p.feet + l.at[0];
+    p.grip[1] = p.feet + l.at[1];
+    p.foot[0] = p.feet + l.at[2];
+    p.foot[1] = p.feet + l.at[3];
+    p.hips = p.feet + l.hips;
+    for (int h = 0; h < 2; ++h) {
+        p.normal[h] = octDecode(l.normal[h]);
+        p.closed[h] = l.closed[h];
+        p.onRock[h] = l.onRock[h];
+        p.held[h] = l.held[h];
+    }
     return p;
 }
 

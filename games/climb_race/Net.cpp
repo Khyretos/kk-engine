@@ -52,7 +52,10 @@ void ClimbRaceModule::setupNet() {
     };
     if (const char* who = kke::dev::env("KKE_NET_NAME")) m_netName = who;
     if (const char* wait = kke::dev::env("KKE_CLIMB_WAIT")) m_netWait = std::max(0, std::atoi(wait));
-    if (!m_lobby) return;
+    if (!m_lobby) {
+        syncNetPlayers();
+        return;
+    }
     // Player 1's rows, before Start: Online (Off / Host / Join), then the
     // games found on the LAN and on this PC, and Join.
     kke::Lobby& l = m_lobby->lobby();
@@ -91,6 +94,7 @@ void ClimbRaceModule::setupNet() {
         m_lastNetStatus.clear();
     };
     l.addOption(std::move(join));
+    syncNetPlayers(); // KKE_NET hosts or joins in the first frame, with these names and colours
 }
 
 // This screen's players as the game's players: the first lobby seat is
@@ -354,7 +358,7 @@ void ClimbRaceModule::updateNet(float dt) {
         // Each race started here goes to everyone.
         if (m_phase != Phase::Lobby && m_round != m_sentRound) {
             m_sentRound = m_round;
-            sendSetup();
+            if (!m_net->remotePlayers().empty()) sendSetup(); // nobody to tell: a joiner gets the next race
         }
         // Everyone at the line (or a machine that's taking too long): go.
         if (m_netHold) {
@@ -428,9 +432,14 @@ void ClimbRaceModule::sendNet() {
         p.fallHeight = b.fallHeight;
         p.velocity = w.characterVelocity(r.id);
         for (int s = 0; s < 2; ++s) {
-            p.hand[s] = b.hand[s];
+            p.grip[s] = b.grip[s];
+            p.normal[s] = b.normal[s];
+            p.closed[s] = b.closed[s];
+            p.onRock[s] = b.onRock[s];
+            p.held[s] = b.held[s];
             p.foot[s] = b.foot[s];
         }
+        p.hips = b.hips;
         m_net->setLocalPlayer(slot, netrace::toState(p));
     }
 }

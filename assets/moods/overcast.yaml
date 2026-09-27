@@ -1,0 +1,20 @@
+# A grey day: soft light from everywhere, no hard shadows.
+title: Overcast
+description: A thick cloud cover, soft shadows, calm and a bit moody.
+sky:
+  image: overcast           # Poly Haven "Kloofendal Overcast (Pure Sky)", CC0
+  ambientStrength: 0.75
+sun:
+  azimuth: 140
+  elevation: 50
+  color: "#f2f0ea"
+  intensity: 0.9
+fog:
+  density: 0.003
+  heightFalloff: 0.05
+  maxOpacity: 0.9
+look:
+  saturation: 1.1
+  power: 1.1
+exposure: 1.0
+ambience: wind_soft

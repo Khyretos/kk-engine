@@ -9,19 +9,12 @@ layout(location = 1) in vec3 fragNormal;
 layout(location = 2) in float fragCrest;
 layout(location = 0) out vec4 outColor;
 
-struct GPULight { vec4 directionOrPosition; vec4 colorIntensity; };
-layout(set = 0, binding = 0) uniform LightingUBO {
-    GPULight lights[4];
-    vec4 ambient;
-    vec4 cameraPos;
-    mat4 lightViewProj;
-    mat4 viewProj;
-    vec4 toneParams; // x = tone mapper (tonemap.glsl), y = exposure
-} lighting;
+#include "lighting_ubo.glsl"
 
-#include "tonemap.glsl"
 
+// The scene's sky when it has one (kke::Sky); the sea's own blue otherwise.
 vec3 skyColor(vec3 dir) {
+    if (skyKind() != 0) return skyGradient(dir);
     float h = clamp(dir.y, 0.0, 1.0);
     return mix(vec3(0.62, 0.74, 0.86), vec3(0.18, 0.38, 0.72), pow(h, 0.5)); // linear
 }
@@ -45,9 +38,14 @@ void main() {
     // Foam where the surface is highest and steepest.
     float foam = smoothstep(0.55, 0.9, fragCrest) * (1.0 - N.y) * 6.0;
     color = mix(color, vec3(0.85, 0.9, 0.92), clamp(foam, 0.0, 0.8));
-    // Distance haze into the horizon colour.
-    float dist = length(lighting.cameraPos.xyz - fragPos);
-    color = mix(color, skyColor(vec3(0.0, 0.02, 0.0)), smoothstep(40.0, 140.0, dist));
-    color = toneMap(color, lighting.toneParams); // same curve as the lit meshes
+    // Distance haze: the scene's fog when it has one, else a fade into
+    // the horizon colour.
+    if (lighting.fogColor.a > 0.0) {
+        color = applyFog(color, fragPos);
+    } else {
+        float dist = length(lighting.cameraPos.xyz - fragPos);
+        color = mix(color, skyColor(vec3(0.0, 0.02, 0.0)), smoothstep(40.0, 140.0, dist));
+    }
+    color = displayColor(color); // same curve and look as the lit meshes
     outColor = vec4(color, 1.0);
 }

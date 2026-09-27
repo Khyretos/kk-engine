@@ -42,7 +42,11 @@ struct Pose {
     float groundSpeed = 0.0f;     // m/s, for the run blend
     float fallHeight = 0.0f;      // m, for the landing
     glm::vec3 velocity{0.0f};
-    glm::vec3 hand[2]{}, foot[2]{}; // world, where the IK puts them (valid on the rock)
+    // Where the IK puts the limbs (world; on the rock, and the hands on a
+    // ledge hang): as ClimbRaceModule::BodyInput has them.
+    glm::vec3 grip[2]{}, normal[2]{}, foot[2]{}, hips{0.0f};
+    float closed[2]{};
+    bool onRock[2]{}, held[2]{};
 };
 
 kke::net::NetPlayerState toState(const Pose& p);

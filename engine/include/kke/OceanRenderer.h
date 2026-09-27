@@ -12,8 +12,8 @@ namespace kke {
 
 class Application;
 
-// Draws a kke::OceanWaves sea (shaders/ocean.*) and a gradient sky with a
-// sun (shaders/sky.*). The sea is one static grid (uploaded once) that
+// Draws a kke::OceanWaves sea (shaders/ocean.*), reflecting the scene's
+// sky (kke::Lighting::sky, drawn by the engine's kke::SkyRenderer). The sea is one static grid (uploaded once) that
 // follows the camera in whole-cell steps; all wave motion happens in the
 // vertex shader, so the CPU cost per frame is one push-constant block.
 // Grid: `cells` x `cells` quads over `extent` metres (default 200x200
@@ -22,11 +22,10 @@ class Application;
 class OceanRenderer {
 public:
     OceanRenderer(Application& app, int cells = 200, float extent = 160.0f);
-    void drawSky(const RenderContext& ctx, const glm::vec3& sunDirection);
     void drawOcean(const RenderContext& ctx, const OceanWaves& waves, float time, const glm::vec3& cameraPos);
 
 private:
-    std::unique_ptr<Pipeline> m_ocean, m_sky;
+    std::unique_ptr<Pipeline> m_ocean;
     std::unique_ptr<Mesh> m_grid;
     float m_cellSize;
 };

@@ -102,9 +102,13 @@ void NetModule::init(Application& app) {
         browseDirectory(directories.front()); // the list is there when the panel opens
     }
 
-    const char* mode = std::getenv("KKE_NET");
-    if (!mode || !*mode) return;
-    const std::string m = mode;
+    if (const char* mode = std::getenv("KKE_NET"); mode && *mode) m_envMode = mode;
+}
+
+void NetModule::frameStart(const UpdateContext&) {
+    if (m_envMode.empty()) return;
+    const std::string m = std::move(m_envMode);
+    m_envMode.clear();
     std::string error;
     if (m == "host" || m.rfind("host:", 0) == 0) {
         uint16_t port = 0;

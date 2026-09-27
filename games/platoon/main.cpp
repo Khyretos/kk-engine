@@ -18,18 +18,8 @@
 int main() {
     try {
         kke::Application app("Platoon", 1280, 720);
-        // A clear, cool morning.
-        kke::Lighting& light = app.lighting();
-        light.lights[0].enabled = true;
-        light.lights[0].direction = glm::normalize(glm::vec3(-0.45f, -0.9f, -0.35f));
-        light.lights[0].color = glm::vec3(1.0f, 0.94f, 0.84f);
-        light.lights[0].intensity = 2.1f;
-        light.lights[1].enabled = true;
-        light.lights[1].direction = glm::normalize(glm::vec3(0.6f, -0.3f, 0.5f));
-        light.lights[1].color = glm::vec3(0.55f, 0.65f, 0.85f);
-        light.lights[1].intensity = 0.3f;
-        light.ambientColor = glm::vec3(0.22f);
-        light.toneMapper = kke::ToneMapper::AgX;
+        // A clear, cool morning in the field (assets/moods/morning.yaml).
+        app.setMood("clear_day");
 
         app.addModule<kke::SettingsModule>("settings.json");
         app.addModule<kke::InputModule>("platoon_input.json");

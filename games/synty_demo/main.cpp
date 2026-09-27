@@ -24,14 +24,9 @@
 int main() {
     try {
         kke::Application app("Kreative Kompas Engine - Synty Demo", 1280, 720);
+        // Warm, low sun over the Synty scenes (assets/moods/golden_hour.yaml).
+        app.setMood("morning");
         app.camera().farPlane = 200.0f;
-        app.lighting().lights[0].direction = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f));
-        app.lighting().lights[1].enabled = true;
-        app.lighting().lights[1].isDirectional = true;
-        app.lighting().lights[1].direction = glm::normalize(glm::vec3(0.6f, -0.3f, 0.5f));
-        app.lighting().lights[1].color = glm::vec3(0.55f, 0.65f, 0.85f);
-        app.lighting().lights[1].intensity = 0.35f;
-        app.lighting().ambientColor = glm::vec3(0.25f);
 
         std::vector<kke::Module*> panels;
         panels.push_back(&app.addModule<kke::OrbitCameraModule>(/*distance=*/9.0f, /*pitch=*/-0.35f, /*yaw=*/2.85f, glm::vec3(0.0f, 0.9f, -1.5f)));

@@ -1,4 +1,6 @@
 #include "kke/Application.h"
+#include "kke/SkyRenderer.h"
+#include "kke/Mood.h"
 #include "kke/EngineSettings.h"
 #include "kke/LogoIntro.h"
 #include "kke/DevTools.h"
@@ -98,6 +100,8 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         if (!m_toneMapperOverride) log::get("Application")->warn("KKE_TONEMAP={} is not agx, aces or reinhard; ignored", env);
     }
     m_lightingBuffer = std::make_unique<LightingBuffer>(m_renderer->device());
+    m_mood = std::make_unique<Mood>();
+    if (const char* env = dev::env("KKE_MOOD"); env && *env) m_moodOverride = env;
 
     // Real shadow mapping — see kke::ShadowMap's own class comment for
     // the full scope. 2048 is ShadowMap's own default resolution,
@@ -423,6 +427,21 @@ void Application::playIntro() {
     vkDeviceWaitIdle(device().device());
 }
 
+bool Application::setMood(const std::string& nameOrPath, std::string* error) {
+    if (!m_moodOverride.empty()) return true; // KKE_MOOD wins (applied in run())
+    std::string err;
+    std::optional<Mood> mood = loadMood(nameOrPath, &err);
+    if (!mood) {
+        log::get("Application")->warn("{}", err);
+        if (error) *error = err;
+        return false;
+    }
+    mood->applyTo(m_lighting);
+    *m_mood = std::move(*mood);
+    log::get("Application")->info("mood '{}' ({})", m_mood->name, m_mood->file.generic_string());
+    return true;
+}
+
 void Application::run() {
     resolveInitOrder();
     if (m_introEnabled) playIntro();
@@ -439,6 +458,13 @@ void Application::run() {
         // on destruction. Fault isolation reduces this risk; it can't
         // eliminate it for code this engine doesn't control.
         safeInvoke(m, "init", [&] { m->init(*this); });
+    }
+    // After init(): a game that picks its mood while starting up is overridden.
+    if (!m_moodOverride.empty()) {
+        std::string name = m_moodOverride;
+        m_moodOverride.clear();
+        setMood(name);
+        m_moodOverride = name;
     }
     // KKE_HIDE_UI=1: start with every module's panels hidden (clean
     // screenshots and recordings; modules that toggle panels, e.g. F1 in
@@ -568,8 +594,11 @@ void Application::run() {
         // draw using it — every lit module shares one buffer and
         // descriptor set per view (see LightingBuffer.h).
         if (m_toneMapperOverride) m_lighting.toneMapper = *m_toneMapperOverride;
+        const SkyEnvironment* skyEnv = nullptr;
+        if (m_lighting.sky.kind != Sky::Kind::None && !m_skyRenderer) m_skyRenderer = std::make_unique<SkyRenderer>(*this);
+        if (m_skyRenderer) skyEnv = &m_skyRenderer->prepare(m_lighting.sky, m_lighting.fog, m_lighting.ambientColor);
         for (uint32_t i = 0; i < viewCount; ++i)
-            drawViews[i].lighting->update(m_lighting, drawViews[i].camera.position, lightViewProj, drawViews[i].proj * drawViews[i].view);
+            drawViews[i].lighting->update(m_lighting, drawViews[i].camera.position, lightViewProj, drawViews[i].proj * drawViews[i].view, skyEnv);
 
         // ImGui's NewFrame() (inside beginFrame()) must only be called
         // for a frame that will also reach Render() — calling it here,
@@ -653,6 +682,7 @@ void Application::run() {
                 // The first view's part was cleared with the pass; later
                 // ones may sit over it (picture-in-picture).
                 if (viewCount > 1) m_renderer->beginView(viewPixels(d.rect, sceneExtent), i > 0);
+                if (m_skyRenderer) m_skyRenderer->draw(cmd, d.view, d.proj, renderCtx.lightingDescriptorSet);
                 for (Module* m : m_initOrder) {
                     safeInvoke(m, "render", [&] { m->render(renderCtx); });
                 }

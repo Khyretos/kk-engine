@@ -12,15 +12,10 @@
 int main() {
     try {
         kke::Application app("Kreative Kompas Engine - Farm", 1280, 720);
+        // Morning on the farm (assets/moods/morning.yaml).
+        app.setMood("clear_day");
         app.camera().farPlane = 300.0f;
         app.camera().fovDegrees = 55.0f;
-        app.renderer().setClearColor(glm::vec3(0.58f, 0.74f, 0.9f));
-        kke::Lighting& light = app.lighting();
-        light.lights[1].enabled = true;
-        light.lights[1].isDirectional = true;
-        light.lights[1].direction = glm::normalize(glm::vec3(0.5f, -0.3f, 0.6f));
-        light.lights[1].color = glm::vec3(0.55f, 0.65f, 0.85f);
-        light.lights[1].intensity = 0.3f;
         app.addModule<kke::InputModule>("farm_input.json");
         app.addModule<kke::ModelModule>();
         app.addModule<farm::FarmModule>();

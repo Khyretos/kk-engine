@@ -246,12 +246,15 @@ void ClimbRaceModule::startFromLobby() {
     }
     m_rosterChanged = false;
     resetRace();
+    if (m_howtoFirst) showHowTo(true);
+    m_howtoFirst = false;
     const int online = static_cast<int>(std::count_if(m_racers.begin(), m_racers.end(), [](const Racer& r) { return r.remote; }));
     kke::log::get(name())->info("race: {} climbers: {} playing here, {} online, {} CPU, on mountain {}", m_racers.size(), humans(), online,
                                 static_cast<int>(m_racers.size()) - humans() - online, m_seed);
 }
 
 void ClimbRaceModule::backToLobby() {
+    showHowTo(false);
     m_captured = false;
     SDL_SetWindowRelativeMouseMode(m_app->window().handle(), false);
     resetRace();

@@ -1,0 +1,19 @@
+# Heavy clouds rolling in: tension.
+title: Stormy
+description: Dark, heavy clouds, a cold wind, the sun only just getting through.
+sky:
+  image: stormy             # Poly Haven "Wasteland Clouds (Pure Sky)", CC0
+  intensity: 0.8
+  ambientStrength: 0.45
+sun:
+  azimuth: 140
+  intensity: 1.4
+fog:
+  density: 0.004
+  heightFalloff: 0.05
+  maxOpacity: 0.9
+look:
+  preset: cool
+  saturation: 0.95
+exposure: 0.95
+ambience: wind_strong

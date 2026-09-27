@@ -87,6 +87,9 @@ who's on which screen).
 
 On foot it plays like any third-person game: left stick / WASD to walk,
 right stick / mouse to look, A / Space to jump. Walk up to the rock and grab.
+A how-to-play screen opens before the first race (A / Space starts); X / H
+shows it again at any time. The hint line at the bottom always says what to
+press next, with the button glyphs of the pad you are using.
 
 | On the rock | Controller | Mouse and keyboard |
 |---|---|---|
@@ -96,6 +99,7 @@ right stick / mouse to look, A / Space to jump. Walk up to the rock and grab.
 | Quick snatch: fast, costs more | hold a trigger + press its bumper | hold a mouse button + Q / E |
 | Over an edge (both hands on it) | A | Space |
 | Let go | B | C |
+| How to play | X | H |
 | Race again / new mountain | Start / Y | R / N |
 | Back to the menu (players, CPU climbers) | Back | M |
 
@@ -106,6 +110,11 @@ on a ledge. At zero you fall. Holds: green = jug, orange = crimp, blue =
 sloper, the ledge lips are edges. Some holds are loose and break under a
 lunge.
 
+Both hands can share one hold (match on it), which is how you swap hands on
+a big jug. The arms have a real length: the hands only go where the body can
+hang between them, and if you pull one hand so far that the other arm can't
+stay on, the lower hand cuts loose. Grab again quickly.
+
 ## Switches (headless / demos)
 
 | Variable | Effect |
@@ -115,7 +124,9 @@ lunge.
 | `KKE_CLIMB_AUTOPILOT=1` | No menu, and you climb by yourself too (`kke::ClimbBot`). |
 | `KKE_CLIMB_BOT_PAUSE=<s>` | Every CPU climber's breath between moves (default: from its difficulty). |
 | `KKE_CLIMB_ROCKFALL=1` | No menu; every loose hold on your face comes off two seconds in; where they land is logged. |
-| `KKE_CLIMB_QUIT=<s>` | Quit after that long, logging every climber's height every 5 s. |
+| `KKE_CLIMB_QUIT=<s>` | Quit after that long, logging every climber's height every 5 s and, at the end, how far the hands sat from their holds. |
+| `KKE_CLIMB_INTRO=0/1` | Force the how-to-play screen off or on (it is off in headless runs). |
+| `KKE_CLIMB_CLOSEUP=<m>` | How far behind you the camera sits on the rock (default 4.6; 1.5 to check the grip). |
 | `KKE_NET=host` / `KKE_NET=join:ADDRESS` | Host, or join a host, at startup (see "Online"). `KKE_NET_NAME=<name>` is player 1's name. |
 | `KKE_CLIMB_WAIT=<n>` | Hosting: start by itself once n players have joined online (for tests with no one at the keyboard). |
 | `KKE_LOBBY_JOIN=<n>` | With `KKE_VIRTUAL_INPUT=pad,pad`: n controllers join the menu at startup (see docs/LOBBY.md). |

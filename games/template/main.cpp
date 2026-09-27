@@ -25,17 +25,10 @@
 int main() {
     try {
         kke::Application app("Starter Game", 1280, 720);
-        // A sun, a little sky light from the side, and some ambient light.
-        kke::Lighting& light = app.lighting();
-        light.lights[0].enabled = true;
-        light.lights[0].direction = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f));
-        light.lights[0].intensity = 2.0f;
-        light.lights[1].enabled = true;
-        light.lights[1].direction = glm::normalize(glm::vec3(0.6f, -0.3f, 0.5f));
-        light.lights[1].color = glm::vec3(0.55f, 0.65f, 0.85f);
-        light.lights[1].intensity = 0.3f;
-        light.ambientColor = glm::vec3(0.2f);
-        light.toneMapper = kke::ToneMapper::AgX; // or ACES (punchier) / Reinhard; see docs/RENDERING_PRINCIPLES.md
+        // The sky, sun, fog and colour look (assets/moods/playful.yaml): a bright
+        // cartoon day. Try "golden_hour", "night" or any mood in assets/moods
+        // (docs/MOODS.md), or run with KKE_MOOD=night to try one without editing.
+        app.setMood("playful");
 
         app.addModule<kke::SettingsModule>("settings.json"); // graphics, audio, accessibility
         app.addModule<kke::InputModule>("input.json");       // rebindable controls

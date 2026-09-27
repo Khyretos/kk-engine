@@ -125,6 +125,7 @@ nav:
       - Lua API: reference/lua-api.md
       - JSON or YAML data files: DATA_FILES.md
       - Optimization: OPTIMIZATION.md
+      - Moods (sky, fog, look): MOODS.md
       - Rendering principles: RENDERING_PRINCIPLES.md
       - Benchmarks: BENCHMARKS.md
       - Performance notes: PERFORMANCE_NOTES.md

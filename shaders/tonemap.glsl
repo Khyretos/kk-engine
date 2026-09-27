@@ -26,7 +26,16 @@ vec3 agxSigmoid(vec3 x) {
     return 15.5 * x4 * x2 - 40.14 * x4 * x + 31.96 * x4 - 6.868 * x2 * x + 0.4298 * x2 + 0.1191 * x - 0.00232;
 }
 
-vec3 toneMapAgX(vec3 c) {
+// The look: ASC CDL (slope, offset, power) then saturation around Rec.709
+// luminance, on display-encoded values -- where Wrensch's minimal AgX
+// applies its "punchy" and "golden" looks (kke::ColorGrade).
+vec3 applyLook(vec3 v, vec4 slopeSat, vec4 offset, vec4 power) {
+    v = pow(max(v * slopeSat.rgb + offset.rgb, vec3(0.0)), power.rgb);
+    float luma = dot(v, vec3(0.2126, 0.7152, 0.0722));
+    return luma + slopeSat.a * (v - luma);
+}
+
+vec3 toneMapAgXLook(vec3 c, vec4 slopeSat, vec4 offset, vec4 power, bool look) {
     const mat3 inset = mat3(0.842479062253094, 0.0423282422610123, 0.0423756549057051,
                             0.0784335999999992, 0.878468636469772, 0.0784336,
                             0.0792237451477643, 0.0791661274605434, 0.879142973793104);
@@ -39,8 +48,13 @@ vec3 toneMapAgX(vec3 c) {
     v = clamp(log2(max(v, vec3(1e-10))), minEv, maxEv);
     v = (v - minEv) / (maxEv - minEv);
     v = agxSigmoid(v);
+    if (look) v = applyLook(v, slopeSat, offset, power);
     v = outset * v;
     return pow(max(v, vec3(0.0)), vec3(2.2)); // the sigmoid's output is display-encoded
+}
+
+vec3 toneMapAgX(vec3 c) {
+    return toneMapAgXLook(c, vec4(1.0), vec4(0.0), vec4(1.0), false);
 }
 
 // ACES: Krzysztof Narkowicz's five-coefficient fit ("ACES Filmic Tone
@@ -56,6 +70,19 @@ vec3 toneMap(vec3 c, vec4 toneParams) {
     if (op == 1) return toneMapAces(c);
     if (op == 2) return c / (c + vec3(1.0));
     return toneMapAgX(c);
+}
+
+// toneMap() plus the scene's look (lookOffset.a = 1 when one is set).
+// AgX takes it between its sigmoid and its outset, as Wrensch's reference
+// does; ACES and Reinhard take it on their output, display-encoded.
+vec3 toneMapLook(vec3 c, vec4 toneParams, vec4 slopeSat, vec4 offset, vec4 power) {
+    bool look = offset.a > 0.5;
+    int op = int(toneParams.x + 0.5);
+    if (op == 0) return toneMapAgXLook(c * toneParams.y, slopeSat, offset, power, look);
+    vec3 v = toneMap(c, toneParams);
+    if (!look) return v;
+    v = applyLook(pow(v, vec3(1.0 / 2.2)), slopeSat, offset, power);
+    return pow(clamp(v, 0.0, 1.0), vec3(2.2));
 }
 
 #endif

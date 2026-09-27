@@ -56,6 +56,10 @@ void main() {
     // environment map, as the opaque shader's ambient is).
     vec3 reflection = F * (lighting.ambient.rgb * 1.6 + vec3(0.06));
     vec3 color = body + spec + reflection;
-    color = toneMap(color, lighting.toneParams); // same curve as shadeSurface
+    // Added over the absorbed background, so fog only fades it (the fog's
+    // own colour is already on what's behind).
+    vec3 toEye = fragPosWorld - lighting.cameraPos.xyz;
+    color *= 1.0 - fogAmount(lighting.cameraPos.xyz, normalize(toEye), length(toEye));
+    color = displayColor(color); // same curve and look as shadeSurface
     outColor = vec4(color, 1.0);
 }

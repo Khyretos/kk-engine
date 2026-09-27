@@ -116,7 +116,7 @@ join a new one (and is told nothing it could use).
     snapshots like the level's; `Despawn` removes them.
   - *Breaks*: `Break` messages carry which borders of a breakable broke on
     the host (below).
-  - *Robustness*: protocol version (now 6) and game id checked at join,
+  - *Robustness*: protocol version (now 7) and game id checked at join,
     then the server's password if it has one (compared in constant time;
     `KKE_NET_PASSWORD`, or the panel's Password field) and its access list
     (`NetServer::admit`: bans, allow list), a full server says so, silent peers time out, clients sending bad
@@ -296,7 +296,7 @@ net.isLocalPlayer(id);                   // one of this screen's? (don't draw it
 net.removeLocalPlayer(1);                // Sam puts the controller down
 ```
 
-- On the wire (protocol 6): a client's `Guest` message asks for a player
+- On the wire (protocol 6, and 7 for 32 extra bytes): a client's `Guest` message asks for a player
   in a slot, the host's `GuestAck` gives its id or says why not (the game
   is full, a ban, input replay). `PlayerState` and `Correction` carry the
   slot. A host's own guests need no messages (`NetServer::addLocalGuest`).
@@ -308,7 +308,7 @@ net.removeLocalPlayer(1);                // Sam puts the controller down
   the connection's first player) and voice (one microphone per machine).
 - A guest leaving costs only it; the connection going takes its guests
   with it; kicking a guest tells its owner and keeps the connection.
-- `NetPlayerState::extra` (up to 24 bytes, the game's own) travels with
+- `NetPlayerState::extra` (up to 32 bytes, the game's own) travels with
   every state: Climb Race puts where the hands and feet are in it.
 - Not with input replay yet: there each connection plays one player, and
   a guest is refused with the reason.
@@ -331,7 +331,7 @@ and a template for a menu-driven one:
   countdown waits for every machine), Finish and Loose (a hold came off).
 - Each climber's pose is its NetPlayerState: feet, facing, state (on foot,
   climbing, mantling) and, in `extra`, the hands and feet relative to it
-  (12 values at 1/2048 m).
+  (1 mm), the hips, and each hand's rock normal and grip: 29 bytes.
 - `standIns = false`: the game draws the other players itself (a climber
   on the right face), so NetModule makes no capsules for them.
   `checkMoves = false`: a mantle over an edge looks like going through the

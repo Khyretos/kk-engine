@@ -9,6 +9,7 @@
 namespace kke {
 
 class VulkanDevice;
+struct SkyEnvironment;
 struct Lighting; // defined in Application.h — forward-declared here since
                   // update()'s signature is all this file actually needs
 
@@ -35,7 +36,10 @@ public:
     // guaranteed-minimum limit on some hardware) — not perfectly
     // semantically "lighting" data, but a pragmatic, documented choice
     // given the real constraint, not an accident.
-    void update(const Lighting& lighting, const glm::vec3& cameraPos, const glm::mat4& lightViewProj, const glm::mat4& viewProj);
+    // `sky` is the resolved sky (kke::SkyResolver); without one, the sky
+    // is off and ambient is Lighting::ambientColor, flat.
+    void update(const Lighting& lighting, const glm::vec3& cameraPos, const glm::mat4& lightViewProj, const glm::mat4& viewProj,
+                const SkyEnvironment* sky = nullptr);
 
     VkDescriptorSetLayout descriptorSetLayout() const { return m_setLayout; }
     VkDescriptorSet descriptorSet() const { return m_descriptorSet; }

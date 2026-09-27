@@ -2,6 +2,7 @@
 
 #include "kke/Application.h"
 #include "kke/Log.h"
+#include "kke/Mood.h"
 #if KKE_ENABLE_STEAM_AUDIO
 #include "kke/SteamAudioSpatializer.h"
 #endif
@@ -23,6 +24,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <utility>
 #include <iterator>
 #if defined(__linux__)
@@ -542,6 +544,7 @@ void AudioModule::update(const UpdateContext& ctx) {
     updateRoom(ctx.dt);
     updatePings(ctx.dt);
     updateOcclusion(ctx.dt);
+    updateAmbience();
 
     if (!m_deviceRunning) {
         // Silent mode: consume audio at real-time speed so sounds end and
@@ -554,6 +557,41 @@ void AudioModule::update(const UpdateContext& ctx) {
             m_silentBacklog -= frames;
         }
     }
+}
+
+void AudioModule::updateAmbience() {
+    const std::string& want = ambienceGain > 0.0f ? m_app->mood().ambience : std::string();
+    if (want == m_ambienceName) return;
+    m_ambienceName = want;
+    if (m_ambienceVoice) m_mixer->stop(m_ambienceVoice);
+    m_ambienceVoice = 0;
+    if (want.empty()) return;
+    // assets/ambience/<name>.flac (or .wav, .mp3): the engine's CC0 loops,
+    // or a game's own of the same name.
+    std::string path;
+    std::error_code ec;
+    for (const char* ext : { ".flac", ".wav", ".mp3" }) {
+        const std::string p = "assets/ambience/" + want + ext;
+        if (std::filesystem::is_regular_file(p, ec)) {
+            path = p;
+            break;
+        }
+    }
+    if (path.empty()) {
+        log::get(name())->warn("mood '{}' asks for ambience '{}', but there's no assets/ambience/{}.flac (.wav, .mp3)", m_app->mood().name, want, want);
+        return;
+    }
+    SoundHandle sound = loadSound(path); // logs when it can't
+    if (!sound) return;
+    VoiceDesc d;
+    d.sound = sound;
+    d.spatial = false;    // all around: the air of the place, not a thing in it
+    d.loop = true;
+    d.gain = ambienceGain;
+    d.priority = 8.0f;    // never the voice stolen for a bump
+    d.category = SoundCategory::Ambient;
+    d.reverbSend = 0.0f;  // already recorded in its own space
+    m_ambienceVoice = m_mixer->play(d);
 }
 
 void AudioModule::startRecording(const std::string& path) {

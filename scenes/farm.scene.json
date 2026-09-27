@@ -3,6 +3,7 @@
   "version": 1,
   "name": "Farm",
   "description": "The wildlife demo farm (games/farm_demo): a sheep meadow and a cow pasture with gates, a pig pen by the barn, a farmhouse, a well, an orchard and woods where a fox lives. Fences and buildings are real obstacles on the navmesh the animals walk on.",
+  "mood": "clear_day",
   "packs": [
     "POLYGON_Farm"
   ],
@@ -25,24 +26,6 @@
       0.24
     ]
   },
-  "sun": {
-    "direction": [
-      -0.45,
-      -0.8,
-      -0.35
-    ],
-    "color": [
-      1.0,
-      0.95,
-      0.85
-    ],
-    "intensity": 2.0
-  },
-  "ambient": [
-    0.24,
-    0.25,
-    0.28
-  ],
   "objects": [
     {
       "asset": "SM_Prop_Fence_Wood_01",

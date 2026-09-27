@@ -1,0 +1,16 @@
+# High sun, short shadows, strong colours.
+title: Noon
+description: The sun almost straight up, a deep blue sky.
+sky:
+  image: noon               # Poly Haven "Qwantani Noon (Pure Sky)", CC0
+  ambientStrength: 0.28
+sun:
+  azimuth: 150
+  intensity: 2.6
+fog:
+  density: 0.001
+  heightFalloff: 0.04
+  maxOpacity: 0.7
+look: punchy
+exposure: 0.9
+ambience: meadow_day

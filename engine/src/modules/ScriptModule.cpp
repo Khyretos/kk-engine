@@ -3,6 +3,7 @@
 #include "kke/Application.h"
 #include "kke/DevTools.h"
 #include "kke/Log.h"
+#include "kke/Mood.h"
 #include "kke/net/ScriptSpawns.h"
 #include "kke/SphereImpostors.h"
 #include "kke/modules/InputModule.h"
@@ -164,6 +165,28 @@ void ScriptModule::bindAll() {
     vm.registerFunction("camera", "forward", [app](lua_State* L) {
         glm::vec3 f = app->camera().target - app->camera().position;
         ScriptVM::pushVec3(L, glm::length(f) > 1e-6f ? glm::normalize(f) : glm::vec3(0, 0, -1));
+        return 1;
+    });
+
+    // mood.*: the sky, sun, fog and look (kke/Mood.h, docs/MOODS.md).
+    vm.registerFunction("mood", "set", [app](lua_State* L) {
+        std::string error;
+        if (app->setMood(luaL_checkstring(L, 1), &error)) {
+            lua_pushboolean(L, 1);
+            return 1;
+        }
+        lua_pushboolean(L, 0);
+        lua_pushstring(L, error.c_str());
+        return 2;
+    });
+    vm.registerFunction("mood", "current", [app](lua_State* L) { lua_pushstring(L, app->mood().name.c_str()); return 1; });
+    vm.registerFunction("mood", "list", [](lua_State* L) {
+        const std::vector<std::string> names = listMoods();
+        lua_createtable(L, static_cast<int>(names.size()), 0);
+        for (size_t i = 0; i < names.size(); ++i) {
+            lua_pushstring(L, names[i].c_str());
+            lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+        }
         return 1;
     });
 

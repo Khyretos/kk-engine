@@ -92,6 +92,7 @@ void ClimbRaceModule::buildHud() {
     c.Bind("sub", &m_hud.sub);
     c.Bind("hint", &m_hud.hint);
     c.Bind("racing", &m_hud.racing);
+    c.Bind("howto", &m_hud.howto);
     m_hudModel = c.GetModelHandle();
 
     const char* base = SDL_GetBasePath();
@@ -213,10 +214,23 @@ void ClimbRaceModule::updateHud(float) {
     set(m_hud.banner, racing ? banner : std::string(), "banner");
     set(m_hud.sub, racing ? prompt(sub) : std::string(), "sub");
     const kke::Climber& c = *you->climber;
-    const std::string hint = !racing ? std::string()
-                           : c.climbing() ? prompt("{reach.left} {reach.right} reach  ·  hold {grab.left} {grab.right} and let go to lunge  ·  both: quick snatch  ·  "
-                                                   "{jump} over an edge  ·  {letgo} let go")
-                                          : prompt("walk to the rock and grab it: {reach.left} {reach.right} or {grab.left} {grab.right}  ·  {menu} menu");
+    // What to press next: on an edge, pull up; a hand came off, grab again;
+    // tired, rest; otherwise the moves.
+    std::string hint;
+    if (!racing) {
+    } else if (c.climbing()) {
+        const auto onEdge = [&c](int h) {
+            return c.handHold(h) >= 0 && c.wall().holds()[static_cast<size_t>(c.handHold(h))].kind == kke::ClimbHold::Kind::Edge;
+        };
+        const bool freeHand = (c.handHold(0) < 0 && !c.handMoving(0)) || (c.handHold(1) < 0 && !c.handMoving(1));
+        hint = onEdge(0) && onEdge(1)       ? prompt("{jump} pull yourself up onto the edge")
+             : freeHand                     ? prompt("A hand let go: {move} aim and {reach.left} {reach.right} grab again, quick!")
+             : c.staminaFraction() < 0.3f   ? prompt("Tired! Rest on two green holds or a ledge  ·  {letgo} let go")
+                                            : prompt("{move} aim  ·  {reach.left} {reach.right} reach  ·  hold and let go {grab.left} {grab.right} to lunge  ·  "
+                                                     "{help} how to play");
+    } else {
+        hint = prompt("{move} walk to the rock  ·  {reach.left} {reach.right} grab it  ·  {help} how to play  ·  {menu} menu");
+    }
     set(m_hud.hint, hint, "hint");
 }
 

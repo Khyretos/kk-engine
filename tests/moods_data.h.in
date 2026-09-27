@@ -1,0 +1,13 @@
+// Generated from assets/moods/ by tests/CMakeLists.txt: every mood the
+// engine ships, built into kke_tests so the release workflow (which runs
+// the tests from a package, without the source tree) checks them too.
+#pragma once
+
+struct ShippedMood { const char* file; const char* text; };
+
+inline const ShippedMood kShippedMoods[] = {
+@KKE_MOOD_ENTRIES@
+};
+
+// The sky names cmake/skies.cmake fetches, which moods may refer to.
+inline const char* kShippedSkies[] = { @KKE_SKY_NAMES@ };

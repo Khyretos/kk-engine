@@ -13,15 +13,9 @@
 int main() {
     try {
         kke::Application app("Kreative Kompas Engine - Jiggle Demo", 1280, 720);
+        // A bright cartoon sky for bouncy things (assets/moods/playful.yaml).
+        app.setMood("playful");
         app.camera().farPlane = 100.0f;
-        app.lighting().lights[0].direction = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.35f));
-        app.lighting().lights[0].intensity = 1.8f;
-        app.lighting().lights[1].enabled = true;
-        app.lighting().lights[1].isDirectional = true;
-        app.lighting().lights[1].direction = glm::normalize(glm::vec3(0.6f, -0.3f, 0.5f));
-        app.lighting().lights[1].color = glm::vec3(0.55f, 0.65f, 0.85f);
-        app.lighting().lights[1].intensity = 0.35f;
-        app.lighting().ambientColor = glm::vec3(0.24f);
         app.addModule<kke::OrbitCameraModule>(/*distance=*/2.6f, /*pitch=*/-0.45f, /*yaw=*/0.5f, glm::vec3(0.0f, 0.3f, 0.0f));
         app.addModule<kke::ModelModule>();
         app.addModule<kke_jiggle::JiggleDemoModule>();

@@ -37,6 +37,8 @@ int main() {
 #else
     try {
         kke::Application app("Kreative Kompas Engine - Physics Demo", 1280, 720);
+        // A neutral backdrop so the physics is what you look at (assets/moods/studio.yaml).
+        app.setMood("studio");
 
         // Distance and pitch chosen for this demo's actual content
         // scale, not inherited from kke_demo_game's small-scale

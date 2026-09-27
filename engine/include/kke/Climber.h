@@ -49,17 +49,38 @@ public:
         float reachTime = 0.42f, quickTime = 0.17f, lungeTime = 0.3f; // s
         float chargeTime = 0.75f;   // s to a full charge
         float maxStamina = 100.0f;
-        float drainTwoHands = 1.8f; // per second on two jugs, vertical rock, no feet
+        float drainTwoHands = 1.5f; // per second on two jugs, vertical rock, no feet
         float drainOneHand = 6.0f;
-        float overhangDrain = 0.025f; // + this fraction per degree past vertical
+        float overhangDrain = 0.02f; // + this fraction per degree past vertical
         float footRelief = 0.4f;    // share of the drain the feet take (both on holds)
         float shakeOut = 3.0f;      // per second back on two jugs with feet on, not overhanging
         float costPrecise = 1.5f, costQuick = 5.0f, costLungeMin = 6.0f, costLungeMax = 16.0f;
         float hang = 0.95f;         // m from the hands down to the hips
-        float bodyOut = 0.34f;      // m from the rock to the hips
+        float bodyOut = 0.34f;      // m from the rock to the hips, hanging at ease
+        float bodyIn = 0.16f;       // m: the closest the hips come to the rock, arms stretched
         float bodyFollow = 7.0f;    // 1/s: the body settling under the hands
         float mantleTime = 0.9f;    // s up and over an edge
         float hipsHeight = 0.95f;   // m from the feet to the hips (the capsule's feet = hips - this)
+        // The body's proportions: the hips never hang so far from a hold
+        // that the arm on it can't reach (and a game's IK puts each hand
+        // exactly on its hold). A game with a character sets these from
+        // its skeleton; the defaults are a 1.8 m person.
+        // m from the shoulder to the wrist, arm (nearly) straight, plus the
+        // few centimetres the shoulder itself lifts toward a far hold.
+        float armReach = 0.64f;
+        // The hand on a hold: the knuckles at the hold, the fingers up and
+        // tipped over it into the rock, so the wrist is below and out.
+        float handLength = 0.1f;    // m from the wrist to the knuckles
+        float fingerTilt = 0.45f;   // how far the fingers tip into the rock (0 = straight up)
+        float knuckleOut = 0.015f;  // m the knuckles sit out from the hold's point
+        float shoulderUp = 0.5f;    // m from the hips up to the shoulders
+        float shoulderHalf = 0.18f; // m from the spine out to each shoulder
+        float legReach = 0.9f;      // m from the hip joint to a foothold
+        float hipHalf = 0.1f;       // m from the spine out to each hip joint
+        // A hand whose hold ends up this far past the arm's reach (the
+        // other hand caught something far above) lets go: a cut loose.
+        float cutLoose = 0.08f;
+        float pullSpeed = 4.0f;     // m/s: the body pulled up to a hand that caught a hold out of reach
     };
 
     struct Input {
@@ -93,6 +114,14 @@ public:
     int mantleLedge() const { return m_mantleLedge; } // -1 = the summit
     float mantleProgress() const;
 
+    // Where the wrist is with the hand closed on a point on the rock with
+    // normal n (the game's IK puts the wrist there), and the way the
+    // fingers point.
+    glm::vec3 wristAt(const glm::vec3& grip, const glm::vec3& n) const;
+    glm::vec3 fingerDirection(const glm::vec3& n) const;
+    // Where each shoulder is (the arm's root; reach is measured from it).
+    glm::vec3 shoulder(int h) const { return shoulderAt(h, m_hips); }
+
     glm::vec3 hand(int h) const { return m_hand[h].pos; }
     glm::vec3 foot(int f) const { return m_foot[f].pos; }
     int handHold(int h) const { return m_hand[h].hold; }
@@ -104,6 +133,13 @@ public:
     float charge(int h) const { return m_hand[h].charge; }
     // The hold each hand would go to right now (-1 = none in reach).
     int aimTarget(int h) const { return m_aim[h]; }
+    // Could the body hang with hand h on `hold` and the other hand where it
+    // is? (The arms reach both, with the body between them.) A precise
+    // reach or a snatch only goes to such holds; a lunge may go further,
+    // and the hand left behind lets go when it catches (cutLoose()).
+    bool canSpan(int h, int hold) const;
+    // The same with the other hand on `otherHold` (planning a move ahead).
+    bool canHang(int h, int hold, int otherHold) const;
     // How far hand h can reach from its pivot at the current charge.
     float reachNow(int h) const;
 
@@ -116,6 +152,7 @@ public:
     bool missed() const { return m_missed; }    // a hand closed on nothing
     bool grabbed() const { return m_grabbed; }  // a hand caught a hold
     bool fell() const { return m_fellNow; }
+    int cutLoose() const { return m_cut; }      // a hand's hold ended out of reach: it let go (hand, -1 = none)
 
     // Holds that have come off stay off (the game drops them as bodies).
     bool holdGone(int hold) const;
@@ -142,12 +179,20 @@ private:
         glm::vec3 target{0.0f};
     };
 
-    int findTarget(int h, const glm::vec2& aim, float reach) const;
+    int findTarget(int h, const glm::vec2& aim, float reach, bool dyno) const;
     glm::vec3 pivot(int h) const;
     bool usable(int hold, int h) const;
     void launch(int h, Move m, int target, const glm::vec2& aim, float reach);
     void land(int h);
     void updateBody(float dt, bool fast);
+    glm::vec3 shoulderAt(int h, const glm::vec3& hips) const;
+    // Moves `hips` as little as it can so every hand on the rock (and, with
+    // `reaching`, every hand on its way to it) is within reach of its
+    // shoulder, and stays off the rock.
+    void fitArms(glm::vec3& hips, bool reaching) const;
+    void fitWrists(glm::vec3& hips, const glm::vec3 wrist[2], const bool use[2]) const;
+    void keepOffRock(glm::vec3& hips) const;
+    glm::vec3 hipJoint(int f) const;
     void placeFeet(bool force);
     void updateStamina(float dt);
     void fall();
@@ -162,11 +207,12 @@ private:
     glm::vec3 m_hips{0.0f}, m_facing{0.0f, 0.0f, -1.0f};
     glm::vec3 m_feetAnchor{0.0f}; // hips when the feet were last placed
     float m_stamina = 100.0f, m_drain = 0.0f;
+    float m_pull = 0.0f; // s left of a catch pulling the body up
     glm::vec3 m_mantleFrom{0.0f}, m_mantleFeet{0.0f};
     int m_mantleLedge = -1;
     float m_mantleT = 0.0f;
     std::vector<int> m_gone;
-    int m_broke = -1;
+    int m_broke = -1, m_cut = -1;
     bool m_missed = false, m_grabbed = false, m_fellNow = false;
 };
 
@@ -195,6 +241,10 @@ private:
     std::vector<int> m_route;
     float m_wait = 0.0f;
     int m_lungeHand = -1, m_lungePick = -1; // a lunge being charged
+    int m_came[2] = { -1, -1 };             // the hold each hand last left
+    std::vector<std::pair<int, int>> m_path; // a way round being followed: (hand, hold) moves
+    Climber::Input decide(const Climber& c, float dt);
+    std::vector<std::pair<int, int>> findWay(const Climber& c, int at, int last, float reach) const;
 };
 
 } // namespace kke

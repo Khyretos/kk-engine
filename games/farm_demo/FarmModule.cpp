@@ -134,6 +134,8 @@ bool FarmModule::loadLevel() {
         log->error("{}", m_status);
         return false;
     }
+    std::string moodError;
+    if (!m_scene.mood.empty() && !m_app->setMood(m_scene.mood, &moodError)) log->warn("{}", moodError);
     kke::Lighting& light = m_app->lighting();
     if (m_scene.hasSun) {
         light.lights[0].enabled = true;

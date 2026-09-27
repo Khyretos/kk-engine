@@ -24,8 +24,9 @@ namespace kke::net {
 //   velocity  +-64 m/s per axis, 1/128 m/s steps
 //   rotation  smallest-three quaternion, ~0.001 per component
 //   yaw       0..360 degrees, 1024 steps (0.35 degrees)
-constexpr uint16_t kProtocolVersion = 6; // 2: Spawn, Despawn, Break (#28); 3: join password (#42); 4: Voice; 5: Input, InputAck (#28);
-                                         // 6: several players per connection (Guest, GuestAck), NetPlayerState::extra
+constexpr uint16_t kProtocolVersion = 7; // 2: Spawn, Despawn, Break (#28); 3: join password (#42); 4: Voice; 5: Input, InputAck (#28);
+                                         // 6: several players per connection (Guest, GuestAck), NetPlayerState::extra;
+                                         // 7: extra up to 32 bytes
 constexpr size_t kMaxPlayers = 32;
 constexpr size_t kMaxNameLength = 24;
 constexpr size_t kMaxGameIdLength = 32;
@@ -41,7 +42,7 @@ constexpr uint32_t kMaxChunkId = 65535;
 constexpr size_t kMaxVoiceBytes = 256;     // one Opus frame (20 ms at up to ~100 kbit/s)
 constexpr size_t kMaxInputsPerMsg = 16;    // the newest unacknowledged inputs, resent until acknowledged
 constexpr size_t kMaxLocalPlayers = 8;     // players on one connection (split screen online, a host's bots): slot 0 + 7 guests
-constexpr size_t kMaxPlayerExtraBytes = 24; // NetPlayerState::extra (game-defined, e.g. where the hands are)
+constexpr size_t kMaxPlayerExtraBytes = 32; // NetPlayerState::extra (game-defined, e.g. where the hands are)
 
 constexpr float kWorldXZ = 4096.0f;
 constexpr float kWorldYMin = -512.0f, kWorldYMax = 1536.0f;

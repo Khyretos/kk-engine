@@ -63,6 +63,7 @@ add_executable(kke_tests
     test_shadow_projection.cpp
     test_draw_order.cpp
     test_tone_mapper.cpp
+    test_sky.cpp
     test_jiggle.cpp
     test_rml_data_binding.cpp
     test_frame_retire_queue.cpp
@@ -103,6 +104,23 @@ foreach(f ${KKE_COOKBOOK_FILES})
 endforeach()
 configure_file(cookbook_recipes.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/cookbook_recipes.h @ONLY)
 target_include_directories(kke_tests PRIVATE ${CMAKE_SOURCE_DIR}/games/cookbook)
+
+# The shipped moods (assets/moods/), built in the same way for test_sky.cpp.
+file(GLOB KKE_MOOD_FILES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/assets/moods/*.yaml)
+list(SORT KKE_MOOD_FILES)
+set(KKE_MOOD_ENTRIES "")
+foreach(f ${KKE_MOOD_FILES})
+    get_filename_component(n ${f} NAME)
+    file(READ ${f} text)
+    string(APPEND KKE_MOOD_ENTRIES "    { \"${n}\", R\"KKE_MOOD(${text})KKE_MOOD\" },\n")
+endforeach()
+set(KKE_SKY_NAMES "")
+foreach(entry ${KKE_SKIES})
+    string(REPLACE "|" ";" parts "${entry}")
+    list(GET parts 0 name)
+    string(APPEND KKE_SKY_NAMES "\"${name}\", ")
+endforeach()
+configure_file(moods_data.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/moods_data.h @ONLY)
 
 include(GoogleTest)
 # PRE_TEST: tests are listed when ctest runs, not at build time, so a

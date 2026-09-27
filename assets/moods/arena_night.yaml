@@ -1,0 +1,23 @@
+# A fight under the lights: night sky, a warm lamp high over the ring.
+title: Arena at night
+description: A dark starry sky, one warm key light from above, a cool rim from the side.
+sky:
+  image: night              # Poly Haven "Qwantani Night (Pure Sky)", CC0
+  intensity: 0.12
+  ambientStrength: 1.4
+sun:                         # the ring's lamps
+  azimuth: 145
+  elevation: 72
+  color: "#ffe2b8"
+  intensity: 2.8
+fill:
+  color: "#7f95e6"
+  intensity: 0.45
+fog:
+  density: 0.006
+  heightFalloff: 0.06
+  maxOpacity: 0.85
+  sunScatter: 0.2
+look: punchy
+exposure: 1.15
+ambience: night_crickets

@@ -1,0 +1,16 @@
+# A bright day with fair-weather clouds: the all-rounder.
+title: Clear day
+description: Bright sun, blue sky with puffy clouds, a little haze far away.
+sky:
+  image: clear_day          # Poly Haven "Kloofendal 48d Partly Cloudy (Pure Sky)", CC0
+  ambientStrength: 0.3
+sun:
+  azimuth: 135
+  intensity: 2.4
+fog:
+  density: 0.0012
+  heightFalloff: 0.04
+  maxOpacity: 0.8
+look: punchy
+exposure: 0.95
+ambience: meadow_day

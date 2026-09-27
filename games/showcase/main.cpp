@@ -30,12 +30,9 @@
 int main() {
     try {
         kke::Application app("Kreative Kompas Engine - Showcase", 1280, 720);
+        // A bright day with fair-weather clouds over the course (assets/moods/clear_day.yaml).
+        app.setMood("clear_day");
         app.camera().farPlane = 200.0f;
-        app.lighting().lights[1].enabled = true;
-        app.lighting().lights[1].isDirectional = true;
-        app.lighting().lights[1].direction = glm::normalize(glm::vec3(0.6f, -0.3f, 0.5f));
-        app.lighting().lights[1].color = glm::vec3(0.55f, 0.65f, 0.85f);
-        app.lighting().lights[1].intensity = 0.3f;
 
         // First, so the resource governor's budget (threads, frame caps)
         // is set before physics starts its workers.

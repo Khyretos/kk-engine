@@ -86,6 +86,10 @@ void ClimbRaceModule::init(kke::Application& app) {
     m_defaultCpus = std::clamp(static_cast<int>(envFloat("KKE_CLIMB_CPUS", 1.0f)), 0, kke::Lobby::kMaxCpus);
     m_quitAfter = envFloat("KKE_CLIMB_QUIT", -1.0f);
     if (envOn("KKE_CLIMB_ROCKFALL")) m_rockfall = 1.0f;
+    m_climbCamera = envFloat("KKE_CLIMB_CLOSEUP", m_climbCamera);
+    // How to play before the first race, unless nobody's there to read it.
+    const char* intro = std::getenv("KKE_CLIMB_INTRO");
+    m_howtoFirst = intro && *intro ? *intro == '1' : !(m_autopilot || m_quitAfter > 0.0f || m_rockfall >= 0.0f);
 
     // Controls: the usual character actions (move, look, jump, sprint),
     // and the four grab buttons. Left side of the pad (or the mouse's
@@ -106,6 +110,7 @@ void ClimbRaceModule::init(kke::Application& app) {
         in.defineAction({ "race.new", "New mountain", "Race", "game" });
         in.defineAction({ "menu", "Back to the menu (players, CPU climbers)", "Race", "game" });
         in.defineAction({ "panels", "Developer panels", "Game", "game" });
+        in.defineAction({ "help", "How to play", "Race", "game" });
         auto trigger = [&](const char* action, SDL_GamepadAxis axis) {
             kke::Binding b = IM::bind(action, IM::padAxis(axis, 1), kke::Trigger::Continuous);
             b.deadzone = 0.05f;
@@ -128,6 +133,8 @@ void ClimbRaceModule::init(kke::Application& app) {
         in.addBinding(IM::bind("menu", IM::pad(SDL_GAMEPAD_BUTTON_BACK)));
         in.addBinding(IM::bind("menu", IM::key(SDL_SCANCODE_M)));
         in.addBinding(IM::bind("panels", IM::key(SDL_SCANCODE_F1)));
+        in.addBinding(IM::bind("help", IM::key(SDL_SCANCODE_H)));
+        in.addBinding(IM::bind("help", IM::pad(SDL_GAMEPAD_BUTTON_WEST)));
     }
     m_input->setPlayers(1);
     m_input->commitDefaults();
@@ -272,7 +279,7 @@ void ClimbRaceModule::buildMountain(uint32_t seed, int lanes) {
     for (size_t i = 0; i < m_racers.size(); ++i) {
         Racer& r = m_racers[i];
         r.lane = std::min(static_cast<int>(i), lanes - 1);
-        r.climber = std::make_unique<kke::Climber>(*m_lanes[static_cast<size_t>(r.lane)]->wall);
+        r.climber = makeClimber(r.lane);
         makeBrain(r);
     }
 }
@@ -298,7 +305,7 @@ void ClimbRaceModule::resetRace() {
         // At the start line, in front of the first hold of the line.
         const float x = wall.holds()[static_cast<size_t>(wall.line().front())].position.x;
         const glm::vec3 feet(x, 0.05f, wall.surfaceZ(x, 0.5f) + kStartOut);
-        r.climber = std::make_unique<kke::Climber>(wall);
+        r.climber = makeClimber(r.lane);
         makeBrain(r);
         r.loco->teleport(toWorld(r, feet));
         r.loco->setFacing(glm::vec3(0, 0, -1));
@@ -342,6 +349,19 @@ void ClimbRaceModule::makeBrain(Racer& r) {
     }
     if (m_botPause >= 0.0f) b.pause = m_botPause;
     r.pause = b.pause;
+}
+
+void ClimbRaceModule::showHowTo(bool on) {
+    m_howto = on;
+    m_howtoAge = 0.0f;
+    // Closing it doesn't also jump: the press that closed it is used up.
+    for (Racer& r : m_racers) r.jumpQueued = false;
+    if (on && m_captured) {
+        m_captured = false;
+        SDL_SetWindowRelativeMouseMode(m_app->window().handle(), false);
+    }
+    m_hud.howto = on;
+    if (m_hudModel) m_hudModel.DirtyVariable("howto");
 }
 
 void ClimbRaceModule::onEvent(const SDL_Event& e) {
@@ -551,7 +571,7 @@ void ClimbRaceModule::updateCamera(Racer& r, float dt, kke::Camera& out) {
         r.rig.yaw += diff * (1.0f - std::exp(-2.0f * dt));
         r.rig.pitch += (12.0f - r.rig.pitch) * (1.0f - std::exp(-2.0f * dt));
     }
-    r.rig.settings.armLength += ((climbing ? 4.6f : 4.0f) - r.rig.settings.armLength) * (1.0f - std::exp(-3.0f * dt));
+    r.rig.settings.armLength += ((climbing ? m_climbCamera : 4.0f) - r.rig.settings.armLength) * (1.0f - std::exp(-3.0f * dt));
     r.rig.settings.shoulderOffset = climbing ? 0.0f : 0.45f;
     const glm::vec3 feet = w.characterPosition(r.id);
     r.rig.update(dt, feet, [&w](const glm::vec3& from, const glm::vec3& dir, float maxDist) {
@@ -570,13 +590,24 @@ void ClimbRaceModule::update(const kke::UpdateContext& ctx) {
         updateHud(dt);
         return;
     }
-    // Any player: race again, a new mountain, or the menu.
-    bool again = false, fresh = false, menu = false;
+    // Any player: race again, a new mountain, the menu, or how to play.
+    bool again = false, fresh = false, menu = false, help = false, start = false;
     for (int p = 0; p < m_input->players(); ++p) {
         kke::InputMap& in = m_input->map(p);
         again = again || in.pressed("race.again");
         fresh = fresh || in.pressed("race.new");
         menu = menu || in.pressed("menu");
+        help = help || in.pressed("help");
+        start = start || in.pressed("jump");
+    }
+    // How to play: help opens it; jump (or help again) closes it. The race
+    // stands still meanwhile, and the climbers breathe.
+    if (m_howto) {
+        m_howtoAge += dt;
+        if (m_howtoAge > 0.3f && (help || start)) showHowTo(false);
+        again = fresh = menu = false;
+    } else if (help) {
+        showHowTo(true);
     }
     if (menu && m_lobby) {
         backToLobby();
@@ -599,15 +630,19 @@ void ClimbRaceModule::update(const kke::UpdateContext& ctx) {
         }
     }
 
-    if (m_phase == Phase::Countdown) {
+    // Online the race can't wait for one screen's how-to page: only the
+    // other machines' "ready" holds it (m_netHold).
+    const bool stopped = m_howto && !(m_net && m_net->connected());
+    if (m_phase == Phase::Countdown && !stopped) {
         if (!m_netHold) m_countdown -= dt; // online: until every machine is at the line
         if (m_countdown <= 0.0f) m_phase = Phase::Racing;
     }
     // The crosshair's hold for mouse aiming (last frame's camera).
     for (Racer& r : m_racers) r.crosshair = r.mouse && m_captured ? crosshairHold(r, cameraOf(r), r.crosshairOut) : -1;
-    for (Racer& r : m_racers)
-        if (!r.remote) updateRacer(r, dt);
-    if (m_phase == Phase::Racing) {
+    if (!stopped)
+        for (Racer& r : m_racers)
+            if (!r.remote) updateRacer(r, dt);
+    if (m_phase == Phase::Racing && !stopped) {
         // Every player at the top (or everyone, in a race of bots): results.
         bool playersDone = true, allDone = true, anyPlayer = false;
         for (const Racer& r : m_racers) {
@@ -672,6 +707,11 @@ void ClimbRaceModule::update(const kke::UpdateContext& ctx) {
                                             r.finished ? "finished" : bodyInput(r).climbing ? "climbing" : "on foot");
         }
         if (m_clock >= m_quitAfter) {
+            for (const Racer& r : m_racers)
+                if (r.gripError.samples > 0)
+                    kke::log::get(name())->info("{}: hands on their holds within {:.1f} cm on average, {:.1f} cm at worst ({} samples)", r.name,
+                                                r.gripError.sum / static_cast<float>(r.gripError.samples) * 100.0f, r.gripError.worst * 100.0f,
+                                                r.gripError.samples);
             SDL_Event quit{};
             quit.type = SDL_EVENT_QUIT;
             SDL_PushEvent(&quit);

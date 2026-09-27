@@ -121,6 +121,10 @@ public:
     // What the room probe and pings cast. Jolt by default; replaceable.
     AcousticRayFn roomRay;
 
+    // How loud the mood's ambience loop plays (Application::setMood,
+    // assets/ambience), before the Ambient category's gain. 0 = off.
+    float ambienceGain = 0.5f;
+
     // Decodes WAV / FLAC / MP3 (miniaudio) to mono at the mixer's rate.
     // Null on failure (logged).
     SoundHandle loadSound(const std::string& path);
@@ -159,12 +163,16 @@ private:
     void updateOcclusion(float dt);
     void updateRoom(float dt);
     void updatePings(float dt);
+    void updateAmbience();
     // A point by an opening that `source` can be heard through, or false.
     bool findOpening(const glm::vec3& listener, const glm::vec3& source, glm::vec3& via, float& pathLength);
     uint32_t playTracked(VoiceDesc d);
 
     Application* m_app = nullptr;
     std::unique_ptr<AudioMixer> m_mixer;
+    // The mood's looping background sound (Mood::ambience).
+    std::string m_ambienceName;
+    uint32_t m_ambienceVoice = 0;
     AudioMaterialTable m_materials;
     std::unique_ptr<ImpactBank> m_bank;
     std::unique_ptr<Device> m_device;

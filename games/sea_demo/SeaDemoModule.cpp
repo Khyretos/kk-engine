@@ -177,7 +177,6 @@ void SeaDemoModule::update(const kke::UpdateContext&) {
 }
 
 void SeaDemoModule::render(const kke::RenderContext& ctx) {
-    m_ocean->drawSky(ctx, -m_app->lighting().lights[0].direction);
     m_ocean->drawOcean(ctx, m_waves, m_time, ctx.cameraPos);
     const auto& bodies = m_bodies.bodies();
     for (size_t i = 0; i < bodies.size(); ++i) {

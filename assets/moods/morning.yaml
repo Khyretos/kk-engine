@@ -1,0 +1,17 @@
+# Early, fresh and a little cool.
+title: Morning
+description: Low sun, clean pale sky, cool shadows.
+sky:
+  image: morning            # Poly Haven "Qwantani Mid Morning (Pure Sky)", CC0
+  ambientStrength: 0.32
+  ambientSaturation: 0.4    # a pale sky: keep the shadows from turning teal
+sun:
+  azimuth: 110
+  intensity: 2.5
+fog:
+  density: 0.002
+  heightFalloff: 0.06
+  maxOpacity: 0.85
+look: punchy
+exposure: 1.05
+ambience: meadow_day

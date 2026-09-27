@@ -103,6 +103,9 @@ private:
         kke::ModelModule::InstanceId model = 0;
         std::unique_ptr<kke::Animator> anim;
         float armWeight = 0.0f, legWeight = 0.0f, footWeight = 0.0f;
+        float grip[2] = {};         // fingers closed on a hold (0 open .. 1 closed)
+        float handAim[2] = {};      // hand turned to its hold (0 = as animated)
+        struct { float worst = 0.0f, sum = 0.0f; int samples = 0; } gripError; // knuckles to hold, m
         float time = 0.0f;          // race clock
         bool finished = false;
         float regrab = 0.0f;        // after a fall: no grabbing for a moment
@@ -135,7 +138,13 @@ private:
         kke::Locomotion::State loco = kke::Locomotion::State::Ground;
         float stateTime = 0.0f, groundSpeed = 0.0f, fallHeight = 0.0f;
         bool jumped = false, landed = false;
-        glm::vec3 hand[2]{}, foot[2]{}; // world: where the IK puts them (hands also on a ledge hang)
+        // Each hand: where it closes (the knuckles, world), the rock's normal
+        // there, how closed the fingers are (0..1), whether it's on the rock
+        // (turned onto it) and on a hold.
+        glm::vec3 grip[2]{}, normal[2]{};
+        float closed[2]{};
+        bool onRock[2]{}, held[2]{};
+        glm::vec3 foot[2]{}, hips{0.0f}; // world
     };
     BodyInput bodyInput(const Racer& r) const;
     struct RacerInput {
@@ -201,6 +210,9 @@ private:
     void loadCharacter();
     void setupBody(Racer& r);
     void animateBody(Racer& r, float dt);
+    // A climber on lane `lane`, with the body's proportions measured from
+    // the character's skeleton (so every hold it takes is one the arms reach).
+    std::unique_ptr<kke::Climber> makeClimber(int lane) const;
 
     // The HUD (Hud.cpp, ui/climb_hud.rml).
     void buildHud();
@@ -241,6 +253,12 @@ private:
     float m_best = 0.0f;       // best time on this mountain (0 = none yet)
     std::string m_winner;
     bool m_autopilot = false, m_captured = false;
+    // How to play: up before the first race (KKE_CLIMB_INTRO=0 skips it,
+    // =1 forces it; headless runs skip it) and on the help button. The
+    // race waits while it's up.
+    bool m_howto = false, m_howtoFirst = true;
+    float m_howtoAge = 0.0f; // s since it opened (the press that opened it doesn't close it)
+    void showHowTo(bool on);
     float m_botPause = -1.0f; // KKE_CLIMB_BOT_PAUSE (-1: from the difficulty)
     int m_defaultCpus = 1;    // no lobby: KKE_CLIMB_CPUS
     bool m_rosterChanged = false; // someone joined during a race
@@ -248,6 +266,7 @@ private:
     float m_rockfall = -1.0f; // KKE_CLIMB_ROCKFALL: seconds until it starts (-1 = off)
     void updateRockfall(float dt);
     float m_mouseSensitivity = 0.12f, m_stickSpeed = 200.0f;
+    float m_climbCamera = 4.6f; // m behind you on the rock (KKE_CLIMB_CLOSEUP: nearer, to see the hands)
 
     // Character: the UAL mannequin's bones and clips (retargeting not
     // needed: it's the clips' own skeleton).
@@ -257,6 +276,19 @@ private:
     float m_modelYaw = 0.0f;
     kke::TwoBoneChain m_arm[2], m_leg[2];
     kke::FootPlacer m_feet;
+    int m_pelvis = -1;
+    // Each hand as it is in the rest pose: which way the fingers point and
+    // which way the thumb side faces (model space), to turn it onto a hold;
+    // the finger bones, to close them around it.
+    struct HandRig {
+        glm::quat restModel{1.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec3 fingers{0.0f, 1.0f, 0.0f}, thumbSide{1.0f, 0.0f, 0.0f};
+        float knuckles = 0.09f;     // m from the wrist to the knuckles
+        int segment[4][3] = { { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 } }; // index, middle, ring, pinky
+        int thumb[3] = { -1, -1, -1 };
+    };
+    HandRig m_handRig[2];
+    kke::Climber::Settings m_climbSettings; // proportions from the skeleton
     int m_stMove = -1, m_stJump = -1, m_stFall = -1, m_stLand = -1, m_stHang = -1, m_stTop = -1;
     std::unique_ptr<kke::DynamicMeshRenderer> m_capsule; // no character model: a block
 
@@ -274,6 +306,7 @@ private:
         std::vector<RivalHud> rivals;
         std::string banner, sub, hint;
         bool racing = false;
+        bool howto = false;         // the how-to-play screen is up
     };
     Hud m_hud;
     Rml::DataModelHandle m_hudModel;
