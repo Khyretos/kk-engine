@@ -1,5 +1,8 @@
 #include "ClothSystem.h"
 
+#include "kke/ClothGpu.h"
+#include "kke/Log.h"
+
 #include <Jolt/Core/JobSystem.h>
 #include <Jolt/Physics/Body/Body.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
@@ -16,6 +19,9 @@
 #include <cfloat>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
+#include <iterator>
 #include <utility>
 
 namespace kke::detail {
@@ -24,7 +30,7 @@ namespace {
 
 constexpr float kAirDensity = 1.225f; // kg/m^3
 constexpr float kAssumedStep = 1.0f / 60.0f; // RigidWorld's collision step length
-constexpr uint8_t kTangledSteps = 16;         // Cloth::undoneStreak at which a vertex is let go
+constexpr uint8_t kTangledSteps = 16;         // Cloth::undoneStreak at which a vertex is let go (no sub-steps only)
 constexpr int kMaxPasses = 4;                 // protection narrow-phase passes per step, at most
 constexpr size_t kHairPart = 64;              // guide strands per hair soft body
 constexpr uint32_t kPatchTriangles = 32;      // triangles per patch (ClothSystem::markPatches)
@@ -34,6 +40,14 @@ constexpr uint32_t kMaxPatchBits = 8192;      // patches in all at most for the 
 // direction for the whole step can't pass through itself (Volino and
 // Magnenat-Thalmann 1994; Provot 1997): just under 90 degrees.
 constexpr float kFlatEnough = 1.5f;
+// While the pass is undoing crossings, each collision step is cut in
+// RigidWorld::Settings::clothSubsteps and the pass runs between them, not
+// only after the solver's last sub-step. Layers a solid presses together
+// (sheets over a ball) are then kept apart as they are pressed, a little
+// at a time: fixed all at once afterwards, the solver springs back from
+// the fix and the layers work their way through each other.
+constexpr uint32_t kCalmUpdates = 30; // updates with no crossing undone before sub-steps stop
+constexpr float kMostPerPass = 3.0f;  // the pass moves a vertex at most this x (thickness + a tenth of an edge)
 
 // Sets a flag other worker threads may set too. The Android NDK's libc++
 // has no std::atomic_ref yet; the builtin is the same relaxed store.
@@ -121,8 +135,10 @@ uint32_t hashCell(int x, int y, int z) { return uint32_t(x) * 92837111u ^ uint32
 
 } // namespace
 
-ClothSystem::ClothSystem(JPH::PhysicsSystem& system, JPH::ObjectLayer layer, JPH::TempAllocator& temp, JPH::JobSystem* jobs)
+ClothSystem::ClothSystem(JPH::PhysicsSystem& system, JPH::ObjectLayer layer, JPH::TempAllocator& temp, JPH::JobSystem* jobs, int substeps)
     : m_system(system), m_layer(layer), m_temp(temp), m_jobs(jobs) {
+    m_substeps = std::clamp(substeps, 1, 16);
+    if (const char* e = std::getenv("KKE_CLOTH_GPU_CHECK")) m_gpuCheck = *e == '1';
     m_system.AddStepListener(this);
     m_system.SetSoftBodyContactListener(this);
 }
@@ -251,7 +267,8 @@ uint32_t ClothSystem::add(const ClothDesc& d) {
     s->Optimize();
 
     JPH::SoftBodyCreationSettings cs(s, JPH::RVec3(centroid.x, centroid.y, centroid.z), JPH::Quat::sIdentity(), m_layer);
-    cs.mNumIterations = uint32_t(std::max(1, d.fabric.iterations));
+    c.iterations = std::max(1, d.fabric.iterations);
+    cs.mNumIterations = uint32_t((c.iterations + m_sub - 1) / m_sub);
     cs.mLinearDamping = d.fabric.damping;
     cs.mFriction = d.fabric.friction;
     cs.mGravityFactor = d.gravity;
@@ -383,6 +400,7 @@ uint32_t ClothSystem::addHairPart(const HairDesc& d, const std::vector<glm::vec3
     const float sub = kAssumedStep / float(std::max(1, st.iterations));
     const float scale = sub * sub / meanMass;
     const float stiffRoot = std::clamp(st.stiffRoot, 0.0f, 1.0f);
+    const float pulledOut = 1.0f / (1.0f - std::clamp(st.shrinkage, 0.0f, 0.9f));
     for (uint32_t g = 0; g < guides; ++g) {
         const uint32_t b = g * per;
         for (uint32_t k = 0; k + 1 < per; ++k) {
@@ -393,9 +411,10 @@ uint32_t ClothSystem::addHairPart(const HairDesc& d, const std::vector<glm::vec3
             if (st.curl > 0.0f && k + 3 < per) s->mEdgeConstraints.emplace_back(b + k, b + k + 3, bend);
         }
         // Tethers from the follicle: never longer than maxStretch x the
-        // length along the strand (a curl may be pulled out, not through).
+        // length along the strand (a curl may be pulled out, not through),
+        // or, for shrinking coils, than the hair pulled straight.
         for (uint32_t k = 2; k < per; ++k)
-            s->mLRAConstraints.emplace_back(b + 1, b + k, std::max(1.0f, st.maxStretch) * arc[b + k]);
+            s->mLRAConstraints.emplace_back(b + 1, b + k, std::max(1.0f, st.maxStretch) * pulledOut * arc[b + k]);
     }
     s->CalculateEdgeLengths();
 
@@ -419,7 +438,8 @@ uint32_t ClothSystem::addHairPart(const HairDesc& d, const std::vector<glm::vec3
     s->Optimize();
 
     JPH::SoftBodyCreationSettings cs(s, JPH::RVec3(centroid.x, centroid.y, centroid.z), JPH::Quat::sIdentity(), m_layer);
-    cs.mNumIterations = uint32_t(std::max(1, st.iterations));
+    c.iterations = std::max(1, st.iterations);
+    cs.mNumIterations = uint32_t((c.iterations + m_sub - 1) / m_sub);
     cs.mLinearDamping = st.damping;
     cs.mFriction = st.friction;
     cs.mGravityFactor = st.gravity;
@@ -941,9 +961,11 @@ void ClothSystem::shapeTriangles() {
 }
 
 // Runs fn over [0, count) in chunks, on Jolt's job system when there's
-// one and the pass runs between steps (endStep), else right here.
+// one, else right here. (From OnStep this runs inside one of Jolt's jobs;
+// waiting on a barrier there is fine: the waiting thread runs the
+// barrier's jobs itself.)
 void ClothSystem::parallel(uint32_t count, const std::function<void(uint32_t, uint32_t, Worker&)>& fn) {
-    const int threads = (m_jobs && m_between) ? std::max(1, m_jobs->GetMaxConcurrency()) : 1;
+    const int threads = m_jobs ? std::max(1, m_jobs->GetMaxConcurrency()) : 1;
     if (m_workers.size() < size_t(threads)) m_workers.resize(size_t(threads));
     for (Worker& w : m_workers) {
         w.vt.clear();
@@ -1024,69 +1046,28 @@ void ClothSystem::protect() {
     m_vertBase.resize(m_active.size() + 1);
     m_vertBase[0] = 0;
     for (size_t ci = 0; ci < m_active.size(); ++ci) m_vertBase[ci + 1] = m_vertBase[ci] + uint32_t(m_active[ci]->pos.size());
-    parallel(m_vertBase.back(), [&](uint32_t begin, uint32_t end, Worker& w) {
-        w.stamp.assign(triTotal, UINT32_MAX);
-        w.vt.clear();
-        size_t ci = size_t(std::upper_bound(m_vertBase.begin(), m_vertBase.end(), begin) - m_vertBase.begin()) - 1;
-        for (uint32_t gv = begin; gv < end; ++gv) {
-            while (gv >= m_vertBase[ci + 1]) ++ci;
-            Cloth& c = *m_active[ci];
-            const uint32_t v = gv - m_vertBase[ci];
-            if (c.invMass[v] <= 0.0f) continue; // pinned or asleep: others are pushed off it, from their side
-            if (!c.vertLooked[v]) continue;
-            const bool loose = c.vertPatch[v] == UINT32_MAX;
-            const uint32_t vp = loose ? 0u : m_patchBase[ci] + c.vertPatch[v];
-            glm::ivec3 a, b;
-            if (!cellBox(glm::min(c.pos[v], c.prev[v]) - c.thickness, glm::max(c.pos[v], c.prev[v]) + c.thickness, inv, a, b)) continue;
-            for (int x = a.x; x <= b.x; ++x)
-                for (int y = a.y; y <= b.y; ++y)
-                    for (int z = a.z; z <= b.z; ++z) {
-                        const uint32_t h = hashCell(x, y, z) & m_triGrid.mask;
-                        for (uint32_t e = m_triGrid.start[h]; e < m_triGrid.start[h + 1]; ++e) {
-                            const uint32_t gt = m_triGrid.items[e];
-                            if (w.stamp[gt] == gv) continue; // already seen from another cell
-                            w.stamp[gt] = gv;
-                            Cloth& o = *m_active[m_triCloth[gt]];
-                            const uint32_t tri = gt - o.triBase;
-                            if (&o == &c && nearInTopology(c, v, tri)) continue;
-                            // Far from the triangle for how far it moved relative to it
-                            // (with room for the passes to move things): skip.
-                            const glm::vec4& sph = o.triSphere[tri];
-                            const float reach = sph.w + 3.0f * std::max(c.thickness, o.thickness) + glm::length(c.pos[v] - c.prev[v] - o.triMove[tri]);
-                            const glm::vec3 dc = c.pos[v] - glm::vec3(sph);
-                            const float d2 = glm::dot(dc, dc);
-                            // Within an edge of it: its edges may meet the triangle's (edge pass below).
-                            const float edgeReach = reach + c.meanEdge;
-                            if (d2 > edgeReach * edgeReach) continue;
-                            // (Its own fabric a few threads away doesn't count: that's always this near.)
-                            const uint32_t* t = &o.tris[size_t(tri) * 3];
-                            const glm::vec3 apart = c.rest[v] - o.rest[t[0]];
-                            if (&o != &c || glm::dot(apart, apart) > 9.0f * c.meanEdge * c.meanEdge) {
-                                for (uint8_t* flag : { &c.nearOther[v], &o.nearOther[t[0]], &o.nearOther[t[1]], &o.nearOther[t[2]] })
-                                    setFlag(*flag);
-                            }
-                            if (d2 > reach * reach) continue;
-                            // (The flags above are set whatever the patches: an edge of a
-                            // patch looked at may end at a vertex of one that isn't.)
-                            if (!loose && !patchPair(vp, m_patchBase[m_triCloth[gt]] + o.triPatch[tri])) continue;
-                            w.vt.push_back({ uint32_t(ci), v, gt });
-                        }
-                    }
+    // The cells each vertex looks in: its bounds swept from the last pass
+    // to now (+ thickness). Pinned and asleep vertices don't look (others
+    // are pushed off them, from their side).
+    m_vertBox.assign(m_vertBase.back(), CellBox{});
+    for (size_t ci = 0; ci < m_active.size(); ++ci) {
+        const Cloth& c = *m_active[ci];
+        for (uint32_t v = 0; v < c.pos.size(); ++v) {
+            if (c.invMass[v] <= 0.0f || !c.vertLooked[v]) continue;
+            CellBox& box = m_vertBox[m_vertBase[ci] + v];
+            if (!cellBox(glm::min(c.pos[v], c.prev[v]) - c.thickness, glm::max(c.pos[v], c.prev[v]) + c.thickness, inv, box.lo, box.hi)) box = CellBox{};
         }
-    });
-    m_vtPairs.clear();
-    for (const Worker& w : m_workers) m_vtPairs.insert(m_vtPairs.end(), w.vt.begin(), w.vt.end());
-
+    }
     // Edges: two sheets sliding over each other can pass edge through edge
-    // with no vertex ever going through a triangle.
+    // with no vertex ever going through a triangle. Their bounds, for both
+    // searches.
     m_edgeBox.resize(edgeTotal);
     m_edgeCloth.resize(edgeTotal);
     m_edgeLo.resize(edgeTotal);
     m_edgeHi.resize(edgeTotal);
     m_edgeMoves.resize(edgeTotal);
     m_edgePatch.resize(edgeTotal);
-    double edgeSized = 0.0;
-    size_t edgeBoxes = 0;
+    m_edgeLooked.assign(edgeTotal, 0);
     g = 0;
     for (size_t ci = 0; ci < m_active.size(); ++ci) {
         Cloth& c = *m_active[ci];
@@ -1095,64 +1076,63 @@ void ClothSystem::protect() {
             const uint32_t i0 = c.edges[k], i1 = c.edges[k + 1];
             m_edgeCloth[g] = uint32_t(ci);
             m_edgePatch[g] = m_patchBase[ci] + c.edgePatch[k / 2];
-            if (!m_patchLooked[m_edgePatch[g]]) {
-                m_edgeMoves[g] = 0;
-                m_edgeBox[g] = CellBox{};
-                continue;
-            }
+            m_edgeMoves[g] = 0;
+            if (!m_patchLooked[m_edgePatch[g]]) continue;
             m_edgeLo[g] = glm::min(glm::min(c.pos[i0], c.prev[i0]), glm::min(c.pos[i1], c.prev[i1])) - c.thickness;
             m_edgeHi[g] = glm::max(glm::max(c.pos[i0], c.prev[i0]), glm::max(c.pos[i1], c.prev[i1])) + c.thickness;
-            m_edgeMoves[g] = uint8_t((c.invMass[i0] > 0.0f || c.invMass[i1] > 0.0f ? 1 : 0) | (c.nearOther[i0] || c.nearOther[i1] ? 2 : 0));
-            // Only edges near another surface can meet another edge: the rest
-            // stay out of the grid (it's what the queries would skip).
-            m_edgeBox[g] = CellBox{};
-            if (m_edgeMoves[g] & 2) {
-                m_edgeBox[g].lo = m_edgeBox[g].hi = glm::ivec3(0); // placed below
-                {
-                    const glm::vec3 ext = m_edgeHi[g] - m_edgeLo[g];
-                    edgeSized += std::max(ext.x, std::max(ext.y, ext.z));
-                }
-                ++edgeBoxes;
-            }
+            m_edgeMoves[g] = uint8_t(c.invMass[i0] > 0.0f || c.invMass[i1] > 0.0f ? 1 : 0);
+            m_edgeLooked[g] = 1;
         }
     }
-    const float edgeInv = 1.0f / std::max(cell, edgeBoxes ? float(edgeSized / double(edgeBoxes)) : cell);
-    for (size_t ge = 0; ge < edgeTotal; ++ge)
-        if (m_edgeBox[ge].valid() && !cellBox(m_edgeLo[ge], m_edgeHi[ge], edgeInv, m_edgeBox[ge].lo, m_edgeBox[ge].hi)) m_edgeBox[ge] = CellBox{};
-    m_edgeGrid.build(m_edgeBox);
-    parallel(uint32_t(edgeTotal), [&](uint32_t begin, uint32_t end, Worker& w) {
-        w.stamp.assign(edgeTotal, UINT32_MAX);
-        w.ee.clear();
-        for (uint32_t ge = begin; ge < end; ++ge) {
-            // Only edges that can move, near another surface (found by the
-            // vertex pass): nothing else can meet another edge this step.
-            if (m_edgeMoves[ge] != 3) continue;
-            const CellBox& b = m_edgeBox[ge];
-            Cloth& c = *m_active[m_edgeCloth[ge]];
-            const uint32_t e = ge - c.edgeBase;
-            for (int x = b.lo.x; x <= b.hi.x; ++x)
-                for (int y = b.lo.y; y <= b.hi.y; ++y)
-                    for (int z = b.lo.z; z <= b.hi.z; ++z) {
-                        const uint32_t h = hashCell(x, y, z) & m_edgeGrid.mask;
-                        for (uint32_t k = m_edgeGrid.start[h]; k < m_edgeGrid.start[h + 1]; ++k) {
-                            const uint32_t gf = m_edgeGrid.items[k];
-                            // Each pair once: from the lower edge when both move.
-                            if ((m_edgeMoves[gf] == 3 && gf <= ge) || w.stamp[gf] == ge) continue;
-                            w.stamp[gf] = ge;
-                            if (glm::any(glm::lessThan(m_edgeHi[gf], m_edgeLo[ge])) || glm::any(glm::greaterThan(m_edgeLo[gf], m_edgeHi[ge]))) continue;
-                            if (!patchPair(m_edgePatch[ge], m_edgePatch[gf])) continue;
-                            Cloth& o = *m_active[m_edgeCloth[gf]];
-                            const uint32_t f = gf - o.edgeBase;
-                            if (edgesFar(c, e, o, f, 3.0f * std::max(c.thickness, o.thickness))) continue;
-                            if (&o == &c && edgesNear(c, e, f)) continue;
-                            if (edgesApart(c, e, o, f, 3.0f * std::max(c.thickness, o.thickness))) continue;
-                            w.ee.push_back({ ge, gf });
-                        }
-                    }
+    // The GPU if there is one (the CPU if it can't answer, or to check it).
+    const bool gpu = m_gpu && searchOnGpu(triTotal, edgeTotal, cell);
+    if (!gpu || m_gpuCheck) {
+        std::vector<VtPair> gpuVt;
+        std::vector<EePair> gpuEe;
+        if (gpu) {
+            gpuVt.swap(m_vtPairs);
+            gpuEe.swap(m_eePairs);
         }
-    });
-    m_eePairs.clear();
-    for (const Worker& w : m_workers) m_eePairs.insert(m_eePairs.end(), w.ee.begin(), w.ee.end());
+        searchOnCpu(triTotal, edgeTotal, cell);
+        if (gpu) {
+            auto vtKey = [](const VtPair& a) { return (uint64_t(a.cloth) << 58) ^ (uint64_t(a.vertex) << 29) ^ a.tri; };
+            size_t vtMissing = 0, vtExtra = 0, eeMissing = 0, eeExtra = 0;
+            {
+                std::vector<uint64_t> a, b, d;
+                for (const VtPair& x : m_vtPairs) a.push_back(vtKey(x));
+                for (const VtPair& x : gpuVt) b.push_back(vtKey(x));
+                std::sort(a.begin(), a.end());
+                std::sort(b.begin(), b.end());
+                std::set_difference(a.begin(), a.end(), b.begin(), b.end(), std::back_inserter(d));
+                vtMissing = d.size();
+                d.clear();
+                std::set_difference(b.begin(), b.end(), a.begin(), a.end(), std::back_inserter(d));
+                vtExtra = d.size();
+                a.clear();
+                b.clear();
+                d.clear();
+                for (const EePair& x : m_eePairs) a.push_back((uint64_t(x.a) << 32) | x.b);
+                for (const EePair& x : gpuEe) b.push_back((uint64_t(x.a) << 32) | x.b);
+                std::sort(a.begin(), a.end());
+                std::sort(b.begin(), b.end());
+                std::set_difference(a.begin(), a.end(), b.begin(), b.end(), std::back_inserter(d));
+                eeMissing = d.size();
+                d.clear();
+                std::set_difference(b.begin(), b.end(), a.begin(), a.end(), std::back_inserter(d));
+                eeExtra = d.size();
+            }
+            ++m_gpuChecks;
+            if (vtMissing + vtExtra + eeMissing + eeExtra > 0) ++m_gpuDiffered;
+            if (m_gpuChecks % 60 == 1 || vtMissing + vtExtra + eeMissing + eeExtra > 0)
+                log::get("ClothGpu")->info("check {}: GPU {} vertex-triangle and {} edge pairs, CPU {} and {}; the GPU missed {} and {}, found {} and {} more "
+                                           "({} of {} searches differed)",
+                                           m_gpuChecks, gpuVt.size(), gpuEe.size(), m_vtPairs.size(), m_eePairs.size(), vtMissing, eeMissing, vtExtra,
+                                           eeExtra, m_gpuDiffered, m_gpuChecks);
+            // Go on with the GPU's answer: that is the one being checked.
+            m_vtPairs.swap(gpuVt);
+            m_eePairs.swap(gpuEe);
+        }
+    }
 
     // --- Narrow phase, repeated while it undoes crossings -------------------
     // One pass fixes pairs one after another; in a stack (a throw landing
@@ -1193,6 +1173,287 @@ void ClothSystem::protect() {
         }
         if (undone == 0) break;
     }
+}
+
+// The broad phase's queries on the CPU (on Jolt's job system): vertices
+// against the triangles' hash, then the edges the vertices found near
+// another surface against each other.
+void ClothSystem::searchOnCpu(size_t triTotal, size_t edgeTotal, float cell) {
+    parallel(m_vertBase.back(), [&](uint32_t begin, uint32_t end, Worker& w) {
+        w.stamp.assign(triTotal, UINT32_MAX);
+        w.vt.clear();
+        size_t ci = size_t(std::upper_bound(m_vertBase.begin(), m_vertBase.end(), begin) - m_vertBase.begin()) - 1;
+        for (uint32_t gv = begin; gv < end; ++gv) {
+            while (gv >= m_vertBase[ci + 1]) ++ci;
+            Cloth& c = *m_active[ci];
+            const uint32_t v = gv - m_vertBase[ci];
+            if (c.invMass[v] <= 0.0f) continue; // pinned or asleep: others are pushed off it, from their side
+            if (!c.vertLooked[v]) continue;
+            const bool loose = c.vertPatch[v] == UINT32_MAX;
+            const uint32_t vp = loose ? 0u : m_patchBase[ci] + c.vertPatch[v];
+            if (!m_vertBox[gv].valid()) continue;
+            const glm::ivec3 a = m_vertBox[gv].lo, b = m_vertBox[gv].hi;
+            const size_t found = w.vt.size();
+            for (int x = a.x; x <= b.x; ++x)
+                for (int y = a.y; y <= b.y; ++y)
+                    for (int z = a.z; z <= b.z; ++z) {
+                        const uint32_t h = hashCell(x, y, z) & m_triGrid.mask;
+                        for (uint32_t e = m_triGrid.start[h]; e < m_triGrid.start[h + 1]; ++e) {
+                            const uint32_t gt = m_triGrid.items[e];
+                            // Seen from the first cell both boxes cover (and only
+                            // for its box, not for another cell sharing the hash).
+                            if (!firstShared(glm::ivec3(x, y, z), a, m_triBox[gt])) continue;
+                            if (w.stamp[gt] == gv) continue; // in the bucket twice
+                            w.stamp[gt] = gv;
+                            Cloth& o = *m_active[m_triCloth[gt]];
+                            const uint32_t tri = gt - o.triBase;
+                            if (&o == &c && nearInTopology(c, v, tri)) continue;
+                            // Far from the triangle for how far it moved relative to it
+                            // (with room for the passes to move things): skip.
+                            const glm::vec4& sph = o.triSphere[tri];
+                            const float reach = sph.w + 3.0f * std::max(c.thickness, o.thickness) + glm::length(c.pos[v] - c.prev[v] - o.triMove[tri]);
+                            const glm::vec3 dc = c.pos[v] - glm::vec3(sph);
+                            const float d2 = glm::dot(dc, dc);
+                            // Within an edge of it: its edges may meet the triangle's (edge pass below).
+                            const float edgeReach = reach + c.meanEdge;
+                            if (d2 > edgeReach * edgeReach) continue;
+                            // (Its own fabric a few threads away doesn't count: that's always this near.)
+                            const uint32_t* t = &o.tris[size_t(tri) * 3];
+                            const glm::vec3 apart = c.rest[v] - o.rest[t[0]];
+                            if (&o != &c || glm::dot(apart, apart) > 9.0f * c.meanEdge * c.meanEdge) {
+                                for (uint8_t* flag : { &c.nearOther[v], &o.nearOther[t[0]], &o.nearOther[t[1]], &o.nearOther[t[2]] })
+                                    setFlag(*flag);
+                            }
+                            if (d2 > reach * reach) continue;
+                            // (The flags above are set whatever the patches: an edge of a
+                            // patch looked at may end at a vertex of one that isn't.)
+                            if (!loose && !patchPair(vp, m_patchBase[m_triCloth[gt]] + o.triPatch[tri])) continue;
+                            w.vt.push_back({ uint32_t(ci), v, gt });
+                        }
+                    }
+            // In triangle order (as the GPU's answer is sorted): the order the
+            // narrow phase fixes them in.
+            std::sort(w.vt.begin() + long(found), w.vt.end(), [](const VtPair& p, const VtPair& q) { return p.tri < q.tri; });
+        }
+    });
+    m_vtPairs.clear();
+    for (const Worker& w : m_workers) m_vtPairs.insert(m_vtPairs.end(), w.vt.begin(), w.vt.end());
+
+    // Only edges near another surface can meet another edge (the vertex
+    // queries flagged them): the rest stay out of the hash.
+    double edgeSized = 0.0;
+    size_t edgeBoxes = 0;
+    for (size_t ge = 0; ge < edgeTotal; ++ge) {
+        m_edgeBox[ge] = CellBox{};
+        if (!m_edgeLooked[ge]) continue;
+        const Cloth& c = *m_active[m_edgeCloth[ge]];
+        const uint32_t* ends = &c.edges[size_t(ge - c.edgeBase) * 2];
+        if (c.nearOther[ends[0]] || c.nearOther[ends[1]]) m_edgeMoves[ge] |= 2;
+        if (m_edgeMoves[ge] & 2) {
+            m_edgeBox[ge].lo = m_edgeBox[ge].hi = glm::ivec3(0); // placed below
+            const glm::vec3 ext = m_edgeHi[ge] - m_edgeLo[ge];
+            edgeSized += std::max(ext.x, std::max(ext.y, ext.z));
+            ++edgeBoxes;
+        }
+    }
+    // (Half as big again as the boxes: fewer cells per edge, measured fastest.)
+    const float edgeInv = 1.0f / (1.5f * std::max(cell, edgeBoxes ? float(edgeSized / double(edgeBoxes)) : cell));
+    for (size_t ge = 0; ge < edgeTotal; ++ge)
+        if (m_edgeBox[ge].valid() && !cellBox(m_edgeLo[ge], m_edgeHi[ge], edgeInv, m_edgeBox[ge].lo, m_edgeBox[ge].hi)) m_edgeBox[ge] = CellBox{};
+    m_edgeGrid.build(m_edgeBox);
+    m_edgeGrid.packed.resize(m_edgeGrid.items.size());
+    for (size_t k = 0; k < m_edgeGrid.items.size(); ++k) {
+        const uint32_t ge = m_edgeGrid.items[k];
+        m_edgeGrid.packed[k] = Grid::Packed{ m_edgeLo[ge], ge, m_edgeHi[ge], m_edgeMoves[ge], m_edgeBox[ge].lo, 0u };
+    }
+    parallel(uint32_t(edgeTotal), [&](uint32_t begin, uint32_t end, Worker& w) {
+        w.stamp.assign(edgeTotal, UINT32_MAX);
+        w.ee.clear();
+        for (uint32_t ge = begin; ge < end; ++ge) {
+            // Only edges that can move, near another surface (found by the
+            // vertex pass): nothing else can meet another edge this step.
+            if (m_edgeMoves[ge] != 3) continue;
+            const CellBox& b = m_edgeBox[ge];
+            Cloth& c = *m_active[m_edgeCloth[ge]];
+            const uint32_t e = ge - c.edgeBase;
+            const glm::vec3 lo = m_edgeLo[ge], hi = m_edgeHi[ge];
+            const size_t found = w.ee.size();
+            for (int x = b.lo.x; x <= b.hi.x; ++x)
+                for (int y = b.lo.y; y <= b.hi.y; ++y)
+                    for (int z = b.lo.z; z <= b.hi.z; ++z) {
+                        const uint32_t h = hashCell(x, y, z) & m_edgeGrid.mask;
+                        const Grid::Packed* p = m_edgeGrid.packed.data() + m_edgeGrid.start[h];
+                        const Grid::Packed* pe = m_edgeGrid.packed.data() + m_edgeGrid.start[h + 1];
+                        const glm::ivec3 here(x, y, z);
+                        for (; p != pe; ++p) {
+                            // Each pair once: from the lower edge when both move.
+                            if (p->moves == 3 && p->index <= ge) continue;
+                            // Bounds apart (most of a bucket), read in a row.
+                            if (p->hi.x < lo.x || p->hi.y < lo.y || p->hi.z < lo.z || p->lo.x > hi.x || p->lo.y > hi.y || p->lo.z > hi.z) continue;
+                            // Seen from the first cell both cover only (firstShared: the
+                            // bounds overlapping, it is in both boxes).
+                            if (here != glm::max(b.lo, p->cell)) continue;
+                            const uint32_t gf = p->index;
+                            if (w.stamp[gf] == ge) continue;
+                            w.stamp[gf] = ge;
+                            if (!patchPair(m_edgePatch[ge], m_edgePatch[gf])) continue;
+                            Cloth& o = *m_active[m_edgeCloth[gf]];
+                            const uint32_t f = gf - o.edgeBase;
+                            if (&o == &c && edgesNear(c, e, f)) continue;
+                            if (edgesFar(c, e, o, f, 3.0f * std::max(c.thickness, o.thickness))) continue;
+                            if (edgesApart(c, e, o, f, 3.0f * std::max(c.thickness, o.thickness))) continue;
+                            w.ee.push_back({ ge, gf });
+                        }
+                    }
+            std::sort(w.ee.begin() + long(found), w.ee.end(), [](const EePair& p, const EePair& q) { return p.b < q.b; });
+        }
+    });
+    m_eePairs.clear();
+    for (const Worker& w : m_workers) m_eePairs.insert(m_eePairs.end(), w.ee.begin(), w.ee.end());
+}
+
+// The same queries on the GPU (kke::ClothGpu, shaders/cloth_pairs.comp):
+// everything they read packed into one buffer of 32-bit words, the header
+// first (the shader's H_ words). False: the CPU must do it.
+bool ClothSystem::searchOnGpu(size_t triTotal, size_t edgeTotal, float cell) {
+    const uint32_t verts = m_vertBase.back();
+    // Every edge whose patch is looked at, in a hash of its own: which of
+    // them are near another surface is only known on the GPU.
+    double sized = 0.0;
+    size_t boxes = 0;
+    for (size_t ge = 0; ge < edgeTotal; ++ge) {
+        if (!m_edgeLooked[ge]) continue;
+        const glm::vec3 ext = m_edgeHi[ge] - m_edgeLo[ge];
+        sized += std::max(ext.x, std::max(ext.y, ext.z));
+        ++boxes;
+    }
+    const float edgeInv = 1.0f / std::max(cell, boxes ? float(sized / double(boxes)) : cell);
+    m_edgeAllBox.assign(edgeTotal, CellBox{});
+    for (size_t ge = 0; ge < edgeTotal; ++ge)
+        if (m_edgeLooked[ge] && !cellBox(m_edgeLo[ge], m_edgeHi[ge], edgeInv, m_edgeAllBox[ge].lo, m_edgeAllBox[ge].hi)) m_edgeAllBox[ge] = CellBox{};
+    m_edgeAllGrid.build(m_edgeAllBox);
+
+    std::vector<uint32_t>& w = m_gpuWords;
+    constexpr size_t kHeader = 33;
+    w.assign(kHeader, 0u);
+    auto begin = [&w](size_t word) { w[word] = uint32_t(w.size()); };
+    auto f = [](float x) {
+        uint32_t u;
+        std::memcpy(&u, &x, 4);
+        return u;
+    };
+    auto vec4 = [&w, &f](const glm::vec3& v, float x) { w.insert(w.end(), { f(v.x), f(v.y), f(v.z), f(x) }); };
+    auto box = [&w](const CellBox& b) {
+        const CellBox c = b.valid() ? b : CellBox{ glm::ivec3(0), glm::ivec3(-1) };
+        w.insert(w.end(), { uint32_t(c.lo.x), uint32_t(c.lo.y), uint32_t(c.lo.z), uint32_t(c.hi.x), uint32_t(c.hi.y), uint32_t(c.hi.z) });
+    };
+    w[0] = verts;
+    w[1] = uint32_t(triTotal);
+    w[2] = uint32_t(edgeTotal);
+    w[3] = m_triGrid.mask;
+    w[4] = m_edgeAllGrid.mask;
+    w[5] = m_patchTotal;
+    w[6] = m_allPairs ? 1u : 0u;
+    // (7, 8: how many pairs it may answer, filled in by ClothGpu.)
+    begin(9); // positions, w = the cloth's thickness
+    for (const Cloth* c : m_active)
+        for (const glm::vec3& p : c->pos) vec4(p, c->thickness);
+    begin(10); // at the last pass, w = the cloth's mean edge
+    for (const Cloth* c : m_active)
+        for (const glm::vec3& p : c->prev) vec4(p, c->meanEdge);
+    begin(11); // at rest
+    for (const Cloth* c : m_active)
+        for (const glm::vec3& p : c->rest) vec4(p, 0.0f);
+    begin(12); // 1 = can move, 2 = looked at
+    for (const Cloth* c : m_active)
+        for (size_t v = 0; v < c->pos.size(); ++v) w.push_back((c->invMass[v] > 0.0f ? 1u : 0u) | (c->vertLooked[v] ? 2u : 0u));
+    begin(13); // patch (pass-wide), or none
+    for (size_t ci = 0; ci < m_active.size(); ++ci)
+        for (uint32_t p : m_active[ci]->vertPatch) w.push_back(p == UINT32_MAX ? UINT32_MAX : m_patchBase[ci] + p);
+    begin(14); // cloth
+    for (size_t ci = 0; ci < m_active.size(); ++ci) w.insert(w.end(), m_active[ci]->pos.size(), uint32_t(ci));
+    begin(15);
+    for (const CellBox& b : m_vertBox) box(b);
+    begin(16); // neighbours: where each vertex's start (pass-wide), then them
+    {
+        uint32_t at = 0;
+        for (const Cloth* c : m_active) {
+            for (size_t v = 0; v < c->pos.size(); ++v) w.push_back(at + c->ringStart[v]);
+            at += uint32_t(c->ring.size());
+        }
+        w.push_back(at);
+        begin(17);
+        for (size_t ci = 0; ci < m_active.size(); ++ci)
+            for (uint32_t n : m_active[ci]->ring) w.push_back(m_vertBase[ci] + n);
+    }
+    begin(18); // triangles: pass-wide vertices, cloth
+    for (size_t ci = 0; ci < m_active.size(); ++ci) {
+        const Cloth& c = *m_active[ci];
+        for (size_t t = 0; t + 2 < c.tris.size(); t += 3)
+            w.insert(w.end(), { m_vertBase[ci] + c.tris[t], m_vertBase[ci] + c.tris[t + 1], m_vertBase[ci] + c.tris[t + 2], uint32_t(ci) });
+    }
+    begin(19);
+    for (const Cloth* c : m_active)
+        for (const glm::vec4& sph : c->triSphere) vec4(glm::vec3(sph), sph.w);
+    begin(20);
+    for (const Cloth* c : m_active)
+        for (const glm::vec3& m : c->triMove) vec4(m, 0.0f);
+    begin(21);
+    for (size_t ci = 0; ci < m_active.size(); ++ci)
+        for (uint32_t p : m_active[ci]->triPatch) w.push_back(m_patchBase[ci] + p);
+    begin(22);
+    for (const CellBox& b : m_triBox) box(b);
+    begin(23);
+    w.insert(w.end(), m_triGrid.start.begin(), m_triGrid.start.end());
+    begin(24);
+    w.insert(w.end(), m_triGrid.items.begin(), m_triGrid.items.end());
+    begin(25); // edges: pass-wide ends, cloth, 1 = can move
+    for (size_t ge = 0; ge < edgeTotal; ++ge) {
+        const Cloth& c = *m_active[m_edgeCloth[ge]];
+        const uint32_t* ends = &c.edges[size_t(ge - c.edgeBase) * 2];
+        const uint32_t base = m_vertBase[m_edgeCloth[ge]];
+        w.insert(w.end(), { base + ends[0], base + ends[1], m_edgeCloth[ge], uint32_t(m_edgeMoves[ge] & 1) });
+    }
+    begin(26);
+    for (size_t ge = 0; ge < edgeTotal; ++ge) vec4(m_edgeLooked[ge] ? m_edgeLo[ge] : glm::vec3(0.0f), 0.0f);
+    begin(27);
+    for (size_t ge = 0; ge < edgeTotal; ++ge) vec4(m_edgeLooked[ge] ? m_edgeHi[ge] : glm::vec3(0.0f), 0.0f);
+    begin(28);
+    w.insert(w.end(), m_edgePatch.begin(), m_edgePatch.end());
+    begin(29);
+    for (const CellBox& b : m_edgeAllBox) box(b);
+    begin(30);
+    w.insert(w.end(), m_edgeAllGrid.start.begin(), m_edgeAllGrid.start.end());
+    begin(31);
+    w.insert(w.end(), m_edgeAllGrid.items.begin(), m_edgeAllGrid.items.end());
+    begin(32);
+    for (uint64_t bits : m_patchPairs) w.insert(w.end(), { uint32_t(bits), uint32_t(bits >> 32) });
+    w.push_back(0u); // (no array may be empty past the end)
+
+    if (!m_gpu->search(w, verts, uint32_t(edgeTotal), m_gpuVt, m_gpuEe, m_gpuFlags)) return false;
+
+    // Sorted (the GPU answers in any order; the narrow phase fixes them in
+    // this one, as the CPU finds them), each once.
+    std::vector<uint64_t> keys(m_gpuVt.size() / 2);
+    for (size_t i = 0; i < keys.size(); ++i) keys[i] = (uint64_t(m_gpuVt[i * 2]) << 32) | m_gpuVt[i * 2 + 1];
+    std::sort(keys.begin(), keys.end());
+    keys.erase(std::unique(keys.begin(), keys.end()), keys.end());
+    m_vtPairs.clear();
+    size_t ci = 0;
+    for (uint64_t k : keys) {
+        const uint32_t gv = uint32_t(k >> 32);
+        while (gv >= m_vertBase[ci + 1]) ++ci;
+        m_vtPairs.push_back({ uint32_t(ci), gv - m_vertBase[ci], uint32_t(k) });
+    }
+    keys.resize(m_gpuEe.size() / 2);
+    for (size_t i = 0; i < keys.size(); ++i) keys[i] = (uint64_t(m_gpuEe[i * 2]) << 32) | m_gpuEe[i * 2 + 1];
+    std::sort(keys.begin(), keys.end());
+    keys.erase(std::unique(keys.begin(), keys.end()), keys.end());
+    m_eePairs.clear();
+    for (uint64_t k : keys) m_eePairs.push_back({ uint32_t(k >> 32), uint32_t(k) });
+    for (size_t c = 0; c < m_active.size(); ++c)
+        for (size_t v = 0; v < m_active[c]->pos.size(); ++v) m_active[c]->nearOther[v] = m_gpuFlags[m_vertBase[c] + v] ? 1 : 0;
+    return true;
 }
 
 // Cheap reject: two edges can only pass through each other when the
@@ -1264,7 +1525,7 @@ bool ClothSystem::testEdgeEdge(Cloth& c, uint32_t e, Cloth& o, uint32_t f) {
     glm::vec3 n;
     float gap;
     bool crossed = false;
-    const bool tangled = std::max(std::max(c.undoneStreak[a0], c.undoneStreak[a1]), std::max(o.undoneStreak[b0], o.undoneStreak[b1])) >= kTangledSteps;
+    const bool tangled = tangledAt(std::max(std::max(c.undoneStreak[a0], c.undoneStreak[a1]), std::max(o.undoneStreak[b0], o.undoneStreak[b1])));
     // Nearly parallel edges have no well-defined closest points to compare.
     const bool crossing = vol * volPrev <= 0.0f && uab2 > 0.04f * glm::dot(ua, ua) * glm::dot(ub, ub);
     if (crossing && lPrev > 1e-6f && !tangled && middle(sp) && middle(tp) && middle(s) && middle(t) && glm::dot(d, dPrev) < 0.0f) {
@@ -1328,7 +1589,7 @@ bool ClothSystem::testVertexTriangle(Cloth& c, uint32_t v, Cloth& o, uint32_t tr
         // Where along the step it met the plane, and was it inside the triangle then?
         const float k = sp / (sp - s);
         const glm::vec3 bc = barycentric(glm::mix(c.prev[v], p, k), glm::mix(pa, a, k), glm::mix(pb, b, k), glm::mix(pd, d, k));
-        if (inside(bc, 0.02f) && c.undoneStreak[v] < kTangledSteps) {
+        if (inside(bc, 0.02f) && !tangledAt(c.undoneStreak[v])) {
             side = sp > 0.0f ? 1.0f : -1.0f;
             crossed = true;
         }
@@ -1336,7 +1597,7 @@ bool ClothSystem::testVertexTriangle(Cloth& c, uint32_t v, Cloth& o, uint32_t tr
     if (!crossed) {
         if (std::fabs(s) >= thick) return false;
         if (!inside(barycentric(p, a, b, d), 0.0f)) return false;
-        const float ref = std::fabs(sp) > 1e-6f && c.undoneStreak[v] < kTangledSteps ? sp : s;
+        const float ref = std::fabs(sp) > 1e-6f && !tangledAt(c.undoneStreak[v]) ? sp : s;
         side = ref >= 0.0f ? 1.0f : -1.0f;
     }
     const glm::vec3 bc = glm::clamp(barycentric(p, a, b, d), glm::vec3(0.0f), glm::vec3(1.0f));
@@ -1448,6 +1709,30 @@ void ClothSystem::OnStep(const JPH::PhysicsStepListenerContext& ctx) {
     m_stepMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
 }
 
+int ClothSystem::beginStep() {
+    m_stepMs = 0.0;
+    m_undid = false;
+    for (auto& [id, c] : m_cloths) {
+        c.stats.selfContacts = 0;
+        c.stats.crossingsUndone = 0;
+    }
+    const int sub = m_calm < kCalmUpdates ? m_substeps : 1;
+    if (sub != m_sub) {
+        m_sub = sub;
+        setIterations();
+    }
+    return m_sub;
+}
+
+bool ClothSystem::tangledAt(uint8_t streak) const { return m_substeps == 1 && streak >= kTangledSteps; }
+
+// Each soft body's solver iterations spread over the m_sub sub-steps.
+void ClothSystem::setIterations() {
+    const JPH::BodyLockInterfaceNoLock& locks = m_system.GetBodyLockInterfaceNoLock(); // between updates
+    for (auto& [id, c] : m_cloths)
+        if (JPH::Body* body = locks.TryGetBody(c.body)) softOf(*body)->SetNumIterations(uint32_t((c.iterations + m_sub - 1) / m_sub));
+}
+
 void ClothSystem::endStep() {
     // The pass runs after the step too, so what's drawn (and what the game
     // reads) is the cloth with every crossing the step made already undone.
@@ -1457,6 +1742,7 @@ void ClothSystem::endStep() {
         protectAll(m_system.GetBodyLockInterfaceNoLock()); // between steps: nothing else touches the bodies
         m_between = false;
         m_protectedAfterStep = true;
+        m_calm = m_undid ? 0u : std::min(m_calm + 1u, 1u << 20);
         m_stepMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     }
     m_lastMs = m_stepMs;
@@ -1465,8 +1751,6 @@ void ClothSystem::endStep() {
 void ClothSystem::protectAll(const JPH::BodyLockInterface& locks) {
     m_active.clear();
     for (auto& [id, c] : m_cloths) {
-        c.stats.selfContacts = 0;
-        c.stats.crossingsUndone = 0;
         c.stepBody = nullptr;
         if (c.level != ClothProtection::Full) continue;
         JPH::Body* body = locks.TryGetBody(c.body);
@@ -1486,20 +1770,29 @@ void ClothSystem::protectAll(const JPH::BodyLockInterface& locks) {
         c.reach = c.motion;
         c.nearOther.assign(c.pos.size(), 0);
         c.undoneStreak.resize(c.pos.size(), 0);
-        c.undoneNow.assign(c.pos.size(), 0);
+        c.undoneNow.resize(c.pos.size(), 0);
         m_active.push_back(&c);
     }
     if (m_active.empty()) return;
     protect();
     for (Cloth* c : m_active) {
+        if (c->stats.crossingsUndone > 0) m_undid = true;
         for (size_t i = 0; i < c->pos.size(); ++i) {
-            c->undoneStreak[i] = c->undoneNow[i] ? uint8_t(std::min(255, c->undoneStreak[i] + 2)) : uint8_t(std::max(0, c->undoneStreak[i] - 1));
+            // (Counted once per update, however many sub-steps it has.)
+            if (m_between) {
+                c->undoneStreak[i] = c->undoneNow[i] ? uint8_t(std::min(255, c->undoneStreak[i] + 2)) : uint8_t(std::max(0, c->undoneStreak[i] - 1));
+                c->undoneNow[i] = 0;
+            }
             // However many contacts pile up on one vertex (a heap of cloth
             // on the floor), the pass moves it no further than the step
             // moved it or anything it touched, plus a little: enough to
             // undo any crossing, never enough to fight the solver and the
             // floor and feed energy into the heap.
-            const float reach = c->reach[i] + 3.0f * c->thickness;
+            // And never more than a few thicknesses in one pass, however
+            // fast things moved: a big jump stretches the fabric around it,
+            // the solver springs back from that, and between layers pressed
+            // together that can build up until the cloth flies apart.
+            const float reach = std::min(c->reach[i] + 3.0f * c->thickness, kMostPerPass * (c->thickness + 0.1f * c->meanEdge));
             const glm::vec3 d = c->pos[i] - c->solved[i];
             const float l2 = glm::dot(d, d);
             if (l2 > reach * reach) c->pos[i] = c->solved[i] + d * (reach / std::sqrt(l2));

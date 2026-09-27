@@ -21,15 +21,22 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <unordered_map>
+#include <utility>
 #include <vector>
+
+namespace kke {
+class ClothGpu;
+}
 
 namespace kke::detail {
 
 class ClothSystem final : public JPH::PhysicsStepListener, public JPH::SoftBodyContactListener {
 public:
-    // jobs: the broad phase of the pass between steps runs on it (nullptr: one thread).
-    ClothSystem(JPH::PhysicsSystem& system, JPH::ObjectLayer layer, JPH::TempAllocator& temp, JPH::JobSystem* jobs);
+    // jobs: the protection pass's broad phase runs on it (nullptr: one thread).
+    // substeps: RigidWorld::Settings::clothSubsteps.
+    ClothSystem(JPH::PhysicsSystem& system, JPH::ObjectLayer layer, JPH::TempAllocator& temp, JPH::JobSystem* jobs, int substeps);
     ~ClothSystem() override;
     ClothSystem(const ClothSystem&) = delete;
     ClothSystem& operator=(const ClothSystem&) = delete;
@@ -57,10 +64,13 @@ public:
     ClothStats stats(uint32_t id) const;
     void setWind(const glm::vec3& v);
     glm::vec3 wind() const { return m_wind; }
+    // Full protection's pair search on the GPU (null: the CPU).
+    void setGpu(std::shared_ptr<ClothGpu> gpu) { m_gpu = std::move(gpu); }
     double lastMs() const { return m_lastMs; }
-    // Called by RigidWorld::step before Jolt's update: the time spent in
-    // OnStep is summed over the step's collision steps.
-    void beginStep() { m_stepMs = 0.0; }
+    // Called by RigidWorld::step before Jolt's update. Returns how many
+    // sub-steps to cut each collision step into: more than one while the
+    // protection pass is undoing crossings (RigidWorld::Settings::clothSubsteps).
+    int beginStep();
     void endStep(); // after the Jolt update: the protection pass on what it left
 
     void OnStep(const JPH::PhysicsStepListenerContext& context) override;
@@ -74,6 +84,7 @@ private:
         Fabric fabric;
         float wind = 1.0f;                   // ClothDesc::wind
         float thickness = 0.008f;
+        int iterations = 6;                  // solver sub-steps per physics step (ClothDesc / HairStyle)
         std::vector<uint32_t> tris;          // faces (protection, air)
         std::vector<glm::vec3> rest;         // rest pose, world
         std::vector<float> restArea;         // per triangle, m^2
@@ -82,10 +93,11 @@ private:
         std::vector<glm::vec3> prev;         // world positions after the last pass
         std::vector<glm::vec3> pos, vel;     // scratch: this pass
         // Per vertex: how often it was put back through a triangle lately
-        // (+2 a step it was, -1 a step it wasn't). A real crossing is undone
-        // once; a vertex undone again and again is stuck in a tangle the
-        // pass can't see the start of (two edges that slid through each
-        // other), and is let go until it settles on a side.
+        // (+2 an update it was, -1 one it wasn't). Without sub-steps
+        // (clothSubsteps = 1), a vertex undone again and again is let go
+        // until it settles on a side (tangledAt): layers a solid presses
+        // together would otherwise fight the solver until it blows up. With
+        // sub-steps they are kept apart instead, and nothing is let go.
         std::vector<uint8_t> undoneStreak, undoneNow;
         std::vector<uint16_t> movedIn;       // scratch: the protection pass (1-based) that last moved it, 0 = none
         std::vector<glm::vec3> solved;       // scratch: pos as the solver left it, before protect()
@@ -127,6 +139,20 @@ private:
         std::vector<uint32_t> start, fill, items;
         uint32_t mask = 0;
         void build(const std::vector<CellBox>& boxes);
+        // Optional: what a query tests first, next to every entry in bucket
+        // order, so it rejects most of a bucket reading memory in a row
+        // (the edges' grid: its bounds, m_edgeMoves and CellBox lo; filled
+        // after build()). Measured: 30% off the edge search in a heap; the
+        // triangles' grid gained nothing (fewer candidates per bucket).
+        struct Packed {
+            glm::vec3 lo;
+            uint32_t index;
+            glm::vec3 hi;
+            uint32_t moves;
+            glm::ivec3 cell;
+            uint32_t unused;
+        };
+        std::vector<Packed> packed;
     };
     void load(Cloth& c, JPH::Body& body);
     void store(Cloth& c, JPH::Body& body);
@@ -154,6 +180,12 @@ private:
     float m_dt = 1.0f / 60.0f; // this collision step (OnStep), for friction
     uint16_t m_pass = 0;       // protect(): the narrow-phase pass running (1-based)
     bool m_protectedAfterStep = false; // endStep() ran the pass: the next step's first OnStep needn't
+    int m_substeps = 1;        // while undoing crossings (RigidWorld::Settings::clothSubsteps)
+    int m_sub = 1;             // sub-steps per collision step this update (beginStep)
+    uint32_t m_calm = 1u << 20; // updates in a row in which the pass undid no crossing
+    bool m_undid = false;      // this update's passes undid a crossing
+    void setIterations();
+    bool tangledAt(uint8_t streak) const;
     double m_stepMs = 0.0, m_lastMs = 0.0;
     // Protection scratch, reused.
     std::vector<CellBox> m_triBox, m_edgeBox;
@@ -194,10 +226,30 @@ private:
     };
     std::vector<Worker> m_workers;
     JPH::JobSystem* m_jobs = nullptr;
-    bool m_between = false; // endStep(): outside Jolt's update, may use m_jobs
+    bool m_between = false; // endStep(): after Jolt's update, not between its sub-steps
     void parallel(uint32_t count, const std::function<void(uint32_t, uint32_t, Worker&)>& fn);
     Grid m_triGrid, m_edgeGrid;
     std::vector<Cloth*> m_active;
+    // The GPU's search (kke::ClothGpu): the queries packed for it, its
+    // answers, and every edge in a hash of its own (the CPU's holds only
+    // those near another surface, known only after the vertex queries).
+    std::shared_ptr<ClothGpu> m_gpu;
+    bool m_gpuCheck = false; // KKE_CLOTH_GPU_CHECK=1: the CPU searches too, and differences are logged
+    std::vector<uint32_t> m_gpuWords, m_gpuVt, m_gpuEe, m_gpuFlags;
+    std::vector<CellBox> m_vertBox, m_edgeAllBox;
+    Grid m_edgeAllGrid;
+    bool searchOnGpu(size_t triTotal, size_t edgeTotal, float cell);
+    void searchOnCpu(size_t triTotal, size_t edgeTotal, float cell);
+    std::vector<uint8_t> m_edgeLooked; // per edge: its patch is looked at
+    uint64_t m_gpuChecks = 0, m_gpuDiffered = 0;
+    // Seen from cell c only when it is the first cell (per axis) that the
+    // query's box (from qa) and this box both cover, and the box covers it
+    // (it is not in the bucket only by sharing a hash): once per pair,
+    // whichever cells they share, the same on the CPU and the GPU.
+    static bool firstShared(const glm::ivec3& c, const glm::ivec3& qa, const CellBox& box) {
+        if (glm::any(glm::lessThan(c, box.lo)) || glm::any(glm::greaterThan(c, box.hi))) return false;
+        return c == glm::max(qa, box.lo);
+    }
 };
 
 } // namespace kke::detail

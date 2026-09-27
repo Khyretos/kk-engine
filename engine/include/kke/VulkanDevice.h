@@ -22,6 +22,10 @@ class Window;
 struct QueueFamilyIndices {
     std::optional<uint32_t> graphics;
     std::optional<uint32_t> present;
+    // A queue for compute work of its own (kke::ClothGpu), when the GPU has
+    // one: a compute-only family, or a second queue of the graphics family.
+    std::optional<uint32_t> compute;
+    uint32_t computeIndex = 0;
 
     bool isComplete() const { return graphics.has_value() && present.has_value(); }
 };
@@ -44,6 +48,9 @@ public:
 
     VkQueue graphicsQueue() const { return m_graphicsQueue; }
     VkQueue presentQueue() const { return m_presentQueue; }
+    // The queue of its own for compute (null when the GPU has only the
+    // graphics queue): work there runs beside the frame's, not after it.
+    VkQueue computeQueue() const { return m_computeQueue; }
     const QueueFamilyIndices& queueFamilies() const { return m_queueFamilies; }
 
     VkCommandPool commandPool() const { return m_commandPool; }
@@ -115,6 +122,7 @@ private:
 
     VkQueue m_graphicsQueue = VK_NULL_HANDLE;
     VkQueue m_presentQueue = VK_NULL_HANDLE;
+    VkQueue m_computeQueue = VK_NULL_HANDLE;
     QueueFamilyIndices m_queueFamilies;
 
     VkCommandPool m_commandPool = VK_NULL_HANDLE;

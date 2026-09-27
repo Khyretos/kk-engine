@@ -14,6 +14,7 @@
 
 namespace kke {
 
+class ClothGpu;
 struct RagdollDesc;
 struct RagdollDrive;
 
@@ -59,6 +60,11 @@ public:
         uint32_t maxBodies = 65536;
         glm::vec3 gravity{0.0f, -9.81f, 0.0f};
         float contactReportSpeed = 0.5f;     // m/s: slower impacts aren't reported
+        // While Full cloth is being kept from going through cloth, each
+        // physics step is cut in this many so the protection runs between
+        // the cloth solver's sub-steps (docs/CLOTH.md). 1 = never: cheaper,
+        // but layers pressed together by a solid work through each other.
+        int clothSubsteps = 6;
     };
 
     struct RayHit {
@@ -248,6 +254,9 @@ public:
     void setWind(const glm::vec3& velocity); // m/s, pushes on every cloth by its fabric's airDrag
     glm::vec3 wind() const;
     double lastClothMs() const;            // the engine's protection pass, last step (Jolt's own cloth solve is in lastStepMs)
+    // Full protection's pair search on the GPU (kke/ClothGpu.h;
+    // ClothGpu::create(app.device()), null = the CPU, the default).
+    void setClothGpu(std::shared_ptr<ClothGpu> gpu);
 
     // Hair (kke/Hair.h, docs/HAIR.md): guide strands as Jolt soft bodies,
     // stepped with the cloth and blown by setWind. Positions are world

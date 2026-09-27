@@ -105,7 +105,7 @@ time) picks how hard the engine works at it:
 
 | Level | What it does | When to pick it |
 | --- | --- | --- |
-| **Full** (default) | Everything below, plus cloth against cloth and against itself: every vertex kept `thickness` from every triangle, every edge from every edge, with friction. Anything that went through between two steps is put back on the side it came from (continuous: fast folds don't slip through), the pass repeats until nothing is crossed, and it runs once more after every step so what's drawn is clean. | Anything the camera looks at: capes, blankets, a bed, curtains people walk through. |
+| **Full** (default) | Everything below, plus cloth against cloth and against itself: every vertex kept `thickness` from every triangle, every edge from every edge, with friction. Anything that went through between two steps is put back on the side it came from (continuous: fast folds don't slip through), the pass repeats until nothing is crossed, and it runs once more after every step so what's drawn is clean. While it is undoing crossings, it also runs between the solver's sub-steps (below). | Anything the camera looks at: capes, blankets, a bed, curtains people walk through. |
 | **Basic** | Vertices are balls of `thickness` (cloth rests *on* things), tethers stop it being stretched through a collider, back-stops keep capes off the body. No cloth-against-cloth. | Lots of background cloth that never folds onto itself or other cloth: distant flags, awnings. |
 | **Off** | Raw Jolt, no extras. | You're measuring, or the cloth is tiny and far away. |
 
@@ -118,39 +118,64 @@ demo scenes, counting exactly how many edges pass through triangles):
   in 12 one-minute runs with different starting points and winds: never
   unstable, never crumpled up.
 
-**Known limit.** Where layers are squeezed between a hard edge and each
-other while sliding (the demo's bed: silk slides over the wool blanket at
-the mattress edge while a denim throw lands on it), a hard landing can
-leave a few hundred of the silk sheet's 1,900 edges through the throw for
-about two seconds before the pass sorts them out, and the throw can end up
-under the blanket. The cause is the rigid collision (Jolt) and the cloth
-collision (the engine) taking turns instead of being solved together.
-Solving them together means changing Jolt's soft-body solver; that is the
-next step if it matters in your game.
+### Layers pressed together: sub-steps
 
-The same cause shows worse with two or three sheets draped over a ball
-together: the ball pushes the lower sheet out through the upper one every
-step, the pass puts it back, and after 8 steps of that the vertices are
-let go as "tangled" (so a real tangle can settle). From then the sheets
-stay through each other. Untangling instead of letting go (Baraff, Witkin
-and Kass, "Untangling Cloth", 2003) is the planned fix.
+The solver (Jolt) and the pass (the engine) take turns: Jolt keeps cloth
+out of solids, the pass keeps cloth out of cloth. Where a solid presses
+layers together (three sheets draped over a ball, a bed), Jolt pushes the
+lower sheet up through the upper one every step, and the pass puts it
+back. Done once after the whole step, that fix is big: the fabric around
+it is stretched, the solver springs back from it, and the layers work
+their way through each other. Letting such vertices go as "tangled"
+(what the pass used to do) left the sheets through each other for good.
+
+So while the pass is undoing crossings, each physics step is cut in
+`RigidWorld::Settings::clothSubsteps` (6 by default) and the pass runs
+between the cuts (each cloth's solver iterations are shared out over
+them). Every fix is then small, and the layers are kept apart as they are
+pressed together. Once nothing has been undone for half a second, steps
+go back to one piece. No fix moves a vertex more than a few thicknesses
+in one pass, so pressed layers can't build up energy and fly apart.
+
+Edges through other cloth, three sheets (silk, cotton, denim, 32 x 32)
+dropped together over a ball, counted every third step for 6 s
+(`tests/test_cloth.cpp` has a smaller version):
+
+| clothSubsteps | Three sheets over a ball | 64 x 64 blanket piling on the floor |
+| --- | --- | --- |
+| 1 (the pass after each step only) | 367,000 | 2,300 |
+| 2 | 7,500 | 1,400 |
+| 6 (default) | 272 | 118 |
+
+The cost is the pass running up to six times a step, only while it is
+undoing crossings (the table below). Set `clothSubsteps = 1` to go back
+to one pass a step, with the old "let go" behaviour. The rigid bodies are
+stepped in the same sub-steps meanwhile (more exact, and more costly with
+many bodies).
+
+**Known limit.** The demo's bed (silk sliding over a wool blanket at the
+mattress edge while a denim throw lands on it) used to leave a few hundred
+of the silk sheet's edges through the throw for about two seconds after a
+hard landing. It has not been measured again with sub-steps.
 
 ## What it costs
 
 `kke_bench --filter cloth_` (one thread, the solver's 6 sub-steps, 60 steps a
 second; this sandbox's 4-core VM, so a desktop is faster; medians over 4 s):
 
-| Case | Off | Basic | Full |
-| --- | --- | --- | --- |
-| One 32 x 32 sheet over a ball (1,024 vertices) | 0.35 ms | 0.42 ms | 0.94 ms |
-| One 64 x 64 blanket over a ball, piling on the floor (4,096 vertices) | | 1.74 ms | 9 ms (p95 19 ms) |
-| 16 sheets of 24 x 24 (9,216 vertices) | | 3.2 ms | 7.8 ms |
-| A 32 x 32 wool cape on swinging shoulders in gusty wind | | 0.33 ms | 7.1 ms |
+| Case | Off | Basic | Full, clothSubsteps 1 | Full (default: 6) |
+| --- | --- | --- | --- | --- |
+| One 32 x 32 sheet over a ball (1,024 vertices) | 0.41 ms | 0.43 ms | 0.82 ms | 0.92 ms |
+| One 64 x 64 blanket over a ball, piling on the floor (4,096 vertices) | | 1.4 ms | 10 ms (p95 19 ms) | 33 ms (p95 63 ms) |
+| 16 sheets of 24 x 24 (9,216 vertices) | | 3.4 ms | 6.6 ms | 6.9 ms |
+| A 32 x 32 wool cape on swinging shoulders in gusty wind | | 0.38 ms | 6.8 ms | 7.2 ms |
 
 With the job system (the demo, 4 threads), the pass's search for pairs runs
 on every thread: the Fabrics scene (12 cloths, 7,944 vertices) steps in
-about 7 ms, the stress scene (16 sheets) in about 6 ms, the bed (3 layers,
-3,624 vertices, all touching) in 10-12 ms.
+about 7 ms, the stress scene (16 sheets) in about 6 ms. The bed (3 layers,
+3,624 vertices, all touching) is always undoing something, so it runs in
+sub-steps all the time: about 2.9 times its cost with `clothSubsteps = 1`
+(1.6 times with 2).
 
 Nearly all of Full's cost is finding which parts are near which (the
 fixing itself is under 5%). What keeps that down:
@@ -169,16 +194,45 @@ fixing itself is under 5%). What keeps that down:
   every other.
 - **Grid cells as big as what's in them**, so cloth moving fast gets
   bigger cells. Nothing is left out of the search for moving fast.
+- **Edges' bounds sit next to them in the grid**, so the edge search
+  rejects most of a cell reading memory in a row (a third off the edge
+  search in a heap). The same for triangles was measured slower.
 
 What still costs: cloth that is really close to itself, like a blanket in
 a heap or a cape flapping into folds. A light cape in strong wind costs up
-to 20 times Basic. Moving the search to the GPU is the next step for that.
+to 20 times Basic. The search on the GPU (below) is for that.
+
+### On the GPU
+
+On a GPU with a queue for compute of its own (most desktop GPUs), the
+search for pairs runs there. The CPU still builds the grid and does the
+fixing; the GPU looks at every candidate pair at once, where the CPU goes
+through dozens per vertex for each real pair in a heap. It gives the same
+pairs as the CPU (sometimes one or two more, which the fixing then finds
+aren't touching), so nothing about clipping changes.
+
+The engine turns it on by itself (`RigidBodyModule`); a game with its own
+`RigidWorld` does `world.setClothGpu(kke::ClothGpu::create(app.device()))`.
+`create()` gives null where there is no such queue, and the CPU searches
+as before. The CPU also takes over for a step whenever there are more pairs
+than the GPU's buffers hold (they grow for the next one).
+
+| Variable | What |
+| --- | --- |
+| `KKE_CLOTH_GPU=0` | Search on the CPU only |
+| `KKE_CLOTH_GPU=shared` | Use the graphics queue (a GPU with one queue; the search then waits for the frame) |
+| `KKE_CLOTH_GPU_CHECK=1` | Search on both and log any difference (for testing; slow) |
+
+`ClothGpu::stats()` gives searches done, searches left to the CPU and the
+last one's time; the demo's panel shows them.
 
 Rules of thumb:
 
 - Full costs 2 to 4 times Basic for cloth lying or hanging, and up to 20
   times for cloth folding onto itself all the time (a flapping cape, a
   heap). A cloth lying alone costs little more than Basic.
+- Heaps and layers pressed together cost up to 3 times more again while
+  they run in sub-steps. `clothSubsteps` trades that against clipping.
 - Cloth that stops moving falls asleep and costs almost nothing (it still
   stops other cloth as an obstacle).
 - Vertex count matters most. A cape is fine at 16 x 20; a blanket at 32 x

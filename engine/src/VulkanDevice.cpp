@@ -275,6 +275,19 @@ QueueFamilyIndices VulkanDevice::findQueueFamilies(VkPhysicalDevice device) cons
 
         if (indices.isComplete()) break;
     }
+    // Compute beside the frame: a compute-only family (AMD, NVIDIA), else a
+    // second queue of the graphics family (NVIDIA has 16).
+    for (uint32_t i = 0; i < count; ++i) {
+        if ((families[i].queueFlags & VK_QUEUE_COMPUTE_BIT) && !(families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) && families[i].queueCount > 0) {
+            indices.compute = i;
+            indices.computeIndex = 0;
+            break;
+        }
+    }
+    if (!indices.compute && indices.graphics && families[*indices.graphics].queueCount > 1) {
+        indices.compute = *indices.graphics;
+        indices.computeIndex = 1;
+    }
 
     return indices;
 }
@@ -340,15 +353,16 @@ void VulkanDevice::createLogicalDevice(bool enableValidation) {
         m_queueFamilies.graphics.value(),
         m_queueFamilies.present.value()
     };
+    if (m_queueFamilies.compute) uniqueFamilies.insert(*m_queueFamilies.compute);
 
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-    float priority = 1.0f;
+    const float priorities[2] = { 1.0f, 1.0f };
     for (uint32_t family : uniqueFamilies) {
         VkDeviceQueueCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         info.queueFamilyIndex = family;
-        info.queueCount = 1;
-        info.pQueuePriorities = &priority;
+        info.queueCount = m_queueFamilies.compute && family == *m_queueFamilies.compute ? m_queueFamilies.computeIndex + 1 : 1;
+        info.pQueuePriorities = priorities;
         queueCreateInfos.push_back(info);
     }
 
@@ -385,6 +399,7 @@ void VulkanDevice::createLogicalDevice(bool enableValidation) {
 
     vkGetDeviceQueue(m_device, m_queueFamilies.graphics.value(), 0, &m_graphicsQueue);
     vkGetDeviceQueue(m_device, m_queueFamilies.present.value(), 0, &m_presentQueue);
+    if (m_queueFamilies.compute) vkGetDeviceQueue(m_device, *m_queueFamilies.compute, m_queueFamilies.computeIndex, &m_computeQueue);
 }
 
 void VulkanDevice::createAllocator() {

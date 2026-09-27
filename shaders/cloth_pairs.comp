@@ -1,0 +1,208 @@
+#version 450
+// The cloth protection pass's broad phase on the GPU (kke::ClothGpu,
+// engine/src/ClothGpu.cpp): which vertices may touch which triangles, and
+// which edges which edges, exactly as ClothSystem::protect() finds them on
+// the CPU (engine/src/ClothSystem.cpp), one thread per vertex or edge.
+// The CPU builds the spatial hashes and the cell boxes; this does the
+// queries, the part that costs (dozens of candidates per vertex in a
+// crumpled pile for one real pair).
+//
+// Comparisons have a little slack (kSlack): where float rounding on the
+// GPU differs from the CPU's, it finds a borderline pair rather than
+// missing it (the narrow phase tests every pair again anyway).
+//
+// Everything in comes in one buffer of 32-bit words; its first words say
+// where each array starts (ClothGpu.cpp's Header, which this mirrors).
+layout(local_size_x = 64) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer In { uint w[]; } src;
+layout(std430, set = 0, binding = 1) buffer Out { uint w[]; } dst;     // [0] vt pairs, [1] ee pairs, then a flag per vertex
+layout(std430, set = 0, binding = 2) writeonly buffer VtPairs { uint w[]; } vtPairs; // vertex, triangle
+layout(std430, set = 0, binding = 3) writeonly buffer EePairs { uint w[]; } eePairs; // edge, edge
+
+layout(push_constant) uniform Push { uint kernel; } push; // 0 = vertices against triangles, 1 = edges against edges
+
+// Header words (ClothGpu.cpp).
+const uint H_VERTS = 0, H_TRIS = 1, H_EDGES = 2, H_TRI_MASK = 3, H_EDGE_MASK = 4, H_PATCH_TOTAL = 5, H_ALL_PAIRS = 6, H_VT_CAP = 7, H_EE_CAP = 8;
+const uint H_POS = 9, H_PREV = 10, H_REST = 11, H_VINFO = 12, H_VPATCH = 13, H_VCLOTH = 14, H_VCELL = 15, H_RING_START = 16, H_RING = 17;
+const uint H_TRI = 18, H_TSPHERE = 19, H_TMOVE = 20, H_TPATCH = 21, H_TCELL = 22, H_TGRID_START = 23, H_TGRID_ITEMS = 24;
+const uint H_EDGE = 25, H_ELO = 26, H_EHI = 27, H_EPATCH = 28, H_ECELL = 29, H_EGRID_START = 30, H_EGRID_ITEMS = 31, H_PATCH_BITS = 32;
+
+const float kSlack = 1.0 + 1e-5;
+
+uint hdr(uint k) { return src.w[k]; }
+uint at(uint k, uint i) { return src.w[hdr(k) + i]; }
+vec4 vec4At(uint k, uint i) {
+    uint b = hdr(k) + i * 4u;
+    return vec4(uintBitsToFloat(src.w[b]), uintBitsToFloat(src.w[b + 1u]), uintBitsToFloat(src.w[b + 2u]), uintBitsToFloat(src.w[b + 3u]));
+}
+ivec3 cellLo(uint k, uint i) { uint b = hdr(k) + i * 6u; return ivec3(int(src.w[b]), int(src.w[b + 1u]), int(src.w[b + 2u])); }
+ivec3 cellHi(uint k, uint i) { uint b = hdr(k) + i * 6u + 3u; return ivec3(int(src.w[b]), int(src.w[b + 1u]), int(src.w[b + 2u])); }
+
+vec3 pos(uint v) { return vec4At(H_POS, v).xyz; }
+vec3 prev(uint v) { return vec4At(H_PREV, v).xyz; }
+float thicknessOf(uint v) { return vec4At(H_POS, v).w; }  // its cloth's
+float meanEdgeOf(uint v) { return vec4At(H_PREV, v).w; } // its cloth's
+
+uint hashCell(int x, int y, int z) { return uint(x) * 92837111u ^ uint(y) * 689287499u ^ uint(z) * 283923481u; }
+
+bool patchPair(uint a, uint b) {
+    if (hdr(H_ALL_PAIRS) != 0u) return true;
+    uint bit = a * hdr(H_PATCH_TOTAL) + b;
+    return ((at(H_PATCH_BITS, bit >> 5u) >> (bit & 31u)) & 1u) != 0u;
+}
+
+// Is b one of a's neighbours (the sorted ring the CPU keeps)?
+bool inRing(uint a, uint b) {
+    uint lo = at(H_RING_START, a), hi = at(H_RING_START, a + 1u);
+    while (lo < hi) {
+        uint mid = (lo + hi) >> 1u;
+        uint m = at(H_RING, mid);
+        if (m == b) return true;
+        if (m < b) lo = mid + 1u; else hi = mid;
+    }
+    return false;
+}
+
+// Seen from this cell only: the first cell (per axis) both boxes cover.
+bool firstShared(ivec3 c, ivec3 qa, ivec3 qb, ivec3 lo, ivec3 hi) {
+    if (any(lessThan(c, lo)) || any(greaterThan(c, hi))) return false; // there by the hash, not by its box
+    return c == max(qa, lo);
+}
+
+void setFlag(uint v) { atomicOr(dst.w[2u + v], 1u); }
+
+// Ericson 5.1.9, as closestSegments() in ClothSystem.cpp.
+void closestSegments(vec3 p0, vec3 p1, vec3 q0, vec3 q1, out float s, out float t) {
+    vec3 d1 = p1 - p0, d2 = q1 - q0, r = p0 - q0;
+    float a = dot(d1, d1), e = dot(d2, d2), f = dot(d2, r);
+    s = 0.0; t = 0.0;
+    if (a <= 1e-12 && e <= 1e-12) return;
+    if (a <= 1e-12) { t = clamp(f / e, 0.0, 1.0); return; }
+    float c = dot(d1, r);
+    if (e <= 1e-12) { s = clamp(-c / a, 0.0, 1.0); return; }
+    float b = dot(d1, d2), den = a * e - b * b;
+    s = den > 1e-12 ? clamp((b * f - c * e) / den, 0.0, 1.0) : 0.0;
+    t = (b * s + f) / e;
+    if (t < 0.0) { t = 0.0; s = clamp(-c / a, 0.0, 1.0); }
+    else if (t > 1.0) { t = 1.0; s = clamp((b - c) / a, 0.0, 1.0); }
+}
+
+void vertexQuery(uint gv) {
+    uint info = at(H_VINFO, gv); // bit 0: can move, bit 1: looked at
+    if ((info & 3u) != 3u) return;
+    ivec3 qa = cellLo(H_VCELL, gv), qb = cellHi(H_VCELL, gv);
+    if (qb.x < qa.x) return;
+    uint vc = at(H_VCLOTH, gv), vp = at(H_VPATCH, gv);
+    bool loose = vp == 0xFFFFFFFFu;
+    vec3 p = pos(gv), moved = p - prev(gv), rest = vec4At(H_REST, gv).xyz;
+    float thick = thicknessOf(gv), meanEdge = meanEdgeOf(gv);
+    uint mask = hdr(H_TRI_MASK);
+    for (int x = qa.x; x <= qb.x; ++x)
+        for (int y = qa.y; y <= qb.y; ++y)
+            for (int z = qa.z; z <= qb.z; ++z) {
+                uint h = hashCell(x, y, z) & mask;
+                uint e1 = at(H_TGRID_START, h + 1u);
+                for (uint e = at(H_TGRID_START, h); e < e1; ++e) {
+                    uint gt = at(H_TGRID_ITEMS, e);
+                    if (!firstShared(ivec3(x, y, z), qa, qb, cellLo(H_TCELL, gt), cellHi(H_TCELL, gt))) continue;
+                    uvec4 tri = uvec4(at(H_TRI, gt * 4u), at(H_TRI, gt * 4u + 1u), at(H_TRI, gt * 4u + 2u), at(H_TRI, gt * 4u + 3u));
+                    bool same = tri.w == vc;
+                    if (same && (tri.x == gv || tri.y == gv || tri.z == gv || inRing(gv, tri.x) || inRing(gv, tri.y) || inRing(gv, tri.z))) continue;
+                    vec4 sph = vec4At(H_TSPHERE, gt);
+                    float reach = (sph.w + 3.0 * max(thick, thicknessOf(tri.x)) + length(moved - vec4At(H_TMOVE, gt).xyz)) * kSlack;
+                    vec3 dc = p - sph.xyz;
+                    float d2 = dot(dc, dc);
+                    float edgeReach = reach + meanEdge;
+                    if (d2 > edgeReach * edgeReach) continue;
+                    vec3 apart = rest - vec4At(H_REST, tri.x).xyz;
+                    if (!same || dot(apart, apart) > 9.0 * meanEdge * meanEdge) {
+                        setFlag(gv);
+                        setFlag(tri.x);
+                        setFlag(tri.y);
+                        setFlag(tri.z);
+                    }
+                    if (d2 > reach * reach) continue;
+                    if (!loose && !patchPair(vp, at(H_TPATCH, gt))) continue;
+                    uint k = atomicAdd(dst.w[0], 1u);
+                    if (k < hdr(H_VT_CAP)) {
+                        vtPairs.w[k * 2u] = gv;
+                        vtPairs.w[k * 2u + 1u] = gt;
+                    }
+                }
+            }
+}
+
+// The edge's moves bits as the CPU's m_edgeMoves: 1 = can move, 2 = near another surface.
+uint edgeMoves(uint ge) {
+    uint a = at(H_EDGE, ge * 4u), b = at(H_EDGE, ge * 4u + 1u);
+    uint near = (dst.w[2u + a] | dst.w[2u + b]) != 0u ? 2u : 0u;
+    return (at(H_EDGE, ge * 4u + 3u) & 1u) | near;
+}
+
+bool edgesFar(uint a0, uint a1, uint b0, uint b1, float gap) {
+    vec3 pa0 = pos(a0), pa1 = pos(a1), pb0 = pos(b0), pb1 = pos(b1);
+    vec3 mb = 0.5 * ((pb0 - prev(b0)) + (pb1 - prev(b1)));
+    float moved = max(length(pa0 - prev(a0) - mb), length(pa1 - prev(a1) - mb)) + 0.5 * length((pb0 - prev(b0)) - (pb1 - prev(b1)));
+    float reach = (gap + moved) * kSlack;
+    vec3 ma = 0.5 * (pa0 + pa1), mo = 0.5 * (pb0 + pb1);
+    float far = reach + 0.5 * (length(pa1 - pa0) + length(pb1 - pb0));
+    if (dot(ma - mo, ma - mo) > far * far) return true;
+    float s, t;
+    closestSegments(pa0, pa1, pb0, pb1, s, t);
+    vec3 d = mix(pa0, pa1, s) - mix(pb0, pb1, t);
+    return dot(d, d) > reach * reach;
+}
+
+bool edgesApart(uint a0, uint a1, uint b0, uint b1, float gap) {
+    vec3 uab = cross(pos(a1) - pos(a0), pos(b1) - pos(b0));
+    float vol = dot(pos(b0) - pos(a0), uab);
+    float volPrev = dot(prev(b0) - prev(a0), cross(prev(a1) - prev(a0), prev(b1) - prev(b0)));
+    return vol * volPrev > 0.0 && vol * vol >= gap * gap * kSlack * kSlack * dot(uab, uab);
+}
+
+void edgeQuery(uint ge) {
+    if (edgeMoves(ge) != 3u) return;
+    ivec3 qa = cellLo(H_ECELL, ge), qb = cellHi(H_ECELL, ge);
+    if (qb.x < qa.x) return;
+    uvec4 ea = uvec4(at(H_EDGE, ge * 4u), at(H_EDGE, ge * 4u + 1u), at(H_EDGE, ge * 4u + 2u), 0u);
+    vec3 lo = vec4At(H_ELO, ge).xyz, hi = vec4At(H_EHI, ge).xyz;
+    uint pa = at(H_EPATCH, ge);
+    uint mask = hdr(H_EDGE_MASK);
+    for (int x = qa.x; x <= qb.x; ++x)
+        for (int y = qa.y; y <= qb.y; ++y)
+            for (int z = qa.z; z <= qb.z; ++z) {
+                uint h = hashCell(x, y, z) & mask;
+                uint k1 = at(H_EGRID_START, h + 1u);
+                for (uint k = at(H_EGRID_START, h); k < k1; ++k) {
+                    uint gf = at(H_EGRID_ITEMS, k);
+                    if (!firstShared(ivec3(x, y, z), qa, qb, cellLo(H_ECELL, gf), cellHi(H_ECELL, gf))) continue;
+                    uint mf = edgeMoves(gf);
+                    if ((mf & 2u) == 0u) continue; // not near another surface: can't meet another edge
+                    if (mf == 3u && gf <= ge) continue; // each pair once: from the lower edge when both move
+                    vec3 flo = vec4At(H_ELO, gf).xyz, fhi = vec4At(H_EHI, gf).xyz;
+                    if (any(lessThan(fhi, lo)) || any(greaterThan(flo, hi))) continue;
+                    if (!patchPair(pa, at(H_EPATCH, gf))) continue;
+                    uvec4 eb = uvec4(at(H_EDGE, gf * 4u), at(H_EDGE, gf * 4u + 1u), at(H_EDGE, gf * 4u + 2u), 0u);
+                    float gap = 3.0 * max(thicknessOf(ea.x), thicknessOf(eb.x));
+                    if (edgesFar(ea.x, ea.y, eb.x, eb.y, gap)) continue;
+                    if (ea.z == eb.z && (ea.x == eb.x || ea.x == eb.y || ea.y == eb.x || ea.y == eb.y || inRing(ea.x, eb.x) || inRing(ea.x, eb.y) ||
+                                         inRing(ea.y, eb.x) || inRing(ea.y, eb.y))) continue;
+                    if (edgesApart(ea.x, ea.y, eb.x, eb.y, gap)) continue;
+                    uint n = atomicAdd(dst.w[1], 1u);
+                    if (n < hdr(H_EE_CAP)) {
+                        eePairs.w[n * 2u] = ge;
+                        eePairs.w[n * 2u + 1u] = gf;
+                    }
+                }
+            }
+}
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (push.kernel == 0u) {
+        if (i < hdr(H_VERTS)) vertexQuery(i);
+    } else {
+        if (i < hdr(H_EDGES)) edgeQuery(i);
+    }
+}

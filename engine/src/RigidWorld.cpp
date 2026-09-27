@@ -160,8 +160,12 @@ struct RigidWorld::Impl : public JPH::ContactListener {
     double stepMs = 0.0;
     double simulatedTime = 0.0;
     std::unique_ptr<detail::ClothSystem> cloth; // made on the first addCloth (it adds a step listener)
+    std::shared_ptr<ClothGpu> clothGpu;
     detail::ClothSystem& clothSystem() {
-        if (!cloth) cloth = std::make_unique<detail::ClothSystem>(system, Layers::kCloth, *temp, jobs.get());
+        if (!cloth) {
+            cloth = std::make_unique<detail::ClothSystem>(system, Layers::kCloth, *temp, jobs.get(), settings.clothSubsteps);
+            cloth->setGpu(clothGpu);
+        }
         return *cloth;
     }
 
@@ -924,9 +928,11 @@ void RigidWorld::step(float dt) {
         c.drawFrom = glm::vec3(float(p.GetX()), float(p.GetY()), float(p.GetZ()));
         m->stepCharacter(c, dt);
     }
-    // One collision step per 1/60 s (more for bigger steps).
-    const int collisionSteps = std::max(1, static_cast<int>(std::ceil(dt * 60.0f - 0.01f)));
-    if (m->cloth) m->cloth->beginStep();
+    // One collision step per 1/60 s (more for bigger steps), cut in
+    // sub-steps while cloth is being kept from going through cloth
+    // (ClothSystem::beginStep).
+    int collisionSteps = std::max(1, static_cast<int>(std::ceil(dt * 60.0f - 0.01f)));
+    if (m->cloth) collisionSteps *= m->cloth->beginStep();
     m->system.Update(dt, collisionSteps, m->temp.get(), m->jobs.get());
     if (m->cloth) m->cloth->endStep();
     m->simulatedTime += dt;
@@ -955,6 +961,10 @@ ClothStats RigidWorld::clothStats(ClothId id) const { return m->cloth ? m->cloth
 void RigidWorld::setWind(const glm::vec3& velocity) { m->clothSystem().setWind(velocity); }
 glm::vec3 RigidWorld::wind() const { return m->cloth ? m->cloth->wind() : glm::vec3(0.0f); }
 double RigidWorld::lastClothMs() const { return m->cloth ? m->cloth->lastMs() : 0.0; }
+void RigidWorld::setClothGpu(std::shared_ptr<ClothGpu> gpu) {
+    m->clothGpu = std::move(gpu);
+    if (m->cloth) m->cloth->setGpu(m->clothGpu);
+}
 RigidWorld::HairId RigidWorld::addHair(const HairDesc& desc) { return m->clothSystem().addHair(desc); }
 void RigidWorld::removeHair(HairId id) {
     if (m->cloth) m->cloth->removeHair(id);

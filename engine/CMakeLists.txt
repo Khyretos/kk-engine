@@ -106,6 +106,7 @@ set(ENGINE_SOURCES
     src/SphereImpostors.cpp
     src/HairStrands.cpp
     src/HairRenderer.cpp
+    src/ClothGpu.cpp
     src/Ocean.cpp
     src/FloatingBodies.cpp
     src/OceanRenderer.cpp
@@ -256,8 +257,8 @@ endif()
 
 # The startup intro (kke::LogoIntro) and the sky (kke::SkyRenderer) can run
 # in every game, so their shaders and the title font ship with the engine
-# rather than with each game.
-foreach(shader logo.vert logo.frag logo_backdrop.vert logo_backdrop.frag logo_text.vert logo_text.frag sky.vert sky.frag)
+# rather than with each game. So does the cloth pair search (kke::ClothGpu).
+foreach(shader logo.vert logo.frag logo_backdrop.vert logo_backdrop.frag logo_text.vert logo_text.frag sky.vert sky.frag cloth_pairs.comp)
     engine_add_shader(kke_engine ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()
 engine_copy_runtime_file(kke_engine ${CMAKE_SOURCE_DIR}/assets/fonts/NotoSans-Bold.ttf assets/fonts/NotoSans-Bold.ttf)
