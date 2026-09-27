@@ -5,3 +5,4 @@ foreach(shader model.vert model_instanced.vert shadow_instanced.vert model.frag 
     engine_add_shader(audio_demo ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()
 # Everything it shows is built from boxes in code; no assets needed.
+kke_use_ui(audio_demo)

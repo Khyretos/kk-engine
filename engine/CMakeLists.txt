@@ -127,6 +127,7 @@ set(ENGINE_SOURCES
     src/modules/MarketplaceUiModule.cpp
     src/modules/LightingControlsModule.cpp
     src/modules/LobbyModule.cpp
+    src/modules/DemoPanelModule.cpp
     src/modules/MaterialGridModule.cpp
     src/modules/DebugControlModule.cpp
     src/modules/PhysicsModule.cpp
@@ -206,6 +207,7 @@ set(ENGINE_HEADERS
     include/kke/modules/DebugDrawModule.h
     include/kke/modules/MarketplaceUiModule.h
     include/kke/modules/LightingControlsModule.h
+    include/kke/modules/DemoPanelModule.h
     include/kke/modules/MaterialGridModule.h
     include/kke/modules/DebugControlModule.h
     include/kke/modules/PhysicsModule.h

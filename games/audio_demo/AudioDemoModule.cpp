@@ -4,6 +4,8 @@
 #include "kke/ImpactSynth.h"
 #include "kke/Log.h"
 #include "kke/modules/AudioModule.h"
+#include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/InputModule.h"
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/RigidBodyModule.h"
 
@@ -279,6 +281,8 @@ void AudioDemoModule::init(kke::Application& app) {
     m_exitAfterTour = envOn("KKE_AUDIO_DEMO_EXIT");
     kke::log::get(name())->info("Audio demo: {} stations{}", m_stations.size(), m_tour ? ", touring" : "");
     enter(0);
+    defineInput();
+    buildPanel();
 }
 
 kke::Listener AudioDemoModule::listener() const {
@@ -455,6 +459,8 @@ void AudioDemoModule::logMeasured(const Station& s, const Measured& m) const {
 
 void AudioDemoModule::update(const kke::UpdateContext& ctx) {
     if (m_current < 0 || m_stations.empty()) return;
+    readInput();
+    m_stationIndex = m_current;
     m_time += ctx.dt;
     tickStation(ctx.dt);
     measure();
@@ -471,72 +477,102 @@ void AudioDemoModule::update(const kke::UpdateContext& ctx) {
 }
 
 void AudioDemoModule::renderUi() {
-    if (m_current < 0) return;
+    // The engine's own F1 panels (ImGui, developer tools) start folded,
+    // once every window exists (the second frame): the demo is the RmlUi
+    // panel (buildPanel).
+    if (++m_uiFrames != 2) return;
     const float s = ImGui::GetFontSize() / 13.0f;
-    if (++m_uiFrames == 2) {
-        // The engine's own panels start folded (once every window exists,
-        // on the second frame): this one is the demo.
-        const char* panels[] = {"Performance", "Audio", "Rigid bodies (Jolt)", "Camera"};
-        for (int i = 0; i < 4; ++i) {
-            ImGui::SetWindowCollapsed(panels[i], true, ImGuiCond_Always);
-            ImGui::SetWindowPos(panels[i], ImVec2(10 * s, (10 + 26 * float(i)) * s), ImGuiCond_Always);
+    const char* panels[] = {"Performance", "Audio", "Rigid bodies (Jolt)", "Camera"};
+    for (int i = 0; i < 4; ++i) {
+        ImGui::SetWindowCollapsed(panels[i], true, ImGuiCond_Always);
+        ImGui::SetWindowPos(panels[i], ImVec2(10 * s, (10 + 26 * float(i)) * s), ImGuiCond_Always);
+    }
+}
+
+void AudioDemoModule::defineInput() {
+    auto* in = m_app->getModule<kke::InputModule>();
+    if (!in) return;
+    using IM = kke::InputModule;
+    kke::InputMap& m = in->map(0);
+    auto action = [&](const char* id, const char* label, SDL_Scancode key, SDL_GamepadButton pad) {
+        m.defineAction({ id, label, "Audio demo" });
+        m.addBinding(IM::bind(id, IM::key(key)));
+        m.addBinding(IM::bind(id, IM::pad(pad)));
+    };
+    action("audio.prev", "Previous station", SDL_SCANCODE_LEFTBRACKET, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+    action("audio.next", "Next station", SDL_SCANCODE_RIGHTBRACKET, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
+    action("audio.again", "Start the station again", SDL_SCANCODE_R, SDL_GAMEPAD_BUTTON_WEST);
+    action("audio.ping", "Ping (the Pings station)", SDL_SCANCODE_Q, SDL_GAMEPAD_BUTTON_SOUTH);
+    in->commitDefaults();
+}
+
+void AudioDemoModule::readInput() {
+    auto* in = m_app->getModule<kke::InputModule>();
+    if (!in || m_current < 0) return;
+    const kke::InputMap& m = in->map(0);
+    if (m.pressed("audio.prev")) enter(m_current - 1);
+    if (m.pressed("audio.next")) enter(m_current + 1);
+    if (m.pressed("audio.again")) enter(m_current);
+    if (m.pressed("audio.ping")) m_audio->ping();
+}
+
+// The demo's panel (RmlUi, kke::DemoPanelModule): View on a controller or
+// F3 opens it, the mouse just clicks. Text rows follow the station.
+void AudioDemoModule::buildPanel() {
+    auto* panel = m_app->getModule<kke::DemoPanelModule>();
+    if (!panel) return;
+    auto& s = panel->section("Audio demo");
+    s.text("{audio.prev} {audio.next} station  {audio.again} again  {camera.orbit} turn your head  {camera.zoom} zoom");
+    std::vector<std::string> titles;
+    for (const Station& st : m_stations) titles.push_back(st.title);
+    m_stationIndex = std::max(m_current, 0);
+    s.choice("Station", &m_stationIndex, titles, [this] { enter(m_stationIndex); });
+    s.button("Again", [this] { enter(m_current); });
+    s.toggle("Tour", &m_tour, [this] { m_tourLeft = m_current >= 0 ? m_stations[size_t(m_current)].tourSeconds : 0.0f; });
+    s.text([this] { return m_current < 0 ? std::string() : "Listen for: " + m_stations[size_t(m_current)].listenFor; });
+    auto pings = [this] { return m_current >= 0 && m_stations[size_t(m_current)].kind == Kind::Pings; };
+    s.button("Ping now", [this] { m_audio->ping(); }).showIf(pings);
+    s.text("{audio.ping} ping").showIf(pings);
+    s.text([this] {
+        if (m_current < 0) return std::string();
+        std::string out;
+        for (const Emitter& e : m_stations[size_t(m_current)].emitters) {
+            if (!out.empty()) out += ", ";
+            out += std::string(e.label) + " (" + m_audio->materials().get(e.material).name + ")";
         }
-    }
-    ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 370 * s, 10 * s), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(360 * s, 0), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("Audio demo")) {
-        ImGui::End();
-        return;
-    }
-    const Station& st = m_stations[size_t(m_current)];
-    if (ImGui::Button("< Prev")) enter(m_current - 1);
-    ImGui::SameLine();
-    if (ImGui::Button("Again")) enter(m_current);
-    ImGui::SameLine();
-    if (ImGui::Button("Next >")) enter(m_current + 1);
-    ImGui::SameLine();
-    ImGui::Checkbox("Tour", &m_tour);
-    ImGui::SeparatorText(st.title.c_str());
-    ImGui::TextWrapped("Listen for: %s", st.listenFor.c_str());
-    if (st.kind == Kind::Pings && ImGui::Button("Ping now (Q)")) m_audio->ping();
-    if (!ImGui::GetIO().WantTextInput && ImGui::IsKeyPressed(ImGuiKey_Q, false)) m_audio->ping();
-    for (const Emitter& e : st.emitters) ImGui::BulletText("%s (%s)", e.label, m_audio->materials().get(e.material).name.c_str());
-
-    ImGui::SeparatorText("What the engine hears here");
-    const kke::RoomAcoustics& r = m_audio->room();
-    ImGui::Text("Room: RT60 %.2f s, reverb %.0f%%, open %.0f%%", double(r.rt60), double(r.wet * 100.0f), double(r.openness * 100.0f));
-    ImGui::Text("Sounds %d, least through walls %.0f%%, via a door %d", m_measured.sounds, double(m_measured.minTransmission * 100.0f),
-                m_measured.throughDoor);
-
-    ImGui::SeparatorText("Switches");
+        return out;
+    });
+    s.heading("What the engine hears here");
+    s.text([this] {
+        const kke::RoomAcoustics& r = m_audio->room();
+        char buf[240];
+        std::snprintf(buf, sizeof(buf), "Room: RT60 %.2f s, reverb %.0f%%, open %.0f%%. Sounds %d, least through walls %.0f%%, via a door %d",
+                      double(r.rt60), double(r.wet * 100.0f), double(r.openness * 100.0f), m_measured.sounds,
+                      double(m_measured.minTransmission * 100.0f), m_measured.throughDoor);
+        return std::string(buf);
+    });
+    s.heading("Switches");
     kke::AudioModule::Settings& set = m_audio->settings;
-    ImGui::Checkbox("Reverb", &set.reverb);
-    ImGui::SameLine();
-    ImGui::Checkbox("Walls muffle", &set.occlusion);
-    ImGui::SameLine();
-    ImGui::Checkbox("Openings", &set.openings);
+    s.toggle("Reverb", &set.reverb);
+    s.toggle("Walls muffle", &set.occlusion);
+    s.toggle("Openings", &set.openings);
     // Speakers, the built-in headphone model, or Steam Audio's measured HRTF.
-    int mode = int(m_audio->spatialMode());
-    bool changed = ImGui::RadioButton("Speakers", &mode, int(kke::SpatialMode::Stereo));
-    ImGui::SameLine();
-    changed |= ImGui::RadioButton("Binaural", &mode, int(kke::SpatialMode::Binaural));
+    m_modes = { kke::SpatialMode::Stereo, kke::SpatialMode::Binaural };
+    std::vector<std::string> names = { "Speakers", "Binaural" };
     if (kke::AudioModule::hrtfAvailable()) {
-        ImGui::SameLine();
-        changed |= ImGui::RadioButton("Steam Audio HRTF", &mode, int(kke::SpatialMode::Hrtf));
+        m_modes.push_back(kke::SpatialMode::Hrtf);
+        names.push_back("Steam Audio HRTF");
     }
-    if (changed) {
-        m_audio->setSpatialMode(kke::SpatialMode(mode));
-        m_forcedBinaural = false; // your choice now; leaving the station keeps it
-    }
-
-    ImGui::SeparatorText("Stations");
-    for (int i = 0; i < int(m_stations.size()); ++i) {
-        ImGui::PushID(i);
-        if (ImGui::Selectable(m_stations[size_t(i)].title.c_str(), i == m_current)) enter(i);
-        ImGui::PopID();
-    }
-    ImGui::TextDisabled("Left-drag turns you (and your ears); scroll zooms.");
-    ImGui::End();
+    s.choice("Sound for", kke::DemoPanelModule::Ref<int>([this] {
+                 const auto it = std::find(m_modes.begin(), m_modes.end(), m_audio->spatialMode());
+                 m_modeIndex = it == m_modes.end() ? 0 : static_cast<int>(it - m_modes.begin());
+                 return &m_modeIndex;
+             }),
+             names, [this] {
+                 m_audio->setSpatialMode(m_modes[size_t(m_modeIndex)]);
+                 m_forcedBinaural = false; // your choice now; leaving the station keeps it
+             });
+    s.note("Turning the view turns you (and your ears): left-drag or the right stick. Scroll or the d-pad zooms.");
 }
 
 void AudioDemoModule::shutdown() {

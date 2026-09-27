@@ -7,3 +7,4 @@ endforeach()
 # The character comes from a Synty pack found at runtime (assets/synty/ or
 # KKE_ASSETS_DIR) and the clips from assets/animations/UAL1_Standard.fbx;
 # neither is copied here. The jelly scene needs nothing.
+kke_use_ui(jiggle_demo)

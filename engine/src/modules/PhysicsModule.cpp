@@ -2497,6 +2497,38 @@ void PhysicsModule::spawnScene(Scene scene) {
     }
 }
 
+void PhysicsModule::spawnTetrahedronHere() {
+    // A little horizontal jitter so consecutive spawns don't land
+    // in the exact same spot — genuinely just for a legible demo,
+    // not a real placement system.
+    float jitterX = static_cast<float>((m_nextHandle * 37) % 200) / 100.0f - 1.0f; // -1..1
+    float jitterZ = static_cast<float>((m_nextHandle * 53) % 200) / 100.0f - 1.0f;
+
+    // m_selectedMaterial, not a hardcoded value — real, settable
+    // state (see selectedMaterial()'s own doc comment in
+    // PhysicsModule.h). Defaults to a reasonable wood-like
+    // material, but any UI (see kke::MaterialGridModule) can
+    // change what actually gets spawned here.
+    spawnTetrahedron(glm::vec3(jitterX * 3.0f, m_nextSpawnHeight, jitterZ * 3.0f), m_selectedMaterial);
+}
+
+void PhysicsModule::clearAll() {
+    // Copy the keys first — removeObject() erases from m_objects,
+    // so iterating that map directly while erasing from it would
+    // be exactly the kind of iterator invalidation bug this
+    // codebase has otherwise been careful to avoid all session.
+    std::vector<ObjectHandle> handles;
+    handles.reserve(m_objects.size());
+    for (auto& [handle, obj] : m_objects) {
+        handles.push_back(handle);
+    }
+    for (ObjectHandle handle : handles) {
+        removeObject(handle);
+    }
+    m_breakables.clear();
+    clearRubble();
+}
+
 void PhysicsModule::renderUi() {
     // Position/size chosen to fit the panel's actual content within a
     // default 1280x720 window without needing to scroll — re-checked
@@ -2536,20 +2568,7 @@ void PhysicsModule::renderUi() {
         "special-cased demo button -- see PhysicsModule::spawnTetrahedron() "
         "for the exact call this makes.");
 
-    if (ImGui::Button("Spawn tetrahedron")) {
-        // A little horizontal jitter so consecutive spawns don't land
-        // in the exact same spot — genuinely just for a legible demo,
-        // not a real placement system.
-        float jitterX = static_cast<float>((m_nextHandle * 37) % 200) / 100.0f - 1.0f; // -1..1
-        float jitterZ = static_cast<float>((m_nextHandle * 53) % 200) / 100.0f - 1.0f;
-
-        // m_selectedMaterial, not a hardcoded value — real, settable
-        // state (see selectedMaterial()'s own doc comment in
-        // PhysicsModule.h). Defaults to a reasonable wood-like
-        // material, but any UI (see kke::MaterialGridModule) can
-        // change what actually gets spawned here.
-        spawnTetrahedron(glm::vec3(jitterX * 3.0f, m_nextSpawnHeight, jitterZ * 3.0f), m_selectedMaterial);
-    }
+    if (ImGui::Button("Spawn tetrahedron")) spawnTetrahedronHere();
 
     ImGui::SameLine();
     if (ImGui::Button("Spawn fracturable cube")) spawnScene(Scene::FracturableCube);
@@ -2592,22 +2611,7 @@ void PhysicsModule::renderUi() {
     // lives in games/melt_demo (kke::ParticleFluid + kke::MeltVolume).
     ImGui::TextDisabled("Lava & melting: run melt_demo");
 
-    if (ImGui::Button("Clear all")) {
-        // Copy the keys first — removeObject() erases from m_objects,
-        // so iterating that map directly while erasing from it would
-        // be exactly the kind of iterator invalidation bug this
-        // codebase has otherwise been careful to avoid all session.
-        std::vector<ObjectHandle> handles;
-        handles.reserve(m_objects.size());
-        for (auto& [handle, obj] : m_objects) {
-            handles.push_back(handle);
-        }
-        for (ObjectHandle handle : handles) {
-            removeObject(handle);
-        }
-        m_breakables.clear();
-        clearRubble();
-    }
+    if (ImGui::Button("Clear all")) clearAll();
 
     ImGui::End();
 }
@@ -2625,7 +2629,7 @@ void PhysicsModule::shutdown() {
         m_materialTexturePool = VK_NULL_HANDLE;
     }
 
-    // Copy handles first — same reasoning as "Clear all" above.
+    // Copy handles first — same reasoning as clearAll().
     std::vector<ObjectHandle> handles;
     handles.reserve(m_objects.size());
     for (auto& [handle, obj] : m_objects) {

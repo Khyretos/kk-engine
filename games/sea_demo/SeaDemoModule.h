@@ -12,8 +12,9 @@
 
 namespace kke_sea {
 
-// A boat on an open sea. Drive it (arrow keys), throw things in (left
-// click) and watch density decide: foam and wood ride high, ice floats low,
+// A boat on an open sea. Drive it (arrow keys, or the triggers and the
+// left stick), throw things in (left click where you point, or A at the
+// middle of the screen) and watch density decide: foam and wood ride high, ice floats low,
 // barrels bob, iron sinks. Waves come from the wind sliders. Built from
 // kke::OceanWaves (the sea), kke::FloatingBodies (buoyancy), and
 // kke::OceanRenderer / SphereImpostorRenderer / DynamicMeshRenderer.
@@ -25,14 +26,15 @@ public:
     void update(const kke::UpdateContext& ctx) override;
     void render(const kke::RenderContext& ctx) override;
     void renderShadow(const kke::ShadowRenderContext& ctx) override;
-    void renderUi() override;
     void onEvent(const SDL_Event& event) override;
 
     struct Kind { const char* name; float density; glm::vec3 halfExtents; glm::vec3 color; };
 
 private:
     void reset();
-    void throwObject(int kind);
+    void throwObject(int kind, bool atMouse);
+    void defineInput();
+    void buildPanel();
     void splash(const glm::vec3& at, float strength);
 
     kke::Application* m_app = nullptr;
@@ -51,6 +53,7 @@ private:
 
     float m_time = 0.0f;
     float m_windSpeed = 7.0f, m_windDir = 0.4f, m_chop = 0.6f;
+    float m_windDirDeg = 0.0f; // the panel's view of m_windDir
     int m_kind = 1;
     bool m_followBoat = true;
     float m_throttle = 0.0f, m_rudder = 0.0f;

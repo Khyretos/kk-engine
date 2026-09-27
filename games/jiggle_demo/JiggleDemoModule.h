@@ -31,7 +31,6 @@ public:
     void update(const kke::UpdateContext& ctx) override;
     void render(const kke::RenderContext& ctx) override;
     void renderShadow(const kke::ShadowRenderContext& ctx) override;
-    void renderUi() override;
     void onEvent(const SDL_Event& event) override;
 
 private:
@@ -52,6 +51,12 @@ private:
     void setupBodies();
     void updateBodies(float dt);
     void jump();
+    void squish();
+    void defineInput();
+    void readInput();
+    void buildPanel();
+    kke::JiggleRig* jiggleRig();
+    int m_sceneIndex = 0, m_moveIndex = 0; // the panel's view of m_scene / m_move
 
     kke::Application* m_app = nullptr;
     kke::ModelModule* m_models = nullptr;

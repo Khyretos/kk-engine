@@ -4,3 +4,4 @@ engine_copy_runtime_file(sea_demo ${CMAKE_CURRENT_SOURCE_DIR}/game.json marketpl
 foreach(shader cube.vert glow.frag impostor.vert impostor.frag shadow.vert shadow.frag ocean.vert ocean.frag sky.vert sky.frag)
     engine_add_shader(sea_demo ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()
+kke_use_ui(sea_demo)

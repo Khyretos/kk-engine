@@ -220,6 +220,60 @@ void InputModule::init(Application&) {
         }
     }
     m_animateVirtual = dev::flag("KKE_VIRTUAL_INPUT_ANIMATE");
+    if (const char* v = dev::env("KKE_VIRTUAL_PAD_SCRIPT"); v && *v) {
+        std::string spec = v;
+        size_t start = 0;
+        while (start <= spec.size()) {
+            const size_t comma = std::min(spec.find(',', start), spec.size());
+            const std::string item = spec.substr(start, comma - start);
+            start = comma + 1;
+            const size_t colon = item.find(':');
+            if (colon == std::string::npos) continue;
+            PadStep step;
+            step.at = std::atof(item.substr(0, colon).c_str());
+            std::string control = item.substr(colon + 1);
+            const size_t eq = control.find('=');
+            if (eq != std::string::npos) {
+                step.value = static_cast<float>(std::atof(control.substr(eq + 1).c_str()));
+                control = control.substr(0, eq);
+                step.axis = ButtonPrompts::padAxisFromName(control);
+            } else {
+                step.button = ButtonPrompts::padButtonFromName(control);
+            }
+            if (step.button < 0 && step.axis < 0) {
+                log::get(name())->warn("KKE_VIRTUAL_PAD_SCRIPT: no pad control called '{}'", control);
+                continue;
+            }
+            m_padScript.push_back(step);
+        }
+        std::stable_sort(m_padScript.begin(), m_padScript.end(), [](const PadStep& a, const PadStep& b) { return a.at < b.at; });
+    }
+}
+
+void InputModule::playPadScript(double now) {
+    const Virtual* pad = nullptr;
+    for (const Virtual& v : m_virtual)
+        if (v.pad && v.joy) { pad = &v; break; }
+    if (!pad) return;
+    for (auto it = m_padReleases.begin(); it != m_padReleases.end();) {
+        if (now >= it->first) {
+            SDL_SetJoystickVirtualButton(pad->joy, it->second, false);
+            it = m_padReleases.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    size_t done = 0;
+    for (; done < m_padScript.size() && m_padScript[done].at <= now; ++done) {
+        const PadStep& s = m_padScript[done];
+        if (s.button >= 0) {
+            SDL_SetJoystickVirtualButton(pad->joy, s.button, true);
+            m_padReleases.emplace_back(now + 0.3, s.button);
+        } else {
+            SDL_SetJoystickVirtualAxis(pad->joy, s.axis, static_cast<Sint16>(std::clamp(s.value, -1.0f, 1.0f) * 32767.0f));
+        }
+    }
+    m_padScript.erase(m_padScript.begin(), m_padScript.begin() + static_cast<std::ptrdiff_t>(done));
 }
 
 void InputModule::attachVirtualDevices(const std::string& spec) {
@@ -354,6 +408,7 @@ void InputModule::frameStart(const UpdateContext& ctx) {
         m_lateSpec.clear();
     }
     if (m_animateVirtual) animateVirtualDevices(ctx.totalTime);
+    if (!m_padScript.empty() || !m_padReleases.empty()) playPadScript(m_now);
     m_devices.poll();
     if (!m_promptTouched) {
         // Until someone presses something, a Steam Deck's own controls are

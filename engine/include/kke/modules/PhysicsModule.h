@@ -310,6 +310,18 @@ public:
     size_t objectCount() const { return m_objects.size(); }
     // FEMFX step time, averaged over the last second (0 until then).
     double lastStepMsAvg() const { return m_lastStepMsAvg; }
+    // What the Physics panel shows, for a game's own UI (physics_demo's
+    // RmlUi panel). Measured over the last second.
+    struct PanelStats {
+        double stepMsAvg = 0.0, stepMsMax = 0.0, renderPrepMsAvg = 0.0;
+        float ticksPerSecond = 0.0f, framesPerSecond = 0.0f;
+        uint32_t pieces = 0, awakePieces = 0, facesDrawn = 0, debrisRemoved = 0;
+        size_t ragdolls = 0;
+    };
+    PanelStats panelStats() const {
+        return { m_lastStepMsAvg, m_lastStepMsMax, m_lastRenderPrepMsAvg, m_lastTicksPerSecond, m_lastFramesPerSecond,
+                 m_totalPieces, m_awakePieces, m_renderedFaces, m_debrisRemoved, m_ragdolls.size() };
+    }
 
     // The purpose-built demo scenes, callable from code rather than only
     // from renderUi()'s buttons — the scripted benchmark below uses
@@ -317,6 +329,11 @@ public:
     // set up a scene without clicking through ImGui.
     enum class Scene { GlassSheet, Brick, RubberBall, CarCrash, LavaMelt, FracturableCube, PlasticCube, BreakTest };
     void spawnScene(Scene scene);
+    // Removes every object, piece of rubble and breakable.
+    void clearAll();
+    // spawnTetrahedron() with the selected material, a little apart from
+    // the last one (the panel's "Spawn tetrahedron").
+    void spawnTetrahedronHere();
     // Builds a w x h x d box of tets, bakes a fracture pattern into it
     // (kke::bakeFracture, `pattern` = FracturePattern) and spawns it as a
     // breakable: the brick and glass scenes, and any game's breakable

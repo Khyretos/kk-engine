@@ -63,6 +63,14 @@ public:
     // Two-finger turning and zooming on or off (a game can claim a gesture
     // for its own UI, e.g. the sandbox's node graph).
     void setTouchGestures(bool enabled) { m_touchGestures = enabled; }
+    // A controller turns and zooms the view (needs an InputModule):
+    // camera.orbit is the right stick, camera.zoom the d-pad up (closer)
+    // and down (further). Both are "game" context actions, so they rest
+    // while a menu or kke::DemoPanelModule has the controller; rebind
+    // them like any other. Off by default: games that already read the
+    // right stick for something else keep it.
+    void setPadControls(bool enabled);
+    bool padControls() const { return m_padControls; }
     const TouchGestures& touches() const { return m_touches; }
 
 private:
@@ -89,6 +97,8 @@ private:
     TouchGestures m_touches;
     float m_touchOrbitSensitivity = 0.004f; // radians per pixel the two fingers move
     bool m_touchGestures = true;
+    bool m_padControls = false;
+    void definePadActions();
 };
 
 } // namespace kke

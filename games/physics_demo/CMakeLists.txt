@@ -1,4 +1,4 @@
-add_executable(physics_demo main.cpp)
+add_executable(physics_demo main.cpp PhysicsDemoModule.cpp)
 target_link_libraries(physics_demo PRIVATE kke_engine)
 
 # engine_copy_runtime_file is shared across every game's CMakeLists.txt

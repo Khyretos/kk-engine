@@ -4,3 +4,4 @@ engine_copy_runtime_file(melt_demo ${CMAKE_CURRENT_SOURCE_DIR}/game.json marketp
 foreach(shader cube.vert glow.frag impostor.vert impostor.frag shadow.vert shadow.frag sky.vert fluid_depth.frag fluid_blur.comp fluid_composite.frag)
     engine_add_shader(melt_demo ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()
+kke_use_ui(melt_demo)

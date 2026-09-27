@@ -793,6 +793,21 @@ function(engine_add_shader TARGET SHADER_SOURCE)
     add_dependencies(${TARGET} ${SHADER_TARGET_NAME})
 endfunction()
 
+# What a game needs next to its executable to show RmlUi screens
+# (kke::UiModule, kke::LobbyModule, kke::DemoPanelModule): the UI shaders
+# and the bundled Noto fonts. Button prompt glyphs are copied for every
+# game already (see engine/CMakeLists.txt).
+function(kke_use_ui TARGET)
+    foreach(shader rml_ui.vert rml_ui.frag rml_gradient.frag)
+        engine_add_shader(${TARGET} ${CMAKE_SOURCE_DIR}/shaders/${shader})
+    endforeach()
+    foreach(font NotoSans-Regular.ttf NotoSans-Bold.ttf NotoSans-Italic.ttf NotoColorEmoji.ttf)
+        if(EXISTS ${CMAKE_SOURCE_DIR}/assets/fonts/${font})
+            engine_copy_runtime_file(${TARGET} ${CMAKE_SOURCE_DIR}/assets/fonts/${font} assets/fonts/${font})
+        endif()
+    endforeach()
+endfunction()
+
 # ---------------------------------------------------------------------------
 # Engine core library
 # ---------------------------------------------------------------------------

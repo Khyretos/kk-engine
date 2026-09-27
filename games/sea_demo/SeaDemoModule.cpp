@@ -3,6 +3,9 @@
 #include "kke/Application.h"
 #include "kke/Mesh.h"
 #include "kke/Picking.h"
+#include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/InputModule.h"
+#include "kke/modules/OrbitCameraModule.h"
 
 #include <SDL3/SDL.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -57,6 +60,8 @@ void addBox(std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx, const glm::
 
 void SeaDemoModule::init(kke::Application& app) {
     m_app = &app;
+    defineInput();
+    buildPanel();
     m_ocean = std::make_unique<kke::OceanRenderer>(app);
     m_spheres = std::make_unique<kke::SphereImpostorRenderer>(app);
     // Boat: tapered hull, deck, cabin, mast.
@@ -97,14 +102,17 @@ void SeaDemoModule::reset() {
     }
 }
 
-void SeaDemoModule::throwObject(int kind) {
+void SeaDemoModule::throwObject(int kind, bool atMouse) {
     const kke::Camera& cam = m_app->camera();
     const auto& mouse = m_app->window().mouseState();
     int w = 1, h = 1;
     SDL_GetWindowSize(m_app->window().handle(), &w, &h);
     glm::mat4 view = glm::lookAt(cam.position, cam.target, cam.up);
     glm::mat4 proj = kke::engineProjection(cam.fovDegrees, float(w) / float(std::max(h, 1)), cam.nearPlane, cam.farPlane);
-    kke::Ray ray = kke::screenToRay({ mouse.x, mouse.y }, { float(w), float(h) }, view, proj);
+    // The mouse throws where it points; a controller throws at the middle
+    // of the screen (where the camera looks: at the boat when it follows).
+    const glm::vec2 at = atMouse ? glm::vec2(mouse.x, mouse.y) : glm::vec2(float(w) * 0.5f, float(h) * 0.5f);
+    kke::Ray ray = kke::screenToRay(at, { float(w), float(h) }, view, proj);
     // Budget: drop the oldest thrown object (never the boat).
     size_t alive = 0;
     for (size_t i = 0; i < m_bodies.bodies().size(); ++i) alive += m_bodies.bodies()[i].alive;
@@ -136,9 +144,14 @@ void SeaDemoModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
     // Boat controls: thrust at the stern, below the waterline; the rudder
     // is a sideways force at the stern that scales with speed (no speed,
     // no steering, like a real boat).
-    const bool* keys = SDL_GetKeyboardState(nullptr);
-    float targetThrottle = (keys[SDL_SCANCODE_UP] ? 1.0f : 0.0f) - (keys[SDL_SCANCODE_DOWN] ? 0.5f : 0.0f);
-    float targetRudder = (keys[SDL_SCANCODE_LEFT] ? 1.0f : 0.0f) - (keys[SDL_SCANCODE_RIGHT] ? 1.0f : 0.0f);
+    // Actions (defineInput): arrows or the triggers for the throttle, arrows
+    // or the left stick for the rudder. Reverse is half as strong.
+    float targetThrottle = 0.0f, targetRudder = 0.0f;
+    if (auto* in = m_app->getModule<kke::InputModule>()) {
+        const float t = in->map(0).axis("sea.throttle");
+        targetThrottle = t < 0.0f ? t * 0.5f : t;
+        targetRudder = -in->map(0).axis("sea.rudder");
+    }
     m_throttle += (targetThrottle - m_throttle) * std::min(1.0f, dt * 2.0f);
     m_rudder += (targetRudder - m_rudder) * std::min(1.0f, dt * 4.0f);
     kke::FloatingBody& boat = m_bodies.bodies()[m_boat];
@@ -169,6 +182,13 @@ void SeaDemoModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
 }
 
 void SeaDemoModule::update(const kke::UpdateContext&) {
+    if (auto* in = m_app->getModule<kke::InputModule>()) {
+        const kke::InputMap& m = in->map(0);
+        if (m.pressed("sea.throw")) throwObject(m_kind, false);
+        if (m.pressed("sea.next")) m_kind = (m_kind + 1) % kKindCount;
+        if (m.pressed("sea.follow")) m_followBoat = !m_followBoat;
+        if (m.pressed("sea.reset")) reset();
+    }
     if (m_followBoat) {
         glm::vec3 target = m_bodies.bodies()[m_boat].position + glm::vec3(0, 0.8f, 0);
         glm::vec3& camTarget = m_app->camera().target;
@@ -200,42 +220,84 @@ void SeaDemoModule::renderShadow(const kke::ShadowRenderContext& ctx) {
 }
 
 void SeaDemoModule::onEvent(const SDL_Event& event) {
-    ImGuiIO& io = ImGui::GetIO();
-    if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT && !io.WantCaptureMouse) {
-        throwObject(m_kind);
+    // The mouse throws where it points (the pad throws with sea.throw).
+    // Not while it's over a panel: the RmlUi settings or an F1 ImGui one.
+    const bool overUi = ImGui::GetIO().WantCaptureMouse || m_app->uiCapturesMouse();
+    if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT && !overUi) {
+        throwObject(m_kind, true);
         return;
     }
-    if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat || io.WantTextInput) return;
+    if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat || ImGui::GetIO().WantTextInput) return;
     if (event.key.key >= SDLK_1 && event.key.key < SDLK_1 + kKindCount) m_kind = static_cast<int>(event.key.key - SDLK_1);
-    if (event.key.key == SDLK_R) reset();
-    if (event.key.key == SDLK_C) m_followBoat = !m_followBoat;
 }
 
-void SeaDemoModule::renderUi() {
-    const float s = ImGui::GetFontSize() / 13.0f;
-    ImGui::SetNextWindowPos(ImVec2(10 * s, 10 * s), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(320 * s, 0), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Sea");
-    ImGui::TextWrapped("Arrows: drive the boat   Left click: throw   1-5: what to throw   C: camera follow   R: reset");
-    bool changed = ImGui::SliderFloat("Wind", &m_windSpeed, 0.0f, 14.0f, "%.1f m/s");
-    changed |= ImGui::SliderAngle("Wind direction", &m_windDir, -180.0f, 180.0f);
-    changed |= ImGui::SliderFloat("Choppiness", &m_chop, 0.0f, 0.95f);
-    if (changed) m_waves.setWind(m_windSpeed, m_windDir, m_chop);
-    ImGui::Separator();
-    for (int i = 0; i < kKindCount; ++i) {
-        char label[64];
-        std::snprintf(label, sizeof(label), "%d  %s", i + 1, kKinds[i].name);
-        if (ImGui::RadioButton(label, m_kind == i)) m_kind = i;
-    }
-    size_t alive = 0;
-    for (const auto& b : m_bodies.bodies()) alive += b.alive;
-    const kke::FloatingBody& boat = m_bodies.bodies()[m_boat];
-    ImGui::Separator();
-    ImGui::Text("Boat speed %.1f m/s, %.0f%% submerged", glm::length(boat.velocity), boat.submerged * 100.0f);
-    ImGui::Text("%zu floating bodies (max %zu), %zu spray drops", alive, kMaxBodies, m_spray.size());
-    ImGui::Checkbox("Camera follows boat (C)", &m_followBoat);
-    ImGui::TextDisabled("Water density 1025 kg/m3: lighter things float,\nheavier ones sink. Waves are Gerstner swell.");
-    ImGui::End();
+void SeaDemoModule::defineInput() {
+    auto* in = m_app->getModule<kke::InputModule>();
+    if (!in) return;
+    using IM = kke::InputModule;
+    kke::InputMap& m = in->map(0);
+    m.defineAction({ "sea.throttle", "Throttle / reverse", "Boat", "game", kke::ActionType::Axis1D });
+    m.defineAction({ "sea.rudder", "Rudder", "Boat", "game", kke::ActionType::Axis1D });
+    m.defineAction({ "sea.throw", "Throw", "Sea" });
+    m.defineAction({ "sea.next", "Next thing to throw", "Sea" });
+    m.defineAction({ "sea.follow", "Camera follows the boat", "Sea" });
+    m.defineAction({ "sea.reset", "Reset", "Sea" });
+    auto axis = [&](const char* action, kke::InputSource src, float scale) {
+        kke::Binding b = IM::bind(action, src, kke::Trigger::Continuous);
+        b.scale = scale;
+        b.deadzone = src.kind == kke::SourceKind::GamepadAxis ? 0.15f : 0.0f;
+        m.addBinding(b);
+    };
+    axis("sea.throttle", IM::key(SDL_SCANCODE_UP), 1.0f);
+    axis("sea.throttle", IM::key(SDL_SCANCODE_DOWN), -1.0f);
+    axis("sea.throttle", IM::padAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER), 1.0f);
+    axis("sea.throttle", IM::padAxis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER), -1.0f);
+    axis("sea.rudder", IM::key(SDL_SCANCODE_RIGHT), 1.0f);
+    axis("sea.rudder", IM::key(SDL_SCANCODE_LEFT), -1.0f);
+    axis("sea.rudder", IM::padAxis(SDL_GAMEPAD_AXIS_LEFTX), 1.0f);
+    m.addBinding(IM::bind("sea.throw", IM::pad(SDL_GAMEPAD_BUTTON_SOUTH)));
+    m.addBinding(IM::bind("sea.next", IM::key(SDL_SCANCODE_T)));
+    m.addBinding(IM::bind("sea.next", IM::pad(SDL_GAMEPAD_BUTTON_NORTH)));
+    m.addBinding(IM::bind("sea.follow", IM::key(SDL_SCANCODE_C)));
+    m.addBinding(IM::bind("sea.follow", IM::pad(SDL_GAMEPAD_BUTTON_RIGHT_STICK)));
+    m.addBinding(IM::bind("sea.reset", IM::key(SDL_SCANCODE_R)));
+    m.addBinding(IM::bind("sea.reset", IM::pad(SDL_GAMEPAD_BUTTON_WEST)));
+    in->commitDefaults();
+}
+
+// The settings (RmlUi, kke::DemoPanelModule): the same rows work with a
+// controller (View opens them), the keyboard (F3) and the mouse.
+void SeaDemoModule::buildPanel() {
+    auto* panel = m_app->getModule<kke::DemoPanelModule>();
+    if (!panel) return;
+    auto& s = panel->section("Sea");
+    s.hint("{sea.throttle} throttle  {sea.rudder} steer  {mouse:left} throw where you point  1-5 or {sea.next} what  {sea.follow} follow  "
+           "{sea.reset} reset",
+           "{sea.throttle} throttle  {sea.rudder} steer  {sea.throw} throw  {sea.next} what  {sea.follow} follow  {sea.reset} reset  "
+           "{camera.orbit} look  {camera.zoom} zoom");
+    auto wind = [this] { m_waves.setWind(m_windSpeed, m_windDir, m_chop); };
+    s.heading("Waves");
+    s.slider("Wind", &m_windSpeed, 0.0f, 14.0f, "%.1f m/s", wind, 0.5f);
+    m_windDirDeg = glm::degrees(m_windDir);
+    s.slider("Wind direction", &m_windDirDeg, -180.0f, 180.0f, "%.0f deg", [this, wind] { m_windDir = glm::radians(m_windDirDeg); wind(); }, 5.0f);
+    s.slider("Choppiness", &m_chop, 0.0f, 0.95f, "%.2f", wind, 0.05f);
+    s.heading("Throw");
+    std::vector<std::string> kinds;
+    for (const Kind& k : kKinds) kinds.push_back(k.name);
+    s.choice("What", &m_kind, kinds);
+    s.toggle("Camera follows the boat", &m_followBoat);
+    s.button("Reset", [this] { reset(); });
+    s.text([this] {
+        size_t alive = 0;
+        for (const auto& b : m_bodies.bodies()) alive += b.alive;
+        const kke::FloatingBody& boat = m_bodies.bodies()[m_boat];
+        char buf[160];
+        std::snprintf(buf, sizeof(buf), "Boat %.1f m/s, %.0f%% under water. %zu floating (max %zu), %zu spray drops",
+                      static_cast<double>(glm::length(boat.velocity)), static_cast<double>(boat.submerged * 100.0f), alive, kMaxBodies,
+                      m_spray.size());
+        return std::string(buf);
+    });
+    s.note("Water is 1025 kg/m3: lighter things float, heavier ones sink. Waves are Gerstner swell.");
 }
 
 } // namespace kke_sea

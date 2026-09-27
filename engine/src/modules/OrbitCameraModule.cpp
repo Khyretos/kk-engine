@@ -1,6 +1,7 @@
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/Application.h"
 #include "kke/EngineSettings.h"
+#include "kke/modules/InputModule.h"
 
 #include <imgui.h>
 #include <SDL3/SDL.h>
@@ -13,6 +14,35 @@ namespace kke {
 void OrbitCameraModule::init(Application& app) {
     m_app = &app;
     app.camera().target = m_target;
+    if (m_padControls) definePadActions();
+}
+
+void OrbitCameraModule::setPadControls(bool enabled) {
+    m_padControls = enabled;
+    if (enabled && m_app) definePadActions();
+}
+
+void OrbitCameraModule::definePadActions() {
+    auto* input = m_app->getModule<InputModule>();
+    if (!input) return;
+    for (int p = 0; p < input->players(); ++p) {
+        InputMap& m = input->map(p);
+        if (!m.action("camera.orbit")) m.defineAction({ "camera.orbit", "Turn the camera", "Camera", "game", ActionType::Axis2D, true });
+        if (!m.action("camera.zoom")) m.defineAction({ "camera.zoom", "Camera closer / further", "Camera", "game", ActionType::Axis1D, true });
+        if (m.bindingsFor("camera.orbit").empty()) {
+            Binding b = InputModule::bind("camera.orbit", InputModule::padAxis(SDL_GAMEPAD_AXIS_RIGHTX), Trigger::Continuous);
+            b.sourceY = InputModule::padAxis(SDL_GAMEPAD_AXIS_RIGHTY);
+            b.deadzone = 0.2f;
+            m.addBinding(b);
+        }
+        if (m.bindingsFor("camera.zoom").empty()) {
+            Binding in = InputModule::bind("camera.zoom", InputModule::pad(SDL_GAMEPAD_BUTTON_DPAD_UP), Trigger::Continuous);
+            Binding out = InputModule::bind("camera.zoom", InputModule::pad(SDL_GAMEPAD_BUTTON_DPAD_DOWN), Trigger::Continuous);
+            out.scale = -1.0f;
+            m.addBinding(in);
+            m.addBinding(out);
+        }
+    }
 }
 
 // Before init() only the starting target exists; after it, the camera's
@@ -53,6 +83,18 @@ void OrbitCameraModule::update(const UpdateContext& ctx) {
         nudge(t.pan.x * m_touchOrbitSensitivity * m_sensitivityScale - t.twist,
               -t.pan.y * m_touchOrbitSensitivity * m_sensitivityScale * (m_invertY ? -1.0f : 1.0f),
               t.pinch > 1e-3f ? 1.0f / t.pinch : 1.0f);
+    }
+
+    // A controller: the right stick turns, the d-pad zooms (setPadControls).
+    if (m_padControls) {
+        if (auto* input = m_app->getModule<InputModule>()) {
+            const InputMap& m = input->map(0);
+            const glm::vec2 turn = m.axis2("camera.orbit");
+            const float zoom = m.axis("camera.zoom");
+            if (turn.x != 0.0f || turn.y != 0.0f || zoom != 0.0f)
+                nudge(turn.x * 2.2f * ctx.dt * m_sensitivityScale, -turn.y * 1.6f * ctx.dt * m_sensitivityScale * (m_invertY ? -1.0f : 1.0f),
+                      1.0f - zoom * 1.5f * ctx.dt);
+        }
     }
 
     if (m_autoOrbit) {

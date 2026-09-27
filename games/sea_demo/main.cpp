@@ -1,8 +1,11 @@
 #include "kke/Application.h"
 #include "kke/Renderer.h"
 #include "kke/modules/DebugControlModule.h"
+#include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/InputModule.h"
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/StatsModule.h"
+#include "kke/modules/UiModule.h"
 
 #include "SeaDemoModule.h"
 
@@ -16,12 +19,18 @@ int main() {
         // A bright day over open water (assets/moods/clear_day.yaml): the
         // sky and its clouds reflected in every swell.
         app.setMood("clear_day");
+        // Controls are actions (keyboard, mouse or a controller, remappable);
+        // the settings panel is RmlUi (kke::DemoPanelModule).
+        app.addModule<kke::InputModule>("sea_demo_input.json");
+        app.addModule<kke::UiModule>();
         // Sea module first: its update() moves the camera target before the
         // orbit camera positions itself.
         app.addModule<kke_sea::SeaDemoModule>();
         auto& camera = app.addModule<kke::OrbitCameraModule>(/*distance=*/12.0f, /*pitch=*/-0.3f, /*yaw=*/2.2f, glm::vec3(0.0f, 1.0f, 0.0f));
         camera.setDistanceLimits(2.0f, 80.0f);
         camera.setControls(kke::OrbitCameraModule::Controls::Editor); // left click throws
+        camera.setPadControls(true); // right stick turns, d-pad zooms
+        app.addModule<kke::DemoPanelModule>("Sea");
         app.addModule<kke::DebugControlModule>().setUiVisible(false);
         app.addModule<kke::StatsModule>();
         app.run();

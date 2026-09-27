@@ -27,8 +27,6 @@ public:
     void prepass(const kke::PrepassContext& ctx) override;
     void render(const kke::RenderContext& ctx) override;
     void renderShadow(const kke::ShadowRenderContext& ctx) override;
-    void renderUi() override;
-    void onEvent(const SDL_Event& event) override;
 
     void reset();
 
@@ -41,6 +39,9 @@ public:
     };
 
 private:
+    void defineInput();
+    void readInput();
+    void buildPanel();
     kke::Application* m_app = nullptr;
     std::unique_ptr<kke::ParticleFluid> m_fluid;
     std::unique_ptr<kke::MeltVolume> m_block;
