@@ -72,9 +72,10 @@ private:
     struct FrameBuffers { std::unique_ptr<Buffer> vertices, indices; size_t vCap = 0, iCap = 0; uint64_t version = 0; };
     void ensureUploaded(uint32_t frame);
     Application& m_app;
-    std::unique_ptr<Pipeline> m_pipeline, m_shadowPipeline;
-    std::unique_ptr<Pipeline> m_absorbPipeline, m_lightPipeline; // drawTranslucent(), made on first use
-    std::unique_ptr<Pipeline> m_clothPipeline;                   // drawCloth(), made on first use
+    // Shared by every DynamicMeshRenderer of the application (made once).
+    std::shared_ptr<Pipeline> m_pipeline, m_shadowPipeline;
+    std::shared_ptr<Pipeline> m_absorbPipeline, m_lightPipeline; // drawTranslucent(), made on first use
+    std::shared_ptr<Pipeline> m_clothPipeline;                   // drawCloth(), made on first use
     void bindAndDraw(const RenderContext& ctx, Pipeline& pipeline, const glm::mat4& model, float metallic, float roughness);
     FrameBuffers m_frames[Renderer::kMaxFramesInFlight];
     std::vector<Vertex> m_vertices;

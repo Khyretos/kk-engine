@@ -21,7 +21,7 @@ void main() {
     vec3 view = lighting.cameraPos.xyz - p;
     // Tapers to the tip, never thinner than most of a pixel (thinner
     // ribbons would flicker in and out between pixels).
-    float w = 0.5 * max(frame.counts.z * (1.0 - 0.6 * s), 0.75 * frame.counts.w * length(view));
+    float w = 0.5 * frame.look.w * max(frame.counts.z * (1.0 - 0.6 * s), 0.75 * frame.counts.w * length(view));
     vec3 world = p + across(t, view) * (side * w);
     gl_Position = lighting.viewProj * vec4(world, 1.0);
     fragColor = mix(frame.rootColor.rgb, frame.tipColor.rgb, s) * hairs[hair].color.rgb;

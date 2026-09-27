@@ -175,6 +175,15 @@ That is not measured yet, because this sandbox renders on the CPU. Run the
 demo with `KKE_BENCHMARK` on the machine you care about to see its frame
 time.
 
+Far away, fewer hairs are drawn. A head small on screen has its hairs a
+pixel wide, piled dozens deep, and drawing all of them costs vertex work
+nobody can see. Once they would pile more than 24 deep, the renderer draws
+only every second (third, ...) hair, each wider by the square root of that
+so the hair looks as full; every guide keeps its share. Close up (the
+demo's camera) all of them are drawn. `drawnHairs()` says how many the
+last frame drew. Pipelines are shared by every `HairRenderer`, so a new
+head costs no shader compiling.
+
 Rules of thumb:
 
 - 100 to 200 guides are enough for a head in a game, and 400 for a hero
