@@ -25,7 +25,7 @@ int main() {
     try {
         kke::Application app("Kreative Kompas Engine - Synty Demo", 1280, 720);
         // Warm, low sun over the Synty scenes (assets/moods/golden_hour.yaml).
-        app.setMood("golden_hour");
+        app.setMood("morning");
         app.camera().farPlane = 200.0f;
 
         std::vector<kke::Module*> panels;

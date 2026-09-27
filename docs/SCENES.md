@@ -292,7 +292,7 @@ with `KKE_MOOD=<name>`.
 | `farm_demo` | `morning` | Qwantani Mid Morning | `meadow_day` |
 | `platoon` | `morning` | Qwantani Mid Morning | `meadow_day` |
 | `climb_race` | `golden_hour` | Qwantani Late Afternoon | `wind_soft` |
-| `synty_demo` | `golden_hour` | Qwantani Late Afternoon | `wind_soft` |
+| `synty_demo` | `morning` | Qwantani Mid Morning | `meadow_day` |
 | `goblin_horde` | `sunset` | Qwantani Sunset | `wind_soft` |
 | `duel` | `arena_night` | Qwantani Night | `night_crickets` |
 | `melt_demo` | `dusk` | Qwantani Dusk 2 | `night_crickets` |
