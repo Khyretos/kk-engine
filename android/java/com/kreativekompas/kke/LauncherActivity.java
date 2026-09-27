@@ -48,6 +48,7 @@ public class LauncherActivity extends Activity {
                 if (position < mLibraries.size()) {
                     Intent intent = new Intent(LauncherActivity.this, GameActivity.class);
                     intent.putExtra(GameActivity.EXTRA_GAME, mLibraries.get(position));
+                    intent.putExtra(GameActivity.EXTRA_LABEL, mTitles.get(position));
                     startActivity(intent);
                 }
             }
