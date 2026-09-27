@@ -148,6 +148,11 @@ void Combatant::getUp() {
     }
 }
 
+void Combatant::heal(float amount) {
+    if (m_state == State::Dead || !(amount > 0.0f)) return;
+    m_health = std::min(m_stats.maxHealth, m_health + amount);
+}
+
 void Combatant::reset() {
     m_health = m_stats.maxHealth;
     m_stamina = m_stats.maxStamina;

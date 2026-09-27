@@ -250,3 +250,29 @@ TEST(AnimRig, UalOnSyntyCharacterIfInstalled) {
     EXPECT_LT(std::abs(lowest), 0.2f);
     EXPECT_GT(highest - lowest, 0.05f); // the foot lifts
 }
+
+TEST(AnimRig, AppendClipsByBoneNameReordersAndFillsRest) {
+    ModelData rig = legs();
+    // The same skeleton listed in another order, one bone missing.
+    ModelData src;
+    src.bones.push_back(bone("Root", -1, glm::mat4(1.0f)));
+    src.bones.push_back(bone("Pelvis", 0, at(0, 0.9f, 0)));
+    src.bones.push_back(bone("Thigh_R", 1, at(0.1f, 0, 0)));
+    src.bones.push_back(bone("Thigh_L", 1, at(-0.1f, 0, 0)));
+    kke::ModelAnimation clip;
+    clip.name = "Wiggle";
+    clip.duration = 1.0f;
+    clip.frames.assign(2, std::vector<glm::mat4>(src.bones.size(), glm::mat4(1.0f)));
+    clip.frames[1][3] = at(-0.1f, 0.2f, 0); // Thigh_L lifts
+    src.animations.push_back(clip);
+
+    EXPECT_EQ(kke::appendClipsByBoneName(rig, src), 1u);
+    ASSERT_EQ(rig.animations.size(), 1u);
+    const kke::ModelAnimation& a = rig.animations[0];
+    EXPECT_EQ(a.name, "Wiggle");
+    ASSERT_EQ(a.frames[1].size(), rig.bones.size());
+    const int thighL = rig.findBone("Thigh_L"), calfL = rig.findBone("calf_l");
+    EXPECT_FLOAT_EQ(a.frames[1][static_cast<size_t>(thighL)][3].y, 0.2f);
+    // Not in the source: stays at rest.
+    EXPECT_FLOAT_EQ(a.frames[1][static_cast<size_t>(calfL)][3].y, -0.45f);
+}

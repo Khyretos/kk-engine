@@ -931,6 +931,11 @@ endif()
 if(KKE_ENABLE_JOLT)
     add_subdirectory(games/duel)
 endif()
+# Goblin Horde: waves of goblins on the AI core and kke::Combat
+# (games/goblin_horde/README.md). Jolt: the ruins, the king and ragdolls.
+if(KKE_ENABLE_JOLT)
+    add_subdirectory(games/goblin_horde)
+endif()
 
 # The starter template (docs/tutorials/getting-started.md), and games made
 # from it with tools/new_game, which lists them in games/my_games.cmake.

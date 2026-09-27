@@ -1,0 +1,58 @@
+# The goblins' minds, on the engine AI core (docs/AI.md). Change a number
+# and run the demo again; JSON works the same (goblin.json).
+#
+# Inputs the game sets on every goblin (games/goblin_horde/Goblins.cpp):
+#   crowded   1 when enough goblins are already at the king and this one
+#             isn't one of them (see `attackers` in waves.yml), else 0
+#   morale    0..1 for the whole wave: each kill knocks it down, it comes
+#             back slowly; the last few of a wave have none left
+#   health    0..1, its own
+# `hostile` and `threat` are the core's own (how clearly it senses the king).
+species:
+  - id: goblin
+    label: Goblin
+    walkSpeed: 1.6
+    runSpeed: 4.2
+    acceleration: 18
+    radius: 0.32
+    attackRange: 0.45      # + both radii: a swipe lands from ~1.1 m
+    attackCooldown: 1.4
+    fearDistance: 30
+    homeRadius: 60
+    hostileTo: [hero]
+    flocks: true           # a mob: they keep together and move as one
+    flockRadius: 2.5
+    needs: []
+    senses: { sightRange: 80, fovDegrees: 360, awarenessGain: 8, memorySeconds: 120 }
+    temperament: { boldness: 0.6, curiosity: 0, aggression: 0.9, sociability: 0.8 }
+    actions:
+      - name: charge           # at the king
+        behavior: fight
+        weight: 1.5
+        momentum: 0.1
+        considerations:
+          - { input: hostile, curve: linear }
+          - { input: crowded, curve: linear, invert: true }
+          - { input: morale, curve: logistic, mid: 0.3, steepness: 10 }
+      - name: wait_turn        # too many at him already: circle, jeer, wait
+        behavior: watch
+        weight: 1.2
+        momentum: 0.1
+        considerations:
+          - { input: crowded, curve: step, threshold: 0.5 }
+          - { input: hostile, curve: linear }
+          - { input: morale, curve: logistic, mid: 0.3, steepness: 10 }
+      - name: break            # the wave's nerve goes: run for the hills
+        behavior: flee
+        weight: 2.0
+        momentum: 0.3
+        considerations:
+          - { input: morale, curve: logistic, mid: 0.22, steepness: -14 }
+          - { input: threat, curve: linear }
+      - name: idle
+        behavior: idle
+        weight: 0.05
+  - id: hero
+    label: The king
+    radius: 0.35
+    needs: []

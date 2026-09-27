@@ -9,8 +9,13 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <condition_variable>
+#include <functional>
 #include <map>
+#include <mutex>
+#include <thread>
 #include <tuple>
 #include <iterator>
 
@@ -38,9 +43,86 @@ float instanceScale(const glm::mat4& t) {
 }
 } // namespace
 
+// A few threads that wait for a batch of independent jobs (one skinned
+// instance each) and run them alongside the calling thread.
+class SkinWorkers {
+public:
+    explicit SkinWorkers(int threads) {
+        for (int i = 0; i < threads; ++i) m_threads.emplace_back([this] { loop(); });
+    }
+    ~SkinWorkers() {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_quit = true;
+        }
+        m_wake.notify_all();
+        for (std::thread& t : m_threads) t.join();
+    }
+    size_t threads() const { return m_threads.size(); }
+    // fn(0 .. count-1), spread over the workers and this thread; returns
+    // when all are done.
+    void run(size_t count, const std::function<void(size_t)>& fn) {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_fn = &fn;
+            m_count = count;
+            m_next.store(0);
+            m_busy = m_threads.size();
+            ++m_generation;
+        }
+        m_wake.notify_all();
+        work();
+        std::unique_lock<std::mutex> lock(m_mutex);
+        m_done.wait(lock, [this] { return m_busy == 0; });
+        m_fn = nullptr;
+    }
+
+private:
+    void work() {
+        for (size_t i = m_next.fetch_add(1); i < m_count; i = m_next.fetch_add(1)) (*m_fn)(i);
+    }
+    void loop() {
+        uint64_t seen = 0;
+        for (;;) {
+            {
+                std::unique_lock<std::mutex> lock(m_mutex);
+                m_wake.wait(lock, [&] { return m_quit || m_generation != seen; });
+                if (m_quit) return;
+                seen = m_generation;
+            }
+            work();
+            {
+                std::lock_guard<std::mutex> lock(m_mutex);
+                --m_busy;
+            }
+            m_done.notify_one();
+        }
+    }
+
+    std::vector<std::thread> m_threads;
+    std::mutex m_mutex;
+    std::condition_variable m_wake, m_done;
+    const std::function<void(size_t)>* m_fn = nullptr;
+    size_t m_count = 0;
+    std::atomic<size_t> m_next{ 0 };
+    size_t m_busy = 0;
+    uint64_t m_generation = 0;
+    bool m_quit = false;
+};
+
+ModelModule::ModelModule() = default;
+ModelModule::~ModelModule() = default;
+
 void ModelModule::init(Application& app) {
     m_app = &app;
     m_device = app.device().device();
+    {
+        // Skinning threads: the governor's worker budget (which counts this
+        // thread), never more than the machine has.
+        const int hw = static_cast<int>(std::max(1u, std::thread::hardware_concurrency()));
+        const int extra = std::min(app.resourceBudget().workerThreads, hw) - 1;
+        if (extra > 0) m_skinWorkers = std::make_unique<SkinWorkers>(std::min(extra, 15));
+    }
 
     PipelineConfig config;
     config.cullMode = VK_CULL_MODE_BACK_BIT;
@@ -489,7 +571,7 @@ void ModelModule::uploadDeformed(Instance& inst, uint32_t frameIndex) {
 void ModelModule::skinInstance(Instance& inst, uint32_t frameIndex) {
     if (inst.skinnedFrame == m_frame || inst.skinned.empty()) return;
     inst.skinnedFrame = m_frame;
-    const LoadedModel& lm = *m_models[inst.model];
+    const LoadedModel& lm = *m_models.at(inst.model); // no operator[]: this runs on several threads at once
     std::vector<glm::mat4> world = currentBoneWorld(inst);
     std::vector<glm::mat4> skin(world.size());
     for (size_t b = 0; b < world.size(); ++b) skin[b] = world[b] * lm.data.bones[b].inverseBind;
@@ -506,6 +588,18 @@ void ModelModule::skinInstance(Instance& inst, uint32_t frameIndex) {
         }
         sb.vertices[frameIndex]->upload(sb.cpu.data(), sb.cpu.size() * sizeof(Vertex));
     }
+}
+
+void ModelModule::skinVisible(const Frustum& f, uint32_t frameIndex) {
+    m_toSkin.clear();
+    for (auto& [id, inst] : m_instances)
+        if (inst.visible && !inst.skinned.empty() && inst.skinnedFrame != m_frame && mightBeVisible(inst, f)) m_toSkin.push_back(&inst);
+    if (!m_skinWorkers || m_toSkin.size() < 4) {
+        for (Instance* inst : m_toSkin) skinInstance(*inst, frameIndex);
+        return;
+    }
+    const std::function<void(size_t)> job = [this, frameIndex](size_t i) { skinInstance(*m_toSkin[i], frameIndex); };
+    m_skinWorkers->run(m_toSkin.size(), job);
 }
 
 bool ModelModule::mightBeVisible(const Instance& inst, const Frustum& f) const {
@@ -593,6 +687,7 @@ void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
     // Cull against the light's own frustum: things off camera still cast
     // shadows into view, things outside the shadow map can't.
     const Frustum lightFrustum = Frustum::fromViewProj(ctx.lightViewProj);
+    if (m_showMeshes) skinVisible(lightFrustum, ctx.frameIndex);
     // Instanced groups first; what they drew is skipped below.
     if (m_showMeshes) {
         buildBatches(lightFrustum, m_batches, m_instanceData, false);
@@ -713,6 +808,7 @@ void ModelModule::render(const RenderContext& ctx) {
         // Single draws nearest first too (early-Z, #37). Deformed parts are
         // in world space already (identity transform): they sort by their
         // own origin, i.e. last among close objects, which is harmless.
+        skinVisible(frustum, ctx.frameIndex);
         m_singles.clear();
         std::vector<glm::vec3> singlePos;
         for (auto& [id, inst] : m_instances) {
@@ -802,6 +898,7 @@ void ModelModule::render(const RenderContext& ctx) {
 }
 
 void ModelModule::shutdown() {
+    m_skinWorkers.reset();
     m_instances.clear();
     m_models.clear();
 }
