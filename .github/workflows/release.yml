@@ -112,7 +112,7 @@ jobs:
           done
           # The benchmark people are sent: two short demos, one results file.
           set +e
-          DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_AUDIO=off timeout 180 "$pkg/kke_benchmark" --only kke_basics,showcase_walk --seconds 3 \
+          DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_AUDIO=off timeout 180 "$pkg/benchmark/kke_benchmark" --only kke_basics,showcase_walk --seconds 3 \
             --no-wait --no-open --out "$RUNNER_TEMP/bench" > run_kke_benchmark.log 2>&1
           code=$?
           set -e
@@ -224,7 +224,7 @@ jobs:
         timeout-minutes: 5
         shell: pwsh
         run: |
-          Set-Location $env:PKG_DIR
+          Set-Location (Join-Path $env:PKG_DIR 'benchmark')
           .\kke_benchmark.exe --only kke_basics --seconds 2 --no-wait --no-open --out bench
           Write-Output "kke_benchmark exit code $LASTEXITCODE (3 = a demo could not run, expected without a GPU)"
           if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 3) { throw "kke_benchmark failed with exit code $LASTEXITCODE" }
@@ -273,5 +273,5 @@ jobs:
             flags+=(--draft --target "$SHA")
           fi
           gh release create "$VERSION" dist/* --repo "$REPO" --title "Kreative Kompas Engine $VERSION" \
-            --notes "Downloadable builds of the engine's demos for Windows and Linux (x86_64, AVX2, Vulkan 1.3). Unpack the archive and run kke_demo, or kke_benchmark to measure how well every demo runs on your PC. See README.txt inside the archive and docs/RELEASES.md." \
+            --notes "Downloadable builds of the engine's demos for Windows and Linux (x86_64, AVX2, Vulkan 1.3). Unpack the archive and run kke_demo, or benchmark/kke_benchmark to measure how well every demo runs on your PC. See README.txt inside the archive and docs/RELEASES.md." \
             "${flags[@]}"

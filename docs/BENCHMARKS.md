@@ -19,11 +19,13 @@ for numbers you compare; Debug is several times slower.
 
 The question the two above can't answer is "does every demo run, and how
 well, on *this* machine?". `kke_benchmark` answers it on anyone's
-computer. It ships in every download next to the demos, so the steps
-for a friend are: unpack, double-click `kke_benchmark` (on Linux, run
-`./kke_benchmark` in a terminal), leave the mouse alone for about ten
-minutes, send back the `.json` file from the `benchmark-results` folder
-that opens at the end. README.txt in the download says the same.
+computer. It ships in every download in its own `benchmark/` folder,
+beside the demos it runs, so the steps for a friend are: unpack, open
+`benchmark/`, double-click `kke_benchmark` (on Linux, run
+`./benchmark/kke_benchmark` in a terminal), leave the mouse alone for
+about ten minutes, send back the `.json` file from the `results` folder
+that opens at the end. README.txt in the download says the same. In a
+build tree it is `bin/benchmark/kke_benchmark`.
 
 It plays every demo in [`benchmarks/suite.yaml`](../benchmarks/suite.yaml)
 one after the other, each in its own process with its own autopilot or bot
@@ -44,7 +46,7 @@ per demo whether it ran on Synty art or on stand-in blocks.
 
 ### The results file
 
-`benchmark-results/kke-benchmark-<date>_<time>.json` (plus a `.txt` of the
+`benchmark/results/kke-benchmark-<date>_<time>.json` (plus a `.txt` of the
 same for people, and `run_<stamp>/` with each demo's full log and report):
 
 | Key | What |

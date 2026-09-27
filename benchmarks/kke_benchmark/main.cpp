@@ -3,8 +3,11 @@
 // it for a short while, one after the other, each measuring itself
 // (kke/BenchRecorder.h), and writes ONE results file to send back:
 //
-//   benchmark-results/kke-benchmark-<date>_<time>.json   everything, for tools and AIs
-//   benchmark-results/kke-benchmark-<date>_<time>.txt    the same, for people
+//   results/kke-benchmark-<date>_<time>.json   everything, for tools and AIs
+//   results/kke-benchmark-<date>_<time>.txt    the same, for people
+//
+// It sits in its own folder (benchmark/) with benchmark_suite.yaml and
+// finds the demos one folder up (or next to it).
 //
 // Each demo runs as its own process, so a demo that crashes, hangs or
 // can't start is recorded as such (with what its log said) and the rest
@@ -15,7 +18,7 @@
 //   kke_benchmark --only a,b    only these demos (ids from --list)
 //   kke_benchmark --seconds N   measure N s per demo
 //   kke_benchmark --list        print the demos and exit
-//   kke_benchmark --out DIR     results folder (default: benchmark-results next to this program)
+//   kke_benchmark --out DIR     results folder (default: results/ next to this program)
 //   kke_benchmark --no-wait     don't wait for Enter at the end
 
 #include "kke/BenchmarkReport.h"
@@ -490,6 +493,10 @@ int main(int argc, char** argv) {
 
     const char* base = SDL_GetBasePath();
     const fs::path exeDir = base ? pathFromUtf8(base) : fs::current_path();
+    // The demos: one folder up in a download (benchmark/ has its own
+    // folder), or right here.
+    std::error_code dirEc;
+    const fs::path demoDir = fs::is_directory(exeDir / "shaders", dirEc) ? exeDir : (exeDir / "..").lexically_normal();
     Suite suite;
     std::string error;
     if (!loadSuite(exeDir, suite, error)) {
@@ -517,11 +524,11 @@ int main(int argc, char** argv) {
 
     // Where results go: next to the program, or the user's app data folder
     // when that isn't writable (e.g. unpacked under Program Files).
-    fs::path outDir = outArg.empty() ? exeDir / "benchmark-results" : pathFromUtf8(outArg);
+    fs::path outDir = outArg.empty() ? exeDir / "results" : pathFromUtf8(outArg);
     if (!writable(outDir)) {
         char* pref = SDL_GetPrefPath("Kreative Kompas", "KKE Benchmark");
         if (pref) {
-            outDir = pathFromUtf8(pref) / "benchmark-results";
+            outDir = pathFromUtf8(pref) / "results";
             SDL_free(pref);
         }
         if (!writable(outDir)) {
@@ -539,7 +546,7 @@ int main(int argc, char** argv) {
     // Synty packs are never shipped; a person who owns them can point
     // KKE_ASSETS_DIR at them (docs/BENCHMARKS.md).
     const char* assetsEnv = SDL_getenv("KKE_ASSETS_DIR"); // UTF-8, unlike std::getenv on Windows
-    const bool artFound = (assetsEnv && *assetsEnv && fs::is_directory(pathFromUtf8(assetsEnv), ec)) || fs::is_directory(exeDir / "assets" / "synty", ec);
+    const bool artFound = (assetsEnv && *assetsEnv && fs::is_directory(pathFromUtf8(assetsEnv), ec)) || fs::is_directory(demoDir / "assets" / "synty", ec);
 
     double total = 0.0;
     for (const Demo& d : demos) total += d.warmup + d.seconds + 5.0;
@@ -569,7 +576,7 @@ int main(int argc, char** argv) {
         std::printf("[%zu/%zu] %s\n", i + 1, demos.size(), d.title.c_str());
         std::fflush(stdout);
         const fs::path logFile = logDir / (d.id + ".log");
-        const RunResult r = runDemo(d, exeDir, reportDir, logFile, suite.loadTimeout);
+        const RunResult r = runDemo(d, demoDir, reportDir, logFile, suite.loadTimeout);
 
         json out;
         out["id"] = d.id;
@@ -632,12 +639,12 @@ int main(int argc, char** argv) {
         if (report.contains("hitches")) {
             for (json& h : report["hitches"]) {
                 const double at = secondsOfDay(h.value("time", ""));
-                json near = json::array();
+                json nearby = json::array();
                 for (const LogLine& l : lines) {
                     const double lt = secondsOfDay(l.time);
-                    if (at >= 0.0 && lt >= 0.0 && std::abs(lt - at) <= 1.0 && near.size() < 8) near.push_back(l.text);
+                    if (at >= 0.0 && lt >= 0.0 && std::abs(lt - at) <= 1.0 && nearby.size() < 8) nearby.push_back(l.text);
                 }
-                h["log_near"] = near;
+                h["log_near"] = nearby;
             }
         }
         if (!report.is_null()) out["report"] = report;
