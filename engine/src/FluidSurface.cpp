@@ -91,10 +91,12 @@ FluidSurfaceRenderer::FluidSurfaceRenderer(Application& app) : m_app(app), m_dev
     sub.pColorAttachments = colorRefs;
     sub.pDepthStencilAttachment = &depthRef;
     VkSubpassDependency deps[2]{};
-    // Last frame's blur/composite reads finish before we overwrite.
-    deps[0] = { VK_SUBPASS_EXTERNAL, 0, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+    // Last frame's blur/composite reads, and its depth writes (one depth
+    // image for every frame in flight), finish before we overwrite.
+    deps[0] = { VK_SUBPASS_EXTERNAL, 0,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-                VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, 0 };
     // Our writes are visible to the blur (compute) and composite (fragment).
     deps[1] = { 0, VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
