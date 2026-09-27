@@ -25,6 +25,7 @@ set(ENGINE_SOURCES
     src/PlayScript.cpp
     src/Orders.cpp
     src/OrderScript.cpp
+    src/OrderBridge.cpp
     src/NodeGraph.cpp
     src/TouchGestures.cpp
     src/VoxelTets.cpp
@@ -157,6 +158,7 @@ set(ENGINE_HEADERS
     include/kke/PlayBlocks.h
     include/kke/Orders.h
     include/kke/OrderScript.h
+    include/kke/OrderBridge.h
     include/kke/TouchGestures.h
     include/kke/VoxelTets.h
     include/kke/InteriorColor.h
