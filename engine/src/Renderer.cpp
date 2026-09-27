@@ -636,7 +636,9 @@ void Renderer::endFrame() {
     if (result == VK_ERROR_OUT_OF_DATE_KHR || suboptimal || m_window.wasResized()) {
         m_window.clearResizedFlag();
         recreateSwapChain();
-    } else if (result != VK_SUCCESS) {
+    } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+        // SUBOPTIMAL while the compositor rotates (a landscape game on a
+        // portrait phone) is expected every frame: the image was shown.
         throw std::runtime_error("failed to present swapchain image");
     }
 
