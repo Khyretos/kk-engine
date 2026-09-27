@@ -80,10 +80,10 @@ headless run is clean.
    Y goes to the next mountain, online setup carries the mountain.
 2. **Tour** (done): saved best times and medals, unlocking, medals on the finish
    screen and in the menu.
-3. **Party modes**: Mode row; Rockfall and Elimination; online carries the
+3. **Party modes** (done): Mode row; Rockfall and Elimination; online carries the
    mode.
-4. **Time trial ghost**: record and replay the best run.
-5. **Polish and show**: a results screen with every climber's time and
+4. **Time trial ghost** (done): record and replay the best run.
+5. **Polish and show** (done): a results screen with every climber's time and
    falls, sounds for grabs, falls and medals, screenshots, docs, website.
 
 ## Later (parked, not in these milestones)

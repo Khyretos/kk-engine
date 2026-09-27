@@ -92,6 +92,7 @@ template <typename Stream> void serialize(Stream& s, Setup& m) {
     serialize(s, m.mountain);
     s.integer(m.round, 0, 0x7fffffff);
     s.integer(m.difficulty, 0, 7);
+    s.integer(m.mode, 0, 7);
     uint32_t n = static_cast<uint32_t>(std::min(m.seats.size(), kMaxSeats));
     s.integer(n, 0, kMaxSeats);
     if constexpr (Stream::kReading) m.seats.resize(s.ok() ? n : 0);

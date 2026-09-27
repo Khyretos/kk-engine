@@ -59,6 +59,28 @@ it's in the Mountain row. Every key is explained in
 range) is named in the log and the rest still works. Online, the host's
 mountain goes to everyone, even one only the host has.
 
+## Party modes
+
+Player 1's **Mode** row (the host's, online):
+
+| Mode | Rules |
+|---|---|
+| Race | First over the summit wins. |
+| Rockfall | Rocks tumble down every face at its climber. A hit costs a third of your stamina ("hit by a rock!"): rest when you can. The higher the leader, the more rocks come. |
+| Elimination | Every 30 seconds the lowest climber still in is out: they let go and watch. The last one climbing, or the first to the top, wins. |
+| Time trial | Race the ghost of the best run on this mountain: a pale climber doing exactly what that run did, through player 1's face. Beat it and yours is the ghost next time. Offline only (online it's a Race). |
+
+Medals and best times count in every mode. Every best run on a tour
+mountain is kept as its ghost, in `climb_race_ghosts/` next to the tour
+file.
+
+When the race ends, a results list shows every climber in finishing
+order: their time (or the height they reached), and a note for a medal,
+a new best or how many times they fell. Grabs, broken holds, falls,
+rocks, the countdown and medals all make a sound; the sounds are made
+by the engine's audio (`playImpact` on stone, `playEarcon` for the
+menu-style tones), so the game ships no sound files.
+
 ## Online
 
 Race friends on another PC, or in a second window on the same PC. Each
@@ -151,6 +173,7 @@ stay on, the lower hand cuts loose. Grab again quickly.
 | Variable | Effect |
 |---|---|
 | `KKE_CLIMB_MOUNTAIN=<name>` | Which mountain: its file name (`crumble_peak`) or name, or `random`. Default: the menu's. |
+| `KKE_CLIMB_MODE=<mode>` | `race`, `rockfall`, `elimination` or `time trial`, whatever the menu says. |
 | `KKE_CLIMB_ALL=1` | Every mountain open, whatever the saved tour says (not saved). |
 | `KKE_CLIMB_PROGRESS=<file>` | Where the tour is saved (default `climb_race_progress.json`). |
 | `KKE_CLIMB_SEED=<n>` | Random, on that seed (default 7, Granite Tower's rock). Same seed, same mountain. |

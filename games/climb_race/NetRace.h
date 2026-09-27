@@ -31,6 +31,7 @@ constexpr uint16_t kEventFinish = kGameEventBase + 1; // a racer's owner -> host
 constexpr uint16_t kEventLoose = kGameEventBase + 2;  // a racer's owner -> host -> all: a loose hold came off (Loose)
 constexpr uint16_t kEventReady = kGameEventBase + 3;  // client -> host: built the race, these racers are at the line (Ready)
 constexpr uint16_t kEventGo = kGameEventBase + 4;     // host -> all: everyone's ready, the countdown runs (Ready, no players)
+constexpr uint16_t kEventOut = kGameEventBase + 5;    // host -> all: Elimination, a racer is out (Finish, time unused)
 
 // A racer as its owner sees it, enough for another machine to draw it.
 struct Pose {
@@ -70,6 +71,7 @@ struct Setup {
     Mountain mountain;
     uint32_t round = 0;           // +1 each restart: a new countdown for everyone
     uint8_t difficulty = 1;       // the host's CPU racers (display only)
+    uint8_t mode = 0;             // ClimbRaceModule::Mode: Race, Rockfall, Elimination
     std::vector<Seat> seats;
 };
 std::vector<uint8_t> encode(const Setup& s);

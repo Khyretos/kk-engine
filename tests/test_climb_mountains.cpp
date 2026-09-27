@@ -1,5 +1,6 @@
 // Climb Race's mountains (games/climb_race/mountains/*.yaml): every shipped
 // one loads cleanly, can be climbed, and goes over the network exactly.
+#include "Ghost.h"
 #include "Mountains.h"
 #include "NetRace.h"
 #include "Progress.h"
@@ -93,6 +94,7 @@ TEST(ClimbMountains, TheRaceSetupCarriesTheMountainExactly) {
     s.mountain = tour.back();
     s.mountain.desc.height = 33.3333f; // not a round number
     s.round = 4;
+    s.mode = 2; // Elimination
     s.seats.push_back({ 2, 1, false, "Pip", glm::vec3(0.2f, 0.4f, 0.6f) });
     const auto back = climb_race::netrace::decodeSetup(climb_race::netrace::encode(s));
     ASSERT_TRUE(back.has_value());
@@ -105,6 +107,7 @@ TEST(ClimbMountains, TheRaceSetupCarriesTheMountainExactly) {
     EXPECT_EQ(back->mountain.desc.crimpBias, s.mountain.desc.crimpBias);
     EXPECT_EQ(back->mountain.medals[2], s.mountain.medals[2]);
     EXPECT_EQ(back->round, 4u);
+    EXPECT_EQ(back->mode, 2);
     ASSERT_EQ(back->seats.size(), 1u);
     EXPECT_EQ(back->seats[0].name, "Pip");
 }
@@ -170,6 +173,33 @@ TEST(ClimbProgress, SavesAndLoadsAndRandomHasNoRecords) {
     EXPECT_EQ(broken.record("pebble_hill"), nullptr);
     broken.openAll = true;
     EXPECT_TRUE(broken.isOpen(tour, tour.size() - 1));
+}
+
+TEST(ClimbGhost, RecordsSavesAndPlaysBack) {
+    climb_race::Ghost g;
+    g.name = "Pip";
+    // Up the rock at 1 m/s, a hand on a hold 0.8 m above the feet.
+    for (float t = 0.0f; t <= 3.0f; t += 1.0f / 60.0f) {
+        climb_race::netrace::Pose p;
+        p.feet = glm::vec3(0.5f, t, 0.3f);
+        p.climbing = true;
+        p.grip[0] = p.feet + glm::vec3(-0.2f, 0.8f, 0.0f);
+        p.grip[1] = p.feet + glm::vec3(0.2f, 0.7f, 0.0f);
+        p.foot[0] = p.foot[1] = p.feet;
+        p.hips = p.feet + glm::vec3(0.0f, 0.9f, 0.1f);
+        g.record(t, p);
+    }
+    g.setTime(3.0f);
+    const auto back = climb_race::Ghost::decode(g.encode());
+    ASSERT_TRUE(back.has_value());
+    EXPECT_EQ(back->name, "Pip");
+    EXPECT_NEAR(back->time(), 3.0f, 0.001f);
+    const climb_race::netrace::Pose mid = back->at(1.525f); // between two samples
+    EXPECT_NEAR(mid.feet.y, 1.525f, 0.03f); // a sample is taken on the first frame past its time
+    EXPECT_TRUE(mid.climbing);
+    EXPECT_NEAR(mid.grip[0].y - mid.feet.y, 0.8f, 0.01f);
+    EXPECT_NEAR(back->at(99.0f).feet.y, 3.0f, 0.06f); // after the end: the last pose
+    EXPECT_FALSE(climb_race::Ghost::decode({ 1, 2, 3 }).has_value());
 }
 
 } // namespace

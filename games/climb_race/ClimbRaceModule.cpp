@@ -1,9 +1,11 @@
 #include "ClimbRaceModule.h"
 
 #include "kke/Application.h"
+#include "kke/ImpactSynth.h"
 #include "kke/Log.h"
 #include "kke/SphereImpostors.h"
 #include "kke/Viewports.h"
+#include "kke/modules/AudioModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/NetModule.h"
 #include "kke/modules/LobbyModule.h"
@@ -70,7 +72,8 @@ std::vector<kke::ModuleDependency> ClimbRaceModule::dependencies() const {
              { std::type_index(typeid(kke::ModelModule)), false, "the climbers' animated bodies" },
              { std::type_index(typeid(kke::UiModule)), false, "the HUD: stamina, clock, hands" },
              { std::type_index(typeid(kke::LobbyModule)), false, "the start menu: players join, pick a look, set the CPU climbers" },
-             { std::type_index(typeid(kke::NetModule)), false, "online races: Host / Join in the start menu" } };
+             { std::type_index(typeid(kke::NetModule)), false, "online races: Host / Join in the start menu" },
+             { std::type_index(typeid(kke::AudioModule)), false, "grabs, falls, rocks and the finish, synthesised" } };
 }
 
 void ClimbRaceModule::init(kke::Application& app) {
@@ -80,6 +83,7 @@ void ClimbRaceModule::init(kke::Application& app) {
     m_models = app.getModule<kke::ModelModule>();
     m_net = app.getModule<kke::NetModule>();
     m_lobby = app.getModule<kke::LobbyModule>();
+    m_audio = app.getModule<kke::AudioModule>();
 
     m_randomSeed = static_cast<uint32_t>(envFloat("KKE_CLIMB_SEED", 7.0f));
     m_autopilot = envOn("KKE_CLIMB_AUTOPILOT");
@@ -303,7 +307,7 @@ void ClimbRaceModule::buildMountain(int lanes) {
     // New walls: every climber holds on to the old one, so they start again.
     for (size_t i = 0; i < m_racers.size(); ++i) {
         Racer& r = m_racers[i];
-        r.lane = std::min(static_cast<int>(i), lanes - 1);
+        r.lane = r.ghost ? 0 : std::min(static_cast<int>(i), lanes - 1); // the ghost climbs through player 1
         r.climber = makeClimber(r.lane);
         makeBrain(r);
     }
@@ -311,6 +315,7 @@ void ClimbRaceModule::buildMountain(int lanes) {
 
 void ClimbRaceModule::resetRace() {
     ++m_round;
+    if (!netClient()) m_mode = chosenMode(); // online, the host's (applySetup)
     m_phase = Phase::Countdown;
     m_countdown = 3.0f;
     m_winner.clear();
@@ -345,6 +350,7 @@ void ClimbRaceModule::resetRace() {
         r.newBest = false;
         r.wasClimbing = false;
     }
+    startMode();
 }
 
 // The CPU climbers' brain, from their difficulty: how long they breathe
@@ -521,11 +527,12 @@ void ClimbRaceModule::updateRacer(Racer& r, float dt) {
     RacerInput ri = r.bot ? readBot(r, dt) : readPlayer(r, dt);
     if (!r.bot) r.rig.addLook(ri.look.x, ri.look.y);
     r.idleLook = glm::length(ri.look) > 0.05f ? 0.0f : r.idleLook + dt;
-    const bool racing = m_phase == Phase::Racing && !r.finished;
+    const bool racing = m_phase == Phase::Racing && !isDone(r);
     if (!racing) {
         ri = RacerInput{};
         ri.look = glm::vec2(0.0f);
     }
+    if (r.out) ri.climb.letGo = true; // Elimination: off the rock, and watch
     r.regrab = std::max(0.0f, r.regrab - dt);
 
     if (c.climbing()) {
@@ -535,7 +542,9 @@ void ClimbRaceModule::updateRacer(Racer& r, float dt) {
             ri.climb.reach[0] = true;
         }
         c.update(ri.climb, dt);
+        if (c.grabbed()) sound(toWorld(r, c.hips() + glm::vec3(0.0f, 0.9f, 0.0f)), kke::AudioMaterialTable::Stone, 0.18f);
         if (c.brokeHold() >= 0) {
+            sound(toWorld(r, c.wall().holds()[static_cast<size_t>(c.brokeHold())].position), kke::AudioMaterialTable::Stone, 0.8f);
             dropLoose(*m_lanes[static_cast<size_t>(r.lane)], c.brokeHold(), c.facing() * -1.5f);
             netLoose(r.lane, c.brokeHold(), c.facing() * -1.5f);
         }
@@ -553,6 +562,7 @@ void ClimbRaceModule::updateRacer(Racer& r, float dt) {
             r.regrab = kFallRegrab;
             r.fallStartY = feet.y;
             ++r.falls;
+            sound(feet + glm::vec3(0.0f, 1.0f, 0.0f), kke::AudioMaterialTable::Dirt, 0.5f);
             kke::log::get(name())->info("{} fell from {:.1f} m", r.name, feet.y);
             break;
         }
@@ -563,6 +573,7 @@ void ClimbRaceModule::updateRacer(Racer& r, float dt) {
                 r.finished = true;
                 if (m_winner.empty()) m_winner = r.name;
                 kke::log::get(name())->info("{} topped out in {:.2f} s", r.name, r.time);
+                if (r.seat >= 0) tone(static_cast<int>(kke::Earcon::ToggleOn), 0.8f);
                 netFinished(r);
                 recordFinish(r);
             }
@@ -650,13 +661,13 @@ void ClimbRaceModule::update(const kke::UpdateContext& ctx) {
             startFromLobby();
             if (fresh) {
                 nextMountain();
-                buildMountain(static_cast<int>(m_racers.size()));
+                buildMountain(faces());
                 resetRace();
             }
         } else {
             if (fresh) {
                 nextMountain();
-                buildMountain(static_cast<int>(m_racers.size()));
+                buildMountain(faces());
             }
             resetRace();
         }
@@ -666,25 +677,35 @@ void ClimbRaceModule::update(const kke::UpdateContext& ctx) {
     // other machines' "ready" holds it (m_netHold).
     const bool stopped = m_howto && !(m_net && m_net->connected());
     if (m_phase == Phase::Countdown && !stopped) {
+        const int before = static_cast<int>(std::ceil(m_countdown));
         if (!m_netHold) m_countdown -= dt; // online: until every machine is at the line
-        if (m_countdown <= 0.0f) m_phase = Phase::Racing;
+        if (static_cast<int>(std::ceil(m_countdown)) != before && m_countdown > 0.0f) tone(static_cast<int>(kke::Earcon::Tick));
+        if (m_countdown <= 0.0f) {
+            m_phase = Phase::Racing;
+            tone(static_cast<int>(kke::Earcon::Activate), 0.8f);
+        }
     }
     // The crosshair's hold for mouse aiming (last frame's camera).
     for (Racer& r : m_racers) r.crosshair = r.mouse && m_captured ? crosshairHold(r, cameraOf(r), r.crosshairOut) : -1;
-    if (!stopped)
+    if (!stopped) {
         for (Racer& r : m_racers)
             if (!r.remote) updateRacer(r, dt);
+        recordRuns();
+        updateGhosts(dt);
+        updateMode(dt);
+    }
     if (m_phase == Phase::Racing && !stopped) {
         // Every player at the top (or everyone, in a race of bots): results.
         bool playersDone = true, allDone = true, anyPlayer = false;
         for (const Racer& r : m_racers) {
-            allDone = allDone && r.finished;
+            allDone = allDone && isDone(r);
             if (r.seat >= 0 && !r.bot) {
                 anyPlayer = true;
-                playersDone = playersDone && r.finished;
+                playersDone = playersDone && isDone(r);
             }
         }
-        if (allDone || (anyPlayer && playersDone)) m_phase = Phase::Finished;
+        // Elimination goes on until one is left (updateMode), players out or not.
+        if (allDone || (anyPlayer && playersDone && m_mode != Mode::Elimination)) m_phase = Phase::Finished;
     }
 
     for (Racer& r : m_racers) animateBody(r, dt);
@@ -752,6 +773,14 @@ void ClimbRaceModule::update(const kke::UpdateContext& ctx) {
     }
 }
 
+void ClimbRaceModule::sound(const glm::vec3& at, uint32_t material, float intensity) {
+    if (m_audio) m_audio->playImpact(at, material, std::clamp(intensity, 0.0f, 1.0f));
+}
+
+void ClimbRaceModule::tone(int earcon, float gain) {
+    if (m_audio) m_audio->playEarcon(static_cast<kke::Earcon>(earcon), gain);
+}
+
 void ClimbRaceModule::updateRockfall(float dt) {
     if (m_rockfall < 0.0f) return;
     const float before = m_rockfall;
@@ -782,6 +811,7 @@ void ClimbRaceModule::render(const kke::RenderContext& ctx) {
         lane->mesh->draw(ctx, glm::translate(glm::mat4(1.0f), lane->offset), 0.0f, 0.85f);
         for (const Loose& l : lane->loose) l.mesh->draw(ctx, w.transform(l.body), 0.0f, 0.8f);
     }
+    for (const Rock& rock : m_rocks) m_rockMesh->draw(ctx, w.transform(rock.body), 0.0f, 0.85f);
     // Where each hand would go: cyan left, magenta right; gold while a
     // lunge charges (bigger with the charge); red = the crosshair's hold
     // is out of reach.
@@ -819,6 +849,7 @@ void ClimbRaceModule::renderShadow(const kke::ShadowRenderContext& ctx) {
         lane->mesh->drawShadow(ctx, glm::translate(glm::mat4(1.0f), lane->offset));
         for (const Loose& l : lane->loose) l.mesh->drawShadow(ctx, w.transform(l.body));
     }
+    for (const Rock& rock : m_rocks) m_rockMesh->drawShadow(ctx, w.transform(rock.body));
     if (!m_charModel)
         for (const Racer& r : m_racers) {
             const float yaw = bodyInput(r).yaw;

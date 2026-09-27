@@ -10,17 +10,21 @@
 #include "kke/RigidWorld.h"
 #include "kke/modules/ModelModule.h"
 
+#include "Ghost.h"
 #include "Mountains.h"
 #include "Progress.h"
 #include "NetRace.h"
 
 #include <RmlUi/Core/DataModelHandle.h>
 
+#include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 namespace kke {
+class AudioModule;
 class DynamicMeshRenderer;
 class InputModule;
 class LobbyModule;
@@ -120,6 +124,11 @@ private:
         float fallStartY = 0.0f;
         int falls = 0;
         int medal = -1;             // this race's medal (players; -1 none)
+        bool out = false;           // Elimination: out of this race (lets go, watches)
+        bool ghost = false;         // Time trial: the best run, played back (remote: posed from it)
+        Ghost run;                  // players: this race, recorded (the next ghost if it's the best)
+        float hitCooldown = 0.0f;   // Rockfall: s before another rock counts
+        float hitFlash = 0.0f;      // Rockfall: s left of "hit by a rock!"
         bool newBest = false;       // ... and it's their best on this mountain
         // Online (Net.cpp): its player in the game, and whether another
         // machine plays it (then it's posed from what that machine sends).
@@ -186,12 +195,14 @@ private:
         glm::vec3 tint{1.0f};
         int netId = -1;          // online: its network player
         bool remote = false;     // online: another machine plays it
+        bool ghost = false;      // Time trial: the ghost of the best run
     };
     std::vector<Entry> wantedRoster() const;
     void buildRacers(const std::vector<Entry>& roster);
     void removeRacer(Racer& r);
     void applyLooks();
     int humans() const;
+    int faces() const;
     kke::Camera& cameraOf(Racer& r);
 
     RacerInput readPlayer(Racer& r, float dt);
@@ -240,6 +251,12 @@ private:
     kke::ModelModule* m_models = nullptr;
     kke::LobbyModule* m_lobby = nullptr;
     kke::NetModule* m_net = nullptr;
+    kke::AudioModule* m_audio = nullptr;
+    // Sounds (synthesised, kke::ImpactSynth: no sound files): a chalky tap
+    // for each grab, stone for a breaking hold, a falling climber and
+    // bouncing rocks, UI tones for the countdown, the finish and medals.
+    void sound(const glm::vec3& at, uint32_t material, float intensity);
+    void tone(int earcon, float gain = 0.6f);
     uint32_t m_round = 0, m_sentRound = 0; // races started (resetRace); the host sends each one
     uint32_t m_netRound = 0;               // the online race's number (the host's m_round)
     float m_netSearchAt = 0.0f;            // Join: when to ask the LAN again (m_netTime)
@@ -277,6 +294,40 @@ private:
     kke::Camera m_overview; // three players: the fourth quarter's view of the whole race
     std::vector<kke::RigidWorld::BodyId> m_scenery;
     std::unique_ptr<kke::DynamicMeshRenderer> m_ground, m_markers[4];
+
+    // Party modes (Modes.cpp, DESIGN.md "Party modes"): the start menu's
+    // Mode row (the host's, online).
+    enum class Mode : uint8_t { Race, Rockfall, Elimination, TimeTrial };
+    static constexpr int kModes = 4;
+    Mode m_mode = Mode::Race;
+    Mode chosenMode() const;
+    void setupModes();                     // the Mode row, KKE_CLIMB_MODE
+    void startMode();                      // a new race: rocks cleared, timers set
+    void updateMode(float dt);             // while racing
+    void clearRocks();
+    void spawnRock(int lane, const glm::vec3& above);
+    void eliminate(Racer& r);              // Elimination: out (the host decides online)
+    bool isDone(const Racer& r) const { return r.finished || r.out; }
+    // Time trial (Modes.cpp): the ghost of the best run on this mountain.
+    std::optional<Ghost> m_ghost;          // for m_mountain (none yet: the ghost's face stays empty)
+    float m_raceTime = 0.0f;               // s since the start (what the ghost plays back)
+    std::filesystem::path ghostFile(const Mountain& m) const;
+    void loadGhost();
+    void updateGhosts(float dt);
+    void recordRuns();                     // the players' runs, a pose a frame
+    netrace::Pose poseOf(const Racer& r) const; // world space, as drawn (Net.cpp)
+    struct Rock {
+        kke::RigidWorld::BodyId body = kke::RigidWorld::kNoBody;
+        float age = 0.0f;
+        glm::vec3 lastVelocity{0.0f}; // a sudden change is a bounce: a knock of stone
+    };
+    std::vector<Rock> m_rocks;
+    std::unique_ptr<kke::DynamicMeshRenderer> m_rockMesh;
+    std::vector<float> m_rockTimers;       // per lane: s to its next rock
+    uint32_t m_rockRng = 1;
+    float m_elimTimer = 0.0f;              // s to the next elimination
+    std::string m_flash;                   // a line in the middle for a moment ("Juno is out!")
+    float m_flashTime = 0.0f;
 
     enum class Phase { Lobby, Countdown, Racing, Finished };
     Phase m_phase = Phase::Lobby;
@@ -332,9 +383,13 @@ private:
     struct RivalHud {
         std::string name, height, accent, status;
     };
+    struct ResultHud {
+        std::string place, name, result, note, accent;
+    };
     struct Hud {
         std::vector<PlayerHud> players;
         std::vector<RivalHud> rivals;
+        std::vector<ResultHud> results; // the finish screen, in order
         std::string banner, sub, hint;
         bool racing = false;
         bool howto = false;         // the how-to-play screen is up

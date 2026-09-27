@@ -88,6 +88,15 @@ void ClimbRaceModule::buildHud() {
         r.RegisterMember("status", &RivalHud::status);
     }
     c.RegisterArray<std::vector<RivalHud>>();
+    if (auto r = c.RegisterStruct<ResultHud>()) {
+        r.RegisterMember("place", &ResultHud::place);
+        r.RegisterMember("name", &ResultHud::name);
+        r.RegisterMember("result", &ResultHud::result);
+        r.RegisterMember("note", &ResultHud::note);
+        r.RegisterMember("accent", &ResultHud::accent);
+    }
+    c.RegisterArray<std::vector<ResultHud>>();
+    c.Bind("results", &m_hud.results);
     c.Bind("players", &m_hud.players);
     c.Bind("rivals", &m_hud.rivals);
     c.Bind("banner", &m_hud.banner);
@@ -145,7 +154,9 @@ void ClimbRaceModule::updateHud(float) {
         std::snprintf(buf, sizeof(buf), "%.1f / %.0f m", static_cast<double>(std::max(0.0f, y)), static_cast<double>(c.wall().summitY()));
         h.height = buf;
         const bool resting = c.climbing() && c.drainRate() < 0.0f;
-        h.status = r.finished ? (r.medal >= 0 ? std::string("topped out: ") + medalName(r.medal) : std::string("topped out"))
+        h.status = r.out           ? std::string("out: watching")
+                 : r.hitFlash > 0.0f ? std::string("hit by a rock!")
+                 : r.finished ? (r.medal >= 0 ? std::string("topped out: ") + medalName(r.medal) : std::string("topped out"))
                  : c.state() == kke::Climber::State::Mantle ? std::string("mantling")
                  : resting ? "shaking out"
                  : c.climbing() ? (c.drainRate() > 8.0f ? "pumped" : "climbing")
@@ -185,7 +196,7 @@ void ClimbRaceModule::updateHud(float) {
         std::snprintf(buf, sizeof(buf), "%.0f m", static_cast<double>(std::max(0.0f, w.characterPosition(r->id).y)));
         h.height = buf;
         h.accent = hexColour(r->tint);
-        h.status = r->finished ? "top" : "";
+        h.status = r->finished ? "top" : r->out ? "out" : "";
         rivals.push_back(std::move(h));
     }
     dirty = rivals.size() != m_hud.rivals.size();
@@ -197,13 +208,66 @@ void ClimbRaceModule::updateHud(float) {
         m_hudModel.DirtyVariable("rivals");
     }
 
+    // The finish screen: who topped out in what time, then everyone else
+    // by how high they got (out of Elimination last).
+    std::vector<ResultHud> results;
+    if (m_phase == Phase::Finished) {
+        std::vector<const Racer*> order;
+        for (const Racer& r : m_racers) order.push_back(&r);
+        std::stable_sort(order.begin(), order.end(), [&w](const Racer* a, const Racer* b) {
+            if (a->finished != b->finished) return a->finished;
+            if (a->finished) return a->time < b->time;
+            if (a->out != b->out) return !a->out;
+            return w.characterPosition(a->id).y > w.characterPosition(b->id).y;
+        });
+        for (size_t i = 0; i < order.size(); ++i) {
+            const Racer& r = *order[i];
+            ResultHud h;
+            h.place = std::to_string(i + 1) + ".";
+            h.name = r.name;
+            h.accent = hexColour(r.tint);
+            if (r.finished) {
+                h.result = clock(r.time);
+            } else {
+                std::snprintf(buf, sizeof(buf), "%.1f m", static_cast<double>(std::max(0.0f, w.characterPosition(r.id).y)));
+                h.result = buf;
+            }
+            std::string note = r.out ? "out" : r.ghost ? "your best run" : "";
+            if (r.medal >= 0) note = std::string(medalName(r.medal)) + " medal";
+            if (r.newBest) note += note.empty() ? "a new best!" : ", a new best!";
+            if (r.falls > 0 && !r.ghost) note += (note.empty() ? "" : ", ") + std::to_string(r.falls) + (r.falls == 1 ? " fall" : " falls");
+            h.note = note;
+            results.push_back(std::move(h));
+        }
+    }
+    dirty = results.size() != m_hud.results.size();
+    for (size_t i = 0; !dirty && i < results.size(); ++i)
+        dirty = results[i].name != m_hud.results[i].name || results[i].result != m_hud.results[i].result || results[i].note != m_hud.results[i].note;
+    if (dirty) {
+        m_hud.results = std::move(results);
+        m_hudModel.DirtyVariable("results");
+    }
+
     std::string banner, sub;
     const Racer* you = players.empty() ? &m_racers[0] : players[0];
     if (m_phase == Phase::Countdown) {
         banner = m_countdown > 2.0f ? "3" : m_countdown > 1.0f ? "2" : "1";
-        sub = "Race to the summit";
+        sub = m_mode == Mode::Rockfall      ? "Race to the summit. Watch out for falling rocks!"
+            : m_mode == Mode::Elimination ? "Race to the summit. Every 30 seconds the lowest climber is out!"
+            : m_mode == Mode::TimeTrial && m_ghost ? "Beat your ghost: " + m_ghost->name + ", " + clock(m_ghost->time())
+            : m_mode == Mode::TimeTrial && !netClient() && !netHost() ? "No ghost yet: set a time and it races you next time"
+                                          : "Race to the summit";
     } else if (m_phase == Phase::Racing && you->time < 0.8f && !you->finished) {
         banner = "GO";
+    } else if (m_phase == Phase::Racing && m_flashTime > 0.0f) {
+        banner = m_flash;
+    } else if (m_phase == Phase::Racing && m_mode == Mode::Elimination && !isDone(*you)) {
+        std::snprintf(buf, sizeof(buf), "The lowest climber is out in %d s", static_cast<int>(std::ceil(m_elimTimer)));
+        sub = buf;
+    } else if (m_phase == Phase::Finished && you->out) {
+        banner = m_winner.empty() ? std::string("Out!") : m_winner + " wins";
+        sub = (players.size() > 1 ? you->name : std::string("You")) + " went out at " + clock(you->time) +
+              "  ·  {race.again} race again  ·  {race.new} next mountain  ·  {menu} menu";
     } else if (m_phase == Phase::Finished) {
         banner = m_winner == you->name && players.size() <= 1 ? "You win" : m_winner + " wins";
         sub = (players.size() > 1 ? you->name + " " : std::string("Your time ")) + clock(you->time);
@@ -226,6 +290,12 @@ void ClimbRaceModule::updateHud(float) {
     // tired, rest; otherwise the moves.
     std::string hint;
     if (!racing) {
+    } else if (m_phase == Phase::Finished) {
+        hint = prompt("{race.again} race again  ·  {race.new} next mountain  ·  {menu} menu (players, mountain, mode)");
+    } else if (m_phase == Phase::Racing && you->finished) {
+        hint = prompt("You topped out! Watch the others come up  ·  {race.again} race again now  ·  {menu} menu");
+    } else if (m_phase == Phase::Racing && you->out) {
+        hint = prompt("You're out: watch who's last on the rock  ·  {race.again} race again now  ·  {menu} menu");
     } else if (c.climbing()) {
         const auto onEdge = [&c](int h) {
             return c.handHold(h) >= 0 && c.wall().holds()[static_cast<size_t>(c.handHold(h))].kind == kke::ClimbHold::Kind::Edge;
