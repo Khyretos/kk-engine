@@ -10,6 +10,8 @@
 #include <regex>
 #include <set>
 #include <sstream>
+#include <stdexcept>
+#include <system_error>
 
 namespace kke::datafile {
 

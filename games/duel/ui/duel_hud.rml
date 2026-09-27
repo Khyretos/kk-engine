@@ -1,0 +1,48 @@
+<rml>
+<head>
+    <title>Duel HUD</title>
+    <link type="text/rcss" href="theme.rcss"/>
+    <style>
+        body { pointer-events: none; }
+        .corner { position: absolute; top: 18dp; width: 38%; padding: 10dp 14dp; border-radius: 10dp; background-color: #0b0f1ccc; }
+        .corner.blue { left: 20dp; border-left: 3dp #56a8ff; }
+        .corner.red { right: 20dp; border-right: 3dp #ff6a4a; text-align: right; }
+        .name { font-size: 14dp; font-weight: bold; letter-spacing: 2dp; color: #e8ecf4; }
+        .wins { font-size: 14dp; color: #ffcf5c; margin-left: 10dp; }
+        .bar { height: 16dp; margin-top: 8dp; border-radius: 4dp; background-color: #26304d; }
+        .bar.thin { height: 7dp; margin-top: 5dp; }
+        .fill { height: 100%; border-radius: 4dp; }
+        .red .fill { margin-left: auto; }
+        .health .fill { background-color: #6fe39a; }
+        .low .health .fill { background-color: #ff6b5c; animation: 0.4s linear infinite alternate blink; }
+        @keyframes blink { from { opacity: 1; } to { opacity: 0.4; } }
+        .stamina .fill { background-color: #ffcf5c; }
+        .note { font-size: 13dp; color: #ffcf5c; margin-top: 4dp; height: 16dp; }
+        #round { position: absolute; top: 24dp; left: 0; width: 100%; text-align: center; font-size: 16dp; color: #aab3cc; }
+        #banner { position: absolute; top: 34%; left: 0; width: 100%; text-align: center; }
+        #banner .big { font-size: 72dp; font-weight: bold; color: #ffffff; }
+        #banner .sub { font-size: 18dp; color: #e8ecf4; margin-top: 6dp; }
+        #hint { position: absolute; left: 10%; bottom: 14dp; width: 80%; padding: 6dp 10dp; border-radius: 8dp; background-color: #0b0f1cbb; text-align: center; font-size: 13dp; color: #cfd6e6; }
+    </style>
+</head>
+<body data-model="duel">
+    <div class="corner blue" data-class-low="blue.low">
+        <span class="name">{{blue.name}}</span><span class="wins">{{blue.wins}}</span>
+        <div class="bar health"><div class="fill" data-style-width="blue.health"></div></div>
+        <div class="bar thin stamina"><div class="fill" data-style-width="blue.stamina"></div></div>
+        <div class="note">{{blue.note}}</div>
+    </div>
+    <div id="round">{{round}}</div>
+    <div class="corner red" data-class-low="red.low">
+        <span class="wins">{{red.wins}}</span><span class="name">{{red.name}}</span>
+        <div class="bar health"><div class="fill" data-style-width="red.health"></div></div>
+        <div class="bar thin stamina"><div class="fill" data-style-width="red.stamina"></div></div>
+        <div class="note">{{red.note}}</div>
+    </div>
+    <div id="banner" data-if="banner != ''">
+        <div class="big">{{banner}}</div>
+        <div class="sub">{{sub}}</div>
+    </div>
+    <div id="hint">{{hint}}</div>
+</body>
+</rml>

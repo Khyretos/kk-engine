@@ -15,6 +15,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <algorithm>
 
 namespace climb_race {
 

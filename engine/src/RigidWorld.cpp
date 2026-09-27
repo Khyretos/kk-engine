@@ -40,6 +40,7 @@
 #include <mutex>
 #include <thread>
 #include <unordered_map>
+#include <cmath>
 
 namespace kke {
 

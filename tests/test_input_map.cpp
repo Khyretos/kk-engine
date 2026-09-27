@@ -5,6 +5,8 @@
 
 #include <map>
 #include <tuple>
+#include <algorithm>
+#include <cmath>
 
 namespace {
 

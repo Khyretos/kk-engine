@@ -124,7 +124,16 @@ FetchContent_Declare(
 )
 # SDL's Wayland protocol XML needs wayland-scanner 1.26+ (see the file).
 include(cmake/wayland_scanner.cmake)
+# CMake 4.4 added policy CMP0219 (macro arguments keep their backslashes)
+# and warns when a project that predates it passes backslashes through a
+# macro. SDL 3.4.16 does that in its ELF dlopen-notes check, and its C
+# snippet is written for the old behaviour (under NEW the escaped quotes
+# break the test program and the check wrongly fails). So SDL's
+# subproject gets OLD explicitly: same result as today, no warning.
+# Older CMake ignores the variable. Drop this once SDL sets the policy.
+set(CMAKE_POLICY_DEFAULT_CMP0219 OLD)
 FetchContent_MakeAvailable(SDL3)
+unset(CMAKE_POLICY_DEFAULT_CMP0219)
 
 # SDL3's own vendored source produces occasional warnings depending on
 # which platform backends get compiled (X11, Wayland, KMSDRM, etc. all
@@ -502,8 +511,11 @@ endif()
 # ---------------------------------------------------------------------------
 FetchContent_Declare(
     sqlite
-    URL      https://www.sqlite.org/2025/sqlite-amalgamation-3500400.zip
-    URL_HASH SHA256=1d3049dd0f830a025a53105fc79fd2ab9431aea99e137809d064d8ee8356b032
+    # 3.53.4: its strchr/strrchr results are const-correct, which GCC 15+
+    # (C23 by default, where glibc's strchr keeps the argument's const)
+    # needs; 3.50.4 warned with -Wdiscarded-qualifiers there.
+    URL      https://www.sqlite.org/2026/sqlite-amalgamation-3530400.zip
+    URL_HASH SHA256=1e71ddf93849c6a6ecf58b827c0692073d2dd7ee40196158068f7b29f422e87d
 )
 FetchContent_MakeAvailable(sqlite)
 add_library(kke_sqlite STATIC ${sqlite_SOURCE_DIR}/sqlite3.c)
@@ -902,12 +914,19 @@ endif()
 if(KKE_ENABLE_JOLT)
     add_subdirectory(games/climb_race)
 endif()
+# Duel: a one-on-one fist fight on kke::Combatant (games/duel/README.md).
+# Jolt: the ring, the fighters and knockdown ragdolls.
+if(KKE_ENABLE_JOLT)
+    add_subdirectory(games/duel)
+endif()
 
 # The starter template (docs/tutorials/getting-started.md), and games made
 # from it with tools/new_game, which lists them in games/my_games.cmake.
 if(KKE_ENABLE_JOLT AND ENGINE_ENABLE_LUA)
     add_subdirectory(games/template)
     include(games/my_games.cmake)
+    # The cookbook (docs/cookbook/): cameras, animation and IK recipes.
+    add_subdirectory(games/cookbook)
 endif()
 
 # ---------------------------------------------------------------------------
