@@ -158,6 +158,18 @@ void Renderer::recordCapture(VkCommandBuffer cmd) {
     b.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
     vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &b);
 
+    // The slot's buffer was written by an earlier capture and read by the
+    // host since: both finish before this copy overwrites it.
+    VkBufferMemoryBarrier reuse{};
+    reuse.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+    reuse.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_HOST_READ_BIT;
+    reuse.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    reuse.srcQueueFamilyIndex = reuse.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    reuse.buffer = slot.buffer->handle();
+    reuse.size = VK_WHOLE_SIZE;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr,
+                         1, &reuse, 0, nullptr);
+
     VkBufferImageCopy copy{};
     copy.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
     copy.imageExtent = { e.width, e.height, 1 };
@@ -349,8 +361,9 @@ VkRenderPass Renderer::createSceneCompatiblePass(VkImageLayout colorFinalLayout)
     VkSubpassDependency dependency{};
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
     dependency.dstSubpass = 0;
-    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dependency.srcAccessMask = 0;
+    dependency.srcStageMask =
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    dependency.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
@@ -375,7 +388,11 @@ void Renderer::createScenePass() {
     m_scenePassFormats[0] = color;
     m_scenePassFormats[1] = depth;
     m_scenePassSamples = m_msaa;
-    m_scenePass = createSceneCompatiblePass(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    // The pass leaves the 3D image as an attachment; beginOverlayPass()
+    // moves it to TRANSFER_SRC with a barrier that makes the pass's writes
+    // visible to the blit (a final-layout transition here isn't ordered
+    // before it, which tiled GPUs show as unwritten patches).
+    m_scenePass = createSceneCompatiblePass(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     // Formats changed: every target was made for the old pass.
     for (uint32_t i = 0; i < kMaxFramesInFlight; ++i) m_sceneTargets[i].extent = {};
 }
@@ -517,23 +534,25 @@ void Renderer::beginOverlayPass() {
 
     const SceneTarget& src = m_sceneTargets[m_currentFrame];
     VkImage target = m_swapChain->image(m_currentImageIndex);
-    auto barrier = [&](VkImage image, VkImageLayout layout, VkAccessFlags srcAccess, VkAccessFlags dstAccess,
+    auto barrier = [&](VkImage image, VkImageLayout from, VkImageLayout to, VkAccessFlags srcAccess, VkAccessFlags dstAccess,
                        VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage) {
         VkImageMemoryBarrier b{};
         b.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
         b.srcAccessMask = srcAccess;
         b.dstAccessMask = dstAccess;
-        b.oldLayout = layout;
-        b.newLayout = layout;
+        b.oldLayout = from;
+        b.newLayout = to;
         b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         b.image = image;
         b.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
         vkCmdPipelineBarrier(cmd, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &b);
     };
-    // The 3D image (already TRANSFER_SRC from the pass) is written before it's read.
-    barrier(src.color, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+    // The 3D image: attachment -> blit source, its writes (and the MSAA
+    // resolve) finished and visible before the blit reads it.
+    barrier(src.color, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT);
 
     // Swapchain image: whatever it held -> blit target. The acquire
     // semaphore is waited on at COLOR_ATTACHMENT_OUTPUT, so the barrier
@@ -560,7 +579,7 @@ void Renderer::beginOverlayPass() {
     vkCmdBlitImage(cmd, src.color, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
                    &blit, VK_FILTER_LINEAR);
     // The overlay pass loads (reads) and draws over what the blit wrote.
-    barrier(target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT,
+    barrier(target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT,
             VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 

@@ -282,9 +282,11 @@ void SwapChain::createRenderPass() {
     VkSubpassDependency dependency{};
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
     dependency.dstSubpass = 0;
+    // Frames in flight share the depth image: the previous frame's depth
+    // writes (late fragment tests) must finish before this pass clears it.
     dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                               VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dependency.srcAccessMask = 0;
+                               VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    dependency.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
                                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
@@ -309,7 +311,10 @@ void SwapChain::createRenderPass() {
     // image. Depth is cleared again; the overlay (UI) doesn't depth-test
     // against the scene.
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    // Renderer::beginOverlayPass() moves the image to this layout itself
+    // after the blit, so the pass does no layout transition of its own
+    // (one here would race the blit's writes on tiled GPUs).
+    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     // The dependency must stay identical for the passes to be compatible;
     // Renderer::beginOverlayPass() orders the blit before it with a barrier.
     attachments = { colorAttachment, depthAttachment };

@@ -86,7 +86,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
             cmake ninja-build \
-            libvulkan-dev vulkan-tools mesa-vulkan-drivers \
+            libvulkan-dev vulkan-tools mesa-vulkan-drivers vulkan-validationlayers \
             glslang-tools spirv-tools \
             libfreetype-dev libudev-dev libdbus-1-dev \
             fonts-noto-core fonts-noto-color-emoji \
@@ -121,6 +121,11 @@ jobs:
           # can be checked — a real CI failure found earlier.)
           # Synty-based demos have no assets in CI; they must still start
           # and show their "assets not found" UI instead of crashing.
+          # Vulkan validation with synchronization checks: a missing barrier
+          # is invisible on lavapipe and PCs but shows as garbage patches on
+          # phone GPUs (Kees's phone run, 2026-09-27), so it fails here.
+          export VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation
+          export VK_LAYER_ENABLES=VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT
           failed=0
           for demo in kke_demo kke_basics physics_demo melt_demo sea_demo sandbox rmlui_demo imgui_demo synty_demo starter_game cookbook audio_demo procedural_demo duel goblin_horde pet_companion platoon climb_race farm_demo jiggle_demo; do
             [ -x "./$demo" ] || { echo "== $demo: not built, skipped"; continue; }
@@ -130,10 +135,22 @@ jobs:
             DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_VIRTUAL_INPUT=hosas,pad KKE_VIRTUAL_INPUT_ANIMATE=1 timeout 8 "./$demo" > "run_$demo.log" 2>&1
             code=$?
             set -e
-            if { [ "$code" -ne 124 ] && [ "$code" -ne 0 ]; } || grep -qi "Fatal error" "run_$demo.log"; then
+            if { [ "$code" -ne 124 ] && [ "$code" -ne 0 ]; } || grep -qiE "Fatal error|Validation Error|SYNC-HAZARD" "run_$demo.log"; then
               echo "== $demo: FAILED (exit $code)"; tail -40 "run_$demo.log"; failed=1
             else
               echo "== $demo: ok"
+            fi
+          done
+          # The phone path: portrait, 70% render scale blitted up, MSAA.
+          for demo in kke_demo climb_race; do
+            set +e
+            DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_TARGET=android KKE_WINDOW=405x720 KKE_ORIENTATION=portrait timeout 8 "./$demo" > "run_${demo}_phone.log" 2>&1
+            code=$?
+            set -e
+            if { [ "$code" -ne 124 ] && [ "$code" -ne 0 ]; } || grep -qiE "Fatal error|Validation Error|SYNC-HAZARD" "run_${demo}_phone.log"; then
+              echo "== $demo (phone shape): FAILED (exit $code)"; tail -40 "run_${demo}_phone.log"; failed=1
+            else
+              echo "== $demo (phone shape): ok"
             fi
           done
           exit $failed

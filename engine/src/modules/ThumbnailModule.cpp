@@ -87,7 +87,9 @@ void ThumbnailModule::createGpu() {
     // subpass dependency), so ModelModule's lit pipeline draws in it; the
     // single-sample colour ends ready to be copied. Thumbnails get the
     // same anti-aliasing as the game.
-    m_pass = r.createSceneCompatiblePass(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    // Left as an attachment; the barrier after the pass moves it to
+    // TRANSFER_SRC with the pass's writes visible to the copy.
+    m_pass = r.createSceneCompatiblePass(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     m_samples = r.msaaSamples();
 
     auto makeImage = [&](Image& img, uint32_t size, VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspect,
@@ -497,8 +499,18 @@ void ThumbnailModule::prepass(const PrepassContext& ctx) {
         vkCmdEndRenderPass(cmd);
         m_models->unload(id); // its buffers are freed once this frame is done
 
-        VkMemoryBarrier toCopy{ VK_STRUCTURE_TYPE_MEMORY_BARRIER, nullptr, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT };
-        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 1, &toCopy, 0, nullptr, 0, nullptr);
+        VkImageMemoryBarrier toCopy{};
+        toCopy.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        toCopy.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        toCopy.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        toCopy.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        toCopy.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        toCopy.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        toCopy.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        toCopy.image = m_scratchColor.image;
+        toCopy.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1,
+                             &toCopy);
         atlasToTransfer();
         const ThumbnailTileRect r = thumbnailTileRect(slot, kAtlas, kTile);
         VkImageCopy ic{};
