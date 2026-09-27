@@ -43,53 +43,111 @@ default): the ground and the ragdolls are Jolt bodies.
 
 ## Controls
 
+The mouse and the keys 0 to 3 are read as raw SDL events in
+`ProceduralDemoModule::onEvent`. Everything else is an action from
+`ProceduralDemoModule::defineInput` (player 1, the "Creatures" group, the
+default `game` context) or from the orbit camera, so it works on a
+controller and can be rebound; rebindings are saved to
+`procedural_demo_input.json`.
+
+A controller has no cursor, so it aims with the middle of the screen: the
+panel draws a small crosshair there (`setPadCrosshair(true)` in
+[main.cpp](main.cpp)) while you use a pad and the panel is not Active.
+The pad buttons do exactly what a click at the crosshair would.
+
 | Action | Keyboard and mouse | Controller |
 |---|---|---|
-| Call everyone to a flag | left click the ground | no controller binding yet |
-| Hit the dog or the person (they stagger) | left click them | no controller binding yet |
-| Hard hit (they fall, then get up) | Shift + left click them | no controller binding yet |
-| Scare a bug (it runs off) | left click it | no controller binding yet |
-| Dog: walk / trot / gallop | 1 / 2 / 3 | no controller binding yet |
-| Dog: pick its gait by speed | 0 | no controller binding yet |
-| Orbit the camera | right drag | no controller binding yet |
-| Pan the camera | middle drag | no controller binding yet |
-| Zoom | mouse wheel | no controller binding yet |
-| Move the camera target | WASD (Q / E down / up, Shift faster) | no controller binding yet |
+| Call everyone to a flag (`proc.call`) | left click the ground | A (south): a flag at the crosshair |
+| Hit the dog or the person (they stagger) (`proc.hit`) | left click them | X (west), aimed at the crosshair |
+| Hard hit (they fall, then get up) (`proc.hard`) | Shift + left click them | Y (north), aimed at the crosshair |
+| Scare a bug (it runs off) | left click it | X or Y at the crosshair |
+| Dog: next gait (`proc.gait`: auto, walk, trot, gallop) | G | RB (right shoulder) |
+| Dog: auto / walk / trot / gallop | 0 / 1 / 2 / 3 | the panel's "Dog gait" row |
+| Orbit the camera (`camera.orbit`) | right drag | right stick |
+| Pan the camera (`camera.pan`) | middle drag | left stick |
+| Zoom (`camera.zoom`) | mouse wheel | d-pad up (closer) / down (further) |
+| Move the camera target | WASD (Q / E down / up, Shift faster) | the left stick (above) |
+| Settings panel (`panel.toggle`) | F3, or click it | View (Back) |
+| Engine developer panels (ImGui) | F1, developer builds only | no controller binding yet |
 | Quit | Esc | none |
 
+Notes from the code:
+
+- A is "call" only: `click(..., groundOnly = true)` skips the creatures
+  (the comment: the pad's 'call' is "never a hit"). X and Y do what a left click does,
+  so X or Y with nothing under the crosshair also plants the flag.
+- A left click on the panel does not reach the scene: `onEvent` returns
+  when `m_app->uiCapturesMouse()` (or ImGui wants the mouse).
+- The camera is `OrbitCameraModule` in `Editor` controls (left click is
+  free for the demo), with `setPadControls(true)` (right stick turns,
+  d-pad zooms) and `setPadPan(true)` (the left stick moves the point it
+  looks at across the ground). `KKE_PROC_FOCUS` sets the target every
+  frame, which overrides panning.
+- Button names are positions: on a PlayStation pad A is Cross, X is
+  Square, Y is Triangle.
+- Esc closes the window (the engine's default; the demo does not call
+  `setQuitOnEscape(false)`). That includes pressing Esc to leave the
+  panel, so on the keyboard leave it with F3 instead.
+
 On a touch screen, two fingers turn and zoom the camera (the
-`OrbitCameraModule` default). The demo reads the mouse and keys directly
-from SDL events in `ProceduralDemoModule::onEvent`; it does not use the
-`InputModule`, which is why nothing here is rebindable or works on a
-controller.
+`OrbitCameraModule` default).
+
+### The panel
+
+The panel is a `kke::DemoPanelModule` titled "Procedural animation" on
+the left edge, drawn with RmlUi
+([docs/DEMO_PANEL.md](../../docs/DEMO_PANEL.md)). It starts open with the
+game keeping the controls; the mouse can click and drag any row.
+`panel.toggle` (View on a pad, F3 on the keyboard) makes it Active: up and
+down pick a row, left and right change it, A presses, B hands control
+back. While it is Active, player 1's `game` context is off, so the sticks
+and A, X and Y rest. The last row, "Hide panel", collapses it.
+
+`buildPanel` adds one section, "Procedural animation":
+
+| Row | What it does |
+|---|---|
+| note | "No animation clips: every step is planned." |
+| hint | the controls for the device you hold (a mouse and keyboard line, a controller line) |
+| Dog gait | Auto, Walk, Trot, Gallop (the same as 0 to 3, G and RB) |
+| Hit strength | 1 to 9 m/s in steps of 0.5: the speed of a normal hit (click, X, and the timed `KKE_PROC_HIT`); starts at `KKE_PROC_HIT_SPEED` or 3 |
+| one line per creature | name, gait, speed, head turn, and "(staggering)", "(down)" or "(getting up)" while it is a ragdoll |
 
 ## How it plays
 
 It is a toy, not a game: no goal and no end. The creatures wander between
 random spots in a 18 x 18 m area in the middle of the meadow. Click the
-ground and a red flag appears for 20 seconds; everyone walks to a ring
-around it. The dog cycles through walk (6 s), trot (6 s) and gallop (6 s)
+ground (or press A with the crosshair on it) and a red flag appears for
+20 seconds; everyone walks to a ring around it. The dog cycles through walk (6 s), trot (6 s) and gallop (6 s)
 by itself unless you pick a gait. Heads turn toward the camera when it is
 within 7 m, and the dog wags faster when the camera is within 4 m.
 
-The ImGui panel lists each creature's gait, speed, head turn and state
+The panel lists each creature's gait, speed, head turn and state
 (staggering, down, getting up).
 
 ## How it works
 
 ### Startup and the frame
 
-[main.cpp](main.cpp) adds, in order: `SettingsModule("settings.json")`,
-`RigidBodyModule` (Jolt), `OrbitCameraModule`,
-`procedural_demo::ProceduralDemoModule` and `StatsModule` (panel hidden).
-The mood is `morning`.
+[main.cpp](main.cpp) sets the mood `morning` and adds, in order:
+
+1. `SettingsModule("settings.json")`
+2. `RigidBodyModule` (Jolt)
+3. `InputModule` (`procedural_demo_input.json`)
+4. `UiModule` (RmlUi, for the panel)
+5. `OrbitCameraModule`, with `setPadControls(true)` and `setPadPan(true)`
+6. `procedural_demo::ProceduralDemoModule`
+7. `DemoPanelModule("Procedural animation")` with `setPadCrosshair(true)`
+8. `StatsModule`, its window hidden
 
 `ProceduralDemoModule::init` builds the ground, makes the four creatures,
 places them, reads the `KKE_PROC_*` switches, and puts the orbit camera in
 `Editor` controls (left click is free for the demo) with a distance of 0.6
-to 30 m and a pitch that never goes above level.
+to 30 m and a pitch that never goes above level. Last it defines the input
+actions (`defineInput`) and builds the panel (`buildPanel`).
 
-Each frame `update` (with `dt` clamped to 1/20 s):
+Each frame `update` first calls `readInput` (the pad's call, hit, hard
+hit and next gait), then, with `dt` clamped to 1/20 s:
 
 1. For each creature: if it has a ragdoll, `updatePhysical`; else `think`
    (where to go, how fast), `move` (the controller) and `animate` (the
@@ -184,11 +242,22 @@ or an AI would. Here it is a point on the ground with a heading:
 
 ### Hits: the active ragdoll
 
-`click` builds a ray from the mouse through the stored view and projection
-(the comment notes Vulkan's clip space: y down, depth 0 to 1). It finds the
-nearest creature whose body bone passes within a radius of the ray (0.45 m
-person, 0.35 m dog, 0.2 m bug). No creature means the ground: a Jolt ray
-cast places the flag.
+`click(x, y, hard, groundOnly)` is shared by the mouse and the pad. A left
+click passes the mouse position; `readInput` passes the middle of the
+window (the crosshair) for A, X and Y:
+
+```cpp
+const float cx = float(w) * 0.5f, cy = float(h) * 0.5f;
+if (m.pressed("proc.call")) click(cx, cy, false, true);
+if (m.pressed("proc.hit")) click(cx, cy, false, false);
+if (m.pressed("proc.hard")) click(cx, cy, true, false);
+```
+
+It builds a ray from that point through the stored view and projection
+(the comment notes Vulkan's clip space: y down, depth 0 to 1). Unless
+`groundOnly` is set, it finds the nearest creature whose body bone passes
+within a radius of the ray (0.45 m person, 0.35 m dog, 0.2 m bug). No
+creature means the ground: a Jolt ray cast places the flag.
 
 `hit()` on a bug starts a 2.5 s flee to a spot 4 m away from the camera.
 On the dog or the person:
@@ -204,8 +273,9 @@ On the dog or the person:
    balance), pushes that body in Jolt, and pushes the pelvis with 30% of
    the push.
 
-The push is along the click ray, flat, at `KKE_PROC_HIT_SPEED` (3 m/s)
-for a click or 9 m/s for Shift, plus 0.5 m/s up.
+The push is along the click ray, flat, at the panel's "Hit strength"
+(`m_hitSpeed`: `KKE_PROC_HIT_SPEED`, else 3 m/s) for a normal hit or
+9 m/s for a hard one, plus 0.5 m/s up.
 
 While a creature has a ragdoll, `updatePhysical` runs instead of think and
 move:
@@ -235,11 +305,32 @@ The state machine (`Animated -> Active -> GettingUp`, or `Active -> Fallen
 [docs/PROCEDURAL_ANIMATION.md](../../docs/PROCEDURAL_ANIMATION.md),
 "Active ragdoll".
 
-### The camera and the panel
+### Input, the camera and the panel
 
-`OrbitCameraModule` in `Editor` mode does the orbit, pan, zoom and WASD
-target moves. `KKE_PROC_FOCUS` calls `setTarget` every frame, which
-overrides the WASD moves. The panel is Dear ImGui.
+`defineInput` makes four actions. Three have only a pad button, because
+the mouse and Shift already do them as clicks; `proc.gait` has G and RB:
+
+```cpp
+action("proc.call", "Call everyone to the middle of the screen", SDL_GAMEPAD_BUTTON_SOUTH);
+action("proc.hit", "Hit what's in the middle of the screen", SDL_GAMEPAD_BUTTON_WEST);
+action("proc.hard", "Hit it hard", SDL_GAMEPAD_BUTTON_NORTH);
+m.defineAction({ "proc.gait", "Dog: next gait", "Creatures" });
+```
+
+`commitDefaults()` then lets a saved rebinding file override them. The
+dog's gait is kept twice: `m_dogGait` (a `kke::Gait`, what `think` uses)
+and `m_gaitIndex` (0 to 3, what the panel's choice edits). `gaitOf(index)`
+turns one into the other; the keys, G, RB and the panel all set the index
+and then the gait, so every control and the panel agree.
+
+`OrbitCameraModule` in `Editor` mode does the mouse orbit, pan, zoom and
+WASD target moves; with pad controls on it also reads `camera.orbit`,
+`camera.zoom` and `camera.pan`. `KKE_PROC_FOCUS` calls `setTarget` every
+frame, which overrides the WASD moves and the left stick.
+
+`buildPanel` builds the rows listed under [The panel](#the-panel). The
+creature lines are live text: a lambda per creature that formats its
+state each frame, so the panel needs no update code.
 
 ## Design decisions
 
@@ -269,6 +360,24 @@ overrides the WASD moves. The panel is Dear ImGui.
 - **Headless switches instead of input for tests.** `KKE_PROC_HIT`,
   `KKE_PROC_QUIT` and `KKE_PROC_TRACE` let a script take the screenshots and
   check that a hit character falls and gets up, with no one at the mouse.
+  The pad controls can be scripted too: the same commit that added them
+  (a9d24ad) made `KKE_VIRTUAL_PAD_SCRIPT` accept SDL axis names (`leftx`,
+  `righty`, ...), so a script can move the sticks
+  ([docs/INPUT.md](../../docs/INPUT.md) "Testing without hardware").
+- **A controller aims with the middle of the screen.** A pad has no
+  cursor, so the panel draws a crosshair (`setPadCrosshair`; its header comment: what 'click' means without a
+  mouse, "the demo acts on the middle of the screen") and
+  the left stick moves the view under it (`setPadPan`). The same `click`
+  function serves both, so a pad hit and a mouse hit behave the same.
+- **A pad button that only calls.** A mouse click decides between flag and
+  hit by what is under the cursor. On a pad the crosshair often sits on a
+  creature, so A passes `groundOnly` (the comment: the pad's 'call' is "never a hit") and
+  X and Y are the hits.
+- **The panel is RmlUi, not ImGui.** Commit a9d24ad: "the ImGui HUD is
+  now a DemoPanel with a pad crosshair". The rule in
+  [docs/DEMO_PANEL.md](../../docs/DEMO_PANEL.md): ImGui (F1) is for
+  developers, what a player uses is RmlUi, so a controller reaches every
+  setting.
 
 ## Tuning
 
@@ -283,7 +392,7 @@ overrides the WASD moves. The panel is Dear ImGui.
 | Look limits | `LookAt::Settings` in `makeSpider` | 50 deg yaw, 30 pitch | |
 | Look distance | `animatedPose`, `< 7.0f` | 7 m | heads turn from further away |
 | Tail wag | `animatedPose` | 7 to 14 rad/s, 0.1 to 0.18 m | |
-| Normal / hard hit | `KKE_PROC_HIT_SPEED`, `hard ? 9.0f` | 3 / 9 m/s | more falls |
+| Normal / hard hit | the panel's "Hit strength" (1 to 9) or `KKE_PROC_HIT_SPEED`; `hard ? 9.0f` in `click` | 3 / 9 m/s | more falls |
 | Mass | `c.mass` | dog 25, person 70 kg | harder to knock over |
 | Hills | `groundHeight` | amplitude 0.9 + 0.35 m from 7 to 14 m out | steeper ground |
 | Flag time | `think`, `update` | 20 s | |
@@ -296,15 +405,19 @@ overrides the WASD moves. The panel is Dear ImGui.
 | Active ragdoll, ragdoll builders, skin binding | `kke/ProceduralAnim.h`, `kke/Ragdoll.h` | [RAGDOLLS.md](../../docs/RAGDOLLS.md), [PROCEDURAL_ANIMATION.md](../../docs/PROCEDURAL_ANIMATION.md) |
 | Poses and rest poses | `kke/Animator.h`, `kke/AnimRig.h` | |
 | Jolt ground, ray casts, ragdolls with motors | `kke/RigidWorld.h`, `kke/modules/RigidBodyModule.h` | |
-| Orbit camera | `kke/modules/OrbitCameraModule.h` | |
+| Orbit camera with pad turn, zoom and pan | `kke/modules/OrbitCameraModule.h` (`setPadControls`, `setPadPan`) | [DEMO_PANEL.md](../../docs/DEMO_PANEL.md) |
+| Actions, bindings, button prompts | `kke::InputModule` | [INPUT.md](../../docs/INPUT.md) |
+| Settings panel with a pad crosshair | `kke::DemoPanelModule` (`setPadCrosshair`) | [DEMO_PANEL.md](../../docs/DEMO_PANEL.md) |
 | Generated meshes | `DynamicMeshRenderer` (`kke/SphereImpostors.h`) | |
 | Moods | `Application::setMood` | [MOODS.md](../../docs/MOODS.md) |
 
 ## Assets
 
-None. Every creature, the ground and the steps are generated in code, and
-the build copies only `game.json` and the shaders it needs (`cube`,
-`glow`, `shadow`).
+None. Every creature, the ground and the steps are generated in code. The
+build copies `game.json`, the shaders it needs (`cube`, `glow`, `shadow`)
+and, through `kke_use_ui`, the RmlUi shaders and the Noto fonts the panel
+uses (in `assets/fonts/`, SIL Open Font License 1.1,
+[docs/DEPENDENCIES.md](../../docs/DEPENDENCIES.md)).
 
 ## Make a game like this
 
@@ -325,8 +438,11 @@ the build copies only `game.json` and the shaders it needs (`cube`,
    tail), then look-at last so the head turns from the final body pose.
 6. Add hit reactions with `ActiveRagdoll` only when something hits, and
    copy `updatePhysical` for the target pose and the blend back.
-7. Add input through the `InputModule` (this demo does not) so it is
+7. Keep the input on the `InputModule` like `defineInput`, so it is
    rebindable and works on a controller ([docs/INPUT.md](../../docs/INPUT.md)).
+   If your game aims at things in the world, copy the crosshair idea:
+   `setPadCrosshair(true)`, `setPadPan(true)`, and call your mouse code
+   with the middle of the window.
 
 Pitfalls the code shows:
 
@@ -341,8 +457,8 @@ Pitfalls the code shows:
 
 | File | What is in it |
 |---|---|
-| [main.cpp](main.cpp) | the app, the mood, the module list |
+| [main.cpp](main.cpp) | the app, the mood, the module list, the camera's pad controls, the panel and its crosshair |
 | [ProceduralDemoModule.h](ProceduralDemoModule.h) | the module, the `Part` and `Creature` structs, the switches in a comment |
-| [ProceduralDemoModule.cpp](ProceduralDemoModule.cpp) | mesh helpers, ground and steps, the four creature builders, think / move / animate, hits and the active ragdoll, clicks, the panel |
-| [CMakeLists.txt](CMakeLists.txt) | the `procedural_demo` executable, `game.json` and shader copies |
+| [ProceduralDemoModule.cpp](ProceduralDemoModule.cpp) | mesh helpers, ground and steps, the four creature builders, think / move / animate, hits and the active ragdoll, clicks, input actions (`defineInput`, `readInput`), the RmlUi panel (`buildPanel`) |
+| [CMakeLists.txt](CMakeLists.txt) | the `procedural_demo` executable, `game.json` and shader copies, `kke_use_ui` (the RmlUi shaders and fonts) |
 | [game.json](game.json) | the marketplace entry |
