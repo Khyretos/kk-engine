@@ -24,6 +24,7 @@
 #include <vector>
 
 namespace kke {
+class AudioModule;
 class DynamicMeshRenderer;
 class InputModule;
 class LobbyModule;
@@ -250,6 +251,12 @@ private:
     kke::ModelModule* m_models = nullptr;
     kke::LobbyModule* m_lobby = nullptr;
     kke::NetModule* m_net = nullptr;
+    kke::AudioModule* m_audio = nullptr;
+    // Sounds (synthesised, kke::ImpactSynth: no sound files): a chalky tap
+    // for each grab, stone for a breaking hold, a falling climber and
+    // bouncing rocks, UI tones for the countdown, the finish and medals.
+    void sound(const glm::vec3& at, uint32_t material, float intensity);
+    void tone(int earcon, float gain = 0.6f);
     uint32_t m_round = 0, m_sentRound = 0; // races started (resetRace); the host sends each one
     uint32_t m_netRound = 0;               // the online race's number (the host's m_round)
     float m_netSearchAt = 0.0f;            // Join: when to ask the LAN again (m_netTime)
@@ -312,6 +319,7 @@ private:
     struct Rock {
         kke::RigidWorld::BodyId body = kke::RigidWorld::kNoBody;
         float age = 0.0f;
+        glm::vec3 lastVelocity{0.0f}; // a sudden change is a bounce: a knock of stone
     };
     std::vector<Rock> m_rocks;
     std::unique_ptr<kke::DynamicMeshRenderer> m_rockMesh;
@@ -375,9 +383,13 @@ private:
     struct RivalHud {
         std::string name, height, accent, status;
     };
+    struct ResultHud {
+        std::string place, name, result, note, accent;
+    };
     struct Hud {
         std::vector<PlayerHud> players;
         std::vector<RivalHud> rivals;
+        std::vector<ResultHud> results; // the finish screen, in order
         std::string banner, sub, hint;
         bool racing = false;
         bool howto = false;         // the how-to-play screen is up

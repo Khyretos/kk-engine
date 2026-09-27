@@ -83,7 +83,7 @@ headless run is clean.
 3. **Party modes** (done): Mode row; Rockfall and Elimination; online carries the
    mode.
 4. **Time trial ghost** (done): record and replay the best run.
-5. **Polish and show**: a results screen with every climber's time and
+5. **Polish and show** (done): a results screen with every climber's time and
    falls, sounds for grabs, falls and medals, screenshots, docs, website.
 
 ## Later (parked, not in these milestones)

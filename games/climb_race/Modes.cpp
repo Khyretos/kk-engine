@@ -18,6 +18,7 @@
 #include "kke/Application.h"
 #include "kke/DevTools.h"
 #include "kke/Log.h"
+#include "kke/ImpactSynth.h"
 #include "kke/SphereImpostors.h"
 #include "kke/modules/LobbyModule.h"
 #include "kke/modules/NetModule.h"
@@ -204,6 +205,7 @@ void ClimbRaceModule::eliminate(Racer& r) {
     r.out = true;
     m_flash = r.name + " is out!";
     m_flashTime = 2.5f;
+    tone(static_cast<int>(kke::Earcon::Back), 0.7f);
     kke::log::get(name())->info("elimination: {} is out at {:.1f} m", r.name, m_rigid->world().characterPosition(r.id).y);
     if (netHost() && r.netId >= 0)
         m_net->sendEvent(netrace::kEventOut, netrace::encode(netrace::Finish{ static_cast<uint8_t>(r.netId), m_netRound, r.time }));
@@ -219,6 +221,11 @@ void ClimbRaceModule::updateMode(float dt) {
     // Rocks age and go; they only count while falling fast.
     for (size_t i = 0; i < m_rocks.size();) {
         m_rocks[i].age += dt;
+        // A bounce off the rock face: stone on stone, louder the harder.
+        const glm::vec3 v = w.velocity(m_rocks[i].body);
+        const float jolt = glm::length(v - m_rocks[i].lastVelocity);
+        if (jolt > 2.5f) sound(w.position(m_rocks[i].body), kke::AudioMaterialTable::Stone, jolt / 12.0f);
+        m_rocks[i].lastVelocity = v;
         if (m_rocks[i].age > kRockLife || w.position(m_rocks[i].body).y < -5.0f) {
             w.remove(m_rocks[i].body);
             m_rocks.erase(m_rocks.begin() + static_cast<std::ptrdiff_t>(i));
@@ -246,6 +253,7 @@ void ClimbRaceModule::updateMode(float dt) {
             for (const Rock& rock : m_rocks) {
                 if (glm::length(w.position(rock.body) - (hips + glm::vec3(0.0f, 0.35f, 0.0f))) > 0.75f || w.velocity(rock.body).y > -2.0f) continue;
                 r.climber->knock(kRockHit);
+                sound(hips, kke::AudioMaterialTable::Stone, 1.0f);
                 r.hitCooldown = 1.2f;
                 r.hitFlash = 1.5f;
                 kke::log::get(name())->info("{} was hit by a rock at {:.1f} m", r.name, hips.y);

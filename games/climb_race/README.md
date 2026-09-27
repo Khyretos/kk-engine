@@ -74,6 +74,13 @@ Medals and best times count in every mode. Every best run on a tour
 mountain is kept as its ghost, in `climb_race_ghosts/` next to the tour
 file.
 
+When the race ends, a results list shows every climber in finishing
+order: their time (or the height they reached), and a note for a medal,
+a new best or how many times they fell. Grabs, broken holds, falls,
+rocks, the countdown and medals all make a sound; the sounds are made
+by the engine's audio (`playImpact` on stone, `playEarcon` for the
+menu-style tones), so the game ships no sound files.
+
 ## Online
 
 Race friends on another PC, or in a second window on the same PC. Each

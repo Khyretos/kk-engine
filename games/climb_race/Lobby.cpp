@@ -9,6 +9,7 @@
 #include "kke/Application.h"
 #include "kke/DataFile.h"
 #include "kke/DevTools.h"
+#include "kke/ImpactSynth.h"
 #include "kke/Log.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
@@ -213,6 +214,7 @@ void ClimbRaceModule::recordFinish(Racer& r) {
             if (m.id == res.opened) m_opened = m.name;
         refreshMountainRow(mountainPick());
         kke::log::get(name())->info("{} is open", m_opened);
+        tone(static_cast<int>(kke::Earcon::Activate), 0.8f);
     }
 }
 
