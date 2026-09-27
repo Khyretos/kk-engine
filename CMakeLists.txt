@@ -912,6 +912,8 @@ endif()
 if(KKE_ENABLE_JOLT AND ENGINE_ENABLE_LUA)
     add_subdirectory(games/template)
     include(games/my_games.cmake)
+    # The cookbook (docs/cookbook/): cameras, animation and IK recipes.
+    add_subdirectory(games/cookbook)
 endif()
 
 # ---------------------------------------------------------------------------

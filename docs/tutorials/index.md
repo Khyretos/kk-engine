@@ -19,6 +19,8 @@ Coming next: **invite a friend**, playing your game together over the
 network, once player replication for script games lands
 ([#28](https://github.com/Khyretos/kk-engine/issues/28)).
 
-Want more after these? `games/first_lua_game/` is a whole small game
+Want more after these? The [cookbook](../cookbook/index.md) has recipes
+for everything from your own controls and cameras to pathfinding,
+flocking and inverse kinematics. `games/first_lua_game/` is a whole small game
 (break the targets, with a timer and a results screen) in one Lua file,
 with its own [walkthrough](../../games/first_lua_game/README.md).

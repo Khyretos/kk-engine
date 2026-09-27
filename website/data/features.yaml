@@ -67,6 +67,37 @@
       end
     end)
 
+- id: cookbook
+  title: A cookbook that can't go stale
+  icon: fa-solid fa-book
+  accent: "#ef8354"
+  tagline: From your first line of Lua to IK.
+  summary: >-
+    Recipes for making games, from moving a ball with the arrow keys to
+    eight kinds of camera, maze generation, A* pathfinding, flocking,
+    procedural animation and inverse kinematics. Every recipe is a real
+    file that CI runs in the engine on every change, and every picture
+    is taken from that run.
+  points:
+    - 25 Lua recipes you save into a running game, each with a download
+    - First person, third person, orbit, top-down, isometric, side-on, fixed and cinematic cameras
+    - Blend spaces, look-at, hand IK and foot placement on a real skeleton
+    - The same logic as pictures, a node graph and Lua
+  media:
+    - { src: media/cookbook-maze.webp, caption: "maze.lua: a new maze on every key press, from a recursive backtracker" }
+    - { src: media/cookbook-mannequin.webp, caption: "The cookbook game's mannequin: it looks at you, reaches for the orb and keeps a foot on the step" }
+    - { src: media/cookbook-terrain.webp, caption: "terrain.lua: hills from fractal noise, coloured by height" }
+  demo: cookbook
+  docs: cookbook/
+  code: |
+    -- The idea of pet.lua: follow the player
+    hook.Add("Think", "pet.follow", function(dt)
+      local toMe = player.position() - physics.position(pet)
+      if toMe:length() > 1.8 then
+        physics.setVelocity(pet, toMe:normalized() * 5)
+      end
+    end)
+
 - id: movement
   title: Parkour-grade movement
   icon: fa-solid fa-person-running
