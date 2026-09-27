@@ -74,7 +74,7 @@ the `game` input context.
 | Squish from above (`jiggle.squish`) | jelly | P | Y (north) |
 | Reset the jelly (`jiggle.reset`) | jelly | R | B (east) |
 | Next move (`jiggle.move`) | body | M | RB (right shoulder) |
-| Pick a move: idle, walk, jog, sprint, tour | body | 1 to 5 | the panel's "Move" row |
+| Pick a move: idle, walk, jog, sprint, tour (`jiggle.move1` to `jiggle.move5`) | body | 1 to 5 | the panel's "Move" row |
 | Turn the camera (`camera.orbit`) | both | left-drag | right stick |
 | Pan the camera | both | right-drag | no controller binding yet |
 | Zoom (`camera.zoom`) | both | mouse wheel | d-pad up (closer) / down (further) |
@@ -86,13 +86,19 @@ Notes from the code:
 - `readInput` only reads `jiggle.ball`, `jiggle.squish` and
   `jiggle.reset` in the jelly scene, and `jiggle.move` only in the body
   scene.
-- Keys 1 to 5 are raw key events in `onEvent`, not actions: they cannot
-  be rebound. On a pad, RB cycles through the same five moves.
+- `jiggle.move1` to `jiggle.move5` are keyboard-only actions, one per
+  move, bound to keys 1 to 5. They can be rebound like the others and
+  rest while the panel is Active. `readInput` reads them in both scenes,
+  so a move picked in the jelly scene is the one she runs when you
+  switch. They have no pad binding; on a pad, RB cycles through the same
+  five moves.
 - The camera uses the orbit camera's default `Viewer` controls and
   `setPadControls(true)` ([main.cpp](main.cpp)). In the body scene with
-  "Camera follows" and "Side view" on, the demo sets the camera's yaw
-  every frame to look at her side, so turning left and right is
-  overridden; pitch and zoom still work. Turn "Side view" off to orbit
+  "Camera follows" and "Side view" on, the demo turns the camera every
+  frame to keep looking at her side as she runs round the circle. How far
+  you turn it yourself (mouse or right stick) is kept as an offset from
+  that side view (`m_sideYawOffset`), so turning left and right still
+  works; pitch and zoom work as usual. Turn "Side view" off to orbit
   freely while it follows.
 - Button names are positions: on a PlayStation pad A is Cross, B is
   Circle, X is Square, Y is Triangle.
@@ -251,7 +257,8 @@ This runs once, at start:
    volume). It finds the chest, pelvis and thighs by bone name, pushes the
    skin out, adds two breast and two glute bones, moves the nearby skin
    onto them, and returns the rig chains and the skin zones (belly and
-   thighs). Anything it cannot find is logged.
+   thighs). Anything it cannot find is logged at info: a character
+   without a breast or belly bone just jiggles less.
 5. Retarget the UAL clips onto the reshaped body (`kke::matchBones`,
    `kke::retargetAnimations`). This comes after step 4 on purpose: the
    comment says "the new bones have no UAL counterpart and stay at rest in
@@ -292,7 +299,10 @@ scene is unaffected.
    `kke::poseToLocals` writes the pose into the instance's bone locals.
 5. The camera follows the jiggling one at 1 m height. With "Side view" it
    looks from outside the circle at her side, "across the direction she
-   runs: where lag and bounce show best".
+   runs: where lag and bounce show best". Each frame it first adds how
+   far the camera was turned since the last frame to `m_sideYawOffset`,
+   then sets the yaw to her side plus that offset, so the player can
+   still look around her.
 
 `JiggleRig` steps at a fixed 90 Hz inside `apply` and interpolates the
 offset from the pose, not the positions, so it looks the same at any
@@ -413,8 +423,8 @@ level (the pack is optional), the panel's Body section shows the message
 ("No female Synty character found. Put POLYGON Fantasy Characters (or City
 Characters) in assets/synty/ or set KKE_ASSETS_DIR."), and the body scene
 shows only the floor. The jelly scene works either way. If
-`UAL1_Standard.fbx` is missing, the demo logs a warning and says so in the
-panel.
+`UAL1_Standard.fbx` is missing, the demo logs it at info (BUG-080 in
+BUGS.md, fixed) and says so in the panel.
 
 The `playful` mood is a gradient sky with no picture and no ambience.
 

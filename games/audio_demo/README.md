@@ -86,10 +86,10 @@ Notes from the code:
   actions are in the `game` input context, as are the demo's four
   actions, so they all rest while the panel has the controller (Active).
   That is why the d-pad can move the panel's rows without also zooming.
-- `audio.ping` is read twice: by the demo (`readInput`) and by
-  `AudioModule::update` itself, which pings whenever an action with that
-  id exists and is pressed. Both call `AudioModule::ping()`, which clears
-  and rebuilds its list of pings, so one press still gives one sweep.
+- The demo only defines `audio.ping`; it does not read it.
+  `AudioModule::update` pings whenever an action with that id exists and
+  is pressed, so one press gives one sweep. `readInput` has a comment
+  saying so.
 - The mouse only turns the camera when it is not over the panel
   (`OrbitCameraModule` checks `Application::uiCapturesMouse`).
 
@@ -112,7 +112,9 @@ There is no goal. You pick a station, listen, and compare.
 
 The panel ("Audio demo", on the right edge) has these rows, top to bottom:
 
-- The controls line, with button prompts.
+- The controls line (`hint()`): on a keyboard it names the keys and says
+  "left-drag turns your head, the wheel zooms"; on a controller it shows
+  the button prompts, including the right stick and the d-pad.
 - **Station**: a choice of the ten; changing it moves you there.
 - **Again**: restarts the station (same as R).
 - **Tour**: a toggle for the automatic tour.
@@ -282,7 +284,8 @@ function every frame instead of using the camera
 2. If the circle station switched the spatial mode for you, it puts the
    old mode back.
 3. Removes any crates (body and model).
-4. Stops every playing sound (`mixer().stopAll()`).
+4. Stops every playing sound (`mixer().stopAll()`). That includes the
+   mood's ambience loop; `AudioModule` starts it again on its next update.
 5. Wraps the index (so `[` on the first station goes to the last), and
    resets the station clock, each emitter's next hit (its `phase`), the
    measurements, and the crate, step, tick and ping timers.
@@ -412,8 +415,11 @@ sound visualizer's settings.
 around the screen centre, in the direction it comes from (top = ahead),
 sized by loudness, thinner and labelled "(muffled)" through a wall, with
 a caption. The demo turns it on in [main.cpp](main.cpp). Players who
-cannot hear can see the same cases. It is drawn with ImGui, so see
-the known issue under "Design decisions".
+cannot hear can see the same cases. The ring and captions are RmlUi,
+drawn every frame from `SoundVisualizerModule::frameStart` (it needs the
+`UiModule`), so they show with the F1 panels hidden and in shipping
+builds. Only its settings window is ImGui ("Customize..." in the Audio
+panel).
 
 ## Design decisions
 
@@ -426,7 +432,9 @@ the known issue under "Design decisions".
 - **Entering stops every sound.** `enter` calls `mixer().stopAll()`, and
   the comment in `measure` says why that matters: "Everything playing is
   this station's: entering one stops the rest." The measurements would
-  otherwise mix two stations.
+  otherwise mix two stations. The mood's ambience loop is the one sound
+  that is not the station's: `measure` skips `AudioModule::ambienceVoice()`,
+  so it is not counted in "Sounds" or in the peak.
 - **The ears stay at the station; the camera only turns them.** See
   `listener()`: the view can zoom out to show a whole hall while you still
   hear from inside it. The alternative, hearing from the camera (the
@@ -465,16 +473,15 @@ the known issue under "Design decisions".
   [docs/DEMO_PANEL.md](../../docs/DEMO_PANEL.md): F1 panels are ImGui for
   developers, everything a player sees is RmlUi, so a player with only a
   controller can change everything.
-- **Known issues in the current code** (reported, not fixed here):
-  `enter` stops every voice, including the mood's ambience loop, and
-  `AudioModule` only restarts the ambience when the mood changes, so the
-  meadow sound is gone after the first station change. The ambience voice
-  is also counted in "Sounds" and in the peak. The sound visualizer is
-  drawn with ImGui inside `renderUi`, so while the F1 panels are hidden
-  (the default with a DemoPanelModule) its ring is not shown. The panel's
-  first line uses `{camera.orbit}` and `{camera.zoom}`, which are bound
-  only on a pad, so with the keyboard those prompts are blank (the note
-  at the end of the panel says the mouse controls in words).
+- **The sound ring is RmlUi, not ImGui.** Players who cannot hear need
+  it in the finished game, and the ImGui panels are hidden by default and
+  missing from shipping builds (BUG-078 in BUGS.md, fixed). So the ring
+  and captions are drawn from `frameStart` with RmlUi; only the
+  visualizer's settings window, a developer-style panel, stays ImGui.
+- **The controls line has a keyboard version.** `{camera.orbit}` and
+  `{camera.zoom}` are bound only on a pad, so on a keyboard they would
+  be blank. `hint()` shows a line that says "left-drag" and "the wheel"
+  in words instead (BUG-082 in BUGS.md, fixed for this demo).
 
 ## Tuning
 
@@ -570,7 +577,12 @@ Pitfalls the code shows:
   a door narrower than the spacing between rays shows up over a few
   probes, as the tracker turns each probe by the golden angle.
 - `mixer().stopAll()` stops everything, ambience and music included.
-  Stop only your own voices (`AudioMixer::stop(id)`) in a real game.
+  `AudioModule` starts the mood's ambience loop again on its next update,
+  but nothing restarts your music. Stop only your own voices
+  (`AudioMixer::stop(id)`) in a real game.
+- If you count sounds from `mixer().activeSounds()`, skip
+  `AudioModule::ambienceVoice()` as `measure` does, or the mood's loop is
+  counted as one of yours.
 - The sound rays only see Jolt bodies. A wall that is only a model
   makes no difference to the sound.
 - Actions in the `game` context are off while a DemoPanel is Active; put

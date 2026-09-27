@@ -128,11 +128,13 @@ sky") and adds the modules in this order:
 
 1. `InputModule` (`melt_demo_input.json`)
 2. `UiModule` (RmlUi, for the panel)
-3. `OrbitCameraModule` (distance 2.8 m, pitch -0.35, yaw 0.6, target (0, 0.45, 0)), `setPadControls(true)`
-4. `kke_melt::MeltDemoModule`, the demo
-5. `DemoPanelModule("Melt")`
-6. `DebugControlModule`, its ImGui window hidden
-7. `StatsModule`
+3. `AudioModule`, its ImGui window hidden: it plays the mood's ambience
+   loop (the melt itself makes no sound)
+4. `OrbitCameraModule` (distance 2.8 m, pitch -0.35, yaw 0.6, target (0, 0.45, 0)), `setPadControls(true)`
+5. `kke_melt::MeltDemoModule`, the demo
+6. `DemoPanelModule("Melt")`
+7. `DebugControlModule`, its ImGui window hidden
+8. `StatsModule`
 
 `MeltDemoModule::init` defines the input, creates the sphere and fluid
 surface renderers (the surface's blur radius set to 2.5 particle radii),
@@ -370,13 +372,15 @@ None of the liquid or melting pieces are exposed to Lua
 ## Assets
 
 None. The ground, the block and the liquid are all built in code. The
-only file it loads is the mood's sky picture (Poly Haven "Qwantani Dusk 2
-(Pure Sky)", CC0), fetched by the build for every demo
+only files it loads are the mood's: the sky picture (Poly Haven "Qwantani
+Dusk 2 (Pure Sky)", CC0), fetched by the build for every demo, and the
+`night_crickets` ambience loop (`assets/ambience/night_crickets.flac`,
+CC0, in the repository), which the build copies next to every game
 ([docs/SCENES.md](../../docs/SCENES.md) "Moods"). No Synty pack is used.
 
-The `dusk` mood names an ambience loop (`night_crickets`), but only
-`AudioModule` plays mood ambience and this demo does not add one, so it
-is silent.
+Only `AudioModule` plays mood ambience, which is why [main.cpp](main.cpp)
+adds one (BUG-079 in BUGS.md, fixed). Without the file it logs a warning
+and the demo is silent.
 
 ## Make a game like this
 

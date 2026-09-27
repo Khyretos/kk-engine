@@ -552,7 +552,9 @@ What happens when something is missing:
 
 The `morning` mood's sky picture (Qwantani Mid Morning, CC0 Poly Haven)
 and ambience (`meadow_day`) are fetched or shipped for every demo; they
-are not packs.
+are not packs. Only `AudioModule` plays a mood's ambience, and this demo
+does not add one, so the meadow loop is not heard (sea_demo and melt_demo
+add one for this reason).
 
 ## Make a game like this
 
