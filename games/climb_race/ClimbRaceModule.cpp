@@ -104,8 +104,13 @@ void ClimbRaceModule::init(kke::Application& app) {
         kke::InputMap& in = m_input->map(p);
         kke::InputModule::defineCharacterActions(in);
         // Those buttons are the hands here.
-        for (const char* a : { "fire", "aim", "interact", "crouch" }) in.clearBindings(a);
+        for (const char* a : { "fire", "aim", "interact", "crouch", "camera.toggle", "audio.ping" }) in.clearBindings(a);
         using IM = kke::InputModule;
+        // Q is the left hand and the D-pad moves through the start menu, so
+        // the navigation ping is G only; the pad's right stick click (no
+        // camera modes here) toggles walking.
+        in.addBinding(IM::bind("audio.ping", IM::key(SDL_SCANCODE_G)));
+        in.addBinding(IM::bind("walk", IM::pad(SDL_GAMEPAD_BUTTON_RIGHT_STICK), kke::Trigger::Toggle));
         in.defineAction({ "grab.left", "Left hand: power (hold, let go to lunge)", "Climbing", "game", kke::ActionType::Axis1D });
         in.defineAction({ "grab.right", "Right hand: power (hold, let go to lunge)", "Climbing", "game", kke::ActionType::Axis1D });
         in.defineAction({ "reach.left", "Left hand: reach (with power held: quick)", "Climbing", "game" });
