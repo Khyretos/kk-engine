@@ -120,7 +120,9 @@ On a controller Build mode works like Play: the left stick moves the
 pointer (a ring) and A is its left button, so the panels, the gizmo and
 placing work as with a mouse (`updatePad()` runs in both modes); the
 other buttons are the editor's keys (`buildPadButton()`). Anything
-without a button is a panel control the pointer can press.
+without a button is a panel control the pointer can press: holding A
+on a `-` or `+` keeps stepping, and the right stick scrolls the panel
+the pointer is on.
 
 | Action | Mouse / keyboard | Controller |
 |---|---|---|
@@ -194,7 +196,8 @@ you can walk your level there with collision.
 5. `AudioModule` and `SoundVisualizerModule`: bonks, thuds, impacts.
 6. `PhysicsModule` (FEMFX, when `KKE_ENABLE_FEMFX`), with its own ground
    drawing turned off because the sandbox draws a grid.
-7. `UiModule` (RmlUi), which the node graph editor draws in.
+7. `UiModule` (RmlUi), which the palette, the Build panels and the node
+   graph editor draw in.
 8. `SandboxModule`, then `DebugControlModule` and `StatsModule`.
 
 The camera, physics, audio and debug modules are handed to
@@ -226,9 +229,11 @@ Each frame, `SandboxModule::update()` does, in order:
 7. `updateBat()`, then `updateGraphs()` (which also runs the animals).
 8. Selection and hover boxes, then the gizmo.
 
-`renderUi()` draws what graphs say (`graphUi()`), then either the Play
+`renderUi()` shows what graphs say (`graphUi()`), then either the Play
 palette or, in Build, the Assets panel, the inspector and the "Back to
-Play" button.
+Play" button. All of them are RmlUi: the palette and what graphs say in
+`PlayPalette`, the Build panels in three `FormPanel`s. Only the pad's
+pointer ring is drawn with ImGui, so it stays on top of every panel.
 
 ### Assets and placing
 
@@ -536,9 +541,22 @@ the reason in the status line.
   second list to keep in sync.
 - **The graph editor is RmlUi, not ImGui.** PLAY_TO_MAKE.md says it is
   RmlUi "so it is also there in shipping builds and on touch screens".
-  So is the Play palette (`PlayPalette`). Build mode's panels are still
-  ImGui; they move to RmlUi next (what players use is RmlUi,
-  docs/DEMO_PANEL.md).
+  So is everything else a player uses to make things: the Play palette
+  (`PlayPalette`) and Build mode's panels (`FormPanel`). ImGui is left
+  for the developer panels behind F1 (docs/DEMO_PANEL.md).
+- **The Build panels are written like ImGui windows.** `FormPanel` is
+  immediate mode over RmlUi: every frame `inspectorUi()` lists its rows
+  (`slider()`, `choice()`, `button()`...) and a row returns true in the
+  frame it was changed, so the editor code reads like the ImGui it
+  replaced. The document is rebuilt only when the rows themselves change;
+  values are updated in place, so a text field keeps the keyboard while
+  you type. A press is matched to its row by position and what the row
+  is, so a press on a row that vanished that frame does nothing.
+- **Every control is a click.** Sliders have `-` and `+` beside the bar,
+  numbers step by the grid snap, and colours are three bars, because the
+  pad's pointer can press and hold but can't type or drag precisely. The
+  Assets panel shows one page of 12 pictures at a time for the same
+  reason (and so only those pictures are made).
 - **Drawflow's look, ported by hand.** Drawflow is a JavaScript library;
   the header comment says its look and way of working were ported, not
   its code.
@@ -576,10 +594,11 @@ the reason in the status line.
 - **Everything that can pile up has a cap** (OPTIMIZATION.md rule 5): 6
   balls, 100 undo steps, 200 things per graph, 512 "ran" marks per update
   and 64 lit blocks at once.
-- **Shortcuts are blocked only while typing** (`io.WantTextInput`, not
-  `WantCaptureKeyboard`). BUG-041: ImGui claims the keyboard whenever one
-  of its windows has focus, which silently swallowed F, Delete and R
-  after any click on a panel.
+- **Shortcuts are blocked only while typing** (`typingInUi()`: a text
+  field in a panel has the keyboard; never "a panel has focus"). BUG-041:
+  ImGui claimed the keyboard whenever one of its windows had focus, which
+  silently swallowed F, Delete and R after any click on a panel. Enter or
+  Esc gives the keyboard back.
 - **Settle, then arm fracture.** BUG-043: FEMFX's resting stress on a
   standing prop was above the measured break thresholds, so props broke
   on spawn. They now arm 2 s later, relative to their resting stress.
@@ -707,14 +726,13 @@ Pitfalls the code shows:
   spawn.
 - **Do not remove a thing from inside its own script.** Queue it and
   remove it after the scripts ran (`g.removing`).
-- **Gate shortcuts on `WantTextInput`, not `WantCaptureKeyboard`**
-  (BUG-041).
+- **Gate shortcuts on typing, not on focus** (`typingInUi()`, BUG-041).
 - **"Over the UI" means where the pointer is, not what was pressed.**
   RmlUi (like ImGui) keeps the mouse while a press lasts, so a picture
   dragged out of the palette would never be let go "in the world".
-  `mouseOverUi()` asks the palette and the graph editor whether the
-  pointer is on them (`contains()`), and ImGui whether a window is under
-  it.
+  `mouseOverUi()` asks the palette, the Build panels and the graph
+  editor whether the pointer is on them (`contains()`), and ImGui whether
+  a window is under it.
 - **RmlUi element offsets leave out transforms.** The palette is centred
   with a full-width row and `text-align: center`, not `translateX(-50%)`,
   so `contains()` and `cellCentres()` match what is drawn.
@@ -730,7 +748,8 @@ Pitfalls the code shows:
 | [main.cpp](main.cpp) | Creates the app, sets the mood, adds the modules in order, hands the engine panels to the sandbox. |
 | [SandboxModule.h](SandboxModule.h) | The `SandboxModule` class: modes, tools, the `Object` record, undo snapshots, every member and what it is for. |
 | [SandboxModule.cpp](SandboxModule.cpp) | Asset folder, placing, picking, selection, gizmo, undo/redo, the frame, input for both modes, ragdolls, stagger, look-at, breakables, balls, save/load, the Build mode ImGui panels, what the Play palette holds and does, the bat, gamepad, touch and replays. |
-| [PlayPalette.h](PlayPalette.h), [PlayPalette.cpp](PlayPalette.cpp) | The Play palette in RmlUi: the row of pictures (thumbnail PNGs from the cache, or a big word), the hint line, presses, `contains()` and `cellCentres()`. |
+| [PlayPalette.h](PlayPalette.h), [PlayPalette.cpp](PlayPalette.cpp) | The Play palette in RmlUi: the row of pictures (thumbnail PNGs from the cache, or a big word), the hint line, what graphs say and the score, presses, `contains()` and `cellCentres()`. |
+| [FormPanel.h](FormPanel.h), [FormPanel.cpp](FormPanel.cpp) | Build mode's panels in RmlUi, written like ImGui windows: sections, text, buttons, toggles, choices, sliders, numbers, colours, text fields and picture tiles, all usable with the pad's pointer. |
 | [PlayScripting.cpp](PlayScripting.cpp) | The node graphs: `IPlayWorld` over the sandbox, the Lua VM, recipes, level and thing graphs, live reload, events, errors, animals, the score and speech bubbles. |
 | [GraphEditor.h](GraphEditor.h) | The `GraphEditor` interface and how it is meant to be used with mouse, finger and gamepad. |
 | [GraphEditor.cpp](GraphEditor.cpp) | The RmlUi editor: the RCSS and RML, the `<graphwires>` element, the event listener, dragging, wiring, the "what fits" menu, fit and zoom, "Show Lua". |
