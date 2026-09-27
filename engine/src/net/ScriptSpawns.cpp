@@ -51,6 +51,8 @@ template <typename Stream> void serialize(Stream& s, BodySpawn& b) {
     rawFloat(s, b.restitution);
     s.bits(b.material, 32);
     rawVec3(s, b.color);
+    s.integer(b.look, 0, 2);
+    rawFloat(s, b.cloudy);
 }
 template <typename Stream> void serialize(Stream& s, BreakableBoxSpawn& b) {
     s.integer(b.cells.x, 1, 24);
@@ -108,7 +110,7 @@ std::vector<uint8_t> encode(const BallSpawn& b) { return pack(b); }
 std::optional<BodySpawn> decodeBody(const std::vector<uint8_t>& data) {
     auto b = unpack<BodySpawn>(data);
     if (!b || !sane(b->position, -kWorld, kWorld) || !sane(b->velocity, -1000.0f, 1000.0f) || !sane(b->halfExtents, 0.005f, 100.0f) ||
-        b->radius < 0.005f || b->radius > 100.0f || b->density <= 0.0f || b->density > 1.0e5f)
+        b->radius < 0.005f || b->radius > 100.0f || b->density <= 0.0f || b->density > 1.0e5f || !(b->cloudy >= 0.0f && b->cloudy <= 1.0f))
         return std::nullopt;
     return b;
 }

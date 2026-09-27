@@ -31,6 +31,8 @@ constexpr uint16_t kScriptCall = 0x4C04;
 constexpr uint16_t kScriptReply = 0x4C05;
 
 struct BodySpawn {
+    // How it's drawn; it collides the same whatever it looks like.
+    enum Look : uint8_t { Solid = 0, Glass = 1, Hidden = 2 };
     bool sphere = false;
     bool isStatic = false;
     glm::vec3 position{0.0f}, velocity{0.0f};
@@ -39,6 +41,8 @@ struct BodySpawn {
     float density = 500.0f, friction = 0.6f, restitution = 0.1f;
     uint32_t material = 0;
     glm::vec3 color{0.8f};
+    uint8_t look = Solid;
+    float cloudy = 0.0f; // glass: 0 clear .. 1 milky
 };
 
 struct BreakableBoxSpawn {

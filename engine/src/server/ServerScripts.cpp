@@ -595,6 +595,11 @@ void ServerScripts::bindPhysics() {
         if (isStatic) d.motion = RigidWorld::Motion::Static;
         const glm::vec3 color = ScriptVM::fieldVec3(L, 1, "color", glm::vec3(0.8f));
         const auto group = uint16_t(std::clamp(ScriptVM::fieldNumber(L, 1, "group", 0.0f), 0.0f, 65535.0f));
+        // How the players draw it; it collides the same (docs/SCRIPTING.md "Invisible and glass bodies").
+        const uint8_t look = !ScriptVM::fieldBool(L, 1, "visible", true) ? script_net::BodySpawn::Hidden
+                             : ScriptVM::fieldBool(L, 1, "glass", false) ? script_net::BodySpawn::Glass
+                                                                         : script_net::BodySpawn::Solid;
+        const float cloudy = std::clamp(ScriptVM::fieldNumber(L, 1, "cloudy", 0.0f), 0.0f, 1.0f);
         const RigidWorld::BodyId id = w->add(d);
         if (id == RigidWorld::kNoBody) return luaL_error(L, "physics: body limit reached");
         Body b{ id, src, 0, !isStatic };
@@ -605,7 +610,7 @@ void ServerScripts::bindPhysics() {
             m.id = b.netId;
             m.kind = script_net::kSpawnBody;
             m.desc = script_net::encode(script_net::BodySpawn{ sphere, isStatic, d.position, d.velocity, d.halfExtents, d.radius, d.density, d.friction,
-                                                               d.restitution, d.material, color });
+                                                               d.restitution, d.material, color, look, cloudy });
             effect([this, group, m = std::move(m)] {
                 m_net.spawn(m, true);
                 if (group) m_net.setBodyGroup(m.id, group);

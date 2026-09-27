@@ -28,6 +28,32 @@ row: boxes given the same shove, from icy (`friction = 0.02`) to grippy
 | `velocity` | starting velocity, m/s | 0 |
 | `material` | a sound material, for impact sounds ([Sound](audio.md)) | none |
 
+## Invisible walls and glass
+
+Six balls bounce around a pen they can never leave: its four walls and
+lid are there for physics but not drawn (`visible = false`). Beside it, a
+clear glass box and a milky glass ball (`glass = true`, `cloudy`). **H**
+shows the invisible walls, faintly, the way you'd check them while
+building a level.
+
+![Balls in an invisible pen, a glass box and a glass ball](media/walls.jpg)
+
+```lua title="walls.lua"
+--8<-- "docs/cookbook/recipes/walls.lua"
+```
+
+[Download walls.lua](recipes/walls.lua){ .md-button }
+
+| Setting | Means | Default |
+|---|---|---|
+| `visible` | false: it collides but isn't drawn and casts no shadow (walls that keep a ball on its court, a stair ramp) | true |
+| `glass` | true: see-through, what's behind is tinted by `color` | false |
+| `cloudy` | glass only: 0 = clear, 1 = milky | 0 |
+
+In multiplayer the look travels with the body, so every player sees the
+same glass and nobody sees the walls. `physics.showHidden(true)` only
+shows them on your own screen.
+
 ## Things that really break
 
 With FEMFX (the `everything` preset, [Install and build](../BUILDING.md)),

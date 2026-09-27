@@ -173,6 +173,8 @@ void ScriptModule::onNetSpawn(uint16_t id, uint16_t kind, const std::vector<uint
             return;
         }
         m_bodies.push_back({ body, kNetSource, b->sphere, b->sphere ? glm::vec3(b->radius) : b->halfExtents, b->color, id, {} });
+        m_bodies.back().look = b->look;
+        m_bodies.back().cloudy = b->cloudy;
         if (!b->isStatic) net->bindSpawnedBody(id, body);
         return;
     }

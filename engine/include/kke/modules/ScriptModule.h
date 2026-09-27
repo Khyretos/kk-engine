@@ -78,6 +78,7 @@ public:
     void fixedUpdate(const FixedUpdateContext& ctx) override;
     void update(const UpdateContext& ctx) override;
     void render(const RenderContext& ctx) override;
+    void renderTranslucent(const RenderContext& ctx) override;
     void renderShadow(const ShadowRenderContext& ctx) override;
     void renderUi() override;
     void shutdown() override;
@@ -112,7 +113,8 @@ public:
 private:
     struct ScriptFile { std::string path; std::filesystem::file_time_type mtime; bool ok = false; };
     // netId: its NetModule spawn id when replicated (0 = local only).
-    struct Body { uint32_t id; std::string source; bool sphere; glm::vec3 half; glm::vec3 color; uint16_t netId = 0; std::vector<uint8_t> netDesc{}; uint16_t group = 0; };
+    struct Body { uint32_t id; std::string source; bool sphere; glm::vec3 half; glm::vec3 color; uint16_t netId = 0; std::vector<uint8_t> netDesc{}; uint16_t group = 0;
+                  uint8_t look = 0; float cloudy = 0.0f; }; // look: script_net::BodySpawn::Look
     struct ModelInstance { ModelModule::InstanceId id; std::string source; };
     struct Breakable { uint32_t handle; std::string source; bool broken = false; uint16_t netId = 0; uint16_t netKind = 0; std::vector<uint8_t> netDesc{}; };
     struct Document { int id; Rml::ElementDocument* doc; std::string source; };
@@ -173,8 +175,9 @@ private:
     std::vector<NetMessage> m_netInbox;
     bool m_authority = true;
     int m_netRole = 0; // NetModule::Role as last seen (0 = offline)
-    std::unique_ptr<DynamicMeshRenderer> m_batch;
-    size_t m_batchIndices = 0;
+    std::unique_ptr<DynamicMeshRenderer> m_batch, m_glass; // solid bodies; glass ones (and hidden ones while shown)
+    size_t m_batchIndices = 0, m_glassIndices = 0;
+    bool m_showHidden = false; // physics.showHidden / the panel: draw invisible bodies, faintly
     double m_time = 0.0, m_scanTimer = 0.0;
     float m_dt = 0.0f;
     bool m_inited = false;

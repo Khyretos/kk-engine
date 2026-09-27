@@ -82,8 +82,10 @@ local v = Vec(1, 2, 3)   -- v.x v.y v.z, + - * /, v:length(), v:normalized(), v:
 -- Physics: bodies are numbers (ids)
 local id = physics.box    { pos = Vec(0,1,0), size = Vec(1,1,1), color = Vec(1,0,0),
                             density = 500, bounce = 0.1, friction = 0.6, static = false,
-                            velocity = Vec(0,0,0), material = 0 }
+                            velocity = Vec(0,0,0), material = 0,
+                            visible = true, glass = false, cloudy = 0 }  -- visible = false: an invisible wall; glass: see-through
 local b  = physics.sphere { pos = Vec(0,3,0), radius = 0.5, color = Vec(0,0,1) }  -- same options
+physics.showHidden(true)   -- draw the invisible ones faintly while building a level
 physics.remove(id)   physics.position(id)   physics.velocity(id)   physics.count()
 physics.setVelocity(id, Vec(0,5,0))   physics.impulse(id, Vec(0,5,0) [, point])
 local hit = physics.raycast(from, direction [, maxDistance])  -- nil, or {pos, normal, distance, body, material}
@@ -167,6 +169,7 @@ game's `scripts/` folder, then change it.
 | procedural animation: follow-the-leader body | `caterpillar.lua` |
 | inverse kinematics (reach for a point) | `ik_arm.lua` |
 | physics settings side by side | `bounce.lua` |
+| invisible walls, glass | `walls.lua` |
 | sounds from materials | `sounds.lua` |
 | multiplayer: host decides, players ask | `net_scores/` |
 

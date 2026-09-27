@@ -94,6 +94,7 @@ void ScriptModule::init(Application& app) {
             if (f.path == source) f.ok = false;
     };
     m_batch = std::make_unique<DynamicMeshRenderer>(app);
+    m_glass = std::make_unique<DynamicMeshRenderer>(app);
 #if KKE_ENABLE_NET
     if (auto* net = app.getModule<NetModule>()) m_authority = net->authority();
 #endif
@@ -309,13 +310,20 @@ void ScriptModule::bindAll() {
             d.material = uint32_t(std::max(0.0f, ScriptVM::fieldNumber(L, 1, "material", 0.0f)));
             if (ScriptVM::fieldBool(L, 1, "static", false)) d.motion = RigidWorld::Motion::Static;
             const glm::vec3 color = ScriptVM::fieldVec3(L, 1, "color", glm::vec3(0.8f));
+            // How it looks; it collides the same (docs/SCRIPTING.md "Invisible and glass bodies").
+            const uint8_t look = !ScriptVM::fieldBool(L, 1, "visible", true) ? script_net::BodySpawn::Hidden
+                                 : ScriptVM::fieldBool(L, 1, "glass", false) ? script_net::BodySpawn::Glass
+                                                                             : script_net::BodySpawn::Solid;
+            const float cloudy = std::clamp(ScriptVM::fieldNumber(L, 1, "cloudy", 0.0f), 0.0f, 1.0f);
             const RigidWorld::BodyId id = rbm->world().add(d);
             if (id == RigidWorld::kNoBody) return luaL_error(L, "physics: body limit reached");
             m_bodies.push_back({id, src, sphere, sphere ? glm::vec3(d.radius) : d.halfExtents, color});
+            m_bodies.back().look = look;
+            m_bodies.back().cloudy = cloudy;
             // Kept for multiplayer: an sv_ script's body is built on every client (ScriptReplication.cpp).
             m_bodies.back().netDesc = script_net::encode(script_net::BodySpawn{sphere, d.motion == RigidWorld::Motion::Static, d.position, d.velocity,
                                                                                d.halfExtents, d.radius, d.density, d.friction, d.restitution,
-                                                                               d.material, color});
+                                                                               d.material, color, look, cloudy});
             // A group (a court): only players who see that group are sent it (docs/NETWORKING.md "Groups").
             m_bodies.back().group = uint16_t(std::clamp(ScriptVM::fieldNumber(L, 1, "group", 0.0f), 0.0f, 65535.0f));
             replicate(m_bodies.back());
@@ -331,6 +339,12 @@ void ScriptModule::bindAll() {
         };
         vm.registerFunction("physics", "box", [spawn](lua_State* L) { return spawn(L, false); });
         vm.registerFunction("physics", "sphere", [spawn](lua_State* L) { return spawn(L, true); });
+        // Editing a level: see the invisible walls (on this machine only).
+        vm.registerFunction("physics", "showHidden", [this](lua_State* L) {
+            if (!lua_isnone(L, 1)) m_showHidden = lua_toboolean(L, 1);
+            lua_pushboolean(L, m_showHidden);
+            return 1;
+        });
         vm.registerFunction("physics", "remove", [this, rbm, owned](lua_State* L) {
             const uint32_t id = owned(L, 1);
             for (const Body& b : m_bodies)
@@ -464,25 +478,44 @@ void ScriptModule::update(const UpdateContext& ctx) {
 
     // One mesh for every script body, rebuilt each frame (same approach as
     // kke_demo's crates: one draw instead of hundreds).
-    static std::vector<Vertex> v;
-    static std::vector<uint32_t> idx;
+    static std::vector<Vertex> v, gv;
+    static std::vector<uint32_t> idx, gidx;
     v.clear();
     idx.clear();
+    gv.clear();
+    gidx.clear();
 #if KKE_ENABLE_JOLT
     if (auto* rbm = m_app->getModule<RigidBodyModule>()) {
         for (const Body& b : m_bodies) {
+            if (b.look == script_net::BodySpawn::Hidden && !m_showHidden) continue;
             const glm::mat4 t = rbm->world().transform(b.id);
-            if (b.sphere) appendSphere(t, b.half.x, b.color, v, idx);
-            else appendBox(t, b.half, b.color, v, idx);
+            const bool glass = b.look != script_net::BodySpawn::Solid;
+            // Shown hidden bodies: faint cyan glass, so they read as "not really there".
+            const glm::vec3 color = b.look == script_net::BodySpawn::Hidden ? glm::vec3(0.3f, 0.9f, 1.0f) : b.color;
+            std::vector<Vertex>& vv = glass ? gv : v;
+            std::vector<uint32_t>& ii = glass ? gidx : idx;
+            const size_t first = vv.size();
+            if (b.sphere) appendSphere(t, b.half.x, color, vv, ii);
+            else appendBox(t, b.half, color, vv, ii);
+            // drawTranslucent: uv.x = how strongly the colour filters, uv.y = milkiness.
+            if (glass)
+                for (size_t i = first; i < vv.size(); ++i)
+                    vv[i].uv = b.look == script_net::BodySpawn::Hidden ? glm::vec2(0.6f, 0.25f) : glm::vec2(0.4f, b.cloudy);
         }
     }
 #endif
     m_batchIndices = idx.size();
     if (!idx.empty()) m_batch->upload(v, idx);
+    m_glassIndices = gidx.size();
+    if (!gidx.empty()) m_glass->upload(gv, gidx);
 }
 
 void ScriptModule::render(const RenderContext& ctx) {
     if (m_batchIndices) m_batch->draw(ctx, glm::mat4(1.0f), 0.0f, 0.6f);
+}
+
+void ScriptModule::renderTranslucent(const RenderContext& ctx) {
+    if (m_glassIndices) m_glass->drawTranslucent(ctx, glm::mat4(1.0f), 0.05f);
 }
 
 void ScriptModule::renderShadow(const ShadowRenderContext& ctx) {
@@ -512,6 +545,8 @@ void ScriptModule::renderUi() {
     if (ImGui::Button("Reload all")) reloadAll();
     ImGui::SameLine();
     if (ImGui::Button("Clear console")) { m_console.clear(); m_vm->clearErrors(); }
+    ImGui::SameLine();
+    ImGui::Checkbox("Show invisible bodies", &m_showHidden);
     ImGui::Separator();
     const float footer = ImGui::GetFrameHeightWithSpacing();
     ImGui::BeginChild("console", ImVec2(0, -footer), true);
@@ -551,6 +586,7 @@ void ScriptModule::shutdown() {
     if (m_vm && m_inited) m_vm->callHook("Shutdown");
     if (m_app) releaseAll();
     m_batch.reset();
+    m_glass.reset();
 }
 
 } // namespace kke

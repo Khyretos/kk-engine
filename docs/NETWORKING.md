@@ -148,7 +148,7 @@ join a new one (and is told nothing it could use).
     snapshots like the level's; `Despawn` removes them.
   - *Breaks*: `Break` messages carry which borders of a breakable broke on
     the host (below).
-  - *Robustness*: protocol version (now 8) and game id checked at join,
+  - *Robustness*: protocol version (now 9) and game id checked at join,
     then the server's password if it has one (compared in constant time;
     `KKE_NET_PASSWORD`, or the panel's Password field) and its access list
     (`NetServer::admit`: bans, allow list), a full server says so, silent peers time out, clients sending bad

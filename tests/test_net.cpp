@@ -344,6 +344,16 @@ TEST(NetScriptSpawns, DescriptionsRoundTripAndDamagedOnesAreRefused) {
     EXPECT_EQ(b->radius, body.radius);
     EXPECT_EQ(b->material, 3u);
     EXPECT_EQ(b->color, body.color);
+    EXPECT_EQ(b->look, script_net::BodySpawn::Solid);
+    body.look = script_net::BodySpawn::Glass;
+    body.cloudy = 0.25f;
+    b = script_net::decodeBody(script_net::encode(body));
+    ASSERT_TRUE(b);
+    EXPECT_EQ(b->look, script_net::BodySpawn::Glass);
+    EXPECT_EQ(b->cloudy, 0.25f);
+    body.cloudy = 7.0f; // past 1: damaged
+    EXPECT_FALSE(script_net::decodeBody(script_net::encode(body)));
+    body.cloudy = 0.0f;
 
     script_net::BreakableBoxSpawn box;
     box.cells = glm::ivec3(8, 6, 2);
