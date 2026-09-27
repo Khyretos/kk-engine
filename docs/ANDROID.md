@@ -108,6 +108,8 @@ screen's pixel density, so both read the same on a phone as on a PC.
 - **Gamepads**: Bluetooth and USB controllers work as on a PC (SDL3), with
   the matching button prompts.
 - **Back** (the system gesture or button) closes the game.
+- A small tag in the bottom-left corner names the game (and, in the
+  benchmark, the orientation), so a screenshot says which demo it was.
 
 ## Building an APK yourself
 

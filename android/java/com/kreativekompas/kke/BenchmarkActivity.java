@@ -288,6 +288,7 @@ public class BenchmarkActivity extends Activity {
             Intent intent = new Intent(this, GameActivity.class);
             intent.putExtra(GameActivity.EXTRA_GAME, lib);
             intent.putExtra(GameActivity.EXTRA_ENV, env);
+            intent.putExtra(GameActivity.EXTRA_LABEL, d.optString("title", id) + " \u00b7 " + d.getString("orientation"));
             mHung = false;
             mStartedAt = SystemClock.elapsedRealtime();
             long limitMs = (long) ((d.getDouble("warmup") + d.getDouble("seconds") + mSuite.optDouble("load_timeout", 120.0)) * 1000.0);
