@@ -61,17 +61,18 @@ local function clear()
   print("cleared")
 end
 
--- How long the ball button has been held: a second clears (a controller
--- has no spare button for Clear).
+-- How long the ball button has been held: let go within a second and a
+-- ball flies; hold it a second and everything clears instead (a
+-- controller has no spare button for Clear).
 local ballHeld = 0
 
 hook.Add("Think", "toys.keys", function(dt)
   if input.pressed("toys.tower") then tower() end
-  if input.pressed("toys.ball") then ball() end
   if input.held("toys.ball") then
     ballHeld = ballHeld + dt
     if ballHeld >= 1 and ballHeld - dt < 1 then clear() end
   else
+    if ballHeld > 0 and ballHeld < 1 then ball() end
     ballHeld = 0
   end
   if input.pressed("toys.clear") then clear() end

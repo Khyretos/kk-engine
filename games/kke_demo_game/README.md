@@ -36,18 +36,18 @@ panels hidden (engine switch).
 
 | Action | Keyboard and mouse | Controller |
 |---|---|---|
-| Orbit the camera | Left mouse drag | no controller binding yet |
-| Pan | Right mouse drag | no controller binding yet |
-| Zoom | Mouse wheel | no controller binding yet |
+| Orbit the camera | Left mouse drag | Right stick |
+| Pan | Right mouse drag | none |
+| Zoom | Mouse wheel | D-pad up / down |
 | Turn, zoom (touch screen) | Two-finger drag, pinch, twist | |
-| Use the panels | Mouse | no controller binding yet |
-| Quit | Esc | no controller binding yet |
+| Use the settings panel (right) | Mouse, or F3 / Esc then the arrows and Enter | View, then the d-pad and A (B goes back) |
+| Quit | Esc, then Quit | View, then Quit |
 
-The camera controls are `OrbitCameraModule`'s defaults ("Viewer" mode).
-The module has a `nudge()` method for a gamepad's right stick, but this
-demo adds no `InputModule` and nothing calls `nudge()`, so a controller
-does nothing here. Esc quits because `Window::setQuitOnEscape` defaults to
-true and this demo does not change it.
+The camera controls are `OrbitCameraModule`'s defaults ("Viewer" mode)
+plus `setPadControls(true)`: the right stick turns, the d-pad zooms. Every
+setting is a row in one RmlUi panel (`kke::DemoPanelModule`, right side),
+which the mouse, the keyboard and a controller all reach; Esc opens it
+instead of quitting and it has a Quit row.
 
 ## How it plays
 
@@ -61,8 +61,10 @@ There are no rules. Things to try, all in the panels:
   how many bytes it would send (17 for the destruction).
 - **Particles**: pause the fountain.
 - **Camera**: auto-orbit and its speed.
-- **Lighting** (RmlUi panel): sliders and four presets (warm key and cool
-  fill, dramatic, flat, reset).
+- **Lighting**: ambient, key and fill sliders and four presets (warm key
+  and cool fill, dramatic, flat, reset).
+- **Material** (FEMFX builds): the material the next tetrahedron gets, and
+  a Spawn button.
 - **Marketplace** (RmlUi panel): every `game.json` found in
   `bin/marketplace/`, which is every game the build copied there.
 - **Debug Control**: pause the simulation and step one frame at a time.
@@ -75,7 +77,7 @@ There are no rules. Things to try, all in the panels:
 [main.cpp](main.cpp) is the whole program:
 
 1. Creates a `kke::Application` (1600 x 900), sets the `studio` mood, and
-   turns off `sky.lightsScene` so the Lighting panel's flat ambient is in
+   turns off `sky.lightsScene` so the Lighting rows' flat ambient is in
    charge of the fill light.
 2. Runs a hardware check: it loads its own manifest from
    `marketplace/kke_demo_game/game.json` (CMake copies [game.json](game.json)
@@ -85,17 +87,19 @@ There are no rules. Things to try, all in the panels:
    transparent (grid, particles)":
 
 ```cpp
+app.addModule<kke::InputModule>("kke_basics_input.json");
 app.addModule<kke_demo::CubeModule>();
 app.addModule<kke::GridModule>();
-app.addModule<kke::OrbitCameraModule>();
+app.addModule<kke::OrbitCameraModule>().setPadControls(true);
 app.addModule<kke::ParticleModule>(20000);
 app.addModule<kke_demo::DestructionModule>(16, 1234);
 app.addModule<kke_demo::NetworkModule>();
 app.addModule<kke::UiModule>();
 app.addModule<kke::MarketplaceUiModule>("marketplace");
-app.addModule<kke::LightingControlsModule>();
+auto& panel = app.addModule<kke::DemoPanelModule>("Basics", kke::DemoPanelModule::Side::Right);
+addLightingRows(app, panel);
 app.addModule<kke::DebugControlModule>();
-// FEMFX builds: PhysicsModule, MaterialGridModule(40, 640)
+// FEMFX builds: PhysicsModule, and a Material section on the panel
 app.addModule<kke::StatsModule>();
 ```
 
@@ -235,16 +239,18 @@ kept clear of the poles. Mouse sensitivity follows the engine settings.
 
 ### The panels
 
-- `UiModule` owns the RmlUi context. `LightingControlsModule` and
-  `MarketplaceUiModule` add their own RmlUi documents to it. The
+- `UiModule` owns the RmlUi context. `DemoPanelModule` and
+  `MarketplaceUiModule` add their own RmlUi documents to it. Cube,
+  Destruction and Network each add their section in `init`
+  (`buildPanel`); `main.cpp` adds Lighting and Material. The
   marketplace scans the folder once at start and is a static list (its
   header: "nothing can be clicked, so there is no launch this game
   button").
-- `DebugControlModule`, `StatsModule`, and the demo modules' `renderUi`
-  are ImGui windows.
-- FEMFX builds: `MaterialGridModule` at (40, 640), placed under the
-  lighting panel because a screenshot showed the marketplace panel hiding
-  anything behind it (comment in `main.cpp`).
+- `DebugControlModule` and `StatsModule` are ImGui developer windows,
+  hidden until F1.
+- `LightingControlsModule` and `MaterialGridModule` (the old mouse-only
+  RmlUi panels) are still engine modules a game can add; this demo uses
+  panel rows instead so a controller reaches them.
 
 ## Design decisions
 
@@ -295,7 +301,7 @@ kept clear of the poles. Mouse sensitivity follows the engine settings.
 | GPU particles | [kke/modules/ParticleModule.h](../../engine/include/kke/modules/ParticleModule.h) | |
 | Grid | [kke/modules/GridModule.h](../../engine/include/kke/modules/GridModule.h) | |
 | Orbit camera | [kke/modules/OrbitCameraModule.h](../../engine/include/kke/modules/OrbitCameraModule.h) | |
-| RmlUi panels | `UiModule`, `LightingControlsModule`, `MarketplaceUiModule` | |
+| RmlUi panels | `UiModule`, `DemoPanelModule`, `MarketplaceUiModule` | [DEMO_PANEL.md](../../docs/DEMO_PANEL.md) |
 | Game manifest and hardware check | [kke/GameManifest.h](../../engine/include/kke/GameManifest.h), [kke/HardwareCheck.h](../../engine/include/kke/HardwareCheck.h) | |
 | Pause and step, performance | `DebugControlModule`, `StatsModule` | |
 | Moods | `Application::setMood` | [MOODS.md](../../docs/MOODS.md) |
@@ -348,8 +354,8 @@ Pitfalls the code shows:
   `VkDevice` from `init` for that.
 - `DestructionModule` has no `renderShadow`, so its fragments cast no
   shadows.
-- `MaterialGridModule` exists only in FEMFX builds; guard it with
-  `#if KKE_ENABLE_FEMFX` like `main.cpp` does.
+- `PhysicsModule` exists only in FEMFX builds; guard it and its Material
+  rows with `#if KKE_ENABLE_FEMFX` like `main.cpp` does.
 
 ## Files
 

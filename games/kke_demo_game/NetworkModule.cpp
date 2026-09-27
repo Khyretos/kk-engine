@@ -1,7 +1,7 @@
 #include "NetworkModule.h"
 #include "kke/Application.h"
+#include "kke/modules/DemoPanelModule.h"
 
-#include <imgui.h>
 
 namespace kke_demo {
 
@@ -9,6 +9,7 @@ void NetworkModule::init(kke::Application& app) {
     for (auto* replicable : app.findCapability<kke::INetworkReplicable>()) {
         m_replicables.push_back({ replicable, replicable->replicationChannelName(), 0 });
     }
+    buildPanel(app);
 }
 
 void NetworkModule::update(const kke::UpdateContext& ctx) {
@@ -27,23 +28,19 @@ void NetworkModule::update(const kke::UpdateContext& ctx) {
     }
 }
 
-void NetworkModule::renderUi() {
-    ImGui::SetNextWindowPos(ImVec2(10, 400), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(300, 0), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Network (stub)");
-    ImGui::TextWrapped(
-        "No real transport — this demonstrates discovery only. Found %zu "
-        "INetworkReplicable module(s) via Application::findCapability<>(), "
-        "without knowing what any of them are.", m_replicables.size());
-    ImGui::Separator();
-
-    if (m_replicables.empty()) {
-        ImGui::TextDisabled("(none found — works fine standalone too)");
-    }
-    for (const auto& status : m_replicables) {
-        ImGui::Text("%s: %zu bytes", status.channelName.c_str(), status.lastPayloadBytes);
-    }
-    ImGui::End();
+void NetworkModule::buildPanel(kke::Application& app) {
+    auto* panel = app.getModule<kke::DemoPanelModule>();
+    if (!panel) return;
+    auto& s = panel->section("Network (stub)");
+    s.note("No real transport: this demonstrates discovery only. It finds INetworkReplicable modules via "
+           "Application::findCapability<>(), without knowing what any of them are.");
+    s.text([this] {
+        if (m_replicables.empty()) return std::string("(none found; works fine standalone too)");
+        std::string out;
+        for (const auto& status : m_replicables)
+            out += (out.empty() ? "" : ", ") + status.channelName + ": " + std::to_string(status.lastPayloadBytes) + " bytes";
+        return out;
+    });
 }
 
 } // namespace kke_demo

@@ -32,7 +32,6 @@ public:
     void init(kke::Application& app) override;
     void fixedUpdate(const kke::FixedUpdateContext& ctx) override;
     void render(const kke::RenderContext& ctx) override;
-    void renderUi() override;
 
     // kke::INetworkReplicable — this is the entire "over the wire" payload:
     // 8 bytes seed + 1 byte triggered flag + 8 bytes trigger tick, however
@@ -42,6 +41,7 @@ public:
     void deserializeReplicatedState(const std::vector<uint8_t>& data) override;
 
 private:
+    void buildPanel(kke::Application& app);
     void trigger(uint64_t atTick);
 
     uint32_t m_fragmentCount;

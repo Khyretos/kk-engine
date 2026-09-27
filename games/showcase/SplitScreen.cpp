@@ -122,6 +122,8 @@ void ShowcaseModule::updateLocalPlayers(float dt) {
                 p.fireCooldown = 0.25f;
             }
             if (map.pressed("interact")) forcePush(p.camera);
+            if (map.pressed("camera.toggle"))
+                p.rig.mode = p.rig.mode == kke::CameraRig::Mode::ThirdPerson ? kke::CameraRig::Mode::FirstPerson : kke::CameraRig::Mode::ThirdPerson;
             if (const float z = map.axis("zoom.pad"); z != 0.0f)
                 p.rig.settings.armLength = std::clamp(p.rig.settings.armLength - z * 4.0f * dt, 1.5f, 10.0f);
         } else {

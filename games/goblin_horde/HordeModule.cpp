@@ -73,7 +73,8 @@ void HordeModule::init(kke::Application& app) {
     using IM = kke::InputModule;
     kke::InputMap& in = m_input->map(0);
     kke::InputModule::defineCharacterActions(in);
-    for (const char* a : { "jump", "sprint", "walk", "crouch", "fire", "aim", "interact", "camera.toggle", "camera.zoom" }) in.clearBindings(a);
+    // No voice chat here, so B (push-to-talk) stays free; Q is the ping.
+    for (const char* a : { "jump", "sprint", "walk", "crouch", "fire", "aim", "interact", "camera.toggle", "camera.zoom", "voice.talk" }) in.clearBindings(a);
     in.defineAction({ "horde.slash", "Slash (quick, hits a few)", "Fight", "game" });
     in.defineAction({ "horde.heavy", "Great swing (all around you)", "Fight", "game" });
     in.defineAction({ "horde.block", "Block (just in time: parry)", "Fight", "game" });

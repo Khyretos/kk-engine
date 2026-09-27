@@ -21,10 +21,10 @@ public:
     void update(const kke::UpdateContext& ctx) override;
     void render(const kke::RenderContext& ctx) override;
     void renderShadow(const kke::ShadowRenderContext& ctx) override;
-    void renderUi() override;
     void shutdown() override;
 
 private:
+    void buildPanel(kke::Application& app);
     std::unique_ptr<kke::Pipeline> m_pipeline;
     // A real, separate pipeline for the shadow pass — see
     // shadow.vert/frag: same vertex layout as the main pipeline (so it

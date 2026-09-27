@@ -1,10 +1,12 @@
 #include "DestructionModule.h"
 #include "kke/Application.h"
+#include "kke/modules/DemoPanelModule.h"
 
 #include <glm/gtc/matrix_transform.hpp>
-#include <imgui.h>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
+#include <string>
 #include <algorithm>
 
 namespace kke_demo {
@@ -76,6 +78,7 @@ DestructionModule::DestructionModule(uint32_t fragmentCount, uint64_t seed)
 
 void DestructionModule::init(kke::Application& app) {
     m_fragmentMesh = std::make_unique<kke::Mesh>(kke::Mesh::createCube(app.device()));
+    buildPanel(app);
 
     kke::PipelineConfig config;
     config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(CubePushConstants) };
@@ -119,30 +122,21 @@ void DestructionModule::render(const kke::RenderContext& ctx) {
     }
 }
 
-void DestructionModule::renderUi() {
-    ImGui::SetNextWindowPos(ImVec2(10, 220), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(300, 0), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Destruction");
-    ImGui::Text("Seed: %llu", static_cast<unsigned long long>(m_seed));
-    ImGui::Text("Fragments: %u", m_fragmentCount);
-
-    if (!m_triggered) {
-        if (ImGui::Button("Trigger")) {
-            trigger(m_currentTick);
-        }
-    } else {
-        float elapsed = static_cast<float>(m_currentTick - m_triggerTick) * m_fixedDt;
-        ImGui::Text("Triggered at tick %llu (%.2fs ago)",
-                    static_cast<unsigned long long>(m_triggerTick), elapsed);
-        if (ImGui::Button("Reset")) {
-            m_triggered = false;
-        }
-    }
-    ImGui::TextWrapped(
-        "Replicated state is just the seed + trigger tick above (17 bytes) "
-        "— every fragment's position is re-derived from those on whoever "
-        "receives them, never sent itself.");
-    ImGui::End();
+void DestructionModule::buildPanel(kke::Application& app) {
+    auto* panel = app.getModule<kke::DemoPanelModule>();
+    if (!panel) return;
+    auto& s = panel->section("Destruction");
+    s.text([this] { return "Seed " + std::to_string(m_seed) + ", " + std::to_string(m_fragmentCount) + " fragments"; });
+    s.button("Trigger", [this] { trigger(m_currentTick); }).showIf([this] { return !m_triggered; });
+    s.text([this] {
+        char buf[96];
+        std::snprintf(buf, sizeof(buf), "Triggered at tick %llu (%.2f s ago)", static_cast<unsigned long long>(m_triggerTick),
+                      static_cast<double>(static_cast<float>(m_currentTick - m_triggerTick) * m_fixedDt));
+        return std::string(buf);
+    }).showIf([this] { return m_triggered; });
+    s.button("Reset", [this] { m_triggered = false; }).showIf([this] { return m_triggered; });
+    s.note("Replicated state is just the seed + trigger tick above (17 bytes): every fragment's position is re-derived from those on "
+           "whoever receives them, never sent itself.");
 }
 
 std::vector<uint8_t> DestructionModule::serializeReplicatedState() {
