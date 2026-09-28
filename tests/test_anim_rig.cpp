@@ -38,6 +38,22 @@ ModelData legs() {
     return m;
 }
 
+// A chest 1.4 m up with both arms straight out (a T-pose), facing +Z (the
+// left arm at +X): upper arm 0.3, forearm 0.25.
+ModelData arms() {
+    ModelData m;
+    m.bones.push_back(bone("Root", -1, glm::mat4(1.0f)));
+    m.bones.push_back(bone("Spine_03", 0, at(0, 1.4f, 0)));
+    for (float side : { 1.0f, -1.0f }) {
+        const bool left = side > 0;
+        const int upper = static_cast<int>(m.bones.size());
+        m.bones.push_back(bone(left ? "upperarm_l" : "upperarm_r", 1, at(0.2f * side, 0, 0)));
+        m.bones.push_back(bone(left ? "lowerarm_l" : "lowerarm_r", upper, at(0.3f * side, 0, 0)));
+        m.bones.push_back(bone(left ? "hand_l" : "hand_r", upper + 1, at(0.25f * side, 0, 0)));
+    }
+    return m;
+}
+
 Pose restPose(const ModelData& m) { return kke::AnimationSet(m).restPose(); }
 
 glm::vec3 pos(const ModelData& m, const Pose& p, int b) { return glm::vec3(kke::poseToModel(m, p)[b][3]); }
@@ -275,4 +291,95 @@ TEST(AnimRig, AppendClipsByBoneNameReordersAndFillsRest) {
     EXPECT_FLOAT_EQ(a.frames[1][static_cast<size_t>(thighL)][3].y, 0.2f);
     // Not in the source: stays at rest.
     EXPECT_FLOAT_EQ(a.frames[1][static_cast<size_t>(calfL)][3].y, -0.45f);
+}
+
+TEST(AnimRig, HumanArmReachesInFrontWithTheElbowDown) {
+    const ModelData m = arms();
+    Pose p = restPose(m);
+    const kke::TwoBoneChain r = kke::findChain(m, "upperarm_r", "lowerarm_r", "hand_r");
+    const kke::TwoBoneChain l = kke::findChain(m, "upperarm_l", "lowerarm_l", "hand_l");
+    const kke::HumanArm arm = kke::makeHumanArm(m, r, l);
+    ASSERT_TRUE(arm.valid());
+    EXPECT_FALSE(arm.left);
+    kke::ArmGoal goal;
+    goal.hand = glm::vec3(-0.15f, 1.3f, 0.4f); // in front of the right shoulder, a little low
+    const kke::ArmResult res = kke::solveHumanArm(m, p, arm, goal);
+    EXPECT_FALSE(res.limited);
+    EXPECT_LT(glm::length(pos(m, p, r.end) - goal.hand), 0.005f);
+    EXPECT_NEAR(glm::length(pos(m, p, r.lower) - pos(m, p, r.upper)), 0.3f, 1e-3f);
+    EXPECT_NEAR(glm::length(pos(m, p, r.end) - pos(m, p, r.lower)), 0.25f, 1e-3f);
+    EXPECT_LT(pos(m, p, r.lower).y, 1.38f); // the elbow hangs below the shoulder
+}
+
+TEST(AnimRig, HumanArmElbowOnlyBendsForward) {
+    const ModelData m = arms();
+    const kke::TwoBoneChain r = kke::findChain(m, "upperarm_r", "lowerarm_r", "hand_r");
+    const kke::TwoBoneChain l = kke::findChain(m, "upperarm_l", "lowerarm_l", "hand_l");
+    const kke::HumanArm arm = kke::makeHumanArm(m, r, l);
+    // Targets all round the shoulder, near and far, with elbow hints on every side.
+    int n = 0;
+    for (float yaw = -180.0f; yaw < 180.0f; yaw += 30.0f)
+        for (float pitch = -80.0f; pitch <= 80.0f; pitch += 40.0f)
+            for (float reach : { 0.25f, 0.45f, 0.6f })
+                for (const glm::vec3 hint : { glm::vec3(0, 3, 0), glm::vec3(0, -3, 0), glm::vec3(3, 1.4f, 0), glm::vec3(0, 1.4f, 3) }) {
+                    Pose p = restPose(m);
+                    const glm::vec3 shoulder = pos(m, p, r.upper);
+                    const float y = glm::radians(yaw), x = glm::radians(pitch);
+                    kke::ArmGoal goal;
+                    goal.hand = shoulder + reach * glm::vec3(std::cos(x) * std::sin(y), std::sin(x), std::cos(x) * std::cos(y));
+                    goal.elbowToward = hint;
+                    kke::solveHumanArm(m, p, arm, goal);
+                    const std::vector<glm::mat4> w = kke::poseToModel(m, p);
+                    const glm::vec3 s = glm::vec3(w[r.upper][3]), e = glm::vec3(w[r.lower][3]), h = glm::vec3(w[r.end][3]);
+                    // The hinge as the upper arm carries it: the forearm turns about it the positive (forward) way.
+                    const glm::vec3 hinge = glm::normalize(glm::mat3(w[r.upper]) * arm.upperHinge);
+                    const float bend = glm::dot(glm::cross(glm::normalize(e - s), glm::normalize(h - e)), hinge);
+                    EXPECT_GE(bend, -1e-3f) << "yaw " << yaw << " pitch " << pitch << " reach " << reach;
+                    // The elbow is a hinge: the forearm stays in the plane the hinge allows.
+                    EXPECT_NEAR(glm::dot(glm::normalize(h - e), hinge), 0.0f, 1e-3f);
+                    ++n;
+                }
+    EXPECT_EQ(n, 12 * 5 * 3 * 4);
+}
+
+TEST(AnimRig, HumanArmCannotReachThroughItsBack) {
+    const ModelData m = arms();
+    Pose p = restPose(m);
+    const kke::TwoBoneChain r = kke::findChain(m, "upperarm_r", "lowerarm_r", "hand_r");
+    const kke::TwoBoneChain l = kke::findChain(m, "upperarm_l", "lowerarm_l", "hand_l");
+    const kke::HumanArm arm = kke::makeHumanArm(m, r, l);
+    // Behind the back on the other side: out of the shoulder's range.
+    kke::ArmGoal goal;
+    goal.hand = glm::vec3(0.3f, 1.4f, -0.4f);
+    const kke::ArmResult res = kke::solveHumanArm(m, p, arm, goal);
+    EXPECT_TRUE(res.limited);
+    const glm::vec3 d = res.hand - pos(m, p, r.upper);
+    // Right arm: out is -X. The hand stays within 135 degrees of straight ahead, on its own side.
+    EXPECT_LT(std::atan2(-d.x, d.z), glm::radians(136.0f));
+    EXPECT_GT(std::atan2(-d.x, d.z), glm::radians(-116.0f));
+}
+
+TEST(AnimRig, HumanArmForearmTakesTheTwistWithinItsRange) {
+    const ModelData m = arms();
+    const kke::TwoBoneChain r = kke::findChain(m, "upperarm_r", "lowerarm_r", "hand_r");
+    const kke::HumanArm arm = kke::makeHumanArm(m, r);
+    kke::ArmGoal goal;
+    goal.hand = glm::vec3(-0.75f, 1.4f, 0.0f); // straight out
+    Pose base = restPose(m);
+    const glm::quat neutral = kke::solveHumanArm(m, base, arm, goal).handRotation;
+    for (float turn : { 60.0f, 179.0f }) {
+        Pose p = restPose(m);
+        // Turned about the forearm (straight out along -X).
+        goal.handRotation = glm::angleAxis(glm::radians(turn), glm::vec3(-1, 0, 0)) * neutral;
+        const kke::ArmResult res = kke::solveHumanArm(m, p, arm, goal);
+        const glm::quat diff = res.handRotation * glm::inverse(neutral);
+        const float got = glm::degrees(2.0f * std::acos(glm::clamp(std::abs(diff.w), 0.0f, 1.0f)));
+        if (turn < 90.0f) {
+            EXPECT_FALSE(res.limited);
+            EXPECT_NEAR(got, turn, 0.5f);
+        } else {
+            EXPECT_TRUE(res.limited);
+            EXPECT_NEAR(got, 90.0f + 15.0f, 0.5f); // pronation plus the wrist's own twist
+        }
+    }
 }

@@ -566,14 +566,16 @@ same as a local one. Per frame:
    so getting on and off the rock is smooth. The arms fade out late in a
    mantle, the legs earlier.
 4. Move the pelvis to the climber's hips.
-5. **Arms, two passes**: two-bone IK puts each wrist where
+5. **Arms, two passes**: `kke::solveHumanArm` puts each wrist where
    `Climber::wristAt` says (below and out from the knuckles), with the
-   elbow pole down and out from the rock. If a held hand is still short
+   elbow leaning down and out from the rock, and turns the hand onto its
+   hold, all within a person's joint ranges (the elbow never bends
+   backwards, the forearm and wrist twist only so far). If a held hand is still short
    of its hold, the pelvis moves by the average miss and the arms solve
    again.
 6. **Legs**: two-bone IK puts each ankle a little out from and above its
    foothold, knees toward the rock and out ("like a frog").
-7. **Hands**: each hand is turned so the fingers point along
+7. **Hands**: each hand is turned (in step 5) so the fingers point along
    `Climber::fingerDirection` with the thumb toward the body, and the
    finger bones curl (0.9, 1.1, 0.7 radians per joint, thumb 40%) by how
    closed the grip is. A travelling hand opens and closes over the last

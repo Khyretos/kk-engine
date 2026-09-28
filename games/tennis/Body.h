@@ -55,6 +55,11 @@ public:
     const kke::AnimationSet& set() const { return *m_set; }
     float modelYaw() const { return m_modelYaw; }
     const kke::TwoBoneChain& arm(int side) const { return m_arm[side]; } // 0 left, 1 right
+    const kke::HumanArm& humanArm(int side) const { return m_human[side]; } // the same arm with a person's ranges
+    // How the right hand holds the racket, in the hand bone's frame: the
+    // shaft's direction and the strings' normal (the palm's).
+    const glm::vec3& gripShaft() const { return m_gripShaft; }
+    const glm::vec3& gripFace() const { return m_gripFace; }
     const kke::TwoBoneChain& leg(int side) const { return m_leg[side]; }
     int pelvis() const { return m_pelvis; }
     int spine(int i) const { return m_spine[i]; } // 0..2, hips up
@@ -71,6 +76,8 @@ private:
     std::unique_ptr<kke::AnimationSet> m_set;
     float m_modelYaw = 0.0f;
     kke::TwoBoneChain m_arm[2], m_leg[2];
+    kke::HumanArm m_human[2];
+    glm::vec3 m_gripShaft{0.0f, 1.0f, 0.0f}, m_gripFace{0.0f, 0.0f, 1.0f};
     int m_pelvis = -1, m_spine[3] = { -1, -1, -1 };
     bool m_sideSteps = false;
     kke::ModelModule::ModelId m_racketModel = 0;

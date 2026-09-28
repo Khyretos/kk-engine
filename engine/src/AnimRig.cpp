@@ -112,6 +112,185 @@ void solveTwoBone(const ModelData& model, Pose& pose, const TwoBoneChain& chain,
 }
 
 // ---------------------------------------------------------------------
+// A person's arm
+
+namespace {
+
+// Rotation taking the orthonormal pair (a, b) onto (A, B) (b, B are made
+// perpendicular to a, A first).
+glm::quat frameTurn(const glm::vec3& a, const glm::vec3& b, const glm::vec3& A, const glm::vec3& B) {
+    auto frame = [](glm::vec3 x, glm::vec3 y) {
+        x = glm::normalize(x);
+        y = glm::normalize(y - x * glm::dot(x, y));
+        return glm::mat3(x, y, glm::cross(x, y));
+    };
+    return glm::normalize(glm::quat_cast(frame(A, B) * glm::transpose(frame(a, b))));
+}
+
+// `v` without its part along unit `n`, normalised; false when nothing is left.
+bool across(const glm::vec3& v, const glm::vec3& n, glm::vec3& out) {
+    const glm::vec3 p = v - n * glm::dot(v, n);
+    const float l = glm::length(p);
+    if (l < 1e-4f) return false;
+    out = p / l;
+    return true;
+}
+
+// q = twist * swing, twist about unit `axis`; returns the twist's signed angle.
+float splitTwist(const glm::quat& q, const glm::vec3& axis, glm::quat& swing) {
+    const glm::vec3 v(q.x, q.y, q.z);
+    const glm::vec3 p = axis * glm::dot(v, axis);
+    glm::quat twist(q.w, p.x, p.y, p.z);
+    const float l = glm::length(twist);
+    twist = l < 1e-6f ? glm::quat(1, 0, 0, 0) : twist / l;
+    swing = glm::inverse(twist) * q;
+    float angle = 2.0f * std::atan2(glm::dot(glm::vec3(twist.x, twist.y, twist.z), axis), twist.w);
+    if (angle > glm::pi<float>()) angle -= glm::two_pi<float>();
+    if (angle < -glm::pi<float>()) angle += glm::two_pi<float>();
+    return angle;
+}
+
+} // namespace
+
+HumanArm makeHumanArm(const ModelData& model, const TwoBoneChain& chain, const TwoBoneChain& other) {
+    HumanArm arm;
+    if (!chain.valid()) return arm;
+    arm.chain = chain;
+    arm.otherShoulder = other.valid() ? other.upper : -1;
+    arm.forward = modelForward(model);
+    std::vector<glm::mat4> world(model.bones.size());
+    for (size_t b = 0; b < model.bones.size(); ++b)
+        world[b] = model.bones[b].parent >= 0 ? world[model.bones[b].parent] * model.bones[b].localRest : model.bones[b].localRest;
+    const glm::vec3 up(0, 1, 0), leftDir = glm::cross(up, arm.forward);
+    const glm::vec3 s = positionOf(world[chain.upper]), e = positionOf(world[chain.lower]), h = positionOf(world[chain.end]);
+    arm.left = arm.otherShoulder >= 0 ? glm::dot(s - positionOf(world[arm.otherShoulder]), leftDir) > 0.0f : glm::dot(s, leftDir) > 0.0f;
+    // The elbow's hinge: bending turns the forearm toward the front, so
+    // the axis is the bone's direction crossed with forward (at rest a
+    // person's arms hang or stretch out sideways: the axis is well defined).
+    auto local = [&](int bone, const glm::vec3& dir, glm::vec3& axis, glm::vec3& hinge) {
+        const glm::quat inv = glm::inverse(rotationOf(world[bone]));
+        glm::vec3 hw = glm::cross(glm::normalize(dir), arm.forward);
+        if (glm::length(hw) < 1e-4f) hw = glm::cross(glm::normalize(dir), up);
+        axis = glm::normalize(inv * dir);
+        hinge = glm::normalize(inv * glm::normalize(hw));
+    };
+    local(chain.upper, e - s, arm.upperAxis, arm.upperHinge);
+    local(chain.lower, h - e, arm.lowerAxis, arm.lowerHinge);
+    arm.handRest = glm::normalize(glm::quat_cast(glm::mat3(model.bones[static_cast<size_t>(chain.end)].localRest)));
+    return arm;
+}
+
+ArmResult solveHumanArm(const ModelData& model, Pose& pose, const HumanArm& arm, const ArmGoal& goal, const ArmLimits& limits) {
+    ArmResult out;
+    const TwoBoneChain& c = arm.chain;
+    if (!arm.valid()) return out;
+    std::vector<glm::mat4> world = poseToModel(model, pose);
+    const glm::vec3 S = positionOf(world[c.upper]);
+    out.hand = positionOf(world[c.end]);
+    out.handRotation = rotationOf(world[c.end]);
+    const float w = glm::clamp(goal.weight, 0.0f, 1.0f);
+    if (w <= 0.0f) return out;
+    const float lab = glm::length(positionOf(world[c.lower]) - S), lcb = glm::length(out.hand - positionOf(world[c.lower]));
+    if (lab < 1e-5f || lcb < 1e-5f) return out;
+
+    // The chest's frame: out along the shoulders' line (a turned torso
+    // turns it), up, forward.
+    const glm::vec3 up(0, 1, 0);
+    glm::vec3 outDir;
+    if (arm.otherShoulder < 0 || !across(S - positionOf(world[arm.otherShoulder]), up, outDir)) {
+        const glm::vec3 leftDir = glm::normalize(glm::cross(up, arm.forward));
+        outDir = arm.left ? leftDir : -leftDir;
+    }
+    // Left = cross(up, forward), so forward = cross(left, up) = cross(up, right).
+    const glm::vec3 fwd = arm.left ? glm::cross(outDir, up) : glm::cross(up, outDir);
+
+    // 1. Where the hand can go: within reach (never closer than the
+    //    elbow's full bend allows) and within the shoulder's range.
+    glm::vec3 d = glm::mix(out.hand, goal.hand, w) - S;
+    const float reachMax = lab + lcb - 1e-3f;
+    const float inner = glm::radians(180.0f - limits.elbowMaxFlex);
+    const float reachMin = std::sqrt(std::max(1e-6f, lab * lab + lcb * lcb - 2.0f * lab * lcb * std::cos(inner)));
+    float len = glm::length(d);
+    if (len < 1e-5f) {
+        d = -up * reachMin;
+        len = reachMin;
+    }
+    const float L = glm::clamp(len, reachMin, reachMax);
+    out.limited = len > reachMax + 1e-3f || len < reachMin - 1e-3f;
+    glm::vec3 local(glm::dot(d, outDir), glm::dot(d, up), glm::dot(d, fwd));
+    const float flat = std::sqrt(local.x * local.x + local.z * local.z);
+    if (flat > 1e-4f) {
+        const float bent = glm::clamp((reachMax - L) / std::max(1e-4f, reachMax - reachMin), 0.0f, 1.0f);
+        const float lo = -glm::radians(glm::mix(limits.acrossChest, limits.acrossChestBent, bent));
+        const float hi = glm::radians(limits.behind);
+        const float phi = std::atan2(local.x, local.z); // 0 ahead, +90 out to the side, 180 behind
+        const float kept = glm::clamp(phi, lo, hi);
+        if (kept != phi) {
+            local.x = flat * std::sin(kept);
+            local.z = flat * std::cos(kept);
+            out.limited = true;
+        }
+    }
+    const glm::vec3 n = glm::normalize(outDir * local.x + up * local.y + fwd * local.z);
+    const glm::vec3 H = S + n * L;
+
+    // 2. The elbow: on the circle round the shoulder-hand line, where it
+    //    hangs naturally, swivelled toward the hint by at most `swivel`.
+    const float cosA = glm::clamp((lab * lab + L * L - lcb * lcb) / (2.0f * lab * L), -1.0f, 1.0f);
+    const glm::vec3 centre = S + n * (lab * cosA);
+    const float radius = lab * std::sqrt(std::max(0.0f, 1.0f - cosA * cosA));
+    glm::vec3 e;
+    if (!across(-up + outDir * 0.35f - fwd * 0.15f, n, e) && !across(-fwd, n, e) && !across(outDir, n, e)) e = up;
+    if (goal.elbowToward) {
+        glm::vec3 hint;
+        if (across(*goal.elbowToward - S, n, hint)) {
+            const float angle = std::atan2(glm::dot(glm::cross(e, hint), n), glm::dot(e, hint));
+            const float lim = glm::radians(limits.swivel);
+            e = glm::angleAxis(glm::clamp(angle, -lim, lim), n) * e;
+        }
+    }
+    const glm::vec3 E = centre + e * radius;
+
+    // 3. Each bone from its direction and the hinge (the elbow's inside
+    //    faces away from its point).
+    const glm::vec3 dirU = glm::normalize(E - S), dirL = glm::normalize(H - E);
+    glm::vec3 hinge = glm::cross(dirU, -e);
+    if (glm::length(hinge) < 1e-5f) hinge = glm::cross(dirU, up);
+    hinge = glm::normalize(hinge);
+    const glm::quat upperW = frameTurn(arm.upperAxis, arm.upperHinge, dirU, hinge);
+    glm::quat lowerW = frameTurn(arm.lowerAxis, arm.lowerHinge, dirL, hinge);
+    const int parent = model.bones[static_cast<size_t>(c.upper)].parent;
+    const glm::quat parentW = parent >= 0 ? rotationOf(world[static_cast<size_t>(parent)]) : glm::quat(1, 0, 0, 0);
+    const glm::quat animatedHandLocal = pose[static_cast<size_t>(c.end)].r;
+    const glm::quat handW = goal.handRotation ? glm::slerp(out.handRotation, *goal.handRotation, w) : out.handRotation;
+    glm::quat upperLocal = glm::inverse(parentW) * upperW;
+    glm::quat lowerLocal = glm::inverse(upperW) * lowerW;
+
+    // 4. The hand: the forearm takes the twist (pronation), the wrist
+    //    bends and twists a little; anything beyond is left out.
+    glm::quat handLocal = goal.handRotation ? glm::inverse(lowerW) * handW : animatedHandLocal;
+    glm::quat swing;
+    const float twist = splitTwist(handLocal * glm::inverse(arm.handRest), arm.lowerAxis, swing);
+    const float pron = glm::radians(limits.pronation), wristTwist = glm::radians(limits.wristTwist);
+    const float forearm = goal.handRotation ? glm::clamp(twist, -pron, pron) : 0.0f;
+    const float rest = glm::clamp(twist - forearm, -wristTwist, wristTwist);
+    const float swingAngle = 2.0f * std::acos(glm::clamp(std::abs(swing.w), 0.0f, 1.0f));
+    const float bendMax = glm::radians(limits.wristBend);
+    if (swingAngle > bendMax) swing = glm::slerp(glm::quat(1, 0, 0, 0), swing.w < 0.0f ? -swing : swing, bendMax / swingAngle);
+    if (std::abs(rest - (twist - forearm)) > 1e-3f || swingAngle > bendMax + 1e-3f) out.limited = true;
+    lowerLocal = lowerLocal * glm::angleAxis(forearm, arm.lowerAxis);
+    handLocal = glm::angleAxis(rest, arm.lowerAxis) * swing * arm.handRest;
+
+    pose[static_cast<size_t>(c.upper)].r = glm::normalize(upperLocal);
+    pose[static_cast<size_t>(c.lower)].r = glm::normalize(lowerLocal);
+    pose[static_cast<size_t>(c.end)].r = glm::normalize(handLocal);
+    world = poseToModel(model, pose);
+    out.hand = positionOf(world[c.end]);
+    out.handRotation = rotationOf(world[c.end]);
+    return out;
+}
+
+// ---------------------------------------------------------------------
 // Foot placement
 
 FootPlacer::FootPlacer(const ModelData& model, const TwoBoneChain& left, const TwoBoneChain& right, int pelvis)

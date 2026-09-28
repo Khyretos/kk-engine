@@ -74,6 +74,17 @@ glm::quat rotationOf(const glm::mat4& m) {
     return glm::normalize(glm::quat_cast(r));
 }
 
+// The rotation taking the pair (a, b) onto (A, B), each pair made
+// perpendicular first.
+glm::quat turnFrame(const glm::vec3& a, const glm::vec3& b, const glm::vec3& A, const glm::vec3& B) {
+    auto frame = [](glm::vec3 x, glm::vec3 y) {
+        x = glm::normalize(x);
+        y = glm::normalize(y - x * glm::dot(x, y));
+        return glm::mat3(x, y, glm::cross(x, y));
+    };
+    return glm::normalize(glm::quat_cast(frame(A, B) * glm::transpose(frame(a, b))));
+}
+
 // Turns a bone by `q` (model space), children and all.
 void turnBone(const kke::ModelData& rig, kke::Pose& pose, int bone, const glm::quat& q) {
     if (bone < 0 || static_cast<size_t>(bone) >= pose.size()) return;
@@ -197,6 +208,27 @@ bool Rig::load(kke::ModelModule& models) {
     m_set = std::make_unique<kke::AnimationSet>(m_rig);
     m_arm[0] = kke::findChain(m_rig, "upperarm_l", "lowerarm_l", "hand_l");
     m_arm[1] = kke::findChain(m_rig, "upperarm_r", "lowerarm_r", "hand_r");
+    m_human[0] = kke::makeHumanArm(m_rig, m_arm[0], m_arm[1]);
+    m_human[1] = kke::makeHumanArm(m_rig, m_arm[1], m_arm[0]);
+    // The grip, from the right hand's rest pose: the handle lies across the
+    // palm and the racket leaves the hand past the thumb and index finger,
+    // a little toward where the fingers point; the strings face as the palm.
+    {
+        std::vector<glm::mat4> rest(m_rig.bones.size());
+        for (size_t b = 0; b < m_rig.bones.size(); ++b)
+            rest[b] = m_rig.bones[b].parent >= 0 ? rest[static_cast<size_t>(m_rig.bones[b].parent)] * m_rig.bones[b].localRest : m_rig.bones[b].localRest;
+        const int hand = m_arm[1].end, middle = m_rig.findBone("middle_01_r"), index = m_rig.findBone("index_01_r"), pinky = m_rig.findBone("pinky_01_r");
+        if (hand >= 0 && middle >= 0 && index >= 0 && pinky >= 0) {
+            auto at = [&](int b) { return glm::vec3(rest[static_cast<size_t>(b)][3]); };
+            const glm::vec3 fingers = glm::normalize(at(middle) - at(hand));
+            glm::vec3 thumbSide = at(index) - at(pinky);
+            thumbSide = glm::normalize(thumbSide - fingers * glm::dot(thumbSide, fingers));
+            const glm::vec3 palm = glm::cross(thumbSide, fingers); // a right hand
+            const glm::quat toHand = glm::inverse(rotationOf(rest[static_cast<size_t>(hand)]));
+            m_gripShaft = glm::normalize(toHand * glm::normalize(thumbSide + fingers * 0.45f));
+            m_gripFace = glm::normalize(toHand * palm);
+        }
+    }
     m_leg[0] = kke::findChain(m_rig, "thigh_l", "calf_l", "foot_l");
     m_leg[1] = kke::findChain(m_rig, "thigh_r", "calf_r", "foot_r");
     m_pelvis = m_rig.findBone("pelvis");
@@ -402,6 +434,26 @@ void Body::update(const glm::vec3& feet, float yawDegrees, const glm::vec3& velo
         bendAndTurn(m_rig, pose, fr.up, fr.fwd, fr.right, rp.crouch, rp.twist);
     }
     const std::vector<glm::mat4> bones = kke::poseToModel(rig, pose);
+    const glm::mat4 bodyToWorld = glm::mat4(glm::vec4(worldRight, 0.0f), glm::vec4(0, 1, 0, 0), glm::vec4(facing, 0.0f), glm::vec4(feet, 1.0f));
+    const glm::quat modelToWorld = rotationOf(m_xf);
+    // The racket as the stroke wants it (world): the shaft, and the strings
+    // facing where the shoulders face, opened (slice, lob) or closed
+    // (topspin) by the stroke.
+    auto racketFace = [&](const glm::vec3& shaft) {
+        const float turned = glm::radians(swing.backhand ? rp.twist : -rp.twist) * 0.6f;
+        const glm::vec3 shoulders = std::cos(turned) * facing + std::sin(turned) * worldRight;
+        glm::vec3 face = shoulders - shaft * glm::dot(shoulders, shaft);
+        face = glm::length(face) > 1e-3f ? glm::normalize(face) : glm::vec3(0, 1, 0);
+        glm::vec3 up = glm::vec3(0, 1, 0) - shaft * glm::dot(glm::vec3(0, 1, 0), shaft) - face * glm::dot(glm::vec3(0, 1, 0), face);
+        if (glm::length(up) > 1e-3f) {
+            const float open = glm::radians(rp.faceOpen);
+            face = glm::normalize(std::cos(open) * face + std::sin(open) * glm::normalize(up));
+        }
+        return face;
+    };
+    glm::vec3 handWorld = glm::vec3(bodyToWorld * glm::vec4(handBody, 1.0f));
+    glm::vec3 shaft = glm::normalize(glm::vec3(bodyToWorld * glm::vec4(shaftBody, 0.0f)));
+    glm::vec3 face = racketFace(shaft);
     if (m_hasRacket && rArm.valid() && playing) {
         const glm::vec3 shoulderM(bones[static_cast<size_t>(rArm.upper)][3]);
         const glm::vec3 shoulder(glm::dot(shoulderM, fr.right), shoulderM.y, glm::dot(shoulderM, fr.fwd));
@@ -411,8 +463,23 @@ void Body::update(const glm::vec3& feet, float yawDegrees, const glm::vec3& velo
         dir.y = dir.y * 0.4f + 0.25f;
         shaftBody = glm::normalize(dir);
         handBody = rp.head - shaftBody * 0.46f;
-        const glm::vec3 pole = fr.toModel(glm::vec3(0.6f, 0.6f, -0.4f));
-        kke::solveTwoBone(rig, pose, rArm, fr.toModel(handBody), pole, 1.0f);
+        shaft = glm::normalize(glm::vec3(bodyToWorld * glm::vec4(shaftBody, 0.0f)));
+        face = racketFace(shaft);
+        // The arm takes the hand there and turns it to hold the racket so,
+        // as far as a person's shoulder, elbow, forearm and wrist go
+        // (kke::solveHumanArm); the racket then goes where the hand went.
+        const glm::quat toModel = glm::inverse(modelToWorld);
+        kke::ArmGoal goal;
+        goal.hand = fr.toModel(handBody);
+        goal.handRotation = turnFrame(m_rig.gripShaft(), m_rig.gripFace(), toModel * shaft, toModel * face);
+        const kke::ArmResult held = kke::solveHumanArm(rig, pose, m_rig.humanArm(1), goal);
+        const glm::quat handW = modelToWorld * held.handRotation;
+        handWorld = glm::vec3(m_xf * glm::vec4(held.hand, 1.0f));
+        shaft = glm::normalize(handW * m_rig.gripShaft());
+        face = handW * m_rig.gripFace();
+        face = glm::normalize(face - shaft * glm::dot(face, shaft));
+        handBody = glm::vec3(glm::inverse(bodyToWorld) * glm::vec4(handWorld, 1.0f));
+        shaftBody = glm::normalize(glm::vec3(glm::inverse(bodyToWorld) * glm::vec4(shaft, 0.0f)));
     }
     // The other hand: on the grip for a two-handed backhand, up at the ball
     // for a toss or a smash, otherwise cradling the racket's throat or out
@@ -425,30 +492,14 @@ void Body::update(const glm::vec3& feet, float yawDegrees, const glm::vec3& velo
         else if (swinging && swing.stroke == Stroke::Smash && swing.t <= -1.0f) target = glm::vec3(-0.3f, 2.0f, 0.45f);
         else if (!swinging) target = handBody + shaftBody * 0.22f + glm::vec3(-0.06f, 0.0f, 0.0f);
         else target = glm::vec3(-0.45f, 1.05f, 0.25f) + glm::vec3(0.0f, 0.0f, 0.2f) * (swing.t < 0.0f ? 1.0f : 0.0f);
-        if (swing.tossing && swing.t <= -1.0f) tossBody = target;
-        kke::solveTwoBone(rig, pose, lArm, fr.toModel(target), fr.toModel(glm::vec3(-0.6f, 0.8f, -0.4f)), 1.0f);
+        kke::ArmGoal goal;
+        goal.hand = fr.toModel(target);
+        const kke::ArmResult reached = kke::solveHumanArm(rig, pose, m_rig.humanArm(0), goal);
+        if (swing.tossing && swing.t <= -1.0f) tossBody = glm::vec3(glm::inverse(bodyToWorld) * (m_xf * glm::vec4(reached.hand, 1.0f)));
     }
     if (std::vector<glm::mat4>* locals = m_models.boneLocals(m_instance)) kke::poseToLocals(pose, *locals);
 
-    // The racket in the world: from the hand the IK reached, along the shaft.
-    const glm::mat4 bodyToWorld = glm::mat4(glm::vec4(worldRight, 0.0f), glm::vec4(0, 1, 0, 0), glm::vec4(facing, 0.0f), glm::vec4(feet, 1.0f));
-    glm::vec3 handWorld = glm::vec3(bodyToWorld * glm::vec4(handBody, 1.0f));
-    if (rArm.valid()) {
-        const std::vector<glm::mat4> posed = kke::poseToModel(rig, pose);
-        handWorld = glm::vec3(m_xf * posed[static_cast<size_t>(rArm.end)][3]);
-    }
-    const glm::vec3 shaft = glm::normalize(glm::vec3(bodyToWorld * glm::vec4(shaftBody, 0.0f)));
-    // The strings face where the shoulders face, opened (slice, lob) or
-    // closed (topspin) by the stroke.
-    const float turned = glm::radians(swing.backhand ? rp.twist : -rp.twist) * 0.6f;
-    const glm::vec3 shoulders = std::cos(turned) * facing + std::sin(turned) * worldRight;
-    glm::vec3 face = shoulders - shaft * glm::dot(shoulders, shaft);
-    face = glm::length(face) > 1e-3f ? glm::normalize(face) : glm::vec3(0, 1, 0);
-    glm::vec3 up = glm::vec3(0, 1, 0) - shaft * glm::dot(glm::vec3(0, 1, 0), shaft) - face * glm::dot(glm::vec3(0, 1, 0), face);
-    if (glm::length(up) > 1e-3f) {
-        const float open = glm::radians(rp.faceOpen);
-        face = glm::normalize(std::cos(open) * face + std::sin(open) * glm::normalize(up));
-    }
+    // The racket in the world, in the hand.
     const glm::vec3 x = glm::cross(shaft, face);
     m_racketWorld = glm::mat4(glm::vec4(x, 0.0f), glm::vec4(shaft, 0.0f), glm::vec4(face, 0.0f), glm::vec4(handWorld, 1.0f));
     m_tossHand = glm::vec3(bodyToWorld * glm::vec4(tossBody + glm::vec3(0.0f, 0.08f, 0.0f), 1.0f));
