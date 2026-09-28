@@ -118,12 +118,13 @@ void TennisModule::enterCenter() {
     if (m_cpuMatches && authority())
         for (int c = 0; c < SportCenter::kCourts; ++c)
             if (n == 0 || (c % SportCenter::kPerRow) != SportCenter::kPerRow / 2) startCpuMatch(c);
+    if (m_bench) seatBenchCrowd();
 }
 
 void TennisModule::startCpuMatch(int court) {
     if (matchOn(court)) return;
     uint32_t& dice = m_walkers.empty() ? m_seed : m_walkers.front().dice;
-    const bool doubles = roll(dice) < 0.3f;
+    const bool doubles = m_bench ? m_bench == 2 : roll(dice) < 0.3f;
     std::vector<Entry> entries;
     const int want = doubles ? 4 : 2;
     for (int i = 0; i < want; ++i) {
@@ -139,6 +140,7 @@ void TennisModule::startCpuMatch(int court) {
     MatchRules rules = menuRules(want / 2);
     rules.gamesPerSet = std::min(rules.gamesPerSet, 2); // CPU matches are short: the court turns over
     rules.setsToWin = 1;
+    if (m_bench) rules.gamesPerSet = 6; // the benchmark: every court busy all the time
     Match* m = buildMatch(std::move(entries), rules, court);
     m_teams = teams;
     if (netHost()) sendSetup(*m);
@@ -235,9 +237,9 @@ void TennisModule::closeMatch(size_t matchIndex) {
         }
         freePlayer(idx);
     }
-    // The crowd watching it finds another court.
+    // The crowd watching it finds another court (the benchmark's stay for the next match).
     for (Walker& w : m_walkers)
-        if (w.cpu && w.court == m.court && w.doing == Walker::Doing::Watch) w.timer = std::min(w.timer, 1.0f + roll(w.dice) * 4.0f);
+        if (!m_bench && w.cpu && w.court == m.court && w.doing == Walker::Doing::Watch) w.timer = std::min(w.timer, 1.0f + roll(w.dice) * 4.0f);
     m_courtRest[static_cast<size_t>(m.court)] = 0.0f;
     m_matches.erase(m_matches.begin() + static_cast<std::ptrdiff_t>(matchIndex));
 }
@@ -368,7 +370,7 @@ void TennisModule::stepCenter(float dt) {
             bool person = false;
             for (const Walker& w : m_walkers) person = person || (!w.cpu && !w.gone);
             const bool keptFree = person && (c % SportCenter::kPerRow) == SportCenter::kPerRow / 2;
-            if (rest > kCourtRest && !keptFree) startCpuMatch(c);
+            if ((rest > kCourtRest || m_bench) && !keptFree) startCpuMatch(c);
         }
     }
 }
@@ -408,7 +410,8 @@ void TennisModule::stepCrowd(Walker& w, float dt) {
             // Most go and watch a match; some keep strolling.
             std::vector<int> courts;
             for (const auto& m : m_matches) courts.push_back(m->court);
-            if (!courts.empty() && roll(w.dice) < 0.8f) {
+            // (The benchmark's walkers only walk: its spectators are seated from the start.)
+            if (!courts.empty() && !m_bench && roll(w.dice) < 0.8f) {
                 const int c = courts[static_cast<size_t>(roll(w.dice) * static_cast<float>(courts.size())) % courts.size()];
                 auto& taken = m_seatTaken[static_cast<size_t>(c)];
                 const std::vector<SportCenter::Seat> seats = m_center.seats(c);
@@ -466,7 +469,7 @@ void TennisModule::stepCrowd(Walker& w, float dt) {
         break;
     }
     case Walker::Doing::Watch:
-        if (w.timer <= 0.0f || !matchOn(w.court)) {
+        if (w.timer <= 0.0f || (!matchOn(w.court) && !m_bench)) {
             freeSeat();
             w.doing = Walker::Doing::Wander;
             w.timer = roll(w.dice) * 3.0f;

@@ -117,6 +117,41 @@ public:
         int camSide = 0;               // the half the camera last sat behind
     };
 
+    // The last few seconds of a match, kept to show a winner or an ace
+    // again in slow motion (Replay.cpp).
+    struct Replay {
+        static constexpr uint32_t kFrames = 300; // 5 s of fixed steps
+        struct Who {                   // one player, as Scene.cpp draws them
+            glm::vec3 feet{0.0f}, vel{0.0f}; // world
+            float yaw = 0.0f;          // degrees
+            Stroke stroke = Stroke::Ready;
+            bool backhand = false, tossing = false;
+            float swingT = kSwingIdle;
+            glm::vec3 contact{0.0f};
+        };
+        struct Frame {
+            Ball::State ball;
+            std::array<Who, 4> who;
+        };
+        struct Hit {
+            uint32_t tick = 0;
+            int hitter = 0;            // index into m_players
+            net::Hit hit;
+        };
+        std::vector<Frame> frames = std::vector<Frame>(kFrames); // frames[tick % kFrames]
+        uint32_t tick = 0;             // fixed steps recorded
+        std::vector<Hit> hits;         // the latest ones
+        uint32_t bounceTick = 0;       // the first bounce after the last hit
+        // Playing it: ticks from..to, now at `at`.
+        bool pending = false, playing = false;
+        uint32_t from = 0, to = 0, at = 0;
+        float part = 0.0f;             // how far from frame `at` to the next (a slow replay steps between frames)
+        std::string sub;               // the HUD's line, put back afterwards
+        glm::vec3 camPos{0.0f}, camLook{0.0f};
+        bool camInit = false;
+        const Frame& frame(uint32_t t) const { return frames[t % kFrames]; }
+    };
+
     struct Match {
         int court = 0;
         MatchRules rules;
@@ -137,6 +172,8 @@ public:
         uint32_t netId = 0;            // online: the host's number for it (0: not sent yet)
         std::vector<uint8_t> history;  // who won each point (a late joiner replays the score)
         float ballSentAt = 0.0f;       // host: when its ball last went out
+        int lastHitter = -1;           // index into m_players
+        std::unique_ptr<Replay> replay; // winners and aces again in slow motion (offline, one match)
     };
 
     // Who plays in a match about to start (the menu's seats, CPU players,
@@ -249,6 +286,20 @@ private:
     void onPointForCrowd(const Match& m);
     void updateWalkerBodies(float dt);
 
+    // Replays (Replay.cpp): the last seconds kept, a winner or an ace
+    // shown again in slow motion from beside the ball.
+    void recordReplay(Match& m);
+    void queueReplay(Match& m, int winningTeam);
+    void startReplay(Match& m);
+    void stepReplay(Match& m, float dt);
+    void endReplay(Match& m);
+    bool replayCamera(Match& m, float realDt, kke::Camera& cam);
+    bool replaysOn(const Match& m) const;
+    // The busiest case (Bench.cpp, KKE_TENNIS_BENCH).
+    void setupBench();
+    void seatBenchCrowd();
+    void benchCamera(float dt, kke::Camera& cam);
+
     // The ball test (KKE_TENNIS_BALLTEST=1).
     void ballTest(float dt);
 
@@ -326,6 +377,7 @@ private:
     void stringTest(float dt);
     float m_timingScale = 1.0f;     // the timing window: the menu's Swing timing (Relaxed 1.5, Normal 1, Pro 0.7)
     bool m_autoTiming = false;      // ... Automatic: the swing goes by itself at the right moment
+    bool m_replays = true;          // the menu's Replays row / KKE_TENNIS_REPLAYS=0
     void setTiming(int choice) {
         m_timingScale = choice == 0 ? 1.5f : choice == 2 ? 0.7f : 1.0f;
         m_autoTiming = choice == 3;
@@ -347,6 +399,8 @@ private:
     std::array<float, SportCenter::kCourts> m_courtRest{}; // s each court has been empty
     std::vector<std::pair<std::string, int>> m_wins; // matches won here, best first
     float m_overviewYaw = 0.0f;
+    int m_bench = 0;                // KKE_TENNIS_BENCH: 1 = ten singles matches, 2 = ten doubles (Bench.cpp)
+    float m_benchClock = 0.0f;      // s the flying camera has been touring
 
     // Online.
     uint32_t m_netMatch = 0;        // the host's match number

@@ -52,11 +52,13 @@ void TennisModule::setupLobby() {
     l.addOption({ "teams", "Teams", { "Across the net", "Players together" }, 0, true, {}, [this](int v) { m_teams = v; } });
     l.addOption({ "assist", "Helping hand", { "On", "Off" }, 0, true, {}, [this](int v) { m_assist = v == 0; } });
     l.addOption({ "timing", "Swing timing", { "Relaxed", "Normal", "Pro", "Automatic" }, 1, true, {}, [this](int v) { setTiming(v); } });
+    l.addOption({ "replays", "Replays", { "On", "Off" }, 0, true, {}, [this](int v) { m_replays = v == 0; } });
     m_lobby->load();
     if (const kke::Lobby::Option* o = l.option("length")) m_length = o->value;
     if (const kke::Lobby::Option* o = l.option("teams")) m_teams = o->value;
     if (const kke::Lobby::Option* o = l.option("assist")) m_assist = o->value == 0;
     if (const kke::Lobby::Option* o = l.option("timing")) setTiming(o->value);
+    if (const kke::Lobby::Option* o = l.option("replays"); o && !kke::dev::env("KKE_TENNIS_REPLAYS")) m_replays = o->value == 0;
     if (const kke::Lobby::Option* o = l.option("where"); o && !kke::dev::env("KKE_TENNIS_CENTER")) m_where = o->value;
     if (const kke::Lobby::Option* o = l.option("crowd"); o && !kke::dev::env("KKE_TENNIS_CROWD"))
         m_crowd = kCrowds[static_cast<size_t>(std::clamp(o->value, 0, 3))];

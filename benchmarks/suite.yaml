@@ -161,6 +161,26 @@ demos:
     synty: true
     env: { KKE_RACE_BENCH: "pileup" }
 
+  - id: tennis_singles
+    exe: tennis
+    title: "Tennis: busiest case, 100 people, 10 singles matches"
+    # KKE_TENNIS_BENCH: a CPU match on every court, 6 spectators each on the
+    # benches, the rest walking, a camera flying from court to court
+    # (FEMFX: 10 balls and 20 string beds; Jolt: 100 characters).
+    seconds: 45
+    warmup: 5
+    synty: true
+    env: { KKE_TENNIS_BENCH: "singles" }
+
+  - id: tennis_doubles
+    exe: tennis
+    title: "Tennis: busiest case, 100 people, 10 doubles matches"
+    # The same with 40 players (40 string beds), 5 spectators a court.
+    seconds: 45
+    warmup: 5
+    synty: true
+    env: { KKE_TENNIS_BENCH: "doubles" }
+
   - id: cookbook
     exe: cookbook
     title: "Cookbook: Lua recipes"
