@@ -252,6 +252,11 @@ private:
     void searchOnCpu(size_t triTotal, size_t edgeTotal, float cell);
     std::vector<uint8_t> m_edgeLooked; // per edge: its patch is looked at
     uint64_t m_gpuChecks = 0, m_gpuDiffered = 0;
+    // Which searches faster here (averages of recent searches, ms); the
+    // slower one is timed again every kSearchProbe searches.
+    double m_gpuSearchMs = 0.0, m_cpuSearchMs = 0.0;
+    uint64_t m_searches = 0;
+    bool m_cpuFaster = false;
     // Seen from cell c only when it is the first cell (per axis) that the
     // query's box (from qa) and this box both cover, and the box covers it
     // (it is not in the bucket only by sharing a hash): once per pair,

@@ -932,9 +932,13 @@ void ClothDemoModule::buildPanel() {
         if (m_scene == Scene::Hair) return std::string();
         if (!m_gpu) return std::string("Pair search on the CPU (this GPU has no compute queue of its own)");
         const kke::ClothGpu::Stats st = m_gpu->stats();
-        char buf[160];
-        std::snprintf(buf, sizeof(buf), "Pair search on the GPU: %.2f ms a search (%llu searched, %llu left to the CPU)", st.lastMs,
-                      static_cast<unsigned long long>(st.searches), static_cast<unsigned long long>(st.declined));
+        char buf[200];
+        if (st.cpuMs <= 0.0)
+            std::snprintf(buf, sizeof(buf), "Pair search on the GPU: %.2f ms a search (%llu searched, %llu left to the CPU)", st.gpuMs,
+                          static_cast<unsigned long long>(st.searches), static_cast<unsigned long long>(st.declined));
+        else
+            std::snprintf(buf, sizeof(buf), "Pair search on the %s, the faster here: GPU %.2f ms, CPU %.2f ms a search", st.onCpu ? "CPU" : "GPU",
+                          st.gpuMs, st.cpuMs);
         return std::string(buf);
     });
 }

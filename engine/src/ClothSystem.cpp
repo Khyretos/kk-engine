@@ -58,6 +58,7 @@ constexpr float kSettledMean = 0.006f;     // m/s
 constexpr float kSettledMost = 0.03f;      // m/s
 constexpr uint32_t kSettleWindow = 30;     // updates
 constexpr uint32_t kSettledWindows = 2;
+constexpr uint64_t kSearchProbe = 64;      // searches: the slower of GPU and CPU pair search is timed again this often
 constexpr float kMostPerPass = 3.0f;  // the pass moves a vertex at most this x (thickness + a tenth of an edge)
 
 // Sets a flag other worker threads may set too. The Android NDK's libc++
@@ -1137,8 +1138,19 @@ void ClothSystem::protect() {
             m_edgeLooked[g] = 1;
         }
     }
-    // The GPU if there is one (the CPU if it can't answer, or to check it).
-    const bool gpu = m_gpu && searchOnGpu(triTotal, edgeTotal, cell);
+    // The GPU if there is one and it is the faster here (the CPU if it
+    // can't answer, or to check it). Each is timed; the slower one is tried
+    // again every kSearchProbe searches, as the scene changes.
+    const auto clock = [] { return std::chrono::steady_clock::now(); };
+    const auto average = [](double& avg, double ms) { avg = avg > 0.0 ? avg + 0.2 * (ms - avg) : ms; };
+    ++m_searches;
+    const bool probe = m_searches % kSearchProbe == 1;
+    bool gpu = false;
+    if (m_gpu && (m_cpuFaster ? probe : !probe || m_gpuCheck)) {
+        const auto t0 = clock();
+        gpu = searchOnGpu(triTotal, edgeTotal, cell);
+        if (gpu) average(m_gpuSearchMs, std::chrono::duration<double, std::milli>(clock() - t0).count());
+    }
     if (!gpu || m_gpuCheck) {
         std::vector<VtPair> gpuVt;
         std::vector<EePair> gpuEe;
@@ -1146,7 +1158,9 @@ void ClothSystem::protect() {
             gpuVt.swap(m_vtPairs);
             gpuEe.swap(m_eePairs);
         }
+        const auto t0 = clock();
         searchOnCpu(triTotal, edgeTotal, cell);
+        if (m_gpu && !gpu) average(m_cpuSearchMs, std::chrono::duration<double, std::milli>(clock() - t0).count());
         if (gpu) {
             auto vtKey = [](const VtPair& a) { return (uint64_t(a.cloth) << 58) ^ (uint64_t(a.vertex) << 29) ^ a.tri; };
             size_t vtMissing = 0, vtExtra = 0, eeMissing = 0, eeExtra = 0;
@@ -1185,6 +1199,11 @@ void ClothSystem::protect() {
             m_vtPairs.swap(gpuVt);
             m_eePairs.swap(gpuEe);
         }
+    }
+
+    if (m_gpu) {
+        if (m_gpuSearchMs > 0.0 && m_cpuSearchMs > 0.0) m_cpuFaster = m_cpuSearchMs < m_gpuSearchMs;
+        m_gpu->setTimes(m_gpuSearchMs, m_cpuSearchMs, m_cpuFaster);
     }
 
     // --- Narrow phase, repeated while it undoes crossings -------------------
