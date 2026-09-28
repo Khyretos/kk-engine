@@ -195,6 +195,7 @@ void TennisModule::resolve(Match& m, Rally::Result r, const std::string& call) {
     const int setsBefore = m.score.sets(team);
     const bool game = m.score.pointTo(team);
     m.lastPointTo = team;
+    onPointForCrowd(m);
     ++m_pointsPlayed;
     m_longestRally = std::max(m_longestRally, m.rallyShots);
     std::string names;
@@ -264,8 +265,8 @@ void TennisModule::stepMatch(Match& m, float dt) {
             if (m.score.over()) {
                 m.phase = Match::Phase::MatchOver;
                 m.phaseTime = 0.0f;
-                kke::log::get(name())->info("match over: {} {} - {} {} ({} points, longest rally {} shots)", m.score.setsText(0), m.score.sets(0),
-                                            m.score.sets(1), m.score.setsText(1), m_pointsPlayed, m_longestRally);
+                kke::log::get(name())->info("match over on court {}: sets {}-{} (games {} / {}), team {} wins", m.court + 1, m.score.sets(0), m.score.sets(1),
+                                            m.score.setsText(0), m.score.setsText(1), m.score.winner() + 1);
             } else {
                 startPoint(m);
             }
@@ -564,7 +565,11 @@ void TennisModule::hitBall(Match& m, Player& p, const glm::vec3& contact, bool s
 
     glm::vec2 aim = glm::clamp(p.intent.aim, glm::vec2(-1.0f), glm::vec2(1.0f));
     glm::vec3 target;
-    const float err = (1.0f - quality) * 2.2f + (p.bot ? p.bot->skill().aimError : 0.4f);
+    // Long rallies wear the CPU down: the aim wanders a little more with
+    // every shot, so a rally between two good CPU players ends (real ones
+    // average four or five shots).
+    const float tired = p.bot ? 0.1f * static_cast<float>(std::max(0, m.rallyShots - 3)) : 0.0f;
+    const float err = (1.0f - quality) * 2.2f + (p.bot ? p.bot->skill().aimError : 0.4f) + tired;
     if (serve) {
         const bool deuce = m.score.deuceCourt();
         const float centre = deuce ? -2.05f : 2.05f; // x * s of the box's middle

@@ -6,12 +6,16 @@
 
 #include "kke/Log.h"
 #include "kke/modules/InputModule.h"
+#include "kke/modules/RigidBodyModule.h"
 #include "kke/modules/UiModule.h"
 
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/DataModelHandle.h>
 #include <RmlUi/Core/ElementDocument.h>
 #include <SDL3/SDL.h>
+
+#include <algorithm>
+#include <cmath>
 
 namespace tennis {
 
@@ -33,6 +37,7 @@ void TennisModule::buildHud() {
     c.Bind("sub", &m_hud.sub);
     c.Bind("hint", &m_hud.hint);
     c.Bind("banner", &m_hud.banner);
+    c.Bind("ranking", &m_hud.ranking);
     m_hudModel = c.GetModelHandle();
 
     const char* base = SDL_GetBasePath();
@@ -45,6 +50,34 @@ void TennisModule::buildHud() {
     m_hudDoc->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
 }
 
+// The match the HUD shows: one someone at this screen plays; else, in the
+// sport center, the one nearest to them (the one they're watching).
+const TennisModule::Match* TennisModule::focusMatch() const {
+    for (const auto& m : m_matches)
+        for (int idx : m->players) {
+            const Player& p = m_players[static_cast<size_t>(idx)];
+            if (!p.cpu && !p.remote) return m.get();
+        }
+    if (!m_inCenter) return m_matches.empty() ? nullptr : m_matches.front().get();
+    for (const Walker& w : m_walkers) {
+        if (w.cpu || !w.body) continue;
+        const glm::vec3 feet = m_rigid->world().characterPosition(w.body);
+        const Match* best = nullptr;
+        float bestD = 4.0f; // beside a court, or at its gate
+        for (const auto& m : m_matches) {
+            if (!m_center.courts[static_cast<size_t>(m->court)].contains(feet, bestD)) continue;
+            const glm::vec3 l = m_center.courts[static_cast<size_t>(m->court)].toLocal(feet);
+            const float d = std::max(std::abs(l.x) - kFenceHalfX, std::abs(l.z) - kFenceHalfZ);
+            if (d < bestD) {
+                bestD = d;
+                best = m.get();
+            }
+        }
+        return best;
+    }
+    return nullptr;
+}
+
 void TennisModule::updateHud() {
     if (!m_hudModel) return;
     auto set = [this](std::string& field, const std::string& value, const char* var) {
@@ -52,7 +85,7 @@ void TennisModule::updateHud() {
         field = value;
         m_hudModel.DirtyVariable(var);
     };
-    const Match* m = m_matches.empty() || m_inMenu ? nullptr : m_matches.front().get();
+    const Match* m = m_inMenu ? nullptr : focusMatch();
     for (int t = 0; t < 2; ++t) {
         TeamRow next;
         if (m) {
@@ -93,10 +126,25 @@ void TennisModule::updateHud() {
         else if (human && m->phase != Match::Phase::MatchOver)
             hint = m_input->promptText("{move} run  {tennis.topspin} topspin  {tennis.flat} flat  {tennis.slice} slice  {tennis.lob} lob  "
                                        "(press early, hold to hit harder, the stick aims)  {tennis.menu} menu");
-        if (m->phase == Match::Phase::MatchOver && human) hint = m_input->promptText("{tennis.menu} back to the menu");
+        if (m->phase == Match::Phase::MatchOver && human) hint = m_input->promptText(m_inCenter ? "" : "{tennis.menu} back to the menu");
+        if (human && m_inCenter && m->phase != Match::Phase::MatchOver && m->phase != Match::Phase::Serve)
+            hint = m_input->promptText("{move} run  {tennis.topspin} topspin  {tennis.flat} flat  {tennis.slice} slice  {tennis.lob} lob  "
+                                       "{tennis.menu} leave the court (a walkover)");
         if (m->score.inTiebreak()) banner = "Tiebreak";
         else if (m->rally.secondServeNow() && m->phase == Match::Phase::Serve) banner = "Second serve";
     }
+    // The sport center: where to go, and who has won most here.
+    std::string ranking;
+    if (m_inCenter && !m_inMenu) {
+        bool playing = false;
+        for (const Walker& w : m_walkers) playing = playing || (!w.cpu && w.playing >= 0);
+        if (!playing && hint.empty()) hint = m_input->promptText(centerHint());
+        if (!playing && m && m->phase == Match::Phase::Serve) sub.clear();
+        for (size_t i = 0; i < m_wins.size() && i < 5; ++i)
+            ranking += (ranking.empty() ? "" : "\n") + std::to_string(i + 1) + ". " + m_wins[i].first + "  " + std::to_string(m_wins[i].second);
+        if (ranking.empty()) ranking = "Nobody yet";
+    }
+    set(m_hud.ranking, ranking, "ranking");
     set(m_hud.call, call, "call");
     set(m_hud.sub, sub, "sub");
     set(m_hud.hint, hint, "hint");

@@ -323,6 +323,26 @@ TEST(TennisShot, DeepLobStaysUnderTheRoof) {
     EXPECT_NEAR(land.z, target.z, 0.05f);
 }
 
+// The crowd's spots: none inside a fence, on the players' bench, or
+// closer to another spot (this court's or the next one's) than two people
+// standing side by side.
+TEST(TennisCourt, SpectatorSeatsHaveRoom) {
+    const SportCenter c;
+    std::vector<glm::vec3> all;
+    for (int i = 0; i < SportCenter::kCourts; ++i)
+        for (const SportCenter::Seat& s : c.seats(i)) {
+            EXPECT_EQ(c.courtAt(s.pos), -1);
+            const glm::vec3 l = c.courts[static_cast<size_t>(i)].toLocal(s.pos);
+            // The players' bench: 0.53 to 0.97 m out from the long fences, a person is 0.3 m round.
+            if (std::abs(l.z) < 11.3f) {
+                EXPECT_TRUE(std::abs(l.x) < kFenceHalfX || std::abs(l.x) - kFenceHalfX > 0.97f + 0.3f) << l.x;
+            }
+            all.push_back(s.pos);
+        }
+    for (size_t a = 0; a < all.size(); ++a)
+        for (size_t b = a + 1; b < all.size(); ++b) EXPECT_GT(glm::length(all[a] - all[b]), 0.65f);
+}
+
 // Online: every message reads back as written (to the wire's rounding),
 // and a damaged one is refused rather than half read.
 TEST(TennisNet, MessagesRoundTrip) {

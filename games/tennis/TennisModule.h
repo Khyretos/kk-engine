@@ -14,6 +14,7 @@
 
 #include <RmlUi/Core/DataModelHandle.h>
 
+#include <array>
 #include <memory>
 #include <string>
 #include <vector>
@@ -76,6 +77,8 @@ public:
         bool cpu = true;               // a CPU brain moves it (the host's CPU players; KKE_TENNIS_AUTOPLAY)
         bool remote = false;           // online: another machine runs it; we draw what it sends
         int netId = -1;                // online: its network player id
+        int walker = -1;               // sport center: the walker who is playing (m_walkers)
+        bool alive = false;            // a slot in use (matches come and go in the sport center)
         int input = -1;                // InputModule player (humans)
         int level = 1;                 // CPU level
         kke::RigidWorld::CharacterId body = 0;
@@ -129,9 +132,42 @@ public:
         bool cpu = false;
         int input = -1, level = 1;
         int netId = -1;
+        int walker = -1;
         bool remote = false;
         bool filler = false;           // online: a spare CPU player the host keeps ready (netEntries)
         int team = -1, slot = -1;      // -1: the match decides
+    };
+
+    // Someone in the sport center out of a match: a person at this screen
+    // walking about, or one of the CPU crowd going from court to court to
+    // watch (Center.cpp).
+    struct Walker {
+        std::string name;
+        glm::vec3 tint{1.0f};
+        bool cpu = true;               // the crowd
+        int input = -1;                // a person at this screen
+        kke::RigidWorld::CharacterId body = 0;
+        std::unique_ptr<Body> look;
+        glm::vec3 facing{0.0f, 0.0f, 1.0f}; // world
+        int playing = -1;              // the Player while in a match
+        int queued = -1;               // the court they wait to play on
+        // The crowd: where they go and what they watch.
+        enum class Doing { Wander, ToSeat, Watch } doing = Doing::Wander;
+        glm::vec3 goal{0.0f};
+        glm::vec3 exit{0.0f};          // out of the gap beside a court first, after watching there
+        bool exiting = false;
+        int court = -1, seat = -1;
+        float timer = 0.0f;
+        bool sitting = false;
+        float cheer = 0.0f;            // s left of a cheer (a point ended on the court they watch)
+        bool happy = true;
+        uint32_t dice = 1;
+        // A person's view.
+        kke::Camera camera;
+        bool cameraInit = false;
+        float camYaw = 0.0f;           // degrees, the way the camera looks
+        glm::vec2 stick{0.0f};
+        bool play = false, cpuNow = false, leave = false; // presses, kept for the fixed step
     };
 
 private:
@@ -139,8 +175,10 @@ private:
     void defineControls();
     void buildWorld();              // Scene.cpp
     void startLocalMatch();         // from the menu or the switches (and the host's online match)
-    void buildMatch(std::vector<Entry> entries, const MatchRules& rules);
-    void spawnPlayer(const Entry& e, int team);
+    Match* buildMatch(std::vector<Entry> entries, const MatchRules& rules, int court);
+    int spawnPlayer(const Entry& e, int team);
+    void freePlayer(int index);
+    MatchRules menuRules(int teamSize) const;
     void backToMenu();
     void clearPlayers();
     Player& player(int index) { return m_players[static_cast<size_t>(index)]; }
@@ -162,6 +200,24 @@ private:
     int nearestOpponent(const Match& m, const Player& p) const;
     int serverIndex(const Match& m) const;
     bool isMyBall(const Match& m, int index) const;
+
+    // The sport center (Center.cpp): walk about, pick a court, watch.
+    void enterCenter();
+    void spawnWalker(const std::string& name, const glm::vec3& tint, bool cpu, int input, const glm::vec3& at);
+    void readWalker(Walker& w);
+    void stepCenter(float dt);
+    void stepCrowd(Walker& w, float dt);
+    void startCourt(int court, bool cpuNow);
+    void startCpuMatch(int court);
+    void endCenterMatch(size_t matchIndex, int forfeitTeam);
+    int gateNear(const glm::vec3& world) const; // the court whose gate is here, or -1
+    glm::vec3 gatePoint(int court) const;
+    Match* matchOn(int court);
+    const Match* focusMatch() const;            // the one the HUD shows
+    void updateWalkerCameras(float dt, std::vector<kke::Camera*>& cams);
+    std::string centerHint() const;
+    void onPointForCrowd(const Match& m);
+    void updateWalkerBodies(float dt);
 
     // The ball test (KKE_TENNIS_BALLTEST=1).
     void ballTest(float dt);
@@ -229,6 +285,19 @@ private:
     int m_teams = 0;                // the menu's Teams row
     bool m_autoplay = false;        // KKE_TENNIS_AUTOPLAY: this screen's players have CPU brains (tests)
 
+    // The sport center.
+    int m_where = 0;                // the menu's Play row: 0 one match, 1 the sport center
+    bool m_inCenter = false;
+    int m_crowd = 40;               // the menu's Crowd row (CPU people walking and watching)
+    bool m_cpuMatches = true;       // CPU players take the free courts
+    std::vector<Walker> m_walkers;
+    struct Gate { std::vector<int> waiting; float countdown = -1.0f; };
+    std::array<Gate, SportCenter::kCourts> m_gates;
+    std::array<std::vector<int>, SportCenter::kCourts> m_seatTaken; // walker per seat, -1 free
+    std::array<float, SportCenter::kCourts> m_courtRest{}; // s each court has been empty
+    std::vector<std::pair<std::string, int>> m_wins; // matches won here, best first
+    float m_overviewYaw = 0.0f;
+
     // Online.
     uint32_t m_netMatch = 0;        // the host's match number
     float m_netTime = 0.0f, m_netSearchAt = 0.0f, m_ballSentAt = 0.0f;
@@ -241,7 +310,7 @@ private:
 
     // HUD.
     struct TeamRow { std::string name, sets, points; bool serving = false; };
-    struct Hud { TeamRow t[2]; std::string call, sub, hint, banner; };
+    struct Hud { TeamRow t[2]; std::string call, sub, hint, banner, ranking; };
     Hud m_hud;
     Rml::DataModelHandle m_hudModel;
     Rml::ElementDocument* m_hudDoc = nullptr;

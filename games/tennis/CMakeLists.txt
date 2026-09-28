@@ -1,6 +1,6 @@
 # Tennis (games/tennis/README.md): singles and doubles with a FEMFX soft
 # rubber ball, against the CPU, on one screen or online.
-kke_add_game(tennis main.cpp TennisModule.cpp Play.cpp Scene.cpp Hud.cpp Lobby.cpp Net.cpp NetTennis.cpp Court.cpp Rules.cpp Shot.cpp Ball.cpp Bot.cpp Body.cpp)
+kke_add_game(tennis main.cpp TennisModule.cpp Play.cpp Scene.cpp Hud.cpp Lobby.cpp Center.cpp Net.cpp NetTennis.cpp Court.cpp Rules.cpp Shot.cpp Ball.cpp Bot.cpp Body.cpp)
 target_link_libraries(tennis PRIVATE kke_engine)
 engine_copy_runtime_file(tennis ${CMAKE_CURRENT_SOURCE_DIR}/game.json marketplace/tennis/game.json)
 engine_copy_runtime_file(tennis ${CMAKE_CURRENT_SOURCE_DIR}/ui/tennis_hud.rml ui/tennis_hud.rml)

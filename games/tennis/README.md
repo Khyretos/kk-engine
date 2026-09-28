@@ -21,9 +21,12 @@ where a soft body has to go exactly where the rules say.
 
 ![The TV view of a CPU match: two players, the net, the fence, the next court](../../website/static/media/tennis.webp)
 
-Still to come (this README grows with it): the sport center as a lobby
-where people walk around, challenge each other, take a court and watch
-other matches from the stands.
+Or pick **Sport center** in the menu: walk about all ten courts, step up
+to a free court's gate to play (someone else at the gate is your
+opponent, or play the CPU), watch the CPU players' matches with a crowd
+of up to 100 people who sit, stand and cheer, and see who has won most
+on the board. Still to come: the sport center online (today online is
+one match).
 
 ## Run it
 
@@ -40,6 +43,7 @@ cd build/bin
 KKE_SKIP_INTRO=1 ./tennis                            # skip the logo intro
 KKE_TENNIS_BOTS=1 KKE_TENNIS_QUIT=120 ./tennis       # watch two CPU players, with a log
 KKE_TENNIS_BALLTEST=1 ./tennis                       # the ball's test shots, logged
+KKE_TENNIS_CENTER=1 KKE_TENNIS_BOTS=1 KKE_TENNIS_CROWD=100 ./tennis  # the whole sport center, CPU players only
 KKE_NET=host KKE_NET_NAME=Pip ./tennis                # host an online match...
 KKE_NET=join:127.0.0.1 KKE_NET_NAME=Rook ./tennis     # ...and join it from a second terminal
 ```
@@ -54,8 +58,11 @@ KKE_NET=join:127.0.0.1 KKE_NET_NAME=Rook ./tennis     # ...and join it from a se
 | `KKE_TENNIS_QUIT=<s>` | quit after that many seconds of play, logging the score every 10 s and every call |
 | `KKE_TENNIS_SEED=<n>` | the CPU players' dice (default 1) |
 | `KKE_NET=host` / `KKE_NET=join:ADDRESS` | host, or join a host, at startup ([docs/NETWORKING.md](../../docs/NETWORKING.md)); `KKE_NET_NAME=<name>` is player 1's name |
+| `KKE_TENNIS_CENTER=1` | the sport center instead of one match (the menu's Play row) |
+| `KKE_TENNIS_CROWD=<n>` | how many CPU people walk about the sport center and watch (the menu's Crowd row: 0, 20, 40 or 100) |
+| `KKE_TENNIS_EMPTY=1` | the sport center's free courts stay empty (no CPU matches) |
 | `KKE_TENNIS_WAIT=<n>` | hosting: start the match by itself once `n` people have joined (tests) |
-| `KKE_TENNIS_AUTOPLAY=1` | the players at this screen are played by the CPU (tests: two copies that play each other online) |
+| `KKE_TENNIS_AUTOPLAY=1` | the players at this screen are played by the CPU (tests: two copies that play each other online; in the sport center, walk to a free gate and play the CPU) |
 | `KKE_TENNIS_BALLTEST=1` | no match: seven scripted shots (a drop, a groundstroke, into the net, a serve, both fences, the roof), every contact logged with how far the FEMFX body is from the flight |
 | `KKE_ANIMATIONS_DIR` | where to look for `UAL1_Standard.fbx` and `UAL2.fbx` |
 | `KKE_ASSETS_DIR` | also searched for `Universal Animation Library 2/Unity/UAL2.fbx` |
@@ -76,7 +83,7 @@ are rebindable actions in the "Shots" and "Game" groups.
 | Flat: hard and fast (`tennis.flat`) | J | X (west) |
 | Slice: low and slow (`tennis.slice`) | K / right mouse | B (east) |
 | Lob: over their head (`tennis.lob`) | L | Y (north) |
-| Back to the menu (`tennis.menu`; online, a client leaves the game) | Esc | Back |
+| Back to the menu (`tennis.menu`; online, a client leaves the game; in the sport center, leave the court, the other side winning) | Esc | Back |
 | Developer panels (`panels`) | F1 | none |
 
 - **A shot.** Press the button while the ball is coming: the shot is
@@ -97,12 +104,25 @@ are rebindable actions in the "Shots" and "Game" groups.
 ## How it plays
 
 - **The menu.** Controllers press A to join, up to four players, each
-  with a name and a colour. Player 1 sets the CPU players (0 to 3, Easy
+  with a name and a colour. Player 1 picks one match or the sport center
+  (with its crowd and whether CPU players take the free courts), the CPU players (0 to 3, Easy
   to Expert), the match length (a short set to 4 games, a set to 6, best
   of three short sets, or quick: to 2), the teams (across the net, or all
   the people at this screen on one side against the CPU) and the helping
   hand. Two players make singles; three or four make doubles (filled up
   with CPU players).
+- **The sport center** (the menu's Play row). Everyone at this screen
+  walks the promenade between the courts (split screen for two or more,
+  the camera behind each). A court's gate is at its end by the
+  promenade: stand there and press Topspin to play on it. A second person
+  at the gate is your opponent (a few seconds' countdown lets a third and
+  fourth join for doubles); Lob plays the CPU now, Slice leaves. CPU
+  players take any court nobody wants and hand it over at the end of a
+  point when someone waits (the two middle courts stay free while anyone
+  here plays). The crowd (the Crowd row) strolls, picks a court with a
+  match on, sits on a bench or stands beside it, and cheers or groans at
+  every point. After a match its players walk off at the gate, and every
+  match won goes on the board top right, "Matches won here".
 - **Scoring.** Real tennis ([Rules.cpp](Rules.cpp)): 15, 30, 40, game;
   deuce and advantage (or no-ad); a tiebreak to 7, two clear, at 6 games
   all (or 4 all, or 2 all); the serve changes every game and every two
@@ -234,8 +254,32 @@ head), held in the right hand.
 two rows of five, one scene, with a green surround, lines, net and posts,
 fences with windscreens (see-through: `drawTranslucent`), an umpire's
 chair, floodlights, benches along the promenade between the rows, and
-seats around every court for the spectators still to come. The fences are
-Jolt walls, so people can't walk onto another court.
+spectators' seats beside every court and a standing row behind the
+promenade end. The fences and floodlight poles are Jolt walls, so people
+can't walk onto another court or through a pole.
+
+[Center.cpp](Center.cpp) runs it. Everyone out of a match is a `Walker`
+(a Jolt character and a `Body`): a person at this screen, moved by the
+stick relative to their camera, or one of the crowd. Each court has a
+`Gate` (who waits, the countdown); `startCourt` turns the people waiting
+into a match (hiding their walkers and removing their capsules),
+`endCenterMatch` counts the win and puts them back at the gate. Matches
+come and go, so player slots are reused (`Player::alive`).
+
+The crowd is three states: stroll to a spot on the promenade, go to a
+free seat by a court with a match on (seats beside a court are in the
+gap between two fences, so they walk to the gap's mouth first and back
+out the same way), and watch for 25 to 75 s, facing the court. A point
+on the court they watch sets them cheering (three in four) or groaning.
+Each seat is held by one walker (`m_seatTaken`), so nobody stands in
+anybody. The walkers' camera pulls in in front of a pole or a fence
+(a Jolt raycast from the head), so it never sits inside one.
+
+Cost, 100 in the crowd and ten matches: each person is a skinned
+mannequin (skinned on the CPU by `ModelModule`) and a Jolt character;
+the ten balls are ten FEMFX bodies. On the software renderer the CI uses
+it runs at 3 to 4 frames a second, all of it waiting on the renderer;
+a real GPU is the test that counts.
 
 ### Online
 
@@ -322,6 +366,9 @@ screen.
 | Reach, helping hand's extra | `kReachMin`, `kReachMax`, `kReachHelp` | 0.2, 1.5, 0.45 m |
 | How long an armed shot waits | `kArmedFor` | 1.3 s |
 | CPU levels | `BotSkill::forLevel` in [Bot.cpp](Bot.cpp) | speed, reaction, aim, power, risk |
+| A CPU's aim wandering in a long rally | `tired` in `hitBall` ([Play.cpp](Play.cpp)) | +10 cm a shot after the 3rd |
+| Sport center: walking, the crowd's stroll | `kWalkSpeed`, `kCrowdSpeed` in [Center.cpp](Center.cpp) | 4.2, 1.5 m/s |
+| Sport center: gate reach, countdown, a court's rest before CPU players take it | `kGateReach`, `kGateCountdown`, `kCourtRest` | 3 m, 4 s, 6 s |
 | The ball's body | `ballMaterial`, `buildSphere(4, ...)` in [Ball.cpp](Ball.cpp) | 400 kg/m³, 1e4 stiffness |
 | How hard the body is steered | `steerBody` in [Ball.cpp](Ball.cpp) | 25 /s blend, 20 /s pull onto the path |
 
@@ -387,6 +434,7 @@ screen.
 | [Scene.cpp](Scene.cpp) | The sport center's meshes and walls, bodies, cameras |
 | [Hud.cpp](Hud.cpp), [ui/tennis_hud.rml](ui/tennis_hud.rml) | The scoreboard, the calls, the hints |
 | [Lobby.cpp](Lobby.cpp) | The start menu's fields and options |
+| [Center.cpp](Center.cpp) | The sport center: walkers, gates, the crowd, CPU matches on free courts, the win board |
 | [Net.cpp](Net.cpp) | Online: Host / Join rows, who plays, events in and out, other machines' players |
 | [NetTennis.h](NetTennis.h), [NetTennis.cpp](NetTennis.cpp) | The online messages and how they are packed (tested) |
 | [Rules.h](Rules.h), [Rules.cpp](Rules.cpp) | The score and the umpire (pure) |

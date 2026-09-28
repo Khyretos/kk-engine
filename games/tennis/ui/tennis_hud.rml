@@ -20,6 +20,9 @@
         #hint { position: absolute; left: 10%; bottom: 14dp; width: 80%; padding: 6dp 10dp; border-radius: 8dp; background-color: #0b1a14bb;
                 text-align: center; font-size: 13dp; color: #d6e2d6; }
         #hint img { font-size: 15dp; }
+        #ranking { position: absolute; top: 124dp; right: 16dp; width: 200dp; padding: 8dp 12dp; border-radius: 8dp; background-color: #0b1a14cc;
+                   font-size: 14dp; color: #eef4ee; white-space: pre-line; }
+        #ranking .title { font-size: 13dp; color: #d8f050; font-weight: bold; }
     </style>
 </head>
 <body data-model="tennis">
@@ -28,6 +31,7 @@
         <div class="row"><span class="serve" data-class-on="t1.serving"></span><span class="name">{{t1.name}}</span><span class="sets">{{t1.sets}}</span><span class="points">{{t1.points}}</span></div>
     </div>
     <div id="banner" data-if="banner != ''">{{banner}}</div>
+    <div id="ranking" data-if="ranking != ''"><div class="title">Matches won here</div>{{ranking}}</div>
     <div id="call" data-if="call != '' || sub != ''">
         <div class="big">{{call}}</div>
         <div class="sub">{{sub}}</div>

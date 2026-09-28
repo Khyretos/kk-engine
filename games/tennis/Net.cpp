@@ -198,7 +198,8 @@ void TennisModule::applySetup(const net::Setup& s) {
     rules.gamesPerSet = s.gamesPerSet;
     rules.setsToWin = s.setsToWin;
     m_netMatch = s.match;
-    buildMatch(std::move(entries), rules);
+    clearPlayers();
+    buildMatch(std::move(entries), rules, std::clamp<int>(s.court, 0, SportCenter::kCourts - 1));
     kke::log::get(name())->info("online match {}: {} players, {} of them here", s.match, s.seats.size(), mine);
 }
 

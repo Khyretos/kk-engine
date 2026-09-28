@@ -140,8 +140,18 @@ void TennisModule::buildWorld() {
             for (int sz : { -1, 1 }) {
                 const glm::vec3 base(static_cast<float>(sx) * (fx + 0.3f), 0.0f, static_cast<float>(sz) * (fz + 0.3f));
                 appendBox(p, base + glm::vec3(0.0f, 5.0f, 0.0f), { 0.08f, 5.0f, 0.08f }, post, sv, si);
+                solid(p, base + glm::vec3(0.0f, 5.0f, 0.0f), { 0.1f, 5.0f, 0.1f }); // nobody walks through it
                 appendBox(p, base + glm::vec3(0.0f, 10.1f, 0.0f), { 0.5f, 0.2f, 0.25f }, { 0.9f, 0.9f, 0.8f }, sv, si);
             }
+        // The spectators' benches, behind the seats where the crowd sits
+        // (to look at: the seat itself is where their feet go).
+        for (const SportCenter::Seat& seat : m_center.seats(c)) {
+            if (!seat.sitting) continue;
+            const float yr = glm::radians(seat.yawDegrees);
+            const glm::vec3 back = -glm::vec3(std::sin(yr), 0.0f, std::cos(yr));
+            const glm::vec3 at = p.toLocal(seat.pos + back * 0.32f);
+            appendBox(p, { at.x, 0.21f, at.z }, { 0.2f, 0.21f, 0.55f }, bench, sv, si);
+        }
         Ball::courtBoxes(p, static_cast<uint64_t>(c) * 64u, femfxBoxes);
     }
     // The promenade: benches down the middle and a low wall round the
@@ -200,23 +210,42 @@ void TennisModule::updateBodies(float dt) {
             p.look->update(m_rigid->world().characterPosition(p.body), yaw, m_rigid->world().characterVelocity(p.body), sp, mood, dt);
         }
     }
+    updateWalkerBodies(dt);
 }
 
 void TennisModule::updateCameras(float dt) {
     std::vector<kke::Application::View>& views = m_app->views();
     views.clear();
     kke::Camera& main = m_app->camera();
-    const Match* m = m_matches.empty() ? nullptr : m_matches.front().get();
-    const CourtPlace& place = m_center.courts[static_cast<size_t>(m ? m->court : 0)];
     const float k = 1.0f - std::exp(-3.5f * dt);
-    // Nobody at this screen plays (the menu, a CPU match, the ball test):
-    // the TV camera.
-    std::vector<Player*> humans;
-    if (m && !m_inMenu)
-        for (int idx : m->players)
-            if (!player(idx).cpu && !player(idx).remote) humans.push_back(&player(idx));
-    std::sort(humans.begin(), humans.end(), [](const Player* a, const Player* b) { return a->input < b->input; });
-    if (humans.empty()) {
+    // Everyone at this screen: in a match (behind their baseline), or
+    // walking the sport center (behind them), in the order of their controllers.
+    struct Seen { int input; Player* p; Match* m; kke::Camera* walkerCam; };
+    std::vector<Seen> seen;
+    if (!m_inMenu) {
+        for (auto& m : m_matches)
+            for (int idx : m->players)
+                if (!player(idx).cpu && !player(idx).remote) seen.push_back({ player(idx).input, &player(idx), m.get(), nullptr });
+        std::vector<kke::Camera*> walkerCams;
+        updateWalkerCameras(dt, walkerCams);
+        size_t wc = 0;
+        for (const Walker& w : m_walkers)
+            if (!w.cpu && w.playing < 0 && w.body && wc < walkerCams.size()) seen.push_back({ w.input, nullptr, nullptr, walkerCams[wc++] });
+    }
+    std::sort(seen.begin(), seen.end(), [](const Seen& a, const Seen& b) { return a.input < b.input; });
+    if (seen.empty()) {
+        const Match* m = m_matches.empty() ? nullptr : m_matches.front().get();
+        if (m_inCenter && !m_inMenu) {
+            // Nobody here plays: a slow turn above the whole sport center.
+            m_overviewYaw += dt * 4.0f;
+            const float a = glm::radians(m_overviewYaw);
+            const glm::vec3 want(std::sin(a) * 62.0f, 34.0f, std::cos(a) * 62.0f);
+            main.position = m_broadcastInit ? main.position + (want - main.position) * k : want;
+            main.target = glm::vec3(0.0f, 0.0f, 0.0f);
+            m_broadcastInit = true;
+            return;
+        }
+        const CourtPlace& place = m_center.courts[static_cast<size_t>(m ? m->court : 0)];
         glm::vec3 ball = m && m->ball ? m->ball->position() : glm::vec3(0.0f);
         if (m_testBall) ball = m_testBall->position();
         // The TV view: high behind one end, the whole court in sight over
@@ -228,30 +257,41 @@ void TennisModule::updateCameras(float dt) {
         m_broadcastInit = true;
         return;
     }
-    const std::vector<kke::ViewRect> rects = kke::splitScreen(static_cast<int>(humans.size()), true);
-    for (size_t i = 0; i < humans.size(); ++i) {
-        Player& p = *humans[i];
-        const int side = m->score.sideOf(p.team);
-        const float s = static_cast<float>(side);
-        // Behind the player's own baseline, high enough to see over the net.
-        const float depth = humans.size() > 2 ? 7.5f : 8.5f;
-        const glm::vec3 wantL(p.feet.x * 0.55f, 4.6f, s * (kHalfLength + depth));
-        const glm::vec3 lookL(p.feet.x * 0.3f + m->ball->position().x * 0.15f, 0.4f, -s * 2.0f);
-        kke::Camera& cam = i == 0 ? main : p.camera;
+    const std::vector<kke::ViewRect> rects = kke::splitScreen(static_cast<int>(seen.size()), true);
+    int playing = 0;
+    for (const Seen& s : seen) playing += s.p ? 1 : 0;
+    for (size_t i = 0; i < seen.size(); ++i) {
+        kke::Camera* src = seen[i].walkerCam;
+        if (seen[i].p) {
+            Player& p = *seen[i].p;
+            const Match& m = *seen[i].m;
+            const CourtPlace& place = m_center.courts[static_cast<size_t>(m.court)];
+            const int side = m.score.sideOf(p.team);
+            const float s = static_cast<float>(side);
+            // Behind the player's own baseline, high enough to see over the net.
+            const float depth = playing > 2 ? 7.5f : 8.5f;
+            const glm::vec3 wantL(p.feet.x * 0.55f, 4.6f, s * (kHalfLength + depth));
+            const glm::vec3 lookL(p.feet.x * 0.3f + m.ball->position().x * 0.15f, 0.4f, -s * 2.0f);
+            // Changing ends: swing round rather than cut (a cut after "change ends" confuses).
+            const bool snap = !p.cameraInit;
+            const float kk = p.camSide != side ? 1.0f - std::exp(-2.0f * dt) : k;
+            const glm::vec3 wantW = place.toWorld(wantL), lookW = place.toWorld(lookL);
+            p.camera.position = snap ? wantW : p.camera.position + (wantW - p.camera.position) * kk;
+            p.camera.target = snap ? lookW : p.camera.target + (lookW - p.camera.target) * kk;
+            if (glm::length(p.camera.position - wantW) < 0.3f) p.camSide = side;
+            p.cameraInit = true;
+            src = &p.camera;
+        }
+        kke::Camera& cam = i == 0 ? main : *src;
         if (&cam != &main) {
             cam.fovDegrees = main.fovDegrees;
             cam.nearPlane = main.nearPlane;
             cam.farPlane = main.farPlane;
+        } else {
+            main.position = src->position;
+            main.target = src->target;
         }
-        // Changing ends: swing round rather than cut (a cut after "change ends" confuses).
-        const bool snap = !p.cameraInit;
-        const float kk = p.camSide != side ? 1.0f - std::exp(-2.0f * dt) : k;
-        const glm::vec3 wantW = place.toWorld(wantL), lookW = place.toWorld(lookL);
-        cam.position = snap ? wantW : cam.position + (wantW - cam.position) * kk;
-        cam.target = snap ? lookW : cam.target + (lookW - cam.target) * kk;
-        if (glm::length(cam.position - wantW) < 0.3f) p.camSide = side;
-        p.cameraInit = true;
-        if (humans.size() > 1) views.push_back({ cam, rects[i] });
+        if (seen.size() > 1) views.push_back({ cam, rects[i] });
     }
 }
 

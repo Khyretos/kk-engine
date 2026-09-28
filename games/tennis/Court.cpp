@@ -106,7 +106,8 @@ std::vector<SportCenter::Seat> SportCenter::seats(int court) const {
     // on a bench (their feet on the ground in front of it) and people
     // standing behind it.
     for (int sideX : { -1, 1 }) {
-        const float x = static_cast<float>(sideX) * (kFenceHalfX + 1.2f);
+        // Clear of the players' bench (to 0.97 m out) by a person's width.
+        const float x = static_cast<float>(sideX) * (kFenceHalfX + 1.35f);
         for (int k = 0; k < 9; ++k) {
             const float z = (static_cast<float>(k) - 4.0f) * 2.6f;
             const glm::vec3 w = c.toWorld({ x, 0.0f, z });

@@ -18,6 +18,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <numeric>
 #include <system_error>
 #include <typeindex>
 
@@ -61,6 +62,8 @@ void TennisModule::init(kke::Application& app) {
     m_seed = static_cast<uint32_t>(envFloat("KKE_TENNIS_SEED", 1.0f));
     m_quitAfter = envFloat("KKE_TENNIS_QUIT", -1.0f);
     m_autoplay = envOn("KKE_TENNIS_AUTOPLAY");
+    if (envOn("KKE_TENNIS_CENTER")) m_where = 1;
+    m_crowd = static_cast<int>(envFloat("KKE_TENNIS_CROWD", static_cast<float>(m_crowd)));
 
     const char* base = SDL_GetBasePath();
     const std::filesystem::path tex = std::filesystem::path(base ? base : "") / "textures" / "tennis_ball.png";
@@ -124,10 +127,37 @@ void TennisModule::clearPlayers() {
         if (p.body) w.removeCharacter(p.body);
     m_players.clear();
     m_matches.clear();
+    for (Walker& wk : m_walkers)
+        if (wk.body) w.removeCharacter(wk.body);
+    m_walkers.clear();
+    for (Gate& g : m_gates) g = Gate{};
+    for (auto& seats : m_seatTaken) seats.clear();
+    m_inCenter = false;
 }
 
-void TennisModule::spawnPlayer(const Entry& e, int team) {
+void TennisModule::freePlayer(int index) {
+    Player& p = player(index);
+    if (p.body) m_rigid->world().removeCharacter(p.body);
+    p = Player{};
+}
+
+MatchRules TennisModule::menuRules(int teamSize) const {
+    MatchRules rules;
+    rules.teamSize = teamSize;
+    switch (m_length) {
+    case 1: rules.gamesPerSet = 6; break;
+    case 2: rules.gamesPerSet = 4; rules.setsToWin = 2; break;
+    case 3: rules.gamesPerSet = 2; break; // quick: to 2 games
+    default: rules.gamesPerSet = 4; break;
+    }
+    if (const char* g = kke::dev::env("KKE_TENNIS_GAMES")) rules.gamesPerSet = std::max(1, std::atoi(g));
+    return rules;
+}
+
+int TennisModule::spawnPlayer(const Entry& e, int team) {
     Player p;
+    p.alive = true;
+    p.walker = e.walker;
     p.name = e.name;
     p.tint = e.tint;
     p.team = team;
@@ -147,7 +177,14 @@ void TennisModule::spawnPlayer(const Entry& e, int team) {
     if (p.remote) w.setCharacterKinematic(p.body, true);
     if (p.cpu) p.bot = std::make_unique<Bot>(m_seed * 7919u + static_cast<uint32_t>(m_players.size()) * 104729u, p.level);
     p.look = std::make_unique<Body>(*m_rig, *m_models, e.tint, true);
+    // A free slot (a match that ended) or a new one.
+    for (size_t i = 0; i < m_players.size(); ++i)
+        if (!m_players[i].alive) {
+            m_players[i] = std::move(p);
+            return static_cast<int>(i);
+        }
     m_players.push_back(std::move(p));
+    return static_cast<int>(m_players.size()) - 1;
 }
 
 namespace {
@@ -196,6 +233,10 @@ std::vector<TennisModule::Entry> TennisModule::seatEntries() const {
 }
 
 void TennisModule::startLocalMatch() {
+    if (m_where == 1 && !online()) {
+        enterCenter();
+        return;
+    }
     std::vector<Entry> entries = seatEntries();
     std::vector<Entry> cpus, fillers;
     if (online()) {
@@ -234,23 +275,14 @@ void TennisModule::startLocalMatch() {
         entries.push_back(std::move(e));
     }
     entries.resize(want);
-    MatchRules rules;
-    rules.teamSize = static_cast<int>(want) / 2;
-    switch (m_length) {
-    case 1: rules.gamesPerSet = 6; break;
-    case 2: rules.gamesPerSet = 4; rules.setsToWin = 2; break;
-    case 3: rules.gamesPerSet = 2; break; // quick: to 2 games
-    default: rules.gamesPerSet = 4; break;
-    }
-    if (const char* g = kke::dev::env("KKE_TENNIS_GAMES")) rules.gamesPerSet = std::max(1, std::atoi(g));
-    buildMatch(std::move(entries), rules);
-    if (netHost() && !m_matches.empty()) sendSetup(*m_matches.front());
+    clearPlayers();
+    Match* m = buildMatch(std::move(entries), menuRules(static_cast<int>(want) / 2), 0);
+    if (netHost()) sendSetup(*m);
 }
 
-void TennisModule::buildMatch(std::vector<Entry> entries, const MatchRules& rules) {
-    clearPlayers();
+TennisModule::Match* TennisModule::buildMatch(std::vector<Entry> entries, const MatchRules& rules, int court) {
     auto m = std::make_unique<Match>();
-    m->court = 0;
+    m->court = court;
     const size_t want = entries.size();
     // Teams: as given (the host's Setup); else seats alternate across the
     // net, unless the menu put the people at this screen on one side
@@ -269,10 +301,7 @@ void TennisModule::buildMatch(std::vector<Entry> entries, const MatchRules& rule
     } else {
         for (size_t i = 0; i < want; ++i) team[i] = static_cast<int>(i % 2);
     }
-    for (size_t i = 0; i < want; ++i) {
-        spawnPlayer(entries[i], team[i]);
-        m->players.push_back(static_cast<int>(m_players.size()) - 1);
-    }
+    for (size_t i = 0; i < want; ++i) m->players.push_back(spawnPlayer(entries[i], team[i]));
     // Slots within each team.
     int slots[2] = { 0, 0 };
     for (size_t i = 0; i < want; ++i) {
@@ -289,8 +318,9 @@ void TennisModule::buildMatch(std::vector<Entry> entries, const MatchRules& rule
     std::string who;
     for (int idx : m_matches.back()->players)
         who += (who.empty() ? "" : ", ") + player(idx).name + (player(idx).remote ? " (online)" : "") + " (team " + std::to_string(player(idx).team + 1) + ")";
-    kke::log::get(name())->info("{} match on court {}: {}; first to {} games{}", size == 2 ? "doubles" : "singles", 1, who,
+    kke::log::get(name())->info("{} match on court {}: {}; first to {} games{}", size == 2 ? "doubles" : "singles", court + 1, who,
                                 m_matches.back()->rules.gamesPerSet, m_matches.back()->rules.setsToWin > 1 ? ", best of three" : "");
+    return m_matches.back().get();
 }
 
 void TennisModule::backToMenu() {
@@ -307,11 +337,23 @@ void TennisModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
         return;
     }
     for (auto& m : m_matches) stepMatch(*m, ctx.fixedDt);
+    if (m_inCenter) stepCenter(ctx.fixedDt);
     // KKE_TENNIS_QUIT: a report every 10 s of game time, then quit.
     m_clock += ctx.fixedDt;
     if (m_quitAfter > 0.0f) {
         if (m_clock >= m_reportAt) {
             m_reportAt += 10.0f;
+            if (m_inCenter) {
+                int watching = 0, going = 0, strolling = 0;
+                for (const Walker& w : m_walkers) {
+                    if (!w.cpu) continue;
+                    (w.doing == Walker::Doing::Watch ? watching : w.doing == Walker::Doing::ToSeat ? going : strolling)++;
+                }
+                kke::log::get(name())->info("t {:.0f} s: {} matches on, {} points played, longest rally {} shots; crowd: {} watching, {} going to a "
+                                            "seat, {} strolling; {} matches won so far",
+                                            m_clock, m_matches.size(), m_pointsPlayed, m_longestRally, watching, going, strolling,
+                                            std::accumulate(m_wins.begin(), m_wins.end(), 0, [](int n, const auto& w) { return n + w.second; }));
+            } else
             for (const auto& m : m_matches)
                 kke::log::get(name())->info("t {:.0f} s: sets {}-{}, games {} / {}, points {}-{} ({}), {} points played, longest rally {} shots",
                                             m_clock, m->score.sets(0), m->score.sets(1), m->score.setsText(0), m->score.setsText(1),
@@ -332,6 +374,24 @@ void TennisModule::update(const kke::UpdateContext& ctx) {
     if (p1.pressed("panels")) m_app->debugUi().setVisible(!m_app->debugUi().visible());
     if (m_inMenu) {
         updateLobby(dt);
+    } else if (m_inCenter) {
+        // The sport center: the menu button leaves a match (the other side
+        // wins it) or, walking, goes back to the menu.
+        for (int i = 0; i < m_input->players(); ++i) {
+            if (!m_input->map(i).pressed("tennis.menu")) continue;
+            bool left = false;
+            for (size_t mi = 0; mi < m_matches.size() && !left; ++mi)
+                for (int idx : m_matches[mi]->players)
+                    if (player(idx).walker >= 0 && player(idx).input == i) {
+                        endCenterMatch(mi, player(idx).team);
+                        left = true;
+                        break;
+                    }
+            if (!left) backToMenu();
+            break;
+        }
+        for (Walker& w : m_walkers)
+            if (!w.cpu && w.playing < 0) readWalker(w);
     } else if (m_lobby && !m_ballTest) {
         for (int i = 0; i < m_input->players(); ++i)
             if (m_input->map(i).pressed("tennis.menu")) {
