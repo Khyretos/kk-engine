@@ -65,6 +65,20 @@ public:
     Flight flight() const { return { m_pos, m_vel, kGravity + m_pull }; }
     std::vector<Event> takeEvents();
 
+    // Everything its flight needs to go on from here (a replay goes back
+    // to one and flies again from it; the body is put back at rest shape).
+    struct State {
+        glm::vec3 pos{0.0f}, vel{0.0f};
+        float pull = 0.0f;
+        bool rolling = false;
+    };
+    State state() const { return { m_pos, m_vel, m_pull, m_rolling }; }
+    void setState(const State& s) {
+        place(s.pos, s.vel);
+        m_pull = s.pull;
+        m_rolling = s.rolling;
+    }
+
     // A network follower (a client's copy): take the host's flight when
     // it differs from ours (a shot, a correction).
     void follow(const Flight& target, bool rolling);

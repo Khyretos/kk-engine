@@ -62,6 +62,7 @@ void TennisModule::init(kke::Application& app) {
     m_seed = static_cast<uint32_t>(envFloat("KKE_TENNIS_SEED", 1.0f));
     m_quitAfter = envFloat("KKE_TENNIS_QUIT", -1.0f);
     m_swingLog = kke::dev::flag("KKE_TENNIS_SWINGLOG");
+    if (const char* r = kke::dev::env("KKE_TENNIS_REPLAYS")) m_replays = std::string(r) != "0";
     m_closeUp = static_cast<int>(envFloat("KKE_TENNIS_CLOSEUP", -1.0f));
     if (const char* pose = kke::dev::env("KKE_TENNIS_POSE")) m_poseTest = pose;
     m_stringTest = kke::dev::env("KKE_TENNIS_STRINGTEST") != nullptr;
@@ -86,6 +87,7 @@ void TennisModule::init(kke::Application& app) {
     buildWorld();
     buildHud();
     setupLobby();
+    setupBench();
     setupNet();
     if (m_ballTest) {
         kke::log::get(name())->info("ball test: test shots at the net, the court and the fence (KKE_TENNIS_BALLTEST)");
@@ -137,6 +139,7 @@ void TennisModule::clearPlayers() {
         if (p.body) w.removeCharacter(p.body);
     m_players.clear();
     m_matches.clear();
+    m_app->setTimeScale(1.0f); // left in the middle of a replay
     for (Walker& wk : m_walkers)
         if (wk.body) w.removeCharacter(wk.body);
     m_walkers.clear();
@@ -341,7 +344,14 @@ void TennisModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
         ballTest(ctx.fixedDt);
         return;
     }
-    for (auto& m : m_matches) stepMatch(*m, ctx.fixedDt);
+    for (auto& m : m_matches) {
+        if (m->replay && m->replay->playing) {
+            stepReplay(*m, ctx.fixedDt);
+            continue;
+        }
+        stepMatch(*m, ctx.fixedDt);
+        recordReplay(*m);
+    }
     if (m_inCenter) stepCenter(ctx.fixedDt);
     // KKE_TENNIS_QUIT: a report every 10 s of game time, then quit.
     m_clock += ctx.fixedDt;
@@ -376,6 +386,13 @@ void TennisModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
 void TennisModule::update(const kke::UpdateContext& ctx) {
     const float dt = ctx.dt;
     if (m_stringTest) stringTest(dt);
+    // A shot button skips a replay.
+    for (auto& m : m_matches) {
+        if (!m->replay || !m->replay->playing) continue;
+        for (int i = 0; i < m_input->players(); ++i)
+            for (const char* id : { "tennis.topspin", "tennis.flat", "tennis.slice", "tennis.lob" })
+                if (m_input->map(i).pressed(id)) endReplay(*m);
+    }
     kke::InputMap& p1 = m_input->map(0);
     if (p1.pressed("panels")) m_app->debugUi().setVisible(!m_app->debugUi().visible());
     if (m_inMenu) {

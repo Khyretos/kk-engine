@@ -196,9 +196,23 @@ void TennisModule::renderTranslucent(const kke::RenderContext& ctx) {
 void TennisModule::updateBodies(float dt) {
     for (auto& m : m_matches) {
         const CourtPlace& place = m_center.courts[static_cast<size_t>(m->court)];
-        for (int idx : m->players) {
+        const Replay* replay = m->replay && m->replay->playing ? m->replay.get() : nullptr;
+        for (size_t i = 0; i < m->players.size(); ++i) {
+            const int idx = m->players[i];
             Player& p = player(idx);
             if (!p.look) continue;
+            if (replay && i < replay->frames[0].who.size()) {
+                // A replay: everyone as they were at that moment.
+                // (Between two frames: a slow replay draws four times for each.)
+                const Replay::Who& w = replay->frame(replay->at).who[i];
+                const Replay::Who& n = replay->frame(std::min(replay->at + 1, replay->to)).who[i];
+                const float u = replay->part;
+                const float yaw = w.yaw + std::remainder(n.yaw - w.yaw, 360.0f) * u;
+                SwingPose sp{ w.stroke, w.backhand, w.swingT, w.contact, w.tossing };
+                if (n.stroke == w.stroke && n.backhand == w.backhand) sp.t += (n.swingT - w.swingT) * u;
+                p.look->update(glm::mix(w.feet, n.feet, u), yaw, glm::mix(w.vel, n.vel, u), sp, Body::Mood::Play, dt);
+                continue;
+            }
             const glm::vec3 fw = place.dirToWorld(p.facing);
             const float yaw = glm::degrees(std::atan2(fw.x, fw.z));
             SwingPose sp;
@@ -223,7 +237,7 @@ void TennisModule::updateBodies(float dt) {
             if (m->phase == Match::Phase::MatchOver) mood = m->score.winner() == p.team ? Body::Mood::Cheer : Body::Mood::Stand;
             p.look->update(m_rigid->world().characterPosition(p.body), yaw, m_rigid->world().characterVelocity(p.body), sp, mood, dt);
             if (m_stringTest && p.look->stringDepth() > 0.0f)
-                kke::log::get(name())->info("strings: player {} pocket {:.1f} mm", &p - m_players.data(), p.look->stringDepth() * 1000.0f);
+                kke::log::get(name())->info("strings: player {} pocket {:.1f} mm", idx, p.look->stringDepth() * 1000.0f);
         }
     }
     updateWalkerBodies(dt);
@@ -233,6 +247,9 @@ void TennisModule::updateCameras(float dt) {
     std::vector<kke::Application::View>& views = m_app->views();
     views.clear();
     kke::Camera& main = m_app->camera();
+    // A replay fills the screen, whoever plays: the ball camera.
+    for (auto& m : m_matches)
+        if (replayCamera(*m, dt / m_app->timeScale(), main)) return;
     const float k = 1.0f - std::exp(-3.5f * dt);
     // Everyone at this screen: in a match (behind their baseline), or
     // walking the sport center (behind them), in the order of their controllers.
@@ -251,6 +268,10 @@ void TennisModule::updateCameras(float dt) {
     std::sort(seen.begin(), seen.end(), [](const Seen& a, const Seen& b) { return a.input < b.input; });
     if (seen.empty()) {
         const Match* m = m_matches.empty() ? nullptr : m_matches.front().get();
+        if (m_inCenter && !m_inMenu && m_bench) {
+            benchCamera(dt, main);
+            return;
+        }
         if (m_inCenter && !m_inMenu) {
             // Nobody here plays: a slow turn above the whole sport center.
             m_overviewYaw += dt * 4.0f;

@@ -206,6 +206,7 @@ void TennisModule::resolve(Match& m, Rally::Result r, const std::string& call) {
     const int setsBefore = m.score.sets(team);
     const bool game = m.score.pointTo(team);
     m.lastPointTo = team;
+    queueReplay(m, team);
     m.history.push_back(static_cast<uint8_t>(team));
     onPointForCrowd(m);
     ++m_pointsPlayed;
@@ -240,6 +241,7 @@ void TennisModule::stepMatch(Match& m, float dt) {
         switch (e.kind) {
         case Ball::Event::Kind::Bounce:
             r = m.rally.onBounce(e.at.x, e.at.z);
+            if (m.replay && m.sinceBounce < 0.0f) m.replay->bounceTick = m.replay->tick; // the landing, for a replay
             m.sinceBounce = 0.0f;
             break;
         case Ball::Event::Kind::Net: m.rally.onNet(); break;
@@ -277,6 +279,8 @@ void TennisModule::stepMatch(Match& m, float dt) {
                 m.phase = Match::Phase::MatchOver;
                 m.phaseTime = 0.0f;
             }
+        } else if (m.replay && m.replay->pending && m.phaseTime > 0.9f) {
+            startReplay(m); // a winner or an ace, again in slow motion, once the call has shown
         } else if (m.phaseTime > (m.serveAgain ? 1.2f : 2.2f)) {
             if (m.score.over()) {
                 m.phase = Match::Phase::MatchOver;
@@ -788,6 +792,12 @@ void TennisModule::applyHit(Match& m, int hitter, const net::Hit& h) {
         audio->playImpact(place.toWorld(h.at), kke::AudioMaterialTable::Plastic,
                           std::clamp(glm::length(h.velocity) / 40.0f, 0.3f, 1.0f));
     m.rallyShots = h.shot + 1;
+    m.lastHitter = hitter;
+    if (m.replay && !m.replay->playing) {
+        std::vector<Replay::Hit>& hits = m.replay->hits;
+        if (hits.size() >= 8) hits.erase(hits.begin());
+        hits.push_back({ m.replay->tick, hitter, h });
+    }
     m.sinceHit = 0.0f;
     m.sinceBounce = -1.0f;
     if (h.serve) {

@@ -50,6 +50,8 @@ KKE_SKIP_INTRO=1 ./tennis                            # skip the logo intro
 KKE_TENNIS_BOTS=1 KKE_TENNIS_QUIT=120 ./tennis       # watch two CPU players, with a log
 KKE_TENNIS_BALLTEST=1 ./tennis                       # the ball's test shots, logged
 KKE_TENNIS_CENTER=1 KKE_TENNIS_BOTS=1 KKE_TENNIS_CROWD=100 ./tennis  # the whole sport center, CPU players only
+KKE_TENNIS_BENCH=singles ./tennis                    # the busiest case: 100 people, 10 matches, a flying camera
+KKE_TENNIS_BENCH=doubles KKE_BENCHMARK=40 ./tennis   # the same with doubles, measured, with a report
 KKE_NET=host KKE_NET_NAME=Pip ./tennis                # host an online match...
 KKE_NET=join:127.0.0.1 KKE_NET_NAME=Rook ./tennis     # ...and join it from a second terminal
 ```
@@ -63,6 +65,8 @@ KKE_NET=join:127.0.0.1 KKE_NET_NAME=Rook ./tennis     # ...and join it from a se
 | `KKE_TENNIS_LOBBY=0` | skip the menu: you against one CPU player |
 | `KKE_TENNIS_QUIT=<s>` | quit after that many seconds of play, logging the score every 10 s and every call |
 | `KKE_TENNIS_SEED=<n>` | the CPU players' dice (default 1) |
+| `KKE_TENNIS_REPLAYS=0` | no slow-motion replays of winners and aces (the menu's Replays row) |
+| `KKE_TENNIS_BENCH=singles` / `doubles` | the busiest case, a showcase and a benchmark: 100 people in the sport center, a CPU match on every court (20 players in singles, 40 in doubles), 6 or 5 people watching each match from the benches, the rest walking, and a camera flying from court to court. `kke_benchmark` runs both |
 | `KKE_NET=host` / `KKE_NET=join:ADDRESS` | host, or join a host, at startup ([docs/NETWORKING.md](../../docs/NETWORKING.md)); `KKE_NET_NAME=<name>` is player 1's name |
 | `KKE_TENNIS_CENTER=1` | the sport center instead of one match (the menu's Play row) |
 | `KKE_TENNIS_CROWD=<n>` | how many CPU people walk about the sport center and watch (the menu's Crowd row: 0, 20, 40 or 100) |
@@ -176,6 +180,11 @@ are rebindable actions in the "Shots" and "Game" groups.
   while the ball is coming to you, you walk to meet it, your reach is
   0.45 m longer and a hit is never worse than fairly good. Off, it's all
   you.
+- **Replays** (the menu's Replays row, on by default). A winner or an
+  ace is shown again at a quarter speed from a camera flying beside the
+  ball: the hit, the flight and the landing, the ball and the strings
+  squashing again. Any shot button skips it. Only in one match played at
+  this screen: slowing the game down would slow every court with it.
 - **The CPU players** read your shot after a reaction time, run to where
   the ball can be met, pick a shot (lobs when you're at the net, drop
   shots when brave, slices, flats, topspin) and aim away from you. Their
@@ -413,6 +422,36 @@ The sport center the same way, the host with `KKE_TENNIS_CENTER=1` (no
 `KKE_TENNIS_WAIT`): each copy's person walks to a different free court's
 gate and plays the CPU, and both logs show every court's matches.
 
+### Replays
+
+[Replay.cpp](Replay.cpp) keeps the last five seconds of a match, one
+frame per fixed step: the ball's flight state and every player's feet,
+facing and swing. When the point's last hitter wins it, the replay starts
+0.7 s before that hit and ends 0.6 s after the ball lands. The ball flies
+again from its saved state (its flight is the game's own maths, so it
+flies exactly the same way) and is struck again at the recorded step,
+which squashes the FEMFX ball and pushes the FEMFX strings again; the
+players are drawn from the frames. The engine's
+`Application::setTimeScale(0.25)` makes it slow: as many fixed steps a
+second, each a quarter as long, so FEMFX stays smooth. The ball camera starts
+beside the hitter, a little in front, on the court's middle side, and
+watches the ball come in and the swing meet it; after the hit it swoops
+off after the ball, beside and behind it, and stays on the landing spot
+once the ball has bounced.
+
+### The busiest case (KKE_TENNIS_BENCH)
+
+[Bench.cpp](Bench.cpp) fills the sport center to 100 people: a CPU match
+on every court (always singles, or always doubles), 6 (or 5) spectators
+put straight onto each court's benches, spread along both sides, and the
+rest strolling the promenade. Matches are sets to 6 so the courts stay
+busy, and a court that finishes starts the next match at once with the
+same spectators. The camera flies along one row of courts and back
+along the other, 4.5 s over each court's promenade end, gliding across
+it while it watches the ball, both players and the benches. The seed is fixed, so every run plays the same
+points. It loads FEMFX with 10 balls and 20 or 40 string beds, Jolt with
+100 characters, and 100 procedural bodies.
+
 ### Cameras and the HUD
 
 With people playing, each gets a camera behind their own baseline, high
@@ -541,6 +580,8 @@ screen.
 | [Hud.cpp](Hud.cpp), [ui/tennis_hud.rml](ui/tennis_hud.rml) | The scoreboard, the calls, the hints |
 | [Lobby.cpp](Lobby.cpp) | The start menu's fields and options |
 | [Center.cpp](Center.cpp) | The sport center: walkers, gates, the crowd, CPU matches on free courts, the win board |
+| [Replay.cpp](Replay.cpp) | Slow-motion replays of winners and aces, and the ball camera |
+| [Bench.cpp](Bench.cpp) | The busiest case: ten matches, 100 people, the flying camera |
 | [Net.cpp](Net.cpp) | Online: Host / Join rows, who plays, events in and out, other machines' players |
 | [NetTennis.h](NetTennis.h), [NetTennis.cpp](NetTennis.cpp) | The online messages and how they are packed (tested) |
 | [Rules.h](Rules.h), [Rules.cpp](Rules.cpp) | The score and the umpire (pure) |

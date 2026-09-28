@@ -327,6 +327,15 @@ public:
     // call, then re-freezes — for stepping through frames one at a time
     // while paused. A no-op if not currently paused.
     void stepOneFrame() { if (m_paused) m_stepRequested = true; }
+    // Slow motion (below 1) or fast forward (above 1): game time runs at
+    // this times wall-clock time. There are as many fixed ticks per
+    // second as ever, each one a step of fixedDt x scale (so slow motion
+    // stays smooth, and a shorter step is only more stable; keep fast
+    // forward modest), and update() gets dt x scale. Real time for a
+    // camera or UI: dt / timeScale(). A replay of a hit in slow motion
+    // shows FEMFX squash that lasts a few ms (games/tennis).
+    void setTimeScale(float scale) { m_timeScale = scale > 0.0f ? scale : 1.0f; }
+    float timeScale() const { return m_timeScale; }
 
     // The most fixedUpdate() ticks a single rendered frame may run to
     // catch up with wall-clock time. When the simulation can't keep up
@@ -426,6 +435,7 @@ private:
     std::unordered_map<std::type_index, Module*> m_moduleByType;
 
     bool m_paused = false;
+    float m_timeScale = 1.0f; // setTimeScale()
     bool m_introEnabled = true;
     bool m_uiCapturesMouse = false;
     float m_frameRateLimit = 0.0f;

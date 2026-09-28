@@ -727,7 +727,8 @@ void Application::run() {
                 m_fixedStepsLastFrame++;
                 tickIndex++;
                 const auto tickStart = BenchClock::now();
-                FixedUpdateContext fixedCtx{ m_fixedDt, tickIndex };
+                // setTimeScale(): as many ticks, each a shorter (or longer) step.
+                FixedUpdateContext fixedCtx{ m_fixedDt * m_timeScale, tickIndex };
                 for (Module* m : m_initOrder) {
                     safeInvoke(m, "fixedUpdate", [&] { m->fixedUpdate(fixedCtx); });
                 }
@@ -761,7 +762,7 @@ void Application::run() {
             // passing), so hand modules the fixed tick length instead of
             // a real wall-clock delta — a well-defined, reproducible
             // "one step" rather than an arbitrary tiny number.
-            float effectiveDt = m_paused ? m_fixedDt : dt;
+            float effectiveDt = m_paused ? m_fixedDt : dt * m_timeScale;
             m_fixedAlpha = m_paused ? 1.0f : std::clamp(accumulator / m_fixedDt, 0.0f, 1.0f);
             UpdateContext updateCtx{ effectiveDt, totalTime, m_fixedAlpha };
             for (Module* m : m_initOrder) {
