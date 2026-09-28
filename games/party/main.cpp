@@ -2,8 +2,10 @@
 // PartyModule.h and README.md).
 #include "kke/Application.h"
 #include "kke/modules/AudioModule.h"
+#include "kke/modules/DemoPanelModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
+#include "kke/modules/ModelModule.h"
 #include "kke/modules/NetModule.h"
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/modules/SettingsModule.h"
@@ -24,6 +26,7 @@ int main() {
         app.addModule<kke::SettingsModule>("settings.json");
         app.addModule<kke::InputModule>("party_input.json");
         app.addModule<kke::RigidBodyModule>();
+        app.addModule<kke::ModelModule>(); // people (People.h), when the Synty City pack is there
         app.addModule<kke::UiModule>();
         app.addModule<kke::AudioModule>().setUiVisible(false);
         app.addModule<kke::LobbyModule>("party_lobby.json");
@@ -37,6 +40,8 @@ int main() {
         kke::VoiceModule::Settings voice;
         voice.channel = kke::net::VoiceChannel::All;
         app.addModule<kke::VoiceModule>(voice);
+        // The pause menu: Esc, or Back on a controller (Pause.cpp).
+        app.addModule<kke::DemoPanelModule>("Menu", kke::DemoPanelModule::Side::Right).setWidth(360.0f);
         app.addModule<party::PartyModule>();
         app.addModule<kke::StatsModule>().setUiVisible(false);
         app.run();

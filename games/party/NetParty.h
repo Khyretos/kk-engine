@@ -34,6 +34,8 @@ constexpr uint16_t kEventRound = kEventBase + 0; // host -> all: the round (Roun
 constexpr uint16_t kEventPhase = kEventBase + 1; // host -> all: the show moved on (Phase)
 constexpr uint16_t kEventResult = kEventBase + 2; // owner -> host -> all: a bean finished or went out (Result)
 constexpr uint16_t kEventGame = kEventBase + 3;  // anyone -> host -> all: the minigame's own (Game)
+constexpr uint16_t kEventVote = kEventBase + 4;  // host -> all: the vote for the next game, as it stands (Vote)
+constexpr uint16_t kEventBallot = kEventBase + 5; // a player -> host: their pick (Ballot)
 
 // A bean as its owner sees it, enough for another machine to draw it.
 struct Pose {
@@ -88,5 +90,25 @@ struct Game {
 };
 std::vector<uint8_t> encode(const Game& g);
 std::optional<Game> decodeGame(const std::vector<uint8_t>& bytes);
+
+// Picking the next game by vote: the host sends the choices when the
+// vote opens and again after every ballot, and the winner at the end
+// (the Round that follows builds it).
+struct Ballot {
+    uint8_t index = 0;         // the show's round the vote is for
+    uint8_t player = 0;
+    int8_t choice = -1;        // 0.. into Vote::games
+};
+struct Vote {
+    uint8_t index = 0;
+    std::vector<std::string> games; // Minigame ids, at most 4
+    std::vector<Ballot> ballots;
+    uint8_t secondsLeft = 0;
+    int8_t winner = -1;        // once it's decided
+};
+std::vector<uint8_t> encode(const Vote& v);
+std::optional<Vote> decodeVote(const std::vector<uint8_t>& bytes);
+std::vector<uint8_t> encode(const Ballot& b);
+std::optional<Ballot> decodeBallot(const std::vector<uint8_t>& bytes);
 
 } // namespace party::netparty

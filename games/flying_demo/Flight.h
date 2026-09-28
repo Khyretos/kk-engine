@@ -10,6 +10,8 @@
 //     squared and with the angle of attack, until the wing stalls), drag
 //     against the velocity, a side force that stops it sliding sideways;
 //   - the propeller pulls it along its nose (the throttle), gravity down;
+//     pointed steeply up the pull fades below the plane's weight, so a
+//     plane can't hang on its propeller: it slows and tips over;
 //   - the nose weathervanes into the airflow a little, so it flies where
 //     it points instead of skating.
 // That is the classic arcade-sim middle: loops, rolls, stalls and spins
@@ -35,6 +37,7 @@ struct Controls {
 
 struct FlightSettings {
     float maxThrust = 15.0f;       // m/s^2 at full throttle (a light stunt plane)
+    float steepThrust = 0.4f;      // of that left pointing straight up (from 55 degrees up): it slows and tips over
     float stallSpeed = 22.0f;      // m/s: below this the wing can't hold the plane up
     float maxSpeed = 88.0f;        // m/s: hard cap (dives)
     float pitchRate = 120.0f;      // deg/s at full stick and full authority
@@ -50,6 +53,7 @@ struct FlightSettings {
     float gearHeight = 1.1f;       // m from the plane's origin to the wheels
     float rollingFriction = 0.6f;  // m/s^2 on the ground
     float brakeDecel = 6.0f;       // m/s^2 with the brakes
+    float rotateSpeed = 27.0f;     // m/s on the runway: the nose lifts by itself and the plane flies
     float groundSteer = 40.0f;     // deg/s of tail-wheel steering (rudder) on the ground
     float maxTouchdownSink = 6.0f; // m/s down: more is a crash
     float maxTouchdownTilt = 25.0f;// degrees of bank or pitch: more is a crash

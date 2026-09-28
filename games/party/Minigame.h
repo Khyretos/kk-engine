@@ -28,6 +28,8 @@ struct ShadowRenderContext;
 
 namespace party {
 
+struct PersonBody; // People.h
+
 // What a bean wants this frame: from a player's controls, a CPU's brain,
 // or (online) another machine.
 struct BeanInput {
@@ -78,6 +80,7 @@ struct Bean {
     glm::vec2 lean{0.0f}, leanVel{0.0f};
     float walkPhase = 0.0f, tumble = 0.0f, wave = 0.0f;
     glm::vec3 lastVelocity{0.0f};
+    std::shared_ptr<PersonBody> person; // a person's model and animator (People), or none: a bean
     std::shared_ptr<kke::DynamicMeshRenderer> body, limb;
     BeanLook builtLook;
     bool meshBuilt = false;

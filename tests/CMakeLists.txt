@@ -47,6 +47,7 @@ add_executable(kke_tests
     ${CMAKE_SOURCE_DIR}/games/flying_demo/Course.cpp
     ${CMAKE_SOURCE_DIR}/games/flying_demo/FlyNet.cpp
     ${CMAKE_SOURCE_DIR}/games/flying_demo/Stunts.cpp
+    ${CMAKE_SOURCE_DIR}/games/flying_demo/Combat.cpp
     test_combat.cpp
     test_sidekick.cpp
     test_mesh_lod.cpp
@@ -75,6 +76,7 @@ add_executable(kke_tests
     test_input_devices.cpp
     test_floating_bodies.cpp
     test_audio.cpp
+    test_engine_sound.cpp
     test_footsteps.cpp
     test_room_acoustics.cpp
     test_wav_file.cpp

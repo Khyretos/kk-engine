@@ -75,6 +75,10 @@ public:
     bool talking() const { return m_talking; }         // sending this frame
     bool speaking(uint8_t playerId) const;             // heard in the last 0.3 s
     void mute(uint8_t playerId, bool muted);
+    // Voice chat off for this player: nothing is sent (the microphone's
+    // sound is dropped) and nobody is heard, until it's turned back on.
+    void setEnabled(bool on);
+    bool enabled() const { return m_enabled; }
     bool muted(uint8_t playerId) const { return m_muted.count(playerId) != 0; }
     void setVolume(uint8_t playerId, float gain);
     float inputLevelDb() const { return m_vad.levelDb(); }
@@ -114,6 +118,7 @@ private:
     std::unique_ptr<Capture> m_capture;
     bool m_captureRunning = false;
     std::string m_captureName = "none";
+    bool m_enabled = true;
     AudioStreamHandle m_captured = std::make_shared<AudioStream>(voice::kSampleRate); // mic -> game thread
     std::unique_ptr<voice::VoiceEncoder> m_encoder;
     std::unique_ptr<voice::VoiceCleaner> m_cleaner;

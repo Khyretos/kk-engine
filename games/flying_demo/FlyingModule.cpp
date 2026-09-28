@@ -11,6 +11,7 @@
 #include "kke/ImpactSynth.h"
 #include "kke/Log.h"
 #include "kke/Mood.h"
+#include "kke/ParticleEffects.h"
 #include "kke/SphereImpostors.h"
 #include "kke/Viewports.h"
 #include "kke/modules/AudioModule.h"
@@ -36,6 +37,7 @@ constexpr float kCountdown = 3.0f;      // s of 3, 2, 1
 constexpr float kRespawn = 2.5f;        // s down after a crash
 constexpr float kLost = 45.0f;          // s without a ring: a CPU pilot is put back on the course
 constexpr float kFarOut = 4200.0f;      // m from the middle: turned back to the island
+constexpr float kShieldTime = 3.0f;     // s: Dogfight, bullets don't hurt a plane just back
 constexpr float kMaxStep = 1.0f / 120.0f;
 constexpr int kSampleRate = 48000;
 
@@ -83,6 +85,7 @@ void FlyingModule::init(kke::Application& app) {
     if (m_lobby) m_lobby->setFlightSticks(true); // a flight stick's trigger joins too
 
     loadArt();
+    m_fx = std::make_unique<kke::ParticleEffects>(app);
     setupLobby();
     setupNet();
     readSettings();
@@ -112,6 +115,10 @@ void FlyingModule::shutdown() {
     if (m_audio && m_engineVoice) m_audio->mixer().stop(m_engineVoice);
     for (Pilot& p : m_pilots) removeArt(p);
     m_pilots.clear();
+    for (kke::ModelModule::InstanceId h : m_houses) m_models->remove(h);
+    m_houses.clear();
+    m_chunkMeshes.clear();
+    m_fx.reset();
 }
 
 void FlyingModule::readSettings() {
@@ -121,6 +128,7 @@ void FlyingModule::readSettings() {
         kke::Lobby& l = m_lobby->lobby();
         if (const kke::Lobby::Option* o = l.option("laps")) m_laps = o->value + 1;
         if (const kke::Lobby::Option* o = l.option("rings")) m_ringRadius = o->value == 0 ? 18.0f : o->value == 2 ? 10.0f : 14.0f;
+        if (const kke::Lobby::Option* o = l.option("kills")) m_killsToWin = o->value == 0 ? 5 : o->value == 2 ? 20 : 10;
     }
     m_ringCount = 10;
 }
@@ -156,6 +164,7 @@ void FlyingModule::newFlight() {
         m_island = Island(m_seed);
         buildWorld();
     }
+    if (!m_townBuilt || m_townSeed != m_seed || m_townDistrict != (m_mode == Mode::Dogfight)) buildTown();
     if (m_builtSeed != m_seed || m_builtRadius != m_ringRadius || m_builtRings != m_ringCount) {
         m_builtSeed = m_seed;
         m_builtRadius = m_ringRadius;
@@ -179,8 +188,25 @@ void FlyingModule::newFlight() {
         p.stickThrottle = -2.0f;
         p.eyeSet = false;
         p.smoke = m_mode == Mode::Stunts;
+        p.health = 100.0f;
+        p.shield = 0.0f;
+        p.bumpCooldown = 0.0f;
+        p.lastBy = -1;
+        p.downCause = 0;
+        p.kills = p.deaths = 0;
+        p.firing = false;
+        p.gunCooldown = 0.0f;
+        p.target = -1;
+        p.owed = 0.0f;
+        p.wasDown = false;
+        clearDents(p);
         if (!p.remote) placeAtStart(p);
+        p.previous = p.remote ? p.net.position : p.plane.position;
     }
+    m_bullets.clear();
+    m_fireballs.clear();
+    m_chunks.clear();
+    if (m_fx) m_fx->clear();
     m_clock = 0.0f;
     m_countdown = kCountdown;
     m_phase = m_phase == Phase::Lobby ? Phase::Lobby : Phase::Countdown;
@@ -189,33 +215,21 @@ void FlyingModule::newFlight() {
     ++m_round;
 }
 
-// Race and Stunts: in the air, two by two behind the first ring. Free
-// flight: on the runway, engines idling (CPU pilots already up).
+// Every mode starts on the runway, two by two, engines idling: full
+// throttle, and at take-off speed the plane lifts off by itself. Behind
+// the start menu the planes are already up, flying round the island.
 void FlyingModule::placeAtStart(Pilot& p) {
-    const glm::vec3 up(0.0f, 1.0f, 0.0f);
-    if (m_mode == Mode::Free && !p.cpu && !p.autopilotOn) {
+    p.climbOut = false;
+    if (m_phase != Phase::Lobby) {
         const Runway& r = m_island.runway();
         const int row = p.slot / 2, side = p.slot % 2 == 0 ? -1 : 1;
-        const glm::vec3 at = r.start + glm::vec3(static_cast<float>(side) * 7.0f, 0.0f, static_cast<float>(row) * 30.0f - 20.0f);
+        const float apart = std::max(7.0f, m_shape.bound + 1.0f); // wing tips clear of the next plane's
+        const glm::vec3 at = r.start + glm::vec3(static_cast<float>(side) * apart, 0.0f, -18.0f - static_cast<float>(row) * 28.0f);
         p.plane = parked(at, 0.0f, m_flight);
         p.controls.throttle = 0.0f;
+        p.climbOut = true;
         return;
     }
-    if (m_mode == Mode::Race && !m_rings.empty()) {
-        const Ring& first = m_rings.front();
-        glm::vec3 dir = first.normal;
-        dir.y = 0.0f;
-        dir = glm::length(dir) > 0.01f ? glm::normalize(dir) : glm::vec3(0.0f, 0.0f, -1.0f);
-        const glm::vec3 side = glm::normalize(glm::cross(dir, up));
-        const int row = p.slot / 2;
-        const float lateral = (p.slot % 2 == 0 ? -1.0f : 1.0f) * 22.0f;
-        glm::vec3 at = first.center - dir * (320.0f + 70.0f * static_cast<float>(row)) + side * lateral;
-        at.y = std::max(first.center.y + 6.0f * static_cast<float>(p.slot % 3), m_island.surface(at.x, at.z) + 70.0f);
-        p.plane = airborne(at, yawToward(first.center - at), 52.0f);
-        p.controls.throttle = 0.75f;
-        return;
-    }
-    // Stunts (and CPU pilots in free flight): spread round the island, high up.
     const float a = static_cast<float>(p.slot) / 6.0f * glm::two_pi<float>();
     glm::vec3 at(std::cos(a) * 700.0f, 0.0f, std::sin(a) * 700.0f);
     at.y = std::max(260.0f, m_island.surface(at.x, at.z) + 200.0f);
@@ -227,6 +241,14 @@ void FlyingModule::placeAtStart(Pilot& p) {
 // above where it went down, heading for the middle of the island.
 void FlyingModule::respawn(Pilot& p) {
     p.respawnIn = 0.0f;
+    p.health = 100.0f;
+    p.bumpCooldown = 0.0f;
+    p.lastBy = -1;
+    p.downCause = 0;
+    p.firing = false;
+    p.climbOut = false;
+    p.target = -1;
+    clearDents(p);
     p.autopilot.reset();
     p.trail.points.clear();
     p.controls = Controls{};
@@ -246,6 +268,30 @@ void FlyingModule::respawn(Pilot& p) {
         at.y = std::max(at.y, m_island.surface(at.x, at.z) + 40.0f);
         p.plane = airborne(at, yawToward(next.center - at), 50.0f);
         p.sinceRing = 0.0f;
+        p.previous = p.plane.position;
+        return;
+    }
+    if (m_mode == Mode::Dogfight) {
+        // Round the town, high, where the nearest enemy is furthest away;
+        // a moment of shield.
+        const glm::vec3 c = m_town.centre();
+        glm::vec3 best = c + glm::vec3(900.0f, 120.0f, 0.0f);
+        float bestGap = -1.0f;
+        for (int k = 0; k < 8; ++k) {
+            const float a = static_cast<float>(k) / 8.0f * glm::two_pi<float>();
+            glm::vec3 at = c + glm::vec3(std::cos(a) * 850.0f, 0.0f, std::sin(a) * 850.0f);
+            at.y = std::max(c.y + 120.0f, m_island.surface(at.x, at.z) + 150.0f);
+            float gap = 1e9f;
+            for (const Pilot& o : m_pilots)
+                if (&o != &p && !down(o) && present(o)) gap = std::min(gap, glm::length((o.remote ? o.net.position : o.plane.position) - at));
+            if (gap > bestGap) {
+                bestGap = gap;
+                best = at;
+            }
+        }
+        p.plane = airborne(best, yawToward(c - best), 55.0f);
+        p.shield = kShieldTime;
+        p.previous = p.plane.position;
         return;
     }
     glm::vec3 at = p.plane.position;
@@ -253,6 +299,7 @@ void FlyingModule::respawn(Pilot& p) {
     if (out > kFarOut * 0.8f) at *= (kFarOut * 0.6f) / out;
     at.y = std::max(at.y, m_island.surface(at.x, at.z) + 180.0f);
     p.plane = airborne(at, yawToward(-at), 50.0f);
+    p.previous = p.plane.position;
 }
 
 void FlyingModule::crash(Pilot& p) {
@@ -262,9 +309,13 @@ void FlyingModule::crash(Pilot& p) {
     p.smoke = m_mode == Mode::Stunts ? p.smoke : false;
     if (m_mode == Mode::Stunts) p.stunts.crashed();
     p.trick.clear();
-    if (m_audio) m_audio->playImpact(p.plane.position, 0, 1.0f, static_cast<uint32_t>(p.slot * 97 + p.crashes), 1.4f);
-    if (!p.cpu) kke::log::get(name())->info("{} crashed at ({:.0f}, {:.0f}, {:.0f}), {:.0f} m/s", p.name, p.plane.position.x, p.plane.position.y,
-                                            p.plane.position.z, glm::length(p.plane.velocity));
+    p.health = 0.0f;
+    p.firing = false;
+    explode(p.plane.position, p.plane.velocity, p.tint);
+    if (!p.cpu) kke::log::get(name())->info("{} {} at ({:.0f}, {:.0f}, {:.0f}), {:.0f} m/s", p.name,
+                                            p.downCause == 1 ? "was shot down" : p.downCause == 2 ? "collided" : "crashed", p.plane.position.x,
+                                            p.plane.position.y, p.plane.position.z, glm::length(p.plane.velocity));
+    wentDown(p);
 }
 
 void FlyingModule::passRings(Pilot& p, const glm::vec3& from) {
@@ -300,6 +351,10 @@ int FlyingModule::score(const Pilot& p) const { return p.remote ? static_cast<in
 
 float FlyingModule::progress(const Pilot& p) const {
     if (m_mode == Mode::Stunts) return static_cast<float>(score(p));
+    if (m_mode == Mode::Dogfight) {
+        const int kills = p.remote ? p.net.kills : p.kills, deaths = p.remote ? p.net.deaths : p.deaths;
+        return static_cast<float>(kills) * 1000.0f - static_cast<float>(deaths);
+    }
     const int n = std::max(1, static_cast<int>(m_rings.size()));
     const bool finished = p.remote ? p.net.finished : p.finished;
     if (finished) return 1e9f - (p.remote ? p.net.finishTime : p.finishTime);
@@ -321,6 +376,12 @@ int FlyingModule::place(const Pilot& p) const {
 // Stunts: the time is up.
 bool FlyingModule::everyoneDone() const {
     if (m_mode == Mode::Stunts) return m_clock >= m_stuntTime;
+    if (m_mode == Mode::Dogfight) {
+        if (m_clock >= m_dogfightTime) return true;
+        for (const Pilot& p : m_pilots)
+            if ((p.remote ? p.net.kills : p.kills) >= m_killsToWin) return true;
+        return false;
+    }
     if (m_mode != Mode::Race) return false;
     bool anyLocal = false, localDone = true, allDone = true;
     for (const Pilot& p : m_pilots) {
@@ -341,6 +402,7 @@ void FlyingModule::updatePilot(Pilot& p, float dt) {
         if (p.respawnIn <= 0.0f) respawn(p);
         return;
     }
+    p.previous = p.plane.position;
     const bool frozen = m_phase == Phase::Countdown;
     const bool paused = m_pauseSeat >= 0 && p.seat == m_pauseSeat;
     // In the pause menu online (the flight goes on), the CPU pilot flies
@@ -375,6 +437,7 @@ void FlyingModule::updatePilot(Pilot& p, float dt) {
         crash(p);
         return;
     }
+    if (p.climbOut && !p.plane.onGround && clearance > 60.0f) p.climbOut = false;
     p.sinceRing += dt;
     // A CPU pilot lost for too long (a ring it keeps missing): back on the course.
     if (p.cpu && m_mode == Mode::Race && !p.finished && p.sinceRing > kLost) {
@@ -485,7 +548,7 @@ void FlyingModule::updateLobby(float dt) {
         same = roster[i].seat == m_pilots[i].seat && roster[i].tint == m_pilots[i].tint && roster[i].livery == m_pilots[i].livery &&
                roster[i].name == m_pilots[i].name && roster[i].skill == m_pilots[i].skill;
     readSettings();
-    if (!same || m_island.seed() != m_seed || m_builtRadius != m_ringRadius) {
+    if (!same || m_island.seed() != m_seed || m_builtRadius != m_ringRadius || m_townDistrict != (m_mode == Mode::Dogfight)) {
         if (!same) buildPilots(roster);
         newFlight();
     }
@@ -538,7 +601,7 @@ void FlyingModule::startFromLobby() {
     m_phase = Phase::Countdown;
     newFlight();
     m_phase = Phase::Countdown;
-    const char* modes[] = { "race", "stunts", "free flight" };
+    const char* modes[] = { "race", "stunts", "free flight", "dogfight" };
     int here = 0, online = 0, cpus = 0;
     for (const Pilot& p : m_pilots) {
         if (p.remote) ++online;
@@ -566,6 +629,7 @@ void FlyingModule::update(const kke::UpdateContext& ctx) {
     if (m_phase == Phase::Lobby) {
         // The start menu (or, online, waiting for the host's flight).
         if (m_lobby) updateLobby(dt);
+        updateEffects(dt);
         rebuildTrails();
         updateEngineSound(dt);
         updateHud(dt);
@@ -604,11 +668,23 @@ void FlyingModule::update(const kke::UpdateContext& ctx) {
             m_clock += dt;
         }
         for (Pilot& p : m_pilots) updatePilot(p, dt);
+        collide(dt);
+        m_gunsHere = false;
+        for (Pilot& p : m_pilots) {
+            if (p.remote) p.firing = p.net.firing;
+            fireGuns(p, dt);
+        }
+        updateBullets(dt);
+        sendOwed(dt);
+        updateEffects(dt);
         if (m_phase == Phase::Flying && everyoneDone()) {
             m_phase = Phase::Results;
             if (m_audio) m_audio->playEarcon(kke::Earcon::ToggleOn, 0.8f);
             if (m_mode == Mode::Stunts)
                 for (const Pilot& p : m_pilots) kke::log::get(name())->info("{}: {} points", p.name, score(p));
+            if (m_mode == Mode::Dogfight)
+                for (const Pilot& p : m_pilots)
+                    kke::log::get(name())->info("{}: {} kills, {} deaths", p.name, p.remote ? p.net.kills : p.kills, p.remote ? p.net.deaths : p.deaths);
         }
         m_flashTime = std::max(0.0f, m_flashTime - dt);
     }
@@ -682,8 +758,11 @@ void FlyingModule::update(const kke::UpdateContext& ctx) {
                                             m_mode == Mode::Race ? "lap " + std::to_string((p.remote ? p.net.lap : p.lap) + 1) + " ring " +
                                                                        std::to_string((p.remote ? p.net.nextRing : p.nextRing) + 1) +
                                                                        ((p.remote ? p.net.finished : p.finished) ? " (finished)" : "") + (p.remote ? " (online)" : "")
-                                            : m_mode == Mode::Stunts ? std::to_string(score(p)) + " points"
-                                                                     : std::string(p.plane.onGround ? "on the ground" : "flying"));
+                                            : m_mode == Mode::Stunts   ? std::to_string(score(p)) + " points"
+                                            : m_mode == Mode::Dogfight ? std::to_string(p.remote ? p.net.kills : p.kills) + " kills, " +
+                                                                             std::to_string(p.remote ? p.net.deaths : p.deaths) + " deaths, health " +
+                                                                             std::to_string(static_cast<int>(p.remote ? p.net.health : p.health))
+                                                                       : std::string(p.plane.onGround ? "on the ground" : "flying"));
             }
         }
         if (m_runTime >= m_quitAfter) {
@@ -701,6 +780,13 @@ void FlyingModule::update(const kke::UpdateContext& ctx) {
 void FlyingModule::render(const kke::RenderContext& ctx) {
     if (m_sea) m_sea->draw(ctx, glm::mat4(1.0f), 0.1f, 0.15f);
     if (m_terrain) m_terrain->draw(ctx);
+    if (m_townMesh) m_townMesh->draw(ctx, glm::mat4(1.0f), 0.05f, 0.7f);
+    // Bits of planes that went down.
+    for (const Chunk& c : m_chunks) {
+        if (c.mesh < 0 || c.mesh >= static_cast<int>(m_chunkMeshes.size())) continue;
+        const glm::mat4 m = glm::translate(glm::mat4(1.0f), c.position) * glm::rotate(glm::mat4(1.0f), c.angle, c.axis) * glm::scale(glm::mat4(1.0f), glm::vec3(c.size));
+        m_chunkMeshes[static_cast<size_t>(c.mesh)]->draw(ctx, m, 0.3f, 0.6f);
+    }
     if (m_mode == Mode::Race && m_phase != Phase::Lobby && m_ringMesh) {
         m_ringMesh->draw(ctx, glm::mat4(1.0f), 0.6f, 0.3f);
         // Each local player's next ring, gold.
@@ -721,27 +807,21 @@ void FlyingModule::render(const kke::RenderContext& ctx) {
     for (const Pilot& p : m_pilots) {
         const glm::vec3 at = p.remote ? p.net.position : p.plane.position;
         const glm::quat rot = p.remote ? p.drawnRotation : p.plane.rotation;
-        if (down(p)) {
-            // A few chunks where it went down.
-            if (!m_debris) continue;
-            for (int i = 0; i < 5; ++i) {
-                const float a = static_cast<float>(i) * 1.3f + static_cast<float>(p.slot);
-                const glm::vec3 off(std::cos(a) * 2.5f, 0.3f * static_cast<float>(i % 2), std::sin(a) * 2.5f);
-                const glm::mat4 m = glm::translate(glm::mat4(1.0f), at + off) * glm::rotate(glm::mat4(1.0f), a, glm::vec3(0.3f, 1.0f, 0.2f)) *
-                                    glm::scale(glm::mat4(1.0f), glm::vec3(1.2f - 0.15f * static_cast<float>(i)));
-                m_debris->draw(ctx, m);
-            }
-            continue;
-        }
+        if (down(p) || !present(p)) continue; // in bits (m_chunks), or not heard from yet
         if (p.blockPlane) p.blockPlane->draw(ctx, glm::translate(glm::mat4(1.0f), at) * glm::mat4_cast(rot), 0.2f, 0.45f);
     }
     if (m_smoke && !m_puffs.empty()) m_smoke->draw(ctx, m_puffs);
 }
 
+void FlyingModule::renderTranslucent(const kke::RenderContext& ctx) {
+    if (m_fx) m_fx->draw(ctx);
+}
+
 void FlyingModule::renderShadow(const kke::ShadowRenderContext& ctx) {
     if (m_terrain) m_terrain->drawShadow(ctx);
+    if (m_townMesh) m_townMesh->drawShadow(ctx);
     for (const Pilot& p : m_pilots) {
-        if (!p.blockPlane || down(p)) continue;
+        if (!p.blockPlane || down(p) || !present(p)) continue;
         const glm::vec3 at = p.remote ? p.net.position : p.plane.position;
         const glm::quat rot = p.remote ? p.drawnRotation : p.plane.rotation;
         p.blockPlane->drawShadow(ctx, glm::translate(glm::mat4(1.0f), at) * glm::mat4_cast(rot));

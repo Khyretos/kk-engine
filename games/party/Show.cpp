@@ -44,6 +44,7 @@ int pointsFor(int place, int count) {
 }
 
 void Show::start(const std::vector<std::string>& all, int roundCount, int beans, uint32_t seed, bool shuffle) {
+    pool = all;
     playlist = all;
     if (shuffle) {
         Rng rng(seed);
@@ -60,6 +61,52 @@ const std::string& Show::current() const {
     static const std::string none;
     if (playlist.empty()) return none;
     return playlist[static_cast<size_t>(round) % playlist.size()];
+}
+
+std::vector<std::string> Show::candidates(int count, uint32_t seed) const {
+    std::vector<std::string> fresh, rest;
+    const std::string last = round > 0 ? playlist[static_cast<size_t>(round - 1) % playlist.size()] : std::string();
+    for (const std::string& g : pool) {
+        bool played = false;
+        for (int r = 0; r < round && r < static_cast<int>(playlist.size()); ++r) played = played || playlist[static_cast<size_t>(r)] == g;
+        (played ? rest : fresh).push_back(g);
+    }
+    Rng rng(seed);
+    auto shuffle = [&rng](std::vector<std::string>& v) {
+        for (size_t i = v.size(); i > 1; --i) std::swap(v[i - 1], v[static_cast<size_t>(rng.below(static_cast<int>(i)))]);
+    };
+    shuffle(fresh);
+    shuffle(rest);
+    // The one just played goes last: only picked when there's nothing else.
+    std::stable_partition(rest.begin(), rest.end(), [&last](const std::string& g) { return g != last; });
+    std::vector<std::string> out = fresh;
+    for (const std::string& g : rest)
+        if (g != last || pool.size() <= 1) out.push_back(g);
+    if (out.size() > static_cast<size_t>(std::max(0, count))) out.resize(static_cast<size_t>(std::max(0, count)));
+    return out;
+}
+
+void Show::choose(const std::string& game) {
+    if (game.empty()) return;
+    // The playlist holds every round's game from here on (voting picks each one).
+    if (playlist.size() <= static_cast<size_t>(round)) {
+        const std::vector<std::string> base = playlist.empty() ? pool : playlist;
+        while (playlist.size() <= static_cast<size_t>(round) && !base.empty()) playlist.push_back(base[playlist.size() % base.size()]);
+    }
+    if (static_cast<size_t>(round) < playlist.size()) playlist[static_cast<size_t>(round)] = game;
+}
+
+int tally(const std::vector<int>& votes, int choices, uint32_t seed) {
+    if (choices <= 0) return -1;
+    std::vector<int> count(static_cast<size_t>(choices), 0);
+    for (int v : votes)
+        if (v >= 0 && v < choices) ++count[static_cast<size_t>(v)];
+    const int most = *std::max_element(count.begin(), count.end());
+    std::vector<int> best;
+    for (int c = 0; c < choices; ++c)
+        if (count[static_cast<size_t>(c)] == most) best.push_back(c);
+    Rng rng(seed);
+    return best[static_cast<size_t>(rng.below(static_cast<int>(best.size())))];
 }
 
 std::vector<int> Show::score(const std::vector<RoundResult>& results) {

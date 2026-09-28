@@ -268,10 +268,24 @@ built from blocks when the pack is missing.
 - Soldiers on both sides: the UAL mannequin
   (`assets/animations/UAL1_Standard.fbx`).
 
+## Party (`games/party`)
+
+Not a scene: the packs only give the start menu's Body row its people;
+without them everyone is a bean.
+
+- **POLYGON City Characters**: `SK_Character_Jock`,
+  `SK_Character_Tourist`, `SK_Character_FireFighter`,
+  `SK_Character_Paramedic`, `SK_Character_Grandpa`,
+  `SK_Character_Grandma`, `SK_Character_HipsterGirl`,
+  `SK_Character_PunkGuy`, `SK_Character_SummerGirl`,
+  `SK_Character_Roadworker`, `SK_Character_Hotdog`.
+- Their animation: the UAL mannequin's clips
+  (`assets/animations/UAL1_Standard.fbx`), retargeted.
+
 ## Flying (`games/flying_demo`)
 
-Not a scene file: the island, trees, hangar, tower, rings and smoke are
-built in code from the island's seed.
+Not a scene file: the island, trees, hangar, tower, office towers, rings,
+smoke and explosions are built in code from the island's seed.
 
 - The planes: **POLYGON Stunt Plane**, `SM_Veh_Plane_Stunt_01`
   (`SourceFiles/FBX/`), split by mesh name into the body, `_Prop`,
@@ -279,6 +293,10 @@ built in code from the island's seed.
   `_Flap_Tail`, `_Cockpit_Stick`, `_Glass` and `_Wheels`
   (`_Crop_Duster` is left out). Paint jobs: `Polygon_Plane_Texture_01`
   to `_04`. Without the pack the planes are built from boxes.
+- Dogfight's houses (optional): **POLYGON Town**,
+  `SM_Bld_House_Preset_01` to `_11`, `SM_Bld_Shop_01` to `_03` and
+  `SM_Bld_Church_01`, loaded the first time a dogfight starts. Without
+  the pack the houses are boxes.
 
 ## Racing (`games/racing`)
 
@@ -303,7 +321,7 @@ and the props placed along them, well clear of the road.
 
 ## Demos that use no packs
 
-These run the same with or without any asset pack: `climb_race`, `party`, `tennis`,
+These run the same with or without any asset pack: `climb_race`, `tennis`,
 `procedural_demo`, `physics_demo`, `melt_demo`, `sea_demo`, `audio_demo`,
 `rmlui_demo`, `imgui_demo`, `kke_basics`, `starter_game` and `cookbook`.
 `kke_demo` dresses its course with the art listed under "Showcase course

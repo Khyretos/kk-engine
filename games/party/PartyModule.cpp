@@ -9,6 +9,7 @@
 #include "kke/Log.h"
 #include "kke/SphereImpostors.h"
 #include "kke/modules/AudioModule.h"
+#include "kke/modules/DemoPanelModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
 #include "kke/modules/NetModule.h"
@@ -22,6 +23,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <typeindex>
 
 namespace party {
@@ -48,6 +50,7 @@ std::vector<kke::ModuleDependency> PartyModule::dependencies() const {
              { std::type_index(typeid(kke::LobbyModule)), false, "the start menu: players join, dress their bean, set the CPU beans" },
              { std::type_index(typeid(kke::NetModule)), false, "online parties: Host / Join in the start menu" },
              { std::type_index(typeid(kke::VoiceModule)), false, "voice chat with everyone in the party" },
+             { std::type_index(typeid(kke::DemoPanelModule)), false, "the pause menu: back to the start menu, voice chat, mutes" },
              { std::type_index(typeid(kke::AudioModule)), false, "bumps, glass, fire and the show's tones, synthesised" } };
 }
 
@@ -85,8 +88,10 @@ void PartyModule::init(kke::Application& app) {
     app.camera().farPlane = 300.0f;
     app.window().setQuitOnEscape(false); // Esc frees the mouse
     buildStage();
+    m_people.init(app);
     setupLobby();
     setupNet();
+    setupPause();
     buildBeans(wantedRoster());
     buildHud();
     if (!m_lobby || !m_lobby->isOpen()) startParty();
@@ -205,16 +210,18 @@ void PartyModule::buildStage() {
 std::vector<std::string> PartyModule::chosenGames() const {
     std::vector<std::string> out;
     if (!m_onlyGame.empty()) return { m_onlyGame };
-    const kke::Lobby::Option* o = m_lobby ? m_lobby->lobby().option("games") : nullptr;
-    const int pick = o ? o->value : 0;
-    // 0 = every minigame, shuffled; then one each (practice).
-    if (pick > 0 && pick <= static_cast<int>(m_games.size())) return { m_games[static_cast<size_t>(pick - 1)]->id() };
+    const kke::Lobby::Option* mode = m_lobby ? m_lobby->lobby().option("mode") : nullptr;
+    const kke::Lobby::Option* game = m_lobby ? m_lobby->lobby().option("game") : nullptr;
+    // One game: that one; a party: every minigame (shuffled, or voted on).
+    if (mode && mode->value == 1 && game && game->value >= 0 && game->value < static_cast<int>(m_games.size()))
+        return { m_games[static_cast<size_t>(game->value)]->id() };
     for (const auto& g : m_games) out.push_back(g->id());
     return out;
 }
 
 int PartyModule::chosenRounds() const {
     if (m_forcedRounds > 0) return m_forcedRounds;
+    if (!m_onlyGame.empty() || m_oneGame) return 1;
     const kke::Lobby::Option* o = m_lobby ? m_lobby->lobby().option("rounds") : nullptr;
     static constexpr int kRounds[] = { 3, 5, 8 };
     return o ? kRounds[std::clamp(o->value, 0, 2)] : 5;
@@ -237,13 +244,19 @@ void PartyModule::startParty() {
         m_input->setPlayers(1);
     }
     m_rosterChanged = false;
+    const kke::Lobby::Option* mode = m_lobby ? m_lobby->lobby().option("mode") : nullptr;
+    const kke::Lobby::Option* pick = m_lobby ? m_lobby->lobby().option("pick") : nullptr;
+    m_oneGame = !m_onlyGame.empty() || (mode && mode->value == 1);
+    m_byVote = !m_oneGame && pick && pick->value == 1;
+    if (const char* v = kke::dev::env("KKE_PARTY_VOTE")) m_byVote = !m_oneGame && std::strcmp(v, "0") != 0;
     const std::vector<std::string> games = chosenGames();
     ++m_seed;
     m_show.start(games, chosenRounds(), static_cast<int>(m_beans.size()), m_seed, games.size() > 1);
     kke::log::get(name())->info("party: {} beans ({} playing here), {} rounds: {}", m_beans.size(),
                                 std::count_if(m_beans.begin(), m_beans.end(), [](const Bean& b) { return b.seat >= 0; }), m_show.rounds,
-                                fmt::join(m_show.playlist, ", "));
-    loadRound();
+                                m_byVote ? std::string("picked by vote") : fmt::format("{}", fmt::join(m_show.playlist, ", ")));
+    if (m_byVote) openVote();
+    else loadRound();
 }
 
 void PartyModule::loadRound() {
@@ -330,8 +343,16 @@ void PartyModule::endRound() {
 
 void PartyModule::nextRound() {
     m_show.next();
-    if (m_show.over()) showPodium();
-    else loadRound();
+    if (!m_show.over()) {
+        if (m_byVote) openVote();
+        else loadRound();
+    } else if (m_oneGame && !online()) {
+        // One game: no podium; jump (or the clock) plays it again, the menu button goes back.
+        m_show.start(m_show.pool, 1, static_cast<int>(m_beans.size()), ++m_seed, false);
+        loadRound();
+    } else {
+        showPodium();
+    }
 }
 
 void PartyModule::showPodium() {
@@ -356,7 +377,7 @@ void PartyModule::showPodium() {
         const int p = places[static_cast<size_t>(order[k])];
         glm::vec3 feet = p < 3 && k < 3 ? steps[k] : at + glm::vec3((static_cast<float>(front) - static_cast<float>(rest - 1) * 0.5f) * 1.6f, 0.0f, 0.5f);
         if (!(p < 3 && k < 3)) ++front;
-        if (!b.remote) place(b, feet, 0.0f);
+        if (!b.remote) place(b, feet, 180.0f); // facing the camera
     }
     for (int k = 0; k < 3 && k < static_cast<int>(order.size()); ++k) burst(steps[k] + glm::vec3(0.0f, 1.5f, 0.0f), glm::vec3(1.0f, 0.85f, 0.3f), 60, 6.0f);
     const Bean& winner = m_beans[static_cast<size_t>(order.front())];
@@ -492,6 +513,7 @@ void PartyModule::checkFalls() {
 void PartyModule::update(const kke::UpdateContext& ctx) {
     const float dt = std::min(ctx.dt, 0.05f);
     m_clock += ctx.dt;
+    updatePause();
     kke::InputMap& p1 = m_input->map(0);
     if (p1.pressed("panels")) m_app->debugUi().setVisible(!m_app->debugUi().visible());
     updateNet(dt);
@@ -565,6 +587,7 @@ void PartyModule::update(const kke::UpdateContext& ctx) {
             else startParty();
         }
         break;
+    case Phase::Vote: updateVote(dt); break;
     case Phase::Lobby: break;
     }
 
@@ -572,6 +595,7 @@ void PartyModule::update(const kke::UpdateContext& ctx) {
     // think, then everyone moves (the minigame's rules may stop them).
     for (Bean& b : m_beans) {
         if (b.remote) continue;
+        if (m_phase == Phase::Vote) continue; // the stick and jump vote (updateVote)
         b.input = BeanInput{};
         const bool canMove = b.active && (m_phase == Phase::Play || m_phase == Phase::Intro || m_phase == Phase::Podium) && b.frozen <= 0.0f;
         if (b.bot) {
@@ -582,7 +606,7 @@ void PartyModule::update(const kke::UpdateContext& ctx) {
         }
         b.frozen = std::max(0.0f, b.frozen - dt);
     }
-    if (m_game && m_phase != Phase::Lobby && m_phase != Phase::Podium) m_game->update(*this, dt);
+    if (m_game && m_phase != Phase::Lobby && m_phase != Phase::Podium && m_phase != Phase::Vote) m_game->update(*this, dt);
     for (Bean& b : m_beans)
         if (!b.remote) moveBean(b, dt);
     bumpBeans(dt);
@@ -604,7 +628,7 @@ void PartyModule::update(const kke::UpdateContext& ctx) {
 }
 
 void PartyModule::render(const kke::RenderContext& ctx) {
-    if (m_phase == Phase::Lobby || m_phase == Phase::Podium) m_stageMesh->draw(ctx, glm::mat4(1.0f), 0.0f, 0.7f);
+    if (m_phase == Phase::Lobby || m_phase == Phase::Podium || m_phase == Phase::Vote) m_stageMesh->draw(ctx, glm::mat4(1.0f), 0.0f, 0.7f);
     m_level->draw(ctx, glm::mat4(1.0f), 0.0f, 0.75f);
     kke::RigidWorld& w = world();
     for (const Part& p : m_parts) {
@@ -622,7 +646,7 @@ void PartyModule::render(const kke::RenderContext& ctx) {
 }
 
 void PartyModule::renderShadow(const kke::ShadowRenderContext& ctx) {
-    if (m_phase == Phase::Lobby || m_phase == Phase::Podium) m_stageMesh->drawShadow(ctx);
+    if (m_phase == Phase::Lobby || m_phase == Phase::Podium || m_phase == Phase::Vote) m_stageMesh->drawShadow(ctx);
     m_level->drawShadow(ctx);
     kke::RigidWorld& w = world();
     for (const Part& p : m_parts) {

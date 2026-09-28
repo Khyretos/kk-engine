@@ -24,6 +24,10 @@ and what's next. Code: `kke/AudioMixer.h`, `kke/ImpactSynth.h`,
 - **3D.** Constant-power stereo pan, inverse-distance fall-off, a fade
   near the maximum distance, and a gentle high cut for sounds behind you
   (the cheapest front/back cue there is).
+- **Engines and tyres.** Cars sound like their engines without any
+  recordings (`kke::EngineSound`, below): a V8's burble, a buzzy four, a
+  screaming V10, rising through the revs, popping off the throttle, and
+  the tyres squeal when they slide.
 - **Footsteps.** The showcase character's feet make steps on whatever
   they land on (a ray under each foot finds the ground's material): soft
   when walking, harder when sprinting, one loud step per foot on landing.
@@ -295,6 +299,29 @@ by name (UE, Mixamo, Synty), casts a ray under each foot for the ground's
 material and calls `AudioModule::playFootstep`. The sound
 (`synthesizeFootstep`) is the ground's own modes struck softly (heel, then
 toe) plus a scuff of its noise: long for dirt, a tick on stone.
+
+### Engines and tyres
+
+`kke::EngineSound` (`kke/EngineSound.h`) synthesizes a car from its revs,
+throttle, tyre slide and speed, after Andy Farnell's engine model
+(*Designing Sound*, MIT Press 2010): every cylinder firing is a short
+pulse of pressure (revs/60 x cylinders/2 a second), each cylinder a
+little louder or softer and, for a cross-plane V8, a little early or late
+(the burble); the pulses ring the exhaust pipe (two resonant band-passes)
+and the block (a low-pass that opens with the throttle); intake noise
+pulses with the firings; off the throttle at high revs the pipe pops.
+The tyres are noise through a narrow wavering band-pass near 1 kHz, the
+square of the slide loud, plus a low road rumble with speed. Presets:
+`inline4()`, `inline6()`, `v8()`, `v10()`; every field in `Params` can be
+changed (cylinders, rev range, pipe resonance, lope, roughness,
+brightness, intake, pops).
+
+It writes mono samples: push them into a `kke::AudioStream` played by a
+spatial voice and move the voice with the car
+(`AudioMixer::setPosition`). games/racing/Sound.cpp gives the players'
+cars and the nearest others one each (8 at once), written 0.1 s ahead of
+the speakers. Tests: tests/test_engine_sound.cpp (it fires at the revs,
+throttle is louder, sliding squeals, the same seed is the same sound).
 
 ### FEMFX impacts
 

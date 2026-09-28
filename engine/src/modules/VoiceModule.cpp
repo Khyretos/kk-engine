@@ -127,6 +127,13 @@ void VoiceModule::shutdown() {
     clearSpeakers();
 }
 
+void VoiceModule::setEnabled(bool on) {
+    if (on == m_enabled) return;
+    m_enabled = on;
+    if (!on) clearSpeakers();
+    log::get(name())->info("Voice chat {}", on ? "on" : "off");
+}
+
 void VoiceModule::feedCapture(const float* samples, size_t count) { m_captured->push(samples, count); }
 
 bool VoiceModule::speaking(uint8_t playerId) const {
@@ -150,7 +157,7 @@ AudioStreamHandle VoiceModule::streamOf(uint8_t playerId) const {
 }
 
 void VoiceModule::onVoice(const net::VoiceMsg& m) {
-    if (m.speaker == kSelf) return; // not a real player id
+    if (m.speaker == kSelf || !m_enabled) return; // not a real player id / voice chat off
     if (!m_speakers.count(m.speaker)) log::get(name())->info("Hearing player {}", m.speaker);
     Speaker& s = m_speakers[m.speaker];
     if (auto v = m_volumes.find(m.speaker); v != m_volumes.end()) s.gain = v->second;
@@ -298,6 +305,13 @@ void VoiceModule::update(const UpdateContext& ctx) {
             m_tonePhase = std::fmod(m_tonePhase + 2.0 * 3.14159265358979 * m_toneHz / voice::kSampleRate, 2.0 * 3.14159265358979);
         }
         m_captured->push(tone.data(), tone.size());
+    }
+    if (!m_enabled) {
+        // Off: the microphone's sound goes nowhere (and doesn't pile up).
+        std::vector<float> drop(m_captured->buffered());
+        if (!drop.empty()) m_captured->read(drop.data(), drop.size());
+        m_talking = false;
+        return;
     }
     sendCaptured();
     playOut(ctx.dt);

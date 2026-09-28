@@ -18,7 +18,10 @@ namespace party {
 
 struct BeanLook {
     int colour = 0, pattern = 0, face = 0, hat = 0;
-    bool operator==(const BeanLook& o) const { return colour == o.colour && pattern == o.pattern && face == o.face && hat == o.hat; }
+    int body = 0;  // 0: a bean; 1..: a person (People::all(), when the pack is there)
+    bool operator==(const BeanLook& o) const {
+        return colour == o.colour && pattern == o.pattern && face == o.face && hat == o.hat && body == o.body;
+    }
     bool operator!=(const BeanLook& o) const { return !(*this == o); }
 };
 

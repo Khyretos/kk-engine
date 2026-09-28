@@ -2,6 +2,7 @@
 
 #include "Minigame.h"
 #include "NetParty.h"
+#include "People.h"
 
 #include "kke/Module.h"
 #include "kke/RigidWorld.h"
@@ -14,6 +15,7 @@
 
 namespace kke {
 class AudioModule;
+class DemoPanelModule;
 class DynamicMeshRenderer;
 class InputModule;
 class LobbyModule;
@@ -89,7 +91,9 @@ public:
     void event(int kind, int a, int b) override;
 
 private:
-    enum class Phase : uint8_t { Lobby, Intro, Countdown, Play, RoundOver, Results, Podium };
+    // Vote comes last so the numbers sent online stay the same.
+    enum class Phase : uint8_t { Lobby, Intro, Countdown, Play, RoundOver, Results, Podium, Vote };
+    static constexpr uint8_t kLastPhase = static_cast<uint8_t>(Phase::Vote);
 
     // The roster (Lobby.cpp): who plays, from the menu (and online).
     struct Entry {
@@ -110,6 +114,42 @@ private:
     void buildStage();       // the lobby's (and podium's) floor
     std::vector<std::string> chosenGames() const;
     int chosenRounds() const;
+    void updateModeRows();   // the menu shows Game or Rounds and Next game, for the Mode picked
+    void applyVoiceOption();
+
+    // The pause menu (Pause.cpp): back to the start menu, voice chat and mutes.
+    struct VoicePeer {
+        uint8_t id = 0;
+        std::string name;
+    };
+    std::vector<VoicePeer> voicePeers() const; // the other players online with a microphone
+    void setupPause();
+    void updatePause();
+    kke::DemoPanelModule* m_panel = nullptr;
+    bool m_voiceOn = true, m_muteShown = false;
+    int m_mutePick = 0;
+
+    // Picking the next game by vote (Vote.cpp).
+    struct VoteState {
+        uint8_t index = 0;                 // the show's round it's for
+        std::vector<std::string> games;    // the choices (Minigame ids)
+        std::vector<int> votes;            // per bean: its choice, -1 none yet
+        std::vector<int> cursor;           // per bean: where its player is pointing
+        std::vector<float> lastX;          // per bean: the stick, for its edges
+        std::vector<float> botAt;          // per bean: when a CPU votes
+        int winner = -1;
+        float left = 0.0f;                 // s until it closes
+        float decidedAt = -1.0f;           // m_phaseTime when it was decided
+    };
+    VoteState m_vote;
+    void openVote();
+    void updateVote(float dt);
+    void castVote(Bean& b, int choice);
+    void decideVote();
+    void sendVote();
+    void applyVote(const netparty::Vote& v);
+    void applyBallot(const netparty::Ballot& b);
+    void standOnStage();                   // everyone in a row on the stage (the vote)
 
     // Rounds (PartyModule.cpp).
     void loadRound();        // the show's current minigame: level, beans at the start
@@ -128,6 +168,7 @@ private:
     void bumpBeans(float dt);
     void animateBean(Bean& b, float dt);
     void drawBean(const Bean& b, const kke::RenderContext* ctx, const kke::ShadowRenderContext* shadow);
+    glm::mat4 bodyMatrix(const Bean& b); // where it's drawn: at its feet, turned, leaning, tumbling
     void ensureMesh(Bean& b);
     void park(Bean& b);      // out of the way (out, or a seat nobody plays)
     void updateCameras(float dt);
@@ -187,6 +228,8 @@ private:
     float m_playTime = 0.0f;               // s since GO
     uint32_t m_seed = 1, m_roundSeed = 1;
     Rng m_rng, m_botRng;
+    People m_people;
+    std::vector<int> m_bodyChoices; // the menu's Body row: choice -> BeanLook::body
     std::vector<Bean> m_beans;
     std::vector<int> m_roundPoints;        // what each bean got this round (the results screen)
     int m_finishOrder = 0, m_outOrder = 0;
@@ -198,6 +241,8 @@ private:
     float m_quitAfter = -1.0f, m_startAfter = -1.0f, m_clock = 0.0f;
     std::string m_onlyGame;                // KKE_PARTY_GAME
     int m_forcedRounds = 0;                // KKE_PARTY_ROUNDS
+    bool m_oneGame = false;                // this show is one game (Mode: One game)
+    bool m_byVote = false;                 // the players pick each game (Next game: Vote)
     bool m_rosterChanged = false;
     std::string m_mood;
 
@@ -219,11 +264,21 @@ private:
     struct RowHud {
         std::string place, name, accent, got, total, note;
     };
+    struct DotHud {
+        std::string colour;
+    };
+    struct ChoiceHud {
+        std::string title, goal, count, pointing; // pointing: this screen's players pointing at it
+        std::vector<DotHud> dots;                 // who voted for it, by colour
+        bool here = false, won = false;
+    };
     struct Hud {
         std::vector<PlayerHud> players;
         std::vector<RowHud> rows;          // results and podium
+        std::vector<ChoiceHud> choices;    // the vote
+        std::string voteClock;
         std::string banner, sub, hint, clock, status, round, title, goal, controls, talk;
-        bool show = false, card = false, table = false;
+        bool show = false, card = false, table = false, vote = false;
     };
     Hud m_hud;
     Rml::DataModelHandle m_hudModel;
