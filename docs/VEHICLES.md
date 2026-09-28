@@ -95,6 +95,13 @@ Contacts come through `RigidBodyModule::frameContacts()` like any body's
 (the chassis' `VehicleDesc::material` names it); the wheels are casts,
 not bodies, and report their ground in `VehicleWheelState::groundBody`.
 
+## Sound
+
+`kke::EngineSound` (docs/AUDIO.md "Engines and tyres") turns
+`VehicleState::rpm`, the throttle and the wheels' slip into an engine and
+squealing tyres, with no recordings: feed it every frame and play its
+samples from the car.
+
 ## Other machines' cars
 
 A car driven on another machine doesn't need a vehicle here: a kinematic

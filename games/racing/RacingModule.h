@@ -2,6 +2,8 @@
 
 #include "kke/Application.h"
 #include "kke/AssetCatalog.h"
+#include "kke/AudioMixer.h"
+#include "kke/EngineSound.h"
 #include "kke/Module.h"
 #include "kke/RigidWorld.h"
 #include "kke/Vehicle.h"
@@ -228,6 +230,21 @@ private:
     std::vector<std::unique_ptr<kke::DynamicMeshRenderer>> m_debrisMeshes; // a unit cube per colour used
     std::vector<glm::vec3> m_debrisColors;
     int debrisMesh(const glm::vec3& color);
+
+    // ---- engines and tyres (Sound.cpp)
+    void updateSounds(float dt);
+    void stopSounds();
+    struct EngineVoice {
+        kke::EngineSound synth;
+        std::shared_ptr<kke::AudioStream> stream;
+        uint32_t voice = 0; // mixer voice (0: not playing)
+        int car = -1;       // index in m_cars
+        int type = -1;      // the car type its synth is set up for
+        uint32_t seed = 0;
+    };
+    std::vector<EngineVoice> m_engines;
+    float m_engineAssign = 0.0f;
+    std::vector<float> m_engineScratch;
 
     // ---- the lobby (Lobby.cpp)
     void setupLobby();
