@@ -4,8 +4,8 @@
 # ignores .github/workflows while this folder exists.
 #
 # Differences from the GitHub version:
-# - Runs on pushes to main (arriving by mirror sync) and by hand; pull
-#   requests live on GitHub. A newer push cancels an older run.
+# - Runs nightly on main and by hand; pull requests and per-push checks
+#   live on GitHub.
 # - Artifact actions are Forgejo's own v4 ports.
 # - The Android SDK is installed by the job (the runner image lacks it).
 name: CI
@@ -23,8 +23,11 @@ name: CI
 # failure mail). Push CI runs for main only; PRs still run. A newer push
 # cancels an older run of the same ref that's still going.
 on:
-  push:
-    branches: [main]
+  # Nightly at 03:00 Amsterdam time (01:00 UTC in summer, 02:00 in winter):
+  # a full run takes about an hour here and main is pushed far more often,
+  # so building every push only produced cancelled runs.
+  schedule:
+    - cron: "0 1 * * *"
   workflow_dispatch:
 
 # On main a running build is never cancelled: threads push every few
