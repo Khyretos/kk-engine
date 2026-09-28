@@ -380,7 +380,11 @@ ball game: nothing about the ball streams. The hitter's machine sends the
 hit (where, velocity, spin) and every machine flies the same maths from
 the numbers as they come off the wire; the host is the umpire (Serve and
 Point events, each point numbered so a late hit is dropped) and sends
-its ball a few times a second only to put drift right.
+its ball a few times a second only to put drift right. Its sport center
+runs up to ten matches at once for everyone: each event names its match,
+the host's CPU players for all of them go in one event ten times a
+second, and a client at a court's gate asks the host, which keeps the
+queues (a Gate request, a Board reply).
 
 When a host quits, it tells every player ("the host ended the game")
 before it closes, so they log it as news, not the warning a lost

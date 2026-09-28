@@ -4,11 +4,11 @@
 // the wire, apart from the game code, so both ends read and write it the
 // same way (tests/test_tennis.cpp round-trips every message).
 //
-//   Each player a person plays is a network player (NetModule; a second
-//   person on the same screen is a local player in slot 1..); the host's
-//   CPU players are the host's local players too. Each machine runs its
-//   own players and sends where they are and how they swing
-//   (NetPlayerState, toState/fromState).
+//   Each person is a network player (NetModule; a second person on the
+//   same screen is a local player in slot 1..). Each machine runs its own
+//   people and sends where they are and how they swing (NetPlayerState,
+//   toState/fromState); the host's CPU players, as many as ten courts
+//   need, go ten times a second in one event (Cpus).
 //   The host is the umpire: its Setup says who plays where, its Serve
 //   starts each point and its Point ends it, with the umpire's result,
 //   which every machine applies to the same score.
@@ -24,6 +24,7 @@
 
 #include <glm/glm.hpp>
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -38,7 +39,13 @@ constexpr uint16_t kEventPoint = kEventBase + 2;    // host -> all: the umpire's
 constexpr uint16_t kEventHit = kEventBase + 3;      // hitter's machine -> host -> all (Hit)
 constexpr uint16_t kEventToss = kEventBase + 4;     // server's machine -> host -> all (Toss)
 constexpr uint16_t kEventBall = kEventBase + 5;     // host -> all, a few times a second: where the ball is (Ball)
-constexpr uint16_t kEventEnd = kEventBase + 6;      // host -> all: the match is off, back to the menu (End)
+constexpr uint16_t kEventEnd = kEventBase + 6;      // host -> all: a match is over or off (End)
+constexpr uint16_t kEventCpus = kEventBase + 7;     // host -> all, 10 times a second: where its CPU players are (Cpus)
+constexpr uint16_t kEventGate = kEventBase + 8;     // a client -> host: someone at a court's gate (Gate)
+constexpr uint16_t kEventBoard = kEventBase + 9;    // host -> all: the sport center's gates and wins (Board)
+
+constexpr size_t kMaxHistory = 1024; // points a Setup replays (a long best of three is ~250)
+constexpr size_t kMaxMatches = 16;   // matches in one Cpus event (the sport center has 10 courts)
 
 // A player as its machine sees it, enough for another to draw it.
 struct Pose {
@@ -56,7 +63,7 @@ kke::net::NetPlayerState toState(const Pose& p);
 Pose fromState(const kke::net::NetPlayerState& s);
 
 struct Seat {
-    uint8_t player = 0;           // network player id (the host's CPU players too)
+    uint8_t player = 0;           // network player id (0 for a CPU player)
     uint8_t team = 0, slot = 0;
     bool cpu = false;
     std::string name;
@@ -66,7 +73,10 @@ struct Setup {
     uint32_t match = 0;           // +1 each match the host starts
     uint8_t court = 0;
     uint8_t teamSize = 1, gamesPerSet = 4, setsToWin = 1;
-    std::vector<Seat> seats;
+    bool center = false;          // part of the sport center (else the one match everyone plays)
+    uint16_t point = 0;           // the point it's on (someone joining mid-match)
+    std::vector<uint8_t> history; // who won each point so far (0 / 1): the score, replayed
+    std::vector<Seat> seats;      // in the match's order (Hit and Toss name players by it)
 };
 std::vector<uint8_t> encode(const Setup& s);
 std::optional<Setup> decodeSetup(const std::vector<uint8_t>& bytes);
@@ -94,7 +104,7 @@ std::optional<Point> decodePoint(const std::vector<uint8_t>& bytes);
 struct Hit {
     uint32_t match = 0;
     uint16_t point = 0;
-    uint8_t player = 0;           // who hit it
+    uint8_t player = 0;           // who hit it: their place in the Setup's seats
     uint8_t shot = 0;             // the rally's shot number (0: the serve)
     bool serve = false;
     uint8_t kind = 0;             // ShotKind
@@ -110,7 +120,7 @@ std::optional<Hit> decodeHit(const std::vector<uint8_t>& bytes);
 struct Toss {
     uint32_t match = 0;
     uint16_t point = 0;
-    uint8_t player = 0;
+    uint8_t player = 0;           // the server's place in the Setup's seats
     glm::vec3 at{0.0f};           // court space
     glm::vec3 velocity{0.0f};
 };
@@ -128,11 +138,55 @@ std::vector<uint8_t> encode(const BallState& b);
 std::optional<BallState> decodeBall(const std::vector<uint8_t>& bytes);
 
 struct End {
-    uint32_t match = 0;
-    std::string why;              // "Juno left"
+    uint32_t match = 0;           // 0: all of them (the host left the sport center)
+    std::string why;              // "Juno left"; empty: it was played out
 };
 std::vector<uint8_t> encode(const End& e);
 std::optional<End> decodeEnd(const std::vector<uint8_t>& bytes);
+
+// The host's CPU players, court space (Court.h), a match at a time.
+struct CpuPose {
+    uint8_t player = 0;           // their place in the Setup's seats
+    glm::vec3 feet{0.0f};
+    glm::vec2 velocity{0.0f};     // x, z
+    float yaw = 0.0f;             // degrees, court space: 0 = +Z
+    SwingPose::Kind swing = SwingPose::Kind::Ready;
+    float swingT = -2.0f;
+    glm::vec3 contact{0.0f};
+    bool tossing = false, celebrating = false, cheer = true;
+};
+struct CpuMatch {
+    uint32_t match = 0;
+    std::vector<CpuPose> players;
+};
+struct Cpus {
+    std::vector<CpuMatch> matches;
+};
+std::vector<uint8_t> encode(const Cpus& c);
+std::optional<Cpus> decodeCpus(const std::vector<uint8_t>& bytes);
+
+// Someone at a court's gate, on a client: the host keeps the queues.
+struct Gate {
+    enum Action : uint8_t { Join = 0, Leave = 1, CpuNow = 2 };
+    uint8_t court = 0;
+    uint8_t player = 0;           // network player id
+    uint8_t action = Join;
+};
+std::vector<uint8_t> encode(const Gate& g);
+std::optional<Gate> decodeGate(const std::vector<uint8_t>& bytes);
+
+// The sport center as the host has it: whether it's on, who waits at each
+// gate, and the matches won.
+struct Board {
+    static constexpr size_t kCourts = 10;
+    static constexpr size_t kWins = 10;
+    bool center = false;
+    uint8_t waiting[kCourts] = {};
+    float countdown[kCourts] = {}; // s, < 0: none
+    std::vector<std::pair<std::string, uint16_t>> wins; // best first, up to kWins
+};
+std::vector<uint8_t> encode(const Board& b);
+std::optional<Board> decodeBoard(const std::vector<uint8_t>& bytes);
 
 // A player's colour as the "character" every player joins with ("#5aa6ff").
 std::string tintText(const glm::vec3& tint);

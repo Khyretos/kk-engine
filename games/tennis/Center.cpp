@@ -12,6 +12,7 @@
 #include "kke/Log.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
+#include "kke/modules/NetModule.h"
 #include "kke/modules/RigidBodyModule.h"
 
 #include <algorithm>
@@ -94,8 +95,11 @@ void TennisModule::enterCenter() {
     m_courtRest.fill(0.0f);
     // The people at this screen, on the promenade's middle.
     int n = 0;
-    for (const Entry& e : seatEntries())
-        if (!e.cpu) spawnWalker(e.name, e.tint, false, e.input, m_center.arrival(n++));
+    for (const Entry& e : netEntries()) {
+        if (e.cpu) continue;
+        spawnWalker(e.name, e.tint, false, e.input, m_center.arrival(n++));
+        m_walkers.back().netId = online() ? e.netId : -1;
+    }
     // The crowd, spread along the promenade.
     uint32_t dice = m_seed * 2654435761u + 7u;
     const float halfX = m_center.hallMax.x - 3.0f;
@@ -110,7 +114,8 @@ void TennisModule::enterCenter() {
                                 m_cpuMatches ? "yes" : "no");
     // CPU players start on the courts people don't walk up to first (the
     // two by the promenade's middle stay free while someone here plays).
-    if (m_cpuMatches)
+    if (netHost()) m_boardDirty = true;
+    if (m_cpuMatches && authority())
         for (int c = 0; c < SportCenter::kCourts; ++c)
             if (n == 0 || (c % SportCenter::kPerRow) != SportCenter::kPerRow / 2) startCpuMatch(c);
 }
@@ -134,13 +139,14 @@ void TennisModule::startCpuMatch(int court) {
     MatchRules rules = menuRules(want / 2);
     rules.gamesPerSet = std::min(rules.gamesPerSet, 2); // CPU matches are short: the court turns over
     rules.setsToWin = 1;
-    buildMatch(std::move(entries), rules, court);
+    Match* m = buildMatch(std::move(entries), rules, court);
     m_teams = teams;
+    if (netHost()) sendSetup(*m);
 }
 
 // People at the gate play: those waiting, then CPU players to make a
 // side each (or two).
-void TennisModule::startCourt(int court, bool cpuNow) {
+void TennisModule::startCourt(int court) {
     Gate& g = m_gates[static_cast<size_t>(court)];
     std::vector<Entry> entries;
     for (int wi : g.waiting) {
@@ -148,12 +154,13 @@ void TennisModule::startCourt(int court, bool cpuNow) {
         Entry e;
         e.name = w.name;
         e.tint = w.tint;
-        e.input = w.input;
+        e.input = w.remote ? -1 : w.input;
+        e.remote = w.remote;
+        e.netId = w.netId;
         e.walker = wi;
         entries.push_back(std::move(e));
     }
     if (entries.empty() || matchOn(court)) return;
-    (void)cpuNow;
     const size_t want = entries.size() > 2 ? 4 : 2;
     int cpuNumber = 0;
     while (entries.size() < want) {
@@ -166,8 +173,16 @@ void TennisModule::startCourt(int court, bool cpuNow) {
     }
     entries.resize(want);
     Match* m = buildMatch(std::move(entries), menuRules(static_cast<int>(want) / 2), court);
+    walkersOn(*m);
+    g = Gate{};
+    if (netHost()) sendSetup(*m);
+    m_boardDirty = true;
+}
+
+// The people in a match step off the promenade (their players take over).
+void TennisModule::walkersOn(const Match& m) {
     kke::RigidWorld& world = m_rigid->world();
-    for (int idx : m->players) {
+    for (int idx : m.players) {
         const Player& p = player(idx);
         if (p.walker < 0) continue;
         Walker& w = m_walkers[static_cast<size_t>(p.walker)];
@@ -177,7 +192,6 @@ void TennisModule::startCourt(int court, bool cpuNow) {
         w.body = 0;
         if (w.look) w.look->setVisible(false);
     }
-    g = Gate{};
 }
 
 void TennisModule::endCenterMatch(size_t matchIndex, int forfeitTeam) {
@@ -193,13 +207,20 @@ void TennisModule::endCenterMatch(size_t matchIndex, int forfeitTeam) {
             else ++it->second;
         }
     std::stable_sort(m_wins.begin(), m_wins.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+    if (netHost() && m.netId) m_net->sendEvent(net::kEventEnd, net::encode(net::End{ m.netId, {} }));
+    m_boardDirty = true;
+    closeMatch(matchIndex);
+}
+
+void TennisModule::closeMatch(size_t matchIndex) {
+    Match& m = *m_matches[matchIndex];
     // Whoever walked on walks off, at the gate.
     kke::RigidWorld& world = m_rigid->world();
     const glm::vec3 gate = gatePoint(m.court);
     int k = 0;
     for (int idx : m.players) {
         const Player& p = player(idx);
-        if (p.walker >= 0 && p.walker < static_cast<int>(m_walkers.size())) {
+        if (p.walker >= 0 && p.walker < static_cast<int>(m_walkers.size()) && !m_walkers[static_cast<size_t>(p.walker)].gone) {
             Walker& w = m_walkers[static_cast<size_t>(p.walker)];
             kke::RigidWorld::CharacterDesc cd;
             cd.radius = 0.3f;
@@ -207,6 +228,7 @@ void TennisModule::endCenterMatch(size_t matchIndex, int forfeitTeam) {
             cd.pushStrength = 0.0f;
             w.body = world.addCharacter(cd);
             world.teleportCharacter(w.body, gate + glm::vec3(static_cast<float>(k++) * 1.0f - 1.5f, 0.02f, 0.0f));
+            if (w.remote) world.setCharacterKinematic(w.body, true); // moved by what their machine sends
             w.playing = -1;
             w.cameraInit = false;
             if (w.look) w.look->setVisible(true);
@@ -218,6 +240,28 @@ void TennisModule::endCenterMatch(size_t matchIndex, int forfeitTeam) {
         if (w.cpu && w.court == m.court && w.doing == Walker::Doing::Watch) w.timer = std::min(w.timer, 1.0f + roll(w.dice) * 4.0f);
     m_courtRest[static_cast<size_t>(m.court)] = 0.0f;
     m_matches.erase(m_matches.begin() + static_cast<std::ptrdiff_t>(matchIndex));
+}
+
+void TennisModule::gateJoin(int walker, int court) {
+    Walker& w = m_walkers[static_cast<size_t>(walker)];
+    if (court < 0 || court >= SportCenter::kCourts || w.queued >= 0 || w.playing >= 0) return;
+    Gate& g = m_gates[static_cast<size_t>(court)];
+    // A court people play on is taken; CPU players make way.
+    if (const Match* on = matchOn(court))
+        for (int idx : on->players)
+            if (player(idx).walker >= 0) return;
+    if (g.waiting.size() >= 4) return;
+    g.waiting.push_back(walker);
+    w.queued = court;
+    m_boardDirty = true;
+}
+
+void TennisModule::gateLeave(int walker) {
+    Walker& w = m_walkers[static_cast<size_t>(walker)];
+    if (w.queued < 0) return;
+    std::erase(m_gates[static_cast<size_t>(w.queued)].waiting, walker);
+    w.queued = -1;
+    m_boardDirty = true;
 }
 
 void TennisModule::readWalker(Walker& w) {
@@ -232,7 +276,8 @@ void TennisModule::readWalker(Walker& w) {
 void TennisModule::stepCenter(float dt) {
     kke::RigidWorld& world = m_rigid->world();
     // Matches that are done: everyone off; CPU players give way to people.
-    for (size_t i = m_matches.size(); i-- > 0;) {
+    // (Online, the host decides; a client hears it as End.)
+    for (size_t i = authority() ? m_matches.size() : 0; i-- > 0;) {
         Match& m = *m_matches[i];
         bool people = false;
         for (int idx : m.players) people = people || player(idx).walker >= 0;
@@ -243,7 +288,7 @@ void TennisModule::stepCenter(float dt) {
     }
     for (size_t wi = 0; wi < m_walkers.size(); ++wi) {
         Walker& w = m_walkers[wi];
-        if (w.playing >= 0 || !w.body) continue;
+        if (w.playing >= 0 || !w.body || w.gone || w.remote) continue;
         if (w.cheer > 0.0f) w.cheer -= dt;
         if (w.cpu) {
             stepCrowd(w, dt);
@@ -254,7 +299,8 @@ void TennisModule::stepCenter(float dt) {
         const glm::vec3 fwd(std::sin(cy), 0.0f, std::cos(cy)), right(-std::cos(cy), 0.0f, std::sin(cy));
         if (m_autoplay) {
             // Tests (KKE_TENNIS_AUTOPLAY): walk to the free court's gate and play the CPU.
-            const int court = SportCenter::kPerRow / 2 + (static_cast<int>(wi) % 2) * SportCenter::kPerRow;
+            // (Online, by network id: two screens' first people go to different courts.)
+            const int court = SportCenter::kPerRow / 2 + ((w.netId >= 0 ? w.netId : static_cast<int>(wi)) % 2) * SportCenter::kPerRow;
             glm::vec3 to = gatePoint(court) - world.characterPosition(w.body);
             to.y = 0.0f;
             const float d = glm::length(to);
@@ -276,24 +322,33 @@ void TennisModule::stepCenter(float dt) {
         const glm::vec3 feet = world.characterPosition(w.body);
         const int gate = gateNear(feet);
         const int me = static_cast<int>(wi);
+        // Online, a client asks the host, who keeps the queues.
+        auto ask = [&](int court, uint8_t action) {
+            m_net->sendEvent(net::kEventGate, net::encode(net::Gate{ static_cast<uint8_t>(court), static_cast<uint8_t>(std::max(0, w.netId)), action }));
+        };
         if (w.queued >= 0 && (gate != w.queued || w.leave)) {
-            std::erase(m_gates[static_cast<size_t>(w.queued)].waiting, me);
-            w.queued = -1;
-        }
-        if (w.play && gate >= 0 && w.queued < 0) {
-            Gate& g = m_gates[static_cast<size_t>(gate)];
-            const Match* on = matchOn(gate);
-            bool busy = false;
-            if (on)
-                for (int idx : on->players) busy = busy || player(idx).walker >= 0;
-            if (!busy && g.waiting.size() < 4) {
-                g.waiting.push_back(me);
-                w.queued = gate;
+            if (netClient()) {
+                ask(w.queued, net::Gate::Leave);
+                w.queued = -1;
+            } else {
+                gateLeave(me);
             }
         }
-        if (w.cpuNow && w.queued >= 0 && !matchOn(w.queued)) startCourt(w.queued, true);
+        if (w.play && gate >= 0 && w.queued < 0) {
+            if (netClient()) {
+                ask(gate, net::Gate::Join);
+                w.queued = gate;
+            } else {
+                gateJoin(me, gate);
+            }
+        }
+        if (w.cpuNow && w.queued >= 0) {
+            if (netClient()) ask(w.queued, net::Gate::CpuNow);
+            else if (!matchOn(w.queued)) startCourt(w.queued);
+        }
         w.play = w.cpuNow = w.leave = false;
     }
+    if (!authority()) return;
     // Two or more at a gate: a countdown, then they play.
     for (int c = 0; c < SportCenter::kCourts; ++c) {
         Gate& g = m_gates[static_cast<size_t>(c)];
@@ -302,7 +357,7 @@ void TennisModule::stepCenter(float dt) {
         } else {
             if (g.countdown < 0.0f) g.countdown = kGateCountdown;
             g.countdown -= dt;
-            if ((g.countdown <= 0.0f || g.waiting.size() >= 4) && !matchOn(c)) startCourt(c, false);
+            if ((g.countdown <= 0.0f || g.waiting.size() >= 4) && !matchOn(c)) startCourt(c);
         }
         // Courts nobody plays on or waits for get CPU players.
         float& rest = m_courtRest[static_cast<size_t>(c)];
@@ -311,7 +366,7 @@ void TennisModule::stepCenter(float dt) {
         } else if (m_cpuMatches) {
             rest += dt;
             bool person = false;
-            for (const Walker& w : m_walkers) person = person || !w.cpu;
+            for (const Walker& w : m_walkers) person = person || (!w.cpu && !w.gone);
             const bool keptFree = person && (c % SportCenter::kPerRow) == SportCenter::kPerRow / 2;
             if (rest > kCourtRest && !keptFree) startCpuMatch(c);
         }
@@ -439,7 +494,7 @@ void TennisModule::onPointForCrowd(const Match& m) {
 void TennisModule::updateWalkerBodies(float dt) {
     kke::RigidWorld& world = m_rigid->world();
     for (Walker& w : m_walkers) {
-        if (!w.look || w.playing >= 0 || !w.body) continue;
+        if (!w.look || w.playing >= 0 || !w.body || w.gone) continue;
         Body::Mood mood = Body::Mood::Stand;
         if (w.sitting) mood = Body::Mood::Sit;
         if (w.cheer > 0.0f) mood = w.happy ? Body::Mood::Cheer : Body::Mood::Groan;
@@ -452,7 +507,7 @@ void TennisModule::updateWalkerBodies(float dt) {
 void TennisModule::updateWalkerCameras(float dt, std::vector<kke::Camera*>& cams) {
     kke::RigidWorld& world = m_rigid->world();
     for (Walker& w : m_walkers) {
-        if (w.cpu || w.playing >= 0 || !w.body) continue;
+        if (w.cpu || w.remote || w.gone || w.playing >= 0 || !w.body) continue;
         const glm::vec3 feet = world.characterPosition(w.body);
         const float want = yawOf(w.facing);
         float diff = std::remainder(want - w.camYaw, 360.0f);
@@ -481,7 +536,7 @@ void TennisModule::updateWalkerCameras(float dt, std::vector<kke::Camera*>& cams
 std::string TennisModule::centerHint() const {
     const Walker* me = nullptr;
     for (const Walker& w : m_walkers)
-        if (!w.cpu && w.playing < 0) {
+        if (!w.cpu && !w.remote && !w.gone && w.playing < 0) {
             me = &w;
             break;
         }
@@ -491,9 +546,12 @@ std::string TennisModule::centerHint() const {
     const std::string court = gate >= 0 ? "court " + std::to_string(gate + 1) : "";
     if (me->queued >= 0) {
         const Gate& g = m_gates[static_cast<size_t>(me->queued)];
-        if (g.countdown >= 0.0f)
-            return "Playing on " + court + " in " + std::to_string(static_cast<int>(std::ceil(g.countdown))) + " (" +
-                   std::to_string(g.waiting.size()) + " players)  {tennis.slice} leave";
+        // Online, the host's queue.
+        const float countdown = netClient() ? m_board.countdown[static_cast<size_t>(me->queued)] : g.countdown;
+        const size_t waiting = netClient() ? m_board.waiting[static_cast<size_t>(me->queued)] : g.waiting.size();
+        if (countdown >= 0.0f)
+            return "Playing on " + court + " in " + std::to_string(static_cast<int>(std::ceil(countdown))) + " (" + std::to_string(waiting) +
+                   " players)  {tennis.slice} leave";
         return "Waiting on " + court + " for an opponent  {tennis.lob} play the CPU now  {tennis.slice} leave";
     }
     if (gate >= 0) {

@@ -60,7 +60,7 @@ const TennisModule::Match* TennisModule::focusMatch() const {
         }
     if (!m_inCenter) return m_matches.empty() ? nullptr : m_matches.front().get();
     for (const Walker& w : m_walkers) {
-        if (w.cpu || !w.body) continue;
+        if (w.cpu || w.remote || !w.body) continue;
         const glm::vec3 feet = m_rigid->world().characterPosition(w.body);
         const Match* best = nullptr;
         float bestD = 4.0f; // beside a court, or at its gate
@@ -137,7 +137,7 @@ void TennisModule::updateHud() {
     std::string ranking;
     if (m_inCenter && !m_inMenu) {
         bool playing = false;
-        for (const Walker& w : m_walkers) playing = playing || (!w.cpu && w.playing >= 0);
+        for (const Walker& w : m_walkers) playing = playing || (!w.cpu && !w.remote && w.playing >= 0);
         if (!playing && hint.empty()) hint = m_input->promptText(centerHint());
         if (!playing && m && m->phase == Match::Phase::Serve) sub.clear();
         for (size_t i = 0; i < m_wins.size() && i < 5; ++i)

@@ -230,7 +230,7 @@ void TennisModule::updateCameras(float dt) {
         updateWalkerCameras(dt, walkerCams);
         size_t wc = 0;
         for (const Walker& w : m_walkers)
-            if (!w.cpu && w.playing < 0 && w.body && wc < walkerCams.size()) seen.push_back({ w.input, nullptr, nullptr, walkerCams[wc++] });
+            if (!w.cpu && !w.remote && !w.gone && w.playing < 0 && w.body && wc < walkerCams.size()) seen.push_back({ w.input, nullptr, nullptr, walkerCams[wc++] });
     }
     std::sort(seen.begin(), seen.end(), [](const Seen& a, const Seen& b) { return a.input < b.input; });
     if (seen.empty()) {

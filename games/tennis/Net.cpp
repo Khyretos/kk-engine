@@ -4,7 +4,9 @@
 // umpire: its Setup says who plays where, its Serve starts each point and
 // its Point ends it. Each machine runs its own players, hits for them and
 // sends the hit; every machine flies the ball from the same hit. The
-// host's CPU players are the host's local players, so everyone sees them.
+// host's CPU players go to everyone in one event (Cpus). In the sport
+// center the host runs every court: clients ask at a gate (Gate) and see
+// the queues and the wins it sends (Board).
 
 #include "TennisModule.h"
 
@@ -25,9 +27,9 @@ namespace tennis {
 namespace {
 constexpr int kModeOff = 0, kModeJoin = 1, kModeHost = 2; // Join first: going to Host passes a harmless search, not a game others see
 constexpr float kSearchEvery = 3.0f;  // s between LAN searches while Join is picked
-constexpr float kBallEvery = 0.2f;    // s between the host's ball corrections
-constexpr int kSpareCpus = 3;         // the host keeps this many CPU players online, for short sides
-const char* const kSpareNames[] = { "Lobster (CPU)", "Topspin (CPU)", "Baseline (CPU)" };
+constexpr float kBallEvery = 0.2f;    // s between the host's ball corrections (each match)
+constexpr float kCpusEvery = 0.1f;    // s between the host's CPU player moves
+constexpr float kBoardEvery = 0.5f;   // s between the sport center's boards
 } // namespace
 
 bool TennisModule::netClient() const { return m_net && m_net->role() == kke::NetModule::Role::Client; }
@@ -44,11 +46,14 @@ void TennisModule::setupNet() {
     m_net->checkMoves = false; // the court is flat and open: the speed limits are enough
     m_net->addEventListener([this](const kke::net::GameEventMsg& e) { onNetEvent(e); });
     m_net->onPlayer = [this](uint8_t id, bool joined) {
-        if (!netHost() || !m_lobby) return;
+        if (!netHost()) return;
+        if (joined && !m_lobby) m_newcomers.push_back(id);
+        if (!m_lobby) return;
         std::string who = "Player " + std::to_string(id);
         for (const kke::net::RemotePlayer& p : m_net->remotePlayers())
             if (p.id == id) who = p.name;
-        if (joined) m_lobby->lobby().toast(who + (m_inMenu ? " joined online" : " joined online: plays from the next match"), 5.0f);
+        if (joined) m_newcomers.push_back(id); // the sport center and its matches, next update
+        if (joined) m_lobby->lobby().toast(who + (m_inMenu || m_inCenter ? " joined online" : " joined online: plays from the next match"), 5.0f);
     };
     if (const char* wait = kke::dev::env("KKE_TENNIS_WAIT")) m_netWait = std::max(0, std::atoi(wait));
     if (!m_lobby) {
@@ -96,23 +101,12 @@ void TennisModule::setupNet() {
     syncNetPlayers(); // KKE_NET hosts or joins in the first frame, with these names and colours
 }
 
-// This screen's players as network players: the menu's seats (the first
-// is NetModule's own player, the others local players 1..), then on the
-// host its CPU players, the menu's and spare ones.
+// This screen's people as network players: the menu's seats (the first is
+// NetModule's own player, the others local players 1..). CPU players stay
+// out: the host sends theirs in one event (Cpus).
 std::vector<TennisModule::Entry> TennisModule::netEntries() const {
     std::vector<Entry> out = seatEntries();
-    if (netClient()) std::erase_if(out, [](const Entry& e) { return e.cpu; }); // a client's CPU players stay home
-    else {
-        for (int i = 0; i < kSpareCpus; ++i) {
-            Entry e;
-            e.name = kSpareNames[i];
-            e.tint = glm::vec3(0.75f + 0.1f * static_cast<float>(i), 0.75f, 0.8f);
-            e.cpu = true;
-            e.filler = true;
-            e.level = m_level;
-            out.push_back(std::move(e));
-        }
-    }
+    std::erase_if(out, [](const Entry& e) { return e.cpu; });
     if (out.size() > static_cast<size_t>(kke::NetModule::kMaxLocalPlayers)) out.resize(static_cast<size_t>(kke::NetModule::kMaxLocalPlayers));
     if (m_net)
         for (size_t slot = 0; slot < out.size(); ++slot) {
@@ -138,30 +132,56 @@ void TennisModule::syncNetPlayers() {
     for (int s = std::max(1, slots); s < kke::NetModule::kMaxLocalPlayers; ++s) m_net->removeLocalPlayer(s);
 }
 
-TennisModule::Player* TennisModule::playerByNet(Match& m, int netId) {
-    for (int idx : m.players)
-        if (player(idx).netId == netId) return &player(idx);
+TennisModule::Match* TennisModule::matchByNet(uint32_t id) {
+    if (id == 0) return nullptr;
+    for (const auto& m : m_matches)
+        if (m->netId == id) return m.get();
     return nullptr;
 }
 
-void TennisModule::sendSetup(const Match& m) {
+size_t TennisModule::matchIndex(const Match& m) const {
+    for (size_t i = 0; i < m_matches.size(); ++i)
+        if (m_matches[i].get() == &m) return i;
+    return m_matches.size();
+}
+
+int TennisModule::indexInMatch(const Match& m, const Player& p) const {
+    for (size_t i = 0; i < m.players.size(); ++i)
+        if (&m_players[static_cast<size_t>(m.players[i])] == &p) return static_cast<int>(i);
+    return -1;
+}
+
+namespace {
+// The host's CPU players have no network id; everyone else does.
+bool hostCpu(const TennisModule::Player& p) { return !p.remote && p.netId < 0; }
+} // namespace
+
+net::Setup TennisModule::setupOf(const Match& m) const {
     net::Setup s;
-    s.match = ++m_netMatch;
+    s.match = m.netId;
     s.court = static_cast<uint8_t>(m.court);
     s.teamSize = static_cast<uint8_t>(m.rules.teamSize);
     s.gamesPerSet = static_cast<uint8_t>(m.rules.gamesPerSet);
     s.setsToWin = static_cast<uint8_t>(m.rules.setsToWin);
+    s.center = m_inCenter;
+    s.point = m.serial;
+    s.history.assign(m.history.begin(), m.history.begin() + static_cast<std::ptrdiff_t>(std::min(m.history.size(), net::kMaxHistory)));
     for (int idx : m.players) {
         const Player& p = m_players[static_cast<size_t>(idx)];
-        s.seats.push_back({ static_cast<uint8_t>(std::max(0, p.netId)), static_cast<uint8_t>(p.team), static_cast<uint8_t>(p.slot),
-                            p.cpu && !p.remote && p.input < 0, p.name, p.tint });
+        s.seats.push_back({ static_cast<uint8_t>(std::max(0, p.netId)), static_cast<uint8_t>(p.team), static_cast<uint8_t>(p.slot), hostCpu(p), p.name, p.tint });
     }
-    m_net->sendEvent(net::kEventSetup, net::encode(s));
-    kke::log::get(name())->info("online match {}: {} players, sent to everyone", s.match, s.seats.size());
+    return s;
 }
 
-// A client: the host's match. Our own players are this screen's seats (by
-// their network ids); everyone else's are drawn from what they send.
+void TennisModule::sendSetup(Match& m) {
+    if (m.netId == 0) m.netId = ++m_netMatch;
+    const net::Setup s = setupOf(m);
+    m_net->sendEvent(net::kEventSetup, net::encode(s));
+    kke::log::get(name())->info("online match {} on court {}: {} players, sent to everyone", s.match, m.court + 1, s.seats.size());
+}
+
+// A client: the host's match. Our own people are this screen's seats (by
+// their network ids); everyone else's players are drawn from what they send.
 void TennisModule::applySetup(const net::Setup& s) {
     if (m_lobby) {
         if (m_lobby->isOpen()) {
@@ -171,6 +191,15 @@ void TennisModule::applySetup(const net::Setup& s) {
         m_lobby->applyInput();
     }
     m_inMenu = false;
+    if (s.center) {
+        if (!m_inCenter) enterCenterOnline();
+        if (matchByNet(s.match)) return; // sent again (to someone who joined)
+        syncRemoteWalkers();             // the host may name people we haven't drawn yet
+    } else {
+        clearPlayers();
+    }
+    const int court = std::clamp<int>(s.court, 0, SportCenter::kCourts - 1);
+    if (Match* old = matchOn(court)) closeMatch(matchIndex(*old)); // missed its End
     const std::vector<Entry> ours = netEntries();
     std::vector<Entry> entries;
     int mine = 0;
@@ -178,104 +207,219 @@ void TennisModule::applySetup(const net::Setup& s) {
         Entry e;
         e.name = seat.name;
         e.tint = seat.tint;
-        e.netId = seat.player;
         e.team = seat.team;
         e.slot = seat.slot;
         e.remote = true;
-        if (m_net->isLocalPlayer(seat.player))
-            for (const Entry& own : ours)
-                if (own.netId == seat.player) {
-                    e = own; // our own player, as picked here
-                    e.team = seat.team;
-                    e.slot = seat.slot;
-                    e.remote = false;
-                    ++mine;
-                }
+        e.netCpu = seat.cpu;
+        if (!seat.cpu) {
+            e.netId = seat.player;
+            if (m_net->isLocalPlayer(seat.player)) {
+                for (const Entry& own : ours)
+                    if (own.netId == seat.player) {
+                        e = own; // our own person, as picked here
+                        e.team = seat.team;
+                        e.slot = seat.slot;
+                        ++mine;
+                    }
+            }
+            // Walking about in the sport center: they step onto the court.
+            for (size_t wi = 0; wi < m_walkers.size(); ++wi)
+                if (!m_walkers[wi].cpu && !m_walkers[wi].gone && m_walkers[wi].netId == seat.player) e.walker = static_cast<int>(wi);
+        }
         entries.push_back(std::move(e));
     }
     MatchRules rules;
     rules.teamSize = std::clamp<int>(s.teamSize, 1, 2);
     rules.gamesPerSet = s.gamesPerSet;
     rules.setsToWin = s.setsToWin;
-    m_netMatch = s.match;
-    clearPlayers();
-    buildMatch(std::move(entries), rules, std::clamp<int>(s.court, 0, SportCenter::kCourts - 1));
-    kke::log::get(name())->info("online match {}: {} players, {} of them here", s.match, s.seats.size(), mine);
+    const int teams = m_teams;
+    m_teams = 0; // the seats say who plays where
+    Match* m = buildMatch(std::move(entries), rules, court);
+    m_teams = teams;
+    m->netId = s.match;
+    m->serial = s.point;
+    for (uint8_t team : s.history) {
+        m->score.pointTo(team ? 1 : 0);
+        m->history.push_back(team ? 1 : 0);
+    }
+    walkersOn(*m);
+    kke::log::get(name())->info("online match {} on court {}: {} players, {} of them here", s.match, court + 1, s.seats.size(), mine);
+}
+
+// A client, when the host is in the sport center: our people walk in; the
+// host's matches, people and gates come in its events. The crowd is this
+// screen's own (it only watches).
+void TennisModule::enterCenterOnline() {
+    const bool cpus = m_cpuMatches;
+    m_cpuMatches = false; // the host's call
+    enterCenter();
+    m_cpuMatches = cpus;
+    syncRemoteWalkers();
+}
+
+void TennisModule::closeMatchByNet(uint32_t id, const std::string& why) {
+    if (id == 0 || !m_inCenter) {
+        if (m_matches.empty() && !m_inCenter) return;
+        if (m_lobby && !why.empty()) m_lobby->lobby().toast(why, 5.0f);
+        kke::log::get(name())->info("online: the host ended it: {}", why.empty() ? "played out" : why);
+        backToMenu();
+        return;
+    }
+    Match* m = matchByNet(id);
+    if (!m) return;
+    if (!why.empty() && m_lobby) m_lobby->lobby().toast(why, 5.0f);
+    closeMatch(matchIndex(*m));
 }
 
 void TennisModule::onNetEvent(const kke::net::GameEventMsg& e) {
     const bool fromHost = e.fromPlayer == 0;
-    if (e.kind == net::kEventSetup) {
+    auto log = [this]() { return kke::log::get(name()); };
+    switch (e.kind) {
+    case net::kEventSetup: {
         if (!netClient() || !fromHost) return; // only the host sets up a match
         if (auto s = net::decodeSetup(e.payload)) applySetup(*s);
-        else kke::log::get(name())->warn("online: a damaged match setup");
+        else log()->warn("online: a damaged match setup");
         return;
     }
-    if (e.kind == net::kEventEnd) {
+    case net::kEventEnd: {
         const auto end = net::decodeEnd(e.payload);
-        if (!netClient() || !fromHost || !end || end->match != m_netMatch || m_matches.empty()) return;
-        if (m_lobby) m_lobby->lobby().toast(end->why, 5.0f);
-        kke::log::get(name())->info("online match {} ended: {}", end->match, end->why);
-        backToMenu();
+        if (!netClient() || !fromHost || !end) return;
+        closeMatchByNet(end->match, end->why);
         return;
     }
-    if (m_matches.empty()) return;
-    Match& m = *m_matches.front();
+    case net::kEventBoard: {
+        const auto b = net::decodeBoard(e.payload);
+        if (!netClient() || !fromHost || !b) return;
+        m_board = *b;
+        m_wins.clear();
+        for (const auto& [who, won] : b->wins) m_wins.emplace_back(who, won);
+        if (b->center && !m_inCenter) {
+            if (m_lobby && m_lobby->isOpen()) {
+                m_lobby->save();
+                m_lobby->close();
+                m_lobby->applyInput();
+            }
+            m_inMenu = false;
+            enterCenterOnline();
+        }
+        return;
+    }
+    case net::kEventGate: {
+        const auto g = net::decodeGate(e.payload);
+        if (!netHost() || !g || !m_inCenter || g->court >= SportCenter::kCourts) return;
+        int who = -1;
+        for (size_t wi = 0; wi < m_walkers.size(); ++wi)
+            if (m_walkers[wi].remote && !m_walkers[wi].gone && m_walkers[wi].netId == g->player) who = static_cast<int>(wi);
+        if (who < 0) return;
+        Walker& w = m_walkers[static_cast<size_t>(who)];
+        if (g->action == net::Gate::Join) {
+            gateJoin(who, g->court);
+        } else if (g->action == net::Gate::Leave) {
+            if (w.queued == g->court) gateLeave(who);
+        } else if (g->action == net::Gate::CpuNow) {
+            if (w.queued == g->court && !matchOn(g->court)) startCourt(g->court);
+        }
+        return;
+    }
+    case net::kEventCpus: {
+        const auto c = net::decodeCpus(e.payload);
+        if (!netClient() || !fromHost || !c) return;
+        for (const net::CpuMatch& cm : c->matches) {
+            Match* m = matchByNet(cm.match);
+            if (!m) continue;
+            const CourtPlace& place = m_center.courts[static_cast<size_t>(m->court)];
+            for (const net::CpuPose& cp : cm.players) {
+                if (cp.player >= m->players.size()) continue;
+                Player& p = player(m->players[cp.player]);
+                if (!p.netCpu) continue;
+                const float yaw = glm::radians(cp.yaw);
+                p.pose.feet = place.toWorld(cp.feet);
+                p.pose.velocity = place.dirToWorld(glm::vec3(cp.velocity.x, 0.0f, cp.velocity.y));
+                p.pose.facing = place.dirToWorld(glm::vec3(std::sin(yaw), 0.0f, std::cos(yaw)));
+                p.pose.swing = cp.swing;
+                p.pose.swingT = cp.swingT;
+                p.pose.contact = cp.contact;
+                p.pose.tossing = cp.tossing;
+                p.pose.celebrating = cp.celebrating;
+                p.pose.cheer = cp.cheer;
+                p.hasPose = true;
+            }
+        }
+        return;
+    }
+    default: break;
+    }
+
+    // The rest belong to one match.
     switch (e.kind) {
     case net::kEventServe: {
         const auto s = net::decodeServe(e.payload);
-        if (!netClient() || !fromHost || !s || s->match != m_netMatch) return;
-        m.serial = s->point;
-        m.serveAgain = s->again;
-        startPoint(m);
-        m.rally.setSecondServe(s->second);
-        if (s->second) m.sub = "Second serve";
+        if (!netClient() || !fromHost || !s) return;
+        Match* m = matchByNet(s->match);
+        if (!m) return;
+        m->serial = s->point;
+        m->serveAgain = s->again;
+        startPoint(*m);
+        m->rally.setSecondServe(s->second);
+        if (s->second) m->sub = "Second serve";
         return;
     }
     case net::kEventPoint: {
         const auto p = net::decodePoint(e.payload);
-        if (!netClient() || !fromHost || !p || p->match != m_netMatch || p->point != m.serial) return;
+        if (!netClient() || !fromHost || !p) return;
+        Match* m = matchByNet(p->match);
+        if (!m || p->point != m->serial) return;
         if (p->result == 0 || p->result > static_cast<uint8_t>(Rally::Result::Let)) return;
-        resolve(m, static_cast<Rally::Result>(p->result), p->call);
+        resolve(*m, static_cast<Rally::Result>(p->result), p->call);
         return;
     }
     case net::kEventHit: {
         const auto h = net::decodeHit(e.payload);
-        if (!h || h->match != m_netMatch || h->point != m.serial) return;
-        Player* p = playerByNet(m, h->player);
-        if (!p || !p->remote) return; // ours: already hit here
-        const int idx = static_cast<int>(p - m_players.data());
+        if (!h) return;
+        Match* m = matchByNet(h->match);
+        if (!m || h->point != m->serial || h->player >= m->players.size()) return;
+        const int idx = m->players[h->player];
+        Player& p = player(idx);
+        if (!p.remote) return; // ours: already hit here
         if (netHost()) {
-            // The umpire checks it could be: their turn, this shot, the right phase.
-            const bool phaseOk = h->serve ? m.phase == Match::Phase::Serve && idx == serverIndex(m) : m.phase == Match::Phase::Rally;
-            if (!phaseOk || !m.rally.mayHit(p->team) || h->shot != m.rallyShots) {
-                kke::log::get(name())->info("online: {}'s hit came too late (the point had moved on)", p->name);
+            // The umpire checks it could be: a person's, their turn, this shot, the right phase.
+            const bool phaseOk = h->serve ? m->phase == Match::Phase::Serve && idx == serverIndex(*m) : m->phase == Match::Phase::Rally;
+            if (p.netCpu || !phaseOk || !m->rally.mayHit(p.team) || h->shot != m->rallyShots) {
+                log()->info("online: {}'s hit came too late (the point had moved on)", p.name);
                 return;
             }
             m_net->relayEvent(e);
         }
-        applyHit(m, idx, *h);
+        applyHit(*m, idx, *h);
         return;
     }
     case net::kEventToss: {
         const auto t = net::decodeToss(e.payload);
-        if (!t || t->match != m_netMatch || t->point != m.serial || m.phase != Match::Phase::Serve) return;
-        Player* p = playerByNet(m, t->player);
-        if (!p || !p->remote || static_cast<int>(p - m_players.data()) != serverIndex(m)) return;
-        if (netHost()) m_net->relayEvent(e);
-        p->tossAge = 0.0f;
-        p->swingKind = SwingPose::Kind::Toss;
-        m.ball->place(t->at, t->velocity);
+        if (!t) return;
+        Match* m = matchByNet(t->match);
+        if (!m || t->point != m->serial || m->phase != Match::Phase::Serve || t->player >= m->players.size()) return;
+        const int idx = m->players[t->player];
+        Player& p = player(idx);
+        if (!p.remote || idx != serverIndex(*m)) return;
+        if (netHost()) {
+            if (p.netCpu) return;
+            m_net->relayEvent(e);
+        }
+        p.tossAge = 0.0f;
+        p.swingKind = SwingPose::Kind::Toss;
+        m->ball->place(t->at, t->velocity);
         return;
     }
     case net::kEventBall: {
         const auto b = net::decodeBall(e.payload);
-        if (!netClient() || !fromHost || !b || b->match != m_netMatch || b->point != m.serial || m.phase != Match::Phase::Rally) return;
-        if (b->shot < m.rallyShots) return; // a hit of ours is on its way to the host
-        Ball& ball = *m.ball;
-        if (b->shot > m.rallyShots || glm::length(b->flight.pos - ball.position()) > 0.25f || glm::length(b->flight.vel - ball.velocity()) > 1.0f) {
+        if (!netClient() || !fromHost || !b) return;
+        Match* m = matchByNet(b->match);
+        if (!m || b->point != m->serial || m->phase != Match::Phase::Rally) return;
+        if (b->shot < m->rallyShots) return; // a hit of ours is on its way to the host
+        Ball& ball = *m->ball;
+        if (b->shot > m->rallyShots || glm::length(b->flight.pos - ball.position()) > 0.25f || glm::length(b->flight.vel - ball.velocity()) > 1.0f) {
             ball.follow(b->flight, b->rolling);
-            m.rallyShots = b->shot;
+            m->rallyShots = b->shot;
         }
         return;
     }
@@ -300,6 +444,56 @@ std::string TennisModule::netStatus() const {
     return "Two to four players, or you against the CPU. Another controller? Press {a} on it to join.";
 }
 
+// The people at other screens in the sport center: walking about (drawn
+// where their machines say) or, while they play, their players instead.
+void TennisModule::syncRemoteWalkers() {
+    if (!m_inCenter || !m_net) return;
+    const std::vector<kke::net::RemotePlayer>& remote = m_net->remotePlayers();
+    kke::RigidWorld& world = m_rigid->world();
+    for (Walker& w : m_walkers) {
+        if (!w.remote || w.gone) continue;
+        if (std::none_of(remote.begin(), remote.end(), [&w](const kke::net::RemotePlayer& r) { return r.id == w.netId; })) {
+            w.gone = true;
+            if (m_net->role() == kke::NetModule::Role::Host) gateLeave(static_cast<int>(&w - m_walkers.data()));
+            if (w.body) world.removeCharacter(w.body);
+            w.body = 0;
+            if (w.look) w.look->setVisible(false);
+        }
+    }
+    for (const kke::net::RemotePlayer& r : remote) {
+        const bool known = std::any_of(m_walkers.begin(), m_walkers.end(), [&r](const Walker& w) { return w.remote && !w.gone && w.netId == r.id; });
+        if (known) continue;
+        const glm::vec3 at = r.hasState ? net::fromState(r.state).feet : m_center.arrival(static_cast<int>(m_walkers.size()) % 4);
+        spawnWalker(r.name, net::tintFromText(r.character, glm::vec3(0.8f)), false, -1, at);
+        Walker& w = m_walkers.back();
+        w.remote = true;
+        w.netId = r.id;
+        world.setCharacterKinematic(w.body, true);
+        if (w.look) w.look->setVisible(true);
+    }
+    for (Walker& w : m_walkers) {
+        if (!w.remote || w.gone || w.playing >= 0 || !w.body) continue;
+        const auto it = std::find_if(remote.begin(), remote.end(), [&w](const kke::net::RemotePlayer& r) { return r.id == w.netId; });
+        if (it == remote.end() || !it->hasState) continue;
+        const net::Pose pose = net::fromState(it->state);
+        world.moveCharacter(w.body, pose.feet);
+        world.setCharacterVelocity(w.body, pose.velocity);
+        if (glm::length(pose.facing) > 0.1f) w.facing = glm::normalize(pose.facing);
+    }
+}
+
+void TennisModule::sendBoard() {
+    net::Board b;
+    b.center = m_inCenter;
+    for (size_t c = 0; c < net::Board::kCourts && c < m_gates.size(); ++c) {
+        b.waiting[c] = static_cast<uint8_t>(std::min<size_t>(m_gates[c].waiting.size(), 255));
+        b.countdown[c] = m_gates[c].countdown;
+    }
+    for (size_t i = 0; i < m_wins.size() && i < net::Board::kWins; ++i)
+        b.wins.emplace_back(m_wins[i].first, static_cast<uint16_t>(std::min(m_wins[i].second, 65535)));
+    m_net->sendEvent(net::kEventBoard, net::encode(b));
+}
+
 void TennisModule::updateNet(float dt) {
     if (!m_net) return;
     m_netTime += dt;
@@ -307,8 +501,9 @@ void TennisModule::updateNet(float dt) {
     // Lost the game (the host left, or we were turned away): back to the menu.
     if (m_wasOnline && !isOnline) {
         if (m_lobby) m_lobby->lobby().toast("Left the online game: " + m_net->statusText(), 6.0f);
-        bool shared = false;
-        for (const Player& p : m_players) shared = shared || p.remote;
+        bool shared = m_inCenter;
+        for (const Player& p : m_players) shared = shared || (p.alive && p.remote);
+        for (const Walker& w : m_walkers) shared = shared || w.remote;
         if (shared) backToMenu();
     }
     m_wasOnline = isOnline;
@@ -371,71 +566,155 @@ void TennisModule::updateNet(float dt) {
         kke::log::get(name())->info("online: {} players in, starting", m_net->remotePlayers().size());
         startFromMenu();
     }
-    if (m_matches.empty()) return;
-    Match& m = *m_matches.front();
+    syncRemoteWalkers();
 
-    // Everyone else's players, where their machines say they are.
+    // Everyone else's players, where their machines say they are (a
+    // client's view of the host's CPU players comes in Cpus).
     kke::RigidWorld& w = m_rigid->world();
     const std::vector<kke::net::RemotePlayer>& remote = m_net->remotePlayers();
-    for (int idx : m.players) {
-        Player& p = player(idx);
-        if (!p.remote) continue;
-        const auto it = std::find_if(remote.begin(), remote.end(), [&p](const kke::net::RemotePlayer& r) { return r.id == p.netId; });
-        if (it == remote.end()) {
-            if (!netHost()) continue; // the host says when a match is off
-            const std::string why = p.name + " left the match";
-            kke::log::get(name())->info("online: {}", why);
-            m_net->sendEvent(net::kEventEnd, net::encode(net::End{ m_netMatch, why }));
-            if (m_lobby) m_lobby->lobby().toast(why, 5.0f);
-            clearPlayers(); // the End went out already
-            if (m_lobby) {
-                m_inMenu = true;
-                m_lobby->open();
+    for (size_t mi = m_matches.size(); mi-- > 0;) {
+        Match& m = *m_matches[mi];
+        bool ended = false;
+        for (int idx : m.players) {
+            Player& p = player(idx);
+            if (!p.remote) continue;
+            if (p.netCpu) {
+                if (!p.hasPose) continue;
+            } else {
+                const auto it = std::find_if(remote.begin(), remote.end(), [&p](const kke::net::RemotePlayer& r) { return r.id == p.netId; });
+                if (it == remote.end()) {
+                    if (!netHost()) continue; // the host says when a match is off
+                    const std::string why = p.name + " left the match";
+                    kke::log::get(name())->info("online: {}", why);
+                    if (m_lobby) m_lobby->lobby().toast(why, 5.0f);
+                    if (m_inCenter) {
+                        // The others win it (a forfeit); the court turns over.
+                        endCenterMatch(mi, p.team);
+                    } else {
+                        m_net->sendEvent(net::kEventEnd, net::encode(net::End{ m.netId, why }));
+                        clearPlayers(); // the End went out already
+                        if (m_lobby) {
+                            m_inMenu = true;
+                            m_lobby->open();
+                        }
+                        return;
+                    }
+                    ended = true;
+                    break;
+                }
+                if (!it->hasState) continue;
+                p.pose = net::fromState(it->state);
+                p.hasPose = true;
             }
-            return;
+            w.moveCharacter(p.body, p.pose.feet);
+            w.setCharacterVelocity(p.body, p.pose.velocity);
         }
-        if (!it->hasState) continue;
-        p.pose = net::fromState(it->state);
-        w.moveCharacter(p.body, p.pose.feet);
-        w.setCharacterVelocity(p.body, p.pose.velocity);
-    }
+        if (ended) continue;
 
-    // The host's ball, a few times a second: anyone drifting is put right.
-    if (netHost() && m.phase == Match::Phase::Rally && m_netTime >= m_ballSentAt) {
-        m_ballSentAt = m_netTime + kBallEvery;
-        net::BallState b;
-        b.match = m_netMatch;
-        b.point = m.serial;
-        b.shot = static_cast<uint8_t>(std::min(m.rallyShots, 255));
-        b.flight = m.ball->flight();
-        b.rolling = m.ball->rolling();
-        m_net->sendEvent(net::kEventBall, net::encode(b));
+        // The host's ball, a few times a second: anyone drifting is put right.
+        if (netHost() && m.netId && m.phase == Match::Phase::Rally && m_netTime >= m.ballSentAt) {
+            m.ballSentAt = m_netTime + kBallEvery;
+            net::BallState b;
+            b.match = m.netId;
+            b.point = m.serial;
+            b.shot = static_cast<uint8_t>(std::min(m.rallyShots, 255));
+            b.flight = m.ball->flight();
+            b.rolling = m.ball->rolling();
+            m_net->sendEvent(net::kEventBall, net::encode(b));
+        }
+    }
+    if (!netHost()) return;
+
+    // Matches started before we hosted go out now.
+    for (const auto& m : m_matches)
+        if (!m->netId) sendSetup(*m);
+    // Someone new: the sport center as it is, and every match on.
+    if (!m_newcomers.empty()) {
+        for (uint8_t id : m_newcomers) {
+            if (m_inCenter) {
+                m_boardDirty = true;
+                for (const auto& m : m_matches)
+                    if (m->netId) m_net->sendEventTo(id, net::kEventSetup, net::encode(setupOf(*m)));
+            }
+        }
+        m_newcomers.clear();
+    }
+    if (m_inCenter && (m_boardDirty || m_netTime >= m_boardSentAt)) {
+        m_boardDirty = false;
+        m_boardSentAt = m_netTime + kBoardEvery;
+        sendBoard();
+    }
+    // The CPU players, every match in one event.
+    if (m_netTime >= m_cpusSentAt) {
+        m_cpusSentAt = m_netTime + kCpusEvery;
+        net::Cpus c;
+        for (const auto& mp : m_matches) {
+            const Match& m = *mp;
+            if (!m.netId) continue;
+            net::CpuMatch cm;
+            cm.match = m.netId;
+            for (size_t i = 0; i < m.players.size(); ++i) {
+                const Player& p = m_players[static_cast<size_t>(m.players[i])];
+                if (!hostCpu(p)) continue;
+                net::CpuPose cp;
+                cp.player = static_cast<uint8_t>(i);
+                cp.feet = p.feet;
+                cp.velocity = glm::vec2(p.vel.x, p.vel.z);
+                cp.yaw = glm::degrees(std::atan2(p.facing.x, p.facing.z));
+                cp.swing = p.tossAge >= 0.0f ? SwingPose::Kind::Toss : p.swingKind;
+                cp.swingT = p.swingT;
+                cp.contact = p.swingContact;
+                cp.tossing = p.tossAge >= 0.0f;
+                cp.celebrating = p.celebrate > 0.0f;
+                cp.cheer = p.cheer;
+                cm.players.push_back(cp);
+            }
+            if (!cm.players.empty()) c.matches.push_back(std::move(cm));
+            if (c.matches.size() >= net::kMaxMatches) break;
+        }
+        if (!c.matches.empty()) m_net->sendEvent(net::kEventCpus, net::encode(c));
     }
 }
 
-// Our players' poses, for everyone else (after they moved and swung).
+// Our people's poses, for everyone else (after they moved and swung): in a
+// match, their player; in the sport center, walking about.
 void TennisModule::sendNet() {
-    if (!m_net || !m_net->connected() || m_matches.empty()) return;
-    const Match& m = *m_matches.front();
-    const CourtPlace& place = m_center.courts[static_cast<size_t>(m.court)];
+    if (!m_net || !m_net->connected()) return;
+    auto slotOf = [this](int netId) {
+        for (int s = 0; s < kke::NetModule::kMaxLocalPlayers; ++s)
+            if (m_net->localPlayerId(s) == netId && (s == 0 || netId != 0)) return s;
+        return -1;
+    };
     kke::RigidWorld& w = m_rigid->world();
-    for (int idx : m.players) {
-        const Player& p = player(idx);
-        if (p.remote || p.netId < 0) continue;
-        int slot = -1;
-        for (int s = 0; s < kke::NetModule::kMaxLocalPlayers && slot < 0; ++s)
-            if (m_net->localPlayerId(s) == p.netId && (s == 0 || p.netId != 0)) slot = s;
+    for (const auto& mp : m_matches) {
+        const Match& m = *mp;
+        const CourtPlace& place = m_center.courts[static_cast<size_t>(m.court)];
+        for (int idx : m.players) {
+            const Player& p = player(idx);
+            if (p.remote || p.netId < 0) continue;
+            const int slot = slotOf(p.netId);
+            if (slot < 0) continue;
+            net::Pose pose;
+            pose.feet = w.characterPosition(p.body);
+            pose.velocity = w.characterVelocity(p.body);
+            pose.facing = place.dirToWorld(p.facing);
+            pose.swing = p.tossAge >= 0.0f ? SwingPose::Kind::Toss : p.swingKind;
+            pose.swingT = p.swingT;
+            pose.contact = p.swingContact;
+            pose.tossing = p.tossAge >= 0.0f;
+            pose.cheer = p.cheer;
+            pose.celebrating = p.celebrate > 0.0f;
+            m_net->setLocalPlayer(slot, net::toState(pose));
+        }
+    }
+    for (const Walker& wk : m_walkers) {
+        if (wk.cpu || wk.remote || wk.gone || wk.playing >= 0 || !wk.body || wk.netId < 0) continue;
+        const int slot = slotOf(wk.netId);
         if (slot < 0) continue;
         net::Pose pose;
-        pose.feet = w.characterPosition(p.body);
-        pose.velocity = w.characterVelocity(p.body);
-        pose.facing = place.dirToWorld(p.facing);
-        pose.swing = p.tossAge >= 0.0f ? SwingPose::Kind::Toss : p.swingKind;
-        pose.swingT = p.swingT;
-        pose.contact = p.swingContact;
-        pose.tossing = p.tossAge >= 0.0f;
-        pose.cheer = p.cheer;
-        pose.celebrating = p.celebrate > 0.0f;
+        pose.feet = w.characterPosition(wk.body);
+        pose.velocity = w.characterVelocity(wk.body);
+        pose.facing = wk.facing;
         m_net->setLocalPlayer(slot, net::toState(pose));
     }
 }

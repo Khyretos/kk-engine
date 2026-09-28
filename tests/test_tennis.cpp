@@ -447,6 +447,75 @@ TEST(TennisNet, PoseRoundTrip) {
     EXPECT_LT(net::fromState(net::toState(p)).swingT, -1.0f);
 }
 
+TEST(TennisNet, SportCenterRoundTrip) {
+    // A late joiner's Setup replays the score.
+    net::Setup s;
+    s.match = 12;
+    s.court = 7;
+    s.center = true;
+    s.point = 31;
+    s.history = { 0, 1, 1, 0, 1 };
+    s.seats.push_back({ 0, 0, 0, true, "Ace (CPU)", glm::vec3(0.5f) });
+    s.seats.push_back({ 3, 1, 0, false, "Juno", glm::vec3(0.2f, 0.4f, 1.0f) });
+    const auto s2 = net::decodeSetup(net::encode(s));
+    ASSERT_TRUE(s2.has_value());
+    EXPECT_TRUE(s2->center);
+    EXPECT_EQ(s2->point, 31);
+    EXPECT_EQ(s2->history, s.history);
+    ASSERT_EQ(s2->seats.size(), 2u);
+    EXPECT_TRUE(s2->seats[0].cpu);
+    EXPECT_EQ(s2->seats[1].player, 3);
+
+    net::Cpus c;
+    for (uint32_t id = 1; id <= 3; ++id) {
+        net::CpuMatch m;
+        m.match = id;
+        net::CpuPose p;
+        p.player = 1;
+        p.feet = glm::vec3(1.5f, 0.0f, -11.25f);
+        p.velocity = glm::vec2(3.0f, -1.0f);
+        p.yaw = 135.0f;
+        p.swing = SwingPose::Kind::Backhand;
+        p.swingT = 0.25f;
+        p.tossing = false;
+        p.celebrating = true;
+        m.players.push_back(p);
+        c.matches.push_back(m);
+    }
+    const auto c2 = net::decodeCpus(net::encode(c));
+    ASSERT_TRUE(c2.has_value());
+    ASSERT_EQ(c2->matches.size(), 3u);
+    const net::CpuPose& p2 = c2->matches[2].players.at(0);
+    EXPECT_EQ(c2->matches[2].match, 3u);
+    EXPECT_NEAR(p2.feet.z, -11.25f, 0.01f);
+    EXPECT_NEAR(p2.velocity.x, 3.0f, 0.05f);
+    EXPECT_NEAR(p2.yaw, 135.0f, 1.0f);
+    EXPECT_EQ(p2.swing, SwingPose::Kind::Backhand);
+    EXPECT_TRUE(p2.celebrating);
+
+    const auto g2 = net::decodeGate(net::encode(net::Gate{ 4, 9, net::Gate::CpuNow }));
+    ASSERT_TRUE(g2.has_value());
+    EXPECT_EQ(g2->court, 4);
+    EXPECT_EQ(g2->player, 9);
+    EXPECT_EQ(g2->action, net::Gate::CpuNow);
+
+    net::Board b;
+    b.center = true;
+    for (size_t i = 0; i < net::Board::kCourts; ++i) b.countdown[i] = -1.0f;
+    b.waiting[2] = 3;
+    b.countdown[2] = 2.5f;
+    b.wins = { { "Juno", 4 }, { "Ace (CPU)", 2 } };
+    const auto b2 = net::decodeBoard(net::encode(b));
+    ASSERT_TRUE(b2.has_value());
+    EXPECT_TRUE(b2->center);
+    EXPECT_EQ(b2->waiting[2], 3);
+    EXPECT_NEAR(b2->countdown[2], 2.5f, 0.1f);
+    EXPECT_LT(b2->countdown[0], 0.0f);
+    ASSERT_EQ(b2->wins.size(), 2u);
+    EXPECT_EQ(b2->wins[0].first, "Juno");
+    EXPECT_EQ(b2->wins[0].second, 4);
+}
+
 TEST(TennisNet, TintText) {
     EXPECT_EQ(net::tintText({ 1.0f, 0.0f, 0.5f }), "#ff0080");
     const glm::vec3 t = net::tintFromText("#ff0080", glm::vec3(0.0f));

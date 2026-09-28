@@ -160,7 +160,7 @@ void TennisModule::startPoint(Match& m) {
     // Online: the host starts every serve (a client, when told: onNetEvent).
     if (authority()) {
         ++m.serial;
-        if (netHost()) m_net->sendEvent(net::kEventServe, net::encode(net::Serve{ m_netMatch, m.serial, again, m.rally.secondServeNow() }));
+        if (netHost() && m.netId) m_net->sendEvent(net::kEventServe, net::encode(net::Serve{ m.netId, m.serial, again, m.rally.secondServeNow() }));
     }
     placeForPoint(m);
     m.phase = Match::Phase::Serve;
@@ -182,7 +182,7 @@ void TennisModule::resolve(Match& m, Rally::Result r, const std::string& call) {
     m.phase = Match::Phase::PointOver;
     m.phaseTime = 0.0f;
     m.call = authority() ? m.rally.call() : call;
-    if (netHost()) m_net->sendEvent(net::kEventPoint, net::encode(net::Point{ m_netMatch, m.serial, static_cast<uint8_t>(r), m.call }));
+    if (netHost() && m.netId) m_net->sendEvent(net::kEventPoint, net::encode(net::Point{ m.netId, m.serial, static_cast<uint8_t>(r), m.call }));
     // Every call in the log on a test run (KKE_TENNIS_QUIT).
     if (m_quitAfter > 0.0f) kke::log::get(name())->info("court {}: {} after {} shots", m.court + 1, m.call, m.rallyShots);
     if (r == Rally::Result::Fault || r == Rally::Result::Let) {
@@ -195,6 +195,7 @@ void TennisModule::resolve(Match& m, Rally::Result r, const std::string& call) {
     const int setsBefore = m.score.sets(team);
     const bool game = m.score.pointTo(team);
     m.lastPointTo = team;
+    m.history.push_back(static_cast<uint8_t>(team));
     onPointForCrowd(m);
     ++m_pointsPlayed;
     m_longestRally = std::max(m_longestRally, m.rallyShots);
@@ -396,8 +397,9 @@ void TennisModule::stepPlayer(Match& m, Player& p, float dt) {
                 p.tossAge = 0.0f;
                 b.place(b.position() + glm::vec3(0.0f, 0.1f, 0.0f), glm::vec3(0.0f, 5.4f, -0.35f * s));
                 p.swingKind = SwingPose::Kind::Toss;
-                if (online() && p.netId >= 0)
-                    m_net->sendEvent(net::kEventToss, net::encode(net::Toss{ m_netMatch, m.serial, static_cast<uint8_t>(p.netId), b.position(), b.velocity() }));
+                if (online() && m.netId)
+                    m_net->sendEvent(net::kEventToss,
+                                     net::encode(net::Toss{ m.netId, m.serial, static_cast<uint8_t>(indexInMatch(m, p)), b.position(), b.velocity() }));
                 it.press = false;
                 p.charge = 0.0f;
             }
@@ -606,9 +608,9 @@ void TennisModule::hitBall(Match& m, Player& p, const glm::vec3& contact, bool s
     p.swingT = 0.0f;
 
     net::Hit h;
-    h.match = m_netMatch;
+    h.match = m.netId;
     h.point = m.serial;
-    h.player = static_cast<uint8_t>(std::max(0, p.netId));
+    h.player = static_cast<uint8_t>(indexInMatch(m, p));
     h.shot = static_cast<uint8_t>(std::min(m.rallyShots, 255));
     h.serve = serve;
     h.kind = static_cast<uint8_t>(kind);
@@ -617,7 +619,7 @@ void TennisModule::hitBall(Match& m, Player& p, const glm::vec3& contact, bool s
     h.spin = spin;
     h.pull = plan.gravity - kGravity;
     h.squash = 0.25f + 0.75f * std::min(1.0f, speed / 45.0f);
-    if (online() && p.netId >= 0) {
+    if (online() && m.netId) {
         // Everyone flies the ball from the same numbers: ours too go
         // through the wire's rounding.
         const std::vector<uint8_t> bytes = net::encode(h);

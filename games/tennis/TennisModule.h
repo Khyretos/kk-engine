@@ -76,6 +76,8 @@ public:
         int team = 0, slot = 0;        // slot: 0 or 1 within a doubles team
         bool cpu = true;               // a CPU brain moves it (the host's CPU players; KKE_TENNIS_AUTOPLAY)
         bool remote = false;           // online: another machine runs it; we draw what it sends
+        bool netCpu = false;           // ... a host's CPU player (its moves come in the Cpus event)
+        bool hasPose = false;
         int netId = -1;                // online: its network player id
         int walker = -1;               // sport center: the walker who is playing (m_walkers)
         bool alive = false;            // a slot in use (matches come and go in the sport center)
@@ -122,6 +124,9 @@ public:
         float deadBall = 0.0f;         // s the ball has lain still in a rally
         float sinceHit = 0.0f;         // s since the last hit (a ball nobody can reach ends the rally)
         uint16_t serial = 0;           // online: +1 each serve, so a late hit for an old point is dropped
+        uint32_t netId = 0;            // online: the host's number for it (0: not sent yet)
+        std::vector<uint8_t> history;  // who won each point (a late joiner replays the score)
+        float ballSentAt = 0.0f;       // host: when its ball last went out
     };
 
     // Who plays in a match about to start (the menu's seats, CPU players,
@@ -134,7 +139,7 @@ public:
         int netId = -1;
         int walker = -1;
         bool remote = false;
-        bool filler = false;           // online: a spare CPU player the host keeps ready (netEntries)
+        bool netCpu = false;           // online, a client: one of the host's CPU players
         int team = -1, slot = -1;      // -1: the match decides
     };
 
@@ -146,6 +151,9 @@ public:
         glm::vec3 tint{1.0f};
         bool cpu = true;               // the crowd
         int input = -1;                // a person at this screen
+        bool remote = false;           // online: someone at another screen (moved by what it sends)
+        int netId = -1;                // online: their network player id
+        bool gone = false;             // left the game (the slot stays, so indices hold)
         kke::RigidWorld::CharacterId body = 0;
         std::unique_ptr<Body> look;
         glm::vec3 facing{0.0f, 0.0f, 1.0f}; // world
@@ -207,9 +215,13 @@ private:
     void readWalker(Walker& w);
     void stepCenter(float dt);
     void stepCrowd(Walker& w, float dt);
-    void startCourt(int court, bool cpuNow);
+    void startCourt(int court);
     void startCpuMatch(int court);
     void endCenterMatch(size_t matchIndex, int forfeitTeam);
+    void closeMatch(size_t matchIndex);
+    void walkersOn(const Match& m);         // its people walk off at the gate, it's gone
+    void gateJoin(int walker, int court);
+    void gateLeave(int walker);
     int gateNear(const glm::vec3& world) const; // the court whose gate is here, or -1
     glm::vec3 gatePoint(int court) const;
     Match* matchOn(int court);
@@ -245,13 +257,20 @@ private:
     void updateNet(float dt);
     void sendNet();
     void onNetEvent(const kke::net::GameEventMsg& e);
-    void sendSetup(const Match& m);
+    void sendSetup(Match& m);               // host: gives it a network id if it has none
+    net::Setup setupOf(const Match& m) const;
+    void closeMatchByNet(uint32_t id, const std::string& why);
     void applySetup(const net::Setup& s);
     std::string netStatus() const;
     bool waitsOnline() const;       // KKE_NET join, or a host waiting for KKE_TENNIS_WAIT players
     std::vector<Entry> seatEntries() const; // this screen's players, as the menu has them
     std::vector<Entry> netEntries() const;  // ... as network players (slot order), with netId
-    Player* playerByNet(Match& m, int netId);
+    Match* matchByNet(uint32_t id);
+    size_t matchIndex(const Match& m) const;
+    int indexInMatch(const Match& m, const Player& p) const;
+    void sendBoard();
+    void syncRemoteWalkers();
+    void enterCenterOnline();                   // a client: the host is in the sport center
 
     kke::Application* m_app = nullptr;
     kke::RigidBodyModule* m_rigid = nullptr;
@@ -300,7 +319,10 @@ private:
 
     // Online.
     uint32_t m_netMatch = 0;        // the host's match number
-    float m_netTime = 0.0f, m_netSearchAt = 0.0f, m_ballSentAt = 0.0f;
+    float m_netTime = 0.0f, m_netSearchAt = 0.0f, m_cpusSentAt = 0.0f, m_boardSentAt = 0.0f;
+    bool m_boardDirty = false;
+    std::vector<uint8_t> m_newcomers;           // host: players who joined, to be sent every match
+    net::Board m_board;                         // a client: the host's gates and wins
     bool m_wasOnline = false;
     int m_netWait = 0;              // KKE_TENNIS_WAIT: the host starts once this many others are in
     std::string m_lastNetStatus;

@@ -163,6 +163,7 @@ int TennisModule::spawnPlayer(const Entry& e, int team) {
     p.team = team;
     p.remote = e.remote;
     p.netId = e.netId;
+    p.netCpu = e.netCpu;
     // KKE_TENNIS_AUTOPLAY: this screen's people play themselves (tests).
     p.cpu = !e.remote && (e.cpu || m_autoplay);
     p.input = e.remote ? -1 : e.input;
@@ -233,20 +234,18 @@ std::vector<TennisModule::Entry> TennisModule::seatEntries() const {
 }
 
 void TennisModule::startLocalMatch() {
-    if (m_where == 1 && !online()) {
+    if (m_where == 1 && !netClient()) {
         enterCenter();
         return;
     }
     std::vector<Entry> entries = seatEntries();
-    std::vector<Entry> cpus, fillers;
     if (online()) {
         // People first (ours, then everyone online), then the menu's CPU
-        // players, then spare ones if a side is short.
+        // players, then more if a side is short.
+        std::vector<Entry> cpus;
+        for (const Entry& e : seatEntries())
+            if (e.cpu) cpus.push_back(e);
         entries = netEntries();
-        std::erase_if(entries, [&cpus, &fillers](const Entry& e) {
-            if (e.cpu) (e.filler ? fillers : cpus).push_back(e);
-            return e.cpu;
-        });
         for (const kke::net::RemotePlayer& rp : m_net->remotePlayers()) {
             Entry e;
             e.name = rp.name;
@@ -258,13 +257,9 @@ void TennisModule::startLocalMatch() {
         if (entries.size() > 4)
             kke::log::get(name())->info("online: {} people for one court, the first 4 play (the sport center's other courts come later)", entries.size());
         for (Entry& c : cpus) entries.push_back(std::move(c));
-        // A CPU player with no network slot can't be seen online: it sits out.
-        std::erase_if(entries, [](const Entry& e) { return e.cpu && e.netId <= 0; });
-        std::erase_if(fillers, [](const Entry& e) { return e.netId <= 0; });
     }
     // At least an opponent; doubles when there are more than two.
     const size_t want = (m_doubles || entries.size() > 2) ? 4 : 2;
-    for (size_t i = 0; i < fillers.size() && entries.size() < want; ++i) entries.push_back(fillers[i]);
     int cpuNumber = static_cast<int>(std::count_if(entries.begin(), entries.end(), [](const Entry& e) { return e.cpu; }));
     while (entries.size() < want) {
         Entry e;
@@ -324,7 +319,7 @@ TennisModule::Match* TennisModule::buildMatch(std::vector<Entry> entries, const 
 }
 
 void TennisModule::backToMenu() {
-    if (netHost() && !m_matches.empty()) m_net->sendEvent(net::kEventEnd, net::encode(net::End{ m_netMatch, "The host went back to the menu" }));
+    if (netHost() && (!m_matches.empty() || m_inCenter)) m_net->sendEvent(net::kEventEnd, net::encode(net::End{ 0, "The host went back to the menu" }));
     clearPlayers();
     if (!m_lobby) return;
     m_inMenu = true;
@@ -376,9 +371,16 @@ void TennisModule::update(const kke::UpdateContext& ctx) {
         updateLobby(dt);
     } else if (m_inCenter) {
         // The sport center: the menu button leaves a match (the other side
-        // wins it) or, walking, goes back to the menu.
+        // wins it) or, walking, goes back to the menu. Online, a client's
+        // leaves the game (the host calls its match off).
         for (int i = 0; i < m_input->players(); ++i) {
             if (!m_input->map(i).pressed("tennis.menu")) continue;
+            if (netClient()) {
+                m_wasOnline = false; // on purpose: no "left" toast
+                m_net->leave();
+                backToMenu();
+                break;
+            }
             bool left = false;
             for (size_t mi = 0; mi < m_matches.size() && !left; ++mi)
                 for (int idx : m_matches[mi]->players)
@@ -391,7 +393,7 @@ void TennisModule::update(const kke::UpdateContext& ctx) {
             break;
         }
         for (Walker& w : m_walkers)
-            if (!w.cpu && w.playing < 0) readWalker(w);
+            if (!w.cpu && !w.remote && !w.gone && w.playing < 0) readWalker(w);
     } else if (m_lobby && !m_ballTest) {
         for (int i = 0; i < m_input->players(); ++i)
             if (m_input->map(i).pressed("tennis.menu")) {

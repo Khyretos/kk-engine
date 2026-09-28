@@ -25,8 +25,8 @@ Or pick **Sport center** in the menu: walk about all ten courts, step up
 to a free court's gate to play (someone else at the gate is your
 opponent, or play the CPU), watch the CPU players' matches with a crowd
 of up to 100 people who sit, stand and cheer, and see who has won most
-on the board. Still to come: the sport center online (today online is
-one match).
+on the board. Online, the host's sport center is everyone's: people from
+every screen walk about together, meet at a gate and play each other.
 
 ## Run it
 
@@ -291,11 +291,12 @@ the game's side, [NetTennis.h](NetTennis.h) the messages (event kinds
 from `0x5400`).
 
 - **Who plays.** The host's Start builds the match: its own seats, then
-  everyone online, then the menu's CPU players, then spare CPU players if
-  a side is short (the host keeps three ready as network players, so
-  everyone sees them move). More than four people: the first four play.
-  Its **Setup** says who plays where; each client builds the same match,
-  its own seats played from its own controllers.
+  everyone online, then the menu's CPU players, then more CPU players if
+  a side is short. More than four people: the first four play. Its
+  **Setup** says who plays where; each client builds the same match, its
+  own seats played from its own controllers.
+- **The CPU players are the host's.** It sends where they all are, every
+  match's in one **Cpus** event ten times a second.
 - **Each machine runs its own players** and sends where they are, where
   they face and how far into which swing (`toState`, a `NetPlayerState`
   with the swing's contact packed into its extra bytes). Everyone else's
@@ -316,11 +317,26 @@ from `0x5400`).
   is on the way to the host.
 - **Someone leaves:** the host ends the match for everyone (**End**) and
   all go back to the menu; a client's menu button leaves the game.
+- **The sport center online.** When the host picks Sport center, every
+  client walks in too (**Board** says it's on). The host runs every court:
+  each match has its own number, so every event names the match it
+  belongs to, and a Hit or a Toss names the player by their place in it.
+  Each machine sends where its people walk; the others see them walk.
+  At a gate, a client asks the host (**Gate**: join, leave, play the CPU
+  now) and the host keeps the queues; its **Board**, twice a second, has
+  how many wait at each gate, the countdowns and the wins. Someone who
+  joins later gets the Board and a Setup for every match on, with the
+  points so far, so they see the right score. The crowd is each screen's
+  own: it only watches. Someone leaving mid-match forfeits it (the other
+  side wins).
 
 Tested with two copies on one PC, both played by the CPU
 (`KKE_TENNIS_AUTOPLAY=1`, the commands in "Run it" plus
 `KKE_TENNIS_WAIT=1 KKE_TENNIS_LOBBY=0 KKE_TENNIS_QUIT=70`): both logs make
 the same calls after the same number of shots, rallies of 6 to 15 shots.
+The sport center the same way, the host with `KKE_TENNIS_CENTER=1` (no
+`KKE_TENNIS_WAIT`): each copy's person walks to a different free court's
+gate and plays the CPU, and both logs show every court's matches.
 
 ### Cameras and the HUD
 

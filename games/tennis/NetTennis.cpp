@@ -36,10 +36,65 @@ template <typename Stream> void serialize(Stream& s, Setup& m) {
     s.integer(m.teamSize, 1, 2);
     s.integer(m.gamesPerSet, 1, 12);
     s.integer(m.setsToWin, 1, 3);
+    s.boolean(m.center);
+    s.integer(m.point, 0, 65535);
+    uint32_t points = static_cast<uint32_t>(std::min(m.history.size(), kMaxHistory));
+    s.integer(points, 0, static_cast<int64_t>(kMaxHistory));
+    if constexpr (Stream::kReading) m.history.resize(s.ok() ? points : 0);
+    for (uint8_t& p : m.history) s.integer(p, 0, 1);
     uint32_t n = static_cast<uint32_t>(std::min(m.seats.size(), kMaxSeats));
     s.integer(n, 0, static_cast<int64_t>(kMaxSeats));
     if constexpr (Stream::kReading) m.seats.resize(s.ok() ? n : 0);
     for (Seat& seat : m.seats) serialize(s, seat);
+}
+template <typename Stream> void serialize(Stream& s, CpuPose& m) {
+    s.integer(m.player, 0, 7);
+    s.vec3(m.feet, kCourtRange, kCourtStep);
+    s.real(m.velocity.x, -16.0f, 16.0f, 1.0f / 64.0f);
+    s.real(m.velocity.y, -16.0f, 16.0f, 1.0f / 64.0f);
+    s.real(m.yaw, -180.0f, 180.0f, 360.0f / 256.0f);
+    uint8_t kind = static_cast<uint8_t>(m.swing);
+    s.integer(kind, 0, static_cast<int64_t>(SwingPose::Kind::Toss));
+    if constexpr (Stream::kReading) m.swing = static_cast<SwingPose::Kind>(kind);
+    s.real(m.swingT, -2.0f, 1.0f, 3.0f / 255.0f);
+    s.vec3(m.contact, kContactRange, 1.0f / 128.0f);
+    s.boolean(m.tossing);
+    s.boolean(m.celebrating);
+    s.boolean(m.cheer);
+}
+template <typename Stream> void serialize(Stream& s, Cpus& m) {
+    uint32_t n = static_cast<uint32_t>(std::min(m.matches.size(), kMaxMatches));
+    s.integer(n, 0, static_cast<int64_t>(kMaxMatches));
+    if constexpr (Stream::kReading) m.matches.resize(s.ok() ? n : 0);
+    for (CpuMatch& cm : m.matches) {
+        s.bits(cm.match, 32);
+        uint32_t k = static_cast<uint32_t>(std::min(cm.players.size(), size_t{ 4 }));
+        s.integer(k, 0, 4);
+        if constexpr (Stream::kReading) cm.players.resize(s.ok() ? k : 0);
+        for (CpuPose& p : cm.players) serialize(s, p);
+    }
+}
+template <typename Stream> void serialize(Stream& s, Gate& m) {
+    s.integer(m.court, 0, 15);
+    s.integer(m.player, 0, 255);
+    s.integer(m.action, 0, 2);
+}
+template <typename Stream> void serialize(Stream& s, Board& m) {
+    s.boolean(m.center);
+    for (size_t c = 0; c < Board::kCourts; ++c) {
+        s.integer(m.waiting[c], 0, 7);
+        // 0: none, else tenths of a second + 1.
+        uint32_t cd = m.countdown[c] < 0.0f ? 0u : static_cast<uint32_t>(std::clamp(m.countdown[c], 0.0f, 12.0f) * 10.0f + 1.5f);
+        s.integer(cd, 0, 121);
+        if constexpr (Stream::kReading) m.countdown[c] = cd == 0 ? -1.0f : static_cast<float>(cd - 1) / 10.0f;
+    }
+    uint32_t n = static_cast<uint32_t>(std::min(m.wins.size(), Board::kWins));
+    s.integer(n, 0, static_cast<int64_t>(Board::kWins));
+    if constexpr (Stream::kReading) m.wins.resize(s.ok() ? n : 0);
+    for (auto& w : m.wins) {
+        s.string(w.first, kn::kMaxNameLength);
+        s.integer(w.second, 0, 65535);
+    }
 }
 template <typename Stream> void serialize(Stream& s, Serve& m) {
     s.bits(m.match, 32);
@@ -162,6 +217,12 @@ std::vector<uint8_t> encode(const BallState& b) { return write(b); }
 std::optional<BallState> decodeBall(const std::vector<uint8_t>& bytes) { return read<BallState>(bytes); }
 std::vector<uint8_t> encode(const End& e) { return write(e); }
 std::optional<End> decodeEnd(const std::vector<uint8_t>& bytes) { return read<End>(bytes); }
+std::vector<uint8_t> encode(const Cpus& c) { return write(c); }
+std::optional<Cpus> decodeCpus(const std::vector<uint8_t>& bytes) { return read<Cpus>(bytes); }
+std::vector<uint8_t> encode(const Gate& g) { return write(g); }
+std::optional<Gate> decodeGate(const std::vector<uint8_t>& bytes) { return read<Gate>(bytes); }
+std::vector<uint8_t> encode(const Board& b) { return write(b); }
+std::optional<Board> decodeBoard(const std::vector<uint8_t>& bytes) { return read<Board>(bytes); }
 
 std::string tintText(const glm::vec3& tint) {
     char buf[8];
