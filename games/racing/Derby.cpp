@@ -186,6 +186,9 @@ void RacingModule::updatePileup(float dt) {
     m_pileupTimer -= dt;
     if (m_pileupTimer > 0.0f) return;
     m_pileupTimer = kPileupEvery;
+    if (m_pileups > 0)
+        kke::log::get(name())->info("pile-up {}: {} of {} cars wrecked", m_pileups,
+                                    std::count_if(m_cars.begin(), m_cars.end(), [](const Car& c) { return c.totalled; }), m_cars.size());
     ++m_pileups;
     const Track& t = *m_track;
     const int n = static_cast<int>(m_cars.size());

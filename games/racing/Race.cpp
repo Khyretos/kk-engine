@@ -550,6 +550,7 @@ void RacingModule::buildRace(const std::vector<Entry>& roster) {
             if (c.seat >= 0) c.player = std::max(0, m_lobby->playerOf(c.seat));
     }
     m_rosterChanged = false;
+    warmUpCrashes();
 }
 
 void RacingModule::resetRace() {

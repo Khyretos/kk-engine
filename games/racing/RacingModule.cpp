@@ -82,7 +82,9 @@ void RacingModule::init(kke::Application& app) {
 
     m_autopilot = envOn("KKE_RACE_AUTOPILOT");
     m_crashTest = envOn("KKE_RACE_CRASH");
-    m_pileup = envOn("KKE_RACE_PILEUP");
+    // Benchmark scenarios by name, as the flying demo's KKE_FLY_BENCH.
+    const char* bench = kke::dev::env("KKE_RACE_BENCH");
+    m_pileup = envOn("KKE_RACE_PILEUP") || (bench && std::string(bench) == "pileup");
     m_quitAfter = envFloat("KKE_RACE_QUIT", -1.0f);
     m_defaultCars = std::clamp(static_cast<int>(envFloat("KKE_RACE_CARS", 12.0f)), 1, 24);
     m_forceLaps = static_cast<int>(envFloat("KKE_RACE_LAPS", -1.0f));

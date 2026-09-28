@@ -11,6 +11,7 @@
 #include "kke/Log.h"
 #include "kke/ParticleEffects.h"
 #include "kke/SphereImpostors.h"
+#include "kke/modules/AudioModule.h"
 #include "kke/modules/RigidBodyModule.h"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -61,6 +62,18 @@ void recomputeNormals(const std::vector<glm::vec3>& p, const std::vector<uint32_
 }
 
 } // namespace
+
+// The first big crash shouldn't be the one that builds the bits it throws
+// and loads its sounds: all of that now, while the grid's being made.
+void RacingModule::warmUpCrashes() {
+    debrisMesh(glm::vec3(0.06f));
+    debrisMesh(glm::vec3(0.55f, 0.65f, 0.7f));
+    for (const Car& c : m_cars) debrisMesh(c.color);
+    if (!m_audio) return;
+    for (uint32_t v = 0; v < 4; ++v)
+        for (uint32_t material : { kke::AudioMaterialTable::Metal, kke::AudioMaterialTable::Stone, kke::AudioMaterialTable::Wood, kke::AudioMaterialTable::Dirt })
+            for (float level : { 0.1f, 0.3f, 0.55f, 1.0f }) m_audio->impacts().get(material, level, v);
+}
 
 int RacingModule::debrisMesh(const glm::vec3& color) {
     for (size_t i = 0; i < m_debrisColors.size(); ++i)
