@@ -1,0 +1,166 @@
+<rml>
+<head>
+    <title>Racing HUD</title>
+    <link type="text/rcss" href="theme.rcss"/>
+    <style>
+        /* Over the game: nothing here takes clicks. */
+        body { pointer-events: none; }
+        /* Each player: place and lap in the top left of their view... */
+        .top { position: absolute; width: 230dp; padding: 10dp 14dp; margin: 18dp 0 0 22dp; border-radius: 10dp;
+               background-color: #0b0f1ccc; border-left: 3dp #56a8ff; }
+        .top .name { font-size: 12dp; letter-spacing: 2dp; color: #aab3cc; }
+        .top .place { font-size: 30dp; font-weight: bold; color: #ffffff; }
+        .top .lap { font-size: 16dp; color: #e8ecf4; }
+        .top .best { font-size: 13dp; color: #aab3cc; }
+        .top .status { font-size: 13dp; color: #ffcf5c; margin-top: 4dp; }
+        .top .drift { font-size: 13dp; color: #aab3cc; margin-top: 4dp; }
+        .top .drift span { font-size: 22dp; font-weight: bold; color: #ffffff; }
+        /* ... speed, gear, revs and damage in the bottom right. */
+        .dash { position: absolute; width: 230dp; padding: 10dp 14dp; margin: 0 22dp 64dp 0; border-radius: 10dp; background-color: #0b0f1ccc; }
+        .dash .speed { font-size: 40dp; font-weight: bold; color: #ffffff; }
+        .dash .unit { font-size: 13dp; color: #aab3cc; margin-left: 4dp; }
+        .dash .gear { float: right; font-size: 40dp; font-weight: bold; color: #56a8ff; }
+        .dash .label { font-size: 11dp; letter-spacing: 2dp; color: #7f8aa8; margin-top: 4dp; }
+        .bar { height: 10dp; margin: 3dp 0 2dp 0; border-radius: 5dp; background-color: #26304d; }
+        .fill { height: 10dp; border-radius: 5dp; }
+        .redline .rpm .fill { animation: 0.12s linear infinite alternate blink; }
+        .low .hp .fill { animation: 0.4s linear infinite alternate blink; }
+        @keyframes blink { from { opacity: 1; } to { opacity: 0.35; } }
+        /* This moment: "Perfect shift", "+1250", "TOTALLED"; the drift combo. */
+        .top .combo { font-size: 22dp; font-weight: bold; color: #ffcf5c; margin-top: 2dp; }
+        .top .note { font-size: 18dp; font-weight: bold; color: #ffffff; margin-top: 2dp; }
+        /* The running order. */
+        #order { position: absolute; right: 22dp; top: 22%; width: 210dp; padding: 8dp 12dp; border-radius: 10dp; background-color: #0b0f1ccc; }
+        .row { display: block; font-size: 14dp; color: #e8ecf4; padding: 2dp 0; }
+        .row.you { color: #ffcf5c; font-weight: bold; }
+        .row.out { color: #7f8aa8; }
+        .row .p { display: inline-block; width: 24dp; color: #aab3cc; }
+        .row .dot { display: inline-block; width: 10dp; height: 10dp; border-radius: 5dp; margin-right: 6dp; }
+        .row .g { float: right; color: #aab3cc; font-size: 12dp; }
+        #banner { position: absolute; top: 30%; left: 0; width: 100%; text-align: center; }
+        #banner .big { font-size: 80dp; font-weight: bold; color: #ffffff; }
+        #banner .sub { display: inline-block; font-size: 18dp; color: #e8ecf4; margin-top: 6dp; padding: 4dp 14dp; border-radius: 8dp;
+                       background-color: #0b0f1caa; }
+        /* The drag strip's tree: three ambers, then green (or red). */
+        #tree { position: absolute; top: 14%; left: 50%; width: 90dp; margin-left: -45dp; padding: 10dp; border-radius: 12dp; background-color: #05070ee6; }
+        #tree .bulb { display: block; width: 56dp; height: 56dp; margin: 6dp auto; border-radius: 28dp; background-color: #2a2f3d; }
+        #tree .amber.on { background-color: #ffb020; }
+        #tree .green.on { background-color: #39e36b; }
+        #tree .red.on { background-color: #ff3b30; }
+        #results { position: absolute; left: 50%; top: 46%; width: 640dp; margin-left: -320dp; padding: 10dp 16dp; border-radius: 12dp;
+                   background-color: #0b0f1cdd; }
+        #results .r { display: block; font-size: 15dp; color: #e8ecf4; padding: 2dp 0; }
+        #results .place { display: inline-block; width: 34dp; color: #aab3cc; font-weight: bold; }
+        #results .dot { display: inline-block; width: 10dp; height: 10dp; border-radius: 5dp; margin-right: 8dp; }
+        #results .who { display: inline-block; width: 200dp; }
+        #results .what { display: inline-block; width: 110dp; font-weight: bold; }
+        #results .note { color: #ffcf5c; font-size: 13dp; }
+        #notice { position: absolute; top: 8dp; left: 20%; width: 60%; text-align: center; font-size: 13dp; color: #ffcf5c; }
+        #hint { position: absolute; left: 8%; bottom: 14dp; width: 84%; padding: 6dp 10dp; border-radius: 8dp; background-color: #0b0f1cbb;
+                text-align: center; font-size: 13dp; color: #cfd6e6; }
+        #hint img, #banner .sub img { font-size: 15dp; } /* prompt glyphs are 1.6em */
+        /* How to play. */
+        #howto { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background-color: #05070ef2; }
+        #howto .sheet { position: absolute; left: 50%; top: 50%; width: 960dp; margin-left: -480dp; height: 560dp; margin-top: -290dp; }
+        #howto h1 { display: block; font-size: 44dp; font-weight: bold; color: #ffffff; text-align: center; letter-spacing: 4dp; }
+        #howto .tagline { font-size: 17dp; color: #cfd6e6; text-align: center; margin: 4dp 0 22dp 0; }
+        #howto .cards { display: flex; flex-wrap: wrap; justify-content: space-between; }
+        #howto .card { box-sizing: border-box; width: 308dp; height: 190dp; margin-bottom: 16dp; padding: 14dp 16dp; border-radius: 12dp; background-color: #141b2e;
+                       border-top: 3dp #56a8ff; }
+        #howto .card.hurt { border-top-color: #ff6b5c; }
+        #howto .card.slide { border-top-color: #ffcf5c; }
+        #howto .step { font-size: 12dp; letter-spacing: 2dp; color: #7f8aa8; }
+        #howto .title { font-size: 20dp; font-weight: bold; color: #ffffff; margin: 2dp 0 8dp 0; }
+        #howto .body { font-size: 14dp; color: #cfd6e6; line-height: 1.35; }
+        #howto .body img { font-size: 19dp; }
+        #howto .go { position: absolute; left: 0; bottom: 0; width: 100%; text-align: center; font-size: 20dp; color: #ffffff; }
+        #howto .go img { font-size: 26dp; }
+        #howto .later { font-size: 13dp; color: #7f8aa8; margin-top: 6dp; }
+        #howto .later img { font-size: 16dp; }
+    </style>
+</head>
+<body data-model="race">
+    <div id="notice" data-if="notice != ''">{{notice}}</div>
+    <div data-if="racing">
+        <div data-for="p : players">
+            <div class="top" data-style-left="p.x" data-style-top="p.y" data-style-border-left-color="p.accent">
+                <div class="name">{{p.name}}</div>
+                <div class="place">{{p.place}}</div>
+                <div class="lap">{{p.lap}}</div>
+                <div class="best">{{p.best}}</div>
+                <div class="drift" data-if="p.drift != ''">drift points <span>{{p.drift}}</span></div>
+                <div class="combo" data-if="p.combo != ''">{{p.combo}}</div>
+                <div class="note" data-if="p.note != ''">{{p.note}}</div>
+                <div class="status" data-if="p.status != ''">{{p.status}}</div>
+            </div>
+            <div class="dash" data-class-redline="p.redline" data-class-low="p.low" data-style-right="p.r" data-style-bottom="p.b">
+                <span class="gear">{{p.gear}}</span>
+                <div><span class="speed">{{p.speed}}</span><span class="unit">km/h</span></div>
+                <div class="label">REVS</div>
+                <div class="bar rpm"><div class="fill" data-style-width="p.rpm" data-style-background-color="p.rpm_color"></div></div>
+                <div class="label">CAR</div>
+                <div class="bar hp"><div class="fill" data-style-width="p.health" data-style-background-color="p.health_color"></div></div>
+            </div>
+        </div>
+        <div id="order" data-if="standings.size > 1 && results.size == 0 && !howto">
+            <div data-for="s : standings" class="row" data-class-you="s.you" data-class-out="s.out"><span class="g">{{s.gap}}</span><span class="p">{{s.place}}</span><span class="dot" data-style-background-color="s.accent"></span>{{s.name}}</div>
+        </div>
+        <div id="tree" data-if="drag && lights != '' && !howto">
+            <div class="bulb amber" data-class-on="lights == 'amber1' || lights == 'amber2' || lights == 'amber3'"></div>
+            <div class="bulb amber" data-class-on="lights == 'amber2' || lights == 'amber3'"></div>
+            <div class="bulb amber" data-class-on="lights == 'amber3'"></div>
+            <div class="bulb green" data-class-on="lights == 'green'"></div>
+            <div class="bulb red" data-class-on="lights == 'red'"></div>
+        </div>
+        <div id="banner" data-if="(banner != '' || sub != '') && !howto">
+            <div class="big" data-if="banner != ''">{{banner}}</div>
+            <div class="sub" data-if="sub != ''" data-rml="sub"></div>
+        </div>
+        <div id="results" data-if="results.size > 0 && !howto">
+            <div data-for="r : results" class="r"><span class="place">{{r.place}}</span><span class="dot" data-style-background-color="r.accent"></span><span class="who">{{r.name}}</span><span class="what">{{r.result}}</span><span class="note">{{r.note}}</span></div>
+        </div>
+        <div id="hint" data-if="!howto" data-rml="hint"></div>
+    </div>
+    <div id="howto" data-if="howto">
+        <div class="sheet">
+            <h1>RACING</h1>
+            <div class="tagline">Oval races, drifting and the drag strip. Bring your car home in one piece.</div>
+            <div class="cards">
+                <div class="card">
+                    <div class="step">1 · DRIVE</div>
+                    <div class="title">Gas, brake, steer</div>
+                    <div class="body"><prompt action="throttle"/> accelerates, <prompt action="brake"/> brakes (held when stopped: reverse), <prompt action="steer"/> steers. <prompt action="look.back"/> looks behind you.</div>
+                </div>
+                <div class="card">
+                    <div class="step">2 · THE OVAL</div>
+                    <div class="title">Race the pack</div>
+                    <div class="body">Every turn is a left turn, two cars side by side. Brake before the turns, not in them. The first over the line after the last lap wins.</div>
+                </div>
+                <div class="card hurt">
+                    <div class="step">3 · DAMAGE</div>
+                    <div class="title">Look after your car</div>
+                    <div class="body">Hits dent it, bend the wheels and weaken the engine. At 0% it's totalled. The pit lane inside the front straight fixes it: stop in a box.</div>
+                </div>
+                <div class="card slide">
+                    <div class="step">4 · DRIFT</div>
+                    <div class="title">Slide for points</div>
+                    <div class="body">Tap <prompt action="handbrake"/> into a corner and keep the slide going with <prompt action="throttle"/>. The longer and faster, the bigger the combo. A hit loses it.</div>
+                </div>
+                <div class="card">
+                    <div class="step">5 · DRAG</div>
+                    <div class="title">Launch on green</div>
+                    <div class="body">Three ambers, then green: go! Before green is a red light. Change gear with <prompt action="shift.up"/> at the top of the revs.</div>
+                </div>
+                <div class="card">
+                    <div class="step">IF YOU SPIN</div>
+                    <div class="title">Back on the track</div>
+                    <div class="body"><prompt action="reset.car"/> puts you back on the road. <prompt action="camera"/> changes the camera.<br/><prompt action="race.again"/> race again · <prompt action="race.new"/> next track · <prompt action="menu"/> menu</div>
+                </div>
+            </div>
+            <div class="go"><prompt action="throttle" label="Start"/>
+                <div class="later"><prompt action="help" label="shows this again"/></div>
+            </div>
+        </div>
+    </div>
+</body>
+</rml>

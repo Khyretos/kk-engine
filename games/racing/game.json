@@ -1,0 +1,9 @@
+{
+  "id": "kke.racing",
+  "title": "Racing",
+  "description": "Up to 24 cars on Jolt's vehicle physics: NASCAR-style oval races where hits dent the body, bend the wheels and hurt the engine (pit to repair), drifting for points round the docks, and a quarter-mile drag strip with a Christmas tree and a manual gearbox. Split screen for four, online with Host / Join. Tyre smoke, skid marks, sparks and flying bodywork.",
+  "version": "0.1.0",
+  "tags": ["demo", "racing", "driving", "physics", "damage"],
+  "engine_version": "0.3",
+  "modules": ["Settings", "Input", "RigidBodies", "Models", "UI", "Audio", "Lobby", "Network", "Racing", "Stats"]
+}

@@ -1,0 +1,12 @@
+# The Quarter Mile: a straight drag strip, eight lanes (Track.h). Wait for
+# green, launch, change gear yourself; the time to the line and the speed
+# through it count.
+name: The Quarter Mile
+about: 402 metres, side by side. Launch on green and change gear at the top of the rev counter.
+event: drag
+order: 3
+mood: noon
+length: 402
+width: 32
+laps: 1
+wall: 1.0

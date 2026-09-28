@@ -976,6 +976,11 @@ endif()
 if(KKE_ENABLE_JOLT AND KKE_ENABLE_NET)
     add_subdirectory(games/climb_race)
 endif()
+# Racing: oval, drift and drag races on Jolt's vehicle physics, with dents
+# and smoke (games/racing/README.md). Networking: Host / Join online.
+if(KKE_ENABLE_JOLT AND KKE_ENABLE_NET)
+    add_subdirectory(games/racing)
+endif()
 # Procedural animation: creatures with no clips, hit reactions on joint
 # motors (games/procedural_demo/README.md). Jolt: the ground and ragdolls.
 if(KKE_ENABLE_JOLT)

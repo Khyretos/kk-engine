@@ -104,6 +104,7 @@ set(ENGINE_SOURCES
     src/MeltVolume.cpp
     src/JigglePhysics.cpp
     src/SphereImpostors.cpp
+    src/ParticleEffects.cpp
     src/HairStrands.cpp
     src/HairRenderer.cpp
     src/ClothGpu.cpp

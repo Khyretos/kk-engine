@@ -1,0 +1,14 @@
+# Harbour Run: a twisty loop round the docks for drifting (Track.h).
+# Hairpins, a chicane, a long sweeper: points for sliding, the most wins.
+name: Harbour Run
+about: Tight docks and a long sweeper. Slide through the corners for points; hitting a wall loses the combo.
+event: drift
+order: 2
+mood: dusk
+shape: points
+points: [[0, 0], [120, 0], [168, 18], [186, 64], [162, 108], [112, 102], [82, 72], [42, 88], [30, 140], [72, 172], [150, 178],
+         [222, 152], [262, 92], [252, 22], [222, -40], [150, -72], [60, -72], [-20, -52], [-52, -14]]
+width: 14
+bank: 0
+laps: 2
+wall: 1.0

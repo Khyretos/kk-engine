@@ -128,8 +128,11 @@ public:
     // physics-simulated prop is drawn (PhysicsModule::deformEmbedded moves
     // the vertices; UVs, materials and textures stay the model's own).
     // Uploaded once per frame in flight after each call; empty clears.
+    // modelSpace: the vertices are in the model's own space instead, and
+    // the instance's transform still places it (a dented car body that
+    // keeps driving: upload only when a dent changes it, not every frame).
     void setDeformedVertices(InstanceId instance, const std::vector<std::vector<glm::vec3>>& positions,
-                             const std::vector<std::vector<glm::vec3>>& normals);
+                             const std::vector<std::vector<glm::vec3>>& normals, bool modelSpace = false);
     bool isDeformed(InstanceId instance) const;
     // Replace the geometry a deformed instance draws with, per mesh part
     // (e.g. a finer, unshared triangle soup for a breakable prop — see
@@ -184,6 +187,7 @@ private:
         std::vector<SkinJiggleOffset> skinJiggle;
         std::vector<SkinnedBuffers> skinned; // one per skinned mesh of the model
         std::vector<SkinnedBuffers> deformed; // one per mesh part while setDeformedVertices is active
+        bool deformedInModelSpace = false;    // setDeformedVertices(..., modelSpace): drawn with `transform`
         uint64_t deformVersion = 0;
         uint64_t deformUploaded[Renderer::kMaxFramesInFlight] = {};
         int clip = -1;
