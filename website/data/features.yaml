@@ -200,15 +200,17 @@
   title: Stunt planes, any controller
   icon: fa-solid fa-plane
   accent: "#ffbe0b"
-  tagline: Loops, rolls and ring races over a generated island.
+  tagline: Loops, rolls, ring races and dogfights over a generated island.
   summary: >-
     An arcade flight model that stalls, slides and loops, over an island
-    grown from a seed. Race through rings, score chained stunts, or take
-    off from the runway and go anywhere, four on one screen or online.
+    grown from a seed. Take off from the runway, then race through rings,
+    score chained stunts, shoot each other down over a town, or go
+    anywhere, four on one screen or online.
   points:
     - Gamepad, keyboard and mouse, or a flight stick, per player
     - Change controller from the pause menu, never to one someone else holds
     - CPU pilots from Rookie to Legend, smoke trails, split screen
+    - Dogfights with guns, collisions, explosions and dented planes
     - Synty POLYGON Stunt Plane with moving propeller and control surfaces
   media:
     - { src: media/flying-stunts.webp, caption: "Stunts: a roll for 200, smoke on, the standings on the right" }

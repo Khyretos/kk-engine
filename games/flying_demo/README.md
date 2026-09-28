@@ -1,8 +1,10 @@
 # Flying
 
 Stunt planes over a generated island. Race through a course of rings,
-score loops, rolls, inverted flight and low passes against the clock, or
-take off from the runway and fly wherever you like. Up to four people
+score loops, rolls, inverted flight and low passes against the clock,
+shoot each other down over a town in a dogfight, or fly wherever you
+like. Every flight starts on the runway: open the throttle, roll, and
+the plane lifts off once it is fast enough. Up to four people
 play on one screen (split screen), more online, with up to five CPU
 pilots. Every player flies with the device they picked: a gamepad, the
 keyboard and mouse, or a flight stick, and can move to any other free
@@ -14,7 +16,9 @@ fixed rate, chase and cockpit cameras that lean with the craft), for
 **games where each player chooses their controller** (flight sticks next
 to gamepads and the keyboard, swapped mid-game without touching anyone
 else's), and for **arcade scoring** (tricks recognised from how the
-vehicle moved, chained for a multiplier).
+vehicle moved, chained for a multiplier), and for **arcade combat**
+(guns with a little aim help, damage sent over the network, planes that
+dent, burn and break up).
 
 ![Flying: a Stunts round with the Synty stunt plane, smoke on](../../website/static/media/flying-stunts.webp)
 
@@ -45,7 +49,7 @@ Switches for demos and tests (developer builds):
 | Variable | What it does |
 |---|---|
 | `KKE_FLY_LOBBY=0` | Straight into a flight, no start menu |
-| `KKE_FLY_MODE=race\|stunts\|free` | The mode |
+| `KKE_FLY_MODE=race\|stunts\|free\|dogfight` | The mode |
 | `KKE_FLY_ISLAND=<seed or name>` | The island (`random` for a new one each time) |
 | `KKE_FLY_CPUS=<0..5>` | How many CPU pilots |
 | `KKE_FLY_AUTOPILOT=1` | Player 1 is flown by the CPU pilot too (and no start menu) |
@@ -68,7 +72,7 @@ hint line at the bottom shows the buttons of the device you fly with.
 | Roll | left stick left/right | A / D (or the arrows), or move the mouse | stick left/right |
 | Rudder | LB / RB | Q / E | twist the stick |
 | Throttle | RT up, LT down | Left Shift up, Left Ctrl down | the throttle lever |
-| Smoke on/off | A | Space, left mouse button | trigger (button 1) |
+| Smoke on/off (Dogfight: fire) | A or B | Space or F, left mouse button | trigger (button 1) |
 | Camera: chase, cockpit, far | Y | C | button 2 |
 | Wheel brakes (on the ground) | X | B | button 3 |
 | Look around | right stick | hold the right mouse button and move | the hat |
@@ -100,18 +104,29 @@ textures). Player 1 also sets:
 | Row | Choices |
 |---|---|
 | CPU players | 0 to 5, each Rookie, Pilot, Ace or Legend |
-| Mode | Race, Stunts, Free flight |
+| Mode | Race, Stunts, Free flight, Dogfight |
 | Island | Palm Key, Twin Bays, Gull Rock, Harbour Isle, Cloud Cape, Random |
 | Laps | 1, 2, 3 (Race) |
 | Rings | Big (18 m), Normal (14 m), Tight (10 m) (Race) |
+| First to | 5, 10, 20 kills (Dogfight) |
 | Sky | Day, Morning, Golden hour, Sunset, Stormy (a [mood](../../docs/MOODS.md)) |
 | Online | Off, Join, Host |
 
 Behind the menu the planes already fly round the island.
 
+### Taking off
+
+Every mode starts on the runway, two by two, engines idling. Open the
+throttle and roll: past about 97 km/h the nose lifts by itself and the
+plane flies. That's all there is to it; pull back to climb sooner.
+
+A plane can't hang on its propeller: point the nose straight up and the
+engine pulls less and less, the plane slows, and it tips over into a
+dive. Climb at an angle instead.
+
 ### Race
 
-Everyone starts in the air, two by two, behind the first ring. The next
+After take-off, head for the first ring. The next
 ring for you is drawn gold, and an arrow at the top of your view points
 to it. Fly through the rings in order, the right way; after the last ring
 of the last lap you have finished. The HUD shows your place, lap, ring,
@@ -136,15 +151,33 @@ x2, and so on. A crash costs 300 and breaks the chain.
 
 ### Free flight
 
-You start on the runway with the engine idling: throttle up, roll down
-the runway and pull back once you pass about 95 km/h. Land again on the
-runway or any flat field, gently: coming down faster than 6 m/s or
-tilted more than 25 degrees is a crash. The CPU pilots are already in the
-air.
+Take off and go where you like. Land again on the runway or any flat
+field, gently: coming down faster than 6 m/s or tilted more than 25
+degrees is a crash.
+
+### Dogfight
+
+Take off from the airfield beside a town of houses, shops and towers,
+and shoot the others down. The first to the kill target (5, 10 or 20)
+wins; after five minutes the most kills wins. The guns fire eleven
+rounds a second; a plane near the ring of your sight is led for you.
+Seventeen hits bring a plane down, and a shot-down plane counts as a kill
+for whoever hurt it last in the ten seconds before. Your health bar is
+in your panel, a mark flashes on your sight when you hit, and the feed
+says who shot down whom. Planes come back 850 m from the town, as far
+from the others as they can be, and bullets can't hurt them for 3 s.
+Buildings stop bullets, and flying into one is a crash.
+
+### Collisions
+
+Planes bump off each other. Meet faster than 18 m/s and both explode: a
+fireball, smoke and pieces of the plane falling away. A slower bump
+dents both planes where they touched, and in a dogfight it costs health.
+A collision counts as a crash, not a kill.
 
 ### Crashing
 
-Hit the ground, the sea or a hill and the plane breaks up; 2.5 s later
+Hit the ground, the sea, a hill or a building and the plane explodes; 2.5 s later
 you are back in the air: in a race at the last ring you passed, otherwise
 above where you went down. Fly more than 4.2 km out to sea and you are
 put back over the island too.
@@ -201,12 +234,18 @@ weathervaning into the airflow, and gravity. On the ground the wheels roll
 with friction and brakes and the rudder steers the tail wheel. Each step
 is at most 1/120 s (updatePilot splits a frame).
 
-### The island and the rings (Course.h, Course.cpp, World.cpp)
+### The island, the town and the rings (Course.h, Course.cpp, Combat.h, World.cpp)
 
 `Island(seed)` is a height function: rolling hills, a mountain, a flat
 runway strip in the middle and a coast falling to the sea 1.5 km out.
 `World.cpp` builds it into one flat-shaded mesh (a 24 m grid) with
-about 1400 low-poly trees, a hangar and a tower, and a sea sheet. The
+about 1400 low-poly trees and a sea sheet. `Town` (Combat.h) places the
+hangar and the control tower beside the runway and, for Dogfight, a
+district west of it: 70 m blocks, towers near the middle and houses
+further out. Towers and plain houses are boxes built in code; with
+Synty's POLYGON Town pack the houses are its houses and shops. The town
+is a list of boxes on a 40 m grid, so a plane or a bullet asks it
+`touches` or `blocks` in a few lookups. The
 rings (`Island::rings`) go round the island at heights smoothed so each
 climb and dive between them can be flown, each facing the way you arrive.
 `throughRing()` checks a plane's step crosses the ring's plane inside it.
@@ -220,7 +259,28 @@ point just past its centre; beside or past it, first a point 450 m in
 front so the plane can turn in. The skill (Rookie to Legend) changes the
 cruise speed and how hard they fly. They keep 30 m from each other, and a
 CPU pilot that hasn't made a ring for 45 s is put back on the course. In
-Stunts they circle the island, looping and rolling every 30 s.
+Stunts they circle the island, looping and rolling every 30 s. In a
+dogfight each picks the nearest plane in front of it, flies to where it
+will be, fires when it is near the sight and keeps above the rooftops.
+
+### Guns, damage and explosions (Combat.h, Combat.cpp, Damage.cpp)
+
+A plane is a set of spheres (`planeShape`: nose, cockpit, tail and a
+row along each wing), scaled to its span. `planesTouch` finds where two
+planes came closest over the frame, not only where they ended up, so
+two planes meeting head on at 100 m/s can't pass through each other
+between frames. `bulletHits` tests a bullet's step against the spheres.
+Bullets are points moving at 480 m/s, drawn as tracers.
+
+Each screen tests its own planes and bullets. Damage to a plane another
+screen flies is added up and sent as one `Damage` event every 0.12 s
+(Net.cpp); that screen applies it, and when its plane goes down it sends
+`Down`, so every screen shows the same kill once. Dents are sent as
+`Dent` events. A dent moves the vertices near the hit inwards
+(`ModelModule::setDeformedVertices`, as the racing demo's cars do).
+Explosions are the engine's `kke::ParticleEffects`: fire, smoke and
+sparks, drawn in `renderTranslucent`, plus pieces of the plane that fall
+and tumble.
 
 ### The plane's art (Planes.cpp)
 
@@ -271,8 +331,8 @@ gives the seat's input map the new device.
 The same shape as Climb Race: this screen's players are NetModule's
 player and local players, the host's CPU pilots are the host's local
 players. Each plane goes out every frame as a `NetPlayerState`: position,
-velocity, and in `extra` its attitude, throttle, smoke, crashed, lap,
-ring, finish time and stunt score, so every screen can draw it and rank
+velocity, and in `extra` its attitude, throttle, smoke, guns firing,
+crashed, lap, ring, finish time, stunt score, health, kills and deaths, so every screen can draw it and rank
 it with no other messages. The host's `Setup` event starts each flight
 everywhere. The server's movement limits are raised to a stunt plane's
 speeds (`NetModule::movementLimits`), and remote planes turn smoothly to
@@ -281,7 +341,8 @@ the newest attitude.
 ### The HUD (Hud.cpp, ui/flying_hud.rml)
 
 An RmlUi data model: a panel per player in the corner of their view,
-the arrow to the next ring, the last trick, the standings, the countdown,
+the arrow to the next ring, the last trick, the health bar, the gun
+sight and hit mark, the standings, the countdown,
 results and the pause menu. Only what changed is marked dirty.
 
 ### Sound
@@ -302,11 +363,14 @@ synthesised impact.
   seats them after `setFlightSticks(true)`.
 - **Device swaps are local.** Which device flies which plane never goes
   over the network, so a swap can't upset anyone online.
-- **No collisions between planes.** Planes pass through each other; the
-  CPU pilots keep their distance instead. Mid-air crashes on a crowded
-  ring course would be more frustrating than fun.
-- **Start in the air.** Race and Stunts start airborne so the first
-  second is flying; Free flight is the one that starts on the runway.
+- **Planes collide.** A fast meeting is an explosion and a slow one a
+  dent, and neither counts as a kill, so ramming isn't a way to win.
+- **Take-off is one step.** Every flight starts on the runway, and the
+  plane lifts off by itself once it is fast enough: the feel of a
+  take-off without having to learn one.
+- **A little aim help.** Hitting a turning plane with a gamepad is hard;
+  the guns lead a target near the sight, so a player who gets behind
+  someone gets the kill.
 
 ## Tuning
 
@@ -319,6 +383,9 @@ synthesised impact.
 | Respawn time, how far out to sea, the lost-CPU time | constants at the top of [FlyingModule.cpp](FlyingModule.cpp) |
 | Camera distance and lean | `FlyingModule::updateCamera` |
 | Smoke | `kTrailLife`, `kPuffSpacing` and `rebuildTrails` in [Planes.cpp](Planes.cpp) |
+| Take-off speed, how steep a climb the engine holds | `rotateSpeed`, `steepThrust` in [Flight.h](Flight.h) |
+| Guns, damage, explosion speed, shield | constants at the top of [Damage.cpp](Damage.cpp) |
+| The town | `Town` in [Combat.cpp](Combat.cpp) |
 
 ## Engine features it uses
 
@@ -329,6 +396,7 @@ synthesised impact.
 - [Moods](../../docs/MOODS.md): the Sky row
 - [Synty packs](../../docs/SCENES.md): `kke::AssetCatalog`, `kke::loadModel`, texture variants
 - RmlUi HUD, `kke::DynamicMeshRenderer`, `kke::SphereImpostorRenderer`, `kke::AudioStream`
+- `kke::ParticleEffects` (explosions), `ModelModule::setDeformedVertices` (dents), `AudioModule::playImpact`
 
 ## Assets
 
@@ -336,8 +404,11 @@ synthesised impact.
   from `SourceFiles/FBX/`, with `Polygon_Plane_Texture_01` to `_04`.
   Found in `assets/synty/` next to the executable or under
   `KKE_ASSETS_DIR`. Without it the planes are built from boxes.
-- Everything else (island, trees, hangar, tower, rings, smoke) is built
-  in code. The sky is the mood's CC0 Poly Haven picture.
+- **POLYGON Town** (Synty, not in the repo, optional): Dogfight's houses,
+  `SM_Bld_House_Preset_01` to `_11`, `SM_Bld_Shop_01` to `_03` and
+  `SM_Bld_Church_01`. Without it the houses are boxes.
+- Everything else (island, trees, hangar, tower, office towers, rings,
+  smoke, explosions) is built in code. The sky is the mood's CC0 Poly Haven picture.
 
 ## Make a game like this
 
@@ -366,7 +437,9 @@ synthesised impact.
 | [Course.h](Course.h), [Course.cpp](Course.cpp) | The island, the rings, ring pilot (pure, tested) |
 | [Stunts.h](Stunts.h), [Stunts.cpp](Stunts.cpp) | Trick recognition and scoring (pure, tested) |
 | [FlyNet.h](FlyNet.h), [FlyNet.cpp](FlyNet.cpp) | What goes over the network (pure, tested) |
-| [World.cpp](World.cpp) | Building the island, the sea and the rings |
+| [World.cpp](World.cpp) | Building the island, the town, the sea and the rings |
+| [Combat.h](Combat.h), [Combat.cpp](Combat.cpp) | Plane shapes, collisions, bullets, the town (pure, tested) |
+| [Damage.cpp](Damage.cpp) | Collisions, dents, explosions, guns, kills |
 | [Planes.cpp](Planes.cpp) | The Synty plane in parts, the built plane, the smoke |
 | [Players.cpp](Players.cpp) | Controls, the start menu, reading players and CPU pilots, the pause menu |
 | [Net.cpp](Net.cpp) | Online: host, join, the setup, planes in and out |

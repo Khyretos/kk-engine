@@ -270,8 +270,8 @@ built from blocks when the pack is missing.
 
 ## Flying (`games/flying_demo`)
 
-Not a scene file: the island, trees, hangar, tower, rings and smoke are
-built in code from the island's seed.
+Not a scene file: the island, trees, hangar, tower, office towers, rings,
+smoke and explosions are built in code from the island's seed.
 
 - The planes: **POLYGON Stunt Plane**, `SM_Veh_Plane_Stunt_01`
   (`SourceFiles/FBX/`), split by mesh name into the body, `_Prop`,
@@ -279,6 +279,10 @@ built in code from the island's seed.
   `_Flap_Tail`, `_Cockpit_Stick`, `_Glass` and `_Wheels`
   (`_Crop_Duster` is left out). Paint jobs: `Polygon_Plane_Texture_01`
   to `_04`. Without the pack the planes are built from boxes.
+- Dogfight's houses (optional): **POLYGON Town**,
+  `SM_Bld_House_Preset_01` to `_11`, `SM_Bld_Shop_01` to `_03` and
+  `SM_Bld_Church_01`, loaded the first time a dogfight starts. Without
+  the pack the houses are boxes.
 
 ## Racing (`games/racing`)
 
