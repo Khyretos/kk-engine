@@ -242,6 +242,10 @@ void RacingModule::buildTrack(const TrackDesc& desc) {
     const glm::vec3 center((mn.x + mx.x) * 0.5f, -0.5f, (mn.z + mx.z) * 0.5f);
     const glm::vec3 half((mx.x - mn.x) * 0.5f + 220.0f, 0.5f, (mx.z - mn.z) * 0.5f + 220.0f);
     const glm::vec3 groundColor = desc.event == Event::Oval ? glm::vec3(0.3f, 0.42f, 0.22f) : glm::vec3(0.36f, 0.36f, 0.35f);
+    // What the tyres find under them (docs/VEHICLES.md "Tyres"): the road,
+    // and off it the infield's grass or the docks' concrete.
+    setGround(kke::AudioMaterialTable::Stone, Ground::Tarmac);
+    setGround(kke::AudioMaterialTable::Dirt, desc.event == Event::Oval ? Ground::Grass : Ground::Concrete);
     {
         std::vector<kke::Vertex> v;
         std::vector<uint32_t> idx;
@@ -551,7 +555,7 @@ void RacingModule::crossLine(Car& c, int direction) {
         return;
     }
     // CPU drivers with a bad car head for the pits.
-    if (c.cpu && m_track->hasPits() && c.health < 55.0f && m_laps - c.lap >= 1 && m_damage > 0) c.wantsPit = true;
+    if (c.cpu && m_track->hasPits() && (c.health < 55.0f || tyresHurt(c)) && m_laps - c.lap >= 1 && m_damage > 0) c.wantsPit = true;
     if (c.seat >= 0 && c.lap == m_laps - 1) {
         c.note = "Last lap!";
         c.noteTime = 2.5f;

@@ -297,6 +297,19 @@ public:
     void setVehicleWheelGrip(VehicleId id, int wheel, float scale);
     // Stops the wheels and the engine (after a teleport back on the track).
     void resetVehicle(VehicleId id);
+    // Tyres (kke/Tyre.h, docs/VEHICLES.md "Tyres"). The grip of a kind of
+    // ground, by the BodyDesc::material of the body under the wheel
+    // (anything not set is tarmac): GroundGrip::gravel(), mud(), ...
+    void setGroundGrip(uint32_t material, const GroundGrip& grip);
+    void setAmbientTemperature(float celsius); // air and cold tyres (20 C)
+    // Damage: a slow leak (`leak` of the air a second) that goes flat,
+    // or straight to flat, on the rim or the wheel gone.
+    void punctureVehicleTyre(VehicleId id, int wheel, float leak = 0.4f);
+    void setVehicleTyre(VehicleId id, int wheel, TyreCondition condition);
+    // Tyre warmers (wheel -1: all of them).
+    void setVehicleTyreTemperature(VehicleId id, int wheel, float surface, float core);
+    // A fresh set: cold, full, unworn (a pit stop).
+    void replaceVehicleTyres(VehicleId id);
 
     void step(float dt);
     double lastStepMs() const;

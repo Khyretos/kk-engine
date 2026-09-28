@@ -81,6 +81,66 @@ past 10% of wheelspin or lock the sideways grip fades by up to
 `combinedSlipLoss` (reached at 70%): pull the handbrake or light up the
 rears and the back of the car steps out, like a real car.
 
+## Tyres
+
+Every wheel has a tyre (`kke::Tyre`, `kke/Tyre.h`) that lives on beyond
+its friction curve, run by `RigidWorld` after every step and fed back
+into the grip on the next. It is what the driving sims do, cheaply:
+
+- **Heat, in two layers** (rFactor 2 and Assetto Corsa model it this
+  way). The tread's surface heats in seconds from sliding: the friction's
+  power, force times how fast the tread slides over the road (a burnout
+  passes 150 C in a few seconds). It cools in the air, faster with speed,
+  and into the road and the carcass. The carcass and the air inside warm
+  in minutes from the rubber flexing as it rolls (more when it's soft).
+  Grip peaks in a window (`optimalTemp` 80 C, `window` 55 C either side):
+  cold tyres slide, cooked ones go greasy.
+- **Pressure** follows the air's temperature (the gas law: 2.2 bar cold is
+  ~2.6 at 80 C) and a puncture lets it out. Grip is best a little above
+  the cold setting. A soft tyre flexes more (heat, drag).
+- **Wear** from sliding, three times faster above 120 C; a worn-out tyre
+  blows.
+- **Load sensitivity** (BeamNG's `noLoadCoef`/`fullLoadCoef`, every sim's
+  rule): twice the load gives less than twice the grip (`loadSensitivity`
+  0.15: 85% of it per newton). Weight thrown onto the outside tyres in a
+  corner costs grip, so a car has a balance instead of running on rails.
+- **The ground** (`RigidWorld::setGroundGrip` by the body's
+  `BodyDesc::material`, `kke::GroundGrip`): its grip, rolling resistance
+  and the shape of the curve. On loose ground (`loose`: gravel 0.8, mud
+  0.9) a sliding tyre keeps nearly all of its peak, because it digs in
+  (rally drivers slide on purpose; on tarmac a slide loses grip). Presets:
+  `tarmac()`, `concrete()`, `gravel()`, `dirt()`, `grass()`, `mud()`,
+  `snow()`, `ice()`.
+- **Damage**: `punctureVehicleTyre` (a leak; flat when a quarter is
+  left), `setVehicleTyre` with `TyreCondition::Flat` (on its sidewalls:
+  lower, half the grip, six times the rolling drag), `Rim` (the tyre shreds
+  off after ~1.5 km flat: metal on the road, 0.3 grip) or `Detached` (the
+  wheel is off and the car sits on its hub). The wheel's radius drops with
+  it, so the car sits down on that corner. `replaceVehicleTyres` fits a
+  fresh set; `setVehicleTyreTemperature` is the tyre warmers.
+
+`VehicleWheelState` reports it all: `load`, `surfaceTemp`, `coreTemp`,
+`pressure`, `wear`, `slidePower` (for smoke and marks), `grip` (the scale
+on the friction curve right now), `radius`, `condition` and the ground's
+`groundMaterial`. `TyreDesc` in `VehicleWheelDesc::tyre` sets the window,
+the pressure, the load sensitivity, and scales on heat and wear (0 turns
+either off).
+
+What was left out, and why: relaxation length (slip building up over the
+tyre's first half metre of rolling) needs the slip to be filtered before
+Jolt's solver sees it, and speed-dependent sliding friction would change
+how existing drifts hold; neither shows in a game as much as it costs in
+feel. Sources: BeamNG's wheel documentation and its tyre blog posts
+(https://documentation.beamng.com/modding/vehicle/sections/wheels/,
+https://www.beamng.com/game/news/blog/a-look-at-tire-development-in-beamng-part-2/),
+the Live for Speed tyre report (https://www.lfs.net/report-dec2009),
+https://en.wikipedia.org/wiki/Rolling_resistance and
+https://en.wikipedia.org/wiki/Relaxation_length.
+
+The racing demo draws the rest (games/racing/README.md "Wheels"): the
+tyre squashing on the road, flats, bare rims sparking, torn-off wheels
+rolling away, dust on loose ground.
+
 ## Damage, drifting and resets
 
 - `setVehiclePower(car, scale)`: scales the engine's torque (a hurt

@@ -163,6 +163,20 @@ const CarArt& CarGarage::art(int type, int kit, int paint) {
     return m_cache.emplace(key, std::move(a)).first->second;
 }
 
+void CarGarage::keepWheel(CarArt& a, int side, const kke::ModelData& wheel) {
+    a.wheelPositions[side].clear();
+    a.wheelNormals[side].clear();
+    for (const kke::ModelMesh& m : wheel.meshes) {
+        std::vector<glm::vec3> p, n;
+        for (const kke::ModelVertex& v : m.vertices) {
+            p.push_back(v.position);
+            n.push_back(v.normal);
+        }
+        a.wheelPositions[side].push_back(std::move(p));
+        a.wheelNormals[side].push_back(std::move(n));
+    }
+}
+
 void CarGarage::finish(CarArt& a, const kke::ModelData& body) {
     a.positions.clear();
     a.normals.clear();
@@ -283,6 +297,7 @@ CarArt CarGarage::loadSynty(int type, int kit, int paint) {
         for (kke::ModelMesh& m : wheels[side].meshes)
             for (kke::ModelVertex& v : m.vertices) v.position -= a.wheelCenter[side];
         boundsOf(wheels[side]);
+        keepWheel(a, side, wheels[side]);
     }
     const std::string key = fmt::format("racing/{}/{}", asset, paints()[static_cast<size_t>(paint)].texture);
     finish(a, body);
@@ -327,8 +342,11 @@ CarArt CarGarage::makeBlock(int type, int paint) {
     finish(a, body);
     const std::string key = fmt::format("racing/block/{}/{}", t.id, paint);
     a.body = m_models->add(std::move(body), key + "/body");
-    a.wheel[0] = m_models->add(blockWheel(a.wheelRadius, a.wheelWidth, true), key + "/wheel_l");
-    a.wheel[1] = m_models->add(blockWheel(a.wheelRadius, a.wheelWidth, false), key + "/wheel_r");
+    for (int side = 0; side < 2; ++side) {
+        kke::ModelData wheel = blockWheel(a.wheelRadius, a.wheelWidth, side == 0);
+        keepWheel(a, side, wheel);
+        a.wheel[side] = m_models->add(std::move(wheel), key + (side == 0 ? "/wheel_l" : "/wheel_r"));
+    }
     return a;
 }
 

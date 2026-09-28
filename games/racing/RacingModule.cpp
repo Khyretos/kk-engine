@@ -19,6 +19,9 @@
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
 #include "kke/modules/NetModule.h"
+#if KKE_ENABLE_FEMFX
+#include "kke/modules/PhysicsModule.h"
+#endif
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/modules/UiModule.h"
 
@@ -56,7 +59,11 @@ std::vector<kke::ModuleDependency> RacingModule::dependencies() const {
              { std::type_index(typeid(kke::UiModule)), false, "the HUD: place, lap, speed, gear, damage, drift points" },
              { std::type_index(typeid(kke::LobbyModule)), false, "the start menu: players join, pick a car, set up the race" },
              { std::type_index(typeid(kke::NetModule)), false, "online races: Host / Join in the start menu" },
-             { std::type_index(typeid(kke::AudioModule)), false, "crashes and scrapes, the lights" } };
+             { std::type_index(typeid(kke::AudioModule)), false, "crashes and scrapes, the lights" },
+#if KKE_ENABLE_FEMFX
+             { std::type_index(typeid(kke::PhysicsModule)), false, "bodies that crumple for real (FEMFX): without it, dents by hand" },
+#endif
+    };
 }
 
 void RacingModule::init(kke::Application& app) {
@@ -67,6 +74,11 @@ void RacingModule::init(kke::Application& app) {
     m_net = app.getModule<kke::NetModule>();
     m_lobby = app.getModule<kke::LobbyModule>();
     m_audio = app.getModule<kke::AudioModule>();
+#if KKE_ENABLE_FEMFX
+    m_femfx = app.getModule<kke::PhysicsModule>();
+#endif
+    m_crumple = !(std::getenv("KKE_RACE_FEMFX") && *std::getenv("KKE_RACE_FEMFX") == '0');
+    m_crumpleShove = envFloat("KKE_RACE_SHOVE", m_crumpleShove);
 
     m_autopilot = envOn("KKE_RACE_AUTOPILOT");
     m_crashTest = envOn("KKE_RACE_CRASH");
@@ -74,7 +86,7 @@ void RacingModule::init(kke::Application& app) {
     m_defaultCars = std::clamp(static_cast<int>(envFloat("KKE_RACE_CARS", 12.0f)), 1, 24);
     m_forceLaps = static_cast<int>(envFloat("KKE_RACE_LAPS", -1.0f));
     m_forceDamage = static_cast<int>(envFloat("KKE_RACE_DAMAGE", -1.0f));
-    m_cameraMode = std::clamp(static_cast<int>(envFloat("KKE_RACE_CAMERA", 0.0f)), 0, 3);
+    m_cameraMode = std::clamp(static_cast<int>(envFloat("KKE_RACE_CAMERA", 0.0f)), 0, 4);
     // How to play before the first race, unless nobody's there to read it.
     const char* intro = kke::dev::env("KKE_RACE_INTRO");
     m_howtoFirst = intro && *intro ? *intro == '1' : !(m_autopilot || m_quitAfter > 0.0f);
@@ -195,9 +207,11 @@ void RacingModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
             continue;
         }
         readCarState(c);
+        wobbleWheels(c, dt);
         updateTrackPosition(c, dt);
         driveCar(c, dt);
     }
+    updateShells();
     // The race's clock runs with the physics (a slow frame is the same race).
     if (m_phase != Phase::Lobby) updateRace(dt);
     std::fill(m_shift.begin(), m_shift.end(), 0);
@@ -226,7 +240,7 @@ void RacingModule::update(const kke::UpdateContext& ctx) {
     }
     for (Car& c : m_cars)
         if (c.seat >= 0 && !c.remote) c.lookBack = m_input->map(c.player).held("look.back");
-    if (camera) m_cameraMode = (m_cameraMode + 1) % 4;
+    if (camera) m_cameraMode = (m_cameraMode + 1) % 5;
 
     updateNet(dt);
     m_fx->update(dt, glm::vec3(1.2f, 0.0f, 0.6f));
@@ -286,9 +300,11 @@ void RacingModule::update(const kke::UpdateContext& ctx) {
         c.hitCooldown = std::max(0.0f, c.hitCooldown - dt);
     }
     updateDebris(dt);
+    updateLooseWheels(dt);
     m_skidRebuild -= dt;
     if (m_skidsChanged && m_skidRebuild <= 0.0f) rebuildSkids();
     for (Car& c : m_cars) placeInstances(c);
+    updateTyreLooks();
     sendNet();
 
     // Cameras: player 1 is the engine's camera; split screen adds the
@@ -337,13 +353,18 @@ void RacingModule::update(const kke::UpdateContext& ctx) {
     if (m_quitAfter > 0.0f) {
         if (m_clock >= m_reportAt) {
             m_reportAt += 5.0f;
-            kke::log::get(name())->info("t {:.0f} s: race clock {:.1f} s, physics {:.1f} s, {:.0f} fps", m_clock, m_raceClock,
-                                        m_rigid->world().simulatedTime(), dt > 0.0f ? 1.0f / dt : 0.0f);
-            for (const Car& c : m_cars)
-                kke::log::get(name())->info("t {:.0f} s: P{} {} ({}) lap {} s {:.0f} u {:.1f}, {:.0f} km/h, gear {}, health {:.0f}%{}{}{}", m_clock, c.place,
-                                            c.name, carTypes()[static_cast<size_t>(c.type)].id, c.lap, c.where.s, c.where.u, carSpeed(c) * 3.6f, c.state.gear, c.health,
+            kke::log::get(name())->info("t {:.0f} s: race clock {:.1f} s, physics {:.1f} s, {:.0f} fps{}", m_clock, m_raceClock,
+                                        m_rigid->world().simulatedTime(), dt > 0.0f ? 1.0f / dt : 0.0f, crumpleReport());
+            for (const Car& c : m_cars) {
+                std::string tyres;
+                for (const kke::VehicleWheelState& w : c.state.wheels)
+                    tyres += fmt::format("{}{:.0f}{}", tyres.empty() ? "" : "/", w.surfaceTemp,
+                                         w.condition == kke::TyreCondition::Inflated ? "" : w.condition == kke::TyreCondition::Flat ? "F" : w.condition == kke::TyreCondition::Rim ? "R" : "X");
+                kke::log::get(name())->info("t {:.0f} s: P{} {} ({}) lap {} s {:.0f} u {:.1f}, {:.0f} km/h, gear {}, tyres {} C, health {:.0f}%{}{}{}", m_clock, c.place,
+                                            c.name, carTypes()[static_cast<size_t>(c.type)].id, c.lap, c.where.s, c.where.u, carSpeed(c) * 3.6f, c.state.gear, tyres, c.health,
                                             c.totalled ? ", totalled" : "", c.finished ? ", finished" : "",
                                             event() == Event::Drift ? fmt::format(", drift {:.0f}", c.driftScore + c.driftChain) : std::string());
+            }
         }
         if (m_clock >= m_quitAfter) {
             kke::log::get(name())->info("particles {} of {}, skid marks {}, debris {}", m_fx->count(), m_fx->capacity(), m_skids.size(),
