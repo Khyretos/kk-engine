@@ -64,7 +64,11 @@ else
     trace="$build/art-trace.txt"
     rm -f "$trace"
     echo "Recording which art the demos use: every demo opens for a few seconds (don't touch anything)..."
-    KKE_ASSETS_DIR="$assets" KKE_ASSET_TRACE="$trace" "$build/bin/benchmark/kke_benchmark" --seconds 3 --no-wait --no-open \
+    # The character animations too (assets/animations, CC0, fetched, not in
+    # git): demos only load some Synty art once a character has them.
+    anims=""
+    [ -d assets/animations ] && anims="$repo/assets/animations"
+    KKE_ASSETS_DIR="$assets" KKE_ANIMATIONS_DIR="$anims" KKE_ASSET_TRACE="$trace" "$build/bin/benchmark/kke_benchmark" --seconds 3 --no-wait --no-open \
         --out "$build/art-trace-run" || echo "(a demo had trouble in the recording run; see $build/art-trace-run)"
     [ -s "$trace" ] || die "the recording run opened no art: are the packs in '$assets'?"
     "$build/bin/kke_cook" --root "$assets" --out "$cooked/synty" --trace "$trace"
