@@ -47,6 +47,18 @@
                 text-align: center; font-size: 14dp; color: #fff4d6; }
         #talk { position: absolute; right: 20dp; bottom: 60dp; padding: 4dp 12dp; border-radius: 10dp; background-color: #10301acc;
                 font-size: 14dp; color: #9cff9a; }
+        /* Portrait (a phone held upright, docs/INPUT.md "Per-screen layouts"):
+           the card and the table take the width they have; the context is
+           already the safe area. */
+        body.kke-portrait #card { left: 3%; width: 94%; margin-left: 0; height: auto; top: 22%; margin-top: 0; padding: 18dp 16dp; }
+        body.kke-portrait #card .title { font-size: 38dp; }
+        body.kke-portrait #card .goal { font-size: 18dp; }
+        body.kke-portrait #table { left: 3%; width: 94%; margin-left: 0; top: 20%; margin-top: 0; }
+        body.kke-portrait #table .who { width: 45%; }
+        body.kke-portrait #banner .big { font-size: 52dp; }
+        body.kke-portrait #hint { left: 2%; width: 90%; }
+        body.kke-portrait #top { top: 78dp; } /* under the player panel */
+        body.kke-phone .player { margin: 8dp 0 0 8dp; }
     </style>
 </head>
 <body data-model="party">
