@@ -270,7 +270,7 @@ built from blocks when the pack is missing.
 
 ## Demos that use no packs
 
-These run the same with or without any asset pack: `climb_race`,
+These run the same with or without any asset pack: `climb_race`, `tennis`,
 `procedural_demo`, `physics_demo`, `melt_demo`, `sea_demo`, `audio_demo`,
 `rmlui_demo`, `imgui_demo`, `kke_basics`, `starter_game` and `cookbook`.
 `kke_demo` dresses its course with the art listed under "Showcase course
@@ -297,6 +297,7 @@ with `KKE_MOOD=<name>`.
 | `climb_race` | each mountain's own (`games/climb_race/mountains/`): `morning`, `clear_day`, `golden_hour` (Granite Tower, Random), `sunset`, `overcast`, `misty_morning` | as the mood | as the mood |
 | `synty_demo` | `morning` | Qwantani Mid Morning | `meadow_day` |
 | `goblin_horde` | `sunset` | Qwantani Sunset | `wind_soft` |
+| `tennis` | `clear_day` | Kloofendal 48d Partly Cloudy | `meadow_day` |
 | `duel` | `arena_night` | Qwantani Night | `night_crickets` |
 | `melt_demo` | `dusk` | Qwantani Dusk 2 | `night_crickets` |
 | `starter_game` (and every new game), `cookbook`, `jiggle_demo` | `playful` | gradient | none |

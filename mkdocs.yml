@@ -109,6 +109,7 @@ nav:
       - Games:
           - Climb Race: demos/climb_race.md
           - Duel: demos/duel.md
+          - Tennis: demos/tennis.md
           - Goblin Horde: demos/goblin_horde.md
       - AI and companions:
           - Farm: demos/farm_demo.md

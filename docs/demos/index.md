@@ -26,6 +26,7 @@ Run any demo from `build/bin/` (building: [BUILDING.md](../BUILDING.md)).
 |---|---|---|
 | Your first game, in Lua only | [starter game](../../games/template/README.md) | [first Lua game](../../games/first_lua_game/README.md), the [cookbook](../cookbook/index.md) |
 | A race or a party game for the couch, with online play | [Climb Race](../../games/climb_race/README.md) | the [start menu](../LOBBY.md), [networking](../NETWORKING.md) |
+| A sports game, or anything with a soft ball | [Tennis](../../games/tennis/README.md) | [physics (FEMFX)](../../games/physics_demo/README.md), the [start menu](../LOBBY.md) |
 | A fighting game | [Duel](../../games/duel/README.md) | [melee combat](../COMBAT.md) |
 | An action game against crowds | [Goblin Horde](../../games/goblin_horde/README.md) | [melee combat](../COMBAT.md), [AI](../AI.md) |
 | A strategy or squad game | [Platoon](../../games/platoon/README.md) | [command kit](../../games/command_kit/README.md), [commands and orders](../COMMANDS.md) |

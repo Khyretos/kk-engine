@@ -138,6 +138,7 @@ set(ENGINE_SOURCES
     src/modules/PhysicsModule.cpp
     src/modules/PhysicsModuleBridge.cpp
     src/modules/PhysicsModuleRubble.cpp
+    src/modules/PhysicsModuleMotion.cpp
     src/modules/SettingsModule.cpp
     src/modules/ModelModule.cpp
     src/modules/ThumbnailModule.cpp
