@@ -147,6 +147,31 @@
   demo: climb_race
   docs: MOVEMENT/
 
+- id: racing
+  title: Racing with damage you can see
+  icon: fa-solid fa-flag-checkered
+  accent: "#ff5d5d"
+  tagline: Rub, drift, launch, and don't total your car.
+  summary: >-
+    Oval races of up to 24 cars two abreast, a drift contest round the
+    docks and a quarter-mile drag strip, on Jolt's vehicle physics. Every
+    hit dents the car where it lands, costs power and grip, and enough of
+    them total it, so you drive carefully to finish.
+  points:
+    - Jolt vehicles with a friction circle: a handbrake or a burnout steps the rear out
+    - Dents in the mesh where each hit lands, bent wheels, flying bodywork, engine smoke and fire
+    - Tyre smoke, sparks off metal and skid marks that stay on the road
+    - CPU drivers that pick lanes, overtake, pit when hurt, drift and launch on green
+    - A start menu, up to four players in split screen, and online races
+    - Synty POLYGON Street Racer cars and paint jobs when the pack is there
+  media:
+    - { src: media/racing-oval.webp, caption: "Kompas Speedway: sixteen cars, two abreast into turn one" }
+    - { src: media/racing-drift.webp, caption: "Harbour Run: a slide out of the docks corner for 198 points" }
+    - { src: media/racing-drag.webp, caption: "The Quarter Mile: eight lanes, launch on green, change gear yourself" }
+    - { src: media/racing-lobby.webp, caption: "The start menu: pick a car, a body kit and a paint job" }
+  demo: racing
+  docs: demos/racing/
+
 - id: tennis
   title: Tennis with a soft rubber ball
   icon: fa-solid fa-table-tennis-paddle-ball

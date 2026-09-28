@@ -976,6 +976,11 @@ endif()
 if(KKE_ENABLE_JOLT AND KKE_ENABLE_NET)
     add_subdirectory(games/climb_race)
 endif()
+# Racing: oval, drift and drag races on Jolt's vehicle physics, with dents
+# and smoke (games/racing/README.md). Networking: Host / Join online.
+if(KKE_ENABLE_JOLT AND KKE_ENABLE_NET)
+    add_subdirectory(games/racing)
+endif()
 # Flying: stunt planes over a generated island, gamepads, keyboard and
 # mouse or flight sticks (games/flying_demo/README.md). Networking: it
 # always adds kke::NetModule (online flights).
