@@ -18,16 +18,16 @@ extern const std::size_t kEngineIconPngSize;
 namespace {
 
 // Which ways a phone or tablet screen may turn (only Android and iOS read
-// the hint). Games are laid out for landscape, so that's the default, either
-// way round; KKE_ORIENTATION=portrait or =any overrides it (the benchmark
-// app runs every demo both ways). Without the hint SDL lets a resizable
-// window follow the phone into portrait.
+// the hint). A game follows the phone as it is turned, respecting the
+// phone's rotation lock: people, children most of all, turn their phones
+// all the time, and every layout works both ways. KKE_ORIENTATION=landscape
+// or =portrait holds one way (the benchmark app runs every demo both ways).
 const char* orientationHint() {
     const char* env = std::getenv("KKE_ORIENTATION");
     const std::string_view choice = env ? env : "";
     if (choice == "portrait") return "Portrait PortraitUpsideDown";
-    if (choice == "any") return "LandscapeLeft LandscapeRight Portrait PortraitUpsideDown";
-    return "LandscapeLeft LandscapeRight";
+    if (choice == "landscape") return "LandscapeLeft LandscapeRight";
+    return "LandscapeLeft LandscapeRight Portrait PortraitUpsideDown";
 }
 
 // KKE_WINDOW=WIDTHxHEIGHT opens the window at that size instead of the

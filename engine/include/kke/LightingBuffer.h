@@ -4,6 +4,7 @@
 
 #include <volk.h>
 #include <glm/glm.hpp>
+#include <cstdint>
 #include <memory>
 
 namespace kke {
@@ -43,15 +44,26 @@ public:
     void update(const Lighting& lighting, const glm::vec3& cameraPos, const glm::mat4& lightViewProj, const glm::mat4& viewProj,
                 const SkyEnvironment* sky = nullptr, const glm::vec4& shadowTile = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
 
+    // Picks the frame-in-flight slot that update() writes and
+    // descriptorSet() returns. Each slot has its own buffer: the GPU may
+    // still be drawing the previous frame with its camera and shadow
+    // matrices while this frame writes new ones (a phone's GPU runs a
+    // frame behind; sharing one buffer showed as dark shadow patches
+    // whenever the camera moved fast). Call it after the frame's fence
+    // wait (Renderer::beginFrame). Standalone users can leave it at 0.
+    static constexpr uint32_t kSlotCount = 2; // Renderer::kMaxFramesInFlight (checked in LightingBuffer.cpp)
+    void setFrame(uint32_t frame) { m_slot = frame % kSlotCount; }
+
     VkDescriptorSetLayout descriptorSetLayout() const { return m_setLayout; }
-    VkDescriptorSet descriptorSet() const { return m_descriptorSet; }
+    VkDescriptorSet descriptorSet() const { return m_descriptorSets[m_slot]; }
 
 private:
     VulkanDevice& m_device;
     VkDescriptorSetLayout m_setLayout = VK_NULL_HANDLE;
     VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
-    VkDescriptorSet m_descriptorSet = VK_NULL_HANDLE;
-    std::unique_ptr<Buffer> m_buffer;
+    VkDescriptorSet m_descriptorSets[kSlotCount] = {};
+    std::unique_ptr<Buffer> m_buffers[kSlotCount];
+    uint32_t m_slot = 0;
 };
 
 } // namespace kke

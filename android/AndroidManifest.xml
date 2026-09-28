@@ -40,7 +40,7 @@
         <activity android:name="com.kreativekompas.kke.GameActivity"
             android:label="@LABEL@"
             android:process=":game"
-            android:screenOrientation="sensorLandscape"
+            android:screenOrientation="fullUser"
             android:configChanges="layoutDirection|locale|grammaticalGender|fontScale|fontWeightAdjustment|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
             android:preferMinimalPostProcessing="true"
             android:exported="@GAME_EXPORTED@">
