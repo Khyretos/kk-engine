@@ -21,8 +21,11 @@ linux)
     cp -r "$bld/bin/." "$out/"
     ;;
 windows)
-    cmake -S "$src" -B "$bld" -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DKKE_ENABLE_FEMFX=ON \
-        -DCMAKE_TOOLCHAIN_FILE="$src/cmake/toolchains/mingw-w64-x86_64.cmake"
+    # KKE_BUILD_TYPE / KKE_VERSION_NAME: bake_with_art.sh --windows makes
+    # a Release build named like the Linux one it packages alongside.
+    cmake -S "$src" -B "$bld" -G Ninja -DCMAKE_BUILD_TYPE="${KKE_BUILD_TYPE:-RelWithDebInfo}" -DKKE_ENABLE_FEMFX=ON \
+        -DCMAKE_TOOLCHAIN_FILE="$src/cmake/toolchains/mingw-w64-x86_64.cmake" \
+        ${KKE_VERSION_NAME:+"-DKKE_VERSION_NAME=$KKE_VERSION_NAME"}
     cmake --build "$bld" -j "$jobs"
     wine="$(command -v wine || command -v wine64 || true)"
     if [ -n "$wine" ] && [ "${RUN_TESTS:-1}" = "1" ]; then
