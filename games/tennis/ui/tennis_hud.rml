@@ -1,0 +1,41 @@
+<rml>
+<head>
+    <title>Tennis HUD</title>
+    <link type="text/rcss" href="theme.rcss"/>
+    <style>
+        body { pointer-events: none; }
+        #board { position: absolute; top: 16dp; right: 16dp; padding: 6dp 0dp; border-radius: 8dp; background-color: #0b1a14dd; }
+        .row { display: block; height: 24dp; padding: 0dp 10dp; }
+        .serve { display: inline-block; width: 8dp; height: 8dp; margin: 0dp 8dp 2dp 0dp; border-radius: 4dp; }
+        .serve.on { background-color: #d8f050; }
+        .name { display: inline-block; width: 180dp; font-size: 15dp; font-weight: bold; color: #eef4ee; }
+        .sets { display: inline-block; width: 80dp; font-size: 15dp; color: #c8d4c8; text-align: right; }
+        .points { display: inline-block; width: 44dp; margin-left: 8dp; border-radius: 4dp; background-color: #d8f050; color: #10200a;
+                  font-size: 15dp; font-weight: bold; text-align: center; }
+        #call { position: absolute; top: 30%; left: 0; width: 100%; text-align: center; }
+        #call .big { font-size: 56dp; font-weight: bold; color: #ffffff; }
+        #call .sub { font-size: 20dp; color: #e8f0e0; margin-top: 4dp; }
+        #banner { position: absolute; top: 80dp; right: 16dp; padding: 6dp 12dp; border-radius: 8dp; background-color: #0b1a14cc;
+                  font-size: 14dp; color: #d8f050; }
+        #hint { position: absolute; left: 10%; bottom: 14dp; width: 80%; padding: 6dp 10dp; border-radius: 8dp; background-color: #0b1a14bb;
+                text-align: center; font-size: 13dp; color: #d6e2d6; }
+        #hint img { font-size: 15dp; }
+        #ranking { position: absolute; top: 124dp; right: 16dp; width: 200dp; padding: 8dp 12dp; border-radius: 8dp; background-color: #0b1a14cc;
+                   font-size: 14dp; color: #eef4ee; white-space: pre-line; }
+        #ranking .title { font-size: 13dp; color: #d8f050; font-weight: bold; }
+    </style>
+</head>
+<body data-model="tennis">
+    <div id="board" data-if="t0.name != ''">
+        <div class="row"><span class="serve" data-class-on="t0.serving"></span><span class="name">{{t0.name}}</span><span class="sets">{{t0.sets}}</span><span class="points">{{t0.points}}</span></div>
+        <div class="row"><span class="serve" data-class-on="t1.serving"></span><span class="name">{{t1.name}}</span><span class="sets">{{t1.sets}}</span><span class="points">{{t1.points}}</span></div>
+    </div>
+    <div id="banner" data-if="banner != ''">{{banner}}</div>
+    <div id="ranking" data-if="ranking != ''"><div class="title">Matches won here</div>{{ranking}}</div>
+    <div id="call" data-if="call != '' || sub != ''">
+        <div class="big">{{call}}</div>
+        <div class="sub">{{sub}}</div>
+    </div>
+    <div id="hint" data-if="hint != ''" data-rml="hint"></div>
+</body>
+</rml>

@@ -2,6 +2,7 @@
 
 #include "kke/Cloth.h"
 #include "kke/Hair.h"
+#include "kke/Vehicle.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -276,6 +277,26 @@ public:
     void setHairMotion(HairId id, float motion);
     float hairMotion(HairId id) const;
     HairStats hairStats(HairId id) const;
+
+    // Wheeled vehicles (kke/Vehicle.h, docs/VEHICLES.md): Jolt's vehicle
+    // constraint on a dynamic chassis body. The chassis is an ordinary
+    // body (vehicleBody): it collides, reports contacts, can be pushed,
+    // teleported (setTransform) and read like any other.
+    using VehicleId = uint32_t; // 0 = none
+    VehicleId addVehicle(const VehicleDesc& desc);
+    void removeVehicle(VehicleId id);
+    size_t vehicleCount() const;
+    BodyId vehicleBody(VehicleId id) const;
+    void setVehicleInput(VehicleId id, const VehicleInput& input);
+    // Speed, engine, gear and every wheel (false if the id is unknown).
+    bool vehicleState(VehicleId id, VehicleState& out) const;
+    // Engine torque x `scale` (a damaged engine: 0.5 = half power).
+    void setVehiclePower(VehicleId id, float scale);
+    // One tyre's grip x `scale` (a bent wheel or a puncture: that corner
+    // slides first). 1 = as made.
+    void setVehicleWheelGrip(VehicleId id, int wheel, float scale);
+    // Stops the wheels and the engine (after a teleport back on the track).
+    void resetVehicle(VehicleId id);
 
     void step(float dt);
     double lastStepMs() const;

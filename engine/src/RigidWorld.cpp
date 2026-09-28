@@ -23,6 +23,7 @@
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
+#include <Jolt/Physics/Collision/Shape/OffsetCenterOfMassShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Constraints/HingeConstraint.h>
@@ -30,6 +31,9 @@
 #include <Jolt/Physics/PhysicsSettings.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/Physics/StateRecorderImpl.h>
+#include <Jolt/Physics/Vehicle/VehicleCollisionTester.h>
+#include <Jolt/Physics/Vehicle/VehicleConstraint.h>
+#include <Jolt/Physics/Vehicle/WheeledVehicleController.h>
 #include <Jolt/RegisterTypes.h>
 
 #include <glm/gtc/constants.hpp>
@@ -155,6 +159,18 @@ struct RigidWorld::Impl : public JPH::ContactListener {
     std::unordered_map<RagdollId, Ragdoll> ragdolls;
     void applyAssist(Ragdoll& rd, float dt);
     RagdollId nextRagdoll = 1;
+    struct Vehicle {
+        BodyId body = kNoBody;
+        JPH::Ref<JPH::VehicleConstraint> constraint;
+        JPH::WheeledVehicleController* controller = nullptr; // owned by the constraint
+        std::vector<float> grip;  // per wheel (setVehicleWheelGrip), read by the tyre callback during step()
+        std::vector<float> slipLoss; // per wheel: VehicleWheelDesc::combinedSlipLoss
+        float torque = 0.0f;      // VehicleDesc::maxTorque (setVehiclePower scales it)
+        bool manual = false;
+    };
+    std::unordered_map<VehicleId, Vehicle> vehicles;
+    VehicleId nextVehicle = 1;
+    JPH::Ref<JPH::VehicleCollisionTester> wheelTester; // shared by every vehicle
     std::mutex contactMutex;
     std::vector<Contact> contacts;
     double stepMs = 0.0;
@@ -207,6 +223,11 @@ RigidWorld::RigidWorld(const Settings& settings) : m(std::make_unique<Impl>()) {
 }
 
 RigidWorld::~RigidWorld() {
+    for (auto& [id, v] : m->vehicles) {
+        m->system.RemoveStepListener(v.constraint);
+        m->system.RemoveConstraint(v.constraint);
+    }
+    m->vehicles.clear();
     m->cloth.reset();
     m->characters.clear();
     for (auto& [id, rd] : m->ragdolls)
@@ -937,6 +958,248 @@ void RigidWorld::step(float dt) {
     if (m->cloth) m->cloth->endStep();
     m->simulatedTime += dt;
     m->stepMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+}
+
+// ---- vehicles (kke/Vehicle.h)
+
+namespace {
+
+glm::mat4 toG(JPH::RMat44Arg t) {
+    glm::mat4 out(1.0f);
+    for (int c = 0; c < 3; ++c) out[c] = glm::vec4(toG(t.GetColumn3(c)), 0.0f);
+    const JPH::RVec3 p = t.GetTranslation();
+    out[3] = glm::vec4(float(p.GetX()), float(p.GetY()), float(p.GetZ()), 1.0f);
+    return out;
+}
+
+} // namespace
+
+RigidWorld::VehicleId RigidWorld::addVehicle(const VehicleDesc& d) {
+    if (d.wheels.empty()) return 0;
+    // The chassis: a box or a hull, its centre of mass moved (low: a car
+    // that corners instead of rolling over).
+    JPH::ShapeRefC shape;
+    if (d.hull.size() >= 4) {
+        JPH::Array<JPH::Vec3> pts;
+        pts.reserve(d.hull.size());
+        for (const glm::vec3& p : d.hull) pts.push_back(toJ(p));
+        JPH::ShapeSettings::ShapeResult r = JPH::ConvexHullShapeSettings(pts, 0.02f).Create();
+        if (!r.HasError()) shape = r.Get();
+    }
+    if (!shape) {
+        JPH::RotatedTranslatedShapeSettings box(toJ(d.boxOffset), JPH::Quat::sIdentity(),
+                                                new JPH::BoxShapeSettings(toJ(glm::max(d.halfExtents, glm::vec3(0.05f))), 0.05f));
+        JPH::ShapeSettings::ShapeResult r = box.Create();
+        if (r.HasError()) return 0;
+        shape = r.Get();
+    }
+    JPH::ShapeSettings::ShapeResult offset = JPH::OffsetCenterOfMassShapeSettings(toJ(d.centerOfMassOffset), shape).Create();
+    if (offset.HasError()) return 0;
+    JPH::BodyCreationSettings bcs(offset.Get(), toJR(d.position), toJ(glm::normalize(d.rotation)), JPH::EMotionType::Dynamic, Layers::kMoving);
+    bcs.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
+    bcs.mMassPropertiesOverride.mMass = std::max(1.0f, d.mass);
+    bcs.mFriction = d.friction;
+    bcs.mRestitution = d.restitution;
+    bcs.mUserData = d.material;
+    bcs.mMotionQuality = JPH::EMotionQuality::LinearCast; // 60 m/s into a wall: no tunnelling
+    JPH::Body* body = m->bodies().CreateBody(bcs);
+    if (!body) return 0;
+    m->bodies().AddBody(body->GetID(), JPH::EActivation::Activate);
+
+    JPH::VehicleConstraintSettings vcs;
+    vcs.mUp = JPH::Vec3::sAxisY();
+    vcs.mForward = JPH::Vec3::sAxisZ();
+    for (const VehicleWheelDesc& w : d.wheels) {
+        JPH::WheelSettingsWV* ws = new JPH::WheelSettingsWV;
+        ws->mPosition = toJ(w.position);
+        ws->mSuspensionDirection = JPH::Vec3(0.0f, -1.0f, 0.0f);
+        ws->mRadius = std::max(0.05f, w.radius);
+        ws->mWidth = std::max(0.02f, w.width);
+        ws->mSuspensionMinLength = std::max(0.0f, w.suspensionMin);
+        ws->mSuspensionMaxLength = std::max(ws->mSuspensionMinLength + 0.01f, w.suspensionMax);
+        ws->mSuspensionSpring.mFrequency = w.suspensionFrequency;
+        ws->mSuspensionSpring.mDamping = w.suspensionDamping;
+        ws->mMaxSteerAngle = glm::radians(w.maxSteerDegrees);
+        ws->mMaxBrakeTorque = w.maxBrakeTorque;
+        ws->mMaxHandBrakeTorque = w.maxHandBrakeTorque;
+        const float slide = glm::clamp(w.slideGrip, 0.05f, 1.0f);
+        ws->mLongitudinalFriction.Clear();
+        ws->mLongitudinalFriction.Reserve(4);
+        ws->mLongitudinalFriction.AddPoint(0.0f, 0.0f);
+        ws->mLongitudinalFriction.AddPoint(0.06f, w.longitudinalGrip);
+        ws->mLongitudinalFriction.AddPoint(0.2f, w.longitudinalGrip * (0.5f + 0.5f * slide));
+        ws->mLongitudinalFriction.AddPoint(1.0f, w.longitudinalGrip * slide);
+        ws->mLateralFriction.Clear();
+        ws->mLateralFriction.Reserve(4);
+        ws->mLateralFriction.AddPoint(0.0f, 0.0f);
+        ws->mLateralFriction.AddPoint(3.0f, w.lateralGrip);
+        ws->mLateralFriction.AddPoint(20.0f, w.lateralGrip * (0.5f + 0.5f * slide));
+        ws->mLateralFriction.AddPoint(90.0f, w.lateralGrip * slide);
+        vcs.mWheels.push_back(ws);
+    }
+    const int pairs = static_cast<int>(d.wheels.size()) / 2;
+    if (d.antiRollStiffness > 0.0f)
+        for (int a = 0; a < pairs; ++a) {
+            JPH::VehicleAntiRollBar bar;
+            bar.mLeftWheel = 2 * a;
+            bar.mRightWheel = 2 * a + 1;
+            bar.mStiffness = d.antiRollStiffness;
+            vcs.mAntiRollBars.push_back(bar);
+        }
+    JPH::WheeledVehicleControllerSettings* cs = new JPH::WheeledVehicleControllerSettings;
+    cs->mEngine.mMaxTorque = d.maxTorque;
+    cs->mEngine.mMinRPM = d.minRpm;
+    cs->mEngine.mMaxRPM = std::max(d.minRpm + 100.0f, d.maxRpm);
+    cs->mTransmission.mMode = d.manualGearbox ? JPH::ETransmissionMode::Manual : JPH::ETransmissionMode::Auto;
+    cs->mTransmission.mGearRatios.clear();
+    for (float g : d.gearRatios) cs->mTransmission.mGearRatios.push_back(g);
+    if (cs->mTransmission.mGearRatios.empty()) cs->mTransmission.mGearRatios.push_back(1.0f);
+    cs->mTransmission.mReverseGearRatios.clear();
+    cs->mTransmission.mReverseGearRatios.push_back(d.reverseRatio);
+    cs->mTransmission.mShiftUpRPM = d.shiftUpRpm;
+    cs->mTransmission.mShiftDownRPM = d.shiftDownRpm;
+    cs->mTransmission.mSwitchTime = d.gearSwitchSeconds;
+    cs->mTransmission.mClutchReleaseTime = d.gearSwitchSeconds * 0.6f;
+    cs->mTransmission.mSwitchLatency = d.gearSwitchSeconds;
+    std::vector<int> driven = d.drivenAxles;
+    if (driven.empty()) driven.push_back(std::max(0, pairs - 1));
+    for (int a : driven) {
+        if (a < 0 || a >= pairs) continue;
+        JPH::VehicleDifferentialSettings diff;
+        diff.mLeftWheel = 2 * a;
+        diff.mRightWheel = 2 * a + 1;
+        diff.mDifferentialRatio = d.differentialRatio;
+        diff.mLimitedSlipRatio = d.limitedSlipRatio;
+        cs->mDifferentials.push_back(diff);
+    }
+    for (JPH::VehicleDifferentialSettings& diff : cs->mDifferentials)
+        diff.mEngineTorqueRatio = 1.0f / static_cast<float>(cs->mDifferentials.size());
+    vcs.mController = cs;
+
+    const VehicleId id = m->nextVehicle++;
+    Impl::Vehicle& v = m->vehicles[id];
+    v.body = body->GetID().GetIndexAndSequenceNumber();
+    v.constraint = new JPH::VehicleConstraint(*body, vcs);
+    v.controller = static_cast<JPH::WheeledVehicleController*>(v.constraint->GetController());
+    v.grip.assign(d.wheels.size(), 1.0f);
+    v.slipLoss.clear();
+    for (const VehicleWheelDesc& w : d.wheels) v.slipLoss.push_back(glm::clamp(w.combinedSlipLoss, 0.0f, 0.95f));
+    v.torque = d.maxTorque;
+    v.manual = d.manualGearbox;
+    // Cylinders (not rays): the tyre's width meets kerbs and bumps.
+    // kQuery sees the solid world and other vehicles, not cloth.
+    if (!m->wheelTester) m->wheelTester = new JPH::VehicleCollisionTesterCastCylinder(Layers::kQuery);
+    v.constraint->SetVehicleCollisionTester(m->wheelTester);
+    const std::vector<float>* grip = &v.grip; // stable: unordered_map nodes don't move
+    const std::vector<float>* slipLoss = &v.slipLoss;
+    v.controller->SetTireMaxImpulseCallback([grip, slipLoss](JPH::uint wheel, float& outLongitudinal, float& outLateral, float suspensionImpulse,
+                                                             float longitudinalFriction, float lateralFriction, float longitudinalSlip, float, float) {
+        const float g = wheel < grip->size() ? (*grip)[wheel] : 1.0f;
+        // Past the grip peak (~10% slip) sideways grip fades, all the loss
+        // by 70% (a locked or spinning wheel).
+        const float loss = wheel < slipLoss->size() ? (*slipLoss)[wheel] : 0.0f;
+        const float spin = glm::clamp((std::fabs(longitudinalSlip) - 0.1f) / 0.6f, 0.0f, 1.0f);
+        outLongitudinal = longitudinalFriction * suspensionImpulse * g;
+        outLateral = lateralFriction * suspensionImpulse * g * (1.0f - loss * spin);
+    });
+    m->system.AddConstraint(v.constraint);
+    m->system.AddStepListener(v.constraint);
+    return id;
+}
+
+void RigidWorld::removeVehicle(VehicleId id) {
+    auto it = m->vehicles.find(id);
+    if (it == m->vehicles.end()) return;
+    m->system.RemoveStepListener(it->second.constraint);
+    m->system.RemoveConstraint(it->second.constraint);
+    const BodyId body = it->second.body;
+    m->vehicles.erase(it);
+    remove(body);
+}
+
+size_t RigidWorld::vehicleCount() const { return m->vehicles.size(); }
+
+RigidWorld::BodyId RigidWorld::vehicleBody(VehicleId id) const {
+    auto it = m->vehicles.find(id);
+    return it == m->vehicles.end() ? kNoBody : it->second.body;
+}
+
+void RigidWorld::setVehicleInput(VehicleId id, const VehicleInput& in) {
+    auto it = m->vehicles.find(id);
+    if (it == m->vehicles.end()) return;
+    Impl::Vehicle& v = it->second;
+    // Jolt steers positive = right on the input (the wheels' angle is positive to the left).
+    float forward = glm::clamp(in.throttle, -1.0f, 1.0f);
+    if (v.manual) {
+        const int gears = static_cast<int>(v.controller->GetTransmission().mGearRatios.size());
+        forward = std::max(0.0f, forward);
+        // Braking off the throttle the driver holds the clutch in: an engine
+        // at idle in gear would otherwise creep the car through its brakes.
+        const float clutch = forward == 0.0f && in.brake > 0.0f ? 0.0f : 1.0f;
+        v.controller->GetTransmission().Set(glm::clamp(in.gear, -1, gears), clutch);
+    }
+    v.controller->SetDriverInput(forward, glm::clamp(in.steer, -1.0f, 1.0f), glm::clamp(in.brake, 0.0f, 1.0f), glm::clamp(in.handBrake, 0.0f, 1.0f));
+    if (forward != 0.0f || in.steer != 0.0f || in.brake != 0.0f || in.handBrake != 0.0f) m->bodies().ActivateBody(JPH::BodyID(v.body));
+}
+
+bool RigidWorld::vehicleState(VehicleId id, VehicleState& out) const {
+    auto it = m->vehicles.find(id);
+    if (it == m->vehicles.end()) return false;
+    const Impl::Vehicle& v = it->second;
+    const JPH::VehicleConstraint& c = *v.constraint;
+    const JPH::BodyID body(v.body);
+    const JPH::Vec3 forward = m->bodies().GetRotation(body) * JPH::Vec3::sAxisZ();
+    out.speed = m->bodies().GetLinearVelocity(body).Dot(forward);
+    out.rpm = v.controller->GetEngine().GetCurrentRPM();
+    out.gear = v.controller->GetTransmission().GetCurrentGear();
+    out.switchingGear = v.controller->GetTransmission().IsSwitchingGear();
+    const JPH::uint n = static_cast<JPH::uint>(c.GetWheels().size());
+    out.wheels.resize(n);
+    for (JPH::uint i = 0; i < n; ++i) {
+        const JPH::WheelWV& w = *static_cast<const JPH::WheelWV*>(c.GetWheel(i));
+        const JPH::WheelSettings& ws = *w.GetSettings();
+        VehicleWheelState& o = out.wheels[i];
+        // Wheel meshes are modelled in the car's own axes, centred on the
+        // wheel: the car's right (-X) is the wheel's right, on both sides.
+        o.transform = toG(c.GetWheelWorldTransform(i, -JPH::Vec3::sAxisX(), JPH::Vec3::sAxisY()));
+        o.contact = w.HasContact();
+        o.groundBody = o.contact ? w.GetContactBodyID().GetIndexAndSequenceNumber() : kNoBody;
+        if (o.contact) {
+            const JPH::RVec3 p = w.GetContactPosition();
+            o.contactPoint = glm::vec3(float(p.GetX()), float(p.GetY()), float(p.GetZ()));
+        }
+        o.longitudinalSlip = w.mLongitudinalSlip;
+        o.lateralSlip = glm::degrees(w.mLateralSlip);
+        o.angularVelocity = w.GetAngularVelocity();
+        const float range = ws.mSuspensionMaxLength - ws.mSuspensionMinLength;
+        o.suspension = range > 0.0f ? glm::clamp((ws.mSuspensionMaxLength - w.GetSuspensionLength()) / range, 0.0f, 1.0f) : 0.0f;
+        o.steerDegrees = glm::degrees(w.GetSteerAngle());
+    }
+    return true;
+}
+
+void RigidWorld::setVehiclePower(VehicleId id, float scale) {
+    auto it = m->vehicles.find(id);
+    if (it == m->vehicles.end()) return;
+    it->second.controller->GetEngine().mMaxTorque = it->second.torque * std::max(0.0f, scale);
+}
+
+void RigidWorld::setVehicleWheelGrip(VehicleId id, int wheel, float scale) {
+    auto it = m->vehicles.find(id);
+    if (it == m->vehicles.end() || wheel < 0 || wheel >= static_cast<int>(it->second.grip.size())) return;
+    it->second.grip[static_cast<size_t>(wheel)] = std::max(0.0f, scale);
+}
+
+void RigidWorld::resetVehicle(VehicleId id) {
+    auto it = m->vehicles.find(id);
+    if (it == m->vehicles.end()) return;
+    Impl::Vehicle& v = it->second;
+    for (JPH::Wheel* w : v.constraint->GetWheels()) w->SetAngularVelocity(0.0f);
+    v.controller->GetEngine().SetCurrentRPM(v.controller->GetEngine().mMinRPM);
+    v.controller->SetDriverInput(0.0f, 0.0f, 0.0f, 0.0f);
+    const JPH::BodyID body(v.body);
+    m->bodies().SetLinearAndAngularVelocity(body, JPH::Vec3::sZero(), JPH::Vec3::sZero());
+    m->bodies().ActivateBody(body);
 }
 
 double RigidWorld::lastStepMs() const { return m->stepMs; }

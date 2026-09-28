@@ -1,0 +1,342 @@
+#pragma once
+
+#include "Ball.h"
+#include "Body.h"
+#include "Bot.h"
+#include "Court.h"
+#include "NetTennis.h"
+#include "Rules.h"
+#include "Shot.h"
+
+#include "kke/Application.h"
+#include "kke/Module.h"
+#include "kke/RigidWorld.h"
+
+#include <RmlUi/Core/DataModelHandle.h>
+
+#include <array>
+#include <memory>
+#include <string>
+#include <vector>
+
+namespace kke {
+class DynamicMeshRenderer;
+class InputModule;
+class LobbyModule;
+class ModelModule;
+class NetModule;
+class PhysicsModule;
+class RigidBodyModule;
+} // namespace kke
+namespace Rml { class ElementDocument; }
+
+namespace tennis {
+
+// Tennis (README.md): singles or doubles on a court of the sport center,
+// against CPU players or friends at the same screen, with a FEMFX rubber
+// ball that really squashes on the court and the strings.
+//
+// Controls: move with the stick (WASD); A / Space topspin, X / J flat,
+// B / K slice, Y / L lob. Press before the ball arrives (hold to hit
+// harder); the stick at the moment of the hit aims it: left and right,
+// deep (up) or short (down). Serving: a shot button tosses, the next one
+// hits (at the top of the toss is best).
+//
+// Headless / demo switches: KKE_TENNIS_BOTS=1 (everyone is a CPU),
+// KKE_TENNIS_QUIT=<s> (quit after that long, logging the score),
+// KKE_TENNIS_DOUBLES=1, KKE_TENNIS_LEVEL=0..3, KKE_TENNIS_BALLTEST=1
+// (fire test shots at the net, the court and the fence and log what the
+// FEMFX ball does), KKE_TENNIS_SEED.
+class TennisModule : public kke::Module {
+public:
+    TennisModule();
+    ~TennisModule() override;
+    const char* name() const override { return "Tennis"; }
+    std::vector<kke::ModuleDependency> dependencies() const override;
+    void init(kke::Application& app) override;
+    void fixedUpdate(const kke::FixedUpdateContext& ctx) override;
+    void update(const kke::UpdateContext& ctx) override;
+    void render(const kke::RenderContext& ctx) override;
+    void renderShadow(const kke::ShadowRenderContext& ctx) override;
+    void renderTranslucent(const kke::RenderContext& ctx) override;
+    void shutdown() override;
+
+    // A shot a player wants to play (from their controls or the CPU).
+    struct Intent {
+        glm::vec3 move{0.0f};          // court space, m/s wanted
+        bool press = false;            // a shot button went down this frame
+        bool held = false;             // ...and is still down (charging)
+        ShotKind kind = ShotKind::Topspin;
+        glm::vec2 aim{0.0f};           // -1..1: x left/right as the player sees it, y short/deep
+    };
+
+    struct Player {
+        std::string name;
+        glm::vec3 tint{1.0f};
+        int team = 0, slot = 0;        // slot: 0 or 1 within a doubles team
+        bool cpu = true;               // a CPU brain moves it (the host's CPU players; KKE_TENNIS_AUTOPLAY)
+        bool remote = false;           // online: another machine runs it; we draw what it sends
+        bool netCpu = false;           // ... a host's CPU player (its moves come in the Cpus event)
+        bool hasPose = false;
+        int netId = -1;                // online: its network player id
+        int walker = -1;               // sport center: the walker who is playing (m_walkers)
+        bool alive = false;            // a slot in use (matches come and go in the sport center)
+        int input = -1;                // InputModule player (humans)
+        int level = 1;                 // CPU level
+        kke::RigidWorld::CharacterId body = 0;
+        glm::vec3 feet{0.0f};          // court space, this frame
+        glm::vec3 vel{0.0f};
+        glm::vec3 facing{0.0f, 0.0f, -1.0f}; // court space
+        std::unique_ptr<Bot> bot;
+        std::unique_ptr<Body> look;
+        Intent intent;
+        // A shot waiting for the ball.
+        float armed = -1.0f;           // s since pressed (-1: none)
+        ShotKind armedKind = ShotKind::Topspin;
+        float charge = 0.0f;           // 0..1
+        float ballDist = 99.0f;        // m to the ball at the last hit check
+        // The swing on screen.
+        SwingPose::Kind swingKind = SwingPose::Kind::Ready;
+        float swingT = -2.0f;          // -1..1 while swinging; < -1 idle
+        glm::vec3 swingContact{0.0f};  // body frame
+        float tossAge = -1.0f;         // serving: s since the toss
+        float celebrate = 0.0f;        // s left of a cheer or a groan
+        bool cheer = true;
+        net::Pose pose;                // online, a remote player: what its machine last sent (world)
+        kke::Camera camera;
+        bool cameraInit = false;
+        int camSide = 0;               // the half the camera last sat behind
+    };
+
+    struct Match {
+        int court = 0;
+        MatchRules rules;
+        Score score;
+        Rally rally;
+        std::unique_ptr<Ball> ball;
+        std::vector<int> players;      // indices into m_players
+        enum class Phase { Warmup, Serve, Rally, PointOver, MatchOver } phase = Phase::Warmup;
+        float phaseTime = 0.0f;
+        int lastPointTo = -1;
+        std::string call, sub;         // the umpire: "Out", "15-30"
+        int rallyShots = 0;
+        bool serveAgain = false;       // after a fault or a let: the same point, served again
+        float deadBall = 0.0f;         // s the ball has lain still in a rally
+        float sinceHit = 0.0f;         // s since the last hit (a ball nobody can reach ends the rally)
+        uint16_t serial = 0;           // online: +1 each serve, so a late hit for an old point is dropped
+        uint32_t netId = 0;            // online: the host's number for it (0: not sent yet)
+        std::vector<uint8_t> history;  // who won each point (a late joiner replays the score)
+        float ballSentAt = 0.0f;       // host: when its ball last went out
+    };
+
+    // Who plays in a match about to start (the menu's seats, CPU players,
+    // online players).
+    struct Entry {
+        std::string name;
+        glm::vec3 tint{1.0f};
+        bool cpu = false;
+        int input = -1, level = 1;
+        int netId = -1;
+        int walker = -1;
+        bool remote = false;
+        bool netCpu = false;           // online, a client: one of the host's CPU players
+        int team = -1, slot = -1;      // -1: the match decides
+    };
+
+    // Someone in the sport center out of a match: a person at this screen
+    // walking about, or one of the CPU crowd going from court to court to
+    // watch (Center.cpp).
+    struct Walker {
+        std::string name;
+        glm::vec3 tint{1.0f};
+        bool cpu = true;               // the crowd
+        int input = -1;                // a person at this screen
+        bool remote = false;           // online: someone at another screen (moved by what it sends)
+        int netId = -1;                // online: their network player id
+        bool gone = false;             // left the game (the slot stays, so indices hold)
+        kke::RigidWorld::CharacterId body = 0;
+        std::unique_ptr<Body> look;
+        glm::vec3 facing{0.0f, 0.0f, 1.0f}; // world
+        int playing = -1;              // the Player while in a match
+        int queued = -1;               // the court they wait to play on
+        // The crowd: where they go and what they watch.
+        enum class Doing { Wander, ToSeat, Watch } doing = Doing::Wander;
+        glm::vec3 goal{0.0f};
+        glm::vec3 exit{0.0f};          // out of the gap beside a court first, after watching there
+        bool exiting = false;
+        int court = -1, seat = -1;
+        float timer = 0.0f;
+        bool sitting = false;
+        float cheer = 0.0f;            // s left of a cheer (a point ended on the court they watch)
+        bool happy = true;
+        uint32_t dice = 1;
+        // A person's view.
+        kke::Camera camera;
+        bool cameraInit = false;
+        float camYaw = 0.0f;           // degrees, the way the camera looks
+        glm::vec2 stick{0.0f};
+        bool play = false, cpuNow = false, leave = false; // presses, kept for the fixed step
+    };
+
+private:
+    // Setting up (TennisModule.cpp).
+    void defineControls();
+    void buildWorld();              // Scene.cpp
+    void startLocalMatch();         // from the menu or the switches (and the host's online match)
+    Match* buildMatch(std::vector<Entry> entries, const MatchRules& rules, int court);
+    int spawnPlayer(const Entry& e, int team);
+    void freePlayer(int index);
+    MatchRules menuRules(int teamSize) const;
+    void backToMenu();
+    void clearPlayers();
+    Player& player(int index) { return m_players[static_cast<size_t>(index)]; }
+
+    // The match (Play.cpp).
+    void stepMatch(Match& m, float dt);
+    void startPoint(Match& m);
+    void placeForPoint(Match& m);
+    void stepPlayer(Match& m, Player& p, float dt);
+    void stepRemote(Match& m, Player& p, float dt); // online: a player another machine runs
+    void readHuman(Match& m, Player& p);
+    void thinkCpu(Match& m, Player& p, float dt);
+    bool tryHit(Match& m, Player& p, bool serve);
+    void hitBall(Match& m, Player& p, const glm::vec3& contact, bool serve);
+    void resolve(Match& m, Rally::Result r, const std::string& call = {});
+    void applyHit(Match& m, int hitter, const net::Hit& h);
+    bool authority() const;         // offline or the host: this machine is the umpire
+    int partnerOf(const Match& m, int index) const;
+    int nearestOpponent(const Match& m, const Player& p) const;
+    int serverIndex(const Match& m) const;
+    bool isMyBall(const Match& m, int index) const;
+
+    // The sport center (Center.cpp): walk about, pick a court, watch.
+    void enterCenter();
+    void spawnWalker(const std::string& name, const glm::vec3& tint, bool cpu, int input, const glm::vec3& at);
+    void readWalker(Walker& w);
+    void stepCenter(float dt);
+    void stepCrowd(Walker& w, float dt);
+    void startCourt(int court);
+    void startCpuMatch(int court);
+    void endCenterMatch(size_t matchIndex, int forfeitTeam);
+    void closeMatch(size_t matchIndex);
+    void walkersOn(const Match& m);         // its people walk off at the gate, it's gone
+    void gateJoin(int walker, int court);
+    void gateLeave(int walker);
+    int gateNear(const glm::vec3& world) const; // the court whose gate is here, or -1
+    glm::vec3 gatePoint(int court) const;
+    Match* matchOn(int court);
+    const Match* focusMatch() const;            // the one the HUD shows
+    void updateWalkerCameras(float dt, std::vector<kke::Camera*>& cams);
+    std::string centerHint() const;
+    void onPointForCrowd(const Match& m);
+    void updateWalkerBodies(float dt);
+
+    // The ball test (KKE_TENNIS_BALLTEST=1).
+    void ballTest(float dt);
+
+    // Cameras and drawing (Scene.cpp).
+    void updateCameras(float dt);
+    void updateBodies(float dt);
+    void renderCourts(const kke::RenderContext& ctx);
+
+    // The HUD (Hud.cpp, ui/tennis_hud.rml).
+    void buildHud();
+    void updateHud();
+
+    // The start menu (Lobby.cpp).
+    void setupLobby();
+    void updateLobby(float dt);
+    void startFromMenu();
+
+    // Online (Net.cpp).
+    bool netHost() const;
+    bool netClient() const;
+    bool online() const { return netHost() || netClient(); }
+    void setupNet();
+    void syncNetPlayers();
+    void updateNet(float dt);
+    void sendNet();
+    void onNetEvent(const kke::net::GameEventMsg& e);
+    void sendSetup(Match& m);               // host: gives it a network id if it has none
+    net::Setup setupOf(const Match& m) const;
+    void closeMatchByNet(uint32_t id, const std::string& why);
+    void applySetup(const net::Setup& s);
+    std::string netStatus() const;
+    bool waitsOnline() const;       // KKE_NET join, or a host waiting for KKE_TENNIS_WAIT players
+    std::vector<Entry> seatEntries() const; // this screen's players, as the menu has them
+    std::vector<Entry> netEntries() const;  // ... as network players (slot order), with netId
+    Match* matchByNet(uint32_t id);
+    size_t matchIndex(const Match& m) const;
+    int indexInMatch(const Match& m, const Player& p) const;
+    void sendBoard();
+    void syncRemoteWalkers();
+    void enterCenterOnline();                   // a client: the host is in the sport center
+
+    kke::Application* m_app = nullptr;
+    kke::RigidBodyModule* m_rigid = nullptr;
+    kke::PhysicsModule* m_physics = nullptr;
+    kke::InputModule* m_input = nullptr;
+    kke::ModelModule* m_models = nullptr;
+    kke::LobbyModule* m_lobby = nullptr;
+    kke::NetModule* m_net = nullptr;
+
+    SportCenter m_center;
+    std::unique_ptr<Rig> m_rig;
+    std::vector<Player> m_players;
+    std::vector<std::unique_ptr<Match>> m_matches;
+    std::string m_ballTexture;
+
+    // The world's look.
+    std::unique_ptr<kke::DynamicMeshRenderer> m_courtMesh, m_standMesh, m_fenceMesh;
+    std::vector<kke::RigidWorld::BodyId> m_statics;
+
+    // Switches.
+    bool m_allBots = false, m_doubles = false, m_inMenu = false;
+    int m_level = 1;
+    uint32_t m_seed = 1;
+    float m_quitAfter = -1.0f, m_clock = 0.0f, m_reportAt = 10.0f;
+    bool m_ballTest = false;
+    float m_testTime = 0.0f;
+    int m_testShot = -1;
+    std::unique_ptr<Ball> m_testBall;
+    bool m_assist = true;
+    int m_length = 0;               // the menu's Length row
+    int m_teams = 0;                // the menu's Teams row
+    bool m_autoplay = false;        // KKE_TENNIS_AUTOPLAY: this screen's players have CPU brains (tests)
+
+    // The sport center.
+    int m_where = 0;                // the menu's Play row: 0 one match, 1 the sport center
+    bool m_inCenter = false;
+    int m_crowd = 40;               // the menu's Crowd row (CPU people walking and watching)
+    bool m_cpuMatches = true;       // CPU players take the free courts
+    std::vector<Walker> m_walkers;
+    struct Gate { std::vector<int> waiting; float countdown = -1.0f; };
+    std::array<Gate, SportCenter::kCourts> m_gates;
+    std::array<std::vector<int>, SportCenter::kCourts> m_seatTaken; // walker per seat, -1 free
+    std::array<float, SportCenter::kCourts> m_courtRest{}; // s each court has been empty
+    std::vector<std::pair<std::string, int>> m_wins; // matches won here, best first
+    float m_overviewYaw = 0.0f;
+
+    // Online.
+    uint32_t m_netMatch = 0;        // the host's match number
+    float m_netTime = 0.0f, m_netSearchAt = 0.0f, m_cpusSentAt = 0.0f, m_boardSentAt = 0.0f;
+    bool m_boardDirty = false;
+    std::vector<uint8_t> m_newcomers;           // host: players who joined, to be sent every match
+    net::Board m_board;                         // a client: the host's gates and wins
+    bool m_wasOnline = false;
+    int m_netWait = 0;              // KKE_TENNIS_WAIT: the host starts once this many others are in
+    std::string m_lastNetStatus;
+
+    // Tally for the log.
+    int m_pointsPlayed = 0, m_longestRally = 0;
+
+    // HUD.
+    struct TeamRow { std::string name, sets, points; bool serving = false; };
+    struct Hud { TeamRow t[2]; std::string call, sub, hint, banner, ranking; };
+    Hud m_hud;
+    Rml::DataModelHandle m_hudModel;
+    Rml::ElementDocument* m_hudDoc = nullptr;
+    bool m_broadcastInit = false;   // the TV camera (nobody at this screen plays) has a place
+};
+
+} // namespace tennis

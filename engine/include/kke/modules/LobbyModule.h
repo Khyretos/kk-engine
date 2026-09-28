@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kke/ButtonPrompts.h"
+#include "kke/InputDevices.h"
 #include "kke/Lobby.h"
 #include "kke/Module.h"
 
@@ -68,6 +69,17 @@ public:
     int playerOf(int seat) const;
     int players() const { return static_cast<int>(m_applied.size()); }
 
+    // Flight sticks (and any other joystick SDL doesn't know as a gamepad:
+    // a HOTAS, a wheel) join and take a seat like a controller: the
+    // trigger (button 1) is A, button 2 is B, the hat or the stick moves
+    // through the rows. Off by default (a flight stick has no business in
+    // a climbing game); call before the first frame.
+    void setFlightSticks(bool enabled) { m_flightSticks = enabled; }
+    bool flightSticks() const { return m_flightSticks; }
+    // Is this device one the lobby seats (a gamepad; a joystick with
+    // setFlightSticks)?
+    bool seatable(const InputDevices::Device& d) const;
+
     bool load();
     bool save() const;
 
@@ -98,6 +110,8 @@ private:
     uint64_t m_shownRevision = 0;
     uint32_t m_shownPromptSerial = 0;
     PromptStyle m_joinStyle = PromptStyle::Xbox; // the controller last plugged in or pressed
+    bool m_flightSticks = false;
+    void noteJoinDevice(const InputDevices::Device& d); // "press A" / "pull the trigger" for this one
     std::string m_title, m_subtitle;
 
     struct RowView {

@@ -1,0 +1,16 @@
+# Kompas Speedway: a short, banked oval (games/racing/tracks/, see Track.h
+# for every key). NASCAR-style: every turn a left turn, a big field, two
+# abreast, a flat apron inside with the pit lane on the front straight.
+name: Kompas Speedway
+about: A short banked oval. Two abreast, bump drafting, a pit lane on the front straight.
+event: oval
+order: 1
+mood: golden_hour
+shape: oval
+straight: 260
+radius: 75
+width: 18
+bank: 14
+apron: 10
+laps: 5
+wall: 1.2

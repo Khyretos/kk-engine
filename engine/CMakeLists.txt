@@ -96,6 +96,7 @@ set(ENGINE_SOURCES
     src/Lobby.cpp
     src/AudioMixer.cpp
     src/ImpactSynth.cpp
+    src/EngineSound.cpp
     src/Footsteps.cpp
     src/RoomAcoustics.cpp
     src/WavFile.cpp
@@ -105,6 +106,7 @@ set(ENGINE_SOURCES
     src/MeltVolume.cpp
     src/JigglePhysics.cpp
     src/SphereImpostors.cpp
+    src/ParticleEffects.cpp
     src/HairStrands.cpp
     src/HairRenderer.cpp
     src/ClothGpu.cpp
@@ -139,6 +141,7 @@ set(ENGINE_SOURCES
     src/modules/PhysicsModule.cpp
     src/modules/PhysicsModuleBridge.cpp
     src/modules/PhysicsModuleRubble.cpp
+    src/modules/PhysicsModuleMotion.cpp
     src/modules/SettingsModule.cpp
     src/modules/ModelModule.cpp
     src/modules/ThumbnailModule.cpp

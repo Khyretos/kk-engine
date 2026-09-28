@@ -495,14 +495,20 @@ void ModelModule::advanceClips(const UpdateContext& ctx) {
 }
 
 void ModelModule::setDeformedVertices(InstanceId id, const std::vector<std::vector<glm::vec3>>& positions,
-                                      const std::vector<std::vector<glm::vec3>>& normals) {
+                                      const std::vector<std::vector<glm::vec3>>& normals, bool modelSpace) {
     auto it = m_instances.find(id);
     if (it == m_instances.end()) return;
     Instance& inst = it->second;
     if (positions.empty()) {
+        // Back to the model's own mesh: frames in flight may still draw the
+        // deformed buffers, so they go once those frames are done.
+        if (m_app && !inst.deformed.empty())
+            m_app->renderer().retire(std::shared_ptr<void>(std::make_shared<std::vector<SkinnedBuffers>>(std::move(inst.deformed))));
         inst.deformed.clear();
+        inst.deformedInModelSpace = false;
         return;
     }
+    inst.deformedInModelSpace = modelSpace;
     const LoadedModel& lm = *m_models[inst.model];
     if (inst.deformed.empty()) {
         // First use: CPU mirror + one vertex buffer per frame in flight per
@@ -618,10 +624,10 @@ void ModelModule::skinVisible(const Frustum& f, uint32_t frameIndex) {
 
 bool ModelModule::mightBeVisible(const Instance& inst, const Frustum& f) const {
     // Deformed parts (breakables) and ragdolls can be anywhere: always drawn.
-    if (!inst.deformed.empty() || !inst.worldOverride.empty()) return true;
+    if ((!inst.deformed.empty() && !inst.deformedInModelSpace) || !inst.worldOverride.empty()) return true;
     const ModelData& d = m_models.at(inst.model)->data;
     glm::vec3 mn = d.boundsMin, mx = d.boundsMax;
-    if (!inst.skinned.empty()) {
+    if (!inst.skinned.empty() || !inst.deformed.empty()) {
         // Animation moves limbs past the bind-pose bounds: a margin.
         glm::vec3 pad = (mx - mn) * 0.25f;
         mn -= pad;
@@ -738,7 +744,7 @@ void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
         skinInstance(inst, ctx.frameIndex);
         if (!inst.deformed.empty()) {
             uploadDeformed(inst, ctx.frameIndex);
-            ShadowPushConstants pc{ ctx.lightViewProj, glm::mat4(1.0f) }; // vertices are already in world space
+            ShadowPushConstants pc{ ctx.lightViewProj, inst.deformedInModelSpace ? inst.transform : glm::mat4(1.0f) }; // else already world space
             vkCmdPushConstants(ctx.cmd, m_shadowPipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
             for (SkinnedBuffers& sb : inst.deformed) {
                 if (!sb.indexCount) continue;
@@ -839,6 +845,7 @@ void ModelModule::render(const RenderContext& ctx) {
             uploadDeformed(inst, ctx.frameIndex);
             const LoadedModel& lm = *m_models[inst.model];
             const bool deformed = !inst.deformed.empty();
+            const bool worldSpace = deformed && !inst.deformedInModelSpace;
             size_t si = 0;
             for (const GpuMesh& gm : lm.meshes) {
                 const GpuMaterial& mat = lm.materials[gm.material];
@@ -855,8 +862,8 @@ void ModelModule::render(const RenderContext& ctx) {
                 // Deformed parts are already in world space (identity
                 // model matrix) but their overlay positions are in model
                 // space: overlayScale carries the object's scale for them.
-                PushConstants pc{ deformed ? glm::mat4(1.0f) : inst.transform, glm::vec4(mat.metallic, mat.roughness, tile, m_overlayStrength),
-                                  glm::vec4(mat.color * inst.tint, deformed ? instanceScale(inst.transform) : 0.0f) };
+                PushConstants pc{ worldSpace ? glm::mat4(1.0f) : inst.transform, glm::vec4(mat.metallic, mat.roughness, tile, m_overlayStrength),
+                                  glm::vec4(mat.color * inst.tint, worldSpace ? instanceScale(inst.transform) : 0.0f) };
                 vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), pcStages, 0, sizeof(pc), &pc);
                 if (deformed) {
                     SkinnedBuffers& sb = inst.deformed[gm.meshIndex];

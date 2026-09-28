@@ -35,6 +35,17 @@ add_executable(kke_tests
     ${CMAKE_SOURCE_DIR}/games/climb_race/NetRace.cpp
     ${CMAKE_SOURCE_DIR}/games/climb_race/Progress.cpp
     ${CMAKE_SOURCE_DIR}/games/climb_race/Ghost.cpp
+    test_tennis.cpp
+    ${CMAKE_SOURCE_DIR}/games/tennis/Rules.cpp
+    ${CMAKE_SOURCE_DIR}/games/tennis/Court.cpp
+    ${CMAKE_SOURCE_DIR}/games/tennis/Shot.cpp
+    ${CMAKE_SOURCE_DIR}/games/tennis/Bot.cpp
+    ${CMAKE_SOURCE_DIR}/games/tennis/NetTennis.cpp
+    test_flight.cpp
+    ${CMAKE_SOURCE_DIR}/games/flying_demo/Flight.cpp
+    ${CMAKE_SOURCE_DIR}/games/flying_demo/Course.cpp
+    ${CMAKE_SOURCE_DIR}/games/flying_demo/FlyNet.cpp
+    ${CMAKE_SOURCE_DIR}/games/flying_demo/Stunts.cpp
     test_combat.cpp
     test_sidekick.cpp
     test_mesh_lod.cpp
@@ -63,6 +74,7 @@ add_executable(kke_tests
     test_input_devices.cpp
     test_floating_bodies.cpp
     test_audio.cpp
+    test_engine_sound.cpp
     test_footsteps.cpp
     test_room_acoustics.cpp
     test_wav_file.cpp
@@ -124,7 +136,11 @@ configure_file(cookbook_recipes.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/cookb
 target_include_directories(kke_tests PRIVATE ${CMAKE_SOURCE_DIR}/games/cookbook)
 # Climb Race's mountain files and race setup (test_climb_mountains.cpp).
 target_include_directories(kke_tests PRIVATE ${CMAKE_SOURCE_DIR}/games/climb_race)
+# The Flying demo's flight model and island (test_flight.cpp).
+target_include_directories(kke_tests PRIVATE ${CMAKE_SOURCE_DIR}/games/flying_demo)
 target_compile_definitions(kke_tests PRIVATE KKE_CLIMB_MOUNTAINS_DIR="${CMAKE_SOURCE_DIR}/games/climb_race/mountains")
+# Tennis's rules, flight maths and CPU footwork (test_tennis.cpp).
+target_include_directories(kke_tests PRIVATE ${CMAKE_SOURCE_DIR}/games/tennis)
 
 # The shipped moods (assets/moods/), built in the same way for test_sky.cpp.
 file(GLOB KKE_MOOD_FILES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/assets/moods/*.yaml)

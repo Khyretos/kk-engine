@@ -77,6 +77,7 @@ public:
 
     void OnStep(const JPH::PhysicsStepListenerContext& context) override;
     JPH::SoftBodyValidateResult OnSoftBodyContactValidate(const JPH::Body& softBody, const JPH::Body& other, JPH::SoftBodyContactSettings& settings) override;
+    void OnSoftBodyContactAdded(const JPH::Body& softBody, const JPH::SoftBodyManifold& manifold) override;
 
 private:
     struct Cloth {
@@ -106,6 +107,16 @@ private:
         std::vector<uint8_t> nearOther;      // scratch: within an edge of a triangle not its own neighbourhood
         std::vector<float> motion, reach;    // scratch: how far each vertex moved this step; the most it or anything it touched moved
         std::vector<float> invMass;
+        std::vector<glm::vec3> solidNormal; // per vertex, this update: the normal of the solid it rests on (world), 0 = none
+        bool touchedSolid = false;          // solidNormal has any this update
+        bool liftForSleep = false;          // settled: lifted off the solids' corners this update, then put to sleep
+        std::vector<uint32_t> cornerTris;   // solidCorners() scratch: triangles straddling a solid's edge,
+        std::vector<JPH::Vec3> cornerProbes; // 4 points each (local), and what the solids made of them
+        std::vector<JPH::Plane> cornerPlane;
+        std::vector<float> cornerDeep;
+        std::vector<int> cornerHit;
+        std::vector<JPH::Vec3> cornerLift;  // per vertex, zero between calls
+        std::vector<uint32_t> cornerLifted;
         std::vector<glm::mat4> bindPose;
         bool skinned = false;                // has Jolt skinned constraints
         bool prevValid = false;
@@ -170,6 +181,7 @@ private:
     void protectAll(const JPH::BodyLockInterface& locks); // load, protect(), store every Full cloth
     void setHairMotionOf(Cloth& c, float motion);
     bool settle(Cloth& c);                                // has it stayed put long enough to sleep?
+    void solidCorners(Cloth& c, JPH::Body& body);         // lift triangles off the solids' edges and corners
     void protect();
     void shapeTriangles(); // triN, triNPrev, triSphere of every active cloth
     bool nearInTopology(const Cloth& c, uint32_t v, uint32_t tri) const;
@@ -188,6 +200,7 @@ private:
     std::unordered_map<uint32_t, std::vector<uint32_t>> m_hairs; // hair id -> its parts (ids in m_cloths)
     glm::vec3 m_wind{0.0f};
     float m_dt = 1.0f / 60.0f; // this collision step (OnStep), for friction
+    bool m_onlyCrossings = false; // protect(): this pass only undoes crossings (checking the last one's pushes)
     uint16_t m_pass = 0;       // protect(): the narrow-phase pass running (1-based)
     bool m_protectedAfterStep = false; // endStep() ran the pass: the next step's first OnStep needn't
     int m_substeps = 1;        // while undoing crossings (RigidWorld::Settings::clothSubsteps)

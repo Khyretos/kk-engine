@@ -73,6 +73,16 @@ m_lobby->open();
   (games/climb_race/Net.cpp, docs/NETWORKING.md "In Climb Race"). Set
   `visible` to show a row only when it applies; `setTitle` redraws them.
 - `onJoin` / `onLeave` are called with the seat.
+- Flight sticks and other joysticks stay out of the menu unless the game
+  calls `m_lobby->setFlightSticks(true)`: then a stick's trigger joins
+  (button 1 confirms, button 2 goes back, the hat or the stick moves),
+  and its card says "Flight stick: <name>". The Flying demo does this.
+- `l.setSeatDevice(seat, device, pad)` moves a joined seat to another
+  device: false when another seat holds it (a device is never shared),
+  true when it's free or already theirs. `seatOfDevice(device, pad)` says
+  who holds one. The Flying demo's pause menu is built on these
+  (games/flying_demo/Players.cpp); LobbyModule hands the seat's input map
+  its new device on the next frame.
 - The title and the subtitle take button prompts: `{a}`, `{start}`,
   `{jump}` (ButtonPrompts::format).
 - `kke::Lobby` is pure logic (no window, no SDL), so it's unit-tested

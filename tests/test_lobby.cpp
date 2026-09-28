@@ -221,3 +221,32 @@ TEST(Lobby, NameFieldNamesTheSeat) {
     EXPECT_EQ(l.seatName(1), "Juno");
     EXPECT_EQ(l.seatName(2), "Pip");
 }
+
+TEST(Lobby, SeatsMoveOnlyToFreeDevices) {
+    Lobby l;
+    Lobby::Press pad1;
+    pad1.device = Lobby::Device::Pad;
+    pad1.pad = 11;
+    pad1.confirm = true;
+    l.handle(pad1); // player 1 takes pad 11
+    ASSERT_EQ(l.join(Lobby::Device::Pad, 22), 1);
+    ASSERT_EQ(l.join(Lobby::Device::KeyboardMouse), 2);
+    EXPECT_EQ(l.seatOfDevice(Lobby::Device::Pad, 22), 1);
+    EXPECT_EQ(l.seatOfDevice(Lobby::Device::Pad, 33), -1);
+
+    // Nobody takes a device another player holds.
+    EXPECT_FALSE(l.setSeatDevice(0, Lobby::Device::Pad, 22));
+    EXPECT_FALSE(l.setSeatDevice(1, Lobby::Device::KeyboardMouse));
+    EXPECT_EQ(l.seat(0).pad, 11u);
+    // A free one (a flight stick plugged in later) is fine, and the old
+    // one is free for someone else then.
+    EXPECT_TRUE(l.setSeatDevice(0, Lobby::Device::Pad, 33));
+    EXPECT_EQ(l.seatOfDevice(Lobby::Device::Pad, 33), 0);
+    EXPECT_TRUE(l.setSeatDevice(2, Lobby::Device::Pad, 11));
+    EXPECT_EQ(l.seatOfKeyboard(), -1);
+    EXPECT_TRUE(l.setSeatDevice(1, Lobby::Device::KeyboardMouse));
+    EXPECT_TRUE(l.setSeatDevice(1, Lobby::Device::KeyboardMouse)); // already theirs
+    // Only joined seats, only real devices.
+    EXPECT_FALSE(l.setSeatDevice(3, Lobby::Device::Pad, 44));
+    EXPECT_FALSE(l.setSeatDevice(0, Lobby::Device::Any));
+}
