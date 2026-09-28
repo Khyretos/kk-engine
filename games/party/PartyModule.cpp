@@ -29,7 +29,7 @@ namespace party {
 namespace {
 
 // How long each screen between rounds stays up (s).
-constexpr float kIntroTime = 5.0f, kCountdownTime = 3.0f, kRoundOverTime = 2.5f, kResultsTime = 7.0f;
+constexpr float kIntroTime = 5.0f, kCountdownTime = 3.0f, kRoundOverTime = 2.5f, kResultsTime = 7.0f, kPodiumTime = 30.0f;
 
 float envFloat(const char* name, float fallback) {
     const char* v = kke::dev::env(name);
@@ -559,7 +559,8 @@ void PartyModule::update(const kke::UpdateContext& ctx) {
         }
         break;
     case Phase::Podium:
-        if (host && skip && m_phaseTime > 2.0f) {
+        // A press, or on its own after a while (so a demo left running starts over).
+        if (host && ((skip && m_phaseTime > 2.0f) || m_phaseTime > kPodiumTime)) {
             if (m_lobby) backToLobby();
             else startParty();
         }

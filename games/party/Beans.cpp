@@ -12,6 +12,7 @@
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
 #include "kke/modules/RigidBodyModule.h"
+#include "kke/Renderer.h"
 
 #include <SDL3/SDL.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -302,7 +303,13 @@ void PartyModule::updateCameras(float dt) {
             m_overview.position = at + glm::vec3(0.0f, 3.4f, 7.5f);
             m_overview.target = at + glm::vec3(0.0f, 1.3f, -4.0f);
         }
-        main.position = m_overview.position;
+        // A tall screen (a phone upright) sees less across: step back part
+        // of the way (all of it would leave the beans tiny; the arena's
+        // ends may be cut, the middle where they play is not).
+        const VkExtent2D e = m_app->renderer().extent();
+        const float aspect = e.height ? static_cast<float>(e.width) / static_cast<float>(e.height) : 1.0f;
+        const float back = std::clamp(std::pow((16.0f / 9.0f) / std::max(0.1f, aspect), 0.35f), 1.0f, 1.6f);
+        main.position = m_overview.target + (m_overview.position - m_overview.target) * back;
         main.target = m_overview.target;
         return;
     }

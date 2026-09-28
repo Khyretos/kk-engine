@@ -92,8 +92,10 @@ game only repeats once all eight have been played. Each round goes:
    and points, and the total so far.
 
 After the last round come the standings on the **podium**: the top three
-on the steps waving, everyone else in front. Jump (A, Space) goes back to
-the menu, or starts a new party when the menu is off.
+on the steps waving, everyone else in front. Jump (A, Space), or 30 s
+without one, goes back to the menu (or starts a new party when the menu
+is off). On a phone held upright the round card and the tables take the
+screen's width (`body.kke-portrait` in the HUD).
 
 A round ranks beans in three groups: those who **finished** (by who was
 first over the line), then those **still standing** (by the minigame's

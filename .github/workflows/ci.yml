@@ -142,7 +142,7 @@ jobs:
             fi
           done
           # The phone path: portrait, 70% render scale blitted up, MSAA.
-          for demo in kke_demo climb_race; do
+          for demo in kke_demo climb_race party; do
             set +e
             DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_TARGET=android KKE_WINDOW=405x720 KKE_ORIENTATION=portrait timeout 8 "./$demo" > "run_${demo}_phone.log" 2>&1
             code=$?
