@@ -2,47 +2,47 @@
 
 Written by `benchmarks/track.py` from the Benchmarks workflow on every push to `main`; don't edit by hand. What the numbers mean: [docs/BENCHMARKS.md](https://github.com/Khyretos/kk-engine/blob/main/docs/BENCHMARKS.md).
 
-Latest: `1265a85d83` (2026-09-28T04:53:21Z) on AMD EPYC 9V45 96-Core Processor                , llvmpipe (LLVM 20.1.2, 256 bits). 93 run(s) tracked.
+Latest: `9410bd4700` (2026-09-28T04:55:34Z) on AMD EPYC 9V74 80-Core Processor                , llvmpipe (LLVM 20.1.2, 256 bits). 94 run(s) tracked.
 
 Every run is on a shared GitHub runner (4 vCPUs, lavapipe software Vulkan), so single points wobble; look for steps that stay.
 
 | Metric | Latest | Best | Runs |
 |---|---:|---:|---:|
-| `bench.audio_mix_32_voices_full_ms` | 0.1187 | 0.1096 | 87 |
-| `bench.audio_mix_32_voices_ms` | 0.0711 | 0.0614 | 93 |
-| `bench.cloth_16x24_basic_ms` | 3.13 | 2.90 | 37 |
-| `bench.cloth_16x24_full_ms` | 5.98 | 5.31 | 37 |
-| `bench.cloth_1x32_basic_ms` | 0.3521 | 0.3282 | 37 |
-| `bench.cloth_1x32_full_ms` | 0.7194 | 0.6111 | 37 |
-| `bench.cloth_1x32_off_ms` | 0.3525 | 0.3291 | 37 |
-| `bench.cloth_1x64_basic_ms` | 1.50 | 1.38 | 37 |
-| `bench.cloth_1x64_full_ms` | 27.41 | 5.27 | 37 |
-| `bench.cloth_cape_basic_ms` | 0.3359 | 0.3091 | 26 |
-| `bench.cloth_cape_full_ms` | 5.65 | 4.63 | 26 |
-| `bench.fracture_bake_cube_ms` | 5.01 | 4.63 | 93 |
-| `bench.hair_1x100_straight_ms` | 0.1281 | 0.1071 | 32 |
-| `bench.hair_1x160_braids_ms` | 0.3104 | 0.3104 | 14 |
-| `bench.hair_1x160_cornrows_ms` | 0.0346 | 0.0327 | 14 |
-| `bench.hair_1x200_3b_ms` | 0.3052 | 0.3052 | 17 |
-| `bench.hair_1x200_4c_ms` | 0.1732 | 0.1725 | 17 |
-| `bench.hair_1x200_bantu_ms` | 0.4102 | 0.4102 | 17 |
-| `bench.hair_1x400_curly_ms` | 1.39 | 1.17 | 32 |
-| `bench.hair_1x400_long_ms` | 0.6838 | 0.5540 | 32 |
-| `bench.hair_8x200_long_ms` | 2.65 | 2.16 | 32 |
-| `bench.impact_synth_8_materials_ms` | 0.9801 | 0.9068 | 93 |
-| `bench.lua_think_50_hooks_ms` | 0.1483 | 0.1408 | 93 |
-| `bench.net_snapshot_256_bodies_ms` | 0.0565 | 0.0503 | 93 |
-| `bench.particle_fluid_2000_ms` | 2.75 | 2.58 | 93 |
-| `bench.rigid_crates_400_ms` | 1.07 | 0.9864 | 93 |
-| `bench.rigid_raycast_1000_ms` | 0.3518 | 0.3228 | 93 |
-| `stress.crates.fps_avg` | 17.51 | 22.85 | 93 |
-| `stress.crates.physics_avg_ms` | 0.2909 | 0.2847 | 93 |
-| `stress.fps_1pct_low` | 10.59 | 16.28 | 93 |
-| `stress.fps_avg` | 17.56 | 23.34 | 93 |
-| `stress.frame_p99_ms` | 71.22 | 57.86 | 93 |
-| `stress.impacts.fps_avg` | 14.89 | 19.00 | 93 |
-| `stress.peak_rss_mb` | 391 | 251 | 93 |
-| `stress.walk.fps_avg` | 20.80 | 29.14 | 93 |
+| `bench.audio_mix_32_voices_full_ms` | 0.1513 | 0.1096 | 88 |
+| `bench.audio_mix_32_voices_ms` | 0.0808 | 0.0614 | 94 |
+| `bench.cloth_16x24_basic_ms` | 3.71 | 2.90 | 38 |
+| `bench.cloth_16x24_full_ms` | 7.49 | 5.31 | 38 |
+| `bench.cloth_1x32_basic_ms` | 0.4244 | 0.3282 | 38 |
+| `bench.cloth_1x32_full_ms` | 0.9161 | 0.6111 | 38 |
+| `bench.cloth_1x32_off_ms` | 0.4241 | 0.3291 | 38 |
+| `bench.cloth_1x64_basic_ms` | 1.79 | 1.38 | 38 |
+| `bench.cloth_1x64_full_ms` | 33.51 | 5.27 | 38 |
+| `bench.cloth_cape_basic_ms` | 0.3948 | 0.3091 | 27 |
+| `bench.cloth_cape_full_ms` | 6.71 | 4.63 | 27 |
+| `bench.fracture_bake_cube_ms` | 6.17 | 4.63 | 94 |
+| `bench.hair_1x100_straight_ms` | 0.1726 | 0.1071 | 33 |
+| `bench.hair_1x160_braids_ms` | 0.4124 | 0.3104 | 15 |
+| `bench.hair_1x160_cornrows_ms` | 0.0453 | 0.0327 | 15 |
+| `bench.hair_1x200_3b_ms` | 0.4132 | 0.3052 | 18 |
+| `bench.hair_1x200_4c_ms` | 0.2337 | 0.1725 | 18 |
+| `bench.hair_1x200_bantu_ms` | 0.5616 | 0.4102 | 18 |
+| `bench.hair_1x400_curly_ms` | 1.85 | 1.17 | 33 |
+| `bench.hair_1x400_long_ms` | 0.9136 | 0.5540 | 33 |
+| `bench.hair_8x200_long_ms` | 3.57 | 2.16 | 33 |
+| `bench.impact_synth_8_materials_ms` | 0.9479 | 0.9068 | 94 |
+| `bench.lua_think_50_hooks_ms` | 0.2004 | 0.1408 | 94 |
+| `bench.net_snapshot_256_bodies_ms` | 0.0667 | 0.0503 | 94 |
+| `bench.particle_fluid_2000_ms` | 3.40 | 2.58 | 94 |
+| `bench.rigid_crates_400_ms` | 1.35 | 0.9864 | 94 |
+| `bench.rigid_raycast_1000_ms` | 0.3501 | 0.3228 | 94 |
+| `stress.crates.fps_avg` | 13.86 | 22.85 | 94 |
+| `stress.crates.physics_avg_ms` | 0.3542 | 0.2847 | 94 |
+| `stress.fps_1pct_low` | 7.83 | 16.28 | 94 |
+| `stress.fps_avg` | 13.94 | 23.34 | 94 |
+| `stress.frame_p99_ms` | 88.87 | 57.86 | 94 |
+| `stress.impacts.fps_avg` | 11.84 | 19.00 | 94 |
+| `stress.peak_rss_mb` | 391 | 251 | 94 |
+| `stress.walk.fps_avg` | 16.58 | 29.14 | 94 |
 
 ![bench.audio_mix_32_voices_full_ms](charts/bench_audio_mix_32_voices_full_ms.svg)
 
