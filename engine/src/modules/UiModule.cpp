@@ -287,8 +287,7 @@ bool UiModule::EngineSystemInterface::LogMessage(Rml::Log::Type type, const Rml:
 
 Rml::Element* UiModule::screenButtonAt(float nx, float ny) const {
     if (!m_context) return nullptr;
-    const Rml::Vector2i size = m_context->GetDimensions();
-    Rml::Element* e = m_context->GetElementAtPoint(Rml::Vector2f(nx * static_cast<float>(size.x), ny * static_cast<float>(size.y)));
+    Rml::Element* e = m_context->GetElementAtPoint(Rml::Vector2f(nx * m_frameSize.x - m_origin.x, ny * m_frameSize.y - m_origin.y));
     for (; e; e = e->GetParentNode())
         if (e->HasAttribute("data-kke-action")) return e;
     return nullptr;
@@ -349,6 +348,7 @@ void UiModule::frameStart(const UpdateContext& ctx) {
 
 void UiModule::init(Application& app) {
     m_app = &app;
+    m_pixelsPerPoint = app.window().pixelsPerPoint();
     m_systemInterface.window = app.window().handle();
     m_renderInterface = std::make_unique<RmlVulkanRenderInterface>(app.device(), app.renderer().overlayRenderPass(), app.renderer().hasStencil());
 
@@ -417,9 +417,28 @@ static constexpr float kReferenceHeight = 900.0f;
 void UiModule::renderUi() {
     if (!m_context) return;
     VkExtent2D extent = m_app->renderer().extent();
-    Rml::Vector2i currentSize = m_context->GetDimensions();
-    if (currentSize.x != static_cast<int>(extent.width) || currentSize.y != static_cast<int>(extent.height)) {
-        m_context->SetDimensions(Rml::Vector2i(static_cast<int>(extent.width), static_cast<int>(extent.height)));
+    // Menus keep to the safe area: clear of notches, rounded corners, the
+    // system bars and the profile's standard margin (kke/UiProfile.h).
+    const ScreenRect safe = m_app->uiSafeRect();
+    m_frameSize = Rml::Vector2f(static_cast<float>(extent.width), static_cast<float>(extent.height));
+    m_origin = Rml::Vector2f(std::round(safe.x), std::round(safe.y));
+    const Rml::Vector2i wanted(std::max(1, static_cast<int>(std::round(safe.x + safe.w) - m_origin.x)),
+                               std::max(1, static_cast<int>(std::round(safe.y + safe.h) - m_origin.y)));
+    if (m_context->GetDimensions() != wanted) m_context->SetDimensions(wanted);
+    // Per-screen classes on every document's body (ui.profile() in
+    // docs/SCRIPTING.md): one menu's RCSS can lay itself out per kind of screen
+    // and per orientation instead of phone and PC layouts fighting.
+    {
+        const UiProfile profile = m_app->uiProfile();
+        const bool portrait = extent.height > extent.width;
+        for (int i = 0; i < m_context->GetNumDocuments(); ++i) {
+            Rml::ElementDocument* doc = m_context->GetDocument(i);
+            doc->SetClass("kke-phone", profile == UiProfile::Phone);
+            doc->SetClass("kke-desktop", profile == UiProfile::Desktop);
+            doc->SetClass("kke-console", profile == UiProfile::Console);
+            doc->SetClass("kke-portrait", portrait);
+            doc->SetClass("kke-landscape", !portrait);
+        }
     }
     m_pixelsPerPoint = m_app->window().pixelsPerPoint();
     const float shortSide = static_cast<float>(std::min(extent.width, extent.height));
@@ -448,12 +467,9 @@ void UiModule::reloadStyleSheets() {
 void UiModule::renderOverlay(const RenderContext& ctx) {
     if (!m_context) return;
 
-    // RenderContext only carries what 3D drawing needs (view/proj/etc),
-    // not pixel dimensions, so we ask the context for its own size --
-    // which we set once at creation and don't currently update on window
-    // resize (see docs/HISTORY.md "Roadmap").
-    Rml::Vector2i size = m_context->GetDimensions();
-    m_renderInterface->beginFrame(ctx.cmd, glm::vec2(static_cast<float>(size.x), static_cast<float>(size.y)));
+    // RenderContext only carries what 3D drawing needs, so the frame's size
+    // and the safe area's corner come from renderUi(), which ran this frame.
+    m_renderInterface->beginFrame(ctx.cmd, glm::vec2(m_frameSize.x, m_frameSize.y), glm::vec2(m_origin.x, m_origin.y));
     m_context->Render();
 }
 
@@ -461,12 +477,15 @@ void UiModule::onEvent(const SDL_Event& event) {
     if (!m_context) return;
 
     int modifiers = currentRmlModifiers();
-    // Window coordinates -> framebuffer pixels (see Window::pixelsPerPoint()).
+    // Window coordinates -> framebuffer pixels (see Window::pixelsPerPoint()),
+    // then -> context pixels (the context starts at the safe area's corner).
     const float ppp = m_pixelsPerPoint;
+    const auto cx = [&](float x) { return x * ppp - m_origin.x; };
+    const auto cy = [&](float y) { return y * ppp - m_origin.y; };
 
     switch (event.type) {
         case SDL_EVENT_MOUSE_MOTION:
-            m_context->ProcessMouseMove(static_cast<int>(event.motion.x * ppp), static_cast<int>(event.motion.y * ppp), modifiers);
+            m_context->ProcessMouseMove(static_cast<int>(cx(event.motion.x)), static_cast<int>(cy(event.motion.y)), modifiers);
             // Real slider dragging -- see this class's own header
             // comment on m_draggingSlider for why this exists. Every
             // motion event while a range input is being dragged
@@ -474,7 +493,7 @@ void UiModule::onEvent(const SDL_Event& event) {
             // the same real fix already applied to the initial click
             // below, just repeated continuously instead of once.
             if (m_draggingSlider) {
-                setRangeSliderValueFromMouseX(m_draggingSlider, event.motion.x * ppp);
+                setRangeSliderValueFromMouseX(m_draggingSlider, cx(event.motion.x));
             }
             // Real panel dragging — see m_draggingPanel's own header
             // comment. A pixel delta from the drag's own start point,
@@ -498,12 +517,9 @@ void UiModule::onEvent(const SDL_Event& event) {
             }
             break;
         case SDL_EVENT_MOUSE_BUTTON_DOWN: {
-            if (event.button.which != SDL_TOUCH_MOUSEID && event.button.button == SDL_BUTTON_LEFT) {
-                const Rml::Vector2i size = m_context->GetDimensions();
-                if (size.x > 0 && size.y > 0)
-                    showScreenButtonPressed(~uint64_t{0}, screenButtonAt(event.button.x * ppp / static_cast<float>(size.x),
-                                                                        event.button.y * ppp / static_cast<float>(size.y)));
-            }
+            if (event.button.which != SDL_TOUCH_MOUSEID && event.button.button == SDL_BUTTON_LEFT && m_frameSize.x > 0.0f &&
+                m_frameSize.y > 0.0f)
+                showScreenButtonPressed(~uint64_t{0}, screenButtonAt(event.button.x * ppp / m_frameSize.x, event.button.y * ppp / m_frameSize.y));
             int button = sdlButtonToRmlButton(event.button.button);
             if (button >= 0) m_context->ProcessMouseButtonDown(button, modifiers);
 
@@ -531,7 +547,7 @@ void UiModule::onEvent(const SDL_Event& event) {
             if (button == 0) {
                 Rml::Element* hover = m_context->GetHoverElement();
                 if (isRangeSliderInput(hover)) {
-                    setRangeSliderValueFromMouseX(hover, event.button.x * ppp);
+                    setRangeSliderValueFromMouseX(hover, cx(event.button.x));
                     // Real drag start, not just a one-time click — a
                     // genuine, reported gap this closes: clicking
                     // alone could set a value, but holding and moving

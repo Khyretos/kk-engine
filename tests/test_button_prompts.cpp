@@ -235,3 +235,30 @@ TEST(ButtonPrompts, TouchTurnsButtonActionsIntoTappableButtons) {
     prompts.setTouchGesture("aim", "swipe_up");
     EXPECT_NE(prompts.format(PromptStyle::Touch, map, "{aim} aim").find("Gesture_Swipe_Up.png"), std::string::npos);
 }
+
+TEST(ButtonPrompts, TouchKeepsSentencesAndMouseClicksAsText) {
+    kke::InputMap map;
+    map.defineAction({ "rally", "Rally" });
+    map.defineAction({ "select", "Select" });
+    map.defineAction({ "call", "Call everyone to the middle of the screen" });
+    map.addBinding(bind("select", { kke::SourceKind::MouseButton, 0, SDL_BUTTON_LEFT, 0 }));
+    ButtonPrompts prompts;
+
+    // A mouse click is a tap on the scene, not a button.
+    const std::string click = prompts.format(PromptStyle::Touch, map, "{select} select a soldier");
+    EXPECT_EQ(click.find("kke-touch-button"), std::string::npos) << click;
+    EXPECT_NE(click.find("select a soldier"), std::string::npos) << click;
+
+    // A sentence after the placeholder stays a sentence beside the button.
+    const std::string long_ = prompts.format(PromptStyle::Touch, map, "{rally} call everyone to the crosshair");
+    EXPECT_NE(long_.find(">Rally</span>"), std::string::npos) << long_;
+    EXPECT_NE(long_.find("call everyone to the crosshair"), std::string::npos) << long_;
+    // No short label of its own: the sentence's first word is the button.
+    const std::string first = prompts.format(PromptStyle::Touch, map, "{call} call everyone to the crosshair");
+    EXPECT_NE(first.find(">call</span> everyone to the crosshair"), std::string::npos) << first;
+
+    // Punctuation ends a label.
+    const std::string punct = prompts.format(PromptStyle::Touch, map, "{rally} group 1 (Ctrl: store)");
+    EXPECT_NE(punct.find(">group 1</span>"), std::string::npos) << punct;
+    EXPECT_NE(punct.find("(Ctrl: store)"), std::string::npos) << punct;
+}

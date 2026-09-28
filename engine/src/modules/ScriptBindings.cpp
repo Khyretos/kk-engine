@@ -458,6 +458,14 @@ void ScriptModule::bindUi() {
         if (!e) luaL_error(L, "%s: the document has no element with id '%s'", what, elementId);
         return e;
     };
+    // ui.profile() -> "phone" | "desktop" | "console": what kind of screen
+    // the game's menus are for (kke/UiProfile.h). Every document's body
+    // also carries the class kke-phone/kke-desktop/kke-console and
+    // kke-portrait/kke-landscape, so RCSS can lay a menu out per screen.
+    vm.registerFunction("ui", "profile", [this](lua_State* L) {
+        lua_pushstring(L, uiProfileName(m_app->uiProfile()));
+        return 1;
+    });
     // ui.text(doc, id, text): plain text, shown as typed (no markup).
     vm.registerFunction("ui", "text", [element](lua_State* L) {
         Rml::Element* e = element(L, "ui.text");

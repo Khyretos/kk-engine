@@ -1333,12 +1333,14 @@ void ShowcaseModule::renderShadow(const kke::ShadowRenderContext& ctx) {
 void ShowcaseModule::renderUi() {
     if (m_menuOpen) return; // the pause menu has the screen
     const float s = ImGui::GetFontSize() / 13.0f;
-    // On a narrow screen (a phone held upright, a small window) the score
-    // bar reaches the left edge: start under it, folded (a tap on the
-    // title opens it).
-    const ImVec2 screen = ImGui::GetIO().DisplaySize;
-    const bool narrow = screen.x < 1100.0f * s;
-    ImGui::SetNextWindowPos(ImVec2(10 * s, (narrow ? 80.0f : 10.0f) * s), ImGuiCond_FirstUseEver);
+    // On a narrow screen (a phone, a small window) the score bar reaches
+    // the left edge: start under it, folded (a tap on the title opens it).
+    // Upright, the score bar is taller, so lower still.
+    const ImVec2 origin = ImGui::GetMainViewport()->WorkPos; // the safe area
+    const ImVec2 view = ImGui::GetMainViewport()->WorkSize;
+    const bool narrow = view.x < 1100.0f * s;
+    const float y = !narrow ? 10.0f * s : view.y > view.x ? view.y * 0.15f : 80.0f * s;
+    ImGui::SetNextWindowPos(ImVec2(origin.x + 10 * s, origin.y + y), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(300 * s, 0), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowCollapsed(narrow, ImGuiCond_FirstUseEver);
     ImGui::Begin("KKE Showcase");

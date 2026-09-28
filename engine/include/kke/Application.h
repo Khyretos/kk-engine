@@ -10,6 +10,7 @@
 #include "kke/Viewports.h"
 #include "kke/ResourceGovernor.h"
 #include "kke/HardwareTarget.h"
+#include "kke/UiProfile.h"
 #include "kke/ShadowMap.h"
 #include "kke/Texture.h"
 
@@ -306,6 +307,16 @@ public:
     const HardwareTarget& hardwareTarget() const { return *m_target.target; }
     EngineSettings targetDefaultSettings() const { return settingsForTarget(*m_target.target); }
 
+    // What kind of screen the menus are made for (kke/UiProfile.h): phone,
+    // desktop or console, from the hardware target or KKE_UI_PROFILE.
+    UiProfile uiProfile() const { return m_uiProfile; }
+    // The part of the drawn frame (renderer extent, pixels) that menus and
+    // HUDs keep to: the system's safe area (notch, rounded corners, status
+    // and navigation bars) plus the profile's standard margin. RmlUi and
+    // the ImGui panels both lay out inside it, so nothing is cut off at
+    // the screen's edges.
+    ScreenRect uiSafeRect() const;
+
     // The ImGui developer overlay (Performance, Physics, Camera panels...).
     DebugUi& debugUi() { return *m_debugUi; }
     bool uiCapturesMouse() const { return m_uiCapturesMouse; }
@@ -419,6 +430,7 @@ private:
     bool m_sceneCovered = false;
     ResourceBudget m_budget;
     TargetChoice m_target;
+    UiProfile m_uiProfile = UiProfile::Desktop;
     float m_effectiveLimit = 0.0f;
     bool m_stepRequested = false;
 
