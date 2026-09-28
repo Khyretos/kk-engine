@@ -77,6 +77,7 @@ add_executable(kke_tests
     test_floating_bodies.cpp
     test_audio.cpp
     test_engine_sound.cpp
+    test_tyre.cpp
     test_footsteps.cpp
     test_room_acoustics.cpp
     test_wav_file.cpp

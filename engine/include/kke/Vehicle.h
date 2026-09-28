@@ -3,6 +3,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include "kke/Tyre.h"
+
 #include <cstdint>
 #include <vector>
 
@@ -46,6 +48,9 @@ struct VehicleWheelDesc {
     // spinning or locked tyre loses: a handbrake or a burnout steps the
     // rear out. 0 = sideways grip ignores wheelspin.
     float combinedSlipLoss = 0.6f;
+    // Heat, wear, pressure, load sensitivity and damage (kke/Tyre.h,
+    // docs/VEHICLES.md "Tyres").
+    TyreDesc tyre;
 };
 
 struct VehicleDesc {
@@ -103,6 +108,16 @@ struct VehicleWheelState {
     float angularVelocity = 0.0f;  // rad/s
     float suspension = 0.0f;       // 0 = fully extended .. 1 = fully compressed
     float steerDegrees = 0.0f;     // positive = left
+    // The tyre (kke/Tyre.h, docs/VEHICLES.md "Tyres").
+    float load = 0.0f;             // N on the ground
+    float surfaceTemp = 20.0f, coreTemp = 20.0f; // C: the tread's surface, the carcass and its air
+    float pressure = 0.0f;         // bar now (0 when flat)
+    float wear = 0.0f;             // 0 new .. 1 gone
+    float slidePower = 0.0f;       // W the tread slid off (smoke, marks, squeal)
+    float grip = 1.0f;             // x the friction curve right now: heat, wear, air, the ground, the load
+    float radius = 0.33f;          // m now (lower when flat or on the rim)
+    TyreCondition condition = TyreCondition::Inflated;
+    uint32_t groundMaterial = 0;   // BodyDesc::material of the ground (RigidWorld::setGroundGrip)
 };
 
 struct VehicleState {

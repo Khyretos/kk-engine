@@ -77,6 +77,7 @@ int RacingModule::debrisMesh(const glm::vec3& color) {
 
 void RacingModule::clearEffects() {
     if (m_fx) m_fx->clear();
+    clearLooseWheels();
     kke::RigidWorld& w = m_rigid->world();
     for (Debris& d : m_debris) w.remove(d.body);
     m_debris.clear();
@@ -130,7 +131,10 @@ void RacingModule::hitCar(Car& c, const glm::vec3& point, const glm::vec3& into,
     netHit(c, local, dir, depth);
     // A corner hit bends that wheel: less grip there, and the car pulls.
     for (int wh = 0; wh < 4; ++wh)
-        if (glm::length(local - c.art->wheelCenter[wh]) < 0.9f && speed > 6.0f) c.bent[wh] = std::min(1.0f, c.bent[wh] + (speed - 6.0f) * 0.025f * factor);
+        if (glm::length(local - c.art->wheelCenter[wh]) < 0.9f && speed > 6.0f) {
+            c.bent[wh] = std::min(1.0f, c.bent[wh] + (speed - 6.0f) * 0.025f * factor);
+            damageWheel(c, wh, speed * std::sqrt(factor), -into * 2.5f);
+        }
     if (speed > 11.0f) spawnDebris(c, point, -into * 2.0f + c.velocity * 0.5f, 2 + static_cast<int>(speed / 10.0f));
     // Drift: a hit ends the combo, points and all.
     if (c.driftChain > 0.0f) {
@@ -154,6 +158,7 @@ void RacingModule::hitCar(Car& c, const glm::vec3& point, const glm::vec3& into,
 // Pushes the body's vertices near the hit in, the most at the point
 // itself, fading out over a radius that grows with the depth.
 void RacingModule::dent(Car& c, const glm::vec3& localPoint, const glm::vec3& localDir, float depth) {
+    if (crumple(c, localPoint, localDir, depth)) return; // FEMFX works it out (Crumple.cpp)
     const CarArt& art = *c.art;
     if (c.dented.empty()) {
         c.dented = art.positions;
@@ -196,10 +201,12 @@ void RacingModule::repairCar(Car& c, float amount) {
     const float mend = amount / 100.0f;
     for (float& b : c.bent) b = std::max(0.0f, b - mend * 2.0f);
     if (c.health >= 100.0f && !c.dented.empty()) {
+        resetShell(c);
         c.dented.clear();
         c.dentedNormals.clear();
         c.dentsChanged = true;
     }
+    if (c.health >= 100.0f) refitWheels(c); // new tyres, the wheels back on
     if (c.health > 0.0f) c.totalled = false;
     if (wasHurt) applyDamage(c);
 }
@@ -309,8 +316,11 @@ void RacingModule::updateEffects(Car& c, float dt) {
             at = glm::vec3(xf * glm::vec4(c.art->wheelCenter[wh] - glm::vec3(0.0f, c.art->wheelRadius, 0.0f), 1.0f));
         } else if (static_cast<size_t>(wh) < c.state.wheels.size()) {
             const kke::VehicleWheelState& ws = c.state.wheels[static_cast<size_t>(wh)];
-            contact = ws.contact;
+            contact = ws.contact && !((c.detached >> wh) & 1u);
             at = ws.contactPoint;
+            wheelEffects(c, wh, dt);
+            // A bare rim sparks instead; loose ground throws dust and stones.
+            if (ws.condition == kke::TyreCondition::Rim || loose(groundOf(ws.groundMaterial))) contact = false;
             // Spinning (a burnout, a launch) or locked: the tyre's surface
             // slides along the road; sideways: a slip angle well past the
             // grip's peak (a few degrees is just cornering).
@@ -318,6 +328,8 @@ void RacingModule::updateEffects(Car& c, float dt) {
             const float spin = std::fabs(surface - speed);
             const float slide = std::fabs(speed) > 4.0f ? std::fabs(ws.lateralSlip) : 0.0f;
             intensity = std::clamp((spin - 4.0f) / 8.0f, 0.0f, 1.0f) + std::clamp((slide - 9.0f) / 16.0f, 0.0f, 1.0f);
+            // Hot rubber smokes more (past ~140 C a burnout billows).
+            if (intensity > 0.0f) intensity += std::clamp((ws.surfaceTemp - 140.0f) / 120.0f, 0.0f, 0.5f);
             intensity = std::min(intensity, 1.0f);
         }
         SkidTrail& trail = m_trails[index][static_cast<size_t>(wh)];

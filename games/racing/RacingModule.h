@@ -18,6 +18,7 @@
 #include <array>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace kke {
@@ -27,6 +28,7 @@ class InputModule;
 class LobbyModule;
 class NetModule;
 class ParticleEffects;
+class PhysicsModule;
 class RigidBodyModule;
 namespace net { struct GameEventMsg; }
 } // namespace kke
@@ -57,9 +59,12 @@ namespace racing {
 // quarter_mile), KKE_RACE_CARS=<n>, KKE_RACE_LAPS=<n>, KKE_RACE_DAMAGE=
 // 0|1|2 (off, normal, brutal), KKE_RACE_LOBBY=0 (straight into a race),
 // KKE_RACE_AUTOPILOT=1 (no lobby, and a CPU drives your car too),
-// KKE_RACE_CAMERA=<n> (0 chase, 1 far, 2 bumper, 3 TV), KKE_RACE_QUIT=<s>
+// KKE_RACE_CAMERA=<n> (0 chase, 1 far, 2 bumper, 3 TV, 4 wheel), KKE_RACE_QUIT=<s>
 // (quit after that long, logging every car every few seconds),
 // KKE_RACE_CRASH=1 (every CPU driver aims for the car ahead: a damage test).
+// What the tyres find under them (Wheels.cpp): grip, and what they throw up.
+enum class Ground : uint8_t { Tarmac, Concrete, Grass, Gravel, Dirt, Mud, Snow };
+
 class RacingModule : public kke::Module {
 public:
     RacingModule();
@@ -77,6 +82,7 @@ public:
     enum class Phase { Lobby, Countdown, Racing, Finished };
 
 private:
+    struct Shell; // Crumple.cpp
     // ---- a car in the race (Driving.cpp)
     struct Car {
         // Who drives it.
@@ -105,6 +111,7 @@ private:
         kke::ModelModule::InstanceId bodyInst = 0, wheelInst[4] = {};
         std::vector<std::vector<glm::vec3>> dented, dentedNormals; // the body now (car space), once hit
         bool dentsChanged = false;
+        std::shared_ptr<Shell> shell; // its FEMFX body (Crumple.cpp), when the build has FEMFX
         // Where it is.
         Track::Where where;
         int lap = 0;                // line crossings since the start (-1 behind it on the grid)
@@ -123,6 +130,11 @@ private:
         float wheelSmoke[4] = {};   // s until the next puff
         float scrapeTimer = 0.0f;
         int hits = 0;
+        // Wheels (Wheels.cpp): what's drawn, what's gone.
+        float wheelAngle[4] = {};   // rad each wheel has turned (a bent one wobbles with it)
+        uint32_t tyreLook[4] = {};  // the squash last drawn (0: the tyre as made)
+        uint8_t detached = 0;       // a bit per wheel torn off
+        float rimSpark[4] = {};     // s until the next sparks off a bare rim
         // Pit lane.
         bool wantsPit = false;      // CPU: heading in
         float pitTime = 0.0f;       // s stopped in the pit box
@@ -230,6 +242,42 @@ private:
     std::vector<std::unique_ptr<kke::DynamicMeshRenderer>> m_debrisMeshes; // a unit cube per colour used
     std::vector<glm::vec3> m_debrisColors;
     int debrisMesh(const glm::vec3& color);
+
+    // ---- crumpling bodies on FEMFX (Crumple.cpp)
+    bool crumpleOn() const;
+    void makeShell(Car& c, int slot);
+    void dropShell(Car& c);
+    void resetShell(Car& c);
+    bool crumple(Car& c, const glm::vec3& localPoint, const glm::vec3& localDir, float depth); // false: no FEMFX, dent by hand
+    void updateShells();
+    std::string crumpleReport() const; // for the KKE_RACE_QUIT log
+    kke::PhysicsModule* m_femfx = nullptr;
+    bool m_crumple = true;          // KKE_RACE_FEMFX=0: dents by hand even with FEMFX
+    float m_crumpleShove = 1000.0f; // m/s of shove per m of dent asked for (KKE_RACE_SHOVE)
+
+    // ---- wheels (Wheels.cpp): tyres squashing on the road, flats, bare
+    // rims, torn-off wheels rolling away, what each ground throws up
+    void setGround(uint32_t material, Ground g);
+    Ground groundOf(uint32_t material) const;
+    static bool loose(Ground g) { return g != Ground::Tarmac && g != Ground::Concrete; }
+    std::unordered_map<uint32_t, Ground> m_grounds;
+    void wobbleWheels(Car& c, float dt);                 // after readCarState: bent and flat wheels wobble
+    void updateTyreLooks();                              // per frame: the nearest cars' tyres squash
+    void wheelEffects(Car& c, int wheel, float dt);      // sparks off a rim, dust, rubber
+    void damageWheel(Car& c, int wheel, float speed, const glm::vec3& push); // a hit at that corner
+    void tearOffWheel(Car& c, int wheel, const glm::vec3& push);
+    void refitWheels(Car& c);                            // the pit crew
+    static bool tyresHurt(const Car& c);                 // flat, on the rim, gone or worn out: a pit stop's worth
+    void updateLooseWheels(float dt);
+    void clearLooseWheels();
+    struct LooseWheel {
+        kke::RigidWorld::BodyId body = kke::RigidWorld::kNoBody;
+        kke::ModelModule::InstanceId inst = 0;
+        glm::mat4 prev{1.0f}, now{1.0f};
+        float age = 0.0f;
+    };
+    std::vector<LooseWheel> m_looseWheels;
+    std::vector<std::vector<glm::vec3>> m_tyreScratch;
 
     // ---- engines and tyres (Sound.cpp)
     void updateSounds(float dt);

@@ -49,6 +49,9 @@ struct CarArt {
     kke::ModelModule::ModelId body = 0, wheel[2] = {}; // wheel[0] left, [1] right
     std::vector<std::vector<glm::vec3>> positions, normals; // the body's parts, as made (for dents)
     std::vector<std::vector<uint32_t>> indices;
+    // The wheels' parts as made (centred on the wheel, car axes): the tyre
+    // squashes on the road and bulges, goes flat, shreds off the rim.
+    std::vector<std::vector<glm::vec3>> wheelPositions[2], wheelNormals[2];
     glm::vec3 wheelCenter[4]{};          // fl, fr, rl, rr (car space)
     float wheelRadius = 0.36f, wheelWidth = 0.3f;
     glm::vec3 boundsMin{-1.0f, 0.0f, -2.5f}, boundsMax{1.0f, 1.4f, 2.5f};
@@ -69,6 +72,7 @@ private:
     CarArt loadSynty(int type, int kit, int paint);
     CarArt makeBlock(int type, int paint);
     void finish(CarArt& art, const kke::ModelData& body); // parts for dents, bounds, hull
+    static void keepWheel(CarArt& art, int side, const kke::ModelData& wheel); // parts for the tyre's squash
     kke::ModelModule* m_models;
     const kke::AssetCatalog* m_catalog;
     std::string m_packRoot, m_textures;

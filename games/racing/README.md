@@ -43,7 +43,8 @@ For demos and tests:
 | `KKE_RACE_CARS=16`, `KKE_RACE_LAPS=3` | the field and the laps |
 | `KKE_RACE_DAMAGE=0/1/2` | damage off, normal, brutal |
 | `KKE_RACE_CRASH=1` | the damage test: CPU drivers aim at the car in front |
-| `KKE_RACE_CAMERA=0..3` | chase, far chase, bonnet, TV |
+| `KKE_RACE_CAMERA=0..4` | chase, far chase, bonnet, TV, wheel |
+| `KKE_RACE_FEMFX=0` | dents by hand even in a FEMFX build (for comparison) |
 | `KKE_RACE_LOBBY=0` | straight into a race, no start menu |
 | `KKE_RACE_QUIT=60` | quit after 60 s, printing where every car is every 5 s |
 | `KKE_ASSETS_DIR=...` | where the Synty packs are (docs/SCENES.md) |
@@ -110,6 +111,13 @@ tyre grips less), throws sparks and, above 40 km/h, bits of bodywork.
 Health sets the engine's power (half at zero); below 45% the engine
 smokes, and a totalled car stops where it is. Scraping along a wall or
 another car wears it down slowly with a trail of sparks.
+
+A hit at a corner can puncture that tyre (it goes down over a few
+seconds) or blow it; driven on flat it shreds off the rim and the bare
+rim sparks on the road. A corner already bent all the way can lose its
+wheel, which rolls away on its own. The tyres also get hot: a burnout or
+a long slide cooks them (they smoke more, then grip less), and cold ones
+slide. The pit box fits a fresh set and bolts lost wheels back on.
 
 ### Drift
 
@@ -208,6 +216,46 @@ normals; `ModelModule::setDeformedVertices` draws the dented copy. Debris
 are small boxes on Jolt that fade after 14 s. Online, a dent is an event
 so everyone sees the same car.
 
+### Crumpling (Crumple.cpp)
+
+In a FEMFX build (`KKE_ENABLE_FEMFX`, desktop) the dent isn't pushed in
+by hand: every car's body is also an AMD FEMFX solid, a box of 288
+tetrahedra the car's size, soft steel with a low yield (it stays bent).
+Jolt keeps driving the car; a hit is replayed into the solid as a shove
+where it landed, the way it pushed, and FEMFX works out how the metal
+gives: the dent spreads, panels buckle round it, a hard hit folds a
+corner in. The Synty body is skinned to the solid (`kke::embedPoints`,
+`PhysicsModule::deformEmbedded`). The solids sit far from the track on
+FEMFX's own ground, held still (each step their motion as a whole is
+taken out, leaving only the change of shape), and are awake only for a
+moment after a hit: about 0.1 ms a step with nothing hit, 1-3 ms in a
+pile-up. Without FEMFX (Android) the dents are the hand-made ones above.
+
+### Wheels (Wheels.cpp)
+
+The tyre model is the engine's (docs/VEHICLES.md "Tyres": heat, wear,
+pressure, load, the ground, flats). This file draws it:
+
+- **Squash and bulge.** The nearest six cars' tyres flatten where they
+  meet the road, as far as the load pushes them (a landing, a banked
+  turn), and the sidewalls bulge out; a flat one sits down on its
+  sidewalls. It moves each tyre vertex in the wheel's spinning frame
+  every frame the wheel turns, so it's the cars near a camera only
+  (from further away a 3 cm flat spot can't be seen). BeamNG gets this
+  from a soft-body tyre; this is the cheap trick of the same look.
+- **Wobble.** A bent wheel runs out of true (its plane tilted in its own
+  frame, so the tilt goes round as it turns); a flat one flops.
+- **Rims and lost wheels.** A bare rim throws sparks on the road; a torn
+  off wheel is a Jolt body of its own (a 12-sided drum), spinning as it
+  was, and rolls away.
+- **The ground.** On loose ground (grass, gravel, dirt, mud, snow) tyres
+  throw up dust at speed and a cloud and stones where they slide or spin,
+  instead of smoke and marks. `setGround` in `Race.cpp` says which body
+  is which ground.
+
+The wheel camera (**C** until it comes round) sits on the side sill
+looking back at the front tyre.
+
 ### Effects
 
 `kke::ParticleEffects` (docs/PARTICLE_EFFECTS.md): tyre smoke where a
@@ -231,8 +279,8 @@ the audio module's impact sounds.
 One view per player (`kke/Viewports.h`): stacked for two, quarters for
 three and four; with three players the fourth quarter is a TV camera
 that follows the leader. Each player's camera is a chase, far chase,
-bonnet or TV camera; the chase camera widens its field of view with
-speed.
+bonnet, TV or wheel camera; the chase camera widens its field of view
+with speed.
 
 ### The HUD (Hud.cpp, ui/racing_hud.rml)
 
@@ -277,6 +325,9 @@ are dead-reckoned from their last pose.
 | A car type's weight, power, drive, grip, lock | `carTypes()` in `Cars.cpp` |
 | Suspension, brakes, tyres | `buildCar` in `Driving.cpp` / `Cars.cpp` |
 | How much a hit hurts, dent depth | `hitCar` in `Damage.cpp` |
+| How the metal gives (FEMFX) | `bodyMaterial()` and `m_crumpleShove` in `Crumple.cpp` |
+| Punctures, lost wheels, the tyre's squash | `damageWheel`, `kTyreStiffness` in `Wheels.cpp` |
+| Tyre heat, wear, grip of each ground | `kke::TyreDesc`, `kke::GroundGrip` (docs/VEHICLES.md) |
 | Drift scoring | `updateDrift` in `Damage.cpp` |
 | CPU pace, lanes, drifting | `readCpu` in `Driving.cpp`; skill in `resetRace` (`Race.cpp`) |
 | Pit limiter and repair rate | `kPitSpeed`, `driveCar` in `Driving.cpp` |
@@ -284,7 +335,8 @@ are dead-reckoned from their last pose.
 
 ## Engine features it uses
 
-Jolt vehicles (`kke/Vehicle.h`, docs/VEHICLES.md), `kke::ParticleEffects`
+Jolt vehicles and their tyres (`kke/Vehicle.h`, `kke/Tyre.h`, docs/VEHICLES.md),
+FEMFX plastic solids with an embedded mesh (docs/PHYSICS_BRIDGE.md), `kke::ParticleEffects`
 (docs/PARTICLE_EFFECTS.md), model deformation (`ModelModule::setDeformedVertices`),
 `DynamicMeshRenderer`, the start menu (docs/LOBBY.md), networking
 (docs/NETWORKING.md), split screen and button prompts (docs/INPUT.md),
@@ -320,6 +372,8 @@ on screen says so, and everything else is the same.
 | `Driving.cpp` | players, CPU drivers, touch, the rules on top, cameras |
 | `Damage.cpp` | hits, dents, debris, smoke, sparks, skid marks, drift points |
 | `Sound.cpp` | the engines and tyres |
+| `Wheels.cpp` | tyres squashing, flats, rims, lost wheels, dust |
+| `Crumple.cpp` | the bodies' FEMFX solids |
 | `Lobby.cpp` | the start menu |
 | `Net.cpp`, `NetRace.h`, `NetRace.cpp` | online races |
 | `Hud.cpp`, `ui/racing_hud.rml` | the HUD |
