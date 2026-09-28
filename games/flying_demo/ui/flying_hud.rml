@@ -44,6 +44,18 @@
                 text-align: center; font-size: 13dp; color: #cfd6e6; }
         #hint img { font-size: 17dp; }
         #art { position: absolute; left: 3%; bottom: 10%; width: 60%; font-size: 12dp; color: #cfd6e6; }
+        /* Phones: the context already keeps to the safe area with its own
+           margin (docs/INPUT.md "Phone, PC and console"), so the panels sit
+           at its edges; upright, the standings and the clock go under the
+           player's panel instead of beside it. */
+        body.kke-phone .card { left: 0; top: 0; }
+        body.kke-phone #standings { right: 0; top: 44dp; }
+        body.kke-phone #clock { top: 0; }
+        body.kke-phone #hint { left: 0; width: 100%; bottom: 0; }
+        body.kke-portrait #standings { top: 175dp; right: auto; left: 0; }
+        body.kke-portrait #clock { top: 175dp; left: auto; right: 0; width: 120dp; text-align: right; }
+        body.kke-portrait .arrow { top: 36%; }
+        body.kke-portrait #pause .sheet { width: 92%; left: 4%; margin-left: 0; top: 8%; }
         /* The pause menu. */
         #pause { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background-color: #05070ecc; }
         #pause .sheet { position: absolute; left: 50%; top: 18%; width: 560dp; margin-left: -280dp; padding: 18dp 22dp; border-radius: 12dp;
