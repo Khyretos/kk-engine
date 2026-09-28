@@ -143,7 +143,10 @@ void BenchRecorder::endFrame(double wallMs, double residentMb) {
     const bool excluded = m_excludeFrame;
     m_excludeFrame = false;
     const bool measured = m_measureStart >= 0.0 && !done() && !excluded;
-    if (excluded && m_measureStart >= 0.0 && !done()) ++m_excludedFrames;
+    if (excluded && m_measureStart >= 0.0 && !done()) {
+        ++m_excludedFrames;
+        m_excludedMs += wallMs;
+    }
     m_lastT = m_frame.t + wallMs / 1000.0;
 
     if (measured) {
@@ -251,8 +254,11 @@ void BenchRecorder::endFrame(double wallMs, double residentMb) {
 // Called for each measured frame. tMeasured: when it began, in seconds
 // since measuring started.
 void BenchRecorder::pickShots(double tMeasured, double wallMs) {
+    // At most one picture a second, so a slow machine (a few frames a
+    // second) still measures mostly game frames.
     auto request = [&](const std::string& kind, const char* valueFmt, double value, double at) {
-        if (m_shotRequestCount >= kMaxShotRequests) return;
+        if (m_shotRequestCount >= kMaxShotRequests || tMeasured - m_lastShotAt < 1.0) return false;
+        m_lastShotAt = tMeasured;
         ++m_shotRequestCount;
         char buf[96];
         std::string label = kind;
@@ -264,14 +270,11 @@ void BenchRecorder::pickShots(double tMeasured, double wallMs) {
         std::snprintf(buf, sizeof(buf), "_at-%.1fs", at);
         label += buf;
         m_shotRequests.push_back({ kind, label, at, value });
+        return true;
     };
     // The slowest frame: each new record at least 10% worse than the last
-    // picture, at most one a second (the first second sets records often).
-    if (wallMs > m_shotWorstMs * 1.1 && tMeasured - m_shotWorstAt >= 1.0) {
-        m_shotWorstMs = wallMs;
-        m_shotWorstAt = tMeasured;
-        request("worst-frame", "%.0fms", wallMs, tMeasured);
-    }
+    // picture (the first second sets records often).
+    if (wallMs > m_shotWorstMs * 1.1 && request("worst-frame", "%.0fms", wallMs, tMeasured)) m_shotWorstMs = wallMs;
     // Whole seconds: the slowest and the fastest so far (3% apart from the
     // last picture of that kind, so a steady game isn't pictured twice a second).
     const int second = static_cast<int>(tMeasured);
@@ -280,16 +283,8 @@ void BenchRecorder::pickShots(double tMeasured, double wallMs) {
         if (m_secondFrames > 0 && span > 0.5) {
             const double fps = m_secondFrames / span;
             const double at = tMeasured; // the picture is of the frame right after that second
-            if ((m_shotSlowFps <= 0.0 || fps < m_shotSlowFps * 0.97) && tMeasured - m_shotSlowAt >= 1.0) {
-                m_shotSlowFps = fps;
-                m_shotSlowAt = tMeasured;
-                request("slowest-second", "%.0ffps", fps, at);
-            }
-            if (fps > m_shotFastFps * 1.03 && tMeasured - m_shotFastAt >= 1.0) {
-                m_shotFastFps = fps;
-                m_shotFastAt = tMeasured;
-                request("fastest-second", "%.0ffps", fps, at);
-            }
+            if ((m_shotSlowFps <= 0.0 || fps < m_shotSlowFps * 0.97) && request("slowest-second", "%.0ffps", fps, at)) m_shotSlowFps = fps;
+            if (fps > m_shotFastFps * 1.03 && request("fastest-second", "%.0ffps", fps, at)) m_shotFastFps = fps;
         }
         m_second = second;
         m_secondStart = tMeasured;
@@ -298,10 +293,9 @@ void BenchRecorder::pickShots(double tMeasured, double wallMs) {
     ++m_secondFrames;
     // Three views spread over the run: what the demo looks like.
     static constexpr double kViewAt[3] = { 0.1, 0.5, 0.9 };
-    if (m_viewsTaken < 3 && tMeasured >= kViewAt[m_viewsTaken] * m_options.seconds) {
+    if (m_viewsTaken < 3 && tMeasured >= kViewAt[m_viewsTaken] * m_options.seconds &&
+        request("view-" + std::to_string(m_viewsTaken + 1) + "-of-3", nullptr, 0.0, tMeasured))
         ++m_viewsTaken;
-        request("view-" + std::to_string(m_viewsTaken) + "-of-3", nullptr, 0.0, tMeasured);
-    }
 }
 
 std::vector<BenchRecorder::ShotRequest> BenchRecorder::takeShotRequests() {
@@ -351,7 +345,10 @@ nlohmann::json BenchRecorder::toJson(const std::vector<std::pair<std::string, st
     for (double ms : m_frameMs) total += ms;
     s["frames"] = m_frameMs.size();
     s["screenshot_frames"] = m_excludedFrames; // not measured: they copied or read back a screenshot
-    s["seconds"] = round3(total / 1000.0);
+    // The measured stretch of time, screenshot frames included (they only
+    // leave the frame statistics): a slow machine that took pictures still
+    // ran for as long as it was asked.
+    s["seconds"] = round3((total + m_excludedMs) / 1000.0);
     s["fps_avg"] = round3(total > 0.0 ? 1000.0 * m_frameMs.size() / total : 0.0);
     s["fps_1pct_low"] = round3(lowFps(m_frameMs, 0.01));
     s["fps_0_1pct_low"] = round3(lowFps(m_frameMs, 0.001));
