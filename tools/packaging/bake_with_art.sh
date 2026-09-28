@@ -81,7 +81,10 @@ tools/packaging/package.sh --bin "$build/bin" --platform linux --version "$versi
     --deps "$build/_deps" --strip strip --cooked "$cooked"
 if [ "$windows" = 1 ]; then
     command -v docker > /dev/null || die "--windows needs Docker (docker compose run --rm windows)"
-    docker compose run --rm windows
+    # Release, no tests: the same kind of build as the Linux one above. The
+    # container reads .kke-art.key and .kke-art.build from the repository,
+    # so the .exe files decrypt this bake's art.
+    docker compose run --rm -e KKE_BUILD_TYPE=Release -e KKE_VERSION_NAME="$version-with-art" -e RUN_TESTS=0 windows
     tools/packaging/package.sh --bin dist/windows --platform windows --version "$version-with-art" --out dist \
         --deps build-docker/windows/_deps --cooked "$cooked"
 fi
