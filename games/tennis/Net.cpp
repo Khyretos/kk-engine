@@ -336,7 +336,8 @@ void TennisModule::onNetEvent(const kke::net::GameEventMsg& e) {
                 p.pose.feet = place.toWorld(cp.feet);
                 p.pose.velocity = place.dirToWorld(glm::vec3(cp.velocity.x, 0.0f, cp.velocity.y));
                 p.pose.facing = place.dirToWorld(glm::vec3(std::sin(yaw), 0.0f, std::cos(yaw)));
-                p.pose.swing = cp.swing;
+                p.pose.stroke = cp.stroke;
+                p.pose.backhand = cp.backhand;
                 p.pose.swingT = cp.swingT;
                 p.pose.contact = cp.contact;
                 p.pose.tossing = cp.tossing;
@@ -406,7 +407,6 @@ void TennisModule::onNetEvent(const kke::net::GameEventMsg& e) {
             m_net->relayEvent(e);
         }
         p.tossAge = 0.0f;
-        p.swingKind = SwingPose::Kind::Toss;
         m->ball->place(t->at, t->velocity);
         return;
     }
@@ -661,7 +661,8 @@ void TennisModule::updateNet(float dt) {
                 cp.feet = p.feet;
                 cp.velocity = glm::vec2(p.vel.x, p.vel.z);
                 cp.yaw = glm::degrees(std::atan2(p.facing.x, p.facing.z));
-                cp.swing = p.tossAge >= 0.0f ? SwingPose::Kind::Toss : p.swingKind;
+                cp.stroke = p.stroke;
+                cp.backhand = p.backhand;
                 cp.swingT = p.swingT;
                 cp.contact = p.swingContact;
                 cp.tossing = p.tossAge >= 0.0f;
@@ -698,7 +699,8 @@ void TennisModule::sendNet() {
             pose.feet = w.characterPosition(p.body);
             pose.velocity = w.characterVelocity(p.body);
             pose.facing = place.dirToWorld(p.facing);
-            pose.swing = p.tossAge >= 0.0f ? SwingPose::Kind::Toss : p.swingKind;
+            pose.stroke = p.stroke;
+            pose.backhand = p.backhand;
             pose.swingT = p.swingT;
             pose.contact = p.swingContact;
             pose.tossing = p.tossAge >= 0.0f;

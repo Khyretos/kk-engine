@@ -6,6 +6,8 @@
 
 #include "kke/modules/PhysicsModule.h"
 
+#include <vector>
+
 #if KKE_ENABLE_FEMFX
 
 namespace kke {
@@ -56,9 +58,28 @@ void PhysicsModule::changeVertexVelocities(ObjectHandle handle,
     if (!m_scene || !change) return;
     forEachPiece(handle, [&](AMD::FmTetMesh& piece) {
         const uint32_t n = AMD::FmGetNumVerts(piece);
-        for (uint32_t i = 0; i < n; ++i)
+        for (uint32_t i = 0; i < n; ++i) {
+            if (AMD::FmGetVertFlags(piece, i) & FM_VERT_FLAG_KINEMATIC) continue; // pinned
             AMD::FmSetVertVelocity(m_scene, &piece, i, toF(change(toG(AMD::FmGetVertPosition(piece, i)), toG(AMD::FmGetVertVelocity(piece, i)))));
+        }
     });
+}
+
+void PhysicsModule::moveVertices(ObjectHandle handle, const std::function<glm::vec3(const glm::vec3& position)>& move) {
+    if (!m_scene || !move) return;
+    forEachPiece(handle, [&](AMD::FmTetMesh& piece) {
+        const uint32_t n = AMD::FmGetNumVerts(piece);
+        for (uint32_t i = 0; i < n; ++i) AMD::FmSetVertPosition(m_scene, &piece, i, toF(move(toG(AMD::FmGetVertPosition(piece, i)))));
+    });
+}
+
+void PhysicsModule::sleepObject(ObjectHandle handle) {
+    if (!m_scene) return;
+    std::vector<uint32_t> ids;
+    forEachPiece(handle, [&](AMD::FmTetMesh& piece) {
+        if (!AMD::FmIsTetMeshSleeping(piece)) ids.push_back(AMD::FmGetObjectId(piece));
+    });
+    if (!ids.empty()) AMD::FmCreateSleepingIsland(m_scene, ids.data(), static_cast<uint32_t>(ids.size()), nullptr, 0);
 }
 
 void PhysicsModule::translateObject(ObjectHandle handle, const glm::vec3& delta) {

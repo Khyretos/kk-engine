@@ -3,18 +3,24 @@
 Singles and doubles on a hard court, in a sport center of ten courts. You
 play the CPU, or up to four people play on one screen, split in two or
 four, or online with people on other PCs (and their friends on the same
-screen as them). The ball is a FEMFX soft body: it flattens on the strings and on the
-court and wobbles back. You press a shot button early, hold it to hit
-harder, and aim with the stick; when the ball reaches you the swing
-happens, and how well you timed it and how well you stood decides where
-it goes. The score is real tennis: deuce and advantage, tiebreaks, lets,
+screen as them). The ball is a FEMFX soft body, and so are the racket's
+strings: the ball flattens on them and on the court and wobbles back, and
+the strings give a pocket and ring. Every swing is made on the spot, with
+no animation clips: you hold a shot button to take the racket back (the
+longer, the harder, if your legs have it) and let go to swing; when you
+let go decides whether you meet the ball dead on, early or late. Fourteen
+strokes, from topspin drives and slices to volleys, smashes and three
+serves, each with its own path, speed and timing window, picked from
+where the ball is. Running flat out and hitting hard tire you: tired
+players run slower, hit softer and time worse. The score is real tennis: deuce and advantage, tiebreaks, lets,
 double faults, changing ends.
 
 The demo teaches how to put a FEMFX object into a game that needs exact
 numbers (the ball's flight is the game's own maths; FEMFX gives it its
 body), a CPU player whose footwork is pure logic you can unit-test, rules
-as a small state machine the whole game listens to, two-bone IK swings
-with no animation clips, the start menu with local players and CPU
+as a small state machine the whole game listens to, procedural swings
+(two-bone IK and a turning, crouching body) with no animation clips, a
+FEMFX object pinned in a frame, the start menu with local players and CPU
 players, and online play where every machine flies the ball from the same
 hit. Start here for a sports game, any game with a ball, or any game
 where a soft body has to go exactly where the rules say.
@@ -64,6 +70,10 @@ KKE_NET=join:127.0.0.1 KKE_NET_NAME=Rook ./tennis     # ...and join it from a se
 | `KKE_TENNIS_WAIT=<n>` | hosting: start the match by itself once `n` people have joined (tests) |
 | `KKE_TENNIS_AUTOPLAY=1` | the players at this screen are played by the CPU (tests: two copies that play each other online; in the sport center, walk to a free gate and play the CPU) |
 | `KKE_TENNIS_BALLTEST=1` | no match: seven scripted shots (a drop, a groundstroke, into the net, a serve, both fences, the roof), every contact logged with how far the FEMFX body is from the flight |
+| `KKE_TENNIS_SWINGLOG=1` | a log line for every hit: the stroke, the timing error and word, the spacing, the quality, the power, the stamina |
+| `KKE_TENNIS_STRINGTEST=1` | one string bed on its own hit by a 30 m/s ball every 2 s, and every racket's pocket, logged in mm |
+| `KKE_TENNIS_CLOSEUP=<n>` | the camera side-on to player `n` (0 = the first), close: for looking at swings |
+| `KKE_TENNIS_POSE=<stroke>,<f\|b>,<t>` | player 1 held in one moment of a stroke, e.g. `drive,b,-1` (a backhand drive's full takeback) or `flat serve,f,0` (contact); names as `strokeName` in [Swing.cpp](Swing.cpp) |
 | `KKE_ANIMATIONS_DIR` | where to look for `UAL1_Standard.fbx` and `UAL2.fbx` |
 | `KKE_ASSETS_DIR` | also searched for `Universal Animation Library 2/Unity/UAL2.fbx` |
 
@@ -86,16 +96,35 @@ are rebindable actions in the "Shots" and "Game" groups.
 | Back to the menu (`tennis.menu`; online, a client leaves the game; in the sport center, leave the court, the other side winning) | Esc | Back |
 | Developer panels (`panels`) | F1 | none |
 
-- **A shot.** Press the button while the ball is coming: the shot is
-  armed for up to 1.3 s and swings when the ball reaches your hitting
-  spot. Hold it to hit harder (you run slower while you hold). Pressed
-  0.08 to 0.7 s before the ball arrives is perfect timing; too late is a
-  swing at the ball already past, too early is a swing at nothing.
+- **A shot.** Press and hold a shot button as the ball comes: the racket
+  goes back and the shot builds power (the power bar, bottom left; you
+  move slower while you hold). Let go to swing. The forward swing takes
+  0.1 to 0.25 s depending on the stroke, so let go that long before the
+  ball reaches your hitting spot, a little in front of you. The word
+  bottom left says how it went: Perfect, Early, Late, Very early, Very
+  late. Too early or too late by more than about 0.12 to 0.18 s and you
+  miss it.
+- **Which stroke** is picked for you from where the ball is and the
+  button: a high ball before the bounce is a smash, near the net a volley,
+  just after the bounce and low a half volley, far to the side a stretch;
+  otherwise Topspin is a drive, Flat a flat drive, Slice a slice, Lob a
+  lob (the CPU players also play drop shots). Forehand or backhand is
+  the side the ball is on.
 - **Aim** with the stick (or WASD) as you hit: left and right is across
   the court, forward is deeper, back is shorter.
-- **The serve.** Stand still: the first press tosses the ball, the second
-  hits it; hit it near the top of the toss (about 2.75 m) for the best
-  serve. Let it drop and you catch it and toss again.
+- **The serve.** Stand still and hold a shot button: the ball goes up and
+  the racket goes back. Let go to swing; the best serve meets the ball
+  near the top of the toss. Topspin and Lob serve a kick serve (high and
+  safe, always the second serve's pick), Flat the fastest, Slice one that
+  swings wide. Let the ball drop and you catch it and toss again.
+- **Stamina** (the green bar, bottom left) goes down when you run faster
+  than a jog and with every swing (more the harder), and comes back
+  slowly in a rally and quickly between points. Tired, you run slower,
+  can't build full power, your timing window shrinks and your aim
+  wanders.
+- **Swing timing** in the menu: Relaxed (a wider window), Normal, Pro (a
+  narrower one), or Automatic (the swing lets go by itself at the right
+  moment; you pick the shot, the power and the aim).
 - The HUD's hints show the right glyph for the device each player last
   touched (`InputModule::promptText`).
 - The engine's character actions this game doesn't use (jump, sprint,
@@ -109,7 +138,7 @@ are rebindable actions in the "Shots" and "Game" groups.
   to Expert), the match length (a short set to 4 games, a set to 6, best
   of three short sets, or quick: to 2), the teams (across the net, or all
   the people at this screen on one side against the CPU) and the helping
-  hand. Two players make singles; three or four make doubles (filled up
+  hand, and the swing timing. Two players make singles; three or four make doubles (filled up
   with CPU players).
 - **The sport center** (the menu's Play row). Everyone at this screen
   walks the promenade between the courts (split screen for two or more,
@@ -217,17 +246,50 @@ court, and the body can't either.
   waist high on the way down, or earlier when it would carry them too
   deep.
 
-### Hitting
+### Swings and hitting
 
-`tryHit` and `hitBall` in [Play.cpp](Play.cpp). An armed shot waits until
-the ball is within reach (0.2 to 1.5 m) and reaches the hitting spot a
-little in front, or starts going away. Quality is spacing (the ball an arm
-and a racket to the side, between knee and shoulder, beside or just in
-front) times timing (how long before the ball the button went down; a CPU
-player's by its level). The target is the aim plus a wobble that grows as
-quality drops; hitting early pulls it across the body, late pushes it
-wide. `planShot` gives the velocity; the spin kind gives the pull and the
-spin; the harder the hit, the more the strings squash the ball.
+[Swing.h](Swing.h) is pure maths (tested): the fourteen strokes, each a
+`StrokeShape` (the racket head's path through ready, takeback, slot,
+contact and finish in the body's frame, the face's angle, how far the
+shoulders turn and the knees bend, how long the takeback, forward swing
+and follow-through take, the timing window, how fast and how steady),
+`pickStroke` (which stroke fits the ball), `racketAt` (where the racket
+and body are at a moment of the swing: a curve through the slot, mirrored
+for a backhand) and `Stamina`.
+
+A swing runs on one clock, t: -2 to -1 the takeback (held as long as
+the button is), -1 to 0 the forward swing (from the release, taking
+`forward` seconds), 0 contact, 0 to 1 the follow-through. `stepPlayer`
+and `stepSwing` in [Play.cpp](Play.cpp): on release the contact time is
+known (`contactAt`); when the ball crosses the hitting plane (a distance
+in front of the body, or a height for an overhead) within reach, that is
+`crossAt`. The timing error is `contactAt - crossAt`; within `maxError`
+it's a hit (`hitBall`), otherwise a miss. Quality is spacing (the ball an
+arm and a racket to the side, between knee and shoulder) times timing
+(`timingQuality`: 1 dead on, ~0.8 at the window's edge). The target is the
+aim plus a wobble that grows as quality drops and with tiredness; early
+pulls it across the body, late pushes it wide. The stroke scales the
+speed and the wobble; `planShot` gives the velocity; the harder the hit,
+the more the strings squash the ball. CPU players (and Automatic timing)
+let go themselves, when the ball is `forward` seconds from the plane,
+plus a timing error drawn from their level (`BotSkill::timing`: 55 ms
+Easy to 18 ms Expert).
+
+### The strings
+
+[Strings.h](Strings.h), [Strings.cpp](Strings.cpp). Each racket's string
+bed is a FEMFX slab (6 x 7 cells, 4 cm thick; thinner ones jitter)
+whose rim is pinned in the frame (`TetSpawnOptions::pinnedVerts`) and
+stretched 3% into it (`moveVertices`), so it has tension like strings.
+The slab stays still 150 m above the sport center, never drawn; the
+16 x 19 strings are ribbons drawn on the racket from points embedded in
+it (`kke::embedPoints`, `deformEmbedded`), moved along the face's normal
+as the slab bends. A hit pushes the slab's vertices around the contact
+point in proportion to the ball's speed; FEMFX bends it into a pocket
+(about 17 mm for 30 m/s, measured with `KKE_TENNIS_STRINGTEST`) and lets
+it ring out over ~0.4 s, and then it is put to sleep (`sleepObject`;
+FEMFX never sleeps a lone object by itself). A real pocket lasts about
+5 ms, less than a frame: these strings are softer, so it can be seen.
 
 ### The CPU player
 
@@ -243,10 +305,15 @@ at least 90%.
 [Body.cpp](Body.cpp). The players are the UAL mannequin with its idle,
 walk, jog and sprint clips blended by speed, UAL2's side steps when that
 pack is there, and sitting, cheering and groaning. There are no swing
-clips: every swing is two-bone IK on the right arm along a path (back,
-contact, follow-through) timed so the racket meets the ball; the left arm
-tosses the serve. The racket is a mesh built in code (grip, shaft, oval
-head), held in the right hand.
+clips: `racketAt` gives the racket head's place, and the body follows it.
+The pelvis and spine turn (30% / 70%) with the shoulders, the hips drop
+and two-bone IK keeps the feet planted, the right arm reaches the head
+with two-bone IK, and the left hand joins the grip for a two-handed
+backhand, throws the toss, points up at a smash or cradles the racket at
+the ready. The racket face opens for slice and lob and closes for
+topspin. The racket is POLYGON Shops' tennis racket when that pack is
+there (its flat string sheet taken out: the FEMFX strings go there), or a
+mesh built in code.
 
 ### The sport center
 
@@ -360,15 +427,23 @@ screen.
 - **Press early, swing on arrival.** Timing a button to the exact frame
   is not fun on a TV; arming the shot and grading how early you pressed
   keeps timing a skill without being a lottery.
-- **Procedural swings.** Kees was asked which swing animations to use;
-  until there is an answer the swings are IK, which needs no clips and
-  always reaches the ball.
+- **Procedural swings.** Kees has no tennis animations (they are
+  expensive) and wants the fun to be in procedural ones: every stroke is
+  a path, a body turn and IK, so it bends to wherever the ball really is.
+- **Hold to take back, let go to swing.** The player measures the swing
+  (how long to hold: power, costing stamina) and times it (when to let
+  go); the stroke itself is picked from the ball so a pad has enough
+  buttons. Automatic timing keeps it playable for anyone who wants only
+  the tactics.
 - **Hits, not a streamed ball, online.** Sending the hit and letting every
   machine fly the same maths costs one small message per shot and looks
   smooth at any latency; the host's ball a few times a second only mops
   up. Streaming the ball's position would lag it and jitter the squash.
-- **No Synty art yet.** The Shopping Mall pack Kees mentioned is not on
-  the share; the courts are built from boxes.
+- **Strings far away.** Carrying a FEMFX slab on a racket swinging at
+  40 m/s would cost solver time and shake it; only the pocket matters, so
+  the slab stays still and its shape is copied onto the racket.
+- **No Synty courts yet.** The Shopping Mall pack Kees mentioned is not on
+  the share; the courts are built from boxes. The racket is Synty's.
 
 ## Tuning
 
@@ -380,7 +455,11 @@ screen.
 | Shot speeds | `speedFor` in [Play.cpp](Play.cpp) | flat 25-35, topspin 20-28, slice 15-20, lob 9-10.5, serve 30-46 m/s |
 | Run speed, while charging | `kRunSpeed`, `kChargeSpeed` in [Play.cpp](Play.cpp) | 5.8, 3.6 m/s |
 | Reach, helping hand's extra | `kReachMin`, `kReachMax`, `kReachHelp` | 0.2, 1.5, 0.45 m |
-| How long an armed shot waits | `kArmedFor` | 1.3 s |
+| Stroke paths, times, windows, speed, steadiness | `shapes()` in [Swing.cpp](Swing.cpp) | forward swing 0.1-0.25 s, window 25-50 ms, miss past 100-180 ms |
+| Stamina costs and effects | `Stamina` in [Swing.cpp](Swing.cpp) | swing 0.015 + 0.05 x power², recovery 0.02 /s in a rally, 0.18 /s between points |
+| Swing timing choice | `setTiming` | Relaxed 1.5x, Normal 1x, Pro 0.7x the window |
+| CPU timing error | `BotSkill::timing` in [Bot.cpp](Bot.cpp) | 55, 38, 27, 18 ms |
+| The strings | `stringMaterial`, `kStretch`, `kPush` in [Strings.cpp](Strings.cpp) | 1e4 stiffness, 3% stretch, 0.1 x the ball's speed |
 | CPU levels | `BotSkill::forLevel` in [Bot.cpp](Bot.cpp) | speed, reaction, aim, power, risk |
 | A CPU's aim wandering in a long rally | `tired` in `hitBall` ([Play.cpp](Play.cpp)) | +10 cm a shot after the 3rd |
 | Sport center: walking, the crowd's stroll | `kWalkSpeed`, `kCrowdSpeed` in [Center.cpp](Center.cpp) | 4.2, 1.5 m/s |
@@ -416,8 +495,11 @@ screen.
   once at info level and players turn to run sideways.
 - The ball's felt and seam: [textures/tennis_ball.png](textures/tennis_ball.png),
   made by [textures/make_ball_texture.py](textures/make_ball_texture.py).
-- Everything else (the courts, the racket) is built in code. No Synty
-  pack is used yet.
+- The racket: `SM_Prop_Sport_Tennis_Racket_01.fbx` and its atlas
+  `PolygonShops_Texture_01_A.png` from Synty's POLYGON Shops pack, found
+  anywhere under `assets/synty` or `KKE_ASSETS_DIR` (Synty packs are
+  never in the repository). Without it the racket is built in code.
+- Everything else (the courts) is built in code.
 
 ## Make a game like this
 
@@ -458,5 +540,7 @@ screen.
 | [Court.h](Court.h), [Court.cpp](Court.cpp) | Court sizes, boxes, positions, the ten-court layout, seats |
 | [Ball.h](Ball.h), [Ball.cpp](Ball.cpp) | The ball: its flight and its FEMFX body |
 | [Bot.h](Bot.h), [Bot.cpp](Bot.cpp) | The CPU player (pure) |
-| [Body.h](Body.h), [Body.cpp](Body.cpp) | The mannequin, its clips, the IK swings, the racket |
+| [Swing.h](Swing.h), [Swing.cpp](Swing.cpp) | The strokes, their paths and timing, stamina (pure, tested) |
+| [Strings.h](Strings.h), [Strings.cpp](Strings.cpp) | The FEMFX string beds and the strings' ribbons |
+| [Body.h](Body.h), [Body.cpp](Body.cpp) | The mannequin, its clips, the procedural swings, the racket |
 | [textures/](textures/) | The ball's texture and the script that makes it |

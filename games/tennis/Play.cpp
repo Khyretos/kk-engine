@@ -19,9 +19,6 @@ namespace tennis {
 namespace {
 
 constexpr float kRunSpeed = 5.8f, kChargeSpeed = 3.6f;
-constexpr float kArmedFor = 1.3f;      // s a pressed shot waits for the ball
-constexpr float kSwingTime = 0.38f;    // s of follow-through
-constexpr float kLead = 0.14f;         // s of forward swing before contact
 constexpr float kReachMin = 0.2f, kReachMax = 1.5f, kReachHelp = 0.45f;
 
 float speedFor(ShotKind k, float charge) {
@@ -46,6 +43,23 @@ float netMarginFor(ShotKind k) {
     case ShotKind::Serve: return 0.12f;
     }
     return 0.3f;
+}
+
+// The flight a stroke gives the ball (the button picked the shot; where
+// it was met can change it: an overhead is flat, a stretch is a slice).
+ShotKind flightKind(Stroke s, ShotKind asked) {
+    switch (s) {
+    case Stroke::Drive: return ShotKind::Topspin;
+    case Stroke::Flat:
+    case Stroke::Smash: return ShotKind::Flat;
+    case Stroke::Slice:
+    case Stroke::Stretch: return ShotKind::Slice;
+    case Stroke::Lob: return ShotKind::Lob;
+    case Stroke::Drop: return ShotKind::Drop;
+    case Stroke::Volley: return asked == ShotKind::Topspin ? ShotKind::Flat : asked;
+    case Stroke::HalfVolley: return asked == ShotKind::Lob ? ShotKind::Lob : ShotKind::Topspin;
+    default: return ShotKind::Serve;
+    }
 }
 
 float spinRate(ShotKind k) {
@@ -143,10 +157,7 @@ void TennisModule::placeForPoint(Match& m) {
         p.facing = glm::vec3(0.0f, 0.0f, -static_cast<float>(side));
         w.teleportCharacter(p.body, place.toWorld(spot) + glm::vec3(0.0f, 0.02f, 0.0f));
         w.setCharacterVelocity(p.body, glm::vec3(0.0f));
-        p.armed = -1.0f;
-        p.charge = 0.0f;
-        p.swingT = -2.0f;
-        p.swingKind = SwingPose::Kind::Ready;
+        endSwing(p);
         p.tossAge = -1.0f;
     }
 }
@@ -167,12 +178,12 @@ void TennisModule::startPoint(Match& m) {
     m.phaseTime = 0.0f;
     m.rallyShots = 0;
     m.deadBall = 0.0f;
+    m.sinceBounce = -1.0f;
     m.call.clear();
     m.sub = m.rally.secondServeNow() ? "Second serve" : m.score.callText();
     const Player& s = player(serverIndex(m));
     // The ball in the server's hand until the toss.
-    const CourtPlace& place = m_center.courts[static_cast<size_t>(m.court)];
-    m.ball->place(place.toLocal(s.look ? s.look->tossHand() : place.toWorld(s.feet + glm::vec3(0, 1.2f, 0))));
+    m.ball->place(tossHand(m, s));
 }
 
 bool TennisModule::authority() const { return !netClient(); }
@@ -218,6 +229,7 @@ void TennisModule::stepMatch(Match& m, float dt) {
     Ball& b = *m.ball;
     b.step(dt);
     m.phaseTime += dt;
+    if (m.sinceBounce >= 0.0f) m.sinceBounce += dt;
     const CourtPlace& place = m_center.courts[static_cast<size_t>(m.court)];
     auto* audio = m_app->getModule<kke::AudioModule>();
     for (const Ball::Event& e : b.takeEvents()) {
@@ -226,7 +238,10 @@ void TennisModule::stepMatch(Match& m, float dt) {
         if (m.phase != Match::Phase::Rally) continue;
         Rally::Result r = Rally::Result::None;
         switch (e.kind) {
-        case Ball::Event::Kind::Bounce: r = m.rally.onBounce(e.at.x, e.at.z); break;
+        case Ball::Event::Kind::Bounce:
+            r = m.rally.onBounce(e.at.x, e.at.z);
+            m.sinceBounce = 0.0f;
+            break;
         case Ball::Event::Kind::Net: m.rally.onNet(); break;
         case Ball::Event::Kind::Out: r = m.rally.onOut(); break;
         }
@@ -341,10 +356,7 @@ void TennisModule::thinkCpu(Match& m, Player& p, float dt) {
     p.intent.move = dist > 0.05f ? to / dist * speed : glm::vec3(0.0f);
     p.intent.kind = d.kind;
     p.intent.aim = d.aim;
-    if (d.swing) {
-        p.intent.press = true;
-        p.charge = d.charge;
-    }
+    p.intent.press = d.swing; // the takeback; stepPlayer lets it go when the ball comes
 }
 
 void TennisModule::stepPlayer(Match& m, Player& p, float dt) {
@@ -364,64 +376,59 @@ void TennisModule::stepPlayer(Match& m, Player& p, float dt) {
     if (p.cpu) thinkCpu(m, p, dt);
     Intent& it = p.intent;
     const bool serving = m.phase == Match::Phase::Serve && idx == serverIndex(m);
-    glm::vec3 move = it.move;
+    glm::vec3 move = it.move * p.stamina.speedFactor();
 
-    // A pressed shot waits for the ball; holding the button charges it.
-    if (it.press && m.phase == Match::Phase::Rally && p.armed < 0.0f) {
-        p.armed = 0.0f;
-        p.ballDist = 99.0f;
-        p.armedKind = it.kind;
-        if (!p.cpu) p.charge = 0.0f;
+    // Stamina: running hard in a rally costs, the time between points gives it back.
+    const float running = glm::length(glm::vec2(p.vel.x, p.vel.z));
+    if (m.phase == Match::Phase::Rally) {
+        p.stamina.run(running, dt);
+        if (running < 2.0f) p.stamina.rest(dt, false);
+    } else {
+        p.stamina.rest(dt, true);
     }
-    if (p.armed >= 0.0f) {
-        p.armed += dt;
-        if (!p.cpu && it.held) p.charge = std::min(1.0f, p.charge + dt * 1.4f);
-        if (p.armed > kArmedFor) {
-            // Too early: a swing at nothing.
-            p.armed = -1.0f;
-            p.swingKind = SwingPose::Kind::Forehand;
-            p.swingContact = glm::vec3(0.6f, 1.0f, 0.4f);
-            p.swingT = 0.0f;
+    if (p.timingShown > 0.0f) p.timingShown -= dt;
+
+    const bool idle = p.swingT <= kSwingIdle + 0.5f;
+    // Let go of the button: the forward swing. The CPU (and a person with
+    // the menu's Assist) let go at the right moment, the CPU give or take
+    // its skill.
+    const bool autoTime = p.cpu || m_autoTiming;
+    bool release = false;
+    if (!idle && p.contactAt < 0.0f) {
+        if (autoTime) {
+            const float tt = timeToSpot(m, p);
+            const StrokeShape& sh = shapeOf(p.stroke);
+            // (Half a step early: the step that lets go is the one nearest the moment.)
+            release = (tt >= 0.0f && tt <= sh.forward + p.releaseLead + 0.5f * dt) || (tt < 0.0f && p.crossAt >= 0.0f);
+        } else {
+            release = !it.held;
         }
-        if (!p.cpu && it.held) move *= kChargeSpeed / kRunSpeed;
     }
 
-    // Serving: the first press tosses, the next one hits.
+    // Serving: press to toss (holding builds the serve's power), let go to hit.
     if (serving) {
         move = glm::vec3(0.0f);
         if (p.tossAge < 0.0f) {
-            b.place(place.toLocal(p.look ? p.look->tossHand() : place.toWorld(p.feet + glm::vec3(0.3f, 1.2f, 0.0f))));
-            p.swingKind = SwingPose::Kind::Ready;
+            b.place(tossHand(m, p));
             const bool cpuToss = p.cpu && m.phaseTime > 1.1f;
             if ((it.press && !p.cpu && m.phaseTime > 0.3f) || cpuToss) {
                 p.tossAge = 0.0f;
                 b.place(b.position() + glm::vec3(0.0f, 0.1f, 0.0f), glm::vec3(0.0f, 5.4f, -0.35f * s));
-                p.swingKind = SwingPose::Kind::Toss;
                 if (online() && m.netId)
                     m_net->sendEvent(net::kEventToss,
                                      net::encode(net::Toss{ m.netId, m.serial, static_cast<uint8_t>(indexInMatch(m, p)), b.position(), b.velocity() }));
-                it.press = false;
-                p.charge = 0.0f;
+                if (p.cpu) it.aim = glm::vec2(noise(0.5f), 0.2f);
+                startSwing(m, p, it.kind, true);
+                release = false;
             }
         } else {
             p.tossAge += dt;
-            if (!p.cpu && it.held) p.charge = std::min(1.0f, p.charge + dt * 1.6f);
-            const glm::vec3 ball = b.position();
-            const bool falling = b.velocity().y < 0.0f;
-            bool hit = false;
-            if (p.cpu) hit = falling && ball.y < 2.7f + 0.2f * p.bot->skill().power && ball.y > 1.9f;
-            else hit = it.press && p.tossAge > 0.15f;
-            if (hit) {
-                if (p.cpu) {
-                    p.charge = p.bot->skill().power;
-                    it.aim = glm::vec2(noise(0.5f), 0.2f);
-                }
-                if (!tryHit(m, p, true)) p.swingT = 0.0f; // a swing and a miss: toss again
-            }
-            if (ball.y < 1.0f && falling && m.phase == Match::Phase::Serve) {
+            stepSwing(m, p, true, release, dt);
+            if (b.position().y < 1.0f && b.velocity().y < 0.0f && m.phase == Match::Phase::Serve) {
                 // Nobody hit it: catch it and toss again.
+                if (m_swingLog) kke::log::get(name())->info("court {}: {} caught the toss (let go: {}, ball at the spot: {})", m.court + 1, p.name, p.contactAt >= 0.0f, p.crossAt >= 0.0f);
                 p.tossAge = -1.0f;
-                p.swingT = -2.0f;
+                endSwing(p);
             }
         }
         it.press = false;
@@ -438,40 +445,26 @@ void TennisModule::stepPlayer(Match& m, Player& p, float dt) {
                 glm::vec3 to = Bot::standFor(contact, side) - p.feet;
                 to.y = 0.0f;
                 const float d = glm::length(to);
-                if (d > 0.1f) move = to / d * std::min(kRunSpeed * 0.9f, d * 4.0f);
+                if (d > 0.1f) move = to / d * std::min(kRunSpeed * 0.9f * p.stamina.speedFactor(), d * 4.0f);
             }
         }
-        if (p.armed >= 0.0f || (p.cpu && it.press)) {
-            if (p.cpu && p.armed < 0.0f) {
-                p.armed = 0.0f;
-                p.ballDist = 99.0f;
-                p.armedKind = it.kind;
-            }
-            tryHit(m, p, false);
+        // The CPU starts its takeback in time for a full one.
+        if (p.cpu && idle && m.rally.mayHit(p.team) && isMyBall(m, idx)) {
+            const float tt = timeToSpot(m, p);
+            const StrokeShape& sh = shapeOf(Stroke::Drive);
+            if (tt >= 0.0f && tt < sh.windUp + sh.forward + 0.05f) it.press = true;
         }
+        if (it.press && idle && m.rally.mayHit(p.team)) startSwing(m, p, it.kind, false);
+        else if (!idle) stepSwing(m, p, false, release, dt);
         it.press = false;
     } else {
         it.press = false;
-        // Between points: walk back toward the middle of the half.
-        if (m.phase == Match::Phase::PointOver || m.phase == Match::Phase::MatchOver) move = glm::vec3(0.0f);
-        if (m.phase == Match::Phase::Serve || m.phase == Match::Phase::Warmup) move = glm::vec3(0.0f);
+        if (!idle) stepSwing(m, p, false, false, dt);
+        // Between points: stand still (placeForPoint puts everyone back).
+        move = glm::vec3(0.0f);
     }
-
-    // The forward swing starts just before the ball arrives.
-    if (p.armed >= 0.0f && m.phase == Match::Phase::Rally) {
-        const glm::vec3 rel = b.position() - (p.feet + glm::vec3(0.0f, 1.0f, 0.0f));
-        const float approach = -glm::dot(glm::normalize(glm::vec3(rel.x, 0.0f, rel.z) + glm::vec3(1e-4f)), glm::vec3(b.velocity().x, 0.0f, b.velocity().z));
-        const float tc = approach > 0.5f ? (glm::length(glm::vec2(rel.x, rel.z)) - 0.8f) / approach : 1.0f;
-        const bool forehand = (b.position().x - p.feet.x) * s >= -0.1f;
-        p.swingKind = forehand ? SwingPose::Kind::Forehand : SwingPose::Kind::Backhand;
-        p.swingContact = glm::vec3(forehand ? 0.75f : -0.7f, std::clamp(b.position().y, 0.4f, 2.0f), 0.45f);
-        p.swingT = tc < kLead ? -std::max(0.0f, tc) / kLead : -1.0f;
-    } else if (p.swingT >= 0.0f) {
-        p.swingT += dt / kSwingTime;
-        if (p.swingT > 1.0f) p.swingT = -2.0f;
-    } else if (p.swingKind != SwingPose::Kind::Toss) {
-        p.swingT = -2.0f;
-    }
+    // In the takeback the feet slow (a person's; the CPU sets its own pace).
+    if (!p.cpu && p.swingT > kSwingIdle + 0.5f && p.contactAt < 0.0f) move *= kChargeSpeed / kRunSpeed;
 
     // Facing: the net, unless running flat out somewhere.
     glm::vec3 face(0.0f, 0.0f, -s);
@@ -485,6 +478,186 @@ void TennisModule::stepPlayer(Match& m, Player& p, float dt) {
     if (p.celebrate > 0.0f) p.celebrate -= dt;
 }
 
+// Where the server holds the ball (court space): the hand, once the body
+// has been posed; before that, beside them.
+glm::vec3 TennisModule::tossHand(const Match& m, const Player& p) const {
+    const CourtPlace& place = m_center.courts[static_cast<size_t>(m.court)];
+    const glm::vec3 fallback = p.feet + glm::vec3(0.0f, 1.2f, 0.0f);
+    if (!p.look) return fallback;
+    const glm::vec3 hand = place.toLocal(p.look->tossHand());
+    return glm::length(glm::vec2(hand.x - p.feet.x, hand.z - p.feet.z)) < 1.0f ? hand : fallback;
+}
+
+// The ball in this player's body frame: x right, y up, z toward the net.
+glm::vec3 TennisModule::bodyRel(const Match& m, const Player& p, const glm::vec3& at) const {
+    const float s = static_cast<float>(m.score.sideOf(p.team));
+    return { (at.x - p.feet.x) * s, at.y, -(at.z - p.feet.z) * s };
+}
+
+// How far the ball still has to go to the hitting spot of the stroke
+// (the plane in front of the body where the racket meets it, or for an
+// overhead, the height): > 0 before, <= 0 once there.
+float TennisModule::planeGap(const Match& m, const Player& p) const {
+    const StrokeShape& sh = shapeOf(p.stroke);
+    const glm::vec3 rel = bodyRel(m, p, m.ball->position());
+    if (sh.overhead) return m.ball->velocity().y > 0.0f ? 99.0f : rel.y - sh.plane;
+    return rel.z - sh.plane;
+}
+
+// When the ball gets to the hitting spot (s from now; -1: not soon), on
+// its flight and, before its bounce, the bounce after it.
+float TennisModule::timeToSpot(const Match& m, const Player& p, glm::vec3* at, float* bounceAge) const {
+    const StrokeShape& sh = shapeOf(p.stroke == Stroke::Ready ? Stroke::Drive : p.stroke);
+    const Flight f = m.ball->flight();
+    if (bounceAge) *bounceAge = m.sinceBounce;
+    float t = -1.0f;
+    Flight on = f;
+    float from = 0.0f; // when `on` starts
+    if (sh.overhead) {
+        t = f.timeDownTo(sh.plane);
+    } else {
+        const float s = static_cast<float>(m.score.sideOf(p.team));
+        const float zPlane = p.feet.z - s * sh.plane;
+        t = f.timeAtZ(zPlane);
+        if (t >= 0.0f && m.sinceBounce < 0.0f && m.phase == Match::Phase::Rally) {
+            const float land = f.timeDownTo(kBallRadius);
+            if (land >= 0.0f && land < t) {
+                const float after = kGravity + (f.gravity - kGravity) * kPullAfterBounce;
+                on = bounce(f, land, m.ball->bounceModel(), after);
+                from = land;
+                const float t2 = on.timeAtZ(zPlane);
+                t = t2 < 0.0f ? -1.0f : land + t2;
+            }
+        }
+    }
+    if (t < 0.0f) return -1.0f;
+    if (at) *at = on.at(t - from);
+    if (bounceAge) *bounceAge = m.sinceBounce >= 0.0f ? m.sinceBounce + t : from > 0.0f ? t - from : -1.0f;
+    return t;
+}
+
+void TennisModule::startSwing(Match& m, Player& p, ShotKind kind, bool serve) {
+    p.armedKind = kind;
+    p.clock = 0.0f;
+    p.contactAt = -1.0f;
+    p.crossAt = -1.0f;
+    p.prevPlane = 99.0f;
+    p.swingDone = false;
+    p.charge = 0.0f;
+    p.swingT = -2.0f;
+    if (serve) {
+        // The CPU mixes its first serves (flat, slice, kick) and kicks its second.
+        if (p.cpu) {
+            const float roll = std::uniform_real_distribution<float>(0.0f, 1.0f)(rng());
+            kind = m.rally.secondServeNow() || roll > 0.8f ? ShotKind::Topspin : roll < 0.5f ? ShotKind::Flat : ShotKind::Slice;
+        }
+        p.stroke = serveFor(kind);
+        p.backhand = false;
+    } else {
+        // Where it'll be met picks the stroke (a volley at the net, a
+        // half-volley at the feet, a stretch out wide...).
+        glm::vec3 at = m.ball->position();
+        float sinceBounce = m.sinceBounce;
+        timeToSpot(m, p, &at, &sinceBounce);
+        const StrokeChoice c = pickStroke(kind, bodyRel(m, p, at), sinceBounce, std::abs(p.feet.z));
+        p.stroke = c.stroke;
+        p.backhand = c.backhand;
+    }
+    const StrokeShape& sh = shapeOf(p.stroke);
+    p.swingContact = sh.contact * glm::vec3(p.backhand ? -1.0f : 1.0f, 1.0f, 1.0f);
+    // The CPU's timing: off by a little, more when it's tired.
+    p.releaseLead = 0.0f;
+    if (p.cpu && p.bot) p.releaseLead = noise(p.bot->skill().timing / std::max(0.3f, p.stamina.windowScale()));
+}
+
+void TennisModule::endSwing(Player& p) {
+    p.swingT = kSwingIdle;
+    p.stroke = Stroke::Ready;
+    p.contactAt = -1.0f;
+    p.crossAt = -1.0f;
+    p.swingDone = false;
+    p.charge = 0.0f;
+}
+
+// One step of a swing: the takeback builds power until let go; the forward
+// swing reaches contact `forward` s later; the ball is hit if it reaches
+// the hitting spot (in reach) within the stroke's timing window of that.
+void TennisModule::stepSwing(Match& m, Player& p, bool serving, bool release, float dt) {
+    const StrokeShape& sh = shapeOf(p.stroke);
+    p.clock += dt;
+    if (p.contactAt < 0.0f) {
+        // The takeback.
+        p.swingT = std::min(-1.0f, -2.0f + p.clock / sh.windUp);
+        const float cap = p.stamina.powerCap() * (p.cpu && p.bot ? p.bot->skill().power + 0.3f : 1.0f);
+        p.charge = std::min(std::min(1.0f, cap), p.charge + p.stamina.chargeRate() * dt);
+        if (release) {
+            p.contactAt = p.clock + sh.forward;
+            p.swingT = -1.0f;
+        }
+        // Still re-reading the ball: a forehand can turn into a backhand.
+        if (!serving && m.phase == Match::Phase::Rally && !p.swingDone) {
+            glm::vec3 at;
+            float sinceBounce = -1.0f;
+            if (timeToSpot(m, p, &at, &sinceBounce) >= 0.0f) {
+                const StrokeChoice c = pickStroke(p.armedKind, bodyRel(m, p, at), sinceBounce, std::abs(p.feet.z));
+                if (c.stroke != p.stroke || c.backhand != p.backhand) {
+                    p.stroke = c.stroke;
+                    p.backhand = c.backhand;
+                }
+            }
+        }
+    } else if (p.clock <= p.contactAt) {
+        p.swingT = -1.0f + (p.clock - (p.contactAt - sh.forward)) / sh.forward;
+    } else {
+        p.swingT = (p.clock - p.contactAt) / sh.follow;
+        if (p.swingT > 1.0f) {
+            endSwing(p);
+            return;
+        }
+    }
+    if (p.swingDone || !m.rally.mayHit(p.team) || (!serving && m.phase != Match::Phase::Rally)) return;
+
+    // Where the ball is against the hitting spot: record when it got there
+    // (in reach), between steps.
+    const glm::vec3 ball = m.ball->position();
+    const glm::vec3 rel = bodyRel(m, p, ball);
+    const float gap = planeGap(m, p);
+    if (p.crossAt < 0.0f && p.prevPlane > 0.0f && gap <= 0.0f && p.prevPlane < 90.0f) {
+        const float reach = kReachMax + (!p.cpu && m_assist ? kReachHelp : 0.0f) + (p.stroke == Stroke::Stretch ? 0.35f : 0.0f);
+        bool inReach;
+        if (sh.overhead) inReach = glm::length(glm::vec2(rel.x, rel.z)) < (serving ? 1.3f : 1.5f);
+        else inReach = std::abs(rel.x) > kReachMin * 0.5f && std::abs(rel.x) < reach && rel.y > 0.06f && rel.y < 2.4f;
+        if (inReach) p.crossAt = p.clock - dt * (-gap) / std::max(1e-4f, p.prevPlane - gap);
+    }
+    p.prevPlane = gap;
+
+    const float scale = p.stamina.windowScale() * m_timingScale;
+    const float maxError = std::max(sh.window * 1.5f, sh.maxError * std::max(0.5f, scale));
+    if (p.contactAt >= 0.0f && p.crossAt >= 0.0f) {
+        const float error = p.contactAt - p.crossAt; // + late: the ball got there first
+        if (std::abs(error) > maxError) {
+            p.swingDone = true;
+            p.timingText = timingWord(error, sh, scale);
+            p.timingShown = 1.2f;
+            if (m_swingLog) kke::log::get(name())->info("court {}: {} {} missed: {:+.0f} ms", m.court + 1, p.name, strokeName(p.stroke), error * 1000.0f);
+            return;
+        }
+        if (p.clock + 1e-5f >= std::max(p.contactAt, p.crossAt)) {
+            p.swingDone = true;
+            hitBall(m, p, ball, serving, error);
+        }
+        return;
+    }
+    // Swung too soon (the ball never came) or never swung (it went by).
+    if ((p.contactAt >= 0.0f && p.clock > p.contactAt + maxError) || (p.crossAt >= 0.0f && p.contactAt < 0.0f && p.clock > p.crossAt + maxError)) {
+        p.swingDone = true;
+        p.timingText = p.contactAt >= 0.0f ? "Too early" : "Too late";
+        p.timingShown = 1.2f;
+        if (m_swingLog) kke::log::get(name())->info("court {}: {} {} missed: {}", m.court + 1, p.name, strokeName(p.stroke), p.timingText);
+        if (p.contactAt < 0.0f) endSwing(p);
+    }
+}
+
 // Another machine's player: its feet and swing come from what it sends
 // (Net.cpp); its hits and its toss come as events.
 void TennisModule::stepRemote(Match& m, Player& p, float dt) {
@@ -492,7 +665,8 @@ void TennisModule::stepRemote(Match& m, Player& p, float dt) {
     glm::vec3 face = place.dirToLocal(p.pose.facing);
     face.y = 0.0f;
     if (glm::length(face) > 1e-3f) p.facing = glm::normalize(face);
-    p.swingKind = p.pose.swing == SwingPose::Kind::Toss && p.tossAge < 0.0f ? SwingPose::Kind::Ready : p.pose.swing;
+    p.stroke = p.pose.stroke;
+    p.backhand = p.pose.backhand;
     p.swingT = p.pose.swingT;
     p.swingContact = p.pose.contact;
     const bool serving = m.phase == Match::Phase::Serve && static_cast<int>(&p - m_players.data()) == serverIndex(m);
@@ -501,7 +675,7 @@ void TennisModule::stepRemote(Match& m, Player& p, float dt) {
         // The ball in their hand until their toss comes; back in it if
         // they let it drop.
         if (p.tossAge < 0.0f) {
-            b.place(place.toLocal(p.look ? p.look->tossHand() : place.toWorld(p.feet + glm::vec3(0.3f, 1.2f, 0.0f))));
+            b.place(tossHand(m, p));
         } else {
             p.tossAge += dt;
             if (b.position().y < 1.0f && b.velocity().y < 0.0f) p.tossAge = -1.0f;
@@ -510,72 +684,44 @@ void TennisModule::stepRemote(Match& m, Player& p, float dt) {
     if (p.celebrate > 0.0f) p.celebrate -= dt;
 }
 
-bool TennisModule::tryHit(Match& m, Player& p, bool serve) {
-    Ball& b = *m.ball;
-    if (!m.rally.mayHit(p.team)) return false;
-    const glm::vec3 ball = b.position();
-    const glm::vec2 flat(ball.x - p.feet.x, ball.z - p.feet.z);
-    const float d = glm::length(flat);
-    const float reach = kReachMax + (!p.cpu && m_assist ? kReachHelp : 0.0f);
-    if (serve) {
-        if (ball.y < 1.7f || ball.y > 3.4f || d > 1.2f) return false;
-    } else {
-        const float was = p.ballDist;
-        p.ballDist = d;
-        if (d < kReachMin * 0.5f || d > reach || ball.y < 0.08f || ball.y > 2.9f) return false;
-        // Not once it has gone past behind the player.
-        const float s = static_cast<float>(m.score.sideOf(p.team));
-        const float forward = -(ball.z - p.feet.z) * s;
-        if (forward < -0.9f) return false;
-        // Wait for it to reach the hitting spot, a little in front, or to
-        // start going away (the last chance).
-        if (forward > 0.5f && d < was + 1e-4f) return false;
-    }
-    hitBall(m, p, ball, serve);
-    return true;
-}
-
-void TennisModule::hitBall(Match& m, Player& p, const glm::vec3& contact, bool serve) {
+void TennisModule::hitBall(Match& m, Player& p, const glm::vec3& contact, bool serve, float timingError) {
     const int side = m.score.sideOf(p.team);
     const float s = static_cast<float>(side);
     const bool doubles = m.rules.teamSize > 1;
-    const ShotKind kind = serve ? ShotKind::Serve : p.armedKind;
-    // Timing: the ball by the right hip, a little in front, waist high, is
-    // perfect; the further from that, the wilder.
-    const glm::vec3 rel((contact.x - p.feet.x) * s, contact.y, -(contact.z - p.feet.z) * s); // x right, z forward
-    const bool forehand = rel.x >= -0.1f;
-    float quality = 1.0f;
-    if (serve) {
-        quality = std::clamp(1.0f - std::abs(contact.y - 2.75f) / 0.9f, 0.2f, 1.0f);
-    } else {
-        // Spacing: an arm and a racket to the side, between knee and
-        // shoulder, beside or just in front; each a band, not a point.
-        auto band = [](float v, float lo, float hi, float falloff) {
-            const float out = v < lo ? lo - v : v > hi ? v - hi : 0.0f;
-            return std::max(0.0f, 1.0f - out / falloff);
-        };
-        quality = band(std::abs(rel.x), 0.5f, 1.05f, 0.7f) * band(rel.y, 0.55f, 1.55f, 1.0f) * band(rel.z, -0.1f, 0.6f, 0.9f);
-        // Timing: pressed a moment before it came (a human's press; the
-        // CPU's by its skill).
-        if (p.cpu) quality *= 1.0f - std::abs(noise(0.25f * (1.0f - p.bot->skill().power)));
-        else quality *= band(p.armed, 0.08f, 0.7f, 0.9f);
-        quality = std::clamp(quality, 0.15f, 1.0f);
-    }
+    const StrokeShape& sh = shapeOf(p.stroke);
+    const ShotKind kind = serve ? ShotKind::Serve : flightKind(p.stroke, p.armedKind);
+    const glm::vec3 rel = bodyRel(m, p, contact); // x right, z forward
+    const bool forehand = !p.backhand;
+    // Spacing: an arm and a racket to the side, between knee and shoulder,
+    // beside or just in front; each a band, not a point.
+    auto band = [](float v, float lo, float hi, float falloff) {
+        const float out = v < lo ? lo - v : v > hi ? v - hi : 0.0f;
+        return std::max(0.0f, 1.0f - out / falloff);
+    };
+    float spacing = 1.0f;
+    if (serve || sh.overhead) spacing = band(glm::length(glm::vec2(rel.x, rel.z)), 0.0f, 0.6f, 1.0f);
+    else spacing = band(std::abs(rel.x), 0.45f, 1.1f, 0.7f) * band(rel.y, 0.3f, 1.6f, 1.0f);
+    const float scale = p.stamina.windowScale() * m_timingScale;
+    const float timing = timingQuality(timingError, sh, scale);
+    float quality = std::clamp(spacing * (0.25f + 0.75f * timing), 0.15f, 1.0f);
     if (!p.cpu && m_assist) quality = std::max(quality, 0.7f);
-    // Early (in front) pulls it across the body, late pushes it wide.
-    const float early = serve ? 0.0f : std::clamp((rel.z - 0.4f) / 0.6f, -1.0f, 1.0f);
+    p.timingText = timingWord(timingError, sh, scale);
+    p.timingShown = 1.2f;
+    if (m_swingLog)
+        kke::log::get(name())->info("court {}: {} {}{} {:+.0f} ms ({}), spacing {:.2f}, power {:.2f}, stamina {:.2f}", m.court + 1, p.name,
+                                    p.backhand ? "backhand " : "", strokeName(p.stroke), timingError * 1000.0f, p.timingText, spacing, p.charge,
+                                    p.stamina.level);
+    // Late pushes it wide the way the racket faced, early pulls it across.
+    const float early = serve ? 0.0f : std::clamp(-timingError / std::max(0.02f, sh.maxError), -1.0f, 1.0f);
 
     glm::vec2 aim = glm::clamp(p.intent.aim, glm::vec2(-1.0f), glm::vec2(1.0f));
     glm::vec3 target;
-    // Long rallies wear the CPU down: the aim wanders a little more with
-    // every shot, so a rally between two good CPU players ends (real ones
-    // average four or five shots).
-    const float tired = p.bot ? 0.1f * static_cast<float>(std::max(0, m.rallyShots - 3)) : 0.0f;
-    const float err = (1.0f - quality) * 2.2f + (p.bot ? p.bot->skill().aimError : 0.4f) + tired;
+    const float err = ((1.0f - quality) * 2.2f + (p.bot ? p.bot->skill().aimError : 0.4f)) * sh.control + p.stamina.aimWobble();
     if (serve) {
         const bool deuce = m.score.deuceCourt();
         const float centre = deuce ? -2.05f : 2.05f; // x * s of the box's middle
-        const float x = std::clamp(centre + aim.x * 1.4f + noise(err * 0.5f), centre - 1.8f, centre + 1.8f);
+        const float wide = p.stroke == Stroke::ServeSlice ? (deuce ? -0.4f : 0.4f) : 0.0f; // slice swings out wide
+        const float x = std::clamp(centre + wide + aim.x * 1.4f + noise(err * 0.5f), centre - 1.8f, centre + 1.8f);
         const float depth = std::clamp(4.6f + aim.y * 0.9f + noise(err * 0.4f), 3.0f, kServiceLine + 0.6f);
         target = { x * s, 0.0f, -s * depth };
     } else {
@@ -583,29 +729,30 @@ void TennisModule::hitBall(Match& m, Player& p, const glm::vec3& contact, bool s
         float depth = 7.6f + aim.y * 1.9f;
         if (kind == ShotKind::Drop) depth = 2.6f + aim.y * 0.5f;
         if (kind == ShotKind::Lob) depth = 9.6f + aim.y * 1.2f;
+        if (p.stroke == Stroke::Volley || p.stroke == Stroke::HalfVolley) depth -= 1.2f;
         const float x = aim.x * half + (forehand ? -1.0f : 1.0f) * early * 1.6f + noise(err);
         target = { x * s, 0.0f, -s * (depth + noise(err * 0.8f)) };
     }
     const float charge = std::clamp(p.charge, 0.0f, 1.0f);
-    float speed = speedFor(kind, charge) * (0.7f + 0.3f * quality);
+    float speed = speedFor(kind, charge) * sh.speed * (0.7f + 0.3f * quality);
     if (serve && m.rally.secondServeNow()) speed *= 0.8f;
     // Slow shots from far away still get there in time (a drop shot from
     // the baseline is a hard push, not a moon ball).
     const float longest = kind == ShotKind::Lob ? 2.4f : 1.5f;
     speed = std::max(speed, glm::length(glm::vec2(target.x - contact.x, target.z - contact.z)) / longest);
-    const ShotKind flight = serve ? ShotKind::Serve : kind;
-    ShotPlan plan = planShot(contact, target, speed, flight, netMarginFor(kind) * (0.6f + 0.6f * quality));
+    // A kick serve flies like topspin: higher over the net, dipping in.
+    const ShotKind flight = p.stroke == Stroke::ServeKick ? ShotKind::Topspin : kind;
+    ShotPlan plan = planShot(contact, target, speed, flight, netMarginFor(flight) * (0.6f + 0.6f * quality));
     // A mistimed shot also comes off the frame a bit: a little into the net
     // or long.
-    plan.velocity *= 1.0f + noise((1.0f - quality) * 0.06f);
+    plan.velocity *= 1.0f + noise((1.0f - quality) * 0.1f);
     glm::vec3 dir(plan.velocity.x, 0.0f, plan.velocity.z);
     dir = glm::length(dir) > 1e-3f ? glm::normalize(dir) : glm::vec3(0.0f, 0.0f, -s);
-    const glm::vec3 spin = glm::cross(glm::vec3(0, 1, 0), dir) * spinRate(kind);
-    p.armed = -1.0f;
-    p.charge = 0.0f;
-    p.swingKind = serve ? SwingPose::Kind::Serve : (forehand ? SwingPose::Kind::Forehand : SwingPose::Kind::Backhand);
+    const glm::vec3 spin = glm::cross(glm::vec3(0, 1, 0), dir) * spinRate(flight);
+    p.stamina.swing(charge, serve);
     p.swingContact = glm::vec3(rel.x, contact.y, std::max(0.2f, rel.z));
-    p.swingT = 0.0f;
+    p.charge = 0.0f;
+
 
     net::Hit h;
     h.match = m.netId;
@@ -633,12 +780,16 @@ void TennisModule::hitBall(Match& m, Player& p, const glm::vec3& contact, bool s
 // rally counts it.
 void TennisModule::applyHit(Match& m, int hitter, const net::Hit& h) {
     Ball& b = *m.ball;
+    const CourtPlace& place = m_center.courts[static_cast<size_t>(m.court)];
+    // The strings take the ball as it comes in (FEMFX, Strings.h).
+    if (Player& hp = player(hitter); hp.look) hp.look->hitStrings(place.toWorld(h.at), place.dirToWorld(b.velocity()));
     b.strikeAt(h.at, h.velocity, h.spin, h.pull, h.squash);
     if (auto* audio = m_app->getModule<kke::AudioModule>())
-        audio->playImpact(m_center.courts[static_cast<size_t>(m.court)].toWorld(h.at), kke::AudioMaterialTable::Plastic,
+        audio->playImpact(place.toWorld(h.at), kke::AudioMaterialTable::Plastic,
                           std::clamp(glm::length(h.velocity) / 40.0f, 0.3f, 1.0f));
     m.rallyShots = h.shot + 1;
     m.sinceHit = 0.0f;
+    m.sinceBounce = -1.0f;
     if (h.serve) {
         m.phase = Match::Phase::Rally;
         m.phaseTime = 0.0f;

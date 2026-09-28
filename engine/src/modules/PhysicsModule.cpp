@@ -655,7 +655,7 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshWithOptions(const TetMesh
     }
     ObjectHandle h = spawnTetMeshInternal(mesh, position, material, options.fracture, options.velocity, options.plastic,
                                           options.tetFlags.empty() ? nullptr : &options.tetFlags, options.drawOnlyCracks,
-                                          options.armFractureAfterSeconds);
+                                          options.armFractureAfterSeconds, options.pinnedVerts.empty() ? nullptr : &options.pinnedVerts);
     if (h != kInvalidHandle) {
         SpawnedTet& obj = *m_objects[h];
         if (options.vertexUVs.size() == mesh.vertices.size()) obj.vertexUVs = options.vertexUVs;
@@ -1033,7 +1033,7 @@ void PhysicsModule::updateBreakables() {
 PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshInternal(const TetMeshData& mesh, const glm::vec3& position, const Material& material, bool enableFracture,
                                                                   const glm::vec3& initialVelocity, bool enablePlasticity,
                                                                   const std::vector<uint16_t>* tetFlags, bool drawOnlyCracks,
-                                                                  float armFractureAfterSeconds) {
+                                                                  float armFractureAfterSeconds, const std::vector<uint32_t>* pinnedVerts) {
     if (m_objects.size() >= kMaxObjects) {
         log::get(name())->warn("spawnTetMesh: at cap ({}), ignoring", kMaxObjects);
         return kInvalidHandle;
@@ -1196,6 +1196,16 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshInternal(const TetMeshDat
     // second time was the real cause of a since-fixed crash — see the
     // class comment's debugging account, point 3.
     AMD::FmSetMassesFromRestDensities(obj->tetMesh, 0.0f);
+    // Pinned vertices (TetSpawnOptions::pinnedVerts): kinematic, still.
+    if (pinnedVerts)
+        for (uint32_t v : *pinnedVerts) {
+            if (v >= numVerts) {
+                log::get(name())->error("spawnTetMesh: pinned vertex {} of {}", v, numVerts);
+                continue;
+            }
+            AMD::FmSetVertFlags(obj->tetMesh, v, AMD::FmGetVertFlags(*obj->tetMesh, v) | FM_VERT_FLAG_KINEMATIC);
+            AMD::FmSetVertVelocity(nullptr, obj->tetMesh, v, AMD::FmInitVector3(0.0f));
+        }
 
     int initResult = AMD::FmFinishTetMeshInit(obj->tetMesh);
     if (initResult != 0) {

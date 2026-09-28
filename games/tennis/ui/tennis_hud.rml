@@ -23,6 +23,14 @@
         #ranking { position: absolute; top: 124dp; right: 16dp; width: 200dp; padding: 8dp 12dp; border-radius: 8dp; background-color: #0b1a14cc;
                    font-size: 14dp; color: #eef4ee; white-space: pre-line; }
         #ranking .title { font-size: 13dp; color: #d8f050; font-weight: bold; }
+        #meters { position: absolute; left: 16dp; bottom: 64dp; }
+        .meter { display: block; width: 220dp; margin-top: 6dp; padding: 6dp 10dp; border-radius: 8dp; background-color: #0b1a14cc; }
+        .meter .who { display: block; font-size: 13dp; font-weight: bold; color: #eef4ee; }
+        .meter .timing { float: right; font-size: 13dp; color: #d8f050; font-weight: bold; }
+        .bar { display: block; height: 7dp; margin-top: 4dp; border-radius: 3dp; background-color: #ffffff22; }
+        .bar .fill { display: block; height: 7dp; border-radius: 3dp; }
+        .stamina .fill { background-color: #5ad07a; }
+        .power .fill { background-color: #f0b030; }
     </style>
 </head>
 <body data-model="tennis">
@@ -35,6 +43,13 @@
     <div id="call" data-if="call != '' || sub != ''">
         <div class="big">{{call}}</div>
         <div class="sub">{{sub}}</div>
+    </div>
+    <div id="meters">
+        <div class="meter" data-for="p : meters">
+            <span class="timing">{{p.timing}}</span><span class="who">{{p.name}}</span>
+            <div class="bar stamina"><div class="fill" data-style-width="(p.stamina * 100) + '%'"></div></div>
+            <div class="bar power" data-if="p.charging"><div class="fill" data-style-width="(p.power * 100) + '%'"></div></div>
+        </div>
     </div>
     <div id="hint" data-if="hint != ''" data-rml="hint"></div>
 </body>
