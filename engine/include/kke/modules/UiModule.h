@@ -4,8 +4,13 @@
 #include "kke/Capabilities.h"
 #include "kke/RmlVulkanRenderInterface.h"
 
+#include <glm/glm.hpp>
+#include <RmlUi/Core/Element.h>
+#include <RmlUi/Core/ObserverPtr.h>
 #include <RmlUi/Core/SystemInterface.h>
+#include <cstdint>
 #include <memory>
+#include <unordered_map>
 
 namespace Rml {
 class Context;
@@ -90,6 +95,15 @@ public:
     void setUiScale(float scale) { m_uiScale = scale; }
     float uiScale() const { return m_uiScale; }
     float dpRatio() const { return m_dpRatio; }
+    // The context covers the screen's safe area, not the whole window
+    // (Application::uiSafeRect), so a point from SDL (window points) and a
+    // point in the context (what GetAbsoluteOffset() and RmlUi events give)
+    // differ by more than pixelsPerPoint. Convert with these.
+    float pixelsPerPoint() const { return m_pixelsPerPoint; }
+    glm::vec2 toContext(glm::vec2 points) const { return points * m_pixelsPerPoint - glm::vec2(m_origin.x, m_origin.y); }
+    glm::vec2 toPoints(glm::vec2 contextPixels) const {
+        return (contextPixels + glm::vec2(m_origin.x, m_origin.y)) / m_pixelsPerPoint;
+    }
 
     // <prompt action="jump" label="Jump"/> in any document shows the
     // button for that action on the device the player is using, and
@@ -128,6 +142,14 @@ private:
     // in any document of the context play an AudioModule earcon.
     std::unique_ptr<Rml::EventListener> m_earcons;
     std::unique_ptr<PromptInstancer> m_prompts;
+    // On-screen buttons (ButtonPrompts::touchButton): the one under a
+    // point of the window (0..1 each way), for InputModule; and the ones
+    // held now (by finger id, the mouse as ~0), drawn pressed.
+    // (nx, ny) = a point on the whole frame, 0..1 (SDL touch coordinates).
+    Rml::Element* screenButtonAt(float nx, float ny) const;
+    void showScreenButtonPressed(uint64_t pointer, Rml::Element* button);
+    std::unordered_map<uint64_t, Rml::ObserverPtr<Rml::Element>> m_pressedButtons;
+    bool m_finderSet = false;
     bool m_initialised = false;
     Application* m_app = nullptr; // needed each frame in update() to detect window resize
 
@@ -144,6 +166,10 @@ private:
     float m_navHeld[4] = {}, m_navRepeat[4] = {};
     float m_dpRatio = 1.0f;
     float m_pixelsPerPoint = 1.0f; // see Window::pixelsPerPoint()
+    // The context covers the screen's safe area (Application::uiSafeRect):
+    // m_origin is its top-left in frame pixels, m_frameSize the whole frame.
+    Rml::Vector2f m_origin{0.0f, 0.0f};
+    Rml::Vector2f m_frameSize{0.0f, 0.0f};
 
     Rml::Element* m_draggingSlider = nullptr;
 

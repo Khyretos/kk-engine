@@ -14,6 +14,10 @@ class Element;
 class ElementDocument;
 } // namespace Rml
 
+namespace kke {
+class UiModule;
+}
+
 namespace kke_sandbox {
 
 class FormPanelListener;
@@ -44,7 +48,7 @@ public:
     FormPanel& operator=(const FormPanel&) = delete;
 
     // Needs a UiModule's context; without one nothing is shown.
-    void attach(Rml::Context* context, float pixelsPerPoint);
+    void attach(Rml::Context* context, const kke::UiModule& ui);
     // Closes the document; before the UiModule shuts RmlUi down.
     void detach();
 
@@ -135,7 +139,7 @@ private:
     Rml::Context* m_context = nullptr;
     Rml::ElementDocument* m_doc = nullptr;
     std::unique_ptr<FormPanelListener> m_listener;
-    float m_ppp = 1.0f;
+    const kke::UiModule* m_ui = nullptr; // window points <-> context pixels (toContext/toPoints)
     bool m_visible = false;
 
     std::vector<Row> m_rows;

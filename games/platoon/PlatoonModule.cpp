@@ -837,7 +837,12 @@ void PlatoonModule::updateHud(float dt) {
                         { "💥", "Focus fire", pad ? "{cmd.force}+{cmd.context}" : "{touch:tap}", m_armed == kke::OrderKind::FocusFire },
                         { "🔄", "Regroup", "{rts.regroup}", false },
                         { "🔷", kke::formationName(m_formation), "{rts.formation}", false } });
-    m_hud->setHint(m_cmd.padActive()
+    // A touch screen gets its own line: taps and drags on the scene, and
+    // the buttons above are tapped themselves.
+    const bool fingers = m_input->promptStyle() == kke::PromptStyle::Touch;
+    m_hud->setHint(fingers ? "{touch:tap} a soldier: select, drag: select an area · {touch:tap} the ground: order there · "
+                             "{touch:hold} order wheel"
+                   : m_cmd.padActive()
                        ? "{move} pan · {look.rate} turn/zoom · {rts.select} select, hold: select an area · {cmd.context} order at the ring "
                          "({cmd.force} focus fire) · hold {cmd.wheel} order wheel · {rts.all}{rts.next}{rts.regroup} all, next, regroup · "
                          "hold {rts.groups} + d-pad: groups 1-4 ({cmd.force} too: store) · {panel.toggle} menu"

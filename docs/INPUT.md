@@ -148,8 +148,9 @@ device, so rebinding changes the prompt: modifiers first (Ctrl + S), an
 axis the keyboard drives shows its keys (W A S D), a stick shows the
 stick. An action with nothing bound on that device shows nothing. `ui.*`
 actions on the keyboard show the keys RmlUi answers to (Enter, Esc,
-arrows, Tab). On touch, an action shows a tap unless the game names a
-gesture (`prompts().setTouchGesture("jump", "swipe_up")`). Buttons that
+arrows, Tab). On touch, a Button action is a real on-screen button (see
+"Touch screens") unless the game names a gesture for it
+(`prompts().setTouchGesture("jump", "swipe_up")`). Buttons that
 aren't actions have names: `a b x y` (by position, so `a` is Cross on a
 DualSense and B on a Switch), `lb rb lt rt ls rs start back guide
 dpad_up ... l4 r4 l5 r5`, `key:Space`, `mouse:left`, `touch:tap`
@@ -193,6 +194,56 @@ work with a finger unchanged. Two fingers are gestures:
 `OrbitCameraModule` uses them (drag turns the view, pinch zooms, twist
 spins it). The sandbox's Play mode also plays with a gamepad as a
 pointer; see docs/PLAY_TO_MAKE.md "Fingers and controllers".
+
+In the touch style the prompts are the buttons: every Button action in a
+hint (`<prompt action="fire" label="shoot"/>`, `promptText("{jump} jump")`,
+`input.promptText` in Lua) is drawn as a coloured pill with its label on
+it, and a finger on it holds that action down until it lifts
+(`InputMap::setScreenButton`), several fingers several buttons. In
+`promptText` the words after a placeholder, up to the next one or
+punctuation (` · `, `,`, `;`, `|`, `.`, `:`, brackets, two spaces), are its
+label; more than three words (or 22 letters) is a sentence, so the button
+takes the action's own label and the sentence stays text beside it. An
+action bound to a mouse button (select, order to the crosshair) means
+"here, on the scene": on a touch screen that is a tap on the scene, so it
+shows the tap picture, never a button. Each action
+keeps one of five colours (its place among the map's actions), so buttons
+next to each other differ. A press on a button is not also a click in
+the game. Axes (move, look) keep their picture; an on-screen stick is
+not there yet. `KKE_PROMPT_STYLE=touch` shows the buttons on a PC, where
+the mouse presses them.
+
+## Phone, PC and console
+
+Menus are made for one kind of screen at a time, so a phone's menus don't
+fight a PC's (`kke/UiProfile.h`, `Application::uiProfile()`):
+
+| Profile | Chosen for | Standard margin |
+|---|---|---|
+| `phone` | the `android` and `ios` targets | 2.5% of the short side |
+| `console` | `steam-deck`, `handheld-pc` (TVs, pads) | 5% (a TV's title-safe area) |
+| `desktop` | everything else | none |
+
+`KKE_UI_PROFILE=phone|desktop|console` picks one by hand (with
+`KKE_WINDOW=720x1600` a PC shows a phone's layout).
+
+- **Safe area.** Menus (RmlUi) and the F1 panels (ImGui's work area) keep
+  to `Application::uiSafeRect()`: the system's safe area (a notch, rounded
+  corners, the status and navigation bars, `SDL_GetWindowSafeArea`) shrunk
+  by the profile's margin. Nothing a menu puts at `left: 0` or `bottom: 0`
+  is cut off. The RmlUi context *is* that rectangle, so a point from SDL
+  (window points) goes through `UiModule::toContext()` before it's compared
+  with `GetAbsoluteOffset()`; `toPoints()` goes back.
+- **Per-screen layouts.** Every document's body gets `kke-phone`,
+  `kke-desktop` or `kke-console`, and `kke-portrait` or `kke-landscape`, so
+  one RCSS file lays a menu out per screen:
+  `body.kke-phone.kke-portrait .btn { width: 22%; }`. Lua reads the
+  profile with `ui.profile()`.
+- **One menu at a time on small screens.** On a phone or console the
+  marketplace's game list folds into a "Games" button instead of sharing
+  the screen with the game's own panel; the command demos' order bar
+  drops its key line (its buttons are tapped) and stacks its hint under
+  it.
 
 ## Split screen
 

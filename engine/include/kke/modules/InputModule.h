@@ -6,9 +6,13 @@
 #include "kke/InputMap.h"
 #include "kke/Module.h"
 
+#include <SDL3/SDL.h>
+
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace kke {
@@ -61,6 +65,14 @@ public:
     // ButtonPrompts::rml / format).
     std::string promptRml(const std::string& action, const std::string& label = {}, int player = 0) const;
     std::string promptText(const std::string& text, int player = 0) const;
+
+    // On-screen buttons (touch-style prompts, ButtonPrompts::touchButton):
+    // the finder says which button, if any, is under a point of the window
+    // (0..1 each way). UiModule sets it. A finger (or the left mouse
+    // button) pressed on one holds its action down until it lifts, and the
+    // press doesn't also reach the game as a click.
+    using ScreenButtonFinder = std::function<bool(float nx, float ny, int& player, std::string& action)>;
+    void setScreenButtonFinder(ScreenButtonFinder finder) { m_screenButtonAt = std::move(finder); }
 
     void commitDefaults();
     bool save() const;
@@ -134,6 +146,15 @@ private:
     std::optional<PromptStyle> m_forcedStyle;
     uint32_t m_promptSerial = 0;
     bool m_promptTouched = false; // a real input has set the style (else the start-up guess may change)
+
+    // Returns true when the event pressed or released an on-screen button
+    // (and so is not the game's).
+    bool screenButtonEvent(const SDL_Event& event);
+    struct HeldScreenButton { int player = 0; std::string action; };
+    ScreenButtonFinder m_screenButtonAt;
+    std::unordered_map<SDL_FingerID, HeldScreenButton> m_fingerButtons;
+    std::optional<HeldScreenButton> m_mouseButton; // the left button held on one
+    bool m_touchMouseOnButton = false;             // a finger's emulated click, swallowed
 
     std::string m_path;
     InputDevices m_devices;

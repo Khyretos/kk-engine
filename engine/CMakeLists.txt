@@ -45,6 +45,7 @@ set(ENGINE_SOURCES
     src/MeshLod.cpp
     src/ResourceGovernor.cpp
     src/HardwareTarget.cpp
+    src/UiProfile.cpp
     src/FrameStats.cpp
     src/Viewports.cpp
     src/PhysicsBridge.cpp
@@ -138,6 +139,7 @@ set(ENGINE_SOURCES
     src/modules/PhysicsModule.cpp
     src/modules/PhysicsModuleBridge.cpp
     src/modules/PhysicsModuleRubble.cpp
+    src/modules/PhysicsModuleMotion.cpp
     src/modules/SettingsModule.cpp
     src/modules/ModelModule.cpp
     src/modules/ThumbnailModule.cpp

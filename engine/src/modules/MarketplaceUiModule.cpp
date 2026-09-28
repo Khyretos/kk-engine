@@ -29,6 +29,18 @@ std::string MarketplaceUiModule::buildDocumentRml() const {
         << R"(scrollbarvertical { width: 8dp; } scrollbarvertical slidertrack { background-color: #00000000; })"
         << R"(scrollbarvertical sliderbar { background-color: #3a4670; border-radius: 4dp; min-height: 24dp; })"
         << R"(scrollbarvertical sliderarrowdec, scrollbarvertical sliderarrowinc { height: 0; })"
+        // Phone and console (body.kke-phone / .kke-console, set by UiModule):
+        // the list folds into a "Games" button at the bottom left so it
+        // doesn't fight the game's own panel for the screen; a tap on it
+        // opens the list over the whole screen, its Close button folds it
+        // again. A PC keeps it open beside the game's panel.
+        << R"(#list { display:block; position:absolute; left:12dp; top:12dp; width:45%; max-width:420dp; height:88%; overflow-y:auto; background-color:#1a1d2e; padding:16dp; pointer-events:auto; })"
+        << R"(#fold, #close { display:none; })"
+        << R"(body.kke-phone #list, body.kke-console #list { left:0dp; top:0dp; width:100%; max-width:none; height:100%; })"
+        << R"(body.kke-phone #fold, body.kke-console #fold { display:block; position:absolute; left:12dp; bottom:12dp; padding:8dp 16dp; border-radius:18dp; background-color:#2f6fd6f0; color:#ffffff; font-size:16dp; pointer-events:auto; })"
+        << R"(body.kke-phone #close, body.kke-console #close { display:block; float:right; padding:6dp 14dp; border-radius:16dp; background-color:#c9405af0; color:#ffffff; font-size:15dp; pointer-events:auto; })"
+        << R"(body.kke-phone.kke-folded #list, body.kke-console.kke-folded #list { display:none; })"
+        << R"(body.kke-phone #fold.hidden, body.kke-console #fold.hidden { display:none; })"
         << R"(</style></head>)"
         << R"(<body style="position:absolute; left:0dp; top:0dp; width:100%; height:100%; font-family:Noto Sans; pointer-events:none;">)"
         // pointer-events:none is load-bearing, not decorative: without it,
@@ -57,7 +69,7 @@ std::string MarketplaceUiModule::buildDocumentRml() const {
         // scrolls): games put their own panel (DemoPanelModule) on the
         // right, and at 51% the list covered it on a phone held upright,
         // where the screen is only ~900dp wide.
-        << R"(<div style="display:block; position:absolute; left:12dp; top:12dp; width:45%; max-width:420dp; height:88%; overflow-y:auto; background-color:#1a1d2e; padding:16dp; pointer-events:auto;">)"
+        << R"(<div id="list">)"
         // Confirmed and fixed: display:block was missing from every <p>
         // and <div> below. RmlUi has no built-in "p/div default to
         // block" rule the way a browser does — that behavior in
@@ -68,7 +80,7 @@ std::string MarketplaceUiModule::buildDocumentRml() const {
         // why titles/ids/descriptions/tags all ran together on one
         // line instead of stacking. Same root cause, same fix, as the
         // rmlui_demo tabset layout bug found earlier this session.
-        << R"(<p class="draggable-handle" style="display:block; font-size:22dp; color:#ffffff; pointer-events:auto; font-family:Noto Sans;">Marketplace (# )" << m_index.count() << R"( games)</p>)";
+        << R"(<div id="close">Close</div><p class="draggable-handle" style="display:block; font-size:22dp; color:#ffffff; pointer-events:auto; font-family:Noto Sans;">Marketplace (# )" << m_index.count() << R"( games)</p>)";
 
     for (const auto& game : m_index.games()) {
         // Every field below came from someone else's game.json, not this
@@ -98,7 +110,9 @@ std::string MarketplaceUiModule::buildDocumentRml() const {
         rml << "</div>";
     }
 
-    rml << "</div></body></rml>";
+    rml << "</div>";
+    rml << R"(<div id="fold">Games ()" << m_index.count() << ")</div>";
+    rml << "</body></rml>";
     return rml.str();
 }
 
@@ -116,10 +130,32 @@ void MarketplaceUiModule::init(Application& app) {
     std::string rml = buildDocumentRml();
     m_document = ui->context()->LoadDocumentFromMemory(rml);
     if (m_document) {
+        // Folded to start with (only shows on a phone or console, see the
+        // style sheet above).
+        m_document->SetClass("kke-folded", true);
+        m_foldListener = std::make_unique<FoldListener>(*this);
+        if (Rml::Element* fold = m_document->GetElementById("fold")) fold->AddEventListener(Rml::EventId::Click, m_foldListener.get());
+        if (Rml::Element* close = m_document->GetElementById("close")) close->AddEventListener(Rml::EventId::Click, m_foldListener.get());
         m_document->Show();
     } else {
         std::cerr << "[marketplace-ui] generated document failed to load — see rmlui log output above" << std::endl;
     }
+}
+
+void MarketplaceUiModule::FoldListener::ProcessEvent(Rml::Event& event) {
+    Rml::ElementDocument* doc = m_owner.m_document;
+    if (!doc) return;
+    const bool opening = event.GetCurrentElement() && event.GetCurrentElement()->GetId() == "fold";
+    doc->SetClass("kke-folded", !opening);
+    if (Rml::Element* fold = doc->GetElementById("fold")) fold->SetClass("hidden", opening);
+}
+
+void MarketplaceUiModule::shutdown() {
+    if (m_document) {
+        if (Rml::Element* fold = m_document->GetElementById("fold")) fold->RemoveEventListener(Rml::EventId::Click, m_foldListener.get());
+        if (Rml::Element* close = m_document->GetElementById("close")) close->RemoveEventListener(Rml::EventId::Click, m_foldListener.get());
+    }
+    m_document = nullptr;
 }
 
 } // namespace kke

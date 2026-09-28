@@ -1,0 +1,9 @@
+{
+  "id": "kke.tennis",
+  "title": "Tennis",
+  "description": "Singles and doubles with a soft rubber ball simulated by FEMFX: it squashes on the racket, skids and kicks off the court. Play the CPU, friends on one screen, or online. Topspin, flat, slice and lob, a helping hand for beginners, real tennis scoring with tiebreaks.",
+  "version": "0.1.0",
+  "tags": ["demo", "sport", "tennis", "physics", "femfx"],
+  "engine_version": "0.3",
+  "modules": ["Settings", "Input", "RigidBodies", "Physics", "Models", "UI", "Audio", "Lobby", "Network", "DemoPanel", "Tennis", "Stats"]
+}

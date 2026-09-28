@@ -1,4 +1,5 @@
 #include "PlayPalette.h"
+#include "kke/modules/UiModule.h"
 
 #include "kke/Log.h"
 #include "kke/RmlTextSafety.h"
@@ -82,9 +83,9 @@ PlayPalette::PlayPalette() = default;
 
 PlayPalette::~PlayPalette() { detach(); }
 
-void PlayPalette::attach(Rml::Context* context, float pixelsPerPoint) {
+void PlayPalette::attach(Rml::Context* context, const kke::UiModule& ui) {
     m_context = context;
-    m_ppp = pixelsPerPoint > 0.0f ? pixelsPerPoint : 1.0f;
+    m_ui = &ui;
     if (!m_context || m_doc) return;
     m_doc = m_context->LoadDocumentFromMemory(kDocument, "play-palette");
     if (!m_doc) {
@@ -150,7 +151,7 @@ bool PlayPalette::contains(const glm::vec2& point) const {
     Rml::Element* bar = m_doc->GetElementById("bar");
     const Rml::Vector2f o = bar->GetAbsoluteOffset(Rml::BoxArea::Border);
     const Rml::Vector2f s = bar->GetBox().GetSize(Rml::BoxArea::Border);
-    const glm::vec2 px = point * m_ppp;
+    const glm::vec2 px = m_ui->toContext(point);
     return px.x >= o.x && px.y >= o.y && px.x <= o.x + s.x && px.y <= o.y + s.y;
 }
 
@@ -163,7 +164,7 @@ std::vector<glm::vec2> PlayPalette::cellCentres() const {
         if (!pic) continue;
         const Rml::Vector2f o = pic->GetAbsoluteOffset(Rml::BoxArea::Border);
         const Rml::Vector2f s = pic->GetBox().GetSize(Rml::BoxArea::Border);
-        out.emplace_back((o.x + s.x * 0.5f) / m_ppp, (o.y + s.y * 0.5f) / m_ppp);
+        out.push_back(m_ui->toPoints(glm::vec2(o.x + s.x * 0.5f, o.y + s.y * 0.5f)));
     }
     return out;
 }

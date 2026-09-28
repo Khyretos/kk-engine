@@ -509,6 +509,13 @@ Pitfalls the code shows:
 - FEMFX is not deterministic across machines; in multiplayer the host
   decides which borders break and clients follow
   (`setBreakableFollower`, `applyBrokenBorders`).
+- A small, light, stiff object (a 57 g tennis ball) loses most of its
+  gravity and bounce in FEMFX's implicit solver. To throw one around from
+  game code, steer it: `objectMotion` reads its centre and velocity,
+  `changeVertexVelocities` kicks, spins or squashes it, `translateObject`
+  and `resetObject` put it somewhere. [Tennis](../tennis/README.md) flies
+  its ball on its own maths and steers the FEMFX body along, so the
+  squash and the wobble stay FEMFX's.
 
 ## Files
 

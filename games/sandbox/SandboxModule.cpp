@@ -170,9 +170,9 @@ void SandboxModule::init(kke::Application& app) {
     // round-trip check in tests/sandbox_roundtrip.sh).
     if (const char* save = std::getenv("KKE_SANDBOX_SAVE")) saveLayout(save);
     if (auto* ui = app.getModule<kke::UiModule>(); ui && ui->context()) {
-        m_palette.attach(ui->context(), app.window().pixelsPerPoint());
+        m_palette.attach(ui->context(), *ui);
         m_palette.onPress = [this](const std::string& id) { palettePressed(id); };
-        for (FormPanel* p : { &m_assetsPanel, &m_toolsPanel, &m_modePanel }) p->attach(ui->context(), app.window().pixelsPerPoint());
+        for (FormPanel* p : { &m_assetsPanel, &m_toolsPanel, &m_modePanel }) p->attach(ui->context(), *ui);
     } else {
         kke::log::get(name())->warn("no RmlUi context: Play mode has no palette");
     }

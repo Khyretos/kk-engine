@@ -1,0 +1,346 @@
+# Forgejo port of .github/workflows/ci.yml, run by git.kreative-kompas.com
+# (which mirrors this repo) on the Kompas server runner, so build times can
+# be compared with GitHub's. GitHub ignores the .forgejo folder, and Forgejo
+# ignores .github/workflows while this folder exists.
+#
+# Differences from the GitHub version:
+# - Runs on pushes to main (arriving by mirror sync) and by hand; pull
+#   requests live on GitHub. A newer push cancels an older run.
+# - Artifact actions are Forgejo's own v4 ports.
+# - The Android SDK is installed by the job (the runner image lacks it).
+name: CI
+
+# Runs on every push and pull request — see docs/HISTORY.md "Test suite &
+# coverage" for the reasoning behind this pipeline's shape: unit tests
+# cover pure logic (manifest parsing, marketplace dedup, text escaping)
+# with an enforced 85% line-coverage floor; Vulkan/GPU-touching code
+# stays verified the way this whole project has been built — by actually
+# compiling and running it headlessly against Mesa's lavapipe software
+# Vulkan device, not by mocking the Vulkan API.
+#
+# During the WIP/POC phase every commit is pushed to both main and a
+# working branch; running CI for both doubled every result (and every
+# failure mail). Push CI runs for main only; PRs still run. A newer push
+# cancels an older run of the same ref that's still going.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# On main a running build is never cancelled: threads push every few
+# minutes, and cancelling left main with no finished CI run for hours.
+# GitHub keeps one run going plus the newest waiting one, so main still
+# only builds its latest commit next. Pull requests cancel as before.
+concurrency:
+  group: ci-${{ github.ref }}
+  # One runner builds one job at a time here, so only the newest commit
+  # is worth building: a newer mirror sync cancels an older run.
+  cancel-in-progress: true
+
+jobs:
+  # Every third-party library, tool, image, font and action must be listed,
+  # with its licence, in docs/DEPENDENCIES.md: this fails when one is added
+  # without its row.
+  dependencies:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Every dependency is in docs/DEPENDENCIES.md
+        run: python3 -W error tools/ci/check_dependencies.py
+
+  # Every std:: name must come from a header the file includes. CI's GCC 13
+  # still pulls many headers in through others; GCC 15/16 (Arch, Fedora)
+  # don't, so a missing #include <algorithm> builds here and fails there.
+  std-includes:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Every standard name has its header included
+        run: python3 -W error tools/ci/check_std_includes.py
+
+  # Shipping builds (-DKKE_SHIPPING=ON, docs/ANTI_CHEAT.md) compile the
+  # developer tools out: this keeps that configuration building with zero
+  # warnings and its tests passing (DevTools.* checks the debug switches
+  # really are ignored).
+  shipping-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            cmake ninja-build \
+            libvulkan-dev glslang-tools spirv-tools \
+            libfreetype-dev libudev-dev libdbus-1-dev \
+            libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev \
+            pkg-config libgl1-mesa-dev libegl1-mesa-dev \
+            libasound2-dev libdecor-0-dev libexpat1-dev libxml2-dev
+
+      - name: Configure (shipping)
+        run: cmake -B build-ship -G Ninja -DCMAKE_BUILD_TYPE=Release -DKKE_SHIPPING=ON -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_VALIDATION=OFF -DKKE_ENABLE_BENCHMARKS=OFF
+
+      - name: Build (shipping)
+        run: cmake --build build-ship -j --target kke_tests starter_game sandbox kke_seal
+
+      - name: Run unit tests (shipping)
+        run: ./build-ship/bin/kke_tests
+
+  build-test-and-coverage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            cmake ninja-build \
+            libvulkan-dev vulkan-tools mesa-vulkan-drivers vulkan-validationlayers \
+            glslang-tools spirv-tools \
+            libfreetype-dev libudev-dev libdbus-1-dev \
+            fonts-noto-core fonts-noto-color-emoji \
+            xvfb xdotool imagemagick lcov \
+            libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev \
+            pkg-config libgl1-mesa-dev libegl1-mesa-dev \
+            libasound2-dev libdecor-0-dev libexpat1-dev libxml2-dev
+
+      # --- Plain build: this is what a contributor/CI should catch first,
+      # fast, before paying for a second coverage-instrumented build. ---
+      - name: Configure (plain)
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DKKE_WARNINGS_AS_ERRORS=ON
+
+      - name: Build (plain)
+        run: cmake --build build -j
+
+      - name: Run unit tests (plain)
+        run: ./build/bin/kke_tests
+
+      - name: Headless smoke tests — do the demos actually run?
+        run: |
+          Xvfb :99 -screen 0 1280x720x24 &
+          sleep 2
+          cd build/bin
+          rm -f imgui.ini
+          # Each demo runs for a few seconds under lavapipe; exit code 124
+          # (killed by `timeout`) = ran the whole time = success. Any other
+          # non-zero code, or "Fatal error" in its log, fails the step.
+          # (errexit is off around the run on purpose: under `bash -e` a
+          # bare non-zero command aborts the script before its exit code
+          # can be checked — a real CI failure found earlier.)
+          # Synty-based demos have no assets in CI; they must still start
+          # and show their "assets not found" UI instead of crashing.
+          # Vulkan validation with synchronization checks: a missing barrier
+          # is invisible on lavapipe and PCs but shows as garbage patches on
+          # phone GPUs (Kees's phone run, 2026-09-27), so it fails here.
+          export VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation
+          export VK_LAYER_ENABLES=VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT
+          failed=0
+          for demo in kke_demo kke_basics physics_demo melt_demo sea_demo sandbox rmlui_demo imgui_demo synty_demo starter_game cookbook audio_demo procedural_demo duel goblin_horde pet_companion platoon climb_race farm_demo jiggle_demo; do
+            [ -x "./$demo" ] || { echo "== $demo: not built, skipped"; continue; }
+            set +e
+            # Virtual HOSAS pair + gamepad (SDL virtual joysticks), moving:
+            # exercises device keying, polling and bindings with no hardware.
+            DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_VIRTUAL_INPUT=hosas,pad KKE_VIRTUAL_INPUT_ANIMATE=1 timeout 8 "./$demo" > "run_$demo.log" 2>&1
+            code=$?
+            set -e
+            if { [ "$code" -ne 124 ] && [ "$code" -ne 0 ]; } || grep -qiE "Fatal error|Validation Error|SYNC-HAZARD" "run_$demo.log"; then
+              echo "== $demo: FAILED (exit $code)"; tail -40 "run_$demo.log"; failed=1
+            else
+              echo "== $demo: ok"
+            fi
+          done
+          # The phone path: portrait, 70% render scale blitted up, MSAA.
+          for demo in kke_demo climb_race; do
+            set +e
+            DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_TARGET=android KKE_WINDOW=405x720 KKE_ORIENTATION=portrait timeout 8 "./$demo" > "run_${demo}_phone.log" 2>&1
+            code=$?
+            set -e
+            if { [ "$code" -ne 124 ] && [ "$code" -ne 0 ]; } || grep -qiE "Fatal error|Validation Error|SYNC-HAZARD" "run_${demo}_phone.log"; then
+              echo "== $demo (phone shape): FAILED (exit $code)"; tail -40 "run_${demo}_phone.log"; failed=1
+            else
+              echo "== $demo (phone shape): ok"
+            fi
+          done
+          exit $failed
+
+      # The cookbook (docs/cookbook/): every Lua recipe runs in the starter
+      # game, and every camera in the cookbook game, for a few seconds each;
+      # any script error fails the step.
+      - name: Cookbook recipes run headless
+        run: DISPLAY=:99 python3 -W error tools/docs_site/run_recipes.py --bin build/bin
+
+      # The checker AI assistants are told to use (AGENTS.md): it must pass
+      # on a clean game and fail on a broken script.
+      - name: tools/check_game passes and fails correctly
+        run: |
+          DISPLAY=:99 python3 -W error tools/check_game starter_game --seconds 5
+          mkdir -p /tmp/broken && echo 'local t = nil; print(t.x)' > /tmp/broken/broken.lua
+          if DISPLAY=:99 python3 -W error tools/check_game starter_game --scripts /tmp/broken --seconds 5; then
+            echo "check_game said OK for a broken script"; exit 1
+          fi
+
+      # --- Coverage build: separate build directory, deliberately not
+      # reusing the plain one (mixing instrumented and non-instrumented
+      # objects corrupts gcov data). ---
+      - name: Configure (coverage)
+        run: cmake -B build-coverage -G Ninja -DCMAKE_BUILD_TYPE=Debug -DKKE_ENABLE_COVERAGE=ON
+
+      - name: Build (coverage)
+        run: cmake --build build-coverage -j
+
+      - name: Run unit tests (coverage)
+        run: ./build-coverage/bin/kke_tests
+
+      - name: Run headless demo (coverage) — exercises Vulkan/GPU code paths
+        run: |
+          pkill Xvfb || true
+          sleep 1
+          Xvfb :99 -screen 0 1280x720x24 &
+          sleep 2
+          cd build-coverage/bin
+          rm -f imgui.ini
+          DISPLAY=:99 SDL_VIDEODRIVER=x11 timeout 8 ./kke_demo > run.log 2>&1 || true
+          cat run.log
+
+      - name: Generate coverage report
+        run: |
+          lcov --capture --directory build-coverage --output-file coverage_full.info \
+            --ignore-errors mismatch,unused,negative,inconsistent,gcov,source
+          lcov --extract coverage_full.info "*/engine/src/*" \
+            --output-file coverage_engine.info --ignore-errors unused
+          lcov --summary coverage_engine.info | tee coverage_summary.txt
+          genhtml coverage_engine.info --output-directory coverage_html
+
+      # Report-only during the POC phase: GPU-side modules (ModelModule,
+      # DebugDraw, the demos' own modules) are exercised by the smoke tests
+      # above, not by kke_demo's coverage run, so every new feature lowered
+      # the percentage and failed CI without anything being broken
+      # (78.7% vs the old 85% floor). The floor comes back as a ratchet at
+      # alpha. A warning annotation keeps the number visible on every run.
+      - name: Coverage report (not enforced during POC)
+        run: |
+          percent=$(grep "lines" coverage_summary.txt | grep -oP '\d+\.\d+(?=%)')
+          echo "Measured line coverage: ${percent}%"
+          echo "::warning title=Coverage::Line coverage ${percent}% (not enforced during POC; target 85%)"
+
+      - name: Upload coverage HTML report
+        if: always()
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage_html/
+
+  # Optimized builds warn where Debug doesn't (GCC's -Warray-bounds and
+  # friends only run with the optimizer), and third-party code is outside
+  # -Werror: this job builds Release and fails on any warning in the
+  # configure or build log, whoever's code it is in. The Release workflow
+  # (release.yml) packages this same configuration.
+  release-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            cmake ninja-build glslang-tools spirv-tools \
+            libvulkan-dev libfreetype-dev libudev-dev libdbus-1-dev \
+            libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev \
+            pkg-config libgl1-mesa-dev libegl1-mesa-dev \
+            libasound2-dev libdecor-0-dev libexpat1-dev libxml2-dev
+
+      - name: Configure (Release, FEMFX)
+        run: |
+          set -o pipefail
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DKKE_ENABLE_FEMFX=ON \
+            -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_VALIDATION=OFF 2>&1 | tee configure.log
+
+      - name: Build (Release)
+        run: |
+          set -o pipefail
+          cmake --build build -j 2>&1 | tee build.log
+
+      - name: No warnings anywhere
+        run: tools/ci/check_warnings.sh configure.log build.log
+
+      - name: Unit tests (Release)
+        run: ./build/bin/kke_tests --gtest_brief=1
+
+  # Every game built for Android (arm64, clang from the NDK: stricter than
+  # GCC in places) and packed into the demos APK, with zero warnings. The
+  # APK is kept as a run artifact for trying on a phone (docs/ANDROID.md).
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # r28c: r27c's toolchain files ask for CMake < 3.10, which CMake 4
+      # warns about; r29's clang 21 can't compile the fmt inside spdlog 1.14.
+      # The runner image has no Android SDK or CMake (GitHub's does): install
+      # them, and the SDK command-line tools once, then keep them in the runner cache.
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: ~/android-sdk
+          key: android-sdk-ndk28.2.13676358-api35
+      - name: Android command-line tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq openjdk-17-jdk-headless unzip cmake
+          export ANDROID_HOME="$HOME/android-sdk"
+          if [ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            curl -sSLo /tmp/clt.zip https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
+            mkdir -p "$ANDROID_HOME/cmdline-tools"
+            unzip -q /tmp/clt.zip -d "$ANDROID_HOME/cmdline-tools"
+            mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+          fi
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+
+      - name: Android NDK r28c and SDK packages
+        run: |
+          # `yes` dies of SIGPIPE once sdkmanager stops reading; that is fine.
+          (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build python3-yaml
+
+      - name: Configure (android-arm64)
+        run: |
+          set -o pipefail
+          cmake --preset android-arm64 -DKKE_WARNINGS_AS_ERRORS=ON 2>&1 | tee configure.log
+
+      - name: Build (android-arm64)
+        run: |
+          set -o pipefail
+          cmake --build build-android-arm64 -j 2>&1 | tee build.log
+
+      - name: APK
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KKE_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -o pipefail
+          ks=()
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/kke.keystore"
+            ks=(--keystore "$RUNNER_TEMP/kke.keystore")
+          fi
+          python3 android/build_apk.py --build build-android-arm64 --out dist/kke-demos-android-arm64.apk "${ks[@]}" 2>&1 | tee apk.log
+          python3 android/build_apk.py --build build-android-arm64 --benchmark --out dist/kke-benchmark-android-arm64.apk "${ks[@]}" 2>&1 | tee -a apk.log
+
+      - name: No warnings anywhere
+        run: tools/ci/check_warnings.sh configure.log build.log apk.log
+
+      - uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: kke-android-arm64
+          path: dist/*.apk
+          if-no-files-found: error

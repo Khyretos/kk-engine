@@ -151,6 +151,12 @@ public:
     // Forget edges and toggles (after a rebind, a context switch, focus loss).
     void resetStates();
 
+    // An on-screen button (a phone's tappable prompt) holding a Button
+    // action down, besides its bindings. A press and release between two
+    // updates still counts as one frame held, so a quick tap is never lost.
+    // Off while the action's context is.
+    void setScreenButton(const std::string& action, bool down);
+
     // Bindings as JSON (actions are code-defined). load() keeps actions and
     // replaces bindings; unknown actions are dropped with a count.
     nlohmann::json save() const;
@@ -175,6 +181,8 @@ private:
     bool hasDoubleTapSibling(size_t index) const;
     void rebuildIndex();
 
+    struct ScreenButton { bool down = false, tapped = false; };
+    std::unordered_map<std::string, ScreenButton> m_screenButtons;
     std::vector<ActionDef> m_actions;
     std::unordered_map<std::string, size_t> m_actionIndex;
     std::vector<Binding> m_bindings, m_defaults;

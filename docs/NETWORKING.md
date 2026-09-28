@@ -369,6 +369,12 @@ and a template for a menu-driven one:
   `checkMoves = false`: a mantle over an edge looks like going through the
   rock to the wall check; the speed limits still apply.
 
+The Flying demo (games/flying_demo/Net.cpp) does the same with planes,
+and raises the server's speed limits to a stunt plane's before hosting:
+`NetModule::movementLimits` (a `net::MovementLimits`: horizontal, rise
+and fall speed, slack, teleport cooldown) is what the host's server
+checks every move against; set it before `host()`.
+
 When a host quits, it tells every player ("the host ended the game")
 before it closes, so they log it as news, not the warning a lost
 connection gets.
