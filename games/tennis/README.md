@@ -324,8 +324,12 @@ walk, jog and sprint clips blended by speed, UAL2's side steps when that
 pack is there, and sitting, cheering and groaning. There are no swing
 clips: `racketAt` gives the racket head's place, and the body follows it.
 The pelvis and spine turn (30% / 70%) with the shoulders, the hips drop
-and two-bone IK keeps the feet planted, the right arm reaches the head
-with two-bone IK, and the left hand joins the grip for a two-handed
+and two-bone IK keeps the feet planted. The right arm reaches for the
+racket's place and turns the hand to hold it with `kke::solveHumanArm`,
+which keeps to what a person's shoulder, elbow, forearm and wrist can
+do; the racket is then drawn in the hand, wherever the hand got to (the
+grip: the handle across the palm, the head past the thumb and index
+finger, the strings facing as the palm). The left hand joins the grip for a two-handed
 backhand, throws the toss, points up at a smash or cradles the racket at
 the ready. The racket face opens for slice and lob and closes for
 topspin. The racket is POLYGON Shops' tennis racket when that pack is

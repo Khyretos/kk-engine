@@ -7,6 +7,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -36,6 +37,66 @@ struct TwoBoneChain {
 TwoBoneChain findChain(const ModelData& model, const std::string& upper, const std::string& lower, const std::string& end);
 void solveTwoBone(const ModelData& model, Pose& pose, const TwoBoneChain& chain, const glm::vec3& target, const glm::vec3& pole,
                   float weight = 1.0f);
+
+// ---------------------------------------------------------------------
+// A person's arm: two-bone IK that keeps to what a human arm can do.
+// solveTwoBone bends a chain any way the pole says and swings it by the
+// shortest turn, which lets an arm reach through its own back, bend its
+// elbow backwards or leave the upper arm twisted. solveHumanArm instead
+// places the elbow the way anthropomorphic-limb IK does it (Tolani,
+// Goswami & Badler 2000): the elbow's "swivel" round the shoulder-hand
+// line, starting from where it hangs naturally (down, a little out and
+// back), then builds each bone's rotation from its direction and the
+// elbow's hinge axis, so the elbow is a hinge and bends only forward.
+// Ranges (ArmLimits, the usual joint ranges of motion):
+//   - shoulder: the hand's direction from the shoulder, measured in the
+//     chest's own frame (the line between the shoulders, so a turned
+//     torso turns the range with it), from `acrossChest` toward the other
+//     side to `behind` back past the side;
+//   - elbow: straight to `elbowMaxFlex`, never backwards;
+//   - forearm: `pronation` either way (the twist is the forearm's, not the
+//     wrist's);
+//   - wrist: bends at most `wristBend`, twists at most `wristTwist`.
+// A target outside them is moved to the nearest place the arm can reach;
+// the result says where the hand went.
+struct ArmLimits {
+    float elbowMaxFlex = 145.0f;    // degrees from straight
+    float acrossChest = 70.0f;      // degrees from straight ahead toward the other side, arm long
+    float acrossChestBent = 115.0f; // the same with the elbow fully bent (a hand on the other shoulder)
+    float behind = 135.0f;          // degrees from straight ahead back past the side (90 = out to the side)
+    float swivel = 70.0f;           // degrees the elbow may swing round from where it hangs
+    float pronation = 90.0f;        // forearm twist either way
+    float wristBend = 70.0f;        // any direction
+    float wristTwist = 15.0f;
+};
+
+// Built once per rig: each bone's own axis and the elbow's hinge in bone
+// space, from the rest pose. `other` is the other arm (its upper bone
+// gives the shoulders' line); invalid = the chest is the model's own frame.
+struct HumanArm {
+    TwoBoneChain chain;
+    int otherShoulder = -1;
+    bool left = false;               // the character's left arm
+    glm::vec3 upperAxis{0.0f}, upperHinge{0.0f}; // upper arm's local frame
+    glm::vec3 lowerAxis{0.0f}, lowerHinge{0.0f}; // forearm's local frame
+    glm::quat handRest{1, 0, 0, 0};  // the hand's rest rotation in the forearm (the wrist's neutral)
+    glm::vec3 forward{0, 0, 1};      // modelForward
+    bool valid() const { return chain.valid(); }
+};
+HumanArm makeHumanArm(const ModelData& model, const TwoBoneChain& arm, const TwoBoneChain& other = TwoBoneChain{});
+
+struct ArmGoal {
+    glm::vec3 hand{0.0f};                     // model space
+    std::optional<glm::vec3> elbowToward;     // model-space point the elbow leans to (within `swivel`)
+    std::optional<glm::quat> handRotation;    // model-space rotation for the hand (within the forearm and wrist ranges)
+    float weight = 1.0f;                      // 0 = the animated pose, 1 = the goal
+};
+struct ArmResult {
+    glm::vec3 hand{0.0f};   // where the hand went (model space)
+    glm::quat handRotation{1, 0, 0, 0}; // the hand's rotation (model space)
+    bool limited = false;   // the goal was outside the arm's ranges
+};
+ArmResult solveHumanArm(const ModelData& model, Pose& pose, const HumanArm& arm, const ArmGoal& goal, const ArmLimits& limits = ArmLimits{});
 
 // ---------------------------------------------------------------------
 // Foot placement: each foot keeps its animated height above the ground

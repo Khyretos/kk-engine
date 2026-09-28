@@ -140,9 +140,36 @@ than `giveUpYaw` is dropped and the head comes back to forward rather than
 snapping over the shoulder. For aiming, build a `LookAt` from any chain of
 `Link{bone, share}` and pass the weapon's direction as `forward`.
 
+## A person's arm: `solveHumanArm`
+
+`solveTwoBone` bends a chain wherever its pole says and swings it the
+shortest way, so a person's arm can end up reaching through its own back,
+bending its elbow backwards or twisting its upper arm. For people, use
+`solveHumanArm` ([kke/AnimRig.h](../engine/include/kke/AnimRig.h)): it
+places the elbow by its swivel round the shoulder-hand line (Tolani,
+Goswami & Badler 2000), starting from where an elbow hangs, and builds
+each bone from its direction and the elbow's hinge, so the elbow only
+bends forward. `ArmLimits` holds the joint ranges: the shoulder's (in the
+chest's frame, so a turned torso turns it), the elbow's bend, the
+forearm's twist, the wrist's bend and twist. A goal outside them is moved
+to the nearest pose the arm can make, and the result says where the hand
+went: attach what the hand holds to that.
+
+```cpp
+kke::HumanArm right = kke::makeHumanArm(model, rightArm, leftArm); // once
+kke::ArmGoal goal;
+goal.hand = targetModelSpace;
+goal.handRotation = gripRotation;  // optional: the forearm and wrist turn it as far as they go
+goal.elbowToward = poleModelSpace; // optional: leans the elbow, within ArmLimits::swivel
+kke::ArmResult held = kke::solveHumanArm(model, pose, right, goal);
+```
+
+Tennis holds its racket this way (the racket follows the hand) and Climb
+Race puts its hands on holds with it.
+
 ## Long chains: `solveFabrik`
 
-Two-bone IK (`kke::solveTwoBone`) is exact for arms and most legs. Tails,
+Two-bone IK (`kke::solveTwoBone`, or `solveHumanArm` for people's arms) is exact for arms and most legs. Tails,
 necks, tentacles and three-segment insect legs use FABRIK:
 
 ```cpp

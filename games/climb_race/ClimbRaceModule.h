@@ -357,6 +357,7 @@ private:
     std::unique_ptr<kke::AnimationSet> m_animSet;
     float m_modelYaw = 0.0f;
     kke::TwoBoneChain m_arm[2], m_leg[2];
+    kke::HumanArm m_human[2]; // the arms with a person's joint ranges (kke::solveHumanArm)
     kke::FootPlacer m_feet;
     int m_pelvis = -1;
     // Each hand as it is in the rest pose: which way the fingers point and

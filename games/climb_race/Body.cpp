@@ -82,6 +82,7 @@ void ClimbRaceModule::loadCharacter() {
         m_arm[s] = kke::findChain(m_rigData, s == 0 ? "upperarm_l" : "upperarm_r", s == 0 ? "lowerarm_l" : "lowerarm_r", s == 0 ? "hand_l" : "hand_r");
         m_leg[s] = kke::findChain(m_rigData, s == 0 ? "thigh_l" : "thigh_r", s == 0 ? "calf_l" : "calf_r", s == 0 ? "foot_l" : "foot_r");
     }
+    for (int s = 0; s < 2; ++s) m_human[s] = kke::makeHumanArm(m_rigData, m_arm[s], m_arm[1 - s]);
     m_pelvis = -1;
     for (size_t b = 0; b < m_rigData.bones.size(); ++b)
         if (kke::canonicalBoneName(m_rigData.bones[b].name) == "pelvis") m_pelvis = static_cast<int>(b);
@@ -332,6 +333,10 @@ void ClimbRaceModule::animateBody(Racer& r, float dt) {
         }
         // Arms: two passes. If the animated torso leaves a hand short of its
         // hold, the whole body moves the rest of the way and they solve again.
+        // Each arm keeps to a person's ranges (kke::solveHumanArm): the elbow
+        // bends only forward, the shoulder doesn't reach through the back,
+        // and the hand turns onto its hold as far as the forearm and wrist go.
+        const glm::mat3 toModel = glm::mat3(inv);
         for (int pass = 0; pass < 2; ++pass) {
             const std::vector<glm::mat4> bones = kke::poseToModel(m_rigData, pose);
             for (int s = 0; s < 2; ++s) {
@@ -346,7 +351,16 @@ void ClimbRaceModule::animateBody(Racer& r, float dt) {
                                                              : shoulder - right * (m_climbSettings.shoulderHalf * side);
                 const float across = std::clamp(-glm::dot(wrist[s] - chest, right) * side / 0.3f, 0.0f, 1.0f);
                 const glm::vec3 pole = shoulder - up * 0.5f + right * (0.45f * side * (1.0f - across)) - in * (0.25f + 0.35f * across);
-                kke::solveTwoBone(m_rigData, pose, m_arm[s], model(wrist[s]), model(pole), r.armWeight);
+                kke::ArmGoal goal;
+                goal.hand = model(wrist[s]);
+                goal.elbowToward = model(pole);
+                goal.weight = r.armWeight;
+                if (r.handAim[s] > 0.01f) {
+                    const HandRig& hr = m_handRig[s];
+                    const glm::quat want = frameRotation(hr.fingers, hr.thumbSide, toModel * fingerDir[s], toModel * thumbDir[s]) * hr.restModel;
+                    goal.handRotation = glm::slerp(rotationOf(bones[static_cast<size_t>(m_arm[s].end)]), want, r.handAim[s]);
+                }
+                kke::solveHumanArm(m_rigData, pose, m_human[s], goal);
             }
             if (pass == 1 || !climbing || m_pelvis < 0) break;
             const std::vector<glm::mat4> solved = kke::poseToModel(m_rigData, pose);
@@ -377,23 +391,13 @@ void ClimbRaceModule::animateBody(Racer& r, float dt) {
                 kke::solveTwoBone(m_rigData, pose, m_leg[s], model(foot), model(pole), r.legWeight);
             }
         }
-        // Hands: turned onto the hold, fingers closed around it.
+        // Hands: turned onto the hold with the arms (above), fingers closed around it.
         const std::vector<glm::mat4> bones = kke::poseToModel(m_rigData, pose);
-        const glm::mat3 toModel = glm::mat3(inv);
         for (int s = 0; s < 2; ++s) {
             const HandRig& hr = m_handRig[s];
             const int hand = m_arm[s].end;
             if (!m_arm[s].valid()) continue;
-            const float aim = r.handAim[s] * r.armWeight;
-            const glm::quat now = rotationOf(bones[static_cast<size_t>(hand)]);
-            glm::quat handModel = now;
-            if (aim > 0.01f) {
-                const glm::quat want = frameRotation(hr.fingers, hr.thumbSide, toModel * fingerDir[s], toModel * thumbDir[s]) * hr.restModel;
-                handModel = glm::slerp(now, want, aim);
-                const int parent = m_rigData.bones[static_cast<size_t>(hand)].parent;
-                const glm::quat parentModel = parent >= 0 ? rotationOf(bones[static_cast<size_t>(parent)]) : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-                pose[static_cast<size_t>(hand)].r = glm::normalize(glm::inverse(parentModel) * handModel);
-            }
+            const glm::quat handModel = rotationOf(bones[static_cast<size_t>(hand)]);
             const float curl = r.grip[s] * r.armWeight;
             if (curl < 0.01f) continue;
             // Curl toward the palm: about the axis across the knuckles.
