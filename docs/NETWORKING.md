@@ -515,6 +515,31 @@ default), with nothing to sign up for:
   placed, occluded and reverberated like any other sound. Mute or set
   the volume of anyone locally; `speaking(id)` lets a game draw a
   speaker icon.
+- **Proximity chat you can see** (`kke::VoiceHudModule`, add it after
+  the VoiceModule): the direction a voice comes from matters most, so it
+  is heard *and* shown.
+  - Heard: a Nearby voice plays from the speaker's mouth (their network
+    position + `Settings::mouthHeight`, or the game's `speakerPosition`
+    hook), panned, delayed between the ears in Binaural mode, muffled
+    when behind you or a wall, and fading out to `hearingRange`. Hosting,
+    the server's `proximityRange` follows `hearingRange`, so nobody out of
+    range is even sent the voice. The pause menu's "Headphones: sharper
+    direction" switches the mixer to Binaural (a delay and head shadow
+    per ear instead of a plain pan).
+  - Shown: a ring over each talker's head that pulses with their voice,
+    with their name; someone out of view gets an arrow at the edge of the
+    screen pointing their way (top = ahead, bottom = behind).
+  - The list: players near you who talked lately, nearest first, one
+    numbered slot each with a direction arrow, distance and level. A slot
+    keeps its number while they talk and nothing moves while the menu is
+    open. The pause menu (kke::DemoPanelModule) gets a "Voices nearby"
+    section with **one mute per slot** ("1  Mute Sam  (8 m left)"), how to
+    talk (hold a button, or when I speak), and markers on/off. Muting is
+    local; a muted player's slot stays, greyed, so you can unmute them.
+  - The data behind it is `VoiceModule::talkers()` (who, speaking, muted,
+    distance, azimuth, elevation, level), for a game that draws its own.
+  - Used by games/party and games/tennis (the sport center), both at a
+    30 m hearing range.
 - **Off**: `setEnabled(false)` turns voice chat off for this player:
   nothing is sent and nobody is heard until it's turned back on (Party's
   Voice row in the menu and its pause panel).

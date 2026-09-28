@@ -11,6 +11,7 @@
 #include "kke/modules/SettingsModule.h"
 #include "kke/modules/StatsModule.h"
 #include "kke/modules/UiModule.h"
+#include "kke/modules/VoiceHudModule.h"
 #include "kke/modules/VoiceModule.h"
 
 #include "PartyModule.h"
@@ -35,14 +36,19 @@ int main() {
         net.gameId = "party";
         net.maxPlayers = 12; // everyone at every screen, and the host's CPU beans (NetParty.cpp: a Round holds 12 seats)
         app.addModule<kke::NetModule>(net);
-        // Voice chat with the whole party (everyone hears everyone, like a
-        // call); push to talk by default (docs/NETWORKING.md "Voice").
+        // Proximity voice chat: beans near you are heard from where they
+        // stand, and fade out across the arena; push to talk by default
+        // (docs/NETWORKING.md "Voice").
         kke::VoiceModule::Settings voice;
-        voice.channel = kke::net::VoiceChannel::All;
+        voice.channel = kke::net::VoiceChannel::Proximity;
+        voice.hearingRange = 30.0f;
+        voice.mouthHeight = 1.2f; // a bean's face (people are taller, but close enough)
         app.addModule<kke::VoiceModule>(voice);
         // The pause menu: Esc, or Back on a controller (Pause.cpp).
         app.addModule<kke::DemoPanelModule>("Menu", kke::DemoPanelModule::Side::Right).setWidth(360.0f);
         app.addModule<party::PartyModule>();
+        // Who is talking and from where, and a mute for each nearby slot (pause menu).
+        app.addModule<kke::VoiceHudModule>();
         app.addModule<kke::StatsModule>().setUiVisible(false);
         app.run();
     } catch (const std::exception& e) {

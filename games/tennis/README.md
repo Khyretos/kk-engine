@@ -94,6 +94,7 @@ are rebindable actions in the "Shots" and "Game" groups.
 | Slice: low and slow (`tennis.slice`) | K / right mouse | B (east) |
 | Lob: over their head (`tennis.lob`) | L | Y (north) |
 | Back to the menu (`tennis.menu`; online, a client leaves the game; in the sport center, leave the court, the other side winning) | Esc | Back |
+| Talk to the people near you (`voice.talk`, online) | V | LB |
 | Developer panels (`panels`) | F1 | none |
 
 - **A shot.** Press and hold a shot button as the ball comes: the racket
@@ -128,7 +129,14 @@ are rebindable actions in the "Shots" and "Game" groups.
 - The HUD's hints show the right glyph for the device each player last
   touched (`InputModule::promptText`).
 - The engine's character actions this game doesn't use (jump, sprint,
-  fire, look and so on, and `voice.talk`) have their bindings cleared.
+  fire, look and so on) have their bindings cleared; `voice.talk` moves
+  to V and LB (B is the slice).
+- **Proximity voice chat** online (`kke::VoiceModule` +
+  `kke::VoiceHudModule`, [docs/NETWORKING.md](../../docs/NETWORKING.md)
+  "Voice"): people within 30 m are heard from where they stand (the next
+  court faintly), a ring over a talker's head or an arrow at the screen's
+  edge shows where a voice comes from, and the menu's "Voices nearby" has
+  a mute for each slot of the nearby talkers list.
 
 ## How it plays
 

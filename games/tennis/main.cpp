@@ -13,6 +13,8 @@
 #include "kke/modules/SettingsModule.h"
 #include "kke/modules/StatsModule.h"
 #include "kke/modules/UiModule.h"
+#include "kke/modules/VoiceHudModule.h"
+#include "kke/modules/VoiceModule.h"
 
 #include "TennisModule.h"
 
@@ -40,8 +42,17 @@ int main() {
         net.gameId = "tennis";
         net.maxPlayers = 128;
         app.addModule<kke::NetModule>(net);
+        // Proximity voice chat (docs/NETWORKING.md "Voice"): people near you
+        // are heard from where they stand; hold V or LB to talk. The court
+        // next door (18 m) is faint, the far end of the center silent.
+        kke::VoiceModule::Settings voice;
+        voice.channel = kke::net::VoiceChannel::Proximity;
+        voice.hearingRange = 30.0f;
+        app.addModule<kke::VoiceModule>(voice);
         app.addModule<kke::DemoPanelModule>();
         app.addModule<tennis::TennisModule>();
+        // Who is talking and from where, and a mute for each (pause menu).
+        app.addModule<kke::VoiceHudModule>();
         app.addModule<kke::StatsModule>().setUiVisible(false);
         app.run();
     } catch (const std::exception& e) {

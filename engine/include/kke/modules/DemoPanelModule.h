@@ -102,6 +102,9 @@ public:
         Section& button(std::string label, std::function<void()> onPress);
         // The row added last shows only while `visible` says so.
         Section& showIf(std::function<bool()> visible);
+        // The row added last is named by `label` every frame instead of
+        // its fixed label (a slot whose player changes: "Mute Sam").
+        Section& labelLive(std::function<std::string()> label);
         // The whole section shows only while `visible` says so.
         Section& sectionIf(std::function<bool()> visible);
 
@@ -168,11 +171,13 @@ private:
         std::function<std::vector<std::string>()> optionsFn;
         std::function<void()> onChange;
         std::function<bool()> visible;
+        std::function<std::string()> liveLabel;
         // Built document: the row, its value text and a slider's fill.
         Rml::Element* el = nullptr;
         Rml::Element* value = nullptr;
         Rml::Element* fill = nullptr;
-        std::string shown;
+        Rml::Element* labelEl = nullptr;
+        std::string shown, shownLabel;
         float shownFill = -1.0f;
         bool hidden = false;
         bool focusable() const { return kind >= Kind::SliderF; }

@@ -14,6 +14,10 @@
 //             reverberated like any other sound (category Voice).
 //   You:      mute anyone locally, set their volume, see who's speaking
 //             (speaking(id), and the panel). "Hear myself" tests the mic.
+//             talkers() says who spoke lately, how loud, how far and from
+//             which direction: kke::VoiceHudModule draws it (a marker over
+//             each talker's head, an arrow at the screen's edge for one
+//             out of view, and a list of nearby talkers to mute).
 //   Clean:    before coding, the microphone goes through echo
 //             cancellation (what the speakers play is taken out, so
 //             nobody hears themselves back when you don't wear
@@ -33,6 +37,7 @@
 #include "kke/voice/VoiceCleaner.h"
 #include "kke/voice/VoiceCodec.h"
 
+#include <functional>
 #include <map>
 #include <memory>
 #include <set>
@@ -49,7 +54,9 @@ public:
         int bitrate = 24000;          // bits/s
         float inputGain = 1.0f;
         float outputGain = 1.0f;
-        float hearingRange = 40.0f;   // m: proximity voices fade out to here
+        float hearingRange = 40.0f;   // m: proximity voices fade out to here (hosting, the server's
+                                      // VoiceRules::proximityRange follows it, so nobody far is even sent)
+        float mouthHeight = 1.6f;     // m above a player's state position (their feet) a voice comes from
         bool openMicrophone = true;   // false: listen only
         bool noiseSuppression = true; // RNNoise on the microphone
         bool echoCancellation = true; // take out what the speakers play (needs the audio output at 48 kHz)
@@ -96,6 +103,34 @@ public:
     // A speaker's stream (tests read what would be heard).
     AudioStreamHandle streamOf(uint8_t playerId) const;
 
+    // Where a speaker's voice comes from, when the game knows better than
+    // the player's network state + mouthHeight (a bean's head, a seat).
+    // Return false to fall back to the state.
+    std::function<bool(uint8_t playerId, glm::vec3& mouth)> speakerPosition;
+
+    // Someone heard lately, as a speaking indicator or a mute list sees
+    // them. Direction and distance are from the listener (the audio
+    // module's ears, else the camera): azimuth 0 = straight ahead, +pi/2 =
+    // right, +-pi = behind.
+    struct Talker {
+        uint8_t id = 0;
+        std::string name;
+        bool speaking = false;   // heard in the last 0.3 s
+        float quietFor = 0.0f;   // s since last heard
+        bool muted = false;      // by you (their voice still arrives, so you can see them talk and unmute)
+        bool placed = false;     // heard from a place (proximity, position known)
+        glm::vec3 mouth{0.0f};
+        float distance = 0.0f;   // m (placed only)
+        float azimuth = 0.0f;    // radians (placed only)
+        float elevation = 0.0f;  // radians, + above (placed only)
+        float level = 0.0f;      // 0..1, how loud their voice is right now (before distance)
+    };
+    // Everyone heard in the last `recentSeconds`, nearest first (voices
+    // with no place last).
+    std::vector<Talker> talkers(float recentSeconds = 5.0f) const;
+    // A player's name (or "Player N" when they're not in the list any more).
+    std::string nameOf(uint8_t playerId) const;
+
 private:
     struct Capture;
     struct Speaker {
@@ -106,11 +141,13 @@ private:
         net::VoiceChannel channel = net::VoiceChannel::Proximity;
         double lastHeard = -1e9;
         float gain = 1.0f;
+        float level = 0.0f; // 0..1, smoothed
     };
     void onVoice(const net::VoiceMsg& m);
     void sendCaptured();
     void playOut(float dt);
     void place(uint8_t id, Speaker& s);
+    bool mouthOf(uint8_t id, glm::vec3& mouth) const;
     void clearSpeakers();
     static constexpr uint8_t kSelf = 255; // "hear myself"
 

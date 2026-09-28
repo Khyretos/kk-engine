@@ -309,15 +309,9 @@ void PartyModule::updateHud(float) {
     }
     set(m_hud.hint, show ? hint : std::string(), "hint");
 
-    // Voice: who's talking (online).
-    std::string talk;
-    if (m_voice && m_net && m_net->connected()) {
-        for (const kke::net::RemotePlayer& p : m_net->remotePlayers())
-            if (m_voice->speaking(p.id)) talk += (talk.empty() ? "" : ", ") + p.name;
-        if (m_voice->talking()) talk = talk.empty() ? std::string("You") : "You, " + talk;
-        if (!talk.empty()) talk = "Talking: " + talk;
-    }
-    set(m_hud.talk, talk, "talk");
+    // Voice: who's talking, where from, and their mutes are kke::VoiceHudModule's
+    // (markers over heads, the nearby list); this line stays empty.
+    set(m_hud.talk, std::string(), "talk");
 }
 
 } // namespace party

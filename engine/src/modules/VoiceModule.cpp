@@ -225,20 +225,74 @@ void VoiceModule::sendCaptured() {
     }
 }
 
+bool VoiceModule::mouthOf(uint8_t id, glm::vec3& mouth) const {
+    if (speakerPosition && speakerPosition(id, mouth)) return true;
+    if (auto* net = m_app->getModule<NetModule>())
+        for (const net::RemotePlayer& p : net->remotePlayers())
+            if (p.id == id && p.hasState) {
+                mouth = p.state.position + glm::vec3(0.0f, settings.mouthHeight, 0.0f); // the mouth, not the feet
+                return true;
+            }
+    return false;
+}
+
+std::string VoiceModule::nameOf(uint8_t playerId) const {
+    if (auto* net = m_app ? m_app->getModule<NetModule>() : nullptr)
+        for (const net::RemotePlayer& p : net->remotePlayers())
+            if (p.id == playerId) return p.name;
+    return "Player " + std::to_string(int(playerId));
+}
+
+std::vector<VoiceModule::Talker> VoiceModule::talkers(float recentSeconds) const {
+    std::vector<Talker> out;
+    if (!m_app) return out;
+    Listener ears;
+    if (auto* audio = m_app->getModule<AudioModule>()) {
+        ears = audio->mixer().listener();
+    } else {
+        const Camera& cam = m_app->camera();
+        ears.position = cam.position;
+        ears.forward = cam.target - cam.position;
+        ears.up = cam.up;
+    }
+    glm::vec3 fwd = glm::dot(ears.forward, ears.forward) > 1e-12f ? glm::normalize(ears.forward) : glm::vec3(0, 0, -1);
+    glm::vec3 right = glm::cross(fwd, ears.up);
+    right = glm::dot(right, right) > 1e-12f ? glm::normalize(right) : glm::vec3(1, 0, 0);
+    const glm::vec3 up = glm::cross(right, fwd);
+    for (const auto& [id, s] : m_speakers) {
+        if (id == kSelf || m_time - s.lastHeard > double(recentSeconds)) continue;
+        Talker t;
+        t.id = id;
+        t.name = nameOf(id);
+        t.quietFor = float(m_time - s.lastHeard);
+        t.speaking = t.quietFor < float(kSpeakingSeconds);
+        t.muted = muted(id);
+        t.level = t.muted ? 0.0f : s.level;
+        if (s.channel == net::VoiceChannel::Proximity && mouthOf(id, t.mouth)) {
+            t.placed = true;
+            const glm::vec3 d = t.mouth - ears.position;
+            t.distance = glm::length(d);
+            if (t.distance > 1e-4f) {
+                const glm::vec3 dir = d / t.distance;
+                t.azimuth = std::atan2(glm::dot(dir, right), glm::dot(dir, fwd));
+                t.elevation = std::asin(std::clamp(glm::dot(dir, up), -1.0f, 1.0f));
+            }
+        }
+        out.push_back(std::move(t));
+    }
+    std::sort(out.begin(), out.end(), [](const Talker& a, const Talker& b) {
+        if (a.placed != b.placed) return a.placed;
+        return a.distance < b.distance || (a.distance == b.distance && a.id < b.id);
+    });
+    return out;
+}
+
 void VoiceModule::place(uint8_t id, Speaker& s) {
     auto* audio = m_app->getModule<AudioModule>();
     if (!audio) return;
     const bool spatial = id != kSelf && s.channel == net::VoiceChannel::Proximity;
     glm::vec3 pos(0.0f);
-    bool found = !spatial;
-    if (spatial)
-        if (auto* net = m_app->getModule<NetModule>())
-            for (const net::RemotePlayer& p : net->remotePlayers())
-                if (p.id == id && p.hasState) {
-                    pos = p.state.position + glm::vec3(0.0f, 1.6f, 0.0f); // the mouth, not the feet
-                    found = true;
-                }
-    if (!found) return; // not placed yet: wait for their first state
+    if (spatial && !mouthOf(id, pos)) return; // not placed yet: wait for their first state
     AudioMixer& mixer = audio->mixer();
     if (s.mixerVoice && mixer.isPlaying(s.mixerVoice)) {
         if (spatial) mixer.setPosition(s.mixerVoice, pos);
@@ -281,6 +335,12 @@ void VoiceModule::playOut(float dt) {
             const float g = settings.outputGain * s.gain;
             if (g != 1.0f)
                 for (float& x : pcm) x *= g;
+            // How loud they are (what an indicator pulses with): -50 dB
+            // RMS is nothing, -10 dB is shouting.
+            float sum = 0.0f;
+            for (float x : pcm) sum += x * x;
+            const float db = 10.0f * std::log10(sum / float(voice::kFrameSamples) + 1e-10f);
+            s.level = std::max(s.level, std::clamp((db + 50.0f) / 40.0f, 0.0f, 1.0f));
             s.stream->push(pcm, voice::kFrameSamples);
         }
         place(id, s);
@@ -313,7 +373,11 @@ void VoiceModule::update(const UpdateContext& ctx) {
         m_talking = false;
         return;
     }
+    // Hosting: nobody past the hearing range is even sent a proximity voice.
+    if (net && net->role() == NetModule::Role::Host) net->voiceRules.proximityRange = settings.hearingRange;
     sendCaptured();
+    const float decay = std::exp(-ctx.dt * 8.0f);
+    for (auto& [id, sp] : m_speakers) sp.level *= decay;
     playOut(ctx.dt);
     // Players who left: their voice goes once they've been quiet a while.
     if (net)

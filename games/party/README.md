@@ -164,9 +164,12 @@ network, or type an address). Anyone at any screen can play: every
 person is a network player, and the host's CPU beans are the host's own
 players. The host runs the show (which game, the seed, the phases);
 every machine moves its own beans and reports when one finishes or goes
-out, and the host puts those in order. Voice chat reaches everyone in
-the party (push to talk, [docs/NETWORKING.md](../../docs/NETWORKING.md)),
-and is always up to each player: Voice chat Off in the start menu or the
+out, and the host puts those in order. Voice chat is proximity chat
+(push to talk, [docs/NETWORKING.md](../../docs/NETWORKING.md)): beans
+within 30 m are heard from where they stand, a ring over a talking bean's
+head (or an arrow at the screen's edge) shows where a voice comes from,
+and a list of nearby talkers has a mute for each slot in the pause menu
+(`kke::VoiceHudModule`). It is always up to each player: Voice chat Off in the start menu or the
 pause menu stops it both ways, and the pause menu mutes anyone (or
 everyone) just for you. The host runs the vote too: each player's pick
 goes to the host, which sends the vote as it stands to everyone.
@@ -278,8 +281,9 @@ up, the beans stand on the stage above their cards and hop.
 An RmlUi data model `party`: a panel per local player (name, points, the
 minigame's status line), the clock and the round, the round card, the
 results and podium table, the vote's three cards (with a dot of each
-voter's colour), the prompt line with button glyphs
-(`kke::ButtonPrompts`), and who is talking on voice.
+voter's colour) and the prompt line with button glyphs
+(`kke::ButtonPrompts`). Who is talking, and from where, is
+`kke::VoiceHudModule`'s.
 
 ### Networking ([Net.cpp](Net.cpp), [NetParty.h](NetParty.h))
 
@@ -347,7 +351,10 @@ machine without the pack draws a person picked elsewhere as a bean.
 `kke::DemoPanelModule` as a pause menu: Esc or Back opens it. It has
 Back to the start menu, Voice chat on or off, a player to mute or unmute
 (the other screens' players; CPU beans have no microphone), Mute
-everyone and who is talking. It hides while the start menu is up.
+everyone and who is talking. Below it, `kke::VoiceHudModule` adds
+"Voices nearby": a mute for each numbered slot of the nearby talkers list,
+hold-to-talk or voice activated, and the voice markers on or off. It
+hides while the start menu is up.
 
 ## Assets
 

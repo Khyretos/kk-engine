@@ -12,9 +12,12 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <memory>
 #include <random>
+#include <string>
 #include <vector>
 
 using namespace kke;
@@ -332,3 +335,76 @@ TEST(AudioMixer, OutputTapHearsWhatTheSpeakersPlay) {
     mixer.mix(out.data(), 480);
     EXPECT_EQ(tap->buffered(), 480u);
 }
+
+#if KKE_ENABLE_VOICE && KKE_ENABLE_JOLT
+#include "kke/Application.h"
+#include "kke/modules/VoiceHudModule.h"
+
+#include <glm/gtc/constants.hpp>
+
+namespace {
+VoiceModule::Talker talker(uint8_t id, float distance) {
+    VoiceModule::Talker t;
+    t.id = id;
+    t.name = "P" + std::to_string(int(id));
+    t.placed = true;
+    t.distance = distance;
+    return t;
+}
+} // namespace
+
+TEST(VoiceHud, SlotsKeepTheirPlayerAndFillNearestFirst) {
+    std::array<VoiceHudModule::Slot, VoiceHudModule::kMaxSlots> slots{};
+    VoiceHudModule::assignSlots(slots, { talker(3, 5.0f), talker(7, 9.0f) }, 3, false);
+    EXPECT_EQ(slots[0].talker.id, 3);
+    EXPECT_EQ(slots[1].talker.id, 7);
+    EXPECT_FALSE(slots[2].used);
+    // 9 walks up closer than 7: nobody changes number, 9 takes the free slot.
+    VoiceHudModule::assignSlots(slots, { talker(9, 1.0f), talker(3, 5.0f), talker(7, 9.0f) }, 3, false);
+    EXPECT_EQ(slots[0].talker.id, 3);
+    EXPECT_EQ(slots[1].talker.id, 7);
+    EXPECT_EQ(slots[2].talker.id, 9);
+    EXPECT_FLOAT_EQ(slots[2].talker.distance, 1.0f);
+    // A fourth doesn't fit in 3 slots.
+    VoiceHudModule::assignSlots(slots, { talker(9, 1.0f), talker(3, 5.0f), talker(7, 9.0f), talker(1, 2.0f) }, 3, false);
+    EXPECT_TRUE(std::none_of(slots.begin(), slots.end(), [](const VoiceHudModule::Slot& s) { return s.used && s.talker.id == 1; }));
+    // 3 went quiet: while the menu is open (frozen) the slot stays, after it goes and 1 moves in.
+    VoiceHudModule::assignSlots(slots, { talker(9, 1.0f), talker(1, 2.0f), talker(7, 9.0f) }, 3, true);
+    EXPECT_EQ(slots[0].talker.id, 3);
+    EXPECT_FALSE(slots[0].talker.speaking);
+    VoiceHudModule::assignSlots(slots, { talker(9, 1.0f), talker(1, 2.0f), talker(7, 9.0f) }, 3, false);
+    EXPECT_EQ(slots[0].talker.id, 1);
+    EXPECT_EQ(slots[1].talker.id, 7);
+}
+
+TEST(VoiceHud, ProjectsAheadAndRejectsBehind) {
+    Camera cam;
+    cam.position = glm::vec3(0.0f);
+    cam.target = glm::vec3(0.0f, 0.0f, -1.0f);
+    cam.fovDegrees = 90.0f;
+    glm::vec2 ndc;
+    ASSERT_TRUE(VoiceHudModule::project(cam, 1.0f, glm::vec3(0.0f, 0.0f, -5.0f), ndc));
+    EXPECT_NEAR(ndc.x, 0.0f, 1e-5f);
+    EXPECT_NEAR(ndc.y, 0.0f, 1e-5f);
+    ASSERT_TRUE(VoiceHudModule::project(cam, 1.0f, glm::vec3(5.0f, 5.0f, -5.0f), ndc)); // the top right corner at 90 degrees
+    EXPECT_NEAR(ndc.x, 1.0f, 1e-5f);
+    EXPECT_NEAR(ndc.y, -1.0f, 1e-5f);
+    EXPECT_FALSE(VoiceHudModule::project(cam, 1.0f, glm::vec3(0.0f, 0.0f, 5.0f), ndc));
+}
+
+TEST(VoiceHud, EdgeArrowsPointTheWayTheVoiceIs) {
+    const glm::vec2 size(1000.0f, 500.0f);
+    const glm::vec2 ahead = VoiceHudModule::edgePoint(0.0f, size, 20.0f);
+    EXPECT_NEAR(ahead.x, 500.0f, 1e-3f);
+    EXPECT_NEAR(ahead.y, 20.0f, 1e-3f);
+    const glm::vec2 behind = VoiceHudModule::edgePoint(glm::pi<float>(), size, 20.0f);
+    EXPECT_NEAR(behind.y, 480.0f, 1e-3f);
+    const glm::vec2 right = VoiceHudModule::edgePoint(glm::half_pi<float>(), size, 20.0f);
+    EXPECT_NEAR(right.x, 980.0f, 1e-3f);
+    EXPECT_NEAR(right.y, 250.0f, 1e-3f);
+    EXPECT_STREQ(VoiceHudModule::directionWord(0.0f), "ahead");
+    EXPECT_STREQ(VoiceHudModule::directionWord(-glm::half_pi<float>()), "left");
+    EXPECT_STREQ(VoiceHudModule::directionWord(3.0f), "behind");
+    EXPECT_STREQ(VoiceHudModule::directionWord(-2.4f), "behind left");
+}
+#endif

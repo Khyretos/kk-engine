@@ -102,10 +102,12 @@ void TennisModule::defineControls() {
     for (int p = 0; p < 4; ++p) {
         kke::InputMap& in = m_input->map(p);
         kke::InputModule::defineCharacterActions(in);
-        // Tennis needs the move stick and the shot buttons, nothing else.
+        // Tennis needs the move stick, the shot buttons and push to talk, nothing else.
         for (const char* a : { "jump", "sprint", "walk", "crouch", "fire", "aim", "interact", "camera.toggle", "camera.zoom", "look", "look.rate",
                                "voice.talk" })
             in.clearBindings(a);
+        in.addBinding(IM::bind("voice.talk", IM::key(SDL_SCANCODE_V))); // B is a shot on the pad; keep one talk key everywhere
+        in.addBinding(IM::bind("voice.talk", IM::pad(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)));
         in.defineAction({ "tennis.topspin", "Topspin (the all-round shot)", "Shots", "game" });
         in.defineAction({ "tennis.flat", "Flat (hard and fast)", "Shots", "game" });
         in.defineAction({ "tennis.slice", "Slice (low and slow)", "Shots", "game" });

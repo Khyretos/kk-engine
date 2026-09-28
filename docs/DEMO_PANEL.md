@@ -39,6 +39,8 @@ a row and then calls the row's `onChange`.
   player holds (kke::ButtonPrompts); `hint()` picks a different line for
   keyboard and controller, since an action bound only to a pad shows
   nothing on the keyboard.
+- A row whose name changes (a slot for whichever player is in it):
+  `.labelLive([this] { return "Mute " + name(); })` after the row.
 - A row that belongs to one scene: `.showIf([this] { return m_scene == 1; })`,
   or a whole section: `sectionIf(...)`.
 - A value that moves (a setting of whichever character is selected): pass a

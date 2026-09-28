@@ -222,6 +222,16 @@ DemoPanelModule::Section& DemoPanelModule::Section::showIf(std::function<bool()>
     return *this;
 }
 
+DemoPanelModule::Section& DemoPanelModule::Section::labelLive(std::function<std::string()> label) {
+    if (!m_rows.empty()) {
+        Row& r = m_owner.m_rows[m_rows.back()];
+        r.liveLabel = std::move(label);
+        r.label = r.liveLabel();
+        m_owner.m_dirty = true;
+    }
+    return *this;
+}
+
 DemoPanelModule::Section& DemoPanelModule::Section::sectionIf(std::function<bool()> visible) {
     m_visible = std::move(visible);
     return *this;
@@ -416,21 +426,21 @@ void DemoPanelModule::build() {
             case Row::Kind::SliderF:
             case Row::Kind::SliderI:
                 open(i, "slider");
-                rml += "<span class=\"label\">" + escapeRmlText(r.label) + "</span><span class=\"value\" id=\"v" + id +
+                rml += "<span class=\"label\" id=\"l" + id + "\">" + escapeRmlText(r.label) + "</span><span class=\"value\" id=\"v" + id +
                        "\"></span><div class=\"bar\" id=\"b" + id + "\"><div class=\"fill\" id=\"f" + id + "\"></div></div></div>";
                 break;
             case Row::Kind::Choice:
                 open(i, "choice");
-                rml += "<span class=\"label\">" + escapeRmlText(r.label) + "</span><span class=\"value\"><span class=\"arrow\" data-dir=\"-1\">&lt; </span><span id=\"v" +
+                rml += "<span class=\"label\" id=\"l" + id + "\">" + escapeRmlText(r.label) + "</span><span class=\"value\"><span class=\"arrow\" data-dir=\"-1\">&lt; </span><span id=\"v" +
                        id + "\"></span><span class=\"arrow\" data-dir=\"1\"> &gt;</span></span></div>";
                 break;
             case Row::Kind::Toggle:
                 open(i, "toggle");
-                rml += "<span class=\"box\" id=\"v" + id + "\"></span>" + escapeRmlText(r.label) + "</div>";
+                rml += "<span class=\"box\" id=\"v" + id + "\"></span><span id=\"l" + id + "\">" + escapeRmlText(r.label) + "</span></div>";
                 break;
             case Row::Kind::Button:
                 open(i, "button");
-                rml += escapeRmlText(r.label) + "</div>";
+                rml += "<span id=\"l" + id + "\">" + escapeRmlText(r.label) + "</span></div>";
                 break;
             }
         }
@@ -447,6 +457,8 @@ void DemoPanelModule::build() {
         m_rows[i].el = m_doc->GetElementById("r" + id);
         m_rows[i].value = m_doc->GetElementById("v" + id);
         m_rows[i].fill = m_doc->GetElementById("f" + id);
+        m_rows[i].labelEl = m_doc->GetElementById("l" + id);
+        m_rows[i].shownLabel = m_rows[i].label;
     }
     if (m_titleEl) m_titleEl->SetInnerRML(escapeRmlText(m_title));
     if (m_doc) {
@@ -787,6 +799,13 @@ void DemoPanelModule::refresh() {
         if (!vis) {
             focusLost |= i == m_focus;
             continue;
+        }
+        if (r.liveLabel && r.labelEl) {
+            std::string label = r.liveLabel();
+            if (label != r.shownLabel) {
+                r.labelEl->SetInnerRML(escapeRmlText(label));
+                r.shownLabel = r.label = std::move(label);
+            }
         }
         std::string shown;
         float fill = -1.0f;

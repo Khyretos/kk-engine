@@ -100,6 +100,11 @@ public:
     // point in the context (what GetAbsoluteOffset() and RmlUi events give)
     // differ by more than pixelsPerPoint. Convert with these.
     float pixelsPerPoint() const { return m_pixelsPerPoint; }
+    // The whole frame in pixels, and where the context (the safe area)
+    // starts in it: a point projected from the 3D view (frame pixels)
+    // minus frameOrigin() is where it is in the context.
+    glm::vec2 frameSize() const { return { m_frameSize.x, m_frameSize.y }; }
+    glm::vec2 frameOrigin() const { return { m_origin.x, m_origin.y }; }
     glm::vec2 toContext(glm::vec2 points) const { return points * m_pixelsPerPoint - glm::vec2(m_origin.x, m_origin.y); }
     glm::vec2 toPoints(glm::vec2 contextPixels) const {
         return (contextPixels + glm::vec2(m_origin.x, m_origin.y)) / m_pixelsPerPoint;
