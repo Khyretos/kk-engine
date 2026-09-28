@@ -156,6 +156,7 @@ bool NetModule::host(uint16_t port, std::string* error) {
         m_server->onEvent = [this](const net::GameEventMsg& e) { dispatchEvent(e); };
         m_server->onVoice = [this](const net::VoiceMsg& m) { for (const auto& l : m_voiceListeners) l(m); };
         m_server->voice = voiceRules;
+        m_server->limits = movementLimits;
         if (m_rigid) {
             m_moveCheck = std::make_unique<net::WorldMoveCheck>(m_rigid->world(), [this](RigidWorld::BodyId b) {
                 return std::any_of(m_capsules.begin(), m_capsules.end(), [b](const auto& kv) { return kv.second == b; });

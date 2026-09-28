@@ -108,6 +108,7 @@ nav:
           - Cookbook player: demos/cookbook.md
       - Games:
           - Climb Race: demos/climb_race.md
+          - Flying: demos/flying_demo.md
           - Duel: demos/duel.md
           - Goblin Horde: demos/goblin_horde.md
       - AI and companions:

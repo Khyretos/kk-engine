@@ -35,6 +35,11 @@ add_executable(kke_tests
     ${CMAKE_SOURCE_DIR}/games/climb_race/NetRace.cpp
     ${CMAKE_SOURCE_DIR}/games/climb_race/Progress.cpp
     ${CMAKE_SOURCE_DIR}/games/climb_race/Ghost.cpp
+    test_flight.cpp
+    ${CMAKE_SOURCE_DIR}/games/flying_demo/Flight.cpp
+    ${CMAKE_SOURCE_DIR}/games/flying_demo/Course.cpp
+    ${CMAKE_SOURCE_DIR}/games/flying_demo/FlyNet.cpp
+    ${CMAKE_SOURCE_DIR}/games/flying_demo/Stunts.cpp
     test_combat.cpp
     test_sidekick.cpp
     test_mesh_lod.cpp
@@ -115,6 +120,8 @@ configure_file(cookbook_recipes.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/cookb
 target_include_directories(kke_tests PRIVATE ${CMAKE_SOURCE_DIR}/games/cookbook)
 # Climb Race's mountain files and race setup (test_climb_mountains.cpp).
 target_include_directories(kke_tests PRIVATE ${CMAKE_SOURCE_DIR}/games/climb_race)
+# The Flying demo's flight model and island (test_flight.cpp).
+target_include_directories(kke_tests PRIVATE ${CMAKE_SOURCE_DIR}/games/flying_demo)
 target_compile_definitions(kke_tests PRIVATE KKE_CLIMB_MOUNTAINS_DIR="${CMAKE_SOURCE_DIR}/games/climb_race/mountains")
 
 # The shipped moods (assets/moods/), built in the same way for test_sky.cpp.
