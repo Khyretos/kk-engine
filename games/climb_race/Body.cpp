@@ -45,6 +45,47 @@ void shiftBone(const kke::ModelData& rig, kke::Pose& pose, const std::vector<glm
     const int parent = rig.bones[static_cast<size_t>(b)].parent;
     pose[static_cast<size_t>(b)].t += parent >= 0 ? glm::inverse(glm::mat3(bones[static_cast<size_t>(parent)])) * delta : delta;
 }
+// How a hand sits on a hold (world space). The hold is a dome on the
+// rock (ClimbWall::appendHold): a ring of about its size on the rock and
+// an apex its depth out, so a ball through both (a crimp is wider: a
+// capsule). The knuckles sit on its upper front and the fingers point on
+// up over it, along its surface, so kke::wrapFingers curls them onto
+// its top: over the lip of a jug or a crimp's thin edge, flat on a sloper.
+struct HoldGrip {
+    glm::vec3 knuckles{0.0f};  // where the middle finger's knuckle goes
+    glm::vec3 fingers{0.0f};   // the way the fingers point from there
+    kke::GripSurface surface;  // what they close on: the hold and the rock
+};
+HoldGrip gripOnHold(const glm::vec3& point, glm::vec3 n, kke::ClimbHold::Kind kind, float size, float skin) {
+    HoldGrip g;
+    n = glm::normalize(n);
+    glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f) - n * n.y;
+    up = glm::length(up) < 1e-4f ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::normalize(up);
+    const glm::vec3 along = glm::cross(up, n);
+    const float depth = kke::holdDepth(kind, size);
+    const glm::vec3 rock = point - n * (depth * 0.8f); // the rock's surface under the hold
+    glm::vec3 centre;
+    float radius = 0.0f, half = 0.0f, lean = 0.0f;
+    if (depth < 0.01f) {
+        // A ledge's edge: a rounded lip.
+        radius = 0.02f;
+        centre = point - n * radius;
+        lean = 50.0f;
+    } else {
+        const float back = (size * size - depth * depth) / (2.0f * depth); // the ball's centre behind the rock
+        radius = depth + back;
+        centre = rock - n * back;
+        half = kind == kke::ClimbHold::Kind::Crimp ? size * 0.6f : 0.0f;
+        lean = kind == kke::ClimbHold::Kind::Crimp ? 45.0f : kind == kke::ClimbHold::Kind::Sloper ? 20.0f : 35.0f;
+    }
+    const float a = glm::radians(lean);
+    const glm::vec3 out = n * std::cos(a) + up * std::sin(a);
+    g.knuckles = centre + out * (radius + skin);
+    g.fingers = glm::normalize(up * std::cos(a) - n * std::sin(a));
+    g.surface.capsules.push_back({ centre - along * half, centre + along * half, radius });
+    g.surface.planes.push_back({ rock, n });
+    return g;
+}
 int boneIndex(const kke::ModelData& rig, const std::string& name) {
     for (size_t b = 0; b < rig.bones.size(); ++b)
         if (kke::canonicalBoneName(rig.bones[b].name) == name || rig.bones[b].name == name) return static_cast<int>(b);
@@ -83,6 +124,10 @@ void ClimbRaceModule::loadCharacter() {
         m_leg[s] = kke::findChain(m_rigData, s == 0 ? "thigh_l" : "thigh_r", s == 0 ? "calf_l" : "calf_r", s == 0 ? "foot_l" : "foot_r");
     }
     for (int s = 0; s < 2; ++s) m_human[s] = kke::makeHumanArm(m_rigData, m_arm[s], m_arm[1 - s]);
+    // The body and the hands from the mannequin's own mesh: the arms keep
+    // out of the body, the fingers close on what they hold.
+    m_bodyShape = kke::BodyShape::fit(*d);
+    for (int s = 0; s < 2; ++s) m_hands[s] = kke::makeHandRig(*d, s == 0);
     m_pelvis = -1;
     for (size_t b = 0; b < m_rigData.bones.size(); ++b)
         if (kke::canonicalBoneName(m_rigData.bones[b].name) == "pelvis") m_pelvis = static_cast<int>(b);
@@ -216,12 +261,18 @@ ClimbRaceModule::BodyInput ClimbRaceModule::bodyInput(const Racer& r) const {
                 const kke::ClimbHold& h = holds[static_cast<size_t>(hold)];
                 b.grip[s] = toWorld(r, h.position);
                 b.normal[s] = h.normal;
+                b.holdKind[s] = h.kind;
+                b.holdSize[s] = h.size;
                 b.onRock[s] = b.held[s] = true;
                 b.closed[s] = 1.0f;
             } else if (c.handMoving(s)) {
                 const int t = c.handTarget(s);
                 b.grip[s] = toWorld(r, c.hand(s));
                 b.normal[s] = t >= 0 ? holds[static_cast<size_t>(t)].normal : -b.in;
+                if (t >= 0) {
+                    b.holdKind[s] = holds[static_cast<size_t>(t)].kind;
+                    b.holdSize[s] = holds[static_cast<size_t>(t)].size;
+                }
                 b.onRock[s] = true;
                 b.closed[s] = std::clamp((c.handProgress(s) - 0.8f) / 0.2f, 0.0f, 1.0f); // open, closing as it arrives
             } else {
@@ -233,6 +284,7 @@ ClimbRaceModule::BodyInput ClimbRaceModule::bodyInput(const Racer& r) const {
             const float side = s == 0 ? -1.0f : 1.0f;
             b.grip[s] = r.loco->hangEdge() + right * (0.22f * side) + b.in * 0.04f;
             b.onRock[s] = true;
+            b.holdKind[s] = kke::ClimbHold::Kind::Edge;
             b.closed[s] = 1.0f;
         }
         b.foot[s] = toWorld(r, c.foot(s));
@@ -305,6 +357,7 @@ void ClimbRaceModule::animateBody(Racer& r, float dt) {
     r.armWeight += (armGoal - r.armWeight) * k;
     r.legWeight += (legGoal - r.legWeight) * k;
     glm::vec3 fingerDir[2], thumbDir[2], wrist[2];
+    HoldGrip holdAt[2];
     if (r.armWeight > 0.01f || r.legWeight > 0.01f) {
         const glm::vec3 in = b.in; // into the rock
         const glm::vec3 up(0.0f, 1.0f, 0.0f);
@@ -315,13 +368,18 @@ void ClimbRaceModule::animateBody(Racer& r, float dt) {
             r.grip[s] += (b.closed[s] - r.grip[s]) * k;
             r.handAim[s] += ((b.onRock[s] ? 1.0f : 0.0f) - r.handAim[s]) * k;
         }
-        // The fingers point up and hook over the hold, palm to the rock, the
-        // thumb toward the body's middle; the wrist sits below and out from
-        // the knuckles by the hand's length.
+        // The palm to the rock, the thumb toward the body's middle, the
+        // knuckles on the hold's upper front and the fingers on over it
+        // (gripOnHold); the wrist the hand's length below the knuckles.
         for (int s = 0; s < 2; ++s) {
             fingerDir[s] = c.fingerDirection(normal[s]);
             thumbDir[s] = s == 0 ? right : -right;
-            wrist[s] = b.onRock[s] ? c.wristAt(grip[s], normal[s]) : grip[s];
+            wrist[s] = grip[s];
+            if (b.onRock[s]) {
+                holdAt[s] = gripOnHold(grip[s], normal[s], b.holdKind[s], b.holdSize[s], m_hands[s].fingerRadius * 1.3f);
+                fingerDir[s] = holdAt[s].fingers;
+                wrist[s] = holdAt[s].knuckles - holdAt[s].fingers * m_handRig[s].knuckles;
+            }
         }
 
         // The pelvis where the climber's hips are (the logic already keeps
@@ -331,14 +389,64 @@ void ClimbRaceModule::animateBody(Racer& r, float dt) {
             const glm::vec3 want = model(b.hips);
             shiftBone(m_rigData, pose, bones, m_pelvis, (want - positionOf(bones[static_cast<size_t>(m_pelvis)])) * r.armWeight);
         }
-        // Arms: two passes. If the animated torso leaves a hand short of its
-        // hold, the whole body moves the rest of the way and they solve again.
-        // Each arm keeps to a person's ranges (kke::solveHumanArm): the elbow
-        // bends only forward, the shoulder doesn't reach through the back,
-        // and the hand turns onto its hold as far as the forearm and wrist go.
+        // Arms: up to four passes. If the animated torso leaves a hand short
+        // of its hold, or an arm can only reach it through the body (a hand
+        // crossing over in front of the face), the whole body moves (along
+        // the rock, and back off it) and they solve again. Each arm keeps to
+        // a person's ranges (kke::solveHumanArm): the elbow bends only
+        // forward, the shoulder doesn't reach through the back, and the hand
+        // turns onto its hold as far as the forearm and wrist go. And it
+        // never goes through the body (kke/BodyShape.h): the elbow swings
+        // round, the head leans away, and the hand gives way no more than a
+        // few centimetres (the body moves instead).
         const glm::mat3 toModel = glm::mat3(inv);
-        for (int pass = 0; pass < 2; ++pass) {
+        kke::BodyAvoid avoid;
+        avoid.maxShift = 0.08f;
+        const glm::vec3 outOfRock = -glm::normalize(toModel * in);
+        // Legs: feet on their holds. Solved before each arm pass too, so the
+        // arms keep clear of where the thighs really are, and from the
+        // animated legs each time (a partial weight applied twice would
+        // count twice).
+        kke::BoneTRS legsAtStart[2][3];
+        for (int s = 0; s < 2; ++s)
+            if (m_leg[s].valid()) {
+                legsAtStart[s][0] = pose[static_cast<size_t>(m_leg[s].upper)];
+                legsAtStart[s][1] = pose[static_cast<size_t>(m_leg[s].lower)];
+                legsAtStart[s][2] = pose[static_cast<size_t>(m_leg[s].end)];
+            }
+        auto solveLegs = [&]() {
+            if (r.legWeight <= 0.01f) return;
+            for (int s = 0; s < 2; ++s)
+                if (m_leg[s].valid()) {
+                    pose[static_cast<size_t>(m_leg[s].upper)] = legsAtStart[s][0];
+                    pose[static_cast<size_t>(m_leg[s].lower)] = legsAtStart[s][1];
+                    pose[static_cast<size_t>(m_leg[s].end)] = legsAtStart[s][2];
+                }
             const std::vector<glm::mat4> bones = kke::poseToModel(m_rigData, pose);
+            for (int s = 0; s < 2; ++s) {
+                if (!m_leg[s].valid()) continue;
+                const float side = s == 0 ? -1.0f : 1.0f;
+                // The ankle sits a little out from the foothold and above it.
+                const glm::vec3 foot = b.foot[s] - in * 0.1f + up * 0.07f;
+                const glm::vec3 hip = glm::vec3(xf * bones[static_cast<size_t>(m_leg[s].upper)][3]);
+                // Knees toward the rock and a little out, like a frog.
+                const glm::vec3 pole = hip + in * 0.6f + right * (0.35f * side) - up * 0.2f;
+                kke::solveTwoBone(m_rigData, pose, m_leg[s], model(foot), model(pole), r.legWeight);
+            }
+        };
+        // The head leans away from an arm reaching past it once per frame,
+        // not once more every pass: each pass starts from the frame's head
+        // and last frame's lean.
+        const kke::BodyShape::Part* neck = m_bodyShape.part(kke::BodyPart::Neck);
+        const kke::BoneTRS neckAtStart = neck ? pose[static_cast<size_t>(neck->bone)] : kke::BoneTRS{};
+        const kke::BodyAvoidState avoidAtStart[2] = { r.avoid[0], r.avoid[1] };
+        for (int pass = 0; pass < 4; ++pass) {
+            if (neck) pose[static_cast<size_t>(neck->bone)] = neckAtStart;
+            r.avoid[0] = avoidAtStart[0];
+            r.avoid[1] = avoidAtStart[1];
+            if (climbing) solveLegs();
+            const std::vector<glm::mat4> bones = kke::poseToModel(m_rigData, pose);
+            float caught = 0.0f;
             for (int s = 0; s < 2; ++s) {
                 if (!m_arm[s].valid() || r.armWeight <= 0.01f) continue;
                 const float side = s == 0 ? -1.0f : 1.0f;
@@ -360,9 +468,10 @@ void ClimbRaceModule::animateBody(Racer& r, float dt) {
                     const glm::quat want = frameRotation(hr.fingers, hr.thumbSide, toModel * fingerDir[s], toModel * thumbDir[s]) * hr.restModel;
                     goal.handRotation = glm::slerp(rotationOf(bones[static_cast<size_t>(m_arm[s].end)]), want, r.handAim[s]);
                 }
-                kke::solveHumanArm(m_rigData, pose, m_human[s], goal);
+                const kke::BodyAvoidResult got = kke::solveHumanArm(m_rigData, pose, m_human[s], goal, m_bodyShape, avoid, &r.avoid[s]);
+                caught = std::max(caught, got.penetration);
             }
-            if (pass == 1 || !climbing || m_pelvis < 0) break;
+            if (pass == 3 || !climbing || m_pelvis < 0) break;
             const std::vector<glm::mat4> solved = kke::poseToModel(m_rigData, pose);
             glm::vec3 shortBy(0.0f);
             int n = 0;
@@ -374,51 +483,27 @@ void ClimbRaceModule::animateBody(Racer& r, float dt) {
                     ++n;
                 }
             }
-            if (n == 0) break;
-            shiftBone(m_rigData, pose, solved, m_pelvis, shortBy / static_cast<float>(n) * r.armWeight);
+            if (n == 0 && caught <= 0.0f) break;
+            const glm::vec3 move = (n > 0 ? shortBy / static_cast<float>(n) : glm::vec3(0.0f)) + outOfRock * caught;
+            shiftBone(m_rigData, pose, solved, m_pelvis, move * r.armWeight);
         }
         // Legs, after the body has settled.
-        if (r.legWeight > 0.01f) {
-            const std::vector<glm::mat4> bones = kke::poseToModel(m_rigData, pose);
-            for (int s = 0; s < 2; ++s) {
-                if (!m_leg[s].valid()) continue;
-                const float side = s == 0 ? -1.0f : 1.0f;
-                // The ankle sits a little out from the foothold and above it.
-                const glm::vec3 foot = b.foot[s] - in * 0.1f + up * 0.07f;
-                const glm::vec3 hip = glm::vec3(xf * bones[static_cast<size_t>(m_leg[s].upper)][3]);
-                // Knees toward the rock and a little out, like a frog.
-                const glm::vec3 pole = hip + in * 0.6f + right * (0.35f * side) - up * 0.2f;
-                kke::solveTwoBone(m_rigData, pose, m_leg[s], model(foot), model(pole), r.legWeight);
-            }
-        }
-        // Hands: turned onto the hold with the arms (above), fingers closed around it.
-        const std::vector<glm::mat4> bones = kke::poseToModel(m_rigData, pose);
+        solveLegs();
+        // Hands: turned onto the hold with the arms (above), the fingers
+        // closed on it until they touch it (kke::wrapFingers); a hand in the
+        // air closes loosely.
         for (int s = 0; s < 2; ++s) {
-            const HandRig& hr = m_handRig[s];
-            const int hand = m_arm[s].end;
             if (!m_arm[s].valid()) continue;
-            const glm::quat handModel = rotationOf(bones[static_cast<size_t>(hand)]);
-            const float curl = r.grip[s] * r.armWeight;
-            if (curl < 0.01f) continue;
-            // Curl toward the palm: about the axis across the knuckles.
-            const glm::vec3 palm = glm::normalize(-(toModel * normal[s]));
-            const glm::vec3 f = handModel * glm::inverse(hr.restModel) * hr.fingers;
-            glm::vec3 axis = glm::cross(f, palm);
-            if (glm::length(axis) < 1e-4f) continue;
-            axis = glm::normalize(axis);
-            const float bend[3] = { 0.9f, 1.1f, 0.7f }; // radians per joint, fully closed
-            auto curlChain = [&](const int* seg, float amount) {
-                glm::quat parentModel = handModel;
-                for (int j = 0; j < 3; ++j) {
-                    if (seg[j] < 0) break;
-                    const glm::vec3 localAxis = glm::inverse(parentModel) * axis;
-                    kke::BoneTRS& bone = pose[static_cast<size_t>(seg[j])];
-                    bone.r = glm::normalize(glm::angleAxis(bend[j] * amount, localAxis) * bone.r);
-                    parentModel = parentModel * bone.r;
-                }
-            };
-            for (const auto& seg : hr.segment) curlChain(seg, curl);
-            curlChain(hr.thumb, curl * 0.4f);
+            const float close = r.grip[s] * r.armWeight;
+            if (close < 0.01f) continue;
+            kke::GripSurface surface;
+            const bool onHold = b.onRock[s] && (b.held[s] || !climbing);
+            if (onHold) {
+                for (const kke::Capsule& cap : holdAt[s].surface.capsules) surface.capsules.push_back({ model(cap.a), model(cap.b), cap.radius });
+                for (const kke::GripSurface::Plane& p : holdAt[s].surface.planes)
+                    surface.planes.push_back({ model(p.point), glm::normalize(toModel * p.normal) });
+            }
+            kke::wrapFingers(m_rigData, pose, m_hands[s], surface, onHold ? close : close * 0.55f, 0.6f);
         }
     }
     // How well the hands sit on their holds: the knuckles against the
@@ -429,7 +514,8 @@ void ClimbRaceModule::animateBody(Racer& r, float dt) {
             const int hold = c.handHold(s), knuckle = m_handRig[s].segment[1][0];
             if (hold < 0 || knuckle < 0 || r.grip[s] < 0.95f || r.handAim[s] < 0.95f) continue;
             const glm::vec3 at = glm::vec3(xf * final[static_cast<size_t>(knuckle)][3]);
-            const glm::vec3 want = toWorld(r, c.wall().holds()[static_cast<size_t>(hold)].position);
+            const kke::ClimbHold& h = c.wall().holds()[static_cast<size_t>(hold)];
+            const glm::vec3 want = gripOnHold(toWorld(r, h.position), h.normal, h.kind, h.size, m_hands[s].fingerRadius * 1.3f).knuckles;
             const float d = glm::length(at - want);
             r.gripError.worst = std::max(r.gripError.worst, d);
             r.gripError.sum += d;

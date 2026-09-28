@@ -36,6 +36,8 @@ set(ENGINE_SOURCES
     src/BreakGraph.cpp
     src/Animator.cpp
     src/AnimRig.cpp
+    src/BodyShape.cpp
+    src/Equipment.cpp
     src/ProceduralAnim.cpp
     src/ClimbWall.cpp
     src/CookedFile.cpp

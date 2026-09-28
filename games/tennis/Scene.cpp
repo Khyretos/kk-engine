@@ -287,7 +287,8 @@ void TennisModule::updateCameras(float dt) {
             // KKE_TENNIS_CLOSEUP: side on to one player, close, for looking at the strokes.
             const Player& p = player(m->players[static_cast<size_t>(m_closeUp)]);
             const float s = static_cast<float>(m->score.sideOf(p.team));
-            main.position = place.toWorld(p.feet + glm::vec3(-3.6f * s, 1.5f, -1.2f * s));
+            const float d = m_closeUpDistance / 3.8f;
+            main.position = place.toWorld(p.feet + glm::vec3(-3.6f * s * d, 1.1f + 0.4f * std::abs(d), -1.2f * s * d));
             main.target = place.toWorld(p.feet + glm::vec3(0.0f, 1.1f, 0.0f));
             return;
         }

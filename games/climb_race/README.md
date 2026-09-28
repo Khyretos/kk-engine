@@ -566,20 +566,28 @@ same as a local one. Per frame:
    so getting on and off the rock is smooth. The arms fade out late in a
    mantle, the legs earlier.
 4. Move the pelvis to the climber's hips.
-5. **Arms, two passes**: `kke::solveHumanArm` puts each wrist where
-   `Climber::wristAt` says (below and out from the knuckles), with the
-   elbow leaning down and out from the rock, and turns the hand onto its
-   hold, all within a person's joint ranges (the elbow never bends
-   backwards, the forearm and wrist twist only so far). If a held hand is still short
-   of its hold, the pelvis moves by the average miss and the arms solve
-   again.
+5. **Arms, up to four passes**: `kke::solveHumanArm` puts each wrist
+   where the hand's grip on its hold says (the knuckles on the hold's
+   upper front, the wrist a hand's length below), with the elbow leaning
+   down and out from the rock, and turns the hand onto its hold, all
+   within a person's joint ranges (the elbow never bends backwards, the
+   forearm and wrist twist only so far). It is the body-aware solve
+   ([docs/EQUIPMENT.md](../../docs/EQUIPMENT.md)): the arm never goes
+   through the chest, neck or legs; the elbow swings round, the head leans
+   away from an arm reaching past it, and the hand gives way at most 8 cm.
+   If a held hand is still short of its hold, or an arm is still against
+   the body (a hand crossing in front of the face), the pelvis moves by
+   the average miss and back off the rock, the legs re-solve, and the
+   arms solve again.
 6. **Legs**: two-bone IK puts each ankle a little out from and above its
    foothold, knees toward the rock and out ("like a frog").
 7. **Hands**: each hand is turned (in step 5) so the fingers point along
-   `Climber::fingerDirection` with the thumb toward the body, and the
-   finger bones curl (0.9, 1.1, 0.7 radians per joint, thumb 40%) by how
-   closed the grip is. A travelling hand opens and closes over the last
-   20% of its move.
+   the hold with the thumb toward the body, and `kke::wrapFingers` curls
+   each finger, knuckle first, until it touches the hold (a ball for a
+   jug or sloper, a thin capsule for a crimp, a lip for an edge) or the
+   rock, within a person's finger ranges. A hand in the air closes
+   loosely. A travelling hand opens and closes over the last 20% of its
+   move.
 
 With `KKE_CLIMB_QUIT`, the game measures the distance from the middle
 knuckle to the held hold on every frame and logs the average and worst

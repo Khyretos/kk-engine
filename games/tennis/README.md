@@ -77,6 +77,7 @@ KKE_NET=join:127.0.0.1 KKE_NET_NAME=Rook ./tennis     # ...and join it from a se
 | `KKE_TENNIS_SWINGLOG=1` | a log line for every hit: the stroke, the timing error and word, the spacing, the quality, the power, the stamina |
 | `KKE_TENNIS_STRINGTEST=1` | one string bed on its own hit by a 30 m/s ball every 2 s, and every racket's pocket, logged in mm |
 | `KKE_TENNIS_CLOSEUP=<n>` | the camera side-on to player `n` (0 = the first), close: for looking at swings |
+| `KKE_TENNIS_CLOSEUP_DISTANCE=<m>` | how far that camera is (default 3.8): about 1.5 to look at the hands on the racket; negative puts it on the player's other side |
 | `KKE_TENNIS_POSE=<stroke>,<f\|b>,<t>` | player 1 held in one moment of a stroke, e.g. `drive,b,-1` (a backhand drive's full takeback) or `flat serve,f,0` (contact); names as `strokeName` in [Swing.cpp](Swing.cpp) |
 | `KKE_ANIMATIONS_DIR` | where to look for `UAL1_Standard.fbx` and `UAL2.fbx` |
 | `KKE_ASSETS_DIR` | also searched for `Universal Animation Library 2/Unity/UAL2.fbx` |
@@ -324,14 +325,18 @@ walk, jog and sprint clips blended by speed, UAL2's side steps when that
 pack is there, and sitting, cheering and groaning. There are no swing
 clips: `racketAt` gives the racket head's place, and the body follows it.
 The pelvis and spine turn (30% / 70%) with the shoulders, the hips drop
-and two-bone IK keeps the feet planted. The right arm reaches for the
-racket's place and turns the hand to hold it with `kke::solveHumanArm`,
-which keeps to what a person's shoulder, elbow, forearm and wrist can
-do; the racket is then drawn in the hand, wherever the hand got to (the
-grip: the handle across the palm, the head past the thumb and index
-finger, the strings facing as the palm). The left hand joins the grip for a two-handed
-backhand, throws the toss, points up at a smash or cradles the racket at
-the ready. The racket face opens for slice and lob and closes for
+and two-bone IK keeps the feet planted. The racket is an equipped item
+([docs/EQUIPMENT.md](../../docs/EQUIPMENT.md)): `kke::Equipment` puts it
+in the right hand's palm socket by its "main" grip (the handle along the
+palm, the head past the thumb and index finger, the strings facing as the
+palm), and the fingers close round the handle until they touch it. The
+right arm reaches for where that puts the hand with the body-aware
+`kke::solveHumanArm`, which keeps to what a person's shoulder, elbow,
+forearm and wrist can do and never lets the arm or the racket go through
+the body (a follow-through wraps round the shoulder instead of through
+the head); the racket is then drawn where the hand got to. The left hand
+takes the "support" grip for a two-handed backhand and the "throat" at
+the ready, throws the toss or points up at a smash. The racket face opens for slice and lob and closes for
 topspin. The racket is POLYGON Shops' tennis racket when that pack is
 there (its flat string sheet taken out: the FEMFX strings go there), or a
 mesh built in code.

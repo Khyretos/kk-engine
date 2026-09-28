@@ -71,17 +71,6 @@ glm::vec3 holdColor(ClimbHold::Kind k) {
     return { 1.0f, 1.0f, 1.0f };
 }
 
-// How far the hand's grip point sits off the rock, and how far the hold
-// sticks out (its apex).
-float holdDepth(ClimbHold::Kind k, float size) {
-    switch (k) {
-    case ClimbHold::Kind::Jug: return size * 0.95f;
-    case ClimbHold::Kind::Crimp: return size * 0.55f;
-    case ClimbHold::Kind::Sloper: return size * 0.5f;
-    case ClimbHold::Kind::Edge: return 0.0f;
-    }
-    return size;
-}
 
 void addTriangle(ClimbMesh& m, const glm::vec3& a, const glm::vec3& b, const glm::vec3& c, const glm::vec3& color) {
     glm::vec3 n = glm::cross(b - a, c - a);
@@ -110,6 +99,16 @@ void addQuad(ClimbMesh& m, const glm::vec3& a, const glm::vec3& b, const glm::ve
 }
 
 } // namespace
+
+float holdDepth(ClimbHold::Kind k, float size) {
+    switch (k) {
+    case ClimbHold::Kind::Jug: return size * 0.95f;
+    case ClimbHold::Kind::Crimp: return size * 0.55f;
+    case ClimbHold::Kind::Sloper: return size * 0.5f;
+    case ClimbHold::Kind::Edge: return 0.0f;
+    }
+    return size;
+}
 
 float holdGrip(ClimbHold::Kind kind) {
     switch (kind) {

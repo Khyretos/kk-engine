@@ -2,6 +2,8 @@
 
 #include "kke/AnimRig.h"
 #include "kke/Animator.h"
+#include "kke/BodyShape.h"
+#include "kke/Equipment.h"
 #include "kke/ModelAsset.h"
 #include "kke/modules/ModelModule.h"
 
@@ -56,10 +58,16 @@ public:
     float modelYaw() const { return m_modelYaw; }
     const kke::TwoBoneChain& arm(int side) const { return m_arm[side]; } // 0 left, 1 right
     const kke::HumanArm& humanArm(int side) const { return m_human[side]; } // the same arm with a person's ranges
-    // How the right hand holds the racket, in the hand bone's frame: the
-    // shaft's direction and the strings' normal (the palm's).
-    const glm::vec3& gripShaft() const { return m_gripShaft; }
-    const glm::vec3& gripFace() const { return m_gripFace; }
+    // The body as capsules fitted to the mannequin's mesh (the arms and the
+    // racket keep out of it), and the hands' palms and the body's sockets.
+    const kke::BodyShape& bodyShape() const { return m_body; }
+    const kke::Equipment& equipment() const { return m_equip; }
+    // The racket as equipment, in our racket frame: held in the right palm
+    // by its handle ("main"); the left hand above it for a two-handed
+    // backhand ("support") or cradling the throat while waiting ("throat").
+    const kke::Equippable& racketItem() const { return m_racketItem; }
+    int supportGrip() const { return m_supportGrip; }
+    int throatGrip() const { return m_throatGrip; }
     const kke::TwoBoneChain& leg(int side) const { return m_leg[side]; }
     int pelvis() const { return m_pelvis; }
     int spine(int i) const { return m_spine[i]; } // 0..2, hips up
@@ -77,7 +85,11 @@ private:
     float m_modelYaw = 0.0f;
     kke::TwoBoneChain m_arm[2], m_leg[2];
     kke::HumanArm m_human[2];
-    glm::vec3 m_gripShaft{0.0f, 1.0f, 0.0f}, m_gripFace{0.0f, 0.0f, 1.0f};
+    kke::BodyShape m_body;
+    kke::Equipment m_equip;
+    kke::Equippable m_racketItem;
+    int m_supportGrip = -1, m_throatGrip = -1;
+    void makeRacketItem();
     int m_pelvis = -1, m_spine[3] = { -1, -1, -1 };
     bool m_sideSteps = false;
     kke::ModelModule::ModelId m_racketModel = 0;
@@ -139,6 +151,8 @@ private:
     kke::ModelModule::InstanceId m_instance = 0;
     kke::ModelModule::InstanceId m_racketInstance = 0;
     std::unique_ptr<kke::Animator> m_anim;
+    kke::Equipment m_equip;                   // this person's: the racket in the right hand
+    kke::BodyAvoidState m_avoid[2];           // each arm's way round the body, frame to frame
     struct States { int idle = -1, run = -1, sprint = -1, left = -1, right = -1, back = -1, sit = -1, cheer = -1, groan = -1, clap = -1; } m_st;
     bool m_hasRacket = false;
     bool m_visible = true;

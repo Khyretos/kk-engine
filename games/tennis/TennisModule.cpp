@@ -64,6 +64,7 @@ void TennisModule::init(kke::Application& app) {
     m_swingLog = kke::dev::flag("KKE_TENNIS_SWINGLOG");
     if (const char* r = kke::dev::env("KKE_TENNIS_REPLAYS")) m_replays = std::string(r) != "0";
     m_closeUp = static_cast<int>(envFloat("KKE_TENNIS_CLOSEUP", -1.0f));
+    m_closeUpDistance = envFloat("KKE_TENNIS_CLOSEUP_DISTANCE", 3.8f);
     if (const char* pose = kke::dev::env("KKE_TENNIS_POSE")) m_poseTest = pose;
     m_stringTest = kke::dev::env("KKE_TENNIS_STRINGTEST") != nullptr;
     m_autoplay = envOn("KKE_TENNIS_AUTOPLAY");

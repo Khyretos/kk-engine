@@ -37,6 +37,9 @@ struct ClimbHold {
 
 // How good a hold is to hang from (1 = a jug, lower = more tiring).
 float holdGrip(ClimbHold::Kind kind);
+// How far a hold sticks out of the rock (its apex); its `position` is
+// 80% of the way out.
+float holdDepth(ClimbHold::Kind kind, float size);
 const char* holdKindName(ClimbHold::Kind kind);
 
 // A shelf sticking out of the rock: a box, world space. Standing on one

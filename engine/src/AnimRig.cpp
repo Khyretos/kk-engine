@@ -180,18 +180,23 @@ HumanArm makeHumanArm(const ModelData& model, const TwoBoneChain& chain, const T
     return arm;
 }
 
-ArmResult solveHumanArm(const ModelData& model, Pose& pose, const HumanArm& arm, const ArmGoal& goal, const ArmLimits& limits) {
-    ArmResult out;
+namespace {
+
+// Steps 1 and 2 of solveHumanArm: where the hand can go and where the
+// elbow goes, from the posed bones. `outDir`/`fwd`: the chest's frame.
+struct ArmPlan {
+    bool ok = false;
+    glm::vec3 S{0.0f}, E{0.0f}, H{0.0f}, e{0.0f};
+    bool limited = false;
+};
+ArmPlan planHumanArm(const std::vector<glm::mat4>& world, const HumanArm& arm, const ArmGoal& goal, const ArmLimits& limits) {
+    ArmPlan p;
     const TwoBoneChain& c = arm.chain;
-    if (!arm.valid()) return out;
-    std::vector<glm::mat4> world = poseToModel(model, pose);
     const glm::vec3 S = positionOf(world[c.upper]);
-    out.hand = positionOf(world[c.end]);
-    out.handRotation = rotationOf(world[c.end]);
+    const glm::vec3 handNow = positionOf(world[c.end]);
     const float w = glm::clamp(goal.weight, 0.0f, 1.0f);
-    if (w <= 0.0f) return out;
-    const float lab = glm::length(positionOf(world[c.lower]) - S), lcb = glm::length(out.hand - positionOf(world[c.lower]));
-    if (lab < 1e-5f || lcb < 1e-5f) return out;
+    const float lab = glm::length(positionOf(world[c.lower]) - S), lcb = glm::length(handNow - positionOf(world[c.lower]));
+    if (lab < 1e-5f || lcb < 1e-5f) return p;
 
     // The chest's frame: out along the shoulders' line (a turned torso
     // turns it), up, forward.
@@ -206,7 +211,7 @@ ArmResult solveHumanArm(const ModelData& model, Pose& pose, const HumanArm& arm,
 
     // 1. Where the hand can go: within reach (never closer than the
     //    elbow's full bend allows) and within the shoulder's range.
-    glm::vec3 d = glm::mix(out.hand, goal.hand, w) - S;
+    glm::vec3 d = glm::mix(handNow, goal.hand, w) - S;
     const float reachMax = lab + lcb - 1e-3f;
     const float inner = glm::radians(180.0f - limits.elbowMaxFlex);
     const float reachMin = std::sqrt(std::max(1e-6f, lab * lab + lcb * lcb - 2.0f * lab * lcb * std::cos(inner)));
@@ -216,7 +221,7 @@ ArmResult solveHumanArm(const ModelData& model, Pose& pose, const HumanArm& arm,
         len = reachMin;
     }
     const float L = glm::clamp(len, reachMin, reachMax);
-    out.limited = len > reachMax + 1e-3f || len < reachMin - 1e-3f;
+    p.limited = len > reachMax + 1e-3f || len < reachMin - 1e-3f;
     glm::vec3 local(glm::dot(d, outDir), glm::dot(d, up), glm::dot(d, fwd));
     const float flat = std::sqrt(local.x * local.x + local.z * local.z);
     if (flat > 1e-4f) {
@@ -228,28 +233,70 @@ ArmResult solveHumanArm(const ModelData& model, Pose& pose, const HumanArm& arm,
         if (kept != phi) {
             local.x = flat * std::sin(kept);
             local.z = flat * std::cos(kept);
-            out.limited = true;
+            p.limited = true;
         }
     }
     const glm::vec3 n = glm::normalize(outDir * local.x + up * local.y + fwd * local.z);
     const glm::vec3 H = S + n * L;
 
     // 2. The elbow: on the circle round the shoulder-hand line, where it
-    //    hangs naturally, swivelled toward the hint by at most `swivel`.
+    //    hangs naturally, swivelled toward the hint (and by the goal's
+    //    extra turn) by at most `swivel`.
     const float cosA = glm::clamp((lab * lab + L * L - lcb * lcb) / (2.0f * lab * L), -1.0f, 1.0f);
     const glm::vec3 centre = S + n * (lab * cosA);
     const float radius = lab * std::sqrt(std::max(0.0f, 1.0f - cosA * cosA));
     glm::vec3 e;
     if (!across(-up + outDir * 0.35f - fwd * 0.15f, n, e) && !across(-fwd, n, e) && !across(outDir, n, e)) e = up;
+    float angle = 0.0f;
     if (goal.elbowToward) {
         glm::vec3 hint;
-        if (across(*goal.elbowToward - S, n, hint)) {
-            const float angle = std::atan2(glm::dot(glm::cross(e, hint), n), glm::dot(e, hint));
-            const float lim = glm::radians(limits.swivel);
-            e = glm::angleAxis(glm::clamp(angle, -lim, lim), n) * e;
-        }
+        if (across(*goal.elbowToward - S, n, hint)) angle = std::atan2(glm::dot(glm::cross(e, hint), n), glm::dot(e, hint));
     }
-    const glm::vec3 E = centre + e * radius;
+    // + turns the elbow up and out (away from the body), whichever arm.
+    const float out = arm.left ? -1.0f : 1.0f;
+    const float lim = glm::radians(limits.swivel);
+    angle = glm::clamp(glm::clamp(angle, -lim, lim) + glm::radians(goal.swivelOffset) * out, -lim, lim);
+    e = glm::angleAxis(angle, n) * e;
+    p.S = S;
+    p.H = H;
+    p.e = e;
+    p.E = centre + e * radius;
+    p.ok = true;
+    return p;
+}
+
+} // namespace
+
+ArmPoints humanArmPoints(const std::vector<glm::mat4>& world, const HumanArm& arm, const ArmGoal& goal, const ArmLimits& limits) {
+    ArmPoints out;
+    if (!arm.valid()) return out;
+    const TwoBoneChain& c = arm.chain;
+    out.shoulder = positionOf(world[c.upper]);
+    out.elbow = positionOf(world[c.lower]);
+    out.hand = positionOf(world[c.end]);
+    if (goal.weight <= 0.0f) return out;
+    const ArmPlan p = planHumanArm(world, arm, goal, limits);
+    if (!p.ok) return out;
+    out.elbow = p.E;
+    out.hand = p.H;
+    out.limited = p.limited;
+    return out;
+}
+
+ArmResult solveHumanArm(const ModelData& model, Pose& pose, const HumanArm& arm, const ArmGoal& goal, const ArmLimits& limits) {
+    ArmResult out;
+    const TwoBoneChain& c = arm.chain;
+    if (!arm.valid()) return out;
+    std::vector<glm::mat4> world = poseToModel(model, pose);
+    out.hand = positionOf(world[c.end]);
+    out.handRotation = rotationOf(world[c.end]);
+    const float w = glm::clamp(goal.weight, 0.0f, 1.0f);
+    if (w <= 0.0f) return out;
+    const ArmPlan plan = planHumanArm(world, arm, goal, limits);
+    if (!plan.ok) return out;
+    out.limited = plan.limited;
+    const glm::vec3 up(0, 1, 0);
+    const glm::vec3 S = plan.S, E = plan.E, H = plan.H, e = plan.e;
 
     // 3. Each bone from its direction and the hinge (the elbow's inside
     //    faces away from its point).

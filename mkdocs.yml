@@ -141,6 +141,7 @@ nav:
       - AI (animals, enemies, companions): AI.md
       - Melee combat and crowds: COMBAT.md
       - Procedural animation: PROCEDURAL_ANIMATION.md
+      - Equipment and body awareness: EQUIPMENT.md
       - Input: INPUT.md
       - Start menu and joining: LOBBY.md
       - Settings panel: DEMO_PANEL.md

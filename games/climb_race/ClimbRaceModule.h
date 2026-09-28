@@ -2,9 +2,11 @@
 
 #include "kke/AnimRig.h"
 #include "kke/Animator.h"
+#include "kke/BodyShape.h"
 #include "kke/CameraRig.h"
 #include "kke/ClimbWall.h"
 #include "kke/Climber.h"
+#include "kke/Equipment.h"
 #include "kke/Locomotion.h"
 #include "kke/Module.h"
 #include "kke/RigidWorld.h"
@@ -111,6 +113,7 @@ private:
         float armWeight = 0.0f, legWeight = 0.0f, footWeight = 0.0f;
         float grip[2] = {};         // fingers closed on a hold (0 open .. 1 closed)
         float handAim[2] = {};      // hand turned to its hold (0 = as animated)
+        kke::BodyAvoidState avoid[2]; // each arm's way round the body, frame to frame
         struct { float worst = 0.0f, sum = 0.0f; int samples = 0; } gripError; // knuckles to hold, m
         float time = 0.0f;          // race clock
         bool finished = false;
@@ -157,6 +160,9 @@ private:
         glm::vec3 grip[2]{}, normal[2]{};
         float closed[2]{};
         bool onRock[2]{}, held[2]{};
+        // The hold each hand is on or going to (its shape for the fingers).
+        kke::ClimbHold::Kind holdKind[2] = { kke::ClimbHold::Kind::Jug, kke::ClimbHold::Kind::Jug };
+        float holdSize[2] = { 0.12f, 0.12f };
         glm::vec3 foot[2]{}, hips{0.0f}; // world
     };
     BodyInput bodyInput(const Racer& r) const;
@@ -371,6 +377,8 @@ private:
         int thumb[3] = { -1, -1, -1 };
     };
     HandRig m_handRig[2];
+    kke::HandRig m_hands[2];                // palms and fingers (kke/Equipment.h): the fingers close on the hold
+    kke::BodyShape m_bodyShape;             // the body the arms keep out of (kke/BodyShape.h)
     kke::Climber::Settings m_climbSettings; // proportions from the skeleton
     int m_stMove = -1, m_stJump = -1, m_stFall = -1, m_stLand = -1, m_stHang = -1, m_stTop = -1;
     std::unique_ptr<kke::DynamicMeshRenderer> m_capsule; // no character model: a block

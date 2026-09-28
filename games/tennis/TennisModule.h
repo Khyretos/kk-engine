@@ -366,6 +366,7 @@ private:
     std::string m_poseTest;         // KKE_TENNIS_POSE: a stroke held still (Scene.cpp)
     bool m_stringTest = false;      // KKE_TENNIS_STRINGTEST: log each racket's pocket (Strings.h)
     int m_closeUp = -1;             // KKE_TENNIS_CLOSEUP=<n>: the camera side on to player n of the first match
+    float m_closeUpDistance = 3.8f; // KKE_TENNIS_CLOSEUP_DISTANCE=<m>: how far away (for looking at hands)
     bool m_swingLog = false;        // KKE_TENNIS_SWINGLOG=1: every swing in the log (stroke, timing, power, stamina)
     float m_quitAfter = -1.0f, m_clock = 0.0f, m_reportAt = 10.0f;
     bool m_ballTest = false;

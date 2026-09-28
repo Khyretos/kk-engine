@@ -165,7 +165,11 @@ kke::ArmResult held = kke::solveHumanArm(model, pose, right, goal);
 ```
 
 Tennis holds its racket this way (the racket follows the hand) and Climb
-Race puts its hands on holds with it.
+Race puts its hands on holds with it. Both use the overload that also
+knows the body (`kke/BodyShape.h`: the arm goes round the torso, head and
+legs, never through them) and hold things by the palm with the fingers
+closed on them (`kke/Equipment.h`); [EQUIPMENT.md](EQUIPMENT.md) explains
+both.
 
 ## Long chains: `solveFabrik`
 

@@ -90,6 +90,10 @@ struct ArmGoal {
     std::optional<glm::vec3> elbowToward;     // model-space point the elbow leans to (within `swivel`)
     std::optional<glm::quat> handRotation;    // model-space rotation for the hand (within the forearm and wrist ranges)
     float weight = 1.0f;                      // 0 = the animated pose, 1 = the goal
+    // Degrees the elbow turns further round the shoulder-hand line, +
+    // up and out (away from the body), still within `swivel`. The body
+    // awareness in kke/BodyShape.h uses it to keep the arm out of the torso.
+    float swivelOffset = 0.0f;
 };
 struct ArmResult {
     glm::vec3 hand{0.0f};   // where the hand went (model space)
@@ -97,6 +101,14 @@ struct ArmResult {
     bool limited = false;   // the goal was outside the arm's ranges
 };
 ArmResult solveHumanArm(const ModelData& model, Pose& pose, const HumanArm& arm, const ArmGoal& goal, const ArmLimits& limits = ArmLimits{});
+// Where solveHumanArm would put the shoulder, elbow and hand (model
+// space) for these posed bones, without posing anything: cheap enough to
+// try many elbow positions.
+struct ArmPoints {
+    glm::vec3 shoulder{0.0f}, elbow{0.0f}, hand{0.0f};
+    bool limited = false;
+};
+ArmPoints humanArmPoints(const std::vector<glm::mat4>& world, const HumanArm& arm, const ArmGoal& goal, const ArmLimits& limits = ArmLimits{});
 
 // ---------------------------------------------------------------------
 // Foot placement: each foot keeps its animated height above the ground
