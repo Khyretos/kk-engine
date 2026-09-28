@@ -46,7 +46,10 @@ public:
     // thread frame-specific Vulkan state (which command buffer, how big is
     // the screen) through to the methods RmlUi calls without knowing any
     // of that exists.
-    void beginFrame(VkCommandBuffer cmd, glm::vec2 screenSizePixels);
+    // `screenSizePixels` is the whole frame; `origin` is where the context's
+    // (0,0) sits in it, so a context sized to the screen's safe area draws
+    // inside that area (UiModule).
+    void beginFrame(VkCommandBuffer cmd, glm::vec2 screenSizePixels, glm::vec2 origin = glm::vec2(0.0f));
 
     // Rml::RenderInterface — required
     Rml::CompiledGeometryHandle CompileGeometry(Rml::Span<const Rml::Vertex> vertices, Rml::Span<const int> indices) override;
@@ -158,6 +161,7 @@ private:
 
     VkCommandBuffer m_currentCmd = VK_NULL_HANDLE;
     glm::vec2 m_screenSize{0.0f, 0.0f};
+    glm::vec2 m_origin{0.0f, 0.0f};
     glm::mat4 m_projection{1.0f};
     glm::mat4 m_transform{1.0f};
     bool m_scissorEnabled = false;

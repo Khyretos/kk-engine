@@ -17,6 +17,7 @@
 #include <stb_image_write.h>
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -91,6 +92,11 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
     m_target = detectHardwareTarget();
     log::get("Application")->info("Hardware target: {} ({}); platform backend: {}", m_target.target->name, m_target.reason,
                                   platform::backendName());
+    {
+        const char* profile = dev::env("KKE_UI_PROFILE");
+        m_uiProfile = uiProfileForTarget(m_target.target->name, profile ? profile : "");
+        log::get("Application")->info("UI profile: {}", uiProfileName(m_uiProfile));
+    }
     {
         EngineSettings defaults = targetDefaultSettings();
         if (const char* all = dev::env("KKE_USE_EVERYTHING"); all && *all == '1') defaults.performance.useEverything = true;
@@ -853,7 +859,10 @@ void Application::run() {
                 drawViews[i].lighting->update(m_lighting, drawViews[i].camera.position, lightViewProjs[i],
                                               drawViews[i].proj * drawViews[i].view, skyEnv, m_shadowMap->tileRect(i));
             }
-            m_debugUi->beginFrame();
+            {
+                const VkExtent2D extent = m_renderer->extent();
+                m_debugUi->beginFrame(uiSafeRect(), static_cast<float>(extent.width), static_cast<float>(extent.height));
+            }
             // Developer panels: compiled out of shipping builds (kke/DevTools.h).
             if constexpr (dev::kEnabled) {
                 for (Module* m : m_initOrder) {
@@ -1029,6 +1038,23 @@ VkDescriptorSet Application::textureSet(const std::string& path) {
     VkDescriptorSet set = entry.set;
     m_textureCache[path] = std::move(entry);
     return set;
+}
+
+ScreenRect Application::uiSafeRect() const {
+    const VkExtent2D extent = m_renderer->extent();
+    const float width = static_cast<float>(extent.width), height = static_cast<float>(extent.height);
+    ScreenRect system;
+    int windowW = 0, windowH = 0;
+    SDL_Rect safe{};
+    if (SDL_GetWindowSize(m_window.handle(), &windowW, &windowH) && windowW > 0 && windowH > 0 &&
+        SDL_GetWindowSafeArea(m_window.handle(), &safe)) {
+        // Window points -> the frame's pixels (the frame follows the window's shape).
+        const float sx = width / static_cast<float>(windowW), sy = height / static_cast<float>(windowH);
+        system = { static_cast<float>(safe.x) * sx, static_cast<float>(safe.y) * sy, static_cast<float>(safe.w) * sx,
+                   static_cast<float>(safe.h) * sy };
+    }
+    const float margin = std::round(uiMarginFraction(m_uiProfile) * std::min(width, height));
+    return safeScreenRect(width, height, system, margin);
 }
 
 } // namespace kke

@@ -103,6 +103,10 @@ the phone settings: `KKE_WINDOW=720x1600 KKE_TARGET=android ./build/bin/duel`
 (upright) or `KKE_WINDOW=1600x720` (sideways). Menus (RmlUi) are sized from
 the screen's short side, and the F1 developer panels (ImGui) from the
 screen's pixel density, so both read the same on a phone as on a PC.
+Both keep to the screen's safe area: clear of the camera notch, the
+rounded corners, the status bar and the navigation bar (which Android 15
+draws the game under), plus a standard margin, so nothing is cut off at
+an edge (docs/INPUT.md "Phone, PC and console").
 
 ## Controls
 

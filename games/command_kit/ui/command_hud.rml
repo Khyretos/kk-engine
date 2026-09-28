@@ -9,7 +9,10 @@
                   background-color: #0b0f1ccc; border-left: 3dp #ffcf5c; }
         #status .title { font-size: 13dp; letter-spacing: 2dp; color: #aab3cc; margin-bottom: 4dp; }
         #status .line { font-size: 15dp; margin-top: 3dp; }
-        #bar { position: absolute; left: 0; bottom: 34dp; width: 100%; text-align: center; pointer-events: auto; }
+        /* The buttons and the line of controls stack at the bottom, so a
+           long line wraps upward instead of running under the buttons. */
+        #bottom { position: absolute; left: 0; bottom: 8dp; width: 100%; }
+        #bar { display: block; width: 100%; text-align: center; pointer-events: auto; }
         .btn { display: inline-block; width: 84dp; margin: 0 5dp; padding: 8dp 0 6dp 0; border-radius: 14dp;
                background-color: #151a2bdd; border: 2dp #2f3a5c; text-align: center; }
         .btn:hover { background-color: #26304ddd; border-color: #56a8ff; }
@@ -30,8 +33,17 @@
         #wheel .item .icon { font-size: 26dp; }
         #wheel .item .label { font-size: 12dp; }
         #toast { position: absolute; top: 22%; left: 0; width: 100%; text-align: center; font-size: 30dp; font-weight: bold; color: #ffffff; }
-        #hint { position: absolute; left: 0; bottom: 8dp; width: 100%; text-align: center; font-size: 12dp; color: #aab3cc; }
+        #hint { display: block; width: 100%; margin-top: 8dp; text-align: center; font-size: 12dp; color: #aab3cc; }
         #hint img, .btn .key img { font-size: 14dp; } /* prompt glyphs are 1.6em */
+        /* Touch: bigger buttons to hit with a thumb, no key line under them. */
+        body.touch .btn { width: 92dp; margin: 4dp 4dp; padding: 10dp 0 8dp 0; }
+        body.touch .btn .key { display: none; }
+        body.touch #hint { font-size: 14dp; }
+        /* A phone held upright: two rows of buttons, and the status panel
+           narrower so it leaves the middle of the screen free. */
+        body.kke-phone.kke-portrait #status { width: 48%; padding: 8dp 12dp; }
+        body.kke-phone.kke-portrait .btn { width: 22%; margin: 4dp 1%; }
+        body.kke-phone.kke-landscape #status { width: 260dp; }
     </style>
 </head>
 <body data-model="cmd">
@@ -49,13 +61,15 @@
         </div>
     </div>
     <div id="toast" data-if="toast != ''">{{toast}}</div>
-    <div id="bar">
-        <div class="btn" data-for="b, i : buttons" data-class-on="b.on" data-event-click="press(i)">
-            <div class="icon">{{b.icon}}</div>
-            <div class="label">{{b.label}}</div>
-            <div class="key" data-rml="b.key"></div>
+    <div id="bottom">
+        <div id="bar">
+            <div class="btn" data-for="b, i : buttons" data-class-on="b.on" data-event-click="press(i)">
+                <div class="icon">{{b.icon}}</div>
+                <div class="label">{{b.label}}</div>
+                <div class="key" data-rml="b.key"></div>
+            </div>
         </div>
+        <div id="hint" data-rml="hint"></div>
     </div>
-    <div id="hint" data-rml="hint"></div>
 </body>
 </rml>

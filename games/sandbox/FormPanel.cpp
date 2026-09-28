@@ -1,4 +1,5 @@
 #include "FormPanel.h"
+#include "kke/modules/UiModule.h"
 
 #include "kke/Log.h"
 #include "kke/RmlTextSafety.h"
@@ -133,9 +134,9 @@ FormPanel::FormPanel(std::string name, std::string style) : m_name(std::move(nam
 
 FormPanel::~FormPanel() { detach(); }
 
-void FormPanel::attach(Rml::Context* context, float pixelsPerPoint) {
+void FormPanel::attach(Rml::Context* context, const kke::UiModule& ui) {
     m_context = context;
-    m_ppp = pixelsPerPoint > 0.0f ? pixelsPerPoint : 1.0f;
+    m_ui = &ui;
     if (!m_context || m_doc) return;
     m_doc = m_context->LoadDocumentFromMemory(kDocument, "build-" + m_name);
     if (!m_doc) {
@@ -194,7 +195,7 @@ void FormPanel::begin(double now, glm::vec2 mouse, bool mouseDown) {
         e.row = static_cast<size_t>(m_dragRow);
         e.part = Part::Bar;
         e.sub = m_dragSub;
-        e.fraction = barFraction(e.row, m_dragSub, mouse.x * m_ppp);
+        e.fraction = barFraction(e.row, m_dragSub, m_ui->toContext(mouse).x);
         m_events.push_back(e);
     }
     if (m_holdRow >= 0 && now >= m_holdNext) {
@@ -569,14 +570,14 @@ bool FormPanel::contains(glm::vec2 point) const {
     Rml::Element* panel = m_doc->GetElementById("panel");
     const Rml::Vector2f o = panel->GetAbsoluteOffset(Rml::BoxArea::Border);
     const Rml::Vector2f s = panel->GetBox().GetSize(Rml::BoxArea::Border);
-    const glm::vec2 px = point * m_ppp;
+    const glm::vec2 px = m_ui->toContext(point);
     return px.x >= o.x && px.y >= o.y && px.x <= o.x + s.x && px.y <= o.y + s.y;
 }
 
 void FormPanel::scroll(float points) {
     if (!m_doc || !m_visible) return;
     Rml::Element* panel = m_doc->GetElementById("panel");
-    panel->SetScrollTop(panel->GetScrollTop() + points * m_ppp);
+    panel->SetScrollTop(panel->GetScrollTop() + points * m_ui->pixelsPerPoint());
 }
 
 bool FormPanel::typing() const {
