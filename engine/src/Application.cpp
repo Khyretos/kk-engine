@@ -812,16 +812,14 @@ void Application::run() {
         renderCtx.defaultMaterialTextureDescriptorSet = m_defaultTextureDescriptorSet;
         renderCtx.viewCount = viewCount;
 
-        // Once per frame, before any module's render() might bind and
-        // draw using it — every lit module shares one buffer and
-        // descriptor set per view (see LightingBuffer.h).
+        // The lighting buffers are written once per frame, after
+        // beginFrame() below and before any module's render() binds them:
+        // every lit module shares one buffer and descriptor set per view
+        // and frame in flight (see LightingBuffer.h).
         if (m_toneMapperOverride) m_lighting.toneMapper = *m_toneMapperOverride;
         const SkyEnvironment* skyEnv = nullptr;
         if (m_lighting.sky.kind != Sky::Kind::None && !m_skyRenderer) m_skyRenderer = std::make_unique<SkyRenderer>(*this);
         if (m_skyRenderer) skyEnv = &m_skyRenderer->prepare(m_lighting.sky, m_lighting.fog, m_lighting.ambientColor);
-        for (uint32_t i = 0; i < viewCount; ++i)
-            drawViews[i].lighting->update(m_lighting, drawViews[i].camera.position, lightViewProjs[i], drawViews[i].proj * drawViews[i].view, skyEnv,
-                                          m_shadowMap->tileRect(i));
 
         // ImGui's NewFrame() (inside beginFrame()) must only be called
         // for a frame that will also reach Render() — calling it here,
@@ -848,6 +846,13 @@ void Application::run() {
         const auto benchAfterBegin = BenchClock::now();
         auto benchBeforeEnd = benchAfterBegin, benchAfterEnd = benchAfterBegin;
         if (frameBegun) {
+            // After beginFrame's fence wait: this frame slot's buffers are
+            // free, while the other slot may still be drawing on the GPU.
+            for (uint32_t i = 0; i < viewCount; ++i) {
+                drawViews[i].lighting->setFrame(m_renderer->currentFrameIndex());
+                drawViews[i].lighting->update(m_lighting, drawViews[i].camera.position, lightViewProjs[i],
+                                              drawViews[i].proj * drawViews[i].view, skyEnv, m_shadowMap->tileRect(i));
+            }
             m_debugUi->beginFrame();
             // Developer panels: compiled out of shipping builds (kke/DevTools.h).
             if constexpr (dev::kEnabled) {

@@ -53,6 +53,12 @@ void SwapChain::recreate() {
     createFramebuffers();
 }
 
+bool SwapChain::screenTurned() const {
+    VkSurfaceCapabilitiesKHR caps{};
+    if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_device.physicalDevice(), m_device.surface(), &caps) != VK_SUCCESS) return false;
+    return caps.currentTransform != m_surfaceTransform;
+}
+
 void SwapChain::create() {
     VkPhysicalDevice physical = m_device.physicalDevice();
     VkSurfaceKHR surface = m_device.surface();
@@ -109,12 +115,26 @@ void SwapChain::create() {
     // draws upright and lets the compositor turn the image (IDENTITY), so
     // a turned screen swaps width and height. Desktops report IDENTITY.
     VkSurfaceTransformFlagBitsKHR transform = capabilities.currentTransform;
+    m_surfaceTransform = capabilities.currentTransform;
     m_compositorRotates = false;
     if ((capabilities.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) && transform != VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) {
         if (transform & (VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR | VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR))
             std::swap(extent.width, extent.height);
         transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
         m_compositorRotates = true;
+    }
+    // Drivers disagree on which way round currentExtent is while the
+    // screen is turned (Kees's Adreno 730 drew landscape games into a
+    // portrait image the compositor then squashed). The window knows how
+    // it is held: the image is drawn upright, so it takes the window's
+    // shape. A desktop's extent already matches its window.
+    if (transform == VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) {
+        int w = 0, h = 0;
+        m_window.getFramebufferSize(w, h);
+        const bool windowWide = w > h, extentWide = extent.width > extent.height;
+        if (w > 0 && h > 0 && w != h && extent.width != extent.height && windowWide != extentWide &&
+            extent.height <= capabilities.maxImageExtent.width && extent.width <= capabilities.maxImageExtent.height)
+            std::swap(extent.width, extent.height);
     }
 
     uint32_t imageCount = capabilities.minImageCount + 1;

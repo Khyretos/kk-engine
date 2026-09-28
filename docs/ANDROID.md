@@ -90,10 +90,13 @@ python3 android/build_apk.py --build build-android-arm64 --benchmark --out dist/
 
 ## Screen orientation
 
-Games are laid out for landscape, so they turn to landscape (either way
-round) whatever way the phone is held. `KKE_ORIENTATION=portrait` starts
-a game upright instead and `KKE_ORIENTATION=any` lets it follow the phone;
-the benchmark app uses both to test every demo both ways.
+A game follows the phone as it is turned, upright or sideways, and
+respects the phone's rotation lock: people, and children most of all, turn
+their phones all the time. On a turn the engine makes a new swapchain at
+the new shape and every screen lays itself out again (menus are sized from
+the screen's short side, so they keep their size). `KKE_ORIENTATION=landscape`
+or `=portrait` holds a game one way; the benchmark app uses both to test
+every demo both ways.
 
 To see a phone's layout on a PC, open a game at a phone's shape and with
 the phone settings: `KKE_WINDOW=720x1600 KKE_TARGET=android ./build/bin/duel`

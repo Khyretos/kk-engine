@@ -1,5 +1,6 @@
 #include "kke/LightingBuffer.h"
 #include "kke/Application.h"
+#include "kke/Renderer.h"
 #include "kke/VulkanDevice.h"
 #include "kke/VulkanCheck.h"
 
@@ -8,6 +9,8 @@
 #include <cstring>
 
 namespace kke {
+
+static_assert(static_cast<int>(LightingBuffer::kSlotCount) == Renderer::kMaxFramesInFlight, "one lighting buffer per frame in flight");
 
 namespace {
 
@@ -68,45 +71,44 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
     layoutInfo.pBindings = &binding;
     VK_CHECK(vkCreateDescriptorSetLayout(device.device(), &layoutInfo, nullptr, &m_setLayout));
 
-    // --- Descriptor pool: exactly one set needed -- every lit module
-    // shares this same one light buffer, there's no per-object growth
-    // the way RmlVulkanRenderInterface's texture pool needs.
-    VkDescriptorPoolSize poolSize{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 };
+    // --- Descriptor pool: one set per frame in flight -- every lit
+    // module shares these, there's no per-object growth the way
+    // RmlVulkanRenderInterface's texture pool needs.
+    VkDescriptorPoolSize poolSize{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSlotCount };
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.maxSets = 1;
+    poolInfo.maxSets = kSlotCount;
     poolInfo.poolSizeCount = 1;
     poolInfo.pPoolSizes = &poolSize;
     VK_CHECK(vkCreateDescriptorPool(device.device(), &poolInfo, nullptr, &m_descriptorPool));
 
-    VkDescriptorSetAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool = m_descriptorPool;
-    allocInfo.descriptorSetCount = 1;
-    allocInfo.pSetLayouts = &m_setLayout;
-    VK_CHECK(vkAllocateDescriptorSets(device.device(), &allocInfo, &m_descriptorSet));
+    for (uint32_t i = 0; i < kSlotCount; ++i) {
+        VkDescriptorSetAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocInfo.descriptorPool = m_descriptorPool;
+        allocInfo.descriptorSetCount = 1;
+        allocInfo.pSetLayouts = &m_setLayout;
+        VK_CHECK(vkAllocateDescriptorSets(device.device(), &allocInfo, &m_descriptorSets[i]));
 
-    // Host-visible, updated directly every frame (matching the same
-    // pattern PhysicsModule already uses for its own per-frame vertex
-    // uploads) -- this buffer is tiny (well under 200 bytes for 4
-    // lights), so a staging-buffer round trip would be pure overhead
-    // for no real benefit.
-    m_buffer = std::make_unique<Buffer>(
-        device, sizeof(LightingUBOData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        // Host-visible, updated directly every frame -- this buffer is
+        // tiny, so a staging-buffer round trip would be pure overhead.
+        m_buffers[i] = std::make_unique<Buffer>(device, sizeof(LightingUBOData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                                VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-    VkDescriptorBufferInfo bufferInfo{};
-    bufferInfo.buffer = m_buffer->handle();
-    bufferInfo.offset = 0;
-    bufferInfo.range = sizeof(LightingUBOData);
+        VkDescriptorBufferInfo bufferInfo{};
+        bufferInfo.buffer = m_buffers[i]->handle();
+        bufferInfo.offset = 0;
+        bufferInfo.range = sizeof(LightingUBOData);
 
-    VkWriteDescriptorSet write{};
-    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write.dstSet = m_descriptorSet;
-    write.dstBinding = 0;
-    write.descriptorCount = 1;
-    write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    write.pBufferInfo = &bufferInfo;
-    vkUpdateDescriptorSets(device.device(), 1, &write, 0, nullptr);
+        VkWriteDescriptorSet write{};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = m_descriptorSets[i];
+        write.dstBinding = 0;
+        write.descriptorCount = 1;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        write.pBufferInfo = &bufferInfo;
+        vkUpdateDescriptorSets(device.device(), 1, &write, 0, nullptr);
+    }
 }
 
 LightingBuffer::~LightingBuffer() {
@@ -163,7 +165,7 @@ void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos
     if (f.enabled) data.fogColor.a = std::max(f.density, 0.0f);
     data.fogParams = glm::vec4(f.heightFalloff, f.height, std::clamp(f.maxOpacity, 0.0f, 1.0f), f.sunScatter);
 
-    m_buffer->upload(&data, sizeof(data));
+    m_buffers[m_slot]->upload(&data, sizeof(data));
 }
 
 } // namespace kke

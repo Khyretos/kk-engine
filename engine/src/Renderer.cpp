@@ -632,7 +632,9 @@ void Renderer::endFrame() {
 
     VkResult result = vkQueuePresentKHR(m_device->presentQueue(), &presentInfo);
 
-    const bool suboptimal = result == VK_SUBOPTIMAL_KHR && !m_swapChain->compositorRotates();
+    // While the compositor turns the image, SUBOPTIMAL comes every frame;
+    // only a turn of the screen since the swapchain was made needs a new one.
+    const bool suboptimal = result == VK_SUBOPTIMAL_KHR && (!m_swapChain->compositorRotates() || m_swapChain->screenTurned());
     if (result == VK_ERROR_OUT_OF_DATE_KHR || suboptimal || m_window.wasResized()) {
         m_window.clearResizedFlag();
         recreateSwapChain();

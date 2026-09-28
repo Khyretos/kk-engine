@@ -49,6 +49,9 @@ public:
     // VK_SUBOPTIMAL_KHR every frame, which is expected, not a reason to
     // recreate the swapchain.
     bool compositorRotates() const { return m_compositorRotates; }
+    // True when the screen has turned since the swapchain was made (a
+    // phone rotated from landscape to portrait or back): time to recreate.
+    bool screenTurned() const;
     VkFramebuffer framebuffer(uint32_t index) const { return m_framebuffers[index]; }
     size_t imageCount() const { return m_images.size(); }
     bool hasStencil() const { return m_hasStencil; }
@@ -72,6 +75,7 @@ private:
     bool m_canBlitTo = false;
     bool m_wantReadable = false, m_readable = false;
     bool m_compositorRotates = false;
+    VkSurfaceTransformFlagBitsKHR m_surfaceTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
 
     VkImage m_depthImage = VK_NULL_HANDLE;
     VmaAllocation m_depthImageAllocation = VK_NULL_HANDLE;
