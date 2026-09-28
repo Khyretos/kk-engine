@@ -96,6 +96,10 @@ void RacingModule::loadTrackList() {
         m_tracks.push_back(defaultTrack());
     }
     kke::log::get(name())->info("{} tracks in {}", m_tracks.size(), folder.generic_string());
+    // The pile-up benchmark happens in the derby pen.
+    if (m_pileup)
+        for (size_t i = 0; i < m_tracks.size() && m_forceTrack < 0; ++i)
+            if (m_tracks[i].event == Event::Derby) m_forceTrack = static_cast<int>(i);
     if (const char* want = kke::dev::env("KKE_RACE_TRACK")) {
         for (size_t i = 0; i < m_tracks.size(); ++i)
             if (m_tracks[i].id == want || m_tracks[i].name == want) m_forceTrack = static_cast<int>(i);
@@ -122,7 +126,7 @@ int RacingModule::chosenCars() const {
                                                                                    : m_defaultCars;
     const Event ev = m_tracks[static_cast<size_t>(chosenTrack())].event;
     if (ev == Event::Drag) cars = std::min(cars, 8);   // eight lanes
-    if (ev == Event::Derby) cars = std::min(cars, 12); // room to get going in the pen
+    if (ev == Event::Derby) cars = std::min(cars, m_pileup ? 24 : 12); // room to get going in the pen (the pile-up: packed)
     if (ev == Event::Rally) cars = std::min(cars, 10); // the queue before the start
     return std::clamp(cars, 1, 24);
 }
@@ -553,7 +557,9 @@ void RacingModule::resetRace() {
     m_laps = lapsOf(event());
     m_damage = event() == Event::Derby ? std::max(1, chosenDamage()) : chosenDamage(); // a derby without damage never ends
     m_phase = Phase::Countdown;
-    m_countdown = event() == Event::Drag ? 4.0f : 3.0f;
+    m_countdown = event() == Event::Drag ? 4.0f : m_pileup ? 1.0f : 3.0f;
+    m_pileupTimer = 0.0f;
+    m_pileups = 0;
     m_raceClock = 0.0f;
     m_leaderDone = -1.0f;
     m_finishedFor = 0.0f;
@@ -647,7 +653,8 @@ void RacingModule::updateRace(float dt) {
             for (Car& c : m_cars)
                 if (c.reaction < 0.0f && !c.remote && m_track->delta(c.startS, c.where.s) > 0.3f) c.reaction = m_raceClock;
         if (m_leaderDone >= 0.0f) m_leaderDone += dt;
-        if (event() == Event::Derby) updateDerby();
+        if (m_pileup && m_track->arena()) updatePileup(dt);
+        else if (event() == Event::Derby) updateDerby();
         // Over when every car is home (or out), when every player here is
         // and the rest had a while, or a minute after the winner.
         bool allDone = true, playersDone = true, anyPlayer = false;

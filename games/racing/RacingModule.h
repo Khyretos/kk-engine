@@ -61,7 +61,9 @@ namespace racing {
 // KKE_RACE_AUTOPILOT=1 (no lobby, and a CPU drives your car too),
 // KKE_RACE_CAMERA=<n> (0 chase, 1 far, 2 bumper, 3 TV, 4 wheel), KKE_RACE_QUIT=<s>
 // (quit after that long, logging every car every few seconds),
-// KKE_RACE_CRASH=1 (every CPU driver aims for the car ahead: a damage test).
+// KKE_RACE_CRASH=1 (every CPU driver aims for the car ahead: a damage test),
+// KKE_RACE_PILEUP=1 (the worst case, for benchmarks: 24 cars in the derby
+// pen launched head-on at full speed into the middle, again every 7 s).
 // What the tyres find under them (Wheels.cpp): grip, and what they throw up.
 enum class Ground : uint8_t { Tarmac, Concrete, Grass, Gravel, Dirt, Mud, Snow };
 Ground groundNamed(const std::string& name); // a track's `ground` / `verge`
@@ -237,6 +239,10 @@ private:
     void updateDerby();
     void derbyHit(Car& victim, Car* by, const glm::vec3& into, float hurt);
     void knockOut(Car& c, const std::string& why);
+    void updatePileup(float dt);
+    bool m_pileup = false;       // KKE_RACE_PILEUP
+    float m_pileupTimer = 0.0f;  // s to the next launch
+    int m_pileups = 0;
     static std::string clockText(float seconds);
     kke::ModelModule::InstanceId placeProp(const std::string& asset, const glm::vec3& pos, const glm::vec3& forward, float scale = 1.0f,
                                            const char* pack = "POLYGON_Street_Racer");
