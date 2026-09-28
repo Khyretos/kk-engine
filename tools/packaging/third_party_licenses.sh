@@ -96,8 +96,11 @@ fi
 # licences ask for their notices to travel with the binaries. libstdc++
 # and libgcc are under the GCC Runtime Library Exception: no notice needed.
 if [ "$platform" = windows ]; then
-    mingw="/usr/share/doc/mingw-w64-x86-64-dev/copyright"
-    [ -f "$mingw" ] || die "$mingw not found: install mingw-w64 (Windows packages are built with it)"
+    # A copy of Debian's mingw-w64 copyright file (the notices of every
+    # part of the runtime) lives in the repository, so packaging works on
+    # any host (Arch has no such file) and not only inside the container.
+    mingw="$repo/tools/packaging/licenses/mingw-w64-runtime.txt"
+    [ -f "$mingw" ] || die "$mingw is missing (git pull?)"
     banner "MinGW-w64 runtime (CRT, winpthreads)" "Debian copyright file"
     cat "$mingw"
 fi
