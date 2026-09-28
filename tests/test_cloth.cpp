@@ -315,6 +315,47 @@ TEST(Cloth, CharactersPushCurtainsAsideAndRaysIgnoreCloth) {
     EXPECT_GT(pushed, 0.1f);
 }
 
+TEST(Cloth, AsleepOverAMattressNoEdgePokesThrough) {
+    // Jolt keeps the vertices off the mattress, not the triangles between
+    // them: draped over its edge, the edge pokes up through triangles whose
+    // vertices sit either side of it. Asleep, none may be in it.
+    kke::RigidWorld w(single());
+    ground(w);
+    const glm::vec3 centre(0.0f, 0.15f, 0.0f), half(0.6f, 0.15f, 0.5f);
+    kke::RigidWorld::BodyDesc mattress;
+    mattress.motion = kke::RigidWorld::Motion::Static;
+    mattress.halfExtents = half;
+    mattress.position = centre;
+    w.add(mattress);
+    kke::ClothDesc blanket;
+    blanket.mesh = kke::clothGrid(glm::vec3(0.1f, 0.5f, 0.05f), 1.4f, 1.4f, 24, 24, glm::vec3(1, 0, 0), glm::vec3(0, 0, 1));
+    blanket.fabric = kke::clothFabric("wool");
+    const auto a = w.addCloth(blanket);
+    bool slept = false;
+    for (int i = 0; i < 20 * 60 && !slept; ++i) {
+        w.step(1.0f / 60.0f);
+        slept = w.clothStats(a).sleeping;
+    }
+    ASSERT_TRUE(slept);
+    std::vector<glm::vec3> p;
+    w.clothPositions(a, p);
+    // Points across each triangle, inside the mattress by more than a millimetre.
+    int into = 0;
+    const auto& idx = blanket.mesh.indices;
+    for (size_t t = 0; t + 2 < idx.size(); t += 3) {
+        bool in = false;
+        for (int i = 0; i <= 6 && !in; ++i)
+            for (int j = 0; i + j <= 6 && !in; ++j) {
+                const float u = float(i) / 6.0f, v = float(j) / 6.0f;
+                const glm::vec3 x = p[idx[t]] * (1.0f - u - v) + p[idx[t + 1]] * u + p[idx[t + 2]] * v;
+                const glm::vec3 d = half - glm::abs(x - centre);
+                in = std::min(d.x, std::min(d.y, d.z)) > 0.001f;
+            }
+        into += in ? 1 : 0;
+    }
+    EXPECT_EQ(into, 0) << "triangles with the mattress's edge through them";
+}
+
 TEST(Cloth, LayersOnABedFallAsleepAndWakeForABall) {
     // A cotton sheet over a wool blanket over a mattress: the pass keeps nudging the
     // layers apart by a fraction of a millimetre, which Jolt's own sleep
