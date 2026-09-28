@@ -1,0 +1,19 @@
+# Pinewood Stage: a rally stage (Track.h). A gravel road over forest hills
+# from the start to the finish, no walls: a crest you can jump, a hairpin
+# at the top, trees and rocks waiting for anyone who runs wide. One car at
+# a time, against the clock. Each point is [x, z, height].
+name: Pinewood Stage
+about: Gravel through the pines, one car at a time against the clock. A jump, a hairpin, and trees if you run wide.
+event: rally
+order: 5
+mood: morning
+shape: stage
+points: [[0, -10, 0], [0, 60, 0], [0, 120, 0.5], [25, 190, 2], [75, 235, 4], [140, 250, 7], [200, 230, 4], [245, 190, 2],
+         [300, 175, 3], [335, 180, 6], [350, 185, 7.5], [368, 191, 5], [400, 205, 3], [450, 250, 5], [465, 310, 9],
+         [450, 365, 12], [410, 385, 12], [375, 370, 11], [340, 320, 8], [300, 300, 6], [250, 320, 5], [200, 360, 7],
+         [140, 380, 4], [80, 370, 2], [40, 400, 3], [20, 460, 1], [20, 520, 0]]
+width: 9
+ground: gravel
+verge: grass
+hills: 8
+trees: 0.7

@@ -42,6 +42,16 @@ glm::vec3 dustColor(Ground g);
 
 } // namespace
 
+Ground groundNamed(const std::string& name) {
+    if (name == "concrete") return Ground::Concrete;
+    if (name == "grass") return Ground::Grass;
+    if (name == "gravel") return Ground::Gravel;
+    if (name == "dirt") return Ground::Dirt;
+    if (name == "mud") return Ground::Mud;
+    if (name == "snow") return Ground::Snow;
+    return Ground::Tarmac;
+}
+
 void RacingModule::setGround(uint32_t material, Ground g) {
     m_grounds[material] = g;
     kke::GroundGrip grip;

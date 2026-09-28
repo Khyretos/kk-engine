@@ -58,7 +58,7 @@ void RacingModule::setupLobby() {
             for (int i = 0; i < static_cast<int>(laps->choices.size()); ++i)
                 if (std::atoi(laps->choices[static_cast<size_t>(i)].c_str()) <= t.laps) best = i;
             laps->value = best;
-            laps->visible = t.event != Event::Drag;
+            laps->visible = t.event != Event::Drag && t.event != Event::Derby && t.event != Event::Rally; // one run: no laps
         }
     };
     l.addOption(std::move(track));
@@ -77,7 +77,10 @@ void RacingModule::setupLobby() {
         if (kke::Lobby::Option* o = l.option("track")) o->value = m_forceTrack;
     if (kke::Lobby::Option* o = l.option("track")) {
         o->value = std::clamp(o->value, 0, static_cast<int>(o->choices.size()) - 1);
-        if (kke::Lobby::Option* lp = l.option("laps")) lp->visible = m_tracks[static_cast<size_t>(o->value)].event != Event::Drag;
+        if (kke::Lobby::Option* lp = l.option("laps")) {
+            const Event e = m_tracks[static_cast<size_t>(o->value)].event;
+            lp->visible = e != Event::Drag && e != Event::Derby && e != Event::Rally; // one run: no laps
+        }
     }
     if (const char* cars = kke::dev::env("KKE_RACE_CARS")) {
         kke::Lobby::Option* o = l.option("cars");
@@ -116,12 +119,14 @@ void RacingModule::updateLobby(float) {
     m_app->views().clear();
     if (!m_cars.empty()) {
         const Car& pole = m_cars[0];
-        const Track::Sample f = m_track->at(pole.where.s);
-        const glm::vec3 leftFlat(f.forward.z, 0.0f, -f.forward.x);
+        // Along the way the pole car faces (in an arena that's into the pen).
+        glm::vec3 ahead = carForward(pole);
+        ahead = glm::normalize(glm::vec3(ahead.x, 0.0f, ahead.z) + glm::vec3(0.0f, 0.0f, 1e-4f));
+        const glm::vec3 leftFlat(ahead.z, 0.0f, -ahead.x);
         const glm::vec3 at = carPosition(pole);
         kke::Camera& cam = m_app->camera();
-        cam.position = at + f.forward * 9.0f - leftFlat * 4.0f + glm::vec3(0.0f, 2.2f, 0.0f);
-        cam.target = at - f.forward * 6.0f + glm::vec3(0.0f, 0.6f, 0.0f);
+        cam.position = at + ahead * 9.0f - leftFlat * 4.0f + glm::vec3(0.0f, 2.2f, 0.0f);
+        cam.target = at - ahead * 6.0f + glm::vec3(0.0f, 0.6f, 0.0f);
         cam.fovDegrees = 60.0f;
     }
     if (m_lobby->lobby().takeStart()) startFromLobby();

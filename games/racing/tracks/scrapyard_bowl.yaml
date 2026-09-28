@@ -1,0 +1,11 @@
+# Scrapyard Bowl: a destruction derby (Track.h). A walled dirt pen, every
+# car round the edge facing in; wreck the others, the last one running
+# wins. Points for the damage you deal decide the rest.
+name: Scrapyard Bowl
+about: A dirt pen in a scrapyard. Wreck them all; back into them, the boot can take it and the engine can't.
+event: derby
+order: 4
+mood: sunset
+size: [72, 52]
+ground: dirt
+wall: 1.4

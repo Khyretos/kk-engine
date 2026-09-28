@@ -159,13 +159,14 @@ void RacingModule::init(kke::Application& app) {
     m_input->setPlayers(1);
     m_input->commitDefaults();
 
-    // Synty's POLYGON Street Racer (cars and track props), from the asset
-    // folder (assets/synty or KKE_ASSETS_DIR). Only that pack is scanned.
+    // Synty's POLYGON Street Racer (cars and track props) and POLYGON
+    // Nature (a rally stage's trees and rocks), from the asset folder
+    // (assets/synty or KKE_ASSETS_DIR). Only those packs are scanned.
     {
         const char* base = SDL_GetBasePath();
         const std::string folder = kke::findAssetFolder("assets/synty", { "KKE_ASSETS_DIR", "KKE_SYNTY_DIR" }, base ? base : "");
         kke::CatalogScanOptions only;
-        only.onlyPacks = { "POLYGON_Street_Racer" };
+        only.onlyPacks = { "POLYGON_Street_Racer", "POLYGON_Nature" };
         if (!folder.empty()) m_catalog = kke::AssetCatalog::scan(folder, only);
         m_garage = std::make_unique<CarGarage>(m_models, &m_catalog);
         if (!m_garage->hasPack())

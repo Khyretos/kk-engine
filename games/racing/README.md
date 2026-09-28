@@ -1,6 +1,6 @@
 # Racing
 
-Three kinds of race on Jolt's vehicle physics, from a start menu where
+Five kinds of race on Jolt's vehicle physics, from a start menu where
 players join locally or online:
 
 - **Oval**: laps of a banked speedway with a big field (up to 24 cars),
@@ -13,6 +13,13 @@ players join locally or online:
 - **Drag**: a straight quarter mile, eight lanes. Hold the brake and the
   throttle for a burnout while the ambers count down, launch on green
   (early is a red light) and change gear yourself at the top of the revs.
+- **Destruction derby**: a walled dirt pen, everyone round the edge
+  facing in. Wreck the others; the last car running wins. Points for the
+  damage you deal decide the rest. The engine's in the front, so the
+  clever ones reverse into people.
+- **Rally**: a gravel stage over forest hills, no walls, one car at a
+  time against the clock. A jump, a hairpin, and trees and rocks for
+  anyone who runs wide.
 
 Tyre smoke from burnouts and slides, sparks off metal, skid marks that
 stay on the road, bits of bodywork that fly off, smoke and fire from a
@@ -39,7 +46,7 @@ For demos and tests:
 | Variable | What it does |
 |---|---|
 | `KKE_RACE_AUTOPILOT=1` | the CPU drives player 1; races start by themselves and restart 10 s after the finish |
-| `KKE_RACE_TRACK=speedway` | this track (`speedway`, `harbour_drift`, `quarter_mile`, or any file in `tracks/`) |
+| `KKE_RACE_TRACK=speedway` | this track (`speedway`, `harbour_drift`, `quarter_mile`, `scrapyard_bowl`, `forest_stage`, or any file in `tracks/`) |
 | `KKE_RACE_CARS=16`, `KKE_RACE_LAPS=3` | the field and the laps |
 | `KKE_RACE_DAMAGE=0/1/2` | damage off, normal, brutal |
 | `KKE_RACE_CRASH=1` | the damage test: CPU drivers aim at the car in front |
@@ -141,6 +148,34 @@ the last one and a half, and from then on the brake is yours: moving
 gearbox is manual; "Perfect shift" at the top of the revs. Your reaction
 time and your speed through the line are on the results.
 
+### Destruction derby
+
+Up to 12 cars start round the edge of the pen facing the middle; damage
+is always on. A hit takes health as anywhere else, but where it lands
+matters: the front (the engine) takes 1.4x, the boot 0.6x, and derby cars
+are braced to take about twice the knocks of a road car, so a bout lasts
+minutes. Driving into someone scores the damage you did to them (their
+hit into you scores for them); finishing a car off is 50 more. Ninety
+seconds without driving into anyone and you're out (until only two are
+left: they fight it out). The last car running wins;
+if several are still going after four minutes, the most points wins.
+
+The CPU drivers pick a victim every few seconds (close, hurt, in front of
+them), drive at where it's going to be, and the better ones put it in
+reverse when it's close behind and back into it. They lift off before
+the wall, three-point-turn off it when they end up nose first against
+it, and back out of a jam.
+
+### Rally
+
+Up to 10 cars queue behind the start and leave eight seconds apart; each
+car's clock starts as it crosses the line and stops at the finish.
+Fastest time wins. The road is gravel (two thirds of tarmac's grip, and
+the tyres keep most of it when they slide, so the car goes round
+sideways), the verge is grass, and there are no walls: run wide and
+you're into the fields, the trees or a rock. Far off the road for a few
+seconds, or upside down, puts you back on it.
+
 ### Online
 
 Player 1 sets Online to Host or Join in the start menu (or
@@ -178,6 +213,17 @@ the track, as distance along it (`s`) and across it (`u`). Laps,
 positions, the CPU drivers and the "back on the track" reset all use
 `s` and `u`.
 
+Two more shapes. An **arena** (the derby) is an oval pen `size` across
+and along: the centre line is the wall's line, the floor is the ground
+slab (its `ground`), and `insideArena()` says what's in it. A **stage**
+(the rally) is an open road through points that may carry a height,
+`[x, z, y]`: the samples follow the hills and a height grid round the
+road (`terrain()`, 4 m squares) sits at the road's height beside it and
+rises and falls by `hills` metres from about 40 m out. It is drawn, given
+to Jolt as one mesh, and `groundHeight()` stands the trees and rocks on
+it. Each track's `ground` and `verge` set what the tyres find there
+(`setGround`, docs/VEHICLES.md "Tyres").
+
 ### Cars (Cars.h, Cars.cpp)
 
 `Garage` makes a car's art: the Street Racer car (`SK_Veh_Preset_<type>_0<kit>`),
@@ -205,6 +251,16 @@ into a bend, then held sideways on the throttle with the front wheels
 along the slide and aimed down the road) and the drag launch and
 shifts. `driveCar` applies the rules on top: held on the grid, the pit
 limiter and repairs, a bent wheel's pull, a totalled car's stop.
+
+### The derby (Derby.cpp)
+
+`updateDerby` counts who's still running, knocks out anyone who hasn't
+driven into someone for 90 s, and ends the bout when one car is left
+or the clock runs out (the survivors are finished there and the table
+places them). `hitCar` passes the other car to `derbyHit`, which credits
+it only if it was the one moving into the hit (its speed along the push
+a few steps before, `velocityBefore`, is more than the victim's: after
+the step they've already bounced). `readDerbyCpu` is the rammers' AI.
 
 ### Damage (Damage.cpp)
 
@@ -345,8 +401,9 @@ moods (docs/MOODS.md), engine and impact sounds (docs/AUDIO.md), data files
 
 ## Assets
 
-The Synty **POLYGON Street Racer** pack, from `KKE_ASSETS_DIR` (never in
-the repository); docs/SCENES.md lists every asset used. Without it the
+The Synty **POLYGON Street Racer** pack, and **POLYGON Nature** for the
+rally stage's trees and rocks, from `KKE_ASSETS_DIR` (never in the
+repository); docs/SCENES.md lists every asset used. Without it the
 cars are blocks, the tracks have no props, a line in the log (info) and
 on screen says so, and everything else is the same.
 
@@ -356,6 +413,10 @@ on screen says so, and everything else is the same.
   points; it's in the start menu next time.
 - **Another event**: a new `Event` in `Track.h`; its rules in
   `updateRace`/`crossLine` (`Race.cpp`) and its HUD in `Hud.cpp`.
+  `Derby.cpp` is a whole event in one file: start there.
+- **Another stage or pen**: `tracks/forest_stage.yaml` with your own
+  points and heights (`ground: snow`, `hills: 20`), or
+  `tracks/scrapyard_bowl.yaml` with another `size` and `ground: mud`.
 - **A car game of your own**: `RigidWorld::addVehicle` with a
   `VehicleDesc` is all the physics (docs/VEHICLES.md has a complete
   example); `ParticleEffects` for smoke.
@@ -374,7 +435,8 @@ on screen says so, and everything else is the same.
 | `Sound.cpp` | the engines and tyres |
 | `Wheels.cpp` | tyres squashing, flats, rims, lost wheels, dust |
 | `Crumple.cpp` | the bodies' FEMFX solids |
+| `Derby.cpp` | the destruction derby: rules, points, the rammers |
 | `Lobby.cpp` | the start menu |
 | `Net.cpp`, `NetRace.h`, `NetRace.cpp` | online races |
 | `Hud.cpp`, `ui/racing_hud.rml` | the HUD |
-| `tracks/` | Kompas Speedway, Harbour Run, The Quarter Mile |
+| `tracks/` | Kompas Speedway, Harbour Run, The Quarter Mile, Scrapyard Bowl, Pinewood Stage |

@@ -1,6 +1,6 @@
 # Racing (games/racing/README.md): oval, drift and drag races on Jolt's
 # vehicle physics (kke/Vehicle.h), with dents, smoke and sparks.
-kke_add_game(racing main.cpp RacingModule.cpp Race.cpp Sound.cpp Wheels.cpp Crumple.cpp Driving.cpp Damage.cpp Lobby.cpp Net.cpp NetRace.cpp Hud.cpp Track.cpp Cars.cpp)
+kke_add_game(racing main.cpp RacingModule.cpp Race.cpp Sound.cpp Wheels.cpp Crumple.cpp Derby.cpp Driving.cpp Damage.cpp Lobby.cpp Net.cpp NetRace.cpp Hud.cpp Track.cpp Cars.cpp)
 target_link_libraries(racing PRIVATE kke_engine)
 engine_copy_runtime_file(racing ${CMAKE_CURRENT_SOURCE_DIR}/game.json marketplace/racing/game.json)
 engine_copy_runtime_file(racing ${CMAKE_CURRENT_SOURCE_DIR}/ui/racing_hud.rml ui/racing_hud.rml)

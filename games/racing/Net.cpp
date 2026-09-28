@@ -283,7 +283,7 @@ void RacingModule::onNetEvent(const kke::net::GameEventMsg& e) {
         c.finished = true;
         c.finishTime = f->time;
         if (m_leaderDone < 0.0f) m_leaderDone = 0.0f;
-        if (m_winner.empty() && event() != Event::Drift) m_winner = c.name;
+        if (m_winner.empty() && !scoredAtEnd(event())) m_winner = c.name;
         kke::log::get(name())->info("{} finished in {} (online)", c.name, clockText(c.finishTime));
     } else if (const auto h = netrace::decodeHit(e.payload); h && h->round == m_netRound && h->slot < m_cars.size()) {
         Car& c = m_cars[h->slot];

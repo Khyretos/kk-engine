@@ -315,7 +315,10 @@ and the props placed along them, well clear of the road.
   `SM_Prop_ToolCabinet_01_Preset`, `SM_Bld_RepairShop_Large_01` (the oval's
   pit garage), `SM_Bld_Warehouse_01`, `SM_Bld_Crane_01`,
   `SM_Prop_Container_Stack_01`, `_04`, `_07`, `SM_Prop_Container_Large_Stack_02`
-  (the docks).
+  (the docks), `SM_Env_Dirt_Pile_01` to `_03`,
+  `SM_Bld_Shelter_01` (the derby's scrapyard).
+- The rally stage: **POLYGON Nature**, `SM_Tree_Pine_01`, `SM_Tree_01`,
+  `_02`, `_03`, `SM_Tree_Birch_01`, `SM_Rock_01` to `_03`, `SM_Rock_Small_01`.
 - Without the pack every car is a coloured block of its type's size and
   the tracks have no props; the log (info) and the start menu say so.
 
@@ -348,7 +351,7 @@ with `KKE_MOOD=<name>`.
 | `climb_race` | each mountain's own (`games/climb_race/mountains/`): `morning`, `clear_day`, `golden_hour` (Granite Tower, Random), `sunset`, `overcast`, `misty_morning` | as the mood | as the mood |
 | `party` | each minigame's own: `sunset` (the lobby and podium), `clear_day`, `dusk`, `arena_night`, `noon`, `golden_hour`, `playful` | as the mood | as the mood |
 | `synty_demo` | `morning` | Qwantani Mid Morning | `meadow_day` |
-| `racing` | each track's own (`games/racing/tracks/`): `golden_hour` (Kompas Speedway), `dusk` (Harbour Run), `noon` (The Quarter Mile) | as the mood | as the mood |
+| `racing` | each track's own (`games/racing/tracks/`): `golden_hour` (Kompas Speedway), `dusk` (Harbour Run), `noon` (The Quarter Mile), `sunset` (Scrapyard Bowl), `morning` (Pinewood Stage) | as the mood | as the mood |
 | `flying_demo` | `clear_day`; the start menu's Sky row: `morning`, `golden_hour`, `sunset`, `stormy` | as the mood | as the mood |
 | `goblin_horde` | `sunset` | Qwantani Sunset | `wind_soft` |
 | `tennis` | `clear_day` | Kloofendal 48d Partly Cloudy | `meadow_day` |

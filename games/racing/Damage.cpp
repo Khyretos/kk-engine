@@ -103,13 +103,14 @@ void RacingModule::handleContacts() {
         if (!byCar && !isTrack(other)) continue;
         if (!byCar && other == m_trackBodies[0] && ct.speed < 6.0f) continue;
         // Jolt's normal points from a to b: a is pushed back along -normal.
-        if (carA) hitCar(m_cars[a->second], ct.point, ct.normal, ct.speed, byCar);
-        if (carB) hitCar(m_cars[b->second], ct.point, -ct.normal, ct.speed, byCar);
+        if (carA) hitCar(m_cars[a->second], ct.point, ct.normal, ct.speed, carB ? &m_cars[b->second] : nullptr);
+        if (carB) hitCar(m_cars[b->second], ct.point, -ct.normal, ct.speed, carA ? &m_cars[a->second] : nullptr);
     }
 }
 
 // `into` points into the car (the way the hit pushed it).
-void RacingModule::hitCar(Car& c, const glm::vec3& point, const glm::vec3& into, float speed, bool byCar) {
+void RacingModule::hitCar(Car& c, const glm::vec3& point, const glm::vec3& into, float speed, Car* by) {
+    const bool byCar = by != nullptr;
     if (speed < 2.5f) return;
     // Sparks and a scrape whoever's machine it is; the damage is the owner's.
     m_fx->sparks(point, -into, static_cast<int>(std::min(6.0f + speed * 1.6f, 60.0f)), 3.0f + speed * 0.35f, c.velocity * 0.6f);
@@ -119,12 +120,21 @@ void RacingModule::hitCar(Car& c, const glm::vec3& point, const glm::vec3& into,
     c.hitCooldown = 0.2f;
     // Drift events are about style: a tap on the wall costs the combo, not the car.
     const float factor = (m_damage == 2 ? 2.2f : 1.0f) * (event() == Event::Drift ? 0.35f : 1.0f);
-    const float hurt = std::pow(std::max(0.0f, speed - 3.0f), 1.35f) * 0.85f * factor * (byCar ? 0.8f : 1.0f);
-    c.health = std::max(0.0f, c.health - hurt);
-    ++c.hits;
-    // The dent: deeper the harder, where it landed, the way it was pushed.
     const glm::mat4 inv = glm::inverse(c.xf);
     const glm::vec3 local = glm::vec3(inv * glm::vec4(point, 1.0f));
+    float hurt = std::pow(std::max(0.0f, speed - 3.0f), 1.35f) * 0.85f * factor * (byCar ? 0.8f : 1.0f);
+    // The derby: the engine's in the front, so that's where a hit hurts;
+    // the boot is a crumple zone (why derby drivers ram backwards).
+    if (event() == Event::Derby) {
+        const float along = (local.z - c.art->boundsMin.z) / std::max(c.art->boundsMax.z - c.art->boundsMin.z, 0.5f); // 0 rear .. 1 front
+        // Derby cars are stripped and braced (glass out, cage in): they take
+        // about twice the knocks, so a bout lasts minutes, not seconds.
+        hurt *= 0.55f * (along > 0.75f ? 1.4f : along < 0.25f ? 0.6f : 1.0f);
+    }
+    c.health = std::max(0.0f, c.health - hurt);
+    ++c.hits;
+    if (event() == Event::Derby) derbyHit(c, by, into, hurt);
+    // The dent: deeper the harder, where it landed, the way it was pushed.
     const glm::vec3 dir = glm::normalize(glm::vec3(inv * glm::vec4(into, 0.0f)));
     const float depth = std::clamp((speed - 2.5f) * 0.016f * factor, 0.01f, 0.22f);
     dent(c, local, dir, depth);
@@ -150,8 +160,10 @@ void RacingModule::hitCar(Car& c, const glm::vec3& point, const glm::vec3& into,
         c.totalled = true;
         c.note = "TOTALLED";
         c.noteTime = 5.0f;
+        c.outAt = m_raceClock;
         kke::log::get(name())->info("{} is totalled ({} hits, the last at {:.0f} km/h)", c.name, c.hits, speed * 3.6f);
         if (c.seat >= 0) tone(static_cast<int>(kke::Earcon::Error), 0.9f);
+        if (event() == Event::Derby) knockOut(c, "");
     }
 }
 
@@ -293,7 +305,7 @@ void RacingModule::updateScrapes(float dt) {
         m_fx->sparks(at, normal + glm::vec3(0.0f, 0.4f, 0.0f), 4, 3.0f + speed * 0.1f, c.velocity * 0.7f);
         if (!c.remote && m_damage > 0 && m_phase == Phase::Racing && !c.totalled) {
             c.health = std::max(0.0f, c.health - (m_damage == 2 ? 3.0f : 1.2f) * 0.035f * speed / 20.0f);
-            if (c.health <= 0.0f) hitCar(c, at, -normal, 12.0f, false);
+            if (c.health <= 0.0f) hitCar(c, at, -normal, 12.0f, nullptr);
         }
         if (static_cast<int>(m_clock * 5.0f) != static_cast<int>((m_clock - dt) * 5.0f)) sound(at, kke::AudioMaterialTable::Metal, 0.15f + speed * 0.005f);
     }

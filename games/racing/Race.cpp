@@ -16,6 +16,7 @@
 #include "kke/modules/RigidBodyModule.h"
 
 #include <SDL3/SDL.h>
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 
@@ -55,6 +56,7 @@ const char* const kDrivers[] = { "Axel",  "Brooke", "Cruz",  "Dita",  "Enzo",  "
                                  "Mika",  "Nell",   "Otto",  "Pia",   "Quinn", "Rae",  "Sonny", "Tess",  "Ugo",   "Vi",    "Wes",   "Xan",
                                  "Yuki",  "Zed" };
 constexpr float kDriftGap = 3.0f; // s between drift runs
+constexpr float kRallyGap = 8.0f; // s between cars starting a stage
 constexpr int kDriverCount = static_cast<int>(sizeof(kDrivers) / sizeof(kDrivers[0]));
 
 uint32_t hash(uint32_t x) {
@@ -112,13 +114,16 @@ int RacingModule::chosenTrack() const {
     return std::clamp(pick, 0, static_cast<int>(m_tracks.size()) - 1);
 }
 
-int RacingModule::lapsOf(Event e) const { return e == Event::Drag ? 1 : chosenLaps(); }
+int RacingModule::lapsOf(Event e) const { return e == Event::Drag || e == Event::Derby || e == Event::Rally ? 1 : chosenLaps(); }
 
 int RacingModule::chosenCars() const {
     const kke::Lobby::Option* o = m_lobby ? m_lobby->lobby().option("cars") : nullptr;
     int cars = o && o->value >= 0 && o->value < static_cast<int>(o->choices.size()) ? std::atoi(o->choices[static_cast<size_t>(o->value)].c_str())
                                                                                    : m_defaultCars;
-    if (m_tracks[static_cast<size_t>(chosenTrack())].event == Event::Drag) cars = std::min(cars, 8); // eight lanes
+    const Event ev = m_tracks[static_cast<size_t>(chosenTrack())].event;
+    if (ev == Event::Drag) cars = std::min(cars, 8);   // eight lanes
+    if (ev == Event::Derby) cars = std::min(cars, 12); // room to get going in the pen
+    if (ev == Event::Rally) cars = std::min(cars, 10); // the queue before the start
     return std::clamp(cars, 1, 24);
 }
 
@@ -186,6 +191,9 @@ std::vector<RacingModule::Entry> RacingModule::wantedRoster() const {
         e.skill = skill;
         if (ev == Event::Oval) e.type = h % 5 < 3 ? carTypeIndex("muscle") : static_cast<int>((h >> 8) % static_cast<uint32_t>(types));
         else if (ev == Event::Drift) e.type = std::array<int, 4>{ carTypeIndex("sports"), carTypeIndex("muscle"), carTypeIndex("exotic"), carTypeIndex("ute") }[(h >> 4) % 4];
+        // Old sedans, utes and stock cars in the pen; hatches and small sports cars on the gravel.
+        else if (ev == Event::Derby) e.type = std::array<int, 4>{ carTypeIndex("sedan"), carTypeIndex("ute"), carTypeIndex("muscle"), carTypeIndex("sedan") }[(h >> 4) % 4];
+        else if (ev == Event::Rally) e.type = std::array<int, 4>{ carTypeIndex("hatch"), carTypeIndex("hatch"), carTypeIndex("sports"), carTypeIndex("sedan") }[(h >> 4) % 4];
         else e.type = static_cast<int>((h >> 8) % static_cast<uint32_t>(types));
         e.type = std::max(0, e.type);
         e.kit = static_cast<int>((h >> 12) % kKits);
@@ -232,8 +240,9 @@ void RacingModule::buildTrack(const TrackDesc& desc) {
     }
     kke::RigidWorld& w = m_rigid->world();
 
-    // The ground: a slab under everything, grass round the speedway,
-    // concrete at the docks and the strip.
+    // The ground: a slab under everything (grass round the speedway,
+    // concrete at the docks and the strip, the arena's dirt floor), or a
+    // stage's hills.
     glm::vec3 mn(1e9f), mx(-1e9f);
     for (const Track::Sample& s : t.samples()) {
         mn = glm::min(mn, s.p);
@@ -241,27 +250,33 @@ void RacingModule::buildTrack(const TrackDesc& desc) {
     }
     const glm::vec3 center((mn.x + mx.x) * 0.5f, -0.5f, (mn.z + mx.z) * 0.5f);
     const glm::vec3 half((mx.x - mn.x) * 0.5f + 220.0f, 0.5f, (mx.z - mn.z) * 0.5f + 220.0f);
-    const glm::vec3 groundColor = desc.event == Event::Oval ? glm::vec3(0.3f, 0.42f, 0.22f) : glm::vec3(0.36f, 0.36f, 0.35f);
-    // What the tyres find under them (docs/VEHICLES.md "Tyres"): the road,
-    // and off it the infield's grass or the docks' concrete.
-    setGround(kke::AudioMaterialTable::Stone, Ground::Tarmac);
-    setGround(kke::AudioMaterialTable::Dirt, desc.event == Event::Oval ? Ground::Grass : Ground::Concrete);
+    // What the tyres find under them (docs/VEHICLES.md "Tyres"): the road's
+    // ground, and off it the verge's.
+    setGround(kke::AudioMaterialTable::Stone, groundNamed(desc.ground));
+    setGround(kke::AudioMaterialTable::Dirt, groundNamed(desc.verge));
     {
         std::vector<kke::Vertex> v;
         std::vector<uint32_t> idx;
-        appendBox(center, half, groundColor, v, idx);
-        m_ground = std::make_unique<kke::DynamicMeshRenderer>(*m_app);
-        m_ground->upload(v, idx);
         kke::RigidWorld::BodyDesc d;
         d.motion = kke::RigidWorld::Motion::Static;
-        d.halfExtents = half;
-        d.position = center;
         d.friction = 0.7f;
         d.material = kke::AudioMaterialTable::Dirt;
+        if (t.stage()) {
+            appendMesh(t.terrain(), v, idx);
+            d.shape = kke::RigidWorld::Shape::Mesh;
+            d.points = t.terrain().positions;
+            d.indices = t.terrain().indices;
+        } else {
+            appendBox(center, half, groundColor(desc.verge), v, idx);
+            d.halfExtents = half;
+            d.position = center;
+        }
+        m_ground = std::make_unique<kke::DynamicMeshRenderer>(*m_app);
+        m_ground->upload(v, idx);
         m_trackBodies.push_back(w.add(d));
     }
     // The road (and the apron) as one static mesh; the walls as boxes.
-    {
+    if (!t.surface().indices.empty()) { // an arena's floor is the ground
         std::vector<kke::Vertex> v;
         std::vector<uint32_t> idx;
         appendMesh(t.surface(), v, idx);
@@ -307,8 +322,8 @@ void RacingModule::buildTrack(const TrackDesc& desc) {
                                 desc.width, t.wallBoxes().size(), m_props.size());
 }
 
-kke::ModelModule::InstanceId RacingModule::placeProp(const std::string& asset, const glm::vec3& pos, const glm::vec3& forward, float scale) {
-    const kke::CatalogAsset* a = m_catalog.find(asset, { "POLYGON_Street_Racer" });
+kke::ModelModule::InstanceId RacingModule::placeProp(const std::string& asset, const glm::vec3& pos, const glm::vec3& forward, float scale, const char* pack) {
+    const kke::CatalogAsset* a = m_catalog.find(asset, { pack });
     if (!a) return 0;
     kke::ModelLoadOptions opts = kke::packLoadOptions(m_catalog, *a);
     opts.loadAnimations = false;
@@ -345,6 +360,14 @@ void RacingModule::buildScenery() {
     };
     glm::vec3 pos, face;
     const TrackDesc& d = t.desc();
+    if (t.arena()) {
+        buildArenaScenery();
+        return;
+    }
+    if (t.stage()) {
+        buildStageScenery();
+        return;
+    }
     if (d.event == Event::Drag) {
         for (float s = 0.0f; s < t.finishS() + 200.0f; s += 60.0f)
             for (float side : { -1.0f, 1.0f })
@@ -390,6 +413,112 @@ void RacingModule::buildScenery() {
         if (spot(s, 1.0f, 1.2f, pos, face)) placeProp("SM_Prop_Barrier_Tyre_StackA_02", pos, face);
 }
 
+void RacingModule::addSolid(const glm::vec3& center, const glm::vec3& half, float yaw, uint32_t material) {
+    kke::RigidWorld::BodyDesc d;
+    d.motion = kke::RigidWorld::Motion::Static;
+    d.halfExtents = half;
+    d.position = center;
+    d.rotation = glm::angleAxis(yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+    d.friction = 0.5f;
+    d.restitution = 0.15f;
+    d.material = material;
+    m_trackBodies.push_back(m_rigid->world().add(d));
+}
+
+// The derby pen: a ring of tyre stacks round the outside of the wall,
+// floodlights, and the scrapyard it's in (dirt heaps, containers, a crane,
+// a shelter for the crowd).
+void RacingModule::buildArenaScenery() {
+    const Track& t = *m_track;
+    const glm::vec2 half = t.desc().size * 0.5f;
+    auto rim = [&](float th, float out) { return glm::vec3(std::cos(th) * (half.x + out), 0.0f, std::sin(th) * (half.y + out)); };
+    const float around = glm::pi<float>() * (half.x + half.y); // about the perimeter
+    const int stacks = static_cast<int>(around / 5.0f);
+    for (int i = 0; i < stacks; ++i) {
+        const float th = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(stacks);
+        const glm::vec3 p = rim(th, 0.9f);
+        placeProp(i % 3 ? "SM_Prop_Barrier_Tyre_StackA_01" : "SM_Prop_Barrier_Tyre_StackB_01", p, -p);
+    }
+    for (int i = 0; i < 6; ++i) {
+        const float th = glm::two_pi<float>() * (static_cast<float>(i) + 0.5f) / 6.0f;
+        const glm::vec3 p = rim(th, 5.0f);
+        placeProp("SM_Prop_Pole_Large_Lights_01", p, -p);
+    }
+    const char* heaps[] = { "SM_Env_Dirt_Pile_01", "SM_Env_Dirt_Pile_02", "SM_Env_Dirt_Pile_03" };
+    for (int i = 0; i < 9; ++i) {
+        const float th = glm::two_pi<float>() * (static_cast<float>(i) + 0.25f) / 9.0f;
+        placeProp(heaps[i % 3], rim(th, 13.0f + static_cast<float>(i % 3) * 4.0f), rim(th + 1.0f, 0.0f));
+    }
+    const char* boxes[] = { "SM_Prop_Container_Stack_01", "SM_Prop_Container_Stack_04", "SM_Prop_Container_Large_Stack_02" };
+    for (int i = 0; i < 7; ++i) {
+        const float th = glm::pi<float>() * (0.15f + 0.1f * static_cast<float>(i));
+        const glm::vec3 p = rim(th, 28.0f);
+        placeProp(boxes[i % 3], p, -p);
+    }
+    const glm::vec3 stand = rim(-glm::half_pi<float>(), 11.0f);
+    placeProp("SM_Bld_Shelter_01", stand, -stand);
+    placeProp("SM_Bld_Crane_01", rim(1.9f, 45.0f), -rim(1.9f, 0.0f));
+}
+
+// A rally stage: forest either side (as thick as `trees`), rocks close to
+// the road, the start and finish signs. The trees and rocks near the road
+// are solid: leave it and you can hit them.
+void RacingModule::buildStageScenery() {
+    const Track& t = *m_track;
+    const TrackDesc& d = t.desc();
+    const float hw = t.halfWidth();
+    uint32_t seed = 0x9e3779b9u;
+    auto rnd = [&seed]() {
+        seed = hash(seed + 0x6d2b79f5u);
+        return static_cast<float>(seed & 0xffffffu) / static_cast<float>(0x1000000);
+    };
+    auto groundAt = [&](const glm::vec3& p) { return glm::vec3(p.x, t.groundHeight(p.x, p.z), p.z); };
+    // Clear of the road everywhere (a bend's other side can be close)?
+    auto clear = [&](const glm::vec3& p, float room) {
+        const Track::Where w = t.locate(p);
+        return std::fabs(w.u) > hw + room || w.s < 1.0f || w.s > t.length() - 1.0f;
+    };
+    const char* trees[] = { "SM_Tree_Pine_01", "SM_Tree_01", "SM_Tree_Pine_01", "SM_Tree_02", "SM_Tree_Birch_01", "SM_Tree_03" };
+    const char* rocks[] = { "SM_Rock_01", "SM_Rock_02", "SM_Rock_03", "SM_Rock_Small_01" };
+    const float every = 26.0f - 20.0f * d.trees; // m along the road between trees, each side
+    int placed = 0;
+    for (float s = 0.0f; s < t.length() && d.trees > 0.0f; s += every) {
+        const Track::Sample f = t.at(s);
+        const glm::vec3 leftFlat(f.forward.z, 0.0f, -f.forward.x);
+        for (float side : { -1.0f, 1.0f }) {
+            // Near the road (solid), and a second row further back (just to look at).
+            for (int row = 0; row < 2; ++row) {
+                const float out = row == 0 ? hw + 4.0f + rnd() * 18.0f : hw + 26.0f + rnd() * 60.0f;
+                const glm::vec3 p = groundAt(f.p + leftFlat * (side * out) + f.forward * ((rnd() - 0.5f) * every));
+                if (!clear(p, 3.5f)) continue;
+                const float scale = 0.8f + rnd() * 0.5f;
+                const float yaw = rnd() * glm::two_pi<float>();
+                if (!placeProp(trees[static_cast<size_t>(rnd() * 6.0f) % 6], p - glm::vec3(0.0f, 0.2f, 0.0f), glm::vec3(std::sin(yaw), 0.0f, std::cos(yaw)), scale, "POLYGON_Nature"))
+                    continue;
+                ++placed;
+                if (row == 0) addSolid(p + glm::vec3(0.0f, 2.0f, 0.0f), glm::vec3(0.3f * scale, 2.0f, 0.3f * scale), yaw, kke::AudioMaterialTable::Wood);
+            }
+        }
+        // Now and then a rock on the verge: cut the corner, pay for it.
+        if (rnd() < 0.25f) {
+            const float side = rnd() < 0.5f ? -1.0f : 1.0f;
+            const glm::vec3 p = groundAt(f.p + leftFlat * (side * (hw + 1.8f + rnd() * 4.0f)));
+            const float scale = 0.6f + rnd() * 0.6f;
+            if (clear(p, 1.2f) && placeProp(rocks[static_cast<size_t>(rnd() * 4.0f) % 4], p, f.forward, scale, "POLYGON_Nature"))
+                addSolid(p + glm::vec3(0.0f, 0.3f * scale, 0.0f), glm::vec3(0.6f * scale, 0.35f * scale, 0.6f * scale), rnd() * 3.0f, kke::AudioMaterialTable::Stone);
+        }
+    }
+    // The start and the finish.
+    for (float at : { t.startS(), t.finishS() }) {
+        const Track::Sample f = t.at(at);
+        const glm::vec3 leftFlat(f.forward.z, 0.0f, -f.forward.x);
+        placeProp(at == t.startS() ? "SM_Prop_Sign_Start_01" : "SM_Prop_Sign_Finish_01", groundAt(f.p + leftFlat * (hw + 2.5f)), -leftFlat);
+        for (float side : { -1.0f, 1.0f })
+            placeProp("SM_Prop_Barrier_Tyre_StackA_01", groundAt(f.p + leftFlat * (side * (hw + 1.2f)) + f.forward * 3.0f), f.forward);
+    }
+    kke::log::get(name())->info("stage: {} trees and rocks", placed);
+}
+
 void RacingModule::buildRace(const std::vector<Entry>& roster) {
     for (Car& c : m_cars) removeCar(c);
     m_cars.clear();
@@ -422,7 +551,7 @@ void RacingModule::buildRace(const std::vector<Entry>& roster) {
 void RacingModule::resetRace() {
     ++m_round;
     m_laps = lapsOf(event());
-    m_damage = chosenDamage();
+    m_damage = event() == Event::Derby ? std::max(1, chosenDamage()) : chosenDamage(); // a derby without damage never ends
     m_phase = Phase::Countdown;
     m_countdown = event() == Event::Drag ? 4.0f : 3.0f;
     m_raceClock = 0.0f;
@@ -436,7 +565,8 @@ void RacingModule::resetRace() {
         Car& c = m_cars[static_cast<size_t>(i)];
         const glm::vec3 p = t.gridPosition(i, cars);
         const Track::Where w = t.locate(p);
-        resetCarOnTrack(c, w.s, w.u);
+        if (t.arena()) placeCar(c, p + glm::vec3(0.0f, 0.12f, 0.0f), t.gridForward(i, cars), glm::vec3(0.0f, 1.0f, 0.0f)); // round the pen, facing in
+        else resetCarOnTrack(c, w.s, w.u);
         c.where = t.locate(carPosition(c));
         c.lap = t.closed() && c.where.s > t.length() * 0.5f ? -1 : 0; // behind the line: the first crossing starts lap 1
         c.progress = 0.0f;
@@ -448,6 +578,11 @@ void RacingModule::resetRace() {
         repairCar(c, 1000.0f);
         c.totalled = false;
         c.hits = 0;
+        c.derbyPoints = 0.0f;
+        c.wrecked = 0;
+        c.lastAttack = c.lastHitAt = c.outAt = 0.0f;
+        c.lastHitBy = c.aiTarget = -1;
+        c.aiUnstick = 0.0f;
         c.wantsPit = false;
         c.pitTime = 0.0f;
         c.pitStops = 0;
@@ -465,8 +600,9 @@ void RacingModule::resetRace() {
         c.aiLane = c.where.u;
         c.aiLaneTimer = 2.0f + random01(c) * 4.0f;
         c.aiStuck = c.aiReverse = c.aiSlide = c.aiWrongWay = 0.0f;
-        // Drift runs leave the line one after another, room to slide.
-        c.releaseAt = event() == Event::Drift ? static_cast<float>(i) * kDriftGap : 0.0f;
+        // Drift runs leave the line one after another, room to slide; rally
+        // cars start the stage one at a time.
+        c.releaseAt = event() == Event::Drift ? static_cast<float>(i) * kDriftGap : event() == Event::Rally ? static_cast<float>(i) * kRallyGap : 0.0f;
         // Every CPU driver a little different: how hard it corners, when
         // it shifts and reacts on the strip.
         const float skill = static_cast<float>(c.skill);
@@ -511,6 +647,7 @@ void RacingModule::updateRace(float dt) {
             for (Car& c : m_cars)
                 if (c.reaction < 0.0f && !c.remote && m_track->delta(c.startS, c.where.s) > 0.3f) c.reaction = m_raceClock;
         if (m_leaderDone >= 0.0f) m_leaderDone += dt;
+        if (event() == Event::Derby) updateDerby();
         // Over when every car is home (or out), when every player here is
         // and the rest had a while, or a minute after the winner.
         bool allDone = true, playersDone = true, anyPlayer = false;
@@ -522,7 +659,9 @@ void RacingModule::updateRace(float dt) {
             }
         }
         // Drift runs left one after another: the last one gets its lap too.
-        const float grace = event() == Event::Drift ? kDriftGap * static_cast<float>(m_cars.size()) : 0.0f;
+        const float grace = event() == Event::Drift ? kDriftGap * static_cast<float>(m_cars.size())
+                          : event() == Event::Rally ? kRallyGap * static_cast<float>(m_cars.size()) + 60.0f // the stage's longer than a lap
+                                                    : 0.0f;
         if (allDone || (anyPlayer && playersDone && m_leaderDone > 15.0f + grace) || m_leaderDone > 60.0f + grace) {
             m_phase = Phase::Finished;
             m_finishedFor = 0.0f;
@@ -565,10 +704,11 @@ void RacingModule::crossLine(Car& c, int direction) {
 void RacingModule::finishCar(Car& c) {
     if (c.finished || c.remote) return;
     c.finished = true;
-    c.finishTime = m_raceClock;
+    c.finishTime = event() == Event::Rally ? m_raceClock - c.lapStart : m_raceClock; // a stage: from its own start
     if (event() == Event::Drag) c.trapSpeed = carSpeed(c);
     if (m_leaderDone < 0.0f) m_leaderDone = 0.0f;
-    if (m_winner.empty() && event() != Event::Drift && !(event() == Event::Drag && c.falseStart)) m_winner = c.name;
+    // Drift, derby and rally: the winner's only known at the end (updateStandings).
+    if (m_winner.empty() && !scoredAtEnd(event()) && !(event() == Event::Drag && c.falseStart)) m_winner = c.name;
     kke::log::get(name())->info("{} finished in {}{}", c.name, clockText(c.finishTime),
                                 event() == Event::Drag ? fmt::format(" (reaction {:.3f} s, {:.0f} km/h at the line{})", c.reaction, c.trapSpeed * 3.6f,
                                                                      c.falseStart ? ", false start" : "")
@@ -586,6 +726,12 @@ void RacingModule::updateStandings() {
         const Car& a = m_cars[static_cast<size_t>(ia)];
         const Car& b = m_cars[static_cast<size_t>(ib)];
         if (ev == Event::Drift) return a.driftScore + a.driftChain > b.driftScore + b.driftChain;
+        // The derby: still running first, the most damage dealt; then who lasted longest.
+        if (ev == Event::Derby) {
+            if (a.totalled != b.totalled) return !a.totalled;
+            if (!a.totalled) return a.derbyPoints > b.derbyPoints;
+            return a.outAt != b.outAt ? a.outAt > b.outAt : a.derbyPoints > b.derbyPoints;
+        }
         if (ev == Event::Drag && a.falseStart != b.falseStart) return !a.falseStart;
         if (a.finished != b.finished) return a.finished;
         if (a.finished) return a.finishTime < b.finishTime;
@@ -593,8 +739,10 @@ void RacingModule::updateStandings() {
         return a.progress > b.progress;
     });
     for (size_t i = 0; i < order.size(); ++i) m_cars[static_cast<size_t>(order[i])].place = static_cast<int>(i) + 1;
-    // Drift: the most points wins once everyone's done.
-    if (ev == Event::Drift && m_phase == Phase::Finished && m_winner.empty()) m_winner = m_cars[static_cast<size_t>(order[0])].name;
+    // Drift, derby, rally: the top of the table wins once everyone's done
+    // (a stage only if they got to the end).
+    const Car& top = m_cars[static_cast<size_t>(order[0])];
+    if (scoredAtEnd(ev) && m_phase == Phase::Finished && m_winner.empty() && (ev != Event::Rally || top.finished)) m_winner = top.name;
 }
 
 void RacingModule::resetCarOnTrack(Car& c, float s, float u) {
@@ -602,8 +750,13 @@ void RacingModule::resetCarOnTrack(Car& c, float s, float u) {
     const Track::Sample f = t.at(s);
     const bool apron = u > t.halfWidth();
     const glm::vec3 up = apron ? glm::vec3(0.0f, 1.0f, 0.0f) : f.up;
-    const glm::vec3 pos = t.point(s, u) + up * 0.12f;
-    const glm::quat rot = carRotation(f.forward, up);
+    // Up a stage's hills: along the slope, not into it.
+    const glm::vec3 forward = t.stage() ? glm::normalize(glm::cross(f.left, up)) : f.forward;
+    placeCar(c, t.point(s, u) + up * 0.12f, forward, up);
+}
+
+void RacingModule::placeCar(Car& c, const glm::vec3& pos, const glm::vec3& forward, const glm::vec3& up) {
+    const glm::quat rot = carRotation(forward, up);
     kke::RigidWorld& w = m_rigid->world();
     w.setTransform(c.body, pos, rot);
     w.setVelocity(c.body, glm::vec3(0.0f));

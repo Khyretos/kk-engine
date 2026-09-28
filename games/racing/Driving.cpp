@@ -124,6 +124,8 @@ void RacingModule::readCarState(Car& c) {
     w.vehicleState(c.vehicle, c.state);
     c.prevXf = c.xf;
     c.xf = w.transform(c.body);
+    c.pastVelocity[c.pastHead] = c.velocity;
+    c.pastHead = (c.pastHead + 1) % 6;
     c.velocity = w.velocity(c.body);
     const glm::mat4 inv = glm::inverse(c.xf);
     for (size_t i = 0; i < 4 && i < c.state.wheels.size(); ++i) c.wheelLocal[i] = inv * c.state.wheels[i].transform;
@@ -132,7 +134,16 @@ void RacingModule::readCarState(Car& c) {
 void RacingModule::updateTrackPosition(Car& c, float dt) {
     const Track& t = *m_track;
     const Track::Where was = c.where;
-    c.where = t.locate(carPosition(c), c.where.sample);
+    const glm::vec3 pos = carPosition(c);
+    c.where = t.locate(pos, c.where.sample);
+    c.upsideDown = glm::dot(carUp(c), glm::vec3(0.0f, 1.0f, 0.0f)) < 0.35f ? c.upsideDown + dt : 0.0f;
+    if (t.arena()) {
+        // The pen: no line, no wrong way; only over the wall is off.
+        c.wrongWay = 0.0f;
+        c.offTrack = !t.insideArena(pos, -3.0f) || pos.y < -3.0f ? c.offTrack + dt : 0.0f;
+        return;
+    }
+    if (t.stage() && was.s < t.startS() && c.where.s >= t.startS() && m_phase == Phase::Racing) c.lapStart = m_raceClock; // the stage clock starts
     if (t.closed()) {
         const float L = t.length();
         if (was.s > L * 0.75f && c.where.s < L * 0.25f) crossLine(c, 1);
@@ -144,8 +155,9 @@ void RacingModule::updateTrackPosition(Car& c, float dt) {
     }
     const Track::Sample f = t.at(c.where.s);
     c.wrongWay = glm::dot(c.velocity, f.forward) < -3.0f ? c.wrongWay + dt : 0.0f;
-    c.upsideDown = glm::dot(carUp(c), glm::vec3(0.0f, 1.0f, 0.0f)) < 0.35f ? c.upsideDown + dt : 0.0f;
-    const bool off = c.where.u < t.minU() - 4.0f || c.where.u > t.maxU() + 4.0f || carPosition(c).y < -3.0f;
+    // A stage has no walls: off into the fields is allowed, lost in them isn't.
+    const float slack = t.stage() ? 30.0f : 4.0f;
+    const bool off = c.where.u < t.minU() - slack || c.where.u > t.maxU() + slack || pos.y < t.groundHeight(pos.x, pos.z) - 3.0f;
     c.offTrack = off ? c.offTrack + dt : 0.0f;
 }
 
@@ -272,13 +284,14 @@ kke::VehicleInput RacingModule::readCpu(Car& c, float dt) {
     // How fast: the tightest bit of track within braking distance.
     // The docks are tight: the drift event is taken more carefully, braking earlier.
     const bool drift = event() == Event::Drift;
-    const float grip = type.grip * (drift ? 0.72f : 0.95f);
+    // On a stage's gravel the grip's two thirds of tarmac's (docs/VEHICLES.md "Tyres").
+    const float grip = type.grip * (drift ? 0.72f : event() == Event::Rally ? 0.6f : 0.95f);
     const float brakeDist = speed * speed / (2.0f * (drift ? 5.5f : 7.5f)) + (drift ? 25.0f : 15.0f);
     const float k = t.maxCurvature(c.where.s, brakeDist);
     const float bank = std::fabs(t.at(c.where.s + brakeDist * 0.5f).bank);
     const float corner = std::sqrt(grip * kGravity * (1.0f + 1.4f * std::sin(bank)) / std::max(k, 1e-4f));
     float target = std::min(corner * c.aiPace, 95.0f);
-    if (c.finished) target = std::min(target, 25.0f); // a lap to cool down
+    if (c.finished) target = std::min(target, m_track->stage() ? 0.0f : 25.0f); // a lap to cool down; the end of a stage is the end of the road
     target = std::min(target, limit);
     if (m_phase != Phase::Racing) target = 0.0f; // on the grid: no burnouts from the CPU drivers
     if (speed < target - 1.0f) {
@@ -357,13 +370,23 @@ void RacingModule::driveCar(Car& c, float dt) {
     const bool asked = mine && player < m_resetAsked.size() && m_resetAsked[player] != 0;
     if (!c.totalled && (asked || c.upsideDown > (mine ? 4.0f : 2.5f) || c.offTrack > 3.0f || (c.cpu && c.aiWrongWay > 2.0f) || (c.cpu && c.aiStuck > 1.4f && c.aiReverse > 0.0f && std::fabs(carSpeed(c)) < 0.3f))) {
         const Track& t = *m_track;
-        resetCarOnTrack(c, c.where.s, std::clamp(c.where.u, -t.halfWidth() + 1.5f, t.halfWidth() - 1.5f));
+        if (t.arena()) {
+            // Right way up where it is, well inside the wall.
+            glm::vec3 p = carPosition(c);
+            p.y = 0.0f;
+            while (!t.insideArena(p, 5.0f) && glm::length(p) > 1.0f) p *= 0.9f;
+            glm::vec3 f = carForward(c);
+            f.y = 0.0f;
+            placeCar(c, p + glm::vec3(0.0f, 0.15f, 0.0f), glm::length(f) > 0.2f ? glm::normalize(f) : -glm::normalize(p + glm::vec3(0.01f)), glm::vec3(0.0f, 1.0f, 0.0f));
+        } else {
+            resetCarOnTrack(c, c.where.s, std::clamp(c.where.u, -t.halfWidth() + 1.5f, t.halfWidth() - 1.5f));
+        }
         c.note = "Back on the track";
         c.noteTime = 1.5f;
         return;
     }
 
-    kke::VehicleInput in = c.cpu ? readCpu(c, dt) : readPlayer(c);
+    kke::VehicleInput in = !c.cpu ? readPlayer(c) : event() == Event::Derby ? readDerbyCpu(c, dt) : readCpu(c, dt);
     // The strip: players change gear themselves.
     if (event() == Event::Drag) {
         if (mine && player < m_shift.size() && m_shift[player] != 0) {

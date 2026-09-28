@@ -152,6 +152,7 @@ void RacingModule::updateHud(float) {
     std::sort(players.begin(), players.end(), [](const Car* a, const Car* b) { return a->player < b->player; });
     const std::vector<kke::ViewRect> rects = kke::splitScreen(std::max(1, static_cast<int>(players.size())), players.size() > 2);
     const int cars = static_cast<int>(m_cars.size());
+    const int running = static_cast<int>(std::count_if(m_cars.begin(), m_cars.end(), [](const Car& c) { return !c.totalled; }));
     std::vector<PlayerHud> next;
     for (size_t i = 0; i < players.size() && racing; ++i) {
         const Car& c = *players[i];
@@ -162,6 +163,13 @@ void RacingModule::updateHud(float) {
         if (ev == Event::Drag) {
             h.lap = c.finished ? clockText(c.finishTime) : m_phase == Phase::Racing ? clockText(m_raceClock) : "";
             h.best = c.reaction >= 0.0f ? fmt::format("reaction {:.3f} s", c.reaction) : "";
+        } else if (ev == Event::Derby) {
+            h.lap = fmt::format("{} of {} running", running, cars);
+            h.best = fmt::format("{:.0f} pts{}", c.derbyPoints, c.wrecked ? fmt::format(", {} wrecked", c.wrecked) : std::string());
+        } else if (ev == Event::Rally) {
+            const bool started = c.where.s >= m_track->startS() && m_phase == Phase::Racing;
+            h.lap = c.finished ? clockText(c.finishTime) : started ? clockText(m_raceClock - c.lapStart) : std::string("To the start line");
+            h.best = fmt::format("{:.1f} km to go", std::max(0.0f, m_track->finishS() - c.where.s) / 1000.0f);
         } else {
             h.lap = c.finished ? std::string("Finished") : fmt::format("Lap {} / {}", std::clamp(c.lap + 1, 1, m_laps), m_laps);
             h.best = c.bestLap > 0.0f ? "best " + clockText(c.bestLap) : m_phase == Phase::Racing ? clockText(m_raceClock - c.lapStart) : "";
@@ -224,6 +232,8 @@ void RacingModule::updateHud(float) {
         s.out = c->totalled;
         if (c->totalled) s.gap = "out";
         else if (ev == Event::Drift) s.gap = points(c->driftScore + c->driftChain);
+        else if (ev == Event::Derby) s.gap = fmt::format("{:.0f} pts", c->derbyPoints);
+        else if (ev == Event::Rally) s.gap = c->finished ? clockText(c->finishTime) : c->where.s < m_track->startS() ? "waiting" : "on stage";
         else if (c->finished) s.gap = ev == Event::Drag ? clockText(c->finishTime) : "done";
         else if (c != leader && leader) s.gap = fmt::format("-{:.0f} m", std::max(0.0f, leader->progress - c->progress));
         standings.push_back(std::move(s));
@@ -252,6 +262,9 @@ void RacingModule::updateHud(float) {
                 r.result = c->finished ? clockText(c->finishTime) : "DNF";
                 r.note = c->falseStart ? std::string("false start")
                                        : c->finished ? fmt::format("reaction {:.3f} s, {:.0f} km/h", c->reaction, c->trapSpeed * 3.6f) : std::string();
+            } else if (ev == Event::Derby) {
+                r.result = c->totalled ? "out at " + clockText(c->outAt) : std::string("survived");
+                r.note = fmt::format("{:.0f} points", c->derbyPoints) + (c->wrecked ? fmt::format(", wrecked {}", c->wrecked) : std::string());
             } else {
                 r.result = c->finished ? clockText(c->finishTime) : c->totalled ? "totalled" : "DNF";
                 r.note = c->bestLap > 0.0f ? "best lap " + clockText(c->bestLap) : "";
@@ -282,8 +295,10 @@ void RacingModule::updateHud(float) {
             sub = m_countdown > 1.5f ? std::string("Rev it: hold {brake} and {throttle} for a burnout. Go on green!") : "";
         } else {
             banner = m_countdown > 2.0f ? "3" : m_countdown > 1.0f ? "2" : "1";
-            sub = ev == Event::Drift ? "Slide through the corners: the longer and faster, the more points. Don't hit anything!"
-                                     : fmt::format("{} laps. Drive carefully: hits hurt your car.", m_laps);
+            sub = ev == Event::Drift   ? std::string("Slide through the corners: the longer and faster, the more points. Don't hit anything!")
+                : ev == Event::Derby   ? std::string("Wreck them all: the last car running wins. Back into them: the boot can take it, the engine can't.")
+                : ev == Event::Rally   ? std::string("One at a time against the clock. Loose gravel: brake early and slide it round.")
+                                       : fmt::format("{} laps. Drive carefully: hits hurt your car.", m_laps);
             if (m_netHold) sub = "Waiting for everyone to reach the grid...";
         }
     } else if (m_phase == Phase::Racing && m_raceClock < 1.0f) {
@@ -295,6 +310,7 @@ void RacingModule::updateHud(float) {
         if (you) {
             sub = (players.size() > 1 ? you->name + ": " : std::string()) + ordinal(you->place);
             if (ev == Event::Drift) sub += ", " + points(you->driftScore) + " points";
+            else if (ev == Event::Derby) sub += fmt::format(", {:.0f} points", you->derbyPoints) + (you->totalled ? ", wrecked" : ", still running");
             else if (you->finished) sub += ", " + clockText(you->finishTime);
             else if (you->totalled) sub += ", totalled";
         }

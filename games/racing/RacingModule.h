@@ -64,6 +64,7 @@ namespace racing {
 // KKE_RACE_CRASH=1 (every CPU driver aims for the car ahead: a damage test).
 // What the tyres find under them (Wheels.cpp): grip, and what they throw up.
 enum class Ground : uint8_t { Tarmac, Concrete, Grass, Gravel, Dirt, Mud, Snow };
+Ground groundNamed(const std::string& name); // a track's `ground` / `verge`
 
 class RacingModule : public kke::Module {
 public:
@@ -104,6 +105,8 @@ private:
         glm::mat4 xf{1.0f}, prevXf{1.0f}; // this physics step and the one before (drawn in between)
         glm::mat4 wheelLocal[4]{};        // each wheel in the body's space (spin, steer, suspension)
         glm::vec3 velocity{0.0f};
+        glm::vec3 pastVelocity[6]{};      // the last few steps' (a hit's before, not its bounce)
+        int pastHead = 0;
         float wheelSpin = 0.0f;           // remote cars: the wheels' angle
         netrace::CarPose net;             // remote cars: the newest pose
         bool hasNet = false;
@@ -130,6 +133,13 @@ private:
         float wheelSmoke[4] = {};   // s until the next puff
         float scrapeTimer = 0.0f;
         int hits = 0;
+        // Derby (Derby.cpp).
+        float derbyPoints = 0.0f;   // damage dealt to the others, and a bonus for each one wrecked
+        int wrecked = 0;            // cars it finished off
+        float lastAttack = 0.0f;    // race clock: when it last drove into someone
+        int lastHitBy = -1;         // the car that last drove into it (the wreck goes to them)
+        float lastHitAt = 0.0f;
+        float outAt = 0.0f;         // race clock: when it was wrecked
         // Wheels (Wheels.cpp): what's drawn, what's gone.
         float wheelAngle[4] = {};   // rad each wheel has turned (a bent one wobbles with it)
         uint32_t tyreLook[4] = {};  // the squash last drawn (0: the tyre as made)
@@ -165,15 +175,19 @@ private:
         float aiShiftAt = 0.9f;     // drag: fraction of the rev range it shifts at
         float aiReact = 0.3f;       // drag: s after green it goes
         float aiSlide = 0.0f;       // drift: s left of this handbrake flick
+        int aiTarget = -1;          // derby: the car it's after
+        float aiUnstick = 0.0f;     // derby: s left backing off (or pulling away) from a jam, +forward / -reverse
         uint32_t rng = 1;
     };
     float random01(Car& c);
     void buildCar(Car& c, int slot);
     void removeCar(Car& c);
     void resetCarOnTrack(Car& c, float s, float u);
+    void placeCar(Car& c, const glm::vec3& pos, const glm::vec3& forward, const glm::vec3& up);
     void readCarState(Car& c);            // after a physics step: state, transforms
     kke::VehicleInput readPlayer(Car& c);
     kke::VehicleInput readCpu(Car& c, float dt);
+    kke::VehicleInput readDerbyCpu(Car& c, float dt); // Derby.cpp
     void driveCar(Car& c, float dt);      // input -> Jolt (+ damage, pits, drag launch)
     void updateTrackPosition(Car& c, float dt);
     void updateRemoteCar(Car& c, float dt);
@@ -186,6 +200,7 @@ private:
     static glm::vec3 carUp(const Car& c) { return glm::normalize(glm::vec3(c.xf[1])); }
     static glm::vec3 carPosition(const Car& c) { return glm::vec3(c.xf[3]); }
     static float carSpeed(const Car& c) { return glm::dot(c.velocity, carForward(c)); }
+    static glm::vec3 velocityBefore(const Car& c) { return c.pastVelocity[c.pastHead]; } // ~0.1 s ago
     static bool done(const Car& c) { return c.finished || c.totalled; }
     static float carHalfWidthOf(const Car& c);
 
@@ -215,12 +230,23 @@ private:
     Event event() const { return m_track ? m_track->desc().event : Event::Oval; }
     int humans() const;
     int lapsOf(Event e) const;
+    // Events decided by a score once everyone's done, not by who's home first.
+    static bool scoredAtEnd(Event e) { return e == Event::Drift || e == Event::Derby || e == Event::Rally; }
+
+    // ---- the derby (Derby.cpp): last car running, points for hits
+    void updateDerby();
+    void derbyHit(Car& victim, Car* by, const glm::vec3& into, float hurt);
+    void knockOut(Car& c, const std::string& why);
     static std::string clockText(float seconds);
-    kke::ModelModule::InstanceId placeProp(const std::string& asset, const glm::vec3& pos, const glm::vec3& forward, float scale = 1.0f);
+    kke::ModelModule::InstanceId placeProp(const std::string& asset, const glm::vec3& pos, const glm::vec3& forward, float scale = 1.0f,
+                                           const char* pack = "POLYGON_Street_Racer");
+    void buildArenaScenery();
+    void buildStageScenery();
+    void addSolid(const glm::vec3& center, const glm::vec3& half, float yaw, uint32_t material); // something to hit that isn't drawn by us
 
     // ---- damage and effects (Damage.cpp)
     void handleContacts();
-    void hitCar(Car& c, const glm::vec3& point, const glm::vec3& into, float speed, bool byCar);
+    void hitCar(Car& c, const glm::vec3& point, const glm::vec3& into, float speed, Car* by); // by: the other car, or null
     void dent(Car& c, const glm::vec3& localPoint, const glm::vec3& localDir, float depth);
     void applyDamage(Car& c);
     void updateEffects(Car& c, float dt);

@@ -16,6 +16,8 @@ const char* eventName(Event e) {
     case Event::Oval: return "Oval race";
     case Event::Drift: return "Drift";
     case Event::Drag: return "Drag race";
+    case Event::Derby: return "Destruction derby";
+    case Event::Rally: return "Rally";
     }
     return "?";
 }
@@ -25,7 +27,8 @@ namespace {
 // Keys a track file may have (anything else is reported: a typo shouldn't
 // silently do nothing).
 const char* const kKeys[] = { "name", "about", "event", "order", "mood", "shape", "straight", "radius", "length",
-                              "points", "width", "bank", "apron", "laps", "wall" };
+                              "points", "width", "bank", "apron", "laps", "wall", "size", "ground", "verge", "hills", "trees" };
+const char* const kGrounds[] = { "tarmac", "concrete", "gravel", "dirt", "mud", "snow", "grass" };
 
 template <typename T> void clampTo(T& v, T lo, T hi, const char* key, std::vector<std::string>& problems) {
     if (v < lo || v > hi) {
@@ -53,6 +56,35 @@ std::vector<glm::vec2> smoothLoop(const std::vector<glm::vec2>& pts, float spaci
             out.push_back((t2 - t) / (t2 - t1) * b1 + (t - t1) / (t2 - t1) * b2);
         }
     }
+    return out;
+}
+
+// Centripetal Catmull-Rom through open points (the ends held), with a
+// height (z of the vec3) carried along.
+std::vector<glm::vec3> smoothOpen(const std::vector<glm::vec3>& pts, float spacing) {
+    std::vector<glm::vec3> out;
+    const size_t n = pts.size();
+    auto at = [&](long i) { return pts[static_cast<size_t>(std::clamp(i, 0L, static_cast<long>(n) - 1))]; };
+    auto flat = [](const glm::vec3& v) { return glm::vec2(v.x, v.y); };
+    for (size_t i = 0; i + 1 < n; ++i) {
+        const long k = static_cast<long>(i);
+        glm::vec3 p0 = at(k - 1), p1 = at(k), p2 = at(k + 1), p3 = at(k + 2);
+        if (i == 0) p0 = p1 * 2.0f - p2;         // a straight start
+        if (i + 2 >= n) p3 = p2 * 2.0f - p1;     // and end
+        auto knot = [&](const glm::vec3& a, const glm::vec3& b) { return std::sqrt(std::max(glm::length(flat(b) - flat(a)), 1e-3f)); };
+        const float t0 = 0.0f, t1 = t0 + knot(p0, p1), t2 = t1 + knot(p1, p2), t3 = t2 + knot(p2, p3);
+        const int steps = std::max(4, static_cast<int>(glm::length(flat(p2) - flat(p1)) / spacing));
+        for (int s = 0; s < steps; ++s) {
+            const float t = t1 + (t2 - t1) * static_cast<float>(s) / static_cast<float>(steps);
+            const glm::vec3 a1 = (t1 - t) / (t1 - t0) * p0 + (t - t0) / (t1 - t0) * p1;
+            const glm::vec3 a2 = (t2 - t) / (t2 - t1) * p1 + (t - t1) / (t2 - t1) * p2;
+            const glm::vec3 a3 = (t3 - t) / (t3 - t2) * p2 + (t - t2) / (t3 - t2) * p3;
+            const glm::vec3 b1 = (t2 - t) / (t2 - t0) * a1 + (t - t0) / (t2 - t0) * a2;
+            const glm::vec3 b2 = (t3 - t) / (t3 - t1) * a2 + (t - t1) / (t3 - t1) * a3;
+            out.push_back((t2 - t) / (t2 - t1) * b1 + (t - t1) / (t2 - t1) * b2);
+        }
+    }
+    out.push_back(pts.back());
     return out;
 }
 
@@ -94,7 +126,20 @@ constexpr float kRoadBase = 0.03f; // the road's lowest edge, just above the gra
 const glm::vec3 kAsphalt(0.17f, 0.17f, 0.19f), kApron(0.27f, 0.27f, 0.28f), kWall(0.84f, 0.85f, 0.88f), kWallTop(0.2f, 0.35f, 0.75f);
 const glm::vec3 kWhite(0.92f, 0.92f, 0.9f), kYellow(0.95f, 0.78f, 0.15f), kRed(0.8f, 0.12f, 0.1f), kBlack(0.05f, 0.05f, 0.06f);
 
+// The road's colour by its ground.
+glm::vec3 roadColor(const std::string& ground) {
+    if (ground == "gravel") return { 0.5f, 0.46f, 0.39f };
+    if (ground == "dirt") return { 0.42f, 0.33f, 0.24f };
+    if (ground == "mud") return { 0.26f, 0.2f, 0.14f };
+    if (ground == "snow") return { 0.86f, 0.88f, 0.92f };
+    if (ground == "concrete") return { 0.36f, 0.36f, 0.35f };
+    if (ground == "grass") return { 0.3f, 0.42f, 0.22f };
+    return kAsphalt;
+}
+
 } // namespace
+
+glm::vec3 groundColor(const std::string& ground) { return roadColor(ground); }
 
 bool trackFromJson(const nlohmann::json& j, TrackDesc& t, std::vector<std::string>& problems) {
     if (!j.is_object()) return false;
@@ -118,7 +163,9 @@ bool trackFromJson(const nlohmann::json& j, TrackDesc& t, std::vector<std::strin
     if (event == "oval") t.event = Event::Oval;
     else if (event == "drift") t.event = Event::Drift;
     else if (event == "drag") t.event = Event::Drag;
-    else problems.push_back("event '" + event + "' is not oval, drift or drag");
+    else if (event == "derby") t.event = Event::Derby;
+    else if (event == "rally") t.event = Event::Rally;
+    else problems.push_back("event '" + event + "' is not oval, drift, drag, derby or rally");
     if (j.contains("order") && j["order"].is_number_integer()) t.order = j["order"].get<int>();
     if (j.contains("laps") && j["laps"].is_number_integer()) t.laps = j["laps"].get<int>();
     num("straight", t.straight);
@@ -128,13 +175,34 @@ bool trackFromJson(const nlohmann::json& j, TrackDesc& t, std::vector<std::strin
     num("bank", t.bank);
     num("apron", t.apron);
     num("wall", t.wall);
+    num("hills", t.hills);
+    num("trees", t.trees);
     if (j.contains("points")) {
         if (!j["points"].is_array()) problems.push_back("points should be a list of [x, z]");
         else
             for (const auto& p : j["points"])
-                if (p.is_array() && p.size() == 2 && p[0].is_number() && p[1].is_number()) t.points.emplace_back(p[0].get<float>(), p[1].get<float>());
-                else problems.push_back("a point should be [x, z]");
+                if (p.is_array() && (p.size() == 2 || p.size() == 3) && p[0].is_number() && p[1].is_number() && (p.size() == 2 || p[2].is_number())) {
+                    t.points.emplace_back(p[0].get<float>(), p[1].get<float>());
+                    t.heights.push_back(p.size() == 3 ? p[2].get<float>() : 0.0f);
+                } else {
+                    problems.push_back("a point should be [x, z] or [x, z, y]");
+                }
     }
+    if (j.contains("size")) {
+        const auto& sz = j["size"];
+        if (sz.is_array() && sz.size() == 2 && sz[0].is_number() && sz[1].is_number()) t.size = { sz[0].get<float>(), sz[1].get<float>() };
+        else problems.push_back("size should be [across, along]");
+    }
+    // Each event's usual ground unless the file says.
+    t.ground = t.event == Event::Rally ? "gravel" : t.event == Event::Derby ? "dirt" : "tarmac";
+    t.verge = t.event == Event::Derby ? t.ground : t.event == Event::Oval || t.event == Event::Rally ? "grass" : "concrete";
+    str("ground", t.ground);
+    str("verge", t.verge);
+    for (std::string* g : { &t.ground, &t.verge })
+        if (std::find_if(std::begin(kGrounds), std::end(kGrounds), [&](const char* k) { return *g == k; }) == std::end(kGrounds)) {
+            problems.push_back("ground '" + *g + "' is not tarmac, concrete, gravel, dirt, mud, snow or grass");
+            *g = "tarmac";
+        }
     clampTo(t.width, 8.0f, 40.0f, "width", problems);
     clampTo(t.bank, 0.0f, 30.0f, "bank", problems);
     clampTo(t.apron, 0.0f, 20.0f, "apron", problems);
@@ -143,15 +211,24 @@ bool trackFromJson(const nlohmann::json& j, TrackDesc& t, std::vector<std::strin
     clampTo(t.radius, 20.0f, 400.0f, "radius", problems);
     clampTo(t.length, 60.0f, 2000.0f, "length", problems);
     clampTo(t.laps, 1, 99, "laps", problems);
-    if (t.shape != "oval" && t.shape != "points" && t.shape != "strip") {
-        problems.push_back("shape '" + t.shape + "' is not oval, points or strip");
+    clampTo(t.hills, 0.0f, 40.0f, "hills", problems);
+    clampTo(t.trees, 0.0f, 1.0f, "trees", problems);
+    clampTo(t.size.x, 30.0f, 300.0f, "size (across)", problems);
+    clampTo(t.size.y, 30.0f, 300.0f, "size (along)", problems);
+    if (t.shape != "oval" && t.shape != "points" && t.shape != "strip" && t.shape != "arena" && t.shape != "stage") {
+        problems.push_back("shape '" + t.shape + "' is not oval, points, strip, arena or stage");
         t.shape = "oval";
     }
-    if (t.shape == "points" && t.points.size() < 4) {
-        problems.push_back("a points track needs at least 4 points");
+    if ((t.shape == "points" && t.points.size() < 4) || (t.shape == "stage" && t.points.size() < 2)) {
+        problems.push_back(fmt::format("a {} track needs at least {} points", t.shape, t.shape == "points" ? 4 : 2));
         t.shape = "oval";
     }
     if (t.event == Event::Drag) t.shape = "strip";
+    if (t.event == Event::Derby) t.shape = "arena";
+    if (t.event == Event::Rally && t.shape != "stage") {
+        problems.push_back("a rally needs shape: stage");
+        t.event = Event::Oval;
+    }
     if (t.name.empty()) t.name = t.id;
     return true;
 }
@@ -201,13 +278,16 @@ TrackDesc defaultTrack() {
 }
 
 Track::Track(const TrackDesc& desc) : m_desc(desc) {
-    m_closed = m_desc.shape != "strip";
+    m_closed = m_desc.shape != "strip" && m_desc.shape != "stage";
+    if (arena()) m_desc.width = 4.0f; // the line the wall follows; the floor is the ground
     sample();
     buildGeometry();
+    if (stage()) buildTerrain();
 }
 
 void Track::sample() {
     std::vector<glm::vec2> line;
+    std::vector<glm::vec3> hilly; // stage: x, z and the road's height
     if (m_desc.shape == "oval") {
         // Two straights along Z, turns around (0, +-L/2), run anticlockwise
         // seen from above: every turn a left turn, like NASCAR. s = 0 is
@@ -225,8 +305,22 @@ void Track::sample() {
             push({ R * std::cos(th), -L * 0.5f + R * std::sin(th) });
         }
         for (float z = -L * 0.5f; z < 0.0f; z += 0.5f) push({ -R, z });
+    } else if (m_desc.shape == "arena") {
+        // The wall's line: an ellipse just inside the size, the same way
+        // round as the oval (the wall on the right).
+        const float a = m_desc.size.x * 0.5f - halfWidth() - 0.5f, b = m_desc.size.y * 0.5f - halfWidth() - 0.5f;
+        for (int k = 0; k < 720; ++k) {
+            const float th = glm::pi<float>() * (1.0f - 2.0f * static_cast<float>(k) / 720.0f);
+            line.push_back({ a * std::cos(th), b * std::sin(th) });
+        }
     } else if (m_desc.shape == "points") {
         line = smoothLoop(m_desc.points, 0.5f);
+    } else if (m_desc.shape == "stage") {
+        std::vector<glm::vec3> pts;
+        for (size_t i = 0; i < m_desc.points.size(); ++i)
+            pts.emplace_back(m_desc.points[i].x, m_desc.points[i].y, i < m_desc.heights.size() ? m_desc.heights[i] : 0.0f);
+        hilly = smoothOpen(pts, 0.5f);
+        for (const glm::vec3& p : hilly) line.emplace_back(p.x, p.y);
     } else {
         // The strip: 30 m behind the line to stage, the run, then room to stop.
         line = { { 0.0f, -30.0f }, { 0.0f, m_desc.length + 260.0f } };
@@ -286,6 +380,31 @@ void Track::sample() {
         s.left = leftFlat * std::cos(s.bank) - glm::vec3(0.0f, 1.0f, 0.0f) * std::sin(s.bank);
         s.up = glm::vec3(0.0f, 1.0f, 0.0f) * std::cos(s.bank) + leftFlat * std::sin(s.bank);
         s.p.y = kRoadBase + heightOffset(s);
+    }
+    // A stage's hills: each sample the height of the nearest point of the
+    // smoothed line (they were made from it, so it's close).
+    if (!hilly.empty()) {
+        size_t j = 0;
+        for (Sample& s : m_samples) {
+            float best = 1e30f;
+            for (size_t k = j; k < hilly.size() && k < j + 400; ++k) {
+                const float d = glm::length(glm::vec2(hilly[k].x - s.p.x, hilly[k].y - s.p.z));
+                if (d < best) {
+                    best = d;
+                    j = k;
+                }
+            }
+            s.p.y += hilly[j].z;
+        }
+        // Up is square to the slope (forward stays level: s and u are
+        // measured flat, as everywhere else).
+        const size_t count = m_samples.size();
+        for (size_t i = 0; i < count; ++i) {
+            Sample& s = m_samples[i];
+            const glm::vec3 d = m_samples[std::min(i + 1, count - 1)].p - m_samples[i ? i - 1 : 0].p;
+            const glm::vec3 slope = glm::length(d) > 1e-4f ? glm::normalize(d) : s.forward;
+            s.up = glm::normalize(glm::cross(slope, s.left));
+        }
     }
     if (hasPits()) {
         // The pit boxes: on the apron of the front straight, before the line.
@@ -394,8 +513,19 @@ float Track::maxCurvature(float s, float ahead) const {
     return k;
 }
 
+bool Track::insideArena(const glm::vec3& p, float margin) const {
+    const float a = m_desc.size.x * 0.5f - margin, b = m_desc.size.y * 0.5f - margin;
+    return a > 0.0f && b > 0.0f && (p.x * p.x) / (a * a) + (p.z * p.z) / (b * b) < 1.0f;
+}
+
 glm::vec3 Track::gridPosition(int slot, int cars) const {
     const float hw = halfWidth();
+    if (arena()) {
+        // Round the edge, evenly, a car's length off the wall.
+        const float th = glm::two_pi<float>() * static_cast<float>(slot) / static_cast<float>(std::max(cars, 1)) + 0.3f;
+        return glm::vec3(std::cos(th) * (m_desc.size.x * 0.5f - 6.0f), kRoadBase, std::sin(th) * (m_desc.size.y * 0.5f - 6.0f));
+    }
+    if (stage()) return point(startS() - 2.8f - static_cast<float>(slot) * 8.0f, 0.0f); // single file: one car at a time
     if (!m_closed) {
         // Side by side at the line, one lane each.
         const int lanes = std::max(1, std::min(cars, 8));
@@ -409,6 +539,7 @@ glm::vec3 Track::gridPosition(int slot, int cars) const {
 
 glm::vec3 Track::gridForward(int slot, int cars) const {
     const glm::vec3 p = gridPosition(slot, cars);
+    if (arena()) return glm::length(glm::vec2(p.x, p.z)) > 1e-3f ? -glm::normalize(glm::vec3(p.x, 0.0f, p.z)) : glm::vec3(0.0f, 0.0f, 1.0f);
     return at(locate(p).s).forward;
 }
 
@@ -417,12 +548,13 @@ void Track::buildGeometry() {
     const size_t segs = m_closed ? n : n - 1;
     const float hw = halfWidth(), apron = m_desc.apron;
     const glm::vec3 Y(0.0f, 1.0f, 0.0f);
-    // The road and the apron, sample to sample.
-    for (size_t i = 0; i < segs; ++i) {
+    // The road and the apron, sample to sample (an arena's floor is the ground).
+    const glm::vec3 road = roadColor(m_desc.ground);
+    for (size_t i = 0; i < segs && !arena(); ++i) {
         const Sample& a = m_samples[i];
         const Sample& b = m_samples[(i + 1) % n];
         const glm::vec3 up = glm::normalize(a.up + b.up);
-        quad(m_surface, a.p - a.left * hw, b.p - b.left * hw, b.p + b.left * hw, a.p + a.left * hw, up, kAsphalt);
+        quad(m_surface, a.p - a.left * hw, b.p - b.left * hw, b.p + b.left * hw, a.p + a.left * hw, up, road);
         if (apron > 0.0f) {
             const float sa = a.s, sb = sa + m_step;
             quad(m_surface, point(sa, hw), point(sb, hw), point(sb, hw + apron), point(sa, hw + apron), Y, kApron);
@@ -452,8 +584,30 @@ void Track::buildGeometry() {
             m_wallBoxes.push_back(box);
         }
     };
-    wall(-hw - 0.4f, 0.6f, true, kWall);
-    wall(hw + apron + 0.4f, 0.6f, false, apron > 0.0f ? kWall * glm::vec3(0.9f, 0.95f, 1.0f) : kWall);
+    // A stage has none (off the road is off the road); an arena only the
+    // outside one, all round.
+    if (!stage()) wall(-hw - 0.4f, arena() ? 0.8f : 0.6f, true, kWall);
+    if (!stage() && !arena()) wall(hw + apron + 0.4f, 0.6f, false, apron > 0.0f ? kWall * glm::vec3(0.9f, 0.95f, 1.0f) : kWall);
+    if (arena()) return; // no lines on the dirt
+    if (stage()) {
+        // The start and the finish: a chequered line across the gravel.
+        auto flagLine = [&](float at) {
+            const int squares = static_cast<int>(m_desc.width);
+            for (int row = 0; row < 2; ++row)
+                for (int c = 0; c < squares; ++c) {
+                    const float u0 = -hw + m_desc.width * static_cast<float>(c) / static_cast<float>(squares);
+                    const float u1 = -hw + m_desc.width * static_cast<float>(c + 1) / static_cast<float>(squares);
+                    const float s0 = at + static_cast<float>(row) - 1.0f;
+                    const Sample fa = this->at(s0), fb = this->at(s0 + 1.0f);
+                    const glm::vec3 lift = (fa.up + fb.up) * 0.006f;
+                    quad(m_markings, point(s0, u0) + lift, point(s0 + 1.0f, u0) + lift, point(s0 + 1.0f, u1) + lift, point(s0, u1) + lift, fa.up,
+                         (c + row) % 2 ? kWhite : kBlack);
+                }
+        };
+        flagLine(startS());
+        flagLine(finishS());
+        return;
+    }
     if (!m_closed) {
         // The end of the strip: a catch wall across it.
         const Sample& e = m_samples.back();
@@ -511,6 +665,92 @@ void Track::buildGeometry() {
         const bool red = (i / 1) % 2 == 0;
         stripe(a.s, a.s + m_step, side > 0 ? hw - 1.2f : -hw, side > 0 ? hw : -hw + 1.2f, red ? kRed : kWhite);
     }
+}
+
+namespace {
+
+// Rolling land: a few waves at odd angles, -1..1, no repeats you'd notice.
+float hillNoise(float x, float z) {
+    const float a = std::sin(x * 0.019f + 1.3f) * std::cos(z * 0.016f - 0.4f);
+    const float b = std::sin(x * 0.043f - z * 0.037f + 2.1f);
+    const float c = std::cos(x * 0.071f + z * 0.083f + 0.7f);
+    return 0.55f * a + 0.3f * b + 0.15f * c;
+}
+
+} // namespace
+
+// The land round a stage: a grid of 4 m squares over everything the road
+// covers and a wide margin. Near the road it's the road's own height (a
+// few cm under, so the gravel shows and a wheel over the edge barely
+// drops); from a few metres out it rises and falls with the hills, the
+// full `hills` from ~40 m away. Trees and rocks stand on it (Race.cpp).
+void Track::buildTerrain() {
+    glm::vec2 mn(1e9f), mx(-1e9f);
+    for (const Sample& s : m_samples) {
+        mn = glm::min(mn, glm::vec2(s.p.x, s.p.z));
+        mx = glm::max(mx, glm::vec2(s.p.x, s.p.z));
+    }
+    const float margin = 140.0f;
+    m_cell = 4.0f;
+    m_gridMin = mn - glm::vec2(margin);
+    m_gx = static_cast<int>(std::ceil((mx.x - mn.x + 2.0f * margin) / m_cell)) + 1;
+    m_gz = static_cast<int>(std::ceil((mx.y - mn.y + 2.0f * margin) / m_cell)) + 1;
+    m_heights.assign(static_cast<size_t>(m_gx) * static_cast<size_t>(m_gz), 0.0f);
+    const float hw = halfWidth(), flatTo = hw + 3.0f, fullAt = hw + 40.0f;
+    std::vector<float> nearness(m_heights.size(), 1e9f); // m to the road's middle
+    const glm::vec3 verge = groundColor(m_desc.verge);
+    for (int z = 0; z < m_gz; ++z)
+        for (int x = 0; x < m_gx; ++x) {
+            const glm::vec2 p = m_gridMin + glm::vec2(static_cast<float>(x), static_cast<float>(z)) * m_cell;
+            // The nearest sample: every one (a stage is a few hundred).
+            float best = 1e30f;
+            size_t k = 0;
+            for (size_t i = 0; i < m_samples.size(); ++i) {
+                const float dx = m_samples[i].p.x - p.x, dz = m_samples[i].p.z - p.y;
+                const float d = dx * dx + dz * dz;
+                if (d < best) {
+                    best = d;
+                    k = i;
+                }
+            }
+            const float d = std::sqrt(best);
+            const float t = std::clamp((d - flatTo) / (fullAt - flatTo), 0.0f, 1.0f);
+            const float rise = t * t * (3.0f - 2.0f * t);
+            const size_t at = static_cast<size_t>(z) * static_cast<size_t>(m_gx) + static_cast<size_t>(x);
+            m_heights[at] = m_samples[k].p.y - 0.06f + m_desc.hills * rise * hillNoise(p.x, p.y);
+            nearness[at] = d;
+        }
+    // Triangles, each square split the same way; normals from the heights.
+    auto h = [&](int x, int z) { return m_heights[static_cast<size_t>(std::clamp(z, 0, m_gz - 1)) * static_cast<size_t>(m_gx) + static_cast<size_t>(std::clamp(x, 0, m_gx - 1))]; };
+    Mesh& m = m_terrain;
+    m.positions.reserve(m_heights.size());
+    for (int z = 0; z < m_gz; ++z)
+        for (int x = 0; x < m_gx; ++x) {
+            const glm::vec2 p = m_gridMin + glm::vec2(static_cast<float>(x), static_cast<float>(z)) * m_cell;
+            m.positions.emplace_back(p.x, h(x, z), p.y);
+            m.normals.push_back(glm::normalize(glm::vec3(h(x - 1, z) - h(x + 1, z), 2.0f * m_cell, h(x, z - 1) - h(x, z + 1))));
+            // A little light and shade in the grass, bare earth by the road.
+            const float shade = 0.9f + 0.1f * hillNoise(p.x * 3.1f, p.y * 2.7f);
+            const float bare = std::clamp(1.0f - (nearness[static_cast<size_t>(z) * static_cast<size_t>(m_gx) + static_cast<size_t>(x)] - hw) / 4.0f, 0.0f, 1.0f);
+            m.colors.push_back(glm::mix(verge * shade, groundColor(m_desc.ground) * 0.85f, bare * 0.6f));
+        }
+    for (int z = 0; z + 1 < m_gz; ++z)
+        for (int x = 0; x + 1 < m_gx; ++x) {
+            const uint32_t a = static_cast<uint32_t>(z * m_gx + x), b = a + 1, c = a + static_cast<uint32_t>(m_gx), d = c + 1;
+            m.indices.insert(m.indices.end(), { a, c, b, b, c, d });
+        }
+}
+
+float Track::groundHeight(float x, float z) const {
+    if (m_heights.empty()) return 0.0f;
+    const float fx = (x - m_gridMin.x) / m_cell, fz = (z - m_gridMin.y) / m_cell;
+    if (fx < 0.0f || fz < 0.0f || fx >= static_cast<float>(m_gx - 1) || fz >= static_cast<float>(m_gz - 1)) return 0.0f;
+    const int ix = static_cast<int>(fx), iz = static_cast<int>(fz);
+    const float tx = fx - static_cast<float>(ix), tz = fz - static_cast<float>(iz);
+    auto h = [&](int a, int b) { return m_heights[static_cast<size_t>(b) * static_cast<size_t>(m_gx) + static_cast<size_t>(a)]; };
+    // The same triangle the mesh has (a, c, b | b, c, d).
+    if (tx + tz <= 1.0f) return h(ix, iz) + (h(ix + 1, iz) - h(ix, iz)) * tx + (h(ix, iz + 1) - h(ix, iz)) * tz;
+    return h(ix + 1, iz + 1) + (h(ix, iz + 1) - h(ix + 1, iz + 1)) * (1.0f - tx) + (h(ix + 1, iz) - h(ix + 1, iz + 1)) * (1.0f - tz);
 }
 
 } // namespace racing
