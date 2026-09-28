@@ -85,6 +85,7 @@ void PartyModule::init(kke::Application& app) {
     app.camera().farPlane = 300.0f;
     app.window().setQuitOnEscape(false); // Esc frees the mouse
     buildStage();
+    m_people.init(app);
     setupLobby();
     setupNet();
     buildBeans(wantedRoster());

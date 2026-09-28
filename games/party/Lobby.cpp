@@ -52,6 +52,13 @@ void PartyModule::setupLobby() {
     l.addLookField({ "pattern", "Pattern", beanPatterns(), {} });
     l.addLookField({ "face", "Face", beanFaces(), {} });
     l.addLookField({ "hat", "Hat", beanHats(), {} });
+    // Bean, or a person when the Synty City pack is there (People.h).
+    m_bodyChoices = m_people.available();
+    if (m_people.any()) {
+        kke::Lobby::LookField bodies{ "body", "Body", { "Bean" }, {} };
+        for (size_t i = 1; i < m_bodyChoices.size(); ++i) bodies.choices.push_back(People::all()[static_cast<size_t>(m_bodyChoices[i] - 1)]);
+        l.addLookField(std::move(bodies));
+    }
     l.setCpuCount(5); // a full stage, unless last time said otherwise
     l.addOption({ "rounds", "Rounds", { "3", "5", "8" }, 1, true, {}, {} });
     kke::Lobby::Option games{ "games", "Games", { "Mixed" }, 0, true, {}, {} };
@@ -89,6 +96,8 @@ std::vector<PartyModule::Entry> PartyModule::wantedRoster() const {
             e.seat = seat;
             e.name = kNames[n];
             e.look = BeanLook{ std::clamp(look(1), 0, colours - 1), look(2), look(3), look(4) };
+            const int body = look(5);
+            e.look.body = body > 0 && body < static_cast<int>(m_bodyChoices.size()) ? m_bodyChoices[static_cast<size_t>(body)] : 0;
             nameUsed[static_cast<size_t>(n)] = true;
             colourUsed[static_cast<size_t>(e.look.colour)] = true;
             out.push_back(std::move(e));
@@ -116,12 +125,15 @@ std::vector<PartyModule::Entry> PartyModule::wantedRoster() const {
         e.name = std::string(kNames[ni]) + " (CPU)";
         e.look = BeanLook{ static_cast<int>(ci), static_cast<int>((ni + 1) % beanPatterns().size()), static_cast<int>(ni % beanFaces().size()),
                            1 + static_cast<int>((ni * 5 + 3) % (beanHats().size() - 1)) };
+        // With the people there, every other CPU is a person.
+        if (m_bodyChoices.size() > 1 && i % 2 == 1) e.look.body = m_bodyChoices[1 + (ni * 7) % (m_bodyChoices.size() - 1)];
         out.push_back(std::move(e));
     }
     return out;
 }
 
 void PartyModule::removeBean(Bean& b) {
+    m_people.remove(b);
     if (b.id && m_rigid) m_rigid->world().removeCharacter(b.id);
     b.id = 0;
     if (b.body) m_app->renderer().retire(std::shared_ptr<void>(std::move(b.body)));

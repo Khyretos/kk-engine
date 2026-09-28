@@ -2,6 +2,7 @@
 
 #include "Minigame.h"
 #include "NetParty.h"
+#include "People.h"
 
 #include "kke/Module.h"
 #include "kke/RigidWorld.h"
@@ -128,6 +129,7 @@ private:
     void bumpBeans(float dt);
     void animateBean(Bean& b, float dt);
     void drawBean(const Bean& b, const kke::RenderContext* ctx, const kke::ShadowRenderContext* shadow);
+    glm::mat4 bodyMatrix(const Bean& b); // where it's drawn: at its feet, turned, leaning, tumbling
     void ensureMesh(Bean& b);
     void park(Bean& b);      // out of the way (out, or a seat nobody plays)
     void updateCameras(float dt);
@@ -187,6 +189,8 @@ private:
     float m_playTime = 0.0f;               // s since GO
     uint32_t m_seed = 1, m_roundSeed = 1;
     Rng m_rng, m_botRng;
+    People m_people;
+    std::vector<int> m_bodyChoices; // the menu's Body row: choice -> BeanLook::body
     std::vector<Bean> m_beans;
     std::vector<int> m_roundPoints;        // what each bean got this round (the results screen)
     int m_finishOrder = 0, m_outOrder = 0;

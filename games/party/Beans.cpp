@@ -245,10 +245,15 @@ void PartyModule::animateBean(Bean& b, float dt) {
     b.walkPhase += dt * (b.grounded ? speed * 2.6f : 0.0f);
     b.tumble = b.stun > 0.0f ? b.tumble + dt * 12.0f : b.tumble * std::exp(-10.0f * dt);
     b.wave += dt;
+    // A person instead of a bean: the same body matrix, their own clips
+    // (a person's dive is already a roll, so no extra tilt for it).
+    if (m_people.sync(b)) {
+        const bool cheer = b.finished || m_phase == Phase::Podium;
+        m_people.animate(b, bodyMatrix(b), speed, cheer, !b.hidden, dt);
+    }
 }
 
-void PartyModule::drawBean(const Bean& b, const kke::RenderContext* ctx, const kke::ShadowRenderContext* shadow) {
-    if (b.hidden || !b.meshBuilt) return;
+glm::mat4 PartyModule::bodyMatrix(const Bean& b) {
     const glm::vec3 feet = b.remote ? b.drawFeet : world().characterDrawPosition(b.id, m_app->fixedAlpha());
     glm::mat4 m = glm::translate(glm::mat4(1.0f), feet);
     m = glm::rotate(m, glm::radians(-b.yaw), glm::vec3(0, 1, 0));
@@ -258,7 +263,12 @@ void PartyModule::drawBean(const Bean& b, const kke::RenderContext* ctx, const k
     m = glm::translate(m, glm::vec3(0.0f, mid * (1.0f - diveTilt * 0.55f), 0.0f));
     m = glm::rotate(m, -diveTilt * glm::radians(80.0f) - b.lean.x - std::sin(b.tumble) * 1.4f, glm::vec3(1, 0, 0));
     m = glm::rotate(m, b.lean.y + std::sin(b.tumble * 0.7f) * 0.6f, glm::vec3(0, 0, 1));
-    m = glm::translate(m, glm::vec3(0.0f, -mid, 0.0f));
+    return glm::translate(m, glm::vec3(0.0f, -mid, 0.0f));
+}
+
+void PartyModule::drawBean(const Bean& b, const kke::RenderContext* ctx, const kke::ShadowRenderContext* shadow) {
+    if (b.hidden || !b.meshBuilt || b.person) return; // a person is drawn by ModelModule (People)
+    const glm::mat4 m = bodyMatrix(b);
     const glm::mat4 body = glm::scale(m, glm::vec3(1.0f + b.squash * 0.5f, 1.0f - b.squash, 1.0f + b.squash * 0.5f));
     if (ctx) b.body->draw(*ctx, body, 0.0f, 0.32f);
     if (shadow) b.body->drawShadow(*shadow, body);

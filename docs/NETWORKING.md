@@ -498,6 +498,9 @@ default), with nothing to sign up for:
   placed, occluded and reverberated like any other sound. Mute or set
   the volume of anyone locally; `speaking(id)` lets a game draw a
   speaker icon.
+- **Off**: `setEnabled(false)` turns voice chat off for this player:
+  nothing is sent and nobody is heard until it's turned back on (Party's
+  Voice row in the menu and its pause panel).
 - **Cleaning the microphone** (`kke::voice::VoiceCleaner`), before
   coding, on by default, switches in the Voice panel:
   - *Echo cancellation* (SpeexDSP's MDF filter, BSD): without headphones

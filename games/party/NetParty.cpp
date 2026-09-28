@@ -20,6 +20,7 @@ template <typename Stream> void serialize(Stream& s, BeanLook& l) {
     s.integer(l.pattern, 0, 15);
     s.integer(l.face, 0, 15);
     s.integer(l.hat, 0, 31);
+    s.integer(l.body, 0, 15);
 }
 
 struct Extra {
