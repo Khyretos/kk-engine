@@ -132,6 +132,10 @@ void ClothDemoModule::init(kke::Application& app) {
     if (const char* e = std::getenv("KKE_CLOTH_COUNT")) m_stressCount = std::clamp(std::atoi(e), 1, 400);
     if (const char* e = std::getenv("KKE_CLOTH_RES")) m_stressRes = std::clamp(std::atoi(e), 4, 128);
     if (const char* e = std::getenv("KKE_HAIR_GUIDES")) m_hairGuides = std::clamp(std::atoi(e), 8, 4000);
+    // Phones draw half the hairs (each wider, so it looks as full): the
+    // hair page is GPU-bound there (9 fps on an Adreno 730 with all drawn).
+    const std::string& target = app.hardwareTarget().name;
+    if (target == "android" || target == "ios") m_hairDetail = 0.5f;
     if (const char* e = std::getenv("KKE_HAIR_MOTION")) m_hairMotion = std::clamp(float(std::atof(e)), 0.0f, 1.0f);
     if (const char* e = std::getenv("KKE_HAIR_DETAIL")) m_hairDetail = std::clamp(float(std::atof(e)), 0.05f, 1.0f);
     if (const char* e = std::getenv("KKE_HAIR_PER_GUIDE")) m_hairsPerGuide = std::clamp(std::atoi(e), 0, 256);
