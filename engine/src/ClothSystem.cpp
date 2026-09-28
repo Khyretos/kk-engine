@@ -7,7 +7,12 @@
 #include <Jolt/Physics/Body/Body.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
 #include <Jolt/Physics/Body/BodyLock.h>
+#include <Jolt/Physics/Collision/CollideSoftBodyVertexIterator.h>
+#include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
+#include <Jolt/Physics/Collision/BroadPhase/BroadPhaseQuery.h>
+#include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/Physics/SoftBody/SoftBodyCreationSettings.h>
+#include <Jolt/Physics/SoftBody/SoftBodyManifold.h>
 #include <Jolt/Physics/SoftBody/SoftBodyMotionProperties.h>
 #include <Jolt/Physics/SoftBody/SoftBodySharedSettings.h>
 
@@ -53,12 +58,17 @@ constexpr uint32_t kCalmUpdates = 30; // updates with no crossing undone before 
 // trembling in place counts as still). Jolt's own test (every vertex under
 // 0.17 m/s at every step) never passes for layers resting on each other,
 // which the pass keeps nudging apart by a fraction of a millimetre, so a
-// settled bed cost as much as a falling one.
-constexpr float kSettledMean = 0.006f;     // m/s
-constexpr float kSettledMost = 0.03f;      // m/s
+// settled bed cost as much as a falling one. (A sheet held apart from
+// the layers over and under it creeps a centimetre a second as they are
+// nudged apart: that too is settled.)
+constexpr float kSettledMean = 0.012f;     // m/s
+constexpr float kSettledMost = 0.06f;      // m/s
 constexpr uint32_t kSettleWindow = 30;     // updates
 constexpr uint32_t kSettledWindows = 2;
 constexpr uint64_t kSearchProbe = 64;      // searches: the slower of GPU and CPU pair search is timed again this often
+constexpr float kCornerSlop = 0.25f;       // thicknesses: a solid's corner this far into a triangle is left be
+constexpr float kFlatContact = 0.9f;       // cos: vertices of a triangle resting on faces further apart than this straddle an edge
+constexpr float kCornerLift = 2.0f;        // thicknesses: the most a triangle is lifted off a solid's corner
 constexpr float kMostPerPass = 3.0f;  // the pass moves a vertex at most this x (thickness + a tenth of an edge)
 
 // Sets a flag other worker threads may set too. The Android NDK's libc++
@@ -288,7 +298,9 @@ uint32_t ClothSystem::add(const ClothDesc& d) {
     cs.mFacesDoubleSided = true;
     const uint32_t id = m_next++;
     cs.mUserData = id; // OnSoftBodyContactValidate finds the cloth by it
-    cs.mAllowSleeping = true;
+    // Full protection puts it to sleep itself (settle()), lifted off the
+    // solids' corners first; Jolt would put it to sleep as it is.
+    cs.mAllowSleeping = d.protection != ClothProtection::Full;
     JPH::BodyInterface& bi = m_system.GetBodyInterface();
     c.body = bi.CreateAndAddSoftBody(cs, JPH::EActivation::Activate);
     if (c.body.IsInvalid()) return 0;
@@ -616,6 +628,7 @@ void ClothSystem::setProtection(uint32_t id, ClothProtection level) {
     if (!lock.Succeeded()) return;
     JPH::SoftBodyMotionProperties* mp = softOf(lock.GetBody());
     mp->SetVertexRadius(level == ClothProtection::Off ? 0.0f : c.thickness);
+    lock.GetBody().SetAllowSleeping(level != ClothProtection::Full);
 }
 
 ClothProtection ClothSystem::protection(uint32_t id) const {
@@ -1210,7 +1223,11 @@ void ClothSystem::protect() {
     // One pass fixes pairs one after another; in a stack (a throw landing
     // on a sheet on a blanket) fixing one pair can push another through,
     // so it runs again, up to kMaxPasses, until a pass undoes nothing.
+    // Pushing touching pairs apart can push an edge through another too,
+    // with nothing looking again: after a pass that undid nothing, one more
+    // looks only for crossings among what it moved.
     for (Cloth* c : m_active) c->movedIn.assign(c->pos.size(), 0);
+    m_onlyCrossings = false;
     for (int pass = 0; pass < kMaxPasses; ++pass) {
         m_pass = uint16_t(pass + 1);
         if (pass > 0) shapeTriangles();
@@ -1243,7 +1260,13 @@ void ClothSystem::protect() {
             }
             undone += testEdgeEdge(c, pr.a - c.edgeBase, o, pr.b - o.edgeBase) ? 1u : 0u;
         }
-        if (undone == 0) break;
+        if (undone > 0) {
+            m_onlyCrossings = false;
+        } else if (m_onlyCrossings) {
+            break;
+        } else {
+            m_onlyCrossings = true;
+        }
     }
 }
 
@@ -1606,7 +1629,7 @@ bool ClothSystem::testEdgeEdge(Cloth& c, uint32_t e, Cloth& o, uint32_t f) {
         gap = glm::dot(d, n);
         crossed = true;
     } else {
-        if (l >= thick || l < 1e-7f || !middle(s) || !middle(t)) return false;
+        if (m_onlyCrossings || l >= thick || l < 1e-7f || !middle(s) || !middle(t)) return false;
         n = d / l;
         gap = l;
     }
@@ -1667,7 +1690,7 @@ bool ClothSystem::testVertexTriangle(Cloth& c, uint32_t v, Cloth& o, uint32_t tr
         }
     }
     if (!crossed) {
-        if (std::fabs(s) >= thick) return false;
+        if (m_onlyCrossings || std::fabs(s) >= thick) return false;
         if (!inside(barycentric(p, a, b, d), 0.0f)) return false;
         const float ref = std::fabs(sp) > 1e-6f && !tangledAt(c.undoneStreak[v]) ? sp : s;
         side = ref >= 0.0f ? 1.0f : -1.0f;
@@ -1756,6 +1779,24 @@ JPH::SoftBodyValidateResult ClothSystem::OnSoftBodyContactValidate(const JPH::Bo
     return JPH::SoftBodyValidateResult::AcceptContact;
 }
 
+// Which vertices rest on a solid, and on which face (solidCorners()).
+// Jolt forgets it at the end of the update. One soft body per call, so
+// each cloth's arrays are written by one thread.
+void ClothSystem::OnSoftBodyContactAdded(const JPH::Body& softBody, const JPH::SoftBodyManifold& manifold) {
+    auto it = m_cloths.find(uint32_t(softBody.GetUserData()));
+    if (it == m_cloths.end() || it->second.hair || it->second.level == ClothProtection::Off) return;
+    Cloth& c = it->second;
+    const auto& verts = manifold.GetVertices();
+    c.solidNormal.resize(verts.size());
+    const JPH::RMat44 com = softBody.GetCenterOfMassTransform();
+    for (size_t i = 0; i < verts.size(); ++i)
+        if (manifold.HasContact(verts[i])) {
+            // (The contact normal points into the cloth's side; the face's out of the solid is the other way.)
+            c.solidNormal[i] = toG(com.Multiply3x3(-manifold.GetContactNormal(verts[i])));
+            c.touchedSolid = true;
+        }
+}
+
 // Before each collision step: air on the cloth that moves, and the
 // protection pass for all but the first collision step of an update
 // (that one had its pass at the end of the last update).
@@ -1786,6 +1827,9 @@ int ClothSystem::beginStep() {
     m_undid = false;
     for (auto& [id, c] : m_cloths) {
         c.stats.selfContacts = 0;
+        c.stats.solidCorners = 0;
+        if (c.touchedSolid) std::fill(c.solidNormal.begin(), c.solidNormal.end(), glm::vec3(0.0f));
+        c.touchedSolid = false;
         c.stats.crossingsUndone = 0;
     }
     const int sub = m_calm < kCalmUpdates ? m_substeps : 1;
@@ -1811,7 +1855,11 @@ void ClothSystem::endStep() {
     if (!m_cloths.empty()) {
         const auto t0 = std::chrono::steady_clock::now();
         m_between = true;
-        protectAll(m_system.GetBodyLockInterfaceNoLock()); // between steps: nothing else touches the bodies
+        const JPH::BodyLockInterfaceNoLock& locks = m_system.GetBodyLockInterfaceNoLock(); // between steps: nothing else touches the bodies
+        for (auto& [id, c] : m_cloths)
+            if (c.liftForSleep)
+                if (JPH::Body* body = locks.TryGetBody(c.body); body && body->IsActive()) solidCorners(c, *body);
+        protectAll(locks);
         m_between = false;
         m_protectedAfterStep = true;
         m_calm = m_undid ? 0u : std::min(m_calm + 1u, 1u << 20);
@@ -1873,15 +1921,118 @@ void ClothSystem::protectAll(const JPH::BodyLockInterface& locks) {
             const float l2 = glm::dot(d, d);
             if (l2 > reach * reach) c->pos[i] = c->solved[i] + d * (reach / std::sqrt(l2));
         }
-        if (m_between && c->stepBody && settle(*c)) {
-            c->settleFrom.clear();
-            sleep.push_back(c->body);
+        if (m_between && c->stepBody) {
+            if (!settle(*c)) {
+                c->liftForSleep = false;
+            } else if (!c->liftForSleep) {
+                c->liftForSleep = true; // lifted off the solids' corners first (solidCorners()), then asleep
+            } else {
+                c->settleFrom.clear();
+                sleep.push_back(c->body);
+                c->liftForSleep = false;
+            }
         }
         if (c->stepBody) store(*c, *c->stepBody);
         c->prev = c->pos;
         c->prevValid = true;
     }
     if (!sleep.empty()) m_system.GetBodyInterfaceNoLock().DeactivateBodies(sleep.data(), int(sleep.size())); // between updates
+}
+
+// Jolt keeps each cloth vertex out of solids, not the triangles between
+// them: a box's corner or edge (a pillow, a table) can poke up through a
+// triangle whose three vertices all sit just outside it. Where a
+// triangle's vertices rest on different faces (or some on nothing), the
+// triangle itself, as thick as the cloth, is tested against the solids,
+// and lifted off the deepest one. Once, as the cloth goes to sleep: the
+// solver pulls it back taut over the edge every update, and lifted every
+// update it loses its grip and creeps off the solid.
+void ClothSystem::solidCorners(Cloth& c, JPH::Body& body) {
+    JPH::SoftBodyMotionProperties* mp = softOf(body);
+    auto& verts = mp->GetVertices();
+    if (!c.touchedSolid || c.tris.empty() || verts.size() != c.solidNormal.size()) return;
+    // Triangles straddling a solid's edge or corner: some vertices resting on
+    // it and some not, or resting on faces that point different ways. Their
+    // middle and edges' midpoints go to the same exact test Jolt gives each
+    // vertex (a query ball would miss: a box's queries round its edges off).
+    c.cornerTris.clear();
+    c.cornerProbes.clear();
+    for (size_t t = 0; t + 2 < c.tris.size(); t += 3) {
+        const glm::vec3 n[3] = { c.solidNormal[c.tris[t]], c.solidNormal[c.tris[t + 1]], c.solidNormal[c.tris[t + 2]] };
+        const int touching = int(n[0] != glm::vec3(0.0f)) + int(n[1] != glm::vec3(0.0f)) + int(n[2] != glm::vec3(0.0f));
+        if (touching == 0) continue;
+        bool corner = touching < 3;
+        for (int k = 0; k < 3 && !corner; ++k) corner = glm::dot(n[k], n[(k + 1) % 3]) < kFlatContact;
+        if (!corner) continue;
+        const JPH::Vec3 a = verts[c.tris[t]].mPosition, b = verts[c.tris[t + 1]].mPosition, d = verts[c.tris[t + 2]].mPosition;
+        c.cornerTris.push_back(uint32_t(t));
+        c.cornerProbes.push_back((a + b + d) / 3.0f);
+        c.cornerProbes.push_back((a + b) * 0.5f);
+        c.cornerProbes.push_back((b + d) * 0.5f);
+        c.cornerProbes.push_back((d + a) * 0.5f);
+    }
+    if (c.cornerTris.empty()) return;
+    c.cornerLift.resize(verts.size(), JPH::Vec3::sZero());
+    const size_t probes = c.cornerProbes.size();
+    const float slack = (1.0f - kCornerSlop) * c.thickness; // a probe closer to a solid than this is in too far
+    c.cornerDeep.assign(probes, -slack);
+    c.cornerPlane.resize(probes);
+    c.cornerHit.assign(probes, -1);
+    const float one = 1.0f;
+    const JPH::CollideSoftBodyVertexIterator probe(JPH::StridedPtr<const JPH::Vec3>(c.cornerProbes.data()), JPH::StridedPtr<const float>(&one, 0),
+                                                   JPH::StridedPtr<JPH::Plane>(c.cornerPlane.data()), JPH::StridedPtr<float>(c.cornerDeep.data()),
+                                                   JPH::StridedPtr<int>(c.cornerHit.data()));
+    // Every solid near the cloth, in the cloth's own space as Jolt does it.
+    const JPH::RMat44 com = body.GetCenterOfMassTransform();
+    const JPH::RMat44 inv = com.InversedRotationTranslation();
+    JPH::AllHitCollisionCollector<JPH::CollideShapeBodyCollector> near;
+    m_system.GetBroadPhaseQuery().CollideAABox(body.GetWorldSpaceBounds(), near, m_system.GetDefaultBroadPhaseLayerFilter(m_layer),
+                                               m_system.GetDefaultLayerFilter(m_layer));
+    const JPH::BodyLockInterface& locks = m_system.GetBodyLockInterfaceNoLock();
+    for (const JPH::BodyID id : near.mHits) {
+        if (id == body.GetID()) continue;
+        JPH::BodyLockRead lock(locks, id);
+        if (!lock.Succeeded()) continue;
+        const JPH::Body& solid = lock.GetBody();
+        if (solid.IsSoftBody() || solid.IsSensor()) continue;
+        solid.GetShape()->CollideSoftBodyVertices((inv * solid.GetCenterOfMassTransform()).ToMat44(), JPH::Vec3::sOne(), probe,
+                                                  uint32_t(probes), 0);
+    }
+    for (size_t k = 0; k < c.cornerTris.size(); ++k) {
+        float deepest = -slack;
+        size_t at = probes;
+        for (size_t q = k * 4; q < k * 4 + 4; ++q)
+            if (c.cornerHit[q] >= 0 && c.cornerDeep[q] > deepest) {
+                deepest = c.cornerDeep[q];
+                at = q;
+            }
+        if (at == probes) continue;
+        // Up off the solid until the probe is a thickness clear, like a
+        // vertex (the pass after it keeps the cloth over it out of the way).
+        const JPH::Vec3 out = c.cornerPlane[at].GetNormal();
+        const float lift = std::min(deepest + c.thickness, kCornerLift * c.thickness);
+        // Each vertex once, however many of its triangles are lifted: as far
+        // along each one's way out as that one needs.
+        const uint32_t t = c.cornerTris[k];
+        for (uint32_t j = 0; j < 3; ++j) {
+            const uint32_t v = c.tris[t + j];
+            if (verts[v].mInvMass <= 0.0f) continue;
+            JPH::Vec3& up = c.cornerLift[v];
+            if (up.IsNearZero()) c.cornerLifted.push_back(v);
+            up += out * std::max(0.0f, lift - up.Dot(out));
+        }
+        ++c.stats.solidCorners;
+    }
+    for (const uint32_t v : c.cornerLifted) {
+        JPH::SoftBodyVertex& x = verts[v];
+        const JPH::Vec3 up = c.cornerLift[v];
+        x.mPosition += up;
+        const JPH::Vec3 out = up.Normalized();
+        const float into = x.mVelocity.Dot(out);
+        if (into < 0.0f) x.mVelocity -= out * into;
+        c.cornerLift[v] = JPH::Vec3::sZero();
+    }
+    c.cornerLifted.clear();
 }
 
 // Once an update, after the pass: has it stayed put long enough?

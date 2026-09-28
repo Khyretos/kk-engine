@@ -153,10 +153,33 @@ to one pass a step, with the old "let go" behaviour. The rigid bodies are
 stepped in the same sub-steps meanwhile (more exact, and more costly with
 many bodies).
 
-**Known limit.** The demo's bed (silk sliding over a wool blanket at the
-mattress edge while a denim throw lands on it) used to leave a few hundred
-of the silk sheet's edges through the throw for about two seconds after a
-hard landing. It has not been measured again with sub-steps.
+### The bed: landings and solid edges
+
+Two last kinds of clipping showed on the demo's bed (wool blanket, silk
+sheet, denim throw), both now gone. Measured in a copy of the bed with
+six different landings of the throw, counting edges through triangles and
+triangles into the mattress and pillows once it has all settled:
+
+| | Before | Now |
+| --- | --- | --- |
+| Edges of one cover through another | 402 | 0 |
+| Triangles into the mattress or a pillow | about 30 per landing, up to 5 mm deep | 0 |
+
+- **A landing through the sheet.** The pass pushes touching pairs apart,
+  and one push can move an edge through another pair's triangle. Nothing
+  looked again, so the throw landing on the silk left hundreds of edges
+  through it for good. Now a pass that undid nothing is followed by one
+  that only looks for crossings among the vertices it moved.
+- **A solid's edge through a cover.** Jolt keeps each vertex a thickness
+  off a solid, not the triangles between them, so a mattress edge or a
+  pillow corner pokes up through a triangle whose vertices sit on either
+  side of it. As a Full cloth goes to sleep, the triangles resting across
+  a solid's edge or corner are tested against it (Jolt's exact test, as
+  for vertices) and lifted a thickness clear; the pass then keeps the
+  cloth over them out of the way. It is done once, at sleep: done every
+  step, the solver pulls the cloth back taut over the edge each time,
+  and the cover loses its grip and creeps off the bed. While a cover
+  moves, a solid's edge can still show through it by a few millimetres.
 
 ## What it costs
 
@@ -239,8 +262,8 @@ Rules of thumb:
   they run in sub-steps. `clothSubsteps` trades that against clipping.
 - Cloth that stops moving falls asleep and costs almost nothing (it still
   stops other cloth as an obstacle). Under Full protection it sleeps once
-  it has stayed put for a second (on average under 6 mm/s, no vertex over
-  3 cm/s, measured over half seconds), even while the pass keeps nudging
+  it has stayed put for a second (on average under 12 mm/s, no vertex
+  over 6 cm/s, measured over half seconds), even while the pass keeps nudging
   layers resting on each other apart by a fraction of a millimetre, which
   Jolt's own sleep test never lets rest. The demo's bed, three covers
   down: 80 ms a step before, 0.1 ms once they sleep. A body landing on it
