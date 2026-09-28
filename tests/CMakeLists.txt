@@ -35,6 +35,11 @@ add_executable(kke_tests
     ${CMAKE_SOURCE_DIR}/games/climb_race/NetRace.cpp
     ${CMAKE_SOURCE_DIR}/games/climb_race/Progress.cpp
     ${CMAKE_SOURCE_DIR}/games/climb_race/Ghost.cpp
+    test_flight.cpp
+    ${CMAKE_SOURCE_DIR}/games/flying_demo/Flight.cpp
+    ${CMAKE_SOURCE_DIR}/games/flying_demo/Course.cpp
+    ${CMAKE_SOURCE_DIR}/games/flying_demo/FlyNet.cpp
+    ${CMAKE_SOURCE_DIR}/games/flying_demo/Stunts.cpp
     test_combat.cpp
     test_sidekick.cpp
     test_mesh_lod.cpp
@@ -59,6 +64,7 @@ add_executable(kke_tests
     test_storage.cpp
     test_input_map.cpp
     test_button_prompts.cpp
+    test_ui_profile.cpp
     test_input_devices.cpp
     test_floating_bodies.cpp
     test_audio.cpp
@@ -92,6 +98,14 @@ if(ENGINE_ENABLE_LUA)
     endif()
 endif()
 target_compile_definitions(kke_tests PRIVATE KKE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+# The party game's show, glass and wire format (test_party.cpp).
+if(KKE_ENABLE_JOLT AND KKE_ENABLE_NET)
+    target_sources(kke_tests PRIVATE test_party.cpp
+        ${CMAKE_SOURCE_DIR}/games/party/Show.cpp
+        ${CMAKE_SOURCE_DIR}/games/party/Shatter.cpp
+        ${CMAKE_SOURCE_DIR}/games/party/NetParty.cpp)
+    target_include_directories(kke_tests PRIVATE ${CMAKE_SOURCE_DIR}/games/party)
+endif()
 
 # ToneMapper.ValuesMatchTheShader reads shaders/tonemap.glsl. It is built
 # into the test binary because the Release workflow runs kke_tests from a
@@ -115,6 +129,8 @@ configure_file(cookbook_recipes.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/cookb
 target_include_directories(kke_tests PRIVATE ${CMAKE_SOURCE_DIR}/games/cookbook)
 # Climb Race's mountain files and race setup (test_climb_mountains.cpp).
 target_include_directories(kke_tests PRIVATE ${CMAKE_SOURCE_DIR}/games/climb_race)
+# The Flying demo's flight model and island (test_flight.cpp).
+target_include_directories(kke_tests PRIVATE ${CMAKE_SOURCE_DIR}/games/flying_demo)
 target_compile_definitions(kke_tests PRIVATE KKE_CLIMB_MOUNTAINS_DIR="${CMAKE_SOURCE_DIR}/games/climb_race/mountains")
 
 # The shipped moods (assets/moods/), built in the same way for test_sky.cpp.

@@ -24,6 +24,9 @@ namespace command_kit {
 class CommandHud {
 public:
     struct Line { std::string text, color = "#e8ecf4"; };
+    // On a touch screen the buttons show no key (they're tapped), and the
+    // document's body gets the class "touch" (with kke-phone and
+    // kke-portrait/kke-landscape from UiModule) for its phone layout.
     // `key` and the hint are prompt text: "{pet.come}" shows the button
     // for that action on the device in use (kke/ButtonPrompts.h), "{touch:tap}"
     // a gesture; the rest is plain text.
@@ -50,6 +53,7 @@ public:
 
 private:
     std::string prompts(const std::string& text) const; // prompt text -> RML
+    bool touch() const; // prompts are for a touch screen
 
     kke::Application& m_app;
     Rml::DataModelHandle m_model;

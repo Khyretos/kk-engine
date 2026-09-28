@@ -167,5 +167,15 @@ TEST(BenchRecorder, AScreenshotFrameIsNotMeasured) {
     EXPECT_EQ(r.hitchCount(), 0);
     const nlohmann::json j = r.toJson({}, {}, {});
     EXPECT_EQ(j["summary"]["screenshot_frames"].get<int>(), 1);
+    EXPECT_NEAR(j["summary"]["seconds"].get<double>(), 4.2, 0.01); // the measured stretch, picture frame included
     EXPECT_NEAR(j["summary"]["frame_ms"]["max"].get<double>(), 10.0, 1e-9);
+}
+
+TEST(BenchRecorder, ASlowMachineTakesAtMostOnePictureASecond) {
+    BenchRecorder r = make(3.0, 0.0);
+    double t = 0.0;
+    for (int i = 0; i < 15; ++i) t = feed(r, 1, 200.0 + (i % 3) * 40.0, t); // 5 fps, uneven
+    const auto shots = r.takeShotRequests();
+    EXPECT_GE(shots.size(), 2u);
+    for (size_t i = 1; i < shots.size(); ++i) EXPECT_GE(shots[i].tSeconds - shots[i - 1].tSeconds, 0.99);
 }

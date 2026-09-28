@@ -268,9 +268,21 @@ built from blocks when the pack is missing.
 - Soldiers on both sides: the UAL mannequin
   (`assets/animations/UAL1_Standard.fbx`).
 
+## Flying (`games/flying_demo`)
+
+Not a scene file: the island, trees, hangar, tower, rings and smoke are
+built in code from the island's seed.
+
+- The planes: **POLYGON Stunt Plane**, `SM_Veh_Plane_Stunt_01`
+  (`SourceFiles/FBX/`), split by mesh name into the body, `_Prop`,
+  `_Flap_fl_01/_02`, `_Flap_fr_01/_02`, `_Flap_rl_01`, `_Flap_rr_01`,
+  `_Flap_Tail`, `_Cockpit_Stick`, `_Glass` and `_Wheels`
+  (`_Crop_Duster` is left out). Paint jobs: `Polygon_Plane_Texture_01`
+  to `_04`. Without the pack the planes are built from boxes.
+
 ## Demos that use no packs
 
-These run the same with or without any asset pack: `climb_race`,
+These run the same with or without any asset pack: `climb_race`, `party`,
 `procedural_demo`, `physics_demo`, `melt_demo`, `sea_demo`, `audio_demo`,
 `rmlui_demo`, `imgui_demo`, `kke_basics`, `starter_game` and `cookbook`.
 `kke_demo` dresses its course with the art listed under "Showcase course
@@ -295,7 +307,9 @@ with `KKE_MOOD=<name>`.
 | `farm_demo` | `clear_day` | Kloofendal 48d Partly Cloudy | `meadow_day` |
 | `platoon` | `clear_day` | Kloofendal 48d Partly Cloudy | `meadow_day` |
 | `climb_race` | each mountain's own (`games/climb_race/mountains/`): `morning`, `clear_day`, `golden_hour` (Granite Tower, Random), `sunset`, `overcast`, `misty_morning` | as the mood | as the mood |
+| `party` | each minigame's own: `sunset` (the lobby and podium), `clear_day`, `dusk`, `arena_night`, `noon`, `golden_hour`, `playful` | as the mood | as the mood |
 | `synty_demo` | `morning` | Qwantani Mid Morning | `meadow_day` |
+| `flying_demo` | `clear_day`; the start menu's Sky row: `morning`, `golden_hour`, `sunset`, `stormy` | as the mood | as the mood |
 | `goblin_horde` | `sunset` | Qwantani Sunset | `wind_soft` |
 | `duel` | `arena_night` | Qwantani Night | `night_crickets` |
 | `melt_demo` | `dusk` | Qwantani Dusk 2 | `night_crickets` |

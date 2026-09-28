@@ -58,21 +58,35 @@ cmake --build "$build"
 # --- 3. Which art files do the demos open? ------------------------------
 cooked="$build/cooked-art"
 rm -rf "$cooked"
+# The mannequin animations (CC0): UAL1_Standard.fbx from the repository,
+# plus UAL2.fbx (vault/climb clips, a better sword swing) when it's next to
+# it or in the packs folder. Gathered in one folder: the recording run and
+# the download both use it, and demos only load some Synty art once their
+# characters are animated.
+anims="$build/animations"
+rm -rf "$anims"
+mkdir -p "$anims"
+cp assets/animations/*.fbx "$anims/" 2> /dev/null || true
+if [ ! -f "$anims/UAL2.fbx" ]; then
+    ual2="$(find "$assets" -name UAL2.fbx -print -quit 2> /dev/null || true)"
+    if [ -n "$ual2" ]; then cp "$ual2" "$anims/UAL2.fbx"; echo "using $ual2"; fi
+fi
+[ -f "$anims/UAL1_Standard.fbx" ] || echo "note: assets/animations/UAL1_Standard.fbx is missing (git pull?): characters will be blocks"
 if [ "$all_art" = 1 ]; then
     "$build/bin/kke_cook" --root "$assets" --out "$cooked/synty" --all
 else
     trace="$build/art-trace.txt"
     rm -f "$trace"
     echo "Recording which art the demos use: every demo opens for a few seconds (don't touch anything)..."
-    KKE_ASSETS_DIR="$assets" KKE_ASSET_TRACE="$trace" "$build/bin/benchmark/kke_benchmark" --seconds 3 --no-wait --no-open \
+    KKE_ASSETS_DIR="$assets" KKE_ANIMATIONS_DIR="$anims" KKE_ASSET_TRACE="$trace" "$build/bin/benchmark/kke_benchmark" --seconds 3 --no-wait --no-open \
         --out "$build/art-trace-run" || echo "(a demo had trouble in the recording run; see $build/art-trace-run)"
     [ -s "$trace" ] || die "the recording run opened no art: are the packs in '$assets'?"
     "$build/bin/kke_cook" --root "$assets" --out "$cooked/synty" --trace "$trace"
 fi
-# The CC0 character animations (assets/animations, downloaded, not in git)
-# ride along, cooked like the rest so package.sh's art check stays simple.
-if ls assets/animations/*.fbx > /dev/null 2>&1; then
-    "$build/bin/kke_cook" --root assets/animations --out "$cooked/animations" --all
+# The animations ride along cooked like the rest, so package.sh's art
+# check stays simple.
+if ls "$anims"/*.fbx > /dev/null 2>&1; then
+    "$build/bin/kke_cook" --root "$anims" --out "$cooked/animations" --all
 fi
 "$build/bin/kke_cook" --check "$cooked" > /dev/null || die "something in $cooked isn't cooked"
 
@@ -81,7 +95,10 @@ tools/packaging/package.sh --bin "$build/bin" --platform linux --version "$versi
     --deps "$build/_deps" --strip strip --cooked "$cooked"
 if [ "$windows" = 1 ]; then
     command -v docker > /dev/null || die "--windows needs Docker (docker compose run --rm windows)"
-    docker compose run --rm windows
+    # Release, no tests: the same kind of build as the Linux one above. The
+    # container reads .kke-art.key and .kke-art.build from the repository,
+    # so the .exe files decrypt this bake's art.
+    docker compose run --rm -e KKE_BUILD_TYPE=Release -e KKE_VERSION_NAME="$version-with-art" -e RUN_TESTS=0 windows
     tools/packaging/package.sh --bin dist/windows --platform windows --version "$version-with-art" --out dist \
         --deps build-docker/windows/_deps --cooked "$cooked"
 fi

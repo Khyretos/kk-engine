@@ -1,0 +1,349 @@
+# Party
+
+A friendslop party game: a show of short minigames for friends on one
+couch and online, in the spirit of Fall Guys, Mario Party and Squid Game.
+Everyone is a wobbly jelly bean you dress up in the start menu. Each round
+is a random minigame with its own level, mood and rules; places give
+points (10, 8, 6, 5, 4, 3, 2, 1), and after the last round the top three
+climb the podium. There are eight minigames: an obstacle course, a
+flaming jump rope, a glass bridge you really fall through, a button-mash
+tug of war, red light green light, falling hex floors, sumo and hot
+potato. Up to four people play on one screen in split screen, with CPU
+beans filling the show; one machine hosts and others join over the
+network, with voice chat.
+
+It is the starting point for **any game made of many short rounds** (a
+minigame is one file with a small interface; the party does the rest),
+for **physics-driven silliness** (characters that get knocked, tumble and
+squash; glass that shatters into Jolt shards; floors that fall away), and
+for **couch plus online party games** (the same show, host-run, with any
+mix of local players, remote players and CPUs). Climb Race is the other
+party game to read next to it: this one copies its start menu, split
+screen and online pattern.
+
+![Party: Mash Tug of War, two teams over the mud pit](../../website/static/media/party-tug.webp)
+
+## Run it
+
+The executable is `party` ([CMakeLists.txt](CMakeLists.txt)). It is built
+when `KKE_ENABLE_JOLT` and `KKE_ENABLE_NET` are on (both are by default):
+the beans and levels are Jolt bodies, and main.cpp always adds
+`kke::NetModule` and `kke::VoiceModule`.
+
+```sh
+cmake --workflow --preset default
+cd build/bin && ./party
+KKE_SKIP_INTRO=1 ./party                      # skip the engine's logo intro
+KKE_PARTY_GAME=glass_bridge ./party           # only one minigame, no menu
+```
+
+Run it from `build/bin`: the HUD (`ui/party_hud.rml`), its theme and the
+fonts are copied next to the executable by the build. It uses no asset
+packs: every bean, hat and level is built in code.
+
+Switches for testing (read with `kke::dev::env`, so a shipping build
+ignores them):
+
+| Switch | What it does |
+|---|---|
+| `KKE_PARTY_GAME=<id>` | Play only this minigame (ids below), skipping the menu |
+| `KKE_PARTY_LOBBY=0` | Skip the start menu: player 1 and the CPU beans start at once |
+| `KKE_PARTY_CPUS=<n>` | How many CPU beans (0 to 5) |
+| `KKE_PARTY_ROUNDS=<n>` | Rounds in the show |
+| `KKE_PARTY_SEED=<n>` | The show's seed (the playlist and every level) |
+| `KKE_PARTY_AUTOPILOT=1` | Player 1 is a CPU too: the whole show plays itself |
+| `KKE_PARTY_START=<s>` | Start from the menu after this many seconds, as if player 1 chose Start (with `KKE_LOBBY_JOIN=<n>` and virtual pads: split screen without hands) |
+| `KKE_PARTY_QUIT=<s>` | Quit after this many seconds, logging where it got to |
+| `KKE_NET=host`, `KKE_NET=join:ADDRESS` | Host or join without the menu |
+| `KKE_VOICE=off` | No microphone (headless runs) |
+
+## Controls
+
+Everything can be rebound and is saved in `party_input.json`; the hint
+line at the bottom always shows the buttons of the device you use.
+
+| | Controller | Keyboard and mouse |
+|---|---|---|
+| Run | Left stick | WASD |
+| Turn the camera | Right stick | Mouse |
+| Jump (and mash) | A | Space |
+| Dive | X or RB | E or right mouse |
+| Watch someone else when you're out | A / X | Space / E |
+| Back to the menu | Back | M |
+| Developer panels | | F1 |
+
+In the start menu every controller presses A to join (up to four), then
+picks a name, colour, pattern, face and hat. Player 1 sets the CPU beans
+(0 to 5), the number of rounds (3, 5 or 8) and the games (all of them
+mixed, or only one), and hosts or joins online.
+
+## How it plays
+
+### The show
+
+A party is a playlist: the minigames shuffled with the show's seed, so a
+game only repeats once all eight have been played. Each round goes:
+
+1. **The round card** (5 s): the title, one line on what to do, the
+   controls. Everyone stands at their start.
+2. **The countdown** (3 s), then **GO**.
+3. **Play** until the minigame says it's over or its clock runs out.
+4. **Round over** (2.5 s), then **the results** (7 s): each bean's place
+   and points, and the total so far.
+
+After the last round come the standings on the **podium**: the top three
+on the steps waving, everyone else in front. Jump (A, Space), or 30 s
+without one, goes back to the menu (or starts a new party when the menu
+is off). On a phone held upright the round card and the tables take the
+screen's width (`body.kke-portrait` in the HUD).
+
+A round ranks beans in three groups: those who **finished** (by who was
+first over the line), then those **still standing** (by the minigame's
+score: how far they got, how many pulls), then those **out** (the last one
+out ranks best). Ties share a place and its points.
+
+### The minigames
+
+| Id | Minigame | What you do | Ends |
+|---|---|---|---|
+| `obstacle` | Obstacle Dash | Race through sweepers, sliding platforms, hammers, a spinning disc, a wall of doors (some are fake and break) and rolling balls on a slope, to the finish arch. Falling puts you back at the last checkpoint. | 60% have finished, or 2:30 |
+| `jump_rope` | Flaming Jump Rope | Everyone on a narrow bridge over lava; two giant beans swing a burning rope round it. Jump it. It speeds up and now and then turns round. | One left, or 1:40 (survivors share the win) |
+| `glass_bridge` | Glass Bridge | Eight steps of two glass panes each: one tempered, one that shatters. Jump pane to pane. Everyone can see which panes held. | Everyone has crossed or fallen |
+| `tug` | Mash Tug of War | Two teams, one rope over a mud pit. Mash jump to pull. | A team is dragged in, or 0:30 (the rope's side wins) |
+| `red_light` | Red Light, Green Light | Run for the line while the giant doll's back is turned. When it turns round, freeze: anyone still moving is out. | Everyone has finished or is out, or 1:15 |
+| `tiles` | Hex-a-Gone | Three floors of hexagons; a tile drops a moment after you step on it. Keep moving. | One left, or 2:00 |
+| `sumo` | Bean Sumo | Barge and dive into the others to knock them off a round floor whose edge crumbles away ring by ring. | One left, or 1:30 |
+| `hot_potato` | Hot Potato | Someone has a bomb; touch someone to pass it on (not straight back). Whoever holds it at the bang is out. Holding it makes you faster. | One left, or 2:30 |
+
+### Beans
+
+A bean is a capsule character (`kBeanRadius` 0.42 m, `kBeanHeight`
+1.3 m) with a body, a visor face, stubby arms and feet, a pattern and a
+hat. It runs at 5.2 m/s, jumps 6.3 m/s (with a little coyote time), and
+dives: a belly slide at 8 m/s for 0.7 s that shoves whoever it hits. A
+knock sends a bean tumbling for a moment with no control. Beans bump into
+each other (softly in races, hard in Sumo), squash when they land, lean
+into turns and waddle.
+
+### Cameras and split screen
+
+With one player the camera follows behind you (right stick to turn).
+Two to four people on one screen get the screen split
+(`kke::splitScreen`); with three, the fourth quarter shows the whole
+level. Some minigames (the rope, tug of war, sumo, hot potato) use one
+fixed view of the whole arena for everyone instead. When you are out you
+watch someone still playing; jump or dive to switch who.
+
+### Online
+
+Player 1 picks Host or Join in the menu (Join lists games found on the
+network, or type an address). Anyone at any screen can play: every
+person is a network player, and the host's CPU beans are the host's own
+players. The host runs the show (which game, the seed, the phases);
+every machine moves its own beans and reports when one finishes or goes
+out, and the host puts those in order. Voice chat is on for everyone in
+the party (push to talk, [docs/NETWORKING.md](../../docs/NETWORKING.md)).
+A party holds 12 beans online.
+
+## How it works
+
+### Startup and the frame
+
+[main.cpp](main.cpp) adds the modules in order: settings, input (the
+controls file), rigid bodies (Jolt), RmlUi, audio, the start menu
+(`kke::LobbyModule`), networking, voice, the game (`PartyModule`) and the
+stats overlay.
+
+`PartyModule::update` ([PartyModule.cpp](PartyModule.cpp)) each frame:
+
+1. Runs the show's phase (the host moves it on and tells the others).
+2. Reads each local player's controls (`readPlayer`, camera-relative
+   movement) and asks the minigame for each CPU bean's (`Minigame::bot`).
+3. Lets the minigame run its level and rules (`Minigame::update`). It can
+   change a bean's input here (tug of war holds everyone still).
+4. Moves each bean (`moveBean`), bumps them apart (`bumpBeans`), catches
+   falls (`checkFalls`: below `Minigame::killY`, `Minigame::fell` decides).
+5. Animates, spawns particles, sends this machine's beans online, moves
+   the cameras and fills the HUD.
+
+Drawing is the stage (lobby and podium), the level mesh, the parts, the
+minigame's own extras, the beans, the particles, and last the glass (see
+through, `DynamicMeshRenderer::drawTranslucent`).
+
+### A minigame ([Minigame.h](Minigame.h))
+
+A minigame is a class with:
+
+- `id`, `title`, `goal`, `controls`, `mood`, `timeLimit`, `camera` (follow
+  or one overview) and `killY`;
+- `build(Arena&)`: the level. Static boxes (`staticBox`: one mesh for the
+  whole level, plus a Jolt body each), decoration (`levelMesh`), and parts:
+  pieces with their own mesh that move, fall or go (`addPart` with a Jolt
+  body, `addVisual` without);
+- `spawn`: where bean *i* of *n* starts;
+- `update`: moving parts (`movePart` for kinematic ones, so beans riding
+  them move along), rules (`finish`, `eliminate`, `knock`, `respawn`),
+  effects (`burst`, `flame`, `sound`, `flash`, `status`);
+- `bot`: a CPU bean's stick and buttons, with its `difficulty` (Easy to
+  Expert) making it better or worse;
+- `over`, `timeUp` (settle the scores), `beanStatus` (the line in your
+  panel), `bumpStrength`, `touched`;
+- `onEvent`: something every machine must see (a pane broke). Call
+  `Arena::event(kind, a, b)` and `onEvent` runs here now and on every
+  other machine when it arrives.
+
+`Arena` is what the party gives a minigame (the world, the beans, the
+clock, two random generators: `rng()` is seeded per round and the same on
+every machine, `botRng()` is for CPU brains and effects).
+
+### The minigames ([minigames/](minigames/))
+
+- **Obstacle Dash**: kinematic sweepers turned by `movePart` (their
+  velocity comes from the move, so they shove beans), platforms sliding
+  on sine waves, hammer pendulums, a convex-hull disc, doors (a fake one
+  breaks on an event), balls rolling down a slope on a kinematic path.
+  Checkpoints: `fell` respawns instead of eliminating.
+- **Flaming Jump Rope**: the rope's angle is the integral of its speed
+  (which rises and flips sign at seeded times), a formula of the clock,
+  so it is at the same place on every machine. Each machine checks its
+  own beans against the rope's line. Bots estimate when it reaches their
+  feet and jump with a reaction error.
+- **Glass Bridge**: which pane of each pair holds comes from the round's
+  seed. Stepping on a fake pane sends an event with the spot you stepped
+  on; every machine then removes the pane and cuts it into Voronoi cells
+  round that spot ([Shatter.h](Shatter.h): half-plane clipping, seeded,
+  so the same shards everywhere), each a thin convex-hull Jolt body that
+  falls with you to the floor far below. Bots remember panes seen to
+  hold, wait for someone braver, then guess, and never share a pane.
+- **Mash Tug of War**: teams by roster order. Each machine counts its
+  beans' presses as their score, which goes online with their pose, so
+  every machine computes the same rope. The host calls the win (an event);
+  the losers are dragged in and tumble into the mud.
+- **Red Light, Green Light**: a seeded schedule of greens and reds (greens
+  get shorter). The doll takes 0.45 s to turn round (the warning), then
+  there's 0.3 s of grace; after that anyone moving faster than 0.6 m/s is
+  out. Bots have a reaction time per switch; slower bots sometimes get
+  caught.
+- **Hex-a-Gone**: 3 floors of 91 hexagon tiles, each a kinematic hull.
+  A tile stepped on (an event) shakes for 0.55 s, turns dynamic with
+  `RigidWorld::setMotion`, tumbles away and is removed after 3 s. Bots
+  hop to solid tiles a few steps away, nearer the middle.
+- **Bean Sumo**: a hex floor whose outer rings shake then drop at set
+  times; `bumpStrength` 6.5 makes every bump a shove. Bots pick a target
+  (nearer and nearer the edge is juicier), come at it from the middle's
+  side and dive.
+- **Hot Potato**: the host lights each bomb (a new holder and when it
+  goes off, from a fuse that shortens each time); the holder's own
+  machine sees them touch someone and passes it (an event). Everyone but
+  the holder runs at 90%.
+
+### The start menu ([Lobby.cpp](Lobby.cpp))
+
+`kke::LobbyModule` ([docs/LOBBY.md](../../docs/LOBBY.md)) with look fields
+(name, colour, pattern, face, hat), a CPU count and two options (rounds,
+games). `wantedRoster()` turns the menu into beans: the people, then CPU
+beans with the names, colours and outfits nobody took. While the menu is
+up, the beans stand on the stage above their cards and hop.
+
+### The HUD ([Hud.cpp](Hud.cpp), [ui/party_hud.rml](ui/party_hud.rml))
+
+An RmlUi data model `party`: a panel per local player (name, points, the
+minigame's status line), the clock and the round, the round card, the
+results and podium table, the prompt line with button glyphs
+(`kke::ButtonPrompts`), and who is talking on voice.
+
+### Networking ([Net.cpp](Net.cpp), [NetParty.h](NetParty.h))
+
+Event kinds from `0x5000`: **Round** (host to all: the minigame, the seed,
+every seat's player, name, look and points; 12 seats fit one 512-byte
+event), **Phase** (host to all), **Result** (a machine's claim that its
+bean finished or went out; the host orders them and passes them on) and
+**Game** (a minigame's own event, relayed by the host). Each bean's pose
+is its `NetPlayerState`, with its look and minigame score in `extra`.
+Remote beans are drawn smoothed toward where their machine says they are,
+and kept as characters so local beans bump into them. Every message
+carries the round number; old ones are dropped.
+
+## Design decisions
+
+- **C++, not Lua**: split screen, the start menu, networking and dozens
+  of moving Jolt parts per level. A minigame is still small: one file,
+  one class, 200 to 400 lines.
+- **Beans made in code**: no asset packs needed anywhere, looks sent
+  online as four small numbers, and bodies that squash and stretch.
+- **Rules as formulas of the clock and the seed** wherever possible (the
+  rope, the doll, the crumbling ring), so machines agree without
+  messages; events only for what players cause (a pane, a tile, the bomb).
+- **Each machine is the authority on its own beans** (where they are,
+  when they finish or fall): nobody is ever "out" because of lag on
+  someone else's machine. The host orders the claims.
+- **The show is plain data** ([Show.h](Show.h)): places, points, the
+  playlist and standings are unit tested (`tests/test_party.cpp`).
+
+## Tuning
+
+| Where | What |
+|---|---|
+| `Beans.cpp`, `moveBean` | Run and dive speeds, jump, coyote time, knocks |
+| `Beans.cpp`, `bumpBeans` | How beans push apart and shove |
+| `Show.cpp`, `pointsFor` | Points per place |
+| `PartyModule.cpp` | Phase lengths (the card, countdown, results) |
+| Each minigame | Its constants at the top of its file |
+
+## Engine features it uses
+
+Jolt characters, kinematic and dynamic bodies, convex hulls and
+`setMotion` (`kke/RigidWorld.h`); split screen (`kke/Viewports.h`); the
+start menu (`kke::LobbyModule`); networking and voice (`kke::NetModule`,
+`kke::VoiceModule`); RmlUi with button glyphs; the camera rig; moods;
+impact sounds and earcons (`kke/ImpactSynth.h`); translucent glass
+(`DynamicMeshRenderer::drawTranslucent`).
+
+## Assets
+
+None. Beans, hats and levels are built from boxes, spheres, cylinders and
+lathes in [Bean.cpp](Bean.cpp) and the minigames; the skies and ambient
+sounds are the moods' ([docs/MOODS.md](../../docs/MOODS.md)).
+
+## Make a game like this
+
+1. **Add a minigame** before anything else: copy the closest one in
+   [minigames/](minigames/), change the `id`, add its make function to
+   [Minigames.cpp](Minigames.cpp) and a row to the table above. Try it
+   with `KKE_PARTY_GAME=<id> KKE_PARTY_AUTOPILOT=1`.
+2. **Write the bot early.** A minigame nobody can test alone doesn't get
+   tuned; CPU beans also fill a party of two.
+3. **Decide what every machine must agree on.** If it can come from the
+   clock and `Arena::rng()`, compute it; if a player causes it, make it
+   an event; never let two machines decide the same thing.
+4. **A new kind of game** (a board, teams across rounds): the show is
+   `Show` plus the phases in PartyModule; add a phase rather than a
+   second module.
+
+Pitfalls the code shows:
+
+- `Arena::rng()` only in `build` and `start`: using it in `update` would
+  make machines drift apart. Anything random per frame uses `botRng()`.
+- Don't destroy a part's mesh yourself: `removePart` hands it to
+  `renderer().retire()` so frames in flight can still draw it.
+- A game event's numbers fit ±2^24; pack small ones together (Glass
+  Bridge packs where you stepped into one).
+
+## Files
+
+| File | What is in it |
+|---|---|
+| [main.cpp](main.cpp) | The modules, the net and voice settings |
+| [PartyModule.h](PartyModule.h), [PartyModule.cpp](PartyModule.cpp) | The show's phases, loading a round, the Arena for minigames, the frame, drawing |
+| [Minigame.h](Minigame.h) | `Bean`, `Part`, `Arena` and `Minigame`: everything a minigame sees |
+| [Minigames.cpp](Minigames.cpp) | The list of minigames |
+| [minigames/](minigames/) | One file per minigame, and Common.h (steering, hex grids, glass) |
+| [Beans.cpp](Beans.cpp) | Controls, moving, bumping, animating and drawing beans; cameras; particles |
+| [Bean.h](Bean.h), [Bean.cpp](Bean.cpp) | The bean's looks and mesh, `MeshBuilder` |
+| [Lobby.cpp](Lobby.cpp) | The start menu, the roster, CPU beans |
+| [Hud.cpp](Hud.cpp), [ui/party_hud.rml](ui/party_hud.rml) | The HUD |
+| [Net.cpp](Net.cpp), [NetParty.h](NetParty.h), [NetParty.cpp](NetParty.cpp) | Online: menu rows, the show over the network, the wire format |
+| [Show.h](Show.h), [Show.cpp](Show.cpp) | Places, points, the playlist, standings, the seeded random numbers |
+| [Shatter.h](Shatter.h), [Shatter.cpp](Shatter.cpp) | Cutting a pane into Voronoi shards |
+| [CMakeLists.txt](CMakeLists.txt) | The executable and the files copied next to it |
+| [game.json](game.json) | The marketplace listing |

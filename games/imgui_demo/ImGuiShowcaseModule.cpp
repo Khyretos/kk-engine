@@ -26,6 +26,7 @@ void ImGuiShowcaseModule::renderUi() {
     // and half off a phone's screen. Where that doesn't fit, place it once
     // beside or under the other panels.
     const float s = ImGui::GetFontSize() / 13.0f;
+    const ImVec2 origin = ImGui::GetMainViewport()->WorkPos;
     const ImVec2 view = ImGui::GetMainViewport()->WorkSize;
     // (ImGuiCond_Once doesn't do: the demo's own FirstUseEver call uses
     // up the window's once.)
@@ -35,7 +36,8 @@ void ImGuiShowcaseModule::renderUi() {
         const ImVec2 size(std::min(550.0f * s, tall ? view.x - 16.0f * s : view.x * 0.6f),
                           std::min(680.0f * s, tall ? view.y * 0.6f : view.y - 16.0f * s));
         // Right of (landscape) or under (portrait) the stacked panels.
-        const ImVec2 pos = !tall ? ImVec2(view.x - size.x - 8.0f * s, 8.0f * s) : ImVec2(8.0f * s, view.y * 0.2f);
+        const ImVec2 pos = !tall ? ImVec2(origin.x + view.x - size.x - 8.0f * s, origin.y + 8.0f * s)
+                                 : ImVec2(origin.x + 8.0f * s, origin.y + view.y * 0.2f);
         ImGui::SetWindowSize("Dear ImGui Demo", size);
         ImGui::SetWindowPos("Dear ImGui Demo", pos);
     }

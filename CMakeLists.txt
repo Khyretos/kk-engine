@@ -981,6 +981,18 @@ endif()
 if(KKE_ENABLE_JOLT AND KKE_ENABLE_NET)
     add_subdirectory(games/racing)
 endif()
+# Flying: stunt planes over a generated island, gamepads, keyboard and
+# mouse or flight sticks (games/flying_demo/README.md). Networking: it
+# always adds kke::NetModule (online flights).
+if(KKE_ENABLE_NET)
+    add_subdirectory(games/flying_demo)
+endif()
+# Party: a show of minigames (obstacle course, flaming jump rope, glass
+# bridge, ...) on jelly beans, split screen and online (games/party/README.md).
+# Jolt: the levels and the beans; networking: it always adds kke::NetModule.
+if(KKE_ENABLE_JOLT AND KKE_ENABLE_NET)
+    add_subdirectory(games/party)
+endif()
 # Procedural animation: creatures with no clips, hit reactions on joint
 # motors (games/procedural_demo/README.md). Jolt: the ground and ragdolls.
 if(KKE_ENABLE_JOLT)

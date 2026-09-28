@@ -1,0 +1,9 @@
+{
+  "id": "kke.flying_demo",
+  "title": "Flying",
+  "description": "Stunt planes over a generated island. Race through the rings, score loops, rolls and low passes, or take off from the runway and fly anywhere. Up to four on one screen and more online, each with a gamepad, the keyboard and mouse, or a flight stick: change controller any time from the pause menu.",
+  "version": "0.1.0",
+  "tags": ["demo", "flying", "racing", "split-screen", "online", "flight-stick"],
+  "engine_version": "0.3",
+  "modules": ["Settings", "Input", "Models", "UI", "Audio", "Lobby", "Network", "Flying", "Stats"]
+}

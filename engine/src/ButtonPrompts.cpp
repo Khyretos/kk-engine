@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <string_view>
 
 namespace kke {
 
@@ -339,6 +340,21 @@ std::string ButtonPrompts::rml(const std::vector<Glyph>& glyphs, const std::stri
     return out + "</span>";
 }
 
+namespace {
+// A button's label: at most three words and 22 characters.
+bool isShortLabel(const std::string& label) {
+    if (label.size() > 22) return false;
+    int words = 0;
+    bool inWord = false;
+    for (char c : label) {
+        const bool space = c == ' ';
+        if (!space && !inWord) ++words;
+        inWord = !space;
+    }
+    return words <= 3;
+}
+} // namespace
+
 int ButtonPrompts::touchColour(const InputMap& map, const std::string& action) {
     const std::vector<ActionDef>& all = map.actions();
     for (size_t i = 0; i < all.size(); ++i)
@@ -349,6 +365,10 @@ int ButtonPrompts::touchColour(const InputMap& map, const std::string& action) {
 bool ButtonPrompts::isTouchButton(const InputMap& map, const std::string& action) const {
     const ActionDef* def = map.action(action);
     if (!def || def->type != ActionType::Button) return false;
+    // A mouse click means "here, on the world" (select, order to the
+    // crosshair): on a touch screen that's a tap on the scene, not a button.
+    for (size_t i : map.bindingsFor(action))
+        if (map.bindings()[i].source.kind == SourceKind::MouseButton) return false;
     auto it = m_touch.find(action);
     return it == m_touch.end() || lower(it->second) == "tap";
 }
@@ -381,20 +401,33 @@ std::string ButtonPrompts::format(PromptStyle style, const InputMap& map, const 
                 const bool action = map.action(name) != nullptr;
                 flush();
                 if (style == PromptStyle::Touch && action && isTouchButton(map, name)) {
-                    // The words after the placeholder are the button's label.
+                    // The words after the placeholder are the button's label,
+                    // up to punctuation or the next placeholder. A long run of
+                    // words is a sentence, not a label: the button then takes
+                    // the action's own short label, or else the sentence's
+                    // first word, and the rest stays text beside it.
+                    static constexpr std::string_view kStops = "{,;|.:()/!?\n";
                     size_t stop = end + 1;
                     while (stop < text.size() && text[stop] == ' ') ++stop;
                     size_t labelEnd = stop;
-                    while (labelEnd < text.size() && text[labelEnd] != '{' && text[labelEnd] != ',' && text[labelEnd] != ';' &&
-                           text[labelEnd] != '|' && text.compare(labelEnd, 3, " \xC2\xB7") != 0 && text.compare(labelEnd, 2, "\xC2\xB7") != 0 &&
-                           text.compare(labelEnd, 2, "  ") != 0)
+                    while (labelEnd < text.size() && kStops.find(text[labelEnd]) == std::string_view::npos &&
+                           text.compare(labelEnd, 3, " \xC2\xB7") != 0 && text.compare(labelEnd, 2, "\xC2\xB7") != 0 &&
+                           text.compare(labelEnd, 2, "  ") != 0 && text.compare(labelEnd, 3, "\xE2\x80\x94") != 0)
                         ++labelEnd;
                     std::string label = text.substr(stop, labelEnd - stop);
                     while (!label.empty() && label.back() == ' ') label.pop_back();
-                    if (label.empty()) {
+                    if (label.empty() || !isShortLabel(label)) {
                         const ActionDef* def = map.action(name);
-                        label = def && !def->label.empty() ? def->label : name;
-                        labelEnd = end + 1;
+                        if (def && !def->label.empty() && isShortLabel(def->label)) {
+                            label = def->label;
+                            labelEnd = end + 1;
+                        } else if (!label.empty()) {
+                            label = label.substr(0, label.find(' '));
+                            labelEnd = stop + label.size();
+                        } else {
+                            label = name;
+                            labelEnd = end + 1;
+                        }
                     }
                     out += touchButton(name, label, player, touchColour(map, name));
                     i = labelEnd - 1;

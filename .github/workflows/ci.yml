@@ -127,7 +127,7 @@ jobs:
           export VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation
           export VK_LAYER_ENABLES=VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT
           failed=0
-          for demo in kke_demo kke_basics physics_demo melt_demo sea_demo sandbox rmlui_demo imgui_demo synty_demo starter_game cookbook audio_demo procedural_demo duel goblin_horde pet_companion platoon climb_race farm_demo jiggle_demo; do
+          for demo in kke_demo kke_basics physics_demo melt_demo sea_demo sandbox rmlui_demo imgui_demo synty_demo starter_game cookbook audio_demo procedural_demo duel goblin_horde pet_companion platoon climb_race flying_demo party farm_demo jiggle_demo; do
             [ -x "./$demo" ] || { echo "== $demo: not built, skipped"; continue; }
             set +e
             # Virtual HOSAS pair + gamepad (SDL virtual joysticks), moving:
@@ -142,7 +142,7 @@ jobs:
             fi
           done
           # The phone path: portrait, 70% render scale blitted up, MSAA.
-          for demo in kke_demo climb_race; do
+          for demo in kke_demo climb_race party; do
             set +e
             DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_TARGET=android KKE_WINDOW=405x720 KKE_ORIENTATION=portrait timeout 8 "./$demo" > "run_${demo}_phone.log" 2>&1
             code=$?

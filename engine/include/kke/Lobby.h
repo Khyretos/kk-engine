@@ -123,6 +123,14 @@ public:
     // Joins the next free seat on a device (false when full or taken).
     int join(Device device, uint32_t pad = 0);
     void leave(int seat);
+    // Moves a joined seat onto another device (a pause menu's "change
+    // controller"): a controller (or flight stick) by its ref, or the
+    // keyboard and mouse. Never onto one another seat holds: false then,
+    // and nothing changes. Choosing the device it already has is true.
+    bool setSeatDevice(int seat, Device device, uint32_t pad = 0);
+    // The seat holding a device (-1: free). Player 1 before their first
+    // press holds nothing.
+    int seatOfDevice(Device device, uint32_t pad = 0) const;
     // "Player 2", or the seat's choice of a look field with id "name".
     std::string seatName(int seat) const;
     // The rows a seat's cursor moves through.

@@ -92,6 +92,7 @@ done
 [ -f "$stage/benchmark/kke_benchmark$exe" ] || die "benchmark/kke_benchmark$exe is missing from $bin (KKE_ENABLE_BENCHMARKS=OFF?)"
 [ -f "$stage/benchmark/benchmark_suite.yaml" ] || die "benchmark/benchmark_suite.yaml is missing from $bin"
 rm -rf "$stage/benchmark/results" # a local run's results never ship
+rm -f "$stage/kke_cook$exe" # the art cooker is a tool for whoever bakes, not for players
 
 # --- Strip symbols (optional). -----------------------------------------
 if [ -n "$strip_tool" ]; then
