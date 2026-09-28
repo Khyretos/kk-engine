@@ -29,6 +29,7 @@ Run any demo from `build/bin/` (building: [BUILDING.md](../BUILDING.md)).
 | A driving game: races, drifting, damage | [Racing](../../games/racing/README.md) | [vehicles](../VEHICLES.md), [particle effects](../PARTICLE_EFFECTS.md), the [start menu](../LOBBY.md) |
 | A flying, driving or other vehicle game; flight sticks | [Flying](../../games/flying_demo/README.md) | [input](../INPUT.md), the [start menu](../LOBBY.md) |
 | A party game of many short minigames (Fall Guys, Mario Party, Squid Game style) | [Party](../../games/party/README.md) | [Climb Race](../../games/climb_race/README.md), the [start menu](../LOBBY.md), [networking](../NETWORKING.md) |
+| A sports game, or anything with a soft ball | [Tennis](../../games/tennis/README.md) | [physics (FEMFX)](../../games/physics_demo/README.md), the [start menu](../LOBBY.md) |
 | A fighting game | [Duel](../../games/duel/README.md) | [melee combat](../COMBAT.md) |
 | An action game against crowds | [Goblin Horde](../../games/goblin_horde/README.md) | [melee combat](../COMBAT.md), [AI](../AI.md) |
 | A strategy or squad game | [Platoon](../../games/platoon/README.md) | [command kit](../../games/command_kit/README.md), [commands and orders](../COMMANDS.md) |

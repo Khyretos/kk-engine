@@ -17,6 +17,7 @@
 
 #include <glm/glm.hpp>
 #include <array>
+#include <functional>
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -300,6 +301,23 @@ public:
     // Number of separate pieces the object has broken into (1 = intact).
     uint32_t pieceCount(ObjectHandle handle) const;
 
+    // ---- Steering a whole object (a ball in a game: games/tennis)
+    // Its centre of mass and mean velocity, every piece together. False
+    // for an unknown handle.
+    bool objectMotion(ObjectHandle handle, glm::vec3& center, glm::vec3& velocity) const;
+    // Every vertex's velocity through `change(position, velocity)`, which
+    // returns the new velocity: the same added to all of them is a kick
+    // (its wobble stays), a turn about the centre is spin, a push along a
+    // normal that grows with the distance from the centre squashes it.
+    // Wakes the object. Cost: one call per vertex.
+    void changeVertexVelocities(ObjectHandle handle, const std::function<glm::vec3(const glm::vec3& position, const glm::vec3& velocity)>& change);
+    // Moves every vertex by `delta`: same shape, same velocities (putting
+    // a ball back where a serve starts, a network correction). Wakes it.
+    void translateObject(ObjectHandle handle, const glm::vec3& delta);
+    // Back to its rest shape at `center` with every vertex at `velocity`
+    // (no wobble, no spin). Wakes it.
+    void resetObject(ObjectHandle handle, const glm::vec3& center, const glm::vec3& velocity);
+
     // Removes a previously spawned object. Safe to call with
     // kInvalidHandle or a handle that's already been removed — both
     // are no-ops, not errors, matching this codebase's general
@@ -471,6 +489,8 @@ public:
     Material& selectedMaterial() { return m_selectedMaterial; }
 
 private:
+    // Calls fn(FmTetMesh&) for every piece of an object (PhysicsModuleMotion.cpp).
+    template <typename Fn> void forEachPiece(ObjectHandle handle, Fn&& fn) const;
     // A real, general box-mesh generator — the same 8-corner, 6-tet
     // diagonal decomposition already proven for the single-cell cube
     // and the 2x2x2 "Spawn fracturable cube" grid, generalized to any

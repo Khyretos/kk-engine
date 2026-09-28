@@ -134,6 +134,7 @@ struct ClothStats {
     bool sleeping = false;
     uint32_t selfContacts = 0;       // vertex-triangle pairs the protection pass pushed apart last step
     uint32_t crossingsUndone = 0;    // vertices that had crossed a triangle and were put back
+    uint32_t solidCorners = 0;       // triangles lifted off a solid's corner or edge poking through them
 };
 
 // Smooth per-vertex normals of a triangle list (for drawing).

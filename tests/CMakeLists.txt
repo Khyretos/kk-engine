@@ -35,6 +35,11 @@ add_executable(kke_tests
     ${CMAKE_SOURCE_DIR}/games/climb_race/NetRace.cpp
     ${CMAKE_SOURCE_DIR}/games/climb_race/Progress.cpp
     ${CMAKE_SOURCE_DIR}/games/climb_race/Ghost.cpp
+    test_tennis.cpp
+    ${CMAKE_SOURCE_DIR}/games/tennis/Rules.cpp
+    ${CMAKE_SOURCE_DIR}/games/tennis/Court.cpp
+    ${CMAKE_SOURCE_DIR}/games/tennis/Shot.cpp
+    ${CMAKE_SOURCE_DIR}/games/tennis/Bot.cpp
     test_flight.cpp
     ${CMAKE_SOURCE_DIR}/games/flying_demo/Flight.cpp
     ${CMAKE_SOURCE_DIR}/games/flying_demo/Course.cpp
@@ -132,6 +137,8 @@ target_include_directories(kke_tests PRIVATE ${CMAKE_SOURCE_DIR}/games/climb_rac
 # The Flying demo's flight model and island (test_flight.cpp).
 target_include_directories(kke_tests PRIVATE ${CMAKE_SOURCE_DIR}/games/flying_demo)
 target_compile_definitions(kke_tests PRIVATE KKE_CLIMB_MOUNTAINS_DIR="${CMAKE_SOURCE_DIR}/games/climb_race/mountains")
+# Tennis's rules, flight maths and CPU footwork (test_tennis.cpp).
+target_include_directories(kke_tests PRIVATE ${CMAKE_SOURCE_DIR}/games/tennis)
 
 # The shipped moods (assets/moods/), built in the same way for test_sky.cpp.
 file(GLOB KKE_MOOD_FILES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/assets/moods/*.yaml)

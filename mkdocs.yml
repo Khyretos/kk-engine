@@ -112,6 +112,7 @@ nav:
           - Flying: demos/flying_demo.md
           - Party: demos/party.md
           - Duel: demos/duel.md
+          - Tennis: demos/tennis.md
           - Goblin Horde: demos/goblin_horde.md
       - AI and companions:
           - Farm: demos/farm_demo.md

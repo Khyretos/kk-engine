@@ -172,6 +172,28 @@
   demo: racing
   docs: demos/racing/
 
+- id: tennis
+  title: Tennis with a soft rubber ball
+  icon: fa-solid fa-table-tennis-paddle-ball
+  accent: "#d8f050"
+  tagline: The ball squashes; the score is real.
+  summary: >-
+    Singles and doubles on a hard court, against the CPU or friends on one
+    screen. The ball is a FEMFX soft body that flattens on the strings and
+    the court and wobbles back, flying on exact maths (gravity, spin, air
+    drag, the bounce) that every player, CPU and network peer agrees on.
+  points:
+    - "Topspin, flat, slice and lob: press early, hold to hit harder, the stick aims"
+    - "Real scoring: deuce and advantage, tiebreaks, lets and double faults, changing ends"
+    - A start menu where controllers press A to join, up to four players, CPU players from Easy to Expert
+    - A helping hand for beginners that walks you to the ball
+    - A sport center of ten courts in one scene, with fences and an invisible roof that keep every ball in its court
+  media:
+    - { src: media/tennis.webp, caption: "The TV view of a CPU match on court 1 of the sport center" }
+    - { src: media/tennis-menu.webp, caption: "The start menu: controllers press A to join, player 1 sets the match" }
+  demo: tennis
+  docs: demos/tennis/
+
 - id: flying
   title: Stunt planes, any controller
   icon: fa-solid fa-plane

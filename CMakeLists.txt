@@ -1023,6 +1023,12 @@ if(KKE_ENABLE_JOLT)
     add_subdirectory(games/goblin_horde)
 endif()
 
+# Tennis: singles and doubles with a FEMFX rubber ball (games/tennis/README.md).
+# Jolt: the players and fences; FEMFX: the ball; networking: online matches.
+if(KKE_ENABLE_JOLT AND KKE_ENABLE_FEMFX AND KKE_ENABLE_NET)
+    add_subdirectory(games/tennis)
+endif()
+
 # The starter template (docs/tutorials/getting-started.md), and games made
 # from it with tools/new_game, which lists them in games/my_games.cmake.
 if(KKE_ENABLE_JOLT AND ENGINE_ENABLE_LUA)
