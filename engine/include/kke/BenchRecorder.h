@@ -206,8 +206,9 @@ private:
     int m_excludedFrames = 0;
     std::vector<ShotRequest> m_shotRequests;
     int m_shotRequestCount = 0;
-    double m_shotWorstMs = 0.0, m_shotWorstAt = -1e9;
-    double m_shotSlowFps = 0.0, m_shotFastFps = 0.0, m_shotSlowAt = -1e9, m_shotFastAt = -1e9;
+    double m_shotWorstMs = 0.0, m_shotSlowFps = 0.0, m_shotFastFps = 0.0;
+    double m_lastShotAt = -1e9; // one picture a second at most
+    double m_excludedMs = 0.0;  // time the screenshot frames took
     int m_second = 0, m_secondFrames = 0; // the whole second being counted
     double m_secondStart = 0.0;
     int m_viewsTaken = 0;

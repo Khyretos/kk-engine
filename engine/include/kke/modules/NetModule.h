@@ -234,6 +234,10 @@ public:
     size_t predictionCorrections() const;
 
     // --- movement checks (host)
+    // How fast a player may move between two states (NetServer::limits):
+    // on foot by default; a game of planes or cars raises them. Set
+    // before host().
+    net::MovementLimits movementLimits;
     bool checkMoves = true;
     net::MoveCheckSettings moveCheckSettings;
     size_t refusedMoves() const { return m_server ? m_server->refusedMoves() : 0; }

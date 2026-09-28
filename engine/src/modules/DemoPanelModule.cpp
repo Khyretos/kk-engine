@@ -661,8 +661,8 @@ void DemoPanelModule::onClick(Rml::Element* target, float mouseX, bool down) {
 
 void DemoPanelModule::onEvent(const SDL_Event& e) {
     if (e.type == SDL_EVENT_MOUSE_MOTION && m_dragRow >= 0) {
-        const float ppp = m_app ? m_app->window().pixelsPerPoint() : 1.0f;
-        setSliderFromMouse(static_cast<size_t>(m_dragRow), e.motion.x * ppp);
+        const UiModule* ui = m_app ? m_app->getModule<UiModule>() : nullptr;
+        if (ui) setSliderFromMouse(static_cast<size_t>(m_dragRow), ui->toContext(glm::vec2(e.motion.x, e.motion.y)).x);
     } else if (e.type == SDL_EVENT_MOUSE_BUTTON_UP) {
         m_dragRow = -1;
     }

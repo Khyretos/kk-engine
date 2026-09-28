@@ -12,6 +12,8 @@ only that game reads. KKE does that with one step.
 
 ## Bake a private download (the short version)
 
+Step by step, for someone who doesn't read code: [BAKING_FOR_FRIENDS.md](BAKING_FOR_FRIENDS.md).
+
 On your own PC, with the packs extracted somewhere:
 
 ```bash

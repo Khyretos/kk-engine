@@ -153,6 +153,26 @@ void Lobby::leave(int seat) {
     if (onLeave) onLeave(seat);
 }
 
+int Lobby::seatOfDevice(Device device, uint32_t pad) const {
+    if (device == Device::Pad) return seatOfPad(pad);
+    if (device == Device::KeyboardMouse) return seatOfKeyboard();
+    return -1;
+}
+
+bool Lobby::setSeatDevice(int seat, Device device, uint32_t pad) {
+    if (seat < 0 || seat >= kMaxSeats || device == Device::Any) return false;
+    Seat& s = m_seats[static_cast<size_t>(seat)];
+    if (!s.joined) return false;
+    const int holder = seatOfDevice(device, pad);
+    if (holder == seat) return true;
+    if (holder >= 0) return false;
+    s.device = device;
+    s.pad = device == Device::Pad ? pad : 0;
+    s.padPresent = true;
+    changed();
+    return true;
+}
+
 std::string Lobby::seatName(int seat) const {
     for (size_t f = 0; f < m_looks.size(); ++f) {
         const LookField& field = m_looks[f];

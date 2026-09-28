@@ -26,6 +26,8 @@ Run any demo from `build/bin/` (building: [BUILDING.md](../BUILDING.md)).
 |---|---|---|
 | Your first game, in Lua only | [starter game](../../games/template/README.md) | [first Lua game](../../games/first_lua_game/README.md), the [cookbook](../cookbook/index.md) |
 | A race or a party game for the couch, with online play | [Climb Race](../../games/climb_race/README.md) | the [start menu](../LOBBY.md), [networking](../NETWORKING.md) |
+| A flying, driving or other vehicle game; flight sticks | [Flying](../../games/flying_demo/README.md) | [input](../INPUT.md), the [start menu](../LOBBY.md) |
+| A party game of many short minigames (Fall Guys, Mario Party, Squid Game style) | [Party](../../games/party/README.md) | [Climb Race](../../games/climb_race/README.md), the [start menu](../LOBBY.md), [networking](../NETWORKING.md) |
 | A sports game, or anything with a soft ball | [Tennis](../../games/tennis/README.md) | [physics (FEMFX)](../../games/physics_demo/README.md), the [start menu](../LOBBY.md) |
 | A fighting game | [Duel](../../games/duel/README.md) | [melee combat](../COMBAT.md) |
 | An action game against crowds | [Goblin Horde](../../games/goblin_horde/README.md) | [melee combat](../COMBAT.md), [AI](../AI.md) |

@@ -201,20 +201,32 @@ Lobby::Press LobbyModule::pressFrom(unsigned now, Held& held, unsigned tapped, f
     return p;
 }
 
+bool LobbyModule::seatable(const InputDevices::Device& d) const {
+    return d.connected && (d.kind == InputDevices::Kind::Gamepad || (m_flightSticks && d.kind == InputDevices::Kind::Joystick));
+}
+
+void LobbyModule::noteJoinDevice(const InputDevices::Device& d) {
+    if (d.kind == InputDevices::Kind::Joystick) {
+        m_lobby.joinButton = "the trigger";
+        return;
+    }
+    m_joinStyle = InputModule::promptStyleFor(d);
+    m_lobby.joinButton = glyph(m_joinStyle, "a");
+}
+
 void LobbyModule::readDevices(float dt) {
     const InputDevices& devices = m_input->devices();
     std::vector<uint32_t> pads;
     m_keyboardMice.clear();
     for (const InputDevices::Device& d : devices.devices()) {
         if (!d.connected) continue;
-        if (d.kind == InputDevices::Kind::Gamepad) pads.push_back(d.ref);
+        if (seatable(d)) pads.push_back(d.ref);
         else if (d.kind == InputDevices::Kind::Keyboard || d.kind == InputDevices::Kind::Mouse) m_keyboardMice.push_back(d.ref);
     }
     // Controllers that came or went.
     for (uint32_t p : pads)
         if (std::find(m_pads.begin(), m_pads.end(), p) == m_pads.end()) {
-            if (const InputDevices::Device* d = devices.find(p)) m_joinStyle = InputModule::promptStyleFor(*d);
-            m_lobby.joinButton = glyph(m_joinStyle, "a");
+            if (const InputDevices::Device* d = devices.find(p)) noteJoinDevice(*d);
             m_lobby.padConnected(p);
         }
     for (uint32_t p : m_pads)
@@ -227,27 +239,44 @@ void LobbyModule::readDevices(float dt) {
     // Each controller on its own; the keyboard (and mice) as one.
     const bool open = m_lobby.isOpen();
     for (uint32_t ref : m_pads) {
-        auto button = [&](SDL_GamepadButton b) { return devices.value({ SourceKind::GamepadButton, ref, static_cast<int32_t>(b), 0 }, nullptr) > 0.5f; };
-        auto axis = [&](SDL_GamepadAxis a) { return devices.value({ SourceKind::GamepadAxis, ref, static_cast<int32_t>(a), 0 }, nullptr); };
+        const InputDevices::Device* dev = devices.find(ref);
+        const bool stick = dev && dev->kind == InputDevices::Kind::Joystick;
         unsigned now = 0;
-        if (open) {
-            const float x = axis(SDL_GAMEPAD_AXIS_LEFTX), y = axis(SDL_GAMEPAD_AXIS_LEFTY);
-            if (button(SDL_GAMEPAD_BUTTON_DPAD_UP) || y < -0.55f) now |= kUp;
-            if (button(SDL_GAMEPAD_BUTTON_DPAD_DOWN) || y > 0.55f) now |= kDown;
-            if (button(SDL_GAMEPAD_BUTTON_DPAD_LEFT) || x < -0.55f) now |= kLeft;
-            if (button(SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || x > 0.55f) now |= kRight;
-            if (button(SDL_GAMEPAD_BUTTON_EAST)) now |= kBack;
-            if (button(SDL_GAMEPAD_BUTTON_START)) now |= kStart;
+        if (stick) {
+            // A flight stick: the trigger joins and confirms, the next
+            // button goes back, the hat (or the stick itself) moves.
+            auto button = [&](int b) { return devices.value({ SourceKind::JoyButton, ref, b, 0 }, nullptr) > 0.5f; };
+            auto axis = [&](int a) { return devices.value({ SourceKind::JoyAxis, ref, a, 0 }, nullptr); };
+            auto hat = [&](int dir) { return devices.value({ SourceKind::JoyHat, ref, dir, 0 }, nullptr) > 0.5f; };
+            if (open) {
+                const float x = axis(0), y = axis(1);
+                if (hat(0) || y < -0.55f) now |= kUp;
+                if (hat(2) || y > 0.55f) now |= kDown;
+                if (hat(3) || x < -0.55f) now |= kLeft;
+                if (hat(1) || x > 0.55f) now |= kRight;
+                if (button(1)) now |= kBack;
+            }
+            if (button(0)) now |= kConfirm;
+        } else {
+            auto button = [&](SDL_GamepadButton b) { return devices.value({ SourceKind::GamepadButton, ref, static_cast<int32_t>(b), 0 }, nullptr) > 0.5f; };
+            auto axis = [&](SDL_GamepadAxis a) { return devices.value({ SourceKind::GamepadAxis, ref, static_cast<int32_t>(a), 0 }, nullptr); };
+            if (open) {
+                const float x = axis(SDL_GAMEPAD_AXIS_LEFTX), y = axis(SDL_GAMEPAD_AXIS_LEFTY);
+                if (button(SDL_GAMEPAD_BUTTON_DPAD_UP) || y < -0.55f) now |= kUp;
+                if (button(SDL_GAMEPAD_BUTTON_DPAD_DOWN) || y > 0.55f) now |= kDown;
+                if (button(SDL_GAMEPAD_BUTTON_DPAD_LEFT) || x < -0.55f) now |= kLeft;
+                if (button(SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || x > 0.55f) now |= kRight;
+                if (button(SDL_GAMEPAD_BUTTON_EAST)) now |= kBack;
+                if (button(SDL_GAMEPAD_BUTTON_START)) now |= kStart;
+            }
+            if (button(SDL_GAMEPAD_BUTTON_SOUTH)) now |= kConfirm;
         }
-        if (button(SDL_GAMEPAD_BUTTON_SOUTH)) now |= kConfirm;
         if (!open) m_tapped[ref] &= kConfirm;
         Lobby::Press p = pressFrom(now, m_held[ref], m_tapped[ref], dt);
         p.device = Lobby::Device::Pad;
         p.pad = ref;
         if (p.any()) {
-            if (m_lobby.seatOfPad(ref) < 0)
-                if (const InputDevices::Device* d = devices.find(ref)) m_joinStyle = InputModule::promptStyleFor(*d);
-            m_lobby.joinButton = glyph(m_joinStyle, "a");
+            if (m_lobby.seatOfPad(ref) < 0 && dev) noteJoinDevice(*dev);
             m_lobby.handle(p, m_pads);
         }
     }
@@ -300,6 +329,11 @@ void LobbyModule::onEvent(const SDL_Event& e) {
         }
         for (const InputDevices::Device& d : m_input->devices().devices())
             if (d.connected && d.kind == InputDevices::Kind::Gamepad && d.sdlId == e.gbutton.which) m_tapped[d.ref] |= bit;
+    } else if (e.type == SDL_EVENT_JOYSTICK_BUTTON_DOWN && m_flightSticks && e.jbutton.button <= 1) {
+        // A flight stick's quick trigger pull (gamepads send their own events above).
+        const unsigned bit = e.jbutton.button == 0 ? kConfirm : kBack;
+        for (const InputDevices::Device& d : m_input->devices().devices())
+            if (d.connected && d.kind == InputDevices::Kind::Joystick && d.sdlId == e.jbutton.which) m_tapped[d.ref] |= bit;
     }
 }
 
@@ -310,10 +344,13 @@ void LobbyModule::update(const UpdateContext& ctx) {
         // for screenshots and tests of a full lobby without hands on pads.
         for (const InputDevices::Device& d : m_input->devices().devices())
             if (d.connected && d.kind == InputDevices::Kind::Gamepad) m_pads.push_back(d.ref);
+        // Flight sticks after the gamepads: "press A" names a pad's button.
+        for (const InputDevices::Device& d : m_input->devices().devices())
+            if (d.connected && d.kind == InputDevices::Kind::Joystick && seatable(d)) m_pads.push_back(d.ref);
         for (uint32_t p : m_pads) m_lobby.padConnected(p, true);
         if (!m_pads.empty())
-            if (const InputDevices::Device* d = m_input->devices().find(m_pads.front())) m_joinStyle = InputModule::promptStyleFor(*d);
-        m_lobby.joinButton = glyph(m_joinStyle, "a");
+            if (const InputDevices::Device* d = m_input->devices().find(m_pads.front())) noteJoinDevice(*d);
+        if (m_pads.empty()) m_lobby.joinButton = glyph(m_joinStyle, "a");
         if (const char* v = dev::env("KKE_LOBBY_JOIN"); v && *v) {
             if (m_lobby.seat(0).device == Lobby::Device::Any && m_lobby.isOpen()) {
                 Lobby::Press keys; // player 1: the keyboard
@@ -414,7 +451,10 @@ void LobbyModule::refreshUi() {
     v.subtitle = promptText(m_joinStyle, m_subtitle);
     const Lobby::Seat& one = l.seat(0);
     const PromptStyle style = seatStyle(0);
+    const InputDevices::Device* oneDevice = one.device == Lobby::Device::Pad ? m_input->devices().find(one.pad) : nullptr;
     if (one.device == Lobby::Device::Any) v.hint = "Player 1: press " + join + " or " + enter;
+    else if (oneDevice && oneDevice->kind == InputDevices::Kind::Joystick)
+        v.hint = "Hat or stick: choose and change   ·   trigger: next   ·   button 2: leave   ·   player 1: the Start row begins";
     else if (isPadStyle(style))
         v.hint = promptText(style, "{dpad_up}{dpad_down} choose   ·   {dpad_left}{dpad_right} change   ·   {a} next   ·   {b} leave   ·   "
                                    "player 1: {start} or the Start row begins");
@@ -436,6 +476,8 @@ void LobbyModule::refreshUi() {
         sv.name = l.seatName(i);
         sv.unplugged = s.joined && s.device == Lobby::Device::Pad && !s.padPresent;
         sv.device = s.device == Lobby::Device::Pad ? "Controller" : s.device == Lobby::Device::KeyboardMouse ? "Keyboard and mouse" : "Any controller or the keyboard";
+        if (s.device == Lobby::Device::Pad)
+            if (const InputDevices::Device* d = m_input->devices().find(s.pad); d && d->kind == InputDevices::Kind::Joystick) sv.device = "Flight stick: " + d->label();
         sv.accent = "#3a4260";
         if (s.joined && swatchField >= 0) {
             const Lobby::LookField& f = l.lookFields()[static_cast<size_t>(swatchField)];
