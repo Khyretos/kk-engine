@@ -82,11 +82,18 @@ void RacingModule::init(kke::Application& app) {
 
     m_autopilot = envOn("KKE_RACE_AUTOPILOT");
     m_crashTest = envOn("KKE_RACE_CRASH");
+    m_pileup = envOn("KKE_RACE_PILEUP");
     m_quitAfter = envFloat("KKE_RACE_QUIT", -1.0f);
     m_defaultCars = std::clamp(static_cast<int>(envFloat("KKE_RACE_CARS", 12.0f)), 1, 24);
     m_forceLaps = static_cast<int>(envFloat("KKE_RACE_LAPS", -1.0f));
     m_forceDamage = static_cast<int>(envFloat("KKE_RACE_DAMAGE", -1.0f));
     m_cameraMode = std::clamp(static_cast<int>(envFloat("KKE_RACE_CAMERA", 0.0f)), 0, 4);
+    if (m_pileup) {
+        // The worst case: a full field, brutal damage, nobody at the wheel.
+        m_autopilot = true;
+        if (!kke::dev::env("KKE_RACE_CARS")) m_defaultCars = 24;
+        if (m_forceDamage < 0) m_forceDamage = 2;
+    }
     // How to play before the first race, unless nobody's there to read it.
     const char* intro = kke::dev::env("KKE_RACE_INTRO");
     m_howtoFirst = intro && *intro ? *intro == '1' : !(m_autopilot || m_quitAfter > 0.0f);

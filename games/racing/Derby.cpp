@@ -10,6 +10,7 @@
 #include "RacingModule.h"
 
 #include "kke/Log.h"
+#include "kke/modules/RigidBodyModule.h"
 
 #include <algorithm>
 #include <cmath>
@@ -21,6 +22,8 @@ namespace {
 constexpr float kDerbyTime = 240.0f; // s: then the survivors are placed on points
 constexpr float kIdleOut = 90.0f;    // s without driving into anyone: out (while more than two are left)
 constexpr float kWreckBonus = 50.0f; // points for finishing a car off
+constexpr float kPileupEvery = 7.0f;  // s between pile-ups (KKE_RACE_PILEUP)
+constexpr float kPileupSpeed = 30.0f; // m/s each car is launched at (108 km/h)
 
 } // namespace
 
@@ -172,6 +175,32 @@ kke::VehicleInput RacingModule::readDerbyCpu(Car& c, float dt) {
         if (c.aiUnstick * dir <= 0.0f) c.aiUnstick = 0.0f;
     }
     return in;
+}
+
+// The benchmark's worst case (KKE_RACE_PILEUP=1): every car mended, put
+// back round the edge of the pen and launched at the middle at 108 km/h,
+// all at once, every few seconds. Everything the racing demo can do fires
+// together: every FEMFX body crumpling, tyres blowing and wheels tearing
+// off, debris, sparks, smoke and fire, dozens of contacts a step.
+void RacingModule::updatePileup(float dt) {
+    m_pileupTimer -= dt;
+    if (m_pileupTimer > 0.0f) return;
+    m_pileupTimer = kPileupEvery;
+    ++m_pileups;
+    const Track& t = *m_track;
+    const int n = static_cast<int>(m_cars.size());
+    kke::RigidWorld& w = m_rigid->world();
+    for (int i = 0; i < n; ++i) {
+        Car& c = m_cars[static_cast<size_t>(i)];
+        if (c.remote) continue;
+        repairCar(c, 1000.0f);
+        const glm::vec3 forward = t.gridForward(i, n);
+        placeCar(c, t.gridPosition(i, n) + glm::vec3(0.0f, 0.15f, 0.0f), forward, glm::vec3(0.0f, 1.0f, 0.0f));
+        w.setVelocity(c.body, forward * kPileupSpeed);
+        c.velocity = forward * kPileupSpeed;
+        std::fill(std::begin(c.pastVelocity), std::end(c.pastVelocity), c.velocity);
+    }
+    kke::log::get(name())->info("pile-up {}: {} cars at {:.0f} km/h into the middle", m_pileups, n, kPileupSpeed * 3.6f);
 }
 
 } // namespace racing

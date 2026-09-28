@@ -143,6 +143,15 @@ demos:
     synty: true
     env: { KKE_HORDE_BOT: "1" }
 
+  - id: racing_pileup
+    exe: racing
+    title: "Racing: worst case, 24 cars head-on at 108 km/h"
+    # KKE_RACE_PILEUP: the derby pen, brutal damage, every car mended and
+    # launched into the middle every 7 s (FEMFX crumpling, blown tyres,
+    # lost wheels, debris, smoke and fire all at once).
+    synty: true
+    env: { KKE_RACE_PILEUP: "1" }
+
   - id: cookbook
     exe: cookbook
     title: "Cookbook: Lua recipes"

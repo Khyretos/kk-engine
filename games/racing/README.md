@@ -50,6 +50,7 @@ For demos and tests:
 | `KKE_RACE_CARS=16`, `KKE_RACE_LAPS=3` | the field and the laps |
 | `KKE_RACE_DAMAGE=0/1/2` | damage off, normal, brutal |
 | `KKE_RACE_CRASH=1` | the damage test: CPU drivers aim at the car in front |
+| `KKE_RACE_PILEUP=1` | the worst case, for benchmarks: 24 cars (or `KKE_RACE_CARS`) in the derby pen, brutal damage, launched head-on at 108 km/h into the middle every 7 s (`kke_benchmark` runs it as `racing_pileup`) |
 | `KKE_RACE_CAMERA=0..4` | chase, far chase, bonnet, TV, wheel |
 | `KKE_RACE_FEMFX=0` | dents by hand even in a FEMFX build (for comparison) |
 | `KKE_RACE_LOBBY=0` | straight into a race, no start menu |
