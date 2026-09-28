@@ -96,6 +96,7 @@ set(ENGINE_SOURCES
     src/Lobby.cpp
     src/AudioMixer.cpp
     src/ImpactSynth.cpp
+    src/EngineSound.cpp
     src/Footsteps.cpp
     src/RoomAcoustics.cpp
     src/WavFile.cpp

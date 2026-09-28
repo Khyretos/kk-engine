@@ -36,6 +36,7 @@ int pointsFor(int place, int count);
 // party shuffles them (seeded, so every machine online gets the same
 // order) and plays the first `rounds`.
 struct Show {
+    std::vector<std::string> pool;       // every game this party can play
     std::vector<std::string> playlist;
     int rounds = 5;
     int round = 0;                   // the round being played (0-based)
@@ -50,11 +51,22 @@ struct Show {
     // A round's results: adds everyone's points and returns what each got.
     std::vector<int> score(const std::vector<RoundResult>& results);
     void next() { ++round; }
+    // Picking by vote (README.md "Modes"): up to `count` games for the
+    // players to choose from before this round, the ones not played yet
+    // first (never the one just played, while there are others), in an
+    // order from `seed`. choose() makes the winner this round's game.
+    std::vector<std::string> candidates(int count, uint32_t seed) const;
+    void choose(const std::string& game);
     // Overall standings: bean indices, most points first (ties keep the
     // roster order), and each one's place (equal points share it).
     std::vector<int> standings() const;
     std::vector<int> standingPlaces() const;
 };
+
+// The winner of a vote: the choice with the most `votes` (each one a
+// choice 0..choices-1, or -1 for none), a tie (or no votes) settled by
+// `seed`.
+int tally(const std::vector<int>& votes, int choices, uint32_t seed);
 
 // A small, repeatable random number generator (the same on every
 // machine and compiler, unlike std::uniform_*_distribution).

@@ -71,6 +71,40 @@ TEST(PartyShow, SameSeedSamePlaylistAndPointsAddUp) {
     EXPECT_GE(one.points[static_cast<size_t>(order[0])], one.points[static_cast<size_t>(order[2])]);
 }
 
+TEST(PartyShow, VotingOffersUnplayedGamesAndTheWinnerIsPlayed) {
+    const std::vector<std::string> all = { "a", "b", "c", "d", "e" };
+    Show show;
+    show.start(all, 5, 4, 42, true);
+    std::set<std::string> played;
+    for (int r = 0; r < 5; ++r) {
+        const std::vector<std::string> offer = show.candidates(3, 100u + static_cast<uint32_t>(r));
+        ASSERT_EQ(offer.size(), 3u) << "round " << r;
+        // The ones not played yet come first (then played ones, to make three).
+        const size_t fresh = std::min<size_t>(3, all.size() - played.size());
+        for (size_t k = 0; k < fresh; ++k) EXPECT_EQ(played.count(offer[k]), 0u) << offer[k] << " was already played";
+        EXPECT_EQ(offer, show.candidates(3, 100u + static_cast<uint32_t>(r))) << "the same seed offers the same games";
+        show.choose(offer[fresh - 1]);
+        EXPECT_EQ(show.current(), offer[fresh - 1]);
+        played.insert(show.current());
+        show.next();
+    }
+    // All played: everything is offered again, except the one just played.
+    const std::string last = show.playlist[4];
+    show.rounds = 7;
+    const std::vector<std::string> again = show.candidates(3, 7);
+    EXPECT_EQ(again.size(), 3u);
+    for (const std::string& g : again) EXPECT_NE(g, last);
+
+    EXPECT_EQ(tally({ 0, 2, 2, -1 }, 3, 1), 2);
+    EXPECT_EQ(tally({ 1 }, 3, 1), 1);
+    // A tie goes either way, but always the same way for a seed, and never to a choice nobody picked.
+    const int tie = tally({ 0, 2 }, 3, 5);
+    EXPECT_TRUE(tie == 0 || tie == 2);
+    EXPECT_EQ(tie, tally({ 0, 2 }, 3, 5));
+    const int none = tally({ -1, -1 }, 3, 9);
+    EXPECT_TRUE(none >= 0 && none < 3);
+}
+
 TEST(PartyShatter, ShardsCoverThePaneExactly) {
     ShardDesc d;
     d.halfSize = { 1.0f, 1.0f };
@@ -150,14 +184,36 @@ TEST(PartyNet, EventsAndPosesRoundTrip) {
     p.feet = { 1.5f, -2.0f, -40.25f };
     p.yaw = 90.0f;
     p.look = BeanLook{ 3, 2, 1, 7 };
+    p.look.body = 9;
     p.score = 17.0f;
     p.stunned = true;
     const netparty::Pose q = netparty::fromState(netparty::toState(p));
     EXPECT_NEAR(q.feet.z, p.feet.z, 0.02f);
     EXPECT_EQ(q.look.colour, 3);
     EXPECT_EQ(q.look.hat, 7);
+    EXPECT_EQ(q.look.body, 9);
     EXPECT_NEAR(q.score, 17.0f, 0.01f);
     EXPECT_TRUE(q.stunned);
+
+    netparty::Vote v;
+    v.index = 2;
+    v.games = { "sumo", "tiles", "tug" };
+    v.ballots = { { 2, 1, 0 }, { 2, 4, -1 }, { 2, 7, 2 } };
+    v.secondsLeft = 9;
+    v.winner = 2;
+    const auto vote = netparty::decodeVote(netparty::encode(v));
+    ASSERT_TRUE(vote.has_value());
+    EXPECT_EQ(vote->games, v.games);
+    ASSERT_EQ(vote->ballots.size(), 3u);
+    EXPECT_EQ(vote->ballots[1].player, 4);
+    EXPECT_EQ(vote->ballots[1].choice, -1);
+    EXPECT_EQ(vote->ballots[2].choice, 2);
+    EXPECT_EQ(vote->secondsLeft, 9);
+    EXPECT_EQ(vote->winner, 2);
+    const auto ballot = netparty::decodeBallot(netparty::encode(netparty::Ballot{ 3, 5, 1 }));
+    ASSERT_TRUE(ballot.has_value());
+    EXPECT_EQ(ballot->player, 5);
+    EXPECT_EQ(ballot->choice, 1);
 
     // Garbage never decodes into something.
     EXPECT_FALSE(netparty::decodeRound({ 1, 2, 3 }).has_value());

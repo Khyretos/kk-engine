@@ -176,6 +176,7 @@ void RacingModule::init(kke::Application& app) {
 }
 
 void RacingModule::shutdown() {
+    stopSounds();
     kke::RigidWorld& w = m_rigid->world();
     for (Car& c : m_cars) removeCar(c);
     m_cars.clear();
@@ -229,6 +230,7 @@ void RacingModule::update(const kke::UpdateContext& ctx) {
 
     updateNet(dt);
     m_fx->update(dt, glm::vec3(1.2f, 0.0f, 0.6f));
+    updateSounds(dt);
     if (m_phase == Phase::Lobby) {
         updateLobby(dt);
         for (Car& c : m_cars) placeInstances(c);

@@ -217,6 +217,15 @@ laid under sliding tyres (up to 3000). Contact sounds come from the
 audio module's impact synthesis (docs/AUDIO.md), from the bodies'
 materials.
 
+### Sound (Sound.cpp)
+
+Every car near you is heard from where it is: its own engine, made by
+`kke::EngineSound` from its revs and throttle (a V8 for the stock car, a
+V10 for the exotic, sixes and fours for the rest), and its tyres
+squealing when they slide or spin. The players' cars always have one;
+the other seven go to the cars nearest the camera. Hits and scrapes are
+the audio module's impact sounds.
+
 ### Split screen and cameras
 
 One view per player (`kke/Viewports.h`): stacked for two, quarters for
@@ -279,7 +288,7 @@ Jolt vehicles (`kke/Vehicle.h`, docs/VEHICLES.md), `kke::ParticleEffects`
 (docs/PARTICLE_EFFECTS.md), model deformation (`ModelModule::setDeformedVertices`),
 `DynamicMeshRenderer`, the start menu (docs/LOBBY.md), networking
 (docs/NETWORKING.md), split screen and button prompts (docs/INPUT.md),
-moods (docs/MOODS.md), impact sounds (docs/AUDIO.md), data files
+moods (docs/MOODS.md), engine and impact sounds (docs/AUDIO.md), data files
 (docs/DATA_FILES.md).
 
 ## Assets
@@ -310,6 +319,7 @@ on screen says so, and everything else is the same.
 | `Race.cpp` | the field, the grid, the race rules, laps and results, scenery |
 | `Driving.cpp` | players, CPU drivers, touch, the rules on top, cameras |
 | `Damage.cpp` | hits, dents, debris, smoke, sparks, skid marks, drift points |
+| `Sound.cpp` | the engines and tyres |
 | `Lobby.cpp` | the start menu |
 | `Net.cpp`, `NetRace.h`, `NetRace.cpp` | online races |
 | `Hud.cpp`, `ui/racing_hud.rml` | the HUD |
