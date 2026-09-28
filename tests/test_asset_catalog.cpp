@@ -85,6 +85,33 @@ TEST(AssetCatalog, OnlyPacksSkipsTheRest) {
     fs::remove_all(root);
 }
 
+TEST(AssetCatalog, PackNamesWithoutTheDownloadSuffix) {
+    EXPECT_EQ(kke::packBaseName("POLYGON_Street_Racer_SourceFiles_v3"), "POLYGON_Street_Racer");
+    EXPECT_EQ(kke::packBaseName("POLYGON_Nature_Source_Files_v2"), "POLYGON_Nature");
+    EXPECT_EQ(kke::packBaseName("PolygonTown_Source_Files"), "PolygonTown");
+    EXPECT_EQ(kke::packBaseName("POLYGON_WaterGuns_Unreal_SourceFiles_v2"), "POLYGON_WaterGuns");
+    EXPECT_EQ(kke::packBaseName("SIDEKICK_Starter_Unreal_v1_0_0"), "SIDEKICK_Starter");
+    EXPECT_EQ(kke::packBaseName("POLYGON_Town (1)"), "POLYGON_Town");
+    EXPECT_EQ(kke::packBaseName("POLYGON_Town"), "POLYGON_Town");
+    EXPECT_EQ(kke::packBaseName("Farm Animals Animated  by Quaternius"), "Farm Animals Animated  by Quaternius");
+    // Packs extracted as they were downloaded: found by their short names.
+    fs::path root = fs::temp_directory_path() / "kke_catalog_download_names";
+    fs::remove_all(root);
+    touch(root / "POLYGON_Street_Racer_SourceFiles_v3/FBX/SM_Prop_Sign_Start_01.fbx");
+    touch(root / "POLYGON_Nature_Source_Files_v2/FBX/SM_Tree_Pine_01.fbx");
+    touch(root / "POLYGON_Town_SourceFiles_v5/FBX/SM_Bld_House_01.fbx");
+    kke::CatalogScanOptions o;
+    o.onlyPacks = { "POLYGON_Street_Racer", "POLYGON_Nature" };
+    auto c = kke::AssetCatalog::scan(root.string(), o);
+    ASSERT_EQ(c.packs.size(), 2u);
+    EXPECT_EQ(c.packs[0].name, "POLYGON_Nature");
+    EXPECT_EQ(c.packs[1].name, "POLYGON_Street_Racer");
+    EXPECT_NE(c.find("SM_Prop_Sign_Start_01", { "POLYGON_Street_Racer" }), nullptr);
+    EXPECT_NE(c.pack("POLYGON_Nature_Source_Files_v2"), nullptr); // a scene that saved the folder name
+    EXPECT_EQ(c.find("SM_Bld_House_01"), nullptr);
+    fs::remove_all(root);
+}
+
 TEST(AssetCatalog, PrefersFbxOverObjDuplicates) {
     fs::path root = makeUserLayout();
     auto c = kke::AssetCatalog::scan(root.string());

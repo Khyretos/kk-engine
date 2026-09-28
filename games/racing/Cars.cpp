@@ -6,6 +6,7 @@
 #include <glm/gtc/constants.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <filesystem>
 
@@ -265,10 +266,38 @@ CarArt CarGarage::loadSynty(int type, int kit, int paint) {
         wmin[c] = glm::vec3(1e9f);
         wmax[c] = glm::vec3(-1e9f);
     }
+    // Some presets number their wheels (SK_Veh_Sports_03_Wheel_39..42, not
+    // _fl.._rr): those four go to corners by where they sit, front (+Z) and
+    // left (+X) of their middle.
+    auto numberedWheel = [](const std::string& n) {
+        const size_t at = n.rfind("_Wheel_");
+        return at != std::string::npos && n.find("Steering") == std::string::npos && at + 7 < n.size() &&
+               std::all_of(n.begin() + static_cast<long>(at) + 7, n.end(), [](char ch) { return std::isdigit(static_cast<unsigned char>(ch)) != 0; });
+    };
+    auto centre = [](const kke::ModelMesh& m) {
+        glm::vec3 lo(1e9f), hi(-1e9f);
+        for (const kke::ModelVertex& v : m.vertices) {
+            lo = glm::min(lo, v.position);
+            hi = glm::max(hi, v.position);
+        }
+        return (lo + hi) * 0.5f;
+    };
+    glm::vec3 numberedMid(0.0f);
+    int numbered = 0;
+    for (const kke::ModelMesh& m : src.meshes)
+        if (numberedWheel(m.name) && !m.vertices.empty()) {
+            numberedMid += centre(m);
+            ++numbered;
+        }
+    if (numbered == 4) numberedMid /= 4.0f;
     for (const kke::ModelMesh& m : src.meshes) {
         int corner = -1;
         for (int c = 0; c < 4; ++c)
             if (m.name.find(corners[c]) != std::string::npos) corner = c;
+        if (corner < 0 && numbered == 4 && numberedWheel(m.name) && !m.vertices.empty()) {
+            const glm::vec3 at = centre(m);
+            corner = (at.z > numberedMid.z ? 0 : 2) + (at.x > numberedMid.x ? 0 : 1); // fl fr rl rr
+        }
         if (corner >= 0) {
             have[corner] = true;
             for (const kke::ModelVertex& v : m.vertices) {

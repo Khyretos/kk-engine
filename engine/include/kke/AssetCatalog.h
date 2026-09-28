@@ -61,7 +61,8 @@ struct CatalogScanOptions {
     // many times in total, waiting firstRetryDelayMs, then twice that...
     int attempts = 4;
     int firstRetryDelayMs = 25;
-    // Only these top-level pack folders (by folder name); empty = all. A
+    // Only these top-level pack folders (by pack name, packBaseName(), or
+    // folder name); empty = all. A
     // game that needs two packs out of a big shared cache skips walking
     // the rest (a 70-pack cache takes most of a minute on a network share).
     std::vector<std::string> onlyPacks;
@@ -69,6 +70,14 @@ struct CatalogScanOptions {
     // attempt (1-based), as if the file system had.
     std::function<std::error_code(const std::string& dir, int attempt)> injectListingError;
 };
+
+// A pack's name from its folder: the download's suffix off, so a pack
+// extracted as it came is found by the same name as one fetched by
+// tools/fetch_assets.sh ("POLYGON_Street_Racer_SourceFiles_v3",
+// "POLYGON_Nature_Source_Files_v2", "PolygonTown_Source_Files",
+// "SIDEKICK_Starter_Unreal_v1_0_0", "POLYGON_Town (1)" -> "POLYGON_Street_Racer",
+// "POLYGON_Nature", "PolygonTown", "SIDEKICK_Starter", "POLYGON_Town").
+std::string packBaseName(const std::string& folder);
 
 struct AssetCatalog {
     std::vector<CatalogPack> packs;

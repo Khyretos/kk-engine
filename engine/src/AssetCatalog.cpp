@@ -192,7 +192,10 @@ AssetCatalog AssetCatalog::scan(const std::string& rootPath, const CatalogScanOp
         }
         std::string name = entry.path().filename().string();
         if (isAssetTypeFolder(name)) rootIsPack = true;
-        else if (!options.onlyPacks.empty() && std::find(options.onlyPacks.begin(), options.onlyPacks.end(), name) == options.onlyPacks.end()) continue;
+        else if (!options.onlyPacks.empty() && std::none_of(options.onlyPacks.begin(), options.onlyPacks.end(), [&](const std::string& want) {
+                     return want == name || packBaseName(want) == packBaseName(name);
+                 }))
+            continue;
         else if (containsModels(walker, entry.path())) packDirs.push_back(entry.path());
     }
     if (rootIsPack || packDirs.empty()) {
@@ -205,6 +208,7 @@ AssetCatalog AssetCatalog::scan(const std::string& rootPath, const CatalogScanOp
         CatalogPack pack;
         pack.name = fs::weakly_canonical(dir, ec).filename().string();
         if (ec || pack.name.empty()) pack.name = dir.filename().string(); // "pack/." and the like
+        pack.name = packBaseName(pack.name);
         pack.root = dir.string();
 
         std::map<std::string, fs::path> byStem; // lower-case stem -> chosen file
@@ -287,8 +291,18 @@ AssetCatalog AssetCatalog::scan(const std::string& rootPath, const CatalogScanOp
     return catalog;
 }
 
+std::string packBaseName(const std::string& folder) {
+    // The same rule as tools/fetch_assets.sh.
+    static const std::regex kSuffix(R"([_ ]?(Source[_ ]?Files|SourceFiles|Source_Files|\[Source\]|\[Pro\]|Unity_20[0-9_]+|Unreal).*$)");
+    static const std::regex kCopy(R"( \([0-9]+\)$)");
+    std::string base = std::regex_replace(std::regex_replace(folder, kSuffix, ""), kCopy, "");
+    return base.empty() ? folder : base;
+}
+
 const CatalogPack* AssetCatalog::pack(const std::string& name) const {
     for (const CatalogPack& p : packs) if (p.name == name) return &p;
+    const std::string base = packBaseName(name); // a folder name, as scenes saved them
+    for (const CatalogPack& p : packs) if (p.name == base) return &p;
     return nullptr;
 }
 
@@ -322,7 +336,7 @@ const CatalogAsset* AssetCatalog::find(const std::string& name, const std::vecto
         for (const CatalogAsset& a : assets) {
             if (a.name != name) continue;
             const CatalogPack* p = pack(a.pack);
-            if (a.pack == want || (p && fs::path(p->root).filename().string() == want)) return &a;
+            if (a.pack == want || a.pack == packBaseName(want) || (p && fs::path(p->root).filename().string() == want)) return &a;
         }
     }
     return find(name);
