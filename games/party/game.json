@@ -1,0 +1,9 @@
+{
+  "id": "kke.party",
+  "title": "Party",
+  "description": "A party game show for friends: up to four on one screen, CPU beans and friends online. Dress your jelly bean, then race, jump, guess and shove through rounds of minigames (Obstacle Dash, Flaming Jump Rope, Glass Bridge, Mash Tug of War, Red Light Green Light, Falling Tiles, Sumo Ring, Hot Potato) for points and a place on the podium. Voice chat included.",
+  "version": "0.1.0",
+  "tags": ["demo", "party", "minigames", "physics", "online", "split-screen"],
+  "engine_version": "0.3",
+  "modules": ["Settings", "Input", "RigidBodies", "UI", "Audio", "Lobby", "Network", "Voice", "Party", "Stats"]
+}

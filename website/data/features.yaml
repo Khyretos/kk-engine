@@ -147,6 +147,29 @@
   demo: climb_race
   docs: MOVEMENT/
 
+- id: party
+  title: A party game for friends
+  icon: fa-solid fa-champagne-glasses
+  accent: "#ff5fa2"
+  tagline: Eight minigames, one podium.
+  summary: >-
+    A show of short minigames for the couch and online, like Fall Guys,
+    Mario Party and Squid Game: wobbly beans you dress up, knocked about
+    by real physics. Places give points; the top three climb the podium.
+  points:
+    - "Eight minigames: an obstacle course, a flaming jump rope, a glass bridge, button-mash tug of war, red light green light, falling hex floors, sumo and hot potato"
+    - Glass that really shatters into physics shards you fall with
+    - Up to four players in split screen, CPU beans from Easy to Expert
+    - One machine hosts, others join over the network, with voice chat
+    - A minigame is one C++ file with a small interface; the party does the rest
+  media:
+    - { src: media/party-tug.webp, caption: "Mash Tug of War: two teams, one rope, a mud pit" }
+    - { src: media/party-rope.webp, caption: "Flaming Jump Rope over the lava" }
+    - { src: media/party-potato.webp, caption: "Hot Potato: pass the bomb before it goes bang" }
+    - { src: media/party-sumo.webp, caption: "Bean Sumo: the edge crumbles, the last bean on wins" }
+  demo: party
+  docs: demos/party/
+
 - id: destruction
   title: Things really break
   icon: fa-solid fa-burst
