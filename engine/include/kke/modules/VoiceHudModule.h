@@ -72,7 +72,7 @@ public:
     void shutdown() override;
 
     Settings settings;
-    bool visible = true; // the game hides it (a menu over everything, a cutscene)
+    bool visible = true; // the game hides it (a menu over everything, a cutscene); it hides itself while a LobbyModule menu is open
 
     // The list as shown (slot i is number i + 1).
     const std::array<Slot, kMaxSlots>& slots() const { return m_slots; }

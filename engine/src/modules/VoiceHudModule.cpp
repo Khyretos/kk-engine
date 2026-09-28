@@ -5,6 +5,7 @@
 #include "kke/RmlTextSafety.h"
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/LobbyModule.h"
 #include "kke/modules/NetModule.h"
 #include "kke/modules/UiModule.h"
 
@@ -31,7 +32,7 @@ const char* kHudRml = R"(
     <style>
         body { font-family: Noto Sans; pointer-events: none; width: 100%; height: 100%; }
         .mark, .arrow { position: absolute; width: 0; height: 0; }
-        .ring { position: absolute; border-radius: 50%; border-color: #60e080; background-color: #60e08040; }
+        .ring { position: absolute; box-sizing: border-box; border-color: #60e080; background-color: #60e08040; }
         .nm { position: absolute; white-space: nowrap; font-size: 13dp; color: #ffffff; transform: translate(-50%, 0);
               font-effect: shadow(1dp 1dp #000000c0); }
         .chev { position: absolute; width: 14dp; height: 14dp; margin-left: -7dp; margin-top: -7dp;
@@ -44,13 +45,13 @@ const char* kHudRml = R"(
         .slot.muted { color: #9aa0a8; }
         .num { display: inline-block; width: 16dp; color: #a0c8ff; }
         .dir { display: inline-block; position: relative; width: 20dp; height: 18dp; vertical-align: middle; }
-        .dir .chev { left: 10dp; top: 10dp; width: 8dp; height: 8dp; margin-left: -4dp; margin-top: -4dp;
-                     border-top-width: 2.5dp; border-right-width: 2.5dp; border-color: #ffffff; }
+        .dir .chev { left: 10dp; top: 11dp; width: 10dp; height: 10dp; margin-left: -5dp; margin-top: -5dp;
+                     border-top-width: 3dp; border-right-width: 3dp; border-color: #ffffff; }
         .slot.muted .dir .chev { border-color: #9aa0a8; }
         .who { display: inline-block; width: 110dp; white-space: nowrap; overflow: hidden; }
         .info { display: inline-block; width: 60dp; font-size: 12dp; color: #c8d0d8; }
-        .lvl { display: inline-block; width: 18dp; height: 6dp; margin-top: 7dp; background-color: #ffffff30; border-radius: 3dp; }
-        .fill { height: 6dp; width: 0; background-color: #60e080; border-radius: 3dp; }
+        .lvl { display: inline-block; width: 2dp; height: 6dp; background-color: #60e080; border-radius: 3dp; }
+        #self.hidden { display: none; }
         #self { display: block; margin-bottom: 3dp; padding: 3dp 8dp; border-radius: 6dp; background-color: #1d4a2ad0;
                 color: #ffffff; font-size: 13dp; }
     </style>
@@ -240,13 +241,13 @@ bool VoiceHudModule::makeDocument() {
         row->SetClass("hidden", true);
         row->SetInnerRML("<span class=\"num\">" + std::to_string(i + 1) +
                          "</span><span class=\"dir\"><div class=\"chev\"></div></span><span class=\"who\"></span><span class=\"info\"></span>"
-                         "<span class=\"lvl\"><div class=\"fill\"></div></span>");
+                         "<span class=\"lvl\"></span>");
         SlotEls& e = m_slotEls[size_t(i)];
         e.row = m_listEl->AppendChild(std::move(row));
         e.chev = e.row->GetChild(1)->GetChild(0);
         e.name = e.row->GetChild(2);
         e.info = e.row->GetChild(3);
-        e.fill = e.row->GetChild(4)->GetChild(0);
+        e.fill = e.row->GetChild(4); // a bar as long as the voice is loud
     }
     m_builtCorner = settings.corner == Corner::BottomLeft ? Corner::TopLeft : Corner::BottomLeft; // placed on the first draw
     m_doc->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
@@ -281,7 +282,9 @@ void VoiceHudModule::draw() {
     const glm::vec2 size(float(ctxSize.x), float(ctxSize.y));
     const glm::vec2 frame = ui && ui->frameSize().x > 0.0f ? ui->frameSize() : size;
     const glm::vec2 origin = ui ? ui->frameOrigin() : glm::vec2(0.0f);
-    const bool on = visible && m_voice->enabled();
+    // Not over a start menu (its player cards sit where the list does); voices still play.
+    auto* lobby = m_app->getModule<LobbyModule>();
+    const bool on = visible && m_voice->enabled() && !(lobby && lobby->isOpen());
 
     // Markers: over the heads of the people talking, or at the edge.
     size_t marks = 0, arrows = 0;
@@ -310,6 +313,7 @@ void VoiceHudModule::draw() {
                 ring->SetProperty("width", px(2.0f * r));
                 ring->SetProperty("height", px(2.0f * r));
                 ring->SetProperty("border-width", px(w));
+                ring->SetProperty("border-radius", px(r)); // (RmlUi takes no % here)
                 Rml::Element* nm = m->GetChild(1);
                 nm->SetProperty("top", px(r + 2.0f * dp));
                 const std::string rml = escapeRmlText(t.name);
@@ -366,7 +370,7 @@ void VoiceHudModule::draw() {
         if (nm != e.shownName) e.name->SetInnerRML(e.shownName = nm);
         const std::string info = t.muted ? "muted" : t.placed ? std::to_string(int(std::lround(t.distance))) + " m" : "radio";
         if (info != e.shownInfo) e.info->SetInnerRML(e.shownInfo = info);
-        e.fill->SetProperty("width", px(18.0f * dp * std::clamp(t.level, 0.0f, 1.0f)));
+        e.fill->SetProperty("width", px(dp * (2.0f + 18.0f * std::clamp(t.level, 0.0f, 1.0f))));
     }
 }
 

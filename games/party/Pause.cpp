@@ -95,7 +95,13 @@ void PartyModule::updatePause() {
     const bool inMenu = m_lobby && m_lobby->isOpen();
     m_panel->setVisible(!inMenu);
     if (inMenu && m_panel->state() != kke::DemoPanelModule::State::Collapsed) m_panel->setState(kke::DemoPanelModule::State::Collapsed);
-    if (m_voice) m_voiceOn = m_voice->enabled();
+    if (m_voice) {
+        m_voiceOn = m_voice->enabled();
+        // Proximity chat in the arena (heard from where each bean is); between
+        // games (menu, results, vote, podium) everyone is together, like a call.
+        const bool arena = m_phase == Phase::Intro || m_phase == Phase::Countdown || m_phase == Phase::Play || m_phase == Phase::RoundOver;
+        m_voice->settings.channel = arena ? kke::net::VoiceChannel::Proximity : kke::net::VoiceChannel::All;
+    }
 }
 
 } // namespace party
