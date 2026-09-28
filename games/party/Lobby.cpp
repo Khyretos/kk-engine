@@ -1,6 +1,7 @@
 // The start menu (kke::LobbyModule): each player dresses their bean
-// (name, colour, pattern, face, hat), player 1 sets the CPU beans, the
-// rounds and the games, and the beans stand on the stage, each one above
+// (name, colour, pattern, face, hat, body), player 1 sets the CPU beans,
+// the mode (a party, or one game), the rounds, how the next game is
+// picked (at random, or by vote) and voice chat, and the beans stand on the stage, each one above
 // its player's card.
 
 #include "PartyModule.h"
@@ -11,6 +12,7 @@
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
 #include "kke/modules/RigidBodyModule.h"
+#include "kke/modules/VoiceModule.h"
 
 #include <algorithm>
 #include <cmath>
@@ -52,12 +54,34 @@ void PartyModule::setupLobby() {
     l.addLookField({ "pattern", "Pattern", beanPatterns(), {} });
     l.addLookField({ "face", "Face", beanFaces(), {} });
     l.addLookField({ "hat", "Hat", beanHats(), {} });
+    // Bean, or a person when the Synty City pack is there (People.h).
+    m_bodyChoices = m_people.available();
+    if (m_people.any()) {
+        kke::Lobby::LookField bodies{ "body", "Body", { "Bean" }, {} };
+        for (size_t i = 1; i < m_bodyChoices.size(); ++i) bodies.choices.push_back(People::all()[static_cast<size_t>(m_bodyChoices[i] - 1)]);
+        l.addLookField(std::move(bodies));
+    }
     l.setCpuCount(5); // a full stage, unless last time said otherwise
+    // Mode: a party of rounds (points, a podium), or one minigame to play
+    // on its own (practice, or trying one out).
+    kke::Lobby::Option mode{ "mode", "Mode", { "Party", "One game" }, 0, true, {}, {} };
+    mode.onChange = [this](int) { updateModeRows(); };
+    l.addOption(std::move(mode));
+    kke::Lobby::Option game{ "game", "Game", {}, 0, false, {}, {} };
+    for (const auto& g : m_games) game.choices.push_back(g->title());
+    l.addOption(std::move(game));
     l.addOption({ "rounds", "Rounds", { "3", "5", "8" }, 1, true, {}, {} });
-    kke::Lobby::Option games{ "games", "Games", { "Mixed" }, 0, true, {}, {} };
-    for (const auto& g : m_games) games.choices.push_back(std::string("Only ") + g->title());
-    l.addOption(std::move(games));
+    l.addOption({ "pick", "Next game", { "Random", "Vote" }, 0, true, {}, {} });
+    // Voice chat (online) is never forced on anyone: Off here, or in the
+    // pause menu, where each player can also be muted.
+    if (m_voice) {
+        kke::Lobby::Option voice{ "voice", "Voice chat", { "On", "Off" }, 0, true, {}, {} };
+        voice.onChange = [this](int) { applyVoiceOption(); };
+        l.addOption(std::move(voice));
+    }
     m_lobby->load();
+    updateModeRows();
+    applyVoiceOption();
     m_lobby->setTitle("PARTY", "Dress your bean. Another controller? Press {a} on it to join.");
     l.onJoin = [this](int seat) {
         if (m_phase == Phase::Lobby) return;
@@ -71,6 +95,22 @@ void PartyModule::setupLobby() {
         for (int i = 0; i < kke::Lobby::kMaxCpus; ++i) l.setCpuDifficulty(i, 1 + i % 3);
         m_lobby->close();
     }
+}
+
+void PartyModule::updateModeRows() {
+    kke::Lobby& l = m_lobby->lobby();
+    const kke::Lobby::Option* mode = l.option("mode");
+    const bool one = mode && mode->value == 1;
+    if (kke::Lobby::Option* o = l.option("game")) o->visible = one;
+    if (kke::Lobby::Option* o = l.option("rounds")) o->visible = !one;
+    if (kke::Lobby::Option* o = l.option("pick")) o->visible = !one;
+}
+
+void PartyModule::applyVoiceOption() {
+    if (!m_voice || !m_lobby) return;
+    const kke::Lobby::Option* o = m_lobby->lobby().option("voice");
+    const bool on = !o || o->value == 0;
+    if (m_voice->enabled() != on) m_voice->setEnabled(on);
 }
 
 std::vector<PartyModule::Entry> PartyModule::wantedRoster() const {
@@ -89,6 +129,8 @@ std::vector<PartyModule::Entry> PartyModule::wantedRoster() const {
             e.seat = seat;
             e.name = kNames[n];
             e.look = BeanLook{ std::clamp(look(1), 0, colours - 1), look(2), look(3), look(4) };
+            const int body = look(5);
+            e.look.body = body > 0 && body < static_cast<int>(m_bodyChoices.size()) ? m_bodyChoices[static_cast<size_t>(body)] : 0;
             nameUsed[static_cast<size_t>(n)] = true;
             colourUsed[static_cast<size_t>(e.look.colour)] = true;
             out.push_back(std::move(e));
@@ -116,12 +158,15 @@ std::vector<PartyModule::Entry> PartyModule::wantedRoster() const {
         e.name = std::string(kNames[ni]) + " (CPU)";
         e.look = BeanLook{ static_cast<int>(ci), static_cast<int>((ni + 1) % beanPatterns().size()), static_cast<int>(ni % beanFaces().size()),
                            1 + static_cast<int>((ni * 5 + 3) % (beanHats().size() - 1)) };
+        // With the people there, every other CPU is a person.
+        if (m_bodyChoices.size() > 1 && i % 2 == 1) e.look.body = m_bodyChoices[1 + (ni * 7) % (m_bodyChoices.size() - 1)];
         out.push_back(std::move(e));
     }
     return out;
 }
 
 void PartyModule::removeBean(Bean& b) {
+    m_people.remove(b);
     if (b.id && m_rigid) m_rigid->world().removeCharacter(b.id);
     b.id = 0;
     if (b.body) m_app->renderer().retire(std::shared_ptr<void>(std::move(b.body)));

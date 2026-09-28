@@ -13,6 +13,7 @@
 #include "kke/modules/NetModule.h"
 #include "kke/modules/UiModule.h"
 
+#include <glm/gtc/matrix_transform.hpp>
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/DataModelHandle.h>
 #include <RmlUi/Core/ElementDocument.h>
@@ -85,6 +86,12 @@ void FlyingModule::buildHud() {
         p.RegisterMember("arrow", &PlayerHud::arrow);
         p.RegisterMember("stall", &PlayerHud::stall);
         p.RegisterMember("down", &PlayerHud::down);
+        p.RegisterMember("health", &PlayerHud::health);
+        p.RegisterMember("hurt", &PlayerHud::hurt);
+        p.RegisterMember("sight", &PlayerHud::sight);
+        p.RegisterMember("sight_x", &PlayerHud::sightX);
+        p.RegisterMember("sight_y", &PlayerHud::sightY);
+        p.RegisterMember("hit", &PlayerHud::hit);
     }
     c.RegisterArray<std::vector<PlayerHud>>();
     if (auto r = c.RegisterStruct<RowHud>()) {
@@ -148,6 +155,8 @@ void FlyingModule::updateHud(float) {
         if (p.seat >= 0 && !p.remote) players.push_back(&p);
     std::sort(players.begin(), players.end(), [](const Pilot* a, const Pilot* b) { return a->player < b->player; });
     const std::vector<kke::ViewRect> rects = kke::splitScreen(std::max(1, static_cast<int>(players.size())), true);
+    int winW = 1, winH = 1;
+    m_app->window().getFramebufferSize(winW, winH);
     const int n = static_cast<int>(m_rings.size());
     std::vector<PlayerHud> next;
     for (size_t i = 0; flying && i < players.size(); ++i) {
@@ -163,11 +172,16 @@ void FlyingModule::updateHud(float) {
         h.throttle = std::to_string(h.throttlePct) + "%";
         h.stall = p.plane.stalled && !p.plane.onGround && !down(p);
         h.down = down(p);
-        h.status = h.down                                   ? "Crashed! Back in a moment"
+        const Pilot* by = p.lastBy >= 0 && p.lastBy < static_cast<int>(m_pilots.size()) ? &m_pilots[static_cast<size_t>(p.lastBy)] : nullptr;
+        const std::string downText = p.downCause == 1 && by ? "Shot down by " + by->name + "! Back in a moment"
+                                   : p.downCause == 2 && by ? "Collided with " + by->name + "! Back in a moment"
+                                                            : "Crashed! Back in a moment";
+        h.status = h.down                                   ? downText
+                 : p.shield > 0.0f && m_mode == Mode::Dogfight ? "Shielded for a moment: get clear"
                  : h.stall                                  ? "STALL: push the nose down"
                  : p.plane.onGround && p.controls.brake     ? "On the ground, brakes on"
                  : p.plane.onGround && p.plane.airspeed < 5 ? "On the ground: throttle up to take off"
-                 : p.plane.onGround                         ? "Rolling: pull up at " + std::to_string(static_cast<int>(m_flight.stallSpeed * 3.6f * 1.2f)) + " km/h"
+                 : p.plane.onGround                         ? "Rolling: it lifts off at " + std::to_string(static_cast<int>(m_flight.rotateSpeed * 3.6f)) + " km/h"
                  : height < 30.0f && p.plane.velocity.y < -8.0f ? "PULL UP"
                                                             : std::string();
         if (m_mode == Mode::Race && n > 0) {
@@ -187,11 +201,36 @@ void FlyingModule::updateHud(float) {
         } else if (m_mode == Mode::Stunts) {
             h.big = points(score(p));
             h.sub = ordinal(place(p)) + "  ·  " + clock(std::max(0.0f, m_stuntTime - m_clock)) + " left";
+        } else if (m_mode == Mode::Dogfight) {
+            h.big = std::to_string(p.kills) + (p.kills == 1 ? " kill" : " kills");
+            h.sub = ordinal(place(p)) + "  ·  first to " + std::to_string(m_killsToWin) + "  ·  " + std::to_string(p.deaths) +
+                    (p.deaths == 1 ? " time down" : " times down");
         } else {
             h.big = "Free flight";
             h.sub = "The runway, the hills, the sea: go anywhere";
         }
         if (h.arrow.empty()) h.arrow = "none";
+        h.health = std::to_string(static_cast<int>(std::ceil(std::max(0.0f, p.health)))) + "%";
+        h.hurt = p.health < 35.0f;
+        // Dogfight: the gun sight, where the nose points 250 m out, as this
+        // player's camera sees it.
+        const kke::ViewRect& view = rects[std::min(i, rects.size() - 1)];
+        if (m_mode == Mode::Dogfight && m_phase == Phase::Flying && !h.down && !p.plane.onGround) {
+            const kke::Camera& cam = p.camera;
+            const float aspect = (static_cast<float>(winW) * view.w) / std::max(1.0f, static_cast<float>(winH) * view.h);
+            const glm::mat4 vp = glm::perspective(glm::radians(cam.fovDegrees), aspect, cam.nearPlane, cam.farPlane) * glm::lookAt(cam.position, cam.target, cam.up);
+            const glm::vec4 clip = vp * glm::vec4(p.plane.position + p.plane.forward() * 250.0f, 1.0f);
+            if (clip.w > 0.1f) {
+                const glm::vec2 ndc = glm::vec2(clip) / clip.w;
+                if (std::abs(ndc.x) < 0.95f && std::abs(ndc.y) < 0.95f) {
+                    h.sight = true;
+                    h.sightX = percent(0.5f + ndc.x * 0.5f);
+                    h.sightY = percent(0.5f - ndc.y * 0.5f);
+                }
+            }
+            h.hit = p.hitMark > 0.0f;
+        }
+        if (!h.sight) h.sightX = h.sightY = "-100%";
         h.trick = p.trickTime > 0.0f ? p.trick : std::string();
         h.device = deviceName(p.seat);
         h.accent = hexColour(p.tint);
@@ -206,7 +245,8 @@ void FlyingModule::updateHud(float) {
         const PlayerHud &a = next[i], &b = m_hud.players[i];
         dirty = a.name != b.name || a.speed != b.speed || a.altitude != b.altitude || a.throttle != b.throttle || a.status != b.status || a.big != b.big ||
                 a.sub != b.sub || a.device != b.device || a.accent != b.accent || a.x != b.x || a.y != b.y || a.w != b.w || a.trick != b.trick ||
-                a.arrow != b.arrow || a.stall != b.stall || a.down != b.down;
+                a.arrow != b.arrow || a.stall != b.stall || a.down != b.down || a.health != b.health || a.hurt != b.hurt || a.sight != b.sight ||
+                a.sightX != b.sightX || a.sightY != b.sightY || a.hit != b.hit;
     }
     if (dirty) {
         m_hud.players = std::move(next);
@@ -228,6 +268,7 @@ void FlyingModule::updateHud(float) {
             r.you = p.seat >= 0 && !p.remote;
             const bool finished = p.remote ? p.net.finished : p.finished;
             if (m_mode == Mode::Stunts) r.what = points(score(p));
+            else if (m_mode == Mode::Dogfight) r.what = std::to_string(p.remote ? p.net.kills : p.kills) + " kills";
             else if (finished) r.what = clock(p.remote ? p.net.finishTime : p.finishTime);
             else r.what = "lap " + std::to_string(std::min((p.remote ? p.net.lap : p.lap) + 1, m_laps));
             if (down(p)) r.what = "crashed";
@@ -247,7 +288,7 @@ void FlyingModule::updateHud(float) {
     const bool stick = !players.empty() && onFlightStick(*players[0]);
     auto prompt = [this, p1, stick](std::string text) {
         if (stick) // a flight stick: its own buttons
-            for (const char* a : { "smoke", "camera", "brake", "pause", "again" }) {
+            for (const char* a : { "smoke", "fire", "camera", "brake", "pause", "again" }) {
                 const std::string from = std::string("{fly.") + a + "}", to = std::string("{stick.") + a + "}";
                 for (size_t at = text.find(from); at != std::string::npos; at = text.find(from, at + to.size())) text.replace(at, from.size(), to);
             }
@@ -259,7 +300,9 @@ void FlyingModule::updateHud(float) {
         banner = std::to_string(std::max(1, static_cast<int>(std::ceil(m_countdown))));
         sub = m_mode == Mode::Race     ? "Fly through the rings in order, " + std::to_string(m_laps) + (m_laps == 1 ? " lap" : " laps")
             : m_mode == Mode::Stunts ? "Loops, rolls, inverted, knife edge and low passes score points: " + std::to_string(static_cast<int>(m_stuntTime)) + " s"
+            : m_mode == Mode::Dogfight ? "Take off and shoot the others down: first to " + std::to_string(m_killsToWin) + " kills"
                                      : "Take off from the runway and fly anywhere";
+        sub = "Full throttle to take off  ·  " + sub;
     } else if (m_phase == Phase::Flying && m_clock < 1.0f) {
         banner = "GO";
     } else if (results) {
@@ -267,22 +310,32 @@ void FlyingModule::updateHud(float) {
         for (const Pilot& p : m_pilots)
             if (!best || progress(p) > progress(*best)) best = &p;
         banner = best ? best->name + " wins" : "";
+        if (best && m_mode == Mode::Dogfight) {
+            const int kills = best->remote ? best->net.kills : best->kills;
+            banner += ": " + std::to_string(kills) + (kills == 1 ? " kill" : " kills");
+        }
         sub = prompt("{fly.again} fly again  ·  {fly.menu} start menu");
     }
     set(m_hud.banner, flying ? banner : std::string(), "banner");
     set(m_hud.sub, flying ? sub : std::string(), "sub");
     set(m_hud.results, results, "results");
     set(m_hud.flash, flying && m_flashTime > 0.0f ? m_flash : std::string(), "flash");
-    set(m_hud.clock, flying && m_mode == Mode::Race && m_phase == Phase::Flying ? clock(m_clock) : std::string(), "clock");
+    set(m_hud.clock,
+        flying && m_phase == Phase::Flying ? m_mode == Mode::Race       ? clock(m_clock)
+                                           : m_mode == Mode::Dogfight ? clock(std::max(0.0f, m_dogfightTime - m_clock))
+                                                                      : std::string()
+                                           : std::string(),
+        "clock");
     std::string hint;
     if (flying && !results) {
         const bool keys = !players.empty() && onKeyboard(*players[0]);
-        hint = keys ? prompt("{fly.pitch} {fly.roll} fly (or the mouse)  ·  {fly.yaw} rudder  ·  {fly.throttle.up} {fly.throttle.down} throttle  ·  "
-                             "{fly.smoke} smoke  ·  {fly.camera} camera  ·  {fly.pause} pause")
-             : stick ? prompt("Stick: fly  ·  twist: rudder  ·  lever: throttle  ·  {fly.smoke} smoke  ·  {fly.camera} camera  ·  {fly.brake} brakes  ·  "
+        const std::string action = m_mode == Mode::Dogfight ? (keys ? "{fly.fire} or the left button fire" : "{fly.fire} fire") : "{fly.smoke} smoke";
+        hint = keys ? prompt("{fly.pitch} {fly.roll} fly (or the mouse)  ·  {fly.yaw} rudder  ·  {fly.throttle.up} {fly.throttle.down} throttle  ·  " + action +
+                             "  ·  {fly.camera} camera  ·  {fly.pause} pause")
+             : stick ? prompt("Stick: fly  ·  twist: rudder  ·  lever: throttle  ·  " + action + "  ·  {fly.camera} camera  ·  {fly.brake} brakes  ·  "
                               "{fly.pause} pause")
-                     : prompt("{fly.pitch} fly  ·  {fly.yaw} rudder  ·  {fly.throttle.up} {fly.throttle.down} throttle  ·  {fly.smoke} smoke  ·  "
-                              "{fly.camera} camera  ·  {fly.pause} pause, change controller");
+                     : prompt("{fly.pitch} fly  ·  {fly.yaw} rudder  ·  {fly.throttle.up} {fly.throttle.down} throttle  ·  " + action +
+                              "  ·  {fly.camera} camera  ·  {fly.pause} pause, change controller");
     }
     set(m_hud.hint, hint, "hint");
 

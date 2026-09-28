@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 
 namespace flying {
 
@@ -144,6 +145,7 @@ void FlyingModule::sendSetup() {
     s.rings = static_cast<uint8_t>(m_ringCount);
     s.ringRadius = m_ringRadius;
     s.mood = m_mood;
+    s.killsToWin = static_cast<uint8_t>(std::clamp(m_killsToWin, 1, 63));
     for (const Pilot& p : m_pilots) {
         if (p.netId < 0) continue;
         s.seats.push_back({ static_cast<uint8_t>(p.netId), static_cast<uint8_t>(p.slot), p.cpu, static_cast<uint8_t>(p.skill),
@@ -192,6 +194,7 @@ void FlyingModule::applySetup(const net::Setup& s) {
     m_laps = std::clamp<int>(s.laps, 1, 7);
     m_ringCount = std::clamp<int>(s.rings, 3, 64);
     m_ringRadius = std::clamp(s.ringRadius, 6.0f, 30.0f);
+    m_killsToWin = std::clamp<int>(s.killsToWin, 1, 63);
     if (!s.mood.empty() && s.mood != m_mood) {
         m_mood = s.mood;
         m_app->setMood(m_mood);
@@ -213,10 +216,25 @@ void FlyingModule::applySetup(const net::Setup& s) {
 }
 
 void FlyingModule::onNetEvent(const kke::net::GameEventMsg& e) {
-    if (e.kind != net::kEventSetup) return;
-    if (!netClient() || e.fromPlayer != 0) return; // only the host sets up a flight
-    if (auto s = net::decodeSetup(e.payload)) applySetup(*s);
-    else kke::log::get(name())->warn("online: a damaged flight setup");
+    if (e.kind == net::kEventSetup) {
+        if (!netClient() || e.fromPlayer != 0) return; // only the host sets up a flight
+        if (auto s = net::decodeSetup(e.payload)) applySetup(*s);
+        else kke::log::get(name())->warn("online: a damaged flight setup");
+        return;
+    }
+    if (e.kind != net::kEventDamage && e.kind != net::kEventDent && e.kind != net::kEventDown) return;
+    if (netHost()) m_net->relayEvent(e); // everyone else hears it too
+    if (e.kind == net::kEventDamage) {
+        if (auto d = net::decodeDamage(e.payload)) onDamage(*d);
+    } else if (e.kind == net::kEventDent) {
+        if (auto d = net::decodeDent(e.payload)) {
+            if (m_net->isLocalPlayer(d->plane)) return; // ours: dented already
+            onDent(*d);
+        }
+    } else if (auto d = net::decodeDown(e.payload)) {
+        if (m_net->isLocalPlayer(d->plane)) return; // ours: counted already
+        onDown(*d);
+    }
 }
 
 std::string FlyingModule::netStatus() const {
@@ -326,7 +344,14 @@ void FlyingModule::updateNet(float dt) {
         }
         if (!it->hasState) continue;
         const net::Plane plane = net::fromState(it->state);
+        if (!p.netSeen) p.net.position = plane.position; // no slide from the origin
+        p.netSeen = true;
         const bool jump = plane.teleported || glm::length(plane.position - p.net.position) > 150.0f;
+        p.previous = jump ? plane.position : p.net.position;
+        // It went down: its explosion here too. Back up: a new plane, no dents.
+        if (plane.crashed && !p.wasDown && m_phase != Phase::Lobby) explode(plane.position, plane.velocity, p.tint);
+        if (!plane.crashed && p.wasDown) clearDents(p);
+        p.wasDown = plane.crashed;
         p.net = plane;
         p.plane.position = plane.position;
         p.plane.velocity = plane.velocity;
@@ -361,6 +386,10 @@ void FlyingModule::sendNet() {
         n.finishTime = p.finishTime;
         n.score = static_cast<uint32_t>(std::clamp(p.stunts.score(), 0, 65535));
         n.round = static_cast<uint8_t>(m_round & 0xFFu);
+        n.firing = p.firing && !down(p);
+        n.health = static_cast<uint8_t>(std::clamp(static_cast<int>(std::ceil(p.health)), 0, 100));
+        n.kills = static_cast<uint8_t>(std::clamp(p.kills, 0, 63));
+        n.deaths = static_cast<uint8_t>(std::clamp(p.deaths, 0, 63));
         p.teleported = false;
         m_net->setLocalPlayer(slot, net::toState(n));
     }

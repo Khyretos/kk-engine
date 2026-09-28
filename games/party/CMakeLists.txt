@@ -1,7 +1,7 @@
 # Party (games/party/README.md): a show of minigames on jelly beans the
 # engine makes itself, for up to four on one screen and friends online.
 file(GLOB PARTY_MINIGAMES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/minigames/*.cpp)
-kke_add_game(party main.cpp PartyModule.cpp Beans.cpp Lobby.cpp Hud.cpp Net.cpp NetParty.cpp Bean.cpp Show.cpp Shatter.cpp Minigames.cpp
+kke_add_game(party main.cpp PartyModule.cpp Beans.cpp Lobby.cpp Hud.cpp Net.cpp NetParty.cpp Bean.cpp People.cpp Show.cpp Shatter.cpp Vote.cpp Pause.cpp Minigames.cpp
              ${PARTY_MINIGAMES})
 target_link_libraries(party PRIVATE kke_engine)
 target_include_directories(party PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

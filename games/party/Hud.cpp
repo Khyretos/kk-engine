@@ -67,6 +67,21 @@ void PartyModule::buildHud() {
         r.RegisterMember("note", &RowHud::note);
     }
     c.RegisterArray<std::vector<RowHud>>();
+    if (auto d = c.RegisterStruct<DotHud>()) d.RegisterMember("colour", &DotHud::colour);
+    c.RegisterArray<std::vector<DotHud>>();
+    if (auto v = c.RegisterStruct<ChoiceHud>()) {
+        v.RegisterMember("title", &ChoiceHud::title);
+        v.RegisterMember("goal", &ChoiceHud::goal);
+        v.RegisterMember("count", &ChoiceHud::count);
+        v.RegisterMember("pointing", &ChoiceHud::pointing);
+        v.RegisterMember("dots", &ChoiceHud::dots);
+        v.RegisterMember("here", &ChoiceHud::here);
+        v.RegisterMember("won", &ChoiceHud::won);
+    }
+    c.RegisterArray<std::vector<ChoiceHud>>();
+    c.Bind("choices", &m_hud.choices);
+    c.Bind("vote", &m_hud.vote);
+    c.Bind("voteClock", &m_hud.voteClock);
     c.Bind("players", &m_hud.players);
     c.Bind("rows", &m_hud.rows);
     c.Bind("banner", &m_hud.banner);
@@ -167,6 +182,7 @@ void PartyModule::updateHud(float) {
     set(m_hud.clock, clock, "clock");
     set(m_hud.status, m_phase == Phase::Play ? m_status : std::string(), "status");
     std::snprintf(buf, sizeof(buf), "ROUND %d OF %d", std::min(m_show.round + 1, m_show.rounds), m_show.rounds);
+    if (m_oneGame) std::snprintf(buf, sizeof(buf), "ONE GAME");
     set(m_hud.round, show && m_phase != Phase::Podium ? std::string(buf) : std::string(), "round");
 
     // Button prompts: the buttons of the device player 1 is using.
@@ -227,17 +243,67 @@ void PartyModule::updateHud(float) {
     }
     setBool(m_hud.table, table, "table");
 
+    // The vote: the choices, who voted for which, where this screen's players point.
+    const bool vote = m_phase == Phase::Vote && !m_vote.games.empty();
+    std::vector<ChoiceHud> choices;
+    if (vote) {
+        for (size_t c = 0; c < m_vote.games.size(); ++c) {
+            ChoiceHud h;
+            h.title = m_vote.games[c];
+            for (const auto& g : m_games)
+                if (g->id() == m_vote.games[c]) {
+                    h.title = g->title();
+                    h.goal = g->goal();
+                }
+            int count = 0;
+            for (const Bean& b : m_beans) {
+                const size_t i = static_cast<size_t>(b.index);
+                if (i < m_vote.votes.size() && m_vote.votes[i] == static_cast<int>(c)) {
+                    ++count;
+                    h.dots.push_back({ hexColour(beanColour(b.look.colour)) });
+                }
+            }
+            h.count = count == 1 ? "1 vote" : std::to_string(count) + " votes";
+            for (const Bean* b : players) {
+                const size_t i = static_cast<size_t>(b->index);
+                if (i < m_vote.cursor.size() && m_vote.cursor[i] == static_cast<int>(c) && m_vote.winner < 0) {
+                    h.here = true;
+                    if (players.size() > 1) h.pointing += (h.pointing.empty() ? "" : ", ") + b->name;
+                }
+            }
+            h.won = m_vote.winner == static_cast<int>(c);
+            choices.push_back(std::move(h));
+        }
+    }
+    dirty = choices.size() != m_hud.choices.size();
+    for (size_t i = 0; !dirty && i < choices.size(); ++i) {
+        const ChoiceHud &a = choices[i], &b = m_hud.choices[i];
+        dirty = a.title != b.title || a.count != b.count || a.pointing != b.pointing || !std::equal(a.dots.begin(), a.dots.end(), b.dots.begin(), b.dots.end(), [](const DotHud& x, const DotHud& y) { return x.colour == y.colour; }) || a.here != b.here || a.won != b.won;
+    }
+    if (dirty) {
+        m_hud.choices = std::move(choices);
+        m_hudModel.DirtyVariable("choices");
+    }
+    setBool(m_hud.vote, vote, "vote");
+    std::snprintf(buf, sizeof(buf), "%d", static_cast<int>(std::ceil(m_vote.left)));
+    set(m_hud.voteClock, vote && m_vote.winner < 0 ? std::string(buf) : std::string(), "voteClock");
+
     // What to press.
     std::string hint;
     const bool anyOut = !players.empty() && std::any_of(players.begin(), players.end(), [](const Bean* b) { return b->out; });
     switch (m_phase) {
-    case Phase::Intro: hint = prompt(netClient() ? "The host starts the round" : "{jump} ready  ·  {menu} menu"); break;
+    case Phase::Intro: hint = prompt(netClient() ? "The host starts the round" : "{jump} ready  ·  {panel.toggle} menu"); break;
     case Phase::Countdown: hint = prompt(m_game ? m_game->controls() : std::string()); break;
     case Phase::Play:
         hint = prompt(m_game ? m_game->controls() : std::string());
         if (anyOut) hint += prompt("  ·  out: {jump} watch someone else");
         break;
-    case Phase::Results: hint = prompt(netClient() ? "The host starts the next round" : "{jump} next round  ·  {menu} menu"); break;
+    case Phase::Results:
+        hint = prompt(netClient()                ? "The host starts the next round"
+                      : m_oneGame && !online() ? "{jump} play it again  ·  {panel.toggle} menu"
+                                               : "{jump} next round  ·  {panel.toggle} menu");
+        break;
+    case Phase::Vote: hint = prompt(m_vote.winner >= 0 ? std::string() : "{move} pick a game  ·  {jump} vote for it"); break;
     case Phase::Podium: hint = prompt(netClient() ? "The host picks what's next" : "{jump} back to the menu  ·  a new party"); break;
     default: break;
     }

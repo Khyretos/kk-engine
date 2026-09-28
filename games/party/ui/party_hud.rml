@@ -43,6 +43,19 @@
         #table .got { display: inline-block; width: 60dp; color: #9cff9a; font-weight: bold; }
         #table .total { display: inline-block; width: 60dp; font-weight: bold; }
         #table .note { color: #aab3cc; font-size: 14dp; }
+        /* The vote: three games side by side, the stage and its beans below. */
+        #vote { position: absolute; left: 50%; top: 4%; width: 900dp; margin-left: -450dp; text-align: center; }
+        #vote .head { font-size: 15dp; letter-spacing: 4dp; color: #ffd76b; }
+        #vote .clock { display: inline-block; font-size: 28dp; font-weight: bold; color: #ffffff; margin: 4dp 0 10dp 0; }
+        #vote .choice { display: inline-block; vertical-align: top; width: 250dp; height: 180dp; margin: 0 8dp; padding: 14dp 12dp;
+                        border-radius: 18dp; background-color: #1a1030dd; border: 4dp #1a103000; }
+        #vote .choice.here { border-color: #ffffff; background-color: #2a1850ee; }
+        #vote .choice.won { border-color: #ffd76b; background-color: #4a3010ee; }
+        #vote .title { display: block; font-size: 25dp; font-weight: bold; color: #ffffff; }
+        #vote .goal { display: block; font-size: 14dp; color: #fff4d6; margin-top: 6dp; line-height: 1.25; height: 70dp; }
+        #vote .count { display: block; font-size: 16dp; font-weight: bold; color: #9cff9a; margin-top: 6dp; }
+        #vote .dot { display: inline-block; width: 14dp; height: 14dp; border-radius: 7dp; margin: 4dp 2dp 0 2dp; }
+        #vote .pointing { display: block; font-size: 13dp; color: #d8f7ff; margin-top: 4dp; }
         #hint { position: absolute; left: 8%; bottom: 14dp; width: 84%; padding: 6dp 10dp; border-radius: 10dp; background-color: #1a1030bb;
                 text-align: center; font-size: 14dp; color: #fff4d6; }
         #talk { position: absolute; right: 20dp; bottom: 60dp; padding: 4dp 12dp; border-radius: 10dp; background-color: #10301acc;
@@ -59,6 +72,9 @@
         body.kke-portrait #hint { left: 2%; width: 90%; }
         body.kke-portrait #top { top: 78dp; } /* under the player panel */
         body.kke-phone .player { margin: 8dp 0 0 8dp; }
+        body.kke-portrait #vote { left: 3%; width: 94%; margin-left: 0; top: 12%; }
+        body.kke-portrait #vote .choice { display: block; width: auto; height: auto; margin: 0 0 8dp 0; padding: 8dp 12dp; }
+        body.kke-portrait #vote .goal { display: none; }
     </style>
 </head>
 <body data-model="party">
@@ -75,7 +91,7 @@
             <div class="clock" data-if="clock != ''">{{clock}}</div>
             <div class="status" data-if="status != ''">{{status}}</div>
         </div>
-        <div id="banner" data-if="banner != '' && !card">
+        <div id="banner" data-if="banner != '' && !card && !vote">
             <div class="big">{{banner}}</div>
             <div class="sub" data-if="sub != ''">{{sub}}</div>
         </div>
@@ -87,6 +103,20 @@
         </div>
         <div id="table" data-if="table">
             <div data-for="r : rows" class="row"><span class="place">{{r.place}}</span><span class="dot" data-style-background-color="r.accent"></span><span class="who">{{r.name}}</span><span class="got">{{r.got}}</span><span class="total">{{r.total}}</span><span class="note">{{r.note}}</span></div>
+        </div>
+        <div id="vote" data-if="vote">
+            <div class="head">VOTE FOR THE NEXT GAME · {{round}}</div>
+            <div class="clock" data-if="voteClock != ''">{{voteClock}}</div>
+            <div class="clock" data-if="voteClock == ''">Decided!</div>
+            <div>
+                <div data-for="c : choices" class="choice" data-class-here="c.here" data-class-won="c.won">
+                    <span class="title">{{c.title}}</span>
+                    <span class="goal">{{c.goal}}</span>
+                    <span class="count">{{c.count}}</span>
+                    <div><span data-for="d : c.dots" class="dot" data-style-background-color="d.colour"></span></div>
+                    <span class="pointing" data-if="c.pointing != ''">{{c.pointing}}</span>
+                </div>
+            </div>
         </div>
         <div id="hint" data-if="hint != ''" data-rml="hint"></div>
     </div>

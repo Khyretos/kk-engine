@@ -5,8 +5,13 @@
 
 #include "FlyingModule.h"
 
+#include "kke/AssetCatalog.h"
 #include "kke/Log.h"
+#include "kke/SceneLoader.h"
 #include "kke/SphereImpostors.h"
+
+#include <SDL3/SDL.h>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <glm/gtc/constants.hpp>
 
@@ -130,11 +135,7 @@ void FlyingModule::buildWorld() {
             quad(sx, sx + 1.6f, z - 20.0f, z, 0.02f, { 0.92f, 0.92f, 0.9f });
         }
     }
-    // A hangar and a tower by the runway.
-    appendBox({ x1 + 45.0f, w.height() + 7.0f, w.start.z - 120.0f }, { 16.0f, 7.0f, 22.0f }, { 0.62f, 0.64f, 0.68f }, v, idx);
-    appendBox({ x1 + 45.0f, w.height() + 14.5f, w.start.z - 120.0f }, { 16.5f, 0.6f, 22.5f }, { 0.55f, 0.18f, 0.16f }, v, idx);
-    appendBox({ x1 + 30.0f, w.height() + 12.0f, w.start.z - 200.0f }, { 3.0f, 12.0f, 3.0f }, { 0.85f, 0.85f, 0.82f }, v, idx);
-    appendBox({ x1 + 30.0f, w.height() + 25.0f, w.start.z - 200.0f }, { 4.5f, 2.0f, 4.5f }, { 0.25f, 0.45f, 0.6f }, v, idx);
+    // The hangar and the control tower are the town's (buildTown).
     // Trees: scattered on the grass, never on the runway, the beach or the rock.
     uint32_t r = seed * 2246822519u + 3266489917u;
     auto rand01 = [&r]() {
@@ -169,14 +170,6 @@ void FlyingModule::buildWorld() {
         pushTriangle(sv, si, { { -s, Island::kSea, -s }, c, up, {} }, { { s, Island::kSea, s }, c, up, {} }, { { -s, Island::kSea, s }, c, up, {} });
         m_sea = std::make_unique<kke::DynamicMeshRenderer>(*m_app);
         m_sea->upload(sv, si);
-    }
-    // Debris of a crash: a few chunks (drawn scaled and spun per crash).
-    if (!m_debris) {
-        std::vector<kke::Vertex> dv;
-        std::vector<uint32_t> di;
-        appendBox(glm::vec3(0.0f), glm::vec3(0.5f), { 0.3f, 0.28f, 0.26f }, dv, di);
-        m_debris = std::make_unique<kke::DynamicMeshRenderer>(*m_app);
-        m_debris->upload(dv, di);
     }
 }
 
@@ -222,6 +215,106 @@ void FlyingModule::buildRings() {
     torus(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f), 1.0f, 0.1f, { 1.0f, 0.78f, 0.15f }, v, idx);
     if (!m_nextRingMesh) m_nextRingMesh = std::make_unique<kke::DynamicMeshRenderer>(*m_app);
     m_nextRingMesh->upload(v, idx);
+}
+
+// The houses and shops of the Dogfight's town: Synty's POLYGON Town when
+// it's installed (the office towers are always built here, as boxes).
+void FlyingModule::loadTownArt() {
+    if (!m_models || m_townArtTried) return;
+    m_townArtTried = true;
+    const char* base = SDL_GetBasePath();
+    const std::string folder = kke::findAssetFolder("assets/synty", { "KKE_ASSETS_DIR", "KKE_SYNTY_DIR" }, base ? base : "", nullptr);
+    if (folder.empty()) return;
+    kke::CatalogScanOptions scan;
+    scan.onlyPacks = { "POLYGON_Town" };
+    const kke::AssetCatalog catalog = kke::AssetCatalog::scan(folder, scan);
+    std::vector<std::string> names;
+    for (int i = 1; i <= 11; ++i) names.push_back("SM_Bld_House_Preset_" + std::string(i < 10 ? "0" : "") + std::to_string(i));
+    for (const char* n : { "SM_Bld_Shop_01", "SM_Bld_Shop_02", "SM_Bld_Shop_03", "SM_Bld_Church_01" }) names.push_back(n);
+    for (const std::string& n : names) {
+        const kke::CatalogAsset* asset = catalog.find(n);
+        if (!asset) continue;
+        kke::ModelData data;
+        try {
+            data = kke::loadModel(asset->path, kke::packLoadOptions(catalog, *asset));
+        } catch (const std::exception& e) {
+            kke::log::get(name())->warn("town: {} didn't load ({}): a box stands in", n, e.what());
+            continue;
+        }
+        const glm::vec3 lo = data.boundsMin, hi = data.boundsMax;
+        if (!(lo.x < hi.x)) continue;
+        const float scale = glm::length(hi - lo) > 150.0f ? 0.01f : 1.0f;
+        const kke::ModelModule::ModelId id = m_models->add(std::move(data), n);
+        if (!id) continue;
+        m_houseModels.push_back(id);
+        m_houseSizes.push_back((hi - lo) * scale);
+        m_houseOffsets.push_back(glm::vec3((lo.x + hi.x) * 0.5f, lo.y, (lo.z + hi.z) * 0.5f) * scale);
+        m_houseScales.push_back(scale);
+    }
+    if (!m_houseModels.empty()) kke::log::get(name())->info("town: {} Synty houses and shops", m_houseModels.size());
+}
+
+// The buildings a plane can hit, drawn: the hangar and the control tower
+// always; in a dogfight, the town beside the runway (Combat.h's Town).
+void FlyingModule::buildTown() {
+    m_townBuilt = true;
+    m_townSeed = m_island.seed();
+    m_townDistrict = m_mode == Mode::Dogfight;
+    if (m_townDistrict) loadTownArt(); // the first dogfight: the houses (a few seconds)
+    m_town = Town(m_island, m_townDistrict, m_houseSizes);
+    for (kke::ModelModule::InstanceId h : m_houses) m_models->remove(h);
+    m_houses.clear();
+    std::vector<kke::Vertex> v;
+    std::vector<uint32_t> idx;
+    const std::vector<Building>& all = m_town.buildings();
+    for (size_t i = 0; i < all.size(); ++i) {
+        const Building& b = all[i];
+        const glm::vec3 mid = (b.lo + b.hi) * 0.5f, half = (b.hi - b.lo) * 0.5f;
+        if (i == 0) {
+            // The hangar, its red roof a little wider.
+            appendBox(mid - glm::vec3(0.0f, 0.6f, 0.0f), half - glm::vec3(0.5f, 0.6f, 0.5f), b.colour, v, idx);
+            appendBox({ mid.x, b.hi.y - 0.6f, mid.z }, { half.x, 0.6f, half.z }, { 0.55f, 0.18f, 0.16f }, v, idx);
+            continue;
+        }
+        if (i == 1) {
+            // The control tower: a shaft and a glass cab.
+            appendBox({ mid.x, b.lo.y + (half.y * 2.0f - 4.0f) * 0.5f, mid.z }, { 3.0f, (half.y * 2.0f - 4.0f) * 0.5f, 3.0f }, b.colour, v, idx);
+            appendBox({ mid.x, b.hi.y - 2.0f, mid.z }, { half.x, 2.0f, half.z }, { 0.25f, 0.45f, 0.6f }, v, idx);
+            continue;
+        }
+        if (b.art >= 0 && b.art < static_cast<int>(m_houseModels.size())) {
+            const size_t k = static_cast<size_t>(b.art);
+            const kke::ModelModule::InstanceId inst = m_models->spawn(m_houseModels[k]);
+            const glm::mat4 xf = glm::translate(glm::mat4(1.0f), glm::vec3(mid.x, b.lo.y + 1.0f, mid.z)) *
+                                 glm::rotate(glm::mat4(1.0f), glm::half_pi<float>() * static_cast<float>(b.turn), glm::vec3(0.0f, 1.0f, 0.0f)) *
+                                 glm::translate(glm::mat4(1.0f), -m_houseOffsets[k]) * glm::scale(glm::mat4(1.0f), glm::vec3(m_houseScales[k]));
+            m_models->setTransform(inst, xf);
+            m_houses.push_back(inst);
+            continue;
+        }
+        appendBox(mid, half, b.colour, v, idx);
+        if (b.tower) {
+            // Rows of windows round each floor, and a parapet.
+            const glm::vec3 glass(0.16f, 0.24f, 0.34f);
+            for (float y = b.lo.y + 4.5f; y < b.hi.y - 2.0f; y += 4.0f) {
+                appendBox({ mid.x, y, b.lo.z - 0.05f }, { half.x - 1.2f, 1.1f, 0.06f }, glass, v, idx);
+                appendBox({ mid.x, y, b.hi.z + 0.05f }, { half.x - 1.2f, 1.1f, 0.06f }, glass, v, idx);
+                appendBox({ b.lo.x - 0.05f, y, mid.z }, { 0.06f, 1.1f, half.z - 1.2f }, glass, v, idx);
+                appendBox({ b.hi.x + 0.05f, y, mid.z }, { 0.06f, 1.1f, half.z - 1.2f }, glass, v, idx);
+            }
+            appendBox({ mid.x, b.hi.y + 0.4f, mid.z }, { half.x * 0.35f, 0.4f, half.z * 0.35f }, b.colour * 0.8f, v, idx);
+        } else {
+            // A house of boxes: a roof of a darker red.
+            appendBox({ mid.x, b.hi.y + 0.5f, mid.z }, { half.x + 0.4f, 0.5f, half.z + 0.4f }, { 0.52f, 0.24f, 0.2f }, v, idx);
+        }
+    }
+    if (m_townMesh) m_app->renderer().retire(std::move(m_townMesh)); // frames in flight still draw it
+    m_townMesh = std::make_unique<kke::DynamicMeshRenderer>(*m_app);
+    m_townMesh->upload(v, idx);
+    int towers = 0;
+    for (const Building& b : all) towers += b.tower ? 1 : 0;
+    if (m_townDistrict)
+        kke::log::get(name())->info("town on island {}: {} buildings ({} towers, {} Synty houses)", m_townSeed, all.size(), towers, m_houses.size());
 }
 
 } // namespace flying

@@ -13,19 +13,20 @@ namespace {
 
 namespace kn = kke::net;
 
-constexpr uint8_t kFlagSmoke = 1u << 0, kFlagCrashed = 1u << 1, kFlagGround = 1u << 2, kFlagFinished = 1u << 3;
+constexpr uint8_t kFlagSmoke = 1u << 0, kFlagCrashed = 1u << 1, kFlagGround = 1u << 2, kFlagFinished = 1u << 3, kFlagFiring = 1u << 4;
 constexpr size_t kMaxSeats = 32;
 constexpr size_t kMaxMood = 32;
 
 // NetPlayerState::extra: the attitude (smallest three, 35 bits), throttle
 // (6), next ring (6), lap (3), finish time (to 1/100 s, 19), score (16),
-// round (8). 93 bits, 12 bytes.
+// round (8), health (7), kills and deaths (6 each). 112 bits, 14 bytes.
 struct Extra {
     glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
     float throttle = 0.0f;
     uint8_t nextRing = 0, lap = 0, round = 0;
     float finishTime = 0.0f;
     uint32_t score = 0;
+    uint8_t health = 100, kills = 0, deaths = 0;
 };
 template <typename Stream> void serialize(Stream& s, Extra& e) {
     s.quat(e.rotation);
@@ -35,6 +36,58 @@ template <typename Stream> void serialize(Stream& s, Extra& e) {
     s.real(e.finishTime, 0.0f, 5000.0f, 0.01f);
     s.integer(e.score, 0, 65535);
     s.integer(e.round, 0, 255);
+    s.integer(e.health, 0, 100);
+    s.integer(e.kills, 0, 63);
+    s.integer(e.deaths, 0, 63);
+}
+
+// A point or a direction on a plane: within 8 m of its middle, to 2 cm.
+template <typename Stream> void planePoint(Stream& s, glm::vec3& v) {
+    for (int i = 0; i < 3; ++i) s.real(v[i], -8.0f, 8.0f, 0.02f);
+}
+
+template <typename Stream> void serialize(Stream& s, Damage& d) {
+    s.integer(d.target, 0, 255);
+    s.integer(d.from, 0, 255);
+    s.integer(d.round, 0, 255);
+    s.boolean(d.bump);
+    s.real(d.amount, 0.0f, 255.0f, 0.25f);
+    s.real(d.speed, 0.0f, 255.0f, 0.25f);
+    planePoint(s, d.point);
+    for (int i = 0; i < 3; ++i) s.real(d.direction[i], -1.0f, 1.0f, 1.0f / 127.0f);
+}
+
+template <typename Stream> void serialize(Stream& s, Dent& d) {
+    s.integer(d.plane, 0, 255);
+    s.integer(d.round, 0, 255);
+    planePoint(s, d.point);
+    for (int i = 0; i < 3; ++i) s.real(d.direction[i], -1.0f, 1.0f, 1.0f / 127.0f);
+    s.real(d.depth, 0.0f, 1.0f, 1.0f / 255.0f);
+}
+
+template <typename Stream> void serialize(Stream& s, Down& d) {
+    s.integer(d.plane, 0, 255);
+    s.integer(d.by, 0, 255);
+    s.integer(d.round, 0, 255);
+    s.integer(d.cause, 0, 3);
+}
+
+template <typename T> std::vector<uint8_t> encodeAny(const T& value) {
+    T copy = value;
+    std::vector<uint8_t> out;
+    {
+        kn::WriteStream w(out);
+        serialize(w, copy);
+    }
+    return out;
+}
+
+template <typename T> std::optional<T> decodeAny(const std::vector<uint8_t>& bytes) {
+    kn::ReadStream r(bytes.data(), bytes.size());
+    T m;
+    serialize(r, m);
+    if (!r.ok() || r.bitsLeft() >= 8) return std::nullopt;
+    return m;
 }
 
 template <typename Stream> void serialize(Stream& s, Seat& seat) {
@@ -57,6 +110,7 @@ template <typename Stream> void serialize(Stream& s, Setup& m) {
     s.integer(m.rings, 3, 63);
     s.real(m.ringRadius, 4.0f, 40.0f, 0.25f);
     s.string(m.mood, kMaxMood);
+    s.integer(m.killsToWin, 1, 63);
     uint32_t n = static_cast<uint32_t>(std::min(m.seats.size(), kMaxSeats));
     s.integer(n, 0, kMaxSeats);
     if constexpr (Stream::kReading) m.seats.resize(s.ok() ? n : 0);
@@ -75,7 +129,7 @@ kke::net::NetPlayerState toState(const Plane& p) {
     s.yaw = yaw;
     s.speed = std::min(glm::length(p.velocity) / 5.0f, 20.0f); // m/s / 5: the field tops out at 20
     s.flags = static_cast<uint8_t>((p.smoke ? kFlagSmoke : 0) | (p.crashed ? kFlagCrashed : 0) | (p.onGround ? kFlagGround : 0) |
-                                   (p.finished ? kFlagFinished : 0) | (p.teleported ? kn::kPlayerTeleported : 0));
+                                   (p.finished ? kFlagFinished : 0) | (p.firing ? kFlagFiring : 0) | (p.teleported ? kn::kPlayerTeleported : 0));
     Extra e;
     e.rotation = glm::normalize(p.rotation);
     e.throttle = std::clamp(p.throttle, 0.0f, 1.0f);
@@ -84,6 +138,9 @@ kke::net::NetPlayerState toState(const Plane& p) {
     e.finishTime = std::clamp(p.finishTime, 0.0f, 5000.0f);
     e.score = std::min<uint32_t>(p.score, 65535);
     e.round = p.round;
+    e.health = std::min<uint8_t>(p.health, 100);
+    e.kills = std::min<uint8_t>(p.kills, 63);
+    e.deaths = std::min<uint8_t>(p.deaths, 63);
     {
         kn::WriteStream w(s.extra);
         serialize(w, e);
@@ -100,6 +157,7 @@ Plane fromState(const kke::net::NetPlayerState& s) {
     p.onGround = (s.flags & kFlagGround) != 0;
     p.finished = (s.flags & kFlagFinished) != 0;
     p.teleported = (s.flags & kn::kPlayerTeleported) != 0;
+    p.firing = (s.flags & kFlagFiring) != 0;
     Extra e;
     kn::ReadStream r(s.extra.data(), s.extra.size());
     serialize(r, e);
@@ -115,6 +173,9 @@ Plane fromState(const kke::net::NetPlayerState& s) {
     p.finishTime = e.finishTime;
     p.score = e.score;
     p.round = e.round;
+    p.health = e.health;
+    p.kills = e.kills;
+    p.deaths = e.deaths;
     return p;
 }
 
@@ -135,6 +196,13 @@ std::optional<Setup> decodeSetup(const std::vector<uint8_t>& bytes) {
     if (!r.ok() || r.bitsLeft() >= 8) return std::nullopt;
     return m;
 }
+
+std::vector<uint8_t> encode(const Damage& d) { return encodeAny(d); }
+std::vector<uint8_t> encode(const Dent& d) { return encodeAny(d); }
+std::vector<uint8_t> encode(const Down& d) { return encodeAny(d); }
+std::optional<Damage> decodeDamage(const std::vector<uint8_t>& bytes) { return decodeAny<Damage>(bytes); }
+std::optional<Dent> decodeDent(const std::vector<uint8_t>& bytes) { return decodeAny<Dent>(bytes); }
+std::optional<Down> decodeDown(const std::vector<uint8_t>& bytes) { return decodeAny<Down>(bytes); }
 
 std::string tintText(const glm::vec3& tint) {
     char buf[16];

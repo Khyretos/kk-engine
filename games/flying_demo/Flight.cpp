@@ -92,6 +92,9 @@ void step(PlaneState& s, const Controls& c, const FlightSettings& f, const Groun
         rollRate = 0.0f;
         yawRate = yaw * f.groundSteer * std::clamp(speed / 6.0f, 0.3f, 1.0f) + yaw * f.yawRate * authority * 0.5f;
         pitchRate = std::max(pitchRate, pitch * f.pitchRate * authority); // the weathervane doesn't pin the tail down
+        // Fast enough to fly: the nose comes up by itself (unless the stick
+        // pushes it down), so full throttle is all a take-off needs.
+        if (vf > f.rotateSpeed && pitch > -0.3f && pitchOf(s.rotation) < 9.0f) pitchRate = std::max(pitchRate, 12.0f);
     }
     const glm::vec3 turn(glm::radians(pitchRate), glm::radians(-yawRate), glm::radians(-rollRate));
     const float angle = glm::length(turn) * dt;
@@ -99,7 +102,8 @@ void step(PlaneState& s, const Controls& c, const FlightSettings& f, const Groun
 
     // Forces (as accelerations).
     glm::vec3 acc(0.0f, -kGravity, 0.0f);
-    acc += fwd * (std::clamp(c.throttle, 0.0f, 1.0f) * f.maxThrust * (1.0f - 0.5f * std::min(speed / f.maxSpeed, 1.0f)));
+    const float steep = std::clamp((glm::degrees(std::asin(std::clamp(fwd.y, -1.0f, 1.0f))) - 55.0f) / 35.0f, 0.0f, 1.0f);
+    acc += fwd * (std::clamp(c.throttle, 0.0f, 1.0f) * f.maxThrust * (1.0f - 0.5f * std::min(speed / f.maxSpeed, 1.0f)) * (1.0f - (1.0f - f.steepThrust) * steep));
     const float liftAcc = lift * kGravity;
     acc += up * liftAcc;
     if (speed > 0.01f) acc -= (s.velocity / speed) * (f.drag * speed * speed + f.inducedDrag * std::abs(liftAcc));

@@ -157,6 +157,19 @@ void FlyingModule::loadArt() {
         case Art::Kind::Stick: hinge.y = plo.y; break;
         case Art::Kind::Body: break;
         }
+        // As made, for dents (Damage.cpp).
+        std::vector<std::vector<glm::vec3>> positions, normals;
+        std::vector<std::vector<uint32_t>> indices;
+        for (const kke::ModelMesh& m : p.meshes) {
+            std::vector<glm::vec3> pos, nrm;
+            for (const kke::ModelVertex& v : m.vertices) {
+                pos.push_back(v.position);
+                nrm.push_back(v.normal);
+            }
+            positions.push_back(std::move(pos));
+            normals.push_back(std::move(nrm));
+            indices.push_back(m.indices);
+        }
         kke::ModelData d;
         d.sourcePath = data.sourcePath;
         d.materials = data.materials;
@@ -169,7 +182,12 @@ void FlyingModule::loadArt() {
         m_art.kinds.push_back(p.kind);
         m_art.hinges.push_back(hinge);
         m_art.axes.push_back(axis);
+        m_art.positions.push_back(std::move(positions));
+        m_art.normals.push_back(std::move(normals));
+        m_art.indices.push_back(std::move(indices));
     }
+    m_art.scale = scale;
+    m_shape = planeShape(span * scale);
     if (const kke::CatalogPack* pack = catalog.pack(asset->pack)) m_art.liveries = pack->textureVariants;
     m_art.loaded = !m_art.parts.empty();
     log->info("stunt plane: {} parts, {:.1f} m span (scale {}), nose along ({:.0f}, {:.0f}, {:.0f}), {} paint jobs", m_art.parts.size(), span * scale,
@@ -204,11 +222,17 @@ void FlyingModule::spawnArt(Pilot& p) {
     for (float x : { -0.9f, 0.9f }) appendBox({ x, g + 0.3f, -1.2f }, { 0.08f, 0.3f, 0.3f }, black, v, idx); // wheels
     p.blockPlane = std::make_unique<kke::DynamicMeshRenderer>(*m_app);
     p.blockPlane->upload(v, idx);
+    p.blockBase = std::move(v);
+    p.blockIndices = std::move(idx);
 }
 
 void FlyingModule::removeArt(Pilot& p) {
     for (kke::ModelModule::InstanceId i : p.parts) m_models->remove(i);
     p.parts.clear();
+    p.dented.clear();
+    p.dentedNormals.clear();
+    p.blockDented.clear();
+    p.dentsChanged = false;
     if (p.blockPlane) m_app->renderer().retire(std::move(p.blockPlane)); // frames in flight still draw it
 }
 
@@ -217,14 +241,25 @@ void FlyingModule::poseArt(Pilot& p, float dt) {
     const float throttle = p.remote ? p.net.throttle : p.controls.throttle;
     const bool down = p.remote ? p.net.crashed : (p.plane.crashed || p.respawnIn > 0.0f);
     p.propAngle = std::fmod(p.propAngle + dt * (down ? 0.0f : 900.0f + 2600.0f * throttle), 360.0f);
+    if (p.blockPlane && p.dentsChanged) {
+        p.dentsChanged = false;
+        p.blockPlane->upload(p.blockDented.empty() ? p.blockBase : p.blockDented, p.blockIndices);
+    }
     if (p.parts.empty()) return;
     const glm::vec3 position = p.remote ? p.net.position : p.plane.position;
     const glm::quat rotation = p.remote ? p.drawnRotation : p.plane.rotation;
     const glm::mat4 world = planeMatrix(position, rotation) * m_art.toPlane;
+    if (p.dentsChanged) {
+        p.dentsChanged = false;
+        for (size_t i = 0; i < p.parts.size(); ++i) {
+            if (p.dented.size() > i && !p.dented[i].empty()) m_models->setDeformedVertices(p.parts[i], p.dented[i], p.dentedNormals[i], true);
+            else if (m_models->isDeformed(p.parts[i])) m_models->setDeformedVertices(p.parts[i], {}, {}, true);
+        }
+    }
     // Remote planes: the controls aren't sent, so their surfaces rest.
     const Controls c = p.remote ? Controls{} : p.controls;
     for (size_t i = 0; i < p.parts.size() && i < m_art.kinds.size(); ++i) {
-        m_models->setVisible(p.parts[i], !down);
+        m_models->setVisible(p.parts[i], !down && present(p));
         float angle = 0.0f;
         glm::vec3 axis = m_art.axes[i];
         switch (m_art.kinds[i]) {
@@ -300,6 +335,14 @@ void FlyingModule::rebuildTrails() {
             if (nearEye) continue;
             m_puffs.push_back({ pt.at, radius, glm::mix(tint, glm::vec3(0.97f), std::sqrt(t)), 0.0f, 1.0f });
         }
+    }
+    // Explosions (Damage.cpp): balls of fire swelling, going orange, dark and out.
+    for (const Fireball& f : m_fireballs) {
+        if (f.age < 0.0f) continue;
+        const float t = std::clamp(f.age / 1.2f, 0.0f, 1.0f);
+        const glm::vec3 colour = t < 0.5f ? glm::mix(glm::vec3(1.0f, 0.9f, 0.55f), glm::vec3(1.0f, 0.45f, 0.1f), t * 2.0f)
+                                          : glm::mix(glm::vec3(1.0f, 0.45f, 0.1f), glm::vec3(0.15f, 0.12f, 0.1f), (t - 0.5f) * 2.0f);
+        m_puffs.push_back({ f.position, f.size * (0.45f + 1.1f * std::sqrt(t)), colour, std::max(0.0f, 1.0f - t * 1.3f), 1.0f });
     }
     if (!m_smoke && !m_puffs.empty()) m_smoke = std::make_unique<kke::SphereImpostorRenderer>(*m_app);
 }

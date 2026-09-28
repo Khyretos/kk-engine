@@ -1,6 +1,8 @@
 // The Flying demo's flight model and course (games/flying_demo/Flight.h,
 // Course.h): planes fly, stall and land the way the README says, and
-// the CPU pilots get round every island's rings.
+// the CPU pilots get round every island's rings. Combat.h: planes and
+// bullets hit what they should, and the Dogfight town stands on the land.
+#include "Combat.h"
 #include "Course.h"
 #include "Flight.h"
 #include "FlyNet.h"
@@ -8,6 +10,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <optional>
 #include <string>
@@ -79,6 +82,28 @@ TEST(Flight, AFullLoopComesBackAround) {
     EXPECT_GT(s.up().y, 0.9f) << "and came back upright";
 }
 
+TEST(Flight, StraightUpSlowsAndTipsOver) {
+    // The engine is weaker than the plane is heavy: pointed at the sky it
+    // slows, and then falls over nose first (a hammerhead), never hangs there.
+    FlightSettings f;
+    PlaneState s = airborne(glm::vec3(0.0f, 300.0f, 0.0f), 0.0f, 60.0f);
+    s.rotation = glm::angleAxis(glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f)) * s.rotation;
+    s.velocity = s.forward() * 60.0f;
+    ASSERT_GT(s.forward().y, 0.99f);
+    Controls c;
+    c.throttle = 1.0f;
+    float stoppedAt = -1.0f, lowestPitch = 90.0f;
+    for (int i = 0; i < 60 * 20; ++i) {
+        step(s, c, f, flatGround(), kDt);
+        if (stoppedAt < 0.0f && s.velocity.y <= 0.0f) stoppedAt = static_cast<float>(i) * kDt;
+        lowestPitch = std::min(lowestPitch, pitchOf(s.rotation));
+    }
+    EXPECT_GT(stoppedAt, 0.0f) << "it ran out of speed going up";
+    EXPECT_LT(stoppedAt, 12.0f);
+    EXPECT_LT(lowestPitch, -30.0f) << "and the nose fell through";
+    EXPECT_FALSE(s.crashed);
+}
+
 TEST(Flight, TooSlowStalls) {
     FlightSettings f;
     PlaneState s = airborne(glm::vec3(0.0f, 500.0f, 0.0f), 0.0f, 30.0f);
@@ -123,6 +148,24 @@ TEST(Flight, TakesOffFromTheGroundAndLandsGently) {
     c.pitch = -1.0f;
     for (int i = 0; i < 60 * 5 && !dive.crashed; ++i) step(dive, c, f, flatGround(), kDt);
     EXPECT_TRUE(dive.crashed);
+}
+
+TEST(Flight, TakesOffWithJustTheThrottle) {
+    // No stick at all: at take-off speed the nose lifts by itself.
+    FlightSettings f;
+    PlaneState s = parked(glm::vec3(0.0f), 0.0f, f);
+    Controls c;
+    c.throttle = 1.0f;
+    float liftOff = -1.0f;
+    for (int i = 0; i < 60 * 20; ++i) {
+        step(s, c, f, flatGround(), kDt);
+        if (!s.onGround && liftOff < 0.0f) liftOff = -s.position.z;
+    }
+    EXPECT_FALSE(s.crashed);
+    EXPECT_GT(liftOff, 20.0f) << "it rolls a while first";
+    EXPECT_LT(liftOff, 400.0f) << "well inside the island's 760 m runway";
+    EXPECT_FALSE(s.onGround);
+    EXPECT_GT(s.position.y, 8.0f) << "and stays up (pulling back climbs away)";
 }
 
 TEST(Course, SameSeedSameIslandAndRings) {
@@ -195,7 +238,15 @@ TEST(FlyNet, PlanesAndSetupRoundTrip) {
     p.finishTime = 123.45f;
     p.score = 4200;
     p.round = 9;
+    p.firing = true;
+    p.health = 37;
+    p.kills = 12;
+    p.deaths = 3;
     const net::Plane q = net::fromState(net::toState(p));
+    EXPECT_TRUE(q.firing);
+    EXPECT_EQ(q.health, 37);
+    EXPECT_EQ(q.kills, 12);
+    EXPECT_EQ(q.deaths, 3);
     EXPECT_LT(glm::length(q.position - p.position), 0.01f);
     EXPECT_GT(std::abs(glm::dot(q.rotation, p.rotation)), 0.999f);
     EXPECT_NEAR(q.throttle, 0.75f, 0.02f);
@@ -215,6 +266,7 @@ TEST(FlyNet, PlanesAndSetupRoundTrip) {
     s.rings = 12;
     s.ringRadius = 10.0f;
     s.mood = "golden_hour";
+    s.killsToWin = 15;
     s.seats.push_back({ 1, 0, false, 1, 2, "Kees", glm::vec3(0.2f, 0.6f, 1.0f) });
     s.seats.push_back({ 5, 1, true, 3, 0, "Ace", glm::vec3(1.0f, 0.3f, 0.2f) });
     const std::optional<net::Setup> t = net::decodeSetup(net::encode(s));
@@ -225,6 +277,7 @@ TEST(FlyNet, PlanesAndSetupRoundTrip) {
     EXPECT_EQ(t->rings, 12);
     EXPECT_FLOAT_EQ(t->ringRadius, 10.0f);
     EXPECT_EQ(t->mood, "golden_hour");
+    EXPECT_EQ(t->killsToWin, 15);
     ASSERT_EQ(t->seats.size(), 2u);
     EXPECT_EQ(t->seats[1].name, "Ace");
     EXPECT_TRUE(t->seats[1].cpu);
@@ -232,6 +285,48 @@ TEST(FlyNet, PlanesAndSetupRoundTrip) {
     EXPECT_EQ(t->seats[0].livery, 2);
     EXPECT_FALSE(net::decodeSetup({ 1, 2 }).has_value());
     EXPECT_EQ(net::tintFromText(net::tintText(glm::vec3(1.0f, 0.5f, 0.0f)), glm::vec3(0.0f)).g, 128.0f / 255.0f);
+}
+
+TEST(FlyNet, DamageDentsAndDownsRoundTrip) {
+    net::Damage d;
+    d.target = 4;
+    d.from = 7;
+    d.round = 200;
+    d.bump = true;
+    d.amount = 42.5f;
+    d.speed = 17.25f;
+    d.point = glm::vec3(-3.5f, 0.7f, -0.8f);
+    d.direction = glm::normalize(glm::vec3(1.0f, -0.2f, 0.1f));
+    const std::optional<net::Damage> e = net::decodeDamage(net::encode(d));
+    ASSERT_TRUE(e.has_value());
+    EXPECT_EQ(e->target, 4);
+    EXPECT_EQ(e->from, 7);
+    EXPECT_EQ(e->round, 200);
+    EXPECT_TRUE(e->bump);
+    EXPECT_NEAR(e->amount, 42.5f, 0.13f);
+    EXPECT_NEAR(e->speed, 17.25f, 0.13f);
+    EXPECT_LT(glm::length(e->point - d.point), 0.03f);
+    EXPECT_LT(glm::length(e->direction - d.direction), 0.02f);
+
+    net::Dent dent;
+    dent.plane = 2;
+    dent.point = glm::vec3(0.0f, 0.5f, 2.4f);
+    dent.direction = glm::vec3(0.0f, 0.0f, -1.0f);
+    dent.depth = 0.12f;
+    const std::optional<net::Dent> f = net::decodeDent(net::encode(dent));
+    ASSERT_TRUE(f.has_value());
+    EXPECT_EQ(f->plane, 2);
+    EXPECT_NEAR(f->depth, 0.12f, 0.005f);
+
+    net::Down down;
+    down.plane = 3;
+    down.by = 9;
+    down.cause = 1;
+    const std::optional<net::Down> g = net::decodeDown(net::encode(down));
+    ASSERT_TRUE(g.has_value());
+    EXPECT_EQ(g->by, 9);
+    EXPECT_EQ(g->cause, 1);
+    EXPECT_FALSE(net::decodeDown({ 1 }).has_value());
 }
 
 TEST(Stunts, LoopsAndRollsScore) {
@@ -263,4 +358,73 @@ TEST(Stunts, LoopsAndRollsScore) {
     EXPECT_EQ(points, 300) << "within 3 s of the loop: x1.5";
     t.crashed();
     EXPECT_EQ(t.score(), 500);
+}
+
+TEST(PlaneCombat, HeadOnPlanesMeetEvenBetweenFrames) {
+    const glm::quat level = airborne(glm::vec3(0.0f), 0.0f, 1.0f).rotation;
+    const glm::quat facing = airborne(glm::vec3(0.0f), 180.0f, 1.0f).rotation;
+    // 90 m/s each at 30 frames a second: 6 m a step each, and they pass
+    // through each other within one step.
+    const PlaneShape shape = planeShape();
+    const PlaneContact c = planesTouch(shape, { 0, 100, 3 }, { 0, 100, -3 }, level, { 0, 100, -3 }, { 0, 100, 3 }, facing);
+    EXPECT_TRUE(c.hit);
+    EXPECT_GT(c.depth, 0.5f);
+    // Wing tips 12 m apart: no touch.
+    EXPECT_FALSE(planesTouch(shape, { 0, 100, 3 }, { 0, 100, -3 }, level, { 12, 100, -3 }, { 12, 100, 3 }, facing).hit);
+    // Side by side, wing tips overlapping: a touch pushing them apart.
+    const PlaneContact side = planesTouch(shape, { 0, 100, 0 }, { 0, 100, -1 }, level, { 7.5f, 100, 0 }, { 7.5f, 100, -1 }, level);
+    EXPECT_TRUE(side.hit);
+    EXPECT_LT(side.normal.x, -0.5f) << "a is pushed away from b";
+    // A wider plane (Synty's) reaches further out.
+    const PlaneShape wide = planeShape(14.8f);
+    EXPECT_GT(wide.bound, 7.4f);
+    EXPECT_FALSE(planesTouch(shape, { 0, 100, 0 }, { 0, 100, -1 }, level, { 12.5f, 100, 0 }, { 12.5f, 100, -1 }, level).hit);
+    EXPECT_TRUE(planesTouch(wide, { 0, 100, 0 }, { 0, 100, -1 }, level, { 12.5f, 100, 0 }, { 12.5f, 100, -1 }, level).hit);
+}
+
+TEST(PlaneCombat, BulletsHitThePlaneNotTheAirBeside) {
+    const PlaneState s = airborne(glm::vec3(0.0f, 100.0f, 0.0f), 0.0f, 50.0f);
+    const PlaneShape shape = planeShape();
+    float t = 0.0f;
+    glm::vec3 at;
+    EXPECT_TRUE(bulletHits(shape, { -20, 100.6f, 0 }, { 20, 100.6f, 0 }, s.position, s.rotation, t, at)) << "through the cockpit";
+    EXPECT_LT(at.x, -1.0f) << "on the side it came from";
+    EXPECT_GT(at.x, -4.5f);
+    EXPECT_TRUE(bulletHits(shape, { 3.5f, 120, -0.8f }, { 3.5f, 80, -0.8f }, s.position, s.rotation, t, at)) << "down through a wing";
+    EXPECT_FALSE(bulletHits(shape, { -20, 104, 0 }, { 20, 104, 0 }, s.position, s.rotation, t, at)) << "over it";
+    EXPECT_FALSE(bulletHits(shape, { -20, 100, 0 }, { -8, 100, 0 }, s.position, s.rotation, t, at)) << "short of it";
+    // Leading a crossing target: aim ahead of it.
+    const glm::vec3 lead = leadPoint({ 0, 0, 0 }, { 0, 0, -450 }, { 40, 0, 0 }, 450.0f);
+    EXPECT_NEAR(lead.x, 40.0f, 0.01f);
+}
+
+TEST(PlaneCombat, TheTownStandsOnTheLandAndBlocks) {
+    for (uint32_t seed : { 1u, 2u, 3u, 11u, 42u }) {
+        const Island island(seed);
+        const Town airfield(island, false);
+        EXPECT_EQ(airfield.buildings().size(), 2u) << "the hangar and the tower";
+        const Town town(island, true);
+        EXPECT_GT(town.buildings().size(), 40u) << "island " << seed;
+        int towers = 0;
+        for (const Building& b : town.buildings()) {
+            if (b.tower) ++towers;
+            const glm::vec3 mid = (b.lo + b.hi) * 0.5f;
+            EXPECT_LE(b.lo.y, island.terrain(mid.x, mid.z)) << "no floating buildings";
+            EXPECT_FALSE(island.onRunway(mid.x, mid.z, 20.0f)) << "nothing on the runway";
+        }
+        EXPECT_GT(towers, 5) << "island " << seed << ": something tall to fly between";
+        // Flying into a wall touches it; the street beside it doesn't.
+        const Building& b = town.buildings().back();
+        glm::vec3 n;
+        float depth = 0.0f;
+        const glm::vec3 wall((b.lo.x + b.hi.x) * 0.5f, (b.lo.y + b.hi.y) * 0.5f, b.lo.z - 0.5f);
+        EXPECT_TRUE(town.touches(wall, 1.0f, n, depth));
+        EXPECT_LT(n.z, -0.9f) << "out the way it came";
+        EXPECT_FALSE(town.touches(wall - glm::vec3(0.0f, 0.0f, 9.0f), 1.0f, n, depth));
+        float t = 0.0f;
+        EXPECT_TRUE(town.blocks(wall, wall + glm::vec3(0, 0, 1), t));
+        EXPECT_NEAR(t, 0.5f, 0.02f);
+        EXPECT_GE(town.roof(wall.x, b.lo.z + 1.0f), b.hi.y);
+        EXPECT_GT(town.centre().y, town.roof(town.centre().x, town.centre().z));
+    }
 }

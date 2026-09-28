@@ -46,7 +46,7 @@ struct SkyPick {
     const char* mood;
 };
 const SkyPick kSkies[] = { { "Day", "clear_day" }, { "Morning", "morning" }, { "Golden hour", "golden_hour" }, { "Sunset", "sunset" }, { "Stormy", "stormy" } };
-const char* const kModeNames[] = { "Race", "Stunts", "Free flight" };
+const char* const kModeNames[] = { "Race", "Stunts", "Free flight", "Dogfight" };
 const float kRingSizes[] = { 18.0f, 14.0f, 10.0f };
 
 void axisKeys(kke::InputMap& in, const char* action, SDL_Scancode plus, SDL_Scancode minus) {
@@ -85,6 +85,7 @@ void FlyingModule::defineActions() {
         def("fly.throttle.up", "Throttle up", "Flying", kke::ActionType::Axis1D);
         def("fly.throttle.down", "Throttle down", "Flying", kke::ActionType::Axis1D);
         def("fly.smoke", "Smoke on / off", "Flying");
+        def("fly.fire", "Fire the guns (Dogfight)", "Flying");
         def("fly.brake", "Wheel brakes", "Flying");
         def("fly.camera", "Camera: chase, cockpit, far", "Camera");
         def("fly.look", "Look around (stick, hat)", "Camera", kke::ActionType::Axis2D);
@@ -101,6 +102,7 @@ void FlyingModule::defineActions() {
         // are actions of their own, read only for a player on a stick
         // (pressedBy / heldBy): button 4 of a pad is not "pause".
         def("stick.smoke", "Flight stick: smoke", "Flight stick");
+        def("stick.fire", "Flight stick: fire (Dogfight)", "Flight stick");
         def("stick.camera", "Flight stick: camera", "Flight stick");
         def("stick.brake", "Flight stick: wheel brakes", "Flight stick");
         def("stick.pause", "Flight stick: pause", "Flight stick");
@@ -119,8 +121,8 @@ void FlyingModule::defineActions() {
         def("panels", "Developer panels", "Game");
 
         // Gamepad: left stick flies (pull back: nose up), bumpers the
-        // rudder, triggers the throttle, A smoke, X brakes, Y camera,
-        // right stick looks, Start pauses.
+        // rudder, triggers the throttle, A smoke (in a dogfight A or B
+        // fire), X brakes, Y camera, right stick looks, Start pauses.
         padStick(in, "fly.pitch", SDL_GAMEPAD_AXIS_LEFTY, 1.0f);
         padStick(in, "fly.roll", SDL_GAMEPAD_AXIS_LEFTX, 1.0f);
         in.addBinding(IM::bind("fly.yaw", IM::pad(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER), kke::Trigger::Continuous));
@@ -137,6 +139,8 @@ void FlyingModule::defineActions() {
             in.addBinding(down);
         }
         in.addBinding(IM::bind("fly.smoke", IM::pad(SDL_GAMEPAD_BUTTON_SOUTH)));
+        in.addBinding(IM::bind("fly.fire", IM::pad(SDL_GAMEPAD_BUTTON_SOUTH), kke::Trigger::Continuous));
+        in.addBinding(IM::bind("fly.fire", IM::pad(SDL_GAMEPAD_BUTTON_EAST), kke::Trigger::Continuous));
         in.addBinding(IM::bind("fly.brake", IM::pad(SDL_GAMEPAD_BUTTON_WEST), kke::Trigger::Continuous));
         in.addBinding(IM::bind("fly.camera", IM::pad(SDL_GAMEPAD_BUTTON_NORTH)));
         {
@@ -150,9 +154,10 @@ void FlyingModule::defineActions() {
         in.addBinding(IM::bind("fly.menu", IM::pad(SDL_GAMEPAD_BUTTON_BACK)));
 
         // Keyboard and mouse: W/S pitch (S pulls up, like a stick), A/D
-        // roll, Q/E rudder, Shift/Ctrl throttle, Space smoke, B brakes,
-        // C camera; the mouse is a stick that centres itself, the right
-        // button held looks around instead.
+        // roll, Q/E rudder, Shift/Ctrl throttle, Space smoke (in a
+        // dogfight Space, F or the left button fire), B brakes, C camera;
+        // the mouse is a stick that centres itself, the right button held
+        // looks around instead.
         axisKeys(in, "fly.pitch", SDL_SCANCODE_S, SDL_SCANCODE_W);
         axisKeys(in, "fly.pitch", SDL_SCANCODE_DOWN, SDL_SCANCODE_UP);
         axisKeys(in, "fly.roll", SDL_SCANCODE_D, SDL_SCANCODE_A);
@@ -161,6 +166,9 @@ void FlyingModule::defineActions() {
         in.addBinding(IM::bind("fly.throttle.up", IM::key(SDL_SCANCODE_LSHIFT), kke::Trigger::Continuous));
         in.addBinding(IM::bind("fly.throttle.down", IM::key(SDL_SCANCODE_LCTRL), kke::Trigger::Continuous));
         in.addBinding(IM::bind("fly.smoke", IM::key(SDL_SCANCODE_SPACE)));
+        in.addBinding(IM::bind("fly.fire", IM::key(SDL_SCANCODE_SPACE), kke::Trigger::Continuous));
+        in.addBinding(IM::bind("fly.fire", IM::key(SDL_SCANCODE_F), kke::Trigger::Continuous));
+        in.addBinding(IM::bind("fly.fire", IM::mouse(SDL_BUTTON_LEFT), kke::Trigger::Continuous));
         in.addBinding(IM::bind("fly.brake", IM::key(SDL_SCANCODE_B), kke::Trigger::Continuous));
         in.addBinding(IM::bind("fly.camera", IM::key(SDL_SCANCODE_C)));
         for (int axis = 0; axis < 2; ++axis) {
@@ -177,8 +185,9 @@ void FlyingModule::defineActions() {
         in.addBinding(IM::bind("panels", IM::key(SDL_SCANCODE_F1)));
 
         // Flight stick: X roll, Y pitch (pull back: nose up), twist the
-        // rudder, the throttle lever the throttle; trigger smoke, button 2
-        // camera, 3 brakes, 4 pause; the hat looks around.
+        // rudder, the throttle lever the throttle; trigger smoke (in a
+        // dogfight, fire), button 2 camera, 3 brakes, 4 pause; the hat
+        // looks around.
         {
             kke::Binding roll = IM::bind("stick.roll", joyAxis(0), kke::Trigger::Continuous);
             kke::Binding pitch = IM::bind("stick.pitch", joyAxis(1), kke::Trigger::Continuous);
@@ -191,6 +200,7 @@ void FlyingModule::defineActions() {
             in.addBinding(IM::bind("stick.throttle", joyAxis(3), kke::Trigger::Continuous));
         }
         in.addBinding(IM::bind("stick.smoke", joyButton(0)));
+        in.addBinding(IM::bind("stick.fire", joyButton(0), kke::Trigger::Continuous));
         in.addBinding(IM::bind("stick.camera", joyButton(1)));
         in.addBinding(IM::bind("stick.brake", joyButton(2), kke::Trigger::Continuous));
         in.addBinding(IM::bind("stick.pause", joyButton(3)));
@@ -267,16 +277,18 @@ void FlyingModule::setupLobby() {
     l.addOption(std::move(island));
     l.addOption({ "laps", "Laps", { "1", "2", "3" }, 1, true, {}, {} });
     l.addOption({ "rings", "Rings", { "Big", "Normal", "Tight" }, 1, true, {}, {} });
+    l.addOption({ "kills", "First to", { "5 kills", "10 kills", "20 kills" }, 1, true, {}, {} });
     kke::Lobby::Option sky{ "sky", "Sky", {}, 0, true, {}, {} };
     for (const SkyPick& s : kSkies) sky.choices.push_back(s.name);
     sky.onChange = [this](int) { m_app->setMood(moodName()); };
     l.addOption(std::move(sky));
-    // Laps and rings mean nothing outside a race.
+    // Laps and rings mean nothing outside a race, kills outside a dogfight.
     auto showRaceRows = [this]() {
         kke::Lobby& lb = m_lobby->lobby();
         const bool race = mode() == Mode::Race;
         if (kke::Lobby::Option* o = lb.option("laps")) o->visible = race;
         if (kke::Lobby::Option* o = lb.option("rings")) o->visible = race;
+        if (kke::Lobby::Option* o = lb.option("kills")) o->visible = mode() == Mode::Dogfight;
     };
     l.option("mode")->onChange = [showRaceRows](int) { showRaceRows(); };
     m_lobby->load();
@@ -287,7 +299,7 @@ void FlyingModule::setupLobby() {
         m_lobby->lobby().toast(m_lobby->lobby().seatName(seat) + " joins the next flight", 5.0f);
     };
     if (const char* v = kke::dev::env("KKE_FLY_MODE")) {
-        const int pick = std::strcmp(v, "stunts") == 0 ? 1 : std::strcmp(v, "free") == 0 ? 2 : 0;
+        const int pick = std::strcmp(v, "stunts") == 0 ? 1 : std::strcmp(v, "free") == 0 ? 2 : std::strcmp(v, "dogfight") == 0 ? 3 : 0;
         l.option("mode")->value = pick;
         showRaceRows();
     }
@@ -486,7 +498,9 @@ Controls FlyingModule::readPlayer(Pilot& p, float dt) {
         c.yaw = yaw;
     }
     c.brake = heldBy(p.player, "fly.brake");
-    if (pressedBy(p.player, "fly.smoke")) p.smoke = !p.smoke;
+    // A dogfight has guns instead of smoke, on the same buttons.
+    if (m_mode == Mode::Dogfight) p.firing = heldBy(p.player, "fly.fire");
+    else if (pressedBy(p.player, "fly.smoke")) p.smoke = !p.smoke;
     if (pressedBy(p.player, "fly.camera")) p.cameraMode = (p.cameraMode + 1) % 3;
     // Looking around: the right stick or hat while held (back to the nose
     // when let go), or the mouse with its right button held.
@@ -504,40 +518,106 @@ Controls FlyingModule::readPlayer(Pilot& p, float dt) {
 
 Controls FlyingModule::readCpu(Pilot& p) {
     const float skill = static_cast<float>(std::clamp(p.skill, 0, 3)) / 3.0f;
+    // The ground as a CPU pilot sees it: the land, and the roofs (with room
+    // to spare: it doesn't shave the walls).
+    Ground g = m_island.ground();
+    g.height = [this](float x, float z) { return std::max(m_island.surface(x, z), m_town.roof(x, z, 25.0f)); };
+    p.firing = false;
+    // Off the runway: full throttle straight down it, and climb straight
+    // out until clear of everything.
+    if (p.plane.onGround || p.climbOut) {
+        const glm::vec3 ahead = p.plane.forward();
+        const glm::vec3 out = p.plane.position + glm::normalize(glm::vec3(ahead.x, 0.0f, ahead.z) + glm::vec3(0.0f, 0.0f, 1e-4f)) * 500.0f + glm::vec3(0.0f, 160.0f, 0.0f);
+        Controls c = steerToward(p.plane, out, g, 0.0f, skill);
+        c.throttle = 1.0f;
+        if (p.plane.onGround) c.roll = c.yaw = 0.0f;
+        p.smoke = false;
+        return c;
+    }
     // Don't fly into each other: a plane close by pushes the aim away
     // from it (a pilot keeps its distance in a formation).
     glm::vec3 apart(0.0f);
     for (const Pilot& o : m_pilots) {
-        if (&o == &p || down(o)) continue;
+        if (&o == &p || down(o) || !present(o)) continue;
         const glm::vec3 d = p.plane.position - (o.remote ? o.net.position : o.plane.position);
         const float dist = glm::length(d);
         if (dist < 30.0f && dist > 0.01f) apart += d / dist * (30.0f - dist) * 3.0f;
     }
-    if (mode() == Mode::Race && !m_rings.empty()) {
+    if (m_mode == Mode::Race && !m_rings.empty()) {
         const Ring& next = m_rings[static_cast<size_t>(p.nextRing) % m_rings.size()];
         glm::vec3 target = p.autopilot.aim(next, p.plane.position);
         // Near the ring, the ring wins: the others will be through it or past.
         if (glm::length(next.center - p.plane.position) > 120.0f) target += apart;
-        return steerToward(p.plane, target, m_island.ground(), p.autopilot.floor(55.0f), skill);
+        return steerToward(p.plane, target, g, p.autopilot.floor(55.0f), skill);
+    }
+    if (m_mode == Mode::Dogfight && m_phase != Phase::Lobby) {
+        const glm::vec3 c = m_town.centre();
+        return readCpuDogfight(p, steerToward(p.plane, glm::vec3(c.x, c.y + 60.0f, c.z) + apart, g, 60.0f, skill));
     }
     // Stunts and free flight: laps of the island at a sightseeing height,
     // with a loop now and then for the show.
     const float a = m_clock * 0.05f + static_cast<float>(p.slot);
     const glm::vec3 target = glm::vec3(std::cos(a) * 900.0f, 220.0f, std::sin(a) * 900.0f) + apart;
-    Controls c = steerToward(p.plane, target, m_island.ground(), 60.0f, skill);
+    Controls c = steerToward(p.plane, target, g, 60.0f, skill);
     // Stunts: a loop (about 7 s round), then a roll, every 30 s, when
     // there's room under it.
     const float cycle = std::fmod(m_clock + static_cast<float>(p.slot) * 7.0f, 30.0f);
     const bool room = p.plane.position.y - m_island.surface(p.plane.position.x, p.plane.position.z) > 150.0f;
-    if (mode() == Mode::Stunts && m_phase == Phase::Flying && room && cycle < 8.0f) {
+    if (m_mode == Mode::Stunts && m_phase == Phase::Flying && room && cycle < 8.0f) {
         c.pitch = 1.0f;
         c.roll = 0.0f;
         c.throttle = 1.0f;
-    } else if (mode() == Mode::Stunts && m_phase == Phase::Flying && room && cycle > 12.0f && cycle < 13.6f) {
+    } else if (m_mode == Mode::Stunts && m_phase == Phase::Flying && room && cycle > 12.0f && cycle < 13.6f) {
         c.roll = 1.0f;
         c.pitch = 0.1f;
     }
-    p.smoke = mode() == Mode::Stunts;
+    p.smoke = m_mode == Mode::Stunts;
+    return c;
+}
+
+// A CPU dogfighter: picks someone (whoever last hurt it, else the nearest),
+// flies at where they'll be when its bullets get there, and fires when
+// they're in its sights, the way is clear and they're in range. Better
+// pilots turn harder and aim truer (Damage.cpp's spread). Nobody in reach:
+// `cruise` (a circle over the town).
+Controls FlyingModule::readCpuDogfight(Pilot& p, const Controls& cruise) {
+    const int self = static_cast<int>(&p - m_pilots.data());
+    const float skill = static_cast<float>(std::clamp(p.skill, 0, 3)) / 3.0f;
+    const float dt = 1.0f / 60.0f;
+    p.targetFor += dt;
+    auto valid = [&](int i) {
+        return i >= 0 && i < static_cast<int>(m_pilots.size()) && i != self && !down(m_pilots[static_cast<size_t>(i)]) && present(m_pilots[static_cast<size_t>(i)]);
+    };
+    if (p.lastBy >= 0 && m_clock - p.lastByAt < 3.0f && valid(p.lastBy)) p.target = p.lastBy; // revenge
+    if (!valid(p.target) || p.targetFor > 20.0f) {
+        p.targetFor = 0.0f;
+        p.target = -1;
+        float best = 1e9f;
+        for (size_t i = 0; i < m_pilots.size(); ++i) {
+            if (!valid(static_cast<int>(i))) continue;
+            const Pilot& o = m_pilots[i];
+            if (!o.remote && o.plane.onGround) continue; // still on the runway: fair play
+            const float d = glm::length((o.remote ? o.net.position : o.plane.position) - p.plane.position);
+            if (d < best) {
+                best = d;
+                p.target = static_cast<int>(i);
+            }
+        }
+    }
+    if (!valid(p.target)) return cruise;
+    const Pilot& t = m_pilots[static_cast<size_t>(p.target)];
+    const glm::vec3 at = t.remote ? t.net.position : t.plane.position, vel = t.remote ? t.net.velocity : t.plane.velocity;
+    const glm::vec3 lead = leadPoint(p.plane.position, at, vel - p.plane.velocity, 480.0f);
+    Ground g = m_island.ground();
+    g.height = [this](float x, float z) { return std::max(m_island.surface(x, z), m_town.roof(x, z, 25.0f)); };
+    Controls c = steerToward(p.plane, lead, g, 35.0f + 25.0f * (1.0f - skill), 0.4f + 0.6f * skill);
+    const glm::vec3 to = lead - p.plane.position;
+    const float range = glm::length(to);
+    const float off = glm::degrees(std::acos(std::clamp(glm::dot(glm::normalize(to), p.plane.forward()), -1.0f, 1.0f)));
+    float wall = 0.0f;
+    p.firing = range < 650.0f && off < 4.0f + (1.0f - skill) * 4.0f && !m_town.blocks(p.plane.position, at, wall);
+    // Close behind: ease off, don't fly into it.
+    if (range < 90.0f && glm::dot(to, p.plane.forward()) > 0.0f) c.throttle = std::min(c.throttle, 0.3f);
     return c;
 }
 

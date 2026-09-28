@@ -2,15 +2,17 @@
 
 A friendslop party game: a show of short minigames for friends on one
 couch and online, in the spirit of Fall Guys, Mario Party and Squid Game.
-Everyone is a wobbly jelly bean you dress up in the start menu. Each round
-is a random minigame with its own level, mood and rules; places give
+Everyone is a wobbly jelly bean you dress up in the start menu (or, with
+the Synty City pack, one of eleven everyday people). Each round
+is a random (or voted-for) minigame with its own level, mood and rules; places give
 points (10, 8, 6, 5, 4, 3, 2, 1), and after the last round the top three
 climb the podium. There are eight minigames: an obstacle course, a
 flaming jump rope, a glass bridge you really fall through, a button-mash
 tug of war, red light green light, falling hex floors, sumo and hot
 potato. Up to four people play on one screen in split screen, with CPU
 beans filling the show; one machine hosts and others join over the
-network, with voice chat.
+network, with voice chat anyone can turn off or mute. One game mode
+plays a single minigame on its own, to practise or to try it out.
 
 It is the starting point for **any game made of many short rounds** (a
 minigame is one file with a small interface; the party does the rest),
@@ -34,7 +36,7 @@ the beans and levels are Jolt bodies, and main.cpp always adds
 cmake --workflow --preset default
 cd build/bin && ./party
 KKE_SKIP_INTRO=1 ./party                      # skip the engine's logo intro
-KKE_PARTY_GAME=glass_bridge ./party           # only one minigame, no menu
+KKE_PARTY_GAME=glass_bridge ./party           # one game, over and over, no menu
 ```
 
 Run it from `build/bin`: the HUD (`ui/party_hud.rml`), its theme and the
@@ -46,7 +48,8 @@ ignores them):
 
 | Switch | What it does |
 |---|---|
-| `KKE_PARTY_GAME=<id>` | Play only this minigame (ids below), skipping the menu |
+| `KKE_PARTY_GAME=<id>` | One game: play only this minigame (ids below), again and again, skipping the menu |
+| `KKE_PARTY_VOTE=1` | Pick each game by vote (the menu's Next game: Vote) |
 | `KKE_PARTY_LOBBY=0` | Skip the start menu: player 1 and the CPU beans start at once |
 | `KKE_PARTY_CPUS=<n>` | How many CPU beans (0 to 5) |
 | `KKE_PARTY_ROUNDS=<n>` | Rounds in the show |
@@ -69,13 +72,23 @@ line at the bottom always shows the buttons of the device you use.
 | Jump (and mash) | A | Space |
 | Dive | X or RB | E or right mouse |
 | Watch someone else when you're out | A / X | Space / E |
-| Back to the menu | Back | M |
+| Pause menu (voice, mutes, back to the start menu) | Back | Esc or F3 |
+| Back to the start menu | | M |
+| Vote for a game (between rounds, with Vote) | Left stick left/right, A | A/D, Space |
 | Developer panels | | F1 |
 
 In the start menu every controller presses A to join (up to four), then
-picks a name, colour, pattern, face and hat. Player 1 sets the CPU beans
-(0 to 5), the number of rounds (3, 5 or 8) and the games (all of them
-mixed, or only one), and hosts or joins online.
+picks a name, colour, pattern, face, hat and body (Bean, or a person when
+the pack is there). Player 1 sets the CPU beans (0 to 5) and:
+
+| Row | Choices | |
+|---|---|---|
+| Mode | Party, One game | A party of rounds with points and a podium, or one minigame on its own |
+| Game | the eight minigames | One game only: which one |
+| Rounds | 3, 5, 8 | Party only |
+| Next game | Random, Vote | Party only: the shuffled playlist, or everyone votes before each round |
+| Voice chat | On, Off | Off: you hear nobody and nobody hears you |
+| Online | Off, Join, Host | |
 
 ## How it plays
 
@@ -90,6 +103,16 @@ game only repeats once all eight have been played. Each round goes:
 3. **Play** until the minigame says it's over or its clock runs out.
 4. **Round over** (2.5 s), then **the results** (7 s): each bean's place
    and points, and the total so far.
+
+With **Next game: Vote**, before each round everyone stands on the stage
+and three minigames come up (ones not played yet this party first).
+Point at one with the stick and vote with jump; you can change your mind
+until the 12 s are up (or a moment after the last vote). CPU beans vote
+too. The most votes wins; a coin settles a tie.
+
+In **One game** mode there is one round and no podium: after the results,
+jump plays it again (with a new level from a new seed), and the pause
+menu goes back to the start menu.
 
 After the last round come the standings on the **podium**: the top three
 on the steps waving, everyone else in front. Jump (A, Space), or 30 s
@@ -141,8 +164,12 @@ network, or type an address). Anyone at any screen can play: every
 person is a network player, and the host's CPU beans are the host's own
 players. The host runs the show (which game, the seed, the phases);
 every machine moves its own beans and reports when one finishes or goes
-out, and the host puts those in order. Voice chat is on for everyone in
-the party (push to talk, [docs/NETWORKING.md](../../docs/NETWORKING.md)).
+out, and the host puts those in order. Voice chat reaches everyone in
+the party (push to talk, [docs/NETWORKING.md](../../docs/NETWORKING.md)),
+and is always up to each player: Voice chat Off in the start menu or the
+pause menu stops it both ways, and the pause menu mutes anyone (or
+everyone) just for you. The host runs the vote too: each player's pick
+goes to the host, which sends the vote as it stands to everyone.
 A party holds 12 beans online.
 
 ## How it works
@@ -240,8 +267,9 @@ every machine, `botRng()` is for CPU brains and effects).
 ### The start menu ([Lobby.cpp](Lobby.cpp))
 
 `kke::LobbyModule` ([docs/LOBBY.md](../../docs/LOBBY.md)) with look fields
-(name, colour, pattern, face, hat), a CPU count and two options (rounds,
-games). `wantedRoster()` turns the menu into beans: the people, then CPU
+(name, colour, pattern, face, hat, body), a CPU count and the options
+above; `updateModeRows()` shows Game or Rounds and Next game for the Mode
+picked. `wantedRoster()` turns the menu into beans: the people, then CPU
 beans with the names, colours and outfits nobody took. While the menu is
 up, the beans stand on the stage above their cards and hop.
 
@@ -249,7 +277,8 @@ up, the beans stand on the stage above their cards and hop.
 
 An RmlUi data model `party`: a panel per local player (name, points, the
 minigame's status line), the clock and the round, the round card, the
-results and podium table, the prompt line with button glyphs
+results and podium table, the vote's three cards (with a dot of each
+voter's colour), the prompt line with button glyphs
 (`kke::ButtonPrompts`), and who is talking on voice.
 
 ### Networking ([Net.cpp](Net.cpp), [NetParty.h](NetParty.h))
@@ -258,7 +287,10 @@ Event kinds from `0x5000`: **Round** (host to all: the minigame, the seed,
 every seat's player, name, look and points; 12 seats fit one 512-byte
 event), **Phase** (host to all), **Result** (a machine's claim that its
 bean finished or went out; the host orders them and passes them on) and
-**Game** (a minigame's own event, relayed by the host). Each bean's pose
+**Game** (a minigame's own event, relayed by the host), **Vote** (host to
+all: the choices, every ballot, the time left, the winner) and **Ballot**
+(a player's pick, to the host). Before a vote the host sends a Round with
+no game: who plays and the points. Each bean's pose
 is its `NetPlayerState`, with its look and minigame score in `extra`.
 Remote beans are drawn smoothed toward where their machine says they are,
 and kept as characters so local beans bump into them. Every message
@@ -299,11 +331,32 @@ start menu (`kke::LobbyModule`); networking and voice (`kke::NetModule`,
 impact sounds and earcons (`kke/ImpactSynth.h`); translucent glass
 (`DynamicMeshRenderer::drawTranslucent`).
 
+### People ([People.h](People.h), [People.cpp](People.cpp))
+
+The Body row's other choice: a POLYGON City Characters person
+(`kke::ModelModule`), animated with the Universal Animation Library's
+clips retargeted onto their skeleton (`kke::matchBones`,
+`kke::retargetAnimations`): idle, walk, jog and sprint blended by speed,
+jump, fall, land, a roll for the dive, a hit for a tumble and a dance on
+the podium. Each is loaded the first time someone picks it. The physics
+is the same capsule, so nobody is bigger or faster for their look. A
+machine without the pack draws a person picked elsewhere as a bean.
+
+### The pause menu ([Pause.cpp](Pause.cpp))
+
+`kke::DemoPanelModule` as a pause menu: Esc or Back opens it. It has
+Back to the start menu, Voice chat on or off, a player to mute or unmute
+(the other screens' players; CPU beans have no microphone), Mute
+everyone and who is talking. It hides while the start menu is up.
+
 ## Assets
 
-None. Beans, hats and levels are built from boxes, spheres, cylinders and
-lathes in [Bean.cpp](Bean.cpp) and the minigames; the skies and ambient
-sounds are the moods' ([docs/MOODS.md](../../docs/MOODS.md)).
+None needed. Beans, hats and levels are built from boxes, spheres,
+cylinders and lathes in [Bean.cpp](Bean.cpp) and the minigames; the skies
+and ambient sounds are the moods' ([docs/MOODS.md](../../docs/MOODS.md)).
+With the Synty packs (`assets/synty` or `KKE_ASSETS_DIR`) and the
+animation library (`assets/animations/UAL1_Standard.fbx`) the people are
+there too ([docs/SCENES.md](../../docs/SCENES.md) lists them).
 
 ## Make a game like this
 
@@ -341,6 +394,9 @@ Pitfalls the code shows:
 | [Beans.cpp](Beans.cpp) | Controls, moving, bumping, animating and drawing beans; cameras; particles |
 | [Bean.h](Bean.h), [Bean.cpp](Bean.cpp) | The bean's looks and mesh, `MeshBuilder` |
 | [Lobby.cpp](Lobby.cpp) | The start menu, the roster, CPU beans |
+| [Vote.cpp](Vote.cpp) | Picking the next game by vote, online too |
+| [Pause.cpp](Pause.cpp) | The pause menu: voice chat and mutes |
+| [People.h](People.h), [People.cpp](People.cpp) | Synty people as bodies, with retargeted animation |
 | [Hud.cpp](Hud.cpp), [ui/party_hud.rml](ui/party_hud.rml) | The HUD |
 | [Net.cpp](Net.cpp), [NetParty.h](NetParty.h), [NetParty.cpp](NetParty.cpp) | Online: menu rows, the show over the network, the wire format |
 | [Show.h](Show.h), [Show.cpp](Show.cpp) | Places, points, the playlist, standings, the seeded random numbers |

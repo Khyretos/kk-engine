@@ -46,6 +46,7 @@ add_executable(kke_tests
     ${CMAKE_SOURCE_DIR}/games/flying_demo/Course.cpp
     ${CMAKE_SOURCE_DIR}/games/flying_demo/FlyNet.cpp
     ${CMAKE_SOURCE_DIR}/games/flying_demo/Stunts.cpp
+    ${CMAKE_SOURCE_DIR}/games/flying_demo/Combat.cpp
     test_combat.cpp
     test_sidekick.cpp
     test_mesh_lod.cpp
