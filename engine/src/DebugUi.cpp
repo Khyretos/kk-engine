@@ -5,6 +5,7 @@
 #include "kke/VulkanCheck.h"
 
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <cmath>
 #include <backends/imgui_impl_sdl3.h>
 #include <backends/imgui_impl_vulkan.h>
@@ -104,10 +105,23 @@ DebugUi::~DebugUi() {
     }
 }
 
-void DebugUi::beginFrame() {
+void DebugUi::beginFrame(const ScreenRect& safe, float frameW, float frameH) {
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
+    // The safe area as work-area insets, in ImGui's points. NewFrame() just
+    // reset the insets being built, so this is the whole of this frame's
+    // (a main menu bar then adds its height on top); applied at once too,
+    // so windows placed this frame already see it.
+    const ImGuiIO& io = ImGui::GetIO();
+    if (frameW <= 0.0f || frameH <= 0.0f || io.DisplaySize.x <= 0.0f || io.DisplaySize.y <= 0.0f) return;
+    const float sx = io.DisplaySize.x / frameW, sy = io.DisplaySize.y / frameH;
+    auto* viewport = static_cast<ImGuiViewportP*>(ImGui::GetMainViewport());
+    viewport->BuildWorkInsetMin = ImVec2(safe.x * sx, safe.y * sy);
+    viewport->BuildWorkInsetMax = ImVec2((frameW - safe.x - safe.w) * sx, (frameH - safe.y - safe.h) * sy);
+    viewport->WorkInsetMin = viewport->BuildWorkInsetMin;
+    viewport->WorkInsetMax = viewport->BuildWorkInsetMax;
+    viewport->UpdateWorkRect();
 }
 
 void DebugUi::processEvent(const SDL_Event& event) {

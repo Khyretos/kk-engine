@@ -164,6 +164,7 @@ nav:
       - Rendering principles: RENDERING_PRINCIPLES.md
       - Benchmarks: BENCHMARKS.md
       - Cooked art (private builds with Synty art): COOKED_ART.md
+      - Baking the benchmark with the art, for friends: BAKING_FOR_FRIENDS.md
       - Performance notes: PERFORMANCE_NOTES.md
       - Platforms and hardware targets: PLATFORMS.md
       - Android: ANDROID.md

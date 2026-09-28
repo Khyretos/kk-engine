@@ -16,6 +16,10 @@ class ElementDocument;
 class EventListener;
 }
 
+namespace kke {
+class UiModule;
+}
+
 namespace kke_sandbox {
 
 class GraphWires;
@@ -52,7 +56,7 @@ public:
     GraphEditor& operator=(const GraphEditor&) = delete;
 
     // Needs a UiModule's context; without one the editor stays closed.
-    void attach(Rml::Context* context, float pixelsPerPoint);
+    void attach(Rml::Context* context, const kke::UiModule& ui);
     // Closes the document; before the UiModule shuts RmlUi down.
     void detach();
 
@@ -118,7 +122,7 @@ private:
     Rml::Context* m_context = nullptr;
     Rml::ElementDocument* m_doc = nullptr;
     std::unique_ptr<Rml::EventListener> m_listener;
-    float m_ppp = 1.0f;
+    const kke::UiModule* m_ui = nullptr; // window points <-> context pixels (toContext/toPoints)
 
     kke::NodeGraph* m_graph = nullptr;
     const kke::NodeLibrary* m_library = nullptr;

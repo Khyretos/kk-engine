@@ -314,9 +314,10 @@ void RmlVulkanRenderInterface::destroyTexture(CompiledTexture& texture) {
     texture = CompiledTexture{};
 }
 
-void RmlVulkanRenderInterface::beginFrame(VkCommandBuffer cmd, glm::vec2 screenSizePixels) {
+void RmlVulkanRenderInterface::beginFrame(VkCommandBuffer cmd, glm::vec2 screenSizePixels, glm::vec2 origin) {
     m_currentCmd = cmd;
     m_screenSize = screenSizePixels;
+    m_origin = origin;
     m_scissorEnabled = false;
     m_transform = glm::mat4(1.0f);
     // Pixel space (top-left origin, y down) straight to Vulkan clip space
@@ -326,8 +327,8 @@ void RmlVulkanRenderInterface::beginFrame(VkCommandBuffer cmd, glm::vec2 screenS
     m_projection[0][0] = 2.0f / std::max(1.0f, screenSizePixels.x);
     m_projection[1][1] = 2.0f / std::max(1.0f, screenSizePixels.y);
     m_projection[2][2] = -1.0f / 10000.0f;
-    m_projection[3][0] = -1.0f;
-    m_projection[3][1] = -1.0f;
+    m_projection[3][0] = -1.0f + 2.0f * origin.x / std::max(1.0f, screenSizePixels.x);
+    m_projection[3][1] = -1.0f + 2.0f * origin.y / std::max(1.0f, screenSizePixels.y);
     m_projection[3][2] = 0.5f;
 
     // Real deferred-destruction sweep, not decorative — see
@@ -494,10 +495,12 @@ void RmlVulkanRenderInterface::EnableScissorRegion(bool enable) {
 void RmlVulkanRenderInterface::SetScissorRegion(Rml::Rectanglei region) {
     if (!m_scissorEnabled || m_currentCmd == VK_NULL_HANDLE) return;
 
-    int32_t x = std::max(0, region.Left());
-    int32_t y = std::max(0, region.Top());
-    uint32_t width = static_cast<uint32_t>(std::max(0, region.Right() - x));
-    uint32_t height = static_cast<uint32_t>(std::max(0, region.Bottom() - y));
+    // Context pixels -> frame pixels.
+    const int ox = static_cast<int>(m_origin.x), oy = static_cast<int>(m_origin.y);
+    int32_t x = std::max(0, region.Left() + ox);
+    int32_t y = std::max(0, region.Top() + oy);
+    uint32_t width = static_cast<uint32_t>(std::max(0, region.Right() + ox - x));
+    uint32_t height = static_cast<uint32_t>(std::max(0, region.Bottom() + oy - y));
 
     VkRect2D rect{ { x, y }, { width, height } };
     vkCmdSetScissor(m_currentCmd, 0, 1, &rect);

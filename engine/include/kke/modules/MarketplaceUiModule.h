@@ -3,6 +3,9 @@
 #include "kke/Module.h"
 #include "kke/MarketplaceIndex.h"
 
+#include <RmlUi/Core/EventListener.h>
+
+#include <memory>
 #include <string>
 
 namespace Rml {
@@ -20,6 +23,8 @@ namespace kke {
 // itself.
 //
 // HONEST LIMITATIONS, matching the rest of this integration's state:
+//   - On a phone or console the list folds into a "Games" button so it
+//     doesn't cover the game's own panel (kke/UiProfile.h).
 //   - Non-interactive. RmlUi has no input wiring yet (see docs/HISTORY.md
 //     Roadmap "RmlUi slice 4") — nothing can be clicked, so there is no
 //     "launch this game" button, just a static list.
@@ -37,9 +42,20 @@ public:
     std::vector<ModuleDependency> dependencies() const override;
 
     void init(Application& app) override;
+    void shutdown() override;
 
 private:
     std::string buildDocumentRml() const;
+
+    // Opens and folds the list on a phone or console.
+    class FoldListener : public Rml::EventListener {
+    public:
+        explicit FoldListener(MarketplaceUiModule& owner) : m_owner(owner) {}
+        void ProcessEvent(Rml::Event& event) override;
+    private:
+        MarketplaceUiModule& m_owner;
+    };
+    std::unique_ptr<FoldListener> m_foldListener;
 
     std::string m_marketplaceDirectory;
     MarketplaceIndex m_index;

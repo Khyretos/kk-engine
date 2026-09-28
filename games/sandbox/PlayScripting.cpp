@@ -260,7 +260,7 @@ void SandboxModule::initGraphs() {
     g.vm->printSink = [this](const std::string& source, const std::string& text) { kke::log::get(name())->info("{}: {}", source, text); };
     g.library = kke::NodeLibrary::fromApi(g.vm->apiFunctions(), g.vm->apiEvents());
     if (auto* ui = m_app->getModule<kke::UiModule>(); ui && ui->context())
-        g.editor.attach(ui->context(), m_app->window().pixelsPerPoint());
+        g.editor.attach(ui->context(), *ui);
     else
         kke::log::get(name())->info("no RmlUi context: the node graph editor (Look) is off");
 #endif

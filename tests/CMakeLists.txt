@@ -64,6 +64,7 @@ add_executable(kke_tests
     test_storage.cpp
     test_input_map.cpp
     test_button_prompts.cpp
+    test_ui_profile.cpp
     test_input_devices.cpp
     test_floating_bodies.cpp
     test_audio.cpp

@@ -90,6 +90,11 @@ bool CommandHud::build(const std::string& title) {
     return true;
 }
 
+bool CommandHud::touch() const {
+    const kke::InputModule* in = m_app.getModule<kke::InputModule>();
+    return in && in->promptStyle() == kke::PromptStyle::Touch;
+}
+
 std::string CommandHud::prompts(const std::string& text) const {
     const kke::InputModule* in = m_app.getModule<kke::InputModule>();
     return in ? in->promptText(text) : kke::escapeRmlText(text);
@@ -97,7 +102,9 @@ std::string CommandHud::prompts(const std::string& text) const {
 
 void CommandHud::setButtons(std::vector<Button> buttons) {
     std::vector<ButtonView> next;
-    for (Button& b : buttons) next.push_back({ std::move(b.icon), std::move(b.label), prompts(b.key), b.on });
+    // On a touch screen the buttons are tapped themselves: no key under them.
+    const bool fingers = touch();
+    for (Button& b : buttons) next.push_back({ std::move(b.icon), std::move(b.label), fingers ? std::string() : prompts(b.key), b.on });
     bool same = next.size() == m_buttons.size();
     for (size_t i = 0; same && i < next.size(); ++i)
         same = next[i].icon == m_buttons[i].icon && next[i].label == m_buttons[i].label && next[i].key == m_buttons[i].key &&
@@ -135,7 +142,11 @@ void CommandHud::toast(const std::string& text, float seconds) {
 
 void CommandHud::update(const CommandInput::Frame& in, float dt) {
     if (!m_model) return;
+    // Window points -> the UI's pixels (the UI covers the screen's safe area).
+    const kke::UiModule* ui = m_app.getModule<kke::UiModule>();
     const float scale = m_app.window().pixelsPerPoint();
+    auto toUi = [&](glm::vec2 points) { return ui ? ui->toContext(points) : points * scale; };
+    if (m_doc) m_doc->SetClass("touch", touch());
     auto set = [this](auto& field, const auto& value, const char* var) {
         if (field == value) return;
         field = value;
@@ -148,7 +159,7 @@ void CommandHud::update(const CommandInput::Frame& in, float dt) {
     set(m_reticle, in.reticle && !in.wheelOpen, "reticle");
     set(m_box, in.dragging, "box");
     if (in.dragging) {
-        const glm::vec2 mn = glm::min(in.boxA, in.boxB) * scale, mx = glm::max(in.boxA, in.boxB) * scale;
+        const glm::vec2 mn = toUi(glm::min(in.boxA, in.boxB)), mx = toUi(glm::max(in.boxA, in.boxB));
         set(m_boxLeft, px(mn.x), "box_left");
         set(m_boxTop, px(mn.y), "box_top");
         set(m_boxWidth, px(mx.x - mn.x), "box_width");
@@ -156,7 +167,7 @@ void CommandHud::update(const CommandInput::Frame& in, float dt) {
     }
     set(m_wheelOpen, in.wheelOpen, "wheel_open");
     if (in.wheelOpen) {
-        const glm::vec2 c = in.wheelCenter * scale;
+        const glm::vec2 c = toUi(in.wheelCenter);
         set(m_wheelLeft, px(c.x), "wheel_left");
         set(m_wheelTop, px(c.y), "wheel_top");
         // Items on a ring around the centre (the wheel's own directions).
@@ -181,8 +192,9 @@ void CommandHud::update(const CommandInput::Frame& in, float dt) {
 bool CommandHud::overButtons(const glm::vec2& points) {
     Rml::Element* bar = m_doc ? m_doc->GetElementById("bar") : nullptr;
     if (!bar) return false;
-    const float scale = m_app.window().pixelsPerPoint();
-    return bar->IsPointWithinElement(Rml::Vector2f(points.x * scale, points.y * scale));
+    const kke::UiModule* ui = m_app.getModule<kke::UiModule>();
+    const glm::vec2 p = ui ? ui->toContext(points) : points * m_app.window().pixelsPerPoint();
+    return bar->IsPointWithinElement(Rml::Vector2f(p.x, p.y));
 }
 
 } // namespace command_kit

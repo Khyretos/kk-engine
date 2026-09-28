@@ -1,4 +1,5 @@
 #include "GraphEditor.h"
+#include "kke/modules/UiModule.h"
 
 #include "kke/Log.h"
 #include "kke/PlayScript.h"
@@ -377,9 +378,9 @@ void GraphEditor::detach() {
     m_context = nullptr;
 }
 
-void GraphEditor::attach(Rml::Context* context, float pixelsPerPoint) {
+void GraphEditor::attach(Rml::Context* context, const kke::UiModule& ui) {
     m_context = context;
-    m_ppp = pixelsPerPoint > 0.0f ? pixelsPerPoint : 1.0f;
+    m_ui = &ui;
     if (!m_context || m_doc) return;
     static bool registered = false;
     if (!registered) {
@@ -467,7 +468,7 @@ bool GraphEditor::contains(const glm::vec2& p) const {
     Rml::Element* panel = m_doc->GetElementById("panel");
     const Rml::Vector2f o = panel->GetAbsoluteOffset(Rml::BoxArea::Border);
     const Rml::Vector2f s = panel->GetBox().GetSize(Rml::BoxArea::Border);
-    const glm::vec2 px = p * m_ppp;
+    const glm::vec2 px = m_ui->toContext(p);
     return px.x >= o.x && px.y >= o.y && px.x <= o.x + s.x && px.y <= o.y + s.y;
 }
 
@@ -483,13 +484,13 @@ glm::vec2 GraphEditor::toWorld(const glm::vec2& px) const {
 
 void GraphEditor::pan(const glm::vec2& d) {
     if (!isOpen()) return;
-    m_pan += d * m_ppp;
+    m_pan += d * m_ui->pixelsPerPoint();
     applyTransform();
 }
 
 void GraphEditor::zoom(float steps, const glm::vec2& aroundPoints) {
     if (!isOpen() || steps == 0.0f) return;
-    const glm::vec2 px = aroundPoints * m_ppp;
+    const glm::vec2 px = m_ui->toContext(aroundPoints);
     const glm::vec2 before = toWorld(px);
     m_zoom = std::clamp(m_zoom * std::pow(1.15f, steps), 0.3f, 2.5f);
     // Keep the point under the finger (or cursor) where it is.
@@ -613,7 +614,7 @@ void GraphEditor::onClick(Rml::Element* target) {
     } else if (act == "fit") m_fitPending = true;
     else if (act == "zoomin" || act == "zoomout") {
         const Rml::Vector2f s = m_doc->GetElementById("canvas")->GetBox().GetSize(Rml::BoxArea::Padding);
-        zoom(act == "zoomin" ? 1.0f : -1.0f, (canvasOrigin() + glm::vec2(s.x, s.y) * 0.5f) / m_ppp);
+        zoom(act == "zoomin" ? 1.0f : -1.0f, m_ui->toPoints(canvasOrigin() + glm::vec2(s.x, s.y) * 0.5f));
     } else if (act == "remove" || act == "delnode" || act == "dellink") removeSelected();
     else if (act == "add") {
         // In the middle of the view, nudged so repeated taps don't stack.
@@ -679,7 +680,7 @@ void GraphEditor::onScroll(float delta, const glm::vec2& px) {
     Rml::Element* canvas = m_doc->GetElementById("canvas");
     bool onCanvas = false;
     for (Rml::Element* e = hover; e; e = e->GetParentNode()) onCanvas = onCanvas || e == canvas;
-    if (onCanvas) zoom(-delta, px / m_ppp);
+    if (onCanvas) zoom(-delta, m_ui->toPoints(px));
 }
 
 int GraphEditor::hitWire(const glm::vec2& world) const {
@@ -954,7 +955,7 @@ void GraphEditor::layoutWires() {
 GraphEditor::Result GraphEditor::update(float dt, const glm::vec2& mouse, bool mouseDown) {
     if (!isOpen() || !m_doc) return Result::None;
     m_moved = false;
-    const glm::vec2 px = mouse * m_ppp;
+    const glm::vec2 px = m_ui->toContext(mouse);
     m_mousePx = px;
     const float dp = m_context->GetDensityIndependentPixelRatio();
 

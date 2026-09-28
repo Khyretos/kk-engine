@@ -45,6 +45,7 @@ set(ENGINE_SOURCES
     src/MeshLod.cpp
     src/ResourceGovernor.cpp
     src/HardwareTarget.cpp
+    src/UiProfile.cpp
     src/FrameStats.cpp
     src/Viewports.cpp
     src/PhysicsBridge.cpp
