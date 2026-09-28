@@ -479,7 +479,9 @@ void RacingModule::updateCamera(Car& c, float dt, kke::Camera& out) {
             const float s = c.where.s + 60.0f + std::min(speed, 60.0f) * 0.5f;
             const Track::Sample f = t.at(s);
             const glm::vec3 leftFlat(f.forward.z, 0.0f, -f.forward.x);
-            m_tvSpot = glm::vec3(f.p.x, 0.0f, f.p.z) - leftFlat * (t.halfWidth() + 9.0f) + glm::vec3(0.0f, 6.0f, 0.0f);
+            // Up on a pole, above the wall and the banking between it and the road.
+            const float edge = t.point(s, -t.halfWidth()).y + t.desc().wall;
+            m_tvSpot = glm::vec3(f.p.x, 0.0f, f.p.z) - leftFlat * (t.halfWidth() + 9.0f) + glm::vec3(0.0f, std::max(6.0f, edge + 5.0f), 0.0f);
         }
         out.position = m_tvSpot;
         out.target = pos + glm::vec3(0.0f, 0.8f, 0.0f);
@@ -495,17 +497,24 @@ void RacingModule::updateCamera(Car& c, float dt, kke::Camera& out) {
         c.camPos = want;
         c.camInit = true;
     } else {
-        const float back = m_cameraMode == 1 ? 10.5f : 6.2f + speed * 0.02f;
-        const float up = m_cameraMode == 1 ? 3.6f : 1.4f + height * 0.55f;
-        want = pos - fwd * back + glm::vec3(0.0f, up, 0.0f);
+        const float back = m_cameraMode == 1 ? 10.5f : 6.0f + speed * 0.015f;
+        const float up = m_cameraMode == 1 ? 3.6f : 1.5f + height * 0.6f;
+        if (!c.camInit) c.camDir = fwd;
+        // Always the same distance behind; only the heading lags, so a turn
+        // swings the camera out but speed never drops it back into the
+        // car behind.
+        c.camDir += (fwd - c.camDir) * (1.0f - std::exp(-(c.lookBack ? 30.0f : 6.0f) * dt));
+        c.camDir.y = 0.0f;
+        c.camDir = glm::length(c.camDir) > 1e-3f ? glm::normalize(c.camDir) : fwd;
+        want = pos - c.camDir * back + glm::vec3(0.0f, up, 0.0f);
         look = pos + fwd * 4.0f + glm::vec3(0.0f, height * 0.7f, 0.0f);
         if (!c.camInit) {
-            c.camPos = want;
             c.camLook = look;
             c.camInit = true;
         }
-        // Behind, with a little lag (turns swing it out, crashes shake it).
-        c.camPos += (want - c.camPos) * (1.0f - std::exp(-(c.lookBack ? 30.0f : 7.0f) * dt));
+        // Height follows a little behind (bumps, landings).
+        c.camPos = glm::vec3(want.x, c.camPos.y + (want.y - c.camPos.y) * (1.0f - std::exp(-10.0f * dt)), want.z);
+        if (std::fabs(c.camPos.y - want.y) > 3.0f) c.camPos.y = want.y;
         // Never below the road.
         if (m_track) {
             const Track::Where w = m_track->locate(c.camPos, c.where.sample);

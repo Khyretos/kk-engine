@@ -239,7 +239,20 @@ void RacingModule::update(const kke::UpdateContext& ctx) {
     // closes it. The lights wait meanwhile (offline).
     if (m_howto) {
         m_howtoAge += dt;
-        if (m_howtoAge > 0.3f && (help || close)) showHowTo(false);
+        // On a touch screen a finger anywhere closes it too.
+        int touchDevices = 0;
+        bool finger = false;
+        if (SDL_TouchID* ids = SDL_GetTouchDevices(&touchDevices)) {
+            for (int d = 0; d < touchDevices && !finger; ++d) {
+                int count = 0;
+                if (SDL_Finger** f = SDL_GetTouchFingers(ids[d], &count)) {
+                    finger = count > 0;
+                    SDL_free(f);
+                }
+            }
+            SDL_free(ids);
+        }
+        if (m_howtoAge > 0.3f && (help || close || finger)) showHowTo(false);
         again = fresh = menu = false;
     } else if (help) {
         showHowTo(true);

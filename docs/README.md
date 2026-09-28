@@ -28,6 +28,8 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [PHYSICS_BRIDGE.md](PHYSICS_BRIDGE.md) | How FEMFX deformable pieces and Jolt rigid bodies and characters meet |
 | [CLOTH.md](CLOTH.md) | Cloth: capes, flags, blankets, nets; fabric presets, no-clipping protection levels, what it costs |
 | [HAIR.md](HAIR.md) | Hair: guide strands on Jolt soft bodies, styles, drawn on the GPU, no clipping into the head, what it costs |
+| [VEHICLES.md](VEHICLES.md) | Cars and other wheeled vehicles on Jolt: suspension, tyres, engine, gearbox, drifting, damage |
+| [PARTICLE_EFFECTS.md](PARTICLE_EFFECTS.md) | Smoke and sparks: tyre smoke, engine fires, sparks off metal |
 | [RAGDOLLS.md](RAGDOLLS.md) | Humanoid and animal ragdolls, their joint limits and how to override them |
 | [NETWORKING.md](NETWORKING.md) | Transport, protocol, authority and replication |
 | [STORAGE.md](STORAGE.md) | Saving data: SQLite built in, Valkey and PostgreSQL optional |

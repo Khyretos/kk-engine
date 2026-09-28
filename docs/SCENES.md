@@ -280,6 +280,27 @@ built in code from the island's seed.
   (`_Crop_Duster` is left out). Paint jobs: `Polygon_Plane_Texture_01`
   to `_04`. Without the pack the planes are built from boxes.
 
+## Racing (`games/racing`)
+
+Not a scene file: the tracks are built in code from `games/racing/tracks/`
+and the props placed along them, well clear of the road.
+
+- The cars: **POLYGON Street Racer**, `SK_Veh_Preset_Muscle_01` to `_04`,
+  `SK_Veh_Preset_Sports_01` to `_04`, `SK_Veh_Preset_Exotic_01` to `_04`,
+  `SK_Veh_Preset_Sedan_01` to `_04`, `SK_Veh_Preset_Hatch_01` to `_04`,
+  `SK_Veh_Preset_Ute_01` to `_04` (`SourceFiles/FBX/Veh/`), split into the
+  body and the wheels by mesh name. Paint jobs: `PolygonStreetRacer_Veh_Tex_*`
+  (`Textures/Vehicles/`), carbon parts `PolygonStreetRacer_Texture_Carbon`.
+- Trackside: `SM_Prop_Pole_Large_Lights_01`, `_02`, `SM_Prop_Sign_Start_01`,
+  `SM_Prop_Sign_Finish_01`, `SM_Prop_Barrier_Tyre_StackA_01`, `SM_Prop_Barrier_Tyre_StackA_02`,
+  `SM_Prop_Barrier_Tyre_StackB_01`, `SM_Prop_TyreStack_01`,
+  `SM_Prop_ToolCabinet_01_Preset`, `SM_Bld_RepairShop_Large_01` (the oval's
+  pit garage), `SM_Bld_Warehouse_01`, `SM_Bld_Crane_01`,
+  `SM_Prop_Container_Stack_01`, `_04`, `_07`, `SM_Prop_Container_Large_Stack_02`
+  (the docks).
+- Without the pack every car is a coloured block of its type's size and
+  the tracks have no props; the log (info) and the start menu say so.
+
 ## Demos that use no packs
 
 These run the same with or without any asset pack: `climb_race`, `party`,
@@ -309,6 +330,7 @@ with `KKE_MOOD=<name>`.
 | `climb_race` | each mountain's own (`games/climb_race/mountains/`): `morning`, `clear_day`, `golden_hour` (Granite Tower, Random), `sunset`, `overcast`, `misty_morning` | as the mood | as the mood |
 | `party` | each minigame's own: `sunset` (the lobby and podium), `clear_day`, `dusk`, `arena_night`, `noon`, `golden_hour`, `playful` | as the mood | as the mood |
 | `synty_demo` | `morning` | Qwantani Mid Morning | `meadow_day` |
+| `racing` | each track's own (`games/racing/tracks/`): `golden_hour` (Kompas Speedway), `dusk` (Harbour Run), `noon` (The Quarter Mile) | as the mood | as the mood |
 | `flying_demo` | `clear_day`; the start menu's Sky row: `morning`, `golden_hour`, `sunset`, `stormy` | as the mood | as the mood |
 | `goblin_horde` | `sunset` | Qwantani Sunset | `wind_soft` |
 | `duel` | `arena_night` | Qwantani Night | `night_crickets` |

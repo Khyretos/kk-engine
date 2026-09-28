@@ -138,6 +138,7 @@ private:
         // Camera.
         kke::Camera camera;
         glm::vec3 camPos{0.0f}, camLook{0.0f};
+        glm::vec3 camDir{0.0f, 0.0f, 1.0f}; // the chase camera's heading, lagging the car's
         bool camInit = false;
         bool lookBack = false;
         // CPU driver.

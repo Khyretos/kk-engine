@@ -98,7 +98,7 @@ struct VehicleWheelState {
     bool contact = false;        // touching the ground
     glm::vec3 contactPoint{0.0f};
     uint32_t groundBody = 0xffffffffu; // RigidWorld::BodyId under it (kNoBody in the air)
-    float longitudinalSlip = 0.0f; // (wheel speed - ground speed) / ground speed: 0 rolls, -1 locked, >0 wheelspin
+    float longitudinalSlip = 0.0f; // |wheel speed - ground speed| / ground speed: 0 rolls, 1 locked, more than 1 spins
     float lateralSlip = 0.0f;      // slip angle, degrees (a drift is 10-40)
     float angularVelocity = 0.0f;  // rad/s
     float suspension = 0.0f;       // 0 = fully extended .. 1 = fully compressed

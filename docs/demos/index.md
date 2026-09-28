@@ -26,6 +26,7 @@ Run any demo from `build/bin/` (building: [BUILDING.md](../BUILDING.md)).
 |---|---|---|
 | Your first game, in Lua only | [starter game](../../games/template/README.md) | [first Lua game](../../games/first_lua_game/README.md), the [cookbook](../cookbook/index.md) |
 | A race or a party game for the couch, with online play | [Climb Race](../../games/climb_race/README.md) | the [start menu](../LOBBY.md), [networking](../NETWORKING.md) |
+| A driving game: races, drifting, damage | [Racing](../../games/racing/README.md) | [vehicles](../VEHICLES.md), [particle effects](../PARTICLE_EFFECTS.md), the [start menu](../LOBBY.md) |
 | A flying, driving or other vehicle game; flight sticks | [Flying](../../games/flying_demo/README.md) | [input](../INPUT.md), the [start menu](../LOBBY.md) |
 | A party game of many short minigames (Fall Guys, Mario Party, Squid Game style) | [Party](../../games/party/README.md) | [Climb Race](../../games/climb_race/README.md), the [start menu](../LOBBY.md), [networking](../NETWORKING.md) |
 | A fighting game | [Duel](../../games/duel/README.md) | [melee combat](../COMBAT.md) |

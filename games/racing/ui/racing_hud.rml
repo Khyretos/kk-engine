@@ -59,6 +59,38 @@
         #hint { position: absolute; left: 8%; bottom: 14dp; width: 84%; padding: 6dp 10dp; border-radius: 8dp; background-color: #0b0f1cbb;
                 text-align: center; font-size: 13dp; color: #cfd6e6; }
         #hint img, #banner .sub img { font-size: 15dp; } /* prompt glyphs are 1.6em */
+        /* On a touch screen the hint's prompts are buttons (docs/INPUT.md), and so is the how-to's Start. */
+        #hint, #howto { pointer-events: auto; }
+        /* Phones (docs/INPUT.md "Phone, PC and console"): the touch zones
+           under the thumbs, the running order only when there's room. */
+        #touch { display: none; }
+        body.kke-phone #touch { display: block; position: absolute; left: 0; bottom: 0; width: 100%; height: 30%; }
+        #touch div { position: absolute; bottom: 0; height: 100%; border-top: 1dp #ffffff33; font-size: 13dp; letter-spacing: 2dp;
+                     color: #ffffff66; text-align: center; padding-top: 8dp; }
+        #touch .steer { left: 0; width: 50%; }
+        #touch .brake { left: 50%; width: 25%; border-left: 1dp #ffffff33; }
+        #touch .gas { left: 75%; width: 25%; border-left: 1dp #ffffff33; }
+        body.kke-phone.kke-portrait #order { display: none; }
+        body.kke-phone.kke-landscape #order { width: 160dp; top: 18%; }
+        body.kke-phone.kke-landscape .row { font-size: 12dp; }
+        body.kke-phone .dash { margin-bottom: 96dp; }
+        body.kke-phone.kke-portrait .top, body.kke-phone.kke-portrait .dash { width: 190dp; }
+        body.kke-phone.kke-portrait #results { width: 94%; left: 3%; margin-left: 0; top: 30%; }
+        body.kke-phone.kke-portrait #results .who { width: 42%; }
+        body.kke-phone.kke-portrait #results .note { display: none; }
+        body.kke-phone.kke-portrait #notice { top: auto; bottom: 32%; left: 5%; width: 90%; }
+        /* How to play on a phone: the whole sheet on the screen, each card its title. */
+        .phone-only { display: none; }
+        body.kke-phone .phone-only { display: block; }
+        body.kke-phone #howto .sheet { width: 96%; left: 2%; margin-left: 0; top: 2%; margin-top: 0; height: 96%; }
+        body.kke-phone #howto h1 { font-size: 28dp; }
+        body.kke-phone #howto .tagline { margin: 2dp 0 8dp 0; font-size: 14dp; }
+        body.kke-phone #howto .card { width: 32.5%; height: auto; padding: 6dp 10dp; margin-bottom: 6dp; }
+        body.kke-phone.kke-portrait #howto .card { width: 49%; }
+        body.kke-phone #howto .card .body { display: none; }
+        body.kke-phone #howto .title { font-size: 16dp; margin: 2dp 0 2dp 0; }
+        body.kke-phone #howto .go { position: relative; margin-top: 8dp; }
+        body.kke-phone #howto .later { display: none; }
         /* How to play. */
         #howto { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background-color: #05070ef2; }
         #howto .sheet { position: absolute; left: 50%; top: 50%; width: 960dp; margin-left: -480dp; height: 560dp; margin-top: -290dp; }
@@ -119,12 +151,14 @@
         <div id="results" data-if="results.size > 0 && !howto">
             <div data-for="r : results" class="r"><span class="place">{{r.place}}</span><span class="dot" data-style-background-color="r.accent"></span><span class="who">{{r.name}}</span><span class="what">{{r.result}}</span><span class="note">{{r.note}}</span></div>
         </div>
+        <div id="touch" data-if="racing && results.size == 0 && !howto"><div class="steer">STEER</div><div class="brake">BRAKE</div><div class="gas">GAS</div></div>
         <div id="hint" data-if="!howto" data-rml="hint"></div>
     </div>
     <div id="howto" data-if="howto">
         <div class="sheet">
             <h1>RACING</h1>
             <div class="tagline">Oval races, drifting and the drag strip. Bring your car home in one piece.</div>
+            <div class="tagline phone-only">Hold the left half of the screen to steer (left or right of its middle), the right edge for gas, next to it the brake.</div>
             <div class="cards">
                 <div class="card">
                     <div class="step">1 · DRIVE</div>
