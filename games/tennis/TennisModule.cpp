@@ -361,6 +361,11 @@ void TennisModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
             if (m_inCenter) {
                 int watching = 0, going = 0, strolling = 0;
                 for (const Walker& w : m_walkers) {
+                    if (w.remote && !w.gone && w.body) {
+                        const glm::vec3 at = m_rigid->world().characterPosition(w.body);
+                        kke::log::get(name())->info("t {:.0f} s: {} (another screen) at ({:.1f}, {:.1f}), {}", m_clock, w.name, at.x, at.z,
+                                                    w.playing >= 0 ? "playing" : w.look && w.look->visible() ? "walking, drawn" : "walking, NOT drawn");
+                    }
                     if (!w.cpu) continue;
                     (w.doing == Walker::Doing::Watch ? watching : w.doing == Walker::Doing::ToSeat ? going : strolling)++;
                 }

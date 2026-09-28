@@ -97,8 +97,12 @@ void TennisModule::enterCenter() {
     int n = 0;
     for (const Entry& e : netEntries()) {
         if (e.cpu) continue;
-        spawnWalker(e.name, e.tint, false, e.input, m_center.arrival(n++));
-        m_walkers.back().netId = online() ? e.netId : -1;
+        // Online, each machine's people arrive in their own places (a client
+        // knows its id by now), not on top of another screen's.
+        const int place = online() && e.netId > 0 ? e.netId * kke::NetModule::kMaxLocalPlayers + n : n;
+        spawnWalker(e.name, e.tint, false, e.input, m_center.arrival(place));
+        m_walkers.back().localSlot = n++;
+        m_walkers.back().netId = online() ? e.netId : -1; // or once hosting or joining starts (sendNet)
     }
     // The crowd, spread along the promenade.
     uint32_t dice = m_seed * 2654435761u + 7u;
