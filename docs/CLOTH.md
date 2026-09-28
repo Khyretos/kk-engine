@@ -215,7 +215,10 @@ The engine turns it on by itself (`RigidBodyModule`); a game with its own
 `RigidWorld` does `world.setClothGpu(kke::ClothGpu::create(app.device()))`.
 `create()` gives null where there is no such queue, and the CPU searches
 as before. The CPU also takes over for a step whenever there are more pairs
-than the GPU's buffers hold (they grow for the next one).
+than the GPU's buffers hold (they grow for the next one), and for as long
+as it is the faster of the two: the pass times both (the slower one again
+every 64 searches) and uses the faster. On a phone (Adreno 730) the GPU,
+busy drawing, took 16.8 ms a search in the bed, more than the CPU.
 
 | Variable | What |
 | --- | --- |
@@ -223,8 +226,9 @@ than the GPU's buffers hold (they grow for the next one).
 | `KKE_CLOTH_GPU=shared` | Use the graphics queue (a GPU with one queue; the search then waits for the frame) |
 | `KKE_CLOTH_GPU_CHECK=1` | Search on both and log any difference (for testing; slow) |
 
-`ClothGpu::stats()` gives searches done, searches left to the CPU and the
-last one's time; the demo's panel shows them.
+`ClothGpu::stats()` gives searches done, searches left to the CPU, the
+last one's time, both averages and which one searches; the demo's panel
+shows them.
 
 Rules of thumb:
 

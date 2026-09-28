@@ -51,7 +51,7 @@ KKE_BENCHMARK=1 ./cloth_demo                              # tours every scene an
 | `KKE_CLOTH_COUNT`, `KKE_CLOTH_RES` | Stress scene: sheets, vertices per side (default 16, 24) |
 | `KKE_HAIR_GUIDES`, `KKE_HAIR_PER_GUIDE` | Hair scene: guide strands per head, hairs drawn per guide (default 160, and 0 = as the style draws) |
 | `KKE_HAIR_MOTION=0..1` | Hair scene: hair physics, 1 natural (default), 0 solid (no simulation) |
-| `KKE_HAIR_DETAIL=0.05..1` | Hair scene: the share of hairs drawn (default 1), for phones and slow GPUs |
+| `KKE_HAIR_DETAIL=0.05..1` | Hair scene: the share of hairs drawn (default 1, 0.5 on phones), for phones and slow GPUs |
 | `KKE_HAIR_SHOW=types34\|styles\|braids\|types12\|classic` | Hair scene: the catalog's page (default types 3 and 4) |
 | `KKE_HAIR_STYLES=4c,afro` | Hair scene: exactly these heads, from `hairStyleNames()` and `hairstyleNames()` |
 | `KKE_CLOTH_GPU=0\|shared` | Search for cloth pairs on the CPU only, or on the graphics queue (docs/CLOTH.md, "On the GPU") |
