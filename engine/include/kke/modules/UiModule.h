@@ -4,8 +4,12 @@
 #include "kke/Capabilities.h"
 #include "kke/RmlVulkanRenderInterface.h"
 
+#include <RmlUi/Core/Element.h>
+#include <RmlUi/Core/ObserverPtr.h>
 #include <RmlUi/Core/SystemInterface.h>
+#include <cstdint>
 #include <memory>
+#include <unordered_map>
 
 namespace Rml {
 class Context;
@@ -128,6 +132,13 @@ private:
     // in any document of the context play an AudioModule earcon.
     std::unique_ptr<Rml::EventListener> m_earcons;
     std::unique_ptr<PromptInstancer> m_prompts;
+    // On-screen buttons (ButtonPrompts::touchButton): the one under a
+    // point of the window (0..1 each way), for InputModule; and the ones
+    // held now (by finger id, the mouse as ~0), drawn pressed.
+    Rml::Element* screenButtonAt(float nx, float ny) const;
+    void showScreenButtonPressed(uint64_t pointer, Rml::Element* button);
+    std::unordered_map<uint64_t, Rml::ObserverPtr<Rml::Element>> m_pressedButtons;
+    bool m_finderSet = false;
     bool m_initialised = false;
     Application* m_app = nullptr; // needed each frame in update() to detect window resize
 

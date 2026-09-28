@@ -99,7 +99,24 @@ public:
     // action with nothing bound on this device becomes nothing; a name
     // that is neither an action nor a control shows as a key cap. Anything
     // else is escaped, so the text may come from a player.
-    std::string format(PromptStyle style, const InputMap& map, const std::string& text) const;
+    // Touch style: every Button action without a gesture of its own
+    // (setTouchGesture) is a real on-screen button, tapped to do the action
+    // (see touchButton); its label is the words after the placeholder, up
+    // to the next placeholder or a separator (" · ", ",", ";", "|"),
+    // so "{aim} aim · {reach} reach" makes two buttons. `player` (0-based)
+    // is the one the buttons press for.
+    std::string format(PromptStyle style, const InputMap& map, const std::string& text, int player = 0) const;
+
+    // A phone's on-screen button for a Button action: a coloured pill with
+    // the label on it (`colour` picks one of five, see touchColour, so
+    // buttons are told apart at a glance). UiModule finds it under a finger
+    // by its data-kke-action / data-kke-player attributes and holds the
+    // action down while the finger stays (InputMap::setScreenButton).
+    static std::string touchButton(const std::string& action, const std::string& label, int player = 0, int colour = 0);
+    // An action's colour: its place among the map's actions.
+    static int touchColour(const InputMap& map, const std::string& action);
+    // Whether `action` shows as a touchButton in the touch style.
+    bool isTouchButton(const InputMap& map, const std::string& action) const;
 
     // Pure mappings, public for the tests.
     static std::string padButtonFile(PromptStyle style, int sdlGamepadButton);

@@ -107,7 +107,9 @@ screen's pixel density, so both read the same on a phone as on a PC.
 ## Controls
 
 - **Touch**: a tap is a mouse click, so menus (RmlUi) work with a finger.
-  On-screen sticks for playing with touch alone are not there yet.
+  The hints on screen are buttons: each action is a coloured button with
+  its name on it, pressed with a finger (docs/INPUT.md "Touch screens").
+  On-screen sticks for moving are not there yet.
 - **Gamepads**: Bluetooth and USB controllers work as on a PC (SDL3), with
   the matching button prompts.
 - **Back** (the system gesture or button) closes the game.

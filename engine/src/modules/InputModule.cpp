@@ -449,8 +449,67 @@ uint32_t InputModule::sanityControl(const SDL_Event& e) {
     }
 }
 
+bool InputModule::screenButtonEvent(const SDL_Event& event) {
+    auto press = [&](const HeldScreenButton& b, bool down) {
+        if (b.player >= 0 && b.player < players()) m_maps[static_cast<size_t>(b.player)]->setScreenButton(b.action, down);
+    };
+    auto find = [&](float nx, float ny, HeldScreenButton& out) { return m_screenButtonAt && m_screenButtonAt(nx, ny, out.player, out.action); };
+    auto windowPoint = [](SDL_WindowID id, float x, float y, float& nx, float& ny) {
+        int w = 0, h = 0;
+        SDL_Window* window = SDL_GetWindowFromID(id);
+        if (!window || !SDL_GetWindowSize(window, &w, &h) || w <= 0 || h <= 0) return false;
+        nx = x / static_cast<float>(w);
+        ny = y / static_cast<float>(h);
+        return true;
+    };
+    switch (event.type) {
+    case SDL_EVENT_FINGER_DOWN: {
+        HeldScreenButton b;
+        if (!find(event.tfinger.x, event.tfinger.y, b)) return false;
+        press(b, true);
+        m_fingerButtons[event.tfinger.fingerID] = std::move(b);
+        return true;
+    }
+    case SDL_EVENT_FINGER_UP:
+    case SDL_EVENT_FINGER_CANCELED: {
+        auto it = m_fingerButtons.find(event.tfinger.fingerID);
+        if (it == m_fingerButtons.end()) return false;
+        press(it->second, false);
+        m_fingerButtons.erase(it);
+        return true;
+    }
+    case SDL_EVENT_MOUSE_BUTTON_DOWN: {
+        if (event.button.button != SDL_BUTTON_LEFT) return false;
+        float nx = 0.0f, ny = 0.0f;
+        HeldScreenButton b;
+        if (!windowPoint(event.button.windowID, event.button.x, event.button.y, nx, ny) || !find(nx, ny, b)) return false;
+        if (event.button.which == SDL_TOUCH_MOUSEID) {
+            m_touchMouseOnButton = true; // the finger's own event pressed it
+        } else {
+            press(b, true);
+            m_mouseButton = std::move(b);
+        }
+        return true;
+    }
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (event.button.button != SDL_BUTTON_LEFT) return false;
+        if (event.button.which == SDL_TOUCH_MOUSEID && m_touchMouseOnButton) {
+            m_touchMouseOnButton = false;
+            return true;
+        }
+        if (event.button.which != SDL_TOUCH_MOUSEID && m_mouseButton) {
+            press(*m_mouseButton, false);
+            m_mouseButton.reset();
+            return true;
+        }
+        return false;
+    default: return false;
+    }
+}
+
 void InputModule::onEvent(const SDL_Event& event) {
-    m_devices.handleEvent(event);
+    // A press on an on-screen button is the button's, not a click in the game.
+    if (!screenButtonEvent(event)) m_devices.handleEvent(event);
     // OS timestamps (ns), not frame times: frames would make every human
     // look machine-regular (kke/InputSanity.h).
     const double t = static_cast<double>(event.common.timestamp) * 1e-9;
@@ -545,13 +604,18 @@ std::string InputModule::promptRml(const std::string& action, const std::string&
     const int p = std::clamp(player, 0, players() - 1);
     const InputMap& m = *m_maps[static_cast<size_t>(p)];
     const PromptStyle style = promptStyle(p);
+    if (style == PromptStyle::Touch && m_prompts.isTouchButton(m, action)) {
+        const ActionDef* def = m.action(action);
+        return ButtonPrompts::touchButton(action, !label.empty() ? label : !def->label.empty() ? def->label : action, p,
+                                         ButtonPrompts::touchColour(m, action));
+    }
     std::vector<ButtonPrompts::Glyph> g = m.action(action) ? m_prompts.actionGlyphs(style, m, action) : m_prompts.namedGlyphs(style, action);
     return m_prompts.rml(g, label);
 }
 
 std::string InputModule::promptText(const std::string& text, int player) const {
     const int p = std::clamp(player, 0, players() - 1);
-    return m_prompts.format(promptStyle(p), *m_maps[static_cast<size_t>(p)], text);
+    return m_prompts.format(promptStyle(p), *m_maps[static_cast<size_t>(p)], text, p);
 }
 
 void InputModule::shutdown() {

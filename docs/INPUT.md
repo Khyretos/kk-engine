@@ -148,8 +148,9 @@ device, so rebinding changes the prompt: modifiers first (Ctrl + S), an
 axis the keyboard drives shows its keys (W A S D), a stick shows the
 stick. An action with nothing bound on that device shows nothing. `ui.*`
 actions on the keyboard show the keys RmlUi answers to (Enter, Esc,
-arrows, Tab). On touch, an action shows a tap unless the game names a
-gesture (`prompts().setTouchGesture("jump", "swipe_up")`). Buttons that
+arrows, Tab). On touch, a Button action is a real on-screen button (see
+"Touch screens") unless the game names a gesture for it
+(`prompts().setTouchGesture("jump", "swipe_up")`). Buttons that
 aren't actions have names: `a b x y` (by position, so `a` is Cross on a
 DualSense and B on a Switch), `lb rb lt rt ls rs start back guide
 dpad_up ... l4 r4 l5 r5`, `key:Space`, `mouse:left`, `touch:tap`
@@ -193,6 +194,19 @@ work with a finger unchanged. Two fingers are gestures:
 `OrbitCameraModule` uses them (drag turns the view, pinch zooms, twist
 spins it). The sandbox's Play mode also plays with a gamepad as a
 pointer; see docs/PLAY_TO_MAKE.md "Fingers and controllers".
+
+In the touch style the prompts are the buttons: every Button action in a
+hint (`<prompt action="fire" label="shoot"/>`, `promptText("{jump} jump")`,
+`input.promptText` in Lua) is drawn as a coloured pill with its label on
+it, and a finger on it holds that action down until it lifts
+(`InputMap::setScreenButton`), several fingers several buttons. In
+`promptText` the words after a placeholder, up to the next one or a
+separator (` · `, `,`, `;`, `|`, two spaces), are its label. Each action
+keeps one of five colours (its place among the map's actions), so buttons
+next to each other differ. A press on a button is not also a click in
+the game. Axes (move, look) keep their picture; an on-screen stick is
+not there yet. `KKE_PROMPT_STYLE=touch` shows the buttons on a PC, where
+the mouse presses them.
 
 ## Split screen
 

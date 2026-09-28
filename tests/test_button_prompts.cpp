@@ -211,3 +211,27 @@ TEST(ButtonPrompts, MarkupEscapesTextAndPointsAtTheRoot) {
     EXPECT_NE(f.find("XboxSeriesX_A.png"), std::string::npos) << f;
     EXPECT_NE(f.find(" to jump, {literal}, &lt;i&gt;"), std::string::npos) << f;
 }
+
+TEST(ButtonPrompts, TouchTurnsButtonActionsIntoTappableButtons) {
+    kke::InputMap map;
+    map.defineAction({ "aim", "Aim" });
+    map.defineAction({ "reach", "Reach" });
+    map.defineAction({ "move", "Move", "", "game", kke::ActionType::Axis2D });
+    ButtonPrompts prompts;
+
+    // The words after each placeholder are its button's label.
+    const std::string f = prompts.format(PromptStyle::Touch, map, "{aim} aim \xC2\xB7 {reach} reach far, {move} move", 1);
+    EXPECT_NE(f.find("data-kke-action=\"aim\" data-kke-player=\"1\""), std::string::npos) << f;
+    EXPECT_NE(f.find(">aim</span> \xC2\xB7 "), std::string::npos) << f;
+    EXPECT_NE(f.find(">reach far</span>, "), std::string::npos) << f;
+    // An axis can't be tapped: it keeps its picture.
+    EXPECT_EQ(f.find("data-kke-action=\"move\""), std::string::npos) << f;
+    // Neighbouring actions get different colours; a lone placeholder is
+    // labelled with the action's name.
+    EXPECT_NE(ButtonPrompts::touchButton("aim", "a", 0, ButtonPrompts::touchColour(map, "aim")),
+              ButtonPrompts::touchButton("aim", "a", 0, ButtonPrompts::touchColour(map, "reach")));
+    EXPECT_NE(prompts.format(PromptStyle::Touch, map, "{aim}").find(">Aim</span>"), std::string::npos);
+    // A gesture of its own shows the gesture instead.
+    prompts.setTouchGesture("aim", "swipe_up");
+    EXPECT_NE(prompts.format(PromptStyle::Touch, map, "{aim} aim").find("Gesture_Swipe_Up.png"), std::string::npos);
+}

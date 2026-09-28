@@ -285,10 +285,39 @@ bool UiModule::EngineSystemInterface::LogMessage(Rml::Log::Type type, const Rml:
     return true;
 }
 
+Rml::Element* UiModule::screenButtonAt(float nx, float ny) const {
+    if (!m_context) return nullptr;
+    const Rml::Vector2i size = m_context->GetDimensions();
+    Rml::Element* e = m_context->GetElementAtPoint(Rml::Vector2f(nx * static_cast<float>(size.x), ny * static_cast<float>(size.y)));
+    for (; e; e = e->GetParentNode())
+        if (e->HasAttribute("data-kke-action")) return e;
+    return nullptr;
+}
+
+void UiModule::showScreenButtonPressed(uint64_t pointer, Rml::Element* button) {
+    if (auto it = m_pressedButtons.find(pointer); it != m_pressedButtons.end()) {
+        if (it->second) it->second->RemoveProperty("opacity");
+        m_pressedButtons.erase(it);
+    }
+    if (!button) return;
+    button->SetProperty("opacity", "0.6");
+    m_pressedButtons[pointer] = button->GetObserverPtr();
+}
+
 void UiModule::frameStart(const UpdateContext& ctx) {
     if (!m_context || !m_app) return;
     InputModule* input = m_app->getModule<InputModule>();
     if (!input) return;
+    if (!m_finderSet) {
+        input->setScreenButtonFinder([this](float nx, float ny, int& player, std::string& action) {
+            Rml::Element* b = screenButtonAt(nx, ny);
+            if (!b) return false;
+            action = b->GetAttribute<Rml::String>("data-kke-action", "");
+            player = b->GetAttribute<int>("data-kke-player", 0);
+            return !action.empty();
+        });
+        m_finderSet = true;
+    }
     const InputMap& map = input->map(0);
     auto tap = [&](Rml::Input::KeyIdentifier k, int mods = 0) {
         // Nothing focused yet: the first press just focuses the first control.
@@ -469,6 +498,12 @@ void UiModule::onEvent(const SDL_Event& event) {
             }
             break;
         case SDL_EVENT_MOUSE_BUTTON_DOWN: {
+            if (event.button.which != SDL_TOUCH_MOUSEID && event.button.button == SDL_BUTTON_LEFT) {
+                const Rml::Vector2i size = m_context->GetDimensions();
+                if (size.x > 0 && size.y > 0)
+                    showScreenButtonPressed(~uint64_t{0}, screenButtonAt(event.button.x * ppp / static_cast<float>(size.x),
+                                                                        event.button.y * ppp / static_cast<float>(size.y)));
+            }
             int button = sdlButtonToRmlButton(event.button.button);
             if (button >= 0) m_context->ProcessMouseButtonDown(button, modifiers);
 
@@ -530,7 +565,15 @@ void UiModule::onEvent(const SDL_Event& event) {
             }
             break;
         }
+        case SDL_EVENT_FINGER_DOWN:
+            showScreenButtonPressed(event.tfinger.fingerID, screenButtonAt(event.tfinger.x, event.tfinger.y));
+            break;
+        case SDL_EVENT_FINGER_UP:
+        case SDL_EVENT_FINGER_CANCELED:
+            showScreenButtonPressed(event.tfinger.fingerID, nullptr);
+            break;
         case SDL_EVENT_MOUSE_BUTTON_UP: {
+            if (event.button.which != SDL_TOUCH_MOUSEID && event.button.button == SDL_BUTTON_LEFT) showScreenButtonPressed(~uint64_t{0}, nullptr);
             int button = sdlButtonToRmlButton(event.button.button);
             if (button >= 0) m_context->ProcessMouseButtonUp(button, modifiers);
             // Ends the drag unconditionally on any button-up, even if
@@ -569,6 +612,10 @@ void UiModule::onEvent(const SDL_Event& event) {
 }
 
 void UiModule::shutdown() {
+    if (m_finderSet && m_app)
+        if (InputModule* input = m_app->getModule<InputModule>()) input->setScreenButtonFinder(nullptr);
+    m_finderSet = false;
+    m_pressedButtons.clear();
     if (m_context && m_earcons)
         for (const char* ev : {"focus", "click", "change"}) m_context->RemoveEventListener(ev, m_earcons.get(), true);
     if (m_initialised) {

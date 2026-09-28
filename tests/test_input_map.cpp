@@ -382,3 +382,29 @@ TEST(InputModule, LeftHandedMirrorKeepsDirections) {
     EXPECT_EQ(kke::InputModule::mirrorScancode(kke::InputModule::mirrorScancode(SDL_SCANCODE_Q)), SDL_SCANCODE_Q);
     EXPECT_EQ(kke::InputModule::mirrorScancode(SDL_SCANCODE_F1), SDL_SCANCODE_F1);
 }
+
+TEST(InputMap, ScreenButtonsHoldAndNeverLoseAQuickTap) {
+    Rig r;
+    r.map.defineAction({ "jump", "Jump", "Movement" });
+    r.step();
+    r.map.setScreenButton("jump", true);
+    r.step();
+    EXPECT_TRUE(r.map.pressed("jump"));
+    r.step();
+    EXPECT_TRUE(r.map.held("jump")); // the finger stays
+    r.map.setScreenButton("jump", false);
+    r.step();
+    EXPECT_TRUE(r.map.released("jump"));
+    // Down and up between two updates is still one press.
+    r.map.setScreenButton("jump", true);
+    r.map.setScreenButton("jump", false);
+    r.step();
+    EXPECT_TRUE(r.map.pressed("jump"));
+    r.step();
+    EXPECT_FALSE(r.map.held("jump"));
+    // Off with its context.
+    r.map.setContextEnabled("game", false);
+    r.map.setScreenButton("jump", true);
+    r.step();
+    EXPECT_FALSE(r.map.held("jump"));
+}
