@@ -1,0 +1,83 @@
+<rml>
+<head>
+    <title>Party HUD</title>
+    <link type="text/rcss" href="theme.rcss"/>
+    <style>
+        /* Over the game: nothing here takes clicks. */
+        body { pointer-events: none; }
+        /* One panel per player, in the top left corner of their view. */
+        .player { position: absolute; max-width: 300dp; padding: 10dp 14dp; margin: 16dp 0 0 20dp; border-radius: 14dp;
+                  background-color: #1a1030cc; border-left: 5dp #ff7ac8; }
+        .player .name { font-size: 16dp; font-weight: bold; color: #ffffff; }
+        .player .points { font-size: 13dp; color: #ffd76b; }
+        .player .status { font-size: 14dp; color: #d8f7ff; margin-top: 3dp; }
+        .player.out { opacity: 0.8; }
+        .player.out .status { color: #ff9a8a; }
+        .player.won .status { color: #9cff9a; }
+        .player .mic { font-size: 12dp; color: #9cff9a; }
+        /* The clock and the minigame's line, top middle. */
+        #top { position: absolute; top: 12dp; left: 0; width: 100%; text-align: center; }
+        #top .round { font-size: 12dp; letter-spacing: 3dp; color: #ffd76b; }
+        #top .clock { display: inline-block; font-size: 30dp; font-weight: bold; color: #ffffff; padding: 2dp 16dp; border-radius: 12dp;
+                      background-color: #1a1030bb; }
+        #top .status { display: block; font-size: 22dp; font-weight: bold; color: #ffffff; margin-top: 4dp; }
+        #banner { position: absolute; top: 32%; left: 0; width: 100%; text-align: center; }
+        #banner .big { font-size: 76dp; font-weight: bold; color: #ffffff; }
+        #banner .sub { display: inline-block; font-size: 18dp; color: #fff4d6; margin-top: 6dp; padding: 4dp 14dp; border-radius: 10dp;
+                       background-color: #1a1030aa; }
+        /* The round card: what the next minigame is and how to play it. */
+        #card { position: absolute; left: 50%; top: 50%; width: 720dp; margin-left: -360dp; height: 340dp; margin-top: -190dp;
+                padding: 26dp 34dp; border-radius: 22dp; background-color: #1a1030ee; border-top: 6dp #ff7ac8; text-align: center; }
+        #card .round { font-size: 14dp; letter-spacing: 4dp; color: #ffd76b; }
+        #card .title { display: block; font-size: 52dp; font-weight: bold; color: #ffffff; margin: 8dp 0; }
+        #card .goal { font-size: 21dp; color: #fff4d6; line-height: 1.3; }
+        #card .controls { margin-top: 22dp; font-size: 17dp; color: #d8f7ff; }
+        #card .controls img, #hint img { font-size: 22dp; }
+        /* The results and the podium's standings. */
+        #table { position: absolute; left: 50%; top: 50%; width: 560dp; margin-left: -280dp; margin-top: -120dp; padding: 12dp 18dp;
+                 border-radius: 16dp; background-color: #1a1030e6; }
+        #table .row { display: block; font-size: 17dp; color: #ffffff; padding: 3dp 0; }
+        #table .place { display: inline-block; width: 48dp; color: #ffd76b; font-weight: bold; }
+        #table .dot { display: inline-block; width: 12dp; height: 12dp; border-radius: 6dp; margin-right: 10dp; }
+        #table .who { display: inline-block; width: 220dp; }
+        #table .got { display: inline-block; width: 60dp; color: #9cff9a; font-weight: bold; }
+        #table .total { display: inline-block; width: 60dp; font-weight: bold; }
+        #table .note { color: #aab3cc; font-size: 14dp; }
+        #hint { position: absolute; left: 8%; bottom: 14dp; width: 84%; padding: 6dp 10dp; border-radius: 10dp; background-color: #1a1030bb;
+                text-align: center; font-size: 14dp; color: #fff4d6; }
+        #talk { position: absolute; right: 20dp; bottom: 60dp; padding: 4dp 12dp; border-radius: 10dp; background-color: #10301acc;
+                font-size: 14dp; color: #9cff9a; }
+    </style>
+</head>
+<body data-model="party">
+    <div data-if="show">
+        <div data-for="p : players" class="player" data-class-out="p.out" data-class-won="p.won" data-style-left="p.x" data-style-top="p.y"
+             data-style-border-left-color="p.accent">
+            <div class="name">{{p.name}}</div>
+            <div class="points">{{p.points}}</div>
+            <div class="status" data-if="p.status != ''">{{p.status}}</div>
+            <div class="mic" data-if="p.talking">talking</div>
+        </div>
+        <div id="top" data-if="!card">
+            <div class="round" data-if="clock != ''">{{round}}</div>
+            <div class="clock" data-if="clock != ''">{{clock}}</div>
+            <div class="status" data-if="status != ''">{{status}}</div>
+        </div>
+        <div id="banner" data-if="banner != '' && !card">
+            <div class="big">{{banner}}</div>
+            <div class="sub" data-if="sub != ''">{{sub}}</div>
+        </div>
+        <div id="card" data-if="card">
+            <div class="round">{{round}}</div>
+            <div class="title">{{title}}</div>
+            <div class="goal">{{goal}}</div>
+            <div class="controls" data-rml="controls"></div>
+        </div>
+        <div id="table" data-if="table">
+            <div data-for="r : rows" class="row"><span class="place">{{r.place}}</span><span class="dot" data-style-background-color="r.accent"></span><span class="who">{{r.name}}</span><span class="got">{{r.got}}</span><span class="total">{{r.total}}</span><span class="note">{{r.note}}</span></div>
+        </div>
+        <div id="hint" data-if="hint != ''" data-rml="hint"></div>
+    </div>
+    <div id="talk" data-if="talk != ''">{{talk}}</div>
+</body>
+</rml>

@@ -282,7 +282,7 @@ built in code from the island's seed.
 
 ## Demos that use no packs
 
-These run the same with or without any asset pack: `climb_race`,
+These run the same with or without any asset pack: `climb_race`, `party`,
 `procedural_demo`, `physics_demo`, `melt_demo`, `sea_demo`, `audio_demo`,
 `rmlui_demo`, `imgui_demo`, `kke_basics`, `starter_game` and `cookbook`.
 `kke_demo` dresses its course with the art listed under "Showcase course
@@ -307,6 +307,7 @@ with `KKE_MOOD=<name>`.
 | `farm_demo` | `clear_day` | Kloofendal 48d Partly Cloudy | `meadow_day` |
 | `platoon` | `clear_day` | Kloofendal 48d Partly Cloudy | `meadow_day` |
 | `climb_race` | each mountain's own (`games/climb_race/mountains/`): `morning`, `clear_day`, `golden_hour` (Granite Tower, Random), `sunset`, `overcast`, `misty_morning` | as the mood | as the mood |
+| `party` | each minigame's own: `sunset` (the lobby and podium), `clear_day`, `dusk`, `arena_night`, `noon`, `golden_hour`, `playful` | as the mood | as the mood |
 | `synty_demo` | `morning` | Qwantani Mid Morning | `meadow_day` |
 | `flying_demo` | `clear_day`; the start menu's Sky row: `morning`, `golden_hour`, `sunset`, `stormy` | as the mood | as the mood |
 | `goblin_horde` | `sunset` | Qwantani Sunset | `wind_soft` |

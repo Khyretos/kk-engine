@@ -98,6 +98,14 @@ if(ENGINE_ENABLE_LUA)
     endif()
 endif()
 target_compile_definitions(kke_tests PRIVATE KKE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+# The party game's show, glass and wire format (test_party.cpp).
+if(KKE_ENABLE_JOLT AND KKE_ENABLE_NET)
+    target_sources(kke_tests PRIVATE test_party.cpp
+        ${CMAKE_SOURCE_DIR}/games/party/Show.cpp
+        ${CMAKE_SOURCE_DIR}/games/party/Shatter.cpp
+        ${CMAKE_SOURCE_DIR}/games/party/NetParty.cpp)
+    target_include_directories(kke_tests PRIVATE ${CMAKE_SOURCE_DIR}/games/party)
+endif()
 
 # ToneMapper.ValuesMatchTheShader reads shaders/tonemap.glsl. It is built
 # into the test binary because the Release workflow runs kke_tests from a
