@@ -4,6 +4,7 @@
 #include "Body.h"
 #include "Bot.h"
 #include "Court.h"
+#include "NetTennis.h"
 #include "Rules.h"
 #include "Shot.h"
 
@@ -72,7 +73,9 @@ public:
         std::string name;
         glm::vec3 tint{1.0f};
         int team = 0, slot = 0;        // slot: 0 or 1 within a doubles team
-        bool cpu = true;
+        bool cpu = true;               // a CPU brain moves it (the host's CPU players; KKE_TENNIS_AUTOPLAY)
+        bool remote = false;           // online: another machine runs it; we draw what it sends
+        int netId = -1;                // online: its network player id
         int input = -1;                // InputModule player (humans)
         int level = 1;                 // CPU level
         kke::RigidWorld::CharacterId body = 0;
@@ -94,6 +97,7 @@ public:
         float tossAge = -1.0f;         // serving: s since the toss
         float celebrate = 0.0f;        // s left of a cheer or a groan
         bool cheer = true;
+        net::Pose pose;                // online, a remote player: what its machine last sent (world)
         kke::Camera camera;
         bool cameraInit = false;
         int camSide = 0;               // the half the camera last sat behind
@@ -113,14 +117,31 @@ public:
         int rallyShots = 0;
         bool serveAgain = false;       // after a fault or a let: the same point, served again
         float deadBall = 0.0f;         // s the ball has lain still in a rally
+        float sinceHit = 0.0f;         // s since the last hit (a ball nobody can reach ends the rally)
+        uint16_t serial = 0;           // online: +1 each serve, so a late hit for an old point is dropped
+    };
+
+    // Who plays in a match about to start (the menu's seats, CPU players,
+    // online players).
+    struct Entry {
+        std::string name;
+        glm::vec3 tint{1.0f};
+        bool cpu = false;
+        int input = -1, level = 1;
+        int netId = -1;
+        bool remote = false;
+        bool filler = false;           // online: a spare CPU player the host keeps ready (netEntries)
+        int team = -1, slot = -1;      // -1: the match decides
     };
 
 private:
     // Setting up (TennisModule.cpp).
     void defineControls();
     void buildWorld();              // Scene.cpp
-    void startLocalMatch();         // from the menu or the switches
-    void spawnPlayer(const std::string& name, const glm::vec3& tint, int team, bool cpu, int input, int level);
+    void startLocalMatch();         // from the menu or the switches (and the host's online match)
+    void buildMatch(std::vector<Entry> entries, const MatchRules& rules);
+    void spawnPlayer(const Entry& e, int team);
+    void backToMenu();
     void clearPlayers();
     Player& player(int index) { return m_players[static_cast<size_t>(index)]; }
 
@@ -129,11 +150,14 @@ private:
     void startPoint(Match& m);
     void placeForPoint(Match& m);
     void stepPlayer(Match& m, Player& p, float dt);
+    void stepRemote(Match& m, Player& p, float dt); // online: a player another machine runs
     void readHuman(Match& m, Player& p);
     void thinkCpu(Match& m, Player& p, float dt);
     bool tryHit(Match& m, Player& p, bool serve);
     void hitBall(Match& m, Player& p, const glm::vec3& contact, bool serve);
-    void resolve(Match& m, Rally::Result r);
+    void resolve(Match& m, Rally::Result r, const std::string& call = {});
+    void applyHit(Match& m, int hitter, const net::Hit& h);
+    bool authority() const;         // offline or the host: this machine is the umpire
     int partnerOf(const Match& m, int index) const;
     int nearestOpponent(const Match& m, const Player& p) const;
     int serverIndex(const Match& m) const;
@@ -154,6 +178,24 @@ private:
     // The start menu (Lobby.cpp).
     void setupLobby();
     void updateLobby(float dt);
+    void startFromMenu();
+
+    // Online (Net.cpp).
+    bool netHost() const;
+    bool netClient() const;
+    bool online() const { return netHost() || netClient(); }
+    void setupNet();
+    void syncNetPlayers();
+    void updateNet(float dt);
+    void sendNet();
+    void onNetEvent(const kke::net::GameEventMsg& e);
+    void sendSetup(const Match& m);
+    void applySetup(const net::Setup& s);
+    std::string netStatus() const;
+    bool waitsOnline() const;       // KKE_NET join, or a host waiting for KKE_TENNIS_WAIT players
+    std::vector<Entry> seatEntries() const; // this screen's players, as the menu has them
+    std::vector<Entry> netEntries() const;  // ... as network players (slot order), with netId
+    Player* playerByNet(Match& m, int netId);
 
     kke::Application* m_app = nullptr;
     kke::RigidBodyModule* m_rigid = nullptr;
@@ -185,6 +227,14 @@ private:
     bool m_assist = true;
     int m_length = 0;               // the menu's Length row
     int m_teams = 0;                // the menu's Teams row
+    bool m_autoplay = false;        // KKE_TENNIS_AUTOPLAY: this screen's players have CPU brains (tests)
+
+    // Online.
+    uint32_t m_netMatch = 0;        // the host's match number
+    float m_netTime = 0.0f, m_netSearchAt = 0.0f, m_ballSentAt = 0.0f;
+    bool m_wasOnline = false;
+    int m_netWait = 0;              // KKE_TENNIS_WAIT: the host starts once this many others are in
+    std::string m_lastNetStatus;
 
     // Tally for the log.
     int m_pointsPlayed = 0, m_longestRally = 0;

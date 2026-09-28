@@ -111,6 +111,18 @@ ShotPlan planShot(const glm::vec3& from, const glm::vec3& target, float speed, S
         if (clear) break;
         t *= 1.06f;
     }
+    // ... but not up into the roof: a slow lob from far behind the
+    // baseline would need a moon ball (the air takes its speed), so it
+    // goes faster and lower instead.
+    const float highest = kLidHeight - 2.5f;
+    for (int tries = 0; tries < 60; ++tries) {
+        const Flight f{ from, plan.velocity, plan.gravity };
+        const float top = f.vel.y > 0.0f ? std::log(1.0f + kDrag * f.vel.y / plan.gravity) / kDrag : 0.0f;
+        if (f.at(top).y <= highest) break;
+        t *= 0.95f;
+        plan.velocity = launch(t);
+        plan.time = t;
+    }
     return plan;
 }
 

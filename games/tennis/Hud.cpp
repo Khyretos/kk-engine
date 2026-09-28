@@ -85,7 +85,7 @@ void TennisModule::updateHud() {
         bool human = false, humanServes = false;
         for (int idx : m->players) {
             const Player& p = m_players[static_cast<size_t>(idx)];
-            if (p.cpu) continue;
+            if (p.cpu || p.remote) continue;
             human = true;
             if (m->phase == Match::Phase::Serve && idx == serverIndex(*m)) humanServes = true;
         }

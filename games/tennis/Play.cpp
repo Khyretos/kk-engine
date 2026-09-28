@@ -7,6 +7,7 @@
 #include "kke/Log.h"
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/InputModule.h"
+#include "kke/modules/NetModule.h"
 #include "kke/modules/RigidBodyModule.h"
 
 #include <algorithm>
@@ -152,9 +153,15 @@ void TennisModule::placeForPoint(Match& m) {
 
 void TennisModule::startPoint(Match& m) {
     const int serveTeam = m.score.servingTeam();
-    if (m.serveAgain) m.rally.serveAgain();
+    const bool again = m.serveAgain;
+    if (again) m.rally.serveAgain();
     else m.rally.newPoint(serveTeam, m.score.sideOf(serveTeam), m.score.deuceCourt(), m.rules.teamSize > 1);
     m.serveAgain = false;
+    // Online: the host starts every serve (a client, when told: onNetEvent).
+    if (authority()) {
+        ++m.serial;
+        if (netHost()) m_net->sendEvent(net::kEventServe, net::encode(net::Serve{ m_netMatch, m.serial, again, m.rally.secondServeNow() }));
+    }
     placeForPoint(m);
     m.phase = Match::Phase::Serve;
     m.phaseTime = 0.0f;
@@ -168,11 +175,14 @@ void TennisModule::startPoint(Match& m) {
     m.ball->place(place.toLocal(s.look ? s.look->tossHand() : place.toWorld(s.feet + glm::vec3(0, 1.2f, 0))));
 }
 
-void TennisModule::resolve(Match& m, Rally::Result r) {
+bool TennisModule::authority() const { return !netClient(); }
+
+void TennisModule::resolve(Match& m, Rally::Result r, const std::string& call) {
     if (r == Rally::Result::None) return;
     m.phase = Match::Phase::PointOver;
     m.phaseTime = 0.0f;
-    m.call = m.rally.call();
+    m.call = authority() ? m.rally.call() : call;
+    if (netHost()) m_net->sendEvent(net::kEventPoint, net::encode(net::Point{ m_netMatch, m.serial, static_cast<uint8_t>(r), m.call }));
     // Every call in the log on a test run (KKE_TENNIS_QUIT).
     if (m_quitAfter > 0.0f) kke::log::get(name())->info("court {}: {} after {} shots", m.court + 1, m.call, m.rallyShots);
     if (r == Rally::Result::Fault || r == Rally::Result::Let) {
@@ -218,14 +228,14 @@ void TennisModule::stepMatch(Match& m, float dt) {
         case Ball::Event::Kind::Net: m.rally.onNet(); break;
         case Ball::Event::Kind::Out: r = m.rally.onOut(); break;
         }
-        resolve(m, r);
+        if (authority()) resolve(m, r); // a client waits for the host's call
     }
 
     for (int idx : m.players) stepPlayer(m, player(idx), dt);
 
     switch (m.phase) {
     case Match::Phase::Warmup:
-        if (m.phaseTime > 1.5f) startPoint(m);
+        if (m.phaseTime > 1.5f && authority()) startPoint(m);
         break;
     case Match::Phase::Serve:
         break; // stepPlayer runs the toss and the hit
@@ -233,8 +243,9 @@ void TennisModule::stepMatch(Match& m, float dt) {
         // A ball that stopped (rolled dead against the net) ends the rally.
         const bool still = glm::length(b.velocity()) < 0.4f && b.position().y < kBallRadius * 2.5f;
         m.deadBall = still ? m.deadBall + dt : 0.0f;
+        m.sinceHit += dt;
         // A ball lying still counts as bouncing twice where it lies.
-        if (m.deadBall > 1.0f || m.phaseTime > 20.0f) {
+        if (authority() && (m.deadBall > 1.0f || m.sinceHit > 10.0f)) {
             Rally::Result r = m.rally.onBounce(b.position().x, b.position().z);
             if (r == Rally::Result::None) r = m.rally.onBounce(b.position().x, b.position().z);
             if (r == Rally::Result::None) r = m.rally.onOut();
@@ -243,7 +254,13 @@ void TennisModule::stepMatch(Match& m, float dt) {
         break;
     }
     case Match::Phase::PointOver:
-        if (m.phaseTime > (m.serveAgain ? 1.2f : 2.2f)) {
+        if (!authority()) {
+            // The host says when the next serve is; the match is over when the score says so.
+            if (m.score.over() && m.phaseTime > 2.2f) {
+                m.phase = Match::Phase::MatchOver;
+                m.phaseTime = 0.0f;
+            }
+        } else if (m.phaseTime > (m.serveAgain ? 1.2f : 2.2f)) {
             if (m.score.over()) {
                 m.phase = Match::Phase::MatchOver;
                 m.phaseTime = 0.0f;
@@ -255,7 +272,7 @@ void TennisModule::stepMatch(Match& m, float dt) {
         }
         break;
     case Match::Phase::MatchOver:
-        if (m.phaseTime > 8.0f && (m_allBots || m.players.empty())) {
+        if (m.phaseTime > 8.0f && authority() && (m_allBots || m.players.empty())) {
             m.score = Score(m.rules);
             m.phase = Match::Phase::Warmup;
             m.phaseTime = 0.0f;
@@ -333,6 +350,10 @@ void TennisModule::stepPlayer(Match& m, Player& p, float dt) {
     const CourtPlace& place = m_center.courts[static_cast<size_t>(m.court)];
     p.feet = place.toLocal(w.characterPosition(p.body));
     p.vel = place.dirToLocal(w.characterVelocity(p.body));
+    if (p.remote) {
+        stepRemote(m, p, dt);
+        return;
+    }
     const int idx = static_cast<int>(&p - m_players.data());
     const int side = m.score.sideOf(p.team);
     const float s = static_cast<float>(side);
@@ -374,6 +395,8 @@ void TennisModule::stepPlayer(Match& m, Player& p, float dt) {
                 p.tossAge = 0.0f;
                 b.place(b.position() + glm::vec3(0.0f, 0.1f, 0.0f), glm::vec3(0.0f, 5.4f, -0.35f * s));
                 p.swingKind = SwingPose::Kind::Toss;
+                if (online() && p.netId >= 0)
+                    m_net->sendEvent(net::kEventToss, net::encode(net::Toss{ m_netMatch, m.serial, static_cast<uint8_t>(p.netId), b.position(), b.velocity() }));
                 it.press = false;
                 p.charge = 0.0f;
             }
@@ -459,6 +482,31 @@ void TennisModule::stepPlayer(Match& m, Player& p, float dt) {
     if (p.celebrate > 0.0f) p.celebrate -= dt;
 }
 
+// Another machine's player: its feet and swing come from what it sends
+// (Net.cpp); its hits and its toss come as events.
+void TennisModule::stepRemote(Match& m, Player& p, float dt) {
+    const CourtPlace& place = m_center.courts[static_cast<size_t>(m.court)];
+    glm::vec3 face = place.dirToLocal(p.pose.facing);
+    face.y = 0.0f;
+    if (glm::length(face) > 1e-3f) p.facing = glm::normalize(face);
+    p.swingKind = p.pose.swing == SwingPose::Kind::Toss && p.tossAge < 0.0f ? SwingPose::Kind::Ready : p.pose.swing;
+    p.swingT = p.pose.swingT;
+    p.swingContact = p.pose.contact;
+    const bool serving = m.phase == Match::Phase::Serve && static_cast<int>(&p - m_players.data()) == serverIndex(m);
+    if (serving) {
+        Ball& b = *m.ball;
+        // The ball in their hand until their toss comes; back in it if
+        // they let it drop.
+        if (p.tossAge < 0.0f) {
+            b.place(place.toLocal(p.look ? p.look->tossHand() : place.toWorld(p.feet + glm::vec3(0.3f, 1.2f, 0.0f))));
+        } else {
+            p.tossAge += dt;
+            if (b.position().y < 1.0f && b.velocity().y < 0.0f) p.tossAge = -1.0f;
+        }
+    }
+    if (p.celebrate > 0.0f) p.celebrate -= dt;
+}
+
 bool TennisModule::tryHit(Match& m, Player& p, bool serve) {
     Ball& b = *m.ball;
     if (!m.rally.mayHit(p.team)) return false;
@@ -485,7 +533,6 @@ bool TennisModule::tryHit(Match& m, Player& p, bool serve) {
 }
 
 void TennisModule::hitBall(Match& m, Player& p, const glm::vec3& contact, bool serve) {
-    Ball& b = *m.ball;
     const int side = m.score.sideOf(p.team);
     const float s = static_cast<float>(side);
     const bool doubles = m.rules.teamSize > 1;
@@ -547,25 +594,56 @@ void TennisModule::hitBall(Match& m, Player& p, const glm::vec3& contact, bool s
     glm::vec3 dir(plan.velocity.x, 0.0f, plan.velocity.z);
     dir = glm::length(dir) > 1e-3f ? glm::normalize(dir) : glm::vec3(0.0f, 0.0f, -s);
     const glm::vec3 spin = glm::cross(glm::vec3(0, 1, 0), dir) * spinRate(kind);
-    b.strike(plan.velocity, spin, plan.gravity - kGravity, 0.25f + 0.75f * std::min(1.0f, speed / 45.0f));
-
-    if (auto* audio = m_app->getModule<kke::AudioModule>())
-        audio->playImpact(m_center.courts[static_cast<size_t>(m.court)].toWorld(contact), kke::AudioMaterialTable::Plastic,
-                          std::clamp(speed / 40.0f, 0.3f, 1.0f));
     p.armed = -1.0f;
     p.charge = 0.0f;
-    p.tossAge = -1.0f;
     p.swingKind = serve ? SwingPose::Kind::Serve : (forehand ? SwingPose::Kind::Forehand : SwingPose::Kind::Backhand);
     p.swingContact = glm::vec3(rel.x, contact.y, std::max(0.2f, rel.z));
     p.swingT = 0.0f;
-    ++m.rallyShots;
-    for (int idx : m.players)
-        if (player(idx).team != p.team && player(idx).bot) player(idx).bot->onOpponentHit();
-    if (serve) {
+
+    net::Hit h;
+    h.match = m_netMatch;
+    h.point = m.serial;
+    h.player = static_cast<uint8_t>(std::max(0, p.netId));
+    h.shot = static_cast<uint8_t>(std::min(m.rallyShots, 255));
+    h.serve = serve;
+    h.kind = static_cast<uint8_t>(kind);
+    h.at = contact;
+    h.velocity = plan.velocity;
+    h.spin = spin;
+    h.pull = plan.gravity - kGravity;
+    h.squash = 0.25f + 0.75f * std::min(1.0f, speed / 45.0f);
+    if (online() && p.netId >= 0) {
+        // Everyone flies the ball from the same numbers: ours too go
+        // through the wire's rounding.
+        const std::vector<uint8_t> bytes = net::encode(h);
+        if (const auto back = net::decodeHit(bytes)) h = *back;
+        m_net->sendEvent(net::kEventHit, bytes);
+    }
+    applyHit(m, static_cast<int>(&p - m_players.data()), h);
+}
+
+// A hit, from this machine or another (online): the ball goes, the
+// rally counts it.
+void TennisModule::applyHit(Match& m, int hitter, const net::Hit& h) {
+    Ball& b = *m.ball;
+    b.strikeAt(h.at, h.velocity, h.spin, h.pull, h.squash);
+    if (auto* audio = m_app->getModule<kke::AudioModule>())
+        audio->playImpact(m_center.courts[static_cast<size_t>(m.court)].toWorld(h.at), kke::AudioMaterialTable::Plastic,
+                          std::clamp(glm::length(h.velocity) / 40.0f, 0.3f, 1.0f));
+    m.rallyShots = h.shot + 1;
+    m.sinceHit = 0.0f;
+    if (h.serve) {
         m.phase = Match::Phase::Rally;
         m.phaseTime = 0.0f;
     }
-    resolve(m, m.rally.onHit(p.team));
+    const int team = player(hitter).team;
+    for (int idx : m.players) {
+        Player& q = player(idx);
+        if (idx == hitter) q.tossAge = -1.0f;
+        if (q.team != team && q.bot) q.bot->onOpponentHit();
+    }
+    const Rally::Result r = m.rally.onHit(team);
+    if (authority()) resolve(m, r);
 }
 
 } // namespace tennis

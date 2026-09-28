@@ -60,6 +60,7 @@ void TennisModule::init(kke::Application& app) {
     m_level = static_cast<int>(envFloat("KKE_TENNIS_LEVEL", 1.0f));
     m_seed = static_cast<uint32_t>(envFloat("KKE_TENNIS_SEED", 1.0f));
     m_quitAfter = envFloat("KKE_TENNIS_QUIT", -1.0f);
+    m_autoplay = envOn("KKE_TENNIS_AUTOPLAY");
 
     const char* base = SDL_GetBasePath();
     const std::filesystem::path tex = std::filesystem::path(base ? base : "") / "textures" / "tennis_ball.png";
@@ -74,11 +75,12 @@ void TennisModule::init(kke::Application& app) {
     buildWorld();
     buildHud();
     setupLobby();
+    setupNet();
     if (m_ballTest) {
         kke::log::get(name())->info("ball test: test shots at the net, the court and the fence (KKE_TENNIS_BALLTEST)");
         if (m_lobby) m_lobby->close();
         m_inMenu = false;
-    } else if (!m_inMenu) {
+    } else if (!m_inMenu && !waitsOnline()) {
         startLocalMatch();
     }
 }
@@ -124,60 +126,140 @@ void TennisModule::clearPlayers() {
     m_matches.clear();
 }
 
-void TennisModule::spawnPlayer(const std::string& nm, const glm::vec3& tint, int team, bool cpu, int input, int level) {
+void TennisModule::spawnPlayer(const Entry& e, int team) {
     Player p;
-    p.name = nm;
-    p.tint = tint;
+    p.name = e.name;
+    p.tint = e.tint;
     p.team = team;
-    p.cpu = cpu;
-    p.input = input;
-    p.level = level;
+    p.remote = e.remote;
+    p.netId = e.netId;
+    // KKE_TENNIS_AUTOPLAY: this screen's people play themselves (tests).
+    p.cpu = !e.remote && (e.cpu || m_autoplay);
+    p.input = e.remote ? -1 : e.input;
+    p.level = e.cpu ? e.level : std::max(e.level, 2);
     kke::RigidWorld::CharacterDesc cd;
     cd.radius = 0.3f;
     cd.height = 1.8f;
     cd.pushStrength = 0.0f;
-    p.body = m_rigid->world().addCharacter(cd);
-    if (cpu) p.bot = std::make_unique<Bot>(m_seed * 7919u + static_cast<uint32_t>(m_players.size()) * 104729u, level);
-    p.look = std::make_unique<Body>(*m_rig, *m_models, tint, true);
+    kke::RigidWorld& w = m_rigid->world();
+    p.body = w.addCharacter(cd);
+    // Another machine's player goes where that machine says (Net.cpp).
+    if (p.remote) w.setCharacterKinematic(p.body, true);
+    if (p.cpu) p.bot = std::make_unique<Bot>(m_seed * 7919u + static_cast<uint32_t>(m_players.size()) * 104729u, p.level);
+    p.look = std::make_unique<Body>(*m_rig, *m_models, e.tint, true);
     m_players.push_back(std::move(p));
 }
 
-void TennisModule::startLocalMatch() {
-    clearPlayers();
-    auto m = std::make_unique<Match>();
-    m->court = 0;
-    // Who plays: the menu's seats, then its CPU players; the switches
-    // without the menu.
-    struct Entry { std::string name; glm::vec3 tint; bool cpu; int input; int level; };
+namespace {
+const glm::vec3 kTints[] = { { 0.35f, 0.6f, 1.25f }, { 1.25f, 0.45f, 0.32f }, { 0.45f, 1.1f, 0.45f }, { 1.2f, 1.0f, 0.35f } };
+const char* const kCpuNames[] = { "Ace", "Deuce", "Volley", "Lobster" };
+} // namespace
+
+// This screen's players: the menu's seats, then its CPU players (the
+// switches without the menu). Online, the same order is their network
+// slots (syncNetPlayers).
+std::vector<TennisModule::Entry> TennisModule::seatEntries() const {
     std::vector<Entry> entries;
-    static const glm::vec3 kTints[] = { { 0.35f, 0.6f, 1.25f }, { 1.25f, 0.45f, 0.32f }, { 0.45f, 1.1f, 0.45f }, { 1.2f, 1.0f, 0.35f } };
     if (m_lobby && !m_allBots) {
         kke::Lobby& l = m_lobby->lobby();
         for (int seat : l.joinedSeats()) {
-            glm::vec3 tint = kTints[entries.size() % 4];
+            Entry e;
+            e.name = l.seatName(seat);
+            e.tint = kTints[entries.size() % 4];
             const auto& fields = l.lookFields();
             for (size_t f = 0; f < fields.size(); ++f)
                 if (fields[f].id == "colour" && !fields[f].swatches.empty())
-                    tint = fields[f].swatches[static_cast<size_t>(l.seat(seat).look[f]) % fields[f].swatches.size()] * 1.25f;
-            entries.push_back({ l.seatName(seat), tint, false, m_lobby->playerOf(seat), 0 });
+                    e.tint = fields[f].swatches[static_cast<size_t>(l.seat(seat).look[f]) % fields[f].swatches.size()] * 1.25f;
+            e.input = m_lobby->playerOf(seat);
+            entries.push_back(std::move(e));
         }
-        for (int i = 0; i < l.cpuCount(); ++i) entries.push_back({ "", kTints[entries.size() % 4], true, -1, l.cpuDifficulty(i) });
+        for (int i = 0; i < l.cpuCount(); ++i) {
+            Entry e;
+            e.tint = kTints[entries.size() % 4];
+            e.cpu = true;
+            e.level = l.cpuDifficulty(i);
+            entries.push_back(std::move(e));
+        }
     } else if (!m_allBots) {
-        entries.push_back({ "You", kTints[0], false, 0, 0 });
+        Entry e;
+        e.name = "You";
+        e.tint = kTints[0];
+        e.input = 0;
+        entries.push_back(std::move(e));
     }
-    // At least an opponent; doubles when there are more than two.
-    const size_t want = (m_doubles || entries.size() > 2) ? 4 : 2;
-    while (entries.size() < want) entries.push_back({ "", kTints[entries.size() % 4], true, -1, m_level });
-    entries.resize(want);
-    static const char* const kCpuNames[] = { "Ace", "Deuce", "Volley", "Lobster" };
     int cpuNumber = 0;
     for (Entry& e : entries)
         if (e.cpu && e.name.empty()) e.name = std::string(kCpuNames[cpuNumber++ % 4]) + " (CPU)";
-    // Teams: seats alternate across the net, unless the menu put the
-    // people at this screen on one side against the CPU players.
-    const int size = static_cast<int>(want) / 2;
+    // KKE_NET_NAME: player 1's name (online tests, two windows on one PC).
+    if (const char* who = kke::dev::env("KKE_NET_NAME"); who && *who && !entries.empty() && !entries.front().cpu) entries.front().name = who;
+    return entries;
+}
+
+void TennisModule::startLocalMatch() {
+    std::vector<Entry> entries = seatEntries();
+    std::vector<Entry> cpus, fillers;
+    if (online()) {
+        // People first (ours, then everyone online), then the menu's CPU
+        // players, then spare ones if a side is short.
+        entries = netEntries();
+        std::erase_if(entries, [&cpus, &fillers](const Entry& e) {
+            if (e.cpu) (e.filler ? fillers : cpus).push_back(e);
+            return e.cpu;
+        });
+        for (const kke::net::RemotePlayer& rp : m_net->remotePlayers()) {
+            Entry e;
+            e.name = rp.name;
+            e.tint = net::tintFromText(rp.character, glm::vec3(0.8f));
+            e.netId = rp.id;
+            e.remote = true;
+            entries.push_back(std::move(e));
+        }
+        if (entries.size() > 4)
+            kke::log::get(name())->info("online: {} people for one court, the first 4 play (the sport center's other courts come later)", entries.size());
+        for (Entry& c : cpus) entries.push_back(std::move(c));
+        // A CPU player with no network slot can't be seen online: it sits out.
+        std::erase_if(entries, [](const Entry& e) { return e.cpu && e.netId <= 0; });
+        std::erase_if(fillers, [](const Entry& e) { return e.netId <= 0; });
+    }
+    // At least an opponent; doubles when there are more than two.
+    const size_t want = (m_doubles || entries.size() > 2) ? 4 : 2;
+    for (size_t i = 0; i < fillers.size() && entries.size() < want; ++i) entries.push_back(fillers[i]);
+    int cpuNumber = static_cast<int>(std::count_if(entries.begin(), entries.end(), [](const Entry& e) { return e.cpu; }));
+    while (entries.size() < want) {
+        Entry e;
+        e.tint = kTints[entries.size() % 4];
+        e.cpu = true;
+        e.level = m_level;
+        e.name = std::string(kCpuNames[cpuNumber++ % 4]) + " (CPU)";
+        entries.push_back(std::move(e));
+    }
+    entries.resize(want);
+    MatchRules rules;
+    rules.teamSize = static_cast<int>(want) / 2;
+    switch (m_length) {
+    case 1: rules.gamesPerSet = 6; break;
+    case 2: rules.gamesPerSet = 4; rules.setsToWin = 2; break;
+    case 3: rules.gamesPerSet = 2; break; // quick: to 2 games
+    default: rules.gamesPerSet = 4; break;
+    }
+    if (const char* g = kke::dev::env("KKE_TENNIS_GAMES")) rules.gamesPerSet = std::max(1, std::atoi(g));
+    buildMatch(std::move(entries), rules);
+    if (netHost() && !m_matches.empty()) sendSetup(*m_matches.front());
+}
+
+void TennisModule::buildMatch(std::vector<Entry> entries, const MatchRules& rules) {
+    clearPlayers();
+    auto m = std::make_unique<Match>();
+    m->court = 0;
+    const size_t want = entries.size();
+    // Teams: as given (the host's Setup); else seats alternate across the
+    // net, unless the menu put the people at this screen on one side
+    // against the CPU players.
+    const int size = rules.teamSize;
     std::vector<int> team(want, 0);
-    if (m_teams == 1) {
+    if (!entries.empty() && entries.front().team >= 0) {
+        for (size_t i = 0; i < want; ++i) team[i] = entries[i].team;
+    } else if (m_teams == 1) {
         for (size_t i = 0; i < want; ++i) team[i] = entries[i].cpu ? 1 : 0;
         int n0 = static_cast<int>(std::count(team.begin(), team.end(), 0));
         for (size_t i = want; i-- > 0 && n0 > size;)
@@ -188,30 +270,35 @@ void TennisModule::startLocalMatch() {
         for (size_t i = 0; i < want; ++i) team[i] = static_cast<int>(i % 2);
     }
     for (size_t i = 0; i < want; ++i) {
-        spawnPlayer(entries[i].name, entries[i].tint, team[i], entries[i].cpu, entries[i].input, entries[i].level);
+        spawnPlayer(entries[i], team[i]);
         m->players.push_back(static_cast<int>(m_players.size()) - 1);
     }
     // Slots within each team.
     int slots[2] = { 0, 0 };
-    for (int idx : m->players) player(idx).slot = slots[player(idx).team]++;
-
-    m->rules.teamSize = size;
-    switch (m_length) {
-    case 1: m->rules.gamesPerSet = 6; break;
-    case 2: m->rules.gamesPerSet = 4; m->rules.setsToWin = 2; break;
-    case 3: m->rules.gamesPerSet = 2; break; // quick: to 2 games
-    default: m->rules.gamesPerSet = 4; break;
+    for (size_t i = 0; i < want; ++i) {
+        Player& p = player(m->players[i]);
+        p.slot = entries[i].slot >= 0 ? entries[i].slot : slots[p.team]++;
     }
-    if (const char* g = kke::dev::env("KKE_TENNIS_GAMES")) m->rules.gamesPerSet = std::max(1, std::atoi(g));
+
+    m->rules = rules;
     m->score = Score(m->rules);
     m->ball = std::make_unique<Ball>(*m_physics, m_center.courts[static_cast<size_t>(m->court)], m_ballTexture);
     m->phase = Match::Phase::Warmup;
     m->phaseTime = 0.0f;
     m_matches.push_back(std::move(m));
     std::string who;
-    for (int idx : m_matches.back()->players) who += (who.empty() ? "" : ", ") + player(idx).name + " (team " + std::to_string(player(idx).team + 1) + ")";
+    for (int idx : m_matches.back()->players)
+        who += (who.empty() ? "" : ", ") + player(idx).name + (player(idx).remote ? " (online)" : "") + " (team " + std::to_string(player(idx).team + 1) + ")";
     kke::log::get(name())->info("{} match on court {}: {}; first to {} games{}", size == 2 ? "doubles" : "singles", 1, who,
                                 m_matches.back()->rules.gamesPerSet, m_matches.back()->rules.setsToWin > 1 ? ", best of three" : "");
+}
+
+void TennisModule::backToMenu() {
+    if (netHost() && !m_matches.empty()) m_net->sendEvent(net::kEventEnd, net::encode(net::End{ m_netMatch, "The host went back to the menu" }));
+    clearPlayers();
+    if (!m_lobby) return;
+    m_inMenu = true;
+    m_lobby->open();
 }
 
 void TennisModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
@@ -246,20 +333,25 @@ void TennisModule::update(const kke::UpdateContext& ctx) {
     if (m_inMenu) {
         updateLobby(dt);
     } else if (m_lobby && !m_ballTest) {
-        for (int i = 0; i < 4; ++i)
+        for (int i = 0; i < m_input->players(); ++i)
             if (m_input->map(i).pressed("tennis.menu")) {
-                m_inMenu = true;
-                clearPlayers();
-                m_lobby->open();
+                // A client's menu button leaves the online game.
+                if (netClient()) {
+                    m_wasOnline = false; // on purpose: no "left" toast
+                    m_net->leave();
+                }
+                backToMenu();
                 break;
             }
     }
+    updateNet(dt);
     for (auto& m : m_matches)
         for (int idx : m->players)
-            if (!player(idx).cpu) readHuman(*m, player(idx));
+            if (!player(idx).cpu && !player(idx).remote) readHuman(*m, player(idx));
     updateBodies(dt);
     updateCameras(dt);
     updateHud();
+    sendNet();
 
 }
 

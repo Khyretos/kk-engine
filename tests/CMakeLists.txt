@@ -40,6 +40,7 @@ add_executable(kke_tests
     ${CMAKE_SOURCE_DIR}/games/tennis/Court.cpp
     ${CMAKE_SOURCE_DIR}/games/tennis/Shot.cpp
     ${CMAKE_SOURCE_DIR}/games/tennis/Bot.cpp
+    ${CMAKE_SOURCE_DIR}/games/tennis/NetTennis.cpp
     test_flight.cpp
     ${CMAKE_SOURCE_DIR}/games/flying_demo/Flight.cpp
     ${CMAKE_SOURCE_DIR}/games/flying_demo/Course.cpp

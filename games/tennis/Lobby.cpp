@@ -68,9 +68,21 @@ void TennisModule::updateLobby(float) {
     }
     kke::Lobby& l = m_lobby->lobby();
     if (!l.takeStart()) return;
-    m_lobby->close();
-    m_lobby->save();
-    m_lobby->applyInput();
+    if (netClient()) {
+        l.toast("Online: the host starts the match", 3.0f);
+        return;
+    }
+    startFromMenu();
+}
+
+void TennisModule::startFromMenu() {
+    if (m_lobby) {
+        if (m_lobby->isOpen()) {
+            m_lobby->close();
+            m_lobby->save();
+        }
+        m_lobby->applyInput();
+    }
     m_inMenu = false;
     startLocalMatch();
 }

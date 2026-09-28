@@ -48,6 +48,11 @@ public:
     // space), the spin's extra pull down while it flies (Shot.h
     // spinPull), and how hard the strings squash it (0..1, the look).
     void strike(const glm::vec3& velocity, const glm::vec3& spin, float pull, float squash);
+    // The same, from where the hitter's machine met it (online).
+    void strikeAt(const glm::vec3& at, const glm::vec3& velocity, const glm::vec3& spin, float pull, float squash) {
+        m_pos = at;
+        strike(velocity, spin, pull, squash);
+    }
     // Call once per fixed step after the physics stepped: moves the
     // flight, notes what it touched, steers the body along.
     void step(float dt);
@@ -56,12 +61,13 @@ public:
     glm::vec3 velocity() const { return m_vel; }
     glm::vec3 worldPosition() const { return m_place.toWorld(m_pos); }
     float pull() const { return m_pull; }
+    bool rolling() const { return m_rolling; }
     Flight flight() const { return { m_pos, m_vel, kGravity + m_pull }; }
     std::vector<Event> takeEvents();
 
     // A network follower (a client's copy): take the host's flight when
     // it differs from ours (a shot, a correction).
-    void follow(const Flight& target);
+    void follow(const Flight& target, bool rolling);
 
     // The fence, the roof and the net, as FEMFX boxes (append to the list
     // PhysicsModule::setExternalBoxes gets). `key` numbers them.

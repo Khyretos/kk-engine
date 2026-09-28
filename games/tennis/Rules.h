@@ -86,6 +86,7 @@ public:
     void newPoint(int server, int serverSide, bool deuceCourt, bool doubles);
     void serveAgain(); // after a fault (the second serve) or a let (the same serve again)
     bool secondServeNow() const { return m_faults == 1; }
+    void setSecondServe(bool second) { m_faults = second ? 1 : 0; } // online: the umpire's word
 
     // May `team` hit the ball now? (It came over and hasn't bounced twice;
     // the serve's return waits for its bounce; nobody hits it twice.)

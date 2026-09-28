@@ -214,7 +214,7 @@ void TennisModule::updateCameras(float dt) {
     std::vector<Player*> humans;
     if (m && !m_inMenu)
         for (int idx : m->players)
-            if (!player(idx).cpu) humans.push_back(&player(idx));
+            if (!player(idx).cpu && !player(idx).remote) humans.push_back(&player(idx));
     std::sort(humans.begin(), humans.end(), [](const Player* a, const Player* b) { return a->input < b->input; });
     if (humans.empty()) {
         glm::vec3 ball = m && m->ball ? m->ball->position() : glm::vec3(0.0f);

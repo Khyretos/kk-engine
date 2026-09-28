@@ -375,6 +375,13 @@ and raises the server's speed limits to a stunt plane's before hosting:
 and fall speed, slack, teleport cooldown) is what the host's server
 checks every move against; set it before `host()`.
 
+Tennis (games/tennis/Net.cpp, NetTennis.h, events from 0x5400) shows a
+ball game: nothing about the ball streams. The hitter's machine sends the
+hit (where, velocity, spin) and every machine flies the same maths from
+the numbers as they come off the wire; the host is the umpire (Serve and
+Point events, each point numbered so a late hit is dropped) and sends
+its ball a few times a second only to put drift right.
+
 When a host quits, it tells every player ("the host ended the game")
 before it closes, so they log it as news, not the warning a lost
 connection gets.

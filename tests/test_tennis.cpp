@@ -1,8 +1,10 @@
 // Tennis (games/tennis): the score, the umpire, the ball's flight, the
 // shot that puts a ball on a spot, and the CPU player's footwork. All pure
-// logic; the FEMFX ball itself is checked by KKE_TENNIS_BALLTEST=1.
+// logic; the FEMFX ball itself is checked by KKE_TENNIS_BALLTEST=1. And
+// every online message, written and read back (NetTennis.h).
 #include "Bot.h"
 #include "Court.h"
+#include "NetTennis.h"
 #include "Rules.h"
 #include "Shot.h"
 
@@ -11,6 +13,7 @@
 #include <algorithm>
 #include <cmath>
 #include <random>
+#include <vector>
 
 namespace {
 
@@ -303,6 +306,132 @@ TEST(TennisBot, AHardBotReachesAlmostEveryBall) {
         if (hit) ++reached;
     }
     EXPECT_GE(reached, kShots * 9 / 10);
+}
+
+// A lob from well behind the baseline stays under the roof (a slow one
+// would need a moon ball: the air takes its speed) and still lands.
+TEST(TennisShot, DeepLobStaysUnderTheRoof) {
+    const glm::vec3 from(-4.3f, 1.4f, -14.6f), target(1.0f, 0.0f, 10.4f);
+    const ShotPlan plan = planShot(from, target, 10.0f, ShotKind::Lob, 1.5f);
+    const Flight f{ from, plan.velocity, plan.gravity };
+    float top = 0.0f;
+    for (float t = 0.0f; t < plan.time; t += 0.01f) top = std::max(top, f.at(t).y);
+    EXPECT_LT(top, kLidHeight - 2.0f);
+    EXPECT_TRUE(plan.clearsNet);
+    const glm::vec3 land = f.at(plan.time);
+    EXPECT_NEAR(land.x, target.x, 0.05f);
+    EXPECT_NEAR(land.z, target.z, 0.05f);
+}
+
+// Online: every message reads back as written (to the wire's rounding),
+// and a damaged one is refused rather than half read.
+TEST(TennisNet, MessagesRoundTrip) {
+    net::Setup s;
+    s.match = 7;
+    s.court = 3;
+    s.teamSize = 2;
+    s.gamesPerSet = 6;
+    s.setsToWin = 2;
+    s.seats.push_back({ 0, 0, 0, false, "Juno", { 0.35f, 0.6f, 1.25f } });
+    s.seats.push_back({ 4, 1, 1, true, "Ace (CPU)", { 1.0f, 0.5f, 0.2f } });
+    const auto s2 = net::decodeSetup(net::encode(s));
+    ASSERT_TRUE(s2.has_value());
+    EXPECT_EQ(s2->match, 7u);
+    EXPECT_EQ(s2->court, 3);
+    EXPECT_EQ(s2->teamSize, 2);
+    EXPECT_EQ(s2->gamesPerSet, 6);
+    EXPECT_EQ(s2->setsToWin, 2);
+    ASSERT_EQ(s2->seats.size(), 2u);
+    EXPECT_EQ(s2->seats[1].player, 4);
+    EXPECT_EQ(s2->seats[1].team, 1);
+    EXPECT_EQ(s2->seats[1].slot, 1);
+    EXPECT_TRUE(s2->seats[1].cpu);
+    EXPECT_EQ(s2->seats[0].name, "Juno");
+    EXPECT_NEAR(s2->seats[0].tint.z, 1.25f, 0.01f);
+
+    const auto sv = net::decodeServe(net::encode(net::Serve{ 7, 300, true, true }));
+    ASSERT_TRUE(sv.has_value());
+    EXPECT_EQ(sv->point, 300);
+    EXPECT_TRUE(sv->again && sv->second);
+
+    const auto pt = net::decodePoint(net::encode(net::Point{ 7, 12, static_cast<uint8_t>(Rally::Result::Fault), "Fault" }));
+    ASSERT_TRUE(pt.has_value());
+    EXPECT_EQ(static_cast<Rally::Result>(pt->result), Rally::Result::Fault);
+    EXPECT_EQ(pt->call, "Fault");
+
+    net::Hit h;
+    h.match = 7;
+    h.point = 12;
+    h.player = 2;
+    h.shot = 5;
+    h.kind = static_cast<uint8_t>(ShotKind::Slice);
+    h.at = { -3.2f, 0.9f, 11.4f };
+    h.velocity = { 2.5f, 4.0f, -24.0f };
+    h.spin = { -50.0f, 0.0f, 3.0f };
+    h.pull = -2.5f;
+    h.squash = 0.6f;
+    const auto h2 = net::decodeHit(net::encode(h));
+    ASSERT_TRUE(h2.has_value());
+    EXPECT_EQ(h2->shot, 5);
+    EXPECT_EQ(h2->kind, h.kind);
+    EXPECT_LT(glm::length(h2->at - h.at), 0.002f);
+    EXPECT_LT(glm::length(h2->velocity - h.velocity), 0.004f);
+    EXPECT_LT(glm::length(h2->spin - h.spin), 0.05f);
+    EXPECT_NEAR(h2->pull, h.pull, 0.005f);
+    // A hit read back and written again is the same bytes: every machine
+    // flies the ball from exactly the same numbers.
+    EXPECT_EQ(net::encode(*h2), net::encode(h));
+
+    net::BallState b;
+    b.match = 7;
+    b.point = 12;
+    b.shot = 6;
+    b.flight = { { 1.0f, 0.5f, -4.0f }, { 0.5f, 3.0f, -20.0f }, kGravity + 3.0f };
+    b.rolling = true;
+    const auto b2 = net::decodeBall(net::encode(b));
+    ASSERT_TRUE(b2.has_value());
+    EXPECT_EQ(b2->shot, 6);
+    EXPECT_TRUE(b2->rolling);
+    EXPECT_NEAR(b2->flight.gravity, b.flight.gravity, 0.01f);
+    EXPECT_FLOAT_EQ(b2->flight.drag, kDrag);
+
+    const auto e2 = net::decodeEnd(net::encode(net::End{ 7, "Juno left the match" }));
+    ASSERT_TRUE(e2.has_value());
+    EXPECT_EQ(e2->why, "Juno left the match");
+
+    std::vector<uint8_t> cut = net::encode(h);
+    cut.resize(cut.size() / 2);
+    EXPECT_FALSE(net::decodeHit(cut).has_value());
+}
+
+TEST(TennisNet, PoseRoundTrip) {
+    net::Pose p;
+    p.feet = { 12.0f, 0.0f, -30.0f };
+    p.velocity = { 3.0f, 0.0f, -1.0f };
+    p.facing = glm::normalize(glm::vec3(1.0f, 0.0f, -1.0f));
+    p.swing = SwingPose::Kind::Backhand;
+    p.swingT = 0.5f;
+    p.contact = { -0.7f, 1.1f, 0.45f };
+    p.celebrating = true;
+    p.cheer = false;
+    const net::Pose q = net::fromState(net::toState(p));
+    EXPECT_LT(glm::length(q.feet - p.feet), 0.01f);
+    EXPECT_LT(glm::length(q.facing - p.facing), 0.02f);
+    EXPECT_EQ(q.swing, SwingPose::Kind::Backhand);
+    EXPECT_NEAR(q.swingT, 0.5f, 0.02f);
+    EXPECT_LT(glm::length(q.contact - p.contact), 0.005f);
+    EXPECT_TRUE(q.celebrating);
+    EXPECT_FALSE(q.cheer);
+    // Not swinging stays not swinging.
+    p.swingT = -2.0f;
+    EXPECT_LT(net::fromState(net::toState(p)).swingT, -1.0f);
+}
+
+TEST(TennisNet, TintText) {
+    EXPECT_EQ(net::tintText({ 1.0f, 0.0f, 0.5f }), "#ff0080");
+    const glm::vec3 t = net::tintFromText("#ff0080", glm::vec3(0.0f));
+    EXPECT_NEAR(t.z, 128.0f / 255.0f, 1e-4f);
+    EXPECT_EQ(net::tintFromText("oops", glm::vec3(0.25f)), glm::vec3(0.25f));
 }
 
 } // namespace

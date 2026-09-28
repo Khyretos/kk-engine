@@ -2,7 +2,8 @@
 
 Singles and doubles on a hard court, in a sport center of ten courts. You
 play the CPU, or up to four people play on one screen, split in two or
-four. The ball is a FEMFX soft body: it flattens on the strings and on the
+four, or online with people on other PCs (and their friends on the same
+screen as them). The ball is a FEMFX soft body: it flattens on the strings and on the
 court and wobbles back. You press a shot button early, hold it to hit
 harder, and aim with the stick; when the ball reaches you the swing
 happens, and how well you timed it and how well you stood decides where
@@ -13,15 +14,16 @@ The demo teaches how to put a FEMFX object into a game that needs exact
 numbers (the ball's flight is the game's own maths; FEMFX gives it its
 body), a CPU player whose footwork is pure logic you can unit-test, rules
 as a small state machine the whole game listens to, two-bone IK swings
-with no animation clips, and the start menu with local players and CPU
-players. Start here for a sports game, any game with a ball, or any game
+with no animation clips, the start menu with local players and CPU
+players, and online play where every machine flies the ball from the same
+hit. Start here for a sports game, any game with a ball, or any game
 where a soft body has to go exactly where the rules say.
 
 ![The TV view of a CPU match: two players, the net, the fence, the next court](../../website/static/media/tennis.webp)
 
-Still to come (this README grows with them): online matches, and the sport
-center as a lobby where people walk around, challenge each other, take a
-court and watch other matches from the stands.
+Still to come (this README grows with it): the sport center as a lobby
+where people walk around, challenge each other, take a court and watch
+other matches from the stands.
 
 ## Run it
 
@@ -38,6 +40,8 @@ cd build/bin
 KKE_SKIP_INTRO=1 ./tennis                            # skip the logo intro
 KKE_TENNIS_BOTS=1 KKE_TENNIS_QUIT=120 ./tennis       # watch two CPU players, with a log
 KKE_TENNIS_BALLTEST=1 ./tennis                       # the ball's test shots, logged
+KKE_NET=host KKE_NET_NAME=Pip ./tennis                # host an online match...
+KKE_NET=join:127.0.0.1 KKE_NET_NAME=Rook ./tennis     # ...and join it from a second terminal
 ```
 
 | Variable | Effect |
@@ -49,6 +53,9 @@ KKE_TENNIS_BALLTEST=1 ./tennis                       # the ball's test shots, lo
 | `KKE_TENNIS_LOBBY=0` | skip the menu: you against one CPU player |
 | `KKE_TENNIS_QUIT=<s>` | quit after that many seconds of play, logging the score every 10 s and every call |
 | `KKE_TENNIS_SEED=<n>` | the CPU players' dice (default 1) |
+| `KKE_NET=host` / `KKE_NET=join:ADDRESS` | host, or join a host, at startup ([docs/NETWORKING.md](../../docs/NETWORKING.md)); `KKE_NET_NAME=<name>` is player 1's name |
+| `KKE_TENNIS_WAIT=<n>` | hosting: start the match by itself once `n` people have joined (tests) |
+| `KKE_TENNIS_AUTOPLAY=1` | the players at this screen are played by the CPU (tests: two copies that play each other online) |
 | `KKE_TENNIS_BALLTEST=1` | no match: seven scripted shots (a drop, a groundstroke, into the net, a serve, both fences, the roof), every contact logged with how far the FEMFX body is from the flight |
 | `KKE_ANIMATIONS_DIR` | where to look for `UAL1_Standard.fbx` and `UAL2.fbx` |
 | `KKE_ASSETS_DIR` | also searched for `Universal Animation Library 2/Unity/UAL2.fbx` |
@@ -69,7 +76,7 @@ are rebindable actions in the "Shots" and "Game" groups.
 | Flat: hard and fast (`tennis.flat`) | J | X (west) |
 | Slice: low and slow (`tennis.slice`) | K / right mouse | B (east) |
 | Lob: over their head (`tennis.lob`) | L | Y (north) |
-| Back to the menu (`tennis.menu`) | Esc | Back |
+| Back to the menu (`tennis.menu`; online, a client leaves the game) | Esc | Back |
 | Developer panels (`panels`) | F1 | none |
 
 - **A shot.** Press the button while the ball is coming: the shot is
@@ -230,6 +237,47 @@ chair, floodlights, benches along the promenade between the rows, and
 seats around every court for the spectators still to come. The fences are
 Jolt walls, so people can't walk onto another court.
 
+### Online
+
+Player 1 sets **Online** in the menu to **Host** or **Join** (the games
+found on the network and on this PC are listed; pick one and press Join).
+Everyone at each screen plays: a second person at a screen is a
+`NetModule` local player, like the menu's seats. [Net.cpp](Net.cpp) has
+the game's side, [NetTennis.h](NetTennis.h) the messages (event kinds
+from `0x5400`).
+
+- **Who plays.** The host's Start builds the match: its own seats, then
+  everyone online, then the menu's CPU players, then spare CPU players if
+  a side is short (the host keeps three ready as network players, so
+  everyone sees them move). More than four people: the first four play.
+  Its **Setup** says who plays where; each client builds the same match,
+  its own seats played from its own controllers.
+- **Each machine runs its own players** and sends where they are, where
+  they face and how far into which swing (`toState`, a `NetPlayerState`
+  with the swing's contact packed into its extra bytes). Everyone else's
+  players are kinematic capsules put where their machine says.
+- **The host is the umpire.** Its **Serve** starts each point (with a
+  number, so a hit that arrives after the call is dropped) and its
+  **Point** ends it with the result and the call; every machine applies
+  that result to the same score. A client never calls a point from its
+  own ball.
+- **A hit is all the ball needs.** The hitter's machine plans the shot and
+  sends **Hit** (where, the velocity, spin, pull); everyone, the hitter
+  too, flies the ball from the numbers as they come off the wire, so the
+  flights match to the bit (a test checks the bytes). The host checks a
+  client's hit could happen (their turn, this point, this shot) before it
+  passes it on. A serve's **Toss** goes the same way.
+- **Drift is put right.** Five times a second the host sends its ball;
+  a client more than 25 cm or 1 m/s off takes it, unless a hit of its own
+  is on the way to the host.
+- **Someone leaves:** the host ends the match for everyone (**End**) and
+  all go back to the menu; a client's menu button leaves the game.
+
+Tested with two copies on one PC, both played by the CPU
+(`KKE_TENNIS_AUTOPLAY=1`, the commands in "Run it" plus
+`KKE_TENNIS_WAIT=1 KKE_TENNIS_LOBBY=0 KKE_TENNIS_QUIT=70`): both logs make
+the same calls after the same number of shots, rallies of 6 to 15 shots.
+
 ### Cameras and the HUD
 
 With people playing, each gets a camera behind their own baseline, high
@@ -255,6 +303,10 @@ screen.
 - **Procedural swings.** Kees was asked which swing animations to use;
   until there is an answer the swings are IK, which needs no clips and
   always reaches the ball.
+- **Hits, not a streamed ball, online.** Sending the hit and letting every
+  machine fly the same maths costs one small message per shot and looks
+  smooth at any latency; the host's ball a few times a second only mops
+  up. Streaming the ball's position would lag it and jitter the squash.
 - **No Synty art yet.** The Shopping Mall pack Kees mentioned is not on
   the share; the courts are built from boxes.
 
@@ -288,6 +340,9 @@ screen.
   [docs/DEMO_PANEL.md](../../docs/DEMO_PANEL.md))
 - Impact sounds (`AudioModule::playImpact`)
 - Moods ([docs/MOODS.md](../../docs/MOODS.md))
+- Online play with local players (`NetModule`: `sendEvent`, `relayEvent`,
+  `addLocalPlayer`, `setLocalPlayer`, LAN search;
+  [docs/NETWORKING.md](../../docs/NETWORKING.md))
 
 ## Assets
 
@@ -315,8 +370,11 @@ screen.
    with `strike`-like velocity fields for the squash.
 4. **Write the CPU as pure logic** that gets a view and returns a
    decision, then test its footwork without a window.
-5. **Read next:** [the physics demo](../physics_demo/README.md),
-   [Climb Race](../climb_race/README.md) for online play with local
+5. **Online, send what happened, not where things are.** A hit, a toss,
+   the umpire's call: small events every machine applies the same way
+   ([Net.cpp](Net.cpp)); only people's poses stream.
+6. **Read next:** [the physics demo](../physics_demo/README.md),
+   [Climb Race](../climb_race/README.md) for more online play with local
    guests, [docs/LOBBY.md](../../docs/LOBBY.md).
 
 ## Files
@@ -329,6 +387,8 @@ screen.
 | [Scene.cpp](Scene.cpp) | The sport center's meshes and walls, bodies, cameras |
 | [Hud.cpp](Hud.cpp), [ui/tennis_hud.rml](ui/tennis_hud.rml) | The scoreboard, the calls, the hints |
 | [Lobby.cpp](Lobby.cpp) | The start menu's fields and options |
+| [Net.cpp](Net.cpp) | Online: Host / Join rows, who plays, events in and out, other machines' players |
+| [NetTennis.h](NetTennis.h), [NetTennis.cpp](NetTennis.cpp) | The online messages and how they are packed (tested) |
 | [Rules.h](Rules.h), [Rules.cpp](Rules.cpp) | The score and the umpire (pure) |
 | [Shot.h](Shot.h), [Shot.cpp](Shot.cpp) | Flights, bounces, planning a shot, where to meet a ball (pure) |
 | [Court.h](Court.h), [Court.cpp](Court.cpp) | Court sizes, boxes, positions, the ten-court layout, seats |

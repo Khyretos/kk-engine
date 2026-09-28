@@ -121,12 +121,12 @@ void Ball::strike(const glm::vec3& velocity, const glm::vec3& spin, float pull, 
     });
 }
 
-void Ball::follow(const Flight& target) {
+void Ball::follow(const Flight& target, bool rolling) {
     if (glm::length(target.pos - m_pos) < 0.01f && glm::length(target.vel - m_vel) < 0.05f) return;
     m_pos = target.pos;
     m_vel = target.vel;
     m_pull = target.gravity - kGravity;
-    m_rolling = false;
+    m_rolling = rolling;
 }
 
 void Ball::step(float dt) {
