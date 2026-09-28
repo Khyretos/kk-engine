@@ -5,14 +5,19 @@
 #include "kke/ModelAsset.h"
 #include "kke/modules/ModelModule.h"
 
+#include "Strings.h"
+#include "Swing.h"
+
 #include <glm/glm.hpp>
 
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace kke {
 class Application;
 class DynamicMeshRenderer;
+class PhysicsModule;
 struct RenderContext;
 struct ShadowRenderContext;
 } // namespace kke
@@ -28,6 +33,21 @@ public:
     explicit Rig(kke::Application& app);
     ~Rig();
     bool load(kke::ModelModule& models);
+    // POLYGON Shops' tennis racket (SM_Prop_Sport_Tennis_Racket_01) when the
+    // pack is under KKE_ASSETS_DIR or assets/synty; else the racket is drawn
+    // from boxes.
+    bool loadRacket(kke::ModelModule& models);
+    // FEMFX strings (Strings.h): each racket's bed is made on its first hit.
+    // Without physics the strings stay straight.
+    void setPhysics(kke::PhysicsModule* physics) { m_physics = physics; }
+    // A new string bed (null without physics, or past the most there can be).
+    std::unique_ptr<StringBed> makeStringBed();
+    void freeStringBed(const StringBed& bed) { m_freeBeds.push_back(bed.slot()); }
+    const StringLayout& strings() const { return m_strings; }
+    kke::DynamicMeshRenderer& stringsMesh() { return *m_stringsMesh; } // straight, racket frame
+    kke::ModelModule::ModelId racketModel() const { return m_racketModel; }
+    const std::string& racketTexture() const { return m_racketTexture; }
+    const glm::mat4& racketAlign() const { return m_racketAlign; } // our racket frame (grip at the hand, shaft +Y, strings +Z) -> the model's
     bool loaded() const { return m_model != 0; }
 
     kke::ModelModule::ModelId model() const { return m_model; }
@@ -35,10 +55,14 @@ public:
     const kke::AnimationSet& set() const { return *m_set; }
     float modelYaw() const { return m_modelYaw; }
     const kke::TwoBoneChain& arm(int side) const { return m_arm[side]; } // 0 left, 1 right
+    const kke::TwoBoneChain& leg(int side) const { return m_leg[side]; }
+    int pelvis() const { return m_pelvis; }
+    int spine(int i) const { return m_spine[i]; } // 0..2, hips up
     int bone(const char* name) const { return m_rig.findBone(name); }
     kke::DynamicMeshRenderer& block() { return *m_block; }
     kke::DynamicMeshRenderer& racketMesh() { return *m_racket; }
     bool sideSteps() const { return m_sideSteps; }
+    kke::Application& app() { return m_app; }
 
 private:
     kke::Application& m_app;
@@ -46,18 +70,30 @@ private:
     kke::ModelData m_rig;
     std::unique_ptr<kke::AnimationSet> m_set;
     float m_modelYaw = 0.0f;
-    kke::TwoBoneChain m_arm[2];
+    kke::TwoBoneChain m_arm[2], m_leg[2];
+    int m_pelvis = -1, m_spine[3] = { -1, -1, -1 };
     bool m_sideSteps = false;
+    kke::ModelModule::ModelId m_racketModel = 0;
+    std::string m_racketTexture;
+    glm::mat4 m_racketAlign{1.0f};
     std::unique_ptr<kke::DynamicMeshRenderer> m_block, m_racket;
+    kke::PhysicsModule* m_physics = nullptr;
+    StringLayout m_strings;
+    std::unique_ptr<kke::DynamicMeshRenderer> m_stringsMesh;
+    int m_stringBeds = 0;          // parking places handed out so far
+    std::vector<int> m_freeBeds;   // ... and given back
 };
 
-// What the arms do this frame. A swing is procedural (two-bone IK on the
-// racket arm along a path through the contact point), so the racket meets
-// the ball wherever it really is.
+// What the body does this frame for a stroke (Swing.h). A swing is
+// procedural: the shoulders turn, the knees bend and two-bone IK takes the
+// racket arm along the stroke's path through the contact point, so the
+// racket meets the ball wherever it really is.
 struct SwingPose {
-    enum class Kind { Ready, Forehand, Backhand, Serve, Toss } kind = Kind::Ready;
-    float t = 0.0f;              // -1 wound up .. 0 contact .. 1 follow-through done
+    Stroke stroke = Stroke::Ready;
+    bool backhand = false;
+    float t = kSwingIdle;        // Swing.h's clock
     glm::vec3 contact{0.0f};     // the ball at contact, in the body's frame (x right, y up, z forward)
+    bool tossing = false;        // serving: the other hand throws the ball up
 };
 
 // One person on screen. Tennis players hold a racket; spectators sit,
@@ -82,6 +118,10 @@ public:
     const glm::mat4& racket() const { return m_racketWorld; }
     // The hand holding the ball on a serve (world).
     glm::vec3 tossHand() const { return m_tossHand; }
+    // The ball met the strings at `ball` (world) moving at `velocity`
+    // (world, m/s): the FEMFX strings take the blow.
+    void hitStrings(const glm::vec3& ball, const glm::vec3& velocity);
+    float stringDepth() const { return m_bed ? m_bed->depth() : 0.0f; } // m (KKE_TENNIS_STRINGTEST)
 
     void render(const kke::RenderContext& ctx);
     void renderShadow(const kke::ShadowRenderContext& ctx);
@@ -90,6 +130,7 @@ private:
     Rig& m_rig;
     kke::ModelModule& m_models;
     kke::ModelModule::InstanceId m_instance = 0;
+    kke::ModelModule::InstanceId m_racketInstance = 0;
     std::unique_ptr<kke::Animator> m_anim;
     struct States { int idle = -1, run = -1, sprint = -1, left = -1, right = -1, back = -1, sit = -1, cheer = -1, groan = -1, clap = -1; } m_st;
     bool m_hasRacket = false;
@@ -98,6 +139,13 @@ private:
     glm::mat4 m_xf{1.0f};
     glm::mat4 m_racketWorld{1.0f};
     glm::vec3 m_tossHand{0.0f};
+    glm::vec3 m_racketVel{0.0f};              // world, m/s: the head's middle
+    glm::vec3 m_racketHead{0.0f};             // world, last frame
+    std::unique_ptr<StringBed> m_bed;         // made on the first hit
+    std::unique_ptr<kke::DynamicMeshRenderer> m_bentStrings;
+    std::vector<glm::vec3> m_bentPoints;
+    bool m_bent = false;                      // draw m_bentStrings, not the rig's straight ones
+    void updateStrings(float dt);
 };
 
 } // namespace tennis

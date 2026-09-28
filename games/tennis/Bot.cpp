@@ -9,10 +9,10 @@ namespace tennis {
 
 BotSkill BotSkill::forLevel(int level) {
     switch (std::clamp(level, 0, 3)) {
-    case 0: return { 3.6f, 0.45f, 2.4f, 0.25f, 0.1f };
-    case 1: return { 4.6f, 0.3f, 1.5f, 0.5f, 0.3f };
-    case 2: return { 5.4f, 0.18f, 0.9f, 0.7f, 0.5f };
-    default: return { 6.2f, 0.1f, 0.5f, 0.85f, 0.7f };
+    case 0: return { 3.6f, 0.45f, 2.4f, 0.25f, 0.1f, 0.055f };
+    case 1: return { 4.6f, 0.3f, 1.5f, 0.5f, 0.3f, 0.038f };
+    case 2: return { 5.4f, 0.18f, 0.9f, 0.7f, 0.5f, 0.027f };
+    default: return { 6.2f, 0.1f, 0.5f, 0.85f, 0.7f, 0.018f };
     }
 }
 
@@ -98,8 +98,9 @@ Bot::Decision Bot::think(const View& v, float dt) {
     d.kind = m_kind;
     d.aim = m_aim;
     d.charge = m_skill.power;
-    // Ready the swing as the ball comes close; the game hits it when it
-    // reaches the hitting spot (TennisModule::tryHit).
+    // Take the racket back as the ball comes close; the game swings when
+    // it reaches the hitting spot (TennisModule::stepSwing), give or take
+    // the level's timing.
     const glm::vec2 flat(v.ball.pos.x - v.feet.x, v.ball.pos.z - v.feet.z);
     d.swing = v.mayHit && glm::length(flat) < 3.0f && v.ball.pos.y > 0.1f && v.ball.pos.y < 3.0f;
     if (d.swing) m_planned = false;

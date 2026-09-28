@@ -20,6 +20,7 @@ constexpr float kSpeedRange = 80.0f, kSpeedStep = 1.0f / 512.0f;
 constexpr float kSpinRange = 256.0f, kSpinStep = 1.0f / 32.0f;
 // NetPlayerState::extra: the swing's contact in the body frame, +-4 m at 2 mm.
 constexpr float kContactRange = 4.0f, kContactStep = 1.0f / 512.0f;
+constexpr uint8_t kBackhand = 1u << 7; // NetPlayerState::state: the stroke, this bit a backhand
 constexpr uint8_t kFlagSwinging = 1u << 0, kFlagTossing = 1u << 1, kFlagCheer = 1u << 2, kFlagCelebrating = 1u << 3;
 
 template <typename Stream> void serialize(Stream& s, Seat& m) {
@@ -53,10 +54,11 @@ template <typename Stream> void serialize(Stream& s, CpuPose& m) {
     s.real(m.velocity.x, -16.0f, 16.0f, 1.0f / 64.0f);
     s.real(m.velocity.y, -16.0f, 16.0f, 1.0f / 64.0f);
     s.real(m.yaw, -180.0f, 180.0f, 360.0f / 256.0f);
-    uint8_t kind = static_cast<uint8_t>(m.swing);
-    s.integer(kind, 0, static_cast<int64_t>(SwingPose::Kind::Toss));
-    if constexpr (Stream::kReading) m.swing = static_cast<SwingPose::Kind>(kind);
-    s.real(m.swingT, -2.0f, 1.0f, 3.0f / 255.0f);
+    uint8_t stroke = static_cast<uint8_t>(m.stroke);
+    s.integer(stroke, 0, static_cast<int64_t>(Stroke::Count) - 1);
+    if constexpr (Stream::kReading) m.stroke = static_cast<Stroke>(stroke);
+    s.boolean(m.backhand);
+    s.real(m.swingT, kSwingIdle, 1.0f, 4.0f / 255.0f);
     s.vec3(m.contact, kContactRange, 1.0f / 128.0f);
     s.boolean(m.tossing);
     s.boolean(m.celebrating);
@@ -173,11 +175,11 @@ kn::NetPlayerState toState(const Pose& p) {
     s.position = p.feet;
     s.velocity = p.velocity;
     s.yaw = yawOf(p.facing);
-    s.state = static_cast<uint8_t>(p.swing);
-    s.flags = static_cast<uint8_t>((p.swingT >= -1.0f ? kFlagSwinging : 0) | (p.tossing ? kFlagTossing : 0) | (p.cheer ? kFlagCheer : 0) |
+    s.state = static_cast<uint8_t>(static_cast<uint8_t>(p.stroke) | (p.backhand ? kBackhand : 0u));
+    s.flags = static_cast<uint8_t>((p.swingT > kSwingIdle + 0.5f ? kFlagSwinging : 0) | (p.tossing ? kFlagTossing : 0) | (p.cheer ? kFlagCheer : 0) |
                                    (p.celebrating ? kFlagCelebrating : 0));
     s.speed = std::clamp(glm::length(glm::vec2(p.velocity.x, p.velocity.z)), 0.0f, 20.0f);
-    s.progress = std::clamp((p.swingT + 1.0f) * 0.5f, 0.0f, 1.0f);
+    s.progress = std::clamp((p.swingT + 2.0f) / 3.0f, 0.0f, 1.0f); // the takeback to the finish
     glm::vec3 contact = glm::clamp(p.contact, glm::vec3(-kContactRange), glm::vec3(kContactRange));
     {
         kn::WriteStream w(s.extra);
@@ -192,8 +194,9 @@ Pose fromState(const kn::NetPlayerState& s) {
     p.velocity = s.velocity;
     const float yaw = glm::radians(s.yaw);
     p.facing = glm::vec3(std::sin(yaw), 0.0f, -std::cos(yaw));
-    p.swing = static_cast<SwingPose::Kind>(std::min<uint8_t>(s.state, static_cast<uint8_t>(SwingPose::Kind::Toss)));
-    p.swingT = (s.flags & kFlagSwinging) ? s.progress * 2.0f - 1.0f : -2.0f;
+    p.stroke = static_cast<Stroke>(std::min<uint8_t>(static_cast<uint8_t>(s.state & ~kBackhand), static_cast<uint8_t>(Stroke::Count) - 1));
+    p.backhand = (s.state & kBackhand) != 0;
+    p.swingT = (s.flags & kFlagSwinging) ? s.progress * 3.0f - 2.0f : kSwingIdle;
     p.tossing = (s.flags & kFlagTossing) != 0;
     p.cheer = (s.flags & kFlagCheer) != 0;
     p.celebrating = (s.flags & kFlagCelebrating) != 0;

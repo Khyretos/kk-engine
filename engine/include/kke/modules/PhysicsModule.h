@@ -282,6 +282,11 @@ public:
         // Not set but texturePath is: worked out here from the texture as
         // vertexUVs sample it. Neither: the surface look, darkened.
         InteriorFill interior;
+        // Vertices (indices into TetMeshData::vertices) held where they
+        // spawned: FEMFX moves the rest around them, like a drum skin in
+        // its hoop (games/tennis: a racket's strings in the frame).
+        // changeVertexVelocities() leaves them still. Not with chunkOfTet.
+        std::vector<uint32_t> pinnedVerts;
     };
     ObjectHandle spawnTetMeshWithOptions(const TetMeshData& mesh, const glm::vec3& position, const Material& material,
                                          const TetSpawnOptions& options);
@@ -298,6 +303,12 @@ public:
     // True once every piece of the object is asleep (nothing moves: a
     // caller can skip recomputing anything derived from it).
     bool isObjectAsleep(ObjectHandle handle) const;
+    // Puts the object to sleep now, however it moves; the next push
+    // (changeVertexVelocities, moveVertices, a collision) wakes it. FEMFX
+    // only puts things to sleep that touch something: an object alone in
+    // the air, even one held still by pinned vertices, never sleeps by
+    // itself (games/tennis: the string beds, once they stop ringing).
+    void sleepObject(ObjectHandle handle);
     // Number of separate pieces the object has broken into (1 = intact).
     uint32_t pieceCount(ObjectHandle handle) const;
 
@@ -309,8 +320,14 @@ public:
     // returns the new velocity: the same added to all of them is a kick
     // (its wobble stays), a turn about the centre is spin, a push along a
     // normal that grows with the distance from the centre squashes it.
-    // Wakes the object. Cost: one call per vertex.
+    // Wakes the object. Pinned vertices (TetSpawnOptions::pinnedVerts)
+    // keep still. Cost: one call per vertex.
     void changeVertexVelocities(ObjectHandle handle, const std::function<glm::vec3(const glm::vec3& position, const glm::vec3& velocity)>& change);
+    // Every vertex's position through `move(position)`, which returns the
+    // new one: a changed shape the object then springs back from, or,
+    // with pinned vertices moved outward, a skin stretched in its hoop
+    // (games/tennis strings: tension, so they ring like a drum). Wakes it.
+    void moveVertices(ObjectHandle handle, const std::function<glm::vec3(const glm::vec3& position)>& move);
     // Moves every vertex by `delta`: same shape, same velocities (putting
     // a ball back where a serve starts, a network correction). Wakes it.
     void translateObject(ObjectHandle handle, const glm::vec3& delta);
@@ -527,7 +544,7 @@ private:
     ObjectHandle spawnTetMeshInternal(const TetMeshData& mesh, const glm::vec3& position, const Material& material, bool enableFracture,
                                        const glm::vec3& initialVelocity = glm::vec3(0.0f), bool enablePlasticity = false,
                                        const std::vector<uint16_t>* tetFlags = nullptr, bool drawOnlyCracks = false,
-                                       float armFractureAfterSeconds = 0.0f);
+                                       float armFractureAfterSeconds = 0.0f, const std::vector<uint32_t>* pinnedVerts = nullptr);
 
     // One spawned tetrahedron's full FEMFX + render state. A plain
     // struct, not a class with its own methods — PhysicsModule owns

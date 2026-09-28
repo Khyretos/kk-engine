@@ -14,6 +14,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <string>
 
 namespace tennis {
 
@@ -200,14 +202,28 @@ void TennisModule::updateBodies(float dt) {
             const glm::vec3 fw = place.dirToWorld(p.facing);
             const float yaw = glm::degrees(std::atan2(fw.x, fw.z));
             SwingPose sp;
-            sp.kind = p.swingT < -1.5f && p.swingKind != SwingPose::Kind::Toss ? SwingPose::Kind::Ready : p.swingKind;
-            if (p.tossAge >= 0.0f) sp.kind = SwingPose::Kind::Toss;
-            sp.t = std::max(-1.0f, p.swingT);
+            sp.stroke = p.stroke;
+            sp.backhand = p.backhand;
+            sp.t = p.swingT;
             sp.contact = p.swingContact;
+            sp.tossing = p.tossAge >= 0.0f;
+            if (!m_poseTest.empty() && m->players[static_cast<size_t>(std::max(0, m_closeUp))] == idx) {
+                // KKE_TENNIS_POSE=<stroke>[,b],<t>: this player held in one moment of a stroke (screenshots).
+                const size_t c1 = m_poseTest.find(','), c2 = m_poseTest.rfind(',');
+                const std::string name = m_poseTest.substr(0, c1);
+                for (int k = 0; k < static_cast<int>(Stroke::Count); ++k)
+                    if (name == strokeName(static_cast<Stroke>(k))) sp.stroke = static_cast<Stroke>(k);
+                sp.backhand = m_poseTest.find(",b,") != std::string::npos;
+                sp.t = c2 != std::string::npos ? std::strtof(m_poseTest.c_str() + c2 + 1, nullptr) : 0.0f;
+                sp.contact = glm::vec3(0.0f);
+                sp.tossing = false;
+            }
             Body::Mood mood = Body::Mood::Play;
             if (p.celebrate > 0.0f) mood = p.cheer ? Body::Mood::Cheer : Body::Mood::Groan;
             if (m->phase == Match::Phase::MatchOver) mood = m->score.winner() == p.team ? Body::Mood::Cheer : Body::Mood::Stand;
             p.look->update(m_rigid->world().characterPosition(p.body), yaw, m_rigid->world().characterVelocity(p.body), sp, mood, dt);
+            if (m_stringTest && p.look->stringDepth() > 0.0f)
+                kke::log::get(name())->info("strings: player {} pocket {:.1f} mm", &p - m_players.data(), p.look->stringDepth() * 1000.0f);
         }
     }
     updateWalkerBodies(dt);
@@ -246,6 +262,14 @@ void TennisModule::updateCameras(float dt) {
             return;
         }
         const CourtPlace& place = m_center.courts[static_cast<size_t>(m ? m->court : 0)];
+        if (m && m_closeUp >= 0 && m_closeUp < static_cast<int>(m->players.size())) {
+            // KKE_TENNIS_CLOSEUP: side on to one player, close, for looking at the strokes.
+            const Player& p = player(m->players[static_cast<size_t>(m_closeUp)]);
+            const float s = static_cast<float>(m->score.sideOf(p.team));
+            main.position = place.toWorld(p.feet + glm::vec3(-3.6f * s, 1.5f, -1.2f * s));
+            main.target = place.toWorld(p.feet + glm::vec3(0.0f, 1.1f, 0.0f));
+            return;
+        }
         glm::vec3 ball = m && m->ball ? m->ball->position() : glm::vec3(0.0f);
         if (m_testBall) ball = m_testBall->position();
         // The TV view: high behind one end, the whole court in sight over

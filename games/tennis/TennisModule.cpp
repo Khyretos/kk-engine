@@ -61,6 +61,10 @@ void TennisModule::init(kke::Application& app) {
     m_level = static_cast<int>(envFloat("KKE_TENNIS_LEVEL", 1.0f));
     m_seed = static_cast<uint32_t>(envFloat("KKE_TENNIS_SEED", 1.0f));
     m_quitAfter = envFloat("KKE_TENNIS_QUIT", -1.0f);
+    m_swingLog = kke::dev::flag("KKE_TENNIS_SWINGLOG");
+    m_closeUp = static_cast<int>(envFloat("KKE_TENNIS_CLOSEUP", -1.0f));
+    if (const char* pose = kke::dev::env("KKE_TENNIS_POSE")) m_poseTest = pose;
+    m_stringTest = kke::dev::env("KKE_TENNIS_STRINGTEST") != nullptr;
     m_autoplay = envOn("KKE_TENNIS_AUTOPLAY");
     if (envOn("KKE_TENNIS_CENTER")) m_where = 1;
     m_crowd = static_cast<int>(envFloat("KKE_TENNIS_CROWD", static_cast<float>(m_crowd)));
@@ -74,7 +78,11 @@ void TennisModule::init(kke::Application& app) {
     app.camera().fovDegrees = 50.0f;
     defineControls();
     m_rig = std::make_unique<Rig>(app);
-    if (m_models) m_rig->load(*m_models);
+    if (m_models) {
+        m_rig->load(*m_models);
+        m_rig->loadRacket(*m_models);
+        m_rig->setPhysics(m_physics);
+    }
     buildWorld();
     buildHud();
     setupLobby();
@@ -365,6 +373,7 @@ void TennisModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
 
 void TennisModule::update(const kke::UpdateContext& ctx) {
     const float dt = ctx.dt;
+    if (m_stringTest) stringTest(dt);
     kke::InputMap& p1 = m_input->map(0);
     if (p1.pressed("panels")) m_app->debugUi().setVisible(!m_app->debugUi().visible());
     if (m_inMenu) {
@@ -433,6 +442,7 @@ void TennisModule::renderShadow(const kke::ShadowRenderContext& ctx) {
 void TennisModule::shutdown() {
     clearPlayers();
     m_testBall.reset();
+    m_testBed.reset();
     if (m_rigid) {
         kke::RigidWorld& w = m_rigid->world();
         for (kke::RigidWorld::BodyId b : m_statics) w.remove(b);
@@ -442,6 +452,31 @@ void TennisModule::shutdown() {
     m_standMesh.reset();
     m_fenceMesh.reset();
     m_rig.reset();
+}
+
+// ------------------------------------------------------------ string test
+
+// One string bed on its own, hit in the middle by a 30 m/s ball every 2 s:
+// logs how deep the pocket goes and how long it takes to ring out.
+void TennisModule::stringTest(float dt) {
+    if (!m_testBed) {
+        m_testBed = m_rig->makeStringBed();
+        m_testBedTime = 0.0f;
+        if (!m_testBed) {
+            m_stringTest = false;
+            kke::log::get(name())->warn("string test: no string bed (no physics?)");
+        }
+        return;
+    }
+    const float was = m_testBedTime;
+    m_testBedTime += dt;
+    if (std::fmod(was, 2.0f) > std::fmod(m_testBedTime, 2.0f)) {
+        const glm::vec2 c = m_rig->strings().centre;
+        m_testBed->strike(glm::vec3(c, 0.0f), glm::vec3(0.0f, 0.0f, -30.0f));
+        kke::log::get(name())->info("string test: hit at {:.1f} s", m_testBedTime);
+    }
+    std::vector<glm::vec3> bent;
+    if (m_testBed->update(dt, bent)) kke::log::get(name())->info("string test: {:.2f} s pocket {:.1f} mm", m_testBedTime, m_testBed->depth() * 1000.0f);
 }
 
 // ------------------------------------------------------------ ball test
