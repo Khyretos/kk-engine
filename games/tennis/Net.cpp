@@ -463,12 +463,13 @@ void TennisModule::syncRemoteWalkers() {
     for (const kke::net::RemotePlayer& r : remote) {
         const bool known = std::any_of(m_walkers.begin(), m_walkers.end(), [&r](const Walker& w) { return w.remote && !w.gone && w.netId == r.id; });
         if (known) continue;
-        const glm::vec3 at = r.hasState ? net::fromState(r.state).feet : m_center.arrival(static_cast<int>(m_walkers.size()) % 4);
+        const glm::vec3 at = r.hasState ? net::fromState(r.state).feet : m_center.arrival(r.id * kke::NetModule::kMaxLocalPlayers);
         spawnWalker(r.name, net::tintFromText(r.character, glm::vec3(0.8f)), false, -1, at);
         Walker& w = m_walkers.back();
         w.remote = true;
         w.netId = r.id;
         world.setCharacterKinematic(w.body, true);
+        kke::log::get(name())->info("sport center: {} is here from another screen", r.name);
         if (w.look) w.look->setVisible(true);
     }
     for (Walker& w : m_walkers) {
@@ -686,6 +687,14 @@ void TennisModule::sendNet() {
             if (m_net->localPlayerId(s) == netId && (s == 0 || netId != 0)) return s;
         return -1;
     };
+    // People who were walking before this screen went online (KKE_NET
+    // with no menu enters the sport center before hosting starts) get
+    // their network ids now.
+    for (Walker& wk : m_walkers) {
+        if (wk.cpu || wk.remote || wk.gone || wk.localSlot < 0 || wk.netId >= 0) continue;
+        const int id = m_net->localPlayerId(wk.localSlot);
+        if (wk.localSlot == 0 || id != 0) wk.netId = id;
+    }
     kke::RigidWorld& w = m_rigid->world();
     for (const auto& mp : m_matches) {
         const Match& m = *mp;

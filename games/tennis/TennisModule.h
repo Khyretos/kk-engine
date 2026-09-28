@@ -200,6 +200,7 @@ public:
         int input = -1;                // a person at this screen
         bool remote = false;           // online: someone at another screen (moved by what it sends)
         int netId = -1;                // online: their network player id
+        int localSlot = -1;            // a person at this screen: their NetModule local player slot
         bool gone = false;             // left the game (the slot stays, so indices hold)
         kke::RigidWorld::CharacterId body = 0;
         std::unique_ptr<Body> look;
