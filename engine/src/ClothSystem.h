@@ -246,11 +246,17 @@ private:
         std::vector<uint32_t> stamp;
         std::vector<VtPair> vt;
         std::vector<EePair> ee;
+        double sized = 0.0;                         // box sizes summed, and how many (cell size)
+        size_t boxes = 0;
     };
     std::vector<Worker> m_workers;
+    struct Crew;
+    std::unique_ptr<Crew> m_crew;                   // parallel()'s threads, started on first use
+    std::vector<uint32_t> m_queries;                // searchOnCpu: the vertices (then edges) that look
     JPH::JobSystem* m_jobs = nullptr;
     bool m_between = false; // endStep(): after Jolt's update, not between its sub-steps
-    void parallel(uint32_t count, const std::function<void(uint32_t, uint32_t, Worker&)>& fn);
+    // grain: the fewest items worth a job of their own.
+    void parallel(uint32_t count, const std::function<void(uint32_t, uint32_t, Worker&)>& fn, uint32_t grain = 256);
     Grid m_triGrid, m_edgeGrid;
     std::vector<Cloth*> m_active;
     // The GPU's search (kke::ClothGpu): the queries packed for it, its

@@ -47,7 +47,10 @@ evidence):
 2. **FEMFX always compiled optimized** (BUG-029) — Debug builds ran
    the solver at -O0.
 3. **At most 2 catch-up ticks per frame** (BUG-030) — was 8, which
-   turned one slow tick into eight per frame.
+   turned one slow tick into eight per frame. And none after a tick
+   that took longer than it simulates: it can never be caught up, so a
+   second one only doubled the frame (cloth landing on a phone: two
+   90 ms ticks in one frame).
 4. **Render only exterior faces, skip sleeping objects, one buffer per
    frame in flight** — ~10x fewer triangles, no CPU rebuild for
    anything asleep, and fixes BUG-026 (fracture pieces invisible).

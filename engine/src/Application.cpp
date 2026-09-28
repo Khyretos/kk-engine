@@ -713,6 +713,7 @@ void Application::run() {
             for (Module* m : m_initOrder) safeInvoke(m, "frameStart", [&] { m->frameStart(frameCtx); });
         }
 
+        uint32_t stepCap = m_maxFixedStepsPerFrame;
         if (!m_paused) {
             // Cap how much simulation time a single slow frame can inject
             // — otherwise a long stall (asset load, breakpoint) causes a
@@ -725,11 +726,22 @@ void Application::run() {
             while (accumulator >= m_fixedDt) {
                 m_fixedStepsLastFrame++;
                 tickIndex++;
+                const auto tickStart = BenchClock::now();
                 FixedUpdateContext fixedCtx{ m_fixedDt, tickIndex };
                 for (Module* m : m_initOrder) {
                     safeInvoke(m, "fixedUpdate", [&] { m->fixedUpdate(fixedCtx); });
                 }
                 accumulator -= m_fixedDt;
+                // A tick that took longer than the time it simulates can
+                // never be caught up: a second one would only double this
+                // frame's stall (cloth landing on a phone: two 90 ms ticks
+                // in one frame). Run slow motion for this frame instead.
+                const float tickCost = std::chrono::duration<float>(BenchClock::now() - tickStart).count();
+                if (tickCost > m_fixedDt && accumulator >= m_fixedDt) {
+                    accumulator = std::fmod(accumulator, m_fixedDt);
+                    stepCap = m_fixedStepsLastFrame; // counts as falling behind
+                    break;
+                }
             }
         } else if (m_stepRequested) {
             // Single-step: exactly one fixed tick, ignoring whatever the
@@ -981,7 +993,7 @@ void Application::run() {
             m_bench->addStage(BenchRecorder::Record, msSince(benchAfterUpdate, benchBeforeBegin) + msSince(benchAfterBegin, benchBeforeEnd));
             m_bench->addStage(BenchRecorder::Present, msSince(benchBeforeEnd, benchAfterEnd));
             m_bench->addStage(BenchRecorder::Idle, msSince(benchAfterEnd, benchIdleEnd));
-            m_bench->setFrameInfo(m_renderer->lastGpuFrameTimeMs(), static_cast<int>(m_fixedStepsLastFrame), static_cast<int>(m_maxFixedStepsPerFrame));
+            m_bench->setFrameInfo(m_renderer->lastGpuFrameTimeMs(), static_cast<int>(m_fixedStepsLastFrame), static_cast<int>(stepCap));
         }
     }
     if (m_bench) writeBenchmarkReport();

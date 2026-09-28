@@ -335,7 +335,9 @@ public:
     // stays usable. The old cap was 8, which turned one expensive tick
     // into eight per frame — measured at 0.4 FPS in physics_demo — and
     // made the overload worse instead of absorbing it. 1 = never catch
-    // up (pure slow-motion under load); 0 is treated as 1.
+    // up (pure slow-motion under load); 0 is treated as 1. A tick that
+    // itself costs more wall time than it simulates is never followed by
+    // a catch-up tick in the same frame, whatever this cap says.
     void setMaxFixedStepsPerFrame(uint32_t steps) { m_maxFixedStepsPerFrame = steps ? steps : 1; }
     uint32_t maxFixedStepsPerFrame() const { return m_maxFixedStepsPerFrame; }
     // Fixed ticks actually run during the most recent frame — so a stats

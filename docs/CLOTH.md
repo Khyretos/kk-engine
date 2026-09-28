@@ -193,9 +193,15 @@ second; this sandbox's 4-core VM, so a desktop is faster; medians over 4 s):
 | 16 sheets of 24 x 24 (9,216 vertices) | | 3.4 ms | 6.6 ms | 6.9 ms |
 | A 32 x 32 wool cape on swinging shoulders in gusty wind | | 0.38 ms | 6.8 ms | 7.2 ms |
 
-With the job system (the demo, 4 threads), the pass's search for pairs runs
-on every thread: the Fabrics scene (12 cloths, 7,944 vertices) steps in
-about 7 ms, the stress scene (16 sheets) in about 6 ms. The bed (3 layers,
+With the job system (the demo, 4 threads), every part of the pass that
+isn't one pair after another (the triangles' shapes, the patches, the
+bounds, the search for pairs) runs on every thread, on the pass's own
+threads: they wait a moment for the next part instead of being woken for
+each, which made the whole pass 8% faster than Jolt's jobs. The Fabrics
+scene (12 cloths, 7,944 vertices) steps in about 6 ms (17 ms a step
+averaged over its first 7 s, landings included, went to 13 ms), the
+stress scene (16 sheets) in about 6 ms, and the bed's worst step, the
+throw landing on the silk, went from 94 ms to 60 ms. The bed (3 layers,
 3,624 vertices, all touching) is always undoing something, so it runs in
 sub-steps all the time: about 2.9 times its cost with `clothSubsteps = 1`
 (1.6 times with 2).
