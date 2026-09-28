@@ -7,6 +7,7 @@
 #include "NetTennis.h"
 #include "Rules.h"
 #include "Shot.h"
+#include "Swing.h"
 
 #include "kke/Application.h"
 #include "kke/Module.h"
@@ -90,15 +91,23 @@ public:
         std::unique_ptr<Bot> bot;
         std::unique_ptr<Body> look;
         Intent intent;
-        // A shot waiting for the ball.
-        float armed = -1.0f;           // s since pressed (-1: none)
-        ShotKind armedKind = ShotKind::Topspin;
-        float charge = 0.0f;           // 0..1
-        float ballDist = 99.0f;        // m to the ball at the last hit check
-        // The swing on screen.
-        SwingPose::Kind swingKind = SwingPose::Kind::Ready;
-        float swingT = -2.0f;          // -1..1 while swinging; < -1 idle
+        // The swing (Swing.h): pressed, the takeback builds power; let go,
+        // the forward swing meets the ball (or doesn't) at contact.
+        Stroke stroke = Stroke::Ready;
+        bool backhand = false;
+        float swingT = kSwingIdle;     // Swing.h's clock: -2..-1 takeback, -1..0 forward, 0..1 follow-through
         glm::vec3 swingContact{0.0f};  // body frame
+        ShotKind armedKind = ShotKind::Topspin; // the shot button pressed
+        float charge = 0.0f;           // 0..1 power built in the takeback
+        float clock = 0.0f;            // s since the swing began
+        float contactAt = -1.0f;       // on that clock: when the racket reaches contact (-1: not let go yet)
+        float crossAt = -1.0f;         // ... when the ball reached the hitting spot (-1: not yet)
+        float prevPlane = 99.0f;       // the ball's distance to the hitting spot last step
+        float releaseLead = 0.0f;      // the CPU: its timing error this swing (s)
+        bool swingDone = false;        // this swing hit or missed already
+        Stamina stamina;
+        std::string timingText;        // "Perfect", "Late"... shown a moment after a shot
+        float timingShown = 0.0f;      // s left
         float tossAge = -1.0f;         // serving: s since the toss
         float celebrate = 0.0f;        // s left of a cheer or a groan
         bool cheer = true;
@@ -123,6 +132,7 @@ public:
         bool serveAgain = false;       // after a fault or a let: the same point, served again
         float deadBall = 0.0f;         // s the ball has lain still in a rally
         float sinceHit = 0.0f;         // s since the last hit (a ball nobody can reach ends the rally)
+        float sinceBounce = -1.0f;     // s since it bounced (-1: not since the last hit)
         uint16_t serial = 0;           // online: +1 each serve, so a late hit for an old point is dropped
         uint32_t netId = 0;            // online: the host's number for it (0: not sent yet)
         std::vector<uint8_t> history;  // who won each point (a late joiner replays the score)
@@ -199,8 +209,16 @@ private:
     void stepRemote(Match& m, Player& p, float dt); // online: a player another machine runs
     void readHuman(Match& m, Player& p);
     void thinkCpu(Match& m, Player& p, float dt);
-    bool tryHit(Match& m, Player& p, bool serve);
-    void hitBall(Match& m, Player& p, const glm::vec3& contact, bool serve);
+    // The swing (Swing.h): start it, how far the ball is from the hitting
+    // spot, when it gets there, and the hit.
+    void startSwing(Match& m, Player& p, ShotKind kind, bool serve);
+    void stepSwing(Match& m, Player& p, bool serving, bool release, float dt);
+    void endSwing(Player& p);
+    float planeGap(const Match& m, const Player& p) const;
+    float timeToSpot(const Match& m, const Player& p, glm::vec3* at = nullptr, float* bounceAge = nullptr) const;
+    glm::vec3 bodyRel(const Match& m, const Player& p, const glm::vec3& at) const;
+    glm::vec3 tossHand(const Match& m, const Player& p) const;
+    void hitBall(Match& m, Player& p, const glm::vec3& contact, bool serve, float timingError);
     void resolve(Match& m, Rally::Result r, const std::string& call = {});
     void applyHit(Match& m, int hitter, const net::Hit& h);
     bool authority() const;         // offline or the host: this machine is the umpire
@@ -294,11 +312,24 @@ private:
     bool m_allBots = false, m_doubles = false, m_inMenu = false;
     int m_level = 1;
     uint32_t m_seed = 1;
+    std::string m_poseTest;         // KKE_TENNIS_POSE: a stroke held still (Scene.cpp)
+    bool m_stringTest = false;      // KKE_TENNIS_STRINGTEST: log each racket's pocket (Strings.h)
+    int m_closeUp = -1;             // KKE_TENNIS_CLOSEUP=<n>: the camera side on to player n of the first match
+    bool m_swingLog = false;        // KKE_TENNIS_SWINGLOG=1: every swing in the log (stroke, timing, power, stamina)
     float m_quitAfter = -1.0f, m_clock = 0.0f, m_reportAt = 10.0f;
     bool m_ballTest = false;
     float m_testTime = 0.0f;
     int m_testShot = -1;
     std::unique_ptr<Ball> m_testBall;
+    std::unique_ptr<StringBed> m_testBed; // KKE_TENNIS_STRINGTEST
+    float m_testBedTime = 0.0f;
+    void stringTest(float dt);
+    float m_timingScale = 1.0f;     // the timing window: the menu's Swing timing (Relaxed 1.5, Normal 1, Pro 0.7)
+    bool m_autoTiming = false;      // ... Automatic: the swing goes by itself at the right moment
+    void setTiming(int choice) {
+        m_timingScale = choice == 0 ? 1.5f : choice == 2 ? 0.7f : 1.0f;
+        m_autoTiming = choice == 3;
+    }
     bool m_assist = true;
     int m_length = 0;               // the menu's Length row
     int m_teams = 0;                // the menu's Teams row
@@ -332,7 +363,14 @@ private:
 
     // HUD.
     struct TeamRow { std::string name, sets, points; bool serving = false; };
-    struct Hud { TeamRow t[2]; std::string call, sub, hint, banner, ranking; };
+    // A person at this screen, in a match: their legs and their swing.
+    struct MeterRow {
+        std::string name, timing;
+        float stamina = 1.0f, power = 0.0f;
+        bool charging = false;
+        bool operator==(const MeterRow&) const = default;
+    };
+    struct Hud { TeamRow t[2]; std::string call, sub, hint, banner, ranking; std::vector<MeterRow> meters; };
     Hud m_hud;
     Rml::DataModelHandle m_hudModel;
     Rml::ElementDocument* m_hudDoc = nullptr;

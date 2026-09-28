@@ -21,6 +21,7 @@
 #include "Body.h"
 #include "Rules.h"
 #include "Shot.h"
+#include "Swing.h"
 
 #include <glm/glm.hpp>
 
@@ -52,8 +53,9 @@ struct Pose {
     glm::vec3 feet{0.0f};         // world
     glm::vec3 velocity{0.0f};
     glm::vec3 facing{0.0f, 0.0f, -1.0f}; // world, flat
-    SwingPose::Kind swing = SwingPose::Kind::Ready;
-    float swingT = -2.0f;         // -1..1 while swinging, < -1 idle
+    Stroke stroke = Stroke::Ready;
+    bool backhand = false;
+    float swingT = kSwingIdle;    // Swing.h's clock
     glm::vec3 contact{0.0f};      // the swing's contact, body frame
     bool tossing = false;         // serving: the ball is up
     bool cheer = true;
@@ -150,8 +152,9 @@ struct CpuPose {
     glm::vec3 feet{0.0f};
     glm::vec2 velocity{0.0f};     // x, z
     float yaw = 0.0f;             // degrees, court space: 0 = +Z
-    SwingPose::Kind swing = SwingPose::Kind::Ready;
-    float swingT = -2.0f;
+    Stroke stroke = Stroke::Ready;
+    bool backhand = false;
+    float swingT = kSwingIdle;
     glm::vec3 contact{0.0f};
     bool tossing = false, celebrating = false, cheer = true;
 };

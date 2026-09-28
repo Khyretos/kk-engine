@@ -20,6 +20,7 @@ struct BotSkill {
     float aimError = 1.2f;     // m of wobble on the target
     float power = 0.5f;        // 0..1 how hard it hits
     float risk = 0.3f;         // 0..1 how close to the lines it aims
+    float timing = 0.03f;      // s: how far off its swing's timing wanders (Swing.h)
     static BotSkill forLevel(int level); // 0 Easy, 1 Normal, 2 Hard, 3 Expert
 };
 

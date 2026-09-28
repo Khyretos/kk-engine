@@ -25,8 +25,11 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <condition_variable>
 #include <cstring>
 #include <iterator>
+#include <mutex>
+#include <thread>
 #include <utility>
 
 namespace kke::detail {
@@ -69,6 +72,7 @@ constexpr uint64_t kSearchProbe = 64;      // searches: the slower of GPU and CP
 constexpr float kCornerSlop = 0.25f;       // thicknesses: a solid's corner this far into a triangle is left be
 constexpr float kFlatContact = 0.9f;       // cos: vertices of a triangle resting on faces further apart than this straddle an edge
 constexpr float kCornerLift = 2.0f;        // thicknesses: the most a triangle is lifted off a solid's corner
+constexpr std::chrono::microseconds kCrewSpin{50}; // how long the crew's threads wait for the next phase before they sleep
 constexpr float kMostPerPass = 3.0f;  // the pass moves a vertex at most this x (thickness + a tenth of an edge)
 
 // Sets a flag other worker threads may set too. The Android NDK's libc++
@@ -156,6 +160,81 @@ bool cellBox(const glm::vec3& lo, const glm::vec3& hi, float inv, glm::ivec3& a,
 uint32_t hashCell(int x, int y, int z) { return uint32_t(x) * 92837111u ^ uint32_t(y) * 689287499u ^ uint32_t(z) * 283923481u; }
 
 } // namespace
+
+// The protection pass's own threads (parallel()). The pass runs about ten
+// short parallel phases one after another; through Jolt's job system
+// (a job each, a barrier, its threads woken each time) the whole pass took
+// 8% longer, measured. These threads wait a moment for the next phase
+// (kCrewSpin), then sleep until the next pass.
+struct ClothSystem::Crew {
+    struct Task {
+        const std::function<void(uint32_t)>* job = nullptr;
+        uint32_t count = 0;
+        std::atomic<uint32_t> next{0}, done{0};
+    };
+    explicit Crew(int helpers) {
+        for (int i = 0; i < helpers; ++i) threads.emplace_back([this] { loop(); });
+    }
+    ~Crew() {
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            quit = true;
+        }
+        wake.notify_all();
+        for (std::thread& t : threads) t.join();
+    }
+    // job(i) for every i in [0, count), on these threads and this one.
+    void run(uint32_t count, const std::function<void(uint32_t)>& job) {
+        auto task = std::make_shared<Task>();
+        task->job = &job;
+        task->count = count;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            current = task;
+            generation.fetch_add(1, std::memory_order_release);
+        }
+        if (sleeping.load(std::memory_order_acquire) > 0) wake.notify_all();
+        work(*task);
+        while (task->done.load(std::memory_order_acquire) < count) std::this_thread::yield();
+    }
+
+private:
+    // (A thread late to a task finds every index taken and never calls
+    // job: the caller has returned by then, and job with it.)
+    static void work(Task& t) {
+        for (uint32_t i; (i = t.next.fetch_add(1, std::memory_order_relaxed)) < t.count;) {
+            (*t.job)(i);
+            t.done.fetch_add(1, std::memory_order_release);
+        }
+    }
+    void loop() {
+        uint64_t seen = 0;
+        for (;;) {
+            const auto until = std::chrono::steady_clock::now() + kCrewSpin;
+            while (generation.load(std::memory_order_acquire) == seen && std::chrono::steady_clock::now() < until) std::this_thread::yield();
+            std::shared_ptr<Task> task;
+            {
+                std::unique_lock<std::mutex> lock(mutex);
+                if (generation.load(std::memory_order_relaxed) == seen && !quit) {
+                    sleeping.fetch_add(1, std::memory_order_acq_rel);
+                    wake.wait(lock, [&] { return quit || generation.load(std::memory_order_relaxed) != seen; });
+                    sleeping.fetch_sub(1, std::memory_order_acq_rel);
+                }
+                if (quit) return;
+                seen = generation.load(std::memory_order_relaxed);
+                task = current;
+            }
+            work(*task);
+        }
+    }
+    std::vector<std::thread> threads;
+    std::mutex mutex;
+    std::condition_variable wake;
+    std::shared_ptr<Task> current;
+    std::atomic<uint64_t> generation{0};
+    std::atomic<int> sleeping{0};
+    bool quit = false;
+};
 
 ClothSystem::ClothSystem(JPH::PhysicsSystem& system, JPH::ObjectLayer layer, JPH::TempAllocator& temp, JPH::JobSystem* jobs, int substeps)
     : m_system(system), m_layer(layer), m_temp(temp), m_jobs(jobs) {
@@ -892,42 +971,45 @@ void ClothSystem::markPatches() {
     // Bounds, and the sum of every normal the step's triangles have: at its
     // start, its end, and the cross term of the two (the normal in between
     // is a positive mix of the three, so a cone holding them holds it).
-    for (size_t ci = 0; ci < m_active.size(); ++ci) {
-        Cloth& c = *m_active[ci];
-        const size_t nt = c.tris.size() / 3;
-        c.triMixed.resize(nt);
-        for (size_t t = 0; t < nt; ++t) {
-            const uint32_t gp = m_patchBase[ci] + c.triPatch[t];
-            const uint32_t i0 = c.tris[t * 3], i1 = c.tris[t * 3 + 1], i2 = c.tris[t * 3 + 2];
-            glm::vec3 lo = glm::min(glm::min(c.pos[i0], c.prev[i0]), glm::min(glm::min(c.pos[i1], c.prev[i1]), glm::min(c.pos[i2], c.prev[i2])));
-            glm::vec3 hi = glm::max(glm::max(c.pos[i0], c.prev[i0]), glm::max(glm::max(c.pos[i1], c.prev[i1]), glm::max(c.pos[i2], c.prev[i2])));
-            m_patchLo[gp] = glm::min(m_patchLo[gp], lo);
-            m_patchHi[gp] = glm::max(m_patchHi[gp], hi);
-            const glm::vec3 mixed = glm::cross(c.prev[i1] - c.prev[i0], c.pos[i2] - c.pos[i0]) + glm::cross(c.pos[i1] - c.pos[i0], c.prev[i2] - c.prev[i0]);
-            const float ml = glm::length(mixed);
-            if (c.triN[t] == glm::vec3(0.0f) || ml < 1e-12f) {
-                lowest[gp] = -2.0f; // degenerate: no cone
-                c.triMixed[t] = glm::vec3(0.0f);
-                continue;
+    // (Each cloth's patches its own: a cloth per job.)
+    parallel(uint32_t(m_active.size()), [&](uint32_t begin, uint32_t end, Worker&) {
+        for (size_t ci = begin; ci < end; ++ci) {
+            Cloth& c = *m_active[ci];
+            const size_t nt = c.tris.size() / 3;
+            c.triMixed.resize(nt);
+            for (size_t t = 0; t < nt; ++t) {
+                const uint32_t gp = m_patchBase[ci] + c.triPatch[t];
+                const uint32_t i0 = c.tris[t * 3], i1 = c.tris[t * 3 + 1], i2 = c.tris[t * 3 + 2];
+                glm::vec3 lo = glm::min(glm::min(c.pos[i0], c.prev[i0]), glm::min(glm::min(c.pos[i1], c.prev[i1]), glm::min(c.pos[i2], c.prev[i2])));
+                glm::vec3 hi = glm::max(glm::max(c.pos[i0], c.prev[i0]), glm::max(glm::max(c.pos[i1], c.prev[i1]), glm::max(c.pos[i2], c.prev[i2])));
+                m_patchLo[gp] = glm::min(m_patchLo[gp], lo);
+                m_patchHi[gp] = glm::max(m_patchHi[gp], hi);
+                const glm::vec3 mixed = glm::cross(c.prev[i1] - c.prev[i0], c.pos[i2] - c.pos[i0]) + glm::cross(c.pos[i1] - c.pos[i0], c.prev[i2] - c.prev[i0]);
+                const float ml = glm::length(mixed);
+                if (c.triN[t] == glm::vec3(0.0f) || ml < 1e-12f) {
+                    lowest[gp] = -2.0f; // degenerate: no cone
+                    c.triMixed[t] = glm::vec3(0.0f);
+                    continue;
+                }
+                c.triMixed[t] = mixed / ml;
+                sum[gp] += c.triN[t] + c.triNPrev[t] + c.triMixed[t];
             }
-            c.triMixed[t] = mixed / ml;
-            sum[gp] += c.triN[t] + c.triNPrev[t] + c.triMixed[t];
+            for (uint32_t p = 0; p < c.patches; ++p) {
+                const uint32_t gp = m_patchBase[ci] + p;
+                m_patchLo[gp] -= c.thickness;
+                m_patchHi[gp] += c.thickness;
+                const float l = glm::length(sum[gp]);
+                sum[gp] = l > 1e-6f ? sum[gp] / l : glm::vec3(0.0f);
+                if (l <= 1e-6f) lowest[gp] = -2.0f;
+            }
+            // Cones: the axis the mean normal, the half-angle the widest normal from it.
+            for (size_t t = 0; t < nt; ++t) {
+                const uint32_t gp = m_patchBase[ci] + c.triPatch[t];
+                const glm::vec3 axis = sum[gp];
+                lowest[gp] = std::min(lowest[gp], std::min(std::min(glm::dot(c.triN[t], axis), glm::dot(c.triNPrev[t], axis)), glm::dot(c.triMixed[t], axis)));
+            }
         }
-        for (uint32_t p = 0; p < c.patches; ++p) {
-            const uint32_t gp = m_patchBase[ci] + p;
-            m_patchLo[gp] -= c.thickness;
-            m_patchHi[gp] += c.thickness;
-            const float l = glm::length(sum[gp]);
-            sum[gp] = l > 1e-6f ? sum[gp] / l : glm::vec3(0.0f);
-            if (l <= 1e-6f) lowest[gp] = -2.0f;
-        }
-        // Cones: the axis the mean normal, the half-angle the widest normal from it.
-        for (size_t t = 0; t < nt; ++t) {
-            const uint32_t gp = m_patchBase[ci] + c.triPatch[t];
-            const glm::vec3 axis = sum[gp];
-            lowest[gp] = std::min(lowest[gp], std::min(std::min(glm::dot(c.triN[t], axis), glm::dot(c.triNPrev[t], axis)), glm::dot(c.triMixed[t], axis)));
-        }
-    }
+    }, 1);
     for (uint32_t gp = 0; gp < total; ++gp)
         m_patchCone[gp] = lowest[gp] < -1.5f ? glm::vec4(0, 0, 1, glm::pi<float>()) : glm::vec4(sum[gp], std::acos(std::clamp(lowest[gp], -1.0f, 1.0f)));
     auto look = [&](uint32_t a, uint32_t b) {
@@ -999,13 +1081,16 @@ void ClothSystem::markPatches() {
 
 void ClothSystem::shapeTriangles() {
     for (Cloth* cp : m_active) {
-        Cloth& c = *cp;
-        const size_t nt = c.tris.size() / 3;
-        c.triN.resize(nt);
-        c.triNPrev.resize(nt);
-        c.triSphere.resize(nt);
-        c.triMove.resize(nt);
-        for (size_t t = 0; t < nt; ++t) {
+        const size_t nt = cp->tris.size() / 3;
+        cp->triN.resize(nt);
+        cp->triNPrev.resize(nt);
+        cp->triSphere.resize(nt);
+        cp->triMove.resize(nt);
+    }
+    parallel(uint32_t(m_triCloth.size()), [&](uint32_t begin, uint32_t end, Worker&) {
+        for (uint32_t g = begin; g < end; ++g) {
+            Cloth& c = *m_active[m_triCloth[g]];
+            const size_t t = g - c.triBase;
             const uint32_t i0 = c.tris[t * 3], i1 = c.tris[t * 3 + 1], i2 = c.tris[t * 3 + 2];
             const glm::vec3 n = glm::cross(c.pos[i1] - c.pos[i0], c.pos[i2] - c.pos[i0]);
             const glm::vec3 np = glm::cross(c.prev[i1] - c.prev[i0], c.prev[i2] - c.prev[i0]);
@@ -1024,35 +1109,32 @@ void ClothSystem::shapeTriangles() {
             c.triSphere[t] = glm::vec4(centre, std::sqrt(r2));
             c.triMove[t] = centre - centrePrev;
         }
-    }
+    }, 1024);
 }
 
-// Runs fn over [0, count) in chunks, on Jolt's job system when there's
-// one, else right here. (From OnStep this runs inside one of Jolt's jobs;
-// waiting on a barrier there is fine: the waiting thread runs the
-// barrier's jobs itself.)
-void ClothSystem::parallel(uint32_t count, const std::function<void(uint32_t, uint32_t, Worker&)>& fn) {
-    const int threads = m_jobs ? std::max(1, m_jobs->GetMaxConcurrency()) : 1;
-    if (m_workers.size() < size_t(threads)) m_workers.resize(size_t(threads));
+// Runs fn over [0, count) in chunks: on the crew (as many threads as
+// Jolt's job system has) when there's a job system, else right here.
+void ClothSystem::parallel(uint32_t count, const std::function<void(uint32_t, uint32_t, Worker&)>& fn, uint32_t grain) {
+    const int most = m_jobs ? std::max(1, m_jobs->GetMaxConcurrency()) : 1;
+    const int threads = int(std::min<uint32_t>(uint32_t(most), std::max<uint32_t>(1, count / std::max(1u, grain))));
+    if (m_workers.size() < size_t(most)) m_workers.resize(size_t(most));
     for (Worker& w : m_workers) {
         w.vt.clear();
         w.ee.clear();
+        w.sized = 0.0;
+        w.boxes = 0;
     }
-    if (threads == 1 || count < 2048) {
+    if (threads == 1) {
         fn(0, count, m_workers[0]);
         return;
     }
-    JPH::JobSystem::Barrier* barrier = m_jobs->CreateBarrier();
+    if (!m_crew) m_crew = std::make_unique<Crew>(most - 1);
     const uint32_t chunk = (count + uint32_t(threads) - 1) / uint32_t(threads);
-    for (int t = 0; t < threads; ++t) {
-        const uint32_t begin = uint32_t(t) * chunk, end = std::min(count, begin + chunk);
-        if (begin >= end) break;
-        Worker* w = &m_workers[size_t(t)];
-        JPH::JobHandle job = m_jobs->CreateJob("ClothProtection", JPH::Color::sGreen, [&fn, begin, end, w] { fn(begin, end, *w); });
-        barrier->AddJob(job);
-    }
-    m_jobs->WaitForJobs(barrier);
-    m_jobs->DestroyBarrier(barrier);
+    const std::function<void(uint32_t)> job = [&](uint32_t t) {
+        const uint32_t begin = t * chunk, end = std::min(count, begin + chunk);
+        if (begin < end) fn(begin, end, m_workers[t]);
+    };
+    m_crew->run(uint32_t(threads), job);
 }
 
 void ClothSystem::protect() {
@@ -1068,21 +1150,35 @@ void ClothSystem::protect() {
     // --- Broad phase, once per step: who could touch whom ------------------
     // Everything's bounds swept from the last pass to now (+ thickness), in
     // a spatial hash; the pairs whose bounds meet are kept for the passes.
+    // Every triangle and edge numbered through, and each one's cloth.
+    m_triCloth.resize(triTotal);
+    m_edgeCloth.resize(edgeTotal);
+    m_vertBase.resize(m_active.size() + 1);
+    m_vertBase[0] = 0;
+    {
+        uint32_t tris = 0, edges = 0;
+        for (size_t ci = 0; ci < m_active.size(); ++ci) {
+            Cloth& c = *m_active[ci];
+            c.triBase = tris;
+            c.edgeBase = edges;
+            tris += uint32_t(c.tris.size() / 3);
+            edges += uint32_t(c.edges.size() / 2);
+            std::fill(m_triCloth.begin() + c.triBase, m_triCloth.begin() + tris, uint32_t(ci));
+            std::fill(m_edgeCloth.begin() + c.edgeBase, m_edgeCloth.begin() + edges, uint32_t(ci));
+            m_vertBase[ci + 1] = m_vertBase[ci] + uint32_t(c.pos.size());
+        }
+    }
     shapeTriangles();
     markPatches();
     m_triBox.resize(triTotal);
-    m_triCloth.resize(triTotal);
     m_triLo.resize(triTotal);
     m_triHi.resize(triTotal);
-    double sized = 0.0;
-    size_t boxes = 0;
-    size_t g = 0;
-    for (size_t ci = 0; ci < m_active.size(); ++ci) {
-        Cloth& c = *m_active[ci];
-        c.triBase = uint32_t(g);
-        for (size_t t = 0; t < c.tris.size() / 3; ++t, ++g) {
+    parallel(uint32_t(triTotal), [&](uint32_t begin, uint32_t end, Worker& w) {
+        for (uint32_t g = begin; g < end; ++g) {
+            const uint32_t ci = m_triCloth[g];
+            const Cloth& c = *m_active[ci];
+            const size_t t = g - c.triBase;
             CellBox& box = m_triBox[g];
-            m_triCloth[g] = uint32_t(ci);
             if (!m_patchLooked[m_patchBase[ci] + c.triPatch[t]]) {
                 box = CellBox{};
                 continue;
@@ -1098,59 +1194,67 @@ void ClothSystem::protect() {
             box.hi = glm::ivec3(0); // valid for now: placed below
             {
                 const glm::vec3 ext = m_triHi[g] - m_triLo[g];
-                sized += std::max(ext.x, std::max(ext.y, ext.z));
+                w.sized += std::max(ext.x, std::max(ext.y, ext.z));
             }
-            ++boxes;
+            ++w.boxes;
         }
+    }, 1024);
+    double sized = 0.0;
+    size_t boxes = 0;
+    for (const Worker& w : m_workers) {
+        sized += w.sized;
+        boxes += w.boxes;
     }
     // Cells about as big as the boxes (a box then covers a few cells, and a
     // cell holds a few boxes); cloth moving fast gets bigger cells.
     const float triCell = std::max(cell, boxes ? float(sized / double(boxes)) : cell);
     const float inv = 1.0f / triCell;
-    for (size_t gt = 0; gt < triTotal; ++gt)
-        if (m_triBox[gt].valid() && !cellBox(m_triLo[gt], m_triHi[gt], inv, m_triBox[gt].lo, m_triBox[gt].hi)) m_triBox[gt] = CellBox{};
+    parallel(uint32_t(triTotal), [&](uint32_t begin, uint32_t end, Worker&) {
+        for (uint32_t gt = begin; gt < end; ++gt)
+            if (m_triBox[gt].valid() && !cellBox(m_triLo[gt], m_triHi[gt], inv, m_triBox[gt].lo, m_triBox[gt].hi)) m_triBox[gt] = CellBox{};
+    }, 2048);
     m_triGrid.build(m_triBox);
-    m_vertBase.resize(m_active.size() + 1);
-    m_vertBase[0] = 0;
-    for (size_t ci = 0; ci < m_active.size(); ++ci) m_vertBase[ci + 1] = m_vertBase[ci] + uint32_t(m_active[ci]->pos.size());
     // The cells each vertex looks in: its bounds swept from the last pass
     // to now (+ thickness). Pinned and asleep vertices don't look (others
     // are pushed off them, from their side).
-    m_vertBox.assign(m_vertBase.back(), CellBox{});
-    for (size_t ci = 0; ci < m_active.size(); ++ci) {
-        const Cloth& c = *m_active[ci];
-        for (uint32_t v = 0; v < c.pos.size(); ++v) {
+    m_vertBox.resize(m_vertBase.back());
+    parallel(m_vertBase.back(), [&](uint32_t begin, uint32_t end, Worker&) {
+        size_t ci = size_t(std::upper_bound(m_vertBase.begin(), m_vertBase.end(), begin) - m_vertBase.begin()) - 1;
+        for (uint32_t gv = begin; gv < end; ++gv) {
+            while (gv >= m_vertBase[ci + 1]) ++ci;
+            const Cloth& c = *m_active[ci];
+            const uint32_t v = gv - m_vertBase[ci];
+            CellBox& box = m_vertBox[gv];
+            box = CellBox{};
             if (c.invMass[v] <= 0.0f || !c.vertLooked[v]) continue;
-            CellBox& box = m_vertBox[m_vertBase[ci] + v];
             if (!cellBox(glm::min(c.pos[v], c.prev[v]) - c.thickness, glm::max(c.pos[v], c.prev[v]) + c.thickness, inv, box.lo, box.hi)) box = CellBox{};
         }
-    }
+    }, 2048);
     // Edges: two sheets sliding over each other can pass edge through edge
     // with no vertex ever going through a triangle. Their bounds, for both
     // searches.
     m_edgeBox.resize(edgeTotal);
-    m_edgeCloth.resize(edgeTotal);
     m_edgeLo.resize(edgeTotal);
     m_edgeHi.resize(edgeTotal);
     m_edgeMoves.resize(edgeTotal);
     m_edgePatch.resize(edgeTotal);
-    m_edgeLooked.assign(edgeTotal, 0);
-    g = 0;
-    for (size_t ci = 0; ci < m_active.size(); ++ci) {
-        Cloth& c = *m_active[ci];
-        c.edgeBase = uint32_t(g);
-        for (size_t k = 0; k + 1 < c.edges.size(); k += 2, ++g) {
+    m_edgeLooked.resize(edgeTotal);
+    parallel(uint32_t(edgeTotal), [&](uint32_t begin, uint32_t end, Worker&) {
+        for (uint32_t g = begin; g < end; ++g) {
+            const uint32_t ci = m_edgeCloth[g];
+            const Cloth& c = *m_active[ci];
+            const size_t k = size_t(g - c.edgeBase) * 2;
             const uint32_t i0 = c.edges[k], i1 = c.edges[k + 1];
-            m_edgeCloth[g] = uint32_t(ci);
             m_edgePatch[g] = m_patchBase[ci] + c.edgePatch[k / 2];
             m_edgeMoves[g] = 0;
+            m_edgeLooked[g] = 0;
             if (!m_patchLooked[m_edgePatch[g]]) continue;
             m_edgeLo[g] = glm::min(glm::min(c.pos[i0], c.prev[i0]), glm::min(c.pos[i1], c.prev[i1])) - c.thickness;
             m_edgeHi[g] = glm::max(glm::max(c.pos[i0], c.prev[i0]), glm::max(c.pos[i1], c.prev[i1])) + c.thickness;
             m_edgeMoves[g] = uint8_t(c.invMass[i0] > 0.0f || c.invMass[i1] > 0.0f ? 1 : 0);
             m_edgeLooked[g] = 1;
         }
-    }
+    }, 2048);
     // The GPU if there is one and it is the faster here (the CPU if it
     // can't answer, or to check it). Each is timed; the slower one is tried
     // again every kSearchProbe searches, as the scene changes.
@@ -1274,11 +1378,18 @@ void ClothSystem::protect() {
 // against the triangles' hash, then the edges the vertices found near
 // another surface against each other.
 void ClothSystem::searchOnCpu(size_t triTotal, size_t edgeTotal, float cell) {
-    parallel(m_vertBase.back(), [&](uint32_t begin, uint32_t end, Worker& w) {
+    // Only the vertices that look, listed first so each thread gets an even
+    // share of them (they bunch up where cloth is folded or touching).
+    m_queries.clear();
+    for (size_t ci = 0; ci < m_active.size(); ++ci)
+        for (uint32_t gv = m_vertBase[ci]; gv < m_vertBase[ci + 1]; ++gv)
+            if (m_vertBox[gv].valid()) m_queries.push_back(gv);
+    parallel(uint32_t(m_queries.size()), [&](uint32_t begin, uint32_t end, Worker& w) {
         w.stamp.assign(triTotal, UINT32_MAX);
         w.vt.clear();
-        size_t ci = size_t(std::upper_bound(m_vertBase.begin(), m_vertBase.end(), begin) - m_vertBase.begin()) - 1;
-        for (uint32_t gv = begin; gv < end; ++gv) {
+        size_t ci = begin < end ? size_t(std::upper_bound(m_vertBase.begin(), m_vertBase.end(), m_queries[begin]) - m_vertBase.begin()) - 1 : 0;
+        for (uint32_t q = begin; q < end; ++q) {
+            const uint32_t gv = m_queries[q];
             while (gv >= m_vertBase[ci + 1]) ++ci;
             Cloth& c = *m_active[ci];
             const uint32_t v = gv - m_vertBase[ci];
@@ -1361,13 +1472,16 @@ void ClothSystem::searchOnCpu(size_t triTotal, size_t edgeTotal, float cell) {
         const uint32_t ge = m_edgeGrid.items[k];
         m_edgeGrid.packed[k] = Grid::Packed{ m_edgeLo[ge], ge, m_edgeHi[ge], m_edgeMoves[ge], m_edgeBox[ge].lo, 0u };
     }
-    parallel(uint32_t(edgeTotal), [&](uint32_t begin, uint32_t end, Worker& w) {
+    // Only edges that can move, near another surface (found by the vertex
+    // pass): nothing else can meet another edge this step.
+    m_queries.clear();
+    for (uint32_t ge = 0; ge < edgeTotal; ++ge)
+        if (m_edgeMoves[ge] == 3) m_queries.push_back(ge);
+    parallel(uint32_t(m_queries.size()), [&](uint32_t begin, uint32_t end, Worker& w) {
         w.stamp.assign(edgeTotal, UINT32_MAX);
         w.ee.clear();
-        for (uint32_t ge = begin; ge < end; ++ge) {
-            // Only edges that can move, near another surface (found by the
-            // vertex pass): nothing else can meet another edge this step.
-            if (m_edgeMoves[ge] != 3) continue;
+        for (uint32_t q = begin; q < end; ++q) {
+            const uint32_t ge = m_queries[q];
             const CellBox& b = m_edgeBox[ge];
             Cloth& c = *m_active[m_edgeCloth[ge]];
             const uint32_t e = ge - c.edgeBase;

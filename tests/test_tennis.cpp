@@ -7,6 +7,7 @@
 #include "NetTennis.h"
 #include "Rules.h"
 #include "Shot.h"
+#include "Swing.h"
 
 #include <gtest/gtest.h>
 
@@ -429,7 +430,8 @@ TEST(TennisNet, PoseRoundTrip) {
     p.feet = { 12.0f, 0.0f, -30.0f };
     p.velocity = { 3.0f, 0.0f, -1.0f };
     p.facing = glm::normalize(glm::vec3(1.0f, 0.0f, -1.0f));
-    p.swing = SwingPose::Kind::Backhand;
+    p.stroke = Stroke::Slice;
+    p.backhand = true;
     p.swingT = 0.5f;
     p.contact = { -0.7f, 1.1f, 0.45f };
     p.celebrating = true;
@@ -437,14 +439,18 @@ TEST(TennisNet, PoseRoundTrip) {
     const net::Pose q = net::fromState(net::toState(p));
     EXPECT_LT(glm::length(q.feet - p.feet), 0.01f);
     EXPECT_LT(glm::length(q.facing - p.facing), 0.02f);
-    EXPECT_EQ(q.swing, SwingPose::Kind::Backhand);
+    EXPECT_EQ(q.stroke, Stroke::Slice);
+    EXPECT_TRUE(q.backhand);
     EXPECT_NEAR(q.swingT, 0.5f, 0.02f);
     EXPECT_LT(glm::length(q.contact - p.contact), 0.005f);
     EXPECT_TRUE(q.celebrating);
     EXPECT_FALSE(q.cheer);
     // Not swinging stays not swinging.
-    p.swingT = -2.0f;
-    EXPECT_LT(net::fromState(net::toState(p)).swingT, -1.0f);
+    p.swingT = kSwingIdle;
+    EXPECT_LT(net::fromState(net::toState(p)).swingT, -2.5f);
+    // The takeback survives too (a power-up being held).
+    p.swingT = -1.5f;
+    EXPECT_NEAR(net::fromState(net::toState(p)).swingT, -1.5f, 0.02f);
 }
 
 TEST(TennisNet, SportCenterRoundTrip) {
@@ -475,7 +481,8 @@ TEST(TennisNet, SportCenterRoundTrip) {
         p.feet = glm::vec3(1.5f, 0.0f, -11.25f);
         p.velocity = glm::vec2(3.0f, -1.0f);
         p.yaw = 135.0f;
-        p.swing = SwingPose::Kind::Backhand;
+        p.stroke = Stroke::Volley;
+        p.backhand = true;
         p.swingT = 0.25f;
         p.tossing = false;
         p.celebrating = true;
@@ -490,7 +497,8 @@ TEST(TennisNet, SportCenterRoundTrip) {
     EXPECT_NEAR(p2.feet.z, -11.25f, 0.01f);
     EXPECT_NEAR(p2.velocity.x, 3.0f, 0.05f);
     EXPECT_NEAR(p2.yaw, 135.0f, 1.0f);
-    EXPECT_EQ(p2.swing, SwingPose::Kind::Backhand);
+    EXPECT_EQ(p2.stroke, Stroke::Volley);
+    EXPECT_TRUE(p2.backhand);
     EXPECT_TRUE(p2.celebrating);
 
     const auto g2 = net::decodeGate(net::encode(net::Gate{ 4, 9, net::Gate::CpuNow }));
@@ -521,6 +529,73 @@ TEST(TennisNet, TintText) {
     const glm::vec3 t = net::tintFromText("#ff0080", glm::vec3(0.0f));
     EXPECT_NEAR(t.z, 128.0f / 255.0f, 1e-4f);
     EXPECT_EQ(net::tintFromText("oops", glm::vec3(0.25f)), glm::vec3(0.25f));
+}
+
+// ------------------------------------------------------------ Swing.h
+
+TEST(TennisSwing, StrokeFitsTheBall) {
+    // A ball at the net before its bounce is volleyed; a high one smashed.
+    EXPECT_EQ(pickStroke(ShotKind::Topspin, { 0.7f, 1.1f, 0.6f }, -1.0f, 3.0f).stroke, Stroke::Volley);
+    EXPECT_EQ(pickStroke(ShotKind::Topspin, { 0.4f, 2.4f, 0.4f }, -1.0f, 5.0f).stroke, Stroke::Smash);
+    // From the baseline, the button decides; the side picks the hand.
+    const StrokeChoice bh = pickStroke(ShotKind::Slice, { -0.8f, 0.9f, 0.4f }, 0.4f, 12.0f);
+    EXPECT_EQ(bh.stroke, Stroke::Slice);
+    EXPECT_TRUE(bh.backhand);
+    EXPECT_EQ(pickStroke(ShotKind::Topspin, { 0.8f, 0.9f, 0.4f }, 0.4f, 12.0f).stroke, Stroke::Drive);
+    // Low just after the bounce: a half-volley; far out wide: a stretch.
+    EXPECT_EQ(pickStroke(ShotKind::Topspin, { 0.7f, 0.3f, 0.4f }, 0.08f, 9.0f).stroke, Stroke::HalfVolley);
+    EXPECT_EQ(pickStroke(ShotKind::Topspin, { 1.5f, 0.8f, 0.4f }, 0.5f, 12.0f).stroke, Stroke::Stretch);
+    EXPECT_EQ(serveFor(ShotKind::Flat), Stroke::ServeFlat);
+    EXPECT_EQ(serveFor(ShotKind::Topspin), Stroke::ServeKick);
+}
+
+TEST(TennisSwing, RacketMeetsTheBallAtContact) {
+    // Every stroke's path passes through the contact at t = 0, on both
+    // sides, and moves smoothly (no jumps between the parts).
+    for (int s = static_cast<int>(Stroke::Drive); s < static_cast<int>(Stroke::Count); ++s)
+        for (bool backhand : { false, true }) {
+            const Stroke st = static_cast<Stroke>(s);
+            const glm::vec3 contact(backhand ? -0.7f : 0.7f, 1.0f, 0.5f);
+            EXPECT_LT(glm::length(racketAt(st, backhand, 0.0f, contact).head - contact), 1e-4f) << strokeName(st);
+            glm::vec3 was = racketAt(st, backhand, -2.0f, contact).head;
+            for (float t = -1.99f; t <= 1.0f; t += 0.01f) {
+                const glm::vec3 now = racketAt(st, backhand, t, contact).head;
+                EXPECT_LT(glm::length(now - was), 0.12f) << strokeName(st) << " t " << t;
+                was = now;
+            }
+        }
+}
+
+TEST(TennisSwing, TimingWindow) {
+    const StrokeShape& drive = shapeOf(Stroke::Drive);
+    EXPECT_NEAR(timingQuality(0.0f, drive), 1.0f, 1e-5f);
+    EXPECT_GT(timingQuality(drive.window, drive), 0.7f);                 // the window's edge: still clean
+    EXPECT_LT(timingQuality(drive.window * 3.0f, drive), 0.5f);          // well off: a poor hit
+    EXPECT_EQ(timingQuality(drive.maxError + 0.01f, drive), 0.0f);       // past it: a miss
+    EXPECT_GT(timingQuality(0.02f, drive, 1.5f), timingQuality(0.02f, drive, 0.7f)); // Relaxed forgives more than Pro
+    EXPECT_STREQ(timingWord(0.0f, drive), "Perfect");
+    EXPECT_STREQ(timingWord(-drive.window, drive), "Early");
+    EXPECT_STREQ(timingWord(drive.window * 2.0f, drive), "Very late");
+    // A volley is quicker than a drive; a serve slower.
+    EXPECT_LT(shapeOf(Stroke::Volley).forward, drive.forward);
+    EXPECT_GT(shapeOf(Stroke::ServeFlat).windUp, drive.windUp);
+}
+
+TEST(TennisSwing, StaminaWearsAndComesBack) {
+    Stamina st;
+    for (int i = 0; i < 20 * 60; ++i) st.run(5.8f, 1.0f / 60.0f); // 20 s flat out
+    EXPECT_LT(st.level, 0.8f);
+    EXPECT_LT(st.speedFactor(), 1.0f);
+    EXPECT_LT(st.powerCap(), 0.95f);
+    const float tired = st.level;
+    for (int i = 0; i < 10; ++i) st.swing(1.0f, false);
+    EXPECT_LT(st.level, tired);
+    for (int i = 0; i < 20 * 60; ++i) st.rest(1.0f / 60.0f, true); // 20 s between points
+    EXPECT_GT(st.level, 0.95f);
+    // Jogging is free.
+    Stamina easy;
+    easy.run(3.0f, 10.0f);
+    EXPECT_FLOAT_EQ(easy.level, 1.0f);
 }
 
 } // namespace

@@ -31,6 +31,15 @@ void TennisModule::buildHud() {
         p.RegisterMember("points", &TeamRow::points);
         p.RegisterMember("serving", &TeamRow::serving);
     }
+    if (auto p = c.RegisterStruct<MeterRow>()) {
+        p.RegisterMember("name", &MeterRow::name);
+        p.RegisterMember("timing", &MeterRow::timing);
+        p.RegisterMember("stamina", &MeterRow::stamina);
+        p.RegisterMember("power", &MeterRow::power);
+        p.RegisterMember("charging", &MeterRow::charging);
+    }
+    c.RegisterArray<std::vector<MeterRow>>();
+    c.Bind("meters", &m_hud.meters);
     c.Bind("t0", &m_hud.t[0]);
     c.Bind("t1", &m_hud.t[1]);
     c.Bind("call", &m_hud.call);
@@ -122,16 +131,36 @@ void TennisModule::updateHud() {
             human = true;
             if (m->phase == Match::Phase::Serve && idx == serverIndex(*m)) humanServes = true;
         }
-        if (humanServes) hint = m_input->promptText("{tennis.topspin} toss, then again at the top to serve  {move} aim");
+        if (humanServes)
+            hint = m_input->promptText("Hold {tennis.flat} flat, {tennis.slice} slice or {tennis.topspin} kick to toss, let go as the ball drops to serve  {move} aim");
         else if (human && m->phase != Match::Phase::MatchOver)
             hint = m_input->promptText("{move} run  {tennis.topspin} topspin  {tennis.flat} flat  {tennis.slice} slice  {tennis.lob} lob  "
-                                       "(press early, hold to hit harder, the stick aims)  {tennis.menu} menu");
+                                       "(hold to take the racket back, longer hits harder; let go as the ball comes)  {tennis.menu} menu");
         if (m->phase == Match::Phase::MatchOver && human) hint = m_input->promptText(m_inCenter ? "" : "{tennis.menu} back to the menu");
         if (human && m_inCenter && m->phase != Match::Phase::MatchOver && m->phase != Match::Phase::Serve)
             hint = m_input->promptText("{move} run  {tennis.topspin} topspin  {tennis.flat} flat  {tennis.slice} slice  {tennis.lob} lob  "
                                        "{tennis.menu} leave the court (a walkover)");
         if (m->score.inTiebreak()) banner = "Tiebreak";
         else if (m->rally.secondServeNow() && m->phase == Match::Phase::Serve) banner = "Second serve";
+    }
+    // The people at this screen: stamina, the power being built, how the
+    // last swing was timed. (Rounded, so the model changes only when the bars do.)
+    std::vector<MeterRow> meters;
+    if (m && m->phase != Match::Phase::MatchOver)
+        for (int idx : m->players) {
+            const Player& p = m_players[static_cast<size_t>(idx)];
+            if (p.remote || p.input < 0 || (p.cpu && !m_autoplay)) continue;
+            MeterRow r;
+            r.name = p.name;
+            r.stamina = std::round(p.stamina.level * 50.0f) / 50.0f;
+            r.charging = p.swingT > kSwingIdle + 0.5f && p.contactAt < 0.0f;
+            r.power = r.charging ? std::round(p.charge * 50.0f) / 50.0f : 0.0f;
+            r.timing = p.timingShown > 0.0f ? p.timingText : "";
+            meters.push_back(std::move(r));
+        }
+    if (meters != m_hud.meters) {
+        m_hud.meters = std::move(meters);
+        m_hudModel.DirtyVariable("meters");
     }
     // The sport center: where to go, and who has won most here.
     std::string ranking;
