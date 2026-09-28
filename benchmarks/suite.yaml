@@ -90,6 +90,15 @@ demos:
     title: "Climb Race: a race with 3 CPU climbers"
     env: { KKE_CLIMB_AUTOPILOT: "1", KKE_CLIMB_CPUS: "3" }
 
+  - id: flying_pileup
+    exe: flying_demo
+    title: "Flying: six planes head-on at full speed, every 7 s"
+    # Every plane flies into the others over the dogfight town and
+    # explodes: fireballs, smoke, sparks, pieces and dents all at once.
+    seconds: 30
+    synty: true
+    env: { KKE_FLY_AUTOPILOT: "1", KKE_FLY_MODE: "dogfight", KKE_FLY_CPUS: "5", KKE_FLY_BENCH: "pileup" }
+
   - id: procedural_demo
     exe: procedural_demo
     title: "Procedural animation: gaits, look-at, a ragdoll hit"

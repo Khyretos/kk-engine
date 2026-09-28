@@ -43,6 +43,7 @@ constexpr float kShield = 3.0f;        // s after coming back: bullets don't hur
 constexpr float kFireballLife = 1.2f;
 constexpr float kChunkLife = 10.0f;
 constexpr size_t kMaxChunks = 200;
+constexpr glm::vec3 kDebrisDark(0.16f, 0.15f, 0.14f);
 constexpr float kOweEvery = 0.12f;     // s: damage to another screen's plane is sent this often
 constexpr float kKillCredit = 10.0f;   // s: hurt that long ago still counts as the kill
 
@@ -321,6 +322,19 @@ int FlyingModule::chunkMesh(const glm::vec3& colour) {
     return static_cast<int>(m_chunkColours.size()) - 1;
 }
 
+// Made on the first explosion they would stall that frame (a mesh upload,
+// a synthesised sound per variant), with every plane going up at once in
+// the worst case: made at the start of the flight instead.
+void FlyingModule::warmUpExplosions() {
+    chunkMesh(kDebrisDark);
+    for (const Pilot& p : m_pilots) chunkMesh(glm::clamp(p.tint, glm::vec3(0.0f), glm::vec3(1.0f)));
+    if (!m_audio) return;
+    for (uint32_t v = 0; v < 4; ++v) {
+        for (float level : { 0.1f, 0.3f, 0.55f, 1.0f }) m_audio->impacts().get(kke::AudioMaterialTable::Metal, level, v);
+        m_audio->impacts().get(kke::AudioMaterialTable::Stone, 1.0f, v);
+    }
+}
+
 // A fireball, a burst of sparks, black smoke, and bits of the plane flying.
 void FlyingModule::explode(const glm::vec3& at, const glm::vec3& velocity, const glm::vec3& tint) {
     for (int i = 0; i < 7; ++i) {
@@ -350,7 +364,7 @@ void FlyingModule::explode(const glm::vec3& at, const glm::vec3& velocity, const
             m_fx->emit(s);
         }
     }
-    const int dark = chunkMesh({ 0.16f, 0.15f, 0.14f }), coloured = chunkMesh(glm::clamp(tint, glm::vec3(0.0f), glm::vec3(1.0f)));
+    const int dark = chunkMesh(kDebrisDark), coloured = chunkMesh(glm::clamp(tint, glm::vec3(0.0f), glm::vec3(1.0f)));
     for (int i = 0; i < 10; ++i) {
         if (m_chunks.size() >= kMaxChunks) m_chunks.erase(m_chunks.begin());
         Chunk c;

@@ -28,6 +28,8 @@
 #include <cmath>
 #include <cstdlib>
 #include <typeindex>
+#include <string>
+#include <string_view>
 
 namespace flying {
 
@@ -75,6 +77,7 @@ void FlyingModule::init(kke::Application& app) {
     m_defaultCpus = std::clamp(static_cast<int>(envFloat("KKE_FLY_CPUS", 3.0f)), 0, kke::Lobby::kMaxCpus);
     m_stuntTime = std::max(10.0f, envFloat("KKE_FLY_STUNT_TIME", m_stuntTime));
     m_netWait = std::max(0, static_cast<int>(envFloat("KKE_FLY_WAIT", 0.0f)));
+    if (const char* bench = kke::dev::env("KKE_FLY_BENCH")) m_pileup = std::string_view(bench) == "pileup";
 
     defineActions();
     kke::Camera& cam = app.camera();
@@ -209,7 +212,10 @@ void FlyingModule::newFlight() {
     if (m_fx) m_fx->clear();
     m_clock = 0.0f;
     m_countdown = kCountdown;
+    m_pileupIn = 0.0f;
+    m_pileups = 0;
     m_phase = m_phase == Phase::Lobby ? Phase::Lobby : Phase::Countdown;
+    if (m_phase != Phase::Lobby) warmUpExplosions();
     m_flash.clear();
     m_flashTime = 0.0f;
     ++m_round;
@@ -256,6 +262,10 @@ void FlyingModule::respawn(Pilot& p) {
     p.mouseStick = glm::vec2(0.0f);
     p.eyeSet = false;
     p.teleported = true;
+    if (m_pileup) {
+        placePileup(p);
+        return;
+    }
     if (m_mode == Mode::Race && !m_rings.empty()) {
         const int n = static_cast<int>(m_rings.size());
         if (p.nextRing == 0 && p.lap == 0) {
@@ -300,6 +310,41 @@ void FlyingModule::respawn(Pilot& p) {
     at.y = std::max(at.y, m_island.surface(at.x, at.z) + 180.0f);
     p.plane = airborne(at, yawToward(-at), 50.0f);
     p.previous = p.plane.position;
+}
+
+// The crash benchmark: every plane on a circle 300 m out, nose to the
+// middle at full speed, so they all meet there about 4 s later.
+void FlyingModule::placePileup(Pilot& p) {
+    const Runway& r = m_island.runway();
+    glm::vec3 c = m_mode == Mode::Dogfight ? m_town.centre() : glm::vec3(r.start.x, 0.0f, r.start.z - r.length * 0.5f);
+    c.y = m_island.surface(c.x, c.z) + 250.0f;
+    const float speed = m_flight.maxSpeed * 0.85f;
+    const float a = static_cast<float>(p.slot) / static_cast<float>(std::max<size_t>(m_pilots.size(), 1)) * glm::two_pi<float>();
+    const glm::vec3 at = c + glm::vec3(std::cos(a), 0.0f, std::sin(a)) * (speed * 4.0f);
+    p.plane = airborne(at, yawToward(c - at), speed);
+    p.controls = Controls{};
+    p.controls.throttle = 1.0f;
+    p.climbOut = false;
+    p.previous = p.plane.position;
+}
+
+void FlyingModule::updatePileup(float dt) {
+    constexpr float kEvery = 7.0f; // s: 4 to meet, 2.5 down, a moment to spare
+    m_pileupIn -= dt;
+    if (m_pileupIn > 0.0f) return;
+    if (m_pileups > 0) {
+        int down = 0, planes = 0;
+        for (const Pilot& p : m_pilots) {
+            if (p.remote) continue;
+            ++planes;
+            if (p.respawnIn > 0.0f) ++down;
+        }
+        kke::log::get(name())->info("pile-up {}: {} of {} planes exploded", m_pileups, down, planes);
+    }
+    ++m_pileups;
+    m_pileupIn = kEvery;
+    for (Pilot& p : m_pilots)
+        if (!p.remote) respawn(p);
 }
 
 void FlyingModule::crash(Pilot& p) {
@@ -398,6 +443,7 @@ bool FlyingModule::everyoneDone() const {
 void FlyingModule::updatePilot(Pilot& p, float dt) {
     if (p.remote) return; // Net.cpp moves it
     if (p.respawnIn > 0.0f) {
+        if (m_pileup) return; // back with everyone at the next pile-up
         p.respawnIn -= dt;
         if (p.respawnIn <= 0.0f) respawn(p);
         return;
@@ -407,8 +453,13 @@ void FlyingModule::updatePilot(Pilot& p, float dt) {
     const bool paused = m_pauseSeat >= 0 && p.seat == m_pauseSeat;
     // In the pause menu online (the flight goes on), the CPU pilot flies
     // your plane until you're back.
-    if (m_phase == Phase::Lobby || p.cpu || p.autopilotOn || paused) p.controls = readCpu(p);
-    else p.controls = readPlayer(p, dt);
+    if (m_pileup && m_phase != Phase::Lobby) {
+        // Straight and level into the middle, whoever flies it.
+    } else if (m_phase == Phase::Lobby || p.cpu || p.autopilotOn || paused) {
+        p.controls = readCpu(p);
+    } else {
+        p.controls = readPlayer(p, dt);
+    }
     if (frozen) {
         // Waiting for "go": held where they are, engines running.
         p.plane.velocity = p.plane.forward() * (p.plane.onGround ? 0.0f : 52.0f);
@@ -666,6 +717,7 @@ void FlyingModule::update(const kke::UpdateContext& ctx) {
             }
         } else {
             m_clock += dt;
+            if (m_pileup) updatePileup(dt);
         }
         for (Pilot& p : m_pilots) updatePilot(p, dt);
         collide(dt);

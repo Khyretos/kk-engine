@@ -56,6 +56,7 @@ Switches for demos and tests (developer builds):
 | `KKE_FLY_QUIT=<s>` | Quit after that long, logging where every plane is every 5 s |
 | `KKE_FLY_STUNT_TIME=<s>` | The length of a Stunts round (default 120) |
 | `KKE_FLY_WAIT=<n>` | Online host: start the flight once n players have joined |
+| `KKE_FLY_BENCH=pileup` | Crash benchmark: every plane flies head-on into the others at full speed, again every 7 s. With `KKE_BENCHMARK=30` it records frame times; `kke_benchmark` runs it as `flying_pileup` |
 | `KKE_NET=host`, `KKE_NET=join:ADDRESS`, `KKE_NET_NAME=<name>` | Online without the menu ([NETWORKING.md](../../docs/NETWORKING.md)) |
 | `KKE_LOBBY_JOIN=<n>` | The first n controllers already plugged in join the start menu |
 | `KKE_VIRTUAL_INPUT=hosas,pad` | Two virtual flight sticks and a virtual gamepad, no hardware needed ([INPUT.md](../../docs/INPUT.md)) |

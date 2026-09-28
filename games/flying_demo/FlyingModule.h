@@ -61,6 +61,8 @@ namespace flying {
 // autopilot too), KKE_FLY_QUIT=<s> (quit after that long, with a log of
 // every plane's progress every few seconds), KKE_FLY_STUNT_TIME=<s>,
 // KKE_FLY_WAIT=<n> (online host: start once n players joined),
+// KKE_FLY_BENCH=pileup (every plane flies head-on into the others at
+// full speed, again every 7 s: a benchmark for explosions and dents),
 // KKE_LOBBY_JOIN=<n>.
 class FlyingModule : public kke::Module {
 public:
@@ -266,6 +268,8 @@ private:
     void newFlight();             // the lobby's settings -> island, rings, pilots at the start
     void placeAtStart(Pilot& p);
     void respawn(Pilot& p);
+    void placePileup(Pilot& p);   // KKE_FLY_BENCH=pileup: on the circle, full speed, nose to the middle
+    void updatePileup(float dt);
     void updatePilot(Pilot& p, float dt);
     void passRings(Pilot& p, const glm::vec3& from);
     void crash(Pilot& p);
@@ -278,6 +282,7 @@ private:
     void clearDents(Pilot& p);
     void applyDents(Pilot& p);
     void explode(const glm::vec3& at, const glm::vec3& velocity, const glm::vec3& tint);
+    void warmUpExplosions();      // the pieces' meshes and the bangs made before the first explosion needs them
     void wentDown(Pilot& p);                  // deaths, kills, the feed
     void fireGuns(Pilot& p, float dt);
     void updateBullets(float dt);
@@ -349,6 +354,9 @@ private:
     uint32_t m_sentRound = 0;     // the host: the last flight it sent
     std::string m_netName;        // KKE_NET_NAME: player 1's name
     int m_netWait = 0;            // KKE_FLY_WAIT: the host starts once this many others are in
+    bool m_pileup = false;        // KKE_FLY_BENCH=pileup
+    float m_pileupIn = 0.0f;      // s to the next pile-up
+    int m_pileups = 0;
 
     // ---- the HUD (Hud.cpp, ui/flying_hud.rml)
     void buildHud();
