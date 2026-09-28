@@ -1,0 +1,254 @@
+# Forgejo port of .github/workflows/release.yml, run by git.kreative-kompas.com
+# (which mirrors this repo) on the Kompas server runner, so build times can
+# be compared with GitHub's. GitHub ignores the .forgejo folder, and Forgejo
+# ignores .github/workflows while this folder exists.
+#
+# Differences from the GitHub version:
+# - Builds and tests the Linux, Windows and Android packages and keeps them
+#   as run artifacts; publishing the release stays on GitHub.
+# - Windows unit tests run under Wine in the build job, not on a separate
+#   real-Windows job (there is no Windows machine here).
+# - Artifact actions are Forgejo's own v4 ports; the Android SDK is
+#   installed by the job.
+# Downloadable builds (docs/RELEASES.md, issue #14).
+#
+# Pushing a tag like v0.1.0-alpha builds Linux, Windows and Android packages of the
+# engine's demos, tests them, and publishes them as a GitHub Release (a
+# pre-release when the tag has a '-' in it). Running the workflow by hand
+# (Actions tab -> "Release" -> Run workflow) builds and tests the same
+# packages and keeps them as run artifacts; tick "draft" to also put them
+# in a draft release that only maintainers can see, or "publish" to release
+# them for real (GitHub then creates the version's tag on that commit).
+#
+# Both platforms build on Linux: Windows is cross-compiled with MinGW-w64
+# (same toolchain as docker/windows.Dockerfile; the C++ runtime is linked
+# statically, so no MinGW DLLs ship),
+# then its unit tests run on a real Windows runner. Paid art packs are
+# never part of a package: tools/packaging/package.sh refuses to package
+# one.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version name for the archives (e.g. v0.1.0-alpha)
+        required: true
+        default: dev
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  VERSION: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            cmake ninja-build glslang-tools spirv-tools \
+            libvulkan-dev mesa-vulkan-drivers \
+            libfreetype-dev libudev-dev libdbus-1-dev \
+            libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev \
+            pkg-config libgl1-mesa-dev libegl1-mesa-dev \
+            libasound2-dev libdecor-0-dev libexpat1-dev libxml2-dev \
+            xvfb zip
+
+      # libstdc++/libgcc linked statically: the package then needs only
+      # glibc, FreeType and the system's Vulkan loader/driver.
+      - name: Configure
+        run: |
+          set -o pipefail
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DKKE_ENABLE_FEMFX=ON -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_VALIDATION=OFF "-DKKE_VERSION_NAME=$VERSION" \
+            "-DCMAKE_EXE_LINKER_FLAGS=-static-libstdc++ -static-libgcc" 2>&1 | tee configure.log
+
+      - name: Build
+        run: |
+          set -o pipefail
+          cmake --build build -j 2>&1 | tee build.log
+
+      - name: No warnings anywhere
+        run: tools/ci/check_warnings.sh configure.log build.log
+
+      - name: Unit tests
+        run: ./build/bin/kke_tests --gtest_brief=1
+
+      - name: Package
+        run: tools/packaging/package.sh --bin build/bin --platform linux --version "$VERSION" --out dist --deps build/_deps --strip strip
+
+      # The packaged demos, unpacked somewhere else and started from an
+      # unrelated folder: proves the package is complete and that games
+      # find their shaders next to the executable, not in the cwd.
+      - name: Smoke-test the package
+        run: |
+          mkdir -p "$RUNNER_TEMP/unpacked"
+          tar -xzf "dist/kk-engine-$VERSION-linux-x86_64.tar.gz" -C "$RUNNER_TEMP/unpacked"
+          pkg="$RUNNER_TEMP/unpacked/kk-engine-$VERSION-linux-x86_64"
+          Xvfb :99 -screen 0 1280x720x24 &
+          sleep 2
+          cd "$RUNNER_TEMP"
+          failed=0
+          for demo in kke_demo kke_basics physics_demo melt_demo jiggle_demo sea_demo imgui_demo rmlui_demo sandbox synty_demo audio_demo; do
+            [ -x "$pkg/$demo" ] || { echo "== $demo: missing from the package"; failed=1; continue; }
+            set +e
+            DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_SKIP_INTRO=1 timeout 8 "$pkg/$demo" > "run_$demo.log" 2>&1
+            code=$?
+            set -e
+            if { [ "$code" -ne 124 ] && [ "$code" -ne 0 ]; } || grep -qi "Fatal error" "run_$demo.log"; then
+              echo "== $demo: FAILED (exit $code)"; tail -40 "run_$demo.log"; failed=1
+            else
+              echo "== $demo: ok"
+            fi
+          done
+          # The benchmark people are sent: two short demos, one results file.
+          set +e
+          DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_AUDIO=off timeout 180 "$pkg/benchmark/kke_benchmark" --only kke_basics,showcase_walk --seconds 3 \
+            --no-wait --no-open --out "$RUNNER_TEMP/bench" > run_kke_benchmark.log 2>&1
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ] || ! ls "$RUNNER_TEMP"/bench/kke-benchmark-*.json > /dev/null 2>&1; then
+            echo "== kke_benchmark: FAILED (exit $code)"; tail -60 run_kke_benchmark.log; failed=1
+          else
+            echo "== kke_benchmark: ok"
+          fi
+          exit $failed
+
+      - uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: kk-engine-linux
+          path: dist/*
+          if-no-files-found: error
+
+  windows:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MinGW-w64 and tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cmake ninja-build glslang-tools mingw-w64 g++-mingw-w64-x86-64-posix zip
+
+      - name: Configure (MinGW-w64 cross)
+        run: |
+          set -o pipefail
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DKKE_ENABLE_FEMFX=ON -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_VALIDATION=OFF "-DKKE_VERSION_NAME=$VERSION" \
+            -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake 2>&1 | tee configure.log
+
+      - name: Build
+        run: |
+          set -o pipefail
+          cmake --build build -j 2>&1 | tee build.log
+
+      - name: No warnings anywhere
+        run: tools/ci/check_warnings.sh configure.log build.log
+
+      - name: Package
+        run: tools/packaging/package.sh --bin build/bin --platform windows --version "$VERSION" --out dist --deps build/_deps --strip x86_64-w64-mingw32-strip
+
+      - uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: kk-engine-windows
+          path: dist/*
+          if-no-files-found: error
+
+      # GitHub runs these on a real Windows machine; here they run under Wine.
+      # Z: is Wine's view of /, so the tests find the source tree at the
+      # absolute path they were compiled with.
+      - name: Unit tests under Wine
+        timeout-minutes: 15
+        run: |
+          sudo dpkg --add-architecture i386 >/dev/null 2>&1 || true
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq wine64 unzip
+          export WINEDEBUG=-all WINEPREFIX="$RUNNER_TEMP/wine"
+          mkdir -p "$RUNNER_TEMP/pkg" && unzip -q dist/kk-engine-*-windows-x86_64.zip -d "$RUNNER_TEMP/pkg"
+          pkg=$(ls -d "$RUNNER_TEMP"/pkg/*/ | head -1)
+          cp build/bin/kke_tests.exe "$pkg"
+          cd "$pkg" && wine64 ./kke_tests.exe --gtest_brief=1
+
+  # The demos APK and the benchmark APK for Android phones
+  # (docs/ANDROID.md), signed with the
+  # project key when the repository has it (ANDROID_KEYSTORE_* secrets).
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # The runner image has no Android SDK or CMake (GitHub's does): install
+      # them, and the SDK command-line tools once, then keep them in the runner cache.
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: ~/android-sdk
+          key: android-sdk-ndk28.2.13676358-api35
+      - name: Android command-line tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq openjdk-17-jdk-headless unzip cmake
+          export ANDROID_HOME="$HOME/android-sdk"
+          if [ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            curl -sSLo /tmp/clt.zip https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
+            mkdir -p "$ANDROID_HOME/cmdline-tools"
+            unzip -q /tmp/clt.zip -d "$ANDROID_HOME/cmdline-tools"
+            mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+          fi
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+
+      - name: Android NDK r28c and SDK packages
+        run: |
+          # `yes` dies of SIGPIPE once sdkmanager stops reading; that is fine.
+          (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build python3-yaml
+
+      - name: Configure
+        run: |
+          set -o pipefail
+          cmake --preset android-arm64 -DKKE_WARNINGS_AS_ERRORS=ON 2>&1 | tee configure.log
+
+      - name: Build
+        run: |
+          set -o pipefail
+          cmake --build build-android-arm64 -j 2>&1 | tee build.log
+
+      - name: APK
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KKE_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -o pipefail
+          ks=()
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/kke.keystore"
+            ks=(--keystore "$RUNNER_TEMP/kke.keystore")
+          fi
+          apk="dist/kk-engine-$VERSION-android-arm64.apk"
+          bench="dist/kk-engine-benchmark-$VERSION-android-arm64.apk"
+          python3 android/build_apk.py --build build-android-arm64 --out "$apk" --version-name "$VERSION" "${ks[@]}" 2>&1 | tee apk.log
+          python3 android/build_apk.py --build build-android-arm64 --benchmark --out "$bench" --version-name "$VERSION" "${ks[@]}" 2>&1 | tee -a apk.log
+          (cd dist && for f in *.apk; do sha256sum "$f" > "$f.sha256"; done)
+
+      - name: No warnings anywhere
+        run: tools/ci/check_warnings.sh configure.log build.log apk.log
+
+      - uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: kk-engine-android
+          path: dist/*
+          if-no-files-found: error
