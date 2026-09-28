@@ -4,6 +4,7 @@
 
 #include "kke/ProceduralAnim.h"
 #include "kke/Ragdoll.h"
+#include "kke/Tyre.h"
 
 #include <Jolt/Jolt.h>
 
@@ -167,7 +168,20 @@ struct RigidWorld::Impl : public JPH::ContactListener {
         std::vector<float> slipLoss; // per wheel: VehicleWheelDesc::combinedSlipLoss
         float torque = 0.0f;      // VehicleDesc::maxTorque (setVehiclePower scales it)
         bool manual = false;
+        // Tyres (kke/Tyre.h): heat, wear, air, what's left; the ground each
+        // wheel was on last step; the friction curves' peaks; the wheel
+        // settings (the constraint holds them) whose radius a flat lowers.
+        std::vector<Tyre> tyres;
+        std::vector<GroundGrip> ground;
+        std::vector<uint32_t> groundMaterial;
+        std::vector<float> peakLong, peakLat, radius;
+        std::vector<JPH::WheelSettingsWV*> settings;
+        float nominalLoad = 0.0f; // N per wheel with the car at rest
+        float mass = 1.0f;
     };
+    void updateTyres(Vehicle& v, float dt);
+    std::unordered_map<uint32_t, GroundGrip> groundGrip; // setGroundGrip, by body material
+    float ambient = 20.0f;
     std::unordered_map<VehicleId, Vehicle> vehicles;
     VehicleId nextVehicle = 1;
     JPH::Ref<JPH::VehicleCollisionTester> wheelTester; // shared by every vehicle
@@ -175,6 +189,7 @@ struct RigidWorld::Impl : public JPH::ContactListener {
     std::vector<Contact> contacts;
     double stepMs = 0.0;
     double simulatedTime = 0.0;
+    float lastDt = 1.0f / 60.0f; // the last step (a wheel's load is its suspension impulse over it)
     std::unique_ptr<detail::ClothSystem> cloth; // made on the first addCloth (it adds a step listener)
     std::shared_ptr<ClothGpu> clothGpu;
     detail::ClothSystem& clothSystem() {
@@ -956,6 +971,8 @@ void RigidWorld::step(float dt) {
     if (m->cloth) collisionSteps *= m->cloth->beginStep();
     m->system.Update(dt, collisionSteps, m->temp.get(), m->jobs.get());
     if (m->cloth) m->cloth->endStep();
+    m->lastDt = dt;
+    for (auto& [id, v] : m->vehicles) m->updateTyres(v, dt);
     m->simulatedTime += dt;
     m->stepMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
 }
@@ -1009,8 +1026,10 @@ RigidWorld::VehicleId RigidWorld::addVehicle(const VehicleDesc& d) {
     JPH::VehicleConstraintSettings vcs;
     vcs.mUp = JPH::Vec3::sAxisY();
     vcs.mForward = JPH::Vec3::sAxisZ();
+    std::vector<JPH::WheelSettingsWV*> wheelSettings;
     for (const VehicleWheelDesc& w : d.wheels) {
         JPH::WheelSettingsWV* ws = new JPH::WheelSettingsWV;
+        wheelSettings.push_back(ws);
         ws->mPosition = toJ(w.position);
         ws->mSuspensionDirection = JPH::Vec3(0.0f, -1.0f, 0.0f);
         ws->mRadius = std::max(0.05f, w.radius);
@@ -1086,18 +1105,43 @@ RigidWorld::VehicleId RigidWorld::addVehicle(const VehicleDesc& d) {
     for (const VehicleWheelDesc& w : d.wheels) v.slipLoss.push_back(glm::clamp(w.combinedSlipLoss, 0.0f, 0.95f));
     v.torque = d.maxTorque;
     v.manual = d.manualGearbox;
+    v.settings = wheelSettings;
+    for (const VehicleWheelDesc& w : d.wheels) {
+        v.tyres.emplace_back(w.tyre, m->ambient);
+        v.peakLong.push_back(w.longitudinalGrip);
+        v.peakLat.push_back(w.lateralGrip);
+        v.radius.push_back(std::max(0.05f, w.radius));
+    }
+    v.ground.assign(d.wheels.size(), GroundGrip::tarmac());
+    v.groundMaterial.assign(d.wheels.size(), 0);
+    v.mass = std::max(1.0f, d.mass);
+    v.nominalLoad = v.mass * 9.81f / static_cast<float>(d.wheels.size());
     // Cylinders (not rays): the tyre's width meets kerbs and bumps.
     // kQuery sees the solid world and other vehicles, not cloth.
     if (!m->wheelTester) m->wheelTester = new JPH::VehicleCollisionTesterCastCylinder(Layers::kQuery);
     v.constraint->SetVehicleCollisionTester(m->wheelTester);
-    const std::vector<float>* grip = &v.grip; // stable: unordered_map nodes don't move
-    const std::vector<float>* slipLoss = &v.slipLoss;
-    v.controller->SetTireMaxImpulseCallback([grip, slipLoss](JPH::uint wheel, float& outLongitudinal, float& outLateral, float suspensionImpulse,
-                                                             float longitudinalFriction, float lateralFriction, float longitudinalSlip, float, float) {
-        const float g = wheel < grip->size() ? (*grip)[wheel] : 1.0f;
+    const Impl::Vehicle* vp = &v; // stable: unordered_map nodes don't move
+    v.controller->SetTireMaxImpulseCallback([vp](JPH::uint wheel, float& outLongitudinal, float& outLateral, float suspensionImpulse,
+                                                 float longitudinalFriction, float lateralFriction, float longitudinalSlip, float lateralSlip, float deltaTime) {
+        if (wheel >= vp->grip.size()) {
+            outLongitudinal = longitudinalFriction * suspensionImpulse;
+            outLateral = lateralFriction * suspensionImpulse;
+            return;
+        }
+        const Tyre& tyre = vp->tyres[wheel];
+        const GroundGrip& ground = vp->ground[wheel];
+        // The grip now: the game's scale, the tyre's heat, air and wear,
+        // the ground, and the load (twice the weight, less than twice the grip).
+        const float load = deltaTime > 0.0f ? suspensionImpulse / deltaTime : 0.0f;
+        const float g = vp->grip[wheel] * tyre.grip() * ground.grip * tyre.loadFactor(load, vp->nominalLoad);
+        // Loose ground: a sliding tyre keeps most of its peak (it digs in).
+        if (ground.loose > 0.0f && tyre.condition() == TyreCondition::Inflated) {
+            if (std::fabs(longitudinalSlip) > 0.06f) longitudinalFriction += ground.loose * std::max(0.0f, vp->peakLong[wheel] - longitudinalFriction);
+            if (std::fabs(lateralSlip) > glm::radians(3.0f)) lateralFriction += ground.loose * std::max(0.0f, vp->peakLat[wheel] - lateralFriction);
+        }
         // Past the grip peak (~10% slip) sideways grip fades, all the loss
         // by 70% (a locked or spinning wheel).
-        const float loss = wheel < slipLoss->size() ? (*slipLoss)[wheel] : 0.0f;
+        const float loss = vp->slipLoss[wheel];
         const float spin = glm::clamp((std::fabs(longitudinalSlip) - 0.1f) / 0.6f, 0.0f, 1.0f);
         outLongitudinal = longitudinalFriction * suspensionImpulse * g;
         outLateral = lateralFriction * suspensionImpulse * g * (1.0f - loss * spin);
@@ -1105,6 +1149,82 @@ RigidWorld::VehicleId RigidWorld::addVehicle(const VehicleDesc& d) {
     m->system.AddConstraint(v.constraint);
     m->system.AddStepListener(v.constraint);
     return id;
+}
+
+// After each step: what every tyre did (its load, the forces the ground
+// gave and how fast the tread slid over it) heats, wears and deflates it;
+// the ground under it sets the next step's grip; rolling resistance (the
+// ground's, more on a flat) slows the car; a flat or missing tyre lowers
+// the wheel.
+void RigidWorld::Impl::updateTyres(Vehicle& v, float dt) {
+    const JPH::BodyID body(v.body);
+    for (size_t i = 0; i < v.tyres.size(); ++i) {
+        const JPH::WheelWV& w = *static_cast<const JPH::WheelWV*>(v.constraint->GetWheel(static_cast<JPH::uint>(i)));
+        Tyre& tyre = v.tyres[i];
+        Tyre::Step s;
+        s.dt = dt;
+        if (w.HasContact()) {
+            const JPH::BodyID groundId = w.GetContactBodyID();
+            const uint32_t material = static_cast<uint32_t>(bodies().GetUserData(groundId));
+            v.groundMaterial[i] = material;
+            const auto g = groundGrip.find(material);
+            v.ground[i] = g == groundGrip.end() ? GroundGrip::tarmac() : g->second;
+            const JPH::Vec3 rel = bodies().GetPointVelocity(body, w.GetContactPosition()) - w.GetContactPointVelocity();
+            const float vLong = rel.Dot(w.GetContactLongitudinal());
+            const float vLat = rel.Dot(w.GetContactLateral());
+            s.load = std::max(0.0f, w.GetSuspensionLambda() / dt);
+            s.speed = rel.Length();
+            s.longitudinalForce = w.GetLongitudinalLambda() / dt;
+            s.lateralForce = w.GetLateralLambda() / dt;
+            s.longitudinalSlipSpeed = std::fabs(w.GetAngularVelocity() * w.GetSettings()->mRadius - vLong);
+            s.lateralSlipSpeed = std::fabs(vLat);
+            s.groundHeat = v.ground[i].heat;
+            // Rolling resistance against the way it rolls, never more than
+            // stops it (a quarter of its speed per step at most).
+            if (std::fabs(vLong) > 0.3f) {
+                const float force = v.ground[i].rolling * tyre.dragScale() * s.load;
+                const float impulse = std::min(force * dt, 0.25f * std::fabs(vLong) * v.mass / static_cast<float>(v.tyres.size()));
+                bodies().AddImpulse(body, w.GetContactLongitudinal() * (vLong > 0.0f ? -impulse : impulse), w.GetContactPosition());
+            }
+        }
+        tyre.update(s);
+        const float radius = v.radius[i] * tyre.radiusScale();
+        if (std::fabs(v.settings[i]->mRadius - radius) > 0.001f) v.settings[i]->mRadius = radius;
+    }
+}
+
+void RigidWorld::setGroundGrip(uint32_t material, const GroundGrip& grip) { m->groundGrip[material] = grip; }
+
+void RigidWorld::setAmbientTemperature(float celsius) {
+    m->ambient = celsius;
+    for (auto& [id, v] : m->vehicles)
+        for (Tyre& t : v.tyres) t.setAmbient(celsius);
+}
+
+void RigidWorld::setVehicleTyre(VehicleId id, int wheel, TyreCondition condition) {
+    auto it = m->vehicles.find(id);
+    if (it == m->vehicles.end() || wheel < 0 || wheel >= static_cast<int>(it->second.tyres.size())) return;
+    it->second.tyres[static_cast<size_t>(wheel)].setCondition(condition);
+    m->bodies().ActivateBody(JPH::BodyID(it->second.body));
+}
+
+void RigidWorld::punctureVehicleTyre(VehicleId id, int wheel, float leak) {
+    auto it = m->vehicles.find(id);
+    if (it == m->vehicles.end() || wheel < 0 || wheel >= static_cast<int>(it->second.tyres.size())) return;
+    it->second.tyres[static_cast<size_t>(wheel)].puncture(leak);
+}
+
+void RigidWorld::setVehicleTyreTemperature(VehicleId id, int wheel, float surface, float core) {
+    auto it = m->vehicles.find(id);
+    if (it == m->vehicles.end()) return;
+    for (size_t i = 0; i < it->second.tyres.size(); ++i)
+        if (wheel < 0 || static_cast<size_t>(wheel) == i) it->second.tyres[i].setTemperature(surface, core);
+}
+
+void RigidWorld::replaceVehicleTyres(VehicleId id) {
+    auto it = m->vehicles.find(id);
+    if (it == m->vehicles.end()) return;
+    for (Tyre& t : it->second.tyres) t.replace();
 }
 
 void RigidWorld::removeVehicle(VehicleId id) {
@@ -1174,6 +1294,19 @@ bool RigidWorld::vehicleState(VehicleId id, VehicleState& out) const {
         const float range = ws.mSuspensionMaxLength - ws.mSuspensionMinLength;
         o.suspension = range > 0.0f ? glm::clamp((ws.mSuspensionMaxLength - w.GetSuspensionLength()) / range, 0.0f, 1.0f) : 0.0f;
         o.steerDegrees = glm::degrees(w.GetSteerAngle());
+        if (i < v.tyres.size()) {
+            const Tyre& t = v.tyres[i];
+            o.load = o.contact ? std::max(0.0f, w.GetSuspensionLambda() / m->lastDt) : 0.0f;
+            o.surfaceTemp = t.surfaceTemp();
+            o.coreTemp = t.coreTemp();
+            o.pressure = t.pressure();
+            o.wear = t.wear();
+            o.condition = t.condition();
+            o.slidePower = t.slidePower();
+            o.groundMaterial = v.groundMaterial[i];
+            o.grip = v.grip[i] * t.grip() * v.ground[i].grip * t.loadFactor(o.load, v.nominalLoad);
+            o.radius = ws.mRadius;
+        }
     }
     return true;
 }

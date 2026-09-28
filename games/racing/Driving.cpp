@@ -84,6 +84,10 @@ void RacingModule::buildCar(Car& c, int slot) {
         d.material = kke::AudioMaterialTable::Metal;
         c.vehicle = w.addVehicle(d);
         c.body = w.vehicleBody(c.vehicle);
+        // Out of the tyre warmers: in the window from the first corner
+        // (drag cars heat theirs with a burnout).
+        if (event() == Event::Drag) w.setVehicleTyreTemperature(c.vehicle, -1, 40.0f, 35.0f);
+        else w.setVehicleTyreTemperature(c.vehicle, -1, 75.0f, 60.0f);
     }
     c.xf = c.prevXf = glm::translate(glm::mat4(1.0f), start);
     for (int i = 0; i < 4; ++i) c.wheelLocal[i] = glm::translate(glm::mat4(1.0f), c.art->wheelCenter[i]);
@@ -95,10 +99,14 @@ void RacingModule::buildCar(Car& c, int slot) {
     }
     c.dented.clear();
     c.dentedNormals.clear();
+    makeShell(c, slot);
+    c.detached = 0;
+    for (uint32_t& l : c.tyreLook) l = 0;
 }
 
 void RacingModule::removeCar(Car& c) {
     kke::RigidWorld& w = m_rigid->world();
+    dropShell(c);
     if (c.bodyInst) m_models->remove(c.bodyInst);
     c.bodyInst = 0;
     for (kke::ModelModule::InstanceId& i : c.wheelInst) {
@@ -390,7 +398,7 @@ void RacingModule::driveCar(Car& c, float dt) {
     // The pit lane's limiter, and repairs in the box.
     const bool pits = m_track->inPits(c.where);
     if (pits && carSpeed(c) > kPitSpeed) in.throttle = std::min(in.throttle, 0.0f);
-    if (pits && std::fabs(carSpeed(c)) < 1.5f && m_damage > 0 && !c.totalled && (c.health < 99.9f || c.bent[0] + c.bent[1] + c.bent[2] + c.bent[3] > 0.0f)) {
+    if (pits && std::fabs(carSpeed(c)) < 1.5f && m_damage > 0 && !c.totalled && (c.health < 99.9f || c.bent[0] + c.bent[1] + c.bent[2] + c.bent[3] > 0.0f || tyresHurt(c))) {
         c.pitTime += dt;
         repairCar(c, 30.0f * dt);
         c.note = fmt::format("Repairing: {:.0f}%", c.health);
@@ -459,8 +467,10 @@ void RacingModule::placeInstances(Car& c) {
 
 kke::Camera& RacingModule::cameraOf(Car& c) { return c.seat >= 0 && c.player == 0 ? m_app->camera() : c.camera; }
 
-// Chase (close or far) behind the car, low on the bonnet, or the TV
-// camera: trackside, following the car past it.
+// Chase (close or far) behind the car, low on the bonnet, the TV camera
+// (trackside, following the car past it), or the wheel camera: bolted to
+// the side sill, looking back at the front tyre (it squashes, it bulges,
+// it smokes).
 void RacingModule::updateCamera(Car& c, float dt, kke::Camera& out) {
     const glm::mat4 xf = drawTransform(c);
     const glm::vec3 pos(xf[3]);
@@ -490,6 +500,15 @@ void RacingModule::updateCamera(Car& c, float dt, kke::Camera& out) {
         return;
     }
     glm::vec3 want, look;
+    if (m_cameraMode == 4 && c.art) {
+        const glm::vec3 wheel = c.art->wheelCenter[0];
+        const glm::vec3 mount(c.art->boundsMax.x + 0.55f, c.art->wheelRadius * 1.15f, wheel.z + 1.5f);
+        out.position = glm::vec3(xf * glm::vec4(mount, 1.0f));
+        out.target = glm::vec3(xf * glm::vec4(wheel - glm::vec3(0.0f, c.art->wheelRadius * 0.35f, 0.0f), 1.0f));
+        out.fovDegrees = 55.0f;
+        c.camInit = false;
+        return;
+    }
     if (m_cameraMode == 2) {
         // On the bonnet: fixed to the car, no lag.
         want = pos + glm::vec3(xf[1]) * (height * 0.82f) + glm::vec3(xf[2]) * (c.lookBack ? -0.8f : 0.4f);

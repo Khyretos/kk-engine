@@ -6,6 +6,9 @@
 #include "kke/modules/LobbyModule.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/NetModule.h"
+#if KKE_ENABLE_FEMFX
+#include "kke/modules/PhysicsModule.h"
+#endif
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/modules/SettingsModule.h"
 #include "kke/modules/StatsModule.h"
@@ -24,6 +27,10 @@ int main() {
         app.addModule<kke::SettingsModule>("settings.json");
         app.addModule<kke::InputModule>("racing_input.json");
         app.addModule<kke::RigidBodyModule>();
+#if KKE_ENABLE_FEMFX
+        // The car bodies' crumpling (Crumple.cpp): FEMFX solids, nothing of its own drawn.
+        app.addModule<kke::PhysicsModule>(/*renderScale=*/1.0f, /*initialObjectCount=*/0).setDrawGround(false);
+#endif
         app.addModule<kke::ModelModule>();
         app.addModule<kke::UiModule>();
         app.addModule<kke::AudioModule>().setUiVisible(false);
