@@ -850,7 +850,7 @@ void ClothDemoModule::buildPanel() {
                    m_protection = kke::ClothProtection(m_protectionIndex);
                    applyProtection();
                });
-    top.note("{cloth.protection} changes it. Full: cloth can't pass through cloth, not even itself. Basic: through the world, not other cloth. Off: raw Jolt.")
+    top.note("Full: cloth can't pass through cloth, not even itself. Basic: through the world, not other cloth. Off: raw Jolt. {cloth.protection} change")
         .showIf(cloth);
     top.button("Drop again", [this] { redrop(); });
     top.toggle("Tour the scenes", &m_tour);

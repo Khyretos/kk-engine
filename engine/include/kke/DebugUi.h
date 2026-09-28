@@ -2,6 +2,8 @@
 
 #include <volk.h>
 #include <SDL3/SDL.h>
+#include "kke/UiProfile.h"
+
 #include <cstdint>
 
 namespace kke {
@@ -21,7 +23,10 @@ public:
     DebugUi& operator=(const DebugUi&) = delete;
 
     // Call once per frame before building any ImGui:: UI calls.
-    void beginFrame();
+    // `safe` = the part of the `frameW` x `frameH` pixel frame the panels
+    // keep to (Application::uiSafeRect): it becomes ImGui's work area, so
+    // docked, placed and menu-bar windows stay clear of notches and bars.
+    void beginFrame(const ScreenRect& safe, float frameW, float frameH);
 
     // Forwards a raw SDL event into ImGui (mouse/keyboard/etc). Call this
     // from Window::pollEvents()'s callback so main.cpp never has to touch

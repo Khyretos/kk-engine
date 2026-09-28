@@ -24,6 +24,8 @@ namespace kke {
 // on each other; a tap on a title opens it.
 inline void placeNextDebugWindow(ImVec2 pos, ImVec2 size = ImVec2(0.0f, 0.0f)) {
     const float s = ImGui::GetFontSize() / 13.0f;
+    // The work area is the screen's safe area (DebugUi::beginFrame).
+    const ImVec2 origin = ImGui::GetMainViewport()->WorkPos;
     const ImVec2 view = ImGui::GetMainViewport()->WorkSize;
     const float margin = 8.0f * s;
     ImVec2 sz(size.x * s, size.y * s);
@@ -35,7 +37,7 @@ inline void placeNextDebugWindow(ImVec2 pos, ImVec2 size = ImVec2(0.0f, 0.0f)) {
         static int frame = -1;
         static float nextY = 0.0f;
         if (ImGui::GetFrameCount() != frame) { frame = ImGui::GetFrameCount(); nextY = margin; }
-        ImGui::SetNextWindowPos(ImVec2(margin, nextY), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(origin.x + margin, origin.y + nextY), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowCollapsed(true, ImGuiCond_FirstUseEver);
         nextY += ImGui::GetFrameHeight() + 4.0f * s;
         return;
@@ -44,7 +46,7 @@ inline void placeNextDebugWindow(ImVec2 pos, ImVec2 size = ImVec2(0.0f, 0.0f)) {
     const float w = size.x > 0.0f ? sz.x : view.x * 0.5f;
     p.x = std::clamp(p.x, margin, std::max(margin, view.x - w - margin));
     p.y = std::clamp(p.y, margin, std::max(margin, view.y * 0.75f));
-    ImGui::SetNextWindowPos(p, ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(origin.x + p.x, origin.y + p.y), ImGuiCond_FirstUseEver);
 }
 
 } // namespace kke
