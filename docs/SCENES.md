@@ -268,9 +268,23 @@ built from blocks when the pack is missing.
 - Soldiers on both sides: the UAL mannequin
   (`assets/animations/UAL1_Standard.fbx`).
 
+## Party (`games/party`)
+
+Not a scene: the packs only give the start menu's Body row its people;
+without them everyone is a bean.
+
+- **POLYGON City Characters**: `SK_Character_Jock`,
+  `SK_Character_Tourist`, `SK_Character_FireFighter`,
+  `SK_Character_Paramedic`, `SK_Character_Grandpa`,
+  `SK_Character_Grandma`, `SK_Character_HipsterGirl`,
+  `SK_Character_PunkGuy`, `SK_Character_SummerGirl`,
+  `SK_Character_Roadworker`, `SK_Character_Hotdog`.
+- Their animation: the UAL mannequin's clips
+  (`assets/animations/UAL1_Standard.fbx`), retargeted.
+
 ## Demos that use no packs
 
-These run the same with or without any asset pack: `climb_race`, `party`,
+These run the same with or without any asset pack: `climb_race`,
 `procedural_demo`, `physics_demo`, `melt_demo`, `sea_demo`, `audio_demo`,
 `rmlui_demo`, `imgui_demo`, `kke_basics`, `starter_game` and `cookbook`.
 `kke_demo` dresses its course with the art listed under "Showcase course

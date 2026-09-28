@@ -55,7 +55,7 @@ void PartyModule::defineControls() {
         in.addBinding(IM::bind("dive", IM::pad(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)));
         in.addBinding(IM::bind("dive", IM::key(SDL_SCANCODE_E)));
         in.addBinding(IM::bind("dive", IM::mouse(SDL_BUTTON_RIGHT)));
-        in.addBinding(IM::bind("menu", IM::pad(SDL_GAMEPAD_BUTTON_BACK)));
+        // A controller's Back opens the pause menu (Pause.cpp), which has "Back to the start menu".
         in.addBinding(IM::bind("menu", IM::key(SDL_SCANCODE_M)));
         in.addBinding(IM::bind("panels", IM::key(SDL_SCANCODE_F1)));
     }

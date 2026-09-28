@@ -47,7 +47,7 @@ public:
     static const char* assetOf(int body);                // "SK_Character_Jock" (body >= 1)
 
     void init(kke::Application& app);
-    bool any() const { return !m_available.empty(); }
+    bool any() const { return m_available.size() > 1; } // anyone besides the bean
     // The bodies this machine can draw, for the menu: 0 (Bean) first.
     const std::vector<int>& available() const { return m_available; }
     bool has(int body) const;

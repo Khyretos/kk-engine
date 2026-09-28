@@ -1,6 +1,7 @@
 // The start menu (kke::LobbyModule): each player dresses their bean
-// (name, colour, pattern, face, hat), player 1 sets the CPU beans, the
-// rounds and the games, and the beans stand on the stage, each one above
+// (name, colour, pattern, face, hat, body), player 1 sets the CPU beans,
+// the mode (a party, or one game), the rounds, how the next game is
+// picked (at random, or by vote) and voice chat, and the beans stand on the stage, each one above
 // its player's card.
 
 #include "PartyModule.h"
@@ -11,6 +12,7 @@
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
 #include "kke/modules/RigidBodyModule.h"
+#include "kke/modules/VoiceModule.h"
 
 #include <algorithm>
 #include <cmath>
@@ -60,11 +62,26 @@ void PartyModule::setupLobby() {
         l.addLookField(std::move(bodies));
     }
     l.setCpuCount(5); // a full stage, unless last time said otherwise
+    // Mode: a party of rounds (points, a podium), or one minigame to play
+    // on its own (practice, or trying one out).
+    kke::Lobby::Option mode{ "mode", "Mode", { "Party", "One game" }, 0, true, {}, {} };
+    mode.onChange = [this](int) { updateModeRows(); };
+    l.addOption(std::move(mode));
+    kke::Lobby::Option game{ "game", "Game", {}, 0, false, {}, {} };
+    for (const auto& g : m_games) game.choices.push_back(g->title());
+    l.addOption(std::move(game));
     l.addOption({ "rounds", "Rounds", { "3", "5", "8" }, 1, true, {}, {} });
-    kke::Lobby::Option games{ "games", "Games", { "Mixed" }, 0, true, {}, {} };
-    for (const auto& g : m_games) games.choices.push_back(std::string("Only ") + g->title());
-    l.addOption(std::move(games));
+    l.addOption({ "pick", "Next game", { "Random", "Vote" }, 0, true, {}, {} });
+    // Voice chat (online) is never forced on anyone: Off here, or in the
+    // pause menu, where each player can also be muted.
+    if (m_voice) {
+        kke::Lobby::Option voice{ "voice", "Voice chat", { "On", "Off" }, 0, true, {}, {} };
+        voice.onChange = [this](int) { applyVoiceOption(); };
+        l.addOption(std::move(voice));
+    }
     m_lobby->load();
+    updateModeRows();
+    applyVoiceOption();
     m_lobby->setTitle("PARTY", "Dress your bean. Another controller? Press {a} on it to join.");
     l.onJoin = [this](int seat) {
         if (m_phase == Phase::Lobby) return;
@@ -78,6 +95,22 @@ void PartyModule::setupLobby() {
         for (int i = 0; i < kke::Lobby::kMaxCpus; ++i) l.setCpuDifficulty(i, 1 + i % 3);
         m_lobby->close();
     }
+}
+
+void PartyModule::updateModeRows() {
+    kke::Lobby& l = m_lobby->lobby();
+    const kke::Lobby::Option* mode = l.option("mode");
+    const bool one = mode && mode->value == 1;
+    if (kke::Lobby::Option* o = l.option("game")) o->visible = one;
+    if (kke::Lobby::Option* o = l.option("rounds")) o->visible = !one;
+    if (kke::Lobby::Option* o = l.option("pick")) o->visible = !one;
+}
+
+void PartyModule::applyVoiceOption() {
+    if (!m_voice || !m_lobby) return;
+    const kke::Lobby::Option* o = m_lobby->lobby().option("voice");
+    const bool on = !o || o->value == 0;
+    if (m_voice->enabled() != on) m_voice->setEnabled(on);
 }
 
 std::vector<PartyModule::Entry> PartyModule::wantedRoster() const {

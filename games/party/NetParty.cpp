@@ -69,6 +69,28 @@ template <typename Stream> void serialize(Stream& s, Game& m) {
     s.integer(m.a, -(1 << 24), 1 << 24);
     s.integer(m.b, -(1 << 24), 1 << 24);
 }
+template <typename Stream> void serialize(Stream& s, Ballot& m) {
+    s.integer(m.index, 0, 255);
+    s.integer(m.player, 0, net::kMaxPlayers);
+    s.integer(m.choice, -1, 3);
+}
+template <typename Stream> void serialize(Stream& s, Vote& m) {
+    s.integer(m.index, 0, 255);
+    uint32_t games = static_cast<uint32_t>(std::min<size_t>(m.games.size(), 4));
+    s.integer(games, 0, 4);
+    if constexpr (Stream::kReading) m.games.resize(s.ok() ? games : 0);
+    for (size_t i = 0; i < games && i < m.games.size(); ++i) s.string(m.games[i], kMaxGameId);
+    uint32_t n = static_cast<uint32_t>(std::min(m.ballots.size(), kMaxSeats));
+    s.integer(n, 0, kMaxSeats);
+    if constexpr (Stream::kReading) m.ballots.resize(s.ok() ? n : 0);
+    for (size_t i = 0; i < n && i < m.ballots.size(); ++i) {
+        m.ballots[i].index = m.index;
+        s.integer(m.ballots[i].player, 0, net::kMaxPlayers);
+        s.integer(m.ballots[i].choice, -1, 3);
+    }
+    s.integer(m.secondsLeft, 0, 60);
+    s.integer(m.winner, -1, 3);
+}
 
 template <typename Msg> std::vector<uint8_t> write(Msg m) {
     std::vector<uint8_t> out;
@@ -127,5 +149,10 @@ std::vector<uint8_t> encode(const Result& r) { return write(r); }
 std::optional<Result> decodeResult(const std::vector<uint8_t>& bytes) { return read<Result>(bytes); }
 std::vector<uint8_t> encode(const Game& g) { return write(g); }
 std::optional<Game> decodeGame(const std::vector<uint8_t>& bytes) { return read<Game>(bytes); }
+
+std::vector<uint8_t> encode(const Vote& v) { return write(v); }
+std::optional<Vote> decodeVote(const std::vector<uint8_t>& bytes) { return read<Vote>(bytes); }
+std::vector<uint8_t> encode(const Ballot& b) { return write(b); }
+std::optional<Ballot> decodeBallot(const std::vector<uint8_t>& bytes) { return read<Ballot>(bytes); }
 
 } // namespace party::netparty

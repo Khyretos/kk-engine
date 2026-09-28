@@ -105,9 +105,9 @@ void PartyModule::syncNetPlayers() {
         if (slots >= kke::NetModule::kMaxLocalPlayers) break;
         if (slots == 0) {
             m_net->playerName = e.name.substr(0, 16);
-            m_net->playerCharacter = "bean";
+            m_net->playerCharacter = e.seat < 0 ? "cpu" : "bean";
         } else {
-            m_net->addLocalPlayer(slots, e.name.substr(0, 16), "bean");
+            m_net->addLocalPlayer(slots, e.name.substr(0, 16), e.seat < 0 ? "cpu" : "bean"); // "cpu": no microphone (Pause.cpp)
         }
         ++slots;
     }
@@ -156,7 +156,10 @@ void PartyModule::sendRound() {
         s.points = static_cast<size_t>(b.index) < m_show.points.size() ? m_show.points[static_cast<size_t>(b.index)] : 0;
         r.seats.push_back(std::move(s));
     }
-    if (m_game && (m_sentRound != m_netRound || m_phase == Phase::Results || m_phase == Phase::Podium)) {
+    // A vote sends the roster and the points with no game yet (the round
+    // after it names the game).
+    if ((m_game || m_phase == Phase::Vote) &&
+        (m_sentRound != m_netRound || m_phase == Phase::Results || m_phase == Phase::Podium || m_phase == Phase::Vote)) {
         m_sentRound = m_netRound;
         m_net->sendEvent(netparty::kEventRound, netparty::encode(r));
     }
@@ -206,6 +209,7 @@ void PartyModule::applyRound(const netparty::Round& r) {
     for (size_t i = 0; i < r.seats.size() && i < m_show.points.size(); ++i) m_show.points[i] = r.seats[i].points;
     m_roundPoints.assign(m_show.points.size(), 0);
     for (size_t i = 0; i < m_show.points.size() && i < before.size(); ++i) m_roundPoints[i] = m_show.points[i] - before[i];
+    if (r.game.empty()) return; // before a vote: who plays and the points, the game comes after it
     if (r.round != m_netRound || !m_game || r.game != m_game->id()) {
         buildRound(r.game, r.seed);
         m_netRound = r.round;
@@ -218,6 +222,7 @@ void PartyModule::applyPhase(Phase phase) {
     case Phase::Lobby: backToLobby(); return;
     case Phase::Play: startPlay(); return;
     case Phase::Podium: showPodium(); return;
+    case Phase::Vote: return; // opened by the host's Vote (applyVote)
     case Phase::RoundOver:
         tone(static_cast<int>(kke::Earcon::ToggleOn), 0.8f);
         break;
@@ -249,7 +254,7 @@ void PartyModule::onNetEvent(const kke::net::GameEventMsg& e) {
     if (e.kind == netparty::kEventRound && netClient()) {
         if (const auto r = netparty::decodeRound(e.payload)) applyRound(*r);
     } else if (e.kind == netparty::kEventPhase && netClient()) {
-        if (const auto p = netparty::decodePhase(e.payload); p && p->round == m_netRound) applyPhase(static_cast<Phase>(std::min<uint8_t>(p->phase, 6)));
+        if (const auto p = netparty::decodePhase(e.payload); p && p->round == m_netRound) applyPhase(static_cast<Phase>(std::min<uint8_t>(p->phase, kLastPhase)));
     } else if (e.kind == netparty::kEventResult) {
         const auto r = netparty::decodeResult(e.payload);
         Bean* b = r && r->round == m_netRound ? beanOfNet(r->player) : nullptr;
@@ -286,6 +291,10 @@ void PartyModule::onNetEvent(const kke::net::GameEventMsg& e) {
                 }
             }
         }
+    } else if (e.kind == netparty::kEventVote && netClient()) {
+        if (const auto v = netparty::decodeVote(e.payload)) applyVote(*v);
+    } else if (e.kind == netparty::kEventBallot && netHost()) {
+        if (const auto b = netparty::decodeBallot(e.payload)) applyBallot(*b);
     } else if (e.kind == netparty::kEventGame) {
         if (const auto g = netparty::decodeGame(e.payload); g && g->round == m_netRound && m_game) {
             m_game->onEvent(*this, g->kind, g->a, g->b);

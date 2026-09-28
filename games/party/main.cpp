@@ -2,6 +2,7 @@
 // PartyModule.h and README.md).
 #include "kke/Application.h"
 #include "kke/modules/AudioModule.h"
+#include "kke/modules/DemoPanelModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
 #include "kke/modules/ModelModule.h"
@@ -39,6 +40,8 @@ int main() {
         kke::VoiceModule::Settings voice;
         voice.channel = kke::net::VoiceChannel::All;
         app.addModule<kke::VoiceModule>(voice);
+        // The pause menu: Esc, or Back on a controller (Pause.cpp).
+        app.addModule<kke::DemoPanelModule>("Menu", kke::DemoPanelModule::Side::Right).setWidth(360.0f);
         app.addModule<party::PartyModule>();
         app.addModule<kke::StatsModule>().setUiVisible(false);
         app.run();
