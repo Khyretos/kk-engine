@@ -39,6 +39,7 @@ public:
     void renderShadow(const kke::ShadowRenderContext& ctx) override;
 
     glm::vec3 standAt{ 3.0f, 0.0f, 1.0f };   // the stander's feet
+    static constexpr float orbRadius = 0.06f; // the ball the hand reaches for (metres)
     glm::vec3 circleAt{ -11.0f, 0.0f, 9.0f }; // centre of the walker's circle
     float circleRadius = 3.0f;
 

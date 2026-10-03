@@ -11,6 +11,10 @@
 #include <string>
 #include <vector>
 
+namespace Rml {
+class ElementDocument;
+} // namespace Rml
+
 namespace kke {
 class DynamicMeshRenderer;
 class OrbitCameraModule;
@@ -118,6 +122,12 @@ private:
     void defineInput();
     void readInput();
     void buildPanel();
+    // The tour (Tour.cpp): stations that each show one use, with a card
+    // saying what you see, what it's for and what to try.
+    void buildTour();
+    void goToStation(int index, bool moveCamera = true);
+    void updateTour(float dt);
+    int creatureIndex(Kind kind) const;
     static kke::Gait gaitOf(int index); // 0 auto, 1 walk, 2 trot, 3 gallop
     void appendCreature(const Creature& c, std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx) const;
 
@@ -135,6 +145,12 @@ private:
     int m_focus = -1;
     float m_time = 0.0f, m_quitAfter = -1.0f, m_hitAt = -1.0f, m_hitSpeed = 3.0f, m_logTimer = 0.0f;
     bool m_hitDone = false, m_trace = false;
+    Rml::ElementDocument* m_card = nullptr;
+    int m_station = 0;
+    float m_stationTime = 0.0f;
+    int m_autoHits = 0;
+    bool m_cardShown = true;
+    int m_cardPad = -1; // the card's "try" is for: 0 keyboard and mouse, 1 a controller
 };
 
 } // namespace procedural_demo

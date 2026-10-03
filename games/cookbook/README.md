@@ -5,7 +5,8 @@ starter template's setup (the same level, the same character) plus the
 eight camera types most games use, switchable while you play, screen
 shake, and two animated UAL mannequins: one walking round a circle on a
 blend space, one standing with a head that looks at you, a hand that
-reaches for a floating orb and feet planted on a step.
+reaches for a floating yellow ball and feet planted on a step. The
+player is the same mannequin, animated (the starter game's `PlayerBody`).
 
 It is the reference for **choosing a camera** (shooter, action game,
 top-down, isometric strategy, platformer, fixed-camera horror, cutscenes)
@@ -52,6 +53,7 @@ engine's standard character actions, as in the starter game.
 | Zoom the camera arm in / out | X / Z | RT / LT (analog) |
 | Play a camera path over the stairs | P | d-pad up |
 | Shake the camera | K | d-pad left |
+| Show or hide the guide card | H | d-pad down |
 | Pause: settings, button remapping, quit | Esc | Start or View / Back |
 | Developer panels | F1 | none: a developer tool, keyboard only |
 
@@ -67,6 +69,14 @@ There is no goal: it is a playground. Walk around the starter level
 switch cameras to feel what each does to the same scene. The walking
 mannequin circles at (-11, 0, 9); the standing one is at (3, 0, 1), next
 to where you start.
+
+A card in the corner ([scripts/guide.lua](scripts/guide.lua)) says what
+the game is, and changes as you walk: next to the standing mannequin it
+explains the ball (arm IK), the head (look-at) and the step (foot
+placement); at the walker, the blend space; at the pillars, the cameras;
+at the stairs and the fence, moving. It always lists the camera buttons.
+H or the d-pad down hides it. The docs' screenshots leave it out
+(run_recipes.py copies the scripts without it).
 
 ## How it works
 
@@ -158,8 +168,11 @@ its own `Animator`:
   model space, in three steps:
   1. `kke::FootPlacer` casts a ray down from each foot through Jolt and
      plants it (one foot lands on the step).
-  2. `kke::solveTwoBone` puts the right hand on the orb, which drifts in
-     a slow figure eight; the pole points the elbow out and down.
+  2. `kke::solveHumanArm` puts the right palm on the near side of the
+     ball, which drifts in a slow figure eight to the mannequin's right
+     (never across the body or down at the hips); the elbow bends only
+     forward, leans out and down, and the shoulder lifts its collarbone
+     when the hand goes high, as a person's does.
   3. The head looks at the camera: a spring smooths the look point,
      `turnTowards` limits the turn to 60 degrees, and the model-space
      turn is converted to the head bone's local rotation
@@ -255,7 +268,7 @@ overshoot at any frame rate, shake grows with trauma squared,
 | Lua bindings from C++ | `kke::ScriptVM::registerFunction` | [cookbook/cpp.md](../../docs/cookbook/cpp.md), [SCRIPTING.md](../../docs/SCRIPTING.md) |
 | Skinned models | `ModelModule` | |
 | Blend spaces, clip states | `kke::Animator`, `kke::AnimationSet` | [cookbook/animation.md](../../docs/cookbook/animation.md) |
-| Two-bone IK, foot placement | `kke::solveTwoBone`, `kke::FootPlacer` ([kke/AnimRig.h](../../engine/include/kke/AnimRig.h)) | [PROCEDURAL_ANIMATION.md](../../docs/PROCEDURAL_ANIMATION.md) |
+| Arm IK, foot placement | `kke::solveHumanArm`, `kke::FootPlacer` ([kke/AnimRig.h](../../engine/include/kke/AnimRig.h)) | [PROCEDURAL_ANIMATION.md](../../docs/PROCEDURAL_ANIMATION.md) |
 | Jolt bodies and ray casts from C++ | `kke::RigidWorld` | [cookbook/physics.md](../../docs/cookbook/physics.md) |
 
 ## Assets
@@ -267,7 +280,8 @@ overshoot at any frame rate, shake grows with trauma squared,
   `Walk_Loop`, `Jog_Fwd_Loop`. Without it the log says
   "assets/animations/UAL1_Standard.fbx not found: no mannequins" and the
   rest of the game runs.
-- No Synty packs. The level is Lua boxes; the player is two boxes.
+- No Synty packs. The level is Lua boxes; the player is the same
+  mannequin (two boxes when the file is missing).
 
 ## Make a game like this
 
@@ -304,4 +318,6 @@ Pitfalls:
 | [PhysicsRecipes.h](PhysicsRecipes.h) | `dropCrate`, `groundBelow`: Jolt from C++ |
 | [scripts/cameras.lua](scripts/cameras.lua) | Keys 1 to 8, the camera path (P), shake (K) |
 | [scripts/level.lua](scripts/level.lua) | The starter level, pillars, the mannequin's step |
+| [scripts/guide.lua](scripts/guide.lua) | The card that says what you're looking at |
+| [../template/PlayerBody.cpp](../template/PlayerBody.cpp) | The player's animated mannequin, shared with the starter game |
 | [CMakeLists.txt](CMakeLists.txt) | The executable and files copied next to it |

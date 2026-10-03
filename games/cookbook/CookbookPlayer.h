@@ -14,6 +14,10 @@ class InputModule;
 class RigidBodyModule;
 } // namespace kke
 
+namespace starter {
+class PlayerBody;
+} // namespace starter
+
 namespace cookbook {
 
 // The cookbook's player: the starter template's character (games/template)
@@ -67,7 +71,8 @@ private:
     kke::RigidWorld::CharacterId m_player = 0;
     std::unique_ptr<kke::Locomotion> m_loco;
     kke::CameraRig m_rig;
-    std::unique_ptr<kke::DynamicMeshRenderer> m_body;
+    std::unique_ptr<starter::PlayerBody> m_mannequin;
+    std::unique_ptr<kke::DynamicMeshRenderer> m_body; // the block, without the mannequin
     View m_view = View::Third;
     float m_trauma = 0.0f;
     float m_time = 0.0f;
