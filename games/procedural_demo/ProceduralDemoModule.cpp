@@ -7,7 +7,9 @@
 #include "kke/modules/InputModule.h"
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/RigidBodyModule.h"
+#include "kke/modules/UiModule.h"
 
+#include <RmlUi/Core/ElementDocument.h>
 #include <SDL3/SDL.h>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -151,6 +153,10 @@ ProceduralDemoModule::~ProceduralDemoModule() = default;
 // destroyed after every shutdown(), not in dependency order, so doing this
 // in the destructor crashed on quitting with a ragdoll down.
 void ProceduralDemoModule::shutdown() {
+    if (m_card) {
+        m_card->Close(); // while the UI is still there
+        m_card = nullptr;
+    }
     if (m_rigid)
         for (Creature& c : m_creatures)
             if (c.handle) {
@@ -161,7 +167,8 @@ void ProceduralDemoModule::shutdown() {
 
 std::vector<kke::ModuleDependency> ProceduralDemoModule::dependencies() const {
     return { { std::type_index(typeid(kke::RigidBodyModule)), true, "the ground under the feet, and ragdolls with joint motors (Jolt)" },
-             { std::type_index(typeid(kke::OrbitCameraModule)), false, "the camera" } };
+             { std::type_index(typeid(kke::OrbitCameraModule)), false, "the camera" },
+             { std::type_index(typeid(kke::UiModule)), false, "the tour's card" } };
 }
 
 // ------------------------------------------------------------- ground
@@ -436,6 +443,7 @@ void ProceduralDemoModule::init(kke::Application& app) {
     }
     defineInput();
     buildPanel();
+    buildTour();
     kke::log::get(name())->info("{} creatures, no animation clips: click the ground to call them, click the dog or the person to hit",
                                 m_creatures.size());
 }
@@ -625,6 +633,7 @@ void ProceduralDemoModule::update(const kke::UpdateContext& ctx) {
     readInput();
     const float dt = std::min(ctx.dt, 1.0f / 20.0f);
     m_time += dt;
+    updateTour(dt);
     for (Creature& c : m_creatures) {
         if (c.handle) {
             updatePhysical(c, dt);

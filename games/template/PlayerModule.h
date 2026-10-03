@@ -15,6 +15,8 @@ class RigidBodyModule;
 
 namespace starter {
 
+class PlayerBody;
+
 // The player: a character you walk, run, jump, vault and climb with, and
 // a third-person camera that follows it. Movement is kke::Locomotion on
 // Jolt's character controller (docs/MOVEMENT.md), the camera is
@@ -25,8 +27,8 @@ namespace starter {
 // how you add your own bindings: player.position(), player.teleport(pos),
 // player.facing().
 //
-// The body is a coloured block. kke_demo (games/showcase) shows how to put
-// an animated character model on the same capsule.
+// The body is the engine's mannequin, animated (PlayerBody), or a
+// coloured block when assets/animations/ isn't there.
 class PlayerModule : public kke::Module {
 public:
     PlayerModule();
@@ -51,7 +53,8 @@ private:
     kke::RigidWorld::CharacterId m_player = 0;
     std::unique_ptr<kke::Locomotion> m_loco;
     kke::CameraRig m_rig;
-    std::unique_ptr<kke::DynamicMeshRenderer> m_body;
+    std::unique_ptr<PlayerBody> m_mannequin;
+    std::unique_ptr<kke::DynamicMeshRenderer> m_body; // the block, without the mannequin
     bool m_captured = false;
     bool m_jumpQueued = false;
     float m_mouseSensitivity = 0.12f; // degrees per pixel

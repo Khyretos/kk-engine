@@ -99,6 +99,7 @@ void RacingModule::buildCar(Car& c, int slot) {
     }
     c.dented.clear();
     c.dentedNormals.clear();
+    c.pressed.clear();
     makeShell(c, slot);
     c.detached = 0;
     for (uint32_t& l : c.tyreLook) l = 0;

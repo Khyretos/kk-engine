@@ -48,7 +48,6 @@ struct SkyPick {
 };
 const SkyPick kSkies[] = { { "Day", "clear_day" }, { "Morning", "morning" }, { "Golden hour", "golden_hour" }, { "Sunset", "sunset" }, { "Stormy", "stormy" } };
 const char* const kModeNames[] = { "Race", "Stunts", "Free flight", "Dogfight" };
-const float kRingSizes[] = { 18.0f, 14.0f, 10.0f };
 
 void axisKeys(kke::InputMap& in, const char* action, SDL_Scancode plus, SDL_Scancode minus) {
     kke::Binding p = IM::bind(action, IM::key(plus), kke::Trigger::Continuous);

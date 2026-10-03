@@ -761,7 +761,8 @@ void ClothDemoModule::updateMeshes(const glm::vec3& cameraPos) {
     m_meshMs = m_meshMs * 0.95 + msSince(t0) * 0.05;
 }
 
-void ClothDemoModule::update(const kke::UpdateContext&) {
+void ClothDemoModule::update(const kke::UpdateContext& ctx) {
+    if (ctx.dt > 0.0f) m_frameMs = m_frameMs * 0.95 + double(ctx.dt) * 1000.0 * 0.05;
     readInput();
     const kke::Camera& cam = m_app->camera();
     int w = 0, h = 0;
@@ -931,6 +932,19 @@ void ClothDemoModule::buildPanel() {
     hair.note("Guides are simulated; the hairs drawn around them are built on the GPU.");
 
     auto& cost = panel->section("Cost");
+    // How hard the GPU works: a screen redrawn as fast as it can be (vsync
+    // off, no frame cap) keeps it at full power, and some cards whine.
+    cost.text([this] {
+        const float gpu = m_app->renderer().lastGpuFrameTimeMs();
+        const float cap = m_app->effectiveFrameRateLimit();
+        char buf[200];
+        int n = std::snprintf(buf, sizeof(buf), "%.0f frames a second", m_frameMs > 0.0 ? 1000.0 / m_frameMs : 0.0);
+        if (gpu >= 0.0f) n += std::snprintf(buf + n, sizeof(buf) - size_t(n), ", GPU %.1f ms a frame", double(gpu));
+        n += std::snprintf(buf + n, sizeof(buf) - size_t(n), ", vsync %s", m_app->renderer().vsync() ? "on" : "off");
+        if (cap > 0.0f) std::snprintf(buf + n, sizeof(buf) - size_t(n), ", capped at %.0f", double(cap));
+        else std::snprintf(buf + n, sizeof(buf) - size_t(n), ", no frame cap");
+        return std::string(buf);
+    });
     cost.text([this] {
         if (m_scene == Scene::Hair) {
             size_t guides = 0, verts = 0, hairs = 0, drawn = 0;

@@ -155,6 +155,16 @@ after the pad was last used.
 | Engine debug panels | F1, or the "Developer panels (F1)" toggle at the top of the inspector | the toggle: point at it, A |
 | Camera | right-drag orbit, middle-drag pan, wheel zoom, WASD/QE move, Shift faster | right stick turns, triggers zoom |
 
+In Play mode (FEMFX builds) props from a model pack break by themselves:
+anything whose name says what it's made of or what it is (a crate, a
+barrel, a bottle, a rock, a fence, a car) and that is at most 4.5 m
+across is turned into a breakable a few a frame (up to 120), its
+material guessed from its name (`kke::guessBreakKind`,
+[docs/BREAKABLES.md](../../docs/BREAKABLES.md)). Floors, roads, walls,
+buildings and plants stay as they are. Back in Build mode they are whole
+again, and they're never saved as breakable unless you made them so with
+X. The panel's "Props break in Play" turns it off.
+
 ## How it plays
 
 **Play mode.** The palette shows only blocks whose assets are on disk
@@ -721,9 +731,9 @@ the reason in the status line.
 | Grid snap | inspector "Grid snap", `m_snap` | 0.5 m (off, 0.25, 0.5, 1, 2.5, 5) | Coarser placement. |
 | Rotate step | inspector, `m_rotateStep` | 45 deg (5 to 90) | Bigger rotation steps for R and the ring. |
 | Undo depth | `kMaxUndo`, SandboxModule.h | 100 | More memory for more steps. |
-| Ball speed | inspector "Ball speed", `m_ballSpeed` | 18 m/s (5 to 40) | Harder hits; the comment above `kBreakMaterials` says 12 m/s breaks nothing and 18 m/s breaks all four breakable materials. |
+| Ball speed | inspector "Ball speed", `m_ballSpeed` | 18 m/s (5 to 40) | Harder hits; the material presets (`kke::breakPreset`, engine/src/Breakables.cpp) were tuned so 12 m/s breaks nothing and 18 m/s breaks all four breakable materials. |
 | Max balls | `kMaxBalls` | 6 | More balls alive at once. |
-| Break materials | `kBreakMaterials` | Wood, Stone, Glass, Ceramic, Metal | Density, stiffness, fracture threshold, pattern and chunk size per material. |
+| Break materials | `kke::breakPreset` (engine/src/Breakables.cpp) | Wood, Stone, Glass, Ceramic, Metal | Density, stiffness, fracture threshold, pattern and chunk size per material. |
 | Chunk size, detail, toughness | inspector "Physics toys" | x1.0, 160 cells, x1.0 | Bigger pieces, closer shape (more CPU), harder to break. |
 | World seed | inspector | 1 | A different seed breaks every prop differently. |
 | Things per graph | `kMaxSpawnsPerGraph`, PlayScripting.cpp | 200 | More things a graph may spawn. |

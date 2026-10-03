@@ -36,7 +36,9 @@ int main() {
         camera.setPadControls(true);
         camera.setPadPan(true);
         app.addModule<procedural_demo::ProceduralDemoModule>();
-        app.addModule<kke::DemoPanelModule>("Procedural animation").setPadCrosshair(true);
+        auto& panel = app.addModule<kke::DemoPanelModule>("Procedural animation");
+        panel.setPadCrosshair(true);
+        panel.setState(kke::DemoPanelModule::State::Collapsed); // the tour's card speaks first; F3 opens it
         app.addModule<kke::StatsModule>().setUiVisible(false);
         app.run();
     } catch (const std::exception& e) {

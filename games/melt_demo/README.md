@@ -113,6 +113,13 @@ above the block. The block is 0.5 m on each side. What you should see:
 Lava itself cools as it gives its heat away and crusts over below 550 C:
 it turns dark and rough and stops flowing.
 
+Nothing floats: a piece of the block that's no longer joined to the
+ground (its middle melted out, an undercut corner) falls and lands on
+whatever is below it, and hot wax, chocolate and aluminium sag into any
+hole under them before they melt (`MeltMaterial::softening`: 15, 8 and
+40 degrees under the melting point). The panel says "collapsing" while
+something falls.
+
 The liquid has a budget of 3,000 particles (`kMaxParticles`), shared by
 the lava and the melt. When it is full, no more lava comes out of the
 spout and melted voxels stop turning into particles; the panel says so.
@@ -241,6 +248,20 @@ voxel crosses from solid to empty (density 0.5), not on every step that
 melts a little ([docs/OPTIMIZATION.md](../../docs/OPTIMIZATION.md) #32).
 Outside the grid the distance keeps growing, so the grid's own edge is not
 an invisible wall (BUG-049 in BUGS.md).
+
+### Collapsing: `MeltVolume::collapse()`
+
+`step()` calls it after melting. A flood fill over the voxels you see
+(density above 0.5, 6-connected) labels each solid piece; any piece not
+touching the bottom row (the ground) falls under gravity a cell at a
+time, its soft fringe with it, until the cell below holds something that
+isn't itself, then it merges with what it landed on. Soft voxels (within
+`softening` degrees of melting) creep down into an empty cell below at
+`sagSpeed` m/s. It runs only after something melted or while something
+is falling (about 0.1 ms for 24x24x24), and tests in
+`tests/test_melt_volume.cpp` (`LoosePiecesFallAndLand`,
+`SoftMaterialSagsIntoAHole`) hold it to "nothing left in the air,
+nothing lost on the way down".
 
 ### The block's surface
 

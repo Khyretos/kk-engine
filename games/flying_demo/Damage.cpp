@@ -39,7 +39,6 @@ constexpr float kFireRate = 11.0f;     // rounds a second
 constexpr float kBulletLife = 1.6f;    // s: about 750 m
 constexpr float kBulletDamage = 6.0f;  // health a hit: 17 hits bring a plane down
 constexpr float kAimHelp = 3.5f;       // degrees: a plane this near the sight is led for you
-constexpr float kShield = 3.0f;        // s after coming back: bullets don't hurt
 constexpr float kFireballLife = 1.2f;
 constexpr float kChunkLife = 10.0f;
 constexpr size_t kMaxChunks = 200;

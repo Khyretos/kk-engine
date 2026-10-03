@@ -10,6 +10,7 @@
 #include <Jolt/Physics/Collision/CollideSoftBodyVertexIterator.h>
 #include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseQuery.h>
+#include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/Physics/SoftBody/SoftBodyCreationSettings.h>
 #include <Jolt/Physics/SoftBody/SoftBodyManifold.h>
@@ -71,6 +72,7 @@ constexpr uint32_t kSettledWindows = 2;
 constexpr uint64_t kSearchProbe = 64;      // searches: the slower of GPU and CPU pair search is timed again this often
 constexpr float kCornerSlop = 0.25f;       // thicknesses: a solid's corner this far into a triangle is left be
 constexpr float kFlatContact = 0.9f;       // cos: vertices of a triangle resting on faces further apart than this straddle an edge
+constexpr float kDrawLiftMost = 0.015f;   // m: the most a triangle is lifted as drawn (awake)
 constexpr float kCornerLift = 2.0f;        // thicknesses: the most a triangle is lifted off a solid's corner
 constexpr std::chrono::microseconds kCrewSpin{50}; // how long the crew's threads wait for the next phase before they sleep
 constexpr float kMostPerPass = 3.0f;  // the pass moves a vertex at most this x (thickness + a tenth of an edge)
@@ -672,6 +674,10 @@ bool ClothSystem::positions(uint32_t id, std::vector<glm::vec3>& out) const {
         const JPH::RVec3 w = com * verts[i].mPosition;
         out[i] = glm::vec3(float(w.GetX()), float(w.GetY()), float(w.GetZ()));
     }
+    // Lifted off a solid's corner as drawn (solidCorners()).
+    const Cloth& c = it->second;
+    for (const uint32_t v : c.drawLifted)
+        if (v < out.size()) out[v] += toG(com.Multiply3x3(c.drawLift[v]));
     return true;
 }
 
@@ -1415,7 +1421,6 @@ void ClothSystem::searchOnCpu(size_t triTotal, size_t edgeTotal, float cell) {
                             w.stamp[gt] = gv;
                             Cloth& o = *m_active[m_triCloth[gt]];
                             const uint32_t tri = gt - o.triBase;
-                            if (&o == &c && nearInTopology(c, v, tri)) continue;
                             // Far from the triangle for how far it moved relative to it
                             // (with room for the passes to move things): skip.
                             const glm::vec4& sph = o.triSphere[tri];
@@ -1436,6 +1441,9 @@ void ClothSystem::searchOnCpu(size_t triTotal, size_t edgeTotal, float cell) {
                             // (The flags above are set whatever the patches: an edge of a
                             // patch looked at may end at a vertex of one that isn't.)
                             if (!loose && !patchPair(vp, m_patchBase[m_triCloth[gt]] + o.triPatch[tri])) continue;
+                            // Its own triangles and its neighbours' (last: the dearest test;
+                            // they are too near in the fabric to have set the flags above).
+                            if (&o == &c && nearInTopology(c, v, tri)) continue;
                             w.vt.push_back({ uint32_t(ci), v, gt });
                         }
                     }
@@ -1975,9 +1983,18 @@ void ClothSystem::endStep() {
         const auto t0 = std::chrono::steady_clock::now();
         m_between = true;
         const JPH::BodyLockInterfaceNoLock& locks = m_system.GetBodyLockInterfaceNoLock(); // between steps: nothing else touches the bodies
-        for (auto& [id, c] : m_cloths)
-            if (c.liftForSleep)
-                if (JPH::Body* body = locks.TryGetBody(c.body); body && body->IsActive()) solidCorners(c, *body);
+        // Settling: lifted for good, once, then asleep. Awake: lifted only
+        // as drawn (lifted every update in the solver, it would creep off
+        // the solid). A cloth to a thread.
+        m_lifting.clear();
+        for (auto& [id, c] : m_cloths) {
+            clearDrawLift(c);
+            if (c.level == ClothProtection::Off || !c.touchedSolid || c.tris.empty()) continue;
+            if (JPH::Body* body = locks.TryGetBody(c.body); body && body->IsActive()) m_lifting.push_back({ &c, body });
+        }
+        parallel(uint32_t(m_lifting.size()), [&](uint32_t begin, uint32_t end, Worker&) {
+            for (uint32_t i = begin; i < end; ++i) solidCorners(*m_lifting[i].first, *m_lifting[i].second, !m_lifting[i].first->liftForSleep);
+        }, 1);
         protectAll(locks);
         m_between = false;
         m_protectedAfterStep = true;
@@ -2066,41 +2083,28 @@ void ClothSystem::protectAll(const JPH::BodyLockInterface& locks) {
 // and lifted off the deepest one. Once, as the cloth goes to sleep: the
 // solver pulls it back taut over the edge every update, and lifted every
 // update it loses its grip and creeps off the solid.
-void ClothSystem::solidCorners(Cloth& c, JPH::Body& body) {
+void ClothSystem::clearDrawLift(Cloth& c) {
+    for (const uint32_t v : c.drawLifted) c.drawLift[v] = JPH::Vec3::sZero();
+    c.drawLifted.clear();
+}
+
+void ClothSystem::solidCorners(Cloth& c, JPH::Body& body, bool drawOnly) {
     JPH::SoftBodyMotionProperties* mp = softOf(body);
     auto& verts = mp->GetVertices();
     if (!c.touchedSolid || c.tris.empty() || verts.size() != c.solidNormal.size()) return;
     // Triangles straddling a solid's edge or corner: some vertices resting on
-    // it and some not, or resting on faces that point different ways. Their
-    // middle and edges' midpoints go to the same exact test Jolt gives each
-    // vertex (a query ball would miss: a box's queries round its edges off).
+    // it and some not, or resting on faces that point different ways.
     c.cornerTris.clear();
-    c.cornerProbes.clear();
     for (size_t t = 0; t + 2 < c.tris.size(); t += 3) {
         const glm::vec3 n[3] = { c.solidNormal[c.tris[t]], c.solidNormal[c.tris[t + 1]], c.solidNormal[c.tris[t + 2]] };
         const int touching = int(n[0] != glm::vec3(0.0f)) + int(n[1] != glm::vec3(0.0f)) + int(n[2] != glm::vec3(0.0f));
         if (touching == 0) continue;
         bool corner = touching < 3;
         for (int k = 0; k < 3 && !corner; ++k) corner = glm::dot(n[k], n[(k + 1) % 3]) < kFlatContact;
-        if (!corner) continue;
-        const JPH::Vec3 a = verts[c.tris[t]].mPosition, b = verts[c.tris[t + 1]].mPosition, d = verts[c.tris[t + 2]].mPosition;
-        c.cornerTris.push_back(uint32_t(t));
-        c.cornerProbes.push_back((a + b + d) / 3.0f);
-        c.cornerProbes.push_back((a + b) * 0.5f);
-        c.cornerProbes.push_back((b + d) * 0.5f);
-        c.cornerProbes.push_back((d + a) * 0.5f);
+        if (corner) c.cornerTris.push_back(uint32_t(t));
     }
     if (c.cornerTris.empty()) return;
     c.cornerLift.resize(verts.size(), JPH::Vec3::sZero());
-    const size_t probes = c.cornerProbes.size();
-    const float slack = (1.0f - kCornerSlop) * c.thickness; // a probe closer to a solid than this is in too far
-    c.cornerDeep.assign(probes, -slack);
-    c.cornerPlane.resize(probes);
-    c.cornerHit.assign(probes, -1);
-    const float one = 1.0f;
-    const JPH::CollideSoftBodyVertexIterator probe(JPH::StridedPtr<const JPH::Vec3>(c.cornerProbes.data()), JPH::StridedPtr<const float>(&one, 0),
-                                                   JPH::StridedPtr<JPH::Plane>(c.cornerPlane.data()), JPH::StridedPtr<float>(c.cornerDeep.data()),
-                                                   JPH::StridedPtr<int>(c.cornerHit.data()));
     // Every solid near the cloth, in the cloth's own space as Jolt does it.
     const JPH::RMat44 com = body.GetCenterOfMassTransform();
     const JPH::RMat44 inv = com.InversedRotationTranslation();
@@ -2108,39 +2112,153 @@ void ClothSystem::solidCorners(Cloth& c, JPH::Body& body) {
     m_system.GetBroadPhaseQuery().CollideAABox(body.GetWorldSpaceBounds(), near, m_system.GetDefaultBroadPhaseLayerFilter(m_layer),
                                                m_system.GetDefaultLayerFilter(m_layer));
     const JPH::BodyLockInterface& locks = m_system.GetBodyLockInterfaceNoLock();
-    for (const JPH::BodyID id : near.mHits) {
-        if (id == body.GetID()) continue;
-        JPH::BodyLockRead lock(locks, id);
-        if (!lock.Succeeded()) continue;
-        const JPH::Body& solid = lock.GetBody();
-        if (solid.IsSoftBody() || solid.IsSensor()) continue;
-        solid.GetShape()->CollideSoftBodyVertices((inv * solid.GetCenterOfMassTransform()).ToMat44(), JPH::Vec3::sOne(), probe,
-                                                  uint32_t(probes), 0);
-    }
-    for (size_t k = 0; k < c.cornerTris.size(); ++k) {
-        float deepest = -slack;
-        size_t at = probes;
-        for (size_t q = k * 4; q < k * 4 + 4; ++q)
-            if (c.cornerHit[q] >= 0 && c.cornerDeep[q] > deepest) {
-                deepest = c.cornerDeep[q];
-                at = q;
-            }
-        if (at == probes) continue;
-        // Up off the solid until the probe is a thickness clear, like a
-        // vertex (the pass after it keeps the cloth over it out of the way).
-        const JPH::Vec3 out = c.cornerPlane[at].GetNormal();
-        const float lift = std::min(deepest + c.thickness, kCornerLift * c.thickness);
-        // Each vertex once, however many of its triangles are lifted: as far
-        // along each one's way out as that one needs.
-        const uint32_t t = c.cornerTris[k];
-        for (uint32_t j = 0; j < 3; ++j) {
-            const uint32_t v = c.tris[t + j];
-            if (verts[v].mInvMass <= 0.0f) continue;
-            JPH::Vec3& up = c.cornerLift[v];
-            if (up.IsNearZero()) c.cornerLifted.push_back(v);
-            up += out * std::max(0.0f, lift - up.Dot(out));
+    // Their middle and edges' midpoints go to the same exact test Jolt gives
+    // each vertex (a query ball would miss: a box's queries round its edges
+    // off). As drawn, twice: a lift along one face can leave the edge
+    // through the triangle next to it.
+    constexpr size_t perTri = 4;
+    const float slack = (1.0f - kCornerSlop) * c.thickness; // a probe closer to a solid than this is in too far
+    // (As drawn it may go further: nothing springs back from it.)
+    const float most = drawOnly ? std::max(2.0f * kCornerLift * c.thickness, kDrawLiftMost) : kCornerLift * c.thickness;
+    for (int pass = 0; pass < (drawOnly ? 2 : 1); ++pass) {
+        if (pass > 0) c.cornerBase = c.cornerLift; // where this pass's probes were
+        c.cornerProbes.clear();
+        for (const uint32_t t : c.cornerTris) {
+            const uint32_t i0 = c.tris[t], i1 = c.tris[t + 1], i2 = c.tris[t + 2];
+            const JPH::Vec3 a = verts[i0].mPosition + c.cornerLift[i0], b = verts[i1].mPosition + c.cornerLift[i1],
+                            d = verts[i2].mPosition + c.cornerLift[i2];
+            c.cornerProbes.push_back((a + b + d) / 3.0f);
+            c.cornerProbes.push_back((a + b) * 0.5f);
+            c.cornerProbes.push_back((b + d) * 0.5f);
+            c.cornerProbes.push_back((d + a) * 0.5f);
         }
-        ++c.stats.solidCorners;
+        const size_t probes = c.cornerProbes.size();
+        c.cornerDeep.assign(probes, -slack);
+        c.cornerPlane.resize(probes);
+        c.cornerHit.assign(probes, -1);
+        const float one = 1.0f;
+        const JPH::CollideSoftBodyVertexIterator probe(JPH::StridedPtr<const JPH::Vec3>(c.cornerProbes.data()), JPH::StridedPtr<const float>(&one, 0),
+                                                       JPH::StridedPtr<JPH::Plane>(c.cornerPlane.data()), JPH::StridedPtr<float>(c.cornerDeep.data()),
+                                                       JPH::StridedPtr<int>(c.cornerHit.data()));
+        for (const JPH::BodyID id : near.mHits) {
+            if (id == body.GetID()) continue;
+            JPH::BodyLockRead lock(locks, id);
+            if (!lock.Succeeded()) continue;
+            const JPH::Body& solid = lock.GetBody();
+            if (solid.IsSoftBody() || solid.IsSensor()) continue;
+            solid.GetShape()->CollideSoftBodyVertices((inv * solid.GetCenterOfMassTransform()).ToMat44(), JPH::Vec3::sOne(), probe,
+                                                      uint32_t(probes), 0);
+        }
+        for (size_t k = 0; k < c.cornerTris.size(); ++k) {
+            float deepest = -slack;
+            size_t at = probes;
+            for (size_t q = k * perTri; q < k * perTri + perTri; ++q)
+                if (c.cornerHit[q] >= 0 && c.cornerDeep[q] > deepest) {
+                    deepest = c.cornerDeep[q];
+                    at = q;
+                }
+            if (at == probes) continue;
+            // Up off the solid until the probe is a thickness clear, like a
+            // vertex (the pass after it keeps the cloth over it out of the way).
+            const JPH::Vec3 out = c.cornerPlane[at].GetNormal();
+            // Each vertex once, however many of its triangles are lifted: as
+            // far along each one's way out as that one needs.
+            const uint32_t t = c.cornerTris[k];
+            for (uint32_t j = 0; j < 3; ++j) {
+                const uint32_t v = c.tris[t + j];
+                if (verts[v].mInvMass <= 0.0f) continue;
+                JPH::Vec3& up = c.cornerLift[v];
+                if (up.IsNearZero()) c.cornerLifted.push_back(v);
+                // (A second pass: on top of what the first gave it.)
+                const float base = pass > 0 ? std::max(0.0f, c.cornerBase[v].Dot(out)) : 0.0f;
+                const float lift = std::min(deepest + c.thickness + base, most);
+                up += out * std::max(0.0f, lift - up.Dot(out));
+            }
+            if (pass == 0) ++c.stats.solidCorners;
+        }
+    }
+    // A box's corner is a point, and its edge a line: either pokes through
+    // a triangle between all the probes. As drawn, a box's edge passing
+    // under a triangle and through it (on the side away from the box, within
+    // a few thicknesses of its plane) lifts the triangle a thickness clear.
+    if (drawOnly) {
+        c.cornerBase = c.cornerLift; // where the corners are compared with
+        for (const JPH::BodyID id : near.mHits) {
+            if (id == body.GetID()) continue;
+            JPH::BodyLockRead lock(locks, id);
+            if (!lock.Succeeded()) continue;
+            const JPH::Body& solid = lock.GetBody();
+            if (solid.IsSoftBody() || solid.IsSensor() || solid.GetShape()->GetSubType() != JPH::EShapeSubType::Box) continue;
+            const JPH::Mat44 toCloth = (inv * solid.GetCenterOfMassTransform()).ToMat44();
+            const JPH::Vec3 half = static_cast<const JPH::BoxShape*>(solid.GetShape())->GetHalfExtent();
+            const JPH::Vec3 centre = toCloth.GetTranslation();
+            const JPH::Mat44 toBox = toCloth.InversedRotationTranslation();
+            // Its 12 edges (their ends are its corners), in the cloth's space.
+            JPH::Vec3 corner[8];
+            for (int k = 0; k < 8; ++k)
+                corner[k] = toCloth * JPH::Vec3(k & 1 ? half.GetX() : -half.GetX(), k & 2 ? half.GetY() : -half.GetY(), k & 4 ? half.GetZ() : -half.GetZ());
+            std::pair<JPH::Vec3, JPH::Vec3> edges[12];
+            int ne = 0;
+            for (int k = 0; k < 8; ++k)
+                for (int axis = 0; axis < 3; ++axis)
+                    if (!(k & (1 << axis))) edges[ne++] = { corner[k], corner[k | (1 << axis)] };
+            const float reach = most + 2.0f * c.meanEdge; // a triangle further from the box than this can't have it through
+            for (const uint32_t t : c.cornerTris) {
+                const uint32_t i0 = c.tris[t], i1 = c.tris[t + 1], i2 = c.tris[t + 2];
+                const JPH::Vec3 a = verts[i0].mPosition + c.cornerLift[i0], b = verts[i1].mPosition + c.cornerLift[i1],
+                                d = verts[i2].mPosition + c.cornerLift[i2];
+                const JPH::Vec3 out = (toBox * ((a + b + d) / 3.0f)).Abs() - half;
+                if (out.ReduceMax() > reach) continue;
+                JPH::Vec3 n = (b - a).Cross(d - a);
+                const float len = n.Length();
+                if (len < 1e-12f) continue;
+                n /= len;
+                if (n.Dot((a + b + d) / 3.0f - centre) < 0.0f) n = -n; // away from the box
+                // Each edge clipped to the prism over the triangle; along
+                // what's left, how far it is through the triangle (that's
+                // linear: the most is at one end).
+                const JPH::Vec3 side[3] = { n.Cross(b - a), n.Cross(d - b), n.Cross(a - d) };
+                const JPH::Vec3 from[3] = { a, b, d };
+                const float sign = side[0].Dot(d - a) >= 0.0f ? 1.0f : -1.0f; // inwards
+                float need = 0.0f;
+                for (int e = 0; e < ne; ++e) {
+                    const JPH::Vec3 p0 = edges[e].first, p1 = edges[e].second;
+                    float t0 = 0.0f, t1 = 1.0f;
+                    for (int k = 0; k < 3 && t0 <= t1; ++k) {
+                        const float f0 = sign * side[k].Dot(p0 - from[k]), f1 = sign * side[k].Dot(p1 - from[k]);
+                        if (f0 < 0.0f && f1 < 0.0f) {
+                            t1 = -1.0f;
+                        } else if (f0 < 0.0f) {
+                            t0 = std::max(t0, f0 / (f0 - f1));
+                        } else if (f1 < 0.0f) {
+                            t1 = std::min(t1, f0 / (f0 - f1));
+                        }
+                    }
+                    if (t0 > t1) continue;
+                    const float above = std::max(n.Dot(p0 + (p1 - p0) * t0 - a), n.Dot(p0 + (p1 - p0) * t1 - a)); // > 0: through it
+                    if (above <= -c.thickness || above > most) continue;
+                    need = std::max(need, above + c.thickness);
+                }
+                if (need <= 0.0f) continue;
+                need = std::min(need, most);
+                for (const uint32_t v : { i0, i1, i2 }) {
+                    if (verts[v].mInvMass <= 0.0f) continue;
+                    JPH::Vec3& up = c.cornerLift[v];
+                    if (up.IsNearZero()) c.cornerLifted.push_back(v);
+                    up += n * std::max(0.0f, c.cornerBase[v].Dot(n) + need - up.Dot(n)); // each vertex once, as above
+                }
+            }
+        }
+    }
+    if (drawOnly) {
+        c.drawLift.resize(verts.size(), JPH::Vec3::sZero());
+        for (const uint32_t v : c.cornerLifted) {
+            c.drawLift[v] = c.cornerLift[v];
+            c.cornerLift[v] = JPH::Vec3::sZero();
+        }
+        c.drawLifted.swap(c.cornerLifted);
+        c.cornerLifted.clear();
+        return;
     }
     for (const uint32_t v : c.cornerLifted) {
         JPH::SoftBodyVertex& x = verts[v];

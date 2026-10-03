@@ -70,6 +70,13 @@ CAMERAS = ["first", "third", "orbit", "topdown", "iso", "side", "fixed", "cinema
 ERROR = re.compile(r"\]\[(Scripts|CookbookPlayer|Mannequin)\]\[[^\]]*\]\[(error|critical)\]|Fatal error")
 
 
+def copy_cookbook_scripts(scripts):
+    """The cookbook's scripts without its on-screen guide (not in the docs' pictures)."""
+    for f in (ROOT / "games" / "cookbook" / "scripts").glob("*.lua"):
+        if f.name != "guide.lua":
+            shutil.copy(f, scripts)
+
+
 def write_camera(scripts, pos, target):
     """A script that holds the cookbook game's camera still: view.path
     with two keyframes at the same place. (In Init: bindings a game adds
@@ -142,13 +149,14 @@ def main():
             if kind == "game":
                 game = "cookbook"
                 pos, target, shot_at = GAME_SHOTS[what]
-                for f in (ROOT / "games" / "cookbook" / "scripts").glob("*.lua"):
-                    shutil.copy(f, scripts)
+                copy_cookbook_scripts(scripts)
                 write_camera(scripts, pos, target)
                 env["KKE_SCRIPTS_DIR"] = scripts
                 shot = MEDIA / f"{what}.jpg"
             elif kind == "camera":
                 game = "cookbook"
+                copy_cookbook_scripts(scripts)
+                env["KKE_SCRIPTS_DIR"] = scripts
                 env["KKE_COOKBOOK_VIEW"] = what
                 shot = MEDIA / f"camera-{what}.jpg"
                 shot_at = 7 if what == "cinematic" else 5

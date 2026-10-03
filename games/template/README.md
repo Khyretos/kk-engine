@@ -61,6 +61,7 @@ actions, so they can be rebound and saved in `input.json`.
 | Sprint | Left Shift (hold) | click the left stick (toggle) |
 | Walk | Left Alt (hold) | push the left stick part of the way (the speed follows the stick) |
 | First or third person | V | click the right stick |
+| Show or hide the guide card | H | d-pad down |
 | Developer panels (Scripts panel and console, stats) | F1 | none: a developer tool, keyboard only |
 | Let go of the mouse | Esc | (not needed) |
 
@@ -70,6 +71,13 @@ There are no rules yet: that is your job. You spawn at (0, 0.1, 6) facing
 the level. Walk up the stairs, vault the fence, climb the block, push the
 crates. Fall off the world (below y = -20) and you are put back at the
 spawn point. The console prints a welcome line when the scripts start.
+
+A card in the corner says what this game is for: the starting point for
+yours, where the level comes from (`scripts/game.lua`) and how to make a
+copy (`tools/new_game`). It is [scripts/guide.lua](scripts/guide.lua), a
+small example of on-screen text from Lua (`ui.open`) and of your own
+button (`input.define`); H or the d-pad down hides it, and you can delete
+the file when your game no longer needs it.
 
 ## How it works
 
@@ -141,8 +149,10 @@ and in `init`:
    ([docs/MOVEMENT.md](../../docs/MOVEMENT.md));
 3. sets up a `kke::CameraRig` in third-person mode, pitched 12 degrees
    down;
-4. builds the body: two boxes (a blue torso and a dark visor on the
-   front, so you can see which way it faces) in a `DynamicMeshRenderer`;
+4. builds the body: the engine's mannequin (`PlayerBody`, below), or two
+   boxes (a blue torso and a dark visor on the front, so you can see
+   which way it faces) when `assets/animations/UAL1_Standard.fbx` is
+   missing;
 5. turns off quit-on-Escape (Esc frees the mouse instead);
 6. registers the Lua bindings.
 
@@ -171,6 +181,18 @@ Each `update`:
 
 `render` and `renderShadow` draw the body at the capsule's feet, turned to
 `facingYaw()`; in first person the body is not drawn.
+
+### The body (PlayerBody)
+
+[PlayerBody.cpp](PlayerBody.cpp) loads the mannequin and gives it an
+`kke::Animator`: a blend space from idle through walk and jog to sprint
+(at Locomotion's own speeds, so the feet don't slide), and jump, fall and
+land clips. Each frame it picks the clip from `Locomotion::state()`, then
+`kke::CharacterIk` puts the feet flat on what is under them, the hands on
+the edge of a fence or block while vaulting or climbing, and leans the
+body into speeding up and turning ([PROCEDURAL_ANIMATION.md](../../docs/PROCEDURAL_ANIMATION.md)).
+The model follows `characterDrawPosition`, like the camera, so it never
+steps at the physics rate. In first person it is hidden.
 
 ### The `player` table in Lua
 
@@ -214,9 +236,11 @@ and crates), so bumping them makes the right sound. A `hook.Add("Init",
   the level and rules live in Lua, which reloads while the game runs.
   AGENTS.md's rule "Lua first" says the same: C++ only for what Lua
   cannot do.
-- **The body is a block.** PlayerModule.h says so and points to kke_demo
-  (games/showcase) for an animated model on the same capsule. The
-  template stays small and has no asset to go missing.
+- **The body is the mannequin.** Quaternius' CC0 Universal Animation
+  Library ships with the engine, so every game starts with a person who
+  walks, runs, jumps and puts their feet on the steps, not a block (Kees,
+  2026-09-28: "replace all the cubes"). `PlayerBody` is one small file to
+  swap for your own character; the block stays as the fallback.
 - **Scripts from the source folder while developing.** Saving the file you
   are editing is enough; no copy step, no rebuild. The copy next to the
   executable is the fallback for a shipped game.
@@ -261,8 +285,10 @@ Walking, running, jumping and vaulting speeds are Locomotion's settings
 
 ## Assets
 
-None. No Synty packs, no models, no sound files: the level is boxes made
-in Lua, the body is two boxes made in C++, and sounds are synthesised. The
+No Synty packs and no sound files: the level is boxes made in Lua and
+sounds are synthesised. The body is the mannequin from
+`assets/animations/UAL1_Standard.fbx` (Quaternius, CC0), which the engine
+copies next to every game. The
 build copies the Noto Sans fonts (`assets/fonts/`) and the shaders next to
 the executable for the UI.
 
@@ -302,7 +328,9 @@ Pitfalls:
 |---|---|
 | [main.cpp](main.cpp) | The modules the game is made of, the mood, where scripts are read from |
 | [PlayerModule.h](PlayerModule.h) | The player module's class: spawn point, look speeds |
-| [PlayerModule.cpp](PlayerModule.cpp) | Input, movement, camera, the body, the `player.*` Lua functions |
+| [PlayerModule.cpp](PlayerModule.cpp) | Input, movement, camera, the `player.*` Lua functions |
+| [PlayerBody.h](PlayerBody.h), [PlayerBody.cpp](PlayerBody.cpp) | The animated mannequin: which clip for what Locomotion does, feet and hands by `kke::CharacterIk` |
 | [scripts/game.lua](scripts/game.lua) | The level and the rules |
+| [scripts/guide.lua](scripts/guide.lua) | The card that says what this game is for (delete it when you like) |
 | [CMakeLists.txt](CMakeLists.txt) | The executable (`GAME_NAME`), the script paths, files copied next to it |
 | [game.json](game.json) | The marketplace listing: id, title, description, tags, modules |
