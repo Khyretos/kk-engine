@@ -187,9 +187,11 @@ void TennisModule::buildWorld() {
 void TennisModule::renderCourts(const kke::RenderContext& ctx) {
     if (m_courtMesh) m_courtMesh->draw(ctx, glm::mat4(1.0f), 0.0f, 0.9f);
     if (m_standMesh) m_standMesh->draw(ctx, glm::mat4(1.0f), 0.1f, 0.7f);
+    if (m_markMesh && !m_markIdx.empty()) m_markMesh->draw(ctx, glm::mat4(1.0f), 0.0f, 0.8f);
 }
 
 void TennisModule::renderTranslucent(const kke::RenderContext& ctx) {
+    if (m_shadowMesh && !m_shadowIdx.empty()) m_shadowMesh->drawTranslucent(ctx, glm::mat4(1.0f), 0.95f);
     if (m_fenceMesh) m_fenceMesh->drawTranslucent(ctx, glm::mat4(1.0f), 0.6f);
 }
 
@@ -244,6 +246,11 @@ void TennisModule::updateBodies(float dt) {
     updateWalkerBodies(dt);
 }
 
+namespace {
+constexpr float kLookSpeed = 200.0f; // degrees a second, the right stick held over
+constexpr float kCamPitch = -11.0f;  // looking a little down, over the net
+} // namespace
+
 void TennisModule::updateCameras(float dt) {
     std::vector<kke::Application::View>& views = m_app->views();
     views.clear();
@@ -259,7 +266,8 @@ void TennisModule::updateCameras(float dt) {
     if (!m_inMenu) {
         for (auto& m : m_matches)
             for (int idx : m->players)
-                if (!player(idx).cpu && !player(idx).remote) seen.push_back({ player(idx).input, &player(idx), m.get(), nullptr });
+                // (KKE_TENNIS_AUTOPLAY: the CPU plays for the person here, who keeps their camera.)
+                if ((!player(idx).cpu || (m_autoplay && player(idx).input >= 0)) && !player(idx).remote) seen.push_back({ player(idx).input, &player(idx), m.get(), nullptr });
         std::vector<kke::Camera*> walkerCams;
         updateWalkerCameras(dt, walkerCams);
         size_t wc = 0;
@@ -315,17 +323,41 @@ void TennisModule::updateCameras(float dt) {
             const CourtPlace& place = m_center.courts[static_cast<size_t>(m.court)];
             const int side = m.score.sideOf(p.team);
             const float s = static_cast<float>(side);
-            // Behind the player's own baseline, high enough to see over the net.
-            const float depth = playing > 2 ? 7.5f : 8.5f;
-            const glm::vec3 wantL(p.feet.x * 0.55f, 4.6f, s * (kHalfLength + depth));
-            const glm::vec3 lookL(p.feet.x * 0.3f + m.ball->position().x * 0.15f, 0.4f, -s * 2.0f);
-            // Changing ends: swing round rather than cut (a cut after "change ends" confuses).
-            const bool snap = !p.cameraInit;
-            const float kk = p.camSide != side ? 1.0f - std::exp(-2.0f * dt) : k;
-            const glm::vec3 wantW = place.toWorld(wantL), lookW = place.toWorld(lookL);
-            p.camera.position = snap ? wantW : p.camera.position + (wantW - p.camera.position) * kk;
-            p.camera.target = snap ? lookW : p.camera.target + (lookW - p.camera.target) * kk;
-            if (glm::length(p.camera.position - wantW) < 0.3f) p.camSide = side;
+            // Close behind the player, a little above (kke::CameraRig, like
+            // Climb Race): the ball comes toward you, so you see it come and
+            // can get the racket back in time. The right stick looks round;
+            // let go and it settles back to looking over the net (and swings
+            // round when ends change).
+            const glm::vec3 toNet = place.dirToWorld({ 0.0f, 0.0f, -s });
+            const float home = glm::degrees(std::atan2(toNet.x, -toNet.z));
+            glm::vec2 look(0.0f);
+            if (p.input >= 0) look = m_input->map(p.input).axis2("look.rate");
+            p.idleLook = glm::length(look) > 0.05f ? 0.0f : p.idleLook + dt;
+            if (p.camSide != side) p.idleLook = 10.0f;
+            p.camSide = side;
+            p.rig.addLook(look.x * kLookSpeed * dt, look.y * kLookSpeed * 0.7f * dt);
+            if (!p.cameraInit) {
+                p.rig.yaw = home;
+                p.rig.pitch = kCamPitch;
+            } else if (p.idleLook > 0.8f) {
+                const float back = 1.0f - std::exp(-2.5f * dt);
+                p.rig.yaw += std::remainder(home - p.rig.yaw, 360.0f) * back;
+                p.rig.pitch += (kCamPitch - p.rig.pitch) * back;
+            }
+            p.rig.settings.armLength = playing > 2 ? 4.8f : 4.2f;
+            p.rig.settings.pivotHeight = 2.0f;
+            p.rig.settings.shoulderOffset = 0.45f; // over the shoulder: the ball coming in isn't behind you
+            p.rig.settings.positionLag = 8.0f;
+            p.rig.settings.pitchMin = -45.0f;
+            p.rig.settings.pitchMax = 20.0f;
+            p.rig.settings.fovDegrees = main.fovDegrees;
+            kke::RigidWorld& world = m_rigid->world();
+            p.rig.update(dt, world.characterDrawPosition(p.body, m_app->fixedAlpha()),
+                         [&world](const glm::vec3& from, const glm::vec3& dir, float maxDist) {
+                             const auto hit = world.raycast(from, dir, maxDist);
+                             return hit.hit ? hit.distance : maxDist;
+                         },
+                         p.camera);
             p.cameraInit = true;
             src = &p.camera;
         }

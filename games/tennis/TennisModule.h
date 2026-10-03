@@ -10,6 +10,8 @@
 #include "Swing.h"
 
 #include "kke/Application.h"
+#include "kke/CameraRig.h"
+#include "kke/Mesh.h"
 #include "kke/Module.h"
 #include "kke/RigidWorld.h"
 
@@ -115,6 +117,11 @@ public:
         kke::Camera camera;
         bool cameraInit = false;
         int camSide = 0;               // the half the camera last sat behind
+        // A person's camera: close behind them (kke::CameraRig, third
+        // person); the right stick looks round, and it settles back to
+        // looking over the net.
+        kke::CameraRig rig;
+        float idleLook = 10.0f;        // s since the right stick was last used
     };
 
     // The last few seconds of a match, kept to show a winner or an ace
@@ -173,6 +180,8 @@ public:
         std::vector<uint8_t> history;  // who won each point (a late joiner replays the score)
         float ballSentAt = 0.0f;       // host: when its ball last went out
         int lastHitter = -1;           // index into m_players
+        glm::vec3 landingAt{0.0f};     // where the last shot comes down (Marks.cpp: the ring)
+        int landingShot = -1;          // ... for which shot of the rally (rallyShots)
         std::unique_ptr<Replay> replay; // winners and aces again in slow motion (offline, one match)
     };
 
@@ -315,6 +324,8 @@ private:
     // The HUD (Hud.cpp, ui/tennis_hud.rml).
     void buildHud();
     void updateHud();
+    // The ball's shadow and the landing ring (Marks.cpp).
+    void updateMarks();
 
     // The start menu (Lobby.cpp).
     void setupLobby();
@@ -361,6 +372,9 @@ private:
 
     // The world's look.
     std::unique_ptr<kke::DynamicMeshRenderer> m_courtMesh, m_standMesh, m_fenceMesh;
+    std::unique_ptr<kke::DynamicMeshRenderer> m_shadowMesh, m_markMesh; // Marks.cpp, rebuilt every frame
+    std::vector<kke::Vertex> m_shadowVerts, m_markVerts;
+    std::vector<uint32_t> m_shadowIdx, m_markIdx;
     std::vector<kke::RigidWorld::BodyId> m_statics;
 
     // Switches.
