@@ -83,6 +83,7 @@ public:
     int outCount() const override;
     int activeCount() const override;
     void burst(const glm::vec3& at, const glm::vec3& color, int count, float speed) override;
+    void rubble(const glm::vec3& at, const glm::vec3& color, int count, float radius) override;
     void flame(const glm::vec3& at, float size) override;
     void sound(const glm::vec3& at, uint32_t material, float intensity) override;
     void tone(int earcon, float gain) override;
@@ -165,7 +166,21 @@ private:
     void defineControls();
     BeanInput readPlayer(Bean& b, float dt);
     void moveBean(Bean& b, float dt);
+    void pushFrom(Bean& b);  // the push button
+    void sendKnock(Bean& b, const glm::vec3& velocity, float stun); // a push on another machine's bean
     void bumpBeans(float dt);
+    // Two beans that dived into each other at the same power (a charged-
+    // dive game, both on this machine): they lock, both mash jump, and the
+    // loser flies off at twice the power they met with.
+    struct Clash {
+        int a = -1, b = -1;      // bean indices (-1: no clash)
+        int presses[2] = { 0, 0 };
+        float left = 0.0f, power = 1.0f;
+        glm::vec3 dir{1.0f, 0.0f, 0.0f}; // from a to b
+    };
+    Clash m_clash;
+    void startClash(Bean& a, Bean& b, const glm::vec3& dir);
+    void updateClash(float dt);
     void animateBean(Bean& b, float dt);
     void drawBean(const Bean& b, const kke::RenderContext* ctx, const kke::ShadowRenderContext* shadow);
     glm::mat4 bodyMatrix(const Bean& b); // where it's drawn: at its feet, turned, leaning, tumbling
@@ -245,6 +260,7 @@ private:
     bool m_byVote = false;                 // the players pick each game (Next game: Vote)
     bool m_rosterChanged = false;
     std::string m_mood;
+    float m_cameraDistance = 5.5f;         // Settings > Camera: how far behind your bean
 
     // The level: static boxes in one mesh; parts that move or break.
     std::vector<kke::Vertex> m_levelV;
@@ -258,8 +274,8 @@ private:
 
     // HUD.
     struct PlayerHud {
-        std::string name, accent, status, points, x, y, w;
-        bool out = false, won = false, talking = false;
+        std::string name, accent, status, points, x, y, w, stamina;
+        bool out = false, won = false, talking = false, tired = false, tank = false;
     };
     struct RowHud {
         std::string place, name, accent, got, total, note;

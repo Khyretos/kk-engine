@@ -3,9 +3,11 @@
 // don't let anyone eat the floor out from under you. Fall through all
 // three and you're out; the last bean standing wins.
 //
-// Tiles are Jolt bodies: kinematic while they hold (they shake), dynamic
-// once they drop, tumbling down past the floors below. A tile going is an
-// event, so it goes on every machine.
+// Tiles are kinematic Jolt bodies the whole time: stepped on, one shakes
+// harder and harder, then sinks a little as it crumbles like stone and
+// is gone, its rubble falling past the floors below (particles, nothing
+// to collide with, so a going tile never throws anyone into the air). A
+// tile going is an event, so it goes on every machine.
 
 #include "Common.h"
 
@@ -24,8 +26,9 @@ constexpr int kLayers = 3;
 constexpr int kRings = 5;
 constexpr float kTileR = 1.05f, kGap = 0.1f, kTileHalfH = 0.2f;
 constexpr float kLayerGap = 6.0f;
-constexpr float kShake = 0.55f;    // s from stepped on to dropping
-constexpr float kGone = 3.0f;      // s a dropped tile falls before it's removed
+constexpr float kShake = 0.55f;    // s from stepped on to crumbling
+constexpr float kCrumble = 0.45f;  // s it sinks and sheds rubble before it's gone
+constexpr float kSink = 0.3f;      // m it sinks while crumbling
 constexpr int kEventStep = 1;
 
 float layerY(int layer) { return -kLayerGap * static_cast<float>(layer); }
@@ -51,7 +54,9 @@ public:
                 t.centre = glm::vec3(c.x, layerY(layer) - kTileHalfH, c.y);
                 // A lighter ring pattern so you can read the floor.
                 const glm::vec3 top = hexRing(c, kTileR, kGap) % 2 ? tops[layer] * 0.85f : tops[layer];
-                t.part = addTile(a, t.centre, top, tops[layer] * 0.6f);
+                t.top = top;
+                t.side = tops[layer] * 0.6f;
+                t.part = addTile(a, t.centre, t.top, t.side);
                 m_tiles.push_back(t);
             }
         }
@@ -74,22 +79,33 @@ public:
     void update(Arena& a, float dt) override {
         const float t = a.time();
         kke::RigidWorld& w = a.world();
-        // Stepped-on tiles shake, then drop; dropped ones go after a while.
+        // Stepped-on tiles shake, then crumble away.
         for (Tile& tile : m_tiles) {
             if (tile.state == 1) {
                 const float k = t - tile.at;
                 if (k >= kShake) {
                     tile.state = 2;
                     tile.at = t;
-                    movePart(a, tile, tile.centre, dt);
-                    w.setMotion(a.part(tile.part).body, kke::RigidWorld::Motion::Dynamic);
+                    a.sound(tile.centre, kke::AudioMaterialTable::Stone, 0.35f);
                 } else {
-                    const float s = 0.04f * std::sin(k * 70.0f);
-                    movePart(a, tile, tile.centre + glm::vec3(s, -k * 0.1f, -s), dt);
+                    // Shaking harder as it goes, the odd crumb falling off.
+                    const float amp = 0.015f + 0.04f * k / kShake;
+                    const float s = amp * std::sin(k * 70.0f);
+                    movePart(a, tile, tile.centre + glm::vec3(s, -k * 0.06f, -s), dt);
+                    if (a.botRng().unit() < dt * 6.0f) a.rubble(tile.centre, tile.top, 1, kTileR);
                 }
-            } else if (tile.state == 2 && t - tile.at > kGone) {
-                a.removePart(tile.part);
-                tile.state = 3;
+            } else if (tile.state == 2) {
+                const float k = std::min(1.0f, (t - tile.at) / kCrumble);
+                // Sinking slowly (a bean on it goes down with it), shedding rubble.
+                movePart(a, tile, tile.centre - glm::vec3(0.0f, kShake * 0.06f + k * k * kSink, 0.0f), dt);
+                if (a.botRng().unit() < dt * 30.0f) a.rubble(tile.centre - glm::vec3(0.0f, kTileHalfH, 0.0f), tile.top, 2, kTileR * 0.9f);
+                if (k >= 1.0f) {
+                    // Gone: the last of it falls apart.
+                    a.removePart(tile.part);
+                    a.rubble(tile.centre - glm::vec3(0.0f, kSink, 0.0f), tile.top, 26, kTileR * 0.85f);
+                    a.rubble(tile.centre - glm::vec3(0.0f, kSink + kTileHalfH, 0.0f), tile.side, 10, kTileR * 0.85f);
+                    tile.state = 3;
+                }
             }
         }
         if (!a.playing()) return;
@@ -173,8 +189,9 @@ private:
     struct Tile {
         int layer = 0, part = -1;
         glm::vec3 centre{0.0f};
-        int state = 0;       // 0 solid, 1 shaking, 2 dropping, 3 gone
-        float at = 0.0f;     // when it started shaking / dropping
+        glm::vec3 top{1.0f}, side{0.6f}; // its colours (the rubble's too)
+        int state = 0;       // 0 solid, 1 shaking, 2 crumbling, 3 gone
+        float at = 0.0f;     // when it started shaking / crumbling
     };
     std::vector<Tile> m_tiles;
 

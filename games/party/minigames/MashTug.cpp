@@ -3,6 +3,11 @@
 // other's front bean over the edge wins; when time runs out, the rope's
 // side decides.
 //
+// Uneven teams pull as hard as even ones: each team's pulls count as if
+// it had as many beans as the bigger one (one against two: the one pulls
+// double; two against three: each of the two counts 1.5). The rope's
+// arrow and the line under the clock show which way and how hard.
+//
 // Each machine counts its own beans' presses (their score, which travels
 // with their pose), so the rope is the same everywhere; the host calls
 // the win (an event).
@@ -15,6 +20,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 namespace party {
 
@@ -37,8 +43,12 @@ public:
     std::string controls() const override { return "Mash {jump} to pull!"; }
     const char* mood() const override { return "noon"; }
     float timeLimit() const override { return 30.0f; }
+    // The 3-player split's spare quarter shows the arena from here.
     CameraStyle camera() const override { return CameraStyle::Overview; }
     float killY() const override { return -2.4f; }
+    // Off to the side and higher: your own team is in a line in front of you.
+    float cameraSide() const override { return 2.2f; }
+    float cameraPitch() const override { return -24.0f; }
     float bumpStrength() const override { return 0.0f; }
 
     void overview(kke::Camera& cam) const override {
@@ -74,6 +84,17 @@ public:
         rope.transform(0, glm::rotate(glm::mat4(1.0f), -kPi * 0.5f, glm::vec3(0, 0, 1))); // Y -> X
         rope.box({ 0.0f, -0.25f, 0.0f }, { 0.05f, 0.25f, 0.2f }, glm::vec3(1.0f, 0.85f, 0.15f));
         m_rope = a.addVisual(std::move(v), std::move(idx));
+        // The arrow (points +X; turned round for the left team), in gold.
+        v.clear();
+        idx.clear();
+        MeshBuilder arrow{ v, idx };
+        arrow.box({ -0.25f, 0.0f, 0.0f }, { 0.35f, 0.09f, 0.09f }, glm::vec3(1.0f, 0.85f, 0.2f));
+        for (int k = 0; k < 6; ++k) { // a stepped head
+            const float t = static_cast<float>(k) / 6.0f;
+            arrow.box({ 0.12f + t * 0.42f, 0.0f, 0.0f }, { 0.04f, 0.3f * (1.0f - t) + 0.03f, 0.1f }, glm::vec3(1.0f, 0.85f, 0.2f));
+        }
+        m_arrow = a.addVisual(std::move(v), std::move(idx));
+        m_rate[0] = m_rate[1] = m_last[0] = m_last[1] = 0.0f;
     }
 
     void spawn(Arena& a, int index, int count, glm::vec3& feet, float& yaw) override {
@@ -95,13 +116,24 @@ public:
                 b.squashVel -= 6.0f; // a heave
             }
             b.input.move = glm::vec2(0.0f);
-            b.input.jump = b.input.dive = false;
+            b.input.jump = b.input.dive = b.input.push = false;
+            b.pulling = b.active && b.stun <= 0.0f && m_winner < 0;
             sum[team] += b.result.score;
             ++n[team];
         }
-        // The rope: the difference in taps per bean pulls it.
+        // Each team's strength: its pulls, scaled up to the bigger team's size.
+        const float most = static_cast<float>(std::max(1, std::max(n[0], n[1])));
+        float strength[2];
+        for (int t = 0; t < 2; ++t) strength[t] = n[t] ? sum[t] * most / static_cast<float>(n[t]) : 0.0f;
+        // How hard each is pulling right now (pulls a second, smoothed).
+        for (int t = 0; t < 2; ++t) {
+            const float rate = dt > 0.0f ? std::max(0.0f, strength[t] - m_last[t]) / dt : 0.0f;
+            m_rate[t] += (rate - m_rate[t]) * std::min(1.0f, dt * 2.5f);
+            m_last[t] = strength[t];
+        }
+        // The rope: the difference in strength pulls it.
         if (m_winner < 0) {
-            const float want = std::clamp(((n[1] ? sum[1] / static_cast<float>(n[1]) : 0.0f) - (n[0] ? sum[0] / static_cast<float>(n[0]) : 0.0f)) * kPull, -kWin - 0.2f, kWin + 0.2f);
+            const float want = std::clamp((strength[1] - strength[0]) / most * kPull, -kWin - 0.2f, kWin + 0.2f);
             m_pos += (want - m_pos) * std::min(1.0f, dt * 6.0f);
             if (a.authority() && a.playing() && std::abs(m_pos) >= kWin) a.event(kEventWin, m_pos > 0.0f ? 1 : 0, 0);
         } else {
@@ -109,6 +141,13 @@ public:
         }
         glm::mat4 r = glm::translate(glm::mat4(1.0f), { m_pos, 0.75f, 0.0f });
         a.part(m_rope).transform = r;
+        // The arrow over the pit: points the way the rope is going, bigger the harder.
+        const float diff = m_winner >= 0 ? (m_winner ? 1.0f : -1.0f) * 12.0f : m_rate[1] - m_rate[0];
+        const float size = std::clamp(std::abs(diff) / 12.0f, 0.15f, 1.0f);
+        glm::mat4 arrow = glm::translate(glm::mat4(1.0f), { m_pos, 2.6f + 0.1f * std::sin(a.time() * 6.0f), 0.0f });
+        if (diff < 0.0f) arrow = glm::rotate(arrow, kPi, glm::vec3(0, 1, 0));
+        a.part(m_arrow).transform = glm::scale(arrow, glm::vec3(0.6f + size, 0.6f + size * 0.6f, 0.6f + size * 0.6f));
+        a.part(m_arrow).visible = a.playing() || m_winner >= 0;
         // Everyone holds the rope where it is; a bean dragged over the
         // edge lets go and tumbles into the mud.
         for (Bean& b : beans) {
@@ -121,7 +160,12 @@ public:
             }
             a.place(b, at, b.index % 2 ? -90.0f : 90.0f);
         }
-        if (a.playing() && m_winner < 0) a.status(std::abs(m_pos) > kWin * 0.6f ? "Hold on!" : "MASH!");
+        if (a.playing() && m_winner < 0) {
+            char line[96];
+            std::snprintf(line, sizeof(line), "RED %.0f  %s  %.0f BLUE%s", m_rate[0], m_rate[0] > m_rate[1] + 0.5f ? "<<" : m_rate[1] > m_rate[0] + 0.5f ? ">>" : "==",
+                          m_rate[1], std::abs(m_pos) > kWin * 0.6f ? "  ·  Hold on!" : "");
+            a.status(line);
+        }
     }
 
     void onEvent(Arena& a, int kind, int x, int y) override {
@@ -169,7 +213,8 @@ private:
     float m_pos = 0.0f;      // how far the rope has moved (+: toward the right team)
     int m_winner = -1;
     float m_decidedAt = 0.0f;
-    int m_rope = -1;
+    int m_rope = -1, m_arrow = -1;
+    float m_rate[2] = { 0.0f, 0.0f }, m_last[2] = { 0.0f, 0.0f }; // each team's pulls a second; last frame's strength
 
     static glm::vec3 teamColour(int team) { return team ? glm::vec3(0.25f, 0.5f, 1.0f) : glm::vec3(1.0f, 0.35f, 0.3f); }
 

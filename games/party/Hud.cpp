@@ -56,6 +56,9 @@ void PartyModule::buildHud() {
         p.RegisterMember("out", &PlayerHud::out);
         p.RegisterMember("won", &PlayerHud::won);
         p.RegisterMember("talking", &PlayerHud::talking);
+        p.RegisterMember("stamina", &PlayerHud::stamina);
+        p.RegisterMember("tired", &PlayerHud::tired);
+        p.RegisterMember("tank", &PlayerHud::tank);
     }
     c.RegisterArray<std::vector<PlayerHud>>();
     if (auto r = c.RegisterStruct<RowHud>()) {
@@ -130,7 +133,7 @@ void PartyModule::updateHud(float) {
     for (const Bean& b : m_beans)
         if (b.seat >= 0 && !b.remote) players.push_back(&b);
     std::sort(players.begin(), players.end(), [](const Bean* a, const Bean* b) { return a->player < b->player; });
-    const bool split = m_game && m_game->camera() == CameraStyle::Follow && m_phase != Phase::Podium && players.size() > 1;
+    const bool split = m_game && m_phase != Phase::Podium && players.size() > 1;
     const std::vector<kke::ViewRect> rects = kke::splitScreen(std::max(1, static_cast<int>(players.size())), true);
     std::vector<PlayerHud> next;
     for (size_t i = 0; i < players.size(); ++i) {
@@ -146,6 +149,11 @@ void PartyModule::updateHud(float) {
         h.status = st;
         h.out = b.out;
         h.won = b.finished;
+        // Stamina, in steps of 5% (so the panel isn't rebuilt every frame).
+        std::snprintf(buf, sizeof(buf), "%d%%", static_cast<int>(std::lround(b.stamina * 20.0f)) * 5);
+        h.stamina = buf;
+        h.tank = m_phase == Phase::Play || m_phase == Phase::Countdown || m_phase == Phase::Intro;
+        h.tired = b.stamina < 0.3f;
         h.talking = m_voice && m_net && b.netId >= 0 && m_voice->talking() && b.player == 0;
         // Split screen: the panel in the corner of their view; one view (or
         // a shared one): side by side along the top.
@@ -165,7 +173,8 @@ void PartyModule::updateHud(float) {
     for (size_t i = 0; !dirty && i < next.size(); ++i) {
         const PlayerHud &a = next[i], &b = m_hud.players[i];
         dirty = a.name != b.name || a.status != b.status || a.points != b.points || a.x != b.x || a.y != b.y || a.w != b.w || a.accent != b.accent ||
-                a.out != b.out || a.won != b.won || a.talking != b.talking;
+                a.out != b.out || a.won != b.won || a.talking != b.talking ||
+                a.stamina != b.stamina || a.tired != b.tired || a.tank != b.tank;
     }
     if (dirty) {
         m_hud.players = std::move(next);

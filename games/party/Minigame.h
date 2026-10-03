@@ -37,6 +37,8 @@ struct BeanInput {
     bool jump = false;     // pressed this frame
     bool dive = false;     // pressed this frame
     bool jumpHeld = false;
+    bool diveHeld = false;
+    bool push = false;     // pressed this frame: shove whoever is in front
 };
 
 // One player or CPU in the party.
@@ -74,6 +76,23 @@ struct Bean {
     float checkpointYaw = 0.0f;
     BeanInput input;           // this frame's
     float frozen = 0.0f;       // s the controls are locked (the minigame's rule)
+    bool pulling = false;      // set by the minigame: hauling on a rope (drawn leaning back)
+    // Stamina (Beans.cpp): jumping, diving and pushing use it, standing
+    // still and running on the ground bring it back.
+    float stamina = 1.0f;      // 0..1
+    float diveCooldown = 0.0f; // s before the next dive
+    float pushCooldown = 0.0f; // s before the next push
+    float pushPose = 0.0f;     // s left of the push's arms-out (drawing)
+    float charge = 0.0f;       // s the dive button has been held (games with a charged dive)
+    float divePower = 1.0f;    // the last dive's power: 1, up to 2 fully charged
+    bool clashing = false;     // locked in a clash (Beans.cpp): mash to win it
+    float jumpBuffer = 0.0f;   // s a jump press waits for the ground
+    float groundTime = 0.0f; // s on the ground since the last landing
+    int repeatJumps = 0;       // jumps in a row: each goes less high
+    bool jumped = false;       // in the air from a jump of our own
+    // Before GO: where the bean may move (its start area).
+    bool fenced = false;
+    glm::vec3 fenceMin{0.0f}, fenceMax{0.0f};
 
     // Drawing: squash and stretch, leaning into turns, waddling.
     float squash = 0.0f, squashVel = 0.0f;
@@ -156,6 +175,9 @@ public:
 
     // Effects.
     virtual void burst(const glm::vec3& at, const glm::vec3& color, int count, float speed = 4.0f) = 0; // confetti, shards
+    // Chunks of one colour dropping out of a disc (a floor crumbling): they
+    // barely spread and fall like stones, nothing to collide with.
+    virtual void rubble(const glm::vec3& at, const glm::vec3& color, int count, float radius) = 0;
     virtual void flame(const glm::vec3& at, float size) = 0;  // one frame of fire at a point
     virtual void sound(const glm::vec3& at, uint32_t material, float intensity) = 0; // kke::AudioMaterialTable ids
     virtual void tone(int earcon, float gain = 0.6f) = 0;
@@ -179,12 +201,17 @@ public:
     virtual const char* id() const = 0;       // "obstacle" (the playlist, logs, KKE_PARTY_GAME)
     virtual const char* title() const = 0;    // "Obstacle Dash"
     virtual const char* goal() const = 0;     // the round card's one line: what to do
-    virtual std::string controls() const { return "{move} run  ·  {jump} jump  ·  {dive} dive"; }
+    virtual std::string controls() const { return "{move} run  ·  {jump} jump  ·  {dive} dive  ·  {push} push"; }
     virtual const char* mood() const { return "clear_day"; }
     virtual float timeLimit() const { return 90.0f; }
     virtual CameraStyle camera() const { return CameraStyle::Follow; }
     virtual void overview(kke::Camera& cam) const { (void)cam; }
     virtual float followYaw() const { return 0.0f; } // the camera's starting direction (degrees, 0 = -Z)
+    // The camera behind each bean: how far to the side (m, over the right
+    // shoulder) and how steeply it looks down (degrees), when the bean's
+    // own body or a line of others would block the view.
+    virtual float cameraSide() const { return 0.0f; }
+    virtual float cameraPitch() const { return -16.0f; }
     virtual float killY() const { return -8.0f; }  // below this a bean has fallen off (fell())
 
     virtual void build(Arena& a) = 0;          // the level
@@ -200,6 +227,14 @@ public:
     virtual void timeUp(Arena& a) { (void)a; }
     // The player's own panel line ("12 taps", "holding the bomb!").
     virtual std::string beanStatus(Arena& a, const Bean& b) const { (void)a; (void)b; return {}; }
+    // A push (the push button) is a bump on purpose: how hard (m/s).
+    virtual float pushStrength() const { return 6.0f; }
+    // Hold dive to charge it (up to twice as hard), let go to dive; two
+    // beans diving head-on at the same power clash and mash it out.
+    virtual bool chargedDive() const { return false; }
+    // A dive started in the air: m/s upwards it gives (0: none, the usual).
+    // The glass bridge's save: a dive the moment the glass goes under you.
+    virtual float airDiveLift(Arena& a, const Bean& b) const { (void)a; (void)b; return 0.0f; }
     // Beans bump into each other (sumo, tag): how hard (m/s at a full run).
     virtual float bumpStrength() const { return 2.5f; }
     virtual void touched(Arena& a, Bean& by, Bean& other) { (void)a; (void)by; (void)other; } // one bean ran or dived into another

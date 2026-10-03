@@ -9,12 +9,14 @@
 
 #include "../Minigame.h"
 
+#include "kke/DevTools.h"
 #include "kke/ImpactSynth.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 namespace party {
 
@@ -196,6 +198,9 @@ public:
             for (int k = 0; k < 10; ++k)
                 a.levelMesh().box({ -kHalfWidth + 0.5f + static_cast<float>(k), kSlopeRise + 0.01f, kFinishZ }, { 0.5f, 0.02f, 0.4f },
                                   k % 2 ? glm::vec3(0.1f) : glm::vec3(1.0f));
+            // The chute at the top and the drain at the bottom (dark slots across the track).
+            a.levelMesh().box({ 0.0f, kSlopeRise + 0.012f, kSlopeZ1 - 3.0f }, { kHalfWidth - 0.4f, 0.01f, kBallR }, glm::vec3(0.08f, 0.06f, 0.1f));
+            a.levelMesh().box({ 0.0f, 0.012f, kSlopeZ0 + 2.0f }, { kHalfWidth - 0.4f, 0.01f, kBallR }, glm::vec3(0.08f, 0.06f, 0.1f));
             for (int k = 0; k < 3; ++k) {
                 Ball b;
                 b.offset = static_cast<float>(k) / 3.0f;
@@ -224,6 +229,12 @@ public:
         const int inRow = std::min(perRow, count - row * perRow);
         feet = glm::vec3((static_cast<float>(col) - static_cast<float>(inRow - 1) * 0.5f) * 1.4f, 0.05f, kStartZ + 1.5f + static_cast<float>(row) * 1.6f);
         yaw = 0.0f;
+        // KKE_OBSTACLE_FROM=<n>: start at checkpoint n (1..5) instead, to try a later part.
+        if (const char* from = kke::dev::env("KKE_OBSTACLE_FROM")) {
+            const int k = std::clamp(std::atoi(from), 0, static_cast<int>(sizeof(kCheckpoints) / sizeof(kCheckpoints[0])) - 1);
+            feet.z += kCheckpoints[k] - kStartZ + 1.0f;
+            if (kCheckpoints[k] < kSlopeZ0) feet.y += kSlopeRise * 0.1f;
+        }
     }
 
     void update(Arena& a, float dt) override {
@@ -352,15 +363,22 @@ private:
     bool m_doorSolid[5] = {};
 
     float hammerAngle(const Hammer& h) const { return std::sin(h.speed * m_time + h.phase) * 1.15f; }
+    // A ball rises out of the chute at the top, rolls down the slope and
+    // drops into the drain at the bottom (before the doors), then comes
+    // round again: it never rolls through the doors or jumps back up.
     glm::vec3 ballPos(const Ball& b) const {
-        const float len = std::abs(kSlopeZ1 - kSlopeZ0) + 8.0f;
-        const float s = std::fmod(m_time * 0.11f + b.offset, 1.0f); // 0 at the top .. 1 at the bottom
-        const float z = kSlopeZ1 - 4.0f + s * len;
+        const float top = kSlopeZ1 - 3.0f, bottom = kSlopeZ0 + 2.0f; // the drain: on the flat between the doors and the slope
+        const float s = std::fmod(m_time * 0.12f + b.offset, 1.0f); // 0 at the top .. 1 at the bottom
+        const float z = top + s * (bottom - top);
         const float t = std::clamp((z - kSlopeZ1) / (kSlopeZ0 - kSlopeZ1), 0.0f, 1.0f);
-        const float y = z < kSlopeZ1 ? kSlopeRise : kSlopeRise * (1.0f - t);
+        float y = z < kSlopeZ1 ? kSlopeRise : kSlopeRise * (1.0f - t);
+        // Coming up out of the chute, going down the drain.
+        const float dip = s < 0.06f ? 1.0f - s / 0.06f : s > 0.94f ? (s - 0.94f) / 0.06f : 0.0f;
+        y -= dip * (kBallR * 2.0f + 0.3f);
         const float x = std::sin(b.offset * 11.0f + m_time * 0.7f) * 2.5f;
         return { x, y + kBallR, z };
     }
+    static bool ballUp(const glm::vec3& c) { return c.y > kBallR * 0.6f; } // out of the chute or drain: it can hit
 
     // Moving parts where the clock says.
     void place(Arena& a, float dt) {
@@ -411,6 +429,7 @@ private:
     void hitByBalls(Arena& a, Bean& b, const glm::vec3& p) {
         for (const Ball& ball : m_balls) {
             const glm::vec3 c = ballPos(ball);
+            if (!ballUp(c)) continue;
             const glm::vec3 d = p + glm::vec3(0.0f, kBeanHeight * 0.5f, 0.0f) - c;
             if (glm::length(d) > kBallR + kBeanRadius + 0.1f) continue;
             glm::vec3 out = glm::normalize(glm::vec3(d.x, 0.0f, d.z) + glm::vec3(0.0f, 0.0f, 0.6f));

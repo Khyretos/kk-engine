@@ -35,7 +35,7 @@ const PersonAsset kPeople[] = {
 constexpr int kPeopleCount = static_cast<int>(sizeof(kPeople) / sizeof(kPeople[0]));
 
 // The animator's states, added in this order on every one.
-enum State { Move = 0, JumpUp, Fall, Land, Dive, Hit, Cheer };
+enum State { Move = 0, JumpUp, Fall, Land, Dive, Hit, Cheer, Push, Pull };
 
 } // namespace
 
@@ -136,7 +136,7 @@ bool People::sync(Bean& b) {
     const kke::AnimationSet& s = *r->set;
     auto clip = [&s](const char* name, const char* fallback) {
         const int c = s.find(name);
-        return c >= 0 ? c : s.find(fallback);
+        return c >= 0 ? c : std::max(0, s.find(fallback)); // the first clip when neither is there
     };
     p->anim = std::make_unique<kke::Animator>(s);
     kke::Animator& a = *p->anim;
@@ -149,6 +149,8 @@ bool People::sync(Bean& b) {
     a.addClipState("dive", clip("|Roll", "Jump_Loop"), false, 1.3f);
     a.addClipState("hit", clip("Hit_Chest", "Hit"), false, 1.0f);
     a.addClipState("cheer", clip("|Dance_Loop", "Idle"), true);
+    a.addClipState("push", clip("Push_Loop", "Hit_Chest"), true, 1.6f);
+    a.addClipState("pull", clip("Crouch_Idle_Loop", "Idle"), true); // low, leaning back on the rope (bodyMatrix)
     a.play(Move, 0.0f);
     p->state = Move;
     b.person = std::move(p);
@@ -190,6 +192,10 @@ void People::animate(Bean& b, const glm::mat4& m, float speed, bool cheer, bool 
         p.airTime = 0.0f;
     } else if (p.state == Land && !a.finished()) {
         // landing
+    } else if (b.pushPose > 0.0f) {
+        go(Push, 0.06f);
+    } else if (b.pulling) {
+        go(Pull, 0.2f);
     } else if (cheer) {
         go(Cheer, 0.3f);
     } else {

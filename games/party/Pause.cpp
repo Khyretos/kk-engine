@@ -28,10 +28,13 @@ std::vector<PartyModule::VoicePeer> PartyModule::voicePeers() const {
 }
 
 void PartyModule::setupPause() {
-    if (auto* shell = m_app->getModule<kke::GameShellModule>())
+    if (auto* shell = m_app->getModule<kke::GameShellModule>()) {
         shell->onMainMenu = [this] {
             if (m_lobby && m_phase != Phase::Lobby && !netClient()) backToLobby();
         };
+        // Every round is seen from behind your own bean; how far behind is yours to pick.
+        shell->settings("Camera").slider("Distance behind your bean", &m_cameraDistance, 3.0f, 9.0f, "%.1f m", {}, 0.5f);
+    }
     m_panel = m_app->getModule<kke::DemoPanelModule>();
     if (!m_panel) return;
     m_panel->setTitle("Party and voice");

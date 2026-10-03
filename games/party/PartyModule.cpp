@@ -307,8 +307,27 @@ void PartyModule::buildRound(const std::string& game, uint32_t seed) {
         b.checkpoint = feet;
         b.checkpointYaw = yaw;
         if (!b.remote) place(b, feet, yaw);
-        b.rig.yaw = m_game->followYaw();
-        b.rig.pitch = -16.0f;
+        b.rig.yaw = yaw; // behind them, looking the way they face
+        b.rig.pitch = m_game->cameraPitch();
+        b.stamina = 1.0f;
+        b.pulling = b.clashing = false;
+        b.charge = 0.0f;
+        b.divePower = 1.0f;
+        b.diveCooldown = b.pushCooldown = b.jumpBuffer = 0.0f;
+        b.repeatJumps = 0;
+    }
+    m_clash = Clash{};
+    // Before GO everyone keeps to the start area: around where they all
+    // start, a step either way.
+    glm::vec3 lo(1e9f), hi(-1e9f);
+    for (const Bean& b : m_beans) {
+        lo = glm::min(lo, b.checkpoint);
+        hi = glm::max(hi, b.checkpoint);
+    }
+    for (Bean& b : m_beans) {
+        b.fenced = count > 0;
+        b.fenceMin = lo - glm::vec3(0.8f, 0.0f, 0.8f);
+        b.fenceMax = hi + glm::vec3(0.8f, 0.0f, 0.8f);
     }
     m_phase = Phase::Intro;
     m_phaseTime = 0.0f;
@@ -597,7 +616,8 @@ void PartyModule::update(const kke::UpdateContext& ctx) {
         if (b.remote) continue;
         if (m_phase == Phase::Vote) continue; // the stick and jump vote (updateVote)
         b.input = BeanInput{};
-        const bool canMove = b.active && (m_phase == Phase::Play || m_phase == Phase::Intro || m_phase == Phase::Podium) && b.frozen <= 0.0f;
+        const bool canMove = b.active && (m_phase == Phase::Play || m_phase == Phase::Intro || m_phase == Phase::Countdown || m_phase == Phase::Podium) &&
+                             b.frozen <= 0.0f;
         if (b.bot) {
             if (canMove && m_phase == Phase::Play && m_game) b.input = m_game->bot(*this, b, dt);
         } else {
@@ -607,6 +627,7 @@ void PartyModule::update(const kke::UpdateContext& ctx) {
         b.frozen = std::max(0.0f, b.frozen - dt);
     }
     if (m_game && m_phase != Phase::Lobby && m_phase != Phase::Podium && m_phase != Phase::Vote) m_game->update(*this, dt);
+    updateClash(dt);
     for (Bean& b : m_beans)
         if (!b.remote) moveBean(b, dt);
     bumpBeans(dt);

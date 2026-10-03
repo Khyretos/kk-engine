@@ -33,10 +33,11 @@ public:
     const char* id() const override { return "hot_potato"; }
     const char* title() const override { return "Hot Potato"; }
     const char* goal() const override { return "Got the bomb? Touch someone to pass it on before it goes BANG! Last one standing wins."; }
-    std::string controls() const override { return "{move} run  ·  {dive} dive to tag  ·  {jump} jump"; }
+    std::string controls() const override { return "{move} run  ·  {dive} dive to tag  ·  {push} push  ·  {jump} jump"; }
     const char* mood() const override { return "clear_day"; }
     float timeLimit() const override { return 150.0f; }
     float bumpStrength() const override { return 1.5f; }
+    // The 3-player split's spare quarter shows the arena from here.
     CameraStyle camera() const override { return CameraStyle::Overview; }
 
     void overview(kke::Camera& cam) const override {

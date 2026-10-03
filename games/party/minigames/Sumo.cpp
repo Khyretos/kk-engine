@@ -1,9 +1,13 @@
 // Bean Sumo: everyone on one round floor in the sky. Barge into the
-// others and dive at them to knock them off; the edge crumbles away ring
-// by ring, so the floor keeps getting smaller. The last bean on it wins.
+// others and dive at them to knock them off; hold dive to wind up a
+// harder one. Two beans diving head-on at the same power clash: both mash
+// jump and the loser flies off at twice the power they met with. The edge
+// crumbles away ring by ring, so the floor keeps getting smaller. The
+// last bean on it wins.
 //
-// The floor's rings drop at set times (the same everywhere, no events);
-// bumping is the party's (PartyModule::bumpBeans), just much harder here.
+// The floor's rings crumble at set times (the same everywhere, no events);
+// bumping, the charged dive and the clash are the party's
+// (PartyModule::bumpBeans, Beans.cpp), just much harder here.
 
 #include "Common.h"
 
@@ -20,7 +24,8 @@ using namespace common;
 
 constexpr int kRings = 6;
 constexpr float kTileR = 1.0f, kGap = 0.04f, kTileHalfH = 0.25f;
-constexpr float kWarn = 2.5f;       // s a ring shakes before it drops
+constexpr float kWarn = 2.5f;       // s a ring shakes before it crumbles
+constexpr float kCrumble = 0.6f;    // s it takes to crumble away
 constexpr float kDrops[] = { 25.0f, 42.0f, 58.0f, 72.0f }; // rings 6, 5, 4, 3 go
 
 class Sumo final : public Minigame {
@@ -28,11 +33,13 @@ public:
     const char* id() const override { return "sumo"; }
     const char* title() const override { return "Bean Sumo"; }
     const char* goal() const override { return "Barge and dive into the others to knock them off. The edge keeps crumbling. Last bean on the floor wins!"; }
-    std::string controls() const override { return "{move} run  ·  {dive} dive into someone  ·  {jump} jump"; }
+    std::string controls() const override { return "{move} run  ·  hold {dive} and let go: dive (longer, harder)  ·  {push} push  ·  {jump} jump (mash in a clash)"; }
     const char* mood() const override { return "sunset"; }
     float timeLimit() const override { return 90.0f; }
     float killY() const override { return -6.0f; }
     float bumpStrength() const override { return 6.5f; }
+    bool chargedDive() const override { return true; }
+    // The 3-player split's spare quarter shows the arena from here.
     CameraStyle camera() const override { return CameraStyle::Overview; }
 
     void overview(kke::Camera& cam) const override {
@@ -59,6 +66,7 @@ public:
             const glm::vec3 top = t.ring == 2 ? glm::vec3(0.85f, 0.75f, 0.45f) : t.ring >= kRings - 1 ? glm::vec3(0.85f, 0.3f, 0.28f)
                                                                                                     : glm::vec3(0.93f, 0.85f, 0.66f);
             MeshBuilder{ v, idx }.hexPrism(glm::vec3(0.0f), kTileR, kTileHalfH, top, glm::vec3(0.55f, 0.42f, 0.3f));
+            t.top = top;
             t.part = a.addPart(d, std::move(v), std::move(idx));
             m_tiles.push_back(t);
         }
@@ -80,22 +88,28 @@ public:
 
     void update(Arena& a, float dt) override {
         const float t = a.playing() ? a.time() : 0.0f;
-        kke::RigidWorld& w = a.world();
         for (Tile& tile : m_tiles) {
             const int drop = dropIndex(tile.ring);
             if (drop < 0 || tile.state == 2) continue;
             const float when = kDrops[drop];
             if (tile.state == 0 && t >= when) {
                 tile.state = 1;
-                a.movePart(tile.part, tile.centre, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), dt);
-                w.setMotion(a.part(tile.part).body, kke::RigidWorld::Motion::Dynamic);
                 tile.at = t;
+                if (a.botRng().below(3) == 0) a.sound(tile.centre, kke::AudioMaterialTable::Stone, 0.4f);
             } else if (tile.state == 0 && t >= when - kWarn) {
                 const float s = 0.03f * std::sin((t + tile.centre.x) * 60.0f);
                 a.movePart(tile.part, tile.centre + glm::vec3(s, 0.0f, -s), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), dt);
-            } else if (tile.state == 1 && t - tile.at > 3.0f) {
-                a.removePart(tile.part);
-                tile.state = 2;
+            } else if (tile.state == 1) {
+                // Crumbling: sinking slowly and shedding rubble, then gone
+                // (kinematic to the end, so nobody is thrown by it).
+                const float k = std::min(1.0f, (t - tile.at) / kCrumble);
+                a.movePart(tile.part, tile.centre - glm::vec3(0.0f, k * k * 0.35f, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), dt);
+                if (a.botRng().unit() < dt * 20.0f) a.rubble(tile.centre - glm::vec3(0.0f, kTileHalfH, 0.0f), tile.top, 2, kTileR * 0.9f);
+                if (k >= 1.0f) {
+                    a.removePart(tile.part);
+                    a.rubble(tile.centre - glm::vec3(0.0f, 0.35f, 0.0f), tile.top, 20, kTileR * 0.85f);
+                    tile.state = 2;
+                }
             }
         }
         if (!a.playing()) return;
@@ -157,7 +171,17 @@ public:
         const float d = glm::length(glm::vec2(q.x - p.x, q.z - p.z));
         const glm::vec3 aim = d > 2.5f ? q - outward * 1.2f : q;
         in.move = steer(p, aim);
-        if (d < 2.0f && b.grounded && b.dive <= 0.0f && a.botRng().unit() < dt * 3.0f * skill(b)) in.dive = true;
+        // Winding up a dive (b.j: holding, b.b: s left to hold), then letting go.
+        if (b.j == 1) {
+            b.b -= dt;
+            in.diveHeld = b.b > 0.0f && b.grounded;
+            if (!in.diveHeld) b.j = 0;
+        } else if (d < 3.0f && b.grounded && b.dive <= 0.0f && b.diveCooldown <= 0.0f && a.botRng().unit() < dt * 3.0f * skill(b)) {
+            b.j = 1;
+            b.b = a.botRng().range(0.05f, 0.9f);
+            in.diveHeld = true;
+        }
+        if (in.diveHeld && b.charge > 0.0f && d < 1.6f) b.b = 0.0f; // too close to wait: go now
         return in;
     }
 
@@ -165,7 +189,8 @@ private:
     struct Tile {
         int ring = 0, part = -1;
         glm::vec3 centre{0.0f};
-        int state = 0;   // 0 solid, 1 dropping, 2 gone
+        glm::vec3 top{1.0f};
+        int state = 0;   // 0 solid, 1 crumbling, 2 gone
         float at = 0.0f;
     };
     std::vector<Tile> m_tiles;

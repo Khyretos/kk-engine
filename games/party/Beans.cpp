@@ -28,6 +28,17 @@ constexpr float kRunSpeed = 5.2f;
 constexpr float kJumpSpeed = 6.3f;
 constexpr float kDiveTime = 0.7f, kDiveSpeed = 8.0f;
 constexpr float kCoyote = 0.12f;
+constexpr float kChargeMax = 1.0f;    // s of holding dive for a full-power dive (charged-dive games)
+constexpr float kClashTime = 2.0f;    // s two clashing beans mash for
+constexpr float kJumpBuffer = 0.15f;  // s a press waits for the ground (pressed just before landing)
+constexpr float kDiveCooldown = 1.1f; // s after a dive before the next
+constexpr float kPushCooldown = 0.7f, kPushReach = 1.35f;
+// Stamina: what each move costs, how fast it comes back.
+constexpr float kJumpCost = 0.12f, kDiveCost = 0.28f, kPushCost = 0.15f;
+constexpr float kRegenGround = 0.32f, kRegenAir = 0.05f;
+// Jumps in a row (a hop the moment you land): each goes less high, so
+// bunny hopping is slower than running.
+constexpr float kRepeatWindow = 0.15f, kRepeatScale = 0.85f, kRepeatMin = 0.6f;
 constexpr float kLookMouse = 0.12f, kLookStick = 180.0f;
 
 float yawOf(const glm::vec3& d) { return glm::degrees(std::atan2(d.x, -d.z)); }
@@ -51,6 +62,9 @@ void PartyModule::defineControls() {
         in.defineAction({ "dive", "Dive (and shove whoever you land on)", "Party", "game" });
         in.defineAction({ "menu", "Back to the menu (players, rounds, games)", "Party", "game" });
         in.defineAction({ "panels", "Developer panels", "Game", "game" });
+        in.defineAction({ "push", "Push whoever is in front of you", "Party", "game" });
+        in.addBinding(IM::bind("push", IM::pad(SDL_GAMEPAD_BUTTON_EAST)));
+        in.addBinding(IM::bind("push", IM::key(SDL_SCANCODE_F)));
         in.addBinding(IM::bind("dive", IM::pad(SDL_GAMEPAD_BUTTON_WEST)));
         in.addBinding(IM::bind("dive", IM::pad(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)));
         in.addBinding(IM::bind("dive", IM::key(SDL_SCANCODE_E)));
@@ -78,12 +92,6 @@ BeanInput PartyModule::readPlayer(Bean& b, float dt) {
     const glm::vec2 move = in.axis2("move");
     // Relative to what the player sees: their camera, or the shared one.
     glm::vec3 fwd = b.rig.forward(), right = b.rig.right();
-    if (m_game && m_game->camera() == CameraStyle::Overview) {
-        fwd = m_overview.target - m_overview.position;
-        fwd.y = 0.0f;
-        fwd = glm::length(fwd) > 1e-3f ? glm::normalize(fwd) : glm::vec3(0, 0, -1);
-        right = glm::cross(fwd, glm::vec3(0, 1, 0));
-    }
     fwd.y = right.y = 0.0f;
     glm::vec3 wish = (glm::length(fwd) > 1e-3f ? glm::normalize(fwd) : glm::vec3(0, 0, -1)) * move.y +
                      (glm::length(right) > 1e-3f ? glm::normalize(right) : glm::vec3(1, 0, 0)) * move.x;
@@ -92,6 +100,8 @@ BeanInput PartyModule::readPlayer(Bean& b, float dt) {
     bi.jump = in.pressed("jump");
     bi.jumpHeld = in.held("jump");
     bi.dive = in.pressed("dive");
+    bi.diveHeld = in.held("dive");
+    bi.push = in.pressed("push");
     return bi;
 }
 
@@ -109,25 +119,50 @@ void PartyModule::moveBean(Bean& b, float dt) {
     const bool was = b.grounded;
     b.grounded = w.characterOnGround(b.id);
     b.airTime = b.grounded ? 0.0f : b.airTime + dt;
+    b.groundTime = b.grounded ? (was ? b.groundTime + dt : 0.0f) : 0.0f;
+    if (b.grounded && b.groundTime > kRepeatWindow) b.repeatJumps = 0;
+    if (b.grounded && !was) b.jumped = false;
     b.bumped = std::max(0.0f, b.bumped - dt);
+    b.diveCooldown = std::max(0.0f, b.diveCooldown - dt);
+    b.pushCooldown = std::max(0.0f, b.pushCooldown - dt);
+    b.pushPose = std::max(0.0f, b.pushPose - dt);
+    b.stamina = std::min(1.0f, b.stamina + (b.grounded && b.dive <= 0.0f ? kRegenGround : kRegenAir) * dt);
     BeanInput in = b.stun > 0.0f ? BeanInput{} : b.input;
     if (!b.active && m_phase == Phase::Play) in = BeanInput{}; // finished: wait at the goal
     glm::vec3 wish = glm::vec3(in.move.x, 0.0f, in.move.y) * kRunSpeed;
     kke::RigidWorld::CharacterInput ci;
     ci.airSteer = 1000.0f; // we send the exact horizontal velocity
-    // Dive: a burst forward, then a belly slide that slows down.
-    if (in.dive && b.dive <= 0.0f && b.stun <= 0.0f) {
-        b.dive = kDiveTime;
-        b.velocity = facingOf(b.yaw) * kDiveSpeed;
-        if (b.grounded) b.launch = std::max(b.launch, 3.2f);
-        sound(b.feet(w), kke::AudioMaterialTable::Rubber, 0.25f);
+    // Dive: a burst forward, then a belly slide that slows down. Not
+    // again straight away, and not on an empty tank.
+    const bool canDive = b.dive <= 0.0f && b.stun <= 0.0f && b.diveCooldown <= 0.0f && b.stamina >= kDiveCost * 0.5f;
+    bool diveNow = in.dive;
+    if (m_game && m_game->chargedDive()) {
+        // Held: winding up (slow on your feet, squashing down); let go: dive.
+        diveNow = b.charge > 0.0f && !in.diveHeld;
+        if (in.diveHeld && canDive && b.grounded) {
+            b.charge = std::min(kChargeMax, b.charge + dt);
+            wish *= 0.35f;
+            b.squash = std::max(b.squash, 0.2f * b.charge / kChargeMax);
+        }
     }
+    if (diveNow && canDive) {
+        b.divePower = 1.0f + std::min(b.charge, kChargeMax) / kChargeMax;
+        b.dive = kDiveTime;
+        b.diveCooldown = kDiveTime + kDiveCooldown;
+        b.stamina = std::max(0.0f, b.stamina - kDiveCost * b.divePower);
+        b.velocity = facingOf(b.yaw) * kDiveSpeed * (0.75f + 0.25f * b.divePower);
+        if (b.grounded) b.launch = std::max(b.launch, 3.2f);
+        else if (m_game) b.launch = std::max(b.launch, m_game->airDiveLift(*this, b));
+        sound(b.feet(w), kke::AudioMaterialTable::Rubber, 0.25f * b.divePower);
+    }
+    if (diveNow || !in.diveHeld) b.charge = 0.0f;
     if (b.dive > 0.0f) {
         b.dive -= dt;
         wish = facingOf(b.yaw) * (b.grounded ? kDiveSpeed * std::max(0.0f, b.dive / kDiveTime) : kDiveSpeed * 0.9f);
         // Landed from a dive: back up on your feet a moment later.
         if (b.grounded && b.dive < kDiveTime - 0.25f) b.dive = std::min(b.dive, 0.2f);
     }
+    if (in.push && b.pushCooldown <= 0.0f && b.dive <= 0.0f && b.stamina >= kPushCost * 0.5f) pushFrom(b);
     if (b.stun > 0.0f) {
         b.stun -= dt;
         wish = glm::vec3(0.0f);
@@ -143,18 +178,31 @@ void PartyModule::moveBean(Bean& b, float dt) {
         const float step = 900.0f * dt;
         b.yaw += std::clamp(d, -step, step);
     }
-    if (in.jump && (b.grounded || b.airTime < kCoyote) && b.dive <= 0.0f && b.stun <= 0.0f) {
+    // Jump: a press counts for a moment (pressed just before landing), and
+    // a little after leaving an edge. A jump the moment you land goes less
+    // high, and so does one on an empty tank.
+    b.jumpBuffer = in.jump ? kJumpBuffer : std::max(0.0f, b.jumpBuffer - dt);
+    const bool canJump = (b.grounded || (b.airTime < kCoyote && !b.jumped)) && b.dive <= 0.0f && b.stun <= 0.0f;
+    if (b.jumpBuffer > 0.0f && canJump) {
+        if (b.grounded && b.groundTime < kRepeatWindow && b.repeatJumps > 0) ++b.repeatJumps;
+        else b.repeatJumps = 1;
+        const float repeat = std::max(kRepeatMin, std::pow(kRepeatScale, static_cast<float>(b.repeatJumps - 1)));
+        const float tired = b.stamina >= kJumpCost ? 1.0f : 0.75f;
+        b.stamina = std::max(0.0f, b.stamina - kJumpCost);
         ci.jump = true;
-        ci.jumpSpeed = kJumpSpeed;
+        ci.jumpSpeed = kJumpSpeed * std::sqrt(repeat * tired); // height goes with speed squared
         ci.jumpInAir = true; // coyote time is ours to decide
-        b.airTime = kCoyote; // one jump
+        b.jumpBuffer = 0.0f;
+        b.jumped = true;
+        b.airTime = kCoyote;
         b.squash = -0.25f;   // stretch
         sound(b.feet(w), kke::AudioMaterialTable::Rubber, 0.12f);
     }
     if (b.launch > 0.0f) {
         if (b.grounded) {
+            ci.jumpSpeed = std::max(ci.jump ? ci.jumpSpeed : 0.0f, b.launch);
             ci.jump = true;
-            ci.jumpSpeed = std::max(ci.jumpSpeed * (ci.jump ? 1.0f : 0.0f), b.launch);
+            ci.jumpInAir = true;
         } else {
             const glm::vec3 v = w.characterVelocity(b.id);
             w.setCharacterVelocity(b.id, glm::vec3(v.x, std::max(v.y, b.launch), v.z));
@@ -162,7 +210,22 @@ void PartyModule::moveBean(Bean& b, float dt) {
         b.launch = 0.0f;
     }
     b.push *= std::exp(-(b.grounded ? 3.5f : 0.5f) * dt);
-    ci.move = b.velocity + b.push;
+    glm::vec3 move = b.velocity + b.push;
+    // Before GO: stay in your start area (no head start, and nobody can be
+    // pushed off the start). Moving about and shoving inside it is fine.
+    if (b.fenced && m_phase != Phase::Play) {
+        const glm::vec3 at = w.characterPosition(b.id);
+        auto hold = [&](float pos, float lo, float hi, float& v) {
+            if ((pos <= lo && v < 0.0f) || (pos >= hi && v > 0.0f)) v = 0.0f;
+            if (pos < lo - 0.05f) v = std::max(v, (lo - pos) * 8.0f);
+            if (pos > hi + 0.05f) v = std::min(v, (hi - pos) * 8.0f);
+        };
+        hold(at.x, b.fenceMin.x, b.fenceMax.x, move.x);
+        hold(at.z, b.fenceMin.z, b.fenceMax.z, move.z);
+        if (move.x == 0.0f) b.velocity.x = b.push.x = 0.0f;
+        if (move.z == 0.0f) b.velocity.z = b.push.z = 0.0f;
+    }
+    ci.move = move;
     w.setCharacterInput(b.id, ci);
     // A hard landing squashes the jelly.
     if (b.grounded && !was) {
@@ -170,6 +233,39 @@ void PartyModule::moveBean(Bean& b, float dt) {
         b.squashVel += std::min(fall, 12.0f) * 0.25f;
         if (fall > 4.0f) sound(b.feet(w), kke::AudioMaterialTable::Rubber, std::min(1.0f, fall / 14.0f));
     }
+}
+
+// The push button: a two-handed shove at whoever is closest in front.
+void PartyModule::pushFrom(Bean& b) {
+    kke::RigidWorld& w = world();
+    b.pushCooldown = kPushCooldown;
+    b.pushPose = 0.3f;
+    b.stamina = std::max(0.0f, b.stamina - kPushCost);
+    const glm::vec3 at = b.feet(w), fwd = facingOf(b.yaw);
+    Bean* best = nullptr;
+    float bestD = kPushReach + kBeanRadius;
+    for (Bean& o : m_beans) {
+        if (&o == &b || o.hidden || !o.active) continue;
+        const glm::vec3 p = o.remote ? o.drawFeet : o.feet(w);
+        glm::vec3 d = p - at;
+        if (std::abs(d.y) > kBeanHeight * 0.8f) continue;
+        d.y = 0.0f;
+        const float dist = glm::length(d);
+        if (dist > bestD || dist < 1e-3f || glm::dot(d / dist, fwd) < 0.45f) continue;
+        bestD = dist;
+        best = &o;
+    }
+    sound(at + glm::vec3(0.0f, 0.8f, 0.0f), kke::AudioMaterialTable::Rubber, best ? 0.45f : 0.1f);
+    if (!best) return;
+    glm::vec3 dir = (best->remote ? best->drawFeet : best->feet(w)) - at;
+    dir.y = 0.0f;
+    dir = glm::length(dir) > 1e-3f ? glm::normalize(dir) : fwd;
+    const float strength = m_game ? m_game->pushStrength() : 6.0f;
+    const glm::vec3 shove = dir * strength + glm::vec3(0.0f, 1.8f, 0.0f);
+    if (best->remote) sendKnock(*best, shove, 0.35f); // its own machine moves it
+    else knock(*best, shove, 0.35f);
+    knock(b, -dir * 0.8f, 0.0f);
+    if (m_game && m_phase == Phase::Play) m_game->touched(*this, b, *best);
 }
 
 void PartyModule::bumpBeans(float dt) {
@@ -199,16 +295,88 @@ void PartyModule::bumpBeans(float dt) {
                 if (by.bumped > 0.0f) return;
                 by.bumped = 0.35f;
                 const bool dived = by.dive > 0.0f;
-                if (dived) knock(hit, dir * (strength * 1.6f + 2.0f) + glm::vec3(0.0f, 3.5f, 0.0f), 0.9f);
+                if (dived) knock(hit, dir * (strength * 1.6f + 2.0f) * by.divePower + glm::vec3(0.0f, 3.5f, 0.0f), 0.9f);
                 else if (speed > 2.5f) knock(hit, dir * strength * std::min(speed / kRunSpeed, 1.2f) + glm::vec3(0.0f, 1.2f, 0.0f), 0.0f);
                 knock(by, -dir * 1.2f, 0.0f);
                 sound((pa + pc) * 0.5f + glm::vec3(0.0f, 0.7f, 0.0f), kke::AudioMaterialTable::Rubber, std::min(1.0f, speed / 8.0f + (dived ? 0.3f : 0.0f)));
                 if (m_game && m_phase == Phase::Play) m_game->touched(*this, by, hit);
             };
+            // Head-on dives at the same power: a clash (both here, a game that has them).
+            if (m_game && m_game->chargedDive() && m_phase == Phase::Play && m_clash.a < 0 && !a.remote && !c.remote && a.dive > 0.0f &&
+                c.dive > 0.0f && !a.clashing && !c.clashing && glm::dot(facingOf(a.yaw), facingOf(c.yaw)) < -0.5f &&
+                std::abs(a.divePower - c.divePower) < 0.2f) {
+                startClash(a, c, n);
+                continue;
+            }
             if (approach > 1.2f) shove(a, c, n, approach);
             else if (approach < -1.2f) shove(c, a, -n, -approach);
         }
     }
+}
+
+void PartyModule::startClash(Bean& a, Bean& b, const glm::vec3& dir) {
+    m_clash = Clash{};
+    m_clash.a = a.index;
+    m_clash.b = b.index;
+    m_clash.left = kClashTime;
+    m_clash.power = std::max(a.divePower, b.divePower);
+    m_clash.dir = dir;
+    for (Bean* x : { &a, &b }) {
+        x->clashing = true;
+        x->dive = 0.0f;
+        x->charge = 0.0f;
+        x->velocity = x->push = glm::vec3(0.0f);
+    }
+    kke::RigidWorld& w = world();
+    const glm::vec3 mid = (a.feet(w) + b.feet(w)) * 0.5f + glm::vec3(0.0f, 0.8f, 0.0f);
+    sound(mid, kke::AudioMaterialTable::Wood, 1.0f);
+    burst(mid, glm::vec3(1.0f, 0.85f, 0.3f), 30, 5.0f);
+    flash("CLASH! Mash jump!", 1.2f);
+}
+
+void PartyModule::updateClash(float dt) {
+    if (m_clash.a < 0) return;
+    Bean* side[2] = { nullptr, nullptr };
+    for (Bean& b : m_beans) {
+        if (b.index == m_clash.a) side[0] = &b;
+        if (b.index == m_clash.b) side[1] = &b;
+    }
+    const bool broken = !side[0] || !side[1] || m_phase != Phase::Play || side[0]->hidden || side[1]->hidden || !side[0]->active || !side[1]->active;
+    kke::RigidWorld& w = world();
+    if (!broken) {
+        const glm::vec3 mid = (side[0]->feet(w) + side[1]->feet(w)) * 0.5f + glm::vec3(0.0f, 0.8f, 0.0f);
+        for (int k = 0; k < 2; ++k) {
+            Bean& b = *side[k];
+            const bool press = b.bot ? m_botRng.unit() < dt * (5.0f + 2.5f * static_cast<float>(b.difficulty)) : b.input.jump;
+            if (press) {
+                ++m_clash.presses[k];
+                b.squash = 0.25f;
+                if (m_botRng.below(2) == 0) burst(mid, k == 0 ? glm::vec3(1.0f, 0.6f, 0.2f) : glm::vec3(0.4f, 0.7f, 1.0f), 3, 2.5f);
+            }
+            // Locked together, leaning in, nothing else.
+            b.input = BeanInput{};
+            b.velocity = b.push = glm::vec3(0.0f);
+            b.yaw = yawOf(k == 0 ? m_clash.dir : -m_clash.dir);
+        }
+        status("CLASH  " + std::to_string(m_clash.presses[0]) + " : " + std::to_string(m_clash.presses[1]));
+        m_clash.left -= dt;
+        if (m_clash.left > 0.0f) return;
+    }
+    if (!broken) {
+        // The loser flies at twice the power they met with.
+        const int winner = m_clash.presses[0] == m_clash.presses[1] ? m_botRng.below(2) : m_clash.presses[0] > m_clash.presses[1] ? 0 : 1;
+        Bean& win = *side[winner];
+        Bean& lose = *side[1 - winner];
+        const glm::vec3 dir = winner == 0 ? m_clash.dir : -m_clash.dir;
+        const float strength = m_game ? m_game->bumpStrength() : 2.5f;
+        knock(lose, dir * (strength * 1.6f + 2.0f) * m_clash.power * 2.0f + glm::vec3(0.0f, 5.0f, 0.0f), 1.2f);
+        knock(win, -dir * 1.0f, 0.0f);
+        sound(lose.feet(w) + glm::vec3(0.0f, 0.8f, 0.0f), kke::AudioMaterialTable::Rubber, 1.0f);
+        if (m_game) m_game->touched(*this, win, lose);
+    }
+    for (Bean* b : side)
+        if (b) b->clashing = false;
+    m_clash = Clash{};
 }
 
 void PartyModule::ensureMesh(Bean& b) {
@@ -262,7 +430,8 @@ glm::mat4 PartyModule::bodyMatrix(const Bean& b) {
     // Diving: flat on the belly; tumbling: rolling over; leaning into moves.
     const float diveTilt = b.dive > 0.0f ? std::min(1.0f, (kDiveTime - b.dive) * 6.0f) : 0.0f;
     m = glm::translate(m, glm::vec3(0.0f, mid * (1.0f - diveTilt * 0.55f), 0.0f));
-    m = glm::rotate(m, -diveTilt * glm::radians(80.0f) - b.lean.x - std::sin(b.tumble) * 1.4f, glm::vec3(1, 0, 0));
+    const float haul = b.pulling ? 0.35f : 0.0f; // leaning back on a rope
+    m = glm::rotate(m, -diveTilt * glm::radians(80.0f) - b.lean.x - std::sin(b.tumble) * 1.4f + haul, glm::vec3(1, 0, 0));
     m = glm::rotate(m, b.lean.y + std::sin(b.tumble * 0.7f) * 0.6f, glm::vec3(0, 0, 1));
     return glm::translate(m, glm::vec3(0.0f, -mid, 0.0f));
 }
@@ -283,7 +452,11 @@ void PartyModule::drawBean(const Bean& b, const kke::RenderContext* ctx, const k
         const glm::mat4 fm = glm::scale(glm::translate(m, foot), glm::vec3(0.12f, 0.08f, 0.17f));
         const bool cheer = b.finished || m_phase == Phase::Podium;
         const float swing = cheer ? 0.35f + 0.12f * std::sin(b.wave * 9.0f + fs) : -step * fs * 0.08f;
-        const glm::vec3 hand(0.47f * fs, (0.55f + (cheer ? 0.45f : 0.0f)) * sq, swing);
+        glm::vec3 hand(0.47f * fs, (0.55f + (cheer ? 0.45f : 0.0f)) * sq, swing);
+        // A push: both hands shoot out in front.
+        const float shove = b.pushPose > 0.0f ? std::sin(b.pushPose / 0.3f * 3.14159f) : 0.0f;
+        hand = glm::mix(hand, glm::vec3(0.3f * fs, 0.68f * sq, -0.62f), shove);
+        if (b.pulling) hand = glm::vec3(0.14f * fs, 0.62f * sq, -0.5f - 0.18f * (fs + 1.0f)); // one hand behind the other on the rope
         const glm::mat4 hm = glm::scale(glm::translate(m, hand), glm::vec3(0.1f));
         if (ctx) {
             b.limb->draw(*ctx, fm, 0.0f, 0.4f);
@@ -304,7 +477,7 @@ void PartyModule::updateCameras(float dt) {
         if (b.seat >= 0 && !b.remote) players.push_back(&b);
     std::sort(players.begin(), players.end(), [](const Bean* a, const Bean* b) { return a->player < b->player; });
     kke::Camera& main = m_app->camera();
-    const bool shared = !m_game || m_game->camera() == CameraStyle::Overview || m_phase == Phase::Podium || players.empty();
+    const bool shared = !m_game || m_phase == Phase::Podium || players.empty(); // every round: behind your own bean
     if (shared) {
         if (m_game) {
             m_game->overview(m_overview);
@@ -340,7 +513,9 @@ void PartyModule::updateCameras(float dt) {
             if (b.watching < 0 || b.watching >= static_cast<int>(m_beans.size()) || !m_beans[static_cast<size_t>(b.watching)].active)
                 for (const Bean& o : m_beans)
                     if (o.active && !o.hidden) b.watching = o.index;
-            if (b.input.jump || m_input->map(b.player).pressed("dive")) {
+            // (an out bean's own controls are off, so ask the buttons)
+            const kke::InputMap& in = m_input->map(b.player);
+            if (in.pressed("jump") || in.pressed("dive")) {
                 // Next one still playing.
                 for (size_t k = 1; k <= m_beans.size(); ++k) {
                     const Bean& o = m_beans[(static_cast<size_t>(std::max(0, b.watching)) + k) % m_beans.size()];
@@ -354,9 +529,9 @@ void PartyModule::updateCameras(float dt) {
             if (b.watching >= 0 && (b.hidden || b.out)) focus = &m_beans[static_cast<size_t>(b.watching)];
         }
         const glm::vec3 feet = focus->remote ? focus->drawFeet : w.characterDrawPosition(focus->id, m_app->fixedAlpha());
-        b.rig.settings.armLength = 5.5f;
+        b.rig.settings.armLength = m_cameraDistance;
         b.rig.settings.pivotHeight = 1.2f;
-        b.rig.settings.shoulderOffset = 0.0f;
+        b.rig.settings.shoulderOffset = m_game && m_phase != Phase::Podium ? m_game->cameraSide() : 0.0f;
         b.rig.update(dt, feet, [&w](const glm::vec3& from, const glm::vec3& dir, float maxDist) {
             const auto hit = w.raycast(from, dir, maxDist);
             return hit.hit ? hit.distance : maxDist;
@@ -412,6 +587,22 @@ void PartyModule::burst(const glm::vec3& at, const glm::vec3& color, int count, 
         p.life = m_botRng.range(1.2f, 2.2f);
         p.gravity = 6.0f;
         p.spin = m_botRng.range(-12.0f, 12.0f);
+        m_particles.push_back(p);
+    }
+}
+
+void PartyModule::rubble(const glm::vec3& at, const glm::vec3& color, int count, float radius) {
+    for (int i = 0; i < count && m_particles.size() < 2000; ++i) {
+        Particle p;
+        const float ang = m_botRng.range(0.0f, 6.2831853f), r = radius * std::sqrt(m_botRng.unit());
+        p.pos = at + glm::vec3(std::cos(ang) * r, m_botRng.range(-0.1f, 0.1f), std::sin(ang) * r);
+        p.vel = glm::vec3(std::cos(ang) * 0.4f, m_botRng.range(-0.5f, 0.6f), std::sin(ang) * 0.4f);
+        p.color = color * m_botRng.range(0.7f, 1.0f);
+        p.color2 = color * 0.45f; // darker as it goes, like dust settling
+        p.size = m_botRng.range(0.07f, 0.16f);
+        p.life = m_botRng.range(1.4f, 2.4f);
+        p.gravity = 9.8f;
+        p.spin = m_botRng.range(-5.0f, 5.0f);
         m_particles.push_back(p);
     }
 }

@@ -254,6 +254,16 @@ void PartyModule::sendResult(uint8_t kind, const Bean& b) {
     m_net->sendEvent(netparty::kEventResult, netparty::encode(r));
 }
 
+void PartyModule::sendKnock(Bean& b, const glm::vec3& velocity, float stun) {
+    if (!m_net || !m_net->connected() || b.netId < 0) return;
+    netparty::Knock k;
+    k.round = m_netRound;
+    k.player = static_cast<uint8_t>(b.netId);
+    k.velocity = glm::clamp(velocity, glm::vec3(-40.0f), glm::vec3(40.0f));
+    k.stun = std::clamp(stun, 0.0f, 3.0f);
+    m_net->sendEvent(netparty::kEventKnock, netparty::encode(k));
+}
+
 void PartyModule::event(int kind, int a, int b) {
     if (m_game) m_game->onEvent(*this, kind, a, b);
     if (!m_net || !m_net->connected() || m_netApplying) return;
@@ -306,6 +316,11 @@ void PartyModule::onNetEvent(const kke::net::GameEventMsg& e) {
         if (const auto v = netparty::decodeVote(e.payload)) applyVote(*v);
     } else if (e.kind == netparty::kEventBallot && netHost()) {
         if (const auto b = netparty::decodeBallot(e.payload)) applyBallot(*b);
+    } else if (e.kind == netparty::kEventKnock) {
+        if (const auto k = netparty::decodeKnock(e.payload); k && k->round == m_netRound) {
+            if (Bean* b = beanOfNet(k->player); b && !b->remote) knock(*b, k->velocity, k->stun);
+            else if (netHost()) m_net->relayEvent(e); // someone else's: pass it on
+        }
     } else if (e.kind == netparty::kEventGame) {
         if (const auto g = netparty::decodeGame(e.payload); g && g->round == m_netRound && m_game) {
             m_game->onEvent(*this, g->kind, g->a, g->b);
