@@ -235,7 +235,8 @@ void TennisModule::updateBodies(float dt) {
             Body::Mood mood = Body::Mood::Play;
             if (p.celebrate > 0.0f) mood = p.cheer ? Body::Mood::Cheer : Body::Mood::Groan;
             if (m->phase == Match::Phase::MatchOver) mood = m->score.winner() == p.team ? Body::Mood::Cheer : Body::Mood::Stand;
-            p.look->update(m_rigid->world().characterPosition(p.body), yaw, m_rigid->world().characterVelocity(p.body), sp, mood, dt);
+            // Drawn between the last two physics steps (no 60 Hz shake).
+            p.look->update(m_rigid->world().characterDrawPosition(p.body, m_app->fixedAlpha()), yaw, m_rigid->world().characterVelocity(p.body), sp, mood, dt);
             if (m_stringTest && p.look->stringDepth() > 0.0f)
                 kke::log::get(name())->info("strings: player {} pocket {:.1f} mm", idx, p.look->stringDepth() * 1000.0f);
         }

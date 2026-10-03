@@ -41,6 +41,8 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [DATA_FILES.md](DATA_FILES.md) | Every data file can be JSON or YAML; which one wins when both exist |
 | [SCRIPTING.md](SCRIPTING.md) | Lua gameplay scripts |
 | [PLAY_TO_MAKE.md](PLAY_TO_MAKE.md) | Make the game while playing it: Simple, node graph and Lua levels |
+| [ASSETS.md](ASSETS.md) | Asset folders: what each one expects, naming conventions, how packs are found whatever their folder is called, what each game needs |
+| [TOOLS.md](TOOLS.md) | How to use kke_assets, kke_model_info, kke_seal, kke_license, kke_packs and kke_server |
 | [SCENES.md](SCENES.md) | Levels built from asset packs |
 | [SHOWCASE.md](SHOWCASE.md) | kke_demo: the stations, controls, HUD and demo scripts |
 | [OPTIMIZATION.md](OPTIMIZATION.md) | Performance rules, measured log and backlog |

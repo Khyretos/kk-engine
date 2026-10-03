@@ -165,6 +165,85 @@ TEST(Locomotion, TooTallWallIsJustAJump) {
     EXPECT_EQ(loco.state(), Locomotion::State::Air);
 }
 
+// A screen faster than the physics: most frames have no physics step.
+// The jump asked for on one frame must survive the next frame's input
+// (which no longer carries it) until a step takes it.
+TEST(Locomotion, JumpSurvivesFramesWithoutAPhysicsStep) {
+    Course c;
+    c.spawn({ 0, 0.01f, 0 });
+    Locomotion loco(c.world, c.player);
+    Locomotion::Input go;
+    go.goUp = true;
+    const float frame = 1.0f / 240.0f;
+    loco.update(go, frame);
+    ASSERT_TRUE(loco.jumped());
+    loco.update(Locomotion::Input{}, frame); // no step in between
+    loco.update(Locomotion::Input{}, frame);
+    c.world.step(kDt);
+    EXPECT_GT(c.world.characterVelocity(c.player).y, 3.0f);
+    float peak = 0.0f;
+    for (int i = 0; i < 60; ++i) {
+        loco.update(Locomotion::Input{}, kDt);
+        c.world.step(kDt);
+        peak = std::max(peak, c.feet().y);
+    }
+    EXPECT_GT(peak, 1.0f);
+}
+
+// Coyote time: just off an edge (no ground under the capsule any more), a
+// jump still goes up.
+TEST(Locomotion, CoyoteJumpGoesUp) {
+    Course c;
+    c.box({ 0, 1.0f, 0 }, { 1.0f, 1.0f, 1.0f }); // a 2 m block, top at y = 2
+    c.spawn({ 0, 2.01f, -0.6f });
+    Locomotion loco(c.world, c.player);
+    // Run off its -Z edge, then jump the moment it starts to fall.
+    Locomotion::Input in = forward();
+    bool off = false;
+    for (int i = 0; i < 120 && !off; ++i) {
+        loco.update(in, kDt);
+        c.world.step(kDt);
+        off = !c.world.characterOnGround(c.player) && c.feet().y < 2.0f;
+    }
+    ASSERT_TRUE(off);
+    in.goUp = true;
+    loco.update(in, kDt);
+    ASSERT_TRUE(loco.jumped());
+    c.world.step(kDt);
+    EXPECT_GT(c.world.characterVelocity(c.player).y, 3.0f);
+}
+
+// No bunny hop: straight back up after landing, each jump is smaller; a
+// moment on the ground gives a full one again.
+TEST(Locomotion, RepeatJumpsGoLessHigh) {
+    Course c;
+    c.spawn({ 0, 0.01f, 0 });
+    Locomotion loco(c.world, c.player);
+    auto hop = [&](float waitAfter) {
+        Locomotion::Input go;
+        go.goUp = true;
+        float peak = c.feet().y;
+        loco.update(go, kDt);
+        c.world.step(kDt);
+        for (int i = 0; i < 120 && loco.state() != Locomotion::State::Ground; ++i) {
+            loco.update(Locomotion::Input{}, kDt);
+            c.world.step(kDt);
+            peak = std::max(peak, c.feet().y);
+        }
+        c.run(loco, Locomotion::Input{}, waitAfter);
+        return peak;
+    };
+    const float first = hop(0.0f);
+    const float second = hop(0.0f);
+    const float third = hop(0.6f);
+    const float rested = hop(0.0f);
+    EXPECT_GT(first, 1.0f);
+    EXPECT_LT(second, first * 0.85f);
+    EXPECT_LT(third, second);
+    EXPECT_GT(third, first * 0.3f); // still a jump
+    EXPECT_NEAR(rested, first, 0.05f);
+}
+
 TEST(Locomotion, TurnsAtALimitedRateAndSlowsInSharpTurns) {
     Course c;
     c.spawn({ 0, 0.01f, 0 });

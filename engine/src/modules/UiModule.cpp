@@ -5,6 +5,7 @@
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/RmlTextSafety.h"
+#include "kke/SpriteCatalog.h"
 
 #include <RmlUi/Core/Core.h>
 #include <RmlUi/Core/Context.h>
@@ -264,6 +265,10 @@ void UiModule::EngineSystemInterface::DeactivateKeyboard() {
 }
 
 void UiModule::EngineSystemInterface::JoinPath(Rml::String& translatedPath, const Rml::String& documentPath, const Rml::String& path) {
+    if (isSpriteReference(path)) { // "sprite:NAME": the render interface looks it up
+        translatedPath = path;
+        return;
+    }
     std::error_code ec;
     const std::filesystem::path p(path);
     if (p.is_absolute() && std::filesystem::is_regular_file(p, ec)) {

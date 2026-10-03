@@ -1,3 +1,21 @@
+# Assets
+
+What every folder here expects, the naming conventions and how packs are
+found whatever their folder is called: [docs/ASSETS.md](../docs/ASSETS.md).
+Run `kke_assets` to see what the engine found and what each game needs.
+
+| Folder | What | In git? |
+|---|---|---|
+| `synty/` | Your 3D art packs (models, characters, animations), any vendor | No |
+| `sprites/` | Your 2D packs (menu and HUD sprites, icons) | No |
+| `animations/` | `UAL1_Standard.fbx`, the mannequin (CC0) | That file only |
+| `prompts/xelu/` | Button glyphs (CC0) | Yes |
+| `fonts/` | Noto fonts (OFL) | Yes |
+| `ambience/` | Looping background sounds for moods (CC0) | Yes |
+| `moods/` | Mood files: sky, sun, fog, look | Yes |
+| `branding/` | Logo, icon, banner | Yes |
+| `textures/` | Test images | Yes |
+
 ## Branding — `assets/branding/`
 
 The Kreative Kompas logo and banner (Kreative Kompas's own, committed):
@@ -23,8 +41,10 @@ Paid asset packs are licensed per user and **must never be committed**
 (`assets/synty/` is in `.gitignore`).
 
 **Setup:** extract your pack(s) and put the pack folders inside
-`assets/synty/`. Any layout works — the engine scans for them
-(`kke::AssetCatalog`):
+`assets/synty/`. Keep the names they came with
+(`POLYGON_Street_Racer_SourceFiles_v3` is fine, so is a name of your
+own: packs are recognised by their files too). Any layout works — the
+engine scans for them (`kke::AssetCatalog`, `kke/KnownPacks.h`):
 
     assets/synty/POLYGON_Prototype/Characters/SK_Character_Dummy_Male_01.fbx
     assets/synty/POLYGON_Prototype/StaticMeshes/...

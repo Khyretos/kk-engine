@@ -83,7 +83,9 @@ void Mannequin::init(kke::Application& app) {
     // --8<-- [start:rig]
     // The chains IK bends (found by bone name) and the head's forward axis
     // in its own space, worked out once from the rest pose.
-    m_armR = kke::findChain(*m_data, "upperarm_r", "lowerarm_r", "hand_r");
+    m_armR = kke::makeHumanArm(*m_data, kke::findChain(*m_data, "upperarm_r", "lowerarm_r", "hand_r"),
+                               kke::findChain(*m_data, "upperarm_l", "lowerarm_l", "hand_l"));
+    m_body = kke::BodyShape::fit(*m_data); // capsules round the mesh, per bone
     m_feet = kke::FootPlacer(*m_data, kke::findChain(*m_data, "thigh_l", "calf_l", "foot_l"), kke::findChain(*m_data, "thigh_r", "calf_r", "foot_r"),
                              findBone(*m_data, "pelvis"));
     m_head = findBone(*m_data, "head");
@@ -170,12 +172,16 @@ void Mannequin::updateStander(float dt) {
     // --8<-- [end:feet]
 
     // --8<-- [start:ik]
-    // 2. The right hand on the orb: two-bone IK (shoulder, elbow, wrist).
-    // The pole is where the elbow should point: out and down.
+    // 2. The right hand on the orb: a person's arm (kke::solveHumanArm).
+    // The elbow only bends forward, the shoulder keeps to its range and
+    // lifts its collarbone when the hand goes high, and the body shape
+    // keeps the arm out of the torso. `elbowToward` says which way the
+    // elbow leans: out and down.
     if (m_armR.valid()) {
-        const glm::vec3 orb = orbPosition();
-        const glm::vec3 pole = standAt + glm::vec3(-0.8f, 0.6f, -0.3f);
-        kke::solveTwoBone(*m_data, pose, m_armR, model(orb), model(pole), 1.0f);
+        kke::ArmGoal goal;
+        goal.hand = model(orbPosition());
+        goal.elbowToward = model(standAt + glm::vec3(-0.8f, 0.6f, -0.3f));
+        kke::solveHumanArm(*m_data, pose, m_armR, goal, m_body, kke::BodyAvoid{}, &m_armAvoid);
     }
     // --8<-- [end:ik]
 
