@@ -72,6 +72,7 @@ public:
         m_balls.clear();
         m_doorParts.clear();
         m_doorBroken.clear();
+        for (bool& seen : m_doorSeenSolid) seen = false;
         Rng& rng = a.rng();
         auto floor = [&](float z0, float z1, float y = 0.0f) {
             const float mid = (z0 + z1) * 0.5f, half = std::abs(z0 - z1) * 0.5f;
@@ -319,16 +320,16 @@ public:
         // The doors: head for the one picked; a solid one sends you to another.
         if (p.z < kDoorZ + 8.0f && p.z > kDoorZ - 1.0f) {
             const float wd = 2.0f * kHalfWidth / 5.0f;
-            if (b.i < 0 || b.i > 4 || b.j != 1) {
-                b.i = a.botRng().below(5);
+            if (b.i < 0 || b.i > 4 || b.j != 1 || m_doorSeenSolid[b.i]) {
+                // A door not seen to be solid (one that's broken is best).
+                int pick = a.botRng().below(5);
+                for (int k = 0; k < 5; ++k)
+                    if (m_doorBroken[static_cast<size_t>(k)]) pick = k;
+                for (int tries = 0; tries < 5 && m_doorSeenSolid[pick] && !m_doorBroken[static_cast<size_t>(pick)]; ++tries) pick = (pick + 1) % 5;
+                b.i = pick;
                 b.j = 1;
             }
             targetX = -kHalfWidth + wd * (static_cast<float>(b.i) + 0.5f);
-            if (p.z < kDoorZ + 0.9f && std::abs(b.velocity.z) < 0.5f && b.grounded) b.c += dt;
-            if (b.c > 0.6f) { // stuck at a solid door
-                b.c = 0.0f;
-                b.i = (b.i + 1 + a.botRng().below(4)) % 5;
-            }
         }
         glm::vec3 to(targetX - p.x, 0.0f, ahead - p.z);
         to = glm::normalize(to);
@@ -361,6 +362,7 @@ private:
     std::vector<int> m_doorParts;
     std::vector<bool> m_doorBroken;
     bool m_doorSolid[5] = {};
+    bool m_doorSeenSolid[5] = {}; // bounced off, so the bots go for another
 
     float hammerAngle(const Hammer& h) const { return std::sin(h.speed * m_time + h.phase) * 1.15f; }
     // A ball rises out of the chute at the top, rolls down the slope and
@@ -445,6 +447,8 @@ private:
         const int k = std::clamp(static_cast<int>((p.x + kHalfWidth) / wd), 0, 4);
         if (m_doorBroken[static_cast<size_t>(k)]) return;
         if (m_doorSolid[k]) {
+            m_doorSeenSolid[k] = true; // everyone saw that
+            if (b.bot) b.i = -1;       // pick again (Bean::i, the bot's door)
             a.knock(b, glm::vec3(0.0f, 1.5f, 3.0f), 0.3f);
             a.sound(p + glm::vec3(0.0f, 1.0f, 0.0f), kke::AudioMaterialTable::Wood, 0.5f);
             b.bumped = 0.4f;
