@@ -117,6 +117,13 @@ struct ModelLoadOptions {
     // on every axis is taken as meters and scaled up 100x.
     bool fixUnitMismatch = true;
     float tinyModel = 0.1f;
+    // Clips that walk away from where they start (root motion baked into
+    // the root or hips: Synty's animals, many mocap clips) are made to
+    // play in place (makeClipsInPlace). The game moves the character; a
+    // clip played as authored walks the model ahead of it and snaps it
+    // back every loop. False keeps the travel (for AnimationSet's
+    // extractRootMotion, or a file meant as root motion).
+    bool clipsInPlace = true;
 };
 
 // Throws std::runtime_error with the path and the reason on failure.
@@ -124,6 +131,15 @@ ModelData loadModel(const std::string& path, const ModelLoadOptions& options = {
 
 // Rest-pose world (model-space) transform of every bone.
 std::vector<glm::mat4> computeRestPose(const ModelData& model);
+
+// Takes the steady horizontal travel out of every clip that has it: the
+// topmost bone whose model-space position moves more than `minTravel`
+// from the clip's first frame to its last (the root, or the hips when the
+// root stays put) keeps its sway and bob but loses the drift, so the clip
+// plays in place and loops without snapping back. `minTravel` < 0 = 4% of
+// the skeleton's size (a walk cycle travels far more; an idle's shuffle
+// far less). Returns how many clips changed.
+int makeClipsInPlace(ModelData& model, float minTravel = -1.0f);
 
 // Given each bone's local transform (e.g. a ModelAnimation frame, or the
 // rest pose with a few bones rotated), returns the matrices to skin with:

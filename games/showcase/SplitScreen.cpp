@@ -151,8 +151,9 @@ void ShowcaseModule::updateLocalPlayers(float dt) {
         in.goUp = p.jumpQueued;
         p.jumpQueued = false;
         loco.update(in, dt);
-        glm::vec3 feet = w.characterPosition(p.id);
-        if (feet.y < -20.0f) loco.teleport(m_spawn); // fell out of the world
+        if (w.characterPosition(p.id).y < -20.0f) loco.teleport(m_spawn); // fell out of the world
+        // Drawn and followed between the last two physics steps (no shake).
+        const glm::vec3 feet = w.characterDrawPosition(p.id, m_app->fixedAlpha());
 
         // The same camera settings as player 1 (field of view, clip planes).
         const kke::Camera& main = m_app->camera();
@@ -202,7 +203,7 @@ void ShowcaseModule::updateLocalPlayers(float dt) {
     // The overhead view goes last, drawn over the top right corner (it
     // fits with up to three players).
     if (m_overhead && views.size() < kke::kMaxViews) {
-        const glm::vec3 feet = w.characterPosition(m_player);
+        const glm::vec3 feet = w.characterDrawPosition(m_player, m_app->fixedAlpha());
         kke::Camera top = m_app->camera();
         top.position = feet + glm::vec3(0.0f, 14.0f, 0.01f);
         top.target = feet;

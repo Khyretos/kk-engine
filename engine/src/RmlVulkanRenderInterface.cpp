@@ -2,6 +2,8 @@
 #include "kke/VulkanDevice.h"
 #include "kke/VulkanCheck.h"
 #include "kke/Log.h"
+#include "kke/CookedFile.h"
+#include "kke/SpriteCatalog.h"
 
 // STB_IMAGE_IMPLEMENTATION must be defined in exactly one translation
 // unit across the whole project — confirmed via a real grep that no
@@ -9,6 +11,7 @@
 // natural, and currently only, consumer of stb_image in this codebase.
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
+#include <SDL3/SDL.h>
 #include <RmlUi/Core/Dictionary.h>
 #include <RmlUi/Core/Variant.h>
 #include <RmlUi/Core/DecorationTypes.h>
@@ -16,6 +19,8 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
+#include <string>
 #include <vector>
 #include <algorithm>
 #include <cmath>
@@ -425,12 +430,31 @@ void RmlVulkanRenderInterface::ReleaseGeometry(Rml::CompiledGeometryHandle geome
 
 Rml::TextureHandle RmlVulkanRenderInterface::LoadTexture(Rml::Vector2i& texture_dimensions, const Rml::String& source) {
     int width = 0, height = 0, channels = 0;
+    // "sprite:NAME" is an image from the sprite folder (kke/SpriteCatalog.h,
+    // docs/ASSETS.md); anything else is a file path.
+    std::string path = source;
+    if (isSpriteReference(source)) {
+        const char* base = SDL_GetBasePath();
+        path = resolveSprite(source, base ? base : "");
+        if (path.empty()) {
+            log::get("UI")->warn("RmlVulkanRenderInterface::LoadTexture: no sprite '{}' in the sprite folder (assets/sprites or KKE_SPRITES_DIR)",
+                                 source.substr(7));
+            texture_dimensions = Rml::Vector2i(1, 1);
+            return 0;
+        }
+    }
+    // Read through the cooked-art reader, so a baked download's encrypted
+    // sprites load like plain files (docs/COOKED_ART.md).
+    std::vector<uint8_t> bytes;
+    std::string readError;
     // Forcing 4 channels (RGBA) regardless of the source file's own
     // format — matches createTextureFromPixels' own hardcoded
     // VK_FORMAT_R8G8B8A8_UNORM expectation exactly, so this can reuse
     // that same real GPU upload path unmodified rather than needing a
     // second, format-aware variant of it.
-    stbi_uc* pixels = stbi_load(source.c_str(), &width, &height, &channels, 4);
+    stbi_uc* pixels = cooked::readAssetFile(path, bytes, &readError)
+                          ? stbi_load_from_memory(bytes.data(), static_cast<int>(bytes.size()), &width, &height, &channels, 4)
+                          : nullptr;
     if (!pixels) {
         // A missing or corrupt file isn't fatal — same convention as
         // untextured geometry (texture handle 0), not a thrown error,
@@ -438,8 +462,8 @@ Rml::TextureHandle RmlVulkanRenderInterface::LoadTexture(Rml::Vector2i& texture_
         // document. stbi_failure_reason() is genuinely useful here
         // (distinguishes "file not found" from "not a valid image"),
         // logged rather than silently swallowed.
-        log::get("UI")->warn("RmlVulkanRenderInterface::LoadTexture: failed to load '{}' ({})",
-                              source, stbi_failure_reason() ? stbi_failure_reason() : "unknown reason");
+        log::get("UI")->warn("RmlVulkanRenderInterface::LoadTexture: failed to load '{}' ({})", path,
+                             !readError.empty() ? readError.c_str() : stbi_failure_reason() ? stbi_failure_reason() : "unknown reason");
         texture_dimensions = Rml::Vector2i(1, 1);
         return 0;
     }

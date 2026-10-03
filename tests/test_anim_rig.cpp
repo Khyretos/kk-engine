@@ -6,6 +6,8 @@
 #include <filesystem>
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 
 using kke::ModelData;
 using kke::Pose;
@@ -148,6 +150,167 @@ TEST(AnimRig, FeetTiltWithTheSlope) {
         EXPECT_GT(footUp.z, 0.0f); // tilted the same way as the ground
         EXPECT_NEAR(pos(m, p, l.end).y, 0.0f, 0.01f); // still standing on it
     }
+}
+
+// Feet with a ball bone, ankles 0.08 m up: a foot whose heel is over the
+// floor and whose toes are over a 0.2 m step stands on the step, at once
+// (a planted foot never sinks in while the smoothing catches up).
+TEST(AnimRig, FootHalfOverAStepStandsOnIt) {
+    ModelData m;
+    m.bones.push_back(bone("Root", -1, glm::mat4(1.0f)));
+    m.bones.push_back(bone("Pelvis", 0, at(0, 0.98f, 0)));
+    for (float side : { -0.1f, 0.1f }) {
+        const bool left = side < 0;
+        const int thigh = static_cast<int>(m.bones.size());
+        m.bones.push_back(bone(left ? "Thigh_L" : "Thigh_R", 1, at(side, 0, 0)));
+        m.bones.push_back(bone(left ? "calf_l" : "calf_r", thigh, at(0, -0.45f, 0)));
+        m.bones.push_back(bone(left ? "Foot_L" : "Foot_R", thigh + 1, at(0, -0.45f, 0)));
+        m.bones.push_back(bone(left ? "ball_l" : "ball_r", thigh + 2, at(0, -0.06f, 0.14f)));
+    }
+    const kke::TwoBoneChain l = kke::findChain(m, "thigh_l", "calf_l", "foot_l");
+    const kke::TwoBoneChain r = kke::findChain(m, "thigh_r", "calf_r", "foot_r");
+    kke::FootPlacer placer(m, l, r, 1);
+    // The step starts 0.1 m in front of the ankles, under the left foot only.
+    auto ground = [](const glm::vec3& from, glm::vec3& hit) {
+        hit = glm::vec3(from.x, from.x < 0.0f && from.z > 0.1f ? 0.2f : 0.0f, from.z);
+        return true;
+    };
+    Pose p = restPose(m);
+    placer.apply(m, p, ground, 1.0f / 60.0f); // one frame
+    const int ballL = 5;
+    EXPECT_GE(pos(m, p, ballL).y, 0.2f - 0.005f);              // the toes are on the step, not in it
+    EXPECT_NEAR(pos(m, p, r.end).y, 0.08f, 0.01f);             // the other foot stays on the floor
+}
+
+// The shoulder girdle: overhead, the clavicle lifts (the shoulder rises);
+// reaching low in front, it barely moves.
+ModelData armsWithClavicles() {
+    ModelData m;
+    m.bones.push_back(bone("Root", -1, glm::mat4(1.0f)));
+    m.bones.push_back(bone("Spine_03", 0, at(0, 1.4f, 0)));
+    for (float side : { 1.0f, -1.0f }) {
+        const bool left = side > 0;
+        const int clav = static_cast<int>(m.bones.size());
+        m.bones.push_back(bone(left ? "clavicle_l" : "clavicle_r", 1, at(0.04f * side, 0, 0)));
+        m.bones.push_back(bone(left ? "upperarm_l" : "upperarm_r", clav, at(0.16f * side, 0, 0)));
+        m.bones.push_back(bone(left ? "lowerarm_l" : "lowerarm_r", clav + 1, at(0.3f * side, 0, 0)));
+        m.bones.push_back(bone(left ? "hand_l" : "hand_r", clav + 2, at(0.25f * side, 0, 0)));
+    }
+    return m;
+}
+
+TEST(AnimRig, HumanArmLiftsTheShoulderGirdleOverhead) {
+    const ModelData m = armsWithClavicles();
+    const kke::TwoBoneChain r = kke::findChain(m, "upperarm_r", "lowerarm_r", "hand_r");
+    const kke::TwoBoneChain l = kke::findChain(m, "upperarm_l", "lowerarm_l", "hand_l");
+    const kke::HumanArm arm = kke::makeHumanArm(m, r, l);
+    ASSERT_GE(arm.clavicle, 0);
+    const float restShoulderY = pos(m, restPose(m), r.upper).y;
+
+    Pose up = restPose(m);
+    kke::ArmGoal overhead;
+    overhead.hand = glm::vec3(-0.25f, 1.4f + 0.58f, 0.05f);
+    kke::solveHumanArm(m, up, arm, overhead);
+    EXPECT_GT(pos(m, up, r.upper).y, restShoulderY + 0.04f); // shrugged
+    EXPECT_LT(glm::length(pos(m, up, r.end) - overhead.hand), 0.01f);
+
+    Pose low = restPose(m);
+    kke::ArmGoal front;
+    front.hand = glm::vec3(-0.2f, 1.1f, 0.3f);
+    kke::solveHumanArm(m, low, arm, front);
+    EXPECT_LT(std::abs(pos(m, low, r.upper).y - restShoulderY), 0.015f);
+
+    // Off: the shoulder stays where it is.
+    kke::ArmLimits still;
+    still.shoulderShrug = still.shoulderReach = 0.0f;
+    Pose fixed = restPose(m);
+    kke::solveHumanArm(m, fixed, arm, overhead, still);
+    EXPECT_NEAR(pos(m, fixed, r.upper).y, restShoulderY, 1e-4f);
+}
+
+// Straight up, the hand can't go far across behind the head (the range
+// closes in overhead).
+TEST(AnimRig, HumanArmRangeClosesInOverhead) {
+    const ModelData m = arms();
+    const kke::TwoBoneChain r = kke::findChain(m, "upperarm_r", "lowerarm_r", "hand_r");
+    const kke::TwoBoneChain l = kke::findChain(m, "upperarm_l", "lowerarm_l", "hand_l");
+    const kke::HumanArm arm = kke::makeHumanArm(m, r, l);
+    Pose p = restPose(m);
+    kke::ArmGoal goal;
+    goal.hand = glm::vec3(0.1f, 1.4f + 0.54f, -0.05f); // up, across to the left and behind the head
+    const kke::ArmResult res = kke::solveHumanArm(m, p, arm, goal);
+    EXPECT_TRUE(res.limited);
+    const glm::vec3 d = pos(m, p, r.end) - pos(m, p, r.upper);
+    // Measured from straight ahead toward the other side (+X here).
+    const float across = glm::degrees(std::atan2(d.x, d.z));
+    EXPECT_GT(across, 0.0f);
+    EXPECT_LT(across, 45.0f); // at shoulder height it could go to 70
+}
+
+// Clips that walk away from their start (root motion baked in) play in
+// place; the sway stays; a turn in place isn't touched.
+TEST(AnimRig, ClipsThatTravelPlayInPlace) {
+    ModelData m;
+    m.bones.push_back(bone("Root", -1, glm::mat4(1.0f)));
+    m.bones.push_back(bone("Hips", 0, at(0, 0.5f, 0)));
+    m.bones.push_back(bone("Head", 1, at(0, 0, 0.4f)));
+    kke::ModelAnimation walk;
+    walk.name = "Walk";
+    walk.duration = 1.0f;
+    walk.sampleRate = 30.0f;
+    kke::ModelAnimation turn = walk;
+    turn.name = "Turn";
+    for (int f = 0; f <= 30; ++f) {
+        const float t = static_cast<float>(f) / 30.0f;
+        const float sway = 0.03f * std::sin(t * 6.2831853f);
+        walk.frames.push_back({ glm::mat4(1.0f), at(sway, 0.5f, 1.2f * t), at(0, 0, 0.4f) });
+        turn.frames.push_back({ glm::mat4(1.0f), at(0, 0.5f, 0) * glm::rotate(glm::mat4(1.0f), 1.5f * t, glm::vec3(0, 1, 0)), at(0, 0, 0.4f) });
+    }
+    m.animations = { walk, turn };
+    EXPECT_EQ(kke::makeClipsInPlace(m), 1);
+    const auto& w = m.animations[0].frames;
+    EXPECT_NEAR(w.back()[1][3].z, w.front()[1][3].z, 1e-4f);  // no travel
+    EXPECT_NEAR(w[7][1][3].x, 0.03f * std::sin(7.0f / 30.0f * 6.2831853f), 1e-4f); // sway kept
+    EXPECT_NEAR(w[15][1][3].y, 0.5f, 1e-4f);
+    EXPECT_NEAR(m.animations[1].frames.back()[1][3].x, 0.0f, 1e-6f); // the turn untouched
+}
+
+// With the real pack (KKE_ASSETS_DIR or assets/synty): POLYGON Dogs' walk
+// has its travel baked into the skeleton; loaded, no bone walks away.
+TEST(AnimRig, SyntyDogWalkPlaysInPlaceIfInstalled) {
+    namespace fs = std::filesystem;
+    std::vector<fs::path> roots = { fs::path(KKE_SOURCE_DIR) / "assets/synty" };
+    if (const char* dir = std::getenv("KKE_ASSETS_DIR")) roots.insert(roots.begin(), dir);
+    fs::path clip;
+    for (const fs::path& r : roots)
+        if (fs::exists(r / "POLYGON_Dogs/FBX/Animations/Locomotion/_POLYGON_Dog_Locomotion_Walking.fbx"))
+            clip = r / "POLYGON_Dogs/FBX/Animations/Locomotion/_POLYGON_Dog_Locomotion_Walking.fbx";
+    if (clip.empty()) GTEST_SKIP() << "POLYGON Dogs not installed";
+    kke::ModelLoadOptions o;
+    o.allowNoMeshes = true;
+    auto maxTravel = [](const ModelData& m) {
+        const kke::ModelAnimation& a = m.animations.front();
+        auto worldOf = [&](const std::vector<glm::mat4>& locals) {
+            std::vector<glm::mat4> w(m.bones.size());
+            for (size_t b = 0; b < m.bones.size(); ++b) w[b] = m.bones[b].parent >= 0 ? w[m.bones[b].parent] * locals[b] : locals[b];
+            return w;
+        };
+        const auto first = worldOf(a.frames.front()), last = worldOf(a.frames.back());
+        float most = 0.0f;
+        for (size_t b = 0; b < m.bones.size(); ++b) {
+            glm::vec3 d = glm::vec3(last[b][3]) - glm::vec3(first[b][3]);
+            d.y = 0.0f;
+            most = std::max(most, glm::length(d));
+        }
+        return most;
+    };
+    o.clipsInPlace = false;
+    const ModelData raw = kke::loadModel(clip.string(), o);
+    ASSERT_FALSE(raw.animations.empty());
+    o.clipsInPlace = true;
+    const ModelData inPlace = kke::loadModel(clip.string(), o);
+    std::printf("dog walk: travels %.3f m as authored, %.3f m in place\n", maxTravel(raw), maxTravel(inPlace));
+    EXPECT_LT(maxTravel(inPlace), 0.03f);
 }
 
 TEST(AnimRig, CanonicalNamesPairUalWithSynty) {

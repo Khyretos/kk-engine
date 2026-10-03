@@ -650,7 +650,9 @@ std::string PetModule::doing() const {
 }
 
 void PetModule::animateDog(float dt) {
-    const glm::vec3 dog = positionOf(kDog);
+    // Drawn between the last two physics steps: at its raw position the
+    // body moves in 60 Hz jumps while the planted feet stay put.
+    const glm::vec3 dog = m_rigid->world().characterDrawPosition(m_dogChar, m_app->fixedAlpha());
     const glm::vec3 vel = flat(m_rigid->world().characterVelocity(m_dogChar));
     const glm::mat4 body = bodyAt(dog, m_dogYaw);
     // Sitting: the back end down, nose up.
@@ -741,8 +743,11 @@ void PetModule::updatePlayer(float dt) {
     m_loco->update(li, dt);
     const glm::vec3 feet = world.characterPosition(m_playerChar);
     if (feet.y < -20.0f) m_loco->teleport({ 0.0f, 0.1f, 5.0f });
-    m_body->update(feet, m_loco->facingYaw(), m_loco->groundSpeed(), dt);
-    m_rig.update(dt, feet, [&world](const glm::vec3& from, const glm::vec3& dir, float maxDist) {
+    // Drawn and followed between the last two physics steps: the raw
+    // feet move in 60 Hz jumps, which shakes the body on a faster screen.
+    const glm::vec3 drawn = world.characterDrawPosition(m_playerChar, m_app->fixedAlpha());
+    m_body->update(drawn, m_loco->facingYaw(), m_loco->groundSpeed(), dt);
+    m_rig.update(dt, drawn, [&world](const glm::vec3& from, const glm::vec3& dir, float maxDist) {
         const auto hit = world.raycast(from, dir, maxDist);
         return hit.hit ? hit.distance : maxDist;
     }, m_app->camera());

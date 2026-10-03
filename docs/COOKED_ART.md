@@ -20,7 +20,11 @@ On your own PC, with the packs extracted somewhere:
 tools/packaging/bake_with_art.sh --assets /path/to/your/synty/packs
 tools/packaging/bake_with_art.sh --assets /path/to/your/synty/packs --windows   # also the Windows zip (Docker)
 tools/packaging/bake_with_art.sh --assets /path/to/your/synty/packs --android   # also the phone APKs (Docker, docs/ANDROID.md)
+tools/packaging/bake_with_art.sh --assets /path/to/your/synty/packs --sprites /path/to/sprite/packs   # menu sprites too
 ```
+
+Pack folder names don't matter ([ASSETS.md](ASSETS.md)): the script
+first prints what `kke_assets` finds and what each game is missing.
 
 It needs a screen: step 3 opens every demo for a few seconds. When it
 finishes, the archives are in `dist/`, named `*-with-art*`. Send them to
@@ -45,8 +49,9 @@ in `.gitignore`).
    download holds a few hundred files instead of every pack.
    `--all-art` skips this and cooks everything (much bigger).
 4. **Cook.** `kke_cook` writes each traced file to `build-art/cooked-art/`
-   under the same relative path and name, encrypted; the CC0 animations
-   in `assets/animations/` go along too. `kke_cook --check` confirms
+   under the same relative path and name, encrypted (3D packs in
+   `synty/`, sprites in `sprites/`); the CC0 animations in
+   `assets/animations/` go along too. `kke_cook --check` confirms
    nothing raw slipped through.
 5. **Package.** `tools/packaging/package.sh --cooked build-art/cooked-art`
    puts the cooked folder in the download's `assets/`. The packager's
@@ -112,3 +117,5 @@ KKE_ASSET_TRACE=trace.txt ./some_game                                         # 
 ```
 
 Art extensions: `.fbx .obj .gltf .glb .png .tga .jpg .jpeg .bmp .psd .sk`.
+Menu images (`<img>` in RmlUi documents, `sprite:` names) are read the
+same way, so cooked sprites show in a baked download.

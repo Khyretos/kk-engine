@@ -214,6 +214,7 @@ void Locomotion::update(const Input& in, float dt) {
     const bool scripted = m_state == State::Vault || m_state == State::Climb || m_state == State::Hang || m_state == State::Leap ||
                           m_state == State::WallRun;
     const float over = scripted ? dt : moved;
+    if (scripted) m_inJump = false; // a jump that became a vault, a hang or a wall run is over
     if (m_haveLastFeet && over > 0.0f) m_measuredSpeed = glm::length(glm::vec2(feetNow.x - m_lastFeet.x, feetNow.z - m_lastFeet.z)) / over;
     m_lastFeet = feetNow;
     m_lastSimTime = simNow;
@@ -221,6 +222,7 @@ void Locomotion::update(const Input& in, float dt) {
     // Queued input: "go up" pressed a moment too early still counts.
     m_buffer = in.goUp ? m_settings.jumpBuffer : std::max(0.0f, m_buffer - dt);
 
+    m_sinceLanded += dt;
     m_regrab = std::max(0.0f, m_regrab - dt);
     m_wallCooldown = std::max(0.0f, m_wallCooldown - dt);
     if (m_state == State::Vault || m_state == State::Climb) {
@@ -271,16 +273,23 @@ void Locomotion::jump(const Input& in) {
     // right after a turn goes where you asked, not where you were going.
     glm::vec3 wish = flat(in.move);
     if (glm::length(wish) > 0.1f) m_moveDir = glm::normalize(wish);
+    // Straight back up after landing a jump: a smaller hop each time.
+    m_repeatJumps = m_landedFromJump && m_state == State::Ground && m_sinceLanded <= s.repeatJumpWindow ? m_repeatJumps + 1 : 0;
+    const float share = std::max(s.repeatJumpMin, std::pow(s.repeatJumpFactor, static_cast<float>(m_repeatJumps)));
     RigidWorld::CharacterInput ci;
     ci.move = m_moveDir * m_speed;
     ci.jump = true;
-    ci.jumpSpeed = s.jumpSpeed;
+    ci.jumpSpeed = s.jumpSpeed * share;
+    // Ours to decide (coyote time, the kerb tier): the controller jumps
+    // even if this step it isn't touching the ground.
+    ci.jumpInAir = true;
     ci.airSteer = 1e6f;
     m_world.setCharacterInput(m_id, ci);
     m_airEntrySpeed = m_speed;
     m_airPeak = m_world.characterPosition(m_id).y;
     m_jumped = true;
     m_jumpedFromGround = true;
+    m_inJump = true;
     m_buffer = 0.0f;
     enter(State::Air);
 }
@@ -386,6 +395,9 @@ void Locomotion::updateAir(const Input& in, float dt, bool grounded) {
     m_airPeak = std::max(m_airPeak, feet.y);
     if (grounded && m_stateTime > 0.05f) {
         m_landed = true;
+        m_landedFromJump = m_inJump;
+        m_inJump = false;
+        m_sinceLanded = 0.0f;
         m_fallHeight = m_airPeak - feet.y;
         m_sinceGrounded = 0.0f;
         m_jumpedFromGround = false;

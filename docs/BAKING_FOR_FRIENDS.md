@@ -40,12 +40,54 @@ Windows or Android tools on your PC.
 
 2. Know where your Synty packs are: the folder that holds the unpacked
    packs (`POLYGON_Farm`, `POLYGON_Fantasy_Characters`, ...). Below it is
-   written as `~/Synty`; use your real path.
+   written as `~/Synty`; use your real path. See *What the bake needs*
+   below for which packs, and how to check them.
 
 3. The mannequin animations: `assets/animations/UAL1_Standard.fbx` comes
    with the repository. If your packs folder has *Universal Animation
    Library 2* in it, the bake uses its `UAL2.fbx` too (better sword swings
    and climbing); nothing to do.
+
+## What the bake needs
+
+A bake puts in exactly the art the games find on your PC, so check that
+first. One command lists your packs and, for every game, which of its
+packs are there:
+
+```bash
+build-release/bin/kke_assets ~/Synty
+```
+
+```text
+What the games need:
+  racing         ok POLYGON_Nature, ok POLYGON_Street_Racer
+  tennis         MISSING POLYGON_Shops, ok Universal Animation Library 2
+```
+
+A `MISSING` pack means blocks in that game, in the download too. The
+bake runs the same check and prints it before the recording starts.
+`kke_assets needs` shows the whole list ([ASSETS.md](ASSETS.md) has it
+as a table).
+
+What matters and what doesn't:
+
+- **Folder names don't matter.** Keep the folders as they came out of
+  the zips (`POLYGON_Street_Racer_SourceFiles_v3`,
+  `POLYGON_Nature_Source_Files_v2`) or call them anything: packs are
+  recognised by their name in any spelling and, failing that, by files
+  only they have. No renaming, no symlinks.
+- **All packs in one folder.** `--assets` is the folder that holds the
+  pack folders (or holds a folder that holds them, like
+  `~/Synty/Synty/POLYGON_Town`), not one pack.
+- **Unzipped.** Zips and Unity packages that weren't unpacked can't be
+  read; `tools/fetch_assets.sh` unpacks them for you. Unreal-only packs
+  (`.uasset` files, like `SIDEKICK_Starter`) can't be read at all.
+- **The mannequin.** `assets/animations/UAL1_Standard.fbx` comes with
+  the repository. *Universal Animation Library 2* anywhere in your packs
+  folder is found and baked too (`UAL2.fbx`).
+- **Sprites (optional).** 2D packs (Synty `INTERFACE_*`) go in
+  `assets/sprites/`, or pass `--sprites ~/SyntyUI`. Only sprites a menu
+  showed during the recording are baked (all of them with `--all-art`).
 
 ## Every time: bake
 
@@ -107,7 +149,8 @@ results to send back ([ANDROID.md](ANDROID.md) has the details).
 | You see | Do |
 |---|---|
 | `permission denied ... docker.sock` | Step 1 of *Once*: the `usermod` line, then log out and in |
-| `the recording run opened no art: are the packs in ...?` | `--assets` points at the wrong folder: it must be the folder that holds the pack folders |
+| `the recording run opened no art: are the packs in ...?` | `--assets` points at the wrong folder: it must be the folder that holds the pack folders. `kke_assets ~/Synty` shows what is found there |
+| A game shows blocks although you have its pack | Run `kke_assets ~/Synty`: if the game's line says `MISSING`, the pack's folder holds something else (a zip, an Unreal project) or sits too deep; [ASSETS.md](ASSETS.md) |
 | `refusing to package paid/third-party art` | Raw art got into the build folder; tell Claude which file it names |
 | A demo window stays black or a demo "had trouble" during recording | The bake still finishes; the result file in `build-art/art-trace-run/` says which demo and why |
 | Deleting `dist/windows` or `build-docker` says "permission denied" | Docker made them as root: `sudo rm -rf dist/windows build-docker/windows` |

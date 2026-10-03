@@ -164,12 +164,75 @@ goal.elbowToward = poleModelSpace; // optional: leans the elbow, within ArmLimit
 kke::ArmResult held = kke::solveHumanArm(model, pose, right, goal);
 ```
 
+Raised overhead, the range closes in (`acrossOverhead`, `behindOverhead`:
+the hand can't go as far across or behind the head as it can at shoulder
+height), and the **shoulder girdle** moves with the arm: when the rig has a
+clavicle above the upper arm (`HumanArm::clavicle`, found by name), the
+clavicle lifts about one degree for every two the arm rises past shoulder
+height (up to `shoulderShrug`, 30°) and swings forward as the hand reaches
+ahead (`shoulderReach`). That is the scapulohumeral rhythm every person
+has; an arm raised by the shoulder joint alone pinches the mesh at the
+shoulder and looks dislocated.
+
 Tennis holds its racket this way (the racket follows the hand) and Climb
 Race puts its hands on holds with it. Both use the overload that also
 knows the body (`kke/BodyShape.h`: the arm goes round the torso, head and
 legs, never through them) and hold things by the palm with the fingers
 closed on them (`kke/Equipment.h`); [EQUIPMENT.md](EQUIPMENT.md) explains
 both.
+
+## Clip, contacts, lean: `CharacterIk`
+
+`kke::CharacterIk` ([kke/CharacterIk.h](../engine/include/kke/CharacterIk.h))
+is the whole layer a person gets on top of their animation, in the order
+the big engines run it:
+
+1. **The clip is the base.** The Animator's pose carries the style and
+   the timing of every move (walk, vault, climb, hang).
+2. **Contacts put the hands and feet where the world says they are.**
+   Feet stand on the ground under them (`FootPlacer`, which asks under the
+   heel, the ball and the toe tip of each foot and takes the highest, so a
+   foot half over a step stands on it and never in it; a planted foot never
+   sinks while the smoothing catches up). A foot can also be planted on a
+   ledge, a wall or a box top (`foot(side, point, normal)`), and a hand put
+   on an edge or a handle (`hand(side, point, elbowToward)`), solved as a
+   human arm that keeps out of its own body.
+3. **Procedural fine-tuning.** The upper body leans into speeding up,
+   slowing down and turning (1.6° per m/s², at most 9°).
+
+Contacts are set every frame in world space; a limb without one fades back
+to the clip, so a hand reaching for a ledge or a foot leaving a wall never
+pops.
+
+```cpp
+kke::CharacterIk ik(rig, &skinnedModel);                  // once: bones, arms, body shape
+// every frame, after the Animator:
+kke::Pose pose = animator.pose();
+ik.feetOnGround(onGround);                                 // off in the air
+if (hanging) {
+    ik.hand(kke::CharacterIk::Left, edgeLeft, elbowHintLeft);
+    ik.hand(kke::CharacterIk::Right, edgeRight, elbowHintRight);
+    ik.foot(kke::CharacterIk::Left, wallPoint, wallNormal); // braced on the wall
+}
+ik.apply(rig, pose, modelToWorld, groundRay, velocity, dt);
+kke::poseToLocals(pose, locals);
+```
+
+The walkable showcase (`games/showcase`, `kke_demo`) uses it for walking,
+vaulting, climbing, hanging and shimmying: hands on the edge, the balls of
+the feet braced on the wall while hanging, feet onto the top at the end of
+a climb. Tests: `tests/test_character_ik.cpp`.
+
+## Clips that walk away: `makeClipsInPlace`
+
+Some clips have the travel baked into the root or hips bone (Synty's
+animals, many mocap walks). Played on a character the game moves itself,
+the model walks ahead of its body and snaps back every loop. `loadModel`
+now makes every clip play in place (`ModelLoadOptions::clipsInPlace`, on
+by default): the topmost bone whose own translation travels from the first
+frame to the last loses that steady drift and keeps its sway and bob. A
+turn in place isn't touched. Set `clipsInPlace = false` for a file meant as
+root motion (`AnimationSet::extractRootMotion`).
 
 ## Long chains: `solveFabrik`
 
