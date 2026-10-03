@@ -56,6 +56,23 @@ float computeShadow(vec4 posLightSpace) {
     return litSum / 9.0;
 }
 
+// The light-space position for a shadow lookup, pushed out along the
+// surface normal by about a shadow-map texel (more the more the surface
+// turns away from the light). Thin surfaces lying on or right over other
+// casters (cloth on a ball or a mattress, a sheet's own folds) otherwise
+// sample the caster they touch and break up into blocky lit and dark
+// patches: the depth bias alone can't separate surfaces closer than a
+// texel. N faces the viewer; L points towards the light.
+vec4 shadowPosNormalOffset(vec3 worldPos, vec3 N, vec3 L) {
+    // An orthographic light: the first row of lightViewProj is the light's
+    // right axis divided by the half width the map covers.
+    mat4 m = lighting.lightViewProj;
+    float halfWidth = 1.0 / max(length(vec3(m[0][0], m[1][0], m[2][0])), 1e-6);
+    float texel = 2.0 * halfWidth / (float(textureSize(shadowMap, 0).x) * max(lighting.shadowTile.z, 1e-6));
+    float NdotL = clamp(dot(N, L), 0.0, 1.0);
+    return m * vec4(worldPos + N * texel * (1.0 + 2.0 * (1.0 - NdotL)), 1.0);
+}
+
 // Trowbridge-Reitz GGX normal distribution function -- how much the
 // microfacet normals are concentrated around the halfway vector.
 // Concentrated (small denominator growth) for low roughness -> a
