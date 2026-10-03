@@ -133,7 +133,6 @@ nav:
           - Sandbox: demos/sandbox.md
           - RmlUi demo: demos/rmlui_demo.md
           - ImGui demo: demos/imgui_demo.md
-          - kke_basics: demos/kke_demo_game.md
   - Guides:
       - Play to make: PLAY_TO_MAKE.md
       - Scripting in Lua: SCRIPTING.md

@@ -72,7 +72,8 @@ the keyboard.
 | Back on the track | D-pad up | T |
 | Camera | Y | C |
 | Race again / next track | Start / D-pad right | R / N |
-| Start menu | Back | M |
+| Pause menu (settings, controls, main menu, quit) | Start while driving, or Select | Esc |
+| Start menu (players, cars, track) | the pause menu's Main menu | M, or the pause menu |
 | How to play | D-pad down | H |
 | Developer panels | | F1 |
 

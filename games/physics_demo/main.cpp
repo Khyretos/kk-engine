@@ -1,5 +1,6 @@
 #include "kke/Application.h"
 #include "kke/modules/AudioModule.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/SoundVisualizerModule.h"
 #include "kke/Log.h"
 #include "kke/modules/OrbitCameraModule.h"
@@ -87,6 +88,8 @@ int main() {
         // Material Grid: materials, scenes and the debris budget from a
         // controller (View), the keyboard (F3) or the mouse.
         app.addModule<kke::UiModule>();
+        // The shared menus: title, settings, controls, pause (docs/GAME_SHELL.md).
+        app.addModule<kke::GameShellModule>("Physics", "Break, bend and crush things");
         app.addModule<kke_physics_demo::PhysicsDemoModule>();
         app.addModule<kke::DemoPanelModule>("Physics");
         app.addModule<kke::DebugControlModule>();

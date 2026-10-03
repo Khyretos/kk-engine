@@ -139,11 +139,9 @@ void ShowcaseModule::init(kke::Application& app) {
         kke::InputModule::defineCharacterActions(in);
         in.defineAction({ "reset", "Reset crates + player", "Showcase", "game" });
         in.defineAction({ "panels", "Engine panels", "Showcase", "game" });
-        in.defineAction({ "menu", "Pause menu", "Showcase", "ui" }); // Esc is fixed (see onEvent); "ui": works in the menu
         using IM = kke::InputModule;
         in.addBinding(IM::bind("reset", IM::key(SDL_SCANCODE_R)));
         in.addBinding(IM::bind("reset", IM::pad(SDL_GAMEPAD_BUTTON_WEST)));
-        in.addBinding(IM::bind("menu", IM::pad(SDL_GAMEPAD_BUTTON_START)));
         // The engine panels are developer tools: F1 only (View is a toy).
         in.addBinding(IM::bind("panels", IM::key(SDL_SCANCODE_F1)));
         // A controller's zoom is the d-pad up / down, held; the wheel's
@@ -201,6 +199,7 @@ void ShowcaseModule::init(kke::Application& app) {
     app.window().setQuitOnEscape(false);
     m_status = "Click the view to control the character (Esc: menu)";
     buildHud();
+    buildPauseRows();
     findScenes();
     // KKE_SCENE=town_block (or a path): start in that scene.
     if (const char* want = std::getenv("KKE_SCENE"); want && *want)
@@ -776,8 +775,8 @@ void ShowcaseModule::setCaptured(bool on) {
     SDL_SetWindowRelativeMouseMode(m_app->window().handle(), on);
 }
 
-// Only what isn't an action: clicking the view grabs the mouse, Esc
-// lets it go (Esc stays fixed so you can never lock yourself out).
+// Only what isn't an action: clicking the view grabs the mouse. Esc is
+// the pause menu (kke::GameShellModule), which lets the mouse go.
 void ShowcaseModule::onEvent(const SDL_Event& e) {
     ImGuiIO& io = ImGui::GetIO();
     if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !m_captured && !m_menuOpen && !io.WantCaptureMouse && !m_app->uiCapturesMouse() &&
@@ -786,8 +785,6 @@ void ShowcaseModule::onEvent(const SDL_Event& e) {
         m_swallowFire = true; // this click grabbed the mouse; it isn't a shot
         return;
     }
-    // Esc: the pause menu (and the mouse back), or out of it again.
-    if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_ESCAPE) setMenuOpen(!m_menuOpen);
 }
 
 // Everything else goes through the input map (rebindable, controllers,
@@ -959,7 +956,7 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     updateStressTest(dt);
     batchCrates();
     if (m_lava) m_lava->update();
-    updateHud(dt);
+    updateHud();
     kke::RigidWorld& w = m_rigid->world();
 
     // Crouch: a 1.0 m capsule. Standing up waits until there's headroom.

@@ -83,7 +83,7 @@ $leak"
 
 # --- Every demo must be there and executable. ---------------------------
 demos=()
-for d in kke_demo kke_basics sandbox physics_demo melt_demo jiggle_demo sea_demo imgui_demo rmlui_demo synty_demo audio_demo \
+for d in kke_demo sandbox physics_demo melt_demo jiggle_demo sea_demo imgui_demo rmlui_demo synty_demo audio_demo \
          climb_race flying_demo racing procedural_demo cloth_demo farm_demo pet_companion platoon duel goblin_horde cookbook; do
     if [ -f "$stage/$d$exe" ]; then demos+=("$d"); fi
 done

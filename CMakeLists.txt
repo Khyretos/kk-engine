@@ -936,7 +936,6 @@ endif()
 # add_subdirectory is today's honest state, not a placeholder pretending
 # to be more general than it is.
 # ---------------------------------------------------------------------------
-add_subdirectory(games/kke_demo_game)
 if(KKE_ENABLE_JOLT)
     add_subdirectory(games/showcase)
 endif()

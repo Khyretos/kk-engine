@@ -355,8 +355,8 @@ void FlyingModule::updateHud(float) {
             device = d.label + (d.holder == m_pauseSeat ? " (yours now)" : "");
             taken = d.holder >= 0 && d.holder != m_pauseSeat;
         }
-        const char* labels[] = { "Resume", "Controls", "Restart", "Start menu", "Quit" };
-        for (int i = 0; i < 5; ++i) {
+        const char* labels[] = { "Resume", "Controls", "Restart", "Settings", "Start menu", "Quit" };
+        for (int i = 0; i < 6; ++i) {
             PauseRow r;
             r.label = labels[i];
             r.focused = i == m_pauseRow;

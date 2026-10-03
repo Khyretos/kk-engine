@@ -68,8 +68,8 @@ void PetModule::init(kke::Application& app) {
     kke::InputMap& in = m_input->map(0);
     kke::InputModule::defineCharacterActions(in);
     command_kit::CommandInput::defineActions(in);
-    // BUG-065: the d-pad down is Sit here, so audio.ping moves to View on a
-    // controller (Q stays); orders don't queue in the garden, so Left Shift
+    // BUG-065: the d-pad down is Sit here and Select is the pause menu, so
+    // audio.ping is Q only; orders don't queue in the garden, so Left Shift
     // is only sprint.
     in.clearBindings("audio.ping");
     in.clearBindings("cmd.queue");
@@ -85,8 +85,8 @@ void PetModule::init(kke::Application& app) {
     quick("pet.fetch", "Fetch", SDL_SCANCODE_4, SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
     quick("pet.drop", "Drop it", SDL_SCANCODE_5, SDL_GAMEPAD_BUTTON_WEST);
     in.addBinding(IM::bind("audio.ping", IM::key(SDL_SCANCODE_Q)));
-    in.addBinding(IM::bind("audio.ping", IM::pad(SDL_GAMEPAD_BUTTON_BACK)));
-    quick("pet.mouse", "Free the mouse / look with it", SDL_SCANCODE_ESCAPE, SDL_GAMEPAD_BUTTON_INVALID);
+    // Esc is the pause menu (kke::GameShellModule), which frees the mouse too.
+    quick("pet.mouse", "Free the mouse / look with it", SDL_SCANCODE_TAB, SDL_GAMEPAD_BUTTON_INVALID);
     quick("panels", "Developer panels", SDL_SCANCODE_F1, SDL_GAMEPAD_BUTTON_INVALID);
     m_input->commitDefaults();
     app.window().setQuitOnEscape(false);
@@ -820,6 +820,7 @@ void PetModule::update(const kke::UpdateContext& ctx) {
     }
     kke::InputMap& in = m_input->map(0);
     if (in.pressed("panels")) m_app->debugUi().setVisible(!m_app->debugUi().visible());
+    m_captured = SDL_GetWindowRelativeMouseMode(m_app->window().handle()); // the pause menu frees it
     if (in.pressed("pet.mouse")) {
         m_captured = !m_captured;
         SDL_SetWindowRelativeMouseMode(m_app->window().handle(), m_captured);

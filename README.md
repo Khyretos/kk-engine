@@ -108,7 +108,6 @@ Actions. Platforms, hardware targets and consoles: [docs/PLATFORMS.md](docs/PLAT
 | `synty_demo` | Synty POLYGON models loaded straight from FBX, skinned and animated |
 | `rmlui_demo` | The game UI toolkit: menus, settings, inventory drag and drop, HUD, and a live input tester |
 | `imgui_demo` | Dear ImGui's full widget demo |
-| `kke_basics` | The original building-block demo: cube, grid, particles, orbit camera |
 
 The character in `kke_demo` is Quaternius' Universal Animation Library
 mannequin (CC0), `assets/animations/UAL1_Standard.fbx`, which is in the

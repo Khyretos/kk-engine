@@ -72,7 +72,8 @@ line at the bottom always shows the buttons of the device you use.
 | Jump (and mash) | A | Space |
 | Dive | X or RB | E or right mouse |
 | Watch someone else when you're out | A / X | Space / E |
-| Pause menu (voice, mutes, back to the start menu) | Back | Esc or F3 |
+| Pause menu (settings, controls, back to the start menu, quit) | Start or Select | Esc |
+| Party and voice panel (voice, mutes) | the pause menu's Demo settings | F3, or the pause menu |
 | Back to the start menu | | M |
 | Vote for a game (between rounds, with Vote) | Left stick left/right, A | A/D, Space |
 | Developer panels | | F1 |
@@ -348,8 +349,10 @@ machine without the pack draws a person picked elsewhere as a bean.
 
 ### The pause menu ([Pause.cpp](Pause.cpp))
 
-`kke::DemoPanelModule` as a pause menu: Esc or Back opens it. It has
-Back to the start menu, Voice chat on or off, a player to mute or unmute
+The pause menu is the shared one (`kke::GameShellModule`, Esc, Start or
+Select); its Main menu goes back to the start menu. Its Demo settings row
+opens `kke::DemoPanelModule` ("Party and voice", F3 too): Back to the
+start menu, Voice chat on or off, a player to mute or unmute
 (the other screens' players; CPU beans have no microphone), Mute
 everyone and who is talking. Below it, `kke::VoiceHudModule` adds
 "Voices nearby": a mute for each numbered slot of the nearby talkers list,

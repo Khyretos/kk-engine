@@ -4,6 +4,7 @@
 #include "kke/DevTools.h"
 #include "kke/Log.h"
 #include "kke/SphereImpostors.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
 #include "kke/modules/ModelModule.h"
@@ -123,15 +124,50 @@ void TennisModule::defineControls() {
         in.addBinding(IM::bind("tennis.slice", IM::key(SDL_SCANCODE_K)));
         in.addBinding(IM::bind("tennis.slice", IM::mouse(SDL_BUTTON_RIGHT)));
         in.addBinding(IM::bind("tennis.lob", IM::key(SDL_SCANCODE_L)));
-        in.addBinding(IM::bind("tennis.menu", IM::key(SDL_SCANCODE_ESCAPE)));
+        // Esc and Select are the pause menu (kke::GameShellModule), whose Main
+        // menu does the same; M stays a keyboard shortcut.
+        in.addBinding(IM::bind("tennis.menu", IM::key(SDL_SCANCODE_M)));
         in.addBinding(IM::bind("panels", IM::key(SDL_SCANCODE_F1)));
         in.addBinding(IM::bind("tennis.topspin", IM::pad(SDL_GAMEPAD_BUTTON_SOUTH)));
         in.addBinding(IM::bind("tennis.flat", IM::pad(SDL_GAMEPAD_BUTTON_WEST)));
         in.addBinding(IM::bind("tennis.slice", IM::pad(SDL_GAMEPAD_BUTTON_EAST)));
         in.addBinding(IM::bind("tennis.lob", IM::pad(SDL_GAMEPAD_BUTTON_NORTH)));
-        in.addBinding(IM::bind("tennis.menu", IM::pad(SDL_GAMEPAD_BUTTON_BACK)));
     }
     m_input->commitDefaults();
+    if (auto* shell = m_app->getModule<kke::GameShellModule>()) {
+        shell->onMainMenu = [this] { leaveToMenu(); };
+        shell->addPauseItem("Leave the court (a walkover)", [this] { leaveCenterMatch(0); },
+                            [this] { return m_inCenter && !netClient() && inCenterMatch(0); });
+    }
+}
+
+// The menu button (M, or the pause menu's Main menu): back to the start
+// menu; a client's leaves the online game.
+void TennisModule::leaveToMenu() {
+    if (netClient()) {
+        m_wasOnline = false; // on purpose: no "left" toast
+        m_net->leave();
+    }
+    if (!m_inMenu) backToMenu();
+}
+
+// In the sport center: the player on input map `input` walks off their
+// court (the other side wins the match). False when they aren't playing.
+bool TennisModule::leaveCenterMatch(int input) {
+    for (size_t mi = 0; mi < m_matches.size(); ++mi)
+        for (int idx : m_matches[mi]->players)
+            if (player(idx).walker >= 0 && player(idx).input == input) {
+                endCenterMatch(mi, player(idx).team);
+                return true;
+            }
+    return false;
+}
+
+bool TennisModule::inCenterMatch(int input) const {
+    for (const auto& m : m_matches)
+        for (int idx : m->players)
+            if (m_players[static_cast<size_t>(idx)].walker >= 0 && m_players[static_cast<size_t>(idx)].input == input) return true;
+    return false;
 }
 
 void TennisModule::clearPlayers() {
@@ -410,20 +446,10 @@ void TennisModule::update(const kke::UpdateContext& ctx) {
         for (int i = 0; i < m_input->players(); ++i) {
             if (!m_input->map(i).pressed("tennis.menu")) continue;
             if (netClient()) {
-                m_wasOnline = false; // on purpose: no "left" toast
-                m_net->leave();
-                backToMenu();
+                leaveToMenu();
                 break;
             }
-            bool left = false;
-            for (size_t mi = 0; mi < m_matches.size() && !left; ++mi)
-                for (int idx : m_matches[mi]->players)
-                    if (player(idx).walker >= 0 && player(idx).input == i) {
-                        endCenterMatch(mi, player(idx).team);
-                        left = true;
-                        break;
-                    }
-            if (!left) backToMenu();
+            if (!leaveCenterMatch(i)) backToMenu();
             break;
         }
         for (Walker& w : m_walkers)
@@ -431,12 +457,7 @@ void TennisModule::update(const kke::UpdateContext& ctx) {
     } else if (m_lobby && !m_ballTest) {
         for (int i = 0; i < m_input->players(); ++i)
             if (m_input->map(i).pressed("tennis.menu")) {
-                // A client's menu button leaves the online game.
-                if (netClient()) {
-                    m_wasOnline = false; // on purpose: no "left" toast
-                    m_net->leave();
-                }
-                backToMenu();
+                leaveToMenu();
                 break;
             }
     }

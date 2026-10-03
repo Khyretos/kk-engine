@@ -2,6 +2,7 @@
 // second player (see DuelModule.h and README.md).
 #include "kke/Application.h"
 #include "kke/modules/AudioModule.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/RigidBodyModule.h"
@@ -24,6 +25,8 @@ int main() {
         app.addModule<kke::RigidBodyModule>();
         app.addModule<kke::ModelModule>();
         app.addModule<kke::UiModule>();
+        // The shared menus: title, settings, controls, pause (docs/GAME_SHELL.md).
+        app.addModule<kke::GameShellModule>("Duel", "A one-on-one fist fight");
         app.addModule<kke::AudioModule>().setUiVisible(false);
         app.addModule<duel::DuelModule>();
         app.addModule<kke::StatsModule>().setUiVisible(false);

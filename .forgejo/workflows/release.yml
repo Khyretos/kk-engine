@@ -99,7 +99,7 @@ jobs:
           sleep 2
           cd "$RUNNER_TEMP"
           failed=0
-          for demo in kke_demo kke_basics physics_demo melt_demo jiggle_demo sea_demo imgui_demo rmlui_demo sandbox synty_demo audio_demo; do
+          for demo in kke_demo physics_demo melt_demo jiggle_demo sea_demo imgui_demo rmlui_demo sandbox synty_demo audio_demo; do
             [ -x "$pkg/$demo" ] || { echo "== $demo: missing from the package"; failed=1; continue; }
             set +e
             DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_SKIP_INTRO=1 timeout 8 "$pkg/$demo" > "run_$demo.log" 2>&1
@@ -113,7 +113,7 @@ jobs:
           done
           # The benchmark people are sent: two short demos, one results file.
           set +e
-          DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_AUDIO=off timeout 180 "$pkg/benchmark/kke_benchmark" --only kke_basics,showcase_walk --seconds 3 \
+          DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_AUDIO=off timeout 180 "$pkg/benchmark/kke_benchmark" --only sea_demo,showcase_walk --seconds 3 \
             --no-wait --no-open --out "$RUNNER_TEMP/bench" > run_kke_benchmark.log 2>&1
           code=$?
           set -e

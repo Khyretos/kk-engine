@@ -1,6 +1,7 @@
 #include "kke/Application.h"
 #include "kke/modules/DebugControlModule.h"
 #include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/UiModule.h"
@@ -23,6 +24,8 @@ int main() {
         // settings panel is RmlUi (kke::DemoPanelModule, on the right).
         app.addModule<kke::InputModule>("cloth_demo_input.json");
         app.addModule<kke::UiModule>();
+        // The shared menus: title, settings, controls, pause (docs/GAME_SHELL.md).
+        app.addModule<kke::GameShellModule>("Cloth and Hair", "Capes, sheets, flags and every hair type");
         app.addModule<kke::OrbitCameraModule>(/*distance=*/8.0f, /*pitch=*/-0.2f, /*yaw=*/0.0f, glm::vec3(0.0f, 1.4f, 0.0f))
             .setPadControls(true); // right stick turns, d-pad zooms
         app.addModule<kke_cloth::ClothDemoModule>();

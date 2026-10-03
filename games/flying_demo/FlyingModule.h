@@ -50,7 +50,7 @@ namespace flying {
 //
 // Controllers (README.md "Controllers"): each player flies with the
 // device they joined on: a gamepad, a flight stick, or the keyboard and
-// mouse. The pause menu (Start, Esc, or a flight stick's fourth button)
+// mouse. The pause menu (Start, Back, Esc, or a flight stick's fourth button)
 // lets a player move to any other device that is plugged in and free,
 // never to one another player holds. That's this screen's business
 // only: online players don't see or care.

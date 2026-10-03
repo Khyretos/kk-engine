@@ -139,6 +139,14 @@ void LobbyModule::close() {
     m_lobby.setOpen(false);
 }
 
+void LobbyModule::setSuspended(bool suspended) {
+    if (suspended == m_suspended) return;
+    m_suspended = suspended;
+    m_tapped.clear();
+    if (!suspended) m_deafFrames = 2;
+    if (m_doc) m_doc->SetProperty("visibility", suspended ? "hidden" : "visible");
+}
+
 void LobbyModule::applyInput() {
     m_applied = m_lobby.joinedSeats();
     m_input->setPlayers(static_cast<int>(m_applied.size()));
@@ -236,7 +244,10 @@ void LobbyModule::readDevices(float dt) {
         }
     m_pads = std::move(pads);
 
-    // Each controller on its own; the keyboard (and mice) as one.
+    // Each controller on its own; the keyboard (and mice) as one. Held
+    // buttons are still tracked while deaf, so letting go isn't a press.
+    const bool deaf = m_suspended || m_deafFrames > 0;
+    if (m_deafFrames > 0) --m_deafFrames;
     const bool open = m_lobby.isOpen();
     for (uint32_t ref : m_pads) {
         const InputDevices::Device* dev = devices.find(ref);
@@ -275,7 +286,7 @@ void LobbyModule::readDevices(float dt) {
         Lobby::Press p = pressFrom(now, m_held[ref], m_tapped[ref], dt);
         p.device = Lobby::Device::Pad;
         p.pad = ref;
-        if (p.any()) {
+        if (p.any() && !deaf) {
             if (m_lobby.seatOfPad(ref) < 0 && dev) noteJoinDevice(*dev);
             m_lobby.handle(p, m_pads);
         }
@@ -295,12 +306,13 @@ void LobbyModule::readDevices(float dt) {
         if (!open) m_tapped[0] &= kConfirm;
         Lobby::Press p = pressFrom(now, m_held[0], m_tapped[0], dt);
         p.device = Lobby::Device::KeyboardMouse;
-        if (p.any()) m_lobby.handle(p, m_pads);
+        if (p.any() && !deaf) m_lobby.handle(p, m_pads);
     }
     m_tapped.clear();
 }
 
 void LobbyModule::onEvent(const SDL_Event& e) {
+    if (m_suspended) return;
     if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat) {
         // The same keys as readDevices(); Space only confirms in the menu.
         unsigned bit = 0;

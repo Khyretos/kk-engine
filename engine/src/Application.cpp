@@ -16,6 +16,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <stb_image_write.h>
 #include <algorithm>
+#include <atomic>
+#include <cstdio>
 #include <cctype>
 #include <cmath>
 #include <chrono>
@@ -233,7 +235,42 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
     m_debugUi->setVisible(dev::kEnabled);
 }
 
+namespace {
+
+// Quitting must never hang (Kees, 2026-09-28: SUPER+Q left racing stuck
+// after "FEMFX scene destroyed" until it was killed). Once the main loop
+// has ended, a watchdog gives the teardown kQuitGrace seconds; past that it
+// says on stderr which step never finished (the log is closed by then)
+// and ends the process. The step names are string literals (a module's
+// name() too), so the watchdog can read them while the main thread
+// destroys things.
+constexpr int kQuitGraceSeconds = 8;
+std::atomic<const char*> g_quitStep{ nullptr };
+std::atomic<const char*> g_quitModule{ nullptr };
+
+void quitStep(const char* step, const char* module = nullptr) {
+    g_quitModule.store(module);
+    g_quitStep.store(step);
+}
+
+void startQuitWatchdog() {
+    quitStep("finishing the last frame");
+    std::thread([] {
+        std::this_thread::sleep_for(std::chrono::seconds(kQuitGraceSeconds));
+        const char* step = g_quitStep.load();
+        const char* module = g_quitModule.load();
+        std::fprintf(stderr, "[kke][warning]: quitting took longer than %d s, stuck while %s%s%s; ending the process (please report this)\n",
+                     kQuitGraceSeconds, step ? step : "?", module ? " " : "", module ? module : "");
+        std::fflush(stderr);
+        std::_Exit(0);
+    }).detach();
+}
+
+} // namespace
+
 Application::~Application() {
+    if (!g_quitStep.load()) startQuitWatchdog(); // run() never ran, or threw
+    quitStep("waiting for the GPU");
     // A real, validation-layer-confirmed bug this fixes: without this
     // wait, a module's shutdown() (called below) could destroy Vulkan
     // resources — buffers, pipelines — while the GPU was still
@@ -262,8 +299,10 @@ Application::~Application() {
     // shutdown() isn't trusted once a module has already thrown.
     for (auto it = m_initOrder.rbegin(); it != m_initOrder.rend(); ++it) {
         if (m_faultedModules.count(*it)) continue;
+        quitStep("shutting down", (*it)->name());
         safeInvoke(*it, "shutdown", [&] { (*it)->shutdown(); });
     }
+    quitStep("freeing the engine's descriptor pools");
 
     // The shadow map descriptor infrastructure created in the
     // constructor above -- destroyed here, after every module's own
@@ -281,7 +320,18 @@ Application::~Application() {
         if (m_materialTextureSetLayout) vkDestroyDescriptorSetLayout(dev, m_materialTextureSetLayout, nullptr);
     }
 
+    quitStep("flushing the log");
     log::shutdown(); // flush the async queue before the process exits
+
+    // The modules' destructors (worker threads join here: physics, skinning,
+    // networking, audio), one at a time so a stuck one is named; then the
+    // members below (the renderer, then the window and SDL).
+    for (auto& m : m_modules) {
+        quitStep("destroying", m->name());
+        m.reset();
+    }
+    m_modules.clear();
+    quitStep("closing the renderer, the window and SDL");
 }
 
 // The one place a Module's own code can hand control back to the engine
@@ -998,6 +1048,7 @@ void Application::run() {
         }
     }
     if (m_bench) writeBenchmarkReport();
+    startQuitWatchdog();
 }
 
 void Application::setResourceBudget(const ResourceBudget& budget) {

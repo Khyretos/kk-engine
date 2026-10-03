@@ -3,6 +3,7 @@
 #include "kke/Application.h"
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
 #include "kke/modules/ModelModule.h"
@@ -29,6 +30,8 @@ int main() {
         app.addModule<kke::RigidBodyModule>();
         app.addModule<kke::ModelModule>(); // people (People.h), when the Synty City pack is there
         app.addModule<kke::UiModule>();
+        // The shared menus: title, settings, controls, pause (docs/GAME_SHELL.md).
+        app.addModule<kke::GameShellModule>("Party", "Minigames with friends");
         app.addModule<kke::AudioModule>().setUiVisible(false);
         app.addModule<kke::LobbyModule>("party_lobby.json");
         // Online: Host / Join in the start menu (or KKE_NET=host, KKE_NET=join:ADDRESS).

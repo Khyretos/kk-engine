@@ -5,6 +5,7 @@
 #include "kke/Application.h"
 #include "kke/Log.h"
 #include "kke/SphereImpostors.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/RigidBodyModule.h"
 
@@ -141,9 +142,15 @@ void DuelModule::init(kke::Application& app) {
         in.addBinding(lt);
         in.addBinding(IM::bind("duel.dodge", IM::pad(SDL_GAMEPAD_BUTTON_SOUTH)));
         in.addBinding(IM::bind("duel.again", IM::pad(SDL_GAMEPAD_BUTTON_START)));
-        in.addBinding(IM::bind("duel.two", IM::pad(SDL_GAMEPAD_BUTTON_BACK)));
     }
     m_input->commitDefaults();
+    if (auto* shell = app.getModule<kke::GameShellModule>()) {
+        // Start is the rematch between rounds; the second player joins from
+        // the pause menu on a controller (Select pauses), or with F2.
+        shell->startIsTheGames = [this] { return m_phase == Phase::RoundOver || m_phase == Phase::MatchOver; };
+        shell->addPauseItem("Two players", [this] { setTwoPlayers(true); }, [this] { return !m_twoPlayers && !m_allBots; });
+        shell->addPauseItem("Back to the bot", [this] { setTwoPlayers(false); }, [this] { return m_twoPlayers; });
+    }
 
     app.camera().farPlane = 120.0f;
     app.camera().fovDegrees = 50.0f;

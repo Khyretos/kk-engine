@@ -2,6 +2,7 @@
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/DebugControlModule.h"
 #include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/OrbitCameraModule.h"
@@ -27,6 +28,8 @@ int main() {
         // demo's panel is RmlUi (kke::DemoPanelModule, on the right).
         app.addModule<kke::InputModule>("audio_demo_input.json");
         app.addModule<kke::UiModule>();
+        // The shared menus: title, settings, controls, pause (docs/GAME_SHELL.md).
+        app.addModule<kke::GameShellModule>("Audio Demo", "Sound stations: rooms, echoes, pings and music");
         app.addModule<kke::OrbitCameraModule>(/*distance=*/9.0f, /*pitch=*/-0.55f, /*yaw=*/0.4f, glm::vec3(0.0f, 1.6f, 0.0f))
             .setPadControls(true); // right stick turns you, d-pad zooms
         app.addModule<kke::RigidBodyModule>();

@@ -5,6 +5,7 @@
 #include "kke/DevTools.h"
 #include "kke/Log.h"
 #include "kke/RmlTextSafety.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/UiModule.h"
 
@@ -272,13 +273,17 @@ DemoPanelModule::Section& DemoPanelModule::section(const std::string& title) {
 void DemoPanelModule::init(Application& app) {
     m_app = &app;
     m_input = app.getModule<InputModule>();
+    // A game with the shared menus (GameShellModule) pauses on Select and
+    // Esc and quits from there; the panel is one row of its pause menu.
+    const bool shell = app.getModule<GameShellModule>() != nullptr;
+    if (shell) m_escapeMenu = false;
     // One action opens and closes it; the rows use the built-in ui.*
     // actions (d-pad / left stick, A, B), remappable like any other.
     for (int p = 0; m_input && p < m_input->players(); ++p) {
         InputMap& m = m_input->map(p);
         if (!m.action("panel.toggle")) m.defineAction({ "panel.toggle", "Settings panel", "Menus", "panel" });
         if (m.bindingsFor("panel.toggle").empty()) {
-            m.addBinding(InputModule::bind("panel.toggle", InputModule::pad(SDL_GAMEPAD_BUTTON_BACK)));
+            if (!shell) m.addBinding(InputModule::bind("panel.toggle", InputModule::pad(SDL_GAMEPAD_BUTTON_BACK)));
             m.addBinding(InputModule::bind("panel.toggle", InputModule::key(SDL_SCANCODE_F3)));
         }
     }
