@@ -8,8 +8,13 @@ clip, a procedural wave written in code, idle breathing, and a pose you
 build bone by bone from the "Characters" panel. With a physics module in
 the build you can knock any of them over as a ragdoll, have them stand up
 where they landed, and (in a FEMFX build) throw one through a pane of
-glass that shatters. If the Quaternius Farm Animals pack is in the same
-asset folder, a horse and a pug join them and ragdoll with animal joints.
+glass that shatters. In a FEMFX build the props bend and break too
+(`kke::Breakables`, [docs/BREAKABLES.md](../../docs/BREAKABLES.md)): the
+crates, barrels and chest are wood that splinters, the barrier and the
+flag pole metal that dents and bends (the pole anchored at its foot), and
+"Drop onto a crate" drops the selected character onto the next one. If
+the Quaternius Farm Animals pack is in the same asset folder, a horse and
+a pug join them and ragdoll with animal joints.
 
 The demo teaches how to use bought art in KKE: finding a pack on disk
 whatever its layout, loading its FBX files with their textures, placing
@@ -66,6 +71,7 @@ The actions are made in `SyntySceneModule::defineInput`
 | Ragdoll everyone | Shift+R | the panel's "Ragdoll everyone" button |
 | Everyone stands up (`synty.stand`) | T | Y (north) |
 | Throw the selected one through a glass pane (`synty.glass`), FEMFX builds | G | A (south) |
+| Drop the selected one onto a crate (`synty.crates`), FEMFX builds | C | B (east) |
 | Show bones on / off (`synty.bones`) | B | left stick click |
 | Previous / next character (`synty.prev`, `synty.next`) | [ / ] | LB / RB |
 | Turn the camera (`camera.orbit`) | left-drag | right stick |

@@ -14,14 +14,21 @@ MeltVolume::MeltVolume(const glm::ivec3& dims, const glm::vec3& origin, float ce
     m_density.assign(n, 0.0f);
     m_temp.assign(n, 20.0f);
     m_meltAccum.assign(n, 0.0f);
+    m_fallSpeed.assign(n, 0.0f);
+    m_fallDistance.assign(n, 0.0f);
+    m_sag.assign(n, 0.0f);
 }
 
 void MeltVolume::clear() {
     std::fill(m_density.begin(), m_density.end(), 0.0f);
     m_distanceDirty = true;
     std::fill(m_meltAccum.begin(), m_meltAccum.end(), 0.0f);
+    std::fill(m_fallSpeed.begin(), m_fallSpeed.end(), 0.0f);
+    std::fill(m_fallDistance.begin(), m_fallDistance.end(), 0.0f);
+    std::fill(m_sag.begin(), m_sag.end(), 0.0f);
     m_initialSolid = 0.0f;
     m_dirty = true;
+    m_settled = false;
 }
 
 void MeltVolume::fillBox(const glm::vec3& mn, const glm::vec3& mx, float temperature) {
@@ -38,6 +45,7 @@ void MeltVolume::fillBox(const glm::vec3& mn, const glm::vec3& mx, float tempera
     for (float d : m_density) m_initialSolid += d;
     m_startTemperature = temperature;
     m_dirty = true;
+    m_settled = false;
     rebuildDistance();
 }
 
@@ -224,6 +232,7 @@ size_t MeltVolume::step(float dt, ParticleFluid& fluid) {
                 if (m_density[v] < 0.02f) m_density[v] = 0.0f;
                 m_meltAccum[v] += lost;
                 m_dirty = true;
+                m_settled = false;
                 // The distance field only sees solid (> 0.5) or not: most
                 // steps melt a little without flipping a voxel, and skip
                 // the rebuild (2-3 ms of a 3 ms step before).
@@ -235,8 +244,161 @@ size_t MeltVolume::step(float dt, ParticleFluid& fluid) {
                     ++emitted;
                 }
             }
+    // 4. What lost its support falls; soft material sags.
+    collapse(dt);
     if (m_distanceDirty) rebuildDistance();
     return emitted;
+}
+
+void MeltVolume::collapse(float dt) {
+    // Settled stays settled until something melts, except soft material,
+    // which can start to sag just by warming up.
+    if ((m_settled && m_material.softening <= 0.0f) || dt <= 0.0f) return;
+    constexpr float kSolid = 0.5f;   // what the surface shows
+    constexpr float kGravity = 9.81f;
+    constexpr float kMaxSpeed = 8.0f;
+    const size_t n = m_density.size();
+    const int sx = 1, sy = m_dims.x, sz = m_dims.x * m_dims.y;
+    m_label.assign(n, -1);
+    m_fallingVoxels = 0;
+    auto rowOf = [&](uint32_t v) { return static_cast<int>((v / static_cast<uint32_t>(sy)) % static_cast<uint32_t>(m_dims.y)); };
+    bool moved = false;
+    // Moves voxel v one cell down, into whatever is there (merging: the
+    // densities add up to at most 1, temperatures mix by mass).
+    auto moveDown = [&](uint32_t v, float speed, float distance) {
+        const uint32_t t = v - static_cast<uint32_t>(sy);
+        const float d = m_density[v], dt0 = m_density[t];
+        const float total = d + dt0;
+        if (total > 0.0f) m_temp[t] = (m_temp[t] * dt0 + m_temp[v] * d) / total;
+        m_density[t] = std::min(1.0f, total);
+        m_meltAccum[t] += m_meltAccum[v];
+        m_fallSpeed[t] = speed;
+        m_fallDistance[t] = distance;
+        m_density[v] = 0.0f;
+        m_meltAccum[v] = 0.0f;
+        m_fallSpeed[v] = 0.0f;
+        m_fallDistance[v] = 0.0f;
+    };
+    int label = 0;
+    for (size_t seed = 0; seed < n; ++seed) {
+        if (m_density[seed] <= kSolid || m_label[seed] >= 0) continue;
+        // One piece: flood fill over solid voxels.
+        m_stack.clear();
+        m_moving.clear();
+        m_stack.push_back(static_cast<uint32_t>(seed));
+        m_label[seed] = label;
+        bool grounded = false;
+        float speed = 0.0f, distance = 0.0f;
+        while (!m_stack.empty()) {
+            const uint32_t v = m_stack.back();
+            m_stack.pop_back();
+            m_moving.push_back(v);
+            const int x = static_cast<int>(v % static_cast<uint32_t>(m_dims.x));
+            const int y = rowOf(v);
+            const int z = static_cast<int>(v / static_cast<uint32_t>(sz));
+            if (y == 0) grounded = true;
+            speed = std::max(speed, m_fallSpeed[v]);
+            distance = std::max(distance, m_fallDistance[v]);
+            const int nb[6][4] = { { 1, 0, 0, sx }, { -1, 0, 0, -sx }, { 0, 1, 0, sy }, { 0, -1, 0, -sy }, { 0, 0, 1, sz }, { 0, 0, -1, -sz } };
+            for (const auto& o : nb) {
+                const int xx = x + o[0], yy = y + o[1], zz = z + o[2];
+                if (xx < 0 || yy < 0 || zz < 0 || xx >= m_dims.x || yy >= m_dims.y || zz >= m_dims.z) continue;
+                const uint32_t u = static_cast<uint32_t>(static_cast<int>(v) + o[3]);
+                if (m_density[u] <= kSolid || m_label[u] >= 0) continue;
+                m_label[u] = label;
+                m_stack.push_back(u);
+            }
+        }
+        const int self = label++;
+        if (grounded) {
+            for (uint32_t v : m_moving) m_fallSpeed[v] = m_fallDistance[v] = 0.0f;
+            continue;
+        }
+        // Loose: it falls as one, a cell at a time. Its soft fringe (the
+        // half-melted voxels around it) comes along.
+        speed = std::min(kMaxSpeed, speed + kGravity * dt);
+        distance += speed * dt;
+        const size_t solidCount = m_moving.size();
+        for (size_t i = 0; i < solidCount; ++i) {
+            const uint32_t v = m_moving[i];
+            const int y = rowOf(v);
+            for (int o : { sx, -sx, sz, -sz, sy }) {
+                const int64_t u = static_cast<int64_t>(v) + o;
+                if (u < 0 || u >= static_cast<int64_t>(n)) continue;
+                const uint32_t uu = static_cast<uint32_t>(u);
+                // Same row for the sideways neighbours (no wrapping round the grid).
+                if (o != sy && rowOf(uu) != y) continue;
+                if (o == sy && y + 1 >= m_dims.y) continue;
+                if (m_density[uu] > 0.0f && m_density[uu] <= kSolid && m_label[uu] != self) {
+                    m_label[uu] = self;
+                    m_moving.push_back(uu);
+                }
+            }
+        }
+        m_fallingVoxels += solidCount;
+        bool landed = false;
+        while (distance >= m_cell && !landed) {
+            // Free below every solid voxel of it (its own voxels move too)?
+            for (uint32_t v : m_moving) {
+                if (m_density[v] <= kSolid) continue; // the fringe gives way
+                if (rowOf(v) == 0) { landed = true; break; } // on the ground
+                const uint32_t t = v - static_cast<uint32_t>(sy);
+                if (m_label[t] != self && m_density[t] > kSolid) {
+                    landed = true;
+                    break;
+                }
+            }
+            if (landed) break;
+            // Bottom rows first, so each voxel moves into a cell already emptied.
+            // (A fringe voxel on the bottom row has nowhere to go: it stays.)
+            std::sort(m_moving.begin(), m_moving.end());
+            for (uint32_t v : m_moving)
+                if (rowOf(v) > 0) {
+                    m_label[v - static_cast<uint32_t>(sy)] = self;
+                    moveDown(v, speed, 0.0f);
+                }
+            for (uint32_t& v : m_moving)
+                if (rowOf(v) > 0) v -= static_cast<uint32_t>(sy);
+            // Labels of the cells it left behind (the top row) are stale: clear them.
+            for (size_t v = 0; v < n; ++v)
+                if (m_label[v] == self && m_density[v] <= 0.0f) m_label[v] = -1;
+            distance -= m_cell;
+            moved = true;
+        }
+        // Remember the fall where it is now (landed: at rest).
+        for (size_t i = 0; i < m_moving.size(); ++i) {
+            const uint32_t v = m_moving[i];
+            m_fallSpeed[v] = landed ? 0.0f : speed;
+            m_fallDistance[v] = landed ? 0.0f : distance;
+        }
+    }
+    // Soft material sags into a hole straight below it.
+    const MeltMaterial& mat = m_material;
+    if (mat.softening > 0.0f) {
+        const float soft = mat.meltingPoint - mat.softening;
+        for (size_t v = 0; v < n; ++v) {
+            if (m_density[v] <= kSolid || m_temp[v] < soft || rowOf(static_cast<uint32_t>(v)) == 0) continue;
+            const size_t t = v - static_cast<size_t>(sy);
+            if (m_density[t] > kSolid) {
+                m_sag[v] = 0.0f;
+                continue;
+            }
+            const float k = std::clamp((m_temp[v] - soft) / mat.softening, 0.0f, 1.0f);
+            m_sag[v] += mat.sagSpeed * k * dt;
+            ++m_fallingVoxels;
+            if (m_sag[v] >= m_cell) {
+                moveDown(static_cast<uint32_t>(v), 0.0f, 0.0f);
+                m_sag[v] = 0.0f;
+                moved = true;
+            }
+        }
+    }
+    if (moved) {
+        m_dirty = true;
+        m_distanceDirty = true;
+    }
+    // Nothing moving and nothing will until something melts again.
+    m_settled = m_fallingVoxels == 0;
 }
 
 float MeltVolume::solidFraction() const {

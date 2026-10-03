@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kke/AssetCatalog.h"
+#include "kke/Breakables.h"
 #include "kke/Capabilities.h"
 #include "kke/Module.h"
 #include "kke/Picking.h"
@@ -108,7 +109,7 @@ private:
         bool animal = false;      // an Animal block: moved by the AI, not a collider or a ragdoll
         std::string texture;      // texture variant path, "" = the model's own
         uint32_t fractureSeed = 0; // this object's own seed, mixed with the world's (kke::fractureSeed); 0 = its id
-        int breakMaterial = -1;    // kBreakMaterials index it was made breakable with (saved in layouts)
+        int breakMaterial = -1;    // kke::BreakKind it was made breakable with (saved in layouts)
         // Ragdoll (characters)
         kke::IRagdollPhysics::RagdollHandle ragdoll = 0;
         kke::RagdollDesc ragdollDesc;
@@ -128,11 +129,9 @@ private:
         // Breakable (props): a FEMFX tet volume voxelized from the prop's
         // own mesh; the prop's vertices are glued to it (embedding) and
         // drawn deformed every frame the physics is awake.
-        uint32_t proxy = 0;
-        kke::TetEmbedding embedding;          // all mesh parts' vertices, concatenated
-        std::vector<glm::vec3> restNormals;
-        std::vector<size_t> partOffsets;      // where each mesh part starts in the arrays above
-        bool settled = false;                 // last frame's vertices already match a sleeping object
+        uint32_t proxy = 0;                   // its kke::Breakables physics handle
+        bool autoBreak = false;               // made breakable by Play mode (kke::guessBreakKind), not saved
+        bool autoTried = false;               // Play mode looked at it already
         // Node graphs (PlayScripting.cpp)
         kke::NodeGraph graph;                 // what this one thing does
         std::string owner;                    // the graph that brought it out ("" = placed by hand, saved)
@@ -213,6 +212,7 @@ private:
     void lookAway(Object& o);
     bool isDown(const Object& o) const { return o.ragdoll && (!o.active.valid() || o.active.state() == kke::ActiveRagdoll::State::Fallen); }
     void makeBreakable(Object& o);
+    void updateAutoBreakables();
     void restoreProp(Object& o);
     void updateBreakables();
     void throwBall();
@@ -295,6 +295,8 @@ private:
     kke::DebugDrawModule* m_debug = nullptr;
     kke::IRagdollPhysics* m_ragdolls = nullptr;
     bool m_hasFemfx = false;
+    std::unique_ptr<kke::Breakables> m_breakables;
+    bool m_autoBreakables = true;      // Play mode makes props breakable by what they're called (panel toggle)
 
     // Assets
     std::string m_assetFolder;
@@ -362,7 +364,7 @@ private:
     float m_overlayStrength = 1.0f;
 
     // Physics toys
-    int m_breakMaterial = 0;           // index into kBreakMaterials (see .cpp)
+    int m_breakMaterial = 0;           // kke::BreakKind index (kke/Breakables.h)
     int m_patternOverride = 0;         // 0 = the material's own pattern, else FracturePattern + 1
     float m_chunkScale = 1.0f;         // multiplies the material's chunk size
     int m_detailCells = 160;           // voxel budget per prop (6 tets per cell)

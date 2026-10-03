@@ -123,6 +123,7 @@ nav:
       - Physics, water and sound:
           - Physics (FEMFX): demos/physics_demo.md
           - Melting: demos/melt_demo.md
+          - Particles: demos/particles_demo.md
           - Sea: demos/sea_demo.md
           - Jiggle: demos/jiggle_demo.md
           - Cloth and hair: demos/cloth_demo.md
@@ -159,6 +160,8 @@ nav:
       - The kke_demo showcase: SHOWCASE.md
       - Jiggle physics: JIGGLE.md
       - Physics bridge: PHYSICS_BRIDGE.md
+      - Breakable props: BREAKABLES.md
+      - Particle effects: PARTICLE_EFFECTS.md
       - Ragdolls: RAGDOLLS.md
       - Cloth: CLOTH.md
       - Hair: HAIR.md
