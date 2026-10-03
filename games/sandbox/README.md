@@ -155,6 +155,16 @@ after the pad was last used.
 | Engine debug panels | F1, or the "Developer panels (F1)" toggle at the top of the inspector | the toggle: point at it, A |
 | Camera | right-drag orbit, middle-drag pan, wheel zoom, WASD/QE move, Shift faster | right stick turns, triggers zoom |
 
+In Play mode (FEMFX builds) props from a model pack break by themselves:
+anything whose name says what it's made of or what it is (a crate, a
+barrel, a bottle, a rock, a fence, a car) and that is at most 4.5 m
+across is turned into a breakable a few a frame (up to 120), its
+material guessed from its name (`kke::guessBreakKind`,
+[docs/BREAKABLES.md](../../docs/BREAKABLES.md)). Floors, roads, walls,
+buildings and plants stay as they are. Back in Build mode they are whole
+again, and they're never saved as breakable unless you made them so with
+X. The panel's "Props break in Play" turns it off.
+
 ## How it plays
 
 **Play mode.** The palette shows only blocks whose assets are on disk

@@ -255,9 +255,16 @@ every machine, `botRng()` is for CPU brains and effects).
   out. Bots have a reaction time per switch; slower bots sometimes get
   caught.
 - **Hex-a-Gone**: 3 floors of 91 hexagon tiles, each a kinematic hull.
-  A tile stepped on (an event) shakes for 0.55 s, turns dynamic with
-  `RigidWorld::setMotion`, tumbles away and is removed after 3 s. Bots
-  hop to solid tiles a few steps away, nearer the middle.
+  A tile stepped on (an event) cracks at once into a seeded Voronoi of 9
+  pieces (`shatterPolygon` in [Shatter.cpp](Shatter.cpp), the same cut
+  the glass bridge uses, so every client sees the same cracks), shakes
+  harder and harder, then crumbles: the tile's collider goes and its
+  pieces fall as stone shards with a puff of dust. The shards are on
+  `RigidWorld`'s debris layer (`BodyDesc::debris`), which hits the ground
+  and other debris but never a player, so a crumbling tile can't launch
+  anyone into the air any more; you just fall through the gap. Shards
+  are removed after 3 s. Bots hop to solid tiles a few steps away,
+  nearer the middle.
 - **Bean Sumo**: a hex floor whose outer rings shake then drop at set
   times; `bumpStrength` 6.5 makes every bump a shove. Bots pick a target
   (nearer and nearer the edge is juicier), come at it from the middle's

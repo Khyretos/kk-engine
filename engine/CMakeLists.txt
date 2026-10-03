@@ -114,6 +114,7 @@ set(ENGINE_SOURCES
     src/JigglePhysics.cpp
     src/SphereImpostors.cpp
     src/ParticleEffects.cpp
+    src/ParticleLibrary.cpp
     src/HairStrands.cpp
     src/HairRenderer.cpp
     src/ClothGpu.cpp

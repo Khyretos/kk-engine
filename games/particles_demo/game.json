@@ -1,0 +1,9 @@
+{
+  "id": "engine.kke.particles_demo",
+  "title": "KKE Particles Demo",
+  "description": "Every ready-made particle effect in the engine's library, one at a time or all at once: fire, explosions, smoke, dust, sparks, wood and stone chips, glass, splashes, rain, snow, leaves, confetti, fireworks, magic and more. Each one is a few lines of YAML to copy and change.",
+  "version": "0.1.0",
+  "tags": ["demo", "particles", "effects", "fire", "smoke"],
+  "engine_version": "0.3",
+  "modules": ["ParticlesDemo", "OrbitCamera"]
+}
