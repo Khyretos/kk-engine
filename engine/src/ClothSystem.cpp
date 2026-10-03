@@ -1828,7 +1828,10 @@ bool ClothSystem::testVertexTriangle(Cloth& c, uint32_t v, Cloth& o, uint32_t tr
     // Velocity: no more approach along the normal.
     const glm::vec3 vt = o.vel[t[0]] * bc.x + o.vel[t[1]] * bc.y + o.vel[t[2]] * bc.z;
     const float vrel = glm::dot(c.vel[v] - vt, nrm);
-    float pushed = std::fabs(lambda) / m_dt; // how hard they were pressed together (as a speed x mass)
+    // How hard they were pressed together (as a speed x mass). Putting a
+    // vertex back from the far side isn't pressing: counted as such, a cape
+    // dragged through a curtain gripped it with all that and carried it off.
+    float pushed = crossed ? 0.0f : std::fabs(lambda) / m_dt;
     if (vrel * side < 0.0f) {
         const float j = -vrel / wsum;
         c.vel[v] += nrm * (wp * j);

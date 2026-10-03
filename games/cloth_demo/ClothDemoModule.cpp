@@ -104,8 +104,8 @@ glm::quat fromTo(const glm::vec3& a, const glm::vec3& b) {
 }
 
 kke::ClothProtection protectionFromName(const char* s) {
-    if (std::strcmp(s, "off") == 0) return kke::ClothProtection::Off;
-    if (std::strcmp(s, "basic") == 0) return kke::ClothProtection::Basic;
+    if (SDL_strcasecmp(s, "off") == 0) return kke::ClothProtection::Off;
+    if (SDL_strcasecmp(s, "basic") == 0) return kke::ClothProtection::Basic;
     return kke::ClothProtection::Full;
 }
 
@@ -251,6 +251,9 @@ void ClothDemoModule::setScene(Scene s) {
     m_sceneTime = 0.0f;
     m_ballTimer = 0.0f;
     clear();
+    // Each windy scene's own breeze (KKE_CLOTH_WIND overrides): the cape
+    // gets its air from the running, so only a light wind on top.
+    if (!std::getenv("KKE_CLOTH_WIND")) m_windSpeed = s == Scene::Cape ? 1.0f : s == Scene::Hair ? 3.0f : 4.0f;
     switch (s) {
     case Scene::Fabrics: buildFabrics(); break;
     case Scene::Bed: buildBed(); break;
@@ -349,13 +352,18 @@ void ClothDemoModule::buildCape() {
     Runner& r = *m_runner;
     r.body = std::make_unique<kke::DynamicMeshRenderer>(*m_app);
     // Cloth-only capsules: only cloth feels them (like a character's).
-    for (int i = 0; i < 5; ++i) {
+    // Torso, legs, arms and the head and neck (without it the curtain
+    // slid through the head and down between the cape and the back, and
+    // was carried off).
+    for (int i = 0; i < 6; ++i) {
         kke::RigidWorld::BodyDesc b;
         b.shape = kke::RigidWorld::Shape::Capsule;
         b.motion = kke::RigidWorld::Motion::Kinematic;
         b.clothOnly = true;
-        b.radius = i == 0 ? 0.17f : i < 3 ? 0.075f : 0.055f;
-        b.halfHeight = i == 0 ? 0.2f : i < 3 ? 0.38f : 0.3f;
+        // A centimetre fatter than drawn, so a cape resting on a leg lies on
+        // the leg instead of flickering into it.
+        b.radius = (i == 0 ? 0.17f : i < 3 ? 0.075f : i < 5 ? 0.055f : 0.12f) + 0.01f;
+        b.halfHeight = i == 0 ? 0.2f : i < 3 ? 0.38f : i < 5 ? 0.3f : 0.06f;
         r.proxies.push_back(m_world->add(b));
     }
     stepRunner(0.0f);
@@ -369,26 +377,41 @@ void ClothDemoModule::buildCape() {
     cape.fabric = kke::clothFabric("satin");
     cape.fabric.color = glm::vec3(0.6f, 0.05f, 0.08f);
     cape.fabric.bend = 60.0f;
+    cape.fabric.density = 0.3f; // a lined cape: hangs and billows, not a flag
     cape.bindPose = { torso };
     cape.skin.resize(cape.mesh.positions.size());
-    for (auto& sv : cape.skin) {
+    for (size_t i = 0; i < cape.skin.size(); ++i) {
+        auto& sv = cape.skin[i];
         sv.joints = glm::uvec4(0);
         sv.weights = glm::vec4(1, 0, 0, 0);
-        sv.maxDistance = 2.0f; // free to fly, but never behind its back-stop (into the back)
+        // Free to fly, more the further down (as a character's cloth is
+        // painted), and never behind its back-stop (into the back). Near the
+        // collar it stays on the back, so the top can't fold over itself
+        // and flip the cape up onto the shoulders.
+        const float down = cape.mesh.positions[0].y - cape.mesh.positions[i].y;
+        sv.maxDistance = 0.03f + 1.2f * down;
     }
     for (int c = 0; c < cape.mesh.columns; ++c) cape.pinned.push_back(kke::clothGridIndex(cape.mesh, c, 0));
     cape.backStop = 0.01f;
     addCloth(cape, "");
-    // A curtain across its path to run through.
+    // A curtain across its path to run through: a doorway at the top of
+    // the circle (a quarter turn in), spanning the circle's radius so the
+    // runner goes through it, not along it into the posts.
     const float a = glm::half_pi<float>();
     const glm::vec3 door(std::cos(a) * r.radius, 0.0f, std::sin(a) * r.radius);
-    kke::ClothDesc curtain;
-    curtain.mesh = kke::clothGrid(door + glm::vec3(0.0f, 1.2f, 0.0f), 1.4f, 2.2f, 24, 36, glm::vec3(1, 0, 0), glm::vec3(0, -1, 0));
-    curtain.fabric = kke::clothFabric("linen");
-    for (int c = 0; c < curtain.mesh.columns; ++c) curtain.pinned.push_back(kke::clothGridIndex(curtain.mesh, c, 0));
-    addCloth(curtain, "curtain");
-    addSolidBox(door + glm::vec3(0.0f, 2.32f, 0.0f), glm::vec3(0.85f, 0.03f, 0.03f), glm::vec3(0.35f, 0.25f, 0.15f), 0.6f, false);
-    for (float x : { -0.82f, 0.82f }) addSolidBox(door + glm::vec3(x, 1.16f, 0.0f), glm::vec3(0.04f, 1.16f, 0.04f), glm::vec3(0.35f, 0.25f, 0.15f), 0.6f);
+    const glm::vec3 across(0.0f, 0.0f, 1.0f); // the radius there
+    // Two halves meeting in the middle, like a doorway's: the runner parts
+    // them, and they fall back behind the cape instead of being carried off
+    // wrapped around the runner.
+    for (float side : { -1.0f, 1.0f }) {
+        kke::ClothDesc curtain;
+        curtain.mesh = kke::clothGrid(door + glm::vec3(0.0f, 1.2f, 0.0f) + across * (side * 0.355f), 0.7f, 2.2f, 12, 36, across, glm::vec3(0, -1, 0));
+        curtain.fabric = kke::clothFabric("linen");
+        for (int c = 0; c < curtain.mesh.columns; ++c) curtain.pinned.push_back(kke::clothGridIndex(curtain.mesh, c, 0));
+        addCloth(curtain, side < 0.0f ? "curtain left" : "curtain right");
+    }
+    addSolidBox(door + glm::vec3(0.0f, 2.32f, 0.0f), glm::vec3(0.03f, 0.03f, 0.85f), glm::vec3(0.35f, 0.25f, 0.15f), 0.6f, false);
+    for (float x : { -0.82f, 0.82f }) addSolidBox(door + glm::vec3(0.0f, 1.16f, 0.0f) + across * x, glm::vec3(0.04f, 1.16f, 0.04f), glm::vec3(0.35f, 0.25f, 0.15f), 0.6f);
     m_gusts = false;
     if (m_camera) m_camera->setView(glm::vec3(0.0f, 0.9f, 0.0f), 8.0f, -0.4f, 0.4f);
 }
@@ -532,7 +555,6 @@ void ClothDemoModule::buildHair() {
         h->drawn->build(d);
         m_heads.push_back(std::move(h));
     }
-    if (!std::getenv("KKE_CLOTH_WIND")) m_windSpeed = 3.0f;
     m_gusts = true;
     applyHairSettings();
     stepHeads(0.0f);
@@ -613,6 +635,9 @@ void ClothDemoModule::stepRunner(float dt) {
         addCapsule(v, idx, mid - dir * half, mid + dir * half, radius, i == 0 || i >= 3 ? shirt : glm::vec3(0.2f), 12);
     }
     addCapsule(v, idx, shoulder + glm::vec3(0, 0.22f, 0), shoulder + glm::vec3(0, 0.22f, 0), 0.12f, skin, 16); // head
+    const glm::vec3 headMid = shoulder + glm::vec3(0.0f, 0.16f, 0.0f); // neck to the top of the head
+    if (dt > 0.0f) m_world->moveKinematic(r.proxies[5], headMid, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), dt);
+    else m_world->setTransform(r.proxies[5], headMid, glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
     r.body->upload(v, idx);
 }
 
@@ -675,6 +700,23 @@ void ClothDemoModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
     if (m_scene == Scene::Stress && m_sceneTime > 5.0f) redrop();
     stepHeads(dt);
     m_world->step(dt);
+    if (m_runner && std::getenv("DBGCAPE")) {
+        std::string line;
+        for (auto& pc : m_cloth) {
+            auto st = m_world->clothStats(pc->id);
+            std::vector<glm::vec3> q; m_world->clothPositions(pc->id, q);
+            float far = 0; for (auto& x : q) far = std::max(far, std::fabs(x.x));
+            line += " " + pc->label + ":c" + std::to_string(st.selfContacts) + "/x" + std::to_string(st.crossingsUndone);
+        }
+        {
+            std::vector<glm::vec3> q; m_world->clothPositions(m_cloth.front()->id, q);
+            glm::vec3 cen(0); float lo = 9, spread = 0; for (auto& x : q) { cen += x; lo = std::min(lo, x.y); }
+            cen /= float(q.size()); for (auto& x : q) spread = std::max(spread, glm::length(x - cen));
+            const glm::vec3 l = glm::vec3(glm::inverse(m_runner->torso) * glm::vec4(cen, 1));
+            char b[160]; std::snprintf(b, sizeof b, " CEN %.2f %.2f %.2f lo %.2f spread %.2f", l.x, l.y, l.z, lo, spread); line += b;
+        }
+        std::fprintf(stderr, "T %.3f ang %.2f%s\n", m_sceneTime, m_runner->angle, line.c_str());
+    }
     m_stepMs = m_stepMs * 0.95 + m_world->lastStepMs() * 0.05;
     m_protectMs = m_protectMs * 0.95 + m_world->lastClothMs() * 0.05;
 }
