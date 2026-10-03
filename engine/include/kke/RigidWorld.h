@@ -96,8 +96,17 @@ public:
     };
     struct CharacterInput {
         glm::vec3 move{0.0f};                // desired horizontal velocity, m/s (y ignored)
+        // Jump on the next physics step. A jump set between two steps is
+        // kept until a step takes it, even if the caller sets a new input
+        // without it in the meantime (a 144 Hz frame often has no 60 Hz
+        // step: the jump would be lost while the jump animation plays).
         bool jump = false;
         float jumpSpeed = 5.0f;
+        // Jump even when the controller isn't standing on ground this
+        // step: the caller has already decided a jump is allowed (coyote
+        // time just after running off an edge, a kerb it snaps down to).
+        // The fall so far is replaced by the jump, not added to it.
+        bool jumpInAir = false;
         // In the air, how fast the horizontal velocity blends toward `move`
         // (per second). The default steers a little; a very large value
         // hands air control to the caller, who then sends the exact

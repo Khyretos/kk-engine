@@ -158,6 +158,10 @@ HumanArm makeHumanArm(const ModelData& model, const TwoBoneChain& chain, const T
     arm.chain = chain;
     arm.otherShoulder = other.valid() ? other.upper : -1;
     arm.forward = modelForward(model);
+    if (const int parent = model.bones[static_cast<size_t>(chain.upper)].parent; parent >= 0) {
+        const std::string n = canonicalBoneName(model.bones[static_cast<size_t>(parent)].name);
+        if (n.find("clavicle") != std::string::npos || n.find("shoulder") != std::string::npos) arm.clavicle = parent;
+    }
     std::vector<glm::mat4> world(model.bones.size());
     for (size_t b = 0; b < model.bones.size(); ++b)
         world[b] = model.bones[b].parent >= 0 ? world[model.bones[b].parent] * model.bones[b].localRest : model.bones[b].localRest;
@@ -187,12 +191,13 @@ namespace {
 struct ArmPlan {
     bool ok = false;
     glm::vec3 S{0.0f}, E{0.0f}, H{0.0f}, e{0.0f};
+    glm::quat girdle{1, 0, 0, 0}; // model-space turn of the clavicle (S is where the shoulder is after it)
     bool limited = false;
 };
 ArmPlan planHumanArm(const std::vector<glm::mat4>& world, const HumanArm& arm, const ArmGoal& goal, const ArmLimits& limits) {
     ArmPlan p;
     const TwoBoneChain& c = arm.chain;
-    const glm::vec3 S = positionOf(world[c.upper]);
+    glm::vec3 S = positionOf(world[c.upper]);
     const glm::vec3 handNow = positionOf(world[c.end]);
     const float w = glm::clamp(goal.weight, 0.0f, 1.0f);
     const float lab = glm::length(positionOf(world[c.lower]) - S), lcb = glm::length(handNow - positionOf(world[c.lower]));
@@ -210,33 +215,57 @@ ArmPlan planHumanArm(const std::vector<glm::mat4>& world, const HumanArm& arm, c
     const glm::vec3 fwd = arm.left ? glm::cross(outDir, up) : glm::cross(up, outDir);
 
     // 1. Where the hand can go: within reach (never closer than the
-    //    elbow's full bend allows) and within the shoulder's range.
-    glm::vec3 d = glm::mix(handNow, goal.hand, w) - S;
+    //    elbow's full bend allows) and within the shoulder's range, which
+    //    narrows as the arm goes up.
+    const glm::vec3 goalHand = glm::mix(handNow, goal.hand, w);
     const float reachMax = lab + lcb - 1e-3f;
     const float inner = glm::radians(180.0f - limits.elbowMaxFlex);
     const float reachMin = std::sqrt(std::max(1e-6f, lab * lab + lcb * lcb - 2.0f * lab * lcb * std::cos(inner)));
-    float len = glm::length(d);
-    if (len < 1e-5f) {
-        d = -up * reachMin;
-        len = reachMin;
-    }
-    const float L = glm::clamp(len, reachMin, reachMax);
-    p.limited = len > reachMax + 1e-3f || len < reachMin - 1e-3f;
-    glm::vec3 local(glm::dot(d, outDir), glm::dot(d, up), glm::dot(d, fwd));
-    const float flat = std::sqrt(local.x * local.x + local.z * local.z);
-    if (flat > 1e-4f) {
-        const float bent = glm::clamp((reachMax - L) / std::max(1e-4f, reachMax - reachMin), 0.0f, 1.0f);
-        const float lo = -glm::radians(glm::mix(limits.acrossChest, limits.acrossChestBent, bent));
-        const float hi = glm::radians(limits.behind);
-        const float phi = std::atan2(local.x, local.z); // 0 ahead, +90 out to the side, 180 behind
-        const float kept = glm::clamp(phi, lo, hi);
-        if (kept != phi) {
-            local.x = flat * std::sin(kept);
-            local.z = flat * std::cos(kept);
-            p.limited = true;
+    float L = 0.0f, kept = 0.0f, flatShare = 0.0f;
+    glm::vec3 n(0.0f);
+    auto reachFrom = [&](const glm::vec3& shoulder) {
+        glm::vec3 d = goalHand - shoulder;
+        float len = glm::length(d);
+        if (len < 1e-5f) {
+            d = -up * reachMin;
+            len = reachMin;
         }
+        L = glm::clamp(len, reachMin, reachMax);
+        p.limited = len > reachMax + 1e-3f || len < reachMin - 1e-3f;
+        glm::vec3 local(glm::dot(d, outDir), glm::dot(d, up), glm::dot(d, fwd));
+        const float flat = std::sqrt(local.x * local.x + local.z * local.z);
+        flatShare = flat / len;
+        kept = glm::radians(90.0f);
+        if (flat > 1e-4f) {
+            const float bent = glm::clamp((reachMax - L) / std::max(1e-4f, reachMax - reachMin), 0.0f, 1.0f);
+            const float raised = glm::clamp(local.y / len, 0.0f, 1.0f); // 0 at shoulder height or below, 1 straight up
+            const float lo = -glm::radians(glm::mix(glm::mix(limits.acrossChest, limits.acrossChestBent, bent), limits.acrossOverhead, raised));
+            const float hi = glm::radians(glm::mix(limits.behind, limits.behindOverhead, raised));
+            const float phi = std::atan2(local.x, local.z); // 0 ahead, +90 out to the side, 180 behind
+            kept = glm::clamp(phi, lo, hi);
+            if (kept != phi) {
+                local.x = flat * std::sin(kept);
+                local.z = flat * std::cos(kept);
+                p.limited = true;
+            }
+        }
+        n = glm::normalize(outDir * local.x + up * local.y + fwd * local.z);
+    };
+    reachFrom(S);
+    // The girdle: the clavicle lifts as the arm rises past shoulder height
+    // and swings forward as it reaches ahead (back a little behind); the
+    // shoulder moves with it, so the reach is worked out again from there.
+    if (arm.clavicle >= 0 && (limits.shoulderShrug > 0.0f || limits.shoulderReach > 0.0f)) {
+        const float fromDown = std::acos(glm::clamp(-n.y, -1.0f, 1.0f));              // 0 hanging, pi straight up
+        const float shrug = glm::radians(limits.shoulderShrug) * glm::clamp((fromDown - glm::radians(80.0f)) / glm::radians(100.0f), 0.0f, 1.0f);
+        const float ahead = std::cos(kept) * flatShare * glm::clamp(L / reachMax, 0.0f, 1.0f); // + reaching out front, - behind
+        const float reach = glm::radians(limits.shoulderReach) * (ahead > 0.0f ? ahead : 0.5f * ahead);
+        // Lifting the outer end up is a turn about out x up; forward, out x forward.
+        p.girdle = glm::angleAxis(shrug * w, glm::normalize(glm::cross(outDir, up))) * glm::angleAxis(reach * w, glm::normalize(glm::cross(outDir, fwd)));
+        const glm::vec3 C = positionOf(world[static_cast<size_t>(arm.clavicle)]);
+        S = C + p.girdle * (S - C);
+        reachFrom(S);
     }
-    const glm::vec3 n = glm::normalize(outDir * local.x + up * local.y + fwd * local.z);
     const glm::vec3 H = S + n * L;
 
     // 2. The elbow: on the circle round the shoulder-hand line, where it
@@ -277,6 +306,7 @@ ArmPoints humanArmPoints(const std::vector<glm::mat4>& world, const HumanArm& ar
     if (goal.weight <= 0.0f) return out;
     const ArmPlan p = planHumanArm(world, arm, goal, limits);
     if (!p.ok) return out;
+    out.shoulder = p.S;
     out.elbow = p.E;
     out.hand = p.H;
     out.limited = p.limited;
@@ -295,6 +325,11 @@ ArmResult solveHumanArm(const ModelData& model, Pose& pose, const HumanArm& arm,
     const ArmPlan plan = planHumanArm(world, arm, goal, limits);
     if (!plan.ok) return out;
     out.limited = plan.limited;
+    if (arm.clavicle >= 0) {
+        // The girdle first: the shoulder goes where the plan put it.
+        rotateInModel(pose, arm.clavicle, rotationOf(world[static_cast<size_t>(arm.clavicle)]), plan.girdle);
+        world = poseToModel(model, pose);
+    }
     const glm::vec3 up(0, 1, 0);
     const glm::vec3 S = plan.S, E = plan.E, H = plan.H, e = plan.e;
 
@@ -343,8 +378,28 @@ ArmResult solveHumanArm(const ModelData& model, Pose& pose, const HumanArm& arm,
 FootPlacer::FootPlacer(const ModelData& model, const TwoBoneChain& left, const TwoBoneChain& right, int pelvis)
     : FootPlacer(model, left, right, pelvis, Settings{}) {}
 
-FootPlacer::FootPlacer(const ModelData&, const TwoBoneChain& left, const TwoBoneChain& right, int pelvis, const Settings& s)
-    : m_left(left), m_right(right), m_pelvis(pelvis), m_s(s) {}
+FootPlacer::FootPlacer(const ModelData& model, const TwoBoneChain& left, const TwoBoneChain& right, int pelvis, const Settings& s)
+    : m_left(left), m_right(right), m_pelvis(pelvis), m_s(s) {
+    if (!valid()) return;
+    std::vector<glm::mat4> rest(model.bones.size());
+    for (size_t b = 0; b < model.bones.size(); ++b)
+        rest[b] = model.bones[b].parent >= 0 ? rest[static_cast<size_t>(model.bones[b].parent)] * model.bones[b].localRest : model.bones[b].localRest;
+    const TwoBoneChain* legs[2] = { &m_left, &m_right };
+    for (int i = 0; i < 2; ++i) {
+        const int foot = legs[i]->end;
+        for (size_t b = 0; b < model.bones.size(); ++b)
+            if (model.bones[b].parent == foot) {
+                m_ball[i] = static_cast<int>(b);
+                break;
+            }
+        // Heights above the lowest point of the foot at rest (the floor).
+        const float ankle = positionOf(rest[static_cast<size_t>(foot)]).y;
+        const float ball = m_ball[i] >= 0 ? positionOf(rest[static_cast<size_t>(m_ball[i])]).y : ankle;
+        const float floor = std::min(0.0f, std::min(ankle, ball));
+        m_ankleRest[i] = ankle - floor;
+        m_ballRest[i] = ball - floor;
+    }
+}
 
 void FootPlacer::apply(const ModelData& model, Pose& pose, const GroundQuery& ground, float dt, float weight) {
     SurfaceQuery flat;
@@ -366,26 +421,56 @@ void FootPlacer::apply(const ModelData& model, Pose& pose, const SurfaceQuery& g
     const TwoBoneChain* legs[2] = { &m_left, &m_right };
     glm::vec3 feet[2];
     float want[2] = { 0.0f, 0.0f };
+    float floorOf[2] = { 0.0f, 0.0f };   // the highest ground under the foot, unclamped
+    float soleAbove[2] = { 0.0f, 0.0f }; // how high the animated sole is off its floor
+    bool found[2] = { false, false };
     for (int i = 0; i < 2; ++i) {
         feet[i] = positionOf(world[legs[i]->end]);
-        glm::vec3 hit, normal;
-        // The capsule stands at model y = 0; a foot's ground above or
-        // below that is how far the foot should move.
-        if (weight > 0.0f && ground && ground(feet[i] + glm::vec3(0.0f, m_s.probeUp, 0.0f), hit, normal)) {
-            want[i] = glm::clamp(hit.y, -m_s.maxDrop, m_s.maxRaise);
-            // Tilt toward the slope, at most maxTilt, scaled by weight.
-            const glm::vec3 axis = glm::cross(up, normal);
-            const float s = glm::length(axis);
-            if (s > 1e-4f && normal.y > 0.0f) {
-                const float angle = std::min(std::atan2(s, normal.y), maxTilt) * weight;
-                wantNormal[i] = glm::angleAxis(angle, axis / s) * up;
+        const glm::vec3 ball = m_ball[i] >= 0 ? positionOf(world[static_cast<size_t>(m_ball[i])]) : feet[i];
+        soleAbove[i] = std::max(0.0f, std::min(feet[i].y - m_ankleRest[i], ball.y - m_ballRest[i]));
+        if (weight <= 0.0f || !ground) continue;
+        // Heel, ball and tip: the highest ground under any of them is the
+        // foot's (stepping onto a box with the toes, it rises before they
+        // would go in). The normal is the one under the ankle, else the
+        // highest point's.
+        glm::vec3 along(ball.x - feet[i].x, 0.0f, ball.z - feet[i].z);
+        const glm::vec3 points[3] = { feet[i] - along * m_s.heelLength, ball, ball + along * m_s.tipLength };
+        const int count = m_ball[i] >= 0 && glm::length(along) > 1e-3f ? 3 : 1;
+        glm::vec3 normal = up;
+        for (int k = 0; k < count; ++k) {
+            const glm::vec3 at = k == 0 && count == 1 ? feet[i] : points[k];
+            glm::vec3 hit, n;
+            if (!ground(at + glm::vec3(0.0f, m_s.probeUp, 0.0f), hit, n)) continue;
+            // Too high is a wall, not a floor for this foot; a hit where the
+            // ray starts means it started inside something (toes in a wall).
+            if (hit.y > m_s.maxRaise + 0.05f || hit.y > at.y + m_s.probeUp - 0.01f) continue;
+            if (!found[i] || hit.y > floorOf[i] + 1e-3f) {
+                floorOf[i] = hit.y;
+                normal = n;
             }
+            found[i] = true;
+        }
+        if (!found[i]) continue;
+        want[i] = glm::clamp(floorOf[i], -m_s.maxDrop, m_s.maxRaise);
+        // Tilt toward the slope, at most maxTilt, scaled by weight.
+        const glm::vec3 axis = glm::cross(up, normal);
+        const float sn = glm::length(axis);
+        if (sn > 1e-4f && normal.y > 0.0f) {
+            const float angle = std::min(std::atan2(sn, normal.y), maxTilt) * weight;
+            wantNormal[i] = glm::angleAxis(angle, axis / sn) * up;
         }
     }
     const float wantPelvis = std::max(-m_s.maxDrop, std::min(0.0f, std::min(want[0], want[1])));
     const float k = dt > 0.0f ? 1.0f - std::exp(-m_s.smoothing * dt) : 1.0f;
+    const float kUp = dt > 0.0f ? 1.0f - std::exp(-std::max(m_s.riseSmoothing, m_s.smoothing) * dt) : 1.0f;
     for (int i = 0; i < 2; ++i) {
-        m_footOffset[i] += (want[i] - m_footOffset[i]) * k;
+        m_footOffset[i] += (want[i] - m_footOffset[i]) * (want[i] > m_footOffset[i] ? kUp : k);
+        // Never into the ground: a sole lower than the floor under it comes
+        // up at once (a planted foot); one still in the air may ease in.
+        if (found[i] && weight > 0.0f) {
+            const float least = std::min(want[i], floorOf[i] - soleAbove[i]) * weight;
+            m_footOffset[i] = std::max(m_footOffset[i], least);
+        }
         m_footNormal[i] = glm::normalize(m_footNormal[i] + (wantNormal[i] - m_footNormal[i]) * k);
     }
     m_pelvisOffset += (wantPelvis - m_pelvisOffset) * k;
@@ -414,10 +499,10 @@ void FootPlacer::apply(const ModelData& model, Pose& pose, const SurfaceQuery& g
     // Finally the feet lie along the ground: the animated foot rotation
     // (from before the leg IK, which would otherwise swing it along with
     // the calf), turned in model space by the tilt from level to the slope.
-    if (level) return;
+    // On level ground too: a knee bent for a step would otherwise tip the
+    // toes down into it.
     const std::vector<glm::mat4> solved = poseToModel(model, pose);
     for (int i = 0; i < 2; ++i) {
-        if (m_footNormal[i].y > 0.99999f) continue;
         const int foot = legs[i]->end, parentBone = model.bones[foot].parent;
         const glm::quat tilt = rotationBetween(up, m_footNormal[i]);
         const glm::quat footModel = tilt * rotationOf(world[foot]);

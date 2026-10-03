@@ -36,8 +36,9 @@ and committed.
 
 ## Reproducing a scene
 
-1. Put the pack's source folder in `assets/synty/` under its own name (a
-   symlink works): `assets/synty/PolygonTown_Source_Files/...`.
+1. Put the pack in `assets/synty/` (or `KKE_ASSETS_DIR`) under any name:
+   `PolygonTown_Source_Files`, `POLYGON_Town_SourceFiles_v5` and a name
+   of your own all work (docs/ASSETS.md).
 2. Run `kke_demo` and pick the scene. Missing assets are logged by name and
    the rest still loads.
 

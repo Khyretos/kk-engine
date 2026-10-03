@@ -152,7 +152,7 @@ private:
     kke::ModelData m_rigData;
     std::unique_ptr<kke::AnimationSet> m_animSet;
     float m_modelYaw = 0.0f;
-    kke::TwoBoneChain m_arm[2];
+    kke::HumanArm m_arm[2]; // a person's arms (kke::solveHumanArm): elbows bend only forward, shoulders keep their range
     bool m_meleeClips = false; // UAL 2 is there
     struct States {
         int idle = -1, fwd = -1, back = -1, left = -1, right = -1;

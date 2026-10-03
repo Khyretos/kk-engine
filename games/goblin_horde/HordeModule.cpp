@@ -442,7 +442,9 @@ void HordeModule::updateCamera(float dt) {
         m_rig.pitch = -24.0f;
     }
     kke::RigidWorld& world = m_rigid->world();
-    const glm::vec3 feet = world.characterPosition(m_hero.body);
+    // Follows the hero where it's drawn (between physics steps): the raw
+    // position moves in 60 Hz jumps and shakes the view.
+    const glm::vec3 feet = world.characterDrawPosition(m_hero.body, m_app->fixedAlpha());
     m_rig.update(dt, feet, [&world](const glm::vec3& from, const glm::vec3& dir, float maxDist) {
         const auto hit = world.raycast(from, dir, maxDist);
         return hit.hit ? hit.distance : maxDist;
@@ -452,7 +454,7 @@ void HordeModule::updateCamera(float dt) {
 void HordeModule::render(const kke::RenderContext& ctx) {
     m_arena->draw(ctx, glm::mat4(1.0f), 0.0f, 0.9f);
     if (m_heroModel) return;
-    const glm::vec3 feet = m_rigid->world().characterPosition(m_hero.body);
+    const glm::vec3 feet = m_rigid->world().characterDrawPosition(m_hero.body, m_app->fixedAlpha());
     const float yaw = glm::degrees(std::atan2(m_hero.facing.x, m_hero.facing.z));
     m_block->draw(ctx, glm::rotate(glm::translate(glm::mat4(1.0f), feet), glm::radians(yaw), glm::vec3(0, 1, 0)), 0.3f, 0.5f);
 }
@@ -460,7 +462,7 @@ void HordeModule::render(const kke::RenderContext& ctx) {
 void HordeModule::renderShadow(const kke::ShadowRenderContext& ctx) {
     m_arena->drawShadow(ctx, glm::mat4(1.0f));
     if (m_heroModel) return;
-    const glm::vec3 feet = m_rigid->world().characterPosition(m_hero.body);
+    const glm::vec3 feet = m_rigid->world().characterDrawPosition(m_hero.body, m_app->fixedAlpha());
     m_block->drawShadow(ctx, glm::translate(glm::mat4(1.0f), feet));
 }
 

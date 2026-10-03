@@ -9,8 +9,10 @@ compile_commands.json
 benchmark_logs/
 benchmark/
 
-# Paid/licensed art packs (e.g. Synty) are never committed — see assets/README.md
+# Paid/licensed art packs (e.g. Synty) are never committed — see docs/ASSETS.md
 assets/synty/
+assets/sprites/*
+!assets/sprites/README.md
 # The key cooked Synty art is encrypted with (docs/COOKED_ART.md), and art
 # cooked with it: both only ever go into a private package.
 .kke-art.key

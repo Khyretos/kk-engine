@@ -7,6 +7,7 @@
 #include "Flinch.h"
 
 #include "kke/Application.h"
+#include "kke/KnownPacks.h"
 #include "kke/AssetCatalog.h"
 #include "kke/Log.h"
 #include "kke/SceneLoader.h"
@@ -103,9 +104,8 @@ void HordeModule::loadHero() {
         log->error("{}: {}", ual1, e.what());
         return;
     }
-    const char* assets = std::getenv("KKE_ASSETS_DIR");
     const std::string ual2 = firstExisting({ (fs::path(animDir) / "UAL2.fbx").string(),
-                                             assets ? (fs::path(assets) / "Universal Animation Library 2" / "Unity" / "UAL2.fbx").string() : std::string() });
+                                             kke::findPackFile("Universal Animation Library 2", "UAL2.fbx", base ? base : "") });
     if (!ual2.empty()) {
         try {
             kke::ModelLoadOptions o;
@@ -357,7 +357,8 @@ void HordeModule::animateHero(float dt) {
     using S = kke::Combatant::State;
     kke::RigidWorld& w = m_rigid->world();
     const kke::Combatant& c = m_combat.get(m_hero.id);
-    const glm::vec3 feet = w.characterPosition(m_hero.body);
+    // Drawn between the last two physics steps (no 60 Hz shake).
+    const glm::vec3 feet = w.characterDrawPosition(m_hero.body, m_app->fixedAlpha());
     const glm::mat4 xf = glm::rotate(glm::translate(glm::mat4(1.0f), feet), glm::radians(yawOf(m_hero.facing) + m_heroYaw), glm::vec3(0, 1, 0));
     m_models->setTransform(m_hero.model, xf);
 

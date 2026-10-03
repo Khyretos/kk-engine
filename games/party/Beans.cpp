@@ -146,6 +146,7 @@ void PartyModule::moveBean(Bean& b, float dt) {
     if (in.jump && (b.grounded || b.airTime < kCoyote) && b.dive <= 0.0f && b.stun <= 0.0f) {
         ci.jump = true;
         ci.jumpSpeed = kJumpSpeed;
+        ci.jumpInAir = true; // coyote time is ours to decide
         b.airTime = kCoyote; // one jump
         b.squash = -0.25f;   // stretch
         sound(b.feet(w), kke::AudioMaterialTable::Rubber, 0.12f);

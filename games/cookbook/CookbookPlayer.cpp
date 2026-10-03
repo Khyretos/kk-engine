@@ -233,8 +233,10 @@ void CookbookPlayer::update(const kke::UpdateContext& ctx) {
     if (m_view == View::First) m_loco->setFacing(m_rig.forward());
     m_loco->update(li, dt);
 
-    const glm::vec3 feet = world.characterPosition(m_player);
-    if (feet.y < -20.0f) m_loco->teleport(spawn);
+    if (world.characterPosition(m_player).y < -20.0f) m_loco->teleport(spawn);
+    // Cameras follow the feet where they're drawn: between the last two
+    // physics steps (the raw position jumps at 60 Hz and shakes the view).
+    const glm::vec3 feet = world.characterDrawPosition(m_player, m_app->fixedAlpha());
 
     kke::Camera& cam = m_app->camera();
     auto ray = [&world](const glm::vec3& from, const glm::vec3& dir, float maxDist) {
@@ -300,13 +302,13 @@ void CookbookPlayer::update(const kke::UpdateContext& ctx) {
 
 void CookbookPlayer::render(const kke::RenderContext& ctx) {
     if (m_view == View::First) return;
-    const glm::vec3 feet = m_rigid->world().characterPosition(m_player);
+    const glm::vec3 feet = m_rigid->world().characterDrawPosition(m_player, m_app->fixedAlpha());
     const glm::mat4 t = glm::rotate(glm::translate(glm::mat4(1.0f), feet), glm::radians(-m_loco->facingYaw()), glm::vec3(0, 1, 0));
     m_body->draw(ctx, t, 0.0f, 0.6f);
 }
 
 void CookbookPlayer::renderShadow(const kke::ShadowRenderContext& ctx) {
-    const glm::vec3 feet = m_rigid->world().characterPosition(m_player);
+    const glm::vec3 feet = m_rigid->world().characterDrawPosition(m_player, m_app->fixedAlpha());
     m_body->drawShadow(ctx, glm::rotate(glm::translate(glm::mat4(1.0f), feet), glm::radians(-m_loco->facingYaw()), glm::vec3(0, 1, 0)));
 }
 

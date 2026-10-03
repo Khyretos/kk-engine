@@ -1,4 +1,5 @@
 #include "kke/AssetCatalog.h"
+#include "kke/KnownPacks.h"
 #include "kke/Log.h"
 
 #include <algorithm>
@@ -191,12 +192,35 @@ AssetCatalog AssetCatalog::scan(const std::string& rootPath, const CatalogScanOp
             continue;
         }
         std::string name = entry.path().filename().string();
-        if (isAssetTypeFolder(name)) rootIsPack = true;
-        else if (!options.onlyPacks.empty() && std::none_of(options.onlyPacks.begin(), options.onlyPacks.end(), [&](const std::string& want) {
-                     return want == name || packBaseName(want) == packBaseName(name);
-                 }))
+        if (isAssetTypeFolder(name)) {
+            rootIsPack = true;
             continue;
-        else if (containsModels(walker, entry.path())) packDirs.push_back(entry.path());
+        }
+        // Packs kept together in a folder of their own ("Synty/POLYGON_Town"):
+        // a folder that isn't a known pack but holds known packs by name
+        // is searched one level down instead.
+        std::vector<fs::path> candidates{ entry.path() };
+        if (!knownPack(name)) {
+            std::vector<fs::directory_entry> inner;
+            walker.list(entry.path(), inner);
+            std::vector<fs::path> nested;
+            for (const fs::directory_entry& e : inner) {
+                std::error_code innerEc;
+                if (e.is_directory(innerEc) && knownPack(e.path().filename().string())) nested.push_back(e.path());
+            }
+            if (!nested.empty()) candidates = nested;
+        }
+        for (const fs::path& dir : candidates) {
+            // Any spelling of a wanted pack's name, or a folder whose name
+            // isn't a known pack but whose contents are (kke/KnownPacks.h).
+            const std::string dirName = dir.filename().string();
+            if (!options.onlyPacks.empty() && std::none_of(options.onlyPacks.begin(), options.onlyPacks.end(), [&](const std::string& want) {
+                    if (samePack(want, dirName)) return true;
+                    return !knownPack(dirName) && samePack(want, identifyPackFolder(dir.string()).name);
+                }))
+                continue;
+            if (containsModels(walker, dir)) packDirs.push_back(dir);
+        }
     }
     if (rootIsPack || packDirs.empty()) {
         packDirs.clear();
@@ -206,9 +230,9 @@ AssetCatalog AssetCatalog::scan(const std::string& rootPath, const CatalogScanOp
 
     for (const fs::path& dir : packDirs) {
         CatalogPack pack;
-        pack.name = fs::weakly_canonical(dir, ec).filename().string();
-        if (ec || pack.name.empty()) pack.name = dir.filename().string(); // "pack/." and the like
-        pack.name = packBaseName(pack.name);
+        // The pack's name: a known pack by any spelling or by its contents,
+        // else the folder's name without the download's suffix.
+        pack.name = identifyPackFolder(dir.string()).name;
         pack.root = dir.string();
 
         std::map<std::string, fs::path> byStem; // lower-case stem -> chosen file
@@ -293,7 +317,7 @@ AssetCatalog AssetCatalog::scan(const std::string& rootPath, const CatalogScanOp
 
 std::string packBaseName(const std::string& folder) {
     // The same rule as tools/fetch_assets.sh.
-    static const std::regex kSuffix(R"([_ ]?(Source[_ ]?Files|SourceFiles|Source_Files|\[Source\]|\[Pro\]|Unity_20[0-9_]+|Unreal).*$)");
+    static const std::regex kSuffix(R"([_ ]?(Source[_ ]?Files|SourceFiles|Source_Files|Source[_ ]?Sprites|\[Source\]|\[Pro\]|Unity_20[0-9_]+|Unreal).*$)");
     static const std::regex kCopy(R"( \([0-9]+\)$)");
     std::string base = std::regex_replace(std::regex_replace(folder, kSuffix, ""), kCopy, "");
     return base.empty() ? folder : base;
@@ -301,8 +325,8 @@ std::string packBaseName(const std::string& folder) {
 
 const CatalogPack* AssetCatalog::pack(const std::string& name) const {
     for (const CatalogPack& p : packs) if (p.name == name) return &p;
-    const std::string base = packBaseName(name); // a folder name, as scenes saved them
-    for (const CatalogPack& p : packs) if (p.name == base) return &p;
+    // Any spelling of it: a folder name, as scenes saved them (kke/KnownPacks.h).
+    for (const CatalogPack& p : packs) if (samePack(p.name, name)) return &p;
     return nullptr;
 }
 
@@ -336,7 +360,7 @@ const CatalogAsset* AssetCatalog::find(const std::string& name, const std::vecto
         for (const CatalogAsset& a : assets) {
             if (a.name != name) continue;
             const CatalogPack* p = pack(a.pack);
-            if (a.pack == want || a.pack == packBaseName(want) || (p && fs::path(p->root).filename().string() == want)) return &a;
+            if (samePack(a.pack, want) || (p && fs::path(p->root).filename().string() == want)) return &a;
         }
     }
     return find(name);

@@ -148,10 +148,12 @@ nav:
       - Audio: AUDIO.md
       - Networking: NETWORKING.md
       - Hosting a server: SERVER_HOSTING.md
+      - The kke_ tools: TOOLS.md
       - Saving data: STORAGE.md
       - Anti-cheat: ANTI_CHEAT.md
       - Kreative DRM: DRM.md
       - DLC and mods: MODDING.md
+      - Asset folders and naming: ASSETS.md
       - Scenes: SCENES.md
       - The kke_demo showcase: SHOWCASE.md
       - Jiggle physics: JIGGLE.md

@@ -5,6 +5,7 @@
 #include "kke/AssetCatalog.h"
 #include "kke/SceneLoader.h"
 #include "kke/CameraRig.h"
+#include "kke/CharacterIk.h"
 #include "kke/FrameStats.h"
 #include "kke/Footsteps.h"
 #include "kke/ResourceGovernor.h"
@@ -255,11 +256,13 @@ private:
     std::string m_character;               // "" = mannequin
     std::vector<std::string> m_characters; // SK_ assets in the catalog
     kke::ModelData m_rigData;              // the character's bones + its clips
-    kke::FootPlacer m_feet;
+    // On top of the clips: feet on the ground or planted, hands on edges
+    // (human arms that keep out of the body), the lean into speeding up.
+    kke::CharacterIk m_ik;
     kke::CharacterFootsteps m_steps;       // step sounds from the feet (docs/AUDIO.md)
-    kke::TwoBoneChain m_armL, m_armR;
     bool m_footIk = true, m_handIk = true;
-    float m_footWeight = 0.0f, m_handWeight = 0.0f;
+    glm::vec3 m_leanVelocity{0.0f};        // the body's velocity, held through scripted moves
+    int m_footBone[2] = { -1, -1 };        // foot_l, foot_r (hanging: braced on the wall)
     float m_modelYaw = 0.0f; // turns the model to face -Z
     std::unique_ptr<kke::AnimationSet> m_animSet;
     std::unique_ptr<kke::Animator> m_anim;

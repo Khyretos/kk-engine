@@ -374,6 +374,7 @@ ModelData loadModel(const std::string& path, const ModelLoadOptions& options) {
             }
         }
     }
+    if (options.clipsInPlace) makeClipsInPlace(model);
     if (options.fixUnitMismatch && model.bones.empty() && !first && std::abs(scene->settings.unit_meters - 0.01) < 1e-6) {
         const glm::vec3 size = model.boundsMax - model.boundsMin;
         if (std::max(size.x, std::max(size.y, size.z)) < options.tinyModel) {
@@ -393,6 +394,69 @@ std::vector<glm::mat4> computeRestPose(const ModelData& model) {
         world[b] = p >= 0 ? world[p] * model.bones[b].localRest : model.bones[b].localRest;
     }
     return world;
+}
+
+int makeClipsInPlace(ModelData& model, float minTravel) {
+    const size_t bones = model.bones.size();
+    if (bones == 0 || model.animations.empty()) return 0;
+    std::vector<int> depth(bones, 0);
+    for (size_t b = 0; b < bones; ++b) depth[b] = model.bones[b].parent >= 0 ? depth[static_cast<size_t>(model.bones[b].parent)] + 1 : 0;
+    if (minTravel < 0.0f) {
+        const std::vector<glm::mat4> rest = computeRestPose(model);
+        glm::vec3 lo(rest[0][3]), hi(rest[0][3]);
+        for (const glm::mat4& m : rest) {
+            lo = glm::min(lo, glm::vec3(m[3]));
+            hi = glm::max(hi, glm::vec3(m[3]));
+        }
+        minTravel = 0.04f * std::max(glm::length(hi - lo), 1e-3f);
+    }
+    auto worldOf = [&](const std::vector<glm::mat4>& locals) {
+        std::vector<glm::mat4> w(bones);
+        for (size_t b = 0; b < bones; ++b) {
+            const int p = model.bones[b].parent;
+            w[b] = p >= 0 ? w[static_cast<size_t>(p)] * locals[b] : locals[b];
+        }
+        return w;
+    };
+    int changed = 0;
+    for (ModelAnimation& anim : model.animations) {
+        if (anim.frames.size() < 2 || anim.frames.front().size() != bones || anim.frames.back().size() != bones) continue;
+        const std::vector<glm::mat4> first = worldOf(anim.frames.front()), last = worldOf(anim.frames.back());
+        int mover = -1;
+        glm::vec3 travel(0.0f);
+        for (size_t b = 0; b < bones; ++b) {
+            glm::vec3 d = glm::vec3(last[b][3]) - glm::vec3(first[b][3]);
+            d.y = 0.0f;
+            if (glm::length(d) <= minTravel) continue;
+            // Its own translation must carry the travel, not a turning
+            // parent swinging it round (a turn-in-place clip).
+            const int p = model.bones[b].parent;
+            const glm::mat4 parentFirst = p >= 0 ? first[static_cast<size_t>(p)] : glm::mat4(1.0f);
+            glm::vec3 own = glm::vec3(parentFirst * glm::vec4(glm::vec3(anim.frames.back()[b][3]), 1.0f)) - glm::vec3(first[b][3]);
+            own.y = 0.0f;
+            if (glm::length(own) <= minTravel * 0.5f) continue;
+            if (mover < 0 || depth[b] < depth[static_cast<size_t>(mover)]) {
+                mover = static_cast<int>(b);
+                travel = d;
+            }
+        }
+        if (mover < 0) continue;
+        // Frame by frame, the drift so far comes off the mover's position
+        // (in its parent's space for that frame, which may be animated).
+        const int parent = model.bones[static_cast<size_t>(mover)].parent;
+        const float lastFrame = static_cast<float>(anim.frames.size() - 1);
+        for (size_t f = 0; f < anim.frames.size(); ++f) {
+            std::vector<glm::mat4>& locals = anim.frames[f];
+            glm::mat4 parentWorld(1.0f);
+            if (parent >= 0) parentWorld = worldOf(locals)[static_cast<size_t>(parent)];
+            glm::mat4& local = locals[static_cast<size_t>(mover)];
+            const glm::vec3 drift = travel * (static_cast<float>(f) / lastFrame);
+            const glm::vec3 at = glm::vec3(parentWorld * glm::vec4(glm::vec3(local[3]), 1.0f)) - drift;
+            local[3] = glm::vec4(glm::vec3(glm::inverse(parentWorld) * glm::vec4(at, 1.0f)), 1.0f);
+        }
+        ++changed;
+    }
+    return changed;
 }
 
 std::vector<glm::mat4> computeSkinMatrices(const ModelData& model, const std::vector<glm::mat4>& locals) {
