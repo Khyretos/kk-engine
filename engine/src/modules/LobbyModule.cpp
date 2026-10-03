@@ -70,6 +70,19 @@ const char* kLobbyRml = R"(
         #hint { position: absolute; left: 0; bottom: 1.2%; width: 100%; text-align: center; font-size: 13dp; color: #aab3cc; }
         #hint img, .toast img { font-size: 14dp; } /* prompt glyphs are 1.6em */
         .prompt img { font-size: 16dp; }
+        .row .value.empty { color: #7d869e; }
+        #typing { position: absolute; left: 22%; right: 22%; top: 20%; padding: 16dp 20dp; border-radius: 12dp;
+                  background-color: #0b0f1cf2; border-top: 4dp #56a8ff; text-align: center; }
+        #typing .label { font-size: 14dp; letter-spacing: 2dp; color: #aab3cc; }
+        #typing .text { font-size: 26dp; color: #ffffff; margin: 8dp 0 12dp 0; padding: 6dp; border-radius: 6dp;
+                        background-color: #1a2138; min-height: 34dp; }
+        #typing .keys { display: block; margin-top: 4dp; }
+        #typing .key { display: inline-block; width: 38dp; padding: 6dp 0; margin: 2dp; border-radius: 6dp;
+                       background-color: #1f2740; font-size: 17dp; color: #cfd6e6; }
+        #typing .key.wide { width: 120dp; }
+        #typing .key.focused { background-color: #56a8ff; color: #0b0f1c; font-weight: bold; }
+        #typing .hint { font-size: 13dp; color: #aab3cc; margin-top: 10dp; }
+        #typing .hint img { font-size: 14dp; }
         #toasts { position: absolute; top: 18dp; right: 18dp; width: 360dp; }
         .toast { display: block; margin-bottom: 8dp; padding: 10dp 14dp; border-radius: 8dp; background-color: #0b0f1ce6;
                  border-left: 4dp #ffcf5c; font-size: 15dp; color: #ffffff; }
@@ -94,13 +107,21 @@ const char* kLobbyRml = R"(
                     <div data-for="row : seat.rows" class="row" data-class-focused="row.focused" data-class-start="row.start"
                          data-class-section="row.action">
                         <span data-if="row.start">{{row.label}}</span>
-                        <span data-if="!row.start" class="label">{{row.label}}</span><span data-if="!row.start" class="value"><span data-if="row.has_swatch" class="swatch" data-style-background-color="row.swatch"></span><span class="arrow" data-if="row.arrows">&lt; </span>{{row.value}}<span class="arrow" data-if="row.arrows"> &gt;</span></span>
+                        <span data-if="!row.start" class="label">{{row.label}}</span><span data-if="!row.start" class="value"><span data-if="row.has_swatch" class="swatch" data-style-background-color="row.swatch"></span><span class="arrow" data-if="row.arrows">&lt; </span><span data-class-empty="row.empty">{{row.value}}</span><span class="arrow" data-if="row.arrows"> &gt;</span></span>
                     </div>
                 </div>
                 <div class="prompt" data-if="!seat.joined" data-rml="seat.prompt"></div>
             </div>
         </div>
         <div id="hint" data-rml="hint"></div>
+        <div id="typing" data-if="typing">
+            <div class="label">{{typing_label}}</div>
+            <div class="text">{{typing_text}}_</div>
+            <div class="keys" data-for="r : keys">
+                <span data-for="k : r.keys" class="key" data-class-focused="k.focused" data-class-wide="k.wide">{{k.label}}</span>
+            </div>
+            <div class="hint" data-rml="typing_hint"></div>
+        </div>
     </div>
     <div id="toasts">
         <div class="toast" data-for="t : toasts" data-rml="t"></div>
@@ -137,6 +158,14 @@ void LobbyModule::open() {
 
 void LobbyModule::close() {
     m_lobby.setOpen(false);
+}
+
+void LobbyModule::setSuspended(bool suspended) {
+    if (suspended == m_suspended) return;
+    m_suspended = suspended;
+    m_tapped.clear();
+    if (!suspended) m_deafFrames = 2;
+    if (m_doc) m_doc->SetProperty("visibility", suspended ? "hidden" : "visible");
 }
 
 void LobbyModule::applyInput() {
@@ -236,7 +265,10 @@ void LobbyModule::readDevices(float dt) {
         }
     m_pads = std::move(pads);
 
-    // Each controller on its own; the keyboard (and mice) as one.
+    // Each controller on its own; the keyboard (and mice) as one. Held
+    // buttons are still tracked while deaf, so letting go isn't a press.
+    const bool deaf = m_suspended || m_deafFrames > 0;
+    if (m_deafFrames > 0) --m_deafFrames;
     const bool open = m_lobby.isOpen();
     for (uint32_t ref : m_pads) {
         const InputDevices::Device* dev = devices.find(ref);
@@ -275,7 +307,7 @@ void LobbyModule::readDevices(float dt) {
         Lobby::Press p = pressFrom(now, m_held[ref], m_tapped[ref], dt);
         p.device = Lobby::Device::Pad;
         p.pad = ref;
-        if (p.any()) {
+        if (p.any() && !deaf) {
             if (m_lobby.seatOfPad(ref) < 0 && dev) noteJoinDevice(*dev);
             m_lobby.handle(p, m_pads);
         }
@@ -295,12 +327,40 @@ void LobbyModule::readDevices(float dt) {
         if (!open) m_tapped[0] &= kConfirm;
         Lobby::Press p = pressFrom(now, m_held[0], m_tapped[0], dt);
         p.device = Lobby::Device::KeyboardMouse;
-        if (p.any()) m_lobby.handle(p, m_pads);
+        // While typing, the keyboard types (onEvent), it doesn't steer.
+        if (p.any() && !deaf && !m_lobby.editing()) m_lobby.handle(p, m_pads);
     }
     m_tapped.clear();
 }
 
 void LobbyModule::onEvent(const SDL_Event& e) {
+    if (m_suspended) return;
+    if (m_lobby.editing() && m_lobby.isOpen()) {
+        // Typing into a text row: the keyboard types (controllers still
+        // drive the on-screen keyboard below).
+        if (e.type == SDL_EVENT_TEXT_INPUT) {
+            m_lobby.typeText(e.text.text);
+            return;
+        }
+        if (e.type == SDL_EVENT_KEY_DOWN) {
+            switch (e.key.scancode) {
+            case SDL_SCANCODE_BACKSPACE: m_lobby.backspace(); break;
+            case SDL_SCANCODE_RETURN: case SDL_SCANCODE_KP_ENTER: if (!e.key.repeat) m_lobby.finishEditing(true); break;
+            case SDL_SCANCODE_ESCAPE: if (!e.key.repeat) m_lobby.finishEditing(false); break;
+            case SDL_SCANCODE_V:
+                if (e.key.mod & SDL_KMOD_CTRL) // paste an address someone sent
+                    if (char* clip = SDL_GetClipboardText()) {
+                        m_lobby.typeText(clip);
+                        SDL_free(clip);
+                    }
+                break;
+            default: break;
+            }
+            m_held[0].bits = ~0u; // keys down while typing (Enter, Esc) aren't presses after it
+            return;
+        }
+        if (e.type == SDL_EVENT_KEY_UP) return;
+    }
     if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat) {
         // The same keys as readDevices(); Space only confirms in the menu.
         unsigned bit = 0;
@@ -365,6 +425,13 @@ void LobbyModule::update(const UpdateContext& ctx) {
     }
     readDevices(ctx.dt);
     m_lobby.update(ctx.dt);
+    if (m_lobby.editing() && !m_lobby.isOpen()) m_lobby.finishEditing(false);
+    if (m_lobby.editing() != m_textInput) {
+        // Text events (with the layout and any IME) only while typing.
+        m_textInput = m_lobby.editing();
+        if (m_textInput) SDL_StartTextInput(m_app->window().handle());
+        else SDL_StopTextInput(m_app->window().handle());
+    }
     if (!m_applied.empty()) assignDevices();
     refreshUi();
 }
@@ -407,6 +474,7 @@ void LobbyModule::buildUi() {
         r.RegisterMember("start", &RowView::start);
         r.RegisterMember("arrows", &RowView::arrows);
         r.RegisterMember("has_swatch", &RowView::hasSwatch);
+        r.RegisterMember("empty", &RowView::empty);
     }
     c.RegisterArray<std::vector<RowView>>();
     if (auto s = c.RegisterStruct<SeatView>()) {
@@ -422,6 +490,19 @@ void LobbyModule::buildUi() {
     }
     c.RegisterArray<std::vector<SeatView>>();
     c.RegisterArray<std::vector<std::string>>();
+    if (auto k = c.RegisterStruct<KeyView>()) {
+        k.RegisterMember("label", &KeyView::label);
+        k.RegisterMember("focused", &KeyView::focused);
+        k.RegisterMember("wide", &KeyView::wide);
+    }
+    c.RegisterArray<std::vector<KeyView>>();
+    if (auto k = c.RegisterStruct<KeyRowView>()) k.RegisterMember("keys", &KeyRowView::keys);
+    c.RegisterArray<std::vector<KeyRowView>>();
+    c.Bind("typing", &m_view.typing);
+    c.Bind("typing_label", &m_view.typingLabel);
+    c.Bind("typing_text", &m_view.typingText);
+    c.Bind("typing_hint", &m_view.typingHint);
+    c.Bind("keys", &m_view.keys);
     c.Bind("open", &m_view.open);
     c.Bind("title", &m_view.title);
     c.Bind("subtitle", &m_view.subtitle);
@@ -511,15 +592,37 @@ void LobbyModule::refreshUi() {
                     rv.label = o.label;
                     rv.action = o.choices.empty();
                     rv.value = o.choices.empty() ? "" : o.choices[static_cast<size_t>(o.value)];
+                    if (l.isTextOption(o.id)) {
+                        rv.action = false;
+                        rv.value = l.text(o.id);
+                        rv.empty = rv.value.empty();
+                        if (rv.empty) rv.value = l.placeholder(o.id);
+                    }
                 } else {
                     rv.start = true;
                     rv.label = "Start";
                 }
-                rv.arrows = rv.focused && !rv.action && !rv.start;
+                rv.arrows = rv.focused && !rv.action && !rv.start && !(row.kind == Lobby::Row::Kind::Option && l.isTextOption(l.options()[static_cast<size_t>(row.index)].id));
                 sv.rows.push_back(std::move(rv));
             }
         }
         v.seats.push_back(std::move(sv));
+    }
+    if (l.editing()) {
+        v.typing = true;
+        for (const Lobby::Option& o : l.options())
+            if (o.id == l.editingId()) v.typingLabel = o.label;
+        v.typingText = l.text(l.editingId());
+        const auto& keys = Lobby::keyboardKeys();
+        for (size_t r = 0; r < keys.size(); ++r) {
+            KeyRowView row;
+            for (size_t k = 0; k < keys[r].size(); ++k)
+                row.keys.push_back({ keys[r][k], static_cast<int>(r) == l.keyRow() && static_cast<int>(k) == l.keyCol(), keys[r][k].size() > 1 });
+            v.keys.push_back(std::move(row));
+        }
+        v.typingHint = isPadStyle(style) && one.device == Lobby::Device::Pad
+                           ? promptText(style, "{a} type   ·   {b} delete   ·   {start} done")
+                           : promptText(PromptStyle::Keyboard, "type it   ·   {key:Return} done   ·   {key:Escape} put it back");
     }
     for (const Lobby::Toast& t : l.toasts()) v.toasts.push_back(t.text);
     m_view = std::move(v);

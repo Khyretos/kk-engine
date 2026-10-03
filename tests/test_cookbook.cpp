@@ -144,10 +144,10 @@ TEST(Cookbook, BindingsDoWhatTheInputPageSays) {
     double now = 0.0;
     auto frame = [&] { in.update(keys, now += 1.0 / 60.0); };
 
-    keys.set(kke::SourceKind::GamepadButton, SDL_GAMEPAD_BUTTON_BACK, 1.0f);
+    keys.set(kke::SourceKind::GamepadButton, SDL_GAMEPAD_BUTTON_DPAD_RIGHT, 1.0f);
     frame();
     EXPECT_TRUE(in.pressed("camera.next"));
-    keys.set(kke::SourceKind::GamepadButton, SDL_GAMEPAD_BUTTON_BACK, 0.0f);
+    keys.set(kke::SourceKind::GamepadButton, SDL_GAMEPAD_BUTTON_DPAD_RIGHT, 0.0f);
     frame();
 
     // Hold Q: the charge starts after the hold time; letting go throws.

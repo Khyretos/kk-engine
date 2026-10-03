@@ -327,7 +327,7 @@ and the props placed along them, well clear of the road.
 
 These run the same with or without any asset pack: `climb_race`, `tennis`,
 `procedural_demo`, `physics_demo`, `melt_demo`, `sea_demo`, `audio_demo`,
-`rmlui_demo`, `imgui_demo`, `kke_basics`, `starter_game` and `cookbook`.
+`rmlui_demo`, `imgui_demo`, `starter_game` and `cookbook`.
 `kke_demo` dresses its course with the art listed under "Showcase course
 art" above when the packs are there, and plays the same without them.
 
@@ -359,4 +359,4 @@ with `KKE_MOOD=<name>`.
 | `duel` | `arena_night` | Qwantani Night | `night_crickets` |
 | `melt_demo` | `dusk` | Qwantani Dusk 2 | `night_crickets` |
 | `starter_game` (and every new game), `cookbook`, `jiggle_demo` | `playful` | gradient | none |
-| `physics_demo`, `kke_basics`, `rmlui_demo`, `imgui_demo` | `studio` | gradient | none |
+| `physics_demo`, `rmlui_demo`, `imgui_demo` | `studio` | gradient | none |

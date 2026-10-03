@@ -80,12 +80,13 @@ can be rebound (they are saved in `climb_race_input.json`).
 | Anywhere in a race | Controller | Mouse and keyboard |
 |---|---|---|
 | How to play | X | H |
-| Race again | Start | R |
+| Race again (once you are done, or after the race) | Start | R |
 | Next mountain | Y | N |
-| Back to the menu (players, mountain, mode) | Back | M |
+| Pause menu (settings, controls, main menu, quit) | Start while climbing, or Select | Esc |
+| Back to the start menu (players, mountain, mode) | the pause menu's Main menu | M, or the pause menu |
 | Developer panels (network, stats) | no controller binding | F1 |
 | Ping the surroundings (hear the walls) | no controller binding (the D-pad moves through the menu) | G |
-| Let go of the mouse | (none needed) | Esc |
+| Let go of the mouse | (none needed) | Esc (opens the pause menu too) |
 
 The left side of the pad (and the left mouse button, Q) is the left hand;
 the right side is the right hand. `init` gives all four player maps

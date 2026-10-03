@@ -6,6 +6,7 @@
 #include "kke/SphereImpostors.h"
 #include "kke/Viewports.h"
 #include "kke/modules/AudioModule.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/NetModule.h"
 #include "kke/modules/LobbyModule.h"
@@ -140,7 +141,8 @@ void ClimbRaceModule::init(kke::Application& app) {
         in.addBinding(IM::bind("race.again", IM::key(SDL_SCANCODE_R)));
         in.addBinding(IM::bind("race.new", IM::pad(SDL_GAMEPAD_BUTTON_NORTH)));
         in.addBinding(IM::bind("race.new", IM::key(SDL_SCANCODE_N)));
-        in.addBinding(IM::bind("menu", IM::pad(SDL_GAMEPAD_BUTTON_BACK)));
+        // Select (and Esc) is the pause menu (kke::GameShellModule), whose
+        // Main menu comes back here; M stays a keyboard shortcut.
         in.addBinding(IM::bind("menu", IM::key(SDL_SCANCODE_M)));
         in.addBinding(IM::bind("panels", IM::key(SDL_SCANCODE_F1)));
         in.addBinding(IM::bind("help", IM::key(SDL_SCANCODE_H)));
@@ -169,6 +171,20 @@ void ClimbRaceModule::init(kke::Application& app) {
 
     app.camera().farPlane = 250.0f;
     app.window().setQuitOnEscape(false); // Esc frees the mouse
+    if (auto* shell = app.getModule<kke::GameShellModule>()) {
+        // The pause menu's Main menu goes back to the start menu (the lobby);
+        // Start is "race again" once a local climber is done.
+        shell->onMainMenu = [this] {
+            if (m_phase != Phase::Lobby) backToLobby();
+        };
+        shell->startIsTheGames = [this] {
+            if (m_phase == Phase::Finished) return true;
+            if (m_phase != Phase::Racing) return false;
+            for (const Racer& r : m_racers)
+                if (r.seat >= 0 && isDone(r)) return true;
+            return false;
+        };
+    }
     loadCharacter();
     buildScenery();
     loadMountainList();

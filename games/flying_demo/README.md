@@ -77,7 +77,7 @@ hint line at the bottom shows the buttons of the device you fly with.
 | Camera: chase, cockpit, far | Y | C | button 2 |
 | Wheel brakes (on the ground) | X | B | button 3 |
 | Look around | right stick | hold the right mouse button and move | the hat |
-| Pause, change controller | Start | Esc | button 4 |
+| Pause, change controller, settings | Start or Back | Esc | button 4 |
 | After a flight: again / start menu | A / Back | Enter or R / M | trigger / - |
 
 The mouse is a stick that centres itself: move it forward and the nose
@@ -185,7 +185,7 @@ put back over the island too.
 
 ### Changing controller
 
-Press pause (Start, Esc, or the stick's fourth button). The menu is run
+Press pause (Start, Back, Esc, or the stick's fourth button). The menu is run
 by whoever pressed it, with their own device. The **Controls** row shows
 the device you fly with; left and right go through the others that are
 plugged in, **skipping any another player holds**, and the list under it
@@ -196,6 +196,10 @@ to you.)
 
 Offline the pause stops the flight; online the flight goes on around you,
 and the CPU pilot flies your plane until you're back.
+
+The pause menu's **Settings** row opens the menus every KKE game shares
+(`kke::GameShellModule`, [GAME_SHELL.md](../../docs/GAME_SHELL.md)):
+display, sound, look speed and simple button remapping.
 
 ### Online
 

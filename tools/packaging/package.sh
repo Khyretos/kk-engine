@@ -67,6 +67,8 @@ done
 # Synty packs arrive as FBX/Unity files under a synty/ or Polygon folder;
 # none of that is built into bin/ by CMake, so anything found here came
 # from a local asset folder and must not go out.
+# The one FBX that ships is Quaternius' CC0 mannequin (in the repository,
+# docs/DEPENDENCIES.md): characters without art are that, not blocks.
 # Cooked art (--cooked) comes in now, so the check below sees it too: a
 # cooked file starts with KKECOOK2 and is let through, anything else isn't.
 if [ -n "$cooked" ]; then
@@ -76,14 +78,14 @@ if [ -n "$cooked" ]; then
 fi
 leak="$(cd "$stage" && find . -type f \( -ipath '*synty*' -o -ipath '*polygon*' -o -ipath '*/SourceFiles/*' \
     -o -iname '*.fbx' -o -iname '*.unitypackage' -o -iname '*.prefab' -o -iname '*.controller' -o -iname '*.mat' \) \
-    ! -path "./synty_demo$exe" ! -path './marketplace/synty_demo/game.json' -print |
+    ! -path "./synty_demo$exe" ! -path './marketplace/synty_demo/game.json' ! -path './assets/animations/UAL1_Standard.fbx' -print |
     while IFS= read -r f; do [ "$(head -c 8 "$f")" = KKECOOK2 ] || echo "$f"; done)"
 [ -z "$leak" ] || die "refusing to package paid/third-party art found in $bin:
 $leak"
 
 # --- Every demo must be there and executable. ---------------------------
 demos=()
-for d in kke_demo kke_basics sandbox physics_demo melt_demo jiggle_demo sea_demo imgui_demo rmlui_demo synty_demo audio_demo \
+for d in kke_demo sandbox physics_demo melt_demo jiggle_demo sea_demo imgui_demo rmlui_demo synty_demo audio_demo \
          climb_race flying_demo racing procedural_demo cloth_demo farm_demo pet_companion platoon duel goblin_horde cookbook; do
     if [ -f "$stage/$d$exe" ]; then demos+=("$d"); fi
 done

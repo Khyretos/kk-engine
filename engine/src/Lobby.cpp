@@ -7,6 +7,17 @@ namespace kke {
 namespace {
 constexpr const char* kCpus = "cpus";
 std::string cpuId(int cpu) { return "cpu." + std::to_string(cpu + 1); }
+// What a text row keeps: what an address, a port or a join code can hold
+// (and nothing a UI could read as markup).
+std::string addressChars(const std::string& text) {
+    std::string out;
+    for (char c : text) {
+        const bool ok = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '.' || c == ':' || c == '-' ||
+                        c == '_' || c == '@' || c == '[' || c == ']';
+        if (ok) out.push_back(c);
+    }
+    return out;
+}
 } // namespace
 
 Lobby::Lobby() : m_seats(kMaxSeats) {
@@ -38,6 +49,119 @@ int Lobby::addOption(Option option) {
     m_options.push_back(std::move(option));
     changed();
     return static_cast<int>(m_options.size()) - 1;
+}
+
+int Lobby::addTextOption(std::string id, std::string label, std::string placeholder, std::function<void(const std::string&)> onDone) {
+    TextField& t = m_texts[id];
+    t.placeholder = std::move(placeholder);
+    t.onDone = std::move(onDone);
+    // Added after load() (a game sets its online rows up later): what
+    // was saved still comes back.
+    if (const auto v = m_savedTexts.find(id); v != m_savedTexts.end()) {
+        t.text = addressChars(v->second).substr(0, kMaxTextLength);
+        m_savedTexts.erase(v);
+    }
+    Option o;
+    o.id = std::move(id);
+    o.label = std::move(label);
+    return addOption(std::move(o));
+}
+
+std::string Lobby::text(const std::string& id) const {
+    const auto it = m_texts.find(id);
+    return it == m_texts.end() ? std::string() : it->second.text;
+}
+
+std::string Lobby::placeholder(const std::string& id) const {
+    const auto it = m_texts.find(id);
+    return it == m_texts.end() ? std::string() : it->second.placeholder;
+}
+
+void Lobby::setText(const std::string& id, std::string text) {
+    const auto it = m_texts.find(id);
+    if (it == m_texts.end()) return;
+    text = addressChars(text);
+    if (text.size() > kMaxTextLength) text.resize(kMaxTextLength);
+    it->second.text = std::move(text);
+    changed();
+}
+
+const std::vector<std::vector<std::string>>& Lobby::keyboardKeys() {
+    static const std::vector<std::vector<std::string>> keys = [] {
+        std::vector<std::vector<std::string>> rows;
+        for (const char* line : { "1234567890", "qwertyuiop", "asdfghjkl-", "zxcvbnm.:@" }) {
+            std::vector<std::string> row;
+            for (const char* c = line; *c; ++c) row.emplace_back(1, *c);
+            rows.push_back(std::move(row));
+        }
+        rows.push_back({ kKeyDelete, kKeyClear, kKeyDone });
+        return rows;
+    }();
+    return keys;
+}
+
+void Lobby::startEditing(const std::string& id) {
+    if (!isTextOption(id)) return;
+    m_editing = id;
+    m_before = text(id);
+    m_keyRow = 0;
+    m_keyCol = 0;
+    changed();
+}
+
+void Lobby::typeText(const std::string& typed) {
+    if (!editing()) return;
+    setText(m_editing, text(m_editing) + addressChars(typed));
+}
+
+void Lobby::backspace() {
+    if (!editing()) return;
+    std::string& t = m_texts[m_editing].text;
+    if (!t.empty()) t.pop_back();
+    changed();
+}
+
+void Lobby::finishEditing(bool keep) {
+    if (!editing()) return;
+    TextField& t = m_texts[m_editing];
+    if (!keep) t.text = m_before;
+    m_editing.clear();
+    changed();
+    if (keep && t.onDone) t.onDone(t.text);
+}
+
+// The on-screen keyboard: the d-pad moves, A types the key, B deletes a
+// letter (or, with nothing typed, closes it), Start is Done.
+void Lobby::editStep(const Press& press) {
+    const auto& keys = keyboardKeys();
+    const int rows = static_cast<int>(keys.size());
+    if (press.start) {
+        finishEditing(true);
+        return;
+    }
+    if (press.back) {
+        if (text(m_editing).empty()) finishEditing(true);
+        else backspace();
+        return;
+    }
+    auto width = [&](int r) { return static_cast<int>(keys[static_cast<size_t>(r)].size()); };
+    if (press.up || press.down) {
+        // Keep the column's place across rows of other widths.
+        const float at = (static_cast<float>(m_keyCol) + 0.5f) / static_cast<float>(width(m_keyRow));
+        m_keyRow = std::clamp(m_keyRow + (press.down ? 1 : -1), 0, rows - 1);
+        m_keyCol = std::clamp(static_cast<int>(at * static_cast<float>(width(m_keyRow))), 0, width(m_keyRow) - 1);
+    }
+    if (press.left || press.right) m_keyCol = (m_keyCol + (press.right ? 1 : -1) + width(m_keyRow)) % width(m_keyRow);
+    if (press.confirm) {
+        const std::string& key = keys[static_cast<size_t>(m_keyRow)][static_cast<size_t>(m_keyCol)];
+        if (key == kKeyDelete) backspace();
+        else if (key == kKeyClear) setText(m_editing, {});
+        else if (key == kKeyDone) {
+            finishEditing(true);
+            return;
+        } else typeText(key);
+    }
+    changed();
 }
 
 Lobby::Option* Lobby::option(const std::string& id) {
@@ -260,6 +384,10 @@ void Lobby::handle(const Press& press, const std::vector<uint32_t>& connectedPad
 }
 
 void Lobby::step(int seat, const Press& press) {
+    if (seat == 0 && editing()) {
+        editStep(press);
+        return;
+    }
     Seat& s = m_seats[static_cast<size_t>(seat)];
     const std::vector<Row> list = rows(seat);
     const int last = static_cast<int>(list.size()) - 1;
@@ -291,7 +419,9 @@ void Lobby::step(int seat, const Press& press) {
     }
     if (press.confirm) {
         if (row.kind == Row::Kind::Start) m_start = true;
-        else if (row.kind == Row::Kind::Option && m_options[static_cast<size_t>(row.index)].choices.empty()) {
+        else if (row.kind == Row::Kind::Option && isTextOption(m_options[static_cast<size_t>(row.index)].id)) {
+            if (seat == 0) startEditing(m_options[static_cast<size_t>(row.index)].id);
+        } else if (row.kind == Row::Kind::Option && m_options[static_cast<size_t>(row.index)].choices.empty()) {
             if (m_options[static_cast<size_t>(row.index)].onPress) m_options[static_cast<size_t>(row.index)].onPress();
         } else {
             s.row = std::min(static_cast<int>(rows(seat).size()) - 1, s.row + 1);
@@ -347,8 +477,10 @@ nlohmann::json Lobby::save() const {
         j["seats"].push_back({ { "look", look } });
     }
     nlohmann::json options = nlohmann::json::object();
+    for (const auto& [id, text] : m_savedTexts) options[id] = text; // rows this run didn't add (yet)
     for (const Option& o : m_options)
         if (!o.choices.empty()) options[o.id] = o.choices[static_cast<size_t>(o.value)];
+    for (const auto& [id, t] : m_texts) options[id] = t.text;
     j["options"] = options;
     return j;
 }
@@ -373,6 +505,10 @@ void Lobby::load(const nlohmann::json& j) {
         for (Option& o : m_options)
             if (const auto v = options->find(o.id); v != options->end() && o.id != kCpus)
                 if (const int c = indexOf(o.choices, *v); c >= 0) o.value = c;
+        for (const auto& [id, v] : options->items())
+            if (v.is_string() && !option(id)) m_savedTexts[id] = v.get<std::string>();
+        for (auto& [id, t] : m_texts)
+            if (const auto v = options->find(id); v != options->end() && v->is_string()) setText(id, v->get<std::string>());
         if (const auto v = options->find(kCpus); v != options->end())
             if (const int c = indexOf(option(kCpus)->choices, *v); c >= 0) option(kCpus)->value = c;
         refreshCpuRows();

@@ -2,6 +2,7 @@
 // damage you can see (see RacingModule.h and README.md).
 #include "kke/Application.h"
 #include "kke/modules/AudioModule.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
 #include "kke/modules/ModelModule.h"
@@ -33,6 +34,8 @@ int main() {
 #endif
         app.addModule<kke::ModelModule>();
         app.addModule<kke::UiModule>();
+        // The shared menus: title, settings, controls, pause (docs/GAME_SHELL.md).
+        app.addModule<kke::GameShellModule>("Racing", "Circuits, rally stages and a destruction derby");
         app.addModule<kke::AudioModule>().setUiVisible(false);
         app.addModule<kke::LobbyModule>("racing_lobby.json");
         // Online: Host / Join in the start menu (or KKE_NET=host, KKE_NET=join:ADDRESS).

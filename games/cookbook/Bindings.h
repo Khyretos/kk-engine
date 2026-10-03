@@ -14,10 +14,11 @@ inline void addCookbookBindings(kke::InputMap& in) {
     using kke::InputModule;
     using kke::Trigger;
 
-    // A button action: Tab on the keyboard, the View/Back button on a pad.
+    // A button action: Tab on the keyboard, d-pad right on a pad (View/Back
+    // and Start belong to the pause menu every game shares).
     in.defineAction({ "camera.next", "Next camera", "Camera" });
     in.addBinding(InputModule::bind("camera.next", InputModule::key(SDL_SCANCODE_TAB)));
-    in.addBinding(InputModule::bind("camera.next", InputModule::pad(SDL_GAMEPAD_BUTTON_BACK)));
+    in.addBinding(InputModule::bind("camera.next", InputModule::pad(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)));
 
     // Hold to charge, release to throw: two actions on one key.
     in.defineAction({ "throw.charge", "Charge a throw", "Actions" });

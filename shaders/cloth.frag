@@ -83,12 +83,17 @@ void main() {
     float fuzz = pc.weave.z;
     float gloss = pc.weave.w;
 
-    vec3 N = normalize(fragNormalWorld);
-    if (!gl_FrontFacing) N = -N;
     vec3 V = normalize(lighting.cameraPos.xyz - fragPosWorld);
+    vec3 dpdx = dFdx(fragPosWorld), dpdy = dFdy(fragPosWorld);
+    // Two-sided: the smooth normal turned to the side being looked at. The
+    // triangle's own normal says which side that is (gl_FrontFacing would
+    // trust the winding, which a cloth folded over itself can't keep).
+    vec3 N = normalize(fragNormalWorld);
+    vec3 Ng = cross(dpdx, dpdy);
+    if (dot(Ng, V) < 0.0) Ng = -Ng;
+    if (dot(N, Ng) < 0.0) N = -N;
 
     // Thread direction (warp = +u) in world space, from the UV derivatives.
-    vec3 dpdx = dFdx(fragPosWorld), dpdy = dFdy(fragPosWorld);
     vec2 duvdx = dFdx(fragUV), duvdy = dFdy(fragUV);
     vec3 T = dpdx * duvdy.y - dpdy * duvdx.y;
     T = T - N * dot(N, T);
@@ -113,20 +118,26 @@ void main() {
     // Fibre direction on top: the warp or, where the weft is on top, across it.
     vec3 fibre = normalize(mix(cross(N, T), T, warpTop));
 
-    float shadow = lighting.ambient.a > 0.5 ? computeShadow(fragPosLightSpace) : 1.0;
+    vec3 sunL = lighting.lights[0].directionOrPosition.w > 0.5 ? normalize(lighting.lights[0].directionOrPosition.xyz - fragPosWorld)
+                                                               : normalize(-lighting.lights[0].directionOrPosition.xyz);
+    float shadow = lighting.ambient.a > 0.5 ? computeShadow(shadowPosNormalOffset(fragPosWorld, N, sunL)) : 1.0;
     float NdotV = max(dot(N, V), 1e-3);
     vec3 F0 = vec3(0.04);
     vec3 Lo = vec3(0.0);
     for (int i = 0; i < 4; ++i) {
         float intensity = lighting.lights[i].colorIntensity.a;
         if (intensity <= 0.0) continue;
-        vec3 radiance = lighting.lights[i].colorIntensity.rgb * intensity * (i == 0 ? shadow : 1.0);
         vec3 L = lighting.lights[i].directionOrPosition.w > 0.5 ? normalize(lighting.lights[i].directionOrPosition.xyz - fragPosWorld)
                                                                 : normalize(-lighting.lights[i].directionOrPosition.xyz);
         vec3 H = normalize(V + L);
         float NdotLraw = dot(N, L);
         // Fuzzy fabrics wrap light around (fibres are lit from the side too).
         float wrap = fuzz * 0.5;
+        // Where a fold turns away from the light the cloth shades itself
+        // smoothly; the shadow map, a texel at a time, would cut that soft
+        // edge into hard blotches. So it fades in as the fold faces the light.
+        float sunShadow = mix(1.0, shadow, smoothstep(-wrap, 0.3, NdotLraw));
+        vec3 radiance = lighting.lights[i].colorIntensity.rgb * intensity * (i == 0 ? sunShadow : 1.0);
         float NdotL = max((NdotLraw + wrap) / (1.0 + wrap), 0.0);
         float NdotLs = max(NdotLraw, 0.0);
         float NdotH = max(dot(N, H), 0.0);

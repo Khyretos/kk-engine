@@ -236,6 +236,9 @@ private:
     void freePlayer(int index);
     MatchRules menuRules(int teamSize) const;
     void backToMenu();
+    void leaveToMenu();                 // the menu button: back to the start menu (a client leaves online)
+    bool leaveCenterMatch(int input);   // sport center: walk off the court (a walkover)
+    bool inCenterMatch(int input) const;
     void clearPlayers();
     Player& player(int index) { return m_players[static_cast<size_t>(index)]; }
 

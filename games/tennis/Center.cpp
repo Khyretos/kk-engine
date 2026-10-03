@@ -569,7 +569,7 @@ std::string TennisModule::centerHint() const {
         if (people) return "Court " + std::to_string(gate + 1) + " is taken: watch from beside it, or find another gate";
         return "{tennis.topspin} play on " + court;
     }
-    return "{move} walk to a court's gate (the end by the promenade) to play; the stands are beside each court  {tennis.menu} menu";
+    return "{move} walk to a court's gate (the end by the promenade) to play; the stands are beside each court  {shell.pause} menu";
 }
 
 } // namespace tennis

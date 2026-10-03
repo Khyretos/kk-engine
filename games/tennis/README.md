@@ -98,7 +98,8 @@ are rebindable actions in the "Shots" and "Game" groups.
 | Flat: hard and fast (`tennis.flat`) | J | X (west) |
 | Slice: low and slow (`tennis.slice`) | K / right mouse | B (east) |
 | Lob: over their head (`tennis.lob`) | L | Y (north) |
-| Back to the menu (`tennis.menu`; online, a client leaves the game; in the sport center, leave the court, the other side winning) | Esc | Back |
+| Pause menu: settings, controls, quit | Esc | Start or Select |
+| Back to the menu (`tennis.menu`; online, a client leaves the game; in the sport center, leave the court, the other side winning) | M, or the pause menu | the pause menu |
 | Talk to the people near you (`voice.talk`, online) | V | LB |
 | Developer panels (`panels`) | F1 | none |
 

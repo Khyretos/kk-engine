@@ -59,6 +59,11 @@ public:
     void open();
     void close();
     bool isOpen() const { return m_lobby.isOpen(); }
+    // Hidden and deaf while another menu has the screen (GameShellModule's
+    // title and pause menu): no presses reach the lobby, and the press
+    // that closes that menu doesn't land here either.
+    void setSuspended(bool suspended);
+    bool suspended() const { return m_suspended; }
 
     // One InputModule player per joined seat, in seat order, each on its
     // own devices; kept up to date as controllers come and go. Call it
@@ -111,6 +116,8 @@ private:
     uint32_t m_shownPromptSerial = 0;
     PromptStyle m_joinStyle = PromptStyle::Xbox; // the controller last plugged in or pressed
     bool m_flightSticks = false;
+    bool m_suspended = false;
+    int m_deafFrames = 0; // after a suspension: buttons still held from the other menu aren't presses
     void noteJoinDevice(const InputDevices::Device& d); // "press A" / "pull the trigger" for this one
     std::string m_title, m_subtitle;
 
@@ -118,6 +125,14 @@ private:
         std::string label, value, swatch = "#00000000"; // swatch: always a colour (RmlUi styles hidden rows too)
         bool hasSwatch = false;
         bool focused = false, action = false, start = false, arrows = false;
+        bool empty = false; // a text row showing its placeholder
+    };
+    struct KeyView {
+        std::string label;
+        bool focused = false, wide = false;
+    };
+    struct KeyRowView {
+        std::vector<KeyView> keys;
     };
     struct SeatView {
         bool joined = false, you = false, unplugged = false, waiting = false;
@@ -129,7 +144,11 @@ private:
         std::string title, subtitle, hint;
         std::vector<SeatView> seats;
         std::vector<std::string> toasts;
+        bool typing = false; // player 1 is typing into a text row
+        std::string typingLabel, typingText, typingHint;
+        std::vector<KeyRowView> keys;
     };
+    bool m_textInput = false; // SDL text input is on (while typing)
     View m_view;
     Rml::DataModelHandle m_model;
     Rml::ElementDocument* m_doc = nullptr;

@@ -77,6 +77,7 @@ def main():
 
     xvfb = start_display()
     env = dict(os.environ, KKE_SKIP_INTRO="1", SDL_VIDEODRIVER=os.environ.get("SDL_VIDEODRIVER", "x11"))
+    env.setdefault("KKE_MAIN_MENU", "0")  # straight into the game, past the title (docs/GAME_SHELL.md)
     if args.scripts:
         env["KKE_SCRIPTS_DIR"] = str(pathlib.Path(args.scripts).resolve())
     try:

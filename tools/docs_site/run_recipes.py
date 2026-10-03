@@ -115,6 +115,7 @@ def main():
     args = ap.parse_args()
     bindir = pathlib.Path(args.bin).resolve()
     base_env = dict(os.environ, KKE_SKIP_INTRO="1", SDL_VIDEODRIVER=os.environ.get("SDL_VIDEODRIVER", "x11"))
+    base_env.setdefault("KKE_MAIN_MENU", "0")  # the recipes run in the game, not on its title
     if args.shots:
         MEDIA.mkdir(parents=True, exist_ok=True)
 

@@ -135,11 +135,11 @@ void TennisModule::updateHud() {
             hint = m_input->promptText("Hold {tennis.flat} flat, {tennis.slice} slice or {tennis.topspin} kick to toss, let go as the ball drops to serve  {move} aim");
         else if (human && m->phase != Match::Phase::MatchOver)
             hint = m_input->promptText("{move} run  {tennis.topspin} topspin  {tennis.flat} flat  {tennis.slice} slice  {tennis.lob} lob  "
-                                       "(hold to take the racket back, longer hits harder; let go as the ball comes)  {tennis.menu} menu");
-        if (m->phase == Match::Phase::MatchOver && human) hint = m_input->promptText(m_inCenter ? "" : "{tennis.menu} back to the menu");
+                                       "(hold to take the racket back, longer hits harder; let go as the ball comes)  {shell.pause} menu");
+        if (m->phase == Match::Phase::MatchOver && human) hint = m_input->promptText(m_inCenter ? "" : "{shell.pause} pause menu: Main menu");
         if (human && m_inCenter && m->phase != Match::Phase::MatchOver && m->phase != Match::Phase::Serve)
             hint = m_input->promptText("{move} run  {tennis.topspin} topspin  {tennis.flat} flat  {tennis.slice} slice  {tennis.lob} lob  "
-                                       "{tennis.menu} leave the court (a walkover)");
+                                       "{shell.pause} pause menu: leave the court (a walkover)");
         if (m->score.inTiebreak()) banner = "Tiebreak";
         else if (m->rally.secondServeNow() && m->phase == Match::Phase::Serve) banner = "Second serve";
     }

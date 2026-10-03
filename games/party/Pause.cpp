@@ -1,11 +1,13 @@
-// The pause menu (kke::DemoPanelModule): Esc, or Back on a controller,
-// during a party. It takes the party back to the start menu, and has
-// voice chat: off or on for this screen, and a mute for each player
-// online, so nobody has to listen to anyone they'd rather not.
+// The pause menu is the shared one (kke::GameShellModule: Esc, Start or
+// Select): its Main menu takes the party back to the start menu. Its
+// "Demo settings" row opens this panel (kke::DemoPanelModule): voice chat
+// off or on for this screen, and a mute for each player online, so nobody
+// has to listen to anyone they'd rather not.
 
 #include "PartyModule.h"
 
 #include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/LobbyModule.h"
 #include "kke/modules/NetModule.h"
 #include "kke/modules/VoiceModule.h"
@@ -26,9 +28,13 @@ std::vector<PartyModule::VoicePeer> PartyModule::voicePeers() const {
 }
 
 void PartyModule::setupPause() {
+    if (auto* shell = m_app->getModule<kke::GameShellModule>())
+        shell->onMainMenu = [this] {
+            if (m_lobby && m_phase != Phase::Lobby && !netClient()) backToLobby();
+        };
     m_panel = m_app->getModule<kke::DemoPanelModule>();
     if (!m_panel) return;
-    m_panel->setTitle("Menu");
+    m_panel->setTitle("Party and voice");
     m_panel->setState(kke::DemoPanelModule::State::Collapsed); // a tab in the corner until it's wanted
     kke::DemoPanelModule::Section& party = m_panel->section("Party");
     party.button("Back to the start menu", [this] {

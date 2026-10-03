@@ -2,7 +2,7 @@
 
 The camera decides what kind of game it feels like. The cookbook game has
 the eight cameras most games use, and switches between them while you
-play: **1** to **8** pick one, **Tab** (or View/Back on a pad) goes to the
+play: **1** to **8** pick one, **Tab** (or d-pad right on a pad) goes to the
 next, **P** plays a camera path, **K** shakes.
 
 ```sh

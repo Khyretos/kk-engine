@@ -59,6 +59,12 @@ a row and then calls the row's `onChange`.
 `game` input context is off, so the stick that picks rows doesn't also
 drive the boat. The last row, "Hide panel", collapses it.
 
+In a game with the game shell (`kke::GameShellModule`, every demo now,
+[GAME_SHELL.md](GAME_SHELL.md)) the View/Back button and Esc open the
+shell's pause menu instead, and its "Demo settings" row makes the panel
+Active; `panel.toggle` is then F3 only and the panel has no Quit row (the
+pause menu has it). Without the shell:
+
 Esc works like a pause menu: it opens the panel with the keyboard on it,
 and Esc again goes back to the game. Because of that the panel turns the
 window's quit-on-Esc off and adds a "Quit" row above "Hide panel", so

@@ -72,6 +72,21 @@ m_lobby->open();
   adds Online (Off / Join / Host), Game and Join this way
   (games/climb_race/Net.cpp, docs/NETWORKING.md "In Climb Race"). Set
   `visible` to show a row only when it applies; `setTitle` redraws them.
+- `addTextOption(id, label, placeholder, onDone)` adds a row player 1
+  types into: an address or a join code. A on it opens an on-screen
+  keyboard (d-pad moves, A types, B deletes, Start is Done); on the
+  keyboard they just type (Ctrl+V pastes, Enter keeps it, Esc puts back
+  what was there). Only what an address or a code can hold is kept
+  (letters, digits, `. : - _ @ [ ]`). `onDone` gets the text when they
+  finish; `text(id)` reads it any time. It's saved in the lobby file with
+  the other options, even when the row is added after `load()`. Every
+  online demo has one, "Address or code", under Online = Join: it joins
+  through `NetModule::joinTyped` (an IP or name, `:port` optional, or a
+  join code), for when the LAN search finds nothing (a VPN, another
+  network).
+- The game shell (`kke::GameShellModule`, [GAME_SHELL.md](GAME_SHELL.md))
+  adds a "Settings and quit" row, and Select opens its pause menu over the
+  lobby; the lobby stops listening while that menu is open.
 - `onJoin` / `onLeave` are called with the seat.
 - Flight sticks and other joysticks stay out of the menu unless the game
   calls `m_lobby->setFlightSticks(true)`: then a stick's trigger joins

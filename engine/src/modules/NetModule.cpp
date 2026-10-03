@@ -226,6 +226,41 @@ bool NetModule::host(uint16_t port, std::string* error) {
     return false;
 }
 
+bool NetModule::splitTypedAddress(const std::string& typed, std::string& address, uint16_t& port) {
+    const size_t first = typed.find_first_not_of(" \t");
+    const std::string t = first == std::string::npos ? std::string() : typed.substr(first, typed.find_last_not_of(" \t") - first + 1);
+    address = t;
+    if (net::looksLikeJoinCode(t)) return true; // CODE or CODE@relay[:port]: NetModule::join reads it
+    auto portOf = [&](const std::string& digits) {
+        if (digits.empty() || digits.size() > 5 || digits.find_first_not_of("0123456789") != std::string::npos) return false;
+        const int p = std::stoi(digits);
+        if (p < 1 || p > 65535) return false;
+        port = static_cast<uint16_t>(p);
+        return true;
+    };
+    if (!t.empty() && t.front() == '[') {
+        // [IPv6] or [IPv6]:port
+        const size_t close = t.find(']');
+        if (close == std::string::npos) return false;
+        address = t.substr(1, close - 1);
+        if (close + 1 == t.size()) return true;
+        return t[close + 1] == ':' && portOf(t.substr(close + 2));
+    }
+    const size_t colon = t.find(':');
+    if (colon == std::string::npos || t.find(':', colon + 1) != std::string::npos) return true; // a name, IPv4, or a bare IPv6
+    address = t.substr(0, colon);
+    return portOf(t.substr(colon + 1));
+}
+
+bool NetModule::joinTyped(const std::string& typed, uint16_t port, std::string* error) {
+    std::string address;
+    if (!splitTypedAddress(typed, address, port) || address.empty()) {
+        if (error) *error = typed.empty() ? "type an address or a join code first" : "'" + typed + "' isn't an address, address:port or join code";
+        return false;
+    }
+    return join(address, port, error);
+}
+
 bool NetModule::join(const std::string& address, uint16_t port, std::string* error) {
     leave();
     auto enet = std::make_unique<net::EnetTransport>();

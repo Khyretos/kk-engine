@@ -5,6 +5,7 @@
 // game runs.
 #include "kke/Application.h"
 #include "kke/modules/AudioModule.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/RigidBodyModule.h"
@@ -35,6 +36,8 @@ int main() {
         app.addModule<kke::RigidBodyModule>();                // Jolt physics
         app.addModule<kke::ModelModule>();                    // 3D models (models.* in Lua)
         app.addModule<kke::UiModule>();                       // HUD and menus (ui.* in Lua)
+        // The shared menus: title, settings, controls, pause (docs/GAME_SHELL.md).
+        app.addModule<kke::GameShellModule>("Starter Game", "Your game starts here");
         app.addModule<kke::AudioModule>().setUiVisible(false);
 #if KKE_ENABLE_FEMFX
         // Things that really break (breakable.* in Lua), with the

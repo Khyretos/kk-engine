@@ -15,6 +15,7 @@
 #include "kke/SphereImpostors.h"
 #include "kke/Viewports.h"
 #include "kke/modules/AudioModule.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
 #include "kke/modules/NetModule.h"
@@ -69,6 +70,16 @@ void FlyingModule::init(kke::Application& app) {
     m_input = app.getModule<kke::InputModule>();
     m_models = app.getModule<kke::ModelModule>();
     m_lobby = app.getModule<kke::LobbyModule>();
+    if (auto* shell = app.getModule<kke::GameShellModule>()) {
+        // In the air the flight's own pause menu has Start, Select and Esc
+        // (it knows who pressed and can hand them another controller); its
+        // Settings row opens the shared menus. On the start menu the shared
+        // ones answer Select.
+        shell->blockPause = [this] { return m_phase != Phase::Lobby; };
+        shell->onMainMenu = [this] {
+            if (m_phase != Phase::Lobby) backToLobby();
+        };
+    }
     m_net = app.getModule<kke::NetModule>();
     m_audio = app.getModule<kke::AudioModule>();
 

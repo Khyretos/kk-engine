@@ -4,6 +4,7 @@
 #include "kke/Application.h"
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
 #include "kke/modules/ModelModule.h"
@@ -34,6 +35,8 @@ int main() {
         app.addModule<kke::PhysicsModule>(/*renderScale=*/1.0f, /*initialObjectCount=*/0).setDrawGround(false);
         app.addModule<kke::ModelModule>();
         app.addModule<kke::UiModule>();
+        // The shared menus: title, settings, controls, pause (docs/GAME_SHELL.md).
+        app.addModule<kke::GameShellModule>("Tennis", "Singles, doubles and the sport center");
         app.addModule<kke::AudioModule>().setUiVisible(false);
         app.addModule<kke::LobbyModule>("tennis_lobby.json");
         // Online: the sport center. Everyone in it is a player; a host's CPU

@@ -8,6 +8,7 @@
 
 #include "kke/DevTools.h"
 #include "kke/Log.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
 #include "kke/modules/NetModule.h"
@@ -151,6 +152,7 @@ void FlyingModule::defineActions() {
         }
         in.addBinding(IM::bind("fly.pause", IM::pad(SDL_GAMEPAD_BUTTON_START)));
         in.addBinding(IM::bind("fly.again", IM::pad(SDL_GAMEPAD_BUTTON_SOUTH)));
+        in.addBinding(IM::bind("fly.pause", IM::pad(SDL_GAMEPAD_BUTTON_BACK)));
         in.addBinding(IM::bind("fly.menu", IM::pad(SDL_GAMEPAD_BUTTON_BACK)));
 
         // Keyboard and mouse: W/S pitch (S pulls up, like a stick), A/D
@@ -665,14 +667,15 @@ void FlyingModule::openPause(int seat) {
 void FlyingModule::closePause() { m_pauseSeat = -1; }
 
 // The rows: Resume, Controls (left / right through the devices; the ones
-// another player holds are skipped), Restart, Start menu, Quit.
+// another player holds are skipped), Restart, Settings (the shared game
+// shell: settings, button remapping), Start menu, Quit.
 void FlyingModule::updatePause(float dt) {
     if (m_pauseSeat < 0) return;
     m_pauseAge += dt;
     int player = 0;
     for (const Pilot& p : m_pilots)
         if (p.seat == m_pauseSeat) player = p.player;
-    constexpr int kRows = 5;
+    constexpr int kRows = 6;
     if (pressedBy(player, "pause.up")) m_pauseRow = (m_pauseRow + kRows - 1) % kRows;
     if (pressedBy(player, "pause.down")) m_pauseRow = (m_pauseRow + 1) % kRows;
     const int step = (pressedBy(player, "pause.right") ? 1 : 0) - (pressedBy(player, "pause.left") ? 1 : 0);
@@ -728,9 +731,13 @@ void FlyingModule::pauseAction(int row) {
         break;
     case 3:
         closePause();
+        if (auto* shell = m_app->getModule<kke::GameShellModule>()) shell->openPause();
+        break;
+    case 4:
+        closePause();
         backToLobby();
         break;
-    case 4: {
+    case 5: {
         SDL_Event quit{};
         quit.type = SDL_EVENT_QUIT;
         SDL_PushEvent(&quit);
