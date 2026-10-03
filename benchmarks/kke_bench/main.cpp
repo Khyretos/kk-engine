@@ -203,6 +203,77 @@ std::vector<Case> makeCases() {
         } });
     }
 
+    // A satin tablecloth on a little table, stirred by a breeze so it never
+    // sleeps: Jolt, the protection pass and, as drawn, the lift off the
+    // table's edges and corners (clothPositions()).
+    cases.push_back({ "cloth_table_wind_full", "Jolt cloth: a 28x28 satin tablecloth on a table in a breeze, Full protection, as drawn", 240, [] {
+        auto w = std::make_shared<kke::RigidWorld>([] {
+            kke::RigidWorld::Settings s;
+            s.threads = 0;
+            return s;
+        }());
+        kke::RigidWorld::BodyDesc g;
+        g.motion = kke::RigidWorld::Motion::Static;
+        g.halfExtents = glm::vec3(30.0f, 0.5f, 30.0f);
+        g.position = glm::vec3(0.0f, -0.5f, 0.0f);
+        w->add(g);
+        kke::RigidWorld::BodyDesc table;
+        table.motion = kke::RigidWorld::Motion::Static;
+        table.halfExtents = glm::vec3(0.3f, 0.025f, 0.3f);
+        table.position = glm::vec3(0.0f, 1.0f, 0.0f);
+        w->add(table);
+        kke::ClothDesc d;
+        d.mesh = kke::clothGrid(glm::vec3(0.0f, 1.5f, 0.0f), 1.2f, 1.2f, 28, 28, glm::vec3(1, 0, 0), glm::vec3(0, 0, 1));
+        d.fabric = kke::clothFabric("satin");
+        d.wind = 0.4f;
+        const auto id = std::make_shared<kke::RigidWorld::ClothId>(w->addCloth(d));
+        w->setWind(glm::vec3(1.4f, 0.0f, 3.8f));
+        for (int i = 0; i < 120; ++i) w->step(1.0f / 60.0f); // on the table
+        auto p = std::make_shared<std::vector<glm::vec3>>();
+        return std::function<double()>([w, id, p] {
+            w->step(1.0f / 60.0f);
+            w->clothPositions(*id, *p);
+            return double(p->back().y);
+        });
+    } });
+
+    // A bed: a wool blanket and a cotton sheet dropped on a mattress, again
+    // every 3 s: layers pressed together, the protection pass's hardest job.
+    cases.push_back({ "cloth_bed_layers_full", "Jolt cloth: a 32x32 wool blanket and 32x32 cotton sheet dropped on a mattress, Full protection", 240, [] {
+        auto w = std::make_shared<kke::RigidWorld>([] {
+            kke::RigidWorld::Settings s;
+            s.threads = 0;
+            return s;
+        }());
+        kke::RigidWorld::BodyDesc g;
+        g.motion = kke::RigidWorld::Motion::Static;
+        g.halfExtents = glm::vec3(30.0f, 0.5f, 30.0f);
+        g.position = glm::vec3(0.0f, -0.5f, 0.0f);
+        w->add(g);
+        kke::RigidWorld::BodyDesc mattress;
+        mattress.motion = kke::RigidWorld::Motion::Static;
+        mattress.halfExtents = glm::vec3(1.0f, 0.15f, 0.75f);
+        mattress.position = glm::vec3(0.0f, 0.3f, 0.0f);
+        w->add(mattress);
+        auto ids = std::make_shared<std::vector<kke::RigidWorld::ClothId>>();
+        const char* fabrics[] = { "wool", "cotton" };
+        for (int i = 0; i < 2; ++i) {
+            kke::ClothDesc d;
+            d.mesh = kke::clothGrid(glm::vec3(0.1f * float(i), 0.8f + 0.15f * float(i), 0.0f), 1.8f, 1.6f, 32, 32, glm::vec3(1, 0, 0), glm::vec3(0, 0, 1));
+            d.fabric = kke::clothFabric(fabrics[i]);
+            ids->push_back(w->addCloth(d));
+        }
+        auto steps = std::make_shared<int>(0);
+        return std::function<double()>([w, ids, steps] {
+            if (++*steps % 180 == 0)
+                for (auto id : *ids) w->resetCloth(id);
+            w->step(1.0f / 60.0f);
+            std::vector<glm::vec3> p;
+            w->clothPositions(ids->back(), p);
+            return double(p[p.size() / 2].y);
+        });
+    } });
+
     // Hair (kke/Hair.h): guide strands on heads that turn and nod in a
     // gusting wind, never asleep. One sample = one 60 Hz step of the whole
     // world (Jolt's rod solve, head collision, wind). What's drawn around
@@ -254,6 +325,72 @@ std::vector<Case> makeCases() {
             });
         } });
     }
+
+    // Springiness: 4C coils and 3B ringlets on a head shaken hard (a quick
+    // look round and back), where coils stretch and spring back.
+    struct ShakeCase { const char* name; const char* what; const char* style; };
+    for (const ShakeCase sc : { ShakeCase{ "hair_1x200_4c_shake", "Jolt hair: one head, 200 guide strands, type 4C coils, head shaken hard (springiness)", "4c" },
+                                ShakeCase{ "hair_1x200_3b_shake", "Jolt hair: one head, 200 guide strands, type 3B ringlets, head shaken hard (springiness)", "3b" } }) {
+        const char* style = sc.style;
+        cases.push_back({ sc.name, sc.what, 240, [style] {
+            auto w = std::make_shared<kke::RigidWorld>([] {
+                kke::RigidWorld::Settings s;
+                s.threads = 0;
+                return s;
+            }());
+            const glm::vec3 neck(0.0f, 1.5f, 0.0f), centre = neck + glm::vec3(0.0f, 0.12f, 0.0f);
+            kke::RigidWorld::BodyDesc b;
+            b.shape = kke::RigidWorld::Shape::Sphere;
+            b.motion = kke::RigidWorld::Motion::Kinematic;
+            b.clothOnly = true;
+            b.radius = 0.1f;
+            b.position = centre;
+            const auto body = w->add(b);
+            kke::HairDesc d;
+            kke::hairstyleOnHead(d, style, centre, 0.1f, 200);
+            const auto hair = w->addHair(d);
+            auto t = std::make_shared<float>(0.0f);
+            return std::function<double()>([w, body, hair, neck, t] {
+                *t += 1.0f / 60.0f;
+                const glm::quat q = glm::angleAxis(1.1f * std::sin(*t * 7.0f), glm::vec3(0, 1, 0)) * glm::angleAxis(0.35f * std::sin(*t * 5.0f), glm::vec3(1, 0, 0));
+                const glm::mat4 m = glm::translate(glm::mat4(1.0f), neck) * glm::mat4_cast(q) * glm::translate(glm::mat4(1.0f), -neck);
+                w->moveKinematic(body, glm::vec3(m * glm::vec4(neck + glm::vec3(0.0f, 0.12f, 0.0f), 1.0f)), q, 1.0f / 60.0f);
+                w->setHairJoint(hair, m);
+                w->step(1.0f / 60.0f);
+                std::vector<glm::vec3> p;
+                w->hairPositions(hair, p);
+                return double(p.back().y);
+            });
+        } });
+    }
+
+    // Hair physics Solid and back (the cloth demo's setting) every half a
+    // second, in a gusting wind, the head turning: the switch, and solid
+    // hair's cost (it follows the head without being simulated).
+    cases.push_back({ "hair_1x400_long_solid_toggle", "Jolt hair: one head, 400 long guide strands, Solid and moving in turn every 0.5 s, in wind", 240, [] {
+        auto w = std::make_shared<kke::RigidWorld>([] {
+            kke::RigidWorld::Settings s;
+            s.threads = 0;
+            return s;
+        }());
+        const glm::vec3 neck(0.0f, 1.5f, 0.0f), centre = neck + glm::vec3(0.0f, 0.12f, 0.0f);
+        kke::HairDesc d;
+        kke::hairstyleOnHead(d, "long", centre, 0.1f, 400);
+        const auto hair = w->addHair(d);
+        auto t = std::make_shared<float>(0.0f);
+        auto steps = std::make_shared<int>(0);
+        return std::function<double()>([w, hair, neck, t, steps] {
+            *t += 1.0f / 60.0f;
+            if (++*steps % 30 == 0) w->setHairMotion(hair, (*steps / 30) % 2 == 0 ? 1.0f : 0.0f);
+            w->setWind(glm::vec3(3.0f * (0.6f + 0.4f * std::sin(*t * 1.3f)), 0.0f, 0.0f));
+            const glm::quat q = glm::angleAxis(0.7f * std::sin(*t * 2.0f), glm::vec3(0, 1, 0));
+            w->setHairJoint(hair, glm::translate(glm::mat4(1.0f), neck) * glm::mat4_cast(q) * glm::translate(glm::mat4(1.0f), -neck));
+            w->step(1.0f / 60.0f);
+            std::vector<glm::vec3> p;
+            w->hairPositions(hair, p);
+            return double(p.back().y);
+        });
+    } });
 
     // Raycasts into a settled pile: what picking, audio occlusion and the
     // camera spring arm pay per query.

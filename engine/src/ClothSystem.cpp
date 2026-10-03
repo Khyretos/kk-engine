@@ -1421,7 +1421,6 @@ void ClothSystem::searchOnCpu(size_t triTotal, size_t edgeTotal, float cell) {
                             w.stamp[gt] = gv;
                             Cloth& o = *m_active[m_triCloth[gt]];
                             const uint32_t tri = gt - o.triBase;
-                            if (&o == &c && nearInTopology(c, v, tri)) continue;
                             // Far from the triangle for how far it moved relative to it
                             // (with room for the passes to move things): skip.
                             const glm::vec4& sph = o.triSphere[tri];
@@ -1442,6 +1441,9 @@ void ClothSystem::searchOnCpu(size_t triTotal, size_t edgeTotal, float cell) {
                             // (The flags above are set whatever the patches: an edge of a
                             // patch looked at may end at a vertex of one that isn't.)
                             if (!loose && !patchPair(vp, m_patchBase[m_triCloth[gt]] + o.triPatch[tri])) continue;
+                            // Its own triangles and its neighbours' (last: the dearest test;
+                            // they are too near in the fabric to have set the flags above).
+                            if (&o == &c && nearInTopology(c, v, tri)) continue;
                             w.vt.push_back({ uint32_t(ci), v, gt });
                         }
                     }
