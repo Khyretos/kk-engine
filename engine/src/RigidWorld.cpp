@@ -758,7 +758,18 @@ std::vector<RigidWorld::CharacterId> RigidWorld::characterIds() const {
 
 void RigidWorld::setCharacterInput(CharacterId id, const CharacterInput& input) {
     auto it = m->characters.find(id);
-    if (it != m->characters.end()) it->second.input = input;
+    if (it == m->characters.end()) return;
+    CharacterInput& cur = it->second.input;
+    // A jump not yet taken by a step stays (see CharacterInput::jump).
+    const bool pending = cur.jump && !input.jump;
+    const float speed = cur.jumpSpeed;
+    const bool inAir = cur.jumpInAir;
+    cur = input;
+    if (pending) {
+        cur.jump = true;
+        cur.jumpSpeed = speed;
+        cur.jumpInAir = inAir;
+    }
 }
 
 glm::vec3 RigidWorld::characterPosition(CharacterId id) const {
@@ -893,7 +904,10 @@ bool RigidWorld::capsuleFits(const glm::vec3& feet, float height, float radius) 
 
 void RigidWorld::Impl::stepCharacter(Character& c, float dt) {
     c.time += dt;
-    if (c.kinematic) return; // placed by the caller (vaults, climbs)
+    if (c.kinematic) {
+        c.input.jump = false; // placed by the caller (vaults, climbs): no jump left over for later
+        return;
+    }
     const JPH::Vec3 gravity = system.GetGravity();
     JPH::CharacterVirtual& ch = *c.ch;
     ch.UpdateGroundVelocity();
@@ -909,7 +923,10 @@ void RigidWorld::Impl::stepCharacter(Character& c, float dt) {
         // In the air: keep the fall, some steering (airSteer).
         JPH::Vec3 horizontal(current.GetX(), 0.0f, current.GetZ());
         horizontal = horizontal + (move - horizontal) * std::min(1.0f, c.input.airSteer * dt);
-        v = horizontal + JPH::Vec3(0.0f, current.GetY(), 0.0f);
+        // A jump the caller allows off the ground (coyote time) replaces
+        // the fall; any other jump in the air does nothing.
+        const float vy = c.input.jump && c.input.jumpInAir ? std::max(current.GetY(), 0.0f) + c.input.jumpSpeed : current.GetY();
+        v = horizontal + JPH::Vec3(0.0f, vy, 0.0f);
     }
     // Standing on walkable ground, only gravity's push *into* the
     // ground applies: its slope-parallel part would make an idle

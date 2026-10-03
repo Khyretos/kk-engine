@@ -66,6 +66,18 @@ fall/land stutter on small drops. Coyote time (0.12 s) and a jump buffer
 (0.15 s, PointDown's "queued input") come from the same idea: don't make
 the player hit a one-frame window.
 
+## Drawing it: between physics steps
+
+The capsule moves at the physics rate (60 Hz). Drawn at its raw position
+on a faster screen it stands still one frame and jumps the next, and a
+camera that follows it smoothly (the spring arm's lag) shows that as a
+shaking body, worst while the camera turns. Games draw the character, and
+point the camera, at `RigidWorld::characterDrawPosition(id,
+app.fixedAlpha())`: the feet between the last two physics steps. Gameplay
+(Locomotion, hits, the network) keeps using `characterPosition`. The
+showcase, the starter game, the cookbook, Climb Race, the party game,
+tennis, the duel, the goblin horde and the pet do this.
+
 ## Turning (*Smoother turn movement*, MM1, ysKxT3q4tA8)
 
 - **Speed and direction are separate.** Input rotates the direction at a
@@ -91,6 +103,20 @@ the player hit a one-frame window.
   flight, the body still faces where you meant to go.
 - **Take-off is a glue window.** The last grounded frame may re-aim the run
   at the input, so a jump straight after a turn goes where you asked.
+- **A jump always happens.** The press is kept until a physics step takes
+  it (`RigidWorld::CharacterInput::jump`): on a screen faster than the
+  60 Hz physics most frames have no step, and the next frame's input used
+  to wipe the jump while the jump animation still played. A coyote jump
+  (or one from the kerb tier) jumps even when the capsule isn't touching
+  the ground that step (`jumpInAir`): Locomotion has already decided.
+- **No bunny hopping.** Jumping again within 0.3 s of landing a jump goes
+  up at 82% of the last one's speed (67% of the height), down to 60% of a
+  full jump (`repeatJumpWindow`, `repeatJumpFactor`, `repeatJumpMin`); a
+  moment on the ground gives a full jump again. Mashing the button can't
+  keep the character floating, and the jump animation plays only when a
+  jump really starts (`Locomotion::jumped()`). Tests:
+  `Locomotion.JumpSurvivesFramesWithoutAPhysicsStep`, `CoyoteJumpGoesUp`,
+  `RepeatJumpsGoLessHigh`.
 - **Ledge grab in the air**: rising slowly or falling, steering into a wall
   whose top is within reach turns into a climb when "go up" is held, or
   when the top is less than 1.5 m above the feet. Otherwise it hangs.

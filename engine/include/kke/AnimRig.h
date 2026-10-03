@@ -68,6 +68,19 @@ struct ArmLimits {
     float pronation = 90.0f;        // forearm twist either way
     float wristBend = 70.0f;        // any direction
     float wristTwist = 15.0f;
+    // Raised overhead the range closes in: the hand can't go as far
+    // across or behind as it can at shoulder height (degrees, arm
+    // straight up; between, the range blends with the elevation).
+    float acrossOverhead = 35.0f;
+    float behindOverhead = 100.0f;
+    // The shoulder girdle (scapulohumeral rhythm): a person raising an arm
+    // overhead lifts the collarbone too, about one degree for every two
+    // the arm goes past shoulder height, and reaches forward with it. An
+    // arm raised by the shoulder joint alone pinches the mesh there and
+    // looks dislocated. Degrees the clavicle turns at most (0 = off; the
+    // rig needs a clavicle bone, HumanArm::clavicle).
+    float shoulderShrug = 30.0f;    // up, with the arm overhead
+    float shoulderReach = 14.0f;    // forward, with the arm reaching out ahead (half of it back, behind)
 };
 
 // Built once per rig: each bone's own axis and the elbow's hinge in bone
@@ -76,6 +89,7 @@ struct ArmLimits {
 struct HumanArm {
     TwoBoneChain chain;
     int otherShoulder = -1;
+    int clavicle = -1;               // the upper arm's parent when it is a clavicle / shoulder bone (the girdle)
     bool left = false;               // the character's left arm
     glm::vec3 upperAxis{0.0f}, upperHinge{0.0f}; // upper arm's local frame
     glm::vec3 lowerAxis{0.0f}, lowerHinge{0.0f}; // forearm's local frame
@@ -116,6 +130,11 @@ ArmPoints humanArmPoints(const std::vector<glm::mat4>& world, const HumanArm& ar
 // lower than the capsule's floor, two-bone IK bends the legs, and each
 // foot tilts to lie along the slope under it (up to maxTilt). Smoothed
 // over frames, so stepping onto a stair isn't a snap.
+// The ground is asked for under the heel, the ball and the tip of each
+// foot (the ball is the foot bone's child, when the rig has one), and the
+// highest of them counts: a foot half over a step stands on the step, not
+// in it. A planted foot never goes into the ground while the smoothing
+// catches up; only a foot still in the air above it eases in.
 class FootPlacer {
 public:
     // model-space point -> the ground below it (model space). False = none.
@@ -129,6 +148,9 @@ public:
         float probeUp = 0.5f;     // ground ray starts this far above the foot
         float smoothing = 14.0f;  // 1/s: how fast offsets follow the ground
         float maxTilt = 30.0f;    // degrees a foot may tilt to match a slope
+        float riseSmoothing = 40.0f; // 1/s going up (onto a step): quicker than going down
+        float tipLength = 0.4f;   // the toe tip lies this share of the ankle-to-ball length past the ball
+        float heelLength = 0.25f; // and the heel this share behind the ankle
     };
 
     FootPlacer() = default;
@@ -148,6 +170,9 @@ public:
 private:
     TwoBoneChain m_left, m_right;
     int m_pelvis = -1;
+    int m_ball[2] = { -1, -1 };         // the foot bones' first child (ball / toes), or -1
+    float m_ankleRest[2] = { 0.0f, 0.0f }; // rest-pose heights above the floor (model y = 0)
+    float m_ballRest[2] = { 0.0f, 0.0f };
     Settings m_s;
     float m_footOffset[2] = { 0.0f, 0.0f };
     float m_pelvisOffset = 0.0f;

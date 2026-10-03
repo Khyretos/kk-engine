@@ -89,6 +89,11 @@ public:
         float airSpeedMin = 1.6f;                            // steering cap for slow jumps
         float airTurnRate = 240.0f;
         float coyoteTime = 0.12f, jumpBuffer = 0.15f;
+        // No bunny hopping: a jump taken within repeatJumpWindow of
+        // landing from the last one goes up at repeatJumpFactor of that
+        // one's speed (never below repeatJumpMin of jumpSpeed). Waiting
+        // a moment on the ground gives a full jump again.
+        float repeatJumpWindow = 0.3f, repeatJumpFactor = 0.82f, repeatJumpMin = 0.6f;
         float groundSnap = 0.25f;                            // the middle floor tier
         // Traversal.
         float radius = 0.3f, height = 1.8f;                  // the capsule
@@ -160,6 +165,9 @@ public:
     void setFacing(const glm::vec3& dir);      // first person: face the camera
     // One-frame events for animation and sound.
     bool jumped() const { return m_jumped; }
+    // Jumps in a row, each landed and taken again within
+    // Settings::repeatJumpWindow (0 = a fresh, full-height jump).
+    int repeatJumps() const { return m_repeatJumps; }
     bool landed() const { return m_landed; }
     float fallHeight() const { return m_fallHeight; }
     const Obstacle& lastObstacle() const { return m_obstacle; }
@@ -236,6 +244,10 @@ private:
     bool m_jumpedFromGround = false;
     float m_airEntrySpeed = 0.0f, m_airPeak = 0.0f;
     bool m_jumped = false, m_landed = false;
+    bool m_inJump = false;         // airborne from jump() (not a drop, a wall jump or a ledge)
+    bool m_landedFromJump = false; // the last landing ended one (repeat jumps)
+    float m_sinceLanded = 0.0f;
+    int m_repeatJumps = 0;
     float m_fallHeight = 0.0f;
 
     // Traversal in progress.

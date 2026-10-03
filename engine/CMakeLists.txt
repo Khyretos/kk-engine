@@ -37,6 +37,7 @@ set(ENGINE_SOURCES
     src/Animator.cpp
     src/AnimRig.cpp
     src/BodyShape.cpp
+    src/CharacterIk.cpp
     src/Equipment.cpp
     src/ProceduralAnim.cpp
     src/ClimbWall.cpp

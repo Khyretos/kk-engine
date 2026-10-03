@@ -114,16 +114,22 @@ turned into it:
 
 ### 2. A hand on a target
 
-The engine's two-bone IK is the Lua recipe above, on real bones:
+The Lua recipe above is plain two-bone IK. A person's arm needs more than
+that, or the elbow bends backwards and the shoulder looks dislocated:
+`kke::solveHumanArm` places the elbow where it hangs naturally, keeps the
+shoulder, elbow and wrist to a person's ranges, lifts the collarbone when
+the hand goes overhead, and with a `kke::BodyShape` keeps the arm out of
+the body:
 
 ```cpp title="games/cookbook/Mannequin.cpp"
 --8<-- "games/cookbook/Mannequin.cpp:ik"
 ```
 
-The last argument is the weight: 0 leaves the animated pose, 1 is the
-full solve. Fading it in and out over a few frames is what makes a hand
-reach for a ledge and let go without popping (the showcase does exactly
-that when vaulting).
+`goal.weight` blends: 0 leaves the animated pose, 1 is the full solve.
+Fading it in and out over a few frames is what makes a hand reach for a
+ledge and let go without popping. `kke::CharacterIk` does that fading for
+you, for both hands and feet (the showcase uses it for vaulting, climbing
+and hanging).
 
 ### 3. Looking at you
 
