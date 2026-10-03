@@ -44,7 +44,8 @@ executable, and the fonts from `assets/fonts/`.
 
 The demo can write two files next to the executable: `settings.json`
 (the Settings screen's "Apply & save", via `SettingsModule`) and
-`input.json` (the Input screen's "Save", via `InputModule`). Both are read
+`input.json` (the Input screen's "Save" and every change in Settings >
+Controls, via `InputModule`). Both are read
 at startup. Delete them to get the defaults back.
 
 ## Controls
@@ -67,7 +68,8 @@ Per screen:
 |---|---|---|---|
 | Main menu | Pick an entry | Click | Focus it, A |
 | Settings | Change a setting | Click, drag a slider, pick from the list | Focus it, A |
-| Settings | Change keys and buttons (Controls tab) | "Change them" opens the Input screen | Focus it, A |
+| Settings | Change a key or button (Controls tab) | Click its key or controller cell, then press the new one (Esc cancels) | Focus the cell, A, then press the new button (Start cancels) |
+| Settings | Every binding, chords and axes (Controls tab) | "Advanced..." opens the Input screen | Focus it, A |
 | Input | Add a binding | Click "+ Add", then press the key, button, stick or combination | Focus "+ Add", A, then press anything |
 | Input | Cancel listening | Esc or the Cancel button | Focus Cancel, A |
 | Inventory | Move, equip, stack an item | Drag it to another slot, or click it and then the slot | Focus it, A, focus the slot, A (A on the same slot puts it back) |
@@ -95,7 +97,14 @@ UI, with enough fake game state behind it to feel real.
   numbers, physics catch-up steps). "Apply & save" writes
   `settings.json`, "Revert" goes back to the last saved state, "Defaults"
   resets. The footer says "Unsaved changes" until you save.
-- **Input.** Left: every connected keyboard, mouse, gamepad and
+  Controls also holds the simple key list: one row per action with its
+  key and its controller button, shown as glyphs. Pick a cell, press the
+  new key or button, and it is saved for every player at once (the
+  rebinding helpers are the game shell's, `GameShellModule::rebind`, so
+  it behaves like the menus in every game). "Reset keys" restores the
+  defaults; "Advanced..." opens the Input screen below, which is the
+  full editor.
+- **Input** (the advanced editor). Left: every connected keyboard, mouse, gamepad and
   joystick. The card of the device you touch lights up; select one to
   see its buttons, axes, hats, gyro, accelerometer and touchpad live.
   Identical devices (a pair of flight sticks) are numbered, can be named
