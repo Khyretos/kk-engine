@@ -72,7 +72,8 @@ line at the bottom always shows the buttons of the device you use.
 | Jump (and mash) | A | Space |
 | Dive | X or RB | E or right mouse |
 | Watch someone else when you're out | A / X | Space / E |
-| Pause menu (voice, mutes, back to the start menu) | Back | Esc or F3 |
+| Pause menu (settings, controls, back to the start menu, quit) | Start or Select | Esc |
+| Party and voice panel (voice, mutes) | the pause menu's Demo settings | F3, or the pause menu |
 | Back to the start menu | | M |
 | Vote for a game (between rounds, with Vote) | Left stick left/right, A | A/D, Space |
 | Developer panels | | F1 |
@@ -255,9 +256,16 @@ every machine, `botRng()` is for CPU brains and effects).
   out. Bots have a reaction time per switch; slower bots sometimes get
   caught.
 - **Hex-a-Gone**: 3 floors of 91 hexagon tiles, each a kinematic hull.
-  A tile stepped on (an event) shakes for 0.55 s, turns dynamic with
-  `RigidWorld::setMotion`, tumbles away and is removed after 3 s. Bots
-  hop to solid tiles a few steps away, nearer the middle.
+  A tile stepped on (an event) cracks at once into a seeded Voronoi of 9
+  pieces (`shatterPolygon` in [Shatter.cpp](Shatter.cpp), the same cut
+  the glass bridge uses, so every client sees the same cracks), shakes
+  harder and harder, then crumbles: the tile's collider goes and its
+  pieces fall as stone shards with a puff of dust. The shards are on
+  `RigidWorld`'s debris layer (`BodyDesc::debris`), which hits the ground
+  and other debris but never a player, so a crumbling tile can't launch
+  anyone into the air any more; you just fall through the gap. Shards
+  are removed after 3 s. Bots hop to solid tiles a few steps away,
+  nearer the middle.
 - **Bean Sumo**: a hex floor whose outer rings shake then drop at set
   times; `bumpStrength` 6.5 makes every bump a shove. Bots pick a target
   (nearer and nearer the edge is juicier), come at it from the middle's
@@ -348,8 +356,10 @@ machine without the pack draws a person picked elsewhere as a bean.
 
 ### The pause menu ([Pause.cpp](Pause.cpp))
 
-`kke::DemoPanelModule` as a pause menu: Esc or Back opens it. It has
-Back to the start menu, Voice chat on or off, a player to mute or unmute
+The pause menu is the shared one (`kke::GameShellModule`, Esc, Start or
+Select); its Main menu goes back to the start menu. Its Demo settings row
+opens `kke::DemoPanelModule` ("Party and voice", F3 too): Back to the
+start menu, Voice chat on or off, a player to mute or unmute
 (the other screens' players; CPU beans have no microphone), Mute
 everyone and who is talking. Below it, `kke::VoiceHudModule` adds
 "Voices nearby": a mute for each numbered slot of the nearby talkers list,

@@ -83,6 +83,8 @@ def looks_like_paid_art(rel):
     # Same rule as tools/packaging/package.sh: paid packs (Synty) are
     # never shipped, whatever a local build folder holds.
     low = rel.lower()
+    if low == "assets/animations/ual1_standard.fbx":
+        return False  # Quaternius' CC0 mannequin, in the repository: characters without art are that, not blocks
     if any(s in low for s in ("synty", "polygon", "/sourcefiles/")) and not low.startswith("marketplace/synty_demo/"):
         return True
     return low.endswith((".fbx", ".unitypackage", ".prefab", ".controller", ".mat"))

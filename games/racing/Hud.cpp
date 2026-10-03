@@ -322,11 +322,11 @@ void RacingModule::updateHud(float) {
     std::string hint;
     if (!racing) {
     } else if (m_phase == Phase::Finished) {
-        hint = prompt("{race.again} race again  ·  {race.new} next track  ·  {menu} menu (players, cars, track)");
+        hint = prompt("{race.again} race again  ·  {race.new} next track");
     } else if (you && you->totalled) {
-        hint = prompt("Totalled! Watch the rest  ·  {camera} camera  ·  {race.again} race again  ·  {menu} menu");
+        hint = prompt("Totalled! Watch the rest  ·  {camera} camera  ·  {race.again} race again");
     } else if (ev == Event::Drag) {
-        hint = prompt("{throttle} go on green  ·  {shift.up} gear up at the top of the revs  ·  {help} how to play  ·  {menu} menu");
+        hint = prompt("{throttle} go on green  ·  {shift.up} gear up at the top of the revs  ·  {help} how to play");
     } else if (ev == Event::Drift) {
         hint = prompt("{steer} steer  ·  {throttle} gas  ·  {handbrake} handbrake to start a slide  ·  {camera} camera  ·  {help} how to play");
     } else {

@@ -166,7 +166,13 @@ bool FarmModule::loadLevel() {
 
     std::vector<std::string> searched;
     m_packDir = kke::findAssetFolder("assets/synty", { "KKE_ASSETS_DIR", "KKE_SYNTY_DIR" }, exeDir, &searched);
-    if (!m_packDir.empty()) m_catalog = kke::AssetCatalog::scan(m_packDir);
+    if (!m_packDir.empty()) {
+        // Only the three packs the farm uses: walking a whole shared cache
+        // can take a minute, and the window can't close until init is done.
+        kke::CatalogScanOptions only;
+        only.onlyPacks = { "POLYGON_Farm", "POLYGON_Dogs", "Farm Animals Animated  by Quaternius" };
+        m_catalog = kke::AssetCatalog::scan(m_packDir, only);
+    }
     if (m_packDir.empty() || !m_catalog.find("SM_Bld_Barn_01")) {
         m_status = "POLYGON Farm isn't installed: put the extracted pack in assets/synty/ or set KKE_ASSETS_DIR (see README.md). "
                    "The animals still run on the bare field.";
@@ -557,7 +563,7 @@ void FarmModule::buildPanel() {
     if (!panel) return;
     auto& s = panel->section("Farm");
     s.text("You're the dog. {move} move  {sprint} run  {bark} bark  {look.rate} look");
-    s.hint("Click to look around; Esc lets go of the mouse.", "");
+    s.hint("Click to look around; Esc pauses (settings, controls, quit).", "");
     s.showIf([this] { return m_input->promptStyle() == kke::PromptStyle::Keyboard; });
     s.text([this] { return std::string("Lesson: ") + kLessons[m_lesson] + ".  {farm.lesson} next lesson"; });
     s.text("{interact} show the nearest animal  {farm.learn} let them learn");
@@ -578,8 +584,8 @@ void FarmModule::onEvent(const SDL_Event& e) {
         m_captured = true;
         SDL_SetWindowRelativeMouseMode(m_app->window().handle(), true);
     } else if (e.type == SDL_EVENT_KEY_DOWN && e.key.scancode == SDL_SCANCODE_ESCAPE && m_captured) {
-        // Esc lets go of the mouse and opens the panel (its Quit row ends
-        // the game; kke::DemoPanelModule::setEscapeMenu).
+        // Esc lets go of the mouse; the game shell opens its pause menu (Quit
+        // is there; kke::GameShellModule).
         m_captured = false;
         SDL_SetWindowRelativeMouseMode(m_app->window().handle(), false);
     }

@@ -15,8 +15,10 @@
 // then puts them to sleep), so a pack of cars costs nothing until they
 // touch.
 //
-// Without FEMFX (Android, a build without it) dent() pushes the body's
-// vertices in by hand instead (Damage.cpp).
+// The solid's cells are ~60 cm, too coarse for the crease right where a
+// bumper hit, so dent() also presses that in by hand (Damage.cpp) and
+// it's laid back on top of every shape read from here. Without FEMFX
+// (Android, a build without it) the hand-pressed dents are all there is.
 
 #include "RacingModule.h"
 
@@ -169,6 +171,7 @@ void RacingModule::updateShells() {
                 c.dentedNormals[p][i] = s.normals[k];
             }
         }
+        addPressedDents(c); // the creases on top of FEMFX's crumple (Damage.cpp)
         c.dentsChanged = true;
     }
 }

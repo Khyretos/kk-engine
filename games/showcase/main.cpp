@@ -1,6 +1,7 @@
 #include "kke/Application.h"
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/DebugControlModule.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/ModelModule.h"
 #if KKE_ENABLE_NET
@@ -52,6 +53,8 @@ int main() {
         app.addModule<kke::ModelModule>();
         // RmlUi: documents made by Lua scripts (ui.*), e.g. break-the-targets' HUD.
         app.addModule<kke::UiModule>();
+        // The shared menus: title, settings, controls, pause (docs/GAME_SHELL.md).
+        app.addModule<kke::GameShellModule>("KKE Demo", "Everything the engine does, in one place");
         panels.push_back(&app.addModule<kke::AudioModule>());
 #if KKE_ENABLE_NET && KKE_ENABLE_VOICE
         // Voice chat: hold B to talk to players near you (KKE_VOICE=off: no microphone).

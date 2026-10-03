@@ -4,6 +4,7 @@
 // FlyingModule.h and README.md).
 #include "kke/Application.h"
 #include "kke/modules/AudioModule.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
 #include "kke/modules/ModelModule.h"
@@ -27,6 +28,8 @@ int main() {
         app.addModule<kke::InputModule>("flying_input.json");
         app.addModule<kke::ModelModule>();
         app.addModule<kke::UiModule>();
+        // The shared menus: title, settings, controls, pause (docs/GAME_SHELL.md).
+        app.addModule<kke::GameShellModule>("Flying", "Races, stunts and dogfights");
         app.addModule<kke::AudioModule>().setUiVisible(false);
         app.addModule<kke::LobbyModule>("flying_lobby.json");
         // Online: Host / Join in the start menu (or KKE_NET=host, KKE_NET=join:ADDRESS).

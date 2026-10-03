@@ -66,12 +66,13 @@ The executable is `platoon` ([CMakeLists.txt](CMakeLists.txt)). The root
 | Hold position | H | X | the Hold button |
 | Take cover | C | Y | the Cover button |
 | Regroup | R | D-pad down | the Regroup button |
-| Next formation | G | View / Back | the formation button |
+| Next formation | G | Right stick click | the formation button |
 | Attack an enemy | right click it | RB on it | the Attack button, then tap the enemy |
 | Pan the camera | WASD | left stick | no touch binding yet |
 | Turn the camera | Q / E | right stick left / right | no touch binding yet |
 | Zoom | mouse wheel | right stick up / down | no touch binding yet |
-| Menu (formation, the HUD's orders, Quit) | F3 or Esc | Start | none |
+| Pause menu (settings, controls, quit) | Esc | Start or Select | none |
+| Settings panel (formation, the HUD's orders) | F3, or the pause menu | the pause menu | none |
 | Developer panels | F1 | none (developer tools) | none |
 | Quit | Esc, then Quit | Start, then Quit | none |
 

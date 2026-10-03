@@ -41,11 +41,12 @@ Run any demo from `build/bin/` (building: [BUILDING.md](../BUILDING.md)).
 | Debug panels and tools for yourself | [ImGui demo](../../games/imgui_demo/README.md) | |
 | Breakable, bendable, squashable things | [physics_demo](../../games/physics_demo/README.md) | [physics bridge](../PHYSICS_BRIDGE.md), [ragdolls](../RAGDOLLS.md) |
 | Lava, melting and pouring | [melt_demo](../../games/melt_demo/README.md) | |
+| Fire, smoke, explosions, sparks, weather, confetti, magic | [particles_demo](../../games/particles_demo/README.md) | [particle effects](../PARTICLE_EFFECTS.md) |
+| Props that bend and break (any model pack) | [synty_demo](../../games/synty_demo/README.md), [Sandbox](../../games/sandbox/README.md) | [breakables](../BREAKABLES.md) |
 | Boats, water, floating and sinking | [sea_demo](../../games/sea_demo/README.md) | |
 | Soft bodies, jelly, jiggling characters | [jiggle_demo](../../games/jiggle_demo/README.md) | [jiggle physics](../JIGGLE.md) |
 | Capes, flags, nets, curtains and blankets | [cloth_demo](../../games/cloth_demo/README.md) | [cloth](../CLOTH.md) |
 | Sound that fills a place: rooms, walls, doors, footsteps | [audio_demo](../../games/audio_demo/README.md) | [audio](../AUDIO.md) |
 | Store-bought characters: load, skin, pose and ragdoll them | [synty_demo](../../games/synty_demo/README.md) | [scenes](../SCENES.md), [ragdolls](../RAGDOLLS.md) |
 | A small tech demo with a settings panel a controller can drive | any of the six above, or procedural_demo | [the demo panel](../DEMO_PANEL.md) |
-| A game in plain C++ from the smallest pieces | [kke_basics](../../games/kke_demo_game/README.md) | [C++ cookbook](../cookbook/cpp.md) |
 

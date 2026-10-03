@@ -58,7 +58,8 @@ and are rebindable actions in the "Fight" and "Match" groups.
 | Block, held; just before the hit it parries (`duel.block`) | Left Shift | numpad 0 | RB or LT |
 | Dodge (`duel.dodge`) | Space | numpad Enter | A (south) |
 | Next round / rematch (`duel.again`) | R | none | Start |
-| Second player takes the red corner, or hands it back (`duel.two`) | F2 | none | Back |
+| Second player takes the red corner, or hands it back (`duel.two`) | F2 | none | the pause menu (Select) |
+| Pause menu: settings, controls, quit | Esc | none | Start (during a round) or Select |
 | Developer panels (`panels`) | F1 | none | no controller binding yet |
 
 Notes from the code:
@@ -97,7 +98,7 @@ Notes from the code:
   At zero the fighter goes down as a ragdoll and gets back up about 2.2 s
   later. The uppercut does 40 poise damage, so two landed uppercuts in a
   row floor anyone.
-- **Two players.** F2 (or Back) gives the red corner to a second player.
+- **Two players.** F2 (or Two players in the pause menu) gives the red corner to a second player.
   With two controllers each player gets one; with one controller it goes
   to player 2 and player 1 keeps the keyboard; with none, both share the
   keyboard on different keys. Press it again to hand red back to the bot.

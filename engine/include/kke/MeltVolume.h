@@ -31,6 +31,15 @@ class ParticleFluid;
 //    signed distance field (two-pass chamfer transform over the voxels,
 //    rebuilt only after melting), so a particle that lands deep inside is
 //    pushed straight back out in one step instead of shooting up.
+//  - Melting collapses (collapse()): the grid's bottom layer is the
+//    ground. Solid pieces no longer joined to it (6-connected flood fill
+//    over what you see, density > 0.5) fall under gravity, a cell at a
+//    time, until they land and merge with whatever they land on; hot,
+//    soft material (MeltMaterial::softening) sags into any hole below it.
+//    So a block whose middle melts out drops its top, an undercut side
+//    breaks off, and wax slumps, instead of pieces floating in the air.
+//    Labelling 24^3 voxels costs ~0.1 ms, and runs only after something
+//    melted or while something is falling.
 struct MeltMaterial {
     float meltingPoint = 0.0f;       // degrees C
     float heatCapacity = 4.0f;       // how much heat a voxel soaks up per degree (relative units)
@@ -40,6 +49,8 @@ struct MeltMaterial {
     float conduction = 3.0f;         // heat spread between voxels per second
     uint8_t liquidMaterial = 1;      // ParticleFluid material id of the melt
     float liquidTemperature = 5.0f;  // temperature of melted-off particles
+    float softening = 0.0f;          // degrees below the melting point where it starts to sag (wax, chocolate); 0 = never
+    float sagSpeed = 0.15f;          // m/s soft material creeps down into a hole below it
 };
 
 class MeltVolume {
@@ -73,6 +84,12 @@ public:
 
     float solidFraction() const;                     // remaining solid / initial solid
     const glm::ivec3& dims() const { return m_dims; }
+    size_t fallingVoxels() const { return m_fallingVoxels; } // solid voxels falling or sagging after the last step
+
+    // Pieces not joined to the ground (the bottom layer) fall, soft
+    // material sags; step() calls it. Public for tests and for a game that
+    // carves the volume itself.
+    void collapse(float dt);
 
 private:
     size_t idx(int x, int y, int z) const { return (static_cast<size_t>(z) * m_dims.y + y) * m_dims.x + x; }
@@ -92,6 +109,14 @@ private:
     float m_initialSolid = 0.0f;
     float m_startTemperature = 20.0f; // of the solid when filled (for glow)
     bool m_dirty = true;
+
+    // collapse(): per voxel, the piece it belongs to and how fast / far it
+    // has fallen since it last moved a cell.
+    std::vector<int> m_label;
+    std::vector<uint32_t> m_stack, m_moving;
+    std::vector<float> m_fallSpeed, m_fallDistance, m_sag; // m_sag: how far soft material has crept towards the cell below
+    bool m_settled = false;   // nothing changed since the last collapse() found everything resting
+    size_t m_fallingVoxels = 0;
 
     std::vector<glm::vec3> m_meshPos, m_meshNrm;
     std::vector<float> m_meshGlow;

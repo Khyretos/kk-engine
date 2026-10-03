@@ -1,6 +1,7 @@
 #include "kke/Application.h"
 #include "kke/modules/DebugControlModule.h"
 #include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/UiModule.h"
 #include "kke/modules/ModelModule.h"
@@ -23,6 +24,8 @@ int main() {
         // settings panel is RmlUi (kke::DemoPanelModule, on the right).
         app.addModule<kke::InputModule>("jiggle_demo_input.json");
         app.addModule<kke::UiModule>();
+        // The shared menus: title, settings, controls, pause (docs/GAME_SHELL.md).
+        app.addModule<kke::GameShellModule>("Jiggle", "Soft bodies that bounce and settle");
         app.addModule<kke::OrbitCameraModule>(/*distance=*/2.6f, /*pitch=*/-0.45f, /*yaw=*/0.5f, glm::vec3(0.0f, 0.3f, 0.0f))
             .setPadControls(true); // right stick turns, d-pad zooms
         app.addModule<kke::ModelModule>();

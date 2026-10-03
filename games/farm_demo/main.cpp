@@ -3,6 +3,7 @@
 #include "kke/Application.h"
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/StatsModule.h"
@@ -21,6 +22,8 @@ int main() {
         app.camera().fovDegrees = 55.0f;
         app.addModule<kke::InputModule>("farm_input.json");
         app.addModule<kke::UiModule>();
+        // The shared menus: title, settings, controls, pause (docs/GAME_SHELL.md).
+        app.addModule<kke::GameShellModule>("Farm", "Animals that learn and a navigation mesh");
         // Plays the mood's ambience loop (BUG-086).
         app.addModule<kke::AudioModule>().setUiVisible(false);
         app.addModule<kke::ModelModule>();

@@ -94,6 +94,17 @@ void RacingModule::setupNet() {
         m_lastNetStatus.clear();
     };
     l.addOption(std::move(join));
+    // Or type it: the host's address (a VPN's too, where the LAN search
+    // finds nothing) or a join code. Remembered in the lobby file.
+    l.addTextOption("net.address", "Address or code", "type the host's IP or join code", [this](const std::string& typed) {
+        if (typed.empty()) return;
+        m_lobby->save();
+        syncNetPlayers();
+        std::string error;
+        if (!m_net->joinTyped(typed, kke::NetModule::kDefaultPort, &error)) m_lobby->lobby().toast("Can't join: " + error, 5.0f);
+        m_lastNetStatus.clear();
+    });
+    if (kke::Lobby::Option* typed = l.option("net.address")) typed->visible = false;
     syncNetPlayers(); // KKE_NET hosts or joins in the first frame, with these names
 }
 
@@ -409,6 +420,10 @@ void RacingModule::updateNet(float dt) {
             if (game->visible != looking || join->visible != any) {
                 game->visible = looking;
                 join->visible = any;
+                rows = true;
+            }
+            if (kke::Lobby::Option* typed = l.option("net.address"); typed && typed->visible != looking) {
+                typed->visible = looking;
                 rows = true;
             }
             if (any) {

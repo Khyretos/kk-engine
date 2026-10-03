@@ -24,10 +24,6 @@ defaults:
   load_timeout: 120
 
 demos:
-  - id: kke_basics
-    exe: kke_basics
-    title: "Basics: cubes, destruction, lights"
-
   - id: showcase_walk
     exe: kke_demo
     title: "Showcase: the course by autopilot"

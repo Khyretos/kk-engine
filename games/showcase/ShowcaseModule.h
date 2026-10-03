@@ -27,7 +27,7 @@
 #include <memory>
 #include <vector>
 
-namespace kke { class RigidBodyModule; class PhysicsModule; class InputModule; class NetModule; class UiModule; }
+namespace kke { class RigidBodyModule; class PhysicsModule; class InputModule; class NetModule; class UiModule; class GameShellModule; }
 namespace Rml { class ElementDocument; }
 
 namespace kke_showcase {
@@ -222,8 +222,8 @@ private:
     // RmlUi HUD (station hints, what the character is doing) and pause
     // menu (Hud.cpp, ui/showcase_*.rml).
     void buildHud();
-    void updateHud(float dt);
-    void setMenuOpen(bool open);
+    void updateHud();
+    void buildPauseRows();
     struct HudState {
         std::string move, speed, station, stationText, stationLive, menuHint;
         bool trick = false, panels = false, online = false;
@@ -232,10 +232,10 @@ private:
     HudState m_hud;
     kke::UiModule* m_ui = nullptr;
     Rml::ElementDocument* m_hudDoc = nullptr;
-    Rml::ElementDocument* m_pauseDoc = nullptr;
     Rml::DataModelHandle m_hudModel;
-    bool m_menuOpen = false, m_pausedByMenu = false;
-    float m_menuAt = 0.0f; // KKE_MENU: seconds until it opens
+    bool m_menuOpen = false;        // the shared pause menu is up (kke::GameShellModule)
+    kke::GameShellModule* m_shell = nullptr;
+    int m_playersChoice = 0;        // the pause menu's Players row (0 = one player)
     float m_shoulder = 0.45f;   // camera shoulder offset (m, + = right); moves off a wall being run along
     float m_demoTricks = -1.0f; // KKE_DEMO_TRICKS: wall run, ledge leaps (same)
     void buildTrickCourse(std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx);

@@ -54,6 +54,8 @@ public:
         float friction = 0.6f, restitution = 0.1f;
         uint32_t material = 0;               // game-defined id, reported in contacts (sounds, effects)
         bool clothOnly = false;              // seen only by cloth: a moving mannequin's arms, a cape's body proxy
+        bool debris = false;                 // falling rubble (not Static): lands on the level, bodies and other debris, but
+                                             // characters pass through it and rays and overlap queries don't see it
     };
 
     struct Settings {

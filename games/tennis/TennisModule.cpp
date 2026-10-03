@@ -4,6 +4,7 @@
 #include "kke/DevTools.h"
 #include "kke/Log.h"
 #include "kke/SphereImpostors.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
 #include "kke/modules/ModelModule.h"
@@ -105,9 +106,9 @@ void TennisModule::defineControls() {
     for (int p = 0; p < 4; ++p) {
         kke::InputMap& in = m_input->map(p);
         kke::InputModule::defineCharacterActions(in);
-        // Tennis needs the move stick, the shot buttons and push to talk, nothing else.
-        for (const char* a : { "jump", "sprint", "walk", "crouch", "fire", "aim", "interact", "camera.toggle", "camera.zoom", "look", "look.rate",
-                               "voice.talk" })
+        // Tennis needs the move stick, the camera stick, the shot buttons and
+        // push to talk, nothing else.
+        for (const char* a : { "jump", "sprint", "walk", "crouch", "fire", "aim", "interact", "camera.toggle", "camera.zoom", "look", "voice.talk" })
             in.clearBindings(a);
         in.addBinding(IM::bind("voice.talk", IM::key(SDL_SCANCODE_V))); // B is a shot on the pad; keep one talk key everywhere
         in.addBinding(IM::bind("voice.talk", IM::pad(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)));
@@ -123,15 +124,50 @@ void TennisModule::defineControls() {
         in.addBinding(IM::bind("tennis.slice", IM::key(SDL_SCANCODE_K)));
         in.addBinding(IM::bind("tennis.slice", IM::mouse(SDL_BUTTON_RIGHT)));
         in.addBinding(IM::bind("tennis.lob", IM::key(SDL_SCANCODE_L)));
-        in.addBinding(IM::bind("tennis.menu", IM::key(SDL_SCANCODE_ESCAPE)));
+        // Esc and Select are the pause menu (kke::GameShellModule), whose Main
+        // menu does the same; M stays a keyboard shortcut.
+        in.addBinding(IM::bind("tennis.menu", IM::key(SDL_SCANCODE_M)));
         in.addBinding(IM::bind("panels", IM::key(SDL_SCANCODE_F1)));
         in.addBinding(IM::bind("tennis.topspin", IM::pad(SDL_GAMEPAD_BUTTON_SOUTH)));
         in.addBinding(IM::bind("tennis.flat", IM::pad(SDL_GAMEPAD_BUTTON_WEST)));
         in.addBinding(IM::bind("tennis.slice", IM::pad(SDL_GAMEPAD_BUTTON_EAST)));
         in.addBinding(IM::bind("tennis.lob", IM::pad(SDL_GAMEPAD_BUTTON_NORTH)));
-        in.addBinding(IM::bind("tennis.menu", IM::pad(SDL_GAMEPAD_BUTTON_BACK)));
     }
     m_input->commitDefaults();
+    if (auto* shell = m_app->getModule<kke::GameShellModule>()) {
+        shell->onMainMenu = [this] { leaveToMenu(); };
+        shell->addPauseItem("Leave the court (a walkover)", [this] { leaveCenterMatch(0); },
+                            [this] { return m_inCenter && !netClient() && inCenterMatch(0); });
+    }
+}
+
+// The menu button (M, or the pause menu's Main menu): back to the start
+// menu; a client's leaves the online game.
+void TennisModule::leaveToMenu() {
+    if (netClient()) {
+        m_wasOnline = false; // on purpose: no "left" toast
+        m_net->leave();
+    }
+    if (!m_inMenu) backToMenu();
+}
+
+// In the sport center: the player on input map `input` walks off their
+// court (the other side wins the match). False when they aren't playing.
+bool TennisModule::leaveCenterMatch(int input) {
+    for (size_t mi = 0; mi < m_matches.size(); ++mi)
+        for (int idx : m_matches[mi]->players)
+            if (player(idx).walker >= 0 && player(idx).input == input) {
+                endCenterMatch(mi, player(idx).team);
+                return true;
+            }
+    return false;
+}
+
+bool TennisModule::inCenterMatch(int input) const {
+    for (const auto& m : m_matches)
+        for (int idx : m->players)
+            if (m_players[static_cast<size_t>(idx)].walker >= 0 && m_players[static_cast<size_t>(idx)].input == input) return true;
+    return false;
 }
 
 void TennisModule::clearPlayers() {
@@ -212,7 +248,7 @@ const char* const kCpuNames[] = { "Ace", "Deuce", "Volley", "Lobster" };
 // slots (syncNetPlayers).
 std::vector<TennisModule::Entry> TennisModule::seatEntries() const {
     std::vector<Entry> entries;
-    if (m_lobby && !m_allBots) {
+    if (m_lobby && !m_allBots && !m_lobby->lobby().joinedSeats().empty()) {
         kke::Lobby& l = m_lobby->lobby();
         for (int seat : l.joinedSeats()) {
             Entry e;
@@ -223,6 +259,8 @@ std::vector<TennisModule::Entry> TennisModule::seatEntries() const {
                 if (fields[f].id == "colour" && !fields[f].swatches.empty())
                     e.tint = fields[f].swatches[static_cast<size_t>(l.seat(seat).look[f]) % fields[f].swatches.size()] * 1.25f;
             e.input = m_lobby->playerOf(seat);
+            // The menu was skipped (KKE_TENNIS_LOBBY=0): seats in order, the first on player 0's devices.
+            if (e.input < 0) e.input = static_cast<int>(entries.size());
             entries.push_back(std::move(e));
         }
         for (int i = 0; i < l.cpuCount(); ++i) {
@@ -233,6 +271,7 @@ std::vector<TennisModule::Entry> TennisModule::seatEntries() const {
             entries.push_back(std::move(e));
         }
     } else if (!m_allBots) {
+        // No one joined at the menu: you, on the keyboard or the first controller.
         Entry e;
         e.name = "You";
         e.tint = kTints[0];
@@ -410,20 +449,10 @@ void TennisModule::update(const kke::UpdateContext& ctx) {
         for (int i = 0; i < m_input->players(); ++i) {
             if (!m_input->map(i).pressed("tennis.menu")) continue;
             if (netClient()) {
-                m_wasOnline = false; // on purpose: no "left" toast
-                m_net->leave();
-                backToMenu();
+                leaveToMenu();
                 break;
             }
-            bool left = false;
-            for (size_t mi = 0; mi < m_matches.size() && !left; ++mi)
-                for (int idx : m_matches[mi]->players)
-                    if (player(idx).walker >= 0 && player(idx).input == i) {
-                        endCenterMatch(mi, player(idx).team);
-                        left = true;
-                        break;
-                    }
-            if (!left) backToMenu();
+            if (!leaveCenterMatch(i)) backToMenu();
             break;
         }
         for (Walker& w : m_walkers)
@@ -431,12 +460,7 @@ void TennisModule::update(const kke::UpdateContext& ctx) {
     } else if (m_lobby && !m_ballTest) {
         for (int i = 0; i < m_input->players(); ++i)
             if (m_input->map(i).pressed("tennis.menu")) {
-                // A client's menu button leaves the online game.
-                if (netClient()) {
-                    m_wasOnline = false; // on purpose: no "left" toast
-                    m_net->leave();
-                }
-                backToMenu();
+                leaveToMenu();
                 break;
             }
     }
@@ -446,6 +470,7 @@ void TennisModule::update(const kke::UpdateContext& ctx) {
             if (!player(idx).cpu && !player(idx).remote) readHuman(*m, player(idx));
     updateBodies(dt);
     updateCameras(dt);
+    updateMarks();
     updateHud();
     sendNet();
 

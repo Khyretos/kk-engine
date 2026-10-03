@@ -267,7 +267,7 @@ void ClimbRaceModule::updateHud(float) {
     } else if (m_phase == Phase::Finished && you->out) {
         banner = m_winner.empty() ? std::string("Out!") : m_winner + " wins";
         sub = (players.size() > 1 ? you->name : std::string("You")) + " went out at " + clock(you->time) +
-              "  ·  {race.again} race again  ·  {race.new} next mountain  ·  {menu} menu";
+              "  ·  {race.again} race again  ·  {race.new} next mountain";
     } else if (m_phase == Phase::Finished) {
         banner = m_winner == you->name && players.size() <= 1 ? "You win" : m_winner + " wins";
         sub = (players.size() > 1 ? you->name + " " : std::string("Your time ")) + clock(you->time);
@@ -278,7 +278,7 @@ void ClimbRaceModule::updateHud(float) {
             sub += "  ·  " + rec;
         }
         if (!m_opened.empty()) sub += "  ·  " + m_opened + " is open!";
-        sub += "  ·  {race.again} race again  ·  {race.new} next mountain  ·  {menu} menu";
+        sub += "  ·  {race.again} race again  ·  {race.new} next mountain";
     }
     // Button prompts: the buttons of the device player 1 is using.
     const int p1 = players.empty() ? 0 : std::max(0, players[0]->player);
@@ -291,11 +291,11 @@ void ClimbRaceModule::updateHud(float) {
     std::string hint;
     if (!racing) {
     } else if (m_phase == Phase::Finished) {
-        hint = prompt("{race.again} race again  ·  {race.new} next mountain  ·  {menu} menu (players, mountain, mode)");
+        hint = prompt("{race.again} race again  ·  {race.new} next mountain");
     } else if (m_phase == Phase::Racing && you->finished) {
-        hint = prompt("You topped out! Watch the others come up  ·  {race.again} race again now  ·  {menu} menu");
+        hint = prompt("You topped out! Watch the others come up  ·  {race.again} race again now");
     } else if (m_phase == Phase::Racing && you->out) {
-        hint = prompt("You're out: watch who's last on the rock  ·  {race.again} race again now  ·  {menu} menu");
+        hint = prompt("You're out: watch who's last on the rock  ·  {race.again} race again now");
     } else if (c.climbing()) {
         const auto onEdge = [&c](int h) {
             return c.handHold(h) >= 0 && c.wall().holds()[static_cast<size_t>(c.handHold(h))].kind == kke::ClimbHold::Kind::Edge;
@@ -307,7 +307,7 @@ void ClimbRaceModule::updateHud(float) {
                                             : prompt("{move} aim  ·  {reach.left} {reach.right} reach  ·  hold and let go {grab.left} {grab.right} to lunge  ·  "
                                                      "{help} how to play");
     } else {
-        hint = prompt("{move} walk to the rock  ·  {reach.left} {reach.right} grab it  ·  {help} how to play  ·  {menu} menu");
+        hint = prompt("{move} walk to the rock  ·  {reach.left} {reach.right} grab it  ·  {help} how to play");
     }
     set(m_hud.hint, hint, "hint");
 }

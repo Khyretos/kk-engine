@@ -2,6 +2,7 @@
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/DebugControlModule.h"
 #include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/UiModule.h"
 #include "kke/modules/OrbitCameraModule.h"
@@ -21,6 +22,8 @@ int main() {
         // settings panel is RmlUi (kke::DemoPanelModule).
         app.addModule<kke::InputModule>("melt_demo_input.json");
         app.addModule<kke::UiModule>();
+        // The shared menus: title, settings, controls, pause (docs/GAME_SHELL.md).
+        app.addModule<kke::GameShellModule>("Melt", "Heat things until they flow");
         // Plays the mood's ambience loop (the mood names it; BUG-079).
         app.addModule<kke::AudioModule>().setUiVisible(false);
         app.addModule<kke::OrbitCameraModule>(/*distance=*/2.8f, /*pitch=*/-0.35f, /*yaw=*/0.6f, glm::vec3(0.0f, 0.45f, 0.0f))

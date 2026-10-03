@@ -52,8 +52,9 @@ root `CMakeLists.txt` only builds it when `KKE_ENABLE_JOLT` and
 |---|---|---|---|
 | Move | WASD (Left Shift runs, Left Alt walks) | left stick (click it to toggle running) | no touch binding yet |
 | Jump | Space | A | no touch binding yet |
-| Look | the mouse, once Esc has captured it | right stick | no touch binding yet |
-| Capture / free the mouse | Esc | none needed | a finger frees it |
+| Look | the mouse, once Tab has captured it | right stick | no touch binding yet |
+| Capture / free the mouse | Tab | none needed | a finger frees it |
+| Pause menu (settings, controls, quit) | Esc | Start or Select | none |
 | Order at the pointer (the context order) | left click while the mouse is free; right click any time | RB (at the reticle) | tap |
 | Pet | click or right click the dog, or E | Y | tap the dog, or the Pet button |
 | Order wheel | hold Tab or the middle button, or hold the left button half a second; the mouse picks | hold LB, the right stick picks, B cancels | hold a finger, drag to pick |
@@ -61,7 +62,7 @@ root `CMakeLists.txt` only builds it when `KKE_ENABLE_JOLT` and
 | Come / Sit / Stay / Fetch | 1 / 2 / 3 / 4 | D-pad up / down / left / right | the buttons |
 | Drop it | 5 | X | the Drop it button |
 | Pick up / throw the ball | left click while the mouse is captured | RT | the Throw button |
-| Navigation ping (hear the walls) | Q | View / Back | none |
+| Navigation ping (hear the walls) | Q | none | none |
 | Developer panels | F1 | none (developer tools) | none |
 | Every button on the HUD bar | click it | its button: the prompt under it (Pet is Y, Throw is RT) | tap it |
 
@@ -124,9 +125,9 @@ reloads it while the game runs), else the copy next to the executable.
 1. Defines the actions: the character set (`defineCharacterActions`), the
    command kit's (`CommandInput::defineActions`), and the quick orders
    (`pet.come` .. `pet.drop`, `pet.mouse`, `panels`). The d-pad down is
-   Sit, so the ping's default bindings are cleared and it goes on Q and
-   View; `cmd.queue` loses its Left Shift, because Shift runs and orders
-   do not queue in the garden (BUG-065). Turns off quit on Esc.
+   Sit and Select is the pause menu, so the ping goes on Q only; `cmd.queue` loses its Left Shift, because Shift runs and orders
+   do not queue in the garden (BUG-065). Esc is the pause menu
+   (kke::GameShellModule); Tab captures and frees the mouse.
 2. Builds the garden (`buildGarden`).
 3. Adds the player (a Jolt character with `kke::Locomotion` and a UAL
    mannequin `command_kit::Humanoid`) and the dog (a smaller Jolt

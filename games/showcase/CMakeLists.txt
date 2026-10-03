@@ -24,7 +24,7 @@ endforeach()
 # Character animations (Quaternius' Universal Animation Library, CC0) are
 # found at runtime in assets/animations/ (see ShowcaseModule::setupPlayer).
 # RmlUi HUD and pause menu, with the UI showcase's theme.
-foreach(f showcase_hud.rml showcase_pause.rml) # prefixed: rmlui_demo has a hud.rml in the same ui/
+foreach(f showcase_hud.rml) # prefixed: rmlui_demo has a hud.rml in the same ui/
     engine_copy_runtime_file(kke_demo ${CMAKE_CURRENT_SOURCE_DIR}/ui/${f} ui/${f})
 endforeach()
 engine_copy_runtime_file(kke_demo ${CMAKE_SOURCE_DIR}/games/rmlui_demo/ui/theme.rcss ui/theme.rcss)

@@ -107,7 +107,7 @@ void PlayerModule::setCaptured(bool on) {
 // Clicking the view grabs the mouse (so it can turn the camera); Esc lets
 // it go.
 void PlayerModule::onEvent(const SDL_Event& e) {
-    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !m_captured && !ImGui::GetIO().WantCaptureMouse && e.button.button == SDL_BUTTON_LEFT)
+    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !m_captured && !ImGui::GetIO().WantCaptureMouse && !m_app->uiCapturesMouse() && e.button.button == SDL_BUTTON_LEFT)
         setCaptured(true);
     if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_ESCAPE) setCaptured(false);
 }

@@ -3,6 +3,7 @@
 #include "kke/Application.h"
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/RigidBodyModule.h"
@@ -27,6 +28,8 @@ int main() {
         app.addModule<kke::RigidBodyModule>();
         app.addModule<kke::ModelModule>();
         app.addModule<kke::UiModule>();
+        // The shared menus: title, settings, controls, pause (docs/GAME_SHELL.md).
+        app.addModule<kke::GameShellModule>("Platoon", "Command a squad");
         app.addModule<kke::AudioModule>().setUiVisible(false);
         // scripts/*.lua (order.* and the Ordered / OrderDone events),
         // hot-reloaded from the source folder while you develop.

@@ -3,6 +3,7 @@
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/DebugControlModule.h"
 #include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/StatsModule.h"
@@ -24,6 +25,8 @@ int main() {
         // the settings panel is RmlUi (kke::DemoPanelModule).
         app.addModule<kke::InputModule>("sea_demo_input.json");
         app.addModule<kke::UiModule>();
+        // The shared menus: title, settings, controls, pause (docs/GAME_SHELL.md).
+        app.addModule<kke::GameShellModule>("Sea", "Waves, wind and things that float");
         // Plays the mood's ambience loop (the mood names it; BUG-079).
         app.addModule<kke::AudioModule>().setUiVisible(false);
         // Sea module first: its update() moves the camera target before the

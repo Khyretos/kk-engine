@@ -38,10 +38,11 @@ The **Scenes** panel visits Synty-built levels far from the course
   doing (running, vaulting, hanging, wall running, and so on) with the
   measured speed. Near a station it shows the station's hint, plus live
   numbers where there are some, such as how much of the lava block is left.
-- **Esc**, or **Start** on a controller, opens the pause menu
-  (`ui/showcase_pause.rml`). The HUD's corner shows the menu button for the
-  device you use. The menu has Resume, Back to the start, 1 to 4 players
-  (split screen), engine panels and Quit. An offline game stops while the
+- **Esc**, or **Start** or **View** on a controller, opens the pause menu
+  every KKE game shares ([GAME_SHELL.md](GAME_SHELL.md)). The HUD's corner
+  shows the menu button for the device you use. The menu has Resume, Back
+  to the start, 1 to 4 players (split screen), engine panels (developer
+  builds), Settings, Controls, Main menu and Quit. An offline game stops while the
   menu is open. Online, the others keep playing. B on a controller closes
   it, and the d-pad and A move through it. In split screen any player's
   Start opens it.
@@ -65,7 +66,7 @@ The **Scenes** panel visits Synty-built levels far from the course
 | Push to talk (voice builds) | P | LB |
 | Lua toys: tower, ball, clear | G, B, N (or hold B) | RB, View, hold View a second |
 | Break-the-targets | T | D-pad right |
-| Pause menu | Esc | Start |
+| Pause menu | Esc | Start or View |
 
 Split-screen players 2 to 4 move, jump, crouch, shoot, push, reset and
 zoom with their own controller. The full list, and why each key is where
@@ -81,7 +82,7 @@ it is, is in [games/showcase/README.md](../games/showcase/README.md).
 | `KKE_DEMO_TRICKS=1` | Wall run and wall jump, then ledge leaps along the pillars and the leap up to the beam |
 | `KKE_DEMO_BRIDGE=1` | Drops an iron ball on the yard's glass, then rolls one into a crate, and logs how far the crates moved |
 | `KKE_SPLIT=2..4`, `KKE_OVERHEAD=1` | Local split screen, and an overhead picture-in-picture view |
-| `KKE_MENU=1` | Opens the pause menu after 1.5 s |
+| `KKE_MAIN_MENU=pause` | Opens the pause menu after 1.5 s (`KKE_MAIN_MENU=0`: no title screen) |
 | `KKE_SCENE=town_block` | Starts in a Synty scene |
 | `KKE_DEMO_AUTOPILOT=1` | The character (and extra split-screen players) run the parkour lane on their own |
 | `KKE_BRIDGE=0` | Turns the FEMFX-Jolt bridge off, to compare |

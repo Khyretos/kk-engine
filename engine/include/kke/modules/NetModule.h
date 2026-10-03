@@ -107,6 +107,13 @@ public:
     bool host(uint16_t port = 0, std::string* error = nullptr); // 0 = first free from kDefaultPort
     // `address`: an address, or a join code ("K7M-Q2P", or "K7M-Q2P@relay.example.org").
     bool join(const std::string& address, uint16_t port = kDefaultPort, std::string* error = nullptr);
+    // What a player typed into a Join menu: a join code, a name or an IP,
+    // with or without ":port" ("192.168.1.20:27961", "[::1]:27961",
+    // "my-pc.lan"). Without a port, `port`. Empty is an error.
+    bool joinTyped(const std::string& typed, uint16_t port = kDefaultPort, std::string* error = nullptr);
+    // The address and port in what was typed (the code itself for a join
+    // code). False when the port isn't a number from 1 to 65535.
+    static bool splitTypedAddress(const std::string& typed, std::string& address, uint16_t& port);
     void leave();
     Role role() const { return m_role; }
     bool authority() const { return m_role != Role::Client; } // offline or host: this game's physics is the truth

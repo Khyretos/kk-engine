@@ -25,6 +25,7 @@ add_executable(kke_tests
     test_interior_fill.cpp
     test_particle_fluid.cpp
     test_melt_volume.cpp
+    test_particle_library.cpp
     test_voronoi_fracture.cpp
     test_break_graph.cpp
     test_animator.cpp
@@ -61,6 +62,7 @@ add_executable(kke_tests
     test_cooked_file.cpp
     test_viewports.cpp
     test_lobby.cpp
+    test_game_shell.cpp
     test_physics_bridge.cpp
     test_physics_world.cpp
     test_buoyancy.cpp

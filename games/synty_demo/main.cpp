@@ -2,6 +2,7 @@
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/DebugControlModule.h"
 #include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/OrbitCameraModule.h"
@@ -36,6 +37,8 @@ int main() {
         // the demo's panel is RmlUi (kke::DemoPanelModule).
         app.addModule<kke::InputModule>("synty_demo_input.json");
         app.addModule<kke::UiModule>();
+        // The shared menus: title, settings, controls, pause (docs/GAME_SHELL.md).
+        app.addModule<kke::GameShellModule>("Characters", "Synty characters walking around");
         // Plays the mood's ambience loop (BUG-086).
         app.addModule<kke::AudioModule>().setUiVisible(false);
         std::vector<kke::Module*> panels;

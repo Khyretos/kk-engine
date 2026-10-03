@@ -1,13 +1,17 @@
-// kke_demo's RmlUi HUD and pause menu (ACTION_PLAN.md 1.4, issue #12).
-// The HUD says what the character is doing and, near a station, what to
-// try there (live numbers where there are some). Esc or a controller's
-// Start opens the pause menu (KKE_MENU=1: open at start, for screenshots): the game stops (unless it's online), the
-// mouse is free, and the menu works with a controller too.
+// kke_demo's RmlUi HUD (ACTION_PLAN.md 1.4, issue #12) and its rows in the
+// shared pause menu. The HUD says what the character is doing and, near a
+// station, what to try there (live numbers where there are some). Esc or a
+// controller's Start or Select opens the pause menu (kke::GameShellModule,
+// whose look started as this game's own; KKE_MAIN_MENU=pause opens it at
+// start, for screenshots): the game stops (unless it's online), the mouse
+// is free, and the menu works with a controller too.
 
 #include "ShowcaseModule.h"
 
 #include "kke/Application.h"
 #include "kke/Log.h"
+#include "kke/DevTools.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/modules/UiModule.h"
@@ -45,88 +49,44 @@ void ShowcaseModule::buildHud() {
     c.Bind("panels", &m_hud.panels);
     c.Bind("online", &m_hud.online);
     c.Bind("players", &m_hud.players);
-    c.BindEventCallback("resume", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) { setMenuOpen(false); });
-    c.BindEventCallback("restart", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
-        resetCourse();
-        m_loco->teleport(m_spawn);
-        setMenuOpen(false);
-    });
-    c.BindEventCallback("set_players", [this](Rml::DataModelHandle h, Rml::Event&, const Rml::VariantList& args) {
-        if (args.empty()) return;
-        setLocalPlayers(args[0].Get<int>());
-        m_hud.players = static_cast<int>(m_locals.size()) + 1;
-        h.DirtyVariable("players");
-    });
-    c.BindEventCallback("toggle_panels", [this](Rml::DataModelHandle h, Rml::Event&, const Rml::VariantList&) {
-        m_showPanels = !m_showPanels;
-        for (kke::Module* p : m_panels) p->setUiVisible(m_showPanels);
-        m_hud.panels = m_showPanels;
-        h.DirtyVariable("panels");
-    });
-    c.BindEventCallback("quit", [](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
-        SDL_Event quit{};
-        quit.type = SDL_EVENT_QUIT;
-        SDL_PushEvent(&quit);
-    });
     m_hudModel = c.GetModelHandle();
 
     // Next to the executable (CMake copies ui/ there).
     const char* base = SDL_GetBasePath();
     const std::string root = std::string(base ? base : "") + "ui/";
     m_hudDoc = ctx->LoadDocument(root + "showcase_hud.rml");
-    m_pauseDoc = ctx->LoadDocument(root + "showcase_pause.rml");
-    if (!m_hudDoc || !m_pauseDoc) {
-        kke::log::get(name())->warn("HUD: could not load {}showcase_hud.rml / showcase_pause.rml", root);
+    if (!m_hudDoc) {
+        kke::log::get(name())->warn("HUD: could not load {}showcase_hud.rml", root);
         return;
     }
     m_hudDoc->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
-    if (const char* menu = std::getenv("KKE_MENU"); menu && *menu == '1') m_menuAt = 1.5f; // once the game is running
 }
 
-void ShowcaseModule::setMenuOpen(bool open) {
-    if (open == m_menuOpen) return;
-    m_menuOpen = open;
-#if KKE_ENABLE_NET
-    m_hud.online = m_net && m_net->connected();
-#endif
-    if (m_hudModel) {
-        m_hud.players = static_cast<int>(m_locals.size()) + 1;
-        m_hud.panels = m_showPanels;
-        m_hudModel.DirtyVariable("online");
-        m_hudModel.DirtyVariable("players");
-        m_hudModel.DirtyVariable("panels");
-    }
-    if (open) {
-        setCaptured(false);
-        // Online the others play on: only an offline game stops.
-        m_pausedByMenu = !m_hud.online && !m_app->isPaused();
-        if (m_pausedByMenu) m_app->setPaused(true);
-        if (m_pauseDoc) m_pauseDoc->Show(Rml::ModalFlag::Modal, Rml::FocusFlag::Document);
-        if (m_pauseDoc)
-            if (Rml::Element* first = m_pauseDoc->GetElementById("resume")) first->Focus(true);
-    } else {
-        if (m_pausedByMenu) m_app->setPaused(false);
-        m_pausedByMenu = false;
-        if (m_pauseDoc) m_pauseDoc->Hide();
-    }
+// This game's rows in the shared pause menu: back to the start, how many
+// players share the screen, and the engine's panels.
+void ShowcaseModule::buildPauseRows() {
+    m_shell = m_app->getModule<kke::GameShellModule>();
+    if (!m_shell) return;
+    m_shell->addPauseItem("Back to the start", [this] {
+        resetCourse();
+        m_loco->teleport(m_spawn);
+        m_shell->closeMenu();
+    });
+    m_shell->pauseRows().choice("Players on this screen", &m_playersChoice, { "1", "2", "3", "4" },
+                                [this] { setLocalPlayers(m_playersChoice + 1); });
+    if (kke::dev::kEnabled)
+        m_shell->pauseRows().toggle("Engine panels (F1)", &m_showPanels, [this] {
+            for (kke::Module* p : m_panels) p->setUiVisible(m_showPanels);
+        });
 }
 
-// Before the game's update, paused or not: the menu's own buttons.
+// Before the game's update, paused or not: follow the shared menu (it
+// freed the mouse when it opened).
 void ShowcaseModule::frameStart(const kke::UpdateContext&) {
-    if (!m_input) return;
-    // Any player's Start opens or closes it (split screen: players 2-4
-    // too), and any player's B closes it.
-    for (int p = 0; p < m_input->players(); ++p) {
-        kke::InputMap& in = m_input->map(p);
-        if (in.pressed("menu")) {
-            setMenuOpen(!m_menuOpen);
-            break;
-        }
-        if (m_menuOpen && in.pressed("ui.back")) {
-            setMenuOpen(false);
-            break;
-        }
-    }
+    const bool open = m_shell && m_shell->menuOpen();
+    if (open && !m_menuOpen) m_captured = false;
+    m_menuOpen = open;
+    m_playersChoice = static_cast<int>(m_locals.size());
 }
 
 namespace {
@@ -138,8 +98,7 @@ std::string metres(float v) {
 bool within(const glm::vec3& p, const glm::vec3& c, float hx, float hz) { return std::abs(p.x - c.x) < hx && std::abs(p.z - c.z) < hz; }
 } // namespace
 
-void ShowcaseModule::updateHud(float dt) {
-    if (m_menuAt > 0.0f && (m_menuAt -= dt) <= 0.0f) setMenuOpen(true);
+void ShowcaseModule::updateHud() {
     if (!m_hudModel || !m_loco) return;
     using State = kke::Locomotion::State;
     const State st = m_loco->state();
@@ -209,7 +168,7 @@ void ShowcaseModule::updateHud(float dt) {
     set(m_hud.stationLive, live, "station_live");
     // "Esc menu" on the keyboard, "(Start) menu" on a controller.
     const bool keys = !input || input->promptStyle() == kke::PromptStyle::Keyboard;
-    set(m_hud.menuHint, keys ? "<span class=\"keycap\">Esc</span> menu" : input->promptText("{menu} menu"), "menu_hint");
+    set(m_hud.menuHint, keys ? "<span class=\"keycap\">Esc</span> menu" : input->promptText("{shell.pause} menu"), "menu_hint");
     if (m_hud.trick != trick) {
         m_hud.trick = trick;
         m_hudModel.DirtyVariable("trick");

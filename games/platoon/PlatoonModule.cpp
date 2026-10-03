@@ -107,7 +107,7 @@ void PlatoonModule::init(kke::Application& app) {
     quick("rts.hold", "Hold position", SDL_SCANCODE_H, SDL_GAMEPAD_BUTTON_WEST);
     quick("rts.cover", "Take cover", SDL_SCANCODE_C, SDL_GAMEPAD_BUTTON_NORTH);
     quick("rts.regroup", "Regroup", SDL_SCANCODE_R, SDL_GAMEPAD_BUTTON_DPAD_DOWN);
-    quick("rts.formation", "Next formation", SDL_SCANCODE_G, SDL_GAMEPAD_BUTTON_BACK);
+    quick("rts.formation", "Next formation", SDL_SCANCODE_G, SDL_GAMEPAD_BUTTON_RIGHT_STICK);
     quick("rts.left", "Turn the view left", SDL_SCANCODE_Q, SDL_GAMEPAD_BUTTON_INVALID);
     quick("rts.right", "Turn the view right", SDL_SCANCODE_E, SDL_GAMEPAD_BUTTON_INVALID);
     quick("panels", "Developer panels", SDL_SCANCODE_F1, SDL_GAMEPAD_BUTTON_INVALID);
@@ -126,11 +126,8 @@ void PlatoonModule::init(kke::Application& app) {
     const SDL_GamepadButton groupPad[] = { SDL_GAMEPAD_BUTTON_DPAD_UP, SDL_GAMEPAD_BUTTON_DPAD_RIGHT, SDL_GAMEPAD_BUTTON_DPAD_DOWN,
                                            SDL_GAMEPAD_BUTTON_DPAD_LEFT };
     for (int g = 1; g <= 4; ++g) in.addBinding(IM::bind("rts.group" + std::to_string(g), IM::pad(groupPad[g - 1])));
-    // The settings panel (kke::DemoPanelModule) opens with Start or F3 here:
-    // View is rts.formation. Esc opens it too, with a Quit row.
-    in.defineAction({ "panel.toggle", "Settings panel", "Menus", "panel" });
-    in.addBinding(IM::bind("panel.toggle", IM::pad(SDL_GAMEPAD_BUTTON_START)));
-    in.addBinding(IM::bind("panel.toggle", IM::key(SDL_SCANCODE_F3)));
+    // Start, Select and Esc are the pause menu (kke::GameShellModule); the
+    // settings panel is a row there, or F3.
     m_input->commitDefaults();
     buildPanel();
 

@@ -4,6 +4,7 @@
 #include "kke/DataFile.h"
 #include "kke/Log.h"
 #include "kke/SphereImpostors.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/RigidBodyModule.h"
 
@@ -99,6 +100,11 @@ void HordeModule::init(kke::Application& app) {
     in.addBinding(IM::bind("panels", IM::key(SDL_SCANCODE_F1)));
     m_input->commitDefaults();
     app.window().setQuitOnEscape(false); // Esc lets go of the mouse instead
+    if (auto* shell = app.getModule<kke::GameShellModule>()) {
+        // Start is "try again" once the horde has won; otherwise it pauses.
+        shell->startIsTheGames = [this] { return m_phase == Phase::Overrun; };
+        shell->addPauseItem("Start over", [this] { restart(); });
+    }
 
     app.camera().farPlane = 200.0f;
     m_rig.mode = kke::CameraRig::Mode::ThirdPerson;
@@ -299,7 +305,7 @@ void HordeModule::setCaptured(bool on) {
 }
 
 void HordeModule::onEvent(const SDL_Event& e) {
-    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !m_captured && !ImGui::GetIO().WantCaptureMouse && e.button.button == SDL_BUTTON_LEFT) setCaptured(true);
+    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !m_captured && !ImGui::GetIO().WantCaptureMouse && !m_app->uiCapturesMouse() && e.button.button == SDL_BUTTON_LEFT) setCaptured(true);
     if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_ESCAPE) setCaptured(false);
 }
 

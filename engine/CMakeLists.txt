@@ -32,6 +32,7 @@ set(ENGINE_SOURCES
     src/NodeGraph.cpp
     src/TouchGestures.cpp
     src/VoxelTets.cpp
+    src/Breakables.cpp
     src/InteriorColor.cpp
     src/FracturePattern.cpp
     src/VoronoiFracture.cpp
@@ -113,6 +114,7 @@ set(ENGINE_SOURCES
     src/JigglePhysics.cpp
     src/SphereImpostors.cpp
     src/ParticleEffects.cpp
+    src/ParticleLibrary.cpp
     src/HairStrands.cpp
     src/HairRenderer.cpp
     src/ClothGpu.cpp
@@ -142,6 +144,7 @@ set(ENGINE_SOURCES
     src/modules/LightingControlsModule.cpp
     src/modules/LobbyModule.cpp
     src/modules/DemoPanelModule.cpp
+    src/modules/GameShellModule.cpp
     src/modules/MaterialGridModule.cpp
     src/modules/DebugControlModule.cpp
     src/modules/PhysicsModule.cpp
@@ -190,6 +193,7 @@ set(ENGINE_HEADERS
     include/kke/OrderBridge.h
     include/kke/TouchGestures.h
     include/kke/VoxelTets.h
+    include/kke/Breakables.h
     include/kke/InteriorColor.h
     include/kke/FracturePattern.h
     include/kke/ParticleFluid.h
@@ -226,6 +230,7 @@ set(ENGINE_HEADERS
     include/kke/modules/MarketplaceUiModule.h
     include/kke/modules/LightingControlsModule.h
     include/kke/modules/DemoPanelModule.h
+    include/kke/modules/GameShellModule.h
     include/kke/modules/MaterialGridModule.h
     include/kke/modules/DebugControlModule.h
     include/kke/modules/PhysicsModule.h
@@ -274,6 +279,9 @@ foreach(shader logo.vert logo.frag logo_backdrop.vert logo_backdrop.frag logo_te
     engine_add_shader(kke_engine ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()
 engine_copy_runtime_file(kke_engine ${CMAKE_SOURCE_DIR}/assets/fonts/NotoSans-Bold.ttf assets/fonts/NotoSans-Bold.ttf)
+# Quaternius' CC0 mannequin and its animations (docs/DEPENDENCIES.md): a
+# character without art is this, never a block, in every build and download.
+engine_copy_runtime_file(kke_engine ${CMAKE_SOURCE_DIR}/assets/animations/UAL1_Standard.fbx assets/animations/UAL1_Standard.fbx)
 kke_add_moods(kke_engine) # assets/moods and the CC0 skies (cmake/skies.cmake)
 
 # Button prompt glyphs (kke/ButtonPrompts.h, Xelu's CC0 pack): the sets the

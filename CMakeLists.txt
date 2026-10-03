@@ -937,7 +937,6 @@ endif()
 # add_subdirectory is today's honest state, not a placeholder pretending
 # to be more general than it is.
 # ---------------------------------------------------------------------------
-add_subdirectory(games/kke_demo_game)
 if(KKE_ENABLE_JOLT)
     add_subdirectory(games/showcase)
 endif()
@@ -963,6 +962,7 @@ add_subdirectory(games/rmlui_demo)
 add_subdirectory(games/synty_demo)
 add_subdirectory(games/sandbox)
 add_subdirectory(games/melt_demo)
+add_subdirectory(games/particles_demo)
 add_subdirectory(games/jiggle_demo)
 add_subdirectory(games/farm_demo)
 add_subdirectory(games/sea_demo)

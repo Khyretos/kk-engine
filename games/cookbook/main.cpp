@@ -5,6 +5,7 @@
 // CI builds and runs it, so the recipes can't quietly go stale.
 #include "kke/Application.h"
 #include "kke/modules/AudioModule.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/RigidBodyModule.h"
@@ -30,6 +31,8 @@ int main() {
         app.addModule<kke::RigidBodyModule>();
         app.addModule<kke::ModelModule>();
         app.addModule<kke::UiModule>();
+        // The shared menus: title, settings, controls, pause (docs/GAME_SHELL.md).
+        app.addModule<kke::GameShellModule>("Cookbook", "Every recipe in the cookbook, live");
         app.addModule<kke::AudioModule>().setUiVisible(false);
         std::error_code ec;
         const bool fromSource = std::filesystem::is_directory(GAME_SCRIPTS_SOURCE, ec);

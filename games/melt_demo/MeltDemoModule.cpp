@@ -27,13 +27,13 @@ const glm::vec3 kSpout(0.0f, 1.5f, 0.0f);
 // from real materials (relative melting points and behaviour are real).
 const MeltDemoModule::BlockPreset kPresets[] = {
     { "Ice (melts to water)", 0.0f, -15.0f, 1.0f, 0.002f, 1.5f, { 0.78f, 0.9f, 1.0f }, { 0.25f, 0.5f, 0.85f },
-      [] { kke::FluidMaterial m; m.viscosityHot = 0.01f; m.viscosityCold = 0.02f; m.hotTemperature = 100.0f; return m; }(), false },
+      [] { kke::FluidMaterial m; m.viscosityHot = 0.01f; m.viscosityCold = 0.02f; m.hotTemperature = 100.0f; return m; }(), false, 0.0f },
     { "Wax (softens, re-hardens)", 60.0f, 20.0f, 1.0f, 0.004f, 1.0f, { 0.95f, 0.9f, 0.75f }, { 0.98f, 0.93f, 0.7f },
-      [] { kke::FluidMaterial m; m.viscosityHot = 0.05f; m.viscosityCold = 0.15f; m.hotTemperature = 120.0f; m.solidifyTemperature = 45.0f; return m; }(), false },
+      [] { kke::FluidMaterial m; m.viscosityHot = 0.05f; m.viscosityCold = 0.15f; m.hotTemperature = 120.0f; m.solidifyTemperature = 45.0f; return m; }(), false, 15.0f },
     { "Chocolate", 35.0f, 18.0f, 1.0f, 0.006f, 1.0f, { 0.36f, 0.2f, 0.12f }, { 0.3f, 0.16f, 0.09f },
-      [] { kke::FluidMaterial m; m.viscosityHot = 0.06f; m.viscosityCold = 0.15f; m.hotTemperature = 80.0f; m.solidifyTemperature = 25.0f; return m; }(), false },
+      [] { kke::FluidMaterial m; m.viscosityHot = 0.06f; m.viscosityCold = 0.15f; m.hotTemperature = 80.0f; m.solidifyTemperature = 25.0f; return m; }(), false, 8.0f },
     { "Aluminium (glows, then melts)", 660.0f, 20.0f, 1.5f, 0.002f, 4.0f, { 0.78f, 0.8f, 0.84f }, { 0.85f, 0.86f, 0.9f },
-      [] { kke::FluidMaterial m; m.viscosityHot = 0.02f; m.viscosityCold = 0.12f; m.hotTemperature = 900.0f; m.solidifyTemperature = 600.0f; return m; }(), true },
+      [] { kke::FluidMaterial m; m.viscosityHot = 0.02f; m.viscosityCold = 0.12f; m.hotTemperature = 900.0f; m.solidifyTemperature = 600.0f; return m; }(), true, 40.0f },
 };
 constexpr int kPresetCount = static_cast<int>(sizeof(kPresets) / sizeof(kPresets[0]));
 
@@ -102,6 +102,9 @@ void MeltDemoModule::reset() {
     // 1.0 every drop crusted on touch and sealed the block in a black shell.
     // Tuned headless in simulated time: ice ~60% left at 5 s, ~8% at 25 s.
     mm.liquidHeatCapacity = 3.0f;
+    // Pieces that lose their footing fall (MeltVolume::collapse); soft
+    // ones sag first.
+    mm.softening = p.softening;
     m_block->fillBox(glm::vec3(-0.25f, 0.0f, -0.25f), glm::vec3(0.25f, 0.5f, 0.25f), p.startTemperature);
     kke::MeltVolume* block = m_block.get();
     m_fluid->addCollider([block](const glm::vec3& pos, glm::vec3& n) { return block->signedDistance(pos, n); });
@@ -248,8 +251,8 @@ void MeltDemoModule::buildPanel() {
     s.separator();
     s.text([this] {
         char buf[200];
-        std::snprintf(buf, sizeof(buf), "Block left: %.0f%%. Liquid: %zu / %zu particles", static_cast<double>(m_block->solidFraction() * 100.0f),
-                      m_fluid->size(), m_fluid->capacity());
+        std::snprintf(buf, sizeof(buf), "Block left: %.0f%%%s. Liquid: %zu / %zu particles", static_cast<double>(m_block->solidFraction() * 100.0f),
+                      m_block->fallingVoxels() ? ", collapsing" : "", m_fluid->size(), m_fluid->capacity());
         return std::string(buf);
     });
     s.text("Liquid budget full: reset to pour again").showIf([this] { return m_fluid && m_fluid->size() >= m_fluid->capacity(); });
