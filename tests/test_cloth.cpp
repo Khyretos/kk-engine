@@ -356,6 +356,52 @@ TEST(Cloth, AsleepOverAMattressNoEdgePokesThrough) {
     EXPECT_EQ(into, 0) << "triangles with the mattress's edge through them";
 }
 
+TEST(Cloth, AwakeInWindNoTableEdgeShowsThrough) {
+    // A tablecloth in the wind never sleeps, so it is never lifted off the
+    // table's edges for good. As drawn, the edges and corners must not show
+    // through it all the same, more than 2 mm (the solver itself is left
+    // alone: lifted every update, the cloth would creep off the table).
+    kke::RigidWorld w(single());
+    ground(w);
+    const glm::vec3 centre(0.0f, 1.0f, 0.0f), half(0.3f, 0.025f, 0.3f);
+    kke::RigidWorld::BodyDesc table;
+    table.motion = kke::RigidWorld::Motion::Static;
+    table.halfExtents = half;
+    table.position = centre;
+    w.add(table);
+    kke::ClothDesc cloth;
+    cloth.mesh = kke::clothGrid(glm::vec3(0.0f, 1.5f, 0.0f), 1.2f, 1.2f, 28, 28, glm::vec3(1, 0, 0), glm::vec3(0, 0, 1));
+    cloth.fabric = kke::clothFabric("satin");
+    cloth.wind = 0.4f; // half sheltered: it stirs, never settles
+    const auto a = w.addCloth(cloth);
+    w.setWind(glm::vec3(1.4f, 0.0f, 3.8f));
+    int worst = 0;
+    std::vector<glm::vec3> p;
+    for (int i = 0; i < 6 * 60; ++i) {
+        w.step(1.0f / 60.0f);
+        if (i < 3 * 60 || i % 10 != 0) continue;
+        ASSERT_FALSE(w.clothStats(a).sleeping);
+        w.clothPositions(a, p);
+        int into = 0;
+        const auto& idx = cloth.mesh.indices;
+        for (size_t t = 0; t + 2 < idx.size(); t += 3) {
+            bool in = false;
+            for (int k = 0; k <= 6 && !in; ++k)
+                for (int j = 0; k + j <= 6 && !in; ++j) {
+                    const float u = float(k) / 6.0f, v = float(j) / 6.0f;
+                    const glm::vec3 x = p[idx[t]] * (1.0f - u - v) + p[idx[t + 1]] * u + p[idx[t + 2]] * v;
+                    const glm::vec3 d = half - glm::abs(x - centre);
+                    in = std::min(d.x, std::min(d.y, d.z)) > 0.002f;
+                }
+            into += in ? 1 : 0;
+        }
+        worst = std::max(worst, into);
+    }
+    // (Unlifted, over a hundred, the corners' up to 6 mm through. Now and
+    // then a triangle that has just come off the table misses out.)
+    EXPECT_LE(worst, 3) << "triangles with the table's edge through them, as drawn";
+}
+
 TEST(Cloth, LayersOnABedFallAsleepAndWakeForABall) {
     // A cotton sheet over a wool blanket over a mattress: the pass keeps nudging the
     // layers apart by a fraction of a millimetre, which Jolt's own sleep

@@ -116,7 +116,12 @@ private:
         std::vector<float> cornerDeep;
         std::vector<int> cornerHit;
         std::vector<JPH::Vec3> cornerLift;  // per vertex, zero between calls
+        std::vector<JPH::Vec3> cornerBase;  // solidCorners() scratch: cornerLift at the start of its second pass
         std::vector<uint32_t> cornerLifted;
+        // Awake: the same lift off the solids' corners, only for drawing
+        // (positions()), so an edge never shows through a cloth that moves.
+        std::vector<JPH::Vec3> drawLift;     // per vertex (local), zero but at drawLifted
+        std::vector<uint32_t> drawLifted;
         std::vector<glm::mat4> bindPose;
         bool skinned = false;                // has Jolt skinned constraints
         bool prevValid = false;
@@ -181,7 +186,8 @@ private:
     void protectAll(const JPH::BodyLockInterface& locks); // load, protect(), store every Full cloth
     void setHairMotionOf(Cloth& c, float motion);
     bool settle(Cloth& c);                                // has it stayed put long enough to sleep?
-    void solidCorners(Cloth& c, JPH::Body& body);         // lift triangles off the solids' edges and corners
+    void solidCorners(Cloth& c, JPH::Body& body, bool drawOnly); // lift triangles off the solids' edges and corners
+    static void clearDrawLift(Cloth& c);
     void protect();
     void shapeTriangles(); // triN, triNPrev, triSphere of every active cloth
     bool nearInTopology(const Cloth& c, uint32_t v, uint32_t tri) const;
@@ -251,6 +257,7 @@ private:
     };
     std::vector<Worker> m_workers;
     struct Crew;
+    std::vector<std::pair<Cloth*, JPH::Body*>> m_lifting; // endStep() scratch: the cloths solidCorners() looks at
     std::unique_ptr<Crew> m_crew;                   // parallel()'s threads, started on first use
     std::vector<uint32_t> m_queries;                // searchOnCpu: the vertices (then edges) that look
     JPH::JobSystem* m_jobs = nullptr;
