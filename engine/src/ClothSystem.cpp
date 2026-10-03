@@ -748,8 +748,10 @@ void ClothSystem::setWind(const glm::vec3& v) {
     if (v == m_wind) return;
     m_wind = v;
     JPH::BodyInterface& bi = m_system.GetBodyInterface();
+    // (Not solid hair: it is out of the world, and Jolt would step a body
+    // woken there without it being in the broad phase.)
     for (auto& [id, c] : m_cloths)
-        if (c.wind > 0.0f) bi.ActivateBody(c.body);
+        if (c.wind > 0.0f && bi.IsAdded(c.body)) bi.ActivateBody(c.body);
 }
 
 void ClothSystem::load(Cloth& c, JPH::Body& body) {
