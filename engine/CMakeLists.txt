@@ -276,6 +276,9 @@ foreach(shader logo.vert logo.frag logo_backdrop.vert logo_backdrop.frag logo_te
     engine_add_shader(kke_engine ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()
 engine_copy_runtime_file(kke_engine ${CMAKE_SOURCE_DIR}/assets/fonts/NotoSans-Bold.ttf assets/fonts/NotoSans-Bold.ttf)
+# Quaternius' CC0 mannequin and its animations (docs/DEPENDENCIES.md): a
+# character without art is this, never a block, in every build and download.
+engine_copy_runtime_file(kke_engine ${CMAKE_SOURCE_DIR}/assets/animations/UAL1_Standard.fbx assets/animations/UAL1_Standard.fbx)
 kke_add_moods(kke_engine) # assets/moods and the CC0 skies (cmake/skies.cmake)
 
 # Button prompt glyphs (kke/ButtonPrompts.h, Xelu's CC0 pack): the sets the

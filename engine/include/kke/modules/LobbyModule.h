@@ -125,6 +125,14 @@ private:
         std::string label, value, swatch = "#00000000"; // swatch: always a colour (RmlUi styles hidden rows too)
         bool hasSwatch = false;
         bool focused = false, action = false, start = false, arrows = false;
+        bool empty = false; // a text row showing its placeholder
+    };
+    struct KeyView {
+        std::string label;
+        bool focused = false, wide = false;
+    };
+    struct KeyRowView {
+        std::vector<KeyView> keys;
     };
     struct SeatView {
         bool joined = false, you = false, unplugged = false, waiting = false;
@@ -136,7 +144,11 @@ private:
         std::string title, subtitle, hint;
         std::vector<SeatView> seats;
         std::vector<std::string> toasts;
+        bool typing = false; // player 1 is typing into a text row
+        std::string typingLabel, typingText, typingHint;
+        std::vector<KeyRowView> keys;
     };
+    bool m_textInput = false; // SDL text input is on (while typing)
     View m_view;
     Rml::DataModelHandle m_model;
     Rml::ElementDocument* m_doc = nullptr;

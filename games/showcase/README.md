@@ -58,7 +58,7 @@ are read in `ShowcaseModule::init` unless noted:
 | `KKE_BRIDGE=0` | Turns the FEMFX-Jolt bridge off, to compare |
 | `KKE_SPLIT=2..4` | Start with that many local players |
 | `KKE_OVERHEAD=1` | An overhead picture-in-picture view of player 1 |
-| `KKE_MENU=1` | Opens the pause menu 1.5 s after start (read in `Hud.cpp`) |
+| `KKE_MAIN_MENU=pause` | Opens the pause menu 1.5 s after start (the game shell's switch; `KKE_MAIN_MENU=0` skips the title) |
 | `KKE_SCENE=town_block` | Start in the Synty scene whose path contains this text |
 | `KKE_COURSE_ART=0` | Leaves the Synty art off the course |
 | `KKE_CHARACTER=SK_Character_...` | Play as a Synty character, retargeted |
@@ -93,7 +93,7 @@ saved in `input.json`.
 | First / third person | V | R3 |
 | Camera distance | Mouse wheel (while captured) | D-pad up / down (hold) |
 | Reset crates and player | R | X |
-| Pause menu | Esc | Start |
+| Pause menu: settings, button remapping, quit | Esc | Start or View / Back |
 | Engine panels (ImGui, developer tools) | F1 | none |
 | Ping the surroundings (hear the walls) | Q | D-pad left |
 | Push to talk (voice builds) | P (B is a toy) | LB |
@@ -103,15 +103,14 @@ climbs up, back plus Space jumps off, C lets go. Jump with left or right
 held leaps to the next edge. Running fast beside a wall and jumping starts
 a wall run; jump again to kick off.
 
-In the pause menu: the mouse, or the d-pad / left stick to move, A to
-press, B or Start to close. The keyboard reaches RmlUi directly (arrows,
-Enter, Tab), and Esc closes it. The HUD's corner hint shows the menu
-button of the device in use: "Esc menu" on the keyboard, the Start glyph
-on a controller.
+The pause menu is the one every KKE game shares (`kke::GameShellModule`,
+[GAME_SHELL.md](../../docs/GAME_SHELL.md)): the mouse, the arrows and
+Enter, or the d-pad / left stick and A; B, Esc or Start closes it. The
+HUD's corner hint shows the pause button of the device in use.
 
 Players 2 to 4 (split screen) get a controller each: move, look, sprint,
 walk, crouch, jump, shoot (RT), push (Y), zoom (d-pad) and the pause menu
-(Start) all work from it; shots and pushes go along that player's own
+(Start or View / Back) all work from it; shots and pushes go along that player's own
 view.
 
 The Lua scripts add their own actions:
@@ -138,8 +137,9 @@ stations, with their positions from [Layout.h](Layout.h):
 | Low roof | (10, 6) | 1.2 m clearance: crouch to get under |
 | Stairs, ramp, steep slope, pillars | around (-8, -4), (8, -10), (-14 to -6.5, -14) | 0.25 m steps, a 24 degree ramp you walk, a 55 degree slope you slide off, pillars that push the camera in |
 
-The pause menu (Esc / Start) has Resume, Back to the start, 1 to 4
-players, Engine panels and Quit. Offline it pauses the game; online the
+The pause menu (Esc / Start / View) has Resume, Back to the start, 1 to
+4 players, Engine panels (developer builds), Settings, Controls, Main
+menu and Quit. Offline it pauses the game; online the
 others keep playing. The **KKE Showcase** ImGui window (always shown)
 has the controls, a Scenes list to visit the Synty levels, and panels for
 movement, performance and the stress test, character, lighting, lava,
@@ -181,8 +181,8 @@ then reads the environment variables above.
 
 Each frame the engine calls, in this order:
 
-- `frameStart`: the pause menu's own buttons (Start, B). It runs even
-  while the game is paused, which is why the menu lives here.
+- `frameStart`: follows the game shell's menu (open or closed) and lets
+  go of the mouse when it opens. It runs even while the game is paused.
 - `fixedUpdate` (60 Hz): the lava station, the moving platform and the
   pool's buoyancy.
 - `update`: stress test, crate batch, lava mesh, HUD, crouch, input, the
@@ -500,11 +500,9 @@ line. "Back to the course" returns you.
 [Hud.cpp](Hud.cpp) uses RmlUi through `UiModule`. `buildHud` creates one
 data model, `"demo"`, and binds `HudState` fields to it (`move`, `speed`,
 `trick`, `station`, `station_text`, `menu_hint`, `station_live`,
-`panels`, `online`, `players`) plus five event callbacks (`resume`,
-`restart`, `set_players`, `toggle_panels`, `quit`). Both documents,
-[ui/showcase_hud.rml](ui/showcase_hud.rml) and
-[ui/showcase_pause.rml](ui/showcase_pause.rml), use that one model and
-share `theme.rcss` from `games/rmlui_demo/ui/`.
+`panels`, `online`, `players`). The document,
+[ui/showcase_hud.rml](ui/showcase_hud.rml), shares `theme.rcss` from
+`games/rmlui_demo/ui/`.
 
 `updateHud` runs every frame. It turns the Locomotion state and speed into
 a word (Standing, Walking over 0.2 m/s, Running over 2.2, Sprinting over
@@ -512,19 +510,20 @@ a word (Standing, Walking over 0.2 m/s, Running over 2.2, Sprinting over
 box your feet are in and picks its title and hint. The lava adds a live
 line ("Wax block, 40% left"). A small `set` lambda only marks a variable
 dirty when its text changed, so RmlUi does not re-lay-out every frame.
-`menu_hint` is the corner's menu prompt: an Esc keycap on the keyboard,
-`promptText("{menu} menu")` (the Start glyph) on a controller.
+`menu_hint` is the corner's menu prompt, `promptText("{shell.pause} menu")`:
+the Esc keycap on the keyboard, the Start glyph on a controller.
 
 Hints are written with action names in braces, such as
 `"Push them {interact} or shoot them over {fire}."`, and passed through
 `InputModule::promptText`, which swaps each `{action}` for the button
 glyph of the device in use ([INPUT.md](../../docs/INPUT.md)).
 
-`setMenuOpen` shows the pause document modal, focuses Resume, releases
-the mouse, and pauses the `Application` only when not connected online.
-The menu is toggled from `frameStart` (the `menu` action: Start, read
-from every local player's map) and from `onEvent` (Esc), and `ui.back`
-(B, any player) closes it. Esc is handled as a raw key, not an action, "so you can never lock yourself out".
+The pause menu is `kke::GameShellModule`'s ([GAME_SHELL.md](../../docs/GAME_SHELL.md)).
+`buildPauseRows` adds the showcase's rows to it: Back to the start, the
+number of players on this screen, and the engine panels in developer
+builds. The shell pauses the `Application` only when not online, opens on
+Esc, Start or View from any local player, and Esc is a raw key there too,
+"so you can never lock yourself out".
 
 ### Split screen
 
@@ -550,7 +549,7 @@ each module's `render` runs once per view.
 
 Players 2 to 4 also shoot, push (along their own camera: `shoot(p.camera)`,
 `forcePush(p.camera)`), zoom, reset themselves (X) and open or close the
-pause menu (`frameStart` reads every player's map). The Lua toys and the
+pause menu (the game shell reads every player's map). The Lua toys and the
 ping still read player 1's map only.
 
 ### Networking (NET builds)
@@ -668,8 +667,8 @@ source folder to edit live. API: [SCRIPTING.md](../../docs/SCRIPTING.md).
 - **Course art is all or nothing.** "Half the art would look like a bug."
 - **Esc is fixed, not rebindable.** It always frees the mouse and opens
   the menu, "so you can never lock yourself out" by rebinding.
-- **The menu only pauses offline.** The comment in `setMenuOpen`:
-  "Online the others play on: only an offline game stops."
+- **The menu only pauses offline.** The game shell's rule for every game:
+  online the others play on; only an offline game stops.
 - **Split screen works without controllers.** Extra players with no pad
   run the lane on their own "so split screen can be tried alone".
 - **The stress test is scripted and uncapped.** A fixed script and seed so
@@ -819,11 +818,10 @@ Pitfalls the code shows:
 | [LavaStation.h](LavaStation.h), [LavaStation.cpp](LavaStation.cpp) | The lava: fluid, melting block, colliders, presets, drawing |
 | [SplitScreen.cpp](SplitScreen.cpp) | Local players 2-4, controller assignment, views, the overhead view |
 | [StressTest.cpp](StressTest.cpp) | The 36 s stress test and its report |
-| [Hud.cpp](Hud.cpp) | RmlUi data model, HUD updates, pause menu open and close |
+| [Hud.cpp](Hud.cpp) | RmlUi data model, HUD updates, the pause menu's rows |
 | [Layout.h](Layout.h) | Station positions |
 | [course_art.scene.json](course_art.scene.json) | Synty art placed around the stations |
 | [ui/showcase_hud.rml](ui/showcase_hud.rml) | The HUD: movement state, station hint |
-| [ui/showcase_pause.rml](ui/showcase_pause.rml) | The pause menu |
 | [scripts/toys.lua](scripts/toys.lua) | Lua toys: tower, ball, clear, hit counter |
 | [game.json](game.json) | Manifest (copied to `marketplace/showcase/`) |
 | [CMakeLists.txt](CMakeLists.txt) | The executable, shaders, fonts, UI, scripts and course art it copies |

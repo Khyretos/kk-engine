@@ -61,6 +61,7 @@ add_executable(kke_tests
     test_cooked_file.cpp
     test_viewports.cpp
     test_lobby.cpp
+    test_game_shell.cpp
     test_physics_bridge.cpp
     test_physics_world.cpp
     test_buoyancy.cpp

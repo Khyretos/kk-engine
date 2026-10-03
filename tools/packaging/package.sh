@@ -67,6 +67,8 @@ done
 # Synty packs arrive as FBX/Unity files under a synty/ or Polygon folder;
 # none of that is built into bin/ by CMake, so anything found here came
 # from a local asset folder and must not go out.
+# The one FBX that ships is Quaternius' CC0 mannequin (in the repository,
+# docs/DEPENDENCIES.md): characters without art are that, not blocks.
 # Cooked art (--cooked) comes in now, so the check below sees it too: a
 # cooked file starts with KKECOOK2 and is let through, anything else isn't.
 if [ -n "$cooked" ]; then
@@ -76,7 +78,7 @@ if [ -n "$cooked" ]; then
 fi
 leak="$(cd "$stage" && find . -type f \( -ipath '*synty*' -o -ipath '*polygon*' -o -ipath '*/SourceFiles/*' \
     -o -iname '*.fbx' -o -iname '*.unitypackage' -o -iname '*.prefab' -o -iname '*.controller' -o -iname '*.mat' \) \
-    ! -path "./synty_demo$exe" ! -path './marketplace/synty_demo/game.json' -print |
+    ! -path "./synty_demo$exe" ! -path './marketplace/synty_demo/game.json' ! -path './assets/animations/UAL1_Standard.fbx' -print |
     while IFS= read -r f; do [ "$(head -c 8 "$f")" = KKECOOK2 ] || echo "$f"; done)"
 [ -z "$leak" ] || die "refusing to package paid/third-party art found in $bin:
 $leak"

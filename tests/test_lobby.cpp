@@ -250,3 +250,76 @@ TEST(Lobby, SeatsMoveOnlyToFreeDevices) {
     EXPECT_FALSE(l.setSeatDevice(3, Lobby::Device::Pad, 44));
     EXPECT_FALSE(l.setSeatDevice(0, Lobby::Device::Any));
 }
+
+TEST(Lobby, TextRowsTypeKeepAndCancel) {
+    Lobby l;
+    std::string joined;
+    l.addTextOption("net.address", "Address or code", "type it", [&](const std::string& t) { joined = t; });
+    EXPECT_TRUE(l.isTextOption("net.address"));
+    EXPECT_EQ(l.placeholder("net.address"), "type it");
+
+    // Only what an address or a code can hold.
+    l.startEditing("net.address");
+    ASSERT_TRUE(l.editing());
+    l.typeText("10.0.0.7:27961 <b>");
+    EXPECT_EQ(l.text("net.address"), "10.0.0.7:27961b");
+    l.backspace();
+    l.finishEditing(true);
+    EXPECT_FALSE(l.editing());
+    EXPECT_EQ(joined, "10.0.0.7:27961");
+
+    // Cancelling puts back what was there.
+    l.startEditing("net.address");
+    l.typeText("xyz");
+    l.finishEditing(false);
+    EXPECT_EQ(l.text("net.address"), "10.0.0.7:27961");
+}
+
+TEST(Lobby, OnScreenKeyboardTypesWithAPad) {
+    Lobby l;
+    std::string joined;
+    l.addTextOption("net.address", "Address or code", {}, [&](const std::string& t) { joined = t; });
+    const Lobby::Press pad = padPress(7);
+    l.handle(with(pad, &Lobby::Press::confirm)); // player 1 takes pad 7
+    // Down to the text row (after the CPU row) and A opens the keyboard.
+    int guard = 0;
+    while (!l.editing() && guard++ < 20) {
+        const std::vector<Lobby::Row> rows = l.rows(0);
+        const Lobby::Row row = rows[static_cast<size_t>(l.seat(0).row)];
+        if (row.kind == Lobby::Row::Kind::Option && l.options()[static_cast<size_t>(row.index)].id == "net.address")
+            l.handle(with(pad, &Lobby::Press::confirm));
+        else
+            l.handle(with(pad, &Lobby::Press::down));
+    }
+    ASSERT_TRUE(l.editing());
+    // A types the key under the cursor: "1", then right twice: "3".
+    l.handle(with(pad, &Lobby::Press::confirm));
+    l.handle(with(pad, &Lobby::Press::right));
+    l.handle(with(pad, &Lobby::Press::right));
+    l.handle(with(pad, &Lobby::Press::confirm));
+    EXPECT_EQ(l.text("net.address"), "13");
+    // B deletes a letter; Start is Done.
+    l.handle(with(pad, &Lobby::Press::back));
+    EXPECT_EQ(l.text("net.address"), "1");
+    l.handle(with(pad, &Lobby::Press::start));
+    EXPECT_FALSE(l.editing());
+    EXPECT_EQ(joined, "1");
+    // Start while typing finished the typing, it didn't start the game.
+    EXPECT_FALSE(l.takeStart());
+    // The last row: Delete, Clear, Done.
+    const auto& keys = Lobby::keyboardKeys();
+    EXPECT_EQ(keys.back().back(), Lobby::kKeyDone);
+}
+
+TEST(Lobby, TextRowsAreSavedEvenWhenAddedAfterLoading) {
+    Lobby a;
+    a.addTextOption("net.address", "Address or code");
+    a.setText("net.address", "K7M-Q2P");
+    const nlohmann::json saved = a.save();
+
+    Lobby b;
+    b.load(saved); // before the game adds its online rows
+    EXPECT_EQ(b.save()["options"]["net.address"], "K7M-Q2P"); // kept meanwhile
+    b.addTextOption("net.address", "Address or code");
+    EXPECT_EQ(b.text("net.address"), "K7M-Q2P");
+}

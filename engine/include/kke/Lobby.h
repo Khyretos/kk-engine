@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -96,6 +97,35 @@ public:
     int addOption(Option option);
     Option* option(const std::string& id);
     const std::vector<Option>& options() const { return m_options; }
+    // A row player 1 types into (an address, a join code): A on it opens
+    // an on-screen keyboard; on the keyboard, just type (Enter keeps it,
+    // Esc puts back what was there). Saved with the other options.
+    // `onDone` runs when they finish typing (kept, not cancelled).
+    int addTextOption(std::string id, std::string label, std::string placeholder = {},
+                      std::function<void(const std::string&)> onDone = {});
+    bool isTextOption(const std::string& id) const { return m_texts.count(id) > 0; }
+    std::string text(const std::string& id) const;
+    std::string placeholder(const std::string& id) const;
+    void setText(const std::string& id, std::string text);
+
+    // ---- typing into a text row (player 1 only; the others carry on)
+    // The on-screen keyboard: rows of keys; the last row is the actions.
+    static const std::vector<std::vector<std::string>>& keyboardKeys();
+    static constexpr const char* kKeyDelete = "Delete";
+    static constexpr const char* kKeyClear = "Clear";
+    static constexpr const char* kKeyDone = "Done";
+    static constexpr size_t kMaxTextLength = 80;
+    bool editing() const { return !m_editing.empty(); }
+    const std::string& editingId() const { return m_editing; }
+    int keyRow() const { return m_keyRow; }
+    int keyCol() const { return m_keyCol; }
+    void startEditing(const std::string& id);
+    // Adds what was typed, keeping only what an address or a code can
+    // hold (letters, digits and . : - _ @ [ ]).
+    void typeText(const std::string& typed);
+    void backspace();
+    // keep = false puts back the text from before.
+    void finishEditing(bool keep);
     // The CPU players' difficulty names, easiest first (default Easy,
     // Normal, Hard, Expert). Resets every CPU to the second one.
     void setDifficulties(std::vector<std::string> names);
@@ -169,6 +199,17 @@ private:
     void changed() { ++m_revision; }
     void refreshCpuRows();
     void step(int seat, const Press& press);
+    void editStep(const Press& press);
+
+    struct TextField {
+        std::string text, placeholder;
+        std::function<void(const std::string&)> onDone;
+    };
+    std::map<std::string, TextField> m_texts; // by option id
+    std::map<std::string, std::string> m_savedTexts; // loaded before their row was added
+    std::string m_editing;                    // the text row being typed into, or empty
+    std::string m_before;                     // its text before
+    int m_keyRow = 0, m_keyCol = 0;
 
     std::vector<Seat> m_seats;
     std::vector<LookField> m_looks;
