@@ -56,6 +56,7 @@ Switches for demos and tests (developer builds):
 | `KKE_FLY_QUIT=<s>` | Quit after that long, logging where every plane is every 5 s |
 | `KKE_FLY_STUNT_TIME=<s>` | The length of a Stunts round (default 120) |
 | `KKE_FLY_WAIT=<n>` | Online host: start the flight once n players have joined |
+| `KKE_FLY_CAMERA=chase\|cockpit\|far` | The camera every flight starts with |
 | `KKE_FLY_BENCH=pileup` | Crash benchmark: every plane flies head-on into the others at full speed, again every 7 s. With `KKE_BENCHMARK=30` it records frame times; `kke_benchmark` runs it as `flying_pileup` |
 | `KKE_NET=host`, `KKE_NET=join:ADDRESS`, `KKE_NET_NAME=<name>` | Online without the menu ([NETWORKING.md](../../docs/NETWORKING.md)) |
 | `KKE_LOBBY_JOIN=<n>` | The first n controllers already plugged in join the start menu |
@@ -165,9 +166,8 @@ rounds a second; a plane near the ring of your sight is led for you.
 Seventeen hits bring a plane down, and a shot-down plane counts as a kill
 for whoever hurt it last in the ten seconds before. Your health bar is
 in your panel, a mark flashes on your sight when you hit, and the feed
-says who shot down whom. Planes come back 850 m from the town, as far
-from the others as they can be, and bullets can't hurt them for 3 s.
-Buildings stop bullets, and flying into one is a crash.
+says who shot down whom. Over every other plane in view is its name and
+its health. Buildings stop bullets, and flying into one is a crash.
 
 ### Collisions
 
@@ -179,9 +179,10 @@ A collision counts as a crash, not a kill.
 ### Crashing
 
 Hit the ground, the sea, a hill or a building and the plane explodes; 2.5 s later
-you are back in the air: in a race at the last ring you passed, otherwise
-above where you went down. Fly more than 4.2 km out to sea and you are
-put back over the island too.
+you are back on the runway (a race keeps your lap and ring). Until you
+are 10 m up, nothing can hit you: bullets and other planes pass through,
+and your guns are quiet. Fly more than 4.2 km out to sea and you are put
+back in the air over the island.
 
 ### Changing controller
 
@@ -301,11 +302,12 @@ paint jobs are the pack's texture variants (`setTextureOverride`).
 ### Smoke
 
 `updateTrail` drops a puff every 1.5 m flown behind the tail (along the
-way since last frame, so a slow frame leaves no gaps). Puffs grow and
-whiten over 7 s and drift up. They are drawn as lit spheres
-(`kke::SphereImpostorRenderer`), one draw for every plane's smoke; a puff
-right in front of a camera is left out so the chase camera doesn't fly
-through a wall of smoke.
+way since last frame, so a slow frame leaves no gaps), tinted with the
+plane's colour. The puffs are the engine's soft smoke
+(`kke::ParticleEffects`, the same as the racing cars' tyre smoke): they
+spread and drift up over 7 s, lit by the sun and the sky. Smoke thins
+out right in front of a camera, so the chase camera sees through the
+trail it follows.
 
 ### Cameras and split screen
 
@@ -314,7 +316,9 @@ One camera per player at this screen, laid out with `kke::splitScreen`
 The chase camera sits behind and above the plane in the plane's own
 frame, smoothed, and leans only halfway into a bank so the horizon still
 says which way is up; upside down it follows the plane. The cockpit
-camera is at the pilot's seat. Look (right stick, hat, mouse) turns the
+camera sits above the nose, halfway between the seat and the propeller,
+so the wing and the long nose don't fill the view; from there the
+propeller isn't drawn (it would be a blur). Look (right stick, hat, mouse) turns the
 view around the plane and springs back when let go.
 
 ### Players and controllers (Players.cpp, engine Lobby, LobbyModule)
