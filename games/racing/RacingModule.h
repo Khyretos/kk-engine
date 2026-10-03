@@ -116,6 +116,7 @@ private:
         // Drawing.
         kke::ModelModule::InstanceId bodyInst = 0, wheelInst[4] = {};
         std::vector<std::vector<glm::vec3>> dented, dentedNormals; // the body now (car space), once hit
+        std::vector<std::vector<glm::vec3>> pressed; // the local dents pushed in by hand, on top of FEMFX's crumple
         bool dentsChanged = false;
         std::shared_ptr<Shell> shell; // its FEMFX body (Crumple.cpp), when the build has FEMFX
         // Where it is.
@@ -256,6 +257,7 @@ private:
     void handleContacts();
     void hitCar(Car& c, const glm::vec3& point, const glm::vec3& into, float speed, Car* by); // by: the other car, or null
     void dent(Car& c, const glm::vec3& localPoint, const glm::vec3& localDir, float depth);
+    void addPressedDents(Car& c); // FEMFX's shape read back: the hand-pressed dents go back on top (Damage.cpp)
     void applyDamage(Car& c);
     void updateEffects(Car& c, float dt);
     void updateScrapes(float dt);

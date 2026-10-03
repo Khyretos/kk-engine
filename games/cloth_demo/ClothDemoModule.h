@@ -138,6 +138,7 @@ private:
     float m_windDegrees = 20.0f;
     // Measured, smoothed: whole physics step, the protection pass, the mesh rebuild.
     double m_stepMs = 0.0, m_protectMs = 0.0, m_meshMs = 0.0;
+    double m_frameMs = 0.0; // smoothed frame time (the Cost panel)
     float m_pixelAngle = 0.001f; // radians per pixel (thread width)
 };
 

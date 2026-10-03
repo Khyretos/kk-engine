@@ -36,6 +36,7 @@ constexpr uint16_t kEventResult = kEventBase + 2; // owner -> host -> all: a bea
 constexpr uint16_t kEventGame = kEventBase + 3;  // anyone -> host -> all: the minigame's own (Game)
 constexpr uint16_t kEventVote = kEventBase + 4;  // host -> all: the vote for the next game, as it stands (Vote)
 constexpr uint16_t kEventBallot = kEventBase + 5; // a player -> host: their pick (Ballot)
+constexpr uint16_t kEventKnock = kEventBase + 6; // anyone -> host -> all: a bean was pushed (Knock); its own machine moves it
 
 // A bean as its owner sees it, enough for another machine to draw it.
 struct Pose {
@@ -110,5 +111,15 @@ std::vector<uint8_t> encode(const Vote& v);
 std::optional<Vote> decodeVote(const std::vector<uint8_t>& bytes);
 std::vector<uint8_t> encode(const Ballot& b);
 std::optional<Ballot> decodeBallot(const std::vector<uint8_t>& bytes);
+
+// A push on a bean another machine plays.
+struct Knock {
+    uint32_t round = 0;
+    uint8_t player = 0;        // the bean pushed
+    glm::vec3 velocity{0.0f};  // m/s (y: up), within +-40
+    float stun = 0.0f;         // s, 0..3
+};
+std::vector<uint8_t> encode(const Knock& k);
+std::optional<Knock> decodeKnock(const std::vector<uint8_t>& bytes);
 
 } // namespace party::netparty

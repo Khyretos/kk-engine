@@ -40,6 +40,7 @@ default): the ground and the ragdolls are Jolt bodies.
 | `KKE_PROC_HIT_SPEED=<m/s>` | how hard that hit and a normal click are (default 3; about 4 and up knocks them down) |
 | `KKE_PROC_QUIT=<seconds>` | quit after that long, logging each creature's gait, speed and state every 2 s |
 | `KKE_PROC_TRACE=1` | log a hit body's balance, weakest joint and lean every frame |
+| `KKE_PROC_STATION=<0-5>` | start the tour at that station |
 
 ## Controls
 
@@ -61,6 +62,8 @@ The pad buttons do exactly what a click at the crosshair would.
 | Hit the dog or the person (they stagger) (`proc.hit`) | left click them | X (west), aimed at the crosshair |
 | Hard hit (they fall, then get up) (`proc.hard`) | Shift + left click them | Y (north), aimed at the crosshair |
 | Scare a bug (it runs off) | left click it | X or Y at the crosshair |
+| Tour: next / previous station (`proc.next`, `proc.prev`) | N / B | d-pad right / left |
+| Tour: hide or show the card (`proc.guide`) | H | click the left stick |
 | Dog: next gait (`proc.gait`: auto, walk, trot, gallop) | G | RB (right shoulder) |
 | Dog: auto / walk / trot / gallop | 0 / 1 / 2 / 3 | the panel's "Dog gait" row |
 | Orbit the camera (`camera.orbit`) | right drag | right stick |
@@ -93,8 +96,9 @@ On a touch screen, two fingers turn and zoom the camera (the
 
 The panel is a `kke::DemoPanelModule` titled "Procedural animation" on
 the left edge, drawn with RmlUi
-([docs/DEMO_PANEL.md](../../docs/DEMO_PANEL.md)). It starts open with the
-game keeping the controls; the mouse can click and drag any row.
+([docs/DEMO_PANEL.md](../../docs/DEMO_PANEL.md)). It starts collapsed
+(main.cpp), so the tour's card is the first thing you read; opened, the
+game keeps the controls and the mouse can click and drag any row.
 `panel.toggle` (View on a pad, F3 on the keyboard) makes it Active: up and
 down pick a row, left and right change it, A presses, B hands control
 back. While it is Active, player 1's `game` context is off, so the sticks
@@ -115,6 +119,30 @@ window; the panel's "Quit" row, just above "Hide panel", does.
 | one line per creature | name, gait, speed, head turn, and "(staggering)", "(down)" or "(getting up)" while it is a ragdoll |
 
 ## How it plays
+
+### The tour
+
+Kees asked what this demo is *for* (2026-09-28: "im missing the reason to
+use it and how it could be handy"), and picked a guided tour (2026-10-03).
+A card at the bottom left walks through six stations ([Tour.cpp](Tour.cpp)).
+Each points the camera at one creature and says what you see, which games
+need it ("Use it for") and what to try, with the buttons for the device you
+hold:
+
+| # | Station | Camera on | What it shows |
+|---|---|---|---|
+| 1 | Creatures with no animations | the meadow | the idea: motion worked out while they move |
+| 2 | Feet that find the ground | the spider | the bugs walk to a flag on top of the steps: feet find each step |
+| 3 | Walk, trot, gallop | the dog | gaits picked by speed; the dog's gait is set back to auto |
+| 4 | Looking at you | the person, close | heads follow the camera within the neck's limits |
+| 5 | Hit, stagger, fall, get up | the person | the tour hits it every 6 s while it stands, light then hard |
+| 6 | Your turn | the meadow | everything, with a pointer to docs/PROCEDURAL_ANIMATION.md |
+
+`KKE_PROC_STATION=<0-5>` starts at a station (screenshots). With
+`KKE_PROC_FOCUS` or `KKE_PROC_VIEW` set and no station, the camera stays
+where those put it.
+
+### Playing
 
 It is a toy, not a game: no goal and no end. The creatures wander between
 random spots in a 18 x 18 m area in the middle of the meadow. Click the
@@ -463,5 +491,6 @@ Pitfalls the code shows:
 | [main.cpp](main.cpp) | the app, the mood, the module list, the camera's pad controls, the panel and its crosshair |
 | [ProceduralDemoModule.h](ProceduralDemoModule.h) | the module, the `Part` and `Creature` structs, the switches in a comment |
 | [ProceduralDemoModule.cpp](ProceduralDemoModule.cpp) | mesh helpers, ground and steps, the four creature builders, think / move / animate, hits and the active ragdoll, clicks, input actions (`defineInput`, `readInput`), the RmlUi panel (`buildPanel`) |
+| [Tour.cpp](Tour.cpp) | the guided tour: the six stations, the card (RmlUi), the tour's buttons, the timed hits at station 5 |
 | [CMakeLists.txt](CMakeLists.txt) | the `procedural_demo` executable, `game.json` and shader copies, `kke_use_ui` (the RmlUi shaders and fonts) |
 | [game.json](game.json) | the marketplace entry |

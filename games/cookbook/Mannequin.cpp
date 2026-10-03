@@ -10,6 +10,7 @@
 #include "kke/modules/RigidBodyModule.h"
 
 #include <SDL3/SDL.h>
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <cmath>
@@ -101,20 +102,24 @@ void Mannequin::init(kke::Application& app) {
     m_models->setTransform(m_stander,
                            glm::rotate(glm::translate(glm::mat4(1.0f), standAt), glm::radians(m_turnToPlusZ), glm::vec3(0, 1, 0)));
 
-    // The orb the hand reaches for: a small glowing cube.
+    // The orb the hand reaches for: a small glowing ball (a UV sphere).
     std::vector<kke::Vertex> v;
     std::vector<uint32_t> idx;
     const glm::vec3 c(1.0f, 0.85f, 0.3f);
-    const glm::vec3 normals[6] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
-    for (const glm::vec3& n : normals) {
-        const glm::vec3 u = std::abs(n.y) > 0.5f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
-        const glm::vec3 w = glm::cross(n, u);
-        const uint32_t b = static_cast<uint32_t>(v.size());
-        for (glm::vec2 k : { glm::vec2(-1, -1), glm::vec2(1, -1), glm::vec2(1, 1), glm::vec2(-1, 1)})
-            v.push_back({ (n + u * k.x + w * k.y) * 0.06f, c, n, glm::vec2(0.0f) });
-        if (glm::dot(glm::cross(u, w), n) >= 0.0f) idx.insert(idx.end(), { b, b + 1, b + 2, b, b + 2, b + 3 });
-        else idx.insert(idx.end(), { b, b + 2, b + 1, b, b + 3, b + 2 });
+    constexpr int rings = 12, segments = 20;
+    for (int r = 0; r <= rings; ++r) {
+        const float lat = glm::pi<float>() * static_cast<float>(r) / rings; // 0 at the top
+        for (int s = 0; s <= segments; ++s) {
+            const float lon = glm::two_pi<float>() * static_cast<float>(s) / segments;
+            const glm::vec3 n(std::sin(lat) * std::cos(lon), std::cos(lat), std::sin(lat) * std::sin(lon));
+            v.push_back({ n * orbRadius, c, n, glm::vec2(0.0f) });
+        }
     }
+    for (int r = 0; r < rings; ++r)
+        for (int s = 0; s < segments; ++s) {
+            const uint32_t a = static_cast<uint32_t>(r * (segments + 1) + s), b = a + segments + 1;
+            idx.insert(idx.end(), { a, a + 1, b, a + 1, b + 1, b });
+        }
     m_orb = std::make_unique<kke::DynamicMeshRenderer>(app);
     m_orb->upload(v, idx);
     m_lookAt = standAt + glm::vec3(0.0f, 1.6f, 2.0f);
@@ -147,8 +152,11 @@ void Mannequin::updateWalker(float dt) {
 // --8<-- [end:walker]
 
 glm::vec3 Mannequin::orbPosition() const {
-    // In front of the stander, to its right, drifting in a slow figure eight.
-    return standAt + glm::vec3(-0.35f + 0.25f * std::sin(m_time * 0.9f), 1.25f + 0.25f * std::sin(m_time * 1.8f), 0.45f);
+    // In front of the stander, to its right (-X: it faces +Z), drifting in
+    // a slow figure eight that stays where a right hand comfortably goes:
+    // never across the body, never down by the hips.
+    return standAt + glm::vec3(-0.4f + 0.12f * std::sin(m_time * 0.9f), 1.25f + 0.16f * std::sin(m_time * 1.8f),
+                               0.42f + 0.08f * std::cos(m_time * 0.9f));
 }
 
 void Mannequin::updateStander(float dt) {
@@ -179,7 +187,10 @@ void Mannequin::updateStander(float dt) {
     // elbow leans: out and down.
     if (m_armR.valid()) {
         kke::ArmGoal goal;
-        goal.hand = model(orbPosition());
+        // The palm on the near side of the ball, not inside it.
+        const glm::vec3 orb = orbPosition();
+        const glm::vec3 shoulder = standAt + glm::vec3(-0.18f, 1.42f, 0.0f);
+        goal.hand = model(orb + glm::normalize(shoulder - orb) * (orbRadius + 0.03f));
         goal.elbowToward = model(standAt + glm::vec3(-0.8f, 0.6f, -0.3f));
         kke::solveHumanArm(*m_data, pose, m_armR, goal, m_body, kke::BodyAvoid{}, &m_armAvoid);
     }

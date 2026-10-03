@@ -49,9 +49,9 @@ kke::ModelModule::ModelId SyntySceneModule::load(const std::string& relative) {
     return m_models->load(asset->path, opts);
 }
 
-void SyntySceneModule::place(const std::string& relative, glm::vec3 position, float yawDegrees, glm::vec3 scale) {
+kke::ModelModule::InstanceId SyntySceneModule::place(const std::string& relative, glm::vec3 position, float yawDegrees, glm::vec3 scale) {
     kke::ModelModule::ModelId id = load(relative);
-    if (!id) return;
+    if (!id) return 0;
     // Synty pivots vary: building pieces sit at a corner, props at their
     // center (so a crate would be half in the floor). Place every piece by
     // its bounds instead: centered on `position` in X/Z, bottom at its Y.
@@ -61,8 +61,49 @@ void SyntySceneModule::place(const std::string& relative, glm::vec3 position, fl
     glm::mat4 t = glm::translate(glm::mat4(1.0f), position);
     t = glm::rotate(t, glm::radians(yawDegrees), glm::vec3(0, 1, 0));
     t = glm::scale(t, scale);
-    m_models->spawn(id, glm::translate(t, offset));
+    const kke::ModelModule::InstanceId instance = m_models->spawn(id, glm::translate(t, offset));
     ++m_propCount;
+    m_props.emplace_back(instance, fs::path(relative).filename().string());
+    return instance;
+}
+
+void SyntySceneModule::makePropsBreakable() {
+    m_breakables = std::make_unique<kke::Breakables>(*m_app);
+    for (const auto& [instance, file] : m_props) {
+        kke::BreakKind kind;
+        if (!instance || !kke::guessBreakKind(file, kind)) continue;
+        if (const char* only = std::getenv("KKE_SYNTY_BREAKABLE_ONLY"); only && file.find(only) == std::string::npos) continue;
+        kke::Breakables::Options o;
+        o.kind = kind;
+        o.seed = static_cast<uint32_t>(instance) * 2654435761u;
+        o.maxSize = 3.0f; // trees stay trees
+        std::string stats;
+        if (!m_breakables->make(instance, m_models->transform(instance), o, &stats)) continue;
+        kke::log::get(name())->info("breakable {}: {}", file, stats);
+        if (kind == kke::BreakKind::Metal) continue; // the drop aims at what splinters
+        const kke::ModelData* d = m_models->model(m_models->instanceModel(instance));
+        const glm::mat4 t = m_models->transform(instance);
+        m_crates.push_back(glm::vec3(t * glm::vec4((d->boundsMin + d->boundsMax) * 0.5f, 1.0f)) +
+                           glm::vec3(0.0f, (d->boundsMax.y - d->boundsMin.y) * 0.5f, 0.0f));
+    }
+}
+
+// The selected character, dropped from above onto the next crate or
+// barrel, belly first. (A thrown ragdoll's limbs drag it short of where
+// it was aimed; a drop lands where it should, every time.)
+void SyntySceneModule::throwAtProps() {
+    if (!m_breakables || m_crates.empty() || m_characters.empty()) return;
+    Character& c = m_characters[size_t(m_selected)];
+    if (c.ragdoll) return;
+    const glm::vec3 target = m_crates[m_nextCrate++ % m_crates.size()];
+    glm::mat4 t = m_models->transform(c.instance);
+    t[3] = glm::vec4(target + glm::vec3(0.0f, 1.5f, 0.0f), 1.0f);
+    m_models->setTransform(c.instance, t);
+    ragdoll(c, glm::vec3(0.0f, -6.0f, 0.0f));
+}
+
+void SyntySceneModule::shutdown() {
+    if (m_breakables) m_breakables->clear(); // PhysicsModule shuts down after us
 }
 
 void SyntySceneModule::init(kke::Application& app) {
@@ -119,6 +160,11 @@ void SyntySceneModule::init(kke::Application& app) {
     place("StaticMeshes/SM_Prop_FlagPole_01.fbx", glm::vec3(0.0f, 0, -8.0f));
 
     addJoltLevel();
+#if KKE_ENABLE_FEMFX
+    // KKE_SYNTY_BREAKABLES=0: the props stay plain (to compare).
+    const char* breakables = std::getenv("KKE_SYNTY_BREAKABLES");
+    if (m_app->getModule<kke::PhysicsModule>() && !(breakables && *breakables == '0')) makePropsBreakable();
+#endif
 
     // --- characters in a row, each doing something different
     struct Spec { const char* file; const char* label; const char* behavior; };
@@ -191,6 +237,7 @@ void SyntySceneModule::rotateBone(Character& c, const char* boneName, glm::vec3 
 
 void SyntySceneModule::update(const kke::UpdateContext& ctx) {
     readInput();
+    if (m_breakables) m_breakables->update();
     m_time += ctx.dt;
     m_models->setShowBones(m_showBones);
     std::vector<glm::mat4> bodies;
@@ -390,6 +437,7 @@ void SyntySceneModule::defineInput() {
     action("synty.ragdoll", "Ragdoll the selected character", SDL_SCANCODE_R, SDL_GAMEPAD_BUTTON_WEST);
     action("synty.stand", "Everyone stands up", SDL_SCANCODE_T, SDL_GAMEPAD_BUTTON_NORTH);
     if (kHasGlass) action("synty.glass", "Through a glass pane", SDL_SCANCODE_G, SDL_GAMEPAD_BUTTON_SOUTH);
+    if (kHasGlass) action("synty.crates", "Drop onto a crate", SDL_SCANCODE_C, SDL_GAMEPAD_BUTTON_EAST);
     action("synty.bones", "Show bones", SDL_SCANCODE_B, SDL_GAMEPAD_BUTTON_LEFT_STICK);
     action("synty.prev", "Previous character", SDL_SCANCODE_LEFTBRACKET, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
     action("synty.next", "Next character", SDL_SCANCODE_RIGHTBRACKET, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
@@ -407,6 +455,7 @@ void SyntySceneModule::readInput() {
     if (m.pressed("synty.stand"))
         for (Character& c : m_characters) standUp(c);
     if (kHasGlass && m.pressed("synty.glass")) throughGlass(m_characters[size_t(m_selected)]);
+    if (kHasGlass && m.pressed("synty.crates")) throwAtProps();
     const int n = static_cast<int>(m_characters.size());
     if (m.pressed("synty.prev")) select((m_selected + n - 1) % n);
     if (m.pressed("synty.next")) select((m_selected + 1) % n);
@@ -441,7 +490,7 @@ void SyntySceneModule::buildPanel() {
         s.note(looked);
         return;
     }
-    const std::string glass = kHasGlass ? "{synty.glass} through glass  " : "";
+    const std::string glass = kHasGlass ? "{synty.glass} through glass  {synty.crates} onto a crate  " : "";
     s.hint("{synty.ragdoll} ragdoll  Shift+{synty.ragdoll} everyone  {synty.stand} stand up  " + glass +
                "{synty.prev}{synty.next} who  {synty.bones} bones  F1 developer panels",
            "{synty.ragdoll} ragdoll  {synty.stand} stand up  " + glass + "{synty.prev}{synty.next} who  " +
@@ -460,6 +509,9 @@ void SyntySceneModule::buildPanel() {
         for (Character& c : m_characters) standUp(c);
     }).showIf(physics);
     if (kHasGlass) s.button("Through a glass pane", [this] { throughGlass(m_characters[size_t(m_selected)]); }).showIf(physics);
+    s.button("Drop onto a crate", [this] { throwAtProps(); }).showIf([this, physics] { return physics() && m_breakables && m_breakables->count() > 0; });
+    s.note("The crates, barrels, chest and barrier are breakable (kke::Breakables): wood splinters, metal dents.")
+        .showIf([this] { return m_breakables && m_breakables->count() > 0; });
     s.note("Ragdolls need a physics module (Jolt or FEMFX).").showIf([this] { return m_physics == nullptr; });
     if (m_characters.empty()) return;
 

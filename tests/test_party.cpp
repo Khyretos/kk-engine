@@ -131,6 +131,28 @@ TEST(PartyShatter, ShardsCoverThePaneExactly) {
     for (size_t i = 0; i < shards.size(); ++i) EXPECT_EQ(again[i], shards[i]);
 }
 
+TEST(PartyShatter, HexTileCracksIntoPiecesCoveringIt) {
+    // Hex-a-Gone's tile outline (decreasing angle: the pane's turn).
+    Polygon2 hex;
+    for (int k = 5; k >= 0; --k) {
+        const float a = 3.14159265f / 3.0f * static_cast<float>(k);
+        hex.push_back({ std::cos(a) * 1.05f, std::sin(a) * 1.05f });
+    }
+    const std::vector<Polygon2> pieces = shatterPolygon(hex, { 0.2f, -0.1f }, 9, 42);
+    ASSERT_GE(pieces.size(), 4u);
+    float area = 0.0f;
+    for (const Polygon2& p : pieces) area += polygonArea(p);
+    EXPECT_NEAR(area, polygonArea(hex), 1e-3f) << "no gaps, no overlaps";
+    // A piece's prism: a closed hull round its own middle.
+    std::vector<glm::vec3> hull;
+    std::vector<kke::Vertex> v;
+    std::vector<uint32_t> idx;
+    shardPrism(pieces[0], polygonCentroid(pieces[0]), 0.2f, glm::vec3(1.0f), glm::vec3(0.5f), hull, v, idx, 0.02f);
+    EXPECT_EQ(hull.size(), pieces[0].size() * 2);
+    EXPECT_EQ(idx.size() % 3, 0u);
+    for (uint32_t i : idx) EXPECT_LT(i, v.size());
+}
+
 TEST(PartyNet, RoundWithEverySeatFitsOneEventAndRoundTrips) {
     netparty::Round r;
     r.round = 42;
@@ -214,6 +236,16 @@ TEST(PartyNet, EventsAndPosesRoundTrip) {
     ASSERT_TRUE(ballot.has_value());
     EXPECT_EQ(ballot->player, 5);
     EXPECT_EQ(ballot->choice, 1);
+    // A push on another machine's bean: the velocity to 1 cm/s, clamped.
+    const auto knock = netparty::decodeKnock(netparty::encode(netparty::Knock{ 7, 2, glm::vec3(5.5f, 1.8f, -99.0f), 0.35f }));
+    ASSERT_TRUE(knock.has_value());
+    EXPECT_EQ(knock->round, 7u);
+    EXPECT_EQ(knock->player, 2);
+    EXPECT_NEAR(knock->velocity.x, 5.5f, 0.011f);
+    EXPECT_NEAR(knock->velocity.y, 1.8f, 0.011f);
+    EXPECT_NEAR(knock->velocity.z, -40.0f, 0.011f);
+    EXPECT_NEAR(knock->stun, 0.35f, 0.011f);
+    EXPECT_FALSE(netparty::decodeKnock({ 1, 2 }).has_value());
 
     // Garbage never decodes into something.
     EXPECT_FALSE(netparty::decodeRound({ 1, 2, 3 }).has_value());

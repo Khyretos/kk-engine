@@ -15,6 +15,10 @@
         .player.out .status { color: #ff9a8a; }
         .player.won .status { color: #9cff9a; }
         .player .mic { font-size: 12dp; color: #9cff9a; }
+        /* Stamina: jumping, diving and pushing use it. */
+        .player .tank { width: 120dp; height: 6dp; margin-top: 5dp; border-radius: 3dp; background-color: #ffffff30; }
+        .player .tank .fill { height: 6dp; border-radius: 3dp; background-color: #7ad8ff; }
+        .player .tank.tired .fill { background-color: #ff9a6b; }
         /* The clock and the minigame's line, top middle. */
         #top { position: absolute; top: 12dp; left: 0; width: 100%; text-align: center; }
         #top .round { font-size: 12dp; letter-spacing: 3dp; color: #ffd76b; }
@@ -85,6 +89,7 @@
             <div class="points">{{p.points}}</div>
             <div class="status" data-if="p.status != ''">{{p.status}}</div>
             <div class="mic" data-if="p.talking">talking</div>
+            <div class="tank" data-if="p.tank" data-class-tired="p.tired"><div class="fill" data-style-width="p.stamina"></div></div>
         </div>
         <div id="top" data-if="!card">
             <div class="round" data-if="clock != ''">{{round}}</div>

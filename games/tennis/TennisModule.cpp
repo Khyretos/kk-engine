@@ -106,9 +106,9 @@ void TennisModule::defineControls() {
     for (int p = 0; p < 4; ++p) {
         kke::InputMap& in = m_input->map(p);
         kke::InputModule::defineCharacterActions(in);
-        // Tennis needs the move stick, the shot buttons and push to talk, nothing else.
-        for (const char* a : { "jump", "sprint", "walk", "crouch", "fire", "aim", "interact", "camera.toggle", "camera.zoom", "look", "look.rate",
-                               "voice.talk" })
+        // Tennis needs the move stick, the camera stick, the shot buttons and
+        // push to talk, nothing else.
+        for (const char* a : { "jump", "sprint", "walk", "crouch", "fire", "aim", "interact", "camera.toggle", "camera.zoom", "look", "voice.talk" })
             in.clearBindings(a);
         in.addBinding(IM::bind("voice.talk", IM::key(SDL_SCANCODE_V))); // B is a shot on the pad; keep one talk key everywhere
         in.addBinding(IM::bind("voice.talk", IM::pad(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)));
@@ -248,7 +248,7 @@ const char* const kCpuNames[] = { "Ace", "Deuce", "Volley", "Lobster" };
 // slots (syncNetPlayers).
 std::vector<TennisModule::Entry> TennisModule::seatEntries() const {
     std::vector<Entry> entries;
-    if (m_lobby && !m_allBots) {
+    if (m_lobby && !m_allBots && !m_lobby->lobby().joinedSeats().empty()) {
         kke::Lobby& l = m_lobby->lobby();
         for (int seat : l.joinedSeats()) {
             Entry e;
@@ -259,6 +259,8 @@ std::vector<TennisModule::Entry> TennisModule::seatEntries() const {
                 if (fields[f].id == "colour" && !fields[f].swatches.empty())
                     e.tint = fields[f].swatches[static_cast<size_t>(l.seat(seat).look[f]) % fields[f].swatches.size()] * 1.25f;
             e.input = m_lobby->playerOf(seat);
+            // The menu was skipped (KKE_TENNIS_LOBBY=0): seats in order, the first on player 0's devices.
+            if (e.input < 0) e.input = static_cast<int>(entries.size());
             entries.push_back(std::move(e));
         }
         for (int i = 0; i < l.cpuCount(); ++i) {
@@ -269,6 +271,7 @@ std::vector<TennisModule::Entry> TennisModule::seatEntries() const {
             entries.push_back(std::move(e));
         }
     } else if (!m_allBots) {
+        // No one joined at the menu: you, on the keyboard or the first controller.
         Entry e;
         e.name = "You";
         e.tint = kTints[0];
@@ -467,6 +470,7 @@ void TennisModule::update(const kke::UpdateContext& ctx) {
             if (!player(idx).cpu && !player(idx).remote) readHuman(*m, player(idx));
     updateBodies(dt);
     updateCameras(dt);
+    updateMarks();
     updateHud();
     sendNet();
 

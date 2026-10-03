@@ -93,7 +93,8 @@ are rebindable actions in the "Shots" and "Game" groups.
 
 | Action | Keyboard / mouse | Controller |
 |---|---|---|
-| Run (`move`) | WASD | left stick |
+| Run (`move`, relative to the camera) | WASD | left stick |
+| Look around (`look.rate`; the camera settles back behind you, facing the net, when you let go) | none | right stick |
 | Topspin, the all-round shot; also the toss and the serve (`tennis.topspin`) | Space / left mouse | A (south) |
 | Flat: hard and fast (`tennis.flat`) | J | X (west) |
 | Slice: low and slow (`tennis.slice`) | K / right mouse | B (east) |
@@ -119,6 +120,12 @@ are rebindable actions in the "Shots" and "Game" groups.
   the side the ball is on.
 - **Aim** with the stick (or WASD) as you hit: left and right is across
   the court, forward is deeper, back is shorter.
+- **Reading the ball.** The camera sits close behind you, a little over
+  your right shoulder, looking over the net. The ball has a soft shadow
+  straight under it on the court (smaller and darker as it comes down),
+  and a shot coming at you shows a yellow ring where it will land; the
+  ring stays a moment after the bounce, shrinking
+  ([Marks.cpp](Marks.cpp)).
 - **The serve.** Stand still and hold a shot button: the ball goes up and
   the racket goes back. Let go to swing; the best serve meets the ball
   near the top of the toss. Topspin and Lob serve a kick serve (high and

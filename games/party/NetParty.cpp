@@ -91,6 +91,14 @@ template <typename Stream> void serialize(Stream& s, Vote& m) {
     s.integer(m.secondsLeft, 0, 60);
     s.integer(m.winner, -1, 3);
 }
+template <typename Stream> void serialize(Stream& s, Knock& m) {
+    s.integer(m.round, 0, 0x7fffffff);
+    s.integer(m.player, 0, net::kMaxPlayers);
+    s.real(m.velocity.x, -40.0f, 40.0f, 0.01f);
+    s.real(m.velocity.y, -40.0f, 40.0f, 0.01f);
+    s.real(m.velocity.z, -40.0f, 40.0f, 0.01f);
+    s.real(m.stun, 0.0f, 3.0f, 0.01f);
+}
 
 template <typename Msg> std::vector<uint8_t> write(Msg m) {
     std::vector<uint8_t> out;
@@ -153,6 +161,8 @@ std::optional<Game> decodeGame(const std::vector<uint8_t>& bytes) { return read<
 std::vector<uint8_t> encode(const Vote& v) { return write(v); }
 std::optional<Vote> decodeVote(const std::vector<uint8_t>& bytes) { return read<Vote>(bytes); }
 std::vector<uint8_t> encode(const Ballot& b) { return write(b); }
+std::vector<uint8_t> encode(const Knock& k) { return write(k); }
+std::optional<Knock> decodeKnock(const std::vector<uint8_t>& bytes) { return read<Knock>(bytes); }
 std::optional<Ballot> decodeBallot(const std::vector<uint8_t>& bytes) { return read<Ballot>(bytes); }
 
 } // namespace party::netparty

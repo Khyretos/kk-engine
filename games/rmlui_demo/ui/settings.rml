@@ -25,6 +25,15 @@
         #saved { display: inline-block; color: #6fe39a; margin-top: 8dp; }
         #buttons { float: right; }
         .note { font-size: 12dp; color: #8b93aa; padding: 10dp 4dp; }
+        .keys-head { display: block; padding: 12dp 4dp 4dp 4dp; font-size: 12dp; color: #8b93aa; }
+        .keys-row { display: block; padding: 3dp 4dp; border-bottom: 1dp #222a45; }
+        .k-name { display: inline-block; width: 38%; vertical-align: middle; }
+        .k-cell { display: inline-block; width: 28%; margin-left: 2%; text-align: center; vertical-align: middle; }
+        .keys-row .k-cell { padding: 3dp 0dp; font-size: 15dp; }
+        .keys-row .k-cell img { font-size: 20dp; }
+        .keys-row .k-cell.waiting { color: #ffcf5c; border-color: #ffcf5c; }
+        .keys-foot { display: block; padding: 10dp 4dp 0dp 4dp; text-align: right; }
+        .k-status { display: block; color: #ffcf5c; padding: 2dp 4dp 6dp 4dp; }
         @media (max-width: 800px) { .setting .name { width: 100%; } .setting .control { width: 100%; text-align: left; } }
     </style>
 </head>
@@ -108,10 +117,24 @@
                 <span class="name">Invert Y axis</span>
                 <span class="control"><input type="checkbox" data-checked="invert_y"/></span>
             </div>
-            <div class="setting">
-                <span class="name">Keys and buttons<span class="desc">Every action, for the keyboard, mouse and controllers, on the Input screen</span></span>
-                <span class="control"><button class="small" data-event-click="go('input')">Change them</button></span>
+            <div class="keys-head">
+                <span class="k-name">Keys and buttons</span><span class="k-cell">Keyboard</span><span class="k-cell">Controller</span>
             </div>
+            <div class="k-status" data-if="key_status != ''">{{ key_status }}</div>
+            <div class="keys-row" data-for="row, i : keys">
+                <span class="k-name">{{ row.label }}</span>
+                <button class="k-cell" data-class-waiting="row.wait_key" data-event-click="bind_key(i)">
+                    <span data-if="row.wait_key">press a key...</span><span data-if="!row.wait_key" data-rml="row.key"></span>
+                </button>
+                <button class="k-cell" data-class-waiting="row.wait_pad" data-event-click="bind_pad(i)">
+                    <span data-if="row.wait_pad">press a button...</span><span data-if="!row.wait_pad" data-rml="row.pad"></span>
+                </button>
+            </div>
+            <div class="keys-foot">
+                <button class="small" data-event-click="keys_default">Reset keys</button>
+                <button class="small" data-event-click="go('input')">Advanced...</button>
+            </div>
+            <div class="note">Pick a key or button, then press the new one. Advanced shows every action with second keys, chords and stick axes.</div>
         </panel>
 
         <tab>Gameplay</tab>

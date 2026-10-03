@@ -5,6 +5,8 @@
 #include "kke/modules/SettingsModule.h"
 #include "kke/modules/UiModule.h"
 #include "kke/modules/InputModule.h"
+#include "kke/modules/GameShellModule.h"
+#include "kke/ButtonPrompts.h"
 #include "InputScreen.h"
 
 #include <RmlUi/Core/Context.h>
@@ -143,6 +145,7 @@ void ShowcaseModule::setScreen(const std::string& screen) {
         m_loadingModel.DirtyAllVariables();
     }
     if (screen == "dialog" && m_node < 0) startDialogNode(0);
+    if (screen == "settings") refreshKeyRows(); // the Input screen may have changed them
     m_navModel.DirtyVariable("screen");
 }
 
@@ -213,7 +216,115 @@ void ShowcaseModule::buildSettingsModel() {
         h.DirtyAllVariables();
     });
     c.BindEventCallback("go", &ShowcaseModule::onGo, this);
+
+    // The simple key list: one row per action a player would change, its
+    // key and its controller button; pick one and press the new one.
+    if (auto k = c.RegisterStruct<KeyRow>()) {
+        k.RegisterMember("id", &KeyRow::id);
+        k.RegisterMember("label", &KeyRow::label);
+        k.RegisterMember("key", &KeyRow::key);
+        k.RegisterMember("pad", &KeyRow::pad);
+        k.RegisterMember("wait_key", &KeyRow::waitKey);
+        k.RegisterMember("wait_pad", &KeyRow::waitPad);
+    }
+    c.RegisterArray<std::vector<KeyRow>>();
+    c.Bind("keys", &m_keyRows);
+    c.Bind("key_status", &m_keyStatus);
+    c.BindFunc("key_waiting", [this](Rml::Variant& v) { v = !m_keyCapture.empty(); });
+    c.BindEventCallback("bind_key", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) { startKeyCapture(argInt(args, 0), false); });
+    c.BindEventCallback("bind_pad", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) { startKeyCapture(argInt(args, 0), true); });
+    c.BindEventCallback("keys_default", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
+        auto* input = m_app->getModule<kke::InputModule>();
+        if (!input) return;
+        for (int p = 0; p < input->players(); ++p) input->map(p).restoreDefaults();
+        m_keyStatus = input->save() ? "Back to the default keys and buttons" : "Could not write " + input->path();
+        refreshKeyRows();
+    });
     m_settingsModel = c.GetModelHandle();
+    refreshKeyRows();
+}
+
+void ShowcaseModule::refreshKeyRows() {
+    auto* input = m_app->getModule<kke::InputModule>();
+    m_keyRows.clear();
+    if (input) {
+        const kke::InputMap& map = input->map(0);
+        const kke::ButtonPrompts& prompts = input->prompts();
+        kke::PromptStyle pad = input->promptStyle(0);
+        if (!kke::isPadStyle(pad)) pad = kke::PromptStyle::Xbox;
+        auto glyphs = [&](kke::PromptStyle style, const std::string& id) {
+            const auto g = prompts.actionGlyphs(style, map, id);
+            return g.empty() ? std::string("not set") : prompts.rml(g);
+        };
+        for (const std::string& id : kke::GameShellModule::remappable(map)) {
+            const kke::ActionDef* a = map.action(id);
+            KeyRow r;
+            r.id = id;
+            r.label = a && !a->label.empty() ? a->label : id;
+            r.key = glyphs(kke::PromptStyle::Keyboard, id);
+            r.pad = glyphs(pad, id);
+            r.waitKey = id == m_keyCapture && !m_keyCapturePad;
+            r.waitPad = id == m_keyCapture && m_keyCapturePad;
+            m_keyRows.push_back(std::move(r));
+        }
+    }
+    if (m_settingsModel) {
+        m_settingsModel.DirtyVariable("keys");
+        m_settingsModel.DirtyVariable("key_status");
+        m_settingsModel.DirtyVariable("key_waiting");
+    }
+}
+
+void ShowcaseModule::startKeyCapture(int row, bool pad) {
+    if (row < 0 || row >= static_cast<int>(m_keyRows.size())) return;
+    m_keyCapture = m_keyRows[static_cast<size_t>(row)].id;
+    m_keyCapturePad = pad;
+    m_keyCaptureArmed = false; // the A press that clicked the row isn't the new button
+    m_keyStatus = pad ? "Press the new controller button for " + m_keyRows[static_cast<size_t>(row)].label + " (Start: cancel)"
+                      : "Press the new key or mouse button for " + m_keyRows[static_cast<size_t>(row)].label + " (Esc: cancel)";
+    refreshKeyRows();
+}
+
+void ShowcaseModule::finishKeyCapture(const kke::InputSource* source) {
+    auto* input = m_app->getModule<kke::InputModule>();
+    if (source && input) {
+        const auto cls = m_keyCapturePad ? kke::GameShellModule::DeviceClass::Controller : kke::GameShellModule::DeviceClass::KeyboardMouse;
+        bool any = false;
+        for (int p = 0; p < input->players(); ++p) any |= kke::GameShellModule::rebind(input->map(p), m_keyCapture, cls, *source);
+        m_keyStatus = !any ? "That can't be used here" : input->save() ? "Saved" : "Could not write " + input->path();
+    } else {
+        m_keyStatus.clear();
+    }
+    m_keyCapture.clear();
+    for (int p = 0; input && p < input->players(); ++p) input->map(p).resetStates(); // the press isn't also an action
+    refreshKeyRows();
+}
+
+// While a row waits: the next key, mouse button or controller button (a
+// trigger pulled past halfway counts too) becomes the binding.
+void ShowcaseModule::keyCaptureEvent(const SDL_Event& e) {
+    if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat) {
+        if (e.key.key == SDLK_ESCAPE) {
+            finishKeyCapture(nullptr);
+        } else if (!m_keyCapturePad) {
+            const kke::InputSource s = kke::InputModule::key(e.key.scancode);
+            finishKeyCapture(&s);
+        }
+    } else if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !m_keyCapturePad) {
+        const kke::InputSource s = kke::InputModule::mouse(e.button.button);
+        finishKeyCapture(&s);
+    } else if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && m_keyCapturePad) {
+        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_START) {
+            finishKeyCapture(nullptr);
+        } else {
+            const kke::InputSource s = kke::InputModule::pad(static_cast<SDL_GamepadButton>(e.gbutton.button));
+            finishKeyCapture(&s);
+        }
+    } else if (e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION && m_keyCapturePad &&
+               (e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER || e.gaxis.axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) && e.gaxis.value > 20000) {
+        const kke::InputSource s = kke::InputModule::padAxis(static_cast<SDL_GamepadAxis>(e.gaxis.axis), 1);
+        finishKeyCapture(&s);
+    }
 }
 
 // ------------------------------------------------------------------ inventory
@@ -759,12 +870,13 @@ void ShowcaseModule::updateLoading(float dt) {
 
 void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     float dt = std::min(ctx.dt, 0.1f);
+    if (!m_keyCapture.empty()) m_keyCaptureArmed = true;
 
     // Controller: B = back (like Esc), LB/RB = previous/next screen.
     if (auto* input = m_app->getModule<kke::InputModule>()) {
         const kke::InputMap& m = input->map(0);
         auto* is = m_app->getModule<InputScreen>();
-        if (!(is && is->capturing())) {
+        if (!(is && is->capturing()) && m_keyCapture.empty()) {
             if (m.pressed("ui.back")) {
                 if (m_showCredits || m_showQuit) {
                     m_showCredits = m_showQuit = false;
@@ -823,6 +935,10 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
 }
 
 void ShowcaseModule::onEvent(const SDL_Event& event) {
+    if (!m_keyCapture.empty()) {
+        if (m_keyCaptureArmed) keyCaptureEvent(event);
+        return;
+    }
     if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat) return;
     SDL_Keycode key = event.key.key;
 

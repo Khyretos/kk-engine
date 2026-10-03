@@ -34,6 +34,7 @@ public:
     std::string controls() const override { return "{jump} jump  ·  {move} shuffle along the bridge"; }
     const char* mood() const override { return "dusk"; }
     float timeLimit() const override { return 100.0f; }
+    // The 3-player split's spare quarter shows the arena from here.
     CameraStyle camera() const override { return CameraStyle::Overview; }
     float killY() const override { return -2.5f; }
 

@@ -15,6 +15,7 @@ class ElementDocument;
 
 namespace kke {
 class SettingsModule;
+struct InputSource;
 class UiModule;
 }
 
@@ -55,6 +56,9 @@ public:
     struct Damage { int amount = 0; float x = 50.0f, y = 45.0f, ttl = 1.1f; bool crit = false; };
     struct Choice { std::string text; int next = -1; bool leave = false; };
     struct ChatMessage { std::string who, text, color; bool system = false; };
+    // A row of the simple key list in Settings: the action, then its key
+    // and its controller button as prompt glyphs (RML).
+    struct KeyRow { std::string id, label, key, pad; bool waitKey = false, waitPad = false; };
 
 private:
     void setScreen(const std::string& screen);
@@ -114,6 +118,17 @@ private:
     // settings
     Rml::DataModelHandle m_settingsModel;
     std::string m_settingsPath;
+    // the simple key list (Settings > Controls); the Input screen is the
+    // advanced editor
+    void refreshKeyRows();
+    void startKeyCapture(int row, bool pad);
+    void finishKeyCapture(const kke::InputSource* source);
+    void keyCaptureEvent(const SDL_Event& event);
+    std::vector<KeyRow> m_keyRows;
+    std::string m_keyCapture; // the action waiting for a key or button
+    bool m_keyCapturePad = false;
+    bool m_keyCaptureArmed = false; // from the frame after the press that picked the row
+    std::string m_keyStatus;
 
     // inventory
     Rml::DataModelHandle m_invModel;

@@ -3,7 +3,9 @@
 # regions of these files, and CI builds and runs it.
 set(GAME_NAME cookbook)
 
-kke_add_game(${GAME_NAME} main.cpp CookbookPlayer.cpp Mannequin.cpp)
+# The player's body is the starter game's (games/template/PlayerBody).
+kke_add_game(${GAME_NAME} main.cpp CookbookPlayer.cpp Mannequin.cpp ${CMAKE_SOURCE_DIR}/games/template/PlayerBody.cpp)
+target_include_directories(${GAME_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/games/template)
 target_link_libraries(${GAME_NAME} PRIVATE kke_engine)
 target_compile_definitions(${GAME_NAME} PRIVATE
     GAME_SCRIPTS_SOURCE="${CMAKE_CURRENT_SOURCE_DIR}/scripts"

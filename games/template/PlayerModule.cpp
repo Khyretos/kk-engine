@@ -1,8 +1,11 @@
 #include "PlayerModule.h"
 
+#include "PlayerBody.h"
+
 #include "kke/Application.h"
 #include "kke/SphereImpostors.h"
 #include "kke/modules/InputModule.h"
+#include "kke/modules/ModelModule.h"
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/modules/ScriptModule.h"
 
@@ -42,6 +45,7 @@ PlayerModule::~PlayerModule() = default;
 std::vector<kke::ModuleDependency> PlayerModule::dependencies() const {
     return { { std::type_index(typeid(kke::RigidBodyModule)), true, "the character controller and collision" },
              { std::type_index(typeid(kke::InputModule)), true, "move, look and jump actions" },
+             { std::type_index(typeid(kke::ModelModule)), false, "the animated mannequin (else a block)" },
              // Optional: when scripts exist, they get the `player` table.
              { std::type_index(typeid(kke::ScriptModule)), false, "the player.* Lua bindings" } };
 }
@@ -66,14 +70,19 @@ void PlayerModule::init(kke::Application& app) {
     m_rig.mode = kke::CameraRig::Mode::ThirdPerson;
     m_rig.pitch = -12.0f;
 
-    // The body: a torso and a darker "visor" on the front, so you can see
-    // which way the character faces.
-    std::vector<kke::Vertex> v;
-    std::vector<uint32_t> idx;
-    appendBox({ 0.0f, 0.9f, 0.0f }, { 0.28f, 0.9f, 0.2f }, { 0.2f, 0.45f, 0.9f }, v, idx);
-    appendBox({ 0.0f, 1.55f, -0.2f }, { 0.2f, 0.08f, 0.03f }, { 0.1f, 0.1f, 0.15f }, v, idx);
-    m_body = std::make_unique<kke::DynamicMeshRenderer>(app);
-    m_body->upload(v, idx);
+    // The body: the animated mannequin. Without it, a torso and a darker
+    // "visor" on the front, so you can see which way the character faces.
+    m_mannequin = std::make_unique<PlayerBody>();
+    auto* models = app.getModule<kke::ModelModule>();
+    if (!models || !m_mannequin->load(*models)) {
+        m_mannequin.reset();
+        std::vector<kke::Vertex> v;
+        std::vector<uint32_t> idx;
+        appendBox({ 0.0f, 0.9f, 0.0f }, { 0.28f, 0.9f, 0.2f }, { 0.2f, 0.45f, 0.9f }, v, idx);
+        appendBox({ 0.0f, 1.55f, -0.2f }, { 0.2f, 0.08f, 0.03f }, { 0.1f, 0.1f, 0.15f }, v, idx);
+        m_body = std::make_unique<kke::DynamicMeshRenderer>(app);
+        m_body->upload(v, idx);
+    }
 
     app.window().setQuitOnEscape(false); // Esc releases the mouse instead
     registerLua();
@@ -152,20 +161,23 @@ void PlayerModule::update(const kke::UpdateContext& ctx) {
     // It follows the feet where they're drawn (between the last two
     // physics steps): the raw position moves in 60 Hz jumps, which shakes
     // the view on a faster screen, most of all while it turns.
-    m_rig.update(dt, world.characterDrawPosition(m_player, m_app->fixedAlpha()), [&world](const glm::vec3& from, const glm::vec3& dir, float maxDist) {
+    const glm::vec3 drawFeet = world.characterDrawPosition(m_player, m_app->fixedAlpha());
+    m_rig.update(dt, drawFeet, [&world](const glm::vec3& from, const glm::vec3& dir, float maxDist) {
         const auto hit = world.raycast(from, dir, maxDist);
         return hit.hit ? hit.distance : maxDist;
     }, m_app->camera());
+    if (m_mannequin) m_mannequin->update(*m_loco, world, m_player, drawFeet, m_rig.mode != kke::CameraRig::Mode::FirstPerson, dt);
 }
 
 void PlayerModule::render(const kke::RenderContext& ctx) {
-    if (m_rig.mode == kke::CameraRig::Mode::FirstPerson) return;
+    if (!m_body || m_rig.mode == kke::CameraRig::Mode::FirstPerson) return;
     const glm::vec3 feet = m_rigid->world().characterDrawPosition(m_player, m_app->fixedAlpha());
     const glm::mat4 t = glm::rotate(glm::translate(glm::mat4(1.0f), feet), glm::radians(-m_loco->facingYaw()), glm::vec3(0, 1, 0));
     m_body->draw(ctx, t, 0.0f, 0.6f);
 }
 
 void PlayerModule::renderShadow(const kke::ShadowRenderContext& ctx) {
+    if (!m_body) return;
     const glm::vec3 feet = m_rigid->world().characterDrawPosition(m_player, m_app->fixedAlpha());
     m_body->drawShadow(ctx, glm::rotate(glm::translate(glm::mat4(1.0f), feet), glm::radians(-m_loco->facingYaw()), glm::vec3(0, 1, 0)));
 }
