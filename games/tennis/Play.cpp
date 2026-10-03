@@ -305,17 +305,26 @@ void TennisModule::stepMatch(Match& m, float dt) {
 void TennisModule::readHuman(Match& m, Player& p) {
     if (p.input < 0) return;
     kke::InputMap& in = m_input->map(p.input);
-    // The stick is in screen space: the camera sits behind the player's
-    // own half, so up is toward the net.
+    // The stick is in screen space: up is where the camera looks (behind
+    // the player, toward the net unless they look round). Aiming is the
+    // same stick seen from the player's own half: up is deep, across is
+    // left and right.
     const int side = m.score.sideOf(p.team);
     const float s = static_cast<float>(side);
     const glm::vec2 stick = in.axis2("move");
-    const glm::vec3 fwd(0.0f, 0.0f, -s), right(s, 0.0f, 0.0f);
+    const CourtPlace& place = m_center.courts[static_cast<size_t>(m.court)];
+    glm::vec3 fwd(0.0f, 0.0f, -s), right(s, 0.0f, 0.0f);
+    if (p.cameraInit) {
+        fwd = place.dirToLocal(p.rig.forward());
+        fwd.y = 0.0f;
+        fwd = glm::length(fwd) > 1e-3f ? glm::normalize(fwd) : glm::vec3(0.0f, 0.0f, -s);
+        right = glm::vec3(-fwd.z, 0.0f, fwd.x);
+    }
     glm::vec3 move = right * stick.x + fwd * stick.y;
     if (glm::length(move) > 1.0f) move = glm::normalize(move);
     Intent it;
     it.move = move * kRunSpeed;
-    it.aim = glm::clamp(stick, glm::vec2(-1.0f), glm::vec2(1.0f));
+    it.aim = glm::clamp(glm::vec2(move.x * s, -move.z * s), glm::vec2(-1.0f), glm::vec2(1.0f));
     struct B { const char* id; ShotKind kind; };
     for (const B& b : { B{ "tennis.topspin", ShotKind::Topspin }, B{ "tennis.flat", ShotKind::Flat }, B{ "tennis.slice", ShotKind::Slice },
                         B{ "tennis.lob", ShotKind::Lob } }) {

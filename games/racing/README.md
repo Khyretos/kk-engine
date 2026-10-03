@@ -276,8 +276,8 @@ so everyone sees the same car.
 
 ### Crumpling (Crumple.cpp)
 
-In a FEMFX build (`KKE_ENABLE_FEMFX`, desktop) the dent isn't pushed in
-by hand: every car's body is also an AMD FEMFX solid, a box of 288
+In a FEMFX build (`KKE_ENABLE_FEMFX`, desktop) every car's body is also
+an AMD FEMFX solid, a box of 288
 tetrahedra the car's size, soft steel with a low yield (it stays bent).
 Jolt keeps driving the car; a hit is replayed into the solid as a shove
 where it landed, the way it pushed, and FEMFX works out how the metal
@@ -287,7 +287,13 @@ corner in. The Synty body is skinned to the solid (`kke::embedPoints`,
 FEMFX's own ground, held still (each step their motion as a whole is
 taken out, leaving only the change of shape), and are awake only for a
 moment after a hit: about 0.1 ms a step with nothing hit, 1-3 ms in a
-pile-up. Without FEMFX (Android) the dents are the hand-made ones above.
+pile-up. The solid's cells are about 60 cm, too coarse for the crease
+right where a bumper hit (on its own it left at most 8 cm after a 30 s
+`KKE_RACE_CRASH=1` run, which reads as "no deformation"), so every hit
+is also pressed in by hand as above (80% as deep), kept per vertex, and
+laid back on top of each shape FEMFX reads back: FEMFX bends the body,
+the hand-pressed dent is the crease (17 cm deepest in the same run).
+Without FEMFX (Android) the dents are only the hand-made ones.
 
 ### Wheels (Wheels.cpp)
 

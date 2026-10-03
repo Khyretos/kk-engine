@@ -162,7 +162,8 @@ public:
             d.angularVelocity = glm::vec3(out.y * 4.0f, 0.0f, -out.x * 4.0f);
             std::vector<kke::Vertex> v;
             std::vector<uint32_t> idx;
-            prism(cell, c, d.points, v, idx);
+            const glm::vec3 tint(0.75f, 0.92f, 1.0f);
+            shardPrism(cell, c, kThick, tint, tint, d.points, v, idx, 0.0f, glm::vec2(1.2f, 0.06f));
             const int part = a.addPart(d, std::move(v), std::move(idx));
             a.part(part).translucent = true;
             a.part(part).roughness = 0.05f;
@@ -240,43 +241,6 @@ private:
     };
     std::vector<Pane> m_panes;
     std::vector<int> m_known; // per row: the side known to hold (-1: nobody knows yet)
-
-    // A shard: the cell as a thin prism, centred on its own middle (its
-    // body's origin), in body space for Jolt and as a mesh.
-    static void prism(const Polygon2& cell, const glm::vec2& c, std::vector<glm::vec3>& hull, std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx) {
-        const size_t n = cell.size();
-        for (int top = 0; top < 2; ++top)
-            for (const glm::vec2& q : cell) hull.push_back({ q.x - c.x, top ? kThick : -kThick, q.y - c.y });
-        const glm::vec3 tint(0.75f, 0.92f, 1.0f);
-        auto vert = [&](const glm::vec3& pos, const glm::vec3& nrm) {
-            v.push_back({ pos, tint, nrm, glm::vec2(1.2f, 0.06f) });
-            return static_cast<uint32_t>(v.size() - 1);
-        };
-        // Top and bottom fans (the cell is counter-clockwise seen from above).
-        for (int top = 0; top < 2; ++top) {
-            const glm::vec3 nrm(0.0f, top ? 1.0f : -1.0f, 0.0f);
-            const uint32_t first = static_cast<uint32_t>(v.size());
-            for (size_t i = 0; i < n; ++i) vert(hull[static_cast<size_t>(top) * n + i], nrm);
-            for (uint32_t i = 1; i + 1 < n; ++i) {
-                // Seen from its own side: counter-clockwise from above is the top's front.
-                if (top) idx.insert(idx.end(), { first, first + i + 1, first + i });
-                else idx.insert(idx.end(), { first, first + i, first + i + 1 });
-            }
-        }
-        for (size_t i = 0; i < n; ++i) {
-            const glm::vec3 a0 = hull[i], a1 = hull[(i + 1) % n], b0 = hull[n + i], b1 = hull[n + (i + 1) % n];
-            glm::vec3 nrm = glm::cross(a1 - a0, b0 - a0);
-            if (glm::dot(nrm, a0 + a1) < 0.0f) nrm = -nrm; // outward (the centre is the origin)
-            nrm = glm::normalize(nrm);
-            const uint32_t s = static_cast<uint32_t>(v.size());
-            vert(a0, nrm);
-            vert(a1, nrm);
-            vert(b1, nrm);
-            vert(b0, nrm);
-            if (glm::dot(glm::cross(a1 - a0, b1 - a0), nrm) > 0.0f) idx.insert(idx.end(), { s, s + 1, s + 2, s, s + 2, s + 3 });
-            else idx.insert(idx.end(), { s, s + 2, s + 1, s, s + 3, s + 2 });
-        }
-    }
 };
 
 } // namespace

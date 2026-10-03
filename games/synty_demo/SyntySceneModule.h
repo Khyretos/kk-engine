@@ -5,7 +5,9 @@
 #include "kke/Capabilities.h"
 #include "kke/Ragdoll.h"
 #include "kke/AssetCatalog.h"
+#include "kke/Breakables.h"
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -21,6 +23,7 @@ public:
     std::vector<kke::ModuleDependency> dependencies() const override;
     void init(kke::Application& app) override;
     void update(const kke::UpdateContext& ctx) override;
+    void shutdown() override;
     void onEvent(const SDL_Event& event) override; // F1: developer panels, Shift+R: everyone falls
 
     // The pack's root folder (containing _SourceFiles/), or empty.
@@ -61,7 +64,12 @@ private:
     kke::IRagdollPhysics* m_physics = nullptr; // optional: whatever module offers ragdolls
     void throughGlass(Character& c); // FEMFX build only: see the .cpp
     kke::ModelModule::ModelId load(const std::string& relative);
-    void place(const std::string& relative, glm::vec3 position, float yawDegrees = 0.0f, glm::vec3 scale = glm::vec3(1.0f));
+    // Returns the instance (0 if the asset isn't there).
+    kke::ModelModule::InstanceId place(const std::string& relative, glm::vec3 position, float yawDegrees = 0.0f, glm::vec3 scale = glm::vec3(1.0f));
+    // FEMFX builds: the props named like what they're made of (crates,
+    // barrels, the chest, the barrier) bend and break (kke::Breakables).
+    void makePropsBreakable();
+    void throwAtProps();
     void rotateBone(Character& c, const char* bone, glm::vec3 eulerDegrees);
     void defineInput();
     void readInput();
@@ -73,6 +81,10 @@ private:
     kke::ModelModule* m_models = nullptr;
     std::string m_packDir;          // the asset folder (may hold several packs)
     kke::AssetCatalog m_catalog;
+    std::unique_ptr<kke::Breakables> m_breakables;
+    std::vector<std::pair<kke::ModelModule::InstanceId, std::string>> m_props; // every placed prop and its file name
+    std::vector<glm::vec3> m_crates; // tops of the props that splinter: where "onto a crate" drops someone
+    size_t m_nextCrate = 0;
     std::vector<std::string> m_searched;
     std::vector<Character> m_characters;
     float m_time = 0.0f;
