@@ -7,6 +7,7 @@
 #include "Flinch.h"
 
 #include "kke/Application.h"
+#include "kke/KnownPacks.h"
 #include "kke/AssetCatalog.h"
 #include "kke/Log.h"
 #include "kke/SceneLoader.h"
@@ -103,9 +104,8 @@ void HordeModule::loadHero() {
         log->error("{}: {}", ual1, e.what());
         return;
     }
-    const char* assets = std::getenv("KKE_ASSETS_DIR");
     const std::string ual2 = firstExisting({ (fs::path(animDir) / "UAL2.fbx").string(),
-                                             assets ? (fs::path(assets) / "Universal Animation Library 2" / "Unity" / "UAL2.fbx").string() : std::string() });
+                                             kke::findPackFile("Universal Animation Library 2", "UAL2.fbx", base ? base : "") });
     if (!ual2.empty()) {
         try {
             kke::ModelLoadOptions o;

@@ -7,6 +7,7 @@
 #include "Flinch.h"
 
 #include "kke/Application.h"
+#include "kke/KnownPacks.h"
 #include "kke/AssetCatalog.h"
 #include "kke/Log.h"
 #include "kke/MeshLod.h"
@@ -84,8 +85,8 @@ void HordeModule::loadGoblins() {
     const char* packs[2] = { "SIDEKICK_Goblin_Fighters", "ANIMATION_Goblin_Locomotion" };
     for (int i = 0; i < 2; ++i) {
         const char* pack = packs[i];
-        const fs::path root = fs::path(packDir) / pack;
-        if (!fs::exists(root, ec)) {
+        const fs::path root = kke::findPackFolder(packDir, pack); // any folder name (kke/KnownPacks.h)
+        if (root.empty()) {
             log->info("{} not found under {}: the goblins need it", pack, packDir);
             continue;
         }

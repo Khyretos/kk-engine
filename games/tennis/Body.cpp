@@ -6,6 +6,7 @@
 #include "Body.h"
 
 #include "kke/AnimRig.h"
+#include "kke/KnownPacks.h"
 #include "kke/Application.h"
 #include "kke/AssetCatalog.h"
 #include "kke/Log.h"
@@ -207,10 +208,9 @@ bool Rig::load(kke::ModelModule& models) {
     m_rig = kke::ModelData{};
     m_rig.bones = d->bones;
     m_rig.animations = d->animations;
-    // UAL 2 (side steps, cheers): next to UAL 1, or the pack under KKE_ASSETS_DIR.
-    const char* assets = std::getenv("KKE_ASSETS_DIR");
+    // UAL 2 (side steps, cheers): next to UAL 1, or the pack in the asset folder.
     for (const std::string& ual2 : { (fs::path(dir) / "UAL2.fbx").string(),
-                                     assets ? (fs::path(assets) / "Universal Animation Library 2" / "Unity" / "UAL2.fbx").string() : std::string() }) {
+                                     kke::findPackFile("Universal Animation Library 2", "UAL2.fbx", base ? base : "") }) {
         if (ual2.empty() || !fs::exists(ual2, ec)) continue;
         try {
             kke::ModelLoadOptions o;
@@ -223,7 +223,7 @@ bool Rig::load(kke::ModelModule& models) {
         break;
     }
     if (!m_sideSteps)
-        kke::log::get("Tennis")->info("UAL2.fbx not found (assets/animations, or 'Universal Animation Library 2' under KKE_ASSETS_DIR): "
+        kke::log::get("Tennis")->info("UAL2.fbx not found (assets/animations, or the 'Universal Animation Library 2' pack in the asset folder): "
                                       "players turn to run sideways instead of side-stepping");
     m_set = std::make_unique<kke::AnimationSet>(m_rig);
     m_arm[0] = kke::findChain(m_rig, "upperarm_l", "lowerarm_l", "hand_l");

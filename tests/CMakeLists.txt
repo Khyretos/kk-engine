@@ -13,6 +13,7 @@ add_executable(kke_tests
     test_ragdoll.cpp
     test_benchmark_report.cpp
     test_asset_catalog.cpp
+    test_known_packs.cpp
     test_picking.cpp
     test_play_blocks.cpp
     test_orders.cpp

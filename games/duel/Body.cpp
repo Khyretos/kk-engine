@@ -8,6 +8,7 @@
 #include "DuelModule.h"
 
 #include "kke/Application.h"
+#include "kke/KnownPacks.h"
 #include "kke/AssetCatalog.h"
 #include "kke/Log.h"
 #include "kke/modules/RigidBodyModule.h"
@@ -61,9 +62,8 @@ void DuelModule::loadCharacter() {
     m_rigData.animations = d->animations;
 
     // UAL 2: next to UAL 1, or the extracted pack in the asset folder.
-    const char* assets = std::getenv("KKE_ASSETS_DIR");
     const std::string ual2 = firstExisting({ dir.empty() ? std::string() : (fs::path(dir) / "UAL2.fbx").string(),
-                                             assets ? (fs::path(assets) / "Universal Animation Library 2" / "Unity" / "UAL2.fbx").string() : std::string() });
+                                             kke::findPackFile("Universal Animation Library 2", "UAL2.fbx", base ? base : "") });
     if (!ual2.empty()) {
         try {
             kke::ModelLoadOptions o;
@@ -74,7 +74,7 @@ void DuelModule::loadCharacter() {
             kke::log::get(name())->warn("UAL2.fbx: {}", e.what());
         }
     } else {
-        kke::log::get(name())->info("UAL2.fbx not found (assets/animations, or 'Universal Animation Library 2' under KKE_ASSETS_DIR): "
+        kke::log::get(name())->info("UAL2.fbx not found (assets/animations, or the 'Universal Animation Library 2' pack in the asset folder): "
                                     "UAL 1's punches stand in for the hook, uppercut and knee");
     }
     m_animSet = std::make_unique<kke::AnimationSet>(m_rigData);

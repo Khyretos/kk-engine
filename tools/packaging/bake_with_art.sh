@@ -4,9 +4,10 @@
 # encrypted with a key made for this bake alone, so the download holds no
 # FBX or texture anyone can lift out, and only this bake's builds read it.
 #
-#   tools/packaging/bake_with_art.sh --assets DIR [--version NAME] [--windows] [--android] [--all-art] [--build DIR]
+#   tools/packaging/bake_with_art.sh --assets DIR [--sprites DIR] [--version NAME] [--windows] [--android] [--all-art] [--build DIR]
 #
-#   --assets DIR   your extracted Synty packs (default: $KKE_ASSETS_DIR)
+#   --assets DIR   your extracted Synty packs, folder names as they came (default: $KKE_ASSETS_DIR)
+#   --sprites DIR  your 2D sprite packs (default: $KKE_SPRITES_DIR, else assets/sprites if it has any)
 #   --version      name in the archive (default: friends-<date>)
 #   --windows      also the Windows zip (cross-compiled in Docker: docker compose run --rm windows)
 #   --android      also the phone APKs, demos and benchmark (built in Docker: docker compose run --rm android)
@@ -14,7 +15,8 @@
 #                  demos load during a short benchmark run (much bigger)
 #   --build DIR    build folder (default: build-art)
 #
-# Steps: keys (a new one per bake) -> Release build -> a short kke_benchmark run with the
+# Steps: keys (a new one per bake) -> Release build -> kke_assets says which packs each
+# game finds and which are missing (docs/ASSETS.md) -> a short kke_benchmark run with the
 # packs that records every art file the demos open (needs a screen) ->
 # kke_cook those files -> package.sh --cooked. Archives land in dist/.
 set -euo pipefail
@@ -22,10 +24,11 @@ set -euo pipefail
 die() { echo "bake_with_art.sh: error: $*" >&2; exit 1; }
 
 repo="$(cd "$(dirname "$0")/../.." && pwd)"
-assets="${KKE_ASSETS_DIR:-}" version="friends-$(date +%Y%m%d)" windows=0 android=0 all_art=0 build="$repo/build-art"
+assets="${KKE_ASSETS_DIR:-}" sprites="${KKE_SPRITES_DIR:-}" version="friends-$(date +%Y%m%d)" windows=0 android=0 all_art=0 build="$repo/build-art"
 while [ $# -gt 0 ]; do
     case "$1" in
     --assets) assets="$2"; shift 2 ;;
+    --sprites) sprites="$2"; shift 2 ;;
     --version) version="$2"; shift 2 ;;
     --windows) windows=1; shift ;;
     --android) android=1; shift ;;
@@ -37,6 +40,12 @@ done
 [ -n "$assets" ] || die "--assets <your Synty packs folder> (or set KKE_ASSETS_DIR)"
 [ -d "$assets" ] || die "'$assets' is not a folder"
 assets="$(cd "$assets" && pwd)"
+if [ -n "$sprites" ]; then
+    [ -d "$sprites" ] || die "--sprites '$sprites' is not a folder"
+elif [ -n "$(find "$repo/assets/sprites" -type f ! -name README.md -print -quit 2> /dev/null)" ]; then
+    sprites="$repo/assets/sprites"
+fi
+[ -z "$sprites" ] || sprites="$(cd "$sprites" && pwd -P)"
 cd "$repo"
 
 # --- 1. Keys: the checkout's secret (made once, never committed) and a
@@ -55,7 +64,13 @@ cmake -S . -B "$build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DKKE_ENABLE_FEMFX=ON
     "-DKKE_VERSION_NAME=$version" "-DKKE_ART_KEY_FILE=$repo/.kke-art.key" "-DKKE_ART_BUILD_FILE=$repo/.kke-art.build"
 cmake --build "$build"
 
-# --- 3. Which art files do the demos open? ------------------------------
+# --- 3. Which packs are there, and which art files do the demos open? ---
+# Folder names don't matter (packs are recognised by their files too); a
+# pack that is MISSING here is blocks in the download.
+echo
+echo "Your packs, and what each game needs (kke_assets):"
+"$build/bin/kke_assets" "$assets" ${sprites:+"$sprites"} || true
+echo
 cooked="$build/cooked-art"
 rm -rf "$cooked"
 # The mannequin animations (CC0): UAL1_Standard.fbx from the repository,
@@ -74,14 +89,19 @@ fi
 [ -f "$anims/UAL1_Standard.fbx" ] || echo "note: assets/animations/UAL1_Standard.fbx is missing (git pull?): characters will be blocks"
 if [ "$all_art" = 1 ]; then
     "$build/bin/kke_cook" --root "$assets" --out "$cooked/synty" --all
+    if [ -n "$sprites" ]; then "$build/bin/kke_cook" --root "$sprites" --out "$cooked/sprites" --all; fi
 else
     trace="$build/art-trace.txt"
     rm -f "$trace"
     echo "Recording which art the demos use: every demo opens for a few seconds (don't touch anything)..."
-    KKE_ASSETS_DIR="$assets" KKE_ANIMATIONS_DIR="$anims" KKE_ASSET_TRACE="$trace" "$build/bin/benchmark/kke_benchmark" --seconds 3 --no-wait --no-open \
+    KKE_ASSETS_DIR="$assets" KKE_SPRITES_DIR="$sprites" KKE_ANIMATIONS_DIR="$anims" KKE_ASSET_TRACE="$trace" "$build/bin/benchmark/kke_benchmark" --seconds 3 --no-wait --no-open \
         --out "$build/art-trace-run" || echo "(a demo had trouble in the recording run; see $build/art-trace-run)"
     [ -s "$trace" ] || die "the recording run opened no art: are the packs in '$assets'?"
     "$build/bin/kke_cook" --root "$assets" --out "$cooked/synty" --trace "$trace"
+    # Sprites the menus showed during the run, if any.
+    if [ -n "$sprites" ] && grep -qF "$sprites/" "$trace"; then
+        "$build/bin/kke_cook" --root "$sprites" --out "$cooked/sprites" --trace "$trace"
+    fi
 fi
 # The animations ride along cooked like the rest, so package.sh's art
 # check stays simple.

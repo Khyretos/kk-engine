@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # Downloads art packs from Kees's asset share and extracts them where the
-# engine looks for them (assets/synty/<Pack>/, git-ignored). Packs are
-# licensed per user: never commit what this fetches (see assets/README.md).
+# engine looks for them (assets/synty/<Pack>/, git-ignored; sprite packs,
+# INTERFACE_*, go to assets/sprites/<Pack>/). Packs are licensed per
+# user: never commit what this fetches (see docs/ASSETS.md).
 #
 #   tools/fetch_assets.sh --list                     # what the share holds
 #   tools/fetch_assets.sh POLYGON_Town ANIMATION_    # every archive whose name
 #                                                    # starts with one of these
 #   KKE_ASSETS_DIR=/data/packs tools/fetch_assets.sh POLYGON_Fantasy_Characters
+#   KKE_SPRITES_DIR=/data/sprites tools/fetch_assets.sh INTERFACE_
 #
 # One zip is downloaded at a time and deleted right after extracting, so
 # the disk only needs room for the extracted packs plus the largest zip.
@@ -25,7 +27,8 @@ if [[ -z "$SHARE_HASH" ]]; then
     echo "fetch_assets.sh: set KKE_SHARE_HASH to the asset share's link hash (kept out of the repo)" >&2
     exit 2
 fi
-DEST="${KKE_ASSETS_DIR:-$(cd "$(dirname "$0")/.." && pwd)/assets/synty}"
+MODELS_DEST="${KKE_ASSETS_DIR:-$(cd "$(dirname "$0")/.." && pwd)/assets/synty}"
+SPRITES_DEST="${KKE_SPRITES_DIR:-$(cd "$(dirname "$0")/.." && pwd)/assets/sprites}"
 
 listing() {
     curl -fsS "$SHARE_HOST/public/api/resources?hash=$SHARE_HASH&path=/" |
@@ -49,7 +52,7 @@ unpack_unitypackage() { # $1 = .unitypackage, $2 = destination folder
 }
 
 if [[ $# -eq 0 || "$1" == "--help" ]]; then
-    sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
     exit 0
 fi
 if [[ "$1" == "--list" ]]; then
@@ -57,7 +60,6 @@ if [[ "$1" == "--list" ]]; then
     exit 0
 fi
 
-mkdir -p "$DEST"
 mapfile -t names < <(listing | cut -f2)
 for prefix in "$@"; do
     matched=0
@@ -66,8 +68,12 @@ for prefix in "$@"; do
         matched=1
         # "POLYGON_Town_SourceFiles_v5.zip" -> "POLYGON_Town"
         pack="${name%.*}"
-        pack="$(sed -E 's/[_ ]?(Source[_ ]?Files|SourceFiles|Source_Files|\[Source\]|\[Pro\]|Unity_20[0-9_]+|Unreal)[^/]*$//; s/ \([0-9]+\)$//' <<<"$pack")"
+        pack="$(sed -E 's/[_ ]?(Source[_ ]?Files|SourceFiles|Source_Files|Source[_ ]?Sprites|\[Source\]|\[Pro\]|Unity_20[0-9_]+|Unreal)[^/]*$//; s/ \([0-9]+\)$//' <<<"$pack")"
         [[ -n "$pack" ]] || pack="${name%.*}"
+        # Sprite packs (Synty's INTERFACE_*) go to the sprite folder.
+        DEST="$MODELS_DEST"
+        [[ "$name" == INTERFACE_* ]] && DEST="$SPRITES_DEST"
+        mkdir -p "$DEST"
         if [[ -d "$DEST/$pack" ]]; then echo "skip   $pack (already in $DEST)"; continue; fi
         echo "fetch  $name -> $DEST/$pack"
         tmpfile="$(mktemp --suffix="-${name// /_}")"

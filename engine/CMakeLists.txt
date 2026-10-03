@@ -20,6 +20,8 @@ set(ENGINE_SOURCES
     src/BenchmarkReport.cpp
     src/BenchRecorder.cpp
     src/AssetCatalog.cpp
+    src/KnownPacks.cpp
+    src/SpriteCatalog.cpp
     src/Picking.cpp
     src/DrawOrder.cpp
     src/PlayBlocks.cpp
@@ -178,6 +180,8 @@ set(ENGINE_HEADERS
     include/kke/BenchRecorder.h
     include/kke/CookedFile.h
     include/kke/AssetCatalog.h
+    include/kke/KnownPacks.h
+    include/kke/SpriteCatalog.h
     include/kke/Picking.h
     include/kke/PlayBlocks.h
     include/kke/Orders.h
