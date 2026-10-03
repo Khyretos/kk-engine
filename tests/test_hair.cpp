@@ -437,3 +437,28 @@ TEST(Hair, MotionGoesFromNaturalToSolid) {
     EXPECT_LT(solidMs, naturalMs * 0.3) << "solid hair costs little";
     EXPECT_LT(halfMs, naturalMs) << "less motion: cheaper";
 }
+
+// Solid hair is out of the world: wind (or anything else that wakes the
+// cloth) must leave it be. Jolt stepped it woken there without it being
+// in the broad phase, and crashed (the demo's Hair scene, set to solid).
+TEST(Hair, SolidHairInWindIsLeftAlone) {
+    kke::RigidWorld::Settings set;
+    set.threads = 2;
+    kke::RigidWorld world(set);
+    const glm::vec3 centre(0.0f, 1.62f, 0.0f);
+    kke::HairDesc d;
+    d.style = kke::hairStyle("long");
+    kke::hairScalp(d, centre, 0.1f, 200);
+    const auto hair = world.addHair(d);
+    world.setHairMotion(hair, 0.0f);
+    for (int f = 0; f < 60; ++f) {
+        world.setWind(glm::vec3(std::sin(float(f)), 0.0f, 3.0f)); // a new wind every step
+        world.setHairJoint(hair, glm::mat4(1.0f));
+        world.step(1.0f / 60.0f);
+    }
+    world.setHairMotion(hair, 1.0f);
+    for (int f = 0; f < 30; ++f) world.step(1.0f / 60.0f);
+    std::vector<glm::vec3> p;
+    ASSERT_TRUE(world.hairPositions(hair, p));
+    for (const glm::vec3& v : p) ASSERT_TRUE(std::isfinite(v.x + v.y + v.z));
+}
