@@ -13,7 +13,7 @@ namespace {
 
 namespace kn = kke::net;
 
-constexpr uint8_t kFlagSmoke = 1u << 0, kFlagCrashed = 1u << 1, kFlagGround = 1u << 2, kFlagFinished = 1u << 3, kFlagFiring = 1u << 4;
+constexpr uint8_t kFlagSmoke = 1u << 0, kFlagCrashed = 1u << 1, kFlagGround = 1u << 2, kFlagFinished = 1u << 3, kFlagFiring = 1u << 4, kFlagSafe = 1u << 5;
 constexpr size_t kMaxSeats = 32;
 constexpr size_t kMaxMood = 32;
 
@@ -129,7 +129,7 @@ kke::net::NetPlayerState toState(const Plane& p) {
     s.yaw = yaw;
     s.speed = std::min(glm::length(p.velocity) / 5.0f, 20.0f); // m/s / 5: the field tops out at 20
     s.flags = static_cast<uint8_t>((p.smoke ? kFlagSmoke : 0) | (p.crashed ? kFlagCrashed : 0) | (p.onGround ? kFlagGround : 0) |
-                                   (p.finished ? kFlagFinished : 0) | (p.firing ? kFlagFiring : 0) | (p.teleported ? kn::kPlayerTeleported : 0));
+                                   (p.finished ? kFlagFinished : 0) | (p.firing ? kFlagFiring : 0) | (p.safe ? kFlagSafe : 0) | (p.teleported ? kn::kPlayerTeleported : 0));
     Extra e;
     e.rotation = glm::normalize(p.rotation);
     e.throttle = std::clamp(p.throttle, 0.0f, 1.0f);
@@ -158,6 +158,7 @@ Plane fromState(const kke::net::NetPlayerState& s) {
     p.finished = (s.flags & kFlagFinished) != 0;
     p.teleported = (s.flags & kn::kPlayerTeleported) != 0;
     p.firing = (s.flags & kFlagFiring) != 0;
+    p.safe = (s.flags & kFlagSafe) != 0;
     Extra e;
     kn::ReadStream r(s.extra.data(), s.extra.size());
     serialize(r, e);

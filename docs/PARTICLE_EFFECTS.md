@@ -8,7 +8,9 @@ growth, fade) and drawn as camera-facing quads:
 
 - **Smoke** is soft, lit by the sun (with its shadow) and the sky, and
   sorted back to front in every view, so thick smoke reads as a volume
-  and darkens where the sun can't reach it.
+  and darkens where the sun can't reach it. It thins out within a few
+  metres of the camera, so a camera passing through a puff (a chase
+  camera behind its own smoke trail) still sees.
 - **Sparks** are additive streaks along their velocity, in linear HDR
   colour, so they bloom.
 

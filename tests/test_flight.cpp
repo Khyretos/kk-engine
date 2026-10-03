@@ -239,11 +239,13 @@ TEST(FlyNet, PlanesAndSetupRoundTrip) {
     p.score = 4200;
     p.round = 9;
     p.firing = true;
+    p.safe = true;
     p.health = 37;
     p.kills = 12;
     p.deaths = 3;
     const net::Plane q = net::fromState(net::toState(p));
     EXPECT_TRUE(q.firing);
+    EXPECT_TRUE(q.safe);
     EXPECT_EQ(q.health, 37);
     EXPECT_EQ(q.kills, 12);
     EXPECT_EQ(q.deaths, 3);

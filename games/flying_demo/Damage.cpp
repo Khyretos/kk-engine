@@ -139,6 +139,7 @@ void FlyingModule::collide(float) {
     for (size_t i = 0; i < m_pilots.size(); ++i) {
         Pilot& a = m_pilots[i];
         if (a.remote || down(a)) continue;
+        const bool aSafe = a.safe;
         // The buildings: out of the wall, and hurt (or a crash, flying into it).
         glm::vec3 normal(0.0f), point(0.0f);
         float deepest = 0.0f;
@@ -173,6 +174,7 @@ void FlyingModule::collide(float) {
             if (j == i) continue;
             Pilot& b = m_pilots[j];
             if (down(b) || !present(b) || (!b.remote && j < i)) continue; // two of ours: once
+            if (aSafe || safe(b)) continue; // one is still on the runway: they pass through
             const glm::vec3 b1 = b.remote ? b.net.position : b.plane.position;
             const PlaneContact c = planesTouch(m_shape, a.previous, a.plane.position, a.plane.rotation, b.previous, b1, b.remote ? b.drawnRotation : b.plane.rotation);
             if (!c.hit) continue;
@@ -236,7 +238,7 @@ void FlyingModule::hurt(Pilot& p, float amount, int by, const glm::vec3& worldPo
         p.owedDirection = dir;
         return;
     }
-    if (cause == 1 && p.shield > 0.0f) return;
+    if (p.safe) return;
     p.health -= amount;
     const int self = static_cast<int>(&p - m_pilots.data());
     if (by >= 0 && by != self) {
@@ -426,7 +428,7 @@ void FlyingModule::addKill(int killer, int victim, int cause) {
 // ---- guns
 
 void FlyingModule::fireGuns(Pilot& p, float dt) {
-    if (m_mode != Mode::Dogfight || m_phase != Phase::Flying || down(p) || (!p.remote && p.plane.onGround)) {
+    if (m_mode != Mode::Dogfight || m_phase != Phase::Flying || down(p) || safe(p)) {
         p.firing = false;
         p.gunCooldown = 0.0f;
         return;
@@ -453,7 +455,7 @@ void FlyingModule::fireGuns(Pilot& p, float dt) {
         float best = std::cos(glm::radians(kAimHelp));
         for (size_t j = 0; j < m_pilots.size(); ++j) {
             const Pilot& o = m_pilots[j];
-            if (static_cast<int>(j) == self || down(o) || !present(o)) continue;
+            if (static_cast<int>(j) == self || down(o) || !present(o) || safe(o)) continue;
             const glm::vec3 oAt = o.remote ? o.net.position : o.plane.position;
             if (glm::length(oAt - at) > kMuzzle * kBulletLife) continue;
             const glm::vec3 lead = leadPoint(muzzle, oAt, (o.remote ? o.net.velocity : o.plane.velocity) - vel, kMuzzle);
@@ -494,7 +496,7 @@ void FlyingModule::updateBullets(float dt) {
         if (b.live)
             for (size_t j = 0; j < m_pilots.size(); ++j) {
                 const Pilot& o = m_pilots[j];
-                if (static_cast<int>(j) == b.owner || down(o) || !present(o)) continue;
+                if (static_cast<int>(j) == b.owner || down(o) || !present(o) || safe(o)) continue;
                 float t = 0.0f;
                 glm::vec3 at;
                 if (bulletHits(m_shape, from, to, o.remote ? o.net.position : o.plane.position, o.remote ? o.drawnRotation : o.plane.rotation, t, at) && t < best) {
@@ -605,7 +607,6 @@ void FlyingModule::onDown(const net::Down& d) {
 void FlyingModule::updateEffects(float dt) {
     for (Pilot& p : m_pilots) {
         p.bumpCooldown = std::max(0.0f, p.bumpCooldown - dt);
-        p.shield = std::max(0.0f, p.shield - dt);
         p.hitMark = std::max(0.0f, p.hitMark - dt);
         // A hurt plane smokes from its engine: grey, then black and burning.
         const float health = p.remote ? static_cast<float>(p.net.health) : p.health;

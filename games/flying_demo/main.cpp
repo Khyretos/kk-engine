@@ -3,6 +3,7 @@
 // a gamepad, the keyboard and mouse, or a flight stick (see
 // FlyingModule.h and README.md).
 #include "kke/Application.h"
+#include "kke/DevTools.h"
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
@@ -16,6 +17,7 @@
 #include "FlyingModule.h"
 
 #include <iostream>
+#include <string_view>
 
 int main() {
     try {
@@ -29,7 +31,11 @@ int main() {
         app.addModule<kke::ModelModule>();
         app.addModule<kke::UiModule>();
         // The shared menus: title, settings, controls, pause (docs/GAME_SHELL.md).
-        app.addModule<kke::GameShellModule>("Flying", "Races, stunts and dogfights");
+        auto& shell = app.addModule<kke::GameShellModule>("Flying", "Races, stunts and dogfights");
+        // Flown by the CPU (demos, headless checks) or straight into a flight:
+        // no title menu over it.
+        const char* lobby = kke::dev::env("KKE_FLY_LOBBY");
+        shell.setStartOnTitle(!kke::dev::flag("KKE_FLY_AUTOPILOT") && !(lobby && std::string_view(lobby) == "0"));
         app.addModule<kke::AudioModule>().setUiVisible(false);
         app.addModule<kke::LobbyModule>("flying_lobby.json");
         // Online: Host / Join in the start menu (or KKE_NET=host, KKE_NET=join:ADDRESS).

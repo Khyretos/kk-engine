@@ -23,11 +23,15 @@ void main() {
     float lumps = 0.08 * sin(3.0 * a + seed) + 0.06 * sin(5.0 * a + seed * 1.7) + 0.04 * sin(7.0 * a - seed * 2.3);
     float edge = 0.92 + lumps;
     float body = 1.0 - smoothstep(edge * 0.25, edge, r);
-    float alpha = clamp(fragParams.y, 0.0, 1.0) * body * body;
+    // Thinned out right in front of the camera: a chase camera following
+    // its own smoke trail (or a cockpit in tyre smoke) sees through the
+    // puff it is passing, not a wall of grey.
+    float dist = length(lighting.cameraPos.xyz - fragWorld);
+    float alpha = clamp(fragParams.y, 0.0, 1.0) * body * body * smoothstep(0.5, 4.0, dist);
     if (alpha < 1.0 / 512.0) discard;
 
     // Lit as a sphere of haze: the normal bulges out of the sprite.
-    vec3 toCam = normalize(lighting.cameraPos.xyz - fragWorld);
+    vec3 toCam = (lighting.cameraPos.xyz - fragWorld) / max(dist, 1e-4);
     vec3 right = normalize(cross(abs(toCam.y) > 0.99 ? vec3(1, 0, 0) : vec3(0, 1, 0), toCam));
     vec3 up = cross(toCam, right);
     vec3 N = normalize(right * fragUV.x + up * fragUV.y + toCam * sqrt(max(1.0 - r * r, 0.0)));

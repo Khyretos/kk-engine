@@ -27,6 +27,12 @@
         /* Which way the next ring is. */
         .arrow { position: absolute; left: 50%; top: 14%; width: 40dp; height: 40dp; margin-left: -20dp; font-size: 34dp; font-weight: bold;
                  text-align: center; color: #ffcf5c; }
+        /* Over every other plane in view: its name and (Dogfight) its health. */
+        .tag { position: absolute; width: 120dp; margin-left: -60dp; margin-top: -30dp; text-align: center; }
+        .tag .who { font-size: 13dp; font-weight: bold; font-effect: outline(1dp #000000c0); }
+        .tag .life { margin: 3dp auto 0dp auto; width: 64dp; height: 6dp; border-radius: 3dp; background-color: #00000099; }
+        .tag .life .fill { height: 100%; border-radius: 3dp; background-color: #5ee07a; }
+        .tag .life.hurt .fill { background-color: #ff5c5c; }
         /* Dogfight: the gun sight, where the nose points; red on a hit. */
         .sight { position: absolute; width: 34dp; height: 34dp; margin-left: -17dp; margin-top: -17dp; border: 2dp #ffffffcc; border-radius: 17dp; }
         .sight .dot { position: absolute; left: 14dp; top: 14dp; width: 2dp; height: 2dp; background-color: #ffffff; }
@@ -96,6 +102,10 @@
             </div>
             <div class="arrow" data-if="p.arrow != 'none'" data-style-transform="p.arrow">^</div>
             <div class="trick" data-if="p.trick != ''">{{p.trick}}</div>
+            <div class="tag" data-for="t : p.tags" data-style-left="t.x" data-style-top="t.y">
+                <div class="who" data-style-color="t.accent">{{t.name}}</div>
+                <div class="life" data-if="t.bar" data-class-hurt="t.hurt"><div class="fill" data-style-width="t.health"></div></div>
+            </div>
             <div class="sight" data-if="p.sight" data-class-hit="p.hit" data-style-left="p.sight_x" data-style-top="p.sight_y"><div class="dot"></div></div>
         </div>
         <div id="standings" data-if="standings.size > 0">

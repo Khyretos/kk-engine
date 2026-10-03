@@ -27,6 +27,8 @@ namespace flying {
 
 namespace {
 
+constexpr float kTagRange = 1500.0f; // m: planes further away get no name tag
+
 std::string clock(float seconds) {
     char buf[32];
     const int m = static_cast<int>(seconds) / 60;
@@ -69,6 +71,16 @@ void FlyingModule::buildHud() {
     Rml::Context* ctx = ui->context();
     Rml::DataModelConstructor c = ctx->CreateDataModel("flying");
     if (!c) return;
+    if (auto t = c.RegisterStruct<TagHud>()) {
+        t.RegisterMember("name", &TagHud::name);
+        t.RegisterMember("accent", &TagHud::accent);
+        t.RegisterMember("health", &TagHud::health);
+        t.RegisterMember("x", &TagHud::x);
+        t.RegisterMember("y", &TagHud::y);
+        t.RegisterMember("hurt", &TagHud::hurt);
+        t.RegisterMember("bar", &TagHud::bar);
+    }
+    c.RegisterArray<std::vector<TagHud>>();
     if (auto p = c.RegisterStruct<PlayerHud>()) {
         p.RegisterMember("name", &PlayerHud::name);
         p.RegisterMember("speed", &PlayerHud::speed);
@@ -92,6 +104,7 @@ void FlyingModule::buildHud() {
         p.RegisterMember("sight_x", &PlayerHud::sightX);
         p.RegisterMember("sight_y", &PlayerHud::sightY);
         p.RegisterMember("hit", &PlayerHud::hit);
+        p.RegisterMember("tags", &PlayerHud::tags);
     }
     c.RegisterArray<std::vector<PlayerHud>>();
     if (auto r = c.RegisterStruct<RowHud>()) {
@@ -177,7 +190,7 @@ void FlyingModule::updateHud(float) {
                                    : p.downCause == 2 && by ? "Collided with " + by->name + "! Back in a moment"
                                                             : "Crashed! Back in a moment";
         h.status = h.down                                   ? downText
-                 : p.shield > 0.0f && m_mode == Mode::Dogfight ? "Shielded for a moment: get clear"
+                 : p.safe && !p.plane.onGround && m_mode == Mode::Dogfight ? "Climb: bullets reach you from 10 m up"
                  : h.stall                                  ? "STALL: push the nose down"
                  : p.plane.onGround && p.controls.brake     ? "On the ground, brakes on"
                  : p.plane.onGround && p.plane.airspeed < 5 ? "On the ground: throttle up to take off"
@@ -215,10 +228,32 @@ void FlyingModule::updateHud(float) {
         // Dogfight: the gun sight, where the nose points 250 m out, as this
         // player's camera sees it.
         const kke::ViewRect& view = rects[std::min(i, rects.size() - 1)];
+        const kke::Camera& cam = p.camera;
+        const float aspect = (static_cast<float>(winW) * view.w) / std::max(1.0f, static_cast<float>(winH) * view.h);
+        const glm::mat4 vp = glm::perspective(glm::radians(cam.fovDegrees), aspect, cam.nearPlane, cam.farPlane) * glm::lookAt(cam.position, cam.target, cam.up);
+        // The other planes in view, near enough to matter: a name over each,
+        // and in a dogfight a health bar.
+        for (size_t j = 0; flying && j < m_pilots.size(); ++j) {
+            const Pilot& o = m_pilots[j];
+            if (&o == &p || down(o) || !present(o)) continue;
+            const glm::vec3 at = o.remote ? o.net.position : o.plane.position;
+            if (glm::length(at - cam.position) > kTagRange) continue;
+            const glm::vec4 clip = vp * glm::vec4(at + glm::vec3(0.0f, 4.0f, 0.0f), 1.0f);
+            if (clip.w < 0.5f) continue;
+            const glm::vec2 ndc = glm::vec2(clip) / clip.w;
+            if (std::abs(ndc.x) > 0.95f || std::abs(ndc.y) > 0.9f) continue;
+            TagHud t;
+            t.name = o.name;
+            t.accent = hexColour(o.tint);
+            const float health = o.remote ? static_cast<float>(o.net.health) : o.health;
+            t.bar = m_mode == Mode::Dogfight;
+            t.health = std::to_string(static_cast<int>(std::ceil(std::clamp(health, 0.0f, 100.0f)))) + "%";
+            t.hurt = health < 35.0f;
+            t.x = percent(0.5f + ndc.x * 0.5f);
+            t.y = percent(0.5f - ndc.y * 0.5f);
+            h.tags.push_back(std::move(t));
+        }
         if (m_mode == Mode::Dogfight && m_phase == Phase::Flying && !h.down && !p.plane.onGround) {
-            const kke::Camera& cam = p.camera;
-            const float aspect = (static_cast<float>(winW) * view.w) / std::max(1.0f, static_cast<float>(winH) * view.h);
-            const glm::mat4 vp = glm::perspective(glm::radians(cam.fovDegrees), aspect, cam.nearPlane, cam.farPlane) * glm::lookAt(cam.position, cam.target, cam.up);
             const glm::vec4 clip = vp * glm::vec4(p.plane.position + p.plane.forward() * 250.0f, 1.0f);
             if (clip.w > 0.1f) {
                 const glm::vec2 ndc = glm::vec2(clip) / clip.w;
@@ -246,7 +281,7 @@ void FlyingModule::updateHud(float) {
         dirty = a.name != b.name || a.speed != b.speed || a.altitude != b.altitude || a.throttle != b.throttle || a.status != b.status || a.big != b.big ||
                 a.sub != b.sub || a.device != b.device || a.accent != b.accent || a.x != b.x || a.y != b.y || a.w != b.w || a.trick != b.trick ||
                 a.arrow != b.arrow || a.stall != b.stall || a.down != b.down || a.health != b.health || a.hurt != b.hurt || a.sight != b.sight ||
-                a.sightX != b.sightX || a.sightY != b.sightY || a.hit != b.hit;
+                a.sightX != b.sightX || a.sightY != b.sightY || a.hit != b.hit || a.tags != b.tags;
     }
     if (dirty) {
         m_hud.players = std::move(next);

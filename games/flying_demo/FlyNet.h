@@ -58,6 +58,7 @@ struct Plane {
     bool firing = false;         // Dogfight: its guns are going (others draw the tracers)
     uint8_t health = 100;        // 0..100 (a hurt plane smokes)
     uint8_t kills = 0, deaths = 0; // Dogfight: 0..63 each
+    bool safe = false;           // on the runway (or just off it): can't be hit, passes through planes
 };
 
 kke::net::NetPlayerState toState(const Plane& p);

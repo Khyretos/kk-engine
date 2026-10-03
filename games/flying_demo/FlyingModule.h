@@ -14,7 +14,6 @@
 
 #include <RmlUi/Core/DataModelHandle.h>
 
-#include <deque>
 #include <memory>
 #include <string>
 #include <vector>
@@ -61,7 +60,7 @@ namespace flying {
 // autopilot too), KKE_FLY_QUIT=<s> (quit after that long, with a log of
 // every plane's progress every few seconds), KKE_FLY_STUNT_TIME=<s>,
 // KKE_FLY_WAIT=<n> (online host: start once n players joined),
-// KKE_FLY_BENCH=pileup (every plane flies head-on into the others at
+// KKE_FLY_CAMERA=chase|cockpit|far, KKE_FLY_BENCH=pileup (every plane flies head-on into the others at
 // full speed, again every 7 s: a benchmark for explosions and dents),
 // KKE_LOBBY_JOIN=<n>.
 class FlyingModule : public kke::Module {
@@ -83,12 +82,7 @@ public:
 private:
     // A plane's smoke: puffs dropped behind it while the smoke is on,
     // each growing and drifting up as it ages.
-    struct Trail {
-        struct Point {
-            glm::vec3 at{0.0f};
-            float age = 0.0f;
-        };
-        std::deque<Point> points;
+    struct Trail {              // the puffs themselves live in m_fx
         glm::vec3 last{0.0f};   // where the last puff went
         bool dropping = false;  // the smoke was on last frame
     };
@@ -124,7 +118,7 @@ private:
         // Damage (Damage.cpp): bumps and bullets take health; at 0 it
         // goes down. Dents stay until it comes back as a new plane.
         float health = 100.0f;
-        float shield = 0.0f;        // s left of the spawn shield (Dogfight: bullets don't hurt)
+        bool safe = false;          // on the runway (and the first few metres up): bullets and planes pass through it
         float bumpCooldown = 0.0f;  // s: one bump at a time
         int lastBy = -1;            // the pilot (index) that last hurt it, for who gets the kill
         float lastByAt = -100.0f;   // m_clock then
@@ -204,6 +198,7 @@ private:
         std::vector<glm::vec3> hinges;                   // model space: where each part turns
         std::vector<glm::vec3> axes;                     // model space: what it turns about
         glm::mat4 toPlane{1.0f};                         // model space -> plane space (forward -Z, metres)
+        glm::vec3 eye{0.0f, 1.05f, 0.9f};                // plane space: the cockpit camera (the built plane's seat)
         std::vector<std::string> liveries;               // texture paths, one per paint job
         std::string status;                              // shown when the pack isn't there
         // Each part as made (model space), for dents: [part][mesh].
@@ -218,8 +213,9 @@ private:
     void poseArt(Pilot& p, float dt);
     void rebuildTrails();
     void updateTrail(Pilot& p, float dt);
-    std::unique_ptr<kke::SphereImpostorRenderer> m_smoke; // the puffs, drawn as lit spheres
+    std::unique_ptr<kke::SphereImpostorRenderer> m_smoke; // the fireballs, drawn as glowing spheres
     std::vector<kke::SphereImpostorRenderer::Sphere> m_puffs;
+    uint32_t m_puffSeed = 0x2545F491u; // each smoke puff's shape
     std::vector<std::string> m_liveryNames;
 
     // ---- players, the lobby and the pause menu (Players.cpp)
@@ -267,7 +263,8 @@ private:
     // ---- the flight (FlyingModule.cpp)
     void newFlight();             // the lobby's settings -> island, rings, pilots at the start
     void placeAtStart(Pilot& p);
-    void respawn(Pilot& p);
+    void respawn(Pilot& p, bool crashed = false);
+    bool safe(const Pilot& p) const { return p.remote ? p.net.safe : p.safe; }
     void placePileup(Pilot& p);   // KKE_FLY_BENCH=pileup: on the circle, full speed, nose to the middle
     void updatePileup(float dt);
     void updatePilot(Pilot& p, float dt);
@@ -355,6 +352,7 @@ private:
     std::string m_netName;        // KKE_NET_NAME: player 1's name
     int m_netWait = 0;            // KKE_FLY_WAIT: the host starts once this many others are in
     bool m_pileup = false;        // KKE_FLY_BENCH=pileup
+    int m_startCamera = 0;        // KKE_FLY_CAMERA=chase|cockpit|far: the camera every flight starts with
     float m_pileupIn = 0.0f;      // s to the next pile-up
     int m_pileups = 0;
 
@@ -375,6 +373,7 @@ private:
     // The flight now (the lobby's settings, or the host's online).
     Mode m_mode = Mode::Race;
     uint32_t m_seed = 1;
+    mutable uint32_t m_randomSeed = 0; // the Random island's seed, rolled on first use
     int m_laps = 2;
     int m_killsToWin = 10;        // Dogfight
     float m_dogfightTime = 300.0f; // Dogfight: s, unless someone gets the kills first
@@ -402,10 +401,16 @@ private:
     double m_enginePhase[4] = {};
 
     // HUD model.
+    struct TagHud { // another plane in this player's view: its name and, in a dogfight, its health
+        std::string name, accent, health, x, y;
+        bool hurt = false, bar = false;
+        bool operator==(const TagHud&) const = default;
+    };
     struct PlayerHud {
         std::string name, speed, altitude, throttle, status, big, sub, device, accent, x, y, w, trick, arrow, health, sightX, sightY;
         int throttlePct = 0;
         bool stall = false, down = false, hurt = false, sight = false, hit = false;
+        std::vector<TagHud> tags;
     };
     struct RowHud {
         std::string place, name, what, accent;

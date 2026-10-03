@@ -40,7 +40,8 @@ constexpr float kCountdown = 3.0f;      // s of 3, 2, 1
 constexpr float kRespawn = 2.5f;        // s down after a crash
 constexpr float kLost = 45.0f;          // s without a ring: a CPU pilot is put back on the course
 constexpr float kFarOut = 4200.0f;      // m from the middle: turned back to the island
-constexpr float kShieldTime = 3.0f;     // s: Dogfight, bullets don't hurt a plane just back
+constexpr size_t kMaxParticles = 16000; // six planes' smoke trails (7 s each) and the explosions
+constexpr float kSafeUntil = 10.0f;     // m up: a plane from the runway can be hit (and hit others) from here
 constexpr float kMaxStep = 1.0f / 120.0f;
 constexpr int kSampleRate = 48000;
 
@@ -88,6 +89,7 @@ void FlyingModule::init(kke::Application& app) {
     m_defaultCpus = std::clamp(static_cast<int>(envFloat("KKE_FLY_CPUS", 3.0f)), 0, kke::Lobby::kMaxCpus);
     m_stuntTime = std::max(10.0f, envFloat("KKE_FLY_STUNT_TIME", m_stuntTime));
     m_netWait = std::max(0, static_cast<int>(envFloat("KKE_FLY_WAIT", 0.0f)));
+    if (const char* cam = kke::dev::env("KKE_FLY_CAMERA")) m_startCamera = std::string_view(cam) == "cockpit" ? 1 : std::string_view(cam) == "far" ? 2 : 0;
     if (const char* bench = kke::dev::env("KKE_FLY_BENCH")) m_pileup = std::string_view(bench) == "pileup";
 
     defineActions();
@@ -99,7 +101,7 @@ void FlyingModule::init(kke::Application& app) {
     if (m_lobby) m_lobby->setFlightSticks(true); // a flight stick's trigger joins too
 
     loadArt();
-    m_fx = std::make_unique<kke::ParticleEffects>(app);
+    m_fx = std::make_unique<kke::ParticleEffects>(app, kMaxParticles);
     setupLobby();
     setupNet();
     readSettings();
@@ -165,6 +167,7 @@ void FlyingModule::buildPilots(const std::vector<Entry>& roster) {
         p.netId = e.netId;
         p.remote = e.remote;
         p.autopilotOn = m_autopilot && e.seat >= 0;
+        p.cameraMode = m_startCamera;
         if (m_lobby && e.seat >= 0) p.player = std::max(0, m_lobby->playerOf(e.seat));
         m_pilots.push_back(std::move(p));
     }
@@ -195,7 +198,6 @@ void FlyingModule::newFlight() {
         p.stunts.reset();
         p.trick.clear();
         p.trickTime = 0.0f;
-        p.trail.points.clear();
         p.autopilot.reset();
         p.controls = Controls{};
         p.mouseStick = glm::vec2(0.0f);
@@ -203,7 +205,7 @@ void FlyingModule::newFlight() {
         p.eyeSet = false;
         p.smoke = m_mode == Mode::Stunts;
         p.health = 100.0f;
-        p.shield = 0.0f;
+        p.safe = false;
         p.bumpCooldown = 0.0f;
         p.lastBy = -1;
         p.downCause = 0;
@@ -237,6 +239,7 @@ void FlyingModule::newFlight() {
 // the start menu the planes are already up, flying round the island.
 void FlyingModule::placeAtStart(Pilot& p) {
     p.climbOut = false;
+    p.safe = false;
     if (m_phase != Phase::Lobby) {
         const Runway& r = m_island.runway();
         const int row = p.slot / 2, side = p.slot % 2 == 0 ? -1 : 1;
@@ -245,6 +248,7 @@ void FlyingModule::placeAtStart(Pilot& p) {
         p.plane = parked(at, 0.0f, m_flight);
         p.controls.throttle = 0.0f;
         p.climbOut = true;
+        p.safe = true; // on the runway: nothing can hit it until it flies
         return;
     }
     const float a = static_cast<float>(p.slot) / 6.0f * glm::two_pi<float>();
@@ -254,9 +258,11 @@ void FlyingModule::placeAtStart(Pilot& p) {
     p.controls.throttle = 0.8f;
 }
 
-// Back after a crash: in the air at the last ring passed (Race), or
-// above where it went down, heading for the middle of the island.
-void FlyingModule::respawn(Pilot& p) {
+// Back after a crash: on the runway, safe from bullets and other planes
+// until it is in the air again. Put back for other reasons (a lost CPU
+// pilot, too far out to sea): in the air at the last ring passed (Race),
+// or over the island.
+void FlyingModule::respawn(Pilot& p, bool crashed) {
     p.respawnIn = 0.0f;
     p.health = 100.0f;
     p.bumpCooldown = 0.0f;
@@ -267,7 +273,6 @@ void FlyingModule::respawn(Pilot& p) {
     p.target = -1;
     clearDents(p);
     p.autopilot.reset();
-    p.trail.points.clear();
     p.controls = Controls{};
     p.controls.throttle = 0.8f;
     p.mouseStick = glm::vec2(0.0f);
@@ -277,12 +282,14 @@ void FlyingModule::respawn(Pilot& p) {
         placePileup(p);
         return;
     }
+    if (crashed || (m_mode == Mode::Race && p.nextRing == 0 && p.lap == 0)) {
+        placeAtStart(p);
+        p.sinceRing = 0.0f;
+        p.previous = p.plane.position;
+        return;
+    }
     if (m_mode == Mode::Race && !m_rings.empty()) {
         const int n = static_cast<int>(m_rings.size());
-        if (p.nextRing == 0 && p.lap == 0) {
-            placeAtStart(p);
-            return;
-        }
         const Ring& last = m_rings[static_cast<size_t>((p.nextRing + n - 1) % n)];
         const Ring& next = m_rings[static_cast<size_t>(p.nextRing % n)];
         glm::vec3 at = last.center + last.normal * 10.0f;
@@ -293,8 +300,7 @@ void FlyingModule::respawn(Pilot& p) {
         return;
     }
     if (m_mode == Mode::Dogfight) {
-        // Round the town, high, where the nearest enemy is furthest away;
-        // a moment of shield.
+        // Round the town, high, where the nearest enemy is furthest away.
         const glm::vec3 c = m_town.centre();
         glm::vec3 best = c + glm::vec3(900.0f, 120.0f, 0.0f);
         float bestGap = -1.0f;
@@ -311,7 +317,6 @@ void FlyingModule::respawn(Pilot& p) {
             }
         }
         p.plane = airborne(best, yawToward(c - best), 55.0f);
-        p.shield = kShieldTime;
         p.previous = p.plane.position;
         return;
     }
@@ -456,7 +461,7 @@ void FlyingModule::updatePilot(Pilot& p, float dt) {
     if (p.respawnIn > 0.0f) {
         if (m_pileup) return; // back with everyone at the next pile-up
         p.respawnIn -= dt;
-        if (p.respawnIn <= 0.0f) respawn(p);
+        if (p.respawnIn <= 0.0f) respawn(p, true);
         return;
     }
     p.previous = p.plane.position;
@@ -500,6 +505,7 @@ void FlyingModule::updatePilot(Pilot& p, float dt) {
         return;
     }
     if (p.climbOut && !p.plane.onGround && clearance > 60.0f) p.climbOut = false;
+    if (p.safe && !p.plane.onGround && clearance > kSafeUntil) p.safe = false;
     p.sinceRing += dt;
     // A CPU pilot lost for too long (a ring it keeps missing): back on the course.
     if (p.cpu && m_mode == Mode::Race && !p.finished && p.sinceRing > kLost) {
@@ -535,7 +541,7 @@ void FlyingModule::updateCamera(Pilot& p, float dt) {
     }
     if (p.cameraMode == 1) {
         cam.nearPlane = 0.15f;
-        const glm::vec3 eye = pos + rot * glm::vec3(0.0f, 1.05f, 0.9f);
+        const glm::vec3 eye = pos + rot * (m_art.loaded ? m_art.eye : Art{}.eye);
         cam.position = eye;
         cam.target = eye + rot * (look * glm::vec3(0.0f, 0.0f, -10.0f));
         cam.up = rot * glm::vec3(0.0f, 1.0f, 0.0f);
@@ -677,6 +683,7 @@ void FlyingModule::startFromLobby() {
 void FlyingModule::backToLobby() {
     closePause();
     m_phase = Phase::Lobby;
+    m_randomSeed = 0; // Random: another island next time
     m_app->views().clear();
     if (m_lobby) m_lobby->open();
     newFlight();

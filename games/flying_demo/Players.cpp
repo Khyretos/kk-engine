@@ -327,8 +327,11 @@ uint32_t FlyingModule::islandSeed() const {
     const kke::Lobby::Option* o = m_lobby->lobby().option("island");
     const int pick = o ? o->value : 0;
     if (pick >= 0 && pick < kIslandCount) return kIslands[pick].seed;
-    // Random: a new island each flight.
-    return 1000u + static_cast<uint32_t>(SDL_GetTicks() % 100000u);
+    // Random: rolled once and kept (the menu reads this every frame, so a
+    // new one each call rebuilt the island every frame), and rolled again
+    // back in the start menu after a flight.
+    if (m_randomSeed == 0) m_randomSeed = 1000u + static_cast<uint32_t>(SDL_GetTicks() % 100000u);
+    return m_randomSeed;
 }
 
 std::string FlyingModule::moodName() const {
@@ -598,7 +601,7 @@ Controls FlyingModule::readCpuDogfight(Pilot& p, const Controls& cruise) {
         for (size_t i = 0; i < m_pilots.size(); ++i) {
             if (!valid(static_cast<int>(i))) continue;
             const Pilot& o = m_pilots[i];
-            if (!o.remote && o.plane.onGround) continue; // still on the runway: fair play
+            if (safe(o)) continue; // still on the runway: it can't be hit
             const float d = glm::length((o.remote ? o.net.position : o.plane.position) - p.plane.position);
             if (d < best) {
                 best = d;

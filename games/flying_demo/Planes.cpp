@@ -9,6 +9,7 @@
 #include "kke/AssetCatalog.h"
 #include "kke/DevTools.h"
 #include "kke/Log.h"
+#include "kke/ParticleEffects.h"
 #include "kke/SceneLoader.h"
 #include "kke/SphereImpostors.h"
 
@@ -188,6 +189,27 @@ void FlyingModule::loadArt() {
     }
     m_art.scale = scale;
     m_shape = planeShape(span * scale);
+    // The cockpit camera: up from the stick, pushed forward toward the
+    // propeller so the upper wing and the long nose don't fill the view.
+    {
+        glm::vec3 seat(0.0f), prop(0.0f, 1.0f, -3.0f);
+        float propRadius = 1.0f;
+        for (size_t i = 0; i < m_art.kinds.size(); ++i) {
+            if (m_art.kinds[i] == Art::Kind::Stick) seat = glm::vec3(m_art.toPlane * glm::vec4(m_art.hinges[i], 1.0f));
+            if (m_art.kinds[i] == Art::Kind::Prop) {
+                prop = glm::vec3(m_art.toPlane * glm::vec4(m_art.hinges[i], 1.0f));
+                glm::vec3 plo(1e9f), phi(-1e9f);
+                for (const std::vector<glm::vec3>& mesh : m_art.positions[i])
+                    for (const glm::vec3& v : mesh) {
+                        plo = glm::min(plo, v);
+                        phi = glm::max(phi, v);
+                    }
+                propRadius = 0.5f * (phi.y - plo.y) * scale;
+            }
+        }
+        m_art.eye = glm::mix(seat, prop, 0.5f);
+        m_art.eye.y = std::max(seat.y + 1.0f, prop.y + propRadius * 0.6f);
+    }
     if (const kke::CatalogPack* pack = catalog.pack(asset->pack)) m_art.liveries = pack->textureVariants;
     m_art.loaded = !m_art.parts.empty();
     log->info("stunt plane: {} parts, {:.1f} m span (scale {}), nose along ({:.0f}, {:.0f}, {:.0f}), {} paint jobs", m_art.parts.size(), span * scale,
@@ -259,7 +281,10 @@ void FlyingModule::poseArt(Pilot& p, float dt) {
     // Remote planes: the controls aren't sent, so their surfaces rest.
     const Controls c = p.remote ? Controls{} : p.controls;
     for (size_t i = 0; i < p.parts.size() && i < m_art.kinds.size(); ++i) {
-        m_models->setVisible(p.parts[i], !down && present(p));
+        // From the cockpit a spinning propeller is a blur you see through,
+        // not a blade across the view: it isn't drawn.
+        const bool blur = m_art.kinds[i] == Art::Kind::Prop && p.seat >= 0 && !p.remote && p.cameraMode == 1;
+        m_models->setVisible(p.parts[i], !down && present(p) && !blur);
         float angle = 0.0f;
         glm::vec3 axis = m_art.axes[i];
         switch (m_art.kinds[i]) {
@@ -285,23 +310,40 @@ void FlyingModule::poseArt(Pilot& p, float dt) {
 // no gaps); each ages, grows and drifts up a little.
 void FlyingModule::updateTrail(Pilot& p, float dt) {
     Trail& t = p.trail;
-    for (Trail::Point& pt : t.points) {
-        pt.age += dt;
-        pt.at.y += dt * 0.4f;
-    }
-    while (!t.points.empty() && t.points.front().age > kTrailLife) t.points.pop_front();
     const bool on = p.remote ? p.net.smoke && !p.net.crashed : p.smoke && !p.plane.crashed && p.respawnIn <= 0.0f;
-    if (!on) {
+    if (!on || !m_fx) {
         t.dropping = false;
         return;
     }
     const glm::vec3 position = p.remote ? p.net.position : p.plane.position;
     const glm::quat rotation = p.remote ? p.drawnRotation : p.plane.rotation;
+    const glm::vec3 velocity = p.remote ? p.net.velocity : p.plane.velocity;
     const glm::vec3 tail = position + rotation * glm::vec3(0.0f, 0.4f, 4.5f);
+    // The engine's soft smoke (kke::ParticleEffects, as the racing cars'
+    // tyre smoke): a puff every 1.5 m flown, tinted with the plane's
+    // colour, spreading and drifting up as it hangs in the air.
+    const glm::vec3 tint = glm::mix(p.tint, glm::vec3(1.0f), 0.7f);
+    auto puff = [&](const glm::vec3& at, float age) {
+        kke::ParticleEffects::Particle s;
+        s.position = at;
+        s.velocity = velocity * 0.04f;
+        s.color = tint;
+        s.radius = 0.7f;
+        s.growth = 0.42f;
+        s.opacity = 0.7f;
+        s.life = kTrailLife;
+        s.drag = 1.5f;
+        s.rise = 0.12f;
+        s.spin = 0.2f;
+        s.age = age;
+        m_puffSeed = m_puffSeed * 1664525u + 1013904223u;
+        s.seed = static_cast<float>(m_puffSeed >> 8) / 16777216.0f;
+        m_fx->emit(s);
+    };
     if (!t.dropping || glm::length(tail - t.last) > 200.0f) { // just switched on, or put somewhere else
         t.dropping = true;
         t.last = tail;
-        t.points.push_back({ tail, 0.0f });
+        puff(tail, 0.0f);
         return;
     }
     const glm::vec3 way = tail - t.last;
@@ -309,33 +351,15 @@ void FlyingModule::updateTrail(Pilot& p, float dt) {
     const int puffs = static_cast<int>(length / kPuffSpacing);
     for (int i = 1; i <= puffs; ++i) {
         const float k = static_cast<float>(i) * kPuffSpacing / length;
-        t.points.push_back({ t.last + way * k, dt * (1.0f - k) }); // the earlier ones are a little older
+        puff(t.last + way * k, dt * (1.0f - k)); // the earlier ones are a little older
     }
     if (puffs > 0) t.last += way * (static_cast<float>(puffs) * kPuffSpacing / length);
 }
 
-// Every puff of every plane's smoke, for render(): rebuilt each frame
-// in update() (render() runs once per split-screen view). A puff starts
-// small and tinted with the plane's colour, then grows and whitens.
+// The fireballs, for render(): rebuilt each frame in update() (render()
+// runs once per split-screen view).
 void FlyingModule::rebuildTrails() {
     m_puffs.clear();
-    // The cameras here: a puff right in front of one would fill its view
-    // (the chase camera flies down its own plane's smoke), so those go.
-    std::vector<glm::vec3> eyes;
-    for (const Pilot& p : m_pilots)
-        if (p.seat >= 0 && !p.remote) eyes.push_back(p.camera.position);
-    if (eyes.empty()) eyes.push_back(m_app->camera().position);
-    for (const Pilot& p : m_pilots) {
-        const glm::vec3 tint = glm::mix(p.tint, glm::vec3(1.0f), 0.75f);
-        for (const Trail::Point& pt : p.trail.points) {
-            const float t = std::min(pt.age / kTrailLife, 1.0f);
-            const float radius = 0.35f + 2.4f * std::sqrt(t);
-            bool nearEye = false;
-            for (const glm::vec3& e : eyes) nearEye = nearEye || glm::length(e - pt.at) < radius + 6.0f;
-            if (nearEye) continue;
-            m_puffs.push_back({ pt.at, radius, glm::mix(tint, glm::vec3(0.97f), std::sqrt(t)), 0.0f, 1.0f });
-        }
-    }
     // Explosions (Damage.cpp): balls of fire swelling, going orange, dark and out.
     for (const Fireball& f : m_fireballs) {
         if (f.age < 0.0f) continue;

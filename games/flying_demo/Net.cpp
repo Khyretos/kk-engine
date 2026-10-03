@@ -372,7 +372,7 @@ void FlyingModule::updateNet(float dt) {
         p.plane.velocity = plane.velocity;
         p.plane.rotation = plane.rotation;
         p.drawnRotation = jump ? plane.rotation : glm::slerp(p.drawnRotation, plane.rotation, std::min(1.0f, dt * 12.0f));
-        if (jump) p.trail.points.clear();
+        if (jump) p.trail.dropping = false;
         p.smoke = plane.smoke;
     }
 }
@@ -394,6 +394,7 @@ void FlyingModule::sendNet() {
         n.smoke = p.smoke;
         n.crashed = down(p);
         n.onGround = p.plane.onGround;
+        n.safe = p.safe;
         n.finished = p.finished;
         n.teleported = p.teleported;
         n.nextRing = static_cast<uint8_t>(std::clamp(p.nextRing, 0, 63));
