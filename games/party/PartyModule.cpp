@@ -301,6 +301,7 @@ void PartyModule::buildRound(const std::string& game, uint32_t seed) {
         b.v = glm::vec3(0.0f);
         b.botTimer = 0.0f;
         b.watching = -1;
+        b.hasViewFeet = false;
         glm::vec3 feet(0.0f);
         float yaw = 0.0f;
         m_game->spawn(*this, i, count, feet, yaw);

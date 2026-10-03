@@ -97,8 +97,9 @@ public:
             s.part = a.addVisual(std::move(v), std::move(idx));
             m_sweepers.push_back(s);
         }
-        // The gap: three platforms sliding side to side over nothing.
-        floor(kGapZ1 - 1.0f, kHammerZ1 - 2.0f);
+        // The gap: three platforms sliding side to side over nothing. The
+        // hammers' floor runs on unbroken to the disc.
+        floor(kGapZ1 + 0.5f, kDiscZ + kDiscR - 0.5f);
         for (int i = 0; i < 3; ++i) {
             Slider s;
             s.z = kGapZ0 - 3.0f - 5.5f * static_cast<float>(i);
@@ -134,7 +135,6 @@ public:
         }
         // The disc: a turning round platform, and a bridge on and off it.
         {
-            floor(kDiscZ + kDiscR + 1.0f, kDiscZ + kDiscR - 0.5f);
             kke::RigidWorld::BodyDesc d;
             d.shape = kke::RigidWorld::Shape::ConvexHull;
             d.motion = kke::RigidWorld::Motion::Kinematic;

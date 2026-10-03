@@ -85,7 +85,9 @@ struct Bean {
     float pushPose = 0.0f;     // s left of the push's arms-out (drawing)
     float charge = 0.0f;       // s the dive button has been held (games with a charged dive)
     float divePower = 1.0f;    // the last dive's power: 1, up to 2 fully charged
-    bool clashing = false;     // locked in a clash (Beans.cpp): mash to win it
+    bool clashing = false;
+    glm::vec3 viewFeet{0.0f};  // where this player's camera last looked (a parked bean is never followed)
+    bool hasViewFeet = false;     // locked in a clash (Beans.cpp): mash to win it
     float jumpBuffer = 0.0f;   // s a jump press waits for the ground
     float groundTime = 0.0f; // s on the ground since the last landing
     int repeatJumps = 0;       // jumps in a row: each goes less high

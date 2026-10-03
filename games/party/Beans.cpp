@@ -528,7 +528,17 @@ void PartyModule::updateCameras(float dt) {
             if (b.watching >= 0 && !b.hidden && b.finished) focus = &b; // finished: see yourself celebrate unless everyone's done
             if (b.watching >= 0 && (b.hidden || b.out)) focus = &m_beans[static_cast<size_t>(b.watching)];
         }
-        const glm::vec3 feet = focus->remote ? focus->drawFeet : w.characterDrawPosition(focus->id, m_app->fixedAlpha());
+        // A parked bean (out, between rounds) waits far below the level:
+        // never follow it there, stay where the camera last looked.
+        if (focus->hidden && focus != &b && !b.hidden) focus = &b;
+        if (!focus->hidden) {
+            b.viewFeet = focus->remote ? focus->drawFeet : w.characterDrawPosition(focus->id, m_app->fixedAlpha());
+            b.hasViewFeet = true;
+        } else if (!b.hasViewFeet) {
+            b.viewFeet = b.checkpoint;
+            b.hasViewFeet = true;
+        }
+        const glm::vec3 feet = b.viewFeet;
         b.rig.settings.armLength = m_cameraDistance;
         b.rig.settings.pivotHeight = 1.2f;
         b.rig.settings.shoulderOffset = m_game && m_phase != Phase::Podium ? m_game->cameraSide() : 0.0f;
