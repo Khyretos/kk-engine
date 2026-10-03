@@ -30,6 +30,7 @@ set(ENGINE_SOURCES
     src/NodeGraph.cpp
     src/TouchGestures.cpp
     src/VoxelTets.cpp
+    src/Breakables.cpp
     src/InteriorColor.cpp
     src/FracturePattern.cpp
     src/VoronoiFracture.cpp
@@ -185,6 +186,7 @@ set(ENGINE_HEADERS
     include/kke/OrderBridge.h
     include/kke/TouchGestures.h
     include/kke/VoxelTets.h
+    include/kke/Breakables.h
     include/kke/InteriorColor.h
     include/kke/FracturePattern.h
     include/kke/ParticleFluid.h

@@ -59,13 +59,17 @@ namespace {
 // which nothing else sees. kQuery is never a body's layer: it's what
 // rays, overlap tests and characters ask with, so they see the solid
 // world and neither cloth nor cloth colliders (a curtain doesn't stop a
-// ray or a player; it moves out of the way).
+// ray or a player; it moves out of the way). kDebris is falling rubble
+// (BodyDesc::debris): it lands on the level, other bodies and itself, but
+// characters walk through it and rays don't see it, so a crumbling floor
+// drops the player instead of throwing them.
 namespace Layers {
 constexpr JPH::ObjectLayer kStatic = 0;
 constexpr JPH::ObjectLayer kMoving = 1;
 constexpr JPH::ObjectLayer kCloth = 2;
 constexpr JPH::ObjectLayer kClothCollider = 3;
 constexpr JPH::ObjectLayer kQuery = 4;
+constexpr JPH::ObjectLayer kDebris = 5;
 } // namespace Layers
 namespace BroadLayers {
 constexpr JPH::BroadPhaseLayer kStatic(0);
@@ -99,9 +103,10 @@ public:
     bool ShouldCollide(JPH::ObjectLayer a, JPH::ObjectLayer b) const override {
         if (a > b) std::swap(a, b);
         switch (a) {
-        case Layers::kStatic: return b == Layers::kMoving || b == Layers::kCloth || b == Layers::kQuery;
-        case Layers::kMoving: return b == Layers::kMoving || b == Layers::kCloth || b == Layers::kQuery;
+        case Layers::kStatic: return b == Layers::kMoving || b == Layers::kCloth || b == Layers::kQuery || b == Layers::kDebris;
+        case Layers::kMoving: return b == Layers::kMoving || b == Layers::kCloth || b == Layers::kQuery || b == Layers::kDebris;
         case Layers::kCloth: return b == Layers::kClothCollider;
+        case Layers::kDebris: return b == Layers::kDebris;
         default: return false;
         }
     }
@@ -308,7 +313,10 @@ RigidWorld::BodyId RigidWorld::add(const BodyDesc& d) {
                                     : d.motion == Motion::Kinematic ? JPH::EMotionType::Kinematic : JPH::EMotionType::Dynamic;
     // A cloth-only collider moves only when told to (nothing else can push it).
     const JPH::EMotionType bodyMotion = d.clothOnly && motion == JPH::EMotionType::Dynamic ? JPH::EMotionType::Kinematic : motion;
-    const JPH::ObjectLayer layer = d.clothOnly ? Layers::kClothCollider : d.motion == Motion::Static ? Layers::kStatic : Layers::kMoving;
+    const JPH::ObjectLayer layer = d.clothOnly                      ? Layers::kClothCollider
+                                   : d.motion == Motion::Static      ? Layers::kStatic
+                                   : d.debris                         ? Layers::kDebris
+                                                                     : Layers::kMoving;
     JPH::BodyCreationSettings bcs(shape, toJR(d.position), toJ(glm::normalize(d.rotation)), bodyMotion, layer);
     bcs.mFriction = d.friction;
     bcs.mRestitution = d.restitution;
