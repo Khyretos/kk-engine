@@ -1204,6 +1204,15 @@ void GameShellModule::frameStart(const UpdateContext& ctx) {
         m_players = m_input->players(); // the lobby added players: their maps get the prompt action too
         definePauseAction();
     }
+    // A game's own pause buttons, for controllers that aren't gamepads (a
+    // flight stick, a wheel): bound to "shell.open" (the events above only
+    // see gamepads and the keyboard).
+    if (m_page == Page::None && m_input && m_capture.empty())
+        for (int p = 0; p < m_input->players(); ++p)
+            if (m_input->map(p).action("shell.open") && m_input->map(p).pressed("shell.open")) {
+                openPause();
+                break;
+            }
     if (m_page == Page::None) return;
     if (m_panel) m_panel->setVisible(false); // a game may show it again meanwhile (online, the game runs)
     // A pause menu opened offline that went online meanwhile (a friend

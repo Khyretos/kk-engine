@@ -43,6 +43,12 @@ same with a **controller**, the **keyboard** and the **mouse**.
 The pause button shows in hints as `{shell.pause}` (Esc on the keyboard,
 the Start glyph on a controller).
 
+Controllers that aren't gamepads (a flight stick, a wheel) reach the
+menus through the player's input map: bind their buttons and hat to
+`ui.up` / `ui.down` / `ui.left` / `ui.right` / `ui.accept` / `ui.back`,
+and define a `shell.open` action bound to the button that should open the
+pause menu (the racing demo's `Controllers.cpp` does all of it).
+
 ## Using it in a game
 
 ```cpp

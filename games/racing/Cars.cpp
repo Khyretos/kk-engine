@@ -254,6 +254,9 @@ CarArt CarGarage::loadSynty(int type, int kit, int paint) {
     kke::ModelData body, wheels[2];
     body.sourcePath = wheels[0].sourcePath = wheels[1].sourcePath = src.sourcePath;
     body.materials = wheels[0].materials = wheels[1].materials = src.materials;
+    kke::ModelData steering;
+    steering.sourcePath = src.sourcePath;
+    steering.materials = src.materials;
     std::vector<kke::ModelMesh> merged(src.materials.size());
     for (size_t m = 0; m < merged.size(); ++m) {
         merged[m].material = static_cast<uint32_t>(m);
@@ -307,6 +310,11 @@ CarArt CarGarage::loadSynty(int type, int kit, int paint) {
             if (corner < 2) wheels[corner].meshes.push_back(m); // front-left, front-right: the models
             continue;
         }
+        // The steering wheel turns: a model of its own.
+        if (m.name.find("SteeringW") != std::string::npos && !m.vertices.empty()) {
+            steering.meshes.push_back(m);
+            continue;
+        }
         kke::ModelMesh& into = merged[std::min<size_t>(m.material, merged.size() - 1)];
         const uint32_t base = static_cast<uint32_t>(into.vertices.size());
         into.vertices.insert(into.vertices.end(), m.vertices.begin(), m.vertices.end());
@@ -329,6 +337,41 @@ CarArt CarGarage::loadSynty(int type, int kit, int paint) {
         keepWheel(a, side, wheels[side]);
     }
     const std::string key = fmt::format("racing/{}/{}", asset, paints()[static_cast<size_t>(paint)].texture);
+    for (size_t p = 0; p < body.meshes.size(); ++p)
+        if (src.materials[body.meshes[p].material].name.find("Glass") != std::string::npos) a.glassParts.push_back(p);
+    if (!steering.meshes.empty()) {
+        // Its middle, and the column: the wheel's thinnest way through
+        // (the smallest spread of its vertices), pointing back at the
+        // driver. The driver's eyes are behind and above it.
+        glm::vec3 lo(1e9f), hi(-1e9f);
+        size_t n = 0;
+        for (const kke::ModelMesh& m : steering.meshes)
+            for (const kke::ModelVertex& v : m.vertices) {
+                lo = glm::min(lo, v.position);
+                hi = glm::max(hi, v.position);
+                ++n;
+            }
+        const glm::vec3 mid = (lo + hi) * 0.5f;
+        glm::mat3 spread(0.0f);
+        for (const kke::ModelMesh& m : steering.meshes)
+            for (const kke::ModelVertex& v : m.vertices) spread += glm::outerProduct(v.position - mid, v.position - mid);
+        spread = spread / static_cast<float>(std::max<size_t>(n, 1)) + glm::mat3(1e-6f);
+        // The smallest eigenvector: power iteration on the inverse.
+        const glm::mat3 inv = glm::inverse(spread);
+        glm::vec3 axis(0.0f, 0.3f, -1.0f);
+        for (int i = 0; i < 40; ++i) axis = glm::normalize(inv * axis);
+        if (axis.z > 0.0f) axis = -axis;
+        a.steerCenter = mid;
+        a.steerAxis = axis;
+        for (kke::ModelMesh& m : steering.meshes)
+            for (kke::ModelVertex& v : m.vertices) v.position -= mid;
+        boundsOf(steering);
+        a.steering = m_models->add(std::move(steering), key + "/steering");
+        // A seated driver: the eyes about 60 cm behind the wheel's middle
+        // and a third of a metre above it.
+        a.eye = mid + glm::vec3(0.0f, 0.33f, -0.6f);
+        a.interior = true;
+    }
     finish(a, body);
     a.body = m_models->add(std::move(body), key + "/body");
     a.wheel[0] = m_models->add(std::move(wheels[0]), key + "/wheel_l");
@@ -369,6 +412,8 @@ CarArt CarGarage::makeBlock(int type, int paint) {
     body.meshes.push_back(std::move(trim));
     boundsOf(body);
     finish(a, body);
+    a.glassParts = { 1 };
+    a.eye = glm::vec3(hw * 0.4f, belt + 0.3f, -hl * 0.1f);
     const std::string key = fmt::format("racing/block/{}/{}", t.id, paint);
     a.body = m_models->add(std::move(body), key + "/body");
     for (int side = 0; side < 2; ++side) {

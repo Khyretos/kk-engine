@@ -56,6 +56,14 @@ struct CarArt {
     float wheelRadius = 0.36f, wheelWidth = 0.3f;
     glm::vec3 boundsMin{-1.0f, 0.0f, -2.5f}, boundsMax{1.0f, 1.4f, 2.5f};
     std::vector<glm::vec3> hull;         // Jolt chassis
+    // Inside (the cockpit cameras): where the driver's eyes are, the body
+    // parts that are glass (taken away when you sit inside), and the
+    // steering wheel on its own (it turns with the steering).
+    glm::vec3 eye{0.35f, 1.05f, -0.2f};  // car space
+    std::vector<size_t> glassParts;      // indices into positions
+    kke::ModelModule::ModelId steering = 0;
+    glm::vec3 steerCenter{0.0f}, steerAxis{0.0f, 0.0f, -1.0f}; // the column, pointing at the driver
+    bool interior = false;               // the pack's dashboard, seats and wheel are there
 };
 
 // Loads the pack's cars once each (type, kit, paint) and hands them out;
