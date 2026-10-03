@@ -261,9 +261,11 @@ void ClimbWall::placeLedges() {
     }
 }
 
+// No hold inside a ledge's stone (from a hand's breadth under its
+// underside), nor right on top of it where the feet stand.
 bool ClimbWall::blockedByLedge(float x, float y) const {
     for (const ClimbLedge& l : m_ledges)
-        if (std::abs(x - l.center.x) < l.halfExtents.x + 0.3f && y > l.top() - 0.2f && y < l.top() + 0.35f) return true;
+        if (std::abs(x - l.center.x) < l.halfExtents.x + 0.3f && y > l.center.y - l.halfExtents.y - 0.15f && y < l.top() + 0.35f) return true;
     return false;
 }
 
@@ -366,18 +368,21 @@ void ClimbWall::placeHolds() {
         const float nx = std::clamp(x + dx, xMin, xMax), ny = y + dy;
         // Landing in a ledge's band, or stepping past it: take the ledge.
         auto crosses = [&](const ClimbLedge& l) {
-            return std::abs(nx - l.center.x) < l.halfExtents.x + 0.3f && ny > l.top() - 0.2f && y < l.top() + 0.35f && y < l.top() - 0.01f;
+            return std::abs(nx - l.center.x) < l.halfExtents.x + 0.3f && ny > l.center.y - l.halfExtents.y - 0.15f && y < l.top() + 0.35f &&
+                   y < l.top() - 0.01f;
         };
         bool ledge = false;
         for (const ClimbLedge& l : m_ledges) ledge = ledge || crosses(l);
         if (ledge) {
-            // Up to the ledge's lip: a hold just under it (when the last
-            // one is further down), then the edge, then on from its top.
+            // Up to the ledge's lip: a hold just under its underside (when
+            // the last one is further down), then the edge, then on from
+            // its top.
             for (size_t li = 0; li < m_ledges.size(); ++li) {
                 const ClimbLedge& l = m_ledges[li];
                 if (crosses(l)) {
                     x = std::clamp(nx, l.center.x - l.halfExtents.x + 0.25f, l.center.x + l.halfExtents.x - 0.25f);
-                    if (y < l.top() - 0.45f) addRoute(makeHold(x, l.top() - 0.3f, ClimbHold::Kind::Jug));
+                    const float under = l.center.y - l.halfExtents.y - 0.2f;
+                    if (y < under - 0.15f) addRoute(makeHold(x, under, ClimbHold::Kind::Jug));
                     y = l.top();
                     const int e = edgeAt(static_cast<int>(li), x);
                     if (e >= 0) m_line.push_back(e);
