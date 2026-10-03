@@ -78,7 +78,9 @@ void DuelModule::loadCharacter() {
                                     "UAL 1's punches stand in for the hook, uppercut and knee");
     }
     m_animSet = std::make_unique<kke::AnimationSet>(m_rigData);
-    for (int s = 0; s < 2; ++s) m_arm[s] = kke::findChain(m_rigData, s == 0 ? "upperarm_l" : "upperarm_r", s == 0 ? "lowerarm_l" : "lowerarm_r", s == 0 ? "hand_l" : "hand_r");
+    const kke::TwoBoneChain arms[2] = { kke::findChain(m_rigData, "upperarm_l", "lowerarm_l", "hand_l"),
+                                        kke::findChain(m_rigData, "upperarm_r", "lowerarm_r", "hand_r") };
+    for (int s = 0; s < 2; ++s) m_arm[s] = kke::makeHumanArm(m_rigData, arms[s], arms[1 - s]);
     const glm::vec3 fwd = kke::modelForward(m_rigData);
     m_modelYaw = 180.0f - glm::degrees(std::atan2(fwd.x, fwd.z));
 }
@@ -139,7 +141,7 @@ void DuelModule::animateBody(Fighter& f, const Fighter& other, float dt) {
         return;
     }
 
-    const glm::vec3 feet = w.characterPosition(f.body);
+    const glm::vec3 feet = w.characterDrawPosition(f.body, m_app->fixedAlpha()); // between physics steps: no 60 Hz shake
     const float yaw = m_modelYaw - glm::degrees(std::atan2(f.facing.x, -f.facing.z));
     const glm::mat4 xf = glm::rotate(glm::translate(glm::mat4(1.0f), feet), glm::radians(yaw), glm::vec3(0, 1, 0));
     m_models->setTransform(f.model, xf);
@@ -223,9 +225,12 @@ void DuelModule::animateBody(Fighter& f, const Fighter& other, float dt) {
         for (int s = 0; s < 2; ++s) {
             const float side = s == 0 ? -1.0f : 1.0f;
             const glm::vec3 hand = chin + fwdM * (0.22f + 0.06f * high) + rightM * (0.09f * side) + up * (-0.08f + 0.1f * high);
-            const glm::vec3 shoulder(bones[static_cast<size_t>(m_arm[s].upper)][3]);
-            const glm::vec3 pole = shoulder - up * 0.6f + rightM * (0.3f * side) + fwdM * 0.1f;
-            kke::solveTwoBone(m_rigData, pose, m_arm[s], hand, pole, f.guard);
+            const glm::vec3 shoulder(bones[static_cast<size_t>(m_arm[s].chain.upper)][3]);
+            kke::ArmGoal goal;
+            goal.hand = hand;
+            goal.elbowToward = shoulder - up * 0.6f + rightM * (0.3f * side) + fwdM * 0.1f; // elbows down and a little out
+            goal.weight = f.guard;
+            kke::solveHumanArm(m_rigData, pose, m_arm[s], goal);
         }
     }
 

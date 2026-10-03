@@ -29,6 +29,7 @@ add_executable(kke_tests
     test_break_graph.cpp
     test_animator.cpp
     test_anim_rig.cpp
+    test_character_ik.cpp
     test_body_shape.cpp
     test_procedural_anim.cpp
     test_climb_wall.cpp

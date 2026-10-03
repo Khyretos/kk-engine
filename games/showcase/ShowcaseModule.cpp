@@ -644,16 +644,11 @@ void ShowcaseModule::useCharacter(const std::string& asset) {
     buildAnimator();
     m_steps = kke::CharacterFootsteps();
     m_steps.bind(m_rigData);
-    m_feet = kke::FootPlacer(m_rigData, kke::findChain(m_rigData, "thigh_l", "calf_l", "foot_l"),
-                             kke::findChain(m_rigData, "thigh_r", "calf_r", "foot_r"), [&] {
-                                 for (size_t b = 0; b < m_rigData.bones.size(); ++b)
-                                     if (kke::canonicalBoneName(m_rigData.bones[b].name) == "pelvis") return static_cast<int>(b);
-                                 return -1;
-                             }());
+    m_ik = kke::CharacterIk(m_rigData, d); // the body's capsules fitted to this character's mesh
+    m_footBone[0] = kke::findChain(m_rigData, "thigh_l", "calf_l", "foot_l").end;
+    m_footBone[1] = kke::findChain(m_rigData, "thigh_r", "calf_r", "foot_r").end;
     const glm::vec3 fwd = kke::modelForward(m_rigData);
     m_modelYaw = 180.0f - glm::degrees(std::atan2(fwd.x, fwd.z));
-    m_armL = kke::findChain(m_rigData, "upperarm_l", "lowerarm_l", "hand_l");
-    m_armR = kke::findChain(m_rigData, "upperarm_r", "lowerarm_r", "hand_r");
 }
 
 void ShowcaseModule::buildAnimator() {
@@ -713,60 +708,75 @@ void ShowcaseModule::addAnimatorStates(kke::Animator& a) {
 void ShowcaseModule::applyIk(float dt) {
     std::vector<glm::mat4>* locals = m_models->boneLocals(m_charInstance);
     if (!locals || !m_anim) return;
+    // The clip is the base; kke::CharacterIk puts the hands and feet where
+    // the world says they are and leans the body into its speed changes.
     kke::Pose pose = m_anim->pose();
     using State = kke::Locomotion::State;
-    const kke::Locomotion::State st = m_loco->state();
+    using Side = kke::CharacterIk::Side;
+    const State st = m_loco->state();
+    const float progress = m_loco->traversalProgress();
     const glm::mat4 toWorld = m_models->transform(m_charInstance);
-    const glm::mat4 toModel = glm::inverse(toWorld);
-    const float k = 1.0f - std::exp(-10.0f * dt);
-
-    // Feet: on the ground only (in the air they'd reach for the floor).
-    m_footWeight += ((m_footIk && st == State::Ground ? 1.0f : 0.0f) - m_footWeight) * k;
     kke::RigidWorld& w = m_rigid->world();
     auto ground = [&](const glm::vec3& from, glm::vec3& hit, glm::vec3& normal) {
-        const glm::vec3 start = glm::vec3(toWorld * glm::vec4(from, 1.0f));
-        kke::RigidWorld::RayHit h = w.raycast(start, glm::vec3(0, -1, 0), 1.2f);
+        kke::RigidWorld::RayHit h = w.raycast(from, glm::vec3(0, -1, 0), 1.2f);
         if (!h.hit || h.normal.y < 0.5f) return false;
-        hit = glm::vec3(toModel * glm::vec4(h.point, 1.0f));
-        normal = glm::normalize(glm::mat3(toModel) * h.normal);
+        hit = h.point;
+        normal = h.normal;
         return true;
     };
-    m_feet.apply(m_rigData, pose, kke::FootPlacer::SurfaceQuery(ground), dt, m_footWeight);
+    // Feet on the ground walking, and at the end of a climb (stepping
+    // onto the top); in the air they'd reach down for the floor.
+    m_ik.feetOnGround(m_footIk && (st == State::Ground || (st == State::Climb && progress > 0.75f)));
+
+    const kke::Locomotion::Obstacle& o = m_loco->lastObstacle();
+    const glm::vec3 in = -o.normal;
+    const glm::vec3 side(in.z, 0.0f, -in.x);
+    const glm::vec3 feetAt = glm::vec3(toWorld[3]);
+    // Hands: on the top edge during the first part of a vault or climb,
+    // where the clips have no hand plant matched to this obstacle, on the
+    // edge while hanging (and shimmying), and reaching for the next edge at
+    // the end of a ledge leap.
+    const bool reach = m_handIk && (st == State::Hang || (st == State::Leap && progress > 0.6f) || (st == State::Climb && progress < 0.7f) ||
+                                    (st == State::Vault && progress < 0.45f));
+    if (reach) {
+        const glm::vec3 grip = st == State::Hang || st == State::Leap ? m_loco->hangEdge() : glm::vec3(o.face.x, o.target.y, o.face.z);
+        const glm::vec3 edge(grip.x + in.x * 0.08f, grip.y + 0.02f, grip.z + in.z * 0.08f);
+        const std::vector<glm::mat4> bones = kke::poseToModel(m_rigData, pose);
+        for (int i = 0; i < 2; ++i) {
+            const kke::HumanArm& arm = m_ik.arm(static_cast<Side>(i));
+            if (!arm.valid()) continue;
+            // Shoulder-width apart along the edge; which side is which
+            // comes from where the shoulders are. The elbows hang out and
+            // down, away from the wall.
+            const glm::vec3 shoulder = glm::vec3(toWorld * bones[static_cast<size_t>(arm.chain.upper)][3]);
+            const float s = glm::dot(shoulder - edge, side) > 0.0f ? 1.0f : -1.0f;
+            const glm::vec3 hand = edge + side * (0.22f * s);
+            m_ik.hand(static_cast<Side>(i), hand, hand - in * 0.3f + side * (0.35f * s) - glm::vec3(0, 0.5f, 0));
+        }
+    }
+    // Hanging: the balls of the feet against the wall below the hands
+    // (braced, the way people hang on a ledge), where there is wall.
+    if (m_footIk && st == State::Hang) {
+        const std::vector<glm::mat4> bones = kke::poseToModel(m_rigData, pose);
+        for (int i = 0; i < 2; ++i) {
+            if (m_footBone[i] < 0) continue;
+            // Level with the animated foot, a little higher, straight into the wall.
+            const glm::vec3 foot = glm::vec3(toWorld * bones[static_cast<size_t>(m_footBone[i])][3]);
+            const glm::vec3 from(foot.x - in.x * 0.3f, std::max(foot.y, feetAt.y) + 0.25f, foot.z - in.z * 0.3f);
+            const kke::RigidWorld::RayHit h = w.raycast(from, in, 1.0f);
+            if (h.hit && std::abs(h.normal.y) < 0.6f) m_ik.foot(static_cast<Side>(i), h.point, h.normal);
+        }
+    }
+    // The lean comes from the body's own velocity on the ground; scripted
+    // moves keep the last one (they place the capsule, its velocity says nothing).
+    if (st == State::Ground || st == State::Air) m_leanVelocity = w.characterVelocity(m_player);
+    m_ik.apply(m_rigData, pose, toWorld, ground, m_leanVelocity, dt);
+
     // Step sounds where the (placed) feet actually come down.
     if (m_steps.bound()) {
         const glm::vec3 v = w.characterVelocity(m_player);
         m_steps.update(kke::poseToModel(m_rigData, pose), toWorld, w, m_app->getModule<kke::AudioModule>(), glm::length(glm::vec2(v.x, v.z)),
                        st == State::Ground && w.characterOnGround(m_player), dt);
-    }
-
-    // Hands: on the top edge during the first part of a vault or climb,
-    // where the stand-in clips have no hand plant of their own, and
-    // reaching for the next edge at the end of a ledge leap.
-    const bool reach = m_handIk && (st == State::Hang || (st == State::Leap && m_loco->traversalProgress() > 0.6f) ||
-                                    (st == State::Climb && m_loco->traversalProgress() < 0.7f) ||
-                                    (st == State::Vault && m_loco->traversalProgress() < 0.45f));
-    m_handWeight += ((reach ? 1.0f : 0.0f) - m_handWeight) * (1.0f - std::exp(-18.0f * dt));
-    if (m_handWeight > 0.01f) {
-        const kke::Locomotion::Obstacle& o = m_loco->lastObstacle();
-        const glm::vec3 in = -o.normal;
-        const glm::vec3 side(in.z, 0.0f, -in.x);
-        // Hanging (and shimmying) the edge is where the hands are now.
-        const glm::vec3 grip = st == State::Hang || st == State::Leap ? m_loco->hangEdge() : glm::vec3(o.face.x, o.target.y, o.face.z);
-        const glm::vec3 edge(grip.x + in.x * 0.08f, grip.y + 0.02f, grip.z + in.z * 0.08f);
-        const std::vector<glm::mat4> world = kke::poseToModel(m_rigData, pose);
-        for (int i = 0; i < 2; ++i) {
-            const kke::TwoBoneChain& arm = i == 0 ? m_armL : m_armR;
-            if (!arm.valid()) continue;
-            // Shoulder-width apart along the edge; which side is which
-            // comes from where the shoulders are.
-            const glm::vec3 shoulder = glm::vec3(toWorld * world[arm.upper][3]);
-            const float s = glm::dot(shoulder - edge, side) > 0.0f ? 1.0f : -1.0f;
-            const glm::vec3 hand = edge + side * (0.22f * s);
-            const glm::vec3 elbow = glm::vec3(toWorld * world[arm.lower][3]);
-            const glm::vec3 pole = elbow - in * 0.3f + side * (0.3f * s) - glm::vec3(0, 0.2f, 0);
-            kke::solveTwoBone(m_rigData, pose, arm, glm::vec3(toModel * glm::vec4(hand, 1.0f)),
-                              glm::vec3(toModel * glm::vec4(pole, 1.0f)), m_handWeight);
-        }
     }
     kke::poseToLocals(pose, *locals);
 }
@@ -1069,6 +1079,10 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     if (m_loco->jumped() && m_anim) m_anim->play(m_stJump, 0.08f, true);
 
     const glm::vec3 feet = w.characterPosition(m_player);
+    // Drawn (and followed by the camera) between the last two physics
+    // steps: the raw feet move in 60 Hz jumps, which shakes the body
+    // against the view on a faster screen, worst while the camera turns.
+    const glm::vec3 drawFeet = w.characterDrawPosition(m_player, m_app->fixedAlpha());
     // Face where Locomotion says (it turns at a limited rate, squares up
     // to obstacles), or where we look in first person.
     m_facing = m_rig.mode == kke::CameraRig::Mode::FirstPerson ? m_rig.yaw : m_loco->facingYaw();
@@ -1080,7 +1094,7 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     if (m_charInstance) {
         // Turn the model so it faces -Z (UAL's mannequin already does;
         // Synty characters face +Z), then like the rig at yaw 0.
-        glm::mat4 t = glm::rotate(glm::translate(glm::mat4(1.0f), feet), glm::radians(m_modelYaw - m_facing), glm::vec3(0, 1, 0));
+        glm::mat4 t = glm::rotate(glm::translate(glm::mat4(1.0f), drawFeet), glm::radians(m_modelYaw - m_facing), glm::vec3(0, 1, 0));
         m_models->setTransform(m_charInstance, t);
         m_models->setVisible(m_charInstance, m_rig.mode != kke::CameraRig::Mode::FirstPerson);
         applyIk(dt);
@@ -1099,7 +1113,7 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
         float& cur = m_rig.settings.shoulderOffset;
         cur += (shoulder - cur) * (1.0f - std::exp(-8.0f * dt));
     }
-    m_rig.update(dt, feet, [&w](const glm::vec3& from, const glm::vec3& d, float maxD) {
+    m_rig.update(dt, drawFeet, [&w](const glm::vec3& from, const glm::vec3& d, float maxD) {
         auto h = w.raycast(from, d, maxD);
         return h.hit ? h.distance : maxD;
     }, m_app->camera());
@@ -1309,7 +1323,7 @@ void ShowcaseModule::render(const kke::RenderContext& ctx) {
     if (m_crateBatchIndices) m_crateBatch->draw(ctx, glm::mat4(1.0f), 0.0f, 0.7f);
     m_cubes[3]->draw(ctx, glm::scale(w.transform(m_platform), m_platformHalf), 0.3f, 0.4f);
     if (!m_charInstance && m_rig.mode != kke::CameraRig::Mode::FirstPerson) {
-        glm::mat4 t = glm::rotate(glm::translate(glm::mat4(1.0f), w.characterPosition(m_player)), glm::radians(-m_facing), glm::vec3(0, 1, 0));
+        glm::mat4 t = glm::rotate(glm::translate(glm::mat4(1.0f), w.characterDrawPosition(m_player, m_app->fixedAlpha())), glm::radians(-m_facing), glm::vec3(0, 1, 0));
         m_capsule->draw(ctx, t, 0.0f, 0.6f);
     }
     for (const glm::mat4& t : m_avatarCapsules) m_capsule->draw(ctx, t, 0.0f, 0.6f);
@@ -1327,7 +1341,7 @@ void ShowcaseModule::renderShadow(const kke::ShadowRenderContext& ctx) {
     kke::RigidWorld& w = m_rigid->world();
     if (m_crateBatchIndices) m_crateBatch->drawShadow(ctx);
     m_cubes[3]->drawShadow(ctx, glm::scale(w.transform(m_platform), m_platformHalf));
-    if (!m_charInstance) m_capsule->drawShadow(ctx, glm::translate(glm::mat4(1.0f), w.characterPosition(m_player)));
+    if (!m_charInstance) m_capsule->drawShadow(ctx, glm::translate(glm::mat4(1.0f), w.characterDrawPosition(m_player, m_app->fixedAlpha())));
 }
 
 void ShowcaseModule::renderUi() {
@@ -1449,7 +1463,7 @@ void ShowcaseModule::renderUi() {
     if (ImGui::CollapsingHeader("Character")) {
         ImGui::Checkbox("Feet on the ground (foot IK)", &m_footIk);
         ImGui::Checkbox("Hands on edges (hand IK)", &m_handIk);
-        ImGui::Text("Hips lowered %.2f m", -m_feet.pelvisOffset());
+        ImGui::Text("Lean %.1f degrees", glm::length(m_ik.leanDegrees()));
         scanCatalog();
         const char* current = m_character.empty() ? "UAL mannequin" : m_character.c_str();
         if (ImGui::BeginCombo("Character", current)) {

@@ -357,7 +357,8 @@ void HordeModule::animateHero(float dt) {
     using S = kke::Combatant::State;
     kke::RigidWorld& w = m_rigid->world();
     const kke::Combatant& c = m_combat.get(m_hero.id);
-    const glm::vec3 feet = w.characterPosition(m_hero.body);
+    // Drawn between the last two physics steps (no 60 Hz shake).
+    const glm::vec3 feet = w.characterDrawPosition(m_hero.body, m_app->fixedAlpha());
     const glm::mat4 xf = glm::rotate(glm::translate(glm::mat4(1.0f), feet), glm::radians(yawOf(m_hero.facing) + m_heroYaw), glm::vec3(0, 1, 0));
     m_models->setTransform(m_hero.model, xf);
 

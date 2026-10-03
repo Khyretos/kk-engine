@@ -149,7 +149,10 @@ void PlayerModule::update(const kke::UpdateContext& ctx) {
     if (feet.y < -20.0f) m_loco->teleport(spawn); // fell off the world
 
     // The camera never goes through walls: it asks Jolt what's in the way.
-    m_rig.update(dt, feet, [&world](const glm::vec3& from, const glm::vec3& dir, float maxDist) {
+    // It follows the feet where they're drawn (between the last two
+    // physics steps): the raw position moves in 60 Hz jumps, which shakes
+    // the view on a faster screen, most of all while it turns.
+    m_rig.update(dt, world.characterDrawPosition(m_player, m_app->fixedAlpha()), [&world](const glm::vec3& from, const glm::vec3& dir, float maxDist) {
         const auto hit = world.raycast(from, dir, maxDist);
         return hit.hit ? hit.distance : maxDist;
     }, m_app->camera());
@@ -157,13 +160,13 @@ void PlayerModule::update(const kke::UpdateContext& ctx) {
 
 void PlayerModule::render(const kke::RenderContext& ctx) {
     if (m_rig.mode == kke::CameraRig::Mode::FirstPerson) return;
-    const glm::vec3 feet = m_rigid->world().characterPosition(m_player);
+    const glm::vec3 feet = m_rigid->world().characterDrawPosition(m_player, m_app->fixedAlpha());
     const glm::mat4 t = glm::rotate(glm::translate(glm::mat4(1.0f), feet), glm::radians(-m_loco->facingYaw()), glm::vec3(0, 1, 0));
     m_body->draw(ctx, t, 0.0f, 0.6f);
 }
 
 void PlayerModule::renderShadow(const kke::ShadowRenderContext& ctx) {
-    const glm::vec3 feet = m_rigid->world().characterPosition(m_player);
+    const glm::vec3 feet = m_rigid->world().characterDrawPosition(m_player, m_app->fixedAlpha());
     m_body->drawShadow(ctx, glm::rotate(glm::translate(glm::mat4(1.0f), feet), glm::radians(-m_loco->facingYaw()), glm::vec3(0, 1, 0)));
 }
 

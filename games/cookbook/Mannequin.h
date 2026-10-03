@@ -2,6 +2,7 @@
 
 #include "kke/AnimRig.h"
 #include "kke/Animator.h"
+#include "kke/BodyShape.h"
 #include "kke/Module.h"
 #include "kke/modules/ModelModule.h"
 
@@ -62,7 +63,9 @@ private:
     // The stander.
     kke::ModelModule::InstanceId m_stander = 0;
     std::unique_ptr<kke::Animator> m_standAnim;
-    kke::TwoBoneChain m_armR;
+    kke::HumanArm m_armR;               // a person's arm: elbow, shoulder and wrist ranges
+    kke::BodyShape m_body;              // the body's capsules: the arm never goes through it
+    kke::BodyAvoidState m_armAvoid;
     kke::FootPlacer m_feet;
     int m_head = -1;
     glm::vec3 m_headForward{ 0.0f, 0.0f, 1.0f }; // the head's forward, in the head bone's own space

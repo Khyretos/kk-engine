@@ -505,7 +505,7 @@ void TennisModule::updateWalkerBodies(float dt) {
         Body::Mood mood = Body::Mood::Stand;
         if (w.sitting) mood = Body::Mood::Sit;
         if (w.cheer > 0.0f) mood = w.happy ? Body::Mood::Cheer : Body::Mood::Groan;
-        w.look->update(world.characterPosition(w.body), yawOf(w.facing), world.characterVelocity(w.body), SwingPose{}, mood, dt);
+        w.look->update(world.characterDrawPosition(w.body, m_app->fixedAlpha()), yawOf(w.facing), world.characterVelocity(w.body), SwingPose{}, mood, dt);
     }
 }
 
@@ -515,7 +515,7 @@ void TennisModule::updateWalkerCameras(float dt, std::vector<kke::Camera*>& cams
     kke::RigidWorld& world = m_rigid->world();
     for (Walker& w : m_walkers) {
         if (w.cpu || w.remote || w.gone || w.playing >= 0 || !w.body) continue;
-        const glm::vec3 feet = world.characterPosition(w.body);
+        const glm::vec3 feet = world.characterDrawPosition(w.body, m_app->fixedAlpha()); // with the drawn body
         const float want = yawOf(w.facing);
         float diff = std::remainder(want - w.camYaw, 360.0f);
         const float moving = glm::length(w.stick) > 0.2f ? 1.0f : 0.0f;
