@@ -10,7 +10,8 @@ foreach(font NotoSans-Regular.ttf NotoSans-Bold.ttf NotoSans-Italic.ttf NotoColo
     engine_copy_runtime_file(flying_demo ${CMAKE_SOURCE_DIR}/assets/fonts/${font} assets/fonts/${font})
 endforeach()
 foreach(shader cube.vert cube.frag glow.frag impostor.vert impostor.frag shadow.vert shadow.frag model.vert model_instanced.vert shadow_instanced.vert model.frag
-               rml_ui.vert rml_ui.frag rml_gradient.frag effect.vert effect_smoke.frag effect_spark.frag)
+               rml_ui.vert rml_ui.frag rml_gradient.frag effect.vert effect_smoke.frag effect_spark.frag
+               effect_glow.frag effect_flake.frag effect_ring.frag)
     engine_add_shader(flying_demo ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()
 # The plane is Synty's POLYGON Stunt Plane pack, found at runtime in

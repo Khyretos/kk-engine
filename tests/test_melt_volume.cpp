@@ -95,3 +95,42 @@ TEST(MeltVolume, GridBoundaryIsNotAWall) {
     for (int i = 0; i < 60; ++i) fluid.step(1.0f / 60.0f);
     EXPECT_GT(fluid.positions()[0].x, 0.6f);
 }
+
+// Kees's report: "some pieces keep floating". A piece with nothing under
+// it falls and lands on what's below; what stands on the ground stays.
+TEST(MeltVolume, LoosePiecesFallAndLand) {
+    kke::MeltVolume v(glm::ivec3(10), glm::vec3(-0.5f, 0.0f, -0.5f), 0.1f);
+    v.fillBox(glm::vec3(-0.3f, 0.0f, -0.3f), glm::vec3(0.3f, 0.2f, 0.3f), -10.0f); // a slab on the ground (2 cells)
+    v.fillBox(glm::vec3(-0.1f, 0.6f, -0.1f), glm::vec3(0.1f, 0.8f, 0.1f), -10.0f); // a lump in the air above it
+    v.material().meltingPoint = 0.0f;
+    EXPECT_GT(v.density(glm::vec3(0.0f, 0.7f, 0.0f)), 0.9f);
+    float t = 0.0f;
+    for (int i = 0; i < 120 && (i < 2 || v.fallingVoxels() > 0); ++i, t += 1.0f / 60.0f) v.collapse(1.0f / 60.0f);
+    EXPECT_EQ(v.fallingVoxels(), 0u) << "it landed";
+    EXPECT_LT(t, 1.0f) << "a 40 cm drop takes about 0.3 s";
+    EXPECT_LT(v.density(glm::vec3(0.0f, 0.7f, 0.0f)), 0.1f) << "nothing left in the air";
+    EXPECT_GT(v.density(glm::vec3(0.0f, 0.25f, 0.0f)), 0.9f) << "resting on the slab";
+    EXPECT_GT(v.density(glm::vec3(0.25f, 0.05f, 0.25f)), 0.9f) << "the slab didn't move";
+    EXPECT_NEAR(v.solidFraction(), 1.0f, 1e-4f) << "nothing lost on the way down";
+    // At rest, collapse() leaves it alone.
+    v.rebuildMesh();
+    v.collapse(1.0f / 60.0f);
+    EXPECT_FALSE(v.rebuildMesh());
+}
+
+TEST(MeltVolume, SoftMaterialSagsIntoAHole) {
+    kke::MeltVolume v(glm::ivec3(6, 8, 6), glm::vec3(-0.3f, 0.0f, -0.3f), 0.1f);
+    // A bridge: two legs and a deck, warm enough to be soft but not melting.
+    v.fillBox(glm::vec3(-0.3f, 0.0f, -0.1f), glm::vec3(-0.1f, 0.6f, 0.1f), 55.0f);
+    v.fillBox(glm::vec3(0.1f, 0.0f, -0.1f), glm::vec3(0.3f, 0.6f, 0.1f), 55.0f);
+    v.fillBox(glm::vec3(-0.3f, 0.4f, -0.1f), glm::vec3(0.3f, 0.6f, 0.1f), 55.0f);
+    v.material().meltingPoint = 60.0f;
+    v.material().softening = 15.0f;
+    v.material().sagSpeed = 0.5f;
+    EXPECT_LT(v.density(glm::vec3(0.0f, 0.05f, 0.0f)), 0.1f);
+    for (int i = 0; i < 120; ++i) v.collapse(1.0f / 60.0f);
+    EXPECT_GT(v.density(glm::vec3(0.0f, 0.05f, 0.0f)), 0.9f) << "the middle of the deck sagged all the way down";
+    EXPECT_LT(v.density(glm::vec3(0.0f, 0.55f, 0.0f)), 0.1f) << "and left a dip where it was";
+    EXPECT_GT(v.density(glm::vec3(-0.25f, 0.55f, 0.0f)), 0.9f) << "the deck over the legs stays";
+    EXPECT_EQ(v.fallingVoxels(), 0u);
+}

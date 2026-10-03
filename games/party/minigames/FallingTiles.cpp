@@ -3,13 +3,20 @@
 // don't let anyone eat the floor out from under you. Fall through all
 // three and you're out; the last bean standing wins.
 //
-// Tiles are Jolt bodies: kinematic while they hold (they shake), dynamic
-// once they drop, tumbling down past the floors below. A tile going is an
-// event, so it goes on every machine.
+// Tiles are Jolt bodies, kinematic while they hold. Stepped on, a tile
+// cracks into Voronoi pieces round where it was stepped on (you see the
+// cracks open while it shakes), then crumbles: the pieces fall as rubble
+// (RigidWorld debris, which characters pass through), so the floor drops
+// out from under you instead of a whole tile turning dynamic under your
+// feet and throwing you into the air. A tile going is an event, so it
+// goes on every machine, and every machine breaks it the same way.
 
 #include "Common.h"
 
+#include "../Shatter.h"
+
 #include "kke/ImpactSynth.h"
+#include "kke/SphereImpostors.h"
 
 #include <algorithm>
 #include <cmath>
@@ -24,8 +31,9 @@ constexpr int kLayers = 3;
 constexpr int kRings = 5;
 constexpr float kTileR = 1.05f, kGap = 0.1f, kTileHalfH = 0.2f;
 constexpr float kLayerGap = 6.0f;
-constexpr float kShake = 0.55f;    // s from stepped on to dropping
-constexpr float kGone = 3.0f;      // s a dropped tile falls before it's removed
+constexpr float kShake = 0.55f;    // s from stepped on to crumbling
+constexpr float kGone = 3.0f;      // s the rubble falls before it's removed
+constexpr int kPieces = 9;         // rubble per tile
 constexpr int kEventStep = 1;
 
 float layerY(int layer) { return -kLayerGap * static_cast<float>(layer); }
@@ -50,8 +58,9 @@ public:
                 t.layer = layer;
                 t.centre = glm::vec3(c.x, layerY(layer) - kTileHalfH, c.y);
                 // A lighter ring pattern so you can read the floor.
-                const glm::vec3 top = hexRing(c, kTileR, kGap) % 2 ? tops[layer] * 0.85f : tops[layer];
-                t.part = addTile(a, t.centre, top, tops[layer] * 0.6f);
+                t.top = hexRing(c, kTileR, kGap) % 2 ? tops[layer] * 0.85f : tops[layer];
+                t.side = tops[layer] * 0.6f;
+                t.part = addTile(a, t.centre, t.top, t.side);
                 m_tiles.push_back(t);
             }
         }
@@ -75,23 +84,26 @@ public:
         const float t = a.time();
         kke::RigidWorld& w = a.world();
         // Stepped-on tiles shake, then drop; dropped ones go after a while.
-        for (Tile& tile : m_tiles) {
+        for (size_t i = 0; i < m_tiles.size(); ++i) {
+            Tile& tile = m_tiles[i];
             if (tile.state == 1) {
                 const float k = t - tile.at;
                 if (k >= kShake) {
+                    crumble(a, tile);
                     tile.state = 2;
                     tile.at = t;
-                    movePart(a, tile, tile.centre, dt);
-                    w.setMotion(a.part(tile.part).body, kke::RigidWorld::Motion::Dynamic);
                 } else {
-                    const float s = 0.04f * std::sin(k * 70.0f);
-                    movePart(a, tile, tile.centre + glm::vec3(s, -k * 0.1f, -s), dt);
+                    // A tremble that grows, and it sags a little as it goes.
+                    const float s = 0.03f * (0.4f + k / kShake) * std::sin(k * 70.0f);
+                    movePart(a, tile, tile.centre + glm::vec3(s, -k * 0.08f, -s), dt);
                 }
             } else if (tile.state == 2 && t - tile.at > kGone) {
-                a.removePart(tile.part);
+                for (int p : tile.rubble) a.removePart(p);
+                tile.rubble.clear();
                 tile.state = 3;
             }
         }
+        (void)w;
         if (!a.playing()) return;
         // This machine's beans step on tiles.
         for (Bean& b : a.beans()) {
@@ -111,7 +123,8 @@ public:
         if (tile.state != 0) return;
         tile.state = 1;
         tile.at = a.time();
-        if (a.botRng().below(4) == 0) a.sound(tile.centre, kke::AudioMaterialTable::Plastic, 0.3f);
+        crack(a, tile, static_cast<uint32_t>(x));
+        if (a.botRng().below(3) == 0) a.sound(tile.centre, kke::AudioMaterialTable::Stone, 0.25f);
     }
 
     bool over(Arena& a) const override {
@@ -173,10 +186,75 @@ private:
     struct Tile {
         int layer = 0, part = -1;
         glm::vec3 centre{0.0f};
-        int state = 0;       // 0 solid, 1 shaking, 2 dropping, 3 gone
-        float at = 0.0f;     // when it started shaking / dropping
+        glm::vec3 top{1.0f}, side{0.6f};
+        int state = 0;       // 0 solid, 1 cracked and shaking, 2 crumbling, 3 gone
+        float at = 0.0f;     // when it started shaking / crumbling
+        std::vector<Polygon2> cells; // its pieces, from when it cracked
+        std::vector<int> rubble;     // the falling pieces' parts
     };
     std::vector<Tile> m_tiles;
+
+    static Polygon2 hexOutline() {
+        Polygon2 out;
+        // The same turn as shatterPane's pane: counter-clockwise seen from
+        // above, which is decreasing angle in (x, z).
+        for (int k = 5; k >= 0; --k) {
+            const float ang = kPi / 3.0f * static_cast<float>(k);
+            out.push_back({ std::cos(ang) * kTileR, std::sin(ang) * kTileR });
+        }
+        return out;
+    }
+
+    // Stepped on: the tile's cut into its pieces where it was stepped on
+    // (the same cut on every machine: the seed is the round's and the
+    // tile's), and drawn as them with the cracks open, still one solid
+    // tile you can stand on.
+    void crack(Arena& a, Tile& tile, uint32_t index) {
+        Rng rng(a.seed() * 131u + index);
+        const float ang = rng.range(0.0f, 2.0f * kPi), r = rng.range(0.0f, kTileR * 0.5f);
+        tile.cells = shatterPolygon(hexOutline(), glm::vec2(std::cos(ang), std::sin(ang)) * r, kPieces, a.seed() * 31u + index);
+        if (tile.cells.empty()) return;
+        std::vector<kke::Vertex> v;
+        std::vector<uint32_t> idx;
+        std::vector<glm::vec3> hull;
+        for (const Polygon2& cell : tile.cells) {
+            const glm::vec2 c = polygonCentroid(cell);
+            const size_t from = v.size();
+            shardPrism(cell, c, kTileHalfH, tile.top, tile.side * 0.8f, hull, v, idx, 0.025f);
+            for (size_t i = from; i < v.size(); ++i) v[i].position += glm::vec3(c.x, 0.0f, c.y);
+        }
+        a.part(tile.part).mesh->upload(v, idx);
+    }
+
+    // Shaken loose: the solid tile goes and its pieces fall as rubble,
+    // gently, each its own way, kicking up dust.
+    void crumble(Arena& a, Tile& tile) {
+        const glm::vec3 at = a.world().position(a.part(tile.part).body);
+        a.removePart(tile.part);
+        Rng rng(a.seed() * 977u + static_cast<uint32_t>(tile.part + 1));
+        for (const Polygon2& cell : tile.cells) {
+            const glm::vec2 c = polygonCentroid(cell);
+            kke::RigidWorld::BodyDesc d;
+            d.shape = kke::RigidWorld::Shape::ConvexHull;
+            d.motion = kke::RigidWorld::Motion::Dynamic;
+            d.debris = true; // falls past the beans; never under or into them
+            d.position = at + glm::vec3(c.x, 0.0f, c.y);
+            d.density = 2200.0f;
+            d.friction = 0.7f;
+            d.restitution = 0.05f;
+            d.material = kke::AudioMaterialTable::Stone;
+            const glm::vec2 out = glm::length(c) > 1e-3f ? glm::normalize(c) : glm::vec2(0.0f);
+            d.velocity = glm::vec3(out.x * rng.range(0.0f, 0.4f), -rng.range(0.0f, 0.6f), out.y * rng.range(0.0f, 0.4f));
+            d.angularVelocity = glm::vec3(out.y, 0.0f, -out.x) * rng.range(0.5f, 2.5f);
+            std::vector<kke::Vertex> v;
+            std::vector<uint32_t> idx;
+            shardPrism(cell, c, kTileHalfH, tile.top, tile.side * 0.8f, d.points, v, idx, 0.012f);
+            tile.rubble.push_back(a.addPart(d, std::move(v), std::move(idx)));
+        }
+        tile.cells.clear();
+        a.burst(at + glm::vec3(0.0f, kTileHalfH, 0.0f), glm::mix(tile.side, glm::vec3(0.8f), 0.5f), 10, 1.2f);
+        a.sound(at, kke::AudioMaterialTable::Stone, 0.4f);
+    }
 
     static int addTile(Arena& a, const glm::vec3& centre, const glm::vec3& top, const glm::vec3& side) {
         kke::RigidWorld::BodyDesc d;

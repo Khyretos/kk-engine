@@ -36,6 +36,7 @@ public:
         glm::vec3 solidColor, liquidColor;
         kke::FluidMaterial liquid;
         bool incandescent;  // glows when hot (metal)
+        float softening;    // degrees under the melting point where it starts to sag (0: stays rigid until it melts)
     };
 
 private:

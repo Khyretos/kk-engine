@@ -181,33 +181,60 @@ void RacingModule::hitCar(Car& c, const glm::vec3& point, const glm::vec3& into,
 }
 
 // Pushes the body's vertices near the hit in, the most at the point
-// itself, fading out over a radius that grows with the depth.
+// itself, fading out over a radius that grows with the depth. With FEMFX
+// the body also crumples as a whole (Crumple.cpp: the panel buckles, a
+// corner folds), but its tets are ~60 cm, too coarse to show the crease
+// where a bumper hit: with FEMFX alone a crash read as "no deformation" (deepest
+// dent 8 cm after a 30 s crash test). So the hit is pressed in by hand as
+// well, kept in `pressed`, and laid back on top of every shape FEMFX
+// reads back.
 void RacingModule::dent(Car& c, const glm::vec3& localPoint, const glm::vec3& localDir, float depth) {
-    if (crumple(c, localPoint, localDir, depth)) return; // FEMFX works it out (Crumple.cpp)
+    const bool crumpled = crumple(c, localPoint, localDir, depth); // FEMFX works out the whole body's give
     const CarArt& art = *c.art;
     if (c.dented.empty()) {
         c.dented = art.positions;
         c.dentedNormals = art.normals;
     }
+    if (c.pressed.size() != art.positions.size()) {
+        c.pressed.assign(art.positions.size(), {});
+        for (size_t p = 0; p < art.positions.size(); ++p) c.pressed[p].assign(art.positions[p].size(), glm::vec3(0.0f));
+    }
+    // With FEMFX doing the big shape, the hand-pressed part is the crease.
+    const float press = crumpled ? depth * 0.8f : depth;
     const float radius = 0.45f + depth * 2.5f;
     const glm::vec3 mid = (art.boundsMin + art.boundsMax) * 0.5f;
     for (size_t p = 0; p < c.dented.size(); ++p) {
         bool moved = false;
-        for (glm::vec3& v : c.dented[p]) {
+        for (size_t i = 0; i < c.dented[p].size(); ++i) {
+            glm::vec3& v = c.dented[p][i];
             const float d = glm::length(v - localPoint);
             if (d >= radius) continue;
             const float f = (1.0f - d / radius) * (1.0f - d / radius);
-            glm::vec3 next = v + localDir * (depth * f);
+            glm::vec3 next = v + localDir * (press * f);
             // Never through the middle of the car (a panel folds, it doesn't pass the seats).
             const glm::vec3 fromMid = next - mid, wasMid = v - mid;
             for (int axis = 0; axis < 3; ++axis)
                 if (fromMid[axis] * wasMid[axis] < 0.0f) next[axis] = mid[axis] + wasMid[axis] * 0.1f;
+            if (i < c.pressed[p].size()) c.pressed[p][i] += next - v;
             v = next;
             moved = true;
         }
         if (moved && p < art.indices.size()) recomputeNormals(c.dented[p], art.indices[p], c.dentedNormals[p]);
     }
     c.dentsChanged = true;
+}
+
+void RacingModule::addPressedDents(Car& c) {
+    if (c.pressed.empty() || !c.art) return;
+    for (size_t p = 0; p < c.dented.size() && p < c.pressed.size(); ++p) {
+        bool any = false;
+        for (size_t i = 0; i < c.dented[p].size() && i < c.pressed[p].size(); ++i) {
+            if (c.pressed[p][i] == glm::vec3(0.0f)) continue;
+            c.dented[p][i] += c.pressed[p][i];
+            any = true;
+        }
+        if (any && p < c.art->indices.size()) recomputeNormals(c.dented[p], c.art->indices[p], c.dentedNormals[p]);
+    }
 }
 
 // Damage as the car feels it: less power as it's hurt, and each bent
@@ -229,6 +256,7 @@ void RacingModule::repairCar(Car& c, float amount) {
         resetShell(c);
         c.dented.clear();
         c.dentedNormals.clear();
+        c.pressed.clear();
         c.dentsChanged = true;
     }
     if (c.health >= 100.0f) refitWheels(c); // new tyres, the wheels back on
