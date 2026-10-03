@@ -57,6 +57,7 @@ ignores them):
 | `KKE_PARTY_AUTOPILOT=1` | Player 1 is a CPU too: the whole show plays itself |
 | `KKE_PARTY_START=<s>` | Start from the menu after this many seconds, as if player 1 chose Start (with `KKE_LOBBY_JOIN=<n>` and virtual pads: split screen without hands) |
 | `KKE_PARTY_QUIT=<s>` | Quit after this many seconds, logging where it got to |
+| `KKE_OBSTACLE_FROM=<n>` | Obstacle Dash: start everyone at checkpoint n (to test one part of the course) |
 | `KKE_NET=host`, `KKE_NET=join:ADDRESS` | Host or join without the menu |
 | `KKE_VOICE=off` | No microphone (headless runs) |
 
@@ -70,13 +71,17 @@ line at the bottom always shows the buttons of the device you use.
 | Run | Left stick | WASD |
 | Turn the camera | Right stick | Mouse |
 | Jump (and mash) | A | Space |
-| Dive | X or RB | E or right mouse |
+| Dive (Sumo: hold to wind up, let go to dive) | X or RB | E or right mouse |
+| Push whoever is in front of you | B | F |
 | Watch someone else when you're out | A / X | Space / E |
 | Pause menu (settings, controls, back to the start menu, quit) | Start or Select | Esc |
 | Party and voice panel (voice, mutes) | the pause menu's Demo settings | F3, or the pause menu |
 | Back to the start menu | | M |
 | Vote for a game (between rounds, with Vote) | Left stick left/right, A | A/D, Space |
 | Developer panels | | F1 |
+
+Settings > Camera > Distance behind your bean (3 to 9 m) sets how far
+back your camera sits.
 
 In the start menu every controller presses A to join (up to four), then
 picks a name, colour, pattern, face, hat and body (Bean, or a person when
@@ -132,7 +137,7 @@ out ranks best). Ties share a place and its points.
 |---|---|---|---|
 | `obstacle` | Obstacle Dash | Race through sweepers, sliding platforms, hammers, a spinning disc, a wall of doors (some are fake and break) and rolling balls on a slope, to the finish arch. Falling puts you back at the last checkpoint. | 60% have finished, or 2:30 |
 | `jump_rope` | Flaming Jump Rope | Everyone on a narrow bridge over lava; two giant beans swing a burning rope round it. Jump it. It speeds up and now and then turns round. | One left, or 1:40 (survivors share the win) |
-| `glass_bridge` | Glass Bridge | Eight steps of two glass panes each: one tempered, one that shatters. Jump pane to pane. Everyone can see which panes held. | Everyone has crossed or fallen |
+| `glass_bridge` | Glass Bridge | Eight steps of three glass panes each: one tempered, the others shatter, and now and then a row is all fake (jump and dive over it). Shoving is allowed; dive the moment the glass goes for a save. | Everyone has crossed or fallen |
 | `tug` | Mash Tug of War | Two teams, one rope over a mud pit. Mash jump to pull. | A team is dragged in, or 0:30 (the rope's side wins) |
 | `red_light` | Red Light, Green Light | Run for the line while the giant doll's back is turned. When it turns round, freeze: anyone still moving is out. | Everyone has finished or is out, or 1:15 |
 | `tiles` | Hex-a-Gone | Three floors of hexagons; a tile drops a moment after you step on it. Keep moving. | One left, or 2:00 |
@@ -143,20 +148,37 @@ out ranks best). Ties share a place and its points.
 
 A bean is a capsule character (`kBeanRadius` 0.42 m, `kBeanHeight`
 1.3 m) with a body, a visor face, stubby arms and feet, a pattern and a
-hat. It runs at 5.2 m/s, jumps 6.3 m/s (with a little coyote time), and
-dives: a belly slide at 8 m/s for 0.7 s that shoves whoever it hits. A
-knock sends a bean tumbling for a moment with no control. Beans bump into
-each other (softly in races, hard in Sumo), squash when they land, lean
-into turns and waddle.
+hat. It runs at 5.2 m/s, jumps 6.3 m/s and dives: a belly slide at 8 m/s
+for 0.7 s that shoves whoever it hits. A knock sends a bean tumbling for
+a moment with no control. Beans bump into each other (softly in races,
+hard in Sumo), squash when they land, lean into turns and waddle.
+
+- **Jumping** always lifts off when you're on the ground: a press counts
+  for 0.15 s before you land, and for a little while after you run off an
+  edge. A jump straight after landing goes less high (85%, then 72%...,
+  never under 60%), so bunny hopping doesn't build speed.
+- **Stamina** (the bar on your panel): jumping, diving and pushing use it;
+  standing on the ground fills it back up. On an empty tank jumps are
+  lower and you can't dive or push.
+- **Dive** has a cooldown of 1.1 s after the slide.
+- **Push** (B / F) shoves the nearest bean in front of you, once every
+  0.7 s. It works in every game, online too (a Knock event to the bean's
+  own machine).
+- **Before GO** nobody can leave the start area: move about and shove
+  inside it, but no head start and nobody pushed off the start.
+- **Sumo's charged dive**: hold dive to wind up (you slow down and
+  squash), let go to dive up to twice as hard. Two beans diving head-on at
+  the same power clash: both mash jump for 2 s and the loser flies off at
+  twice the power they met with (both beans on one machine; online beans
+  just bump).
 
 ### Cameras and split screen
 
-With one player the camera follows behind you (right stick to turn).
-Two to four people on one screen get the screen split
-(`kke::splitScreen`); with three, the fourth quarter shows the whole
-level. Some minigames (the rope, tug of war, sumo, hot potato) use one
-fixed view of the whole arena for everyone instead. When you are out you
-watch someone still playing; jump or dive to switch who.
+Every game uses a third-person camera over your shoulder (right stick to
+turn); Settings > Camera sets how far back it sits. Two to four people on
+one screen get the screen split (`kke::splitScreen`); with three, the
+fourth quarter shows the whole arena. When you are out you watch someone
+still playing; jump or dive to switch who.
 
 ### Online
 
@@ -239,8 +261,12 @@ every machine, `botRng()` is for CPU brains and effects).
   so it is at the same place on every machine. Each machine checks its
   own beans against the rope's line. Bots estimate when it reaches their
   feet and jump with a reaction error.
-- **Glass Bridge**: which pane of each pair holds comes from the round's
-  seed. Stepping on a fake pane sends an event with the spot you stepped
+- **Glass Bridge**: which pane of each row holds, and which rows are all
+  fake (never two in a row, never the first or last), comes from the
+  round's seed. Either side of an all-fake row the rows are 4.4 m apart,
+  6.8 m to clear: more than a running jump, so it takes a dive at the top.
+  A dive within 0.3 s of the glass breaking under you lifts you 5.5 m/s
+  (`Minigame::airDiveLift`). Stepping on a fake pane sends an event with the spot you stepped
   on; every machine then removes the pane and cuts it into Voronoi cells
   round that spot ([Shatter.h](Shatter.h): half-plane clipping, seeded,
   so the same shards everywhere), each a thin convex-hull Jolt body that
@@ -248,7 +274,11 @@ every machine, `botRng()` is for CPU brains and effects).
   hold, wait for someone braver, then guess, and never share a pane.
 - **Mash Tug of War**: teams by roster order. Each machine counts its
   beans' presses as their score, which goes online with their pose, so
-  every machine computes the same rope. The host calls the win (an event);
+  every machine computes the same rope. A short team pulls as if it were
+  full: its presses count times (biggest team / its size), so 1 against 2
+  pulls with the power of 2, and each of 2 against 3 with 1.5 each. The
+  HUD shows both teams' pull per second and a gold arrow over the pit
+  points where the rope is going, longer the bigger the difference. The host calls the win (an event);
   the losers are dragged in and tumble into the mud.
 - **Red Light, Green Light**: a seeded schedule of greens and reds (greens
   get shorter). The doll takes 0.45 s to turn round (the warning), then
@@ -256,11 +286,14 @@ every machine, `botRng()` is for CPU brains and effects).
   out. Bots have a reaction time per switch; slower bots sometimes get
   caught.
 - **Hex-a-Gone**: 3 floors of 91 hexagon tiles, each a kinematic hull.
-  A tile stepped on (an event) shakes for 0.55 s, turns dynamic with
-  `RigidWorld::setMotion`, tumbles away and is removed after 3 s. Bots
+  A tile stepped on (an event) shakes harder for 0.55 s, then sinks
+  0.3 m over 0.45 s shedding rubble and is removed, its last pieces
+  falling as particles (`Arena::rubble`). It stays kinematic to the end,
+  so a going tile never throws anyone into the air. Bots
   hop to solid tiles a few steps away, nearer the middle.
-- **Bean Sumo**: a hex floor whose outer rings shake then drop at set
-  times; `bumpStrength` 6.5 makes every bump a shove. Bots pick a target
+- **Bean Sumo**: a hex floor whose outer rings shake then crumble at set
+  times (like Hex-a-Gone's tiles); `chargedDive` turns on the wind-up dive
+  and the clash (`PartyModule::startClash`); `bumpStrength` 6.5 makes every bump a shove. Bots pick a target
   (nearer and nearer the edge is juicier), come at it from the middle's
   side and dive.
 - **Hot Potato**: the host lights each bomb (a new holder and when it
@@ -293,8 +326,9 @@ every seat's player, name, look and points; 12 seats fit one 512-byte
 event), **Phase** (host to all), **Result** (a machine's claim that its
 bean finished or went out; the host orders them and passes them on) and
 **Game** (a minigame's own event, relayed by the host), **Vote** (host to
-all: the choices, every ballot, the time left, the winner) and **Ballot**
-(a player's pick, to the host). Before a vote the host sends a Round with
+all: the choices, every ballot, the time left, the winner), **Ballot**
+(a player's pick, to the host) and **Knock** (a push on another machine's
+bean: its velocity and stun; the host relays it to the bean's machine). Before a vote the host sends a Round with
 no game: who plays and the points. Each bean's pose
 is its `NetPlayerState`, with its look and minigame score in `extra`.
 Remote beans are drawn smoothed toward where their machine says they are,

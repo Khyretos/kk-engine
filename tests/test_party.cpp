@@ -214,6 +214,16 @@ TEST(PartyNet, EventsAndPosesRoundTrip) {
     ASSERT_TRUE(ballot.has_value());
     EXPECT_EQ(ballot->player, 5);
     EXPECT_EQ(ballot->choice, 1);
+    // A push on another machine's bean: the velocity to 1 cm/s, clamped.
+    const auto knock = netparty::decodeKnock(netparty::encode(netparty::Knock{ 7, 2, glm::vec3(5.5f, 1.8f, -99.0f), 0.35f }));
+    ASSERT_TRUE(knock.has_value());
+    EXPECT_EQ(knock->round, 7u);
+    EXPECT_EQ(knock->player, 2);
+    EXPECT_NEAR(knock->velocity.x, 5.5f, 0.011f);
+    EXPECT_NEAR(knock->velocity.y, 1.8f, 0.011f);
+    EXPECT_NEAR(knock->velocity.z, -40.0f, 0.011f);
+    EXPECT_NEAR(knock->stun, 0.35f, 0.011f);
+    EXPECT_FALSE(netparty::decodeKnock({ 1, 2 }).has_value());
 
     // Garbage never decodes into something.
     EXPECT_FALSE(netparty::decodeRound({ 1, 2, 3 }).has_value());
