@@ -61,26 +61,35 @@ void DuelModule::loadCharacter() {
     m_rigData.bones = d->bones;
     m_rigData.animations = d->animations;
 
-    // UAL 2: next to UAL 1, or the extracted pack in the asset folder.
-    const std::string ual2 = firstExisting({ dir.empty() ? std::string() : (fs::path(dir) / "UAL2.fbx").string(),
-                                             kke::findPackFile("Universal Animation Library 2", "UAL2.fbx", base ? base : "") });
-    if (!ual2.empty()) {
+    // More clips, by bone name onto the same skeleton: UAL 2 (the hook,
+    // uppercut, knee, knockback, getting up) next to UAL 1 or in the asset
+    // folder, and the whole UAL 1 (a kick, dodges, body hits) when it's
+    // there. Clips the rig already has are skipped.
+    auto append = [&](const std::string& file) {
+        if (file.empty()) return false;
         try {
             kke::ModelLoadOptions o;
             o.allowNoMeshes = true;
-            kke::appendClipsByBoneName(m_rigData, kke::loadModel(ual2, o));
-            m_meleeClips = true;
+            kke::ModelData more = kke::loadModel(file, o);
+            std::erase_if(more.animations, [&](const kke::ModelAnimation& a) {
+                return std::any_of(m_rigData.animations.begin(), m_rigData.animations.end(),
+                                   [&](const kke::ModelAnimation& have) { return have.name == a.name; });
+            });
+            kke::appendClipsByBoneName(m_rigData, more);
+            return true;
         } catch (const std::exception& e) {
-            kke::log::get(name())->warn("UAL2.fbx: {}", e.what());
+            kke::log::get(name())->warn("{}: {}", file, e.what());
+            return false;
         }
-    } else {
+    };
+    m_meleeClips = append(firstExisting({ dir.empty() ? std::string() : (fs::path(dir) / "UAL2.fbx").string(),
+                                          kke::findPackFile("Universal Animation Library 2", "UAL2.fbx", base ? base : "") }));
+    if (!m_meleeClips)
         kke::log::get(name())->info("UAL2.fbx not found (assets/animations, or the 'Universal Animation Library 2' pack in the asset folder): "
                                     "UAL 1's punches stand in for the hook, uppercut and knee");
-    }
+    m_fullUal1 = append(firstExisting({ dir.empty() ? std::string() : (fs::path(dir) / "UAL1.fbx").string(),
+                                        kke::findPackFile("Universal Animation Library", "UAL1.fbx", base ? base : "") }));
     m_animSet = std::make_unique<kke::AnimationSet>(m_rigData);
-    const kke::TwoBoneChain arms[2] = { kke::findChain(m_rigData, "upperarm_l", "lowerarm_l", "hand_l"),
-                                        kke::findChain(m_rigData, "upperarm_r", "lowerarm_r", "hand_r") };
-    for (int s = 0; s < 2; ++s) m_arm[s] = kke::makeHumanArm(m_rigData, arms[s], arms[1 - s]);
     const glm::vec3 fwd = kke::modelForward(m_rigData);
     m_modelYaw = 180.0f - glm::degrees(std::atan2(fwd.x, fwd.z));
 }
@@ -104,7 +113,10 @@ void DuelModule::setupBody(Fighter& f) {
         const float speed = clip >= 0 && seconds > 0.0f ? s.duration(clip) / seconds : 1.0f;
         return a.addClipState(state, clip, false, speed);
     };
-    const kke::AttackDesc light = kke::AttackDesc::light(), heavy = kke::AttackDesc::heavy(), kick = kke::AttackDesc::kick();
+    auto strike = [&](const char* state, std::initializer_list<const char*> clips, const char* attack) {
+        const kke::AttackDesc d = attackNamed(attack);
+        return timed(state, pick(clips), d.windup + d.active + d.recovery);
+    };
     const kke::CombatStats stats = kke::CombatStats::fighter();
     // Same order on both animators, so the state numbers match.
     m_st.idle = a.addClipState("idle", pick({ "|Idle_Loop" }), true);
@@ -112,17 +124,27 @@ void DuelModule::setupBody(Fighter& f) {
     m_st.back = a.addClipState("back", pick({ "|Walk_Bwd_Loop", "|Walk_Loop" }), true, 1.4f);
     m_st.left = a.addClipState("left", pick({ "|Walk_L_Loop", "|Walk_Loop" }), true, 1.4f);
     m_st.right = a.addClipState("right", pick({ "|Walk_R_Loop", "|Walk_Loop" }), true, 1.4f);
-    const float lightTime = light.windup + light.active + light.recovery;
-    m_st.jabL = timed("jab_l", pick({ "|Melee_Hook", "|Punch_Jab" }), lightTime);
-    m_st.jabR = timed("jab_r", pick({ "|Punch_Cross", "|Punch_Jab" }), lightTime);
-    m_st.heavy = timed("uppercut", pick({ "|Melee_Uppercut", "|Punch_Cross" }), heavy.windup + heavy.active + heavy.recovery);
-    m_st.kick = timed("knee", pick({ "|Melee_Knee", "|Punch_Cross" }), kick.windup + kick.active + kick.recovery);
+    // Each strike its own clip, the best one there is (UAL 2, then UAL 1).
+    m_st.jab = strike("jab", { "|Punch_Jab" }, "jab");
+    m_st.cross = strike("cross", { "|Punch_Cross", "|Punch_Jab" }, "cross");
+    m_st.hook = strike("hook", { "|Melee_Hook", "|Punch_Cross" }, "hook");
+    m_st.heavy = strike("uppercut", { "|Melee_Uppercut", "|Punch_Cross" }, "uppercut");
+    m_st.knee = strike("knee", { "|Melee_Knee", "|Kick", "|Punch_Cross" }, "knee");
+    m_st.kick = s.find("|Kick") >= 0 ? strike("kick", { "|Kick" }, "kick") : -1; // only with the whole UAL 1
     m_st.dodge = timed("dodge", pick({ "|Walk_Bwd_Loop", "|Jump_Start" }), stats.dodgeTime + 0.15f);
-    m_st.hitHigh = timed("hit_high", pick({ "|Hit_Head", "|Hit_Chest" }), light.hitStun);
-    m_st.hitLow = timed("hit_low", pick({ "|Hit_Chest" }), light.hitStun);
-    m_st.hitHard = timed("hit_hard", pick({ "|Hit_Knockback", "|Hit_Chest" }), heavy.hitStun);
+    m_st.dodgeL = timed("dodge_l", pick({ "|Dodge_Left", "|Walk_L_Loop", "|Walk_Bwd_Loop" }), stats.dodgeTime + 0.25f);
+    m_st.dodgeR = timed("dodge_r", pick({ "|Dodge_Right", "|Walk_R_Loop", "|Walk_Bwd_Loop" }), stats.dodgeTime + 0.25f);
+    const float stun = kke::AttackDesc::light().hitStun;
+    m_st.hitHigh = timed("hit_high", pick({ "|Hit_Head", "|Hit_Chest" }), stun);
+    m_st.hitLow = timed("hit_low", pick({ "|Hit_Chest" }), stun);
+    m_st.hitStomach = timed("hit_stomach", pick({ "|Hit_Stomach", "|Hit_Chest" }), kke::AttackDesc::kick().hitStun);
+    m_st.hitHard = timed("hit_hard", pick({ "|Hit_Knockback", "|Hit_Chest" }), kke::AttackDesc::heavy().hitStun);
     m_st.getUp = timed("get_up", pick({ "|LayToIdle", "|KipUp", "|Crouch_Idle_Loop" }), kGetUpTime);
-    m_st.win = a.addClipState("win", pick({ "|Dance_Loop", "|Yes", "|Idle_Loop" }), true);
+    m_st.win = a.addClipState("win", pick({ "|Celebration", "|Dance_Loop", "|Yes", "|Idle_Loop" }), true);
+    // Feet on the canvas, the lean into footwork, the guard's hands (a
+    // human arm that stays out of its own body: kke::CharacterIk).
+    const kke::ModelData* skinned = m_models->model(m_charModel);
+    f.ik = std::make_unique<kke::CharacterIk>(m_rigData, skinned);
     a.play(m_st.idle, 0.0f);
 }
 
@@ -138,6 +160,7 @@ void DuelModule::animateBody(Fighter& f, const Fighter& other, float dt) {
         std::vector<glm::mat4> bodies;
         if (m_ragdolls->ragdollBodyTransforms(f.ragdoll, bodies))
             m_models->setBoneWorldOverride(f.model, kke::poseFromRagdoll(m_rigData, f.binding, bodies, glm::inverse(m_models->transform(f.model))));
+        if (f.ik) f.ik->reset();
         return;
     }
 
@@ -145,6 +168,8 @@ void DuelModule::animateBody(Fighter& f, const Fighter& other, float dt) {
     const float yaw = m_modelYaw - glm::degrees(std::atan2(f.facing.x, -f.facing.z));
     const glm::mat4 xf = glm::rotate(glm::translate(glm::mat4(1.0f), feet), glm::radians(yaw), glm::vec3(0, 1, 0));
     m_models->setTransform(f.model, xf);
+    const glm::vec3 velocity = dt > 0.0f ? (feet - f.lastFeet) / dt : glm::vec3(0.0f);
+    f.lastFeet = feet;
 
     // The state machine: kke::Combatant's state picks the clip.
     using S = kke::Combatant::State;
@@ -157,25 +182,29 @@ void DuelModule::animateBody(Fighter& f, const Fighter& other, float dt) {
     case S::Windup:
         if (entered) {
             const std::string& n = c.currentAttack().name;
-            int st = m_st.heavy;
-            if (n == "light") {
-                f.leftHand = !f.leftHand;
-                st = f.leftHand ? m_st.jabL : m_st.jabR;
-            } else if (n == "kick") {
-                st = m_st.kick;
-            }
+            int st = m_st.jab;
+            if (n == "cross") st = m_st.cross;
+            else if (n == "hook") st = m_st.hook;
+            else if (n == "uppercut") st = m_st.heavy;
+            else if (n == "knee") st = m_st.knee;
+            else if (n == "kick") st = m_st.kick >= 0 ? m_st.kick : m_st.knee;
             a.play(st, 0.06f, true);
         }
         break;
     case S::Stunned:
         if (entered) {
-            const float stun = c.stateLength();
-            a.play(stun > 0.5f ? m_st.hitHard : (f.leftHand ? m_st.hitHigh : m_st.hitLow), 0.05f, true);
+            // The reaction fits the blow: the head snaps back from a punch,
+            // a knee folds the body, an uppercut throws it.
+            int st = f.leftHand ? m_st.hitHigh : m_st.hitLow;
+            if (c.stateLength() > 0.5f || f.lastHit == "uppercut") st = m_st.hitHard;
+            else if (f.lastHit == "knee" || f.lastHit == "kick") st = m_st.hitStomach;
+            else if (f.lastHit == "jab" || f.lastHit == "cross" || f.lastHit == "hook") st = m_st.hitHigh;
+            a.play(st, 0.05f, true);
             f.leftHand = !f.leftHand;
         }
         break;
     case S::Dodging:
-        if (entered) a.play(m_st.dodge, 0.05f, true);
+        if (entered) a.play(f.dodgeSide < 0.0f ? m_st.dodgeL : f.dodgeSide > 0.0f ? m_st.dodgeR : m_st.dodge, 0.05f, true);
         break;
     case S::Knockdown:
         break; // the get-up clip plays (set by getUp())
@@ -209,29 +238,73 @@ void DuelModule::animateBody(Fighter& f, const Fighter& other, float dt) {
     if (!locals) return;
     kke::Pose pose = a.pose();
 
-    // The guard: hands to the chin, up in front of the face when blocking.
-    // Off while a strike or a flinch moves the arms.
+    // A boxer's stance on top of the clip (the mannequin's idle and walks
+    // stand up straight): knees bent, the body bladed (lead shoulder
+    // forward), leaning in, chin down, hands up. Off while a strike, a
+    // flinch or a dodge moves the body.
     const bool free = c.state() == S::Idle && !gettingUp && m_phase != Phase::MatchOver;
-    const float guardGoal = !free ? 0.0f : c.blocking() ? 1.0f : 0.55f;
+    const float guardGoal = !free ? 0.0f : c.blocking() ? 1.0f : 0.7f;
     f.guard += (guardGoal - f.guard) * (1.0f - std::exp(-(guardGoal > f.guard ? 22.0f : 8.0f) * dt));
-    if (f.guard > 0.01f && m_arm[0].valid() && m_arm[1].valid()) {
-        const std::vector<glm::mat4> bones = kke::poseToModel(m_rigData, pose);
-        const int head = m_rigData.findBone("Head");
-        const glm::vec3 fwdM = kke::modelForward(m_rigData);
-        const glm::vec3 up(0.0f, 1.0f, 0.0f);
-        const glm::vec3 rightM = glm::normalize(glm::cross(fwdM, up));
-        const glm::vec3 chin = head >= 0 ? glm::vec3(bones[static_cast<size_t>(head)][3]) : glm::vec3(0.0f, 1.6f, 0.0f);
-        const float high = c.blocking() ? 1.0f : 0.0f;
-        for (int s = 0; s < 2; ++s) {
-            const float side = s == 0 ? -1.0f : 1.0f;
-            const glm::vec3 hand = chin + fwdM * (0.22f + 0.06f * high) + rightM * (0.09f * side) + up * (-0.08f + 0.1f * high);
-            const glm::vec3 shoulder(bones[static_cast<size_t>(m_arm[s].chain.upper)][3]);
-            kke::ArmGoal goal;
-            goal.hand = hand;
-            goal.elbowToward = shoulder - up * 0.6f + rightM * (0.3f * side) + fwdM * 0.1f; // elbows down and a little out
-            goal.weight = f.guard;
-            kke::solveHumanArm(m_rigData, pose, m_arm[s], goal);
+    const glm::vec3 up(0.0f, 1.0f, 0.0f);
+    const glm::vec3 fwdM = kke::modelForward(m_rigData);
+    const glm::vec3 rightM = glm::normalize(glm::cross(fwdM, up));
+    const float stance = std::min(1.0f, f.guard / 0.7f);
+    if (stance > 0.01f) {
+        auto turn = [&](const char* bone, const glm::vec3& axis, float degrees) {
+            const int b = m_rigData.findBone(bone);
+            if (b < 0) return;
+            const std::vector<glm::mat4> world = kke::poseToModel(m_rigData, pose);
+            glm::mat3 m(world[static_cast<size_t>(b)]);
+            for (int i = 0; i < 3; ++i) m[i] = glm::normalize(m[i]);
+            const glm::quat boneWorld = glm::quat_cast(m);
+            const glm::quat delta = glm::angleAxis(glm::radians(degrees * stance), axis);
+            pose[static_cast<size_t>(b)].r = glm::normalize(pose[static_cast<size_t>(b)].r * (glm::inverse(boneWorld) * delta * boneWorld));
+        };
+        // Hips down (the feet stay on the canvas below: the knees bend).
+        if (const int pelvis = m_rigData.findBone("pelvis"); pelvis >= 0) {
+            const std::vector<glm::mat4> world = kke::poseToModel(m_rigData, pose);
+            const int parent = m_rigData.bones[static_cast<size_t>(pelvis)].parent;
+            const glm::mat4 parentWorld = parent >= 0 ? world[static_cast<size_t>(parent)] : glm::mat4(1.0f);
+            const glm::vec3 drop = glm::vec3(glm::inverse(parentWorld) * glm::vec4(-up * (0.08f * stance) - fwdM * (0.02f * stance), 0.0f));
+            pose[static_cast<size_t>(pelvis)].t += drop;
         }
+        turn("spine_01", up, -14.0f);     // bladed: the left (lead) shoulder forward
+        turn("spine_02", -rightM, 7.0f);  // leaning in
+        turn("spine_03", -rightM, 5.0f);
+        turn("neck_01", -rightM, 6.0f);   // chin down
+    }
+    if (f.ik) {
+        // Hands to the face, the lead (left) one a little out in front;
+        // blocking, both come up and in to cover it.
+        if (f.guard > 0.01f) {
+            const std::vector<glm::mat4> bones = kke::poseToModel(m_rigData, pose);
+            const int head = m_rigData.findBone("Head");
+            const glm::vec3 chin = head >= 0 ? glm::vec3(bones[static_cast<size_t>(head)][3]) : glm::vec3(0.0f, 1.55f, 0.0f);
+            const float high = c.blocking() ? 1.0f : 0.0f;
+            for (int s = 0; s < 2; ++s) {
+                const float side = s == 0 ? -1.0f : 1.0f;
+                const float lead = s == 0 ? 1.0f : 0.0f;
+                const glm::vec3 handM = chin + fwdM * (0.22f + 0.1f * lead + 0.03f * high) + rightM * (side * (0.11f - 0.04f * high)) +
+                                        up * (-0.05f + 0.08f * high - 0.03f * lead * (1.0f - high));
+                const glm::vec3 shoulder = handM - fwdM * 0.3f + rightM * (0.18f * side) - up * 0.15f;
+                const glm::vec3 elbowM = shoulder - up * 0.45f + rightM * (0.12f * side) + fwdM * 0.05f; // elbows down, tucked
+                // Blend from where the clip has the hand (a fading guard never pops).
+                const int handBone = m_rigData.findBone(s == 0 ? "hand_l" : "hand_r");
+                const glm::vec3 clipHand = handBone >= 0 ? glm::vec3(bones[static_cast<size_t>(handBone)][3]) : handM;
+                const glm::vec3 goal = glm::mix(clipHand, handM, std::min(1.0f, f.guard / 0.7f));
+                f.ik->hand(s == 0 ? kke::CharacterIk::Left : kke::CharacterIk::Right, glm::vec3(xf * glm::vec4(goal, 1.0f)),
+                           glm::vec3(xf * glm::vec4(elbowM, 1.0f)));
+            }
+        }
+        // The canvas is flat at y = 0 inside the ropes.
+        const auto ground = [](const glm::vec3& from, glm::vec3& hit, glm::vec3& normal) {
+            if (from.y < 0.0f) return false;
+            hit = glm::vec3(from.x, 0.0f, from.z);
+            normal = glm::vec3(0.0f, 1.0f, 0.0f);
+            return true;
+        };
+        f.ik->feetOnGround(c.state() != S::Dodging || f.dodgeSide == 0.0f);
+        f.ik->apply(m_rigData, pose, xf, ground, velocity, dt);
     }
 
     // Getting up: blend from where the ragdoll left the body into the clip.

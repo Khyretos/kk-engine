@@ -284,7 +284,7 @@ size_t PhysicsModule::physicsBlast(const glm::vec3& center, float radius, float 
             for (uint32_t i = 0; i < verts; ++i) {
                 const glm::vec3 dv = blastVelocity(c, r, v, toG(AMD::FmGetVertPosition(*piece, i)));
                 if (glm::dot(dv, dv) <= 0.0f) continue;
-                AMD::FmSetVertVelocity(m_scene, piece, i, toF(toG(AMD::FmGetVertVelocity(*piece, i)) + dv)); // wakes it
+                AMD::FmSetVertVelocity(m_scene, piece, i, toF(blastedVelocity(toG(AMD::FmGetVertVelocity(*piece, i)), dv))); // wakes it
                 any = true;
             }
             pushed += any ? 1 : 0;
@@ -295,7 +295,7 @@ size_t PhysicsModule::physicsBlast(const glm::vec3& center, float radius, float 
             const AMD::FmRigidBodyState st = AMD::FmGetState(*body);
             const glm::vec3 dv = blastVelocity(c, r, v, toG(st.pos));
             if (glm::dot(dv, dv) <= 0.0f) continue;
-            AMD::FmSetVelocity(m_scene, body, toF(toG(st.vel) + dv));
+            AMD::FmSetVelocity(m_scene, body, toF(blastedVelocity(toG(st.vel), dv)));
             ++pushed;
         }
     }

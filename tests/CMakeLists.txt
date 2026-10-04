@@ -32,6 +32,7 @@ add_executable(kke_tests
     test_animator.cpp
     test_anim_rig.cpp
     test_character_ik.cpp
+    test_inventory.cpp
     test_body_shape.cpp
     test_procedural_anim.cpp
     test_climb_wall.cpp
@@ -97,6 +98,7 @@ add_executable(kke_tests
     test_tone_mapper.cpp
     test_sky.cpp
     test_jiggle.cpp
+    test_auto_rig.cpp
     test_rml_data_binding.cpp
     test_frame_retire_queue.cpp
     test_anti_cheat.cpp

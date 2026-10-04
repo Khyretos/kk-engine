@@ -833,3 +833,81 @@ TEST(Locomotion, SlowJumpNextToAWallIsNoWallRun) {
         ASSERT_NE(loco.state(), Locomotion::State::WallRun);
     }
 }
+
+// Wall climb: running at a 4 m wall (too tall to climb straight or to
+// reach with a jump) and pressing "go up" runs up it and hangs from the top.
+TEST(Locomotion, RunningAtATallWallRunsUpItAndHangs) {
+    Course c;
+    c.box({ 0, 2.0f, -6.0f }, { 3.0f, 2.0f, 1.0f }); // face at z = -5, top at 4
+    c.spawn({ 0, 0.01f, 0 });
+    Locomotion loco(c.world, c.player);
+    c.run(loco, forward(), 1.25f); // up to running speed, a step from the wall
+    ASSERT_GT(loco.groundSpeed(), loco.settings().wallClimbMinSpeed);
+    Locomotion::Input up = forward();
+    up.goUp = true;
+    bool climbed = false;
+    for (int i = 0; i < 90 && loco.state() != Locomotion::State::Hang; ++i) {
+        loco.update(up, kDt);
+        c.world.step(kDt);
+        up.goUp = false;
+        climbed = climbed || loco.wallClimbing();
+    }
+    EXPECT_TRUE(climbed);
+    ASSERT_EQ(loco.state(), Locomotion::State::Hang) << "feet " << c.feet().y;
+    EXPECT_NEAR(loco.hangEdge().y, 4.0f, 0.02f);
+    EXPECT_NEAR(c.feet().y, 4.0f - loco.settings().hangReach, 0.05f);
+    // And on up from the hang (a 2 m deep top: a climb).
+    Locomotion::Input go;
+    go.goUp = true;
+    c.run(loco, go, 0.1f);
+    c.run(loco, Locomotion::Input{}, 1.5f);
+    EXPECT_EQ(loco.state(), Locomotion::State::Ground);
+    EXPECT_NEAR(c.feet().y, 4.0f, 0.05f);
+}
+
+// Standing still at the same wall, "go up" is only a jump (no run-up).
+TEST(Locomotion, StandingAtATallWallIsNoWallClimb) {
+    Course c;
+    c.box({ 0, 2.0f, -1.5f }, { 3.0f, 2.0f, 1.0f });
+    c.spawn({ 0, 0.01f, 0 });
+    Locomotion loco(c.world, c.player);
+    Locomotion::Input up = forward();
+    up.goUp = true;
+    loco.update(up, kDt);
+    EXPECT_EQ(loco.state(), Locomotion::State::Air);
+    EXPECT_FALSE(loco.wallClimbing());
+}
+
+// Hang vault: hanging from the thin 3 m wall, "go up" goes over it and
+// down to the floor on the far side.
+TEST(Locomotion, VaultsOverAThinWallFromAHang) {
+    Course c;
+    c.box({ 16.0f, 1.5f, 12.0f }, { 0.3f, 1.5f, 4.0f });
+    c.spawn({ 17.2f, 0.01f, 12.0f });
+    Locomotion loco(c.world, c.player);
+    Locomotion::Input in;
+    in.move = glm::vec3(-1, 0, 0);
+    for (int i = 0; i < 90 && loco.state() != Locomotion::State::Hang; ++i) {
+        in.goUp = (i == 4);
+        loco.update(in, kDt);
+        c.world.step(kDt);
+    }
+    ASSERT_EQ(loco.state(), Locomotion::State::Hang);
+    Locomotion::Input up;
+    up.goUp = true;
+    bool vaulted = false;
+    float lowestOverTop = 1e9f;
+    for (int i = 0; i < 120; ++i) {
+        loco.update(up, kDt);
+        c.world.step(kDt);
+        up.goUp = false;
+        vaulted = vaulted || loco.hangVaulting();
+        // Over the wall (x 15.7 .. 16.3) the feet stay above its top.
+        if (loco.hangVaulting() && std::abs(c.feet().x - 16.0f) < 0.3f) lowestOverTop = std::min(lowestOverTop, c.feet().y);
+    }
+    EXPECT_TRUE(vaulted);
+    EXPECT_GT(lowestOverTop, 2.9f);
+    EXPECT_EQ(loco.state(), Locomotion::State::Ground);
+    EXPECT_NEAR(c.feet().y, 0.0f, 0.05f);
+    EXPECT_LT(c.feet().x, 15.7f - loco.settings().radius); // on the far side
+}

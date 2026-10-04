@@ -1,4 +1,6 @@
 #include "ShowcaseModule.h"
+#include "Geometry.h"
+#include "NetEvents.h"
 
 #include "kke/Application.h"
 #include "kke/AssetCatalog.h"
@@ -44,58 +46,13 @@ constexpr const char* kTraversalClips[] = { "SafetyVault", "ClimbUp_1m", "ClimbU
 constexpr const char* kWallRunClips[] = { "WallRun_L_Loop", "WallRun_R_Loop" };
 // The breaking yard (glass, plank, stone wall).
 using layout::kYard;
+using layout::kSupply;
+using layout::kSupplyTableHalf;
 // Climbs up walls this high (m) or more take the 2 m clip.
 constexpr float kClimbHighFrom = 1.6f;
 
-void appendBox(const glm::mat4& m, const glm::vec3& half, const glm::vec3& color, std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx) {
-    const glm::vec3 n[6] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
-    const glm::mat3 nm = glm::mat3(m);
-    for (const glm::vec3& normal : n) {
-        glm::vec3 u = std::abs(normal.y) > 0.5f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
-        glm::vec3 w = glm::cross(normal, u);
-        uint32_t base = static_cast<uint32_t>(v.size());
-        // Slightly darker sides: shape reads better without textures.
-        glm::vec3 c = color * (normal.y > 0.5f ? 1.0f : normal.y < -0.5f ? 0.6f : 0.85f);
-        for (glm::vec2 k : { glm::vec2(-1, -1), glm::vec2(1, -1), glm::vec2(1, 1), glm::vec2(-1, 1) }) {
-            glm::vec3 p = (normal + u * k.x + w * k.y) * half;
-            v.push_back({ glm::vec3(m * glm::vec4(p, 1.0f)), c, glm::normalize(nm * normal), glm::vec2(0.0f) });
-        }
-        // Counter-clockwise from outside.
-        glm::vec3 a = v[base].position, b = v[base + 1].position, cc = v[base + 2].position;
-        if (glm::dot(glm::cross(b - a, cc - a), nm * normal) >= 0.0f) idx.insert(idx.end(), { base, base + 1, base + 2, base, base + 2, base + 3 });
-        else idx.insert(idx.end(), { base, base + 2, base + 1, base, base + 3, base + 2 });
-    }
-}
-
 #if KKE_ENABLE_NET
-// Game events (NetModule::sendEvent), serialized the docs/NETWORKING.md way:
-// one function per message for both directions.
-enum EventKind : uint16_t { kEventShoot = 1, kEventPush = 2, kEventReset = 3 };
-struct ShotEvent { glm::vec3 from{0.0f}, dir{0.0f, 0.0f, -1.0f}; };
-struct PushEvent { uint16_t body = 0; glm::vec3 dir{0.0f}, point{0.0f}; };
-template <typename Stream> bool serialize(Stream& s, ShotEvent& e) {
-    s.vec3(e.from, glm::vec3(-4096.0f, -512.0f, -4096.0f), glm::vec3(4096.0f, 1536.0f, 4096.0f), 1.0f / 256.0f);
-    s.vec3(e.dir, 1.0f, 1.0f / 2048.0f);
-    return s.ok();
-}
-template <typename Stream> bool serialize(Stream& s, PushEvent& e) {
-    s.integer(e.body, 0, 65535);
-    s.vec3(e.dir, 1.0f, 1.0f / 2048.0f);
-    s.vec3(e.point, glm::vec3(-4096.0f, -512.0f, -4096.0f), glm::vec3(4096.0f, 1536.0f, 4096.0f), 1.0f / 256.0f);
-    return s.ok();
-}
-template <typename T> std::vector<uint8_t> pack(T value) {
-    std::vector<uint8_t> out;
-    {
-        kke::net::WriteStream w(out);
-        serialize(w, value);
-    }
-    return out;
-}
-template <typename T> bool unpack(const std::vector<uint8_t>& data, T& value) {
-    kke::net::ReadStream r(data.data(), data.size());
-    return serialize(r, value) && r.ok();
-}
+using namespace netev;
 #endif
 
 // Showcase bits in NetPlayerState::flags (kPlayerTeleported is the engine's).
@@ -119,12 +76,14 @@ void ShowcaseModule::init(kke::Application& app) {
     m_rigid = app.getModule<kke::RigidBodyModule>();
     m_models = app.getModule<kke::ModelModule>();
     m_input = app.getModule<kke::InputModule>();
+    m_ui = app.getModule<kke::UiModule>();
 #if KKE_ENABLE_NET
     m_net = app.getModule<kke::NetModule>();
     if (m_net) {
         m_net->onEvent = [this](const kke::net::GameEventMsg& e) { onNetEvent(e.kind, e.fromPlayer, e.payload); };
         m_net->onCorrection = [this](const glm::vec3& p) { m_loco->teleport(p); };
         // Input replay: players who join start where ours does, side by side.
+        setupOnline();
         m_net->replaySpawn = [this](uint8_t id) { return (m_autopilot ? m_autopilotStart : m_spawn) + glm::vec3(1.2f * id, 0.0f, 0.0f); };
     }
 #endif
@@ -138,10 +97,13 @@ void ShowcaseModule::init(kke::Application& app) {
         kke::InputMap& in = m_input->map(0);
         kke::InputModule::defineCharacterActions(in);
         in.defineAction({ "reset", "Reset crates + player", "Showcase", "game" });
+        in.defineAction({ "pickup", "Pick up / put down", "Showcase", "game" });
         in.defineAction({ "panels", "Engine panels", "Showcase", "game" });
         using IM = kke::InputModule;
+        // Resetting is also the spawn menu's last row (RB or G).
         in.addBinding(IM::bind("reset", IM::key(SDL_SCANCODE_R)));
-        in.addBinding(IM::bind("reset", IM::pad(SDL_GAMEPAD_BUTTON_WEST)));
+        in.addBinding(IM::bind("pickup", IM::key(SDL_SCANCODE_F)));
+        in.addBinding(IM::bind("pickup", IM::pad(SDL_GAMEPAD_BUTTON_WEST)));
         // The engine panels are developer tools: F1 only (View is a toy).
         in.addBinding(IM::bind("panels", IM::key(SDL_SCANCODE_F1)));
         // A controller's zoom is the d-pad up / down, held; the wheel's
@@ -161,6 +123,10 @@ void ShowcaseModule::init(kke::Application& app) {
         in.clearBindings("voice.talk");
         in.addBinding(IM::bind("voice.talk", IM::key(SDL_SCANCODE_P)));
         in.addBinding(IM::bind("voice.talk", IM::pad(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)));
+        buildSpawnMenu(); // its actions: RB / G, and the list's own
+        buildInventoryScreen(); // Tab, I, View; and the bag's own
+        buildMapScreen();       // M; and the map's own
+        defineRideActions();    // gas, brake (cars, the plane)
         // Left-click shoots, but not the click that grabs the mouse (see onEvent).
         m_input->commitDefaults();
         if (const char* lefty = std::getenv("KKE_LEFT_HANDED"); lefty && *lefty == '1') kke::InputModule::mirrorKeyboard(in);
@@ -189,10 +155,38 @@ void ShowcaseModule::init(kke::Application& app) {
         m_capsule->upload(v, i);
     }
     buildLevel();
+    buildWorld();
+    {
+        std::vector<kke::Vertex> v;
+        std::vector<uint32_t> i;
+        buildRange(v, i);
+        m_rangeStatic = std::make_unique<kke::DynamicMeshRenderer>(app);
+        m_rangeStatic->upload(v, i);
+        m_rangeBatch = std::make_unique<kke::DynamicMeshRenderer>(app);
+        m_rangeMetal = std::make_unique<kke::DynamicMeshRenderer>(app);
+        v.clear();
+        i.clear();
+        buildVehicles(v, i);
+        m_vehStatic = std::make_unique<kke::DynamicMeshRenderer>(app);
+        m_vehStatic->upload(v, i);
+        m_vehBatch = std::make_unique<kke::DynamicMeshRenderer>(app);
+        v.clear();
+        i.clear();
+        buildNature(v, i);
+        m_natureStatic = std::make_unique<kke::DynamicMeshRenderer>(app);
+        m_natureStatic->upload(v, i);
+        m_natureBatch = std::make_unique<kke::DynamicMeshRenderer>(app);
+        m_grassBatch = std::make_unique<kke::DynamicMeshRenderer>(app);
+    }
+    buildGuns();
     dressCourse();
     spawnCrates();
     spawnBreakables();
     setupPlayer();
+    loadItems();
+    spawnRange();
+    spawnVehicles();
+    spawnNature();
     m_rig.mode = kke::CameraRig::Mode::ThirdPerson;
     m_rig.yaw = 0.0f;
     m_rig.pitch = -12.0f;
@@ -239,6 +233,28 @@ void ShowcaseModule::init(kke::Application& app) {
         m_loco->setFacing(glm::vec3(0, 0, -1));
         m_rig.yaw = 0.0f;
     }
+    if (const char* c = std::getenv("KKE_DEMO_CARRY"); c && *c && *c != '0') {
+        m_demoCarry = 0.0f;
+        m_rig.yaw = 150.0f; // behind and beside you, looking the way you face (+Z)
+    }
+    if (const char* wd = std::getenv("KKE_DEMO_WORLD"); wd && *wd && *wd != '0') m_demoWorld = 0.0f;
+    if (const char* g = std::getenv("KKE_DEMO_GUNS"); g && *g && *g != '0') m_demoGuns = 0.0f;
+    if (const char* d = std::getenv("KKE_DEMO_DRIVE"); d && *d && *d != '0') {
+        m_demoDrive = 0.0f;
+        if (*d == '2') m_laps = 1; // =2: straight to the plane (as if the lap were driven)
+    }
+    if (const char* pk = std::getenv("KKE_DEMO_PARKOUR"); pk && *pk && *pk != '0') {
+        // =1 all of it; =2 from the hang vault, =3 the shimmy, =4 the rooftops.
+        static const int kFrom[] = { 0, 0, 3, 6, 10 };
+        m_demoParkourStep = kFrom[std::clamp(*pk - '0', 0, 4)];
+        if (const char* fz = std::getenv("KKE_DEMO_PARKOUR_FREEZE")) m_demoParkourFreeze = fz;
+    }
+    if (const char* on = std::getenv("KKE_DEMO_ONLINE"); on && *on && *on != '0') m_demoOnline = 0.0f;
+    if (const char* n = std::getenv("KKE_DEMO_NATURE"); n && *n && *n != '0') m_demoNature = 0.0f;
+    if (const char* it = std::getenv("KKE_DEMO_ITEMS"); it && *it && *it != '0') {
+        m_demoItems = 0.0f;
+        m_demoItemsKeepOpen = *it == '2';
+    }
     if (const char* sp = std::getenv("KKE_SPLIT"); sp && *sp) setLocalPlayers(std::atoi(sp));
     if (const char* pip = std::getenv("KKE_OVERHEAD"); pip && *pip && *pip != '0') m_overhead = true;
     if (const char* b = std::getenv("KKE_DEMO_BRIDGE"); b && *b && *b != '0') {
@@ -276,10 +292,19 @@ void ShowcaseModule::buildLevel() {
     const glm::vec3 floor(0.36f, 0.4f, 0.36f), wall(0.55f, 0.52f, 0.48f), accent(0.85f, 0.55f, 0.25f), ramp(0.45f, 0.55f, 0.7f);
     addStaticBox({ { 0, -0.25f, 0 }, { 30, 0.25f, 30 }, floor }, v, idx);
     // Perimeter walls.
-    addStaticBox({ { 0, 1.5f, -30 }, { 30, 1.5f, 0.3f }, wall }, v, idx);
-    addStaticBox({ { 0, 1.5f, 30 }, { 30, 1.5f, 0.3f }, wall }, v, idx);
-    addStaticBox({ { -30, 1.5f, 0 }, { 0.3f, 1.5f, 30 }, wall }, v, idx);
-    addStaticBox({ { 30, 1.5f, 0 }, { 0.3f, 1.5f, 30 }, wall }, v, idx);
+    // Perimeter walls, with a gate in each (the roads out to the zones start there: World.cpp).
+    auto wallWithGate = [&](float gateAt, bool alongX, float at) {
+        for (int s = 0; s < 2; ++s) {
+            const float from = s == 0 ? -30.0f : gateAt + layout::kGateHalf, to = s == 0 ? gateAt - layout::kGateHalf : 30.0f;
+            const float mid = (from + to) * 0.5f, half = (to - from) * 0.5f;
+            if (alongX) addStaticBox({ { mid, 1.5f, at }, { half, 1.5f, 0.3f }, wall }, v, idx);
+            else addStaticBox({ { at, 1.5f, mid }, { 0.3f, 1.5f, half }, wall }, v, idx);
+        }
+    };
+    wallWithGate(layout::kGateNorth.x, true, -30.0f);
+    wallWithGate(layout::kGateSouth.x, true, 30.0f);
+    wallWithGate(layout::kGateWest.y, false, -30.0f);
+    wallWithGate(layout::kGateEast.y, false, 30.0f);
     // Stairs up to a 2 m platform (0.25 m steps: the controller climbs them).
     for (int s = 0; s < 8; ++s)
         addStaticBox({ { -8.0f, 0.125f + s * 0.25f, -2.0f - s * 0.4f }, { 1.5f, 0.125f + s * 0.25f, 0.2f }, accent }, v, idx);
@@ -315,9 +340,24 @@ void ShowcaseModule::buildLevel() {
     for (glm::vec2 c : { glm::vec2(-1, -1), glm::vec2(1, -1), glm::vec2(1, 1), glm::vec2(-1, 1) })
         addStaticBox({ { 10.0f + c.x * 1.4f, 0.6f, 6.0f + c.y * 1.4f }, { 0.1f, 0.6f, 0.1f }, wall }, v, idx);
     buildParkourLane(v, idx);
+    buildParkourPark(v, idx);
     buildTrickCourse(v, idx);
     buildPool(v, idx);
     buildLava(v, idx);
+    // The supply table: things to pick up (Items.cpp), on a top 0.84 m up.
+    {
+        const glm::vec3 c = kSupply + glm::vec3(0.0f, kSupplyTableHalf.y, 0.0f), h = kSupplyTableHalf;
+        const glm::vec3 wood(0.48f, 0.34f, 0.22f);
+        appendBox(glm::translate(glm::mat4(1.0f), c + glm::vec3(0.0f, h.y - 0.03f, 0.0f)), glm::vec3(h.x, 0.03f, h.z), wood, v, idx);
+        for (glm::vec2 k : { glm::vec2(-1, -1), glm::vec2(1, -1), glm::vec2(1, 1), glm::vec2(-1, 1) })
+            appendBox(glm::translate(glm::mat4(1.0f), kSupply + glm::vec3(k.x * (h.x - 0.06f), h.y - 0.03f, k.y * (h.z - 0.06f))), glm::vec3(0.04f, h.y - 0.03f, 0.04f),
+                      wood * 0.8f, v, idx);
+        kke::RigidWorld::BodyDesc d;
+        d.motion = kke::RigidWorld::Motion::Static;
+        d.halfExtents = h;
+        d.position = c;
+        m_rigid->world().add(d);
+    }
     // Breaking yard floor marker.
     addStaticBox({ { 14.0f, 0.01f, -6.0f }, { 5.5f, 0.01f, 4.5f }, glm::vec3(0.3f, 0.3f, 0.25f) }, v, idx);
     m_level->upload(v, idx);
@@ -377,7 +417,8 @@ void ShowcaseModule::findScenes() {
             SceneEntry e;
             e.path = f;
             e.file = kke::SceneFile::load(f);
-            e.origin = glm::vec3(200.0f * static_cast<float>(m_scenes.size() + 1), 0.0f, 0.0f);
+            // Far outside the open world (World.cpp ends at 700 m).
+            e.origin = glm::vec3(3000.0f + 400.0f * static_cast<float>(m_scenes.size()), 0.0f, 3000.0f);
             m_scenes.push_back(std::move(e));
         } catch (const std::exception& ex) {
             kke::log::get(name())->warn("{}", ex.what());
@@ -440,6 +481,7 @@ void ShowcaseModule::visitScene(size_t index) {
 }
 
 void ShowcaseModule::spawnCrates() {
+    dropHeld(); // it may be one of these
     for (const Crate& c : m_crates) m_rigid->world().remove(c.body);
     m_crates.clear();
     // A pyramid of crates, and a few big light boxes to push around.
@@ -637,6 +679,7 @@ void ShowcaseModule::useCharacter(const std::string& asset) {
         p.anim.reset();
     }
     m_charModel = model;
+    m_equipmentBuilt = false; // sockets from the new skeleton
     m_character = model == m_ualModel ? std::string() : asset;
     m_charInstance = m_models->spawn(m_charModel, glm::mat4(1.0f));
     m_models->setOverlayEnabled(m_charInstance, false);
@@ -735,10 +778,33 @@ void ShowcaseModule::applyIk(float dt) {
     // where the clips have no hand plant matched to this obstacle, on the
     // edge while hanging (and shimmying), and reaching for the next edge at
     // the end of a ledge leap.
+    const bool hangVault = m_loco->hangVaulting();
     const bool reach = m_handIk && (st == State::Hang || (st == State::Leap && progress > 0.6f) || (st == State::Climb && progress < 0.7f) ||
-                                    (st == State::Vault && progress < 0.45f));
+                                    (st == State::Vault && progress < (hangVault ? kke::Locomotion::hangVaultSplit + 0.2f : 0.45f)));
+    // Shimmying: hand over hand along the edge, the feet stepping along the
+    // wall below, each planted while the body moves past it, then lifted
+    // and moved on (a stride every shimmyStride metres).
+    constexpr float shimmyStride = 0.36f;
+    if (st == State::Hang && std::abs(m_loco->shimmySpeed()) > 0.01f) {
+        m_shimmyDist += std::abs(m_loco->shimmySpeed()) * dt;
+        m_shimmyDir = m_loco->shimmySpeed() > 0.0f ? 1.0f : -1.0f;
+    }
+    const glm::vec3 right(-in.z, 0.0f, in.x); // the character's right, facing the wall
+    // A limb's step at cycle offset `phase`: along the travel (m) and how high it's lifted (0..1).
+    auto shimmyStep = [&](float phase, float& along, float& lift) {
+        const float u = std::fmod(m_shimmyDist / shimmyStride + phase, 1.0f);
+        if (u < 0.6f) {
+            along = shimmyStride * (0.3f - u);
+            lift = 0.0f;
+        } else {
+            const float k = (u - 0.6f) / 0.4f;
+            along = shimmyStride * (-0.3f + 0.6f * k);
+            lift = std::sin(glm::pi<float>() * k);
+        }
+        along *= m_shimmyDir;
+    };
     if (reach) {
-        const glm::vec3 grip = st == State::Hang || st == State::Leap ? m_loco->hangEdge() : glm::vec3(o.face.x, o.target.y, o.face.z);
+        const glm::vec3 grip = st == State::Hang || st == State::Leap ? m_loco->hangEdge() : hangVault ? o.face : glm::vec3(o.face.x, o.target.y, o.face.z);
         const glm::vec3 edge(grip.x + in.x * 0.08f, grip.y + 0.02f, grip.z + in.z * 0.08f);
         const std::vector<glm::mat4> bones = kke::poseToModel(m_rigData, pose);
         for (int i = 0; i < 2; ++i) {
@@ -749,10 +815,20 @@ void ShowcaseModule::applyIk(float dt) {
             // down, away from the wall.
             const glm::vec3 shoulder = glm::vec3(toWorld * bones[static_cast<size_t>(arm.chain.upper)][3]);
             const float s = glm::dot(shoulder - edge, side) > 0.0f ? 1.0f : -1.0f;
-            const glm::vec3 hand = edge + side * (0.22f * s);
+            glm::vec3 hand = edge + side * (0.22f * s);
+            if (st == State::Hang) {
+                // The hand on the side it's heading leads.
+                float along = 0.0f, lift = 0.0f;
+                const bool lead = glm::dot(side * s, right) * m_shimmyDir > 0.0f;
+                shimmyStep(lead ? 0.0f : 0.5f, along, lift);
+                hand += right * along + glm::vec3(0.0f, 0.07f * lift, 0.0f) - in * (0.05f * lift);
+            }
             m_ik.hand(static_cast<Side>(i), hand, hand - in * 0.3f + side * (0.35f * s) - glm::vec3(0, 0.5f, 0));
         }
     }
+    if (!reach && m_handIk) holdHands();
+    if (!reach && m_held.body == kke::RigidWorld::kNoBody) aimHands(pose, toWorld); // a gun up to the eye
+    if (!reach) chopHands(pose, toWorld);                                            // the axe swing, a hand down to a flower
     // Hanging: the balls of the feet against the wall below the hands
     // (braced, the way people hang on a ledge), where there is wall.
     if (m_footIk && st == State::Hang) {
@@ -761,15 +837,38 @@ void ShowcaseModule::applyIk(float dt) {
             if (m_footBone[i] < 0) continue;
             // Level with the animated foot, a little higher, straight into the wall.
             const glm::vec3 foot = glm::vec3(toWorld * bones[static_cast<size_t>(m_footBone[i])][3]);
-            const glm::vec3 from(foot.x - in.x * 0.3f, std::max(foot.y, feetAt.y) + 0.25f, foot.z - in.z * 0.3f);
+            glm::vec3 from(foot.x - in.x * 0.3f, std::max(foot.y, feetAt.y) + 0.25f, foot.z - in.z * 0.3f);
+            float along = 0.0f, lift = 0.0f;
+            shimmyStep(i == 0 ? 0.25f : 0.75f, along, lift);
+            from += right * along + glm::vec3(0.0f, 0.1f * lift, 0.0f);
             const kke::RigidWorld::RayHit h = w.raycast(from, in, 1.0f);
-            if (h.hit && std::abs(h.normal.y) < 0.6f) m_ik.foot(static_cast<Side>(i), h.point, h.normal);
+            if (h.hit && std::abs(h.normal.y) < 0.6f) m_ik.foot(static_cast<Side>(i), h.point - in * (0.08f * lift), h.normal);
+        }
+    }
+    // Running up a wall: two steps on it, left then right, each foot
+    // planted where it first touched (the body rises past it).
+    if (m_footIk && m_loco->wallClimbing()) {
+        for (int i = 0; i < 2; ++i) {
+            const float from = i == 0 ? 0.12f : 0.42f, to = from + 0.35f;
+            if (progress < from || progress > to) {
+                m_climbStepSet[i] = false;
+                continue;
+            }
+            if (!m_climbStepSet[i]) {
+                const glm::vec3 hip = feetAt + glm::vec3(0.0f, 0.45f, 0.0f) + right * (i == 0 ? -0.12f : 0.12f);
+                const kke::RigidWorld::RayHit h = w.raycast(hip - in * 0.3f, in, 1.6f);
+                if (!h.hit || std::abs(h.normal.y) > 0.6f) continue;
+                m_climbStep[i] = h.point;
+                m_climbStepSet[i] = true;
+            }
+            m_ik.foot(static_cast<Side>(i), m_climbStep[i], -in);
         }
     }
     // The lean comes from the body's own velocity on the ground; scripted
     // moves keep the last one (they place the capsule, its velocity says nothing).
     if (st == State::Ground || st == State::Air) m_leanVelocity = w.characterVelocity(m_player);
     m_ik.apply(m_rigData, pose, toWorld, ground, m_leanVelocity, dt);
+    drawEquipped(pose, toWorld); // and the hands close round what they hold
 
     // Step sounds where the (placed) feet actually come down.
     if (m_steps.bound()) {
@@ -789,7 +888,22 @@ void ShowcaseModule::setCaptured(bool on) {
 // the pause menu (kke::GameShellModule), which lets the mouse go.
 void ShowcaseModule::onEvent(const SDL_Event& e) {
     ImGuiIO& io = ImGui::GetIO();
-    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !m_captured && !m_menuOpen && !io.WantCaptureMouse && !m_app->uiCapturesMouse() &&
+    // Esc or Start with the bag or the spawn menu open close it (the
+    // pause menu waits: GameShellModule::blockPause). View is the bag's
+    // own close (inv.close).
+    if ((m_invOpen || m_spawnOpen || m_mapOpen) && ((e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_ESCAPE) ||
+                                       (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_START))) {
+        if (m_invOpen && m_invMoving) {
+            m_invMoving = 0; // put back first
+            m_invDirty = true;
+        } else {
+            openInventory(false);
+            openSpawnMenu(false);
+            openMap(false);
+        }
+        return;
+    }
+    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !m_captured && !m_menuOpen && !m_spawnOpen && !m_invOpen && !m_mapOpen && !io.WantCaptureMouse && !m_app->uiCapturesMouse() &&
         e.button.button == SDL_BUTTON_LEFT) {
         setCaptured(true);
         m_swallowFire = true; // this click grabbed the mouse; it isn't a shot
@@ -802,7 +916,7 @@ void ShowcaseModule::onEvent(const SDL_Event& e) {
 void ShowcaseModule::readActions(float dt) {
     kke::InputMap& in = m_input->map(0);
     // Typing in an ImGui field: the game doesn't hear the keys.
-    in.setContextEnabled("game", !ImGui::GetIO().WantTextInput && !m_menuOpen); // the menu has the controls
+    in.setContextEnabled("game", !ImGui::GetIO().WantTextInput && !m_menuOpen && !m_spawnOpen && !m_invOpen && !m_mapOpen); // a menu has the controls
     const bool mouseLeft = m_input->devices().value({ kke::SourceKind::MouseButton, 0, SDL_BUTTON_LEFT, 0 }, nullptr) > 0.5f;
     if (!mouseLeft) m_swallowFire = false;
 
@@ -815,8 +929,24 @@ void ShowcaseModule::readActions(float dt) {
     if (in.axis("camera.zoom") != 0.0f && m_captured)
         m_rig.settings.armLength = std::clamp(m_rig.settings.armLength - in.axis("camera.zoom") * 0.4f, 1.5f, 10.0f);
     if (const float z = in.axis("zoom.pad"); z != 0.0f) m_rig.settings.armLength = std::clamp(m_rig.settings.armLength - z * 4.0f * dt, 1.5f, 10.0f);
+    if (m_ride != Ride::None) {
+        // In a car or the plane: Vehicles.cpp has the controls.
+        m_moveInput = glm::vec2(0.0f);
+        readRide(in, dt);
+        if (in.pressed("panels")) {
+            m_showPanels = !m_showPanels;
+            for (kke::Module* p : m_panels) p->setUiVisible(m_showPanels);
+        }
+        return;
+    }
     if (in.pressed("camera.toggle"))
         m_rig.mode = m_rig.mode == kke::CameraRig::Mode::ThirdPerson ? kke::CameraRig::Mode::FirstPerson : kke::CameraRig::Mode::ThirdPerson;
+    if (m_demoDrive >= 0.0f) {
+        glm::vec2 move(0.0f);
+        float gas = 0.0f, brake = 0.0f;
+        bool handBrake = false;
+        updateDriveDemo(dt, move, gas, brake, handBrake); // on foot: the walk to the car, to the plane
+    }
 
     m_moveInput = in.axis2("move");
     m_sprint = in.held("sprint");
@@ -827,15 +957,36 @@ void ShowcaseModule::readActions(float dt) {
     // Fire: once on press, then 4 shots/s while held.
     const bool fireOk = !(mouseLeft && (!m_captured || m_swallowFire));
     m_fireCooldown -= dt;
-    if (fireOk && in.held("fire") && (in.pressed("fire") || m_fireCooldown <= 0.0f)) {
+    // A gun or a grenade in the right hand: Guns.cpp has the trigger.
+    {
+        bool fire = fireOk && in.held("fire"), firePressed = fireOk && in.pressed("fire"), aim = in.held("aim");
+        if (m_demoGuns >= 0.0f) {
+            fire = firePressed = false;
+            updateGunsDemo(dt, fire, aim);
+            firePressed = fire;
+        }
+        updateGuns(dt, fire, firePressed, aim);
+    }
+    // The axe in the right hand: the trigger swings it (Nature.cpp).
+    bool chop = axeInHand() && fireOk && in.pressed("fire");
+    if (m_demoNature >= 0.0f) updateNatureDemo(dt, chop);
+    if (chop) startChop();
+    if (m_held.body != kke::RigidWorld::kNoBody) {
+        // Holding something: the trigger throws it.
+        if (fireOk && in.pressed("fire")) {
+            throwHeld(m_app->camera());
+            m_fireCooldown = 0.4f;
+        }
+    } else if (!armed() && !axeInHand() && fireOk && in.held("fire") && (in.pressed("fire") || m_fireCooldown <= 0.0f)) {
         shoot(m_app->camera());
         m_fireCooldown = 0.25f;
     }
     if (in.pressed("interact")) forcePush(m_app->camera());
-    if (in.pressed("reset")) {
-        resetCourse();
-        m_loco->teleport(m_spawn);
+    if (in.pressed("pickup") && !useVehicle()) { // a car or the plane next to you: get in
+        if (const int flower = m_held.body == kke::RigidWorld::kNoBody && itemInReach() < 0 ? flowerInReach() : -1; flower >= 0) pickFlower(flower);
+        else togglePickUp();
     }
+    if (in.pressed("reset")) resetWorld();
     if (in.pressed("panels")) {
         m_showPanels = !m_showPanels;
         for (kke::Module* p : m_panels) p->setUiVisible(m_showPanels);
@@ -901,6 +1052,12 @@ void ShowcaseModule::forcePush(const kke::Camera& cam) {
     glm::vec3 dir = glm::normalize(cam.target - cam.position);
     auto hit = m_rigid->world().raycast(cam.position, dir, 30.0f);
     if (!hit.hit) return;
+    // Spawned props and dummies are this machine's own (offline).
+    for (const Prop& p : m_props)
+        if (p.body == hit.body) m_rigid->world().addImpulse(p.body, dir * 60.0f, hit.point);
+    for (const SpawnDummy& dm : m_dummies)
+        for (kke::RigidWorld::BodyId b : m_rigid->world().ragdollBodies(dm.ragdoll))
+            if (b == hit.body) m_rigid->world().addVelocity(b, dir * 6.0f);
     for (size_t i = 0; i < m_crates.size(); ++i) {
         if (m_crates[i].body != hit.body) continue;
         // Here right away; on a client also on the host, whose crate ours follows.
@@ -915,6 +1072,7 @@ void ShowcaseModule::forcePush(const kke::Camera& cam) {
 // Client: another player's shot, relayed by the host.
 void ShowcaseModule::onNetEvent(uint16_t kind, uint8_t from, const std::vector<uint8_t>& payload) {
 #if KKE_ENABLE_NET
+    if (onOnlineEvent(kind, from, payload)) return; // spawning and carrying (Online.cpp)
     const bool host = m_net && m_net->role() == kke::NetModule::Role::Host;
     switch (kind) {
     case kEventShoot: {
@@ -950,6 +1108,10 @@ void ShowcaseModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
     // Local only: every machine runs its own lava (what it looks like
     // isn't gameplay state).
     if (m_lava) m_lava->fixedUpdate(ctx.fixedDt, m_rigid->world(), lavaWatched());
+    carryStep(ctx.fixedDt);
+    stepRemoteCarries(ctx.fixedDt); // hosting: what the other players carry
+    stepVehicles(ctx.fixedDt);
+    tickFuses(ctx.fixedDt); // grenades and barrels (each machine its own range for now)
     // Platform: back and forth, up and down.
     m_platformTime += ctx.fixedDt;
 #if KKE_ENABLE_NET
@@ -965,6 +1127,14 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     m_fps = m_fps * 0.95f + (dt > 0.0f ? 1.0f / dt : 0.0f) * 0.05f;
     updateStressTest(dt);
     batchCrates();
+    batchProps();
+    batchItems();
+    batchRange();
+    batchVehicles();
+    updateNature(dt);
+    batchNature();
+    updateDummies();
+    updateEffects(dt);
     if (m_lava) m_lava->update();
     updateHud();
     kke::RigidWorld& w = m_rigid->world();
@@ -977,7 +1147,20 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     m_rig.settings.pivotHeight += (target - m_rig.settings.pivotHeight) * std::min(1.0f, 10.0f * dt);
     m_rig.settings.eyeHeight = m_rig.settings.pivotHeight + 0.15f;
 
+    updateSpawnMenu(dt);
+    updateInventory(dt);
+    updateMap(dt);
     readActions(dt);
+    if (m_toastTime > 0.0f && (m_toastTime -= dt) <= 0.0f) toast("");
+    updateEngineSound(dt);
+    if (m_ride != Ride::None) {
+        // Riding: no walking; the camera chases the car or the plane.
+        updateRide(dt);
+        updateAvatars(dt);
+        updateLocalPlayers(dt);
+        applyLighting();
+        return;
+    }
     // Actions -> the movement layer, camera-relative. An analog stick gives
     // partial speeds (walk by tilting a little). What "go up" becomes
     // (vault, climb or jump) is Locomotion's call, from what its sensors
@@ -986,6 +1169,14 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     in.move = m_rig.forward() * m_moveInput.y + m_rig.right() * m_moveInput.x;
     in.move.y = 0.0f;
     if (glm::length(in.move) > 1e-3f) in.move = glm::normalize(in.move) * std::min(1.0f, glm::length(m_moveInput));
+    // A heavy bag: slower, and no sprinting near the limit.
+    const float load = loadFactor();
+    in.move *= load;
+    if (load < 0.7f) m_sprint = false;
+    if (m_chop >= 0.0f) { // swinging the axe: feet planted
+        in.move *= 0.3f;
+        m_sprint = false;
+    }
     if (m_autopilot) {
         // Down the lane (or a scene's trail) toward -Z at a run; "go up"
         // whenever the sensors see something (a player's timing). On the
@@ -1049,17 +1240,49 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
             m_rig.yaw = 0.0f;
         }
     }
+    if (m_demoCarry >= 0.0f) {
+        // KKE_DEMO_CARRY=1: spawn a crate, walk up, lift it, carry it a
+        // few steps, throw it; again every 7 s (screenshots, checks).
+        m_demoCarry += dt;
+        const float t = m_demoCarry;
+        auto at = [&](float mark) { return t >= mark && t - dt < mark; };
+        if (at(0.5f)) spawnRow(0);
+        if (t > 1.0f && t < 2.0f && !m_props.empty()) { // up to it
+            glm::vec3 to = w.position(m_props.back().body) - w.characterPosition(m_player);
+            to.y = 0.0f;
+            if (glm::length(to) > 1.0f) in.move = glm::normalize(to) * 0.5f;
+        }
+        if (at(2.0f)) togglePickUp();
+        if (t > 2.3f && t < 4.0f) in.move = m_loco->facing() * 0.5f;
+        if (at(4.4f)) throwHeld(m_app->camera());
+        if (at(2.1f) || at(4.3f) || at(5.0f)) {
+            const glm::vec3 c = m_props.empty() ? glm::vec3(0.0f) : w.position(m_props.back().body);
+            const glm::vec3 me = w.characterPosition(m_player);
+            kke::log::get(name())->info("carry demo: {} at {:.2f} {:.2f} {:.2f}, you at {:.2f} {:.2f} ({:.1f} s)",
+                                        m_held.body != kke::RigidWorld::kNoBody ? "holding the crate" : "the crate is", c.x, c.y, c.z, me.x, me.z, t);
+        }
+        if (t > 7.0f) {
+            clearSpawned();
+            m_loco->teleport(m_spawn);
+            m_demoCarry = 0.0f;
+        }
+    }
+    if (m_demoItems >= 0.0f) updateItemsDemo(dt, in.move);
+    if (m_demoWorld >= 0.0f) updateWorldDemo(dt);
     // Wading through the pool: no running.
     const bool wading = inPool(w.characterPosition(m_player));
     if (m_demoBridge >= 0.0f) updateBridgeDemo(dt);
+    if (m_demoParkourStep >= 0) updateParkourDemo(dt, in);
+    if (m_demoOnline >= 0.0f) updateOnlineDemo(dt, in);
     in.fast = m_sprint && !m_crouch && !wading;
-    in.slow = m_walk || wading;
+    in.slow = m_walk || wading || m_aimBlend > 0.5f; // aiming: a steady walk
     in.crouch = hanging ? m_wantCrouch != m_crouch : m_crouch;
     in.goUp = m_jumpQueued;
     m_jumpQueued = false;
-    if (m_rig.mode == kke::CameraRig::Mode::FirstPerson) m_loco->setFacing(m_rig.forward());
+    // First person, or aiming: the body turns with the view.
+    if (m_rig.mode == kke::CameraRig::Mode::FirstPerson || m_aimWanted) m_loco->setFacing(m_rig.forward());
     const kke::Locomotion::State before = m_loco->state();
-    if (!stepNetPlayer(in, dt)) m_loco->update(in, dt);
+    if (!stepNetPlayer(in, dt)) m_loco->update(in, m_demoParkourFrozen ? 0.0f : dt);
     if (m_autopilot && m_loco->state() != before &&
         (m_loco->state() == kke::Locomotion::State::Vault || m_loco->state() == kke::Locomotion::State::Climb)) {
         const kke::Locomotion::Obstacle& o = m_loco->lastObstacle();
@@ -1082,7 +1305,7 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     const glm::vec3 drawFeet = w.characterDrawPosition(m_player, m_app->fixedAlpha());
     // Face where Locomotion says (it turns at a limited rate, squares up
     // to obstacles), or where we look in first person.
-    m_facing = m_rig.mode == kke::CameraRig::Mode::FirstPerson ? m_rig.yaw : m_loco->facingYaw();
+    m_facing = m_rig.mode == kke::CameraRig::Mode::FirstPerson || m_aimWanted ? m_rig.yaw : m_loco->facingYaw();
     if (feet.y < -20.0f) m_loco->teleport(m_spawn); // fell out of the world
 
     updateAnimation(dt);
@@ -1101,7 +1324,7 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     // along a wall, the shoulder moves to the open side: over the wall
     // shoulder the spring arm would pull in to the back of the head.
     {
-        float shoulder = m_shoulder;
+        float shoulder = m_shoulder * (1.0f + 0.5f * m_aimBlend); // aiming: further over the shoulder
         if (const float side = m_loco->wallRunSide(); side != 0.0f) {
             const glm::vec3 f = m_loco->facing();
             const glm::vec3 open = -glm::vec3(-f.z, 0.0f, f.x) * side; // away from the wall
@@ -1114,9 +1337,20 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
         auto h = w.raycast(from, d, maxD);
         return h.hit ? h.distance : maxD;
     }, m_app->camera());
+    if (m_shake > 0.01f) {
+        // A blast nearby shakes the view (a few cm, fast).
+        kke::Camera& cam = m_app->camera();
+        const float t = static_cast<float>(SDL_GetTicks()) * 0.001f;
+        const glm::vec3 j = glm::vec3(std::sin(t * 61.0f), std::sin(t * 47.0f + 1.3f), std::sin(t * 53.0f + 2.1f)) * (0.12f * m_shake);
+        cam.position += j;
+        cam.target += j * 0.5f;
+    }
     updateLocalPlayers(dt);
+    applyLighting();
+}
 
-    // Lighting from the panel.
+// Lighting from the panel.
+void ShowcaseModule::applyLighting() {
     kke::Light& sun = m_app->lighting().lights[0];
     const float az = glm::radians(m_sunAzimuth), el = glm::radians(m_sunElevation);
     sun.enabled = true;
@@ -1137,6 +1371,8 @@ void ShowcaseModule::updateAnimation(float dt) {
     m.fallHeight = m_loco->fallHeight();
     m.obstacleHeight = m_loco->lastObstacle().height;
     m.wallSide = m_loco->wallRunSide();
+    m.wallClimb = m_loco->wallClimbing();
+    m.hangVault = m_loco->hangVaulting();
     m.crouch = m_crouch;
     m.landed = m_loco->landed();
     animate(*m_anim, m, dt);
@@ -1148,13 +1384,25 @@ void ShowcaseModule::animate(kke::Animator& a, const MotionInfo& m, float dt) {
     const int cur = a.current();
     switch (m.state) {
     case State::Vault:
-        if (m_stVaultClip >= 0) {
+        if (m.hangVault && m_stClimbHigh >= 0 && m_stVaultClip >= 0) {
+            // Over a thin wall from a hang: the 2 m climb's pull-up, then
+            // the vault's second half (the body over, the legs swinging through).
+            constexpr float split = kke::Locomotion::hangVaultSplit;
+            const int clip = m.progress < split ? m_stClimbHigh : m_stVaultClip;
+            if (cur != clip) a.play(clip, 0.12f);
+            a.setProgress(m.progress < split ? 0.3f + 0.4f * m.progress / split : 0.4f + 0.6f * (m.progress - split) / (1.0f - split));
+        } else if (m_stVaultClip >= 0) {
             if (cur != m_stVaultClip) a.play(m_stVaultClip, 0.08f);
             a.setProgress(m.progress);
         } else if (cur != m_stVault) a.play(m_stVault, 0.08f);
         break;
     case State::Leap: // between two edges: the tucked fall pose, then the hang
-        if (cur != m_stFall) a.play(m_stFall, 0.1f);
+        if (m.wallClimb && m_stClimbHigh >= 0) {
+            // Running up a wall: the 2 m climb's spring and reach (feet on
+            // the wall by IK, see applyIk).
+            if (cur != m_stClimbHigh) a.play(m_stClimbHigh, 0.08f);
+            a.setProgress(0.3f * m.progress);
+        } else if (cur != m_stFall) a.play(m_stFall, 0.1f);
         break;
     case State::WallRun: {
         const int run = m.wallSide < 0.0f ? m_stWallRunL : m_stWallRunR;
@@ -1312,14 +1560,29 @@ void ShowcaseModule::batchCrates() {
 
 void ShowcaseModule::render(const kke::RenderContext& ctx) {
     m_level->draw(ctx, glm::mat4(1.0f), 0.0f, 0.85f);
+    if (m_world) m_world->draw(ctx, glm::mat4(1.0f), 0.0f, 0.9f);
     drawPool(ctx);
     if (m_lava) m_lava->render(ctx);
     for (const SceneEntry& e : m_scenes)
         if (e.ground) e.ground->draw(ctx, glm::mat4(1.0f), 0.0f, 0.95f);
     kke::RigidWorld& w = m_rigid->world();
     if (m_crateBatchIndices) m_crateBatch->draw(ctx, glm::mat4(1.0f), 0.0f, 0.7f);
+    if (m_propBatchIndices) m_propBatch->draw(ctx, glm::mat4(1.0f), 0.0f, 0.7f);
+    if (m_propMetalIndices) m_propMetal->draw(ctx, glm::mat4(1.0f), 0.85f, 0.35f);
+    if (m_rangeStatic) m_rangeStatic->draw(ctx, glm::mat4(1.0f), 0.0f, 0.85f);
+    if (m_rangeBatchIndices) m_rangeBatch->draw(ctx, glm::mat4(1.0f), 0.0f, 0.7f);
+    if (m_rangeMetalIndices) m_rangeMetal->draw(ctx, glm::mat4(1.0f), 0.8f, 0.4f);
+    if (m_vehStatic) m_vehStatic->draw(ctx, glm::mat4(1.0f), 0.0f, 0.85f);
+    if (m_vehBatchIndices) m_vehBatch->draw(ctx, glm::mat4(1.0f), 0.35f, 0.35f);
+    if (m_natureStatic) m_natureStatic->draw(ctx, glm::mat4(1.0f), 0.0f, 0.85f);
+    if (m_natureBatchIndices) m_natureBatch->draw(ctx, glm::mat4(1.0f), 0.0f, 0.8f);
+    if (m_grassBatchIndices) m_grassBatch->draw(ctx, glm::mat4(1.0f), 0.0f, 0.9f);
+    for (size_t k = 0; k < m_snowChunks.size(); ++k)
+        if (m_snowIndices[k]) m_snowChunks[k]->draw(ctx, glm::mat4(1.0f), 0.0f, 0.6f);
+    if (m_itemBatchIndices) m_itemBatch->draw(ctx, glm::mat4(1.0f), 0.15f, 0.55f);
+    if (m_equipBatchIndices) m_equipBatch->draw(ctx, glm::mat4(1.0f), 0.15f, 0.55f);
     m_cubes[3]->draw(ctx, glm::scale(w.transform(m_platform), m_platformHalf), 0.3f, 0.4f);
-    if (!m_charInstance && m_rig.mode != kke::CameraRig::Mode::FirstPerson) {
+    if (!m_charInstance && m_rig.mode != kke::CameraRig::Mode::FirstPerson && m_ride == Ride::None) {
         glm::mat4 t = glm::rotate(glm::translate(glm::mat4(1.0f), w.characterDrawPosition(m_player, m_app->fixedAlpha())), glm::radians(-m_facing), glm::vec3(0, 1, 0));
         m_capsule->draw(ctx, t, 0.0f, 0.6f);
     }
@@ -1332,17 +1595,31 @@ void ShowcaseModule::prepass(const kke::PrepassContext& ctx) {
 
 void ShowcaseModule::renderShadow(const kke::ShadowRenderContext& ctx) {
     m_level->drawShadow(ctx);
+    if (m_world) m_world->drawShadow(ctx);
     if (m_lava) m_lava->renderShadow(ctx);
     for (const SceneEntry& e : m_scenes)
         if (e.ground) e.ground->drawShadow(ctx);
     kke::RigidWorld& w = m_rigid->world();
     if (m_crateBatchIndices) m_crateBatch->drawShadow(ctx);
+    if (m_propBatchIndices) m_propBatch->drawShadow(ctx);
+    if (m_propMetalIndices) m_propMetal->drawShadow(ctx);
+    if (m_rangeStatic) m_rangeStatic->drawShadow(ctx);
+    if (m_rangeBatchIndices) m_rangeBatch->drawShadow(ctx);
+    if (m_rangeMetalIndices) m_rangeMetal->drawShadow(ctx);
+    if (m_vehStatic) m_vehStatic->drawShadow(ctx);
+    if (m_vehBatchIndices) m_vehBatch->drawShadow(ctx);
+    if (m_natureStatic) m_natureStatic->drawShadow(ctx);
+    if (m_natureBatchIndices) m_natureBatch->drawShadow(ctx); // the grass casts none (too fine to show, too many)
+    for (size_t k = 0; k < m_snowChunks.size(); ++k)
+        if (m_snowIndices[k]) m_snowChunks[k]->drawShadow(ctx);
+    if (m_itemBatchIndices) m_itemBatch->drawShadow(ctx);
+    if (m_equipBatchIndices) m_equipBatch->drawShadow(ctx);
     m_cubes[3]->drawShadow(ctx, glm::scale(w.transform(m_platform), m_platformHalf));
-    if (!m_charInstance) m_capsule->drawShadow(ctx, glm::translate(glm::mat4(1.0f), w.characterDrawPosition(m_player, m_app->fixedAlpha())));
+    if (!m_charInstance && m_ride == Ride::None) m_capsule->drawShadow(ctx, glm::translate(glm::mat4(1.0f), w.characterDrawPosition(m_player, m_app->fixedAlpha())));
 }
 
 void ShowcaseModule::renderUi() {
-    if (m_menuOpen) return; // the pause menu has the screen
+    if (m_menuOpen || m_invOpen || m_mapOpen) return; // the pause menu, the bag or the map has the screen
     const float s = ImGui::GetFontSize() / 13.0f;
     // On a narrow screen (a phone, a small window) the score bar reaches
     // the left edge: start under it, folded (a tap on the title opens it).
@@ -1371,9 +1648,9 @@ void ShowcaseModule::renderUi() {
     if (m_wantCrouch != m_crouch) ImGui::TextColored(ImVec4(1, 0.8f, 0.3f, 1), "No room to stand up");
     ImGui::Text("Rigid bodies %zu (%zu awake), %.2f ms", w.bodyCount(), w.activeBodyCount(), w.lastStepMs());
     if (ImGui::CollapsingHeader("Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::TextUnformatted("Keyboard: WASD move, Shift sprint, Alt walk, Space jump / vault / climb,\nC crouch / let go, mouse look, wheel zoom, V view, left click shoot, E push, R reset,\nQ ping, P talk, G/B/N toys, F1 engine panels, Esc menu (frees the mouse).\n"
-                               "Controller: left stick move, right stick look, A jump / vault / climb, B crouch,\nL3 sprint, RT shoot, Y push, X reset, R3 view, d-pad up/down zoom,\n"
-                               "d-pad left ping, LB talk, RB/View toys (hold View: clear), Start menu.");
+        ImGui::TextUnformatted("Keyboard: WASD move, Shift sprint, Alt walk, Space jump / vault / climb,\nC crouch / let go, mouse look, wheel zoom, V view, left click shoot or throw, E push,\nF pick up / put down, G spawn menu, R reset, Q ping, P talk, B/N toys, F1 engine panels,\nEsc menu (frees the mouse).\n"
+                               "Controller: left stick move, right stick look, A jump / vault / climb, B crouch,\nL3 sprint, RT shoot or throw, Y push, X pick up / put down, RB spawn menu,\n"
+                               "R3 view, d-pad up/down zoom, d-pad left ping, LB talk, Start or View menu.");
         ImGui::SliderFloat("Mouse sensitivity", &m_mouseSensitivity, 0.02f, 0.5f, "%.2f deg/px");
         ImGui::SliderFloat("Stick / gyro speed", &m_stickSpeed, 45.0f, 540.0f, "%.0f deg/s");
         if (ImGui::Button("Left-handed keys (mirror)")) kke::InputModule::mirrorKeyboard(m_input->map(0));

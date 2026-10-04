@@ -28,6 +28,7 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [EQUIPMENT.md](EQUIPMENT.md) | Holding and wearing things: sockets and slots, grips in the palm with the fingers closed round them, and arms that never go through the body |
 | [COMBAT.md](COMBAT.md) | Melee combat and crowds: attacks, blocks, parries, poise, hordes that wait their turn |
 | [JIGGLE.md](JIGGLE.md) | Jiggle physics for bones, skin and soft bodies |
+| [AUTO_RIG.md](AUTO_RIG.md) | Auto-rigging: a skeleton and skin weights for a body that has none (an OBJ), so it plays UAL clips |
 | [PHYSICS_BRIDGE.md](PHYSICS_BRIDGE.md) | How FEMFX deformable pieces and Jolt rigid bodies and characters meet |
 | [CLOTH.md](CLOTH.md) | Cloth: capes, flags, blankets, nets; fabric presets, no-clipping protection levels, what it costs |
 | [HAIR.md](HAIR.md) | Hair: guide strands on Jolt soft bodies, styles, drawn on the GPU, no clipping into the head, what it costs |

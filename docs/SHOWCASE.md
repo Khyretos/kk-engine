@@ -32,13 +32,36 @@ packs the course is the plain boxes it is built from.
 The **Scenes** panel visits Synty-built levels far from the course
 ([SCENES.md](SCENES.md)).
 
+The **firing range** (north of the yard, the world map's second zone) has
+a rifle, a pistol, rounds and grenades on its bench. Hold right mouse (LT)
+to aim and fire at steel plates, FEMFX glass and stone walls that break for
+real, and red barrels that blow up and set each other off. How it works is
+in [games/showcase/README.md](../games/showcase/README.md#the-firing-range).
+
+At the **race track** three cars (a hatch, a coupe, a truck) wait in the
+car park: get in (F / X) and drive the oval; the HUD times each lap. At the
+**airfield** a stunt plane waits on the runway: throttle up and it takes
+off by itself; land on the runway or a flat field, or crash it in a
+fireball. See [games/showcase/README.md](../games/showcase/README.md#cars-and-the-plane).
+
+The **parkour park** has a section for each move: a vault field, walls to
+run up (wall climb), thin walls to vault over from a hang, a wall to
+shimmy round, pillars to leap between, walls to run along and a row of
+rooftops. See [games/showcase/README.md](../games/showcase/README.md#the-parkour-park).
+
+In the **nature park** the trees and grass sway in the wind. Take the axe
+from the chopping block, fell a tree in four swings, split its logs into
+firewood, and pick flowers in the meadow. Up the mountain the **snow
+field** keeps every footprint and tyre track. See
+[games/showcase/README.md](../games/showcase/README.md#the-nature-park-and-the-snow-field).
+
 ## HUD and menu
 
 - The HUD (RmlUi, `ui/showcase_hud.rml`) shows what the character is
   doing (running, vaulting, hanging, wall running, and so on) with the
   measured speed. Near a station it shows the station's hint, plus live
   numbers where there are some, such as how much of the lava block is left.
-- **Esc**, or **Start** or **View** on a controller, opens the pause menu
+- **Esc**, or **Start** on a controller (View opens the bag), opens the pause menu
   every KKE game shares ([GAME_SHELL.md](GAME_SHELL.md)). The HUD's corner
   shows the menu button for the device you use. The menu has Resume, Back
   to the start, 1 to 4 players (split screen), engine panels (developer
@@ -58,17 +81,25 @@ The **Scenes** panel visits Synty-built levels far from the course
 | Sprint, walk | Left Shift, Left Alt | L3 (toggle), tilt the stick a little |
 | Jump, vault, climb | Space | A |
 | Crouch, let go of a ledge | C | B |
-| Shoot, push | Left click, E | RT, Y |
+| Shoot (or throw what you hold), push | Left click, E | RT, Y |
+| Aim a gun (crosshair, closer camera) | Right mouse | LT |
+| Get in or out of a car or the plane | F | X |
+| Drive: steer, gas, brake or reverse, handbrake | A D, W, S, Space | Left stick, RT, LT, A |
+| Fly: stick, throttle up / down | W A S D, Shift / Ctrl | Left stick, RT / LT |
+| Pick up / put down (items go in your bag) | F | X |
+| Bag: inventory and equipment | Tab or I | View |
+| World map (travel to a zone) | M | pause menu > World map |
+| Spawn menu (crates, barrels, balls, a dummy; clear, reset the world) | G | RB |
 | First / third person | V | R3 |
 | Camera distance | Mouse wheel | D-pad up / down |
-| Reset crates and player | R | X |
+| Reset the world | R | the spawn menu's last row |
 | Ping (hear the walls) | Q | D-pad left |
 | Push to talk (voice builds) | P | LB |
-| Lua toys: tower, ball, clear | G, B, N (or hold B) | RB, View, hold View a second |
+| Lua toys: tower, ball, clear | H, B, N (or hold B) | the spawn menu |
 | Break-the-targets | T | D-pad right |
-| Pause menu | Esc | Start or View |
+| Pause menu | Esc | Start |
 
-Split-screen players 2 to 4 move, jump, crouch, shoot, push, reset and
+Split-screen players 2 to 4 move, jump, crouch, shoot, push and
 zoom with their own controller. The full list, and why each key is where
 it is, is in [games/showcase/README.md](../games/showcase/README.md).
 
@@ -80,6 +111,13 @@ it is, is in [games/showcase/README.md](../games/showcase/README.md).
 | `KKE_START_AT=x,y,z[,yaw]` | Start there, facing yaw (the camera too) |
 | `KKE_DEMO_HANG=1` | Jump, hang, shimmy around the end and jump back at the lane's 3 m wall |
 | `KKE_DEMO_TRICKS=1` | Wall run and wall jump, then ledge leaps along the pillars and the leap up to the beam |
+| `KKE_DEMO_WORLD=1` | Shows the world map, then visits every zone in turn |
+| `KKE_DEMO_ITEMS=1` | At the supply table: picks things up, opens the bag, equips an axe, a rifle, a helmet, a canteen and a lantern, then shows them worn |
+| `KKE_DEMO_GUNS=1` | At the firing range: rifle at the plates, the glass and the stone walls, then the red barrels, the pistol and a grenade |
+| `KKE_DEMO_DRIVE=1` | Drives a timed lap of the race track, then flies the plane round the airfield and crashes it (`=2`: only the plane) |
+| `KKE_DEMO_PARKOUR=1` | Wall climb, hang vault, shimmy round a corner and a leap, then the rooftops, in the parkour park (`=2`, `=3`, `=4` start later; `KKE_DEMO_PARKOUR_FREEZE=wallclimb`, `hangvault` or `shimmy` stops mid-move for a screenshot) |
+| `KKE_DEMO_ONLINE=1` | With `KKE_NET=host` on one copy and `KKE_NET=join:ADDRESS` on another: the guest asks the host for a crate, lifts it, carries it and throws it; both log what they see |
+| `KKE_DEMO_NATURE=1` | Takes the axe, fells a tree, splits a log, picks three flowers, then walks a trail through the snow and looks back at it |
 | `KKE_DEMO_BRIDGE=1` | Drops an iron ball on the yard's glass, then rolls one into a crate, and logs how far the crates moved |
 | `KKE_SPLIT=2..4`, `KKE_OVERHEAD=1` | Local split screen, and an overhead picture-in-picture view |
 | `KKE_MAIN_MENU=pause` | Opens the pause menu after 1.5 s (`KKE_MAIN_MENU=0`: no title screen) |

@@ -54,7 +54,9 @@ void moundMesh(std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx) {
 } // namespace
 
 void SeaDemoModule::buildWorld() {
+#if KKE_ENABLE_FEMFX
     m_physics = m_app->getModule<kke::PhysicsModule>();
+#endif
     {
         std::vector<kke::Vertex> v;
         std::vector<uint32_t> idx;

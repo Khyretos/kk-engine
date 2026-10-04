@@ -3,6 +3,7 @@
 #include "kke/AnimRig.h"
 #include "kke/Application.h"
 #include "kke/AssetCatalog.h"
+#include "kke/AutoRig.h"
 #include "kke/Log.h"
 #include "kke/SceneLoader.h"
 #include "kke/modules/DemoPanelModule.h"
@@ -13,6 +14,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -52,6 +54,19 @@ const Fruit kFruit[] = {
 const glm::vec3 kBallColors[] = { { 0.98f, 0.8f, 0.1f }, { 0.15f, 0.55f, 0.95f }, { 0.2f, 0.8f, 0.35f },
                                   { 0.95f, 0.45f, 0.1f }, { 0.75f, 0.3f, 0.9f },  { 0.95f, 0.95f, 0.95f } };
 
+// Her hair: "Bald", then kke::hairstyleOnHead names (docs/HAIR.md).
+const char* const kHairStyles[] = { "Bald", "box braids", "afro", "puff", "high-top fade", "twist-out", "bantu knots", "cornrows", "locs",
+                                    "two-strand twists", "straight", "long", "wavy", "curly", "short" };
+constexpr int kHairStyleCount = static_cast<int>(sizeof(kHairStyles) / sizeof(kHairStyles[0]));
+// Root and tip colours (sRGB).
+struct HairColour { const char* name; glm::vec3 root, tip; };
+const HairColour kHairColours[] = {
+    { "Black", { 0.03f, 0.025f, 0.02f }, { 0.08f, 0.06f, 0.05f } },
+    { "Dark brown", { 0.1f, 0.06f, 0.04f }, { 0.22f, 0.14f, 0.08f } },
+    { "Auburn", { 0.25f, 0.08f, 0.04f }, { 0.5f, 0.2f, 0.08f } },
+    { "Blonde", { 0.45f, 0.3f, 0.14f }, { 0.78f, 0.6f, 0.36f } },
+};
+
 float rand01(uint32_t& s) {
     s ^= s << 13;
     s ^= s >> 17;
@@ -74,7 +89,211 @@ void flatShape(kke::DynamicMeshRenderer& r, float y, float radius, int sides, co
     r.upload(v, idx);
 }
 
+// The realistic body Kees picked (female_body.zip from the asset share: a
+// Character Creator 4 woman, free on CGTrader, never committed). Looks in
+// <packs>/female_body for a rigged FBX first, then any FBX or OBJ.
+// KKE_JIGGLE_BODY=<file> picks one directly.
+std::string findRealisticBody(const std::string& packDir) {
+    if (const char* e = std::getenv("KKE_JIGGLE_BODY"); e && *e) return e;
+    if (packDir.empty()) return {};
+    std::error_code ec;
+    const std::filesystem::path dir = std::filesystem::path(packDir) / "female_body";
+    if (!std::filesystem::is_directory(dir, ec)) return {};
+    std::string fbx, obj;
+    for (auto it = std::filesystem::recursive_directory_iterator(dir, ec); !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+        if (!it->is_regular_file(ec)) continue;
+        std::string ext = it->path().extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (ext == ".fbx" && fbx.empty()) fbx = it->path().string();
+        else if (ext == ".obj" && obj.empty()) obj = it->path().string();
+    }
+    return fbx.empty() ? obj : fbx;
+}
+
+// Character Creator's eye occlusion, tear lines and eyelashes are thin
+// see-through shells drawn with opacity maps; drawn opaque they'd cover the
+// eyes in grey, so they go.
+void dropSeeThroughShells(kke::ModelData& m) {
+    auto seeThrough = [&](const kke::ModelMesh& mesh) {
+        if (mesh.material >= m.materials.size()) return false;
+        const std::string& n = m.materials[mesh.material].name;
+        return n.find("Occlusion") != std::string::npos || n.find("Tearline") != std::string::npos ||
+               n.find("Eyelash") != std::string::npos;
+    };
+    m.meshes.erase(std::remove_if(m.meshes.begin(), m.meshes.end(), seeThrough), m.meshes.end());
+}
+
 } // namespace
+
+// ---------------------------------------------------------------------
+// Hair
+
+// The head as a sphere, fitted (least squares) to the head's skin above
+// the brows, and the scalp's triangles for the painted cap.
+void JiggleDemoModule::findHead(const kke::ModelData& body) {
+    m_head = HeadShape{};
+    const kke::ModelMesh* head = nullptr;
+    for (const kke::ModelMesh& mesh : body.meshes)
+        if (mesh.material < body.materials.size() && body.materials[mesh.material].name.find("Skin_Head") != std::string::npos) head = &mesh;
+    if (!head || head->vertices.empty()) return;
+    float top = -1e9f;
+    for (const kke::ModelVertex& v : head->vertices) top = std::max(top, v.position.y);
+    // x^2 + y^2 + z^2 = 2 c.p + (r^2 - |c|^2): linear in (c, k).
+    glm::dmat4 ata(0.0);
+    glm::dvec4 atb(0.0);
+    for (const kke::ModelVertex& v : head->vertices) {
+        if (v.position.y < top - 0.1f) continue;
+        const glm::dvec4 row(2.0 * v.position.x, 2.0 * v.position.y, 2.0 * v.position.z, 1.0);
+        ata += glm::outerProduct(row, row);
+        atb += row * static_cast<double>(glm::dot(v.position, v.position));
+    }
+    const glm::dvec4 x = glm::inverse(ata) * atb;
+    const glm::dvec3 c(x);
+    const double r2 = x.w + glm::dot(c, c);
+    if (!(r2 > 0.0)) return;
+    m_head.centre = glm::vec3(c);
+    m_head.radius = static_cast<float>(std::sqrt(r2));
+    if (m_head.radius < 0.05f || m_head.radius > 0.2f) return; // not a head
+    m_head.found = true;
+    // The chest and breasts below the shoulders, above the waist.
+    m_head.torsoMin = glm::vec3(1e9f);
+    m_head.torsoMax = glm::vec3(-1e9f);
+    for (const kke::ModelMesh& mesh : body.meshes)
+        for (const kke::ModelVertex& v : mesh.vertices) {
+            const glm::vec3 d = v.position - m_head.centre;
+            if (d.y > -0.3f || d.y < -0.62f || std::abs(d.x) > 0.17f) continue; // below the shoulders: their capsule is rounder
+            m_head.torsoMin = glm::min(m_head.torsoMin, v.position);
+            m_head.torsoMax = glm::max(m_head.torsoMax, v.position);
+        }
+    for (const kke::ModelVertex& v : head->vertices) m_head.scalp.push_back({ v.position, glm::vec3(0.0f), v.normal, glm::vec2(0.0f) });
+    m_head.scalpIndices = head->indices;
+}
+
+void JiggleDemoModule::buildHair() {
+#if KKE_ENABLE_JOLT
+    if (m_world && m_hair) m_world->removeHair(m_hair);
+    m_hair = 0;
+    m_hairDrawn.reset();
+    m_scalpCap.reset();
+    if (!m_head.found || m_hairStyle <= 0) return;
+    if (!m_world) {
+        m_world = std::make_unique<kke::RigidWorld>();
+        // The head (moves with her) and her neck and shoulders, seen only by hair.
+        kke::RigidWorld::BodyDesc hb;
+        hb.shape = kke::RigidWorld::Shape::Sphere;
+        hb.motion = kke::RigidWorld::Motion::Kinematic;
+        hb.clothOnly = true;
+        hb.radius = m_head.radius;
+        hb.position = glm::vec3(m_headNow[3]);
+        m_headCollider = m_world->add(hb);
+        // Rest pose, model space; they move with her chest (m_chestNow).
+        const glm::vec3 c = m_head.centre;
+        auto proxy = [&](kke::RigidWorld::BodyDesc b) {
+            const glm::vec3 pos = b.position;
+            const glm::quat rot = b.rotation;
+            b.motion = kke::RigidWorld::Motion::Kinematic;
+            b.clothOnly = true;
+            b.position = glm::vec3(m_chestNow * glm::vec4(pos, 1.0f));
+            b.rotation = glm::quat_cast(glm::mat3(m_chestNow)) * rot;
+            m_proxies.push_back({ m_world->add(b), pos, rot });
+        };
+        kke::RigidWorld::BodyDesc neck;
+        neck.shape = kke::RigidWorld::Shape::Capsule;
+        neck.radius = 0.055f;
+        neck.halfHeight = 0.05f;
+        neck.position = c + glm::vec3(0.0f, -0.17f, 0.0f);
+        proxy(neck);
+        kke::RigidWorld::BodyDesc shoulders = neck; // across, from shoulder to shoulder
+        shoulders.radius = 0.065f;
+        shoulders.halfHeight = 0.13f;
+        shoulders.position = c + glm::vec3(0.0f, -0.26f, 0.0f);
+        shoulders.rotation = glm::angleAxis(1.5707963f, glm::vec3(0, 0, 1));
+        proxy(shoulders);
+        kke::RigidWorld::BodyDesc torso; // chest, breasts and back
+        torso.shape = kke::RigidWorld::Shape::Box;
+        torso.halfExtents = glm::max((m_head.torsoMax - m_head.torsoMin) * 0.5f - glm::vec3(0.01f), glm::vec3(0.02f));
+        torso.position = (m_head.torsoMin + m_head.torsoMax) * 0.5f;
+        proxy(torso);
+    }
+    kke::HairDesc d;
+    d.style.rootColor = kHairColours[m_hairColour].root;
+    d.style.tipColor = kHairColours[m_hairColour].tip;
+    d.bindPose = m_headBind;
+    const glm::vec3 centre(m_headBind * glm::vec4(0, 0, 0, 1));
+    const glm::vec3 front = glm::normalize(glm::mat3(m_headBind) * m_head.front);
+    if (!kke::hairstyleOnHead(d, kHairStyles[m_hairStyle], centre, m_head.radius, 220, glm::vec3(0, 1, 0), front)) {
+        kke::log::get(name())->warn("hair: no style '{}'", kHairStyles[m_hairStyle]);
+        return;
+    }
+    // Long hair rests falling a little back, so it lies down her back
+    // instead of through it (the rest pose only knows the head).
+    d.down = glm::normalize(glm::vec3(0.0f, -1.0f, 0.0f) - front * 0.4f);
+    m_hair = m_world->addHair(d);
+    m_hairFresh = true;
+    kke::log::get(name())->info("hair: '{}', {} guides on a head of {:.3f} m at ({:.3f}, {:.3f}, {:.3f})", kHairStyles[m_hairStyle], d.roots.size(),
+                                m_head.radius, centre.x, centre.y, centre.z);
+    m_hairDrawn = std::make_unique<kke::HairRenderer>(*m_app);
+    m_hairDrawn->build(d);
+    // The scalp painted the root colour where hair grows (docs/HAIR.md: skin
+    // between the drawn hairs reads as thin hair): the head's own triangles
+    // near a root, lifted a hair's width off the skin, in head space.
+    float spacing = 0.03f;
+    if (d.roots.size() > 1) spacing = std::sqrt(4.0f * m_head.radius * m_head.radius * 2.4f / static_cast<float>(d.roots.size()));
+    if (d.style.plait > 0) spacing *= 0.5f; // braids and locs: parts show between them
+    const glm::mat4 toHead = glm::inverse(m_headBind);
+    std::vector<char> covered(m_head.scalp.size(), 0);
+    for (size_t i = 0; i < m_head.scalp.size(); ++i)
+        for (const glm::vec3& r : d.roots)
+            if (glm::distance(m_head.scalp[i].position, r) < 1.4f * spacing) { covered[i] = 1; break; }
+    std::vector<kke::Vertex> v;
+    std::vector<uint32_t> idx;
+    std::vector<uint32_t> remap(m_head.scalp.size(), ~0u);
+    for (size_t t = 0; t + 2 < m_head.scalpIndices.size(); t += 3) {
+        const uint32_t a = m_head.scalpIndices[t], b = m_head.scalpIndices[t + 1], c = m_head.scalpIndices[t + 2];
+        if (!covered[a] || !covered[b] || !covered[c]) continue;
+        for (uint32_t k : { a, b, c }) {
+            if (remap[k] == ~0u) {
+                remap[k] = static_cast<uint32_t>(v.size());
+                const kke::Vertex& s = m_head.scalp[k];
+                v.push_back({ glm::vec3(toHead * glm::vec4(s.position + s.normal * 0.0015f, 1.0f)), d.style.rootColor,
+                              glm::normalize(glm::mat3(toHead) * s.normal), glm::vec2(0.0f) });
+            }
+            idx.push_back(remap[k]);
+        }
+    }
+    if (!idx.empty()) {
+        m_scalpCap = std::make_unique<kke::DynamicMeshRenderer>(*m_app);
+        m_scalpCap->upload(v, idx);
+    }
+    m_world->setTransform(m_headCollider, glm::vec3(m_headNow[3]), glm::quat_cast(glm::mat3(m_headNow)));
+    m_world->setHairJoint(m_hair, m_headNow);
+#endif
+}
+
+void JiggleDemoModule::updateHair(float dt) {
+#if KKE_ENABLE_JOLT
+    if (!m_world || !m_hair) return;
+    const glm::vec3 centre(m_headNow[3]);
+    const glm::quat headRot = glm::quat_cast(glm::mat3(m_headNow)), chest = glm::quat_cast(glm::mat3(m_chestNow));
+    if (m_hairFresh) {
+        // Where she is now, at rest, so nothing sweeps in from the rest pose.
+        m_world->setTransform(m_headCollider, centre, headRot);
+        for (const Proxy& p : m_proxies) m_world->setTransform(p.id, glm::vec3(m_chestNow * glm::vec4(p.pos, 1.0f)), chest * p.rot);
+        m_world->setHairJoint(m_hair, m_headNow);
+        m_world->resetHair(m_hair);
+        m_hairFresh = false;
+    } else {
+        m_world->moveKinematic(m_headCollider, centre, headRot, dt);
+        for (const Proxy& p : m_proxies) m_world->moveKinematic(p.id, glm::vec3(m_chestNow * glm::vec4(p.pos, 1.0f)), chest * p.rot, dt);
+    }
+    m_world->setHairJoint(m_hair, m_headNow);
+    m_world->step(dt);
+    m_world->hairPositions(m_hair, m_guides);
+    m_hairDrawn->update(m_guides, m_headNow);
+#else
+    (void)dt;
+#endif
+}
 
 std::vector<kke::ModuleDependency> JiggleDemoModule::dependencies() const {
     return { { std::type_index(typeid(kke::ModelModule)), true, "draws the characters" } };
@@ -92,6 +311,10 @@ void JiggleDemoModule::init(kke::Application& app) {
     flatShape(*m_floor, -0.004f, 12.0f, 4, glm::vec3(0.32f, 0.34f, 0.37f));
     resetJelly();
 
+    // KKE_JIGGLE_HAIR=<style> (or "bald"): her hair at the start, for screenshots.
+    if (const char* e = std::getenv("KKE_JIGGLE_HAIR"))
+        for (int i = 0; i < kHairStyleCount; ++i)
+            if (SDL_strcasecmp(e, kHairStyles[i]) == 0) m_hairStyle = i;
     m_tissue.bust = 0.075f;
     m_tissue.glutes = 0.06f;
     m_tissue.hips = 0.03f;
@@ -115,6 +338,7 @@ void JiggleDemoModule::init(kke::Application& app) {
 void JiggleDemoModule::setScene(Scene s) {
     m_scene = s;
     for (Dancer& d : m_dancers) m_models->setVisible(d.instance, s == Scene::Body && (d.jiggle || m_showTwin));
+    if (m_staticBody) m_models->setVisible(m_staticBody, s == Scene::Body);
     if (!m_camera) return;
     if (s == Scene::Jelly) m_camera->setView(glm::vec3(0.0f, 0.3f, 0.0f), 2.6f, -0.45f, 0.5f);
     else m_camera->setView(glm::vec3(0.0f, 0.95f, 0.0f), 3.4f, -0.12f, 0.0f);
@@ -122,6 +346,8 @@ void JiggleDemoModule::setScene(Scene s) {
     if (const char* v = std::getenv("KKE_JIGGLE_VIEW")) {
         float yaw = 0.0f, pitch = -0.12f, dist = 3.4f;
         if (std::sscanf(v, "%f,%f,%f", &yaw, &pitch, &dist) >= 1) m_camera->setView(m_camera->target(), dist, pitch, yaw);
+        if (s == Scene::Body) m_sideYawOffset = yaw; // with "Side view" on: from her side, turned this far
+
     }
 }
 
@@ -206,33 +432,88 @@ void JiggleDemoModule::setupBodies() {
     }
     std::vector<std::string> searched;
     const std::string packDir = kke::findAssetFolder("assets/synty", { "KKE_ASSETS_DIR", "KKE_SYNTY_DIR" }, base ? base : "", &searched);
-    const kke::AssetCatalog catalog = packDir.empty() ? kke::AssetCatalog{} : kke::AssetCatalog::scan(packDir);
-    const kke::CatalogAsset* asset = nullptr;
-    if (const char* want = std::getenv("KKE_JIGGLE_CHARACTER")) asset = catalog.find(want);
-    for (const char* c : { "SK_Character_Female_Gypsy", "SK_Character_Female_Peasant_01", "SK_Character_HipsterGirl", "SK_Character_Female_Druid",
-                           "SK_Character_Dummy_Female_01" })
-        if (!asset) asset = catalog.find(c, { "POLYGON_Fantasy_Characters", "POLYGON_City_Characters", "POLYGON_Prototype" });
-    if (!asset) {
-        m_bodyStatus = "No female Synty character found. Put POLYGON Fantasy Characters (or City Characters) in assets/synty/ "
-                       "or set KKE_ASSETS_DIR.";
-        log->info("{}", m_bodyStatus); // optional pack; the panel says so too
-        return;
-    }
     kke::ModelData ual, body;
+    // The realistic body first; a Synty character when it isn't there.
+    const std::string realistic = std::getenv("KKE_JIGGLE_CHARACTER") ? std::string() : findRealisticBody(packDir);
     try {
         ual = kke::loadModel(ualFile);
-        body = kke::loadModel(asset->path, kke::packLoadOptions(catalog, *asset));
     } catch (const std::exception& e) {
         m_bodyStatus = e.what();
         log->error("{}", m_bodyStatus);
         return;
     }
-    m_characterName = asset->name;
+    try {
+        if (!realistic.empty()) {
+            body = kke::loadModel(realistic);
+            dropSeeThroughShells(body);
+            // OBJ has no units; Character Creator writes centimetres.
+            if (!body.isSkinned() && body.boundsMax.y - body.boundsMin.y > 10.0f) {
+                for (kke::ModelMesh& mesh : body.meshes)
+                    for (kke::ModelVertex& v : mesh.vertices) v.position *= 0.01f;
+                body.boundsMin *= 0.01f;
+                body.boundsMax *= 0.01f;
+            }
+            m_characterName = "Realistic body (" + std::filesystem::path(realistic).filename().string() + ")";
+        }
+    } catch (const std::exception& e) {
+        log->warn("{}: {}", realistic, e.what());
+        body = kke::ModelData{};
+    }
+    bool realisticBody = false;
+    if (!body.meshes.empty() && !body.isSkinned()) {
+        // No skeleton in the file (the OBJ): fit UAL's skeleton to her and
+        // weight the skin to it (kke::autoRigHumanoid, docs/AUTO_RIG.md).
+        const auto t0 = std::chrono::steady_clock::now();
+        const kke::AutoRigReport rig = kke::autoRigHumanoid(body, ual);
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        if (!rig.ok) {
+            m_bodyStatus = m_characterName + " could not be rigged (" + rig.reason + "), so it stands still.";
+            log->warn("{}", m_bodyStatus);
+            findHead(body);
+            m_staticBody = m_models->spawn(m_models->add(std::move(body), "jiggle:realistic"), glm::mat4(1.0f));
+            m_models->setOverlayEnabled(m_staticBody, false);
+            m_headBind = m_headNow = glm::translate(glm::mat4(1.0f), m_head.centre);
+            buildHair();
+            return;
+        }
+        log->info("'{}': auto-rigged in {:.0f} ms: {} skin points, scale {:.2f}, arms lifted {:.0f} / {:.0f} deg into the T-pose", m_characterName, ms,
+                  rig.points, static_cast<double>(rig.scale), static_cast<double>(rig.armDropDegrees[0]), static_cast<double>(rig.armDropDegrees[1]));
+        realisticBody = true;
+    }
+    if (body.meshes.empty()) {
+        const kke::AssetCatalog catalog = packDir.empty() ? kke::AssetCatalog{} : kke::AssetCatalog::scan(packDir);
+        const kke::CatalogAsset* asset = nullptr;
+        if (const char* want = std::getenv("KKE_JIGGLE_CHARACTER")) asset = catalog.find(want);
+        for (const char* c : { "SK_Character_Female_Gypsy", "SK_Character_Female_Peasant_01", "SK_Character_HipsterGirl", "SK_Character_Female_Druid",
+                               "SK_Character_Dummy_Female_01" })
+            if (!asset) asset = catalog.find(c, { "POLYGON_Fantasy_Characters", "POLYGON_City_Characters", "POLYGON_Prototype" });
+        if (!asset) {
+            m_bodyStatus = "No body found. Put female_body (or a female Synty character: POLYGON Fantasy Characters, City Characters) "
+                           "in assets/synty/ or set KKE_ASSETS_DIR.";
+            log->info("{}", m_bodyStatus); // optional pack; the panel says so too
+            return;
+        }
+        try {
+            body = kke::loadModel(asset->path, kke::packLoadOptions(catalog, *asset));
+        } catch (const std::exception& e) {
+            m_bodyStatus = e.what();
+            log->error("{}", m_bodyStatus);
+            return;
+        }
+        m_characterName = asset->name;
+    }
     // The shape and the soft-tissue bones first, then the clips (the new
     // bones have no UAL counterpart and stay at rest in them).
-    const kke::HumanoidJiggleSetup setup = kke::addHumanoidSoftTissue(body, m_tissue);
+    // Her shape is the artist's: soft-tissue bones only, no added volume.
+    kke::HumanoidSoftTissue tissue = m_tissue;
+    if (realisticBody) tissue.bust = tissue.glutes = tissue.hips = 0.0f;
+    const kke::HumanoidJiggleSetup setup = kke::addHumanoidSoftTissue(body, tissue);
+    if (realisticBody) {
+        findHead(body);
+        m_head.front = kke::modelForward(body); // the rig turned her to face as UAL does
+    }
     // A character without a breast or belly bone just jiggles less: info.
-    for (const std::string& m : setup.missing) log->info("'{}': soft tissue: no {}", asset->name, m);
+    for (const std::string& m : setup.missing) log->info("'{}': soft tissue: no {}", m_characterName, m);
     const kke::BoneMatch match = kke::matchBones(ual, body);
     m_rig = kke::ModelData{};
     m_rig.bones = body.bones;
@@ -241,10 +522,10 @@ void JiggleDemoModule::setupBodies() {
     m_rig.animations = kke::retargetAnimations(ual, body, match);
     m_bones = setup.chains.size();
     m_zones = setup.zones.size();
-    log->info("'{}': {} jiggle bones, {} skin zones, {} of {} bones take the UAL clips", asset->name, m_bones, m_zones, match.matched,
+    log->info("'{}': {} jiggle bones, {} skin zones, {} of {} bones take the UAL clips", m_characterName, m_bones, m_zones, match.matched,
               body.bones.size());
 
-    const kke::ModelModule::ModelId id = m_models->add(std::move(body), "jiggle:" + asset->name);
+    const kke::ModelModule::ModelId id = m_models->add(std::move(body), "jiggle:" + m_characterName);
     if (!id) return;
     m_animSet = std::make_unique<kke::AnimationSet>(m_rig);
     m_anim = std::make_unique<kke::Animator>(*m_animSet);
@@ -270,6 +551,25 @@ void JiggleDemoModule::setupBodies() {
         m_dancers.push_back(std::move(d));
     }
     m_bodiesReady = true;
+    if (m_head.found) {
+        // Hair on her head: it follows the head bone, its colliders the chest.
+        auto find = [&](const char* n) {
+            for (size_t b = 0; b < m_rig.bones.size(); ++b)
+                if (kke::canonicalBoneName(m_rig.bones[b].name) == n) return static_cast<int>(b);
+            return -1;
+        };
+        const std::vector<glm::mat4> rest = kke::computeRestPose(m_rig);
+        m_headBone = find("head");
+        m_chestBone = find("spine_03");
+        if (m_headBone >= 0 && m_chestBone >= 0) {
+            m_headRestInv = glm::inverse(rest[size_t(m_headBone)]);
+            m_chestRestInv = glm::inverse(rest[size_t(m_chestBone)]);
+        } else {
+            m_headBone = m_chestBone = -1;
+        }
+        m_headBind = m_headNow = glm::translate(glm::mat4(1.0f), m_head.centre);
+        buildHair();
+    }
 }
 
 void JiggleDemoModule::jump() {
@@ -335,7 +635,19 @@ void JiggleDemoModule::updateBodies(float dt) {
             m_stretchNow = std::max(d.rig.maxStretchNow(), m_stretchNow * std::exp(-dt));
             if (std::getenv("KKE_JIGGLE_TRACE")) kke::log::get(name())->info("t={:.2f} speed={:.2f} y={:.2f} swing={:.1f} stretch={:.3f}", m_tourTime, m_speed, m_jumpY, d.rig.maxSwingDegrees(), d.rig.maxStretchNow());
         }
-        if (std::vector<glm::mat4>* locals = m_models->boneLocals(d.instance)) kke::poseToLocals(pose, *locals);
+        if (std::vector<glm::mat4>* locals = m_models->boneLocals(d.instance)) {
+            kke::poseToLocals(pose, *locals);
+            if (d.jiggle && m_headBone >= 0) {
+                // Where her head and chest are now, for the hair.
+                std::vector<glm::mat4> world(locals->size());
+                for (size_t b = 0; b < world.size(); ++b) {
+                    const int p = m_rig.bones[b].parent;
+                    world[b] = p >= 0 ? world[size_t(p)] * (*locals)[b] : (*locals)[b];
+                }
+                m_headNow = toWorld * world[size_t(m_headBone)] * m_headRestInv * m_headBind;
+                m_chestNow = toWorld * world[size_t(m_chestBone)] * m_chestRestInv;
+            }
+        }
         // The camera follows the jiggling one (not her jumps: that would hide them).
         if (d.jiggle && m_follow && m_camera) {
             const glm::vec3 want(pos.x, 1.0f, pos.z);
@@ -364,7 +676,18 @@ void JiggleDemoModule::update(const kke::UpdateContext& ctx) {
     m_sceneIndex = m_scene == Scene::Jelly ? 0 : 1;
     const float dt = std::min(ctx.dt, 0.1f);
     if (m_scene == Scene::Jelly) updateJelly(dt);
-    else updateBodies(dt);
+    else {
+        updateBodies(dt);
+        if (dt > 0.0f) updateHair(dt);
+    }
+}
+
+void JiggleDemoModule::compute(VkCommandBuffer cmd) {
+#if KKE_ENABLE_JOLT
+    if (m_scene == Scene::Body && m_hairDrawn) m_hairDrawn->compute(cmd); // the hairs' points, before the passes draw them
+#else
+    (void)cmd;
+#endif
 }
 
 void JiggleDemoModule::render(const kke::RenderContext& ctx) {
@@ -391,10 +714,22 @@ void JiggleDemoModule::render(const kke::RenderContext& ctx) {
         }
     }
     if (!m_sphereScratch.empty()) m_spheres->draw(ctx, m_sphereScratch);
+#if KKE_ENABLE_JOLT
+    if (m_scene == Scene::Body && m_hairDrawn) {
+        if (m_scalpCap) m_scalpCap->draw(ctx, m_headNow, 0.0f, 0.8f);
+        m_hairDrawn->draw(ctx);
+    }
+#endif
 }
 
 void JiggleDemoModule::renderShadow(const kke::ShadowRenderContext& ctx) {
     if (m_scene == Scene::Jelly) m_jellyMesh->drawShadow(ctx);
+#if KKE_ENABLE_JOLT
+    if (m_scene == Scene::Body && m_hairDrawn) {
+        if (m_scalpCap) m_scalpCap->drawShadow(ctx, m_headNow);
+        m_hairDrawn->drawShadow(ctx, -m_app->lighting().lights[0].direction);
+    }
+#endif
 }
 
 void JiggleDemoModule::defineInput() {
@@ -502,6 +837,12 @@ void JiggleDemoModule::buildPanel() {
     b.sectionIf(body);
     b.text([this] { return m_bodiesReady ? m_characterName : m_bodyStatus; });
     b.text("{jiggle.move} next move  {jiggle.go} jump").showIf([this] { return m_bodiesReady; });
+#if KKE_ENABLE_JOLT
+    std::vector<std::string> styles(kHairStyles, kHairStyles + kHairStyleCount), colours;
+    for (const HairColour& c : kHairColours) colours.push_back(c.name);
+    b.choice("Hair", &m_hairStyle, styles, [this] { buildHair(); }).showIf([this] { return m_head.found; });
+    b.choice("Hair colour", &m_hairColour, colours, [this] { buildHair(); }).showIf([this] { return m_head.found && m_hairStyle > 0; });
+#endif
     b.toggle("Twin without jiggle", Panel::Ref<bool>([this] { return m_bodiesReady ? &m_showTwin : nullptr; }), [this] { setScene(m_scene); });
     b.note("The twin runs half a lap behind with the same body and clips, but no jiggle, to compare.").showIf([this] { return m_bodiesReady; });
     b.choice("Move", Panel::Ref<int>([this] {

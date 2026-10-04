@@ -44,6 +44,7 @@ set(ENGINE_SOURCES
     src/BodyShape.cpp
     src/CharacterIk.cpp
     src/Equipment.cpp
+    src/Inventory.cpp
     src/ProceduralAnim.cpp
     src/ClimbWall.cpp
     src/CookedFile.cpp
@@ -116,6 +117,7 @@ set(ENGINE_SOURCES
     src/ParticleFluid.cpp
     src/MeltVolume.cpp
     src/JigglePhysics.cpp
+    src/AutoRig.cpp
     src/SphereImpostors.cpp
     src/ParticleEffects.cpp
     src/ParticleLibrary.cpp
@@ -550,6 +552,6 @@ endif()
 # fracture setup are pure number crunching, 5-20x slower at -O0, and
 # nobody steps through them in a debugger. docs/OPTIMIZATION.md log #15.
 if(NOT MSVC)
-    set_source_files_properties(src/Sky.cpp src/Texture.cpp src/TextureMips.cpp src/VoxelTets.cpp src/InteriorColor.cpp src/FracturePattern.cpp src/VoronoiFracture.cpp src/ParticleFluid.cpp src/MeltVolume.cpp src/JigglePhysics.cpp src/Ocean.cpp src/FloatingBodies.cpp src/ClothSystem.cpp
+    set_source_files_properties(src/Sky.cpp src/Texture.cpp src/TextureMips.cpp src/VoxelTets.cpp src/InteriorColor.cpp src/FracturePattern.cpp src/VoronoiFracture.cpp src/ParticleFluid.cpp src/MeltVolume.cpp src/JigglePhysics.cpp src/AutoRig.cpp src/Ocean.cpp src/FloatingBodies.cpp src/ClothSystem.cpp
         PROPERTIES COMPILE_OPTIONS "$<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>")
 endif()
