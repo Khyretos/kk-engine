@@ -410,9 +410,12 @@ void ShowcaseModule::updateItemsDemo(float dt, glm::vec3& move) {
         m_loco->setFacing(glm::vec3(0, 0, -1));
         m_rig.yaw = 0.0f;
     }
-    // Step by step along the table, picking up what's in reach.
+    // Step by step along the table, picking up what's in reach (four
+    // times a second: thirteen things, and which is nearest at each step
+    // depends on the frame rate, so at 0.4 s the rifle was sometimes
+    // still on the table at the end).
     if (t > 1.0f && t < 5.0f) {
-        if (std::fmod(t, 0.4f) < dt) {
+        if (std::fmod(t, 0.25f) < dt) {
             m_loco->setFacing(glm::vec3(0, 0, -1)); // to the table (walking along turns you)
             togglePickUp();
         }
