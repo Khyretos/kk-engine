@@ -8,10 +8,11 @@ The showcase world comes as a series, one commit per round, all on branch `kke-d
 | 2 | `kke-demo-02.patch` | kke_demo: the bag (grid inventory screen), items to pick up, equipment on the character |
 | 3 | `kke-demo-03.patch` | kke_demo: the open world round the yard (terrain, roads, zones, world map) |
 | 4 | `kke-demo-04.patch` | kke_demo: guns, grenades and the firing range (+ FEMFX far-from-origin fix) |
+| 5 | `kke-demo-05.patch` | kke_demo: cars at the race track, a stunt plane at the airfield |
 
 Apply in order with `git am` (`git am -3` after other patches). One PR for the branch is fine;
 title it after the newest round, or `kke_demo: showcase world (rounds 1-N)`.
-Checked (rounds 1-4): the series applies on Forgejo `main` 9349996 alone, after racing-round, platoon-duel,
+Checked (rounds 1-5): the series applies on Forgejo `main` 9349996 alone, after racing-round, platoon-duel,
 climbing-hands and sea-demo, and after goblin-horde. (goblin-horde itself doesn't apply after
 the other four; that's between those patches, not this series.)
 
@@ -218,3 +219,47 @@ full frame rate, and whether FEMFX scenes in the other games look the same as be
 Known: "Clear what I spawned" also removes the range dummies (reset the world brings them
 back). No reload key yet (it reloads by itself when empty; R is reset). The range is local
 only online (round 8).
+
+# Round 5: cars and the plane
+
+Game code only (no engine change). kke_demo now also compiles `games/flying_demo/Flight.cpp`
+(the flight model, like kke_tests already does); `Flight.h` got a one-line comment saying so.
+
+## What changed (11 files)
+- `games/showcase/Vehicles.cpp` (new): the race track (oval 585 m, kerbs, start gantry, 8 cones,
+  a jump), three cars on Jolt vehicle physics (hatch FWD, coupe RWD, truck AWD), the stunt
+  plane (Flying demo flight model on a kinematic body), getting in/out with F / X, chase camera,
+  lap timer (physics time), engine sound (`kke::EngineSound`), crash = explosion + wreck + new
+  plane after 4 s. `KKE_DEMO_DRIVE=1` (or `=2`: plane only).
+- New actions `drive.gas` (Shift, RT) and `drive.brake` (Ctrl, LT). Cars also use W/S, A/D.
+- HUD: vehicle name, controls and live line (km/h, gear, lap / height, throttle, STALL).
+- README "Cars and the plane", SHOWCASE.md, zone texts.
+
+## Already checked in the cloud
+- GCC -Werror build of everything: zero warnings. clang -Werror syntax on every changed .cpp
+  (and Flight.cpp in this target): clean. `check_std_includes.py` OK. `kke_tests` 999 passed.
+  `check_game kke_demo --headless`: OK (only the sky HDR).
+- `KKE_DEMO_DRIVE=1`: the hatch drives a full lap (33.4 s), stops, you get out; at the airfield
+  the plane rolls, lifts off at ~100 km/h, flies all four waypoints (up to 100 m, 206 km/h),
+  dives into the runway: crash, explosion, wreck, a new plane, you beside it.
+- Real keys (xdotool): F gets in, W drives, F gets out at the driver's door.
+- `KKE_DEMO_GUNS=1` unchanged (same plates, barrels, grenade).
+- Screenshots: `kke-demo-shots/car-park.png`, `car-lap.png`, `plane-flying.png`, `plane-wreck.png`.
+
+## Run on soucouyant
+```sh
+cmake --build build --target kke_demo flying_demo kke_tests -j4 && build/bin/kke_tests
+tools/check_game kke_demo --seconds 10
+cd build/bin && KKE_DEMO_DRIVE=1 ./kke_demo    # log: "vehicles:" and "drive demo:" (lap, waypoints, crash)
+```
+Not judged in the cloud: how the cars feel at full frame rate (grip, the truck on the jump),
+the engine sound, the plane with a pad or the T.16000M sticks (no stick bindings here yet).
+
+## Play list for Kees (round 5)
+1. M > Race track. Walk to a car, F / X gets in. Drive a lap (RT gas, LT brake); try the jump.
+2. Knock the cones over on the far straight. Roll the truck, R puts it back on its wheels.
+3. M > Airfield. Get in the plane, hold RT (Shift): it lifts off by itself. Loop, then land.
+4. Crash it on purpose: the fireball, then the new plane on the runway.
+
+Known: vehicles are local only online (round 8). Flight sticks aren't bound in the showcase
+(the Flying demo has them).

@@ -86,3 +86,15 @@ Lessons:
 For a 9B model: doable are new GunDef rows (magazine, interval, push), plate positions,
 sound recipe numbers. Hard: the shot ray maths and anything in the FEMFX engine code; there,
 reproduce with a scripted demo first and change one thing per run.
+
+## Round 5: cars and a plane (Vehicles.cpp)
+- Reuse: the plane flies on `games/flying_demo/Flight.cpp`, compiled into kke_demo with
+  `target_include_directories` (kke_tests already did the same). Pure-maths code shares well.
+- Riding: make the character kinematic (`setCharacterKinematic`) and `moveCharacter` it to the
+  seat each frame; zones, HUD and map keep working. `Locomotion::teleport` hands it back.
+- Camera ray: ignore the ridden body (`raycast(..., accept)`), or the spring arm hits the car.
+- Test a flight autopilot in a 20-line C++ program first (link Flight.cpp, print every 5 s):
+  it showed the plane circling a waypoint for ever (turn too wide) in seconds, not minutes.
+  Fix: a waypoint counts once you are past your closest approach.
+- An autopilot "climb first" rule plus rising hills = it flew straight into the world edge.
+- Lap times and fuses in physics time, never frame time.
