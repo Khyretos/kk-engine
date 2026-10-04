@@ -455,9 +455,11 @@ TEST(ScriptCalls, DamagedBytesAreRefused) {
     EXPECT_FALSE(ScriptCalls::decodeCall({ 1, 0, 0, 0, 'a', 'b' }).has_value()); // no end to the name
     EXPECT_FALSE(ScriptCalls::decodeReply({ 1, 0, 0, 0, 9 }).has_value());      // no such status
     EXPECT_FALSE(ScriptCalls::decodeReply({ 1, 0 }).has_value());
-    std::vector<uint8_t> longName(4, 0);
-    longName.insert(longName.end(), 65, 'a');
-    longName.push_back(0);
+    // id (4 bytes), a 65-byte name, its end. Sized once: growing it with
+    // insert() made GCC 16 -O3 see a memset past the first allocation.
+    std::vector<uint8_t> longName(4 + 65 + 1, 'a');
+    for (size_t i = 0; i < 4; ++i) longName[i] = 0;
+    longName.back() = 0;
     EXPECT_FALSE(ScriptCalls::decodeCall(longName).has_value());
 }
 

@@ -347,16 +347,21 @@ VoronoiCut cutAlongVoronoi(const TetMeshData& mesh, const FractureSeeds& seeds) 
     std::vector<uint8_t> snapped(q.size(), 0);
     for (int pass = 0; pass < 3; ++pass) {
         for (uint32_t v = 0; v < q.size(); ++v) {
+            // The first 8 distinct chunks around v, kept sorted as they are
+            // inserted (std::sort on a part-filled array made GCC 16 -O3
+            // see a read past its end).
             uint32_t cs[8];
             int nc = 0;
             for (uint32_t t : incident[v]) {
-                uint32_t c = chunk[t];
+                const uint32_t c = chunk[t];
                 bool seen = false;
                 for (int i = 0; i < nc; ++i) seen |= cs[i] == c;
-                if (!seen && nc < 8) cs[nc++] = c;
+                if (seen || nc == 8) continue;
+                int i = nc++;
+                for (; i > 0 && cs[i - 1] > c; --i) cs[i] = cs[i - 1];
+                cs[i] = c;
             }
             if (nc < 2) continue;
-            std::sort(cs, cs + nc);
             // Least squares in the directions the vertex may move in: the
             // surface's tangent plane (or edge line) for surface vertices,
             // anywhere for interior ones. Minimise the distance to each
