@@ -31,7 +31,7 @@ const glm::quat kNoTurn(1.0f, 0.0f, 0.0f, 0.0f);
 constexpr float kStartZ = 0.0f;
 constexpr float kSweepZ0 = -12.0f, kSweepZ1 = -34.0f;
 constexpr float kGapZ0 = -36.0f, kGapZ1 = -54.0f;
-constexpr float kHammerZ0 = -56.0f, kHammerZ1 = -76.0f;
+constexpr float kHammerZ0 = -56.0f;
 constexpr float kDiscZ = -88.0f, kDiscR = 8.0f;
 constexpr float kDoorZ = -104.0f;
 constexpr float kSlopeZ0 = -108.0f, kSlopeZ1 = -134.0f, kSlopeRise = 5.0f;
