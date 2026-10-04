@@ -75,6 +75,10 @@ void RacingModule::init(kke::Application& app) {
     m_net = app.getModule<kke::NetModule>();
     m_lobby = app.getModule<kke::LobbyModule>();
     m_audio = app.getModule<kke::AudioModule>();
+    m_shell = app.getModule<kke::GameShellModule>();
+    // A flight stick (or a wheel, any joystick that isn't a gamepad) joins
+    // with its trigger and drives (Controllers.cpp).
+    if (m_lobby) m_lobby->setFlightSticks(true);
 #if KKE_ENABLE_FEMFX
     m_femfx = app.getModule<kke::PhysicsModule>();
 #endif
@@ -90,7 +94,12 @@ void RacingModule::init(kke::Application& app) {
     m_defaultCars = std::clamp(static_cast<int>(envFloat("KKE_RACE_CARS", 12.0f)), 1, 24);
     m_forceLaps = static_cast<int>(envFloat("KKE_RACE_LAPS", -1.0f));
     m_forceDamage = static_cast<int>(envFloat("KKE_RACE_DAMAGE", -1.0f));
-    m_cameraMode = std::clamp(static_cast<int>(envFloat("KKE_RACE_CAMERA", 0.0f)), 0, 4);
+    if (const char* cam = kke::dev::env("KKE_RACE_CAMERA")) {
+        const CamMode m = camModeNamed(cam);
+        if (m != CamMode::Count) m_cameraMode = m;
+        else kke::log::get(name())->warn("KKE_RACE_CAMERA={}: not a camera (chase, far, cockpit, first, bonnet, wheel, tv)", cam);
+    }
+    m_playerCam.fill(m_cameraMode == CamMode::Tv ? CamMode::Chase : m_cameraMode);
     if (m_pileup) {
         // The worst case: a full field, brutal damage, nobody at the wheel.
         m_autopilot = true;
@@ -118,6 +127,9 @@ void RacingModule::init(kke::Application& app) {
         in.defineAction({ "look.back", "Look back", "Driving", "game" });
         in.defineAction({ "reset.car", "Back on the track", "Driving", "game" });
         in.defineAction({ "camera", "Camera", "Driving", "game" });
+        in.defineAction({ "look", "Look round", "Driving", "game", kke::ActionType::Axis2D });
+        in.defineAction({ "look.free", "Look round with the mouse (hold)", "Driving", "game" });
+        in.defineAction({ "look.mouse", "Mouse look", "Driving", "game", kke::ActionType::Axis2D, false });
         in.defineAction({ "race.again", "Race again", "Race", "game" });
         in.defineAction({ "race.new", "Next track", "Race", "game" });
         in.defineAction({ "menu", "Back to the menu (players, cars, track)", "Race", "game" });
@@ -156,6 +168,20 @@ void RacingModule::init(kke::Application& app) {
         in.addBinding(IM::bind("reset.car", IM::key(SDL_SCANCODE_T)));
         in.addBinding(IM::bind("camera", IM::pad(SDL_GAMEPAD_BUTTON_NORTH)));
         in.addBinding(IM::bind("camera", IM::key(SDL_SCANCODE_C)));
+        {
+            // The right stick looks round (where it points is where you look).
+            kke::Binding b = IM::bind("look", IM::padAxis(SDL_GAMEPAD_AXIS_RIGHTX), kke::Trigger::Continuous);
+            b.sourceY = IM::padAxis(SDL_GAMEPAD_AXIS_RIGHTY);
+            b.deadzone = 0.15f;
+            in.addBinding(b);
+        }
+        in.addBinding(IM::bind("look.free", IM::mouse(SDL_BUTTON_RIGHT), kke::Trigger::Continuous));
+        for (int axis = 0; axis < 2; ++axis) {
+            kke::Binding b = IM::bind("look.mouse", { kke::SourceKind::MouseMotion, 0, axis, 0 }, kke::Trigger::Continuous);
+            b.component = axis;
+            in.addBinding(b);
+        }
+        bindJoysticks(in);
         in.addBinding(IM::bind("race.again", IM::pad(SDL_GAMEPAD_BUTTON_START)));
         in.addBinding(IM::bind("race.again", IM::key(SDL_SCANCODE_R)));
         in.addBinding(IM::bind("race.new", IM::pad(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)));
@@ -173,12 +199,27 @@ void RacingModule::init(kke::Application& app) {
     touch.buttons = { "throttle", "brake", "handbrake", "reset.car", "camera", "look.back" };
     m_input->setTouchLayout(touch);
     m_input->commitDefaults();
+    loadWheelSetup();
     if (auto* shell = app.getModule<kke::GameShellModule>()) {
         // The pause menu's Main menu goes back to the start menu (the lobby);
         // Start is "race again" once the race is over or a car here is totalled.
         shell->onMainMenu = [this] {
             if (m_phase != Phase::Lobby) backToLobby();
         };
+        // Every player's camera from the menus too, and the wheel set-up.
+        shell->settings("Driving")
+            .choice("Camera", &m_menuCamera, { "Chase", "Far chase", "Cockpit", "First person", "Bonnet", "Wheel", "TV" },
+                    [this] { m_playerCam.fill(static_cast<CamMode>(std::clamp(m_menuCamera, 0, static_cast<int>(CamMode::Count) - 1))); })
+            .button("Set up a wheel or flight stick", [this, shell] {
+                shell->closeMenu();
+                startWheelSetup();
+            });
+        shell->addPauseItem("Set up a wheel or flight stick", [this, shell] {
+            // Back in the start menu first: nobody drives meanwhile.
+            shell->closeMenu();
+            if (m_phase != Phase::Lobby) backToLobby();
+            startWheelSetup();
+        });
         shell->startIsTheGames = [this] {
             if (m_phase == Phase::Finished) return true;
             if (m_phase != Phase::Racing) return false;
@@ -237,6 +278,7 @@ void RacingModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
             continue;
         }
         readCarState(c);
+        if (c.seat >= 0) updateHead(c, dt);
         wobbleWheels(c, dt);
         updateTrackPosition(c, dt);
         driveCar(c, dt);
@@ -256,7 +298,8 @@ void RacingModule::update(const kke::UpdateContext& ctx) {
     const int players = m_input->players();
     m_shift.resize(static_cast<size_t>(players), 0);
     m_resetAsked.resize(static_cast<size_t>(players), 0);
-    bool again = false, fresh = false, menu = false, help = false, close = false, camera = false;
+    bool again = false, fresh = false, menu = false, help = false, close = false;
+    std::array<bool, 4> camera{};
     for (int p = 0; p < players; ++p) {
         kke::InputMap& in = m_input->map(p);
         m_shift[static_cast<size_t>(p)] += (in.pressed("shift.up") ? 1 : 0) - (in.pressed("shift.down") ? 1 : 0);
@@ -266,11 +309,27 @@ void RacingModule::update(const kke::UpdateContext& ctx) {
         menu = menu || in.pressed("menu");
         help = help || in.pressed("help");
         close = close || in.pressed("handbrake") || in.pressed("throttle");
-        camera = camera || in.pressed("camera");
+        if (p < 4 && in.pressed("camera") && m_wheelStep < 0) camera[static_cast<size_t>(p)] = true;
     }
-    for (Car& c : m_cars)
-        if (c.seat >= 0 && !c.remote) c.lookBack = m_input->map(c.player).held("look.back");
-    if (camera) m_cameraMode = (m_cameraMode + 1) % 5;
+    // Each player's own camera; with nobody driving here, the one watched.
+    bool anyMine = false;
+    for (Car& c : m_cars) {
+        if (c.seat < 0 || c.remote) continue;
+        anyMine = true;
+        const size_t p = static_cast<size_t>(std::clamp(c.player, 0, 3));
+        c.cam = m_playerCam[p];
+        if (camera[p]) {
+            nextCamera(c);
+            m_playerCam[p] = c.cam;
+            camera[p] = false;
+        }
+        c.lookBack = m_input->map(c.player).held("look.back");
+        readLook(c, dt);
+        updateInterior(c);
+    }
+    if (!anyMine && camera[0]) m_cameraMode = static_cast<CamMode>((static_cast<int>(m_cameraMode) + 1) % static_cast<int>(CamMode::Count));
+    m_menuCamera = static_cast<int>(m_playerCam[0]);
+    updateWheelSetup(dt);
 
     updateNet(dt);
     m_fx->update(dt, glm::vec3(1.2f, 0.0f, 0.6f));
@@ -351,29 +410,24 @@ void RacingModule::update(const kke::UpdateContext& ctx) {
             Car* lead = &m_cars[0];
             for (Car& c : m_cars)
                 if (c.place == 1) lead = &c;
-            updateCamera(*lead, dt, m_app->camera());
+            updateCamera(*lead, m_cameraMode, dt, m_app->camera());
         }
     } else {
         const std::vector<kke::ViewRect> rects = kke::splitScreen(static_cast<int>(views.size()), views.size() > 2);
         for (size_t i = 0; i < views.size(); ++i) {
             kke::Camera& cam = cameraOf(*views[i]);
-            if (&cam != &m_app->camera()) {
-                cam.nearPlane = m_app->camera().nearPlane;
-                cam.farPlane = m_app->camera().farPlane;
-            }
-            updateCamera(*views[i], dt, cam);
+            if (&cam != &m_app->camera()) cam.farPlane = m_app->camera().farPlane;
+            updateCamera(*views[i], views[i]->cam, dt, cam);
             if (views.size() > 1) appViews.push_back({ cam, rects[i] });
         }
         // Three players: the empty quarter is the TV camera on the leader.
         if (views.size() == 3) {
-            const int saved = m_cameraMode;
-            m_cameraMode = 3;
             Car* lead = &m_cars[0];
             for (Car& c : m_cars)
                 if (c.place == 1) lead = &c;
             kke::Camera tv = m_tvCamera;
-            updateCamera(*lead, dt, tv);
-            m_cameraMode = saved;
+            tv.farPlane = m_app->camera().farPlane;
+            updateCamera(*lead, CamMode::Tv, dt, tv);
             appViews.push_back({ tv, kke::splitScreen(4, true)[3] });
         }
     }

@@ -51,7 +51,7 @@ For demos and tests:
 | `KKE_RACE_DAMAGE=0/1/2` | damage off, normal, brutal |
 | `KKE_RACE_CRASH=1` | the damage test: CPU drivers aim at the car in front |
 | `KKE_RACE_BENCH=pileup` | the worst case, for benchmarks: 24 cars (or `KKE_RACE_CARS`) in the derby pen, brutal damage, launched head-on at 108 km/h into the middle every 7 s (`kke_benchmark` runs it as `racing_pileup`) |
-| `KKE_RACE_CAMERA=0..4` | chase, far chase, bonnet, TV, wheel |
+| `KKE_RACE_CAMERA=cockpit` | the camera to start with: `chase`, `far`, `cockpit`, `first`, `bonnet`, `wheel`, `tv` (or 0..6) |
 | `KKE_RACE_FEMFX=0` | dents by hand even in a FEMFX build (for comparison) |
 | `KKE_RACE_LOBBY=0` | straight into a race, no start menu |
 | `KKE_RACE_QUIT=60` | quit after 60 s, printing where every car is every 5 s |
@@ -59,23 +59,32 @@ For demos and tests:
 
 ## Controls
 
-Up to four players on one screen (split screen), each with a gamepad or
-the keyboard.
+Up to four players on one screen (split screen), each with a gamepad,
+the keyboard, a flight stick or a wheel and pedals.
 
-| | Gamepad | Keyboard |
-|---|---|---|
-| Steer | left stick | A / D or the arrows |
-| Gas / brake | right / left trigger | W / S (S reverses once stopped) |
-| Handbrake (start a slide) | A | Space |
-| Gear up / down (drag strip) | B / X | E / Q |
-| Look back | LB | B |
-| Back on the track | D-pad up | T |
-| Camera | Y | C |
+| | Gamepad | Keyboard | Flight stick |
+|---|---|---|---|
+| Steer | left stick | A / D or the arrows | the stick left / right |
+| Gas / brake | right / left trigger | W / S (S reverses once stopped) | push forward / pull back |
+| Handbrake (start a slide) | A | Space | trigger |
+| Gear up / down (drag strip) | B / X | E / Q | button 6 / 5 |
+| Look back | LB | B | button 3 |
+| Back on the track | D-pad up | T | button 4 |
+| Camera (each player their own) | Y | C | button 2 |
+| Look round | right stick | hold the right mouse button and move | the hat |
 | Race again / next track | Start / D-pad right | R / N |
 | Pause menu (settings, controls, main menu, quit) | Start while driving, or Select | Esc |
 | Start menu (players, cars, track) | the pause menu's Main menu | M, or the pause menu |
 | How to play | D-pad down | H |
 | Developer panels | | F1 |
+
+A flight stick or wheel joins in the start menu with its trigger (button
+1). A wheel and pedals (or a stick's throttle lever) need a short set-up
+once: Settings > Driving > **Set up a wheel or flight stick** (also in
+the pause menu). Turn it all the way left, then right, press the gas,
+press the brake; B or Backspace skips a step. It finds each by what
+moved, so any wheel works, pedals on their own plug too, and it's saved
+in `racing_wheel.json`.
 
 On a touch screen: the left half of the screen steers (where your finger
 is, left or right of the middle of that half), the right quarter is the
@@ -317,7 +326,7 @@ pressure, load, the ground, flats). This file draws it:
   instead of smoke and marks. `setGround` in `Race.cpp` says which body
   is which ground.
 
-The wheel camera (**C** until it comes round) sits on the side sill
+The wheel camera (`KKE_RACE_CAMERA=wheel`, or **C** until it comes round) sits on the side sill
 looking back at the front tyre.
 
 ### Effects
@@ -342,9 +351,30 @@ the audio module's impact sounds.
 
 One view per player (`kke/Viewports.h`): stacked for two, quarters for
 three and four; with three players the fourth quarter is a TV camera
-that follows the leader. Each player's camera is a chase, far chase,
-bonnet, TV or wheel camera; the chase camera widens its field of view
-with speed.
+that follows the leader. Each player picks their own camera (Cameras.cpp):
+
+- **Chase** and **far chase**: behind the car, the heading lagging a
+  little so a turn swings it out; it widens its field of view with speed.
+- **Cockpit**: the driver's seat. The Synty cars have a whole interior
+  (dashboard, gauges, seats, steering wheel), so the camera sits where a
+  driver's eyes would be (60 cm behind the steering wheel's middle, a
+  third of a metre above it). The steering wheel is taken out of the body
+  as a model of its own and turns with the steering; the windows are
+  folded away while you sit inside (the pack's glass is drawn dark and
+  solid for the outside).
+- **First person**: the same seat, with a head on a spring: the car's
+  acceleration in its own frame throws it about (braking forward, a
+  corner sideways, a landing down) and the eyes turn into the corner.
+- **Bonnet**: just above the middle of the bonnet (found from the body's
+  shape), nothing in the way.
+- **Wheel**: on the side sill, looking back at the front tyre.
+- **TV**: trackside, following the car past.
+
+The right stick looks round: where it points is where you look (up
+ahead, right to the right, down behind you), and letting go swings the
+view back. Outside the car the camera goes round it; inside, the head
+turns (up to 125 degrees). The mouse does the same with its right button
+held, at the Settings page's look sensitivity.
 
 ### The HUD (Hud.cpp, ui/racing_hud.rml)
 
@@ -438,7 +468,9 @@ on screen says so, and everything else is the same.
 | `Track.h`, `Track.cpp` | tracks from `tracks/*.yaml`: the road, walls, where a car is |
 | `Cars.h`, `Cars.cpp` | car types, paint jobs, the car art (Synty or blocks) |
 | `Race.cpp` | the field, the grid, the race rules, laps and results, scenery |
-| `Driving.cpp` | players, CPU drivers, touch, the rules on top, cameras |
+| `Driving.cpp` | players, CPU drivers, touch, the rules on top |
+| `Cameras.cpp` | the seven cameras, looking round, the head in first person |
+| `Controllers.cpp` | flight sticks, and setting up a wheel and pedals |
 | `Damage.cpp` | hits, dents, debris, smoke, sparks, skid marks, drift points |
 | `Sound.cpp` | the engines and tyres |
 | `Wheels.cpp` | tyres squashing, flats, rims, lost wheels, dust |

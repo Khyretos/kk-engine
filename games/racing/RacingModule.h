@@ -15,7 +15,9 @@
 
 #include <RmlUi/Core/DataModelHandle.h>
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -24,6 +26,8 @@
 namespace kke {
 class AudioModule;
 class DynamicMeshRenderer;
+class GameShellModule;
+class InputMap;
 class InputModule;
 class LobbyModule;
 class NetModule;
@@ -59,7 +63,8 @@ namespace racing {
 // quarter_mile), KKE_RACE_CARS=<n>, KKE_RACE_LAPS=<n>, KKE_RACE_DAMAGE=
 // 0|1|2 (off, normal, brutal), KKE_RACE_LOBBY=0 (straight into a race),
 // KKE_RACE_AUTOPILOT=1 (no lobby, and a CPU drives your car too),
-// KKE_RACE_CAMERA=<n> (0 chase, 1 far, 2 bumper, 3 TV, 4 wheel), KKE_RACE_QUIT=<s>
+// KKE_RACE_CAMERA=<name or n> (chase, far, cockpit, first, bonnet, wheel,
+// tv; 0..6), KKE_RACE_QUIT=<s>
 // (quit after that long, logging every car every few seconds),
 // KKE_RACE_CRASH=1 (every CPU driver aims for the car ahead: a damage test),
 // KKE_RACE_BENCH=pileup (the worst case, for benchmarks: 24 cars in the
@@ -68,6 +73,28 @@ namespace racing {
 // What the tyres find under them (Wheels.cpp): grip, and what they throw up.
 enum class Ground : uint8_t { Tarmac, Concrete, Grass, Gravel, Dirt, Mud, Snow };
 Ground groundNamed(const std::string& name); // a track's `ground` / `verge`
+
+// The cameras (Cameras.cpp), each player their own, Y or C for the next.
+enum class CamMode : uint8_t { Chase, Far, Cockpit, FirstPerson, Bonnet, Wheel, Tv, Count };
+const char* camModeName(CamMode m);
+CamMode camModeNamed(const std::string& name); // "cockpit", "first", "3": Count when unknown
+
+// A wheel and pedals or a flight stick, set up once (Controllers.cpp):
+// which axis steers and how far is full lock, which axes are the pedals
+// and where they rest. Pedals rest at one end of their axis, which a
+// plain binding can't say, so the game reads them itself.
+struct AxisSetup {
+    std::string device;      // the device's stable key (InputDevices::Device::stableKey)
+    int axis = -1;           // -1: not set up
+    float rest = 0.0f, full = 1.0f; // the axis's value at rest and all the way
+    bool valid() const { return axis >= 0 && std::fabs(full - rest) > 0.2f; }
+    // 0 at rest .. 1 all the way.
+    float amount(float value) const { return std::clamp((value - rest) / (full - rest), 0.0f, 1.0f); }
+};
+struct WheelSetup {
+    AxisSetup steerLeft, steerRight, gas, brake; // steerLeft/Right: the same axis, rest = centre
+    bool any() const { return steerLeft.valid() || gas.valid() || brake.valid(); }
+};
 
 class RacingModule : public kke::Module {
 public:
@@ -163,7 +190,16 @@ private:
         float reaction = -1.0f, trapSpeed = 0.0f, startS = 0.0f;
         std::string note;           // "Perfect shift", "Crashed: combo lost", ...
         float noteTime = 0.0f;
-        // Camera.
+        // Camera (Cameras.cpp).
+        CamMode cam = CamMode::Chase;
+        glm::vec2 look{0.0f}, lookWant{0.0f}; // looking round: yaw (+ right), pitch (+ up), radians
+        float lookHold = 0.0f;      // s the mouse's look stays before swinging back
+        glm::vec3 head{0.0f};       // first person: the head, thrown about by the g-forces (car space)
+        glm::vec3 headVel{0.0f};    // its spring
+        glm::vec3 lastVel{0.0f};
+        float headYaw = 0.0f;       // first person: looking into the corner
+        bool glassHidden = false;   // sitting inside: the windows out of the way
+        kke::ModelModule::InstanceId steerInst = 0;
         kke::Camera camera;
         glm::vec3 camPos{0.0f}, camLook{0.0f};
         glm::vec3 camDir{0.0f, 0.0f, 1.0f}; // the chase camera's heading, lagging the car's
@@ -197,7 +233,21 @@ private:
     void updateRemoteCar(Car& c, float dt);
     glm::mat4 drawTransform(const Car& c) const;
     void placeInstances(Car& c);          // body + wheel instances for this frame
-    void updateCamera(Car& c, float dt, kke::Camera& out);
+    std::vector<std::vector<glm::vec3>> m_glassScratch;
+    void updateCamera(Car& c, CamMode mode, float dt, kke::Camera& out); // Cameras.cpp
+    void readLook(Car& c, float dt);      // right stick, a stick's hat, the mouse (right button held)
+    void updateHead(Car& c, float dt);    // first person: the g-forces on the driver's head (each physics step)
+    void nextCamera(Car& c);
+    void updateInterior(Car& c);          // the steering wheel turned, the glass hidden or not
+    // Controllers.cpp: flight sticks and wheels.
+    void bindJoysticks(kke::InputMap& in);
+    void loadWheelSetup();
+    void saveWheelSetup() const;
+    void startWheelSetup();
+    void updateWheelSetup(float dt);
+    void readWheel(Car& c, float& steer, float& throttle, float& brake) const; // a set-up wheel's axes, for this player
+    float wheelAxis(const AxisSetup& a, const std::vector<uint32_t>& devices) const; // its value, -2 when not connected
+    void dropJoystickPedals(kke::InputMap& in) const;
     kke::Camera& cameraOf(Car& c);
     static glm::vec3 carForward(const Car& c) { return glm::normalize(glm::vec3(c.xf[2])); }
     static glm::vec3 carLeft(const Car& c) { return glm::normalize(glm::vec3(c.xf[0])); }
@@ -290,7 +340,7 @@ private:
     std::string crumpleReport() const; // for the KKE_RACE_QUIT log
     kke::PhysicsModule* m_femfx = nullptr;
     bool m_crumple = true;          // KKE_RACE_FEMFX=0: dents by hand even with FEMFX
-    float m_crumpleShove = 1000.0f; // m/s of shove per m of dent asked for (KKE_RACE_SHOVE)
+    float m_crumpleShove = 2500.0f; // m/s of shove per m of dent asked for (KKE_RACE_SHOVE)
 
     // ---- wheels (Wheels.cpp): tyres squashing on the road, flats, bare
     // rims, torn-off wheels rolling away, what each ground throws up
@@ -376,6 +426,7 @@ private:
     kke::InputModule* m_input = nullptr;
     kke::ModelModule* m_models = nullptr;
     kke::LobbyModule* m_lobby = nullptr;
+    kke::GameShellModule* m_shell = nullptr;
     kke::NetModule* m_net = nullptr;
     kke::AudioModule* m_audio = nullptr;
 
@@ -407,7 +458,19 @@ private:
     Phase m_phase = Phase::Lobby;
     float m_countdown = 3.0f, m_raceClock = 0.0f, m_leaderDone = -1.0f, m_finishedFor = 0.0f;
     int m_laps = 5, m_damage = 1;
-    int m_cameraMode = 0;
+    CamMode m_cameraMode = CamMode::Chase; // the view when nobody here drives (KKE_RACE_CAMERA)
+    std::array<CamMode, 4> m_playerCam{};  // each player's choice, kept from race to race
+    int m_menuCamera = 0; // the Settings page's row: player 1's
+    // Setting up a wheel or a stick (Controllers.cpp).
+    WheelSetup m_wheel;
+    int m_wheelStep = -1;                  // -1 off; 0 left, 1 right, 2 gas, 3 brake
+    float m_wheelHeld = 0.0f;
+    AxisSetup m_wheelCandidate;
+    std::unordered_map<std::string, std::vector<float>> m_wheelBaseline; // device key -> axes at the step's start
+    std::string m_wheelPrompt, m_wheelSub; // on screen while it runs
+    float m_wheelMeter = 0.0f;             // 0..1: held long enough
+    float m_wheelDone = 0.0f;              // s the last words stay up
+    bool m_wheelSkip = false;              // B / Backspace down last frame
     bool m_autopilot = false, m_crashTest = false, m_rosterChanged = false;
     int m_defaultCars = 12;
     int m_forceTrack = -1, m_forceLaps = -1, m_forceDamage = -1;
@@ -439,6 +502,8 @@ private:
         std::vector<StandingHud> standings;
         std::vector<ResultHud> results;
         std::string banner, sub, hint, notice, lights; // lights: the drag tree ("", "amber1".."amber3", "green", "red")
+        std::string setup, setupSub, setupMeter = "0%"; // the wheel set-up's prompt (Controllers.cpp)
+        bool setupBar = false;
         bool racing = false, howto = false, drag = false;
     };
     Hud m_hud;

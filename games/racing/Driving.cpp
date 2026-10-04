@@ -1,5 +1,6 @@
 // Driving: each car's Jolt vehicle, its players' pedals or its CPU
-// driver, where it is on the track, how it's drawn, and the cameras.
+// driver, where it is on the track and how it's drawn (the cameras are
+// Cameras.cpp).
 
 #include "RacingModule.h"
 
@@ -97,6 +98,11 @@ void RacingModule::buildCar(Car& c, int slot) {
         c.wheelInst[i] = m_models->spawn(c.art->wheel[i & 1], c.xf * c.wheelLocal[i]);
         m_models->setOverlayEnabled(c.wheelInst[i], false);
     }
+    if (c.art->steering) {
+        c.steerInst = m_models->spawn(c.art->steering, c.xf);
+        m_models->setOverlayEnabled(c.steerInst, false);
+    }
+    c.glassHidden = false;
     c.dented.clear();
     c.dentedNormals.clear();
     c.pressed.clear();
@@ -114,6 +120,8 @@ void RacingModule::removeCar(Car& c) {
         if (i) m_models->remove(i);
         i = 0;
     }
+    if (c.steerInst) m_models->remove(c.steerInst);
+    c.steerInst = 0;
     if (c.vehicle) w.removeVehicle(c.vehicle);
     else if (c.body != kke::RigidWorld::kNoBody) w.remove(c.body);
     c.vehicle = 0;
@@ -169,6 +177,7 @@ kke::VehicleInput RacingModule::readPlayer(Car& c) {
     in.throttle = map.axis("throttle");
     in.brake = map.axis("brake");
     in.handBrake = map.held("handbrake") ? 1.0f : 0.0f;
+    readWheel(c, steer, in.throttle, in.brake); // a wheel and pedals (Controllers.cpp)
     if (c.player == 0) {
         const Touch t = readTouch();
         if (t.any) {
@@ -493,93 +502,26 @@ void RacingModule::placeInstances(Car& c) {
     const glm::mat4 xf = drawTransform(c);
     m_models->setTransform(c.bodyInst, xf);
     for (int i = 0; i < 4; ++i) m_models->setTransform(c.wheelInst[i], xf * c.wheelLocal[i]);
+    if (c.steerInst) {
+        // The wheel turns about eight times as far as the front wheels do.
+        const float turn = -c.input.steer * glm::radians(carTypes()[static_cast<size_t>(c.type)].steer) * 8.0f;
+        m_models->setTransform(c.steerInst, xf * glm::translate(glm::mat4(1.0f), c.art->steerCenter) * glm::rotate(glm::mat4(1.0f), turn, c.art->steerAxis));
+    }
     if (c.dentsChanged) {
         c.dentsChanged = false;
-        if (c.dented.empty()) m_models->setDeformedVertices(c.bodyInst, {}, {}, true);
-        else m_models->setDeformedVertices(c.bodyInst, c.dented, c.dentedNormals, true);
-    }
-}
-
-kke::Camera& RacingModule::cameraOf(Car& c) { return c.seat >= 0 && c.player == 0 ? m_app->camera() : c.camera; }
-
-// Chase (close or far) behind the car, low on the bonnet, the TV camera
-// (trackside, following the car past it), or the wheel camera: bolted to
-// the side sill, looking back at the front tyre (it squashes, it bulges,
-// it smokes).
-void RacingModule::updateCamera(Car& c, float dt, kke::Camera& out) {
-    const glm::mat4 xf = drawTransform(c);
-    const glm::vec3 pos(xf[3]);
-    glm::vec3 fwd(xf[2]);
-    fwd.y = 0.0f;
-    fwd = glm::length(fwd) > 1e-3f ? glm::normalize(fwd) : glm::vec3(0.0f, 0.0f, 1.0f);
-    if (c.lookBack) fwd = -fwd;
-    const float speed = std::fabs(carSpeed(c));
-    const float height = c.art ? c.art->boundsMax.y : 1.4f;
-    if (m_cameraMode == 3 && m_track) {
-        // A spot beside the track ahead of the car; the next one once it's well past.
-        const Track& t = *m_track;
-        const float past = glm::dot(pos - m_tvSpot, t.at(c.where.s).forward);
-        if (m_tvCar != static_cast<int>(&c - m_cars.data()) || past > 45.0f || glm::length(m_tvSpot) < 1e-3f) {
-            m_tvCar = static_cast<int>(&c - m_cars.data());
-            const float s = c.where.s + 60.0f + std::min(speed, 60.0f) * 0.5f;
-            const Track::Sample f = t.at(s);
-            const glm::vec3 leftFlat(f.forward.z, 0.0f, -f.forward.x);
-            // Up on a pole, above the wall and the banking between it and the road.
-            const float edge = t.point(s, -t.halfWidth()).y + t.desc().wall;
-            m_tvSpot = glm::vec3(f.p.x, 0.0f, f.p.z) - leftFlat * (t.halfWidth() + 9.0f) + glm::vec3(0.0f, std::max(6.0f, edge + 5.0f), 0.0f);
-        }
-        out.position = m_tvSpot;
-        out.target = pos + glm::vec3(0.0f, 0.8f, 0.0f);
-        out.fovDegrees = std::clamp(55.0f - glm::length(pos - m_tvSpot) * 0.25f, 18.0f, 55.0f);
-        c.camInit = false;
-        return;
-    }
-    glm::vec3 want, look;
-    if (m_cameraMode == 4 && c.art) {
-        const glm::vec3 wheel = c.art->wheelCenter[0];
-        const glm::vec3 mount(c.art->boundsMax.x + 0.55f, c.art->wheelRadius * 1.15f, wheel.z + 1.5f);
-        out.position = glm::vec3(xf * glm::vec4(mount, 1.0f));
-        out.target = glm::vec3(xf * glm::vec4(wheel - glm::vec3(0.0f, c.art->wheelRadius * 0.35f, 0.0f), 1.0f));
-        out.fovDegrees = 55.0f;
-        c.camInit = false;
-        return;
-    }
-    if (m_cameraMode == 2) {
-        // On the bonnet: fixed to the car, no lag.
-        want = pos + glm::vec3(xf[1]) * (height * 0.82f) + glm::vec3(xf[2]) * (c.lookBack ? -0.8f : 0.4f);
-        look = want + fwd * 10.0f;
-        c.camPos = want;
-        c.camInit = true;
-    } else {
-        const float back = m_cameraMode == 1 ? 10.5f : 6.0f + speed * 0.015f;
-        const float up = m_cameraMode == 1 ? 3.6f : 1.5f + height * 0.6f;
-        if (!c.camInit) c.camDir = fwd;
-        // Always the same distance behind; only the heading lags, so a turn
-        // swings the camera out but speed never drops it back into the
-        // car behind.
-        c.camDir += (fwd - c.camDir) * (1.0f - std::exp(-(c.lookBack ? 30.0f : 6.0f) * dt));
-        c.camDir.y = 0.0f;
-        c.camDir = glm::length(c.camDir) > 1e-3f ? glm::normalize(c.camDir) : fwd;
-        want = pos - c.camDir * back + glm::vec3(0.0f, up, 0.0f);
-        look = pos + fwd * 4.0f + glm::vec3(0.0f, height * 0.7f, 0.0f);
-        if (!c.camInit) {
-            c.camLook = look;
-            c.camInit = true;
-        }
-        // Height follows a little behind (bumps, landings).
-        c.camPos = glm::vec3(want.x, c.camPos.y + (want.y - c.camPos.y) * (1.0f - std::exp(-10.0f * dt)), want.z);
-        if (std::fabs(c.camPos.y - want.y) > 3.0f) c.camPos.y = want.y;
-        // Never below the road.
-        if (m_track) {
-            const Track::Where w = m_track->locate(c.camPos, c.where.sample);
-            if (std::fabs(w.u) < m_track->halfWidth() && w.height < 0.6f) c.camPos.y += 0.6f - w.height;
+        if (c.glassHidden) {
+            // Sitting inside: the windows folded away to nothing (the
+            // dents, if any, kept).
+            m_glassScratch = c.dented.empty() ? c.art->positions : c.dented;
+            for (size_t p : c.art->glassParts)
+                if (p < m_glassScratch.size()) std::fill(m_glassScratch[p].begin(), m_glassScratch[p].end(), c.art->eye);
+            m_models->setDeformedVertices(c.bodyInst, m_glassScratch, c.dented.empty() ? c.art->normals : c.dentedNormals, true);
+        } else if (c.dented.empty()) {
+            m_models->setDeformedVertices(c.bodyInst, {}, {}, true);
+        } else {
+            m_models->setDeformedVertices(c.bodyInst, c.dented, c.dentedNormals, true);
         }
     }
-    c.camLook += (look - c.camLook) * (1.0f - std::exp(-14.0f * dt));
-    out.position = c.camPos;
-    out.target = m_cameraMode == 2 ? look : c.camLook;
-    // Faster feels faster: a wider view.
-    out.fovDegrees = 62.0f + std::clamp(speed - 15.0f, 0.0f, 60.0f) * 0.25f;
 }
 
 } // namespace racing
