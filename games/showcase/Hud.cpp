@@ -51,6 +51,9 @@ void ShowcaseModule::buildHud() {
     c.Bind("players", &m_hud.players);
     c.Bind("prompt", &m_hud.prompt);
     c.Bind("toast", &m_hud.toast);
+    c.Bind("ammo", &m_hud.ammo);
+    c.Bind("crosshair", &m_hud.crosshair);
+    c.Bind("reloading", &m_hud.reloading);
     m_hudModel = c.GetModelHandle();
 
     // Next to the executable (CMake copies ui/ there).
@@ -166,6 +169,11 @@ void ShowcaseModule::updateHud() {
     } else if (const int zone = zoneAt(p); zone > 0) {
         station = kZones[zone].name;
         text = kZones[zone].text;
+        if (zone == 2) { // the firing range
+            text = armed() ? "Fire {fire}, aim {aim}. Hit the plates, break the glass and the walls, shoot a red barrel."
+                           : "Pick up a gun from the bench {pickup}: it goes straight into your hand.";
+            live = "Plates down: " + std::to_string(platesDown()) + " of " + std::to_string(plateCount());
+        }
     }
 
     auto set = [this](std::string& field, std::string value, const char* name) {
@@ -194,6 +202,24 @@ void ShowcaseModule::updateHud() {
             }
     }
     set(m_hud.prompt, prompt.empty() || !input ? prompt : input->promptText(prompt), "prompt");
+    // The gun: rounds in it and in the bag, or reloading; the crosshair.
+    std::string ammo;
+    if (const GunDef* gun = gunInHand()) {
+        const auto loaded = m_loaded.find(gun->id);
+        ammo = std::to_string(loaded == m_loaded.end() ? 0 : loaded->second) + " / " + std::to_string(m_inv.count(gun->ammo));
+    } else if (grenadeInHand()) {
+        ammo = "Grenades " + std::to_string(m_inv.count("grenade"));
+    }
+    set(m_hud.ammo, ammo, "ammo");
+    const bool crosshair = armed() && !m_invOpen && !m_spawnOpen && !m_mapOpen;
+    if (m_hud.crosshair != crosshair) {
+        m_hud.crosshair = crosshair;
+        m_hudModel.DirtyVariable("crosshair");
+    }
+    if (const bool reloading = m_reloadLeft > 0.0f; m_hud.reloading != reloading) {
+        m_hud.reloading = reloading;
+        m_hudModel.DirtyVariable("reloading");
+    }
     if (m_hud.trick != trick) {
         m_hud.trick = trick;
         m_hudModel.DirtyVariable("trick");

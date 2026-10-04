@@ -32,6 +32,12 @@ packs the course is the plain boxes it is built from.
 The **Scenes** panel visits Synty-built levels far from the course
 ([SCENES.md](SCENES.md)).
 
+The **firing range** (north of the yard, the world map's second zone) has
+a rifle, a pistol, rounds and grenades on its bench. Hold right mouse (LT)
+to aim and fire at steel plates, FEMFX glass and stone walls that break for
+real, and red barrels that blow up and set each other off. How it works is
+in [games/showcase/README.md](../games/showcase/README.md#the-firing-range).
+
 ## HUD and menu
 
 - The HUD (RmlUi, `ui/showcase_hud.rml`) shows what the character is
@@ -59,6 +65,7 @@ The **Scenes** panel visits Synty-built levels far from the course
 | Jump, vault, climb | Space | A |
 | Crouch, let go of a ledge | C | B |
 | Shoot (or throw what you hold), push | Left click, E | RT, Y |
+| Aim a gun (crosshair, closer camera) | Right mouse | LT |
 | Pick up / put down (items go in your bag) | F | X |
 | Bag: inventory and equipment | Tab or I | View |
 | World map (travel to a zone) | M | pause menu > World map |
@@ -86,6 +93,7 @@ it is, is in [games/showcase/README.md](../games/showcase/README.md).
 | `KKE_DEMO_TRICKS=1` | Wall run and wall jump, then ledge leaps along the pillars and the leap up to the beam |
 | `KKE_DEMO_WORLD=1` | Shows the world map, then visits every zone in turn |
 | `KKE_DEMO_ITEMS=1` | At the supply table: picks things up, opens the bag, equips an axe, a rifle, a helmet, a canteen and a lantern, then shows them worn |
+| `KKE_DEMO_GUNS=1` | At the firing range: rifle at the plates, the glass and the stone walls, then the red barrels, the pistol and a grenade |
 | `KKE_DEMO_BRIDGE=1` | Drops an iron ball on the yard's glass, then rolls one into a crate, and logs how far the crates moved |
 | `KKE_SPLIT=2..4`, `KKE_OVERHEAD=1` | Local split screen, and an overhead picture-in-picture view |
 | `KKE_MAIN_MENU=pause` | Opens the pause menu after 1.5 s (`KKE_MAIN_MENU=0`: no title screen) |

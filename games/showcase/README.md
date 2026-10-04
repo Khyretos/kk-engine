@@ -57,6 +57,7 @@ are read in `ShowcaseModule::init` unless noted:
 | `KKE_DEMO_WORLD=1` | Opens the world map for a few seconds, then visits every zone in turn (5 s each) and logs the ground there |
 | `KKE_DEMO_ITEMS=1` | At the supply table: picks up what's in reach, opens the bag, equips an axe, a rifle, a helmet, a canteen and a lantern, closes it and turns the camera to see them worn. Logs the bag and the weight. `=2` leaves the bag open (drive it with keys or the mouse; each place and drop is logged) |
 | `KKE_DEMO_CARRY=1` | Spawns a crate, lifts it, carries it a few steps and throws it, and logs where it is. Loops every 7 s |
+| `KKE_DEMO_GUNS=1` | At the firing range: takes the guns off the bench, knocks down plates with the rifle, breaks the glass, the plank and a stone wall, sets off the red barrels, switches to the pistol, throws a grenade. Logs every hit and blast |
 | `KKE_DEMO_BRIDGE=1` | Drops an iron ball on the yard glass, then rolls one into a crate, and logs how far the crates moved (FEMFX builds) |
 | `KKE_BRIDGE=0` | Turns the FEMFX-Jolt bridge off, to compare |
 | `KKE_SPLIT=2..4` | Start with that many local players |
@@ -93,7 +94,8 @@ saved in `input.json`.
 | Walk | Left Alt (hold) | Tilt the stick a little (analog speed); no button |
 | Jump, vault, climb, grab a ledge | Space | A |
 | Crouch, or let go of a ledge | C (toggle) | B (toggle) |
-| Shoot (or throw what you hold) | Left click (hold for 4 shots a second) | RT |
+| Shoot (or throw what you hold); with a gun in your right hand, fire it (the rifle is automatic), with a grenade, throw it | Left click (hold for 4 shots a second) | RT |
+| Aim down the sights (the camera comes in over the shoulder, a crosshair shows) | Right mouse (hold) | LT (hold) |
 | Push what you look at | E | Y |
 | Pick up / put down the crate, barrel or ball in front of you; an item goes in your bag | F | X |
 | Bag (inventory and equipment) | Tab or I | View |
@@ -182,6 +184,42 @@ others keep playing. The **KKE Showcase** ImGui window (always shown)
 has the controls, a Scenes list to visit the Synty levels, and panels for
 movement, performance and the stress test, character, lighting, lava,
 split screen and camera. F1 shows the other modules' panels too.
+
+### The firing range
+
+North of the yard (zone 2, [Range.cpp](Range.cpp), the guns in
+[Guns.cpp](Guns.cpp)). The bench holds a rifle, a pistol, rifle and pistol
+rounds and two boxes of grenades; picking a gun or a tool up with an empty
+right hand puts it straight in that hand. Down range, from left to right:
+
+| Lane | What is there |
+|---|---|
+| Plates | 10 steel plates on plinths at 15, 28 and 45 m. A hit knocks one down; the HUD counts "Plates down" |
+| Breakables (FEMFX) | A glass pane, a plank on two blocks, a stone wall at 14 m and a bigger one at 23 m. Bullets break them for real; each piece is its own body |
+| Barrels and crates | 5 red barrels, a crate pyramid and two ragdoll dummies. A shot barrel burns for a moment and blows up, setting off the barrels near it |
+
+How a shot works: the crosshair point is a ray from the camera; the shot
+leaves the muzzle towards it with a little spread (0.25 degrees aimed,
+1.6 from the hip). Jolt (`kke::physicsRaycast`) and FEMFX each find their
+nearest hit and the nearer wins. A Jolt hit gets an impulse and an effect
+by material (sparks on steel, chips on wood and stone); a FEMFX hit gets a
+small fast iron slug spawned just short of it, so the break is FEMFX's own
+fracture, not a fake one. Magazines refill from the bag's rounds when
+empty (30 rifle, 12 pistol); no rounds left is a click and a toast.
+
+Grenades and barrels call `explode`: `kke::physicsBlast` pushes everything
+in both physics engines away (7 m), FEMFX walls crack, barrels and
+grenades in reach go up after it, and there is a fireball, smoke, a
+shockwave ring, a point-light flash, camera shake and a synthesized boom.
+Fuses count in physics time (`fixedUpdate`), so a slow machine does not
+blow a grenade up in mid-air. Every sound is synthesized at startup
+(`buildGuns`): no audio files. The effects are the built-in
+`kke::ParticleLibrary` ones, drawn in `renderTranslucent`; their shaders
+are copied by this game's CMakeLists.
+
+While aiming, the character turns with the camera and walks; the arms
+are placed by IK (`aimHands`: rifle to the shoulder with the left hand on
+the fore-end, pistol out in both hands, a grenade raised to throw).
 
 ### Spawning and carrying
 
@@ -902,6 +940,8 @@ Pitfalls the code shows:
 | [LavaStation.h](LavaStation.h), [LavaStation.cpp](LavaStation.cpp) | The lava: fluid, melting block, colliders, presets, drawing |
 | [SplitScreen.cpp](SplitScreen.cpp) | Local players 2-4, controller assignment, views, the overhead view |
 | [StressTest.cpp](StressTest.cpp) | The 36 s stress test and its report |
+| [Guns.cpp](Guns.cpp) | Guns, grenades, explosions: firing, hits, synthesized sounds, effects, aiming arms |
+| [Range.cpp](Range.cpp) | The firing range: bench, plates, barrels, crates, dummies, FEMFX glass and walls, the `KKE_DEMO_GUNS` run |
 | [Hud.cpp](Hud.cpp) | RmlUi data model, HUD updates, the pause menu's rows |
 | [Layout.h](Layout.h) | Station positions |
 | [course_art.scene.json](course_art.scene.json) | Synty art placed around the stations |

@@ -1,6 +1,6 @@
 # kke_demo: the walkable showcase (ACTION_PLAN.md P1).
 kke_add_game(kke_demo main.cpp ShowcaseModule.cpp StressTest.cpp SplitScreen.cpp Stations.cpp LavaStation.cpp Hud.cpp
-    Geometry.cpp Spawner.cpp Carry.cpp Items.cpp InventoryScreen.cpp World.cpp)
+    Geometry.cpp Spawner.cpp Carry.cpp Items.cpp InventoryScreen.cpp World.cpp Guns.cpp Range.cpp)
 target_link_libraries(kke_demo PRIVATE kke_engine)
 engine_copy_runtime_file(kke_demo ${CMAKE_CURRENT_SOURCE_DIR}/game.json marketplace/showcase/game.json)
 # The kinds of item (kke::ItemCatalog): names, sizes in the bag, weights, slots.
@@ -21,7 +21,8 @@ endforeach()
 foreach(shader rml_ui.vert rml_ui.frag rml_gradient.frag)
     engine_add_shader(kke_demo ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()
-foreach(shader model.vert model_instanced.vert shadow_instanced.vert model.frag shadow.vert shadow.frag cube.vert cube.frag glow.frag ocean.vert ocean.frag sky.vert sky.frag impostor.vert impostor.frag fluid_depth.frag fluid_blur.comp fluid_composite.frag)
+foreach(shader model.vert model_instanced.vert shadow_instanced.vert model.frag shadow.vert shadow.frag cube.vert cube.frag glow.frag ocean.vert ocean.frag sky.vert sky.frag impostor.vert impostor.frag fluid_depth.frag fluid_blur.comp fluid_composite.frag
+               effect.vert effect_smoke.frag effect_spark.frag effect_glow.frag effect_flake.frag effect_ring.frag) # effect_*: particles (guns, blasts)
     engine_add_shader(kke_demo ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()
 # Character animations (Quaternius' Universal Animation Library, CC0) are

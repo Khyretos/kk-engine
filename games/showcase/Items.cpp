@@ -102,6 +102,14 @@ void ShowcaseModule::buildLooks() {
             appendBox(at(0.035f, 0.02f, 0.0f), glm::vec3(0.025f, 0.004f, 0.006f), kGunMetal, v, i);
             grip.radius = 0.014f;
             l.metallic = 0.6f;
+        } else if (id == "grenade") {
+            // Held round its body: the lever along +Y, the ring on top.
+            appendSphere(at(0.0f, 0.0f, 0.0f) * glm::scale(glm::mat4(1.0f), glm::vec3(1.0f, 1.2f, 1.0f)), 0.042f, def.color, v, i);
+            appendCylinder(at(0.0f, 0.058f, 0.0f), 0.014f, 0.012f, kGunMetal, v, i);
+            appendBox(at(0.02f, 0.03f, 0.0f) * turn(-15.0f, glm::vec3(0, 0, 1)), glm::vec3(0.004f, 0.04f, 0.008f), kSteel, v, i);
+            appendCylinder(at(-0.02f, 0.075f, 0.0f) * turn(90.0f, glm::vec3(1, 0, 0)), 0.012f, 0.002f, kSteel, v, i);
+            grip.radius = 0.042f;
+            l.metallic = 0.3f;
         } else if (id == "medkit") {
             appendBox(glm::mat4(1.0f), glm::vec3(0.11f, 0.08f, 0.05f), def.color, v, i);
             for (int s = -1; s <= 1; s += 2) {
@@ -229,6 +237,12 @@ void ShowcaseModule::placeItems() {
         { "flower_red", 1, -1.8f, 1.4f }, { "flower_yellow", 1, -1.5f, 1.8f }, { "flower_blue", 1, -2.1f, 1.9f },
     };
     for (const Spot& s : kGround) dropItem(s.id, s.count, kSupply + glm::vec3(s.x, 0.0f, s.z));
+    // The firing range's bench: guns, plenty of rounds and grenades (x across it, z along it).
+    static const Spot kBench[] = {
+        { "rifle", 1, 0.0f, -3.0f },      { "ammo_rifle", 30, 0.1f, -2.2f }, { "ammo_rifle", 30, -0.1f, -1.8f }, { "ammo_rifle", 30, 0.1f, -1.4f },
+        { "pistol", 1, 0.0f, 0.0f },      { "ammo_pistol", 50, 0.1f, 0.6f }, { "grenade", 4, 0.0f, 2.5f },     { "grenade", 4, 0.1f, 3.1f },
+    };
+    for (const Spot& s : kBench) dropItem(s.id, s.count, kRangeBench + glm::vec3(s.x, kRangeBenchHalf.y * 2.0f, s.z));
 }
 
 int ShowcaseModule::itemInReach() const {
@@ -279,6 +293,14 @@ void ShowcaseModule::takeItem(int index) {
         m_worldItems.erase(m_worldItems.begin() + index);
         toast("Picked up " + what);
     }
+    // A gun, a tool or a grenade with the right hand empty goes straight into it.
+    if (taken > 0 && !m_inv.equipped(kke::EquipSlot::RightHand) && (def->category == "Weapon" || def->category == "Tool") &&
+        (def->equipSlots & kke::slotBit(kke::EquipSlot::RightHand)))
+        for (const kke::InventoryItem& in : m_inv.items())
+            if (in.id == def->id && in.slot < 0 && m_inv.equip(m_items, in.uid, kke::EquipSlot::RightHand)) {
+                toast(def->name + " in your right hand");
+                break;
+            }
     m_invDirty = true;
     syncEquipment();
 }
@@ -311,6 +333,7 @@ void ShowcaseModule::drawEquipped(kke::Pose& pose, const glm::mat4& toWorld) {
     }
     const bool carrying = m_held.body != kke::RigidWorld::kNoBody; // both hands on a crate: hand items stowed
     const bool shown = m_rig.mode != kke::CameraRig::Mode::FirstPerson;
+    m_muzzleValid = false;
     if (m_equipmentBuilt && m_equipment.valid() && shown) {
         const std::vector<glm::mat4> bones = kke::poseToModel(m_rigData, pose);
         for (size_t s = 0; s < kke::kEquipSlots; ++s) {
@@ -322,7 +345,13 @@ void ShowcaseModule::drawEquipped(kke::Pose& pose, const glm::mat4& toWorld) {
             const kke::InventoryItem* in = m_inv.equipped(slot);
             const auto look = in ? m_looks.find(in->id) : m_looks.end();
             if (look == m_looks.end()) continue;
-            const glm::mat4 m = toWorld * m_equipment.itemTransform(slot, bones);
+            glm::mat4 m = toWorld * m_equipment.itemTransform(slot, bones);
+            if (slot == kke::EquipSlot::RightHand && m_aimWanted) m = aimedGun(m); // pointed along the crosshair
+            if (slot == kke::EquipSlot::RightHand) {
+                const GunDef* gun = gunInHand();
+                m_muzzle = glm::vec3(m * glm::vec4(gun ? gun->muzzle : glm::vec3(0.0f), 1.0f)); // a grenade leaves from the hand
+                m_muzzleValid = true;
+            }
             const glm::mat3 nm = glm::mat3(m);
             const uint32_t base = static_cast<uint32_t>(v.size());
             for (const kke::Vertex& p : look->second.v) {

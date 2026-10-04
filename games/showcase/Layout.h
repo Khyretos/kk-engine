@@ -18,6 +18,9 @@ inline constexpr glm::vec3 kPlatform(-14.0f, 0.0f, 6.0f);     // moving platform
 inline constexpr glm::vec3 kLowRoof(10.0f, 0.0f, 6.0f);       // crouch under it
 inline constexpr glm::vec3 kSupply(-4.5f, 0.0f, 2.5f);        // supply table: things to pick up and equip
 inline constexpr glm::vec3 kSupplyTableHalf(1.3f, 0.42f, 0.45f); // its top is 0.84 m up
+// The firing range's bench (Range.cpp): you shoot from behind it toward +X.
+inline constexpr glm::vec3 kRangeBench(140.0f, 0.0f, -150.0f);
+inline constexpr glm::vec3 kRangeBenchHalf(0.45f, 0.45f, 6.0f);
 
 // The yard's gates: gaps in its walls, the roads start there.
 inline constexpr float kGateHalf = 5.0f;
@@ -45,8 +48,8 @@ inline constexpr Zone kZones[] = {
       { 0.95f, 0.8f, 0.3f }, { 0.0f, 0.05f, 6.0f }, 0.0f },
     { "PARKOUR PARK", "Walls, gaps and rooftops to run, vault and climb.", { 0.0f, 0.0f, -160.0f }, 70.0f, { 0.3f, 0.6f, 0.95f },
       { 0.0f, 0.05f, -95.0f }, 0.0f },
-    { "FIRING RANGE", "Targets and things to break with the guns from the supply table.", { 170.0f, 0.0f, -150.0f }, 45.0f, { 0.9f, 0.3f, 0.25f },
-      { 140.0f, 0.05f, -120.0f }, 45.0f },
+    { "FIRING RANGE", "Guns on the bench: steel plates, glass and stone to break, red barrels to blow up.", { 170.0f, 0.0f, -150.0f }, 45.0f, { 0.9f, 0.3f, 0.25f },
+      { 137.5f, 0.05f, -150.0f }, 90.0f },
     { "AIRFIELD", "A runway and a hangar.", { 380.0f, 0.0f, 40.0f }, 200.0f, { 0.95f, 0.95f, 0.95f }, { 200.0f, 0.05f, 15.0f }, 90.0f },
     { "RACE TRACK", "An oval and a car park.", { 0.0f, 0.0f, 255.0f }, 125.0f, { 0.2f, 0.2f, 0.2f }, { 0.0f, 0.05f, 140.0f }, 180.0f },
     { "NATURE PARK", "A forest and a meadow.", { -230.0f, 0.0f, 40.0f }, 110.0f, { 0.3f, 0.75f, 0.3f }, { -135.0f, 0.05f, 8.0f }, -90.0f },

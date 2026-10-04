@@ -180,11 +180,22 @@ void ShowcaseModule::init(kke::Application& app) {
     }
     buildLevel();
     buildWorld();
+    {
+        std::vector<kke::Vertex> v;
+        std::vector<uint32_t> i;
+        buildRange(v, i);
+        m_rangeStatic = std::make_unique<kke::DynamicMeshRenderer>(app);
+        m_rangeStatic->upload(v, i);
+        m_rangeBatch = std::make_unique<kke::DynamicMeshRenderer>(app);
+        m_rangeMetal = std::make_unique<kke::DynamicMeshRenderer>(app);
+    }
+    buildGuns();
     dressCourse();
     spawnCrates();
     spawnBreakables();
     setupPlayer();
     loadItems();
+    spawnRange();
     m_rig.mode = kke::CameraRig::Mode::ThirdPerson;
     m_rig.yaw = 0.0f;
     m_rig.pitch = -12.0f;
@@ -236,6 +247,7 @@ void ShowcaseModule::init(kke::Application& app) {
         m_rig.yaw = 150.0f; // behind and beside you, looking the way you face (+Z)
     }
     if (const char* wd = std::getenv("KKE_DEMO_WORLD"); wd && *wd && *wd != '0') m_demoWorld = 0.0f;
+    if (const char* g = std::getenv("KKE_DEMO_GUNS"); g && *g && *g != '0') m_demoGuns = 0.0f;
     if (const char* it = std::getenv("KKE_DEMO_ITEMS"); it && *it && *it != '0') {
         m_demoItems = 0.0f;
         m_demoItemsKeepOpen = *it == '2';
@@ -781,6 +793,7 @@ void ShowcaseModule::applyIk(float dt) {
         }
     }
     if (!reach && m_handIk) holdHands();
+    if (!reach && m_held.body == kke::RigidWorld::kNoBody) aimHands(pose, toWorld); // a gun up to the eye
     // Hanging: the balls of the feet against the wall below the hands
     // (braced, the way people hang on a ledge), where there is wall.
     if (m_footIk && st == State::Hang) {
@@ -871,13 +884,23 @@ void ShowcaseModule::readActions(float dt) {
     // Fire: once on press, then 4 shots/s while held.
     const bool fireOk = !(mouseLeft && (!m_captured || m_swallowFire));
     m_fireCooldown -= dt;
+    // A gun or a grenade in the right hand: Guns.cpp has the trigger.
+    {
+        bool fire = fireOk && in.held("fire"), firePressed = fireOk && in.pressed("fire"), aim = in.held("aim");
+        if (m_demoGuns >= 0.0f) {
+            fire = firePressed = false;
+            updateGunsDemo(dt, fire, aim);
+            firePressed = fire;
+        }
+        updateGuns(dt, fire, firePressed, aim);
+    }
     if (m_held.body != kke::RigidWorld::kNoBody) {
         // Holding something: the trigger throws it.
         if (fireOk && in.pressed("fire")) {
             throwHeld(m_app->camera());
             m_fireCooldown = 0.4f;
         }
-    } else if (fireOk && in.held("fire") && (in.pressed("fire") || m_fireCooldown <= 0.0f)) {
+    } else if (!armed() && fireOk && in.held("fire") && (in.pressed("fire") || m_fireCooldown <= 0.0f)) {
         shoot(m_app->camera());
         m_fireCooldown = 0.25f;
     }
@@ -1005,6 +1028,7 @@ void ShowcaseModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
     // isn't gameplay state).
     if (m_lava) m_lava->fixedUpdate(ctx.fixedDt, m_rigid->world(), lavaWatched());
     carryStep(ctx.fixedDt);
+    tickFuses(ctx.fixedDt); // grenades and barrels (each machine its own range for now)
     // Platform: back and forth, up and down.
     m_platformTime += ctx.fixedDt;
 #if KKE_ENABLE_NET
@@ -1022,7 +1046,9 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     batchCrates();
     batchProps();
     batchItems();
+    batchRange();
     updateDummies();
+    updateEffects(dt);
     if (m_lava) m_lava->update();
     updateHud();
     kke::RigidWorld& w = m_rigid->world();
@@ -1148,11 +1174,12 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     const bool wading = inPool(w.characterPosition(m_player));
     if (m_demoBridge >= 0.0f) updateBridgeDemo(dt);
     in.fast = m_sprint && !m_crouch && !wading;
-    in.slow = m_walk || wading;
+    in.slow = m_walk || wading || m_aimBlend > 0.5f; // aiming: a steady walk
     in.crouch = hanging ? m_wantCrouch != m_crouch : m_crouch;
     in.goUp = m_jumpQueued;
     m_jumpQueued = false;
-    if (m_rig.mode == kke::CameraRig::Mode::FirstPerson) m_loco->setFacing(m_rig.forward());
+    // First person, or aiming: the body turns with the view.
+    if (m_rig.mode == kke::CameraRig::Mode::FirstPerson || m_aimWanted) m_loco->setFacing(m_rig.forward());
     const kke::Locomotion::State before = m_loco->state();
     if (!stepNetPlayer(in, dt)) m_loco->update(in, dt);
     if (m_autopilot && m_loco->state() != before &&
@@ -1177,7 +1204,7 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     const glm::vec3 drawFeet = w.characterDrawPosition(m_player, m_app->fixedAlpha());
     // Face where Locomotion says (it turns at a limited rate, squares up
     // to obstacles), or where we look in first person.
-    m_facing = m_rig.mode == kke::CameraRig::Mode::FirstPerson ? m_rig.yaw : m_loco->facingYaw();
+    m_facing = m_rig.mode == kke::CameraRig::Mode::FirstPerson || m_aimWanted ? m_rig.yaw : m_loco->facingYaw();
     if (feet.y < -20.0f) m_loco->teleport(m_spawn); // fell out of the world
 
     updateAnimation(dt);
@@ -1196,7 +1223,7 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     // along a wall, the shoulder moves to the open side: over the wall
     // shoulder the spring arm would pull in to the back of the head.
     {
-        float shoulder = m_shoulder;
+        float shoulder = m_shoulder * (1.0f + 0.5f * m_aimBlend); // aiming: further over the shoulder
         if (const float side = m_loco->wallRunSide(); side != 0.0f) {
             const glm::vec3 f = m_loco->facing();
             const glm::vec3 open = -glm::vec3(-f.z, 0.0f, f.x) * side; // away from the wall
@@ -1209,6 +1236,14 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
         auto h = w.raycast(from, d, maxD);
         return h.hit ? h.distance : maxD;
     }, m_app->camera());
+    if (m_shake > 0.01f) {
+        // A blast nearby shakes the view (a few cm, fast).
+        kke::Camera& cam = m_app->camera();
+        const float t = static_cast<float>(SDL_GetTicks()) * 0.001f;
+        const glm::vec3 j = glm::vec3(std::sin(t * 61.0f), std::sin(t * 47.0f + 1.3f), std::sin(t * 53.0f + 2.1f)) * (0.12f * m_shake);
+        cam.position += j;
+        cam.target += j * 0.5f;
+    }
     updateLocalPlayers(dt);
 
     // Lighting from the panel.
@@ -1416,6 +1451,9 @@ void ShowcaseModule::render(const kke::RenderContext& ctx) {
     if (m_crateBatchIndices) m_crateBatch->draw(ctx, glm::mat4(1.0f), 0.0f, 0.7f);
     if (m_propBatchIndices) m_propBatch->draw(ctx, glm::mat4(1.0f), 0.0f, 0.7f);
     if (m_propMetalIndices) m_propMetal->draw(ctx, glm::mat4(1.0f), 0.85f, 0.35f);
+    if (m_rangeStatic) m_rangeStatic->draw(ctx, glm::mat4(1.0f), 0.0f, 0.85f);
+    if (m_rangeBatchIndices) m_rangeBatch->draw(ctx, glm::mat4(1.0f), 0.0f, 0.7f);
+    if (m_rangeMetalIndices) m_rangeMetal->draw(ctx, glm::mat4(1.0f), 0.8f, 0.4f);
     if (m_itemBatchIndices) m_itemBatch->draw(ctx, glm::mat4(1.0f), 0.15f, 0.55f);
     if (m_equipBatchIndices) m_equipBatch->draw(ctx, glm::mat4(1.0f), 0.15f, 0.55f);
     m_cubes[3]->draw(ctx, glm::scale(w.transform(m_platform), m_platformHalf), 0.3f, 0.4f);
@@ -1440,6 +1478,9 @@ void ShowcaseModule::renderShadow(const kke::ShadowRenderContext& ctx) {
     if (m_crateBatchIndices) m_crateBatch->drawShadow(ctx);
     if (m_propBatchIndices) m_propBatch->drawShadow(ctx);
     if (m_propMetalIndices) m_propMetal->drawShadow(ctx);
+    if (m_rangeStatic) m_rangeStatic->drawShadow(ctx);
+    if (m_rangeBatchIndices) m_rangeBatch->drawShadow(ctx);
+    if (m_rangeMetalIndices) m_rangeMetal->drawShadow(ctx);
     if (m_itemBatchIndices) m_itemBatch->drawShadow(ctx);
     if (m_equipBatchIndices) m_equipBatch->drawShadow(ctx);
     m_cubes[3]->drawShadow(ctx, glm::scale(w.transform(m_platform), m_platformHalf));

@@ -21,6 +21,9 @@
 #include "kke/Application.h"
 #include "kke/Log.h"
 #include "kke/modules/InputModule.h"
+#if KKE_ENABLE_FEMFX
+#include "kke/modules/PhysicsBridgeModule.h"
+#endif
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/modules/UiModule.h"
 
@@ -100,7 +103,7 @@ struct Road {
 const std::vector<Road>& roads() {
     static const std::vector<Road> r = {
         { { kGateNorth, { 0.0f, -100.0f } }, 7.0f, true },                                                 // to the parkour park
-        { { { 0.0f, -70.0f }, { 60.0f, -95.0f }, { 128.0f, -126.0f } }, 6.0f, true },                     // to the firing range
+        { { { 0.0f, -70.0f }, { 60.0f, -95.0f }, { 128.0f, -126.0f }, { 134.0f, -142.0f } }, 6.0f, true },                     // to the firing range
         { { kGateEast, { 120.0f, -18.0f }, { 160.0f, 5.0f }, { 172.0f, 22.0f } }, 7.0f, true },           // to the airfield
         { { kGateSouth, { 0.0f, 145.0f } }, 7.0f, true },                                                 // to the race track
         { { kGateWest, { -80.0f, 4.0f }, { -135.0f, 8.0f } }, 7.0f, true },                               // to the nature park
@@ -242,7 +245,16 @@ void ShowcaseModule::buildWorld() {
         for (const kke::Vertex& p : v) d.points.push_back(p.position);
         d.indices = idx;
         d.friction = 0.8f;
-        if (m_rigid->world().add(d) == kke::RigidWorld::kNoBody) kke::log::get(name())->warn("world: the terrain collider could not be made");
+        const kke::RigidWorld::BodyId terrain = m_rigid->world().add(d);
+        if (terrain == kke::RigidWorld::kNoBody) kke::log::get(name())->warn("world: the terrain collider could not be made");
+#if KKE_ENABLE_FEMFX
+        // The bridge mirrors Jolt bodies near FEMFX pieces into FEMFX as
+        // boxes: the terrain's box is the whole world, and every breakable
+        // would be inside it (thrown about). FEMFX has its own floor at
+        // y = 0, which is where the terrain is under the yard and the range.
+        else if (auto* bridge = m_app->getModule<kke::PhysicsBridgeModule>())
+            bridge->ignore(terrain);
+#endif
     }
     // Invisible walls at the very edge, past the ring of hills.
     for (int s = 0; s < 4; ++s) {

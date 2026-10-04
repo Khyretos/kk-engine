@@ -317,6 +317,7 @@ void ShowcaseModule::resetWorld() {
     dropHeld();
     clearSpawned();
     resetCourse();
+    spawnRange(); // plates up, barrels back, breakables whole, dummies standing
     // The bag empties, its things back on the supply table.
     openInventory(false);
     m_inv.clear();

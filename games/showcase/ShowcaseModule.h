@@ -19,6 +19,9 @@
 #include "kke/Ragdoll.h"
 #include "kke/OceanRenderer.h"
 #include "kke/Module.h"
+#include "kke/AudioMixer.h"
+#include "kke/ParticleEffects.h"
+#include "kke/ParticleLibrary.h"
 #include "kke/RigidWorld.h"
 #include "kke/SphereImpostors.h"
 #include "kke/modules/ModelModule.h"
@@ -336,6 +339,83 @@ private:
     float m_demoWorld = -1.0f; // KKE_DEMO_WORLD: seconds into the tour, -1 = off
     void updateWorldDemo(float dt);
 
+    // Guns, grenades and explosions (Guns.cpp). A rifle or pistol in the
+    // right hand fires (RT, click) where the crosshair is; aim (LT, right
+    // click) brings it up to the eye and the camera over the shoulder.
+    // Rounds come from the bag (it reloads by itself). A grenade in the
+    // right hand is thrown instead. Bullets knock Jolt bodies and break
+    // FEMFX ones; red barrels and grenades blow up (kke::physicsBlast).
+    struct GunDef {
+        const char* id;
+        const char* ammo;  // item id of its rounds
+        int magazine;
+        float interval;    // s between shots
+        bool automatic;    // held trigger keeps firing
+        float reload;      // s
+        float push;        // N s on what it hits
+        glm::vec3 muzzle;  // item space
+    };
+    struct Grenade { kke::RigidWorld::BodyId body = kke::RigidWorld::kNoBody; float fuse = 0.0f; };
+    struct Slug { uint32_t handle = 0; float age = 0.0f; }; // a FEMFX bullet, gone after a moment
+    void buildGuns();
+    const GunDef* gunInHand() const; // nullptr: no gun in the right hand
+    bool grenadeInHand() const;
+    bool armed() const { return gunInHand() || grenadeInHand(); }
+    void updateGuns(float dt, bool fireHeld, bool firePressed, bool aimHeld);
+    void fireGun(const GunDef& gun);
+    void bulletHit(const glm::vec3& from, const glm::vec3& dir, const GunDef& gun);
+    void throwGrenade();
+    void explode(const glm::vec3& at, float power);
+    void aimHands(const kke::Pose& pose, const glm::mat4& toWorld); // IK targets for the aim pose (before m_ik.apply)
+    glm::mat4 aimedGun(const glm::mat4& inHand) const;              // the gun's frame while aiming
+    void updateEffects(float dt);
+    void tickFuses(float dt); // fixedUpdate
+    void playSound(const std::shared_ptr<const kke::SoundBuffer>& sound, const glm::vec3& at, float gain, float range);
+    void renderTranslucent(const kke::RenderContext& ctx) override;
+    std::unique_ptr<kke::ParticleEffects> m_fx;
+    std::unique_ptr<kke::ParticleLibrary> m_fxLib;
+    std::shared_ptr<const kke::SoundBuffer> m_sndRifle, m_sndPistol, m_sndBoom, m_sndClick, m_sndReload;
+    std::map<std::string, int> m_loaded;   // rounds in each gun's magazine
+    float m_gunCooldown = 0.0f, m_reloadLeft = 0.0f;
+    float m_sinceShot = 10.0f;             // s since the last shot (the gun stays up a moment)
+    float m_aimBlend = 0.0f;               // 0 = relaxed, 1 = aiming
+    float m_armBase = 3.5f, m_fovBase = 60.0f;
+    bool m_aimWanted = false;
+    glm::vec3 m_aimPoint{0.0f};            // where the crosshair ray lands
+    glm::vec3 m_muzzle{0.0f};              // world, last drawn
+    bool m_muzzleValid = false;
+    float m_flash = 0.0f, m_flashStrength = 0.0f;
+    glm::vec3 m_flashAt{0.0f}, m_flashColor{1.0f};
+    float m_shake = 0.0f;                  // camera shake from a blast, 0..1
+    std::vector<Grenade> m_grenades;
+    std::vector<Slug> m_slugs;
+    uint32_t m_shotSeed = 1;
+    // The firing range (Range.cpp), in its zone: a bench with guns,
+    // rounds and grenades; steel plates that fall when hit; glass, a plank
+    // and stone walls that break (FEMFX); red barrels by a crate pile;
+    // two dummies. Reset the world puts it all back.
+    enum class RangeKind : uint8_t { Plate, Barrel, Crate };
+    struct RangeThing {
+        kke::RigidWorld::BodyId body = kke::RigidWorld::kNoBody;
+        RangeKind kind = RangeKind::Crate;
+        glm::vec3 half{0.3f}; // barrel: x = radius, y = half height
+        glm::vec3 color{0.6f};
+        float fuse = -1.0f;   // barrel: s to the bang, -1 = not lit
+    };
+    void buildRange(std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx);
+    void spawnRange();
+    void clearRange();
+    void batchRange();
+    int platesDown() const;
+    int plateCount() const;
+    std::vector<RangeThing> m_range;
+    std::vector<uint32_t> m_rangeBreakables; // FEMFX handles
+    std::unique_ptr<kke::DynamicMeshRenderer> m_rangeStatic, m_rangeBatch, m_rangeMetal;
+    size_t m_rangeBatchIndices = 0, m_rangeMetalIndices = 0;
+    float m_demoGuns = -1.0f; // KKE_DEMO_GUNS: seconds into the script, -1 = off
+    bool m_demoAim = false;   // the script aims (m_aimPoint), not the camera
+    void updateGunsDemo(float dt, bool& fire, bool& aim);
+
     // The bag (InventoryScreen.cpp, ui/showcase_inventory.rml): Tab, I or
     // View opens it over the game. Move with the arrows, the
     // d-pad or the mouse; take and place with A, Space or a click; turn
@@ -388,8 +468,8 @@ private:
     void updateHud();
     void buildPauseRows();
     struct HudState {
-        std::string move, speed, station, stationText, stationLive, menuHint, prompt, toast;
-        bool trick = false, panels = false, online = false;
+        std::string move, speed, station, stationText, stationLive, menuHint, prompt, toast, ammo;
+        bool trick = false, panels = false, online = false, crosshair = false, reloading = false;
         int players = 1;
     };
     HudState m_hud;
