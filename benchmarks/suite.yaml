@@ -181,9 +181,10 @@ demos:
     exe: cookbook
     title: "Cookbook: Lua recipes"
     # A virtual pad walks the character round the level and presses
-    # View every few seconds, so the run tours all eight cameras (and
-    # plays the camera path) instead of watching an empty field.
+    # d-pad right (next camera) every few seconds, so the run tours all
+    # eight cameras (and plays the camera path) instead of watching an
+    # empty field. Not View/Back: that opens the pause menu.
     env:
       KKE_VIRTUAL_INPUT: "pad"
-      KKE_VIRTUAL_PAD_SCRIPT: "0.5:lefty=-0.8,0.5:leftx=0.3,2.5:back,4:a,5:back,6:leftx=-0.6,7.5:back,8:rightx=0.5,10:back,10.5:rightx=0,11:a,12.5:back,13:leftx=0.6,15:back,15.5:dpad_up,17.5:back,18:lefty=0.8,18:leftx=0,20:back"
+      KKE_VIRTUAL_PAD_SCRIPT: "0.5:lefty=-0.8,0.5:leftx=0.3,2.5:dpad_right,4:a,5:dpad_right,6:leftx=-0.6,7.5:dpad_right,8:rightx=0.5,10:dpad_right,10.5:rightx=0,11:a,12.5:dpad_right,13:leftx=0.6,15:dpad_right,15.5:dpad_up,17.5:dpad_right,18:lefty=0.8,18:leftx=0,20:dpad_right"
     quick: false
