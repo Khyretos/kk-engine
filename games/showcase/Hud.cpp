@@ -176,6 +176,21 @@ void ShowcaseModule::updateHud() {
         }
     }
 
+    if (m_ride != Ride::None) {
+        // Riding: what it is, how to drive or fly it, the numbers.
+        move = m_ride == Ride::Plane ? (m_plane.wreck >= 0.0f ? "Crashed" : m_plane.s.onGround ? "Taxiing" : "Flying") : "Driving";
+        speedText.clear();
+        if (m_ride == Ride::Car) {
+            station = std::string(m_cars[static_cast<size_t>(m_rideCar)].name);
+            for (char& ch : station) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+            text = "Steer {move}, gas {drive.gas}, brake or reverse {drive.brake}, handbrake {jump}. Back on its wheels {reset}, get out {pickup}.";
+        } else {
+            station = "STUNT PLANE";
+            text = m_plane.s.onGround ? "Throttle up {drive.gas} and roll: it lifts off by itself. Steer {move}, brakes {jump}, get out {pickup} once stopped."
+                                      : "Stick {move} (forward: nose down), throttle {drive.gas} / {drive.brake}. Land on the runway or a flat field.";
+        }
+        live = rideHud();
+    }
     auto set = [this](std::string& field, std::string value, const char* name) {
         if (field == value) return;
         field = std::move(value);
@@ -200,6 +215,10 @@ void ShowcaseModule::updateHud() {
                 const int n = m_worldItems[static_cast<size_t>(item)].count;
                 prompt = "{pickup} Pick up " + (n > 1 ? std::to_string(n) + " x " : std::string()) + def->name;
             }
+        if (prompt.empty() && m_ride == Ride::None) {
+            if (const int car = carInReach(); car >= 0) prompt = std::string("{pickup} Drive the ") + m_cars[static_cast<size_t>(car)].name;
+            else if (planeInReach()) prompt = "{pickup} Fly the plane";
+        }
     }
     set(m_hud.prompt, prompt.empty() || !input ? prompt : input->promptText(prompt), "prompt");
     // The gun: rounds in it and in the bag, or reloading; the crosshair.
@@ -211,7 +230,7 @@ void ShowcaseModule::updateHud() {
         ammo = "Grenades " + std::to_string(m_inv.count("grenade"));
     }
     set(m_hud.ammo, ammo, "ammo");
-    const bool crosshair = armed() && !m_invOpen && !m_spawnOpen && !m_mapOpen;
+    const bool crosshair = armed() && m_ride == Ride::None && !m_invOpen && !m_spawnOpen && !m_mapOpen;
     if (m_hud.crosshair != crosshair) {
         m_hud.crosshair = crosshair;
         m_hudModel.DirtyVariable("crosshair");

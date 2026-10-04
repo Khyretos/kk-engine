@@ -13,6 +13,7 @@
 #include "kke/ResourceGovernor.h"
 #include "kke/Buoyancy.h"
 #include "kke/Locomotion.h"
+#include "Flight.h" // games/flying_demo: the plane's flight model
 #include "LavaStation.h"
 #include "Layout.h"
 #include "kke/Ocean.h"
@@ -20,6 +21,7 @@
 #include "kke/OceanRenderer.h"
 #include "kke/Module.h"
 #include "kke/AudioMixer.h"
+#include "kke/EngineSound.h"
 #include "kke/ParticleEffects.h"
 #include "kke/ParticleLibrary.h"
 #include "kke/RigidWorld.h"
@@ -33,7 +35,7 @@
 #include <memory>
 #include <vector>
 
-namespace kke { class RigidBodyModule; class PhysicsModule; class InputModule; class NetModule; class UiModule; class GameShellModule; }
+namespace kke { class RigidBodyModule; class PhysicsModule; class InputModule; class InputMap; class NetModule; class UiModule; class GameShellModule; }
 namespace Rml { class ElementDocument; }
 
 namespace kke_showcase {
@@ -100,6 +102,7 @@ private:
     void forcePush(const kke::Camera& cam);
     void setCaptured(bool on);
     void readActions(float dt);
+    void applyLighting();
     void resetCourse(); // crates back (asks the host when we're a client)
 
     // Multiplayer (kke::NetModule, docs/NETWORKING.md): our player's state out,
@@ -415,6 +418,73 @@ private:
     float m_demoGuns = -1.0f; // KKE_DEMO_GUNS: seconds into the script, -1 = off
     bool m_demoAim = false;   // the script aims (m_aimPoint), not the camera
     void updateGunsDemo(float dt, bool& fire, bool& aim);
+
+    // Cars and the plane (Vehicles.cpp). Cars on Jolt's vehicle physics
+    // (kke/Vehicle.h) at the race track: an oval with a lap timer, cones
+    // and a jump. A stunt plane on the airfield's runway, flown by the
+    // Flying demo's flight model (games/flying_demo/Flight.h) on a
+    // kinematic body. Walk up and press pickup (F / X) to get in or out.
+    enum class Ride : uint8_t { None, Car, Plane };
+    struct Car {
+        kke::RigidWorld::VehicleId id = 0;
+        glm::vec3 half{0.85f, 0.35f, 2.0f}; // the chassis
+        glm::vec3 color{0.7f};
+        glm::vec3 home{0.0f};
+        float homeYaw = 0.0f;               // degrees, 0 = facing -Z (like the rig)
+        const char* name = "";
+        kke::VehicleState state;
+    };
+    struct Plane {
+        flying::PlaneState s;
+        flying::Controls c;
+        kke::RigidWorld::BodyId body = kke::RigidWorld::kNoBody;
+        glm::vec3 home{0.0f};
+        float homeYaw = 0.0f;  // flying::headingOf: 0 = -Z, clockwise
+        float prop = 0.0f;     // propeller angle (radians)
+        float wreck = -1.0f;   // s since it crashed, -1 = whole
+        glm::vec3 drawPos{0.0f};
+        glm::quat drawRot{1.0f, 0.0f, 0.0f, 0.0f};
+    };
+    void defineRideActions();             // drive.gas, drive.brake (init, before the bindings are committed)
+    void buildVehicles(std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx); // the oval, the car park, the ramp, the hangar
+    void spawnVehicles();
+    void clearVehicles();
+    void batchVehicles();
+    bool useVehicle();                    // pickup pressed: in or out (false: nothing to do here)
+    int carInReach() const;               // index into m_cars, -1 = none
+    bool planeInReach() const;
+    void enterVehicle(Ride ride, int car);
+    void exitVehicle(bool force = false); // force: even moving (travel, reset, a crash)
+    void flipCar();                       // back on its wheels (reset while driving)
+    void readRide(kke::InputMap& in, float dt);
+    void stepVehicles(float dt);          // fixedUpdate: inputs to the car, the plane's flight
+    void updateRide(float dt);            // the camera, the character in the seat, laps
+    void updateEngineSound(float dt);
+    flying::Ground flightGround() const;
+    glm::vec3 ridePosition() const;
+    kke::RigidWorld::BodyId rideBody() const;
+    std::string rideHud() const;          // speed, gear, altitude, lap
+    std::vector<Car> m_cars;
+    Plane m_plane;
+    flying::FlightSettings m_flight;
+    Ride m_ride = Ride::None;
+    int m_rideCar = -1;
+    kke::VehicleInput m_carIn;
+    std::vector<RangeThing> m_cones;      // the track's cones (kind Crate, drawn orange)
+    float m_lookIdle = 10.0f;             // s since the player turned the camera (then it swings in behind)
+    float m_rideArm = 7.0f, m_walkArm = 3.5f;
+    float m_lapAngle = 0.0f, m_lapTime = -1.0f, m_lastLap = -1.0f, m_bestLap = -1.0f, m_lapPrev = 0.0f;
+    int m_laps = 0;
+    std::unique_ptr<kke::DynamicMeshRenderer> m_vehStatic, m_vehBatch;
+    size_t m_vehBatchIndices = 0;
+    kke::EngineSound m_engine;
+    std::shared_ptr<kke::AudioStream> m_engineStream;
+    uint32_t m_engineVoice = 0;
+    std::vector<float> m_engineScratch;
+    float m_demoDrive = -1.0f; // KKE_DEMO_DRIVE: seconds into the script, -1 = off
+    int m_demoWaypoint = 0;
+    float m_demoClosest = 1e9f; // m: the plane's nearest pass at the waypoint so far
+    void updateDriveDemo(float dt, glm::vec2& move, float& gas, float& brake, bool& handBrake);
 
     // The bag (InventoryScreen.cpp, ui/showcase_inventory.rml): Tab, I or
     // View opens it over the game. Move with the arrows, the

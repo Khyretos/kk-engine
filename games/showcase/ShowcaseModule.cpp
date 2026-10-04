@@ -151,6 +151,7 @@ void ShowcaseModule::init(kke::Application& app) {
         buildSpawnMenu(); // its actions: RB / G, and the list's own
         buildInventoryScreen(); // Tab, I, View; and the bag's own
         buildMapScreen();       // M; and the map's own
+        defineRideActions();    // gas, brake (cars, the plane)
         // Left-click shoots, but not the click that grabs the mouse (see onEvent).
         m_input->commitDefaults();
         if (const char* lefty = std::getenv("KKE_LEFT_HANDED"); lefty && *lefty == '1') kke::InputModule::mirrorKeyboard(in);
@@ -188,6 +189,12 @@ void ShowcaseModule::init(kke::Application& app) {
         m_rangeStatic->upload(v, i);
         m_rangeBatch = std::make_unique<kke::DynamicMeshRenderer>(app);
         m_rangeMetal = std::make_unique<kke::DynamicMeshRenderer>(app);
+        v.clear();
+        i.clear();
+        buildVehicles(v, i);
+        m_vehStatic = std::make_unique<kke::DynamicMeshRenderer>(app);
+        m_vehStatic->upload(v, i);
+        m_vehBatch = std::make_unique<kke::DynamicMeshRenderer>(app);
     }
     buildGuns();
     dressCourse();
@@ -196,6 +203,7 @@ void ShowcaseModule::init(kke::Application& app) {
     setupPlayer();
     loadItems();
     spawnRange();
+    spawnVehicles();
     m_rig.mode = kke::CameraRig::Mode::ThirdPerson;
     m_rig.yaw = 0.0f;
     m_rig.pitch = -12.0f;
@@ -248,6 +256,10 @@ void ShowcaseModule::init(kke::Application& app) {
     }
     if (const char* wd = std::getenv("KKE_DEMO_WORLD"); wd && *wd && *wd != '0') m_demoWorld = 0.0f;
     if (const char* g = std::getenv("KKE_DEMO_GUNS"); g && *g && *g != '0') m_demoGuns = 0.0f;
+    if (const char* d = std::getenv("KKE_DEMO_DRIVE"); d && *d && *d != '0') {
+        m_demoDrive = 0.0f;
+        if (*d == '2') m_laps = 1; // =2: straight to the plane (as if the lap were driven)
+    }
     if (const char* it = std::getenv("KKE_DEMO_ITEMS"); it && *it && *it != '0') {
         m_demoItems = 0.0f;
         m_demoItemsKeepOpen = *it == '2';
@@ -872,8 +884,24 @@ void ShowcaseModule::readActions(float dt) {
     if (in.axis("camera.zoom") != 0.0f && m_captured)
         m_rig.settings.armLength = std::clamp(m_rig.settings.armLength - in.axis("camera.zoom") * 0.4f, 1.5f, 10.0f);
     if (const float z = in.axis("zoom.pad"); z != 0.0f) m_rig.settings.armLength = std::clamp(m_rig.settings.armLength - z * 4.0f * dt, 1.5f, 10.0f);
+    if (m_ride != Ride::None) {
+        // In a car or the plane: Vehicles.cpp has the controls.
+        m_moveInput = glm::vec2(0.0f);
+        readRide(in, dt);
+        if (in.pressed("panels")) {
+            m_showPanels = !m_showPanels;
+            for (kke::Module* p : m_panels) p->setUiVisible(m_showPanels);
+        }
+        return;
+    }
     if (in.pressed("camera.toggle"))
         m_rig.mode = m_rig.mode == kke::CameraRig::Mode::ThirdPerson ? kke::CameraRig::Mode::FirstPerson : kke::CameraRig::Mode::ThirdPerson;
+    if (m_demoDrive >= 0.0f) {
+        glm::vec2 move(0.0f);
+        float gas = 0.0f, brake = 0.0f;
+        bool handBrake = false;
+        updateDriveDemo(dt, move, gas, brake, handBrake); // on foot: the walk to the car, to the plane
+    }
 
     m_moveInput = in.axis2("move");
     m_sprint = in.held("sprint");
@@ -905,7 +933,7 @@ void ShowcaseModule::readActions(float dt) {
         m_fireCooldown = 0.25f;
     }
     if (in.pressed("interact")) forcePush(m_app->camera());
-    if (in.pressed("pickup")) togglePickUp();
+    if (in.pressed("pickup") && !useVehicle()) togglePickUp(); // a car or the plane next to you: get in
     if (in.pressed("reset")) resetWorld();
     if (in.pressed("panels")) {
         m_showPanels = !m_showPanels;
@@ -1028,6 +1056,7 @@ void ShowcaseModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
     // isn't gameplay state).
     if (m_lava) m_lava->fixedUpdate(ctx.fixedDt, m_rigid->world(), lavaWatched());
     carryStep(ctx.fixedDt);
+    stepVehicles(ctx.fixedDt);
     tickFuses(ctx.fixedDt); // grenades and barrels (each machine its own range for now)
     // Platform: back and forth, up and down.
     m_platformTime += ctx.fixedDt;
@@ -1047,6 +1076,7 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     batchProps();
     batchItems();
     batchRange();
+    batchVehicles();
     updateDummies();
     updateEffects(dt);
     if (m_lava) m_lava->update();
@@ -1066,6 +1096,15 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     updateMap(dt);
     readActions(dt);
     if (m_toastTime > 0.0f && (m_toastTime -= dt) <= 0.0f) toast("");
+    updateEngineSound(dt);
+    if (m_ride != Ride::None) {
+        // Riding: no walking; the camera chases the car or the plane.
+        updateRide(dt);
+        updateAvatars(dt);
+        updateLocalPlayers(dt);
+        applyLighting();
+        return;
+    }
     // Actions -> the movement layer, camera-relative. An analog stick gives
     // partial speeds (walk by tilting a little). What "go up" becomes
     // (vault, climb or jump) is Locomotion's call, from what its sensors
@@ -1245,8 +1284,11 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
         cam.target += j * 0.5f;
     }
     updateLocalPlayers(dt);
+    applyLighting();
+}
 
-    // Lighting from the panel.
+// Lighting from the panel.
+void ShowcaseModule::applyLighting() {
     kke::Light& sun = m_app->lighting().lights[0];
     const float az = glm::radians(m_sunAzimuth), el = glm::radians(m_sunElevation);
     sun.enabled = true;
@@ -1454,10 +1496,12 @@ void ShowcaseModule::render(const kke::RenderContext& ctx) {
     if (m_rangeStatic) m_rangeStatic->draw(ctx, glm::mat4(1.0f), 0.0f, 0.85f);
     if (m_rangeBatchIndices) m_rangeBatch->draw(ctx, glm::mat4(1.0f), 0.0f, 0.7f);
     if (m_rangeMetalIndices) m_rangeMetal->draw(ctx, glm::mat4(1.0f), 0.8f, 0.4f);
+    if (m_vehStatic) m_vehStatic->draw(ctx, glm::mat4(1.0f), 0.0f, 0.85f);
+    if (m_vehBatchIndices) m_vehBatch->draw(ctx, glm::mat4(1.0f), 0.35f, 0.35f);
     if (m_itemBatchIndices) m_itemBatch->draw(ctx, glm::mat4(1.0f), 0.15f, 0.55f);
     if (m_equipBatchIndices) m_equipBatch->draw(ctx, glm::mat4(1.0f), 0.15f, 0.55f);
     m_cubes[3]->draw(ctx, glm::scale(w.transform(m_platform), m_platformHalf), 0.3f, 0.4f);
-    if (!m_charInstance && m_rig.mode != kke::CameraRig::Mode::FirstPerson) {
+    if (!m_charInstance && m_rig.mode != kke::CameraRig::Mode::FirstPerson && m_ride == Ride::None) {
         glm::mat4 t = glm::rotate(glm::translate(glm::mat4(1.0f), w.characterDrawPosition(m_player, m_app->fixedAlpha())), glm::radians(-m_facing), glm::vec3(0, 1, 0));
         m_capsule->draw(ctx, t, 0.0f, 0.6f);
     }
@@ -1481,10 +1525,12 @@ void ShowcaseModule::renderShadow(const kke::ShadowRenderContext& ctx) {
     if (m_rangeStatic) m_rangeStatic->drawShadow(ctx);
     if (m_rangeBatchIndices) m_rangeBatch->drawShadow(ctx);
     if (m_rangeMetalIndices) m_rangeMetal->drawShadow(ctx);
+    if (m_vehStatic) m_vehStatic->drawShadow(ctx);
+    if (m_vehBatchIndices) m_vehBatch->drawShadow(ctx);
     if (m_itemBatchIndices) m_itemBatch->drawShadow(ctx);
     if (m_equipBatchIndices) m_equipBatch->drawShadow(ctx);
     m_cubes[3]->drawShadow(ctx, glm::scale(w.transform(m_platform), m_platformHalf));
-    if (!m_charInstance) m_capsule->drawShadow(ctx, glm::translate(glm::mat4(1.0f), w.characterDrawPosition(m_player, m_app->fixedAlpha())));
+    if (!m_charInstance && m_ride == Ride::None) m_capsule->drawShadow(ctx, glm::translate(glm::mat4(1.0f), w.characterDrawPosition(m_player, m_app->fixedAlpha())));
 }
 
 void ShowcaseModule::renderUi() {

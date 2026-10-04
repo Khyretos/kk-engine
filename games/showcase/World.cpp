@@ -337,6 +337,7 @@ void ShowcaseModule::travelTo(int zone) {
     const Zone& z = kZones[zone];
     dropHeld();
     openMap(false);
+    if (m_ride != Ride::None) exitVehicle(true); // the car or the plane stays where it is
     const glm::vec3 at(z.arrive.x, (zone == 0 ? 0.0f : groundHeight(z.arrive.x, z.arrive.z)) + 0.05f, z.arrive.z);
     m_loco->teleport(at);
     const float yaw = glm::radians(z.arriveYaw);

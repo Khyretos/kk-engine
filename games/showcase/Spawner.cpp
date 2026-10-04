@@ -318,6 +318,7 @@ void ShowcaseModule::resetWorld() {
     clearSpawned();
     resetCourse();
     spawnRange(); // plates up, barrels back, breakables whole, dummies standing
+    spawnVehicles(); // cars in their bays, the plane on the runway
     // The bag empties, its things back on the supply table.
     openInventory(false);
     m_inv.clear();

@@ -38,6 +38,12 @@ to aim and fire at steel plates, FEMFX glass and stone walls that break for
 real, and red barrels that blow up and set each other off. How it works is
 in [games/showcase/README.md](../games/showcase/README.md#the-firing-range).
 
+At the **race track** three cars (a hatch, a coupe, a truck) wait in the
+car park: get in (F / X) and drive the oval; the HUD times each lap. At the
+**airfield** a stunt plane waits on the runway: throttle up and it takes
+off by itself; land on the runway or a flat field, or crash it in a
+fireball. See [games/showcase/README.md](../games/showcase/README.md#cars-and-the-plane).
+
 ## HUD and menu
 
 - The HUD (RmlUi, `ui/showcase_hud.rml`) shows what the character is
@@ -66,6 +72,9 @@ in [games/showcase/README.md](../games/showcase/README.md#the-firing-range).
 | Crouch, let go of a ledge | C | B |
 | Shoot (or throw what you hold), push | Left click, E | RT, Y |
 | Aim a gun (crosshair, closer camera) | Right mouse | LT |
+| Get in or out of a car or the plane | F | X |
+| Drive: steer, gas, brake or reverse, handbrake | A D, W, S, Space | Left stick, RT, LT, A |
+| Fly: stick, throttle up / down | W A S D, Shift / Ctrl | Left stick, RT / LT |
 | Pick up / put down (items go in your bag) | F | X |
 | Bag: inventory and equipment | Tab or I | View |
 | World map (travel to a zone) | M | pause menu > World map |
@@ -94,6 +103,7 @@ it is, is in [games/showcase/README.md](../games/showcase/README.md).
 | `KKE_DEMO_WORLD=1` | Shows the world map, then visits every zone in turn |
 | `KKE_DEMO_ITEMS=1` | At the supply table: picks things up, opens the bag, equips an axe, a rifle, a helmet, a canteen and a lantern, then shows them worn |
 | `KKE_DEMO_GUNS=1` | At the firing range: rifle at the plates, the glass and the stone walls, then the red barrels, the pistol and a grenade |
+| `KKE_DEMO_DRIVE=1` | Drives a timed lap of the race track, then flies the plane round the airfield and crashes it (`=2`: only the plane) |
 | `KKE_DEMO_BRIDGE=1` | Drops an iron ball on the yard's glass, then rolls one into a crate, and logs how far the crates moved |
 | `KKE_SPLIT=2..4`, `KKE_OVERHEAD=1` | Local split screen, and an overhead picture-in-picture view |
 | `KKE_MAIN_MENU=pause` | Opens the pause menu after 1.5 s (`KKE_MAIN_MENU=0`: no title screen) |

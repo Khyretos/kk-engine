@@ -58,6 +58,7 @@ are read in `ShowcaseModule::init` unless noted:
 | `KKE_DEMO_ITEMS=1` | At the supply table: picks up what's in reach, opens the bag, equips an axe, a rifle, a helmet, a canteen and a lantern, closes it and turns the camera to see them worn. Logs the bag and the weight. `=2` leaves the bag open (drive it with keys or the mouse; each place and drop is logged) |
 | `KKE_DEMO_CARRY=1` | Spawns a crate, lifts it, carries it a few steps and throws it, and logs where it is. Loops every 7 s |
 | `KKE_DEMO_GUNS=1` | At the firing range: takes the guns off the bench, knocks down plates with the rifle, breaks the glass, the plank and a stone wall, sets off the red barrels, switches to the pistol, throws a grenade. Logs every hit and blast |
+| `KKE_DEMO_DRIVE=1` | At the race track: gets in the red hatch and drives a lap of the oval (logs its progress and the lap time), then flies the plane from the airfield round four waypoints and dives it into the runway (the crash). `=2` skips the car |
 | `KKE_DEMO_BRIDGE=1` | Drops an iron ball on the yard glass, then rolls one into a crate, and logs how far the crates moved (FEMFX builds) |
 | `KKE_BRIDGE=0` | Turns the FEMFX-Jolt bridge off, to compare |
 | `KKE_SPLIT=2..4` | Start with that many local players |
@@ -97,7 +98,7 @@ saved in `input.json`.
 | Shoot (or throw what you hold); with a gun in your right hand, fire it (the rifle is automatic), with a grenade, throw it | Left click (hold for 4 shots a second) | RT |
 | Aim down the sights (the camera comes in over the shoulder, a crosshair shows) | Right mouse (hold) | LT (hold) |
 | Push what you look at | E | Y |
-| Pick up / put down the crate, barrel or ball in front of you; an item goes in your bag | F | X |
+| Pick up / put down the crate, barrel or ball in front of you; an item goes in your bag. Next to a car or the plane: get in (and out) | F | X |
 | Bag (inventory and equipment) | Tab or I | View |
 | World map: the zones, travel there | M | the pause menu's World map |
 | Spawn menu: crates, barrels, balls, a tower, a ragdoll dummy; clear, reset the world | G | RB |
@@ -220,6 +221,42 @@ are copied by this game's CMakeLists.
 While aiming, the character turns with the camera and walks; the arms
 are placed by IK (`aimHands`: rifle to the shoulder with the left hand on
 the fore-end, pistol out in both hands, a grenade raised to throw).
+
+### Cars and the plane
+
+[Vehicles.cpp](Vehicles.cpp). Walk up to a car or the plane and press
+pickup (F / X) to get in; the same button gets you out once you have
+stopped. The camera chases what you ride and swings in behind it when you
+stop turning it; the wheel or the d-pad moves it out (V: from the seat).
+
+| | Keyboard | Controller |
+|---|---|---|
+| Car: steer, gas, brake / reverse | A D, W (or Shift), S (or Ctrl) | Left stick, RT, LT |
+| Car: handbrake, back on its wheels | Space, R | A, none |
+| Plane: stick (forward: nose down), roll | W S, A D | Left stick |
+| Plane: throttle up / down, wheel brakes | Shift / Ctrl, Space | RT / LT, A |
+
+**The race track** (zone 5): an oval 585 m round (two 120 m straights and
+two bends of 55 m radius), kerbs on the bends, a start gantry, a slalom of
+cones on the far straight and a jump beside the car park. Three cars wait
+in the car park, each its own `kke::VehicleDesc` on Jolt's vehicle physics
+([VEHICLES.md](../../docs/VEHICLES.md)): a light front-drive hatch, a
+rear-drive coupe and a heavy all-wheel-drive truck that sits higher. Go
+once round the oval on the track and the HUD gives the lap time (physics
+time, so it is the same on a slow PC).
+
+**The airfield** (zone 4): a stunt plane at the west end of the runway.
+It flies on the Flying demo's flight model (`games/flying_demo/Flight.h`,
+compiled into this game): lift, drag, stalls and the nose that comes up
+by itself at take-off speed, so full throttle and a straight run is a
+take-off. A kinematic Jolt body follows it, so it pushes crates and people
+out of the way. Land on the runway or any flat field; a hard landing, a
+hillside or anything built is a crash: an explosion (the guns' `explode`),
+a wreck, and a new plane on the runway four seconds later.
+
+Each machine drives its own cars and plane for now (online comes with
+round 8). The engine note is `kke::EngineSound`, synthesized from the rpm
+and the throttle like the racing demo's.
 
 ### Spawning and carrying
 
@@ -941,6 +978,7 @@ Pitfalls the code shows:
 | [SplitScreen.cpp](SplitScreen.cpp) | Local players 2-4, controller assignment, views, the overhead view |
 | [StressTest.cpp](StressTest.cpp) | The 36 s stress test and its report |
 | [Guns.cpp](Guns.cpp) | Guns, grenades, explosions: firing, hits, synthesized sounds, effects, aiming arms |
+| [Vehicles.cpp](Vehicles.cpp) | The race track (oval, kerbs, cones, jump), three cars, the plane and its crash, getting in and out, the chase camera, lap times, the engine sound, the `KKE_DEMO_DRIVE` run |
 | [Range.cpp](Range.cpp) | The firing range: bench, plates, barrels, crates, dummies, FEMFX glass and walls, the `KKE_DEMO_GUNS` run |
 | [Hud.cpp](Hud.cpp) | RmlUi data model, HUD updates, the pause menu's rows |
 | [Layout.h](Layout.h) | Station positions |
