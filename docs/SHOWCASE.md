@@ -116,6 +116,7 @@ it is, is in [games/showcase/README.md](../games/showcase/README.md).
 | `KKE_DEMO_GUNS=1` | At the firing range: rifle at the plates, the glass and the stone walls, then the red barrels, the pistol and a grenade |
 | `KKE_DEMO_DRIVE=1` | Drives a timed lap of the race track, then flies the plane round the airfield and crashes it (`=2`: only the plane) |
 | `KKE_DEMO_PARKOUR=1` | Wall climb, hang vault, shimmy round a corner and a leap, then the rooftops, in the parkour park (`=2`, `=3`, `=4` start later; `KKE_DEMO_PARKOUR_FREEZE=wallclimb`, `hangvault` or `shimmy` stops mid-move for a screenshot) |
+| `KKE_DEMO_ONLINE=1` | With `KKE_NET=host` on one copy and `KKE_NET=join:ADDRESS` on another: the guest asks the host for a crate, lifts it, carries it and throws it; both log what they see |
 | `KKE_DEMO_NATURE=1` | Takes the axe, fells a tree, splits a log, picks three flowers, then walks a trail through the snow and looks back at it |
 | `KKE_DEMO_BRIDGE=1` | Drops an iron ball on the yard's glass, then rolls one into a crate, and logs how far the crates moved |
 | `KKE_SPLIT=2..4`, `KKE_OVERHEAD=1` | Local split screen, and an overhead picture-in-picture view |

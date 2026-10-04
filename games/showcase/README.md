@@ -73,6 +73,7 @@ are read in `ShowcaseModule::init` unless noted:
 | `KKE_STRESS_TEST=1` | Runs the 36 s stress test at start and quits when done |
 | `KKE_BENCH_DIR=dir` | Where the stress report goes (default `benchmark/`) |
 | `KKE_NET=host` / `KKE_NET=join:ADDRESS` | Host or join (read by `NetModule`) |
+| `KKE_DEMO_ONLINE=1` | Run it on a host and a guest: the host spawns a barrel; the guest asks for a crate, walks to it, lifts it, carries it, throws it and clears. Both log what they see (`online demo (host)`, `online: player 1 picked up body ...`) |
 | `KKE_VOICE=off` | No microphone (read by `VoiceModule`) |
 | `KKE_SCRIPTS_DIR=<repo>/games/showcase/scripts` | Run the Lua scripts from the source folder, so edits reload live |
 | `KKE_ANIMATIONS_DIR`, `KKE_SCENES_DIR`, `KKE_ASSETS_DIR` / `KKE_SYNTY_DIR`, `KKE_COURSE_DIR` | Where to find the animations, scenes, Synty packs and the course art |
@@ -256,8 +257,8 @@ out of the way. Land on the runway or any flat field; a hard landing, a
 hillside or anything built is a crash: an explosion (the guns' `explode`),
 a wreck, and a new plane on the runway four seconds later.
 
-Each machine drives its own cars and plane for now (online comes with
-round 8). The engine note is `kke::EngineSound`, synthesized from the rpm
+Each machine drives its own cars and plane: they aren't shared online
+yet (see "Online" below). The engine note is `kke::EngineSound`, synthesized from the rpm
 and the throttle like the racing demo's.
 
 ### The parkour park
@@ -320,7 +321,7 @@ wooden crate, a small crate, a big light box, an iron crate (too heavy to
 lift), a barrel, a rubber ball, a crate tower and a ragdoll dummy, then
 **Clear what I spawned** and **Reset the world** (what you spawned goes,
 the course's crates go back, you're back at the
-start). Spawning is offline only for now.
+start).
 
 X (F) picks up the crate, barrel or ball in front of you, up to 60 kg: it
 rides in front of your chest in both hands and stays a physics body, so
@@ -328,6 +329,15 @@ it bumps into walls and other crates instead of going through them (snag
 it on something and you let go). X (F) puts it down, RT (click) throws it
 where you look. Climbing, vaulting or hanging drops it. Heavier things you
 push (Y, E).
+
+**Online** it all works the same for everyone. The host makes what anyone
+spawns, so every machine sees the same crate in the same place, and the
+host's physics moves it. Lift something on a guest and the host carries
+it in front of you; everyone sees it ride along and fly when you throw it.
+Clear what I spawned clears everyone's; Reset the world (host) resets
+everyone. What stays on each machine: the firing range's dummies, the
+forest (trees, logs, flowers), the snow's footprints, and the cars and
+plane.
 
 ### Items, the bag and equipment
 
@@ -802,7 +812,22 @@ shared:
   relays shots to everyone. A client's push is applied locally and sent to
   the host, which ignores it if the crate is more than 2 m from the pushed
   point ("a stale or made-up push does nothing"). A client's reset asks
-  the host.
+  the host. The event structs live in [NetEvents.h](NetEvents.h).
+- **Spawned things** ([Online.cpp](Online.cpp)). A guest's spawn menu
+  sends the row and the spot to the host (`SpawnRowEvent`); the host checks
+  the spot is within 8 m of that player, builds it with `spawnRowAt` and
+  shares each prop with `NetModule::spawn` (kind `0x5301`, a `PropDesc`
+  with the shape, size, colour, material and rotation). Every machine's
+  spawn listener builds the same prop and `bindSpawnedBody` ties it to the
+  host's body, which then replicates like the crates. `despawn` removes it
+  everywhere when it's cleared or the oldest goes (the 60-prop cap).
+- **Carrying.** A guest's pick up sends `CarryEvent` (net id, yaw); the
+  host checks it is within 3 m and adds a `RemoteCarry`, then
+  `stepRemoteCarries` steers that body to `holdPointFor` the guest's
+  replicated position and facing, the same maths as your own carry
+  (`steerHeld`). Put down and throw send their velocity. The guest's copy
+  only lets go past 3 m (the host's own limit is 2.5 m), since the copy
+  arrives a little late.
 
 ### The stress test
 
@@ -1040,6 +1065,7 @@ Pitfalls the code shows:
 | [SplitScreen.cpp](SplitScreen.cpp) | Local players 2-4, controller assignment, views, the overhead view |
 | [StressTest.cpp](StressTest.cpp) | The 36 s stress test and its report |
 | [Guns.cpp](Guns.cpp) | Guns, grenades, explosions: firing, hits, synthesized sounds, effects, aiming arms |
+| [Online.cpp](Online.cpp), [NetEvents.h](NetEvents.h) | Spawned props and carrying online: the host makes what guests spawn, carries what they lift; the game's event messages; the `KKE_DEMO_ONLINE` run |
 | [Parkour.cpp](Parkour.cpp) | The parkour park's seven sections, the HUD's name for each, the `KKE_DEMO_PARKOUR` run |
 | [Nature.cpp](Nature.cpp) | The nature park (trees, undergrowth, grass, wind), chopping trees and splitting logs, picking flowers, the snow field and its footprints, the `KKE_DEMO_NATURE` run |
 | [Vehicles.cpp](Vehicles.cpp) | The race track (oval, kerbs, cones, jump), three cars, the plane and its crash, getting in and out, the chase camera, lap times, the engine sound, the `KKE_DEMO_DRIVE` run |

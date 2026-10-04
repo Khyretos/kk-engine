@@ -7,16 +7,14 @@
 // gets stuck you let go of it. X or F again puts it down, RT or a click
 // throws it where you look. What weighs more than kMaxLift you push (Y, E).
 //
-// Online only the host's bodies are real; carrying is offline (and on
-// the host) for now.
+// Online the host's bodies are the real ones: a client carries its own
+// copy and tells the host, which carries the real one for that player
+// (Online.cpp), so everyone sees it in that player's hands.
 
 #include "ShowcaseModule.h"
 
 #include "kke/Application.h"
 #include "kke/modules/RigidBodyModule.h"
-#if KKE_ENABLE_NET
-#include "kke/modules/NetModule.h"
-#endif
 
 #include <glm/gtc/quaternion.hpp>
 
@@ -31,20 +29,23 @@ constexpr float kReach = 1.8f;        // m from the chest to the thing's middle
 constexpr float kFollow = 14.0f;      // 1/s: how fast the held body closes the gap to the hands
 constexpr float kMaxFollow = 9.0f;    // m/s
 constexpr float kLetGoDistance = 1.0f; // m off the hands (snagged on something): it drops
+constexpr float kOnlineLetGoDistance = 3.0f; // m: a guest's copy lags the host's hands
 constexpr float kLiftTime = 0.6f;      // s: while lifting from where it lay, it may still be far off
 } // namespace
 
 glm::vec3 ShowcaseModule::holdPoint() const {
     const kke::RigidWorld& w = m_rigid->world();
-    glm::vec3 f = m_loco->facing();
-    f.y = 0.0f;
+    return holdPointFor(w.characterPosition(m_player), m_loco->facing(), w.characterRadius(m_player), m_crouch, m_held.half);
+}
+
+glm::vec3 ShowcaseModule::holdPointFor(const glm::vec3& feet, const glm::vec3& facing, float radius, bool crouch, const glm::vec3& half) {
+    glm::vec3 f(facing.x, 0.0f, facing.z);
     f = glm::length(f) > 1e-3f ? glm::normalize(f) : glm::vec3(0, 0, -1);
     // Clear of the capsule, its near face a hand's width in front of the
     // chest; bigger things ride a little lower (held against the belly).
-    const float r = w.characterRadius(m_player);
-    const float depth = std::max(m_held.half.x, m_held.half.z);
-    const float height = (m_crouch ? 0.65f : 1.05f) - std::min(0.25f, m_held.half.y * 0.4f);
-    return w.characterPosition(m_player) + glm::vec3(0, height, 0) + f * (r + 0.12f + depth);
+    const float depth = std::max(half.x, half.z);
+    const float height = (crouch ? 0.65f : 1.05f) - std::min(0.25f, half.y * 0.4f);
+    return feet + glm::vec3(0, height, 0) + f * (radius + 0.12f + depth);
 }
 
 void ShowcaseModule::togglePickUp() {
@@ -59,12 +60,6 @@ void ShowcaseModule::togglePickUp() {
         takeItem(item);
         return;
     }
-#if KKE_ENABLE_NET
-    if (m_net && !m_net->authority()) {
-        m_status = "Carrying is offline only for now";
-        return;
-    }
-#endif
     kke::RigidWorld& w = m_rigid->world();
     const glm::vec3 chest = w.characterPosition(m_player) + glm::vec3(0, 0.9f, 0);
     glm::vec3 f = m_loco->facing();
@@ -99,6 +94,7 @@ void ShowcaseModule::togglePickUp() {
         return;
     }
     m_held.body = best->id;
+    std::erase_if(m_remoteCarries, [&](const RemoteCarry& c) { return c.body == best->id; }); // hosting: ours now
     m_held.mass = best->mass;
     m_held.half = best->halfExtents;
     // Keep it square to you on whichever face is nearest, so lifting
@@ -106,6 +102,7 @@ void ShowcaseModule::togglePickUp() {
     const glm::vec3 bodyF = best->rotation * glm::vec3(0, 0, -1);
     const float rel = std::atan2(bodyF.x, -bodyF.z) - std::atan2(f.x, -f.z);
     m_held.yawOffset = std::round(rel / glm::half_pi<float>()) * glm::half_pi<float>();
+    tellCarry(true, glm::vec3(0.0f)); // online: the host carries the real one for us
 }
 
 void ShowcaseModule::dropHeld() {
@@ -114,6 +111,7 @@ void ShowcaseModule::dropHeld() {
     kke::RigidWorld& w = m_rigid->world();
     w.setAngularVelocity(m_held.body, glm::vec3(0.0f));
     w.setVelocity(m_held.body, w.characterVelocity(m_player));
+    tellCarry(false, w.characterVelocity(m_player));
     m_held = Held{};
 }
 
@@ -130,9 +128,11 @@ void ShowcaseModule::throwHeld(const kke::Camera& cam) {
     // A light thing flies far, a full crate about a body length or three.
     const float speed = std::clamp(9.0f * std::sqrt(15.0f / std::max(m_held.mass, 1.0f)), 4.0f, 14.0f);
     const kke::RigidWorld::BodyId body = m_held.body;
+    const glm::vec3 velocity = w.characterVelocity(m_player) + dir * speed, spin = glm::vec3(-dir.z, 0.0f, dir.x) * 2.0f;
+    tellThrow(velocity, spin);
     m_held = Held{};
-    w.setVelocity(body, w.characterVelocity(m_player) + dir * speed);
-    w.setAngularVelocity(body, glm::vec3(-dir.z, 0.0f, dir.x) * 2.0f);
+    w.setVelocity(body, velocity);
+    w.setAngularVelocity(body, spin);
 }
 
 // At the physics rate: steer the body to the hands with its velocity (it
@@ -150,25 +150,34 @@ void ShowcaseModule::carryStep(float dt) {
     const glm::vec3 target = holdPoint();
     const glm::vec3 gap = target - at;
     m_held.age += dt;
-    if (glm::length(gap) > (m_held.age < kLiftTime ? kReach + 0.5f : kLetGoDistance)) {
+    // Online the host carries the real body and our copy shows it a little
+    // late, so a guest only lets go past the host's own limit (2.5 m): the
+    // host decides when it snags, and our copy then falls away from us.
+    const float letGo = onlineClient() ? kOnlineLetGoDistance : kLetGoDistance;
+    if (glm::length(gap) > (m_held.age < kLiftTime ? kReach + 0.5f : letGo)) {
         dropHeld();
         return;
     }
-    glm::vec3 v = gap * kFollow;
+    steerHeld(m_held.body, target, w.characterVelocity(m_player), m_loco->facing(), m_held.yawOffset, dt);
+}
+
+void ShowcaseModule::steerHeld(kke::RigidWorld::BodyId body, const glm::vec3& target, const glm::vec3& carrierVelocity, const glm::vec3& f,
+                               float yawOffset, float dt) {
+    kke::RigidWorld& w = m_rigid->world();
+    glm::vec3 v = (target - w.position(body)) * kFollow;
     if (glm::length(v) > kMaxFollow) v = glm::normalize(v) * kMaxFollow;
     // The step adds gravity after this; ask for that much more upward.
-    w.setVelocity(m_held.body, w.characterVelocity(m_player) * glm::vec3(1, 0, 1) + v + glm::vec3(0, 9.81f * dt, 0));
+    w.setVelocity(body, carrierVelocity * glm::vec3(1, 0, 1) + v + glm::vec3(0, 9.81f * dt, 0));
     // Turn toward upright and the facing (yaw) by the shortest way.
-    const glm::vec3 f = m_loco->facing();
-    const float yaw = std::atan2(f.x, -f.z) + m_held.yawOffset;
+    const float yaw = std::atan2(f.x, -f.z) + yawOffset;
     const glm::quat want = glm::angleAxis(-yaw, glm::vec3(0, 1, 0));
-    glm::quat q = w.rotation(m_held.body);
+    glm::quat q = w.rotation(body);
     glm::quat diff = want * glm::inverse(q);
     if (diff.w < 0.0f) diff = -diff;
     const float angle = 2.0f * std::acos(std::clamp(diff.w, -1.0f, 1.0f));
     glm::vec3 axis(diff.x, diff.y, diff.z);
     const float s = glm::length(axis);
-    w.setAngularVelocity(m_held.body, s > 1e-5f ? axis / s * std::min(angle * 10.0f, 12.0f) : glm::vec3(0.0f));
+    w.setAngularVelocity(body, s > 1e-5f ? axis / s * std::min(angle * 10.0f, 12.0f) : glm::vec3(0.0f));
 }
 
 // The hands on the held body's sides, a little below the middle, the

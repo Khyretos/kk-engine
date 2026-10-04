@@ -46,6 +46,21 @@ namespace kke_showcase {
 // (first/third person spring arm), the animator (idle/walk/jog/sprint
 // blend, jump, crouch), FEMFX breakables you can shoot (glass, stone,
 // wood), and lighting you can change. Grows as systems land.
+// The spawn menu's rows (Spawner.cpp), in order. The two after the last thing are the clean-up rows.
+enum SpawnRowId : int {
+    kRowCrate,
+    kRowSmallCrate,
+    kRowBigBox,
+    kRowHeavyCrate,
+    kRowBarrel,
+    kRowBall,
+    kRowTower,
+    kRowDummy,
+    kRowClear,
+    kRowReset,
+    kRowCount
+};
+
 class ShowcaseModule : public kke::Module {
 public:
     const char* name() const override { return "Showcase"; }
@@ -240,6 +255,7 @@ private:
         glm::vec3 half{0.3f}; // box half extents; sphere: x = radius; barrel: x = radius, y = half height
         glm::vec3 color{0.6f};
         float metallic = 0.0f;
+        uint16_t netId = 0; // online: its NetModule spawn id (0 = this machine's own)
     };
     struct SpawnDummy { // a ragdoll dummy: the mannequin on Jolt bodies
         kke::RigidWorld::RagdollId ragdoll = 0;
@@ -251,6 +267,7 @@ private:
     void openSpawnMenu(bool open);
     void updateSpawnMenu(float dt);
     void spawnRow(int row);
+    void spawnRowAt(int row, const glm::vec3& at, const glm::vec3& base); // the host's spawn, at a spot (yours or a client's)
     void spawnProp(PropShape shape, const glm::vec3& half, float density, const glm::vec3& color, uint32_t material, const glm::vec3& at,
                    float metallic = 0.0f, float restitution = 0.1f);
     void spawnDummy(const glm::vec3& at);
@@ -282,6 +299,38 @@ private:
     void dropHeld();
     void holdHands();          // IK contacts for the hands on the held body
     glm::vec3 holdPoint() const;
+    // Where a carrier's hands hold something `half` big, and steering a
+    // held body there (ours, or on the host a client's).
+    static glm::vec3 holdPointFor(const glm::vec3& feet, const glm::vec3& facing, float radius, bool crouch, const glm::vec3& half);
+    void steerHeld(kke::RigidWorld::BodyId body, const glm::vec3& target, const glm::vec3& carrierVelocity, const glm::vec3& facing,
+                   float yawOffset, float dt);
+
+    // Online spawning and carrying (Online.cpp). The host's spawn menu
+    // props are NetModule spawned objects (every client builds a copy that
+    // follows the host's); a client's spawn menu asks the host. Carrying a
+    // replicated body, a client tells the host, which carries it for that
+    // player (the client carries its own copy meanwhile: no lag in the
+    // hands). Offline all of this is a no-op.
+    void setupOnline();
+    bool onlineClient() const;  // joined to someone else's game
+    bool onlineHost() const;    // hosting, with or without players yet
+    bool replicating() const;   // spawnProp shares what it makes (the host, inside spawnRowAt)
+    void shareProp(Prop& p, const glm::quat& rotation, float density, uint32_t material, float restitution);
+    void forgetProp(const Prop& p); // host: gone everywhere
+    uint16_t netIdOf(kke::RigidWorld::BodyId body) const;
+    kke::RigidWorld::BodyId bodyOfNet(uint16_t id) const;
+    bool onOnlineEvent(uint16_t kind, uint8_t from, const std::vector<uint8_t>& payload); // false: not one of these
+    void askHostToSpawn(int row, const glm::vec3& at, const glm::vec3& base); // client: a spawn menu row (or clear)
+    void tellCarry(bool carrying, const glm::vec3& velocity);  // client: about m_held
+    void tellThrow(const glm::vec3& velocity, const glm::vec3& spin);
+    void stepRemoteCarries(float dt); // host, physics rate
+    struct RemoteCarry { uint8_t player = 0; kke::RigidWorld::BodyId body = kke::RigidWorld::kNoBody; glm::vec3 half{0.3f}; float yawOffset = 0.0f; };
+    std::vector<RemoteCarry> m_remoteCarries;
+    bool m_sharing = false; // inside the host's spawnRowAt
+    float m_demoOnline = -1.0f; // KKE_DEMO_ONLINE: seconds since joined, -1 = off
+    int m_demoOnlineStep = 0;
+    float m_demoOnlineMark = 0.0f; // when the step began
+    void updateOnlineDemo(float dt, kke::Locomotion::Input& in);
     struct Held {
         kke::RigidWorld::BodyId body = kke::RigidWorld::kNoBody;
         glm::vec3 half{0.3f};
