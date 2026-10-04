@@ -45,6 +45,8 @@ constexpr const char* kTraversalClips[] = { "SafetyVault", "ClimbUp_1m", "ClimbU
 constexpr const char* kWallRunClips[] = { "WallRun_L_Loop", "WallRun_R_Loop" };
 // The breaking yard (glass, plank, stone wall).
 using layout::kYard;
+using layout::kSupply;
+using layout::kSupplyTableHalf;
 // Climbs up walls this high (m) or more take the 2 m clip.
 constexpr float kClimbHighFrom = 1.6f;
 
@@ -147,6 +149,7 @@ void ShowcaseModule::init(kke::Application& app) {
         in.addBinding(IM::bind("voice.talk", IM::key(SDL_SCANCODE_P)));
         in.addBinding(IM::bind("voice.talk", IM::pad(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)));
         buildSpawnMenu(); // its actions: RB / G, and the list's own
+        buildInventoryScreen(); // Tab, I, the d-pad's right; and the bag's own
         // Left-click shoots, but not the click that grabs the mouse (see onEvent).
         m_input->commitDefaults();
         if (const char* lefty = std::getenv("KKE_LEFT_HANDED"); lefty && *lefty == '1') kke::InputModule::mirrorKeyboard(in);
@@ -179,6 +182,7 @@ void ShowcaseModule::init(kke::Application& app) {
     spawnCrates();
     spawnBreakables();
     setupPlayer();
+    loadItems();
     m_rig.mode = kke::CameraRig::Mode::ThirdPerson;
     m_rig.yaw = 0.0f;
     m_rig.pitch = -12.0f;
@@ -228,6 +232,10 @@ void ShowcaseModule::init(kke::Application& app) {
     if (const char* c = std::getenv("KKE_DEMO_CARRY"); c && *c && *c != '0') {
         m_demoCarry = 0.0f;
         m_rig.yaw = 150.0f; // behind and beside you, looking the way you face (+Z)
+    }
+    if (const char* it = std::getenv("KKE_DEMO_ITEMS"); it && *it && *it != '0') {
+        m_demoItems = 0.0f;
+        m_demoItemsKeepOpen = *it == '2';
     }
     if (const char* sp = std::getenv("KKE_SPLIT"); sp && *sp) setLocalPlayers(std::atoi(sp));
     if (const char* pip = std::getenv("KKE_OVERHEAD"); pip && *pip && *pip != '0') m_overhead = true;
@@ -308,6 +316,20 @@ void ShowcaseModule::buildLevel() {
     buildTrickCourse(v, idx);
     buildPool(v, idx);
     buildLava(v, idx);
+    // The supply table: things to pick up (Items.cpp), on a top 0.84 m up.
+    {
+        const glm::vec3 c = kSupply + glm::vec3(0.0f, kSupplyTableHalf.y, 0.0f), h = kSupplyTableHalf;
+        const glm::vec3 wood(0.48f, 0.34f, 0.22f);
+        appendBox(glm::translate(glm::mat4(1.0f), c + glm::vec3(0.0f, h.y - 0.03f, 0.0f)), glm::vec3(h.x, 0.03f, h.z), wood, v, idx);
+        for (glm::vec2 k : { glm::vec2(-1, -1), glm::vec2(1, -1), glm::vec2(1, 1), glm::vec2(-1, 1) })
+            appendBox(glm::translate(glm::mat4(1.0f), kSupply + glm::vec3(k.x * (h.x - 0.06f), h.y - 0.03f, k.y * (h.z - 0.06f))), glm::vec3(0.04f, h.y - 0.03f, 0.04f),
+                      wood * 0.8f, v, idx);
+        kke::RigidWorld::BodyDesc d;
+        d.motion = kke::RigidWorld::Motion::Static;
+        d.halfExtents = h;
+        d.position = c;
+        m_rigid->world().add(d);
+    }
     // Breaking yard floor marker.
     addStaticBox({ { 14.0f, 0.01f, -6.0f }, { 5.5f, 0.01f, 4.5f }, glm::vec3(0.3f, 0.3f, 0.25f) }, v, idx);
     m_level->upload(v, idx);
@@ -628,6 +650,7 @@ void ShowcaseModule::useCharacter(const std::string& asset) {
         p.anim.reset();
     }
     m_charModel = model;
+    m_equipmentBuilt = false; // sockets from the new skeleton
     m_character = model == m_ualModel ? std::string() : asset;
     m_charInstance = m_models->spawn(m_charModel, glm::mat4(1.0f));
     m_models->setOverlayEnabled(m_charInstance, false);
@@ -762,6 +785,7 @@ void ShowcaseModule::applyIk(float dt) {
     // moves keep the last one (they place the capsule, its velocity says nothing).
     if (st == State::Ground || st == State::Air) m_leanVelocity = w.characterVelocity(m_player);
     m_ik.apply(m_rigData, pose, toWorld, ground, m_leanVelocity, dt);
+    drawEquipped(pose, toWorld); // and the hands close round what they hold
 
     // Step sounds where the (placed) feet actually come down.
     if (m_steps.bound()) {
@@ -781,7 +805,21 @@ void ShowcaseModule::setCaptured(bool on) {
 // the pause menu (kke::GameShellModule), which lets the mouse go.
 void ShowcaseModule::onEvent(const SDL_Event& e) {
     ImGuiIO& io = ImGui::GetIO();
-    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !m_captured && !m_menuOpen && !m_spawnOpen && !io.WantCaptureMouse && !m_app->uiCapturesMouse() &&
+    // Esc or Start with the bag or the spawn menu open close it (the
+    // pause menu waits: GameShellModule::blockPause). View is the bag's
+    // own close (inv.close).
+    if ((m_invOpen || m_spawnOpen) && ((e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_ESCAPE) ||
+                                       (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_START))) {
+        if (m_invOpen && m_invMoving) {
+            m_invMoving = 0; // put back first
+            m_invDirty = true;
+        } else {
+            openInventory(false);
+            openSpawnMenu(false);
+        }
+        return;
+    }
+    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !m_captured && !m_menuOpen && !m_spawnOpen && !m_invOpen && !io.WantCaptureMouse && !m_app->uiCapturesMouse() &&
         e.button.button == SDL_BUTTON_LEFT) {
         setCaptured(true);
         m_swallowFire = true; // this click grabbed the mouse; it isn't a shot
@@ -794,7 +832,7 @@ void ShowcaseModule::onEvent(const SDL_Event& e) {
 void ShowcaseModule::readActions(float dt) {
     kke::InputMap& in = m_input->map(0);
     // Typing in an ImGui field: the game doesn't hear the keys.
-    in.setContextEnabled("game", !ImGui::GetIO().WantTextInput && !m_menuOpen && !m_spawnOpen); // a menu has the controls
+    in.setContextEnabled("game", !ImGui::GetIO().WantTextInput && !m_menuOpen && !m_spawnOpen && !m_invOpen); // a menu has the controls
     const bool mouseLeft = m_input->devices().value({ kke::SourceKind::MouseButton, 0, SDL_BUTTON_LEFT, 0 }, nullptr) > 0.5f;
     if (!mouseLeft) m_swallowFire = false;
 
@@ -969,6 +1007,7 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     updateStressTest(dt);
     batchCrates();
     batchProps();
+    batchItems();
     updateDummies();
     if (m_lava) m_lava->update();
     updateHud();
@@ -983,7 +1022,9 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     m_rig.settings.eyeHeight = m_rig.settings.pivotHeight + 0.15f;
 
     updateSpawnMenu(dt);
+    updateInventory(dt);
     readActions(dt);
+    if (m_toastTime > 0.0f && (m_toastTime -= dt) <= 0.0f) toast("");
     // Actions -> the movement layer, camera-relative. An analog stick gives
     // partial speeds (walk by tilting a little). What "go up" becomes
     // (vault, climb or jump) is Locomotion's call, from what its sensors
@@ -992,6 +1033,10 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     in.move = m_rig.forward() * m_moveInput.y + m_rig.right() * m_moveInput.x;
     in.move.y = 0.0f;
     if (glm::length(in.move) > 1e-3f) in.move = glm::normalize(in.move) * std::min(1.0f, glm::length(m_moveInput));
+    // A heavy bag: slower, and no sprinting near the limit.
+    const float load = loadFactor();
+    in.move *= load;
+    if (load < 0.7f) m_sprint = false;
     if (m_autopilot) {
         // Down the lane (or a scene's trail) toward -Z at a run; "go up"
         // whenever the sensors see something (a player's timing). On the
@@ -1082,6 +1127,7 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
             m_demoCarry = 0.0f;
         }
     }
+    if (m_demoItems >= 0.0f) updateItemsDemo(dt, in.move);
     // Wading through the pool: no running.
     const bool wading = inPool(w.characterPosition(m_player));
     if (m_demoBridge >= 0.0f) updateBridgeDemo(dt);
@@ -1353,6 +1399,8 @@ void ShowcaseModule::render(const kke::RenderContext& ctx) {
     if (m_crateBatchIndices) m_crateBatch->draw(ctx, glm::mat4(1.0f), 0.0f, 0.7f);
     if (m_propBatchIndices) m_propBatch->draw(ctx, glm::mat4(1.0f), 0.0f, 0.7f);
     if (m_propMetalIndices) m_propMetal->draw(ctx, glm::mat4(1.0f), 0.85f, 0.35f);
+    if (m_itemBatchIndices) m_itemBatch->draw(ctx, glm::mat4(1.0f), 0.15f, 0.55f);
+    if (m_equipBatchIndices) m_equipBatch->draw(ctx, glm::mat4(1.0f), 0.15f, 0.55f);
     m_cubes[3]->draw(ctx, glm::scale(w.transform(m_platform), m_platformHalf), 0.3f, 0.4f);
     if (!m_charInstance && m_rig.mode != kke::CameraRig::Mode::FirstPerson) {
         glm::mat4 t = glm::rotate(glm::translate(glm::mat4(1.0f), w.characterDrawPosition(m_player, m_app->fixedAlpha())), glm::radians(-m_facing), glm::vec3(0, 1, 0));
@@ -1374,12 +1422,14 @@ void ShowcaseModule::renderShadow(const kke::ShadowRenderContext& ctx) {
     if (m_crateBatchIndices) m_crateBatch->drawShadow(ctx);
     if (m_propBatchIndices) m_propBatch->drawShadow(ctx);
     if (m_propMetalIndices) m_propMetal->drawShadow(ctx);
+    if (m_itemBatchIndices) m_itemBatch->drawShadow(ctx);
+    if (m_equipBatchIndices) m_equipBatch->drawShadow(ctx);
     m_cubes[3]->drawShadow(ctx, glm::scale(w.transform(m_platform), m_platformHalf));
     if (!m_charInstance) m_capsule->drawShadow(ctx, glm::translate(glm::mat4(1.0f), w.characterDrawPosition(m_player, m_app->fixedAlpha())));
 }
 
 void ShowcaseModule::renderUi() {
-    if (m_menuOpen) return; // the pause menu has the screen
+    if (m_menuOpen || m_invOpen) return; // the pause menu or the bag has the screen
     const float s = ImGui::GetFontSize() / 13.0f;
     // On a narrow screen (a phone, a small window) the score bar reaches
     // the left edge: start under it, folded (a tap on the title opens it).

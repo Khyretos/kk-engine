@@ -54,6 +54,7 @@ are read in `ShowcaseModule::init` unless noted:
 | `KKE_DEMO_AUTOPILOT=1` | The character runs the parkour lane (or a scene's trail) by itself and logs each vault and climb |
 | `KKE_DEMO_HANG=1` | Jump at the 3 m wall, hang, shimmy round its end, jump off. Loops every 10 s |
 | `KKE_DEMO_TRICKS=1` | Wall run and wall jump, pillar leaps, the leap up to the beam. Loops every 13.5 s |
+| `KKE_DEMO_ITEMS=1` | At the supply table: picks up what's in reach, opens the bag, equips an axe, a rifle, a helmet, a canteen and a lantern, closes it and turns the camera to see them worn. Logs the bag and the weight. `=2` leaves the bag open (drive it with keys or the mouse; each place and drop is logged) |
 | `KKE_DEMO_CARRY=1` | Spawns a crate, lifts it, carries it a few steps and throws it, and logs where it is. Loops every 7 s |
 | `KKE_DEMO_BRIDGE=1` | Drops an iron ball on the yard glass, then rolls one into a crate, and logs how far the crates moved (FEMFX builds) |
 | `KKE_BRIDGE=0` | Turns the FEMFX-Jolt bridge off, to compare |
@@ -93,12 +94,13 @@ saved in `input.json`.
 | Crouch, or let go of a ledge | C (toggle) | B (toggle) |
 | Shoot (or throw what you hold) | Left click (hold for 4 shots a second) | RT |
 | Push what you look at | E | Y |
-| Pick up / put down the crate, barrel or ball in front of you | F | X |
+| Pick up / put down the crate, barrel or ball in front of you; an item goes in your bag | F | X |
+| Bag (inventory and equipment) | Tab or I | View |
 | Spawn menu: crates, barrels, balls, a tower, a ragdoll dummy; clear, reset the world | G | RB |
 | First / third person | V | R3 |
 | Camera distance | Mouse wheel (while captured) | D-pad up / down (hold) |
 | Reset the world (also in the spawn menu) | R | none (spawn menu) |
-| Pause menu: settings, button remapping, quit | Esc | Start or View / Back |
+| Pause menu: settings, button remapping, quit | Esc | Start |
 | Engine panels (ImGui, developer tools) | F1 | none |
 | Ping the surroundings (hear the walls) | Q | D-pad left |
 | Push to talk (voice builds) | P (B is a toy) | LB |
@@ -168,6 +170,33 @@ it bumps into walls and other crates instead of going through them (snag
 it on something and you let go). X (F) puts it down, RT (click) throws it
 where you look. Climbing, vaulting or hanging drops it. Heavier things you
 push (Y, E).
+
+### Items, the bag and equipment
+
+The supply table by the start (-4.5, 2.5) has one of everything: a wood
+axe, a hunting rifle, a pistol and their rounds, a first-aid kit, a
+lantern, a helmet, a canteen, firewood, apples and flowers. Walk up and
+X (F) puts the one in front of you in your bag; the HUD says what it is.
+
+Tab, I or View opens the bag over the game: a 10 x 6 grid where every
+item takes its cells (the rifle 4 x 1, the axe 1 x 3), with what you wear
+and hold on the left and the details of the item under the cursor
+(description, weight, size, where it equips) on the right. Move with the
+arrows, WASD, the d-pad, the stick or the mouse. A, Space or a click
+takes an item and places it again: on a cell (the cells turn green where
+it fits, red where it doesn't), on a stack of the same kind (they merge),
+or on an equipment slot. R or Y turns what you're moving, E, X or a
+right-click equips or takes off, Q or RB drops it in front of you, T or
+R3 sorts the bag biggest first. B, View, Tab or Esc closes it.
+
+What you equip is drawn on the character (kke::Equipment): the axe or the
+rifle in the right hand or across the back, the pistol or the canteen on
+a hip, the lantern in the left hand, the helmet on the head, the fingers
+closed round what a hand holds. Carrying a crate stows the hands' things.
+The weight shows under the grid: past half of 30 kg you get slower, near
+the limit you can't sprint. The kinds of item are data,
+[data/items.json](data/items.json) (name, description, size, weight,
+stack, slots); [Items.cpp](Items.cpp) makes their meshes.
 
 ## How it works
 

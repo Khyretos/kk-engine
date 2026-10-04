@@ -15,6 +15,9 @@
         #station .name { font-size: 13dp; letter-spacing: 3dp; color: #ffcf5c; }
         #station .text { font-size: 15dp; color: #e8ecf4; margin-top: 3dp; }
         #station .live { font-size: 13dp; color: #aab3cc; margin-top: 3dp; }
+        #prompt { position: absolute; left: 50%; bottom: 128dp; width: 400dp; margin-left: -200dp; text-align: center; font-size: 15dp; color: #ffffff; }
+        #toast { position: absolute; left: 50%; top: 18%; width: 500dp; margin-left: -250dp; text-align: center; padding: 8dp 14dp;
+                 border-radius: 8dp; background-color: #0b0f1ccc; font-size: 15dp; color: #6fe39a; animation: 0.2s cubic-out slide-up; }
         #esc { position: absolute; right: 24dp; bottom: 28dp; font-size: 12dp; color: #8b93aa; }
     </style>
 </head>
@@ -27,6 +30,8 @@
         <div class="text" data-rml="station_text"></div>
         <div class="live" data-if="station_live != ''">{{station_live}}</div>
     </div>
+    <div id="prompt" data-if="prompt != ''" data-rml="prompt"></div>
+    <div id="toast" data-if="toast != ''">{{toast}}</div>
     <div id="esc" data-rml="menu_hint"></div>
 </body>
 </rml>

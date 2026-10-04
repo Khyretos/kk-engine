@@ -49,6 +49,8 @@ void ShowcaseModule::buildHud() {
     c.Bind("panels", &m_hud.panels);
     c.Bind("online", &m_hud.online);
     c.Bind("players", &m_hud.players);
+    c.Bind("prompt", &m_hud.prompt);
+    c.Bind("toast", &m_hud.toast);
     m_hudModel = c.GetModelHandle();
 
     // Next to the executable (CMake copies ui/ there).
@@ -67,6 +69,9 @@ void ShowcaseModule::buildHud() {
 void ShowcaseModule::buildPauseRows() {
     m_shell = m_app->getModule<kke::GameShellModule>();
     if (!m_shell) return;
+    // Esc, Start or Select close the bag or the spawn menu first (onEvent).
+    m_shell->blockPause = [this] { return m_invOpen || m_spawnOpen; };
+    m_shell->selectIsTheGames = [] { return true; }; // View opens the bag; Start pauses
     m_shell->addPauseItem("Reset the world", [this] {
         resetWorld();
         m_shell->closeMenu();
@@ -135,6 +140,9 @@ void ShowcaseModule::updateHud() {
     } else if (within(p, kYard, 7.0f, 6.0f)) {
         station = "BREAKING YARD";
         text = "Shoot {fire} at the glass, the plank and the stone wall.";
+    } else if (within(p, kSupply, 3.0f, 3.0f)) {
+        station = "SUPPLY TABLE";
+        text = "Pick things up {pickup}, then open your bag {inv.open} to equip them.";
     } else if (within(p, kCratePile, 3.5f, 3.5f)) {
         station = "CRATES";
         text = "Pick one up {pickup}, push them {interact} or shoot them over {fire}. More from the spawn menu {spawn.menu}.";
@@ -168,6 +176,17 @@ void ShowcaseModule::updateHud() {
     // "Esc menu" on the keyboard, "(Start) menu" on a controller.
     const bool keys = !input || input->promptStyle() == kke::PromptStyle::Keyboard;
     set(m_hud.menuHint, keys ? "<span class=\"keycap\">Esc</span> menu" : input->promptText("{shell.pause} menu"), "menu_hint");
+    // What pickup would do here.
+    std::string prompt;
+    if (!m_invOpen && !m_spawnOpen && m_held.body == kke::RigidWorld::kNoBody && st == State::Ground) {
+        const int item = itemInReach();
+        if (item >= 0)
+            if (const kke::ItemDef* def = m_items.find(m_worldItems[static_cast<size_t>(item)].id)) {
+                const int n = m_worldItems[static_cast<size_t>(item)].count;
+                prompt = "{pickup} Pick up " + (n > 1 ? std::to_string(n) + " x " : std::string()) + def->name;
+            }
+    }
+    set(m_hud.prompt, prompt.empty() || !input ? prompt : input->promptText(prompt), "prompt");
     if (m_hud.trick != trick) {
         m_hud.trick = trick;
         m_hudModel.DirtyVariable("trick");

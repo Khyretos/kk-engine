@@ -129,6 +129,9 @@ public:
     // True while Start is the game's own button ("Start: race again" on a
     // results screen): then only Select and Esc open the pause menu.
     std::function<bool()> startIsTheGames;
+    // True while Select (View, Back) is the game's own button (kke_demo's
+    // bag): then only Start and Esc open the pause menu.
+    std::function<bool()> selectIsTheGames;
     // A row in the pause menu between Resume and Settings.
     Rows& pauseRows() { return m_pauseRows; }
     void addPauseItem(std::string label, std::function<void()> onPress, std::function<bool()> visible = {});

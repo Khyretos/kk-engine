@@ -38,7 +38,7 @@ The **Scenes** panel visits Synty-built levels far from the course
   doing (running, vaulting, hanging, wall running, and so on) with the
   measured speed. Near a station it shows the station's hint, plus live
   numbers where there are some, such as how much of the lava block is left.
-- **Esc**, or **Start** or **View** on a controller, opens the pause menu
+- **Esc**, or **Start** on a controller (View opens the bag), opens the pause menu
   every KKE game shares ([GAME_SHELL.md](GAME_SHELL.md)). The HUD's corner
   shows the menu button for the device you use. The menu has Resume, Back
   to the start, 1 to 4 players (split screen), engine panels (developer
@@ -59,7 +59,8 @@ The **Scenes** panel visits Synty-built levels far from the course
 | Jump, vault, climb | Space | A |
 | Crouch, let go of a ledge | C | B |
 | Shoot (or throw what you hold), push | Left click, E | RT, Y |
-| Pick up / put down | F | X |
+| Pick up / put down (items go in your bag) | F | X |
+| Bag: inventory and equipment | Tab or I | View |
 | Spawn menu (crates, barrels, balls, a dummy; clear, reset the world) | G | RB |
 | First / third person | V | R3 |
 | Camera distance | Mouse wheel | D-pad up / down |
@@ -68,7 +69,7 @@ The **Scenes** panel visits Synty-built levels far from the course
 | Push to talk (voice builds) | P | LB |
 | Lua toys: tower, ball, clear | H, B, N (or hold B) | the spawn menu |
 | Break-the-targets | T | D-pad right |
-| Pause menu | Esc | Start or View |
+| Pause menu | Esc | Start |
 
 Split-screen players 2 to 4 move, jump, crouch, shoot, push and
 zoom with their own controller. The full list, and why each key is where
@@ -82,6 +83,7 @@ it is, is in [games/showcase/README.md](../games/showcase/README.md).
 | `KKE_START_AT=x,y,z[,yaw]` | Start there, facing yaw (the camera too) |
 | `KKE_DEMO_HANG=1` | Jump, hang, shimmy around the end and jump back at the lane's 3 m wall |
 | `KKE_DEMO_TRICKS=1` | Wall run and wall jump, then ledge leaps along the pillars and the leap up to the beam |
+| `KKE_DEMO_ITEMS=1` | At the supply table: picks things up, opens the bag, equips an axe, a rifle, a helmet, a canteen and a lantern, then shows them worn |
 | `KKE_DEMO_BRIDGE=1` | Drops an iron ball on the yard's glass, then rolls one into a crate, and logs how far the crates moved |
 | `KKE_SPLIT=2..4`, `KKE_OVERHEAD=1` | Local split screen, and an overhead picture-in-picture view |
 | `KKE_MAIN_MENU=pause` | Opens the pause menu after 1.5 s (`KKE_MAIN_MENU=0`: no title screen) |

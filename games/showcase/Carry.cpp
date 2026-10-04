@@ -52,14 +52,19 @@ void ShowcaseModule::togglePickUp() {
         dropHeld();
         return;
     }
+    // Only on your feet: not hanging, vaulting or in the air.
+    if (m_loco->state() != kke::Locomotion::State::Ground) return;
+    // An item in front of you (Items.cpp) goes in the bag; crates are lifted.
+    if (const int item = itemInReach(); item >= 0) {
+        takeItem(item);
+        return;
+    }
 #if KKE_ENABLE_NET
     if (m_net && !m_net->authority()) {
         m_status = "Carrying is offline only for now";
         return;
     }
 #endif
-    // Only on your feet: not hanging, vaulting or in the air.
-    if (m_loco->state() != kke::Locomotion::State::Ground) return;
     kke::RigidWorld& w = m_rigid->world();
     const glm::vec3 chest = w.characterPosition(m_player) + glm::vec3(0, 0.9f, 0);
     glm::vec3 f = m_loco->facing();

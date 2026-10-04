@@ -8,6 +8,8 @@
 #include "kke/CharacterIk.h"
 #include "kke/FrameStats.h"
 #include "kke/Footsteps.h"
+#include "kke/Equipment.h"
+#include "kke/Inventory.h"
 #include "kke/ResourceGovernor.h"
 #include "kke/Buoyancy.h"
 #include "kke/Locomotion.h"
@@ -267,6 +269,78 @@ private:
     Held m_held;
     float m_demoCarry = -1.0f; // KKE_DEMO_CARRY: seconds into the script, -1 = off
 
+    // Items (Items.cpp): things lying about (the supply table by the
+    // start, later the zones) that pickup puts in your bag, a grid
+    // inventory (kke::Inventory, data/items.json), and what you equip
+    // shown on the character (kke::Equipment: in a hand, on the back, a
+    // hip, the head). The bag's weight slows you down.
+    struct ItemLook {               // one kind's mesh, item space (grip at the origin)
+        std::vector<kke::Vertex> v;
+        std::vector<uint32_t> idx;
+        glm::vec3 lo{0.0f}, hi{0.0f}; // bounds
+        float metallic = 0.0f;
+        kke::Equippable equip;       // held by Equipment: m_looks never moves an entry
+    };
+    struct WorldItem {
+        std::string id;
+        int count = 1;
+        kke::RigidWorld::BodyId body = kke::RigidWorld::kNoBody;
+    };
+    void loadItems();
+    void buildLooks();
+    void placeItems();              // the supply table's things, back where they started
+    void clearWorldItems();
+    void dropItem(const std::string& id, int count, const glm::vec3& at);
+    int itemInReach() const;        // index into m_worldItems, -1 = none
+    void takeItem(int index);
+    void syncEquipment();           // m_inv's equipped things -> m_equipment
+    void drawEquipped(kke::Pose& pose, const glm::mat4& toWorld);
+    void batchItems();
+    void toast(std::string text);
+    float loadFactor() const;       // 1 = light, less with a heavy bag
+    kke::ItemCatalog m_items;
+    kke::Inventory m_inv{10, 6, 30.0f};
+    std::map<std::string, ItemLook> m_looks;
+    std::vector<WorldItem> m_worldItems;
+    kke::Equipment m_equipment;
+    bool m_equipmentBuilt = false;
+    std::unique_ptr<kke::DynamicMeshRenderer> m_itemBatch, m_equipBatch;
+    size_t m_itemBatchIndices = 0, m_equipBatchIndices = 0;
+    float m_demoItems = -1.0f;      // KKE_DEMO_ITEMS: seconds into the script, -1 = off
+    bool m_demoItemsKeepOpen = false; // KKE_DEMO_ITEMS=2: the bag stays open
+    void updateItemsDemo(float dt, glm::vec3& move);
+
+    // The bag (InventoryScreen.cpp, ui/showcase_inventory.rml): Tab, I or
+    // View opens it over the game. Move with the arrows, the
+    // d-pad or the mouse; take and place with A, Space or a click; turn
+    // with R or Y; equip with E or X; drop with Q or RB; sort with T.
+    struct InvCell { bool cursor = false, ok = false, bad = false; };
+    struct InvTile { std::string style, label, count; bool moving = false; };
+    struct InvSlot { std::string name, item, style; bool cursor = false, fits = false; };
+    void buildInventoryScreen();
+    void openInventory(bool open);
+    void updateInventory(float dt);
+    void refreshInventory();
+    void invPress();                // take or place at the cursor
+    void invEquipToggle();
+    void invDrop();
+    const kke::InventoryItem* invUnderCursor() const;
+    bool m_invOpen = false, m_invRecapture = false, m_invDirty = true;
+    int m_invX = 0, m_invY = 0;     // the cursor: a cell, or x = -1 for the equipment column (y = slot)
+    uint32_t m_invMoving = 0;       // the item being moved (0 = none)
+    bool m_invMovingRotated = false;
+    float m_invRepeat = 0.0f;
+    glm::ivec2 m_invHeldDir{0};
+    std::vector<InvCell> m_invCells;
+    std::vector<InvTile> m_invTiles;
+    std::vector<InvSlot> m_invSlots;
+    struct InvDetails { std::string name, category, description, weight, size, equip; bool any = false; };
+    InvDetails m_invInfo;
+    std::string m_invWeight, m_invWeightBar, m_invNote, m_invKeys;
+    bool m_invHeavy = false;
+    Rml::ElementDocument* m_invDoc = nullptr;
+    Rml::DataModelHandle m_invModel;
+
     // Player.
     kke::RigidWorld::CharacterId m_player = 0;
     std::unique_ptr<kke::Locomotion> m_loco;      // vault/climb, turning, air control
@@ -288,11 +362,12 @@ private:
     void updateHud();
     void buildPauseRows();
     struct HudState {
-        std::string move, speed, station, stationText, stationLive, menuHint;
+        std::string move, speed, station, stationText, stationLive, menuHint, prompt, toast;
         bool trick = false, panels = false, online = false;
         int players = 1;
     };
     HudState m_hud;
+    float m_toastTime = 0.0f; // s the toast stays
     kke::UiModule* m_ui = nullptr;
     Rml::ElementDocument* m_hudDoc = nullptr;
     Rml::DataModelHandle m_hudModel;

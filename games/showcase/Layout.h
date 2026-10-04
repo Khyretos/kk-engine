@@ -14,5 +14,7 @@ inline constexpr float kLaneX = 20.0f;                        // parkour lane, r
 inline constexpr float kTrickX = 26.0f;                       // trick course face: wall run, ledge leaps
 inline constexpr glm::vec3 kPlatform(-14.0f, 0.0f, 6.0f);     // moving platform
 inline constexpr glm::vec3 kLowRoof(10.0f, 0.0f, 6.0f);       // crouch under it
+inline constexpr glm::vec3 kSupply(-4.5f, 0.0f, 2.5f);        // supply table: things to pick up and equip
+inline constexpr glm::vec3 kSupplyTableHalf(1.3f, 0.42f, 0.45f); // its top is 0.84 m up
 
 } // namespace kke_showcase::layout

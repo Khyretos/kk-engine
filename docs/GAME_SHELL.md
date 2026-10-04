@@ -64,6 +64,8 @@ shell->blockPause = [this] { return m_cutscene; };
   just closes the title.
 - `startIsTheGames`: while it's true, Start belongs to the game (a results
   screen's "Start: again") and only View/Back and Esc open the pause menu.
+- `selectIsTheGames`: the same for View/Back (kke_demo's bag): only Start
+  and Esc open the pause menu.
 - `blockPause`: while it's true, nothing opens the menu (the Flying demo
   keeps its own per-player pause menu in the air, with a Settings row that
   calls `openPause()`).
