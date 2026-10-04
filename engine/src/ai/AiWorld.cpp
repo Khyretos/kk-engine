@@ -1076,6 +1076,14 @@ void AiWorld::move(Agent& a, const glm::vec3& steering, float speedLimit, float 
     Mover m{ a.position, a.velocity, speedLimit, s.acceleration, s.radius };
 
     glm::vec3 total = steering;
+    // Sent to a spot, it turns onto it as hard as its legs allow: steering
+    // is the change of velocity wanted, which acceleration alone would
+    // make in a second, and at a run that second drifts a couple of
+    // metres (soldiers still running from their last order crossed the
+    // barrier they were sent behind). So it is made in speed/acceleration
+    // seconds instead, as quick as the species can.
+    if ((a.order.kind == Order::Kind::MoveTo || a.order.kind == Order::Kind::Hold) && speedLimit > 0.0f)
+        total *= std::max(1.0f, s.acceleration / speedLimit);
     // Never walk through each other; herds also pull together.
     std::vector<Neighbour> near;
     neighbours(a, std::max(s.flockRadius, 3.0f), false, near);
