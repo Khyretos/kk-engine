@@ -17,6 +17,7 @@ git fetch FORGEJO <branch> && git checkout -B <branch> FORGEJO/<branch>
 | `kke-demo-checks.md` | `kke-demo-world` (rounds 1-8 (complete): `kke-demo.patch`, `kke-demo-02.patch` ... `kke-demo-08.patch`; screenshots in `kke-demo-shots/`) |
 | `jiggle-body-checks.md` | `feature/jiggle-realistic-body` (on `main` fa1b7f1) |
 | `sandbox-checks.md` | `sandbox/feedback-toys-walk` (`sandbox.patch`, made on `main` fa1b7f1, applied on `main` 9ea425b; screenshots in `sandbox-shots/`; extra files `sandbox-toys.scene.json`, `sandbox-wmclose.c`) |
+| `pet-companion-checks.md` | `pet/companion-feedback` (`pet-companion.patch`, 2 commits on `main` 018027c; screenshots in `pet-companion-shots/`) |
 | `racing-round-checks.md` | none pushed from this inbox (`racing-round.patch` was not in this batch) |
 
 The "Apply and build" steps in the checks files that run `git am` are already
