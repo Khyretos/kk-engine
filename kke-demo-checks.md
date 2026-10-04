@@ -9,6 +9,7 @@ The showcase world comes as a series, one commit per round, all on branch `kke-d
 | 3 | `kke-demo-03.patch` | kke_demo: the open world round the yard (terrain, roads, zones, world map) |
 | 4 | `kke-demo-04.patch` | kke_demo: guns, grenades and the firing range (+ FEMFX far-from-origin fix) |
 | 5 | `kke-demo-05.patch` | kke_demo: cars at the race track, a stunt plane at the airfield |
+| 6 | `kke-demo-06.patch` | kke_demo: the nature park and the snow field |
 
 Apply in order with `git am` (`git am -3` after other patches). One PR for the branch is fine;
 title it after the newest round, or `kke_demo: showcase world (rounds 1-N)`.
@@ -263,3 +264,49 @@ the engine sound, the plane with a pad or the T.16000M sticks (no stick bindings
 
 Known: vehicles are local only online (round 8). Flight sticks aren't bound in the showcase
 (the Flying demo has them).
+
+# Round 6: the nature park and the snow field
+
+Game code only (no engine change).
+
+## What changed (11 files)
+- `games/showcase/Nature.cpp` (new): ~85 trees round a meadow, ~520 Synty plants, grass blades
+  near you that sway with gusts and bend away from your legs, drifting leaves. Synty POLYGON
+  Nature trees/stumps/plants when installed (all or none), shape-built trees otherwise
+  (`KKE_NATURE_ART=0` forces those). The axe (chopping block at the park gate, plus the supply
+  table's): fire swings it with IK hands; four hits fell a tree (tips away from you, crash,
+  shake), it becomes 2-4 log props and a stump; a swing at a log splits it into firewood.
+  Flowers picked with F / X into the bag. Snow field: a 116 m grid of quarter-metre cells that
+  keeps footprints (every stride, left/right) and tyre tracks, rebuilt in chunks; snow falling.
+  `KKE_DEMO_NATURE=1`.
+- HUD: park text changes with the axe in hand, "Trees felled: N"; prompt "Pick the Cornflower".
+- Reset the world grows the forest back and lays fresh snow. README section, SHOWCASE.md rows.
+
+## Already checked in the cloud
+- GCC -Werror build: zero warnings. clang -Werror syntax on every changed .cpp: clean.
+  `check_std_includes.py` OK. `kke_tests` 999 passed. `check_game kke_demo --headless`: OK
+  (only the sky HDR).
+- `KKE_DEMO_NATURE=1`, with and without POLYGON Nature: axe taken, four chops, the tree falls,
+  lies as logs, one log split into firewood, three flowers picked (1 each in the bag), a walk
+  through the snow leaves a trail of footprints.
+- The series still applies alone on 9349996 and with `git am -3` after racing-round,
+  platoon-duel, climbing-hands and sea-demo.
+- Screenshots: `kke-demo-shots/forest-chop.png`, `tree-down.png`, `meadow.png`, `snow-trail.png`.
+
+## Run on soucouyant
+```sh
+cmake --build build --target kke_demo kke_tests -j4 && build/bin/kke_tests
+tools/check_game kke_demo --seconds 10
+cd build/bin && KKE_DEMO_NATURE=1 ./kke_demo    # log: "nature:" and "nature demo:" lines
+```
+Not judged in the cloud: frame rate in the park at full resolution with the Synty undergrowth,
+how the sway and the swing look in motion, the sounds.
+
+## Play list for Kees (round 6)
+1. M > Nature park. Walk through the grass: it parts round your legs. Watch the trees in the wind.
+2. Take the axe from the chopping block (F / X). Fire four times at a tree: timber.
+3. Carry a log, or swing at it to split it into firewood; pick it up into the bag.
+4. Pick flowers in the meadow (F / X). Open the bag: they're in it.
+5. M > Snow field. Walk a loop and look back at your footprints. Reset (R) for fresh snow.
+
+Known: the forest and the snow are local only online (round 8).
