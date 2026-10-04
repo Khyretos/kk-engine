@@ -20,11 +20,14 @@ namespace {
 
 uint32_t maskOf(uint8_t prefix) { return prefix == 0 ? 0u : ~0u << (32u - prefix); }
 
+#if !defined(_WIN32)
+// Windows reports the prefix length itself (OnLinkPrefixLength).
 uint8_t prefixOf(uint32_t mask) {
     uint8_t n = 0;
     while (n < 32 && (mask & (0x80000000u >> n))) ++n;
     return n;
 }
+#endif
 
 } // namespace
 
