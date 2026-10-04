@@ -66,10 +66,13 @@ TEST(CookedFile, ReadAssetFileReadsPlainAndCookedAndTraces) {
     EXPECT_EQ(b, plain);
     EXPECT_TRUE(cooked::isCookedFile((dir / "cooked.png").string()));
     EXPECT_FALSE(cooked::isCookedFile((dir / "plain.png").string()));
-    std::ifstream in(trace);
     std::string l1, l2;
-    std::getline(in, l1);
-    std::getline(in, l2);
+    {
+        // Closed before remove_all below: Windows can't delete an open file.
+        std::ifstream in(trace);
+        std::getline(in, l1);
+        std::getline(in, l2);
+    }
     EXPECT_NE(l1.find("plain.png"), std::string::npos);
     EXPECT_NE(l2.find("cooked.png"), std::string::npos);
     std::vector<uint8_t> none;
