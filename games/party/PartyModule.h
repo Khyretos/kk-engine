@@ -106,6 +106,9 @@ private:
     };
     void setupLobby();
     std::vector<Entry> wantedRoster() const;
+    static const std::vector<std::string>& lobbyNames();
+    std::string characterOf(const Entry& e) const;             // online: the look every machine reads (Net.cpp)
+    BeanLook lookOfCharacter(const std::string& character, const BeanLook& fallback) const;
     void buildBeans(const std::vector<Entry>& roster);
     void removeBean(Bean& b);
     void applyLooks();

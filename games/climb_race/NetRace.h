@@ -32,6 +32,7 @@ constexpr uint16_t kEventLoose = kGameEventBase + 2;  // a racer's owner -> host
 constexpr uint16_t kEventReady = kGameEventBase + 3;  // client -> host: built the race, these racers are at the line (Ready)
 constexpr uint16_t kEventGo = kGameEventBase + 4;     // host -> all: everyone's ready, the countdown runs (Ready, no players)
 constexpr uint16_t kEventOut = kGameEventBase + 5;    // host -> all: Elimination, a racer is out (Finish, time unused)
+constexpr uint16_t kEventHit = kGameEventBase + 6;    // a racer's owner -> host -> all: Rockfall, a rock hit them (Finish, time unused)
 
 // A racer as its owner sees it, enough for another machine to draw it.
 struct Pose {
@@ -102,8 +103,14 @@ struct Ready {
 std::vector<uint8_t> encode(const Ready& r);
 std::optional<Ready> decodeReady(const std::vector<uint8_t>& bytes);
 
-// A climber's colour as the "character" every player joins with ("#5aa6ff").
+// A climber's colour as text ("#5aa6ff").
 std::string tintText(const glm::vec3& tint);
 glm::vec3 tintFromText(const std::string& text, const glm::vec3& fallback);
+// The "character" every player joins with: their lobby look (kke::Lobby
+// lookText, which every lobby shows) and the exact colour, "look:2.4|#5aa6ff";
+// a CPU climber's says so ("look:3.1|cpu,#ff7333"). It changes while
+// they're in the game when they pick another look.
+std::string characterText(const std::string& look, bool cpu, const glm::vec3& tint);
+glm::vec3 tintOfCharacter(const std::string& character, const glm::vec3& fallback);
 
 } // namespace climb_race::netrace

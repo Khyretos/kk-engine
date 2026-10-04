@@ -216,6 +216,7 @@ private:
         bool remote = false, cpu = false;
     };
     std::vector<Entry> wantedRoster() const;
+    std::vector<Entry> lobbyRoster() const; // the menu's grid: wantedRoster, online with everyone else's cars
     void loadTrackList();
     void buildTrack(const TrackDesc& desc);
     void clearTrack();
@@ -303,6 +304,7 @@ private:
     void damageWheel(Car& c, int wheel, float speed, const glm::vec3& push); // a hit at that corner
     void tearOffWheel(Car& c, int wheel, const glm::vec3& push);
     void refitWheels(Car& c);                            // the pit crew
+    void remoteDamage(Car& c);                           // online: a remote car's wheels and repairs, from its pose
     static bool tyresHurt(const Car& c);                 // flat, on the rim, gone or worn out: a pit stop's worth
     void updateLooseWheels(float dt);
     void clearLooseWheels();

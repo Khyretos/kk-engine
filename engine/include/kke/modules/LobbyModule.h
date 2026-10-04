@@ -98,6 +98,7 @@ private:
     void assignDevices();
     void buildUi();
     void refreshUi();
+    void updateOnline(); // the other machines' players (NetModule) into the lobby
     // Button prompts (Xelu glyphs, kke/ButtonPrompts.h) as RmlUi markup.
     PromptStyle seatStyle(int seat) const;
     std::string glyph(PromptStyle style, const std::string& name) const;
@@ -139,8 +140,12 @@ private:
         std::string name, device, accent, prompt;
         std::vector<RowView> rows;
     };
+    struct OnlineView {
+        std::string name, tag, look, accent;
+    };
     struct View {
         bool open = true;
+        std::vector<OnlineView> online;
         std::string title, subtitle, hint;
         std::vector<SeatView> seats;
         std::vector<std::string> toasts;

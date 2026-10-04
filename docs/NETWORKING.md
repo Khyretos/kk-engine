@@ -345,6 +345,29 @@ net.removeLocalPlayer(1);                // Sam puts the controller down
 - Not with input replay yet: there each connection plays one player, and
   a guest is refused with the reason.
 
+## Names and looks that change
+
+A player's name and "character" (what others draw them as: a colour, a
+car, an outfit) are sent when they join, and again whenever they change:
+set `NetModule::playerName` / `playerCharacter`, or call
+`addLocalPlayer(slot, name, character)` again with the new ones, at any
+time. So a player who joins a lobby and then picks another colour shows
+up in it on every screen.
+
+- On the wire (protocol 10): a client's `Profile` message (slot, name,
+  character); the host keeps it and tells everyone with a `PlayerInfo`
+  for a player they already know. The host's own changes go out the same
+  way (`NetServer::setLocalProfile`). A later joiner gets the newest.
+- The player keeps their id: `NetClient::onPlayerChanged(id)` fires (and
+  `NetServer::onProfile(id)` on the host), not `onPlayer`, which stays
+  "joined or left".
+- `Profile` counts toward the events-per-second limit; a new name passes
+  the server's `admit` check like a joining one.
+- Every online demo puts its lobby look in the character
+  (`kke::Lobby::lookText`, "look:2.4|#5aa6ff": the choice numbers, then
+  the game's own words after the bar), so LobbyModule shows everyone
+  online with what they picked (docs/LOBBY.md "Online").
+
 ## In Climb Race
 
 A whole game on top of the above (games/climb_race/Net.cpp, NetRace.h),
@@ -355,12 +378,15 @@ and a template for a menu-driven one:
   `lanGames()` gives address, port, host name, players and whether it's
   this game) and Join. Host calls `host()`, Join calls `join(address, port)`.
 - Every lobby seat is a player: the first is NetModule's own, the others
-  `addLocalPlayer(slot, name, character)`, with the colour as the
-  character ("#5aa6ff"). The host's CPU climbers are host guests too, so
-  they're players everyone sees.
+  `addLocalPlayer(slot, name, character)`, with the lobby look and the
+  exact colour as the character ("look:2.4|#5aa6ff", "|cpu,#..." for a
+  CPU). The host's CPU climbers are host guests too, so they're players
+  everyone sees. In the menu the other screens' players stand at the back
+  of the line-up in their colours, on every screen.
 - The host decides the race with game events (base 0x4300): Setup (the
   mountain, and which player climbs which face), Ready and Go (the
-  countdown waits for every machine), Finish and Loose (a hold came off).
+  countdown waits for every machine), Finish and Loose (a hold came off),
+  Hit (Rockfall: a rock hit someone; it flashes on every screen).
 - Each climber's pose is its NetPlayerState: feet, facing, state (on foot,
   climbing, mantling) and, in `extra`, the hands and feet relative to it
   (1 mm), the hips, and each hand's rock normal and grip: 29 bytes.
@@ -410,7 +436,7 @@ connection gets.
 
 ## Tests
 
-`tests/test_net.cpp` (19 tests, all in CI):
+`tests/test_net.cpp` (all in CI):
 
 - BitStream: round trips at the edges of every range, quaternions,
   strings, reading past the end.
@@ -440,7 +466,10 @@ gets their own screen's players, a guest leaving and a connection going;
 guests filling a server so a late joiner is turned away, a kicked guest's
 owner told and still connected; guests refused under input replay; a
 guest's impossible move corrected by its slot, not the first player's.
-The fuzz test covers `Guest`, `GuestAck` and states with extra bytes.
+The fuzz test covers `Guest`, `GuestAck`, `Profile` and states with extra
+bytes. A look picked after joining (the host's, a client's, a guest's)
+reaches everyone with the same ids, isn't taken for a join, and reaches
+a later joiner.
 The host ending the game tells its players so (`endedByServer()`), which
 is not a lost connection.
 

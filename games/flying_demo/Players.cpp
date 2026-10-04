@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <iterator>
 
 namespace flying {
 
@@ -374,6 +375,7 @@ std::vector<FlyingModule::Entry> FlyingModule::wantedRoster() const {
         const std::vector<int>& look = l.seat(seat).look;
         e.tint = kColours[static_cast<size_t>(look.size() > 1 ? look[1] : 0) % 8].rgb;
         e.livery = look.size() > 2 ? look[2] : 0;
+        e.look = look;
         taken.push_back(e.name);
         colours.push_back(look.size() > 1 ? look[1] : 0);
         out.push_back(e);
@@ -393,6 +395,10 @@ std::vector<FlyingModule::Entry> FlyingModule::wantedRoster() const {
         colours.push_back(colour);
         c.tint = kColours[colour].rgb;
         c.livery = (i + 1) % 4;
+        int nameIndex = 0;
+        for (int n = 0; n < static_cast<int>(std::size(kNames)); ++n)
+            if (c.name == kNames[n]) nameIndex = n;
+        c.look = { nameIndex, colour, c.livery };
         out.push_back(c);
     }
     return out;

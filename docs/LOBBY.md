@@ -104,6 +104,29 @@ m_lobby->open();
   (`tests/test_lobby.cpp`); LobbyModule turns real devices into its
   presses and shows it with RmlUi.
 
+## Online
+
+In a network game (`NetModule`, docs/NETWORKING.md) the menu also lists
+everyone on the other machines, on the left ("Online in this game"):
+their name, HOST or CPU, and what they picked, in their colour. The host
+sees each player who joins the moment they're in, and a joiner sees the
+host's players. When someone changes a look in their menu, every screen
+shows it.
+
+This works when the game sends its lobby look as the NetModule
+character: `lobby().lookText(seat)` ("look:2.4", the choice numbers)
+and, after a `|`, anything of the game's own ("look:2.4|cpu,#5aa6ff").
+`lookFromText(character)` reads the choices back (one per look field,
+out of range or missing ones as 0), `characterExtra(character)` gives
+the game's part, and `lookChoice(look, field)` a choice's name. Every
+machine runs the same game, so the numbers mean the same everywhere.
+LobbyModule fills `lobby().onlinePlayers()` itself each frame; a game
+whose character is "cpu" or ends in "|cpu..." is tagged CPU.
+
+The games also put the other screens' players into the scene behind the
+menu: Climb Race and Party line them up at the back of the stage,
+Racing parks their cars on the grid as they picked them.
+
 ## Testing without controllers
 
 | Variable | Effect |

@@ -26,11 +26,12 @@ namespace kke::net {
 //   velocity  +-64 m/s per axis, 1/128 m/s steps
 //   rotation  smallest-three quaternion, ~0.001 per component
 //   yaw       0..360 degrees, 1024 steps (0.35 degrees)
-constexpr uint16_t kProtocolVersion = 9; // 2: Spawn, Despawn, Break (#28); 3: join password (#42); 4: Voice; 5: Input, InputAck (#28);
-                                         // 6: several players per connection (Guest, GuestAck), NetPlayerState::extra;
-                                         // 7: extra up to 32 bytes; 8: up to 254 players, snapshots say who is
-                                         // there but not in this one (Snapshot::present); 9: script bodies can be
-                                         // glass or invisible (script_net::BodySpawn::look)
+constexpr uint16_t kProtocolVersion = 10; // 2: Spawn, Despawn, Break (#28); 3: join password (#42); 4: Voice; 5: Input, InputAck (#28);
+                                          // 6: several players per connection (Guest, GuestAck), NetPlayerState::extra;
+                                          // 7: extra up to 32 bytes; 8: up to 254 players, snapshots say who is
+                                          // there but not in this one (Snapshot::present); 9: script bodies can be
+                                          // glass or invisible (script_net::BodySpawn::look); 10: a player's name and
+                                          // look change while in the game (Profile)
 constexpr size_t kMaxPlayers = 254;       // ids 1..254 (a sport center's lobby: ~100 people)
 constexpr size_t kMaxNameLength = 24;
 constexpr size_t kMaxGameIdLength = 32;
@@ -71,6 +72,7 @@ enum class MessageType : uint8_t {
     InputAck,        // server -> one client (unreliable): your player after your input N
     Guest,           // client -> server (reliable): another player on this screen joins / leaves
     GuestAck,        // server -> one client (reliable): that player's id, or why not
+    Profile,         // client -> server (reliable): one of my players has a new name or look
     Count
 };
 
@@ -142,6 +144,13 @@ struct CorrectionMsg {
 struct GuestMsg {
     uint8_t slot = 1;          // 1 .. kMaxLocalPlayers - 1
     bool present = true;       // false: that player left (the connection stays)
+    std::string name, character;
+};
+// A player picked another look (or name) while in the game: a lobby's
+// colour, car, outfit. The server keeps it and tells everyone with a
+// PlayerInfo for a player they already know.
+struct ProfileMsg {
+    uint8_t slot = 0;          // 0 = the connection's own player, 1.. its guests
     std::string name, character;
 };
 struct GuestAckMsg {
@@ -264,6 +273,11 @@ template <typename Stream> void serialize(Stream& s, CorrectionMsg& m) {
 template <typename Stream> void serialize(Stream& s, GuestMsg& m) {
     s.integer(m.slot, 1, kMaxLocalPlayers - 1);
     s.boolean(m.present);
+    s.string(m.name, kMaxNameLength);
+    s.string(m.character, kMaxCharacterLength);
+}
+template <typename Stream> void serialize(Stream& s, ProfileMsg& m) {
+    s.integer(m.slot, 0, kMaxLocalPlayers - 1);
     s.string(m.name, kMaxNameLength);
     s.string(m.character, kMaxCharacterLength);
 }

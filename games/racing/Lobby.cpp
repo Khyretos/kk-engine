@@ -98,14 +98,23 @@ void RacingModule::setupLobby() {
     if (m_autopilot || (lobbyVar && std::strcmp(lobbyVar, "0") == 0)) m_lobby->close();
 }
 
+// The grid in the menu: online, the other screens' players' cars too (as
+// they picked them), so the host sees who joined and a joiner sees who's in.
+std::vector<RacingModule::Entry> RacingModule::lobbyRoster() const {
+    if (!m_net || m_net->role() == kke::NetModule::Role::Offline) return wantedRoster();
+    std::vector<Entry> out = onlineRoster();
+    if (netClient()) std::erase_if(out, [](const Entry& e) { return e.cpu; }); // the host's CPU cars come with the race
+    return out;
+}
+
 void RacingModule::updateLobby(float) {
     // Another track, or the line-up changed: the grid again.
     const TrackDesc& want = m_tracks[static_cast<size_t>(chosenTrack())];
-    const std::vector<Entry> roster = wantedRoster();
+    const std::vector<Entry> roster = lobbyRoster();
     bool same = want.id == m_builtTrack && roster.size() == m_cars.size();
     for (size_t i = 0; same && i < roster.size(); ++i)
         same = roster[i].seat == m_cars[i].seat && roster[i].type == m_cars[i].type && roster[i].kit == m_cars[i].kit &&
-               roster[i].paint == m_cars[i].paint;
+               roster[i].paint == m_cars[i].paint && roster[i].remote == m_cars[i].remote && roster[i].netId == m_cars[i].netId;
     if (!same) {
         if (want.id != m_builtTrack) buildTrack(want);
         buildRace(roster);

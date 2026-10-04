@@ -122,5 +122,11 @@ std::optional<Down> decodeDown(const std::vector<uint8_t>& bytes);
 // A colour as the "character" every player joins with ("#5aa6ff").
 std::string tintText(const glm::vec3& tint);
 glm::vec3 tintFromText(const std::string& text, const glm::vec3& fallback);
+// The "character" a pilot joins with: their lobby look (kke::Lobby
+// lookText, which every lobby shows), then the paint and the exact
+// colour: "look:3.1.2|p2,#ff7333" ("cpu," first for a CPU pilot).
+std::string characterText(const std::string& look, bool cpu, int livery, const glm::vec3& tint);
+glm::vec3 tintOfCharacter(const std::string& character, const glm::vec3& fallback);
+int liveryOfCharacter(const std::string& character, int fallback);
 
 } // namespace flying::net

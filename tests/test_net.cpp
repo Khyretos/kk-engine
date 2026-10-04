@@ -241,6 +241,8 @@ TEST(NetProtocol, FuzzedPacketsNeverCrashTheDecoders) {
         seeds.push_back(encode(MessageType::Guest, g));
         GuestAckMsg ga{ 2, 7, "full" };
         seeds.push_back(encode(MessageType::GuestAck, ga));
+        ProfileMsg pr{ 1, "Kees", "look:2.4|cpu,#5aa6ff" };
+        seeds.push_back(encode(MessageType::Profile, pr));
         NetPlayerState withExtra;
         withExtra.extra = { 1, 2, 3, 4, 5, 6 };
         PlayerStateMsg pe{ 5, withExtra, 3 };
@@ -277,6 +279,11 @@ TEST(NetProtocol, FuzzedPacketsNeverCrashTheDecoders) {
             EXPECT_LT(g->slot, kMaxLocalPlayers);
         }
         accepted += decode<GuestAckMsg>(MessageType::GuestAck, d, n).has_value();
+        if (auto pr = decode<ProfileMsg>(MessageType::Profile, d, n)) {
+            EXPECT_LT(pr->slot, kMaxLocalPlayers);
+            EXPECT_LE(pr->character.size(), kMaxCharacterLength);
+            ++accepted;
+        }
         if (auto s = decode<SnapshotMsg>(MessageType::Snapshot, d, n)) {
             ++accepted;
             EXPECT_LE(s->bodies.size(), kMaxBodiesPerSnapshot);
@@ -879,6 +886,67 @@ TEST(NetSession, SeveralPlayersOnOneConnection) {
     EXPECT_EQ(m.server.clientCount(), 1u);
     EXPECT_EQ(changes.size(), 2u);
     EXPECT_EQ(m.clients[1]->players(m.now).size(), 2u); // the host and its guest
+}
+
+// A look picked after joining (a lobby's colour, car, outfit): the host's,
+// a client's and a guest's reach everyone, nobody gets a new id, and it
+// isn't news of a player joining.
+TEST(NetSession, ALookPickedInTheGameReachesEveryone) {
+    Match m(2);
+    m.clients[0]->addGuest(1, "Couch", "look:0.1");
+    m.run(0.3);
+    const uint8_t me = m.clients[0]->playerId(), guest = m.clients[0]->guestId(1);
+    ASSERT_NE(guest, 0);
+    int joins = 0;
+    std::vector<uint8_t> changed;
+    m.clients[1]->onPlayer = [&](uint8_t, bool) { ++joins; };
+    m.clients[1]->onPlayerChanged = [&](uint8_t id) { changed.push_back(id); };
+    std::vector<uint8_t> hostSaw;
+    m.server.onProfile = [&](uint8_t id) { hostSaw.push_back(id); };
+
+    m.clients[0]->setProfile("P0", "look:3.2|#ff0000");
+    m.clients[0]->addGuest(1, "Couch", "look:0.5");
+    m.server.setLocalProfile(0, "Host", "look:7.7");
+    m.run(0.3);
+
+    EXPECT_EQ(m.clients[0]->playerId(), me);
+    EXPECT_EQ(m.clients[0]->guestId(1), guest) << "the same player, the same id";
+    EXPECT_EQ(joins, 0) << "a new look is not a new player";
+    EXPECT_EQ(changed.size(), 3u);
+    EXPECT_EQ(hostSaw.size(), 2u);
+    for (const RemotePlayer& p : m.clients[1]->players(m.now)) {
+        if (p.id == me) {
+            EXPECT_EQ(p.character, "look:3.2|#ff0000");
+        }
+        if (p.id == guest) {
+            EXPECT_EQ(p.character, "look:0.5");
+        }
+        if (p.id == 0) {
+            EXPECT_EQ(p.character, "look:7.7");
+        }
+    }
+    for (const RemotePlayer& p : m.server.players(m.now))
+        if (p.id == me) {
+            EXPECT_EQ(p.character, "look:3.2|#ff0000");
+        }
+    // The host's look reaches the client that changed its own too.
+    for (const RemotePlayer& p : m.clients[0]->players(m.now))
+        if (p.id == 0) {
+            EXPECT_EQ(p.character, "look:7.7");
+        }
+
+    // The same look again is no news.
+    changed.clear();
+    m.clients[0]->setProfile("P0", "look:3.2|#ff0000");
+    m.run(0.2);
+    EXPECT_TRUE(changed.empty());
+    // A client that joins later gets everyone's newest look.
+    NetClient& late = m.addClient();
+    m.run(0.3);
+    for (const RemotePlayer& p : late.players(m.now))
+        if (p.id == me) {
+            EXPECT_EQ(p.character, "look:3.2|#ff0000");
+        }
 }
 
 TEST(NetSession, GuestsCountTowardAFullServerAndAKickedGuestIsTold) {

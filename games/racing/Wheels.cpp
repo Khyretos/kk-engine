@@ -237,12 +237,15 @@ void RacingModule::damageWheel(Car& c, int wheel, float speed, const glm::vec3& 
 }
 
 void RacingModule::tearOffWheel(Car& c, int wheel, const glm::vec3& push) {
-    if (!c.vehicle || ((c.detached >> wheel) & 1u) || static_cast<size_t>(wheel) >= c.state.wheels.size()) return;
+    // A remote car (online) has no vehicle here: its machine tore it off,
+    // and this one shows it going, from where its wheel is drawn.
+    if (wheel < 0 || wheel > 3 || ((c.detached >> wheel) & 1u)) return;
+    if (c.vehicle ? static_cast<size_t>(wheel) >= c.state.wheels.size() : !c.remote) return;
     kke::RigidWorld& w = m_rigid->world();
     c.detached = static_cast<uint8_t>(c.detached | (1u << wheel));
-    w.setVehicleTyre(c.vehicle, wheel, kke::TyreCondition::Detached);
+    if (c.vehicle) w.setVehicleTyre(c.vehicle, wheel, kke::TyreCondition::Detached);
     m_models->setVisible(c.wheelInst[wheel], false);
-    const glm::mat4 xf = c.state.wheels[static_cast<size_t>(wheel)].transform;
+    const glm::mat4 xf = c.vehicle ? c.state.wheels[static_cast<size_t>(wheel)].transform : c.xf * c.wheelLocal[wheel];
     const CarArt& art = *c.art;
     // The wheel as a body of its own: a 12-sided drum, spinning as it was.
     kke::RigidWorld::BodyDesc b;

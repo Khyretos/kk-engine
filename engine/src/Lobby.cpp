@@ -1,6 +1,8 @@
 #include "kke/Lobby.h"
 
 #include <algorithm>
+#include <string>
+#include <string_view>
 
 namespace kke {
 
@@ -305,6 +307,64 @@ std::string Lobby::seatName(int seat) const {
         return field.choices[static_cast<size_t>(std::clamp(c, 0, static_cast<int>(field.choices.size()) - 1))];
     }
     return "Player " + std::to_string(seat + 1);
+}
+
+std::string Lobby::lookText(const std::vector<int>& look) {
+    std::string out = "look:";
+    for (size_t i = 0; i < look.size(); ++i) {
+        if (i) out += '.';
+        out += std::to_string(look[i]);
+    }
+    return out;
+}
+
+std::string Lobby::lookText(int seat) const {
+    if (seat < 0 || seat >= kMaxSeats) return lookText(std::vector<int>{});
+    return lookText(m_seats[static_cast<size_t>(seat)].look);
+}
+
+std::vector<int> Lobby::lookFromText(const std::string& character) const {
+    static constexpr std::string_view kPrefix = "look:";
+    if (character.compare(0, kPrefix.size(), kPrefix) != 0) return {};
+    const std::string body = character.substr(kPrefix.size(), character.find('|') == std::string::npos ? std::string::npos
+                                                                                                         : character.find('|') - kPrefix.size());
+    std::vector<int> look(m_looks.size(), 0);
+    size_t field = 0, at = 0;
+    while (at <= body.size() && field < look.size()) {
+        const size_t dot = std::min(body.find('.', at), body.size());
+        int v = 0;
+        bool digits = dot > at;
+        for (size_t i = at; i < dot && digits; ++i) {
+            if (body[i] < '0' || body[i] > '9' || v > 9999) digits = false;
+            else v = v * 10 + (body[i] - '0');
+        }
+        const int n = static_cast<int>(m_looks[field].choices.size());
+        look[field] = digits && v < n ? v : 0; // another version's choice: the first
+        ++field;
+        at = dot + 1;
+    }
+    return look;
+}
+
+std::string Lobby::characterExtra(const std::string& character) {
+    const size_t bar = character.find('|');
+    return bar == std::string::npos ? std::string() : character.substr(bar + 1);
+}
+
+std::string Lobby::lookChoice(const std::vector<int>& look, int field) const {
+    if (field < 0 || field >= static_cast<int>(m_looks.size()) || field >= static_cast<int>(look.size())) return {};
+    const LookField& f = m_looks[static_cast<size_t>(field)];
+    const int c = look[static_cast<size_t>(field)];
+    return c >= 0 && c < static_cast<int>(f.choices.size()) ? f.choices[static_cast<size_t>(c)] : std::string();
+}
+
+void Lobby::setOnlinePlayers(std::vector<OnlinePlayer> players) {
+    const auto same = [](const OnlinePlayer& a, const OnlinePlayer& b) {
+        return a.id == b.id && a.name == b.name && a.look == b.look && a.host == b.host && a.cpu == b.cpu;
+    };
+    if (players.size() == m_online.size() && std::equal(players.begin(), players.end(), m_online.begin(), same)) return;
+    m_online = std::move(players);
+    changed();
 }
 
 std::vector<Lobby::Row> Lobby::rows(int seat) const {

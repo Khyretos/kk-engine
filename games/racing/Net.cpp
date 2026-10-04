@@ -118,7 +118,10 @@ void RacingModule::syncNetPlayers() {
     for (const Entry& e : ours) {
         if (e.cpu || e.seat < 0) continue;
         if (slots >= kke::NetModule::kMaxLocalPlayers) break;
-        const std::string car = std::to_string(e.type) + "/" + std::to_string(e.kit) + "/" + std::to_string(e.paint);
+        // The lobby look (every menu shows it), then the car exactly
+        // ("look:1.2.0.5|2/0/5"); picking another in the menu tells everyone.
+        const std::string look = m_lobby ? kke::Lobby::lookText(m_lobby->lobby().seat(e.seat).look) : std::string("look:");
+        const std::string car = look + "|" + std::to_string(e.type) + "/" + std::to_string(e.kit) + "/" + std::to_string(e.paint);
         if (slots == 0) {
             m_net->playerName = e.name;
             m_net->playerCharacter = car;
@@ -150,9 +153,10 @@ std::vector<RacingModule::Entry> RacingModule::onlineRoster() const {
         e.name = p.name;
         e.netId = p.id;
         e.remote = true;
-        // Their car, as they picked it ("type/kit/paint").
+        // Their car, as they picked it ("look:...|type/kit/paint").
         int type = 0, kit = 0, paint = 0;
-        if (std::sscanf(p.character.c_str(), "%d/%d/%d", &type, &kit, &paint) == 3) {
+        const std::string car = kke::Lobby::characterExtra(p.character).empty() ? p.character : kke::Lobby::characterExtra(p.character);
+        if (std::sscanf(car.c_str(), "%d/%d/%d", &type, &kit, &paint) == 3) {
             e.type = std::clamp(type, 0, static_cast<int>(carTypes().size()) - 1);
             e.kit = std::clamp(kit, 0, kKits - 1);
             e.paint = std::clamp(paint, 0, static_cast<int>(paints().size()) - 1);
@@ -339,6 +343,7 @@ netrace::CarPose RacingModule::poseOf(const Car& c) const {
     p.totalled = c.totalled;
     p.braking = c.input.brake > 0.2f;
     p.handBrake = c.input.handBrake > 0.5f;
+    p.detached = static_cast<uint8_t>(c.detached & 0xFu);
     // Which tyres smoke: the same test as the effect (Damage.cpp), roughly.
     for (size_t w = 0; w < c.state.wheels.size() && w < 4; ++w) {
         const kke::VehicleWheelState& ws = c.state.wheels[w];
@@ -474,9 +479,10 @@ void RacingModule::updateNet(float dt) {
             c.totalled = true; // gone: parked where it was
             continue;
         }
-        if (!it->hasState) continue;
+        if (!it->hasState || m_phase == Phase::Lobby) continue; // in the menu they wait on the grid
         c.net = netrace::fromState(it->state);
         c.hasNet = true;
+        remoteDamage(c);
         c.health = c.net.health;
         c.totalled = c.net.totalled;
         c.lap = c.net.lap;
@@ -485,6 +491,23 @@ void RacingModule::updateNet(float dt) {
             c.finishTime = m_raceClock;
         }
     }
+}
+
+// What its own machine says about a remote car's damage that no dent
+// event carries: a wheel torn off here too (a loose wheel bounces away on
+// every screen), and the pit crew's work (dents gone, wheels back on).
+void RacingModule::remoteDamage(Car& c) {
+    for (int wheel = 0; wheel < 4; ++wheel)
+        if (((c.net.detached >> wheel) & 1u) && !((c.detached >> wheel) & 1u)) tearOffWheel(c, wheel, glm::vec3(0.0f, 2.0f, 0.0f));
+    const bool mended = c.net.health >= 99.5f && (c.health < 99.5f || !c.dented.empty());
+    if (mended && !c.dented.empty()) {
+        resetShell(c);
+        c.dented.clear();
+        c.dentedNormals.clear();
+        c.pressed.clear();
+        c.dentsChanged = true;
+    }
+    if (c.detached && !c.net.detached) refitWheels(c);
 }
 
 // Our cars' poses for everyone else; on the host, the CPU cars too.

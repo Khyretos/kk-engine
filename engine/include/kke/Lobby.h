@@ -190,6 +190,31 @@ public:
 
     std::function<void(int seat)> onJoin, onLeave;
 
+    // ---- online (docs/LOBBY.md "Online"): the players on the other
+    // machines of a network game, shown beside this screen's seats with
+    // the looks they picked. Every machine runs the same game, so a look
+    // goes over the network as its choice numbers ("look:2.0.5"), as the
+    // NetModule player's character; a game may add its own words after
+    // a '|' ("look:2.0.5|cpu").
+    struct OnlinePlayer {
+        uint8_t id = 0;            // NetModule player id (0: the host)
+        std::string name;
+        std::vector<int> look;     // one choice per look field; empty: unknown
+        bool host = false, cpu = false;
+    };
+    // "look:" and the choices of `look`.
+    static std::string lookText(const std::vector<int>& look);
+    std::string lookText(int seat) const; // a seat's own
+    // The choices in a character ("look:2.0.5|cpu"), one per look field
+    // (missing or out of range: 0); empty when it isn't one.
+    std::vector<int> lookFromText(const std::string& character) const;
+    // The game's words after the '|' ("cpu"), or empty.
+    static std::string characterExtra(const std::string& character);
+    // A look choice's name and swatch, for any look (a seat's or an online player's).
+    std::string lookChoice(const std::vector<int>& look, int field) const;
+    void setOnlinePlayers(std::vector<OnlinePlayer> players); // bumps revision() only when it changed
+    const std::vector<OnlinePlayer>& onlinePlayers() const { return m_online; }
+
     // ---- saved between runs: every seat's looks and player 1's settings
     // (no devices: controllers are claimed again each time).
     nlohmann::json save() const;
@@ -212,6 +237,7 @@ private:
     int m_keyRow = 0, m_keyCol = 0;
 
     std::vector<Seat> m_seats;
+    std::vector<OnlinePlayer> m_online;
     std::vector<LookField> m_looks;
     std::vector<Option> m_options;
     std::vector<std::string> m_difficulties;

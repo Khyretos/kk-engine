@@ -234,7 +234,10 @@ std::string tintText(const glm::vec3& tint) {
     return buf;
 }
 
-glm::vec3 tintFromText(const std::string& text, const glm::vec3& fallback) {
+glm::vec3 tintFromText(const std::string& character, const glm::vec3& fallback) {
+    // "#5aa6ff", or a player's whole character ("look:2.4|#5aa6ff").
+    const size_t hash = character.rfind('#');
+    const std::string text = hash == std::string::npos ? character : character.substr(hash);
     unsigned r = 0, g = 0, b = 0;
     if (text.size() != 7 || std::sscanf(text.c_str(), "#%02x%02x%02x", &r, &g, &b) != 3) return fallback;
     return glm::vec3(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b)) / 255.0f;

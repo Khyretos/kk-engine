@@ -521,9 +521,16 @@ void NetModule::addLocalPlayer(int slot, const std::string& who, const std::stri
         log::get(name())->error("addLocalPlayer: slot {} (1 .. {})", slot, kMaxLocalPlayers - 1);
         return;
     }
-    if (auto it = m_localGuests.find(slot); it != m_localGuests.end() && it->second.name == who && it->second.character == character)
-        return; // already in
-    if (m_server) m_server->removeLocalGuest(static_cast<uint8_t>(slot)); // someone else had that slot
+    if (auto it = m_localGuests.find(slot); it != m_localGuests.end()) {
+        if (it->second.name == who && it->second.character == character) return; // already in
+        // A new name or look (picked in the lobby): the same player, so
+        // they keep their id and everyone is told.
+        it->second.name = who;
+        it->second.character = character;
+        if (m_server) m_server->setLocalProfile(static_cast<uint8_t>(slot), who, character);
+        else if (m_client) m_client->addGuest(static_cast<uint8_t>(slot), who, character);
+        return;
+    }
     LocalGuest& g = m_localGuests[slot];
     g.name = who;
     g.character = character;
@@ -888,6 +895,7 @@ void NetModule::update(const UpdateContext& ctx) {
         if (m_relayJoin) return; // still finding the server
     }
     if (m_server) {
+        m_server->setLocalProfile(0, playerName, playerCharacter); // a look picked after hosting reaches everyone
         if (m_hasLocal) m_server->setLocalState(m_local);
         for (const auto& [slot, g] : m_localGuests)
             if (g.hasState) m_server->setLocalGuestState(static_cast<uint8_t>(slot), g.state);
@@ -922,6 +930,7 @@ void NetModule::update(const UpdateContext& ctx) {
         runReplayedPlayers(ctx.dt);
         m_remote = m_server->players(t);
     } else if (m_client) {
+        m_client->setProfile(playerName, playerCharacter); // ... and after joining
         if (m_hasLocal) m_client->setLocalState(m_local);
         for (const auto& [slot, g] : m_localGuests)
             if (g.hasState) m_client->setGuestState(static_cast<uint8_t>(slot), g.state);

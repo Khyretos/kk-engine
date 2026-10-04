@@ -114,11 +114,14 @@ void PartyModule::syncNetPlayers() {
     for (const Entry& e : ours) {
         if (e.seat < 0 && netClient()) continue; // a client's CPU beans stay home
         if (slots >= kke::NetModule::kMaxLocalPlayers) break;
+        // The look (every lobby shows it; a new pick tells everyone) and
+        // whether it's a CPU bean (no microphone, Pause.cpp).
+        const std::string character = characterOf(e);
         if (slots == 0) {
             m_net->playerName = e.name.substr(0, 16);
-            m_net->playerCharacter = e.seat < 0 ? "cpu" : "bean";
+            m_net->playerCharacter = character;
         } else {
-            m_net->addLocalPlayer(slots, e.name.substr(0, 16), e.seat < 0 ? "cpu" : "bean"); // "cpu": no microphone (Pause.cpp)
+            m_net->addLocalPlayer(slots, e.name.substr(0, 16), character);
         }
         ++slots;
     }
@@ -141,10 +144,41 @@ std::vector<PartyModule::Entry> PartyModule::onlineRoster() const {
         e.name = p.name;
         e.netId = p.id;
         e.remote = true;
-        if (p.hasState) e.look = netparty::fromState(p.state).look;
+        e.look = lookOfCharacter(p.character, p.hasState ? netparty::fromState(p.state).look : BeanLook{});
         out.push_back(std::move(e));
     }
     return out;
+}
+
+// "look:3.5.1.0.2.1|bean,b4": the lobby's look (its choice numbers, which
+// every menu reads) and, after the bar, cpu or bean and the person's
+// number (People::all(): the same on every machine, unlike the Body row,
+// which only lists the people this one has).
+std::string PartyModule::characterOf(const Entry& e) const {
+    int nameIndex = 0;
+    const std::string bare = e.name.substr(0, e.name.find(" ("));
+    for (int n = 0; n < static_cast<int>(lobbyNames().size()); ++n)
+        if (bare == lobbyNames()[static_cast<size_t>(n)]) nameIndex = n;
+    int bodyRow = 0;
+    for (size_t i = 1; i < m_bodyChoices.size(); ++i)
+        if (m_bodyChoices[i] == e.look.body) bodyRow = static_cast<int>(i);
+    std::vector<int> look = { nameIndex, e.look.colour, e.look.pattern, e.look.face, e.look.hat };
+    if (m_bodyChoices.size() > 1) look.push_back(bodyRow);
+    return kke::Lobby::lookText(look) + "|" + (e.seat < 0 ? "cpu" : "bean") + ",b" + std::to_string(e.look.body);
+}
+
+BeanLook PartyModule::lookOfCharacter(const std::string& character, const BeanLook& fallback) const {
+    if (!m_lobby) return fallback;
+    const std::vector<int> look = m_lobby->lobby().lookFromText(character);
+    if (look.size() < 5) return fallback;
+    BeanLook b{ look[1], look[2], look[3], look[4] };
+    const std::string extra = kke::Lobby::characterExtra(character);
+    if (const size_t at = extra.find(",b"); at != std::string::npos) {
+        int body = 0;
+        for (size_t i = at + 2; i < extra.size() && i < at + 5 && extra[i] >= '0' && extra[i] <= '9'; ++i) body = body * 10 + (extra[i] - '0');
+        b.body = std::clamp(body, 0, static_cast<int>(People::all().size()));
+    }
+    return b;
 }
 
 // Host: the round (whenever it's a new one, or the points changed) and
@@ -430,7 +464,10 @@ void PartyModule::updateNet(float dt) {
             }
             continue;
         }
-        if (!it->hasState) continue;
+        if (!it->hasState || m_phase == Phase::Lobby) { // in the menu: the line-up places them, in the look they picked
+            b.look = lookOfCharacter(it->character, b.look);
+            continue;
+        }
         const netparty::Pose p = netparty::fromState(it->state);
         b.drawFeet = glm::length(b.drawFeet - p.feet) > 3.0f ? p.feet : glm::mix(b.drawFeet, p.feet, std::min(1.0f, dt * 20.0f));
         b.velocity = p.velocity;

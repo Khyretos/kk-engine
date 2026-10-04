@@ -13,6 +13,7 @@
 #include "kke/Log.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
+#include "kke/modules/NetModule.h"
 #include "kke/modules/RigidBodyModule.h"
 
 #include <SDL3/SDL.h>
@@ -47,6 +48,14 @@ glm::vec2 cpuSpot(int i, int count) {
     return { 0.22f + 0.56f * t, 0.64f };
 }
 constexpr float kCpuBack = 3.5f;
+// The other screens' players, a row behind: between the CPU players' spots
+// (the middle one would hide right behind a lone CPU player).
+glm::vec2 onlineSpot(int i, int count, int cpus) {
+    glm::vec2 at = cpuSpot(i, count);
+    if (cpus > 0 && cpus % 2 == count % 2) at.x += 0.12f;
+    return at;
+}
+constexpr float kOnlineBack = 6.5f; // the other screens' players, behind the CPU climbers
 
 } // namespace
 
@@ -234,13 +243,13 @@ std::vector<ClimbRaceModule::Entry> ClimbRaceModule::wantedRoster() const {
             const kke::Lobby::Seat& s = l.seat(seat);
             const int n = std::clamp(s.look[0], 0, kNameCount - 1), c = std::clamp(s.look[1], 0, kColourCount - 1);
             nameUsed[static_cast<size_t>(n)] = colourUsed[static_cast<size_t>(c)] = true;
-            out.push_back({ seat, 2, kNames[n], kColours[c].rgb });
+            out.push_back({ seat, 2, kNames[n], kColours[c].rgb, s.look });
         }
         cpus = l.cpuCount();
         for (int i = 0; i < cpus; ++i) difficulty[static_cast<size_t>(i)] = l.cpuDifficulty(i);
     } else {
         nameUsed[0] = colourUsed[0] = true;
-        out.push_back({ 0, 2, "You", kColours[0].rgb });
+        out.push_back({ 0, 2, "You", kColours[0].rgb, { 0, 0 } });
     }
     if (!m_netName.empty()) out[0].name = m_netName; // the name it joins with, on every screen
     if (m_autopilot) out[0].name += " (autopilot)";
@@ -250,7 +259,8 @@ std::vector<ClimbRaceModule::Entry> ClimbRaceModule::wantedRoster() const {
         const size_t ni = n == nameUsed.end() ? static_cast<size_t>(i) % kNameCount : static_cast<size_t>(n - nameUsed.begin());
         const size_t ci = c == colourUsed.end() ? static_cast<size_t>(i) % kColourCount : static_cast<size_t>(c - colourUsed.begin());
         nameUsed[ni] = colourUsed[ci] = true;
-        out.push_back({ -1, difficulty[static_cast<size_t>(i)], std::string(kNames[ni]) + " (CPU)", kColours[ci].rgb });
+        out.push_back({ -1, difficulty[static_cast<size_t>(i)], std::string(kNames[ni]) + " (CPU)", kColours[ci].rgb,
+                        { static_cast<int>(ni), static_cast<int>(ci) } });
     }
     return out;
 }
@@ -297,10 +307,10 @@ void ClimbRaceModule::buildRacers(const std::vector<Entry>& roster) {
     }
 }
 
-void ClimbRaceModule::applyLooks() {
-    const std::vector<Entry> roster = wantedRoster();
+void ClimbRaceModule::applyLooks(const std::vector<Entry>& roster) {
     for (size_t i = 0; i < m_racers.size() && i < roster.size(); ++i) {
         Racer& r = m_racers[i];
+        if (r.remote != roster[i].remote || r.netId != roster[i].netId) continue; // not the same climber
         r.name = roster[i].name;
         if (r.difficulty != roster[i].difficulty) {
             r.difficulty = roster[i].difficulty;
@@ -326,13 +336,25 @@ kke::Camera& ClimbRaceModule::cameraOf(Racer& r) {
     return r.seat >= 0 && r.player == 0 ? m_app->camera() : r.camera;
 }
 
+// The menu's line-up: this screen's climbers, and online the other
+// screens' players too (in their own colours, standing at the back), so
+// the host sees who joined and a joiner sees who's already in.
+std::vector<ClimbRaceModule::Entry> ClimbRaceModule::lobbyRoster() const {
+    std::vector<Entry> out = wantedRoster();
+    if (!m_net || m_net->role() == kke::NetModule::Role::Offline) return out;
+    if (netClient()) std::erase_if(out, [](const Entry& e) { return e.seat < 0; }); // a joiner's CPU climbers stay home
+    for (const kke::net::RemotePlayer& p : m_net->remotePlayers()) out.push_back(remoteEntry(p));
+    return out;
+}
+
 void ClimbRaceModule::updateLobby(float dt) {
     // Someone joined or left, or the CPU count changed: a new line-up.
-    const std::vector<Entry> roster = wantedRoster();
+    const std::vector<Entry> roster = lobbyRoster();
     bool same = roster.size() == m_racers.size();
-    for (size_t i = 0; same && i < roster.size(); ++i) same = roster[i].seat == m_racers[i].seat;
+    for (size_t i = 0; same && i < roster.size(); ++i)
+        same = roster[i].seat == m_racers[i].seat && roster[i].remote == m_racers[i].remote && roster[i].netId == m_racers[i].netId;
     if (!same) buildRacers(roster);
-    applyLooks();
+    applyLooks(roster);
     // Another mountain picked: it rises behind the line-up.
     if (const Mountain m = chosenMountain(); keyOf(m) != m_builtKey) {
         useMountain(m);
@@ -358,13 +380,26 @@ void ClimbRaceModule::updateLobby(float dt) {
         return cam.position + dir * std::min(k, 20.0f);
     };
     kke::RigidWorld& w = m_rigid->world();
-    int cpu = 0;
-    const int cpus = static_cast<int>(m_racers.size()) - humans();
+    int cpu = 0, other = 0;
+    const int others = static_cast<int>(std::count_if(m_racers.begin(), m_racers.end(), [](const Racer& r) { return r.remote; }));
+    const int cpus = static_cast<int>(m_racers.size()) - humans() - others;
     for (Racer& r : m_racers) {
-        glm::vec3 feet = r.seat >= 0 ? onGround(cardSpot(r.seat)) : onGround(cpuSpot(cpu++, cpus)) - glm::vec3(0.0f, 0.0f, kCpuBack);
+        glm::vec3 feet = r.seat >= 0 ? onGround(cardSpot(r.seat))
+                         : r.remote  ? onGround(onlineSpot(other++, others, cpus)) - glm::vec3(0.0f, 0.0f, kOnlineBack)
+                                     : onGround(cpuSpot(cpu++, cpus)) - glm::vec3(0.0f, 0.0f, kCpuBack);
         feet.y = 0.05f;
         glm::vec3 face = cam.position - feet;
         face.y = 0.0f;
+        if (r.remote) {
+            // Another screen's player: stands here, as their machine
+            // doesn't send a pose until the race.
+            r.net = netrace::Pose{};
+            r.net.feet = feet;
+            r.net.yaw = glm::degrees(std::atan2(face.x, -face.z));
+            r.net.loco = static_cast<uint8_t>(kke::Locomotion::State::Ground);
+            w.moveCharacter(r.id, feet);
+            continue;
+        }
         // Only when its spot moved: the height is the floor's (it drops the
         // last few cm onto it), and putting it back up each frame made it
         // bob up and down, a shake on screen.
@@ -401,7 +436,7 @@ void ClimbRaceModule::startFromLobby() {
     bool same = !netHost() && roster.size() == m_racers.size();
     for (size_t i = 0; same && i < roster.size(); ++i) same = roster[i].seat == m_racers[i].seat;
     if (!same) buildRacers(roster);
-    applyLooks();
+    applyLooks(roster);
     // One face per climber.
     if (const Mountain m = chosenMountain(); keyOf(m) != m_builtKey || static_cast<int>(m_lanes.size()) != faces()) {
         useMountain(m);

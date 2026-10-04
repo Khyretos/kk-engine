@@ -323,3 +323,40 @@ TEST(Lobby, TextRowsAreSavedEvenWhenAddedAfterLoading) {
     b.addTextOption("net.address", "Address or code");
     EXPECT_EQ(b.text("net.address"), "K7M-Q2P");
 }
+
+// Online (docs/LOBBY.md "Online"): a look goes over the network as its
+// choice numbers; any lobby of the same game reads it back.
+TEST(Lobby, LooksGoOnlineAsTextAndComeBack) {
+    kke::Lobby l;
+    l.addLookField({ "name", "Name", { "Pip", "Juno", "Rook" }, {} });
+    l.addLookField({ "colour", "Colour", { "Sky", "Ember" }, { { 0.3f, 0.6f, 1.0f }, { 1.0f, 0.4f, 0.2f } } });
+    l.setLook(0, 0, 2);
+    l.setLook(0, 1, 1);
+    EXPECT_EQ(l.lookText(0), "look:2.1");
+    EXPECT_EQ(l.lookFromText("look:2.1"), (std::vector<int>{ 2, 1 }));
+    EXPECT_EQ(l.lookFromText("look:2.1|cpu,#ff7333"), (std::vector<int>{ 2, 1 }));
+    EXPECT_EQ(kke::Lobby::characterExtra("look:2.1|cpu,#ff7333"), "cpu,#ff7333");
+    EXPECT_EQ(kke::Lobby::characterExtra("look:2.1"), "");
+    // Another version's choices, short or broken text: the first choice, never out of range.
+    EXPECT_EQ(l.lookFromText("look:9.1"), (std::vector<int>{ 0, 1 }));
+    EXPECT_EQ(l.lookFromText("look:1"), (std::vector<int>{ 1, 0 }));
+    EXPECT_EQ(l.lookFromText("look:x.-1.5.6"), (std::vector<int>{ 0, 0 }));
+    EXPECT_TRUE(l.lookFromText("#5aa6ff").empty());
+    EXPECT_EQ(l.lookChoice({ 1, 1 }, 1), "Ember");
+    EXPECT_EQ(l.lookChoice({ 1 }, 1), "");
+}
+
+TEST(Lobby, OnlinePlayersAreShownOnlyWhenTheyChange) {
+    kke::Lobby l;
+    l.addLookField({ "colour", "Colour", { "Sky", "Ember" }, {} });
+    const uint64_t r0 = l.revision();
+    l.setOnlinePlayers({ { 0, "Kees", { 1 }, true, false } });
+    const uint64_t r1 = l.revision();
+    EXPECT_GT(r1, r0);
+    l.setOnlinePlayers({ { 0, "Kees", { 1 }, true, false } });
+    EXPECT_EQ(l.revision(), r1) << "nothing new: not redrawn";
+    l.setOnlinePlayers({ { 0, "Kees", { 0 }, true, false } });
+    EXPECT_GT(l.revision(), r1) << "a new colour is shown";
+    ASSERT_EQ(l.onlinePlayers().size(), 1u);
+    EXPECT_EQ(l.onlinePlayers()[0].look, (std::vector<int>{ 0 }));
+}

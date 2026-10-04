@@ -232,6 +232,7 @@ private:
         int seat = -1, skill = 1, livery = 0, slot = 0;
         std::string name;
         glm::vec3 tint{1.0f};
+        std::vector<int> look; // its lobby look (name, colour, paint), as it goes online
         int netId = -1;
         bool remote = false;
         bool cpu = false;

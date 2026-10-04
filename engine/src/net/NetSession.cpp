@@ -264,6 +264,44 @@ uint8_t NetServer::addLocalGuest(uint8_t slot, const std::string& name, const st
     return id;
 }
 
+void NetServer::setLocalProfile(uint8_t slot, const std::string& name, const std::string& character) {
+    std::string* n = nullptr;
+    std::string* ch = nullptr;
+    uint8_t id = 0;
+    if (slot == 0) {
+        if (m_config.dedicated) return; // no player of its own
+        n = &m_hostName;
+        ch = &m_hostCharacter;
+    } else if (auto it = m_localGuests.find(slot); it != m_localGuests.end()) {
+        n = &it->second.name;
+        ch = &it->second.character;
+        id = it->second.id;
+    } else {
+        return;
+    }
+    const std::string newName = name.substr(0, kMaxNameLength), newCharacter = character.substr(0, kMaxCharacterLength);
+    if (*n == newName && *ch == newCharacter) return;
+    *n = newName.empty() ? *n : newName;
+    *ch = newCharacter;
+    if (!m_running) return;
+    PlayerInfoMsg info{ id, true, *n, *ch };
+    broadcastReliable(encode(MessageType::PlayerInfo, info), -1);
+}
+
+void NetServer::handleProfile(Client& c, const ProfileMsg& m) {
+    Client* p = m.slot == 0 ? &c : guestOf(c.peer, m.slot);
+    if (!p) return; // a guest the server refused or dropped
+    const std::string name = m.name.empty() ? p->name : m.name;
+    if (name == p->name && m.character == p->character) return;
+    // A new name passes the same door a joining one does.
+    if (name != p->name && admit && !admit(name, m_transport.address(c.peer)).empty()) return;
+    p->name = name;
+    p->character = m.character;
+    PlayerInfoMsg info{ p->id, true, p->name, p->character };
+    broadcastReliable(encode(MessageType::PlayerInfo, info), -1);
+    if (onProfile) onProfile(p->id);
+}
+
 void NetServer::removeLocalGuest(uint8_t slot) {
     auto it = m_localGuests.find(slot);
     if (it == m_localGuests.end()) return;
@@ -482,6 +520,16 @@ void NetServer::receive(Client& c, const NetEvent& e) {
     case MessageType::Guest:
         if (auto m = decode<GuestMsg>(*type, e.data.data(), e.data.size()); m && e.channel == Channel::Reliable) handleGuest(c, *m);
         else bad(c, "guest");
+        break;
+    case MessageType::Profile:
+        if (auto m = decode<ProfileMsg>(*type, e.data.data(), e.data.size()); m && e.channel == Channel::Reliable) {
+            // Flipping through colours is a few a second; more is flooding.
+            if (m_now - c.eventWindow >= 1.0) { c.eventWindow = m_now; c.eventsInWindow = 0; }
+            if (++c.eventsInWindow > m_config.maxEventsPerSecond) return;
+            handleProfile(c, *m);
+        } else {
+            bad(c, "profile");
+        }
         break;
     case MessageType::Input:
         if (!m_config.inputReplay) return bad(c, "inputs without input replay");
@@ -837,15 +885,29 @@ void NetClient::askGuest(uint8_t slot, Guest& g) {
     g.asked = true;
 }
 
+void NetClient::setProfile(const std::string& name, const std::string& character) {
+    const std::string n = name.substr(0, kMaxNameLength), ch = character.substr(0, kMaxCharacterLength);
+    if (n == m_name && ch == m_character) return;
+    m_name = n;
+    m_character = ch;
+    if (m_status == Status::Connected) sendMsg(m_transport, m_server, Channel::Reliable, MessageType::Profile, ProfileMsg{ 0, m_name, m_character });
+}
+
 void NetClient::addGuest(uint8_t slot, const std::string& name, const std::string& character) {
     if (slot == 0 || slot >= kMaxLocalPlayers) return;
     Guest& g = m_guests[slot];
-    if (g.asked && g.name == name && g.character == character) return;
-    if (g.asked) removeGuest(slot); // someone else in that slot now
-    Guest& fresh = m_guests[slot];
-    fresh.name = name.substr(0, kMaxNameLength);
-    fresh.character = character.substr(0, kMaxCharacterLength);
-    askGuest(slot, fresh);
+    const std::string n = name.substr(0, kMaxNameLength), ch = character.substr(0, kMaxCharacterLength);
+    if (g.name == n && g.character == ch && (g.asked || m_status != Status::Connected)) return;
+    if (g.asked) {
+        // The same player picked another look: they keep their id.
+        g.name = n;
+        g.character = ch;
+        sendMsg(m_transport, m_server, Channel::Reliable, MessageType::Profile, ProfileMsg{ slot, g.name, g.character });
+        return;
+    }
+    g.name = n;
+    g.character = ch;
+    askGuest(slot, g);
 }
 
 void NetClient::removeGuest(uint8_t slot) {
@@ -940,6 +1002,7 @@ void NetClient::receive(const NetEvent& e) {
     case MessageType::PlayerInfo:
         if (auto m = decode<PlayerInfoMsg>(*type, d, n)) {
             if (isOurs(m->playerId)) break; // ourselves
+            const bool known = m_players.count(m->playerId) > 0;
             if (m->present) {
                 Player& p = m_players[m->playerId];
                 p.name = m->name;
@@ -947,7 +1010,11 @@ void NetClient::receive(const NetEvent& e) {
             } else {
                 m_players.erase(m->playerId);
             }
-            if (onPlayer) onPlayer(m->playerId, m->present);
+            if (m->present && known) {
+                if (onPlayerChanged) onPlayerChanged(m->playerId); // a new look, not a new player
+            } else if (onPlayer) {
+                onPlayer(m->playerId, m->present);
+            }
         } else ++m_badPackets;
         break;
     case MessageType::Correction:

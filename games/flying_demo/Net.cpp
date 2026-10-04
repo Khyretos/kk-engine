@@ -113,11 +113,14 @@ void FlyingModule::syncNetPlayers() {
     for (const Entry& e : wantedRoster()) {
         if (e.cpu && netClient()) continue; // a client's CPU pilots stay home
         if (slots >= kke::NetModule::kMaxLocalPlayers) break;
+        // Its lobby look (every menu shows it), the exact paint and colour:
+        // picking another in the menu tells everyone.
+        const std::string character = net::characterText(kke::Lobby::lookText(e.look), e.cpu, e.livery, e.tint);
         if (slots == 0) {
             m_net->playerName = e.name;
-            m_net->playerCharacter = net::tintText(e.tint);
+            m_net->playerCharacter = character;
         } else {
-            m_net->addLocalPlayer(slots, e.name, net::tintText(e.tint));
+            m_net->addLocalPlayer(slots, e.name, character);
         }
         ++slots;
     }
@@ -137,10 +140,10 @@ std::vector<FlyingModule::Entry> FlyingModule::onlineRoster() const {
     for (const kke::net::RemotePlayer& p : m_net->remotePlayers()) {
         Entry e;
         e.name = p.name;
-        e.tint = net::tintFromText(p.character, glm::vec3(0.8f));
+        e.tint = net::tintOfCharacter(p.character, glm::vec3(0.8f));
         e.netId = p.id;
         e.remote = true;
-        e.livery = p.id % 4;
+        e.livery = net::liveryOfCharacter(p.character, p.id % 4); // the paint they picked
         out.push_back(std::move(e));
     }
     return out;

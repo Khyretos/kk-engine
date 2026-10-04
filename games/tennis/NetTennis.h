@@ -191,8 +191,10 @@ struct Board {
 std::vector<uint8_t> encode(const Board& b);
 std::optional<Board> decodeBoard(const std::vector<uint8_t>& bytes);
 
-// A player's colour as the "character" every player joins with ("#5aa6ff").
+// A player's colour ("#5aa6ff"). The "character" every player joins with
+// is their lobby look (kke::Lobby::lookText, which every lobby shows) and
+// this: "look:2.4|#5aa6ff"; tintFromText reads either.
 std::string tintText(const glm::vec3& tint);
-glm::vec3 tintFromText(const std::string& text, const glm::vec3& fallback);
+glm::vec3 tintFromText(const std::string& character, const glm::vec3& fallback);
 
 } // namespace tennis::net

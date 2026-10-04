@@ -220,4 +220,32 @@ glm::vec3 tintFromText(const std::string& text, const glm::vec3& fallback) {
     return glm::vec3(static_cast<float>((v >> 16) & 0xff), static_cast<float>((v >> 8) & 0xff), static_cast<float>(v & 0xff)) / 255.0f;
 }
 
+std::string characterText(const std::string& look, bool cpu, int livery, const glm::vec3& tint) {
+    return look + "|" + (cpu ? "cpu," : "") + "p" + std::to_string(std::clamp(livery, 0, 99)) + "," + tintText(tint);
+}
+
+glm::vec3 tintOfCharacter(const std::string& character, const glm::vec3& fallback) {
+    const size_t hash = character.rfind('#');
+    return hash == std::string::npos ? fallback : tintFromText(character.substr(hash), fallback);
+}
+
+int liveryOfCharacter(const std::string& character, int fallback) {
+    const size_t bar = character.find('|');
+    if (bar == std::string::npos) return fallback;
+    for (size_t at = bar + 1; at < character.size();) {
+        const size_t comma = std::min(character.find(',', at), character.size());
+        if (character[at] == 'p' && comma - at >= 2 && comma - at <= 3) {
+            int v = 0;
+            bool digits = true;
+            for (size_t i = at + 1; i < comma; ++i) {
+                if (character[i] < '0' || character[i] > '9') digits = false;
+                else v = v * 10 + (character[i] - '0');
+            }
+            if (digits) return v;
+        }
+        at = comma + 1;
+    }
+    return fallback;
+}
+
 } // namespace flying::net

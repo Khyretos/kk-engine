@@ -204,6 +204,9 @@ public:
     void removeLocalGuest(uint8_t slot);
     void setLocalGuestState(uint8_t slot, const NetPlayerState& state);
     uint8_t localGuestId(uint8_t slot) const;
+    // The host's own player (slot 0) or one of its guests picked another
+    // name or look (a lobby's colour, car, outfit): everyone is told.
+    void setLocalProfile(uint8_t slot, const std::string& name, const std::string& character);
     // Every replicated body as it is now (the server's physics). Ids are
     // the game's own, 0..65535, stable while the body lives.
     void setBodies(const std::vector<NetBodyState>& bodies) { m_bodies = bodies; }
@@ -298,6 +301,7 @@ public:
     // player's first state.
     std::function<bool(uint8_t id, const NetPlayerState& from, const NetPlayerState& to, double dt)> checkMove;
     std::function<void(const GameEventMsg&)> onEvent;          // from a client
+    std::function<void(uint8_t id)> onProfile;                 // a client's player has a new name or look (players() has it)
     std::function<void(const VoiceMsg&)> onVoice;              // a client's voice the host should hear
     VoiceRules voice;
     std::function<void(uint8_t id, bool joined)> onPlayer;
@@ -340,6 +344,7 @@ private:
     uint8_t freeId() const;
     size_t freeSlots() const;
     void handleGuest(Client& c, const GuestMsg& m);
+    void handleProfile(Client& c, const ProfileMsg& m);
     void dropGuest(Client& g, const std::string& reason, bool tellOwner);
     bool mayShow(const Client& viewer, uint8_t subject) const; // fog of war: any player on that screen sees it
     void receive(Client& c, const NetEvent& e);
@@ -413,6 +418,10 @@ public:
     void removeGuest(uint8_t slot);
     void setGuestState(uint8_t slot, const NetPlayerState& state);
     uint8_t guestId(uint8_t slot) const;
+    // Our own player picked another name or look (in the lobby, after
+    // joining): sent now if connected, else used by the next connect().
+    // A guest's goes through addGuest with the same slot.
+    void setProfile(const std::string& name, const std::string& character);
     bool isOurs(uint8_t playerId) const; // our own player or one of our guests
     void sendEvent(uint16_t kind, const std::vector<uint8_t>& payload);
     // Input replay: the server said (at Welcome) it moves our player from
@@ -441,6 +450,7 @@ public:
     // A guest got its id (id != 0), or was refused / removed (id 0, reason).
     std::function<void(uint8_t slot, uint8_t id, const std::string& reason)> onGuest;
     std::function<void(uint8_t id, bool joined)> onPlayer;
+    std::function<void(uint8_t id)> onPlayerChanged;           // someone already here has a new name or look
     std::function<void(const SpawnMsg&)> onSpawn;              // build your copy
     std::function<void(uint16_t id)> onDespawn;                // remove it
     std::function<void(const BreakMsg&)> onBreak;              // break your copy along these borders

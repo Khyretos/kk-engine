@@ -6,6 +6,9 @@
 #include "kke/Log.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/UiModule.h"
+#if KKE_ENABLE_NET && KKE_ENABLE_JOLT
+#include "kke/modules/NetModule.h"
+#endif
 
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/DataModelHandle.h>
@@ -83,6 +86,13 @@ const char* kLobbyRml = R"(
         #typing .key.focused { background-color: #56a8ff; color: #0b0f1c; font-weight: bold; }
         #typing .hint { font-size: 13dp; color: #aab3cc; margin-top: 10dp; }
         #typing .hint img { font-size: 14dp; }
+        #online { position: absolute; left: 3%; top: 21%; width: 30%; }
+        #online .head { font-size: 12dp; letter-spacing: 2dp; color: #eef1f8; margin-bottom: 4dp; font-effect: outline(2dp #000000b0); }
+        .player { display: block; margin-bottom: 6dp; padding: 6dp 12dp; border-radius: 8dp; background-color: #0b0f1cd0;
+                  border-left: 4dp #56a8ff; }
+        .player .name { font-size: 17dp; font-weight: bold; color: #ffffff; }
+        .player .tag { font-size: 12dp; color: #ffcf5c; margin-left: 6dp; }
+        .player .look { font-size: 13dp; color: #cfd6e6; }
         #toasts { position: absolute; top: 18dp; right: 18dp; width: 360dp; }
         .toast { display: block; margin-bottom: 8dp; padding: 10dp 14dp; border-radius: 8dp; background-color: #0b0f1ce6;
                  border-left: 4dp #ffcf5c; font-size: 15dp; color: #ffffff; }
@@ -111,6 +121,13 @@ const char* kLobbyRml = R"(
                     </div>
                 </div>
                 <div class="prompt" data-if="!seat.joined" data-rml="seat.prompt"></div>
+            </div>
+        </div>
+        <div id="online" data-if="online.size > 0">
+            <div class="head">ONLINE IN THIS GAME</div>
+            <div data-for="p : online" class="player" data-style-border-left-color="p.accent">
+                <span class="name">{{p.name}}</span><span class="tag">{{p.tag}}</span>
+                <div class="look">{{p.look}}</div>
             </div>
         </div>
         <div id="hint" data-rml="hint"></div>
@@ -425,6 +442,7 @@ void LobbyModule::update(const UpdateContext& ctx) {
     }
     readDevices(ctx.dt);
     m_lobby.update(ctx.dt);
+    updateOnline();
     if (m_lobby.editing() && !m_lobby.isOpen()) m_lobby.finishEditing(false);
     if (m_lobby.editing() != m_textInput) {
         // Text events (with the layout and any IME) only while typing.
@@ -434,6 +452,29 @@ void LobbyModule::update(const UpdateContext& ctx) {
     }
     if (!m_applied.empty()) assignDevices();
     refreshUi();
+}
+
+// Everyone on the other machines of a network game (NetModule), so the
+// host sees who joined and what they picked, and a joiner sees the host's
+// players: their characters carry their looks (Lobby::lookText).
+void LobbyModule::updateOnline() {
+    std::vector<Lobby::OnlinePlayer> online;
+#if KKE_ENABLE_NET && KKE_ENABLE_JOLT
+    if (const NetModule* net = m_app->getModule<NetModule>(); net && net->role() != NetModule::Role::Offline) {
+        for (const net::RemotePlayer& r : net->remotePlayers()) {
+            Lobby::OnlinePlayer p;
+            p.id = r.id;
+            p.name = r.name;
+            p.look = m_lobby.lookFromText(r.character);
+            p.host = r.id == 0;
+            const std::string extra = Lobby::characterExtra(r.character);
+            p.cpu = extra == "cpu" || extra.rfind("cpu,", 0) == 0 || r.character == "cpu";
+            online.push_back(std::move(p));
+        }
+        std::sort(online.begin(), online.end(), [](const Lobby::OnlinePlayer& a, const Lobby::OnlinePlayer& b) { return a.id < b.id; });
+    }
+#endif
+    m_lobby.setOnlinePlayers(std::move(online));
 }
 
 void LobbyModule::shutdown() {
@@ -489,6 +530,13 @@ void LobbyModule::buildUi() {
         s.RegisterMember("rows", &SeatView::rows);
     }
     c.RegisterArray<std::vector<SeatView>>();
+    if (auto o = c.RegisterStruct<OnlineView>()) {
+        o.RegisterMember("name", &OnlineView::name);
+        o.RegisterMember("tag", &OnlineView::tag);
+        o.RegisterMember("look", &OnlineView::look);
+        o.RegisterMember("accent", &OnlineView::accent);
+    }
+    c.RegisterArray<std::vector<OnlineView>>();
     c.RegisterArray<std::vector<std::string>>();
     if (auto k = c.RegisterStruct<KeyView>()) {
         k.RegisterMember("label", &KeyView::label);
@@ -508,6 +556,7 @@ void LobbyModule::buildUi() {
     c.Bind("subtitle", &m_view.subtitle);
     c.Bind("hint", &m_view.hint);
     c.Bind("seats", &m_view.seats);
+    c.Bind("online", &m_view.online);
     c.Bind("toasts", &m_view.toasts);
     m_model = c.GetModelHandle();
     m_doc = ctx->LoadDocumentFromMemory(kLobbyRml, "kke_lobby.rml");
@@ -623,6 +672,24 @@ void LobbyModule::refreshUi() {
         v.typingHint = isPadStyle(style) && one.device == Lobby::Device::Pad
                            ? promptText(style, "{a} type   ·   {b} delete   ·   {start} done")
                            : promptText(PromptStyle::Keyboard, "type it   ·   {key:Return} done   ·   {key:Escape} put it back");
+    }
+    // The other machines' players, with what they picked (the name is the card's).
+    for (const Lobby::OnlinePlayer& p : l.onlinePlayers()) {
+        OnlineView ov;
+        ov.name = p.name;
+        ov.tag = p.host ? "HOST" : p.cpu ? "CPU" : "";
+        ov.accent = "#56a8ff";
+        for (size_t f = 0; f < l.lookFields().size() && f < p.look.size(); ++f) {
+            const Lobby::LookField& field = l.lookFields()[f];
+            if (field.id == "name") continue;
+            const size_t c = static_cast<size_t>(p.look[f]);
+            if (static_cast<int>(f) == swatchField && c < field.swatches.size()) ov.accent = hex(field.swatches[c]);
+            const std::string choice = l.lookChoice(p.look, static_cast<int>(f));
+            if (choice.empty()) continue;
+            if (!ov.look.empty()) ov.look += "  ·  ";
+            ov.look += field.label + ": " + choice;
+        }
+        v.online.push_back(std::move(ov));
     }
     for (const Lobby::Toast& t : l.toasts()) v.toasts.push_back(t.text);
     m_view = std::move(v);

@@ -130,13 +130,19 @@ std::vector<TennisModule::Entry> TennisModule::netEntries() const {
 void TennisModule::syncNetPlayers() {
     if (!m_net) return;
     const std::vector<Entry> ours = netEntries();
+    // The menu's seats in order, as netEntries has them: their looks.
+    std::vector<int> seats;
+    if (m_lobby && !m_allBots) seats = m_lobby->lobby().joinedSeats();
     int slots = 0;
     for (const Entry& e : ours) {
+        const size_t s = static_cast<size_t>(slots);
+        const std::string look = s < seats.size() ? m_lobby->lobby().lookText(seats[s]) : std::string("look:");
+        const std::string character = look + "|" + net::tintText(e.tint); // a new pick in the menu tells everyone
         if (slots == 0) {
             m_net->playerName = e.name;
-            m_net->playerCharacter = net::tintText(e.tint);
+            m_net->playerCharacter = character;
         } else {
-            m_net->addLocalPlayer(slots, e.name, net::tintText(e.tint));
+            m_net->addLocalPlayer(slots, e.name, character);
         }
         ++slots;
     }
@@ -472,8 +478,16 @@ void TennisModule::syncRemoteWalkers() {
         }
     }
     for (const kke::net::RemotePlayer& r : remote) {
-        const bool known = std::any_of(m_walkers.begin(), m_walkers.end(), [&r](const Walker& w) { return w.remote && !w.gone && w.netId == r.id; });
-        if (known) continue;
+        const auto known = std::find_if(m_walkers.begin(), m_walkers.end(), [&r](const Walker& w) { return w.remote && !w.gone && w.netId == r.id; });
+        if (known != m_walkers.end()) {
+            // They picked another colour: everyone sees it.
+            const glm::vec3 tint = net::tintFromText(r.character, known->tint);
+            if (tint != known->tint) {
+                known->tint = tint;
+                if (known->look) known->look->setTint(tint);
+            }
+            continue;
+        }
         const glm::vec3 at = r.hasState ? net::fromState(r.state).feet : m_center.arrival(r.id * kke::NetModule::kMaxLocalPlayers);
         spawnWalker(r.name, net::tintFromText(r.character, glm::vec3(0.8f)), false, -1, at);
         Walker& w = m_walkers.back();

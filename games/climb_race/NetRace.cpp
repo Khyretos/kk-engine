@@ -218,6 +218,15 @@ glm::vec3 tintFromText(const std::string& text, const glm::vec3& fallback) {
     return glm::vec3(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b)) / 255.0f;
 }
 
+std::string characterText(const std::string& look, bool cpu, const glm::vec3& tint) {
+    return look + "|" + (cpu ? "cpu," : "") + tintText(tint);
+}
+
+glm::vec3 tintOfCharacter(const std::string& character, const glm::vec3& fallback) {
+    const size_t hash = character.rfind('#');
+    return hash == std::string::npos ? fallback : tintFromText(character.substr(hash), fallback);
+}
+
 std::vector<uint8_t> encode(const Setup& s) { return write(s); }
 std::optional<Setup> decodeSetup(const std::vector<uint8_t>& bytes) { return read<Setup>(bytes); }
 std::vector<uint8_t> encode(const Finish& f) { return write(f); }

@@ -33,6 +33,7 @@ class LobbyModule;
 class NetModule;
 class RigidBodyModule;
 class UiModule;
+namespace net { struct RemotePlayer; }
 } // namespace kke
 namespace Rml { class ElementDocument; }
 
@@ -199,6 +200,7 @@ private:
         int seat = -1, difficulty = 1;
         std::string name;
         glm::vec3 tint{1.0f};
+        std::vector<int> look;   // its lobby look (name, colour), as it goes online
         int netId = -1;          // online: its network player
         bool remote = false;     // online: another machine plays it
         bool ghost = false;      // Time trial: the ghost of the best run
@@ -206,7 +208,9 @@ private:
     std::vector<Entry> wantedRoster() const;
     void buildRacers(const std::vector<Entry>& roster);
     void removeRacer(Racer& r);
-    void applyLooks();
+    void applyLooks(const std::vector<Entry>& roster);
+    std::vector<Entry> lobbyRoster() const; // the line-up in the menu: wantedRoster + the other screens' players
+    Entry remoteEntry(const kke::net::RemotePlayer& p) const;
     int humans() const;
     int faces() const;
     kke::Camera& cameraOf(Racer& r);
@@ -233,6 +237,7 @@ private:
     bool netClient() const;           // in someone else's game
     bool netHost() const;
     void netFinished(Racer& r);
+    void netHit(Racer& r);            // Rockfall: one of ours was hit (kEventHit)
     void netLoose(int lane, int hold, const glm::vec3& push);
     std::string netStatus() const;
 

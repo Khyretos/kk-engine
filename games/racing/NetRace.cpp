@@ -22,11 +22,11 @@ constexpr float kMaxProgress = 65536.0f; // m: 40 laps of a 1.6 km oval
 // NetPlayerState::extra (32 bytes): the rotation (smallest three, 35
 // bits), forward speed (0..128 m/s, 1/16), steering (7 bits), revs (7),
 // health (7), lap (7), progress round the track (1/8 m, 19 bits), which
-// tyres smoke (4). 115 bits, 15 bytes.
+// tyres smoke (4), wheels torn off (4). 119 bits, 15 bytes.
 struct Extra {
     glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
     float speed = 0.0f, steer = 0.0f, rpm = 0.0f, health = 100.0f, progress = 0.0f;
-    uint32_t lap = 0, smoke = 0;
+    uint32_t lap = 0, smoke = 0, detached = 0;
 };
 template <typename Stream> void serialize(Stream& s, Extra& m) {
     s.quat(m.rotation);
@@ -37,6 +37,7 @@ template <typename Stream> void serialize(Stream& s, Extra& m) {
     s.integer(m.lap, 0, 127);
     s.real(m.progress, 0.0f, kMaxProgress, 1.0f / 8.0f);
     s.integer(m.smoke, 0, 15);
+    s.integer(m.detached, 0, 15);
 }
 
 template <typename Stream> void serialize(Stream& s, CarPose& p) {
@@ -44,7 +45,7 @@ template <typename Stream> void serialize(Stream& s, CarPose& p) {
     s.vec3(p.position, glm::vec3(-net::kWorldXZ, net::kWorldYMin, -net::kWorldXZ), glm::vec3(net::kWorldXZ, net::kWorldYMax, net::kWorldXZ),
            net::kPositionStep);
     s.vec3(p.velocity, 96.0f, 1.0f / 64.0f);
-    Extra e{ p.rotation, p.speed, p.steer, p.rpm, p.health, p.progress, static_cast<uint32_t>(std::clamp(p.lap, 0, 127)), p.smoke };
+    Extra e{ p.rotation, p.speed, p.steer, p.rpm, p.health, p.progress, static_cast<uint32_t>(std::clamp(p.lap, 0, 127)), p.smoke, p.detached };
     serialize(s, e);
     uint32_t gear = static_cast<uint32_t>(std::clamp(p.gear + 1, 0, 15));
     s.integer(gear, 0, 15);
@@ -61,6 +62,7 @@ template <typename Stream> void serialize(Stream& s, CarPose& p) {
         p.progress = e.progress;
         p.lap = static_cast<int>(e.lap);
         p.smoke = static_cast<uint8_t>(e.smoke);
+        p.detached = static_cast<uint8_t>(e.detached);
         p.gear = static_cast<int>(gear) - 1;
     }
 }
@@ -145,7 +147,7 @@ net::NetPlayerState toState(const CarPose& p) {
     s.speed = std::clamp(std::fabs(p.speed), 0.0f, 20.0f);
     s.progress = std::clamp(p.rpm, 0.0f, 1.0f);
     Extra e{ p.rotation, p.speed, p.steer, p.rpm, p.health, std::clamp(p.progress, 0.0f, kMaxProgress),
-             static_cast<uint32_t>(std::clamp(p.lap, 0, 127)), p.smoke };
+             static_cast<uint32_t>(std::clamp(p.lap, 0, 127)), p.smoke, p.detached };
     {
         net::WriteStream w(s.extra);
         serialize(w, e);
@@ -179,6 +181,7 @@ CarPose fromState(const net::NetPlayerState& s) {
     p.lap = static_cast<int>(e.lap);
     p.progress = e.progress;
     p.smoke = static_cast<uint8_t>(e.smoke);
+    p.detached = static_cast<uint8_t>(e.detached);
     return p;
 }
 

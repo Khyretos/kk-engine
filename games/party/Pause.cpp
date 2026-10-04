@@ -21,7 +21,7 @@ std::vector<PartyModule::VoicePeer> PartyModule::voicePeers() const {
     if (!m_net || !m_net->connected()) return out;
     for (const kke::net::RemotePlayer& p : m_net->remotePlayers()) {
         // CPU beans (the host's local players) have no microphone.
-        const bool cpu = p.character == "cpu";
+        const bool cpu = kke::Lobby::characterExtra(p.character).rfind("cpu", 0) == 0;
         if (!cpu) out.push_back({ p.id, p.name });
     }
     return out;

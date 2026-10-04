@@ -49,6 +49,7 @@ struct CarPose {
     float progress = 0.0f;        // m round the track (standings)
     bool finished = false, totalled = false, braking = false, handBrake = false;
     uint8_t smoke = 0;            // tyres sliding, one bit per wheel
+    uint8_t detached = 0;         // wheels torn off, one bit per wheel (everyone sees them go)
 };
 
 kke::net::NetPlayerState toState(const CarPose& p);

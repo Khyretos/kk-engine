@@ -11,12 +11,16 @@
 #include "kke/Log.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
+#include "kke/modules/NetModule.h"
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/modules/VoiceModule.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <iterator>
+#include <string>
+#include <vector>
 
 namespace party {
 
@@ -35,6 +39,14 @@ glm::vec2 cpuSpot(int i, int count) {
     return { 0.18f + 0.64f * t, 0.6f };
 }
 constexpr float kCpuBack = 3.0f;
+// The other screens' players, a row behind: between the CPU players' spots
+// (the middle one would hide right behind a lone CPU player).
+glm::vec2 onlineSpot(int i, int count, int cpus) {
+    glm::vec2 at = cpuSpot(i, count);
+    if (cpus > 0 && cpus % 2 == count % 2) at.x += 0.12f;
+    return at;
+}
+constexpr float kOnlineBack = 5.5f; // the other screens' players, behind the CPU beans
 const glm::vec3 kStage(0.0f, 0.0f, 400.0f);
 
 } // namespace
@@ -218,8 +230,16 @@ void PartyModule::applyLooks() {
     }
 }
 
+const std::vector<std::string>& PartyModule::lobbyNames() {
+    static const std::vector<std::string> names(std::begin(kNames), std::end(kNames));
+    return names;
+}
+
 void PartyModule::updateLobby(float dt) {
-    const std::vector<Entry> roster = netHost() ? onlineRoster() : wantedRoster();
+    // Online, everyone else's beans stand in the line-up too (at the back),
+    // so the host sees who joined and a joiner sees who's in.
+    std::vector<Entry> roster = m_net && m_net->role() != kke::NetModule::Role::Offline ? onlineRoster() : wantedRoster();
+    if (netClient()) std::erase_if(roster, [](const Entry& e) { return e.seat < 0 && !e.remote; }); // our CPU beans stay home
     bool same = roster.size() == m_beans.size();
     for (size_t i = 0; same && i < roster.size(); ++i) same = roster[i].seat == m_beans[i].seat && roster[i].netId == m_beans[i].netId;
     if (!same) buildBeans(roster);
@@ -242,18 +262,28 @@ void PartyModule::updateLobby(float dt) {
         return cam.position + dir * std::min(k, 20.0f);
     };
     kke::RigidWorld& w = world();
-    int cpu = 0;
-    const int cpus = static_cast<int>(std::count_if(m_beans.begin(), m_beans.end(), [](const Bean& b) { return b.seat < 0; }));
+    int cpu = 0, other = 0;
+    const int others = static_cast<int>(std::count_if(m_beans.begin(), m_beans.end(), [](const Bean& b) { return b.remote; }));
+    const int cpus = static_cast<int>(std::count_if(m_beans.begin(), m_beans.end(), [](const Bean& b) { return b.seat < 0 && !b.remote; }));
     for (Bean& b : m_beans) {
         b.active = true;
         b.hidden = false;
-        glm::vec3 feet = b.seat >= 0 ? onGround(cardSpot(b.seat)) : onGround(cpuSpot(cpu++, cpus)) - glm::vec3(0.0f, 0.0f, kCpuBack);
+        glm::vec3 feet = b.seat >= 0 ? onGround(cardSpot(b.seat))
+                         : b.remote  ? onGround(onlineSpot(other++, others, cpus)) - glm::vec3(0.0f, 0.0f, kOnlineBack)
+                                     : onGround(cpuSpot(cpu++, cpus)) - glm::vec3(0.0f, 0.0f, kCpuBack);
         feet.y = kStage.y + 0.02f;
-        if (b.remote) continue;
-        const glm::vec3 at = w.characterPosition(b.id);
-        if (glm::length(glm::vec2(at.x - feet.x, at.z - feet.z)) > 0.05f) place(b, feet, 0.0f);
         glm::vec3 face = cam.position - feet;
         b.yaw = glm::degrees(std::atan2(face.x, -face.z));
+        if (b.remote) {
+            // Another screen's player: their machine sends no pose in the menu.
+            b.drawFeet = feet;
+            b.velocity = glm::vec3(0.0f);
+            b.grounded = true;
+            w.moveCharacter(b.id, feet);
+            continue;
+        }
+        const glm::vec3 at = w.characterPosition(b.id);
+        if (glm::length(glm::vec2(at.x - feet.x, at.z - feet.z)) > 0.05f) place(b, feet, 0.0f);
         // A little hop now and then: they can't wait.
         b.input = BeanInput{};
         b.botTimer -= dt;

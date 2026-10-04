@@ -11,6 +11,7 @@
 
 #include "kke/Application.h"
 #include "kke/DevTools.h"
+#include "kke/ImpactSynth.h"
 #include "kke/Log.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
@@ -118,11 +119,14 @@ void ClimbRaceModule::syncNetPlayers() {
     for (const Entry& e : ours) {
         if (e.seat < 0 && netClient()) continue; // a client's CPU climbers stay home
         if (slots >= kke::NetModule::kMaxLocalPlayers) break;
+        // The look as the lobby has it (everyone's menu shows it) and the
+        // exact colour; changing either in the menu tells everyone.
+        const std::string character = netrace::characterText(kke::Lobby::lookText(e.look), e.seat < 0, e.tint);
         if (slots == 0) {
             m_net->playerName = e.name;
-            m_net->playerCharacter = netrace::tintText(e.tint);
+            m_net->playerCharacter = character;
         } else {
-            m_net->addLocalPlayer(slots, e.name, netrace::tintText(e.tint));
+            m_net->addLocalPlayer(slots, e.name, character);
         }
         ++slots;
     }
@@ -153,15 +157,17 @@ std::vector<ClimbRaceModule::Entry> ClimbRaceModule::onlineRoster() const {
         kke::log::get(name())->info("online: {} CPU climbers sit this race out (room for {} climbers from one screen)", out.size() - kept.size(),
                                     kke::NetModule::kMaxLocalPlayers);
     out = std::move(kept);
-    for (const kke::net::RemotePlayer& p : m_net->remotePlayers()) {
-        Entry e;
-        e.name = p.name;
-        e.tint = netrace::tintFromText(p.character, glm::vec3(0.8f));
-        e.netId = p.id;
-        e.remote = true;
-        out.push_back(std::move(e));
-    }
+    for (const kke::net::RemotePlayer& p : m_net->remotePlayers()) out.push_back(remoteEntry(p));
     return out;
+}
+
+ClimbRaceModule::Entry ClimbRaceModule::remoteEntry(const kke::net::RemotePlayer& p) const {
+    Entry e;
+    e.name = p.name;
+    e.tint = netrace::tintOfCharacter(p.character, glm::vec3(0.8f));
+    e.netId = p.id;
+    e.remote = true;
+    return e;
 }
 
 void ClimbRaceModule::sendSetup() {
@@ -272,6 +278,19 @@ void ClimbRaceModule::onNetEvent(const kke::net::GameEventMsg& e) {
             if (r.netId == f->player) eliminate(r);
         return;
     }
+    if (e.kind == netrace::kEventHit) {
+        // Rockfall: someone else's climber was hit on their screen; it
+        // flashes and thuds here too.
+        if (netHost()) m_net->relayEvent(e);
+        const auto f = netrace::decodeFinish(e.payload);
+        if (!f || f->round != m_netRound) return;
+        for (Racer& r : m_racers) {
+            if (!r.remote || r.netId != f->player) continue;
+            r.hitFlash = 1.5f;
+            sound(m_rigid->world().characterPosition(r.id) + glm::vec3(0.0f, 0.95f, 0.0f), kke::AudioMaterialTable::Stone, 1.0f);
+        }
+        return;
+    }
     if (e.kind != netrace::kEventFinish && e.kind != netrace::kEventLoose) return;
     if (netHost()) m_net->relayEvent(e); // everyone else hears it too
     if (e.kind == netrace::kEventFinish) {
@@ -294,6 +313,11 @@ void ClimbRaceModule::onNetEvent(const kke::net::GameEventMsg& e) {
 void ClimbRaceModule::netFinished(Racer& r) {
     if (!m_net || !m_net->connected() || r.remote || r.netId < 0) return;
     m_net->sendEvent(netrace::kEventFinish, netrace::encode(netrace::Finish{ static_cast<uint8_t>(r.netId), m_netRound, r.time }));
+}
+
+void ClimbRaceModule::netHit(Racer& r) {
+    if (!m_net || !m_net->connected() || r.remote || r.netId < 0) return;
+    m_net->sendEvent(netrace::kEventHit, netrace::encode(netrace::Finish{ static_cast<uint8_t>(r.netId), m_netRound, 0.0f }));
 }
 
 void ClimbRaceModule::netLoose(int lane, int hold, const glm::vec3& push) {
@@ -434,7 +458,11 @@ void ClimbRaceModule::updateNet(float dt) {
             m_racers.erase(m_racers.begin() + static_cast<std::ptrdiff_t>(i));
             continue;
         }
-        if (!it->hasState) continue;
+        if (r.tint != netrace::tintOfCharacter(it->character, r.tint)) {
+            r.tint = netrace::tintOfCharacter(it->character, r.tint); // they picked another colour
+            if (r.model) m_models->setTint(r.model, r.tint);
+        }
+        if (!it->hasState || m_phase == Phase::Lobby) continue; // in the menu the line-up places them
         const netrace::Pose p = netrace::fromState(it->state);
         using LS = kke::Locomotion::State;
         const bool air = !p.climbing && p.loco == static_cast<uint8_t>(LS::Air);

@@ -256,6 +256,7 @@ void ClimbRaceModule::updateMode(float dt) {
                 sound(hips, kke::AudioMaterialTable::Stone, 1.0f);
                 r.hitCooldown = 1.2f;
                 r.hitFlash = 1.5f;
+                netHit(r); // every screen shows it
                 kke::log::get(name())->info("{} was hit by a rock at {:.1f} m", r.name, hips.y);
                 break;
             }
