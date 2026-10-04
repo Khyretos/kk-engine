@@ -162,21 +162,22 @@ void RacingModule::updateCamera(Car& c, CamMode mode, float dt, kke::Camera& out
     out.up = glm::vec3(0.0f, 1.0f, 0.0f);
     out.nearPlane = inside(mode) ? kInsideNear : kOutsideNear;
     if (mode == CamMode::Tv && m_track) {
-        // A spot beside the track ahead of the car; the next one once it's well past.
+        // A spot beside the track ahead of the car; the next one once it's
+        // well past, or far off (put back on the track). Each car has its
+        // own, so two players on TV don't fight over one pole.
         const Track& t = *m_track;
-        const float past = glm::dot(pos - m_tvSpot, t.at(c.where.s).forward);
-        if (m_tvCar != static_cast<int>(&c - m_cars.data()) || past > 45.0f || glm::length(m_tvSpot) < 1e-3f) {
-            m_tvCar = static_cast<int>(&c - m_cars.data());
+        const float past = glm::dot(pos - c.tvSpot, t.at(c.where.s).forward);
+        if (glm::length(c.tvSpot) < 1e-3f || past > 45.0f || glm::length(pos - c.tvSpot) > 150.0f) {
             const float s = c.where.s + 60.0f + std::min(speed, 60.0f) * 0.5f;
             const Track::Sample f = t.at(s);
             const glm::vec3 leftFlat(f.forward.z, 0.0f, -f.forward.x);
             // Up on a pole, above the wall and the banking between it and the road.
             const float edge = t.point(s, -t.halfWidth()).y + t.desc().wall;
-            m_tvSpot = glm::vec3(f.p.x, 0.0f, f.p.z) - leftFlat * (t.halfWidth() + 9.0f) + glm::vec3(0.0f, std::max(6.0f, edge + 5.0f), 0.0f);
+            c.tvSpot = glm::vec3(f.p.x, 0.0f, f.p.z) - leftFlat * (t.halfWidth() + 9.0f) + glm::vec3(0.0f, std::max(6.0f, edge + 5.0f), 0.0f);
         }
-        out.position = m_tvSpot;
+        out.position = c.tvSpot;
         out.target = pos + glm::vec3(0.0f, 0.8f, 0.0f);
-        out.fovDegrees = std::clamp(55.0f - glm::length(pos - m_tvSpot) * 0.25f, 18.0f, 55.0f);
+        out.fovDegrees = std::clamp(55.0f - glm::length(pos - c.tvSpot) * 0.25f, 18.0f, 55.0f);
         c.camInit = false;
         return;
     }

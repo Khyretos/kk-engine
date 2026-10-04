@@ -617,8 +617,6 @@ void RacingModule::resetRace() {
         c.aiShiftAt = 0.8f + 0.05f * skill + 0.04f * random01(c);
         c.aiReact = 0.5f - 0.1f * skill + 0.15f * random01(c);
     }
-    m_tvCar = -1;
-    m_tvSpot = glm::vec3(0.0f);
     m_netHold = false;
     kke::log::get(name())->info("race {}: {} on {}, {} cars ({} here, {} CPU, {} online), {} laps, damage {}", m_round, eventName(event()),
                                 t.desc().name, cars, humans(), std::count_if(m_cars.begin(), m_cars.end(), [](const Car& c) { return c.cpu && c.seat < 0; }),

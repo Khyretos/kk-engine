@@ -99,7 +99,7 @@ void RacingModule::init(kke::Application& app) {
         if (m != CamMode::Count) m_cameraMode = m;
         else kke::log::get(name())->warn("KKE_RACE_CAMERA={}: not a camera (chase, far, cockpit, first, bonnet, wheel, tv)", cam);
     }
-    m_playerCam.fill(m_cameraMode == CamMode::Tv ? CamMode::Chase : m_cameraMode);
+    m_playerCam.fill(m_cameraMode);
     if (m_pileup) {
         // The worst case: a full field, brutal damage, nobody at the wheel.
         m_autopilot = true;

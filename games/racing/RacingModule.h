@@ -205,6 +205,7 @@ private:
         glm::vec3 camDir{0.0f, 0.0f, 1.0f}; // the chase camera's heading, lagging the car's
         bool camInit = false;
         bool lookBack = false;
+        glm::vec3 tvSpot{0.0f};     // the TV camera's pole beside the track (zero: none yet)
         // CPU driver.
         float aiLane = 0.0f;        // target u
         float aiLaneTimer = 0.0f;
@@ -476,8 +477,6 @@ private:
     int m_forceTrack = -1, m_forceLaps = -1, m_forceDamage = -1;
     float m_quitAfter = -1.0f, m_clock = 0.0f, m_reportAt = 5.0f;
     kke::Camera m_tvCamera;
-    glm::vec3 m_tvSpot{0.0f};
-    int m_tvCar = -1;
     std::string m_winner;
     bool m_howto = false, m_howtoFirst = true;
     float m_howtoAge = 0.0f;
