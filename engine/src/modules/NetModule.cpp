@@ -106,6 +106,13 @@ void NetModule::init(Application& app) {
 }
 
 void NetModule::frameStart(const UpdateContext&) {
+    // Here, not in update(): the search runs under a paused game too (the
+    // title menu freezes the game behind it).
+    if (m_search) {
+        std::vector<net::NetEvent> ignored; // the search socket only gets answers (intercepted)
+        m_search->poll(ignored);
+        if (now() > m_searchUntil + 5.0) m_search.reset();
+    }
     if (m_envMode.empty()) return;
     const std::string m = std::move(m_envMode);
     m_envMode.clear();
@@ -134,6 +141,7 @@ std::string NetModule::discoveryInfo() const {
 
 bool NetModule::host(uint16_t port, std::string* error) {
     leave();
+    m_search.reset(); // its socket may hold the first port of the range
     // Port 0: the first free one from kDefaultPort, so a second game on
     // this PC just takes the next port (the LAN search asks the range).
     const uint16_t first = port ? port : kDefaultPort;
@@ -142,6 +150,7 @@ bool NetModule::host(uint16_t port, std::string* error) {
     for (uint32_t p = first; p <= last; ++p) {
         auto enet = std::make_unique<net::EnetTransport>();
         net::EnetTransport* raw = enet.get();
+        raw->setDiscoveryPorts(kDefaultPort, static_cast<uint16_t>(kDefaultPort + kPortRange - 1)); // announce to VPN tunnels
         auto transport = std::make_unique<net::ConditionedTransport>(std::move(enet));
         transport->conditions = simulated;
         auto secure = std::make_unique<net::SecureTransport>(*transport); // a fresh key each time we host
@@ -215,7 +224,6 @@ bool NetModule::host(uint16_t port, std::string* error) {
                 m_relayHost.reset();
             }
         }
-        m_search.reset();
         applyFollowers();
         log::get(name())->info("Hosting '{}' on UDP port {} ({}{})", playerName, p, m_transport->backendName(),
                                config.inputReplay ? ", input replay" : "");
@@ -263,8 +271,12 @@ bool NetModule::joinTyped(const std::string& typed, uint16_t port, std::string* 
 
 bool NetModule::join(const std::string& address, uint16_t port, std::string* error) {
     leave();
+    // The search's port goes to the connection: a host behind a firewall
+    // has been announcing itself to it, so its firewall lets us in.
+    m_search.reset();
     auto enet = std::make_unique<net::EnetTransport>();
     net::EnetTransport* raw = enet.get();
+    raw->setDiscoveryPorts(kDefaultPort, static_cast<uint16_t>(kDefaultPort + kPortRange - 1));
     auto transport = std::make_unique<net::ConditionedTransport>(std::move(enet));
     transport->conditions = simulated;
     auto secure = std::make_unique<net::SecureTransport>(*transport);
@@ -324,7 +336,6 @@ bool NetModule::join(const std::string& address, uint16_t port, std::string* err
     m_role = Role::Client;
     applyFollowers();
     m_status = m_relayJoin ? m_relayJoin->status() : "joining " + address + ":" + std::to_string(port);
-    m_search.reset();
     if (m_relayJoin) log::get(name())->info("Joining {} as '{}'", address, playerName);
     else log::get(name())->info("Joining {}:{} as '{}'", address, port, playerName);
     return true;
@@ -952,11 +963,6 @@ void NetModule::update(const UpdateContext& ctx) {
             m_status = why.empty() ? "disconnected" : why;
         }
     }
-    if (m_search) {
-        std::vector<net::NetEvent> ignored; // the search socket only gets answers (intercepted)
-        m_search->poll(ignored);
-        if (t > m_searchUntil + 5.0) m_search.reset();
-    }
     // Panel bandwidth, once a second.
     if (t - m_statTime >= 1.0) {
         uint64_t sent = 0, received = 0;
@@ -973,7 +979,12 @@ void NetModule::update(const UpdateContext& ctx) {
 
 void NetModule::searchLan() {
     if (m_role != Role::Offline) return;
-    m_search = std::make_unique<net::EnetTransport>();
+    // One socket for the whole search: hosts on a VPN announce themselves
+    // to it between searches, and what it found stays listed.
+    if (!m_search) {
+        m_search = std::make_unique<net::EnetTransport>();
+        m_search->setDiscoveryPorts(kDefaultPort, static_cast<uint16_t>(kDefaultPort + kPortRange - 1));
+    }
     m_search->discover(kDefaultPort, static_cast<uint16_t>(kDefaultPort + kPortRange - 1));
     m_searchUntil = now() + 1.0;
 }

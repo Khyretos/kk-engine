@@ -82,8 +82,9 @@ m_lobby->open();
   the other options, even when the row is added after `load()`. Every
   online demo has one, "Address or code", under Online = Join: it joins
   through `NetModule::joinTyped` (an IP or name, `:port` optional, or a
-  join code), for when the LAN search finds nothing (a VPN, another
-  network).
+  join code), for when the search finds nothing (two different
+  networks with no VPN between them; LANs and VPNs are searched, see
+  NETWORKING.md "Finding games").
 - The game shell (`kke::GameShellModule`, [GAME_SHELL.md](GAME_SHELL.md))
   adds a "Settings and quit" row, and Select opens its pause menu over the
   lobby; the lobby stops listening while that menu is open.

@@ -364,10 +364,13 @@ else()
 endif()
 
 if(KKE_ENABLE_NET)
-    target_sources(kke_engine PRIVATE src/net/EnetTransport.cpp src/server/DirectoryNet.cpp src/server/DedicatedServer.cpp
-        src/server/RelayService.cpp)
+    target_sources(kke_engine PRIVATE src/net/EnetTransport.cpp src/net/LocalNetworks.cpp src/server/DirectoryNet.cpp
+        src/server/DedicatedServer.cpp src/server/RelayService.cpp)
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_NET=1)
     target_link_libraries(kke_engine PUBLIC kke_enet)
+    if(WIN32)
+        target_link_libraries(kke_engine PRIVATE iphlpapi) # GetAdaptersAddresses: the networks a search asks
+    endif()
     if(KKE_ENABLE_JOLT)
         target_sources(kke_engine PRIVATE src/modules/NetModule.cpp)
     endif()

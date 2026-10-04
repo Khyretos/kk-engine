@@ -90,8 +90,8 @@ void FlyingModule::setupNet() {
         m_lastNetStatus.clear();
     };
     l.addOption(std::move(join));
-    // Or type it: the host's address (a VPN's too, where the LAN search
-    // finds nothing) or a join code. Remembered in the lobby file.
+    // Or type it: the host's address (another network, where the search
+    // can't reach) or a join code. Remembered in the lobby file.
     l.addTextOption("net.address", "Address or code", "type the host's IP or join code", [this](const std::string& typed) {
         if (typed.empty()) return;
         m_lobby->save();

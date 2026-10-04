@@ -5,6 +5,7 @@
 #include "kke/net/Transport.h"
 #if KKE_ENABLE_NET
 #include "kke/net/EnetTransport.h"
+#include "kke/net/LocalNetworks.h"
 #endif
 
 #include <gtest/gtest.h>
@@ -1064,6 +1065,66 @@ TEST(NetEnet, TwoHostsOnOnePcDiscoveredAndJoined) {
     EXPECT_EQ(ps[0].name, "Beta");
     ASSERT_TRUE(ps[0].hasState);
     EXPECT_NEAR(ps[0].state.position.x, 3.0f, 0.01f);
+}
+
+// VPN tunnels (docs/NETWORKING.md "Finding games"): a host announces
+// itself to every address of a tunnel, and a client's socket waits in
+// the discovery range, so it lists the host without asking (a firewall
+// can drop its questions) and the host's firewall has seen it first.
+TEST(NetEnet, HostAnnouncesItselfOnATunnel) {
+    auto now = [] { return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count(); };
+    // A pretend tunnel: 127.0.0.0/30 without broadcast, so 127.0.0.1 is asked.
+    auto tunnel = [] { return std::vector<LocalNetwork>{ { "wg-test", 0x7F000002u, 30, false } }; };
+    EnetTransport th, tc;
+    th.listNetworks = tunnel;
+    tc.listNetworks = tunnel;
+    constexpr uint16_t first = 38440, last = 38455;
+    th.setDiscoveryPorts(first, last);
+    tc.setDiscoveryPorts(first, last);
+    NetServer server(th);
+    std::string err;
+    uint16_t hosted = 0;
+    for (uint16_t p = first; p < first + EnetTransport::kSweepPorts - 1 && !hosted; ++p)
+        if (server.start(p, "Kees", "", &err)) hosted = p;
+    if (!hosted) GTEST_SKIP() << "no free UDP ports here: " << err;
+    th.setDiscoveryInfo("Kees|1/8|test");
+    ASSERT_TRUE(tc.open(&err)) << err;
+    ASSERT_GE(tc.port(), first) << "the client waits in the discovery range";
+    ASSERT_LE(tc.port(), first + EnetTransport::kSweepPorts - 1);
+    std::vector<NetEvent> none;
+    for (int i = 0; i < 100 && tc.lanGames().empty(); ++i) {
+        server.update(now()); // polls: the first announcement goes out
+        tc.poll(none);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    ASSERT_EQ(tc.lanGames().size(), 1u) << "the announcement arrived without a search";
+    EXPECT_EQ(tc.lanGames()[0].info, "Kees|1/8|test");
+    EXPECT_EQ(tc.lanGames()[0].port, hosted);
+}
+
+TEST(LocalNetworks, TunnelSweepAddresses) {
+    const auto ip = [](int a, int b, int c, int d) { return static_cast<uint32_t>(a << 24 | b << 16 | c << 8 | d); };
+    // WireGuard's usual 10.8.0.2/24: everyone else on it.
+    LocalNetwork wg{ "wg0", ip(10, 8, 0, 2), 24, false };
+    std::vector<uint32_t> all = sweepAddresses(wg);
+    EXPECT_EQ(all.size(), 253u);
+    EXPECT_EQ(all.front(), ip(10, 8, 0, 1));
+    EXPECT_EQ(all.back(), ip(10, 8, 0, 254));
+    EXPECT_EQ(std::count(all.begin(), all.end(), wg.address), 0);
+    EXPECT_EQ(directedBroadcast(wg), ip(10, 8, 0, 255));
+    // A /32 (Tailscale, some WireGuard setups) and a /16: the /24 around us.
+    for (uint8_t prefix : { uint8_t(32), uint8_t(16) }) {
+        LocalNetwork n{ "tun", ip(100, 64, 7, 9), prefix, false };
+        all = sweepAddresses(n);
+        EXPECT_EQ(all.size(), 253u) << int(prefix);
+        EXPECT_EQ(all.front(), ip(100, 64, 7, 1));
+    }
+    EXPECT_EQ(directedBroadcast(LocalNetwork{ "tun", ip(100, 64, 7, 9), 32, false }), 0u);
+    // A /30: the one other address.
+    all = sweepAddresses(LocalNetwork{ "p2p", ip(10, 0, 0, 1), 30, false });
+    ASSERT_EQ(all.size(), 1u);
+    EXPECT_EQ(all[0], ip(10, 0, 0, 2));
+    EXPECT_EQ(ipv4Text(ip(10, 8, 0, 2)), "10.8.0.2");
 }
 #endif
 

@@ -7,7 +7,7 @@ same with a **controller**, the **keyboard** and the **mouse**.
 
 | Page | What's on it | How you get there |
 |---|---|---|
-| Title | the game's name; Play, Settings, Controls, Quit | when the game starts |
+| Title | the game's name; Play, friends hosting this game ("Join Kees (2/8)", with a `NetModule`: NETWORKING.md "Finding games"), Settings, Controls, Quit | when the game starts |
 | Modes | the game's modes with a line each (only when the game has modes) | Play |
 | Pause | Resume, the game's own rows, Settings, Controls, Main menu, Quit | **Start** or **View/Back** on a controller, **Esc** on the keyboard |
 | Settings | full screen, VSync, frame cap, menu and HUD size, volumes, quiet in the background, look speed, invert look, the game's own sections | Settings |

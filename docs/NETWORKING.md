@@ -24,7 +24,9 @@ and your bandwidth, and has sliders to simulate a bad connection.
 
 Climb Race has it in its start menu: **Online: Host** on one machine,
 **Online: Join** on the other, pick the game and press Join, with up to
-four players on each screen (games/climb_race/README.md "Online").
+four players on each screen (games/climb_race/README.md "Online"). Or press
+**Join Kees** on the other machine's title menu: friends hosting show up
+there by themselves, on a LAN or a VPN ("Finding games" below).
 
 | Variable | Meaning |
 |---|---|
@@ -37,11 +39,49 @@ four players on each screen (games/climb_race/README.md "Online").
 | `KKE_NET_REPLAY` | `1`: host with input replay (competitive; see "Input replay") |
 
 A host takes UDP port 27960, or the next free one up to 27975, so several
-hosts can run on one PC and the LAN search still finds all of them. Allow
-that range in the firewall to play across machines, or use a join code:
-with a relay set, the host's panel shows a code like `K7M-Q2P@relay.example.org`
-and friends type it in the Address box instead of an address; nobody
+hosts can run on one PC and the LAN search still finds all of them. Over
+the internet without a shared network, use a join code: with a relay set,
+the host's panel shows a code like `K7M-Q2P@relay.example.org` and
+friends type it in the Address box instead of an address; nobody
 forwards a port (docs/SERVER_HOSTING.md "Join codes").
+
+## Finding games
+
+Nobody types an address, opens a firewall or starts the game with an
+argument to play with a friend on the same network. Every game with a
+`NetModule` lists the friends hosting it on its title menu, as
+**Join Kees (2/8)** under Play: one press joins, and a lobby game opens
+its lobby with the host's picks in it. The lobbies' **Online: Join** list
+is the same search.
+
+That works on a home LAN and over a VPN alike (WireGuard, Tailscale,
+ZeroTier, Hamachi, Radmin, OpenVPN):
+
+- **LAN**: the search broadcasts a question to ports 27960-27975, on the
+  general broadcast address and on each network's own one (Windows sends
+  the general one out of one network only), and asks localhost for games
+  on this PC. Hosts answer with their name, player count and game.
+- **VPN tunnels** carry no broadcast. `kke/net/LocalNetworks.h` lists
+  this computer's networks; on each one without broadcast (WireGuard,
+  Tailscale and other tun devices) the search asks every address of the
+  subnet on ports 27960-27963, a few hundred 8-byte datagrams spread over
+  a few frames. A /31, /32 or a subnet bigger than /23 is asked as the /24
+  around this computer's address (10.8.0.0/24 for 10.8.0.2).
+- **Firewalls**: Windows puts a WireGuard tunnel on the Public profile, so
+  a host's firewall can drop those questions. So a host also announces
+  itself to every tunnel address every 4 seconds, and a searching game's
+  socket waits on ports 27960-27975, where the announcements land. When
+  the friend joins, the connection uses that same port. Each side has
+  then sent to the other first, and a stateful firewall (Windows, Linux,
+  macOS) lets the other's packets back in. This is how UDP hole punching
+  gets through a NAT. No firewall rule is needed, nor an ICMP (ping) rule:
+  the game never pings.
+
+A game that stops answering drops out of the list 10 seconds later.
+Typing an address ("Address or code" under Online: Join, or
+`KKE_NET=join:ADDRESS`) still works for networks the search can't reach:
+two different home networks, or a subnet bigger than a /23 where the host
+is outside this computer's /24.
 
 ## Encryption
 

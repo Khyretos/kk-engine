@@ -516,6 +516,14 @@ void GameShellModule::buildPage() {
     case Page::Title:
         if (m_modes.empty()) button("Play", [play] { play(""); });
         else button("Play", [push] { push(Page::Modes); });
+        for (const HostedGame& g : m_friends) {
+            button(g.label, [this, g] {
+                closeMenu(); // to the game (a lobby game: its lobby, where the host's picks show)
+                NetModule* net = m_app->getModule<NetModule>();
+                std::string error;
+                if (net && !net->join(g.address, g.port, &error)) log::get(name())->warn("Can't join {}: {}", g.label, error);
+            });
+        }
         button("Settings", [push] { push(Page::Settings); });
         button("Controls", [push] { push(Page::Controls); });
         button("Quit", [this] { m_app->window().requestClose(); });
@@ -1184,6 +1192,26 @@ void GameShellModule::frameEnd() {
     if (m_page != Page::None && m_app) m_app->setUiCapturesMouse(true);
 }
 
+// The title lists friends hosting this game (LAN or VPN, NetModule's
+// search), so joining one is a single press from the main menu.
+void GameShellModule::findFriends(float dt) {
+    NetModule* net = m_app ? m_app->getModule<NetModule>() : nullptr;
+    std::vector<HostedGame> found;
+    if (net && m_page == Page::Title && net->role() == NetModule::Role::Offline) {
+        if ((m_searchIn -= dt) <= 0.0f) {
+            net->searchLan();
+            m_searchIn = 3.0f;
+        }
+        for (const NetModule::LanGame& g : net->lanGames())
+            if (g.ours) found.push_back({ "Join " + g.hostName + (g.players.empty() ? "" : " (" + g.players + ")"), g.address, g.port });
+    } else {
+        m_searchIn = 0.0f; // search at once when the title shows again
+    }
+    if (found == m_friends) return;
+    m_friends = std::move(found);
+    if (m_page == Page::Title) m_dirty = true;
+}
+
 void GameShellModule::frameStart(const UpdateContext& ctx) {
     // frameStart runs while the game is paused too, so the menus work then.
     if (m_lobby && !m_lobbyRowsAdded) {
@@ -1200,6 +1228,7 @@ void GameShellModule::frameStart(const UpdateContext& ctx) {
         }
     }
     if (m_titleAt > 0.0f && (m_titleAt -= ctx.dt) <= 0.0f && onTitle()) setFrozen(true);
+    findFriends(ctx.dt);
     if (m_input && m_input->players() != m_players) {
         m_players = m_input->players(); // the lobby added players: their maps get the prompt action too
         definePauseAction();

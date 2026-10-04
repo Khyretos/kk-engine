@@ -2,6 +2,13 @@
 
 #include <enet/enet.h>
 
+#if defined(_WIN32)
+#include <mstcpip.h>
+#ifndef SIO_UDP_CONNRESET // MinGW's headers lack it (Windows SDK: mstcpip.h)
+#define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR, 12)
+#endif
+#endif
+
 #include <algorithm>
 #include <chrono>
 #include <cstring>
@@ -58,6 +65,25 @@ constexpr size_t kMaxInfo = 200;
 
 PeerId peerId(const ENetPeer* p) { return static_cast<PeerId>(reinterpret_cast<uintptr_t>(p->data)); }
 
+double steadySeconds() { return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+
+// Datagrams of a sweep sent per poll(): a /24 tunnel's few thousand go
+// out over a few frames, never filling the socket's send buffer.
+constexpr size_t kSweepSlice = 256;
+
+// What every socket of ours needs.
+void setUp(ENetHost* host) {
+    enet_socket_set_option(host->socket, ENET_SOCKOPT_BROADCAST, 1);
+#if defined(_WIN32)
+    // A sweep asks addresses with no game: Windows would turn each "port
+    // unreachable" that comes back into an error on the next receive,
+    // and ENet would stop reading for that frame. Like any game server, ignore them.
+    BOOL report = FALSE;
+    DWORD bytes = 0;
+    WSAIoctl(host->socket, SIO_UDP_CONNRESET, &report, sizeof report, nullptr, 0, &bytes, nullptr, nullptr);
+#endif
+}
+
 } // namespace
 
 bool enetRetain() { return retain(); }
@@ -91,8 +117,9 @@ bool EnetTransport::host(uint16_t port, size_t maxPeers, std::string* error) {
         return false;
     }
     m_port = m_host->address.port;
-    enet_socket_set_option(m_host->socket, ENET_SOCKOPT_BROADCAST, 1);
+    setUp(m_host);
     registerHost(m_host, this);
+    m_announceAt = 0.0; // tell the tunnels right away
     return true;
 }
 
@@ -102,12 +129,20 @@ bool EnetTransport::ensureClientHost(std::string* error) {
         if (error) *error = "ENet failed to initialize (no sockets on this system?)";
         return false;
     }
-    m_host = enet_host_create(nullptr, 1, 2, 0, 0);
+    // In the discovery range when there is one, where hosts announce
+    // themselves (see the class comment); any free port otherwise.
+    for (uint32_t p = m_discoveryFirst; m_discoveryFirst && !m_host && p <= m_discoveryLast; ++p) {
+        ENetAddress address{};
+        address.host = ENET_HOST_ANY;
+        address.port = static_cast<enet_uint16>(p);
+        m_host = enet_host_create(&address, 1, 2, 0, 0);
+    }
+    if (!m_host) m_host = enet_host_create(nullptr, 1, 2, 0, 0);
     if (!m_host) {
         if (error) *error = "can't open a UDP socket";
         return false;
     }
-    enet_socket_set_option(m_host->socket, ENET_SOCKOPT_BROADCAST, 1);
+    setUp(m_host);
     registerHost(m_host, this);
     ENetAddress bound{};
     if (enet_socket_get_address(m_host->socket, &bound) == 0) m_port = bound.port;
@@ -154,6 +189,11 @@ void EnetTransport::disconnect(PeerId peer) {
 
 void EnetTransport::poll(std::vector<NetEvent>& out) {
     if (!m_host) return;
+    if (!m_discoveryInfo.empty() && m_discoveryFirst) {
+        const double t = steadySeconds();
+        if (t >= m_announceAt) announceNow(t);
+    }
+    sendQueued();
     ENetEvent e;
     // Service until nothing is left (0 ms: never blocks the frame).
     while (enet_host_service(m_host, &e, 0) > 0) {
@@ -253,6 +293,7 @@ void EnetTransport::close() {
         if (peer->state != ENET_PEER_STATE_DISCONNECTED) enet_peer_disconnect_now(peer, 0); // no answer: tell it right away
     }
     m_peers.clear();
+    m_outbox.clear();
     enet_host_flush(m_host);
     unregisterHost(m_host);
     enet_host_destroy(m_host);
@@ -260,23 +301,73 @@ void EnetTransport::close() {
     m_port = 0;
 }
 
+void EnetTransport::setDiscoveryPorts(uint16_t first, uint16_t last) {
+    m_discoveryFirst = first;
+    m_discoveryLast = std::max(first, last);
+}
+
 bool EnetTransport::discover(uint16_t firstPort, uint16_t lastPort) {
     if (!ensureClientHost(nullptr)) return false;
-    m_lanGames.clear();
+    const double t = steadySeconds();
+    std::erase_if(m_lanGames, [t](const LanGame& g) { return t - g.seenAt > kForgetAfter; });
+    const std::vector<LocalNetwork> networks = listNetworks ? listNetworks() : std::vector<LocalNetwork>{};
     ENetBuffer buf;
     buf.data = const_cast<char*>(kQuery);
     buf.dataLength = sizeof(kQuery);
-    for (uint32_t port = firstPort; port <= lastPort; ++port) {
-        if (port == m_port) continue; // not ourselves
+    auto sendTo = [&](uint32_t host, uint32_t port) { // host byte order
         ENetAddress to{};
+        to.host = ENET_HOST_TO_NET_32(host);
         to.port = static_cast<enet_uint16>(port);
-        to.host = ENET_HOST_BROADCAST;
         enet_socket_send(m_host->socket, &to, &buf, 1);
+    };
+    for (uint32_t port = firstPort; port <= lastPort; ++port) {
+        sendTo(0xFFFFFFFFu, port);
+        // Each LAN's own broadcast too: the one above leaves by one
+        // network only on some systems (Windows), and a PC can be on two.
+        for (const LocalNetwork& n : networks)
+            if (const uint32_t b = n.broadcast ? directedBroadcast(n) : 0) sendTo(b, port);
         // Broadcasts don't reach this machine's own sockets everywhere
         // (and never on loopback-only setups): ask localhost too.
-        if (enet_address_set_host_ip(&to, "127.0.0.1") == 0) enet_socket_send(m_host->socket, &to, &buf, 1);
+        if (port != m_port) sendTo(0x7F000001u, port);
     }
+    // VPN tunnels carry no broadcast: ask every address on them.
+    if (m_outbox.empty()) queueSweep(firstPort, lastPort, false);
+    sendQueued();
     return true;
+}
+
+void EnetTransport::queueSweep(uint16_t firstPort, uint16_t lastPort, bool announce) {
+    const uint32_t last = std::min<uint32_t>(lastPort, firstPort + kSweepPorts - 1u);
+    if (!listNetworks) return;
+    for (const LocalNetwork& n : listNetworks()) {
+        if (n.broadcast) continue;
+        for (uint32_t address : sweepAddresses(n))
+            for (uint32_t port = firstPort; port <= last; ++port) m_outbox.push_back({ address, static_cast<uint16_t>(port), announce });
+    }
+    std::reverse(m_outbox.begin(), m_outbox.end()); // sent from the back
+}
+
+void EnetTransport::announceNow(double t) {
+    m_announceAt = t + kAnnounceEvery;
+    if (m_outbox.empty()) queueSweep(m_discoveryFirst, m_discoveryLast, true);
+}
+
+void EnetTransport::sendQueued() {
+    if (!m_host || m_outbox.empty()) return;
+    std::vector<uint8_t> answer(kAnswer, kAnswer + 8);
+    answer.insert(answer.end(), m_discoveryInfo.begin(), m_discoveryInfo.begin() + static_cast<std::ptrdiff_t>(std::min(m_discoveryInfo.size(), kMaxInfo)));
+    for (size_t i = 0; i < kSweepSlice && !m_outbox.empty(); ++i) {
+        const Datagram d = m_outbox.back();
+        m_outbox.pop_back();
+        if (d.announce && m_discoveryInfo.empty()) continue; // stopped hosting
+        ENetBuffer buf;
+        buf.data = d.announce ? static_cast<void*>(answer.data()) : const_cast<char*>(kQuery);
+        buf.dataLength = d.announce ? answer.size() : sizeof(kQuery);
+        ENetAddress to{};
+        to.host = ENET_HOST_TO_NET_32(d.host);
+        to.port = d.port;
+        enet_socket_send(m_host->socket, &to, &buf, 1);
+    }
 }
 
 int EnetTransport::intercept(ENetHost* host) {
@@ -306,9 +397,15 @@ int EnetTransport::intercept(ENetHost* host) {
         if (enet_address_get_host_ip(&host->receivedAddress, ip, sizeof(ip)) == 0) g.address = ip;
         g.port = host->receivedAddress.port;
         g.info.assign(reinterpret_cast<const char*>(d + 8), std::min(n - 8, kMaxInfo));
-        // The same host can answer twice (broadcast and localhost).
-        for (const LanGame& o : m_lanGames)
-            if (o.port == g.port && (o.address == g.address || o.info == g.info)) return 1;
+        g.seenAt = steadySeconds();
+        // The same host can answer twice (broadcast and localhost) and
+        // keeps announcing itself: refresh what we have.
+        for (LanGame& o : m_lanGames)
+            if (o.port == g.port && (o.address == g.address || o.info == g.info)) {
+                if (o.address == g.address) o.info = g.info; // the player count changed
+                o.seenAt = g.seenAt;
+                return 1;
+            }
         m_lanGames.push_back(std::move(g));
         return 1;
     }

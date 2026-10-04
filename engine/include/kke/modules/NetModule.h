@@ -97,7 +97,7 @@ public:
     const char* name() const override { return "Network"; }
     std::vector<ModuleDependency> dependencies() const override;
     void init(Application& app) override;
-    void frameStart(const UpdateContext& ctx) override; // KKE_NET, once every module is ready
+    void frameStart(const UpdateContext& ctx) override; // KKE_NET, once every module is ready; the LAN search (runs while paused)
     void fixedUpdate(const FixedUpdateContext& ctx) override;
     void update(const UpdateContext& ctx) override;
     void renderUi() override;

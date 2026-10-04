@@ -1,9 +1,11 @@
 #pragma once
 
+#include "kke/net/LocalNetworks.h"
 #include "kke/net/Relay.h"
 #include "kke/net/Transport.h"
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <string>
 #include <vector>
@@ -30,6 +32,17 @@ void enetRelease();
 // far above any peer count we allow, and ENet's intercept hook sees it
 // first. Several hosts on one PC each have their own port in the range,
 // so all of them answer.
+//
+// VPNs need no setup either (docs/NETWORKING.md "Finding games"): a
+// tunnel such as WireGuard carries no broadcast, so a search also asks
+// every address of each tunnel network (kke/net/LocalNetworks.h), a few
+// hundred tiny datagrams spread over the next frames. A host's firewall
+// may drop those questions (Windows puts a WireGuard tunnel on the Public
+// profile), so a host also announces itself to every tunnel address now
+// and then. With discoveryPorts set, a client's socket takes a port in
+// that range, the announcements reach it, and each side has sent to the
+// other first: both firewalls let the answer and the join through, the
+// same way hole punching gets through a NAT.
 //
 // Join codes (kke/net/Relay.h) ride on the same socket too: relay
 // datagrams (sendRaw, onRaw) share the NAT mapping players connect through.
@@ -65,20 +78,41 @@ public:
         std::string address;   // "192.168.1.20"
         uint16_t port = 0;
         std::string info;      // what the host set with setDiscoveryInfo
+        double seenAt = 0.0;   // when it last answered or announced (steady clock, s)
     };
     // What this host answers discovery queries with (name, players, ...).
     void setDiscoveryInfo(const std::string& info) { m_discoveryInfo = info; }
+    // The discovery port range. Set before host() or connect(): a client
+    // socket then takes the first free port in it, and a host announces
+    // itself on tunnels to the first few ports of it (where clients are).
+    void setDiscoveryPorts(uint16_t first, uint16_t last);
     // Sends a query to every port in [firstPort, lastPort] on the LAN
-    // broadcast address and on localhost. Answers arrive through poll()
-    // and collect in lanGames() (cleared by each new search).
+    // broadcast addresses and on localhost, and to the first few of
+    // those ports on every address of each VPN tunnel. Answers (and
+    // hosts' announcements) arrive through poll() and collect in
+    // lanGames(); a game that stops answering drops out after a while.
     bool discover(uint16_t firstPort, uint16_t lastPort);
     const std::vector<LanGame>& lanGames() const { return m_lanGames; }
+    // Ports asked on each tunnel address (a PC rarely hosts more games).
+    static constexpr uint16_t kSweepPorts = 4;
+    static constexpr double kAnnounceEvery = 4.0; // s, while hosting
+    static constexpr double kForgetAfter = 10.0;  // s without an answer
+    // The networks searches and announcements go to (tests point it at
+    // a pretend tunnel on loopback).
+    std::function<std::vector<LocalNetwork>()> listNetworks = localNetworks;
 
     // Internal (ENet's intercept callback).
     int intercept(ENetHost* host);
 
 private:
     bool ensureClientHost(std::string* error);
+    struct Datagram { uint32_t host = 0; uint16_t port = 0; bool announce = false; }; // host byte order
+    void queueSweep(uint16_t firstPort, uint16_t lastPort, bool announce);
+    void sendQueued();
+    void announceNow(double t);
+    uint16_t m_discoveryFirst = 0, m_discoveryLast = 0;
+    std::vector<Datagram> m_outbox; // a sweep, sent a slice each poll()
+    double m_announceAt = 0.0;
     ENetHost* m_host = nullptr;
     bool m_initialized = false;
     uint16_t m_port = 0;

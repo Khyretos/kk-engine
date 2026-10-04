@@ -29,6 +29,9 @@ class SettingsModule;
 //             Settings, Controls, Quit. A game with a LobbyModule goes on
 //             to its lobby after Play: that is where players pick the
 //             game type and every controller is claimed before a match.
+//             A game with a NetModule also lists friends hosting it, on
+//             the LAN or the same VPN, as "Join Kees (2/8)" under Play:
+//             one press joins (docs/NETWORKING.md "Finding games").
 //   Pause     Start or Select on a controller, Esc on the keyboard:
 //             Resume, the game's own rows, Settings, Controls, Main menu,
 //             Quit. Local play freezes the game for everyone; online the
@@ -224,6 +227,7 @@ private:
     std::string bindingText(const std::string& action) const;
     std::string prompts(const std::string& text) const;
     DeviceClass deviceClass() const;
+    void findFriends(float dt);
 
     Application* m_app = nullptr;
     InputModule* m_input = nullptr;
@@ -268,6 +272,14 @@ private:
     long long m_dragRow = -1;
     float m_held[2] = {}, m_repeatAt[2] = {}, m_vHeld[2] = {}, m_vRepeatAt[2] = {};
     std::string m_hintShown;
+
+    struct HostedGame {          // a friend hosting this game, on the title
+        std::string label, address;
+        uint16_t port = 0;
+        bool operator==(const HostedGame&) const = default;
+    };
+    std::vector<HostedGame> m_friends;
+    float m_searchIn = 0.0f;     // seconds until the title searches again
 };
 
 } // namespace kke
