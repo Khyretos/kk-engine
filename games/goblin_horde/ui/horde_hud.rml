@@ -4,33 +4,76 @@
     <link type="text/rcss" href="theme.rcss"/>
     <style>
         body { pointer-events: none; }
-        #king { position: absolute; top: 18dp; left: 20dp; width: 34%; padding: 10dp 14dp; border-radius: 10dp; background-color: #140e08cc; border-left: 3dp #e8b64c; }
-        .name { font-size: 14dp; font-weight: bold; letter-spacing: 2dp; color: #f4ead8; }
-        .bar { height: 16dp; margin-top: 8dp; border-radius: 4dp; background-color: #3a2c1c; }
-        .bar.thin { height: 7dp; margin-top: 5dp; }
+        /* One panel per player at this screen, filling their part of it. */
+        .player { position: absolute; }
+        .card { position: absolute; top: 14dp; left: 14dp; width: 40%; max-width: 330dp; padding: 9dp 12dp; border-radius: 10dp; background-color: #140e08cc; border-left-width: 4dp; border-left-color: #e8b64c; }
+        .name { font-size: 14dp; font-weight: bold; letter-spacing: 1dp; color: #f4ead8; }
+        .weapon { font-size: 13dp; color: #e8d7b0; margin-top: 3dp; }
+        .ammo { color: #ffcf5c; margin-left: 8dp; }
+        .bar { height: 14dp; margin-top: 7dp; border-radius: 4dp; background-color: #3a2c1c; }
+        .bar.thin { height: 6dp; margin-top: 4dp; }
         .fill { height: 100%; border-radius: 4dp; }
         .health .fill { background-color: #d9463a; }
         .low .health .fill { animation: 0.4s linear infinite alternate blink; }
         @keyframes blink { from { opacity: 1; } to { opacity: 0.4; } }
         .stamina .fill { background-color: #ffcf5c; }
-        #wave { position: absolute; top: 18dp; right: 20dp; padding: 10dp 16dp; border-radius: 10dp; background-color: #140e08cc; text-align: right; }
-        #wave .big { font-size: 22dp; font-weight: bold; color: #f4ead8; }
-        #wave .small { font-size: 14dp; color: #b9d98a; margin-top: 2dp; }
-        #wave .kills { font-size: 14dp; color: #e8b64c; margin-top: 2dp; }
+        .charge .fill { background-color: #9fd3ff; }
+        .charged .charge .fill { background-color: #ffe08a; }
+        .status { font-size: 14dp; color: #ff9b8a; margin-top: 5dp; }
+        .down .card { opacity: 0.7; }
+        /* The crosshair while aiming: the middle of the player's view. */
+        .cross { position: absolute; left: 50%; top: 50%; width: 22dp; height: 22dp; margin-left: -11dp; margin-top: -11dp; }
+        .cross div { position: absolute; background-color: #ffffffdd; }
+        .cross .h { left: 0; top: 10dp; width: 22dp; height: 2dp; }
+        .cross .v { left: 10dp; top: 0; width: 2dp; height: 22dp; }
+        .cross .dot { left: 9dp; top: 9dp; width: 4dp; height: 4dp; background-color: #ff5a3c; }
+        .drawing .cross .h, .drawing .cross .v { background-color: #ffcf5c; }
+        #wave { position: absolute; top: 14dp; right: 16dp; padding: 9dp 14dp; border-radius: 10dp; background-color: #140e08cc; text-align: right; }
+        #wave .big { font-size: 20dp; font-weight: bold; color: #f4ead8; }
+        #wave .small { font-size: 13dp; color: #b9d98a; margin-top: 2dp; }
+        #wave .kills { font-size: 13dp; color: #e8b64c; margin-top: 2dp; }
+        #boss { position: absolute; top: 14dp; left: 30%; width: 40%; text-align: center; }
+        #boss .label { font-size: 17dp; font-weight: bold; color: #ffd3c4; letter-spacing: 2dp; }
+        #boss .bar { height: 12dp; margin-top: 5dp; border-width: 1dp; border-color: #000000aa; }
+        #boss .fill { background-color: #b0201a; }
         #banner { position: absolute; top: 30%; left: 0; width: 100%; text-align: center; }
-        #banner .big { font-size: 64dp; font-weight: bold; color: #ffffff; }
+        #banner .big { font-size: 60dp; font-weight: bold; color: #ffffff; }
         #banner .sub { font-size: 18dp; color: #f4ead8; margin-top: 6dp; }
-        #hint { position: absolute; left: 8%; bottom: 14dp; width: 84%; padding: 6dp 10dp; border-radius: 8dp; background-color: #140e08bb; text-align: center; font-size: 13dp; color: #e6dccb; }
-        #hint img { font-size: 15dp; } /* prompt glyphs are 1.6em */
+        #banner img { font-size: 18dp; }
+        #hint { position: absolute; left: 6%; bottom: 12dp; width: 88%; padding: 6dp 10dp; border-radius: 8dp; background-color: #140e08bb; text-align: center; font-size: 12dp; color: #e6dccb; }
+        #hint img { font-size: 14dp; } /* prompt glyphs are 1.6em */
+        /* The inventory, in the middle of its player's part of the screen. */
+        #inventory { position: absolute; }
+        #inventory .box { position: absolute; left: 15%; top: 18%; width: 70%; padding: 14dp 16dp; border-radius: 12dp; background-color: #1b130cee; border-width: 2dp; border-color: #e8b64c; }
+        #inventory .title { font-size: 20dp; font-weight: bold; color: #f4ead8; margin-bottom: 8dp; }
+        #inventory .row { padding: 7dp 10dp; border-radius: 8dp; margin-top: 4dp; color: #d9cdb6; }
+        #inventory .row.focused { background-color: #e8b64c33; color: #ffffff; }
+        #inventory .row .label { font-size: 16dp; font-weight: bold; }
+        #inventory .row .kind { font-size: 12dp; color: #b9d98a; margin-left: 8dp; }
+        #inventory .row .on { font-size: 12dp; color: #ffcf5c; margin-left: 8dp; }
+        #inventory .row .line { font-size: 12dp; margin-top: 2dp; }
+        #inventory .hint { font-size: 12dp; color: #e6dccb; margin-top: 10dp; text-align: center; }
+        #inventory img { font-size: 14dp; }
     </style>
 </head>
 <body data-model="horde">
-    <div id="king" data-class-low="low">
-        <span class="name">THE KING</span>
-        <div class="bar health"><div class="fill" data-style-width="health"></div></div>
-        <div class="bar thin stamina"><div class="fill" data-style-width="stamina"></div></div>
+    <div data-for="p : players" class="player" data-class-low="p.low" data-class-down="p.down" data-class-charged="p.charged" data-class-drawing="p.drawing"
+         data-style-left="p.x" data-style-top="p.y" data-style-width="p.w" data-style-height="p.h">
+        <div class="card" data-style-border-left-color="p.accent">
+            <span class="name">{{p.name}}</span>
+            <div class="weapon">{{p.weapon}}<span class="ammo">{{p.ammo}}</span></div>
+            <div class="bar health"><div class="fill" data-style-width="p.health"></div></div>
+            <div class="bar thin stamina"><div class="fill" data-style-width="p.stamina"></div></div>
+            <div class="bar thin charge"><div class="fill" data-style-width="p.charge"></div></div>
+            <div class="status" data-if="p.status != ''">{{p.status}}</div>
+        </div>
+        <div class="cross" data-if="p.aiming"><div class="h"></div><div class="v"></div><div class="dot"></div></div>
     </div>
-    <div id="wave">
+    <div id="boss" data-if="boss_shown">
+        <div class="label">{{boss}}</div>
+        <div class="bar"><div class="fill" data-style-width="boss_health"></div></div>
+    </div>
+    <div id="wave" data-if="wave != ''">
         <div class="big">{{wave}}</div>
         <div class="small">{{left}}</div>
         <div class="kills">{{kills}}</div>
@@ -39,6 +82,16 @@
         <div class="big">{{banner}}</div>
         <div class="sub" data-rml="sub"></div>
     </div>
-    <div id="hint" data-rml="hint"></div>
+    <div id="hint" data-if="hint != ''" data-rml="hint"></div>
+    <div id="inventory" data-if="inventory" data-style-left="inv_x" data-style-top="inv_y" data-style-width="inv_w" data-style-height="inv_h">
+        <div class="box">
+            <div class="title">{{inventory_title}}</div>
+            <div data-for="r : rows" class="row" data-class-focused="r.focused">
+                <span class="label">{{r.label}}</span><span class="kind">{{r.kind}}</span><span class="on" data-if="r.equipped">equipped</span>
+                <div class="line">{{r.line}}</div>
+            </div>
+            <div class="hint" data-rml="inventory_hint"></div>
+        </div>
+    </div>
 </body>
 </rml>
