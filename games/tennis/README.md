@@ -119,6 +119,12 @@ are rebindable actions in the "Shots" and "Game" groups.
   otherwise Topspin is a drive, Flat a flat drive, Slice a slice, Lob a
   lob (the CPU players also play drop shots). Forehand or backhand is
   the side the ball is on.
+- **The sweet spot.** Through the forward swing the racket goes to
+  where the ball will be, so a well-timed swing really meets it. Right on
+  time and right beside you is the sweet spot ("Sweet spot" bottom left):
+  the ball goes 15% faster. Off centre (mistimed, too close, too far) it
+  comes off slower and tilted, up and long or down into the net, more the
+  further off.
 - **Aim** with the stick (or WASD) as you hit: left and right is across
   the court, forward is deeper, back is shorter.
 - **Reading the ball.** The camera sits close behind you, a little over

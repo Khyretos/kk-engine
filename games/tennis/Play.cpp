@@ -653,6 +653,21 @@ void TennisModule::stepSwing(Match& m, Player& p, bool serving, bool release, fl
     }
     if (p.swingDone || !m.rally.mayHit(p.team) || (!serving && m.phase != Match::Phase::Rally)) return;
 
+    // The racket meets the ball: through the forward swing the head goes to
+    // where the ball will be at contact, all the way when the timing is
+    // right, less the further off it is (a miss still misses).
+    if (p.contactAt >= 0.0f && p.clock <= p.contactAt) {
+        glm::vec3 at;
+        const float tt = timeToSpot(m, p, &at);
+        const float off = std::abs(p.contactAt - (p.clock + tt)) / std::max(0.02f, sh.maxError);
+        if (tt >= 0.0f && off < 1.0f) {
+            glm::vec3 rel = bodyRel(m, p, at);
+            rel.z = std::max(0.2f, rel.z);
+            const glm::vec3 usual = sh.contact * glm::vec3(p.backhand ? -1.0f : 1.0f, 1.0f, 1.0f);
+            p.swingContact = glm::mix(usual, rel, 1.0f - off * off);
+        }
+    }
+
     // Where the ball is against the hitting spot: record when it got there
     // (in reach), between steps.
     const glm::vec3 ball = m.ball->position();
@@ -747,6 +762,9 @@ void TennisModule::hitBall(Match& m, Player& p, const glm::vec3& contact, bool s
         kke::log::get(name())->info("court {}: {} {}{} {:+.0f} ms ({}), spacing {:.2f}, power {:.2f}, stamina {:.2f}", m.court + 1, p.name,
                                     p.backhand ? "backhand " : "", strokeName(p.stroke), timingError * 1000.0f, p.timingText, spacing, p.charge,
                                     p.stamina.level);
+    if (m_swingLog && p.look)
+        kke::log::get(name())->info("court {}: {} racket head {:.0f} cm from the ball", m.court + 1, p.name,
+                                    glm::length(p.look->racketHead() - m_center.courts[static_cast<size_t>(m.court)].toWorld(contact)) * 100.0f);
     // Late pushes it wide the way the racket faced, early pulls it across.
     const float early = serve ? 0.0f : std::clamp(-timingError / std::max(0.02f, sh.maxError), -1.0f, 1.0f);
 
@@ -771,6 +789,13 @@ void TennisModule::hitBall(Match& m, Player& p, const glm::vec3& contact, bool s
     }
     const float charge = std::clamp(p.charge, 0.0f, 1.0f);
     float speed = speedFor(kind, charge) * sh.speed * (0.7f + 0.3f * quality);
+    // The sweet spot: right on time and right beside you, the strings
+    // give it all back and it goes like a bullet.
+    const bool sweet = timing > 0.85f && spacing > 0.9f && (p.cpu || !m_assist);
+    if (sweet) {
+        speed *= 1.15f;
+        p.timingText = "Sweet spot";
+    }
     if (serve && m.rally.secondServeNow()) speed *= 0.8f;
     // Slow shots from far away still get there in time (a drop shot from
     // the baseline is a hard push, not a moon ball).
@@ -779,8 +804,21 @@ void TennisModule::hitBall(Match& m, Player& p, const glm::vec3& contact, bool s
     // A kick serve flies like topspin: higher over the net, dipping in.
     const ShotKind flight = p.stroke == Stroke::ServeKick ? ShotKind::Topspin : kind;
     ShotPlan plan = planShot(contact, target, speed, flight, netMarginFor(flight) * (0.6f + 0.6f * quality));
-    // A mistimed shot also comes off the frame a bit: a little into the net
-    // or long.
+    // Off the sweet spot (mistimed, or too close or too far) the ball meets
+    // the strings off centre: the racket twists in the hand, so it comes
+    // off slower and tilted up (long) or down (into the net), more the
+    // further off; on the frame it's a wild one.
+    const float offCentre = 1.0f - std::min(timing, spacing);
+    if (offCentre > 0.0f) {
+        const glm::vec3 across = glm::cross(glm::normalize(plan.velocity), glm::vec3(0.0f, 1.0f, 0.0f));
+        if (glm::length(across) > 1e-3f) {
+            const float tilt = glm::radians(5.0f) * offCentre * offCentre * (noise(1.0f) < 0.0f ? -1.0f : 1.0f);
+            const glm::vec3 k = glm::normalize(across);
+            const glm::vec3 v = plan.velocity;
+            plan.velocity = v * std::cos(tilt) + glm::cross(k, v) * std::sin(tilt) + k * glm::dot(k, v) * (1.0f - std::cos(tilt));
+        }
+        plan.velocity *= 1.0f - 0.25f * offCentre * offCentre;
+    }
     plan.velocity *= 1.0f + noise((1.0f - quality) * 0.1f);
     glm::vec3 dir(plan.velocity.x, 0.0f, plan.velocity.z);
     dir = glm::length(dir) > 1e-3f ? glm::normalize(dir) : glm::vec3(0.0f, 0.0f, -s);

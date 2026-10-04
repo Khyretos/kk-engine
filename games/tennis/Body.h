@@ -148,6 +148,7 @@ public:
     // The racket's grip-to-head transform in the world (for drawing it and
     // for the hit's sound); identity without a racket.
     const glm::mat4& racket() const { return m_racketWorld; }
+    glm::vec3 racketHead() const { return m_racketHead; } // the strings' middle, world (as last drawn)
     // The hand holding the ball on a serve (world).
     glm::vec3 tossHand() const { return m_tossHand; }
     // The ball met the strings at `ball` (world) moving at `velocity`
