@@ -177,6 +177,42 @@ tennis, the duel, the goblin horde and the pet do this.
 - Tests: `Locomotion.LeapsSidewaysAcrossAGapToAHigherEdge`,
   `LeapsUpToAnEdgeAbove`.
 
+## Wall climb (run up a wall)
+
+- **Start**: on the ground, running into a wall at 2.5 m/s or more,
+  "go up" with the wall at most 1.2 m past the capsule, square to it
+  (within about 45 degrees), and its top too high to climb straight
+  (above the sprint sensor's 2.2 m) but no higher than 4.3 m above the
+  feet. There must be a hangable edge at the top and room for the body
+  all the way up.
+- **The move**: a Leap (`wallClimbing()` is true) that goes to the wall's
+  foot in the first third and rises the whole way, slowing as it goes
+  (the run-up's momentum running out), 0.6 s to the hang position. It
+  hangs on arrival, and "go up" climbs on from there.
+- Animation in kke_demo: the start of UAL2's `ClimbUp_2m` (the spring
+  and the reach), with foot IK planting two steps on the wall, left then
+  right, each held where it first touched while the body rises past it.
+- Standing still, "go up" at the same wall is a plain jump.
+- Tests: `Locomotion.RunningAtATallWallRunsUpItAndHangs`,
+  `StandingAtATallWallIsNoWallClimb`.
+
+## Hang vault (over a thin wall from a hang)
+
+- Hanging from a wall too thin to stand on (the probe finds no room on
+  top), "go up" looks across the top for where it drops away (at most
+  1.1 m), for a floor on the far side (at most 4 m below the top), and
+  for room for the tucked body over the top and the standing body at the
+  landing. Then it vaults over: a Vault (`hangVaulting()` is true).
+- **Path**: pull up at the wall until the feet are level with the top
+  (the first 45% of 1 s), then across with the feet never below the top
+  until past its far side, then down to the floor, falling faster as it
+  goes. It ends on the ground with a little of the run (40% of run speed).
+- An edge above to leap up to comes first (the trick course's beam over
+  its thin wall); the hang vault is for a thin wall with nothing above.
+- Animation in kke_demo: `ClimbUp_2m`'s pull-up, then the second half of
+  `SafetyVault`; hand IK keeps the hands on the top until the body is over.
+- Test: `Locomotion.VaultsOverAThinWallFromAHang`.
+
 ## Wall run
 
 - **Start**: in the air, going at least 4 m/s, still holding the run,
@@ -270,6 +306,10 @@ clips: the network state carries the obstacle height during the move.
 Without volume 2 the stand-ins are used: the tucked jump pose for the
 vault, the take-off reach and a crouch step for the climb. There is no
 hang or shimmy clip in either volume (the hang uses the slowed fall pose).
+kke_demo makes the shimmy with IK: hand over hand along the edge, each
+hand planted while the body moves past it (60% of a 0.36 m stride), then
+lifted a few centimetres and moved on, the leading hand first; the feet
+step along the wall below in between.
 
 After the Animator, two small modifiers run in a fixed order
 (`engine/include/kke/AnimRig.h`, PointDown's *SkeletonModifier3D* idea):

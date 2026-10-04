@@ -46,7 +46,7 @@ struct Zone {
 inline constexpr Zone kZones[] = {
     { "THE YARD", "The course: parkour lane, trick course, crates, lava, pool, breaking yard, supply table.", { 0.0f, 0.0f, 0.0f }, 30.0f,
       { 0.95f, 0.8f, 0.3f }, { 0.0f, 0.05f, 6.0f }, 0.0f },
-    { "PARKOUR PARK", "Walls, gaps and rooftops to run, vault and climb.", { 0.0f, 0.0f, -160.0f }, 70.0f, { 0.3f, 0.6f, 0.95f },
+    { "PARKOUR PARK", "Seven sections, one move each: vault field, wall climb, hang vault, shimmy wall, ledge leaps, wall run and rooftops.", { 0.0f, 0.0f, -160.0f }, 70.0f, { 0.3f, 0.6f, 0.95f },
       { 0.0f, 0.05f, -95.0f }, 0.0f },
     { "FIRING RANGE", "Guns on the bench: steel plates, glass and stone to break, red barrels to blow up.", { 170.0f, 0.0f, -150.0f }, 45.0f, { 0.9f, 0.3f, 0.25f },
       { 137.5f, 0.05f, -150.0f }, 90.0f },

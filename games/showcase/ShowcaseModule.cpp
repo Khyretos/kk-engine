@@ -268,6 +268,12 @@ void ShowcaseModule::init(kke::Application& app) {
         m_demoDrive = 0.0f;
         if (*d == '2') m_laps = 1; // =2: straight to the plane (as if the lap were driven)
     }
+    if (const char* pk = std::getenv("KKE_DEMO_PARKOUR"); pk && *pk && *pk != '0') {
+        // =1 all of it; =2 from the hang vault, =3 the shimmy, =4 the rooftops.
+        static const int kFrom[] = { 0, 0, 3, 6, 10 };
+        m_demoParkourStep = kFrom[std::clamp(*pk - '0', 0, 4)];
+        if (const char* fz = std::getenv("KKE_DEMO_PARKOUR_FREEZE")) m_demoParkourFreeze = fz;
+    }
     if (const char* n = std::getenv("KKE_DEMO_NATURE"); n && *n && *n != '0') m_demoNature = 0.0f;
     if (const char* it = std::getenv("KKE_DEMO_ITEMS"); it && *it && *it != '0') {
         m_demoItems = 0.0f;
@@ -358,6 +364,7 @@ void ShowcaseModule::buildLevel() {
     for (glm::vec2 c : { glm::vec2(-1, -1), glm::vec2(1, -1), glm::vec2(1, 1), glm::vec2(-1, 1) })
         addStaticBox({ { 10.0f + c.x * 1.4f, 0.6f, 6.0f + c.y * 1.4f }, { 0.1f, 0.6f, 0.1f }, wall }, v, idx);
     buildParkourLane(v, idx);
+    buildParkourPark(v, idx);
     buildTrickCourse(v, idx);
     buildPool(v, idx);
     buildLava(v, idx);
@@ -795,10 +802,33 @@ void ShowcaseModule::applyIk(float dt) {
     // where the clips have no hand plant matched to this obstacle, on the
     // edge while hanging (and shimmying), and reaching for the next edge at
     // the end of a ledge leap.
+    const bool hangVault = m_loco->hangVaulting();
     const bool reach = m_handIk && (st == State::Hang || (st == State::Leap && progress > 0.6f) || (st == State::Climb && progress < 0.7f) ||
-                                    (st == State::Vault && progress < 0.45f));
+                                    (st == State::Vault && progress < (hangVault ? kke::Locomotion::hangVaultSplit + 0.2f : 0.45f)));
+    // Shimmying: hand over hand along the edge, the feet stepping along the
+    // wall below, each planted while the body moves past it, then lifted
+    // and moved on (a stride every shimmyStride metres).
+    constexpr float shimmyStride = 0.36f;
+    if (st == State::Hang && std::abs(m_loco->shimmySpeed()) > 0.01f) {
+        m_shimmyDist += std::abs(m_loco->shimmySpeed()) * dt;
+        m_shimmyDir = m_loco->shimmySpeed() > 0.0f ? 1.0f : -1.0f;
+    }
+    const glm::vec3 right(-in.z, 0.0f, in.x); // the character's right, facing the wall
+    // A limb's step at cycle offset `phase`: along the travel (m) and how high it's lifted (0..1).
+    auto shimmyStep = [&](float phase, float& along, float& lift) {
+        const float u = std::fmod(m_shimmyDist / shimmyStride + phase, 1.0f);
+        if (u < 0.6f) {
+            along = shimmyStride * (0.3f - u);
+            lift = 0.0f;
+        } else {
+            const float k = (u - 0.6f) / 0.4f;
+            along = shimmyStride * (-0.3f + 0.6f * k);
+            lift = std::sin(glm::pi<float>() * k);
+        }
+        along *= m_shimmyDir;
+    };
     if (reach) {
-        const glm::vec3 grip = st == State::Hang || st == State::Leap ? m_loco->hangEdge() : glm::vec3(o.face.x, o.target.y, o.face.z);
+        const glm::vec3 grip = st == State::Hang || st == State::Leap ? m_loco->hangEdge() : hangVault ? o.face : glm::vec3(o.face.x, o.target.y, o.face.z);
         const glm::vec3 edge(grip.x + in.x * 0.08f, grip.y + 0.02f, grip.z + in.z * 0.08f);
         const std::vector<glm::mat4> bones = kke::poseToModel(m_rigData, pose);
         for (int i = 0; i < 2; ++i) {
@@ -809,7 +839,14 @@ void ShowcaseModule::applyIk(float dt) {
             // down, away from the wall.
             const glm::vec3 shoulder = glm::vec3(toWorld * bones[static_cast<size_t>(arm.chain.upper)][3]);
             const float s = glm::dot(shoulder - edge, side) > 0.0f ? 1.0f : -1.0f;
-            const glm::vec3 hand = edge + side * (0.22f * s);
+            glm::vec3 hand = edge + side * (0.22f * s);
+            if (st == State::Hang) {
+                // The hand on the side it's heading leads.
+                float along = 0.0f, lift = 0.0f;
+                const bool lead = glm::dot(side * s, right) * m_shimmyDir > 0.0f;
+                shimmyStep(lead ? 0.0f : 0.5f, along, lift);
+                hand += right * along + glm::vec3(0.0f, 0.07f * lift, 0.0f) - in * (0.05f * lift);
+            }
             m_ik.hand(static_cast<Side>(i), hand, hand - in * 0.3f + side * (0.35f * s) - glm::vec3(0, 0.5f, 0));
         }
     }
@@ -824,9 +861,31 @@ void ShowcaseModule::applyIk(float dt) {
             if (m_footBone[i] < 0) continue;
             // Level with the animated foot, a little higher, straight into the wall.
             const glm::vec3 foot = glm::vec3(toWorld * bones[static_cast<size_t>(m_footBone[i])][3]);
-            const glm::vec3 from(foot.x - in.x * 0.3f, std::max(foot.y, feetAt.y) + 0.25f, foot.z - in.z * 0.3f);
+            glm::vec3 from(foot.x - in.x * 0.3f, std::max(foot.y, feetAt.y) + 0.25f, foot.z - in.z * 0.3f);
+            float along = 0.0f, lift = 0.0f;
+            shimmyStep(i == 0 ? 0.25f : 0.75f, along, lift);
+            from += right * along + glm::vec3(0.0f, 0.1f * lift, 0.0f);
             const kke::RigidWorld::RayHit h = w.raycast(from, in, 1.0f);
-            if (h.hit && std::abs(h.normal.y) < 0.6f) m_ik.foot(static_cast<Side>(i), h.point, h.normal);
+            if (h.hit && std::abs(h.normal.y) < 0.6f) m_ik.foot(static_cast<Side>(i), h.point - in * (0.08f * lift), h.normal);
+        }
+    }
+    // Running up a wall: two steps on it, left then right, each foot
+    // planted where it first touched (the body rises past it).
+    if (m_footIk && m_loco->wallClimbing()) {
+        for (int i = 0; i < 2; ++i) {
+            const float from = i == 0 ? 0.12f : 0.42f, to = from + 0.35f;
+            if (progress < from || progress > to) {
+                m_climbStepSet[i] = false;
+                continue;
+            }
+            if (!m_climbStepSet[i]) {
+                const glm::vec3 hip = feetAt + glm::vec3(0.0f, 0.45f, 0.0f) + right * (i == 0 ? -0.12f : 0.12f);
+                const kke::RigidWorld::RayHit h = w.raycast(hip - in * 0.3f, in, 1.6f);
+                if (!h.hit || std::abs(h.normal.y) > 0.6f) continue;
+                m_climbStep[i] = h.point;
+                m_climbStepSet[i] = true;
+            }
+            m_ik.foot(static_cast<Side>(i), m_climbStep[i], -in);
         }
     }
     // The lean comes from the body's own velocity on the ground; scripted
@@ -1235,6 +1294,7 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     // Wading through the pool: no running.
     const bool wading = inPool(w.characterPosition(m_player));
     if (m_demoBridge >= 0.0f) updateBridgeDemo(dt);
+    if (m_demoParkourStep >= 0) updateParkourDemo(dt, in);
     in.fast = m_sprint && !m_crouch && !wading;
     in.slow = m_walk || wading || m_aimBlend > 0.5f; // aiming: a steady walk
     in.crouch = hanging ? m_wantCrouch != m_crouch : m_crouch;
@@ -1243,7 +1303,7 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     // First person, or aiming: the body turns with the view.
     if (m_rig.mode == kke::CameraRig::Mode::FirstPerson || m_aimWanted) m_loco->setFacing(m_rig.forward());
     const kke::Locomotion::State before = m_loco->state();
-    if (!stepNetPlayer(in, dt)) m_loco->update(in, dt);
+    if (!stepNetPlayer(in, dt)) m_loco->update(in, m_demoParkourFrozen ? 0.0f : dt);
     if (m_autopilot && m_loco->state() != before &&
         (m_loco->state() == kke::Locomotion::State::Vault || m_loco->state() == kke::Locomotion::State::Climb)) {
         const kke::Locomotion::Obstacle& o = m_loco->lastObstacle();
@@ -1332,6 +1392,8 @@ void ShowcaseModule::updateAnimation(float dt) {
     m.fallHeight = m_loco->fallHeight();
     m.obstacleHeight = m_loco->lastObstacle().height;
     m.wallSide = m_loco->wallRunSide();
+    m.wallClimb = m_loco->wallClimbing();
+    m.hangVault = m_loco->hangVaulting();
     m.crouch = m_crouch;
     m.landed = m_loco->landed();
     animate(*m_anim, m, dt);
@@ -1343,13 +1405,25 @@ void ShowcaseModule::animate(kke::Animator& a, const MotionInfo& m, float dt) {
     const int cur = a.current();
     switch (m.state) {
     case State::Vault:
-        if (m_stVaultClip >= 0) {
+        if (m.hangVault && m_stClimbHigh >= 0 && m_stVaultClip >= 0) {
+            // Over a thin wall from a hang: the 2 m climb's pull-up, then
+            // the vault's second half (the body over, the legs swinging through).
+            constexpr float split = kke::Locomotion::hangVaultSplit;
+            const int clip = m.progress < split ? m_stClimbHigh : m_stVaultClip;
+            if (cur != clip) a.play(clip, 0.12f);
+            a.setProgress(m.progress < split ? 0.3f + 0.4f * m.progress / split : 0.4f + 0.6f * (m.progress - split) / (1.0f - split));
+        } else if (m_stVaultClip >= 0) {
             if (cur != m_stVaultClip) a.play(m_stVaultClip, 0.08f);
             a.setProgress(m.progress);
         } else if (cur != m_stVault) a.play(m_stVault, 0.08f);
         break;
     case State::Leap: // between two edges: the tucked fall pose, then the hang
-        if (cur != m_stFall) a.play(m_stFall, 0.1f);
+        if (m.wallClimb && m_stClimbHigh >= 0) {
+            // Running up a wall: the 2 m climb's spring and reach (feet on
+            // the wall by IK, see applyIk).
+            if (cur != m_stClimbHigh) a.play(m_stClimbHigh, 0.08f);
+            a.setProgress(0.3f * m.progress);
+        } else if (cur != m_stFall) a.play(m_stFall, 0.1f);
         break;
     case State::WallRun: {
         const int run = m.wallSide < 0.0f ? m_stWallRunL : m_stWallRunR;

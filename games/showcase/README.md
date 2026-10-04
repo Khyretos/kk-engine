@@ -59,6 +59,8 @@ are read in `ShowcaseModule::init` unless noted:
 | `KKE_DEMO_CARRY=1` | Spawns a crate, lifts it, carries it a few steps and throws it, and logs where it is. Loops every 7 s |
 | `KKE_DEMO_GUNS=1` | At the firing range: takes the guns off the bench, knocks down plates with the rifle, breaks the glass, the plank and a stone wall, sets off the red barrels, switches to the pistol, throws a grenade. Logs every hit and blast |
 | `KKE_DEMO_DRIVE=1` | At the race track: gets in the red hatch and drives a lap of the oval (logs its progress and the lap time), then flies the plane from the airfield round four waypoints and dives it into the runway (the crash). `=2` skips the car |
+| `KKE_DEMO_NATURE=1` | In the nature park: takes the axe, fells a tree, splits a log, picks three flowers, then walks a trail through the snow field and looks back at it |
+| `KKE_DEMO_PARKOUR=1` | In the parkour park: runs up the 3.6 m wall and climbs onto it, vaults over a thin wall from a hang, shimmies round the corner of the shimmy wall and leaps the gap, then runs the rooftops. Logs every move. `=2` starts at the hang vault, `=3` the shimmy, `=4` the rooftops |
 | `KKE_DEMO_BRIDGE=1` | Drops an iron ball on the yard glass, then rolls one into a crate, and logs how far the crates moved (FEMFX builds) |
 | `KKE_BRIDGE=0` | Turns the FEMFX-Jolt bridge off, to compare |
 | `KKE_SPLIT=2..4` | Start with that many local players |
@@ -257,6 +259,27 @@ a wreck, and a new plane on the runway four seconds later.
 Each machine drives its own cars and plane for now (online comes with
 round 8). The engine note is `kke::EngineSound`, synthesized from the rpm
 and the throttle like the racing demo's.
+
+### The parkour park
+
+[Parkour.cpp](Parkour.cpp). Zone 2 on the map, up the road north of the
+yard: seven sections, each built to show one move, and the HUD names the
+one you are in. Nothing in it is marked for the movement; Locomotion reads
+every box the same way ([MOVEMENT.md](../../docs/MOVEMENT.md)).
+
+| Section | What's there | The move |
+|---|---|---|
+| Vault field | fences (1.0, 1.1 m), low walls, a 1.2 m box, two fences close together | run and jump: a vault; sprinting, a speed vault that keeps the run |
+| Wall climb | walls of 3, 3.6 and 4.2 m, a painted run-up to each | run at one and jump: you run up it and catch the top; jump again to climb on |
+| Hang vault | thin walls of 2.6 and 3 m | hang from the top, jump: over and down the far side |
+| Shimmy wall | a thin 3 m wall round an outside corner, a 1 m gap, a 3.5 m piece | hang, shimmy hand over hand round the corner, leap the gap |
+| Ledge leaps | five thin pillars, tops 2.8 to 4 m | hang, jump with left or right to leap to the next |
+| Wall run | two 4 m walls, 3.5 m apart | sprint beside one, jump: wall run; jump again to kick across |
+| Rooftops | seven roofs 3.5 to 5.5 m, gaps of 2 to 2.5 m, a rail and a box on top | up the steps, sprint and jump the gaps; a roof too high is caught by the edge |
+
+The wall climb and the hang vault are Locomotion moves (this round); the
+shimmy's hands and feet are IK steps here ([Animation](#animation)): no
+UAL clip has a hang or a shimmy.
 
 ### The nature park and the snow field
 
@@ -543,6 +566,10 @@ indices `m_stMove`, `m_stJump` and so on mean the same everywhere:
   so the clip is posed by how far through the move the capsule is: the
   hands meet the edge whatever the timing.
 - `wall_run_l`, `wall_run_r`: UAL2 loops, or the sprint.
+- The wall climb (a Leap with `wallClimbing()`) plays the first 30% of
+  `climb_high` by progress: the spring and the reach. The hang vault (a
+  Vault with `hangVaulting()`) plays `climb_high`'s pull-up, then the
+  second half of `vault_clip`.
 
 `animate(Animator&, MotionInfo&, dt)` is a switch on `Locomotion::State`
 that picks the state and cross-fade time. A climb up a wall under 1.6 m
@@ -574,6 +601,12 @@ the model's bone locals:
   puts each hand on the edge, shoulder width apart, with the elbow pole
   pushed out and down. The grip point is `Locomotion::hangEdge()` or the
   last obstacle's top.
+- **Shimmy.** Hanging and moving along the edge, the hands go hand over
+  hand: each is planted while the body moves past it (60% of a 0.36 m
+  stride), then lifted 7 cm and moved on, the leading hand first. The
+  braced feet step along the wall in between (`m_shimmyDist`).
+- **Wall climb steps.** Running up a wall, the feet plant two steps on it,
+  left then right, each held where it first touched while the body rises.
 
 Both can be switched off in the Character panel.
 
@@ -1007,6 +1040,7 @@ Pitfalls the code shows:
 | [SplitScreen.cpp](SplitScreen.cpp) | Local players 2-4, controller assignment, views, the overhead view |
 | [StressTest.cpp](StressTest.cpp) | The 36 s stress test and its report |
 | [Guns.cpp](Guns.cpp) | Guns, grenades, explosions: firing, hits, synthesized sounds, effects, aiming arms |
+| [Parkour.cpp](Parkour.cpp) | The parkour park's seven sections, the HUD's name for each, the `KKE_DEMO_PARKOUR` run |
 | [Nature.cpp](Nature.cpp) | The nature park (trees, undergrowth, grass, wind), chopping trees and splitting logs, picking flowers, the snow field and its footprints, the `KKE_DEMO_NATURE` run |
 | [Vehicles.cpp](Vehicles.cpp) | The race track (oval, kerbs, cones, jump), three cars, the plane and its crash, getting in and out, the chase camera, lap times, the engine sound, the `KKE_DEMO_DRIVE` run |
 | [Range.cpp](Range.cpp) | The firing range: bench, plates, barrels, crates, dummies, FEMFX glass and walls, the `KKE_DEMO_GUNS` run |
