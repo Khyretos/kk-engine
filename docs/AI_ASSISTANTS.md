@@ -58,7 +58,40 @@ tools/check_game my_game --keys "e space" # press keys while it runs
 ```
 
 It works on a server with no screen and no GPU. An assistant is told
-never to call a change done until this passes.
+never to call a change done until this passes. `--headless` uses a
+virtual screen even on a desktop, and `--pad` plugs in a virtual
+gamepad that moves its sticks.
+
+### Testing the whole engine on your own PC
+
+`tools/runner/kkrun` is for a local model (or you) that tests engine
+changes, not just one game. Each job is one command that ends with a
+line starting PASS or FAIL (exit code 0 means PASS), and writes its logs
+and screenshots to `build/runner-results/<time>/`, with `latest`
+pointing at the newest:
+
+```bash
+tools/runner/kkrun build                  # configure + build, 6 jobs at once, zero warnings
+tools/runner/kkrun tests                  # kke_tests
+tools/runner/kkrun demo climb_race        # one demo for 8 s with a virtual pad (and a screenshot)
+tools/runner/kkrun shots racing party     # a screenshot of each
+tools/runner/kkrun online                 # a host and a joiner in two windows (--game racing)
+tools/runner/kkrun summary                # every result, the games' warnings, PASS or FAIL
+tools/runner/kkrun all --headless         # all of the above in order
+```
+
+`build` and `all` start a new results folder; the other jobs add to the
+newest one, so running them one by one collects everything in one
+place. The build is RelWithDebInfo (like the `everything-release`
+preset) with warnings as errors; `--type` and `--jobs` change that.
+
+With a desktop session (`DISPLAY` set) games open a real window on the
+GPU; with `--headless`, or no desktop, they run inside Xvfb on lavapipe
+(software Vulkan) when it is installed, otherwise on the GPU. Every run
+prints which mode and which Vulkan device it used. `online` always runs
+headless, in two Xvfb screens. Keys are pressed with xdotool, or with
+python-xlib when xdotool isn't installed. On Arch:
+`sudo pacman -S --needed xorg-server-xvfb vulkan-swrast xdotool imagemagick`.
 
 ## When it can't
 
