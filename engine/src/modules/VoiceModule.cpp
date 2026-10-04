@@ -38,7 +38,10 @@ VoiceModule::VoiceModule() = default;
 VoiceModule::VoiceModule(const Settings& s) : settings(s) {}
 
 VoiceModule::~VoiceModule() {
-    if (m_capture && m_captureRunning) ma_device_uninit(&m_capture->device);
+    if (m_capture && m_captureRunning) {
+        ma_device_stop(&m_capture->device); // see AudioModule::shutdown()
+        ma_device_uninit(&m_capture->device);
+    }
 }
 
 std::vector<ModuleDependency> VoiceModule::dependencies() const {
@@ -117,7 +120,10 @@ void VoiceModule::shutdown() {
     }
     log::get(name())->info("Voice chat: sent {} frames, played {}, concealed {}; late {}, skipped {}, playback underruns {}", m_framesSent, m_framesPlayed,
                            m_framesConcealed, late, skipped, underruns);
-    if (m_capture && m_captureRunning) ma_device_uninit(&m_capture->device);
+    if (m_capture && m_captureRunning) {
+        ma_device_stop(&m_capture->device); // see AudioModule::shutdown()
+        ma_device_uninit(&m_capture->device);
+    }
     m_captureRunning = false;
     m_capture.reset();
     if (m_played)
