@@ -116,6 +116,10 @@ std::string packKey(const std::string& nameOrFolder) {
     std::string key;
     for (unsigned char c : base)
         if (std::isalnum(c)) key += static_cast<char>(std::tolower(c));
+    // "Pack" on the end is spelling, not a name: Synty sells "POLYGON -
+    // Dungeon Pack" and it unzips as POLYGON_Dungeon (soucouyant), while
+    // POLYGON_Pirate_Pack keeps it.
+    if (key.size() > 8 && key.ends_with("pack")) key.resize(key.size() - 4);
     return key.empty() ? lower(nameOrFolder) : key;
 }
 
