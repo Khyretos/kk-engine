@@ -10,6 +10,15 @@ the same world becomes a level editor: an asset browser with thumbnails,
 a move/rotate/scale gizmo, undo/redo, lights, breakable props, and save
 and load as a `kke.scene` that other games can load.
 
+Play mode has two ways to be in the world, picked on the title screen or
+in the pause menu: **Fly around** (the free camera, like before) and
+**Walk around** (you are the UAL mannequin in third person, `Walker.cpp`).
+Both have the same toys: the bat hits whatever you point at, exactly
+where you point; the **Gun** shoots; **Fire** sets things alight so they
+char and burn down; **Melt** makes props glow and slump into a puddle.
+Small props roll and topple when hit, breakable ones shatter, animals
+tumble as ragdolls and get up again ([Toys.cpp](Toys.cpp)).
+
 This demo is the first working version of the engine's "make the game
 while playing it" idea. Read [docs/PLAY_TO_MAKE.md](../../docs/PLAY_TO_MAKE.md)
 first: it explains the three levels (tiers) of making, and this demo
@@ -92,8 +101,32 @@ Environment variables (all read in `SandboxModule::init()` or
 | Pan the view | middle-drag, WASD, Q/E down/up, Shift faster | | no controller binding yet |
 | Get everyone up | the Get up picture | same | Y |
 | Undo | Ctrl+Z | | no controller binding yet |
-| Open the editor (Build) | the Build picture, or F2 | the Build picture | Start (Start again comes back) |
+| Shoot, set alight, melt | the Gun, Fire or Melt picture, then click a thing | tap the picture, tap the thing | A on the picture, A on the thing |
+| Pause menu (Walk around, Fly around, Build mode, Everyone up, Clear everything, Settings, Quit) | Esc (when not placing) | | Start or Select |
+| Open the editor (Build) | the Build picture, F2, or Build mode in the pause menu | the Build picture | the pause menu |
 | Engine debug panels | F1 | | |
+
+### Walk mode (Play, Walk around)
+
+A click takes the mouse so it turns the camera; Tab gives it back to
+click the palette. Every key is an `InputModule` action, so players
+rebind them in Settings, Controls.
+
+| Action | Mouse / keyboard | Controller |
+|---|---|---|
+| Move, look | WASD, mouse | left stick, right stick |
+| Jump (vault, climb), crouch, run | Space, C, Shift | A, B, left stick click |
+| First / third person | V | right stick click |
+| Use what you hold (swing, shoot, burn, melt) | left click | RT |
+| Pick up the tool at your feet | E | Y |
+| A palette picture (3 drops the bat at your feet, and so on) | 1-9 | LB / RB choose, X use |
+| Show the mouse for the palette | Tab | |
+| Everyone up | R | D-pad up |
+| Pause menu | Esc | Start or Select |
+
+Tools picked in Walk mode land at your feet as things to pick up, with
+"E / Y: pick up ..." shown when you stand next to one. People burn for a
+few seconds and then stop, drop and roll; only props melt.
 
 Camera controls come from `OrbitCameraModule` in `Editor` mode
 (`main.cpp`: `camera.setControls(kke::OrbitCameraModule::Controls::Editor)`),
@@ -186,6 +219,18 @@ up.").
 - Clear empties the world and Ctrl+Z brings it back. Nothing asks "are
   you sure?" (rule 3 of "What makes Simple mode simple" in
   PLAY_TO_MAKE.md).
+- **Hit anything, anywhere.** The bat, the gun, fire and melt all aim
+  with the same ray (`aimAt()` in Toys.cpp): body parts of people and
+  animals, the box of every prop, breakables through FEMFX's own ray,
+  and the ground. A hit lands on the exact point: a bat on the head
+  knocks the person over from the head.
+- Small props (at most 3 m, not floors, walls or buildings) become Jolt
+  bodies the moment something hits them, so they roll and topple
+  ("Props roll in Play" in Settings, Sandbox). Breakables shatter.
+  Animals become quadruped ragdolls and stand up after 5 seconds.
+- Fire spreads to flammable things nearby (wood, cloth, hay, plants by
+  their names), chars them darker and slowly melts them down into a
+  heap. Melt heats a prop until it glows and sags into a puddle.
 - There is no win or lose. If a graph adds points (`play.addScore`), a
   score appears top right; `play.say` shows its words in a big bubble
   at the top of the screen for 4 seconds.
@@ -410,6 +455,15 @@ The bat is `kke::BatSwing` ([kke/PlayBlocks.h](../../engine/include/kke/PlayBloc
 tested in `tests/test_play_blocks.cpp`): a right-handed horizontal swing
 around a shoulder pivot, 0.26 s from -80 to 95 degrees.
 
+`swingBat()` now aims with `aimAt()` (Toys.cpp) at whatever is under the
+pointer, and `swingBatAt(target, &exact)` puts the shoulder at the height
+of the exact point, so the sweet spot passes through it. `updateBat()`
+sweeps every object, not only people: people go through `queueHit` (the
+graphs), props and animals through `strike()`. In Walk mode the swing
+starts at the walker's shoulder and both hands are placed on the grip
+with IK. The steps below are how the bat picks people when nothing
+exact is under the pointer.
+
 1. `swingBat()` finds the standing person under the mouse. If there is
    none, it takes the ground point and looks for a standing person within
    `kBatAutoAimMeters` (1.2 m) of it, because fingers and thumbsticks are
@@ -593,6 +647,11 @@ the AI's animation name). See [docs/AI.md](../../docs/AI.md).
   `padButton()`); in Build, the buttons other than A are the editor's
   keys (`buildPadButton()`), and the right stick scrolls a Build panel
   when the pointer is on it.
+- **Menus.** `GameShellModule` gives the title screen, the pause menu
+  (Start, Select or Esc; pausing freezes the world), Settings with the
+  control mappings, and a clean quit. The Play palette hides while a
+  menu is open. `KKE_MAIN_MENU=0` skips the title screen (replays and
+  screenshots).
 - **Replays.** `KKE_SANDBOX_REPLAY=file` reads one step per line and
   pushes the same SDL events real hardware makes:
 
@@ -603,9 +662,10 @@ the AI's animation name). See [docs/AI.md](../../docs/AI.md).
   1.4 pad button <a|b|x|y|lb|rb|start|left|right> <0|1>
   ```
 
-  The replays in `tests/sandbox_replays/` place a person with a
-  gamepad, take the bat and knock them over (`gamepad_bat`), go from
-  Build to Play and back with Start and move the pointer and the view
+  Run them with `KKE_MAIN_MENU=0` (their first line says so). The
+  replays in `tests/sandbox_replays/` place a person with a
+  gamepad, take the bat and knock them over (`gamepad_bat`), open and close the
+  pause menu with Start and move the pointer and the view
   (`gamepad_build`), and zoom and turn the view with two fingers
   (`touch_gestures`). Pushed finger events skip SDL's touch-to-mouse step,
   so one-finger dragging is only checked through the mouse path.
@@ -884,6 +944,8 @@ Pitfalls the code shows:
 | [SandboxModule.cpp](SandboxModule.cpp) | Asset folder, placing, picking, selection, gizmo, undo/redo, the frame, input for both modes, ragdolls, stagger, look-at, breakables, balls, save/load, what the Build panels hold (`assetBrowserUi()`, `inspectorUi()`, `lookUi()`, `lightsUi()`, `modeSwitchUi()`), what the Play palette holds and does, the bat, gamepad (`padButton()`, `buildPadButton()`, the ImGui pointer ring), touch and replays. |
 | [PlayPalette.h](PlayPalette.h), [PlayPalette.cpp](PlayPalette.cpp) | The Play palette in RmlUi: the row of pictures (thumbnail PNGs from the cache, or a big word), the hint line, what graphs say and the score, presses, `contains()` and `cellCentres()`. Its RML and RCSS are the `kDocument` string in the .cpp. |
 | [FormPanel.h](FormPanel.h), [FormPanel.cpp](FormPanel.cpp) | Build mode's panels in RmlUi, written like ImGui windows: sections, text, buttons, toggles, choices, sliders, numbers, colours, text fields and picture tiles, all usable with the pad's pointer. Its RML and RCSS are the `kDocument` string in the .cpp. |
+| [Toys.cpp](Toys.cpp) | Play's toys and Walk mode: aiming at any point (`aimAt()`), `strike()`, rolling props, animal ragdolls, the gun, fire, melt, held tools and pickups, the menus and settings (`initToys()`), and the walker's frame (`updateWalker()`). |
+| [Walker.h](Walker.h), [Walker.cpp](Walker.cpp) | The third-person character for Walk mode: Locomotion, CameraRig, the UAL1 mannequin and hand IK. |
 | [PlayScripting.cpp](PlayScripting.cpp) | The node graphs: `IPlayWorld` over the sandbox, the Lua VM, recipes, level and thing graphs, live reload, events, errors, animals, the score and speech bubbles. |
 | [GraphEditor.h](GraphEditor.h) | The `GraphEditor` interface and how it is meant to be used with mouse, finger and gamepad. |
 | [GraphEditor.cpp](GraphEditor.cpp) | The RmlUi editor: the RCSS and RML, the `<graphwires>` element, the event listener, dragging, wiring, the "what fits" menu, fit and zoom, "Show Lua". |
@@ -912,6 +974,12 @@ Pitfalls the code shows:
   "games/sandbox"). Games that load the level collide through Jolt.
 - **Only 2 point lights are shown** (4 light slots, 2 used by sun and
   sky); a loaded scene keeps all of its lights.
+- **Fire and melt are looks, not simulation.** Charring is a tint and
+  melting moves the vertices of the prop's mesh; neither changes its
+  collision shape until it is put back in Build mode.
+- **The gun, torch and melt tool need packs:** the shotgun or a pistol
+  from a Synty pack, a torch stick; without them they are drawn as
+  lines.
 - **No iOS build yet** (PLAY_TO_MAKE.md "On an iPhone").
 - Touch feel is only checked with replays; real hardware is
   [HARDWARE_TESTS.md](../../docs/HARDWARE_TESTS.md) HW-016.

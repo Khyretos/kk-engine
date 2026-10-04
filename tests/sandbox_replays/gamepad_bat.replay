@@ -1,5 +1,5 @@
 # Play mode with only a gamepad: a person from the palette, the bat, a swing.
-# KKE_SANDBOX_REPLAY=tests/sandbox_replays/gamepad_bat.replay ./sandbox
+# KKE_MAIN_MENU=0 KKE_SANDBOX_REPLAY=tests/sandbox_replays/gamepad_bat.replay ./sandbox
 # (times assume the asset scan has finished; start it with the packs cached)
 1.0 pad attach
 2.0 pad button rb 1
@@ -20,9 +20,9 @@
 4.9 pad button rb 0
 5.2 pad button a 1
 5.3 pad button a 0
-# Back up to the person (one cell to the left of where the stick went up) and swing
+# Back up to the person (one small cell to the left of where the stick went up) and swing
 5.6 pad axis leftx -1
-5.69 pad axis leftx 0
+5.65 pad axis leftx 0
 5.8 pad axis lefty -1
 6.15 pad axis lefty 0
 6.6 pad button a 1
