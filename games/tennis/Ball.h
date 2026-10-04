@@ -3,8 +3,9 @@
 #include "Court.h"
 #include "Shot.h"
 
+#include "kke/Mesh.h"
+
 #include <cstdint>
-#include <string>
 #include <vector>
 
 namespace kke {
@@ -36,7 +37,7 @@ public:
         glm::vec3 at{0.0f}; // court space
     };
 
-    Ball(kke::PhysicsModule& physics, const CourtPlace& place, const std::string& texturePath);
+    explicit Ball(kke::PhysicsModule& physics, const CourtPlace& place);
     ~Ball();
     Ball(const Ball&) = delete;
     Ball& operator=(const Ball&) = delete;
@@ -91,6 +92,11 @@ public:
     // Where the FEMFX body is (its centre, court space): the camera and
     // the test log it, the rules don't.
     glm::vec3 bodyPosition() const;
+    // The look: a smooth felt ball with its white seam, draped over the
+    // FEMFX body so it squashes with it (the tets themselves are never
+    // drawn: faceted, and a seam needs finer triangles). Appends this
+    // frame's triangles, world space, for one DynamicMeshRenderer.
+    void appendLook(std::vector<kke::Vertex>& vertices, std::vector<uint32_t>& indices) const;
 
 private:
     void steerBody(float dt);
@@ -98,6 +104,7 @@ private:
     kke::PhysicsModule& m_physics;
     CourtPlace m_place;
     uint32_t m_handle = 0;
+    mutable std::vector<glm::vec3> m_lookPos, m_lookNormal; // appendLook's scratch
     glm::vec3 m_pos{0.0f}, m_vel{0.0f};
     float m_pull = 0.0f;
     bool m_rolling = false;

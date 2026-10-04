@@ -188,6 +188,7 @@ void TennisModule::renderCourts(const kke::RenderContext& ctx) {
     if (m_courtMesh) m_courtMesh->draw(ctx, glm::mat4(1.0f), 0.0f, 0.9f);
     if (m_standMesh) m_standMesh->draw(ctx, glm::mat4(1.0f), 0.1f, 0.7f);
     if (m_markMesh && !m_markIdx.empty()) m_markMesh->draw(ctx, glm::mat4(1.0f), 0.0f, 0.8f);
+    if (m_ballMesh && !m_ballIdx.empty()) m_ballMesh->draw(ctx, glm::mat4(1.0f), 0.0f, 0.85f); // felt: rough
 }
 
 void TennisModule::renderTranslucent(const kke::RenderContext& ctx) {

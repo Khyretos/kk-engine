@@ -18,7 +18,6 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
-#include <filesystem>
 #include <numeric>
 #include <system_error>
 #include <typeindex>
@@ -73,10 +72,6 @@ void TennisModule::init(kke::Application& app) {
     if (envOn("KKE_TENNIS_CENTER")) m_where = 1;
     m_crowd = static_cast<int>(envFloat("KKE_TENNIS_CROWD", static_cast<float>(m_crowd)));
 
-    const char* base = SDL_GetBasePath();
-    const std::filesystem::path tex = std::filesystem::path(base ? base : "") / "textures" / "tennis_ball.png";
-    std::error_code ec;
-    if (std::filesystem::exists(tex, ec)) m_ballTexture = tex.string();
 
     app.camera().farPlane = 400.0f;
     app.camera().fovDegrees = 50.0f;
@@ -428,7 +423,7 @@ TennisModule::Match* TennisModule::buildMatch(std::vector<Entry> entries, const 
 
     m->rules = rules;
     m->score = Score(m->rules);
-    m->ball = std::make_unique<Ball>(*m_physics, m_center.courts[static_cast<size_t>(m->court)], m_ballTexture);
+    m->ball = std::make_unique<Ball>(*m_physics, m_center.courts[static_cast<size_t>(m->court)]);
     m->phase = Match::Phase::Warmup;
     m->phaseTime = 0.0f;
     m_matches.push_back(std::move(m));
@@ -554,6 +549,7 @@ void TennisModule::render(const kke::RenderContext& ctx) {
 void TennisModule::renderShadow(const kke::ShadowRenderContext& ctx) {
     if (m_standMesh) m_standMesh->drawShadow(ctx);
     if (m_fenceMesh) m_fenceMesh->drawShadow(ctx);
+    if (m_ballMesh && !m_ballIdx.empty()) m_ballMesh->drawShadow(ctx);
     for (Player& p : m_players)
         if (p.look) p.look->renderShadow(ctx);
 }
@@ -606,7 +602,7 @@ void TennisModule::stringTest(float dt) {
 // whether the contact detection sees each touch.
 void TennisModule::ballTest(float dt) {
     if (!m_testBall) {
-        m_testBall = std::make_unique<Ball>(*m_physics, m_center.courts[0], m_ballTexture);
+        m_testBall = std::make_unique<Ball>(*m_physics, m_center.courts[0]);
         m_testTime = 10.0f;
     }
     Ball& b = *m_testBall;

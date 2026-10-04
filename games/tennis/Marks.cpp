@@ -58,9 +58,13 @@ void TennisModule::updateMarks() {
     m_shadowIdx.clear();
     m_markVerts.clear();
     m_markIdx.clear();
+    m_ballVerts.clear();
+    m_ballIdx.clear();
+    if (m_testBall) m_testBall->appendLook(m_ballVerts, m_ballIdx);
     for (auto& mp : m_matches) {
         Match& m = *mp;
         if (!m.ball) continue;
+        m.ball->appendLook(m_ballVerts, m_ballIdx);
         const CourtPlace& place = m_center.courts[static_cast<size_t>(m.court)];
         const glm::vec3 b = m.ball->position();
         const float h = std::max(0.0f, b.y - kBallRadius);
@@ -91,7 +95,9 @@ void TennisModule::updateMarks() {
     if (!m_shadowMesh) {
         m_shadowMesh = std::make_unique<kke::DynamicMeshRenderer>(*m_app);
         m_markMesh = std::make_unique<kke::DynamicMeshRenderer>(*m_app);
+        m_ballMesh = std::make_unique<kke::DynamicMeshRenderer>(*m_app);
     }
+    m_ballMesh->upload(m_ballVerts, m_ballIdx);
     m_shadowMesh->upload(m_shadowVerts, m_shadowIdx);
     m_markMesh->upload(m_markVerts, m_markIdx);
 }

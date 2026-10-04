@@ -4,7 +4,6 @@ kke_add_game(tennis main.cpp TennisModule.cpp Play.cpp Scene.cpp Hud.cpp Lobby.c
 target_link_libraries(tennis PRIVATE kke_engine)
 engine_copy_runtime_file(tennis ${CMAKE_CURRENT_SOURCE_DIR}/game.json marketplace/tennis/game.json)
 engine_copy_runtime_file(tennis ${CMAKE_CURRENT_SOURCE_DIR}/ui/tennis_hud.rml ui/tennis_hud.rml)
-engine_copy_runtime_file(tennis ${CMAKE_CURRENT_SOURCE_DIR}/textures/tennis_ball.png textures/tennis_ball.png)
 engine_copy_runtime_file(tennis ${CMAKE_SOURCE_DIR}/games/rmlui_demo/ui/theme.rcss ui/theme.rcss)
 foreach(font NotoSans-Regular.ttf NotoSans-Bold.ttf NotoSans-Italic.ttf NotoColorEmoji.ttf)
     engine_copy_runtime_file(tennis ${CMAKE_SOURCE_DIR}/assets/fonts/${font} assets/fonts/${font})

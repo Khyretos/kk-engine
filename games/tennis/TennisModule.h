@@ -387,13 +387,12 @@ private:
     std::unique_ptr<Rig> m_rig;
     std::vector<Player> m_players;
     std::vector<std::unique_ptr<Match>> m_matches;
-    std::string m_ballTexture;
 
     // The world's look.
     std::unique_ptr<kke::DynamicMeshRenderer> m_courtMesh, m_standMesh, m_fenceMesh;
-    std::unique_ptr<kke::DynamicMeshRenderer> m_shadowMesh, m_markMesh; // Marks.cpp, rebuilt every frame
-    std::vector<kke::Vertex> m_shadowVerts, m_markVerts;
-    std::vector<uint32_t> m_shadowIdx, m_markIdx;
+    std::unique_ptr<kke::DynamicMeshRenderer> m_shadowMesh, m_markMesh, m_ballMesh; // Marks.cpp, rebuilt every frame
+    std::vector<kke::Vertex> m_shadowVerts, m_markVerts, m_ballVerts;
+    std::vector<uint32_t> m_shadowIdx, m_markIdx, m_ballIdx;
     std::vector<kke::RigidWorld::BodyId> m_statics;
 
     // Switches.

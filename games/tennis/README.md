@@ -570,8 +570,11 @@ screen.
 - Side steps: `UAL2.fbx` (Universal Animation Library 2, CC0) from
   `assets/animations/` or `KKE_ASSETS_DIR`. Without it the log says so
   once at info level and players turn to run sideways.
-- The ball's felt and seam: [textures/tennis_ball.png](textures/tennis_ball.png),
-  made by [textures/make_ball_texture.py](textures/make_ball_texture.py).
+- The ball's felt and seam: made in code ([Ball.cpp](Ball.cpp)), a smooth
+  20,480-triangle sphere coloured optic yellow with the white seam (the
+  classic two-lobe curve), draped over the FEMFX body
+  (`PhysicsModule::deformEmbedded`) so it squashes with it. The tets
+  themselves aren't drawn: faceted, and too coarse for a seam.
 - The racket: `SM_Prop_Sport_Tennis_Racket_01.fbx` and its atlas
   `PolygonShops_Texture_01_A.png` from Synty's POLYGON Shops pack, found
   anywhere under `assets/synty` or `KKE_ASSETS_DIR` (Synty packs are

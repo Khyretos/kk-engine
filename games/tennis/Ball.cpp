@@ -5,12 +5,37 @@
 
 #include <algorithm>
 #include <cmath>
+#include <unordered_map>
 
 namespace tennis {
 
 namespace {
 
 constexpr float kPi = 3.14159265358979f;
+constexpr float kSeamHalf = 0.065f; // the seam's half width, radians (about 3 mm on a real ball)
+constexpr int kLookLevel = 5;       // icosphere subdivisions: 20480 triangles, the seam a clean line
+
+// The seam of a tennis ball: two lobes that meet in an S, a closed curve
+// splitting the ball into two equal halves (a + b = 1 keeps it on the
+// unit sphere).
+glm::vec3 seamAt(float t) {
+    constexpr float a = 0.7f, b = 0.3f;
+    return { a * std::cos(t) + b * std::cos(3.0f * t), a * std::sin(t) - b * std::sin(3.0f * t), 2.0f * std::sqrt(a * b) * std::sin(2.0f * t) };
+}
+
+// The FEMFX body's tets (the physics demo's rubber ball, tennis ball sized).
+const kke::TetMeshData& tetMesh() {
+    static const kke::TetMeshData mesh = kke::PhysicsModule::buildSphere(4, kBallRadius);
+    return mesh;
+}
+
+// The angle from the seam to the unit direction `d`.
+float seamAngle(const glm::vec3& d) {
+    constexpr int kSteps = 720;
+    float best = -1.0f;
+    for (int i = 0; i < kSteps; ++i) best = std::max(best, glm::dot(d, seamAt(2.0f * kPi * static_cast<float>(i) / kSteps)));
+    return std::acos(std::clamp(best, -1.0f, 1.0f));
+}
 
 // Felt over rubber: soft enough to flatten visibly on a hard hit and
 // wobble back. Stiffer (6e4) or finer (5 cells) and FEMFX's solver
@@ -31,23 +56,80 @@ glm::quat yawQuat(float degrees) { return glm::angleAxis(glm::radians(degrees), 
 
 } // namespace
 
-Ball::Ball(kke::PhysicsModule& physics, const CourtPlace& place, const std::string& texturePath) : m_physics(physics), m_place(place) {
-    const kke::TetMeshData mesh = kke::PhysicsModule::buildSphere(4, kBallRadius);
+Ball::Ball(kke::PhysicsModule& physics, const CourtPlace& place) : m_physics(physics), m_place(place) {
+    const kke::TetMeshData& mesh = tetMesh();
     kke::PhysicsModule::TetSpawnOptions o;
-    if (!texturePath.empty()) {
-        // The felt and its seam (textures/tennis_ball.png): longitude and
-        // latitude of each vertex around the centre.
-        o.texturePath = texturePath;
-        o.vertexUVs.reserve(mesh.vertices.size());
-        for (const glm::vec3& v : mesh.vertices) {
-            const float l = glm::length(v);
-            const glm::vec3 d = l > 1e-6f ? v / l : glm::vec3(0, 1, 0);
-            o.vertexUVs.emplace_back(std::atan2(d.x, d.z) / (2.0f * kPi) + 0.5f, std::acos(std::clamp(d.y, -1.0f, 1.0f)) / kPi);
-        }
-    }
+    o.drawOnlyCracks = true; // never drawn: appendLook draws it (it never cracks)
     const glm::vec3 start = m_place.toWorld({ 0.0f, 1.0f, 0.0f });
     m_handle = m_physics.spawnTetMeshWithOptions(mesh, start, ballMaterial(), o);
     m_pos = { 0.0f, 1.0f, 0.0f };
+}
+
+namespace {
+// The look's sphere, colours and how it's glued to the tets: the same for every ball.
+struct Look {
+    std::vector<glm::vec3> normals;     // rest: unit directions
+    std::vector<glm::vec3> colours;
+    std::vector<uint32_t> indices;
+    kke::TetEmbedding embedding;
+};
+
+const Look& look() {
+    static const Look l = [] {
+        Look out;
+        // An icosphere: an icosahedron, each triangle split in four kLookLevel times.
+        const float g = (1.0f + std::sqrt(5.0f)) * 0.5f;
+        std::vector<glm::vec3> v = { { -1, g, 0 }, { 1, g, 0 }, { -1, -g, 0 }, { 1, -g, 0 }, { 0, -1, g }, { 0, 1, g },
+                                     { 0, -1, -g }, { 0, 1, -g }, { g, 0, -1 }, { g, 0, 1 }, { -g, 0, -1 }, { -g, 0, 1 } };
+        for (glm::vec3& p : v) p = glm::normalize(p);
+        std::vector<uint32_t> tri = { 0, 11, 5, 0, 5, 1, 0, 1, 7, 0, 7, 10, 0, 10, 11, 1, 5, 9, 5, 11, 4, 11, 10, 2, 10, 7, 6, 7, 1, 8,
+                                      3, 9, 4, 3, 4, 2, 3, 2, 6, 3, 6, 8, 3, 8, 9, 4, 9, 5, 2, 4, 11, 6, 2, 10, 8, 6, 7, 9, 8, 1 };
+        for (int level = 0; level < kLookLevel; ++level) {
+            std::unordered_map<uint64_t, uint32_t> mid;
+            auto middle = [&](uint32_t a, uint32_t b) {
+                const uint64_t key = (static_cast<uint64_t>(std::min(a, b)) << 32) | std::max(a, b);
+                if (const auto it = mid.find(key); it != mid.end()) return it->second;
+                v.push_back(glm::normalize(v[a] + v[b]));
+                return mid[key] = static_cast<uint32_t>(v.size() - 1);
+            };
+            std::vector<uint32_t> next;
+            next.reserve(tri.size() * 4);
+            for (size_t t = 0; t < tri.size(); t += 3) {
+                const uint32_t a = tri[t], b = tri[t + 1], c = tri[t + 2];
+                const uint32_t ab = middle(a, b), bc = middle(b, c), ca = middle(c, a);
+                next.insert(next.end(), { a, ab, ca, b, bc, ab, c, ca, bc, ab, bc, ca });
+            }
+            tri = std::move(next);
+        }
+        // Felt (optic yellow, a little darker in the groove beside the seam) and the white seam.
+        const glm::vec3 felt(0.80f, 0.88f, 0.22f), seam(0.95f, 0.95f, 0.91f);
+        out.colours.reserve(v.size());
+        for (const glm::vec3& d : v) {
+            const float a = seamAngle(d);
+            const float w = std::clamp((kSeamHalf - a) / 0.012f, 0.0f, 1.0f);
+            const float groove = 1.0f - 0.15f * std::max(0.0f, 1.0f - std::abs(a - kSeamHalf - 0.02f) / 0.03f);
+            out.colours.push_back(glm::mix(felt * groove, seam, w));
+        }
+        out.normals = v;
+        std::vector<glm::vec3> points(v.size());
+        for (size_t i = 0; i < v.size(); ++i) points[i] = v[i] * kBallRadius;
+        out.embedding = kke::embedPoints(tetMesh(), points);
+        // Front faces wound like the engine's (cross(b - a, c - a) outward).
+        for (size_t t = 0; t < tri.size(); t += 3)
+            if (glm::dot(glm::cross(v[tri[t + 1]] - v[tri[t]], v[tri[t + 2]] - v[tri[t]]), v[tri[t]]) < 0.0f) std::swap(tri[t + 1], tri[t + 2]);
+        out.indices = std::move(tri);
+        return out;
+    }();
+    return l;
+}
+} // namespace
+
+void Ball::appendLook(std::vector<kke::Vertex>& vertices, std::vector<uint32_t>& indices) const {
+    const Look& l = look();
+    if (!m_handle || !m_physics.deformEmbedded(m_handle, l.embedding, l.normals, m_lookPos, m_lookNormal) || m_lookPos.size() != l.normals.size()) return;
+    const uint32_t base = static_cast<uint32_t>(vertices.size());
+    for (size_t i = 0; i < m_lookPos.size(); ++i) vertices.push_back({ m_lookPos[i], l.colours[i], m_lookNormal[i], { 0.0f, 0.0f } });
+    for (uint32_t k : l.indices) indices.push_back(base + k);
 }
 
 Ball::~Ball() {
