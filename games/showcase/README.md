@@ -826,8 +826,8 @@ shared:
   `stepRemoteCarries` steers that body to `holdPointFor` the guest's
   replicated position and facing, the same maths as your own carry
   (`steerHeld`). Put down and throw send their velocity. The guest's copy
-  only lets go past 3 m (the host's own limit is 2.5 m), since the copy
-  arrives a little late.
+  only lets go past 4 m, lifting too (the host's own limit is 2.5 m),
+  since the copy arrives a little late.
 
 ### The stress test
 

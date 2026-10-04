@@ -29,7 +29,7 @@ constexpr float kReach = 1.8f;        // m from the chest to the thing's middle
 constexpr float kFollow = 14.0f;      // 1/s: how fast the held body closes the gap to the hands
 constexpr float kMaxFollow = 9.0f;    // m/s
 constexpr float kLetGoDistance = 1.0f; // m off the hands (snagged on something): it drops
-constexpr float kOnlineLetGoDistance = 3.0f; // m: a guest's copy lags the host's hands
+constexpr float kOnlineLetGoDistance = 4.0f; // m: a guest's copy lags the host's hands (3.3 m seen while lifting)
 constexpr float kLiftTime = 0.6f;      // s: while lifting from where it lay, it may still be far off
 } // namespace
 
@@ -153,8 +153,11 @@ void ShowcaseModule::carryStep(float dt) {
     // Online the host carries the real body and our copy shows it a little
     // late, so a guest only lets go past the host's own limit (2.5 m): the
     // host decides when it snags, and our copy then falls away from us.
-    const float letGo = onlineClient() ? kOnlineLetGoDistance : kLetGoDistance;
-    if (glm::length(gap) > (m_held.age < kLiftTime ? kReach + 0.5f : letGo)) {
+    // That goes for the lift too: the copy is furthest behind while the
+    // host's hands first take it (soucouyant: dropped 3 runs in 5 at 0.2 s
+    // into the lift, 2.4 to 3.3 m off).
+    const float letGo = onlineClient() ? kOnlineLetGoDistance : m_held.age < kLiftTime ? kReach + 0.5f : kLetGoDistance;
+    if (glm::length(gap) > letGo) {
         dropHeld();
         return;
     }
