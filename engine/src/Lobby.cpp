@@ -490,6 +490,36 @@ void Lobby::step(int seat, const Press& press) {
     changed();
 }
 
+void Lobby::tapRow(int seat, int row, int side) {
+    if (seat < 0 || seat >= kMaxSeats || !m_seats[static_cast<size_t>(seat)].joined || (seat == 0 && editing())) return;
+    Seat& s = m_seats[static_cast<size_t>(seat)];
+    const std::vector<Row> list = rows(seat);
+    if (row < 0 || row >= static_cast<int>(list.size())) return;
+    s.row = row;
+    Press p;
+    p.device = s.device == Device::Pad ? Device::Pad : Device::KeyboardMouse;
+    p.pad = s.pad;
+    const Row r = list[static_cast<size_t>(row)];
+    const bool value = r.kind == Row::Kind::Look ||
+                       (r.kind == Row::Kind::Option && !m_options[static_cast<size_t>(r.index)].choices.empty());
+    if (value) (side < 0 ? p.left : p.right) = true;
+    else p.confirm = true;
+    step(seat, p);
+    if (value) s.row = row; // stepping a value never moves the cursor on
+}
+
+void Lobby::tapKey(int keyRow, int keyCol) {
+    if (!editing()) return;
+    const auto& keys = keyboardKeys();
+    if (keyRow < 0 || keyRow >= static_cast<int>(keys.size()) || keyCol < 0 || keyCol >= static_cast<int>(keys[static_cast<size_t>(keyRow)].size()))
+        return;
+    m_keyRow = keyRow;
+    m_keyCol = keyCol;
+    Press p;
+    p.confirm = true;
+    editStep(p);
+}
+
 void Lobby::padConnected(uint32_t pad, bool atStartup) {
     const int seat = seatOfPad(pad);
     if (seat >= 0) {

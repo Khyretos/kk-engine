@@ -317,6 +317,15 @@ public:
     // the screen's edges.
     ScreenRect uiSafeRect() const;
 
+    // Events some module must see before every other one: on-screen touch
+    // controls take the fingers on them, so a thumb on the stick is not
+    // also a click or a camera drag in the game. `claim` returns true for
+    // an event it has handled; then no module (and not the developer UI)
+    // sees it. Returns an id for removeEventClaim().
+    using EventClaim = std::function<bool(const SDL_Event&)>;
+    int addEventClaim(EventClaim claim);
+    void removeEventClaim(int id);
+
     // The ImGui developer overlay (Performance, Physics, Camera panels...).
     DebugUi& debugUi() { return *m_debugUi; }
     bool uiCapturesMouse() const { return m_uiCapturesMouse; }
@@ -374,6 +383,8 @@ public:
     BenchRecorder* benchmark() { return m_bench.get(); }
 
 private:
+    std::vector<std::pair<int, EventClaim>> m_eventClaims;
+    int m_nextEventClaim = 1;
     void resolveInitOrder();
     // Points the shadow map's descriptor set at its image (again after
     // ShadowMap::setTiles recreated it).

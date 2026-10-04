@@ -98,6 +98,9 @@ void HordeModule::init(kke::Application& app) {
     in.addBinding(IM::bind("horde.again", IM::key(SDL_SCANCODE_R)));
     in.addBinding(IM::bind("horde.again", IM::pad(SDL_GAMEPAD_BUTTON_START)));
     in.addBinding(IM::bind("panels", IM::key(SDL_SCANCODE_F1)));
+    kke::TouchLayoutOptions touch; // touch: the fight's buttons first
+    touch.buttons = { "horde.slash", "horde.roll", "horde.heavy", "horde.block", "jump", "sprint" };
+    m_input->setTouchLayout(touch);
     m_input->commitDefaults();
     app.window().setQuitOnEscape(false); // Esc lets go of the mouse instead
     if (auto* shell = app.getModule<kke::GameShellModule>()) {

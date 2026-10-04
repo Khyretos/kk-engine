@@ -121,7 +121,7 @@
         <div id="pause" data-if="paused">
             <div class="sheet">
                 <h1>{{pause_title}}</h1>
-                <div data-for="r : pause" class="item" data-class-focused="r.focused" data-class-taken="r.taken">{{r.label}}<span class="value" data-if="r.value != ''"><span data-if="r.arrows">&lt; </span>{{r.value}}<span data-if="r.arrows"> &gt;</span></span></div>
+                <div data-for="r, i : pause" data-attr-data-row="i" class="item" data-class-focused="r.focused" data-class-taken="r.taken">{{r.label}}<span class="value" data-if="r.value != ''"><span data-if="r.arrows">&lt; </span>{{r.value}}<span data-if="r.arrows"> &gt;</span></span></div>
                 <div class="devices" data-if="devices.size > 0">
                     <div>Plugged in:</div>
                     <div data-for="d : devices">{{d}}</div>

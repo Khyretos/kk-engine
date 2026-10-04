@@ -76,6 +76,8 @@ void OrbitCameraModule::update(const UpdateContext& ctx) {
     // Don't fight ImGui: if the mouse is over/dragging an ImGui widget,
     // that input belongs to the UI, not the camera.
     bool uiWantsMouse = ImGui::GetIO().WantCaptureMouse || m_app->uiCapturesMouse();
+    // A finger on the touch controls is SDL's mouse too, not a drag of the view.
+    if (const auto* input = m_app->getModule<InputModule>(); input && input->touchHasMouse()) uiWantsMouse = true;
 
     bool editor = m_controls == Controls::Editor;
     bool orbitButton = editor ? mouse.rightButtonDown : mouse.leftButtonDown;

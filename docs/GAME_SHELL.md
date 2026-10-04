@@ -9,9 +9,9 @@ same with a **controller**, the **keyboard** and the **mouse**.
 |---|---|---|
 | Title | the game's name; Play, friends hosting this game ("Join Kees (2/8)", with a `NetModule`: NETWORKING.md "Finding games"), Settings, Controls, Quit | when the game starts |
 | Modes | the game's modes with a line each (only when the game has modes) | Play |
-| Pause | Resume, the game's own rows, Settings, Controls, Main menu, Quit | **Start** or **View/Back** on a controller, **Esc** on the keyboard |
+| Pause | Resume, the game's own rows, Settings, Controls, Main menu, Quit | **Start** or **View/Back** on a controller, **Esc** on the keyboard, the on-screen pause button on a touch screen |
 | Settings | full screen, VSync, frame cap, menu and HUD size, volumes, quiet in the background, look speed, invert look, the game's own sections | Settings |
-| Controls | every button of the game, for the keyboard and mouse or for a controller: pick a row, press the new key or button | Controls |
+| Controls | every button of the game, for the keyboard and mouse or for a controller: pick a row, press the new key or button. **Touch controls** edits the on-screen sticks and buttons on the frozen game ([TOUCH.md](TOUCH.md)) | Controls |
 
 - **Local play freezes everyone** while the pause menu is open
   (`Application::setPaused`). **Online the game keeps running**: the menu

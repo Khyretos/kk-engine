@@ -36,8 +36,9 @@ std::string hex(const glm::vec3& c) {
 }
 
 // The menu: the title at the top, four player cards along the bottom,
-// toasts in the top right (those show in the game too). Nothing here
-// takes the mouse: it's driven by controllers and the keyboard.
+// toasts in the top right (those show in the game too). Driven by
+// controllers and the keyboard; a tap or a click on a row or a key works
+// too (onEvent: the document itself takes no pointer events).
 const char* kLobbyRml = R"(
 <rml>
 <head>
@@ -106,16 +107,16 @@ const char* kLobbyRml = R"(
             <div class="sub" data-rml="subtitle"></div>
         </div>
         <div id="cards">
-            <div data-for="seat : seats" class="card" data-class-empty="!seat.joined"
-                 data-style-left="(it_index * 25.8) + '%'" data-style-border-top-color="seat.accent">
-                <div class="who">PLAYER {{it_index + 1}}</div>
+            <div data-for="seat, s : seats" class="card" data-class-empty="!seat.joined" data-attr-data-seat="s"
+                 data-style-left="(s * 25.8) + '%'" data-style-border-top-color="seat.accent">
+                <div class="who">PLAYER {{s + 1}}</div>
                 <div data-if="seat.joined">
                     <div class="name">{{seat.name}}</div>
                     <div class="device">{{seat.device}}</div>
                     <div class="unplugged" data-if="seat.unplugged">controller unplugged</div>
                     <div class="prompt" data-if="seat.waiting" data-rml="seat.prompt"></div>
-                    <div data-for="row : seat.rows" class="row" data-class-focused="row.focused" data-class-start="row.start"
-                         data-class-section="row.action">
+                    <div data-for="row, r : seat.rows" class="row" data-class-focused="row.focused" data-class-start="row.start"
+                         data-class-section="row.action" data-attr-data-seat="s" data-attr-data-row="r">
                         <span data-if="row.start">{{row.label}}</span>
                         <span data-if="!row.start" class="label">{{row.label}}</span><span data-if="!row.start" class="value"><span data-if="row.has_swatch" class="swatch" data-style-background-color="row.swatch"></span><span class="arrow" data-if="row.arrows">&lt; </span><span data-class-empty="row.empty">{{row.value}}</span><span class="arrow" data-if="row.arrows"> &gt;</span></span>
                     </div>
@@ -134,8 +135,9 @@ const char* kLobbyRml = R"(
         <div id="typing" data-if="typing">
             <div class="label">{{typing_label}}</div>
             <div class="text">{{typing_text}}_</div>
-            <div class="keys" data-for="r : keys">
-                <span data-for="k : r.keys" class="key" data-class-focused="k.focused" data-class-wide="k.wide">{{k.label}}</span>
+            <div class="keys" data-for="r, kr : keys">
+                <span data-for="k, kc : r.keys" class="key" data-class-focused="k.focused" data-class-wide="k.wide"
+                      data-attr-data-key-row="kr" data-attr-data-key-col="kc">{{k.label}}</span>
             </div>
             <div class="hint" data-rml="typing_hint"></div>
         </div>
@@ -160,7 +162,50 @@ std::vector<ModuleDependency> LobbyModule::dependencies() const {
 void LobbyModule::init(Application& app) {
     m_app = &app;
     m_input = app.getModule<InputModule>();
+    // The lobby has the screen: no touch sticks over the cards.
+    if (m_input) m_input->addTouchHider([this] { return m_lobby.isOpen() && !m_suspended; });
     buildUi();
+}
+
+bool LobbyModule::tapAt(float x, float y) {
+    const UiModule* ui = m_app ? m_app->getModule<UiModule>() : nullptr;
+    if (!ui || !m_doc) return false;
+    const glm::vec2 p = ui->toContext(glm::vec2(x, y));
+    auto inside = [&](Rml::Element* e) {
+        const Rml::Vector2f at = e->GetAbsoluteOffset(Rml::BoxArea::Border), size = e->GetBox().GetSize(Rml::BoxArea::Border);
+        return p.x >= at.x && p.y >= at.y && p.x < at.x + size.x && p.y < at.y + size.y ? (p.x - at.x) / std::max(1.0f, size.x) : -1.0f;
+    };
+    Rml::ElementList list;
+    if (m_lobby.editing()) {
+        m_doc->GetElementsByClassName(list, "key");
+        for (Rml::Element* e : list)
+            if (inside(e) >= 0.0f) {
+                m_lobby.tapKey(e->GetAttribute<int>("data-key-row", -1), e->GetAttribute<int>("data-key-col", -1));
+                return true;
+            }
+        return false;
+    }
+    m_doc->GetElementsByClassName(list, "row");
+    for (Rml::Element* e : list) {
+        const float fx = inside(e);
+        if (fx < 0.0f) continue;
+        // "Colour   < Red >": the left half of the value steps back, the rest on.
+        m_lobby.tapRow(e->GetAttribute<int>("data-seat", -1), e->GetAttribute<int>("data-row", -1), fx > 0.46f && fx < 0.75f ? -1 : 1);
+        return true;
+    }
+    // Player 1's card before their first press: the tap is it (the screen
+    // and the keyboard are theirs, as Enter would make them).
+    list.clear();
+    m_doc->GetElementsByClassName(list, "card");
+    for (Rml::Element* e : list)
+        if (inside(e) >= 0.0f && e->GetAttribute<int>("data-seat", -1) == 0 && m_lobby.seat(0).device == Lobby::Device::Any) {
+            Lobby::Press p;
+            p.device = Lobby::Device::KeyboardMouse;
+            p.confirm = true;
+            m_lobby.handle(p, m_pads);
+            return true;
+        }
+    return false;
 }
 
 void LobbyModule::setTitle(std::string title, std::string subtitle) {
@@ -352,6 +397,8 @@ void LobbyModule::readDevices(float dt) {
 
 void LobbyModule::onEvent(const SDL_Event& e) {
     if (m_suspended) return;
+    // A finger (SDL's mouse from it) or the mouse on a row or a key.
+    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && e.button.button == SDL_BUTTON_LEFT && m_lobby.isOpen() && tapAt(e.button.x, e.button.y)) return;
     if (m_lobby.editing() && m_lobby.isOpen()) {
         // Typing into a text row: the keyboard types (controllers still
         // drive the on-screen keyboard below).
@@ -582,7 +629,11 @@ void LobbyModule::refreshUi() {
     const Lobby::Seat& one = l.seat(0);
     const PromptStyle style = seatStyle(0);
     const InputDevices::Device* oneDevice = one.device == Lobby::Device::Pad ? m_input->devices().find(one.pad) : nullptr;
-    if (one.device == Lobby::Device::Any) v.hint = "Player 1: press " + join + " or " + enter;
+    // A finger plays player 1's card on a touch screen (tapAt).
+    const bool touch = m_input->promptStyle(0) == PromptStyle::Touch;
+    if (one.device == Lobby::Device::Any) v.hint = touch ? std::string("Player 1: tap your card") : "Player 1: press " + join + " or " + enter;
+    else if (touch && one.device == Lobby::Device::KeyboardMouse)
+        v.hint = "Tap a row: a value changes (left half: back)   ·   the Start row begins";
     else if (oneDevice && oneDevice->kind == InputDevices::Kind::Joystick)
         v.hint = "Hat or stick: choose and change   ·   trigger: next   ·   button 2: leave   ·   player 1: the Start row begins";
     else if (isPadStyle(style))
@@ -606,6 +657,7 @@ void LobbyModule::refreshUi() {
         sv.name = l.seatName(i);
         sv.unplugged = s.joined && s.device == Lobby::Device::Pad && !s.padPresent;
         sv.device = s.device == Lobby::Device::Pad ? "Controller" : s.device == Lobby::Device::KeyboardMouse ? "Keyboard and mouse" : "Any controller or the keyboard";
+        if (i == 0 && touch && s.device == Lobby::Device::KeyboardMouse) sv.device = "Touch screen";
         if (s.device == Lobby::Device::Pad)
             if (const InputDevices::Device* d = m_input->devices().find(s.pad); d && d->kind == InputDevices::Kind::Joystick) sv.device = "Flight stick: " + d->label();
         sv.accent = "#3a4260";
@@ -619,7 +671,7 @@ void LobbyModule::refreshUi() {
             sv.prompt = "Press " + join + (keyboardFree ? " or " + enter : std::string()) + " to join";
         } else if (i == 0 && s.device == Lobby::Device::Any) {
             sv.waiting = true;
-            sv.prompt = "Press " + join + " or " + enter;
+            sv.prompt = touch ? std::string("Tap here to play") : "Press " + join + " or " + enter;
         }
         if (s.joined && !sv.waiting) {
             const std::vector<Lobby::Row> rows = l.rows(i);

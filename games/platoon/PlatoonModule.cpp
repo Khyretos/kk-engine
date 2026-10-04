@@ -128,6 +128,10 @@ void PlatoonModule::init(kke::Application& app) {
     for (int g = 1; g <= 4; ++g) in.addBinding(IM::bind("rts.group" + std::to_string(g), IM::pad(groupPad[g - 1])));
     // Start, Select and Esc are the pause menu (kke::GameShellModule); the
     // settings panel is a row there, or F3.
+    // Touch: taps on the world select and order, so the view turns with a right stick, not a drag.
+    kke::TouchLayoutOptions touch;
+    touch.look = kke::TouchLayoutOptions::Look::Stick;
+    m_input->setTouchLayout(touch);
     m_input->commitDefaults();
     buildPanel();
 

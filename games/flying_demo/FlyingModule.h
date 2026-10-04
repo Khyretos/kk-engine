@@ -72,6 +72,7 @@ public:
     std::vector<kke::ModuleDependency> dependencies() const override;
     void init(kke::Application& app) override;
     void update(const kke::UpdateContext& ctx) override;
+    void onEvent(const SDL_Event& event) override;
     void render(const kke::RenderContext& ctx) override;
     void renderShadow(const kke::ShadowRenderContext& ctx) override;
     void renderTranslucent(const kke::RenderContext& ctx) override;
@@ -259,6 +260,7 @@ private:
     void openPause(int seat);
     void closePause();
     void updatePause(float dt);
+    void stepPauseDevice(int step);
     void pauseAction(int row);
     int m_pauseSeat = -1;         // -1: not paused
     int m_pauseRow = 0;

@@ -12,6 +12,10 @@
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
 #include "kke/modules/NetModule.h"
+#include "kke/modules/UiModule.h"
+
+#include <RmlUi/Core/Element.h>
+#include <RmlUi/Core/ElementDocument.h>
 
 #include <SDL3/SDL.h>
 
@@ -777,23 +781,50 @@ void FlyingModule::updatePause(float dt) {
     if (pressedBy(player, "pause.up")) m_pauseRow = (m_pauseRow + kRows - 1) % kRows;
     if (pressedBy(player, "pause.down")) m_pauseRow = (m_pauseRow + 1) % kRows;
     const int step = (pressedBy(player, "pause.right") ? 1 : 0) - (pressedBy(player, "pause.left") ? 1 : 0);
-    const std::vector<DeviceChoice> choices = deviceChoices();
-    if (step != 0 && m_pauseRow == 1 && !choices.empty()) {
-        // Only to a free device (or back to your own).
-        const int n = static_cast<int>(choices.size());
-        for (int i = 1; i <= n; ++i) {
-            const int k = ((m_pauseDevice + step * i) % n + n) % n;
-            if (choices[static_cast<size_t>(k)].holder < 0 || choices[static_cast<size_t>(k)].holder == m_pauseSeat) {
-                m_pauseDevice = k;
-                break;
-            }
-        }
-    }
+    if (step != 0 && m_pauseRow == 1) stepPauseDevice(step);
     if (m_pauseAge > 0.15f && (pressedBy(player, "pause.back") || pressedBy(player, "fly.pause"))) {
         closePause();
         return;
     }
     if (pressedBy(player, "pause.accept") && m_pauseAge > 0.15f) pauseAction(m_pauseRow);
+}
+
+void FlyingModule::stepPauseDevice(int step) {
+    const std::vector<DeviceChoice> choices = deviceChoices();
+    if (choices.empty()) return;
+    // Only to a free device (or back to your own).
+    const int n = static_cast<int>(choices.size());
+    for (int i = 1; i <= n; ++i) {
+        const int k = ((m_pauseDevice + step * i) % n + n) % n;
+        if (choices[static_cast<size_t>(k)].holder < 0 || choices[static_cast<size_t>(k)].holder == m_pauseSeat) {
+            m_pauseDevice = k;
+            break;
+        }
+    }
+}
+
+// A tap (or a click) on a pause row picks it, as A would: a phone has no
+// d-pad. On the Controls row the value's arrows step through the free
+// devices and the label takes the one shown.
+void FlyingModule::onEvent(const SDL_Event& e) {
+    if (m_pauseSeat < 0 || !m_hudDoc || m_pauseAge <= 0.15f || e.type != SDL_EVENT_MOUSE_BUTTON_DOWN || e.button.button != SDL_BUTTON_LEFT) return;
+    const kke::UiModule* ui = m_app->getModule<kke::UiModule>();
+    if (!ui) return;
+    const glm::vec2 p = ui->toContext(glm::vec2(e.button.x, e.button.y));
+    Rml::ElementList rows;
+    m_hudDoc->GetElementsByClassName(rows, "item");
+    for (Rml::Element* el : rows) {
+        const Rml::Vector2f at = el->GetAbsoluteOffset(Rml::BoxArea::Border), size = el->GetBox().GetSize(Rml::BoxArea::Border);
+        if (p.x < at.x || p.y < at.y || p.x >= at.x + size.x || p.y >= at.y + size.y) continue;
+        const int row = el->GetAttribute<int>("data-row", -1);
+        if (row < 0) return;
+        m_pauseRow = row;
+        // The Controls row's value: the left half steps back, the right on; its label takes the device.
+        const float fx = (p.x - at.x) / std::max(1.0f, size.x);
+        if (row == 1 && fx > 0.4f) stepPauseDevice(fx < 0.7f ? -1 : 1);
+        else pauseAction(row);
+        return;
+    }
 }
 
 void FlyingModule::pauseAction(int row) {

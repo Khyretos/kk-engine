@@ -1,4 +1,6 @@
 #include "kke/modules/UiModule.h"
+
+#include "../TouchOverlay.h"
 #include "kke/Application.h"
 #include "kke/Log.h"
 #include "kke/EngineSettings.h"
@@ -320,6 +322,19 @@ void UiModule::frameStart(const UpdateContext& ctx) {
             player = b->GetAttribute<int>("data-kke-player", 0);
             return !action.empty();
         });
+        // The touch controls leave a menu's buttons and tappable prompts alone.
+        input->setUiHitTest([this](float nx, float ny) {
+            if (!m_context) return false;
+            Rml::Element* e = m_context->GetElementAtPoint(Rml::Vector2f(nx * m_frameSize.x - m_origin.x, ny * m_frameSize.y - m_origin.y));
+            for (; e; e = e->GetParentNode()) {
+                const Rml::String& tag = e->GetTagName();
+                if (tag == "button" || tag == "input" || tag == "select" || tag == "textarea" || e->HasAttribute("data-kke-action") ||
+                    e->HasAttribute("data-kke-touch-ui") || e->HasAttribute("onclick"))
+                    return true;
+            }
+            return false;
+        });
+        m_touchOverlay = std::make_unique<TouchOverlay>(m_context, input);
         m_finderSet = true;
     }
     const InputMap& map = input->map(0);
@@ -453,6 +468,7 @@ void UiModule::renderUi() {
         m_context->SetDensityIndependentPixelRatio(ratio);
     }
     if (m_prompts) m_prompts->refresh(m_app->getModule<InputModule>());
+    if (m_touchOverlay) m_touchOverlay->update(m_origin.x, m_origin.y);
     m_context->Update();
     m_app->setUiCapturesMouse(m_context->IsMouseInteracting() || m_draggingSlider || m_draggingPanel);
 }
@@ -634,7 +650,11 @@ void UiModule::onEvent(const SDL_Event& event) {
 
 void UiModule::shutdown() {
     if (m_finderSet && m_app)
-        if (InputModule* input = m_app->getModule<InputModule>()) input->setScreenButtonFinder(nullptr);
+        if (InputModule* input = m_app->getModule<InputModule>()) {
+            input->setScreenButtonFinder(nullptr);
+            input->setUiHitTest(nullptr);
+        }
+    m_touchOverlay.reset();
     m_finderSet = false;
     m_pressedButtons.clear();
     if (m_context && m_earcons)

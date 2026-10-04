@@ -17,6 +17,7 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [HISTORY.md](HISTORY.md) | The development log: the original README, kept whole |
 | [AUDIO.md](AUDIO.md) | The audio engine: mixer, 3D sound, occlusion, impact synthesis, accessibility |
 | [INPUT.md](INPUT.md) | Rebindable actions, devices, triggers and chords |
+| [TOUCH.md](TOUCH.md) | On-screen sticks and buttons in every game; players move, resize and rebind them |
 | [DEMO_PANEL.md](DEMO_PANEL.md) | A settings panel for a demo or tool that works with a controller, the keyboard and the mouse |
 | [LOBBY.md](LOBBY.md) | The start menu: controllers press A to join, players pick a look, player 1 sets the CPU players |
 | [OUTFITS.md](OUTFITS.md) | Outfits: a mannequin dressed in the skin tone and clothes colours a player picks |

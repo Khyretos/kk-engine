@@ -452,6 +452,13 @@ void GameShellModule::openPause() {
     setPage(Page::Pause);
 }
 
+void GameShellModule::startTouchEdit() {
+    if (!m_input) return;
+    m_touchEditing = true;
+    if (m_doc) m_doc->SetProperty("visibility", "hidden"); // the game (still frozen) shows behind the controls
+    m_input->editTouch(true);
+}
+
 void GameShellModule::closeMenu() {
     if (m_settingsChanged) {
         saveSettings();
@@ -709,6 +716,8 @@ void GameShellModule::buildPage() {
             }
         }
         heading("");
+        // On-screen sticks and buttons: move, resize and rebind them on the game itself.
+        if (m_input) button("Touch controls", [this] { startTouchEdit(); });
         button("Reset to defaults", [this] {
             for (int p = 0; m_input && p < m_input->players(); ++p) m_input->map(p).restoreDefaults();
             definePauseAction();
@@ -1098,6 +1107,13 @@ void GameShellModule::onEvent(const SDL_Event& e) {
         captureEvent(e);
         return;
     }
+    if (m_touchEditing) {
+        // The touch layout's own bar has the screen; Esc or B is Done.
+        if ((e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE) ||
+            (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_EAST))
+            m_input->editTouch(false);
+        return;
+    }
     if (e.type == SDL_EVENT_MOUSE_MOTION && m_dragRow >= 0) {
         const UiModule* ui = m_app->getModule<UiModule>();
         if (ui) setSliderFromMouse(static_cast<size_t>(m_dragRow), ui->toContext(glm::vec2(e.motion.x, e.motion.y)).x);
@@ -1229,6 +1245,15 @@ void GameShellModule::frameStart(const UpdateContext& ctx) {
     }
     if (m_titleAt > 0.0f && (m_titleAt -= ctx.dt) <= 0.0f && onTitle()) setFrozen(true);
     findFriends(ctx.dt);
+    if (m_touchEditing) {
+        if (m_input && m_input->touch().editing()) return;
+        m_touchEditing = false; // Done: back to the Controls page
+        if (m_doc) m_doc->SetProperty("visibility", "visible");
+        m_dirty = true;
+    }
+    // The touch controls' pause button opens the menu as Start does.
+    if (m_input && m_page == Page::None && !(blockPause && blockPause()) && !(m_lobby && m_lobby->isOpen()) && m_input->touch().takePause())
+        openPause();
     if (m_input && m_input->players() != m_players) {
         m_players = m_input->players(); // the lobby added players: their maps get the prompt action too
         definePauseAction();

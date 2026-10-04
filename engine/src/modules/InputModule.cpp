@@ -1,5 +1,7 @@
 #include "kke/modules/InputModule.h"
 
+#include "kke/Application.h"
+
 #include "kke/DataFile.h"
 #include "kke/DevTools.h"
 #include "kke/Log.h"
@@ -175,7 +177,9 @@ void InputModule::mirrorKeyboard(InputMap& m) {
     m.resetStates();
 }
 
-void InputModule::init(Application&) {
+void InputModule::init(Application& app) {
+    m_app = &app;
+    m_claimId = app.addEventClaim([this](const SDL_Event& e) { return claimTouch(e); });
     m_devices.init();
 #if defined(SDL_PLATFORM_ANDROID) || defined(SDL_PLATFORM_IOS)
     for (PromptStyle& s : m_promptStyles) s = PromptStyle::Touch;
@@ -254,6 +258,65 @@ void InputModule::init(Application&) {
             m_padScript.push_back(step);
         }
         std::stable_sort(m_padScript.begin(), m_padScript.end(), [](const PadStep& a, const PadStep& b) { return a.at < b.at; });
+    }
+    if (const char* v = dev::env("KKE_VIRTUAL_TOUCH_SCRIPT"); v && *v) {
+        // "3:down 1 0.15 0.8,3.5:move 1 0.15 0.6,5:up 1,6:tap 0.9 0.8":
+        // fingers as SDL events, positions 0..1 of the window.
+        std::string spec = v;
+        size_t start = 0;
+        while (start <= spec.size()) {
+            const size_t comma = std::min(spec.find(',', start), spec.size());
+            const std::string item = spec.substr(start, comma - start);
+            start = comma + 1;
+            TouchStep step;
+            char kind[8] = {};
+            float a = 0.0f, b = 0.0f, c = 0.0f;
+            const int n = std::sscanf(item.c_str(), "%lf:%7s %f %f %f", &step.at, kind, &a, &b, &c);
+            const std::string k = n >= 2 ? kind : "";
+            if (k == "tap" && n >= 4) {
+                step.type = SDL_EVENT_FINGER_DOWN;
+                step.finger = 99;
+                step.pos = { a, b };
+                m_touchScript.push_back(step);
+                step.at += 0.1;
+                step.type = SDL_EVENT_FINGER_UP;
+            } else if ((k == "down" || k == "move") && n >= 5) {
+                step.type = k == "down" ? SDL_EVENT_FINGER_DOWN : SDL_EVENT_FINGER_MOTION;
+                step.finger = static_cast<uint64_t>(a);
+                step.pos = { b, c };
+            } else if (k == "up" && n >= 3) {
+                step.type = SDL_EVENT_FINGER_UP;
+                step.finger = static_cast<uint64_t>(a);
+            } else {
+                log::get(name())->warn("KKE_VIRTUAL_TOUCH_SCRIPT: can't read '{}' (want <s>:down|move <finger> <x> <y>, <s>:up <finger>, <s>:tap <x> <y>)", item);
+                continue;
+            }
+            m_touchScript.push_back(step);
+        }
+        std::stable_sort(m_touchScript.begin(), m_touchScript.end(), [](const TouchStep& x, const TouchStep& y) { return x.at < y.at; });
+    }
+}
+
+void InputModule::playTouchScript(double now) {
+    while (!m_touchScript.empty() && now >= m_touchScript.front().at) {
+        TouchStep s = m_touchScript.front();
+        m_touchScript.erase(m_touchScript.begin());
+        if (s.type == SDL_EVENT_FINGER_UP) {
+            if (auto it = m_scriptFingers.find(s.finger); it != m_scriptFingers.end()) s.pos = it->second;
+            m_scriptFingers.erase(s.finger);
+        } else {
+            m_scriptFingers[s.finger] = s.pos;
+        }
+        SDL_Event e{};
+        e.type = s.type;
+        e.tfinger.timestamp = SDL_GetTicksNS();
+        e.tfinger.touchID = 1;
+        e.tfinger.fingerID = s.finger;
+        e.tfinger.x = s.pos.x;
+        e.tfinger.y = s.pos.y;
+        e.tfinger.pressure = s.type == SDL_EVENT_FINGER_UP ? 0.0f : 1.0f;
+        if (m_app) e.tfinger.windowID = SDL_GetWindowID(m_app->window().handle());
+        SDL_PushEvent(&e);
     }
 }
 
@@ -370,6 +433,123 @@ void InputModule::animateVirtualDevices(float t) {
 void InputModule::commitDefaults() {
     for (auto& m : m_maps) m->storeDefaults();
     load();
+    m_touchActions = 0; // guess the touch layout again from the actions there are now
+}
+
+// ---------------------------------------------------------------- touch controls
+
+void InputModule::setTouchLayout(const TouchLayoutOptions& options) {
+    m_touchOptions = options;
+    m_touchActions = 0;
+}
+
+bool InputModule::touchEnabled() const {
+    if (m_touch.editing()) return true;
+    if (m_touch.layout().empty() || m_maps.empty() || !m_maps[0]->contextEnabled("game")) return false;
+    return std::none_of(m_touchHiders.begin(), m_touchHiders.end(), [](const std::function<bool()>& h) { return h && h(); });
+}
+
+bool InputModule::touchShown() const { return m_touch.editing() || (touchEnabled() && promptStyle(0) == PromptStyle::Touch); }
+
+void InputModule::editTouch(bool editing) {
+    if (editing == m_touch.editing()) return;
+    m_touch.setEditing(editing);
+    if (!editing) {
+        m_touchSaved = m_touch.save().dump();
+        if (!save()) log::get(name())->warn("could not save {}", m_path);
+    }
+}
+
+void InputModule::updateTouch(double now) {
+    const float dt = m_touchApplied < 0.0 ? 0.0f : static_cast<float>(now - m_touchApplied);
+    m_touchApplied = now;
+    if (m_app) {
+        const VkExtent2D e = m_app->renderer().extent();
+        m_touch.setScreen({ static_cast<float>(e.width), static_cast<float>(e.height) }, m_app->uiSafeRect());
+    }
+    // Guess the layout from the actions (again when a script adds some),
+    // then put the player's own back over it.
+    if (!m_maps.empty() && m_maps[0]->actions().size() != m_touchActions) {
+        m_touchActions = m_maps[0]->actions().size();
+        m_touch.setDefaults(TouchControls::autoLayout(*m_maps[0], m_touchOptions));
+        std::string shown;
+        for (const TouchControl& c : m_touch.defaults())
+            shown += std::string(shown.empty() ? "" : ", ") + TouchControls::kindName(c.kind) +
+                     (c.kind == TouchControl::Kind::Stick ? (c.stick ? " right" : " left") : c.action.empty() ? "" : " " + c.action);
+        log::get(name())->info("touch controls: {}", shown);
+        if (!m_touchSaved.empty()) {
+            const nlohmann::json j = nlohmann::json::parse(m_touchSaved, nullptr, false);
+            if (!j.is_discarded()) m_touch.load(j, *m_maps[0]);
+        }
+    }
+    const bool enabled = touchEnabled();
+    if (!enabled && m_touchWasEnabled) {
+        m_touch.releaseAll(); // a menu took the screen: nothing stays held
+        m_touchMouse = false;
+    }
+    m_touchWasEnabled = enabled;
+    if (!m_maps.empty()) m_touch.apply(*m_maps[0], dt);
+}
+
+bool InputModule::claimTouch(const SDL_Event& e) {
+    if (!touchEnabled()) return false;
+    const glm::vec2 frame = [&] {
+        if (!m_app) return glm::vec2(0.0f);
+        const VkExtent2D x = m_app->renderer().extent();
+        return glm::vec2(static_cast<float>(x.width), static_cast<float>(x.height));
+    }();
+    // Window points (mouse events) to 0..1.
+    auto normalized = [](SDL_WindowID id, float x, float y, glm::vec2& out) {
+        int w = 0, h = 0;
+        SDL_Window* window = SDL_GetWindowFromID(id);
+        if (!window || !SDL_GetWindowSize(window, &w, &h) || w <= 0 || h <= 0) return false;
+        out = { x / static_cast<float>(w), y / static_cast<float>(h) };
+        return true;
+    };
+    // The controls are drawn over the game's HUD, so a control under the
+    // finger wins over a HUD prompt; while editing, the edit bar wins.
+    auto onUi = [&](glm::vec2 n) {
+        return m_uiHit && m_uiHit(n.x, n.y) && (m_touch.editing() || m_touch.controlAt(n * frame) < 0);
+    };
+    constexpr uint64_t kMouse = ~uint64_t{ 0 }; // the real mouse, while editing
+    switch (e.type) {
+    case SDL_EVENT_FINGER_DOWN: {
+        const glm::vec2 n(e.tfinger.x, e.tfinger.y);
+        if (onUi(n) || !m_touch.fingerDown(e.tfinger.fingerID, n * frame)) return false;
+        notePromptDevice(0, false, PromptStyle::Touch);
+        return true;
+    }
+    case SDL_EVENT_FINGER_MOTION: return m_touch.fingerMove(e.tfinger.fingerID, glm::vec2(e.tfinger.x, e.tfinger.y) * frame);
+    case SDL_EVENT_FINGER_UP:
+    case SDL_EVENT_FINGER_CANCELED: return m_touch.fingerUp(e.tfinger.fingerID);
+    case SDL_EVENT_MOUSE_BUTTON_DOWN: {
+        if (e.button.button != SDL_BUTTON_LEFT) return false;
+        glm::vec2 n;
+        if (!normalized(e.button.windowID, e.button.x, e.button.y, n) || onUi(n)) return false;
+        if (e.button.which == SDL_TOUCH_MOUSEID) {
+            // SDL's mouse made from the first finger: the finger's own
+            // events above decide; the copy mustn't click in the game.
+            m_touchMouse = m_touch.wouldTake(n * frame);
+            return m_touchMouse;
+        }
+        return m_touch.editing() && m_touch.fingerDown(kMouse, n * frame);
+    }
+    case SDL_EVENT_MOUSE_MOTION: {
+        if (e.motion.which == SDL_TOUCH_MOUSEID) return m_touchMouse;
+        if (!m_touch.owns(kMouse)) return false;
+        glm::vec2 n;
+        return normalized(e.motion.windowID, e.motion.x, e.motion.y, n) && m_touch.fingerMove(kMouse, n * frame);
+    }
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (e.button.button != SDL_BUTTON_LEFT) return false;
+        if (e.button.which == SDL_TOUCH_MOUSEID) {
+            const bool mine = m_touchMouse;
+            m_touchMouse = false;
+            return mine;
+        }
+        return m_touch.fingerUp(kMouse);
+    default: return false;
+    }
 }
 
 bool InputModule::load() {
@@ -391,6 +571,10 @@ bool InputModule::load() {
             for (const ActionDef& a : m_maps[p]->actions())
                 if (m_maps[p]->bindingsFor(a.id).empty()) m_maps[p]->restoreDefaults(a.id);
         }
+        if (const auto t = j.find("touch"); t != j.end() && t->is_object()) {
+            m_touchSaved = t->dump();
+            m_touchActions = 0; // put back over the guessed layout next frame
+        }
         return true;
     } catch (const std::exception& e) {
         log::get(name())->warn("could not read {}: {} (using defaults)", m_path, e.what());
@@ -401,6 +585,7 @@ bool InputModule::load() {
 bool InputModule::save() const {
     nlohmann::json j{ { "version", 1 }, { "devices", m_devices.saveDevices() }, { "players", nlohmann::json::array() } };
     for (const auto& m : m_maps) j["players"].push_back(m->save());
+    j["touch"] = m_touch.save();
     const std::string target = datafile::saveTarget(m_path).string(); // input.yml stays YAML
     const std::string tmp = target + ".tmp";
     {
@@ -421,6 +606,7 @@ void InputModule::frameStart(const UpdateContext& ctx) {
     }
     if (m_animateVirtual) animateVirtualDevices(ctx.totalTime);
     if (!m_padScript.empty() || !m_padReleases.empty()) playPadScript(m_now);
+    if (!m_touchScript.empty()) playTouchScript(m_now);
     m_devices.poll();
     if (!m_promptTouched) {
         // Until someone presses something, a Steam Deck's own controls are
@@ -429,7 +615,25 @@ void InputModule::frameStart(const UpdateContext& ctx) {
             if (d.connected && d.kind == InputDevices::Kind::Gamepad && promptStyleFor(d) == PromptStyle::SteamDeck)
                 for (int p = 0; p < players(); ++p) setPromptStyle(p, PromptStyle::SteamDeck);
     }
-    for (auto& m : m_maps) m->update(m_devices, m_now);
+    updateTouch(m_now);
+    // The touch sticks are "any controller's" sticks for player 1.
+    class WithTouch : public InputState {
+    public:
+        WithTouch(const InputState& base, const TouchControls& touch) : m_base(base), m_touch(touch) {}
+        float value(const InputSource& s, const std::vector<uint32_t>* allowed) const override {
+            const float v = m_base.value(s, allowed);
+            const float full = m_touch.sourceValue(s);
+            if (full == 0.0f) return v;
+            const float t = s.half > 0 ? std::max(0.0f, full) : s.half < 0 ? std::max(0.0f, -full) : full;
+            return std::abs(t) > std::abs(v) ? t : v;
+        }
+
+    private:
+        const InputState& m_base;
+        const TouchControls& m_touch;
+    };
+    const WithTouch withTouch(m_devices, m_touch);
+    for (size_t i = 0; i < m_maps.size(); ++i) m_maps[i]->update(i == 0 && touchEnabled() ? static_cast<const InputState&>(withTouch) : m_devices, m_now);
     m_sanity.update(static_cast<double>(SDL_GetTicksNS()) * 1e-9); // same clock as event timestamps
 }
 
@@ -618,6 +822,8 @@ std::string InputModule::promptText(const std::string& text, int player) const {
 }
 
 void InputModule::shutdown() {
+    if (m_app && m_claimId) m_app->removeEventClaim(m_claimId);
+    m_claimId = 0;
     for (Virtual& v : m_virtual) {
         if (v.joy) SDL_CloseJoystick(v.joy);
         SDL_DetachVirtualJoystick(v.id);

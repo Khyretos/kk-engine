@@ -168,6 +168,10 @@ void RacingModule::init(kke::Application& app) {
         in.addBinding(IM::bind("panels", IM::key(SDL_SCANCODE_F1)));
     }
     m_input->setPlayers(1);
+    // Touch: the stick steers; the pedals and the car's buttons on the right.
+    kke::TouchLayoutOptions touch;
+    touch.buttons = { "throttle", "brake", "handbrake", "reset.car", "camera", "look.back" };
+    m_input->setTouchLayout(touch);
     m_input->commitDefaults();
     if (auto* shell = app.getModule<kke::GameShellModule>()) {
         // The pause menu's Main menu goes back to the start menu (the lobby);

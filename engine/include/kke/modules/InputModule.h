@@ -5,6 +5,7 @@
 #include "kke/InputSanity.h"
 #include "kke/InputMap.h"
 #include "kke/Module.h"
+#include "kke/TouchControls.h"
 
 #include <SDL3/SDL.h>
 
@@ -16,6 +17,8 @@
 #include <vector>
 
 namespace kke {
+
+class Application;
 
 // Owns the input devices and one InputMap per local player (split screen:
 // each player's map listens to the devices assigned to them). Polls and
@@ -74,6 +77,36 @@ public:
     using ScreenButtonFinder = std::function<bool(float nx, float ny, int& player, std::string& action)>;
     void setScreenButtonFinder(ScreenButtonFinder finder) { m_screenButtonAt = std::move(finder); }
 
+    // On-screen touch controls (kke/TouchControls.h, docs/TOUCH.md): a
+    // stick, a look drag, buttons and a pause button for player 1, on by
+    // default in every game. They take fingers while the "game" context
+    // is on and nothing hides them, and show once a finger touched the
+    // screen (from the start on phones). The layout is guessed from the
+    // game's actions; setTouchLayout() steers the guess, or set your own
+    // with touch().setDefaults(). Players' edits are saved in the input
+    // file.
+    TouchControls& touch() { return m_touch; }
+    const TouchControls& touch() const { return m_touch; }
+    void setTouchLayout(const TouchLayoutOptions& options);
+    // Something that has the screen (a lobby, a menu) hides the controls
+    // while `hides` says so.
+    void addTouchHider(std::function<bool()> hides) { m_touchHiders.push_back(std::move(hides)); }
+    // Taking fingers now (also while editing).
+    bool touchEnabled() const;
+    // Drawn now: enabled, and the player plays with fingers (or editing).
+    bool touchShown() const;
+    // The first finger (the one SDL also turns into the mouse) is on the
+    // controls: code reading the mouse state directly should ignore it.
+    bool touchHasMouse() const { return m_touchMouse; }
+    // Editing the layout: drag to move; the overlay's bar does the rest.
+    // Leaving saves the input file.
+    void editTouch(bool editing);
+    // Whether a point (0..1 of the window) is on a player screen's own
+    // control (a menu button, a tappable prompt): the touch controls leave
+    // it alone there. UiModule sets it.
+    using UiHitTest = std::function<bool(float nx, float ny)>;
+    void setUiHitTest(UiHitTest test) { m_uiHit = std::move(test); }
+
     void commitDefaults();
     bool save() const;
     bool load();
@@ -110,6 +143,9 @@ public:
     // <seconds>:<axis>=<value> sets leftx, lefty, rightx,
     // righty, lt or rt until
     // the next change): driving a game's menus and controls headless.
+    // KKE_VIRTUAL_TOUCH_SCRIPT="3:down 1 0.15 0.8,3.5:move 1 0.15 0.6,
+    // 5:up 1,6:tap 0.95 0.08" plays fingers (0..1 of the window) as SDL
+    // finger events: the touch controls headless (docs/TOUCH.md).
     // Used by CI and screenshots. Developer builds only: shipping
     // builds ignore these variables (kke/DevTools.h).
     void attachVirtualDevices(const std::string& spec);
@@ -133,6 +169,11 @@ private:
     struct PadStep { double at = 0.0; int button = -1, axis = -1; float value = 0.0f, hold = 0.3f; };
     std::vector<PadStep> m_padScript; // KKE_VIRTUAL_PAD_SCRIPT, in time order
     std::vector<std::pair<double, int>> m_padReleases; // (time, button) of scripted taps
+    // KKE_VIRTUAL_TOUCH_SCRIPT: fingers pushed as SDL events.
+    struct TouchStep { double at = 0.0; uint32_t type = 0; uint64_t finger = 0; glm::vec2 pos{ 0.0f }; };
+    std::vector<TouchStep> m_touchScript;
+    std::unordered_map<uint64_t, glm::vec2> m_scriptFingers;
+    void playTouchScript(double now);
     struct Virtual { SDL_JoystickID id = 0; SDL_Joystick* joy = nullptr; bool pad = false; int index = 0; };
     std::vector<Virtual> m_virtual;
     bool m_animateVirtual = false;
@@ -155,6 +196,21 @@ private:
     std::unordered_map<SDL_FingerID, HeldScreenButton> m_fingerButtons;
     std::optional<HeldScreenButton> m_mouseButton; // the left button held on one
     bool m_touchMouseOnButton = false;             // a finger's emulated click, swallowed
+
+    // Touch controls: claims fingers before every module (Application::addEventClaim).
+    bool claimTouch(const SDL_Event& event);
+    void updateTouch(double now);
+    Application* m_app = nullptr;
+    int m_claimId = 0;
+    TouchControls m_touch;
+    TouchLayoutOptions m_touchOptions;
+    std::vector<std::function<bool()>> m_touchHiders;
+    UiHitTest m_uiHit;
+    std::string m_touchSaved;        // the player's layout as loaded, JSON (re-read when actions arrive late)
+    size_t m_touchActions = 0;       // player 1's action count the defaults were guessed from
+    bool m_touchMouse = false;       // the touch-emulated mouse pressed on the controls
+    bool m_touchWasEnabled = false;
+    double m_touchApplied = -1.0;
 
     std::string m_path;
     InputDevices m_devices;

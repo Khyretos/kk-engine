@@ -360,3 +360,44 @@ TEST(Lobby, OnlinePlayersAreShownOnlyWhenTheyChange) {
     ASSERT_EQ(l.onlinePlayers().size(), 1u);
     EXPECT_EQ(l.onlinePlayers()[0].look, (std::vector<int>{ 0 }));
 }
+
+TEST(Lobby, AFingerTapsRowsAndKeys) {
+    Lobby l = colourLobby();
+    int pressed = 0;
+    l.addOption({ "go", "Settings and quit", {}, 0, true, [&] { ++pressed; }, {} });
+    l.addTextOption("addr", "Address");
+    const std::vector<Lobby::Row> rows = l.rows(0);
+    int look = -1, action = -1, text = -1, start = -1;
+    for (size_t i = 0; i < rows.size(); ++i) {
+        const Lobby::Row& r = rows[i];
+        if (r.kind == Lobby::Row::Kind::Look && look < 0) look = static_cast<int>(i);
+        if (r.kind == Lobby::Row::Kind::Start) start = static_cast<int>(i);
+        if (r.kind == Lobby::Row::Kind::Option && l.options()[static_cast<size_t>(r.index)].id == "go") action = static_cast<int>(i);
+        if (r.kind == Lobby::Row::Kind::Option && l.options()[static_cast<size_t>(r.index)].id == "addr") text = static_cast<int>(i);
+    }
+    ASSERT_GE(look, 0);
+    ASSERT_GE(action, 0);
+    ASSERT_GE(text, 0);
+    ASSERT_GE(start, 0);
+    // A value steps on (or back) and the cursor stays on it.
+    const int colour = l.seat(0).look[0];
+    l.tapRow(0, look, 1);
+    EXPECT_EQ(l.seat(0).look[0], colour + 1);
+    EXPECT_EQ(l.seat(0).row, look);
+    l.tapRow(0, look, -1);
+    EXPECT_EQ(l.seat(0).look[0], colour);
+    // An action row is pressed.
+    l.tapRow(0, action, 1);
+    EXPECT_EQ(pressed, 1);
+    // A text row opens the keyboard; a tapped key types.
+    l.tapRow(0, text, 1);
+    ASSERT_TRUE(l.editing());
+    l.tapKey(0, 0);
+    EXPECT_EQ(l.text("addr"), Lobby::keyboardKeys()[0][0]);
+    l.finishEditing(true);
+    // Start starts; a seat nobody sits in ignores taps.
+    l.tapRow(0, start, 1);
+    EXPECT_TRUE(l.takeStart());
+    l.tapRow(2, 0, 1);
+    EXPECT_EQ(l.joinedCount(), 1);
+}

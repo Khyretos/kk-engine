@@ -93,6 +93,14 @@ void FlyingModule::init(kke::Application& app) {
     if (const char* bench = kke::dev::env("KKE_FLY_BENCH")) m_pileup = std::string_view(bench) == "pileup";
 
     defineActions();
+    if (m_input) {
+        // Touch: the left stick flies, a drag looks around, and the buttons
+        // a pilot needs (both throttles, not the results screen's).
+        kke::TouchLayoutOptions touch;
+        touch.buttons = { "fly.throttle.up", "fly.throttle.down", "fly.fire", "fly.smoke", "fly.camera", "fly.brake" };
+        m_input->setTouchLayout(touch);
+        m_input->addTouchHider([this] { return m_pauseSeat >= 0; }); // the pause menu takes taps
+    }
     kke::Camera& cam = app.camera();
     cam.fovDegrees = 65.0f;
     cam.nearPlane = 0.3f;
@@ -711,8 +719,9 @@ void FlyingModule::update(const kke::UpdateContext& ctx) {
 
     // Pause: whoever presses it runs the menu with their controller.
     if (m_pauseSeat < 0 && m_phase != Phase::Results) {
+        const bool touchPause = m_input && m_input->touch().takePause(); // player 1's on-screen pause button
         for (const Pilot& p : m_pilots)
-            if (p.seat >= 0 && !p.remote && pressedBy(p.player, "fly.pause")) {
+            if (p.seat >= 0 && !p.remote && (pressedBy(p.player, "fly.pause") || (touchPause && p.player == 0))) {
                 openPause(p.seat);
                 if (m_audio) m_audio->playEarcon(kke::Earcon::Focus, 0.6f);
                 break;

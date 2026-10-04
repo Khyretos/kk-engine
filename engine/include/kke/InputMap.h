@@ -156,6 +156,11 @@ public:
     // updates still counts as one frame held, so a quick tap is never lost.
     // Off while the action's context is.
     void setScreenButton(const std::string& action, bool down);
+    // An on-screen control's value for an axis action (a touch button
+    // holding "throttle" at 1, a drag feeding "look.rate"), added to what
+    // its bindings give until set again; zero lets go. Off while the
+    // action's context is. See kke/TouchControls.h.
+    void setScreenAxis(const std::string& action, const glm::vec2& value);
 
     // Bindings as JSON (actions are code-defined). load() keeps actions and
     // replaces bindings; unknown actions are dropped with a count.
@@ -183,6 +188,7 @@ private:
 
     struct ScreenButton { bool down = false, tapped = false; };
     std::unordered_map<std::string, ScreenButton> m_screenButtons;
+    std::unordered_map<std::string, glm::vec2> m_screenAxes;
     std::vector<ActionDef> m_actions;
     std::unordered_map<std::string, size_t> m_actionIndex;
     std::vector<Binding> m_bindings, m_defaults;
