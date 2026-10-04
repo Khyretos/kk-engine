@@ -1,0 +1,6495 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A modular, open-source Vulkan game engine in C++17, with Lua scripting.">
+      
+      
+      
+        <link rel="canonical" href="https://khyretos.github.io/kk-engine/demos/climb_race/">
+      
+      
+        <link rel="prev" href="../cookbook/">
+      
+      
+        <link rel="next" href="../racing/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Climb Race - Kreative Kompas Engine</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#climb-race" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Kreative Kompas Engine" class="md-header__button md-logo" aria-label="Kreative Kompas Engine" data-md-component="logo">
+      
+  <img src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Kreative Kompas Engine
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Climb Race
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Khyretos/kk-engine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Khyretos/kk-engine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../BUILDING/" class="md-tabs__link">
+          
+  
+  
+  Getting started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../tutorials/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../cookbook/" class="md-tabs__link">
+          
+  
+  
+  Cookbook
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Demos
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../PLAY_TO_MAKE/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/lua-api/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../devlog/" class="md-tabs__link">
+          
+  
+  
+  Project
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Kreative Kompas Engine" class="md-nav__button md-logo" aria-label="Kreative Kompas Engine" data-md-component="logo">
+      
+  <img src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png" alt="logo">
+
+    </a>
+    Kreative Kompas Engine
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Khyretos/kk-engine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Khyretos/kk-engine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BUILDING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install and build
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Make your own game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AI_ASSISTANTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Make games with an AI assistant
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/01-walk-around/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1. Walk around
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/02-break-things/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    2. Break things
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/03-pickups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3. Script a pickup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/04-sound/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    4. Add sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Cookbook
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/first-steps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First steps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/moving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moving things
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/cameras/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cameras
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/gameplay/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gameplay
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/algorithms/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/animation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Animation and IK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/physics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/networking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiplayer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/play-to-make/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Play to make
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/cpp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    C++
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demos
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Demos
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The demos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_2" id="__nav_5_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start here
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Start here
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../template/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Starter game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../first_lua_game/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First Lua game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook player
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5_3" id="__nav_5_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Games
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Games
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Climb Race
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Climb Race
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#run-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controls
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-plays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it plays
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How it plays">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-start-menu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The start menu
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-race" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The race
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mountains-and-the-tour" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mountains and the tour
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#party-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Party modes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#online" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Online
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How it works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#startup-and-the-frame" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Startup and the frame
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-mountains" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The mountains
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-climber" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The climber
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-racer-from-input-to-movement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A racer: from input to movement
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cpu-climbers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CPU climbers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-body-animation-and-ik" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The body: animation and IK
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cameras-and-split-screen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cameras and split screen
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-start-menu-lobbycpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The start menu (Lobby.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#party-modes-modescpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Party modes (Modes.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ghosts-ghosth-ghostcpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ghosts (Ghost.h, Ghost.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#progress-and-medals-progressh-progresscpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Progress and medals (Progress.h, Progress.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#saving" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Saving
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-hud-hudcpp-uiclimb_hudrml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The HUD (Hud.cpp, ui/climb_hud.rml)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#networking-netcpp-netraceh-netracecpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Networking (Net.cpp, NetRace.h, NetRace.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sound" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sound
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#engine-features-it-uses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Engine features it uses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#assets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#make-a-game-like-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Make a game like this
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../racing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Racing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flying_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flying
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../party/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Party
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../duel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Duel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tennis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tennis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../goblin_horde/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Goblin Horde
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI and companions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    AI and companions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../farm_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Farm
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pet_companion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pet companion
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../platoon/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Platoon
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../command_kit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command kit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../procedural_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Procedural animation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_5" id="__nav_5_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics, water and sound
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Physics, water and sound
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../physics_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics (FEMFX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../melt_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Melting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../particles_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sea_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sea
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../jiggle_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jiggle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cloth_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloth and hair
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audio_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../synty_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Synty characters and ragdolls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_6" id="__nav_5_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Showcases and tools
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Showcases and tools
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../showcase/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    kke_demo showcase
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sandbox/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sandbox
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rmlui_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RmlUi demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../imgui_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ImGui demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PLAY_TO_MAKE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Play to make
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SCRIPTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scripting in Lua
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MOVEMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Movement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AI/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI (animals, enemies, companions)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COMBAT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Melee combat and crowds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PROCEDURAL_ANIMATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Procedural animation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../EQUIPMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equipment and body awareness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../INPUT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GAME_SHELL/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Menus, pause and settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../LOBBY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start menu and joining
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../OUTFITS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Outfits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEMO_PANEL/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings panel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COMMANDS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands and orders
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AUDIO/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../NETWORKING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Networking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SERVER_HOSTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hosting a server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TOOLS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The kke_ tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../STORAGE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Saving data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ANTI_CHEAT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anti-cheat
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DRM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kreative DRM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MODDING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DLC and mods
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ASSETS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Asset folders and naming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SCENES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scenes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SHOWCASE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The kke_demo showcase
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../JIGGLE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jiggle physics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PHYSICS_BRIDGE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BREAKABLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Breakable props
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PARTICLE_EFFECTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle effects
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../RAGDOLLS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ragdolls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CLOTH/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../HAIR/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hair
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/lua-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lua API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DATA_FILES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JSON or YAML data files
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../OPTIMIZATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MOODS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moods (sky, fog, look)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../RENDERING_PRINCIPLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rendering principles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BENCHMARKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COOKED_ART/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cooked art (private builds with Synty art)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BAKING_FOR_FRIENDS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Baking the benchmark with the art, for friends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PERFORMANCE_NOTES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PLATFORMS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Platforms and hardware targets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ANDROID/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Android
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SCALING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scaling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEPENDENCIES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dependencies and licences
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../HARDWARE_TESTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PLAYTEST_CHECKLIST/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Playtest checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../devlog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Devlog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GO_TO_MARKET/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Going to market
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../RELEASES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Downloadable builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../HISTORY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development history
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DOCS_SITE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    This site
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#run-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controls
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-plays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it plays
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How it plays">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-start-menu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The start menu
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-race" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The race
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mountains-and-the-tour" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mountains and the tour
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#party-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Party modes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#online" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Online
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How it works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#startup-and-the-frame" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Startup and the frame
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-mountains" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The mountains
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-climber" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The climber
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-racer-from-input-to-movement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A racer: from input to movement
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cpu-climbers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CPU climbers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-body-animation-and-ik" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The body: animation and IK
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cameras-and-split-screen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cameras and split screen
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-start-menu-lobbycpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The start menu (Lobby.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#party-modes-modescpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Party modes (Modes.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ghosts-ghosth-ghostcpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ghosts (Ghost.h, Ghost.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#progress-and-medals-progressh-progresscpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Progress and medals (Progress.h, Progress.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#saving" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Saving
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-hud-hudcpp-uiclimb_hudrml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The HUD (Hud.cpp, ui/climb_hud.rml)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#networking-netcpp-netraceh-netracecpp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Networking (Net.cpp, NetRace.h, NetRace.cpp)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sound" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sound
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#engine-features-it-uses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Engine features it uses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#assets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#make-a-game-like-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Make a game like this
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/Khyretos/kk-engine/edit/main/games/climb_race/README.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="climb-race">Climb Race<a class="headerlink" href="#climb-race" title="Permanent link">&para;</a></h1>
+<p>A speed-climbing race up a generated mountain face. Every climber starts on
+the ground in front of their own copy of the wall, side by side, like a
+speed-climbing final. You walk to the rock, grab it and choose every hold
+yourself: a bumper reaches, a trigger held and let go lunges, both together
+snatch. Stamina runs out on bad holds and overhangs, so you rest on ledges
+and big green holds. The first to mantle over the summit wins. There are
+six mountains on a tour with medal times, four party modes, up to four
+players in split screen, 0 to 5 CPU climbers, and online races with
+several players per screen.</p>
+<p>Climb Race is the engine's flagship game: the one that pulls the most
+engine blocks together into something that plays like a finished game.
+It is the starting point for any <strong>menu-driven couch or online party
+game</strong> (a start menu where controllers join, split screen, CPU players,
+a host who decides the round), for <strong>races and time trials</strong> (per-player
+clocks, results, medals, saved best times, ghosts), for <strong>games built from
+data files</strong> (a level is a small YAML file), and for <strong>procedural
+animation</strong> (two-bone IK on all four limbs of an animated character, hands
+that close on what they hold). <a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/DESIGN.md">DESIGN.md</a> is the plan this
+game was built from; this README is how the built game works.</p>
+<p><img alt="Climb Race: two climbers on their faces, the HUD in the corner" src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/website/static/media/climb-race.webp" /></p>
+<h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
+<p>The executable is <code>climb_race</code> (<code>add_executable(climb_race ...)</code> in
+<a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/CMakeLists.txt">CMakeLists.txt</a>). It is built when <code>KKE_ENABLE_JOLT</code> is
+on, which is the default (root <code>CMakeLists.txt</code>: the rock and the climbers
+are Jolt bodies), so the <code>default</code> preset builds it:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>cmake<span class="w"> </span>--workflow<span class="w"> </span>--preset<span class="w"> </span>default
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>build/bin<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>./climb_race
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nv">KKE_SKIP_INTRO</span><span class="o">=</span><span class="m">1</span><span class="w"> </span>./climb_race<span class="w">     </span><span class="c1"># skip the engine's logo intro</span>
+</code></pre></div>
+<p>Run it from <code>build/bin</code>: the mountains (<code>mountains/*.yaml</code>), the HUD
+(<code>ui/climb_hud.rml</code>) and the fonts are copied there by the build and found
+next to the executable. The tour and the ghosts (see "Saving" below) are
+saved next to the executable too; the menu, settings and controls files
+are written relative to the folder you start it from.</p>
+<p>It also needs <code>KKE_ENABLE_NET</code> (on by default): main.cpp always adds
+<code>kke::NetModule</code>, and <code>engine/CMakeLists.txt</code> only compiles NetModule.cpp
+when networking is on, so with <code>-DKKE_ENABLE_NET=OFF</code> the root
+CMakeLists.txt leaves Climb Race out of the build.</p>
+<p>The climbers' bodies are the UAL mannequin
+(<code>assets/animations/UAL1_Standard.fbx</code>, see "Assets"). Without it the game
+still runs and the climbers are grey blocks.</p>
+<h2 id="controls">Controls<a class="headerlink" href="#controls" title="Permanent link">&para;</a></h2>
+<p>On foot it plays like any third-person game. The hint line at the bottom
+of the screen always says what to press next, with the button glyphs of
+the device player 1 is using. All game bindings are defined in
+<code>ClimbRaceModule::init</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/ClimbRaceModule.cpp">ClimbRaceModule.cpp</a>) and
+can be rebound (they are saved in <code>climb_race_input.json</code>).</p>
+<table>
+<thead>
+<tr>
+<th>On foot</th>
+<th>Controller</th>
+<th>Mouse and keyboard</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Walk / run</td>
+<td>left stick</td>
+<td>WASD</td>
+</tr>
+<tr>
+<td>Look</td>
+<td>right stick</td>
+<td>mouse (click the view first to capture it)</td>
+</tr>
+<tr>
+<td>Sprint</td>
+<td>click the left stick (toggle)</td>
+<td>Left Shift (hold)</td>
+</tr>
+<tr>
+<td>Walk slowly</td>
+<td>click the right stick (toggle)</td>
+<td>Left Alt (hold)</td>
+</tr>
+<tr>
+<td>Jump</td>
+<td>A</td>
+<td>Space</td>
+</tr>
+<tr>
+<td>Grab the rock</td>
+<td>LB / RB, or a trigger</td>
+<td>Q / E, or a mouse button</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>On the rock</th>
+<th>Controller</th>
+<th>Mouse and keyboard</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Choose where a hand goes</td>
+<td>left stick aims (the hold lights up cyan for the left hand, magenta for the right)</td>
+<td>the crosshair picks a hold (a red marker means out of reach), or WASD aims</td>
+</tr>
+<tr>
+<td>Precise reach: slow, cheap</td>
+<td>LB / RB</td>
+<td>Q / E</td>
+</tr>
+<tr>
+<td>Lunge: hold, then let go (the longer, the further)</td>
+<td>LT / RT</td>
+<td>left / right mouse button</td>
+</tr>
+<tr>
+<td>Quick snatch: fast, costs more</td>
+<td>hold a trigger and press its bumper</td>
+<td>hold a mouse button and press Q / E</td>
+</tr>
+<tr>
+<td>Over an edge (both hands on it)</td>
+<td>A</td>
+<td>Space</td>
+</tr>
+<tr>
+<td>Let go</td>
+<td>B</td>
+<td>C</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Anywhere in a race</th>
+<th>Controller</th>
+<th>Mouse and keyboard</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>How to play</td>
+<td>X</td>
+<td>H</td>
+</tr>
+<tr>
+<td>Race again (once you are done, or after the race)</td>
+<td>Start</td>
+<td>R</td>
+</tr>
+<tr>
+<td>Next mountain</td>
+<td>Y</td>
+<td>N</td>
+</tr>
+<tr>
+<td>Pause menu (settings, controls, main menu, quit)</td>
+<td>Start while climbing, or Select</td>
+<td>Esc</td>
+</tr>
+<tr>
+<td>Back to the start menu (players, mountain, mode)</td>
+<td>the pause menu's Main menu</td>
+<td>M, or the pause menu</td>
+</tr>
+<tr>
+<td>Developer panels (network, stats)</td>
+<td>no controller binding</td>
+<td>F1</td>
+</tr>
+<tr>
+<td>Ping the surroundings (hear the walls)</td>
+<td>no controller binding (the D-pad moves through the menu)</td>
+<td>G</td>
+</tr>
+<tr>
+<td>Let go of the mouse</td>
+<td>(none needed)</td>
+<td>Esc (opens the pause menu too)</td>
+</tr>
+</tbody>
+</table>
+<p>The left side of the pad (and the left mouse button, Q) is the left hand;
+the right side is the right hand. <code>init</code> gives all four player maps
+<code>InputModule::defineCharacterActions</code> (move, look, jump, sprint, walk and
+the rest), clears the bindings of <code>fire</code>, <code>aim</code>, <code>interact</code> and <code>crouch</code>
+(those buttons are the hands here) and of <code>camera.toggle</code> and <code>audio.ping</code>
+(Q is a hand, so the ping moves to G; the right stick click walks), and adds <code>grab.left</code> / <code>grab.right</code>
+(1D axes: the triggers with a 0.05 dead zone, and the mouse buttons),
+<code>reach.left</code> / <code>reach.right</code>, <code>letgo</code>, <code>race.again</code>, <code>race.new</code>, <code>menu</code>,
+<code>panels</code> and <code>help</code>.</p>
+<p>The start menu is <code>kke::LobbyModule</code>: every controller that presses A
+joins, up and down pick a row, left and right change it, A moves on, B
+leaves the seat. Enter on the keyboard joins when player 1 is on a
+controller. See <a href="../../LOBBY/">docs/LOBBY.md</a> for the full menu
+controls.</p>
+<h2 id="how-it-plays">How it plays<a class="headerlink" href="#how-it-plays" title="Permanent link">&para;</a></h2>
+<h3 id="the-start-menu">The start menu<a class="headerlink" href="#the-start-menu" title="Permanent link">&para;</a></h3>
+<p><img alt="The start menu: three players and CPU climbers lined up in front of the mountain" src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/website/static/media/climb-lobby.webp" /></p>
+<p>The climbers stand in a row in front of the mountain, each above their
+player's card. Up to four players join (split screen: side by side for
+two, quarters for three and four; with three, the fourth quarter watches
+the whole mountain). Each player picks a <strong>Name</strong> (Pip, Juno, Rook,
+Kestrel, Nova, Flint, Wren, Ziggy, Scout, Bram), a <strong>Colour</strong> for their
+top (Sky, Ember, Moss, Plum, Sun, Coral, Ice, Stone), a <strong>Skin</strong> tone
+(nine, Porcelain to Ebony), and <strong>Trousers</strong> and <strong>Shoes</strong> colours. The
+climber in the line-up changes as you pick (<a href="../../OUTFITS/">docs/OUTFITS.md</a>).
+With the POLYGON City Characters pack installed there is also a <strong>Body</strong>
+row: the mannequin or one of eleven City people, who climb with the
+mannequin's moves.
+Players online show in an <strong>Online in this game</strong> panel and stand in the
+line-up too, in the clothes they picked. Player 1's card also has:</p>
+<ul>
+<li><strong>CPU players</strong>: 0 to 5, and the difficulty of each:</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Difficulty</th>
+<th>The CPU climber (<code>ClimbRaceModule::makeBrain</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Easy</td>
+<td>1.0 s between moves, never lunges, rests below 55% stamina until 97%</td>
+</tr>
+<tr>
+<td>Normal</td>
+<td>0.6 s between moves, lunges when fresh</td>
+</tr>
+<tr>
+<td>Hard</td>
+<td>0.42 s between moves</td>
+</tr>
+<tr>
+<td>Expert</td>
+<td>0.26 s between moves, pushes on tired (rests below 35%, until 80%)</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Mountain</strong>: the open mountains of the tour, then Random.</li>
+<li><strong>Mode</strong>: Race, Rockfall, Elimination, Time trial.</li>
+<li><strong>Online</strong>: Off, Join, Host (and, while joining, <strong>Game</strong> and <strong>Join</strong>).</li>
+<li><strong>Start</strong>. Start on player 1's controller starts from any row.</li>
+</ul>
+<p>A controller that presses A during a race gets a toast ("... joins the
+next race: R to race again now") and is in from the next race. The
+choices are saved in <code>climb_race_lobby.json</code> when the race starts from
+the menu, and loaded next time.</p>
+<p>A how-to-play screen opens before the first race (six cards: get on,
+choose, reach, breathe, over the top, if you slip). Jump starts; the help
+button shows it again at any time. Offline, the race waits while it is up.</p>
+<h3 id="the-race">The race<a class="headerlink" href="#the-race" title="Permanent link">&para;</a></h3>
+<p>A 3, 2, 1 countdown, then GO. Walk to the rock and grab it. On the rock:</p>
+<ul>
+<li><strong>Stamina</strong> is the only thing on the HUD you manage. It drains faster on
+  one hand, on crimps and slopers, on overhangs, and with your feet off
+  holds. It comes back on two jugs (green) with your feet on and the rock
+  not overhanging, and fast when you stand on a ledge or the ground. At
+  zero your grip goes and you fall.</li>
+<li><strong>Holds</strong>: green = jug (easy), orange = crimp (tiring), blue = sloper
+  (most tiring), the grey lips of ledges and the summit are edges (as good
+  as a jug, and you can mantle over them). Some holds are loose: they
+  break off under a lunge and fall down the face.</li>
+<li><strong>Matching</strong>: both hands can share one hold, which is how you swap
+  hands on a big jug. Matching is cheap (half a precise reach), so it is
+  also how you traverse: match, then lead with the other hand.</li>
+<li><strong>Each hand works its own side</strong>: the body is split down the middle.
+  Holds on your left are for the left hand, holds on your right for the
+  right hand, and holds near the middle (between the shoulders) for
+  either. A hand can cross in front of the chest a little past the other
+  shoulder (<code>crossReach</code>, 0.3 m) only when the arm really reaches around
+  the front, and never over the other hand's hold. Bots and online
+  climbers follow the same rules (they live in <code>kke::Climber</code>).</li>
+<li><strong>Real arms</strong>: the hands only go where the body can hang between them.
+  A precise reach or a snatch only offers holds the body can hang from
+  with the other hand where it is. A lunge can go further, and if the
+  lower hand then ends up out of reach it cuts loose: grab again quickly.</li>
+<li><strong>Falling</strong> puts you back on foot (Locomotion). After 0.35 s you can
+  grab again.</li>
+<li><strong>Topping out</strong>: both hands on the summit edge, then jump to mantle over.</li>
+</ul>
+<p>The race ends when every player on this screen is done (or everyone is
+done, in a race of CPU climbers only). A results list shows every
+climber in finishing order: their time (or the height they reached), and
+a note for a medal, a new best, "out", or how many times they fell.</p>
+<p><img alt="The results list" src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/website/static/media/climb-results.webp" /></p>
+<h3 id="mountains-and-the-tour">Mountains and the tour<a class="headerlink" href="#mountains-and-the-tour" title="Permanent link">&para;</a></h3>
+<p><img alt="Six mountains, each with its own sky" src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/website/static/media/climb-mountains.webp" /></p>
+<p>Six mountains, easiest first, each with its own mood (sky and light). At
+first only Pebble Hill (and Random) is open: finish a mountain, at any
+speed, and the next one opens. Each mountain has three medal times; your
+best time and best medal on each are saved and shown in the menu line
+("Pebble Hill (best 0:24.10, silver)"). Medals are for players, not CPU
+climbers; in split screen every player's finish counts.
+<code>KKE_CLIMB_ALL=1</code> opens every mountain for testing (not saved).</p>
+<table>
+<thead>
+<tr>
+<th>Mountain</th>
+<th>Height</th>
+<th>Medals (gold, silver, bronze)</th>
+<th>What it's about</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pebble Hill</td>
+<td>12 m</td>
+<td>25, 35, 55 s</td>
+<td>A gentle slab covered in big green holds. Start here.</td>
+</tr>
+<tr>
+<td>Meadow Crag</td>
+<td>20 m</td>
+<td>40, 70, 110 s</td>
+<td>Two ledges to rest on and a first steep wall.</td>
+</tr>
+<tr>
+<td>Granite Tower</td>
+<td>36 m</td>
+<td>75, 115, 190 s</td>
+<td>The classic face: slab, wall, then a big overhang.</td>
+</tr>
+<tr>
+<td>Overhang Cove</td>
+<td>26 m</td>
+<td>40, 60, 100 s</td>
+<td>Steep all the way. Big holds, but your arms burn.</td>
+</tr>
+<tr>
+<td>Crumble Peak</td>
+<td>30 m</td>
+<td>80, 120, 200 s</td>
+<td>Loose rock everywhere. Lunge and the hold may come with you.</td>
+</tr>
+<tr>
+<td>Cloud Spire</td>
+<td>46 m</td>
+<td>100, 165, 275 s</td>
+<td>The long one. Small holds, four ledges, pace yourself.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Random</strong> is a new mountain every time (the generator's defaults on a new
+seed). After a race, Y / N goes to the next open mountain, round again
+after the last (on Random: another random one).</p>
+<p>To make your own mountain, copy a file in <code>mountains/</code> (say
+<code>pebble_hill.yaml</code> to <code>my_hill.yaml</code>), change its <code>name:</code> and a few
+numbers, rebuild (the build copies <code>mountains/*</code> next to the executable)
+and start the game: it is in the Mountain row once the tour opens it (or
+at once with <code>KKE_CLIMB_ALL=1</code>). Every key is explained in
+<a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/Mountains.h">Mountains.h</a>. A mistake (an unknown key, a number out of
+range) is named in the log and the rest still loads. Online, the host's
+mountain goes to everyone, even one only the host has.</p>
+<h3 id="party-modes">Party modes<a class="headerlink" href="#party-modes" title="Permanent link">&para;</a></h3>
+<p>Player 1's <strong>Mode</strong> row (the host's, online):</p>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Rules</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Race</td>
+<td>First over the summit wins.</td>
+</tr>
+<tr>
+<td>Rockfall</td>
+<td>Rocks tumble down every face at its climber. A hit costs 35 of 100 stamina ("hit by a rock!"). The higher the leader, the more rocks come.</td>
+</tr>
+<tr>
+<td>Elimination</td>
+<td>Every 30 seconds the lowest climber still in is out: they let go and watch. The last one climbing, or the first to the top, wins.</td>
+</tr>
+<tr>
+<td>Time trial</td>
+<td>Race the ghost of the best run on this mountain: a pale climber doing exactly what that run did, through player 1's face. Beat it and yours is the ghost next time. Offline only (online it is a Race).</td>
+</tr>
+</tbody>
+</table>
+<p>Medals and best times count in every mode. Every best run on a tour
+mountain is kept as its ghost.</p>
+<p><img alt="Rockfall" src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/website/static/media/climb-rockfall.webp" />
+<img alt="Time trial: racing the ghost" src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/website/static/media/climb-ghost.webp" /></p>
+<h3 id="online">Online<a class="headerlink" href="#online" title="Permanent link">&para;</a></h3>
+<p>Race friends on another PC, or in a second window on the same PC. Each
+machine can have up to four players on its own couch (split screen), and
+everyone on every screen races everyone else.</p>
+<p><strong>Host a race</strong></p>
+<ol>
+<li>Start Climb Race. In player 1's card, go down to <strong>Online</strong> and press
+   right twice, to <strong>Host</strong>. The line under the title says "Hosting on
+   port 27960: 0 players online".</li>
+<li>Wait for the others to join (a toast pops up for each), then press
+   Start. The race goes to every screen.</li>
+</ol>
+<p><strong>Join a race</strong></p>
+<ol>
+<li>Start Climb Race on the other PC (or a second window). If it is the
+   same PC, pick a different Name and Colour so you can tell yourselves
+   apart.</li>
+<li>Go down to <strong>Online</strong> and press right once, to <strong>Join</strong>. The <strong>Game</strong>
+   row lists every Climb Race hosted on this network and on this PC, with
+   its player count ("Pip (2/16)"); left / right picks one. The list is
+   asked for again every 3 seconds.</li>
+<li>Go down to <strong>Join Pip</strong> and press A (Enter). The line under the title
+   says "Online, connected as player 2: the host starts the race".</li>
+</ol>
+<p><strong>More players on a screen</strong>: on either machine, another controller
+presses A to join the card row, as offline, before or after going online.
+Each is its own climber for everyone.</p>
+<ul>
+<li>The host decides the race: the mountain, who climbs which face, the CPU
+  climbers (the host's, which everyone sees), when it starts, race again
+  and next mountain. A joiner's CPU climbers stay home; its Start does
+  nothing ("The host starts the race").</li>
+<li>The countdown waits until every machine has built the race (at most 8
+  seconds), so everyone starts together.</li>
+<li>Each machine climbs its own players and sends where they are and where
+  their hands and feet are; the others see them on the same holds. A loose
+  hold that breaks and each finish go to everyone.</li>
+<li>Someone joining during a race is in from the next one (the host presses
+  race again). The host leaving ends the race for everyone ("the host
+  ended the game"); a joiner leaving takes only its climbers, and their
+  face stays empty.</li>
+<li>Across PCs: allow UDP ports 27960 to 27975 on the host's firewall. Not
+  on the same network? Use a join code
+  (<a href="../../SERVER_HOSTING/">docs/SERVER_HOSTING.md</a> "Join codes").</li>
+</ul>
+<p>From a terminal (no menu), two windows on one PC:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nv">KKE_NET</span><span class="o">=</span>host<span class="w"> </span><span class="nv">KKE_NET_NAME</span><span class="o">=</span>Pip<span class="w"> </span>./climb_race
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nv">KKE_NET</span><span class="o">=</span>join:127.0.0.1<span class="w"> </span><span class="nv">KKE_NET_NAME</span><span class="o">=</span>Rook<span class="w"> </span>./climb_race<span class="w">    </span><span class="c1"># a second terminal</span>
+</code></pre></div>
+<p>The joiner's card says it is online; the host presses Start. Everything in
+<a href="../../NETWORKING/">docs/NETWORKING.md</a> "Try it" works here too
+(<code>KKE_NET_LAG</code>, <code>KKE_NET_LOSS</code>, join codes). F1 opens the developer panels,
+including the network panel (round trip, loss, who is on which screen).</p>
+<h2 id="how-it-works">How it works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
+<h3 id="startup-and-the-frame">Startup and the frame<a class="headerlink" href="#startup-and-the-frame" title="Permanent link">&para;</a></h3>
+<p><a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/main.cpp">main.cpp</a> creates a 1280 x 720 <code>kke::Application</code>, sets the
+<code>golden_hour</code> mood (each mountain sets its own later) and adds the modules
+in this order:</p>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SettingsModule("settings.json")</code></td>
+<td>graphics, audio and accessibility settings</td>
+</tr>
+<tr>
+<td><code>InputModule("climb_race_input.json")</code></td>
+<td>rebindable actions, one map per player</td>
+</tr>
+<tr>
+<td><code>RigidBodyModule</code></td>
+<td>Jolt: the rock, the ledges, loose holds, rocks, the climbers' capsules</td>
+</tr>
+<tr>
+<td><code>ModelModule</code></td>
+<td>the animated mannequins</td>
+</tr>
+<tr>
+<td><code>UiModule</code></td>
+<td>RmlUi: the HUD, the how-to-play screen, the start menu</td>
+</tr>
+<tr>
+<td><code>AudioModule</code> (panel hidden)</td>
+<td>synthesised impacts and UI tones</td>
+</tr>
+<tr>
+<td><code>LobbyModule("climb_race_lobby.json")</code></td>
+<td>the start menu</td>
+</tr>
+<tr>
+<td><code>NetModule</code> (<code>gameId = "climb_race"</code>, <code>maxPlayers = 16</code>)</td>
+<td>online play</td>
+</tr>
+<tr>
+<td><code>climb_race::ClimbRaceModule</code></td>
+<td>the game</td>
+</tr>
+<tr>
+<td><code>StatsModule</code> (panel hidden)</td>
+<td>frame stats for F1</td>
+</tr>
+</tbody>
+</table>
+<p>The application sorts them so that each module's dependencies come
+first (<code>Application::resolveInitOrder</code>) and calls <code>init</code> and, every
+frame, <code>update</code> in that order.</p>
+<p><code>ClimbRaceModule</code> is one class split over several files by topic
+(Lobby, Body, Hud, Net, Modes). Its <code>dependencies()</code> list says which
+modules it needs (RigidBody, Input) and which it uses when present
+(Model, UI, Lobby, Net, Audio): without the lobby it goes straight into a
+race, without audio it is silent.</p>
+<p><code>ClimbRaceModule::init</code> then:</p>
+<ol>
+<li>reads the <code>KKE_CLIMB_*</code> switches;</li>
+<li>defines the input actions for all four player maps (see "Input");</li>
+<li>builds the small marker cubes and the fallback body block;</li>
+<li><code>loadCharacter()</code> (Body.cpp): the mannequin, its IK chains and the body
+   proportions the climbing logic uses;</li>
+<li><code>buildScenery()</code>: the meadow, one static Jolt box;</li>
+<li><code>loadMountainList()</code> and <code>loadProgress()</code>;</li>
+<li><code>setupLobby()</code> and <code>setupNet()</code>: the menu rows;</li>
+<li>builds the chosen mountain with one face per climber, the racers and
+   the HUD. Without an open menu it calls <code>startFromLobby()</code> at once.</li>
+</ol>
+<p>The game runs as a small state machine, <code>Phase { Lobby, Countdown,
+Racing, Finished }</code>. <code>ClimbRaceModule::update</code> each frame:</p>
+<ol>
+<li>F1 toggles the developer panels.</li>
+<li><code>updateNet(dt)</code>: network events and the other machines' climbers.</li>
+<li>In the <strong>Lobby</strong> phase: <code>updateLobby</code> (line-up, mountain preview) and
+   <code>updateHud</code>, and nothing else.</li>
+<li>Reads race again / next mountain / menu / help from every player.</li>
+<li>The how-to-play screen, the menu, and restarts.</li>
+<li>The countdown (a tick each second, a tone on GO).</li>
+<li>The mouse crosshair's hold, from last frame's camera.</li>
+<li><code>updateRacer</code> for every racer played on this machine, then
+   <code>recordRuns</code> (ghost recording), <code>updateGhosts</code> and <code>updateMode</code>.</li>
+<li>The finish check: every player here done (or everyone done) ends the
+   race; Elimination runs until one is left.</li>
+<li><code>animateBody</code> for every racer (local, remote and ghost).</li>
+<li><code>sendNet()</code>: our racers' poses.</li>
+<li>Cameras and split-screen views, then <code>updateHud</code> and the rockfall test.</li>
+<li>The <code>KKE_CLIMB_QUIT</code> report and quit timer.</li>
+</ol>
+<p><code>render</code> draws the meadow, each face's rock mesh, the loose holds and
+rocks at their Jolt transforms, and the hold markers of players on the
+rock. <code>renderShadow</code> draws the same into the shadow map.</p>
+<h3 id="the-mountains">The mountains<a class="headerlink" href="#the-mountains" title="Permanent link">&para;</a></h3>
+<p>A mountain is a data file in <a href="https://github.com/Khyretos/kk-engine/tree/main/games/climb_race/mountains">mountains/</a>, read by
+<code>loadMountains</code> in <a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/Mountains.cpp">Mountains.cpp</a> through <code>kke::datafile</code>
+(YAML or JSON; <code>pebble_hill.yaml</code> and <code>pebble_hill.json</code> count as one
+mountain, and the newer file wins). Each key maps to a field of the
+engine's rock generator, <code>kke::ClimbWallDesc</code>
+(<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/ClimbWall.h">kke/ClimbWall.h</a>):</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>ClimbWallDesc field</th>
+<th>Range</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>seed</code></td>
+<td><code>seed</code></td>
+<td>0 to 1e9</td>
+</tr>
+<tr>
+<td><code>height</code></td>
+<td><code>height</code></td>
+<td>6 to 80 m</td>
+</tr>
+<tr>
+<td><code>ledges</code></td>
+<td><code>ledges</code></td>
+<td>0 to 8</td>
+</tr>
+<tr>
+<td><code>overhang</code></td>
+<td><code>maxOverhang</code></td>
+<td>0 to 35 degrees</td>
+</tr>
+<tr>
+<td><code>slab</code></td>
+<td><code>maxSlab</code></td>
+<td>0 to 35 degrees</td>
+</tr>
+<tr>
+<td><code>holds</code></td>
+<td><code>density</code></td>
+<td>0.4 to 3 per square metre</td>
+</tr>
+<tr>
+<td><code>jugs</code> / <code>crimps</code></td>
+<td><code>jugBias</code> / <code>crimpBias</code></td>
+<td>-0.5 to 1.5</td>
+</tr>
+<tr>
+<td><code>loose</code></td>
+<td><code>looseChance</code></td>
+<td>0 to 0.6</td>
+</tr>
+<tr>
+<td><code>step</code></td>
+<td><code>routeStep</code></td>
+<td>0.6 to 1.3 m</td>
+</tr>
+</tbody>
+</table>
+<p><code>name</code>, <code>about</code>, <code>order</code>, <code>mood</code> and <code>medals</code> (three times, gold first)
+belong to the game. <code>mountainFromJson</code> checks every key against a list:
+an unknown key or an out-of-range number becomes a line in <code>problems</code>
+(clamped, not fatal), and <code>loadMountainList</code> logs each one as a warning.
+The mountains are sorted by <code>order</code>, then by file name.</p>
+<p><code>kke::ClimbWall::generate</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/src/ClimbWall.cpp">ClimbWall.cpp</a>)
+turns the desc into a face, in three steps, with its own xorshift random
+generator (never <code>std::</code> distributions, whose output differs between
+standard libraries), so the same seed makes the same rock on every
+machine:</p>
+<ol>
+<li><strong>Surface</strong>: the face is split into bands 6 to 10 m tall, each with one
+   lean. The first band is a slab or vertical, one band past 40% of the
+   height is always an overhang (the crux), and the last leans back. The
+   lean is blended across band edges, integrated into a depth profile
+   (<code>z</code> grows by <code>tan(lean)</code> per metre), and value noise adds small
+   bumps and large ribs, calmed near the ground and the lip.</li>
+<li><strong>Ledges</strong>: spread evenly up the face with some jitter, their back
+   inside the rock and their front 0.9 m clear of it.</li>
+<li><strong>Holds</strong>: the ledge and summit edges first; then the <strong>line</strong>, a
+   zigzag of steps no longer than <code>routeStep</code> from the ground to the
+   summit that passes every ledge (so every mountain is climbable); then
+   jugs at arm's height above each ledge; then random holds kept at
+   least <code>spacing</code> apart. The kind of each hold follows the lean (more
+   jugs on overhangs, more crimps on slabs) plus <code>jugBias</code> / <code>crimpBias</code>.</li>
+</ol>
+<p><code>tests/test_climb_mountains.cpp</code> checks that every shipped mountain loads
+without problems and that <code>kke::ClimbBot</code> tops out on each.</p>
+<p><code>ClimbRaceModule::buildMountain(lanes)</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/ClimbRaceModule.cpp">ClimbRaceModule.cpp</a>)
+generates the wall once and copies it into one <code>Lane</code> per climber, 20 m
+apart and centred on x = 0 (<code>kLaneX = 10</code>). For each lane it makes:</p>
+<ul>
+<li>one static Jolt <strong>mesh body</strong> from <code>ClimbWall::buildMesh()</code> (the rock
+  with every fixed hold on it), friction 0.9;</li>
+<li>a static <strong>box body</strong> per ledge;</li>
+<li>one <code>DynamicMeshRenderer</code> with the rock, the ledges, a start line
+  3.5 m out, a summit flag and a dark gully box to the next face;</li>
+<li>a <strong>convex hull body per loose hold</strong>, kinematic (fixed in place) until
+  it breaks, with density 2600 kg/m3 (rock) and a little bounce.</li>
+</ul>
+<p><code>keyOf(mountain)</code> is a string of the id and every generator knob. The
+game only rebuilds when that key (or the number of faces) changes, so
+moving the cursor in the menu does not regenerate the same rock twice.
+Old lanes are handed to <code>renderer().retire()</code>, which frees their GPU
+buffers once the frames still drawing them are done.</p>
+<p><code>useMountain</code> applies the mountain's mood with <code>Application::setMood</code>.
+<code>Random</code> is <code>randomMountain(seed)</code>: the generator's defaults (which are
+Granite Tower's numbers) on <code>KKE_CLIMB_SEED</code> (default 7), and each "next
+mountain" adds 1 to the seed.</p>
+<h3 id="the-climber">The climber<a class="headerlink" href="#the-climber" title="Permanent link">&para;</a></h3>
+<p>The climbing itself is engine logic, <code>kke::Climber</code>
+(<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/Climber.h">kke/Climber.h</a>): pure maths with no
+physics, unit-tested in <code>tests/test_climb_wall.cpp</code>. It knows the wall,
+each hand's hold, each foot's hold, the hips and stamina. The game gives
+it a <code>Climber::Input</code> each frame (an aim, a reach press per hand, a
+trigger value per hand, an optional hold picked outright, let go) and
+reads back the state.</p>
+<p>How a move works:</p>
+<ul>
+<li><strong>Aim</strong>: the stick direction on the wall picks, for each hand, the best
+  hold within reach (<code>aimTarget(hand)</code>); the game draws a marker on it.</li>
+<li><strong>Precise reach</strong> (bumper): up to <code>span</code> (1.55 m) from the other hand's
+  hold, 0.42 s, costs 1.5 stamina.</li>
+<li><strong>Quick snatch</strong> (trigger held + bumper): same reach, 0.17 s, costs 5.</li>
+<li><strong>Lunge</strong> (trigger held, then let go): the charge fills in 0.75 s and
+  sets the reach, up to <code>lungeSpan</code> (2.45 m), 0.3 s, costs 6 to 16. A
+  loose hold hit by a lunge breaks: the hand closes on nothing and the
+  game gets <code>brokeHold()</code>.</li>
+<li><strong>Sides</strong> (<code>onItsSide(hand, point, hips)</code>, <code>crossesOver(hand, hold)</code>):
+  a hold counts as on a hand's side up to <code>shoulderHalf + crossReach</code>
+  past the middle, measured along the wall. Past the other shoulder the
+  arm is measured around the front of the chest, so a far cross is out of
+  reach. <code>canHang</code> and <code>usable</code> refuse holds that break these rules, and
+  <code>ClimbBot</code> traverses by matching.</li>
+<li><strong>Mantle</strong>: both hands on the same edge and pushing up. <code>mantleLedge()</code>
+  says which ledge (-1 = the summit, which is the finish).</li>
+</ul>
+<p><strong>Stamina</strong> (<code>Climber::updateStamina</code>): the drain per second is the
+two-hand rate (1.5) or the one-hand rate (6.0; half-way between while a
+hand is travelling), divided by the average grip of the held holds (jug
+and edge 1.0, crimp 0.6, sloper 0.45), raised 2% per degree of overhang,
+and lowered by the feet (up to 40% of the weight, less under a steep
+overhang). Two jugs, a foot on a hold and a rock that is not overhanging
+give +3 per second instead ("shaking out"). Standing on the ground or a
+ledge, the game calls <code>recover(30, dt)</code> (<code>kRestRate</code>). At zero the
+climber falls. <code>knock(cost)</code> takes stamina at once (Rockfall).</p>
+<p><strong>The body follows the hands</strong>: the hips hang under the hands, never so
+far from a hold that the arm on it cannot reach, and a hand whose hold
+ends up out of reach lets go (<code>cutLoose()</code>). The reach numbers
+(<code>armReach</code>, <code>shoulderUp</code>, <code>shoulderHalf</code>, <code>hipHalf</code>, <code>legReach</code>,
+<code>handLength</code>) are measured from the mannequin's skeleton in
+<code>loadCharacter()</code> and logged at startup ("climber proportions from the
+skeleton: ..."), so every hold the logic lets a hand take is one the IK
+can reach:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1">// A straight arm reaches the knuckles over a hold; keep a little</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1">// bend in it so the elbow never locks.</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">cs</span><span class="p">.</span><span class="n">armReach</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">arm</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mf">0.98f</span><span class="p">;</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">cs</span><span class="p">.</span><span class="n">handLength</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m_handRig</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">knuckles</span><span class="p">;</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">cs</span><span class="p">.</span><span class="n">shoulderUp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">shoulder</span><span class="p">.</span><span class="n">y</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">pelvis</span><span class="p">.</span><span class="n">y</span><span class="p">;</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">cs</span><span class="p">.</span><span class="n">shoulderHalf</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">abs</span><span class="p">(</span><span class="n">shoulder</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">pelvis</span><span class="p">.</span><span class="n">x</span><span class="p">);</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">cs</span><span class="p">.</span><span class="n">hipHalf</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">abs</span><span class="p">(</span><span class="n">hip</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">pelvis</span><span class="p">.</span><span class="n">x</span><span class="p">);</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">cs</span><span class="p">.</span><span class="n">legReach</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">leg</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mf">0.95f</span><span class="p">;</span>
+</code></pre></div>
+<h3 id="a-racer-from-input-to-movement">A racer: from input to movement<a class="headerlink" href="#a-racer-from-input-to-movement" title="Permanent link">&para;</a></h3>
+<p>Each climber is a <code>Racer</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/ClimbRaceModule.h">ClimbRaceModule.h</a>): a Jolt
+character capsule, a <code>kke::Locomotion</code> for being on foot, a
+<code>kke::Climber</code> for the rock, a <code>kke::ClimbBot</code> if it is a CPU, a
+<code>kke::CameraRig</code>, a model instance and an <code>Animator</code>, plus race state
+(time, falls, medal, out, ghost, online ids).</p>
+<p><code>updateRacer</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/ClimbRaceModule.cpp">ClimbRaceModule.cpp</a>) reads a
+<code>RacerInput</code> from <code>readPlayer</code> (a person) or <code>readBot</code> (a CPU), then:</p>
+<ul>
+<li><strong>On the rock</strong>: jump with both hands on holds becomes "aim up and
+  reach", which mantles on an edge. <code>Climber::update</code> runs. The capsule
+  is kinematic and moved to <code>climber.feet()</code> each frame. On <code>Fell</code>, the
+  capsule goes back to Locomotion (teleported to the feet, pushed gently
+  off the rock), <code>regrab</code> blocks grabbing for 0.35 s (<code>kFallRegrab</code>) and
+  <code>falls</code> counts up. On <code>Topped</code> over the summit, the racer is finished:
+  winner if first, a tone, <code>netFinished</code> and <code>recordFinish</code>.</li>
+<li><strong>On foot</strong>: <code>Locomotion::update</code> walks, jumps and catches ledges.
+  Standing (the <code>Ground</code> state, which includes ledges) recovers stamina.
+  A grab press while on the ground, in the air or hanging from a ledge
+  calls <code>Climber::start(feet)</code>, which takes the best holds within reach
+  above; if it succeeds the capsule turns kinematic.</li>
+</ul>
+<p><code>readPlayer</code> maps the stick to both jobs at once: on foot it is a move
+relative to the camera, on the rock it is the aim (x right, y up). A
+mouse player (a seat whose lobby device is not a pad) aims with the
+crosshair when WASD is let go: <code>crosshairHold</code> finds the hold nearest the
+view ray, between 0.5 and 14 m away, and marks it out of reach when
+neither hand's <code>reachNow</code> covers the distance from the other hand's hold.</p>
+<h3 id="cpu-climbers">CPU climbers<a class="headerlink" href="#cpu-climbers" title="Permanent link">&para;</a></h3>
+<p>A CPU climber is a <code>Racer</code> with <code>bot = true</code> and a <code>kke::ClimbBot</code> brain
+(engine code, <a href="https://github.com/Khyretos/kk-engine/blob/main/engine/src/Climber.cpp">Climber.cpp</a>). On the rock
+<code>ClimbBot::think</code> produces the same <code>Climber::Input</code> a person would:
+it follows <code>ClimbWall::line()</code> hand over hand, matches holds, plans a
+few moves ahead when it needs a way round, charges and releases lunges
+when fresh, rests on two jugs or a ledge when tired, and mantles at the
+top. Because it drives the same <code>Climber</code>, it obeys the same stamina and
+reach rules as you.</p>
+<p>Off the rock, <code>readBot</code> does the rest: on the ground it walks to the foot
+of its line (sprinting when more than 3 m away), faces the rock and
+grabs; on a ledge (feet above 1 m) it stands until stamina is back to
+<code>restUntil</code> and at least 0.6 s have passed, then grabs.</p>
+<p>The difficulty only changes four <code>ClimbBot</code> numbers (<code>makeBrain</code>): <code>pause</code>
+between moves, <code>lunges</code>, <code>restBelow</code> and <code>restUntil</code> (table in "How it
+plays"). <code>KKE_CLIMB_BOT_PAUSE</code> overrides the pause for every CPU.</p>
+<h3 id="the-body-animation-and-ik">The body: animation and IK<a class="headerlink" href="#the-body-animation-and-ik" title="Permanent link">&para;</a></h3>
+<p><a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/Body.cpp">Body.cpp</a> draws each climber as the UAL mannequin. At load it
+makes a grey copy of the orange model (joint materials kept dark) so the
+per-climber tint from the menu multiplies cleanly, finds the arm and leg
+chains (<code>kke::findChain</code>), the pelvis, a <code>kke::FootPlacer</code>, and each
+hand's finger bones.</p>
+<p>Each racer's <code>Animator</code> has six states: a <code>move</code> blend space (idle, walk
+1.6, jog 3.6, sprint 6.2 m/s), <code>jump</code>, <code>fall</code>, <code>land</code>, <code>hang</code> (the idle
+clip slowed, its upright torso) and <code>top</code> (a crouch while mantling).</p>
+<p><code>bodyInput(racer)</code> gathers what the body is drawn from into one
+<code>BodyInput</code>: from the local <code>Climber</code> and <code>Locomotion</code>, or, for a remote
+climber or a ghost, from the <code>netrace::Pose</code> received. <code>animateBody</code> then
+works only from that <code>BodyInput</code>, which is why a remote climber looks the
+same as a local one. Per frame:</p>
+<ol>
+<li>Pick the animation state (on the rock: <code>hang</code>, or <code>top</code> past 45% of a
+   mantle; on foot: Locomotion's state) and update the animator.</li>
+<li>On the ground, <code>FootPlacer</code> puts the feet on the surface (ray casts
+   down through Jolt).</li>
+<li>Blend weights for arms and legs ease in and out (<code>1 - exp(-12 dt)</code>),
+   so getting on and off the rock is smooth. The arms fade out late in a
+   mantle, the legs earlier.</li>
+<li>Move the pelvis to the climber's hips.</li>
+<li><strong>Arms, up to four passes</strong>: <code>kke::solveHumanArm</code> puts each wrist
+   where the hand's grip on its hold says (the knuckles on the hold's
+   upper front, the wrist a hand's length below), with the elbow leaning
+   down and out from the rock, and turns the hand onto its hold, all
+   within a person's joint ranges (the elbow never bends backwards, the
+   forearm and wrist twist only so far). It is the body-aware solve
+   (<a href="../../EQUIPMENT/">docs/EQUIPMENT.md</a>): the arm never goes
+   through the chest, neck or legs; the elbow swings round, the head leans
+   away from an arm reaching past it, and the hand gives way at most 8 cm.
+   If a held hand is still short of its hold, or an arm is still against
+   the body (a hand crossing in front of the face), the pelvis moves by
+   the average miss and back off the rock, the legs re-solve, and the
+   arms solve again.</li>
+<li><strong>Legs</strong>: two-bone IK puts each ankle a little out from and above its
+   foothold, knees toward the rock and out ("like a frog").</li>
+<li><strong>Hands</strong>: each hand is turned (in step 5) so the fingers point along
+   the hold with the thumb toward the body, and <code>kke::wrapFingers</code> curls
+   each finger, knuckle first, until it touches the hold (a ball for a
+   jug or sloper, a thin capsule for a crimp, a lip for an edge) or the
+   rock, within a person's finger ranges. A hand in the air closes
+   loosely. A travelling hand opens and closes over the last 20% of its
+   move.</li>
+</ol>
+<p>With <code>KKE_CLIMB_QUIT</code>, the game measures the distance from the middle
+knuckle to the held hold on every frame and logs the average and worst
+at the end: a regression check for the IK. The git history records the
+average going from 12 cm to 2.5 cm when the body proportions were taken
+from the skeleton.</p>
+<h3 id="cameras-and-split-screen">Cameras and split screen<a class="headerlink" href="#cameras-and-split-screen" title="Permanent link">&para;</a></h3>
+<p>Each person's racer has a <code>kke::CameraRig</code> in third-person mode. On foot
+the arm is 4 m with a 0.45 m shoulder offset; on the rock it moves to
+<code>m_climbCamera</code> (4.6 m, <code>KKE_CLIMB_CLOSEUP</code>), centred, and after 0.8 s
+without looking around it settles behind the climber, pitched 12 degrees
+up the face. The rig ray-casts through Jolt so it never goes through the
+rock.</p>
+<p>Player 1's camera is the application camera. With more players, the
+frame builds <code>Application::views()</code> from <code>kke::splitScreen(count, true)</code>
+(<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/Viewports.h">kke/Viewports.h</a>): side by side
+for two, quarters for three and four. With three, a fourth view
+(<code>m_overview</code>) watches the whole mountain from in front, rising with the
+leader. In the lobby a fixed camera looks at the line-up; each climber
+stands where a ray through its card's screen position meets the meadow.</p>
+<p><img alt="Three players: the fourth quarter watches the whole mountain" src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/website/static/media/climb-split-three.webp" /></p>
+<h3 id="the-start-menu-lobbycpp">The start menu (Lobby.cpp)<a class="headerlink" href="#the-start-menu-lobbycpp" title="Permanent link">&para;</a></h3>
+<p><code>setupLobby</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/Lobby.cpp">Lobby.cpp</a>) adds the look fields (<code>name</code>,
+<code>colour</code>, <code>skin</code>, <code>trousers</code>, <code>shoes</code>, all but the name with swatches),
+sets one CPU by default, adds the
+<strong>Mountain</strong> option and (in <code>setupModes</code>) the <strong>Mode</strong> option, then
+<code>load()</code>s last time's choices. <code>onJoin</code> during a race sets
+<code>m_rosterChanged</code> and shows the toast.</p>
+<p><code>wantedRoster()</code> turns the lobby into a list of <code>Entry</code>: the joined seats
+first, then the CPUs, which take the names and colours nobody picked
+(and, on a host, not the names of online players). <code>updateLobby</code> rebuilds
+the racers when the seats change, re-dresses them when looks change
+(<code>dress</code> in Body.cpp: one <code>kke::dressModel</code> copy of the mannequin per
+outfit, the ghost stays a tinted mannequin), and
+rebuilds the mountain behind the line-up when the Mountain row changes,
+so the menu is a live preview.</p>
+<p><code>startFromLobby</code> saves the menu, closes it, builds the final roster (plus
+a ghost entry in Time trial), makes one face per climber, calls
+<code>LobbyModule::applyInput()</code> (one <code>InputModule</code> player per seat, each on
+its own devices) and <code>resetRace()</code>. <code>resetRace</code> puts the loose holds back,
+places every racer at the start line in front of the first hold of the
+line, makes fresh climbers and brains, and calls <code>startMode()</code>.</p>
+<p><code>KKE_CLIMB_LOBBY=0</code>, <code>KKE_CLIMB_AUTOPILOT=1</code> and <code>KKE_CLIMB_ROCKFALL=1</code>
+close the menu at startup, with <code>KKE_CLIMB_CPUS</code> CPUs on Hard.</p>
+<h3 id="party-modes-modescpp">Party modes (Modes.cpp)<a class="headerlink" href="#party-modes-modescpp" title="Permanent link">&para;</a></h3>
+<p><a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/Modes.cpp">Modes.cpp</a> holds all four modes. <code>chosenMode()</code> reads
+<code>KKE_CLIMB_MODE</code> (case-insensitive) or the Mode row. <code>startMode()</code> clears
+rocks, seeds the rock random generator, resets the timers and loads the
+ghost.</p>
+<ul>
+<li><strong>Rockfall</strong>: each lane has a timer, first 3 s, then
+  <code>(3.2 - 1.8 * high) * (0.8 to 1.2)</code> seconds, where <code>high</code> is the
+  leader's height as a fraction of the mountain: 1.1 to 3.8 s between
+  rocks. A rock (a dynamic Jolt box, 48 x 38 x 42 cm, density 2600) is
+  spawned 6.5 to 8.5 m above the climber's hips (never above the summit
+  plus 1 m), just off the rock and a little to one side, with a spin.
+  Nothing spawns while the climber is under 1.5 m. A hit is a rock within
+  0.75 m of the upper body moving down faster than 2 m/s: <code>knock(35)</code>, a
+  1.2 s cooldown and 1.5 s of "hit by a rock!". Rocks live 9 s, at most
+  40 at once, and each bounce (a velocity change over 2.5 m/s) knocks.</li>
+<li><strong>Elimination</strong>: every 30 s (<code>kElimEvery</code>), while two or more are
+  still in, the lowest is <code>eliminate</code>d: <code>out</code> makes the climber let go
+  and watch. When one is left and nobody has topped out, they win.</li>
+<li><strong>Time trial</strong>: see "Ghosts".</li>
+</ul>
+<p>The seed is <code>round * 2654435761 + mountain seed + 1</code>, where <code>round</code> is
+the host's race number online, so every machine rolls the same random
+numbers. Each machine counts hits only on its own climbers.</p>
+<h3 id="ghosts-ghosth-ghostcpp">Ghosts (Ghost.h, Ghost.cpp)<a class="headerlink" href="#ghosts-ghosth-ghostcpp" title="Permanent link">&para;</a></h3>
+<p>A <code>Ghost</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/Ghost.h">Ghost.h</a>) is a list of <code>kke::net::NetPlayerState</code>,
+one every 0.05 s (20 a second), in the mountain's own space (the lane
+offset subtracted), so it can be played back on any face. The pose it
+records is exactly the one online play sends (<code>poseOf</code> in Net.cpp), so
+one encoder serves both.</p>
+<ul>
+<li><strong>Recording</strong>: <code>recordRuns</code> records every local player on a tour
+  mountain while racing. A slow frame fills the gap with copies.</li>
+<li><strong>Saving</strong>: when a finish is a new best (<code>recordFinish</code>), the run is
+  written to <code>climb_race_ghosts/&lt;mountain id&gt;.ghost</code>, through a temporary
+  file and a rename, so a crash never leaves half a file. The format is
+  the engine's bit stream: a magic number, a version, the name, the time
+  and the samples (at most half an hour).</li>
+<li><strong>Playing back</strong>: in Time trial <code>startFromLobby</code> adds a ghost entry. It
+  is a remote-style racer on lane 0 (player 1's face, its body passes
+  through yours). <code>updateGhosts</code> sets its pose from <code>Ghost::at(raceTime)</code>:
+  the feet move smoothly between samples, the limbs ride along. When the
+  race clock passes the ghost's time it finishes. With no saved ghost it
+  is invisible and counts as finished ("No ghost yet: set a time and it
+  races you next time").</li>
+</ul>
+<h3 id="progress-and-medals-progressh-progresscpp">Progress and medals (Progress.h, Progress.cpp)<a class="headerlink" href="#progress-and-medals-progressh-progresscpp" title="Permanent link">&para;</a></h3>
+<p><code>Progress</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/Progress.h">Progress.h</a>) is a map from mountain id to
+<code>{ best, medal, finishes }</code>. <code>finish()</code> updates the best time, the best
+medal and the finish count, and reports whether it opened the next
+mountain. <code>isOpen(tour, i)</code> is true for the first mountain, for every
+mountain with <code>openAll</code>, and for any mountain whose previous one has at
+least one finish. <code>medalFor</code> returns the first medal time the run beats
+(gold, silver, bronze).</p>
+<p><code>recordFinish</code> only counts seats on this screen (not CPUs, not other
+screens' players). On Random there are no records: only a session best
+(<code>m_best</code>). After a finish the game saves the file, and if a mountain
+opened it refreshes the Mountain row and plays a tone.</p>
+<h3 id="saving">Saving<a class="headerlink" href="#saving" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>What</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>climb_race_progress.json</code> (or <code>.yml</code>)</td>
+<td>best time, medal, finishes per mountain</td>
+<td>next to the executable, or <code>KKE_CLIMB_PROGRESS</code></td>
+</tr>
+<tr>
+<td><code>climb_race_ghosts/&lt;id&gt;.ghost</code></td>
+<td>the best run per mountain</td>
+<td>next to the progress file</td>
+</tr>
+<tr>
+<td><code>climb_race_lobby.json</code> (or <code>.yml</code>)</td>
+<td>the menu's looks and settings</td>
+<td>LobbyModule</td>
+</tr>
+<tr>
+<td><code>climb_race_input.json</code></td>
+<td>rebound controls</td>
+<td>InputModule</td>
+</tr>
+</tbody>
+</table>
+<p>Progress is read and written with <code>kke::datafile::loadPath</code> / <code>saveFile</code>
+(<a href="../../DATA_FILES/">docs/DATA_FILES.md</a>). A damaged progress file
+is logged and the tour starts again.</p>
+<h3 id="the-hud-hudcpp-uiclimb_hudrml">The HUD (Hud.cpp, ui/climb_hud.rml)<a class="headerlink" href="#the-hud-hudcpp-uiclimb_hudrml" title="Permanent link">&para;</a></h3>
+<p>The HUD is one RmlUi document, <a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/ui/climb_hud.rml">ui/climb_hud.rml</a>, on
+a data model called <code>climb</code> built in <code>buildHud()</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/Hud.cpp">Hud.cpp</a>).
+C++ fills plain structs, and the document lays them out:</p>
+<ul>
+<li><code>players</code>: one panel per person, placed at the top-left of their
+  split-screen view (<code>x</code>, <code>y</code> in percent from <code>kke::splitScreen</code>): name,
+  race clock, height ("12.3 / 36 m"), a stamina bar (green over 50%,
+  amber over 25%, red below and blinking when low on the rock), what
+  each hand is doing ("reaching", "power 60%", "jug", "free") and a
+  status line ("pumped", "shaking out", "resting on a ledge", ...).</li>
+<li><code>rivals</code>: every climber without a seat (CPUs, online players, the
+  ghost), highest first.</li>
+<li><code>results</code>: the finish list, sorted by finished first, then time, then
+  "not out" before "out", then height.</li>
+<li><code>banner</code>, <code>sub</code>, <code>hint</code>: the big middle text, its sub line and the hint
+  line at the bottom.</li>
+<li><code>howto</code>: shows the how-to-play sheet.</li>
+</ul>
+<p><code>updateHud</code> rebuilds each list every frame but only marks a variable dirty
+when its content changed, so RmlUi does not relayout for nothing. The
+text uses button prompts: <code>{reach.left}</code> in a string becomes the glyph
+of that action on the device player 1 is using
+(<code>InputModule::promptText</code>), and the RML uses <code>&lt;prompt action="..."/&gt;</code>
+the same way.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">hint</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">onEdge</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">onEdge</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w">       </span><span class="o">?</span><span class="w"> </span><span class="n">prompt</span><span class="p">(</span><span class="s">"{jump} pull yourself up onto the edge"</span><span class="p">)</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">     </span><span class="o">:</span><span class="w"> </span><span class="n">freeHand</span><span class="w">                     </span><span class="o">?</span><span class="w"> </span><span class="n">prompt</span><span class="p">(</span><span class="s">"A hand let go: {move} aim and {reach.left} {reach.right} grab again, quick!"</span><span class="p">)</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">     </span><span class="o">:</span><span class="w"> </span><span class="n">c</span><span class="p">.</span><span class="n">staminaFraction</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">0.3f</span><span class="w">   </span><span class="o">?</span><span class="w"> </span><span class="n">prompt</span><span class="p">(</span><span class="s">"Tired! Rest on two green holds or a ledge  ·  {letgo} let go"</span><span class="p">)</span>
+</code></pre></div>
+<p>The hold markers are not part of the HUD: they are small 3D cubes drawn in
+<code>render()</code> on the aimed hold (cyan left, magenta right, gold and growing
+while a lunge charges, red for an out-of-reach crosshair hold).</p>
+<h3 id="networking-netcpp-netraceh-netracecpp">Networking (Net.cpp, NetRace.h, NetRace.cpp)<a class="headerlink" href="#networking-netcpp-netraceh-netracecpp" title="Permanent link">&para;</a></h3>
+<p>Online play is built on <code>kke::NetModule</code>
+(<a href="../../NETWORKING/">docs/NETWORKING.md</a>, "In Climb Race"). The
+model is <strong>each machine simulates its own climbers, the host decides the
+race</strong>.</p>
+<p><strong>Players</strong>: every lobby seat is a network player. <code>syncNetPlayers</code>
+makes the first seat NetModule's own player and the others local players
+(<code>addLocalPlayer(slot, name, colour)</code>, up to <code>kMaxLocalPlayers</code> = 8 per
+machine). On the host the CPU climbers are local players too, so everyone
+sees them. The look travels as the player's "character" string
+(<code>"look:2.4.6.7.6|#5aa6ff"</code>, <code>netrace::characterText</code>) and is sent again
+whenever it changes (protocol 10's Profile message), so a new pick shows
+on every screen at once. Other screens' players stand in the start menu's
+line-up and fill its Online panel; a rock that hits a climber is sent
+(<code>kEventHit</code>) so everyone sees the flash.</p>
+<p><strong>Settings on NetModule</strong>: <code>standIns = false</code> (the game draws other
+players itself, so NetModule makes no capsules for them) and
+<code>checkMoves = false</code> (the host's wall check reads a mantle over an edge
+as going through the rock; the speed limits still apply).</p>
+<p><strong>The menu rows</strong>: Online (Off / Join / Host) calls <code>host()</code>, <code>leave()</code>
+or <code>searchLan()</code>. While Join is picked, <code>updateNet</code> asks the LAN again
+every 3 s and fills the Game row from <code>lanGames()</code> (only Climb Race
+games). Join calls <code>join(address, port)</code>.</p>
+<p><strong>Game events</strong> (<a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/NetRace.h">NetRace.h</a>), kinds from <code>0x4300</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Event</th>
+<th>Direction</th>
+<th>Payload</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kEventSetup</code></td>
+<td>host to all</td>
+<td>the whole mountain (every generator float bit for bit), round, mode, and a seat list: player id, lane, CPU flag, name, tint</td>
+</tr>
+<tr>
+<td><code>kEventReady</code></td>
+<td>client to host</td>
+<td>"I built round N, these players are at the line"</td>
+</tr>
+<tr>
+<td><code>kEventGo</code></td>
+<td>host to all</td>
+<td>everyone is ready: start the countdown</td>
+</tr>
+<tr>
+<td><code>kEventFinish</code></td>
+<td>owner to host, relayed</td>
+<td>player id, round, time</td>
+</tr>
+<tr>
+<td><code>kEventLoose</code></td>
+<td>owner to host, relayed</td>
+<td>lane, hold, push</td>
+</tr>
+<tr>
+<td><code>kEventOut</code></td>
+<td>host to all</td>
+<td>Elimination: this player is out</td>
+</tr>
+</tbody>
+</table>
+<p>A race online goes like this:</p>
+<ol>
+<li>The host's <code>resetRace</code> bumps <code>m_round</code>. <code>updateNet</code> notices a round it
+   has not sent and calls <code>sendSetup()</code>. It then holds the countdown
+   (<code>m_netHold</code>) until every remote racer's machine has sent Ready.</li>
+<li>A client's <code>onNetEvent</code> decodes Setup (only from player 0, the host),
+   and <code>applySetup</code> builds the same faces in the same order, marks its
+   own players by their ids, resets the race and sends Ready.</li>
+<li>When all are ready, or after 8 s, the host sends Go and every
+   countdown runs.</li>
+<li>Every frame <code>sendNet()</code> sets each local racer's <code>NetPlayerState</code> from
+   <code>poseOf(racer)</code>. <code>updateNet</code> reads each remote player's state back
+   with <code>netrace::fromState</code>, moves its kinematic capsule and keeps the
+   jump and landing flags from state changes, so its animation plays.</li>
+<li>Finishes and broken loose holds are events; the host relays them.
+   Each event carries the round number, so a late one from the last race
+   is ignored.</li>
+</ol>
+<p><strong>The pose</strong> goes in the standard <code>NetPlayerState</code>: feet, velocity, yaw,
+a state byte (Locomotion's state 0 to 6, or 8 = climbing, 9 = mantling),
+a finished flag, speed, mantle progress and fall height. The hands, feet
+and hips go in its 32-byte <code>extra</code> field, relative to the feet:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1">// NetPlayerState::extra (32 bytes): hands and feet relative to the feet,</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1">// +-4 m at 1 mm (4 x 39 bits); the hips, +-2 m at 2 mm (33 bits); each</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1">// hand's rock normal (octahedral, 2 x 7 bits), grip (4 bits) and whether</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1">// it's on the rock and on a hold (2 bits). 229 bits, 29 bytes.</span>
+</code></pre></div>
+<p>The normals use octahedral encoding (a unit vector folded onto a square,
+two small numbers instead of three floats).</p>
+<p><strong>Leaving</strong>: if our role drops to offline (the host left, or we were
+turned away) the remote racers are removed and the game goes back to the
+menu with a toast. A remote player who disappears from <code>remotePlayers()</code>
+is removed and their face stays empty.</p>
+<p><code>KKE_CLIMB_WAIT=n</code> makes a host start by itself once n players have
+joined, for tests with nobody at the keyboard.</p>
+<h3 id="sound">Sound<a class="headerlink" href="#sound" title="Permanent link">&para;</a></h3>
+<p>The game ships no sound files. <code>sound()</code> calls
+<code>AudioModule::playImpact(position, material, intensity)</code>, which
+synthesises a hit on an audio material, and <code>tone()</code> calls
+<code>playEarcon</code>, the engine's UI tones (<a href="../../AUDIO/">docs/AUDIO.md</a>):</p>
+<table>
+<thead>
+<tr>
+<th>Event</th>
+<th>Sound</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A hand catches a hold</td>
+<td>Stone, 0.18</td>
+</tr>
+<tr>
+<td>A loose hold breaks</td>
+<td>Stone, 0.8</td>
+</tr>
+<tr>
+<td>A climber falls</td>
+<td>Dirt, 0.5</td>
+</tr>
+<tr>
+<td>A Rockfall rock bounces</td>
+<td>Stone, by how hard it bounced</td>
+</tr>
+<tr>
+<td>A rock hits a climber</td>
+<td>Stone, 1.0</td>
+</tr>
+<tr>
+<td>Each countdown second</td>
+<td><code>Earcon::Tick</code></td>
+</tr>
+<tr>
+<td>GO</td>
+<td><code>Earcon::Activate</code></td>
+</tr>
+<tr>
+<td>A player on this screen tops out</td>
+<td><code>Earcon::ToggleOn</code></td>
+</tr>
+<tr>
+<td>Someone is out (Elimination)</td>
+<td><code>Earcon::Back</code></td>
+</tr>
+<tr>
+<td>A mountain opens</td>
+<td><code>Earcon::Activate</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="design-decisions">Design decisions<a class="headerlink" href="#design-decisions" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>One identical face per climber, side by side.</strong> <code>buildMountain</code> copies
+  one generated wall into every lane. Nobody blocks anybody, a time on a
+  face means the same thing for every climber, and online there are no
+  collisions to settle (which is why <code>standIns</code> is off). DESIGN.md frames
+  it as a speed-climbing final.</li>
+<li><strong>The climbing is pure logic, the body is drawn from it.</strong>
+  <code>kke::Climber</code> has no physics (its header says so); the capsule is
+  moved kinematically to <code>feet()</code> while climbing and handed back to
+  <code>Locomotion</code> on a fall or a top-out. The logic is unit-tested without a
+  window, and what you see is exactly what the climber holds.</li>
+<li><strong>The logic knows the body's proportions.</strong> Commit "Climb Race: hands
+  sit on their holds" records the reason: with the reach measured from
+  the mannequin, the hips never hang where an arm cannot reach, a long
+  lunge cuts the lower hand loose, and the hands went from 12 cm off
+  their holds on average to 2.5 cm.</li>
+<li><strong>The body is drawn from a <code>BodyInput</code>, never from the climber
+  directly.</strong> A local climber, a remote one and a ghost all go through
+  <code>animateBody</code> the same way; only <code>bodyInput()</code> differs. One pose
+  builder (<code>poseOf</code>) feeds both online play and ghost recording (commit
+  "Time trial").</li>
+<li><strong>Mountains are data files, not code.</strong> DESIGN.md's pillar 4 ("Made
+  from data"): anyone can copy one and change a few numbers. Mistakes are
+  reported and clamped instead of refusing the file, so a typo never
+  stops the game.</li>
+<li><strong>Every mountain is climbable by construction.</strong> The generator draws the
+  line first, with steps no longer than <code>routeStep</code>, then fills in the
+  rest; <code>step</code> is clamped to 1.3 m because (comment in Mountains.cpp)
+  "longer than an arm span and the line isn't climbable any more". A test
+  has the bot climb every shipped mountain.</li>
+<li><strong>Deterministic generation, and the mountain sent whole.</strong> The
+  generator avoids <code>std::</code> distributions (comment in ClimbWall.cpp: their
+  output differs between standard libraries), and the Setup event
+  carries every generator float bit for bit (<code>exact()</code> in NetRace.cpp),
+  so a joiner builds the host's rock even from a file only the host has.</li>
+<li><strong>The host decides, each machine climbs its own.</strong> Clients never
+  simulate someone else's climber; they pose it from what arrives. Only
+  the host decides who is out in Elimination. This keeps the host's job
+  small and every player's own climbing free of lag.</li>
+<li><strong>The countdown waits for every machine.</strong> Building a race takes each
+  machine its own time; Ready/Go (with an 8 s limit) makes everyone
+  start together.</li>
+<li><strong>Online is Join first, then Host.</strong> A comment in Net.cpp: with the
+  order Off, Join, Host, pressing right twice to reach Host passes a
+  harmless LAN search, not a game others would see.</li>
+<li><strong>CPU difficulty is four numbers on one bot.</strong> <code>makeBrain</code> only changes
+  pause, lunging and rest thresholds on the same <code>ClimbBot</code>, so every CPU
+  climbs by the same rules as a player and the levels are easy to tune.</li>
+<li><strong>Medals are for players only</strong>, set from bot runs (DESIGN.md: medal
+  times from ClimbBot runs at Normal, Hard and Expert). A CPU winning
+  earns nothing, and in split screen each player earns their own.</li>
+<li><strong>The ghost climbs through player 1's face.</strong> A ghost entry does not
+  add a lane (<code>faces()</code> skips it), so Time trial needs no extra rock.</li>
+<li><strong>No sound files.</strong> Every sound is synthesised by the engine's audio
+  (impacts on audio materials, earcons), so the game ships nothing to
+  license or load.</li>
+<li><strong>Old GPU buffers are retired, not destroyed.</strong> Commit "Climb Race
+  flagship" records Vulkan validation errors when an online race was set
+  up; lanes now go through <code>renderer().retire()</code> so frames in flight can
+  finish drawing them.</li>
+</ul>
+<h2 id="tuning">Tuning<a class="headerlink" href="#tuning" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>What</th>
+<th>Where</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Mountain knobs (<code>height</code>, <code>ledges</code>, <code>overhang</code>, <code>slab</code>, <code>holds</code>, <code>jugs</code>, <code>crimps</code>, <code>loose</code>, <code>step</code>)</td>
+<td><code>mountains/*.yaml</code></td>
+<td>the shape and difficulty of a mountain</td>
+</tr>
+<tr>
+<td><code>medals: [gold, silver, bronze]</code></td>
+<td><code>mountains/*.yaml</code></td>
+<td>the medal times, in seconds</td>
+</tr>
+<tr>
+<td><code>order:</code></td>
+<td><code>mountains/*.yaml</code></td>
+<td>tour order; the next mountain opens after this one</td>
+</tr>
+<tr>
+<td><code>span</code>, <code>lungeSpan</code>, <code>reachTime</code>, <code>quickTime</code>, <code>lungeTime</code>, <code>chargeTime</code></td>
+<td><code>kke::Climber::Settings</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/Climber.h">Climber.h</a>)</td>
+<td>how far and fast hands move</td>
+</tr>
+<tr>
+<td><code>drainTwoHands</code>, <code>drainOneHand</code>, <code>overhangDrain</code>, <code>footRelief</code>, <code>shakeOut</code>, move costs</td>
+<td><code>kke::Climber::Settings</code></td>
+<td>how fast stamina goes and comes back</td>
+</tr>
+<tr>
+<td><code>kRestRate</code> (30)</td>
+<td>ClimbRaceModule.cpp</td>
+<td>stamina per second standing on a ledge or the ground</td>
+</tr>
+<tr>
+<td><code>kFallRegrab</code> (0.35 s)</td>
+<td>ClimbRaceModule.cpp</td>
+<td>how soon after a fall you can grab again</td>
+</tr>
+<tr>
+<td><code>kLaneX</code> (10), <code>kStartOut</code> (3.5)</td>
+<td>ClimbRaceModule.cpp</td>
+<td>lane spacing (half), start line distance from the rock</td>
+</tr>
+<tr>
+<td><code>pause</code>, <code>lunges</code>, <code>restBelow</code>, <code>restUntil</code> per difficulty</td>
+<td><code>makeBrain</code>, ClimbRaceModule.cpp</td>
+<td>how good each CPU level is</td>
+</tr>
+<tr>
+<td><code>kElimEvery</code> (30 s)</td>
+<td>Modes.cpp</td>
+<td>time between eliminations</td>
+</tr>
+<tr>
+<td><code>kRockHit</code> (35), <code>kRockLife</code> (9 s), <code>kMaxRocks</code> (40), rock timer formula</td>
+<td>Modes.cpp</td>
+<td>how dangerous Rockfall is</td>
+</tr>
+<tr>
+<td><code>m_climbCamera</code> (4.6 m), on-foot arm (4 m)</td>
+<td>ClimbRaceModule.h / .cpp</td>
+<td>camera distance</td>
+</tr>
+<tr>
+<td><code>m_mouseSensitivity</code> (0.12 deg/px), <code>m_stickSpeed</code> (200 deg/s)</td>
+<td>ClimbRaceModule.h</td>
+<td>look speed</td>
+</tr>
+<tr>
+<td><code>Ghost::kStep</code> (0.05 s)</td>
+<td>Ghost.h</td>
+<td>ghost sample rate (file size vs smoothness)</td>
+</tr>
+<tr>
+<td><code>kSearchEvery</code> (3 s), 8 s ready limit</td>
+<td>Net.cpp</td>
+<td>LAN search rate, how long the host waits</td>
+</tr>
+</tbody>
+</table>
+<p>Switches (environment variables), for demos, headless runs and tests:</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>KKE_CLIMB_MOUNTAIN=&lt;name&gt;</code></td>
+<td>Which mountain: its file name (<code>crumble_peak</code>) or name, or <code>random</code>. A closed one is put in the row anyway.</td>
+</tr>
+<tr>
+<td><code>KKE_CLIMB_MODE=&lt;mode&gt;</code></td>
+<td><code>race</code>, <code>rockfall</code>, <code>elimination</code> or <code>time trial</code>, whatever the menu says.</td>
+</tr>
+<tr>
+<td><code>KKE_CLIMB_ALL=1</code></td>
+<td>Every mountain open, whatever the saved tour says (not saved).</td>
+</tr>
+<tr>
+<td><code>KKE_CLIMB_PROGRESS=&lt;file&gt;</code></td>
+<td>Where the tour is saved (default <code>climb_race_progress.json</code> next to the executable).</td>
+</tr>
+<tr>
+<td><code>KKE_CLIMB_SEED=&lt;n&gt;</code></td>
+<td>Random, on that seed (default 7, Granite Tower's rock).</td>
+</tr>
+<tr>
+<td><code>KKE_CLIMB_LOBBY=0</code></td>
+<td>No menu: straight into a race, you and <code>KKE_CLIMB_CPUS=&lt;n&gt;</code> CPU climbers (default 1, on Hard).</td>
+</tr>
+<tr>
+<td><code>KKE_CLIMB_AUTOPILOT=1</code></td>
+<td>No menu, and you climb by yourself too (<code>kke::ClimbBot</code>).</td>
+</tr>
+<tr>
+<td><code>KKE_CLIMB_BOT_PAUSE=&lt;s&gt;</code></td>
+<td>Every CPU climber's breath between moves (default: from its difficulty).</td>
+</tr>
+<tr>
+<td><code>KKE_CLIMB_ROCKFALL=1</code></td>
+<td>No menu; every loose hold on the first face comes off two seconds in; where they land is logged at 14 s.</td>
+</tr>
+<tr>
+<td><code>KKE_CLIMB_QUIT=&lt;s&gt;</code></td>
+<td>Quit after that long, logging every climber's height every 5 s and, at the end, how far the hands sat from their holds.</td>
+</tr>
+<tr>
+<td><code>KKE_CLIMB_INTRO=0/1</code></td>
+<td>Force the how-to-play screen off or on (off by default in autopilot, quit and rockfall runs).</td>
+</tr>
+<tr>
+<td><code>KKE_CLIMB_CLOSEUP=&lt;m&gt;</code></td>
+<td>How far behind you the camera sits on the rock (default 4.6; 1.5 to check the grip).</td>
+</tr>
+<tr>
+<td><code>KKE_NET=host</code> / <code>KKE_NET=join:ADDRESS</code></td>
+<td>Host, or join a host, at startup. <code>KKE_NET_NAME=&lt;name&gt;</code> is player 1's name.</td>
+</tr>
+<tr>
+<td><code>KKE_CLIMB_WAIT=&lt;n&gt;</code></td>
+<td>Hosting: start by itself once n players have joined online.</td>
+</tr>
+<tr>
+<td><code>KKE_LOBBY_JOIN=&lt;n&gt;</code></td>
+<td>With <code>KKE_VIRTUAL_INPUT=pad,pad</code>: n controllers join the menu at startup (<a href="../../LOBBY/">docs/LOBBY.md</a>).</td>
+</tr>
+</tbody>
+</table>
+<p>For example, this races you (on autopilot) and a Hard rival to the top of
+Granite Tower and quits after 110 s:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nv">KKE_SKIP_INTRO</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="nv">KKE_CLIMB_MOUNTAIN</span><span class="o">=</span>granite_tower<span class="w"> </span><span class="nv">KKE_CLIMB_AUTOPILOT</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="nv">KKE_CLIMB_QUIT</span><span class="o">=</span><span class="m">110</span><span class="w"> </span>./climb_race
+</code></pre></div>
+<h2 id="engine-features-it-uses">Engine features it uses<a class="headerlink" href="#engine-features-it-uses" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Header / module</th>
+<th>Doc</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Generated climbing walls</td>
+<td><code>kke::ClimbWall</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/ClimbWall.h">kke/ClimbWall.h</a>)</td>
+<td></td>
+</tr>
+<tr>
+<td>Climbing logic, climbing bot</td>
+<td><code>kke::Climber</code>, <code>kke::ClimbBot</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/Climber.h">kke/Climber.h</a>)</td>
+<td></td>
+</tr>
+<tr>
+<td>Character movement (walk, jump, ledge hang)</td>
+<td><code>kke::Locomotion</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/Locomotion.h">kke/Locomotion.h</a>)</td>
+<td><a href="../../MOVEMENT/">MOVEMENT.md</a></td>
+</tr>
+<tr>
+<td>Rigid bodies, character capsules, ray casts</td>
+<td><code>kke::RigidWorld</code>, <code>RigidBodyModule</code></td>
+<td><a href="../../cookbook/physics/">cookbook/physics.md</a></td>
+</tr>
+<tr>
+<td>Third-person camera</td>
+<td><code>kke::CameraRig</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/CameraRig.h">kke/CameraRig.h</a>)</td>
+<td></td>
+</tr>
+<tr>
+<td>Split screen</td>
+<td><code>kke::splitScreen</code>, <code>Application::views()</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/Viewports.h">kke/Viewports.h</a>)</td>
+<td></td>
+</tr>
+<tr>
+<td>Skinned models, tint</td>
+<td><code>ModelModule</code></td>
+<td></td>
+</tr>
+<tr>
+<td>Animation states and blend spaces</td>
+<td><code>kke::Animator</code>, <code>kke::AnimationSet</code></td>
+<td><a href="../../PROCEDURAL_ANIMATION/">PROCEDURAL_ANIMATION.md</a></td>
+</tr>
+<tr>
+<td>Two-bone IK, foot placement</td>
+<td><code>kke::solveTwoBone</code>, <code>kke::FootPlacer</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/AnimRig.h">kke/AnimRig.h</a>)</td>
+<td><a href="../../PROCEDURAL_ANIMATION/">PROCEDURAL_ANIMATION.md</a></td>
+</tr>
+<tr>
+<td>Start menu, seats, CPU players</td>
+<td><code>kke::Lobby</code>, <code>LobbyModule</code></td>
+<td><a href="../../LOBBY/">LOBBY.md</a></td>
+</tr>
+<tr>
+<td>Rebindable input, button prompts</td>
+<td><code>InputModule</code>, <code>InputMap</code></td>
+<td><a href="../../INPUT/">INPUT.md</a></td>
+</tr>
+<tr>
+<td>RmlUi HUD with a data model</td>
+<td><code>UiModule</code></td>
+<td></td>
+</tr>
+<tr>
+<td>Online play, LAN search, game events</td>
+<td><code>NetModule</code>, <code>kke::net</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/modules/NetModule.h">kke/modules/NetModule.h</a>)</td>
+<td><a href="../../NETWORKING/">NETWORKING.md</a></td>
+</tr>
+<tr>
+<td>Bit-packed serialisation</td>
+<td><code>kke::net::WriteStream</code> / <code>ReadStream</code> (kke/net/BitStream.h)</td>
+<td><a href="../../NETWORKING/">NETWORKING.md</a></td>
+</tr>
+<tr>
+<td>Synthesised impacts and UI tones</td>
+<td><code>AudioModule::playImpact</code>, <code>playEarcon</code></td>
+<td><a href="../../AUDIO/">AUDIO.md</a></td>
+</tr>
+<tr>
+<td>Moods (sky, light, fog)</td>
+<td><code>Application::setMood</code></td>
+<td><a href="../../MOODS/">MOODS.md</a></td>
+</tr>
+<tr>
+<td>YAML / JSON data files</td>
+<td><code>kke::datafile</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/DataFile.h">kke/DataFile.h</a>)</td>
+<td><a href="../../DATA_FILES/">DATA_FILES.md</a></td>
+</tr>
+<tr>
+<td>Developer switches</td>
+<td><code>kke::dev::env</code> (kke/DevTools.h)</td>
+<td><a href="../../ANTI_CHEAT/">ANTI_CHEAT.md</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="assets">Assets<a class="headerlink" href="#assets" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>No Synty packs.</strong> Nothing in Climb Race loads a Synty file.</li>
+<li><strong>The climbers</strong>: the UAL mannequin, <code>assets/animations/UAL1_Standard.fbx</code>
+  (Quaternius' Universal Animation Library, CC0; see
+  <a href="../../DEPENDENCIES/">docs/DEPENDENCIES.md</a>). It is found at
+  runtime in <code>assets/animations/</code> (or <code>KKE_ANIMATIONS_DIR</code>). Its clips
+  used: <code>Idle_Loop</code>, <code>Walk_Loop</code>, <code>Jog_Fwd_Loop</code>, <code>Sprint_Loop</code>,
+  <code>Jump_Start</code>, <code>Jump_Loop</code>, <code>Jump_Land</code>, <code>Crouch_Idle_Loop</code>, and
+  <code>Hang_Idle</code> if present. Without the file the log says "animation library
+  not found ... the climbers are blocks" and each climber is drawn as a
+  grey block with a dark visor; the climbing logic then uses the default
+  1.8 m person proportions.</li>
+<li><strong>Generated</strong>: the rock, holds, ledges, rocks, markers and meadow are
+  meshes made in code.</li>
+<li><strong>UI</strong>: <code>ui/climb_hud.rml</code>, the shared theme
+  <code>games/rmlui_demo/ui/theme.rcss</code>, and the Noto Sans fonts from
+  <code>assets/fonts/</code> (all copied by CMakeLists.txt).</li>
+<li><strong>Moods</strong>: <code>assets/moods/*.yaml</code> (<code>golden_hour</code>, <code>morning</code>,
+  <code>clear_day</code>, <code>sunset</code>, <code>overcast</code>, <code>misty_morning</code>).</li>
+<li><strong>Sound</strong>: none; all synthesised.</li>
+</ul>
+<h2 id="make-a-game-like-this">Make a game like this<a class="headerlink" href="#make-a-game-like-this" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Pick the parts you need.</strong> Climb Race is C++ (there is no Lua in it),
+   so start by copying the folder: <code>cp -r games/climb_race games/my_race</code>.
+   Rename the executable in its CMakeLists.txt, add
+   <code>add_subdirectory(games/my_race)</code> to the root CMakeLists.txt (inside
+   an <code>if(KKE_ENABLE_JOLT)</code> like Climb Race's), and change the <code>gameId</code>
+   in main.cpp so your game does not show up in Climb Race's LAN list.
+   <code>tools/new_game</code> is for Lua games made from the starter template; use
+   it instead if your game does not need C++.</li>
+<li><strong>Keep the frame shape.</strong> The <code>Phase</code> state machine, <code>resetRace</code>,
+   <code>startFromLobby</code> / <code>backToLobby</code> and the per-racer struct with its own
+   camera rig and input map work for any round-based game with several
+   players. Replace <code>updateRacer</code> with your own movement.</li>
+<li><strong>Keep the lobby as is.</strong> Change the look fields and the options in
+   <code>setupLobby</code>; <code>wantedRoster()</code> is the one place that turns menu choices
+   into players. Read <a href="../../LOBBY/">docs/LOBBY.md</a>.</li>
+<li><strong>Levels as data.</strong> Copy the Mountains.h pattern: a struct, a
+   <code>fromJson</code> that reports problems instead of failing, a folder loaded
+   with <code>kke::datafile</code>, and a <code>keyOf</code> so you only rebuild on change.</li>
+<li><strong>Draw from one input struct.</strong> If you will ever go online or record
+   replays, write your character's look into one struct (<code>BodyInput</code>,
+   <code>netrace::Pose</code>) and draw only from it. Then remote players and
+   ghosts cost nothing extra.</li>
+<li><strong>Online last, but plan for it.</strong> Copy the Setup / Ready / Go / Finish
+   pattern from NetRace.h and Net.cpp. Put a round number in every event
+   and drop old ones. Read <a href="../../NETWORKING/">docs/NETWORKING.md</a>.</li>
+<li><strong>Test headless.</strong> Give your game switches like <code>KKE_CLIMB_AUTOPILOT</code>
+   and <code>KKE_CLIMB_QUIT</code>, so a bot can play it to the end and the log says
+   what happened. Put pure logic (like Mountains.cpp and Progress.cpp)
+   in files a unit test can compile, as <code>tests/CMakeLists.txt</code> does.</li>
+</ol>
+<p>Pitfalls the code shows:</p>
+<ul>
+<li>Read developer switches through <code>kke::dev::env</code>, not <code>std::getenv</code>, so
+  a shipping build ignores them (<a href="../../ANTI_CHEAT/">docs/ANTI_CHEAT.md</a>).</li>
+<li>Do not destroy GPU meshes while frames may still draw them: hand them
+  to <code>renderer().retire()</code>.</li>
+<li><code>defineCharacterActions</code> binds many keys; clear the ones you reuse
+  (Climb Race clears <code>fire</code>, <code>aim</code>, <code>interact</code> and <code>crouch</code>) and check for
+  overlaps with engine actions such as <code>audio.ping</code> (Q, d-pad down).</li>
+<li>Mark RmlUi variables dirty only when they change; rebuilding lists every
+  frame is fine, relayout every frame is not.</li>
+<li>A generator shared between machines must not use <code>std::</code> random
+  distributions or send rounded floats.</li>
+</ul>
+<h2 id="files">Files<a class="headerlink" href="#files" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>What is in it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/main.cpp">main.cpp</a></td>
+<td>The modules, their order, the NetModule config</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/ClimbRaceModule.h">ClimbRaceModule.h</a></td>
+<td>The game class: <code>Lane</code>, <code>Racer</code>, <code>BodyInput</code>, <code>Entry</code>, phases, modes, HUD structs, every member</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/ClimbRaceModule.cpp">ClimbRaceModule.cpp</a></td>
+<td>init and input actions, building mountains and lanes, <code>resetRace</code>, CPU brains, <code>updateRacer</code>, cameras, the frame, rendering, sounds, the rockfall test</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/Body.cpp">Body.cpp</a></td>
+<td>The mannequin: loading, body proportions, animation states, <code>bodyInput</code>, IK for arms, legs, hands and fingers</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/Lobby.cpp">Lobby.cpp</a></td>
+<td>The start menu: look fields, Mountain row, roster, line-up, start, back to menu, tour progress saving and <code>recordFinish</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/Modes.cpp">Modes.cpp</a></td>
+<td>Race, Rockfall, Elimination, Time trial: rocks, eliminations, ghost playback and recording</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/Hud.cpp">Hud.cpp</a></td>
+<td>The RmlUi data model and what fills it each frame</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/Net.cpp">Net.cpp</a></td>
+<td>Online: menu rows, players, Setup / Ready / Go, events, remote climbers, <code>poseOf</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/NetRace.h">NetRace.h</a>, <a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/NetRace.cpp">NetRace.cpp</a></td>
+<td>The wire format: event kinds, <code>Pose</code>, <code>Setup</code>, <code>Finish</code>, <code>Loose</code>, <code>Ready</code> and their bit-packed encoding</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/Mountains.h">Mountains.h</a>, <a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/Mountains.cpp">Mountains.cpp</a></td>
+<td>The mountain file format (every key documented), loading, medals</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/Progress.h">Progress.h</a>, <a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/Progress.cpp">Progress.cpp</a></td>
+<td>The tour: records, unlocking, save and load</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/Ghost.h">Ghost.h</a>, <a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/Ghost.cpp">Ghost.cpp</a></td>
+<td>Recording, saving, loading and playing back a run</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/tree/main/games/climb_race/mountains">mountains/</a></td>
+<td>The six tour mountains as YAML</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/ui/climb_hud.rml">ui/climb_hud.rml</a></td>
+<td>The HUD and the how-to-play sheet</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/CMakeLists.txt">CMakeLists.txt</a></td>
+<td>The executable and the files copied next to it</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/game.json">game.json</a></td>
+<td>The marketplace listing (id, title, description, tags)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/climb_race/DESIGN.md">DESIGN.md</a></td>
+<td>The plan: pillars, mountains, tour, party modes, milestones, later</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../cookbook/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Cookbook player">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Cookbook player
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../racing/" class="md-footer__link md-footer__link--next" aria-label="Next: Racing">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Racing
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      MIT licence. KKE is written by Claude (Anthropic) working in the repository.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/Khyretos/kk-engine" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://ko-fi.com/khyretos" target="_blank" rel="noopener" title="ko-fi.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11.351 2.715c-2.7 0-4.986.025-6.83.26C2.078 3.285 0 5.154 0 8.61c0 3.506.182 6.13 1.585 8.493 1.584 2.701 4.233 4.182 7.662 4.182h.83c4.209 0 6.494-2.234 7.637-4a9.5 9.5 0 0 0 1.091-2.338C21.792 14.688 24 12.22 24 9.208v-.415c0-3.247-2.13-5.507-5.792-5.87-1.558-.156-2.65-.208-6.857-.208m0 1.947c4.208 0 5.09.052 6.571.182 2.624.311 4.13 1.584 4.13 4v.39c0 2.156-1.792 3.844-3.87 3.844h-.935l-.156.649c-.208 1.013-.597 1.818-1.039 2.546-.909 1.428-2.545 3.064-5.922 3.064h-.805c-2.571 0-4.831-.883-6.078-3.195-1.09-2-1.298-4.155-1.298-7.506 0-2.181.857-3.402 3.012-3.714 1.533-.233 3.559-.26 6.39-.26m6.547 2.287c-.416 0-.65.234-.65.546v2.935c0 .311.234.545.65.545 1.324 0 2.051-.754 2.051-2s-.727-2.026-2.052-2.026m-10.39.182c-1.818 0-3.013 1.48-3.013 3.142 0 1.533.858 2.857 1.949 3.897.727.701 1.87 1.429 2.649 1.896a1.47 1.47 0 0 0 1.507 0c.78-.467 1.922-1.195 2.623-1.896 1.117-1.039 1.974-2.364 1.974-3.897 0-1.662-1.247-3.142-3.039-3.142-1.065 0-1.792.545-2.338 1.298-.493-.753-1.246-1.298-2.312-1.298"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

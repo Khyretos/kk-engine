@@ -1,0 +1,5111 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A modular, open-source Vulkan game engine in C++17, with Lua scripting.">
+      
+      
+      
+        <link rel="canonical" href="https://khyretos.github.io/kk-engine/NETWORKING/">
+      
+      
+        <link rel="prev" href="../AUDIO/">
+      
+      
+        <link rel="next" href="../SERVER_HOSTING/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Networking - Kreative Kompas Engine</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#networking" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Kreative Kompas Engine" class="md-header__button md-logo" aria-label="Kreative Kompas Engine" data-md-component="logo">
+      
+  <img src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Kreative Kompas Engine
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Networking
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Khyretos/kk-engine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Khyretos/kk-engine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../BUILDING/" class="md-tabs__link">
+          
+  
+  
+  Getting started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../tutorials/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../cookbook/" class="md-tabs__link">
+          
+  
+  
+  Cookbook
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../demos/" class="md-tabs__link">
+          
+  
+  
+  Demos
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../PLAY_TO_MAKE/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../reference/lua-api/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../devlog/" class="md-tabs__link">
+          
+  
+  
+  Project
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Kreative Kompas Engine" class="md-nav__button md-logo" aria-label="Kreative Kompas Engine" data-md-component="logo">
+      
+  <img src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png" alt="logo">
+
+    </a>
+    Kreative Kompas Engine
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Khyretos/kk-engine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Khyretos/kk-engine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BUILDING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install and build
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Make your own game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AI_ASSISTANTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Make games with an AI assistant
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/01-walk-around/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1. Walk around
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/02-break-things/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    2. Break things
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/03-pickups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3. Script a pickup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/04-sound/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    4. Add sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Cookbook
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/first-steps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First steps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/moving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moving things
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/cameras/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cameras
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/gameplay/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gameplay
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/algorithms/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/animation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Animation and IK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/physics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/networking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiplayer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/play-to-make/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Play to make
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/cpp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    C++
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demos
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Demos
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The demos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_2" id="__nav_5_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start here
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Start here
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/template/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Starter game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/first_lua_game/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First Lua game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook player
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_3" id="__nav_5_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Games
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Games
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/climb_race/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Climb Race
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/racing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Racing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/flying_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flying
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/party/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Party
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/duel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Duel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/tennis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tennis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/goblin_horde/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Goblin Horde
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI and companions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    AI and companions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/farm_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Farm
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/pet_companion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pet companion
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/platoon/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Platoon
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/command_kit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command kit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/procedural_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Procedural animation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_5" id="__nav_5_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics, water and sound
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Physics, water and sound
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/physics_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics (FEMFX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/melt_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Melting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/particles_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/sea_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sea
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/jiggle_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jiggle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/cloth_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloth and hair
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/audio_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/synty_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Synty characters and ragdolls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_6" id="__nav_5_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Showcases and tools
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Showcases and tools
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/showcase/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    kke_demo showcase
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/sandbox/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sandbox
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/rmlui_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RmlUi demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/imgui_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ImGui demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PLAY_TO_MAKE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Play to make
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SCRIPTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scripting in Lua
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MOVEMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Movement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AI/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI (animals, enemies, companions)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMBAT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Melee combat and crowds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PROCEDURAL_ANIMATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Procedural animation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../EQUIPMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equipment and body awareness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../INPUT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../GAME_SHELL/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Menus, pause and settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../LOBBY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start menu and joining
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OUTFITS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Outfits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DEMO_PANEL/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings panel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMMANDS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands and orders
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AUDIO/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Networking
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Networking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#try-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Try it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#encryption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Encryption
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How it works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-the-client-simulates-the-crates-too" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the client simulates the crates too
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#breakables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Breakables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#movement-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Movement checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#input-replay" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Input replay
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#several-players-on-one-screen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Several players on one screen
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#names-and-looks-that-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Names and looks that change
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#in-climb-race" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In Climb Race
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#in-kke_demo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In kke_demo
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#not-yet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not yet
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#voice" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Voice
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SERVER_HOSTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hosting a server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TOOLS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The kke_ tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../STORAGE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Saving data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ANTI_CHEAT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anti-cheat
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DRM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kreative DRM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MODDING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DLC and mods
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ASSETS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Asset folders and naming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SCENES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scenes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SHOWCASE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The kke_demo showcase
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../JIGGLE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jiggle physics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PHYSICS_BRIDGE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BREAKABLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Breakable props
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PARTICLE_EFFECTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle effects
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../RAGDOLLS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ragdolls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLOTH/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../HAIR/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hair
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/lua-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lua API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DATA_FILES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JSON or YAML data files
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OPTIMIZATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MOODS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moods (sky, fog, look)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../RENDERING_PRINCIPLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rendering principles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BENCHMARKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COOKED_ART/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cooked art (private builds with Synty art)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BAKING_FOR_FRIENDS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Baking the benchmark with the art, for friends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PERFORMANCE_NOTES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PLATFORMS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Platforms and hardware targets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ANDROID/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Android
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SCALING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scaling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DEPENDENCIES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dependencies and licences
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../HARDWARE_TESTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PLAYTEST_CHECKLIST/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Playtest checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../devlog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Devlog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../GO_TO_MARKET/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Going to market
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../RELEASES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Downloadable builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../HISTORY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development history
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DOCS_SITE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    This site
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#try-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Try it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#encryption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Encryption
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How it works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-the-client-simulates-the-crates-too" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the client simulates the crates too
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#breakables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Breakables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#movement-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Movement checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#input-replay" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Input replay
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#several-players-on-one-screen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Several players on one screen
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#names-and-looks-that-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Names and looks that change
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#in-climb-race" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In Climb Race
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#in-kke_demo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In kke_demo
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#not-yet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not yet
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#voice" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Voice
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/Khyretos/kk-engine/edit/main/docs/NETWORKING.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="networking">Networking<a class="headerlink" href="#networking" title="Permanent link">&para;</a></h1>
+<p>Multiplayer v1 (issue #2): host a game or join one, on a LAN or on one PC.
+You see the other players walk, jump, vault and climb, you push the same
+crates, and you see their shots. v2 (issue #28, first part): breakables
+break into the same pieces for everyone, what the host's scripts spawn
+appears for everyone, and the host refuses moves through walls and
+flights. The plan behind it, and what comes after
+it, is in ACTION_PLAN.md "Networking (2.1)".</p>
+<h2 id="try-it">Try it<a class="headerlink" href="#try-it" title="Permanent link">&para;</a></h2>
+<p>Two <code>kke_demo</code> windows on one PC:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nv">KKE_NET</span><span class="o">=</span>host<span class="w"> </span><span class="nv">KKE_NET_NAME</span><span class="o">=</span>Kees<span class="w"> </span>./kke_demo
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nv">KKE_NET</span><span class="o">=</span>join:127.0.0.1<span class="w"> </span><span class="nv">KKE_NET_NAME</span><span class="o">=</span>Guest<span class="w"> </span>./kke_demo<span class="w">   </span><span class="c1"># a second terminal</span>
+</code></pre></div>
+<p>Or press F1 in <code>kke_demo</code> and use the <strong>Network</strong> panel: Host, Join by
+address, or Search LAN (every game on the network and on this PC, with its
+player count; click Join). The panel shows each player's round trip, loss
+and your bandwidth, and has sliders to simulate a bad connection.</p>
+<p>Climb Race has it in its start menu: <strong>Online: Host</strong> on one machine,
+<strong>Online: Join</strong> on the other, pick the game and press Join, with up to
+four players on each screen (games/climb_race/README.md "Online").</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>KKE_NET</code></td>
+<td><code>host</code>, <code>host:PORT</code>, <code>join:ADDRESS</code>, <code>join:ADDRESS:PORT</code> or <code>join:CODE[@RELAY]</code></td>
+</tr>
+<tr>
+<td><code>KKE_NET_RELAY</code></td>
+<td><code>host[:port]</code> of a relay: hosting gets a join code, and codes typed without <code>@relay</code> are asked there (docs/SERVER_HOSTING.md "Join codes")</td>
+</tr>
+<tr>
+<td><code>KKE_NET_NAME</code></td>
+<td>your name in the game and in the LAN list</td>
+</tr>
+<tr>
+<td><code>KKE_NET_LAG</code></td>
+<td>extra one-way delay in ms on everything this game sends</td>
+</tr>
+<tr>
+<td><code>KKE_NET_JITTER</code></td>
+<td>± random ms per packet (reorders unreliable packets)</td>
+</tr>
+<tr>
+<td><code>KKE_NET_LOSS</code></td>
+<td>percent of unreliable packets dropped</td>
+</tr>
+<tr>
+<td><code>KKE_NET_REPLAY</code></td>
+<td><code>1</code>: host with input replay (competitive; see "Input replay")</td>
+</tr>
+</tbody>
+</table>
+<p>A host takes UDP port 27960, or the next free one up to 27975, so several
+hosts can run on one PC and the LAN search still finds all of them. Allow
+that range in the firewall to play across machines, or use a join code:
+with a relay set, the host's panel shows a code like <code>K7M-Q2P@relay.example.org</code>
+and friends type it in the Address box instead of an address; nobody
+forwards a port (docs/SERVER_HOSTING.md "Join codes").</p>
+<h2 id="encryption">Encryption<a class="headerlink" href="#encryption" title="Permanent link">&para;</a></h2>
+<p>Every connection is encrypted, on a LAN too, with nothing to set up
+(<code>kke/net/SecureTransport.h</code>, issue #44). The client and the server each
+make a throwaway X25519 key; the server adds its long-term key and proves
+it holds it; both derive one key per direction with BLAKE2b; every packet
+is then sealed with XChaCha20-Poly1305 (Monocypher, already used for
+<code>kke_seal</code>) and a counter as the nonce. So:</p>
+<ul>
+<li>nobody on the path (café Wi-Fi, a relay, an ISP) can read the password,
+  chat, voice or moves, nor change or replay a packet: a packet that
+  fails its check is dropped, and a peer sending more than 20 of those
+  is dropped too;</li>
+<li>a joiner who knows the server's key (a join code: the relay hands it
+  over) refuses any other, so nobody in the middle can pose as the
+  server; typing a plain address has no key to compare with (encrypted
+  all the same, like a first visit over https without a certificate);</li>
+<li>keys are forward secret: a server key stolen later doesn't open old
+  recordings.</li>
+</ul>
+<p>It costs 25 bytes per packet and a few microseconds of CPU. <code>kke_server</code>
+keeps its key in <code>saveDir/server.key</code> (owner-only) and prints its
+fingerprint at start; a game hosting makes a new key each time. The
+handshake has its own version, so a game from before encryption can't
+join a new one (and is told nothing it could use).</p>
+<h2 id="how-it-works">How it works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a> game (ShowcaseModule)      NetModule                 NetServer / NetClient      ITransport
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a> ---------------------      ---------                 ---------------------      ----------
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a> setLocalPlayer(state) ---&gt; host: + bodies  --------&gt;  snapshots, events    ---&gt;  ENet (UDP)
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a> remotePlayers()       &lt;--- capsules, bodies &lt;-------  interpolation        &lt;---  Loopback (tests)
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a> sendEvent / onEvent                                   movement checks            ConditionedTransport
+</code></pre></div>
+<ul>
+<li><strong>Transport</strong> (<code>kke/net/Transport.h</code>): an interface with a reliable
+  ordered channel and an unreliable sequenced one. <code>EnetTransport</code> is the
+  real one (ENet, MIT); <code>LoopbackTransport</code> runs any number of peers in
+  one process on a simulated network with a manual clock (the tests);
+  <code>ConditionedTransport</code> adds lag, jitter, loss and duplicates to any of
+  them (the panel sliders).</li>
+<li><strong>Serialization</strong> (<code>kke/net/BitStream.h</code>, <code>Protocol.h</code>): Glenn Fiedler's
+  pattern, one templated <code>serialize</code> function per message that both
+  writes and reads, so the two can't drift apart. Values are bit-packed to
+  their range and resolution: a position is 3 x ~23 bits at 1 mm, a
+  rotation is "smallest three" in 35 bits. Every decoder rejects short,
+  long and out-of-range packets; a fuzz test throws random bytes at all of
+  them.</li>
+<li><strong>Sessions</strong> (<code>kke/net/NetSession.h</code>): one server (the host's game, or a
+  process of its own), any number of clients.</li>
+<li><em>Players</em>: each client moves its own player at once (no input delay)
+    and sends its state 30 times a second. The server checks each move
+    against speed limits (<code>MovementLimits</code>) and sends a <code>Correction</code> when
+    one breaks them, then shares all players in its snapshots.</li>
+<li><em>Bodies</em>: the server's physics is the truth. Each snapshot is one UDP
+    packet (1100 bytes); which bodies go in is decided per client by a
+    priority accumulator: moving bodies gain priority faster than
+    sleeping ones, and every body is sent eventually. Players work the
+    same way once they fill more than 60% of the packet (up to 254 on a
+    server): the ones in your group first, then the nearest, and every
+    player is sent often. A player left out of one snapshot is listed
+    as still there in a few bits, so nobody blinks out.</li>
+<li><em>Interpolation</em>: everything that isn't yours is drawn 100 ms in the
+    past, between two received states, so it moves smoothly through
+    jitter and a lost packet or two. A <code>ClockOffset</code> maps the sender's
+    clock onto ours.</li>
+<li><em>Events</em>: reliable, game-defined messages (a shot, a push). The server
+    receives a client's event and decides whether to apply and relay it.</li>
+<li><em>Calls</em>: a script's <code>net.call</code> is an event (<code>script_net::kScriptCall</code>)
+    with a request id; the server's <code>net.handle</code> runs it and answers that
+    player alone (<code>kScriptReply</code>) with the result or why not. A handler
+    runs all or nothing (a store transaction, with its sends and spawns
+    held back until it succeeds), the idea of SpacetimeDB's reducers
+    (<code>kke/ScriptCalls.h</code>, docs/SCRIPTING.md "Calls"). A server without
+    scripts answers "nothing answers" at once rather than passing the
+    call on.</li>
+<li><em>Synced tables</em>: the server's scripts keep tables of keyed rows
+    (<code>net.table</code>); a player's <code>net.watch</code> subscribes to one, whole or
+    filtered on fields (court == 3), with <code>kTableSubscribe</code>. The server
+    sends the matching rows, "ready", then per tick only the inserts,
+    updates and deletes (<code>kTableRows</code>, packed into as few reliable
+    events as fit). Reconnecting or a new host re-subscribes and shows
+    only the differences. SpacetimeDB's tables and subscriptions,
+    without SQL (<code>kke/net/SyncedTables.h</code>, <code>kke/ScriptTables.h</code>,
+    docs/SCRIPTING.md "Synced tables").</li>
+<li><em>Groups</em>: one server holding many rooms, like the ten courts of a
+    sport center. Every player and body is in a group (0 by default);
+    a client is sent the players and bodies of its group and of the
+    groups it shows, so a spectator in the lobby (group 9) can watch
+    court 3 without the other nine courts' traffic. A non-solid player
+    has no capsule in the server's physics, so spectators walk through
+    the ball and never move it (<code>NetServer::setGroup</code>, <code>showGroups</code>,
+    <code>setBodyGroup</code>, <code>setSolid</code>; in Lua <code>net.setGroup</code> and friends,
+    docs/SCRIPTING.md "Groups"). Hiding and priority are about what is
+    sent, not about cheating: fog of war (<code>sendPlayer</code>) still decides
+    on top.</li>
+<li><em>Spawned objects</em>: things the host makes while playing (a server
+    script's crate or breakable) are <code>Spawn</code> messages: an id, a kind and
+    the builder's own description (up to 256 bytes). Each client builds
+    its copy; late joiners get the ones still there (a thrown ball is
+    "transient" and isn't thrown again for them). Bodies then travel in
+    snapshots like the level's; <code>Despawn</code> removes them.</li>
+<li><em>Breaks</em>: <code>Break</code> messages carry which borders of a breakable broke on
+    the host (below).</li>
+<li><em>Robustness</em>: protocol version (now 9) and game id checked at join,
+    then the server's password if it has one (compared in constant time;
+    <code>KKE_NET_PASSWORD</code>, or the panel's Password field) and its access list
+    (<code>NetServer::admit</code>: bans, allow list), a full server says so, silent peers time out, clients sending bad
+    packets, server-only messages or too many events are dropped.</li>
+<li><strong>Dedicated servers</strong>: <code>NetConfig::dedicated</code> gives all slots to
+  clients (no host player). <code>kke_server</code>, its roles, the directory and
+  Docker are in docs/SERVER_HOSTING.md. A server's text for players
+  (MOTD, <code>say</code>) is the event <code>kEventServerMessage</code>; NetModule logs it and
+  shows it in the panel.</li>
+<li><strong>NetModule</strong> (<code>kke/modules/NetModule.h</code>): the engine module that ties
+  it to a game. The game registers its replicated Jolt bodies in the same
+  order on every machine (<code>replicateBody</code>), gives its player's state each
+  frame, and draws <code>remotePlayers()</code>. Other players get a kinematic
+  capsule in the local Jolt world, so they block you and, on the host,
+  push crates.</li>
+</ul>
+<h3 id="why-the-client-simulates-the-crates-too">Why the client simulates the crates too<a class="headerlink" href="#why-the-client-simulates-the-crates-too" title="Permanent link">&para;</a></h3>
+<p>The first version made a client's crates kinematic copies of the host's.
+They looked right but could not be pushed: your character is blocked by
+the local copy before your capsule on the host ever touches the real one.
+Now a client simulates its crates like the host does, so walking into one
+pushes it at once, and each frame steers every crate toward the host's
+state (carried forward by its velocity to about "now"):</p>
+<ul>
+<li>velocity blend toward the host's velocity plus a position-error term
+  (6/s, blended at 12/s), so contacts stay stable;</li>
+<li>a crate the host has asleep and that is (nearly) still here slides the
+  last centimetres into place, because ground friction would otherwise
+  eat the small correcting velocity and leave it a few centimetres off;
+  not while you're walking into it, which is you starting a push;</li>
+<li>more than 2 m off (a reset, a missed tumble) it jumps.</li>
+</ul>
+<p>Measured with two <code>kke_demo</code> instances: a guest pushes a crate 1.8 m, and
+host and guest agree on where it stops to within 1 cm; with 80 ms lag each
+way, 20 ms jitter and 5% loss both ends still agree within 1 cm. Under lag
+a push feels heavier (the host's copy pulls back until it catches up).</p>
+<h3 id="breakables">Breakables<a class="headerlink" href="#breakables" title="Permanent link">&para;</a></h3>
+<p>FEMFX isn't deterministic across machines, so simulating each copy and
+hoping isn't enough: one player's shot would crack the glass on one
+screen and leave it whole on another. What <em>is</em> the same everywhere is
+how a breakable is cut: its pieces are baked from a fracture seed
+(<code>kke::bakeFracture</code>), and it breaks KKE's own way, border by border
+(<code>kke::BreakGraph</code>, PhysicsModule "Breakable"). So:</p>
+<ul>
+<li>The host's breakables break from their stresses as always. Each frame
+  NetModule asks each replicated one how many borders are broken
+  (a cheap count) and, when that changes, sends the new borders as
+  <code>(piece, piece)</code> pairs with the breakable's seed.</li>
+<li>A client's copies are <em>followers</em>: they never break on their own, only
+  along the borders the host sends. Same pieces, same borders, same
+  result: the pieces the client sees are the host's. Where the debris
+  then flies is each machine's own (cosmetic, like before).</li>
+<li>A client whose copy was baked with another seed (another object in that
+  slot, a changed world seed) logs an error and leaves it alone instead
+  of breaking it wrongly.</li>
+<li>Late joiners get every border broken so far, and breaks for a breakable
+  they don't have yet wait until it's there.</li>
+<li>Leaving a game makes them break on their own again.</li>
+</ul>
+<p>Games call <code>replicateBreakable(handle)</code> for the level's breakables, in the
+same order on every machine (kke_demo does it for the breaking yard);
+script breakables are handled for you. Measured with two <code>kke_demo</code>
+windows: the host's script drops a ball on a glass pane, the host's pane
+breaks along 80 borders into 35 pieces, the guest's along the same 80 into
+the same 35; the yard's stone wall, 6 borders and 2 pieces on both.</p>
+<p>A break reaches a client about half a round trip after it happened (plus
+the reliable channel's resend if a packet was lost), so on a client a
+pane cracks a moment after the ball hits it.</p>
+<h3 id="movement-checks">Movement checks<a class="headerlink" href="#movement-checks" title="Permanent link">&para;</a></h3>
+<p>The server always checked moves against speed limits. With the level in
+its own physics world, the host now also refuses (and sends the player
+back to where it last was legitimately) a move that</p>
+<ul>
+<li><strong>goes through a wall</strong>: the path from the last accepted position to
+  the new one, 0.5 m above the feet, crosses static level geometry. The
+  straight line or "up, over, down" must be clear, so stairs, vaults and
+  ledge climbs pass; crates and other players don't count;</li>
+<li><strong>flies</strong>: with nothing to stand on (0.6 m below) or hold (a wall or
+  ledge beside you, for climbs, hangs and wall runs), it has either risen
+  more than 3 m, or it has been in the air over 1.5 s without falling as
+  (a third of) gravity would make it. Standing on a crate counts; your
+  own stand-in capsule doesn't.</li>
+</ul>
+<p><code>kke/net/WorldMoveCheck.h</code> has the rules and <code>MoveCheckSettings</code> the
+numbers (<code>NetModule::moveCheckSettings</code>; a glider or jetpack game turns
+the fall rule off with <code>minFallGravity = 0</code>). The Network panel shows the
+refusals and has a switch; the log gets one line per player per 5 s.
+Any game can add its own rule through <code>NetServer::checkMove</code>.</p>
+<h3 id="input-replay">Input replay<a class="headerlink" href="#input-replay" title="Permanent link">&para;</a></h3>
+<p>Two models for players, chosen by the host:</p>
+<ul>
+<li><strong>Owner-predicted</strong> (the default; co-op, sandbox, most games): your game
+  moves your player and sends where it is; the host checks each move
+  (above). Nothing to set up, nothing ever snaps back for an honest
+  player, and it catches the blatant cheats. Small ones (running a little
+  fast inside the slack) get through.</li>
+<li><strong>Input replay</strong> (competitive; tick <strong>Input replay</strong> next to Host, or
+  <code>KKE_NET_REPLAY=1</code>): your game sends <em>inputs</em> (move direction, sprint,
+  walk, crouch, jump, where you look) 60 times a second and the host runs
+  everyone's movement itself. Where a player is, is whatever the host's
+  own <code>kke::Locomotion</code> made of their inputs: speed hacks, fly hacks,
+  teleports and walking through walls have nothing to send. This is the
+  model of competitive shooters (Valve's Source, Overwatch, Rocket League).</li>
+</ul>
+<p>Nobody wants to wait for the host before their player moves, so with
+input replay your game still moves your player the moment you press
+(prediction). It keeps each input and the state after it; when the host's
+answer for an input disagrees (by more than 5 cm, or in another movement
+state: a vault the host didn't do), it goes back to that input, takes
+the host's position and plays every input since again (rewind and
+replay). With an honest client and the same level both sides agree and
+nothing moves; when they don't, the jump is hidden by fading a drawing
+offset (<code>playerDrawOffset()</code>).</p>
+<p>What makes it work (<code>kke/net/InputReplay.h</code>, <code>LocomotionReplay.h</code>):</p>
+<ul>
+<li><em>Exactly the same numbers on both sides.</em> Inputs are quantized before
+  the client steps them, to what the wire carries (<code>quantize()</code>), and
+  both sides step fixed 1/60 s ticks whatever the frame rate.</li>
+<li><em>Rewindable movement.</em> <code>RigidWorld::characterState()</code> saves a
+  character completely (Jolt's own state of the <code>CharacterVirtual</code>:
+  position, velocity, contacts, ground; its input, height and clock) and
+  <code>setCharacterState()</code> puts it back; a <code>Locomotion</code> is plain data, so a
+  copy is its whole state (<code>restore()</code>). A replayed character is stepped
+  on its own (<code>stepCharacter()</code>, <code>setCharacterManual()</code>), one input at a
+  time, so it can be replayed without stepping the whole world.</li>
+<li><em>The host waits rather than guesses</em> (<code>InputQueue</code>). Each host tick a
+  player may play one input. If theirs hasn't come (a slow frame, a
+  jittery link) they stand still a moment on the host and the ticks are
+  made up when the inputs arrive together, so the host runs exactly the
+  inputs the client predicted with: a bad connection costs latency, not
+  corrections. More than one input per tick on average can't be had:
+  a client sending faster only fills the queue, whose oldest inputs are
+  skipped (a jump in them still happens).</li>
+<li><em>Loss.</em> Every input packet carries the newest 16 unacknowledged inputs,
+  so a lost packet's inputs arrive with the next. The host answers with
+  <code>InputAck</code> (the last input it played and the state after it) with
+  each snapshot.</li>
+</ul>
+<p>In a game: <code>NetModule::setPlayer(&amp;locomotion, character)</code> once, then each
+frame <code>if (!net.stepPlayer(input, dt)) locomotion.update(...)</code> instead of
+updating it yourself: offline, hosting or with owner prediction it
+returns false and nothing changes. The host creates a character and a
+<code>Locomotion</code> for each joining client (at <code>replaySpawn(id)</code>) and runs
+them. The showcase does all of this (<code>ShowcaseModule::stepNetPlayer</code>).</p>
+<p>For now, with input replay: players don't block each other (the host's
+characters don't collide with one another, so a client's prediction
+doesn't bump into stand-ins either); a teleport or respawn is the host's
+to make (one made by the client alone is put back); crates and other
+bodies near you are the host's, so pushing one is predicted only as far
+as your copy of it goes. Everything else (events, voice, spawns, breaks)
+works as with owner prediction.</p>
+<h2 id="several-players-on-one-screen">Several players on one screen<a class="headerlink" href="#several-players-on-one-screen" title="Permanent link">&para;</a></h2>
+<p>Split screen online, like Halo: two (or more) people on one couch join
+someone else's game from one machine, and the host can have friends on
+its couch too. Up to 8 players share one connection (slot 0 is the
+game's own player, slots 1 to 7 are guests); each is a player of its own
+for everyone else, with its own id, name, state and movement checks.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">net</span><span class="p">.</span><span class="n">addLocalPlayer</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="s">"Sam"</span><span class="p">);</span><span class="w">            </span><span class="c1">// before or after host() / join()</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1">// each frame, like setLocalPlayer(state) for the first one:</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">net</span><span class="p">.</span><span class="n">setLocalPlayer</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">samState</span><span class="p">);</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">net</span><span class="p">.</span><span class="n">localPlayerId</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span><span class="w">                    </span><span class="c1">// its id in the game (0 until the host gave one)</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">net</span><span class="p">.</span><span class="n">isLocalPlayer</span><span class="p">(</span><span class="n">id</span><span class="p">);</span><span class="w">                   </span><span class="c1">// one of this screen's? (don't draw it as a remote)</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">net</span><span class="p">.</span><span class="n">removeLocalPlayer</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span><span class="w">                </span><span class="c1">// Sam puts the controller down</span>
+</code></pre></div>
+<ul>
+<li>On the wire (protocol 6, and 7 for 32 extra bytes): a client's <code>Guest</code> message asks for a player
+  in a slot, the host's <code>GuestAck</code> gives its id or says why not (the game
+  is full, a ban, input replay). <code>PlayerState</code> and <code>Correction</code> carry the
+  slot. A host's own guests need no messages (<code>NetServer::addLocalGuest</code>).</li>
+<li>Guests count toward <code>maxPlayers</code>, so a full game turns the next guest
+  or joiner away; the host's LAN and directory entries count them too.</li>
+<li>Nobody is sent their own screen's players in snapshots; the fog of war
+  shows a player to a screen when any of its players can see it.</li>
+<li>Guests share their connection's events (the event's <code>fromPlayer</code> is
+  the connection's first player) and voice (one microphone per machine).</li>
+<li>A guest leaving costs only it; the connection going takes its guests
+  with it; kicking a guest tells its owner and keeps the connection.</li>
+<li><code>NetPlayerState::extra</code> (up to 32 bytes, the game's own) travels with
+  every state: Climb Race puts where the hands and feet are in it.</li>
+<li>Not with input replay yet: there each connection plays one player, and
+  a guest is refused with the reason.</li>
+</ul>
+<h2 id="names-and-looks-that-change">Names and looks that change<a class="headerlink" href="#names-and-looks-that-change" title="Permanent link">&para;</a></h2>
+<p>A player's name and "character" (what others draw them as: a colour, a
+car, an outfit) are sent when they join, and again whenever they change:
+set <code>NetModule::playerName</code> / <code>playerCharacter</code>, or call
+<code>addLocalPlayer(slot, name, character)</code> again with the new ones, at any
+time. So a player who joins a lobby and then picks another colour shows
+up in it on every screen.</p>
+<ul>
+<li>On the wire (protocol 10): a client's <code>Profile</code> message (slot, name,
+  character); the host keeps it and tells everyone with a <code>PlayerInfo</code>
+  for a player they already know. The host's own changes go out the same
+  way (<code>NetServer::setLocalProfile</code>). A later joiner gets the newest.</li>
+<li>The player keeps their id: <code>NetClient::onPlayerChanged(id)</code> fires (and
+  <code>NetServer::onProfile(id)</code> on the host), not <code>onPlayer</code>, which stays
+  "joined or left".</li>
+<li><code>Profile</code> counts toward the events-per-second limit; a new name passes
+  the server's <code>admit</code> check like a joining one.</li>
+<li>Every online demo puts its lobby look in the character
+  (<code>kke::Lobby::lookText</code>, "look:2.4|#5aa6ff": the choice numbers, then
+  the game's own words after the bar), so LobbyModule shows everyone
+  online with what they picked (docs/LOBBY.md "Online").</li>
+</ul>
+<h2 id="in-climb-race">In Climb Race<a class="headerlink" href="#in-climb-race" title="Permanent link">&para;</a></h2>
+<p>A whole game on top of the above (games/climb_race/Net.cpp, NetRace.h),
+and a template for a menu-driven one:</p>
+<ul>
+<li>The start menu (docs/LOBBY.md) gets three rows with <code>lobby().addOption</code>:
+  Online (Off / Join / Host), Game (what <code>NetModule::searchLan()</code> found:
+  <code>lanGames()</code> gives address, port, host name, players and whether it's
+  this game) and Join. Host calls <code>host()</code>, Join calls <code>join(address, port)</code>.</li>
+<li>Every lobby seat is a player: the first is NetModule's own, the others
+  <code>addLocalPlayer(slot, name, character)</code>, with the lobby look and the
+  exact colour as the character ("look:2.4|#5aa6ff", "|cpu,#..." for a
+  CPU). The host's CPU climbers are host guests too, so they're players
+  everyone sees. In the menu the other screens' players stand at the back
+  of the line-up in their colours, on every screen.</li>
+<li>The host decides the race with game events (base 0x4300): Setup (the
+  mountain, and which player climbs which face), Ready and Go (the
+  countdown waits for every machine), Finish and Loose (a hold came off),
+  Hit (Rockfall: a rock hit someone; it flashes on every screen).</li>
+<li>Each climber's pose is its NetPlayerState: feet, facing, state (on foot,
+  climbing, mantling) and, in <code>extra</code>, the hands and feet relative to it
+  (1 mm), the hips, and each hand's rock normal and grip: 29 bytes.</li>
+<li><code>standIns = false</code>: the game draws the other players itself (a climber
+  on the right face), so NetModule makes no capsules for them.
+  <code>checkMoves = false</code>: a mantle over an edge looks like going through the
+  rock to the wall check; the speed limits still apply.</li>
+</ul>
+<p>The Flying demo (games/flying_demo/Net.cpp) does the same with planes,
+and raises the server's speed limits to a stunt plane's before hosting:
+<code>NetModule::movementLimits</code> (a <code>net::MovementLimits</code>: horizontal, rise
+and fall speed, slack, teleport cooldown) is what the host's server
+checks every move against; set it before <code>host()</code>.</p>
+<p>Tennis (games/tennis/Net.cpp, NetTennis.h, events from 0x5400) shows a
+ball game: nothing about the ball streams. The hitter's machine sends the
+hit (where, velocity, spin) and every machine flies the same maths from
+the numbers as they come off the wire; the host is the umpire (Serve and
+Point events, each point numbered so a late hit is dropped) and sends
+its ball a few times a second only to put drift right. Its sport center
+runs up to ten matches at once for everyone: each event names its match,
+the host's CPU players for all of them go in one event ten times a
+second, and a client at a court's gate asks the host, which keeps the
+queues (a Gate request, a Board reply).</p>
+<p>When a host quits, it tells every player ("the host ended the game")
+before it closes, so they log it as news, not the warning a lost
+connection gets.</p>
+<h2 id="in-kke_demo">In kke_demo<a class="headerlink" href="#in-kke_demo" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Players: the local character model, with its own animator per remote
+  player, driven by their state (locomotion state, speed, traversal
+  progress, crouch, fall height). Without the animation library installed
+  they're boxes.</li>
+<li>Crates and the moving platform are the host's. R on a client asks the
+  host to reset them.</li>
+<li>Shots: everyone sees every FEMFX ball. The breaking yard's glass,
+  plank and stone wall break on the host and in the same pieces for
+  everyone (Breakables above).</li>
+<li>Scripts: what <code>sv_*.lua</code> spawns shows up for everyone (docs/SCRIPTING.md
+  "Multiplayer").</li>
+<li>Internet servers: the Network panel (F1) lists the public servers a
+  directory knows for this game (docs/SERVER_HOSTING.md "Servers helping
+  each other"): <code>KKE_DIRECTORIES=host:port</code> fills it at start, Refresh
+  asks again, Join connects (with the Password field's password).</li>
+</ul>
+<h2 id="tests">Tests<a class="headerlink" href="#tests" title="Permanent link">&para;</a></h2>
+<p><code>tests/test_net.cpp</code> (all in CI):</p>
+<ul>
+<li>BitStream: round trips at the edges of every range, quaternions,
+  strings, reading past the end.</li>
+<li>Protocol: every message round trips; truncated, padded, wrong-type and
+  random packets are rejected (fuzzing).</li>
+<li>Loopback network: connect, both channels, disconnect; loss, delay and
+  reordering only where UDP would (reliable stays complete and in order).</li>
+<li>Sessions on the loopback network: join and see each other and the
+  host, bodies by priority within one packet, events and relays, a wrong
+  version, a wrong game and a full server turned away, impossible moves
+  corrected while a real teleport is allowed, a peer sending garbage
+  kicked, leaving seen by everyone, other players still smooth at 80 ms
+  ±25 ms lag with 10% loss.</li>
+<li>Real UDP: two ENet hosts on one PC, LAN discovery finds the host, a
+  client joins and both see each other.</li>
+</ul>
+<p>v2 adds (in the same file): <code>Spawn</code>, <code>Despawn</code> and <code>Break</code> round trips
+and fuzzing, script spawn descriptions (damaged or out-of-range ones
+refused), spawns reaching clients and only the persistent ones reaching
+late joiners, breaks sent once and replayed to late joiners (2500 borders
+split over several messages), a client sending server-only messages
+kicked, and the game's move check refusing and correcting.</p>
+<p>Several players on one screen adds: a client with two guests and a host
+with one, where everyone sees everyone else (the extra bytes too), nobody
+gets their own screen's players, a guest leaving and a connection going;
+guests filling a server so a late joiner is turned away, a kicked guest's
+owner told and still connected; guests refused under input replay; a
+guest's impossible move corrected by its slot, not the first player's.
+The fuzz test covers <code>Guest</code>, <code>GuestAck</code>, <code>Profile</code> and states with extra
+bytes. A look picked after joining (the host's, a client's, a guest's)
+reaches everyone with the same ids, isn't taken for a join, and reaches
+a later joiner.
+The host ending the game tells its players so (<code>endedByServer()</code>), which
+is not a lost connection.</p>
+<p>Groups add: a snapshot's "still there" list round trips; 100 players on
+one server all keep moving for everyone, fresh and never shown as
+hidden, though a snapshot holds only some of them; two courts don't see
+each other's players or ball, a spectator in the lobby sees the court it
+watches and is a ghost, moving a player shows it on its new court and
+leaving forgets its group.</p>
+<p><code>tests/test_break_graph.cpp</code>: a follower given the host's borders ends up
+with the host's pieces; borders that don't exist can't be broken.</p>
+<p><code>tests/test_move_check.cpp</code>: walking, jumping and a 30 m fall pass; through
+a wall is refused; a vault, a ledge climb and five seconds hanging pass;
+rising or hovering in the open is flying; a crate holds you up, your own
+capsule doesn't; the honest fall after a refusal passes.</p>
+<p><code>tests/test_rigid_world.cpp</code>: bodies switch between dynamic and kinematic
+(kinematic ones hold still and push, dynamic again they fall).</p>
+<p><code>tests/test_input_replay.cpp</code> (input replay): the host plays each input
+once and in order, waits for a late one and makes the ticks up, skips a
+lost one after a few ticks, and a client with a fast clock or one that
+goes quiet and bursts gets no extra distance; a press in a skipped input
+still happens; a fair client is never corrected, a push only the server
+knows about is rewound and replayed to the server's exact position, as
+is another movement state in the same place; inputs round trip bit for
+bit as the client stepped them; a Jolt character and its Locomotion put
+back mid-run move exactly the same again through a vault; and over a
+simulated network with lag, jitter and loss a Locomotion player vaults
+the same on both sides, a client with a wall missing from its level is
+stopped by the host's, and a cheat's fast clock buys nothing.</p>
+<h2 id="not-yet">Not yet<a class="headerlink" href="#not-yet" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Rollback for fighting games, lockstep for RTS (ACTION_PLAN.md); with
+  input replay: player-vs-player collision, host-side respawns, and
+  lag-compensated hit checks (rewinding the other players to what the
+  shooter saw).</li>
+<li>Remembering a server's key per address (so a plain-address join can
+  warn when it changes); a relay per region picked by ping.</li>
+<li>Breaking on a client before the host says so (predicted breaks): today
+  a client's pane cracks half a round trip after the hit.</li>
+<li>FEMFX objects that aren't breakables (a thrown ball, soft bodies) aren't
+  in snapshots: each machine simulates its own copy.</li>
+</ul>
+<h2 id="voice">Voice<a class="headerlink" href="#voice" title="Permanent link">&para;</a></h2>
+<p>Voice chat is built in (<code>kke::VoiceModule</code>, <code>KKE_ENABLE_VOICE</code>, on by
+default), with nothing to sign up for:</p>
+<ul>
+<li><strong>Codec</strong>: Opus (BSD), 48 kHz mono, 20 ms frames at 24 kbit/s by default,
+  with in-band forward error correction: a single lost packet is rebuilt
+  from the next one. <code>Voice</code> messages go on the unreliable channel.</li>
+<li><strong>Talking</strong>: push-to-talk (the <code>voice.talk</code> action, <strong>B</strong> by default,
+  rebindable like any action; kke_demo moves it to <strong>P</strong> and <strong>LB</strong>, since
+  B is one of its Lua toys), voice activated (a gate that follows the
+  room's noise floor, with a short hangover so word ends aren't cut), or
+  open mic. "Hear myself" in the Voice panel tests the microphone.</li>
+<li><strong>Who hears it</strong> is decided by the server (<code>net::VoiceRules</code>, set on
+  <code>NetModule::voiceRules</code> by a host): <strong>Nearby</strong> (proximity: within
+  <code>proximityRange</code>, 40 m by default, and heard from where the speaker
+  stands), <strong>Team</strong> (a <code>team(playerId)</code> function; unset = everyone), or
+  <strong>Everyone</strong> (heard like a radio, not from a place). The server stamps
+  who spoke (a client can't pretend to be someone else), caps each
+  speaker at 60 packets a second, and never gives out anyone's address:
+  all voice goes through it. <code>kke_server</code>'s console has <code>mute</code> / <code>unmute</code>.</li>
+<li><strong>Hearing</strong>: each speaker has a jitter buffer (60 ms cushion, reorders,
+  drops what arrives after its turn, conceals up to 100 ms of loss) and a
+  live <code>AudioStream</code> voice in the mixer (category Voice), so voices are
+  placed, occluded and reverberated like any other sound. Mute or set
+  the volume of anyone locally; <code>speaking(id)</code> lets a game draw a
+  speaker icon.</li>
+<li><strong>Proximity chat you can see</strong> (<code>kke::VoiceHudModule</code>, add it after
+  the VoiceModule): the direction a voice comes from matters most, so it
+  is heard <em>and</em> shown.</li>
+<li>Heard: a Nearby voice plays from the speaker's mouth (their network
+    position + <code>Settings::mouthHeight</code>, or the game's <code>speakerPosition</code>
+    hook), panned, delayed between the ears in Binaural mode, muffled
+    when behind you or a wall, and fading out to <code>hearingRange</code>. Hosting,
+    the server's <code>proximityRange</code> follows <code>hearingRange</code>, so nobody out of
+    range is even sent the voice. The pause menu's "Headphones: sharper
+    direction" switches the mixer to Binaural (a delay and head shadow
+    per ear instead of a plain pan).</li>
+<li>Shown: a ring over each talker's head that pulses with their voice,
+    with their name; someone out of view gets an arrow at the edge of the
+    screen pointing their way (top = ahead, bottom = behind).</li>
+<li>The list: players near you who talked lately, nearest first, one
+    numbered slot each with a direction arrow, distance and level. A slot
+    keeps its number while they talk and nothing moves while the menu is
+    open. The pause menu (kke::DemoPanelModule) gets a "Voices nearby"
+    section with <strong>one mute per slot</strong> ("1  Mute Sam  (8 m left)"), how to
+    talk (hold a button, or when I speak), and markers on/off. Muting is
+    local; a muted player's slot stays, greyed, so you can unmute them.</li>
+<li>The data behind it is <code>VoiceModule::talkers()</code> (who, speaking, muted,
+    distance, azimuth, elevation, level), for a game that draws its own.</li>
+<li>Used by games/party and games/tennis (the sport center), both at a
+    30 m hearing range.</li>
+<li><strong>Off</strong>: <code>setEnabled(false)</code> turns voice chat off for this player:
+  nothing is sent and nobody is heard until it's turned back on (Party's
+  Voice row in the menu and its pause panel).</li>
+<li><strong>Cleaning the microphone</strong> (<code>kke::voice::VoiceCleaner</code>), before
+  coding, on by default, switches in the Voice panel:</li>
+<li><em>Echo cancellation</em> (SpeexDSP's MDF filter, BSD): without headphones
+    the microphone hears the speakers, and the others would hear
+    themselves back. The mixer hands voice chat everything it plays
+    (<code>AudioMixer::setOutputTap</code>); an adaptive filter learns the path from
+    speaker to microphone (up to 200 ms of delay and room echo) and
+    subtracts it, then a residual echo suppressor takes out what's left.
+    The panel shows how many dB it took out. Needs the audio output at
+    48 kHz (the default).</li>
+<li><em>Noise suppression</em> (RNNoise 0.1.1, BSD; its model is in the source,
+    416 KB): a small neural network trained on speech takes out fans,
+    keyboards, traffic and hiss, which also keeps the voice gate from
+    opening on noise.</li>
+<li>In the tests: steady noise 29 dB quieter; a speaker echo 25 ms late
+    with a reflection 21 dB quieter after 4 s of learning.</li>
+<li><code>KKE_VOICE=off</code> keeps the microphone closed; <code>KKE_VOICE_NOISE=off</code> /
+  <code>KKE_VOICE_ECHO=off</code> switch the cleaning off; <code>KKE_VOICE_TONE=440</code>
+  sends a test tone instead of the microphone (not cleaned), to check a
+  connection with nobody talking.</li>
+</ul>
+<p>Checked end to end: two kke_demo instances, the host sending a tone, the
+client (at 7 fps under a software GPU) played 1188 frames with nothing
+skipped. Tests: test_voice.cpp (jitter buffer, voice gate, streamed mixer
+voices, routing, flood cap, Opus round trip with a lost frame, noise
+suppression, echo cancellation, the mixer's output tap). With a real
+microphone and speakers it waits for a person: HW-018 in
+docs/HARDWARE_TESTS.md.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../AUDIO/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Audio">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Audio
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../SERVER_HOSTING/" class="md-footer__link md-footer__link--next" aria-label="Next: Hosting a server">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Hosting a server
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      MIT licence. KKE is written by Claude (Anthropic) working in the repository.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/Khyretos/kk-engine" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://ko-fi.com/khyretos" target="_blank" rel="noopener" title="ko-fi.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11.351 2.715c-2.7 0-4.986.025-6.83.26C2.078 3.285 0 5.154 0 8.61c0 3.506.182 6.13 1.585 8.493 1.584 2.701 4.233 4.182 7.662 4.182h.83c4.209 0 6.494-2.234 7.637-4a9.5 9.5 0 0 0 1.091-2.338C21.792 14.688 24 12.22 24 9.208v-.415c0-3.247-2.13-5.507-5.792-5.87-1.558-.156-2.65-.208-6.857-.208m0 1.947c4.208 0 5.09.052 6.571.182 2.624.311 4.13 1.584 4.13 4v.39c0 2.156-1.792 3.844-3.87 3.844h-.935l-.156.649c-.208 1.013-.597 1.818-1.039 2.546-.909 1.428-2.545 3.064-5.922 3.064h-.805c-2.571 0-4.831-.883-6.078-3.195-1.09-2-1.298-4.155-1.298-7.506 0-2.181.857-3.402 3.012-3.714 1.533-.233 3.559-.26 6.39-.26m6.547 2.287c-.416 0-.65.234-.65.546v2.935c0 .311.234.545.65.545 1.324 0 2.051-.754 2.051-2s-.727-2.026-2.052-2.026m-10.39.182c-1.818 0-3.013 1.48-3.013 3.142 0 1.533.858 2.857 1.949 3.897.727.701 1.87 1.429 2.649 1.896a1.47 1.47 0 0 0 1.507 0c.78-.467 1.922-1.195 2.623-1.896 1.117-1.039 1.974-2.364 1.974-3.897 0-1.662-1.247-3.142-3.039-3.142-1.065 0-1.792.545-2.338 1.298-.493-.753-1.246-1.298-2.312-1.298"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
