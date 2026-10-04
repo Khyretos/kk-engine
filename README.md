@@ -15,6 +15,7 @@ git fetch FORGEJO <branch> && git checkout -B <branch> FORGEJO/<branch>
 | `sea-demo-checks.md` | `feature/sea-demo-ships` |
 | `goblin-horde-checks.md` | `goblin-horde-rework` |
 | `kke-demo-checks.md` | `kke-demo-world` (rounds 1-3: `kke-demo.patch`, `kke-demo-02.patch`, `kke-demo-03.patch`) |
+| `jiggle-body-checks.md` | `feature/jiggle-realistic-body` (on `main` fa1b7f1) |
 | `racing-round-checks.md` | none pushed from this inbox (`racing-round.patch` was not in this batch) |
 
 The "Apply and build" steps in the checks files that run `git am` are already
