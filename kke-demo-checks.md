@@ -11,6 +11,7 @@ The showcase world comes as a series, one commit per round, all on branch `kke-d
 | 5 | `kke-demo-05.patch` | kke_demo: cars at the race track, a stunt plane at the airfield |
 | 6 | `kke-demo-06.patch` | kke_demo: the nature park and the snow field |
 | 7 | `kke-demo-07.patch` | kke_demo: the parkour park; Locomotion: wall climb and hang vault |
+| 8 | `kke-demo-08.patch` | kke_demo: spawning and carrying online |
 
 Apply in order with `git am` (`git am -3` after other patches). One PR for the branch is fine;
 title it after the newest round, or `kke_demo: showcase world (rounds 1-N)`.
@@ -365,3 +366,54 @@ rate, and whether the wall climb feels right on a pad.
 2. Hang vault: jump at a thin wall to hang, jump again: over and down.
 3. Shimmy wall: hang, hold right: hand over hand, round the corner; at the gap, jump sideways.
 4. Rooftops: up the steps, sprint and jump roof to roof.
+
+# Round 8: spawning and carrying online
+
+## What changed (10 files)
+- `games/showcase/Online.cpp` (new): a guest's spawn menu sends the row and spot to the host;
+  the host checks it is within 8 m of that player, builds it and shares every prop with
+  `NetModule::spawn` (kind 0x5301) + `bindSpawnedBody`, so all machines see the same body.
+  `despawn` on clear and when the 60-prop cap drops the oldest. A guest's pick up asks the
+  host (within 3 m), which carries the real body in front of the guest's replicated position
+  (`stepRemoteCarries`); put down and throw send their velocity. `KKE_DEMO_ONLINE=1`.
+- `games/showcase/NetEvents.h` (new): the game's event structs and `serialize` functions,
+  moved out of ShowcaseModule.cpp, plus spawn/carry/throw.
+- Carry.cpp: `holdPointFor` / `steerHeld` split out so host and local carry share the maths; a
+  guest lets go only past 3 m (its copy lags; the host's limit is 2.5 m).
+- Spawner.cpp: `spawnRow` splits into "ask the host" (guest) and `spawnRowAt` (host/offline).
+- README (Online paragraph, Networking section, files table, env row), SHOWCASE.md, NETWORKING.md.
+
+## Already checked in the cloud
+- GCC -Werror build: zero warnings. clang -Werror on Online.cpp, Carry.cpp, Spawner.cpp,
+  ShowcaseModule.cpp: clean. `check_std_includes.py` OK. `kke_tests` 1002 passed.
+  `check_game kke_demo --headless`: OK (only the sky HDR).
+- Two copies on two Xvfb displays (`KKE_NET=host` / `join:127.0.0.1`, `KKE_DEMO_ONLINE=1`):
+  the host's barrel showed on the guest with the same net id and spot; the guest's crate was
+  made by the host (`online: player 1 spawned row 0`), lifted (`picked up body 32769`), rode
+  at chest height on both, flew about 4 m when thrown (`threw body 32769`), and clear removed
+  it on both machines.
+- First run found a bug: the guest let go after a step (its copy lags the host's hands by more
+  than the 1 m snag limit). Fixed with the 3 m guest limit; three later runs held it.
+- Offline `KKE_DEMO_CARRY=1`: lift, carry and throw unchanged.
+- Series applies alone on 9349996 and with `git am -3` after racing/platoon/climbing/sea.
+- Screenshot: `kke-demo-shots/online-host-and-guest.png` (host's view, the guest beside you).
+
+## Run on soucouyant
+```sh
+cmake --build build -j4 && tools/check_game kke_demo --seconds 10
+cd build/bin
+KKE_MAIN_MENU=0 KKE_NET=host KKE_DEMO_ONLINE=1 ./kke_demo > host.log 2>&1 &
+sleep 5; KKE_MAIN_MENU=0 KKE_NET=join:127.0.0.1 KKE_DEMO_ONLINE=1 ./kke_demo > guest.log 2>&1
+grep online host.log guest.log   # spawned row, picked up, threw, cleared; no FAILED
+```
+Not judged in the cloud: how smooth a carried crate looks on the guest over a real network.
+
+## Play list for Kees (round 8, two PCs or two copies)
+1. F1 > Network panel: Host on one PC, Search LAN > Join on the other.
+2. On the guest: G, spawn a crate. It shows on both.
+3. Guest: F to lift it, walk, click to throw. The host sees it carried and thrown.
+4. Guest: G > Clear what I spawned: gone on both.
+
+## Not shared online (each machine has its own)
+Range dummies, the forest (trees, logs, flowers), footprints in the snow, the cars and plane.
+

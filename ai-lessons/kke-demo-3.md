@@ -113,3 +113,25 @@ order matters. After adding a move, rerun the old demos
 A 0.6 s move is 5 frames at 9 fps. Hitting it by timing is luck. The demo
 stops calling Locomotion::update (dt 0) once the move is half done
 (KKE_DEMO_PARKOUR_FREEZE=wallclimb), then takes the shot.
+
+# Round 8: spawning and carrying online
+
+## 14. Test online with two copies on two virtual screens
+```sh
+Xvfb :77 & Xvfb :78 &
+DISPLAY=:77 KKE_MAIN_MENU=0 KKE_NET=host KKE_DEMO_ONLINE=1 ./kke_demo > host.log 2>&1 &
+sleep 10; DISPLAY=:78 KKE_MAIN_MENU=0 KKE_NET=join:127.0.0.1 KKE_DEMO_ONLINE=1 ./kke_demo > guest.log 2>&1
+grep online host.log guest.log
+```
+Each side logs what it sees (net ids and positions), so one run checks both.
+
+## 15. The host owns the body; the guest's copy is late
+What happened: the guest lifted a crate and dropped it a step later.
+Cause: the guest's copy follows the host's snapshots, so it trails the
+guest's hands by more than the 1 m "snagged" limit. Fix: the guest only lets
+go past 3 m, a bit more than the host's own 2.5 m, so the host decides.
+Rule: any distance check on a replicated body needs slack for lag.
+
+## 16. Walk to the thing, don't walk "forward"
+The guest's start spot differs run to run, so "walk forward 1 s" missed the
+crate. The demo walks toward the crate until it is 1.3 m away.
