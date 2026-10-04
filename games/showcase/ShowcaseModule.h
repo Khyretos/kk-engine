@@ -71,6 +71,17 @@ private:
     void spawnBreakables();
     void setupPlayer();
     void buildParkourLane(std::vector<kke::Vertex>& v, std::vector<uint32_t>& i);
+    // The parkour park (Parkour.cpp): its sections, the HUD's name for the
+    // one you're in, and KKE_DEMO_PARKOUR (step -1 = off).
+    void buildParkourPark(std::vector<kke::Vertex>& v, std::vector<uint32_t>& i);
+    bool parkourStation(const glm::vec3& p, std::string& station, std::string& text) const;
+    void updateParkourDemo(float dt, kke::Locomotion::Input& in);
+    int m_demoParkourStep = -1, m_demoParkourLast = 0, m_demoParkourRoof = 0;
+    float m_demoParkourT = 0.0f;
+    // KKE_DEMO_PARKOUR_FREEZE=wallclimb|hangvault|shimmy: stop there, mid-move (screenshots).
+    std::string m_demoParkourFreeze;
+    bool m_demoParkourFrozen = false;
+    kke::Locomotion::State m_demoParkourState = kke::Locomotion::State::Ground;
     void updateAnimation(float dt);
     // What the animation state machine reads: from kke::Locomotion for
     // our player, from the network for everyone else's.
@@ -80,7 +91,13 @@ private:
         float obstacleHeight = 0.0f; // vault / climb: the top above the feet
         float wallSide = 0.0f;       // wall run: +1 wall on the right, -1 left
         bool crouch = false, landed = false, jumped = false;
+        bool wallClimb = false, hangVault = false; // a Leap up a wall from the ground; a Vault from a hang
     };
+    // Shimmy hands and feet: how far along the edge (signed, m) and which
+    // way the last move went; the wall climb's footholds.
+    float m_shimmyDist = 0.0f, m_shimmyDir = 1.0f;
+    glm::vec3 m_climbStep[2]{};
+    bool m_climbStepSet[2]{};
     void addAnimatorStates(kke::Animator& a);
     void animate(kke::Animator& a, const MotionInfo& m, float dt);
     // Synty scenes (scenes/*.scene.json), each loaded on first visit at

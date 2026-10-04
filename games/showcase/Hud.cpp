@@ -166,6 +166,8 @@ void ShowcaseModule::updateHud() {
     } else if (within(p, kPlatform, 7.0f, 3.0f)) {
         station = "MOVING PLATFORM";
         text = "Stand on it: it carries you.";
+    } else if (parkourStation(p, station, text)) {
+        // A section of the parkour park (Parkour.cpp).
     } else if (const int zone = zoneAt(p); zone > 0) {
         station = kZones[zone].name;
         text = kZones[zone].text;
