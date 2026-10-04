@@ -53,14 +53,16 @@ trap 'rm -rf "$stage"' EXIT
 
 # --- Copy bin/, minus what only a developer's build tree needs. ----------
 # Unit tests, run logs, ImGui layout files and link by-products stay out.
-(cd "$bin" && find . -type f \
+# Symlinks are copied as links: a shared library's soname
+# (libspdlog.so.1.14 -> libspdlog.so.1.14.1) is what the games ask for.
+(cd "$bin" && find . \( -type f -o -type l \) \
     ! -name "kke_tests$exe" \
     ! -name '*.log' ! -name 'imgui.ini' \
     ! -name '*.a' ! -name '*.lib' ! -name '*.exp' ! -name '*.ilk' ! -name '*.pdb' \
     ! -name '*.dll.a' ! -name 'CTestTestfile.cmake' ! -name '*_tests.cmake' \
     -print0) | while IFS= read -r -d '' f; do
     mkdir -p "$stage/$(dirname "$f")"
-    cp -p "$bin/$f" "$stage/$f"
+    cp -P -p "$bin/$f" "$stage/$f"
 done
 
 # --- Refuse to ship paid art packs. ------------------------------------

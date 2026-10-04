@@ -10,6 +10,9 @@ you can copy.
 demos. Open a terminal in that folder and start them with `./` in front
 (`./kke_seal`). Run one with no arguments and it prints how to use it.
 
+Making the downloads themselves (Linux, AppImage, Windows, Android) is one
+script in the repository, `tools/bake`: [BAKING.md](BAKING.md).
+
 | Tool | What it's for | Who needs it |
 |---|---|---|
 | [kke_assets](#kke_assets) | What's in your asset folders, and what each game still needs | Anyone with art packs; before every bake |
@@ -18,7 +21,7 @@ demos. Open a terminal in that folder and start them with `./` in front
 | [kke_license](#kke_license) | Licence files for games that want a licence check | Developers who choose to use Kreative DRM |
 | [kke_packs](#kke_packs) | Make and check DLC and mod packs, see their load order | Modders and developers with DLC |
 | [kke_server](#kke_server) | A server that runs without a window: join codes, server lists, 24/7 worlds | Whoever hosts |
-| `kke_cook` | Encrypts art for a private download | The bake script runs it ([COOKED_ART.md](COOKED_ART.md)) |
+| `kke_cook` | Encrypts art for a private download | `tools/bake` runs it ([COOKED_ART.md](COOKED_ART.md)) |
 | `kke_bench`, `benchmark/kke_benchmark` | Measure performance | [BENCHMARKS.md](BENCHMARKS.md) |
 | `kke_audio_preview` | Listen to the engine's synthesised sounds | [AUDIO.md](AUDIO.md) |
 

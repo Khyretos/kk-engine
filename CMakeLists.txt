@@ -10,6 +10,18 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+# RmlUi (and, after a re-configure, spdlog) build as shared libraries
+# (RmlUi's BUILD_SHARED_LIBS option). Windows puts their DLLs in bin/ next
+# to the games; on Linux they go there too, and every program finds them
+# relative to itself ($ORIGIN, $ORIGIN/.. for benchmark/), so a download
+# unpacked anywhere runs. Without this the .so files stayed in the build
+# folder and the games only started on the machine that built them.
+# Android packs its libraries itself (android/build_apk.py).
+if(UNIX AND NOT APPLE AND NOT ANDROID)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+    set(CMAKE_BUILD_RPATH "\$ORIGIN;\$ORIGIN/..")
+    set(CMAKE_BUILD_RPATH_USE_ORIGIN ON)
+endif()
 
 # ---------------------------------------------------------------------------
 # Options — every "lego piece" can be toggled independently.

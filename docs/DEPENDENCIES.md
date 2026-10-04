@@ -160,12 +160,14 @@ you build with them.
 | Build-machine packages (Ubuntu 24.04) | `ca-certificates`, `curl`, `git`, `pkg-config`, `unzip`, `zip`, `xz-utils`, `file`, `procps`, `sudo`, `python3`, `xvfb`, `xauth`, `xdotool`, `imagemagick`, `lcov`, `vulkan-tools`, `mesa-vulkan-drivers`, `vulkan-validationlayers`, `fonts-noto-core`, `fonts-noto-color-emoji` | Various open-source licences (see each package's `/usr/share/doc/<package>/copyright`) | Fetching, packaging, headless test runs (with Vulkan synchronization validation), screenshots, coverage |
 | Development headers (Ubuntu 24.04) | `libvulkan-dev`, `libfreetype-dev`, `libudev-dev`, `libdbus-1-dev`, `libx11-dev`, `libxext-dev`, `libxrandr-dev`, `libxinerama-dev`, `libxcursor-dev`, `libxi-dev`, `libxss-dev`, `libxtst-dev`, `libwayland-dev`, `wayland-protocols`, `libxkbcommon-dev`, `libdrm-dev`, `libegl-dev`, `libgl1-mesa-dev`, `libegl1-mesa-dev`, `libasound2-dev`, `libdecor-0-dev`, `libexpat1-dev`, `libxml2-dev`, `libpq-dev` | MIT, BSD, LGPL, FTL (headers of the system libraries above) | Compile against the system libraries |
 | Server image runtime packages | `libfreetype6`, `libpq5` | FTL, PostgreSQL License | In the dedicated-server image, with their copyright files in `/usr/share/doc` |
+| AppImage packer (Alpine 3.21 packages) | `squashfs-tools`, `desktop-file-utils`, `alpine-sdk` | GPL-2.0 (mksquashfs), GPL-2.0 (desktop-file-validate), various | `docker/appimage.Dockerfile`: mksquashfs makes the image inside an `.AppImage`; nothing of them ships |
 
 ### Docker base images
 
 | Image | Key | Used by | Licence |
 |---|---|---|---|
 | Ubuntu 24.04 | `ubuntu` | Build containers, the dedicated-server image | A Linux distribution: many licences, including GPL. Anyone publishing an image built on it is expected to be able to point to the sources, which Ubuntu provides (our reading) |
+| Alpine 3.21 | `alpine` | The AppImage packer (`docker/appimage.Dockerfile`), the base the AppImage project builds its runtime on | A Linux distribution (musl libc, MIT; packages under their own licences) |
 | Debian bookworm-slim | `debian` | Website build stage | Same as Ubuntu |
 | Python 3.12-slim | `python` | Docs build stage | PSF License (+ Debian base) |
 | nginx-unprivileged 1.27 | `nginxinc/nginx-unprivileged` | Serves engine.kreative-kompas.com | BSD-2-Clause (+ Alpine base) |
@@ -189,6 +191,18 @@ you build with them.
 
 ## Things to watch
 
+- **The AppImage runtime** (`type2-runtime`, MIT) is the small program at the
+  front of every `.AppImage` file that opens it; `tools/bake` builds it from
+  source at a pinned commit (`docker/appimage.Dockerfile`). It is the
+  static runtime, so players need no libfuse2. It links
+  `libfuse` 3.15 statically, which is **LGPL-2.1**, plus squashfuse
+  (BSD-2-Clause), zstd (BSD-3-Clause), zlib, mimalloc and musl (MIT). The
+  runtime is a separate program: no game code is linked with it, so the
+  rule above (nothing copyleft *in a game*) holds. The LGPL asks that the
+  libfuse source stays available: it is the public tag plus the runtime's
+  one patch, both named in the AppImage's `THIRD_PARTY_LICENSES.txt`
+  together with every licence text. The `.tar.gz`, `.zip` and APK
+  downloads contain none of it.
 - **Steam Audio is optional and off by default** for a reason: its own code
   is Apache-2.0, but the prebuilt `phonon` library includes Intel IPP under
   Intel's proprietary (though freely redistributable) licence. A game that

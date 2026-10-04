@@ -1,0 +1,224 @@
+#!/usr/bin/env bash
+# Bakes every download in one go (docs/BAKING.md):
+#
+#   tools/bake                                  # public: Linux .tar.gz, AppImage, Windows .zip, Android APKs
+#   tools/bake --assets ~/Synty                 # PRIVATE, with your Synty art cooked in (docs/COOKED_ART.md)
+#   tools/bake --only linux,appimage            # just some of them
+#
+#   --assets DIR    your extracted Synty packs (default: $KKE_ASSETS_DIR). With
+#                   art the files are named *-with-art* and are for friends only.
+#   --no-art        a public bake even when KKE_ASSETS_DIR is set
+#   --sprites DIR   your 2D sprite packs (default: $KKE_SPRITES_DIR, else assets/sprites if it has any)
+#   --all-art       cook every model and texture in the packs, not just what the
+#                   demos open during a short recording run (much bigger, no screen needed)
+#   --version NAME  name in the file names (default: bake-<date>, friends-<date> with art)
+#   --only LIST     comma-separated: linux, appimage, windows, android (default: all four)
+#   --jobs N        parallel compile jobs (default: one per 2.5 GB of RAM, at most one per core)
+#
+# Everything is built in Docker (docker-compose.yml), one platform after the
+# other, never two at once, so a 32 GB PC keeps up:
+#   linux     Ubuntu 24.04 container: runs on any distribution with glibc 2.39+ (Ubuntu 24.04+, Debian 13+, Fedora 40+)
+#   appimage  the Linux download as one file (docker/appimage.Dockerfile)
+#   windows   MinGW-w64 cross build
+#   android   NDK r28c, the demos APK and the benchmark APK
+# With art, a short benchmark run on this PC (needs a screen) records which art
+# files the demos open; kke_cook encrypts exactly those with this bake's key.
+# Everything lands in dist/; the last lines list the files.
+set -euo pipefail
+
+die() { echo "bake: error: $*" >&2; exit 1; }
+step() { echo; echo "=== bake: $* ==="; }
+
+repo="$(cd "$(dirname "$0")/.." && pwd)"
+assets="${KKE_ASSETS_DIR:-}" sprites="${KKE_SPRITES_DIR:-}" version="" only="linux,appimage,windows,android" jobs="" all_art=0 no_art=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+    --assets) assets="$2"; shift 2 ;;
+    --no-art) no_art=1; shift ;;
+    --sprites) sprites="$2"; shift 2 ;;
+    --all-art) all_art=1; shift ;;
+    --version) version="$2"; shift 2 ;;
+    --only) only="$2"; shift 2 ;;
+    --jobs) jobs="$2"; shift 2 ;;
+    -h | --help) sed -n '2,/^set -euo/p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
+    *) die "unknown argument '$1' (tools/bake --help)" ;;
+    esac
+done
+
+# --- What to make. -------------------------------------------------------
+want_linux=0 want_appimage=0 want_windows=0 want_android=0
+IFS=, read -r -a targets <<< "$only"
+for t in "${targets[@]}"; do
+    case "$t" in
+    linux) want_linux=1 ;;
+    appimage) want_appimage=1 ;;
+    windows) want_windows=1 ;;
+    android) want_android=1 ;;
+    *) die "--only: unknown target '$t' (linux, appimage, windows, android)" ;;
+    esac
+done
+[ $((want_linux + want_appimage + want_windows + want_android)) -gt 0 ] || die "--only: nothing to make"
+[ "$no_art" = 0 ] || assets=""
+with_art=0
+if [ -n "$assets" ]; then
+    with_art=1
+    [ -d "$assets" ] || die "--assets '$assets' is not a folder"
+    assets="$(cd "$assets" && pwd)"
+    if [ -n "$sprites" ]; then
+        [ -d "$sprites" ] || die "--sprites '$sprites' is not a folder"
+    elif [ -n "$(find "$repo/assets/sprites" -type f ! -name README.md -print -quit 2> /dev/null)" ]; then
+        sprites="$repo/assets/sprites"
+    fi
+    [ -z "$sprites" ] || sprites="$(cd "$sprites" && pwd -P)"
+    # The recording run opens every demo in a window.
+    if [ "$all_art" = 0 ] && [ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
+        die "the art recording opens every demo on your screen, and there is no screen here (no DISPLAY): run it from your desktop, or pass --all-art"
+    fi
+fi
+[ -n "$version" ] || version="$([ "$with_art" = 1 ] && echo friends || echo bake)-$(date +%Y%m%d)"
+[[ "$version" =~ ^[A-Za-z0-9._-]+$ ]] || die "--version '$version' may only hold letters, digits, '.', '_' and '-'"
+name="$version"
+[ "$with_art" = 0 ] || name="$version-with-art"
+
+# --- Docker, and how many jobs this PC's memory takes. --------------------
+command -v docker > /dev/null || die "Docker is not installed (docs/BAKING.md, 'Once: get your PC ready')"
+docker compose version > /dev/null 2>&1 || die "'docker compose' is missing (Arch/CachyOS: sudo pacman -S docker-compose)"
+docker info > /dev/null 2>&1 || die "Docker isn't running or your user may not use it: sudo systemctl enable --now docker; sudo usermod -aG docker \"\$USER\", then log out and in"
+if [ -z "$jobs" ]; then
+    mem_kb="$(awk '/^MemTotal:/ { print $2 }' /proc/meminfo)"
+    jobs=$((mem_kb / 2621440)) # 2.5 GB per C++ compile job at -O2 with unity files
+    [ "$jobs" -le "$(nproc)" ] || jobs="$(nproc)"
+    [ "$jobs" -ge 1 ] || jobs=1
+fi
+[[ "$jobs" =~ ^[1-9][0-9]*$ ]] || die "--jobs must be a number, got '$jobs'"
+cd "$repo"
+# Extra configure arguments for every container (mirrors, -DKKE_FETCH_SKIES=OFF; docker/build.sh).
+env_args=(-e JOBS="$jobs")
+[ -z "${KKE_CMAKE_ARGS:-}" ] || env_args+=(-e KKE_CMAKE_ARGS="$KKE_CMAKE_ARGS")
+# in_docker [-e VAR=VALUE...] SERVICE [ARGS...]: one container run. Containers
+# write as root, so afterwards the same container gives what it made back
+# to you: rebuilding or deleting dist/ never needs sudo.
+in_docker() {
+    local status=0 service="" a
+    for a in "$@"; do case "$a" in linux | windows | android | appimage) service="$a"; break ;; esac; done
+    docker compose run --rm "${env_args[@]}" "$@" || status=$?
+    if [ "$(id -u)" != 0 ]; then
+        docker compose run --rm --entrypoint chown "$service" -R "$(id -u):$(id -g)" /src/dist /src/build-docker > /dev/null || true
+    fi
+    return "$status"
+}
+echo "bake: $name; making: $only; $jobs compile jobs; with art: $([ "$with_art" = 1 ] && echo "yes, from $assets" || echo no)"
+mkdir -p dist build-docker
+
+# --- 1. Keys. A new build id every bake, so this bake's programs read only
+# this bake's art, and a public bake can never read a private one's
+# (docs/COOKED_ART.md). The checkout's secret is made once. -------------
+if [ ! -f .kke-art.key ]; then
+    head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > .kke-art.key
+    echo >> .kke-art.key
+    echo "made .kke-art.key (the secret every bake's key comes from; keep it out of git)"
+fi
+head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n' > .kke-art.build
+echo >> .kke-art.build
+
+# --- 2. Linux. -------------------------------------------------------------
+# Also needed with art for any target: the recording run and kke_cook are
+# Linux programs.
+cooked=""
+if [ $((want_linux + want_appimage)) -gt 0 ] || [ "$with_art" = 1 ]; then
+    step "Linux build (Ubuntu 24.04 container; the first time also builds the container)"
+    in_docker -e KKE_BUILD_TYPE=Release -e KKE_VERSION_NAME="$name" -e RUN_TESTS=0 linux
+    bin="$repo/dist/linux"
+fi
+
+# --- 3. Art: which packs are there, which files do the demos open, cook them.
+if [ "$with_art" = 1 ]; then
+    step "Your packs, and what each game needs (kke_assets)"
+    "$bin/kke_assets" "$assets" ${sprites:+"$sprites"} || true
+    cooked="$repo/build-docker/bake/cooked-art"
+    anims="$repo/build-docker/bake/animations"
+    rm -rf "$cooked" "$anims"
+    mkdir -p "$anims"
+    # The mannequin animations (CC0): UAL1_Standard.fbx from the repository,
+    # plus UAL2.fbx (vault/climb clips, a better sword swing) from the packs
+    # folder when it's there. Demos only load some Synty art once their
+    # characters are animated, so the recording run uses them too.
+    cp assets/animations/*.fbx "$anims/" 2> /dev/null || true
+    if [ ! -f "$anims/UAL2.fbx" ]; then
+        ual2="$(find "$assets" -name UAL2.fbx -print -quit 2> /dev/null || true)"
+        if [ -n "$ual2" ]; then cp "$ual2" "$anims/UAL2.fbx"; echo "using $ual2"; fi
+    fi
+    [ -f "$anims/UAL1_Standard.fbx" ] || echo "note: assets/animations/UAL1_Standard.fbx is missing (git pull?): characters will be blocks"
+    if [ "$all_art" = 1 ]; then
+        "$bin/kke_cook" --root "$assets" --out "$cooked/synty" --all
+        if [ -n "$sprites" ]; then "$bin/kke_cook" --root "$sprites" --out "$cooked/sprites" --all; fi
+    else
+        step "Recording which art the demos use: every demo opens for a few seconds (don't touch anything)"
+        trace="$repo/build-docker/bake/art-trace.txt"
+        rm -rf "$trace" "$repo/build-docker/bake/art-trace-run"
+        KKE_ASSETS_DIR="$assets" KKE_SPRITES_DIR="$sprites" KKE_ANIMATIONS_DIR="$anims" KKE_ASSET_TRACE="$trace" \
+            "$bin/benchmark/kke_benchmark" --seconds 3 --no-wait --no-open --out "$repo/build-docker/bake/art-trace-run" ||
+            echo "(a demo had trouble in the recording run; see build-docker/bake/art-trace-run)"
+        [ -s "$trace" ] || die "the recording run opened no art: are the packs in '$assets'?"
+        "$bin/kke_cook" --root "$assets" --out "$cooked/synty" --trace "$trace"
+        # Sprites the menus showed during the run, if any.
+        if [ -n "$sprites" ] && grep -qF "$sprites/" "$trace"; then
+            "$bin/kke_cook" --root "$sprites" --out "$cooked/sprites" --trace "$trace"
+        fi
+    fi
+    # The animations ride along cooked like the rest, so package.sh's art
+    # check stays simple.
+    if ls "$anims"/*.fbx > /dev/null 2>&1; then
+        "$bin/kke_cook" --root "$anims" --out "$cooked/animations" --all
+    fi
+    "$bin/kke_cook" --check "$cooked" > /dev/null || die "something in $cooked isn't cooked"
+fi
+
+made=()
+if [ $((want_linux + want_appimage)) -gt 0 ]; then
+    step "Linux download"
+    tools/packaging/package.sh --bin dist/linux --platform linux --version "$name" --out dist \
+        --deps build-docker/linux/_deps --strip strip ${cooked:+--cooked "$cooked"}
+    tarball="dist/kk-engine-$name-linux-x86_64.tar.gz"
+    [ "$want_linux" = 0 ] || made+=("$tarball")
+fi
+
+# --- 4. AppImage: the same download as one file. ---------------------------
+if [ "$want_appimage" = 1 ]; then
+    step "AppImage (the first time also builds its container)"
+    in_docker appimage "$tarball"
+    made+=("dist/kk-engine-$name-x86_64.AppImage")
+    # Asked for the AppImage alone: the .tar.gz was only its input.
+    [ "$want_linux" = 1 ] || rm -f "$tarball" "$tarball.sha256"
+fi
+
+# --- 5. Windows. -------------------------------------------------------------
+if [ "$want_windows" = 1 ]; then
+    step "Windows build (MinGW-w64 container; the first time also builds the container)"
+    # The container reads .kke-art.key and .kke-art.build from the
+    # repository, so the .exe files read this bake's art.
+    in_docker -e KKE_BUILD_TYPE=Release -e KKE_VERSION_NAME="$name" -e RUN_TESTS=0 windows
+    step "Windows download"
+    tools/packaging/package.sh --bin dist/windows --platform windows --version "$name" --out dist \
+        --deps build-docker/windows/_deps ${cooked:+--cooked "$cooked"}
+    made+=("dist/kk-engine-$name-windows-x86_64.zip")
+fi
+
+# --- 6. Android. -------------------------------------------------------------
+if [ "$want_android" = 1 ]; then
+    step "Android build (NDK container; the first time downloads the Android tools, a few GB)"
+    suffix=""
+    [ -z "$cooked" ] || suffix="-with-art"
+    in_docker ${cooked:+-e KKE_COOKED="/src/${cooked#"$repo"/}"} -e KKE_VERSION_NAME="$name" android
+    for apk in demos benchmark; do
+        cp "dist/android/kke-$apk$suffix.apk" "dist/kk-engine-$apk-$name-android-arm64.apk"
+        made+=("dist/kk-engine-$apk-$name-android-arm64.apk")
+    done
+fi
+
+step "Done"
+for f in "${made[@]}"; do echo "  $f ($(du -h "$f" | cut -f1))"; done
+if [ "$with_art" = 1 ]; then
+    echo "These are PRIVATE (-with-art): send them to friends directly. Never upload them to"
+    echo "the public GitHub release or commit them. Always send files from one bake together."
+fi
