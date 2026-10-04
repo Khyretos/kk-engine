@@ -464,6 +464,10 @@ connection gets.
   they're boxes.
 - Crates and the moving platform are the host's. R on a client asks the
   host to reset them.
+- Spawned things: a guest's spawn menu asks the host, which makes the
+  thing and shares it with `spawn` / `bindSpawnedBody`, so everyone sees
+  it. What a guest lifts, the host carries in front of them; throws fly
+  for everyone. `KKE_DEMO_ONLINE=1` on a host and a guest tests it.
 - Shots: everyone sees every FEMFX ball. The breaking yard's glass,
   plank and stone wall break on the host and in the same pieces for
   everyone (Breakables above).

@@ -1,7 +1,8 @@
 #pragma once
 
 // The flight model of the Flying demo (README.md "How a plane flies"):
-// pure maths, no engine, so tests/test_flight.cpp checks it on its own.
+// pure maths, no engine, so tests/test_flight.cpp checks it on its own
+// (and kke_demo, games/showcase/Vehicles.cpp, flies its plane on it).
 //
 // A plane is a point with an orientation. Each step:
 //   - the controls turn it: pitch, roll and yaw rates, weaker when slow

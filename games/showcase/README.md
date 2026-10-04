@@ -54,6 +54,13 @@ are read in `ShowcaseModule::init` unless noted:
 | `KKE_DEMO_AUTOPILOT=1` | The character runs the parkour lane (or a scene's trail) by itself and logs each vault and climb |
 | `KKE_DEMO_HANG=1` | Jump at the 3 m wall, hang, shimmy round its end, jump off. Loops every 10 s |
 | `KKE_DEMO_TRICKS=1` | Wall run and wall jump, pillar leaps, the leap up to the beam. Loops every 13.5 s |
+| `KKE_DEMO_WORLD=1` | Opens the world map for a few seconds, then visits every zone in turn (5 s each) and logs the ground there |
+| `KKE_DEMO_ITEMS=1` | At the supply table: picks up what's in reach, opens the bag, equips an axe, a rifle, a helmet, a canteen and a lantern, closes it and turns the camera to see them worn. Logs the bag and the weight. `=2` leaves the bag open (drive it with keys or the mouse; each place and drop is logged) |
+| `KKE_DEMO_CARRY=1` | Spawns a crate, lifts it, carries it a few steps and throws it, and logs where it is. Loops every 7 s |
+| `KKE_DEMO_GUNS=1` | At the firing range: takes the guns off the bench, knocks down plates with the rifle, breaks the glass, the plank and a stone wall, sets off the red barrels, switches to the pistol, throws a grenade. Logs every hit and blast |
+| `KKE_DEMO_DRIVE=1` | At the race track: gets in the red hatch and drives a lap of the oval (logs its progress and the lap time), then flies the plane from the airfield round four waypoints and dives it into the runway (the crash). `=2` skips the car |
+| `KKE_DEMO_NATURE=1` | In the nature park: takes the axe, fells a tree, splits a log, picks three flowers, then walks a trail through the snow field and looks back at it |
+| `KKE_DEMO_PARKOUR=1` | In the parkour park: runs up the 3.6 m wall and climbs onto it, vaults over a thin wall from a hang, shimmies round the corner of the shimmy wall and leaps the gap, then runs the rooftops. Logs every move. `=2` starts at the hang vault, `=3` the shimmy, `=4` the rooftops |
 | `KKE_DEMO_BRIDGE=1` | Drops an iron ball on the yard glass, then rolls one into a crate, and logs how far the crates moved (FEMFX builds) |
 | `KKE_BRIDGE=0` | Turns the FEMFX-Jolt bridge off, to compare |
 | `KKE_SPLIT=2..4` | Start with that many local players |
@@ -66,6 +73,7 @@ are read in `ShowcaseModule::init` unless noted:
 | `KKE_STRESS_TEST=1` | Runs the 36 s stress test at start and quits when done |
 | `KKE_BENCH_DIR=dir` | Where the stress report goes (default `benchmark/`) |
 | `KKE_NET=host` / `KKE_NET=join:ADDRESS` | Host or join (read by `NetModule`) |
+| `KKE_DEMO_ONLINE=1` | Run it on a host and a guest: the host spawns a barrel; the guest asks for a crate, walks to it, lifts it, carries it, throws it and clears. Both log what they see (`online demo (host)`, `online: player 1 picked up body ...`) |
 | `KKE_VOICE=off` | No microphone (read by `VoiceModule`) |
 | `KKE_SCRIPTS_DIR=<repo>/games/showcase/scripts` | Run the Lua scripts from the source folder, so edits reload live |
 | `KKE_ANIMATIONS_DIR`, `KKE_SCENES_DIR`, `KKE_ASSETS_DIR` / `KKE_SYNTY_DIR`, `KKE_COURSE_DIR` | Where to find the animations, scenes, Synty packs and the course art |
@@ -74,8 +82,10 @@ are read in `ShowcaseModule::init` unless noted:
 
 Player 1. The bindings come from `InputModule::defineCharacterActions`
 ([InputModule.cpp](../../engine/src/modules/InputModule.cpp)) plus four
-actions the showcase adds in `ShowcaseModule::init` (`reset`, `menu`,
-`panels` and `zoom.pad`, the d-pad's held zoom). `init` also moves the
+actions the showcase adds in `ShowcaseModule::init` (`reset`, `pickup`,
+`panels` and `zoom.pad`, the d-pad's held zoom) and the spawn menu's
+(`spawn.menu`, and `spawn.up`, `spawn.down`, `spawn.pick`, `spawn.close`
+while its list is open: [Spawner.cpp](Spawner.cpp)). `init` also moves the
 ping off the d-pad down and push-to-talk off B, which the showcase uses
 for other things (BUG-065). Everything except Esc is rebindable and
 saved in `input.json`.
@@ -88,12 +98,17 @@ saved in `input.json`.
 | Walk | Left Alt (hold) | Tilt the stick a little (analog speed); no button |
 | Jump, vault, climb, grab a ledge | Space | A |
 | Crouch, or let go of a ledge | C (toggle) | B (toggle) |
-| Shoot | Left click (hold for 4 shots a second) | RT |
+| Shoot (or throw what you hold); with a gun in your right hand, fire it (the rifle is automatic), with a grenade, throw it | Left click (hold for 4 shots a second) | RT |
+| Aim down the sights (the camera comes in over the shoulder, a crosshair shows) | Right mouse (hold) | LT (hold) |
 | Push what you look at | E | Y |
+| Pick up / put down the crate, barrel or ball in front of you; an item goes in your bag. Next to a car or the plane: get in (and out) | F | X |
+| Bag (inventory and equipment) | Tab or I | View |
+| World map: the zones, travel there | M | the pause menu's World map |
+| Spawn menu: crates, barrels, balls, a tower, a ragdoll dummy; clear, reset the world | G | RB |
 | First / third person | V | R3 |
 | Camera distance | Mouse wheel (while captured) | D-pad up / down (hold) |
-| Reset crates and player | R | X |
-| Pause menu: settings, button remapping, quit | Esc | Start or View / Back |
+| Reset the world (also in the spawn menu) | R | none (spawn menu) |
+| Pause menu: settings, button remapping, quit | Esc | Start |
 | Engine panels (ImGui, developer tools) | F1 | none |
 | Ping the surroundings (hear the walls) | Q | D-pad left |
 | Push to talk (voice builds) | P (B is a toy) | LB |
@@ -117,7 +132,7 @@ The Lua scripts add their own actions:
 
 | Script | Action | Keyboard | Controller |
 |---|---|---|---|
-| `toys.lua` | Build a crate tower / throw a ball / clear | G / B / N (or hold B) | RB / View / hold View a second |
+| `toys.lua` | Build a crate tower / throw a ball / clear | H / B / N (or hold B) | none: the spawn menu (RB) has towers and balls |
 | `targets.lua` (from `games/first_lua_game`) | Start break-the-targets | T | D-pad right |
 
 ## How it plays
@@ -136,8 +151,37 @@ stations, with their positions from [Layout.h](Layout.h):
 | Moving platform | (-14, 6) | Stand on it: it carries you side to side and up and down |
 | Low roof | (10, 6) | 1.2 m clearance: crouch to get under |
 | Stairs, ramp, steep slope, pillars | around (-8, -4), (8, -10), (-14 to -6.5, -14) | 0.25 m steps, a 24 degree ramp you walk, a 55 degree slope you slide off, pillars that push the camera in |
+| Supply table | (-4.5, 2.5) | One of every item: pick them up, open the bag, equip them |
 
-The pause menu (Esc / Start / View) has Resume, Back to the start, 1 to
+### The open world
+
+The yard is the middle of an open world 1.4 km across ([World.cpp](World.cpp)).
+Each yard wall has a gate; outside, the ground rolls on to a ring of hills,
+with a mountain to the north west. Roads run from the gates to the zones
+(their table is `layout::kZones` in [Layout.h](Layout.h)); a post at each
+gate has a board in each zone's colour, and every zone flies a 14 m flag
+in its colour so you can find it from far away. The HUD names the zone you
+are in.
+
+| Zone | Where | Road |
+|---|---|---|
+| Parkour park | (0, -160) | north gate |
+| Firing range | (170, -150) | north gate, then right |
+| Airfield | (380, 40), runway x 185 to 575 | east gate |
+| Race track | (0, 255) | south gate |
+| Nature park | (-230, 40) | west gate |
+| Snow field | (-300, -280), 30 m up the mountain | west gate, then the dirt trail up |
+
+M (or the pause menu's **World map**) opens the map: the zones, the roads
+and you (the yellow dot points the way you face). Choose a zone with up
+and down (or the mouse) and A, Enter or a click takes you there.
+
+The terrain is one mesh with a vertex every 5 m and one static Jolt mesh
+body; `groundHeight(x, z)` reads the same grid, so what later rounds put
+out there sits on it. Roads are cut level across so cars sit flat. The
+camera's far plane is 1500 m and the mood's fog hides the edge.
+
+The pause menu (Esc / Start) has Resume, World map, Reset the world, 1 to
 4 players, Engine panels (developer builds), Settings, Controls, Main
 menu and Quit. Offline it pauses the game; online the
 others keep playing. The **KKE Showcase** ImGui window (always shown)
@@ -145,12 +189,189 @@ has the controls, a Scenes list to visit the Synty levels, and panels for
 movement, performance and the stress test, character, lighting, lava,
 split screen and camera. F1 shows the other modules' panels too.
 
+### The firing range
+
+North of the yard (zone 2, [Range.cpp](Range.cpp), the guns in
+[Guns.cpp](Guns.cpp)). The bench holds a rifle, a pistol, rifle and pistol
+rounds and two boxes of grenades; picking a gun or a tool up with an empty
+right hand puts it straight in that hand. Down range, from left to right:
+
+| Lane | What is there |
+|---|---|
+| Plates | 10 steel plates on plinths at 15, 28 and 45 m. A hit knocks one down; the HUD counts "Plates down" |
+| Breakables (FEMFX) | A glass pane, a plank on two blocks, a stone wall at 14 m and a bigger one at 23 m. Bullets break them for real; each piece is its own body |
+| Barrels and crates | 5 red barrels, a crate pyramid and two ragdoll dummies. A shot barrel burns for a moment and blows up, setting off the barrels near it |
+
+How a shot works: the crosshair point is a ray from the camera; the shot
+leaves the muzzle towards it with a little spread (0.25 degrees aimed,
+1.6 from the hip). Jolt (`kke::physicsRaycast`) and FEMFX each find their
+nearest hit and the nearer wins. A Jolt hit gets an impulse and an effect
+by material (sparks on steel, chips on wood and stone); a FEMFX hit gets a
+small fast iron slug spawned just short of it, so the break is FEMFX's own
+fracture, not a fake one. Magazines refill from the bag's rounds when
+empty (30 rifle, 12 pistol); no rounds left is a click and a toast.
+
+Grenades and barrels call `explode`: `kke::physicsBlast` pushes everything
+in both physics engines away (7 m), FEMFX walls crack, barrels and
+grenades in reach go up after it, and there is a fireball, smoke, a
+shockwave ring, a point-light flash, camera shake and a synthesized boom.
+Fuses count in physics time (`fixedUpdate`), so a slow machine does not
+blow a grenade up in mid-air. Every sound is synthesized at startup
+(`buildGuns`): no audio files. The effects are the built-in
+`kke::ParticleLibrary` ones, drawn in `renderTranslucent`; their shaders
+are copied by this game's CMakeLists.
+
+While aiming, the character turns with the camera and walks; the arms
+are placed by IK (`aimHands`: rifle to the shoulder with the left hand on
+the fore-end, pistol out in both hands, a grenade raised to throw).
+
+### Cars and the plane
+
+[Vehicles.cpp](Vehicles.cpp). Walk up to a car or the plane and press
+pickup (F / X) to get in; the same button gets you out once you have
+stopped. The camera chases what you ride and swings in behind it when you
+stop turning it; the wheel or the d-pad moves it out (V: from the seat).
+
+| | Keyboard | Controller |
+|---|---|---|
+| Car: steer, gas, brake / reverse | A D, W (or Shift), S (or Ctrl) | Left stick, RT, LT |
+| Car: handbrake, back on its wheels | Space, R | A, none |
+| Plane: stick (forward: nose down), roll | W S, A D | Left stick |
+| Plane: throttle up / down, wheel brakes | Shift / Ctrl, Space | RT / LT, A |
+
+**The race track** (zone 5): an oval 585 m round (two 120 m straights and
+two bends of 55 m radius), kerbs on the bends, a start gantry, a slalom of
+cones on the far straight and a jump beside the car park. Three cars wait
+in the car park, each its own `kke::VehicleDesc` on Jolt's vehicle physics
+([VEHICLES.md](../../docs/VEHICLES.md)): a light front-drive hatch, a
+rear-drive coupe and a heavy all-wheel-drive truck that sits higher. Go
+once round the oval on the track and the HUD gives the lap time (physics
+time, so it is the same on a slow PC).
+
+**The airfield** (zone 4): a stunt plane at the west end of the runway.
+It flies on the Flying demo's flight model (`games/flying_demo/Flight.h`,
+compiled into this game): lift, drag, stalls and the nose that comes up
+by itself at take-off speed, so full throttle and a straight run is a
+take-off. A kinematic Jolt body follows it, so it pushes crates and people
+out of the way. Land on the runway or any flat field; a hard landing, a
+hillside or anything built is a crash: an explosion (the guns' `explode`),
+a wreck, and a new plane on the runway four seconds later.
+
+Each machine drives its own cars and plane: they aren't shared online
+yet (see "Online" below). The engine note is `kke::EngineSound`, synthesized from the rpm
+and the throttle like the racing demo's.
+
+### The parkour park
+
+[Parkour.cpp](Parkour.cpp). Zone 2 on the map, up the road north of the
+yard: seven sections, each built to show one move, and the HUD names the
+one you are in. Nothing in it is marked for the movement; Locomotion reads
+every box the same way ([MOVEMENT.md](../../docs/MOVEMENT.md)).
+
+| Section | What's there | The move |
+|---|---|---|
+| Vault field | fences (1.0, 1.1 m), low walls, a 1.2 m box, two fences close together | run and jump: a vault; sprinting, a speed vault that keeps the run |
+| Wall climb | walls of 3, 3.6 and 4.2 m, a painted run-up to each | run at one and jump: you run up it and catch the top; jump again to climb on |
+| Hang vault | thin walls of 2.6 and 3 m | hang from the top, jump: over and down the far side |
+| Shimmy wall | a thin 3 m wall round an outside corner, a 1 m gap, a 3.5 m piece | hang, shimmy hand over hand round the corner, leap the gap |
+| Ledge leaps | five thin pillars, tops 2.8 to 4 m | hang, jump with left or right to leap to the next |
+| Wall run | two 4 m walls, 3.5 m apart | sprint beside one, jump: wall run; jump again to kick across |
+| Rooftops | seven roofs 3.5 to 5.5 m, gaps of 2 to 2.5 m, a rail and a box on top | up the steps, sprint and jump the gaps; a roof too high is caught by the edge |
+
+The wall climb and the hang vault are Locomotion moves (this round); the
+shimmy's hands and feet are IK steps here ([Animation](#animation)): no
+UAL clip has a hang or a shimmy.
+
+### The nature park and the snow field
+
+[Nature.cpp](Nature.cpp). **The nature park** (zone 6 on the map, west of
+the yard): about 85 trees round a meadow, undergrowth, and grass that
+sways in gusts of wind and bends away from your legs. With POLYGON Nature
+installed the trees, stumps and plants are Synty's (each tree an instance
+turned about its foot every frame, which is the sway); without it the
+trees are built from shapes (round, pine and birch) and look the same
+from a distance (`KKE_NATURE_ART=0` shows those even with the pack). The grass blades are always this file's own: a blade or
+two every half metre within 20 m of you, rebuilt each frame, no shadows.
+Leaves drift down while you are in the forest.
+
+Take the axe from the chopping block at the gate (or the supply table)
+and fire swings it (both hands on the handle, by IK). Four hits fell a
+tree: it tips away from you, slow at first then fast (a rod falling over
+its foot), crashes down with a shake, and after a moment lies as two to
+four logs (props: carry them, throw them, or swing at one to split it into
+firewood for the bag). The stump stays. Flowers in the meadow (poppies,
+buttercups, cornflowers) are picked with pickup straight into the bag.
+Reset the world and the forest grows back.
+
+**The snow field** (zone 7, up the mountain): a layer of snow 22 cm deep
+that keeps every footprint and tyre track. It is a grid of how far each
+point is pressed (quarter-metre cells, 116 m across), drawn as 64 chunks
+of which only the pressed ones are rebuilt (at most six a frame). Feet
+stamp an oval every stride, left then right; a car's wheels stamp where
+they touch. Snow falls round the camera there. Reset the world for fresh
+snow.
+
+### Spawning and carrying
+
+RB (G) opens the spawn menu on the right while the game keeps running:
+up and down to choose (d-pad, left stick, W/S, arrows, or the mouse), A,
+Space, Enter or a click spawns it in front of you, and the list stays
+open so you can spawn more; B, RB, G or Backspace closes it. It has a
+wooden crate, a small crate, a big light box, an iron crate (too heavy to
+lift), a barrel, a rubber ball, a crate tower and a ragdoll dummy, then
+**Clear what I spawned** and **Reset the world** (what you spawned goes,
+the course's crates go back, you're back at the
+start).
+
+X (F) picks up the crate, barrel or ball in front of you, up to 60 kg: it
+rides in front of your chest in both hands and stays a physics body, so
+it bumps into walls and other crates instead of going through them (snag
+it on something and you let go). X (F) puts it down, RT (click) throws it
+where you look. Climbing, vaulting or hanging drops it. Heavier things you
+push (Y, E).
+
+**Online** it all works the same for everyone. The host makes what anyone
+spawns, so every machine sees the same crate in the same place, and the
+host's physics moves it. Lift something on a guest and the host carries
+it in front of you; everyone sees it ride along and fly when you throw it.
+Clear what I spawned clears everyone's; Reset the world (host) resets
+everyone. What stays on each machine: the firing range's dummies, the
+forest (trees, logs, flowers), the snow's footprints, and the cars and
+plane.
+
+### Items, the bag and equipment
+
+The supply table by the start (-4.5, 2.5) has one of everything: a wood
+axe, a hunting rifle, a pistol and their rounds, a first-aid kit, a
+lantern, a helmet, a canteen, firewood, apples and flowers. Walk up and
+X (F) puts the one in front of you in your bag; the HUD says what it is.
+
+Tab, I or View opens the bag over the game: a 10 x 6 grid where every
+item takes its cells (the rifle 4 x 1, the axe 1 x 3), with what you wear
+and hold on the left and the details of the item under the cursor
+(description, weight, size, where it equips) on the right. Move with the
+arrows, WASD, the d-pad, the stick or the mouse. A, Space or a click
+takes an item and places it again: on a cell (the cells turn green where
+it fits, red where it doesn't), on a stack of the same kind (they merge),
+or on an equipment slot. R or Y turns what you're moving, E, X or a
+right-click equips or takes off, Q or RB drops it in front of you, T or
+R3 sorts the bag biggest first. B, View, Tab or Esc closes it.
+
+What you equip is drawn on the character (kke::Equipment): the axe or the
+rifle in the right hand or across the back, the pistol or the canteen on
+a hip, the lantern in the left hand, the helmet on the head, the fingers
+closed round what a hand holds. Carrying a crate stows the hands' things.
+The weight shows under the grid: past half of 30 kg you get slower, near
+the limit you can't sprint. The kinds of item are data,
+[data/items.json](data/items.json) (name, description, size, weight,
+stack, slots); [Items.cpp](Items.cpp) makes their meshes.
+
 ## How it works
 
 ### Startup and the frame
 
 [main.cpp](main.cpp) builds the `kke::Application` (1280 x 720, mood
-`clear_day`, far plane 200 m) and adds modules in this order:
+`clear_day`, far plane 1500 m: the open world is 1.4 km across) and adds modules in this order:
 
 1. `SettingsModule("settings.json")`: first, so the resource budget
    (threads, frame caps) is set before physics starts its workers.
@@ -355,6 +576,10 @@ indices `m_stMove`, `m_stJump` and so on mean the same everywhere:
   so the clip is posed by how far through the move the capsule is: the
   hands meet the edge whatever the timing.
 - `wall_run_l`, `wall_run_r`: UAL2 loops, or the sprint.
+- The wall climb (a Leap with `wallClimbing()`) plays the first 30% of
+  `climb_high` by progress: the spring and the reach. The hang vault (a
+  Vault with `hangVaulting()`) plays `climb_high`'s pull-up, then the
+  second half of `vault_clip`.
 
 `animate(Animator&, MotionInfo&, dt)` is a switch on `Locomotion::State`
 that picks the state and cross-fade time. A climb up a wall under 1.6 m
@@ -386,6 +611,12 @@ the model's bone locals:
   puts each hand on the edge, shoulder width apart, with the elbow pole
   pushed out and down. The grip point is `Locomotion::hangEdge()` or the
   last obstacle's top.
+- **Shimmy.** Hanging and moving along the edge, the hands go hand over
+  hand: each is planted while the body moves past it (60% of a 0.36 m
+  stride), then lifted 7 cm and moved on, the leading hand first. The
+  braced feet step along the wall in between (`m_shimmyDist`).
+- **Wall climb steps.** Running up a wall, the feet plant two steps on it,
+  left then right, each held where it first touched while the body rises.
 
 Both can be switched off in the Character panel.
 
@@ -581,7 +812,22 @@ shared:
   relays shots to everyone. A client's push is applied locally and sent to
   the host, which ignores it if the crate is more than 2 m from the pushed
   point ("a stale or made-up push does nothing"). A client's reset asks
-  the host.
+  the host. The event structs live in [NetEvents.h](NetEvents.h).
+- **Spawned things** ([Online.cpp](Online.cpp)). A guest's spawn menu
+  sends the row and the spot to the host (`SpawnRowEvent`); the host checks
+  the spot is within 8 m of that player, builds it with `spawnRowAt` and
+  shares each prop with `NetModule::spawn` (kind `0x5301`, a `PropDesc`
+  with the shape, size, colour, material and rotation). Every machine's
+  spawn listener builds the same prop and `bindSpawnedBody` ties it to the
+  host's body, which then replicates like the crates. `despawn` removes it
+  everywhere when it's cleared or the oldest goes (the 60-prop cap).
+- **Carrying.** A guest's pick up sends `CarryEvent` (net id, yaw); the
+  host checks it is within 3 m and adds a `RemoteCarry`, then
+  `stepRemoteCarries` steers that body to `holdPointFor` the guest's
+  replicated position and facing, the same maths as your own carry
+  (`steerHeld`). Put down and throw send their velocity. The guest's copy
+  only lets go past 4 m, lifting too (the host's own limit is 2.5 m),
+  since the copy arrives a little late.
 
 ### The stress test
 
@@ -818,6 +1064,12 @@ Pitfalls the code shows:
 | [LavaStation.h](LavaStation.h), [LavaStation.cpp](LavaStation.cpp) | The lava: fluid, melting block, colliders, presets, drawing |
 | [SplitScreen.cpp](SplitScreen.cpp) | Local players 2-4, controller assignment, views, the overhead view |
 | [StressTest.cpp](StressTest.cpp) | The 36 s stress test and its report |
+| [Guns.cpp](Guns.cpp) | Guns, grenades, explosions: firing, hits, synthesized sounds, effects, aiming arms |
+| [Online.cpp](Online.cpp), [NetEvents.h](NetEvents.h) | Spawned props and carrying online: the host makes what guests spawn, carries what they lift; the game's event messages; the `KKE_DEMO_ONLINE` run |
+| [Parkour.cpp](Parkour.cpp) | The parkour park's seven sections, the HUD's name for each, the `KKE_DEMO_PARKOUR` run |
+| [Nature.cpp](Nature.cpp) | The nature park (trees, undergrowth, grass, wind), chopping trees and splitting logs, picking flowers, the snow field and its footprints, the `KKE_DEMO_NATURE` run |
+| [Vehicles.cpp](Vehicles.cpp) | The race track (oval, kerbs, cones, jump), three cars, the plane and its crash, getting in and out, the chase camera, lap times, the engine sound, the `KKE_DEMO_DRIVE` run |
+| [Range.cpp](Range.cpp) | The firing range: bench, plates, barrels, crates, dummies, FEMFX glass and walls, the `KKE_DEMO_GUNS` run |
 | [Hud.cpp](Hud.cpp) | RmlUi data model, HUD updates, the pause menu's rows |
 | [Layout.h](Layout.h) | Station positions |
 | [course_art.scene.json](course_art.scene.json) | Synty art placed around the stations |

@@ -72,7 +72,8 @@ void Locomotion::setFacing(const glm::vec3& dir) {
 }
 
 float Locomotion::traversalProgress() const {
-    if (m_state == State::Leap) return std::clamp(m_stateTime / std::max(1e-3f, m_settings.leapTime), 0.0f, 1.0f);
+    if (m_state == State::Leap)
+        return std::clamp(m_stateTime / std::max(1e-3f, m_wallClimb ? m_settings.wallClimbTime : m_settings.leapTime), 0.0f, 1.0f);
     if (m_state != State::Vault && m_state != State::Climb) return 0.0f;
     return m_duration > 0.0f ? std::clamp(m_stateTime / m_duration, 0.0f, 1.0f) : 1.0f;
 }
@@ -352,6 +353,7 @@ void Locomotion::updateGround(const Input& in, float dt, bool grounded) {
     if (m_buffer > 0.0f && !in.crouch) {
         const bool sprinting = in.fast && m_speed > s.runSpeed * 0.9f;
         if (tryTraversal(in, sprinting ? s.sprintSensor : s.walkSensor, false)) return;
+        if (tryWallClimb(in)) return;
         jump(in);
         return;
     }
@@ -479,6 +481,7 @@ void Locomotion::startTraversal(State st, const Obstacle& o) {
         m_duration = s.climbTime * (0.6f + 0.4f * std::clamp(o.height / s.sprintSensor.maxHeight, 0.0f, 1.0f));
         m_exitSpeed = 0.0f;
     }
+    m_hangVault = false;
     m_world.setCharacterKinematic(m_id, true);
     m_world.setCharacterVelocity(m_id, glm::vec3(0.0f));
     enter(st);
@@ -493,7 +496,26 @@ void Locomotion::updateTraversal(float) {
     m_facing = dirOf(yawOf(m_startFacing) + angleBetween(yawOf(m_startFacing), yawOf(in)) * c);
 
     glm::vec3 p;
-    if (m_state == State::Vault) {
+    if (m_state == State::Vault && m_hangVault) {
+        // Pull up at the wall until the feet are level with the top, then
+        // over (tucked, never below the top until past its far side) and
+        // down to the floor beyond, falling faster as it goes.
+        const float topY = m_obstacle.face.y + 0.03f;
+        const float split = hangVaultSplit;
+        if (t < split) {
+            const float u = smooth(t / split);
+            p = m_start;
+            p.y = glm::mix(m_start.y, topY, u);
+        } else {
+            const float u = (t - split) / (1.0f - split);
+            const glm::vec3 d = flat(m_obstacle.target - m_start);
+            const float across = glm::dot(flat(m_obstacle.face - m_start), glm::normalize(d)) + m_obstacle.depth + 0.05f;
+            const float uBack = std::clamp(across / std::max(glm::length(d), 1e-3f), 0.1f, 0.9f);
+            p = m_start + d * u;
+            p.y = u < uBack ? topY + 0.15f * std::sin(glm::pi<float>() * u / uBack)
+                            : topY + (m_obstacle.target.y - topY) * ((u - uBack) / (1.0f - uBack)) * ((u - uBack) / (1.0f - uBack));
+        }
+    } else if (m_state == State::Vault) {
         // Constant horizontal speed (momentum), parabolic height.
         const glm::vec3 d = flat(m_obstacle.target - m_start);
         const float x = glm::length(d) * t;
@@ -695,8 +717,10 @@ void Locomotion::updateHang(const Input& in, float dt) {
             startTraversal(State::Climb, o);
             return;
         }
-        // Nothing to stand on up there: an edge above to leap up to.
+        // Nothing to stand on up there: an edge above to leap up to, or
+        // (a wall too thin to stand on) over it, down the far side.
         if (tryLeap(glm::vec3(0.0f))) return;
+        if (o.kind == Obstacle::Kind::None && tryHangVault()) return;
     }
     // Shimmy: the sideways part of the input, one checked step at a time.
     // Around a corner the same held input keeps going the same way along
@@ -802,7 +826,105 @@ bool Locomotion::tryLeap(const glm::vec3& side) {
     m_buffer = 0.0f;
     m_shimmy = 0.0f;
     m_jumped = true;
+    m_wallClimb = false;
     enter(State::Leap);
+    return true;
+}
+
+// Wall climb: running into a wall whose top is too high to climb straight
+// but within wallClimbMaxHeight, "go up" runs up it to hang from the top.
+bool Locomotion::tryWallClimb(const Input& in) {
+    const Settings& s = m_settings;
+    const glm::vec3 wish = flat(in.move);
+    if (glm::length(wish) < 0.5f || m_measuredSpeed < s.wallClimbMinSpeed) return false;
+    const glm::vec3 look = glm::normalize(wish);
+    const glm::vec3 feet = m_world.characterPosition(m_id);
+    RigidWorld::RayHit wall = m_world.raycast(feet + glm::vec3(0.0f, 1.2f, 0.0f), look, s.radius + s.wallClimbReach);
+    if (!wall.hit || std::abs(wall.normal.y) > 0.64f) return false;
+    glm::vec3 n = flat(wall.normal);
+    if (glm::length(n) < 1e-3f) return false;
+    n = glm::normalize(n);
+    if (glm::dot(look, -n) < 0.7f) return false; // at it, not along it
+    // Its top: above what a climb reaches, within what a run-up does.
+    const glm::vec3 over = wall.point - n * 0.12f;
+    RigidWorld::RayHit top = m_world.raycast(glm::vec3(over.x, feet.y + s.wallClimbMaxHeight + 0.05f, over.z), glm::vec3(0, -1, 0),
+                                             s.wallClimbMaxHeight + 0.05f - s.sprintSensor.maxHeight);
+    if (!top.hit || top.distance < 0.02f || top.normal.y < 0.64f) return false;
+    const float h = top.point.y - feet.y;
+    if (h <= s.sprintSensor.maxHeight || h > s.wallClimbMaxHeight) return false;
+    // One wall all the way up (feet on it the whole climb): no gap
+    // between a low wall and a beam above it.
+    for (float y = 1.7f; y < h - 0.3f; y += 0.5f) {
+        RigidWorld::RayHit up = m_world.raycast(glm::vec3(feet.x, feet.y + y, feet.z), look, s.radius + s.wallClimbReach + 0.3f);
+        if (!up.hit || std::abs(up.distance - wall.distance) > 0.3f) return false;
+    }
+    glm::vec3 hangFeet, edge, nn;
+    if (!findEdge(feet, n, top.point.y, hangFeet, edge, nn)) return false;
+    // Room for the body all the way up the wall.
+    for (float k : { 0.35f, 0.7f })
+        if (!m_world.capsuleFits(glm::mix(feet, hangFeet, k) + glm::vec3(0.0f, 0.02f, 0.0f), s.height, s.radius)) return false;
+    if (!m_world.capsuleFits(hangFeet + glm::vec3(0.0f, 0.02f, 0.0f), s.height, s.radius)) return false;
+    m_obstacle = Obstacle{};
+    m_obstacle.kind = Obstacle::Kind::Climb;
+    m_obstacle.face = wall.point;
+    m_obstacle.normal = nn;
+    m_obstacle.height = h;
+    m_obstacle.target = glm::vec3(over.x, top.point.y, over.z);
+    m_start = feet;
+    m_hangFeet = hangFeet;
+    m_hangEdge = edge;
+    m_leapNormal = nn;
+    m_buffer = 0.0f;
+    m_shimmy = 0.0f;
+    m_speed = 0.0f;
+    m_jumped = true;
+    m_wallClimb = true;
+    m_world.setCharacterKinematic(m_id, true);
+    m_world.setCharacterVelocity(m_id, glm::vec3(0.0f));
+    enter(State::Leap);
+    return true;
+}
+
+// Hang vault: hanging from a wall too thin to stand on, with a floor on
+// the far side and room over the top: pull up and over, down to it.
+bool Locomotion::tryHangVault() {
+    const Settings& s = m_settings;
+    const glm::vec3 n = m_obstacle.normal, in = -n;
+    const glm::vec3 edge = m_hangEdge;
+    const float topY = edge.y;
+    // Across the top until it drops away (a thin wall, not a platform).
+    float depth = -1.0f;
+    for (float d = 0.1f; d <= s.vaultMaxDepth + 0.1f; d += 0.1f) {
+        const glm::vec3 p = edge + in * (0.05f + d);
+        if (!m_world.raycast(glm::vec3(p.x, topY + 0.3f, p.z), glm::vec3(0, -1, 0), 0.45f).hit) {
+            depth = d;
+            break;
+        }
+    }
+    if (depth < 0.0f) return false;
+    const glm::vec3 land = edge + in * (0.05f + depth + s.radius + 0.35f);
+    RigidWorld::RayHit floor = m_world.raycast(glm::vec3(land.x, topY + 0.2f, land.z), glm::vec3(0, -1, 0), s.hangVaultMaxDrop + 0.2f);
+    if (!floor.hit || floor.normal.y < 0.7f) return false;
+    const glm::vec3 feetThere(land.x, floor.point.y + 0.01f, land.z);
+    const glm::vec3 overTop = edge + in * (0.05f + depth * 0.5f);
+    if (!m_world.capsuleFits(glm::vec3(overTop.x, topY + 0.05f, overTop.z), 0.9f, s.radius) ||
+        !m_world.capsuleFits(feetThere + glm::vec3(0, 0.02f, 0), s.height, s.radius))
+        return false;
+    const glm::vec3 feet = m_world.characterPosition(m_id);
+    m_obstacle.kind = Obstacle::Kind::Vault;
+    m_obstacle.face = edge;
+    m_obstacle.height = topY - feet.y;
+    m_obstacle.depth = depth;
+    m_obstacle.target = feetThere;
+    m_start = feet;
+    m_startFacing = in;
+    m_wallPoint = feet;
+    m_duration = s.hangVaultTime;
+    m_exitSpeed = s.runSpeed * 0.4f;
+    m_buffer = 0.0f;
+    m_shimmy = 0.0f;
+    m_hangVault = true;
+    enter(State::Vault);
     return true;
 }
 
@@ -816,6 +938,12 @@ void Locomotion::updateLeap() {
     const float lift = s.leapOvershoot + std::max(dy, 0.0f) * 0.5f;
     glm::vec3 p = glm::mix(m_start, m_hangFeet, t);
     p.y = m_start.y + dy * t + 4.0f * lift * t * (1.0f - t);
+    if (m_wallClimb) {
+        // Up the wall: to its foot first, then rising, slowing as the
+        // hands reach the top (the run-up's momentum running out).
+        p = glm::mix(m_start, m_hangFeet, smooth(std::min(1.0f, t / 0.35f)));
+        p.y = m_start.y + dy * (1.0f - (1.0f - t) * (1.0f - t));
+    }
     m_facing = -m_leapNormal;
     m_world.moveCharacter(m_id, p);
     if (t >= 1.0f) {

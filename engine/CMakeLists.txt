@@ -44,6 +44,7 @@ set(ENGINE_SOURCES
     src/BodyShape.cpp
     src/CharacterIk.cpp
     src/Equipment.cpp
+    src/Inventory.cpp
     src/ProceduralAnim.cpp
     src/ClimbWall.cpp
     src/CookedFile.cpp
