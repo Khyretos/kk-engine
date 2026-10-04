@@ -55,6 +55,11 @@
         #results .who { display: inline-block; width: 200dp; }
         #results .what { display: inline-block; width: 110dp; font-weight: bold; }
         #results .note { color: #ffcf5c; font-size: 13dp; }
+        #setup { position: absolute; top: 34%; left: 15%; width: 70%; padding: 18dp 24dp; text-align: center; background-color: #0b0f1ae6; border-radius: 12dp; }
+        #setup .big { font-size: 30dp; font-weight: bold; color: #ffffff; }
+        #setup .sub { font-size: 16dp; color: #cfd6e6; margin-top: 8dp; }
+        #setup .bar { height: 8dp; margin: 14dp 20% 0 20%; background-color: #ffffff22; border-radius: 4dp; }
+        #setup .fill { height: 8dp; background-color: #6fe39a; border-radius: 4dp; }
         #notice { position: absolute; top: 8dp; left: 20%; width: 60%; text-align: center; font-size: 13dp; color: #ffcf5c; }
         #hint { position: absolute; left: 8%; bottom: 14dp; width: 84%; padding: 6dp 10dp; border-radius: 8dp; background-color: #0b0f1cbb;
                 text-align: center; font-size: 13dp; color: #cfd6e6; }
@@ -113,6 +118,11 @@
 </head>
 <body data-model="race">
     <div id="notice" data-if="notice != ''">{{notice}}</div>
+    <div id="setup" data-if="setup != ''">
+        <div class="big">{{setup}}</div>
+        <div class="sub">{{setup_sub}}</div>
+        <div class="bar" data-if="setup_bar"><div class="fill" data-style-width="setup_meter"></div></div>
+    </div>
     <div data-if="racing">
         <div data-for="p : players">
             <div class="top" data-style-left="p.x" data-style-top="p.y" data-style-border-left-color="p.accent">
@@ -188,7 +198,7 @@
                 <div class="card">
                     <div class="step">IF YOU SPIN</div>
                     <div class="title">Back on the track</div>
-                    <div class="body"><prompt action="reset.car"/> puts you back on the road. <prompt action="camera"/> changes the camera.<br/><prompt action="race.again"/> race again · <prompt action="race.new"/> next track · <prompt action="menu"/> menu</div>
+                    <div class="body"><prompt action="reset.car"/> puts you back on the road. <prompt action="camera"/> changes the camera (cockpit, first person, chase...), <prompt action="look"/> looks round.<br/><prompt action="race.again"/> race again · <prompt action="race.new"/> next track · <prompt action="menu"/> menu</div>
                 </div>
             </div>
             <div class="go"><prompt action="throttle" label="Start"/>
