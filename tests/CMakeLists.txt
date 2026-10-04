@@ -97,6 +97,7 @@ add_executable(kke_tests
     test_tone_mapper.cpp
     test_sky.cpp
     test_jiggle.cpp
+    test_auto_rig.cpp
     test_rml_data_binding.cpp
     test_frame_retire_queue.cpp
     test_anti_cheat.cpp

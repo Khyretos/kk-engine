@@ -6,6 +6,11 @@
 #include "kke/SphereImpostors.h"
 #include "kke/modules/ModelModule.h"
 
+#if KKE_ENABLE_JOLT
+#include "kke/HairRenderer.h"
+#include "kke/RigidWorld.h"
+#endif
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -29,6 +34,7 @@ public:
     std::vector<kke::ModuleDependency> dependencies() const override;
     void init(kke::Application& app) override;
     void update(const kke::UpdateContext& ctx) override;
+    void compute(VkCommandBuffer cmd) override;
     void render(const kke::RenderContext& ctx) override;
     void renderShadow(const kke::ShadowRenderContext& ctx) override;
 
@@ -55,6 +61,10 @@ private:
     void readInput();
     void buildPanel();
     kke::JiggleRig* jiggleRig();
+    // Hair on the realistic body's bald head (kke::Hair, Jolt soft bodies).
+    void findHead(const kke::ModelData& body);
+    void buildHair();
+    void updateHair(float dt);
     int m_sceneIndex = 0, m_moveIndex = 0; // the panel's view of m_scene / m_move
 
     kke::Application* m_app = nullptr;
@@ -104,6 +114,34 @@ private:
     double m_jiggleUs = 0.0;
     float m_swing = 0.0f, m_stretchNow = 0.0f;
     kke::HumanoidSoftTissue m_tissue;
+    // --- hair (the realistic body is bald)
+    struct HeadShape {
+        bool found = false;
+        glm::vec3 centre{ 0.0f };            // bind pose, model space
+        float radius = 0.0f;
+        std::vector<kke::Vertex> scalp;      // the head's skin, to paint a cap under the hair
+        std::vector<uint32_t> scalpIndices;
+        glm::vec3 front{ 0.0f, 0.0f, 1.0f };   // where her face points, model space
+        glm::vec3 torsoMin{ 0.0f }, torsoMax{ 0.0f }; // chest and breasts, model space: the hair lies on them
+    } m_head;
+    int m_hairStyle = 1, m_hairColour = 0; // kHairStyles (0 = bald), kHairColours
+    glm::mat4 m_headBind{ 1.0f }, m_headNow{ 1.0f };
+    // The head and chest bones the hair and its colliders follow (-1 = the
+    // body stands still), and their rest pose (model space), inverted.
+    int m_headBone = -1, m_chestBone = -1;
+    glm::mat4 m_headRestInv{ 1.0f }, m_chestRestInv{ 1.0f }, m_chestNow{ 1.0f };
+#if KKE_ENABLE_JOLT
+    std::unique_ptr<kke::RigidWorld> m_world;
+    kke::RigidWorld::HairId m_hair = 0;
+    kke::RigidWorld::BodyId m_headCollider = kke::RigidWorld::kNoBody;
+    struct Proxy { kke::RigidWorld::BodyId id; glm::vec3 pos; glm::quat rot; }; // neck, shoulders, back: rest pose, model space
+    std::vector<Proxy> m_proxies;
+    bool m_hairFresh = true; // just built: snap to her, don't sweep from the rest pose
+    std::unique_ptr<kke::HairRenderer> m_hairDrawn;
+    std::unique_ptr<kke::DynamicMeshRenderer> m_scalpCap;
+    std::vector<glm::vec3> m_guides;
+#endif
+    kke::ModelModule::InstanceId m_staticBody = 0; // a body with no skeleton, standing
     size_t m_bones = 0, m_zones = 0;
 };
 

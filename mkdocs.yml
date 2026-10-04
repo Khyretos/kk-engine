@@ -161,6 +161,7 @@ nav:
       - Scenes: SCENES.md
       - The kke_demo showcase: SHOWCASE.md
       - Jiggle physics: JIGGLE.md
+      - Auto-rigging a body: AUTO_RIG.md
       - Physics bridge: PHYSICS_BRIDGE.md
       - Breakable props: BREAKABLES.md
       - Particle effects: PARTICLE_EFFECTS.md
