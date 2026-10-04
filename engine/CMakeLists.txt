@@ -31,6 +31,8 @@ set(ENGINE_SOURCES
     src/OrderBridge.cpp
     src/NodeGraph.cpp
     src/TouchGestures.cpp
+    src/TouchControls.cpp
+    src/TouchOverlay.cpp
     src/VoxelTets.cpp
     src/Breakables.cpp
     src/InteriorColor.cpp
@@ -194,6 +196,7 @@ set(ENGINE_HEADERS
     include/kke/OrderScript.h
     include/kke/OrderBridge.h
     include/kke/TouchGestures.h
+    include/kke/TouchControls.h
     include/kke/VoxelTets.h
     include/kke/Breakables.h
     include/kke/InteriorColor.h

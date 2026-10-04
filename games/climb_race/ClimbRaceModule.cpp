@@ -149,6 +149,11 @@ void ClimbRaceModule::init(kke::Application& app) {
         in.addBinding(IM::bind("help", IM::pad(SDL_GAMEPAD_BUTTON_WEST)));
     }
     m_input->setPlayers(1);
+    // Touch: jump, both hands' grab and reach, let go.
+    kke::TouchLayoutOptions touch;
+    touch.buttons = { "jump", "grab.right", "grab.left", "reach.right", "reach.left", "letgo" };
+    m_input->setTouchLayout(touch);
+    m_input->addTouchHider([this] { return m_howto; }); // How to play has the screen (its Start is a button)
     m_input->commitDefaults();
 
     // The unit cube markers: left hand, right hand, out of reach, charging.

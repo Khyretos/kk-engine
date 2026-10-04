@@ -23,7 +23,9 @@ turning split screen on. Climb Race (`games/climb_race`) uses it.
   Race: name and colour). Player 1's card also has the game's settings:
   CPU players, the difficulty of each (Easy, Normal, Hard, Expert), any
   rows other modules add, and Start. Start on player 1's controller starts
-  from any row.
+  from any row. A finger (or the mouse) taps a row instead: a value steps
+  on (the left half of the value steps back), an action row or Start is
+  pressed, and a key of the on-screen keyboard types ([TOUCH.md](TOUCH.md)).
 - **Hot-plugging.** A controller plugged in shows a toast with its own
   button (Xelu glyphs, [INPUT.md](INPUT.md) "Button prompts"). One that
   belongs to a player and comes loose keeps its seat ("Juno's controller is

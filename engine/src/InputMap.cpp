@@ -268,6 +268,13 @@ void InputMap::update(const InputState& state, double now) {
             anyHeld = anyHeld || sb->second.down || sb->second.tapped;
             sb->second.tapped = false;
         }
+        if (def.type != ActionType::Button)
+            if (auto sa = m_screenAxes.find(def.id); sa != m_screenAxes.end() && contextEnabled(def.context)) {
+                const glm::vec2 c = def.type == ActionType::Axis1D ? glm::vec2(sa->second.x, 0.0f) : sa->second;
+                s.value += c.x;
+                s.value2 += c;
+                if (glm::length(c) > 1e-5f) anyHeld = true;
+            }
         if (def.type == ActionType::Button) s.value = anyHeld ? 1.0f : 0.0f;
         if (def.clamp) {
             s.value = std::clamp(s.value, -1.0f, 1.0f);
@@ -288,6 +295,11 @@ void InputMap::setScreenButton(const std::string& action, bool down) {
     ScreenButton& b = m_screenButtons[action];
     if (down) b.tapped = true;
     b.down = down;
+}
+
+void InputMap::setScreenAxis(const std::string& action, const glm::vec2& value) {
+    if (glm::length(value) < 1e-6f) m_screenAxes.erase(action);
+    else m_screenAxes[action] = value;
 }
 
 const ActionState& InputMap::state(const std::string& action) const {

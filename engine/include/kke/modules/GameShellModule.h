@@ -228,6 +228,7 @@ private:
     std::string prompts(const std::string& text) const;
     DeviceClass deviceClass() const;
     void findFriends(float dt);
+    void startTouchEdit();
 
     Application* m_app = nullptr;
     InputModule* m_input = nullptr;
@@ -258,6 +259,7 @@ private:
     bool m_panelHidden = false;
     bool m_lobbySuspended = false;
     bool m_lobbyRowsAdded = false;
+    bool m_touchEditing = false; // the Controls page is hidden while the touch layout is edited
     bool m_settingsChanged = false;
     bool m_bindingsChanged = false;
     float m_titleAt = -1.0f;     // seconds until the title freezes the game behind it

@@ -143,6 +143,7 @@ nav:
       - Procedural animation: PROCEDURAL_ANIMATION.md
       - Equipment and body awareness: EQUIPMENT.md
       - Input: INPUT.md
+      - Touch controls: TOUCH.md
       - Menus, pause and settings: GAME_SHELL.md
       - Start menu and joining: LOBBY.md
       - Outfits: OUTFITS.md

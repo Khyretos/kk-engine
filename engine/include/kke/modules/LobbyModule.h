@@ -157,6 +157,7 @@ private:
     View m_view;
     Rml::DataModelHandle m_model;
     Rml::ElementDocument* m_doc = nullptr;
+    bool tapAt(float x, float y); // window points; true when it hit a row or a key
 };
 
 } // namespace kke

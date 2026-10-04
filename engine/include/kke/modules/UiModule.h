@@ -155,6 +155,7 @@ private:
     void showScreenButtonPressed(uint64_t pointer, Rml::Element* button);
     std::unordered_map<uint64_t, Rml::ObserverPtr<Rml::Element>> m_pressedButtons;
     bool m_finderSet = false;
+    std::unique_ptr<class TouchOverlay> m_touchOverlay; // draws InputModule's touch controls
     bool m_initialised = false;
     Application* m_app = nullptr; // needed each frame in update() to detect window resize
 

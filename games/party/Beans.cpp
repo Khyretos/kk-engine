@@ -74,6 +74,9 @@ void PartyModule::defineControls() {
         in.addBinding(IM::bind("panels", IM::key(SDL_SCANCODE_F1)));
     }
     m_input->setPlayers(1);
+    kke::TouchLayoutOptions touch; // touch: the bean's own moves, not every character action
+    touch.buttons = { "jump", "dive", "push" };
+    m_input->setTouchLayout(touch);
     m_input->commitDefaults();
 }
 

@@ -113,7 +113,8 @@ an edge (docs/INPUT.md "Phone, PC and console").
 - **Touch**: a tap is a mouse click, so menus (RmlUi) work with a finger.
   The hints on screen are buttons: each action is a coloured button with
   its name on it, pressed with a finger (docs/INPUT.md "Touch screens").
-  On-screen sticks for moving are not there yet.
+  Every game also has on-screen controls (a stick, a look drag, buttons,
+  pause) that players move, resize and rebind (docs/TOUCH.md).
 - **Gamepads**: Bluetooth and USB controllers work as on a PC (SDL3), with
   the matching button prompts.
 - **Back** (the system gesture or button) closes the game.

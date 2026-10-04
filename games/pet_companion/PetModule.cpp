@@ -88,6 +88,10 @@ void PetModule::init(kke::Application& app) {
     // Esc is the pause menu (kke::GameShellModule), which frees the mouse too.
     quick("pet.mouse", "Free the mouse / look with it", SDL_SCANCODE_TAB, SDL_GAMEPAD_BUTTON_INVALID);
     quick("panels", "Developer panels", SDL_SCANCODE_F1, SDL_GAMEPAD_BUTTON_INVALID);
+    // Touch: a tap on the world points (orders), so looking is a right stick, not a drag.
+    kke::TouchLayoutOptions touch;
+    touch.look = kke::TouchLayoutOptions::Look::Stick;
+    m_input->setTouchLayout(touch);
     m_input->commitDefaults();
     app.window().setQuitOnEscape(false);
 

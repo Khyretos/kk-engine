@@ -708,6 +708,8 @@ void Application::run() {
             else if (e.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED)
                 m_bench->addEvent("window resized to " + std::to_string(e.window.data1) + "x" + std::to_string(e.window.data2));
         }
+        for (const auto& [id, claim] : m_eventClaims)
+            if (claim(e)) return;
         m_debugUi->processEvent(e);
         for (Module* m : m_initOrder) {
             safeInvoke(m, "onEvent", [&] { m->onEvent(e); });
@@ -1102,6 +1104,15 @@ VkDescriptorSet Application::textureSet(const std::string& path) {
     VkDescriptorSet set = entry.set;
     m_textureCache[path] = std::move(entry);
     return set;
+}
+
+int Application::addEventClaim(EventClaim claim) {
+    m_eventClaims.emplace_back(m_nextEventClaim, std::move(claim));
+    return m_nextEventClaim++;
+}
+
+void Application::removeEventClaim(int id) {
+    std::erase_if(m_eventClaims, [id](const auto& c) { return c.first == id; });
 }
 
 ScreenRect Application::uiSafeRect() const {

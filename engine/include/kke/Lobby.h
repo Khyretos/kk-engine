@@ -178,6 +178,13 @@ public:
     bool isOpen() const { return m_open; }
     void setOpen(bool open);
     void handle(const Press& press, const std::vector<uint32_t>& connectedPads = {});
+    // A tap (or a click) on a joined seat's row: on a value it steps the
+    // value (`side` -1 back, else on), on an action row or Start it
+    // presses it, and the seat's cursor moves there. Phones have no
+    // d-pad: this is how a finger plays the menu.
+    void tapRow(int seat, int row, int side);
+    // A tap on a key of the on-screen keyboard while typing.
+    void tapKey(int keyRow, int keyCol);
     void padConnected(uint32_t pad, bool atStartup = false);
     void padDisconnected(uint32_t pad);
     void update(float dt); // ages the toasts

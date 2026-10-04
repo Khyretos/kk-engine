@@ -408,3 +408,30 @@ TEST(InputMap, ScreenButtonsHoldAndNeverLoseAQuickTap) {
     r.step();
     EXPECT_FALSE(r.map.held("jump"));
 }
+
+TEST(InputMap, ScreenAxesAddToBindingsUntilLetGo) {
+    Rig r;
+    r.map.defineAction({ "throttle", "Throttle", "Driving", "game", kke::ActionType::Axis1D });
+    r.map.defineAction({ "look.rate", "Look", "Movement", "game", kke::ActionType::Axis2D, false });
+    r.map.addBinding(bind("throttle", axis(5, 1), Trigger::Continuous));
+    r.map.setScreenAxis("throttle", { 1.0f, 0.0f });
+    r.map.setScreenAxis("look.rate", { 2.5f, -0.5f });
+    r.step();
+    EXPECT_FLOAT_EQ(r.map.axis("throttle"), 1.0f);
+    EXPECT_TRUE(r.map.held("throttle"));
+    EXPECT_FLOAT_EQ(r.map.axis2("look.rate").x, 2.5f); // unclamped action: a fast drag stays fast
+    EXPECT_FLOAT_EQ(r.map.axis2("look.rate").y, -0.5f);
+    // A pad trigger on top is still clamped to the action's range.
+    r.state.set(SourceKind::GamepadAxis, 5, 1.0f);
+    r.step();
+    EXPECT_FLOAT_EQ(r.map.axis("throttle"), 1.0f);
+    r.state.set(SourceKind::GamepadAxis, 5, 0.0f);
+    r.map.setScreenAxis("throttle", glm::vec2(0.0f));
+    r.step();
+    EXPECT_FLOAT_EQ(r.map.axis("throttle"), 0.0f);
+    EXPECT_TRUE(r.map.released("throttle"));
+    // Off with its context.
+    r.map.setContextEnabled("game", false);
+    r.step();
+    EXPECT_EQ(r.map.axis2("look.rate"), glm::vec2(0.0f));
+}

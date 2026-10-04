@@ -209,9 +209,12 @@ action bound to a mouse button (select, order to the crosshair) means
 shows the tap picture, never a button. Each action
 keeps one of five colours (its place among the map's actions), so buttons
 next to each other differ. A press on a button is not also a click in
-the game. Axes (move, look) keep their picture; an on-screen stick is
-not there yet. `KKE_PROMPT_STYLE=touch` shows the buttons on a PC, where
-the mouse presses them.
+the game. Axes (move, look) keep their picture. `KKE_PROMPT_STYLE=touch`
+shows the buttons on a PC, where the mouse presses them.
+
+Besides the hints, every game has on-screen controls: a stick, a look
+drag, buttons and a pause button, which players move, resize and rebind
+([TOUCH.md](TOUCH.md)).
 
 ## Phone, PC and console
 
