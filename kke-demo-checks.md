@@ -10,6 +10,7 @@ The showcase world comes as a series, one commit per round, all on branch `kke-d
 | 4 | `kke-demo-04.patch` | kke_demo: guns, grenades and the firing range (+ FEMFX far-from-origin fix) |
 | 5 | `kke-demo-05.patch` | kke_demo: cars at the race track, a stunt plane at the airfield |
 | 6 | `kke-demo-06.patch` | kke_demo: the nature park and the snow field |
+| 7 | `kke-demo-07.patch` | kke_demo: the parkour park; Locomotion: wall climb and hang vault |
 
 Apply in order with `git am` (`git am -3` after other patches). One PR for the branch is fine;
 title it after the newest round, or `kke_demo: showcase world (rounds 1-N)`.
@@ -310,3 +311,57 @@ how the sway and the swing look in motion, the sounds.
 5. M > Snow field. Walk a loop and look back at your footprints. Reset (R) for fresh snow.
 
 Known: the forest and the snow are local only online (round 8).
+
+# Round 7: the parkour park, wall climb, hang vault, shimmy
+
+**Engine change** (one file pair): `engine/include/kke/Locomotion.h`, `engine/src/Locomotion.cpp`,
+with 3 new tests in `tests/test_locomotion.cpp`. No new State values, so network replay and
+saved states are unchanged.
+
+## What changed (12 files)
+- Locomotion **wall climb**: running (2.5 m/s or more) at a wall whose top is 2.2-4.3 m up,
+  go-up runs up it (a Leap, `wallClimbing()`) and hangs from the top. It must be one wall the
+  whole way up (no gap under a beam).
+- Locomotion **hang vault**: hanging from a wall too thin to stand on, go-up pulls up and
+  vaults over to the floor on the far side (a Vault, `hangVaulting()`). An edge above to leap
+  up to still comes first.
+- `games/showcase/Parkour.cpp` (new): the parkour park, 7 sections (vault field, wall climb
+  3/3.6/4.2 m, hang vault, shimmy wall round a corner with a gap, ledge-leap pillars, wall-run
+  pair, 7 rooftops), HUD names each one. `KKE_DEMO_PARKOUR=1` (`=2/3/4` start later;
+  `KKE_DEMO_PARKOUR_FREEZE=wallclimb|hangvault|shimmy` stops mid-move for screenshots).
+- Animation: wall climb = start of `ClimbUp_2m` + two IK footsteps on the wall; hang vault =
+  `ClimbUp_2m` pull-up then the second half of `SafetyVault`; shimmy = hand over hand and feet
+  stepping by IK (no hang/shimmy clip exists in UAL1/UAL2).
+- docs/MOVEMENT.md (two new sections), README, SHOWCASE.md. README also gets the
+  `KKE_DEMO_NATURE` row that round 6 missed.
+
+## Already checked in the cloud
+- Full GCC -Werror build of every target: zero warnings. clang -Werror syntax on Locomotion.cpp,
+  the showcase files and the test: clean. `check_std_includes.py` OK. `kke_tests` 1002 passed
+  (3 new: `RunningAtATallWallRunsUpItAndHangs`, `StandingAtATallWallIsNoWallClimb`,
+  `VaultsOverAThinWallFromAHang`). `check_game kke_demo --headless`: OK (only the sky HDR).
+- `KKE_DEMO_PARKOUR=1`: runs up the 3.6 m wall, hangs, climbs on; hangs from the 2.6 m thin wall
+  and vaults over to the far side; shimmies 8 m, round the corner, 11 m on and leaps the gap to
+  the 3.5 m piece; rooftops 1 to 6 (roof 7 was cut off by the run's time limit at 9 fps).
+- Older demos: `KKE_DEMO_AUTOPILOT` same vaults and climbs; `KKE_DEMO_TRICKS` pillar leaps the
+  same. At 9 fps the frame-timed HANG/TRICKS demos sometimes miss a grab after a plain jump;
+  the new code returns before changing anything when it doesn't apply, so that's the old timing.
+- Series applies alone on 9349996 and with `git am -3` after racing/platoon/climbing/sea.
+- Screenshots: `kke-demo-shots/parkour-wallclimb.png`, `parkour-hangvault.png`,
+  `parkour-shimmy.png`, `parkour-rooftops.png`.
+
+## Run on soucouyant
+```sh
+cmake --build build -j4 && build/bin/kke_tests --gtest_filter='Locomotion*'
+tools/check_game kke_demo --seconds 10
+cd build/bin && KKE_DEMO_PARKOUR=1 ./kke_demo   # log: "parkour demo:" lines, no FAILED
+KKE_DEMO_TRICKS=1 ./kke_demo; KKE_DEMO_HANG=1 ./kke_demo   # at full fps: every grab lands
+```
+Not judged in the cloud: how the run-up, the hang vault and the shimmy steps look at full frame
+rate, and whether the wall climb feels right on a pad.
+
+## Play list for Kees (round 7)
+1. M > Parkour park. Wall climb: run at the purple 3.6 m wall, jump: you run up it. Jump to climb on.
+2. Hang vault: jump at a thin wall to hang, jump again: over and down.
+3. Shimmy wall: hang, hold right: hand over hand, round the corner; at the gap, jump sideways.
+4. Rooftops: up the steps, sprint and jump roof to roof.

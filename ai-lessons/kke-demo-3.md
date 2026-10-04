@@ -75,3 +75,41 @@ A 9B model can do steps 1, 3, 5 and 6 from this file. Steps 4 and 7 need
 someone to look at the result (the log count, a screenshot) and reason
 about why. Give it the measurement to check ("pressed cells > 50") rather
 than asking whether it looks right.
+
+# Round 7: parkour park, wall climb, hang vault
+
+## 9. List an animation pack's clips before planning around them
+
+The plan said "hang and shimmy clips". There are none. Check first:
+```sh
+build/bin/kke_model_info "$KKE_ASSETS_DIR/Universal Animation Library 2/Unity/UAL2.fbx" | grep -iE "hang|shimmy|climb|vault"
+```
+No clip means a procedural pose: IK hands and feet stepping in a cycle
+(plant for 60% of a stride while the body moves past, then lift and move on).
+
+## 10. A unit test world has edges
+
+Debugging the shimmy in a test at z = -150 failed: the character fell
+forever. The test floor is only 100 m square round the origin. Move the
+geometry to near (0, 0) when copying a game layout into a test.
+
+## 11. Demo scripts: drive by state, not by the clock
+
+Under lavapipe the frames and the physics run at different speeds, so a
+script that says "jump at 0.3 s" misses. The parkour demo waits for
+states instead ("jump when 1.3 m from the wall", "next step when Hang").
+Give each step a generous timeout that logs FAILED.
+
+## 12. A new move must not steal an old one
+
+Wall climb first grabbed a beam above a low wall, skipping the trick
+course's "hang, then leap up". Fix: require one wall the whole way up
+(rays every 0.5 m). Hang vault came before "leap up" and stole it too:
+order matters. After adding a move, rerun the old demos
+(KKE_DEMO_TRICKS, KKE_DEMO_HANG, KKE_DEMO_AUTOPILOT) and compare logs.
+
+## 13. Freeze a fast move for a screenshot
+
+A 0.6 s move is 5 frames at 9 fps. Hitting it by timing is luck. The demo
+stops calling Locomotion::update (dt 0) once the move is half done
+(KKE_DEMO_PARKOUR_FREEZE=wallclimb), then takes the shot.
