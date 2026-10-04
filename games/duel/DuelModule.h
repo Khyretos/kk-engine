@@ -3,6 +3,7 @@
 #include "kke/AnimRig.h"
 #include "kke/Animator.h"
 #include "kke/Capabilities.h"
+#include "kke/CharacterIk.h"
 #include "kke/Combat.h"
 #include "kke/Module.h"
 #include "kke/Ragdoll.h"
@@ -12,6 +13,7 @@
 
 #include <RmlUi/Core/DataModelHandle.h>
 
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -48,6 +50,7 @@ class DuelModule : public kke::Module {
 public:
     DuelModule();
     ~DuelModule() override;
+    void shutdown() override;
     const char* name() const override { return "Duel"; }
     std::vector<kke::ModuleDependency> dependencies() const override;
     void init(kke::Application& app) override;
@@ -79,8 +82,18 @@ public:
         kke::ModelModule::InstanceId model = 0;
         std::unique_ptr<kke::Animator> anim;
         int lastState = -1;
-        bool leftHand = false;          // jabs alternate hands
+        bool leftHand = false;          // hit reactions alternate
         float guard = 0.0f;             // IK hands up: 0 relaxed .. 1 blocking
+        std::unique_ptr<kke::CharacterIk> ik; // feet on the canvas, the lean, the guard's hands
+        glm::vec3 lastFeet{0.0f};
+        // Strikes: light chains jab, cross, hook; a press during a strike
+        // is kept for a moment and thrown when the fighter can act.
+        int combo = -1;
+        float sinceLight = 9.0f;
+        std::string buffered;
+        float bufferAge = 0.0f;
+        std::string lastHit;            // the attack that last landed on this fighter
+        float dodgeSide = 0.0f;         // -1 left, 1 right, 0 back
         float flinch = 0.0f;            // hit reaction weight (fades)
         glm::vec3 flinchDir{0.0f};
         // Ragdoll (knockdown / knockout).
@@ -103,6 +116,9 @@ private:
     Intent readPlayer(Fighter& f);
     void updateFighter(Fighter& f, Fighter& other, float dt);
     void onHit(const kke::HitEvent& e);
+    // The strikes by name: jab, cross, hook, uppercut, knee, kick.
+    kke::AttackDesc attackNamed(const std::string& name) const;
+    void throwStrike(Fighter& f, kke::Combatant& c, float distance, float dt);
     void knockDown(Fighter& f, const glm::vec3& push);
     void getUp(Fighter& f);
     void updateCamera(float dt);
@@ -140,7 +156,7 @@ private:
     float m_quitAfter = -1.0f, m_clock = 0.0f, m_reportAt = 5.0f;
     uint32_t m_seed = 1;
     std::string m_level = "normal";
-    struct Tally { int hits = 0, blocks = 0, parries = 0, guardBreaks = 0, knockdowns = 0; } m_tally[2];
+    struct Tally { int hits = 0, blocks = 0, parries = 0, guardBreaks = 0, knockdowns = 0; std::map<std::string, int> thrown; } m_tally[2];
 
     // Camera.
     glm::vec3 m_camMid{0.0f};
@@ -152,12 +168,13 @@ private:
     kke::ModelData m_rigData;
     std::unique_ptr<kke::AnimationSet> m_animSet;
     float m_modelYaw = 0.0f;
-    kke::HumanArm m_arm[2]; // a person's arms (kke::solveHumanArm): elbows bend only forward, shoulders keep their range
     bool m_meleeClips = false; // UAL 2 is there
+    bool m_fullUal1 = false;   // the whole UAL 1 (a kick, dodges, more hits) is there
     struct States {
         int idle = -1, fwd = -1, back = -1, left = -1, right = -1;
-        int jabL = -1, jabR = -1, heavy = -1, kick = -1, dodge = -1;
-        int hitHigh = -1, hitLow = -1, hitHard = -1, getUp = -1, win = -1;
+        int jab = -1, cross = -1, hook = -1, heavy = -1, knee = -1, kick = -1;
+        int dodge = -1, dodgeL = -1, dodgeR = -1;
+        int hitHigh = -1, hitLow = -1, hitStomach = -1, hitHard = -1, getUp = -1, win = -1;
     } m_st;
 
     // HUD.

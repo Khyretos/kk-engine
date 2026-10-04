@@ -1101,7 +1101,26 @@ void AiWorld::move(Agent& a, const glm::vec3& steering, float speedLimit, float 
             }
         }
     }
-    if (!m_obstacles.empty()) total += avoidObstacles(m, m_obstacles, 1.0f);
+    if (!m_obstacles.empty()) {
+        // Going to a spot right next to an obstacle (cover behind a crate, a
+        // place at a wall), from the spot's side of it: that obstacle isn't
+        // in the way, so it doesn't push the agent off its spot. From the
+        // far side it is still walked around.
+        const bool toSpot = a.order.kind == Order::Kind::MoveTo || a.order.kind == Order::Kind::Hold;
+        if (toSpot) {
+            const glm::vec3 goal = a.order.position;
+            std::vector<CircleObstacle> inWay;
+            for (const CircleObstacle& o : m_obstacles) {
+                const bool hugged = flatDistance(goal, o.centre) - o.radius < s.radius + 0.6f;
+                const glm::vec3 toAgent = a.position - o.centre, toGoal = goal - o.centre;
+                const bool goalSide = toAgent.x * toGoal.x + toAgent.z * toGoal.z > 0.0f;
+                if (!(hugged && goalSide)) inWay.push_back(o);
+            }
+            if (!inWay.empty()) total += avoidObstacles(m, inWay, 1.0f);
+        } else {
+            total += avoidObstacles(m, m_obstacles, 1.0f);
+        }
+    }
 
     const glm::vec3 before = a.position;
     integrate(m, total, dt);

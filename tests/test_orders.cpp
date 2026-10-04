@@ -511,6 +511,34 @@ TEST(OrderBridge, PetWaitsForTheGameToEndThePat) {
     EXPECT_EQ(board.currentKind(2), kke::OrderKind::None);
 }
 
+// Taking cover: a spot right in front of a crate is reached quickly (at a
+// run) and held, not circled because the crate pushes the soldier away.
+TEST(OrderBridge, StayAtASpotInFrontOfAnObstacleRunsThereAndSettles) {
+    kke::ai::AiWorld w(4);
+    ASSERT_TRUE(w.addAgent(1, "farmer", { 0, 0, 12 }));
+    w.addObstacle({ { 0, 0, 0 }, 0.8f });
+    kke::OrderBoard board([&](uint32_t u) { return w.agent(u)->position; });
+    kke::AiOrderBridge bridge(board, w);
+    kke::Order cover;
+    cover.kind = kke::OrderKind::Stay;
+    cover.units = { 1 };
+    cover.point = { 0, 0, 1.5f };
+    cover.hasPoint = true;
+    board.issue(cover);
+    EXPECT_TRUE(w.agent(1)->order.run);
+    const kke::ai::Species* s = w.species("farmer");
+    ASSERT_NE(s, nullptr);
+    // At a run, with time to speed up and slow down: well under the walk.
+    const float walkTime = 10.5f / s->walkSpeed;
+    const int frames = run(w, bridge, [&] { return flatDistance(w.agent(1)->position, cover.point) < 0.6f; });
+    ASSERT_GE(frames, 0) << w.describe(1);
+    EXPECT_LT(float(frames) / 30.0f, walkTime * 0.8f);
+    // And it stays there.
+    run(w, bridge, [] { return false; }, 90);
+    EXPECT_LT(flatDistance(w.agent(1)->position, cover.point), 0.6f);
+    EXPECT_GT(flatDistance(w.agent(1)->position, { 0, 0, 0 }), 0.8f);
+}
+
 #if KKE_ENABLE_LUA
 #include "kke/NodeGraph.h"
 #include "kke/OrderScript.h"
