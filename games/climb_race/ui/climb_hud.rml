@@ -100,7 +100,7 @@
                 <div class="card">
                     <div class="step">1 · GET ON</div>
                     <div class="title">Grab the rock</div>
-                    <div class="body">Walk up to the wall with <prompt action="move"/> and grab it with <prompt action="reach.left"/> or <prompt action="reach.right"/>.</div>
+                    <div class="body">Walk up to the wall with <prompt action="move"/> and grab it with <prompt action="grab.left"/> or <prompt action="grab.right"/>.</div>
                 </div>
                 <div class="card">
                     <div class="step">2 · CHOOSE</div>
@@ -110,12 +110,12 @@
                 <div class="card">
                     <div class="step">3 · REACH</div>
                     <div class="title">Move a hand</div>
-                    <div class="body"><prompt action="reach.left"/> <prompt action="reach.right"/> reach, slow and easy.<br/>Hold <prompt action="grab.left"/> <prompt action="grab.right"/> and let go to lunge further. A big lunge lets go of the other hand!</div>
+                    <div class="body"><prompt action="grab.left"/> <prompt action="grab.right"/> move a hand, <prompt action="foot.left"/> <prompt action="foot.right"/> step a foot.<br/>Hold <prompt action="jump"/> and let go to lunge, then grab in time or fall!</div>
                 </div>
                 <div class="card stamina">
                     <div class="step">4 · BREATHE</div>
                     <div class="title">Save your strength</div>
-                    <div class="body">Hanging tires your arms. <span class="jug">Green</span> holds are easy, <span class="crimp">orange</span> and <span class="sloper">blue</span> are hard. Two green holds or a ledge let you rest. Run out and you fall.</div>
+                    <div class="body">Keep both feet on to get your strength back. No feet costs double. <span class="jug">Green</span> holds are easy, <span class="crimp">orange</span> and <span class="sloper">blue</span> are hard. Ledges let you rest. Run out and you fall.</div>
                 </div>
                 <div class="card over">
                     <div class="step">5 · OVER THE TOP</div>

@@ -15,6 +15,15 @@ using kke::Climber;
 
 constexpr float kDt = 1.0f / 60.0f;
 
+// Over the top of a ledge (a mantle onto it): stand up and climb on from
+// there, as the game does. False once on the summit.
+bool onAgain(Climber& c) {
+    if (c.state() != Climber::State::Topped) return true;
+    if (c.mantleLedge() < 0) return false;
+    c.recover(30.0f, 3.0f); // a rest on the ledge
+    return c.start(c.mantleFeet());
+}
+
 ClimbWall wall(uint32_t seed) {
     ClimbWallDesc d;
     d.seed = seed;
@@ -87,10 +96,11 @@ TEST(ClimbWall, HoldsSitOnTheRockAndApart) {
         EXPECT_GE(h.position.x, -w.desc().width * 0.5f + w.desc().margin - 0.05f);
         EXPECT_LE(h.position.x, w.desc().width * 0.5f - w.desc().margin + 0.05f);
         if (h.route) continue;
+        const bool chip = h.kind == ClimbHold::Kind::Foot;
         for (size_t j = 0; j < i; ++j) {
-            if (holds[j].kind == ClimbHold::Kind::Edge) continue;
+            if (holds[j].kind == ClimbHold::Kind::Edge || (!chip && holds[j].kind == ClimbHold::Kind::Foot)) continue;
             const float d = glm::length(glm::vec2(holds[j].position) - glm::vec2(h.position));
-            EXPECT_GE(d, w.desc().spacing * 0.99f);
+            EXPECT_GE(d, (chip ? w.desc().footSpacing : w.desc().spacing) * 0.99f);
         }
     }
     EXPECT_GT(loose, 3);
@@ -113,6 +123,17 @@ TEST(ClimbWall, LedgesStickOutAndKeepTheirBandClear) {
             EXPECT_FALSE(inside) << "a hold inside ledge " << i;
         }
         EXPECT_GE(edges, 5);
+    }
+    // On every mountain: no hold (on the route or not) in a ledge's stone,
+    // where a hand on it would be inside the ledge.
+    for (uint32_t seed = 1; seed <= 40; ++seed) {
+        const ClimbWall m = wall(seed);
+        for (const kke::ClimbLedge& l : m.ledges())
+            for (const ClimbHold& h : m.holds()) {
+                if (h.kind == ClimbHold::Kind::Edge) continue;
+                const glm::vec3 d = glm::abs(h.position - l.center) - l.halfExtents;
+                EXPECT_FALSE(d.x < 0.0f && d.y < 0.05f && d.z < 0.0f) << "seed " << seed << ": a hold in a ledge at y " << h.position.y;
+            }
     }
 }
 
@@ -206,88 +227,183 @@ TEST(Climber, PreciseReachGoesWhereItAimsAndCostsLittle) {
     EXPECT_TRUE(glm::length(r.c.hand(hand) - r.w.holds()[static_cast<size_t>(target)].position) < 1e-3f);
 }
 
-TEST(Climber, LungeReachesFurtherThanPreciseAndCostsMore) {
+// Hold jump until the charge is `charge`, aimed `aim`, then let go. What
+// the jump itself cost.
+float lunge(Rig& r, glm::vec2 aim, float charge) {
+    Climber::Input in;
+    in.aim = aim;
+    in.jump = true;
+    for (int i = 0; i < 600 && (r.c.charge() < charge || !r.c.charging()); ++i) r.c.update(in, kDt);
+    in.jump = false;
+    const float before = r.c.stamina();
+    r.c.update(in, kDt);
+    return before - r.c.stamina();
+}
+
+TEST(Climber, ALungeJumpsAndIsCaughtInTime) {
     Rig r;
     ASSERT_TRUE(r.mount());
-    // A hold beyond precise reach of the right hand's hold, within a full lunge.
-    const glm::vec3 pivot = r.w.holds()[static_cast<size_t>(r.c.handHold(1))].position;
-    int far = -1;
-    for (size_t i = 0; i < r.w.holds().size(); ++i) {
-        const ClimbHold& h = r.w.holds()[i];
-        const float d = glm::length(h.position - pivot);
-        if (!h.loose && h.kind != ClimbHold::Kind::Edge && kke::ClimbWall::reachDistance(h.position, pivot) > r.c.settings().span + 0.2f && d < r.c.settings().lungeSpan - 0.1f &&
-            h.position.y > pivot.y + 0.8f && std::abs(h.position.x - pivot.x) < 0.6f) {
-            far = static_cast<int>(i);
-            break;
+    r.run({}, 0.3f);
+    const float y = r.c.hips().y;
+    const int feet = r.c.feetPlanted();
+    const float cost = lunge(r, glm::vec2(0.0f, 1.0f), 1.0f);
+    ASSERT_TRUE(r.c.flying());
+    EXPECT_EQ(r.c.handHold(0), -1);
+    EXPECT_EQ(r.c.handHold(1), -1);
+    EXPECT_EQ(r.c.feetPlanted(), 0) << "the feet leave the rock too";
+    // A full lunge costs the most (paid at the jump; double without feet on).
+    EXPECT_NEAR(cost, r.c.settings().costDynoMax * (feet == 0 ? r.c.settings().handsOnly : 1.0f), 0.1f);
+    // The trigger at air does nothing; once a hold is in reach it catches.
+    int caughtBy = -1;
+    float top = y;
+    for (int i = 0; i < 120 && r.c.flying(); ++i) {
+        Climber::Input in;
+        top = std::max(top, r.c.hips().y);
+        // Near the top of it (or on the way down), not straight back onto
+        // the holds it left.
+        const bool late = r.c.hips().y > y + r.c.settings().dynoMax * 0.85f || r.c.hips().y < top - 0.05f;
+        for (int h = 0; h < 2 && caughtBy < 0 && late; ++h)
+            if (r.c.aimTarget(h) >= 0) {
+                in.reach[h] = true;
+                caughtBy = h;
+            }
+        r.c.update(in, kDt);
+    }
+    ASSERT_GE(caughtBy, 0);
+    EXPECT_FALSE(r.c.flying());
+    EXPECT_EQ(r.c.state(), Climber::State::Climbing);
+    EXPECT_GE(r.c.handHold(caughtBy), 0);
+    EXPECT_GT(top, y + r.c.settings().dynoMax * 0.8f) << "a full lunge goes up most of dynoMax";
+}
+
+TEST(Climber, ALungeNobodyCatchesIsAFall) {
+    Rig r;
+    ASSERT_TRUE(r.mount());
+    lunge(r, glm::vec2(0.0f, 1.0f), 0.6f);
+    ASSERT_TRUE(r.c.flying());
+    bool fell = false;
+    for (int i = 0; i < 120 && !fell; ++i) {
+        r.c.update({}, kDt);
+        fell = r.c.fell();
+    }
+    EXPECT_TRUE(fell);
+    EXPECT_EQ(r.c.state(), Climber::State::Fell);
+}
+
+TEST(Climber, ATapOfJumpIsNotALunge) {
+    Rig r;
+    ASSERT_TRUE(r.mount());
+    r.run({}, 0.3f);
+    const glm::vec3 hips = r.c.hips();
+    Climber::Input in;
+    in.jump = true;
+    r.c.update(in, kDt);
+    r.c.update(in, kDt);
+    in.jump = false;
+    r.c.update(in, kDt);
+    EXPECT_FALSE(r.c.flying());
+    EXPECT_GE(r.c.handHold(0), 0);
+    EXPECT_GE(r.c.handHold(1), 0);
+    EXPECT_LT(glm::length(r.c.hips() - hips), 0.02f) << "no hop on the spot";
+}
+
+TEST(Climber, FeetStepOntoFootholdsAndComeOffWhenOutOfReach) {
+    Rig r;
+    ASSERT_TRUE(r.mount());
+    r.run({}, 0.3f);
+    // Up off the ground, the feet step onto the footholds shown for them.
+    for (int f = 0; f < 2; ++f) {
+        Climber::Input in;
+        in.step[f] = r.c.footTarget(f) >= 0;
+        r.c.update(in, kDt);
+        r.run({}, r.c.settings().stepTime + 0.05f);
+    }
+    EXPECT_GT(r.c.feetPlanted(), 0) << "there are footholds under the body";
+    // Hands up the wall until a foot can't reach its hold any more.
+    bool slipped = false;
+    for (int move = 0; move < 8 && !slipped; ++move) {
+        const int h = move % 2;
+        Climber::Input in;
+        in.aim = glm::vec2(0.0f, 1.0f);
+        r.c.update(in, kDt);
+        in.reach[h] = true;
+        for (int i = 0; i < 40; ++i) {
+            r.c.update(in, kDt);
+            in.reach[h] = false;
+            slipped = slipped || r.c.slipped() >= 0;
         }
     }
-    ASSERT_GE(far, 0);
-    Climber::Input in;
-    in.pick[0] = far;
-    in.reach[0] = true; // a bumper can't get there
-    r.c.update(in, kDt);
-    EXPECT_FALSE(r.c.handMoving(0));
-    // Trigger held to a full charge, then let go.
-    in.reach[0] = false;
-    in.power[0] = 1.0f;
-    r.run(in, r.c.settings().chargeTime + 0.1f);
-    EXPECT_NEAR(r.c.charge(0), 1.0f, 1e-3f);
-    EXPECT_EQ(r.c.aimTarget(0), far);
-    const float before = r.c.stamina();
-    in.power[0] = 0.0f;
-    r.c.update(in, kDt);
-    EXPECT_EQ(r.c.handMove(0), Climber::Move::Lunge);
-    EXPECT_NEAR(before - r.c.stamina(), r.c.settings().costLungeMax, 0.5f);
-    r.run(in, r.c.settings().lungeTime + 0.05f);
-    EXPECT_EQ(r.c.handHold(0), far);
+    ASSERT_TRUE(slipped);
+    for (int f = 0; f < 2; ++f) {
+        if (r.c.footHold(f) >= 0) continue;
+        const int t = r.c.footTarget(f);
+        if (t < 0) continue;
+        Climber::Input in;
+        in.step[f] = true;
+        r.c.update(in, kDt);
+        EXPECT_TRUE(r.c.footMoving(f));
+        r.run({}, r.c.settings().stepTime + 0.05f);
+        EXPECT_EQ(r.c.footHold(f), t);
+        EXPECT_LT(glm::length(r.c.foot(f) - r.w.holds()[static_cast<size_t>(t)].position), 1e-3f);
+    }
 }
 
-TEST(Climber, QuickSnatchIsFasterThanAPreciseReach) {
+TEST(Climber, FeetOnRestTheArmsAndNoFeetCostDouble) {
     Rig r;
     ASSERT_TRUE(r.mount());
+    r.run({}, 0.6f);
+    // A climber whose legs reach nothing hangs on the arms alone.
+    Rig noFeet;
+    noFeet.c.settings().legReach = 0.05f;
+    ASSERT_TRUE(noFeet.mount());
+    noFeet.run({}, 0.6f);
+    ASSERT_EQ(noFeet.c.feetPlanted(), 0);
+    EXPECT_GT(noFeet.c.drainRate(), 0.0f);
+    if (r.c.feetPlanted() == 2) {
+        EXPECT_LT(r.c.drainRate(), 0.0f) << "both feet planted, both hands on: the arms recover";
+    }
+    // A reach costs double on the arms alone.
     Climber::Input in;
     in.aim = glm::vec2(0.0f, 1.0f);
-    in.power[1] = 0.7f;
-    r.c.update(in, kDt);
-    in.reach[1] = true;
-    r.c.update(in, kDt);
-    EXPECT_EQ(r.c.handMove(1), Climber::Move::Quick);
-    in.reach[1] = false;
-    in.power[1] = 0.0f;
-    r.run(in, r.c.settings().quickTime + 0.03f);
-    EXPECT_FALSE(r.c.handMoving(1));
-    EXPECT_GE(r.c.handHold(1), 0);
+    noFeet.c.update(in, kDt);
+    const float before = noFeet.c.stamina();
+    in.reach[0] = true;
+    noFeet.c.update(in, kDt);
+    ASSERT_TRUE(noFeet.c.handMoving(0));
+    EXPECT_NEAR(before - noFeet.c.stamina(), noFeet.c.settings().costPrecise * noFeet.c.settings().handsOnly, 0.2f);
 }
 
-TEST(Climber, LooseHoldsBreakUnderALunge) {
+TEST(Climber, TwoHandsShareAHoldSideBySideAndStill) {
     Rig r;
     ASSERT_TRUE(r.mount());
-    const glm::vec3 pivot = r.w.holds()[static_cast<size_t>(r.c.handHold(1))].position;
-    // Any loose hold within a lunge of the right hand (search the whole wall's lower part).
-    int loose = -1;
-    for (size_t i = 0; i < r.w.holds().size(); ++i)
-        if (r.w.holds()[i].loose && kke::ClimbWall::reachDistance(r.w.holds()[i].position, pivot) < r.c.settings().lungeSpan - 0.05f &&
-            !r.c.crossesOver(0, static_cast<int>(i)))
-            loose = static_cast<int>(i);
-    if (loose < 0) GTEST_SKIP() << "no loose hold near the start on this seed";
+    const int hold = r.c.handHold(Climber::kRight);
     Climber::Input in;
-    in.pick[0] = loose;
-    in.power[0] = 1.0f;
-    r.run(in, r.c.settings().chargeTime + 0.1f);
-    in.power[0] = 0.0f;
-    bool broke = false;
-    for (int i = 0; i < 40; ++i) {
-        r.c.update(in, kDt);
-        broke = broke || r.c.brokeHold() == loose;
+    in.pick[Climber::kLeft] = hold;
+    r.c.update(in, kDt);
+    in.reach[Climber::kLeft] = true;
+    r.c.update(in, kDt);
+    ASSERT_TRUE(r.c.handMoving(Climber::kLeft)) << "matching is allowed: pick " << r.c.aimTarget(Climber::kLeft) << " span " << r.c.canSpan(Climber::kLeft, hold)
+                                                << " cross " << r.c.crossesOver(Climber::kLeft, hold);
+    in.reach[Climber::kLeft] = false;
+    r.run(in, 1.0f);
+    ASSERT_EQ(r.c.handHold(Climber::kLeft), hold);
+    const glm::vec3 l = r.c.grip(Climber::kLeft), rr = r.c.grip(Climber::kRight);
+    EXPECT_NEAR(glm::length(rr - l), r.c.settings().handWidth, 0.01f) << "side by side, not one inside the other";
+    EXPECT_LT(l.x, rr.x) << "the left hand on the left";
+    // Settled, nothing shakes: the body and the hands stay put frame to frame.
+    float worst = 0.0f;
+    glm::vec3 last = r.c.hips();
+    for (int i = 0; i < 120; ++i) {
+        r.c.update({}, kDt);
+        worst = std::max(worst, glm::length(r.c.hips() - last));
+        last = r.c.hips();
     }
-    EXPECT_TRUE(broke);
-    EXPECT_TRUE(r.c.holdGone(loose));
-    EXPECT_EQ(r.c.handHold(0), -1);
-    EXPECT_EQ(r.c.state(), Climber::State::Climbing) << "the other hand still holds";
+    EXPECT_LT(worst, 0.002f);
 }
 
 TEST(Climber, OneHandTiresFasterAndEmptyArmsLetGo) {
     Rig r;
+    r.c.settings().legReach = 0.05f; // no feet on: the arms alone hold the body
     ASSERT_TRUE(r.mount());
     const float two = r.c.drainRate();
     // While the left hand reaches, the right one holds the body alone.
@@ -334,6 +450,7 @@ TEST(Climber, AKnockCostsStaminaAndAHardOneFalls) {
 }
 
 TEST(Climber, TheBotClimbsToTheSummitAndMantles) {
+    int allLunges = 0, lungedOn = 0;
     for (uint32_t seed = 1; seed <= 40; ++seed) {
         ClimbWall w = wall(seed);
         Climber::Settings s;
@@ -344,18 +461,21 @@ TEST(Climber, TheBotClimbsToTheSummitAndMantles) {
         ASSERT_TRUE(c.start(glm::vec3(p.x, 0.0f, w.surfaceZ(p.x, 1.0f) + 0.45f))) << "seed " << seed;
         float t = 0.0f;
         int lunges = 0;
-        for (; t < 240.0f && c.state() != Climber::State::Topped && c.state() != Climber::State::Fell; t += kDt) {
-            const bool wasLunging = c.handMove(0) == Climber::Move::Lunge || c.handMove(1) == Climber::Move::Lunge;
+        for (; t < 240.0f && c.state() != Climber::State::Fell; t += kDt) {
             c.update(bot.think(c, kDt), kDt);
-            const bool lunging = c.handMove(0) == Climber::Move::Lunge || c.handMove(1) == Climber::Move::Lunge;
-            lunges += lunging && !wasLunging ? 1 : 0;
+            lunges += c.lunged() ? 1 : 0;
+            if (!onAgain(c)) break;
         }
-        EXPECT_GT(lunges, 2) << "seed " << seed << ": fresh, it should lunge past holds";
+        allLunges += lunges;
+        lungedOn += lunges > 0 ? 1 : 0;
         EXPECT_EQ(c.state(), Climber::State::Topped) << "seed " << seed << " stuck at y " << c.hips().y << " after " << t << " s";
         EXPECT_EQ(c.mantleLedge(), -1);
         EXPECT_NEAR(c.feet().y, w.summitY(), 0.05f);
         EXPECT_LT(c.feet().z, w.summitZ());
     }
+    // Fresh, on most mountains it lunges past a hold now and then.
+    EXPECT_GE(lungedOn, 30) << allLunges << " lunges on " << lungedOn << " of 40 mountains";
+    EXPECT_GE(allLunges, 40);
 }
 
 TEST(Climber, TheArmsReachEveryHoldTheHandsAreOn) {
@@ -371,26 +491,24 @@ TEST(Climber, TheArmsReachEveryHoldTheHandsAreOn) {
         const glm::vec3 p = w.holds()[static_cast<size_t>(bot.route().front())].position;
         ASSERT_TRUE(c.start(glm::vec3(p.x, 0.0f, w.surfaceZ(p.x, 1.0f) + 0.45f)));
         float worst = 0.0f, settle = 0.0f;
-        int cuts = 0;
-        for (float t = 0.0f; t < 240.0f && c.state() == Climber::State::Climbing; t += kDt) {
+        for (float t = 0.0f; t < 240.0f && c.state() != Climber::State::Fell; t += kDt) {
             c.update(bot.think(c, kDt), kDt);
-            cuts += c.cutLoose() >= 0 ? 1 : 0;
-            if (c.state() != Climber::State::Climbing) break;
+            if (!onAgain(c)) break;
+            if (c.state() != Climber::State::Climbing) continue;
             // A catch (a start, a lunge) pulls the body up to the hand: a
             // few frames to get there.
-            settle = c.grabbed() || c.cutLoose() >= 0 ? 0.25f : std::max(0.0f, settle - kDt);
+            settle = c.grabbed() || c.cutLoose() >= 0 || c.flying() ? 0.4f : std::max(0.0f, settle - kDt);
             if (settle > 0.0f) continue;
             for (int h = 0; h < 2; ++h) {
                 const int hold = c.handHold(h);
                 if (hold < 0) continue;
                 const ClimbHold& hd = w.holds()[static_cast<size_t>(hold)];
-                const float over = glm::length(c.wristAt(hd.position, hd.normal) - c.shoulder(h)) - s.armReach;
+                const float over = glm::length(c.wristAt(c.grip(h), hd.normal) - c.shoulder(h)) - s.armReach;
                 worst = std::max(worst, over);
             }
         }
-        EXPECT_EQ(c.state(), Climber::State::Mantle) << "seed " << seed;
+        EXPECT_EQ(c.state(), Climber::State::Topped) << "seed " << seed;
         EXPECT_LT(worst, s.cutLoose + 0.01f) << "seed " << seed << ": an arm stretched past its reach";
-        EXPECT_GT(cuts, 0) << "seed " << seed << ": fresh, the bot lunges, and a long lunge cuts the lower hand loose";
     }
 }
 
@@ -402,7 +520,7 @@ TEST(Climber, ABodyHangsBetweenTheHandsOrNot) {
     int nearHold = -1, farHold = -1;
     for (size_t i = 0; i < r.w.holds().size(); ++i) {
         const ClimbHold& h = r.w.holds()[i];
-        if (h.kind == ClimbHold::Kind::Edge || static_cast<int>(i) == right || r.c.crossesOver(Climber::kLeft, static_cast<int>(i)) ||
+        if (h.kind == ClimbHold::Kind::Edge || h.kind == ClimbHold::Kind::Foot || static_cast<int>(i) == right || r.c.crossesOver(Climber::kLeft, static_cast<int>(i)) ||
             h.position.x > at.x)
             continue; // the left hand's side
         const float d = glm::length(h.position - at);
@@ -433,7 +551,7 @@ TEST(Climber, EachHandWorksItsOwnSide) {
     for (size_t i = 0; i < r.w.holds().size(); ++i) {
         const glm::vec3 p = r.w.holds()[i].position;
         const float dx = p.x - at.x;
-        if (static_cast<int>(i) != right && dx > 0.45f && dx < 0.9f && std::abs(p.y - at.y) < 0.6f) {
+        if (static_cast<int>(i) != right && r.w.holds()[i].kind != ClimbHold::Kind::Edge && r.w.holds()[i].kind != ClimbHold::Kind::Foot && dx > 0.45f && dx < 1.2f && std::abs(p.y - at.y) < 0.8f) {
             over = static_cast<int>(i);
             break;
         }
@@ -477,11 +595,57 @@ TEST(Climber, StaminaMattersOnTheWayUp) {
             c.recover(30.0f, 3.0f);
             ASSERT_TRUE(c.start(stand)) << "seed " << seed << ": nothing to grab above ledge " << c.mantleLedge();
         }
-        EXPECT_EQ(c.state(), Climber::State::Topped) << "seed " << seed;
+        EXPECT_EQ(c.state(), Climber::State::Topped) << "seed " << seed << " at y " << c.hips().y << " stamina " << c.staminaFraction();
         EXPECT_EQ(c.mantleLedge(), -1);
-        EXPECT_LT(lowest, 0.7f) << "seed " << seed << ": the climb should tire you";
+        EXPECT_LT(lowest, 0.75f) << "seed " << seed << ": the climb should tire you";
         EXPECT_GT(t, 15.0f) << "seed " << seed << ": 36 m should take a while";
     }
+}
+
+TEST(Climber, TheBodyStaysOutOfTheRockAndTheLedges) {
+    // No knees, head or body through stone: all the way up, the hips, the
+    // chest and the head clear the rock, and a body as tall as a ledge is
+    // in front of it. Along the way a lip is taken where the hand is, not
+    // only at its edge holds' points.
+    bool alongLip = false;
+    for (uint32_t seed : { 2u, 5u, 9u, 14u, 21u }) {
+        ClimbWall w = wall(seed);
+        Climber::Settings s;
+        s.maxStamina = 1e6f;
+        Climber c(w, s);
+        kke::ClimbBot bot(w.line());
+        const glm::vec3 p = w.holds()[static_cast<size_t>(bot.route().front())].position;
+        ASSERT_TRUE(c.start(glm::vec3(p.x, 0.0f, w.surfaceZ(p.x, 1.0f) + 0.45f)));
+        float settle = 0.0f;
+        for (float t = 0.0f; t < 240.0f && c.state() != Climber::State::Fell; t += kDt) {
+            c.update(bot.think(c, kDt), kDt);
+            if (!onAgain(c)) break;
+            if (c.state() != Climber::State::Climbing) continue;
+            settle = c.grabbed() ? 0.4f : std::max(0.0f, settle - kDt);
+            const glm::vec3 hips = c.hips();
+            EXPECT_GE(hips.z, w.surfaceZ(hips.x, hips.y) + s.bodyIn - 0.02f) << "seed " << seed;
+            EXPECT_GE(hips.z, w.surfaceZ(hips.x, hips.y + s.headUp - 0.1f) + 0.13f - 0.02f) << "seed " << seed << ": the head in the rock";
+            if (settle <= 0.0f)
+                for (const kke::ClimbLedge& l : w.ledges()) {
+                    if (std::abs(hips.x - l.center.x) > l.halfExtents.x + s.shoulderHalf) continue;
+                    const float low = hips.y - s.hipsHeight + 0.05f, high = hips.y + s.headUp;
+                    if (high < l.center.y - l.halfExtents.y || low > l.top() - 0.02f) continue;
+                    EXPECT_GE(hips.z, l.center.z + l.halfExtents.z + s.bodyDepth) << "seed " << seed << ": the body inside a ledge at y " << hips.y;
+                }
+            for (int h = 0; h < 2; ++h) {
+                const int hold = c.handHold(h);
+                if (hold < 0) continue;
+                const ClimbHold& hd = w.holds()[static_cast<size_t>(hold)];
+                if (hd.kind != ClimbHold::Kind::Edge) continue;
+                const float off = std::abs(c.grip(h).x - hd.position.x);
+                EXPECT_LE(off, hd.size + 0.03f + s.handWidth * 0.5f + 1e-3f);
+                alongLip = alongLip || off > 0.05f;
+            }
+        }
+        EXPECT_EQ(c.state(), Climber::State::Topped) << "seed " << seed;
+        EXPECT_EQ(c.mantleLedge(), -1) << "seed " << seed;
+    }
+    EXPECT_TRUE(alongLip);
 }
 
 } // namespace

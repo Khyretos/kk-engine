@@ -56,9 +56,14 @@ TEST(ClimbMountains, EveryMountainCanBeClimbedByTheBot) {
         const glm::vec3 p = w.holds()[static_cast<size_t>(bot.route().front())].position;
         ASSERT_TRUE(c.start(glm::vec3(p.x, 0.0f, w.surfaceZ(p.x, 1.0f) + 0.45f))) << m.id;
         float t = 0.0f;
-        for (; t < 300.0f && c.state() != kke::Climber::State::Topped && c.state() != kke::Climber::State::Fell; t += kDt)
+        for (; t < 300.0f && c.state() != kke::Climber::State::Fell; t += kDt) {
             c.update(bot.think(c, kDt), kDt);
+            if (c.state() != kke::Climber::State::Topped) continue;
+            if (c.mantleLedge() < 0) break;
+            ASSERT_TRUE(c.start(c.mantleFeet())) << m.id << ": nothing to grab above ledge " << c.mantleLedge(); // onto the ledge, and on
+        }
         EXPECT_EQ(c.state(), kke::Climber::State::Topped) << m.id << " stuck at y " << c.hips().y << " after " << t << " s";
+        EXPECT_EQ(c.mantleLedge(), -1) << m.id;
     }
 }
 

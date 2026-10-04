@@ -3,9 +3,10 @@
 A speed-climbing race up a generated mountain face. Every climber starts on
 the ground in front of their own copy of the wall, side by side, like a
 speed-climbing final. You walk to the rock, grab it and choose every hold
-yourself: a bumper reaches, a trigger held and let go lunges, both together
-snatch. Stamina runs out on bad holds and overhangs, so you rest on ledges
-and big green holds. The first to mantle over the summit wins. There are
+yourself: a trigger moves that hand, a bumper steps that foot, and jump
+held and let go lunges. Stamina only comes back with both feet on holds
+and runs out twice as fast on the arms alone, so keep your feet on and
+rest on ledges. The first to mantle over the summit wins. There are
 six mountains on a tour with medal times, four party modes, up to four
 players in split screen, 0 to 5 CPU climbers, and online races with
 several players per screen.
@@ -66,14 +67,14 @@ can be rebound (they are saved in `climb_race_input.json`).
 | Sprint | click the left stick (toggle) | Left Shift (hold) |
 | Walk slowly | click the right stick (toggle) | Left Alt (hold) |
 | Jump | A | Space |
-| Grab the rock | LB / RB, or a trigger | Q / E, or a mouse button |
+| Grab the rock | LT / RT | Q / E, or a mouse button |
 
 | On the rock | Controller | Mouse and keyboard |
 |---|---|---|
 | Choose where a hand goes | left stick aims (the hold lights up cyan for the left hand, magenta for the right) | the crosshair picks a hold (a red marker means out of reach), or WASD aims |
-| Precise reach: slow, cheap | LB / RB | Q / E |
-| Lunge: hold, then let go (the longer, the further) | LT / RT | left / right mouse button |
-| Quick snatch: fast, costs more | hold a trigger and press its bumper | hold a mouse button and press Q / E |
+| Move a hand to its lit hold | LT / RT | Q / E, or left / right mouse button |
+| Step a foot onto its lit foothold (small flat marks) | LB / RB | Z / X |
+| Lunge: hold, aim, let go (the longer, the further); then grab in time | hold A, then LT / RT | hold Space, then Q / E |
 | Over an edge (both hands on it) | A | Space |
 | Let go | B | C |
 
@@ -88,14 +89,15 @@ can be rebound (they are saved in `climb_race_input.json`).
 | Ping the surroundings (hear the walls) | no controller binding (the D-pad moves through the menu) | G |
 | Let go of the mouse | (none needed) | Esc (opens the pause menu too) |
 
-The left side of the pad (and the left mouse button, Q) is the left hand;
-the right side is the right hand. `init` gives all four player maps
+The left side of the pad (and the left mouse button, Q, Z) is the left
+hand and foot; the right side is the right ones. A tap of jump on the rock
+does nothing (a lunge needs a short hold). `init` gives all four player maps
 `InputModule::defineCharacterActions` (move, look, jump, sprint, walk and
 the rest), clears the bindings of `fire`, `aim`, `interact` and `crouch`
 (those buttons are the hands here) and of `camera.toggle` and `audio.ping`
 (Q is a hand, so the ping moves to G; the right stick click walks), and adds `grab.left` / `grab.right`
-(1D axes: the triggers with a 0.05 dead zone, and the mouse buttons),
-`reach.left` / `reach.right`, `letgo`, `race.again`, `race.new`, `menu`,
+(1D axes: the triggers with a 0.05 dead zone, the mouse buttons and Q / E;
+pulled past half way is one reach), `foot.left` / `foot.right`, `letgo`, `race.again`, `race.new`, `menu`,
 `panels` and `help`.
 
 The start menu is `kke::LobbyModule`: every controller that presses A
@@ -152,17 +154,27 @@ button shows it again at any time. Offline, the race waits while it is up.
 A 3, 2, 1 countdown, then GO. Walk to the rock and grab it. On the rock:
 
 - **Stamina** is the only thing on the HUD you manage. It drains faster on
-  one hand, on crimps and slopers, on overhangs, and with your feet off
-  holds. It comes back on two jugs (green) with your feet on and the rock
-  not overhanging, and fast when you stand on a ledge or the ground. At
-  zero your grip goes and you fall.
+  one hand, on crimps and slopers and on overhangs. With no feet on holds
+  everything costs double. It comes back slowly but steadily with both
+  feet planted and both hands on holds (faster on good holds, faster
+  still with both hands on one hold), and fast when you stand on a ledge
+  or the ground. At zero your grip goes and you fall.
+- **Feet**: two small flat marks show where each foot can go (cyan left,
+  magenta right). The bumpers step onto them. A foot left too far below
+  as you climb comes off by itself. Small pale chips on the rock are
+  footholds only.
+- **Lunge**: hold jump, aim with the stick, let go. The marker turns gold
+  on the hold you would catch. In the air, pull that hand's trigger in
+  time or you fall.
 - **Holds**: green = jug (easy), orange = crimp (tiring), blue = sloper
   (most tiring), the grey lips of ledges and the summit are edges (as good
-  as a jug, and you can mantle over them). Some holds are loose: they
-  break off under a lunge and fall down the face.
-- **Matching**: both hands can share one hold, which is how you swap
-  hands on a big jug. Matching is cheap (half a precise reach), so it is
-  also how you traverse: match, then lead with the other hand.
+  as a jug, and you can grab them anywhere along their length and mantle
+  over them). Some holds are loose: they break off when a lunge catches
+  them and fall down the face.
+- **Matching**: both hands can share one hold, side by side (or one above
+  the other on a tall one), which is how you swap hands on a big jug.
+  Matching is cheap (half a reach), so it is also how you traverse: match,
+  then lead with the other hand.
 - **Each hand works its own side**: the body is split down the middle.
   Holds on your left are for the left hand, holds on your right for the
   right hand, and holds near the middle (between the shoulders) for
@@ -171,9 +183,12 @@ A 3, 2, 1 countdown, then GO. Walk to the rock and grab it. On the rock:
   the front, and never over the other hand's hold. Bots and online
   climbers follow the same rules (they live in `kke::Climber`).
 - **Real arms**: the hands only go where the body can hang between them.
-  A precise reach or a snatch only offers holds the body can hang from
-  with the other hand where it is. A lunge can go further, and if the
-  lower hand then ends up out of reach it cuts loose: grab again quickly.
+  A reach only offers holds the body can hang from with the other hand
+  where it is. A lunge can go further; if a hand then ends up out of
+  reach it cuts loose: grab again quickly.
+- **No clipping**: the hips, chest, head and knees stay out of the rock
+  and out of ledges. Under a ledge the head stays below it until you hold
+  its lip.
 - **Falling** puts you back on foot (Locomotion). After 0.35 s you can
   grab again.
 - **Topping out**: both hands on the summit edge, then jump to mantle over.
@@ -443,21 +458,28 @@ The climbing itself is engine logic, `kke::Climber`
 ([kke/Climber.h](../../engine/include/kke/Climber.h)): pure maths with no
 physics, unit-tested in `tests/test_climb_wall.cpp`. It knows the wall,
 each hand's hold, each foot's hold, the hips and stamina. The game gives
-it a `Climber::Input` each frame (an aim, a reach press per hand, a
-trigger value per hand, an optional hold picked outright, let go) and
-reads back the state.
+it a `Climber::Input` each frame (an aim, a reach press per hand, a step
+press per foot, jump held, an optional hold picked outright per hand and
+per foot, let go) and reads back the state.
 
 How a move works:
 
 - **Aim**: the stick direction on the wall picks, for each hand, the best
   hold within reach (`aimTarget(hand)`); the game draws a marker on it.
-- **Precise reach** (bumper): up to `span` (1.55 m) from the other hand's
-  hold, 0.42 s, costs 1.5 stamina.
-- **Quick snatch** (trigger held + bumper): same reach, 0.17 s, costs 5.
-- **Lunge** (trigger held, then let go): the charge fills in 0.75 s and
-  sets the reach, up to `lungeSpan` (2.45 m), 0.3 s, costs 6 to 16. A
-  loose hold hit by a lunge breaks: the hand closes on nothing and the
-  game gets `brokeHold()`.
+- **Reach** (trigger): up to `span` (1.55 m) from the other hand's hold,
+  0.42 s, costs 1.5 stamina (double with no feet on).
+- **Feet** (bumper): `footTarget(foot)` is the best foothold under the
+  hips on that foot's side within `legReach`; a step takes 0.25 s and
+  costs 0.4. A planted foot too far from its hip comes off (`slipped()`).
+- **Lunge** (jump held, then let go): the charge fills in 0.75 s; below
+  15% a release does nothing. The hips fly 0.35 to 1.35 m the way the
+  stick points, rising for about 0.3 s to the dead point, then drop. Hands
+  and feet leave the rock (`lunged()`). A trigger pressed while
+  `aimTarget(hand)` (the gold marker) is a hold catches it; nothing caught
+  0.4 s after the dead point is a fall. Costs 6 to 16. A loose hold caught
+  breaks: the hand closes on nothing and the game gets `brokeHold()`.
+- **Two hands on one hold**: they sit side by side, `handWidth` (9 cm)
+  apart; on a lip each hand grabs where it reached.
 - **Sides** (`onItsSide(hand, point, hips)`, `crossesOver(hand, hold)`):
   a hold counts as on a hand's side up to `shoulderHalf + crossReach`
   past the middle, measured along the wall. Past the other shoulder the
@@ -467,13 +489,14 @@ How a move works:
 - **Mantle**: both hands on the same edge and pushing up. `mantleLedge()`
   says which ledge (-1 = the summit, which is the finish).
 
-**Stamina** (`Climber::updateStamina`): the drain per second is the
-two-hand rate (1.5) or the one-hand rate (6.0; half-way between while a
-hand is travelling), divided by the average grip of the held holds (jug
-and edge 1.0, crimp 0.6, sloper 0.45), raised 2% per degree of overhang,
-and lowered by the feet (up to 40% of the weight, less under a steep
-overhang). Two jugs, a foot on a hold and a rock that is not overhanging
-give +3 per second instead ("shaking out"). Standing on the ground or a
+**Stamina** (`Climber::updateStamina`): with both feet planted and both
+hands holding (and not reaching), it comes back at `feetRecover` (2.5 per
+second) times the holds' grip (0.4 to 1), 1.35 times that with both hands
+on one hold, half under an overhang past 10 degrees. Otherwise it drains:
+the two-hand rate (1.5) or the one-hand rate (4.0), divided by the average
+grip of the held holds (jug and edge 1.0, crimp 0.6, sloper 0.45), raised
+2% per degree of overhang, lowered 40% by one planted foot, and doubled
+(`handsOnly`) with no feet on. Standing on the ground or a
 ledge, the game calls `recover(30, dt)` (`kRestRate`). At zero the
 climber falls. `knock(cost)` takes stamina at once (Rockfall).
 
@@ -534,9 +557,11 @@ A CPU climber is a `Racer` with `bot = true` and a `kke::ClimbBot` brain
 (engine code, [Climber.cpp](../../engine/src/Climber.cpp)). On the rock
 `ClimbBot::think` produces the same `Climber::Input` a person would:
 it follows `ClimbWall::line()` hand over hand, matches holds, plans a
-few moves ahead when it needs a way round, charges and releases lunges
-when fresh, rests on two jugs or a ledge when tired, and mantles at the
-top. Because it drives the same `Climber`, it obeys the same stamina and
+few moves ahead when it needs a way round, steps its feet onto
+footholds before each hand move, lunges past a hold when fresh (charging
+just enough that the hold it planned is in reach at the top, then
+catching it), stops to rest with its feet on when tired (below `restAt`,
+70%), always gets onto ledges, and mantles at the top. Because it drives the same `Climber`, it obeys the same stamina and
 reach rules as you.
 
 Off the rock, `readBot` does the rest: on the ground it walks to the foot
@@ -749,20 +774,22 @@ C++ fills plain structs, and the document lays them out:
 
 `updateHud` rebuilds each list every frame but only marks a variable dirty
 when its content changed, so RmlUi does not relayout for nothing. The
-text uses button prompts: `{reach.left}` in a string becomes the glyph
+text uses button prompts: `{grab.left}` in a string becomes the glyph
 of that action on the device player 1 is using
 (`InputModule::promptText`), and the RML uses `<prompt action="..."/>`
 the same way.
 
 ```cpp
 hint = onEdge(0) && onEdge(1)       ? prompt("{jump} pull yourself up onto the edge")
-     : freeHand                     ? prompt("A hand let go: {move} aim and {reach.left} {reach.right} grab again, quick!")
-     : c.staminaFraction() < 0.3f   ? prompt("Tired! Rest on two green holds or a ledge  ·  {letgo} let go")
+     : c.flying()                   ? prompt("Grab! {grab.left} {grab.right} catch the hold before you fall")
+     : freeHand                     ? prompt("A hand let go: {move} aim and {grab.left} {grab.right} grab again, quick!")
+     : c.feetPlanted() == 0         ? prompt("No feet on: your arms tire twice as fast  ·  {foot.left} {foot.right} step onto the lit footholds")
 ```
 
 The hold markers are not part of the HUD: they are small 3D cubes drawn in
 `render()` on the aimed hold (cyan left, magenta right, gold and growing
-while a lunge charges, red for an out-of-reach crosshair hold).
+on the hold a lunge would catch, red for an out-of-reach crosshair hold),
+and small flat marks on each foot's next foothold in the same colours.
 
 ### Networking (Net.cpp, NetRace.h, NetRace.cpp)
 
