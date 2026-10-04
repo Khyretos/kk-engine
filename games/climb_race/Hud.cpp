@@ -32,19 +32,13 @@ std::string clock(float seconds) {
 
 std::string handText(const kke::Climber& c, int h) {
     if (!c.climbing()) return "";
-    if (c.handMoving(h)) {
-        switch (c.handMove(h)) {
-        case kke::Climber::Move::Precise: return "reaching";
-        case kke::Climber::Move::Quick: return "snatching";
-        case kke::Climber::Move::Lunge: return "lunging";
-        case kke::Climber::Move::None: break;
-        }
-    }
-    if (c.charge(h) > 0.05f) {
+    if (c.flying()) return c.handHold(h) >= 0 ? "caught!" : "grab!";
+    if (c.charging()) {
         char buf[32];
-        std::snprintf(buf, sizeof(buf), "power %d%%", static_cast<int>(c.charge(h) * 100.0f));
+        std::snprintf(buf, sizeof(buf), "lunge %d%%", static_cast<int>(c.charge() * 100.0f));
         return buf;
     }
+    if (c.handMoving(h)) return "reaching";
     const int hold = c.handHold(h);
     return hold < 0 ? "free" : kke::holdKindName(c.wall().holds()[static_cast<size_t>(hold)].kind);
 }
@@ -302,12 +296,14 @@ void ClimbRaceModule::updateHud(float) {
         };
         const bool freeHand = (c.handHold(0) < 0 && !c.handMoving(0)) || (c.handHold(1) < 0 && !c.handMoving(1));
         hint = onEdge(0) && onEdge(1)       ? prompt("{jump} pull yourself up onto the edge")
-             : freeHand                     ? prompt("A hand let go: {move} aim and {reach.left} {reach.right} grab again, quick!")
-             : c.staminaFraction() < 0.3f   ? prompt("Tired! Rest on two green holds or a ledge  ·  {letgo} let go")
-                                            : prompt("{move} aim  ·  {reach.left} {reach.right} reach  ·  hold and let go {grab.left} {grab.right} to lunge  ·  "
+             : c.flying()                   ? prompt("Grab! {grab.left} {grab.right} catch the hold before you fall")
+             : freeHand                     ? prompt("A hand let go: {move} aim and {grab.left} {grab.right} grab again, quick!")
+             : c.feetPlanted() == 0         ? prompt("No feet on: your arms tire twice as fast  ·  {foot.left} {foot.right} step onto the lit footholds")
+             : c.staminaFraction() < 0.3f   ? prompt("Tired! Both feet on and hang still, or rest on a ledge  ·  {letgo} let go")
+                                            : prompt("{move} aim  ·  {grab.left} {grab.right} hands  ·  {foot.left} {foot.right} feet  ·  hold {jump} to lunge  ·  "
                                                      "{help} how to play");
     } else {
-        hint = prompt("{move} walk to the rock  ·  {reach.left} {reach.right} grab it  ·  {help} how to play");
+        hint = prompt("{move} walk to the rock  ·  {grab.left} {grab.right} grab it  ·  {help} how to play");
     }
     set(m_hud.hint, hint, "hint");
 }

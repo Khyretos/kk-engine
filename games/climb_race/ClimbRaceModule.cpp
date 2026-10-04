@@ -98,8 +98,9 @@ void ClimbRaceModule::init(kke::Application& app) {
     m_howtoFirst = intro && *intro ? *intro == '1' : !(m_autopilot || m_quitAfter > 0.0f || m_rockfall >= 0.0f);
 
     // Controls: the usual character actions (move, look, jump, sprint),
-    // and the four grab buttons. Left side of the pad (or the mouse's
-    // left button, Q) is the left hand, right side the right hand.
+    // the hands on the triggers (mouse buttons, Q/E) and the feet on the
+    // bumpers (Z/X). Left side is the left hand or foot. Held jump is a
+    // lunge (a tap does nothing on the rock).
     for (int p = 0; p < kke::Lobby::kMaxSeats; ++p) {
         m_input->setPlayers(p + 1);
         kke::InputMap& in = m_input->map(p);
@@ -112,10 +113,10 @@ void ClimbRaceModule::init(kke::Application& app) {
         // camera modes here) toggles walking.
         in.addBinding(IM::bind("audio.ping", IM::key(SDL_SCANCODE_G)));
         in.addBinding(IM::bind("walk", IM::pad(SDL_GAMEPAD_BUTTON_RIGHT_STICK), kke::Trigger::Toggle));
-        in.defineAction({ "grab.left", "Left hand: power (hold, let go to lunge)", "Climbing", "game", kke::ActionType::Axis1D });
-        in.defineAction({ "grab.right", "Right hand: power (hold, let go to lunge)", "Climbing", "game", kke::ActionType::Axis1D });
-        in.defineAction({ "reach.left", "Left hand: reach (with power held: quick)", "Climbing", "game" });
-        in.defineAction({ "reach.right", "Right hand: reach (with power held: quick)", "Climbing", "game" });
+        in.defineAction({ "grab.left", "Left hand: reach for the lit hold (and catch a lunge)", "Climbing", "game", kke::ActionType::Axis1D });
+        in.defineAction({ "grab.right", "Right hand: reach for the lit hold (and catch a lunge)", "Climbing", "game", kke::ActionType::Axis1D });
+        in.defineAction({ "foot.left", "Left foot: step onto the lit foothold", "Climbing", "game" });
+        in.defineAction({ "foot.right", "Right foot: step onto the lit foothold", "Climbing", "game" });
         in.defineAction({ "letgo", "Let go of the rock", "Climbing", "game" });
         in.defineAction({ "race.again", "Race again", "Race", "game" });
         in.defineAction({ "race.new", "Next mountain", "Race", "game" });
@@ -131,10 +132,12 @@ void ClimbRaceModule::init(kke::Application& app) {
         trigger("grab.right", SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
         in.addBinding(IM::bind("grab.left", IM::mouse(SDL_BUTTON_LEFT), kke::Trigger::Continuous));
         in.addBinding(IM::bind("grab.right", IM::mouse(SDL_BUTTON_RIGHT), kke::Trigger::Continuous));
-        in.addBinding(IM::bind("reach.left", IM::pad(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)));
-        in.addBinding(IM::bind("reach.right", IM::pad(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)));
-        in.addBinding(IM::bind("reach.left", IM::key(SDL_SCANCODE_Q)));
-        in.addBinding(IM::bind("reach.right", IM::key(SDL_SCANCODE_E)));
+        in.addBinding(IM::bind("grab.left", IM::key(SDL_SCANCODE_Q), kke::Trigger::Continuous));
+        in.addBinding(IM::bind("grab.right", IM::key(SDL_SCANCODE_E), kke::Trigger::Continuous));
+        in.addBinding(IM::bind("foot.left", IM::pad(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)));
+        in.addBinding(IM::bind("foot.right", IM::pad(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)));
+        in.addBinding(IM::bind("foot.left", IM::key(SDL_SCANCODE_Z)));
+        in.addBinding(IM::bind("foot.right", IM::key(SDL_SCANCODE_X)));
         in.addBinding(IM::bind("letgo", IM::pad(SDL_GAMEPAD_BUTTON_EAST)));
         in.addBinding(IM::bind("letgo", IM::key(SDL_SCANCODE_C)));
         in.addBinding(IM::bind("race.again", IM::pad(SDL_GAMEPAD_BUTTON_START)));
@@ -149,9 +152,9 @@ void ClimbRaceModule::init(kke::Application& app) {
         in.addBinding(IM::bind("help", IM::pad(SDL_GAMEPAD_BUTTON_WEST)));
     }
     m_input->setPlayers(1);
-    // Touch: jump, both hands' grab and reach, let go.
+    // Touch: jump (hold to lunge), both hands, both feet, let go.
     kke::TouchLayoutOptions touch;
-    touch.buttons = { "jump", "grab.right", "grab.left", "reach.right", "reach.left", "letgo" };
+    touch.buttons = { "jump", "grab.right", "grab.left", "foot.right", "foot.left", "letgo" };
     m_input->setTouchLayout(touch);
     m_input->addTouchHider([this] { return m_howto; }); // How to play has the screen (its Start is a button)
     m_input->commitDefaults();
@@ -454,17 +457,22 @@ ClimbRaceModule::RacerInput ClimbRaceModule::readPlayer(Racer& r, float dt) {
     ri.loco.goUp = r.jumpQueued;
     r.jumpQueued = false;
 
-    // On the rock the stick aims (x right, y up), the four buttons grab.
+    // On the rock the stick aims (x right, y up). A trigger pulled past
+    // half way is a hand reaching (once per pull); the bumpers step the
+    // feet; jump held charges a lunge.
     ri.climb.aim = move;
-    ri.climb.reach[0] = in.pressed("reach.left");
-    ri.climb.reach[1] = in.pressed("reach.right");
-    ri.climb.power[0] = in.axis("grab.left");
-    ri.climb.power[1] = in.axis("grab.right");
+    for (int h = 0; h < 2; ++h) {
+        const bool down = in.axis(h == 0 ? "grab.left" : "grab.right") > (r.gripDown[h] ? 0.35f : 0.5f);
+        ri.climb.reach[h] = down && !r.gripDown[h];
+        r.gripDown[h] = down;
+        ri.grab = ri.grab || down;
+    }
+    ri.climb.step[0] = in.pressed("foot.left");
+    ri.climb.step[1] = in.pressed("foot.right");
+    ri.climb.jump = in.held("jump");
     ri.climb.letGo = in.pressed("letgo");
-    ri.mantle = ri.loco.goUp;
     // Mouse players aim with the crosshair when WASD is let go.
     if (r.mouse && m_captured && glm::length(move) < 0.1f && r.crosshair >= 0) ri.climb.pick[0] = ri.climb.pick[1] = r.crosshair;
-    ri.grab = ri.climb.reach[0] || ri.climb.reach[1] || ri.climb.power[0] > 0.3f || ri.climb.power[1] > 0.3f;
     return ri;
 }
 
@@ -474,7 +482,7 @@ ClimbRaceModule::RacerInput ClimbRaceModule::readBot(Racer& r, float dt) {
     RacerInput ri;
     kke::Climber& c = *r.climber;
     if (c.climbing()) {
-        ri.climb = r.brain->think(c, dt); // mantles by itself (up + reach)
+        ri.climb = r.brain->think(c, dt); // feet, lunges and mantles by itself
         return ri;
     }
     const kke::RigidWorld& w = m_rigid->world();
@@ -562,11 +570,7 @@ void ClimbRaceModule::updateRacer(Racer& r, float dt) {
     r.regrab = std::max(0.0f, r.regrab - dt);
 
     if (c.climbing()) {
-        // Jump with both hands on an edge: over it.
-        if (ri.mantle && c.handHold(0) >= 0 && c.handHold(1) >= 0) {
-            ri.climb.aim = glm::vec2(0.0f, 1.0f);
-            ri.climb.reach[0] = true;
-        }
+        // (Jump with both hands on one edge is over it: kke::Climber.)
         c.update(ri.climb, dt);
         if (c.grabbed()) sound(toWorld(r, c.hips() + glm::vec3(0.0f, 0.9f, 0.0f)), kke::AudioMaterialTable::Stone, 0.18f);
         if (c.brokeHold() >= 0) {
@@ -838,22 +842,30 @@ void ClimbRaceModule::render(const kke::RenderContext& ctx) {
         for (const Loose& l : lane->loose) l.mesh->draw(ctx, w.transform(l.body), 0.0f, 0.8f);
     }
     for (const Rock& rock : m_rocks) m_rockMesh->draw(ctx, w.transform(rock.body), 0.0f, 0.85f);
-    // Where each hand would go: cyan left, magenta right; gold while a
-    // lunge charges (bigger with the charge); red = the crosshair's hold
-    // is out of reach.
+    // Where each hand would go: cyan left, magenta right; gold where a
+    // lunge would be caught (while it charges, bigger with the charge, and
+    // in the air); red = the crosshair's hold is out of reach. The feet's
+    // footholds: small flat marks in the same colours.
     for (const Racer& r : m_racers) {
         if (r.seat < 0) continue; // players' markers only
         const kke::Climber& c = *r.climber;
         if (!c.climbing()) continue;
         const kke::ClimbWall& wall = c.wall();
+        const bool lunge = c.charging() || c.flying();
         for (int h = 0; h < 2; ++h) {
             const int t = c.aimTarget(h);
             if (t < 0) continue;
             const glm::vec3 p = toWorld(r, wall.holds()[static_cast<size_t>(t)].position + wall.holds()[static_cast<size_t>(t)].normal * 0.06f);
-            const float s = 0.07f + 0.08f * c.charge(h);
-            const int color = c.charge(h) > 0.05f ? 3 : h;
+            const float s = lunge ? 0.07f + 0.08f * (c.flying() ? 1.0f : c.charge()) : 0.07f;
             const glm::vec3 side(h == 0 ? -0.05f : 0.05f, 0.0f, 0.0f);
-            m_markers[color]->draw(ctx, glm::scale(glm::translate(glm::mat4(1.0f), p + side), glm::vec3(s)), 0.0f, 0.3f);
+            m_markers[lunge ? 3 : h]->draw(ctx, glm::scale(glm::translate(glm::mat4(1.0f), p + side), glm::vec3(s)), 0.0f, 0.3f);
+        }
+        for (int f = 0; f < 2; ++f) {
+            const int t = c.footTarget(f);
+            if (t < 0 || t == c.footHold(f)) continue;
+            const kke::ClimbHold& hold = wall.holds()[static_cast<size_t>(t)];
+            const glm::vec3 p = toWorld(r, hold.position + hold.normal * 0.04f);
+            m_markers[f]->draw(ctx, glm::scale(glm::translate(glm::mat4(1.0f), p), glm::vec3(0.05f, 0.02f, 0.05f)), 0.0f, 0.3f);
         }
         if (r.crosshair >= 0 && r.crosshairOut) {
             const kke::ClimbHold& hold = wall.holds()[static_cast<size_t>(r.crosshair)];

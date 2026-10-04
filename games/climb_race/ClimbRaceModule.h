@@ -45,11 +45,12 @@ namespace climb_race {
 // Climb Race: identical generated rock faces side by side, like a
 // speed-climbing final, one per climber. You start on the ground in front
 // of yours; the first to mantle over the summit wins. On the rock you
-// choose each hold yourself (kke::Climber): a bumper reaches precisely, a
-// trigger held and let go lunges (further the longer you hold), both
-// together snatch quickly. Stamina runs out on bad holds and overhangs;
-// stand on a ledge or hang on two jugs to get it back. Loose holds come
-// off under a lunge and fall down the face (Jolt bodies).
+// choose each hold yourself (kke::Climber): a trigger moves that hand to
+// the lit hold, a bumper steps that foot onto its lit foothold, and jump
+// held and let go lunges the way the stick points (grab in time or
+// fall). Stamina comes back only with both feet on; hanging on the arms
+// alone costs double. Stand on a ledge to rest. Loose holds come off
+// when caught hard and fall down the face (Jolt bodies).
 //
 // It starts in the lobby (kke::LobbyModule): the climbers line up in front
 // of the mountain, every controller that presses A joins (up to four
@@ -120,6 +121,7 @@ private:
         kke::ModelModule::InstanceId model = 0;
         std::unique_ptr<kke::Animator> anim;
         float armWeight = 0.0f, legWeight = 0.0f, footWeight = 0.0f;
+        float armSide[2] = { 1.0f, 1.0f }; // each arm's IK (a free hand hangs as animated)
         // Its own feet on the ground: FootPlacer smooths frame to frame, so
         // one shared by every climber carried one's jump (feet reaching for
         // the ground far below) into the next one's hips and legs.
@@ -136,6 +138,7 @@ private:
         int crosshair = -1;         // hold under the crosshair (mouse aiming)
         bool crosshairOut = false;  // ... out of reach
         bool jumpQueued = false;
+        bool gripDown[2] = {};      // each hand's trigger pulled (a reach is the pull, once)
         bool wasClimbing = false;
         float fallStartY = 0.0f;
         int falls = 0;
@@ -183,8 +186,7 @@ private:
         kke::Locomotion::Input loco;
         kke::Climber::Input climb;
         glm::vec2 look{0.0f};        // degrees this frame
-        bool grab = false;           // any grab button: get on the rock
-        bool mantle = false;         // jump: over the edge
+        bool grab = false;           // a hand's trigger: get on the rock
     };
 
     // The mountains (Mountains.h, mountains/*.yaml): the one picked in

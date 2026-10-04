@@ -237,15 +237,16 @@ where you choose every hold.
   in and out of the rock a quarter. Routes, the climber and the bot all use it.
 - **The climber** (`kke::Climber`) is pure logic, with no physics. The
   capsule is kinematic at `feet()` while climbing and goes back to
-  `kke::Locomotion` on a fall or at the top. The hands pick holds: a
-  bumper reaches precisely (1.55 m), a released trigger lunges up to
-  2.45 m, and both together snatch quickly. The body hangs under the
-  hands and the feet find holds under the hips. Stamina is the one
-  resource.
+  `kke::Locomotion` on a fall or at the top. The triggers move the hands
+  (1.55 m reach), the bumpers step the feet onto footholds, and jump held
+  then let go lunges the body up to 1.35 m (grab in time or fall). The
+  body hangs under the hands and stays out of the rock. Stamina is the
+  one resource: it comes back only with both feet on, and the arms alone
+  cost double.
 - **The body** is IK only: the hang clip slowed down, with two-bone IK
   putting each hand and foot exactly where `Climber` says.
 - Tests: `tests/test_climb_wall.cpp` covers 25 seeds climbable, reaches,
-  lunges, loose holds, stamina and the bot to the top.
+  lunges, feet, loose holds, stamina, no clipping and the bot to the top.
 
 ## Animations
 
