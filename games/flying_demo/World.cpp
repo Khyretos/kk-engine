@@ -23,8 +23,6 @@ namespace flying {
 
 namespace {
 
-constexpr float kCell = 24.0f;        // m between the terrain's grid points
-constexpr float kExtent = 1800.0f;    // m from the middle to the grid's edge (past the coast)
 
 void pushTriangle(std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx, const kke::Vertex& a, const kke::Vertex& b, const kke::Vertex& c) {
     // Wind so the face looks along its normal (the renderer culls back faces).
@@ -48,6 +46,26 @@ void appendBox(const glm::vec3& center, const glm::vec3& half, const glm::vec3& 
             v.push_back({ center + turn * ((n + u * k.x + w * k.y) * half), color, turn * n, glm::vec2(0.0f) });
         if (glm::dot(glm::cross(u, w), n) >= 0.0f) idx.insert(idx.end(), { base, base + 1, base + 2, base, base + 2, base + 3 });
         else idx.insert(idx.end(), { base, base + 2, base + 1, base, base + 3, base + 2 });
+    }
+}
+
+// A band of glass round a box at height `y`, `half` m up and down: one
+// quad a side, just off the walls.
+void windowBand(const glm::vec3& lo, const glm::vec3& hi, float y, float half, const glm::vec3& glass, std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx) {
+    const float inset = 1.2f, off = 0.05f;
+    struct Side {
+        glm::vec3 n, a, b; // outward, and the band's two ends along the wall
+    };
+    const Side sides[4] = {
+        { { 0, 0, -1 }, { lo.x + inset, 0, lo.z - off }, { hi.x - inset, 0, lo.z - off } },
+        { { 0, 0, 1 }, { lo.x + inset, 0, hi.z + off }, { hi.x - inset, 0, hi.z + off } },
+        { { -1, 0, 0 }, { lo.x - off, 0, lo.z + inset }, { lo.x - off, 0, hi.z - inset } },
+        { { 1, 0, 0 }, { hi.x + off, 0, lo.z + inset }, { hi.x + off, 0, hi.z - inset } },
+    };
+    for (const Side& s : sides) {
+        const glm::vec3 a0(s.a.x, y - half, s.a.z), b0(s.b.x, y - half, s.b.z), b1(s.b.x, y + half, s.b.z), a1(s.a.x, y + half, s.a.z);
+        pushTriangle(v, idx, { a0, glass, s.n, {} }, { b0, glass, s.n, {} }, { b1, glass, s.n, {} });
+        pushTriangle(v, idx, { a0, glass, s.n, {} }, { b1, glass, s.n, {} }, { a1, glass, s.n, {} });
     }
 }
 
@@ -80,6 +98,24 @@ glm::vec3 landColour(float h, float steep) {
     return glm::mix(c, snow, std::clamp((h - 235.0f) / 25.0f, 0.0f, 1.0f));
 }
 
+// Canyon: red and ochre bands of sandstone up the walls, dust on the
+// plateau, sand on the gorge's floor.
+glm::vec3 canyonColour(float h, float steep) {
+    if (h < Island::kSea + 0.2f) return { 0.62f, 0.6f, 0.45f };
+    const float strata = 0.5f + 0.5f * std::sin(h * 0.11f);
+    glm::vec3 c = glm::mix(glm::vec3(0.6f, 0.32f, 0.2f), glm::vec3(0.78f, 0.5f, 0.3f), strata);
+    if (steep < 0.25f && h > Island::kPlateau - 25.0f) c = glm::mix(c, glm::vec3(0.74f, 0.6f, 0.42f), 0.8f);
+    if (steep < 0.3f && h < Island::kFloor + 6.0f) c = glm::vec3(0.84f, 0.7f, 0.5f);
+    return c;
+}
+
+// Mega City: pavement in the city, grass round it, a beach.
+glm::vec3 cityColour(float h, float fromMiddle) {
+    if (h < Island::kSea + 0.2f) return { 0.62f, 0.6f, 0.45f };
+    if (h < 3.0f) return { 0.83f, 0.76f, 0.55f };
+    return fromMiddle < 1720.0f ? glm::vec3(0.5f, 0.52f, 0.5f) : glm::vec3(0.36f, 0.55f, 0.24f);
+}
+
 uint32_t hash(uint32_t x) {
     x ^= x >> 16;
     x *= 0x7feb352du;
@@ -97,7 +133,11 @@ void FlyingModule::buildWorld() {
     m_builtSeed = seed;
     std::vector<kke::Vertex> v;
     std::vector<uint32_t> idx;
-    // The land, one quad per grid cell (flat-shaded: the low-poly look).
+    // The land, one quad per grid cell (flat-shaded: the low-poly look);
+    // finer in the canyon, so its walls are walls.
+    const Map map = m_island.map();
+    const float kCell = map == Map::Canyon ? 12.0f : 24.0f;
+    const float kExtent = std::max(1800.0f, m_island.landRadius() + 150.0f);
     const int n = static_cast<int>(2.0f * kExtent / kCell);
     auto at = [&](int i, int j) {
         const float x = -kExtent + static_cast<float>(i) * kCell, z = -kExtent + static_cast<float>(j) * kCell;
@@ -111,7 +151,10 @@ void FlyingModule::buildWorld() {
                 glm::vec3 nrm = glm::normalize(glm::cross(tri[1] - tri[0], tri[2] - tri[0]));
                 if (nrm.y < 0.0f) nrm = -nrm;
                 const float h = (tri[0].y + tri[1].y + tri[2].y) / 3.0f;
-                const glm::vec3 c = landColour(h, 1.0f - nrm.y);
+                const glm::vec3 mid = (tri[0] + tri[1] + tri[2]) / 3.0f;
+                const glm::vec3 c = map == Map::Canyon ? canyonColour(h, 1.0f - nrm.y)
+                                  : map == Map::City   ? cityColour(h, glm::length(glm::vec2(mid.x, mid.z)))
+                                                       : landColour(h, 1.0f - nrm.y);
                 pushTriangle(v, idx, { tri[0], c, nrm, {} }, { tri[1], c, nrm, {} }, { tri[2], c, nrm, {} });
             }
         }
@@ -143,7 +186,17 @@ void FlyingModule::buildWorld() {
         return static_cast<float>(r & 0xffffu) / 65535.0f;
     };
     int trees = 0;
-    for (int tries = 0; tries < 9000 && trees < 1400; ++tries) {
+    // Canyon: a little dry scrub on the plateau, none down the walls.
+    for (int tries = 0; map == Map::Canyon && tries < 6000 && trees < 350; ++tries) {
+        const float x = (rand01() * 2.0f - 1.0f) * 1700.0f, z = (rand01() * 2.0f - 1.0f) * 1700.0f;
+        const float h = m_island.terrain(x, z);
+        if (h < Island::kPlateau - 25.0f || m_island.onRunway(x, z, 60.0f)) continue;
+        if (m_island.gorgeDistance(x, z) < m_island.gorgeHalfWidth(std::atan2(z, x)) + 50.0f) continue;
+        const glm::vec3 leaf = glm::mix(glm::vec3(0.38f, 0.4f, 0.2f), glm::vec3(0.5f, 0.46f, 0.26f), rand01());
+        appendTree({ x, h - 0.3f, z }, 1.6f + rand01() * 1.6f, leaf, v, idx);
+        ++trees;
+    }
+    for (int tries = 0; map == Map::Island && tries < 9000 && trees < 1400; ++tries) {
         const float x = (rand01() * 2.0f - 1.0f) * Island::kRadius, z = (rand01() * 2.0f - 1.0f) * Island::kRadius;
         const float h = m_island.terrain(x, z);
         if (h < 4.0f || h > 180.0f || m_island.onRunway(x, z, 60.0f)) continue;
@@ -157,8 +210,9 @@ void FlyingModule::buildWorld() {
     if (m_terrain) m_app->renderer().retire(std::move(m_terrain)); // frames in flight still draw it
     m_terrain = std::make_unique<kke::DynamicMeshRenderer>(*m_app);
     m_terrain->upload(v, idx);
-    kke::log::get(name())->info("island {}: {} triangles, {} trees, runway at ({:.0f}, {:.0f}, {:.0f})", seed, idx.size() / 3, trees, w.start.x,
-                                w.start.y, w.start.z);
+    kke::log::get(name())->info("{} {}: {} triangles, {} trees, runway at ({:.0f}, {:.0f}, {:.0f})",
+                                map == Map::Canyon ? "canyon" : map == Map::City ? "mega city" : "island", seed & 0xFFFFFFu, idx.size() / 3, trees,
+                                w.start.x, w.start.y, w.start.z);
 
     // The sea: one big sheet, a little translucent-looking blue.
     if (!m_sea) {
@@ -261,7 +315,8 @@ void FlyingModule::buildTown() {
     m_townSeed = m_island.seed();
     m_townDistrict = m_mode == Mode::Dogfight;
     if (m_townDistrict) loadTownArt(); // the first dogfight: the houses (a few seconds)
-    m_town = Town(m_island, m_townDistrict, m_houseSizes);
+    m_townRings = m_rings.size();
+    m_town = Town(m_island, m_townDistrict, m_houseSizes, m_rings);
     for (kke::ModelModule::InstanceId h : m_houses) m_models->remove(h);
     m_houses.clear();
     std::vector<kke::Vertex> v;
@@ -293,15 +348,14 @@ void FlyingModule::buildTown() {
             continue;
         }
         appendBox(mid, half, b.colour, v, idx);
+        if (b.plain) continue;
         if (b.tower) {
-            // Rows of windows round each floor, and a parapet.
+            // Bands of windows round each floor (every other floor on a
+            // skyscraper, two floors tall: the same look, a third of the
+            // triangles), and a parapet.
             const glm::vec3 glass(0.16f, 0.24f, 0.34f);
-            for (float y = b.lo.y + 4.5f; y < b.hi.y - 2.0f; y += 4.0f) {
-                appendBox({ mid.x, y, b.lo.z - 0.05f }, { half.x - 1.2f, 1.1f, 0.06f }, glass, v, idx);
-                appendBox({ mid.x, y, b.hi.z + 0.05f }, { half.x - 1.2f, 1.1f, 0.06f }, glass, v, idx);
-                appendBox({ b.lo.x - 0.05f, y, mid.z }, { 0.06f, 1.1f, half.z - 1.2f }, glass, v, idx);
-                appendBox({ b.hi.x + 0.05f, y, mid.z }, { 0.06f, 1.1f, half.z - 1.2f }, glass, v, idx);
-            }
+            const bool tall = b.hi.y - b.lo.y > 80.0f;
+            for (float y = b.lo.y + 4.5f; y < b.hi.y - 2.0f; y += tall ? 8.0f : 4.0f) windowBand(b.lo, b.hi, y, tall ? 2.2f : 1.1f, glass, v, idx);
             appendBox({ mid.x, b.hi.y + 0.4f, mid.z }, { half.x * 0.35f, 0.4f, half.z * 0.35f }, b.colour * 0.8f, v, idx);
         } else {
             // A house of boxes: a roof of a darker red.
@@ -313,8 +367,10 @@ void FlyingModule::buildTown() {
     m_townMesh->upload(v, idx);
     int towers = 0;
     for (const Building& b : all) towers += b.tower ? 1 : 0;
-    if (m_townDistrict)
-        kke::log::get(name())->info("town on island {}: {} buildings ({} towers, {} Synty houses)", m_townSeed, all.size(), towers, m_houses.size());
+    if (m_townDistrict || m_island.map() != Map::Island)
+        kke::log::get(name())->info("town on {} {}: {} buildings ({} towers, {} Synty houses), {} triangles",
+                                    m_island.map() == Map::Canyon ? "canyon" : m_island.map() == Map::City ? "mega city" : "island", m_townSeed & 0xFFFFFFu,
+                                    all.size(), towers, m_houses.size(), idx.size() / 3);
 }
 
 } // namespace flying

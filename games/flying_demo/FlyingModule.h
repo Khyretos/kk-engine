@@ -31,7 +31,8 @@ namespace Rml { class ElementDocument; }
 
 namespace flying {
 
-// The Flying demo (README.md): stunt planes over a generated island.
+// The Flying demo (README.md): stunt planes over a generated island, a
+// desert canyon or a mega city (Course.h Map).
 // Up to four players on one screen (split screen), more online, and up
 // to five CPU pilots. Four modes: a Race through a ring course, Stunts
 // (loops, rolls, inverted flight and low passes for points against the
@@ -118,6 +119,7 @@ private:
         // Damage (Damage.cpp): bumps and bullets take health; at 0 it
         // goes down. Dents stay until it comes back as a new plane.
         float health = 100.0f;
+        bool inLane = false;        // a CPU pilot: down in the Canyon's gorge or a Mega City avenue, following it
         bool safe = false;          // on the runway (and the first few metres up): bullets and planes pass through it
         float bumpCooldown = 0.0f;  // s: one bump at a time
         int lastBy = -1;            // the pilot (index) that last hurt it, for who gets the kill
@@ -180,12 +182,14 @@ private:
     std::vector<kke::ModelModule::InstanceId> m_houses;
     uint32_t m_townSeed = 0;
     bool m_townDistrict = false;
+    size_t m_townRings = 0;       // the course the town was laid round (the city's avenues)
     bool m_townBuilt = false;
     bool m_townArtTried = false;
     Island m_island{ 1 };
     std::vector<Ring> m_rings;
     std::unique_ptr<kke::DynamicMeshRenderer> m_terrain, m_sea, m_ringMesh, m_nextRingMesh;
-    uint32_t m_builtSeed = 0;
+    uint32_t m_builtSeed = 0;     // the island the terrain mesh was built for
+    uint32_t m_ringSeed = 0;      // ... and the rings
     float m_builtRadius = 0.0f;
     int m_builtRings = 0;
 

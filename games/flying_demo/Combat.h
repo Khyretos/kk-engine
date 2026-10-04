@@ -58,6 +58,7 @@ struct Building {
     int turn = 0;                 // quarter turns of that model about Y
     glm::vec3 colour{0.7f};       // a box's walls
     bool tower = false;           // an office tower (windows, a flat roof)
+    bool plain = false;           // a plain box in its colour: a rock pillar, a stone bridge, a sky bridge
 };
 
 // Every building a plane can hit: the airfield's hangar and control tower
@@ -68,13 +69,19 @@ struct Building {
 class Town {
 public:
     Town() = default;
-    Town(const Island& island, bool district, const std::vector<glm::vec3>& houses = {});
+    // `district`: the green island's town (Dogfight). The Canyon's pillars
+    // and bridges and the Mega City's towers are always there; the city
+    // leaves avenues along `rings` (the race course) and a square round
+    // each ring.
+    Town(const Island& island, bool district, const std::vector<glm::vec3>& houses = {}, const std::vector<Ring>& rings = {});
 
     const std::vector<Building>& buildings() const { return m_buildings; }
     bool district() const { return m_district; }
     // The highest roof within `margin` m of (x, z) (-1e9: none). The CPU
     // pilots fly over this (with a margin: they don't shave the walls).
-    float roof(float x, float z, float margin = 0.0f) const;
+    // `under`: only what starts below that height (a plane under a bridge
+    // flies on beneath it).
+    float roof(float x, float z, float margin = 0.0f, float under = 1e9f) const;
     // A sphere against every building: the deepest overlap, and which way
     // out of it (out of the nearest wall or the roof).
     bool touches(const glm::vec3& center, float radius, glm::vec3& normal, float& depth) const;
@@ -85,6 +92,8 @@ public:
 
 private:
     void index();
+    void addCanyon(const Island& island, const std::vector<Ring>& rings);
+    void addCity(const Island& island, const std::vector<Ring>& rings);
     std::vector<int> near(float x0, float z0, float x1, float z1) const;
     std::vector<Building> m_buildings;
     bool m_district = false;

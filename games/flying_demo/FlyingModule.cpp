@@ -181,13 +181,14 @@ void FlyingModule::newFlight() {
         m_island = Island(m_seed);
         buildWorld();
     }
-    if (!m_townBuilt || m_townSeed != m_seed || m_townDistrict != (m_mode == Mode::Dogfight)) buildTown();
-    if (m_builtSeed != m_seed || m_builtRadius != m_ringRadius || m_builtRings != m_ringCount) {
-        m_builtSeed = m_seed;
+    // The rings before the town: the Mega City leaves an avenue along them.
+    if (m_ringSeed != m_seed || m_builtRadius != m_ringRadius || m_builtRings != m_ringCount) {
+        m_ringSeed = m_seed;
         m_builtRadius = m_ringRadius;
         m_builtRings = m_ringCount;
         buildRings();
     }
+    if (!m_townBuilt || m_townSeed != m_seed || m_townDistrict != (m_mode == Mode::Dogfight) || m_townRings != m_rings.size()) buildTown();
     for (Pilot& p : m_pilots) {
         p.nextRing = p.lap = 0;
         p.finished = false;
@@ -270,6 +271,7 @@ void FlyingModule::respawn(Pilot& p, bool crashed) {
     p.downCause = 0;
     p.firing = false;
     p.climbOut = false;
+    p.inLane = false;
     p.target = -1;
     clearDents(p);
     p.autopilot.reset();
@@ -508,7 +510,9 @@ void FlyingModule::updatePilot(Pilot& p, float dt) {
     if (p.safe && !p.plane.onGround && clearance > kSafeUntil) p.safe = false;
     p.sinceRing += dt;
     // A CPU pilot lost for too long (a ring it keeps missing): back on the course.
-    if (p.cpu && m_mode == Mode::Race && !p.finished && p.sinceRing > kLost) {
+    // The canyon's first ring is a long way round the gorge from the runway.
+    const float lost = m_island.map() == Map::Canyon ? kLost * 2.0f : kLost;
+    if (p.cpu && m_mode == Mode::Race && !p.finished && p.sinceRing > lost) {
         kke::log::get(name())->info("{} lost the course: back at its last ring", p.name);
         respawn(p);
     }

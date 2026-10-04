@@ -298,6 +298,9 @@ smoke and explosions are built in code from the island's seed.
   `SM_Bld_House_Preset_01` to `_11`, `SM_Bld_Shop_01` to `_03` and
   `SM_Bld_Church_01`, loaded the first time a dogfight starts. Without
   the pack the houses are boxes.
+- The Canyon and Mega City maps use no art packs: the plateau, the gorge,
+  its rock pillars and bridges, the city's towers, parks and sky bridges
+  are all built in code from the map's seed.
 
 ## Racing (`games/racing`)
 

@@ -40,7 +40,10 @@ struct IslandPick {
     const char* name;
     uint32_t seed;
 };
-const IslandPick kIslands[] = { { "Palm Key", 1 }, { "Twin Bays", 2 }, { "Gull Rock", 3 }, { "Harbour Isle", 11 }, { "Cloud Cape", 42 } };
+const IslandPick kIslands[] = { { "Palm Key", 1 },     { "Twin Bays", 2 },
+                                { "Gull Rock", 3 },    { "Harbour Isle", 11 },
+                                { "Cloud Cape", 42 },  { "Canyon", mapSeed(Map::Canyon, 7) },
+                                { "Mega City", mapSeed(Map::City, 9) } };
 constexpr int kIslandCount = static_cast<int>(sizeof(kIslands) / sizeof(kIslands[0]));
 struct SkyPick {
     const char* name;
@@ -272,7 +275,7 @@ void FlyingModule::setupLobby() {
     kke::Lobby::Option modeRow{ "mode", "Mode", {}, 0, true, {}, {} };
     for (const char* m : kModeNames) modeRow.choices.push_back(m);
     l.addOption(std::move(modeRow));
-    kke::Lobby::Option island{ "island", "Island", {}, 0, true, {}, {} };
+    kke::Lobby::Option island{ "island", "Map", {}, 0, true, {}, {} };
     for (const IslandPick& i : kIslands) island.choices.push_back(i.name);
     island.choices.push_back("Random");
     l.addOption(std::move(island));
@@ -307,6 +310,8 @@ void FlyingModule::setupLobby() {
     if (const char* v = kke::dev::env("KKE_FLY_ISLAND")) {
         for (int i = 0; i < kIslandCount; ++i)
             if (std::to_string(kIslands[i].seed) == v || kIslands[i].name == std::string(v)) l.option("island")->value = i;
+        if (std::strcmp(v, "canyon") == 0) l.option("island")->value = kIslandCount - 2;
+        if (std::strcmp(v, "city") == 0) l.option("island")->value = kIslandCount - 1;
         if (std::strcmp(v, "random") == 0) l.option("island")->value = kIslandCount;
     }
     if (const char* v = kke::dev::env("KKE_FLY_CPUS")) l.setCpuCount(std::clamp(std::atoi(v), 0, kke::Lobby::kMaxCpus));
@@ -546,6 +551,91 @@ Controls FlyingModule::readCpu(Pilot& p) {
         const glm::vec3 d = p.plane.position - (o.remote ? o.net.position : o.plane.position);
         const float dist = glm::length(d);
         if (dist < 30.0f && dist > 0.01f) apart += d / dist * (30.0f - dist) * 3.0f;
+    }
+    if (m_mode == Mode::Race && !m_rings.empty() && m_island.map() == Map::Canyon) {
+        // Down the gorge: a straight line to a ring cuts through the rock on
+        // the bends, so follow the gorge's middle line a little ahead, at
+        // the next ring's height; on the last stretch, line up on the ring.
+        const Ring& next = m_rings[static_cast<size_t>(p.nextRing) % m_rings.size()];
+        const glm::vec3 at = p.plane.position;
+        const float here = std::atan2(at.z, at.x);
+        const float dir = glm::dot(next.normal, m_island.gorgeTangent(std::atan2(next.center.z, next.center.x))) >= 0.0f ? 1.0f : -1.0f;
+        // Down in the gorge (until it climbs out of it or is well out to
+        // the side): the walls don't count as ground ahead, or it would
+        // climb out at every bend, and nor do the pillars: following the
+        // middle line keeps it off the walls, and it steers round the
+        // pillars (below). A bridge it is about to fly into does count.
+        const float off = m_island.gorgeDistance(at.x, at.z), hw = m_island.gorgeHalfWidth(here);
+        if (at.y < Island::kPlateau - 20.0f && off < hw) p.inLane = true;
+        else if (at.y > Island::kPlateau + 10.0f || off > hw + 150.0f) p.inLane = false;
+        if (p.inLane)
+            g.height = [this, under = at.y - 8.0f](float x, float z) {
+                float top = Island::kFloor;
+                for (const Building& b : m_town.buildings())
+                    if (b.lo.y > Island::kFloor + 20.0f && b.lo.y < under && x > b.lo.x - 8.0f && x < b.hi.x + 8.0f && z > b.lo.z - 8.0f && z < b.hi.z + 8.0f)
+                        top = std::max(top, b.hi.y);
+                return top;
+            };
+        // Up on the plateau it first lines up over the gorge, high above
+        // the rim, and only goes down once it is over the middle and flying
+        // along it: coming in from the side, it would overshoot into a wall.
+        const glm::vec3 way = m_island.gorgeTangent(here) * dir;
+        const glm::vec2 flat(p.plane.velocity.x, p.plane.velocity.z);
+        const bool along = glm::length(flat) > 1.0f && glm::dot(glm::normalize(flat), glm::normalize(glm::vec2(way.x, way.z))) > 0.9f;
+        const bool descend = p.inLane || (along && off < hw * 0.6f);
+        glm::vec3 target;
+        const float ahead = glm::dot(at - next.center, next.normal);
+        const float aside = glm::length((at - next.center) - next.normal * ahead);
+        if (ahead < -5.0f && ahead > -320.0f && aside < 80.0f) {
+            // The last stretch: onto the ring's line, gently (a sharp turn
+            // onto it overshoots it).
+            target = next.center + next.normal * (ahead + 100.0f);
+        } else {
+            target = m_island.gorgePoint(here + dir * 180.0f / m_island.gorgeRadius(here));
+            target.y = descend ? next.center.y : Island::kPlateau + 40.0f;
+        }
+        // A pillar near the way there: aim to pass it with room to spare.
+        for (const Building& b : m_town.buildings()) {
+            if (b.lo.y > Island::kFloor + 20.0f || b.hi.y < at.y - 10.0f) continue;
+            const glm::vec2 c((b.lo.x + b.hi.x) * 0.5f, (b.lo.z + b.hi.z) * 0.5f), from(at.x, at.z), to(target.x, target.z);
+            const glm::vec2 seg = to - from;
+            const float k = std::clamp(glm::dot(c - from, seg) / std::max(glm::dot(seg, seg), 1.0f), 0.0f, 1.0f);
+            if (k <= 0.0f || k >= 1.0f) continue;
+            const glm::vec2 closest = from + seg * k, away = closest - c;
+            const float d = glm::length(away), room = (b.hi.x - b.lo.x) * 0.5f + 22.0f;
+            if (d >= room) continue;
+            const glm::vec2 mid(m_island.gorgePoint(here).x, m_island.gorgePoint(here).z);
+            const glm::vec2 side = d > 0.5f ? away / d : glm::normalize(glm::vec2(-seg.y, seg.x)) * (glm::dot(mid - c, glm::vec2(-seg.y, seg.x)) >= 0.0f ? 1.0f : -1.0f);
+            const glm::vec2 shift = side * (room - d) / k;
+            target.x += shift.x;
+            target.z += shift.y;
+        }
+        return steerToward(p.plane, target + apart * 0.5f, g, 25.0f, skill);
+    }
+    if (m_mode == Mode::Race && !m_rings.empty() && m_island.map() == Map::City) {
+        // Down the avenue: Town leaves the straight line from ring to ring
+        // clear, and each ring faces straight down it, so the ring pilot's
+        // way in (and its turn back after a miss) runs along the avenue.
+        // Over the avenue only what is right under the plane counts as
+        // ground, or it would climb over every tower beside it; anywhere
+        // else the roofs count and it comes back over the towers.
+        const size_t n = m_rings.size();
+        const Ring& next = m_rings[static_cast<size_t>(p.nextRing) % n];
+        const glm::vec3 at = p.plane.position;
+        float off = 1e9f;
+        for (size_t back = 0; back < 2; ++back) { // this avenue and the one before (a turn back)
+            const Ring& a = m_rings[(static_cast<size_t>(p.nextRing) + n - back) % n];
+            const Ring& b = m_rings[(static_cast<size_t>(p.nextRing) + n - back - 1) % n];
+            const glm::vec2 from(b.center.x, b.center.z), ab = glm::vec2(a.center.x, a.center.z) - from, here(at.x, at.z);
+            const float k = std::clamp(glm::dot(here - from, ab) / std::max(glm::dot(ab, ab), 1.0f), 0.0f, 1.0f);
+            off = std::min(off, glm::length(here - (from + ab * k)));
+        }
+        p.inLane = off < 45.0f;
+        if (p.inLane)
+            g.height = [this, under = at.y - 8.0f](float x, float z) { return std::max(m_island.surface(x, z), m_town.roof(x, z, 8.0f, under)); };
+        glm::vec3 target = p.autopilot.aim(next, at);
+        if (glm::length(next.center - at) > 120.0f) target += apart * 0.5f;
+        return steerToward(p.plane, target, g, p.inLane ? 25.0f : p.autopilot.floor(40.0f), skill);
     }
     if (m_mode == Mode::Race && !m_rings.empty()) {
         const Ring& next = m_rings[static_cast<size_t>(p.nextRing) % m_rings.size()];

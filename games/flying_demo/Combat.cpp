@@ -1,5 +1,7 @@
 #include "Combat.h"
 
+#include <glm/gtc/constants.hpp>
+
 #include <algorithm>
 #include <cmath>
 
@@ -122,7 +124,7 @@ glm::vec3 leadPoint(const glm::vec3& from, const glm::vec3& target, const glm::v
 
 // ---- the town
 
-Town::Town(const Island& island, bool district, const std::vector<glm::vec3>& houses) : m_district(district) {
+Town::Town(const Island& island, bool district, const std::vector<glm::vec3>& houses, const std::vector<Ring>& rings) : m_district(district) {
     const Runway& w = island.runway();
     const float x1 = w.start.x + w.width * 0.5f, ground = w.height();
     // The airfield: a hangar (its roof a little wider) and the control
@@ -138,6 +140,18 @@ Town::Town(const Island& island, bool district, const std::vector<glm::vec3>& ho
     tower.colour = { 0.85f, 0.85f, 0.82f };
     m_buildings.push_back(tower);
     m_centre = glm::vec3(w.start.x - 330.0f, ground + 60.0f, w.start.z - w.length * 0.5f);
+    if (island.map() == Map::Canyon) {
+        addCanyon(island, rings);
+        index();
+        return;
+    }
+    if (island.map() == Map::City) {
+        addCity(island, rings);
+        index();
+        // The middle, for the start of a dogfight: over downtown's roofs.
+        m_centre.y = std::max(m_centre.y, roof(m_centre.x, m_centre.z, 150.0f) + 60.0f);
+        return;
+    }
 
     if (district) {
         // Blocks of 70 m (50 m of buildings, 20 m of street) west of the runway.
@@ -199,6 +213,135 @@ Town::Town(const Island& island, bool district, const std::vector<glm::vec3>& ho
     index();
 }
 
+// Rock pillars standing in the gorge's wide stretches and stone bridges
+// across it where it runs along X or Z (a building is an upright box),
+// high enough that the race goes under them.
+void Town::addCanyon(const Island& island, const std::vector<Ring>& rings) {
+    uint32_t s = island.seed() * 2891336453u + 1013904223u;
+    const glm::vec3 rockColour(0.62f, 0.38f, 0.26f);
+    auto nearRing = [&](const glm::vec2& at, float gap) {
+        for (const Ring& r : rings)
+            if (glm::length(glm::vec2(r.center.x, r.center.z) - at) < gap) return true;
+        return false;
+    };
+    // Pillars, off to one side of the middle line, from the floor to most
+    // of the way up.
+    int pillars = 0;
+    for (int tries = 0; tries < 200 && pillars < 16; ++tries) {
+        const float a = unit(s) * glm::two_pi<float>();
+        const float hw = island.gorgeHalfWidth(a);
+        if (hw < 60.0f) continue; // too narrow: no room to fly past
+        const glm::vec3 mid = island.gorgePoint(a), along = island.gorgeTangent(a);
+        const glm::vec3 side = glm::normalize(glm::cross(along, glm::vec3(0.0f, 1.0f, 0.0f)));
+        const glm::vec3 at = mid + side * ((unit(s) < 0.5f ? -1.0f : 1.0f) * hw * 0.5f);
+        if (nearRing(glm::vec2(at.x, at.z), 110.0f)) continue;
+        const float half = 6.0f + unit(s) * 4.0f;
+        Building b;
+        b.plain = true;
+        b.colour = rockColour * (0.9f + unit(s) * 0.2f);
+        b.lo = glm::vec3(at.x - half, Island::kFloor - 2.0f, at.z - half);
+        b.hi = glm::vec3(at.x + half, Island::kFloor + (Island::kPlateau - Island::kFloor) * (0.45f + unit(s) * 0.45f), at.z + half);
+        m_buildings.push_back(b);
+        ++pillars;
+    }
+    // Bridges: a slab from rim to rim, 50 m or so below the plateau.
+    int bridges = 0;
+    for (int k = 0; k < 64 && bridges < 5; ++k) {
+        const float a = static_cast<float>(k) / 64.0f * glm::two_pi<float>();
+        const glm::vec3 t = island.gorgeTangent(a);
+        if (std::abs(t.x) < 0.95f && std::abs(t.z) < 0.95f) continue;
+        const glm::vec3 mid = island.gorgePoint(a);
+        if (nearRing(glm::vec2(mid.x, mid.z), 70.0f)) continue;
+        bool apart = true; // not two side by side
+        for (const Building& b : m_buildings)
+            if (b.plain && b.hi.y - b.lo.y < 20.0f && glm::length(glm::vec2((b.lo.x + b.hi.x) * 0.5f, (b.lo.z + b.hi.z) * 0.5f) - glm::vec2(mid.x, mid.z)) < 400.0f)
+                apart = false;
+        if (!apart) continue;
+        const float span = island.gorgeHalfWidth(a) + 50.0f, y = Island::kFloor + 115.0f;
+        Building b;
+        b.plain = true;
+        b.colour = rockColour * 0.85f;
+        if (std::abs(t.x) >= 0.95f) { // the gorge runs along X: the bridge spans Z
+            b.lo = glm::vec3(mid.x - 7.0f, y, mid.z - span);
+            b.hi = glm::vec3(mid.x + 7.0f, y + 9.0f, mid.z + span);
+        } else {
+            b.lo = glm::vec3(mid.x - span, y, mid.z - 7.0f);
+            b.hi = glm::vec3(mid.x + span, y + 9.0f, mid.z + 7.0f);
+        }
+        m_buildings.push_back(b);
+        ++bridges;
+    }
+    // A dogfight circles over the gorge on the far side from the runway.
+    const glm::vec3 far = island.gorgePoint(glm::pi<float>());
+    m_centre = glm::vec3(far.x, Island::kPlateau + 50.0f, far.z);
+}
+
+// Towers on a 100 m grid (70 m lots, 30 m streets): skyscrapers downtown,
+// smaller further out, a park here and there, sky bridges between some
+// neighbours. Clear of the airport, and of an avenue along the race course
+// with a square round each ring, so the course can be flown between them.
+void Town::addCity(const Island& island, const std::vector<Ring>& rings) {
+    uint32_t s = island.seed() * 2891336453u + 1013904223u;
+    constexpr float kPitch = 100.0f, kLot = 70.0f;
+    const float da = unit(s) * glm::two_pi<float>();
+    const glm::vec2 downtown(std::cos(da) * 750.0f, std::sin(da) * 750.0f);
+    m_centre = glm::vec3(downtown.x, Island::kCityGround + 60.0f, downtown.y);
+    auto toCourse = [&](const glm::vec2& p) {
+        float best = 1e9f;
+        for (size_t i = 0; i < rings.size(); ++i) {
+            const glm::vec2 a(rings[i].center.x, rings[i].center.z), b(rings[(i + 1) % rings.size()].center.x, rings[(i + 1) % rings.size()].center.z);
+            const glm::vec2 ab = b - a;
+            const float t = std::clamp(glm::dot(p - a, ab) / std::max(glm::dot(ab, ab), 1.0f), 0.0f, 1.0f);
+            best = std::min(best, glm::length(p - (a + ab * t)));
+            best = std::min(best, glm::length(p - a) - 110.0f); // a square round the ring, room to turn
+        }
+        return best;
+    };
+    constexpr int kHalf = 17;
+    std::vector<float> tall(static_cast<size_t>((2 * kHalf + 1) * (2 * kHalf + 1)), 0.0f); // each lot's height (0: empty)
+    auto lot = [&](int bx, int bz) -> float& { return tall[static_cast<size_t>((bz + kHalf) * (2 * kHalf + 1) + (bx + kHalf))]; };
+    for (int bz = -kHalf; bz <= kHalf; ++bz)
+        for (int bx = -kHalf; bx <= kHalf; ++bx) {
+            const glm::vec2 c(static_cast<float>(bx) * kPitch, static_cast<float>(bz) * kPitch);
+            const float u = unit(s), v = unit(s), w = unit(s);
+            if (glm::length(c) > 1700.0f || island.onRunway(c.x, c.y, 160.0f)) continue;
+            if (!rings.empty() && toCourse(c) < 120.0f) continue; // the avenue
+            if (u < 0.08f) continue;                              // a park
+            const float d = glm::length(c - downtown);
+            const float base = 30.0f + 260.0f * std::exp(-d * d / (560.0f * 560.0f));
+            const float height = std::clamp(base * (0.55f + 0.6f * v) + 10.0f * w, 18.0f, 340.0f);
+            const int count = height > 110.0f || w < 0.5f ? 1 : 2;
+            for (int i = 0; i < count; ++i) {
+                Building b;
+                b.tower = true;
+                const float grey = 0.45f + unit(s) * 0.35f, warm = unit(s);
+                b.colour = warm < 0.3f ? glm::vec3(grey * 1.05f, grey, grey * 0.88f) : warm < 0.6f ? glm::vec3(grey * 0.9f, grey * 0.97f, grey * 1.08f) : glm::vec3(grey);
+                const float h = i == 0 ? height : height * (0.5f + unit(s) * 0.4f);
+                const float wx = count == 1 ? kLot * (0.6f + unit(s) * 0.4f) : kLot * 0.46f, wz = kLot * (0.6f + unit(s) * 0.4f);
+                const float cx = c.x + (count == 2 ? (i == 0 ? -1.0f : 1.0f) * kLot * 0.27f : 0.0f);
+                b.lo = glm::vec3(cx - wx * 0.5f, Island::kCityGround - 1.0f, c.y - wz * 0.5f);
+                b.hi = glm::vec3(cx + wx * 0.5f, Island::kCityGround + h, c.y + wz * 0.5f);
+                m_buildings.push_back(b);
+            }
+            lot(bx, bz) = height;
+        }
+    // Sky bridges across a street between two tall neighbours.
+    for (int bz = -kHalf; bz <= kHalf; ++bz)
+        for (int bx = -kHalf; bx < kHalf; ++bx) {
+            const float a = lot(bx, bz), b = lot(bx + 1, bz);
+            if (a < 80.0f || b < 80.0f || unit(s) > 0.18f) continue;
+            const float y = Island::kCityGround + 30.0f + unit(s) * (std::min(a, b) - 50.0f);
+            const float x0 = static_cast<float>(bx) * kPitch + kLot * 0.3f, x1 = static_cast<float>(bx + 1) * kPitch - kLot * 0.3f;
+            const float z = static_cast<float>(bz) * kPitch;
+            Building sky;
+            sky.plain = true;
+            sky.colour = glm::vec3(0.35f, 0.42f, 0.5f);
+            sky.lo = glm::vec3(x0, y, z - 5.0f);
+            sky.hi = glm::vec3(x1, y + 6.0f, z + 5.0f);
+            m_buildings.push_back(sky);
+        }
+}
+
 void Town::index() {
     glm::vec2 lo(1e9f), hi(-1e9f);
     for (const Building& b : m_buildings) {
@@ -237,11 +380,11 @@ std::vector<int> Town::near(float x0, float z0, float x1, float z1) const {
     return out;
 }
 
-float Town::roof(float x, float z, float margin) const {
+float Town::roof(float x, float z, float margin, float under) const {
     float top = -1e9f;
     for (int i : near(x - margin, z - margin, x + margin, z + margin)) {
         const Building& b = m_buildings[static_cast<size_t>(i)];
-        if (x >= b.lo.x - margin && x <= b.hi.x + margin && z >= b.lo.z - margin && z <= b.hi.z + margin) top = std::max(top, b.hi.y);
+        if (b.lo.y < under && x >= b.lo.x - margin && x <= b.hi.x + margin && z >= b.lo.z - margin && z <= b.hi.z + margin) top = std::max(top, b.hi.y);
     }
     return top;
 }

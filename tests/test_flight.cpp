@@ -430,3 +430,62 @@ TEST(PlaneCombat, TheTownStandsOnTheLandAndBlocks) {
         EXPECT_GT(town.centre().y, town.roof(town.centre().x, town.centre().z));
     }
 }
+
+// The map rides in the seed's top byte; the Canyon is a plateau with a
+// gorge through it, and its race runs down the gorge under the rim.
+TEST(Course, CanyonRaceRunsDownTheGorge) {
+    EXPECT_EQ(Island(7).map(), Map::Island);
+    EXPECT_EQ(Island(mapSeed(Map::City, 9)).map(), Map::City);
+    const Island canyon(mapSeed(Map::Canyon, 7));
+    ASSERT_EQ(canyon.map(), Map::Canyon);
+    EXPECT_NEAR(canyon.runway().height(), Island::kPlateau, 0.01f);
+    for (float a = 0.0f; a < 6.28f; a += 0.5f) {
+        const glm::vec3 mid = canyon.gorgePoint(a);
+        EXPECT_NEAR(canyon.gorgeDistance(mid.x, mid.z), 0.0f, 2.0f);
+        EXPECT_NEAR(canyon.terrain(mid.x, mid.z), Island::kFloor, 3.0f) << "the floor at the middle";
+        const glm::vec3 out = mid * (1.0f + (canyon.gorgeHalfWidth(a) + 120.0f) / glm::length(glm::vec2(mid.x, mid.z)));
+        EXPECT_GT(canyon.terrain(out.x, out.z), Island::kPlateau - 40.0f) << "the plateau beside it";
+    }
+    const std::vector<Ring> rings = canyon.rings(20, 14.0f);
+    ASSERT_EQ(rings.size(), 20u);
+    for (const Ring& r : rings) {
+        const float a = std::atan2(r.center.z, r.center.x);
+        EXPECT_LT(canyon.gorgeDistance(r.center.x, r.center.z) + r.radius, canyon.gorgeHalfWidth(a)) << "between the walls";
+        EXPECT_LT(r.center.y + r.radius, Island::kPlateau - 60.0f) << "under the rim";
+        EXPECT_GT(r.center.y - r.radius, Island::kFloor + 20.0f);
+    }
+    // Pillars and bridges, none in a ring's way.
+    const Town town(canyon, false, {}, rings);
+    EXPECT_GT(town.buildings().size(), 8u);
+    for (const Ring& r : rings) {
+        glm::vec3 n;
+        float depth = 0.0f;
+        for (float k = -60.0f; k <= 60.0f; k += 5.0f) EXPECT_FALSE(town.touches(r.center + r.normal * k, 4.0f, n, depth)) << "the way through a ring is clear";
+    }
+}
+
+// The Mega City: towers everywhere but on the runway, and the race's
+// avenues are clear.
+TEST(Course, MegaCityLeavesTheCourseClear) {
+    const Island city(mapSeed(Map::City, 9));
+    const std::vector<Ring> rings = city.rings(20, 14.0f);
+    ASSERT_EQ(rings.size(), 20u);
+    const Town town(city, false, {}, rings);
+    EXPECT_GT(town.buildings().size(), 400u);
+    float tallest = 0.0f;
+    for (const Building& b : town.buildings()) {
+        tallest = std::max(tallest, b.hi.y);
+        const glm::vec3 mid = (b.lo + b.hi) * 0.5f;
+        EXPECT_FALSE(city.onRunway(mid.x, mid.z, 20.0f)) << "nothing on the runway";
+    }
+    EXPECT_GT(tallest, 200.0f) << "towers to fly between";
+    for (size_t i = 0; i < rings.size(); ++i) {
+        const Ring& a = rings[i];
+        const Ring& b = rings[(i + 1) % rings.size()];
+        glm::vec3 n;
+        float depth = 0.0f;
+        EXPECT_FALSE(town.touches(a.center, a.radius + 4.0f, n, depth)) << "ring " << i;
+        float t = 0.0f;
+        EXPECT_FALSE(town.blocks(a.center, b.center, t)) << "a straight line from ring " << i << " to the next";
+    }
+}

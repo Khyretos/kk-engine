@@ -1,6 +1,7 @@
 # Flying
 
-Stunt planes over a generated island. Race through a course of rings,
+Stunt planes over a generated island, down a desert canyon or between
+the towers of a mega city. Race through a course of rings,
 score loops, rolls, inverted flight and low passes against the clock,
 shoot each other down over a town in a dogfight, or fly wherever you
 like. Every flight starts on the runway: open the throttle, roll, and
@@ -50,7 +51,7 @@ Switches for demos and tests (developer builds):
 |---|---|
 | `KKE_FLY_LOBBY=0` | Straight into a flight, no start menu |
 | `KKE_FLY_MODE=race\|stunts\|free\|dogfight` | The mode |
-| `KKE_FLY_ISLAND=<seed or name>` | The island (`random` for a new one each time) |
+| `KKE_FLY_ISLAND=<seed or name>` | The map: an island's seed, `canyon`, `city`, or `random` for a new island each time |
 | `KKE_FLY_CPUS=<0..5>` | How many CPU pilots |
 | `KKE_FLY_AUTOPILOT=1` | Player 1 is flown by the CPU pilot too (and no start menu) |
 | `KKE_FLY_QUIT=<s>` | Quit after that long, logging where every plane is every 5 s |
@@ -107,7 +108,7 @@ textures). Player 1 also sets:
 |---|---|
 | CPU players | 0 to 5, each Rookie, Pilot, Ace or Legend |
 | Mode | Race, Stunts, Free flight, Dogfight |
-| Island | Palm Key, Twin Bays, Gull Rock, Harbour Isle, Cloud Cape, Random |
+| Map | Palm Key, Twin Bays, Gull Rock, Harbour Isle, Cloud Cape, Canyon, Mega City, Random |
 | Laps | 1, 2, 3 (Race) |
 | Rings | Big (18 m), Normal (14 m), Tight (10 m) (Race) |
 | First to | 5, 10, 20 kills (Dogfight) |
@@ -256,6 +257,23 @@ rings (`Island::rings`) go round the island at heights smoothed so each
 climb and dive between them can be flown, each facing the way you arrive.
 `throughRing()` checks a plane's step crosses the ring's plane inside it.
 
+The other two maps are the same pieces with other shapes, all built in
+code (no art packs needed). The map rides in the seed's top byte
+(`mapSeed(Map, n)`), so a guest online gets it from the host's seed.
+
+- **Canyon**: a red plateau 190 m up with a gorge winding round it, 14 m
+  deep at the floor and 90 to 180 m wide, its walls in two steps. The
+  runway is on the plateau. The race runs down the gorge, every ring
+  under the rim, past rock pillars (always off to one side, so there is
+  a way past) and under five stone bridges. Climb out over the rim and
+  you are flying over open plateau, but the rings are all down below.
+- **Mega City**: a flat island packed with towers on a 100 m grid, up to
+  340 m tall downtown and lower further out, a park here and there, sky
+  bridges between tall neighbours. The race runs down avenues left clear
+  along the course; everywhere else you fly between walls, and a
+  dogfight there means watching the buildings as much as the other
+  planes.
+
 ### CPU pilots (Course.h RingPilot, Flight.h steerToward)
 
 `steerToward` flies to a point the way a pilot does: bank to turn, pull
@@ -265,6 +283,15 @@ point just past its centre; beside or past it, first a point 450 m in
 front so the plane can turn in. The skill (Rookie to Legend) changes the
 cruise speed and how hard they fly. They keep 30 m from each other, and a
 CPU pilot that hasn't made a ring for 45 s is put back on the course. In
+the Canyon they don't fly straight at the next ring (that cuts through
+the rock on every bend): up on the plateau they first line up high over
+the gorge, go down only once over its middle and flying along it, follow
+the middle line, steer round the pillars, and on the last stretch line up
+on the ring. Down there the walls don't count as ground ahead, or they
+would climb out at every bend. (The first ring is a long way round, so
+the lost time is 90 s there.) In the Mega City they fly the avenue,
+the straight line from ring to ring that the city leaves clear, and only
+count what is right under them as ground once in it. In
 Stunts they circle the island, looping and rolling every 30 s. In a
 dogfight each picks the nearest plane in front of it, flies to where it
 will be, fires when it is near the sight and keeps above the rooftops.

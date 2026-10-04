@@ -211,6 +211,7 @@
     - Change controller from the pause menu, never to one someone else holds
     - CPU pilots from Rookie to Legend, smoke trails, split screen
     - Dogfights with guns, collisions, explosions and dented planes
+    - Three kinds of map - green islands, a desert canyon raced down its gorge, a mega city of towers
     - Synty POLYGON Stunt Plane with moving propeller and control surfaces
   media:
     - { src: media/flying-stunts.webp, caption: "Stunts: a roll for 200, smoke on, the standings on the right" }

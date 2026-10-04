@@ -29,14 +29,38 @@ struct Ring {
     float radius = 12.0f;
 };
 
+// What kind of place: the green island, a desert canyon (a plateau with a
+// winding gorge through it, the race down the gorge), or a mega city
+// (towers on a flat island, the race down avenues between them). The map
+// is in the seed's top byte, so the host's seed is all a guest needs.
+enum class Map : uint8_t { Island, Canyon, City };
+constexpr uint32_t mapSeed(Map map, uint32_t n) { return (static_cast<uint32_t>(map) << 24) | (n & 0xFFFFFFu); }
+
 class Island {
 public:
-    static constexpr float kRadius = 1500.0f; // m to where the sea starts
+    static constexpr float kRadius = 1500.0f; // m to where the sea starts (the green island)
     static constexpr float kSea = 0.0f;       // the water's height
+    static constexpr float kPlateau = 190.0f; // Canyon: the plateau's height (and its runway's)
+    static constexpr float kFloor = 14.0f;    // Canyon: the gorge's floor
+    static constexpr float kCityGround = 6.0f;
 
     explicit Island(uint32_t seed = 1);
     uint32_t seed() const { return m_seed; }
+    Map map() const { return m_map; }
     const Runway& runway() const { return m_runway; }
+    // How far the land goes (past it, the sea).
+    float landRadius() const;
+
+    // Canyon: the gorge's middle line is r = gorgeRadius(a) around the
+    // middle (a: the angle from +X toward +Z), gorgeHalfWidth(a) to each
+    // wall at the floor. Distance from (x, z) to the middle line:
+    float gorgeRadius(float a) const;
+    float gorgeHalfWidth(float a) const;
+    float gorgeDistance(float x, float z) const;
+    // The point on the middle line at angle `a`, at the floor, and the way
+    // along the gorge there (growing a).
+    glm::vec3 gorgePoint(float a) const;
+    glm::vec3 gorgeTangent(float a) const;
 
     // The land under (x, z) (below kSea: the sea floor).
     float terrain(float x, float z) const;
@@ -52,7 +76,13 @@ public:
 
 private:
     float hills(float x, float z) const;
+    float islandTerrain(float x, float z) const;
+    float canyonTerrain(float x, float z) const;
+    float cityTerrain(float x, float z) const;
+    float flattenRunway(float x, float z, float h) const;
+    std::vector<Ring> gorgeRings(int count, float radius) const;
     uint32_t m_seed;
+    Map m_map = Map::Island;
     Runway m_runway;
     float m_phase[6] = {};
     glm::vec2 m_peak{0.0f};    // the mountain
