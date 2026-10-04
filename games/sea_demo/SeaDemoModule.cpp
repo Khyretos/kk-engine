@@ -595,6 +595,13 @@ void SeaDemoModule::update(const kke::UpdateContext& ctx) {
     } else if (!m_started) {
         startVoyage();
     }
+    // The settings panel stays out of the start menu's way (it covered
+    // player 1's card and its rows), folded to its tab for after.
+    if (auto* panel = m_app->getModule<kke::DemoPanelModule>()) {
+        const bool inMenu = m_lobby && m_lobby->isOpen();
+        panel->setVisible(!inMenu);
+        if (inMenu && panel->state() != kke::DemoPanelModule::State::Collapsed) panel->setState(kke::DemoPanelModule::State::Collapsed);
+    }
     // Drawn poses, between the last two physics ticks.
     for (Ship& s : m_ships) {
         if (!s.alive || s.remote) continue;
