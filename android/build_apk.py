@@ -172,7 +172,7 @@ def main():
     ap.add_argument("--keystore", default="", help="keystore to sign with (password in $KKE_ANDROID_KEYSTORE_PASSWORD)")
     ap.add_argument("--key-alias", default="kke", help="key alias in --keystore")
     ap.add_argument("--cooked", default="",
-                    help="art cooked with kke_cook for this build's key (tools/packaging/bake_with_art.sh --android): "
+                    help="art cooked with kke_cook for this build's key (tools/bake --assets DIR --only android): "
                          "added under assets/; for PRIVATE builds only, never a public release")
     args = ap.parse_args()
 

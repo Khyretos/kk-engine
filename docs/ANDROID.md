@@ -45,7 +45,7 @@ starts fresh; leaving it ends that process and returns to the list.
 
 Paid art packs (Synty) are never put in a public APK (the packer refuses
 raw art); demos built on them show their "assets not found" screen. For
-your own phone and friends, `tools/packaging/bake_with_art.sh --android`
+your own phone and friends, `tools/bake --assets ~/Synty --only android`
 makes private APKs with the art cooked in (below).
 
 ## The benchmark app
@@ -158,10 +158,10 @@ that file (the benchmark app does this per demo).
 ## With the Synty art (private builds)
 
 The same bake that makes a private PC download with the demos' Synty art
-(docs/COOKED_ART.md) makes phone APKs too, built in Docker:
+(docs/COOKED_ART.md, docs/BAKING.md) makes phone APKs too, built in Docker:
 
 ```
-tools/packaging/bake_with_art.sh --assets ~/Synty --android
+tools/bake --assets ~/Synty --only android      # or no --only: every platform at once
 # -> dist/kk-engine-demos-friends-<date>-with-art-android-arm64.apk
 #    dist/kk-engine-benchmark-friends-<date>-with-art-android-arm64.apk
 ```

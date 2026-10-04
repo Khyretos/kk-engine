@@ -17,11 +17,13 @@ Step by step, for someone who doesn't read code: [BAKING_FOR_FRIENDS.md](BAKING_
 On your own PC, with the packs extracted somewhere:
 
 ```bash
-tools/packaging/bake_with_art.sh --assets /path/to/your/synty/packs
-tools/packaging/bake_with_art.sh --assets /path/to/your/synty/packs --windows   # also the Windows zip (Docker)
-tools/packaging/bake_with_art.sh --assets /path/to/your/synty/packs --android   # also the phone APKs (Docker, docs/ANDROID.md)
-tools/packaging/bake_with_art.sh --assets /path/to/your/synty/packs --sprites /path/to/sprite/packs   # menu sprites too
+tools/bake --assets /path/to/your/synty/packs                     # Linux, AppImage, Windows, Android (Docker)
+tools/bake --assets /path/to/your/synty/packs --only linux,windows # just those
+tools/bake --assets /path/to/your/synty/packs --sprites /path/to/sprite/packs   # menu sprites too
 ```
+
+([BAKING.md](BAKING.md) has every option; the older
+`tools/packaging/bake_with_art.sh` still works and runs `tools/bake`.)
 
 Pack folder names don't matter ([ASSETS.md](ASSETS.md)): the script
 first prints what `kke_assets` finds and what each game is missing.
@@ -42,18 +44,19 @@ in `.gitignore`).
    SHA3-256 over both, so every bake gets its own key and art from one
    bake doesn't load in another's builds. The Linux and Windows builds
    of one bake share the id, so they read the same cooked art.
-2. **Build.** A Release build with FEMFX in `build-art/`.
+2. **Build.** A Release build with FEMFX in the Linux container
+   (`build-docker/linux/`, copied to `dist/linux/`).
 3. **Trace.** Runs `kke_benchmark --seconds 3` with `KKE_ASSETS_DIR` set
    and `KKE_ASSET_TRACE=<file>`, which makes the engine write down every
    art file it opens. That list is what the demos really use, so the
    download holds a few hundred files instead of every pack.
    `--all-art` skips this and cooks everything (much bigger).
-4. **Cook.** `kke_cook` writes each traced file to `build-art/cooked-art/`
+4. **Cook.** `kke_cook` writes each traced file to `build-docker/bake/cooked-art/`
    under the same relative path and name, encrypted (3D packs in
    `synty/`, sprites in `sprites/`); the CC0 animations in
    `assets/animations/` go along too. `kke_cook --check` confirms
    nothing raw slipped through.
-5. **Package.** `tools/packaging/package.sh --cooked build-art/cooked-art`
+5. **Package.** `tools/packaging/package.sh --cooked build-docker/bake/cooked-art`
    puts the cooked folder in the download's `assets/`. The packager's
    art check refuses any raw model or texture; only cooked files pass.
 

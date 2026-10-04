@@ -2,7 +2,11 @@
 #
 #   docker compose run --rm linux      # -> dist/linux    (+ runs the unit tests)
 #   docker compose run --rm windows    # -> dist/windows  (MinGW-w64 cross build, tests under Wine)
-#   docker compose run --rm android    # -> dist/android  (arm64-v8a .so files; see docs/SCALING.md: FEMFX needs the SIMDe port first)
+#   docker compose run --rm android    # -> dist/android  (kke-demos.apk, kke-benchmark.apk; arm64-v8a, FEMFX off: docs/SCALING.md)
+#   docker compose run --rm appimage dist/<linux .tar.gz>  # -> the same download as one .AppImage file
+#
+# tools/bake runs all of them in a row: one command for every download
+# (docs/BAKING.md).
 #
 # The source tree is mounted, not copied: edit on the host, rebuild in the
 # container. Build trees go to build-docker/<platform>/ (git-ignored).
@@ -24,3 +28,7 @@ services:
     image: kke-build-android
     volumes: [ ".:/src" ]
     command: [ "android" ]
+  appimage:
+    build: { context: docker, dockerfile: appimage.Dockerfile }
+    image: kke-build-appimage
+    volumes: [ ".:/src" ]

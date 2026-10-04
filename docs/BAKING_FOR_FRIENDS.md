@@ -11,6 +11,7 @@ What you get, all in the `dist/` folder of your checkout:
 |---|---|---|
 | `kk-engine-<name>-with-art-windows-x86_64.zip` | Windows PCs | Unzip, open `benchmark`, double-click `kke_benchmark.exe` |
 | `kk-engine-<name>-with-art-linux-x86_64.tar.gz` | Linux PCs, Steam Deck | Unpack, run `benchmark/kke_benchmark` |
+| `kk-engine-<name>-with-art-x86_64.AppImage` | Linux PCs, Steam Deck | One file: mark it executable, run it with `benchmark` after its name |
 | `kk-engine-benchmark-<name>-with-art-android-arm64.apk` | Android phones | Install it, open **KKE Benchmark**, press Start |
 | `kk-engine-demos-<name>-with-art-android-arm64.apk` | Android phones | The demos to play, with the art |
 
@@ -22,9 +23,9 @@ Synty's licence asks for ([COOKED_ART.md](COOKED_ART.md) explains how).
 
 ## Once: get your PC ready
 
-You already build the engine, so the compilers are there. The Windows
-`.exe` and the phone APKs are built inside Docker, so you don't need
-Windows or Android tools on your PC.
+Every platform is built inside Docker (Linux too, so friends on other
+distributions can run it), so you don't need Windows or Android tools on
+your PC.
 
 1. Install Docker and let your user run it (Arch/CachyOS):
 
@@ -55,7 +56,7 @@ first. One command lists your packs and, for every game, which of its
 packs are there:
 
 ```bash
-build-release/bin/kke_assets ~/Synty
+dist/linux/kke_assets ~/Synty     # after a first bake; build-release/bin/kke_assets works too
 ```
 
 ```text
@@ -94,25 +95,30 @@ What matters and what doesn't:
 ```bash
 cd /media/development/Software/kk-engine
 git pull
-tools/packaging/bake_with_art.sh --assets ~/Synty --windows --android --version friends-1
+tools/bake --assets ~/Synty --version friends-1
 ```
 
+- That one command makes all of them: Linux, the AppImage, Windows and
+  both Android APKs ([BAKING.md](BAKING.md) has every option).
 - `--version friends-1` is the name in the file names; pick anything
   (no spaces), for example the date or `friends-2`.
-- Leave out `--windows` or `--android` if you don't need those.
+- Only some? `--only linux,windows` (any of `linux`, `appimage`,
+  `windows`, `android`).
 - It takes a while. What happens, in order:
-  1. **Build** for Linux (about as long as your normal Release build).
+  1. **Build** for Linux in Docker. The **first time** it also sets up
+     the build container (downloads, 10-30 minutes).
   2. **Recording** (about 8 minutes): every demo opens on your screen for
      a few seconds, one after another, to note which art files it uses.
      **Don't touch the mouse or keyboard** and keep the screen on.
   3. **Cooking** the art it noted (a minute).
-  4. **Packing** the Linux download.
-  5. With `--windows`: the Windows build in Docker. The **first time** it
-     also sets up the Windows build tools (downloads, 10-30 minutes);
-     later bakes are much quicker.
-  6. With `--android`: the phone build in Docker, same story (the first
-     time downloads the Android tools, a few GB).
-- At the end it prints `Done. PRIVATE archives in dist/`.
+  4. **Packing** the Linux download and the AppImage.
+  5. The Windows build in Docker (the first time sets up its tools too).
+  6. The phone build in Docker, same story (the first time downloads the
+     Android tools, a few GB).
+- At the end it lists the files it made, then the reminder that they are
+  private.
+- The older command, `tools/packaging/bake_with_art.sh --assets ~/Synty
+  --windows --android`, still works and runs this one.
 
 Each bake makes a fresh key, so art from one bake only works in that
 bake's files. That's on purpose: if one download ever leaked, the next
@@ -135,9 +141,14 @@ bake, never mix files from two bakes.
 The whole folder is needed, not just the `.exe`: the benchmark starts
 the demos next to it, and the art is in `assets/`.
 
-**Linux friends:** send the `.tar.gz`; they unpack it and run
-`./benchmark/kke_benchmark` in a terminal from the unpacked folder, and
-send back the same two files from `benchmark/results/`.
+**Linux friends:** send the `.AppImage` (one file). They make it
+executable (right-click, *Properties*, *Allow executing as program*, or
+`chmod +x` it) and run it with `benchmark` after its name in a terminal:
+`./kk-engine-...-x86_64.AppImage benchmark`. Results land in
+`~/.local/share/Kreative Kompas/KKE Benchmark/results/` (the benchmark
+prints where). Or send
+the `.tar.gz`: they unpack it, run `./benchmark/kke_benchmark` from the
+unpacked folder and send back the same two files from `benchmark/results/`.
 
 **Android friends:** send `kk-engine-benchmark-...apk`. They open it on
 the phone, allow "install from this source" when asked, open **KKE
@@ -152,8 +163,8 @@ results to send back ([ANDROID.md](ANDROID.md) has the details).
 | `the recording run opened no art: are the packs in ...?` | `--assets` points at the wrong folder: it must be the folder that holds the pack folders. `kke_assets ~/Synty` shows what is found there |
 | A game shows blocks although you have its pack | Run `kke_assets ~/Synty`: if the game's line says `MISSING`, the pack's folder holds something else (a zip, an Unreal project) or sits too deep; [ASSETS.md](ASSETS.md) |
 | `refusing to package paid/third-party art` | Raw art got into the build folder; tell Claude which file it names |
-| A demo window stays black or a demo "had trouble" during recording | The bake still finishes; the result file in `build-art/art-trace-run/` says which demo and why |
-| Deleting `dist/windows` or `build-docker` says "permission denied" | Docker made them as root: `sudo rm -rf dist/windows build-docker/windows` |
+| A demo window stays black or a demo "had trouble" during recording | The bake still finishes; the result file in `build-docker/bake/art-trace-run/` says which demo and why |
+| Deleting `dist/windows` or `build-docker` says "permission denied" | Left from a bake before `tools/bake` (it gives the files back to you now): `sudo rm -rf dist build-docker` once |
 | A friend sees grey blocks instead of the art | They ran a file from another bake or the public download: send them this bake's file |
 
 Send the results files to Claude as they come in;

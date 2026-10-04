@@ -50,6 +50,9 @@ tools/packaging/package.sh --bin build/bin --platform linux \
     --version dev --out dist --deps build/_deps
 ```
 
+Every download at once on your own PC, built in Docker like CI (Linux,
+AppImage, Windows, Android): `tools/bake` ([BAKING.md](BAKING.md)).
+
 ## Warnings in release builds
 
 Optimized builds warn where Debug doesn't (GCC's `-Warray-bounds` only runs
