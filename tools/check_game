@@ -8,12 +8,15 @@ assistant that can run commands but can't see a window (docs/AI_ASSISTANTS.md).
     tools/check_game my_game --scripts path/to/dir # another scripts folder
     tools/check_game my_game --shot look.jpg       # and a screenshot
     tools/check_game my_game --keys "space w"      # press keys while it runs
+    tools/check_game my_game --pad --headless      # virtual gamepad, Xvfb even on a desktop
 
 It prints what the scripts printed, every warning and error, then one
 last line: "OK" or "FAILED". Exit code 0 means no errors. Build the game
-first (cmake --build build --target my_game). With no DISPLAY it starts
-Xvfb itself, so it works on a server with no screen (software Vulkan,
-lavapipe, is enough).
+first (cmake --build build --target my_game). With no DISPLAY (or with
+--headless) it starts Xvfb itself, so it works on a server with no screen
+(software Vulkan, lavapipe, is enough; without lavapipe the real GPU
+draws into Xvfb). The first line says which mode and Vulkan device ran.
+Keys go through xdotool, or python-xlib when xdotool isn't installed.
 """
 
 import argparse
@@ -27,38 +30,25 @@ import tempfile
 import time
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+sys.dont_write_bytecode = True  # no __pycache__ in the checkout
+sys.path.insert(0, str(ROOT / "tools" / "runner"))
+import xdisplay  # noqa: E402  (tools/runner/xdisplay.py)
+
 LINE = re.compile(r"^\[[^\]]*\]\[[^\]]*\]\[(?P<who>[^\]]*)\]\[[^\]]*\]\[(?P<level>[a-z]+)\]: (?P<text>.*)$")
 # Warnings that are about the machine, not the game.
 MACHINE = ("validation layers requested but not available",)
 
 
-def start_display():
-    """Starts Xvfb on a free display when there is no screen; returns the
-    process (or None when a display already exists)."""
-    if os.environ.get("DISPLAY"):
+def start_display(headless):
+    """Starts Xvfb when there is no screen or headless is asked for;
+    returns it (or None when the existing display is used)."""
+    if os.environ.get("DISPLAY") and not headless:
         return None
     if not shutil.which("Xvfb"):
         sys.exit("check_game: no DISPLAY and no Xvfb (install xvfb, or run it on a desktop)")
-    for n in range(99, 120):
-        if not pathlib.Path(f"/tmp/.X11-unix/X{n}").exists():
-            xvfb = subprocess.Popen(["Xvfb", f":{n}", "-screen", "0", "1280x720x24"],
-                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            os.environ["DISPLAY"] = f":{n}"
-            time.sleep(1.0)
-            return xvfb
-    sys.exit("check_game: no free X display between :99 and :119")
-
-
-def press(keys, env):
-    """Presses each key (xdotool names: w, space, Return, ...) for a moment."""
-    if not shutil.which("xdotool"):
-        print("check_game: --keys needs xdotool; skipped")
-        return
-    for key in keys.split():
-        subprocess.run(["xdotool", "keydown", key], env=env, check=False)
-        time.sleep(0.4)
-        subprocess.run(["xdotool", "keyup", key], env=env, check=False)
-        time.sleep(0.3)
+    xvfb = xdisplay.Xvfb()
+    os.environ["DISPLAY"] = xvfb.name
+    return xvfb
 
 
 def main():
@@ -67,16 +57,24 @@ def main():
     ap.add_argument("--bin", default=str(ROOT / "build" / "bin"), help="where the built games are")
     ap.add_argument("--scripts", help="run this scripts folder instead of the game's own")
     ap.add_argument("--seconds", type=float, default=8, help="how long to run (default 8)")
-    ap.add_argument("--keys", help="keys to press after 3 s, space-separated (needs xdotool)")
+    ap.add_argument("--keys", help="keys to press after 3 s, space-separated X key names (xdotool or python-xlib)")
     ap.add_argument("--shot", help="save a screenshot here (.jpg or .png) just before it stops")
+    ap.add_argument("--headless", action="store_true", help="run inside Xvfb even when a desktop is there")
+    ap.add_argument("--pad", action="store_true", help="plug in a virtual gamepad that moves its sticks")
+    ap.add_argument("--log", help="also save the game's whole log here")
     args = ap.parse_args()
 
     binary = pathlib.Path(args.bin) / args.game
     if not binary.exists():
         sys.exit(f"check_game: {binary} not found; build it first: cmake --build build --target {args.game}")
 
-    xvfb = start_display()
+    xvfb = start_display(args.headless)
+    mode = xdisplay.headless_note() if xvfb else f"desktop window on {os.environ['DISPLAY']} (real GPU)"
     env = dict(os.environ, KKE_SKIP_INTRO="1", SDL_VIDEODRIVER=os.environ.get("SDL_VIDEODRIVER", "x11"))
+    if xvfb:
+        env.update(xdisplay.headless_env())
+    if args.pad:
+        env.update(KKE_VIRTUAL_INPUT="pad", KKE_VIRTUAL_INPUT_ANIMATE="1")
     env.setdefault("KKE_MAIN_MENU", "0")  # straight into the game, past the title (docs/GAME_SHELL.md)
     if args.scripts:
         env["KKE_SCRIPTS_DIR"] = str(pathlib.Path(args.scripts).resolve())
@@ -87,10 +85,12 @@ def main():
             try:
                 if args.keys:
                     time.sleep(3)
-                    press(args.keys, env)
+                    xdisplay.press(env["DISPLAY"], None, args.keys, hold=0.4, pid=proc.pid)
                 time.sleep(max(0.0, args.seconds - (time.monotonic() - started) - (0.5 if args.shot else 0)))
                 if args.shot:
-                    subprocess.run(["import", "-window", "root", args.shot], env=env, check=True)
+                    # On a desktop, only the game's own window.
+                    window = None if xvfb else xdisplay.window_id(env["DISPLAY"], pid=proc.pid)
+                    xdisplay.screenshot(env["DISPLAY"], args.shot, window)
                     time.sleep(0.5)
                 exited = proc.poll()
             finally:
@@ -102,11 +102,13 @@ def main():
                     proc.wait()
             log.seek(0)
             text = log.read()
+            if args.log:
+                pathlib.Path(args.log).write_text(text)
     finally:
         if xvfb:
-            xvfb.terminate()
-            xvfb.wait()
+            xvfb.stop()
 
+    print(f"-- mode: {mode}; Vulkan device: {xdisplay.device_used(text)}")
     printed, warnings, errors = [], [], []
     for raw in text.splitlines():
         m = LINE.match(raw)
