@@ -83,6 +83,7 @@ void TennisModule::init(kke::Application& app) {
         m_rig->setPhysics(m_physics);
     }
     buildWorld();
+    buildNets();
     buildHud();
     setupLobby();
     setupBench();
@@ -535,6 +536,7 @@ void TennisModule::update(const kke::UpdateContext& ctx) {
     updateBodies(dt);
     updateCameras(dt);
     updateMarks();
+    updateNets(dt);
     updateHud();
     sendNet();
 
@@ -561,8 +563,17 @@ void TennisModule::shutdown() {
     if (m_rigid) {
         kke::RigidWorld& w = m_rigid->world();
         for (kke::RigidWorld::BodyId b : m_statics) w.remove(b);
+        for (const CourtNet& n : m_nets) {
+            w.removeCloth(n.cloth);
+            w.remove(n.ball);
+        }
     }
     m_statics.clear();
+    m_nets.clear();
+    m_netMesh.reset();
+    m_ballMesh.reset();
+    m_markMesh.reset();
+    m_shadowMesh.reset();
     m_courtMesh.reset();
     m_standMesh.reset();
     m_fenceMesh.reset();

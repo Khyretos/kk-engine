@@ -249,6 +249,9 @@ private:
     // Setting up (TennisModule.cpp).
     void defineControls();
     void buildWorld();              // Scene.cpp
+    // The cloth nets (NetCloth.cpp).
+    void buildNets();
+    void updateNets(float dt);
     void startLocalMatch();         // from the menu or the switches (and the host's online match)
     Match* buildMatch(std::vector<Entry> entries, const MatchRules& rules, int court);
     int spawnPlayer(const Entry& e, int team);
@@ -391,6 +394,16 @@ private:
     // The world's look.
     std::unique_ptr<kke::DynamicMeshRenderer> m_courtMesh, m_standMesh, m_fenceMesh;
     std::unique_ptr<kke::DynamicMeshRenderer> m_shadowMesh, m_markMesh, m_ballMesh; // Marks.cpp, rebuilt every frame
+    struct CourtNet {
+        kke::RigidWorld::ClothId cloth = 0;
+        kke::RigidWorld::BodyId ball = 0;  // the court's ball, as only cloth feels it
+        std::vector<uint32_t> lines;       // the threads (kke::clothNet)
+        std::vector<glm::vec3> pos;
+    };
+    std::vector<CourtNet> m_nets;          // NetCloth.cpp, one per court
+    std::unique_ptr<kke::DynamicMeshRenderer> m_netMesh;
+    std::vector<kke::Vertex> m_netVerts;
+    std::vector<uint32_t> m_netIdx;
     std::vector<kke::Vertex> m_shadowVerts, m_markVerts, m_ballVerts;
     std::vector<uint32_t> m_shadowIdx, m_markIdx, m_ballIdx;
     std::vector<kke::RigidWorld::BodyId> m_statics;

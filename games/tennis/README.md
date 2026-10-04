@@ -570,6 +570,12 @@ screen.
 - Side steps: `UAL2.fbx` (Universal Animation Library 2, CC0) from
   `assets/animations/` or `KKE_ASSETS_DIR`. Without it the log says so
   once at info level and players turn to run sideways.
+- The nets: the cloth demo's tennis net ([NetCloth.cpp](NetCloth.cpp)), a
+  Jolt soft-body net on every court (`kke::clothNet`, the "net" fabric),
+  held along the cable and at the posts, simulated at 10 cm and drawn at
+  5 cm as threads facing the camera. A proxy sphere only cloth feels
+  follows each court's ball, so a shot into the net pushes it back and
+  it swings; the ball's flight still decides the let or the net ball.
 - The ball's felt and seam: made in code ([Ball.cpp](Ball.cpp)), a smooth
   20,480-triangle sphere coloured optic yellow with the white seam (the
   classic two-lobe curve), draped over the FEMFX body

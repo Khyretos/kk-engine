@@ -97,8 +97,8 @@ void TennisModule::buildWorld() {
         for (float z : { -kServiceLine, kServiceLine }) appendBox(p, { 0.0f, ly, z }, { kSinglesHalfWidth, lh, lw }, line, cv, ci);
         appendBox(p, { 0.0f, ly, 0.0f }, { lw, lh, kServiceLine }, line, cv, ci);
         for (float z : { -kHalfLength, kHalfLength }) appendBox(p, { 0.0f, ly, z - 0.05f * (z > 0 ? 1.0f : -1.0f) }, { lw, lh, 0.05f }, line, cv, ci);
-        // The net: posts, a white tape along the sagging top, and the mesh
-        // (translucent, drawn after everything solid).
+        // The net: posts and a white tape along the sagging top (the net
+        // itself is cloth: NetCloth.cpp).
         for (float x : { -kPostX, kPostX }) appendBox(p, { x, kNetHeightPost * 0.5f + 0.02f, 0.0f }, { 0.04f, kNetHeightPost * 0.5f + 0.02f, 0.04f }, post, cv, ci);
         constexpr int kTape = 12;
         for (int i = 0; i < kTape; ++i) {
@@ -106,7 +106,6 @@ void TennisModule::buildWorld() {
             const float x1 = -kPostX + 2.0f * kPostX * static_cast<float>(i + 1) / kTape;
             const float y0 = netHeight(x0), y1 = netHeight(x1);
             appendBox(p, { 0.5f * (x0 + x1), 0.5f * (y0 + y1) - 0.03f, 0.0f }, { 0.5f * (x1 - x0) + 0.005f, 0.03f, 0.012f }, line, cv, ci);
-            appendPanel(p, { x0, 0.0f, 0.0f }, { x1, 0.0f, 0.0f }, 0.03f, std::min(y0, y1) - 0.05f, { 0.08f, 0.09f, 0.1f }, 3.5f, 0.15f, tv, ti);
         }
         // The fence: posts every 3 m, a top rail, green windscreens, and Jolt
         // walls so nobody walks through it. The ball's own walls and roof
@@ -189,6 +188,7 @@ void TennisModule::renderCourts(const kke::RenderContext& ctx) {
     if (m_standMesh) m_standMesh->draw(ctx, glm::mat4(1.0f), 0.1f, 0.7f);
     if (m_markMesh && !m_markIdx.empty()) m_markMesh->draw(ctx, glm::mat4(1.0f), 0.0f, 0.8f);
     if (m_ballMesh && !m_ballIdx.empty()) m_ballMesh->draw(ctx, glm::mat4(1.0f), 0.0f, 0.85f); // felt: rough
+    if (m_netMesh && !m_netIdx.empty()) m_netMesh->draw(ctx, glm::mat4(1.0f), 0.0f, 0.8f);
 }
 
 void TennisModule::renderTranslucent(const kke::RenderContext& ctx) {
