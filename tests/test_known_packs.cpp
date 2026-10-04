@@ -98,7 +98,7 @@ TEST(KnownPacks, FindsFilesInAPackWhateverItsFolderIsCalled) {
     touch(root / "UAL_2_unzipped/Unity/UAL2.fbx");
     touch(root / "Goblins/Assets/Synty/SidekickCharacters/Characters/GoblinFighters/GoblinFighter_01.sk");
     EXPECT_EQ(kke::findPackFolder(root.string(), "Universal Animation Library 2"), (root / "UAL_2_unzipped").string());
-    EXPECT_EQ(kke::findFileInPack(root.string(), "Universal Animation Library 2", "UAL2.fbx"), (root / "UAL_2_unzipped/Unity/UAL2.fbx").string());
+    EXPECT_EQ(kke::findFileInPack(root.string(), "Universal Animation Library 2", "UAL2.fbx"), (root / "UAL_2_unzipped" / "Unity" / "UAL2.fbx").string());
     EXPECT_EQ(kke::findPackFolder(root.string(), "SIDEKICK_Goblin_Fighters"), (root / "Goblins").string());
     EXPECT_EQ(kke::findPackFolder(root.string(), "POLYGON_Town"), "");
     EXPECT_EQ(kke::findFileInPack(root.string(), "Universal Animation Library 2", "UAL3.fbx"), "");
