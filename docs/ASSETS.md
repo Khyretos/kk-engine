@@ -142,7 +142,7 @@ the game says which pack it missed. With the packs:
 | duel | Universal Animation Library 2 |
 | goblin_horde | POLYGON_Goblin_War_Camp, POLYGON_Dungeon_Pack, POLYGON_Fantasy_Rivals, POLYGON_Fantasy_Characters, Universal Animation Library 2, Universal Animation Library (optional: kicks and spells) |
 | farm_demo | POLYGON_Farm, POLYGON_Dogs, Farm Animals Animated by Quaternius |
-| pet_companion | Farm Animals Animated by Quaternius, POLYGON_Town |
+| pet_companion | POLYGON_Dogs, POLYGON_Town, Farm Animals Animated by Quaternius (the pug) |
 | platoon | POLYGON_Prototype |
 | jiggle_demo | POLYGON_Prototype, POLYGON_City_Characters, POLYGON_Fantasy_Characters |
 | kke_demo | POLYGON_Town, POLYGON_Nature, Universal Animation Library 2 |

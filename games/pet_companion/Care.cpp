@@ -20,8 +20,8 @@ void Care::update(const Needs& n, const World& w, float dt) {
     // Health: going without for long, or living among its own mess, makes
     // it ill; looked after, it recovers (slowly: a few minutes from sick).
     float sickening = 0.0f;
-    if (n.hunger > 0.85f) sickening += 0.004f;
-    if (n.thirst > 0.85f) sickening += 0.006f;
+    if (n.hunger > 0.85f) sickening += 0.002f;
+    if (n.thirst > 0.85f) sickening += 0.003f;
     if (w.poops > 0 && w.oldestPoop > 90.0f) sickening += 0.0015f * float(std::min(w.poops, 4));
     if (sickening > 0.0f) m_health -= sickening * dt;
     else if (worst < 0.6f && n.tiredness < 0.8f) m_health += 0.006f * dt;
