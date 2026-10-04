@@ -19,9 +19,15 @@ class Application;
 // Grid: `cells` x `cells` quads over `extent` metres (default 200x200
 // over 160 m = 80k triangles; plenty for a sandbox view, trivial for any
 // GPU made this decade — lower it for min-spec).
+//
+// farExtent > extent: the middle half of the grid keeps its fine cells and
+// the outer cells grow toward the edge, so the same vertex count reaches a
+// far horizon (a naval battle seen from 100 m away). Waves too short for a
+// cell are faded out there (each vertex knows its cell size), so the
+// distant sea never flickers.
 class OceanRenderer {
 public:
-    OceanRenderer(Application& app, int cells = 200, float extent = 160.0f);
+    OceanRenderer(Application& app, int cells = 200, float extent = 160.0f, float farExtent = 0.0f);
     void drawOcean(const RenderContext& ctx, const OceanWaves& waves, float time, const glm::vec3& cameraPos);
 
 private:

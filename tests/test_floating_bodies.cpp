@@ -113,3 +113,34 @@ TEST(FloatingBodies, BallastedBoatRidesSwellWithoutCapsizing) {
     EXPECT_GT(minUp, 0.8f);   // never heels past ~37 degrees
     EXPECT_LT(maxY, 2.0f);    // never launched far above the crests (sum of amplitudes ~1.6 m)
 }
+
+TEST(FloatingBodies, LongHullsSailSideBySideWithoutBouncing) {
+    // Two 30 m ships 5 m apart, beam to beam (3 m wide each): bounding
+    // spheres (12 m each) would shove them 19 m apart; capsules leave them be.
+    kke::OceanWaves o = calm();
+    kke::FloatingBodies fb;
+    size_t a = fb.add(glm::vec3(15.0f, 1.5f, 1.5f), 300.0f, { 0, 0, 0 });
+    size_t b = fb.add(glm::vec3(15.0f, 1.5f, 1.5f), 300.0f, { 0, 0, 5.0f });
+    simulate(fb, o, 3.0f);
+    EXPECT_NEAR(fb.bodies()[b].position.z - fb.bodies()[a].position.z, 5.0f, 0.2f);
+}
+
+TEST(FloatingBodies, OverlappingHullsArePushedApart) {
+    kke::OceanWaves o = calm();
+    kke::FloatingBodies fb;
+    size_t a = fb.add(glm::vec3(15.0f, 1.5f, 1.5f), 300.0f, { 0, 0, 0 });
+    size_t b = fb.add(glm::vec3(15.0f, 1.5f, 1.5f), 300.0f, { 10.0f, 0, 1.0f });
+    simulate(fb, o, 1.0f);
+    EXPECT_GT(std::abs(fb.bodies()[b].position.z - fb.bodies()[a].position.z), 2.9f); // a beam apart
+}
+
+TEST(FloatingBodies, RemovedSlotsAreReused) {
+    kke::FloatingBodies fb;
+    size_t a = fb.add(glm::vec3(0.5f), 500.0f, { 0, 0, 0 });
+    size_t b = fb.add(glm::vec3(0.5f), 500.0f, { 3, 0, 0 });
+    fb.remove(a);
+    EXPECT_EQ(fb.aliveCount(), 1u);
+    EXPECT_EQ(fb.add(glm::vec3(0.5f), 500.0f, { 6, 0, 0 }), a);
+    EXPECT_EQ(fb.bodies().size(), 2u);
+    EXPECT_TRUE(fb.bodies()[b].alive);
+}
