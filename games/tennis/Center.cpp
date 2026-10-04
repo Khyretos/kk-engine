@@ -414,10 +414,8 @@ void TennisModule::stepCrowd(Walker& w, float dt) {
         w.sitting = false;
     };
     if (w.exiting) {
-        const glm::vec3 to(w.exit.x - feet.x, 0.0f, w.exit.z - feet.z);
-        const float d = glm::length(to);
-        if (d < 0.5f) w.exiting = false;
-        else move = to / d * kCrowdSpeed;
+        move = wayTo(w, feet, w.exit, 0.5f, dt) * kCrowdSpeed;
+        if (glm::length(move) < 1e-3f) w.exiting = false;
     }
     if (!w.exiting) switch (w.doing) {
     case Walker::Doing::Wander: {
@@ -446,8 +444,7 @@ void TennisModule::stepCrowd(Walker& w, float dt) {
             w.goal = { (roll(w.dice) * 2.0f - 1.0f) * halfX, 0.0f, (roll(w.dice) * 2.0f - 1.0f) * 5.5f };
             w.timer = 6.0f + roll(w.dice) * 10.0f;
         }
-        const glm::vec3 to(w.goal.x - feet.x, 0.0f, w.goal.z - feet.z);
-        if (glm::length(to) > 0.5f) move = glm::normalize(to) * kCrowdSpeed;
+        move = wayTo(w, feet, w.goal, 0.5f, dt) * kCrowdSpeed;
         break;
     }
     case Walker::Doing::ToSeat: {
@@ -479,7 +476,7 @@ void TennisModule::stepCrowd(Walker& w, float dt) {
             const float yr = glm::radians(s.yawDegrees);
             w.facing = { std::sin(yr), 0.0f, std::cos(yr) };
         } else if (d > 1e-3f) {
-            move = to / d * std::min(kCrowdSpeed, d * 3.0f);
+            move = wayTo(w, feet, goal, 0.0f, dt) * std::min(kCrowdSpeed, d * 3.0f);
         }
         break;
     }

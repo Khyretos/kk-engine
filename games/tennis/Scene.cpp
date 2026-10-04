@@ -65,6 +65,7 @@ void TennisModule::buildWorld() {
         d.rotation = glm::angleAxis(glm::radians(place.yawDegrees), glm::vec3(0, 1, 0));
         d.halfExtents = h;
         m_statics.push_back(w.add(d));
+        m_navBoxes.push_back({ d.position, h, d.rotation });
     };
     const CourtPlace world; // identity: world space
     Verts cv, sv, tv;

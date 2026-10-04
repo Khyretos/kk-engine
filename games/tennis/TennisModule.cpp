@@ -4,6 +4,7 @@
 #include "kke/DevTools.h"
 #include "kke/Log.h"
 #include "kke/SphereImpostors.h"
+#include "kke/ai/NavMesh.h"
 #include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/LobbyModule.h"
@@ -84,6 +85,7 @@ void TennisModule::init(kke::Application& app) {
     }
     buildWorld();
     buildNets();
+    buildNavMesh();
     buildHud();
     setupLobby();
     setupBench();

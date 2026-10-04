@@ -23,6 +23,9 @@
 #include <vector>
 
 namespace kke {
+namespace ai {
+class NavMesh;
+}
 class DynamicMeshRenderer;
 class InputModule;
 class LobbyModule;
@@ -237,6 +240,10 @@ public:
         float cheer = 0.0f;            // s left of a cheer (a point ended on the court they watch)
         bool happy = true;
         uint32_t dice = 1;
+        std::vector<glm::vec3> path;   // the way to pathGoal (Walk.cpp)
+        size_t pathAt = 0;
+        glm::vec3 pathGoal{1e9f};
+        float repath = 0.0f;
         // A person's view.
         kke::Camera camera;
         bool cameraInit = false;
@@ -249,6 +256,12 @@ private:
     // Setting up (TennisModule.cpp).
     void defineControls();
     void buildWorld();              // Scene.cpp
+    // The crowd's way about (Walk.cpp).
+    void buildNavMesh();
+    glm::vec3 wayTo(Walker& w, const glm::vec3& feet, const glm::vec3& goal, float arrive, float dt);
+    struct NavBox { glm::vec3 centre, half; glm::quat rotation; };
+    std::vector<NavBox> m_navBoxes;   // buildWorld's solids, world space
+    std::unique_ptr<kke::ai::NavMesh> m_nav;
     // The cloth nets (NetCloth.cpp).
     void buildNets();
     void updateNets(float dt);
