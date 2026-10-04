@@ -1,561 +1,235 @@
 # Goblin Horde
 
-Hold the old fort on the hill against waves of goblins. You are the king
-with his sword, seen over the shoulder. The goblins come in through the
-four gateways; the nearest few go at you while the rest circle and jeer,
+Hold the old fort on the hill against waves of goblins, alone, with
+friends on one screen, online, or both at once. Pick a hero and a main
+weapon in the lobby: a sword, a great axe, a bow or a crossbow. Five kinds
+of goblin come through the four gateways: grunts with clubs and swords,
+archers, battle shamans throwing fire, war shamans who heal and buff the
+others, and brutes with two-handed axes. Every fifth wave a giant comes
+with them. The nearest few go at each hero while the rest circle and jeer,
 waiting their turn. Each kill shakes the wave's nerve, and when it breaks
-the last of them run for the trees. Every wave is bigger. Between waves you
-get your breath and some health back. When your health runs out, the fort
-is overrun.
+the last of them run for the trees.
 
 The demo teaches crowd AI on the engine AI core
 ([docs/AI.md](../../docs/AI.md)), one-against-many melee on `kke::Combat`
-([docs/COMBAT.md](../../docs/COMBAT.md)), Synty SIDEKICK modular
-characters merged and simplified for crowds (`kke/Sidekick.h`,
-`kke/MeshLod.h`), pooled instances, capped Jolt ragdolls, a Recast
-navmesh around ruins, a procedural hit flinch that needs no clip, and
-clips retargeted from one skeleton to another. Start here for a hack and
-slash game, a wave survival or tower-defence-with-a-hero game, or any game
-with dozens of enemies on screen at once.
+([docs/COMBAT.md](../../docs/COMBAT.md)), enemies and weapons as data
+(YAML), telegraphed boss attacks, projectiles with charge and aim,
+split screen through the lobby ([docs/LOBBY.md](../../docs/LOBBY.md)),
+host-run online play on `NetModule`
+([docs/NETWORKING.md](../../docs/NETWORKING.md)), clips from one
+animation library retargeted onto many Synty skeletons, capped Jolt
+ragdolls and a procedural hit flinch. Start here for a hack and slash
+game, a co-op wave survival game, or any game with dozens of enemies on
+screen at once.
 
-![The king in the ruined fort surrounded by goblins at sunset](../../website/static/media/goblin-horde.webp)
+![A hero in the ruined fort surrounded by goblins at sunset](../../website/static/media/goblin-horde.webp)
 
 ## Run it
-
-The executable is `goblin_horde` (`add_executable(goblin_horde ...)` in
-[CMakeLists.txt](CMakeLists.txt)). The root `CMakeLists.txt` adds it only
-when `KKE_ENABLE_JOLT` is on, which is the default.
 
 ```bash
 cmake --build build --target goblin_horde
 cd build/bin
 ./goblin_horde
 KKE_SKIP_INTRO=1 ./goblin_horde                     # skip the logo intro
-KKE_HORDE_BOT=1 KKE_HORDE_QUIT=60 ./goblin_horde    # the king fights alone for a minute, with a report
+KKE_HORDE_BOT=1 KKE_HORDE_QUIT=60 ./goblin_horde    # a bot fights alone for a minute, with a report every 10 s
 ```
+
+The root `CMakeLists.txt` adds it only when `KKE_ENABLE_JOLT` is on (the
+default).
 
 | Variable | Effect |
 |---|---|
-| `KKE_HORDE_BOT=1` | the king fights by himself (attract mode, headless runs) |
+| `KKE_HORDE_BOT=1` | a bot plays (attract mode, headless runs); skips the title and lobby |
+| `KKE_HORDE_WEAPON=<id>` | the first hero's weapon: `sword`, `greataxe`, `bow`, `crossbow` |
 | `KKE_HORDE_WAVE=<n>` | start (and restart) at wave n |
+| `KKE_HORDE_BOSS=1` | a giant comes in the first wave |
+| `KKE_HORDE_LINEUP=1` | every goblin type and giant stands in a row and shows its moves in turn (for checking the art) |
+| `KKE_HORDE_POSE=<clip>` | every goblin plays that UAL clip (checking a clip on every skeleton) |
+| `KKE_HORDE_LOBBY=0` | skip the lobby: one player, keyboard and the first pad |
 | `KKE_HORDE_MAX=<n>` | goblins alive at once, at most (default 60) |
-| `KKE_HORDE_VARIANTS=<n>` | goblin looks loaded, 1 to 16 (default 5; fewer loads faster) |
-| `KKE_HORDE_LOD=<ratio>` | share of each goblin's triangles to keep, 0.02 to 1 (default 0.2) |
 | `KKE_HORDE_RAGDOLLS=<n>` | ragdolls at once (default 12; 0 = the dead just topple) |
-| `KKE_HORDE_HERO=<asset>` | another POLYGON Fantasy Characters model as the king |
-| `KKE_HORDE_QUIT=<s>` | quit after that long, with a report every 10 s |
+| `KKE_HORDE_QUIT=<s>` | quit after that long |
 | `KKE_ASSETS_DIR`, `KKE_SYNTY_DIR` | where the Synty packs are (else `assets/synty`) |
-| `KKE_ANIMATIONS_DIR` | where `UAL1_Standard.fbx` and `UAL2.fbx` are (else `assets/animations`) |
 
-Rebindings are saved to `horde_input.json` (the name given to
-`InputModule` in [main.cpp](main.cpp)).
+Rebindings are saved to `horde_input.json`, lobby choices to
+`horde_lobby.json` (both named in [main.cpp](main.cpp)).
 
 ## Controls
 
-Bound in `HordeModule::init` ([HordeModule.cpp](HordeModule.cpp)), on top
-of the engine's `defineCharacterActions` (move and look).
+Bound in `HordeModule::defineActions` ([HordeModule.cpp](HordeModule.cpp)),
+on top of the engine's character actions (move and look). Every seat in
+the lobby gets its own copy, so each player can rebind theirs.
 
 | Action | Keyboard / mouse | Controller |
 |---|---|---|
 | Move (relative to the camera) | WASD | left stick |
 | Look | mouse, once the view has the mouse | right stick |
-| Take the mouse | left click on the view | |
-| Free the mouse | Esc | |
-| Slash: quick, catches two or three in front (`horde.slash`) | left mouse / J | X (west) |
-| Great swing: slow, costly, everything around you flies (`horde.heavy`) | right mouse / K | Y (north) |
-| Block, held; just before the claw lands it parries (`horde.block`) | Left Shift | RB or LT |
+| Attack: a three-hit combo; with a bow, hold to draw and let go to shoot (`horde.attack`) | left mouse / J | X (west), or RT |
+| Heavy swing; hold to charge a 360° spin; a kick with a bow (`horde.heavy`) | F / K / middle mouse | Y (north) |
+| Aim a bow or crossbow (`horde.aim`) | right mouse | LT |
+| Block, held; just before a blow lands it parries (`horde.block`) | Left Shift | RB |
 | Roll (`horde.roll`) | Space | A (south) |
+| Next weapon (`horde.swap`) | Q | d-pad right |
+| Inventory: choose a weapon (`horde.inventory`) | Tab / I | d-pad up |
+| Pause menu (`shell.pause`, from the game shell) | Esc | Start |
 | Try again after being overrun (`horde.again`) | R | Start |
-| Developer panels (`panels`) | F1 | no controller binding yet |
 
-Notes from the code:
-
-- Esc does not quit this game: `setQuitOnEscape(false)`, because Esc lets
-  go of the mouse.
-- The click that takes the mouse also slashes when the developer panels
-  are hidden (`doSlash` checks `m_captured || !debugUi().visible()`).
-- Button names are positions (SDL's `WEST`, `NORTH`, `SOUTH`), so on a
-  PlayStation pad X is Square, Y is Triangle, A is Cross. The hint line
-  shows the glyphs of the device last used.
-- `voice.talk` is cleared with the other unused character actions (the
-  horde has no voice chat). `audio.ping` (Q, D-pad down) keeps its engine
-  default from `defineCharacterActions` and plays the AudioModule's
-  accessibility ping.
+Esc frees the mouse and opens the pause menu (resume, inventory, start
+over, settings, quit). Closing the window (Super+Q on Hyprland, the
+close button elsewhere) quits like any other game.
 
 ## How it plays
 
-- **Waves.** Each wave starts with a 2.5 s banner ("Wave N", "M goblins
-  are coming"); goblins already start arriving during it. They spawn one
-  every 0.12 s, the first after 1.5 s, 20 to 26 m out beyond a random
-  gateway, until the wave's `atOnce` limit (and `KKE_HORDE_MAX`) is
-  reached; as they die, more come until the wave's total is spent.
-- **Clearing a wave.** When every goblin of the wave is dead or has fled,
-  the wave is beaten: you heal 40% of your maximum health and get the
-  `breather` (4 s) before the next wave.
-- **Morale.** The wave shares one morale value, 0 to 1. Each kill takes
-  0.07 off, it comes back 0.04 a second, and once the whole wave has
-  spawned and only a few are left (at most 2, or an eighth of the wave)
-  it is held at 0.1. Below 0.15 the banner says "They're breaking!", and
-  goblins switch to `break`: they run, and a runner more than 30 m from
-  the centre is gone.
-- **Waiting their turn.** Only the `attackers` nearest goblins (4, from
-  `waves.yml`) go at you. The rest hang back in rings a few metres out,
-  jeering, and step in as the ones in front fall.
-- **Losing.** At zero health the fort is overrun. The banner shows the
-  wave and the kills; `horde.again` (after 1.5 s) starts over from the
-  first wave (or `KKE_HORDE_WAVE`). The bot restarts on its own after 5 s.
-- **After the list.** [data/waves.yml](data/waves.yml) lists six waves.
-  After the last, it repeats the last wave with 1.5× the goblins each time,
-  15% more health per extra wave and 3% more speed (capped at 1.6×).
+- **Lobby.** Each player presses a button on their device to take a seat
+  (up to four on one screen) and picks a name, character, skin,
+  accessory, main weapon and colour. The `Online` row hosts or joins a
+  game; local seats and online players mix freely (up to 16).
+- **Waves.** [data/waves.yml](data/waves.yml) lists the waves: how many
+  goblins, how many at once, speed, health, and the `mix` of types. After
+  the last, it repeats the last wave with more goblins each time. Waves
+  grow by `perPlayer` (60%) for every hero after the first.
+- **Taking turns.** Only `attackers` goblins (4) go at each hero; the rest
+  wait in rings and step in as the ones in front fall.
+- **Morale.** Kills lower the wave's morale; below 0.15 they break and
+  run. Clearing a wave heals every standing hero 40% and gives a
+  `breather`.
+- **Bosses.** Every `bossEvery` (5) waves a giant comes with the wave. Its
+  health grows by half for each extra hero. The boss bar shows its name
+  and health.
+- **Down and out.** A hero at zero health is down; when every hero is
+  down, the fort is overrun and `horde.again` starts over.
 
-The king's moves and the goblins' claw, all built on the engine presets:
+### Weapons ([data/heroes.yml](data/heroes.yml))
 
-| Attack | Windup / active / recovery (s) | Damage | Stamina | Poise dmg | Reach | Other |
-|---|---|---|---|---|---|---|
-| Slash (`slash()`) | 0.14 / 0.14 / 0.26 | 16 | 10 | 14 | 1.25 m ahead, radius 0.85 | sweep: hits everyone in the sphere |
-| Great swing (`greatSwing()`) | 0.4 / 0.22 / 0.45 | 34 | 32 | 40 | centred on him, radius 2.3 | sweep, knockback 7 m/s |
-| Goblin swipe (`swipe()`) | 0.45 / 0.14 / 0.5 | 5 | 0 | 9 | 0.75 m ahead, radius 0.45 | 10% chip, 7 guard damage |
+| Weapon | Attack | Heavy | Notes |
+|---|---|---|---|
+| Sword | three-hit combo, the third the strongest | heavy swing; hold for a 360° spin | fast, one hand |
+| Great axe | slow three-hit combo | two-handed overhead that can't be blocked; hold to spin | slow, wide, hard |
+| Bow | hold to draw (1.1 s to full), let go to shoot: 8 damage at a tap, 46 at full draw, ×2 on the head | a kick to make room | aim with the camera; a pad gets a 4° aim assist |
+| Crossbow | one bolt, 34 damage whether aimed long or not, ×1.5 on the head | a kick | 1.7 s reload after every shot |
 
-The king has 260 health, 120 stamina (regenerating 40 a second), 120
-poise, an 80° block angle, a 0.45 s roll for 16 stamina, and gets up
-after 1.6 s. A goblin is `CombatStats::grunt()`: 30 health (times the
-wave's `health`), 12 poise, knocked down for 1.8 s.
+### Goblins ([data/foes.yml](data/foes.yml))
+
+Each type has three moves, picked by range and situation:
+
+| Type | Moves | Looks |
+|---|---|---|
+| Grunt | slash, double cut, lunge | War Camp warriors, knights, prisoners, cooks; Dungeon goblins |
+| Archer | kick, volley (arrows rain on a marked circle), aimed shot | War Camp archers and rangers, with quivers; keeps 9 m away |
+| Battle shaman | firestorm (a circle that bursts), fireball, zap | War Camp wizard, Dungeon shaman |
+| War shaman | heal the most hurt goblin, war cry (haste), stone skin (takes half damage) | War Camp shaman and beast tamer |
+| Brute | overhead slam, sweep, charge | Dungeon war chief, War Camp king; two-handed axe or hammer |
+
+### Giants
+
+The troll, Grukk the big ork, the barbarian giant and the pig butcher
+(POLYGON Fantasy Rivals). Each has three moves, every one marked on the
+ground before it lands: a thrown boulder (a circle where it will fall), a
+basic combo (a cone in front), and a super slam (a big circle around the
+giant).
 
 ## How it works
 
-### Startup and the frame
+| File | What is in it |
+|---|---|
+| [main.cpp](main.cpp) | The application, the game shell (title, pause, settings), lobby and network modules |
+| [HordeModule.h](HordeModule.h) | The module and its structs: heroes, foes, shots, marks, HUD |
+| [HordeModule.cpp](HordeModule.cpp) | Controls, the lobby, the arena and navmesh, waves and phases, cameras per player, drawing projectiles and marks, the headless report |
+| [Roster.h](Roster.h), [Roster.cpp](Roster.cpp) | Reads `foes.yml`, `heroes.yml` and `waves.yml` into weapons, moves and goblin types |
+| [Art.h](Art.h), [Art.cpp](Art.cpp) | Loads characters and props from the packs, retargets UAL clips onto each skeleton, places props in hands (grips) |
+| [Puppets.cpp](Puppets.cpp) | One animated body: clip states per move, posing, weapon and hat attachments |
+| [Heroes.cpp](Heroes.cpp) | Players and bots: input, combos, heavy and spin, bow draw and crossbow reload, aim, soft lock, two-hand IK |
+| [Foes.cpp](Foes.cpp) | Spawning and pooling goblins, choosing moves, telegraphs, movement, death, ragdolls, animation |
+| [Shots.cpp](Shots.cpp) | Arrows, bolts, fireballs, boulders, ground marks and blasts, and every hit |
+| [Hud.cpp](Hud.cpp), [ui/horde_hud.rml](ui/horde_hud.rml) | A HUD panel per player in their part of the screen, the boss bar, the inventory |
+| [Net.cpp](Net.cpp) | Online play: the lobby's Online rows, player states, the horde from the host |
+| [Flinch.h](Flinch.h) | The procedural hit flinch |
+| [data/goblin.yml](data/goblin.yml) | The goblin minds for the AI core (charge, wait, keep distance, break) |
 
-[main.cpp](main.cpp) creates the `Application`, sets the `sunset` mood
-(`assets/moods/sunset.yaml`: a low orange sun and long shadows) and adds:
+### Minds are data, bodies are code
 
-1. `SettingsModule` (`settings.json`)
-2. `InputModule` (`horde_input.json`)
-3. `RigidBodyModule` (Jolt: the ruins, the king, ragdolls)
-4. `ModelModule` (the king, the sword, the goblins)
-5. `UiModule` (RmlUi, the HUD)
-6. `AudioModule`, its panel hidden
-7. `horde::HordeModule`, the game
-8. `StatsModule`, its panel hidden
+Every type thinks with the `goblin` species in `goblin.yml` (charge,
+wait their turn, break); the game feeds it `crowded`, `morale` and
+`health`. What a goblin can *do* is its `moves` list in `foes.yml`: a goblin
+picks the first move that is ready and in range. A move's `kind` decides
+what happens: `melee`, `dash`, `shot`, `lob`, `blast`, `slam`, `combo`,
+`buff`, `heal`. Adding a goblin type is a YAML edit and a restart.
 
-`HordeModule::init` binds the controls, sets up the `CameraRig`, loads the
-goblin species from `data/goblin.yml`, loads the waves, builds the arena
-and its navmesh, loads the king and the goblin looks, spawns the king,
-builds the HUD and starts the first wave. It logs how many goblin looks
-loaded and their average triangle count before and after simplifying.
+### One clip library, many skeletons
 
-`HordeModule::update` runs, every frame (with `dt` capped at 0.05 s):
+Every character, goblin and giant plays Quaternius's Universal Animation
+Library clips (UAL 1 and 2), retargeted by bone name
+(`kke::retargetAnimations`). The repository ships the 43-clip
+`UAL1_Standard.fbx`; when the full pack is there, `Art.cpp` adds the rest
+of `UAL1.fbx` (kicks, spells, strafes). The War Camp goblins use Synty's
+older bone names (`Shoulder_L`, `Elbow_L`, `UpperLeg_L`, `Ankle_L`);
+`kke::canonicalBoneName` maps them to UAL's (`upperarm_l`, `lowerarm_l`,
+`thigh_l`, `foot_l`), and the ragdoll builder looks bones up the same way.
+Without that mapping those goblins stood in a T-pose and had no ragdoll.
 
-1. F1 toggles the developer panels.
-2. The phase machine (Intro, Fighting, Cleared, Overrun): spawning, the
-   end of a wave, the breather, the game over.
-3. Morale recovers or is held low.
-4. `updateHero`: input (or the bot), attacks, footwork.
-5. `updateGoblins`: AI inputs, `AiWorld::update`, strikes, movement,
-   the dead.
-6. `m_combat.step(dt)` and `onHit` for each `HitEvent`.
-7. `animateHero` and `animateGoblin` for each goblin.
-8. `updateCamera` and `updateHud`.
-9. Timing for the headless report.
+### Telegraphs
 
-### The arena and the navmesh
+A move with a ground mark (`telegraph`, or every giant move) draws a
+glowing outline that fills up until the blow lands: a circle for slams,
+lobs and blasts, a cone for combos, a line for charges (`buildMarkMesh`
+in [Shots.cpp](Shots.cpp)).
 
-`buildArena` builds everything from boxes: a 120 m meadow, the fort's
-four walls (26 m square, `kFort` 13 is half) broken into stretches 2 to
-4.5 m long and 1 to 2.8 m tall with a 4.4 m gateway in the middle of each,
-taller gate posts, the watchtower stump, a well, crates, rubble and 70
-pines outside the walls (none within 6 m of a gateway's path). A fixed
-seed (11) makes the ruins the same every run. Each box goes into one
-`DynamicMeshRenderer`; the solid ones are also static Jolt boxes; the
-ones goblins must avoid are also stored in `m_obstacles` as
-`(x, z, half x, half z)`.
+### Split screen and online
 
-The same vertices and indices then build a Recast navmesh:
+The lobby gives every local seat its own input map and a part of the
+screen (`kke::splitScreen`); each hero has a camera, a HUD panel and an
+inventory in that part. Online, the host runs the horde: it sends wave
+state and every goblin (position, facing, move, health) 15 times a second;
+clients draw them, send their own hero's state, and report their hits on
+goblins to the host, who applies them. Hits on a hero go to the player who
+owns it. A client starts when the host's game leaves the lobby.
 
-```cpp
-kke::ai::NavMeshSettings ns;
-ns.cellSize = 0.3f;
-ns.agentRadius = 0.35f;
-ns.agentHeight = 1.3f;
-if (m_nav.build(pts, idx, ns, &error)) m_ai.setNavMesh(&m_nav);
-```
+### Crowd cost
 
-So the AI core's paths go round walls through the gateways with no level
-annotation at all. If the build fails, the goblins walk straight.
-
-### The goblins' minds
-
-The `goblin` species in [data/goblin.yml](data/goblin.yml) has three
-utility actions (plus a near-zero `idle`):
-
-| Action | Behaviour | Scores high when |
-|---|---|---|
-| charge (1.5) | fight | it senses the king (`hostile`), is not `crowded`, and morale is above about 0.3 |
-| wait_turn (1.2) | watch | it is `crowded`, senses the king, and morale holds |
-| break (2.0) | flee | morale is below about 0.22 and it feels a `threat` |
-
-`hostile` and `threat` come from the AI core's own perception (sight 80
-m, all round). The game sets the other inputs every frame at the top of
-`updateGoblins`:
-
-- It sorts the living goblins by distance to the king. The nearest
-  `attackers` get `crowded = 0`, the rest `crowded = 1`.
-- A waiting goblin's `waitRadius` is `3.2 + 0.8 × sqrt(rank - attackers)`,
-  so the queue fans out in rings with the next in line closest.
-- `morale` is the wave's shared value (1 when the king is dead), and
-  `health` the goblin's own fraction.
-
-The species also sets `flocks: true` (`flockRadius` 2.5): the core keeps
-the mob together and moving as one. `hostileTo: [hero]` makes them enemies
-of the king, who is an actor of the `hero` species (id 1): perceived, never
-moved by the AI. `attackRange` 0.45 plus both radii makes the core fire an
-`Attack` event from about 1.1 m, with 1.4 s between a goblin's attacks.
-
-### The goblins' bodies
-
-The AI core decides; `updateGoblins` moves. Goblins are not Jolt bodies:
-each one is a position, a velocity and a knockback `push`, moved in code.
-Per living goblin:
-
-1. **Strike.** An `Attack` event sets `strike`; if the goblin can act,
-   the king is alive and within 1.6 m, it turns to him and starts
-   `swipe()`.
-2. **Where it wants to go.** Idle and `wait_turn`: toward its
-   `waitRadius` around the king, drifting sideways (left or right by
-   agent id parity). Idle otherwise: the AI core's
-   `desiredVelocity × speedScale`. Windup: a slow step in (0.6 m/s).
-   Other states: stand.
-3. **Move.** Velocity eases toward that at rate 10; `push` decays with
-   `exp(-5 dt)`; position += (velocity + push) × dt, flat on y = 0.
-4. **Collide cheaply.** Each obstacle box, grown by 0.3 m, pushes the
-   goblin out along the shallower axis. A goblin is never closer than
-   0.7 m to the king.
-5. **Face.** At the king while winding up, striking, or within 4 m (unless
-   fleeing), else along its velocity, turning at rate 10.
-6. **Report back.** `Combatant::place` and `AiWorld::setTransform`, so the
-   combat core and the AI core both see where it really is.
-7. **Hurt flash.** A hit tints it red (`2.2, 0.6, 0.5`), fading at 5 per
-   second.
-
-Then the dead are aged: after 5 s the ragdoll is destroyed and the body
-freezes where it lies, after 7 s it sinks at 0.35 m/s, and at 9 s it is
-released. Runaways past 30 m are released at once.
-
-### Crowd cost: merging, simplifying, pooling
-
-`loadGoblins` in [Goblins.cpp](Goblins.cpp):
-
-1. Finds the asset folder (`findAssetFolder("assets/synty", {"KKE_ASSETS_DIR", "KKE_SYNTY_DIR"})`),
-   then walks `SIDEKICK_Goblin_Fighters` and `ANIMATION_Goblin_Locomotion`
-   inside it: every `.sk` file under a `GoblinFighters` path, and the six
-   clip files by exact name under a `Sidekick` path.
-2. Loads the six clips as animation-only models (`allowNoMeshes`).
-3. Keeps the first `KKE_HORDE_VARIANTS` `.sk` files in sorted order, and
-   loads them **in parallel** with `std::async`, each on its own thread:
-   `readSidekickCharacter` reads the part list, `loadSidekickCharacter`
-   merges about thirty part meshes onto one skeleton (skipping `Tongue`,
-   `Teeth`, `EyebrowLeft`, `EyebrowRight`: "too small to see in a
-   crowd"), and `simplifyModel(full, ratio, so)` with `acrossSeams` and
-   `prune` cuts it to 20% of its triangles. Only the GPU upload
-   (`ModelModule::add`) happens back on the main thread.
-4. Gives each look its own rig (bones plus clips appended by bone name,
-   one clip per file renamed to a tag like `|swipe`), its `AnimationSet`,
-   the yaw that turns its forward to +z, and its `spine_01` bone for the
-   flinch (found with `canonicalBoneName`, so naming differences between
-   rigs do not matter).
-
-Instances are pooled per look. `spawnGoblin` takes a hidden instance from
-the look's `free` list if there is one, else spawns a new one;
-`releaseGoblin` hides it, clears its bone override and puts it back. A
-wave of 150 goblins therefore never creates more instances than were
-ever alive at once.
-
-Ragdolls are capped. `killGoblin` turns the dead goblin into a 30 kg
-ragdoll (`buildHumanoidRagdoll`, `bindSkeletonToRagdoll`, `createRagdoll`
-with its running velocity plus the blow, then the blow on torso and head).
-When `KKE_HORDE_RAGDOLLS` (12) are already down, the oldest one's physics
-is destroyed first and that body lies still (`m_ragdolled` is a queue,
-oldest first). If the skeleton cannot make a ragdoll, the cap drops to 0
-("same skeleton every time: don't ask again") and the dead topple over by
-rotating 85° in 0.4 s instead. `ModelModule` skins visible instances on
-the worker threads (commit ec94fc4).
-
-### Goblin animation
-
-`animateGoblin` sets the transform (position, yaw, and a random size
-0.72 to 0.86) and picks a clip from the combat state:
-
-- Windup plays `swipe`, stretched to the swipe's 1.09 s.
-- Idle or Stunned, once any swipe has finished: speed divided by scale
-  picks `sprint` above 4.2 m/s, `run` above 2.2, `walk` above 0.35, else
-  `menace` for a waiting goblin or `idle`.
-
-A living goblin that was hit gets the flinch on top.
-
-### The procedural flinch
-
-[Flinch.h](Flinch.h) is one function, `applyFlinch`, used on the goblins
-(which have no hit clips) and the king alike. It rotates the `spine_01`
-bone in model space around the axis `cross(up, awayFromBlow)` by up to
-`maxDegrees × amount`, so the upper body tips away from the hit and
-everything above the spine follows. The rotation is converted into the
-bone's parent space first, so it works whatever the rig's bone
-orientations are:
-
-```cpp
-const glm::quat turn = glm::angleAxis(glm::radians(maxDegrees) * amount, axis);
-...
-b.r = glm::normalize(glm::inverse(parentRot) * turn * parentRot * b.r);
-```
-
-The caller sets `amount` to 1 on a hit and fades it: goblins 30° fading
-at 3.5 a second, the king 14° fading at 4.
-
-### The king
-
-[Hero.cpp](Hero.cpp).
-
-**Loading** (`loadHero`). The clips come from `UAL1_Standard.fbx` plus
-`UAL2.fbx` when present (the sword attacks, block, knockback, get-up). The
-body comes from POLYGON Fantasy Characters: an `AssetCatalog` scan limited
-to that pack (`onlyPacks`; the commit notes this took start-up from 48 s to
-2 s against a big shared cache), then `KKE_HORDE_HERO` if set, else
-`SK_Character_Male_King`, `SK_Character_Male_Rouge_01`,
-`SK_Character_Male_Peasant_01`. The UAL clips are retargeted onto the
-Synty skeleton with `kke::matchBones` and `kke::retargetAnimations` (the
-log says how many bones matched). Without the pack the king is the UAL
-mannequin recoloured gold; without UAL 1 he is a gold box.
-
-**The sword.** `SM_Prop_SwordOrnate_01` from the same pack is its own
-model instance. At load, the code works out a grip matrix `m_grip` that
-puts the blade (+Y in the sword model) along the king's forward, 7 cm past
-the right hand along the forearm, in the rest pose. Every frame the sword's
-transform is `instance × handBone × m_grip`, so it follows every swing.
-
-**States** (`spawnHero`). A 1D blend state `move` over ground speed
-(`Sword_Idle` at 0, `Walk_Loop` 1.4, `Jog_Fwd_Loop` 3.4, `Sprint_Loop`
-5.5), plus timed clip states for two slashes (alternating), the great
-swing, block, roll, hit, down, get-up and death. Each attack clip is
-stretched to its `AttackDesc` length, as in the Duel.
-
-**Moving and fighting** (`updateHero`). The stick is turned into a world
-direction from the camera rig's forward and right. The slash has a soft
-lock: it faces the nearest living goblin within 3.5 m that is roughly in
-front (`dot > 0.2`), else straight ahead. The great swing is centred on
-him, so it does not aim. A roll turns him to the stick direction. Footwork
-per state: Idle runs at 4.6 m/s (1.6 blocking) and turns toward the stick
-unless blocking; Windup and Active step forward (1.4 m/s for a slash, 0.3
-for the great swing); Dodging rolls at 6.5 m/s; other states stand.
-Knockback `push` decays with `exp(-6 dt)`. The result drives the Jolt
-character.
-
-**The bot** (`heroBot`, with `KKE_HORDE_BOT=1`). It holds the middle of
-the fort, stepping out only for a goblin near the centre; it uses the
-great swing when three or more goblins are within 2.2 m and it has
-stamina, slashes the nearest within 1.9 m, and blocks when a goblin
-within 1.6 m is winding up. It produces a stick vector in camera space,
-exactly like a player.
-
-### The camera
-
-A `kke::CameraRig` in `ThirdPerson` mode: arm 5 m, pivot 1.7 m, field of
-view 60°, pitch -18°. The mouse turns it while captured (0.12 degrees per
-unit); the right stick at 160° a second (70% of that vertically).
-`CameraRig::update` gets a ray-cast function on the Jolt world, so the
-camera pulls in instead of going through a wall. In bot mode it swings
-slowly behind the king.
-
-### The HUD
-
-[Hud.cpp](Hud.cpp) and [ui/horde_hud.rml](ui/horde_hud.rml): an RmlUi data
-model `horde` with the king's health and stamina (percent strings bound to
-bar widths), a `low` flag that makes the health bar blink under 25%, the
-wave, goblins left (alive plus still to spawn), kills, a banner and a hint
-line. Values are dirtied only when they change. The hint is prompt text:
-it offers "take the mouse" on keyboard before the mouse is captured, and
-"Esc frees the mouse" after.
-
-### The headless report
-
-With `KKE_HORDE_QUIT` set, every 10 s the log shows the wave, goblins
-alive, kills, the king's health, the average and worst frame time, and the
-time spent in goblin minds and movement (`updateGoblins`) and in
-animation. `KKE_HORDE_BOT=1 KKE_HORDE_QUIT=60` is a repeatable performance
-run. CI starts `goblin_horde` for 8 seconds in its headless smoke run.
-
-## Design decisions
-
-- **Minds are data, bodies are code.** The species file decides *what*
-  each goblin wants (charge, wait, run); the game decides how it moves and
-  when a swipe really starts. Changing behaviour is a YAML edit and a
-  restart, no rebuild.
-- **The crowd takes turns.** Only `attackers` goblins go in; the rest
-  `wait_turn`. The game computes `crowded` from a distance sort and feeds
-  it to the utility scoring, so the rule is simple in code and still reads
-  as a choice in the AI.
-- **One morale for the wave.** Kills lower it for everyone, so a good
-  streak visibly breaks the mob, and the last stragglers flee instead of
-  being hunted down one by one.
-- **Goblins are not physics bodies.** They move kinematically with a box
-  push-out and a navmesh. Only the king is a Jolt character, and goblins
-  become Jolt bodies only as ragdolls, up to a cap. The header lists the
-  crowd-cost measures: simplification, pooling and capped ragdolls.
-- **Simplify once at load, in parallel.** Each look is merged and cut to
-  20% once, on its own thread, not per instance. `KKE_HORDE_LOD` and
-  `KKE_HORDE_VARIANTS` trade looks against load time.
-- **Pool and recycle.** Instances are hidden and reused, never destroyed
-  mid-game, so a big wave does not churn GPU resources.
-- **Ragdolls are capped, oldest first.** A ragdoll is the expensive part of
-  a death; past the cap, the oldest body stops simulating and lies still,
-  which is invisible in a fight.
-- **A flinch without clips.** The goblin pack has no hit reactions, so a
-  spine rotation stands in (the comment in Flinch.h: "no clip needed,
-  which is why it works on the goblins ... and the king alike").
-- **Clips from one library on another character.** UAL's sword clips are
-  retargeted onto the Synty king by bone name, and the Sidekick goblins
-  take the Goblin Locomotion clips by bone name, instead of authoring
-  clips per character.
-- **Scan only the pack needed.** `CatalogScanOptions::onlyPacks` for the
-  king (48 s to 2 s against a shared cache, per commit ec94fc4).
-- **Missing packs are normal.** Without packs the waves still come
-  (invisible goblins, a gold mannequin or box king); a missing asset
-  folder logs at info, not as a warning (commit 34fadf2), because it is the
-  normal case in CI.
-- **Soft lock on the slash only.** The quick slash snaps to the nearest
-  goblin in front, which makes a crowd fight readable on a controller;
-  the great swing is a circle around the king and needs no aim.
-
-## Tuning
-
-| What | Where | Effect |
-|---|---|---|
-| `attackers`, `breather` | [data/waves.yml](data/waves.yml) | how many goblins fight at once; rest between waves |
-| each wave's `goblins`, `atOnce`, `speed`, `health` | data/waves.yml | size, density and toughness of each wave |
-| `runSpeed`, `attackRange`, `attackCooldown`, `flockRadius`, `senses` | [data/goblin.yml](data/goblin.yml) | how fast and how often goblins attack, how tight the mob is |
-| action weights and curve midpoints | data/goblin.yml | when they charge, wait or break |
-| morale -0.07 per kill, +0.04/s, straggler rule | `HordeModule::update`, `onHit` | how quickly waves break |
-| heal 40% on a cleared wave | `HordeModule::update` | how forgiving the game is |
-| `swipe()` | [Goblins.cpp](Goblins.cpp) | goblin damage, telegraph time (windup 0.45 s), reach |
-| `slash()`, `greatSwing()` | [Hero.cpp](Hero.cpp) | the king's damage, reach, stamina costs |
-| king's `CombatStats` | `spawnHero` | health 260, stamina 120, poise 120, roll |
-| `kRun` 4.6, `kBlockWalk` 1.6, `kRollSpeed` 6.5 | Hero.cpp | the king's speeds |
-| soft-lock range 3.5 m | `updateHero` | how far the slash reaches for a target |
-| `waitRadius` formula | `updateGoblins` | how far the queue stands |
-| goblin size 0.72 to 0.86, speed ±15% | `spawnGoblin` | variety in the crowd |
-| 5 s ragdoll, 7 s sink, 9 s release | `updateGoblins` | how long bodies stay |
-| `kFort` 13, `kGateHalf` 2.2 | [HordeModule.cpp](HordeModule.cpp) | fort size, gateway width |
-| navmesh `cellSize` 0.3, `agentRadius` 0.35 | `buildArena` | path precision and clearance |
-| arm 5, pivot 1.7, fov 60, `m_mouseSensitivity` 0.12, `m_stickSpeed` 160 | `init`, [HordeModule.h](HordeModule.h) | the camera |
-| `KKE_HORDE_MAX`, `KKE_HORDE_LOD`, `KKE_HORDE_VARIANTS`, `KKE_HORDE_RAGDOLLS` | environment | the performance budget |
-
-## Engine features it uses
-
-| Feature | Header / module | Doc |
-|---|---|---|
-| Utility AI, perception, flocking, steering, Attack events | `kke/ai/AiWorld.h` | [AI.md](../../docs/AI.md) |
-| Navmesh from level triangles | `kke/ai/NavMesh.h` (Recast/Detour) | [AI.md](../../docs/AI.md) |
-| Melee rules, sweeping attacks, many combatants | `kke/Combat.h` | [COMBAT.md](../../docs/COMBAT.md) |
-| Sidekick modular characters | `kke/Sidekick.h` | [COMBAT.md](../../docs/COMBAT.md) (crowds) |
-| Mesh simplification | `kke/MeshLod.h` (meshoptimizer) | [COMBAT.md](../../docs/COMBAT.md) (crowds) |
-| Clips by bone name, retargeting, pose helpers | `kke/AnimRig.h`, `kke/Animator.h` | [PROCEDURAL_ANIMATION.md](../../docs/PROCEDURAL_ANIMATION.md) |
-| Ragdolls | `kke/Ragdoll.h`, `IRagdollPhysics` | [RAGDOLLS.md](../../docs/RAGDOLLS.md) |
-| Character controller, static boxes, ray casts | `kke/RigidWorld.h`, `RigidBodyModule` | [MOVEMENT.md](../../docs/MOVEMENT.md) |
-| Third-person camera with collision | `kke/CameraRig.h` | |
-| Skinned instances, pooling by visibility, tints | `ModelModule` | [SCENES.md](../../docs/SCENES.md) |
-| Finding and scanning asset packs | `kke/AssetCatalog.h` | [SCENES.md](../../docs/SCENES.md) |
-| YAML or JSON data files | `kke/DataFile.h` | [DATA_FILES.md](../../docs/DATA_FILES.md) |
-| Rebindable actions, button prompts | `InputModule`, `kke/ButtonPrompts.h` | [INPUT.md](../../docs/INPUT.md) |
-| HUD | `UiModule` (RmlUi) | |
-| Mood | `Application::setMood` | [MOODS.md](../../docs/MOODS.md) |
+Goblins are not physics bodies: they move kinematically with a push-out
+from walls and heroes. Bodies are pooled and reused. Ragdolls are capped
+(`KKE_HORDE_RAGDOLLS`), oldest first. The bot report every 10 s prints
+the frame time and the time spent on minds and animation.
 
 ## Assets
 
-Synty packs are never in the repository ([docs/SCENES.md](../../docs/SCENES.md)).
-Put them in `assets/synty/` (a symlink to a shared cache works) or point
-`KKE_ASSETS_DIR` (or `KKE_SYNTY_DIR`) at them. `tools/fetch_assets.sh` can
-fetch archives by name.
+The game runs without any pack: mannequins stand in for every character
+and boxes for weapons, and the log says what was missed. With the packs
+(`kke_assets needs` prints the required ones):
 
-| Pack | Files used | Without it |
-|---|---|---|
-| SIDEKICK Goblin Fighters (`SIDEKICK_Goblin_Fighters`) | `GoblinFighter_01` to `_05` `.sk` part lists, their parts and `T_GoblinFighter_0NColorMap` colour maps | an info line (a warning only if the pack is there but no goblin loads); the waves still come but the goblins are invisible |
-| ANIMATION Goblin Locomotion (`ANIMATION_Goblin_Locomotion`), Sidekick versions | `A_MOD_GBL_Idle_Standing_Neut`, `A_MOD_GBL_Walk_F_Neut`, `A_MOD_GBL_Run_F_Neut`, `A_MOD_GBL_Sprint_F_Neut`, `A_MOD_GBL_Idle_Fidget_Swipe_Neut` (the attack), `A_MOD_GBL_Idle_Fidget_Menacing_Neut` (waiting) | a warning per missing clip when the pack is there (nothing when it is not); goblins slide in their rest pose or fall back to another clip |
-| POLYGON Fantasy Characters (`POLYGON_Fantasy_Characters`) | `SK_Character_Male_King` (else `SK_Character_Male_Rouge_01`, `SK_Character_Male_Peasant_01`), `SM_Prop_SwordOrnate_01` | info line; the king is the UAL mannequin in gold, without a sword |
+| Pack | What it gives |
+|---|---|
+| POLYGON Goblin War Camp | most goblins, their bows, staffs, clubs, swords, quivers and hats; hero accessories |
+| POLYGON Dungeon Pack | the knight heroes, goblin chiefs and shamans, the great axe, big hammers |
+| POLYGON Fantasy Rivals | the four giants |
+| POLYGON Fantasy Characters | the heroes (king, queen, rogue, druid, bard, witch, sorcerer, peasant) and the sword |
+| Universal Animation Library (full `UAL1.fbx`, optional) | kicks, spells and the rest beyond the shipped Standard set |
+| Universal Animation Library 2 | sword combos, heavy swings, knees |
 
-If no asset folder exists at all, the game logs at info ("goblins can't be
-shown, the waves still come") and plays on.
-
-Not Synty:
-
-- Quaternius' Universal Animation Library 1 (CC0),
-  `assets/animations/UAL1_Standard.fbx`, in the repository: `Sword_Idle`,
-  `Idle_Loop`, `Walk_Loop`, `Jog_Fwd_Loop`, `Sprint_Loop`, `Roll`,
-  `Hit_Chest`, `Hit_Head`, `Death01`, `Sword_Attack` (fallback). Without
-  it the king is a gold box.
-- Universal Animation Library 2, `UAL2.fbx` (optional, in
-  `assets/animations/` or `$KKE_ASSETS_DIR/Universal Animation Library 2/Unity/`):
-  `Sword_Regular_A`, `Sword_Regular_B`, `Sword_Heavy_A`, `Sword_Block`,
-  `Hit_Knockback`, `LayToIdle`. Without it the king swings with UAL 1's
-  single `Sword_Attack`.
-- The HUD: `ui/horde_hud.rml`, the shared `theme.rcss` from
-  `games/rmlui_demo/ui/`, Noto Sans and Noto Color Emoji (SIL Open Font
-  License), copied by [CMakeLists.txt](CMakeLists.txt); Xelu's CC0 button
-  prompts.
-- The fort, trees and rubble are boxes built in code.
+The repository ships `UAL1_Standard.fbx` (CC0), the fonts and Xelu's CC0
+button prompts. The fort, trees and rubble are boxes built in code.
 
 ## Make a game like this
 
 1. **Copy the folder.** `cp -r games/goblin_horde games/my_horde`, rename
    the target and namespace, and add it to the root `CMakeLists.txt` inside
-   `if(KKE_ENABLE_JOLT)`. (`tools/new_game` is for Lua-only games from
-   `games/template`.)
-2. **Change the enemy's mind first.** Edit
-   [data/goblin.yml](data/goblin.yml): rename the species, change speeds
-   and senses, add an action (for example a ranged `harass` with
-   `behavior: watch` scored on a new input) and set that input in
-   `updateGoblins`. See [AI.md](../../docs/AI.md) for every behaviour and
-   curve.
-3. **Change the waves.** [data/waves.yml](data/waves.yml) only; `waveAt`
-   already extends the list forever.
-4. **Change the enemy's body.** Point `loadGoblins` at your pack and clip
-   names (`kClips`), or load a single model per variant. Keep the
-   simplify-once and pooling steps if you want dozens on screen.
-5. **Change the hero.** New attacks are `AttackDesc`s built from presets
-   (`slash()`, `greatSwing()`); add a clip state with the `timed` helper
-   and a case in `animateHero`. A different character only needs a new
-   name in the fallback list: the UAL clips are retargeted.
-6. **Replace the arena.** Anything that produces triangles works for the
-   navmesh; keep `m_obstacles` (or switch goblins to the navmesh alone) so
-   they cannot be knocked through walls.
-7. **Measure.** Run `KKE_HORDE_BOT=1 KKE_HORDE_QUIT=60` and read the
-   report before and after each change.
+   `if(KKE_ENABLE_JOLT)`.
+2. **New enemies are data.** Add a type to `data/foes.yml` with models,
+   a weapon and three moves; add it to a wave's `mix` in
+   `data/waves.yml`. Check it with `KKE_HORDE_LINEUP=1`.
+3. **New weapons are data.** Add one to `data/heroes.yml` with `kind`
+   (`onehand`, `twohand`, `bow`, `crossbow`), a prop, a `combo`, `heavy`
+   and `spin`.
+4. **Check the art.** `KKE_HORDE_LINEUP=1` for every type, then
+   `KKE_HORDE_POSE=Idle_Loop` if one stands in a T-pose (its bone names
+   don't match; see "One clip library").
+5. **Measure.** `KKE_HORDE_BOT=1 KKE_HORDE_QUIT=60` and read the report.
 
-Pitfalls the code shows:
+Pitfalls:
 
-- Goblins move without physics, so knockback can push them into walls;
-  the obstacle push-out is what stops that. Add a box to `m_obstacles`
-  for every solid thing you add.
-- Each look needs its own rig and `AnimationSet`: Sidekick part sets can
-  add bones, so one skeleton does not fit all.
-- `KKE_HORDE_VARIANTS` keeps the first N `.sk` files in sorted order; the
-  same looks come up every run.
-- Destroy ragdolls before the physics module goes (`shutdown` does it)
-  and clear bone overrides when an instance goes back to the pool.
-- Clips from the Goblin Locomotion pack come in root-motion (`_RM`) and
-  in-place versions; the code uses the in-place Sidekick ones because it
-  moves the goblins itself.
-
-## Files
-
-| File | What is in it |
-|---|---|
-| [main.cpp](main.cpp) | The application, the mood and the module list |
-| [HordeModule.h](HordeModule.h) | The module and its structs: `Hero`, `Variant`, `Goblin`, `Wave`, phases, HUD |
-| [HordeModule.cpp](HordeModule.cpp) | Controls, waves loading and scaling, the arena and navmesh, phases, spawning, morale, hits, camera, headless report, shutdown |
-| [Hero.cpp](Hero.cpp) | The king: loading and retargeting, the sword grip, attacks, the bot, movement and animation |
-| [Goblins.cpp](Goblins.cpp) | Goblin loading (parallel merge and simplify), spawning and pooling, AI inputs, movement, death and ragdolls, animation |
-| [Flinch.h](Flinch.h) | The procedural hit flinch |
-| [Hud.cpp](Hud.cpp) | The RmlUi data model and its update |
-| [ui/horde_hud.rml](ui/horde_hud.rml) | The HUD layout and style |
-| [data/goblin.yml](data/goblin.yml) | The goblin and hero species for the AI core |
-| [data/waves.yml](data/waves.yml) | The waves, `attackers` and `breather` |
-| [game.json](game.json) | Marketplace manifest |
-| [CMakeLists.txt](CMakeLists.txt) | The executable and the runtime files copied next to it |
+- Goblins move without physics, so add a box to `m_obstacles` for every
+  solid thing you add, or knockback pushes them through it.
+- A prop's grip decides its axes (`grip()` in [Art.cpp](Art.cpp)): a bow
+  stands up along the arm's forward, a crossbow lies flat across it.
+- Online, only the host decides damage to goblins; a client that applies
+  its own hits would kill goblins the host still sees alive.

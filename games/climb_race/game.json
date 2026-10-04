@@ -1,7 +1,7 @@
 {
   "id": "kke.climb_race",
   "title": "Climb Race",
-  "description": "Race your friends and CPU climbers up a tour of six generated mountains, on one screen or online. Pick every hold yourself: bumpers reach, triggers lunge, both snatch; manage your stamina on ledges and jugs. Medals, a ghost of your best run, and party modes: Rockfall, Elimination, Time trial.",
+  "description": "Race your friends and CPU climbers up a tour of six generated mountains, on one screen or online. Pick every hold yourself: triggers move your hands, bumpers your feet, hold jump to lunge; keep your feet on to save your stamina. Medals, a ghost of your best run, and party modes: Rockfall, Elimination, Time trial.",
   "version": "0.1.0",
   "tags": ["demo", "climbing", "racing", "physics", "ik"],
   "engine_version": "0.3",

@@ -225,4 +225,5 @@ base64 -w0 kke-release.keystore   # -> the ANDROID_KEYSTORE_BASE64 secret
 - On-screen touch controls (virtual sticks and buttons).
 - Voice chat (it needs the microphone permission, asked at runtime).
 - FEMFX deformable physics (x86 AVX code; Jolt runs instead).
-- A 32-bit (armeabi-v7a) or x86_64 build.
+- A 32-bit (armeabi-v7a) build. An x86_64 one exists for the Android
+  emulator only (`android-x86_64` preset, docs/VM_TESTS.md), not for phones.

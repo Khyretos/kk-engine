@@ -13,6 +13,7 @@ import android.os.Looper;
 import android.os.Process;
 import android.os.SystemClock;
 import android.provider.MediaStore;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
@@ -66,6 +67,10 @@ public class BenchmarkActivity extends Activity {
     private static final int REQUEST_COLLECT = 2;
     private static final String COLLECTOR = "kke_benchmark";
     private static final String[] ORIENTATIONS = { "landscape", "portrait" };
+    /** "quick" or "full": start that run at once, with no tap (the Android
+     *  emulator test, docs/VM_TESTS.md); the share menu is then left shut. */
+    public static final String EXTRA_AUTOSTART = "autostart";
+    private static final String TAG = "kke";
 
     private JSONObject mSuite;
     private JSONArray mDemos;       // the runs of this benchmark: each demo once per orientation
@@ -73,6 +78,7 @@ public class BenchmarkActivity extends Activity {
     private File mRunDir;
     private File mResultsDir;
     private int mNext;
+    private boolean mAutostarted;
     private long mStartedAt;
     private boolean mHung;
     private boolean mRunning;
@@ -123,12 +129,19 @@ public class BenchmarkActivity extends Activity {
                 mRunning = false;
             }
         }
+        mAutostarted = savedInstanceState != null && savedInstanceState.getBoolean("autostarted");
+        String auto = getIntent() != null ? getIntent().getStringExtra(EXTRA_AUTOSTART) : null;
+        if (!mRunning && savedInstanceState == null && ("quick".equals(auto) || "full".equals(auto))) {
+            mAutostarted = true;
+            start("quick".equals(auto));
+        }
     }
 
     @Override
     protected void onSaveInstanceState(Bundle out) {
         super.onSaveInstanceState(out);
         out.putBoolean("running", mRunning);
+        out.putBoolean("autostarted", mAutostarted);
         if (mRunning) {
             out.putString("demos", mDemos.toString());
             out.putString("runs", mRuns.toString());
@@ -480,7 +493,11 @@ public class BenchmarkActivity extends Activity {
         mFull.setEnabled(true);
         mQuick.setEnabled(true);
         mShare.setEnabled(true);
-        share();
+        // A line the emulator test waits for (tools/vm/kke_vm.py).
+        Log.i(TAG, "benchmark done: " + ok + " ok, " + skipped + " skipped, " + mRuns.length() + " runs" + names.toString().replace('\n', ' '));
+        if (!mAutostarted) {
+            share();
+        }
     }
 
     private static String mimeType(File f) {

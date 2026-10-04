@@ -60,17 +60,19 @@ The executable is `platoon` ([CMakeLists.txt](CMakeLists.txt)). The root
 | Recall group 1 to 9 (1 = all, 2 = Alpha, 3 = Bravo) | 1 to 9 | groups 1 to 4: hold RT, then d-pad up, right, down, left | none |
 | Store the selection as a group | Ctrl + 1 to 9 | hold LT and RT, then the d-pad | none |
 | Context order at the pointer | right click | RB (at the reticle) | tap the ground or an enemy with soldiers selected |
+| Take cover behind a crate or barrier | right click on the ground next to it | RB next to it | tap next to it |
 | Focus fire (on an enemy) / hold there (on the ground) | Ctrl + right click | hold LT + RB | the Focus fire button, then tap an enemy |
 | Queue after the current order | Shift + right click | none | none |
-| Order wheel | hold Tab or the middle button, or hold the left button half a second | hold LB, the right stick picks, B cancels | hold a finger, drag to pick |
+| Order wheel | hold Tab, or hold the right or left button still for a moment | hold LB, the right stick picks, B cancels | hold a finger, drag to pick |
 | Hold position | H | X | the Hold button |
 | Take cover | C | Y | the Cover button |
 | Regroup | R | D-pad down | the Regroup button |
 | Next formation | G | Right stick click | the formation button |
 | Attack an enemy | right click it | RB on it | the Attack button, then tap the enemy |
-| Pan the camera | WASD | left stick | no touch binding yet |
-| Turn the camera | Q / E | right stick left / right | no touch binding yet |
+| Move the view | WASD / arrows, drag with the middle button, the window's edge (Settings > Camera) | left stick | no touch binding yet |
+| Turn and tilt the view | drag with the right button; Q / E turn | right stick left / right | the right touch stick |
 | Zoom | mouse wheel | right stick up / down | no touch binding yet |
+| Centre on the selected | F, or double-click a soldier | left stick click | none |
 | Pause menu (settings, controls, quit) | Esc | Start or Select | none |
 | Settings panel (formation, the HUD's orders) | F3, or the pause menu | the pause menu | none |
 | Developer panels | F1 | none (developer tools) | none |
@@ -180,13 +182,17 @@ pieces on your side (crates and barriers at z = 0 to 9.5) and four barriers
 on the enemy side (z = -12 to -14). Each piece:
 
 - is a POLYGON Prototype model with a static collider, or a brown block;
-- becomes an AI obstacle circle (radius = its larger half size + 0.1 m);
-- on your side, gets one cover spot (two for wide barriers) on the side
-  away from the enemy, 0.75 m behind it, facing -Z.
+- becomes a row of AI obstacle circles along its length, each as wide as
+  the piece is deep (one big circle round a 3 m barrier would cover the
+  spots behind it and push soldiers off them);
+- is a `CoverObject` (position, half size, yaw).
 
-Enemy-side barriers get no cover spots: `addCover` works them out but only
-stores friendly-side ones. The enemies' protection comes from the barriers
-blocking line of sight. The back wall and side walls are plain blocks; the
+Cover spots are worked out when an order needs them (`coverSpots`): for
+each piece, the face turned most away from the middle of the living
+enemies, 0.75 m out, one spot for a crate and one per 1.4 m of a barrier,
+facing the piece. So the enemy's own barriers become cover too once you
+reach them, and spots move round if the enemy does. The enemies'
+protection comes from the barriers blocking line of sight. The back wall and side walls are plain blocks; the
 side walls also get a row of 0.8 m obstacle circles every 1.5 m so the AI
 steers clear of them.
 
@@ -200,18 +206,20 @@ selected soldier. `m_board.issue` then hands each soldier its slot; the
 board uses the Hungarian method (`kke::assignSlots`) so the total walk is
 the least and paths rarely cross.
 
-`takeCover()` is this game's own order: for each selected soldier it picks
-the nearest free cover spot (near the pointer when given from the wheel,
-plus 0.3 x the soldier's own distance to it), claims it, and issues a Stay
-at that spot. The board listener frees a soldier's spot when any new order
-arrives, except the Stay that put it there:
+`takeCover()` is this game's own order. It takes the free spots (nobody
+else holds one within 0.9 m), then matches soldiers to spots shortest run
+first: the closest soldier-and-spot pair is settled, then the next, so
+nobody crosses the squad. Given a point (a right click next to a crate,
+or the wheel's Take cover), spots of the piece under the pointer win.
+Each soldier gets a Stay at its spot, and the bridge makes a Stay more
+than `stayRunBeyond` (1.5 m) away a run. The board listener takes a
+soldier out of cover when any new order arrives, except the Stay that put
+it there:
 
 ```cpp
-if (Soldier* s = soldier(unit); s && s->coverSpot >= 0 && !(o.kind == kke::OrderKind::Stay && o.hasPoint &&
-                                                            glm::length(o.point - m_cover[size_t(s->coverSpot)].pos) < 0.1f)) {
-    m_cover[size_t(s->coverSpot)].taken = 0;
-    s->coverSpot = -1;
-}
+if (Soldier* s = soldier(unit);
+    s && s->covering && !(o.kind == kke::OrderKind::Stay && o.hasPoint && glm::length(o.point - s->coverPos) < 0.1f))
+    s->covering = false;
 ```
 
 Follow from the wheel: everyone else selected follows the soldier under the
@@ -262,11 +270,18 @@ in cover, `Pistol_Idle_Loop` for 6 s after a shot or while the AI has a
 
 ### The camera
 
-A top-down orbit around `m_focus`: 48 degrees down, 19 m away (10 to 50 m).
-`move` pans it relative to its yaw, faster when zoomed out; the pan is
-kept inside the field (x -20..20, z -28..30). The right stick turns (90
-degrees a second) and zooms; Q/E turn; the mouse wheel zooms in
-`onEvent`. Next/previous soldier moves the focus to that soldier.
+An XCOM-style orbit around `m_focus`: 50 degrees down, 19 m away (8 to
+50 m). Every control moves a goal (`m_focusGoal`, `m_yawGoal`,
+`m_pitchGoal`, `m_distanceGoal`) and the view glides there, so nothing
+jumps. `move` pans relative to the yaw, faster when zoomed out, kept
+inside the field (x -20..20, z -28..30). The mouse works like the
+procedural demo's camera: right-drag turns and tilts (22 to 82 degrees),
+middle-drag moves the ground with the pointer, the wheel zooms. A right
+click without dragging is still the order, and a held one opens the wheel:
+`CommandInput::rightButtonGestures` tells the three apart (12 points of
+movement make it a drag). The right stick turns (110 degrees a second) and
+zooms; Q/E turn; F or L3 centres on the selection, and so does a double
+click on a soldier.
 
 ### The HUD
 
@@ -294,7 +309,7 @@ end)
 
 `KKE_PLATOON_DEMO=1` runs `runDemo` with the camera following the squad:
 everyone moves to (0, 0, 13) in a wedge and the log reports the closest
-two soldiers' distance; everyone takes cover and 9 s later the log counts
+two soldiers' distance; everyone takes cover and, once all are in or after 9 s, the log counts
 who is behind cover; Alpha 1 alone attacks the nearest enemy; after 6 s
 everyone focuses fire on one enemy until it is down (40 s time-out); then
 everyone focuses on the nearest remaining enemy, one at a time, until the

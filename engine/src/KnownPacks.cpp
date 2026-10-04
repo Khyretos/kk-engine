@@ -43,16 +43,22 @@ const std::vector<KnownPack> kPacks = {
     { "POLYGON_Fantasy_Characters", "Characters", "assets/synty", { "SK_Character_Female_Druid.fbx", "SK_Character_Female_Queen.fbx" },
       { "goblin_horde", "jiggle_demo" }, "knights, kings, peasants and wizards" },
     { "POLYGON_Dogs", "Characters", "assets/synty", { "Unity_SK_Animals_Dog_01.fbx" }, { "farm_demo" }, "the farm dog and the fox" },
-    { "SIDEKICK_Goblin_Fighters", "Characters", "assets/synty", { "GoblinFighter_01.sk" }, { "goblin_horde" },
-      "the goblins (without it they are invisible)" },
+    { "POLYGON_Goblin_War_Camp", "Characters", "assets/synty", { "SM_Chr_Attach_Goggles_01.fbx", "SM_Wep_Bow_01.fbx" },
+      { "goblin_horde" }, "goblins, their bows, staffs, clubs and hats (without it, mannequins stand in)" },
+    { "POLYGON_Dungeon_Pack", "Characters", "assets/synty", { "Character_Goblin_WarChief.fbx" }, { "goblin_horde" },
+      "dungeon heroes, goblin chiefs and shamans, big axes and hammers" },
+    { "POLYGON_Fantasy_Rivals", "Characters", "assets/synty", { "SK_BR_Character_Troll_01.fbx" }, { "goblin_horde" },
+      "the giants: troll, big ork, barbarian, pig butcher" },
+    { "SIDEKICK_Goblin_Fighters", "Characters", "assets/synty", { "GoblinFighter_01.sk" }, {},
+      "modular Sidekick goblins (kke/Sidekick.h reads them)" },
     { "Farm Animals Animated  by Quaternius", "Characters", "assets/synty", { "Llama.fbx" },
       { "farm_demo", "pet_companion", "synty_demo" }, "sheep, cows, pigs, horses and the pug (CC0)" },
-    { "ANIMATION_Goblin_Locomotion", "Animations", "assets/synty", { "A_MOD_GBL_BodyLook_D_Additive_Neut.fbx" }, { "goblin_horde" },
-      "the goblins' walk, run and attack clips" },
+    { "ANIMATION_Goblin_Locomotion", "Animations", "assets/synty", { "A_MOD_GBL_BodyLook_D_Additive_Neut.fbx" }, {},
+      "goblin walk, run and attack clips for the Sidekick goblins" },
     { "Universal Animation Library 2", "Animations", "assets/synty", { "UAL2.fbx" }, { "duel", "goblin_horde", "tennis", "kke_demo" },
       "extra mannequin clips: sword swings, vaults, climbs (CC0)" },
-    { "Universal Animation Library", "Animations", "assets/synty", { "UAL1.fbx" }, {},
-      "the full mannequin library (CC0); the games already ship its Standard set" },
+    { "Universal Animation Library", "Animations", "assets/synty", { "UAL1.fbx" }, { "duel" },
+      "the full mannequin library (CC0); the games already ship its Standard set (the duel adds its kick, dodges and body hits)" },
     { "ANIMATION_Base_Locomotion", "Animations", "assets/synty", { "A_BodyLook_Additive_Neut.fbx" }, {}, "Synty's walk, run and jump clips" },
     { "POLYGON_Particle_FX", "Effects", "assets/synty", { "FX_CrystalShard_01.fbx" }, {}, "Synty's particle meshes and textures" },
     { "SIDEKICK_Starter", "Characters", "assets/synty", { "StarterPack.uproject" }, {}, "an Unreal project: KKE can't read .uasset files" },
@@ -110,6 +116,10 @@ std::string packKey(const std::string& nameOrFolder) {
     std::string key;
     for (unsigned char c : base)
         if (std::isalnum(c)) key += static_cast<char>(std::tolower(c));
+    // "Pack" on the end is spelling, not a name: Synty sells "POLYGON -
+    // Dungeon Pack" and it unzips as POLYGON_Dungeon (soucouyant), while
+    // POLYGON_Pirate_Pack keeps it.
+    if (key.size() > 8 && key.ends_with("pack")) key.resize(key.size() - 4);
     return key.empty() ? lower(nameOrFolder) : key;
 }
 

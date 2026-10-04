@@ -319,6 +319,15 @@ TEST(AnimRig, CanonicalNamesPairUalWithSynty) {
     EXPECT_EQ(kke::canonicalBoneName("finger_01_l"), kke::canonicalBoneName("middle_01_l"));
     EXPECT_EQ(kke::canonicalBoneName("mixamorig:Hips"), "pelvis");
     EXPECT_EQ(kke::canonicalBoneName("ball_leaf_l"), kke::canonicalBoneName("ball_l"));
+    // Synty's older rig (Goblin War Camp): Shoulder is the upper arm, Elbow
+    // the forearm, UpperLeg / LowerLeg / Ankle the leg, one Neck.
+    EXPECT_EQ(kke::canonicalBoneName("Shoulder_L"), kke::canonicalBoneName("upperarm_l"));
+    EXPECT_EQ(kke::canonicalBoneName("Elbow_R"), kke::canonicalBoneName("lowerarm_r"));
+    EXPECT_EQ(kke::canonicalBoneName("UpperLeg_L"), kke::canonicalBoneName("thigh_l"));
+    EXPECT_EQ(kke::canonicalBoneName("LowerLeg_R"), kke::canonicalBoneName("calf_r"));
+    EXPECT_EQ(kke::canonicalBoneName("Ankle_L"), kke::canonicalBoneName("foot_l"));
+    EXPECT_EQ(kke::canonicalBoneName("Neck"), kke::canonicalBoneName("neck_01"));
+    EXPECT_EQ(kke::canonicalBoneName("Clavicle_L"), kke::canonicalBoneName("clavicle_l"));
 }
 
 // Target bones point along different axes than the source's, and the

@@ -1,14 +1,22 @@
 # The waves. goblins: how many in the wave; atOnce: alive at the same time
-# (never more than KKE_HORDE_MAX); speed and health: multipliers on the
-# goblin species (goblin.yml) and CombatStats::grunt().
+# (never more than KKE_HORDE_MAX); speed and health: multipliers on every
+# goblin type (foes.yml). mix: how common each type is in this wave
+# (missing types use their `share` from foes.yml; 0 = none).
+# Every `bossEvery`-th wave a boss comes with it (foes.yml `bosses`, in
+# turn), stronger each time round. Several players: each extra player
+# adds `perPlayer` of the goblins and of the boss's health.
 # After the last one the list repeats its last wave, bigger each time.
 # JSON works the same (waves.json).
-attackers: 4        # goblins that go at the king at once; the rest wait their turn
-breather: 4         # seconds between waves
+attackers: 4        # goblins that go at one player at once; the rest wait their turn
+breather: 5         # seconds between waves
+bossEvery: 5
+perPlayer: 0.6
 waves:
-  - { goblins: 6,   atOnce: 6,  speed: 0.9 }
-  - { goblins: 12,  atOnce: 10 }
-  - { goblins: 24,  atOnce: 18, speed: 1.05 }
-  - { goblins: 40,  atOnce: 30, speed: 1.1, health: 1.2 }
-  - { goblins: 80,  atOnce: 50, speed: 1.15, health: 1.3 }
-  - { goblins: 150, atOnce: 60, speed: 1.2, health: 1.5 }
+  - { goblins: 8,   atOnce: 8,  speed: 0.9, mix: { grunt: 1, archer: 0, shaman: 0, warshaman: 0, brute: 0 } }
+  - { goblins: 14,  atOnce: 12,             mix: { grunt: 1, archer: 0.4, shaman: 0, warshaman: 0, brute: 0 } }
+  - { goblins: 22,  atOnce: 18, speed: 1.05, mix: { grunt: 1, archer: 0.4, shaman: 0.3, warshaman: 0, brute: 0.1 } }
+  - { goblins: 32,  atOnce: 26, speed: 1.1 }
+  - { goblins: 24,  atOnce: 20, speed: 1.1 }             # with the first boss
+  - { goblins: 60,  atOnce: 44, speed: 1.15, health: 1.2 }
+  - { goblins: 90,  atOnce: 56, speed: 1.15, health: 1.3 }
+  - { goblins: 150, atOnce: 60, speed: 1.2,  health: 1.5 }

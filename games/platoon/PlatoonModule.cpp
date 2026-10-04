@@ -5,6 +5,7 @@
 #include "kke/Picking.h"
 #include "kke/SphereImpostors.h"
 #include "kke/modules/DemoPanelModule.h"
+#include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/RigidBodyModule.h"
@@ -88,6 +89,14 @@ void PlatoonModule::init(kke::Application& app) {
     kke::InputMap& in = m_input->map(0);
     kke::InputModule::defineCharacterActions(in); // "move" pans, "look.rate" turns
     command_kit::CommandInput::defineActions(in);
+    // The mouse like the procedural demo's camera: the right button turns
+    // the view when dragged (a click is still the order, held still it is
+    // the order wheel), the middle button drags the view along.
+    m_cmd.rightButtonGestures = true;
+    m_cmd.longPressSeconds = 0.4f;
+    const std::vector<size_t> wheelBindings = in.bindingsFor("cmd.wheel");
+    for (auto it = wheelBindings.rbegin(); it != wheelBindings.rend(); ++it)
+        if (in.bindings()[*it].source == kke::InputModule::mouse(SDL_BUTTON_MIDDLE)) in.removeBinding(*it);
     // The character defaults the platoon doesn't use would fire on keys it
     // does (Space jump vs rts.all, E interact vs rts.right, Q and the d-pad
     // down audio.ping vs rts.left and rts.regroup, RT fire vs rts.groups:
@@ -110,6 +119,7 @@ void PlatoonModule::init(kke::Application& app) {
     quick("rts.formation", "Next formation", SDL_SCANCODE_G, SDL_GAMEPAD_BUTTON_RIGHT_STICK);
     quick("rts.left", "Turn the view left", SDL_SCANCODE_Q, SDL_GAMEPAD_BUTTON_INVALID);
     quick("rts.right", "Turn the view right", SDL_SCANCODE_E, SDL_GAMEPAD_BUTTON_INVALID);
+    quick("rts.center", "Centre the view on the selected", SDL_SCANCODE_F, SDL_GAMEPAD_BUTTON_LEFT_STICK);
     quick("panels", "Developer panels", SDL_SCANCODE_F1, SDL_GAMEPAD_BUTTON_INVALID);
     // Groups: 1-9 recall, with cmd.force held (Ctrl / LT) they store. On a
     // controller hold RT (rts.groups) and the d-pad is groups 1-4 (up,
@@ -134,6 +144,8 @@ void PlatoonModule::init(kke::Application& app) {
     m_input->setTouchLayout(touch);
     m_input->commitDefaults();
     buildPanel();
+    if (auto* shell = app.getModule<kke::GameShellModule>())
+        shell->settings("Camera").toggle("Move the view at the window's edge", &m_edgePan);
 
     m_scenery = std::make_unique<command_kit::Scenery>(app, *m_models, *m_rigid);
     buildField();
@@ -144,9 +156,10 @@ void PlatoonModule::init(kke::Application& app) {
     kke::ai::Species s;
     s.id = "soldier";
     s.label = "Soldier";
-    s.walkSpeed = 1.6f;
-    s.runSpeed = 4.2f;
-    s.acceleration = 10.0f;
+    // Soldiers hurry: a squad that strolls to its orders feels slow to command.
+    s.walkSpeed = 2.0f;
+    s.runSpeed = 5.0f;
+    s.acceleration = 14.0f;
     s.turnRate = 540.0f;
     s.radius = 0.35f;
     s.senses.sightRange = 30.0f;
@@ -190,16 +203,15 @@ void PlatoonModule::init(kke::Application& app) {
     });
     m_board.listen({ [this](uint32_t unit, const kke::UnitOrder& o) {
                         kke::log::get("Platoon")->info("{}: {}", soldier(unit) ? soldier(unit)->name : "?", kke::orderName(o.kind));
-                        // A new order frees the cover spot unless it is the order to hold one.
-                        if (Soldier* s = soldier(unit); s && s->coverSpot >= 0 && !(o.kind == kke::OrderKind::Stay && o.hasPoint &&
-                                                                                      glm::length(o.point - m_cover[size_t(s->coverSpot)].pos) < 0.1f)) {
-                            m_cover[size_t(s->coverSpot)].taken = 0;
-                            s->coverSpot = -1;
-                        }
+                        // A new order leaves cover unless it is the order to hold it.
+                        if (Soldier* s = soldier(unit);
+                            s && s->covering && !(o.kind == kke::OrderKind::Stay && o.hasPoint && glm::length(o.point - s->coverPos) < 0.1f))
+                            s->covering = false;
                     },
                      {} });
     m_bridge = std::make_unique<kke::AiOrderBridge>(m_board, m_ai);
-    m_bridge->runBeyond = 6.0f;
+    m_bridge->runBeyond = 4.0f;
+    m_bridge->stayRunBeyond = 1.5f; // to cover: always at a run
     if (auto* scripts = app.getModule<kke::ScriptModule>()) m_script = std::make_unique<kke::OrderScript>(scripts->vm(), m_board, *this);
 
     m_ring = boxMesh(app, { 1.0f, 0.85f, 0.25f });
@@ -221,8 +233,8 @@ void PlatoonModule::init(kke::Application& app) {
     if (const char* q = std::getenv("KKE_PLATOON_QUIT")) m_quitAfter = float(std::atof(q));
     if (m_demo && m_quitAfter < 0.0f) m_quitAfter = 150.0f;
     m_scenery->logUsed(name());
-    kke::log::get(name())->info("the field is ready: {} soldiers, {} enemies, {} cover spots{}", living(false).size(), living(true).size(),
-                                m_cover.size(), m_kit->loaded() ? "" : " (no mannequin: soldiers are blocks)");
+    kke::log::get(name())->info("the field is ready: {} soldiers, {} enemies, {} things to take cover behind{}", living(false).size(),
+                                living(true).size(), m_coverObjects.size(), m_kit->loaded() ? "" : " (no mannequin: soldiers are blocks)");
 }
 
 void PlatoonModule::shutdown() {
@@ -247,17 +259,17 @@ void PlatoonModule::buildField() {
     s.ground(45.0f, { 0.36f, 0.42f, 0.3f });
     // No-man's-land: crates and barriers to hide behind on the way over,
     // the enemy's walls at the far end.
-    addCover("SM_Prop_Crate_01", { -7.0f, 0, 9.0f }, 10.0f, { 0.75f, 0.75f, 0.75f }, true);
-    addCover("SM_Prop_Crate_02", { -1.5f, 0, 8.0f }, -15.0f, { 0.75f, 0.75f, 0.75f }, true);
-    addCover("SM_Prop_Barrier_01", { 4.0f, 0, 9.5f }, 0.0f, { 1.6f, 0.6f, 0.35f }, true);
-    addCover("SM_Prop_Crate_01", { 9.5f, 0, 7.5f }, 30.0f, { 0.75f, 0.75f, 0.75f }, true);
-    addCover("SM_Prop_Barrier_01", { -4.0f, 0, 1.0f }, 0.0f, { 1.6f, 0.6f, 0.35f }, true);
-    addCover("SM_Prop_Crate_03", { 2.0f, 0, 0.0f }, 45.0f, { 0.75f, 0.75f, 0.75f }, true);
-    addCover("SM_Prop_Barrier_01", { 7.5f, 0, 1.5f }, 0.0f, { 1.6f, 0.6f, 0.35f }, true);
-    addCover("SM_Prop_Barrier_01", { -8.0f, 0, -12.0f }, 0.0f, { 1.6f, 0.6f, 0.35f }, false);
-    addCover("SM_Prop_Barrier_01", { -2.5f, 0, -14.0f }, 0.0f, { 1.6f, 0.6f, 0.35f }, false);
-    addCover("SM_Prop_Barrier_01", { 3.0f, 0, -12.0f }, 0.0f, { 1.6f, 0.6f, 0.35f }, false);
-    addCover("SM_Prop_Barrier_01", { 8.5f, 0, -13.5f }, 0.0f, { 1.6f, 0.6f, 0.35f }, false);
+    addCover("SM_Prop_Crate_01", { -7.0f, 0, 9.0f }, 10.0f, { 0.75f, 0.75f, 0.75f });
+    addCover("SM_Prop_Crate_02", { -1.5f, 0, 8.0f }, -15.0f, { 0.75f, 0.75f, 0.75f });
+    addCover("SM_Prop_Barrier_01", { 4.0f, 0, 9.5f }, 0.0f, { 1.6f, 0.6f, 0.35f });
+    addCover("SM_Prop_Crate_01", { 9.5f, 0, 7.5f }, 30.0f, { 0.75f, 0.75f, 0.75f });
+    addCover("SM_Prop_Barrier_01", { -4.0f, 0, 1.0f }, 0.0f, { 1.6f, 0.6f, 0.35f });
+    addCover("SM_Prop_Crate_03", { 2.0f, 0, 0.0f }, 45.0f, { 0.75f, 0.75f, 0.75f });
+    addCover("SM_Prop_Barrier_01", { 7.5f, 0, 1.5f }, 0.0f, { 1.6f, 0.6f, 0.35f });
+    addCover("SM_Prop_Barrier_01", { -8.0f, 0, -12.0f }, 0.0f, { 1.6f, 0.6f, 0.35f });
+    addCover("SM_Prop_Barrier_01", { -2.5f, 0, -14.0f }, 0.0f, { 1.6f, 0.6f, 0.35f });
+    addCover("SM_Prop_Barrier_01", { 3.0f, 0, -12.0f }, 0.0f, { 1.6f, 0.6f, 0.35f });
+    addCover("SM_Prop_Barrier_01", { 8.5f, 0, -13.5f }, 0.0f, { 1.6f, 0.6f, 0.35f });
     // The enemy's back wall and the range's side walls (no cover spots).
     const glm::vec3 concrete(0.55f, 0.56f, 0.6f);
     s.block({ 0, 1.5f, -24 }, { 10, 1.5f, 0.25f }, concrete);
@@ -267,22 +279,87 @@ void PlatoonModule::buildField() {
     }
 }
 
-void PlatoonModule::addCover(const char* model, const glm::vec3& pos, float yaw, const glm::vec3& half, bool friendlySide) {
+void PlatoonModule::addCover(const char* model, const glm::vec3& pos, float yaw, const glm::vec3& half) {
     if (!m_scenery->place(model, pos, yaw, 1.0f, true, { "POLYGON_Prototype" }))
         m_scenery->block(pos + glm::vec3(0.0f, half.y, 0.0f), half, { 0.5f, 0.42f, 0.3f });
-    // Walked around, and hidden behind: spots on the side away from the
-    // danger (the enemy is at -Z for us, we are at +Z for them).
-    const float r = std::max(half.x, half.z);
-    m_ai.addObstacle({ pos, r + 0.1f });
-    const float side = friendlySide ? 1.0f : -1.0f;
-    const int spots = half.x > 1.0f ? 2 : 1;
-    for (int i = 0; i < spots; ++i) {
-        CoverSpot c;
-        const float x = spots == 1 ? 0.0f : (i == 0 ? -0.8f : 0.8f);
-        c.pos = pos + glm::vec3(x, 0.0f, side * (half.z + 0.75f));
-        c.facing = glm::vec3(0.0f, 0.0f, -side);
-        if (friendlySide) m_cover.push_back(c);
+    m_coverObjects.push_back({ pos, half, yaw });
+    // Walked around: circles along its length, as wide as it is deep (one
+    // big circle round a long barrier would cover the spots behind it).
+    const glm::vec3 along = glm::vec3(glm::rotate(glm::mat4(1.0f), glm::radians(yaw), glm::vec3(0, 1, 0)) * glm::vec4(1, 0, 0, 0));
+    const float r = std::min(half.x, half.z) + 0.05f;
+    const float reach = std::max(0.0f, half.x - r);
+    const int n = std::max(1, int(std::ceil(reach * 2.0f / r)) + 1);
+    for (int i = 0; i < n; ++i) {
+        const float t = n == 1 ? 0.0f : -reach + 2.0f * reach * float(i) / float(n - 1);
+        m_ai.addObstacle({ pos + along * t, r });
     }
+}
+
+glm::vec3 PlatoonModule::threatFor(bool enemy) const {
+    glm::vec3 sum(0.0f);
+    int n = 0;
+    for (const Soldier& o : m_soldiers)
+        if (o.enemy != enemy && !o.dead) {
+            sum += o.pos;
+            ++n;
+        }
+    return n ? sum / float(n) : glm::vec3(0.0f, 0.0f, enemy ? 30.0f : -24.0f);
+}
+
+std::vector<PlatoonModule::CoverSpot> PlatoonModule::coverSpots(const glm::vec3& threat) const {
+    // Behind each obstacle, on its face turned away from the danger: one
+    // spot for a crate, one per 1.4 m along a barrier.
+    std::vector<CoverSpot> out;
+    for (size_t i = 0; i < m_coverObjects.size(); ++i) {
+        const CoverObject& o = m_coverObjects[i];
+        const glm::mat4 rot = glm::rotate(glm::mat4(1.0f), glm::radians(o.yaw), glm::vec3(0, 1, 0));
+        const glm::vec3 ax = glm::vec3(rot * glm::vec4(1, 0, 0, 0)), az = glm::vec3(rot * glm::vec4(0, 0, 1, 0));
+        const glm::vec3 toThreat = flat(threat - o.pos);
+        if (glm::length(toThreat) < 1e-3f) continue;
+        // The four faces: the one whose outside looks most away from the threat.
+        const glm::vec3 normals[4] = { az, -az, ax, -ax };
+        const float depth[4] = { o.half.z, o.half.z, o.half.x, o.half.x };
+        const float width[4] = { o.half.x, o.half.x, o.half.z, o.half.z };
+        int best = 0;
+        for (int f = 1; f < 4; ++f)
+            if (glm::dot(normals[f], toThreat) < glm::dot(normals[best], toThreat)) best = f;
+        const glm::vec3 n = normals[best];
+        const glm::vec3 across(-n.z, 0.0f, n.x);
+        const int count = std::max(1, int(width[best] * 2.0f / 1.4f));
+        for (int k = 0; k < count; ++k) {
+            const float t = count == 1 ? 0.0f : (float(k) / float(count - 1) - 0.5f) * (width[best] * 2.0f - 1.0f);
+            CoverSpot c;
+            c.pos = o.pos + n * (depth[best] + 0.75f) + across * t;
+            c.facing = -n;
+            c.object = int(i);
+            out.push_back(c);
+        }
+    }
+    return out;
+}
+
+int PlatoonModule::coverObjectNear(const glm::vec3& p, float within) const {
+    int best = -1;
+    float bestD = within;
+    for (size_t i = 0; i < m_coverObjects.size(); ++i) {
+        const CoverObject& o = m_coverObjects[i];
+        // Distance from the obstacle's footprint (a box turned by its yaw).
+        const glm::mat4 toLocal = glm::rotate(glm::mat4(1.0f), glm::radians(-o.yaw), glm::vec3(0, 1, 0));
+        const glm::vec3 l = glm::vec3(toLocal * glm::vec4(flat(p - o.pos), 0.0f));
+        const float dx = std::max(0.0f, std::abs(l.x) - o.half.x), dz = std::max(0.0f, std::abs(l.z) - o.half.z);
+        const float d = std::sqrt(dx * dx + dz * dz);
+        if (d < bestD) {
+            bestD = d;
+            best = int(i);
+        }
+    }
+    return best;
+}
+
+bool PlatoonModule::inCover(const Soldier& s) const {
+    const kke::ai::Agent* a = m_ai.agent(s.id);
+    const float speed = a ? glm::length(flat(a->velocity)) : 0.0f;
+    return s.covering && speed < 0.6f && glm::length(flat(s.pos - s.coverPos)) < 0.8f; // settling in counts
 }
 
 void PlatoonModule::addSoldier(uint32_t id, const std::string& name, const glm::vec3& pos, bool enemy) {
@@ -367,44 +444,66 @@ void PlatoonModule::give(kke::OrderKind kind, uint32_t target, const glm::vec3* 
 }
 
 void PlatoonModule::takeCover(const glm::vec3* near) {
-    // Each selected soldier to the nearest free cover spot (near the
-    // pointer when given), one soldier a spot: this layer's call, the AI
-    // just holds where it's put.
+    // Spots behind the obstacles, on the side away from the enemy; near
+    // the pointer when given (the obstacle clicked first). Then everyone
+    // at once, shortest run first: the closest soldier-and-spot pair is
+    // settled, then the next, so nobody crosses the squad to a far spot
+    // while a nearer one is left for someone else to run past.
     std::vector<uint32_t> units = m_selection.ids();
     if (units.empty()) {
         m_hud->toast("Select soldiers first");
         return;
     }
-    for (CoverSpot& c : m_cover)
-        if (std::find(units.begin(), units.end(), c.taken) != units.end()) c.taken = 0;
+    for (uint32_t u : units)
+        if (Soldier* s = soldier(u)) s->covering = false;
+    std::vector<CoverSpot> spots = coverSpots(threatFor(false));
+    const int clicked = near ? coverObjectNear(*near, 2.0f) : -1;
+    // Spots someone else already holds are taken.
+    std::erase_if(spots, [&](const CoverSpot& c) {
+        for (const Soldier& o : m_soldiers)
+            if (!o.dead && !o.enemy && o.covering && glm::length(flat(o.coverPos - c.pos)) < 0.9f) return true;
+        return false;
+    });
+    auto cost = [&](const Soldier& s, const CoverSpot& c) {
+        float d = glm::length(flat(c.pos - s.pos));
+        if (near) d = d * 0.35f + glm::length(flat(c.pos - *near)) + (c.object == clicked ? 0.0f : 6.0f);
+        return d;
+    };
+    std::vector<uint32_t> left;
+    for (uint32_t u : units)
+        if (soldier(u) && !soldier(u)->dead) left.push_back(u);
     int placed = 0;
-    for (uint32_t u : units) {
-        Soldier* s = soldier(u);
-        if (!s) continue;
-        const glm::vec3 from = near ? *near : s->pos;
-        int best = -1;
-        float bestD = 1e9f;
-        for (size_t i = 0; i < m_cover.size(); ++i) {
-            if (m_cover[i].taken) continue;
-            const float d = glm::length(flat(m_cover[i].pos - from)) + 0.3f * glm::length(flat(m_cover[i].pos - s->pos));
-            if (d < bestD) {
-                bestD = d;
-                best = int(i);
-            }
-        }
-        if (best < 0) break;
+    while (!left.empty() && !spots.empty()) {
+        size_t bu = 0, bs = 0;
+        float best = 1e9f;
+        for (size_t i = 0; i < left.size(); ++i)
+            for (size_t j = 0; j < spots.size(); ++j)
+                if (const float c = cost(*soldier(left[i]), spots[j]); c < best) {
+                    best = c;
+                    bu = i;
+                    bs = j;
+                }
+        Soldier& s = *soldier(left[bu]);
+        const CoverSpot spot = spots[bs];
+        left.erase(left.begin() + long(bu));
+        spots.erase(spots.begin() + long(bs));
         kke::Order o;
         o.kind = kke::OrderKind::Stay;
-        o.units = { u };
-        o.point = m_cover[size_t(best)].pos;
+        o.units = { s.id };
+        o.point = spot.pos;
         o.hasPoint = true;
         if (m_board.issue(o)) {
-            m_cover[size_t(best)].taken = u;
-            s->coverSpot = best;
+            s.covering = true;
+            s.coverPos = spot.pos;
+            s.coverFacing = spot.facing;
             ++placed;
         }
     }
-    m_hud->toast(placed ? "Take cover!" : "No cover left", 1.4f);
+    m_hud->toast(placed == 0 ? "No cover left" : left.empty() ? "Take cover!" : "Take cover! (not enough for everyone)", 1.4f);
+    if (placed && near) {
+        m_marker3 = *near;
+        m_markerLeft = 1.2f;
+    }
 }
 
 // The controller's select: a tap selects what's under the ring (a click);
@@ -485,7 +584,7 @@ void PlatoonModule::cycleSelection(int step) {
         if (it != mine.end()) at = size_t((int(it - mine.begin()) + step + int(mine.size())) % int(mine.size()));
     }
     m_selection.select(mine[at]);
-    m_focus = soldier(mine[at])->pos;
+    m_focusGoal = soldier(mine[at])->pos;
 }
 
 std::vector<kke::ScreenUnit> PlatoonModule::screenUnits() const {
@@ -539,6 +638,10 @@ void PlatoonModule::click(const command_kit::CommandInput::Frame& f) {
     if (t.relation == kke::Relation::Own) {
         if (f.queue || f.touch) m_selection.toggle(t.thing); // Shift+click, or tapping soldiers one by one
         else m_selection.select(t.thing);
+        // Twice on the same soldier: the view goes to them.
+        if (m_lastClicked == t.thing && m_clock - m_lastClick < 0.4f) m_focusGoal = soldier(t.thing)->pos;
+        m_lastClicked = t.thing;
+        m_lastClick = m_clock;
         return;
     }
     // A finger has no right button: tapping elsewhere with soldiers selected orders them.
@@ -557,6 +660,11 @@ void PlatoonModule::giveContext(const glm::vec2& pointer, bool force, bool queue
     kke::PointerModifiers mods;
     mods.force = force;
     mods.queue = queue;
+    // On the ground next to a crate or a barrier: take cover behind it.
+    if (t.relation == kke::Relation::Ground && !force && !m_selection.empty() && coverObjectNear(t.point, 1.6f) >= 0) {
+        takeCover(&t.point);
+        return;
+    }
     const kke::Order o = kke::contextOrder(m_selection.ids(), t, can, mods);
     if (o.kind == kke::OrderKind::None) return;
     give(o.kind, o.target, o.hasPoint ? &o.point : nullptr, queue);
@@ -631,8 +739,7 @@ void PlatoonModule::shoot(Soldier& from, Soldier& at) {
     const glm::vec3 muzzle = from.pos + glm::vec3(0.0f, kEye, 0.0f) + glm::normalize(flat(at.pos - from.pos) + glm::vec3(0.001f, 0, 0)) * 0.5f;
     glm::vec3 aim = at.pos + glm::vec3(0.0f, kEye - 0.2f, 0.0f);
     // Crouched behind cover, only the head shows over it.
-    const bool covered = at.coverSpot >= 0 && glm::length(flat(at.pos - m_cover[size_t(at.coverSpot)].pos)) < 0.8f &&
-                         glm::dot(flat(from.pos - at.pos), m_cover[size_t(at.coverSpot)].facing) > 0.0f;
+    const bool covered = inCover(at) && glm::dot(flat(from.pos - at.pos), at.coverFacing) > 0.0f;
     if (covered) aim.y = 1.05f;
     float chance = from.enemy ? 0.38f : 0.45f;
     if (covered) chance *= 0.35f;
@@ -657,8 +764,7 @@ void PlatoonModule::kill(Soldier& s) {
     s.dead = true;
     s.hp = 0.0f;
     s.body->act("Death01", false, 1.0f, 0.1f, true);
-    if (s.coverSpot >= 0) m_cover[size_t(s.coverSpot)].taken = 0;
-    s.coverSpot = -1;
+    s.covering = false;
     m_ai.remove(s.id);
     m_selection.remove(s.id);
     m_board.forget(s.id);
@@ -671,28 +777,77 @@ void PlatoonModule::kill(Soldier& s) {
 
 void PlatoonModule::onEvent(const SDL_Event& e) {
     m_cmd.onEvent(e);
-    if (e.type == SDL_EVENT_MOUSE_WHEEL) m_camDistance = std::clamp(m_camDistance * std::pow(0.9f, e.wheel.y), 10.0f, 50.0f);
+    if (e.type == SDL_EVENT_MOUSE_WHEEL && !m_app->uiCapturesMouse())
+        m_distanceGoal = std::clamp(m_distanceGoal * std::pow(0.88f, e.wheel.y), 8.0f, 50.0f);
 }
 
-void PlatoonModule::updateCamera(float dt) {
+void PlatoonModule::centerOnSelection() {
+    glm::vec3 sum(0.0f);
+    int n = 0;
+    for (uint32_t u : m_selection.ids())
+        if (const Soldier* s = soldier(u)) {
+            sum += s->pos;
+            ++n;
+        }
+    if (n) m_focusGoal = sum / float(n);
+}
+
+// An XCOM-style view over the field. Mouse: right-drag turns and tilts it
+// (as in the procedural demo), middle-drag moves it, the wheel zooms, the
+// window's edges move it (settings). Keys: WASD / arrows move, Q and E
+// turn. Controller: the left stick moves, the right stick turns and
+// zooms. Every control moves a goal and the view glides there.
+void PlatoonModule::updateCamera(const command_kit::CommandInput::Frame& f, float dt) {
     kke::InputMap& in = m_input->map(0);
+    float fwdPan = 0.0f, sidePan = 0.0f;
     const glm::vec2 pan = in.axis2("move");
+    fwdPan += pan.y;
+    sidePan += pan.x;
     if (!m_cmd.wheelOpen()) {
         const glm::vec2 turn = in.axis2("look.rate");
-        m_camYaw += turn.x * 90.0f * dt;
-        m_camDistance = std::clamp(m_camDistance * (1.0f + turn.y * 1.2f * dt), 10.0f, 50.0f);
+        m_yawGoal += turn.x * 110.0f * dt;
+        m_distanceGoal = std::clamp(m_distanceGoal * (1.0f + turn.y * 1.4f * dt), 8.0f, 50.0f);
     }
-    if (in.held("rts.left")) m_camYaw -= 90.0f * dt;
-    if (in.held("rts.right")) m_camYaw += 90.0f * dt;
+    if (in.held("rts.left")) m_yawGoal -= 110.0f * dt;
+    if (in.held("rts.right")) m_yawGoal += 110.0f * dt;
+    // The mouse: right-drag turns and tilts, middle-drag moves the ground under it.
+    m_yawGoal += f.orbit.x * 0.3f;
+    m_pitchGoal = std::clamp(m_pitchGoal + f.orbit.y * 0.25f, 22.0f, 82.0f);
+    if (m_edgePan && !m_app->uiCapturesMouse() && !m_cmd.padActive() && !f.dragging) {
+        int w = 1, h = 1;
+        SDL_GetWindowSize(m_app->window().handle(), &w, &h);
+        float mx = 0.0f, my = 0.0f;
+        const SDL_MouseButtonFlags buttons = SDL_GetMouseState(&mx, &my);
+        const float edge = 6.0f;
+        if (buttons == 0 && (SDL_GetWindowFlags(m_app->window().handle()) & SDL_WINDOW_MOUSE_FOCUS)) {
+            if (mx <= edge) sidePan -= 1.0f;
+            if (mx >= float(w) - edge) sidePan += 1.0f;
+            if (my <= edge) fwdPan += 1.0f;
+            if (my >= float(h) - edge) fwdPan -= 1.0f;
+        }
+    }
     const glm::vec3 fwd = kke::yawForward(m_camYaw);
     const glm::vec3 right(-fwd.z, 0.0f, fwd.x);
-    m_focus += (fwd * pan.y + right * pan.x) * (m_camDistance * 0.9f * dt);
-    m_focus.x = std::clamp(m_focus.x, -20.0f, 20.0f);
-    m_focus.z = std::clamp(m_focus.z, -28.0f, 30.0f);
+    m_focusGoal += (fwd * fwdPan + right * sidePan) * (m_camDistance * 0.9f * dt);
+    // Dragging with the middle button: the ground follows the pointer.
+    const float perPoint = m_camDistance * 0.0016f;
+    m_focusGoal += (-right * f.pan.x + fwd * f.pan.y) * perPoint;
+    if (in.pressed("rts.center")) centerOnSelection();
+    m_focusGoal.x = std::clamp(m_focusGoal.x, -20.0f, 20.0f);
+    m_focusGoal.z = std::clamp(m_focusGoal.z, -28.0f, 30.0f);
+
+    // Glide: quick enough to feel direct, smooth enough never to jump.
+    const float k = 1.0f - std::exp(-12.0f * dt);
+    m_camYaw += (m_yawGoal - m_camYaw) * k;
+    m_camPitch += (m_pitchGoal - m_camPitch) * k;
+    m_camDistance += (m_distanceGoal - m_camDistance) * k;
+    m_focus += (m_focusGoal - m_focus) * (1.0f - std::exp(-9.0f * dt));
+
+    const glm::vec3 view = kke::yawForward(m_camYaw);
     const float p = glm::radians(m_camPitch);
     kke::Camera& cam = m_app->camera();
     cam.target = m_focus;
-    cam.position = m_focus - fwd * (std::cos(p) * m_camDistance) + glm::vec3(0.0f, std::sin(p) * m_camDistance, 0.0f);
+    cam.position = m_focus - view * (std::cos(p) * m_camDistance) + glm::vec3(0.0f, std::sin(p) * m_camDistance, 0.0f);
     cam.up = glm::vec3(0.0f, 1.0f, 0.0f);
 }
 
@@ -765,7 +920,7 @@ void PlatoonModule::update(const kke::UpdateContext& ctx) {
         kke::log::get(name())->info("area clear: {} of 6 soldiers standing", living(false).size());
     }
 
-    updateCamera(dt);
+    updateCamera(f, dt);
     updateBodies(dt);
     if (m_script) m_script->fireEvents();
     updateHud(dt);
@@ -787,15 +942,15 @@ void PlatoonModule::updateBodies(float dt) {
         float face = a->yaw;
         const Soldier* target = s.sinceShot < 2.5f ? soldier(s.aimAt) : nullptr;
         if (target && !target->dead && speed < 0.5f) face = aiYaw(flat(target->pos - s.pos));
-        else if (s.coverSpot >= 0 && speed < 0.3f) face = aiYaw(m_cover[size_t(s.coverSpot)].facing);
+        else if (s.covering && speed < 0.3f) face = aiYaw(s.coverFacing);
         s.yaw += angleDelta(s.yaw, face) * (1.0f - std::exp(-10.0f * dt));
         // Stance: running, crouched in cover, gun up after a fight, at ease.
-        const bool inCover = s.coverSpot >= 0 && speed < 0.3f && glm::length(flat(s.pos - m_cover[size_t(s.coverSpot)].pos)) < 0.8f;
+        const bool hidden = inCover(s);
         const std::string& now = s.body->acting();
         const bool oneShot = now == "Pistol_Shoot" || now == "Hit_Chest";
         if (!oneShot || s.body->actionFinished()) {
             if (speed > 0.3f) s.body->act("");
-            else if (inCover && s.sinceShot > 0.6f) s.body->act("Crouch_Idle_Loop", true, 1.0f, 0.25f);
+            else if (hidden && s.sinceShot > 0.6f) s.body->act("Crouch_Idle_Loop", true, 1.0f, 0.25f);
             else if (s.sinceShot < 6.0f || a->focus) s.body->act("Pistol_Idle_Loop", true, 1.0f, 0.2f);
             else s.body->act("");
         }
@@ -844,12 +999,12 @@ void PlatoonModule::updateHud(float dt) {
     m_hud->setHint(fingers ? "{touch:tap} a soldier: select, drag: select an area · {touch:tap} the ground: order there · "
                              "{touch:hold} order wheel"
                    : m_cmd.padActive()
-                       ? "{move} pan · {look.rate} turn/zoom · {rts.select} select, hold: select an area · {cmd.context} order at the ring "
-                         "({cmd.force} focus fire) · hold {cmd.wheel} order wheel · {rts.all}{rts.next}{rts.regroup} all, next, regroup · "
-                         "hold {rts.groups} + d-pad: groups 1-4 ({cmd.force} too: store) · {panel.toggle} menu"
-                       : "{mouse:left} click or drag: select · {cmd.context} order ({cmd.force} focus fire / hold there, {cmd.queue} queue) · "
-                         "hold {cmd.wheel} order wheel · {move} pan, {rts.left}{rts.right} turn, {camera.zoom} zoom · {rts.group1}{rts.group2}{rts.group3} groups "
-                         "(Ctrl+1-9 store) · {touch:tap} select, tap again: order");
+                       ? "{move} move the view · {look.rate} turn/zoom · {rts.center} centre · {rts.select} select, hold: select an area · "
+                         "{cmd.context} order at the ring (by a crate: take cover; {cmd.force} focus fire) · hold {cmd.wheel} order wheel · "
+                         "{rts.all}{rts.next}{rts.regroup} all, next, regroup · hold {rts.groups} + d-pad: groups 1-4 ({cmd.force} too: store)"
+                       : "{mouse:left} click or drag: select · {mouse:right} order (by a crate: take cover; {cmd.force} focus fire, "
+                         "{cmd.queue} queue), hold: order wheel, drag: turn the view · drag {mouse:middle}, {move}: move the view · "
+                         "{rts.left}{rts.right} turn, wheel: zoom · {rts.center} centre · {rts.group1}{rts.group2}{rts.group3} groups (Ctrl+1-9 store)");
     m_hud->update(f, dt);
 }
 
@@ -909,7 +1064,7 @@ void PlatoonModule::runDemo(float dt) {
     glm::vec3 centre(0.0f);
     const std::vector<uint32_t> mine = living(false);
     for (uint32_t u : mine) centre += soldier(u)->pos;
-    if (!mine.empty()) m_focus += (centre / float(mine.size()) - m_focus) * (1.0f - std::exp(-1.5f * dt));
+    if (!mine.empty()) m_focusGoal += (centre / float(mine.size()) - m_focusGoal) * (1.0f - std::exp(-1.5f * dt));
 
     switch (m_demoStep) {
     case 0:
@@ -933,17 +1088,18 @@ void PlatoonModule::runDemo(float dt) {
         }
         break;
     case 2: break;
-    case 3:
-        if (m_demoTimer > 9.0f) {
-            int inCover = 0;
-            for (uint32_t u : living(false))
-                if (soldier(u)->coverSpot >= 0 && glm::length(flat(soldier(u)->pos - m_cover[size_t(soldier(u)->coverSpot)].pos)) < 0.8f) ++inCover;
+    case 3: {
+        int inCover = 0;
+        for (uint32_t u : living(false))
+            if (this->inCover(*soldier(u))) ++inCover;
+        if (inCover == int(living(false).size()) || m_demoTimer > 9.0f) {
             next(std::to_string(inCover) + " of " + std::to_string(living(false).size()) + " behind cover");
             // Individual order: Alpha 1 alone attacks the nearest enemy.
             m_selection.select(1);
             if (const uint32_t e = nearestEnemy(soldier(1) ? soldier(1)->pos : glm::vec3(0.0f))) give(kke::OrderKind::Attack, e);
         }
         break;
+    }
     case 4:
         if (m_demoTimer > 6.0f) {
             // Everyone: focus fire on one enemy.

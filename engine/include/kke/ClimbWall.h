@@ -25,6 +25,7 @@ struct ClimbHold {
         Crimp,  // a thin edge: tiring
         Sloper, // rounded, no lip: the most tiring
         Edge,   // the front edge of a ledge or the summit: a jug you can mantle over
+        Foot,   // a small chip of rock: for the feet only (no hand takes it)
     };
     glm::vec3 position{0.0f};         // where the hand closes on it
     glm::vec3 normal{0.0f, 0.0f, 1.0f}; // the rock's normal there
@@ -72,6 +73,10 @@ struct ClimbWallDesc {
     float jugBias = 0.0f;
     float crimpBias = 0.0f;
     int ledges = 3;            // rest ledges between the base and the summit
+    // Foot chips per m^2 (small nubs only feet use, so there's usually
+    // somewhere to stand), kept footSpacing from every other hold.
+    float footDensity = 1.4f;
+    float footSpacing = 0.24f;
 };
 
 // Triangles to draw and collide with (flat shaded: three vertices per

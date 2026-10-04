@@ -215,25 +215,25 @@ The ring, gym and benches are boxes built in code.
 ## Goblin Horde (`games/goblin_horde`)
 
 Not a scene file: the fort, trees and rubble are boxes built in code.
+Every model is named in [data/foes.yml](../games/goblin_horde/data/foes.yml)
+and [data/heroes.yml](../games/goblin_horde/data/heroes.yml); the first
+one found is the fallback, then the UAL mannequin.
 
-- Goblins: **SIDEKICK Goblin Fighters**, `GoblinFighter_01` to `_05`
-  (`.sk` part lists under `SidekickCharacters/Characters/GoblinFighters/`,
-  parts from `Resources/Meshes`, colour maps `T_GoblinFighter_0NColorMap`).
-  Tongue, teeth and eyebrow parts are left out. Simplified to 20% at load.
-- Goblin clips: **ANIMATION Goblin Locomotion**, Sidekick versions
-  (`Animations/Sidekick/Neutral/...`): `A_MOD_GBL_Idle_Standing_Neut`,
-  `Walk_F_Neut`, `Run_F_Neut`, `Sprint_F_Neut`, `Idle_Fidget_Swipe_Neut`
-  (the attack), `Idle_Fidget_Menacing_Neut` (waiting their turn).
-- The king: **POLYGON Fantasy Characters**, `SK_Character_Male_King`
-  (falls back to `SK_Character_Male_Rouge_01`, `SK_Character_Male_Peasant_01`,
-  then the UAL mannequin) with `SM_Prop_SwordOrnate_01` in his right hand.
-- The king's clips: Quaternius UAL 1 (`Sword_Idle`, `Walk_Loop`,
-  `Jog_Fwd_Loop`, `Sprint_Loop`, `Roll`, `Hit_Chest`, `Death01`) and UAL 2
-  (`Sword_Regular_A`, `Sword_Regular_B`, `Sword_Heavy_A`, `Sword_Block`,
-  `Hit_Knockback`, `LayToIdle`), retargeted.
-
-Put the packs in `assets/synty/` (symlinks to the shared cache work) or set
-`KKE_ASSETS_DIR`.
+- Goblins: **POLYGON Goblin War Camp** (every goblin is a part of
+  `FBX/Characters/Characters.fbx`, e.g. `SM_Chr_Warrior_Male_01`,
+  `SM_Chr_Archer_Female_01`, `SM_Chr_Shaman_01`) and **POLYGON Dungeon
+  Pack** (`Character_Goblin_*`, `Character_Goblin_WarChief`). Their
+  weapons, bows, staffs and hats come from both packs.
+- Bosses: **POLYGON Fantasy Rivals** `SK_BR_Character_Troll_01`,
+  `_Big_Ork_01`, `_BarbarianGiant_01`, `_Pig_Butcher_01`.
+- Heroes: **POLYGON Fantasy Characters** (king, queen, rogue, druid, bard,
+  witch, sorcerer, peasant) and the Dungeon Pack knights.
+- Clips: Quaternius UAL 1 (the full `UAL1.fbx` from the pack, added to the
+  43-clip `UAL1_Standard.fbx` the repository ships) and UAL 2
+  (`Sword_Regular_A/B/C`, `Sword_Heavy_*`, `Melee_Knee`, ...), retargeted
+  by bone name. The War Camp goblins use Synty's older bone names
+  (`Shoulder_L`, `Elbow_L`, `UpperLeg_L`); `kke::canonicalBoneName` pairs
+  them with UAL's.
 
 ## Synty demo (`games/synty_demo`)
 

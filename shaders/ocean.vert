@@ -37,6 +37,12 @@ void main() {
     for (int i = 0; i < 4; ++i) {
         vec2 d = pc.wave[i].xy;
         float k = pc.wave[i].z, a = pc.wave[i].w;
+        // A wave shorter than ~4 cells of this vertex's grid can't be drawn
+        // there (it would alias and flicker): fade it out, gone at 2 cells
+        // (inColor.r = the cell size; kke::OceanRenderer's far rings have
+        // big cells, the near grid keeps every wave the CPU floats on).
+        float cells = (6.2831853 / max(k, 1e-4)) / max(inColor.r, 1e-3);
+        a *= clamp((cells - 2.0) * 0.5, 0.0, 1.0);
         float theta = k * dot(d, p) - pc.omega[i] * pc.misc.x + pc.phase[i];
         float c = cos(theta), s = sin(theta);
         pos.x += pc.q[i] * a * d.x * c;

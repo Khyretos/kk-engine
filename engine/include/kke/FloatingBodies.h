@@ -27,8 +27,8 @@ namespace kke {
 // ~8% showing, 7800 iron sinks to the sea floor.
 //
 // Deliberately small and separate from FEMFX (which has no fluids):
-// semi-implicit Euler, box inertia, bounding-sphere contacts between
-// bodies, a flat sea floor. Unit-tested in tests/test_floating_bodies.cpp.
+// semi-implicit Euler, box inertia, capsule contacts between bodies
+// (along each box's longest axis), a flat sea floor. Unit-tested in tests/test_floating_bodies.cpp.
 struct FloatingBody {
     glm::vec3 halfExtents{0.5f};
     float density = 500.0f;            // kg/m^3
@@ -48,6 +48,10 @@ struct FloatingBody {
     // upright whenever it heels — real ballast, not a fake righting force.
     glm::vec3 centerOfMassOffset{0.0f};
     bool alive = true;
+    // False for small bits (splinters, spray-borne debris) that needn't push
+    // each other: two such bodies skip their contact. They still push, and
+    // are pushed by, everything else.
+    bool pushesSmallBits = true;
 
     // derived by FloatingBodies::add()
     float mass = 0.0f;
@@ -69,10 +73,13 @@ public:
     glm::vec3 gravity{0.0f, -9.81f, 0.0f};
     float seaFloorY = -6.0f;
 
-    // Returns the body's index (stable until clear()).
+    // Returns the body's index: valid until that body is removed (or
+    // clear()). A removed body's slot is reused by a later add(), so a game
+    // that throws thousands of things over a session keeps a short list.
     size_t add(const glm::vec3& halfExtents, float density, const glm::vec3& position,
                const glm::quat& orientation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
     void remove(size_t index) { if (index < m_bodies.size()) m_bodies[index].alive = false; }
+    size_t aliveCount() const;
     void clear() { m_bodies.clear(); }
 
     // A force at a world-space point (engines, rudders, explosions).
@@ -82,6 +89,12 @@ public:
 
     std::vector<FloatingBody>& bodies() { return m_bodies; }
     const std::vector<FloatingBody>& bodies() const { return m_bodies; }
+
+    // The capsule a body pushes others with: its longest axis, as wide as
+    // its beam (public for tests and for games that want the same shape).
+    struct Capsule { glm::vec3 p0{0.0f}, p1{0.0f}; float radius = 0.0f, halfLength = 0.0f; };
+    static Capsule capsuleOf(const FloatingBody& body);
+    static void closestPoints(const glm::vec3& p1, const glm::vec3& q1, const glm::vec3& p2, const glm::vec3& q2, glm::vec3& c1, glm::vec3& c2);
 
 private:
     std::vector<FloatingBody> m_bodies;
