@@ -12,7 +12,11 @@
 #include "kke/SceneLoader.h"
 #include "kke/Thumbnails.h"
 #include "kke/ai/Clips.h"
+#include "kke/ParticleEffects.h"
+#include "kke/ParticleLibrary.h"
 #include "kke/modules/AudioModule.h"
+#include "kke/modules/GameShellModule.h"
+#include "kke/modules/InputModule.h"
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/UiModule.h"
 #if KKE_ENABLE_JOLT
@@ -101,6 +105,11 @@ std::vector<kke::ModuleDependency> SandboxModule::dependencies() const {
         { std::type_index(typeid(kke::ModelModule)), true, "loads and draws the placed assets" },
         { std::type_index(typeid(kke::DebugDrawModule)), true, "selection boxes, grid, placement preview" },
         { std::type_index(typeid(kke::UiModule)), false, "the node graph editor (Look, in Play mode)" },
+        // After these, so the menu sees Esc first, Walk mode reads this
+        // frame's input and the walker's camera wins over the orbit one.
+        { std::type_index(typeid(kke::GameShellModule)), false, "title, pause and settings menus" },
+        { std::type_index(typeid(kke::InputModule)), false, "Walk mode's controls" },
+        { std::type_index(typeid(kke::OrbitCameraModule)), false, "Fly mode's camera" },
     };
 }
 
@@ -156,11 +165,17 @@ void SandboxModule::init(kke::Application& app) {
     if (const char* save = std::getenv("KKE_SANDBOX_SAVE")) saveLayout(save);
     if (auto* ui = app.getModule<kke::UiModule>(); ui && ui->context()) {
         m_palette.attach(ui->context(), *ui);
-        m_palette.onPress = [this](const std::string& id) { palettePressed(id); };
+        m_palette.onPress = [this](const std::string& id) {
+            // Walking with the mouse turning the view, a click is the tool,
+            // not the picture the hidden pointer happens to be over.
+            if (m_view == View::Walk && m_captured) return;
+            palettePressed(id);
+        };
         for (FormPanel* p : { &m_assetsPanel, &m_toolsPanel, &m_modePanel }) p->attach(ui->context(), *ui);
     } else {
         kke::log::get(name())->warn("no RmlUi context: Play mode has no palette");
     }
+    initToys(); // the menus, Walk mode's controls, flames and smoke
     setMode(m_mode); // the camera limits that go with it
 }
 
@@ -174,6 +189,13 @@ void SandboxModule::openAssetFolder(const std::string& folder) {
     if (m_bat) m_models->remove(m_bat);
     m_bat = 0;
     m_batModel = 0;
+    for (ToolModel& t : m_toolModels) {
+        if (t.instance) m_models->remove(t.instance);
+        t = ToolModel{};
+    }
+    for (Pickup& p : m_pickups)
+        if (p.instance) m_models->remove(p.instance);
+    m_pickups.clear();
     m_catalog = kke::AssetCatalog::scan(folder);
     m_assetFolder = m_catalog.assets.empty() ? std::string() : folder;
     // The palette shows only the blocks whose assets these packs have.
@@ -327,6 +349,9 @@ void SandboxModule::removeObject(uint32_t id) {
     auto it = std::find_if(m_objects.begin(), m_objects.end(), [&](const Object& o) { return o.id == id; });
     if (it == m_objects.end()) return;
     if (it->ragdoll && m_ragdolls) m_ragdolls->destroyRagdoll(it->ragdoll);
+    if (it->fire && m_effects) m_effects->stop(it->fire);
+    if (it->body != kke::RigidWorld::kNoBody)
+        if (kke::RigidWorld* w = rigidWorld()) w->remove(it->body);
     dropCollider(*it);
     if (it->proxy && m_breakables) m_breakables->remove(it->instance);
     m_models->remove(it->instance);
@@ -356,6 +381,8 @@ void SandboxModule::worldBounds(const Object& o, glm::vec3& mn, glm::vec3& mx) c
 
 kke::Ray SandboxModule::mouseRay() const {
     const kke::Camera& cam = m_app->camera();
+    // Walking with the mouse turning the view: the crosshair, mid-screen.
+    if (m_view == View::Walk && m_captured) return { cam.position, glm::normalize(cam.target - cam.position) };
     const auto& mouse = m_app->window().mouseState();
     int w = 1, h = 1;
     SDL_GetWindowSize(m_app->window().handle(), &w, &h); // points, same space as the mouse
@@ -374,7 +401,7 @@ uint32_t SandboxModule::pickObject() const {
     for (const Object& o : m_objects) {
         if (o.id == m_movingId || o.proxy || o.ragdoll) continue;
         glm::vec3 mn, mx;
-        worldBounds(o, mn, mx);
+        bodyBounds(o, mn, mx); // where it is now: a crate may have rolled
         float t = kke::rayAabb(ray, mn, mx);
         if (t >= 0.0f && t < best) { best = t; hit = o.id; }
     }
@@ -394,7 +421,7 @@ bool SandboxModule::placementPoint(glm::vec3& out, uint32_t ignoreId) const {
         // something to land on.
         if (std::any_of(m_groupMove.begin(), m_groupMove.end(), [&](const DragStart& g) { return g.id == o.id; })) continue;
         glm::vec3 mn, mx;
-        worldBounds(o, mn, mx);
+        bodyBounds(o, mn, mx);
         float t = kke::rayAabb(ray, mn, mx);
         if (t >= 0.0f && (best < 0.0f || t < best)) { best = t; topY = mx.y; }
     }
@@ -827,7 +854,6 @@ void SandboxModule::update(const kke::UpdateContext& ctx) {
     // Play mode drags from the palette into the world, and ImGui keeps the
     // mouse while its button is held, so there "free" means not over a window.
     const bool play = m_mode == Mode::Play;
-    updateReplay(ctx.dt);
     if (ctx.dt > 0.0f) m_fps += (1.0f / ctx.dt - m_fps) * std::min(1.0f, ctx.dt * 2.0f); // shown in the panel, smoothed
     updatePad(ctx.dt); // the pad pointer, view and zoom, in Play and Build
     bool mouseFree = play ? !mouseOverUi() : !ImGui::GetIO().WantCaptureMouse && !m_app->uiCapturesMouse() && !mouseOverUi();
@@ -913,10 +939,8 @@ void SandboxModule::update(const kke::UpdateContext& ctx) {
             }
         }
         m_hovered = 0;
-    } else if (m_tool == Tool::Bat) {
-        m_hovered = 0;
-        glm::vec3 aim;
-        if (mouseFree && !m_swing.active() && placementPoint(aim, 0)) m_debug->cross(aim, 0.35f, glm::vec3(1.0f, 0.85f, 0.2f));
+    } else if (m_tool == Tool::Bat || m_tool == Tool::Gun || m_tool == Tool::Fire || m_tool == Tool::Melt) {
+        m_hovered = 0; // updateToys marks where it lands
     } else if (m_tool == Tool::Shoot) {
         m_hovered = 0;
         // Aim marker where the ball is heading (first hit: ground or object).
@@ -927,6 +951,7 @@ void SandboxModule::update(const kke::UpdateContext& ctx) {
         m_hovered = mouseFree && m_hoverHandle == Handle::None ? pickObject() : 0;
     }
     updateBat(ctx.dt);
+    updateToys(ctx.dt); // after the bat: a swing's hands are this frame's
     updateGraphs(ctx.dt);
 
     for (const Object& o : m_objects) {
@@ -955,6 +980,44 @@ void SandboxModule::onEvent(const SDL_Event& event) {
             }
         }
         std::erase(m_pads, nullptr);
+        return;
+    }
+    // The title or pause menu is up: it has the keys, the mouse and the pads.
+    if (m_shell && m_shell->menuOpen()) return;
+    if (m_mode == Mode::Play && m_view == View::Walk) {
+        // Walk mode: moving, looking and the tool are InputModule actions
+        // (updateWalker). Here only what isn't: a click that takes the
+        // mouse back, the number keys for the palette, Esc, F1/F2.
+        if (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || event.type == SDL_EVENT_GAMEPAD_BUTTON_UP) {
+            graphEditorPadButton(event.gbutton.button, event.gbutton.down);
+            return;
+        }
+        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT && !m_captured && !mouseOverUi()) {
+            setCaptured(true);
+            m_swallowFire = true;
+            return;
+        }
+        if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat || typingInUi()) return;
+        if (graphEditorKey(event.key.key)) return;
+        if (event.key.key >= SDLK_1 && event.key.key <= SDLK_9) {
+            const size_t cell = static_cast<size_t>(event.key.key - SDLK_1);
+            if (cell < m_cellIds.size()) palettePressed(m_cellIds[cell]);
+            return;
+        }
+        switch (event.key.key) {
+        case SDLK_ESCAPE:
+            if (m_tool == Tool::Place) cancelPlacing();
+            break;
+        case SDLK_F1:
+            m_showEnginePanels = !m_showEnginePanels;
+            for (kke::Module* m : m_enginePanels) m->setUiVisible(m_showEnginePanels);
+            break;
+        case SDLK_F2:
+            setMode(Mode::Build);
+            break;
+        default:
+            break;
+        }
         return;
     }
     if (m_mode == Mode::Play) {
@@ -1017,10 +1080,21 @@ void SandboxModule::onEvent(const SDL_Event& event) {
             if (m_tool == Tool::Place) commitPlacement(false);
             else if (m_tool == Tool::Bat) swingBat();
             else if (m_tool == Tool::Shoot) throwBall();
-            else if (m_tool == Tool::Look) {
+            else if (m_tool == Tool::Gun) fireGun(); // held: updateToys keeps firing
+            else if (m_tool == Tool::Fire || m_tool == Tool::Melt) {
+                // held: updateToys burns / heats where the mouse is
+            } else if (m_tool == Tool::Look) {
                 openThingGraph(pickObject()); // the ground: the level's own graph
                 m_tool = Tool::Select;
-            } else if (Object* o = find(pickObject())) {
+            } else if (Object* o = find(pickObject()); o && o->meltFrom.empty()) {
+                if (o->body != kke::RigidWorld::kNoBody) {
+                    // Picked up from wherever it rolled to, the right way up.
+                    glm::vec3 mn, mx;
+                    bodyBounds(*o, mn, mx);
+                    o->position = glm::vec3((mn.x + mx.x) * 0.5f, mn.y, (mn.z + mx.z) * 0.5f);
+                    dropDynamic(*o);
+                    o->bodyTried = false;
+                }
                 m_tapThing = o->id;
                 m_tapStart = glm::vec2(event.button.x, event.button.y);
                 beginPlacing(o->asset, o->yawDegrees, o->id, o->pack);
@@ -1031,9 +1105,8 @@ void SandboxModule::onEvent(const SDL_Event& event) {
         if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat || io.WantTextInput) return;
         if (graphEditorKey(event.key.key)) return;
         switch (event.key.key) {
-        case SDLK_ESCAPE:
+        case SDLK_ESCAPE: // only when the menu didn't take it (escWouldCancel)
             if (m_tool == Tool::Place) cancelPlacing();
-            m_tool = Tool::Select;
             break;
         case SDLK_SPACE:
             if (m_tool == Tool::Bat) swingBat();
@@ -1456,6 +1529,13 @@ void SandboxModule::throwBall() {
         m_balls.erase(m_balls.begin());
     }
     kke::Ray ray = mouseRay();
+    if (m_view == View::Walk && m_walker.active()) {
+        // Thrown by you, from the chest, toward what the dot is on.
+        const glm::vec3 from = m_walker.feet() + glm::vec3(0.0f, 1.5f, 0.0f) + m_walker.facing() * 0.5f;
+        const Aim aim = aimAt(ray, 120.0f);
+        const glm::vec3 to = aim.hit ? aim.point : ray.at(30.0f);
+        ray = { from - glm::normalize(to - from), glm::normalize(to - from) };
+    }
     kke::Material ball;
     ball.density = 3000.0f;        // dense: carries enough momentum to break things
     ball.stiffness = 2.0e6f;
@@ -2092,6 +2172,11 @@ void SandboxModule::setMode(Mode mode) {
     m_dropOnRelease = false;
     m_drag = Handle::None;
     clearSelection();
+    if (mode == Mode::Build) {
+        // The editor flies, and edits the level as it was placed.
+        setView(View::Fly);
+        resetToys();
+    }
     m_mode = mode;
     // Play keeps the view above the ground whatever fingers or sticks do;
     // the editor may look from anywhere.
@@ -2102,6 +2187,7 @@ void SandboxModule::setMode(Mode mode) {
 }
 
 bool SandboxModule::mouseOverUi() const {
+    if (m_view == View::Walk && m_captured) return false; // the mouse turns the view; the palette is out of reach
     // Where the pointer is, not what was pressed: a picture pressed on the
     // palette and dragged out is over the world when it is let go
     // (RmlUi's own "mouse interacting" stays on while the press lasts).
@@ -2124,72 +2210,60 @@ void SandboxModule::placeBlock(size_t block) {
 }
 
 void SandboxModule::standEveryoneUp() {
-    for (Object& o : m_objects)
-        if (o.ragdoll) standUp(o);
+    for (Object& o : m_objects) {
+        if (!o.ragdoll) continue;
+        if (o.animal) standAnimalUp(o);
+        else standUp(o);
+    }
 }
 
-// Aims at the person under the mouse (else the ground there) and swings
-// from the camera's side, so the bat's sweet spot passes through them.
+// Swings so the bat passes through the exact spot under the mouse, at
+// that height: a person's head or knees, the side of a crate, an
+// animal's back (Kees: "pinpoint the spot where you want to hit them").
+// On the ground: whoever stands near it, at chest height.
 void SandboxModule::swingBat() {
     if (m_swing.active()) return;
-    const kke::Ray ray = mouseRay();
-    glm::vec3 target(0.0f);
-    float best = 1e30f;
+    const Aim aim = aimAt(mouseRay(), m_app->camera().farPlane);
+    if (!aim.hit) return;
+    if (aim.thing) {
+        m_swingThing = aim.thing;
+        m_swingPoint = aim.point;
+        swingBatAt(aim.point, &aim.point);
+        return;
+    }
+    // Forgiving aim for fingers and thumbsticks: a person standing near
+    // the spot is who you meant.
+    glm::vec3 target = aim.point;
+    float nearest = kBatAutoAimMeters;
+    m_swingThing = 0;
     for (const Object& o : m_objects) {
         if (!o.character || isDown(o)) continue;
         glm::vec3 mn, mx;
         worldBounds(o, mn, mx);
-        const float t = kke::rayAabb(ray, mn, mx);
-        if (t >= 0.0f && t < best) {
-            best = t;
-            target = glm::vec3((mn.x + mx.x) * 0.5f, mn.y, (mn.z + mx.z) * 0.5f);
-        }
-    }
-    if (best >= 1e30f) {
-        const float t = kke::rayPlaneY(ray, 0.0f);
-        if (t < 0.0f || t > m_app->camera().farPlane) return;
-        target = ray.at(t);
-        // Forgiving aim for fingers and thumbsticks: a person standing
-        // near the spot is who you meant.
-        float nearest = kBatAutoAimMeters;
-        for (const Object& o : m_objects) {
-            if (!o.character || isDown(o)) continue;
-            glm::vec3 mn, mx;
-            worldBounds(o, mn, mx);
-            const glm::vec3 foot((mn.x + mx.x) * 0.5f, mn.y, (mn.z + mx.z) * 0.5f);
-            const float d = glm::length(glm::vec2(foot.x - target.x, foot.z - target.z));
-            if (d < nearest) {
-                nearest = d;
-                target = foot;
-            }
+        const glm::vec3 foot((mn.x + mx.x) * 0.5f, mn.y, (mn.z + mx.z) * 0.5f);
+        const float d = glm::length(glm::vec2(foot.x - aim.point.x, foot.z - aim.point.z));
+        if (d < nearest) {
+            nearest = d;
+            target = foot;
+            m_swingThing = o.id;
         }
     }
     swingBatAt(target);
 }
 
-bool SandboxModule::swingBatAt(const glm::vec3& target) {
+bool SandboxModule::swingBatAt(const glm::vec3& target, const glm::vec3* exact) {
     if (m_swing.active()) return false;
     const glm::vec3 forward = target - m_app->camera().position;
-    if (!m_swing.start(m_swing.pivotFor(target, forward), forward)) return false;
+    m_swing = kke::BatSwing{}; // Walk mode sizes its own swings
+    glm::vec3 pivot = m_swing.pivotFor(target, forward);
+    if (exact) pivot.y = exact->y; // a level swing through that very spot
+    else m_swingPoint = target + glm::vec3(0.0f, m_swing.settings().pivotHeight, 0.0f);
+    if (!m_swing.start(pivot, forward)) return false;
     m_swingHits.clear();
     animalNoise(target, 12.0f); // the whoosh: animals nearby hear it and may run
     // The bat model, loaded on the first swing. Without it the bat is a
     // thick line: the swing and the hits don't depend on the model.
-    if (!m_batModel && !m_blocks.empty()) {
-        for (size_t i = 0; i < m_blocks.size(); ++i) {
-            if (m_blocks[i].kind != kke::PlayBlockKind::Tool || m_blockAssets[i].empty()) continue;
-            m_batModel = loadAsset(m_blockAssets[i].front());
-            if (const kke::ModelData* d = m_batModel ? m_models->model(m_batModel) : nullptr) {
-                std::vector<glm::vec3> points;
-                for (const kke::ModelMesh& mesh : d->meshes)
-                    for (const kke::ModelVertex& v : mesh.vertices) points.push_back(v.position);
-                m_batAxis = kke::findLongAxis(points);
-                m_bat = m_models->spawn(m_batModel);
-                m_models->setVisible(m_bat, false);
-            }
-            break;
-        }
-    }
+    loadBat();
     return true;
 }
 
@@ -2198,32 +2272,41 @@ void SandboxModule::updateBat(float dt) {
     const bool stillOut = m_swing.update(dt);
     {   // sweep() only hits over what this update swung through
         for (Object& o : m_objects) {
-            if (!o.character || isDown(o) || std::find(m_swingHits.begin(), m_swingHits.end(), o.id) != m_swingHits.end()) continue;
-            // The body, not its bounds: a T-posed character's bounds are
-            // mostly air between its outstretched arms.
+            if (o.id == m_movingId || std::find(m_swingHits.begin(), m_swingHits.end(), o.id) != m_swingHits.end()) continue;
             glm::vec3 mn, mx;
-            worldBounds(o, mn, mx);
-            const glm::vec3 c = (mn + mx) * 0.5f, half(std::min(0.3f, (mx.x - mn.x) * 0.5f), 0.0f, std::min(0.3f, (mx.z - mn.z) * 0.5f));
-            const kke::BatSwing::Hit hit = m_swing.sweep(glm::vec3(c.x - half.x, mn.y, c.z - half.z), glm::vec3(c.x + half.x, mx.y, c.z + half.z));
+            bodyBounds(o, mn, mx);
+            if (o.character && !o.ragdoll) {
+                // The body, not its bounds: a T-posed character's bounds are
+                // mostly air between its outstretched arms.
+                const glm::vec3 c = (mn + mx) * 0.5f, half(std::min(0.3f, (mx.x - mn.x) * 0.5f), 0.0f, std::min(0.3f, (mx.z - mn.z) * 0.5f));
+                mn = glm::vec3(c.x - half.x, mn.y, c.z - half.z);
+                mx = glm::vec3(c.x + half.x, mx.y, c.z + half.z);
+            }
+            const kke::BatSwing::Hit hit = m_swing.sweep(mn, mx);
             if (!hit.hit) continue;
             m_swingHits.push_back(o.id);
+            // Where it was aimed if that's what it hit, so the blow lands there.
+            const glm::vec3 point = o.id == m_swingThing && glm::length(m_swingPoint - hit.point) < 1.0f ? m_swingPoint : hit.point;
             kke::log::get(name())->info("bat hit '{}' at {:.0f} deg: push ({:.1f}, {:.1f}, {:.1f}) m/s", o.asset, hit.degrees,
                                         hit.push.x, hit.push.y, hit.push.z);
-            // What a hit does is the bat's recipe, a node graph ("when it
-            // hits someone: knock them over, wooden bonk"; Look inside the
-            // bat to change it). Without Lua the bat does that itself.
-            if (lookAvailable()) {
-                queueHit(o.id, hit.point, hit.push);
+            // What a hit on a person does is the bat's recipe, a node graph
+            // ("when it hits someone: knock them over, wooden bonk"; Look
+            // inside the bat to change it). Without Lua the bat does that
+            // itself; things and animals it does itself.
+            if (o.character && lookAvailable()) {
+                m_lastHitPoint[o.id] = point;
+                queueHit(o.id, point, hit.push);
                 continue;
             }
-            if (auto* audio = m_app->getModule<kke::AudioModule>())
-                audio->playImpact(hit.point, kke::AudioMaterialTable::Wood, 1.0f, o.id);
-            if (!m_ragdolls) {
-                m_status = "Knocking people over needs a physics module (ragdolls)";
-                continue;
-            }
-            ragdoll(o, hit.push);
+            strike(o.id, point, hit.push, kke::AudioMaterialTable::Wood); // the bat's wooden bonk
         }
+    }
+    // Walking: both hands on the handle, wherever the swing has it.
+    if (m_view == View::Walk && m_walker.active()) {
+        const glm::vec3 d = glm::normalize(m_swing.direction() + glm::vec3(0.0f, -0.2f, 0.0f));
+        const glm::vec3 grip = m_swing.pivot() + d * m_swing.settings().innerReach;
+        m_walker.hand(kke::CharacterIk::Right, grip + d * 0.05f);
+        m_walker.hand(kke::CharacterIk::Left, grip - d * 0.06f);
     }
     // Draw the bat along the swing, tipped a little down.
     const kke::SwingSettings& st = m_swing.settings();
@@ -2248,30 +2331,39 @@ void SandboxModule::modeSwitchUi() {
 // click where it goes); the bat is held instead and swings on every click.
 void SandboxModule::updatePalette() {
     const bool play = m_mode == Mode::Play;
-    m_palette.setVisible(play);
+    // Under the title and pause menus: out of the way (they take the clicks).
+    m_palette.setVisible(play && !(m_shell && m_shell->menuOpen()));
     if (!play) {
         m_paletteCells.clear();
         return;
     }
     bool anyone = false, anyoneStanding = false, anyoneDown = false;
     for (const Object& o : m_objects) {
-        if (!o.character) continue;
-        anyone = true;
-        (isDown(o) ? anyoneDown : anyoneStanding) = true;
+        if (!o.character && !o.animal) continue;
+        if (o.character) anyone = true;
+        const bool down = o.animal ? o.ragdoll != 0 : isDown(o);
+        if (down) anyoneDown = true;
+        else if (o.character) anyoneStanding = true;
     }
+    const bool walk = m_view == View::Walk;
     const char* hint = m_assetFolder.empty()          ? "No asset packs found. Press Build to pick a folder."
                        : m_tool == Tool::Look          ? "Tap a thing or a picture to look inside. Tap the ground for the whole level."
-                       : m_tool == Tool::Place         ? "Let go where it should go!"
+                       : m_tool == Tool::Place         ? (walk ? "Click where it should go!" : "Let go where it should go!")
+                       : walk && !m_captured           ? "Click a picture, or click the world to walk on (Tab)"
+                       : walk && m_tool == Tool::Select ? "Press a picture (1-9) to bring a tool, then E to pick it up"
+                       : walk && m_tool == Tool::Bat   ? "Click to swing at what's under the dot"
+                       : m_tool == Tool::Gun           ? "Click to shoot (hold for more)"
+                       : m_tool == Tool::Fire          ? "Hold on something to set it on fire"
+                       : m_tool == Tool::Melt          ? "Hold on something to melt it"
                        : m_tool == Tool::Bat && anyoneDown && !anyoneStanding ? "Everyone fell over! Press Get up."
-                       : m_tool == Tool::Bat && !anyoneStanding ? "Bring a person, then click them to swing!"
-                       : m_tool == Tool::Bat           ? (m_ragdolls ? "Click someone to bonk them!" : "Click to swing (falling over needs Jolt physics)")
+                       : m_tool == Tool::Bat           ? (m_ragdolls ? "Click exactly where to hit!" : "Click to swing (falling over needs Jolt physics)")
                        : m_tool == Tool::Shoot         ? "Click to throw a ball!"
                        : !anyone                       ? "Drag a person into the world!"
                        : anyoneDown                    ? "Press Get up to try again, or grab the bat!"
                                                        : "Grab the bat and bonk them!";
     std::vector<PlayPalette::Cell> cells;
     if (!m_assetFolder.empty()) {
-        cells.push_back({ "grab", "Grab", "Hand", "", m_tool == Tool::Select });
+        cells.push_back({ "grab", walk ? "Hands" : "Grab", "Hand", "", m_tool == Tool::Select });
         for (size_t i = 0; i < m_blocks.size(); ++i) {
             const kke::PlayBlock& b = m_blocks[i];
             if (m_blockAssets[i].empty()) continue; // not in these packs
@@ -2282,11 +2374,23 @@ void SandboxModule::updatePalette() {
             cells.push_back({ "block:" + std::to_string(i), b.label, "", paletteImage(m_catalog.find(m_blockAssets[i].front())), on });
         }
         if (m_hasFemfx) cells.push_back({ "throw", "Throw", "Ball!", "", m_tool == Tool::Shoot });
+        cells.push_back({ "gun", "Gun", "Bang!", "", m_tool == Tool::Gun });
+        cells.push_back({ "fire", "Fire", "Burn", "", m_tool == Tool::Fire });
+        cells.push_back({ "melt", "Melt", "Hot!", "", m_tool == Tool::Melt });
         if (lookAvailable()) cells.push_back({ "look", "Look", "Inside", "", m_tool == Tool::Look });
-        if (anyoneDown) cells.push_back({ "getup", "Get up", "Up!", "", false });
-        if (!m_objects.empty()) cells.push_back({ "clear", "Clear", "Empty", "", false });
+        if (rigidWorld()) cells.push_back({ walk ? "fly" : "walk", walk ? "Fly" : "Walk", walk ? "Sky" : "Me", "", false });
     }
     cells.push_back({ "build", "Build", "Tools", "", false });
+    // Last: these come and go, and the pictures before them stay put.
+    if (anyoneDown) cells.push_back({ "getup", "Get up", "Up!", "", false });
+    if (!m_objects.empty()) cells.push_back({ "clear", "Clear", "Empty", "", false });
+    // Walking with a controller: LB/RB point at a picture, X presses it.
+    if (walk && m_pads.size() > 0 && !cells.empty()) {
+        m_walkCell = std::clamp(m_walkCell, 0, static_cast<int>(cells.size()) - 1);
+        cells[static_cast<size_t>(m_walkCell)].on = true;
+    }
+    m_cellIds.clear();
+    for (const PlayPalette::Cell& c : cells) m_cellIds.push_back(c.id);
     m_palette.set(hint, cells);
     m_paletteCells = m_palette.cellCentres();
 }
@@ -2306,6 +2410,16 @@ void SandboxModule::palettePressed(const std::string& id) {
         clearAll();
         return;
     }
+    if (id == "walk" || id == "fly") {
+        setView(id == "walk" ? View::Walk : View::Fly);
+        return;
+    }
+    // Walking: a tool comes out in front of you, to pick up (E / Y).
+    const bool walk = m_view == View::Walk && m_walker.active();
+    auto bring = [this](Tool t) {
+        if (m_tool == Tool::Place) cancelPlacing();
+        dropTool(t, m_walker.feet() + m_walker.facing() * 1.1f);
+    };
     // A tool: pressing it again puts it down.
     auto toggle = [this](Tool t) {
         if (m_tool == Tool::Place) cancelPlacing();
@@ -2316,6 +2430,10 @@ void SandboxModule::palettePressed(const std::string& id) {
         m_tool = Tool::Select;
     } else if (id == "throw") {
         toggle(Tool::Shoot);
+    } else if (id == "gun" || id == "fire" || id == "melt") {
+        const Tool t = id == "gun" ? Tool::Gun : id == "fire" ? Tool::Fire : Tool::Melt;
+        if (walk) bring(t);
+        else toggle(t);
     } else if (id == "look") {
         toggle(Tool::Look);
     } else if (id.rfind("block:", 0) == 0) {
@@ -2328,7 +2446,8 @@ void SandboxModule::palettePressed(const std::string& id) {
         }
         if (m_tool == Tool::Place) cancelPlacing();
         if (m_blocks[i].kind == kke::PlayBlockKind::Tool) {
-            m_tool = m_tool == Tool::Bat ? Tool::Select : Tool::Bat;
+            if (walk) bring(Tool::Bat);
+            else m_tool = m_tool == Tool::Bat ? Tool::Select : Tool::Bat;
         } else {
             placeBlock(i);
             m_dropOnRelease = true; // dragged out: let go in the world to drop it
@@ -2474,6 +2593,7 @@ void SandboxModule::padButton(uint8_t button, bool down) {
         m_padCursor = glm::vec2(mouse.x, mouse.y);
     }
     if (graphEditorPadButton(button, down)) return; // B closes it, X removes, Y shows everything
+    if (m_view == View::Walk) return; // Walk mode's buttons are InputModule actions (updateWalker)
     switch (button) {
     case SDL_GAMEPAD_BUTTON_SOUTH: // A: press, hold and move to drag, let go to drop
         if (down != m_padPressing) pointerButton(down);
@@ -2498,17 +2618,15 @@ void SandboxModule::padButton(uint8_t button, bool down) {
     case SDL_GAMEPAD_BUTTON_NORTH: // Y: everyone up
         if (down) standEveryoneUp();
         break;
-    case SDL_GAMEPAD_BUTTON_START: // the editor; Start again comes back (buildPadButton)
-        if (down) setMode(Mode::Build);
-        break;
-    default:
+    default: // Start and Select: the pause menu (GameShellModule), where Build mode is
         break;
     }
 }
 
 void SandboxModule::updatePad(float dt) {
     SDL_Gamepad* pad = m_pads.empty() ? nullptr : m_pads.front();
-    if (!pad) return;
+    if (!pad || (m_view == View::Walk && m_mode == Mode::Play)) return; // walking: the sticks move you and the view
+
     auto axis = [&](SDL_GamepadAxis a) { return static_cast<float>(SDL_GetGamepadAxis(pad, a)) / 32767.0f; };
     int w = 1, h = 1;
     SDL_GetWindowSize(m_app->window().handle(), &w, &h);
@@ -2646,6 +2764,11 @@ void SandboxModule::updateReplay(float dt) {
 }
 
 void SandboxModule::shutdown() {
+    // Everything this module put in other modules goes before they do:
+    // ragdolls and bodies (Jolt), flames (the renderer), models.
+    shutdownToys();
+    if (m_bat) m_models->remove(m_bat);
+    m_bat = 0;
     if (m_breakables) m_breakables->clear(); // PhysicsModule shuts down after us
     m_palette.detach(); // RmlUi goes down after us
     m_assetsPanel.detach();
@@ -2678,6 +2801,7 @@ void SandboxModule::renderUi() {
         for (FormPanel* p : panels) p->end();
     }
     padCursorUi();
+    toysUi();
 }
 
 } // namespace kke_sandbox

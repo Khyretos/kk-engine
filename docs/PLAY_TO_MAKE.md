@@ -58,9 +58,18 @@ along the bottom and one line of hint text.
   so Look shows it and it can be changed like any other.
 - **Grab (the hand):** press on anything in the world and drag it
   somewhere else.
-- **Bat:** click a person and the bat swings through them. They ragdoll,
-  with a wooden bonk, flying along the swing. Click the ground to swing
-  at the air.
+- **Bat:** click anything and the bat swings through that exact spot.
+  People ragdoll from where they were hit, with a wooden bonk; animals
+  tumble and get up again; small props roll and topple; breakable props
+  shatter. Click the ground to swing at the air.
+- **Gun, Fire, Melt:** click a thing to shoot it, set it alight (it chars,
+  spreads fire to wood and cloth nearby and burns down into a heap) or
+  melt it (it glows and slumps into a puddle). People who catch fire
+  stop, drop and roll.
+- **Fly around or Walk around:** the title screen and the pause menu
+  (Esc, Start or Select) pick how you are in the world: the free camera,
+  or a person in third person (the UAL1 mannequin) who picks up the bat
+  and the other tools from the ground and uses them.
 - **Throw** (FEMFX builds): click to throw a ball.
 - **Get up** stands everyone up again; **Clear** empties the world
   (Ctrl+Z brings it back).
