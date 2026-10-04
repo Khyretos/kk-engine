@@ -1,0 +1,362 @@
+#!/usr/bin/env python3
+"""Builds and tests KKE on one PC and writes the results to one folder.
+
+Made for a small local model (or a person) that needs one command per job
+and one line that says whether it worked. Every job ends with a line that
+starts with PASS or FAIL, and exit code 0 means PASS.
+
+    tools/runner/kkrun build                 # configure + build (-j6), zero warnings
+    tools/runner/kkrun tests                 # kke_tests
+    tools/runner/kkrun demo climb_race       # one demo for 8 s with a virtual pad
+    tools/runner/kkrun shots racing tennis   # a screenshot of each
+    tools/runner/kkrun online                # host + joiner, two windows
+    tools/runner/kkrun all                   # every job above, one summary
+    tools/runner/kkrun summary               # print the summary of the last run
+
+Results go to build/runner-results/<time>/ (one log per job, screenshots,
+SUMMARY.txt); build/runner-results/latest points at the newest folder.
+
+Display modes, printed by every job that opens a window:
+  desktop  : a desktop session exists (DISPLAY set) and --headless was not
+             given; the game opens a real window on the real GPU.
+  headless : no DISPLAY, or --headless; the game runs inside Xvfb. Vulkan
+             then uses lavapipe (software) when it is installed, otherwise
+             the real GPU drawing into Xvfb. The job prints which device the
+             game actually used ("using device: ...").
+Keys are pressed with xdotool when installed, otherwise with python-xlib.
+"""
+
+import argparse
+import datetime
+import os
+import pathlib
+import re
+import subprocess
+import sys
+import time
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+sys.dont_write_bytecode = True  # no __pycache__ in the checkout
+sys.path.insert(0, str(ROOT / "tools" / "runner"))
+import xdisplay  # noqa: E402  (sits next to this script)
+
+# Demos whose window comes up with no paid art (CI runs these headless).
+DEFAULT_SHOTS = ["starter_game", "climb_race", "racing", "party"]
+# Warnings about the PC rather than the game (same list as tools/check_game).
+MACHINE_WARNINGS = ("validation layers requested but not available",)
+ONLINE_GAMES = {"climb_race": ("Climb Race", "KKE_CLIMB_WAIT"), "racing": ("Racing", "KKE_RACE_WAIT")}
+
+
+def results_dir(args):
+    """The folder this run writes into: --out; a new timestamped folder for
+    `build`, `all` and --new; otherwise the newest folder (latest), so
+    build, tests, demo, shots and online run one by one end up together."""
+    base = pathlib.Path(args.build).resolve() / "runner-results"
+    latest = base / "latest"
+    if args.out:
+        out = pathlib.Path(args.out).resolve()
+    elif args.job in ("build", "all") or args.new or not latest.exists():
+        out = base / datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    else:
+        return latest.resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    if out.parent == base:
+        if latest.is_symlink():
+            latest.unlink()
+        latest.symlink_to(out.name)
+    return out
+
+
+def record(out, job, ok, detail):
+    """Adds one line to SUMMARY.txt and prints it."""
+    line = f"{'PASS' if ok else 'FAIL'} {job}: {detail}"
+    with open(out / "SUMMARY.txt", "a", encoding="utf-8") as f:
+        f.write(line + "\n")
+    print(line)
+    return ok
+
+
+def run_logged(cmd, log, env=None, cwd=None):
+    """Runs cmd, writes its output to log and to the screen; returns the exit code."""
+    with open(log, "w", encoding="utf-8") as f:
+        f.write("$ " + " ".join(str(c) for c in cmd) + "\n")
+        f.flush()
+        proc = subprocess.Popen([str(c) for c in cmd], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                env=env, cwd=cwd, text=True, errors="replace")
+        assert proc.stdout is not None
+        for raw in proc.stdout:
+            f.write(raw)
+            f.flush()
+            sys.stdout.write(raw)
+            sys.stdout.flush()
+        return proc.wait()
+
+
+def warning_lines(*logs):
+    """The same patterns as tools/ci/check_warnings.sh."""
+    pat = re.compile(r"warning:|CMake Warning|CMake Deprecation Warning|XML failed validation")
+    hits = []
+    for log in logs:
+        for n, raw in enumerate(pathlib.Path(log).read_text(errors="replace").splitlines(), 1):
+            if pat.search(raw):
+                hits.append(f"{pathlib.Path(log).name}:{n}: {raw.strip()}")
+    return hits
+
+
+# ---------------------------------------------------------------- build
+
+
+def job_build(args, out):
+    build = pathlib.Path(args.build)
+    configure = ["cmake", "-S", ROOT, "-B", build, "-G", "Ninja", f"-DCMAKE_BUILD_TYPE={args.type}",
+                 "-DKKE_WARNINGS_AS_ERRORS=ON"]
+    print(f"== build: {args.type}, {args.jobs} parallel jobs, into {build}")
+    code = run_logged(configure, out / "configure.log")
+    if code != 0:
+        return record(out, "build", False, f"configure failed (exit {code}); see configure.log")
+    cmd = ["cmake", "--build", build, "-j", str(args.jobs)]
+    for target in args.target or []:
+        cmd += ["--target", target]
+    code = run_logged(cmd, out / "build.log")
+    warnings = warning_lines(out / "configure.log", out / "build.log")
+    (out / "build-warnings.txt").write_text("\n".join(warnings) + ("\n" if warnings else ""))
+    if code != 0:
+        failed = [l for l in (out / "build.log").read_text(errors="replace").splitlines() if l.startswith("FAILED:")]
+        return record(out, "build", False, f"build failed (exit {code}), {len(failed)} FAILED target(s); see build.log")
+    if warnings:
+        return record(out, "build", False, f"{len(warnings)} warning line(s); see build-warnings.txt (fix them, never silence)")
+    return record(out, "build", True, f"built with zero warnings ({args.type}, -j{args.jobs})")
+
+
+# ---------------------------------------------------------------- unit tests
+
+
+def job_tests(args, out):
+    binary = pathlib.Path(args.build) / "bin" / "kke_tests"
+    if not binary.exists():
+        return record(out, "tests", False, f"{binary} not found; run: tools/runner/kkrun build")
+    cmd = [binary, "--gtest_brief=1"]
+    if args.filter:
+        cmd.append(f"--gtest_filter={args.filter}")
+    print(f"== tests: {binary} (takes a few minutes)")
+    started = time.monotonic()
+    code = run_logged(cmd, out / "tests.log", cwd=binary.parent)
+    text = (out / "tests.log").read_text(errors="replace")
+    passed = re.search(r"\[  PASSED  \] (\d+) test", text)
+    skipped = re.search(r"\[  SKIPPED \] (\d+) test", text)
+    failed = sorted(set(re.findall(r"^\[  FAILED  \] (\S+\.\S+)", text, re.M)))
+    counts = f"{passed[1] if passed else 0} passed, {skipped[1] if skipped else 0} skipped, {len(failed)} failed"
+    took = f"{time.monotonic() - started:.0f} s"
+    if code != 0 or failed:
+        (out / "tests-failed.txt").write_text("\n".join(failed) + "\n")
+        return record(out, "tests", False, f"{counts} ({took}, exit {code}); names in tests-failed.txt")
+    return record(out, "tests", True, f"{counts} ({took})")
+
+
+# ---------------------------------------------------------------- demo and screenshots
+
+
+def check_game(args, out, game, shot=None, keys=None, log_name=None):
+    """Runs tools/check_game on one game; returns (ok, last line)."""
+    cmd = [sys.executable, "-W", "error", ROOT / "tools" / "check_game", game,
+           "--bin", pathlib.Path(args.build) / "bin", "--seconds", str(args.seconds), "--log", out / f"{log_name or game}.game.log"]
+    if args.headless:
+        cmd.append("--headless")
+    if not args.no_pad:
+        cmd.append("--pad")
+    if keys:
+        cmd += ["--keys", keys]
+    if shot:
+        cmd += ["--shot", shot]
+    code = run_logged(cmd, out / f"{log_name or game}.log")
+    lines = (out / f"{log_name or game}.log").read_text(errors="replace").strip().splitlines()
+    return code == 0, (lines[-1] if lines else "no output")
+
+
+def job_demo(args, out):
+    ok, last = check_game(args, out, args.game, shot=out / f"{args.game}.png", keys=args.keys)
+    return record(out, f"demo {args.game}", ok, last)
+
+
+def job_shots(args, out):
+    games = args.games or DEFAULT_SHOTS
+    args.no_pad = True  # an animated pad swings the camera; shots keep the start view
+    good = 0
+    for game in games:
+        shot = out / f"shot-{game}.png"
+        ok, last = check_game(args, out, game, shot=shot, log_name=f"shot-{game}")
+        ok = ok and shot.exists() and shot.stat().st_size > 0
+        good += ok
+        record(out, f"shot {game}", ok, f"{shot.name}: {last}")
+    return good == len(games)
+
+
+# ---------------------------------------------------------------- online
+
+
+def job_online(args, out):
+    game = args.game
+    title, wait_var = ONLINE_GAMES[game]
+    binary = pathlib.Path(args.build).resolve() / "bin" / game
+    if not binary.exists():
+        return record(out, f"online {game}", False, f"{binary} not found; run: tools/runner/kkrun build")
+    # Leftovers from an earlier run would hold the port. -x matches the
+    # process name only, so this script itself is never hit.
+    subprocess.run(["pkill", "-x", game], check=False)
+    host_x, join_x = xdisplay.Xvfb(), xdisplay.Xvfb()
+    print(f"== online {game}: {xdisplay.headless_note()}, host on {host_x.name}, joiner on {join_x.name}")
+    base = dict(os.environ, KKE_SKIP_INTRO="1", KKE_MAIN_MENU="0", SDL_VIDEODRIVER="x11", **xdisplay.headless_env())
+    procs, logs = [], []
+    try:
+        host_env = dict(base, DISPLAY=host_x.name, KKE_NET="host", KKE_NET_NAME="Host", **{wait_var: "1"})
+        join_env = dict(base, DISPLAY=join_x.name, KKE_NET="join:127.0.0.1", KKE_LOBBY_JOIN="1", KKE_NET_NAME="Client")
+        logs = [open(out / f"online-{game}-host.log", "w"), open(out / f"online-{game}-client.log", "w")]
+        host_log, join_log = logs
+        procs.append(subprocess.Popen([binary], cwd=binary.parent, env=host_env, stdout=host_log, stderr=subprocess.STDOUT))
+        time.sleep(4)
+        procs.append(subprocess.Popen([binary], cwd=binary.parent, env=join_env, stdout=join_log, stderr=subprocess.STDOUT))
+        time.sleep(args.settle)
+        # The race starts by itself once the joiner is in (KKE_*_WAIT=1);
+        # a held key in the host window proves input reaches it.
+        xdisplay.press(host_x.name, title, "space")
+        time.sleep(max(1.0, args.seconds - args.settle - 1))
+        xdisplay.screenshot(host_x.name, out / f"online-{game}-host.png")
+        xdisplay.screenshot(join_x.name, out / f"online-{game}-client.png")
+        exits = [p.poll() for p in procs]
+    finally:
+        for p in procs:
+            p.terminate()
+        for p in procs:
+            try:
+                p.wait(10)
+            except subprocess.TimeoutExpired:
+                p.kill()
+                p.wait()
+        for f in logs:
+            f.close()
+        host_x.stop()
+        join_x.stop()
+    host = (out / f"online-{game}-host.log").read_text(errors="replace")
+    join = (out / f"online-{game}-client.log").read_text(errors="replace")
+    problems = []
+    for name, text, code in (("host", host, exits[0]), ("client", join, exits[1])):
+        if code is not None:
+            problems.append(f"{name} stopped by itself (exit {code})")
+        for raw in text.splitlines():
+            if re.search(r"\[(error|critical)\]|Fatal error|Segmentation fault", raw):
+                problems.append(f"{name}: {raw.strip()[:160]}")
+    # The host logs "online: 1 players in, starting"; the client logs the
+    # race the host set up: "online race 1: 2 climbers on ... (1 of them here)".
+    if not re.search(r"online: [1-9]\d* players in, starting", host):
+        problems.append("host never logged 'online: N players in, starting': the client never got in")
+    if not re.search(r"online race \d+: \d+ (climbers|cars) on .*of them here", join):
+        problems.append("client never logged 'online race N: ... of them here': it got no race from the host")
+    device = xdisplay.device_used(host)
+    if problems:
+        (out / f"online-{game}-problems.txt").write_text("\n".join(problems) + "\n")
+        return record(out, f"online {game}", False, f"{problems[0]} ({len(problems)} problem(s), online-{game}-problems.txt)")
+    return record(out, f"online {game}", True, f"host and client connected, raced, no errors; device: {device}; online-{game}-host.png and -client.png")
+
+
+# ---------------------------------------------------------------- summary
+
+
+def job_summary(args, out):
+    summary = out / "SUMMARY.txt"
+    if not summary.exists():
+        print(f"no SUMMARY.txt in {out}")
+        return False
+    lines = summary.read_text().strip().splitlines()
+    failed = [l for l in lines if l.startswith("FAIL")]
+    # Every warning any game logged, minus the machine's own (no
+    # validation layers installed): zero warnings is the rule.
+    warnings = set()
+    for log in sorted(out.glob("*.game.log")) + sorted(out.glob("online-*.log")):
+        for raw in log.read_text(errors="replace").splitlines():
+            if "][warning]: " in raw and not any(m in raw for m in MACHINE_WARNINGS):
+                warnings.add(f"{log.name}: {raw.split('][warning]: ', 1)[1]}")
+    (out / "warnings.txt").write_text("".join(w + "\n" for w in sorted(warnings)))
+    print(f"== results in {out}")
+    print("\n".join(lines))
+    print(f"-- game warnings: {len(warnings)} (warnings.txt)")
+    for w in sorted(warnings)[:10]:
+        print("  " + w)
+    files = sorted(p.name for p in out.iterdir() if p.is_file())
+    print(f"-- files: {', '.join(files)}")
+    if failed:
+        print(f"FAIL: {len(failed)} of {len(lines)} job(s) failed")
+    elif warnings:
+        print(f"FAIL: all {len(lines)} job(s) ran, but the games logged {len(warnings)} warning(s); see warnings.txt")
+    else:
+        print(f"PASS: all {len(lines)} job(s) passed, no warnings")
+    return not failed and not warnings
+
+
+def job_all(args, out):
+    job_build(args, out) and job_tests(args, out)
+    args.game, args.keys = "climb_race", None
+    job_demo(args, out)
+    args.games = None
+    job_shots(args, out)
+    args.game = "climb_race"
+    job_online(args, out)
+    print()
+    return job_summary(args, out)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--build", default=str(ROOT / "build"), help="build folder (default build/)")
+    ap.add_argument("--out", help="results folder (default build/runner-results/<time>)")
+    ap.add_argument("--new", action="store_true", help="start a new results folder (build and all always do)")
+    sub = ap.add_subparsers(dest="job", required=True)
+
+    def windowed(p):
+        p.add_argument("--seconds", type=float, default=8, help="how long each game runs (default 8)")
+        p.add_argument("--headless", action="store_true", help="use Xvfb even on a desktop")
+        p.add_argument("--no-pad", action="store_true", help="no virtual gamepad")
+
+    b = sub.add_parser("build", help="configure and build with zero warnings")
+    for p in (b, sub.add_parser("all", help="build, tests, demo, shots, online, summary")):
+        p.add_argument("--type", default="RelWithDebInfo", help="CMAKE_BUILD_TYPE (default RelWithDebInfo, like the everything-release preset)")
+        p.add_argument("--jobs", type=int, default=6, help="parallel compile jobs (default 6: 32 GB RAM)")
+        p.add_argument("--target", action="append", help="build only this target (repeatable)")
+        p.add_argument("--filter", help="gtest filter, e.g. 'Net*'")
+        p.add_argument("--settle", type=float, default=12, help="seconds before the host presses Space")
+        windowed(p)
+        p.set_defaults(game="climb_race")
+    sub.choices["build"].set_defaults(func=job_build)
+    sub.choices["all"].set_defaults(func=job_all)
+    t = sub.add_parser("tests", help="run kke_tests")
+    t.add_argument("--filter", help="gtest filter, e.g. 'Net*'")
+    t.set_defaults(func=job_tests)
+    d = sub.add_parser("demo", help="run one demo with tools/check_game")
+    d.add_argument("game")
+    d.add_argument("--keys", help="keys to press after 3 s, e.g. 'space w w'")
+    windowed(d)
+    d.set_defaults(func=job_demo)
+    s = sub.add_parser("shots", help="a screenshot of each game")
+    s.add_argument("games", nargs="*", help=f"default: {' '.join(DEFAULT_SHOTS)}")
+    windowed(s)  # (--no-pad is implied: shots keep the start view)
+    s.set_defaults(func=job_shots)
+    o = sub.add_parser("online", help="host + joiner on two Xvfb displays")
+    o.add_argument("--game", default="climb_race", choices=sorted(ONLINE_GAMES))
+    o.add_argument("--seconds", type=float, default=30, help="how long both run (default 30)")
+    o.add_argument("--settle", type=float, default=12, help="seconds before the host presses Space")
+    o.set_defaults(func=job_online)
+    m = sub.add_parser("summary", help="print SUMMARY.txt of the newest run")
+    m.set_defaults(func=job_summary)
+    args = ap.parse_args()
+    sys.stdout.reconfigure(line_buffering=True)
+
+    if args.job == "summary" and not args.out:
+        out = pathlib.Path(args.build).resolve() / "runner-results" / "latest"
+        out = out.resolve() if out.exists() else out
+    else:
+        out = results_dir(args)
+    print(f"== results folder: {out}", flush=True)
+    return 0 if args.func(args, out) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
