@@ -107,7 +107,8 @@ size_t RigidBodyModule::physicsBlast(const glm::vec3& center, float radius, floa
         if (b.motion != RigidWorld::Motion::Dynamic) continue;
         const glm::vec3 dv = blastVelocity(center, radius, speed, b.center);
         if (glm::dot(dv, dv) <= 0.0f) continue;
-        m_world->addVelocity(b.id, dv);
+        const glm::vec3 v = m_world->velocity(b.id);
+        m_world->addVelocity(b.id, blastedVelocity(v, dv) - v);
         ++pushed;
     }
     return pushed;
