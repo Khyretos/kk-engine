@@ -180,6 +180,7 @@ nav:
       - Performance notes: PERFORMANCE_NOTES.md
       - Platforms and hardware targets: PLATFORMS.md
       - Android: ANDROID.md
+      - Windows and Android in VMs: VM_TESTS.md
       - Scaling: SCALING.md
       - Dependencies and licences: DEPENDENCIES.md
       - Hardware tests: HARDWARE_TESTS.md

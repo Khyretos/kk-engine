@@ -35,6 +35,8 @@ sys.path.insert(0, str(ROOT / "tools" / "runner"))
 import xdisplay  # noqa: E402  (tools/runner/xdisplay.py)
 
 LINE = re.compile(r"^\[[^\]]*\]\[[^\]]*\]\[(?P<who>[^\]]*)\]\[[^\]]*\]\[(?P<level>[a-z]+)\]: (?P<text>.*)$")
+# Said on stderr once the log is closed (the quit watchdog in Application.cpp).
+LATE = re.compile(r"^\[kke\]\[(?P<level>[a-z]+)\]: (?P<text>.*)$")
 # Warnings that are about the machine, not the game.
 MACHINE = ("validation layers requested but not available",)
 
@@ -82,11 +84,15 @@ def main():
         with tempfile.TemporaryFile(mode="w+") as log:
             proc = subprocess.Popen([str(binary)], cwd=binary.parent, env=env, stdout=log, stderr=subprocess.STDOUT)
             started = time.monotonic()
+            hung = False
             try:
                 if args.keys:
                     time.sleep(3)
                     xdisplay.press(env["DISPLAY"], None, args.keys, hold=0.4, pid=proc.pid)
                 time.sleep(max(0.0, args.seconds - (time.monotonic() - started) - (0.5 if args.shot else 0)))
+                if args.shot and proc.poll() is not None:
+                    print("-- no screenshot: the game had already quit")
+                    args.shot = None
                 if args.shot:
                     # On a desktop, only the game's own window.
                     window = None if xvfb else xdisplay.window_id(env["DISPLAY"], pid=proc.pid)
@@ -98,6 +104,7 @@ def main():
                 try:
                     proc.wait(10)
                 except subprocess.TimeoutExpired:
+                    hung = True
                     proc.kill()
                     proc.wait()
             log.seek(0)
@@ -115,6 +122,8 @@ def main():
         if not m:
             if "Fatal error" in raw or "Segmentation fault" in raw:
                 errors.append(raw)
+            elif late := LATE.match(raw):
+                (warnings if late["level"] == "warning" else errors).append(f"quitting: {late['text']}")
             continue
         level, who, said = m["level"], m["who"], m["text"]
         if level in ("error", "critical"):
@@ -132,6 +141,9 @@ def main():
         errors.append(f"the game stopped by itself with exit code {exited}")
         print(f"-- the game stopped by itself with exit code {exited}; last lines:")
         print("\n".join("  " + line for line in text.splitlines()[-15:]))
+    if hung:
+        errors.append("it did not quit within 10 s of being asked to")
+        print("-- it did not quit within 10 s of being asked to (killed)")
     if args.shot:
         print(f"-- screenshot: {args.shot}")
     print("FAILED" if errors else f"OK: {args.game} ran {args.seconds:g} s with no errors" +

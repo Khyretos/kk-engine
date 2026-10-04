@@ -1,0 +1,156 @@
+# Windows and Android in virtual machines on soucouyant (docs/VM_TESTS.md).
+#
+# The Windows build runs in a real Windows 11 (QEMU/KVM, the free evaluation
+# image) and the Android build in the Android emulator, instead of only Wine
+# and a compile. Each job builds the platform's package, boots the VM, runs
+# the unit tests (Windows) and every demo through kke_benchmark or the
+# benchmark app, and keeps a summary, screenshots and logs as the run's
+# artifact. Vulkan in both VMs is Mesa's lavapipe on the CPU, as in the
+# Linux CI: the VMs prove the games start, play and quit on that platform;
+# their frame rates aren't a real GPU's.
+#
+# Runs on Sundays and by hand: a full run takes a few hours of the one
+# runner. The VMs' files live on soucouyant in $KKE_VM_DIR, which the job
+# container gets as a volume, with /dev/kvm (the runner's config.yml must
+# allow both: docs/VM_TESTS.md "Setting up soucouyant"). The Windows image
+# is made the first time and remade when its 90-day evaluation nears its
+# end, from the ISO in $KKE_VM_DIR/iso.
+name: VM tests
+
+on:
+  # Sundays at 05:00 Amsterdam time (03:00 UTC in summer), after the nightly
+  # CI and benchmark runs have had the runner.
+  schedule:
+    - cron: "0 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: Which VMs (windows, android, or both)
+        default: windows,android
+      quick:
+        description: Quick benchmark run (fewer demos, 8 s each)
+        type: boolean
+        default: false
+      rebuild_windows:
+        description: Reinstall the Windows image first
+        type: boolean
+        default: false
+
+concurrency:
+  group: vm-tests
+  cancel-in-progress: false
+
+env:
+  KKE_JOBS: "8"          # soucouyant has 32 GB of RAM; see ci.yml
+  KKE_VM_DIR: /srv/kke-vm
+  KKE_VM_CPUS: "8"       # of 16 threads; the job's own build is done by then
+  KKE_VM_MEM_MB: "8192"
+  VERSION: vm-test
+
+jobs:
+  windows:
+    if: github.event_name == 'schedule' || contains(inputs.platforms, 'windows')
+    runs-on: soucouyant
+    timeout-minutes: 300
+    container:
+      image: git.kreative-kompas.com/khyretos/kke-vm:1
+      options: --device /dev/kvm --volume /srv/kke-vm:/srv/kke-vm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: KVM and the VM tools are there
+        run: python3 -W error tools/vm/kke_vm.py check --windows
+
+      # Made once (about 30 minutes), and again before the evaluation ends.
+      - name: Windows image
+        env:
+          REBUILD: ${{ inputs.rebuild_windows && '--force' || '' }}
+        run: python3 -W error tools/vm/kke_vm.py windows-prepare --if-needed $REBUILD
+
+      - name: Configure (MinGW-w64 cross)
+        run: |
+          set -o pipefail
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DKKE_ENABLE_FEMFX=ON -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_VALIDATION=OFF "-DKKE_VERSION_NAME=$VERSION" \
+            -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake 2>&1 | tee configure.log
+
+      - name: Build
+        run: |
+          set -o pipefail
+          cmake --build build -j "$KKE_JOBS" 2>&1 | tee build.log
+
+      - name: No warnings anywhere
+        run: tools/ci/check_warnings.sh configure.log build.log
+
+      - name: Package
+        run: tools/packaging/package.sh --bin build/bin --platform windows --version "$VERSION" --out dist --deps build/_deps --strip x86_64-w64-mingw32-strip
+
+      - name: Tests and demos in Windows 11
+        env:
+          QUICK: ${{ inputs.quick && '--quick' || '' }}
+        run: |
+          python3 -W error tools/vm/kke_vm.py windows-test --package dist/kk-engine-$VERSION-windows-x86_64.zip \
+            --tests build/bin/kke_tests.exe --source . --out vm-results/windows $QUICK
+
+      - name: Summary
+        if: always()
+        run: |
+          cat vm-results/windows/summary.md 2>/dev/null || echo "No summary, the VM did not get that far (see the step above)."
+
+      - uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        if: always()
+        with:
+          name: vm-windows
+          path: vm-results/windows/
+
+  android:
+    if: github.event_name == 'schedule' || contains(inputs.platforms, 'android')
+    runs-on: soucouyant
+    timeout-minutes: 240
+    container:
+      image: git.kreative-kompas.com/khyretos/kke-vm:1
+      options: --device /dev/kvm --volume /srv/kke-vm:/srv/kke-vm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: KVM and the emulator are there
+        run: python3 -W error tools/vm/kke_vm.py check --android
+
+      # x86_64 rather than the phones' arm64: the emulator then runs the
+      # games natively, with no ARM translation.
+      - name: Configure (android-x86_64)
+        run: |
+          set -o pipefail
+          cmake --preset android-x86_64 -DKKE_WARNINGS_AS_ERRORS=ON 2>&1 | tee configure.log
+
+      - name: Build (android-x86_64)
+        run: |
+          set -o pipefail
+          cmake --build build-android-x86_64 -j "$KKE_JOBS" 2>&1 | tee build.log
+
+      - name: APKs
+        run: |
+          set -o pipefail
+          python3 android/build_apk.py --build build-android-x86_64 --out dist/kke-demos-android-x86_64.apk 2>&1 | tee apk.log
+          python3 android/build_apk.py --build build-android-x86_64 --benchmark --out dist/kke-benchmark-android-x86_64.apk 2>&1 | tee -a apk.log
+
+      - name: No warnings anywhere
+        run: tools/ci/check_warnings.sh configure.log build.log apk.log
+
+      - name: Demos in the Android emulator
+        env:
+          QUICK: ${{ inputs.quick && '--quick' || '' }}
+        run: |
+          python3 -W error tools/vm/kke_vm.py android-test --apk dist/kke-demos-android-x86_64.apk \
+            --benchmark-apk dist/kke-benchmark-android-x86_64.apk --out vm-results/android $QUICK
+
+      - name: Summary
+        if: always()
+        run: |
+          cat vm-results/android/summary.md 2>/dev/null || echo "No summary, the emulator did not get that far (see the step above)."
+
+      - uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        if: always()
+        with:
+          name: vm-android
+          path: vm-results/android/

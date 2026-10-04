@@ -112,14 +112,14 @@ void DuelModule::updateHud() {
     auto prompt = [in](const std::string& text, int player = 0) { return in ? in->promptText(text, player) : text; };
     set(m_hud.sub, prompt(sub), "sub");
     set(m_hud.round, "Round " + std::to_string(m_round), "round");
-    const std::string moves = "{move} move  {duel.light} jab  {duel.heavy} uppercut  {duel.kick} knee  {duel.block} block";
+    const std::string moves = "{move} move  {duel.light} punch  {duel.heavy} uppercut  {duel.kick} knee / kick  {duel.block} block";
     // Two players is F2 on the keyboard; on a controller it's in the pause
     // menu (Select is the pause button), so the hint leaves it out there.
     const bool twoKey = !prompt("{duel.two}").empty();
     const std::string hint = m_twoPlayers
                                  ? "P1 " + prompt(moves + "  {duel.dodge} dodge", 0) + "  ·  P2 " + prompt(moves + "  {duel.dodge} dodge", 1) +
                                        (twoKey ? prompt("  ·  {duel.two} back to the bot") : std::string())
-                                 : prompt("{move} move  ·  {duel.light} jab  ·  {duel.heavy} uppercut  ·  {duel.kick} knee  ·  "
+                                 : prompt("{move} move  ·  {duel.light} punch (again: combo)  ·  {duel.heavy} uppercut  ·  {duel.kick} knee / kick  ·  "
                                           "{duel.block} block (just in time: parry)  ·  {duel.dodge} dodge") +
                                        (twoKey ? prompt("  ·  {duel.two} two players") : std::string());
     set(m_hud.hint, hint, "hint");

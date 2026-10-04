@@ -70,18 +70,26 @@ private:
         float yaw = 0.0f;          // AiWorld's convention: 0 = +Z, 90 = +X
         uint32_t aimAt = 0;        // who it last shot at
         float sinceShot = 1e9f;
-        int coverSpot = -1;        // the cover spot it holds, if any
+        bool covering = false;     // told to hold a cover spot:
+        glm::vec3 coverPos{0.0f};  //   where to crouch
+        glm::vec3 coverFacing{0.0f}; // toward the cover (and the danger past it)
         std::unique_ptr<command_kit::Humanoid> body;
+    };
+    // Something to hide behind: a crate, a barrier (a box on the ground).
+    struct CoverObject {
+        glm::vec3 pos{0.0f};
+        glm::vec3 half{0.0f};      // its own half extents (x across, z deep)
+        float yaw = 0.0f;          // degrees about +Y
     };
     struct CoverSpot {
         glm::vec3 pos{0.0f};       // where to crouch
-        glm::vec3 facing{0.0f};    // toward the danger, over the cover
-        uint32_t taken = 0;
+        glm::vec3 facing{0.0f};    // toward the cover (and the danger past it)
+        int object = -1;
     };
     struct Tracer { glm::vec3 from{0.0f}, to{0.0f}; float left = 0.0f; bool hit = false; };
 
     void buildField();
-    void addCover(const char* model, const glm::vec3& pos, float yaw, const glm::vec3& half, bool friendlySide);
+    void addCover(const char* model, const glm::vec3& pos, float yaw, const glm::vec3& half);
     void addSoldier(uint32_t id, const std::string& name, const glm::vec3& pos, bool enemy);
     Soldier* soldier(uint32_t id);
     const Soldier* soldier(uint32_t id) const;
@@ -90,6 +98,11 @@ private:
     // Orders.
     void give(kke::OrderKind kind, uint32_t target = 0, const glm::vec3* point = nullptr, bool queue = false);
     void takeCover(const glm::vec3* near = nullptr);
+    // Cover spots on the side of each obstacle away from `threat`.
+    std::vector<CoverSpot> coverSpots(const glm::vec3& threat) const;
+    glm::vec3 threatFor(bool enemy) const;           // where the other side is (its middle)
+    int coverObjectNear(const glm::vec3& p, float within) const; // -1: none that close
+    bool inCover(const Soldier& s) const;
     void cycleFormation();
     void padSelect(kke::InputMap& in, command_kit::CommandInput::Frame& f, float dt);
     void buildPanel();
@@ -108,7 +121,8 @@ private:
     bool clearShot(const glm::vec3& from, const glm::vec3& to) const;
     void kill(Soldier& s);
 
-    void updateCamera(float dt);
+    void updateCamera(const command_kit::CommandInput::Frame& f, float dt);
+    void centerOnSelection();
     void updateBodies(float dt);
     void updateHud(float dt);
     void runDemo(float dt);
@@ -134,15 +148,19 @@ private:
     kke::OrderKind m_armed = kke::OrderKind::None; // a button waiting for a target (touch: Attack, Focus)
 
     std::vector<Soldier> m_soldiers;
-    std::vector<CoverSpot> m_cover;
+    std::vector<CoverObject> m_coverObjects;
     std::vector<Tracer> m_tracers;
     glm::vec3 m_marker3{0.0f};
     float m_markerLeft = 0.0f;
     uint32_t m_nextRoll = 1;
 
-    // The camera: over the field, looking down at `m_focus`.
-    glm::vec3 m_focus{0.0f, 0.0f, 12.0f};
-    float m_camYaw = 0.0f, m_camPitch = 48.0f, m_camDistance = 19.0f;
+    // The camera (XCOM-like): over the field, looking down at `m_focus`.
+    // Every control moves a goal; the view glides to it.
+    glm::vec3 m_focus{0.0f, 0.0f, 12.0f}, m_focusGoal{0.0f, 0.0f, 12.0f};
+    float m_camYaw = 0.0f, m_camPitch = 50.0f, m_camDistance = 19.0f;
+    float m_yawGoal = 0.0f, m_pitchGoal = 50.0f, m_distanceGoal = 19.0f;
+    bool m_edgePan = false; // settings: the mouse at the window's edge moves the view
+    float m_lastClick = -1.0f; uint32_t m_lastClicked = 0; // a double click on a soldier centres on it
 
     float m_clock = 0.0f, m_quitAfter = -1.0f;
     bool m_demo = false, m_announcedClear = false;
