@@ -28,11 +28,13 @@ void appendBox(const glm::vec3& center, const glm::vec3& half, const glm::vec3& 
     }
 }
 
-Scenery::Scenery(kke::Application& app, kke::ModelModule& models, kke::RigidBodyModule& rigid)
+Scenery::Scenery(kke::Application& app, kke::ModelModule& models, kke::RigidBodyModule& rigid, std::vector<std::string> onlyPacks)
     : m_app(app), m_models(models), m_rigid(rigid) {
     const char* base = SDL_GetBasePath();
     const std::string folder = kke::findAssetFolder("assets/synty", { "KKE_ASSETS_DIR", "KKE_SYNTY_DIR" }, base ? base : "");
-    if (!folder.empty()) m_catalog = kke::AssetCatalog::scan(folder);
+    kke::CatalogScanOptions only;
+    only.onlyPacks = std::move(onlyPacks);
+    if (!folder.empty()) m_catalog = kke::AssetCatalog::scan(folder, only);
     if (m_catalog.assets.empty())
         kke::log::get("Scenery")->info("no asset packs found (assets/synty or KKE_ASSETS_DIR): the scene is blocks");
 }
@@ -47,6 +49,7 @@ void Scenery::ground(float half, const glm::vec3& color) {
     std::vector<uint32_t> idx;
     const glm::vec3 h(half, 0.5f, half), c(0.0f, -0.5f, 0.0f);
     appendBox(c, h, color, v, idx);
+    m_groundHalf = half;
     m_ground = std::make_unique<kke::DynamicMeshRenderer>(m_app);
     m_ground->upload(v, idx);
     kke::RigidWorld::BodyDesc d;
@@ -84,6 +87,7 @@ kke::ModelModule::InstanceId Scenery::place(const std::string& name, const glm::
         b.position = pos + q * ((mn + mx) * 0.5f);
         b.rotation = q;
         m_bodies.push_back(m_rigid.world().add(b));
+        m_colliders.push_back({ b.position, b.halfExtents, yawDegrees });
     }
     return inst;
 }
@@ -97,6 +101,7 @@ void Scenery::block(const glm::vec3& center, const glm::vec3& half, const glm::v
     b.halfExtents = half;
     b.position = center;
     m_bodies.push_back(m_rigid.world().add(b));
+    m_colliders.push_back({ center, half, 0.0f });
 }
 
 void Scenery::logUsed(const char* who) const {

@@ -48,8 +48,13 @@ bool HumanoidKit::load(kke::ModelModule& models) {
     m_set = std::make_unique<kke::AnimationSet>(m_rig);
     const glm::vec3 fwd = kke::modelForward(m_rig);
     m_modelYaw = 180.0f - glm::degrees(std::atan2(fwd.x, fwd.z));
+    m_models = &models;
+    m_hands[0] = kke::makeHandRig(*d, true);
+    m_hands[1] = kke::makeHandRig(*d, false);
     return true;
 }
+
+const kke::ModelData* HumanoidKit::skinned() const { return m_models && m_model ? m_models->model(m_model) : nullptr; }
 
 Humanoid::Humanoid(HumanoidKit& kit, kke::ModelModule& models, const glm::vec3& tint) : m_kit(kit), m_models(models), m_tint(tint) {
     if (!kit.loaded()) return;
@@ -107,7 +112,62 @@ void Humanoid::update(const glm::vec3& feet, float yawDegrees, float groundSpeed
     m_models.setTransform(m_instance, m_transform);
     m_anim->setParameter(groundSpeed);
     m_anim->update(dt);
-    if (std::vector<glm::mat4>* locals = m_models.boneLocals(m_instance)) kke::poseToLocals(m_anim->pose(), *locals);
+    if (!m_ik) {
+        if (std::vector<glm::mat4>* locals = m_models.boneLocals(m_instance)) kke::poseToLocals(m_anim->pose(), *locals);
+        return;
+    }
+    // Clip, then hands and feet on the world, then fingers round what the palms hold.
+    const glm::vec3 velocity = m_haveFeet && dt > 0.0f ? (feet - m_lastFeet) / dt : glm::vec3(0.0f);
+    m_lastFeet = feet;
+    m_haveFeet = true;
+    const kke::ModelData& rig = m_kit.rig();
+    kke::Pose pose = m_anim->pose();
+    m_ik->apply(rig, pose, m_transform, m_ground, velocity, dt);
+    m_bones = kke::poseToModel(rig, pose);
+    for (int side = 0; side < 2; ++side) {
+        const kke::HandRig& h = m_kit.hand(side);
+        if (m_grip[side] <= 0.0f || !h.valid()) continue;
+        const glm::mat4 p = m_bones[size_t(h.hand)] * h.palm;
+        const glm::vec3 centre = glm::vec3(p[3]) + glm::normalize(glm::vec3(p[2])) * m_grip[side];
+        kke::GripSurface ball;
+        ball.capsules.push_back({ centre, centre, m_grip[side] });
+        kke::wrapFingers(rig, pose, h, ball, 1.0f, 0.8f);
+        m_grip[side] = 0.0f;
+    }
+    m_bones = kke::poseToModel(rig, pose);
+    if (std::vector<glm::mat4>* locals = m_models.boneLocals(m_instance)) kke::poseToLocals(pose, *locals);
+}
+
+void Humanoid::enableIk(kke::CharacterIk::GroundQuery ground) {
+    m_ground = std::move(ground);
+    if (!m_ik && m_instance) m_ik = std::make_unique<kke::CharacterIk>(m_kit.rig(), m_kit.skinned());
+}
+
+void Humanoid::reach(int side, const glm::vec3& point, const std::optional<glm::vec3>& elbowToward) {
+    if (m_ik) m_ik->hand(side ? kke::CharacterIk::Right : kke::CharacterIk::Left, point, elbowToward);
+}
+
+void Humanoid::grip(int side, float radius) { m_grip[side & 1] = radius; }
+
+bool Humanoid::palm(int side, glm::mat4& world) const {
+    const kke::HandRig& h = m_kit.hand(side);
+    if (m_bones.empty() || !h.valid()) return false;
+    world = m_transform * m_bones[size_t(h.hand)] * h.palm;
+    return true;
+}
+
+glm::vec3 Humanoid::inPalm(int side, float radius) const {
+    glm::mat4 p(1.0f);
+    if (!palm(side, p)) {
+        // No mannequin: in front of the block body, at the hand's height.
+        const float s = side ? 1.0f : -1.0f;
+        return glm::vec3(m_transform * glm::vec4(0.3f * s, 1.0f, -0.3f, 1.0f));
+    }
+    return glm::vec3(p[3]) + glm::normalize(glm::vec3(p[2])) * radius;
+}
+
+float Humanoid::reachWeight(int side) const {
+    return m_ik ? m_ik->handWeight(side ? kke::CharacterIk::Right : kke::CharacterIk::Left) : 0.0f;
 }
 
 void Humanoid::setTint(const glm::vec3& tint) {
