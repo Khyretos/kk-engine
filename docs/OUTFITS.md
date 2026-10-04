@@ -62,3 +62,30 @@ A player's look travels as their NetModule character, `look:a.b.c.d.e|...`
 screen turns it back into an outfit with `Lobby::lookFromText`, so a new
 pick in the menu shows on every screen at once. CPU players' clothes come
 from their name, so they look the same everywhere too.
+
+## Synty people
+
+When the POLYGON City Characters pack is installed, Climb Race and Tennis
+add a **Body** row: the mannequin, or one of eleven City people (Jock,
+Tourist, Firefighter, Paramedic, Grandpa, Grandma, Hipster, Punk,
+Beachgoer, Roadworker, Hot dog). `kke::PeopleLibrary` (`kke/PeopleLibrary.h`)
+finds the pack and loads a person the first time someone picks them.
+
+The game keeps animating its mannequin, hidden, with all its clips and IK
+(hands on holds, the racket in the hand), and each frame
+`kke::PoseRetarget` (`kke/AnimRig.h`) copies that pose onto the person:
+
+```cpp
+kke::PeopleLibrary people;
+people.scan("MyGame");
+if (const kke::PeopleLibrary::Body* b = people.body(person, models, mannequin)) {
+    personInstance = models.spawn(b->model);
+    // every frame, after the mannequin's pose is in rigLocals:
+    kke::PeopleLibrary::follow(models, personInstance, *b, rigLocals, mannequinTransform);
+}
+```
+
+The person keeps its own textures, so the outfit rows don't change it. A
+machine without the pack draws a person picked elsewhere as the mannequin.
+The Body row is the last look field, so the other rows keep their place in
+the look text whether or not a machine has the pack.

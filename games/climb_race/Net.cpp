@@ -166,6 +166,7 @@ ClimbRaceModule::Entry ClimbRaceModule::remoteEntry(const kke::net::RemotePlayer
     e.name = p.name;
     e.tint = netrace::tintOfCharacter(p.character, glm::vec3(0.8f));
     e.outfit = outfitOfCharacter(p.character, e.tint);
+    e.person = personOfCharacter(p.character);
     e.netId = p.id;
     e.remote = true;
     return e;
@@ -205,7 +206,10 @@ void ClimbRaceModule::applySetup(const netrace::Setup& s) {
         e.tint = seat.tint;
         e.outfit = outfitOf({}, seat.tint);
         for (const kke::net::RemotePlayer& p : m_net->remotePlayers())
-            if (p.id == seat.player) e.outfit = outfitOfCharacter(p.character, seat.tint); // the clothes they picked
+            if (p.id == seat.player) {
+                e.outfit = outfitOfCharacter(p.character, seat.tint); // the clothes (and body) they picked
+                e.person = personOfCharacter(p.character);
+            }
         e.netId = seat.player;
         e.remote = !m_net->isLocalPlayer(seat.player);
         if (!e.remote) {
@@ -218,6 +222,7 @@ void ClimbRaceModule::applySetup(const netrace::Setup& s) {
                     e.name = own.name;
                     e.tint = own.tint;
                     e.outfit = own.outfit;
+                    e.person = own.person;
                 }
             mine = mine || !e.remote;
         }
@@ -466,6 +471,7 @@ void ClimbRaceModule::updateNet(float dt) {
         // They picked another colour or clothes: everyone sees it.
         r.tint = netrace::tintOfCharacter(it->character, r.tint);
         r.outfit = outfitOfCharacter(it->character, r.tint);
+        r.person = personOfCharacter(it->character);
         dress(r);
         if (!it->hasState || m_phase == Phase::Lobby) continue; // in the menu the line-up places them
         const netrace::Pose p = netrace::fromState(it->state);

@@ -568,81 +568,112 @@ BoneMatch matchBones(const ModelData& source, const ModelData& target) {
     return m;
 }
 
-std::vector<ModelAnimation> retargetAnimations(const ModelData& source, const ModelData& target, const BoneMatch& match) {
-    std::vector<ModelAnimation> out;
-    const size_t ns = source.bones.size(), nt = target.bones.size();
-    if (match.sourceOf.size() != nt) return out;
+PoseRetarget::PoseRetarget(const ModelData& source, const ModelData& target)
+    : PoseRetarget(source, target, matchBones(source, target)) {}
 
+PoseRetarget::PoseRetarget(const ModelData& source, const ModelData& target, const BoneMatch& match) : m_match(match) {
+    const size_t ns = source.bones.size(), nt = target.bones.size();
+    if (m_match.sourceOf.size() != nt) {
+        m_match = BoneMatch{};
+        return;
+    }
+    m_sourceParent.resize(ns);
+    for (size_t b = 0; b < ns; ++b) m_sourceParent[b] = source.bones[b].parent;
+    m_targetParent.resize(nt);
+    for (size_t b = 0; b < nt; ++b) m_targetParent[b] = target.bones[b].parent;
     auto restWorld = [](const ModelData& m) {
         std::vector<glm::mat4> w(m.bones.size());
         for (size_t b = 0; b < m.bones.size(); ++b)
             w[b] = m.bones[b].parent >= 0 ? w[m.bones[b].parent] * m.bones[b].localRest : m.bones[b].localRest;
         return w;
     };
-    const std::vector<glm::mat4> srcRest = restWorld(source), tgtRest = restWorld(target);
-    std::vector<glm::quat> srcRestRot(ns), tgtRestRot(nt);
-    for (size_t b = 0; b < ns; ++b) srcRestRot[b] = rotationOf(srcRest[b]);
-    for (size_t b = 0; b < nt; ++b) tgtRestRot[b] = rotationOf(tgtRest[b]);
-    std::vector<BoneTRS> tgtLocalRest(nt);
+    const std::vector<glm::mat4> srcRest = restWorld(source);
+    m_targetRest = restWorld(target);
+    m_sourceRestPos.resize(ns);
+    m_sourceRestRot.resize(ns);
+    for (size_t b = 0; b < ns; ++b) {
+        m_sourceRestPos[b] = positionOf(srcRest[b]);
+        m_sourceRestRot[b] = rotationOf(srcRest[b]);
+    }
+    m_targetRestRot.resize(nt);
+    for (size_t b = 0; b < nt; ++b) m_targetRestRot[b] = rotationOf(m_targetRest[b]);
+    m_targetLocalRest.resize(nt);
     for (size_t b = 0; b < nt; ++b) {
         const glm::mat4& m = target.bones[b].localRest;
-        tgtLocalRest[b].t = positionOf(m);
-        tgtLocalRest[b].r = rotationOf(m);
-        tgtLocalRest[b].s = glm::vec3(glm::length(glm::vec3(m[0])), glm::length(glm::vec3(m[1])), glm::length(glm::vec3(m[2])));
+        m_targetLocalRest[b].t = positionOf(m);
+        m_targetLocalRest[b].r = rotationOf(m);
+        m_targetLocalRest[b].s = glm::vec3(glm::length(glm::vec3(m[0])), glm::length(glm::vec3(m[1])), glm::length(glm::vec3(m[2])));
     }
 
     // Bones that carry motion (not just rotation): the pelvis, and the
     // root if it has a match (root motion). Their travel is scaled by
     // the ratio of pelvis heights, so a shorter character takes shorter
     // steps instead of sliding.
-    float scale = 1.0f;
-    std::vector<bool> moves(nt, false);
+    m_moves.assign(nt, false);
     for (size_t b = 0; b < nt; ++b) {
-        const int s = match.sourceOf[b];
+        const int s = m_match.sourceOf[b];
         if (s < 0) continue;
         const std::string name = canonicalBoneName(target.bones[b].name);
         if (name == "pelvis") {
-            moves[b] = true;
-            const float hs = positionOf(srcRest[s]).y, ht = positionOf(tgtRest[b]).y;
-            if (std::abs(hs) > 1e-4f) scale = ht / hs;
+            m_moves[b] = true;
+            const float hs = m_sourceRestPos[static_cast<size_t>(s)].y, ht = positionOf(m_targetRest[b]).y;
+            if (std::abs(hs) > 1e-4f) m_travel = ht / hs;
         }
-        if (name == "root") moves[b] = true;
+        if (name == "root") m_moves[b] = true;
     }
 
     // Turn the source's motion to face the way the target faces.
-    const glm::quat turn = rotationBetween(modelForward(source), modelForward(target));
+    m_turn = rotationBetween(modelForward(source), modelForward(target));
+    // The target placed over the source: turned back, and the source's height.
+    const float hs = source.boundsMax.y - source.boundsMin.y, ht = target.boundsMax.y - target.boundsMin.y;
+    const float size = hs > 1e-4f && ht > 1e-4f ? hs / ht : 1.0f;
+    m_placement = glm::mat4_cast(glm::inverse(m_turn)) * glm::scale(glm::mat4(1.0f), glm::vec3(size));
+}
 
+void PoseRetarget::apply(const std::vector<glm::mat4>& sourceLocals, std::vector<glm::mat4>& targetLocals) const {
+    const size_t ns = m_sourceParent.size(), nt = m_targetParent.size();
+    std::vector<glm::mat4> srcWorld(ns), tgtWorld(nt);
+    for (size_t b = 0; b < ns; ++b) {
+        const glm::mat4& local = b < sourceLocals.size() ? sourceLocals[b] : glm::mat4(1.0f);
+        srcWorld[b] = m_sourceParent[b] >= 0 ? srcWorld[static_cast<size_t>(m_sourceParent[b])] * local : local;
+    }
+    targetLocals.resize(nt);
+    for (size_t b = 0; b < nt; ++b) {
+        const int p = m_targetParent[b];
+        const glm::mat4 parentWorld = p >= 0 ? tgtWorld[static_cast<size_t>(p)] : glm::mat4(1.0f);
+        const glm::quat parentRot = p >= 0 ? rotationOf(parentWorld) : glm::quat(1, 0, 0, 0);
+        BoneTRS local = m_targetLocalRest[b];
+        const int s = m_match.sourceOf[b];
+        if (s >= 0 && static_cast<size_t>(s) < ns && static_cast<size_t>(s) < sourceLocals.size()) {
+            // The source's change from rest, in model space, on top of
+            // the target's own rest.
+            const size_t si = static_cast<size_t>(s);
+            const glm::quat delta = rotationOf(srcWorld[si]) * glm::inverse(m_sourceRestRot[si]);
+            const glm::quat world = m_turn * delta * glm::inverse(m_turn) * m_targetRestRot[b];
+            local.r = glm::normalize(glm::inverse(parentRot) * world);
+            if (m_moves[b]) {
+                const glm::vec3 pos = positionOf(m_targetRest[b]) + m_turn * (positionOf(srcWorld[si]) - m_sourceRestPos[si]) * m_travel;
+                local.t = glm::vec3(glm::inverse(parentWorld) * glm::vec4(pos, 1.0f));
+            }
+        }
+        targetLocals[b] = compose(local);
+        tgtWorld[b] = parentWorld * targetLocals[b];
+    }
+}
+
+std::vector<ModelAnimation> retargetAnimations(const ModelData& source, const ModelData& target, const BoneMatch& match) {
+    std::vector<ModelAnimation> out;
+    if (match.sourceOf.size() != target.bones.size()) return out;
+    const PoseRetarget retarget(source, target, match);
     for (const ModelAnimation& clip : source.animations) {
         ModelAnimation a;
         a.name = clip.name;
         a.duration = clip.duration;
         a.sampleRate = clip.sampleRate;
         a.frames.reserve(clip.frames.size());
-        std::vector<glm::mat4> srcWorld(ns), tgtWorld(nt);
         for (const auto& frame : clip.frames) {
-            for (size_t b = 0; b < ns && b < frame.size(); ++b)
-                srcWorld[b] = source.bones[b].parent >= 0 ? srcWorld[source.bones[b].parent] * frame[b] : frame[b];
-            std::vector<glm::mat4> locals(nt);
-            for (size_t b = 0; b < nt; ++b) {
-                const int p = target.bones[b].parent;
-                const glm::mat4 parentWorld = p >= 0 ? tgtWorld[p] : glm::mat4(1.0f);
-                const glm::quat parentRot = p >= 0 ? rotationOf(parentWorld) : glm::quat(1, 0, 0, 0);
-                BoneTRS local = tgtLocalRest[b];
-                const int s = match.sourceOf[b];
-                if (s >= 0 && static_cast<size_t>(s) < frame.size()) {
-                    // The source's change from rest, in model space, on
-                    // top of the target's own rest.
-                    const glm::quat delta = rotationOf(srcWorld[s]) * glm::inverse(srcRestRot[s]);
-                    const glm::quat world = turn * delta * glm::inverse(turn) * tgtRestRot[b];
-                    local.r = glm::normalize(glm::inverse(parentRot) * world);
-                    if (moves[b]) {
-                        const glm::vec3 pos = positionOf(tgtRest[b]) + turn * (positionOf(srcWorld[s]) - positionOf(srcRest[s])) * scale;
-                        local.t = glm::vec3(glm::inverse(parentWorld) * glm::vec4(pos, 1.0f));
-                    }
-                }
-                locals[b] = compose(local);
-                tgtWorld[b] = parentWorld * locals[b];
-            }
+            std::vector<glm::mat4> locals;
+            retarget.apply(frame, locals);
             a.frames.push_back(std::move(locals));
         }
         out.push_back(std::move(a));

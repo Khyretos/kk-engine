@@ -56,6 +56,12 @@ void TennisModule::setupLobby() {
     l.addLookField(std::move(skin));
     l.addLookField(std::move(legs));
     l.addLookField(std::move(shoes));
+    // A Synty person instead of the mannequin, when the pack is here.
+    if (m_rig && m_rig->people().any()) {
+        kke::Lobby::LookField body{ "body", "Body", { "Mannequin" }, {} };
+        for (const std::string& n : kke::PeopleLibrary::names()) body.choices.push_back(n);
+        l.addLookField(std::move(body));
+    }
     // Before last time's looks load: every seat starts as someone else.
     for (int seat = 0; seat < kke::Lobby::kMaxSeats; ++seat) {
         l.setLook(seat, 2, 2 + seat * 2);

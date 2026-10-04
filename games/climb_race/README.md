@@ -118,6 +118,9 @@ Kestrel, Nova, Flint, Wren, Ziggy, Scout, Bram), a **Colour** for their
 top (Sky, Ember, Moss, Plum, Sun, Coral, Ice, Stone), a **Skin** tone
 (nine, Porcelain to Ebony), and **Trousers** and **Shoes** colours. The
 climber in the line-up changes as you pick ([docs/OUTFITS.md](../../docs/OUTFITS.md)).
+With the POLYGON City Characters pack installed there is also a **Body**
+row: the mannequin or one of eleven City people, who climb with the
+mannequin's moves.
 Players online show in an **Online in this game** panel and stand in the
 line-up too, in the clothes they picked. Player 1's card also has:
 

@@ -90,6 +90,12 @@ void ClimbRaceModule::setupLobby() {
     l.addLookField(std::move(skin));
     l.addLookField(std::move(legs));
     l.addLookField(std::move(shoes));
+    // A Synty person instead of the mannequin, when the pack is here.
+    if (m_people.any()) {
+        kke::Lobby::LookField body{ "body", "Body", { "Mannequin" }, {} };
+        for (const std::string& n : kke::PeopleLibrary::names()) body.choices.push_back(n);
+        l.addLookField(std::move(body));
+    }
     // Before last time's looks load: every seat starts as someone else.
     for (int seat = 0; seat < kke::Lobby::kMaxSeats; ++seat) {
         l.setLook(seat, 2, 2 + seat * 2);
@@ -263,6 +269,18 @@ kke::Outfit ClimbRaceModule::outfitOf(const std::vector<int>& look, const glm::v
     return o;
 }
 
+int ClimbRaceModule::personOf(const std::vector<int>& look) const {
+    if (!m_lobby) return 0;
+    const auto& fields = m_lobby->lobby().lookFields();
+    for (size_t f = 0; f < fields.size() && f < look.size(); ++f)
+        if (fields[f].id == "body") return std::max(0, look[f]);
+    return 0;
+}
+
+int ClimbRaceModule::personOfCharacter(const std::string& character) const {
+    return m_lobby ? personOf(m_lobby->lobby().lookFromText(character)) : 0;
+}
+
 kke::Outfit ClimbRaceModule::outfitOfCharacter(const std::string& character, const glm::vec3& tint) const {
     const std::vector<int> look = m_lobby ? m_lobby->lobby().lookFromText(character) : std::vector<int>{};
     return outfitOf(look.empty() ? std::vector<int>{ 0, 0, 4, 7, 6 } : look, tint);
@@ -282,13 +300,13 @@ std::vector<ClimbRaceModule::Entry> ClimbRaceModule::wantedRoster() const {
             const kke::Lobby::Seat& s = l.seat(seat);
             const int n = std::clamp(s.look[0], 0, kNameCount - 1), c = std::clamp(s.look[1], 0, kColourCount - 1);
             nameUsed[static_cast<size_t>(n)] = colourUsed[static_cast<size_t>(c)] = true;
-            out.push_back({ seat, 2, kNames[n], kColours[c].rgb, outfitOf(s.look, kColours[c].rgb), s.look });
+            out.push_back({ seat, 2, kNames[n], kColours[c].rgb, outfitOf(s.look, kColours[c].rgb), personOf(s.look), s.look });
         }
         cpus = l.cpuCount();
         for (int i = 0; i < cpus; ++i) difficulty[static_cast<size_t>(i)] = l.cpuDifficulty(i);
     } else {
         nameUsed[0] = colourUsed[0] = true;
-        out.push_back({ 0, 2, "You", kColours[0].rgb, outfitOf({ 0, 0, 4, 7, 6 }, kColours[0].rgb), { 0, 0, 4, 7, 6 } });
+        out.push_back({ 0, 2, "You", kColours[0].rgb, outfitOf({ 0, 0, 4, 7, 6 }, kColours[0].rgb), 0, { 0, 0, 4, 7, 6 } });
     }
     if (!m_netName.empty()) out[0].name = m_netName; // the name it joins with, on every screen
     if (m_autopilot) out[0].name += " (autopilot)";
@@ -301,7 +319,7 @@ std::vector<ClimbRaceModule::Entry> ClimbRaceModule::wantedRoster() const {
         // Clothes of their own, the same on every screen (from their name).
         const std::vector<int> look = { static_cast<int>(ni), static_cast<int>(ci), static_cast<int>((ni * 4 + 1) % kke::skinTones().size()),
                                         static_cast<int>((ni * 5 + 7) % kke::clothColours().size()), static_cast<int>((ni + 6) % kke::clothColours().size()) };
-        out.push_back({ -1, difficulty[static_cast<size_t>(i)], std::string(kNames[ni]) + " (CPU)", kColours[ci].rgb, outfitOf(look, kColours[ci].rgb), look });
+        out.push_back({ -1, difficulty[static_cast<size_t>(i)], std::string(kNames[ni]) + " (CPU)", kColours[ci].rgb, outfitOf(look, kColours[ci].rgb), 0, look });
     }
     return out;
 }
@@ -309,6 +327,9 @@ std::vector<ClimbRaceModule::Entry> ClimbRaceModule::wantedRoster() const {
 void ClimbRaceModule::removeRacer(Racer& r) {
     if (r.model) m_models->remove(r.model);
     r.model = 0;
+    if (r.personModel) m_models->remove(r.personModel);
+    r.personModel = 0;
+    r.personShown = 0;
     if (r.id) m_rigid->world().removeCharacter(r.id);
     r.id = 0;
 }
@@ -332,6 +353,7 @@ void ClimbRaceModule::buildRacers(const std::vector<Entry>& roster) {
         r.name = e.name;
         r.tint = e.tint;
         r.outfit = e.outfit;
+        r.person = e.person;
         kke::RigidWorld::CharacterDesc cd;
         cd.position = glm::vec3(static_cast<float>(i), 0.0f, 12.0f);
         r.id = w.addCharacter(cd);
@@ -363,6 +385,7 @@ void ClimbRaceModule::applyLooks(const std::vector<Entry>& roster) {
             if (r.model && r.ghost) m_models->setTint(r.model, r.tint);
         }
         r.outfit = roster[i].outfit;
+        r.person = roster[i].person;
         dress(r);
     }
 }

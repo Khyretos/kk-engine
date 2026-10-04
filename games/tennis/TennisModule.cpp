@@ -234,11 +234,17 @@ int TennisModule::spawnPlayer(const Entry& e, int team) {
         p.look->setOutfit(cpuOutfit(e.name, e.tint));
     } else if (e.remote && m_net) {
         kke::Outfit o = e.dressed ? e.outfit : outfitOf({}, e.tint);
+        int person = e.person;
         for (const kke::net::RemotePlayer& rp : m_net->remotePlayers())
-            if (rp.id == e.netId) o = outfitOfCharacter(rp.character, e.tint);
+            if (rp.id == e.netId) {
+                o = outfitOfCharacter(rp.character, e.tint);
+                person = personOfCharacter(rp.character);
+            }
         p.look->setOutfit(o);
+        p.look->setPerson(person);
     } else if (e.dressed) {
         p.look->setOutfit(e.outfit);
+        p.look->setPerson(e.person);
     }
     // A free slot (a match that ended) or a new one.
     for (size_t i = 0; i < m_players.size(); ++i)
@@ -272,6 +278,18 @@ kke::Outfit TennisModule::outfitOfCharacter(const std::string& character, const 
     return outfitOf(m_lobby ? m_lobby->lobby().lookFromText(character) : std::vector<int>{}, tint);
 }
 
+int TennisModule::personOf(const std::vector<int>& look) const {
+    if (!m_lobby) return 0;
+    const auto& fields = m_lobby->lobby().lookFields();
+    for (size_t f = 0; f < fields.size() && f < look.size(); ++f)
+        if (fields[f].id == "body") return std::max(0, look[f]);
+    return 0;
+}
+
+int TennisModule::personOfCharacter(const std::string& character) const {
+    return m_lobby ? personOf(m_lobby->lobby().lookFromText(character)) : 0;
+}
+
 kke::Outfit TennisModule::cpuOutfit(const std::string& name, const glm::vec3& tint) {
     uint32_t h = 2166136261u; // FNV-1a: the same name, the same clothes, on every screen
     for (const char c : name) h = (h ^ static_cast<uint8_t>(c)) * 16777619u;
@@ -301,6 +319,7 @@ std::vector<TennisModule::Entry> TennisModule::seatEntries() const {
                 if (fields[f].id == "colour" && !fields[f].swatches.empty())
                     e.tint = fields[f].swatches[static_cast<size_t>(l.seat(seat).look[f]) % fields[f].swatches.size()] * 1.25f;
             e.outfit = outfitOf(l.seat(seat).look, e.tint);
+            e.person = personOf(l.seat(seat).look);
             e.dressed = true;
             e.input = m_lobby->playerOf(seat);
             // The menu was skipped (KKE_TENNIS_LOBBY=0): seats in order, the first on player 0's devices.
@@ -350,6 +369,7 @@ void TennisModule::startLocalMatch() {
             e.name = rp.name;
             e.tint = net::tintFromText(rp.character, glm::vec3(0.8f));
             e.outfit = outfitOfCharacter(rp.character, e.tint);
+            e.person = personOfCharacter(rp.character);
             e.dressed = true;
             e.netId = rp.id;
             e.remote = true;

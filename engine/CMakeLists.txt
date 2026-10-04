@@ -101,6 +101,7 @@ set(ENGINE_SOURCES
     src/modules/InputModule.cpp
     src/Lobby.cpp
     src/Outfit.cpp
+    src/PeopleLibrary.cpp
     src/AudioMixer.cpp
     src/ImpactSynth.cpp
     src/EngineSound.cpp

@@ -202,6 +202,7 @@ bool Rig::load(kke::ModelModule& models) {
     // A light grey copy takes each person's colour (the tint multiplies);
     // the joints stay dark.
     m_base = *d;
+    m_people.scan("Tennis");
     kke::ModelData grey = *d;
     for (kke::ModelMaterial& m : grey.materials) m.baseColor = m.name.find("Joint") != std::string::npos ? glm::vec3(0.12f) : glm::vec3(0.78f);
     m_model = models.add(std::move(grey), "tennis/person");
@@ -376,6 +377,7 @@ Body::Body(Rig& rig, kke::ModelModule& models, const glm::vec3& tint, bool racke
 
 Body::~Body() {
     if (m_instance) m_models.remove(m_instance);
+    if (m_personInstance) m_models.remove(m_personInstance);
     if (m_racketInstance) m_models.remove(m_racketInstance);
     if (m_bed) m_rig.freeStringBed(*m_bed);
 }
@@ -394,13 +396,30 @@ void Body::setOutfit(const kke::Outfit& outfit) {
     m_models.remove(m_instance);
     m_instance = m_models.spawn(id, m_xf);
     m_models.setOverlayEnabled(m_instance, false);
-    m_models.setVisible(m_instance, m_visible);
+    m_models.setVisible(m_instance, m_visible && !m_personInstance);
     m_dressedAs = key;
+}
+
+// The mannequin keeps animating (hidden) and lends the person its pose.
+void Body::setPerson(int person) {
+    if (!m_instance || !m_rig.people().has(person)) person = 0;
+    if (person == m_person) return;
+    if (m_personInstance) m_models.remove(m_personInstance);
+    m_personInstance = 0;
+    m_person = 0;
+    if (const kke::PeopleLibrary::Body* b = person ? m_rig.person(m_models, person) : nullptr) {
+        m_personInstance = m_models.spawn(b->model, m_xf * b->retarget.placement());
+        m_models.setOverlayEnabled(m_personInstance, false);
+        m_models.setVisible(m_personInstance, m_visible);
+        m_person = person;
+    }
+    m_models.setVisible(m_instance, m_visible && !m_personInstance);
 }
 
 void Body::setVisible(bool visible) {
     m_visible = visible;
-    if (m_instance) m_models.setVisible(m_instance, visible);
+    if (m_instance) m_models.setVisible(m_instance, visible && !m_personInstance);
+    if (m_personInstance) m_models.setVisible(m_personInstance, visible);
     if (m_racketInstance) m_models.setVisible(m_racketInstance, visible);
 }
 
@@ -556,7 +575,11 @@ void Body::update(const glm::vec3& feet, float yawDegrees, const glm::vec3& velo
         if (leftGrip >= 0 && m_equip.equip(kke::EquipSlot::LeftHand, racketItem, leftGrip)) m_equip.closeHand(rig, pose, 0);
         else m_equip.unequip(kke::EquipSlot::LeftHand);
     }
-    if (std::vector<glm::mat4>* locals = m_models.boneLocals(m_instance)) kke::poseToLocals(pose, *locals);
+    if (std::vector<glm::mat4>* locals = m_models.boneLocals(m_instance)) {
+        kke::poseToLocals(pose, *locals);
+        if (m_personInstance)
+            if (const kke::PeopleLibrary::Body* b = m_rig.person(m_models, m_person)) kke::PeopleLibrary::follow(m_models, m_personInstance, *b, *locals, m_xf);
+    }
 
     // The racket in the world, in the hand.
     const glm::vec3 x = glm::cross(shaft, face);

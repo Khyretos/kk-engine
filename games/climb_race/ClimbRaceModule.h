@@ -10,6 +10,7 @@
 #include "kke/Locomotion.h"
 #include "kke/Module.h"
 #include "kke/Outfit.h"
+#include "kke/PeopleLibrary.h"
 #include "kke/RigidWorld.h"
 #include "kke/modules/ModelModule.h"
 
@@ -107,6 +108,9 @@ private:
         glm::vec3 tint{1.0f};       // the climber's colour: the top of the outfit, the HUD
         kke::Outfit outfit;         // what the mannequin wears (the menu's look)
         std::string dressedAs;      // the outfit its model instance has
+        int person = 0;             // the menu's Body: 0 the mannequin, 1.. a Synty person (kke::PeopleLibrary)
+        int personShown = 0;        // ... the one drawn (0 when this machine hasn't got them)
+        kke::ModelModule::InstanceId personModel = 0; // drawn over the (hidden) mannequin, posed like it
         kke::RigidWorld::CharacterId id = 0;
         std::unique_ptr<kke::Locomotion> loco;
         std::unique_ptr<kke::Climber> climber;
@@ -205,7 +209,8 @@ private:
         std::string name;
         glm::vec3 tint{1.0f};
         kke::Outfit outfit;
-        std::vector<int> look;   // its lobby look (name, colour, skin, trousers, shoes), as it goes online
+        int person = 0;          // its Body (a Synty person) or 0
+        std::vector<int> look;   // its lobby look (name, colour, skin, trousers, shoes, body), as it goes online
         int netId = -1;          // online: its network player
         bool remote = false;     // online: another machine plays it
         bool ghost = false;      // Time trial: the ghost of the best run
@@ -216,6 +221,8 @@ private:
     void applyLooks(const std::vector<Entry>& roster);
     kke::Outfit outfitOf(const std::vector<int>& look, const glm::vec3& tint) const; // a lobby look as clothes
     kke::Outfit outfitOfCharacter(const std::string& character, const glm::vec3& tint) const; // another screen's
+    int personOf(const std::vector<int>& look) const;             // the Body row (0: the mannequin)
+    int personOfCharacter(const std::string& character) const;
     void dress(Racer& r);                         // its model instance in its outfit (Body.cpp)
     kke::ModelModule::ModelId outfitModel(const kke::Outfit& outfit);
     std::vector<Entry> lobbyRoster() const; // the line-up in the menu: wantedRoster + the other screens' players
@@ -374,6 +381,7 @@ private:
     // needed: it's the clips' own skeleton).
     kke::ModelModule::ModelId m_charModel = 0;   // the plain mannequin (tinted: the ghost)
     kke::ModelData m_baseBody;                    // the mannequin, to dress
+    kke::PeopleLibrary m_people;                  // Synty people to pick as a body
     std::map<std::string, kke::ModelModule::ModelId> m_outfits; // dressed copies, by outfit
     kke::ModelData m_rigData;
     std::unique_ptr<kke::AnimationSet> m_animSet;

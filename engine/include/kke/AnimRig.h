@@ -207,6 +207,38 @@ BoneMatch matchBones(const ModelData& source, const ModelData& target);
 // Every source clip as a clip for the target skeleton.
 std::vector<ModelAnimation> retargetAnimations(const ModelData& source, const ModelData& target, const BoneMatch& match);
 
+// The same retarget, one pose at a time: drives a second skeleton from
+// the poses a first one is given every frame (IK and all), so a game can
+// keep its procedural animation on one rig and draw any matching
+// character with it (Climb Race's and Tennis's Synty people).
+class PoseRetarget {
+public:
+    PoseRetarget() = default;
+    PoseRetarget(const ModelData& source, const ModelData& target);
+    PoseRetarget(const ModelData& source, const ModelData& target, const BoneMatch& match);
+    bool valid() const { return m_match.matched > 0; }
+    const BoneMatch& match() const { return m_match; }
+    // sourceLocals: each source bone's local transform (a Pose made
+    // into matrices, ModelModule::boneLocals); out: the target's.
+    void apply(const std::vector<glm::mat4>& sourceLocals, std::vector<glm::mat4>& targetLocals) const;
+    // The target's model matrix relative to the source's: turned to face
+    // the same way and scaled to the source's height. Draw it at
+    // sourceTransform * placement().
+    const glm::mat4& placement() const { return m_placement; }
+
+private:
+    BoneMatch m_match;
+    std::vector<int> m_sourceParent, m_targetParent;
+    std::vector<glm::vec3> m_sourceRestPos;
+    std::vector<glm::quat> m_sourceRestRot, m_targetRestRot;
+    std::vector<glm::mat4> m_targetRest;
+    std::vector<BoneTRS> m_targetLocalRest;
+    std::vector<bool> m_moves;
+    float m_travel = 1.0f;
+    glm::quat m_turn{1, 0, 0, 0};
+    glm::mat4 m_placement{1.0f};
+};
+
 // Adds `source`'s clips to `rig` when both use the same skeleton but the
 // files list the bones in a different order or with extras (a second
 // animation library for the same mannequin, animation-only FBX files for

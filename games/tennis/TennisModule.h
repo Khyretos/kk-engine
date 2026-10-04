@@ -192,6 +192,7 @@ public:
         glm::vec3 tint{1.0f};
         kke::Outfit outfit;            // what they wear (the menu's look)
         bool dressed = false;          // ... or the tinted mannequin
+        int person = 0;                // the menu's Body: a Synty person, or 0
         bool cpu = false;
         int input = -1, level = 1;
         int netId = -1;
@@ -209,6 +210,7 @@ public:
         glm::vec3 tint{1.0f};
         kke::Outfit outfit;            // a person's clothes (the crowd: tinted)
         bool dressed = false;
+        int person = 0;                // the menu's Body
         bool cpu = true;               // the crowd
         int input = -1;                // a person at this screen
         bool remote = false;           // online: someone at another screen (moved by what it sends)
@@ -283,7 +285,8 @@ private:
 
     // The sport center (Center.cpp): walk about, pick a court, watch.
     void enterCenter();
-    void spawnWalker(const std::string& name, const glm::vec3& tint, bool cpu, int input, const glm::vec3& at, const kke::Outfit* outfit = nullptr);
+    void spawnWalker(const std::string& name, const glm::vec3& tint, bool cpu, int input, const glm::vec3& at, const kke::Outfit* outfit = nullptr,
+                     int person = 0);
     void readWalker(Walker& w);
     void stepCenter(float dt);
     void stepCrowd(Walker& w, float dt);
@@ -358,6 +361,8 @@ private:
     kke::Outfit outfitOf(const std::vector<int>& look, const glm::vec3& tint) const;
     kke::Outfit outfitOfCharacter(const std::string& character, const glm::vec3& tint) const;
     static kke::Outfit cpuOutfit(const std::string& name, const glm::vec3& tint);
+    int personOf(const std::vector<int>& look) const; // the Body row (0: the mannequin)
+    int personOfCharacter(const std::string& character) const;
     std::vector<Entry> netEntries() const;  // ... as network players (slot order), with netId
     Match* matchByNet(uint32_t id);
     size_t matchIndex(const Match& m) const;

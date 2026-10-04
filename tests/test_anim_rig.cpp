@@ -362,6 +362,44 @@ TEST(AnimRig, RetargetCopiesMotionNotAxes) {
     EXPECT_NEAR(pos(tgt, p, 1).y, 0.66f, 0.005f);
 }
 
+// A pose a game made this frame (IK and all), copied onto another
+// skeleton: the same as retargeting it as a clip, and a skeleton copied
+// onto itself is left as it is.
+TEST(AnimRig, PoseRetargetMatchesTheClipRetarget) {
+    ModelData src = legs();
+    std::vector<glm::mat4> frame;
+    for (const kke::ModelBone& b : src.bones) frame.push_back(b.localRest);
+    frame[2] = frame[2] * glm::rotate(glm::mat4(1.0f), glm::radians(-30.0f), glm::vec3(1, 0, 0));
+    kke::ModelAnimation clip;
+    clip.name = "Step";
+    clip.frames.push_back(frame);
+    src.animations.push_back(clip);
+
+    ModelData tgt;
+    tgt.bones.push_back(bone("root", -1, glm::mat4(1.0f)));
+    tgt.bones.push_back(bone("pelvis", 0, at(0, 0.6f, 0)));
+    tgt.bones.push_back(bone("thigh_l", 1, at(-0.08f, 0, 0) * glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(0, 0, 1))));
+    tgt.bones.push_back(bone("calf_l", 2, at(0.3f, 0, 0)));
+    tgt.bones.push_back(bone("foot_l", 3, at(0.3f, 0, 0)));
+    tgt.bones.push_back(bone("thigh_r", 1, at(0.08f, 0, 0)));
+    const std::vector<kke::ModelAnimation> clips = kke::retargetAnimations(src, tgt, kke::matchBones(src, tgt));
+    ASSERT_EQ(clips.size(), 1u);
+    const kke::PoseRetarget retarget(src, tgt);
+    ASSERT_TRUE(retarget.valid());
+    std::vector<glm::mat4> locals;
+    retarget.apply(frame, locals);
+    ASSERT_EQ(locals.size(), tgt.bones.size());
+    for (size_t b = 0; b < locals.size(); ++b)
+        for (int c = 0; c < 4; ++c)
+            for (int r = 0; r < 4; ++r) EXPECT_NEAR(locals[b][c][r], clips[0].frames[0][b][c][r], 1e-5f) << b;
+
+    const kke::PoseRetarget same(src, src);
+    same.apply(frame, locals);
+    for (size_t b = 0; b < locals.size(); ++b)
+        for (int c = 0; c < 4; ++c)
+            for (int r = 0; r < 4; ++r) EXPECT_NEAR(locals[b][c][r], frame[b][c][r], 1e-4f) << b;
+}
+
 TEST(AnimRig, ModelForwardFromTheLegs) {
     ModelData m = legs(); // left leg at -X
     EXPECT_NEAR(kke::modelForward(m).z, -1.0f, 1e-4f);

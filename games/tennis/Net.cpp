@@ -484,13 +484,17 @@ void TennisModule::syncRemoteWalkers() {
             known->tint = net::tintFromText(r.character, known->tint);
             known->outfit = outfitOfCharacter(r.character, known->tint);
             known->dressed = true;
-            if (known->look) known->look->setOutfit(known->outfit);
+            known->person = personOfCharacter(r.character);
+            if (known->look) {
+                known->look->setOutfit(known->outfit);
+                known->look->setPerson(known->person);
+            }
             continue;
         }
         const glm::vec3 at = r.hasState ? net::fromState(r.state).feet : m_center.arrival(r.id * kke::NetModule::kMaxLocalPlayers);
         const glm::vec3 tint = net::tintFromText(r.character, glm::vec3(0.8f));
         const kke::Outfit outfit = outfitOfCharacter(r.character, tint);
-        spawnWalker(r.name, tint, false, -1, at, &outfit);
+        spawnWalker(r.name, tint, false, -1, at, &outfit, personOfCharacter(r.character));
         Walker& w = m_walkers.back();
         w.remote = true;
         w.netId = r.id;

@@ -114,6 +114,7 @@ void ClimbRaceModule::loadCharacter() {
     kke::ModelData grey = *d;
     for (kke::ModelMaterial& m : grey.materials) m.baseColor = m.name.find("Joint") != std::string::npos ? glm::vec3(0.12f) : glm::vec3(0.8f);
     m_baseBody = grey;
+    m_people.scan(name());
     m_charModel = m_models->add(std::move(grey), "climb_race/climber");
     d = m_models->model(m_charModel);
     m_rigData = kke::ModelData{};
@@ -192,14 +193,28 @@ kke::ModelModule::ModelId ClimbRaceModule::outfitModel(const kke::Outfit& outfit
 void ClimbRaceModule::dress(Racer& r) {
     if (!r.model || r.ghost) return;
     const std::string key = kke::outfitKey(r.outfit);
-    if (key == r.dressedAs) return;
-    const kke::ModelModule::ModelId id = outfitModel(r.outfit);
-    if (!id) return;
-    const glm::mat4 xf = m_models->transform(r.model);
-    m_models->remove(r.model);
-    r.model = m_models->spawn(id, xf);
-    m_models->setOverlayEnabled(r.model, false);
-    r.dressedAs = key;
+    if (key != r.dressedAs) {
+        if (const kke::ModelModule::ModelId id = outfitModel(r.outfit)) {
+            const glm::mat4 xf = m_models->transform(r.model);
+            m_models->remove(r.model);
+            r.model = m_models->spawn(id, xf);
+            m_models->setOverlayEnabled(r.model, false);
+            r.dressedAs = key;
+        }
+    }
+    // A Synty person (the Body row): drawn instead of the mannequin, which
+    // still animates underneath and lends it its pose (animateBody).
+    const int person = m_people.has(r.person) ? r.person : 0;
+    if (person != r.personShown) {
+        if (r.personModel) m_models->remove(r.personModel);
+        r.personModel = 0;
+        if (const kke::PeopleLibrary::Body* b = person ? m_people.body(person, *m_models, m_baseBody) : nullptr) {
+            r.personModel = m_models->spawn(b->model, m_models->transform(r.model) * b->retarget.placement());
+            m_models->setOverlayEnabled(r.personModel, false);
+        }
+        r.personShown = person;
+    }
+    m_models->setVisible(r.model, r.personModel == 0);
 }
 
 void ClimbRaceModule::setupBody(Racer& r) {
@@ -553,6 +568,9 @@ void ClimbRaceModule::animateBody(Racer& r, float dt) {
         }
     }
     kke::poseToLocals(pose, *locals);
+    if (r.personModel)
+        if (const kke::PeopleLibrary::Body* body = m_people.body(r.personShown, *m_models, m_baseBody))
+            kke::PeopleLibrary::follow(*m_models, r.personModel, *body, *locals, xf);
 }
 
 } // namespace climb_race

@@ -6,6 +6,7 @@
 #include "kke/Equipment.h"
 #include "kke/ModelAsset.h"
 #include "kke/Outfit.h"
+#include "kke/PeopleLibrary.h"
 #include "kke/modules/ModelModule.h"
 
 #include "Strings.h"
@@ -57,6 +58,9 @@ public:
     kke::ModelModule::ModelId model() const { return m_model; }
     // The mannequin in these clothes: one copy per outfit, shared.
     kke::ModelModule::ModelId outfitModel(kke::ModelModule& models, const kke::Outfit& outfit);
+    // Synty people to pick as a body (the menu's Body row), posed from the mannequin.
+    kke::PeopleLibrary& people() { return m_people; }
+    const kke::PeopleLibrary::Body* person(kke::ModelModule& models, int person) { return m_people.body(person, models, m_base); }
     const kke::ModelData& data() const { return m_rig; }
     const kke::AnimationSet& set() const { return *m_set; }
     float modelYaw() const { return m_modelYaw; }
@@ -86,6 +90,7 @@ private:
     kke::ModelModule::ModelId m_model = 0;
     kke::ModelData m_base;                                      // the mannequin, to dress
     std::map<std::string, kke::ModelModule::ModelId> m_outfits; // dressed copies, by outfitKey
+    kke::PeopleLibrary m_people;
     kke::ModelData m_rig;
     std::unique_ptr<kke::AnimationSet> m_set;
     float m_modelYaw = 0.0f;
@@ -137,6 +142,7 @@ public:
     void update(const glm::vec3& feet, float yawDegrees, const glm::vec3& velocity, const SwingPose& swing, Mood mood, float dt);
     void setTint(const glm::vec3& tint);
     void setOutfit(const kke::Outfit& outfit); // dressed (docs/OUTFITS.md), not tinted
+    void setPerson(int person);                // a Synty person over the mannequin (0: none)
     void setVisible(bool visible);
     bool visible() const { return m_visible; }
     // The racket's grip-to-head transform in the world (for drawing it and
@@ -165,6 +171,8 @@ private:
     bool m_visible = true;
     glm::vec3 m_tint{1.0f};
     std::string m_dressedAs;                  // the outfit m_instance wears ("": the tinted mannequin)
+    int m_person = 0;                         // the Synty person drawn (0: the mannequin is)
+    kke::ModelModule::InstanceId m_personInstance = 0;
     glm::mat4 m_xf{1.0f};
     glm::mat4 m_racketWorld{1.0f};
     glm::vec3 m_tossHand{0.0f};

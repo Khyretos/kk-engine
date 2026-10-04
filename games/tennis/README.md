@@ -155,7 +155,8 @@ are rebindable actions in the "Shots" and "Game" groups.
 
 - **The menu.** Controllers press A to join, up to four players, each
   with a name, a colour for their top, a skin tone, and trousers and shoes
-  colours ([docs/OUTFITS.md](../../docs/OUTFITS.md)); online, everyone
+  colours ([docs/OUTFITS.md](../../docs/OUTFITS.md)), and with the POLYGON
+  City Characters pack a Body (one of eleven City people); online, everyone
   sees the clothes each player picked. Player 1 picks one match or the sport center
   (with its crowd and whether CPU players take the free courts), the CPU players (0 to 3, Easy
   to Expert), the match length (a short set to 4 games, a set to 6, best
