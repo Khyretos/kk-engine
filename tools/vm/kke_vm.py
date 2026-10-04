@@ -188,6 +188,25 @@ class Qmp:
         except VmError as e:
             say(f"screenshot failed: {e}")
 
+    def lit_fraction(self, ppm):
+        """Share of the screen that isn't near-black (0 if it can't be read)."""
+        try:
+            self.cmd("screendump", filename=str(ppm))
+            data = ppm.read_bytes()
+        except (VmError, OSError):
+            return 0.0
+        # Binary PPM: "P6\n<w> <h>\n<max>\n" then RGB triples.
+        parts = data.split(maxsplit=4)
+        if len(parts) < 5 or parts[0] != b"P6":
+            return 0.0
+        px = parts[4]
+        step = 3 * 97    # sample every 97th pixel
+        n = lit = 0
+        for i in range(0, len(px) - 2, step):
+            n += 1
+            lit += px[i] + px[i + 1] + px[i + 2] > 120
+        return lit / n if n else 0.0
+
     def close(self):
         try:
             self.sock.close()
@@ -454,10 +473,16 @@ def windows_prepare(args):
     shots.mkdir(parents=True, exist_ok=True)
     try:
         # The installer CD asks "Press any key to boot from CD or DVD"
-        # once: answer it for the first half minute.
-        for _ in range(30):
+        # once. Answer it only while the screen is dark (firmware, that
+        # prompt, the boot logo): with KVM, Setup is up within seconds, and
+        # a stray Space there presses its Cancel button.
+        probe = work / "install" / "probe.ppm"
+        for _ in range(90):
+            if vm.qmp.lit_fraction(probe) > 0.3:
+                break
             vm.qmp.cmd("send-key", keys=[{"type": "qcode", "data": "spc"}])
             time.sleep(1)
+        probe.unlink(missing_ok=True)
         deadline = time.time() + args.timeout
         n = 0
         while vm.alive() and time.time() < deadline:
