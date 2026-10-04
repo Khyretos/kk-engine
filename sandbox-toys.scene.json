@@ -1,0 +1,9 @@
+{ "format": "kke.scene", "version": 1, "name": "Toys test", "spawn": { "position": [0,0,6], "yaw": 180 },
+  "objects": [
+    { "asset": "SK_Character_Jock", "position": [-2, 0, 0], "yaw": 150 },
+    { "asset": "SK_Character_Jock", "position": [2.5, 0, -1], "yaw": 200 },
+    { "asset": "Sheep", "position": [0, 0, 2], "scale": 0.23 },
+    { "asset": "SM_Prop_Crate_01", "position": [0, 0, -2] },
+    { "asset": "SM_Prop_Barrel_01", "position": [1.5, 0, 1.5] },
+    { "asset": "SM_Primitive_Cone_01", "position": [-1, 0, 2.5] }
+  ] }
