@@ -147,21 +147,22 @@ Cases for code that needs Jolt or Lua are left out of builds without them.
 
 ## Tracked over time
 
-The **Benchmarks** workflow (`.github/workflows/benchmarks.yml`) builds
-Release on every push to `main`, runs kke_bench and the stress test (under
+The **Benchmarks** workflow (`.forgejo/workflows/benchmarks.yml`, on
+git.kreative-kompas.com) builds Release every night on `main`, on one fixed
+machine (soucouyant, in the CI image `docker/ci.Dockerfile`), runs kke_bench and the stress test (under
 Xvfb with Mesa's lavapipe software Vulkan, like the smoke tests), and
 appends the results to the
 [`benchmark-data` branch](https://github.com/Khyretos/kk-engine/tree/benchmark-data):
 `history.jsonl` holds every run, and its README shows a table and a trend
-chart per number. Pull requests run a quick pass and get a comparison in
-the job summary without being recorded. Runs on `main` go one at a time;
-when several pushes land while one runs, only the newest waits and the
-ones in between are skipped, so the history samples main rather than
-listing every commit.
+chart per number (Forgejo's push mirror copies the branch to GitHub). A run
+started by hand on another branch does a quick pass and prints a comparison
+without being recorded. The history samples main once a night rather than
+listing every commit; runs before 2026-10-04 came from GitHub's shared
+runners, so expect one step in each chart where the machine changed.
 
 Every number is compared with the median of the last 10 runs, and changes
-beyond ±25% are marked in the job summary. Nothing fails on a slow
-number: GitHub's shared runners vary by 10-20% between runs, so a single
+beyond ±25% are marked in the job log. Nothing fails on a slow
+number: a machine that also runs other work varies between runs, so a single
 flag is a reason to look at the chart, not proof. The job does fail when
 a benchmark crashes, writes no report, or the build has a warning.
 
