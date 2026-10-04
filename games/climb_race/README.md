@@ -114,8 +114,12 @@ The climbers stand in a row in front of the mountain, each above their
 player's card. Up to four players join (split screen: side by side for
 two, quarters for three and four; with three, the fourth quarter watches
 the whole mountain). Each player picks a **Name** (Pip, Juno, Rook,
-Kestrel, Nova, Flint, Wren, Ziggy, Scout, Bram) and a **Colour** (Sky,
-Ember, Moss, Plum, Sun, Coral, Ice, Stone). Player 1's card also has:
+Kestrel, Nova, Flint, Wren, Ziggy, Scout, Bram), a **Colour** for their
+top (Sky, Ember, Moss, Plum, Sun, Coral, Ice, Stone), a **Skin** tone
+(nine, Porcelain to Ebony), and **Trousers** and **Shoes** colours. The
+climber in the line-up changes as you pick ([docs/OUTFITS.md](../../docs/OUTFITS.md)).
+Players online show in an **Online in this game** panel and stand in the
+line-up too, in the clothes they picked. Player 1's card also has:
 
 - **CPU players**: 0 to 5, and the difficulty of each:
 
@@ -617,8 +621,9 @@ stands where a ray through its card's screen position meets the meadow.
 
 ### The start menu (Lobby.cpp)
 
-`setupLobby` ([Lobby.cpp](Lobby.cpp)) adds two look fields (`name` and
-`colour`, the colour with swatches), sets one CPU by default, adds the
+`setupLobby` ([Lobby.cpp](Lobby.cpp)) adds the look fields (`name`,
+`colour`, `skin`, `trousers`, `shoes`, all but the name with swatches),
+sets one CPU by default, adds the
 **Mountain** option and (in `setupModes`) the **Mode** option, then
 `load()`s last time's choices. `onJoin` during a race sets
 `m_rosterChanged` and shows the toast.
@@ -626,7 +631,9 @@ stands where a ray through its card's screen position meets the meadow.
 `wantedRoster()` turns the lobby into a list of `Entry`: the joined seats
 first, then the CPUs, which take the names and colours nobody picked
 (and, on a host, not the names of online players). `updateLobby` rebuilds
-the racers when the seats change, re-tints them when looks change, and
+the racers when the seats change, re-dresses them when looks change
+(`dress` in Body.cpp: one `kke::dressModel` copy of the mannequin per
+outfit, the ghost stays a tinted mannequin), and
 rebuilds the mountain behind the line-up when the Mountain row changes,
 so the menu is a live preview.
 
@@ -765,8 +772,12 @@ race**.
 makes the first seat NetModule's own player and the others local players
 (`addLocalPlayer(slot, name, colour)`, up to `kMaxLocalPlayers` = 8 per
 machine). On the host the CPU climbers are local players too, so everyone
-sees them. The colour travels as the player's "character" string
-(`"#5aa6ff"`, `netrace::tintText`).
+sees them. The look travels as the player's "character" string
+(`"look:2.4.6.7.6|#5aa6ff"`, `netrace::characterText`) and is sent again
+whenever it changes (protocol 10's Profile message), so a new pick shows
+on every screen at once. Other screens' players stand in the start menu's
+line-up and fill its Online panel; a rock that hits a climber is sent
+(`kEventHit`) so everyone sees the flash.
 
 **Settings on NetModule**: `standIns = false` (the game draws other
 players itself, so NetModule makes no capsules for them) and

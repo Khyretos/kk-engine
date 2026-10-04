@@ -75,6 +75,27 @@ void ClimbRaceModule::setupLobby() {
         colours.swatches.push_back(c.rgb);
     }
     l.addLookField(std::move(colours));
+    // The clothes (docs/OUTFITS.md): the colour above is the top.
+    kke::Lobby::LookField skin{ "skin", "Skin", {}, {} }, legs{ "trousers", "Trousers", {}, {} }, shoes{ "shoes", "Shoes", {}, {} };
+    for (const kke::NamedColour& c : kke::skinTones()) {
+        skin.choices.push_back(c.name);
+        skin.swatches.push_back(c.rgb);
+    }
+    for (const kke::NamedColour& c : kke::clothColours()) {
+        legs.choices.push_back(c.name);
+        legs.swatches.push_back(c.rgb);
+        shoes.choices.push_back(c.name);
+        shoes.swatches.push_back(c.rgb);
+    }
+    l.addLookField(std::move(skin));
+    l.addLookField(std::move(legs));
+    l.addLookField(std::move(shoes));
+    // Before last time's looks load: every seat starts as someone else.
+    for (int seat = 0; seat < kke::Lobby::kMaxSeats; ++seat) {
+        l.setLook(seat, 2, 2 + seat * 2);
+        l.setLook(seat, 3, 7 + seat);
+        l.setLook(seat, 4, 6);
+    }
     l.setCpuCount(1); // a rival, unless last time said otherwise
     // Which mountain: the open ones of the tour, in order, then Random
     // (a new one each time). Finishing one opens the next.
@@ -229,6 +250,24 @@ void ClimbRaceModule::recordFinish(Racer& r) {
     }
 }
 
+kke::Outfit ClimbRaceModule::outfitOf(const std::vector<int>& look, const glm::vec3& tint) const {
+    auto pick = [&look](size_t field, const std::vector<kke::NamedColour>& from, int fallback) {
+        const int c = field < look.size() ? look[field] : fallback;
+        return from[static_cast<size_t>(std::clamp(c, 0, static_cast<int>(from.size()) - 1))].rgb;
+    };
+    kke::Outfit o;
+    o.top = tint;
+    o.skin = pick(2, kke::skinTones(), 4);
+    o.bottom = pick(3, kke::clothColours(), 7);
+    o.shoes = pick(4, kke::clothColours(), 6);
+    return o;
+}
+
+kke::Outfit ClimbRaceModule::outfitOfCharacter(const std::string& character, const glm::vec3& tint) const {
+    const std::vector<int> look = m_lobby ? m_lobby->lobby().lookFromText(character) : std::vector<int>{};
+    return outfitOf(look.empty() ? std::vector<int>{ 0, 0, 4, 7, 6 } : look, tint);
+}
+
 std::vector<ClimbRaceModule::Entry> ClimbRaceModule::wantedRoster() const {
     std::vector<Entry> out;
     std::vector<bool> nameUsed(kNameCount, false), colourUsed(kColourCount, false);
@@ -243,13 +282,13 @@ std::vector<ClimbRaceModule::Entry> ClimbRaceModule::wantedRoster() const {
             const kke::Lobby::Seat& s = l.seat(seat);
             const int n = std::clamp(s.look[0], 0, kNameCount - 1), c = std::clamp(s.look[1], 0, kColourCount - 1);
             nameUsed[static_cast<size_t>(n)] = colourUsed[static_cast<size_t>(c)] = true;
-            out.push_back({ seat, 2, kNames[n], kColours[c].rgb, s.look });
+            out.push_back({ seat, 2, kNames[n], kColours[c].rgb, outfitOf(s.look, kColours[c].rgb), s.look });
         }
         cpus = l.cpuCount();
         for (int i = 0; i < cpus; ++i) difficulty[static_cast<size_t>(i)] = l.cpuDifficulty(i);
     } else {
         nameUsed[0] = colourUsed[0] = true;
-        out.push_back({ 0, 2, "You", kColours[0].rgb, { 0, 0 } });
+        out.push_back({ 0, 2, "You", kColours[0].rgb, outfitOf({ 0, 0, 4, 7, 6 }, kColours[0].rgb), { 0, 0, 4, 7, 6 } });
     }
     if (!m_netName.empty()) out[0].name = m_netName; // the name it joins with, on every screen
     if (m_autopilot) out[0].name += " (autopilot)";
@@ -259,8 +298,10 @@ std::vector<ClimbRaceModule::Entry> ClimbRaceModule::wantedRoster() const {
         const size_t ni = n == nameUsed.end() ? static_cast<size_t>(i) % kNameCount : static_cast<size_t>(n - nameUsed.begin());
         const size_t ci = c == colourUsed.end() ? static_cast<size_t>(i) % kColourCount : static_cast<size_t>(c - colourUsed.begin());
         nameUsed[ni] = colourUsed[ci] = true;
-        out.push_back({ -1, difficulty[static_cast<size_t>(i)], std::string(kNames[ni]) + " (CPU)", kColours[ci].rgb,
-                        { static_cast<int>(ni), static_cast<int>(ci) } });
+        // Clothes of their own, the same on every screen (from their name).
+        const std::vector<int> look = { static_cast<int>(ni), static_cast<int>(ci), static_cast<int>((ni * 4 + 1) % kke::skinTones().size()),
+                                        static_cast<int>((ni * 5 + 7) % kke::clothColours().size()), static_cast<int>((ni + 6) % kke::clothColours().size()) };
+        out.push_back({ -1, difficulty[static_cast<size_t>(i)], std::string(kNames[ni]) + " (CPU)", kColours[ci].rgb, outfitOf(look, kColours[ci].rgb), look });
     }
     return out;
 }
@@ -290,6 +331,7 @@ void ClimbRaceModule::buildRacers(const std::vector<Entry>& roster) {
         r.difficulty = e.difficulty;
         r.name = e.name;
         r.tint = e.tint;
+        r.outfit = e.outfit;
         kke::RigidWorld::CharacterDesc cd;
         cd.position = glm::vec3(static_cast<float>(i), 0.0f, 12.0f);
         r.id = w.addCharacter(cd);
@@ -318,8 +360,10 @@ void ClimbRaceModule::applyLooks(const std::vector<Entry>& roster) {
         }
         if (r.tint != roster[i].tint) {
             r.tint = roster[i].tint;
-            if (r.model) m_models->setTint(r.model, r.tint);
+            if (r.model && r.ghost) m_models->setTint(r.model, r.tint);
         }
+        r.outfit = roster[i].outfit;
+        dress(r);
     }
 }
 

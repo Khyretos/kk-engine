@@ -145,6 +145,7 @@ nav:
       - Input: INPUT.md
       - Menus, pause and settings: GAME_SHELL.md
       - Start menu and joining: LOBBY.md
+      - Outfits: OUTFITS.md
       - Settings panel: DEMO_PANEL.md
       - Commands and orders: COMMANDS.md
       - Audio: AUDIO.md

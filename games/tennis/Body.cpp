@@ -201,6 +201,7 @@ bool Rig::load(kke::ModelModule& models) {
     if (!d || d->bones.empty() || d->animations.empty()) return false;
     // A light grey copy takes each person's colour (the tint multiplies);
     // the joints stay dark.
+    m_base = *d;
     kke::ModelData grey = *d;
     for (kke::ModelMaterial& m : grey.materials) m.baseColor = m.name.find("Joint") != std::string::npos ? glm::vec3(0.12f) : glm::vec3(0.78f);
     m_model = models.add(std::move(grey), "tennis/person");
@@ -324,6 +325,15 @@ std::unique_ptr<StringBed> Rig::makeStringBed() {
     return bed;
 }
 
+kke::ModelModule::ModelId Rig::outfitModel(kke::ModelModule& models, const kke::Outfit& outfit) {
+    if (m_base.meshes.empty()) return 0;
+    const std::string key = kke::outfitKey(outfit);
+    if (const auto it = m_outfits.find(key); it != m_outfits.end()) return it->second;
+    const kke::ModelModule::ModelId id = models.add(kke::dressModel(m_base, outfit), "tennis/person/" + key);
+    m_outfits[key] = id;
+    return id;
+}
+
 // ------------------------------------------------------------------ Body
 
 Body::Body(Rig& rig, kke::ModelModule& models, const glm::vec3& tint, bool racket)
@@ -372,7 +382,20 @@ Body::~Body() {
 
 void Body::setTint(const glm::vec3& tint) {
     m_tint = tint;
-    if (m_instance) m_models.setTint(m_instance, tint);
+    if (m_instance && m_dressedAs.empty()) m_models.setTint(m_instance, tint);
+}
+
+// A new outfit swaps the model instance; the animator and the pose carry on.
+void Body::setOutfit(const kke::Outfit& outfit) {
+    const std::string key = kke::outfitKey(outfit);
+    if (!m_instance || key == m_dressedAs) return;
+    const kke::ModelModule::ModelId id = m_rig.outfitModel(m_models, outfit);
+    if (!id) return;
+    m_models.remove(m_instance);
+    m_instance = m_models.spawn(id, m_xf);
+    m_models.setOverlayEnabled(m_instance, false);
+    m_models.setVisible(m_instance, m_visible);
+    m_dressedAs = key;
 }
 
 void Body::setVisible(bool visible) {

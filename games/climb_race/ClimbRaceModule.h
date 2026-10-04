@@ -9,6 +9,7 @@
 #include "kke/Equipment.h"
 #include "kke/Locomotion.h"
 #include "kke/Module.h"
+#include "kke/Outfit.h"
 #include "kke/RigidWorld.h"
 #include "kke/modules/ModelModule.h"
 
@@ -20,6 +21,7 @@
 #include <RmlUi/Core/DataModelHandle.h>
 
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -102,7 +104,9 @@ private:
         int difficulty = 1;         // CPU climbers: the lobby's difficulty
         float pause = 0.45f;        // CPU climbers: breath between moves
         std::string name;
-        glm::vec3 tint{1.0f};
+        glm::vec3 tint{1.0f};       // the climber's colour: the top of the outfit, the HUD
+        kke::Outfit outfit;         // what the mannequin wears (the menu's look)
+        std::string dressedAs;      // the outfit its model instance has
         kke::RigidWorld::CharacterId id = 0;
         std::unique_ptr<kke::Locomotion> loco;
         std::unique_ptr<kke::Climber> climber;
@@ -200,7 +204,8 @@ private:
         int seat = -1, difficulty = 1;
         std::string name;
         glm::vec3 tint{1.0f};
-        std::vector<int> look;   // its lobby look (name, colour), as it goes online
+        kke::Outfit outfit;
+        std::vector<int> look;   // its lobby look (name, colour, skin, trousers, shoes), as it goes online
         int netId = -1;          // online: its network player
         bool remote = false;     // online: another machine plays it
         bool ghost = false;      // Time trial: the ghost of the best run
@@ -209,6 +214,10 @@ private:
     void buildRacers(const std::vector<Entry>& roster);
     void removeRacer(Racer& r);
     void applyLooks(const std::vector<Entry>& roster);
+    kke::Outfit outfitOf(const std::vector<int>& look, const glm::vec3& tint) const; // a lobby look as clothes
+    kke::Outfit outfitOfCharacter(const std::string& character, const glm::vec3& tint) const; // another screen's
+    void dress(Racer& r);                         // its model instance in its outfit (Body.cpp)
+    kke::ModelModule::ModelId outfitModel(const kke::Outfit& outfit);
     std::vector<Entry> lobbyRoster() const; // the line-up in the menu: wantedRoster + the other screens' players
     Entry remoteEntry(const kke::net::RemotePlayer& p) const;
     int humans() const;
@@ -363,7 +372,9 @@ private:
 
     // Character: the UAL mannequin's bones and clips (retargeting not
     // needed: it's the clips' own skeleton).
-    kke::ModelModule::ModelId m_charModel = 0;
+    kke::ModelModule::ModelId m_charModel = 0;   // the plain mannequin (tinted: the ghost)
+    kke::ModelData m_baseBody;                    // the mannequin, to dress
+    std::map<std::string, kke::ModelModule::ModelId> m_outfits; // dressed copies, by outfit
     kke::ModelData m_rigData;
     std::unique_ptr<kke::AnimationSet> m_animSet;
     float m_modelYaw = 0.0f;

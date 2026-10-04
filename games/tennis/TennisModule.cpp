@@ -228,6 +228,18 @@ int TennisModule::spawnPlayer(const Entry& e, int team) {
     if (p.remote) w.setCharacterKinematic(p.body, true);
     if (p.cpu) p.bot = std::make_unique<Bot>(m_seed * 7919u + static_cast<uint32_t>(m_players.size()) * 104729u, p.level);
     p.look = std::make_unique<Body>(*m_rig, *m_models, e.tint, true);
+    // Clothes: a CPU player's from its name, another screen's person as
+    // they picked there, ours as picked here.
+    if (e.cpu || e.netCpu) {
+        p.look->setOutfit(cpuOutfit(e.name, e.tint));
+    } else if (e.remote && m_net) {
+        kke::Outfit o = e.dressed ? e.outfit : outfitOf({}, e.tint);
+        for (const kke::net::RemotePlayer& rp : m_net->remotePlayers())
+            if (rp.id == e.netId) o = outfitOfCharacter(rp.character, e.tint);
+        p.look->setOutfit(o);
+    } else if (e.dressed) {
+        p.look->setOutfit(e.outfit);
+    }
     // A free slot (a match that ended) or a new one.
     for (size_t i = 0; i < m_players.size(); ++i)
         if (!m_players[i].alive) {
@@ -242,6 +254,36 @@ namespace {
 const glm::vec3 kTints[] = { { 0.35f, 0.6f, 1.25f }, { 1.25f, 0.45f, 0.32f }, { 0.45f, 1.1f, 0.45f }, { 1.2f, 1.0f, 0.35f } };
 const char* const kCpuNames[] = { "Ace", "Deuce", "Volley", "Lobster" };
 } // namespace
+
+kke::Outfit TennisModule::outfitOf(const std::vector<int>& look, const glm::vec3& tint) const {
+    auto pick = [&look](size_t field, const std::vector<kke::NamedColour>& from, int fallback) {
+        const int c = field < look.size() ? look[field] : fallback;
+        return from[static_cast<size_t>(std::clamp(c, 0, static_cast<int>(from.size()) - 1))].rgb;
+    };
+    kke::Outfit o;
+    o.top = glm::clamp(tint / 1.25f, 0.0f, 1.0f); // the players' tints are a brightened swatch
+    o.skin = pick(2, kke::skinTones(), 4);
+    o.bottom = pick(3, kke::clothColours(), 11);
+    o.shoes = pick(4, kke::clothColours(), 0);
+    return o;
+}
+
+kke::Outfit TennisModule::outfitOfCharacter(const std::string& character, const glm::vec3& tint) const {
+    return outfitOf(m_lobby ? m_lobby->lobby().lookFromText(character) : std::vector<int>{}, tint);
+}
+
+kke::Outfit TennisModule::cpuOutfit(const std::string& name, const glm::vec3& tint) {
+    uint32_t h = 2166136261u; // FNV-1a: the same name, the same clothes, on every screen
+    for (const char c : name) h = (h ^ static_cast<uint8_t>(c)) * 16777619u;
+    const auto& skins = kke::skinTones();
+    const auto& cloth = kke::clothColours();
+    kke::Outfit o;
+    o.top = glm::clamp(tint / 1.25f, 0.0f, 1.0f);
+    o.skin = skins[h % skins.size()].rgb;
+    o.bottom = cloth[(h >> 8) % cloth.size()].rgb;
+    o.shoes = cloth[(h >> 16) % cloth.size()].rgb;
+    return o;
+}
 
 // This screen's players: the menu's seats, then its CPU players (the
 // switches without the menu). Online, the same order is their network
@@ -258,6 +300,8 @@ std::vector<TennisModule::Entry> TennisModule::seatEntries() const {
             for (size_t f = 0; f < fields.size(); ++f)
                 if (fields[f].id == "colour" && !fields[f].swatches.empty())
                     e.tint = fields[f].swatches[static_cast<size_t>(l.seat(seat).look[f]) % fields[f].swatches.size()] * 1.25f;
+            e.outfit = outfitOf(l.seat(seat).look, e.tint);
+            e.dressed = true;
             e.input = m_lobby->playerOf(seat);
             // The menu was skipped (KKE_TENNIS_LOBBY=0): seats in order, the first on player 0's devices.
             if (e.input < 0) e.input = static_cast<int>(entries.size());
@@ -275,6 +319,8 @@ std::vector<TennisModule::Entry> TennisModule::seatEntries() const {
         Entry e;
         e.name = "You";
         e.tint = kTints[0];
+        e.outfit = outfitOf({}, e.tint);
+        e.dressed = true;
         e.input = 0;
         entries.push_back(std::move(e));
     }
@@ -303,6 +349,8 @@ void TennisModule::startLocalMatch() {
             Entry e;
             e.name = rp.name;
             e.tint = net::tintFromText(rp.character, glm::vec3(0.8f));
+            e.outfit = outfitOfCharacter(rp.character, e.tint);
+            e.dressed = true;
             e.netId = rp.id;
             e.remote = true;
             entries.push_back(std::move(e));

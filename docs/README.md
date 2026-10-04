@@ -19,6 +19,7 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [INPUT.md](INPUT.md) | Rebindable actions, devices, triggers and chords |
 | [DEMO_PANEL.md](DEMO_PANEL.md) | A settings panel for a demo or tool that works with a controller, the keyboard and the mouse |
 | [LOBBY.md](LOBBY.md) | The start menu: controllers press A to join, players pick a look, player 1 sets the CPU players |
+| [OUTFITS.md](OUTFITS.md) | Outfits: a mannequin dressed in the skin tone and clothes colours a player picks |
 | [COMMANDS.md](COMMANDS.md) | Orders for companions and squads: selection, formations, radial wheel, Lua and nodes |
 | [MOVEMENT.md](MOVEMENT.md) | How characters move, and the animation principles behind it |
 | [AI.md](AI.md) | The AI core: senses, needs, utility decisions, steering, navmesh, orders, `ai.*` in Lua |

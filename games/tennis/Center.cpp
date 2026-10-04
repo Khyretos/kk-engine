@@ -67,7 +67,7 @@ TennisModule::Match* TennisModule::matchOn(int court) {
     return nullptr;
 }
 
-void TennisModule::spawnWalker(const std::string& nm, const glm::vec3& tint, bool cpu, int input, const glm::vec3& at) {
+void TennisModule::spawnWalker(const std::string& nm, const glm::vec3& tint, bool cpu, int input, const glm::vec3& at, const kke::Outfit* outfit) {
     Walker w;
     w.name = nm;
     w.tint = tint;
@@ -81,6 +81,11 @@ void TennisModule::spawnWalker(const std::string& nm, const glm::vec3& tint, boo
     w.body = world.addCharacter(cd);
     world.teleportCharacter(w.body, at + glm::vec3(0.0f, 0.02f, 0.0f));
     w.look = std::make_unique<Body>(*m_rig, *m_models, tint, !cpu);
+    if (outfit) {
+        w.outfit = *outfit;
+        w.dressed = true;
+        w.look->setOutfit(*outfit);
+    }
     w.dice = 0x9e3779b9u * static_cast<uint32_t>(m_walkers.size() + 1) ^ m_seed;
     w.timer = roll(w.dice) * 4.0f;
     w.facing = glm::vec3(0.0f, 0.0f, at.z > 0.0f ? -1.0f : 1.0f);
@@ -100,7 +105,7 @@ void TennisModule::enterCenter() {
         // Online, each machine's people arrive in their own places (a client
         // knows its id by now), not on top of another screen's.
         const int place = online() && e.netId > 0 ? e.netId * kke::NetModule::kMaxLocalPlayers + n : n;
-        spawnWalker(e.name, e.tint, false, e.input, m_center.arrival(place));
+        spawnWalker(e.name, e.tint, false, e.input, m_center.arrival(place), e.dressed ? &e.outfit : nullptr);
         m_walkers.back().localSlot = n++;
         m_walkers.back().netId = online() ? e.netId : -1; // or once hosting or joining starts (sendNet)
     }
@@ -160,6 +165,8 @@ void TennisModule::startCourt(int court) {
         Entry e;
         e.name = w.name;
         e.tint = w.tint;
+        e.outfit = w.outfit;
+        e.dressed = w.dressed;
         e.input = w.remote ? -1 : w.input;
         e.remote = w.remote;
         e.netId = w.netId;

@@ -480,16 +480,17 @@ void TennisModule::syncRemoteWalkers() {
     for (const kke::net::RemotePlayer& r : remote) {
         const auto known = std::find_if(m_walkers.begin(), m_walkers.end(), [&r](const Walker& w) { return w.remote && !w.gone && w.netId == r.id; });
         if (known != m_walkers.end()) {
-            // They picked another colour: everyone sees it.
-            const glm::vec3 tint = net::tintFromText(r.character, known->tint);
-            if (tint != known->tint) {
-                known->tint = tint;
-                if (known->look) known->look->setTint(tint);
-            }
+            // They picked another colour or clothes: everyone sees it.
+            known->tint = net::tintFromText(r.character, known->tint);
+            known->outfit = outfitOfCharacter(r.character, known->tint);
+            known->dressed = true;
+            if (known->look) known->look->setOutfit(known->outfit);
             continue;
         }
         const glm::vec3 at = r.hasState ? net::fromState(r.state).feet : m_center.arrival(r.id * kke::NetModule::kMaxLocalPlayers);
-        spawnWalker(r.name, net::tintFromText(r.character, glm::vec3(0.8f)), false, -1, at);
+        const glm::vec3 tint = net::tintFromText(r.character, glm::vec3(0.8f));
+        const kke::Outfit outfit = outfitOfCharacter(r.character, tint);
+        spawnWalker(r.name, tint, false, -1, at, &outfit);
         Walker& w = m_walkers.back();
         w.remote = true;
         w.netId = r.id;

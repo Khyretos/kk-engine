@@ -41,6 +41,27 @@ void TennisModule::setupLobby() {
         colours.swatches.push_back(c.rgb);
     }
     l.addLookField(std::move(colours));
+    // The clothes (docs/OUTFITS.md): the colour above is the top.
+    kke::Lobby::LookField skin{ "skin", "Skin", {}, {} }, legs{ "trousers", "Trousers", {}, {} }, shoes{ "shoes", "Shoes", {}, {} };
+    for (const kke::NamedColour& c : kke::skinTones()) {
+        skin.choices.push_back(c.name);
+        skin.swatches.push_back(c.rgb);
+    }
+    for (const kke::NamedColour& c : kke::clothColours()) {
+        legs.choices.push_back(c.name);
+        legs.swatches.push_back(c.rgb);
+        shoes.choices.push_back(c.name);
+        shoes.swatches.push_back(c.rgb);
+    }
+    l.addLookField(std::move(skin));
+    l.addLookField(std::move(legs));
+    l.addLookField(std::move(shoes));
+    // Before last time's looks load: every seat starts as someone else.
+    for (int seat = 0; seat < kke::Lobby::kMaxSeats; ++seat) {
+        l.setLook(seat, 2, 2 + seat * 2);
+        l.setLook(seat, 3, 11 - seat);
+        l.setLook(seat, 4, 0);
+    }
     l.setMaxCpus(3);
     l.setCpuCount(1);
     l.addOption({ "where", "Play", { "One match", "Sport center" }, 0, true, {}, [this](int v) { m_where = v; } });

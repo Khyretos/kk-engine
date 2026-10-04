@@ -100,6 +100,7 @@ set(ENGINE_SOURCES
     src/InputDevices.cpp
     src/modules/InputModule.cpp
     src/Lobby.cpp
+    src/Outfit.cpp
     src/AudioMixer.cpp
     src/ImpactSynth.cpp
     src/EngineSound.cpp

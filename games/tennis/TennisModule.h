@@ -190,6 +190,8 @@ public:
     struct Entry {
         std::string name;
         glm::vec3 tint{1.0f};
+        kke::Outfit outfit;            // what they wear (the menu's look)
+        bool dressed = false;          // ... or the tinted mannequin
         bool cpu = false;
         int input = -1, level = 1;
         int netId = -1;
@@ -205,6 +207,8 @@ public:
     struct Walker {
         std::string name;
         glm::vec3 tint{1.0f};
+        kke::Outfit outfit;            // a person's clothes (the crowd: tinted)
+        bool dressed = false;
         bool cpu = true;               // the crowd
         int input = -1;                // a person at this screen
         bool remote = false;           // online: someone at another screen (moved by what it sends)
@@ -279,7 +283,7 @@ private:
 
     // The sport center (Center.cpp): walk about, pick a court, watch.
     void enterCenter();
-    void spawnWalker(const std::string& name, const glm::vec3& tint, bool cpu, int input, const glm::vec3& at);
+    void spawnWalker(const std::string& name, const glm::vec3& tint, bool cpu, int input, const glm::vec3& at, const kke::Outfit* outfit = nullptr);
     void readWalker(Walker& w);
     void stepCenter(float dt);
     void stepCrowd(Walker& w, float dt);
@@ -348,6 +352,12 @@ private:
     std::string netStatus() const;
     bool waitsOnline() const;       // KKE_NET join, or a host waiting for KKE_TENNIS_WAIT players
     std::vector<Entry> seatEntries() const; // this screen's players, as the menu has them
+    // Clothes (docs/OUTFITS.md): a menu look (name, colour, skin, trousers,
+    // shoes), another screen's (its NetModule character), and a CPU
+    // player's, the same on every screen (from its name).
+    kke::Outfit outfitOf(const std::vector<int>& look, const glm::vec3& tint) const;
+    kke::Outfit outfitOfCharacter(const std::string& character, const glm::vec3& tint) const;
+    static kke::Outfit cpuOutfit(const std::string& name, const glm::vec3& tint);
     std::vector<Entry> netEntries() const;  // ... as network players (slot order), with netId
     Match* matchByNet(uint32_t id);
     size_t matchIndex(const Match& m) const;

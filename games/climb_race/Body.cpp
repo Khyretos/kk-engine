@@ -113,6 +113,7 @@ void ClimbRaceModule::loadCharacter() {
     // colour from the menu (the tint multiplies), with its joints kept dark.
     kke::ModelData grey = *d;
     for (kke::ModelMaterial& m : grey.materials) m.baseColor = m.name.find("Joint") != std::string::npos ? glm::vec3(0.12f) : glm::vec3(0.8f);
+    m_baseBody = grey;
     m_charModel = m_models->add(std::move(grey), "climb_race/climber");
     d = m_models->model(m_charModel);
     m_rigData = kke::ModelData{};
@@ -174,11 +175,40 @@ void ClimbRaceModule::loadCharacter() {
     }
 }
 
+// The mannequin in these clothes: one copy per outfit, shared by every
+// climber wearing it.
+kke::ModelModule::ModelId ClimbRaceModule::outfitModel(const kke::Outfit& outfit) {
+    if (m_baseBody.meshes.empty()) return 0;
+    const std::string key = kke::outfitKey(outfit);
+    if (const auto it = m_outfits.find(key); it != m_outfits.end()) return it->second;
+    const kke::ModelModule::ModelId id = m_models->add(kke::dressModel(m_baseBody, outfit), "climb_race/climber/" + key);
+    m_outfits[key] = id;
+    return id;
+}
+
+// A climber's model instance in its outfit (the ghost stays the plain,
+// tinted mannequin). A new pick in the menu, here or on another screen,
+// swaps the instance; the animator and the pose carry on.
+void ClimbRaceModule::dress(Racer& r) {
+    if (!r.model || r.ghost) return;
+    const std::string key = kke::outfitKey(r.outfit);
+    if (key == r.dressedAs) return;
+    const kke::ModelModule::ModelId id = outfitModel(r.outfit);
+    if (!id) return;
+    const glm::mat4 xf = m_models->transform(r.model);
+    m_models->remove(r.model);
+    r.model = m_models->spawn(id, xf);
+    m_models->setOverlayEnabled(r.model, false);
+    r.dressedAs = key;
+}
+
 void ClimbRaceModule::setupBody(Racer& r) {
     if (!m_charModel || !m_animSet) return;
     r.model = m_models->spawn(m_charModel, glm::mat4(1.0f));
     m_models->setOverlayEnabled(r.model, false);
     m_models->setTint(r.model, r.tint);
+    r.dressedAs.clear();
+    dress(r);
     r.anim = std::make_unique<kke::Animator>(*m_animSet);
     kke::Animator& a = *r.anim;
     const kke::AnimationSet& s = *m_animSet;

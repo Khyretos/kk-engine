@@ -86,7 +86,7 @@ const char* kLobbyRml = R"(
         #typing .key.focused { background-color: #56a8ff; color: #0b0f1c; font-weight: bold; }
         #typing .hint { font-size: 13dp; color: #aab3cc; margin-top: 10dp; }
         #typing .hint img { font-size: 14dp; }
-        #online { position: absolute; left: 3%; top: 21%; width: 30%; }
+        #online { position: absolute; right: 3%; top: 21%; width: 30%; }
         #online .head { font-size: 12dp; letter-spacing: 2dp; color: #eef1f8; margin-bottom: 4dp; font-effect: outline(2dp #000000b0); }
         .player { display: block; margin-bottom: 6dp; padding: 6dp 12dp; border-radius: 8dp; background-color: #0b0f1cd0;
                   border-left: 4dp #56a8ff; }
