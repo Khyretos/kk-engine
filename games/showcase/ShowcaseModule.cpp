@@ -195,6 +195,13 @@ void ShowcaseModule::init(kke::Application& app) {
         m_vehStatic = std::make_unique<kke::DynamicMeshRenderer>(app);
         m_vehStatic->upload(v, i);
         m_vehBatch = std::make_unique<kke::DynamicMeshRenderer>(app);
+        v.clear();
+        i.clear();
+        buildNature(v, i);
+        m_natureStatic = std::make_unique<kke::DynamicMeshRenderer>(app);
+        m_natureStatic->upload(v, i);
+        m_natureBatch = std::make_unique<kke::DynamicMeshRenderer>(app);
+        m_grassBatch = std::make_unique<kke::DynamicMeshRenderer>(app);
     }
     buildGuns();
     dressCourse();
@@ -204,6 +211,7 @@ void ShowcaseModule::init(kke::Application& app) {
     loadItems();
     spawnRange();
     spawnVehicles();
+    spawnNature();
     m_rig.mode = kke::CameraRig::Mode::ThirdPerson;
     m_rig.yaw = 0.0f;
     m_rig.pitch = -12.0f;
@@ -260,6 +268,7 @@ void ShowcaseModule::init(kke::Application& app) {
         m_demoDrive = 0.0f;
         if (*d == '2') m_laps = 1; // =2: straight to the plane (as if the lap were driven)
     }
+    if (const char* n = std::getenv("KKE_DEMO_NATURE"); n && *n && *n != '0') m_demoNature = 0.0f;
     if (const char* it = std::getenv("KKE_DEMO_ITEMS"); it && *it && *it != '0') {
         m_demoItems = 0.0f;
         m_demoItemsKeepOpen = *it == '2';
@@ -806,6 +815,7 @@ void ShowcaseModule::applyIk(float dt) {
     }
     if (!reach && m_handIk) holdHands();
     if (!reach && m_held.body == kke::RigidWorld::kNoBody) aimHands(pose, toWorld); // a gun up to the eye
+    if (!reach) chopHands(pose, toWorld);                                            // the axe swing, a hand down to a flower
     // Hanging: the balls of the feet against the wall below the hands
     // (braced, the way people hang on a ledge), where there is wall.
     if (m_footIk && st == State::Hang) {
@@ -922,18 +932,25 @@ void ShowcaseModule::readActions(float dt) {
         }
         updateGuns(dt, fire, firePressed, aim);
     }
+    // The axe in the right hand: the trigger swings it (Nature.cpp).
+    bool chop = axeInHand() && fireOk && in.pressed("fire");
+    if (m_demoNature >= 0.0f) updateNatureDemo(dt, chop);
+    if (chop) startChop();
     if (m_held.body != kke::RigidWorld::kNoBody) {
         // Holding something: the trigger throws it.
         if (fireOk && in.pressed("fire")) {
             throwHeld(m_app->camera());
             m_fireCooldown = 0.4f;
         }
-    } else if (!armed() && fireOk && in.held("fire") && (in.pressed("fire") || m_fireCooldown <= 0.0f)) {
+    } else if (!armed() && !axeInHand() && fireOk && in.held("fire") && (in.pressed("fire") || m_fireCooldown <= 0.0f)) {
         shoot(m_app->camera());
         m_fireCooldown = 0.25f;
     }
     if (in.pressed("interact")) forcePush(m_app->camera());
-    if (in.pressed("pickup") && !useVehicle()) togglePickUp(); // a car or the plane next to you: get in
+    if (in.pressed("pickup") && !useVehicle()) { // a car or the plane next to you: get in
+        if (const int flower = m_held.body == kke::RigidWorld::kNoBody && itemInReach() < 0 ? flowerInReach() : -1; flower >= 0) pickFlower(flower);
+        else togglePickUp();
+    }
     if (in.pressed("reset")) resetWorld();
     if (in.pressed("panels")) {
         m_showPanels = !m_showPanels;
@@ -1077,6 +1094,8 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     batchItems();
     batchRange();
     batchVehicles();
+    updateNature(dt);
+    batchNature();
     updateDummies();
     updateEffects(dt);
     if (m_lava) m_lava->update();
@@ -1117,6 +1136,10 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     const float load = loadFactor();
     in.move *= load;
     if (load < 0.7f) m_sprint = false;
+    if (m_chop >= 0.0f) { // swinging the axe: feet planted
+        in.move *= 0.3f;
+        m_sprint = false;
+    }
     if (m_autopilot) {
         // Down the lane (or a scene's trail) toward -Z at a run; "go up"
         // whenever the sensors see something (a player's timing). On the
@@ -1498,6 +1521,11 @@ void ShowcaseModule::render(const kke::RenderContext& ctx) {
     if (m_rangeMetalIndices) m_rangeMetal->draw(ctx, glm::mat4(1.0f), 0.8f, 0.4f);
     if (m_vehStatic) m_vehStatic->draw(ctx, glm::mat4(1.0f), 0.0f, 0.85f);
     if (m_vehBatchIndices) m_vehBatch->draw(ctx, glm::mat4(1.0f), 0.35f, 0.35f);
+    if (m_natureStatic) m_natureStatic->draw(ctx, glm::mat4(1.0f), 0.0f, 0.85f);
+    if (m_natureBatchIndices) m_natureBatch->draw(ctx, glm::mat4(1.0f), 0.0f, 0.8f);
+    if (m_grassBatchIndices) m_grassBatch->draw(ctx, glm::mat4(1.0f), 0.0f, 0.9f);
+    for (size_t k = 0; k < m_snowChunks.size(); ++k)
+        if (m_snowIndices[k]) m_snowChunks[k]->draw(ctx, glm::mat4(1.0f), 0.0f, 0.6f);
     if (m_itemBatchIndices) m_itemBatch->draw(ctx, glm::mat4(1.0f), 0.15f, 0.55f);
     if (m_equipBatchIndices) m_equipBatch->draw(ctx, glm::mat4(1.0f), 0.15f, 0.55f);
     m_cubes[3]->draw(ctx, glm::scale(w.transform(m_platform), m_platformHalf), 0.3f, 0.4f);
@@ -1527,6 +1555,10 @@ void ShowcaseModule::renderShadow(const kke::ShadowRenderContext& ctx) {
     if (m_rangeMetalIndices) m_rangeMetal->drawShadow(ctx);
     if (m_vehStatic) m_vehStatic->drawShadow(ctx);
     if (m_vehBatchIndices) m_vehBatch->drawShadow(ctx);
+    if (m_natureStatic) m_natureStatic->drawShadow(ctx);
+    if (m_natureBatchIndices) m_natureBatch->drawShadow(ctx); // the grass casts none (too fine to show, too many)
+    for (size_t k = 0; k < m_snowChunks.size(); ++k)
+        if (m_snowIndices[k]) m_snowChunks[k]->drawShadow(ctx);
     if (m_itemBatchIndices) m_itemBatch->drawShadow(ctx);
     if (m_equipBatchIndices) m_equipBatch->drawShadow(ctx);
     m_cubes[3]->drawShadow(ctx, glm::scale(w.transform(m_platform), m_platformHalf));

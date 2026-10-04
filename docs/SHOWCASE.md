@@ -44,6 +44,12 @@ car park: get in (F / X) and drive the oval; the HUD times each lap. At the
 off by itself; land on the runway or a flat field, or crash it in a
 fireball. See [games/showcase/README.md](../games/showcase/README.md#cars-and-the-plane).
 
+In the **nature park** the trees and grass sway in the wind. Take the axe
+from the chopping block, fell a tree in four swings, split its logs into
+firewood, and pick flowers in the meadow. Up the mountain the **snow
+field** keeps every footprint and tyre track. See
+[games/showcase/README.md](../games/showcase/README.md#the-nature-park-and-the-snow-field).
+
 ## HUD and menu
 
 - The HUD (RmlUi, `ui/showcase_hud.rml`) shows what the character is
@@ -104,6 +110,7 @@ it is, is in [games/showcase/README.md](../games/showcase/README.md).
 | `KKE_DEMO_ITEMS=1` | At the supply table: picks things up, opens the bag, equips an axe, a rifle, a helmet, a canteen and a lantern, then shows them worn |
 | `KKE_DEMO_GUNS=1` | At the firing range: rifle at the plates, the glass and the stone walls, then the red barrels, the pistol and a grenade |
 | `KKE_DEMO_DRIVE=1` | Drives a timed lap of the race track, then flies the plane round the airfield and crashes it (`=2`: only the plane) |
+| `KKE_DEMO_NATURE=1` | Takes the axe, fells a tree, splits a log, picks three flowers, then walks a trail through the snow and looks back at it |
 | `KKE_DEMO_BRIDGE=1` | Drops an iron ball on the yard's glass, then rolls one into a crate, and logs how far the crates moved |
 | `KKE_SPLIT=2..4`, `KKE_OVERHEAD=1` | Local split screen, and an overhead picture-in-picture view |
 | `KKE_MAIN_MENU=pause` | Opens the pause menu after 1.5 s (`KKE_MAIN_MENU=0`: no title screen) |

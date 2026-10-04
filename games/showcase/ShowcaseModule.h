@@ -321,6 +321,7 @@ private:
     // over each; the world map (M, or the pause menu) takes you to one.
     void buildWorld();
     float groundHeight(float x, float z) const; // the terrain's height under (x, z)
+    float roadDistance(float x, float z) const; // m from the nearest road's edge (negative: on it)
     int zoneAt(const glm::vec3& p) const;       // index into layout::kZones (1..), -1 = none (or the yard)
     void travelTo(int zone);
     void buildMapScreen();
@@ -485,6 +486,74 @@ private:
     int m_demoWaypoint = 0;
     float m_demoClosest = 1e9f; // m: the plane's nearest pass at the waypoint so far
     void updateDriveDemo(float dt, glm::vec2& move, float& gas, float& brake, bool& handBrake);
+
+    // The nature park and the snow field (Nature.cpp). A forest round a
+    // meadow; trees and grass sway in the wind and bend round you; the axe
+    // fells a tree in four hits (it falls away from you, then lies as logs
+    // to carry or split into firewood); flowers in the meadow go in the
+    // bag. With POLYGON Nature the trees and plants are Synty's, else
+    // they're built from shapes. Up the mountain, snow that keeps every
+    // footprint and tyre track, with snow falling.
+    enum class TreeState : uint8_t { Standing, Falling, Down, Gone };
+    struct Tree {
+        glm::vec3 base{0.0f};
+        float yaw = 0.0f, scale = 1.0f, phase = 0.0f;
+        int kind = 0;
+        float height = 8.0f, trunk = 0.25f; // m: the whole tree, the trunk's radius
+        kke::RigidWorld::BodyId body = kke::RigidWorld::kNoBody; // the trunk (static)
+        kke::ModelModule::InstanceId instance = 0, stump = 0;     // Synty
+        int hits = 0;
+        TreeState state = TreeState::Standing;
+        glm::vec3 fallDir{1.0f, 0.0f, 0.0f};
+        float fall = 0.0f, fallSpeed = 0.0f, downTime = 0.0f, shake = 0.0f;
+    };
+    struct Flower { glm::vec3 at{0.0f}; int kind = 0; float phase = 0.0f; bool picked = false; };
+    struct Plant { glm::vec3 at{0.0f}; float yaw = 0.0f, scale = 1.0f, phase = 0.0f; kke::ModelModule::InstanceId instance = 0; };
+    void buildNature(std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx); // the chopping block, the snow field's ground
+    void spawnNature();
+    void clearNature();
+    void updateNature(float dt);
+    void batchNature();               // trees (shapes), stumps, grass, flowers: every frame (they sway)
+    bool axeInHand() const;
+    void startChop();
+    void chopHit();
+    void chopHands(const kke::Pose& pose, const glm::mat4& toWorld);
+    int treeInReach(float reach) const;
+    int flowerInReach() const;
+    std::string flowerName(int index) const;
+    void pickFlower(int index);
+    glm::mat4 swayOf(const glm::vec3& base, float phase, float amount) const; // a rotation about the base
+    float windGust(const glm::vec3& at) const;
+    void stampSnow(const glm::vec2& at, const glm::vec2& half, float yaw, float depth);
+    void rebuildSnow();
+    bool inSnow(const glm::vec3& p) const;
+    std::vector<Tree> m_trees;
+    std::vector<Flower> m_flowers;
+    std::vector<Plant> m_plants;
+    std::vector<kke::ModelModule::ModelId> m_treeModels, m_stumpModels, m_plantModels;
+    bool m_natureSynty = false, m_natureTried = false;
+    float m_windTime = 0.0f;
+    float m_chop = -1.0f;                 // s into a swing, -1 = not swinging
+    int m_chopTree = -1;
+    glm::vec3 m_chopAt{0.0f};             // where the blade lands
+    int m_felled = 0;
+    float m_pickReach = -1.0f;            // s into reaching down for a flower
+    glm::vec3 m_pickAt{0.0f};
+    std::shared_ptr<const kke::SoundBuffer> m_sndChop, m_sndFall, m_sndPick;
+    std::unique_ptr<kke::DynamicMeshRenderer> m_natureStatic, m_natureBatch, m_grassBatch;
+    size_t m_natureBatchIndices = 0, m_grassBatchIndices = 0;
+    // The snow: a grid of how far it's pressed down (0 fresh .. 1 to the
+    // ground), drawn in chunks, each rebuilt when something presses it.
+    std::vector<float> m_snowPress, m_snowGround;
+    std::vector<std::unique_ptr<kke::DynamicMeshRenderer>> m_snowChunks;
+    std::vector<uint8_t> m_snowDirty;
+    std::vector<size_t> m_snowIndices;
+    float m_stride = 0.0f;                // m walked since the last footprint
+    bool m_leftFoot = false;
+    glm::vec3 m_lastSnowFeet{0.0f};
+    uint32_t m_snowEmitter = 0, m_leafEmitter = 0;
+    float m_demoNature = -1.0f; // KKE_DEMO_NATURE: seconds into the script, -1 = off
+    void updateNatureDemo(float dt, bool& chop);
 
     // The bag (InventoryScreen.cpp, ui/showcase_inventory.rml): Tab, I or
     // View opens it over the game. Move with the arrows, the

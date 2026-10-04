@@ -319,6 +319,7 @@ void ShowcaseModule::resetWorld() {
     resetCourse();
     spawnRange(); // plates up, barrels back, breakables whole, dummies standing
     spawnVehicles(); // cars in their bays, the plane on the runway
+    spawnNature();   // the trees standing again, the flowers back, fresh snow
     // The bag empties, its things back on the supply table.
     openInventory(false);
     m_inv.clear();

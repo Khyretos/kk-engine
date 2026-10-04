@@ -174,6 +174,10 @@ void ShowcaseModule::updateHud() {
                            : "Pick up a gun from the bench {pickup}: it goes straight into your hand.";
             live = "Plates down: " + std::to_string(platesDown()) + " of " + std::to_string(plateCount());
         }
+        if (zone == 5) {
+            if (axeInHand()) text = "Swing the axe {fire} at a tree: four hits fell it. Swing at a log to split it into firewood.";
+            live = "Trees felled: " + std::to_string(m_felled);
+        }
     }
 
     if (m_ride != Ride::None) {
@@ -218,6 +222,7 @@ void ShowcaseModule::updateHud() {
         if (prompt.empty() && m_ride == Ride::None) {
             if (const int car = carInReach(); car >= 0) prompt = std::string("{pickup} Drive the ") + m_cars[static_cast<size_t>(car)].name;
             else if (planeInReach()) prompt = "{pickup} Fly the plane";
+            else if (const int f = flowerInReach(); f >= 0) prompt = "{pickup} Pick the " + flowerName(f);
         }
     }
     set(m_hud.prompt, prompt.empty() || !input ? prompt : input->promptText(prompt), "prompt");

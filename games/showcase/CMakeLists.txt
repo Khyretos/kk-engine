@@ -1,6 +1,6 @@
 # kke_demo: the walkable showcase (ACTION_PLAN.md P1).
 kke_add_game(kke_demo main.cpp ShowcaseModule.cpp StressTest.cpp SplitScreen.cpp Stations.cpp LavaStation.cpp Hud.cpp
-    Geometry.cpp Spawner.cpp Carry.cpp Items.cpp InventoryScreen.cpp World.cpp Guns.cpp Range.cpp Vehicles.cpp
+    Geometry.cpp Spawner.cpp Carry.cpp Items.cpp InventoryScreen.cpp World.cpp Guns.cpp Range.cpp Vehicles.cpp Nature.cpp
     ${CMAKE_SOURCE_DIR}/games/flying_demo/Flight.cpp) # the plane flies on the Flying demo's flight model
 target_include_directories(kke_demo PRIVATE ${CMAKE_SOURCE_DIR}/games/flying_demo)
 target_link_libraries(kke_demo PRIVATE kke_engine)

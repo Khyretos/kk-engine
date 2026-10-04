@@ -258,6 +258,35 @@ Each machine drives its own cars and plane for now (online comes with
 round 8). The engine note is `kke::EngineSound`, synthesized from the rpm
 and the throttle like the racing demo's.
 
+### The nature park and the snow field
+
+[Nature.cpp](Nature.cpp). **The nature park** (zone 6 on the map, west of
+the yard): about 85 trees round a meadow, undergrowth, and grass that
+sways in gusts of wind and bends away from your legs. With POLYGON Nature
+installed the trees, stumps and plants are Synty's (each tree an instance
+turned about its foot every frame, which is the sway); without it the
+trees are built from shapes (round, pine and birch) and look the same
+from a distance (`KKE_NATURE_ART=0` shows those even with the pack). The grass blades are always this file's own: a blade or
+two every half metre within 20 m of you, rebuilt each frame, no shadows.
+Leaves drift down while you are in the forest.
+
+Take the axe from the chopping block at the gate (or the supply table)
+and fire swings it (both hands on the handle, by IK). Four hits fell a
+tree: it tips away from you, slow at first then fast (a rod falling over
+its foot), crashes down with a shake, and after a moment lies as two to
+four logs (props: carry them, throw them, or swing at one to split it into
+firewood for the bag). The stump stays. Flowers in the meadow (poppies,
+buttercups, cornflowers) are picked with pickup straight into the bag.
+Reset the world and the forest grows back.
+
+**The snow field** (zone 7, up the mountain): a layer of snow 22 cm deep
+that keeps every footprint and tyre track. It is a grid of how far each
+point is pressed (quarter-metre cells, 116 m across), drawn as 64 chunks
+of which only the pressed ones are rebuilt (at most six a frame). Feet
+stamp an oval every stride, left then right; a car's wheels stamp where
+they touch. Snow falls round the camera there. Reset the world for fresh
+snow.
+
 ### Spawning and carrying
 
 RB (G) opens the spawn menu on the right while the game keeps running:
@@ -978,6 +1007,7 @@ Pitfalls the code shows:
 | [SplitScreen.cpp](SplitScreen.cpp) | Local players 2-4, controller assignment, views, the overhead view |
 | [StressTest.cpp](StressTest.cpp) | The 36 s stress test and its report |
 | [Guns.cpp](Guns.cpp) | Guns, grenades, explosions: firing, hits, synthesized sounds, effects, aiming arms |
+| [Nature.cpp](Nature.cpp) | The nature park (trees, undergrowth, grass, wind), chopping trees and splitting logs, picking flowers, the snow field and its footprints, the `KKE_DEMO_NATURE` run |
 | [Vehicles.cpp](Vehicles.cpp) | The race track (oval, kerbs, cones, jump), three cars, the plane and its crash, getting in and out, the chase camera, lap times, the engine sound, the `KKE_DEMO_DRIVE` run |
 | [Range.cpp](Range.cpp) | The firing range: bench, plates, barrels, crates, dummies, FEMFX glass and walls, the `KKE_DEMO_GUNS` run |
 | [Hud.cpp](Hud.cpp) | RmlUi data model, HUD updates, the pause menu's rows |

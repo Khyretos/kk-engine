@@ -192,6 +192,16 @@ float ShowcaseModule::groundHeight(float x, float z) const {
     return at(ix + 1, iz + 1) + (at(ix, iz + 1) - at(ix + 1, iz + 1)) * (1.0f - fx) + (at(ix + 1, iz) - at(ix + 1, iz + 1)) * (1.0f - fz);
 }
 
+float ShowcaseModule::roadDistance(float x, float z) const {
+    float best = 1e9f;
+    for (const Road& r : roads()) {
+        float d = 0.0f;
+        nearestOnRoad(r, glm::vec2(x, z), d);
+        best = std::min(best, d - r.width * 0.5f);
+    }
+    return best;
+}
+
 int ShowcaseModule::zoneAt(const glm::vec3& p) const {
     for (int k = 1; k < kZoneCount; ++k) // 0 is the yard: its stations say more
         if (glm::length(glm::vec2(p.x - kZones[k].centre.x, p.z - kZones[k].centre.z)) < kZones[k].radius) return k;

@@ -52,8 +52,8 @@ inline constexpr Zone kZones[] = {
       { 137.5f, 0.05f, -150.0f }, 90.0f },
     { "AIRFIELD", "A stunt plane on the runway: walk up and get in {pickup}. Take off, loop, land.", { 380.0f, 0.0f, 40.0f }, 200.0f, { 0.95f, 0.95f, 0.95f }, { 200.0f, 0.05f, 15.0f }, 90.0f },
     { "RACE TRACK", "Three cars in the car park: get in {pickup} and drive a lap of the oval. Cones on the far straight, a jump by the car park.", { 0.0f, 0.0f, 255.0f }, 125.0f, { 0.2f, 0.2f, 0.2f }, { 0.0f, 0.05f, 140.0f }, 180.0f },
-    { "NATURE PARK", "A forest and a meadow.", { -230.0f, 0.0f, 40.0f }, 110.0f, { 0.3f, 0.75f, 0.3f }, { -135.0f, 0.05f, 8.0f }, -90.0f },
-    { "SNOW FIELD", "Snow up on the mountain.", { -300.0f, 30.0f, -280.0f }, 80.0f, { 0.85f, 0.92f, 1.0f }, { -255.0f, 30.05f, -230.0f },
+    { "NATURE PARK", "Trees and grass swaying in the wind. Take the axe from the chopping block and fell a tree; pick flowers in the meadow.", { -230.0f, 0.0f, 40.0f }, 110.0f, { 0.3f, 0.75f, 0.3f }, { -135.0f, 0.05f, 8.0f }, -90.0f },
+    { "SNOW FIELD", "Fresh snow that keeps every footprint and tyre track. Reset the world {reset} for fresh snow.", { -300.0f, 30.0f, -280.0f }, 80.0f, { 0.85f, 0.92f, 1.0f }, { -255.0f, 30.05f, -230.0f },
       -45.0f },
 };
 inline constexpr int kZoneCount = static_cast<int>(sizeof(kZones) / sizeof(kZones[0]));

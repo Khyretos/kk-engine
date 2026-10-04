@@ -243,6 +243,8 @@ void ShowcaseModule::placeItems() {
         { "pistol", 1, 0.0f, 0.0f },      { "ammo_pistol", 50, 0.1f, 0.6f }, { "grenade", 4, 0.0f, 2.5f },     { "grenade", 4, 0.1f, 3.1f },
     };
     for (const Spot& s : kBench) dropItem(s.id, s.count, kRangeBench + glm::vec3(s.x, kRangeBenchHalf.y * 2.0f, s.z));
+    // An axe on the chopping block at the nature park's gate (Nature.cpp).
+    dropItem("axe", 1, glm::vec3(-146.0f, groundHeight(-146.0f, 17.0f) + 0.62f, 17.0f));
 }
 
 int ShowcaseModule::itemInReach() const {
