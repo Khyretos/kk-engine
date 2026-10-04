@@ -52,6 +52,8 @@ public:
         int wheelPicked = -1;
         int wheelGiven = -1;       // an item was picked and given this frame
         bool force = false, queue = false;
+        glm::vec2 orbit{0.0f};     // rightButtonGestures: right-drag this frame (window points)
+        glm::vec2 pan{0.0f};       // rightButtonGestures: middle-drag this frame (window points)
     };
     // `captured`: the mouse turns the camera (the pointer is the reticle).
     const Frame& update(kke::InputMap& in, kke::Application& app, bool captured, float dt);
@@ -62,6 +64,12 @@ public:
     bool padActive() const { return m_pad; } // the last thing touched was a controller
     float longPressSeconds = 0.5f;
     float dragPixels = 12.0f;                 // window points a press may move and still be a click
+    // The right mouse button as a camera and an order at once (Platoon):
+    // a click is the context order where it was pressed, held still it
+    // opens the wheel there, dragged it turns the camera (Frame::orbit).
+    // The middle button then drags the view (Frame::pan), so the game
+    // takes it off cmd.wheel. Off: the right button is just cmd.context.
+    bool rightButtonGestures = false;
 
 private:
     void openWheel(const glm::vec2& center, const glm::vec2& target, int source);
@@ -74,8 +82,16 @@ private:
         glm::vec2 start{0.0f}, pos{0.0f};
         float held = 0.0f;
     } m_press;
+    // The right button with rightButtonGestures: a click, a hold or a drag.
+    struct RightPress {
+        bool down = false, moved = false, released = false, opened = false;
+        glm::vec2 start{0.0f};
+        float held = 0.0f;
+    } m_right;
+    bool m_middleDown = false;
+    glm::vec2 m_orbitDelta{0.0f}, m_panDelta{0.0f};
     bool m_wheelOpen = false;
-    int m_wheelSource = 0; // 1 = the wheel button (stick or mouse), 2 = a held press
+    int m_wheelSource = 0; // 1 = the wheel button (stick or mouse), 2 = a held press, 3 = a held right button
     glm::vec2 m_wheelCenter{0.0f}, m_wheelTarget{0.0f}, m_wheelMouse{0.0f};
     glm::vec2 m_mouse{0.0f};
 };

@@ -42,10 +42,13 @@ void AiOrderBridge::apply(uint32_t unit, const UnitOrder& o) {
         a.target = o.target;
         a.distance = followDistance;
         break;
-    case OrderKind::Stay:
+    case OrderKind::Stay: {
         a.kind = ai::Order::Kind::Hold;
         a.position = o.hasPoint ? o.point : agent->position;
+        const glm::vec3 d = a.position - agent->position;
+        a.run = glm::length(glm::vec2(d.x, d.z)) > stayRunBeyond; // a spot to hold (cover): get there
         break;
+    }
     case OrderKind::Sit:
         a.kind = ai::Order::Kind::Hold;
         a.position = agent->position;

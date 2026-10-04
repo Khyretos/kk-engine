@@ -11,7 +11,7 @@ The demo teaches the melee core (`kke::Combatant` and `kke::CombatWorld`,
 [docs/COMBAT.md](../../docs/COMBAT.md)), a bot whose tactics are data on
 the engine AI core ([docs/AI.md](../../docs/AI.md)) while its reflexes stay
 in C++, Jolt ragdoll knockdowns that blend back into a get-up clip,
-two-bone IK for the guard, and local two-player input with device
+a boxer's stance and guard made with kke::CharacterIk on top of plain clips, and local two-player input with device
 assignment. Start here for a fighting game, a boxing or wrestling game,
 any one-on-one melee, or any game where an animation has to last exactly
 as long as a rule says.
@@ -52,9 +52,9 @@ and are rebindable actions in the "Fight" and "Match" groups.
 | Action | Player 1 keyboard / mouse | Player 2 keyboard | Controller (either player) |
 |---|---|---|---|
 | Move (you always face the opponent) | WASD | arrow keys | left stick |
-| Jab: quick, cheap (`duel.light`) | J / left mouse | numpad 1 | X (west) |
+| Punch: jab, then cross, then hook when pressed again within about a second (`duel.light`) | J / left mouse | numpad 1 | X (west) |
 | Uppercut: slow, knocks down (`duel.heavy`) | K / right mouse | numpad 2 | Y (north) |
-| Knee: breaks a guard (`duel.kick`) | L | numpad 3 | B (east) |
+| Knee up close, front kick from further; breaks a guard (`duel.kick`) | L | numpad 3 | B (east) |
 | Block, held; just before the hit it parries (`duel.block`) | Left Shift | numpad 0 | RB or LT |
 | Dodge (`duel.dodge`) | Space | numpad Enter | A (south) |
 | Next round / rematch (`duel.again`) | R | none | Start |
@@ -103,14 +103,19 @@ Notes from the code:
   to player 2 and player 1 keeps the keyboard; with none, both share the
   keyboard on different keys. Press it again to hand red back to the bot.
 
-The three attacks are the engine presets from
-[Combat.cpp](../../engine/src/Combat.cpp):
+The strikes start from the engine presets in
+[Combat.cpp](../../engine/src/Combat.cpp); `DuelModule::attackNamed`
+makes the cross, hook and kick from them. A press during a strike is kept
+for 0.35 s and thrown as soon as the fighter can act, so a combo flows.
 
 | Attack | Windup / active / recovery (s) | Damage | Stamina | Poise damage | Other |
 |---|---|---|---|---|---|
 | Jab (`light()`) | 0.28 / 0.12 / 0.32 | 10 | 12 | 18 | 15% chip through a block |
+| Cross | 0.3 / 0.12 / 0.32 | 12 | 13 | 21 | reach 1.05 m |
+| Hook | 0.34 / 0.12 / 0.38 | 15 | 15 | 26 | reach 0.9 m, 24 guard damage |
 | Uppercut (`heavy()`) | 0.55 / 0.16 / 0.5 | 24 | 26 | 40 | knockback 4 m/s, sweeps |
-| Knee (`kick()`) | 0.32 / 0.12 / 0.4 | 6 | 14 | 26 | no chip, 45 guard damage |
+| Knee (`kick()`) | 0.32 / 0.12 / 0.4 | 6 | 14 | 26 | no chip, 45 guard damage; closer than 1.05 m |
+| Front kick | 0.4 / 0.12 / 0.45 | 9 | 16 | 26 | reach 1.45 m, knockback 3.5 m/s; needs the full UAL 1 |
 
 ## How it works
 
@@ -305,7 +310,10 @@ orange; the code copies its `ModelData`, makes every material light grey
 multiplies). If `UAL2.fbx` is found (next to UAL 1, or at
 `$KKE_ASSETS_DIR/Universal Animation Library 2/Unity/UAL2.fbx`), its
 clips are added with `kke::appendClipsByBoneName` (loaded with
-`allowNoMeshes`, since that file has only a skeleton and clips).
+`allowNoMeshes`, since that file has only a skeleton and clips). The full
+UAL 1 (`UAL1.fbx`, the "Universal Animation Library" pack) adds its
+`Kick`, `Dodge_Left/Right`, `Hit_Stomach` and `Celebration` the same way;
+clips the rig already has are skipped.
 
 **States** (`setupBody`). Each fighter gets an `Animator` with states
 picked by name, with fallbacks when UAL 2 is missing:
@@ -314,13 +322,16 @@ picked by name, with fallbacks when UAL 2 is missing:
 |---|---|---|
 | idle | `Idle_Loop` | loop |
 | fwd, back, left, right | `Walk_Fwd/Bwd/L/R_Loop`, else `Walk_Loop` | loop at 1.4× |
-| jab_l, jab_r | `Melee_Hook` / `Punch_Cross`, else `Punch_Jab` | the jab's 0.72 s |
+| jab | `Punch_Jab` | 0.72 s |
+| cross | `Punch_Cross` | 0.74 s |
+| hook | `Melee_Hook`, else `Punch_Cross` | 0.84 s |
 | uppercut | `Melee_Uppercut`, else `Punch_Cross` | 1.21 s |
-| knee | `Melee_Knee`, else `Punch_Cross` | 0.84 s |
-| dodge | `Walk_Bwd_Loop`, else `Jump_Start` | dodge time + 0.15 s |
-| hit_high, hit_low, hit_hard | `Hit_Head`, `Hit_Chest`, `Hit_Knockback` | the attack's `hitStun` |
+| knee | `Melee_Knee`, else `Kick`, else `Punch_Cross` | 0.84 s |
+| kick | `Kick` (only with the full UAL 1) | 0.97 s |
+| dodge, dodge_l, dodge_r | `Walk_Bwd_Loop`; `Dodge_Left/Right`, else the side walks | dodge time + 0.15 / 0.25 s |
+| hit_high, hit_low, hit_stomach, hit_hard | `Hit_Head`, `Hit_Chest`, `Hit_Stomach`, `Hit_Knockback` | the attack's `hitStun` |
 | get_up | `LayToIdle`, `KipUp`, else `Crouch_Idle_Loop` | 0.9 s |
-| win | `Dance_Loop`, `Yes`, else `Idle_Loop` | loop |
+| win | `Celebration`, `Dance_Loop`, `Yes`, else `Idle_Loop` | loop |
 
 The `timed` helper sets the playback speed to `clipDuration / seconds`, so
 the clip lasts exactly as long as the rule:
@@ -339,20 +350,28 @@ the clip's own name.
 
 **The state machine** (`animateBody`). The `Combatant`'s state picks the
 clip, and only on entering a state (`state != f.lastState`): Windup plays
-the attack's clip (jabs alternate hands), Stunned plays a hit clip (hard
-if the stun is longer than 0.5 s), Dodging plays the dodge. In Idle the
+the attack's own clip, Stunned plays the hit clip that fits the blow (the
+head for punches, the stomach for a knee or kick, knockback for an
+uppercut or a stun over 0.5 s), Dodging plays the dodge to the side the
+stick pointed. In Idle the
 fighter's velocity, split into forward and sideways parts, picks the walk
 clip once it is above 0.35 m/s, after any strike or flinch clip has
 finished. The match winner dances.
 
-**The guard** (two-bone IK). When the fighter is Idle, both hands are
-pulled to the chin with `kke::solveTwoBone` on the arm chains
-(`upperarm`, `lowerarm`, `hand`, found with `kke::findChain`). The target
-sits 0.22 m in front of the head bone and a little below; while blocking
-it moves up and forward. The IK weight (`f.guard`) eases toward 0.55
-relaxed or 1.0 blocking, faster going up (rate 22) than down (rate 8), so
-the block snaps up and relaxes slowly. It is off during strikes and hit
-reactions, so the clip's arms are not fought.
+**The stance and the guard** (on top of the clip). The mannequin's idle
+and walks stand up straight, so while the fighter is free (Idle, not
+getting up, not the match winner) `animateBody` poses a boxer over them:
+the pelvis drops 8 cm, `spine_01` turns 14 degrees so the left (lead)
+shoulder is forward, `spine_02`, `spine_03` and `neck_01` lean in and tuck
+the chin. Each turn is about a model-space axis, written onto the bone's
+local rotation as `r * (inverse(boneWorld) * delta * boneWorld)`. Then a
+`kke::CharacterIk` per fighter does the rest: the hands go to the face
+(the lead one further out, both higher and closer when blocking) as human
+arms that stay out of the body, the feet stay on the canvas (so the lower
+hips bend the knees), and the body leans into its footwork. The weight
+(`f.guard`) eases toward 0.7 relaxed or 1.0 blocking, faster going up
+(rate 22) than down (rate 8), and the stance fades with it, so strikes
+and hit reactions play their clips unfought.
 
 When `UAL1_Standard.fbx` is missing, `m_charModel` stays 0 and
 `render`/`renderShadow` draw each fighter as a grey box with a dark visor
@@ -417,7 +436,9 @@ reaction time and when within 2.2 m. A parry is timed by raising the block
 when `foe.windupLeft()` is under 80% of the parry window. When the AI core
 says strike, it picks the punch: the knee if the foe has blocked at least
 twice lately and is blocking now, the uppercut if the foe's poise is under
-45% (or, half the time, if the foe is stunned), else a jab. A short random
+45% (or, half the time, if the foe is stunned), a kick now and then at
+the edge of reach (over 1.25 m), else a punch, which goes through the
+same jab, cross, hook chain as a player's. A short random
 cooldown follows.
 
 | Level | Reaction (s) | Block chance | Parry chance | Aggression |
@@ -486,8 +507,9 @@ headless smoke run.
 - **Blend out of the ragdoll.** The get-up starts from the pose the
   ragdoll left (`poseFromRagdoll`) and blends into the clip over 0.45 s
   instead of snapping.
-- **The guard is IK, not a clip.** UAL has no boxing guard clip, so
-  two-bone IK holds the hands at the chin on top of any idle or walk clip.
+- **The stance is procedural, not a clip.** UAL has no boxing stance
+  clip, so bone turns and `kke::CharacterIk` make one on top of any idle
+  or walk clip.
 - **A grey copy of the mannequin, tinted.** Tint multiplies the base
   colour, so a grey base takes blue and red cleanly where the orange
   original would not.
@@ -615,7 +637,7 @@ Pitfalls the code shows:
 | [main.cpp](main.cpp) | The application, the mood and the module list |
 | [DuelModule.h](DuelModule.h) | The module, `Intent`, `Fighter`, phases, HUD structs |
 | [DuelModule.cpp](DuelModule.cpp) | Controls, the ring, fighters, two-player devices, AI glue, rounds, hits, knockdowns, get-up, camera, headless report |
-| [Body.cpp](Body.cpp) | Loading the mannequin and UAL 2, clip states, the animation state machine, guard IK, the get-up blend |
+| [Body.cpp](Body.cpp) | Loading the mannequin, UAL 2 and the full UAL 1, clip states, the animation state machine, the stance and guard, the get-up blend |
 | [SparringBot.h](SparringBot.h) | The bot's skill levels and interface |
 | [SparringBot.cpp](SparringBot.cpp) | AI inputs, footwork from the AI core, block/parry/dodge reflexes, punch choice |
 | [Hud.cpp](Hud.cpp) | The RmlUi data model and its per-frame update |

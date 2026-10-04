@@ -139,7 +139,7 @@ the game says which pack it missed. With the packs:
 | flying_demo | POLYGON_StuntPlane, POLYGON_Town |
 | party | POLYGON_City_Characters |
 | tennis | POLYGON_Shops (racket and ball), Universal Animation Library 2 |
-| duel | Universal Animation Library 2 |
+| duel | Universal Animation Library 2, Universal Animation Library (optional: the kick, dodges and body hits) |
 | goblin_horde | POLYGON_Goblin_War_Camp, POLYGON_Dungeon_Pack, POLYGON_Fantasy_Rivals, POLYGON_Fantasy_Characters, Universal Animation Library 2, Universal Animation Library (optional: kicks and spells) |
 | farm_demo | POLYGON_Farm, POLYGON_Dogs, Farm Animals Animated by Quaternius |
 | pet_companion | Farm Animals Animated by Quaternius, POLYGON_Town |
