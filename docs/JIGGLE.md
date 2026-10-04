@@ -118,16 +118,21 @@ the tool (see the physics demo's rubber ball); for a jelly that wobbles,
   real jelly does), a second adds Fresnel reflection, light scattered
   inside, light shining through from behind and a glossy highlight. No
   sorting or extra render targets; draw it after the opaque scene.
-- **Body**: a Synty character reshaped with `addHumanoidSoftTissue`,
-  running a circle on UAL clips: stand, jog, jump, sprint, stop dead, jump,
+- **Body**: a realistic woman (`female_body`, a Character Creator 4 OBJ
+  with no skeleton, rigged at load by `kke::autoRigHumanoid`,
+  [AUTO_RIG.md](AUTO_RIG.md)) with soft-tissue bones from
+  `addHumanoidSoftTissue` and strand hair ([HAIR.md](HAIR.md)); without
+  her, a Synty character reshaped with `addHumanoidSoftTissue`. She runs
+  a circle on UAL clips: stand, jog, jump, sprint, stop dead, jump,
   walk (`5`, the tour), or `1`-`4` for one gait, `Space` to jump. The camera
   follows from the side. "Twin without jiggle" adds the same body without
   jiggle half a lap behind; "Show points" draws the simulated points
   (pink) against their animated targets (blue). Breast and glute sliders.
 
 Environment: `KKE_JIGGLE_SCENE=body`, `KKE_JIGGLE_MOVE=0..4`,
-`KKE_JIGGLE_CHARACTER=SK_...`, `KKE_JIGGLE_TWIN=1`,
+`KKE_JIGGLE_CHARACTER=SK_...`, `KKE_JIGGLE_BODY=<file>`,
+`KKE_JIGGLE_HAIR=<style>`, `KKE_JIGGLE_TWIN=1`,
 `KKE_JIGGLE_VIEW=yaw,pitch,distance` (screenshots), `KKE_JIGGLE_TRACE=1`
-(logs swing and stretch every frame). The body scene needs a Synty
-character pack and `assets/animations/UAL1_Standard.fbx`; see SCENES.md
-for exactly which.
+(logs swing and stretch every frame). The body scene needs `female_body`
+(or a Synty character pack) and `assets/animations/UAL1_Standard.fbx`;
+see SCENES.md for exactly which.

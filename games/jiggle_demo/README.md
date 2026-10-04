@@ -7,18 +7,23 @@ when what they are attached to moves.
   Coloured balls rain onto it; they dent it, it wobbles, and it throws them
   back. You can drop a big ball, squish it from above, change how firm it
   is and change its flavour and look.
-- **Body.** A Synty character, given extra curves and soft-tissue bones
-  in code, runs a circle on animation clips: stand, jog, jump, sprint,
-  stop dead, jump, walk. Her breasts, glutes, belly and thighs jiggle,
-  and a twin with the same body and clips but no jiggle can run with her
-  to compare.
+- **Body.** A realistic woman (`female_body`, a free Character Creator 4
+  model from CGTrader) runs a circle on animation clips: stand, jog,
+  jump, sprint, stop dead, jump, walk. Her file has no skeleton, so the
+  engine rigs her when the demo starts (`kke::autoRigHumanoid`,
+  [docs/AUTO_RIG.md](../../docs/AUTO_RIG.md)). Her breasts, glutes, belly
+  and thighs jiggle, she wears our strand hair (box braids to start; the
+  panel picks any style and colour), and a twin with the same body and
+  clips but no jiggle can run with her to compare. Without `female_body`
+  a Synty character takes her place, given extra curves in code.
 
 The demo teaches the engine's jiggle physics
 ([docs/JIGGLE.md](../../docs/JIGGLE.md)): `kke::JellyBody` (a whole soft
 object by lattice shape matching), `kke::JiggleRig` (bone chains that chase
 the animated pose), `kke::JiggleSkin` (jiggle on the skin with no bones)
-and `kke::addHumanoidSoftTissue` (adding shape and soft-tissue bones to a
-rig that has none). Start here for characters with hair, tails, capes,
+`kke::addHumanoidSoftTissue` (adding shape and soft-tissue bones to a
+rig that has none) and `kke::autoRigHumanoid` (a skeleton for a mesh that
+has none). Start here for characters with hair, tails, capes,
 antennae or soft bodies; for slimes, jelly or gummy creatures; or for any
 cartoon squash-and-stretch.
 
@@ -31,8 +36,9 @@ cartoon squash-and-stretch.
 The executable is `jiggle_demo` (`kke_add_game(jiggle_demo ...)` in
 [CMakeLists.txt](CMakeLists.txt): `add_executable` on desktop, a shared
 library on Android). The root `CMakeLists.txt` always adds it; it needs
-no optional library. The jelly scene needs no files. The body scene needs
-a Synty character pack (see [Assets](#assets)) and
+no optional library (the hair needs Jolt, `KKE_ENABLE_JOLT`, on by
+default). The jelly scene needs no files. The body scene needs
+`female_body` or a Synty character pack (see [Assets](#assets)) and
 `assets/animations/UAL1_Standard.fbx`, which is in the repository.
 
 ```bash
@@ -49,8 +55,10 @@ KKE_JIGGLE_SCENE=body KKE_JIGGLE_TWIN=1 ./jiggle_demo
 | `KKE_JIGGLE_MOVE=0..4` | the move: 0 idle, 1 walk, 2 jog, 3 sprint, 4 tour (default) |
 | `KKE_JIGGLE_TWIN=1` | show the twin without jiggle |
 | `KKE_JELLY_LOOK=0..5` | the flavour: strawberry, lime, blue raspberry, orange, panna cotta, clear gelatin |
-| `KKE_JIGGLE_CHARACTER=SK_...` | any character name from the Synty packs found |
-| `KKE_JIGGLE_VIEW=yaw,pitch,distance` | a set camera angle (radians, metres), for screenshots |
+| `KKE_JIGGLE_CHARACTER=SK_...` | a Synty character instead of the realistic body |
+| `KKE_JIGGLE_BODY=<file>` | a body file to use (rigged or not); default: the first FBX, else OBJ, in `<packs>/female_body/` |
+| `KKE_JIGGLE_HAIR=<style>` | her hair at the start: `bald`, `box braids` (default), `afro`, `puff`, `locs`, `wavy`, ... (the panel's list) |
+| `KKE_JIGGLE_VIEW=yaw,pitch,distance` | a set camera angle (radians, metres), for screenshots; in the body scene with "Side view" on, the yaw is from her side |
 | `KKE_JIGGLE_TRACE=1` | log time, speed, jump height, swing and stretch every frame |
 | `KKE_ASSETS_DIR`, `KKE_SYNTY_DIR` | where the Synty packs are (else `assets/synty/`) |
 | `KKE_ANIMATIONS_DIR` | where `UAL1_Standard.fbx` is (else `assets/animations/`) |
@@ -126,7 +134,7 @@ Rows that belong to one scene hide in the other (`sectionIf`, `showIf`):
 |---|---|
 | Jiggle physics | Scene (Jelly / Body); a Tab / LB prompt, shown in the jelly scene |
 | Jelly | controls line; Rain balls; Every (0.15 to 2 s); Big ball; Squish; Reset; Firmness (0.03 to 1); Iterations (1 to 8); Damping (0 to 0.2); Look: Flavour, Translucent, Fruit inside, Density (0 to 4), Milkiness (0 to 1); status (particles, triangles, balls, deformation in mm, solve time) |
-| Body | the character's name, or why it could not load; controls line; Twin without jiggle; Move; Jump; Show points; Camera follows; Side view; Breasts: Stiffness, Soften, Stretch, Drag, Gravity, Blend; Glutes: Stiffness, Drag, Blend; status (bones, zones, points, time per frame, asleep, peak swing, stretch) |
+| Body | the character's name, or why it could not load; controls line; Hair (Bald, box braids, afro, puff, high-top fade, twist-out, bantu knots, cornrows, locs, two-strand twists, straight, long, wavy, curly, short); Hair colour (black, dark brown, auburn, blonde), the realistic body only; Twin without jiggle; Move; Jump; Show points; Camera follows; Side view; Breasts: Stiffness, Soften, Stretch, Drag, Gravity, Blend; Glutes: Stiffness, Drag, Blend; status (bones, zones, points, time per frame, asleep, peak swing, stretch) |
 
 When no character could be loaded, the Body section shows only the reason
 (the other rows return a null value and hide).
@@ -244,19 +252,31 @@ off it is drawn as an ordinary opaque mesh.
 This runs once, at start:
 
 1. Find `UAL1_Standard.fbx` with `kke::findAssetFolder("assets/animations", {"KKE_ANIMATIONS_DIR"}, ...)`.
-2. Find the Synty folder (`KKE_ASSETS_DIR`, `KKE_SYNTY_DIR`, else
-   `assets/synty` near the working directory or the executable), scan it
-   into a `kke::AssetCatalog`, and pick the character: `KKE_JIGGLE_CHARACTER`
-   if set, else the first found of `SK_Character_Female_Gypsy`,
+2. Find the packs folder (`KKE_ASSETS_DIR`, `KKE_SYNTY_DIR`, else
+   `assets/synty` near the working directory or the executable). The
+   realistic body comes first: `KKE_JIGGLE_BODY` if set, else the first
+   `.fbx`, then `.obj`, under `female_body/` there (unless
+   `KKE_JIGGLE_CHARACTER` asks for a Synty character).
+3. Load her. Character Creator's see-through shells (eye occlusion, tear
+   lines, eyelashes) are dropped: drawn opaque they would cover her eyes.
+   An OBJ has no units and hers is in centimetres, so a body over 10 m
+   tall is scaled by 0.01. With no skeleton in the file,
+   `kke::autoRigHumanoid(body, ual)` fits UAL's skeleton to her, weights
+   her skin and lifts her arms from the A-pose into UAL's T-pose (about
+   25 ms; logged with the arm angle). If rigging fails she stands still
+   and the panel says why.
+   Without the realistic body, scan the folder into a `kke::AssetCatalog`
+   and pick a Synty character: `KKE_JIGGLE_CHARACTER` if set, else the
+   first found of `SK_Character_Female_Gypsy`,
    `SK_Character_Female_Peasant_01`, `SK_Character_HipsterGirl`,
-   `SK_Character_Female_Druid`, `SK_Character_Dummy_Female_01`.
-3. Load both models. The Synty one gets its pack's texture through
-   `kke::packLoadOptions`.
-4. Reshape and add bones: `kke::addHumanoidSoftTissue(body, m_tissue)`,
-   with `bust = 0.075`, `glutes = 0.06`, `hips = 0.03` (metres of extra
-   volume). It finds the chest, pelvis and thighs by bone name, pushes the
-   skin out, adds two breast and two glute bones, moves the nearby skin
-   onto them, and returns the rig chains and the skin zones (belly and
+   `SK_Character_Female_Druid`, `SK_Character_Dummy_Female_01`, with its
+   pack's texture through `kke::packLoadOptions`.
+4. Add soft-tissue bones: `kke::addHumanoidSoftTissue(body, tissue)`. A
+   Synty character is also reshaped (`bust = 0.075`, `glutes = 0.06`,
+   `hips = 0.03`, metres of extra volume); the realistic body keeps the
+   artist's shape (all 0). It finds the chest, pelvis and thighs by bone
+   name, adds two breast and two glute bones, moves the nearby skin onto
+   them, and returns the rig chains and the skin zones (belly and
    thighs). Anything it cannot find is logged at info: a character
    without a breast or belly bone just jiggles less.
 5. Retarget the UAL clips onto the reshaped body (`kke::matchBones`,
@@ -269,6 +289,17 @@ This runs once, at start:
 7. Spawn two instances. The second (`jiggle = true`) gets a
    `kke::JiggleRig` from the chains and a `kke::JiggleSkin` from the zones.
    The first is the twin without jiggle.
+
+8. Hair (realistic body only, `findHead` and `buildHair`): her head is a
+   sphere fitted to the top of the head's skin; `kke::hairstyleOnHead`
+   grows the style on it, facing where she faces, its rest pose falling a
+   little back so long hair lies down her back, not through it. The hair
+   lives in its own `kke::RigidWorld` with a head sphere and neck,
+   shoulder and chest proxies (seen only by hair) that follow her head
+   and `spine_03` bones each frame. The scalp under the hair is painted
+   the root colour (the head's own triangles near a root, lifted 1.5 mm),
+   so skin between the drawn hairs doesn't read as thin hair. Changing
+   the style or colour in the panel rebuilds it.
 
 If a step fails, `m_bodyStatus` says why and the panel shows it; the jelly
 scene is unaffected.
@@ -411,18 +442,21 @@ body scene"):
 | What | Source | In the repo? |
 |---|---|---|
 | The clips: `Idle_Loop`, `Walk_Loop`, `Jog_Fwd_Loop`, `Sprint_Loop`, `Jump_Start`, `Jump_Loop`, `Jump_Land` | Quaternius Universal Animation Library, `assets/animations/UAL1_Standard.fbx`, CC0 ([docs/DEPENDENCIES.md](../../docs/DEPENDENCIES.md)) | yes |
-| The character: `SK_Character_Female_Gypsy`, falling back to `SK_Character_Female_Peasant_01` or `SK_Character_Female_Druid` | Synty POLYGON Fantasy Characters | no |
+| The realistic body: `female_body.zip` (Obj/obj.obj and its textures) | "Realistic Human Female Body rigged gameready", free on CGTrader (Kees's copy is on the asset share: `tools/fetch_assets.sh female_body`) | no |
+| or, without it, the character: `SK_Character_Female_Gypsy`, falling back to `SK_Character_Female_Peasant_01` or `SK_Character_Female_Druid` | Synty POLYGON Fantasy Characters | no |
 | or `SK_Character_HipsterGirl` | Synty POLYGON City Characters | no |
 | or `SK_Character_Dummy_Female_01` | Synty POLYGON Prototype | no |
 | The character's texture | the same pack's atlas, via `packLoadOptions` | no |
 
-Synty packs are never committed. Put the pack in
-`assets/synty/POLYGON_Fantasy_Characters/` (a symlink works) or set
-`KKE_ASSETS_DIR`. When no character is found, the demo logs it at info
-level (the pack is optional), the panel's Body section shows the message
-("No female Synty character found. Put POLYGON Fantasy Characters (or City
-Characters) in assets/synty/ or set KKE_ASSETS_DIR."), and the body scene
-shows only the floor. The jelly scene works either way. If
+Neither the body nor the Synty packs are ever committed. Put
+`female_body/` in `assets/synty/` (where `tools/fetch_assets.sh` puts it)
+or set `KKE_ASSETS_DIR`. Without it, put a Synty pack in
+`assets/synty/POLYGON_Fantasy_Characters/` (a symlink works). When no
+body is found, the demo logs it at info level (the files are optional),
+the panel's Body section shows the message ("No body found. Put
+female_body (or a female Synty character: POLYGON Fantasy Characters,
+City Characters) in assets/synty/ or set KKE_ASSETS_DIR."), and the body
+scene shows only the floor. The jelly scene works either way. If
 `UAL1_Standard.fbx` is missing, the demo logs it at info (BUG-080 in
 BUGS.md, fixed) and says so in the panel.
 

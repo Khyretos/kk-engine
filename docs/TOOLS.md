@@ -53,7 +53,7 @@ texture, no animations), or to find the names of a car's wheels.
 ```bash
 ./kke_model_info path/to/SM_Veh_Plane_Stunt_01.fbx            # the summary
 ./kke_model_info path/to/SM_Veh_Plane_Stunt_01.fbx --parts    # every part with where it sits
-./kke_model_info assets/animations/UAL1_Standard.fbx --bones  # every bone and its parent
+./kke_model_info assets/animations/UAL1_Standard.fbx --bones  # every bone, its parent and where it rests
 ```
 
 What you see (the stunt plane):
