@@ -128,7 +128,10 @@ void ShowcaseModule::buildSpawnMenu() {
 
 void ShowcaseModule::openSpawnMenu(bool open) {
     if (open == m_spawnOpen) return;
-    if (open) openInventory(false);
+    if (open) {
+        openInventory(false);
+        openMap(false);
+    }
     m_spawnOpen = open;
     kke::InputMap& in = m_input->map(0);
     in.setContextEnabled("spawnlist", open);
@@ -151,7 +154,7 @@ void ShowcaseModule::openSpawnMenu(bool open) {
 void ShowcaseModule::updateSpawnMenu(float dt) {
     kke::InputMap& in = m_input->map(0);
     // The pause menu has the screen: no spawn menu under it.
-    in.setContextEnabled("spawn", !m_menuOpen && !m_invOpen);
+    in.setContextEnabled("spawn", !m_menuOpen && !m_invOpen && !m_mapOpen);
     if (m_menuOpen) {
         openSpawnMenu(false);
         return;

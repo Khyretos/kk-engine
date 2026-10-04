@@ -61,6 +61,7 @@ The **Scenes** panel visits Synty-built levels far from the course
 | Shoot (or throw what you hold), push | Left click, E | RT, Y |
 | Pick up / put down (items go in your bag) | F | X |
 | Bag: inventory and equipment | Tab or I | View |
+| World map (travel to a zone) | M | pause menu > World map |
 | Spawn menu (crates, barrels, balls, a dummy; clear, reset the world) | G | RB |
 | First / third person | V | R3 |
 | Camera distance | Mouse wheel | D-pad up / down |
@@ -83,6 +84,7 @@ it is, is in [games/showcase/README.md](../games/showcase/README.md).
 | `KKE_START_AT=x,y,z[,yaw]` | Start there, facing yaw (the camera too) |
 | `KKE_DEMO_HANG=1` | Jump, hang, shimmy around the end and jump back at the lane's 3 m wall |
 | `KKE_DEMO_TRICKS=1` | Wall run and wall jump, then ledge leaps along the pillars and the leap up to the beam |
+| `KKE_DEMO_WORLD=1` | Shows the world map, then visits every zone in turn |
 | `KKE_DEMO_ITEMS=1` | At the supply table: picks things up, opens the bag, equips an axe, a rifle, a helmet, a canteen and a lantern, then shows them worn |
 | `KKE_DEMO_BRIDGE=1` | Drops an iron ball on the yard's glass, then rolls one into a crate, and logs how far the crates moved |
 | `KKE_SPLIT=2..4`, `KKE_OVERHEAD=1` | Local split screen, and an overhead picture-in-picture view |

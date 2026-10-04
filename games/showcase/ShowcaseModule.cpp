@@ -149,7 +149,8 @@ void ShowcaseModule::init(kke::Application& app) {
         in.addBinding(IM::bind("voice.talk", IM::key(SDL_SCANCODE_P)));
         in.addBinding(IM::bind("voice.talk", IM::pad(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)));
         buildSpawnMenu(); // its actions: RB / G, and the list's own
-        buildInventoryScreen(); // Tab, I, the d-pad's right; and the bag's own
+        buildInventoryScreen(); // Tab, I, View; and the bag's own
+        buildMapScreen();       // M; and the map's own
         // Left-click shoots, but not the click that grabs the mouse (see onEvent).
         m_input->commitDefaults();
         if (const char* lefty = std::getenv("KKE_LEFT_HANDED"); lefty && *lefty == '1') kke::InputModule::mirrorKeyboard(in);
@@ -178,6 +179,7 @@ void ShowcaseModule::init(kke::Application& app) {
         m_capsule->upload(v, i);
     }
     buildLevel();
+    buildWorld();
     dressCourse();
     spawnCrates();
     spawnBreakables();
@@ -233,6 +235,7 @@ void ShowcaseModule::init(kke::Application& app) {
         m_demoCarry = 0.0f;
         m_rig.yaw = 150.0f; // behind and beside you, looking the way you face (+Z)
     }
+    if (const char* wd = std::getenv("KKE_DEMO_WORLD"); wd && *wd && *wd != '0') m_demoWorld = 0.0f;
     if (const char* it = std::getenv("KKE_DEMO_ITEMS"); it && *it && *it != '0') {
         m_demoItems = 0.0f;
         m_demoItemsKeepOpen = *it == '2';
@@ -274,10 +277,19 @@ void ShowcaseModule::buildLevel() {
     const glm::vec3 floor(0.36f, 0.4f, 0.36f), wall(0.55f, 0.52f, 0.48f), accent(0.85f, 0.55f, 0.25f), ramp(0.45f, 0.55f, 0.7f);
     addStaticBox({ { 0, -0.25f, 0 }, { 30, 0.25f, 30 }, floor }, v, idx);
     // Perimeter walls.
-    addStaticBox({ { 0, 1.5f, -30 }, { 30, 1.5f, 0.3f }, wall }, v, idx);
-    addStaticBox({ { 0, 1.5f, 30 }, { 30, 1.5f, 0.3f }, wall }, v, idx);
-    addStaticBox({ { -30, 1.5f, 0 }, { 0.3f, 1.5f, 30 }, wall }, v, idx);
-    addStaticBox({ { 30, 1.5f, 0 }, { 0.3f, 1.5f, 30 }, wall }, v, idx);
+    // Perimeter walls, with a gate in each (the roads out to the zones start there: World.cpp).
+    auto wallWithGate = [&](float gateAt, bool alongX, float at) {
+        for (int s = 0; s < 2; ++s) {
+            const float from = s == 0 ? -30.0f : gateAt + layout::kGateHalf, to = s == 0 ? gateAt - layout::kGateHalf : 30.0f;
+            const float mid = (from + to) * 0.5f, half = (to - from) * 0.5f;
+            if (alongX) addStaticBox({ { mid, 1.5f, at }, { half, 1.5f, 0.3f }, wall }, v, idx);
+            else addStaticBox({ { at, 1.5f, mid }, { 0.3f, 1.5f, half }, wall }, v, idx);
+        }
+    };
+    wallWithGate(layout::kGateNorth.x, true, -30.0f);
+    wallWithGate(layout::kGateSouth.x, true, 30.0f);
+    wallWithGate(layout::kGateWest.y, false, -30.0f);
+    wallWithGate(layout::kGateEast.y, false, 30.0f);
     // Stairs up to a 2 m platform (0.25 m steps: the controller climbs them).
     for (int s = 0; s < 8; ++s)
         addStaticBox({ { -8.0f, 0.125f + s * 0.25f, -2.0f - s * 0.4f }, { 1.5f, 0.125f + s * 0.25f, 0.2f }, accent }, v, idx);
@@ -389,7 +401,8 @@ void ShowcaseModule::findScenes() {
             SceneEntry e;
             e.path = f;
             e.file = kke::SceneFile::load(f);
-            e.origin = glm::vec3(200.0f * static_cast<float>(m_scenes.size() + 1), 0.0f, 0.0f);
+            // Far outside the open world (World.cpp ends at 700 m).
+            e.origin = glm::vec3(3000.0f + 400.0f * static_cast<float>(m_scenes.size()), 0.0f, 3000.0f);
             m_scenes.push_back(std::move(e));
         } catch (const std::exception& ex) {
             kke::log::get(name())->warn("{}", ex.what());
@@ -808,7 +821,7 @@ void ShowcaseModule::onEvent(const SDL_Event& e) {
     // Esc or Start with the bag or the spawn menu open close it (the
     // pause menu waits: GameShellModule::blockPause). View is the bag's
     // own close (inv.close).
-    if ((m_invOpen || m_spawnOpen) && ((e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_ESCAPE) ||
+    if ((m_invOpen || m_spawnOpen || m_mapOpen) && ((e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && e.key.key == SDLK_ESCAPE) ||
                                        (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_START))) {
         if (m_invOpen && m_invMoving) {
             m_invMoving = 0; // put back first
@@ -816,10 +829,11 @@ void ShowcaseModule::onEvent(const SDL_Event& e) {
         } else {
             openInventory(false);
             openSpawnMenu(false);
+            openMap(false);
         }
         return;
     }
-    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !m_captured && !m_menuOpen && !m_spawnOpen && !m_invOpen && !io.WantCaptureMouse && !m_app->uiCapturesMouse() &&
+    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !m_captured && !m_menuOpen && !m_spawnOpen && !m_invOpen && !m_mapOpen && !io.WantCaptureMouse && !m_app->uiCapturesMouse() &&
         e.button.button == SDL_BUTTON_LEFT) {
         setCaptured(true);
         m_swallowFire = true; // this click grabbed the mouse; it isn't a shot
@@ -832,7 +846,7 @@ void ShowcaseModule::onEvent(const SDL_Event& e) {
 void ShowcaseModule::readActions(float dt) {
     kke::InputMap& in = m_input->map(0);
     // Typing in an ImGui field: the game doesn't hear the keys.
-    in.setContextEnabled("game", !ImGui::GetIO().WantTextInput && !m_menuOpen && !m_spawnOpen && !m_invOpen); // a menu has the controls
+    in.setContextEnabled("game", !ImGui::GetIO().WantTextInput && !m_menuOpen && !m_spawnOpen && !m_invOpen && !m_mapOpen); // a menu has the controls
     const bool mouseLeft = m_input->devices().value({ kke::SourceKind::MouseButton, 0, SDL_BUTTON_LEFT, 0 }, nullptr) > 0.5f;
     if (!mouseLeft) m_swallowFire = false;
 
@@ -1023,6 +1037,7 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
 
     updateSpawnMenu(dt);
     updateInventory(dt);
+    updateMap(dt);
     readActions(dt);
     if (m_toastTime > 0.0f && (m_toastTime -= dt) <= 0.0f) toast("");
     // Actions -> the movement layer, camera-relative. An analog stick gives
@@ -1128,6 +1143,7 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
         }
     }
     if (m_demoItems >= 0.0f) updateItemsDemo(dt, in.move);
+    if (m_demoWorld >= 0.0f) updateWorldDemo(dt);
     // Wading through the pool: no running.
     const bool wading = inPool(w.characterPosition(m_player));
     if (m_demoBridge >= 0.0f) updateBridgeDemo(dt);
@@ -1391,6 +1407,7 @@ void ShowcaseModule::batchCrates() {
 
 void ShowcaseModule::render(const kke::RenderContext& ctx) {
     m_level->draw(ctx, glm::mat4(1.0f), 0.0f, 0.85f);
+    if (m_world) m_world->draw(ctx, glm::mat4(1.0f), 0.0f, 0.9f);
     drawPool(ctx);
     if (m_lava) m_lava->render(ctx);
     for (const SceneEntry& e : m_scenes)
@@ -1415,6 +1432,7 @@ void ShowcaseModule::prepass(const kke::PrepassContext& ctx) {
 
 void ShowcaseModule::renderShadow(const kke::ShadowRenderContext& ctx) {
     m_level->drawShadow(ctx);
+    if (m_world) m_world->drawShadow(ctx);
     if (m_lava) m_lava->renderShadow(ctx);
     for (const SceneEntry& e : m_scenes)
         if (e.ground) e.ground->drawShadow(ctx);
@@ -1429,7 +1447,7 @@ void ShowcaseModule::renderShadow(const kke::ShadowRenderContext& ctx) {
 }
 
 void ShowcaseModule::renderUi() {
-    if (m_menuOpen || m_invOpen) return; // the pause menu or the bag has the screen
+    if (m_menuOpen || m_invOpen || m_mapOpen) return; // the pause menu, the bag or the map has the screen
     const float s = ImGui::GetFontSize() / 13.0f;
     // On a narrow screen (a phone, a small window) the score bar reaches
     // the left edge: start under it, folded (a tap on the title opens it).

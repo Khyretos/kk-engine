@@ -310,6 +310,32 @@ private:
     bool m_demoItemsKeepOpen = false; // KKE_DEMO_ITEMS=2: the bag stays open
     void updateItemsDemo(float dt, glm::vec3& move);
 
+    // The open world round the yard (World.cpp): terrain 1.4 km across,
+    // roads from the yard's gates to the zones (layout::kZones), a flag
+    // over each; the world map (M, or the pause menu) takes you to one.
+    void buildWorld();
+    float groundHeight(float x, float z) const; // the terrain's height under (x, z)
+    int zoneAt(const glm::vec3& p) const;       // index into layout::kZones (1..), -1 = none (or the yard)
+    void travelTo(int zone);
+    void buildMapScreen();
+    void openMap(bool open);
+    void updateMap(float dt);
+    std::vector<float> m_terrain; // heights, m_terrainN x m_terrainN, row = z
+    int m_terrainN = 0;
+    std::unique_ptr<kke::DynamicMeshRenderer> m_world;
+    struct MapZone { std::string name, text, dot, label; bool sel = false; };
+    struct MapRoad { std::string style; };
+    std::vector<MapZone> m_mapZones;
+    std::vector<MapRoad> m_mapRoads;
+    std::string m_mapMe, m_mapKeys;
+    bool m_mapOpen = false, m_mapRecapture = false;
+    int m_mapSel = 0, m_mapHeldDir = 0;
+    float m_mapRepeat = 0.0f;
+    Rml::ElementDocument* m_mapDoc = nullptr;
+    Rml::DataModelHandle m_mapModel;
+    float m_demoWorld = -1.0f; // KKE_DEMO_WORLD: seconds into the tour, -1 = off
+    void updateWorldDemo(float dt);
+
     // The bag (InventoryScreen.cpp, ui/showcase_inventory.rml): Tab, I or
     // View opens it over the game. Move with the arrows, the
     // d-pad or the mouse; take and place with A, Space or a click; turn

@@ -54,6 +54,7 @@ are read in `ShowcaseModule::init` unless noted:
 | `KKE_DEMO_AUTOPILOT=1` | The character runs the parkour lane (or a scene's trail) by itself and logs each vault and climb |
 | `KKE_DEMO_HANG=1` | Jump at the 3 m wall, hang, shimmy round its end, jump off. Loops every 10 s |
 | `KKE_DEMO_TRICKS=1` | Wall run and wall jump, pillar leaps, the leap up to the beam. Loops every 13.5 s |
+| `KKE_DEMO_WORLD=1` | Opens the world map for a few seconds, then visits every zone in turn (5 s each) and logs the ground there |
 | `KKE_DEMO_ITEMS=1` | At the supply table: picks up what's in reach, opens the bag, equips an axe, a rifle, a helmet, a canteen and a lantern, closes it and turns the camera to see them worn. Logs the bag and the weight. `=2` leaves the bag open (drive it with keys or the mouse; each place and drop is logged) |
 | `KKE_DEMO_CARRY=1` | Spawns a crate, lifts it, carries it a few steps and throws it, and logs where it is. Loops every 7 s |
 | `KKE_DEMO_BRIDGE=1` | Drops an iron ball on the yard glass, then rolls one into a crate, and logs how far the crates moved (FEMFX builds) |
@@ -96,6 +97,7 @@ saved in `input.json`.
 | Push what you look at | E | Y |
 | Pick up / put down the crate, barrel or ball in front of you; an item goes in your bag | F | X |
 | Bag (inventory and equipment) | Tab or I | View |
+| World map: the zones, travel there | M | the pause menu's World map |
 | Spawn menu: crates, barrels, balls, a tower, a ragdoll dummy; clear, reset the world | G | RB |
 | First / third person | V | R3 |
 | Camera distance | Mouse wheel (while captured) | D-pad up / down (hold) |
@@ -143,8 +145,37 @@ stations, with their positions from [Layout.h](Layout.h):
 | Moving platform | (-14, 6) | Stand on it: it carries you side to side and up and down |
 | Low roof | (10, 6) | 1.2 m clearance: crouch to get under |
 | Stairs, ramp, steep slope, pillars | around (-8, -4), (8, -10), (-14 to -6.5, -14) | 0.25 m steps, a 24 degree ramp you walk, a 55 degree slope you slide off, pillars that push the camera in |
+| Supply table | (-4.5, 2.5) | One of every item: pick them up, open the bag, equip them |
 
-The pause menu (Esc / Start / View) has Resume, Reset the world, 1 to
+### The open world
+
+The yard is the middle of an open world 1.4 km across ([World.cpp](World.cpp)).
+Each yard wall has a gate; outside, the ground rolls on to a ring of hills,
+with a mountain to the north west. Roads run from the gates to the zones
+(their table is `layout::kZones` in [Layout.h](Layout.h)); a post at each
+gate has a board in each zone's colour, and every zone flies a 14 m flag
+in its colour so you can find it from far away. The HUD names the zone you
+are in.
+
+| Zone | Where | Road |
+|---|---|---|
+| Parkour park | (0, -160) | north gate |
+| Firing range | (170, -150) | north gate, then right |
+| Airfield | (380, 40), runway x 185 to 575 | east gate |
+| Race track | (0, 255) | south gate |
+| Nature park | (-230, 40) | west gate |
+| Snow field | (-300, -280), 30 m up the mountain | west gate, then the dirt trail up |
+
+M (or the pause menu's **World map**) opens the map: the zones, the roads
+and you (the yellow dot points the way you face). Choose a zone with up
+and down (or the mouse) and A, Enter or a click takes you there.
+
+The terrain is one mesh with a vertex every 5 m and one static Jolt mesh
+body; `groundHeight(x, z)` reads the same grid, so what later rounds put
+out there sits on it. Roads are cut level across so cars sit flat. The
+camera's far plane is 1500 m and the mood's fog hides the edge.
+
+The pause menu (Esc / Start) has Resume, World map, Reset the world, 1 to
 4 players, Engine panels (developer builds), Settings, Controls, Main
 menu and Quit. Offline it pauses the game; online the
 others keep playing. The **KKE Showcase** ImGui window (always shown)
@@ -203,7 +234,7 @@ stack, slots); [Items.cpp](Items.cpp) makes their meshes.
 ### Startup and the frame
 
 [main.cpp](main.cpp) builds the `kke::Application` (1280 x 720, mood
-`clear_day`, far plane 200 m) and adds modules in this order:
+`clear_day`, far plane 1500 m: the open world is 1.4 km across) and adds modules in this order:
 
 1. `SettingsModule("settings.json")`: first, so the resource budget
    (threads, frame caps) is set before physics starts its workers.

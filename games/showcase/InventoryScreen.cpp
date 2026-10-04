@@ -190,7 +190,10 @@ void ShowcaseModule::buildInventoryScreen() {
 
 void ShowcaseModule::openInventory(bool open) {
     if (open == m_invOpen) return;
-    if (open) openSpawnMenu(false);
+    if (open) {
+        openSpawnMenu(false);
+        openMap(false);
+    }
     m_invOpen = open;
     kke::InputMap& in = m_input->map(0);
     in.setContextEnabled("invlist", open);
@@ -303,7 +306,7 @@ void ShowcaseModule::updateInventory(float dt) {
         return;
     }
     if (!m_invOpen) {
-        in.setContextEnabled("invclosed", !m_spawnOpen);
+        in.setContextEnabled("invclosed", !m_spawnOpen && !m_mapOpen);
         if (in.pressed("inv.open")) openInventory(true);
         return; // opened this frame: the key that opened it isn't also a close
     }

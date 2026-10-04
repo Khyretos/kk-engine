@@ -70,8 +70,12 @@ void ShowcaseModule::buildPauseRows() {
     m_shell = m_app->getModule<kke::GameShellModule>();
     if (!m_shell) return;
     // Esc, Start or Select close the bag or the spawn menu first (onEvent).
-    m_shell->blockPause = [this] { return m_invOpen || m_spawnOpen; };
+    m_shell->blockPause = [this] { return m_invOpen || m_spawnOpen || m_mapOpen; };
     m_shell->selectIsTheGames = [] { return true; }; // View opens the bag; Start pauses
+    m_shell->addPauseItem("World map", [this] {
+        m_shell->closeMenu();
+        openMap(true);
+    });
     m_shell->addPauseItem("Reset the world", [this] {
         resetWorld();
         m_shell->closeMenu();
@@ -146,7 +150,7 @@ void ShowcaseModule::updateHud() {
     } else if (within(p, kCratePile, 3.5f, 3.5f)) {
         station = "CRATES";
         text = "Pick one up {pickup}, push them {interact} or shoot them over {fire}. More from the spawn menu {spawn.menu}.";
-    } else if (p.x > kTrickX - 3.0f && p.z > -4.0f && p.z < 25.0f) {
+    } else if (p.x > kTrickX - 3.0f && p.x < 30.0f && p.z > -4.0f && p.z < 25.0f) {
         station = "TRICK COURSE";
         text = p.z > 10.0f ? "Sprint {sprint} beside the wall and jump {jump} to run along it. Jump again to kick off."
                            : "Jump {jump} to hang from a pillar. Jump with left or right leaps to the next; at the thin wall, jump leaps up.";
@@ -159,6 +163,9 @@ void ShowcaseModule::updateHud() {
     } else if (within(p, kPlatform, 7.0f, 3.0f)) {
         station = "MOVING PLATFORM";
         text = "Stand on it: it carries you.";
+    } else if (const int zone = zoneAt(p); zone > 0) {
+        station = kZones[zone].name;
+        text = kZones[zone].text;
     }
 
     auto set = [this](std::string& field, std::string value, const char* name) {
