@@ -7,10 +7,11 @@ The showcase world comes as a series, one commit per round, all on branch `kke-d
 | 1 | `kke-demo.patch` | kke_demo: spawn menu, picking things up, grid inventory core |
 | 2 | `kke-demo-02.patch` | kke_demo: the bag (grid inventory screen), items to pick up, equipment on the character |
 | 3 | `kke-demo-03.patch` | kke_demo: the open world round the yard (terrain, roads, zones, world map) |
+| 4 | `kke-demo-04.patch` | kke_demo: guns, grenades and the firing range (+ FEMFX far-from-origin fix) |
 
 Apply in order with `git am` (`git am -3` after other patches). One PR for the branch is fine;
 title it after the newest round, or `kke_demo: showcase world (rounds 1-N)`.
-Checked (rounds 1-3): the series applies on Forgejo `main` 9349996 alone, after racing-round, platoon-duel,
+Checked (rounds 1-4): the series applies on Forgejo `main` 9349996 alone, after racing-round, platoon-duel,
 climbing-hands and sea-demo, and after goblin-horde. (goblin-horde itself doesn't apply after
 the other four; that's between those patches, not this series.)
 
@@ -160,3 +161,60 @@ cd build/bin && KKE_DEMO_WORLD=1 ./kke_demo     # map, then every zone; log has 
 2. M (pause menu > World map with a controller): the map. Choose a zone, A travels there.
 3. Run up the mountain to the snow field; look back at the yard from there (fog, far plane).
 4. Check the frame time out in the open (Performance panel) and in split screen.
+
+# Round 4: guns, grenades and the firing range
+
+**Touches the engine:** `engine/src/modules/PhysicsModule.cpp` (BUG-088). Every FEMFX game uses
+that code, so check them too (list below).
+
+## What changed (16 files)
+- `games/showcase/Guns.cpp` (new): rifle (automatic, 30) and pistol (12) fire from the right
+  hand; aim (right mouse / LT) brings the camera in with a crosshair and turns the character
+  with it; IK holds the gun (rifle to the shoulder, pistol in both hands, grenade raised).
+  Shots raycast Jolt and FEMFX, the nearer hit wins; FEMFX hits break for real. Grenades
+  (RT throws). Explosions: `physicsBlast` on both worlds, fireball, smoke, shockwave, flash,
+  shake, synthesized boom. All sounds synthesized, no files. Reloads from the bag.
+- `games/showcase/Range.cpp` (new): bench with the guns, 10 steel plates at 15/28/45 m,
+  FEMFX glass, plank and two stone walls, 5 red barrels that chain-explode, a crate pyramid,
+  two ragdoll dummies. `KKE_DEMO_GUNS=1` runs it all and logs each hit.
+- HUD: crosshair, ammo "loaded / bag" (or grenades), "Plates down N of 10".
+- Picking up a gun or tool with an empty right hand puts it in that hand.
+- Effect shaders copied by the game's CMakeLists (without them the module turned itself off).
+- **Engine fix BUG-088:** FEMFX rest positions were absolute world coordinates;
+  `FmComputeShapeParams` lost float precision when x and z were both ~100 m+, so objects out
+  there shook apart on spawn. Rest positions are now mesh-local, the spawn position goes to
+  `FmInitVertState` as a translation.
+- The terrain body is ignored by the FEMFX-Jolt bridge (its mirror box was the whole world).
+
+## Already checked in the cloud
+- GCC -Werror build of everything: zero warnings. clang `-fsyntax-only -Werror -Wall -Wextra`
+  on every changed .cpp incl. PhysicsModule.cpp: clean (caught an unused constant, fixed).
+  `check_std_includes.py`: OK.
+- `kke_tests`: 999 passed. `check_game --headless` OK for kke_demo, physics_demo, melt_demo,
+  tennis, sandbox (only the sky HDR warning, which the cloud has no file for).
+- `KKE_DEMO_GUNS=1`: rifle reloads from the bag, 4 plates down, glass breaks into ~28 pieces,
+  plank 5, stone wall 4-6; the red barrel sets off all 5 (crates thrown ~9-12 m); pistol
+  brings it to 7 of 10 plates; grenade thrown and blows up where it lands.
+- The pane at the range is steady now (before the fix it flew up on spawn).
+- Screenshots: `kke-demo-shots/range-fire.png`, `range-boom.png`, `range-pistol.png`, `range-end.png`.
+
+## Run on soucouyant
+```sh
+cmake --build build --target kke_demo kke_tests -j4 && build/bin/kke_tests
+tools/check_game kke_demo --seconds 10
+for g in physics_demo melt_demo tennis sandbox racing synty_demo first_lua_game; do tools/check_game $g --seconds 8; done
+cd build/bin && KKE_DEMO_GUNS=1 ./kke_demo     # log: "guns demo:" and "guns: explosion"
+cd build/bin && KKE_DEMO_BRIDGE=1 ./kke_demo   # yard glass: did the crates move? (0.000 m on lavapipe, before AND after the fix)
+```
+Things the cloud could not judge: how the guns sound on speakers, recoil and shake feel at
+full frame rate, and whether FEMFX scenes in the other games look the same as before the fix.
+
+## Play list for Kees (round 4)
+1. M > Firing range. Pick up the rifle (F / X) from the bench: it goes in your hand.
+2. Hold right mouse (LT) to aim, fire (left click / RT) at the plates, the glass, the walls.
+3. Shoot a red barrel. Then take the pistol and the grenades; RT throws a grenade.
+4. Run out of rounds: the click and the toast; pick up more from the bench.
+
+Known: "Clear what I spawned" also removes the range dummies (reset the world brings them
+back). No reload key yet (it reloads by itself when empty; R is reset). The range is local
+only online (round 8).

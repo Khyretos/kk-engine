@@ -60,3 +60,29 @@ patches/kke-demo-0N.patch`. Before saying it is ready: `git worktree add /tmp/wt
 Doable: adding a zone to `kZones`, moving a road point, changing colours, adding a map row.
 Hard: the terrain/ground-height match and the map's coordinate maths; copy the existing
 functions, change one number at a time, and re-run the KKE_DEMO_WORLD tour after each change.
+
+## Round 4: guns, grenades, the firing range (Guns.cpp, Range.cpp)
+Verified the same way plus `KKE_DEMO_GUNS=1` (logs every hit and blast) and check_game on
+four other FEMFX games after an engine change.
+
+Lessons:
+- FEMFX far from the origin: objects at (152, -154) shook apart on spawn; at (160, 0) they
+  were fine. Bisect by POSITION, not by settings: same object, move it, compare. Cause: rest
+  positions in world coordinates, and FEMFX inverts a matrix of them in float. Keep physics
+  data local and pass the position as a separate translation.
+- The FEMFX-Jolt bridge mirrors every Jolt body near FEMFX as a box. A terrain mesh's box is
+  the whole world: tell the bridge to ignore huge static bodies (`PhysicsBridgeModule::ignore`).
+- Physics runs slower than real time on a slow PC (3x on lavapipe). A fuse counted in frame
+  time blew grenades up in mid-air. Count game timers that touch physics in `fixedUpdate`.
+- Each game copies the shaders it uses. The particle effects need `effect*.spv`; without them
+  the module failed init and turned itself off (one log line, easy to miss: grep "failed").
+- Scripted demos on a slow machine: a frame can jump past a short time window. Fire every
+  event whose time has passed this frame, don't test "is now inside the window".
+- clang caught an unused `constexpr` GCC did not. Android CI is clang -Werror: always run
+  the clang syntax check too.
+- "Pushed 0 bodies" was not a bug: the barrels had already blown everything away. Check
+  what is actually near before changing engine code.
+
+For a 9B model: doable are new GunDef rows (magazine, interval, push), plate positions,
+sound recipe numbers. Hard: the shot ray maths and anything in the FEMFX engine code; there,
+reproduce with a scripted demo first and change one thing per run.
