@@ -28,7 +28,9 @@ tar.exe -xf src.tar -C "$run\src"
 if ($LASTEXITCODE -ne 0) { throw "tar.exe could not unpack src.tar: exit code $LASTEXITCODE" }
 # /workspace/khyretos/kk-engine -> C:\workspace\khyretos\kk-engine
 $link = 'C:' + ($SourceDir -replace '/', '\')
-New-Item -ItemType Directory -Force (Split-Path $link) | Out-Null
+# (Not for a drive root such as C:\ from /src: New-Item refuses that one.)
+$parent = Split-Path $link
+if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Force $parent | Out-Null }
 New-Item -ItemType Junction -Path $link -Target "$run\src" | Out-Null
 if (-not (Test-Path (Join-Path $link 'shaders'))) { throw "source tree not reachable at $link" }
 
