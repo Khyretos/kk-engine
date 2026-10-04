@@ -1,5 +1,5 @@
 # The docs site: https://khyretos.github.io/kk-engine/ (docs/DOCS_SITE.md).
-# Built from docs/ by .github/workflows/docs.yml on every push to main.
+# Built from docs/ by .forgejo/workflows/docs.yml on every push to main.
 # Locally: pip install -r tools/docs_site/requirements.txt && mkdocs serve
 site_name: Kreative Kompas Engine
 site_description: A modular, open-source Vulkan game engine in C++17, with Lua scripting.

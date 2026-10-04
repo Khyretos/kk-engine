@@ -2,9 +2,10 @@
 
 <https://khyretos.github.io/kk-engine/> is built from this folder with
 [MkDocs](https://www.mkdocs.org/) and the Material theme, by
-`.github/workflows/docs.yml` on every push to `main`, which pushes the
-built site to the `gh-pages` branch. It's free: GitHub
-Pages on a public repository.
+`.forgejo/workflows/docs.yml` on git.kreative-kompas.com on every push to
+`main`, which pushes the built site to the `gh-pages` branch. Forgejo's push
+mirror copies that branch to GitHub, where GitHub Pages serves it for free
+(a public repository).
 
 ## Working on it
 

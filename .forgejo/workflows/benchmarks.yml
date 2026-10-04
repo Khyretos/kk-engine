@@ -1,18 +1,24 @@
 name: Benchmarks
 
+# Forgejo port of the former .github/workflows/benchmarks.yml (Forgejo is the
+# main repository now; a branch GitHub pushed itself would be overwritten by
+# the push mirror). Runs on soucouyant in the CI image (docker/ci.Dockerfile),
+# so the numbers come from one fixed machine. Nightly and by hand, like ci.yml:
+# main is pushed too often to build every commit here.
+#
 # The headless benchmark suite (docs/BENCHMARKS.md): kke_bench's CPU cases
 # plus the showcase stress test under Xvfb + lavapipe, on a Release build.
 #
-# Pushes to main append the numbers to the history on the
+# Runs on main append the numbers to the history on the
 # `benchmark-data` branch (history.jsonl, a README with trend charts);
-# pull requests run a quick pass and only compare. Either way the job
-# summary shows each number against the recent median. Nothing here fails
-# on a slow number: shared runners are too noisy for that. It fails when
+# runs by hand on another branch do a quick pass and only compare. Either
+# way the job log shows each number against the recent median. Nothing here
+# fails on a slow number: a busy machine is too noisy for that. It fails when
 # a benchmark crashes, doesn't report, or the build has a warning.
 on:
-  push:
-    branches: [main]
-  pull_request:
+  # Nightly at 04:00 Amsterdam time, after ci.yml's run has had the runner.
+  schedule:
+    - cron: "0 2 * * *"
   workflow_dispatch:
 
 # One run per ref at a time. On main the history is appended in commit
@@ -21,39 +27,29 @@ concurrency:
   group: benchmarks-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-permissions:
-  contents: write
+env:
+  KKE_JOBS: "8"   # soucouyant has 32 GB of RAM; see ci.yml
 
 jobs:
   benchmarks:
-    runs-on: ubuntu-24.04
+    runs-on: soucouyant
+    container:
+      image: git.kreative-kompas.com/khyretos/kke-ci:1
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq \
-            cmake ninja-build \
-            libvulkan-dev vulkan-tools mesa-vulkan-drivers \
-            glslang-tools spirv-tools \
-            libfreetype-dev libudev-dev libdbus-1-dev \
-            fonts-noto-core xvfb \
-            libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
-            libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev \
-            pkg-config libgl1-mesa-dev libegl1-mesa-dev
 
       - name: Configure (Release, warnings are errors)
         run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_TESTS=OFF -DKKE_ENABLE_VALIDATION=OFF
 
       - name: Build kke_bench and the showcase
-        run: cmake --build build -j --target kke_bench kke_demo
+        run: cmake --build build -j "$KKE_JOBS" --target kke_bench kke_demo
 
       - name: kke_bench (headless CPU suite)
         run: |
           mode=""
-          [ "${{ github.event_name }}" = "pull_request" ] && mode="--quick"
+          [ "${{ github.ref }}" != "refs/heads/main" ] && mode="--quick"
           ./build/bin/kke_bench $mode --out "$PWD/bench-out"
 
       - name: Stress test (showcase, Xvfb + lavapipe)
@@ -80,38 +76,40 @@ jobs:
       # there would be noise and merge churn).
       - name: Fetch the benchmark history
         run: |
-          if git fetch --depth=1 origin benchmark-data 2>/dev/null; then
+          if git -c http.extraHeader="Authorization: token ${{ github.token }}" fetch --depth=1 \
+              "${{ github.server_url }}/${{ github.repository }}" benchmark-data 2>/dev/null; then
             git worktree add history FETCH_HEAD
           else
             mkdir history
           fi
 
-      - name: Compare (pull requests)
-        if: github.event_name == 'pull_request'
+      - name: Compare (other branches)
+        if: github.ref != 'refs/heads/main'
         run: |
           python3 benchmarks/track.py --dry-run --history history --commit "${{ github.sha }}" \
-            --date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --ref "${{ github.ref }}" bench-out/*.json >> "$GITHUB_STEP_SUMMARY"
+            --date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --ref "${{ github.ref }}" bench-out/*.json | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
       - name: Record and compare (main)
-        if: github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main'
         run: |
           python3 benchmarks/track.py --history history --commit "${{ github.sha }}" \
-            --date "$(git log -1 --format=%cI)" --ref "${{ github.ref }}" bench-out/*.json >> "$GITHUB_STEP_SUMMARY"
+            --date "$(git log -1 --format=%cI)" --ref "${{ github.ref }}" bench-out/*.json | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
       - name: Push the history to the benchmark-data branch
-        if: github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main'
         run: |
           cd history
           [ -d .git ] || [ -f .git ] || { git init -q; git checkout -q --orphan benchmark-data; }
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "forgejo-actions"
+          git config user.email "forgejo-actions@kreative-kompas.com"
           git add -A
           git commit -q -m "Benchmarks for ${GITHUB_SHA::10}"
-          git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" HEAD:refs/heads/benchmark-data
+          git -c http.extraHeader="Authorization: token ${{ github.token }}" push \
+            "${{ github.server_url }}/${{ github.repository }}" HEAD:refs/heads/benchmark-data
 
       - name: Upload the reports
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v4
         with:
           name: benchmark-reports
           path: |
