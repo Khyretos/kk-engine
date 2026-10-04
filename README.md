@@ -19,3 +19,4 @@ git fetch FORGEJO <branch> && git checkout -B <branch> FORGEJO/<branch>
 
 The "Apply and build" steps in the checks files that run `git am` are already
 done on these branches; skip them and start from the build.
+ai-lessons/: lesson files for the ai-skills library on kireserver.
