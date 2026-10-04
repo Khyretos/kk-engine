@@ -21,10 +21,16 @@ namespace tennis {
 
 void TennisModule::buildHud() {
     auto* ui = m_app->getModule<kke::UiModule>();
-    if (!ui || !ui->context()) return;
+    if (!ui || !ui->context()) {
+        kke::log::get(name())->warn("HUD: no UI context");
+        return;
+    }
     Rml::Context* ctx = ui->context();
     Rml::DataModelConstructor c = ctx->CreateDataModel("tennis");
-    if (!c) return;
+    if (!c) {
+        kke::log::get(name())->warn("HUD: could not make the 'tennis' data model");
+        return;
+    }
     if (auto p = c.RegisterStruct<TeamRow>()) {
         p.RegisterMember("name", &TeamRow::name);
         p.RegisterMember("sets", &TeamRow::sets);
@@ -37,6 +43,9 @@ void TennisModule::buildHud() {
         p.RegisterMember("stamina", &MeterRow::stamina);
         p.RegisterMember("power", &MeterRow::power);
         p.RegisterMember("charging", &MeterRow::charging);
+        p.RegisterMember("serve", &MeterRow::serve);
+        p.RegisterMember("green", &MeterRow::green);
+        p.RegisterMember("zone", &MeterRow::zone);
     }
     c.RegisterArray<std::vector<MeterRow>>();
     c.Bind("meters", &m_hud.meters);
@@ -132,7 +141,7 @@ void TennisModule::updateHud() {
             if (m->phase == Match::Phase::Serve && idx == serverIndex(*m)) humanServes = true;
         }
         if (humanServes)
-            hint = m_input->promptText("Hold {tennis.flat} flat, {tennis.slice} slice or {tennis.topspin} kick to toss, let go as the ball drops to serve  {move} aim");
+            hint = m_input->promptText("Hold {tennis.flat} flat, {tennis.slice} slice or {tennis.topspin} kick to toss, let go while the bar is green (full: full power)  {move} aim");
         else if (human && m->phase != Match::Phase::MatchOver)
             hint = m_input->promptText("{move} run  {tennis.topspin} topspin  {tennis.flat} flat  {tennis.slice} slice  {tennis.lob} lob  "
                                        "(hold to take the racket back, longer hits harder; let go as the ball comes)  {shell.pause} menu");
@@ -155,6 +164,14 @@ void TennisModule::updateHud() {
             r.stamina = std::round(p.stamina.level * 50.0f) / 50.0f;
             r.charging = p.swingT > kSwingIdle + 0.5f && p.contactAt < 0.0f;
             r.power = r.charging ? std::round(p.charge * 50.0f) / 50.0f : 0.0f;
+            if (r.charging && p.serveFull > 0.0f) {
+                // The serve's bar: the fill is the toss's time, full at the right moment.
+                r.serve = true;
+                r.green = std::round(std::clamp(1.0f - p.serveGreen / p.serveFull, 0.0f, 1.0f) * 50.0f) / 50.0f;
+                const float u = p.clock / p.serveFull;
+                r.power = std::round(std::min(u, 1.0f) * 50.0f) / 50.0f;
+                r.zone = u < r.green ? 0 : u <= 1.0f ? 1 : 2;
+            }
             r.timing = p.timingShown > 0.0f ? p.timingText : "";
             meters.push_back(std::move(r));
         }

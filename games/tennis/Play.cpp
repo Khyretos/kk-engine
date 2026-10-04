@@ -421,6 +421,11 @@ void TennisModule::stepPlayer(Match& m, Player& p, float dt) {
     // Serving: press to toss (holding builds the serve's power), let go to hit.
     if (serving) {
         move = glm::vec3(0.0f);
+        // KKE_TENNIS_SERVEAT=<u>: a person's serve tosses by itself and lets go at that point of the bar (tests).
+        if (m_serveAt > 0.0f && !p.cpu) {
+            it.press = p.tossAge < 0.0f;
+            release = p.contactAt < 0.0f && p.serveFull > 0.0f && p.clock >= m_serveAt * p.serveFull;
+        }
         if (p.tossAge < 0.0f) {
             b.place(tossHand(m, p));
             const bool cpuToss = p.cpu && m.phaseTime > 1.1f;
@@ -557,6 +562,7 @@ void TennisModule::startSwing(Match& m, Player& p, ShotKind kind, bool serve) {
     p.prevPlane = 99.0f;
     p.swingDone = false;
     p.charge = 0.0f;
+    p.serveFull = -1.0f;
     p.swingT = -2.0f;
     if (serve) {
         // The CPU mixes its first serves (flat, slice, kick) and kicks its second.
@@ -603,6 +609,23 @@ void TennisModule::stepSwing(Match& m, Player& p, bool serving, bool release, fl
         p.swingT = std::min(-1.0f, -2.0f + p.clock / sh.windUp);
         const float cap = p.stamina.powerCap() * (p.cpu && p.bot ? p.bot->skill().power + 0.3f : 1.0f);
         p.charge = std::min(std::min(1.0f, cap), p.charge + p.stamina.chargeRate() * dt);
+        if (serving && !p.cpu) {
+            // A person's serve is a bar timed to the toss: it fills as the
+            // ball goes up and is full when letting go meets the ball just
+            // right (full power). Green is the stretch before that where
+            // the hit is still clean; past full it's late: less power, and
+            // soon a miss.
+            const float tt = timeToSpot(m, p);
+            if (tt >= 0.0f) {
+                p.serveFull = p.clock + tt - sh.forward;
+                p.serveGreen = 1.5f * sh.window * std::max(0.2f, p.stamina.windowScale() * m_timingScale); // still a clean hit (timingWord: Perfect or Early)
+            }
+            if (p.serveFull > 0.0f) {
+                const float u = p.clock / p.serveFull;
+                const float late = (p.clock - p.serveFull) / std::max(0.02f, p.serveGreen);
+                p.charge = std::min(cap, u <= 1.0f ? u : std::max(0.3f, 1.0f - 0.5f * late));
+            }
+        }
         if (release) {
             p.contactAt = p.clock + sh.forward;
             p.swingT = -1.0f;

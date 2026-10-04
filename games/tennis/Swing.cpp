@@ -199,8 +199,8 @@ std::array<StrokeShape, static_cast<size_t>(Stroke::Count)> makeShapes() {
     serve.windUp = 0.5f;
     serve.forward = 0.25f;
     serve.follow = 0.4f;
-    serve.window = 0.05f;
-    serve.maxError = 0.18f;
+    serve.window = 0.08f; // the serve bar's green is 1.5 of these (Play.cpp): the toss is yours, so a wider window
+    serve.maxError = 0.22f;
     serve.control = 1.1f;
     serve.overhead = true;
     serve.plane = 2.65f;

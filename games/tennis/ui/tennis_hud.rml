@@ -31,6 +31,12 @@
         .bar .fill { display: block; height: 7dp; border-radius: 3dp; }
         .stamina .fill { background-color: #5ad07a; }
         .power .fill { background-color: #f0b030; }
+        /* The serve: a green stretch at the end of the bar, the fill white before it, green in it, red past full. */
+        .servebar { height: 12dp; }
+        .servebar .green { display: block; height: 12dp; border-radius: 3dp; background-color: #3fbf5a66; }
+        .servebar .fill { height: 12dp; margin-top: -12dp; background-color: #e8e8e8; }
+        .servebar .fill.in { background-color: #4ee06a; }
+        .servebar .fill.past { background-color: #e04a3a; }
     </style>
 </head>
 <body data-model="tennis">
@@ -48,7 +54,11 @@
         <div class="meter" data-for="p : meters">
             <span class="timing">{{p.timing}}</span><span class="who">{{p.name}}</span>
             <div class="bar stamina"><div class="fill" data-style-width="(p.stamina * 100) + '%'"></div></div>
-            <div class="bar power" data-if="p.charging"><div class="fill" data-style-width="(p.power * 100) + '%'"></div></div>
+            <div class="bar power" data-if="p.charging && !p.serve"><div class="fill" data-style-width="(p.power * 100) + '%'"></div></div>
+            <div class="bar servebar" data-if="p.serve">
+                <div class="green" data-style-margin-left="(p.green * 100) + '%'"></div>
+                <div class="fill" data-class-in="p.zone == 1" data-class-past="p.zone == 2" data-style-width="(p.power * 100) + '%'"></div>
+            </div>
         </div>
     </div>
     <div id="hint" data-if="hint != ''" data-rml="hint"></div>

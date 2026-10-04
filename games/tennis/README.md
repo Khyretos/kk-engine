@@ -76,6 +76,7 @@ KKE_NET=join:127.0.0.1 KKE_NET_NAME=Rook ./tennis     # ...and join it from a se
 | `KKE_TENNIS_BALLTEST=1` | no match: seven scripted shots (a drop, a groundstroke, into the net, a serve, both fences, the roof), every contact logged with how far the FEMFX body is from the flight |
 | `KKE_TENNIS_SWINGLOG=1` | a log line for every hit: the stroke, the timing error and word, the spacing, the quality, the power, the stamina |
 | `KKE_TENNIS_STRINGTEST=1` | one string bed on its own hit by a 30 m/s ball every 2 s, and every racket's pocket, logged in mm |
+| `KKE_TENNIS_SERVEAT=<u>` | a person's serve tosses by itself and lets go at `u` along the serve bar (1 = full): for testing the bar |
 | `KKE_TENNIS_CLOSEUP=<n>` | the camera side-on to player `n` (0 = the first), close: for looking at swings |
 | `KKE_TENNIS_CLOSEUP_DISTANCE=<m>` | how far that camera is (default 3.8): about 1.5 to look at the hands on the racket; negative puts it on the player's other side |
 | `KKE_TENNIS_POSE=<stroke>,<f\|b>,<t>` | player 1 held in one moment of a stroke, e.g. `drive,b,-1` (a backhand drive's full takeback) or `flat serve,f,0` (contact); names as `strokeName` in [Swing.cpp](Swing.cpp) |
@@ -127,8 +128,11 @@ are rebindable actions in the "Shots" and "Game" groups.
   ring stays a moment after the bounce, shrinking
   ([Marks.cpp](Marks.cpp)).
 - **The serve.** Stand still and hold a shot button: the ball goes up and
-  the racket goes back. Let go to swing; the best serve meets the ball
-  near the top of the toss. Topspin and Lob serve a kick serve (high and
+  the racket goes back, and the serve bar (bottom left) fills with the
+  toss. Let go while the fill is green: that hit is clean, and the full
+  bar is full power (it is full when letting go meets the ball just
+  right). Before the green it's early (a weak serve or a miss); past full
+  the bar turns red: late, less power, and soon a miss. Topspin and Lob serve a kick serve (high and
   safe, always the second serve's pick), Flat the fastest, Slice one that
   swings wide. Let the ball drop and you catch it and toss again.
 - **Stamina** (the green bar, bottom left) goes down when you run faster

@@ -101,6 +101,10 @@ public:
         glm::vec3 swingContact{0.0f};  // body frame
         ShotKind armedKind = ShotKind::Topspin; // the shot button pressed
         float charge = 0.0f;           // 0..1 power built in the takeback
+        // A person's serve: when (p.clock) letting go meets the ball at the
+        // top of the hitting spot (the bar full, full power), and how long
+        // before that the bar is green (safe: the hit is clean).
+        float serveFull = -1.0f, serveGreen = 0.0f;
         float clock = 0.0f;            // s since the swing began
         float contactAt = -1.0f;       // on that clock: when the racket reaches contact (-1: not let go yet)
         float crossAt = -1.0f;         // ... when the ball reached the hitting spot (-1: not yet)
@@ -403,6 +407,7 @@ private:
     bool m_swingLog = false;        // KKE_TENNIS_SWINGLOG=1: every swing in the log (stroke, timing, power, stamina)
     float m_quitAfter = -1.0f, m_clock = 0.0f, m_reportAt = 10.0f;
     bool m_ballTest = false;
+    float m_serveAt = -1.0f;       // KKE_TENNIS_SERVEAT (Play.cpp)
     float m_testTime = 0.0f;
     int m_testShot = -1;
     std::unique_ptr<Ball> m_testBall;
@@ -456,6 +461,11 @@ private:
         std::string name, timing;
         float stamina = 1.0f, power = 0.0f;
         bool charging = false;
+        // The serve's bar: where green starts (0..1 along it), and where
+        // the fill is: 0 before green, 1 in it, 2 past full (late).
+        bool serve = false;
+        float green = 0.0f;
+        int zone = 0;
         bool operator==(const MeterRow&) const = default;
     };
     struct Hud { TeamRow t[2]; std::string call, sub, hint, banner, ranking; std::vector<MeterRow> meters; };

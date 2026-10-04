@@ -69,6 +69,7 @@ void TennisModule::init(kke::Application& app) {
     if (const char* pose = kke::dev::env("KKE_TENNIS_POSE")) m_poseTest = pose;
     m_stringTest = kke::dev::env("KKE_TENNIS_STRINGTEST") != nullptr;
     m_autoplay = envOn("KKE_TENNIS_AUTOPLAY");
+    m_serveAt = envFloat("KKE_TENNIS_SERVEAT", -1.0f);
     if (envOn("KKE_TENNIS_CENTER")) m_where = 1;
     m_crowd = static_cast<int>(envFloat("KKE_TENNIS_CROWD", static_cast<float>(m_crowd)));
 
