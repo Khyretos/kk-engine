@@ -575,7 +575,10 @@ TEST(Climber, EachHandWorksItsOwnSide) {
 
 TEST(Climber, StaminaMattersOnTheWayUp) {
     // Every mountain, with real stamina: the bot has to pace itself (shake out on jugs,
-    // stand on ledges); it still gets up, and it gets tired doing it.
+    // stand on ledges); it still gets up, and it gets tired doing it. But it races:
+    // resting mustn't take most of the climb (on soucouyant the rival once took
+    // 170 s on average, 51 s before, and lost every race to a fresh player).
+    float allTime = 0.0f;
     for (uint32_t seed = 1; seed <= 40; ++seed) {
         ClimbWall w = wall(seed);
         Climber c(w);
@@ -599,7 +602,9 @@ TEST(Climber, StaminaMattersOnTheWayUp) {
         EXPECT_EQ(c.mantleLedge(), -1);
         EXPECT_LT(lowest, 0.75f) << "seed " << seed << ": the climb should tire you";
         EXPECT_GT(t, 15.0f) << "seed " << seed << ": 36 m should take a while";
+        allTime += t;
     }
+    EXPECT_LT(allTime / 40.0f, 100.0f) << "on average up 36 m";
 }
 
 TEST(Climber, TheBodyStaysOutOfTheRockAndTheLedges) {

@@ -467,7 +467,7 @@ How a move works:
 - **Aim**: the stick direction on the wall picks, for each hand, the best
   hold within reach (`aimTarget(hand)`); the game draws a marker on it.
 - **Reach** (trigger): up to `span` (1.55 m) from the other hand's hold,
-  0.42 s, costs 1.5 stamina (double with no feet on).
+  0.42 s, costs 0.9 stamina (double with no feet on).
 - **Feet** (bumper): `footTarget(foot)` is the best foothold under the
   hips on that foot's side within `legReach`; a step takes 0.25 s and
   costs 0.4. A planted foot too far from its hip comes off (`slipped()`).
@@ -490,10 +490,10 @@ How a move works:
   says which ledge (-1 = the summit, which is the finish).
 
 **Stamina** (`Climber::updateStamina`): with both feet planted and both
-hands holding (and not reaching), it comes back at `feetRecover` (2.5 per
+hands holding (and not reaching), it comes back at `feetRecover` (5 per
 second) times the holds' grip (0.4 to 1), 1.35 times that with both hands
 on one hold, half under an overhang past 10 degrees. Otherwise it drains:
-the two-hand rate (1.5) or the one-hand rate (4.0), divided by the average
+the two-hand rate (0.9) or the one-hand rate (2.4), divided by the average
 grip of the held holds (jug and edge 1.0, crimp 0.6, sloper 0.45), raised
 2% per degree of overhang, lowered 40% by one planted foot, and doubled
 (`handsOnly`) with no feet on. Standing on the ground or a

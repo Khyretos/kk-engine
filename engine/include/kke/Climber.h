@@ -59,17 +59,17 @@ public:
         float reachTime = 0.42f;    // s: a hand to its hold
         float quickTime = 0.17f;    // s: a short move (matching, the first grab)
         float maxStamina = 100.0f;
-        float drainTwoHands = 1.5f; // per second on two jugs, vertical rock, feet off
-        float drainOneHand = 4.0f;
+        float drainTwoHands = 0.9f; // per second on two jugs, vertical rock, feet off
+        float drainOneHand = 2.4f;
         float overhangDrain = 0.02f; // + this fraction per degree past vertical
-        float costPrecise = 1.5f;   // a hand's reach
+        float costPrecise = 0.9f;   // a hand's reach
         // No feet on holds: every move and every second costs this many
         // times as much (climbing on the arms alone).
         float handsOnly = 2.0f;
         // Both feet planted, both hands on holds: stamina back per second
         // (times the holds' grip; slow but steady), this much more with
         // both hands on one hold, half under a steep overhang.
-        float feetRecover = 2.5f;
+        float feetRecover = 5.0f;
         float matchRecover = 1.35f;
         float footRelief = 0.4f;    // one foot planted: this share of the drain off (both, a hand moving: 1.6 times it)
         // Feet.
