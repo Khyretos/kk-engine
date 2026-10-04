@@ -546,6 +546,9 @@ void TennisModule::render(const kke::RenderContext& ctx) {
     renderCourts(ctx);
     for (Player& p : m_players)
         if (p.look) p.look->render(ctx);
+    // The people walking about: their rackets' strings (the bodies and rackets are ModelModule's).
+    for (Walker& w : m_walkers)
+        if (w.look) w.look->render(ctx);
 }
 
 void TennisModule::renderShadow(const kke::ShadowRenderContext& ctx) {
@@ -554,6 +557,8 @@ void TennisModule::renderShadow(const kke::ShadowRenderContext& ctx) {
     if (m_ballMesh && !m_ballIdx.empty()) m_ballMesh->drawShadow(ctx);
     for (Player& p : m_players)
         if (p.look) p.look->renderShadow(ctx);
+    for (Walker& w : m_walkers)
+        if (w.look) w.look->renderShadow(ctx);
 }
 
 void TennisModule::shutdown() {

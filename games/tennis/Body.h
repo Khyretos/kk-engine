@@ -178,6 +178,7 @@ private:
     glm::mat4 m_racketWorld{1.0f};
     glm::vec3 m_tossHand{0.0f};
     glm::vec3 m_racketVel{0.0f};              // world, m/s: the head's middle
+    float m_moveSpeed = 0.0f;                 // the move blend's speed, settled (update)
     glm::vec3 m_racketHead{0.0f};             // world, last frame
     std::unique_ptr<StringBed> m_bed;         // made on the first hit
     std::unique_ptr<kke::DynamicMeshRenderer> m_bentStrings;

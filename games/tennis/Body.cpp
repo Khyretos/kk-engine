@@ -461,7 +461,13 @@ void Body::update(const glm::vec3& feet, float yawDegrees, const glm::vec3& velo
     }
     if (want < 0) want = m_st.idle;
     if (a.current() != want) a.play(want, 0.2f);
-    a.setParameter(speed);
+    // The move blend settles: a creep (the character controller's
+    // leftovers, a shuffle into place) is standing still, not a frozen
+    // half step of the walk blended into the idle.
+    const float target = speed < 0.35f ? 0.0f : speed;
+    m_moveSpeed += (target - m_moveSpeed) * (1.0f - std::exp(-10.0f * dt));
+    if (target == 0.0f && m_moveSpeed < 0.05f) m_moveSpeed = 0.0f;
+    a.setParameter(m_moveSpeed);
     a.update(dt);
     kke::Pose pose = a.pose();
 
