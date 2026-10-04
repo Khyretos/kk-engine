@@ -72,7 +72,9 @@ def main():
 
     xvfb = start_display(args.headless)
     mode = xdisplay.headless_note() if xvfb else f"desktop window on {os.environ['DISPLAY']} (real GPU)"
-    env = dict(os.environ, KKE_SKIP_INTRO="1", SDL_VIDEODRIVER=os.environ.get("SDL_VIDEODRIVER", "x11"))
+    # Full speed and pads heard without the focus: the desktop's owner may be
+    # using another window while it runs (the game's background cap is for players).
+    env = dict(os.environ, KKE_SKIP_INTRO="1", KKE_FULL_SPEED_IN_BACKGROUND="1", SDL_VIDEODRIVER=os.environ.get("SDL_VIDEODRIVER", "x11"))
     if xvfb:
         env.update(xdisplay.headless_env())
     if args.pad:

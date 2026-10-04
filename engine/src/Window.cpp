@@ -1,4 +1,5 @@
 #include "kke/Window.h"
+#include "kke/DevTools.h"
 #include "kke/VulkanCheck.h"
 
 #include <stb_image.h>
@@ -45,6 +46,9 @@ void sizeFromEnvironment(uint32_t& width, uint32_t& height) {
 
 Window::Window(const std::string& title, uint32_t width, uint32_t height) {
     SDL_SetHint(SDL_HINT_ORIENTATIONS, orientationHint());
+    // Tests and demos (KKE_FULL_SPEED_IN_BACKGROUND, see Application): a
+    // window without the focus still hears its (virtual) pads.
+    if (dev::flag("KKE_FULL_SPEED_IN_BACKGROUND")) SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
     sizeFromEnvironment(width, height);
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         throw std::runtime_error(std::string("SDL_Init failed: ") + SDL_GetError());
