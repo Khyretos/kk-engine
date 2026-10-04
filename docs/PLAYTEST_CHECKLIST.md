@@ -245,8 +245,13 @@ this only re-checks the ambience that came later.
 
 *Thread: Fighting and goblin horde demos.*
 
+- [ ] Goblins are visible and animated (no T-pose), and the five types look different.
 - [ ] Goblins surround you, wait their turn, and break and run when morale drops.
-- [ ] Slash hits two or three in front; the great swing sends everyone flying.
+- [ ] Sword: three-hit combo, heavy swing, hold heavy to spin; inventory (Tab / d-pad up) swaps weapons.
+- [ ] Bow: hold to draw, a full draw hits harder; crossbow reloads slowly, same damage every bolt.
+- [ ] Wave 5: a giant comes, its attacks are marked on the ground first.
+- [ ] Two players split screen; online host and join; both at once.
+- [ ] Esc pauses; Super+Q closes the game.
 - [ ] Frame rate holds with a big wave.
 
 **Fix:**

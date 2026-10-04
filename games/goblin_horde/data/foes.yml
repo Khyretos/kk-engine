@@ -1,0 +1,192 @@
+# The horde: five goblin types and the bosses, as data. Change a number,
+# run the demo again. JSON works the same (foes.json).
+#
+# Each type:
+#   models     where its looks come from: a pack, a file in it, and the
+#              mesh part of that file (Goblin War Camp keeps every goblin
+#              in one Characters.fbx). One is picked per goblin; the
+#              first one found is the fallback.
+#   weapon     what it holds in its right hand (left: `offhand`). Several:
+#              one is picked per goblin.
+#   scale      size range (1 = the model as made)
+#   health, poise, speed: on top of the goblin basics (CombatStats::grunt)
+#   keep       metres it likes to be from its target (ranged types back off)
+#   moves      exactly what it can do; a goblin picks the first move that
+#              is ready and in range, best first. Kinds:
+#                melee   a swing (AttackDesc: windup, active, recovery,
+#                        damage, reach, radius, knockback, sweep, ...)
+#                dash    a swing that carries it `lunge` metres forward
+#                shot    a projectile: arrow, bolt, fireball, zap, boulder
+#                lob     projectiles in an arc onto where the target
+#                        stands, marked on the ground first (`telegraph`)
+#                blast   a circle on the ground under the target that
+#                        bursts after `telegraph` seconds
+#                slam    a circle around itself that bursts
+#                buff    `buff` (haste, stoneskin) on goblins within `radius`
+#                heal    heals the most hurt goblin within `range`
+#              Every move has `clip` (the UAL animation, first found), `range`
+#              (it starts from this far or nearer), `cooldown` (s).
+#              Wind-up + active + recovery is how long the clip plays.
+types:
+  - id: grunt
+    label: Grunt
+    share: 1.0               # how common, relative to the others (waves.yml can override)
+    models:
+      - { pack: POLYGON_Goblin_War_Camp, file: Characters, part: SM_Chr_Warrior_Male_01 }
+      - { pack: POLYGON_Goblin_War_Camp, file: Characters, part: SM_Chr_Knight_01 }
+      - { pack: POLYGON_Goblin_War_Camp, file: Characters, part: SM_Chr_Prisoner_01 }
+      - { pack: POLYGON_Goblin_War_Camp, file: Characters, part: SM_Chr_Prisoner_02 }
+      - { pack: POLYGON_Goblin_War_Camp, file: Characters, part: SM_Chr_Prisoner_03 }
+      - { pack: POLYGON_Goblin_War_Camp, file: Characters, part: SM_Chr_Cook_01 }
+      - { pack: POLYGON_Dungeon_Pack, file: Character_Goblin_Male }
+      - { pack: POLYGON_Dungeon_Pack, file: Character_Goblin_Female }
+      - { pack: POLYGON_Dungeon_Pack, file: Character_Goblin_Warrior_Male }
+      - { pack: POLYGON_Dungeon_Pack, file: Character_Goblin_Warrior_Female }
+    weapon:
+      - { pack: POLYGON_Goblin_War_Camp, file: SM_Wep_Club_01 }
+      - { pack: POLYGON_Goblin_War_Camp, file: SM_Wep_Club_02 }
+      - { pack: POLYGON_Goblin_War_Camp, file: SM_Wep_Sword_01 }
+      - { pack: POLYGON_Goblin_War_Camp, file: SM_Wep_Axe_01 }
+      - { pack: POLYGON_Goblin_War_Camp, file: SM_Wep_Cleaver_01 }
+      - { pack: POLYGON_Goblin_War_Camp, file: SM_Wep_Dagger_01 }
+    scale: [0.72, 0.86]
+    health: 1.0
+    speed: 1.0
+    keep: 0
+    moves:
+      - { id: slash, kind: melee, clip: [Sword_Regular_A, Sword_Attack], range: 1.5, cooldown: 1.4,
+          windup: 0.45, active: 0.14, recovery: 0.5, damage: 6, reach: 0.8, radius: 0.45, knockback: 0.8, poise: 9, guard: 7 }
+      - { id: double_cut, kind: melee, clip: [Sword_Regular_B, Sword_Attack], range: 1.5, cooldown: 3.5,
+          windup: 0.35, active: 0.22, recovery: 0.55, damage: 9, reach: 0.9, radius: 0.55, knockback: 1.2, poise: 14, guard: 10 }
+      - { id: lunge, kind: dash, clip: [Sword_Dash, Sword_Attack], range: 4.5, minRange: 2.2, cooldown: 6,
+          windup: 0.5, active: 0.25, recovery: 0.6, damage: 10, reach: 0.9, radius: 0.5, knockback: 2.0, poise: 18, lunge: 3.0 }
+
+  - id: archer
+    label: Archer
+    share: 0.45
+    models:
+      - { pack: POLYGON_Goblin_War_Camp, file: Characters, part: SM_Chr_Archer_Male_01 }
+      - { pack: POLYGON_Goblin_War_Camp, file: Characters, part: SM_Chr_Archer_Female_01 }
+      - { pack: POLYGON_Goblin_War_Camp, file: Characters, part: SM_Chr_Ranger_01 }
+    offhand:
+      - { pack: POLYGON_Goblin_War_Camp, file: SM_Wep_Bow_01, grip: bow }
+      - { pack: POLYGON_Goblin_War_Camp, file: SM_Wep_Bow_02, grip: bow }
+    back: { pack: POLYGON_Goblin_War_Camp, file: SM_Prop_Quiver_01 }
+    scale: [0.72, 0.84]
+    health: 0.7
+    speed: 1.05
+    keep: 9                  # stays this far out, backs off when you come close
+    moves:
+      - { id: kick, kind: melee, clip: [Kick, Melee_Knee], range: 1.4, cooldown: 2.5,
+          windup: 0.3, active: 0.15, recovery: 0.4, damage: 4, reach: 0.8, radius: 0.5, knockback: 4.0, poise: 12, guard: 14 }
+      - { id: volley, kind: lob, projectile: arrow, count: 5, spread: 1.6, clip: [Bow_RapidShoot_Loop, Bow_Shoot], range: 22, minRange: 6,
+          cooldown: 9, windup: 0.9, active: 0.5, recovery: 0.5, damage: 6, telegraph: 1.2, radius: 2.4 }
+      - { id: aimed_shot, kind: shot, projectile: arrow, clip: [Bow_Shoot], aimClip: [Bow_Aim_Neutral, Bow_Notch], range: 24, minRange: 3,
+          cooldown: 2.6, windup: 1.0, active: 0.1, recovery: 0.45, damage: 9, speed: 34, knockback: 1.0, poise: 10 }
+
+  - id: shaman
+    label: Battle shaman
+    share: 0.3
+    models:
+      - { pack: POLYGON_Goblin_War_Camp, file: Characters, part: SM_Chr_Wizard_01 }
+      - { pack: POLYGON_Dungeon_Pack, file: Character_Goblin_Shaman }
+    weapon:
+      - { pack: POLYGON_Goblin_War_Camp, file: SM_Wep_Staff_01, grip: staff }
+    scale: [0.74, 0.84]
+    health: 0.8
+    speed: 0.95
+    keep: 10
+    tint: [1.0, 0.92, 0.85]
+    moves:
+      - { id: firestorm, kind: blast, element: fire, clip: [Spell_Double_Shoot_Loop, Spell_Simple_Shoot], range: 18, cooldown: 10,
+          windup: 0.8, active: 0.6, recovery: 0.6, damage: 18, telegraph: 1.4, radius: 2.6, knockback: 4.0, poise: 30 }
+      - { id: fireball, kind: shot, projectile: fireball, clip: [Spell_Simple_Shoot], range: 20, minRange: 2, cooldown: 4,
+          windup: 0.75, active: 0.1, recovery: 0.6, damage: 12, speed: 16, splash: 1.6, knockback: 3.0, poise: 20 }
+      - { id: zap, kind: shot, projectile: zap, clip: [Spell_Simple_Shoot], range: 14, cooldown: 1.8,
+          windup: 0.35, active: 0.1, recovery: 0.35, damage: 5, speed: 30, knockback: 0.5, poise: 6, homing: 4 }
+
+  - id: warshaman
+    label: War shaman
+    share: 0.2
+    models:
+      - { pack: POLYGON_Goblin_War_Camp, file: Characters, part: SM_Chr_Shaman_01 }
+      - { pack: POLYGON_Goblin_War_Camp, file: Characters, part: SM_Chr_BeastTamer_01 }
+    weapon:
+      - { pack: POLYGON_Goblin_War_Camp, file: SM_Wep_Staff_02, grip: staff }
+    scale: [0.76, 0.86]
+    health: 0.9
+    speed: 0.9
+    keep: 12                 # hangs back behind the others
+    moves:
+      - { id: heal, kind: heal, clip: [Spell_Simple_Shoot, Spell_Simple_Enter], range: 14, cooldown: 5,
+          windup: 0.8, active: 0.1, recovery: 0.5, amount: 30 }
+      - { id: war_cry, kind: buff, buff: haste, clip: [Idle_Rail_Call, Spell_Double_Enter], range: 30, cooldown: 12,
+          windup: 0.9, active: 0.2, recovery: 0.7, radius: 10, duration: 8 }
+      - { id: stone_skin, kind: buff, buff: stoneskin, clip: [Spell_Double_Enter, Spell_Simple_Enter], range: 30, cooldown: 15,
+          windup: 1.0, active: 0.2, recovery: 0.6, radius: 8, duration: 10 }
+
+  - id: brute
+    label: Brute
+    share: 0.18
+    models:
+      - { pack: POLYGON_Dungeon_Pack, file: Character_Goblin_WarChief }
+      - { pack: POLYGON_Goblin_War_Camp, file: Characters, part: SM_Chr_King_01 }
+    weapon:
+      - { pack: POLYGON_Dungeon_Pack, file: SM_Wep_Goblin_Axe_Large_01, grip: twohand }
+      - { pack: POLYGON_Dungeon_Pack, file: SM_Wep_Hammer_Large_Stone_01, grip: twohand }
+    scale: [1.05, 1.15]
+    health: 4.5
+    poise: 4.0
+    speed: 0.85
+    keep: 0
+    moves:
+      - { id: overhead, kind: slam, clip: [Sword_Heavy_D, Sword_GroundPound], range: 2.4, cooldown: 4,
+          windup: 0.9, active: 0.18, recovery: 0.9, damage: 22, reach: 1.4, radius: 1.6, knockback: 5.0, poise: 45, telegraph: 0.9, guard: 30 }
+      - { id: sweep, kind: melee, clip: [Sword_Heavy_B, Sword_Heavy_A], range: 2.2, cooldown: 5,
+          windup: 0.7, active: 0.22, recovery: 0.8, damage: 16, reach: 0.2, radius: 2.3, knockback: 6.0, poise: 40, sweep: true, guard: 24 }
+      - { id: charge, kind: dash, clip: [Shield_Dash, Sword_Dash], range: 9, minRange: 3.5, cooldown: 8,
+          windup: 0.8, active: 0.5, recovery: 0.8, damage: 14, reach: 0.8, radius: 0.8, knockback: 7.0, poise: 60, lunge: 6.5, unblockable: true, telegraph: 0.8 }
+
+# The bosses: Synty POLYGON Fantasy Rivals giants. One comes every
+# `bossEvery` waves (waves.yml). Each has three moves: ranged, a basic
+# combo, and a super attack; every one is marked on the ground before it
+# lands.
+bosses:
+  - id: troll
+    label: The Troll
+    models: [{ pack: POLYGON_Fantasy_Rivals, file: SK_BR_Character_Troll_01 }]
+    weapon: [{ pack: POLYGON_Dungeon_Pack, file: SM_Wep_Hammer_Large_Stone_01, grip: twohand }]
+    scale: [2.3, 2.3]
+    health: 900
+    speed: 0.7
+    moves: &giant
+      - { id: super, kind: slam, super: true, clip: [Sword_GroundPound, Sword_Heavy_D], roar: [MonsterTransformation], range: 6, cooldown: 16,
+          windup: 2.2, active: 0.3, recovery: 1.6, damage: 45, radius: 7.5, knockback: 11, poise: 120, telegraph: 2.2, unblockable: true }
+      - { id: combo, kind: combo, clip: [Sword_Heavy_A, Sword_Heavy_B, Sword_Heavy_C], range: 3.4, cooldown: 3,
+          windup: 0.6, active: 0.2, recovery: 0.35, damage: 18, reach: 1.6, radius: 1.7, knockback: 5, poise: 40, telegraph: 0.6, guard: 26 }
+      - { id: throw, kind: lob, projectile: boulder, count: 1, clip: [OverhandThrow], range: 28, minRange: 7, cooldown: 7,
+          windup: 1.0, active: 0.2, recovery: 0.7, damage: 26, telegraph: 1.4, radius: 2.6, knockback: 7, poise: 60 }
+  - id: big_ork
+    label: Grukk the Big Ork
+    models: [{ pack: POLYGON_Fantasy_Rivals, file: SK_BR_Character_Big_Ork_01 }]
+    weapon: [{ pack: POLYGON_Dungeon_Pack, file: SM_Wep_Goblin_Axe_Large_01, grip: twohand }]
+    scale: [2.2, 2.2]
+    health: 1100
+    speed: 0.75
+    moves: *giant
+  - id: barbarian
+    label: The Barbarian Giant
+    models: [{ pack: POLYGON_Fantasy_Rivals, file: SK_BR_Character_BarbarianGiant_01 }]
+    weapon: [{ pack: POLYGON_Dungeon_Pack, file: SM_Wep_GreatSword_01, grip: twohand }]
+    scale: [2.4, 2.4]
+    health: 1300
+    speed: 0.8
+    moves: *giant
+  - id: butcher
+    label: The Pig Butcher
+    models: [{ pack: POLYGON_Fantasy_Rivals, file: SK_BR_Character_Pig_Butcher_01 }]
+    weapon: [{ pack: POLYGON_Goblin_War_Camp, file: SM_Wep_Cleaver_02 }]
+    scale: [2.3, 2.3]
+    health: 1500
+    speed: 0.8
+    moves: *giant

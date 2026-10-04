@@ -75,8 +75,11 @@ struct ClothGpu::Impl {
         ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         ai.commandBufferCount = 1;
         VK_CHECK(vkAllocateCommandBuffers(dev, &ai, &cmd));
+        // Made signalled: ~Impl waits on it, and a game with no cloth never
+        // submits, so an unsignalled fence there hung quitting forever.
         VkFenceCreateInfo fi{};
         fi.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fi.flags = VK_FENCE_CREATE_SIGNALED_BIT;
         VK_CHECK(vkCreateFence(dev, &fi, nullptr, &fence));
 
         VkDescriptorSetLayoutBinding b[4]{};

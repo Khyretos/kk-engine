@@ -1,13 +1,18 @@
 # The goblins' minds, on the engine AI core (docs/AI.md). Change a number
 # and run the demo again; JSON works the same (goblin.json).
 #
-# Inputs the game sets on every goblin (games/goblin_horde/Goblins.cpp):
-#   crowded   1 when enough goblins are already at the king and this one
-#             isn't one of them (see `attackers` in waves.yml), else 0
+# Every goblin type (foes.yml) thinks with the "goblin" species; what it
+# can do in a fight (moves, how far it keeps) is in foes.yml. Bosses think
+# with "boss": they never break.
+#
+# Inputs the game sets on every goblin (games/goblin_horde/Foes.cpp):
+#   crowded   1 when enough goblins are already at its player and this
+#             one isn't one of them (see `attackers` in waves.yml), else 0
+#             (always 0 for the ones that fight from afar)
 #   morale    0..1 for the whole wave: each kill knocks it down, it comes
 #             back slowly; the last few of a wave have none left
 #   health    0..1, its own
-# `hostile` and `threat` are the core's own (how clearly it senses the king).
+# `hostile` and `threat` are the core's own (how clearly it senses a player).
 species:
   - id: goblin
     label: Goblin
@@ -26,7 +31,7 @@ species:
     senses: { sightRange: 80, fovDegrees: 360, awarenessGain: 8, memorySeconds: 120 }
     temperament: { boldness: 0.6, curiosity: 0, aggression: 0.9, sociability: 0.8 }
     actions:
-      - name: charge           # at the king
+      - name: charge           # at a player
         behavior: fight
         weight: 1.5
         momentum: 0.1
@@ -52,7 +57,30 @@ species:
       - name: idle
         behavior: idle
         weight: 0.05
+  - id: boss
+    label: Boss
+    walkSpeed: 1.4
+    runSpeed: 3.6
+    acceleration: 8
+    radius: 0.9
+    attackRange: 1.2
+    attackCooldown: 2.0
+    fearDistance: 0
+    homeRadius: 80
+    hostileTo: [hero]
+    needs: []
+    senses: { sightRange: 120, fovDegrees: 360, awarenessGain: 8, memorySeconds: 600 }
+    temperament: { boldness: 1, curiosity: 0, aggression: 1, sociability: 0 }
+    actions:
+      - name: charge
+        behavior: fight
+        weight: 1.5
+        considerations:
+          - { input: hostile, curve: linear }
+      - name: idle
+        behavior: idle
+        weight: 0.05
   - id: hero
-    label: The king
+    label: A player
     radius: 0.35
     needs: []

@@ -1,4 +1,5 @@
 #include "kke/Ragdoll.h"
+#include "kke/AnimRig.h"
 
 #include <glm/gtc/quaternion.hpp>
 
@@ -19,6 +20,17 @@ int findBoneCI(const ModelData& model, const std::string& name) {
     const std::string wanted = lower(name);
     for (size_t i = 0; i < model.bones.size(); ++i) {
         if (lower(model.bones[i].name) == wanted) return static_cast<int>(i);
+    }
+    return -1;
+}
+
+// A humanoid's bone: by its name, else by another rig's name for the same
+// bone ("Hips" for Pelvis, "Shoulder_L" for UpperArm_L: kke/AnimRig.h).
+int findHumanBone(const ModelData& model, const std::string& name) {
+    if (const int b = findBoneCI(model, name); b >= 0) return b;
+    const std::string canonical = canonicalBoneName(name);
+    for (size_t i = 0; i < model.bones.size(); ++i) {
+        if (canonicalBoneName(model.bones[i].name) == canonical) return static_cast<int>(i);
     }
     return -1;
 }
@@ -149,9 +161,9 @@ RagdollDesc buildHumanoidRagdoll(const ModelData& model, const std::vector<glm::
     const char* required[] = { "Pelvis", "spine_01", "spine_02", "neck_01", "head",
                                "UpperArm_L", "lowerarm_l", "Hand_L", "UpperArm_R", "lowerarm_r", "Hand_R",
                                "Thigh_L", "calf_l", "Foot_L", "Thigh_R", "calf_r", "Foot_R" };
-    auto pos = [&](const char* name) { return glm::vec3(boneWorld[findBoneCI(model, name)][3]); };
+    auto pos = [&](const char* name) { return glm::vec3(boneWorld[findHumanBone(model, name)][3]); };
     for (const char* name : required) {
-        int b = findBoneCI(model, name);
+        int b = findHumanBone(model, name);
         if (b < 0 || b >= static_cast<int>(boneWorld.size())) {
             if (missingBone) *missingBone = name;
             return {};
@@ -386,7 +398,7 @@ RagdollSkinBinding bindSkeletonToRagdoll(const ModelData& model, const std::vect
     binding.restLocal.resize(model.bones.size());
     for (size_t b = 0; b < model.bones.size(); ++b) binding.restLocal[b] = model.bones[b].localRest;
     for (auto& [boneName, bodyName] : map) {
-        int bone = findBoneCI(model, boneName);
+        int bone = findHumanBone(model, boneName);
         int body = ragdoll.findBody(bodyName);
         if (bone < 0 || body < 0 || bone >= static_cast<int>(boneWorld.size())) continue;
         binding.bodyOfBone[bone] = body;

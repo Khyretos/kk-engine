@@ -1,0 +1,84 @@
+# Who you can be, what you can carry. Picked per player in the start menu
+# (character, skin, accessory, weapon) and changed during the game in the
+# inventory. JSON works the same (heroes.json).
+#
+# characters: a pack and a file (Synty POLYGON characters, animated with
+#   Quaternius' Universal Animation Library retargeted onto them). Skins
+#   are the pack's colour variants of its texture atlas. The UAL mannequin
+#   is always there, also without any pack.
+characters:
+  - { id: king,     label: King,          pack: POLYGON_Fantasy_Characters, file: SK_Character_Male_King }
+  - { id: knight,   label: Knight,        pack: POLYGON_Dungeon_Pack,       file: Character_Hero_Knight_Male }
+  - { id: knightess, label: Knightess,    pack: POLYGON_Dungeon_Pack,       file: Character_Hero_Knight_Female }
+  - { id: queen,    label: Queen,         pack: POLYGON_Fantasy_Characters, file: SK_Character_Female_Queen }
+  - { id: rogue,    label: Rogue,         pack: POLYGON_Fantasy_Characters, file: SK_Character_Male_Rouge_01 }
+  - { id: druid,    label: Druid,         pack: POLYGON_Fantasy_Characters, file: SK_Character_Female_Druid }
+  - { id: bard,     label: Bard,          pack: POLYGON_Fantasy_Characters, file: SK_Character_Male_Baird }
+  - { id: witch,    label: Witch,         pack: POLYGON_Fantasy_Characters, file: SK_Character_Female_Witch }
+  - { id: sorcerer, label: Sorcerer,      pack: POLYGON_Fantasy_Characters, file: SK_Character_Male_Sorcerer }
+  - { id: peasant,  label: Peasant,       pack: POLYGON_Fantasy_Characters, file: SK_Character_Female_Peasant_01 }
+  - { id: mannequin, label: Mannequin }
+
+# Worn on the head or the back (Goblin War Camp's attachments, made to
+# sit on a character's head bone).
+accessories:
+  - { id: none,    label: None }
+  - { id: helmet,  label: Helmet,     pack: POLYGON_Goblin_War_Camp, file: SM_Chr_Attach_Helmet_01, on: head }
+  - { id: helmet2, label: War helmet, pack: POLYGON_Goblin_War_Camp, file: SM_Chr_Attach_Helmet_02, on: head }
+  - { id: crown,   label: Crown,      pack: POLYGON_Goblin_War_Camp, file: SM_Chr_Attach_Crown_02, on: head }
+  - { id: hat,     label: Hat,        pack: POLYGON_Goblin_War_Camp, file: SM_Chr_Attach_Hat_01, on: head }
+  - { id: goggles, label: Goggles,    pack: POLYGON_Goblin_War_Camp, file: SM_Chr_Attach_Goggles_01, on: head }
+  - { id: mask,    label: Mask,       pack: POLYGON_Dungeon_Pack,    file: SM_Item_Chr_Mask_01, on: head }
+  - { id: pack,    label: Backpack,   pack: POLYGON_Goblin_War_Camp, file: SM_Chr_Attach_Backpack_01, on: back }
+
+# Weapons. kind: onehand, twohand (melee), bow, crossbow.
+#  Melee: `combo` is the light attack, one move per press (a press during
+#   a swing queues the next, three in a row); `heavy` is a tap of heavy;
+#   holding heavy charges `spin`, a full turn hitting everything around.
+#  Bow: hold attack to draw (`draw` s to full), let go to shoot: damage and
+#   speed grow from `min` to `max` with the draw, a hit on the head counts
+#   double. Aim (LT / right mouse) tightens the camera.
+#  Crossbow: always `damage`, whatever you do; then `reload` seconds.
+#  Shots fly where the camera aims.
+weapons:
+  - id: sword
+    label: Sword
+    kind: onehand
+    prop: { pack: POLYGON_Fantasy_Characters, file: SM_Prop_SwordOrnate_01 }
+    combo:
+      - { clip: [Sword_Regular_A, Sword_Attack], windup: 0.12, active: 0.14, recovery: 0.24, damage: 16, reach: 1.25, radius: 0.85, knockback: 3.0, poise: 14, stamina: 9, sweep: true }
+      - { clip: [Sword_Regular_B, Sword_Attack], windup: 0.12, active: 0.14, recovery: 0.26, damage: 18, reach: 1.3, radius: 0.9, knockback: 3.5, poise: 16, stamina: 10, sweep: true }
+      - { clip: [Sword_Regular_C, Sword_Light_C, Sword_Attack], windup: 0.18, active: 0.2, recovery: 0.42, damage: 28, reach: 1.4, radius: 1.1, knockback: 6.0, poise: 30, stamina: 14, sweep: true }
+    heavy: { clip: [Sword_Heavy_A, Sword_Attack], windup: 0.4, active: 0.22, recovery: 0.45, damage: 38, reach: 1.3, radius: 1.3, knockback: 7.0, poise: 45, stamina: 26, sweep: true }
+    spin:  { clip: [Sword_Light_B, Sword_Regular_B], charge: 0.6, windup: 0.05, active: 0.5, recovery: 0.4, damage: 30, reach: 0.1, radius: 2.4, knockback: 8.0, poise: 40, stamina: 34, sweep: true }
+  - id: greataxe
+    label: Great axe
+    kind: twohand
+    prop: { pack: POLYGON_Dungeon_Pack, file: SM_Wep_Ornate_GreatAxe_01 }
+    combo:
+      - { clip: [Sword_Heavy_A, Sword_Regular_A], windup: 0.3, active: 0.18, recovery: 0.36, damage: 30, reach: 1.5, radius: 1.1, knockback: 5.0, poise: 30, stamina: 15, sweep: true }
+      - { clip: [Sword_Heavy_B, Sword_Regular_B], windup: 0.28, active: 0.2, recovery: 0.4, damage: 32, reach: 1.5, radius: 1.3, knockback: 6.0, poise: 32, stamina: 16, sweep: true }
+      - { clip: [Sword_Heavy_C, Sword_Regular_C], windup: 0.34, active: 0.22, recovery: 0.55, damage: 46, reach: 1.6, radius: 1.5, knockback: 9.0, poise: 55, stamina: 22, sweep: true }
+    heavy: { clip: [Sword_Heavy_D, Sword_GroundPound], windup: 0.75, active: 0.25, recovery: 0.7, damage: 70, reach: 1.6, radius: 2.0, knockback: 10.0, poise: 80, stamina: 40, sweep: true, unblockable: true }
+    spin:  { clip: [Sword_Heavy_B, Sword_Light_B], charge: 0.8, windup: 0.05, active: 0.65, recovery: 0.55, damage: 44, reach: 0.1, radius: 2.8, knockback: 10.0, poise: 60, stamina: 42, sweep: true }
+  - id: bow
+    label: Bow
+    kind: bow
+    prop: { pack: POLYGON_Goblin_War_Camp, file: SM_Wep_Bow_01, grip: bow }
+    arrow: { pack: POLYGON_Goblin_War_Camp, file: SM_Wep_Arrow_01 }
+    draw: 1.1                # s to a full draw
+    min: { damage: 8, speed: 22 }
+    max: { damage: 46, speed: 60 }
+    headshot: 2.0
+    kick: { clip: [Kick, Melee_Knee], windup: 0.18, active: 0.14, recovery: 0.3, damage: 6, reach: 0.9, radius: 0.6, knockback: 6.0, poise: 20, stamina: 10 }
+  - id: crossbow
+    label: Crossbow
+    kind: crossbow
+    # No pack has a crossbow: a short bow laid flat on a stock (grip crossbow).
+    prop: { pack: POLYGON_Goblin_War_Camp, file: SM_Wep_Bow_02, grip: crossbow }
+    arrow: { pack: POLYGON_Goblin_War_Camp, file: SM_Wep_Arrow_01 }
+    damage: 34               # every bolt, aimed or not, the same
+    speed: 70
+    reload: 1.7              # s after every shot
+    headshot: 1.5
+    kick: { clip: [Kick, Melee_Knee], windup: 0.18, active: 0.14, recovery: 0.3, damage: 6, reach: 0.9, radius: 0.6, knockback: 6.0, poise: 20, stamina: 10 }

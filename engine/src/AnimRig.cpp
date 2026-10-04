@@ -527,6 +527,16 @@ std::string canonicalBoneName(const std::string& name) {
     if (n.rfind("finger_", 0) == 0) n = "middle_" + n.substr(7); // Synty's merged fingers
     replace("_leaf", "");                       // UAL end markers
     if (n == "hips") n = "pelvis";
+    // Synty's older rig (Goblin War Camp, Vikings, Knights): the upper arm
+    // is "Shoulder" under its own "Clavicle", the leg UpperLeg / LowerLeg /
+    // Ankle, the neck a single "Neck".
+    static const std::pair<const char*, const char*> kOlderSynty[] = {
+        { "shoulder_l", "upperarm_l" }, { "shoulder_r", "upperarm_r" }, { "elbow_l", "lowerarm_l" }, { "elbow_r", "lowerarm_r" },
+        { "upperleg_l", "thigh_l" },    { "upperleg_r", "thigh_r" },    { "lowerleg_l", "calf_l" },   { "lowerleg_r", "calf_r" },
+        { "ankle_l", "foot_l" },        { "ankle_r", "foot_r" },        { "neck", "neck_01" },
+    };
+    for (const auto& [from, to] : kOlderSynty)
+        if (n == from) return to;
     return n;
 }
 
