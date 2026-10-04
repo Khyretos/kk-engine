@@ -1,6 +1,6 @@
 # Pet Companion (games/pet_companion/README.md): command a dog with the
 # engine's orders (docs/COMMANDS.md).
-kke_add_game(pet_companion main.cpp PetModule.cpp)
+kke_add_game(pet_companion main.cpp PetModule.cpp DogBody.cpp Care.cpp Agility.cpp)
 target_link_libraries(pet_companion PRIVATE kke_command_kit)
 target_compile_definitions(pet_companion PRIVATE
     GAME_SCRIPTS_SOURCE="${CMAKE_CURRENT_SOURCE_DIR}/scripts"

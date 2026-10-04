@@ -32,6 +32,8 @@ public:
     // a gesture; the rest is plain text.
     struct Button { std::string icon, label, key; bool on = false; };
     struct WheelItem { std::string icon, label; };
+    // A bar under the status lines (a pet's food, water, energy): `value` 0..1.
+    struct Meter { std::string icon, label; float value = 0.0f; std::string color = "#6fe39a"; };
 
     explicit CommandHud(kke::Application& app);
     ~CommandHud();
@@ -41,6 +43,7 @@ public:
     void setButtons(std::vector<Button> buttons);
     void setWheel(std::vector<WheelItem> items);
     void setLines(std::vector<Line> lines);
+    void setMeters(const std::vector<Meter>& meters);
     void setHint(const std::string& hint);
     void toast(const std::string& text, float seconds = 2.0f);
     void update(const CommandInput::Frame& in, float dt);
@@ -50,6 +53,7 @@ public:
     struct Item { std::string icon, label, left = "0px", top = "0px"; bool picked = false; };
     struct ButtonView { std::string icon, label, key; bool on = false; };
     struct LineView { std::string text, color = "#e8ecf4"; };
+    struct MeterView { std::string icon, label, width = "0%", color = "#6fe39a"; };
 
 private:
     std::string prompts(const std::string& text) const; // prompt text -> RML
@@ -63,6 +67,7 @@ private:
     std::string m_boxLeft = "0px", m_boxTop = "0px", m_boxWidth = "0px", m_boxHeight = "0px", m_wheelLeft = "0px", m_wheelTop = "0px";
     std::vector<ButtonView> m_buttons;
     std::vector<LineView> m_lines;
+    std::vector<MeterView> m_meters;
     std::vector<Item> m_items;
     std::vector<WheelItem> m_wheel;
     bool m_reticle = false, m_box = false, m_wheelOpen = false;

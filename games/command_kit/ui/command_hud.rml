@@ -9,6 +9,11 @@
                   background-color: #0b0f1ccc; border-left: 3dp #ffcf5c; }
         #status .title { font-size: 13dp; letter-spacing: 2dp; color: #aab3cc; margin-bottom: 4dp; }
         #status .line { font-size: 15dp; margin-top: 3dp; }
+        #status .meter { display: block; margin-top: 5dp; height: 18dp; }
+        #status .meter .micon { display: inline-block; width: 22dp; font-size: 14dp; }
+        #status .meter .mlabel { display: inline-block; width: 78dp; font-size: 13dp; color: #aab3cc; }
+        #status .meter .mbar { display: inline-block; width: 180dp; height: 10dp; border-radius: 5dp; background-color: #ffffff22; }
+        #status .meter .mfill { display: block; height: 10dp; border-radius: 5dp; }
         /* The buttons and the line of controls stack at the bottom, so a
            long line wraps upward instead of running under the buttons. */
         #bottom { position: absolute; left: 0; bottom: 8dp; width: 100%; }
@@ -50,6 +55,10 @@
     <div id="status">
         <div class="title">{{title}}</div>
         <div class="line" data-for="l : lines" data-style-color="l.color">{{l.text}}</div>
+        <div class="meter" data-for="m : meters">
+            <span class="micon">{{m.icon}}</span><span class="mlabel">{{m.label}}</span>
+            <div class="mbar"><div class="mfill" data-style-width="m.width" data-style-background-color="m.color"></div></div>
+        </div>
     </div>
     <div id="reticle" data-if="reticle"></div>
     <div id="box" data-if="box" data-style-left="box_left" data-style-top="box_top" data-style-width="box_width" data-style-height="box_height"></div>
