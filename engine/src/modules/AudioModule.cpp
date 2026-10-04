@@ -80,7 +80,10 @@ AudioModule::AudioModule() : AudioModule(Settings{}) {}
 AudioModule::AudioModule(const Settings& s) : settings(s) {}
 AudioModule::~AudioModule() {
     // Only the device, if shutdown() never ran: nothing else (logging) is safe this late.
-    if (m_device && m_deviceRunning) ma_device_uninit(&m_device->device);
+    if (m_device && m_deviceRunning) {
+        ma_device_stop(&m_device->device); // see shutdown()
+        ma_device_uninit(&m_device->device);
+    }
 }
 
 void AudioModule::applyVolumes(AudioMixer& mixer, const EngineSettings::Audio& volumes, bool focused) {
@@ -727,7 +730,16 @@ void AudioModule::shutdown() {
                                m_impactsPlayed, m_impactsSkipped, m_breaksPlayed, m_footsteps, m_mixer->droppedCount(), m_mixer->stolenCount(),
                                m_room.rt60, m_room.wet);
     if (m_device) {
-        if (m_deviceRunning) ma_device_uninit(&m_device->device);
+        if (m_deviceRunning) {
+            // Stopped first: ma_device_uninit() alone doesn't wake
+            // PulseAudio's worker thread, which waits in the backend's own
+            // loop for the stream's next event. When none comes (soucouyant,
+            // PipeWire with an echo-cancel sink as the output), uninit
+            // waited for it forever and quitting hung until the watchdog
+            // ended the process 8 s later. Stopping wakes the loop.
+            ma_device_stop(&m_device->device);
+            ma_device_uninit(&m_device->device);
+        }
         m_device.reset();
         m_deviceRunning = false;
     }
