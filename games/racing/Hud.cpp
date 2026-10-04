@@ -107,6 +107,10 @@ void RacingModule::buildHud() {
     c.Bind("racing", &m_hud.racing);
     c.Bind("howto", &m_hud.howto);
     c.Bind("drag", &m_hud.drag);
+    c.Bind("setup", &m_hud.setup);
+    c.Bind("setup_sub", &m_hud.setupSub);
+    c.Bind("setup_meter", &m_hud.setupMeter);
+    c.Bind("setup_bar", &m_hud.setupBar);
     m_hudModel = c.GetModelHandle();
 
     const char* base = SDL_GetBasePath();
@@ -144,6 +148,12 @@ void RacingModule::updateHud(float) {
     flag(m_hud.drag, ev == Event::Drag, "drag");
     set(m_hud.notice, m_garage->hasPack() ? std::string() : "POLYGON Street Racer pack not found: block cars and a bare track (assets/synty or KKE_ASSETS_DIR)",
         "notice");
+
+    // Setting up a wheel or a stick (Controllers.cpp).
+    set(m_hud.setup, m_wheelPrompt, "setup");
+    set(m_hud.setupSub, m_wheelStep >= 0 || !m_wheelPrompt.empty() ? m_wheelSub : std::string(), "setup_sub");
+    set(m_hud.setupMeter, fmt::format("{:.0f}%", m_wheelMeter * 100.0f), "setup_meter");
+    flag(m_hud.setupBar, m_wheelStep >= 0, "setup_bar");
 
     // A panel per player, in the corners of their view.
     std::vector<const Car*> players;
@@ -330,7 +340,10 @@ void RacingModule::updateHud(float) {
     } else if (ev == Event::Drift) {
         hint = prompt("{steer} steer  ·  {throttle} gas  ·  {handbrake} handbrake to start a slide  ·  {camera} camera  ·  {help} how to play");
     } else {
-        hint = prompt("{steer} steer  ·  {throttle} gas  ·  {brake} brake  ·  {look.back} look back  ·  {reset.car} back on track  ·  {help} how to play");
+        // The mouse looks round with its right button; a pad or a stick's hat on its own.
+        const bool keys = m_input->promptStyle(p1) == kke::PromptStyle::Keyboard;
+        hint = prompt(std::string("{steer} steer  ·  {throttle} gas  ·  {brake} brake  ·  {camera} camera  ·  ") + (keys ? "{look.free}" : "{look}") +
+                      " look round  ·  {reset.car} back on track  ·  {help} how to play");
     }
     set(m_hud.hint, hint, "hint");
 }
