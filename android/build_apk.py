@@ -34,7 +34,7 @@ REPO = Path(__file__).resolve().parent.parent
 HERE = Path(__file__).resolve().parent
 MIN_SDK = 28  # Android 9: the engine's Vulkan and API floor (CMakePresets.json)
 TARGET_SDK = 35
-ABI = "arm64-v8a"
+ABIS = ("arm64-v8a", "x86_64")  # phones; the emulator on a PC (docs/VM_TESTS.md)
 
 
 def die(msg):
@@ -178,11 +178,16 @@ def main():
 
     build = Path(args.build).resolve()
     bin_dir = build / "bin"
-    lib_dir = build / "android-libs" / ABI
     if not (bin_dir / "shaders").is_dir():
         die(f"{bin_dir} has no shaders/ folder: build the android-arm64 preset first")
-    if not lib_dir.is_dir():
-        die(f"{lib_dir} does not exist: build the android-arm64 preset first")
+    # The ABI is the one the build folder was made for (android-arm64 or
+    # android-x86_64 preset); an APK holds one.
+    found = [a for a in ABIS if (build / "android-libs" / a).is_dir()]
+    if len(found) != 1:
+        die(f"{build / 'android-libs'} should hold exactly one of {', '.join(ABIS)}; found {', '.join(found) or 'none'}: "
+            "build the android-arm64 (or android-x86_64) preset first")
+    abi = found[0]
+    lib_dir = build / "android-libs" / abi
 
     sdk = Path(os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT") or "")
     ndk = Path(os.environ.get("ANDROID_NDK_HOME") or "")
@@ -329,7 +334,7 @@ def main():
         for lib in libs:
             stripped = work / "lib" / lib.name
             run([strip, "--strip-unneeded", "-o", stripped, lib])
-            apk.write(stripped, f"lib/{ABI}/{lib.name}")
+            apk.write(stripped, f"lib/{abi}/{lib.name}")
     aligned = work / "aligned.apk"
     run([tools / "zipalign", "-P", "16", "-f", "4", unsigned, aligned])
 
@@ -353,7 +358,7 @@ def main():
          "--key-pass", "env:KKE_KS_PASS", "--out", out, aligned], env=env)
     run([tools / "apksigner", "verify", out])
     size = out.stat().st_size / (1024 * 1024)
-    print(f"built {out} ({size:.1f} MB): {label} [{package} {version_name} ({version_code})], {len(games)} game(s): {', '.join(games)}")
+    print(f"built {out} ({size:.1f} MB): {label} [{package} {version_name} ({version_code})], {abi}, {len(games)} game(s): {', '.join(games)}")
 
 
 if __name__ == "__main__":

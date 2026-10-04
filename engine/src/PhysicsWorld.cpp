@@ -46,4 +46,11 @@ glm::vec3 blastVelocity(const glm::vec3& center, float radius, float speed, cons
     return dir * speed * (1.0f - dist / radius);
 }
 
+glm::vec3 blastedVelocity(const glm::vec3& velocity, const glm::vec3& dv) {
+    const float push = glm::length(dv);
+    if (push <= 0.0f) return velocity;
+    const glm::vec3 dir = dv / push;
+    return velocity + dir * std::max(0.0f, push - glm::dot(velocity, dir));
+}
+
 } // namespace kke

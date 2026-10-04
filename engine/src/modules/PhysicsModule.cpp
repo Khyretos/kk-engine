@@ -1060,10 +1060,15 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshInternal(const TetMeshDat
     obj->numVerts = numVerts;
     obj->numTets = numTets;
 
+    // The rest shape stays in the mesh's own space; FmInitVertState moves
+    // it to `position`. FEMFX builds each tet's shape (FmComputeShapeParams:
+    // the inverse of [[1 1 1 1], [x], [y], [z]]) from the rest positions,
+    // and with those far out (x and z both past ~100 m) the float inverse
+    // goes bad: a standing pane at (152, -154) took off by itself.
     obj->restPositions.resize(numVerts);
     for (uint32_t i = 0; i < numVerts; ++i) {
         const glm::vec3& v = mesh.vertices[i];
-        obj->restPositions[i] = AMD::FmInitVector3(position.x + v.x, position.y + v.y, position.z + v.z);
+        obj->restPositions[i] = AMD::FmInitVector3(v.x, v.y, v.z);
     }
 
     obj->tetVertIds.resize(numTets);
@@ -1156,7 +1161,7 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshInternal(const TetMeshDat
         AMD::FmInitVector3(1.0f, 0.0f, 0.0f),
         AMD::FmInitVector3(0.0f, 1.0f, 0.0f),
         AMD::FmInitVector3(0.0f, 0.0f, 1.0f));
-    AMD::FmInitVertState(obj->tetMesh, obj->restPositions.data(), identity, AMD::FmInitVector3(0.0f), 1.0f,
+    AMD::FmInitVertState(obj->tetMesh, obj->restPositions.data(), identity, AMD::FmInitVector3(position.x, position.y, position.z), 1.0f,
                           AMD::FmInitVector3(initialVelocity.x, initialVelocity.y, initialVelocity.z));
 
     AMD::FmTetMaterialParams femfxMaterial = toFemfx(material);

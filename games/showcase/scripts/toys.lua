@@ -2,13 +2,14 @@
 -- Edit and save this file while the demo runs: it reloads by itself, and
 -- the towers and balls it made are replaced, not duplicated.
 --
---   G  build a tower of metal crates in front of you
+--   H  build a tower of metal crates in front of you
 --   B  throw a rubber ball where you're looking
 --   N  clear everything this script made (or hold B a second)
--- On a controller: RB tower, View ball, hold View a second to clear.
+-- On a controller the spawn menu (RB) has towers and balls too; this
+-- script is the Lua way of doing the same.
 
-input.define("toys.tower", "Build a crate tower", "G", "rb")
-input.define("toys.ball", "Throw a ball (hold: clear)", "B", "back")
+input.define("toys.tower", "Build a crate tower", "H")
+input.define("toys.ball", "Throw a ball (hold: clear)", "B")
 input.define("toys.clear", "Clear toys", "N")
 
 local M = audio and audio.materials() or {}
@@ -86,4 +87,4 @@ hook.Add("Contact", "toys.count", function(c)
   end
 end)
 
-print("toys.lua loaded: G tower, B ball, N clear (controller: RB, View, hold View)")
+print("toys.lua loaded: H tower, B ball, N clear")

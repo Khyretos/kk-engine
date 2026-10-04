@@ -21,5 +21,11 @@ IPhysicsWorld::Stats physicsStats(const std::vector<IPhysicsWorld*>& worlds);
 // The velocity change a blast gives something at `point` (0 outside the
 // radius; straight up at the very centre).
 glm::vec3 blastVelocity(const glm::vec3& center, float radius, float speed, const glm::vec3& point);
+// What a blast does to something already moving at `velocity`: it is
+// brought up to the blast's speed (`dv`) along the blast's direction, and
+// no faster. Blasts don't stack: a crate between five barrels going up
+// one after another flies as fast as the strongest push, not five times
+// it (on soucouyant it flew 32 or 63 m depending on the order).
+glm::vec3 blastedVelocity(const glm::vec3& velocity, const glm::vec3& dv);
 
 } // namespace kke

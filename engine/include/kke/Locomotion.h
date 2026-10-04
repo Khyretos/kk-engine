@@ -47,6 +47,13 @@ namespace kke {
 //    wall and nothing to climb onto, it leaps up to an edge above. The
 //    target is found and checked before the leap; the body follows an arc
 //    (PointDown's ledge-leap parabola) and hangs on arrival.
+//  - Wall climb: running into a wall too tall to climb straight (its top
+//    up to wallClimbMaxHeight) and pressing "go up" runs up it, two steps
+//    on the wall, and catches the top: a hang (a Leap whose path rises
+//    and slows instead of arcing; wallClimbing() tells the animation).
+//  - Hang vault: hanging from a wall too thin to stand on, "go up" pulls
+//    up and vaults over it, down to the floor on the far side (a Vault;
+//    hangVaulting() tells the animation).
 //  - Wall run: jumping fast alongside a wall, holding the run, runs along
 //    it for a moment (lighter gravity, a little rise at the start). "Go
 //    up" kicks off it (wall jump; the next wall can catch you again),
@@ -119,6 +126,14 @@ public:
         float leapUp = 1.3f, leapDown = 1.0f; // how much higher / lower that edge may be
         float leapOvershoot = 0.3f;   // the arc's peak above the higher end
         float leapTime = 0.45f;
+        // Wall climb (run up a wall to its top, then hang).
+        float wallClimbMinSpeed = 2.5f;  // m/s running into the wall
+        float wallClimbMaxHeight = 4.3f; // highest top above the feet
+        float wallClimbReach = 1.2f;     // wall this far past the capsule
+        float wallClimbTime = 0.6f;
+        // Hang vault (over a thin wall from a hang).
+        float hangVaultTime = 1.0f;
+        float hangVaultMaxDrop = 4.0f;   // floor on the far side, below the top
         // Wall run.
         float wallRunMinSpeed = 4.0f; // horizontal m/s to start one
         float wallRunReach = 0.45f;   // wall this far past the capsule's side
@@ -177,6 +192,12 @@ public:
     glm::vec3 hangEdge() const { return m_hangEdge; }
     // Wall running: which side the wall is on (+1 right, -1 left), else 0.
     float wallRunSide() const { return m_state == State::WallRun ? m_wallSide : 0.0f; }
+    // Running up a wall to its top (a Leap from the ground).
+    bool wallClimbing() const { return m_state == State::Leap && m_wallClimb; }
+    // Over a thin wall from a hang (a Vault): pulling up until
+    // hangVaultSplit of the way, then over and down.
+    bool hangVaulting() const { return m_state == State::Vault && m_hangVault; }
+    static constexpr float hangVaultSplit = 0.45f;
 
     // Area awareness, one direction, with a given sensor (public for tests
     // and debug drawing).
@@ -207,6 +228,9 @@ private:
     bool findLeap(const glm::vec3& side, glm::vec3& outFeet, glm::vec3& outEdge, glm::vec3& outNormal) const;
     bool tryLeap(const glm::vec3& side);
     void updateLeap();
+    // Wall climb from the ground; hang vault from a hang.
+    bool tryWallClimb(const Input& in);
+    bool tryHangVault();
     // Wall run.
     bool tryWallRun(const Input& in);
     void updateWallRun(const Input& in, float dt);
@@ -265,6 +289,8 @@ private:
 
     // Ledge leap in flight (m_start -> m_hangFeet, then hang from m_hangEdge).
     glm::vec3 m_leapNormal{0.0f};
+    bool m_wallClimb = false; // this leap runs up a wall from the ground
+    bool m_hangVault = false; // this vault starts from a hang
 
     // Wall run.
     glm::vec3 m_wallNormal{0.0f}, m_wallAlong{0.0f}, m_lastWall{0.0f};

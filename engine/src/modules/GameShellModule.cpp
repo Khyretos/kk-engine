@@ -1140,7 +1140,7 @@ void GameShellModule::onEvent(const SDL_Event& e) {
         const bool inLobby = m_lobby && m_lobby->isOpen();
         bool open = false;
         if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN)
-            open = e.gbutton.button == SDL_GAMEPAD_BUTTON_BACK ||
+            open = (e.gbutton.button == SDL_GAMEPAD_BUTTON_BACK && !(selectIsTheGames && selectIsTheGames())) ||
                    (e.gbutton.button == SDL_GAMEPAD_BUTTON_START && !inLobby && !(startIsTheGames && startIsTheGames()));
         else if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat)
             open = e.key.key == SDLK_ESCAPE && !inLobby;

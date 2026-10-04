@@ -89,6 +89,23 @@
         "KKE_ENABLE_VALIDATION": "OFF",
         "KKE_ENABLE_TESTS": "OFF"
       }
+    },
+    {
+      "name": "android-x86_64",
+      "displayName": "Hardware: Android emulator (x86_64)",
+      "description": "Every game as an x86_64 library for the Android emulator on a PC (docs/VM_TESTS.md): the same settings as android-arm64, only the ABI differs, so the emulator runs the games without ARM translation. Not for phones.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-android-x86_64",
+      "toolchainFile": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ANDROID_ABI": "x86_64",
+        "ANDROID_PLATFORM": "android-28",
+        "ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES": "ON",
+        "KKE_ENABLE_FEMFX": "OFF",
+        "KKE_ENABLE_VALIDATION": "OFF",
+        "KKE_ENABLE_TESTS": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -119,6 +136,10 @@
     {
       "name": "android-arm64",
       "configurePreset": "android-arm64"
+    },
+    {
+      "name": "android-x86_64",
+      "configurePreset": "android-x86_64"
     }
   ],
   "workflowPresets": [
@@ -210,6 +231,19 @@
         {
           "type": "build",
           "name": "android-arm64"
+        }
+      ]
+    },
+    {
+      "name": "android-x86_64",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "android-x86_64"
+        },
+        {
+          "type": "build",
+          "name": "android-x86_64"
         }
       ]
     }

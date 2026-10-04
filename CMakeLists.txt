@@ -595,6 +595,15 @@ if(KKE_ENABLE_NET AND KKE_ENABLE_VOICE)
     set(OPUS_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
     set(OPUS_INSTALL_PKG_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
     set(OPUS_INSTALL_CMAKE_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+    if(ANDROID)
+        # x86_64 Android (the emulator build, docs/VM_TESTS.md): opus's AVX2
+        # noise-shaping kernel (silk/x86/NSQ_del_dec_avx2.c) casts int16 and
+        # int32 pointers to __m128i* for unaligned loads, which NDK clang
+        # reports under the -Wcast-align opus enables itself (GCC only does on
+        # strict-alignment CPUs). Opus then uses its SSE4.1 kernel instead;
+        # phones (arm64) have neither, so nothing they run changes.
+        set(OPUS_X86_MAY_HAVE_AVX2 OFF CACHE BOOL "" FORCE)
+    endif()
     FetchContent_Declare(
         opus
         GIT_REPOSITORY https://github.com/xiph/opus.git

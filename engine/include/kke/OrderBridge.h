@@ -18,7 +18,7 @@ namespace kke {
 //
 //   Move, Regroup   MoveTo the unit's formation slot; done on arrival (it then holds there)
 //   Follow          Follow the target at followDistance
-//   Stay            Hold the spot (still defends it)
+//   Stay            Hold the spot (still defends it); runs to a spot farther than stayRunBeyond
 //   Sit             Hold where it is; the game shows it sitting
 //   Attack, Focus   Attack the target; the game ends it with OrderBoard::targetGone
 //   Fetch           Interact with the thing; pickUp; Interact with the issuer; deliver; done
@@ -43,6 +43,7 @@ public:
 
     float followDistance = 2.0f;
     float runBeyond = 8.0f;       // Move, Regroup, Pet: run when it is farther than this
+    float stayRunBeyond = 3.0f;   // Stay at a point (taking cover): run when it is farther than this
     float fetchReach = 0.5f;      // Interact distance for the thing to fetch
 
     // Every frame after AiWorld::update, with the events it gave (the game

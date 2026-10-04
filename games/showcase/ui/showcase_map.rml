@@ -1,0 +1,51 @@
+<rml>
+<head>
+    <title>World map</title>
+    <link type="text/rcss" href="theme.rcss"/>
+    <style>
+        /* The world from above, north (-Z) up, 0.42 dp a metre (World.cpp: onMap); the zones to the right. */
+        body { pointer-events: none; }
+        #map { position: absolute; left: 50%; top: 50%; width: 780dp; margin-left: -390dp; height: 500dp; margin-top: -260dp;
+               padding: 16dp 18dp; border-radius: 12dp; pointer-events: auto; animation: 0.18s cubic-out pop; }
+        #map .title { font-size: 13dp; letter-spacing: 3dp; color: #ffcf5c; margin-bottom: 10dp; }
+        #map .title .close { float: right; color: #8b93aa; cursor: pointer; letter-spacing: 0dp; }
+        #land { position: relative; float: left; width: 420dp; height: 420dp; background-color: #3f5f33; border: 1dp #2a3a24; border-radius: 6dp; overflow: hidden; }
+        #land .road { position: absolute; height: 3dp; margin-top: -1dp; background-color: #2b2b2e; transform-origin: 0% 50%; }
+        #land .zone { position: absolute; border-width: 2dp; }
+        #land .label { position: absolute; width: 120dp; text-align: center; font-size: 11dp; color: #ffffff; }
+        /* The yard: 60 m square round (0, 0), which is at (168, 210) dp. */
+        #land .yard { position: absolute; left: 155dp; top: 197dp; width: 25dp; height: 25dp; background-color: #8a8270; border: 1dp #d9c58f; }
+        /* You: a dot with a nose the way you face. */
+        #land .me { position: absolute; width: 16dp; height: 16dp; }
+        #land .me .dot { position: absolute; left: 3dp; top: 3dp; width: 10dp; height: 10dp; border-radius: 5dp; background-color: #ffcf5c; border: 1dp #000000; }
+        #land .me .nose { position: absolute; left: 6dp; top: -5dp; width: 4dp; height: 8dp; background-color: #ffcf5c; border: 1dp #000000; }
+        #list { float: left; margin-left: 18dp; width: 300dp; }
+        #list .row { padding: 6dp 10dp; border-left: 3dp #00000000; cursor: pointer; }
+        #list .row .name { font-size: 15dp; color: #e8ecf4; }
+        #list .row .text { font-size: 12dp; color: #8b93aa; }
+        #list .row.sel { background-color: #34427acc; border-left-color: #ffcf5c; }
+        #list .row.sel .text { color: #c8d0e6; }
+        #keys { clear: both; padding-top: 10dp; font-size: 12dp; color: #8b93aa; }
+        @keyframes pop { from { transform: scale(0.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    </style>
+</head>
+<body data-model="worldmap">
+    <div id="map" class="glass" data-if="open">
+        <div class="title">WORLD MAP<span class="close" data-event-click="close()">close</span></div>
+        <div id="land">
+            <div data-for="r : roads" class="road" data-attr-style="r.style"></div>
+            <div class="yard"></div>
+            <div data-for="z, i : zones" class="zone" data-if="i > 0" data-attr-style="z.dot"></div>
+            <div data-for="z, i : zones" class="label" data-if="i > 0" data-attr-style="z.label">{{z.name}}</div>
+            <div class="me" data-attr-style="me"><div class="nose"></div><div class="dot"></div></div>
+        </div>
+        <div id="list">
+            <div data-for="z, i : zones" class="row" data-class-sel="z.sel" data-event-click="go(i)" data-event-mouseover="hover(i)">
+                <div class="name">{{z.name}}</div>
+                <div class="text">{{z.text}}</div>
+            </div>
+        </div>
+        <div id="keys" data-rml="keys"></div>
+    </div>
+</body>
+</rml>

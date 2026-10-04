@@ -106,6 +106,7 @@ DuelModule::Intent SparringBot::think(const kke::ai::AiWorld& ai, kke::ai::Agent
         const bool open = foe.state() == S::Recovery || foe.state() == S::Stunned;
         if (m_foeBlocks >= 2 && foe.blocking()) in.kick = true;
         else if (foe.poise() < foe.stats().maxPoise * 0.45f || (open && foe.state() == S::Stunned && roll() < 0.5f)) in.heavy = true;
+        else if (distance > 1.25f && roll() < 0.3f) in.kick = true; // at the edge of reach: a kick reaches further than a punch
         else in.light = true;
         m_cooldown = 0.2f + roll() * (1.0f - m_skill.aggression);
     }
