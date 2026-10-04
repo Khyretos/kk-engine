@@ -120,6 +120,10 @@ private:
         kke::ModelModule::InstanceId model = 0;
         std::unique_ptr<kke::Animator> anim;
         float armWeight = 0.0f, legWeight = 0.0f, footWeight = 0.0f;
+        // Its own feet on the ground: FootPlacer smooths frame to frame, so
+        // one shared by every climber carried one's jump (feet reaching for
+        // the ground far below) into the next one's hips and legs.
+        kke::FootPlacer feet;
         float grip[2] = {};         // fingers closed on a hold (0 open .. 1 closed)
         float handAim[2] = {};      // hand turned to its hold (0 = as animated)
         kke::BodyAvoidState avoid[2]; // each arm's way round the body, frame to frame
@@ -388,7 +392,7 @@ private:
     float m_modelYaw = 0.0f;
     kke::TwoBoneChain m_arm[2], m_leg[2];
     kke::HumanArm m_human[2]; // the arms with a person's joint ranges (kke::solveHumanArm)
-    kke::FootPlacer m_feet;
+    kke::FootPlacer m_feet; // set up for the mannequin; each Racer climbs on a copy (Racer::feet)
     int m_pelvis = -1;
     // Each hand as it is in the rest pose: which way the fingers point and
     // which way the thumb side faces (model space), to turn it onto a hold;

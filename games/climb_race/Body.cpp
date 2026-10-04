@@ -225,6 +225,7 @@ void ClimbRaceModule::setupBody(Racer& r) {
     r.dressedAs.clear();
     dress(r);
     r.anim = std::make_unique<kke::Animator>(*m_animSet);
+    r.feet = m_feet; // its own: nobody else's steps move its hips
     kke::Animator& a = *r.anim;
     const kke::AnimationSet& s = *m_animSet;
     auto pick = [&](std::initializer_list<const char*> names) {
@@ -393,7 +394,7 @@ void ClimbRaceModule::animateBody(Racer& r, float dt) {
         normal = glm::normalize(glm::mat3(inv) * h.normal);
         return true;
     };
-    if (m_feet.valid() && r.footWeight > 0.01f) m_feet.apply(m_rigData, pose, kke::FootPlacer::SurfaceQuery(groundQuery), dt, r.footWeight);
+    if (r.feet.valid() && r.footWeight > 0.01f) r.feet.apply(m_rigData, pose, kke::FootPlacer::SurfaceQuery(groundQuery), dt, r.footWeight);
 
     // On the rock: hands on their holds (or on their way), feet on theirs.
     const float mantle = b.mantle ? b.mantleProgress : 0.0f;

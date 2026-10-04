@@ -135,6 +135,9 @@ ArmPoints humanArmPoints(const std::vector<glm::mat4>& world, const HumanArm& ar
 // highest of them counts: a foot half over a step stands on the step, not
 // in it. A planted foot never goes into the ground while the smoothing
 // catches up; only a foot still in the air above it eases in.
+// One per character: the smoothing is state, so a FootPlacer shared by
+// several characters carries one's steps into the next one's legs (in
+// a race, another player's jump moved your hips). Copy a set-up one.
 class FootPlacer {
 public:
     // model-space point -> the ground below it (model space). False = none.

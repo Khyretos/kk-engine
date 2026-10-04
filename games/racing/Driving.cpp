@@ -456,7 +456,18 @@ void RacingModule::updateRemoteCar(Car& c, float dt) {
         // their speed in between.
         if (c.netId < 0) c.net.position += c.net.velocity * dt;
         const glm::quat now = glm::quat_cast(glm::mat3(c.xf));
-        w.moveKinematic(c.body, c.net.position, glm::normalize(glm::slerp(now, glm::normalize(c.net.rotation), 0.5f)), dt);
+        // Put back on the track, or a new race: it jumps there. Swept there
+        // in one step instead, the solid copy would cross the gap at
+        // hundreds of m/s and knock any car on the way flying (a crash
+        // nobody drove into). A step's normal travel, plus slack for a
+        // late message, is a drive.
+        const float drive = std::max(5.0f, glm::length(c.net.velocity) * 0.5f);
+        if (glm::length(c.net.position - glm::vec3(c.xf[3])) > drive) {
+            w.setTransform(c.body, c.net.position, glm::normalize(c.net.rotation));
+            c.prevXf = c.xf = w.transform(c.body); // drawn there now, no streak across the gap
+        } else {
+            w.moveKinematic(c.body, c.net.position, glm::normalize(glm::slerp(now, glm::normalize(c.net.rotation), 0.5f)), dt);
+        }
     }
     c.where = m_track->locate(carPosition(c), c.where.sample);
     c.progress = c.hasNet ? c.net.progress : 0.0f;
