@@ -1,13 +1,17 @@
-# Forgejo port of .github/workflows/ci.yml, run by git.kreative-kompas.com
-# (which mirrors this repo) on the Kompas server runner, so build times can
-# be compared with GitHub's. GitHub ignores the .forgejo folder, and Forgejo
-# ignores .github/workflows while this folder exists.
+# Forgejo port of .github/workflows/ci.yml, run by git.kreative-kompas.com.
+# GitHub ignores the .forgejo folder, and Forgejo ignores .github/workflows
+# while this folder exists.
 #
 # Differences from the GitHub version:
-# - Runs nightly on main and by hand; pull requests and per-push checks
-#   live on GitHub.
+# - Runs nightly on main and by hand.
+# - Every job runs on soucouyant (never on kireserver) inside the CI
+#   toolchain image built from docker/ci.Dockerfile, which already has the
+#   compilers, Vulkan, Xvfb, lcov and the Android SDK with NDK r28c, so no job
+#   installs packages. Changing the toolchain = edit that file, push a new
+#   image tag, then bump the `image:` lines here and in release.yml.
+# - KKE_JOBS caps parallel compiles: soucouyant has 32 GB of RAM and also
+#   runs other repositories' CI and ComfyUI.
 # - Artifact actions are Forgejo's own v4 ports.
-# - The Android SDK is installed by the job (the runner image lacks it).
 name: CI
 
 # Runs on every push and pull request — see docs/HISTORY.md "Test suite &
@@ -34,6 +38,9 @@ on:
 # minutes, and cancelling left main with no finished CI run for hours.
 # GitHub keeps one run going plus the newest waiting one, so main still
 # only builds its latest commit next. Pull requests cancel as before.
+env:
+  KKE_JOBS: "8"
+
 concurrency:
   group: ci-${{ github.ref }}
   # One runner builds one job at a time here, so only the newest commit
@@ -45,7 +52,9 @@ jobs:
   # with its licence, in docs/DEPENDENCIES.md: this fails when one is added
   # without its row.
   dependencies:
-    runs-on: ubuntu-24.04
+    runs-on: soucouyant
+    container:
+      image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
       - uses: actions/checkout@v4
       - name: Every dependency is in docs/DEPENDENCIES.md
@@ -55,7 +64,9 @@ jobs:
   # still pulls many headers in through others; GCC 15/16 (Arch, Fedora)
   # don't, so a missing #include <algorithm> builds here and fails there.
   std-includes:
-    runs-on: ubuntu-24.04
+    runs-on: soucouyant
+    container:
+      image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
       - uses: actions/checkout@v4
       - name: Every standard name has its header included
@@ -66,50 +77,27 @@ jobs:
   # warnings and its tests passing (DevTools.* checks the debug switches
   # really are ignored).
   shipping-build:
-    runs-on: ubuntu-24.04
+    runs-on: soucouyant
+    container:
+      image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq \
-            cmake ninja-build \
-            libvulkan-dev glslang-tools spirv-tools \
-            libfreetype-dev libudev-dev libdbus-1-dev \
-            libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
-            libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev \
-            pkg-config libgl1-mesa-dev libegl1-mesa-dev \
-            libasound2-dev libdecor-0-dev libexpat1-dev libxml2-dev
 
       - name: Configure (shipping)
         run: cmake -B build-ship -G Ninja -DCMAKE_BUILD_TYPE=Release -DKKE_SHIPPING=ON -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_VALIDATION=OFF -DKKE_ENABLE_BENCHMARKS=OFF
 
       - name: Build (shipping)
-        run: cmake --build build-ship -j --target kke_tests starter_game sandbox kke_seal
+        run: cmake --build build-ship -j "$KKE_JOBS" --target kke_tests starter_game sandbox kke_seal
 
       - name: Run unit tests (shipping)
         run: ./build-ship/bin/kke_tests
 
   build-test-and-coverage:
-    runs-on: ubuntu-24.04
+    runs-on: soucouyant
+    container:
+      image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq \
-            cmake ninja-build \
-            libvulkan-dev vulkan-tools mesa-vulkan-drivers vulkan-validationlayers \
-            glslang-tools spirv-tools \
-            libfreetype-dev libudev-dev libdbus-1-dev \
-            fonts-noto-core fonts-noto-color-emoji \
-            xvfb xdotool imagemagick lcov \
-            libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
-            libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev \
-            pkg-config libgl1-mesa-dev libegl1-mesa-dev \
-            libasound2-dev libdecor-0-dev libexpat1-dev libxml2-dev
 
       # --- Plain build: this is what a contributor/CI should catch first,
       # fast, before paying for a second coverage-instrumented build. ---
@@ -117,7 +105,7 @@ jobs:
         run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DKKE_WARNINGS_AS_ERRORS=ON
 
       - name: Build (plain)
-        run: cmake --build build -j
+        run: cmake --build build -j "$KKE_JOBS"
 
       - name: Run unit tests (plain)
         run: ./build/bin/kke_tests
@@ -193,7 +181,7 @@ jobs:
         run: cmake -B build-coverage -G Ninja -DCMAKE_BUILD_TYPE=Debug -DKKE_ENABLE_COVERAGE=ON
 
       - name: Build (coverage)
-        run: cmake --build build-coverage -j
+        run: cmake --build build-coverage -j "$KKE_JOBS"
 
       - name: Run unit tests (coverage)
         run: ./build-coverage/bin/kke_tests
@@ -243,20 +231,11 @@ jobs:
   # configure or build log, whoever's code it is in. The Release workflow
   # (release.yml) packages this same configuration.
   release-build:
-    runs-on: ubuntu-24.04
+    runs-on: soucouyant
+    container:
+      image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq \
-            cmake ninja-build glslang-tools spirv-tools \
-            libvulkan-dev libfreetype-dev libudev-dev libdbus-1-dev \
-            libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
-            libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev \
-            pkg-config libgl1-mesa-dev libegl1-mesa-dev \
-            libasound2-dev libdecor-0-dev libexpat1-dev libxml2-dev
 
       - name: Configure (Release, FEMFX)
         run: |
@@ -267,7 +246,7 @@ jobs:
       - name: Build (Release)
         run: |
           set -o pipefail
-          cmake --build build -j 2>&1 | tee build.log
+          cmake --build build -j "$KKE_JOBS" 2>&1 | tee build.log
 
       - name: No warnings anywhere
         run: tools/ci/check_warnings.sh configure.log build.log
@@ -279,41 +258,11 @@ jobs:
   # GCC in places) and packed into the demos APK, with zero warnings. The
   # APK is kept as a run artifact for trying on a phone (docs/ANDROID.md).
   android:
-    runs-on: ubuntu-24.04
+    runs-on: soucouyant
+    container:
+      image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
       - uses: actions/checkout@v4
-
-      # r28c: r27c's toolchain files ask for CMake < 3.10, which CMake 4
-      # warns about; r29's clang 21 can't compile the fmt inside spdlog 1.14.
-      # The runner image has no Android SDK or CMake (GitHub's does): install
-      # them, and the SDK command-line tools once, then keep them in the runner cache.
-      - name: Cache Android SDK
-        uses: actions/cache@v4
-        with:
-          path: ~/android-sdk
-          key: android-sdk-ndk28.2.13676358-api35
-      - name: Android command-line tools
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq openjdk-17-jdk-headless unzip cmake
-          export ANDROID_HOME="$HOME/android-sdk"
-          if [ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
-            curl -sSLo /tmp/clt.zip https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
-            mkdir -p "$ANDROID_HOME/cmdline-tools"
-            unzip -q /tmp/clt.zip -d "$ANDROID_HOME/cmdline-tools"
-            mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
-          fi
-          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
-
-      - name: Android NDK r28c and SDK packages
-        run: |
-          # `yes` dies of SIGPIPE once sdkmanager stops reading; that is fine.
-          (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358" "platforms;android-35" "build-tools;35.0.0" > /dev/null
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ninja-build python3-yaml
 
       - name: Configure (android-arm64)
         run: |
@@ -323,7 +272,7 @@ jobs:
       - name: Build (android-arm64)
         run: |
           set -o pipefail
-          cmake --build build-android-arm64 -j 2>&1 | tee build.log
+          cmake --build build-android-arm64 -j "$KKE_JOBS" 2>&1 | tee build.log
 
       - name: APK
         env:
