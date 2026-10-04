@@ -136,6 +136,22 @@ TEST(Ragdoll, MovingABodyMovesOnlyItsBonesAndChildren) {
     EXPECT_NEAR(glm::length(delta("Hand_R")), 0.0f, 1e-5f);
 }
 
+// Synty's older rig names the same bones differently (Goblin War Camp):
+// Hips, Shoulder_L, Elbow_L, UpperLeg_L, LowerLeg_L, Ankle_L, Neck.
+TEST(Ragdoll, OlderSyntyBoneNamesStillMakeARagdoll) {
+    kke::ModelData m = tPoseSkeleton();
+    const std::pair<const char*, const char*> renames[] = {
+        { "Pelvis", "Hips" },          { "neck_01", "Neck" },        { "UpperArm_L", "Shoulder_L" }, { "UpperArm_R", "Shoulder_R" },
+        { "lowerarm_l", "Elbow_L" },   { "lowerarm_r", "Elbow_R" },  { "Thigh_L", "UpperLeg_L" },    { "Thigh_R", "UpperLeg_R" },
+        { "calf_l", "LowerLeg_L" },    { "calf_r", "LowerLeg_R" },   { "Foot_L", "Ankle_L" },        { "Foot_R", "Ankle_R" },
+    };
+    for (const auto& [from, to] : renames) m.bones[static_cast<size_t>(m.findBone(from))].name = to;
+    std::string missing;
+    const kke::RagdollDesc d = kke::buildHumanoidRagdoll(m, worldOf(m), 70.0f, &missing);
+    EXPECT_EQ(missing, "");
+    EXPECT_EQ(d.bodies.size(), 11u);
+}
+
 TEST(Ragdoll, MissingBoneReportsWhich) {
     kke::ModelData m = tPoseSkeleton();
     m.bones[m.findBone("calf_r")].name = "shin_right";

@@ -37,6 +37,8 @@ TEST(KnownPacks, KeyIgnoresDownloadSuffixVersionCaseAndPunctuation) {
     // Numbers that are part of the name stay: UAL 1 and 2 are different packs.
     EXPECT_FALSE(kke::samePack("Universal Animation Library", "Universal Animation Library 2"));
     EXPECT_FALSE(kke::samePack("POLYGON_City", "POLYGON_City_Characters"));
+    EXPECT_TRUE(kke::samePack("POLYGON_Dungeon_Pack", "POLYGON_Dungeon")); // as the Dungeon Pack unzips
+    EXPECT_TRUE(kke::samePack("POLYGON_Pirate_Pack", "PolygonPirate"));
 }
 
 TEST(KnownPacks, EveryKnownPackHasAKindAFolderAndAUse) {

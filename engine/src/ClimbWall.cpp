@@ -67,6 +67,8 @@ glm::vec3 holdColor(ClimbHold::Kind k) {
     case ClimbHold::Kind::Crimp: return { 0.95f, 0.52f, 0.12f };
     case ClimbHold::Kind::Sloper: return { 0.18f, 0.45f, 0.95f };
     case ClimbHold::Kind::Edge: return { 0.55f, 0.5f, 0.45f };
+    // Foot chips: pale stone, plain to see but not a colour a hand looks for.
+    case ClimbHold::Kind::Foot: return { 0.74f, 0.68f, 0.58f };
     }
     return { 1.0f, 1.0f, 1.0f };
 }
@@ -106,6 +108,7 @@ float holdDepth(ClimbHold::Kind k, float size) {
     case ClimbHold::Kind::Crimp: return size * 0.55f;
     case ClimbHold::Kind::Sloper: return size * 0.5f;
     case ClimbHold::Kind::Edge: return 0.0f;
+    case ClimbHold::Kind::Foot: return size * 0.8f;
     }
     return size;
 }
@@ -116,6 +119,7 @@ float holdGrip(ClimbHold::Kind kind) {
     case ClimbHold::Kind::Crimp: return 0.6f;
     case ClimbHold::Kind::Sloper: return 0.45f;
     case ClimbHold::Kind::Edge: return 1.0f;
+    case ClimbHold::Kind::Foot: return 0.0f; // not for hands
     }
     return 1.0f;
 }
@@ -126,6 +130,7 @@ const char* holdKindName(ClimbHold::Kind kind) {
     case ClimbHold::Kind::Crimp: return "crimp";
     case ClimbHold::Kind::Sloper: return "sloper";
     case ClimbHold::Kind::Edge: return "edge";
+    case ClimbHold::Kind::Foot: return "foothold";
     }
     return "?";
 }
@@ -261,9 +266,11 @@ void ClimbWall::placeLedges() {
     }
 }
 
+// No hold inside a ledge's stone (from a hand's breadth under its
+// underside), nor right on top of it where the feet stand.
 bool ClimbWall::blockedByLedge(float x, float y) const {
     for (const ClimbLedge& l : m_ledges)
-        if (std::abs(x - l.center.x) < l.halfExtents.x + 0.3f && y > l.top() - 0.2f && y < l.top() + 0.35f) return true;
+        if (std::abs(x - l.center.x) < l.halfExtents.x + 0.3f && y > l.center.y - l.halfExtents.y - 0.15f && y < l.top() + 0.35f) return true;
     return false;
 }
 
@@ -272,7 +279,7 @@ ClimbHold ClimbWall::makeHold(float x, float y, ClimbHold::Kind kind) const {
     h.kind = kind;
     const uint32_t r = hash3(static_cast<int>(x * 97.0f), static_cast<int>(y * 89.0f), m_desc.seed);
     const float jitter = 0.85f + 0.3f * static_cast<float>(r & 1023u) / 1023.0f;
-    h.size = (kind == ClimbHold::Kind::Jug ? 0.13f : kind == ClimbHold::Kind::Crimp ? 0.09f : 0.15f) * jitter;
+    h.size = (kind == ClimbHold::Kind::Jug ? 0.13f : kind == ClimbHold::Kind::Crimp ? 0.09f : kind == ClimbHold::Kind::Foot ? 0.05f : 0.15f) * jitter;
     h.normal = surfaceNormal(x, y);
     h.position = glm::vec3(x, y, surfaceZ(x, y)) + h.normal * (holdDepth(kind, h.size) * 0.8f);
     return h;
@@ -366,18 +373,21 @@ void ClimbWall::placeHolds() {
         const float nx = std::clamp(x + dx, xMin, xMax), ny = y + dy;
         // Landing in a ledge's band, or stepping past it: take the ledge.
         auto crosses = [&](const ClimbLedge& l) {
-            return std::abs(nx - l.center.x) < l.halfExtents.x + 0.3f && ny > l.top() - 0.2f && y < l.top() + 0.35f && y < l.top() - 0.01f;
+            return std::abs(nx - l.center.x) < l.halfExtents.x + 0.3f && ny > l.center.y - l.halfExtents.y - 0.15f && y < l.top() + 0.35f &&
+                   y < l.top() - 0.01f;
         };
         bool ledge = false;
         for (const ClimbLedge& l : m_ledges) ledge = ledge || crosses(l);
         if (ledge) {
-            // Up to the ledge's lip: a hold just under it (when the last
-            // one is further down), then the edge, then on from its top.
+            // Up to the ledge's lip: a hold just under its underside (when
+            // the last one is further down), then the edge, then on from
+            // its top.
             for (size_t li = 0; li < m_ledges.size(); ++li) {
                 const ClimbLedge& l = m_ledges[li];
                 if (crosses(l)) {
                     x = std::clamp(nx, l.center.x - l.halfExtents.x + 0.25f, l.center.x + l.halfExtents.x - 0.25f);
-                    if (y < l.top() - 0.45f) addRoute(makeHold(x, l.top() - 0.3f, ClimbHold::Kind::Jug));
+                    const float under = l.center.y - l.halfExtents.y - 0.2f;
+                    if (y < under - 0.15f) addRoute(makeHold(x, under, ClimbHold::Kind::Jug));
                     y = l.top();
                     const int e = edgeAt(static_cast<int>(li), x);
                     if (e >= 0) m_line.push_back(e);
@@ -421,6 +431,18 @@ void ClimbWall::placeHolds() {
         h.loose = loose;
         m_holds.push_back(h);
     }
+
+    // Foot chips last (the holds above are the same as without them).
+    const int chips = static_cast<int>(area * d.footDensity * 1.6f);
+    for (int i = 0; i < chips; ++i) {
+        const float hx = rng.range(xMin, xMax), hy = rng.range(0.3f, d.height - 0.5f);
+        if (blockedByLedge(hx, hy)) continue;
+        const ClimbHold chip = makeHold(hx, hy, ClimbHold::Kind::Foot);
+        bool near = false;
+        for (const ClimbHold& o : m_holds)
+            near = near || (o.kind != ClimbHold::Kind::Edge && glm::length(glm::vec2(o.position - chip.position)) < d.footSpacing);
+        if (!near) m_holds.push_back(chip);
+    }
 }
 
 int ClimbWall::nearestHold(const glm::vec3& p, float maxDist, int skip) const {
@@ -452,7 +474,7 @@ std::vector<int> ClimbWall::route(float span) const {
     std::vector<int> prev(n, -2);
     std::queue<int> open;
     for (size_t i = 0; i < n; ++i)
-        if (!m_holds[i].loose && m_holds[i].position.y <= 2.2f) {
+        if (!m_holds[i].loose && m_holds[i].kind != ClimbHold::Kind::Foot && m_holds[i].position.y <= 2.2f) {
             prev[i] = -1;
             open.push(static_cast<int>(i));
         }
@@ -467,7 +489,7 @@ std::vector<int> ClimbWall::route(float span) const {
             return path;
         }
         for (size_t b = 0; b < n; ++b) {
-            if (prev[b] != -2 || m_holds[b].loose) continue;
+            if (prev[b] != -2 || m_holds[b].loose || m_holds[b].kind == ClimbHold::Kind::Foot) continue;
             if (reachDistance(m_holds[b].position, ha.position) <= span) {
                 prev[b] = a;
                 open.push(static_cast<int>(b));

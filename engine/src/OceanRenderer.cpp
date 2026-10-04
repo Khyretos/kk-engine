@@ -2,6 +2,7 @@
 
 #include "kke/Application.h"
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -11,14 +12,31 @@ namespace {
 struct OceanPush { glm::vec4 data[8]; };
 } // namespace
 
-OceanRenderer::OceanRenderer(Application& app, int cells, float extent) : m_cellSize(extent / static_cast<float>(cells)) {
+OceanRenderer::OceanRenderer(Application& app, int cells, float extent, float farExtent) : m_cellSize(extent / static_cast<float>(cells)) {
     std::vector<Vertex> verts;
     std::vector<uint32_t> idx;
     verts.reserve(static_cast<size_t>(cells + 1) * (cells + 1));
     const float half = extent * 0.5f;
+    // Inside `inner` the grid is even; beyond, each step grows so the last
+    // vertex lands at farExtent / 2: f(u) = u + k (|u| - inner)^2.
+    const float inner = half * 0.5f;
+    const float farHalf = std::max(farExtent * 0.5f, half);
+    const float k = (farHalf - half) / ((half - inner) * (half - inner));
+    auto graded = [&](float u) {
+        const float a = std::abs(u);
+        if (a <= inner) return u;
+        const float d = a - inner;
+        return std::copysign(a + k * d * d, u);
+    };
+    // How big this vertex's cell is (m): carried in the colour's red for
+    // the shader's wave fade (kke::Vertex has no spare field).
+    auto cellAt = [&](float u) { return graded(std::abs(u) + m_cellSize * 0.5f) - graded(std::max(std::abs(u) - m_cellSize * 0.5f, 0.0f)); };
     for (int z = 0; z <= cells; ++z)
-        for (int x = 0; x <= cells; ++x)
-            verts.push_back(Vertex{ { x * m_cellSize - half, 0.0f, z * m_cellSize - half }, glm::vec3(1.0f), { 0, 1, 0 }, { 0, 0 } });
+        for (int x = 0; x <= cells; ++x) {
+            const float ux = x * m_cellSize - half, uz = z * m_cellSize - half;
+            const float cell = std::max(cellAt(ux), cellAt(uz));
+            verts.push_back(Vertex{ { graded(ux), 0.0f, graded(uz) }, glm::vec3(cell, 1.0f, 1.0f), { 0, 1, 0 }, { 0, 0 } });
+        }
     for (int z = 0; z < cells; ++z)
         for (int x = 0; x < cells; ++x) {
             uint32_t a = z * (cells + 1) + x, b = a + 1, c = a + (cells + 1), d = c + 1;

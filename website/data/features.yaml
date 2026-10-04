@@ -125,10 +125,10 @@
   accent: "#c77dff"
   tagline: Pick every hold yourself.
   summary: >-
-    A race up a generated mountain where each reach is your choice: a slow
-    precise reach, a lunge you charge with the trigger, or a quick snatch.
-    Stamina drains on bad holds and overhangs, and loose rock breaks off
-    and falls as physics.
+    A race up a generated mountain where each move is your choice: the
+    triggers move your hands, the bumpers your feet, and a held jump lunges
+    for a hold you must catch in time. Stamina comes back only with your
+    feet on, and loose rock breaks off and falls as physics.
   points:
     - Seeded rock faces with ledges and a line that can always be climbed
     - Hands and feet placed on the holds with IK
