@@ -72,7 +72,7 @@ the keyboard, a flight stick or a wheel and pedals.
 | Back on the track | D-pad up | T | button 4 |
 | Camera (each player their own) | Y | C | button 2 |
 | Look round | right stick | hold the right mouse button and move | the hat |
-| Race again / next track | Start / D-pad right | R / N |
+| Race again / next track | Start / D-pad right | R / N | trigger, once the race is over |
 | Pause menu (settings, controls, main menu, quit) | Start while driving, or Select | Esc |
 | Start menu (players, cars, track) | the pause menu's Main menu | M, or the pause menu |
 | How to play | D-pad down | H |

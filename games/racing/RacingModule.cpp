@@ -131,6 +131,7 @@ void RacingModule::init(kke::Application& app) {
         in.defineAction({ "look.free", "Look round with the mouse (hold)", "Driving", "game" });
         in.defineAction({ "look.mouse", "Mouse look", "Driving", "game", kke::ActionType::Axis2D, false });
         in.defineAction({ "race.again", "Race again", "Race", "game" });
+        in.defineAction({ "race.again.over", "Race again (once the race is over)", "Race", "game" });
         in.defineAction({ "race.new", "Next track", "Race", "game" });
         in.defineAction({ "menu", "Back to the menu (players, cars, track)", "Race", "game" });
         in.defineAction({ "help", "How to play", "Race", "game" });
@@ -220,13 +221,7 @@ void RacingModule::init(kke::Application& app) {
             if (m_phase != Phase::Lobby) backToLobby();
             startWheelSetup();
         });
-        shell->startIsTheGames = [this] {
-            if (m_phase == Phase::Finished) return true;
-            if (m_phase != Phase::Racing) return false;
-            for (const Car& c : m_cars)
-                if (c.seat >= 0 && c.totalled) return true;
-            return false;
-        };
+        shell->startIsTheGames = [this] { return raceOverHere(); };
     }
 
     // Synty's POLYGON Street Racer (cars and track props) and POLYGON
@@ -290,6 +285,15 @@ void RacingModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
     std::fill(m_resetAsked.begin(), m_resetAsked.end(), 0);
 }
 
+// The race is over here: everyone finished, or a car here is totalled.
+bool RacingModule::raceOverHere() const {
+    if (m_phase == Phase::Finished) return true;
+    if (m_phase != Phase::Racing) return false;
+    for (const Car& c : m_cars)
+        if (c.seat >= 0 && c.totalled) return true;
+    return false;
+}
+
 void RacingModule::update(const kke::UpdateContext& ctx) {
     const float dt = ctx.dt;
     kke::InputMap& p1 = m_input->map(0);
@@ -298,13 +302,14 @@ void RacingModule::update(const kke::UpdateContext& ctx) {
     const int players = m_input->players();
     m_shift.resize(static_cast<size_t>(players), 0);
     m_resetAsked.resize(static_cast<size_t>(players), 0);
-    bool again = false, fresh = false, menu = false, help = false, close = false;
+    bool again = false, againOver = false, fresh = false, menu = false, help = false, close = false;
     std::array<bool, 4> camera{};
     for (int p = 0; p < players; ++p) {
         kke::InputMap& in = m_input->map(p);
         m_shift[static_cast<size_t>(p)] += (in.pressed("shift.up") ? 1 : 0) - (in.pressed("shift.down") ? 1 : 0);
         if (in.pressed("reset.car")) m_resetAsked[static_cast<size_t>(p)] = 1;
         again = again || in.pressed("race.again");
+        againOver = againOver || in.pressed("race.again.over");
         fresh = fresh || in.pressed("race.new");
         menu = menu || in.pressed("menu");
         help = help || in.pressed("help");
@@ -367,6 +372,9 @@ void RacingModule::update(const kke::UpdateContext& ctx) {
         updateHud(dt);
         return;
     }
+    // A flight stick's trigger is also its handbrake: it races again only
+    // once there's nothing left to drive.
+    if (againOver && raceOverHere()) again = true;
     if (netClient()) fresh = again = false; // online, the host starts each race
     if (fresh || again) {
         if (fresh && m_lobby) {

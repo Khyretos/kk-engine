@@ -82,7 +82,7 @@ void RacingModule::bindJoysticks(kke::InputMap& in) {
     in.addBinding(IM::bind("reset.car", joyButton(3)));
     in.addBinding(IM::bind("shift.up", joyButton(5)));
     in.addBinding(IM::bind("shift.down", joyButton(4)));
-    in.addBinding(IM::bind("race.again", joyButton(0)));
+    in.addBinding(IM::bind("race.again.over", joyButton(0))); // not mid-race: it's the handbrake too
     // The hat looks round, the way the right stick does.
     const struct {
         int dir, component;

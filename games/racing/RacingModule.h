@@ -257,6 +257,7 @@ private:
     static float carSpeed(const Car& c) { return glm::dot(c.velocity, carForward(c)); }
     static glm::vec3 velocityBefore(const Car& c) { return c.pastVelocity[c.pastHead]; } // ~0.1 s ago
     static bool done(const Car& c) { return c.finished || c.totalled; }
+    bool raceOverHere() const;
     static float carHalfWidthOf(const Car& c);
 
     // ---- the race (Race.cpp)
