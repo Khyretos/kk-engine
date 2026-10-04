@@ -1,476 +1,267 @@
 # Sea demo
 
-A small red boat on an open sea under a bright sky. You drive it over the
-swell and throw things overboard: a foam block, a wooden crate, a sealed
-barrel, an ice block and an iron block. Density decides what happens:
-foam and wood ride high, ice floats with little showing, iron sinks to the
-sea floor. Wind speed, wind direction and choppiness reshape the waves
-while you play, and every splash throws up spray.
+Pirate ships on an open sea. Pick a ship from Synty's POLYGON Pirate Pack,
+from a rowing boat up to a three-masted man-o'-war, each with its own
+speed, turning and guns. Set the sails, steer with the wind, hold the aim
+button to see where a broadside will fall, and fire. Cannonballs fly in a
+real arc, splash, punch dents and splinters into hulls, snap masts and
+sink ships; wrecks, masts and splinters float on the same waves you see.
+An island fort's wooden palisade splinters for real with FEMFX in builds
+that have it. Up to four people share one screen (split screen), and a
+friend can sail along online.
 
-The demo teaches the way most games do water: no fluid simulation, just
-an analytic ocean surface (`kke::OceanWaves`, four Gerstner waves) and
-Archimedes' law at a handful of sample points on each floating body
-(`kke::FloatingBodies`). The CPU evaluates exactly the waves the GPU draws,
-so things ride the water you see. Start here for a boat, sailing or
-fishing game, a naval shooter, a raft survival game, or any game where
-things must bob, drift and sink.
+It is a showcase, not a whole game: three modes (battle, target practice,
+free sail), a settings panel for wind, waves, guns and enemies, and
+everything a naval game needs underneath. Start here for a pirate game, a
+naval shooter, a sailing game or anything that floats.
 
-![A boat on the swell; foam and wood ride high, iron sinks](../../website/static/media/sea.webp)
+![A brig under sail on the swell](../../website/static/media/sea.webp)
 
 ## Run it
-
-The executable is `sea_demo` (`kke_add_game(sea_demo ...)` in
-[CMakeLists.txt](CMakeLists.txt), which is `add_executable` on desktop and
-a shared library on Android). The root `CMakeLists.txt` always adds it: it
-needs no optional library and no asset pack.
 
 ```bash
 cmake --build build --target sea_demo
 cd build/bin
 ./sea_demo
-KKE_SKIP_INTRO=1 ./sea_demo       # skip the logo intro
-KKE_MOOD=stormy ./sea_demo        # the same sea under another mood
+KKE_SKIP_INTRO=1 ./sea_demo         # skip the logo intro
+KKE_MOOD=stormy ./sea_demo          # the same sea under another mood
 ```
 
-The demo reads no environment variables of its own. Rebindings are saved
-to `sea_demo_input.json` (the name passed to `InputModule` in
-[main.cpp](main.cpp)).
+The ships need the POLYGON Pirate Pack (see [Assets](#assets)); without it
+they are built from boxes and everything else works the same.
 
-To check the controller path with no hardware (from
-[docs/DEMO_PANEL.md](../../docs/DEMO_PANEL.md)):
+Developer switches (ignored in shipping builds):
+
+| Variable | Effect |
+|---|---|
+| `KKE_SEA_START=1` | Sail at once with the start menu's saved choices (headless checks) |
+| `KKE_SEA_MODE=0/1/2` | Battle, target practice or free sail |
+| `KKE_SEA_ENEMIES=n` | n enemy ships (0-6) |
+| `KKE_SEA_SHIP=0-4` | Player 1's ship: rowing boat, longboat, schooner, brig, man-o'-war |
+| `KKE_NET=host`, `KKE_NET=join:ADDRESS` | Host or join online at startup |
+| `KKE_LOBBY_JOIN=n` | n more controllers join the start menu ([LOBBY.md](../../docs/LOBBY.md)) |
 
 ```bash
-KKE_VIRTUAL_INPUT=pad KKE_VIRTUAL_PAD_SCRIPT="8:back,9:dpad_down,9.6:dpad_right" ./sea_demo
+# A battle with three enemies, headless, with a screenshot:
+KKE_SEA_START=1 KKE_SEA_ENEMIES=3 tools/check_game sea_demo --seconds 30 --shot sea.jpg
 ```
-
-This opens the settings panel with the virtual pad's View button 8 s in,
-moves down a row and turns that row up one step.
 
 ## Controls
 
-The boat and throwing actions are made in `SeaDemoModule::defineInput`
-([SeaDemoModule.cpp](SeaDemoModule.cpp)). They are rebindable actions in
-the "Boat" and "Sea" groups, all in the `game` input context.
+All actions are rebindable (Settings, Controls); `SeaDemoModule::defineInput`
+in [SeaDemoModule.cpp](SeaDemoModule.cpp) makes them.
 
 | Action | Keyboard / mouse | Controller |
 |---|---|---|
-| Throttle (`sea.throttle`) | Up arrow | right trigger |
-| Reverse, half strength (`sea.throttle`, negative) | Down arrow | left trigger |
-| Rudder (`sea.rudder`) | Left / Right arrows | left stick, sideways |
-| Throw (`sea.throw`) | left click: where the mouse points | A (south): at the middle of the screen |
-| Pick what to throw: foam, crate, barrel, ice, iron (`sea.kind1` to `sea.kind5`) | 1 to 5 | the panel's "What" row |
-| Next thing to throw (`sea.next`) | T | Y (north) |
-| Camera follows the boat on / off (`sea.follow`) | C | right stick click |
-| Reset (`sea.reset`) | R | X (west) |
-| Turn the camera (`camera.orbit`) | right-drag | right stick |
-| Zoom (`camera.zoom`) | mouse wheel | d-pad up (closer) / down (further) |
-| Pan the camera | middle-drag | no controller binding yet |
-| Move the camera target | W A S D, Q / E down and up, Shift faster | no controller binding yet |
-| Settings panel (`panel.toggle`) | F3 or Esc, or click it | View (Back) |
-| Developer panels (ImGui) | F1, developer builds only | no controller binding yet |
+| Steer | A / D or Left / Right | left stick, sideways |
+| Sails: up a step / down a step (oars: row) | W / S or Up / Down | left stick, up / down |
+| Aim the guns (shows the arc and where it lands) | hold right mouse button | hold LT |
+| Fire a broadside | left click or Space | RT |
+| Turn the camera | Q / E, or drag with the right or middle button | right stick |
+| Camera closer / further | mouse wheel | d-pad up / down |
+| Next ship | Tab | Y (north) |
+| Throw something overboard | T | d-pad right |
+| Next thing to throw | G (or keys 1-5) | d-pad left |
+| Pause menu (Change ship, Restart, Settings) | Esc | Start |
 
-Notes from the code:
-
-- The camera uses `OrbitCameraModule::Controls::Editor`, so left click is
-  free for throwing: orbit is right-drag, pan is middle-drag, and WASD
-  moves the orbit target. With "camera follows the boat" on, the target
-  is pulled back to the boat every frame.
-- A click over a panel does not throw: `onEvent` checks
-  `ImGui::GetIO().WantCaptureMouse` and `Application::uiCapturesMouse()`.
-- `sea.kind1` to `sea.kind5` are keyboard-only actions: `defineInput`
-  makes one per kind, named after it, and binds keys 1 to 5. They can be
-  rebound like the others and rest while the panel is Active. They have
-  no pad binding; on a pad, `sea.next` (Y) cycles through the same five
-  things.
-- `OrbitCameraModule::setPadControls(true)` in [main.cpp](main.cpp) adds
-  `camera.orbit` and `camera.zoom`. Both are `game` actions.
-- Button names are positions (SDL's `SOUTH`, `NORTH`, `WEST`), so on a
-  PlayStation pad A is Cross, Y is Triangle and X is Square.
-
-### The settings panel
-
-The settings are a `kke::DemoPanelModule` titled "Sea", drawn with RmlUi
-([docs/DEMO_PANEL.md](../../docs/DEMO_PANEL.md)). It starts open at the
-left edge; the game keeps the controls and the mouse can click and drag
-any row. `panel.toggle` (View on a pad, F3 on the keyboard) makes it
-Active: a row is highlighted, up and down pick a row, left and right
-change it (hold to sweep a slider), A presses, B or Esc hands control back.
-On the keyboard the panel reads Up, Down, Left, Right, Enter and Esc
-directly. While it is Active, player 1's `game` context is off, so the
-left stick that picks rows does not also steer the boat and the right
-stick and d-pad do not move the camera. The last row, "Hide panel",
-collapses it to its title.
-Esc works like a pause menu: it opens the panel with the keyboard on
-it, and Esc again goes back to the game. So Esc does not close the
-window; the panel's "Quit" row, just above "Hide panel", does.
-`setEscapeMenu(false)` gives Esc back to a game that needs it.
-
-The rows are:
-
-| Row | Kind | Range |
-|---|---|---|
-| Controls hint | text | a keyboard line and a controller line (`hint`) |
-| Wind | slider | 0 to 14 m/s, step 0.5 |
-| Wind direction | slider | -180 to 180 degrees, step 5 |
-| Choppiness | slider | 0 to 0.95, step 0.05 |
-| What | choice | the five kinds |
-| Camera follows the boat | toggle | |
-| Reset | button | |
-| Status | live text | boat speed, how much of it is under water, bodies floating (max 40), spray drops |
-| Note | note | "Water is 1025 kg/m3 ..." |
-
-With a `DemoPanelModule` in the app, the engine's ImGui windows
-(Performance from `StatsModule`, Debug Control, ...) start hidden. F1
-shows them, in developer builds only (`dev::kEnabled`).
+The guns fire to the side the camera looks at: look left of the bow and
+the port guns fire, right and the starboard guns fire. Look up to aim
+further. With **Aim help** on, the guns also pick up the range to the
+nearest enemy on that side and lead it.
 
 ## How it plays
 
-There is no goal and no score: it is a sandbox. The boat spawns at the
-origin and the five kinds of objects spawn once each in a row beside it
-(`reset`). Each throw adds one more. At most 40 bodies are alive at once
-(`kMaxBodies`); the 41st throw removes the oldest thrown object, never
-the boat. Reset clears everything, rebuilds the waves from the current
-wind settings and spawns the boat and the starting row again.
+The start menu (kke::LobbyModule) picks each player's ship, the mode,
+the enemy ship type, how many enemies (the CPU row) and how good they are,
+and Online (Off, Join, Host). Another controller joins with A for split
+screen.
 
-| Kind | Density (kg/m3) | Size (m) | What it does in 1025 kg/m3 water |
-|---|---|---|---|
-| Foam block | 100 | 0.7 x 0.5 x 0.7 | rides on top, about 10% under |
-| Wooden crate | 500 | 0.8 cube | floats about half under |
-| Sealed barrel | 650 | 0.6 x 0.9 x 0.6 | floats low |
-| Ice block | 917 | 1.0 x 0.7 x 1.0 | floats with about 10% showing |
-| Iron block | 7800 | 0.5 cube | sinks to the floor at -6 m |
+| Ship | Speed | Turning | Guns | Feel |
+|---|---|---|---|---|
+| Rowing boat | 3.6 m/s, rowed | 45°/s | 1 swivel gun a side | darts around, sinks in a few hits |
+| Longboat | 4.6 m/s, rowed | 32°/s | 2 a side | steady, no wind needed |
+| Schooner | 9.5 m/s | 20°/s | 4 a side | quickest under sail, light guns |
+| Brig | 8.5 m/s | 13°/s | 8 a side | the all-rounder (default) |
+| Man-o'-war | 7 m/s | 8.5°/s | 7 a side on two decks, 24-pounders | slow to start and turn, hits hardest |
 
-The boat itself is a box of 3.2 x 0.7 x 1.2 m at 280 kg/m3 (hull plus the
-air inside), about 750 kg.
+Sailing ships carry way: they speed up and slow down slowly, turn faster
+at speed, and go fastest with the wind from behind (turn **Wind fills the
+sails** off for the same speed in every direction). Rowing boats ignore the
+wind.
+
+- **Battle**: enemy ships approach, turn broadside-on and fire back.
+  Sunk enemies come back unless that row is off; a sunk player gets a new
+  ship after a few seconds.
+- **Target practice**: enemies lie at anchor closer in, waiting to be sunk.
+- **Free sail**: no enemies; throw things overboard and watch the sea.
 
 ## How it works
 
-### Startup and the frame
+### Ships (`Ships.h`, `Ships.cpp`)
 
-[main.cpp](main.cpp) creates the `Application` (1280 x 720), sets the far
-plane to 400 m so the sea reaches the horizon, sets the mood `clear_day`
-(`assets/moods/clear_day.yaml`: a Poly Haven sky picture reflected in the
-water) and adds the modules in this order:
+`ShipClass` is one row per ship: the Synty file names of its hull, masts,
+sails and rigging, its size, handling, guns and health. `ShipArtLibrary`
+loads each class's parts once. The parts of one ship share an origin, so
+they load raw (`fixUnitMismatch = false`) and the whole set is scaled
+by 100 when the hull is in centimetres (raw length under 2). Each sail is
+matched to the nearest mast by position, so a snapped mast takes its sails
+with it. The hull's vertices are kept for dents.
 
-1. `InputModule` (`sea_demo_input.json`): actions for keyboard, mouse and pads
-2. `UiModule`: RmlUi, which draws the settings panel
-3. `AudioModule`, its ImGui window hidden: it plays the mood's ambience
-   loop (nothing else in the demo makes sound)
-4. `kke_sea::SeaDemoModule`: the game
-5. `OrbitCameraModule` (distance 12 m, pitch -0.3, yaw 2.2, target (0, 1, 0)),
-   distance limits 2 to 80 m, `Controls::Editor`, `setPadControls(true)`
-6. `DemoPanelModule("Sea")`
-7. `DebugControlModule`, its ImGui window hidden
-8. `StatsModule`
+### Sailing (`SeaDemoModule::sailShip`)
 
-The sea module comes before the camera on purpose; the comment in
-[main.cpp](main.cpp) says: "its update() moves the camera target before
-the orbit camera positions itself".
+A ship is one `kke::FloatingBody` box (470 kg/m³, low centre of mass), so
+buoyancy, pitching and rolling come from the waves. On top: thrust from
+the sails (scaled by the wind's angle) or the oars against quadratic drag,
+a keel force that stops it sliding sideways, and a rudder that sets a yaw
+rate, stronger at speed. Water taken on through damage adds mass, so a
+holed ship sits lower and slower before it sinks. Ships push each other
+apart with capsule contacts along the hull (`FloatingBodies`), so two
+long hulls can sail side by side.
 
-`SeaDemoModule::init` defines the input, builds the panel, creates the
-`OceanRenderer` and the `SphereImpostorRenderer` (for spray), builds the
-boat mesh and one box mesh per kind, then calls `reset()`.
+### Guns (`Battle.cpp`)
 
-Every frame the engine calls, in this order for this module:
+A broadside is a rolling volley: each gun fires a few hundredths of a
+second after the last, from its own muzzle along the side, with a little
+spread and recoil. Balls are point masses under gravity with no drag, so
+the predicted arc (`predictArc`) is exactly the path they fly, and the
+ring shows where the first ball lands. Muzzle speed (80 m/s default) and
+elevation set the range; the camera's pitch sets the elevation, or **Aim
+help** solves it for the nearest enemy.
 
-| Hook | What it does |
-|---|---|
-| `fixedUpdate` (fixed step) | reads throttle and rudder, applies the engine, rudder and keel forces to the boat, steps every floating body, spawns splashes, moves the spray |
-| `update` | reads the pressed actions (throw, next, the five kinds, follow, reset), eases the camera target toward the boat |
-| `renderShadow` | the boat and every object into the shadow map |
-| `render` | the ocean, the boat and objects, the spray |
-| `onEvent` | left click throws at the mouse |
+### Damage
 
-Physics runs in `fixedUpdate` so it takes the same steps at any frame
-rate. One-shot presses are read in `update`, which runs every rendered
-frame, so a press is never missed between fixed steps.
+Hits are cheap on purpose (the ships never use FEMFX): a ball that
+crosses the hull dents the Synty mesh around the impact point (vertices
+pushed in, uploaded with `ModelModule::setDeformedVertices`), throws
+splinters (small floating planks), sparks and smoke, takes health and can
+start a fire. A ball through a mast snaps it: the mast and its sails fall
+into the sea as a floating body. At zero health the ship lists, settles
+and sinks; its masts and splinters keep floating for a while.
 
-### The sea: `kke::OceanWaves`
+### Effects (`Effects.cpp`)
 
-[kke/Ocean.h](../../engine/include/kke/Ocean.h). The surface is the sum of
-four Gerstner (trochoidal) waves. Each wave moves surface points in
-circles, which gives sharp crests and flat troughs like real swell. Each
-wave's speed follows deep-water dispersion (omega = sqrt(g k)), so long
-waves travel faster than short ones.
+`kke::ParticleEffects` (smoke and sparks, 9000 at most): wake foam along
+the sides and spray at the bow (more with speed), muzzle flashes and white
+powder smoke, water columns and foam rings where balls land, dust on
+islands, fire and black smoke on burning ships. Flags stream downwind and
+sails swell with the wind.
 
-`setWind(speed, direction, choppiness)` builds the four waves from the
-panel's sliders ([Ocean.cpp](../../engine/src/Ocean.cpp)):
+### The sea and the world (`World.cpp`)
 
-```cpp
-const float lambda0 = std::max(2.0f, 0.5f * speed * speed);
-const float spread[kMaxWaves] = { 0.0f, 0.55f, -0.45f, 0.9f };
-const float lengthScale[kMaxWaves] = { 1.0f, 0.61f, 0.37f, 0.19f };
-for (int i = 0; i < kMaxWaves; ++i) {
-    ...
-    w.wavelength = lambda0 * lengthScale[i];
-    w.amplitude = w.wavelength / 30.0f * (i == 0 ? 1.0f : 0.8f);
-    w.steepness = choppiness;
-```
+`kke::OceanWaves` (Gerstner swell) is drawn by `kke::OceanRenderer` out to
+the horizon: a graded grid (fine near the camera, coarse far away) whose
+waves fade out where the cells get too big to show them, so the far sea
+never flickers. Islands are Synty background islands and rocks (low mounds
+without the pack); ships scrape and stop on them. The fort island has a
+tower, palms and, with FEMFX, a palisade of five wooden panels.
 
-So the main wavelength grows with the square of the wind speed (at 7 m/s,
-the demo's default, about 24.5 m), the height is a thirtieth of the
-length, and three shorter waves spread around the wind direction.
+### The FEMFX fort
 
-Gerstner waves move points sideways as well as up, so "how high is the
-water at (x, z)" is not a single formula. `OceanWaves::height` finds the
-undisturbed point that lands on (x, z) with four fixed-point iterations,
-then returns its height. `velocity` gives the water's own motion, which
-the buoyancy uses for drag, and `normal` its slope.
+Each palisade panel is a `PhysicsModule::spawnPatternedBox` with the
+`Splinters` fracture pattern: wood that breaks along the planks. A
+cannonball that reaches the wall is handed to FEMFX as an iron sphere at
+30 m/s (made heavier to keep its momentum, because at 80 m/s it would jump
+through a plank between steps). The panels spawn unbreakable and arm
+once they have settled, so they never fall apart under their own weight.
+**Rebuild the fort** in the panel puts it back. Builds without FEMFX
+(`KKE_ENABLE_FEMFX=OFF`, the default) have no palisade; the panel says so.
 
-### Floating: `kke::FloatingBodies`
+What it costs (the panel's fort row shows it live): standing, the panel
+pieces sleep and FEMFX takes about 0.1 ms a step. While a wall breaks, each
+moving splinter costs about 0.15-0.2 ms ([SCALING.md](../../docs/SCALING.md)),
+so the debris budget keeps 60 splinters at most; six balls into the wall
+peaked at 8-12 ms a step on a 4-core cloud machine and settled back to
+0.1 ms within ten seconds.
 
-[kke/FloatingBodies.h](../../engine/include/kke/FloatingBodies.h) and
-[FloatingBodies.cpp](../../engine/src/FloatingBodies.cpp). Each body is a
-box. `add` computes its mass (density x volume), its box inertia, and a
-grid of sample points inside it: about 0.35 m apart, 2 to 5 per axis. The
-boat gets 5 x 2 x 4 = 40 points.
+### Online (`SeaNet.cpp`)
 
-`step(dt, ocean, time)` does this for every live body:
+Every ship is a network player: each screen sends its captains' ships,
+and the host also sends its enemy ships as extra local players. A ship's
+state carries its position, orientation, class, team, health, sails and
+which masts stand. Shots go to everyone as events (drawn, not simulated,
+on the other screens). A hit is applied by the ship's owner: whoever sees
+their ball hit a ship they don't own sends a hit event, so a friend's
+damage, sinking and score stay consistent. A client's own enemies make
+way for the host's. The friend gets the same options as the host.
 
-1. Start with gravity. The weight acts at `centerOfMassOffset`, so a low
-   centre of mass gives a righting torque when the body tilts.
-2. For each sample point: ask the ocean how deep it is, turn that into a
-   submerged fraction (smoothly, over the point's own little cube, so
-   bodies do not pop as points cross the surface), and add:
-   - buoyancy `waterDensity * g * pointVolume * fraction`, straight up;
-   - drag against the moving water, `linearDrag`, plus extra vertical
-     drag `heaveDrag`.
+## Notes from Black Flag
 
-   Both are applied at the point, so a tilted hull gets a torque from the
-   difference between its low and high sides with no extra code.
-3. Record `submerged` (0 to 1) and `impactSpeed` (the downward speed at
-   the moment the body first touches water), which the demo uses for
-   splashes.
-4. Integrate with semi-implicit Euler, with angular damping in water.
-5. Keep the lowest corner above the flat sea floor (`seaFloorY = -6`).
+Assassin's Creed IV: Black Flag is the reference for the feel:
 
-After that, overlapping bodies push apart as bounding spheres (radius 0.8
-x the half diagonal), with an inelastic velocity change. That stops a
-crate passing through the boat; it is not a full contact solver.
+- Sails in steps (furled, half, full) instead of a throttle, and a ship
+  that carries way.
+- The camera chooses the guns: look to a side and hold aim, and that
+  side's broadside shows where it will land; look up for range.
+- A rolling broadside reads better than every gun at once.
+- Readable impacts: water columns, splinters, smoke and fire tell you how
+  a fight is going without a health bar.
 
-`remove` only marks a body dead (`alive = false`), so indices stay stable.
-That is why the demo can keep a parallel vector `m_kindOf` (which kind
-each body is; -1 for the boat) and index it with the body index.
-
-### The boat
-
-The boat is a floating body with three extra settings in `reset()`:
-
-```cpp
-m_boat = m_bodies.add(kBoatHalf, 280.0f, { 0.0f, 0.2f, 0.0f });
-m_bodies.bodies()[m_boat].linearDrag = 0.8f;
-m_bodies.bodies()[m_boat].centerOfMassOffset = glm::vec3(0.0f, -0.3f, 0.0f); // ballast keel: stays upright
-```
-
-Driving happens in `fixedUpdate`:
-
-1. Read `sea.throttle` and `sea.rudder` from player 1's `InputMap`.
-   Reverse is scaled by 0.5. Throttle eases toward the target at rate 2/s
-   and rudder at 4/s, so the boat does not jerk.
-2. Only when more than 10% of the hull is in the water
-   (`boat.submerged > 0.1f`), apply three forces with
-   `FloatingBodies::applyForce`:
-   - thrust along the boat's forward axis (+x), `throttle * mass * 3`, at
-     the stern and 0.2 m below the centre;
-   - a rudder force sideways at the stern, `rudder * mass * 0.8 * speed`,
-     with the forward speed clamped to -2..4 m/s: no speed, no steering;
-   - a keel force against sideways motion, `-sideSpeed * mass * 2`, at the
-     centre: water resists sliding sideways far more than going forward.
-3. With throttle above 0.2, drop wake spray at the stern.
-
-Because the thrust and rudder act at the stern, below the centre, they
-also pitch and turn the hull the way a real propeller does.
-
-### Throwing
-
-`throwObject(kind, atMouse)` builds a ray from the camera through a
-screen point with `kke::screenToRay` ([kke/Picking.h](../../engine/include/kke/Picking.h)).
-The mouse throws where it points; a controller throws at the middle of
-the screen, which is the boat when the camera follows it. The new body
-starts 2 m along the ray, with a random orientation, a velocity of
-12 m/s along the ray plus 2 m/s up, and a random spin. If 40 bodies are
-already alive, the first live body that is not the boat is removed first.
-
-### Splashes and spray
-
-Spray drops are a plain vector of `{pos, vel, life}` in the module
-(`m_spray`, at most 1,500). A body entering the water faster than
-1.5 m/s calls `splash`, which adds up to 200 drops in a ring, flying
-upward faster the harder the hit. Every fixed step each drop falls with
-gravity and is removed when its life ends or when it falls back below the
-wave height. They are drawn as 6 cm lit sphere impostors
-(`SphereImpostorRenderer`), which cost one small quad each.
-
-### Drawing
-
-- **The sea:** `kke::OceanRenderer`
-  ([kke/OceanRenderer.h](../../engine/include/kke/OceanRenderer.h)) is one
-  static grid, 200 x 200 cells over 160 m, uploaded once. It follows the
-  camera in whole-cell steps, so the mesh does not swim. All wave motion
-  happens in `shaders/ocean.vert`, which runs the same Gerstner maths with
-  the parameters from `OceanWaves::toGpu`. `shaders/ocean.frag` mixes the
-  water's own colour with a sky reflection by Fresnel, adds a tight sun
-  glint, foam on the highest and steepest crests, and distance haze.
-- **The boat and the objects:** `kke::DynamicMeshRenderer`
-  ([kke/SphereImpostors.h](../../engine/include/kke/SphereImpostors.h))
-  with meshes built in code by `addBox`. The boat is four boxes: a hull
-  pinched at the bow (`bowTaper`), a deck, a cabin and a mast. The iron
-  block is drawn with metallic 0.8, the ice with roughness 0.15.
-- **The spray:** `kke::SphereImpostorRenderer`.
-
-The sea itself casts no shadow; bodies do (`renderShadow`).
-
-### The camera
-
-`OrbitCameraModule` does the orbiting, panning and zooming. When "camera
-follows the boat" is on, `update` moves the camera target 10% of the way
-to a point 0.8 m above the boat each frame, and the orbit camera then
-places itself around that target.
-
-## Design decisions
-
-- **An analytic ocean and sample-point buoyancy, not a fluid
-  simulation.** The comment in
-  [kke/FloatingBodies.h](../../engine/include/kke/FloatingBodies.h) calls
-  it "the whole trick behind most game boats (Sea of Thieves, Just Cause,
-  Unity/Unreal buoyancy plug-ins): no fluid simulation, just Archimedes at
-  sample points on an analytic surface". A fluid solver would cost far
-  more and still not give a sea to the horizon.
-- **Exactly four waves.** [kke/Ocean.h](../../engine/include/kke/Ocean.h)
-  says four is what fits in the 128 bytes of push constants every Vulkan
-  device guarantees, so the vertex shader needs no buffers or textures
-  and the CPU and GPU compute the same surface. More waves, or an FFT
-  ocean, would need a texture that the CPU would also have to read to keep
-  floating objects in step.
-- **Its own small solver, separate from Jolt and FEMFX.** The header
-  says the floating bodies are "deliberately small and separate from
-  FEMFX (which has no fluids)": semi-implicit Euler, box inertia, sphere
-  contacts, a flat floor. The cost is that thrown objects do not collide
-  with anything in the Jolt world, and contacts between them are
-  approximate.
-- **Stability from real physics, not a fake righting force.** The boat
-  first capsized within seconds (BUGS.md BUG-044). The fixes were a
-  correct point height, `heaveDrag` (the energy a real hull loses making
-  waves) and `centerOfMassOffset` (ballast). The header explains that
-  gravity at a low point "pulls it upright whenever it heels: real
-  ballast, not a fake righting force".
-- **A keel as a sideways drag force.** The comment in `reset()` says the
-  drag is "tuned so it glides forward but resists going sideways (a keel,
-  the cheap way)". The boat is still one box; no keel shape is simulated.
-- **Steering that needs speed.** The rudder force scales with forward
-  speed; the comment in `fixedUpdate` says "no speed, no steering, like a
-  real boat".
-- **A body budget.** At most 40 bodies; the oldest thrown one goes first.
-  The same rule as [docs/OPTIMIZATION.md](../../docs/OPTIMIZATION.md)
-  rule 5 ("fixed budgets, graceful degradation"): a player who holds the
-  throw button cannot make the frame rate collapse.
-- **The controller throws at the middle of the screen.** A pad has no
-  pointer, and with the follow camera the middle of the screen is the
-  boat, so A drops things next to it.
-- **Editor camera controls.** The comment in [main.cpp](main.cpp) says
-  "left click throws", so the camera's orbit moves to right-drag.
-- **The settings panel is RmlUi.** Commit 944d596 moved the demo's ImGui
-  window to `kke::DemoPanelModule`, following Kees's rule quoted in
-  [docs/DEMO_PANEL.md](../../docs/DEMO_PANEL.md): ImGui F1 panels are for
-  developers, everything a player sees is RmlUi, so a player with a pad
-  can change everything a mouse user can.
+Here the arc is the real ballistic path (no drag), so a long shot is
+aimed high and a close one flat, the way a gun crew would.
 
 ## Tuning
 
-| What | Where | Effect |
-|---|---|---|
-| `m_windSpeed = 7`, `m_windDir = 0.4`, `m_chop = 0.6` | [SeaDemoModule.h](SeaDemoModule.h) | the starting swell; the panel changes them live |
-| `lambda0 = 0.5 * speed^2`, amplitude = wavelength / 30 | `OceanWaves::setWind` in [Ocean.cpp](../../engine/src/Ocean.cpp) | how fast waves grow with wind; higher amplitude = rougher sea |
-| `kKinds` density and size | [SeaDemoModule.cpp](SeaDemoModule.cpp) | below 1025 floats, above sinks; the closer to 1025, the lower it floats |
-| boat density 280 | `reset()` | lower rides higher and gets thrown about more |
-| boat `linearDrag = 0.8` | `reset()` | higher stops sooner and reaches a lower top speed |
-| boat `centerOfMassOffset.y = -0.3` | `reset()` | lower = harder to capsize, slower rolling |
-| `heaveDrag = 6` (engine default) | [kke/FloatingBodies.h](../../engine/include/kke/FloatingBodies.h) | lower = bouncier, the boat can be launched off crests |
-| thrust `mass * 3`, rudder `mass * 0.8`, keel `mass * 2` | `fixedUpdate` | acceleration, turning rate, how much it drifts sideways in a turn |
-| throttle ease 2/s, rudder ease 4/s | `fixedUpdate` | lower = heavier, laggier controls |
-| `kMaxBodies = 40`, `kMaxSpray = 1500` | [SeaDemoModule.cpp](SeaDemoModule.cpp) | the budgets |
-| throw speed 12 m/s + 2 up | `throwObject` | how far things fly |
-| splash threshold 1.5 m/s, `strength * 18` drops (max 200) | `fixedUpdate`, `splash` | how much spray a landing makes |
-| follow easing 0.1 per frame | `update` | higher = the camera sticks to the boat more tightly |
-| `OceanRenderer(app, 200, 160)` | [kke/OceanRenderer.h](../../engine/include/kke/OceanRenderer.h) defaults | grid detail and reach; lower for weak GPUs |
+| What | Where |
+|---|---|
+| Ship speed, turning, guns, health | `kClasses` in [Ships.cpp](Ships.cpp) |
+| Wind, waves, ball speed, damage, aim help | the settings panel (F3, or the pause menu) |
+| How enemies fight | `thinkEnemy` in [Battle.cpp](Battle.cpp) |
+| Fort wood strength, size, debris budget | `buildFort` in [World.cpp](World.cpp) |
+| Particle budget | `ParticleEffects(..., 9000)` in `SeaDemoModule::init` |
 
 ## Engine features it uses
 
 | Feature | Header / module | Doc |
 |---|---|---|
-| Gerstner ocean, CPU and GPU | `kke::OceanWaves` ([kke/Ocean.h](../../engine/include/kke/Ocean.h)) | this page |
-| Buoyant rigid bodies | `kke::FloatingBodies` ([kke/FloatingBodies.h](../../engine/include/kke/FloatingBodies.h)), tested in `tests/test_floating_bodies.cpp` | [cookbook: physics](../../docs/cookbook/physics.md) |
-| Ocean drawing | `kke::OceanRenderer` ([kke/OceanRenderer.h](../../engine/include/kke/OceanRenderer.h)) | [RENDERING_PRINCIPLES.md](../../docs/RENDERING_PRINCIPLES.md) |
-| Meshes built in code, sphere impostors | `kke::DynamicMeshRenderer`, `kke::SphereImpostorRenderer` ([kke/SphereImpostors.h](../../engine/include/kke/SphereImpostors.h)) | |
-| Mouse and screen-centre rays | `kke::screenToRay` ([kke/Picking.h](../../engine/include/kke/Picking.h)) | |
-| Actions, bindings, prompts | `kke::InputModule` | [INPUT.md](../../docs/INPUT.md) |
-| Settings panel (RmlUi, pad + keyboard + mouse) | `kke::DemoPanelModule` | [DEMO_PANEL.md](../../docs/DEMO_PANEL.md) |
-| Orbit camera with pad controls | `kke::OrbitCameraModule` | [DEMO_PANEL.md](../../docs/DEMO_PANEL.md) |
-| Sky, sun, fog, colour look | `Application::setMood("clear_day")` | [MOODS.md](../../docs/MOODS.md) |
-| Performance and pause panels (F1) | `kke::StatsModule`, `kke::DebugControlModule` | |
+| Gerstner ocean, CPU and GPU | `kke::OceanWaves`, `kke::OceanRenderer` | this page |
+| Buoyant bodies with capsule contacts | `kke::FloatingBodies` (`tests/test_floating_bodies.cpp`) | [cookbook: physics](../../docs/cookbook/physics.md) |
+| Synty models, dents | `kke::ModelModule`, `kke::AssetCatalog` | [ASSETS.md](../../docs/ASSETS.md) |
+| Breakable wood | `kke::PhysicsModule` (FEMFX) | [SCALING.md](../../docs/SCALING.md) |
+| Particles | `kke::ParticleEffects` | |
+| Start menu, split screen | `kke::LobbyModule`, `kke::splitScreen` | [LOBBY.md](../../docs/LOBBY.md) |
+| Title, pause, settings | `kke::GameShellModule` | [GAME_SHELL.md](../../docs/GAME_SHELL.md) |
+| Online | `kke::NetModule` | [NETWORKING.md](../../docs/NETWORKING.md) |
+| Settings panel | `kke::DemoPanelModule` | [DEMO_PANEL.md](../../docs/DEMO_PANEL.md) |
+| Third-person camera | `kke::CameraRig` | |
 
-Nothing of the ocean, buoyancy or drawing is exposed to Lua yet
-([docs/SCRIPTING.md](../../docs/SCRIPTING.md) has no water functions), so a
-game of this kind is C++ for now.
+Nothing of the ocean or ships is exposed to Lua yet, so a game of this
+kind is C++ for now.
 
 ## Assets
 
-None. The boat and every object are boxes built in code, and the spray is
-drawn procedurally. The only files it loads are the mood's: the sky
-picture (Poly Haven "Kloofendal 48d Partly Cloudy (Pure Sky)", CC0),
-which the build fetches for every demo, and the `meadow_day` ambience
-loop (`assets/ambience/meadow_day.flac`, CC0, in the repository), which
-the build copies next to every game ([docs/SCENES.md](../../docs/SCENES.md)
-"Moods"). No Synty pack is used.
-
-Only `AudioModule` plays mood ambience, which is why [main.cpp](main.cpp)
-adds one (BUG-079 in BUGS.md, fixed). Without the file it logs a warning
-and the sea is silent.
+Synty **POLYGON Pirate Pack** (`POLYGON_Pirate_Pack`), found at runtime in
+`assets/synty/` or `KKE_ASSETS_DIR`; never committed. Used: the hulls,
+masts, sails and rigging of `SM_Veh_Boat_Rowing_01`, `SM_Veh_Boat_Small_01`,
+`SM_Veh_Boat_Medium_01`, `SM_Veh_Veh_Boat_Large_01` / `SM_Veh_Boat_Large_*`
+and `SM_Veh_Boat_Warship_01`; `SM_Flag_Pirate_01`, the British and Spanish
+flags; `SM_Env_Background_Island_01/02/03`, `SM_Env_Rock_Huge_01/03`,
+`SM_Env_PalmTree_01/02/03` and `SM_Bld_Fort_Tower_01`. Things thrown
+overboard are boxes built in code. The log lists every file it loaded ("pack assets used").
 
 ## Make a game like this
 
-1. **Copy the folder.** `cp -r games/sea_demo games/my_boats`, rename the
-   target in [CMakeLists.txt](CMakeLists.txt) (all three places, including
-   the `game.json` copy), the namespace `kke_sea` and `name()` returning
-   `"SeaDemo"`, and add `add_subdirectory(games/my_boats)` to the root
-   `CMakeLists.txt`. `tools/new_game` makes Lua-only games from
-   `games/template`; a water game starts from this C++ folder because the
-   ocean has no Lua bindings.
-2. **Replace the box boat with your own.** Keep one floating body for the
-   hull (its box sets buoyancy) and draw any model at its `transform()`.
-   Keep a low `centerOfMassOffset`, and read BUG-044 in BUGS.md before
-   lowering `heaveDrag`.
-3. **Change how it drives.** All the handling is the three forces in
-   `fixedUpdate`. A sail is a force along the wind; an outboard motor is
-   thrust whose direction turns with the rudder.
-4. **Make the weather.** Call `OceanWaves::setWind` over time for a storm
-   coming in, and change the mood (`KKE_MOOD=stormy` to try one).
-5. **Add rules.** Buoys to pass (distance checks against boat positions),
-   cargo to deliver (a thrown body's index), a timer; show them on a
-   `DemoPanelModule` text row or an RmlUi HUD.
-6. **Read next:** [DEMO_PANEL.md](../../docs/DEMO_PANEL.md),
-   [INPUT.md](../../docs/INPUT.md), [MOODS.md](../../docs/MOODS.md),
-   [OPTIMIZATION.md](../../docs/OPTIMIZATION.md).
-
-Pitfalls the code shows:
-
-- Floating bodies do not touch Jolt bodies. A dock or a shore needs its
-  own handling, or a different physics path.
-- `FloatingBodies::remove` never shrinks the vector: dead bodies stay in
-  it until `clear()`. A game that spawns forever should reuse slots or
-  clear now and then.
-- Anything drawn must follow the same `m_time` the bodies were stepped
-  with, or things float on waves that are not the ones on screen.
-- Apply forces only when the hull is in the water, or the boat can steer
-  and accelerate in the air.
-- Physics belongs in `fixedUpdate`; one-shot presses belong in `update`.
+1. **Copy the folder** (`cp -r games/sea_demo games/my_ships`), rename the
+   target in CMakeLists.txt, the namespace `kke_sea` and add the folder to
+   the root CMakeLists.txt.
+2. **Add or change ships** as rows in `kClasses`: Synty names, size,
+   handling and guns.
+3. **Make the rules**: a convoy to protect, a treasure to carry home, a
+   fort to take. `m_ships`, `damageShip` and `startSinking` are the hooks.
+4. Pitfalls: physics goes in `fixedUpdate`, drawing interpolates with
+   `ctx.alpha`; FEMFX objects must never overlap when spawned (they push
+   apart hard enough to break); set `NetModule::playerCharacter` before
+   hosting or joining, because it is sent once.
 
 ## Files
 
 | File | What is in it |
 |---|---|
-| [main.cpp](main.cpp) | The application, the mood, the module list and the camera setup |
-| [SeaDemoModule.h](SeaDemoModule.h) | The module, the `Kind` struct, the spray struct, all state |
-| [SeaDemoModule.cpp](SeaDemoModule.cpp) | The five kinds, box meshes, reset, throwing, splashes, boat forces, input actions, the settings panel |
-| [game.json](game.json) | Marketplace manifest (id, title, tags, modules) |
-| [CMakeLists.txt](CMakeLists.txt) | The executable, its shaders, the manifest, and `kke_use_ui` (the RmlUi shaders and fonts) |
+| [main.cpp](main.cpp) | The application and its modules |
+| [SeaDemoModule.h](SeaDemoModule.h) | The module and all its state |
+| [SeaDemoModule.cpp](SeaDemoModule.cpp) | Start, sailing, controls, camera, split screen, drawing, the panel |
+| [Ships.h](Ships.h) / [Ships.cpp](Ships.cpp) | Ship classes and their Synty art |
+| [Battle.cpp](Battle.cpp) | Aiming, broadsides, cannonballs, damage, masts, sinking, enemy captains |
+| [Effects.cpp](Effects.cpp) | Splashes, wakes, smoke, fire, splinters |
+| [World.cpp](World.cpp) | Islands, the fort, the FEMFX palisade |
+| [SeaNet.cpp](SeaNet.cpp) | Online |
+| [game.json](game.json) | Marketplace manifest |

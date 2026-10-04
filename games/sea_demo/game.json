@@ -1,9 +1,9 @@
 {
   "id": "engine.kke.sea_demo",
   "title": "KKE Sea Demo",
-  "description": "Drive a boat over Gerstner swell and throw things overboard: foam and wood ride high, ice floats low, iron sinks. Buoyancy at sample points on an analytic ocean, the way many games do it.",
-  "version": "0.1.0",
-  "tags": ["demo", "water", "buoyancy", "ocean", "boat", "physics"],
+  "description": "Pirate ships on an open sea: pick a ship with its own handling, fire arcing broadsides, dent and sink ships, splinter a wooden fort (FEMFX), on split screen or online with a friend.",
+  "version": "0.2.0",
+  "tags": ["demo", "water", "buoyancy", "ocean", "boat", "pirates", "naval", "multiplayer", "physics"],
   "engine_version": "0.3",
-  "modules": ["SeaDemo", "OrbitCamera"]
+  "modules": ["Settings", "Input", "Physics", "Models", "UI", "GameShell", "Audio", "Lobby", "Network", "SeaDemo", "DemoPanel", "Stats"]
 }
