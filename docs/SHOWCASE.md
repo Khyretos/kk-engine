@@ -58,17 +58,19 @@ The **Scenes** panel visits Synty-built levels far from the course
 | Sprint, walk | Left Shift, Left Alt | L3 (toggle), tilt the stick a little |
 | Jump, vault, climb | Space | A |
 | Crouch, let go of a ledge | C | B |
-| Shoot, push | Left click, E | RT, Y |
+| Shoot (or throw what you hold), push | Left click, E | RT, Y |
+| Pick up / put down | F | X |
+| Spawn menu (crates, barrels, balls, a dummy; clear, reset the world) | G | RB |
 | First / third person | V | R3 |
 | Camera distance | Mouse wheel | D-pad up / down |
-| Reset crates and player | R | X |
+| Reset the world | R | the spawn menu's last row |
 | Ping (hear the walls) | Q | D-pad left |
 | Push to talk (voice builds) | P | LB |
-| Lua toys: tower, ball, clear | G, B, N (or hold B) | RB, View, hold View a second |
+| Lua toys: tower, ball, clear | H, B, N (or hold B) | the spawn menu |
 | Break-the-targets | T | D-pad right |
 | Pause menu | Esc | Start or View |
 
-Split-screen players 2 to 4 move, jump, crouch, shoot, push, reset and
+Split-screen players 2 to 4 move, jump, crouch, shoot, push and
 zoom with their own controller. The full list, and why each key is where
 it is, is in [games/showcase/README.md](../games/showcase/README.md).
 

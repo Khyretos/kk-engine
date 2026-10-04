@@ -67,9 +67,8 @@ void ShowcaseModule::buildHud() {
 void ShowcaseModule::buildPauseRows() {
     m_shell = m_app->getModule<kke::GameShellModule>();
     if (!m_shell) return;
-    m_shell->addPauseItem("Back to the start", [this] {
-        resetCourse();
-        m_loco->teleport(m_spawn);
+    m_shell->addPauseItem("Reset the world", [this] {
+        resetWorld();
         m_shell->closeMenu();
     });
     m_shell->pauseRows().choice("Players on this screen", &m_playersChoice, { "1", "2", "3", "4" },
@@ -138,7 +137,7 @@ void ShowcaseModule::updateHud() {
         text = "Shoot {fire} at the glass, the plank and the stone wall.";
     } else if (within(p, kCratePile, 3.5f, 3.5f)) {
         station = "CRATES";
-        text = "Push them {interact} or shoot them over {fire}.";
+        text = "Pick one up {pickup}, push them {interact} or shoot them over {fire}. More from the spawn menu {spawn.menu}.";
     } else if (p.x > kTrickX - 3.0f && p.z > -4.0f && p.z < 25.0f) {
         station = "TRICK COURSE";
         text = p.z > 10.0f ? "Sprint {sprint} beside the wall and jump {jump} to run along it. Jump again to kick off."

@@ -1,4 +1,5 @@
 #include "ShowcaseModule.h"
+#include "Geometry.h"
 
 #include "kke/Application.h"
 #include "kke/AssetCatalog.h"
@@ -46,26 +47,6 @@ constexpr const char* kWallRunClips[] = { "WallRun_L_Loop", "WallRun_R_Loop" };
 using layout::kYard;
 // Climbs up walls this high (m) or more take the 2 m clip.
 constexpr float kClimbHighFrom = 1.6f;
-
-void appendBox(const glm::mat4& m, const glm::vec3& half, const glm::vec3& color, std::vector<kke::Vertex>& v, std::vector<uint32_t>& idx) {
-    const glm::vec3 n[6] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
-    const glm::mat3 nm = glm::mat3(m);
-    for (const glm::vec3& normal : n) {
-        glm::vec3 u = std::abs(normal.y) > 0.5f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
-        glm::vec3 w = glm::cross(normal, u);
-        uint32_t base = static_cast<uint32_t>(v.size());
-        // Slightly darker sides: shape reads better without textures.
-        glm::vec3 c = color * (normal.y > 0.5f ? 1.0f : normal.y < -0.5f ? 0.6f : 0.85f);
-        for (glm::vec2 k : { glm::vec2(-1, -1), glm::vec2(1, -1), glm::vec2(1, 1), glm::vec2(-1, 1) }) {
-            glm::vec3 p = (normal + u * k.x + w * k.y) * half;
-            v.push_back({ glm::vec3(m * glm::vec4(p, 1.0f)), c, glm::normalize(nm * normal), glm::vec2(0.0f) });
-        }
-        // Counter-clockwise from outside.
-        glm::vec3 a = v[base].position, b = v[base + 1].position, cc = v[base + 2].position;
-        if (glm::dot(glm::cross(b - a, cc - a), nm * normal) >= 0.0f) idx.insert(idx.end(), { base, base + 1, base + 2, base, base + 2, base + 3 });
-        else idx.insert(idx.end(), { base, base + 2, base + 1, base, base + 3, base + 2 });
-    }
-}
 
 #if KKE_ENABLE_NET
 // Game events (NetModule::sendEvent), serialized the docs/NETWORKING.md way:
@@ -119,6 +100,7 @@ void ShowcaseModule::init(kke::Application& app) {
     m_rigid = app.getModule<kke::RigidBodyModule>();
     m_models = app.getModule<kke::ModelModule>();
     m_input = app.getModule<kke::InputModule>();
+    m_ui = app.getModule<kke::UiModule>();
 #if KKE_ENABLE_NET
     m_net = app.getModule<kke::NetModule>();
     if (m_net) {
@@ -138,10 +120,13 @@ void ShowcaseModule::init(kke::Application& app) {
         kke::InputMap& in = m_input->map(0);
         kke::InputModule::defineCharacterActions(in);
         in.defineAction({ "reset", "Reset crates + player", "Showcase", "game" });
+        in.defineAction({ "pickup", "Pick up / put down", "Showcase", "game" });
         in.defineAction({ "panels", "Engine panels", "Showcase", "game" });
         using IM = kke::InputModule;
+        // Resetting is also the spawn menu's last row (RB or G).
         in.addBinding(IM::bind("reset", IM::key(SDL_SCANCODE_R)));
-        in.addBinding(IM::bind("reset", IM::pad(SDL_GAMEPAD_BUTTON_WEST)));
+        in.addBinding(IM::bind("pickup", IM::key(SDL_SCANCODE_F)));
+        in.addBinding(IM::bind("pickup", IM::pad(SDL_GAMEPAD_BUTTON_WEST)));
         // The engine panels are developer tools: F1 only (View is a toy).
         in.addBinding(IM::bind("panels", IM::key(SDL_SCANCODE_F1)));
         // A controller's zoom is the d-pad up / down, held; the wheel's
@@ -161,6 +146,7 @@ void ShowcaseModule::init(kke::Application& app) {
         in.clearBindings("voice.talk");
         in.addBinding(IM::bind("voice.talk", IM::key(SDL_SCANCODE_P)));
         in.addBinding(IM::bind("voice.talk", IM::pad(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)));
+        buildSpawnMenu(); // its actions: RB / G, and the list's own
         // Left-click shoots, but not the click that grabs the mouse (see onEvent).
         m_input->commitDefaults();
         if (const char* lefty = std::getenv("KKE_LEFT_HANDED"); lefty && *lefty == '1') kke::InputModule::mirrorKeyboard(in);
@@ -238,6 +224,10 @@ void ShowcaseModule::init(kke::Application& app) {
         m_loco->teleport(glm::vec3(25.3f, 0.05f, 27.0f));
         m_loco->setFacing(glm::vec3(0, 0, -1));
         m_rig.yaw = 0.0f;
+    }
+    if (const char* c = std::getenv("KKE_DEMO_CARRY"); c && *c && *c != '0') {
+        m_demoCarry = 0.0f;
+        m_rig.yaw = 150.0f; // behind and beside you, looking the way you face (+Z)
     }
     if (const char* sp = std::getenv("KKE_SPLIT"); sp && *sp) setLocalPlayers(std::atoi(sp));
     if (const char* pip = std::getenv("KKE_OVERHEAD"); pip && *pip && *pip != '0') m_overhead = true;
@@ -440,6 +430,7 @@ void ShowcaseModule::visitScene(size_t index) {
 }
 
 void ShowcaseModule::spawnCrates() {
+    dropHeld(); // it may be one of these
     for (const Crate& c : m_crates) m_rigid->world().remove(c.body);
     m_crates.clear();
     // A pyramid of crates, and a few big light boxes to push around.
@@ -753,6 +744,7 @@ void ShowcaseModule::applyIk(float dt) {
             m_ik.hand(static_cast<Side>(i), hand, hand - in * 0.3f + side * (0.35f * s) - glm::vec3(0, 0.5f, 0));
         }
     }
+    if (!reach && m_handIk) holdHands();
     // Hanging: the balls of the feet against the wall below the hands
     // (braced, the way people hang on a ledge), where there is wall.
     if (m_footIk && st == State::Hang) {
@@ -789,7 +781,7 @@ void ShowcaseModule::setCaptured(bool on) {
 // the pause menu (kke::GameShellModule), which lets the mouse go.
 void ShowcaseModule::onEvent(const SDL_Event& e) {
     ImGuiIO& io = ImGui::GetIO();
-    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !m_captured && !m_menuOpen && !io.WantCaptureMouse && !m_app->uiCapturesMouse() &&
+    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !m_captured && !m_menuOpen && !m_spawnOpen && !io.WantCaptureMouse && !m_app->uiCapturesMouse() &&
         e.button.button == SDL_BUTTON_LEFT) {
         setCaptured(true);
         m_swallowFire = true; // this click grabbed the mouse; it isn't a shot
@@ -802,7 +794,7 @@ void ShowcaseModule::onEvent(const SDL_Event& e) {
 void ShowcaseModule::readActions(float dt) {
     kke::InputMap& in = m_input->map(0);
     // Typing in an ImGui field: the game doesn't hear the keys.
-    in.setContextEnabled("game", !ImGui::GetIO().WantTextInput && !m_menuOpen); // the menu has the controls
+    in.setContextEnabled("game", !ImGui::GetIO().WantTextInput && !m_menuOpen && !m_spawnOpen); // a menu has the controls
     const bool mouseLeft = m_input->devices().value({ kke::SourceKind::MouseButton, 0, SDL_BUTTON_LEFT, 0 }, nullptr) > 0.5f;
     if (!mouseLeft) m_swallowFire = false;
 
@@ -827,15 +819,19 @@ void ShowcaseModule::readActions(float dt) {
     // Fire: once on press, then 4 shots/s while held.
     const bool fireOk = !(mouseLeft && (!m_captured || m_swallowFire));
     m_fireCooldown -= dt;
-    if (fireOk && in.held("fire") && (in.pressed("fire") || m_fireCooldown <= 0.0f)) {
+    if (m_held.body != kke::RigidWorld::kNoBody) {
+        // Holding something: the trigger throws it.
+        if (fireOk && in.pressed("fire")) {
+            throwHeld(m_app->camera());
+            m_fireCooldown = 0.4f;
+        }
+    } else if (fireOk && in.held("fire") && (in.pressed("fire") || m_fireCooldown <= 0.0f)) {
         shoot(m_app->camera());
         m_fireCooldown = 0.25f;
     }
     if (in.pressed("interact")) forcePush(m_app->camera());
-    if (in.pressed("reset")) {
-        resetCourse();
-        m_loco->teleport(m_spawn);
-    }
+    if (in.pressed("pickup")) togglePickUp();
+    if (in.pressed("reset")) resetWorld();
     if (in.pressed("panels")) {
         m_showPanels = !m_showPanels;
         for (kke::Module* p : m_panels) p->setUiVisible(m_showPanels);
@@ -901,6 +897,12 @@ void ShowcaseModule::forcePush(const kke::Camera& cam) {
     glm::vec3 dir = glm::normalize(cam.target - cam.position);
     auto hit = m_rigid->world().raycast(cam.position, dir, 30.0f);
     if (!hit.hit) return;
+    // Spawned props and dummies are this machine's own (offline).
+    for (const Prop& p : m_props)
+        if (p.body == hit.body) m_rigid->world().addImpulse(p.body, dir * 60.0f, hit.point);
+    for (const SpawnDummy& dm : m_dummies)
+        for (kke::RigidWorld::BodyId b : m_rigid->world().ragdollBodies(dm.ragdoll))
+            if (b == hit.body) m_rigid->world().addVelocity(b, dir * 6.0f);
     for (size_t i = 0; i < m_crates.size(); ++i) {
         if (m_crates[i].body != hit.body) continue;
         // Here right away; on a client also on the host, whose crate ours follows.
@@ -950,6 +952,7 @@ void ShowcaseModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
     // Local only: every machine runs its own lava (what it looks like
     // isn't gameplay state).
     if (m_lava) m_lava->fixedUpdate(ctx.fixedDt, m_rigid->world(), lavaWatched());
+    carryStep(ctx.fixedDt);
     // Platform: back and forth, up and down.
     m_platformTime += ctx.fixedDt;
 #if KKE_ENABLE_NET
@@ -965,6 +968,8 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     m_fps = m_fps * 0.95f + (dt > 0.0f ? 1.0f / dt : 0.0f) * 0.05f;
     updateStressTest(dt);
     batchCrates();
+    batchProps();
+    updateDummies();
     if (m_lava) m_lava->update();
     updateHud();
     kke::RigidWorld& w = m_rigid->world();
@@ -977,6 +982,7 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     m_rig.settings.pivotHeight += (target - m_rig.settings.pivotHeight) * std::min(1.0f, 10.0f * dt);
     m_rig.settings.eyeHeight = m_rig.settings.pivotHeight + 0.15f;
 
+    updateSpawnMenu(dt);
     readActions(dt);
     // Actions -> the movement layer, camera-relative. An analog stick gives
     // partial speeds (walk by tilting a little). What "go up" becomes
@@ -1047,6 +1053,33 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
             m_loco->teleport(glm::vec3(25.3f, 0.05f, 27.0f));
             m_loco->setFacing(glm::vec3(0, 0, -1));
             m_rig.yaw = 0.0f;
+        }
+    }
+    if (m_demoCarry >= 0.0f) {
+        // KKE_DEMO_CARRY=1: spawn a crate, walk up, lift it, carry it a
+        // few steps, throw it; again every 7 s (screenshots, checks).
+        m_demoCarry += dt;
+        const float t = m_demoCarry;
+        auto at = [&](float mark) { return t >= mark && t - dt < mark; };
+        if (at(0.5f)) spawnRow(0);
+        if (t > 1.0f && t < 2.0f && !m_props.empty()) { // up to it
+            glm::vec3 to = w.position(m_props.back().body) - w.characterPosition(m_player);
+            to.y = 0.0f;
+            if (glm::length(to) > 1.0f) in.move = glm::normalize(to) * 0.5f;
+        }
+        if (at(2.0f)) togglePickUp();
+        if (t > 2.3f && t < 4.0f) in.move = m_loco->facing() * 0.5f;
+        if (at(4.4f)) throwHeld(m_app->camera());
+        if (at(2.1f) || at(4.3f) || at(5.0f)) {
+            const glm::vec3 c = m_props.empty() ? glm::vec3(0.0f) : w.position(m_props.back().body);
+            const glm::vec3 me = w.characterPosition(m_player);
+            kke::log::get(name())->info("carry demo: {} at {:.2f} {:.2f} {:.2f}, you at {:.2f} {:.2f} ({:.1f} s)",
+                                        m_held.body != kke::RigidWorld::kNoBody ? "holding the crate" : "the crate is", c.x, c.y, c.z, me.x, me.z, t);
+        }
+        if (t > 7.0f) {
+            clearSpawned();
+            m_loco->teleport(m_spawn);
+            m_demoCarry = 0.0f;
         }
     }
     // Wading through the pool: no running.
@@ -1318,6 +1351,8 @@ void ShowcaseModule::render(const kke::RenderContext& ctx) {
         if (e.ground) e.ground->draw(ctx, glm::mat4(1.0f), 0.0f, 0.95f);
     kke::RigidWorld& w = m_rigid->world();
     if (m_crateBatchIndices) m_crateBatch->draw(ctx, glm::mat4(1.0f), 0.0f, 0.7f);
+    if (m_propBatchIndices) m_propBatch->draw(ctx, glm::mat4(1.0f), 0.0f, 0.7f);
+    if (m_propMetalIndices) m_propMetal->draw(ctx, glm::mat4(1.0f), 0.85f, 0.35f);
     m_cubes[3]->draw(ctx, glm::scale(w.transform(m_platform), m_platformHalf), 0.3f, 0.4f);
     if (!m_charInstance && m_rig.mode != kke::CameraRig::Mode::FirstPerson) {
         glm::mat4 t = glm::rotate(glm::translate(glm::mat4(1.0f), w.characterDrawPosition(m_player, m_app->fixedAlpha())), glm::radians(-m_facing), glm::vec3(0, 1, 0));
@@ -1337,6 +1372,8 @@ void ShowcaseModule::renderShadow(const kke::ShadowRenderContext& ctx) {
         if (e.ground) e.ground->drawShadow(ctx);
     kke::RigidWorld& w = m_rigid->world();
     if (m_crateBatchIndices) m_crateBatch->drawShadow(ctx);
+    if (m_propBatchIndices) m_propBatch->drawShadow(ctx);
+    if (m_propMetalIndices) m_propMetal->drawShadow(ctx);
     m_cubes[3]->drawShadow(ctx, glm::scale(w.transform(m_platform), m_platformHalf));
     if (!m_charInstance) m_capsule->drawShadow(ctx, glm::translate(glm::mat4(1.0f), w.characterDrawPosition(m_player, m_app->fixedAlpha())));
 }
@@ -1371,9 +1408,9 @@ void ShowcaseModule::renderUi() {
     if (m_wantCrouch != m_crouch) ImGui::TextColored(ImVec4(1, 0.8f, 0.3f, 1), "No room to stand up");
     ImGui::Text("Rigid bodies %zu (%zu awake), %.2f ms", w.bodyCount(), w.activeBodyCount(), w.lastStepMs());
     if (ImGui::CollapsingHeader("Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::TextUnformatted("Keyboard: WASD move, Shift sprint, Alt walk, Space jump / vault / climb,\nC crouch / let go, mouse look, wheel zoom, V view, left click shoot, E push, R reset,\nQ ping, P talk, G/B/N toys, F1 engine panels, Esc menu (frees the mouse).\n"
-                               "Controller: left stick move, right stick look, A jump / vault / climb, B crouch,\nL3 sprint, RT shoot, Y push, X reset, R3 view, d-pad up/down zoom,\n"
-                               "d-pad left ping, LB talk, RB/View toys (hold View: clear), Start menu.");
+        ImGui::TextUnformatted("Keyboard: WASD move, Shift sprint, Alt walk, Space jump / vault / climb,\nC crouch / let go, mouse look, wheel zoom, V view, left click shoot or throw, E push,\nF pick up / put down, G spawn menu, R reset, Q ping, P talk, B/N toys, F1 engine panels,\nEsc menu (frees the mouse).\n"
+                               "Controller: left stick move, right stick look, A jump / vault / climb, B crouch,\nL3 sprint, RT shoot or throw, Y push, X pick up / put down, RB spawn menu,\n"
+                               "R3 view, d-pad up/down zoom, d-pad left ping, LB talk, Start or View menu.");
         ImGui::SliderFloat("Mouse sensitivity", &m_mouseSensitivity, 0.02f, 0.5f, "%.2f deg/px");
         ImGui::SliderFloat("Stick / gyro speed", &m_stickSpeed, 45.0f, 540.0f, "%.0f deg/s");
         if (ImGui::Button("Left-handed keys (mirror)")) kke::InputModule::mirrorKeyboard(m_input->map(0));

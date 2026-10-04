@@ -14,6 +14,7 @@
 #include "LavaStation.h"
 #include "Layout.h"
 #include "kke/Ocean.h"
+#include "kke/Ragdoll.h"
 #include "kke/OceanRenderer.h"
 #include "kke/Module.h"
 #include "kke/RigidWorld.h"
@@ -203,6 +204,68 @@ private:
     kke::RigidWorld::BodyId m_platform = kke::RigidWorld::kNoBody;
     glm::vec3 m_platformHalf{1.5f, 0.15f, 1.5f};
     float m_platformTime = 0.0f;
+
+    // Things the player spawns from the spawn menu (Spawner.cpp): RB or G
+    // opens it over the game; pick a thing and it lands in front of you.
+    // "Clear what I spawned" and "Reset the world" are its last rows.
+    enum class PropShape : uint8_t { Box, Sphere, Barrel };
+    struct Prop {
+        kke::RigidWorld::BodyId body = kke::RigidWorld::kNoBody;
+        PropShape shape = PropShape::Box;
+        glm::vec3 half{0.3f}; // box half extents; sphere: x = radius; barrel: x = radius, y = half height
+        glm::vec3 color{0.6f};
+        float metallic = 0.0f;
+    };
+    struct SpawnDummy { // a ragdoll dummy: the mannequin on Jolt bodies
+        kke::RigidWorld::RagdollId ragdoll = 0;
+        kke::ModelModule::InstanceId instance = 0;
+        kke::RagdollSkinBinding binding;
+    };
+    struct SpawnRow { std::string label, hint; };
+    void buildSpawnMenu();
+    void openSpawnMenu(bool open);
+    void updateSpawnMenu(float dt);
+    void spawnRow(int row);
+    void spawnProp(PropShape shape, const glm::vec3& half, float density, const glm::vec3& color, uint32_t material, const glm::vec3& at,
+                   float metallic = 0.0f, float restitution = 0.1f);
+    void spawnDummy(const glm::vec3& at);
+    void clearSpawned();
+    void resetWorld();
+    void updateDummies();
+    void batchProps();
+    glm::vec3 spawnSpot(float distance) const; // on the ground in front of the player
+    std::vector<Prop> m_props;
+    std::vector<SpawnDummy> m_dummies;
+    std::vector<SpawnRow> m_spawnRows;
+    std::unique_ptr<kke::DynamicMeshRenderer> m_propBatch, m_propMetal;
+    size_t m_propBatchIndices = 0, m_propMetalIndices = 0;
+    Rml::ElementDocument* m_spawnDoc = nullptr;
+    Rml::DataModelHandle m_spawnModel;
+    bool m_spawnOpen = false, m_spawnRecapture = false;
+    int m_spawnSel = 0;
+    float m_spawnRepeat = 0.0f; // stick / key repeat while held
+    int m_spawnHeldDir = 0;
+    std::string m_spawnNote; // "Spawned a crate" under the list
+
+    // Picking things up (Carry.cpp): X or F lifts the crate, barrel or
+    // ball in front of you (up to kMaxLift kg); it rides in front of the
+    // chest held in both hands (CharacterIk), X or F puts it down, RT or
+    // a click throws it. Heavier things you push (Y or E).
+    void togglePickUp();
+    void carryStep(float dt);  // physics rate: the held body follows the hands
+    void throwHeld(const kke::Camera& cam);
+    void dropHeld();
+    void holdHands();          // IK contacts for the hands on the held body
+    glm::vec3 holdPoint() const;
+    struct Held {
+        kke::RigidWorld::BodyId body = kke::RigidWorld::kNoBody;
+        glm::vec3 half{0.3f};
+        float mass = 0.0f;
+        float yawOffset = 0.0f; // its yaw against the facing when lifted, snapped to the nearest face
+        float age = 0.0f;       // s since it was lifted
+    };
+    Held m_held;
+    float m_demoCarry = -1.0f; // KKE_DEMO_CARRY: seconds into the script, -1 = off
 
     // Player.
     kke::RigidWorld::CharacterId m_player = 0;

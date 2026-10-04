@@ -54,6 +54,7 @@ are read in `ShowcaseModule::init` unless noted:
 | `KKE_DEMO_AUTOPILOT=1` | The character runs the parkour lane (or a scene's trail) by itself and logs each vault and climb |
 | `KKE_DEMO_HANG=1` | Jump at the 3 m wall, hang, shimmy round its end, jump off. Loops every 10 s |
 | `KKE_DEMO_TRICKS=1` | Wall run and wall jump, pillar leaps, the leap up to the beam. Loops every 13.5 s |
+| `KKE_DEMO_CARRY=1` | Spawns a crate, lifts it, carries it a few steps and throws it, and logs where it is. Loops every 7 s |
 | `KKE_DEMO_BRIDGE=1` | Drops an iron ball on the yard glass, then rolls one into a crate, and logs how far the crates moved (FEMFX builds) |
 | `KKE_BRIDGE=0` | Turns the FEMFX-Jolt bridge off, to compare |
 | `KKE_SPLIT=2..4` | Start with that many local players |
@@ -74,8 +75,10 @@ are read in `ShowcaseModule::init` unless noted:
 
 Player 1. The bindings come from `InputModule::defineCharacterActions`
 ([InputModule.cpp](../../engine/src/modules/InputModule.cpp)) plus four
-actions the showcase adds in `ShowcaseModule::init` (`reset`, `menu`,
-`panels` and `zoom.pad`, the d-pad's held zoom). `init` also moves the
+actions the showcase adds in `ShowcaseModule::init` (`reset`, `pickup`,
+`panels` and `zoom.pad`, the d-pad's held zoom) and the spawn menu's
+(`spawn.menu`, and `spawn.up`, `spawn.down`, `spawn.pick`, `spawn.close`
+while its list is open: [Spawner.cpp](Spawner.cpp)). `init` also moves the
 ping off the d-pad down and push-to-talk off B, which the showcase uses
 for other things (BUG-065). Everything except Esc is rebindable and
 saved in `input.json`.
@@ -88,11 +91,13 @@ saved in `input.json`.
 | Walk | Left Alt (hold) | Tilt the stick a little (analog speed); no button |
 | Jump, vault, climb, grab a ledge | Space | A |
 | Crouch, or let go of a ledge | C (toggle) | B (toggle) |
-| Shoot | Left click (hold for 4 shots a second) | RT |
+| Shoot (or throw what you hold) | Left click (hold for 4 shots a second) | RT |
 | Push what you look at | E | Y |
+| Pick up / put down the crate, barrel or ball in front of you | F | X |
+| Spawn menu: crates, barrels, balls, a tower, a ragdoll dummy; clear, reset the world | G | RB |
 | First / third person | V | R3 |
 | Camera distance | Mouse wheel (while captured) | D-pad up / down (hold) |
-| Reset crates and player | R | X |
+| Reset the world (also in the spawn menu) | R | none (spawn menu) |
 | Pause menu: settings, button remapping, quit | Esc | Start or View / Back |
 | Engine panels (ImGui, developer tools) | F1 | none |
 | Ping the surroundings (hear the walls) | Q | D-pad left |
@@ -117,7 +122,7 @@ The Lua scripts add their own actions:
 
 | Script | Action | Keyboard | Controller |
 |---|---|---|---|
-| `toys.lua` | Build a crate tower / throw a ball / clear | G / B / N (or hold B) | RB / View / hold View a second |
+| `toys.lua` | Build a crate tower / throw a ball / clear | H / B / N (or hold B) | none: the spawn menu (RB) has towers and balls |
 | `targets.lua` (from `games/first_lua_game`) | Start break-the-targets | T | D-pad right |
 
 ## How it plays
@@ -137,13 +142,32 @@ stations, with their positions from [Layout.h](Layout.h):
 | Low roof | (10, 6) | 1.2 m clearance: crouch to get under |
 | Stairs, ramp, steep slope, pillars | around (-8, -4), (8, -10), (-14 to -6.5, -14) | 0.25 m steps, a 24 degree ramp you walk, a 55 degree slope you slide off, pillars that push the camera in |
 
-The pause menu (Esc / Start / View) has Resume, Back to the start, 1 to
+The pause menu (Esc / Start / View) has Resume, Reset the world, 1 to
 4 players, Engine panels (developer builds), Settings, Controls, Main
 menu and Quit. Offline it pauses the game; online the
 others keep playing. The **KKE Showcase** ImGui window (always shown)
 has the controls, a Scenes list to visit the Synty levels, and panels for
 movement, performance and the stress test, character, lighting, lava,
 split screen and camera. F1 shows the other modules' panels too.
+
+### Spawning and carrying
+
+RB (G) opens the spawn menu on the right while the game keeps running:
+up and down to choose (d-pad, left stick, W/S, arrows, or the mouse), A,
+Space, Enter or a click spawns it in front of you, and the list stays
+open so you can spawn more; B, RB, G or Backspace closes it. It has a
+wooden crate, a small crate, a big light box, an iron crate (too heavy to
+lift), a barrel, a rubber ball, a crate tower and a ragdoll dummy, then
+**Clear what I spawned** and **Reset the world** (what you spawned goes,
+the course's crates go back, you're back at the
+start). Spawning is offline only for now.
+
+X (F) picks up the crate, barrel or ball in front of you, up to 60 kg: it
+rides in front of your chest in both hands and stays a physics body, so
+it bumps into walls and other crates instead of going through them (snag
+it on something and you let go). X (F) puts it down, RT (click) throws it
+where you look. Climbing, vaulting or hanging drops it. Heavier things you
+push (Y, E).
 
 ## How it works
 

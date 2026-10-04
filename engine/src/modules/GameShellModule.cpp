@@ -358,7 +358,11 @@ void GameShellModule::init(Application& app) {
         m_doc->AddEventListener("click", m_listener.get());
         m_doc->AddEventListener("mousedown", m_listener.get());
         m_rowsEl = m_doc->GetElementById("rows");
+        // Hidden, it must not catch the mouse either: RmlUi still hovers a
+        // hidden body, and the game would think the UI has the mouse (a
+        // click on the view would never reach the game).
         m_doc->SetProperty("visibility", "hidden");
+        m_doc->SetProperty("pointer-events", "none");
         m_doc->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
         // Above the game's own documents (the HUD, the lobby).
         m_doc->PullToFront();
@@ -444,7 +448,10 @@ void GameShellModule::setPage(Page page) {
         m_titleAt = kTitleSettle;
     }
     m_focus = 0;
-    if (m_doc) m_doc->SetProperty("visibility", open ? "visible" : "hidden");
+    if (m_doc) {
+        m_doc->SetProperty("visibility", open ? "visible" : "hidden");
+        m_doc->SetProperty("pointer-events", open ? "auto" : "none");
+    }
 }
 
 void GameShellModule::openPause() {
@@ -455,7 +462,10 @@ void GameShellModule::openPause() {
 void GameShellModule::startTouchEdit() {
     if (!m_input) return;
     m_touchEditing = true;
-    if (m_doc) m_doc->SetProperty("visibility", "hidden"); // the game (still frozen) shows behind the controls
+    if (m_doc) { // the game (still frozen) shows behind the controls, which take the mouse
+        m_doc->SetProperty("visibility", "hidden");
+        m_doc->SetProperty("pointer-events", "none");
+    }
     m_input->editTouch(true);
 }
 
@@ -1248,7 +1258,10 @@ void GameShellModule::frameStart(const UpdateContext& ctx) {
     if (m_touchEditing) {
         if (m_input && m_input->touch().editing()) return;
         m_touchEditing = false; // Done: back to the Controls page
-        if (m_doc) m_doc->SetProperty("visibility", "visible");
+        if (m_doc) {
+            m_doc->SetProperty("visibility", "visible");
+            m_doc->SetProperty("pointer-events", "auto");
+        }
         m_dirty = true;
     }
     // The touch controls' pause button opens the menu as Start does.
