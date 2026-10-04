@@ -32,21 +32,6 @@ namespace kke_showcase {
 
 namespace {
 
-// The rows, in order. The two after the last thing are the clean-up rows.
-enum SpawnRowId : int {
-    kRowCrate,
-    kRowSmallCrate,
-    kRowBigBox,
-    kRowHeavyCrate,
-    kRowBarrel,
-    kRowBall,
-    kRowTower,
-    kRowDummy,
-    kRowClear,
-    kRowReset,
-    kRowCount
-};
-
 // Audio materials (AudioModule's defaults): what a hit sounds like.
 constexpr uint32_t kStone = 1, kWood = 2, kMetal = 3;
 // The most anything may be: past this the oldest spawned thing goes.
@@ -208,6 +193,7 @@ void ShowcaseModule::spawnProp(PropShape shape, const glm::vec3& half, float den
                                const glm::vec3& at, float metallic, float restitution) {
     if (m_props.size() >= kMaxProps) { // the oldest goes
         if (m_held.body == m_props.front().body) dropHeld();
+        forgetProp(m_props.front());
         m_rigid->world().remove(m_props.front().body);
         m_props.erase(m_props.begin());
     }
@@ -238,6 +224,7 @@ void ShowcaseModule::spawnProp(PropShape shape, const glm::vec3& half, float den
         return;
     }
     m_props.push_back({ id, shape, half, color, metallic });
+    if (replicating()) shareProp(m_props.back(), d.rotation, density, material, restitution); // online: on every machine
 }
 
 // The mannequin, standing where it lands, then limp: a ragdoll on Jolt
@@ -301,8 +288,16 @@ void ShowcaseModule::clearSpawned() {
     if (m_held.body != kke::RigidWorld::kNoBody)
         for (const Prop& p : m_props)
             if (p.body == m_held.body) dropHeld();
-    for (const Prop& p : m_props) m_rigid->world().remove(p.body);
-    m_props.clear();
+    // Online, a client's copies of the host's props are the host's to
+    // clear (it says so, and they go everywhere): ask it.
+    const bool client = onlineClient();
+    if (client) askHostToSpawn(kRowClear, glm::vec3(0.0f), glm::vec3(0.0f));
+    std::erase_if(m_props, [&](const Prop& p) {
+        if (client && p.netId) return false;
+        forgetProp(p);
+        m_rigid->world().remove(p.body);
+        return true;
+    });
     for (const SpawnDummy& dm : m_dummies) {
         m_rigid->world().removeRagdoll(dm.ragdoll);
         m_models->remove(dm.instance);
@@ -331,17 +326,22 @@ void ShowcaseModule::resetWorld() {
 }
 
 void ShowcaseModule::spawnRow(int row) {
-#if KKE_ENABLE_NET
-    // Online the host's world is the real one; spawning there for
-    // everyone is still to come.
-    if (m_net && m_net->connected() && row != kRowReset) {
-        m_spawnNote = "Spawning is offline only for now";
+    const glm::vec3 at = spawnSpot(2.2f), base = spawnSpot(3.0f);
+    if (onlineClient() && row != kRowReset && row != kRowClear) {
+        // Online the host's world is the real one: it makes it there, at
+        // our spot, for everyone (Online.cpp).
+        askHostToSpawn(row, at, base);
+        m_spawnNote = "Asked the host";
         if (m_spawnModel) m_spawnModel.DirtyVariable("note");
         return;
     }
-#endif
+    m_sharing = true;
+    spawnRowAt(row, at, base);
+    m_sharing = false;
+}
+
+void ShowcaseModule::spawnRowAt(int row, const glm::vec3& at, const glm::vec3& towerBase) {
     m_spawnNote.clear();
-    const glm::vec3 at = spawnSpot(2.2f);
     const glm::vec3 wood(0.62f, 0.45f, 0.28f), metal(0.55f, 0.6f, 0.68f);
     switch (row) {
     case kRowCrate: spawnProp(PropShape::Box, glm::vec3(0.3f), 250.0f, wood, kWood, at + glm::vec3(0, 0.32f, 0)); break;
@@ -356,7 +356,7 @@ void ShowcaseModule::spawnRow(int row) {
         break;
     case kRowTower: {
         // Two crates a layer, crossed layer on layer, six high.
-        const glm::vec3 base = spawnSpot(3.0f);
+        const glm::vec3 base = towerBase;
         for (int level = 0; level < 6; ++level)
             for (int k = 0; k < 2; ++k) {
                 const glm::vec3 off = level % 2 == 0 ? glm::vec3(k * 0.52f - 0.26f, 0, 0) : glm::vec3(0, 0, k * 0.52f - 0.26f);
@@ -364,7 +364,7 @@ void ShowcaseModule::spawnRow(int row) {
             }
         break;
     }
-    case kRowDummy: spawnDummy(spawnSpot(3.0f)); break;
+    case kRowDummy: spawnDummy(towerBase); break;
     case kRowClear: clearSpawned(); break;
     case kRowReset: resetWorld(); break;
     default: return;

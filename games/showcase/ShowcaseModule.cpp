@@ -1,5 +1,6 @@
 #include "ShowcaseModule.h"
 #include "Geometry.h"
+#include "NetEvents.h"
 
 #include "kke/Application.h"
 #include "kke/AssetCatalog.h"
@@ -51,34 +52,7 @@ using layout::kSupplyTableHalf;
 constexpr float kClimbHighFrom = 1.6f;
 
 #if KKE_ENABLE_NET
-// Game events (NetModule::sendEvent), serialized the docs/NETWORKING.md way:
-// one function per message for both directions.
-enum EventKind : uint16_t { kEventShoot = 1, kEventPush = 2, kEventReset = 3 };
-struct ShotEvent { glm::vec3 from{0.0f}, dir{0.0f, 0.0f, -1.0f}; };
-struct PushEvent { uint16_t body = 0; glm::vec3 dir{0.0f}, point{0.0f}; };
-template <typename Stream> bool serialize(Stream& s, ShotEvent& e) {
-    s.vec3(e.from, glm::vec3(-4096.0f, -512.0f, -4096.0f), glm::vec3(4096.0f, 1536.0f, 4096.0f), 1.0f / 256.0f);
-    s.vec3(e.dir, 1.0f, 1.0f / 2048.0f);
-    return s.ok();
-}
-template <typename Stream> bool serialize(Stream& s, PushEvent& e) {
-    s.integer(e.body, 0, 65535);
-    s.vec3(e.dir, 1.0f, 1.0f / 2048.0f);
-    s.vec3(e.point, glm::vec3(-4096.0f, -512.0f, -4096.0f), glm::vec3(4096.0f, 1536.0f, 4096.0f), 1.0f / 256.0f);
-    return s.ok();
-}
-template <typename T> std::vector<uint8_t> pack(T value) {
-    std::vector<uint8_t> out;
-    {
-        kke::net::WriteStream w(out);
-        serialize(w, value);
-    }
-    return out;
-}
-template <typename T> bool unpack(const std::vector<uint8_t>& data, T& value) {
-    kke::net::ReadStream r(data.data(), data.size());
-    return serialize(r, value) && r.ok();
-}
+using namespace netev;
 #endif
 
 // Showcase bits in NetPlayerState::flags (kPlayerTeleported is the engine's).
@@ -109,6 +83,7 @@ void ShowcaseModule::init(kke::Application& app) {
         m_net->onEvent = [this](const kke::net::GameEventMsg& e) { onNetEvent(e.kind, e.fromPlayer, e.payload); };
         m_net->onCorrection = [this](const glm::vec3& p) { m_loco->teleport(p); };
         // Input replay: players who join start where ours does, side by side.
+        setupOnline();
         m_net->replaySpawn = [this](uint8_t id) { return (m_autopilot ? m_autopilotStart : m_spawn) + glm::vec3(1.2f * id, 0.0f, 0.0f); };
     }
 #endif
@@ -274,6 +249,7 @@ void ShowcaseModule::init(kke::Application& app) {
         m_demoParkourStep = kFrom[std::clamp(*pk - '0', 0, 4)];
         if (const char* fz = std::getenv("KKE_DEMO_PARKOUR_FREEZE")) m_demoParkourFreeze = fz;
     }
+    if (const char* on = std::getenv("KKE_DEMO_ONLINE"); on && *on && *on != '0') m_demoOnline = 0.0f;
     if (const char* n = std::getenv("KKE_DEMO_NATURE"); n && *n && *n != '0') m_demoNature = 0.0f;
     if (const char* it = std::getenv("KKE_DEMO_ITEMS"); it && *it && *it != '0') {
         m_demoItems = 0.0f;
@@ -1096,6 +1072,7 @@ void ShowcaseModule::forcePush(const kke::Camera& cam) {
 // Client: another player's shot, relayed by the host.
 void ShowcaseModule::onNetEvent(uint16_t kind, uint8_t from, const std::vector<uint8_t>& payload) {
 #if KKE_ENABLE_NET
+    if (onOnlineEvent(kind, from, payload)) return; // spawning and carrying (Online.cpp)
     const bool host = m_net && m_net->role() == kke::NetModule::Role::Host;
     switch (kind) {
     case kEventShoot: {
@@ -1132,6 +1109,7 @@ void ShowcaseModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
     // isn't gameplay state).
     if (m_lava) m_lava->fixedUpdate(ctx.fixedDt, m_rigid->world(), lavaWatched());
     carryStep(ctx.fixedDt);
+    stepRemoteCarries(ctx.fixedDt); // hosting: what the other players carry
     stepVehicles(ctx.fixedDt);
     tickFuses(ctx.fixedDt); // grenades and barrels (each machine its own range for now)
     // Platform: back and forth, up and down.
@@ -1295,6 +1273,7 @@ void ShowcaseModule::update(const kke::UpdateContext& ctx) {
     const bool wading = inPool(w.characterPosition(m_player));
     if (m_demoBridge >= 0.0f) updateBridgeDemo(dt);
     if (m_demoParkourStep >= 0) updateParkourDemo(dt, in);
+    if (m_demoOnline >= 0.0f) updateOnlineDemo(dt, in);
     in.fast = m_sprint && !m_crouch && !wading;
     in.slow = m_walk || wading || m_aimBlend > 0.5f; // aiming: a steady walk
     in.crouch = hanging ? m_wantCrouch != m_crouch : m_crouch;
