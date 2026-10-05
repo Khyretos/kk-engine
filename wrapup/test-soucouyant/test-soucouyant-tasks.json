@@ -1,0 +1,53 @@
+{
+ "projects": [
+  {
+   "id": "kk-engine-test-soucouyant",
+   "name": "kk-engine",
+   "description": "Wrap-up of the soucouyant test thread (2026-10-05): VM workflow, Android phone, leftover checks.",
+   "tasks": [
+    {
+     "id": "test-souc-01",
+     "title": "Prove the Forgejo VM tests workflow gets /dev/kvm and /srv/kke-vm",
+     "description": "**Goal:** The weekly `VM tests` workflow runs on the soucouyant runner with KVM and the VM files, and one run passes end to end.\n\n**Machine:** soucouyant\n\n**Steps**\n1. Read `Services/forgejo-runner/runner-data/config.yml` in Server-Docker first: Kees has uncommitted edits there, keep them.\n2. Under `container:` set `valid_volumes: [\"/srv/kke-vm\"]` and add `--device /dev/kvm` to `options` (see `docs/VM_TESTS.md` \"Setting up soucouyant\" in kk-engine).\n3. Restart the runner container (`docker compose up -d` in `Services/forgejo-runner`) after Kees approves.\n4. In kk-engine on Forgejo, Actions → `VM tests` → Run workflow with `platforms=windows,android`, `quick=true`.\n5. Open the run log: the job must print the `kke_vm.py check` lines with KVM present and find `/srv/kke-vm/windows/base.qcow2`.\n6. Download the run artifact and read both `summary.md` files.\n\n**Files**\n- Server-Docker: Services/forgejo-runner/runner-data/config.yml\n- kk-engine: .forgejo/workflows/vm-tests.yml\n- kk-engine: docs/VM_TESTS.md\n- kk-engine: tools/vm/kke_vm.py\n\n**Done when:** A `VM tests` run on Forgejo finishes with both VMs booted (any demo failures listed in its summary), and the runner config change is committed.",
+     "state": "queued"
+    },
+    {
+     "id": "test-souc-02",
+     "title": "Fix cookbook ending early in the Windows VM and Android emulator",
+     "description": "**Goal:** `cookbook` finishes its kke_benchmark run cleanly in both VMs, like every other demo.\n\n**Machine:** soucouyant\n\n**Steps**\n1. Read `/srv/kke-vm/results-20261004/windows/summary.md` and `android/summary.md`: cookbook is `ended_early` with `normal exit`.\n2. Read cookbook's log in `results-20261004/windows/results/` and the Android `logcat.txt`; find why it exits before its benchmark time.\n3. Run `tools/runner/kkrun demo cookbook --seconds 30 --headless` on soucouyant to see if Linux does the same.\n4. Fix the cause in the cookbook game code (or the benchmark's timing if cookbook legitimately ends), with a test if it is logic.\n5. Rebuild with `kkrun build`, run `kkrun tests`, then `python3 tools/vm/kke_vm.py windows-test` and `android-test` as in docs/VM_TESTS.md.\n6. Open a Forgejo PR; Kees merges.\n\n**Files**\n- kk-engine: games/cookbook/ (find with `ls games`)\n- kk-engine: tools/vm/kke_vm.py\n- /srv/kke-vm/results-20261004/\n\n**Done when:** Both VM summaries show cookbook `ok` and the PR is open with 0 warnings and all tests passing.",
+     "state": "queued"
+    },
+    {
+     "id": "test-souc-03",
+     "title": "Run Android tests on Kees's phone first, emulator as fallback",
+     "description": "**Goal:** Android tests run on Kees's Poco X3 NFC (arm64, Android 12) when it is connected over USB or Wi-Fi, and fall back to the emulator otherwise (Kees, 2026-10-04).\n\n**Machine:** soucouyant\n\n**Steps**\n1. Add `--device SERIAL|auto` to `android-test` in `tools/vm/kke_vm.py`: `auto` picks the first `adb devices` entry that is not `emulator-*`, else boots the emulator as today.\n2. Make the `Adb` class take the chosen serial (the emulator serial is hard-coded `emulator-{ANDROID_PORT}` around line 732); skip emulator boot/kill for a phone.\n3. Pick APKs by ABI: phone needs the `android-arm64` preset (`cmake --preset android-arm64 -DKKE_WARNINGS_AS_ERRORS=ON`, `cmake --build build-android-arm64 -j 6`), emulator keeps `android-x86_64`. Read `adb shell getprop ro.product.cpu.abi`.\n4. Install with `adb -s SERIAL install -r`, run the demos and the benchmark app as for the emulator, pull results and `screencap` shots; uninstall test APKs at the end.\n5. Write the device model and real GPU (Adreno) into `summary.md` so phone frame rates are not compared with lavapipe ones.\n6. Document it in `docs/VM_TESTS.md` (new \"Kees's phone\" section) and `docs/ANDROID.md`; open a Forgejo PR.\n\n**Files**\n- kk-engine: tools/vm/kke_vm.py\n- kk-engine: docs/VM_TESTS.md\n- kk-engine: docs/ANDROID.md\n- kk-engine: CMakePresets.json\n\n**Done when:** `kke_vm.py android-test --device auto` runs on the phone (serial 224efd9a) with a summary and screenshots, and with the phone unplugged runs the emulator; PR open.",
+     "state": "queued"
+    },
+    {
+     "id": "test-souc-04",
+     "title": "Set up Wi-Fi adb and scrcpy for the test phone",
+     "description": "**Goal:** Kees's phone can be tested and viewed over Wi-Fi when it is not on USB.\n\n**Machine:** soucouyant\n\n**Steps**\n1. On the phone (Kees): Settings → Developer options → enable Wireless debugging; keep the phone on the same LAN as soucouyant.\n2. Pair once: on the phone tap \"Pair device with pairing code\", then on soucouyant `adb pair PHONE_IP:PAIR_PORT` and enter the code.\n3. Connect: `adb connect PHONE_IP:PORT` (port shown on the Wireless debugging screen); `adb devices -l` must list it.\n4. Ask Kees to give the phone a fixed DHCP lease on his router so the IP stays the same; record the IP in docs/VM_TESTS.md (not the pairing code).\n5. View it: `scrcpy -s PHONE_IP:PORT` (add `--max-size 1280 --video-bit-rate 4M` on Wi-Fi).\n6. Make `--device auto` from test-souc-03 try `adb connect` to the recorded address before falling back to the emulator.\n\n**Files**\n- kk-engine: docs/VM_TESTS.md\n- kk-engine: tools/vm/kke_vm.py\n\n**Done when:** With the USB cable out, `adb devices` lists the phone over Wi-Fi, scrcpy shows it, and `android-test --device auto` uses it.",
+     "state": "queued"
+    },
+    {
+     "id": "test-souc-05",
+     "title": "Script the checks that still needed hands",
+     "description": "**Goal:** The checks that scripted input could not do get a replay or test, or a clear hands-on note for Kees.\n\n**Machine:** soucouyant\n\n**Steps**\n1. Sandbox (#14 merged): the scripted shotgun shot never fired cleanly; record a replay like `gamepad_bat.replay` for the shotgun and make it pass with `KKE_FULL_SPEED_IN_BACKGROUND=1`.\n2. Sea demo (#7): log the FEMFX peak ms while cannons fire at the fort palisade (a scripted broadside); check it stays under the frame budget.\n3. Racing (#3): flight stick passed with a scripted stick only; list for Kees the exact steps to try with the two T.16000M sticks.\n4. Run each with `tools/runner/kkrun demo <game>` on soucouyant with the GameCube adapter ignored.\n5. Open one Forgejo PR with the replays/tests.\n\n**Files**\n- kk-engine: games/sandbox/\n- kk-engine: games/sea_demo/\n- kk-engine: games/racing/\n- kk-engine: tools/check_game\n\n**Done when:** Shotgun replay passes 3 runs in a row, the sea fort peak is in the PR text, and Kees has a short stick checklist.",
+     "state": "queued"
+    },
+    {
+     "id": "test-souc-06",
+     "title": "Merge the per-round ai-lessons into the skills library",
+     "description": "**Goal:** The lessons on kk-engine `patches/inbox:ai-lessons/` live in the matching skills so the local AI has them.\n\n**Machine:** soucouyant\n\n**Steps**\n1. `git -C /media/development/Software/kk-engine fetch forgejo` then `git show forgejo/patches/inbox:ai-lessons/racing-cameras.md` (and platoon-duel, climbing-hands, goblin-horde, sea-demo, kke-demo*, sandbox, pet-companion, jiggle-body, touch-controls, vm-tests, android-ci, bake-all, race-isolation, forgejo-switch).\n2. For each, keep only lasting rules (commands, pitfalls, numbers) and add them to `kk-engine-games`, `kk-engine-showcase`, `kk-engine-characters`, `kk-engine-release` or `kk-engine-vm-tests` with a proof tag.\n3. Skip anything already in a skill; do not copy whole files.\n4. Commit in Server-Docker `Services/ai/ai-skills` with only those files.\n\n**Files**\n- kk-engine: patches/inbox:ai-lessons/*.md\n- Server-Docker: Services/ai/ai-skills/kk-engine-*/SKILL.md\n\n**Done when:** Each ai-lessons file is either reflected in a skill or noted as nothing lasting, and the commit is in Server-Docker.",
+     "state": "queued"
+    },
+    {
+     "id": "test-souc-07",
+     "title": "Check the two Windows VM tests that failed on the first run",
+     "description": "**Goal:** Know whether `CookedFile.ReadAssetFileReadsPlainAndCookedAndTraces` and `KnownPacks.FindsFilesInAPackWhateverItsFolderIsCalled` are flaky on Windows.\n\n**Machine:** soucouyant\n\n**Steps**\n1. Read `/srv/kke-vm/results-20261004/windows-run1/kke_tests.log` for both failures; note that run had `Vulkan device: None`.\n2. Run `python3 tools/vm/kke_vm.py windows-test` three times and grep each `kke_tests.log` for the two names.\n3. If either fails again, fix the path/case handling it trips on (Windows paths, junction to the source tree) and add a test.\n4. Report in docs/VM_TESTS.md under known issues if it was a first-boot effect.\n\n**Files**\n- /srv/kke-vm/results-20261004/windows-run1/\n- kk-engine: tests/ (grep the two test names)\n- kk-engine: tools/vm/kke_vm.py\n\n**Done when:** Three Windows runs pass both tests, or a fix PR is open.",
+     "state": "queued"
+    }
+   ]
+  }
+ ]
+}
