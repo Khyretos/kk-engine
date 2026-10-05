@@ -38,6 +38,7 @@ pedals, button boxes), gyro pitch/yaw/roll, accelerometer, touchpad X/Y.
 | Toggle | each press flips it | crouch, sprint on L3 |
 
 Rules that make this robust:
+
 - **Tap waits for a double tap** only when that same input also has a
   DoubleTap binding, and fires when the window runs out. A double tap
   never also fires the single tap.
