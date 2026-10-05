@@ -135,7 +135,7 @@ cam.target = cam.position + glm::vec3(turn * glm::vec4(look, 0.0f));
 **Zoom** changes the rig's arm length by the `zoom` axis, clamped to 1.5
 to 8 m.
 
-### The Lua side (view.* and player.*)
+### The Lua side (view.*and player.*)
 
 `registerLua()` adds:
 

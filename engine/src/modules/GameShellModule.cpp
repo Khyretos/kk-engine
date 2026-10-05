@@ -96,6 +96,17 @@ bool envIs(const char* value) {
     return v && std::strcmp(v, value) == 0;
 }
 
+// The menu's document shown or put away. Hidden is not enough on its own:
+// RmlUi still finds a visibility: hidden body under the mouse, so where
+// the game's own documents let clicks through (the sandbox palette's
+// body), the hidden menu took the click, came to the front and from then
+// on took every click meant for the game's buttons.
+void showDocument(Rml::ElementDocument* doc, bool shown) {
+    if (!doc) return;
+    doc->SetProperty("visibility", shown ? "visible" : "hidden");
+    doc->SetProperty("pointer-events", shown ? "auto" : "none");
+}
+
 } // namespace
 
 // ---------------------------------------------------------------- Rows
@@ -358,7 +369,7 @@ void GameShellModule::init(Application& app) {
         m_doc->AddEventListener("click", m_listener.get());
         m_doc->AddEventListener("mousedown", m_listener.get());
         m_rowsEl = m_doc->GetElementById("rows");
-        m_doc->SetProperty("visibility", "hidden");
+        showDocument(m_doc, false);
         m_doc->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
         // Above the game's own documents (the HUD, the lobby).
         m_doc->PullToFront();
@@ -444,7 +455,7 @@ void GameShellModule::setPage(Page page) {
         m_titleAt = kTitleSettle;
     }
     m_focus = 0;
-    if (m_doc) m_doc->SetProperty("visibility", open ? "visible" : "hidden");
+    showDocument(m_doc, open);
 }
 
 void GameShellModule::openPause() {
@@ -455,7 +466,7 @@ void GameShellModule::openPause() {
 void GameShellModule::startTouchEdit() {
     if (!m_input) return;
     m_touchEditing = true;
-    if (m_doc) m_doc->SetProperty("visibility", "hidden"); // the game (still frozen) shows behind the controls
+    showDocument(m_doc, false); // the game (still frozen) shows behind the controls
     m_input->editTouch(true);
 }
 
@@ -1129,7 +1140,7 @@ void GameShellModule::onEvent(const SDL_Event& e) {
         const bool inLobby = m_lobby && m_lobby->isOpen();
         bool open = false;
         if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN)
-            open = e.gbutton.button == SDL_GAMEPAD_BUTTON_BACK ||
+            open = (e.gbutton.button == SDL_GAMEPAD_BUTTON_BACK && !(selectIsTheGames && selectIsTheGames())) ||
                    (e.gbutton.button == SDL_GAMEPAD_BUTTON_START && !inLobby && !(startIsTheGames && startIsTheGames()));
         else if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat)
             open = e.key.key == SDLK_ESCAPE && !inLobby;
@@ -1248,7 +1259,7 @@ void GameShellModule::frameStart(const UpdateContext& ctx) {
     if (m_touchEditing) {
         if (m_input && m_input->touch().editing()) return;
         m_touchEditing = false; // Done: back to the Controls page
-        if (m_doc) m_doc->SetProperty("visibility", "visible");
+        showDocument(m_doc, true);
         m_dirty = true;
     }
     // The touch controls' pause button opens the menu as Start does.

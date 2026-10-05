@@ -379,9 +379,9 @@ TEST(Orders, IntentReadsLookingApproachingAndIdle) {
 namespace {
 
 // Runs the AI (it moves its agents itself here) until `done` or a limit.
-template <typename Done> int run(kke::ai::AiWorld& w, kke::AiOrderBridge& bridge, Done done, int frames = 900) {
+template <typename Done> int run(kke::ai::AiWorld& w, kke::AiOrderBridge& bridge, Done done, int frames = 900, float fps = 30.0f) {
     for (int i = 0; i < frames; ++i) {
-        w.update(1.0f / 30.0f);
+        w.update(1.0f / fps);
         bridge.handle(w.takeEvents());
         if (done()) return i;
     }
@@ -509,6 +509,70 @@ TEST(OrderBridge, PetWaitsForTheGameToEndThePat) {
     EXPECT_LT(glm::length(w.agent(2)->position - w.agent(1)->position), 1.6f);
     board.complete(2, true);
     EXPECT_EQ(board.currentKind(2), kke::OrderKind::None);
+}
+
+// Taking cover: a spot right in front of a crate is reached quickly (at a
+// run) and held, not circled because the crate pushes the soldier away.
+TEST(OrderBridge, StayAtASpotInFrontOfAnObstacleRunsThereAndSettles) {
+    kke::ai::AiWorld w(4);
+    ASSERT_TRUE(w.addAgent(1, "farmer", { 0, 0, 12 }));
+    w.addObstacle({ { 0, 0, 0 }, 0.8f });
+    kke::OrderBoard board([&](uint32_t u) { return w.agent(u)->position; });
+    kke::AiOrderBridge bridge(board, w);
+    kke::Order cover;
+    cover.kind = kke::OrderKind::Stay;
+    cover.units = { 1 };
+    cover.point = { 0, 0, 1.5f };
+    cover.hasPoint = true;
+    board.issue(cover);
+    EXPECT_TRUE(w.agent(1)->order.run);
+    const kke::ai::Species* s = w.species("farmer");
+    ASSERT_NE(s, nullptr);
+    // At a run, with time to speed up and slow down: well under the walk.
+    const float walkTime = 10.5f / s->walkSpeed;
+    const int frames = run(w, bridge, [&] { return flatDistance(w.agent(1)->position, cover.point) < 0.6f; });
+    ASSERT_GE(frames, 0) << w.describe(1);
+    EXPECT_LT(float(frames) / 30.0f, walkTime * 0.8f);
+    // And it stays there.
+    run(w, bridge, [] { return false; }, 90);
+    EXPECT_LT(flatDistance(w.agent(1)->position, cover.point), 0.6f);
+    EXPECT_GT(flatDistance(w.agent(1)->position, { 0, 0, 0 }), 0.8f);
+}
+
+// Platoon on soucouyant: a soldier sent to the near end of a barrier's
+// cover face while still running on from the last order turned onto it so
+// slowly that he ran across the barrier's line, to the enemy's side, and
+// stuck there at its end.
+TEST(OrderBridge, StayAtTheEndOfABarrierFaceArrivesOnThatSide) {
+    kke::ai::AiWorld w(4);
+    // Platoon's soldier: quick on its feet.
+    const kke::ai::Species* farmer = w.species("farmer");
+    ASSERT_NE(farmer, nullptr);
+    kke::ai::Species soldier = *farmer;
+    soldier.id = "soldier";
+    soldier.walkSpeed = 2.0f;
+    soldier.runSpeed = 5.0f;
+    soldier.acceleration = 14.0f;
+    soldier.radius = 0.35f;
+    w.defineSpecies(soldier);
+    ASSERT_TRUE(w.addAgent(1, "soldier", { -3.9f, 0, 3.6f }));
+    w.agent(1)->velocity = { 0.3f, 0, -4.2f }; // still running from the last order
+    // A barrier along x, as kke games build one: a chain of small circles.
+    for (int i = 0; i <= 6; ++i) w.addObstacle({ { -1.2f + 0.4f * float(i), 0, 0 }, 0.4f });
+    kke::OrderBoard board([&](uint32_t u) { return w.agent(u)->position; });
+    kke::AiOrderBridge bridge(board, w);
+    kke::Order cover;
+    cover.kind = kke::OrderKind::Stay;
+    cover.units = { 1 };
+    cover.point = { -1.1f, 0, 1.1f };
+    cover.hasPoint = true;
+    board.issue(cover);
+    // At the 140 fps soucouyant ran it at (seconds of it, not frames).
+    const int frames = run(w, bridge, [&] { return flatDistance(w.agent(1)->position, cover.point) < 0.6f; }, 140 * 6, 140.0f);
+    ASSERT_GE(frames, 0) << w.describe(1);
+    run(w, bridge, [] { return false; }, 140 * 3, 140.0f);
+    EXPECT_LT(flatDistance(w.agent(1)->position, cover.point), 0.6f) << w.describe(1);
+    EXPECT_GT(w.agent(1)->position.z, 0.4f); // on the cover side
 }
 
 #if KKE_ENABLE_LUA

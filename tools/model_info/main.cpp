@@ -1,6 +1,7 @@
 // kke_model_info <file> — what the engine sees in a model file: mesh
 // parts, triangles, materials/textures, bones, animation clips (name,
-// length). For checking a pack before building with it. --parts lists
+// length). For checking a pack before building with it. --bones lists
+// every bone with its parent and rest position; --parts lists
 // every mesh part with its bounds (where a car's wheels are).
 #include "kke/ModelAsset.h"
 
@@ -25,8 +26,12 @@ int main(int argc, char** argv) {
             if (std::strcmp(argv[a], "--parts") == 0) parts = true;
             else bones = true;
         }
-        if (bones)
-            for (size_t b = 0; b < m.bones.size(); ++b) std::printf("  bone %zu '%s' parent %d\n", b, m.bones[b].name.c_str(), m.bones[b].parent);
+        if (bones) {
+            const std::vector<glm::mat4> rest = kke::computeRestPose(m); // where each bone is in the rest pose (model space)
+            for (size_t b = 0; b < m.bones.size(); ++b)
+                std::printf("  bone %zu '%s' parent %d at (%.3f %.3f %.3f)\n", b, m.bones[b].name.c_str(), m.bones[b].parent, rest[b][3].x, rest[b][3].y,
+                            rest[b][3].z);
+        }
         if (parts)
             for (const kke::ModelMesh& mesh : m.meshes) {
                 glm::vec3 mn(1e9f), mx(-1e9f);

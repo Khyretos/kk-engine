@@ -63,7 +63,7 @@ How it works (`kke/KnownPacks.h`):
 
 1. **By name.** The engine drops the download's suffix (`_SourceFiles`,
    `_Source_Files`, `_Source_Sprites`, `[Source]`, `[Pro]`, `_Unity_2022…`,
-   `_Unreal…`, a ` (1)` from a second download), a version (`_v3`),
+   `_Unreal…`, a `(1)` from a second download), a version (`_v3`),
    capitals, spaces and punctuation, and compares what is left:
    `POLYGON_Street_Racer_SourceFiles_v3` and `polygon street racer` are
    both `polygonstreetracer`.
@@ -139,10 +139,10 @@ the game says which pack it missed. With the packs:
 | flying_demo | POLYGON_StuntPlane, POLYGON_Town |
 | party | POLYGON_City_Characters |
 | tennis | POLYGON_Shops (racket and ball), Universal Animation Library 2 |
-| duel | Universal Animation Library 2 |
+| duel | Universal Animation Library 2, Universal Animation Library (optional: the kick, dodges and body hits) |
 | goblin_horde | POLYGON_Goblin_War_Camp, POLYGON_Dungeon_Pack, POLYGON_Fantasy_Rivals, POLYGON_Fantasy_Characters, Universal Animation Library 2, Universal Animation Library (optional: kicks and spells) |
 | farm_demo | POLYGON_Farm, POLYGON_Dogs, Farm Animals Animated by Quaternius |
-| pet_companion | Farm Animals Animated by Quaternius, POLYGON_Town |
+| pet_companion | POLYGON_Dogs, POLYGON_Town, Farm Animals Animated by Quaternius (the pug) |
 | platoon | POLYGON_Prototype |
 | jiggle_demo | POLYGON_Prototype, POLYGON_City_Characters, POLYGON_Fantasy_Characters |
 | kke_demo | POLYGON_Town, POLYGON_Nature, Universal Animation Library 2 |

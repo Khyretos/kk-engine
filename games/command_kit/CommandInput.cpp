@@ -54,6 +54,11 @@ void CommandInput::onEvent(const SDL_Event& e) {
             m_press.pos = m_mouse;
             if (glm::length(m_press.pos - m_press.start) > dragPixels) m_press.dragging = true;
         }
+        if (m_right.down && !m_right.opened) {
+            if (!m_right.moved && glm::length(m_mouse - m_right.start) > dragPixels) m_right.moved = true;
+            if (m_right.moved) m_orbitDelta += glm::vec2(e.motion.xrel, e.motion.yrel);
+        }
+        if (m_middleDown) m_panDelta += glm::vec2(e.motion.xrel, e.motion.yrel);
         break;
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
         m_mouse = { e.button.x, e.button.y };
@@ -65,6 +70,12 @@ void CommandInput::onEvent(const SDL_Event& e) {
             m_press.start = m_press.pos = m_mouse;
             m_press.blocked = overUi && overUi(m_mouse);
         }
+        if (rightButtonGestures && e.button.button == SDL_BUTTON_RIGHT) {
+            m_right = RightPress{};
+            m_right.down = true;
+            m_right.start = m_mouse;
+        }
+        if (rightButtonGestures && e.button.button == SDL_BUTTON_MIDDLE) m_middleDown = true;
         break;
     case SDL_EVENT_MOUSE_BUTTON_UP:
         m_mouse = { e.button.x, e.button.y };
@@ -73,9 +84,16 @@ void CommandInput::onEvent(const SDL_Event& e) {
             m_press.released = true;
             m_press.pos = m_mouse;
         }
+        if (e.button.button == SDL_BUTTON_RIGHT && m_right.down) {
+            m_right.down = false;
+            m_right.released = true;
+        }
+        if (e.button.button == SDL_BUTTON_MIDDLE) m_middleDown = false;
         break;
     case SDL_EVENT_WINDOW_FOCUS_LOST:
         m_press = Press{};
+        m_right = RightPress{};
+        m_middleDown = false;
         break;
     default: break;
     }
@@ -152,7 +170,38 @@ const CommandInput::Frame& CommandInput::update(kke::InputMap& in, kke::Applicat
         m_press = Press{};
     }
 
-    if (!m_wheelOpen && in.pressed("cmd.context")) f.context = !(overUi && !f.reticle && overUi(f.pointer));
+    // The right button with gestures: a drag turns the view, held still it
+    // opens the wheel, a click is the order (the bound right button's own
+    // press is that click, so it isn't counted twice).
+    const bool rightGesture = rightButtonGestures && (m_right.down || m_right.released);
+    if (rightButtonGestures) {
+        if (m_right.down && !m_right.moved && !m_right.opened && !m_wheelOpen) {
+            m_right.held += dt;
+            if (m_right.held >= longPressSeconds) {
+                m_right.opened = true;
+                openWheel(m_right.start, m_right.start, 3);
+            }
+        }
+        if (m_wheelOpen && m_wheelSource == 3) {
+            m_wheel.updatePointer(m_mouse - m_wheelCenter);
+            if (!m_right.down) {
+                f.wheelGiven = m_wheel.picked();
+                m_wheelOpen = false;
+            }
+        }
+        if (m_right.released) {
+            if (!m_right.moved && !m_right.opened && !m_wheelOpen) {
+                f.pointer = m_right.start;
+                f.reticle = false;
+                f.context = !(overUi && overUi(f.pointer));
+            }
+            m_right = RightPress{};
+        }
+        f.orbit = m_orbitDelta;
+        f.pan = m_panDelta;
+        m_orbitDelta = m_panDelta = glm::vec2(0.0f);
+    }
+    if (!m_wheelOpen && !rightGesture && in.pressed("cmd.context")) f.context = !(overUi && !f.reticle && overUi(f.pointer));
 
     f.wheelOpen = m_wheelOpen;
     f.wheelCenter = m_wheelCenter;

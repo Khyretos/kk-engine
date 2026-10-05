@@ -1,0 +1,80 @@
+<rml>
+<head>
+    <title>Bag</title>
+    <link type="text/rcss" href="theme.rcss"/>
+    <style>
+        /* Over the game, which keeps running: equipment, the grid, the details. */
+        body { pointer-events: none; }
+        #bag { position: absolute; left: 50%; top: 50%; width: 1030dp; margin-left: -515dp; height: 430dp; margin-top: -240dp;
+               padding: 16dp 18dp; border-radius: 12dp; pointer-events: auto; animation: 0.18s cubic-out pop; }
+        #bag .title { font-size: 13dp; letter-spacing: 3dp; color: #ffcf5c; margin-bottom: 10dp; }
+        #bag .title .close { float: right; color: #8b93aa; cursor: pointer; letter-spacing: 0dp; }
+        #bag .title .sort { float: right; color: #8b93aa; cursor: pointer; letter-spacing: 0dp; margin-right: 18dp; }
+        #equip { float: left; width: 168dp; }
+        #equip .slot { height: 40dp; margin-bottom: 6dp; padding: 4dp 8dp; border: 1dp #3a4670; border-radius: 6dp;
+                       background-color: #0d1120cc; cursor: pointer; }
+        #equip .slot .name { font-size: 11dp; color: #8b93aa; }
+        #equip .slot .item { font-size: 14dp; color: #e8ecf4; }
+        #equip .slot.cursor { border-color: #ffcf5c; }
+        #equip .slot.fits { border-color: #6fe39a; }
+        #grid { position: relative; float: left; margin-left: 16dp; width: 470dp; height: 276dp; }
+        #grid .cell { float: left; width: 42dp; height: 42dp; margin: 1dp; background-color: #0d1120cc; border: 1dp #232c4a; }
+        #grid .cell.cursor { background-color: #34427a; border-color: #ffcf5c; }
+        #grid .cell.ok { background-color: #2a6b47; border-color: #6fe39a; }
+        #grid .cell.bad { background-color: #6b2a33; border-color: #ff7373; }
+        #grid .tile { position: absolute; pointer-events: none; border: 1dp #00000066; border-radius: 4dp; padding: 3dp 5dp; overflow: hidden; }
+        #grid .tile.moving { opacity: 0.35; }
+        #grid .tile .label { font-size: 11dp; color: #f2f4fa; }
+        #grid .tile .count { position: absolute; right: 4dp; bottom: 2dp; font-size: 12dp; font-weight: bold; color: #ffffff; }
+        #info { float: left; margin-left: 18dp; width: 300dp; }
+        #info .name { font-size: 18dp; font-weight: bold; color: #ffffff; }
+        #info .category { font-size: 12dp; color: #ffcf5c; letter-spacing: 2dp; margin-bottom: 8dp; }
+        #info .desc { font-size: 14dp; color: #cfd6ea; margin-bottom: 10dp; }
+        #info .fact { font-size: 13dp; color: #aab3cc; margin-bottom: 3dp; }
+        #info .empty { font-size: 13dp; color: #5d6580; }
+        #weight { clear: both; padding-top: 14dp; }
+        #weight .bar { display: inline-block; width: 420dp; height: 8dp; border-radius: 4dp; background-color: #0d1120; margin: 0dp 10dp; }
+        #weight .fill { height: 8dp; border-radius: 4dp; background-color: #6fe39a; }
+        #weight.heavy .fill { background-color: #ffb347; }
+        #weight .label { font-size: 13dp; color: #e8ecf4; }
+        #weight .note { font-size: 13dp; color: #ffb347; margin-left: 10dp; }
+        #keys { font-size: 12dp; color: #8b93aa; margin-top: 8dp; }
+        @keyframes pop { from { transform: scale(0.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    </style>
+</head>
+<body data-model="inv">
+    <div id="bag" class="glass" data-if="open">
+        <div class="title">BAG<span class="close" data-event-click="close()">close</span><span class="sort" data-event-click="sort()">sort</span></div>
+        <div id="equip">
+            <div data-for="s, k : slots" class="slot" data-class-cursor="s.cursor" data-class-fits="s.fits" data-attr-style="s.style"
+                 data-event-mousedown="slotdown(k)" data-event-mouseover="slothover(k)">
+                <div class="name">{{s.name}}</div>
+                <div class="item">{{s.item}}</div>
+            </div>
+        </div>
+        <div id="grid">
+            <div data-for="c, i : cells" class="cell" data-class-cursor="c.cursor" data-class-ok="c.ok" data-class-bad="c.bad"
+                 data-event-mousedown="celldown(i)" data-event-mouseover="cellhover(i)"></div>
+            <div data-for="t : tiles" class="tile" data-class-moving="t.moving" data-attr-style="t.style">
+                <div class="label">{{t.label}}</div>
+                <div class="count">{{t.count}}</div>
+            </div>
+        </div>
+        <div id="info">
+            <div data-if="info_any">
+                <div class="name">{{info_name}}</div>
+                <div class="category">{{info_category}}</div>
+                <div class="desc">{{info_desc}}</div>
+                <div class="fact">Weight: {{info_weight}}</div>
+                <div class="fact">Size: {{info_size}}</div>
+                <div class="fact" data-if="info_equip != ''">{{info_equip}}</div>
+            </div>
+            <div class="empty" data-if="!info_any">Move over an item to see what it is.</div>
+        </div>
+        <div id="weight" data-class-heavy="heavy">
+            <span class="label">Carrying {{weight}}</span><span class="bar"><div class="fill" data-attr-style="weight_bar"></div></span><span class="note">{{note}}</span>
+        </div>
+        <div id="keys" data-rml="keys"></div>
+    </div>
+</body>
+</rml>

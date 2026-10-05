@@ -34,6 +34,16 @@ div { display: block; }
    running off the side. A set width, not max-width: RmlUi shrinks an
    inline-block that doesn't fit to its narrowest (one picture a row). */
 @media (orientation: portrait) { #bar { width: 92%; white-space: normal; } }
+/* Many pictures (every tool and animal on disk): smaller ones, on two
+   rows if they still don't fit, rather than off the side of the screen. */
+#bar.compact { width: 96%; white-space: normal; padding: 8dp 8dp 6dp 8dp; }
+/* From the left, so a picture stays put when "Get up" comes and goes. */
+#bar.compact #cells { text-align: left; }
+#bar.compact .cell { width: 66dp; margin: 0 3dp 4dp 3dp; }
+#bar.compact .pic { width: 66dp; height: 66dp; border-radius: 12dp; }
+#bar.compact .pic img { width: 60dp; height: 60dp; }
+#bar.compact .word { line-height: 60dp; font-size: 17dp; }
+#bar.compact .label { font-size: 13dp; }
 #hint { font-size: 19dp; font-weight: bold; color: #2b2f3a; margin: 0 4dp 8dp 4dp; }
 .cell { display: inline-block; width: 92dp; margin: 0 4dp; vertical-align: top; }
 .pic { width: 92dp; height: 92dp; border-radius: 16dp; background-color: #eef0f5; border: 3dp #e0e3ec;
@@ -56,6 +66,9 @@ div { display: block; }
 </rml>)RML";
 
 std::string esc(const std::string& s) { return kke::escapeRmlText(s); }
+
+// More pictures than this and they are drawn smaller (#bar.compact).
+constexpr size_t kRoomyCells = 12;
 
 // The picture (or one of its children) that was pressed.
 Rml::Element* cellOf(Rml::Element* e) {
@@ -129,6 +142,7 @@ void PlayPalette::set(const std::string& hint, const std::vector<Cell>& cells) {
     const std::string all = hint + '\n' + rml;
     if (all == m_shown) return;
     m_shown = all;
+    m_doc->GetElementById("bar")->SetClass("compact", cells.size() > kRoomyCells);
     m_doc->GetElementById("hint")->SetInnerRML(esc(hint));
     m_doc->GetElementById("cells")->SetInnerRML(rml);
     m_doc->UpdateDocument(); // lay it out now, so cellCentres() is right this frame

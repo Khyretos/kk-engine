@@ -1055,10 +1055,15 @@ void Application::run() {
 
 void Application::setResourceBudget(const ResourceBudget& budget) {
     m_budget = budget;
+    // KKE_FULL_SPEED_IN_BACKGROUND=1 (developer builds; tools/check_game and
+    // kkrun set it): no background cap. Tests and demos run in windows that
+    // don't have the focus (on soucouyant Kees is using the desktop), and
+    // at 15 fps they measured the cap, not the game. Players keep the cap.
+    if (dev::flag("KKE_FULL_SPEED_IN_BACKGROUND")) m_budget.backgroundFrameRate = 0.0f;
     m_frameRateLimit = budget.frameRateLimit;
     if (m_renderer) m_renderer->setRenderScale(budget.renderScale);
     log::get("Governor")->info("budget: {} worker thread(s), frame cap {}, background cap {}, render scale {:.2f}{}", budget.workerThreads,
-                               budget.frameRateLimit, budget.backgroundFrameRate, budget.renderScale,
+                               budget.frameRateLimit, m_budget.backgroundFrameRate, budget.renderScale,
                                budget.useEverything ? " (use everything)" : "");
 }
 

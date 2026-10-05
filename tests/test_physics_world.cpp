@@ -71,6 +71,15 @@ TEST(PhysicsWorld, BlastVelocityFadesWithDistance) {
     EXPECT_EQ(kke::blastVelocity(c, 0.0f, 10.0f, c), glm::vec3(0.0f));
 }
 
+TEST(PhysicsWorld, BlastsDontStack) {
+    const glm::vec3 dv(0, 0, 10);
+    EXPECT_EQ(kke::blastedVelocity(glm::vec3(0.0f), dv), dv);                     // at rest: the push
+    EXPECT_EQ(kke::blastedVelocity(dv, dv), dv);                                  // a second one: no faster
+    EXPECT_EQ(kke::blastedVelocity(glm::vec3(0, 0, 25), dv), glm::vec3(0, 0, 25)); // already faster: unchanged
+    EXPECT_EQ(kke::blastedVelocity(glm::vec3(3, 0, -4), dv), glm::vec3(3, 0, 10)); // coming at it: turned round, sideways kept
+    EXPECT_EQ(kke::blastedVelocity(glm::vec3(1, 2, 3), glm::vec3(0.0f)), glm::vec3(1, 2, 3));
+}
+
 TEST(PhysicsWorld, RagdollProviderPicksTheBest) {
     struct Provider : kke::IRagdollPhysics {
         explicit Provider(int q) : quality(q) {}

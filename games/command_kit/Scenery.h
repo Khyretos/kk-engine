@@ -29,7 +29,10 @@ void appendBox(const glm::vec3& center, const glm::vec3& half, const glm::vec3& 
 // asked for is remembered, so it can list what it used (docs/SCENES.md).
 class Scenery {
 public:
-    Scenery(kke::Application& app, kke::ModelModule& models, kke::RigidBodyModule& rigid);
+    // `onlyPacks`: look only in these packs (any folder name the pack goes
+    // by, kke::packKey); empty = every pack. A game that names its packs
+    // starts at once on a big library instead of reading every folder.
+    Scenery(kke::Application& app, kke::ModelModule& models, kke::RigidBodyModule& rigid, std::vector<std::string> onlyPacks = {});
     ~Scenery();
 
     // A flat field `half` metres each way from the origin, with a Jolt floor.
@@ -44,6 +47,16 @@ public:
                                        bool collide = true, const std::vector<std::string>& packs = {});
     // A coloured block with a static collider (the fallback for missing art, or level geometry).
     void block(const glm::vec3& center, const glm::vec3& half, const glm::vec3& color, bool collide = true);
+
+    // Every static box collider placed so far (place with `collide`,
+    // block): what a navmesh is built from (kke::ai::NavMesh), with the
+    // ground as `groundHalf` metres each way.
+    struct Collider {
+        glm::vec3 center{0.0f}, half{0.0f};
+        float yaw = 0.0f; // degrees, as place() took it
+    };
+    const std::vector<Collider>& colliders() const { return m_colliders; }
+    float groundHalf() const { return m_groundHalf; }
 
     const std::vector<std::string>& used() const { return m_used; } // asset names, in first-use order
     void logUsed(const char* who) const;
@@ -62,6 +75,8 @@ private:
     bool m_blocksDirty = false;
     std::unique_ptr<kke::DynamicMeshRenderer> m_ground, m_blocks;
     std::vector<kke::RigidWorld::BodyId> m_bodies;
+    std::vector<Collider> m_colliders;
+    float m_groundHalf = 0.0f;
 };
 
 } // namespace command_kit

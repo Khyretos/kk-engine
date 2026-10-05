@@ -1,0 +1,34 @@
+<rml>
+<head>
+    <title>Spawn menu</title>
+    <link type="text/rcss" href="theme.rcss"/>
+    <style>
+        /* A column on the right over the game, which keeps running. */
+        body { pointer-events: none; }
+        #spawn { position: absolute; right: 24dp; top: 50%; width: 330dp; margin-top: -230dp; padding: 14dp 0dp 10dp 0dp;
+                 border-radius: 10dp; pointer-events: auto; animation: 0.2s cubic-out slide-left; }
+        #spawn .title { font-size: 13dp; letter-spacing: 3dp; color: #ffcf5c; padding: 0dp 18dp 8dp 18dp; }
+        #spawn .row { margin: 0dp; padding: 7dp 18dp; border-left: 3dp #00000000; cursor: pointer; }
+        #spawn .row .label { font-size: 16dp; color: #e8ecf4; }
+        #spawn .row .hint { font-size: 12dp; color: #8b93aa; }
+        #spawn .row.sel { background-color: #34427acc; border-left-color: #ffcf5c; }
+        #spawn .row.sel .hint { color: #c8d0e6; }
+        #spawn .row.tidy { border-top: 1dp #3a4670; }
+        #spawn .note { font-size: 13dp; color: #6fe39a; padding: 8dp 18dp 0dp 18dp; height: 18dp; }
+        #spawn .keys { font-size: 12dp; color: #8b93aa; padding: 6dp 18dp 0dp 18dp; }
+        @keyframes slide-left { from { transform: translateX(40dp); opacity: 0; } to { transform: translateX(0dp); opacity: 1; } }
+    </style>
+</head>
+<body data-model="spawn">
+    <div id="spawn" class="glass" data-if="open">
+        <div class="title">SPAWN</div>
+        <div data-for="row, i : rows" class="row" data-class-sel="i == sel" data-class-tidy="i == 8"
+             data-event-click="pick(i)" data-event-mouseover="hover(i)">
+            <div class="label">{{row.label}}</div>
+            <div class="hint">{{row.hint}}</div>
+        </div>
+        <div class="note">{{note}}</div>
+        <div class="keys">Up and down to choose, A, Space or a click to spawn, B or the spawn button to close</div>
+    </div>
+</body>
+</rml>

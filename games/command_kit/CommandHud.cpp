@@ -12,6 +12,8 @@
 #include <RmlUi/Core/ElementDocument.h>
 #include <SDL3/SDL.h>
 
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 
 namespace command_kit {
@@ -51,6 +53,13 @@ bool CommandHud::build(const std::string& title) {
         s.RegisterMember("color", &LineView::color);
     }
     c.RegisterArray<std::vector<LineView>>();
+    if (auto s = c.RegisterStruct<MeterView>()) {
+        s.RegisterMember("icon", &MeterView::icon);
+        s.RegisterMember("label", &MeterView::label);
+        s.RegisterMember("width", &MeterView::width);
+        s.RegisterMember("color", &MeterView::color);
+    }
+    c.RegisterArray<std::vector<MeterView>>();
     if (auto s = c.RegisterStruct<Item>()) {
         s.RegisterMember("icon", &Item::icon);
         s.RegisterMember("label", &Item::label);
@@ -64,6 +73,7 @@ bool CommandHud::build(const std::string& title) {
     c.Bind("toast", &m_toast);
     c.Bind("buttons", &m_buttons);
     c.Bind("lines", &m_lines);
+    c.Bind("meters", &m_meters);
     c.Bind("items", &m_items);
     c.Bind("reticle", &m_reticle);
     c.Bind("box", &m_box);
@@ -124,6 +134,22 @@ void CommandHud::setLines(std::vector<Line> lines) {
     if (same) return;
     m_lines = std::move(next);
     if (m_model) m_model.DirtyVariable("lines");
+}
+
+void CommandHud::setMeters(const std::vector<Meter>& meters) {
+    std::vector<MeterView> next;
+    for (const Meter& m : meters) {
+        // Whole percents: the bar only redraws when it really moves.
+        const int pct = int(std::lround(std::clamp(m.value, 0.0f, 1.0f) * 100.0f));
+        next.push_back({ m.icon, m.label, std::to_string(pct) + "%", m.color });
+    }
+    bool same = next.size() == m_meters.size();
+    for (size_t i = 0; same && i < next.size(); ++i)
+        same = next[i].icon == m_meters[i].icon && next[i].label == m_meters[i].label && next[i].width == m_meters[i].width &&
+               next[i].color == m_meters[i].color;
+    if (same) return;
+    m_meters = std::move(next);
+    if (m_model) m_model.DirtyVariable("meters");
 }
 
 void CommandHud::setHint(const std::string& text) {

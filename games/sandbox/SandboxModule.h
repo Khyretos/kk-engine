@@ -18,6 +18,7 @@
 
 #include "FormPanel.h"
 #include "PlayPalette.h"
+#include "Walker.h"
 
 #include <SDL3/SDL.h>
 #include <glm/glm.hpp>
@@ -25,6 +26,13 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+namespace kke {
+class GameShellModule;
+class InputModule;
+class ParticleEffects;
+class ParticleLibrary;
+}
 
 namespace kke_sandbox {
 
@@ -68,6 +76,8 @@ public:
     void init(kke::Application& app) override;
     void update(const kke::UpdateContext& ctx) override;
     void renderUi() override;
+    void renderTranslucent(const kke::RenderContext& ctx) override; // flames, smoke, sparks
+    void frameStart(const kke::UpdateContext& ctx) override;        // Walk mode's mouse while paused
     void onEvent(const SDL_Event& event) override;
     void shutdown() override;
 
@@ -91,7 +101,11 @@ public:
     Mode mode() const { return m_mode; }
 
 private:
-    enum class Tool { Select, Place, Shoot, Bat, Look };
+    // Shoot throws a FEMFX ball; Gun, Fire and Melt are Toys.cpp's.
+    enum class Tool { Select, Place, Shoot, Bat, Look, Gun, Fire, Melt };
+    // How Play mode is seen (Kees, 2026-09-28): flying around the world
+    // with the camera, or walking in it as a person.
+    enum class View { Fly, Walk };
     enum class Gizmo { Move, Rotate, Scale };
     enum class Handle { None, X, Y, Z, Ring, Scale };
 
@@ -132,6 +146,23 @@ private:
         uint32_t proxy = 0;                   // its kke::Breakables physics handle
         bool autoBreak = false;               // made breakable by Play mode (kke::guessBreakKind), not saved
         bool autoTried = false;               // Play mode looked at it already
+        // Play mode, props that don't break (a cone, a ball): a Jolt body
+        // (the mesh's convex hull) that rolls and tumbles, drawn where Jolt
+        // has it. Back in Build it is put where it was placed.
+        kke::RigidWorld::BodyId body = kke::RigidWorld::kNoBody;
+        glm::vec3 bodyCenter{0.0f};           // the body's origin = the placed prop's centre
+        float bodyMass = 0.0f;                // kg
+        bool bodyTried = false;
+        float downFor = 0.0f;                 // seconds an animal has lain ragdolled (it gets up again)
+        // Fire and heat (Toys.cpp): seconds left burning, how charred it
+        // is, how melted (0..1), and the drawn vertices melting starts from.
+        float burning = 0.0f;
+        float charred = 0.0f;
+        float heat = 0.0f, melted = 0.0f;
+        uint32_t fire = 0;                    // its flames (ParticleLibrary emitter)
+        std::vector<std::vector<glm::vec3>> meltFrom, meltNormals; // world space, per mesh part
+        glm::vec3 meltCenter{0.0f};
+        float meltFloor = 0.0f;
         // Node graphs (PlayScripting.cpp)
         kke::NodeGraph graph;                 // what this one thing does
         std::string owner;                    // the graph that brought it out ("" = placed by hand, saved)
@@ -217,6 +248,67 @@ private:
     void updateBreakables();
     void throwBall();
 
+    // Toys.cpp: hitting anything anywhere, the gun, fire and melting,
+    // animals that tumble, props that roll, and Walk mode.
+    struct Aim {
+        bool hit = false;
+        glm::vec3 point{0.0f}, normal{0.0f, 1.0f, 0.0f};
+        uint32_t thing = 0;   // the sandbox object hit (0 = the ground or nothing)
+        float distance = 0.0f;
+    };
+    // The gun, the torch (Fire) and the heat gun (Melt): a model each,
+    // found in the packs on first use (none: drawn as lines).
+    struct ToolModel {
+        kke::ModelModule::ModelId model = 0;
+        kke::ModelModule::InstanceId instance = 0; // the one in your hands
+        kke::LongAxis axis;
+        bool tried = false;
+    };
+    kke::Ray aimRay() const;                   // the mouse, or the crosshair while walking
+    Aim aimAt(const kke::Ray& ray, float maxDistance = 200.0f) const;
+    // What happens where something is hit at `point` with velocity `push`
+    // (m/s): people and animals tumble from that body part, props are
+    // pushed there (Jolt) or take the blow there (FEMFX: dents, cracks).
+    void strike(uint32_t thing, const glm::vec3& point, const glm::vec3& push, uint32_t sound); // sound: a kke::AudioMaterialTable id
+    void knockOver(Object& o, const glm::vec3& push, const glm::vec3* point);
+    bool makeAnimalRagdoll(Object& o);
+    void standAnimalUp(Object& o);
+    void bodyBounds(const Object& o, glm::vec3& mn, glm::vec3& mx) const; // where it is now (moved, tumbling, ragdolled)
+    void updateDynamicProps();
+    void makeDynamic(Object& o);
+    void dropDynamic(Object& o);
+    void fireGun();
+    void useFire(float dt, bool held);
+    void ignite(Object& o);
+    void updateFire(float dt);
+    void useMelt(float dt, bool held);
+    void updateMelt(float dt);
+    void meltShape(Object& o);
+    void initToys();
+    void shutdownToys();
+    void updateToys(float dt);
+    void renderToys(const kke::RenderContext& ctx);
+    void toysUi();                         // Walk mode's crosshair and what E picks up
+    // Walk mode: the person, their tools lying around, picking them up.
+    void setView(View view);
+    void updateWalker(float dt);
+    void useTool(bool pressed, bool held, float dt);
+    void dropTool(Tool tool, const glm::vec3& at);
+    bool pickUpNearby();
+    void drawHeldTool();
+    void setCaptured(bool on);
+    bool escWouldCancel() const;           // Esc puts something down first (no pause menu then)
+    void resetToys();                      // Build mode: nothing burning, melted or rolled away
+    void prepareMelt(Object& o);
+    void applyTint(Object& o);
+    // The boxes a person's or animal's body is made of (world space):
+    // the ragdoll's while it is one, else what it would be.
+    bool partBoxes(const Object& o, std::vector<std::pair<glm::mat4, glm::vec3>>& out) const;
+    ToolModel* toolModel(Tool tool);       // nullptr for the bat (m_bat) and tools without one
+    void loadBat();
+    // Where a held tool is (Walk mode), its business end and which way it points.
+    bool heldToolPose(Tool tool, glm::mat4& model, glm::vec3& tip, glm::vec3& direction);
+
     void applyLook();                   // overlay + variants from the Look settings
     const kke::CatalogPack* packOf(const std::string& asset, const std::string& pack = {}) const;
     void lookUi();
@@ -276,7 +368,9 @@ private:
     const kke::PlayBlock* blockFor(const std::string& asset) const;
     // Swings the bat so its sweet spot passes through `target` (the foot of
     // whoever is there, or a spot on the ground).
-    bool swingBatAt(const glm::vec3& target);
+    // `exact`: swing at that height through that spot (a click on a
+    // thing: hit where it was clicked), else at shoulder height.
+    bool swingBatAt(const glm::vec3& target, const glm::vec3* exact = nullptr);
 
     // Touch and gamepads (Play mode).
     void openGamepad(SDL_JoystickID id);
@@ -417,6 +511,34 @@ private:
     float m_replayTime = 0.0f;
     SDL_Joystick* m_replayPad = nullptr; // a virtual gamepad the replay drives
     SDL_JoystickID m_replayPadId = 0;
+
+    // Toys (Toys.cpp)
+    kke::GameShellModule* m_shell = nullptr;
+    kke::InputModule* m_input = nullptr;
+    std::unique_ptr<kke::ParticleEffects> m_fx;
+    std::unique_ptr<kke::ParticleLibrary> m_effects;
+    float m_gunCooldown = 0.0f;
+    float m_toolTime = 0.0f;               // seconds the Fire / Melt tool has been held on
+    uint32_t m_toolFx = 0;                 // the flame or heat shimmer at the tool's tip
+    std::unordered_map<uint32_t, glm::vec3> m_lastHitPoint; // where the bat last hit each thing (for its recipe)
+    ToolModel m_toolModels[3];
+    View m_view = View::Fly;
+    Walker m_walker;
+    bool m_captured = false;               // Walk mode: the mouse turns the view
+    bool m_recapture = false;              // the pause menu let the mouse go: take it back after
+    int m_walkCell = 0;                    // Walk mode on a pad: the palette cell LB/RB point at
+    static constexpr uint32_t kWalkerThing = 0xffffff00u; // you, to the animals' AI
+    struct Pickup { Tool tool; glm::vec3 position; kke::ModelModule::InstanceId instance = 0; };
+    std::vector<Pickup> m_pickups;         // Walk mode: tools lying in the world
+    std::vector<std::string> m_cellIds;    // the palette's cells, left to right (Walk mode's LB/RB)
+    std::string m_walkCharacter;           // "" = the mannequin
+    int m_characterChoice = 0;             // pause menu: 0 = mannequin, else m_walkPeople[i - 1]
+    std::vector<std::string> m_walkPeople;
+    bool m_dynamicProps = true;            // Play mode: props that don't break roll and tumble (Jolt)
+    bool m_swallowFire = false;            // the click that grabbed the mouse isn't a shot
+    uint32_t m_swingThing = 0;             // what the bat was aimed at, and where
+    glm::vec3 m_swingPoint{0.0f};
+    float m_heatFxTime = 0.0f;
 
     std::unique_ptr<PlayGraphs> m_graphs;
     bool m_graphsDirty = true;          // things came or went: graphs to (un)load

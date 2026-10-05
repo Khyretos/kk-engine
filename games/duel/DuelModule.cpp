@@ -9,6 +9,7 @@
 #include "kke/modules/InputModule.h"
 #include "kke/modules/RigidBodyModule.h"
 
+#include <RmlUi/Core/ElementDocument.h>
 #include <SDL3/SDL.h>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -61,6 +62,92 @@ glm::vec3 flat(glm::vec3 v) {
 DuelModule::DuelModule() = default;
 DuelModule::~DuelModule() = default;
 
+// Everything that lives in other modules goes while they are still there
+// (ragdolls in the physics world, the HUD in RmlUi, the meshes on the GPU).
+void DuelModule::shutdown() {
+    for (Fighter& f : m_fighters) {
+        if (f.ragdoll && m_ragdolls) m_ragdolls->destroyRagdoll(f.ragdoll);
+        f.ragdoll = 0;
+        f.brain.reset();
+        f.anim.reset();
+        f.ik.reset();
+    }
+    if (m_hudDoc) m_hudDoc->Close();
+    m_hudDoc = nullptr;
+    m_arena.reset();
+    m_block.reset();
+    m_animSet.reset();
+}
+
+kke::AttackDesc DuelModule::attackNamed(const std::string& n) const {
+    // The engine's three presets, and the punches in between (Combat.cpp
+    // has the numbers they start from; README.md the table).
+    kke::AttackDesc a = kke::AttackDesc::light();
+    if (n == "cross") {
+        // The rear hand: a little slower than the jab, a little more.
+        a.windup = 0.3f;
+        a.damage = 12.0f;
+        a.poiseDamage = 21.0f;
+        a.staminaCost = 13.0f;
+        a.reach = 1.05f;
+    } else if (n == "hook") {
+        // Round the guard's side: slower, hurts, wears the guard down.
+        a.windup = 0.34f;
+        a.recovery = 0.38f;
+        a.damage = 15.0f;
+        a.poiseDamage = 26.0f;
+        a.staminaCost = 15.0f;
+        a.reach = 0.9f;
+        a.guardDamage = 24.0f;
+        a.knockback = 2.0f;
+    } else if (n == "uppercut") {
+        a = kke::AttackDesc::heavy();
+    } else if (n == "knee") {
+        a = kke::AttackDesc::kick();
+    } else if (n == "kick") {
+        // A front kick: the longest reach, pushes them back.
+        a = kke::AttackDesc::kick();
+        a.windup = 0.4f;
+        a.recovery = 0.45f;
+        a.damage = 9.0f;
+        a.reach = 1.45f;
+        a.height = 1.0f;
+        a.knockback = 3.5f;
+        a.staminaCost = 16.0f;
+    }
+    a.name = n;
+    return a;
+}
+
+void DuelModule::throwStrike(Fighter& f, kke::Combatant& c, float distance, float dt) {
+    const Intent& in = f.intent;
+    f.sinceLight += dt;
+    if (in.light) f.buffered = "light";
+    else if (in.heavy) f.buffered = "uppercut";
+    else if (in.kick) f.buffered = distance < 1.05f || m_st.kick < 0 ? "knee" : "kick"; // close: the knee; at range: the kick
+    if (in.light || in.heavy || in.kick) f.bufferAge = 0.0f;
+    if (f.buffered.empty()) return;
+    f.bufferAge += dt;
+    if (f.bufferAge > 0.35f) {
+        f.buffered.clear(); // pressed too early: dropped, not thrown late
+        return;
+    }
+    if (!c.canAct()) return;
+    std::string name = f.buffered;
+    if (name == "light") {
+        // Jab, cross, hook: a press soon after the last punch is the next in
+        // the chain, a pause starts it again.
+        static const char* chain[] = { "jab", "cross", "hook" };
+        f.combo = f.sinceLight < 1.15f ? (f.combo + 1) % 3 : 0;
+        name = chain[f.combo];
+    }
+    if (c.attack(attackNamed(name))) {
+        ++m_tally[f.corner].thrown[name];
+        if (f.buffered == "light") f.sinceLight = 0.0f;
+    }
+    f.buffered.clear();
+}
+
 std::vector<kke::ModuleDependency> DuelModule::dependencies() const {
     return { { std::type_index(typeid(kke::RigidBodyModule)), true, "the ring, the fighters' bodies and knockdown ragdolls (Jolt)" },
              { std::type_index(typeid(kke::InputModule)), true, "the fight controls, rebindable" },
@@ -81,7 +168,7 @@ void DuelModule::init(kke::Application& app) {
 
     // Controls. Player 1: WASD, J / K / L (or the mouse buttons) to strike,
     // Shift blocks, Space dodges. Player 2 on the same keyboard: the arrow
-    // keys and the number pad. Controllers: X jab, Y uppercut, B knee,
+    // keys and the number pad. Controllers: X punch, Y uppercut, B knee/kick,
     // RB or LT block, A dodge.
     using IM = kke::InputModule;
     m_input->setPlayers(2);
@@ -91,9 +178,9 @@ void DuelModule::init(kke::Application& app) {
         // No voice chat here, so B (push-to-talk) stays free; Q is the ping.
         for (const char* a : { "jump", "sprint", "walk", "crouch", "fire", "aim", "interact", "camera.toggle", "camera.zoom", "look", "look.rate", "voice.talk" })
             in.clearBindings(a);
-        in.defineAction({ "duel.light", "Jab (quick, cheap)", "Fight", "game" });
+        in.defineAction({ "duel.light", "Punch: jab, cross, hook (press again for the next)", "Fight", "game" });
         in.defineAction({ "duel.heavy", "Uppercut (slow, knocks down)", "Fight", "game" });
-        in.defineAction({ "duel.kick", "Knee (breaks a guard)", "Fight", "game" });
+        in.defineAction({ "duel.kick", "Knee up close, kick from further (breaks a guard)", "Fight", "game" });
         in.defineAction({ "duel.block", "Block (just in time: parry)", "Fight", "game" });
         in.defineAction({ "duel.dodge", "Dodge", "Fight", "game" });
         in.defineAction({ "duel.again", "Next round / rematch", "Match", "game" });
@@ -389,10 +476,8 @@ void DuelModule::updateFighter(Fighter& f, Fighter& other, float dt) {
     }
     c.place(feet, f.facing);
 
-    if (in.light) c.attack(kke::AttackDesc::light());
-    else if (in.heavy) c.attack(kke::AttackDesc::heavy());
-    else if (in.kick) c.attack(kke::AttackDesc::kick());
-    if (in.dodge) c.dodge();
+    throwStrike(f, c, distance, dt);
+    if (in.dodge && c.dodge()) f.dodgeSide = std::abs(in.move.x) > 0.3f ? (in.move.x > 0.0f ? 1.0f : -1.0f) : 0.0f;
     c.setBlocking(in.block);
 
     // Footwork.
@@ -442,6 +527,7 @@ void DuelModule::onHit(const kke::HitEvent& e) {
     Fighter& target = fighter(e.target);
     Fighter& attacker = fighter(e.attacker);
     Tally& t = m_tally[attacker.corner];
+    target.lastHit = e.attack;
     using O = kke::HitOutcome;
     switch (e.outcome) {
     case O::Hit: ++t.hits; target.push += e.push; break;
@@ -595,6 +681,9 @@ void DuelModule::update(const kke::UpdateContext& ctx) {
                                             m_clock, m_fighters[i].name, c.health(), c.stamina(), m_fighters[i].wins, t.hits, t.blocks, t.parries,
                                             t.guardBreaks, t.knockdowns, m_fighters[i].brain ? "; tactic " : "",
                                             m_fighters[i].brain ? m_fighters[i].brain->tactic() : std::string());
+                std::string thrown;
+                for (const auto& [strike, n] : t.thrown) thrown += (thrown.empty() ? "" : ", ") + strike + " " + std::to_string(n);
+                if (!thrown.empty()) kke::log::get(name())->info("  {} threw: {}", m_fighters[i].name, thrown);
             }
         }
         if (m_clock >= m_quitAfter) {

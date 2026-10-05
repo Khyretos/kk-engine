@@ -33,7 +33,7 @@ int main() {
         kke::Application app("Kreative Kompas Engine - Showcase", 1280, 720);
         // A bright day with fair-weather clouds over the course (assets/moods/clear_day.yaml).
         app.setMood("clear_day");
-        app.camera().farPlane = 200.0f;
+        app.camera().farPlane = 1500.0f; // the open world is 1.4 km across
 
         // First, so the resource governor's budget (threads, frame caps)
         // is set before physics starts its workers.

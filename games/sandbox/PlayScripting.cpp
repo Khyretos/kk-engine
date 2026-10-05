@@ -12,6 +12,8 @@
 #include "kke/DevTools.h"
 #include "kke/Log.h"
 #include "kke/NodeGraph.h"
+#include "kke/ParticleEffects.h" // ~SandboxModule (here) frees the toys' effects
+#include "kke/ParticleLibrary.h"
 #include "kke/PlayScript.h"
 #include "kke/ai/AiWorld.h"
 #include "kke/ai/Clips.h"
@@ -92,10 +94,13 @@ struct SandboxModule::PlayGraphs {
         }
         bool exists(uint32_t id) const override { return thing(id) != nullptr; }
         bool ragdoll(uint32_t id, const glm::vec3& push) override {
+            // People and animals, from the body part the bat (or a shot)
+            // hit last; already down, the blow still lands.
             Object* o = thing(id);
-            if (!o || !o->character || s.isDown(*o)) return false;
-            s.ragdoll(*o, push);
-            return s.isDown(*o);
+            if (!o || (!o->character && !o->animal)) return false;
+            const auto hit = s.m_lastHitPoint.find(id);
+            s.knockOver(*o, push, hit != s.m_lastHitPoint.end() ? &hit->second : nullptr);
+            return o->ragdoll != 0;
         }
         bool standUp(uint32_t id) override {
             Object* o = thing(id);
@@ -565,16 +570,24 @@ void SandboxModule::updateAnimals(float dt) {
     for (const kke::ai::Agent& a : ai.agents())
         if (!find(a.id)) gone.push_back(a.id);
     for (uint32_t id : gone) {
+        if (id == kWalkerThing && m_walker.active()) continue; // you, walking: not a placed thing
         ai.remove(id);
         g.animPlaying.erase(id);
     }
     for (const Object& o : m_objects)
         if (o.character && !ai.has(o.id)) ai.addActor(o.id, "farmer", o.position);
+    // Walking about, you are someone the animals see (and run from).
+    if (m_walker.active()) {
+        if (!ai.has(kWalkerThing)) ai.addActor(kWalkerThing, "farmer", m_walker.feet());
+        ai.setTransform(kWalkerThing, m_walker.feet(), m_walker.velocity(), m_walker.facingYaw());
+    } else if (ai.has(kWalkerThing)) {
+        ai.remove(kWalkerThing);
+    }
 
     // In Build (or while carried) the thing leads: the AI takes it from where it is.
     for (const Object& o : m_objects) {
         const kke::ai::Agent* a = ai.agent(o.id);
-        if (a && (a->actor || !play || o.id == m_movingId || g.animPlaying.count(o.id) == 0))
+        if (a && (a->actor || !play || o.id == m_movingId || o.ragdoll || g.animPlaying.count(o.id) == 0))
             ai.setTransform(o.id, o.position, glm::vec3(0.0f), o.yawDegrees);
     }
     if (!play) return;
@@ -587,7 +600,7 @@ void SandboxModule::updateAnimals(float dt) {
     // Then the animal follows its mind: position, facing and the clip for what it's doing.
     for (Object& o : m_objects) {
         const kke::ai::Agent* a = ai.agent(o.id);
-        if (!a || a->actor || o.id == m_movingId) continue;
+        if (!a || a->actor || o.id == m_movingId || o.ragdoll) continue; // tumbling: the ragdoll has it
         o.position = a->position;
         o.yawDegrees = a->yaw;
         m_models->setTransform(o.instance, objectTransform(o));
