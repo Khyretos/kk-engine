@@ -550,7 +550,7 @@ def benchmark_summary(folder):
         demos.append({"id": d.get("id"), "status": d.get("status"), "fps_avg": summary.get("fps_avg"),
                       "reason": d.get("reason") or d.get("exit")})
     gpus = (data.get("vulkan") or {}).get("gpus") or []
-    return {"file": str(files[-1]), "demos": demos, "gpu": ", ".join(str(g.get("name")) for g in gpus) if gpus else None}
+    return {"file": str(files[-1]), "demos": demos, "gpu": ", ".join(str(g.get("gpu") or g.get("name")) for g in gpus) if gpus else None}
 
 
 def write_summary(out, platform, facts, tests, bench, problems):

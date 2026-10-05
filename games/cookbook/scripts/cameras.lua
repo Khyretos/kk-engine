@@ -43,5 +43,5 @@ end)
 -- --8<-- [end:shake]
 
 hook.Add("Init", "cameras.hello", function()
-  print("Cameras: 1-8 pick one, Tab or View cycles, P or d-pad up plays a camera path, K or d-pad left shakes.")
+  print("Cameras: 1-8 pick one, Tab or d-pad right cycles, P or d-pad up plays a camera path, K or d-pad left shakes.")
 end)
