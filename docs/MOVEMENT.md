@@ -3,7 +3,7 @@
 `kke::Locomotion` (`engine/include/kke/Locomotion.h`) is the movement layer
 between input actions and `RigidWorld`'s character controller. Its rules
 come from PointDown's controller, "mechanics museum" and parkour videos
-(https://www.youtube.com/@PointDown). They're Godot videos, but the
+(<https://www.youtube.com/@PointDown>). They're Godot videos, but the
 principles are engine-independent. This file keeps the notes and says
 where each principle lives in the code.
 

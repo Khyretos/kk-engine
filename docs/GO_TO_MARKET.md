@@ -30,6 +30,7 @@ What no free engine gives you in one package today:
 | Lego modules: a game is a list of `addModule<>()` calls | HISTORY.md "Architecture" |
 
 **Who it's for, in order:**
+
 1. Hobby and indie devs who want physics toys, sandbox and destruction games
    (the Garry's Mod / Teardown / BeamNG crowd) and can't pay for or don't
    want Unreal.

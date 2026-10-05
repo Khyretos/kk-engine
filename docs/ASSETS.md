@@ -63,7 +63,7 @@ How it works (`kke/KnownPacks.h`):
 
 1. **By name.** The engine drops the download's suffix (`_SourceFiles`,
    `_Source_Files`, `_Source_Sprites`, `[Source]`, `[Pro]`, `_Unity_2022…`,
-   `_Unreal…`, a ` (1)` from a second download), a version (`_v3`),
+   `_Unreal…`, a `(1)` from a second download), a version (`_v3`),
    capitals, spaces and punctuation, and compares what is left:
    `POLYGON_Street_Racer_SourceFiles_v3` and `polygon street racer` are
    both `polygonstreetracer`.
