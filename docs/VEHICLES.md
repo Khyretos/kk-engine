@@ -131,11 +131,11 @@ tyre's first half metre of rolling) needs the slip to be filtered before
 Jolt's solver sees it, and speed-dependent sliding friction would change
 how existing drifts hold; neither shows in a game as much as it costs in
 feel. Sources: BeamNG's wheel documentation and its tyre blog posts
-(https://documentation.beamng.com/modding/vehicle/sections/wheels/,
-https://www.beamng.com/game/news/blog/a-look-at-tire-development-in-beamng-part-2/),
-the Live for Speed tyre report (https://www.lfs.net/report-dec2009),
-https://en.wikipedia.org/wiki/Rolling_resistance and
-https://en.wikipedia.org/wiki/Relaxation_length.
+(<https://documentation.beamng.com/modding/vehicle/sections/wheels/>,
+<https://www.beamng.com/game/news/blog/a-look-at-tire-development-in-beamng-part-2/>),
+the Live for Speed tyre report (<https://www.lfs.net/report-dec2009>),
+<https://en.wikipedia.org/wiki/Rolling_resistance> and
+<https://en.wikipedia.org/wiki/Relaxation_length>.
 
 The racing demo draws the rest (games/racing/README.md "Wheels"): the
 tyre squashing on the road, flats, bare rims sparking, torn-off wheels
@@ -176,4 +176,4 @@ does this (games/racing/Net.cpp).
 - Stepping at 60 Hz is enough for road cars up to ~300 km/h; the
   wheels are cylinder casts (they meet kerbs with their width).
 - The Jolt documentation for the vehicle system:
-  https://jrouwe.github.io/JoltPhysics/index.html#vehicles
+  <https://jrouwe.github.io/JoltPhysics/index.html#vehicles>

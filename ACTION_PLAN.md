@@ -60,7 +60,9 @@ Detailed design notes live in the linked files; this is the index.
 ## Answers to the questions
 
 ### JSON or YAML?
+
 **Keep JSON**, and make it stricter rather than switching:
+
 - YAML is more fragile, not less: indentation decides structure, implicit
   types bite (`no` becomes `false`, `1.10` becomes `1.1`, the "Norway
   problem"), the spec is huge, and parsers differ from each other. Several
@@ -75,6 +77,7 @@ Detailed design notes live in the linked files; this is the index.
   versioned formats (`"format"`, `"version"`) — already the convention here.
 
 ### Can everything run on both GPU and CPU? No crash without a GPU?
+
 - **Rendering needs Vulkan, but not a GPU**: with no GPU, Mesa's
   *lavapipe* is a CPU implementation of Vulkan. That's exactly how this
   engine has been developed and tested (the 1-core VM). With no Vulkan at
@@ -89,6 +92,7 @@ Detailed design notes live in the linked files; this is the index.
   everything" switch (settings.json `performance`).
 
 ### Do we have culling / chunk loading?
+
 - **Yes now**: frustum culling (camera and shadows), instancing, only
   exterior faces for physics objects, sleeping objects skipped.
 - **Not yet**: world streaming/chunks, LODs, occlusion culling, cascaded
@@ -125,6 +129,7 @@ under Proton (Wine: the Windows build's unit tests already run under
 Wine in `docker/windows.Dockerfile`).
 
 ### Dedicated servers (2026-09-26)
+
 Designed in docs/SERVER_HOSTING.md after Valheim, Core Keeper, Necesse and
 7 Days to Die: one executable, one config file that the server never
 rewrites, a separate access file, remote admin off, a self-hostable
@@ -133,6 +138,7 @@ directory and (next) relay so nothing needs a paid service. Built:
 and `docker/server/`. Issues #41 (parent) to #46.
 
 ### Proposed layers (each a separate, replaceable module)
+
 1. **Transport interface** with backends: ENet (default), yojimbo
    (dedicated secure servers), GameNetworkingSockets (internet P2P, NAT
    traversal) later. Games pick one in `game.json`; tests run against
@@ -191,6 +197,7 @@ deaf players see sound, tuned to taste).
   navigation pings, earcons for UI).
 
 The audio links, checked:
+
 - **WhoStoleMyCoffee/raytraced-audio** (MIT, a Godot/GDScript plugin):
   rays from the listener measure the room for reverb/echo, per-source
   rays muffle sounds behind walls, and "ambient" rays find openings so
@@ -210,6 +217,7 @@ Audio (Apache-2.0) as the optional high-end HRTF/reflection backend.
 ## Hardware profiles & BENCHMARKS.md (2.4) — plan and limits
 
 What Docker can and can't do, honestly:
+
 - **Can**: limit CPU cores and RAM (`--cpus`, `--memory`), pin cores,
   run with no GPU (lavapipe), and pass a real GPU through: Intel Arc
   (`/dev/dri`), NVIDIA (`--gpus`, nvidia-container-toolkit), AMD

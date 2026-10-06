@@ -86,6 +86,7 @@ sees every changed, missing or added file. It also makes the key pair
    mkdir -p ~/.kke
    ./kke_seal keygen ~/.kke/mygame.key
    ```
+
    ```text
    public key: b319d808294cf88dd4f767b3063c1d8d7e2ecb1aa494d93197d4032ea87b2ca5
    secret key written to /home/kees/.kke/mygame.key (keep it private, never commit it)
@@ -108,6 +109,7 @@ sees every changed, missing or added file. It also makes the key pair
    ```bash
    ./kke_seal verify games/mygame/data b319d808...2ca5
    ```
+
    ```text
    seal broken: 1 modified (main.lua)
      modified main.lua
@@ -137,6 +139,7 @@ public key. It uses the same key pair as `kke_seal`, so do step 1 of
    ```bash
    ./kke_license machine com.example.mygame
    ```
+
    ```text
    4e8024479e00da63f7caf720bcbbb46c
    ```
@@ -160,6 +163,7 @@ public key. It uses the same key pair as `kke_seal`, so do step 1 of
    ```bash
    ./kke_license verify license.json b319d808...2ca5 com.example.mygame
    ```
+
    ```text
    valid: licence KEY-1234
    ```
@@ -191,6 +195,7 @@ and shows which packs load in which order and who overrides whom.
    ./kke_packs new mods/better_axe com.me.better_axe "Better axe"          # a mod
    ./kke_packs new dlc/frost com.example.mygame.frost "Frost" --dlc       # a DLC
    ```
+
    ```text
    wrote mods/better_axe/pack.json: put files in mods/better_axe the way they sit in the game's data folder
    ```
@@ -204,6 +209,7 @@ and shows which packs load in which order and who overrides whom.
    ```bash
    ./kke_packs check mods/better_axe
    ```
+
    ```text
    com.me.better_axe 0.1.0 "Better axe" (mod)
      seal: none (add public_key and run kke_seal sign to prove the files are yours)
@@ -218,6 +224,7 @@ and shows which packs load in which order and who overrides whom.
    ```bash
    ./kke_packs order games/mygame/data --dlc games/mygame/dlc --mods mods --list mods.json --own frost
    ```
+
    ```text
    mount order (later wins):
      0. base  games/mygame/data
@@ -264,6 +271,7 @@ Start one and type commands into it:
 ```bash
 ./kke_server --name "Kees's world" --port 27960 --password hunter2
 ```
+
 ```text
 2026-10-03 11:19:47 info kke_server starting: name 'Kees's world', game 'kke', UDP port 27960, 16 players, password ***
 2026-10-03 11:19:47 info encryption: every connection; this server's key is e371-c54c-13ce-dcc0
