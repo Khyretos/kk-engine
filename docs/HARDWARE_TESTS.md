@@ -41,11 +41,13 @@ GPU, driver, RAM, OS and build type. Paste either file back instead of
 log lines.
 
 ### HW-019 · Showcase walk on min-spec, with sound (dev box)
+
 The last check left from issue #12. With the Synty packs in place, start
 the showcase pinned to one core (the `systemd-run` line at the top, with
 `./kke_demo` instead of the benchmark) and walk the whole course: the
 parkour lane, the lava station, the pool and the breaking yard, with
 sound on.
+
 - Is it playable (roughly 30 fps or better) the whole way round?
 - Does the sound keep up: no crackles, gaps or late impacts?
 **Send back:** the lowest fps you saw (F1 → Performance) and where, and
@@ -53,10 +55,12 @@ any `warn` lines from the log.
 **Result:** —
 
 ### HW-018 · Voice chat echo and noise, with speakers (dev box + a second PC or phone hotspot)
+
 Voice chat now cleans the microphone (docs/NETWORKING.md "Voice"). Only a
 real microphone and real speakers can check it. Host kke_demo on one PC
 (`KKE_NET=host KKE_NET_NAME=A ./kke_demo`), join from another (`KKE_NET=join:ADDRESS KKE_NET_NAME=B ./kke_demo`).
 On A use **speakers, not headphones**, Voice panel (F1) on Open mic.
+
 1. B talks: does B hear themselves back from A's speakers? Untick A's
    "Echo cancellation": does the echo come back? (It should, clearly.)
    The number next to the tick box is how much it takes out, in dB.
@@ -68,6 +72,7 @@ and any `Voice` / `SpeexDSP` log lines from both.
 **Result:** —
 
 ### HW-017 · Audio demo with headphones (dev box)
+
 `cd build/bin && ./audio_demo`, headphones on. Click through the stations
 (or tick Tour). For each, does it sound like what "Listen for" says? In
 particular: is the great hall's echo believable or too much? Is the
@@ -82,6 +87,7 @@ WAV it writes.
 **Result:** Passed 2026-09-27. Kees listened to the recorded tours on headphones: "it sounds very good ... perfectly balanced". Real sound files come later.
 
 ### HW-016 · Play mode with a controller and a touchscreen (dev box)
+
 `./sandbox` opens in Play mode. With a gamepad plugged in: left stick
 moves the ring cursor, RB/LB jump along the pictures, hold A on Person
 and move the stick up, let go; RB to the bat, A, then A near the person.
@@ -95,6 +101,7 @@ For touch: does the palette feel big enough under a finger?
 **Result:** —
 
 ### HW-015 · End-user stress test (dev box, and the laptop if you can)
+
 `KKE_STRESS_TEST=1 ./kke_demo` (or the showcase's Performance panel →
 "Run stress test"). Runs 36 s by itself (walk, crate rain, impacts),
 then quits. Hands off the mouse while it runs. Run it once as is and
@@ -106,7 +113,9 @@ Sandbox reference (4-core VM, software GPU): 20 fps avg, 11 fps 1% low,
 **Result:** —
 
 ### HW-014 · Breaking things, again (dev box)
+
 Two parts.
+
 1. `KKE_PHYSICS_SCENES=breaktest ./physics_demo` (or the "Scene: Break
    test" button): glass on two supports, a wooden plank as a bridge, a
    stone wall; iron balls drop/fly at them after ~4 s. Glass should
@@ -125,6 +134,7 @@ after a big break, anything that explodes, flies off or sinks.
 **Result:** —
 
 ### HW-013 · Sea demo (dev box)
+
 `cd build/bin && ./sea_demo`. Drive (arrows), throw things (click, 1-5),
 turn the wind up to 14 m/s. Does the boat feel like a boat (not too
 twitchy, not too stiff)? Do the objects float/sink the way their names
@@ -135,6 +145,7 @@ moves? FPS with 40 bodies in the water?
 with Synty props as floaters.
 
 ### HW-012 · Melt demo feel and speed (dev box)
+
 `cd build/bin && ./melt_demo`, then each block (`Block` combo or
 `KKE_MELT_PRESET=0..3`). In the sandbox it only reached ~8 FPS (software
 GPU), so the simulation ran at ~0.27x speed and I tuned melting headless
@@ -152,6 +163,7 @@ melt pooled inside an invisible cube before it flowed (BUG-049, fixed).
 Re-run: does melt run off the block from the first drop now?
 
 ### HW-011 · Sandbox with your packs (dev box, interactive)
+
 `cd build/bin && ./sandbox` with your packs in `assets/synty/` (or type
 the folder into the Assets panel). Does it find **all** your packs, and
 do the categories make sense? Build something: floor tiles, walls,
@@ -172,12 +184,15 @@ pieces, seen from one side only, and the grid texture slid over moving
 objects (BUG-045..048, 050, 051, all fixed). Re-test as HW-014.
 
 ### HW-010 · Physics thread scaling, as one file (dev box)
+
 Replaces HW-003 (which only produced one line — `KKE_PHYSICS_THREADS`
 probably didn't take effect in that shell). From the repository root:
+
 ```bash
 cmake --workflow --preset everything-release   # if not built yet
 cmake -P tools/run_physics_benchmarks.cmake
 ```
+
 Runs the benchmark at 1, 2, 4, 8, 16 threads (up to your core count).
 **Send back:** `benchmark/sweep_<time>/summary.txt`.
 **Result:** 2026-09-26, dev box: one run came back (8 threads,
@@ -188,12 +203,14 @@ changed since (brick and glass are now breakables with ~800 tets each,
 see OPTIMIZATION.md #21), so re-run the whole sweep.
 
 ### HW-002 · Same benchmark, Debug build (dev box)
+
 Same as HW-001 but from `build/` (`cmake --workflow --preset everything`).
 FEMFX itself is optimized in both now; this measures how much the rest
 of the engine costs at -O0. **Send back:** the `BENCH RESULT` line.
 **Result:** —
 
 ### HW-004 · Min-spec emulation (dev box)
+
 Run the `systemd-run` command above with the release build. **Send back:**
 the `BENCH RESULT` line, and whether the Physics panel's "Simulation
 can't keep up — running in slow motion" message shows during the big
@@ -201,8 +218,10 @@ breaks. *Expectation from the sandbox:* ~10 FPS average while debris is
 flying, then physics drops to ~0.2 ms/step once it settles. **Result:** —
 
 ### HW-005 · Does it look and feel right? (dev box, interactive)
+
 Run `./physics_demo` normally and click through every scene button,
 several times each.
+
 - Do shattered objects show **all** their pieces, including the inside
   faces along the cracks? (Before this change, most pieces were
   invisible — see BUGS.md BUG-026.)
@@ -217,12 +236,14 @@ several times each.
 **Result:** —
 
 ### HW-006 · Clean exit (dev box)
+
 Close each demo (`physics_demo`, `kke_demo`, `rmlui_demo`, `imgui_demo`)
 with the window's close button. None should crash (BUGS.md BUG-025 used
 to crash all of them on exit). **Send back:** any crash output.
 **Result:** —
 
 ### HW-007 · FEMFX capacity warnings (dev box)
+
 While doing HW-001/HW-005, watch the log for
 `FEMFX hit a scene capacity limit`. It shouldn't appear. If it does,
 send the line — the hex flags say exactly which limit
@@ -230,10 +251,12 @@ send the line — the hex flags say exactly which limit
 **Result:** —
 
 ### HW-008 · UI showcase on a real desktop (dev box)
+
 `cd build/bin && ./rmlui_demo`. Click through every nav tab. Then in
 Settings: toggle **Fullscreen** and **VSync**, set a frame-rate limit,
 drag **UI scale** and **FOV**, toggle **Shadows**, rebind a key, then
 Apply & save and restart — do your choices come back?
+
 - Does clicking land exactly where you click? (Especially with desktop
   scaling at 125%/150% — this was broken before, BUG-032.)
 - Does typing work in the chat box? Does Enter send?
@@ -248,6 +271,7 @@ Apply & save and restart — do your choices come back?
 **Result:** —
 
 ### HW-009 · Synty demo, and your other Synty packs (dev box)
+
 `cd build/bin && ./synty_demo` with the Prototype pack in
 `assets/synty/POLYGON_Prototype/`. Check the level and characters look
 right, press **B** for bones, pose a bone from the Characters panel.
@@ -266,6 +290,7 @@ what matter. (A quick way to load one: change a path in
 ## Done
 
 ### HW-001 · Physics benchmark, optimized build — ✅ 2026-09-25
+
 Dev box (Ryzen 7 9800X3D, RX 9070 XT). `BENCH RESULT: 1200 ticks in
 19.98 s wall (1.00x realtime), 162884 frames (8151.0 fps avg), step avg
 1.38 ms max 5.77 ms, render prep avg 0.03 ms, 19 objects / 484 pieces /
@@ -274,6 +299,7 @@ worst physics step (5.8 ms) is a third of a 60 Hz frame. For comparison
 the 1-core sandbox emulation needs 21 ms average. Settled pile: 0.06 ms.
 
 ### HW-003 · Thread scaling — ⚠️ inconclusive 2026-09-25
+
 Only one run came back (step avg 1.40 ms, same as HW-001), so the thread
 count most likely didn't change. Superseded by HW-010.
 

@@ -50,6 +50,7 @@ and joining players, Online play with local players, Climb Race flagship
 game (its notes go to that thread).*
 
 Start menu
+
 - [ ] Climbers stand in front of the mountain, each above their player card.
 - [ ] A second controller pressing A joins; keyboard joins with Enter when player 1 is on a pad.
 - [ ] Name, colour, CPU count (0-5) and difficulty change and are remembered on the next start.
@@ -57,6 +58,7 @@ Start menu
 - [ ] Menus are fully usable with only a controller (no mouse needed).
 
 Climbing
+
 - [ ] The how-to-play screen appears before the first race and X / H brings it back.
 - [ ] Hands land on the holds (not floating beside them); fingers curl round the hold.
 - [ ] Feet find footholds; hips move sensibly; no limb bends backwards.
@@ -68,6 +70,7 @@ Climbing
 - [ ] Split screen with 2, 3 and 4 players: each view follows its climber; with 3 the fourth quarter shows the whole mountain.
 
 Party modes and results (Mode row)
+
 - [ ] Rockfall: rocks come at each climber more often as the leader climbs; a hit reads clearly and costs stamina.
 - [ ] Elimination: every 30 s the lowest climber lets go; it's clear who is out and why.
 - [ ] Time trial: the pale ghost repeats your best run; beating it replaces it.
@@ -75,6 +78,7 @@ Party modes and results (Mode row)
 - [ ] Grabs, broken holds, falls, rocks, the countdown and medals each have a sound that fits.
 
 Online (needs two PCs, or two copies on one PC)
+
 - [ ] Host from the menu; the other copy finds it (LAN) or joins by address.
 - [ ] Two local players on the joining PC both race online.
 - [ ] Remote climbers' hands and feet look as good as local ones.
@@ -110,6 +114,7 @@ intro and banner.*
 Procedural animation (Shove / Look at blocks).*
 
 Play mode (opens first)
+
 - [ ] The row of big pictures is clear to a child: drag one out and it appears where you let go.
 - [ ] Bat: swing at a person, they fall over (ragdoll) and Get up stands them back up.
 - [ ] Throwing a ball, bonking, and breaking things all feel satisfying.
@@ -117,12 +122,14 @@ Play mode (opens first)
 - [ ] Touch (if you have a touchscreen): drag, tap, two-finger turn, pinch zoom (HW-016).
 
 Node graph (the **Look** picture)
+
 - [ ] Opening the bat's recipe shows *When someone is hit → Knock over → Play sound*.
 - [ ] Editing it changes the bat straight away; blocks light up as they run.
 - [ ] Show Lua shows readable code; the graph is still there after save and load.
 - [ ] Shove makes a person stagger (light) or fall and get up (hard).
 
 Build mode (F2)
+
 - [ ] Asset browser thumbnails load for every pack; search and filters work *(Synty)*.
 - [ ] Place, rotate, move, scale with the gizmo; grid snap feels right; Shift turns snapping off.
 - [ ] Make a prop breakable, shoot it: pieces break along natural cracks, no hollow faces, no exploding pieces.
@@ -291,7 +298,7 @@ check: HW-008.
 
 - [ ] `tools/new_game my_game`, build, run: you can walk, jump and climb.
 - [ ] Follow the first tutorial page; every step works as written.
-- [ ] Open https://khyretos.github.io/kk-engine/ — pages load, cookbook screenshots show.
+- [ ] Open <https://khyretos.github.io/kk-engine/> — pages load, cookbook screenshots show.
 - [ ] `./cookbook`: keys 1-8 switch between the eight cameras (first, third, orbit, top-down, isometric, side-on, fixed, cinematic); each feels usable.
 - [ ] Copy two recipes from the cookbook into your game's scripts; they do what the page says.
 

@@ -257,6 +257,7 @@ re-verified: `kke_demo`'s cube, its destruction-fragment explosion
 ground and tetrahedra all render correctly with real, visible shading.
 
 **Two real, honest simplifications in this system, not oversights**:
+
 - Normals are transformed by `mat3(model)` (rotation + scale, ignoring
   translation), not the mathematically general inverse-transpose. This
   is exactly correct for rotation and uniform scale — everything this
@@ -1028,7 +1029,7 @@ the bundled fonts are a floor, not a lock-in.
 ## Where the RmlUi Vulkan backend lives
 
 `RmlVulkanRenderInterface` (`engine/include/kke/RmlVulkanRenderInterface.h`
-+ `.cpp`) is the whole thing: geometry compiles into the engine's own
+- `.cpp`) is the whole thing: geometry compiles into the engine's own
 `Buffer` objects, textures (currently: glyph atlases only) get a real
 VMA-backed `VkImage` + `VkSampler` + descriptor set, and untextured draws
 share the exact same pipeline via a persistent 1×1 white texture rather
@@ -1435,6 +1436,7 @@ folder(s) in `assets/synty/` (any layout) or set `KKE_ASSETS_DIR` — see
 `assets/README.md`. Without it the demo runs and lists where it looked.
 
 Engine pieces this added, usable by any game:
+
 - `kke::loadModel()` (`ModelAsset.h`) — FBX/OBJ to meshes, materials,
   skeleton, skin weights and sampled animation clips; meters, +Y up.
   Resolves textures the file points at with an artist's own path
@@ -1504,6 +1506,7 @@ model in them.
   `F1` shows the engine's debug panels.
 
 **How breakable props work** (engine pieces, reusable by any game):
+
 1. `kke::voxelizeToTets` turns the prop's own triangles into a tet volume
    (cells fitted to its bounds; works on open, non-watertight meshes),
    and `kke::fitSurfaceToMesh` pulls the outside onto the real surface.
@@ -1537,6 +1540,7 @@ crate, sealed barrel, ice, iron), **C** toggles the follow camera, **R**
 resets. Wind speed, direction and choppiness shape the swell.
 
 How it works (the approach most games use — "feels right", cheap):
+
 - `kke::OceanWaves` — 4 Gerstner waves with real deep-water dispersion,
   generated from wind. The CPU evaluates exactly what `ocean.vert` draws
   (128 bytes of push constants, no textures), so floating things ride
@@ -1609,6 +1613,7 @@ and chocolate slump and harden again as they cool; aluminium glows before
 it melts. `Space` toggles the pour, `R` resets.
 
 Engine pieces (reusable, unit-tested, render-agnostic):
+
 - `kke::ParticleFluid` — Position Based Fluids (Macklin & Müller 2013):
   counting-sorted spatial hash, per-substep neighbour lists, per-particle
   temperature (diffusion, cooling), per-material viscosity and
@@ -1651,6 +1656,7 @@ without duplicating either class.
 
 **Two real CMake conflicts hit and fixed while building this**, both
 found by actually building a second executable, not anticipated:
+
 1. Two executables compiling the same shader file collided on a
    global CMake target name (`shader_rml_ui_frag` already exists).
    Fixed by guarding `engine_add_shader` with `if(NOT TARGET ...)`.
@@ -1704,8 +1710,6 @@ change there, and — a genuine bonus, not engineered for — its
 Marketplace panel now shows "# 2 games," correctly auto-discovering
 `physics_demo`'s `game.json` through the same scanning this engine
 already had.
-
-
 
 The tetrahedron and a ground plane are now actually drawn, not just
 logged — reusing the existing cube shaders directly (they just
@@ -2437,7 +2441,7 @@ own intro for the discipline expected).
   - **Verified with a real before/after screenshot, not just a log
     line**: the same click that used to resolve to `body` now
     resolves to `input.range`, the actual slider — and a real,
-    continuous drag (mousedown, several mousemove steps, mouseup) 
+    continuous drag (mousedown, several mousemove steps, mouseup)
     visibly moved the slider thumb from one end of the track to the
     other in an actual screenshot comparison.
   - Full comprehensive verification, after removing every temporary
