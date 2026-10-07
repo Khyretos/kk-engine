@@ -644,4 +644,3 @@ voices, routing, flood cap, Opus round trip with a lost frame, noise
 suppression, echo cancellation, the mixer's output tap). With a real
 microphone and speakers it waits for a person: HW-018 in
 docs/HARDWARE_TESTS.md.
-
