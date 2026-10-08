@@ -24,15 +24,15 @@ set -euo pipefail
 SHARE_HOST="${KKE_SHARE_HOST:-https://media.kreative-kompas.com/files}"
 SHARE_HASH="${KKE_SHARE_HASH:-}"
 if [[ -z "$SHARE_HASH" ]]; then
-    echo "fetch_assets.sh: set KKE_SHARE_HASH to the asset share's link hash (kept out of the repo)" >&2
-    exit 2
+	echo "fetch_assets.sh: set KKE_SHARE_HASH to the asset share's link hash (kept out of the repo)" >&2
+	exit 2
 fi
 MODELS_DEST="${KKE_ASSETS_DIR:-$(cd "$(dirname "$0")/.." && pwd)/assets/synty}"
 SPRITES_DEST="${KKE_SPRITES_DIR:-$(cd "$(dirname "$0")/.." && pwd)/assets/sprites}"
 
 listing() {
-    curl -fsS "$SHARE_HOST/public/api/resources?hash=$SHARE_HASH&path=/" |
-        python3 -c 'import json,sys
+	curl -fsS "$SHARE_HOST/public/api/resources?hash=$SHARE_HASH&path=/" |
+		python3 -c 'import json,sys
 for f in json.load(sys.stdin)["files"]:
     if f["type"] != "directory": print(str(f["size"]) + "\t" + f["name"])'
 }
@@ -40,52 +40,57 @@ for f in json.load(sys.stdin)["files"]:
 urlencode() { python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$1"; }
 
 unpack_unitypackage() { # $1 = .unitypackage, $2 = destination folder
-    local tmp; tmp="$(mktemp -d)"
-    tar -xzf "$1" -C "$tmp"
-    for entry in "$tmp"/*/; do
-        [[ -f "$entry/pathname" && -f "$entry/asset" ]] || continue
-        local rel; rel="$(head -n1 "$entry/pathname" | tr -d '\r')"
-        mkdir -p "$2/$(dirname "$rel")"
-        mv "$entry/asset" "$2/$rel"
-    done
-    rm -rf "$tmp"
+	local tmp
+	tmp="$(mktemp -d)"
+	tar -xzf "$1" -C "$tmp"
+	for entry in "$tmp"/*/; do
+		[[ -f "$entry/pathname" && -f "$entry/asset" ]] || continue
+		local rel
+		rel="$(head -n1 "$entry/pathname" | tr -d '\r')"
+		mkdir -p "$2/$(dirname "$rel")"
+		mv "$entry/asset" "$2/$rel"
+	done
+	rm -rf "$tmp"
 }
 
 if [[ $# -eq 0 || "$1" == "--help" ]]; then
-    sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
-    exit 0
+	sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
+	exit 0
 fi
 if [[ "$1" == "--list" ]]; then
-    listing | awk -F'\t' '{ printf "%8.1f MB  %s\n", $1 / 1048576, $2 }'
-    exit 0
+	listing | awk -F'\t' '{ printf "%8.1f MB  %s\n", $1 / 1048576, $2 }'
+	exit 0
 fi
 
 mapfile -t names < <(listing | cut -f2)
 for prefix in "$@"; do
-    matched=0
-    for name in "${names[@]}"; do
-        [[ "$name" == "$prefix"* ]] || continue
-        matched=1
-        # "POLYGON_Town_SourceFiles_v5.zip" -> "POLYGON_Town"
-        pack="${name%.*}"
-        pack="$(sed -E 's/[_ ]?(Source[_ ]?Files|SourceFiles|Source_Files|Source[_ ]?Sprites|\[Source\]|\[Pro\]|Unity_20[0-9_]+|Unreal)[^/]*$//; s/ \([0-9]+\)$//' <<<"$pack")"
-        [[ -n "$pack" ]] || pack="${name%.*}"
-        # Sprite packs (Synty's INTERFACE_*) go to the sprite folder.
-        DEST="$MODELS_DEST"
-        [[ "$name" == INTERFACE_* ]] && DEST="$SPRITES_DEST"
-        mkdir -p "$DEST"
-        if [[ -d "$DEST/$pack" ]]; then echo "skip   $pack (already in $DEST)"; continue; fi
-        echo "fetch  $name -> $DEST/$pack"
-        tmpfile="$(mktemp --suffix="-${name// /_}")"
-        curl -fsS --retry 4 --retry-delay 2 -o "$tmpfile" "$SHARE_HOST/public/api/raw?hash=$SHARE_HASH&file=/$(urlencode "$name")"
-        mkdir -p "$DEST/$pack.partial"
-        case "$name" in
-            *.zip) unzip -q -o "$tmpfile" -d "$DEST/$pack.partial" ;;
-            *.unitypackage) unpack_unitypackage "$tmpfile" "$DEST/$pack.partial" ;;
-            *) cp "$tmpfile" "$DEST/$pack.partial/$name" ;;
-        esac
-        rm -f "$tmpfile"
-        mv "$DEST/$pack.partial" "$DEST/$pack"
-    done
-    [[ $matched -eq 1 ]] || echo "no archive on the share starts with '$prefix' (try --list)" >&2
+	matched=0
+	for name in "${names[@]}"; do
+		[[ "$name" == "$prefix"* ]] || continue
+		matched=1
+		# "POLYGON_Town_SourceFiles_v5.zip" -> "POLYGON_Town"
+		pack="${name%.*}"
+		pack="$(sed -E 's/[_ ]?(Source[_ ]?Files|SourceFiles|Source_Files|Source[_ ]?Sprites|\[Source\]|\[Pro\]|Unity_20[0-9_]+|Unreal)[^/]*$//; s/ \([0-9]+\)$//' <<<"$pack")"
+		[[ -n "$pack" ]] || pack="${name%.*}"
+		# Sprite packs (Synty's INTERFACE_*) go to the sprite folder.
+		DEST="$MODELS_DEST"
+		[[ "$name" == INTERFACE_* ]] && DEST="$SPRITES_DEST"
+		mkdir -p "$DEST"
+		if [[ -d "$DEST/$pack" ]]; then
+			echo "skip   $pack (already in $DEST)"
+			continue
+		fi
+		echo "fetch  $name -> $DEST/$pack"
+		tmpfile="$(mktemp --suffix="-${name// /_}")"
+		curl -fsS --retry 4 --retry-delay 2 -o "$tmpfile" "$SHARE_HOST/public/api/raw?hash=$SHARE_HASH&file=/$(urlencode "$name")"
+		mkdir -p "$DEST/$pack.partial"
+		case "$name" in
+		*.zip) unzip -q -o "$tmpfile" -d "$DEST/$pack.partial" ;;
+		*.unitypackage) unpack_unitypackage "$tmpfile" "$DEST/$pack.partial" ;;
+		*) cp "$tmpfile" "$DEST/$pack.partial/$name" ;;
+		esac
+		rm -f "$tmpfile"
+		mv "$DEST/$pack.partial" "$DEST/$pack"
+	done
+	[[ $matched -eq 1 ]] || echo "no archive on the share starts with '$prefix' (try --list)" >&2
 done
