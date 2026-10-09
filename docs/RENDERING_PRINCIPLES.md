@@ -132,6 +132,7 @@ rasteriser). So it must be a setting, not a requirement.
 
 **For KKE.** This is the biggest easy win, because **we are forward**:
 MSAA in a forward renderer needs no G-buffer tricks at all.
+
 - Specular AA — **done today** (below).
 - Coverage-preserving alpha mips — **done today** (below).
 - MSAA 2x/4x as a setting, off on min-spec, plus optional SMAA 1x as a
@@ -348,7 +349,7 @@ and ImGui pipelines use `Renderer::overlayRenderPass()`. Thumbnails use
 `Renderer::createSceneCompatiblePass`, so they're anti-aliased too.
 Checked headless at 4x (Synty demo, sandbox with thumbnails, UI
 showcase): smoother edges, validation clean. SMAA 1x is still open in
-#36.
+# 36.
 
 **Later the same day:** shadow map quality (#38). The shadow map is
 sampled with a depth-compare sampler (each of the 9 PCF taps is a

@@ -18,7 +18,7 @@ Read the one that fits before you answer; you rarely need more than one.
 | write C++: a new game module, new Lua functions, engine work | [skills/cpp-module](skills/cpp-module/SKILL.md) |
 
 Small context window? Load only the skill you need: each works alone.
-Large one? https://khyretos.github.io/kk-engine/llms-full.txt is the
+Large one? <https://khyretos.github.io/kk-engine/llms-full.txt> is the
 whole making-games documentation in one file (`tools/docs_site/llms.py
 OUT_DIR` writes it locally).
 

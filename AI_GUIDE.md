@@ -156,6 +156,7 @@ unexplained complex code is not.
 
 Don't re-read every file — docs/HISTORY.md has two tables built exactly for
 fast orientation:
+
 - **"Where the rendering code actually lives"** — which file to open for
   any given rendering concept (simplest draw call, compute-into-graphics,
   GPU timing, pipeline configuration).

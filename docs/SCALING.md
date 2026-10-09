@@ -34,6 +34,7 @@ on (per-step cost; 16.7 ms = a whole 60 Hz frame):
 | 1 + 3,000 lava particles | 60 | 1 | ~11 ms | 26 ms |
 
 What it means:
+
 - **FEMFX's cost follows the number of awake bodies**, ~0.15-0.2 ms each,
   much more than their tet count. A volcano keeps creating awake bodies.
 - **Threads barely help** here (FEMFX parallelizes inside big islands;
@@ -105,6 +106,7 @@ raining onto the ground, one thread: **1.56 ms per step on average,
 ### C. 40 players online, mixed platforms — **possible, it's the biggest item**
 
 How games of this kind do it (Roblox, Fortnite, Rust, Valheim):
+
 - **Authoritative dedicated server** (a headless Linux build: no
   window, no GPU; the engine already runs headless for tests). The
   server runs gameplay and the gameplay-relevant physics.
