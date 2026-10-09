@@ -3,7 +3,30 @@
   "title": "KKE Sea Demo",
   "description": "Pirate ships on an open sea: pick a ship with its own handling, fire arcing broadsides, dent and sink ships, splinter a wooden fort (FEMFX), on split screen or online with a friend.",
   "version": "0.2.0",
-  "tags": ["demo", "water", "buoyancy", "ocean", "boat", "pirates", "naval", "multiplayer", "physics"],
+  "tags": [
+    "demo",
+    "water",
+    "buoyancy",
+    "ocean",
+    "boat",
+    "pirates",
+    "naval",
+    "multiplayer",
+    "physics"
+  ],
   "engine_version": "0.3",
-  "modules": ["Settings", "Input", "Physics", "Models", "UI", "GameShell", "Audio", "Lobby", "Network", "SeaDemo", "DemoPanel", "Stats"]
+  "modules": [
+    "Settings",
+    "Input",
+    "Physics",
+    "Models",
+    "UI",
+    "GameShell",
+    "Audio",
+    "Lobby",
+    "Network",
+    "SeaDemo",
+    "DemoPanel",
+    "Stats"
+  ]
 }

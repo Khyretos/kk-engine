@@ -5,5 +5,15 @@
   "version": "0.1.0",
   "tags": ["starter", "template"],
   "engine_version": "0.3",
-  "modules": ["Settings", "Input", "RigidBodies", "Models", "UI", "Audio", "Scripts", "Player", "Stats"]
+  "modules": [
+    "Settings",
+    "Input",
+    "RigidBodies",
+    "Models",
+    "UI",
+    "Audio",
+    "Scripts",
+    "Player",
+    "Stats"
+  ]
 }

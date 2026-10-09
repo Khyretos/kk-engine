@@ -7,7 +7,14 @@
   "banner": "",
   "tags": ["demo", "engine-sample", "showcase"],
   "engine_version": "0.1.0",
-  "modules": ["RigidBodies", "Models", "Physics", "Showcase", "DebugControl", "Stats"],
+  "modules": [
+    "RigidBodies",
+    "Models",
+    "Physics",
+    "Showcase",
+    "DebugControl",
+    "Stats"
+  ],
   "requirements": {
     "minimum": { "vram_mb": 256, "vulkan_api_version": "1.0" },
     "recommended": { "vram_mb": 1024, "vulkan_api_version": "1.2" },

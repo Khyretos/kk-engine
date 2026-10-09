@@ -7,11 +7,7 @@
   "banner": "",
   "tags": ["demo", "rmlui", "ui"],
   "engine_version": "0.1.0",
-  "modules": [
-    "UI",
-    "RmlUiShowcase",
-    "Stats"
-  ],
+  "modules": ["UI", "RmlUiShowcase", "Stats"],
   "requirements": {
     "minimum": {
       "vram_mb": 64,
