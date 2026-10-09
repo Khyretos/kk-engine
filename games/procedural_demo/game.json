@@ -5,5 +5,11 @@
   "version": "0.1.0",
   "tags": ["demo", "animation", "procedural", "ik", "ragdoll", "physics"],
   "engine_version": "0.3",
-  "modules": ["Settings", "RigidBodies", "OrbitCamera", "ProceduralDemo", "Stats"]
+  "modules": [
+    "Settings",
+    "RigidBodies",
+    "OrbitCamera",
+    "ProceduralDemo",
+    "Stats"
+  ]
 }
