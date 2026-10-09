@@ -1,0 +1,5869 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A modular, open-source Vulkan game engine in C++17, with Lua scripting.">
+      
+      
+      
+        <link rel="canonical" href="https://khyretos.github.io/kk-engine/demos/duel/">
+      
+      
+        <link rel="prev" href="../party/">
+      
+      
+        <link rel="next" href="../tennis/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Duel - Kreative Kompas Engine</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#duel" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Kreative Kompas Engine" class="md-header__button md-logo" aria-label="Kreative Kompas Engine" data-md-component="logo">
+      
+  <img src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Kreative Kompas Engine
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Duel
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Khyretos/kk-engine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Khyretos/kk-engine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../BUILDING/" class="md-tabs__link">
+          
+  
+  
+  Getting started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../tutorials/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../cookbook/" class="md-tabs__link">
+          
+  
+  
+  Cookbook
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Demos
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../PLAY_TO_MAKE/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/lua-api/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../devlog/" class="md-tabs__link">
+          
+  
+  
+  Project
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Kreative Kompas Engine" class="md-nav__button md-logo" aria-label="Kreative Kompas Engine" data-md-component="logo">
+      
+  <img src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png" alt="logo">
+
+    </a>
+    Kreative Kompas Engine
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Khyretos/kk-engine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Khyretos/kk-engine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BUILDING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install and build
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Make your own game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AI_ASSISTANTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Make games with an AI assistant
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/01-walk-around/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1. Walk around
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/02-break-things/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    2. Break things
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/03-pickups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3. Script a pickup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/04-sound/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    4. Add sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Cookbook
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/first-steps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First steps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/moving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moving things
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/cameras/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cameras
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/gameplay/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gameplay
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/algorithms/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/animation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Animation and IK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/physics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/networking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiplayer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/play-to-make/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Play to make
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/cpp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    C++
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demos
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Demos
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The demos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_2" id="__nav_5_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start here
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Start here
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../template/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Starter game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../first_lua_game/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First Lua game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook player
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5_3" id="__nav_5_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Games
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Games
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../climb_race/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Climb Race
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../racing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Racing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flying_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flying
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../party/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Party
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Duel
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Duel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#run-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controls
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-plays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it plays
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How it works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#startup-and-the-frame" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Startup and the frame
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-fighter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A fighter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reading-a-player" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading a player
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#two-players-and-devices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two players and devices
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-combat-rules-and-hits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The combat rules and hits
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#knockdowns-and-getting-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Knockdowns and getting up
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bodies-and-animation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bodies and animation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-ring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The ring
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-sparring-bot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The sparring bot
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-camera" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The camera
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-hud" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The HUD
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headless-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Headless runs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#engine-features-it-uses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Engine features it uses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#assets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#make-a-game-like-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Make a game like this
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tennis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tennis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../goblin_horde/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Goblin Horde
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI and companions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    AI and companions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../farm_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Farm
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pet_companion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pet companion
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../platoon/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Platoon
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../command_kit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command kit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../procedural_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Procedural animation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_5" id="__nav_5_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics, water and sound
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Physics, water and sound
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../physics_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics (FEMFX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../melt_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Melting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../particles_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sea_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sea
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../jiggle_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jiggle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cloth_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloth and hair
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audio_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../synty_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Synty characters and ragdolls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_6" id="__nav_5_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Showcases and tools
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Showcases and tools
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../showcase/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    kke_demo showcase
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sandbox/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sandbox
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rmlui_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RmlUi demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../imgui_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ImGui demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PLAY_TO_MAKE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Play to make
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SCRIPTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scripting in Lua
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MOVEMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Movement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AI/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI (animals, enemies, companions)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COMBAT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Melee combat and crowds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PROCEDURAL_ANIMATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Procedural animation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../EQUIPMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equipment and body awareness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../INPUT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TOUCH/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Touch controls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GAME_SHELL/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Menus, pause and settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../LOBBY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start menu and joining
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../OUTFITS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Outfits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEMO_PANEL/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings panel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COMMANDS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands and orders
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AUDIO/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../NETWORKING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Networking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SERVER_HOSTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hosting a server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TOOLS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The kke_ tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../STORAGE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Saving data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ANTI_CHEAT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anti-cheat
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DRM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kreative DRM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MODDING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DLC and mods
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ASSETS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Asset folders and naming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SCENES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scenes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SHOWCASE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The kke_demo showcase
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../JIGGLE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jiggle physics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AUTO_RIG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Auto-rigging a body
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PHYSICS_BRIDGE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BREAKABLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Breakable props
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PARTICLE_EFFECTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle effects
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../RAGDOLLS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ragdolls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CLOTH/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../HAIR/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hair
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/lua-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lua API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DATA_FILES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JSON or YAML data files
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../OPTIMIZATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MOODS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moods (sky, fog, look)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../RENDERING_PRINCIPLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rendering principles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BENCHMARKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BAKING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Baking every download (one command)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COOKED_ART/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cooked art (private builds with Synty art)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BAKING_FOR_FRIENDS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Baking the benchmark with the art, for friends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PERFORMANCE_NOTES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PLATFORMS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Platforms and hardware targets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ANDROID/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Android
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../VM_TESTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Windows and Android in VMs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SCALING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scaling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEPENDENCIES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dependencies and licences
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../HARDWARE_TESTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PLAYTEST_CHECKLIST/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Playtest checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../devlog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Devlog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GO_TO_MARKET/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Going to market
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../RELEASES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Downloadable builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../HISTORY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development history
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DOCS_SITE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    This site
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#run-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controls
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-plays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it plays
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How it works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#startup-and-the-frame" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Startup and the frame
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-fighter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A fighter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reading-a-player" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading a player
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#two-players-and-devices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two players and devices
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-combat-rules-and-hits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The combat rules and hits
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#knockdowns-and-getting-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Knockdowns and getting up
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bodies-and-animation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bodies and animation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-ring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The ring
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-sparring-bot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The sparring bot
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-camera" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The camera
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-hud" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The HUD
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#headless-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Headless runs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#engine-features-it-uses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Engine features it uses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#assets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#make-a-game-like-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Make a game like this
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/Khyretos/kk-engine/edit/main/games/duel/README.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="duel">Duel<a class="headerlink" href="#duel" title="Permanent link">&para;</a></h1>
+<p>A one-on-one fist fight in a boxing ring under gym lights. You are the
+blue corner; the red corner is a sparring bot, or a second player on the
+same machine. It is best of three rounds. A round ends on a knockout, or
+after 90 seconds, when the healthier fighter takes it. You jab, throw a
+slow uppercut, knee through a guard, block (a block raised just in time is
+a parry) and dodge, and every one of those costs stamina.</p>
+<p>The demo teaches the melee core (<code>kke::Combatant</code> and <code>kke::CombatWorld</code>,
+<a href="../../COMBAT/">docs/COMBAT.md</a>), a bot whose tactics are data on
+the engine AI core (<a href="../../AI/">docs/AI.md</a>) while its reflexes stay
+in C++, Jolt ragdoll knockdowns that blend back into a get-up clip,
+a boxer's stance and guard made with kke::CharacterIk on top of plain clips, and local two-player input with device
+assignment. Start here for a fighting game, a boxing or wrestling game,
+any one-on-one melee, or any game where an animation has to last exactly
+as long as a rule says.</p>
+<p><img alt="Two mannequin fighters in the ring, health and stamina bars at the top" src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/website/static/media/duel.webp" /></p>
+<h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
+<p>The executable is <code>duel</code> (<code>add_executable(duel ...)</code> in
+<a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/CMakeLists.txt">CMakeLists.txt</a>). The root <code>CMakeLists.txt</code> only adds the
+demo when <code>KKE_ENABLE_JOLT</code> is on, which is the default.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>cmake<span class="w"> </span>--build<span class="w"> </span>build<span class="w"> </span>--target<span class="w"> </span>duel
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>build/bin
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>./duel
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="nv">KKE_SKIP_INTRO</span><span class="o">=</span><span class="m">1</span><span class="w"> </span>./duel<span class="w">          </span><span class="c1"># skip the logo intro</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nv">KKE_DUEL_BOTS</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="nv">KKE_DUEL_QUIT</span><span class="o">=</span><span class="m">60</span><span class="w"> </span>./duel<span class="w">   </span><span class="c1"># watch two bots for a minute, with a log</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>KKE_DUEL_LEVEL=easy\|normal\|hard</code></td>
+<td>the bot's reaction time, block and parry rates, aggression (default <code>normal</code>)</td>
+</tr>
+<tr>
+<td><code>KKE_DUEL_BOTS=1</code></td>
+<td>both corners are bots (a demo that plays itself, rematches on its own)</td>
+</tr>
+<tr>
+<td><code>KKE_DUEL_QUIT=&lt;s&gt;</code></td>
+<td>quit after that many seconds, logging a tally at 5 s and every 10 s after</td>
+</tr>
+<tr>
+<td><code>KKE_DUEL_SEED=&lt;n&gt;</code></td>
+<td>the bots' dice (default 1)</td>
+</tr>
+<tr>
+<td><code>KKE_ANIMATIONS_DIR</code></td>
+<td>where to look for <code>UAL1_Standard.fbx</code> and <code>UAL2.fbx</code></td>
+</tr>
+<tr>
+<td><code>KKE_ASSETS_DIR</code></td>
+<td>also searched for <code>Universal Animation Library 2/Unity/UAL2.fbx</code></td>
+</tr>
+</tbody>
+</table>
+<p>Rebindings are saved to <code>duel_input.json</code> (the name passed to
+<code>InputModule</code> in <a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/main.cpp">main.cpp</a>).</p>
+<h2 id="controls">Controls<a class="headerlink" href="#controls" title="Permanent link">&para;</a></h2>
+<p>All bindings are made in <code>DuelModule::init</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/DuelModule.cpp">DuelModule.cpp</a>)
+and are rebindable actions in the "Fight" and "Match" groups.</p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Player 1 keyboard / mouse</th>
+<th>Player 2 keyboard</th>
+<th>Controller (either player)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Move (you always face the opponent)</td>
+<td>WASD</td>
+<td>arrow keys</td>
+<td>left stick</td>
+</tr>
+<tr>
+<td>Punch: jab, then cross, then hook when pressed again within about a second (<code>duel.light</code>)</td>
+<td>J / left mouse</td>
+<td>numpad 1</td>
+<td>X (west)</td>
+</tr>
+<tr>
+<td>Uppercut: slow, knocks down (<code>duel.heavy</code>)</td>
+<td>K / right mouse</td>
+<td>numpad 2</td>
+<td>Y (north)</td>
+</tr>
+<tr>
+<td>Knee up close, front kick from further; breaks a guard (<code>duel.kick</code>)</td>
+<td>L</td>
+<td>numpad 3</td>
+<td>B (east)</td>
+</tr>
+<tr>
+<td>Block, held; just before the hit it parries (<code>duel.block</code>)</td>
+<td>Left Shift</td>
+<td>numpad 0</td>
+<td>RB or LT</td>
+</tr>
+<tr>
+<td>Dodge (<code>duel.dodge</code>)</td>
+<td>Space</td>
+<td>numpad Enter</td>
+<td>A (south)</td>
+</tr>
+<tr>
+<td>Next round / rematch (<code>duel.again</code>)</td>
+<td>R</td>
+<td>none</td>
+<td>Start</td>
+</tr>
+<tr>
+<td>Second player takes the red corner, or hands it back (<code>duel.two</code>)</td>
+<td>F2</td>
+<td>none</td>
+<td>the pause menu (Select)</td>
+</tr>
+<tr>
+<td>Pause menu: settings, controls, quit</td>
+<td>Esc</td>
+<td>none</td>
+<td>Start (during a round) or Select</td>
+</tr>
+<tr>
+<td>Developer panels (<code>panels</code>)</td>
+<td>F1</td>
+<td>none</td>
+<td>no controller binding yet</td>
+</tr>
+</tbody>
+</table>
+<p>Notes from the code:</p>
+<ul>
+<li>Button names are positions (SDL's <code>WEST</code>, <code>NORTH</code>, <code>EAST</code>, <code>SOUTH</code>), so
+  on a PlayStation pad X is Square, Y is Triangle, B is Circle, A is Cross.
+  The HUD's prompts show the right glyph for the device each player last
+  touched (<code>InputModule::promptText</code>).</li>
+<li>The fight starts from <code>InputModule::defineCharacterActions</code>, then clears
+  the bindings of the actions a boxer does not use (jump, sprint, fire,
+  look and so on), including <code>voice.talk</code>, since the duel has no voice
+  chat. <code>audio.ping</code> (Q, D-pad down) keeps its engine default and plays
+  the AudioModule's accessibility ping.</li>
+<li>During the between-rounds pause only player 1's <code>duel.again</code> skips the
+  wait; at the end of the match either player's does.</li>
+</ul>
+<h2 id="how-it-plays">How it plays<a class="headerlink" href="#how-it-plays" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Rounds.</strong> Each round opens with a 2 second intro ("Round N", then
+  "Fight!" after 1.2 s). A knockout (health to zero) ends the round at
+  once. At 90 s (<code>kRoundTime</code>) the fighter with more health takes it; a
+  tie goes to blue (<code>h0 &gt;= h1</code>). The first to two round wins takes the
+  match. Between rounds the next one starts after 3.5 s, or after 1 s if
+  player 1 presses <code>duel.again</code>. After the match, <code>duel.again</code> starts a new
+  one; with <code>KKE_DUEL_BOTS=1</code> it restarts by itself after 4 s.</li>
+<li><strong>Stamina.</strong> Every attack and every dodge spends stamina up front; with
+  too little, it does not start. Stamina comes back after a short pause,
+  slower while blocking.</li>
+<li><strong>Blocking.</strong> A block facing the punch takes a little chip damage and
+  costs stamina. At zero stamina the guard breaks and the blocker is
+  stunned for long. The knee has no chip damage but costs a blocker 45
+  stamina, so it is the guard breaker.</li>
+<li><strong>Parry.</strong> A block raised within 0.15 s of the hit (<code>parryWindow</code>)
+  parries it: no damage, and the attacker is stunned for 0.8 s.</li>
+<li><strong>Poise and knockdowns.</strong> Every hit wears down poise (45 for a fighter).
+  At zero the fighter goes down as a ragdoll and gets back up about 2.2 s
+  later. The uppercut does 40 poise damage, so two landed uppercuts in a
+  row floor anyone.</li>
+<li><strong>Two players.</strong> F2 (or Two players in the pause menu) gives the red corner to a second player.
+  With two controllers each player gets one; with one controller it goes
+  to player 2 and player 1 keeps the keyboard; with none, both share the
+  keyboard on different keys. Press it again to hand red back to the bot.</li>
+</ul>
+<p>The strikes start from the engine presets in
+<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/src/Combat.cpp">Combat.cpp</a>; <code>DuelModule::attackNamed</code>
+makes the cross, hook and kick from them. A press during a strike is kept
+for 0.35 s and thrown as soon as the fighter can act, so a combo flows.</p>
+<table>
+<thead>
+<tr>
+<th>Attack</th>
+<th>Windup / active / recovery (s)</th>
+<th>Damage</th>
+<th>Stamina</th>
+<th>Poise damage</th>
+<th>Other</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Jab (<code>light()</code>)</td>
+<td>0.28 / 0.12 / 0.32</td>
+<td>10</td>
+<td>12</td>
+<td>18</td>
+<td>15% chip through a block</td>
+</tr>
+<tr>
+<td>Cross</td>
+<td>0.3 / 0.12 / 0.32</td>
+<td>12</td>
+<td>13</td>
+<td>21</td>
+<td>reach 1.05 m</td>
+</tr>
+<tr>
+<td>Hook</td>
+<td>0.34 / 0.12 / 0.38</td>
+<td>15</td>
+<td>15</td>
+<td>26</td>
+<td>reach 0.9 m, 24 guard damage</td>
+</tr>
+<tr>
+<td>Uppercut (<code>heavy()</code>)</td>
+<td>0.55 / 0.16 / 0.5</td>
+<td>24</td>
+<td>26</td>
+<td>40</td>
+<td>knockback 4 m/s, sweeps</td>
+</tr>
+<tr>
+<td>Knee (<code>kick()</code>)</td>
+<td>0.32 / 0.12 / 0.4</td>
+<td>6</td>
+<td>14</td>
+<td>26</td>
+<td>no chip, 45 guard damage; closer than 1.05 m</td>
+</tr>
+<tr>
+<td>Front kick</td>
+<td>0.4 / 0.12 / 0.45</td>
+<td>9</td>
+<td>16</td>
+<td>26</td>
+<td>reach 1.45 m, knockback 3.5 m/s; needs the full UAL 1</td>
+</tr>
+</tbody>
+</table>
+<h2 id="how-it-works">How it works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
+<h3 id="startup-and-the-frame">Startup and the frame<a class="headerlink" href="#startup-and-the-frame" title="Permanent link">&para;</a></h3>
+<p><a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/main.cpp">main.cpp</a> creates the <code>Application</code>, sets the mood
+<code>arena_night</code> (<code>assets/moods/arena_night.yaml</code>: the night sky, lights and
+crickets ambience) and adds the modules in this order:</p>
+<ol>
+<li><code>SettingsModule</code> (<code>settings.json</code>)</li>
+<li><code>InputModule</code> (<code>duel_input.json</code>)</li>
+<li><code>RigidBodyModule</code> (Jolt: the ring, the fighters' capsules, ragdolls)</li>
+<li><code>ModelModule</code> (the skinned fighters)</li>
+<li><code>UiModule</code> (RmlUi, the HUD)</li>
+<li><code>AudioModule</code>, its debug panel hidden</li>
+<li><code>duel::DuelModule</code>, the game</li>
+<li><code>StatsModule</code>, its panel hidden</li>
+</ol>
+<p><code>DuelModule::dependencies()</code> declares RigidBody and Input as required and
+Models as optional (without it the fighters are blocks).</p>
+<p><code>DuelModule::init</code> reads the environment, binds the controls for two
+players, loads the mannequin (<code>loadCharacter</code>), loads the bot species from
+<code>data/boxer.yml</code>, builds the ring (<code>buildArena</code>), spawns both fighters,
+builds the HUD, starts in one-player mode and starts the match.</p>
+<p><code>DuelModule::update</code> then runs, every frame:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">m_phase</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Phase</span><span class="o">::</span><span class="n">Fight</span><span class="p">)</span><span class="w"> </span><span class="n">thinkAi</span><span class="p">(</span><span class="n">dt</span><span class="p">);</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">updateFighter</span><span class="p">(</span><span class="n">m_fighters</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="w"> </span><span class="n">m_fighters</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="w"> </span><span class="n">dt</span><span class="p">);</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">updateFighter</span><span class="p">(</span><span class="n">m_fighters</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="w"> </span><span class="n">m_fighters</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="w"> </span><span class="n">dt</span><span class="p">);</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">kke</span><span class="o">::</span><span class="n">HitEvent</span><span class="o">&amp;</span><span class="w"> </span><span class="n">e</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">m_combat</span><span class="p">.</span><span class="n">step</span><span class="p">(</span><span class="n">dt</span><span class="p">))</span><span class="w"> </span><span class="n">onHit</span><span class="p">(</span><span class="n">e</span><span class="p">);</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="n">animateBody</span><span class="p">(</span><span class="n">m_fighters</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">m_fighters</span><span class="p">[</span><span class="mi">1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">dt</span><span class="p">);</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">updateCamera</span><span class="p">(</span><span class="n">dt</span><span class="p">);</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">updateHud</span><span class="p">();</span>
+</code></pre></div>
+<p>Before that it handles F1, F2 and the phase machine (Intro, Fight,
+RoundOver, MatchOver). The order matters: intentions first, then the
+combat rules resolve hits, then the bodies are posed from the new combat
+state, then the camera and HUD read the result.</p>
+<h3 id="a-fighter">A fighter<a class="headerlink" href="#a-fighter" title="Permanent link">&para;</a></h3>
+<p><code>DuelModule::Fighter</code> (in <a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/DuelModule.h">DuelModule.h</a>) holds everything
+about one corner: its <code>kke::CombatantId</code> in the <code>CombatWorld</code>, its Jolt
+character (<code>RigidWorld::CharacterId</code>, radius 0.3 m, height 1.8 m), its
+facing, a knockback velocity still being applied (<code>push</code>), its round wins,
+its model instance and <code>Animator</code>, its ragdoll, and the <code>Intent</code> for this
+frame. An <code>Intent</code> is the same struct for a player and a bot:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">struct</span><span class="w"> </span><span class="nc">Intent</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span><span class="n">glm</span><span class="o">::</span><span class="n">vec2</span><span class="w"> </span><span class="n">move</span><span class="p">{</span><span class="mf">0.0f</span><span class="p">};</span><span class="w">   </span><span class="c1">// x = right (the fighter's own), y = toward the opponent</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">light</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">,</span><span class="w"> </span><span class="n">heavy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">,</span><span class="w"> </span><span class="n">kick</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">,</span><span class="w"> </span><span class="n">dodge</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">block</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="p">};</span>
+</code></pre></div>
+<p>Because the player and the bot fill the same struct, the rest of the code
+never asks who is driving.</p>
+<p><code>updateFighter</code> does this for each fighter:</p>
+<ol>
+<li><strong>Get the intent.</strong> During the Fight phase, from <code>SparringBot::think</code>
+   for a bot or <code>readPlayer</code> for a player; otherwise an empty intent.</li>
+<li><strong>Face the opponent.</strong> The facing turns toward the other fighter with
+   exponential smoothing (<code>1 - exp(-rate * dt)</code>, rate 14, or 6 during a
+   windup so a telegraphed punch can still be tracked a little). It does
+   not turn while the attack is Active or in Recovery: "a committed punch
+   goes where it was aimed", so a dodge to the side makes it miss.</li>
+<li><strong>Tell the combat core.</strong> <code>Combatant::place(feet, facing)</code>, then
+   <code>attack(light/heavy/kick)</code>, <code>dodge()</code> and <code>setBlocking()</code>.</li>
+<li><strong>Footwork.</strong> The intent's move turns into a velocity that depends on
+   the combat state:</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Velocity</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Idle</td>
+<td>wish × 2.2 m/s (1.0 while blocking)</td>
+</tr>
+<tr>
+<td>Windup</td>
+<td>0.5 m/s forward plus 0.4 × wish: stepping into it</td>
+</tr>
+<tr>
+<td>Active</td>
+<td>1.2 m/s forward</td>
+</tr>
+<tr>
+<td>Recovery</td>
+<td>0.4 × wish</td>
+</tr>
+<tr>
+<td>Dodging</td>
+<td>5.5 m/s, fading to 40% over the dodge; back, or sideways, never forward</td>
+</tr>
+<tr>
+<td>Stunned, Knockdown, Dead</td>
+<td>none, only knockback</td>
+</tr>
+</tbody>
+</table>
+<ol>
+<li><strong>Knockback and spacing.</strong> <code>push</code> is added and decays with
+   <code>exp(-7 dt)</code>. If the fighters are closer than 0.72 m (<code>kMinGap</code>), any
+   closing speed is removed, and below 90% of that they are pushed apart,
+   so they never walk through each other (unless the other one is down).</li>
+<li><strong>Move the body.</strong> The velocity goes to the Jolt character with
+   <code>setCharacterInput</code>. A fighter on the ground gets no input.</li>
+<li><strong>Get up.</strong> A downed fighter that is still alive calls <code>getUp</code> after
+   1.3 s (<code>kRagdollTime</code>).</li>
+</ol>
+<h3 id="reading-a-player">Reading a player<a class="headerlink" href="#reading-a-player" title="Permanent link">&para;</a></h3>
+<p><code>readPlayer</code> turns the stick into the fighter's own frame. The stick is
+screen space: up means "away from the camera". It becomes a world
+direction using the camera's flattened forward and right, and then that
+is projected onto the fighter's right and facing. So pushing the stick
+toward the opponent on screen always walks toward the opponent, whichever
+side of the ring the camera is on.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">const</span><span class="w"> </span><span class="n">glm</span><span class="o">::</span><span class="n">vec3</span><span class="w"> </span><span class="n">world</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">camRight</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">camFwd</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="n">y</span><span class="p">;</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">const</span><span class="w"> </span><span class="n">glm</span><span class="o">::</span><span class="n">vec3</span><span class="w"> </span><span class="n">right</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">glm</span><span class="o">::</span><span class="n">normalize</span><span class="p">(</span><span class="n">glm</span><span class="o">::</span><span class="n">cross</span><span class="p">(</span><span class="n">f</span><span class="p">.</span><span class="n">facing</span><span class="p">,</span><span class="w"> </span><span class="n">glm</span><span class="o">::</span><span class="n">vec3</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)));</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">it</span><span class="p">.</span><span class="n">move</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">glm</span><span class="o">::</span><span class="n">vec2</span><span class="p">(</span><span class="n">glm</span><span class="o">::</span><span class="n">dot</span><span class="p">(</span><span class="n">world</span><span class="p">,</span><span class="w"> </span><span class="n">right</span><span class="p">),</span><span class="w"> </span><span class="n">glm</span><span class="o">::</span><span class="n">dot</span><span class="p">(</span><span class="n">world</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">.</span><span class="n">facing</span><span class="p">));</span>
+</code></pre></div>
+<p>Attacks and the dodge use <code>pressed</code> (one frame on the press), the block
+uses <code>held</code>.</p>
+<h3 id="two-players-and-devices">Two players and devices<a class="headerlink" href="#two-players-and-devices" title="Permanent link">&para;</a></h3>
+<p>Both players have their own <code>InputMap</code> (<code>m_input-&gt;setPlayers(2)</code>).
+Player 2's map clears <code>move</code> and rebinds it to the arrow keys and the left
+stick, plus the number pad for the fight actions. Both maps get the same
+controller bindings.</p>
+<p><code>setTwoPlayers</code> decides who listens to which device with
+<code>InputModule::assignDevices</code> (an empty list means "all devices"). In
+one-player mode both maps listen to everything; red is a bot, so its map
+is never read. In two-player mode the keyboard and mouse go to both (the
+keys differ), and the gamepads are split: two pads, one each; one pad,
+player 2's. <code>update</code> calls <code>setTwoPlayers(true)</code> every frame while two
+players are on, so a controller plugged in or pulled out mid-fight is
+picked up.</p>
+<h3 id="the-combat-rules-and-hits">The combat rules and hits<a class="headerlink" href="#the-combat-rules-and-hits" title="Permanent link">&para;</a></h3>
+<p><code>m_combat</code> is a <code>kke::CombatWorld</code>. Each fighter is added in its own team
+with <code>CombatStats::fighter()</code> (100 health, 100 stamina, 45 poise, parry
+window 0.15 s, knockdown 2.2 s). <code>CombatWorld::step(dt)</code> advances every
+<code>Combatant</code>'s state machine (Idle, Windup, Active, Recovery, Stunned,
+Dodging, Knockdown, Dead), checks each active strike's sphere against the
+other capsules, and returns <code>HitEvent</code>s. <code>onHit</code> reacts to each outcome:</p>
+<table>
+<thead>
+<tr>
+<th>Outcome</th>
+<th>What the duel does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Hit</td>
+<td>adds the push to the target, counts a landed hit</td>
+</tr>
+<tr>
+<td>Blocked</td>
+<td>adds the push, counts a block for the defender</td>
+</tr>
+<tr>
+<td>GuardBroke</td>
+<td>adds the push, counts a guard break</td>
+</tr>
+<tr>
+<td>Parried</td>
+<td>pushes the attacker back 1.5 m/s, counts a parry</td>
+</tr>
+<tr>
+<td>Knockdown</td>
+<td><code>knockDown</code> with the push × 1.6 plus 1 m/s up</td>
+</tr>
+<tr>
+<td>Killed</td>
+<td><code>knockDown</code> with push × 2 plus 1.5 m/s up; the attacker wins the round</td>
+</tr>
+</tbody>
+</table>
+<p>The game never computes damage itself. It only moves bodies and plays
+animations; the rules are all in <code>kke::Combatant</code>.</p>
+<h3 id="knockdowns-and-getting-up">Knockdowns and getting up<a class="headerlink" href="#knockdowns-and-getting-up" title="Permanent link">&para;</a></h3>
+<p><code>knockDown</code> hands the skeleton to physics:</p>
+<ol>
+<li>It takes the model's current bone world matrices (<code>boneWorld</code> times
+   the instance transform).</li>
+<li><code>kke::buildHumanoidRagdoll(m_rigData, world, 75.0f, &amp;missing)</code> builds a
+   75 kg ragdoll description that matches the pose (it names the bone it
+   could not find, if any).</li>
+<li><code>bindSkeletonToRagdoll</code> records how each bone sits on its body.</li>
+<li><code>IRagdollPhysics::createRagdoll</code> spawns it with 30% of the push as its
+   starting velocity, then <code>pushRagdollBody</code> gives the torso and head the
+   full push and the pelvis 30%: "the head and chest take the blow; the
+   legs go out from under".</li>
+</ol>
+<p>While it lies there, <code>animateBody</code> skins the model from the ragdoll every
+frame with <code>poseFromRagdoll</code> and <code>setBoneWorldOverride</code>.</p>
+<p><code>getUp</code> runs after 1.3 s. It reads the ragdoll's pelvis, clamps it 0.5 m
+inside the ropes, teleports the Jolt character there, takes the lying pose
+as <code>getUpFrom</code>, destroys the ragdoll and plays the get-up clip. For the
+next 0.45 s <code>animateBody</code> blends from the lying pose into the animated
+pose with <code>kke::blendPoses</code>, so the fighter does not snap from the floor
+into a standing clip. 1.3 s on the ground plus the 0.9 s get-up clip
+(<code>kGetUpTime</code>) equals the combat core's 2.2 s <code>knockdownTime</code>, so the body
+is up when the rules say it can act. A knockout (health zero) never calls
+<code>getUp</code>: the fighter stays down.</p>
+<p>The ragdoll comes from <code>kke::bestRagdollPhysics(app.findCapability&lt;kke::IRagdollPhysics&gt;())</code>.
+Without one (or without the mannequin) there is no ragdoll: the combat
+rules still knock the fighter down, they just stay standing on screen.</p>
+<h3 id="bodies-and-animation">Bodies and animation<a class="headerlink" href="#bodies-and-animation" title="Permanent link">&para;</a></h3>
+<p><a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/Body.cpp">Body.cpp</a> owns the look.</p>
+<p><strong>Loading</strong> (<code>loadCharacter</code>). <code>kke::findAssetFolder("assets/animations",
+{"KKE_ANIMATIONS_DIR"}, ...)</code> finds <code>UAL1_Standard.fbx</code>. The mannequin is
+orange; the code copies its <code>ModelData</code>, makes every material light grey
+(joints dark) and adds the copy as <code>duel/fighter</code>, so
+<code>ModelModule::setTint</code> can colour the corners blue and red (the tint
+multiplies). If <code>UAL2.fbx</code> is found (next to UAL 1, or at
+<code>$KKE_ASSETS_DIR/Universal Animation Library 2/Unity/UAL2.fbx</code>), its
+clips are added with <code>kke::appendClipsByBoneName</code> (loaded with
+<code>allowNoMeshes</code>, since that file has only a skeleton and clips). The full
+UAL 1 (<code>UAL1.fbx</code>, the "Universal Animation Library" pack) adds its
+<code>Kick</code>, <code>Dodge_Left/Right</code>, <code>Hit_Stomach</code> and <code>Celebration</code> the same way;
+clips the rig already has are skipped.</p>
+<p><strong>States</strong> (<code>setupBody</code>). Each fighter gets an <code>Animator</code> with states
+picked by name, with fallbacks when UAL 2 is missing:</p>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Clip (UAL 2 first, then the UAL 1 fallback)</th>
+<th>Length</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>idle</td>
+<td><code>Idle_Loop</code></td>
+<td>loop</td>
+</tr>
+<tr>
+<td>fwd, back, left, right</td>
+<td><code>Walk_Fwd/Bwd/L/R_Loop</code>, else <code>Walk_Loop</code></td>
+<td>loop at 1.4×</td>
+</tr>
+<tr>
+<td>jab</td>
+<td><code>Punch_Jab</code></td>
+<td>0.72 s</td>
+</tr>
+<tr>
+<td>cross</td>
+<td><code>Punch_Cross</code></td>
+<td>0.74 s</td>
+</tr>
+<tr>
+<td>hook</td>
+<td><code>Melee_Hook</code>, else <code>Punch_Cross</code></td>
+<td>0.84 s</td>
+</tr>
+<tr>
+<td>uppercut</td>
+<td><code>Melee_Uppercut</code>, else <code>Punch_Cross</code></td>
+<td>1.21 s</td>
+</tr>
+<tr>
+<td>knee</td>
+<td><code>Melee_Knee</code>, else <code>Kick</code>, else <code>Punch_Cross</code></td>
+<td>0.84 s</td>
+</tr>
+<tr>
+<td>kick</td>
+<td><code>Kick</code> (only with the full UAL 1)</td>
+<td>0.97 s</td>
+</tr>
+<tr>
+<td>dodge, dodge_l, dodge_r</td>
+<td><code>Walk_Bwd_Loop</code>; <code>Dodge_Left/Right</code>, else the side walks</td>
+<td>dodge time + 0.15 / 0.25 s</td>
+</tr>
+<tr>
+<td>hit_high, hit_low, hit_stomach, hit_hard</td>
+<td><code>Hit_Head</code>, <code>Hit_Chest</code>, <code>Hit_Stomach</code>, <code>Hit_Knockback</code></td>
+<td>the attack's <code>hitStun</code></td>
+</tr>
+<tr>
+<td>get_up</td>
+<td><code>LayToIdle</code>, <code>KipUp</code>, else <code>Crouch_Idle_Loop</code></td>
+<td>0.9 s</td>
+</tr>
+<tr>
+<td>win</td>
+<td><code>Celebration</code>, <code>Dance_Loop</code>, <code>Yes</code>, else <code>Idle_Loop</code></td>
+<td>loop</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>timed</code> helper sets the playback speed to <code>clipDuration / seconds</code>, so
+the clip lasts exactly as long as the rule:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">auto</span><span class="w"> </span><span class="n">timed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="o">&amp;</span><span class="p">](</span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="o">*</span><span class="w"> </span><span class="n">state</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">clip</span><span class="p">,</span><span class="w"> </span><span class="kt">float</span><span class="w"> </span><span class="n">seconds</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="kt">float</span><span class="w"> </span><span class="n">speed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">clip</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">seconds</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0f</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="n">s</span><span class="p">.</span><span class="n">duration</span><span class="p">(</span><span class="n">clip</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">seconds</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="mf">1.0f</span><span class="p">;</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">a</span><span class="p">.</span><span class="n">addClipState</span><span class="p">(</span><span class="n">state</span><span class="p">,</span><span class="w"> </span><span class="n">clip</span><span class="p">,</span><span class="w"> </span><span class="nb">false</span><span class="p">,</span><span class="w"> </span><span class="n">speed</span><span class="p">);</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="p">};</span>
+</code></pre></div>
+<p>The leading <code>|</code> in names like <code>"|Idle_Loop"</code> matters: clip names in the
+FBX are <code>Armature|Idle_Loop</code>, and <code>AnimationSet::find</code> matches the first
+clip that contains the text, so the bar anchors the match to the start of
+the clip's own name.</p>
+<p><strong>The state machine</strong> (<code>animateBody</code>). The <code>Combatant</code>'s state picks the
+clip, and only on entering a state (<code>state != f.lastState</code>): Windup plays
+the attack's own clip, Stunned plays the hit clip that fits the blow (the
+head for punches, the stomach for a knee or kick, knockback for an
+uppercut or a stun over 0.5 s), Dodging plays the dodge to the side the
+stick pointed. In Idle the
+fighter's velocity, split into forward and sideways parts, picks the walk
+clip once it is above 0.35 m/s, after any strike or flinch clip has
+finished. The match winner dances.</p>
+<p><strong>The stance and the guard</strong> (on top of the clip). The mannequin's idle
+and walks stand up straight, so while the fighter is free (Idle, not
+getting up, not the match winner) <code>animateBody</code> poses a boxer over them:
+the pelvis drops 8 cm, <code>spine_01</code> turns 14 degrees so the left (lead)
+shoulder is forward, <code>spine_02</code>, <code>spine_03</code> and <code>neck_01</code> lean in and tuck
+the chin. Each turn is about a model-space axis, written onto the bone's
+local rotation as <code>r * (inverse(boneWorld) * delta * boneWorld)</code>. Then a
+<code>kke::CharacterIk</code> per fighter does the rest: the hands go to the face
+(the lead one further out, both higher and closer when blocking) as human
+arms that stay out of the body, the feet stay on the canvas (so the lower
+hips bend the knees), and the body leans into its footwork. The weight
+(<code>f.guard</code>) eases toward 0.7 relaxed or 1.0 blocking, faster going up
+(rate 22) than down (rate 8), and the stance fades with it, so strikes
+and hit reactions play their clips unfought.</p>
+<p>When <code>UAL1_Standard.fbx</code> is missing, <code>m_charModel</code> stays 0 and
+<code>render</code>/<code>renderShadow</code> draw each fighter as a grey box with a dark visor
+(<code>m_block</code>), rotated to the facing.</p>
+<h3 id="the-ring">The ring<a class="headerlink" href="#the-ring" title="Permanent link">&para;</a></h3>
+<p><code>buildArena</code> builds the whole gym from boxes. Each visible box goes into
+one vertex list (<code>appendBox</code>, 24 flat-shaded vertices per box) uploaded
+once into a <code>kke::DynamicMeshRenderer</code>; each solid one is also a static
+Jolt box (<code>RigidWorld::add</code> with <code>Motion::Static</code>). The canvas top is at
+y = 0; the ring is 8.4 m across inside the ropes (<code>kRing</code> 4.2 is half of
+it). The ropes are drawn as thin boxes but collide as four 1.6 m tall
+walls just outside them, so fighters and ragdolls alike stay in. The
+benches and back wall are only drawn. A comment notes that no two faces
+share a plane (the apron top sits under the canvas) to avoid z-fighting.</p>
+<h3 id="the-sparring-bot">The sparring bot<a class="headerlink" href="#the-sparring-bot" title="Permanent link">&para;</a></h3>
+<p>The bot is two layers (<a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/SparringBot.h">SparringBot.h</a>,
+<a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/SparringBot.cpp">SparringBot.cpp</a>).</p>
+<p><strong>Tactics on the AI core.</strong> <code>m_ai</code> is a <code>kke::ai::AiWorld</code>. At init it
+loads the <code>boxer</code> species from <a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/data/boxer.yml">data/boxer.yml</a>.
+<code>syncAi</code> (at every round start) adds a bot as an agent and a player as an
+actor (perceived, never steered), each in its own team, and gives a bot
+the mood <code>{boldness 0.9, curiosity 0, aggression = skill, sociability 0}</code>.
+Every Fight frame, <code>thinkAi</code>:</p>
+<ol>
+<li>sets each fighter's transform in the AI world,</li>
+<li>calls <code>SparringBot::sense</code>, which sets the inputs the species scores
+   on: <code>stamina</code>, <code>health</code>, <code>foe_open</code> (the foe is in Recovery or
+   Stunned), <code>foe_guard</code> (the foe blocks) and <code>patience</code>,</li>
+<li>runs <code>AiWorld::update(dt)</code>,</li>
+<li>turns each <code>AiEvent::Attack</code> (in reach, cooldown over) into
+   <code>SparringBot::strike()</code>.</li>
+</ol>
+<p>The species' utility actions decide the style:</p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Behaviour</th>
+<th>Wins when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>punish (weight 2.2)</td>
+<td>fight</td>
+<td>the foe is open and it has stamina above 12%</td>
+</tr>
+<tr>
+<td>breathe (1.8)</td>
+<td>flee</td>
+<td>its stamina is low (logistic around 25%) and it feels threatened</td>
+</tr>
+<tr>
+<td>press (1.2)</td>
+<td>fight</td>
+<td>it is hostile, has stamina, and patience is low</td>
+</tr>
+<tr>
+<td>circle (1.0)</td>
+<td>watch</td>
+<td>patience is high and it feels threatened</td>
+</tr>
+<tr>
+<td>idle (0.1)</td>
+<td>idle</td>
+<td>nothing else scores</td>
+</tr>
+</tbody>
+</table>
+<p><code>patience</code> drifts: every 1.2 to 3.2 s it is re-rolled as
+<code>roll() * (1.3 - aggression)</code>, so an aggressive bot waits less.</p>
+<p><strong>Footwork</strong> (<code>SparringBot::think</code>). The AI core's
+<code>Agent::desiredVelocity</code> is projected onto the fighter's right and
+facing and divided by the walk speed, giving the same <code>Intent.move</code> a
+stick would. Two tactics adjust it: <code>circle</code> strafes and holds about
+1.8 m away; <code>breathe</code> stops backing up once it is 2.7 m away, so it does
+not run into the ropes.</p>
+<p><strong>Reflexes in C++.</strong> When the foe enters Windup, the bot decides once:
+dodge (only for slow attacks, windup over 0.45 s), block, and whether that
+block is a parry, each rolled against its skill. It acts only after its
+reaction time and when within 2.2 m. A parry is timed by raising the block
+when <code>foe.windupLeft()</code> is under 80% of the parry window. When the AI core
+says strike, it picks the punch: the knee if the foe has blocked at least
+twice lately and is blocking now, the uppercut if the foe's poise is under
+45% (or, half the time, if the foe is stunned), a kick now and then at
+the edge of reach (over 1.25 m), else a punch, which goes through the
+same jab, cross, hook chain as a player's. A short random
+cooldown follows.</p>
+<table>
+<thead>
+<tr>
+<th>Level</th>
+<th>Reaction (s)</th>
+<th>Block chance</th>
+<th>Parry chance</th>
+<th>Aggression</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>easy</td>
+<td>0.18</td>
+<td>0.3</td>
+<td>0.05</td>
+<td>0.35</td>
+</tr>
+<tr>
+<td>normal</td>
+<td>0.1</td>
+<td>0.6</td>
+<td>0.3</td>
+<td>0.55</td>
+</tr>
+<tr>
+<td>hard</td>
+<td>0.05</td>
+<td>0.85</td>
+<td>0.5</td>
+<td>0.75</td>
+</tr>
+</tbody>
+</table>
+<h3 id="the-camera">The camera<a class="headerlink" href="#the-camera" title="Permanent link">&para;</a></h3>
+<p><code>updateCamera</code> is a side-on fighting-game camera. It looks at the
+midpoint of the two fighters, 1.05 m up, from the side of the line between
+them. The distance is <code>max(4.2, separation × 1.25 + 2.6)</code>, so both stay in
+frame. Position and distance ease with <code>1 - exp(-4 dt)</code>. If the fighters
+swap sides, the camera stays on the side it is already on instead of
+swinging across the ring (it flips <code>m_camSide</code> when the new side vector
+points away from where the camera is).</p>
+<h3 id="the-hud">The HUD<a class="headerlink" href="#the-hud" title="Permanent link">&para;</a></h3>
+<p><a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/Hud.cpp">Hud.cpp</a> and <a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/ui/duel_hud.rml">ui/duel_hud.rml</a>. <code>buildHud</code>
+creates an RmlUi data model called <code>duel</code> with a <code>Corner</code> struct per
+fighter (name, health, stamina, wins, note, low) plus <code>banner</code>, <code>sub</code>,
+<code>hint</code> and <code>round</code>, then loads the document. Health and stamina are
+strings like <code>"73%"</code>, bound straight to the bars' widths with
+<code>data-style-width</code>. <code>updateHud</code> builds the new values each frame and calls
+<code>DirtyVariable</code> only when something changed. The note under a bar says
+"down!", "guard broken", "stunned", "blocking" or "winded". Below 25%
+health the <code>low</code> class makes the bar red and blink. The hint line and the
+banner go through <code>InputModule::promptText</code>, which turns <code>{duel.light}</code>
+into the button glyph for the device that player last used.</p>
+<h3 id="headless-runs">Headless runs<a class="headerlink" href="#headless-runs" title="Permanent link">&para;</a></h3>
+<p>With <code>KKE_DUEL_QUIT</code> set, <code>update</code> logs, at 5 s and every 10 s after,
+each fighter's health, stamina, wins, and tally (landed, blocked, parried,
+guard breaks, knockdowns) plus the bot's current tactic, then pushes an
+<code>SDL_EVENT_QUIT</code> when the time is up. With <code>KKE_DUEL_BOTS=1</code> this is a
+self-playing balance test. CI starts <code>duel</code> for 8 seconds as part of the
+headless smoke run.</p>
+<h2 id="design-decisions">Design decisions<a class="headerlink" href="#design-decisions" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>The rules live in the engine, not the game.</strong> Timing, stamina,
+  blocking, parries and poise are <code>kke::Combatant</code>; the duel only feeds it
+  intents and reacts to <code>HitEvent</code>s. COMBAT.md describes the core as
+  "game-agnostic melee" that "knows nothing about input, animation or AI",
+  which is why the Goblin Horde reuses it with the same presets.</li>
+<li><strong>One <code>Intent</code> struct for players and bots.</strong> A bot and a player fill
+  the same fields, so <code>updateFighter</code> has one code path, and two bots
+  (<code>KKE_DUEL_BOTS</code>) or two players need no special cases.</li>
+<li><strong>Tactics as data, reflexes as code.</strong> The bot's choice of plan is the
+  AI core's utility scoring over <code>data/boxer.yml</code>; blocks, parries and
+  dodges stay in <code>SparringBot.cpp</code>. The header says why: they "are about
+  frame timing, not choices". Commit c20b3ec moved the tactics to the AI
+  core so the fighter's style can be changed by editing the YAML.</li>
+<li><strong>Clips are stretched to the rules.</strong> Every attack and hit clip plays
+  exactly as long as its <code>AttackDesc</code> says (<code>timed</code>). The rule decides the
+  timing; the animation only illustrates it, so tuning a number never
+  leaves an animation out of sync.</li>
+<li><strong>No turning during a committed swing.</strong> The code comment: "a committed
+  punch goes where it was aimed". This is what makes side dodges work.</li>
+<li><strong>Ragdoll time plus get-up clip equals the knockdown time.</strong> 1.3 s +
+  0.9 s = 2.2 s, the <code>knockdownTime</code> of <code>CombatStats::fighter()</code>, as the
+  comment on <code>kGetUpTime</code> says ("Combatant's knockdown covers it").</li>
+<li><strong>Blend out of the ragdoll.</strong> The get-up starts from the pose the
+  ragdoll left (<code>poseFromRagdoll</code>) and blends into the clip over 0.45 s
+  instead of snapping.</li>
+<li><strong>The stance is procedural, not a clip.</strong> UAL has no boxing stance
+  clip, so bone turns and <code>kke::CharacterIk</code> make one on top of any idle
+  or walk clip.</li>
+<li><strong>A grey copy of the mannequin, tinted.</strong> Tint multiplies the base
+  colour, so a grey base takes blue and red cleanly where the orange
+  original would not.</li>
+<li><strong>Everything works with less.</strong> No UAL 2: UAL 1's punches stand in. No
+  mannequin: boxes. No ragdoll capability: fighters stay standing. No
+  species file: an error in the log and the bot stands still. The demo
+  still starts in CI with no optional assets.</li>
+<li><strong>The ring is code, not a scene.</strong> Boxes built in <code>buildArena</code>, so the
+  demo needs no Synty packs (docs/SCENES.md lists it as "No Synty
+  packs").</li>
+</ul>
+<h2 id="tuning">Tuning<a class="headerlink" href="#tuning" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>What</th>
+<th>Where</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kRing</code> 4.2</td>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/DuelModule.cpp">DuelModule.cpp</a></td>
+<td>half the ring's width; bigger gives more room to circle</td>
+</tr>
+<tr>
+<td><code>kStart</code> 1.7</td>
+<td>DuelModule.cpp</td>
+<td>each corner's start distance from the middle</td>
+</tr>
+<tr>
+<td><code>kMinGap</code> 0.72</td>
+<td>DuelModule.cpp</td>
+<td>closest the fighters' centres may get</td>
+</tr>
+<tr>
+<td><code>kWalk</code> 2.2, <code>kBlockWalk</code> 1.0, <code>kDodgeSpeed</code> 5.5</td>
+<td>DuelModule.cpp</td>
+<td>footwork speeds in m/s</td>
+</tr>
+<tr>
+<td><code>kRagdollTime</code> 1.3</td>
+<td>DuelModule.cpp</td>
+<td>time on the ground before the get-up (keep it + <code>kGetUpTime</code> = <code>knockdownTime</code>)</td>
+</tr>
+<tr>
+<td><code>kRoundTime</code> 90</td>
+<td>DuelModule.cpp</td>
+<td>round length before the decision</td>
+</tr>
+<tr>
+<td>facing rates 14 and 6</td>
+<td><code>updateFighter</code></td>
+<td>how fast fighters square up (lower is easier to side-step)</td>
+</tr>
+<tr>
+<td>push decay 7</td>
+<td><code>updateFighter</code></td>
+<td>how long knockback slides</td>
+</tr>
+<tr>
+<td>ragdoll mass 75, push multipliers 1.6 and 2.0</td>
+<td><code>knockDown</code>, <code>onHit</code></td>
+<td>how far a knockdown throws the body</td>
+</tr>
+<tr>
+<td><code>kGetUpTime</code> 0.9, blend 0.45 s</td>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/Body.cpp">Body.cpp</a></td>
+<td>get-up clip length and the blend out of the ragdoll</td>
+</tr>
+<tr>
+<td>guard targets 0.22 m, 0.55 / 1.0, rates 22 / 8</td>
+<td><code>animateBody</code></td>
+<td>where the hands sit and how fast the block goes up</td>
+</tr>
+<tr>
+<td>camera <code>4.2</code>, <code>1.25</code>, <code>2.6</code>, rate 4</td>
+<td><code>updateCamera</code></td>
+<td>how far back the camera sits and how fast it follows</td>
+</tr>
+<tr>
+<td><code>Skill</code> per level</td>
+<td><code>SparringBot::skillFor</code></td>
+<td>reaction, block, parry, aggression</td>
+</tr>
+<tr>
+<td>actions, weights, curves, <code>attackRange</code>, <code>attackCooldown</code></td>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/data/boxer.yml">data/boxer.yml</a></td>
+<td>the bot's style; <code>attackRange</code> 0.45 plus both radii is the 1.15 m punch reach</td>
+</tr>
+<tr>
+<td>attack presets, <code>CombatStats::fighter()</code></td>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/engine/src/Combat.cpp">engine/src/Combat.cpp</a></td>
+<td>damage, stamina costs, parry window, poise (shared with other games)</td>
+</tr>
+</tbody>
+</table>
+<p>To change one fighter's stats without touching the engine, pass your own
+<code>CombatStats</code> to <code>m_combat.add</code> in <code>spawnFighters</code>, or build an
+<code>AttackDesc</code> from a preset and change fields (as the Goblin Horde does
+with <code>slash()</code> and <code>swipe()</code>).</p>
+<h2 id="engine-features-it-uses">Engine features it uses<a class="headerlink" href="#engine-features-it-uses" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Header / module</th>
+<th>Doc</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Melee rules: attacks, stamina, blocks, parries, poise</td>
+<td><code>kke/Combat.h</code> (<code>Combatant</code>, <code>CombatWorld</code>, <code>AttackDesc</code>, <code>CombatStats</code>)</td>
+<td><a href="../../COMBAT/">COMBAT.md</a></td>
+</tr>
+<tr>
+<td>Utility AI, steering, Attack events</td>
+<td><code>kke/ai/AiWorld.h</code></td>
+<td><a href="../../AI/">AI.md</a></td>
+</tr>
+<tr>
+<td>Species from YAML</td>
+<td><code>AiWorld::loadSpecies</code></td>
+<td><a href="../../AI/">AI.md</a>, <a href="../../DATA_FILES/">DATA_FILES.md</a></td>
+</tr>
+<tr>
+<td>Character controller, static boxes</td>
+<td><code>kke/RigidWorld.h</code>, <code>RigidBodyModule</code></td>
+<td><a href="../../MOVEMENT/">MOVEMENT.md</a></td>
+</tr>
+<tr>
+<td>Ragdolls built from a pose, skinned back</td>
+<td><code>kke/Ragdoll.h</code>, <code>IRagdollPhysics</code></td>
+<td><a href="../../RAGDOLLS/">RAGDOLLS.md</a></td>
+</tr>
+<tr>
+<td>Clip states, blending, two-bone IK, pose blending</td>
+<td><code>kke/Animator.h</code>, <code>kke/AnimRig.h</code></td>
+<td><a href="../../PROCEDURAL_ANIMATION/">PROCEDURAL_ANIMATION.md</a></td>
+</tr>
+<tr>
+<td>Skinned models, tints, bone overrides</td>
+<td><code>ModelModule</code></td>
+<td><a href="../../SCENES/">SCENES.md</a></td>
+</tr>
+<tr>
+<td>Rebindable actions, two players, device assignment, button prompts</td>
+<td><code>InputModule</code>, <code>kke/InputMap.h</code>, <code>kke/ButtonPrompts.h</code></td>
+<td><a href="../../INPUT/">INPUT.md</a></td>
+</tr>
+<tr>
+<td>HUD with data bindings</td>
+<td><code>UiModule</code> (RmlUi)</td>
+<td><a href="../../INPUT/">INPUT.md</a> (prompts)</td>
+</tr>
+<tr>
+<td>Mood: sky, light, ambience</td>
+<td><code>Application::setMood</code></td>
+<td><a href="../../MOODS/">MOODS.md</a></td>
+</tr>
+<tr>
+<td>Finding assets on this machine</td>
+<td><code>kke/AssetCatalog.h</code> (<code>findAssetFolder</code>)</td>
+<td><a href="../../SCENES/">SCENES.md</a></td>
+</tr>
+<tr>
+<td>Box meshes drawn from code</td>
+<td><code>kke/SphereImpostors.h</code> (<code>DynamicMeshRenderer</code>)</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h2 id="assets">Assets<a class="headerlink" href="#assets" title="Permanent link">&para;</a></h2>
+<p>No Synty packs.</p>
+<ul>
+<li><strong>Fighters:</strong> Quaternius' Universal Animation Library mannequin (CC0),
+  <code>assets/animations/UAL1_Standard.fbx</code>, which is in the repository (not in
+  release downloads, see <a href="../../DEPENDENCIES/">DEPENDENCIES.md</a>).
+  Clips used from it: <code>Idle_Loop</code>, <code>Walk_Loop</code>, <code>Punch_Jab</code>, <code>Punch_Cross</code>,
+  <code>Hit_Head</code>, <code>Hit_Chest</code>, <code>Jump_Start</code>, <code>Crouch_Idle_Loop</code>, <code>Dance_Loop</code>,
+  as fallbacks where UAL 2 is missing.</li>
+<li><strong>Melee clips (optional):</strong> Universal Animation Library 2, <code>UAL2.fbx</code>,
+  from <code>assets/animations/</code> or <code>$KKE_ASSETS_DIR/Universal Animation Library 2/Unity/</code>.
+  Clips used: <code>Melee_Hook</code>, <code>Melee_Uppercut</code>, <code>Melee_Knee</code>,
+  <code>Hit_Knockback</code>, <code>LayToIdle</code>, <code>Walk_Fwd_Loop</code>, <code>Walk_Bwd_Loop</code>,
+  <code>Walk_L_Loop</code>, <code>Walk_R_Loop</code>. Missing: an info line in the log and UAL
+  1's punches stand in.</li>
+<li><strong>Mannequin missing:</strong> a warning ("the fighters are blocks") and each
+  fighter is a grey box with a visor. The fight works the same.</li>
+<li><strong>HUD:</strong> <code>ui/duel_hud.rml</code>, the shared <code>theme.rcss</code> from
+  <code>games/rmlui_demo/ui/</code>, and the Noto Sans and Noto Color Emoji fonts
+  (SIL Open Font License), all copied next to the executable by
+  <a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/CMakeLists.txt">CMakeLists.txt</a>. Button glyphs are Xelu's CC0 prompts.</li>
+<li><strong>Mood:</strong> <code>assets/moods/arena_night.yaml</code>.</li>
+<li><strong>The ring, gym and benches</strong> are boxes built in code.</li>
+</ul>
+<h2 id="make-a-game-like-this">Make a game like this<a class="headerlink" href="#make-a-game-like-this" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Copy the folder.</strong> <code>cp -r games/duel games/my_fight</code>, rename the
+   target and namespace (<code>duel</code> to <code>my_fight</code>), and add
+   <code>add_subdirectory(games/my_fight)</code> inside an <code>if(KKE_ENABLE_JOLT)</code> block
+   in the root <code>CMakeLists.txt</code>. <code>tools/new_game</code> makes Lua-only games from
+   <code>games/template</code>; a C++ melee game starts from this folder instead.</li>
+<li><strong>Change the moves first.</strong> Build your attacks from the presets:
+   <code>kke::AttackDesc a = kke::AttackDesc::heavy(); a.name = "sweep"; a.height = 0.3f;</code>.
+   Give each one a clip state with <code>timed(...)</code> so the clip matches its
+   length, and map it in <code>animateBody</code>'s Windup case by <code>currentAttack().name</code>.</li>
+<li><strong>Change the fighters' bodies.</strong> Pass your own <code>CombatStats</code> to
+   <code>m_combat.add</code>. For a different character, load it in <code>loadCharacter</code>
+   and retarget UAL clips onto it the way the Goblin Horde's <code>loadHero</code>
+   does (<code>matchBones</code>, <code>retargetAnimations</code>).</li>
+<li><strong>Tune the bot in data.</strong> Edit <a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/data/boxer.yml">data/boxer.yml</a>: add an
+   action, change a weight or a curve, add an input and set it in
+   <code>SparringBot::sense</code>. Keep timing reactions (blocks, parries) in C++.</li>
+<li><strong>Replace the ring.</strong> Swap <code>buildArena</code> for your own level (a scene
+   file, or <code>command_kit::Scenery</code>-style pack models with box colliders).
+   Keep walls solid so ragdolls stay in.</li>
+<li><strong>Add rules on top.</strong> Rounds, timers and scoring are the <code>Phase</code>
+   machine in <code>update</code>; that is where a best of five, a ring-out or a
+   super meter would go.</li>
+<li><strong>Read next:</strong> <a href="../../COMBAT/">COMBAT.md</a>,
+   <a href="../../AI/">AI.md</a>, <a href="../../RAGDOLLS/">RAGDOLLS.md</a>,
+   <a href="../../INPUT/">INPUT.md</a>.</li>
+</ol>
+<p>Pitfalls the code shows:</p>
+<ul>
+<li>Keep the facing still during Active and Recovery, or every attack
+  tracks the target and dodging becomes useless.</li>
+<li>Call <code>Combatant::place</code> every frame before <code>CombatWorld::step</code>, or hits
+  are tested against last frame's positions.</li>
+<li>When a ragdoll takes over, stop driving the character controller (the
+  duel sends an empty <code>CharacterInput</code>) and clear the bone override
+  (<code>setBoneWorldOverride(model, {})</code>) when the round resets.</li>
+<li>The HUD model's fields must never become empty strings for style
+  bindings; the duel always writes a percentage.</li>
+<li>Two-player device splits change when controllers come and go, so
+  refresh the assignment (the duel does it every frame).</li>
+</ul>
+<h2 id="files">Files<a class="headerlink" href="#files" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>What is in it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/main.cpp">main.cpp</a></td>
+<td>The application, the mood and the module list</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/DuelModule.h">DuelModule.h</a></td>
+<td>The module, <code>Intent</code>, <code>Fighter</code>, phases, HUD structs</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/DuelModule.cpp">DuelModule.cpp</a></td>
+<td>Controls, the ring, fighters, two-player devices, AI glue, rounds, hits, knockdowns, get-up, camera, headless report</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/Body.cpp">Body.cpp</a></td>
+<td>Loading the mannequin, UAL 2 and the full UAL 1, clip states, the animation state machine, the stance and guard, the get-up blend</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/SparringBot.h">SparringBot.h</a></td>
+<td>The bot's skill levels and interface</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/SparringBot.cpp">SparringBot.cpp</a></td>
+<td>AI inputs, footwork from the AI core, block/parry/dodge reflexes, punch choice</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/Hud.cpp">Hud.cpp</a></td>
+<td>The RmlUi data model and its per-frame update</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/ui/duel_hud.rml">ui/duel_hud.rml</a></td>
+<td>The HUD layout and style</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/data/boxer.yml">data/boxer.yml</a></td>
+<td>The bot's species: utility actions and considerations</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/game.json">game.json</a></td>
+<td>Marketplace manifest (id, title, tags, modules)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/duel/CMakeLists.txt">CMakeLists.txt</a></td>
+<td>The executable and the runtime files copied next to it</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../party/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Party">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Party
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../tennis/" class="md-footer__link md-footer__link--next" aria-label="Next: Tennis">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Tennis
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      MIT licence. KKE is written by Claude (Anthropic) working in the repository.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/Khyretos/kk-engine" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://ko-fi.com/khyretos" target="_blank" rel="noopener" title="ko-fi.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11.351 2.715c-2.7 0-4.986.025-6.83.26C2.078 3.285 0 5.154 0 8.61c0 3.506.182 6.13 1.585 8.493 1.584 2.701 4.233 4.182 7.662 4.182h.83c4.209 0 6.494-2.234 7.637-4a9.5 9.5 0 0 0 1.091-2.338C21.792 14.688 24 12.22 24 9.208v-.415c0-3.247-2.13-5.507-5.792-5.87-1.558-.156-2.65-.208-6.857-.208m0 1.947c4.208 0 5.09.052 6.571.182 2.624.311 4.13 1.584 4.13 4v.39c0 2.156-1.792 3.844-3.87 3.844h-.935l-.156.649c-.208 1.013-.597 1.818-1.039 2.546-.909 1.428-2.545 3.064-5.922 3.064h-.805c-2.571 0-4.831-.883-6.078-3.195-1.09-2-1.298-4.155-1.298-7.506 0-2.181.857-3.402 3.012-3.714 1.533-.233 3.559-.26 6.39-.26m6.547 2.287c-.416 0-.65.234-.65.546v2.935c0 .311.234.545.65.545 1.324 0 2.051-.754 2.051-2s-.727-2.026-2.052-2.026m-10.39.182c-1.818 0-3.013 1.48-3.013 3.142 0 1.533.858 2.857 1.949 3.897.727.701 1.87 1.429 2.649 1.896a1.47 1.47 0 0 0 1.507 0c.78-.467 1.922-1.195 2.623-1.896 1.117-1.039 1.974-2.364 1.974-3.897 0-1.662-1.247-3.142-3.039-3.142-1.065 0-1.792.545-2.338 1.298-.493-.753-1.246-1.298-2.312-1.298"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

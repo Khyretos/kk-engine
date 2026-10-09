@@ -1,0 +1,4248 @@
+# Kreative Kompas Engine: everything to make games, in one file
+
+Generated from the repository by tools/docs_site/llms.py. Sections are
+separated by lines of '='; each starts with the file it came from.
+
+========================================================================
+FILE: AGENTS.md
+========================================================================
+
+# AGENTS.md
+
+Instructions for AI assistants (any model, any tool) helping someone with
+Kreative Kompas Engine (KKE). People use KKE to **make games**; most of
+the time that's what you're helping with, and it's mostly Lua.
+
+## 1. Find the job, read its skill
+
+Each skill is one short file with the steps, the rules and copyable code.
+Read the one that fits before you answer; you rarely need more than one.
+
+| The person wants to... | Read |
+|---|---|
+| start a new game, or grow one into a whole game | [skills/make-a-game](skills/make-a-game/SKILL.md) |
+| write or fix a script: levels, controls, enemies, rules, UI, saving | [skills/lua-scripting](skills/lua-scripting/SKILL.md) |
+| understand something, or learn ("how does...", "what is...") | [skills/explain-kke](skills/explain-kke/SKILL.md) |
+| test a change, or find out why something doesn't work | [skills/check-and-debug](skills/check-and-debug/SKILL.md) |
+| write C++: a new game module, new Lua functions, engine work | [skills/cpp-module](skills/cpp-module/SKILL.md) |
+
+Small context window? Load only the skill you need: each works alone.
+Large one? <https://khyretos.github.io/kk-engine/llms-full.txt> is the
+whole making-games documentation in one file (`tools/docs_site/llms.py
+OUT_DIR` writes it locally).
+
+## 2. Rules that always apply
+
+1. **Say what you checked.** If you ran it, say how (`tools/check_game`
+   printed OK). If you can't run anything, say so once at the start and
+   give the person the exact command to run and what they should see.
+   Never present untested code as working.
+2. **Lua first.** A game's level, rules, controls and UI are Lua in
+   `games/<game>/scripts/`. They reload while the game runs. Reach for
+   C++ only for what Lua can't do (a new kind of system, heavy maths per
+   frame on thousands of things).
+3. **Copy from what works.** `docs/cookbook/recipes/` has tested scripts
+   for most things people ask for (the table in the lua-scripting skill).
+   Start from the closest one instead of from nothing.
+4. **Only use functions that exist.** The API is in the lua-scripting
+   skill and in `docs/SCRIPTING.md`. Don't invent functions; if something
+   is missing, say so and suggest the closest real one.
+5. **Zero warnings.** A warning in the build or in the game's log is a
+   bug to fix properly, never to silence.
+6. **Match the person.** A child or a beginner gets one small step at a
+   time, in plain words, with something they can see change. Someone
+   experienced gets the code and the why.
+
+## 3. Where things are
+
+| Path | What |
+|---|---|
+| `games/template/` | The starter game every new game copies (`tools/new_game NAME`) |
+| `games/<name>/scripts/*.lua` | A game's Lua: level, rules, everything |
+| `docs/cookbook/` | Tested recipes from "hello" to A*, boids and IK, with screenshots |
+| `docs/tutorials/` | Step-by-step: make a game, then grow it |
+| `games/<demo>/README.md` | Each demo explained: how it works, why, how to make a game like it ([docs/demos](docs/demos/index.md) says which to start from) |
+| `docs/SCRIPTING.md` | The Lua API in full |
+| `docs/ASSETS.md` | Asset folders, naming, which packs each game needs (`kke_assets`) |
+| `docs/TOOLS.md` | How to use the kke_ command-line tools |
+| `tools/check_game` | Runs a game headless and reports script errors |
+| `engine/` | The engine (C++20, Vulkan). See [AI_GUIDE.md](AI_GUIDE.md) before changing it |
+
+Changing the engine itself (not a game)? [AI_GUIDE.md](AI_GUIDE.md) has
+the architecture and the contributor rules; read it too.
+
+========================================================================
+FILE: skills/make-a-game/SKILL.md
+========================================================================
+
+---
+name: make-a-game
+description: Take someone from nothing to a playable KKE game, then grow it into a whole game (goal, rules, HUD, sound, saving) one checked step at a time.
+---
+
+# Make a game with KKE
+
+A game is a folder in `games/`, copied from `games/template/`. The copy
+already has a character that walks, runs, jumps, vaults and climbs, a
+camera, and a small level. Everything else is Lua in its `scripts/`
+folder, which reloads while the game runs.
+
+## Step 1: build once (skip if `build/bin/starter_game` exists)
+
+```bash
+git clone https://github.com/Khyretos/kk-engine.git && cd kk-engine
+cmake --workflow --preset default        # first time: fetches libraries, takes a while
+```
+
+System packages per platform: `docs/BUILDING.md`.
+
+## Step 2: make the game's folder
+
+```bash
+tools/new_game my_game                   # lower-case letters, digits, _
+cmake --build build --target my_game
+cd build/bin && ./my_game
+```
+
+Now `games/my_game/scripts/game.lua` is the level. Edit it and save while
+the game runs; it rebuilds itself.
+
+## Step 3: agree on the game in one sentence
+
+Before writing code, write down with the person: **what the player does,
+how they win, how they lose.** "Collect 10 coins before the timer runs
+out; falling off the edge restarts." Everything after this is small steps
+toward that sentence.
+
+## Step 4: grow it in small steps, each one checked
+
+Do **one** step per change, and check it (Step 5) before the next. A good
+order for most games:
+
+| Step | Put it in | Start from (docs/cookbook/recipes/) |
+|---|---|---|
+| 1. The level: ground, walls, platforms | `scripts/game.lua` | the template's `game.lua`, `pyramid.lua` |
+| 2. The thing to do: pickups, targets, enemies | `scripts/<thing>.lua` | `zone_door.lua`, `launch_pad.lua`, `patrol.lua`, `pet.lua` |
+| 3. Controls it needs beyond walking | the same file | `throw.lua`, `toggle.lua`, `shooter.lua` |
+| 4. Win and lose, timer, score on screen | `scripts/round.lua` | `round.lua` |
+| 5. Sound | where things happen | `sounds.lua` |
+| 6. Remember the best score | `round.lua` | `round.lua` (`store`) |
+| 7. Polish: generated levels, smarter enemies | new files | `maze.lua`, `terrain.lua`, `astar.lua`, `flocking.lua` |
+
+The lua-scripting skill has the whole API and the rules; read it before
+writing Lua. Each file should do one thing, with hook and timer names
+prefixed by the file's name.
+
+Talk to other scripts with your own events:
+`hook.Run("CoinCollected", 1)` in one file,
+`hook.Add("CoinCollected", "round.coins", function(n) ... end)` in another.
+
+## Step 5: check every step
+
+```bash
+tools/check_game my_game                  # OK or FAILED, with the script's file and line
+tools/check_game my_game --shot look.jpg  # and a screenshot to look at
+```
+
+Can't run commands? Ask the person to save the file with the game
+running and tell you what the log (or F1, Scripts) says, and what they
+see. Their answer is your test result: read it before the next step.
+
+## Step 6: name it and share it
+
+- `games/my_game/game.json`: title, description, tags.
+- Art: `models.load("SM_...")` uses installed asset packs; plain boxes
+  and spheres with colours are a fine look to start with.
+- A downloadable build: `docs/RELEASES.md` shows how the engine's own
+  builds are packaged; a game's is made the same way.
+
+## When it needs C++
+
+Walking, cameras and physics are already there. New *kinds* of systems
+(a vehicle, a card-game table, a custom camera) are C++ modules in the
+game's folder: see the cpp-module skill. Try Lua first; ask the person
+before adding C++, since it needs a rebuild each time.
+
+========================================================================
+FILE: skills/lua-scripting/SKILL.md
+========================================================================
+
+---
+name: lua-scripting
+description: Write or fix Lua scripts for a KKE game - levels, controls, enemies, rules, HUDs, saving. Use for any gameplay code in games/*/scripts.
+---
+
+# Lua scripting in KKE
+
+A game's scripts are the `.lua` files in `games/<game>/scripts/`. The game
+loads every file there, and **reloads a file within half a second of it
+being saved**, while the game runs: whatever the old version made is
+removed first, so nothing is built twice. One file per feature is normal
+(`level.lua`, `enemies.lua`, `hud.lua`).
+
+## The shape of every script
+
+```lua
+-- 1. Top level: runs once when the file loads. Build things here.
+local crate = physics.box { pos = Vec(0, 2, 0), size = Vec(1, 1, 1), color = Vec(0.8, 0.5, 0.2) }
+
+-- 2. Controls: define once, read every frame.
+input.define("jump_pad", "Launch the crate", "E")
+
+-- 3. Hooks: code that runs later, when something happens.
+hook.Add("Think", "myscript.update", function(dt)   -- every frame; dt = seconds since last
+  if input.pressed("jump_pad") then
+    physics.impulse(crate, Vec(0, 8, 0))
+  end
+end)
+
+-- 4. Timers: code that runs after a delay, or repeatedly.
+timer.Create("myscript.spawn", 2, 0, function()     -- every 2 s, forever (0 = forever)
+  print("two more seconds")
+end)
+```
+
+**Rules that prevent most bugs:**
+
+1. The game's own tables (`player`, `view`, ...) exist only once the
+   game has started: use them **inside hooks or timers**, never at the top
+   level. `physics`, `input`, `hook`, `timer`, `store`, `ui` are fine
+   anywhere.
+2. Hook and timer names must be unique: prefix them with the file's name
+   (`"enemies.update"`). The same name replaces the old one.
+3. Use `local` for every variable and function.
+4. Positions and directions are `Vec(x, y, z)` in metres. **y is up.**
+   The ground in the starter level is at y = 0.
+5. A table only exists if the game has its module: guard optional ones,
+   `if audio then ... end`, `local M = audio and audio.materials() or {}`.
+6. `physics.setVelocity` and `physics.impulse` work on bodies **your
+   scripts made**. Others (the player, other scripts' bodies) raise an
+   error; wrap in `pcall` if you don't know who made it.
+7. Don't loop forever or wait in a loop: use a hook or a timer instead.
+   A script that runs too long is stopped with an error.
+8. **The player is not a physics body.** `Contact` never reports the
+   player. To know when the player reaches something (a coin, a zone, an
+   enemy), compare positions every frame:
+   `(physics.position(coin) - player.position()):length() < 1.2`.
+   `player.position()` is at the feet; add `Vec(0, 0.9, 0)` for the middle.
+
+## The API (everything you can call)
+
+```lua
+-- Hooks
+hook.Add("Think", "id", function(dt) end)         -- every frame
+hook.Add("Tick", "id", function(dt, tick) end)    -- 60 times a second exactly (physics rate)
+hook.Add("Init", "id", function() end)            -- once, when the game has started
+hook.Add("Contact", "id", function(c) end)        -- two bodies touched (never the player): c.a, c.b, c.speed, c.pos, c.materialA, c.materialB
+hook.Add("Break", "id", function(id) end)         -- a breakable came apart
+hook.Add("NetMessage", "id", function(name, data, from) end)
+hook.Add("Shutdown", "id", function() end)
+hook.Remove("Think", "id")
+hook.Run("MyEvent", 1, 2)                          -- call your own event; others hook.Add("MyEvent", ...)
+
+-- Timers
+timer.Simple(1.5, fn)                   -- once, after 1.5 s
+timer.Create("name", 0.5, 10, fn)       -- every 0.5 s, 10 times (0 = forever)
+timer.Remove("name")   timer.Exists("name")
+
+-- Vectors
+local v = Vec(1, 2, 3)   -- v.x v.y v.z, + - * /, v:length(), v:normalized(), v:dot(w), v:cross(w)
+
+-- Physics: bodies are numbers (ids)
+local id = physics.box    { pos = Vec(0,1,0), size = Vec(1,1,1), color = Vec(1,0,0),
+                            density = 500, bounce = 0.1, friction = 0.6, static = false,
+                            velocity = Vec(0,0,0), material = 0,
+                            visible = true, glass = false, cloudy = 0 }  -- visible = false: an invisible wall; glass: see-through
+local b  = physics.sphere { pos = Vec(0,3,0), radius = 0.5, color = Vec(0,0,1) }  -- same options
+physics.showHidden(true)   -- draw the invisible ones faintly while building a level
+physics.remove(id)   physics.position(id)   physics.velocity(id)   physics.count()
+physics.setVelocity(id, Vec(0,5,0))   physics.impulse(id, Vec(0,5,0) [, point])
+local hit = physics.raycast(from, direction [, maxDistance])  -- nil, or {pos, normal, distance, body, material}
+
+-- Input: actions the player can rebind in the settings
+input.define("id", "Label in settings", "Key")   -- keyboard key names: "E", "Space", "Up", "Right Ctrl", "F5"...
+input.pressed("id")  -- true on the one frame it went down
+input.held("id")     -- true every frame it's down
+input.value("id")    -- 0..1 (or -1..1 for an axis)
+input.define("id", "Label", "G", "rb")  -- 4th: controller button ("a","b","x","y","lb","rb","lt","rt","start","dpad_up"...)
+-- Button prompts: a picture of the button on the device in use (keyboard, Xbox, PlayStation, Switch, Deck, touch)
+ui.rml(doc, "hint", input.promptText("{jump} jump  {id} do the thing"))  -- {action} or {a}, {key:Space}, {touch:tap}
+ui.rml(doc, "hint", input.prompt("jump", "Jump"))   -- one prompt with a label
+input.style()        -- "keyboard", "xbox", "playstation", "switch", "steamdeck", "steamcontroller", "touch"
+hook.Add("InputStyle", "my.prompts", function(style) end)  -- device changed: redo promptText hints
+-- In an .rml file: <prompt action="jump" label="Jump"/> redraws by itself. Never write "Press E" in text.
+-- Built-in actions you can read too: "jump", "sprint", "crouch", "fire", "aim", "interact"
+
+-- Camera and player (starter game)
+camera.position()   camera.target()   camera.forward()
+player.position()   player.teleport(Vec(0,1,0))   player.facing()   -- inside hooks only
+
+-- Mood: sky, sun, fog, colour look and background sound in one go (docs/MOODS.md)
+mood.set("golden_hour")   -- or "clear_day", "sunset", "dusk", "night", "misty_morning", "stormy", "playful", ...
+mood.current()   mood.list()
+
+-- Sound
+local M = audio.materials()   -- M.Stone, M.Wood, M.Metal, M.Glass, ...: give bodies material = M.Wood
+audio.impact(pos, M.Metal, 0.8)   -- play one now (loudness 0..1)
+
+-- Screen (HUD, menus): RmlUi, HTML-like
+local doc = ui.open([[<rml><body><div id="score">0</div></body></rml>]])
+ui.text(doc, "score", "12")   ui.class(doc, "id", "hidden", true)   ui.show(doc, false)
+ui.onClick(doc, "button_id", function() end)   ui.close(doc)
+
+-- Saving (lasts between sessions)
+store.save("best", 42)   store.load("best", 0)   store.add("coins", 5)   store.remove("best")
+
+-- 3D models from installed asset packs
+local m = models.load("SM_Prop_Crate_01")   local inst = models.spawn(m, { pos = Vec(0,0,0), yaw = 90 })
+models.move(inst, pos [, yaw])   models.play(inst, "Walk", true)   models.remove(inst)
+
+-- Other
+kke.time()   kke.dt()   print(...)            -- print shows in the log and the F1 Scripts console
+net.role()   net.send(name, data)             -- games with multiplayer (NetModule): docs/cookbook/networking.md
+net.table(name):set(key, row)   net.watch(name, { field = value }, function(event, key, row, old) end) -- state everyone sees (docs/SCRIPTING.md "Synced tables")
+net.setGroup(player, court)   net.showGroups(player, { court })   net.solid(player, false) -- rooms on one server; spectators never touch the ball (server/host only, docs/SCRIPTING.md "Groups")
+net.call(name, data, function(ok, answer) end)   net.handle(name, function(data, from) return answer end) -- ask the host, get an answer (docs/SCRIPTING.md "Calls")
+breakable.box{pos, size, material = "glass"}  -- things that shatter (FEMFX builds)
+```
+
+The complete reference, with every option: `docs/SCRIPTING.md`.
+
+## Start from a tested recipe
+
+Every file below is in `docs/cookbook/recipes/`, runs in CI, and is
+explained in `docs/cookbook/`. Find the closest one, copy it into the
+game's `scripts/` folder, then change it.
+
+| For | Recipe |
+|---|---|
+| first script: variables, if, loops, functions | `hello.lua` |
+| spawn things over time; remove the oldest | `rain.lua` |
+| build with loops; rebuild on a key | `pyramid.lua` |
+| your own key, hold to charge | `throw.lua` |
+| toggle on press vs. while held | `toggle.lua` |
+| show which button to press (pictures per device) | `prompts.lua` |
+| steer something relative to the camera | `roll_ball.lua` |
+| a follower (pet, companion, homing) | `pet.lua` |
+| enemy or platform moving between points | `patrol.lua` |
+| player picks things up (coins, keys, health) | `docs/tutorials/03-pickups.md` |
+| player enters an area | `zone_door.lua` |
+| bodies hit each other (pads, damage from falling things) | `launch_pad.lua` |
+| shooting: raycast from the camera, knockback | `shooter.lua` |
+| explosions, area push | `explosion.lua` |
+| a whole round: timer, HUD, win/lose, best score, restart button | `round.lua` |
+| random maze generation | `maze.lua` |
+| terrain from noise | `terrain.lua` |
+| path finding around walls (A*) | `astar.lua` |
+| flocks and swarms (boids) | `flocking.lua` |
+| procedural animation: follow-the-leader body | `caterpillar.lua` |
+| inverse kinematics (reach for a point) | `ik_arm.lua` |
+| physics settings side by side | `bounce.lua` |
+| invisible walls, glass | `walls.lua` |
+| sounds from materials | `sounds.lua` |
+| multiplayer: host decides, players ask | `net_scores/` |
+
+## Common mistakes
+
+| Symptom in the log | Cause | Fix |
+|---|---|---|
+| `attempt to index a nil value (global 'player')` | used `player` at the top level | move it into `hook.Add("Init", ...)` or a Think hook |
+| `attempt to index a nil value (global 'audio')` | the game has no audio module | guard: `if audio then ... end` |
+| `attempt to call a nil value (field 'xyz')` | that function doesn't exist | check the API list above |
+| no error, but the thing appears at 0, 0, 0 | passed three numbers where a position goes | always one `Vec`: `pos = Vec(1, 2, 3)`, `player.teleport(Vec(0, 1, 0))` |
+| `input.define: unknown key name` | not a key name the engine knows | names as on the key: `"A"`, `"Space"`, `"Left Shift"`, `"Return"`, `"Up"` |
+| things built twice after saving | state kept outside what the script made | only build with `physics.*`/`models.*`/`ui.*`: those are cleaned up on reload |
+| pickups never get picked up | used `Contact` for the player | distance check every frame (rule 8) |
+| nothing happens on a key | used `pressed` for something continuous | `held` for "while down", `pressed` for "once per press" |
+
+## Check it
+
+Save the file with the game running and watch the log (or F1, Scripts).
+Without a screen, or to be sure: `tools/check_game <game>` (see the
+check-and-debug skill). It prints what your scripts printed, every error
+with file and line, and ends with OK or FAILED.
+
+========================================================================
+FILE: skills/check-and-debug/SKILL.md
+========================================================================
+
+---
+name: check-and-debug
+description: Test a KKE game change and find why something doesn't work - run the game headless with tools/check_game, read the log, take a screenshot, or guide a person through it when you can't run commands.
+---
+
+# Check and debug a KKE game
+
+Never call a change done until it has been run. How depends on what you
+can do.
+
+## If you can run commands
+
+```bash
+cmake --build build --target my_game        # only needed after C++ changes; Lua needs no build
+tools/check_game my_game                    # runs 8 s headless, prints the result
+```
+
+It prints three things, then `OK` or `FAILED`:
+
+- **printed by scripts**: every `print(...)`, as `file.lua: text`. Add
+  prints to see what your code does (`print("coins", coins)`).
+- **warnings**: fix them all; they are bugs too.
+- **errors**: `file.lua:LINE: message`. Go to that line.
+
+More options:
+
+```bash
+tools/check_game my_game --scripts some/folder   # run a different scripts folder
+tools/check_game my_game --keys "e e space"      # press keys after 3 s (needs xdotool)
+tools/check_game my_game --seconds 20            # for things that take time
+tools/check_game my_game --shot look.jpg         # screenshot; open it and look
+```
+
+No screen needed: it starts Xvfb and runs on the CPU (lavapipe).
+
+**OK means no errors, not that the game plays right.** Test what should
+happen, too: `print` when it happens ("coin collected 3/10"), then make
+it happen without a player, and check the print appears:
+
+```lua
+-- scripts/zz_test.lua: delete when done
+hook.Add("Init", "zz.test", function()
+  timer.Simple(2, function() player.teleport(Vec(4, 0.5, 2)) end)  -- walk onto the first coin
+end)
+```
+
+If you can view images, look at a `--shot` too.
+
+For C++ changes also run the unit tests: `./build/bin/kke_tests`.
+
+## If you can't run commands
+
+Say so once, then be the person's guide:
+
+1. Give the exact step: "Save `enemies.lua` with the game running."
+2. Say what they should see if it worked: "A red ball appears by the
+   stairs and follows you."
+3. Say where errors show: the terminal the game was started from, or
+   **F1** in the game, then the Scripts panel.
+4. Ask them to paste the error line or describe what happened, and
+   treat that exactly as you would your own test output.
+
+## Reading errors
+
+| Message | Means |
+|---|---|
+| `attempt to index a nil value (global 'X')` | `X` doesn't exist here: a typo, a module the game doesn't have, or `player`/`view` used at the top level instead of in a hook |
+| `attempt to index a nil value (local 'X')` / `(field 'X')` | a variable you expected to hold a table is nil: print it just before |
+| `attempt to call a nil value (field 'X')` | no such function: check the API list in the lua-scripting skill |
+| `attempt to perform arithmetic on a nil value` | a number you use was never set |
+| `physics: N is not a body spawned by a script` | `setVelocity`/`impulse` on a body no script made (the player, bodies made in C++): `pcall` it, or push a body you made |
+| `this script already has N bodies` | too many things: remove old ones (see `rain.lua`) |
+| `unknown key name` | `input.define`'s key isn't a real key name |
+| `ran too long ... an endless loop?` | a loop that doesn't end: use a hook or timer instead of waiting in a loop |
+| the script's things appear twice | something built outside `physics`/`models`/`ui` (these are cleaned on reload) |
+
+## Finding a bug nobody sees an error for
+
+1. Say in one sentence what should happen and what happens instead.
+2. `print` the values involved, every frame if needed, and read them.
+3. Shrink: comment out half the code; which half has the problem?
+4. Compare with the closest recipe in `docs/cookbook/recipes/`, which is
+   known to work.
+5. Fix the cause, then check again with `tools/check_game`.
+
+## Slow, stuttering, or "it runs badly on my PC"
+
+- Measure one game: `KKE_BENCHMARK=20 ./build/bin/my_game` plays it for
+  3 + 20 s and writes `benchmark/<game>_<stamp>.json`: fps, 1% lows,
+  where each frame's time went, every module's cost, and each hitch with
+  its cause.
+- Someone sent a `kke-benchmark-*.json` from `kke_benchmark` (every demo
+  on their machine): `python3 benchmarks/results.py FILE.json` for the
+  table and problems, `--hitches` for every hitch, two files to compare
+  versions or machines. Keys: docs/BENCHMARKS.md "Benchmark for everyone".
+
+========================================================================
+FILE: skills/explain-kke/SKILL.md
+========================================================================
+
+---
+name: explain-kke
+description: Explain KKE or teach game making to someone - beginners, children, or programmers - choosing the right level (pictures, node graph, Lua, C++) and answering from the docs, not from guesses.
+---
+
+# Explaining KKE and teaching game making
+
+KKE's founding idea: **a five-year-old can make a game**, by playing in
+it. There are four levels, all working the same building blocks. Pick
+the one that fits the person, not the most powerful one.
+
+| Level | For | Where |
+|---|---|---|
+| Pictures: drag things into the world, use tools on them | young children, anyone who just wants to play and make | the `sandbox` game, Play mode |
+| Node graph: boxes and wires ("when hit" → "knock over") | people who think in steps but don't type code | the sandbox, **Look** tool |
+| Lua scripts | anyone ready to type a few lines | `games/<game>/scripts/` |
+| C++ modules | programmers building new systems | `games/<game>/*.cpp`, `engine/` |
+
+Whatever a level makes, the next level shows how it's done: a node graph
+shows its Lua with **Show Lua**. Moving up a level is a choice, never a
+requirement. `docs/PLAY_TO_MAKE.md` is the design; `docs/cookbook/play-to-make.md`
+shows one idea at every level.
+
+## How to explain
+
+1. **Answer from the docs.** Check `docs/cookbook/` (how to do things),
+   `docs/SCRIPTING.md` (what Lua can do) and `docs/README.md` (every
+   topic) before explaining. If the docs don't cover it, say so, and say
+   what you inferred.
+2. **Show, then explain.** A short script they can run and see, then one
+   sentence per line that matters. Link the cookbook page that goes
+   further.
+3. **One idea at a time**, each with something that visibly changes:
+   "Change `0.8` to `0.2` and save: the crate turns green."
+4. **Use their words**: "a thing that follows you", not "a steering
+   behaviour", until they ask for the name.
+5. **Real names for real ideas, once they're ready**: A*, noise, boids,
+   IK. The algorithms page (`docs/cookbook/algorithms.md`) explains each
+   with pictures.
+
+## For a child
+
+- Short sentences. One step. Then "What do you see?"
+- Start with pictures (sandbox). Move to Lua only when they want to
+  change *how* something works, and start with changing numbers and
+  colours in `game.lua`.
+- Never say something is too hard. Say "Let's try a small piece of it."
+- Every mistake can be undone: saving a fixed script brings everything
+  back.
+
+## For a programmer
+
+- Architecture: a game is a `kke::Application` with a list of
+  `kke::Module`s (`main.cpp`); Lua is the gameplay layer on top, sandboxed
+  and hot-reloaded. `docs/cookbook/cpp.md`, then `AI_GUIDE.md` for engine
+  internals.
+- Answer "why is it built this way" from the header comments in
+  `engine/include/kke/*.h`, which each explain their design.
+
+## Words people ask about
+
+| Word | Plain meaning |
+|---|---|
+| hook | "when this happens, run my function" (every frame, on a touch, at start) |
+| timer | "run this later, or every few seconds" |
+| body | a thing physics moves: it falls, bounces, gets pushed |
+| static | a body that never moves: floors, walls |
+| raycast | "draw an invisible line; what does it hit first?" |
+| action | a control the player can rebind: "jump" is an action, Space is its key |
+| module | a C++ part of the game: physics, sound, the player |
+| hot reload | save the file and the running game uses it at once |
+| `sv_` script | runs only on the machine that decides (the host) in multiplayer |
+
+========================================================================
+FILE: skills/cpp-module/SKILL.md
+========================================================================
+
+---
+name: cpp-module
+description: Write C++ for a KKE game or the engine - a new kke::Module, new Lua functions for scripts, unit tests - with zero warnings. Use when Lua can't do it or the task is engine work.
+---
+
+# C++ in KKE: modules, Lua bindings, tests
+
+Try Lua first (lua-scripting skill). C++ is for new kinds of systems and
+for work too heavy for Lua. Engine changes (in `engine/`) also follow
+`AI_GUIDE.md`.
+
+## A module
+
+A game is a list of modules in its `main.cpp`. A module is a class:
+
+```cpp
+// games/my_game/Boat.h
+#pragma once
+#include <kke/Module.h>
+#include <glm/glm.hpp>
+
+namespace my_game {
+class Boat : public kke::Module {
+public:
+    const char* name() const override { return "Boat"; }
+    std::vector<kke::ModuleDependency> dependencies() const override;
+    void init(kke::Application& app) override;              // once, after its dependencies
+    void update(const kke::UpdateContext& ctx) override;    // every frame; ctx.dt in seconds
+private:
+    kke::Application* m_app = nullptr;
+    float m_speed = 0.0f;
+    glm::vec3 m_target{0.0f};
+    bool m_ready = false;
+};
+}
+```
+
+```cpp
+// games/my_game/Boat.cpp
+#include "Boat.h"
+#include <kke/Application.h>
+#include <kke/modules/RigidBodyModule.h>
+#include <kke/modules/ScriptModule.h>
+#include <lauxlib.h>   // luaL_error, luaL_check*
+#include <lua.h>       // lua_push*
+#include <typeindex>
+
+namespace my_game {
+std::vector<kke::ModuleDependency> Boat::dependencies() const {
+    // true = required (the game won't start without it, and says why); false = optional
+    return { { std::type_index(typeid(kke::RigidBodyModule)), true, "the boat is a physics body" },
+             { std::type_index(typeid(kke::ScriptModule)), false, "the boat.* Lua functions" } };
+}
+
+void Boat::init(kke::Application& app) {
+    m_app = &app;
+    auto* rigid = app.getModule<kke::RigidBodyModule>();   // null only if optional and missing
+    (void)rigid;
+}
+
+void Boat::update(const kke::UpdateContext& ctx) {
+    (void)ctx;
+}
+}
+```
+
+Then: add `Boat.cpp` to the sources in `games/my_game/CMakeLists.txt`,
+`#include "Boat.h"` and `app.addModule<my_game::Boat>();` in `main.cpp`,
+and `cmake --build build --target my_game`.
+
+Other methods to override when needed: `fixedUpdate` (60 Hz),
+`render`, `renderShadow`, `renderUi` (developer ImGui panel),
+`onEvent(const SDL_Event&)`, `shutdown`. All are in
+`engine/include/kke/Module.h`. A module that throws is disabled and
+logged; the game carries on.
+
+The working example of all of this: `games/cookbook/CookbookPlayer.*`
+(explained in `docs/cookbook/cpp.md`); the smallest: `games/template/PlayerModule.*`.
+
+## Lua functions from C++
+
+Register them at the end of `Boat::init` (scripts can call them from
+hooks: they appear after the scripts first load):
+
+```cpp
+if (auto* scripts = app.getModule<kke::ScriptModule>()) {
+    kke::ScriptVM& vm = scripts->vm();
+    vm.registerFunction("boat", "speed", [this](lua_State* L) {        // boat.speed() -> number
+        lua_pushnumber(L, m_speed);
+        return 1;                                                     // how many results
+    });
+    vm.registerFunction("boat", "moveTo", [this](lua_State* L) {       // boat.moveTo(Vec)
+        m_target = kke::ScriptVM::toVec3(L, 1);
+        if (!m_ready) return luaL_error(L, "boat.moveTo: the boat isn't in the water yet");
+        return 0;
+    });
+}
+```
+
+- Arguments: `luaL_checkstring/checknumber(L, i)`, `luaL_optnumber(L, i, def)`,
+  `ScriptVM::toVec3(L, i)`, `ScriptVM::fieldVec3(L, table, "pos", def)`.
+- Results: `lua_pushnumber`, `lua_pushboolean`, `ScriptVM::pushVec3`.
+- `luaL_error` reports a mistake with the script's file and line and
+  stops that call, not the game.
+- Registering with a `kke::ApiFunction` (label, doc, typed parameters;
+  `kke/LuaApi.h`) also makes it a node-graph block and a row in the
+  generated Lua API reference.
+- Document new functions in `docs/SCRIPTING.md` (engine) or the game's
+  README (game).
+
+## Tests
+
+Pure logic goes in a header or `.cpp` with no GPU or window, and gets a
+GoogleTest in `tests/` (add the file to `tests/CMakeLists.txt`):
+
+```cpp
+#include <gtest/gtest.h>
+TEST(Boat, StopsAtTheDock) {
+    my_game::BoatPath path({0, 0, 0}, {10, 0, 0});   // your own class: pure logic, no window
+    for (int i = 0; i < 600; ++i) path.step(1.0f / 60.0f);
+    EXPECT_NEAR(path.position().x, 10.0f, 0.01f);
+}
+```
+
+```bash
+cmake --build build --target kke_tests && ./build/bin/kke_tests --gtest_filter='Boat*'
+tools/check_game my_game      # and the game itself still runs clean
+```
+
+## Rules
+
+- **Zero warnings.** CI builds with warnings as errors. Fix the cause
+  (initialise the variable, use the right type); never silence it with a
+  pragma, a flag or a cast that hides a real problem.
+- C++20, `namespace kke` for engine code, your own namespace for a game.
+- A new third-party library needs a row in `docs/DEPENDENCIES.md` (CI
+  checks) and a permissive licence. Prefer a proven library to writing
+  your own.
+- Config and data files load as JSON or YAML interchangeably, through
+  the engine's shared loader.
+- Don't claim it works until it built and ran (check-and-debug skill).
+
+========================================================================
+FILE: docs/tutorials/getting-started.md
+========================================================================
+
+# Make your own game
+
+From a fresh clone to your own game running, in four steps. You'll end with
+a character you can walk, run, jump, vault and climb with, in a small level
+whose layout lives in a Lua file you can edit while the game runs.
+
+## 1. Build the engine
+
+Install the system packages and build once, as in
+[Install and build](../BUILDING.md). On Debian or Ubuntu:
+
+```bash
+git clone https://github.com/Khyretos/kk-engine.git
+cd kk-engine
+cmake --workflow --preset default
+```
+
+The first build fetches every library from source and takes a while; later
+builds only compile what changed.
+
+## 2. Try the starter game
+
+The build already made the starter game from `games/template/`:
+
+```bash
+cd build/bin
+./starter_game
+```
+
+Click the view to take the mouse, then:
+
+| Key | Does |
+|---|---|
+| ++w++ ++a++ ++s++ ++d++ | move (relative to the camera) |
+| mouse | look |
+| ++space++ | jump; in front of the fence it vaults, in front of the block it climbs |
+| ++shift++ | sprint |
+| ++alt++ | walk |
+| ++v++ | first or third person |
+| ++esc++ | let go of the mouse |
+| ++f1++ | developer panels: the Scripts panel with its console, and frame stats |
+
+A controller works too, with the same actions on its buttons and sticks.
+
+## 3. Make your copy
+
+From the repository root:
+
+```bash
+tools/new_game my_game            # or: cmake -DNAME=my_game -P tools/new_game.cmake
+cmake --build build
+cd build/bin && ./my_game
+```
+
+`tools/new_game` copies `games/template/` to `games/my_game/`, names the
+executable, the window and the manifest after it, and adds it to the build
+(through `games/my_games.cmake`). Use lower-case letters, digits and `_`.
+
+Your game folder:
+
+| File | What it is |
+|---|---|
+| `main.cpp` | The list of modules your game is made of, and its mood (sky, light and fog, [MOODS.md](../MOODS.md)) |
+| `PlayerModule.cpp` | The player: movement, camera, and the `player` table for Lua |
+| `scripts/game.lua` | The level and the rules |
+| `game.json` | The manifest: name, description, tags (shown by the marketplace) |
+| `CMakeLists.txt` | How it's built; `GAME_NAME` is the executable's name |
+
+## 4. Change something while it runs
+
+Leave the game running, open `games/my_game/scripts/game.lua` and change
+the colour of the stairs:
+
+```lua
+local accent = Vec(0.2, 0.7, 0.9)
+```
+
+Save. The game reloads the script within half a second: the level is
+rebuilt with blue stairs, and nothing is built twice. If you make a
+mistake, the error (file and line) shows in the log and in the Scripts panel
+(++f1++), and the game
+keeps running; fix it and save again.
+
+The game reads its scripts straight from your source folder, so there is
+nothing to rebuild for Lua changes. C++ changes (`main.cpp`,
+`PlayerModule.cpp`) need `cmake --build build` and a restart.
+
+## Next
+
+Carry on with [the tutorials](index.md): walk around and shape the level,
+throw things, script a pickup, and add sound.
+
+========================================================================
+FILE: docs/cookbook/index.md
+========================================================================
+
+# Cookbook
+
+Recipes for making games with KKE, from your first line of Lua to
+pathfinding, procedural animation and inverse kinematics. Each one is a
+small, complete piece of working code with a picture of it running.
+
+![Some of the recipes: a maze, hills from noise, A* and flocking](media/maze.jpg)
+
+## How to use a recipe
+
+Most recipes are **one Lua file**. Make a game from the starter template
+([Make your own game](../tutorials/getting-started.md)), start it, and save
+the recipe into its `scripts/` folder: it runs the moment you save, and
+again every time you change it. Every recipe has a download link, and
+works in the starter game's level as it is.
+
+Some recipes are **C++**, in the cookbook game (`games/cookbook`, run it
+as `./cookbook` from `build/bin`). It is the starter game plus every common
+camera and an animated mannequin; the pages quote its code.
+
+The chapters go from simplest to most involved:
+
+| Chapter | You'll learn |
+|---|---|
+| [First steps](first-steps.md) | Variables, `if`, loops, functions and tables, each spawning something you can see; timers |
+| [Input](input.md) | Your own controls, hold and release, reading the standard actions, binding keys and pads in C++ |
+| [Moving things](moving.md) | Tuning the character, a ball you steer, a pet that follows you, patrols, launch pads |
+| [Cameras](cameras.md) | First person, third person, orbit, top-down, isometric, side-on, fixed and cinematic cameras; screen shake |
+| [Gameplay](gameplay.md) | Trigger zones and doors, shooting with rays, explosions, a full round with a HUD, a timer and a saved best |
+| [Algorithms](algorithms.md) | Maze generation, terrain from noise, A* pathfinding, flocking |
+| [Animation and IK](animation.md) | Procedural motion, springs, two-bone IK, blend spaces, look-at and foot placement on a skeleton |
+| [Physics](physics.md) | Bounce and friction, things that really break, physics from C++ |
+| [Sound](audio.md) | Sound materials, impact sounds, playing your own |
+| [Multiplayer](networking.md) | Host and player scripts, messages, a shared scoreboard |
+| [Play to make](play-to-make.md) | The same game logic three ways: pictures, a node graph, and Lua |
+| [C++](cpp.md) | Your own module, your own Lua bindings, testing your code |
+
+New to Lua? It's a small language; [Programming in Lua](https://www.lua.org/pil/contents.html)
+is the classic introduction, and the [Lua API reference](../reference/lua-api.md)
+lists everything the engine adds. [Scripting in Lua](../SCRIPTING.md)
+explains hooks, timers, hot reload and the sandbox.
+
+## Why the recipes don't go stale
+
+Documentation is only useful when it's right. Every recipe here is checked
+by CI on every change to the engine:
+
+- The Lua recipes are real files (`docs/cookbook/recipes/`), shown on
+  these pages as they are. CI starts the starter game headless with each
+  one (`tools/docs_site/run_recipes.py`) and fails on any script error;
+  the unit tests also compile every one of them.
+- The C++ on these pages is quoted from files that are compiled into the
+  cookbook game and the unit tests (`tests/test_cookbook.cpp`), which run
+  it and check it does what the page says.
+- The play-to-make Lua runs in the unit tests against the same building
+  blocks the sandbox uses.
+
+The screenshots come from the same runs:
+`tools/docs_site/run_recipes.py --shots` takes a picture of each recipe
+running and saves it here.
+
+========================================================================
+FILE: docs/cookbook/first-steps.md
+========================================================================
+
+# First steps
+
+Three small scripts that cover most of the Lua you'll ever need: values,
+decisions, repetition, and doing something later. Save each into your
+game's `scripts/` folder while the game runs; it runs straight away.
+Press ++f1++ for the Scripts panel, where `print` output and any errors
+show up, with the file and line.
+
+## Hello, boxes
+
+Variables, `if`, a loop, a function and a table, each doing something you
+can see: a row of boxes in two colours, and a greeting in four languages.
+
+![A row of boxes, orange and blue](media/hello.jpg)
+
+```lua title="hello.lua"
+-- hello.lua: your first script. Variables, if, loops, functions and
+-- tables, each doing something you can see. (docs/cookbook/first-steps.md)
+
+-- A variable holds a value. `local` keeps it inside this file.
+local count = 8
+local size = 0.6
+
+-- A function is a named recipe you can use again.
+local function colorFor(i)
+  -- if / else: even numbers orange, odd numbers blue.
+  if i % 2 == 0 then
+    return Vec(0.95, 0.55, 0.2)
+  else
+    return Vec(0.25, 0.5, 0.95)
+  end
+end
+
+-- A loop runs its body once for each i from 1 to count.
+for i = 1, count do
+  physics.box {
+    pos = Vec(-4.5 + i, 0.3, 3), -- one metre apart, in a row
+    size = Vec(size, size, size),
+    color = colorFor(i),
+  }
+end
+
+-- A table is a list (or a dictionary). # gives a list's length.
+local greetings = { "Hello", "Hallo", "Bonjour", "Hola" }
+for index, word in ipairs(greetings) do
+  print(index .. ": " .. word .. ", world!")
+end
+print("There are " .. #greetings .. " greetings and " .. count .. " boxes.")
+```
+
+[Download hello.lua](recipes/hello.lua){ .md-button }
+
+- `local` makes a variable belong to this file. Without it, it still only
+  belongs to this script (each script has its own globals), but `local`
+  is faster and says what you mean.
+- `Vec(x, y, z)` is a position, a size or a colour. `y` is up; colours go
+  from 0 to 1 (red, green, blue).
+- `physics.box { ... }` takes a table of named settings. What you leave
+  out gets a sensible default (a 50 cm box that falls).
+- `..` joins text; `#list` is how long a list is; `ipairs` walks a list in
+  order.
+
+Change `count` to 20 and save: the old boxes go and the new row appears.
+That's hot reload: everything a script made is removed before it runs
+again, so nothing doubles up.
+
+## Rain
+
+A **timer** runs a function later, or again and again. This one drops a
+ball five times a second at a random spot, keeps a list of them, and
+removes the oldest so there are never more than 60.
+
+![Blue balls raining down and bouncing](media/rain.jpg)
+
+```lua title="rain.lua"
+-- rain.lua: a timer drops a ball every fifth of a second, somewhere
+-- random, and the oldest ones go so there are never more than 60.
+-- (docs/cookbook/first-steps.md)
+
+local MAX = 60
+local balls = {}  -- a list, oldest first
+
+timer.Create("rain.drop", 0.2, 0, function()   -- 0 repetitions = forever
+  local x = math.random() * 16 - 8                -- -8 .. 8
+  local z = math.random() * 16 - 8
+  local id = physics.sphere {
+    pos = Vec(x, 8, z),
+    radius = 0.15 + math.random() * 0.15,
+    color = Vec(0.3, 0.6 + math.random() * 0.4, 1.0),
+    bounce = 0.5,
+  }
+  table.insert(balls, id)                         -- newest at the end
+  if #balls > MAX then
+    physics.remove(table.remove(balls, 1))        -- the oldest from the front
+  end
+end)
+
+-- Stop after 30 seconds: timer.Simple runs once.
+timer.Simple(30, function()
+  timer.Remove("rain.drop")
+  print("The rain stopped.")
+end)
+```
+
+[Download rain.lua](recipes/rain.lua){ .md-button }
+
+- `timer.Create(name, seconds, repetitions, fn)`: 0 repetitions means
+  forever. `timer.Simple(seconds, fn)` runs once. `timer.Remove(name)`
+  stops one.
+- `math.random()` is a number from 0 to 1, so `math.random() * 16 - 8`
+  is anywhere from -8 to 8.
+- `table.insert(list, x)` adds to the end; `table.remove(list, 1)` takes
+  the first one out (and gives it back, here straight to `physics.remove`).
+
+## A pyramid, and a key to rebuild it
+
+Loops inside loops build in two and three dimensions: layers, rows and
+columns. **G** rebuilds the pyramid after you've knocked it over (walk
+into it, or throw something at it from the [input](input.md) chapter).
+
+![A pyramid of crates](media/pyramid.jpg)
+
+```lua title="pyramid.lua"
+-- pyramid.lua: loops inside loops build a pyramid of crates, and G
+-- rebuilds it after you've knocked it down. (docs/cookbook/first-steps.md)
+
+local SIZE = 0.5
+local LAYERS = 6
+local crates = {}
+
+local function build()
+  for _, id in ipairs(crates) do physics.remove(id) end
+  crates = {}
+  for layer = 0, LAYERS - 1 do
+    local across = LAYERS - layer             -- fewer crates on each layer up
+    for x = 0, across - 1 do
+      for z = 0, across - 1 do
+        local offset = (across - 1) * SIZE / 2  -- centre each layer
+        table.insert(crates, physics.box {
+          pos = Vec(2.5 + x * SIZE - offset, SIZE / 2 + layer * SIZE, -0.5 + z * SIZE - offset),
+          size = Vec(SIZE, SIZE, SIZE) * 0.98,  -- a hair apart, so they settle
+          density = 120,
+          color = Vec(0.55 + layer * 0.07, 0.4, 0.25),
+        })
+      end
+    end
+  end
+  print("Built " .. #crates .. " crates.")
+end
+
+build()
+input.define("pyramid.rebuild", "Rebuild the pyramid", "G")
+hook.Add("Think", "pyramid.keys", function()
+  if input.pressed("pyramid.rebuild") then build() end
+end)
+```
+
+[Download pyramid.lua](recipes/pyramid.lua){ .md-button }
+
+- `hook.Add("Think", id, fn)` runs `fn` every frame. The id names it, so
+  hot reload can replace it instead of adding a second one.
+- `input.define` makes a new action with a default key; players can
+  rebind it. More in [Input](input.md).
+- The crates are made 2% smaller than their spacing so they don't start
+  pressed into each other (which would make them jump apart).
+
+## Events you can hook
+
+`Think` is one of several events. The full list, with what each one
+passes, is in [Scripting in Lua](../SCRIPTING.md#the-api):
+
+| Event | When |
+|---|---|
+| `Init` | once, after every script has loaded and the game has started |
+| `Think` | every frame, with the frame time `dt` in seconds |
+| `Tick` | 60 times a second exactly (physics-rate logic) |
+| `Contact` | two bodies started touching (used in [Moving things](moving.md#launch-pad)) |
+| `Break` | something breakable broke ([Physics](physics.md)) |
+| `NetMessage` | a message from another player ([Multiplayer](networking.md)) |
+| `Shutdown` | the game is closing |
+
+Your own events work the same way: `hook.Run("GameOver", score)` calls
+every `hook.Add("GameOver", ...)` in any script.
+
+Next: [make your own controls](input.md).
+
+========================================================================
+FILE: docs/cookbook/input.md
+========================================================================
+
+# Input
+
+Games in KKE never ask "is W down?". They ask about **actions**: "was
+`jump` pressed?", "how much `move`?". Each action has default keys and
+buttons, and players can rebind all of them in the settings, controllers
+and flight sticks included. The whole system is described in
+[Input](../INPUT.md); these recipes are the parts you use every day.
+
+## Your own action: hold to charge, release to throw
+
+`input.define(id, label, key)` makes an action with a default key. Hold
+**T** to charge, let go to throw a ball where the camera looks: harder
+(and redder) the longer you held it.
+
+```lua title="throw.lua"
+-- throw.lua: your own controls. Hold T to charge, let go to throw; the
+-- longer you hold, the harder it flies. Players can rebind T in the
+-- settings like any other action. (docs/cookbook/input.md)
+
+-- define(id, label, default key): once per action. The label is what
+-- the rebinding screen shows.
+input.define("throw", "Throw a ball (hold to charge)", "T")
+
+local charging = false
+local charge = 0              -- seconds held
+local MAX_CHARGE = 1.5
+
+hook.Add("Think", "throw.update", function(dt)
+  if input.held("throw") then
+    -- Held: build up charge while the key is down.
+    charging = true
+    charge = math.min(charge + dt, MAX_CHARGE)
+  elseif charging then
+    -- Not held any more, but it was last frame: it was just released.
+    charging = false
+    local power = 4 + 16 * (charge / MAX_CHARGE)  -- 4 to 20 m/s
+    local from = camera.position() + camera.forward() * 1.5
+    physics.sphere {
+      pos = from,
+      radius = 0.18,
+      density = 800,
+      velocity = camera.forward() * power + Vec(0, 2, 0),
+      color = Vec(1, 1 - charge / MAX_CHARGE, 0.2),  -- yellow to red with charge
+    }
+    print(string.format("Thrown at %.0f m/s", power))
+    charge = 0
+  end
+end)
+```
+
+[Download throw.lua](recipes/throw.lua){ .md-button }
+
+- `input.pressed(id)` is true for one frame when the action starts,
+  `input.held(id)` for as long as it's on, and `input.value(id)` gives an
+  analog value (a trigger pulled half way is 0.5).
+- "Released" is "held last frame, not now": keep a variable (`charging`)
+  that remembers last frame.
+- Key names are SDL's: `"T"`, `"Space"`, `"Left Shift"`, `"Right Ctrl"`,
+  `"Up"`, `"F5"`, `"Keypad 1"`.
+
+## Toggles, and the standard actions
+
+Every game made from the starter template already has the character
+actions: `move`, `look`, `jump`, `sprint`, `walk`, `crouch`, `fire`,
+`aim`, `interact` and `camera.toggle`, on keyboard and mouse and on a
+controller. Scripts read them like their own. Here **L** switches a lamp
+on and off, and holding sprint makes it glow brighter.
+
+![A lamp beside the stairs](media/toggle.jpg)
+
+```lua title="toggle.lua"
+-- toggle.lua: one key, two ways. L switches a lamp on and off (pressed:
+-- once per press), and holding the engine's own "sprint" action makes it
+-- glow brighter while held. (docs/cookbook/input.md)
+
+input.define("lamp", "Lamp on/off", "L")
+
+local lamp = nil        -- the lamp's body id while it's on
+local bright = false
+
+local function setLamp(on, glow)
+  if lamp then physics.remove(lamp); lamp = nil end
+  if on then
+    local c = glow and Vec(1, 1, 0.7) or Vec(0.9, 0.7, 0.3)
+    lamp = physics.sphere { pos = Vec(-2, 1.2, 3), radius = glow and 0.4 or 0.3, color = c, static = true }
+  end
+end
+
+setLamp(true, false)
+
+hook.Add("Think", "toggle.keys", function()
+  if input.pressed("lamp") then
+    setLamp(lamp == nil, bright)           -- on if it was off, off if on
+  end
+  -- The standard character actions (move, jump, sprint, ...) are there
+  -- too: read them the same way.
+  local sprinting = input.held("sprint")
+  if lamp and sprinting ~= bright then
+    bright = sprinting
+    setLamp(true, bright)
+  end
+end)
+```
+
+[Download toggle.lua](recipes/toggle.lua){ .md-button }
+
+## Show which button to press
+
+Never write "press E": on a controller there is no E. A **prompt** is a
+picture of the button, on whatever the player is holding, and it changes
+the moment they pick up something else. Here are the same six prompts on
+a keyboard, an Xbox pad, a DualSense, a Switch pad, a Steam Deck and a
+touch screen (the pictures are Xelu's free prompts):
+
+![The same prompts on each device](media/prompts.jpg)
+
+```lua title="prompts.lua"
+-- prompts.lua: show the player which button to press, as a picture of
+-- that button on the device they are using right now: a key on the
+-- keyboard, A on an Xbox pad, Cross on a PlayStation pad, a tap on a
+-- touch screen. Pick up another device and every prompt changes by
+-- itself. (docs/cookbook/input.md)
+
+-- Your own action: G on the keyboard, the right bumper on a controller.
+input.define("greet", "Wave hello", "G", "rb")
+
+-- <prompt> is an RmlUi element the engine adds: give it an action (or a
+-- raw button like "touch:hold") and a label.
+local panel = ui.open([[
+<rml>
+<head>
+  <style>
+    body { font-family: Noto Sans; font-size: 22dp; color: #f2f4f8; }
+    div { display: block; }
+    #panel { position: absolute; left: 40dp; top: 40dp; width: 520dp; padding: 16dp 24dp;
+             background-color: #10141ecc; border-radius: 12dp; }
+    #panel div { margin: 6dp 0; }
+    #style { font-size: 16dp; color: #9aa3b8; }
+  </style>
+</head>
+<body>
+  <div id="panel">
+    <div id="style"></div>
+    <div><prompt action="move" label="Move"/></div>
+    <div><prompt action="jump" label="Jump"/></div>
+    <div><prompt action="sprint" label="Sprint"/></div>
+    <div><prompt action="fire" label="Shoot"/></div>
+    <div><prompt action="greet" label="Wave hello"/></div>
+    <div><prompt action="ui.accept" label="Accept"/>  <prompt action="ui.back" label="Back"/></div>
+    <div id="said"></div>
+  </div>
+</body>
+</rml>]])
+
+local function showStyle()
+  ui.text(panel, "style", "Prompts for: " .. input.style())
+end
+showStyle()
+
+-- InputStyle runs when the player switches devices. <prompt> elements
+-- redo themselves; text you built with input.promptText needs redoing.
+hook.Add("InputStyle", "prompts.style", function(style)
+  print("now showing prompts for " .. style)
+  showStyle()
+end)
+
+hook.Add("Think", "prompts.greet", function()
+  if input.pressed("greet") then
+    -- {action} in a string becomes that button's picture.
+    ui.rml(panel, "said", input.promptText("Hello! Press {greet} again to wave twice."))
+  end
+end)
+
+-- The picture's file, to use in your own <img> or HUD.
+print("the greet button's picture: " .. tostring(input.glyph("greet")))
+```
+
+[Download prompts.lua](recipes/prompts.lua){ .md-button }
+
+- `<prompt action="jump" label="Jump"/>` in a document needs no code at
+  all; `input.promptText("{jump} jump")` makes the same markup for
+  `ui.rml`, and `input.prompt("jump", "Jump")` makes one.
+- `{a}`, `{rb}`, `{key:Space}`, `{mouse:left}`, `{touch:tap}` name a
+  button that isn't an action ("press A to join").
+- Give your actions a controller button (`input.define`'s fourth
+  argument) or pads show nothing for them.
+- Try it without a controller: `KKE_PROMPT_STYLE=playstation` starts the
+  game showing PlayStation prompts.
+
+## Binding in C++: pads, holds, chords and axes
+
+In C++ you get everything the bindings screen can do. The cookbook game
+adds its own controls in `games/cookbook/Bindings.h`: a button on both
+keyboard and pad, a hold and a release on one key, a Ctrl chord, and an
+axis driven by two keys and both triggers.
+
+```cpp title="games/cookbook/Bindings.h"
+inline void addCookbookBindings(kke::InputMap& in) {
+    using kke::InputModule;
+    using kke::Trigger;
+
+    // A button action: Tab on the keyboard, d-pad right on a pad (View/Back
+    // and Start belong to the pause menu every game shares).
+    in.defineAction({ "camera.next", "Next camera", "Camera" });
+    in.addBinding(InputModule::bind("camera.next", InputModule::key(SDL_SCANCODE_TAB)));
+    in.addBinding(InputModule::bind("camera.next", InputModule::pad(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)));
+
+    // Hold to charge, release to throw: two actions on one key.
+    in.defineAction({ "throw.charge", "Charge a throw", "Actions" });
+    in.defineAction({ "throw", "Throw", "Actions" });
+    in.addBinding(InputModule::bind("throw.charge", InputModule::key(SDL_SCANCODE_Q), Trigger::Hold));
+    in.addBinding(InputModule::bind("throw", InputModule::key(SDL_SCANCODE_Q), Trigger::Release));
+
+    // A chord: Ctrl+R resets the level; plain R stays free for something else.
+    in.defineAction({ "level.reset", "Reset the level", "Game" });
+    kke::Binding reset = InputModule::bind("level.reset", InputModule::key(SDL_SCANCODE_R));
+    reset.modifiers.push_back(InputModule::key(SDL_SCANCODE_LCTRL));
+    in.addBinding(reset);
+
+    // An axis from two keys and a trigger: zoom in with X or the right
+    // trigger (analog: half pulled = half speed), out with the left one.
+    in.defineAction({ "zoom", "Zoom", "Camera", "game", kke::ActionType::Axis1D });
+    kke::Binding in1 = InputModule::bind("zoom", InputModule::key(SDL_SCANCODE_X), Trigger::Continuous);
+    in.addBinding(in1);
+    kke::Binding out1 = InputModule::bind("zoom", InputModule::key(SDL_SCANCODE_Z), Trigger::Continuous);
+    out1.scale = -1.0f;
+    in.addBinding(out1);
+    kke::Binding padIn = InputModule::bind("zoom", InputModule::padAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER), Trigger::Continuous);
+    padIn.deadzone = 0.1f;
+    in.addBinding(padIn);
+    kke::Binding padOut = InputModule::bind("zoom", InputModule::padAxis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER), Trigger::Continuous);
+    padOut.deadzone = 0.1f;
+    padOut.scale = -1.0f;
+    in.addBinding(padOut);
+}
+```
+
+Call it from your module's `init`, after the standard actions, then save
+them as the defaults the settings screen resets to:
+
+```cpp
+kke::InputMap& in = m_input->map(0); // player 0; split screen has more
+kke::InputModule::defineCharacterActions(in);
+cookbook::addCookbookBindings(in);
+m_input->commitDefaults();
+```
+
+and read them in `update` the same way Lua does:
+
+```cpp
+if (in.pressed("camera.next")) nextCamera();
+if (in.held("throw.charge")) charge += dt;
+if (in.pressed("throw")) throwBall(charge);
+zoom -= in.axis("zoom") * 4.0f * dt;              // -1 .. 1
+const glm::vec2 move = in.axis2("move");           // stick or WASD, length up to 1
+```
+
+The unit test `Cookbook.BindingsDoWhatTheInputPageSays`
+(`tests/test_cookbook.cpp`) presses these keys and buttons on a fake
+keyboard and pad and checks each action does what this page says.
+
+## Triggers at a glance
+
+| Trigger | Fires | Good for |
+|---|---|---|
+| `Press` | on the way down, held while down | jump, interact |
+| `Release` | on the way up | throw on release |
+| `Hold` | after `holdTime` (0.35 s) held | charge, hold to lean |
+| `Tap` | released within `tapTime` | quick actions sharing a key with a hold |
+| `DoubleTap` | second press within 0.3 s | dodge, quick reload |
+| `Continuous` | the whole time, with its analog value | movement, zoom, throttle |
+| `Toggle` | each press flips it | crouch, walk |
+
+What players change is saved in `input.json` next to the game; the
+defaults stay in your code. Left-handed layouts, twin flight sticks and
+rebinding screens are in [Input](../INPUT.md).
+
+Next: [move things around](moving.md).
+
+========================================================================
+FILE: docs/cookbook/moving.md
+========================================================================
+
+# Moving things
+
+Two kinds of things move in a KKE game: **the character**, which walks,
+runs, jumps, vaults and climbs under `kke::Locomotion`, and **physics
+bodies**, which you move by giving them velocity and letting them roll,
+bounce and collide for real.
+
+## The character
+
+The starter game's player is `PlayerModule` (C++). You tune how it moves
+with `Locomotion`'s settings, in `PlayerModule::init`:
+
+```cpp
+auto& move = m_loco->settings();
+move.runSpeed = 4.5f;        // m/s (default 3.6)
+move.sprintSpeed = 8.0f;     // default 6.2
+move.jumpSpeed = 6.5f;       // higher jumps (default 5.2)
+move.airAcceleration = 8.0f; // more steering in the air (default 5)
+move.coyoteTime = 0.2f;      // jump this long after running off an edge (default 0.12 s)
+```
+
+Every setting and its default is in `engine/include/kke/Locomotion.h`;
+[Movement](../MOVEMENT.md) explains the ideas behind them (why turning
+slows you down, why a jump pressed just before landing still counts).
+[Tutorial 1](../tutorials/01-walk-around.md) walks through the player
+module line by line.
+
+From Lua, the starter game gives you `player.position()` (the feet),
+`player.facing()` and `player.teleport(pos)`. Try
+`player.teleport(Vec(-6, 2.1, -6))` in the Scripts panel console (++f1++).
+Those three are the game's own bindings, not the engine's, and a game
+adds them as its modules start, so use them inside hooks and timers (as
+every recipe here does), not at the top of a file.
+
+## A ball you steer
+
+Moving a body is setting its velocity. This ball speeds up in the
+direction of the arrow keys, relative to where the camera looks, and hops
+with Right Ctrl.
+
+![A red ball on the ground](media/roll_ball.jpg)
+
+```lua title="roll_ball.lua"
+-- roll_ball.lua: a ball you steer with the arrow keys, relative to where
+-- the camera looks, and hop with Right Ctrl. Movement is forces on a
+-- physics body, so it rolls, bumps and falls for real.
+-- (docs/cookbook/moving.md)
+
+input.define("ball.forward", "Ball forward", "Up")
+input.define("ball.back", "Ball back", "Down")
+input.define("ball.left", "Ball left", "Left")
+input.define("ball.right", "Ball right", "Right")
+input.define("ball.hop", "Ball hop", "Right Ctrl")
+
+local ball = physics.sphere { pos = Vec(0, 1, 2), radius = 0.35, density = 300, bounce = 0.3, color = Vec(0.9, 0.2, 0.4) }
+local PUSH = 6           -- how hard the arrows push (m/s per second)
+
+hook.Add("Think", "ball.move", function(dt)
+  -- Flatten the camera's forward so "up" never pushes into the ground.
+  local f = camera.forward()
+  local forward = Vec(f.x, 0, f.z):normalized()
+  local right = forward:cross(Vec(0, 1, 0))
+
+  local wish = Vec(0, 0, 0)
+  if input.held("ball.forward") then wish = wish + forward end
+  if input.held("ball.back") then wish = wish - forward end
+  if input.held("ball.right") then wish = wish + right end
+  if input.held("ball.left") then wish = wish - right end
+
+  local v = physics.velocity(ball)
+  if wish:length() > 0 then
+    v = v + wish:normalized() * (PUSH * dt)
+  end
+  -- Hop only when nearly still vertically (on the ground, more or less).
+  if input.pressed("ball.hop") and math.abs(v.y) < 0.2 then
+    v = v + Vec(0, 5, 0)
+  end
+  physics.setVelocity(ball, v)
+
+  -- Fell off the world? Back to the start.
+  if physics.position(ball).y < -10 then
+    physics.remove(ball)
+    ball = physics.sphere { pos = Vec(0, 1, 2), radius = 0.35, density = 300, bounce = 0.3, color = Vec(0.9, 0.2, 0.4) }
+  end
+end)
+```
+
+[Download roll_ball.lua](recipes/roll_ball.lua){ .md-button }
+
+- `camera.forward()` points where the camera looks. Flattening it
+  (`y = 0`) and normalizing it gives "forward along the ground"; the cross
+  product with up gives "right".
+- Adding to the velocity (instead of setting it) keeps the ball's
+  momentum: it still rolls on when you let go, and bumps change its path.
+- `Think` gets `dt`, the seconds since the last frame. Multiplying by it
+  makes the push the same at 30 and at 240 frames per second.
+
+## A pet that follows you
+
+The classic "seek and arrive": head toward a target, slow down near it,
+stop at a comfortable distance.
+
+![A green ball beside the player](media/pet.jpg)
+
+```lua title="pet.lua"
+-- pet.lua: a ball that follows you around like a pet. It steers toward
+-- a spot just behind you, slows down as it arrives, and hops when you
+-- get far ahead. (docs/cookbook/moving.md)
+
+local pet = physics.sphere { pos = Vec(1.5, 0.5, 6), radius = 0.25, density = 200, color = Vec(0.4, 0.9, 0.5) }
+local FOLLOW = 1.8   -- metres it keeps from you
+local SPEED = 7      -- top speed, m/s
+
+hook.Add("Think", "pet.follow", function(dt)
+  local me = player.position()
+  local at = physics.position(pet)
+  local toMe = Vec(me.x - at.x, 0, me.z - at.z)    -- flat: steer, don't fly
+  local distance = toMe:length()
+
+  local v = physics.velocity(pet)
+  if distance > FOLLOW then
+    -- "Arrive": full speed far away, slowing to a stop as it gets close.
+    local speed = math.min(SPEED, (distance - FOLLOW) * 3)
+    local want = toMe:normalized() * speed
+    -- Turn the current velocity toward the wanted one, a bit each frame.
+    local blend = math.min(1, 8 * dt)
+    v = Vec(v.x + (want.x - v.x) * blend, v.y, v.z + (want.z - v.z) * blend)
+  end
+  -- Left far behind (or you jumped up somewhere): hop.
+  if distance > 6 and math.abs(v.y) < 0.1 then v = v + Vec(0, 5, 0) end
+  physics.setVelocity(pet, v)
+
+  if at.y < -10 then           -- fell off: back beside you
+    physics.remove(pet)
+    pet = physics.sphere { pos = me + Vec(1, 1, 0), radius = 0.25, density = 200, color = Vec(0.4, 0.9, 0.5) }
+  end
+end)
+```
+
+[Download pet.lua](recipes/pet.lua){ .md-button }
+
+Blending the velocity toward the wanted one (`blend`) instead of setting
+it outright is what makes the pet curve smoothly instead of snapping to
+each new direction. Raise the 8 for a snappier pet, lower it for a lazier
+one.
+
+## A patrol
+
+Waypoints in a list, an index for the one it's heading to, and a pause at
+each: the core of guards, moving platforms and delivery vans.
+
+![A red guard walking between waypoints](media/patrol.jpg)
+
+```lua title="patrol.lua"
+-- patrol.lua: a guard that walks between waypoints, waits at each, and
+-- turns back. "Go to the next point" is the heart of most enemy and
+-- moving-platform scripts. (docs/cookbook/moving.md)
+
+local WAYPOINTS = { Vec(-3, 0, -1), Vec(3, 0, -1), Vec(3, 0, 3), Vec(-3, 0, 3) }
+local SPEED = 2.5   -- m/s
+local WAIT = 1.0    -- seconds at each point
+
+local guard = physics.box { pos = WAYPOINTS[1] + Vec(0, 0.5, 0), size = Vec(0.6, 1, 0.6), density = 400,
+                            friction = 0, color = Vec(0.8, 0.25, 0.25) }
+local target = 2      -- index of the waypoint it's heading for
+local waiting = 0
+
+hook.Add("Think", "patrol.walk", function(dt)
+  local at = physics.position(guard)
+  local goal = WAYPOINTS[target]
+  local toGoal = Vec(goal.x - at.x, 0, goal.z - at.z)
+  local v = physics.velocity(guard)
+
+  if waiting > 0 then
+    waiting = waiting - dt
+    physics.setVelocity(guard, Vec(0, v.y, 0))
+  elseif toGoal:length() < 0.15 then
+    -- Arrived: wait, then head for the next one (wrapping round to 1).
+    waiting = WAIT
+    target = target % #WAYPOINTS + 1
+  else
+    local step = toGoal:normalized() * SPEED
+    physics.setVelocity(guard, Vec(step.x, v.y, step.z))  -- keep falling if it falls
+  end
+end)
+```
+
+[Download patrol.lua](recipes/patrol.lua){ .md-button }
+
+`target % #WAYPOINTS + 1` counts 2, 3, 4, 1, 2, ... For a guard that goes
+back the way it came (1, 2, 3, 4, 3, 2, ...), keep a direction of +1 or -1
+and flip it at either end.
+
+## Launch pad
+
+The `Contact` hook fires when two bodies start touching, with both ids,
+how hard they hit and where. Here, anything landing on the pad is thrown
+up again.
+
+![Orange balls flying up from a cyan pad](media/launch_pad.jpg)
+
+```lua title="launch_pad.lua"
+-- launch_pad.lua: anything that lands on the pad is fired into the air.
+-- The Contact hook says when two bodies touch. (docs/cookbook/moving.md)
+
+local pad = physics.box { pos = Vec(-2, 0.05, 1), size = Vec(1.6, 0.1, 1.6), color = Vec(0.2, 0.9, 0.9), static = true }
+local LAUNCH = 11   -- m/s upward
+
+hook.Add("Contact", "launch_pad.touch", function(c)
+  -- c.a and c.b are the two bodies; one of them must be the pad.
+  local other = nil
+  if c.a == pad then other = c.b elseif c.b == pad then other = c.a end
+  if not other then return end
+  -- Scripts can only push bodies scripts made: pcall turns "not yours"
+  -- (the level, say) into a quiet false instead of an error.
+  local v = physics.velocity(other)
+  pcall(physics.setVelocity, other, Vec(v.x, LAUNCH, v.z))
+end)
+
+-- Something to launch: a ball dropped on the pad every two seconds.
+timer.Create("launch_pad.feed", 2, 0, function()
+  local ball = physics.sphere { pos = Vec(-2 + math.random() * 0.6 - 0.3, 3, 1), radius = 0.2, color = Vec(1, 0.5, 0.1) }
+  timer.Simple(8, function() physics.remove(ball) end)
+end)
+```
+
+[Download launch_pad.lua](recipes/launch_pad.lua){ .md-button }
+
+A script may only push bodies that scripts made. `pcall(f, ...)` calls
+`f` and catches its error instead of stopping, so the pad quietly ignores
+the level's own boxes.
+
+## Moving a body to an exact place
+
+Sometimes you want a body at an exact spot every frame (a platform on a
+path, a part of something animated). Give it the velocity that gets it
+there in one frame:
+
+```lua
+local function moveTo(id, target, dt)
+  physics.setVelocity(id, (target - physics.position(id)) / math.max(dt, 1 / 240))
+end
+```
+
+It still collides and pushes things on the way, which a teleport wouldn't.
+The [animation](animation.md) recipes are built on this.
+
+Next: [cameras](cameras.md).
+
+========================================================================
+FILE: docs/cookbook/cameras.md
+========================================================================
+
+# Cameras
+
+The camera decides what kind of game it feels like. The cookbook game has
+the eight cameras most games use, and switches between them while you
+play: **1** to **8** pick one, **Tab** (or d-pad right on a pad) goes to the
+next, **P** plays a camera path, **K** shakes.
+
+```sh
+cmake --build build --target cookbook && cd build/bin && ./cookbook
+```
+
+| | | |
+|---|---|---|
+| ![First person](media/camera-first.jpg) **1. First person**: eyes at the head (shooters, horror) | ![Third person](media/camera-third.jpg) **2. Third person**: over the shoulder, never through walls | ![Orbit](media/camera-orbit.jpg) **3. Orbit**: circles the character (inspecting, editors) |
+| ![Top-down](media/camera-topdown.jpg) **4. Top-down**: from above (twin-stick shooters, puzzles) | ![Isometric](media/camera-iso.jpg) **5. Isometric**: high and at 45° (strategy, action RPGs) | ![Side-on](media/camera-side.jpg) **6. Side-on**: from the side, moving left and right (platformers) |
+| ![Fixed](media/camera-fixed.jpg) **7. Fixed**: on the wall, turning to watch (survival horror) | ![Cinematic](media/camera-cinematic.jpg) **8. Cinematic**: a smooth path through keyframes (intros, cutscenes) | |
+
+## How each one is made
+
+A camera is just two points: where it is (`position`) and what it looks
+at (`target`), plus a field of view. Every frame, the game sets them on
+`app.camera()`. Four of the eight are modes of `kke::CameraRig`
+(`engine/include/kke/CameraRig.h`); the other four are a few lines each.
+This is the whole of it, from `games/cookbook/CookbookPlayer.cpp`:
+
+```cpp title="games/cookbook/CookbookPlayer.cpp"
+    const glm::vec3 chest = feet + glm::vec3(0.0f, 1.2f, 0.0f);
+    switch (m_view) {
+    case View::First:
+    case View::Third:
+    case View::Orbit:
+    case View::Cinematic:
+        // kke::CameraRig does these four: eyes, a spring arm that never
+        // goes through walls, an orbit, and a smooth keyframed path.
+        m_rig.update(dt, feet, ray, cam);
+        break;
+    case View::TopDown:
+        // Straight down, a little tilted so walls still read as walls.
+        cam.position = feet + glm::vec3(0.0f, 11.0f, 2.0f);
+        cam.target = feet;
+        break;
+    case View::Iso:
+        // High, far and at 45 degrees, with a narrow lens: almost no
+        // perspective, the look of isometric games.
+        cam.position = feet + glm::vec3(9.0f, 11.0f, 9.0f);
+        cam.target = feet;
+        cam.fovDegrees = 30.0f;
+        break;
+    case View::Side:
+        // Beside the level, looking along -Z; the stick only goes left
+        // and right (moveForward() is zero), like a platformer.
+        cam.position = glm::vec3(feet.x, chest.y + 1.0f, feet.z + 12.0f);
+        cam.target = glm::vec3(feet.x, chest.y, feet.z);
+        break;
+    case View::Fixed:
+        // Bolted to the wall, turning to watch the player.
+        cam.position = fixedCameraAt;
+        cam.target = chest;
+        break;
+    case View::Count: break;
+    }
+    if (m_view == View::TopDown || m_view == View::Side || m_view == View::Fixed) cam.fovDegrees = 50.0f;
+```
+
+- **Third person** is a spring arm, like Unreal's: a line from above the
+  character's shoulders back to the camera. When something's in the way
+  the arm shortens at once (you never see through a wall) and grows back
+  smoothly. `m_rig.settings` has its length, the shoulder offset, the lag
+  and the field of view.
+- **First person** puts the camera at `settings.eyeHeight` and turns the
+  character to face where you look (`m_loco->setFacing(m_rig.forward())`).
+- **Orbit** and **cinematic**: `settings.orbitDistance` for the first,
+  `m_rig.setCinematic(keyframes, loop)` for the second.
+
+## Which way is forward?
+
+With a camera that isn't behind the character, "push the stick up" has to
+mean something else. In top-down, up on the stick is up on the screen;
+in side-on, only left and right exist; with a fixed camera, up is away
+from the camera. The cookbook's player works out forward per camera and
+moves the character relative to that:
+
+```cpp title="games/cookbook/CookbookPlayer.cpp"
+glm::vec3 CookbookPlayer::moveForward() const {
+    switch (m_view) {
+    case View::TopDown: return { 0.0f, 0.0f, -1.0f };                               // up on the screen
+    case View::Iso: return glm::normalize(glm::vec3(-1.0f, 0.0f, -1.0f));          // away from the camera
+    case View::Side: return { 0.0f, 0.0f, 0.0f };                                   // only left and right
+    case View::Fixed: {                                                             // away from the wall camera
+        glm::vec3 f = m_rigid->world().characterPosition(m_player) - fixedCameraAt;
+        f.y = 0.0f;
+        return glm::length(f) > 1e-3f ? glm::normalize(f) : glm::vec3(0, 0, -1);
+    }
+    default: return m_rig.forward();
+    }
+}
+```
+
+## Cameras from Lua
+
+The cookbook game gives scripts a `view` table: `view.mode(name)`,
+`view.shake(amount)` and `view.path(keyframes, loop)`. Its
+`scripts/cameras.lua` binds the number keys to them:
+
+```lua title="games/cookbook/scripts/cameras.lua"
+local cameras = { "first", "third", "orbit", "topdown", "iso", "side", "fixed", "cinematic" }
+for i, name in ipairs(cameras) do
+  input.define("view." .. name, name .. " camera", tostring(i)) -- keys 1 to 8
+end
+
+hook.Add("Think", "cameras.keys", function()
+  for _, name in ipairs(cameras) do
+    if input.pressed("view." .. name) then
+      view.mode(name)
+      print("camera: " .. name)
+    end
+  end
+end)
+```
+
+A camera path is a list of keyframes, each a position, a point to look at
+and a time in seconds; the camera glides through them on a smooth curve
+(Catmull-Rom):
+
+```lua
+-- P or the d-pad up: fly over the stairs and back, then carry on with
+-- third person.
+input.define("view.tour", "Camera tour", "P", "dpad_up")
+hook.Add("Think", "cameras.tour", function()
+  if input.pressed("view.tour") then
+    view.path({
+      { pos = Vec(-12, 3, 4), target = Vec(-6, 1, -4), time = 0 },
+      { pos = Vec(-8, 5, -1), target = Vec(-6, 2, -6), time = 3 },
+      { pos = Vec(-1, 4, -3), target = Vec(-6, 1, -6), time = 6 },
+    }, false)
+    timer.Simple(6.5, function() view.mode("third") end)
+  end
+end)
+```
+
+`view` isn't part of the engine: it's how any game can hand its own C++ to
+Lua. The bindings are about thirty lines in `CookbookPlayer::registerLua`,
+shown in [C++](cpp.md#your-own-lua-bindings).
+
+## Screen shake
+
+Shake sells an explosion or a heavy landing. Add "trauma" (0 to 1) when
+something happens; each frame, turn the camera by a small smooth wobble
+that grows with trauma squared (so little bumps stay little), and let
+trauma fade. From Lua it's `view.shake(0.4)`; the [explosion](gameplay.md#explosions)
+recipe uses it when it's there. The C++, on top of whichever camera is on:
+
+```cpp title="games/cookbook/CookbookPlayer.cpp"
+    // Shake on top of whichever camera: turn the view by a small, smooth
+    // wobble that fades as the trauma does (Procedural.h).
+    if (m_trauma > 0.0f) {
+        const glm::vec3 wobble = shakeOffset(m_trauma, m_time);
+        const glm::vec3 look = cam.target - cam.position;
+        const glm::vec3 side = glm::normalize(glm::cross(look, glm::vec3(0, 1, 0)));
+        glm::mat4 turn = glm::rotate(glm::mat4(1.0f), glm::radians(wobble.x), glm::vec3(0, 1, 0));
+        turn = glm::rotate(turn, glm::radians(wobble.y), side);
+        cam.target = cam.position + glm::vec3(turn * glm::vec4(look, 0.0f));
+        cam.up = glm::vec3(glm::rotate(glm::mat4(1.0f), glm::radians(wobble.z), glm::normalize(look)) * glm::vec4(0, 1, 0, 0));
+        m_trauma = std::max(0.0f, m_trauma - 0.9f * dt); // gone in about a second
+    } else {
+        cam.up = glm::vec3(0, 1, 0);
+    }
+```
+
+The wobble itself is smooth noise, not random jumps:
+
+```cpp title="games/cookbook/Procedural.h"
+// Camera shake from "trauma" (0..1, after Squirrel Eiserloh's GDC talk):
+// the offset grows with trauma squared, so small bumps stay small, and it
+// is smooth noise (a few sines at unrelated rates), not random jumps.
+// Returns yaw, pitch and roll in degrees.
+inline glm::vec3 shakeOffset(float trauma, float time, float maxDegrees = 6.0f) {
+    const float t = std::clamp(trauma, 0.0f, 1.0f);
+    const float amount = t * t * maxDegrees;
+    auto noise = [time](float a, float b, float c) {
+        return (std::sin(time * a) + std::sin(time * b + 1.3f) * 0.6f + std::sin(time * c + 4.1f) * 0.3f) / 1.9f;
+    };
+    return glm::vec3(noise(23.0f, 37.0f, 61.0f), noise(29.0f, 43.0f, 53.0f), noise(19.0f, 31.0f, 47.0f)) * amount;
+}
+```
+
+Next: [gameplay](gameplay.md).
+
+========================================================================
+FILE: docs/cookbook/gameplay.md
+========================================================================
+
+# Gameplay
+
+Four recipes that turn a level into a game: something that reacts to
+where you are, something you can do to the world, and a round with a goal,
+a clock and a result.
+
+## Trigger zones and doors
+
+A zone is a box in space, and "is the player in it?" is six comparisons.
+Remember whether they were in it last frame, and you know when they step
+in and when they step out. Here the green square opens a door; stepping
+off shuts it two seconds later.
+
+![A green pad in front of a closed wooden door](media/zone_door.jpg)
+
+```lua title="zone_door.lua"
+-- zone_door.lua: a trigger zone. Stand on the green square and the door
+-- opens; step off and it shuts two seconds later. Zones are just "is the
+-- player inside this box?", checked every frame. (docs/cookbook/gameplay.md)
+
+local ZONE_MIN, ZONE_MAX = Vec(-1, -0.5, 1), Vec(1, 2.5, 3)   -- a box: two corners
+local DOOR_AT = Vec(0, 1.25, -2)
+
+physics.box { pos = Vec(0, 0.01, 2), size = Vec(2, 0.02, 2), color = Vec(0.3, 0.9, 0.4), static = true }
+-- The wall with a gap for the door.
+physics.box { pos = Vec(-2.25, 1.25, -2), size = Vec(2.5, 2.5, 0.3), color = Vec(0.5, 0.5, 0.55), static = true }
+physics.box { pos = Vec(2.25, 1.25, -2), size = Vec(2.5, 2.5, 0.3), color = Vec(0.5, 0.5, 0.55), static = true }
+
+local door = nil
+local function setDoor(closed)
+  if closed and not door then
+    door = physics.box { pos = DOOR_AT, size = Vec(2, 2.5, 0.2), color = Vec(0.6, 0.4, 0.25), static = true }
+  elseif not closed and door then
+    physics.remove(door)
+    door = nil
+  end
+end
+setDoor(true)
+
+local function inside(p, lo, hi)
+  return p.x >= lo.x and p.x <= hi.x and p.y >= lo.y and p.y <= hi.y and p.z >= lo.z and p.z <= hi.z
+end
+
+local wasInside = false
+hook.Add("Think", "zone.check", function()
+  local now = inside(player.position(), ZONE_MIN, ZONE_MAX)
+  if now and not wasInside then            -- just stepped in
+    timer.Remove("zone.close")             -- cancel a pending close
+    setDoor(false)
+    print("Door open")
+  elseif wasInside and not now then        -- just stepped out
+    timer.Create("zone.close", 2, 1, function() setDoor(true) end)
+  end
+  wasInside = now
+end)
+```
+
+[Download zone_door.lua](recipes/zone_door.lua){ .md-button }
+
+The same shape works for checkpoints (save where they are), traps (start
+a timer), shops and cutscenes (switch the camera). `timer.Create` with a
+name is what makes "shut it later, unless they come back" work: stepping
+back in removes the pending timer by its name.
+
+## Shooting with rays
+
+A ray is a line tested against the world: where it hits, what it hits,
+and the surface's direction there. `physics.raycast(from, direction,
+distance)` from the camera along `camera.forward()` is "what am I looking
+at?". Click (the standard `fire` action) to knock crates off the wall.
+
+![A wall of crates](media/shooter.jpg)
+
+```lua title="shooter.lua"
+-- shooter.lua: click to shoot where the camera looks. A ray finds what
+-- it hits; a hit crate gets knocked back, and a spark marks the spot.
+-- "fire" is one of the engine's standard actions (left mouse, right
+-- trigger). (docs/cookbook/gameplay.md)
+
+-- A wall of crates to shoot at.
+for row = 0, 3 do
+  for col = 0, 5 do
+    physics.box { pos = Vec(-2.5 + col * 0.62, 0.3 + row * 0.62, -1), size = Vec(0.6, 0.6, 0.6), density = 100,
+                  color = Vec(0.5 + row * 0.1, 0.35, 0.2) }
+  end
+end
+
+local sparks = {}
+
+local function spark(at)
+  local id = physics.sphere { pos = at, radius = 0.06, color = Vec(1, 0.9, 0.3), static = true }
+  table.insert(sparks, id)
+  timer.Simple(0.3, function() physics.remove(id) end)
+end
+
+hook.Add("Think", "shooter.fire", function()
+  if not input.pressed("fire") then return end
+  local from = camera.position()
+  local dir = camera.forward()
+  -- raycast(from, direction, max distance) -> what it hit, or nil.
+  local hit = physics.raycast(from, dir, 60)
+  if not hit then return end
+  spark(hit.pos)
+  -- Push what was hit, at the point it was hit (so it spins too). Only
+  -- script bodies can be pushed; pcall skips the rest (walls, the floor).
+  pcall(physics.impulse, hit.body, dir * 4, hit.pos)
+end)
+```
+
+[Download shooter.lua](recipes/shooter.lua){ .md-button }
+
+- `physics.impulse(id, push, point)` pushes at a point, so a crate hit at
+  the corner spins. Its size is momentum (mass × m/s), so heavy things
+  move less.
+- The hit also tells you `hit.normal` (which way the surface faces, for
+  bullet holes and ricochets), `hit.distance` and `hit.material` (for the
+  right sound).
+- Rays are cheap; line-of-sight checks for enemies are the same call from
+  their eyes to the player.
+
+## Explosions
+
+An explosion is a loop over what's near: push each thing away from the
+centre, harder the closer it is. **B** blows up the heap; a new one comes
+three seconds later.
+
+![Crates and balls flying apart](media/explosion.jpg)
+
+```lua title="explosion.lua"
+-- explosion.lua: press B to blow up the heap. Every body nearby is
+-- pushed away from the centre, harder the closer it is; there's a sound,
+-- and the camera shakes where the game has one that can.
+-- (docs/cookbook/gameplay.md)
+
+input.define("boom", "Explosion", "B")
+local RADIUS = 5
+local FORCE = 12   -- m/s at the centre
+
+-- Things to blow up: a heap of crates and balls, rebuilt every time.
+local things = {}
+local function heap(at)
+  for _, id in ipairs(things) do physics.remove(id) end
+  things = {}
+  for i = 1, 30 do
+    local p = at + Vec(math.random() * 2 - 1, 0.3 + i * 0.1, math.random() * 2 - 1)
+    local id
+    if i % 3 == 0 then
+      id = physics.sphere { pos = p, radius = 0.2, color = Vec(0.3, 0.7, 1) }
+    else
+      id = physics.box { pos = p, size = Vec(0.4, 0.4, 0.4), density = 150, color = Vec(0.8, 0.6, 0.3) }
+    end
+    table.insert(things, id)
+  end
+end
+
+local function explode(centre)
+  for _, id in ipairs(things) do
+    local offset = physics.position(id) - centre
+    local distance = offset:length()
+    if distance < RADIUS then
+      local falloff = 1 - distance / RADIUS                 -- 1 at the centre, 0 at the edge
+      local away = (offset + Vec(0, 0.5, 0)):normalized()    -- a little upward: things lift
+      physics.setVelocity(id, physics.velocity(id) + away * (FORCE * falloff))
+    end
+  end
+  if audio then audio.impact(centre, "Stone", 1.0) end
+  if view then view.shake(0.8) end   -- only in games with a view table (the cookbook game)
+end
+
+local HEAP = Vec(0, 0, 2)
+heap(HEAP)
+hook.Add("Think", "explosion.keys", function()
+  if input.pressed("boom") then
+    explode(HEAP + Vec(0, 0.2, 0))
+    timer.Simple(3, function() heap(HEAP) end)   -- a new heap to blow up
+  end
+end)
+```
+
+[Download explosion.lua](recipes/explosion.lua){ .md-button }
+
+`if view then ... end` is how a script uses something only some games
+have: tables exist only when the game has the module that provides them
+(there's no `audio` without an AudioModule, no `view` outside the
+cookbook game), and a missing table is `nil`.
+
+## A whole round
+
+Everything together: a goal (knock the pillars over), a clock, a HUD, a
+win and a lose, a best time that's still there tomorrow, and a button to
+play again.
+
+![Red pillars, with the time and score in the corner](media/round.jpg)
+
+```lua title="round.lua"
+-- round.lua: a whole game round. Knock all the pillars over before the
+-- clock runs out; a HUD shows the time and what's left, you win or lose,
+-- the best time is saved, and a button starts again.
+-- (docs/cookbook/gameplay.md)
+
+local TIME = 45
+local SPOTS = { Vec(-3, 0, -1), Vec(0, 0, -2), Vec(3, 0, -1), Vec(-1.5, 0, 1), Vec(1.5, 0, 1) }
+
+local hud = ui and ui.open([[
+<rml><head><style>
+  body { width: 100%; height: 100%; font-family: Noto Sans; color: #ffffff; pointer-events: none; }
+  #panel { position: absolute; left: 20dp; top: 20dp; padding: 8dp 16dp; background-color: #10131ecc;
+           border-radius: 8dp; font-size: 20dp; }
+  #time { color: #ffd166; }
+  #result { position: absolute; top: 40%; width: 100%; text-align: center; font-size: 40dp; }
+  #again { position: absolute; top: 55%; left: 50%; margin-left: -80dp; width: 160dp; padding: 8dp;
+           text-align: center; background-color: #ef8354; border-radius: 8dp; pointer-events: auto; }
+  #again:hover { background-color: #f4a261; }
+  .hidden { display: none; }
+</style></head>
+<body>
+  <div id="panel">Time <span id="time"></span> · Standing <span id="left"></span> · Best <span id="best"></span></div>
+  <div id="result"></div>
+  <div id="again" class="hidden">Play again</div>
+</body></rml>
+]])
+
+local pillars, timeLeft, playing = {}, 0, false
+
+local function show(id, text) if hud then ui.text(hud, id, text) end end
+
+local function standing()
+  local n = 0
+  for _, p in ipairs(pillars) do
+    -- Still standing = its middle is still up high and near where it was.
+    local at = physics.position(p.id)
+    if at.y > 0.9 and (Vec(at.x, 0, at.z) - p.home):length() < 0.5 then n = n + 1 end
+  end
+  return n
+end
+
+local function start()
+  for _, p in ipairs(pillars) do physics.remove(p.id) end
+  pillars = {}
+  for _, home in ipairs(SPOTS) do
+    local id = physics.box { pos = home + Vec(0, 1, 0), size = Vec(0.4, 2, 0.4), density = 60, color = Vec(0.9, 0.35, 0.35) }
+    table.insert(pillars, { id = id, home = home })
+  end
+  timeLeft, playing = TIME, true
+  show("result", "")
+  if hud then ui.class(hud, "again", "hidden", true) end
+  local best = store.load("round.best")          -- nil until someone wins
+  show("best", best and string.format("%.1f s", best) or "-")
+end
+
+local function finish(won)
+  playing = false
+  if won then
+    local took = TIME - timeLeft
+    show("result", string.format("You did it in %.1f seconds!", took))
+    local best = store.load("round.best")
+    if not best or took < best then
+      store.save("round.best", took)
+      show("best", string.format("%.1f s", took))
+    end
+  else
+    show("result", "Out of time!")
+  end
+  if hud then ui.class(hud, "again", "hidden", false) end
+end
+
+hook.Add("Think", "round.tick", function(dt)
+  if not playing then return end
+  timeLeft = math.max(0, timeLeft - dt)
+  local left = standing()
+  show("time", string.format("%.0f", math.ceil(timeLeft)))
+  show("left", tostring(left))
+  if left == 0 then finish(true)
+  elseif timeLeft == 0 then finish(false) end
+end)
+
+if hud then ui.onClick(hud, "again", start) end
+start()
+```
+
+[Download round.lua](recipes/round.lua){ .md-button }
+
+- **The HUD** is an RmlUi document: HTML-like markup with CSS-like styles.
+  `ui.text(doc, id, text)` changes what an element says, `ui.class` adds
+  or removes a class (here `hidden`, to show the button), and
+  `ui.onClick(doc, id, fn)` runs `fn` when it's clicked. `pointer-events:
+  none` on the body lets clicks go through to the game, except on the
+  button. Press Esc to free the mouse and click it.
+- **Saving**: `store.save(name, value)` and `store.load(name)` keep
+  numbers, text and tables between sessions, in a small database next to
+  the game ([Saving](../SCRIPTING.md#saving)).
+- **Win or lose** is checked once per frame, and `playing` stops the
+  round from ending twice.
+
+[Tutorial 3](../tutorials/03-pickups.md) builds a coin pickup with a
+score HUD step by step, and `games/first_lua_game/` is a complete small
+game in one Lua file ([its walkthrough](../../games/first_lua_game/README.md)).
+
+Next: [algorithms](algorithms.md).
+
+========================================================================
+FILE: docs/cookbook/algorithms.md
+========================================================================
+
+# Algorithms
+
+Classic game algorithms, each in one Lua file you can read top to bottom:
+a maze generator, terrain from noise, A* pathfinding and flocking. They
+build with physics boxes and balls so you can walk into the result.
+
+## Maze generation
+
+The **recursive backtracker** (a depth-first search): start in a corner,
+step to a random neighbour you haven't visited, knocking down the wall
+between, and when every neighbour is visited, back up until one isn't.
+The result has exactly one path between any two cells. **M** makes a new
+one; the entrance faces where the player starts.
+
+![A maze seen from above](media/maze.jpg)
+
+```lua title="maze.lua"
+-- maze.lua: a new maze every time you press M. The recursive backtracker:
+-- walk from cell to random unvisited cell, knocking down the wall between,
+-- and back up when stuck. Every cell ends up reachable, by exactly one
+-- path. (docs/cookbook/algorithms.md)
+
+local W, H = 8, 8               -- cells across and deep
+local CELL = 1.8                -- metres
+local ORIGIN = Vec(-18, 0, 5)   -- the maze's corner in the level
+local WALL_H, THICK = 1.4, 0.2
+
+local walls = {}                -- body ids, to clear the old maze
+local seed = 7
+
+local function generate()
+  math.randomseed(seed)
+  -- open[x][z] = { east = bool, south = bool }: the walls knocked down.
+  local open, visited = {}, {}
+  for x = 1, W do
+    open[x], visited[x] = {}, {}
+    for z = 1, H do open[x][z] = { east = false, south = false } end
+  end
+
+  local stack = { { 1, 1 } }
+  visited[1][1] = true
+  while #stack > 0 do
+    local x, z = stack[#stack][1], stack[#stack][2]
+    -- The neighbours not visited yet.
+    local choices = {}
+    if x > 1 and not visited[x - 1][z] then table.insert(choices, { x - 1, z }) end
+    if x < W and not visited[x + 1][z] then table.insert(choices, { x + 1, z }) end
+    if z > 1 and not visited[x][z - 1] then table.insert(choices, { x, z - 1 }) end
+    if z < H and not visited[x][z + 1] then table.insert(choices, { x, z + 1 }) end
+    if #choices == 0 then
+      table.remove(stack)              -- dead end: back up
+    else
+      local n = choices[math.random(#choices)]
+      local nx, nz = n[1], n[2]
+      -- Knock down the wall between (x, z) and (nx, nz).
+      if nx > x then open[x][z].east = true
+      elseif nx < x then open[nx][z].east = true
+      elseif nz > z then open[x][z].south = true
+      else open[x][nz].south = true end
+      visited[nx][nz] = true
+      table.insert(stack, { nx, nz })
+    end
+  end
+  return open
+end
+
+local function wall(cx, cz, sx, sz)
+  table.insert(walls, physics.box { pos = ORIGIN + Vec(cx, WALL_H / 2, cz), size = Vec(sx, WALL_H, sz),
+                                    color = Vec(0.45, 0.5, 0.65), static = true })
+end
+
+local function build()
+  for _, id in ipairs(walls) do physics.remove(id) end
+  walls = {}
+  local open = generate()
+  -- The outer walls, with a way in at the east side of the first row.
+  wall(W * CELL / 2, 0, W * CELL, THICK)                         -- north
+  wall(W * CELL / 2, H * CELL, W * CELL, THICK)                  -- south
+  wall(0, H * CELL / 2, THICK, H * CELL)                         -- west
+  wall(W * CELL, (H * CELL + CELL) / 2, THICK, (H - 1) * CELL)   -- east, minus the entrance
+  -- Inside: each cell's east and south wall, unless knocked down.
+  for x = 1, W do
+    for z = 1, H do
+      if x < W and not open[x][z].east then wall(x * CELL, (z - 0.5) * CELL, THICK, CELL + THICK) end
+      if z < H and not open[x][z].south then wall((x - 0.5) * CELL, z * CELL, CELL + THICK, THICK) end
+    end
+  end
+  print(string.format("Maze %d: %d walls", seed, #walls))
+end
+
+build()
+input.define("maze.new", "New maze", "M")
+hook.Add("Think", "maze.keys", function()
+  if input.pressed("maze.new") then seed = seed + 1; build() end
+end)
+```
+
+[Download maze.lua](recipes/maze.lua){ .md-button }
+
+- The "recursion" is a list used as a stack: `table.insert` pushes,
+  `table.remove` pops. It never runs out of stack however big the maze.
+- `math.randomseed(seed)` makes the same seed give the same maze: handy
+  for levels you want to share as a number.
+- Each cell only draws its east and south wall; the outer walls close the
+  rest. That avoids placing every inside wall twice.
+
+## Terrain from noise
+
+**Value noise** gives smooth random numbers across the ground: a random
+height at each whole-number point, eased between them. Adding a few layers
+of it, each twice as detailed and half as strong (**fractal noise**, or
+fBm), looks like hills. Height picks the colour: water, grass, rock,
+snow. **N** makes a new landscape.
+
+![Blocky hills with water, grass, rock and snow](media/terrain.jpg)
+
+```lua title="terrain.lua"
+-- terrain.lua: hills from noise. Value noise gives smooth random numbers
+-- over the ground; adding a few layers of it at different sizes (fractal
+-- noise) looks like terrain. Each column's height and colour come from
+-- it. N makes a new landscape. (docs/cookbook/algorithms.md)
+
+local N = 20                    -- columns across and deep
+local STEP = 0.8                -- metres per column
+local ORIGIN = Vec(2, 0, 4)
+local columns = {}
+local seed = 1
+
+-- A fixed random number for each whole-number grid point (a hash).
+local function lattice(ix, iz)
+  local h = (ix * 374761393 + iz * 668265263 + seed * 1442695041) % 2147483647
+  h = (h * h * 15731 + 789221) % 2147483647
+  return (h % 10000) / 10000     -- 0 .. 1
+end
+
+local function smooth(t) return t * t * (3 - 2 * t) end   -- eases in and out
+
+-- Value noise: blend the four grid points around (x, z).
+local function noise(x, z)
+  local ix, iz = math.floor(x), math.floor(z)
+  local fx, fz = smooth(x - ix), smooth(z - iz)
+  local a, b = lattice(ix, iz), lattice(ix + 1, iz)
+  local c, d = lattice(ix, iz + 1), lattice(ix + 1, iz + 1)
+  local top = a + (b - a) * fx
+  local bottom = c + (d - c) * fx
+  return top + (bottom - top) * fz
+end
+
+-- Fractal noise: big gentle hills plus smaller and smaller bumps.
+local function fbm(x, z)
+  local sum, amp, freq, total = 0, 1, 1, 0
+  for _ = 1, 4 do
+    sum = sum + noise(x * freq, z * freq) * amp
+    total = total + amp
+    amp, freq = amp * 0.5, freq * 2
+  end
+  return sum / total              -- 0 .. 1
+end
+
+local function build()
+  for _, id in ipairs(columns) do physics.remove(id) end
+  columns = {}
+  for x = 0, N - 1 do
+    for z = 0, N - 1 do
+      local h = fbm(x * 0.15, z * 0.15)
+      local height = 0.2 + h * h * 4                      -- squared: flatter valleys, sharper peaks
+      local color
+      if h < 0.35 then color = Vec(0.2, 0.45, 0.8)         -- water
+      elseif h < 0.55 then color = Vec(0.35, 0.65, 0.3)    -- grass
+      elseif h < 0.7 then color = Vec(0.5, 0.45, 0.35)     -- rock
+      else color = Vec(0.95, 0.95, 0.97) end               -- snow
+      table.insert(columns, physics.box { pos = ORIGIN + Vec(x * STEP, height / 2, z * STEP),
+                                          size = Vec(STEP, height, STEP), color = color, static = true })
+    end
+  end
+end
+
+build()
+input.define("terrain.new", "New terrain", "N")
+hook.Add("Think", "terrain.keys", function()
+  if input.pressed("terrain.new") then seed = seed + 1; build() end
+end)
+```
+
+[Download terrain.lua](recipes/terrain.lua){ .md-button }
+
+- `lattice` is a hash: the same grid point always gives the same number,
+  so the terrain doesn't depend on the order it's built in.
+- `smooth` (smoothstep) is what hides the grid: without it, the slopes
+  have visible creases at every grid line.
+- Squaring the height before using it flattens the valleys and sharpens
+  the peaks. Try `h ^ 3`, or `1 - math.abs(2 * h - 1)` for ridges.
+
+## A* pathfinding
+
+A* finds the shortest way around walls. It explores cells cheapest-first,
+where a cell's cost is the steps taken to reach it plus a guess at the
+steps left. As long as the guess never overestimates (here: the Manhattan
+distance, which ignores walls), the first path it finds to the goal is a
+shortest one. The red ball re-plans twice a second as you move, and the
+yellow dots show its plan.
+
+![A small walled map seen from above, with a planned path](media/astar.jpg)
+
+```lua title="astar.lua"
+-- astar.lua: a chaser that finds its way to you around walls with A*
+-- (A-star), the path-finding most games use. The map is text; the path
+-- it plans is shown as dots and re-planned twice a second as you move.
+-- (docs/cookbook/algorithms.md)
+
+local MAP = {
+  "##############",
+  "#............#",
+  "#..######....#",
+  "#.......#....#",
+  "#.......#..###",
+  "#..###..#....#",
+  "#....#.......#",
+  "#..####......#",
+  "#............#",
+  "#..#......#..#",
+  "#..#......#..#",
+  "#............#",
+  "##############",
+}
+local ORIGIN = Vec(-7, 0, -1)   -- world position of the map's top-left cell
+local SPEED = 3.5
+
+local W, H = #MAP[1], #MAP
+local function wallAt(x, z) return MAP[z]:sub(x, x) == "#" end
+local function cellOf(p) return math.floor(p.x - ORIGIN.x) + 1, math.floor(p.z - ORIGIN.z) + 1 end
+local function centre(x, z) return ORIGIN + Vec(x - 0.5, 0, z - 0.5) end
+
+for z = 1, H do
+  for x = 1, W do
+    if wallAt(x, z) then
+      physics.box { pos = centre(x, z) + Vec(0, 0.5, 0), size = Vec(1, 1, 1), color = Vec(0.5, 0.52, 0.6), static = true }
+    end
+  end
+end
+
+-- A*: explore cells cheapest-first, where cost = steps so far (g) plus a
+-- guess of the steps left (h, the Manhattan distance, never too high).
+local function findPath(sx, sz, gx, gz)
+  local function key(x, z) return z * 1000 + x end
+  local open = { { x = sx, z = sz, g = 0, f = math.abs(gx - sx) + math.abs(gz - sz) } }
+  local came, best = {}, { [key(sx, sz)] = 0 }
+  while #open > 0 do
+    -- Take the open cell with the lowest f (a heap is faster for big maps).
+    local bi = 1
+    for i = 2, #open do if open[i].f < open[bi].f then bi = i end end
+    local cur = table.remove(open, bi)
+    if cur.x == gx and cur.z == gz then
+      local path, k = {}, key(gx, gz)       -- walk back from the goal
+      while k do
+        table.insert(path, 1, { x = k % 1000, z = k // 1000 })
+        k = came[k]
+      end
+      return path
+    end
+    for _, d in ipairs({ { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }) do
+      local nx, nz = cur.x + d[1], cur.z + d[2]
+      if nx >= 1 and nx <= W and nz >= 1 and nz <= H and not wallAt(nx, nz) then
+        local g = cur.g + 1
+        local k = key(nx, nz)
+        if best[k] == nil or g < best[k] then
+          best[k], came[k] = g, key(cur.x, cur.z)
+          table.insert(open, { x = nx, z = nz, g = g, f = g + math.abs(gx - nx) + math.abs(gz - nz) })
+        end
+      end
+    end
+  end
+  return nil   -- no way through
+end
+
+local chaser = physics.sphere { pos = centre(2, 2) + Vec(0, 0.4, 0), radius = 0.3, density = 300, color = Vec(0.95, 0.3, 0.3) }
+local path, dots = nil, {}
+
+local function showPath()
+  for _, id in ipairs(dots) do physics.remove(id) end
+  dots = {}
+  for _, c in ipairs(path or {}) do
+    table.insert(dots, physics.sphere { pos = centre(c.x, c.z) + Vec(0, 0.05, 0), radius = 0.06,
+                                        color = Vec(1, 0.8, 0.3), static = true })
+  end
+end
+
+local function plan()
+  local cx, cz = cellOf(physics.position(chaser))
+  local px, pz = cellOf(player.position())
+  if px < 1 or px > W or pz < 1 or pz > H or wallAt(px, pz) then path = nil
+  else path = findPath(cx, cz, px, pz) end
+  showPath()
+end
+
+timer.Create("astar.plan", 0.5, 0, plan)   -- the first plan in half a second
+
+hook.Add("Think", "astar.chase", function()
+  local v = physics.velocity(chaser)
+  if not path or #path < 2 then
+    physics.setVelocity(chaser, Vec(0, v.y, 0))
+    return
+  end
+  -- Head for the next cell on the path; drop cells as they're reached.
+  local at = physics.position(chaser)
+  local goal = centre(path[2].x, path[2].z)
+  local to = Vec(goal.x - at.x, 0, goal.z - at.z)
+  if to:length() < 0.2 then table.remove(path, 1) return end
+  local step = to:normalized() * SPEED
+  physics.setVelocity(chaser, Vec(step.x, v.y, step.z))
+end)
+```
+
+[Download astar.lua](recipes/astar.lua){ .md-button }
+
+- The map is text, so you can draw a level in the file. `#` is a wall.
+- Picking the lowest `f` by looking through every open cell is fine for
+  a few hundred cells; for big maps use a binary heap.
+- To allow diagonal steps, add the four diagonal directions with a cost of
+  1.414 and use the octile distance as the guess.
+- Following the path is the [patrol](moving.md#a-patrol) recipe with the
+  path as its waypoints.
+
+## Flocking
+
+Craig Reynolds' **boids** (1986): each ball looks only at its neighbours
+and follows three rules. **Separation**: don't crowd them. **Alignment**:
+head the way they're heading. **Cohesion**: move toward their middle.
+Together they flock like birds or fish. These also keep inside a pen and
+drift after you.
+
+![Balls moving together in a loose flock](media/flocking.jpg)
+
+```lua title="flocking.lua"
+-- flocking.lua: boids. Thirty balls that flock like birds or fish from
+-- three simple rules, each looking only at its neighbours: don't crowd
+-- (separation), go the way they go (alignment), stay with them
+-- (cohesion). They also keep inside a pen and drift after you.
+-- (docs/cookbook/algorithms.md)
+
+local COUNT = 30
+local SEE = 2.5             -- how far a boid sees its neighbours, metres
+local SPEED = 3
+local PEN_MIN, PEN_MAX = Vec(-12, 0, -12), Vec(12, 0, 12)
+
+local boids = {}
+for i = 1, COUNT do
+  local a = i / COUNT * math.pi * 2
+  table.insert(boids, physics.sphere { pos = Vec(math.cos(a) * 4, 0.3, math.sin(a) * 4), radius = 0.2, density = 100,
+                                       friction = 0, color = Vec(0.3 + 0.7 * i / COUNT, 0.6, 1 - 0.6 * i / COUNT) })
+end
+
+hook.Add("Think", "flocking.update", function(dt)
+  -- Read everyone first, then move: every boid reacts to the same moment.
+  local pos, vel = {}, {}
+  for i, id in ipairs(boids) do
+    local p, v = physics.position(id), physics.velocity(id)
+    pos[i], vel[i] = Vec(p.x, 0, p.z), Vec(v.x, 0, v.z)
+  end
+  local me = player.position()
+
+  for i, id in ipairs(boids) do
+    local apart, heading, middle, n = Vec(0, 0, 0), Vec(0, 0, 0), Vec(0, 0, 0), 0
+    for j = 1, COUNT do
+      if j ~= i then
+        local offset = pos[i] - pos[j]
+        local d = offset:length()
+        if d < SEE and d > 0.001 then
+          apart = apart + offset / (d * d)       -- closer pushes harder
+          heading = heading + vel[j]
+          middle = middle + pos[j]
+          n = n + 1
+        end
+      end
+    end
+    local steer = Vec(0, 0, 0)
+    if n > 0 then
+      steer = steer + apart * 1.5                              -- separation
+      steer = steer + (heading / n - vel[i]) * 0.5             -- alignment
+      steer = steer + (middle / n - pos[i]) * 0.4              -- cohesion
+    end
+    steer = steer + (Vec(me.x, 0, me.z) - pos[i]):normalized() * 0.3   -- drift toward you
+    -- The pen: turn back near its edges.
+    if pos[i].x < PEN_MIN.x then steer = steer + Vec(3, 0, 0) end
+    if pos[i].x > PEN_MAX.x then steer = steer - Vec(3, 0, 0) end
+    if pos[i].z < PEN_MIN.z then steer = steer + Vec(0, 0, 3) end
+    if pos[i].z > PEN_MAX.z then steer = steer - Vec(0, 0, 3) end
+
+    local v = vel[i] + steer * (dt * 4)
+    if v:length() > SPEED then v = v:normalized() * SPEED end
+    physics.setVelocity(id, Vec(v.x, physics.velocity(id).y, v.z))
+  end
+end)
+```
+
+[Download flocking.lua](recipes/flocking.lua){ .md-button }
+
+- The weights (1.5, 0.5, 0.4) set the character: more separation is a
+  loose swarm, more cohesion a tight school, more alignment a stream.
+- Every boid reads every other one, so 30 boids is 870 checks a frame.
+  For hundreds, put them in a grid of cells and only check the
+  neighbouring cells.
+
+Next: [animation and IK](animation.md).
+
+========================================================================
+FILE: docs/cookbook/animation.md
+========================================================================
+
+# Animation and IK
+
+Two kinds of animation meet in a game. **Authored** animation is clips an
+artist made (walk, jump, wave), played and blended. **Procedural**
+animation is motion worked out while the game runs: a head turning to look
+at you, a hand reaching for a door handle, feet finding the stairs, a
+tail swinging behind. The best-looking characters are both: clips first,
+procedural touches on top.
+
+The first two recipes are Lua with plain balls, so you can see the maths
+move. The rest is C++ in the cookbook game, on a real skeleton: the
+mannequin from Quaternius' [Universal Animation Library](https://quaternius.com/packs/universalanimationlibrary.html)
+(CC0), which ships with the engine (`assets/animations/UAL1_Standard.fbx`).
+
+## Follow the leader
+
+No clips at all. The head follows a figure eight; every segment is pulled
+to a fixed distance behind the one in front, so the body winds along the
+path the head took; and a sine wave running down the body makes it bob.
+
+![A green caterpillar of balls winding across the ground](media/caterpillar.jpg)
+
+```lua title="caterpillar.lua"
+-- caterpillar.lua: procedural animation with no animation at all. The
+-- head follows a figure eight; every segment keeps a fixed distance
+-- from the one in front ("follow the leader"), so the body winds along
+-- behind it, and each segment bobs a little out of step with the last.
+-- (docs/cookbook/animation.md)
+
+local SEGMENTS = 12
+local GAP = 0.42            -- metres between segment centres
+local CENTRE = Vec(0, 0, 1)
+
+-- Moving a physics body to exactly where you want it, every frame:
+-- give it the velocity that gets it there in this frame.
+local function moveTo(id, target, dt)
+  physics.setVelocity(id, (target - physics.position(id)) / math.max(dt, 1 / 240))
+end
+
+local body = {}
+for i = 1, SEGMENTS do
+  local r = i == 1 and 0.22 or 0.2 - i * 0.006   -- thinner toward the tail, never touching
+  local green = 0.55 + 0.35 * ((i % 2 == 0) and 1 or 0)
+  body[i] = { id = physics.sphere { pos = CENTRE + Vec(-i * GAP, r, 0), radius = r, density = 50, color = Vec(0.35, green, 0.25) },
+              at = CENTRE + Vec(-i * GAP, 0, 0), r = r }
+end
+
+local t = 0
+hook.Add("Think", "caterpillar.move", function(dt)
+  t = t + dt
+  -- The head: a figure eight (a Lissajous curve), 4 m by 2 m.
+  body[1].at = CENTRE + Vec(math.sin(t * 0.5) * 4, 0, math.sin(t) * 2)
+  -- Everyone else: pulled to exactly GAP behind the segment in front.
+  for i = 2, SEGMENTS do
+    local ahead = body[i - 1].at
+    local offset = body[i].at - ahead
+    if offset:length() > 0.001 then body[i].at = ahead + offset:normalized() * GAP end
+  end
+  for i, s in ipairs(body) do
+    local bob = math.max(0, math.sin(t * 8 - i * 0.7)) * 0.12   -- a wave running down the body
+    moveTo(s.id, s.at + Vec(0, s.r + bob, 0), dt)
+  end
+end)
+```
+
+[Download caterpillar.lua](recipes/caterpillar.lua){ .md-button }
+
+The same constraint makes tails, tentacles, ropes, snakes and trains. Run
+it from the tail back toward the head as well, pinning the last segment,
+and you have **FABRIK**, a popular IK method for long chains.
+
+## Two-bone IK, in Lua
+
+**Inverse kinematics** answers "where do the joints go so the hand ends
+up there?". For two bones (upper and lower arm, thigh and shin) there's
+an exact answer: the three sides of the triangle shoulder-elbow-hand are
+known (two bone lengths and the distance to the target), so the **law of
+cosines** gives the angle at the shoulder. A **pole** point says which
+way the elbow bends; without one, the elbow could be anywhere on a
+circle.
+
+![A chain of orange balls reaching from a white shoulder toward a green target](media/ik_arm.jpg)
+
+```lua title="ik_arm.lua"
+-- ik_arm.lua: two-bone inverse kinematics, worked out in Lua so you can
+-- see the maths. Give it a shoulder, two bone lengths and a target, and
+-- the law of cosines says where the elbow goes; a "pole" says which way
+-- it bends. The engine's kke::solveTwoBone does the same for skeletons.
+-- (docs/cookbook/animation.md)
+
+local SHOULDER = Vec(0, 2.2, 0)
+local UPPER, LOWER = 1.2, 1.0         -- bone lengths, metres
+local POLE = Vec(0, 3.5, -2)          -- the elbow bends toward this point
+local BEADS = 5                       -- spheres drawn along each bone
+
+local function moveTo(id, target, dt)
+  physics.setVelocity(id, (target - physics.position(id)) / math.max(dt, 1 / 240))
+end
+
+-- The solve: returns the elbow and hand positions.
+local function solveTwoBone(s, a, b, target, pole)
+  local toTarget = target - s
+  local d = math.max(0.001, math.min(toTarget:length(), a + b - 0.001))   -- can't reach further than a + b
+  local dir = toTarget:normalized()
+  -- Law of cosines: the angle at the shoulder between dir and the upper bone.
+  local cosA = (a * a + d * d - b * b) / (2 * a * d)
+  local sinA = math.sqrt(math.max(0, 1 - cosA * cosA))
+  -- The bend direction: the pole, minus its part along dir.
+  local toPole = pole - s
+  local bend = toPole - dir * toPole:dot(dir)
+  if bend:length() < 0.001 then bend = Vec(0, 1, 0) end
+  bend = bend:normalized()
+  local elbow = s + dir * (a * cosA) + bend * (a * sinA)
+  local hand = s + dir * d
+  return elbow, hand
+end
+
+physics.sphere { pos = SHOULDER, radius = 0.15, color = Vec(0.9, 0.9, 0.9), static = true }
+local beads = {}
+for i = 1, BEADS * 2 do
+  beads[i] = physics.sphere { pos = SHOULDER + Vec(0, -i * 0.2, 0), radius = 0.08, density = 50, color = Vec(0.95, 0.6, 0.2) }
+end
+local targetBall = physics.sphere { pos = Vec(1, 1, 1), radius = 0.12, density = 50, color = Vec(0.3, 0.9, 0.4) }
+
+local t = 0
+hook.Add("Think", "ik_arm.solve", function(dt)
+  t = t + dt
+  -- The target circles in front of the shoulder, sometimes out of reach.
+  local target = SHOULDER + Vec(math.cos(t) * 1.6, math.sin(t * 1.3) * 0.9 - 0.4, 0.9 + math.sin(t * 0.7) * 0.7)
+  moveTo(targetBall, target, dt)
+  local elbow, hand = solveTwoBone(SHOULDER, UPPER, LOWER, target, POLE)
+  -- Beads along shoulder->elbow, then elbow->hand.
+  for i = 1, BEADS do
+    moveTo(beads[i], SHOULDER + (elbow - SHOULDER) * (i / BEADS), dt)
+    moveTo(beads[BEADS + i], elbow + (hand - elbow) * (i / BEADS), dt)
+  end
+end)
+```
+
+[Download ik_arm.lua](recipes/ik_arm.lua){ .md-button }
+
+When the target is out of reach, the distance is clamped to the arm's
+length, so the arm points straight at it instead of breaking.
+
+## On a skeleton: the mannequin
+
+The cookbook game's `Mannequin` module (`games/cookbook/Mannequin.cpp`)
+has two mannequins. One walks round a circle, speeding up and slowing
+down. The other stands with one foot on a step, reaches for a floating
+orb and turns its head to look at you.
+
+![The standing mannequin reaching for the orb, one foot on a step](media/mannequin.jpg)
+
+Poses are per-bone translation, rotation and scale (`kke::Pose`), in each
+bone's parent's space. The order every frame is: the `Animator` plays and
+blends clips into a pose, the procedural steps change that pose, and
+`poseToLocals` hands it to the renderer.
+
+### Blend spaces
+
+A **1D blend space** puts clips along one number, here speed: idle at 0,
+walk at 1.4 m/s, jog at 3.2. Setting the parameter to the character's
+speed blends the two nearest clips, at a shared phase so the feet land
+together instead of sliding.
+
+![The walking mannequin mid-stride](media/walker.jpg)
+
+```cpp title="games/cookbook/Mannequin.cpp"
+    // Clips once as poses (AnimationSet), then an Animator per character.
+    // A 1D blend space: idle at 0 m/s, walk at 1.4, jog at 3.2. Setting
+    // the parameter to the speed blends the two nearest clips, in step.
+    m_set = std::make_unique<kke::AnimationSet>(*m_data);
+    m_walkAnim = std::make_unique<kke::Animator>(*m_set);
+    const int move = m_walkAnim->addBlendState(
+        "move", { { { m_set->find("|Idle_Loop"), 0.0f }, { m_set->find("|Walk_Loop"), 1.4f }, { m_set->find("Jog_Fwd_Loop"), 3.2f } } });
+    m_walkAnim->play(move, 0.0f);
+```
+
+Each frame the speed rises and falls, a spring smooths it, and the blend
+space follows:
+
+```cpp title="games/cookbook/Mannequin.cpp"
+void Mannequin::updateWalker(float dt) {
+    // Speed goes up and down between standing and jogging; a spring keeps
+    // the changes smooth, and the blend space follows the speed.
+    const float wanted = 1.6f + 1.6f * std::sin(m_time * 0.35f);
+    springTowards(m_speed, m_speedVelocity, wanted, 0.4f, dt);
+    m_angle += m_speed / circleRadius * dt; // radians: arc length / radius
+    m_walkAnim->setParameter(m_speed);
+    m_walkAnim->update(dt);
+
+    // Round the circle, facing along it (counter-clockwise seen from above).
+    const glm::vec3 at = circleAt + glm::vec3(std::cos(m_angle), 0.0f, -std::sin(m_angle)) * circleRadius;
+    const float headingDegrees = glm::degrees(m_angle) + 180.0f; // tangent of the circle
+    m_models->setTransform(m_walker, glm::rotate(glm::translate(glm::mat4(1.0f), at), glm::radians(headingDegrees + m_turnToPlusZ),
+                                                 glm::vec3(0, 1, 0)));
+    if (std::vector<glm::mat4>* locals = m_models->boneLocals(m_walker)) kke::poseToLocals(m_walkAnim->pose(), *locals);
+}
+```
+
+Beyond blend spaces the `Animator` has clip states that crossfade
+(`play(state, fade)`), non-looping states that report when they're done
+(`finished()`), and root motion. The showcase game (`games/showcase/`)
+drives its whole character with one, from idle to vaulting.
+
+### Finding the bones
+
+IK works on named chains of bones. `findChain` looks them up by name;
+the head's forward axis is worked out once from the rest pose, because
+every skeleton points its bones differently:
+
+```cpp title="games/cookbook/Mannequin.cpp"
+    // The chains IK bends (found by bone name) and the head's forward axis
+    // in its own space, worked out once from the rest pose.
+    m_armR = kke::makeHumanArm(*m_data, kke::findChain(*m_data, "upperarm_r", "lowerarm_r", "hand_r"),
+                               kke::findChain(*m_data, "upperarm_l", "lowerarm_l", "hand_l"));
+    m_body = kke::BodyShape::fit(*m_data); // capsules round the mesh, per bone
+    m_feet = kke::FootPlacer(*m_data, kke::findChain(*m_data, "thigh_l", "calf_l", "foot_l"), kke::findChain(*m_data, "thigh_r", "calf_r", "foot_r"),
+                             findBone(*m_data, "pelvis"));
+    m_head = findBone(*m_data, "head");
+    if (m_head >= 0) {
+        const std::vector<glm::mat4> rest = kke::poseToModel(*m_data, m_set->restPose());
+        m_headForward = glm::normalize(glm::inverse(rotationOf(rest[static_cast<size_t>(m_head)])) * fwd);
+    }
+```
+
+### 1. Feet on the ground
+
+`kke::FootPlacer` casts a ray down from each foot, lowers the pelvis if
+one foot must go lower than the capsule's floor, bends the legs with
+two-bone IK so each foot lands on what's under it, and tilts it to match
+a slope. It works in the model's own space, so the ray's results are
+turned into it:
+
+```cpp title="games/cookbook/Mannequin.cpp"
+    // 1. Feet on the ground: a ray down from each foot, in model space.
+    kke::RigidWorld& w = m_rigid->world();
+    auto ground = [&](const glm::vec3& from, glm::vec3& hit, glm::vec3& normal) {
+        const kke::RigidWorld::RayHit h = w.raycast(glm::vec3(toWorld * glm::vec4(from, 1.0f)), glm::vec3(0, -1, 0), 1.2f);
+        if (!h.hit || h.normal.y < 0.5f) return false;
+        hit = model(h.point);
+        normal = glm::normalize(glm::mat3(toModel) * h.normal);
+        return true;
+    };
+    if (m_feet.valid()) m_feet.apply(*m_data, pose, kke::FootPlacer::SurfaceQuery(ground), dt);
+```
+
+### 2. A hand on a target
+
+The Lua recipe above is plain two-bone IK. A person's arm needs more than
+that, or the elbow bends backwards and the shoulder looks dislocated:
+`kke::solveHumanArm` places the elbow where it hangs naturally, keeps the
+shoulder, elbow and wrist to a person's ranges, lifts the collarbone when
+the hand goes overhead, and with a `kke::BodyShape` keeps the arm out of
+the body:
+
+```cpp title="games/cookbook/Mannequin.cpp"
+    // 2. The right hand on the orb: a person's arm (kke::solveHumanArm).
+    // The elbow only bends forward, the shoulder keeps to its range and
+    // lifts its collarbone when the hand goes high, and the body shape
+    // keeps the arm out of the torso. `elbowToward` says which way the
+    // elbow leans: out and down.
+    if (m_armR.valid()) {
+        kke::ArmGoal goal;
+        // The palm on the near side of the ball, not inside it.
+        const glm::vec3 orb = orbPosition();
+        const glm::vec3 shoulder = standAt + glm::vec3(-0.18f, 1.42f, 0.0f);
+        goal.hand = model(orb + glm::normalize(shoulder - orb) * (orbRadius + 0.03f));
+        goal.elbowToward = model(standAt + glm::vec3(-0.8f, 0.6f, -0.3f));
+        kke::solveHumanArm(*m_data, pose, m_armR, goal, m_body, kke::BodyAvoid{}, &m_armAvoid);
+    }
+```
+
+`goal.weight` blends: 0 leaves the animated pose, 1 is the full solve.
+Fading it in and out over a few frames is what makes a hand reach for a
+ledge and let go without popping. `kke::CharacterIk` does that fading for
+you, for both hands and feet (the showcase uses it for vaulting, climbing
+and hanging).
+
+### 3. Looking at you
+
+A look-at is one rotation: from where the head faces now to where the
+target is, limited to what a neck can do. A spring smooths the target so
+the head doesn't snap when you move quickly.
+
+```cpp title="games/cookbook/Mannequin.cpp"
+    // 3. The head looks at the camera: a spring smooths where it looks,
+    // turnTowards() limits how far the neck turns (Procedural.h), and the
+    // turn goes into the head bone's local rotation.
+    if (m_head >= 0) {
+        springTowards(m_lookAt, m_lookVelocity, m_app->camera().position, 0.25f, dt);
+        const std::vector<glm::mat4> bones = kke::poseToModel(*m_data, pose);
+        const size_t head = static_cast<size_t>(m_head);
+        const glm::quat headRot = rotationOf(bones[head]);
+        const glm::vec3 facing = headRot * m_headForward;
+        const glm::vec3 toTarget = model(m_lookAt) - glm::vec3(bones[head][3]);
+        const glm::quat turn = turnTowards(facing, toTarget, 60.0f);
+        const int parent = m_data->bones[head].parent;
+        const glm::quat parentRot = parent >= 0 ? rotationOf(bones[static_cast<size_t>(parent)]) : glm::quat(1, 0, 0, 0);
+        // model = parent * local, so a model-space turn T becomes
+        // local' = parent^-1 * T * parent * local.
+        pose[head].r = glm::normalize(glm::inverse(parentRot) * turn * parentRot * pose[head].r);
+    }
+```
+
+The last line is the one piece of bone maths worth remembering: to turn a
+bone by a rotation given in model space, turn its local rotation by that
+rotation as seen from its parent.
+
+## The helpers
+
+Both come from `games/cookbook/Procedural.h`, and the unit tests check
+them (`Cookbook.SpringArrivesWithoutOvershootAtAnyFrameRate`,
+`Cookbook.TurnTowardsStopsAtTheLimit`):
+
+```cpp title="games/cookbook/Procedural.h"
+// A critically damped spring: `x` chases `goal` as fast as it can without
+// overshooting, and `halfLife` is the time it takes to get halfway there.
+// Frame-rate independent (the exact solution, not a step of it), so the
+// same motion at 30 and 240 fps. After Daniel Holden, "Spring-It-On".
+template <typename T>
+void springTowards(T& x, T& velocity, const T& goal, float halfLife, float dt) {
+    const float d = 2.0f * 0.69314718f / std::max(halfLife, 1e-5f); // ln 2 / (halfLife / 2)
+    const T j0 = x - goal;
+    const T j1 = velocity + j0 * d;
+    const float e = std::exp(-d * dt);
+    x = e * (j0 + j1 * dt) + goal;
+    velocity = e * (velocity - j1 * d * dt);
+}
+```
+
+A critically damped spring is the most useful smoothing there is: camera
+follow, UI slides, look targets, speed changes. Unlike "move 10% of the
+way each frame" it behaves the same at any frame rate.
+
+```cpp title="games/cookbook/Procedural.h"
+// The rotation that turns direction `from` toward `to`, by at most
+// `maxDegrees`. The core of every "look at" (a head following you, a
+// turret tracking a target): apply it on top of the animated pose.
+inline glm::quat turnTowards(const glm::vec3& from, const glm::vec3& to, float maxDegrees) {
+    const glm::vec3 a = glm::normalize(from), b = glm::normalize(to);
+    const float angle = std::acos(std::clamp(glm::dot(a, b), -1.0f, 1.0f));
+    if (angle < 1e-4f) return glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+    glm::vec3 axis = glm::cross(a, b);
+    if (glm::length(axis) < 1e-6f) // opposite: any axis at right angles will do
+        axis = glm::cross(a, std::abs(a.y) < 0.9f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0));
+    return glm::angleAxis(std::min(angle, glm::radians(maxDegrees)), glm::normalize(axis));
+}
+```
+
+## More in the engine
+
+- **Jiggle physics** (hair, tails, soft parts): `kke::JiggleRig`, a Verlet
+  chain on top of the pose. [Jiggle physics](../JIGGLE.md).
+- **Ragdolls**: [Ragdolls](../RAGDOLLS.md), from limp to getting back up.
+- **Retargeting** one skeleton's clips onto another (the mannequin's clips
+  on a Synty character): `kke::matchBones` and `retargetAnimations` in
+  `kke/AnimRig.h`.
+- **Locomotion**: [Movement](../MOVEMENT.md), how the character decides
+  what to do, and which animation goes with it.
+
+Next: [physics](physics.md).
+
+========================================================================
+FILE: docs/cookbook/physics.md
+========================================================================
+
+# Physics
+
+Every box and ball a script makes is a rigid body in Jolt: it has mass,
+it falls, it bounces, it pushes other things. The settings on
+`physics.box` and `physics.sphere` decide how, and the same world is
+there from C++ as `kke::RigidWorld`.
+
+## Bounce and friction, side by side
+
+Front row: balls from no bounce (`bounce = 0`) to very bouncy (0.9). Back
+row: boxes given the same shove, from icy (`friction = 0.02`) to grippy
+(0.82), sliding different distances. **R** drops them again.
+
+![Balls bouncing and boxes sliding](media/bounce.jpg)
+
+```lua title="bounce.lua"
+-- bounce.lua: what the physics settings do, side by side. Front row:
+-- balls from no bounce to very bouncy. Back row: the same push on boxes
+-- from icy to grippy, sliding different distances. R drops them again.
+-- (docs/cookbook/physics.md)
+
+input.define("bounce.again", "Drop them again", "R")
+local made = {}
+
+local function drop()
+  for _, id in ipairs(made) do physics.remove(id) end
+  made = {}
+  for i = 0, 5 do
+    local bounce = i / 5 * 0.9                               -- 0 .. 0.9
+    table.insert(made, physics.sphere { pos = Vec(-3 + i * 1.2, 4, 2), radius = 0.25, bounce = bounce,
+                                        color = Vec(0.3, 0.4 + bounce * 0.6, 1) })
+    local friction = 0.02 + i / 5 * 0.8                      -- ice .. rubber
+    local box = physics.box { pos = Vec(-3 + i * 1.2, 0.26, -1), size = Vec(0.5, 0.5, 0.5), friction = friction,
+                              density = 300, color = Vec(1, 0.4 + friction * 0.6, 0.3) }
+    physics.setVelocity(box, Vec(0, 0, -6))                  -- the same shove for all
+    table.insert(made, box)
+  end
+end
+
+drop()
+hook.Add("Think", "bounce.keys", function()
+  if input.pressed("bounce.again") then drop() end
+end)
+```
+
+[Download bounce.lua](recipes/bounce.lua){ .md-button }
+
+| Setting | Means | Default |
+|---|---|---|
+| `density` | kg per cubic metre: how heavy for its size (water is 1000, wood ~500, steel ~8000) | 500 |
+| `bounce` | 0 = lands dead, 1 = bounces back as high as it fell | 0.1 |
+| `friction` | 0 = ice, 1 = rubber; the lower of the two touching surfaces wins | 0.6 |
+| `static` | never moves: floors, walls, platforms | false |
+| `velocity` | starting velocity, m/s | 0 |
+| `material` | a sound material, for impact sounds ([Sound](audio.md)) | none |
+
+## Invisible walls and glass
+
+Six balls bounce around a pen they can never leave: its four walls and
+lid are there for physics but not drawn (`visible = false`). Beside it, a
+clear glass box and a milky glass ball (`glass = true`, `cloudy`). **H**
+shows the invisible walls, faintly, the way you'd check them while
+building a level.
+
+![Balls in an invisible pen, a glass box and a glass ball](media/walls.jpg)
+
+```lua title="walls.lua"
+-- walls.lua: invisible walls and glass. Balls bounce around a pen whose
+-- walls you can't see; beside it, a clear glass box and a milky glass
+-- ball. H shows the invisible walls (for building a level).
+-- (docs/cookbook/physics.md)
+
+input.define("walls.show", "Show the invisible walls", "H")
+
+-- A 4 x 4 m pen with a lid: static boxes that collide but aren't drawn.
+local function wall(pos, size)
+  physics.box { pos = pos, size = size, static = true, visible = false }
+end
+wall(Vec(0, 1, -2), Vec(4, 2, 0.2))
+wall(Vec(0, 1, 2), Vec(4, 2, 0.2))
+wall(Vec(-2, 1, 0), Vec(0.2, 2, 4))
+wall(Vec(2, 1, 0), Vec(0.2, 2, 4))
+wall(Vec(0, 2.1, 0), Vec(4.2, 0.2, 4.2)) -- the lid: nothing bounces out over the top
+
+-- Glass: see-through, tinted by its colour; cloudy = 0 (clear) .. 1 (milky).
+physics.box { pos = Vec(-3.5, 0.75, 0), size = Vec(1.5, 1.5, 1.5), static = true,
+              glass = true, color = Vec(0.4, 0.85, 1.0) }
+physics.sphere { pos = Vec(3.5, 0.8, 0), radius = 0.8, static = true,
+                 glass = true, cloudy = 0.5, color = Vec(1.0, 0.7, 0.4) }
+
+-- Balls that never leave the pen, however hard they're thrown.
+balls = {}
+for i = 0, 5 do
+  balls[#balls + 1] = physics.sphere { pos = Vec(-1.2 + i * 0.5, 0.5 + i * 0.3, 0), radius = 0.2, bounce = 0.9,
+                                friction = 0.1, color = Vec(1, 0.9 - i * 0.12, 0.2) }
+  physics.setVelocity(balls[#balls], Vec(math.cos(i) * 9, 4, math.sin(i) * 9))
+end
+
+hook.Add("Think", "walls.keys", function()
+  if input.pressed("walls.show") then physics.showHidden(not physics.showHidden()) end
+end)
+```
+
+[Download walls.lua](recipes/walls.lua){ .md-button }
+
+| Setting | Means | Default |
+|---|---|---|
+| `visible` | false: it collides but isn't drawn and casts no shadow (walls that keep a ball on its court, a stair ramp) | true |
+| `glass` | true: see-through, what's behind is tinted by `color` | false |
+| `cloudy` | glass only: 0 = clear, 1 = milky | 0 |
+
+In multiplayer the look travels with the body, so every player sees the
+same glass and nobody sees the walls. `physics.showHidden(true)` only
+shows them on your own screen.
+
+## Things that really break
+
+With FEMFX (the `everything` preset, [Install and build](../BUILDING.md)),
+`breakable.box` makes objects that bend, crack and shatter for real, into
+pieces that are bodies of their own. **F** throws an iron ball at what
+you're looking at.
+
+```lua title="glass.lua"
+-- glass.lua: things that really break (FEMFX). A pane of glass, a
+-- wooden plank and a stone slab; press F to throw an iron ball at
+-- whatever you look at. The Break hook says when one comes apart.
+-- Needs a build with FEMFX (the "everything" preset, docs/BUILDING.md).
+-- (docs/cookbook/physics.md)
+
+if not breakable then
+  print("glass.lua: no breakable table in this build (configure with the 'everything' preset)")
+  return
+end
+
+breakable.box { pos = Vec(-2, 1.1, -1), size = Vec(1.2, 1.6, 0.06), material = "glass" }
+breakable.box { pos = Vec(0, 1.1, -1), size = Vec(0.2, 1.6, 0.9), material = "wood", pattern = "splinters" }
+breakable.box { pos = Vec(2, 0.8, -1), size = Vec(1, 1, 0.3), material = "stone" }
+
+input.define("glass.throw", "Throw an iron ball", "F")
+hook.Add("Think", "glass.keys", function()
+  if input.pressed("glass.throw") then
+    breakable.ball { pos = camera.position() + camera.forward(), radius = 0.12, velocity = camera.forward() * 18 }
+  end
+end)
+
+hook.Add("Break", "glass.broke", function(id)
+  print(string.format("Crash! (%d pieces)", breakable.pieces(id)))
+end)
+```
+
+[Download glass.lua](recipes/glass.lua){ .md-button }
+
+Materials (`glass`, `stone`, `wood`, `ice`, `iron`) set how much force it
+takes and how it comes apart; `pattern` overrides the pattern
+(`shards`, `voronoi`, `splinters`, `radial`). [Tutorial 2](../tutorials/02-break-things.md)
+builds a whole shooting gallery of them; [Physics bridge](../PHYSICS_BRIDGE.md)
+explains how the pieces hand over to Jolt.
+
+## Physics from C++
+
+`kke::RigidWorld` (`engine/include/kke/RigidWorld.h`) is what the Lua
+`physics` table calls. The cookbook's `games/cookbook/PhysicsRecipes.h`
+has the two things every game does with it, and the unit test
+`Cookbook.CrateLandsWhereTheRaySaysTheGroundIs` runs them in a world of
+their own:
+
+```cpp title="games/cookbook/PhysicsRecipes.h"
+// A crate: a dynamic box, 60 cm on a side, dropped at `at`.
+inline kke::RigidWorld::BodyId dropCrate(kke::RigidWorld& world, const glm::vec3& at) {
+    kke::RigidWorld::BodyDesc d;
+    d.shape = kke::RigidWorld::Shape::Box;
+    d.halfExtents = glm::vec3(0.3f); // half the size
+    d.position = at;
+    d.density = 150.0f;   // kg/m^3: light wood
+    d.restitution = 0.1f; // hardly bounces
+    return world.add(d);
+}
+```
+
+```cpp title="games/cookbook/PhysicsRecipes.h"
+// How high the ground is below `from` (the first thing a ray straight down
+// hits within 50 m). False when there's nothing there.
+inline bool groundBelow(const kke::RigidWorld& world, const glm::vec3& from, float& height) {
+    const kke::RigidWorld::RayHit hit = world.raycast(from, glm::vec3(0.0f, -1.0f, 0.0f), 50.0f);
+    if (!hit.hit) return false;
+    height = hit.point.y;
+    return true;
+}
+```
+
+In a game, the world belongs to `RigidBodyModule`
+(`app.getModule<kke::RigidBodyModule>()->world()`), which steps it at 60
+Hz and draws script bodies. Contacts come out of `frameContacts()` each
+frame; the character controller (`addCharacter`) is what
+[`Locomotion`](../MOVEMENT.md) drives. For a whole world of your own
+(a server, a test, a tool), make a `RigidWorld` and call `step()`
+yourself, as the test does.
+
+## Other physics
+
+- **Jiggle** (`kke::JiggleRig`): soft parts on a skeleton.
+  [Jiggle physics](../JIGGLE.md).
+- **Ragdolls** on Jolt and FEMFX. [Ragdolls](../RAGDOLLS.md).
+- **Water**: an ocean with buoyancy (`sea_demo`), particle liquids and
+  things that melt (`melt_demo`).
+- **Performance**: how many bodies a single core can take, and what to
+  do about it. [Optimization](../OPTIMIZATION.md).
+
+Next: [sound](audio.md).
+
+========================================================================
+FILE: docs/cookbook/audio.md
+========================================================================
+
+# Sound
+
+KKE's sounds are mostly **synthesized from impacts**: a body with a sound
+material hits something, and the engine makes the right thump, clink or
+crack, louder for a harder hit, placed in 3D where it happened, muffled
+behind walls. A script's job is to say what things are made of.
+
+## Sound materials
+
+One crate of every material, dropped in a row: listen to the difference.
+**O** drops them again, **P** plays a metal ping in front of you.
+
+![A row of crates, one per sound material](media/sounds.jpg)
+
+```lua title="sounds.lua"
+-- sounds.lua: one crate of every sound material, dropped in a row. Each
+-- hit plays the material's impact sound, louder the faster it hits; the
+-- Contact hook prints who hit what. O drops them again.
+-- (docs/cookbook/audio.md)
+
+if not audio then
+  print("sounds.lua: this game has no AudioModule")
+  return
+end
+
+local names = {}
+for name, id in pairs(audio.materials()) do table.insert(names, { name = name, id = id }) end
+table.sort(names, function(a, b) return a.id < b.id end)   -- a stable order
+
+local crates, nameOf = {}, {}
+local function drop()
+  for _, id in ipairs(crates) do physics.remove(id) end
+  crates, nameOf = {}, {}
+  for i, m in ipairs(names) do
+    local id = physics.box { pos = Vec(-4 + i * 1.1, 2 + i * 0.4, 1), size = Vec(0.5, 0.5, 0.5), material = m.id,
+                             color = Vec(0.3 + (i % 3) * 0.25, 0.5, 0.9 - (i % 4) * 0.15) }
+    table.insert(crates, id)
+    nameOf[id] = m.name
+  end
+end
+
+-- The engine plays the sounds by itself; this only reports them.
+hook.Add("Contact", "sounds.report", function(c)
+  local who = nameOf[c.a] or nameOf[c.b]
+  if who and c.speed > 1 then print(string.format("%s hit at %.1f m/s", who, c.speed)) end
+end)
+
+-- Your own sound, anywhere: audio.impact(position, material, loudness 0..1).
+input.define("sounds.again", "Drop the crates again", "O")
+input.define("sounds.ping", "Play a metal ping", "P")
+hook.Add("Think", "sounds.keys", function()
+  if input.pressed("sounds.again") then drop() end
+  if input.pressed("sounds.ping") then audio.impact(camera.position() + camera.forward() * 2, "Metal", 0.8) end
+end)
+drop()
+```
+
+[Download sounds.lua](recipes/sounds.lua){ .md-button }
+
+- `audio.materials()` is a table of name to id (`Stone`, `Wood`, `Metal`,
+  `Glass`, ...). Pass the id as `material` when you make a body, and
+  its hits make sound by themselves.
+- `audio.impact(position, material, loudness)` plays one on demand, for
+  things that aren't collisions: a footstep, a pickup, a bell.
+- The `Contact` hook is how a script hears about hits too: `c.speed` is
+  how hard, `c.materialA` and `c.materialB` what.
+
+## Where the sound comes from
+
+Everything is positioned in 3D relative to the camera, so the crates on
+the left sound on the left. Sounds behind walls are quieter and duller
+(occlusion, by raycast), and a room's size changes its reverb. Nothing to
+set up: it's how `AudioModule` works. The settings players can change
+(volume, the sound visualizer for deaf and hard-of-hearing players,
+mono) are in the settings screen every starter game has.
+
+[Audio](../AUDIO.md) covers the synthesis, spatialization, occlusion and
+the optional Steam Audio backend; [Tutorial 4](../tutorials/04-sound.md)
+adds materials and a pickup chime to the tutorial game.
+
+Next: [multiplayer](networking.md).
+
+========================================================================
+FILE: docs/cookbook/networking.md
+========================================================================
+
+# Multiplayer
+
+The rule that makes multiplayer simple: **the host decides**. One machine
+(the host, or a dedicated server) owns the truth: where things are, who
+scored. The others send requests and show what they're told. In KKE
+that rule is spelled with a file name.
+
+## Host scripts and player scripts
+
+A script whose name starts with `sv_` runs only where the truth lives:
+on the host, or when you're playing alone. Every other script runs on
+every machine. So a feature is usually two files: the host's `sv_` script
+that decides, and a plain script that asks and shows.
+
+This scoreboard is the smallest complete example. **J** asks for a point;
+the host counts it (no more than two a second per player, so a modified
+client can't cheat) and sends the totals to everyone.
+
+```lua title="net_scores/sv_scores.lua"
+-- sv_scores.lua: the scoreboard's truth. sv_ scripts run only where the
+-- game's truth lives: on the host, or when playing alone. Players ask for
+-- points; this decides, keeps the totals and tells everyone.
+-- (docs/cookbook/networking.md)
+
+local scores = {}   -- player id -> points
+
+local function publish()
+  -- To every player's machine (does nothing when playing alone)...
+  if net and net.connected() then net.send("scores", scores) end
+  -- ...and to the scripts on this one.
+  hook.Run("ScoresChanged", scores)
+end
+
+-- The host decides: a point is only counted when it's allowed. Here, one
+-- per player per half second, so a hacked client can't flood it.
+local last = {}
+local function addPoint(player)
+  local now = kke.time()
+  if last[player] and now - last[player] < 0.5 then return end
+  last[player] = now
+  scores[player] = (scores[player] or 0) + 1
+  publish()
+end
+
+hook.Add("NetMessage", "sv_scores.point", function(name, data, from)
+  if name == "point" then addPoint(from) end
+end)
+-- The host's own player (or you, playing alone) asks without the network.
+hook.Add("WantPoint", "sv_scores.local", function(player) addPoint(player) end)
+```
+
+```lua title="net_scores/scores.lua"
+-- scores.lua: every player's side. J asks for a point; the HUD shows the
+-- scoreboard the host sends. Runs on every machine.
+-- (docs/cookbook/networking.md)
+
+input.define("scores.point", "Score a point", "J")
+
+local hud = ui and ui.open([[
+<rml><head><style>
+  body { width: 100%; height: 100%; font-family: Noto Sans; color: #ffffff; pointer-events: none; }
+  #board { position: absolute; right: 20dp; top: 20dp; padding: 8dp 16dp; background-color: #10131ecc;
+           border-radius: 8dp; font-size: 18dp; }
+</style></head>
+<body><div id="board">Press J to score</div></body></rml>
+]])
+
+local function me() return net and net.playerId() or 0 end
+
+local function show(scores)
+  if not hud then return end
+  local lines = {}
+  for player, points in pairs(scores) do
+    local who = player == me() and "You" or ("Player " .. player)
+    table.insert(lines, string.format("%s: %d", who, points))
+  end
+  table.sort(lines)
+  ui.text(hud, "board", table.concat(lines, "  ·  "))
+end
+
+hook.Add("Think", "scores.keys", function()
+  if not input.pressed("scores.point") then return end
+  if net and net.role() == "client" then
+    net.send("point", true)          -- ask the host
+  else
+    hook.Run("WantPoint", me())      -- we are the host (or alone): sv_scores.lua hears this
+  end
+end)
+
+-- The host's copy, on the host; the network's copy, on a client.
+hook.Add("ScoresChanged", "scores.show", show)
+hook.Add("NetMessage", "scores.receive", function(name, data)
+  if name == "scores" and type(data) == "table" then show(data) end
+end)
+```
+
+[Download sv_scores.lua](recipes/net_scores/sv_scores.lua){ .md-button }
+[Download scores.lua](recipes/net_scores/scores.lua){ .md-button }
+
+- `net.send(name, data)` goes from a player to the host, or from the host
+  to every player. `data` is a number, text, true/false, or a table of
+  those (about 500 bytes once encoded).
+- Need an answer back ("can I join?", "did I win?")? `net.call` asks
+  and an `sv_` script's `net.handle` answers; a refusal undoes what the
+  handler did ([Scripting](../SCRIPTING.md) "Calls").
+- State everyone should see (scores, who's in which team) fits a synced
+  table: the `sv_` script's `net.table` keeps it, `net.watch` shows it
+  anywhere and is told what changed, late joiners included
+  ([Scripting](../SCRIPTING.md) "Synced tables").
+- `hook.Add("NetMessage", ...)` receives, with the message's name, its
+  data and who sent it (`from`, a player id).
+- `net.role()` is `"host"`, `"client"` or `"offline"`. Playing alone, the
+  `sv_` script is right there, so the scores go through `hook.Run`
+  instead of the network; the same code works in both cases.
+- Never trust a message: the host checks it makes sense (here: not too
+  often) before acting. What arrives damaged or oversized is dropped
+  before a script sees it.
+
+Both files go in the same `scripts/` folder. Hosting, joining and leaving
+is in the game's menu (the starter game has it); loading and unloading the
+`sv_` scripts as your role changes is automatic.
+
+## What replicates by itself
+
+What an `sv_` script spawns (`physics.box`, `breakable.box`, thrown
+balls) appears on every player's machine and moves as it does on the
+host, so a level built by a host script is shared without a line of
+network code. Plain scripts spawn locally: each machine makes its own.
+
+The character's movement is server-authoritative (the host checks each
+player's moves), and voice chat, LAN discovery and join codes come with
+`NetModule`. [Networking](../NETWORKING.md) has the model in full;
+[Server hosting](../SERVER_HOSTING.md) runs the same scripts on a
+dedicated server, where `server.*` adds `say`, `kick` and a `PlayerJoin`
+hook; [Anti-cheat](../ANTI_CHEAT.md) is why the host decides.
+
+Next: [play to make](play-to-make.md).
+
+========================================================================
+FILE: docs/cookbook/play-to-make.md
+========================================================================
+
+# Play to make
+
+KKE's founding idea is that **a five-year-old can make a game**: you
+start the engine inside a game, and making it is part of playing. There
+are three ways in, for three kinds of people, and they all work the same
+building blocks. This page shows one piece of game logic at all three
+levels: *when the bat hits a person, they fall over*.
+
+[Play to make](../PLAY_TO_MAKE.md) is the design; this is the practice.
+Start the sandbox to follow along:
+
+```sh
+cmake --build build --target sandbox && cd build/bin && ./sandbox
+```
+
+## Level 1: pictures
+
+In the sandbox's Play mode there's a row of big pictures along the
+bottom. Drag a **Person** into the world. Pick the **Bat** and click the
+person: they fly, with a wooden bonk, and ragdoll on the ground. **Up!**
+stands everyone up again.
+
+That is the whole of level 1: things you put in the world, tools you use
+on them, and what happens comes built in. A phone finger or a gamepad
+works too. Nothing is irreversible (Clear has an undo), and nothing needs
+reading.
+
+## Level 2: the node graph
+
+Every picture has a recipe behind it. Press **Look**, then the bat in
+the palette, and the bat's recipe opens as a node graph:
+
+![The bat's recipe: when someone is hit, knock them over and play a sound](../images/node-editor.png)
+
+*When someone is hit* (by the bat) → *Knock over* (who, push) → *Play
+sound* "wood" (where). It's live: change the sound to "metal", or add
+*Add score* after *Knock over*, and the next swing does that. A wire only
+connects where it fits, so a graph can't be wrong in a way that crashes.
+
+The blocks on the left are every `play.*` function and every event the
+engine documents: the node library is generated from the Lua API, so a
+new binding is a new block.
+
+## Level 3: Lua
+
+**Show Lua** in the editor shows what the graph stands for. The bat's
+graph is this script:
+
+```lua title="play/bat.lua"
+-- bat.lua: what the bat's node graph says, written as Lua. The node
+-- graph compiles to Lua much like this (kke/NodeGraph.h), so each node
+-- is a line you could have typed. (docs/cookbook/play-to-make.md)
+
+hook.Add("Hit", "bat.knock_over", function(e)
+  if e.by ~= "bat" then return end
+  play.ragdoll(e.target, e.push)   -- node "Knock over", its push from the hit
+  play.sound("wood", e.point)      -- node "Play sound", where it was hit
+end)
+```
+
+Writing it by hand opens the door to everything else in this cookbook.
+Here's the same idea grown a little: a hit knocks the person over, shows
+a word, scores a point, and stands them back up after three seconds.
+
+```lua title="play/ouch.lua"
+-- ouch.lua: the Lua level of play-to-make, on the same blocks as the
+-- pictures and the node graph. When the bat hits a person: they fall
+-- over, say "Ouch!", you get a point, and three seconds later they get
+-- back up. (docs/cookbook/play-to-make.md)
+
+hook.Add("Hit", "ouch.hit", function(e)
+  if e.by ~= "bat" or e.block ~= "person" then return end
+  play.ragdoll(e.target, e.push)
+  play.sound("bonk", e.point)
+  play.say("Ouch!")
+  play.addScore(1)
+  timer.Simple(3, function()
+    if play.isDown(e.target) then play.standUp(e.target) end
+  end)
+end)
+
+hook.Add("StoodUp", "ouch.up", function(e)
+  play.say("I'm OK!")
+end)
+```
+
+[Download ouch.lua](recipes/play/ouch.lua){ .md-button }
+
+The `play` table is the building blocks, listed in
+[Scripting in Lua](../SCRIPTING.md#play-blocks-play): `spawn`, `remove`,
+`ragdoll`, `standUp`, `isDown`, `swing`, `sound`, `say`, `addScore`,
+`position`, and the events `Hit`, `Clicked`, `Placed`, `FellOver` and
+`StoodUp`. Both scripts above run in the unit tests against a fake play
+world (`Cookbook.PlayRecipeKnocksOverScoresAndStandsBackUp`,
+`Cookbook.BatLuaDoesWhatTheBatGraphDoes` in `tests/test_cookbook.cpp`),
+which is how the cookbook knows they still do what this page says.
+
+## Adding a block of your own
+
+A new building block is written once, in C++, and appears at all three
+levels:
+
+1. **The logic**, pure and unit-tested (`kke::BatSwing` in
+   `kke/PlayBlocks.h` is the model).
+2. **A Lua binding** registered with a `kke::ApiFunction` (label, doc,
+   typed parameters), which is what makes it a documented function and
+   a node (`kke::bindPlayBlocks` in `PlayScript.cpp`).
+3. **A picture**, if it should be in the palette: a `kke::PlayBlock` with
+   an asset name, and a recipe graph if it does something on its own
+   (`kke::playBlockRecipe`).
+
+[C++](cpp.md) shows steps 1 and 2 for an ordinary game module.
+
+========================================================================
+FILE: docs/cookbook/cpp.md
+========================================================================
+
+# C++
+
+Lua is for the game; C++ is for the engine and for anything that needs
+to be fast or to talk to the engine directly. A KKE game in C++ is a list
+of **modules**, and this page shows how to write one, give Lua a way to
+use it, and test it.
+
+## Your own module
+
+A module is a class with a name, the modules it depends on, and the
+lifecycle methods it needs. This is the whole of the cookbook's
+`CookbookPlayer` header, minus its private members:
+
+```cpp
+class CookbookPlayer : public kke::Module {
+public:
+    const char* name() const override { return "CookbookPlayer"; }
+    std::vector<kke::ModuleDependency> dependencies() const override;
+    void init(kke::Application& app) override;             // once, in dependency order
+    void update(const kke::UpdateContext& ctx) override;   // every frame (ctx.dt)
+    void render(const kke::RenderContext& ctx) override;   // draw
+    void renderShadow(const kke::ShadowRenderContext& ctx) override;
+    void onEvent(const SDL_Event& event) override;         // raw input, window events
+};
+```
+
+Dependencies are how a module finds the others, and they decide the
+order of `init`:
+
+```cpp
+std::vector<kke::ModuleDependency> CookbookPlayer::dependencies() const {
+    return { { std::type_index(typeid(kke::RigidBodyModule)), true, "the character controller and collision" },
+             { std::type_index(typeid(kke::InputModule)), true, "move, look and camera actions" },
+             { std::type_index(typeid(kke::ScriptModule)), false, "the view.* and player.* Lua bindings" } };
+}
+```
+
+`true` is required (the game refuses to start without it, with that
+reason in the log); `false` is optional, and `app.getModule<T>()` returns
+null when it's missing. Then `main.cpp` lists the modules:
+
+```cpp
+kke::Application app("KKE Cookbook", 1280, 720);
+app.addModule<kke::SettingsModule>("settings.json");
+app.addModule<kke::InputModule>("input.json");
+app.addModule<kke::RigidBodyModule>();
+app.addModule<kke::ModelModule>();
+app.addModule<kke::UiModule>();
+app.addModule<kke::ScriptModule>("scripts");
+app.addModule<cookbook::CookbookPlayer>();
+app.run();
+```
+
+Other lifecycle methods, when you need them: `fixedUpdate` (60 Hz, for
+physics-rate logic), `frameStart`/`frameEnd`, `compute` (GPU work before
+rendering), `renderUi` (a Dear ImGui panel in developer builds),
+`shutdown`. A module that throws in any of them is disabled and logged,
+and the rest of the game goes on. `engine/include/kke/Module.h` has them
+all; `games/template/` is the smallest complete game, and `tools/new_game
+NAME` copies it for you ([Make your own game](../tutorials/getting-started.md)).
+
+## Your own Lua bindings
+
+A binding is a table name, a function name and a C++ function. It reads
+arguments from the Lua stack, pushes results, and returns how many. The
+cookbook's `view` table, which the [cameras](cameras.md) page uses from
+Lua, is all of these:
+
+```cpp title="games/cookbook/CookbookPlayer.cpp"
+// Lua bindings: a table name, a function name and a C++ lambda. Arguments
+// come off the Lua stack; push the results and return how many.
+void CookbookPlayer::registerLua() {
+    auto* scripts = m_app->getModule<kke::ScriptModule>();
+    if (!scripts) return;
+    kke::ScriptVM& vm = scripts->vm();
+    // view.mode("topdown") switches; view.mode() says which one is on.
+    vm.registerFunction("view", "mode", [this](lua_State* L) {
+        if (lua_isstring(L, 1)) {
+            View v = View::Third;
+            if (!viewFromName(lua_tostring(L, 1), v))
+                return luaL_error(L, "view.mode: no camera '%s' (first, third, orbit, topdown, iso, side, fixed, cinematic)", lua_tostring(L, 1));
+            setView(v);
+        }
+        lua_pushstring(L, viewName(m_view));
+        return 1;
+    });
+    vm.registerFunction("view", "shake", [this](lua_State* L) {
+        shake(static_cast<float>(luaL_optnumber(L, 1, 0.5)));
+        return 0;
+    });
+    // view.path({ {pos = Vec(..), target = Vec(..), time = 0}, ... }, loop)
+    vm.registerFunction("view", "path", [this](lua_State* L) {
+        luaL_checktype(L, 1, LUA_TTABLE);
+        std::vector<kke::CameraRig::Keyframe> keys;
+        const lua_Integer n = luaL_len(L, 1);
+        for (lua_Integer i = 1; i <= n; ++i) {
+            lua_geti(L, 1, i);
+            const int k = lua_gettop(L);
+            keys.push_back({ kke::ScriptVM::fieldVec3(L, k, "pos", glm::vec3(0.0f)), kke::ScriptVM::fieldVec3(L, k, "target", glm::vec3(0.0f)),
+                             kke::ScriptVM::fieldNumber(L, k, "time", static_cast<float>(i - 1)) });
+            lua_pop(L, 1);
+        }
+        if (keys.size() < 2) return luaL_error(L, "view.path: needs at least two keyframes");
+        m_rig.setCinematic(std::move(keys), lua_toboolean(L, 2) != 0);
+        setView(View::Cinematic);
+        return 0;
+    });
+    // The same player.* as the starter template, so recipes run in both.
+    vm.registerFunction("player", "position", [this](lua_State* L) {
+        kke::ScriptVM::pushVec3(L, m_rigid->world().characterPosition(m_player));
+        return 1;
+    });
+    vm.registerFunction("player", "teleport", [this](lua_State* L) {
+        m_loco->teleport(kke::ScriptVM::toVec3(L, 1, spawn));
+        return 0;
+    });
+    vm.registerFunction("player", "facing", [this](lua_State* L) {
+        kke::ScriptVM::pushVec3(L, m_loco->facing());
+        return 1;
+    });
+}
+```
+
+- `luaL_checkstring(L, 1)`, `luaL_optnumber(L, 1, 0.5)`, `lua_toboolean`:
+  Lua's own API reads arguments by position. `kke::ScriptVM::toVec3(L, i)`
+  reads a `Vec`, `fieldVec3(L, table, "pos", fallback)` a named field of a
+  table argument, and `pushVec3` returns one.
+- `luaL_error(L, ...)` reports a mistake with the script's file and line,
+  and stops that call, not the game.
+- Anything registered with a `kke::ApiFunction` (label, doc, typed
+  parameters) instead of a bare name also becomes a block in the node
+  graph and a row in the [Lua API reference](../reference/lua-api.md).
+
+`kke::ScriptVM` runs scripts on their own coroutines with an instruction
+budget and a memory cap, so a script can't hang or exhaust the game;
+[Scripting in Lua](../SCRIPTING.md#safety-and-limits) has the limits.
+
+## Testing your code
+
+The engine's tests are GoogleTest, in `tests/`, and run as `kke_tests`.
+Pure logic (which is most game logic once it's separated from drawing)
+tests in a few lines; the cookbook's tests are in `tests/test_cookbook.cpp`:
+
+```cpp
+TEST(Cookbook, TurnTowardsStopsAtTheLimit) {
+    const glm::vec3 ahead(0, 0, 1), side(1, 0, 0);
+    const glm::quat limited = cookbook::turnTowards(ahead, side, 30.0f);
+    EXPECT_NEAR(glm::degrees(std::acos(glm::dot(limited * ahead, ahead))), 30.0f, 0.01f);
+}
+```
+
+Input, physics and Lua all test without a window: `kke::InputMap` reads
+from any `kke::InputState` (a fake keyboard in the test), a
+`kke::RigidWorld` steps by itself, and a `kke::ScriptVM` runs Lua with
+whatever bindings you give it. The [input](input.md#binding-in-c-pads-holds-chords-and-axes)
+and [physics](physics.md#physics-from-c) pages show one of each.
+
+Run them with `./build/bin/kke_tests`, or one suite:
+`./build/bin/kke_tests --gtest_filter='Cookbook*'`.
+
+## Going further
+
+- **Drawing**: `kke::DynamicMeshRenderer` draws a mesh you build from
+  vertices (the cookbook's player body); `kke::ModelModule` loads FBX and
+  OBJ and draws instances with skinning.
+- **Warnings are errors**: the engine builds with
+  `-DKKE_WARNINGS_AS_ERRORS=ON` in CI, and a Release build with any
+  warning at all fails. Fix them as they come.
+- **Reading the engine**: every `engine/include/kke/*.h` starts with a
+  comment saying what it's for and why it's built that way, and
+  [`AI_GUIDE.md`](../../AI_GUIDE.md) is the map of the codebase.
+- **Where the design lives**: the [guides](../SCRIPTING.md) are one page
+  per system; the [roadmap](../../ROADMAP.md) says what's solid and what
+  isn't yet.
+
+========================================================================
+FILE: docs/demos/index.md
+========================================================================
+
+# The demos
+
+Every demo in `games/` is a working game or scene built only from the
+engine's own blocks. Each one has a README that explains it the same way,
+so you can use any of them as the starting point for a game of your own:
+
+| Section | What it tells you |
+|---|---|
+| Run it | The executable, the build option it needs, the environment switches |
+| Controls | Keyboard, mouse and controller, checked against the input code |
+| How it plays | The rules, the goal, the menus |
+| How it works | System by system: what runs each frame, in which file, and why |
+| Design decisions | What was chosen, why, and what was left out |
+| Tuning | The numbers that change the feel, and where they live |
+| Engine features it uses | Which engine blocks, with links to their guides |
+| Assets | Exactly which files and Synty packs it loads, and what happens without them |
+| Make a game like this | The steps from a copy of the demo to your own game |
+| Files | Every source file and what is in it |
+
+Run any demo from `build/bin/` (building: [BUILDING.md](../BUILDING.md)).
+`KKE_SKIP_INTRO=1` skips the logo intro.
+
+## Which demo to start from
+
+| You want to make... | Start from | Then look at |
+|---|---|---|
+| Your first game, in Lua only | [starter game](../../games/template/README.md) | [first Lua game](../../games/first_lua_game/README.md), the [cookbook](../cookbook/index.md) |
+| A race or a party game for the couch, with online play | [Climb Race](../../games/climb_race/README.md) | the [start menu](../LOBBY.md), [networking](../NETWORKING.md) |
+| A driving game: races, drifting, a destruction derby, a rally, damage | [Racing](../../games/racing/README.md) | [vehicles](../VEHICLES.md), [particle effects](../PARTICLE_EFFECTS.md), the [start menu](../LOBBY.md) |
+| A flying, driving or other vehicle game; flight sticks | [Flying](../../games/flying_demo/README.md) | [input](../INPUT.md), the [start menu](../LOBBY.md) |
+| A party game of many short minigames (Fall Guys, Mario Party, Squid Game style) | [Party](../../games/party/README.md) | [Climb Race](../../games/climb_race/README.md), the [start menu](../LOBBY.md), [networking](../NETWORKING.md) |
+| A sports game, or anything with a soft ball | [Tennis](../../games/tennis/README.md) | [physics (FEMFX)](../../games/physics_demo/README.md), the [start menu](../LOBBY.md) |
+| A fighting game | [Duel](../../games/duel/README.md) | [melee combat](../COMBAT.md) |
+| An action game against crowds | [Goblin Horde](../../games/goblin_horde/README.md) | [melee combat](../COMBAT.md), [AI](../AI.md) |
+| A strategy or squad game | [Platoon](../../games/platoon/README.md) | [command kit](../../games/command_kit/README.md), [commands and orders](../COMMANDS.md) |
+| A pet, a companion, or animals that react to you | [Pet companion](../../games/pet_companion/README.md), [Farm](../../games/farm_demo/README.md) | [AI](../AI.md) |
+| Creatures that walk without animation clips | [Procedural animation](../../games/procedural_demo/README.md) | [procedural animation](../PROCEDURAL_ANIMATION.md) |
+| A third-person adventure, or anything using every system at once | [kke_demo showcase](../../games/showcase/README.md) | [the showcase guide](../SHOWCASE.md) |
+| A building or level-editing game, or a game made while playing | [Sandbox](../../games/sandbox/README.md) | [play to make](../PLAY_TO_MAKE.md) |
+| Menus, a HUD, settings, an inventory | [RmlUi demo](../../games/rmlui_demo/README.md) | [input](../INPUT.md) |
+| Debug panels and tools for yourself | [ImGui demo](../../games/imgui_demo/README.md) | |
+| Breakable, bendable, squashable things | [physics_demo](../../games/physics_demo/README.md) | [physics bridge](../PHYSICS_BRIDGE.md), [ragdolls](../RAGDOLLS.md) |
+| Lava, melting and pouring | [melt_demo](../../games/melt_demo/README.md) | |
+| Fire, smoke, explosions, sparks, weather, confetti, magic | [particles_demo](../../games/particles_demo/README.md) | [particle effects](../PARTICLE_EFFECTS.md) |
+| Props that bend and break (any model pack) | [synty_demo](../../games/synty_demo/README.md), [Sandbox](../../games/sandbox/README.md) | [breakables](../BREAKABLES.md) |
+| Ships, naval battles, water, floating and sinking | [sea_demo](../../games/sea_demo/README.md) | [lobby](../LOBBY.md), [networking](../NETWORKING.md) |
+| Soft bodies, jelly, jiggling characters | [jiggle_demo](../../games/jiggle_demo/README.md) | [jiggle physics](../JIGGLE.md) |
+| Capes, flags, nets, curtains and blankets | [cloth_demo](../../games/cloth_demo/README.md) | [cloth](../CLOTH.md) |
+| Sound that fills a place: rooms, walls, doors, footsteps | [audio_demo](../../games/audio_demo/README.md) | [audio](../AUDIO.md) |
+| Store-bought characters: load, skin, pose and ragdoll them | [synty_demo](../../games/synty_demo/README.md) | [scenes](../SCENES.md), [ragdolls](../RAGDOLLS.md) |
+| A small tech demo with a settings panel a controller can drive | any of the six above, or procedural_demo | [the demo panel](../DEMO_PANEL.md) |
+
+========================================================================
+FILE: docs/SCRIPTING.md
+========================================================================
+
+# SCRIPTING.md — Lua gameplay scripts
+
+Garry's Mod-style scripting for creators who don't want to compile C++.
+Code: `kke/ScriptVM.h` (the sandboxed Lua state), `kke/modules/ScriptModule.h`
+(scripts in a game; bindings in `ScriptModule.cpp` and `ScriptBindings.cpp`);
+tests: `tests/test_script_vm.cpp`. Examples, both in kke_demo:
+
+- `games/first_lua_game/`: **your first game in Lua**, break-the-targets
+  with a score HUD, a timer and a results screen, in one file. Press T.
+  Its README walks through it.
+- `games/showcase/scripts/toys.lua`: G builds a crate tower, B throws a
+  ball, N clears (on a pad: RB tower, View ball, hold View to clear).
+
+## Using it
+
+- Put `*.lua` files in the game's `scripts/` folder (or point
+  `KKE_SCRIPTS_DIR` at a folder). They load in name order at start.
+- **Hot reload:** save a file while the game runs and it reloads within
+  half a second. Its old hooks, timers and spawned bodies are removed
+  first, so nothing doubles up. Deleting a file unloads it.
+- **Console:** the Scripts panel (F1 in kke_demo) lists scripts with
+  their status, shows `print` output and errors, and runs one line of Lua
+  (`print(camera.position())`).
+- **Errors don't stop the game.** A broken hook is reported with
+  `file:line` and a traceback and skipped; everything else keeps running.
+- **Each script has its own globals.** `score = 0` in one file is not
+  seen by another. Share on purpose: `shared.best = 42` (one table all
+  scripts see), or events with `hook.Run("MyEvent", ...)`.
+- **Realms:** `sv_*.lua` runs only where the game's physics is the truth
+  (playing offline, or hosting); every other script runs on every
+  player's machine. Hosting, joining or leaving loads/unloads `sv_`
+  scripts by themselves. (Same prefixes as Garry's Mod; `cl_`/`sh_` run
+  everywhere today.)
+
+### Multiplayer
+
+What an `sv_` script spawns while hosting shows up on every player's
+machine: `physics.box`/`physics.sphere` bodies (moving with the host's,
+like the level's crates), `breakable.box` (breaking into the host's
+pieces) and `breakable.ball` (thrown the same way; players who join
+later don't see old throws). Removing one, or reloading the script,
+removes it everywhere; what an `sv_` script made before you started
+hosting goes out when you do. On a client these objects belong to
+"(host)" in the Scripts panel and go away when you leave. Their `Break`
+hook fires on clients too (with the client's own id for it).
+
+On a dedicated server (`kke_server` with the `scripts` role,
+docs/SERVER_HOSTING.md "Scripts") the same `sv_` and `sh_` scripts run
+headless and replicate the same way; there `net.role()` is `"server"`,
+`net.send` takes a player id to send to one player, and `server.*` adds
+`say`, `kick`, `score` and `top` plus the `PlayerJoin` / `PlayerLeave`
+hooks.
+
+Scripts that aren't `sv_` run on every machine already, so what they
+spawn stays local (each machine makes its own). Other state crosses with
+`net.send`. How it works: docs/NETWORKING.md "Spawned objects" and
+"Breakables".
+
+### Calls
+
+`net.send` is a message with no answer. When a player's script needs
+one ("can I join court 3?"), it calls, and an `sv_` script handles:
+
+```lua
+-- sv_courts.lua: runs where the truth is (the host, a server, or alone)
+local players = {}
+net.handle("join_court", function(data, from)
+    local court = players[data.court]
+    if not court then return nil, "there is no court " .. tostring(data.court) end
+    if #court >= 4 then return nil, "that court is full" end
+    court[#court + 1] = from
+    net.send("court", { court = data.court, players = court }) -- tell everyone
+    return { seat = #court }
+end)
+
+-- courts.lua: runs on every player's machine
+net.call("join_court", { court = 3 }, function(ok, answer)
+    if ok then print("my seat:", answer.seat) else print("no:", answer) end
+end)
+```
+
+- Every call gets exactly one answer, later (never inside `net.call`):
+  `ok` is true with what the handler returned, or false with why not:
+  the handler's own reason (`return nil, "why"`), `"no handler for
+  'name' on the server"`, `"the server's handler for 'name' failed"`
+  (a Lua error; the details are in the server's log, not sent to the
+  player), `"the server is busy"`, `"no answer from the server"` (after
+  10 s) or `"the connection to the server was lost"`.
+- `net.call` returns false, and never answers, when it can't be sent
+  (not connected). Without a callback it's sent all the same.
+- **All or nothing**: when a handler refuses or fails, what it did is
+  undone. On `kke_server` that is everything it sent, spawned, removed,
+  kicked, scored and saved (`store.*`); in a hosted game, its `net.send`s
+  and `store.*` saves (bodies and UI it changed stay). Lua variables are
+  never undone, so check first, then change (as above).
+- Offline or hosting, the `sv_` script is on this machine and answers
+  it on the next frame: the same code works alone and online.
+- One handler per name (a second `net.handle` replaces it; `nil` removes
+  it); reloading the script removes its handlers.
+
+### Synced tables
+
+State everyone should see (who is on which court, the score, the queue,
+the ranking) goes in a synced table: the `sv_` script keeps the rows,
+every player's scripts watch them. A watcher gets the rows once, then
+only what changed; a player who joins late or reconnects gets the rows
+as they are, with no code of your own.
+
+```lua
+-- sv_courts.lua
+local courts = net.table("courts")
+courts:set(3, { court = 3, players = { "Kees", "Ann" }, score = "0-0" })
+
+net.handle("point", function(data, from)
+    local row = courts:get(data.court)
+    row.score = data.score
+    courts:set(data.court, row) -- every watcher of court 3 gets an "update"
+    return true
+end)
+
+-- scoreboard.lua: on every machine
+local court3 = net.watch("courts", { court = 3 }, function(event, key, row, old)
+    if event == "insert" or event == "update" then print("court 3:", row.score) end
+    if event == "delete" then print("court 3 closed") end
+    -- "ready": the first rows are in; "error": row is nil, the third value says why
+end)
+```
+
+- Keys are whole numbers or text; a row is what `net.send` carries (a
+  table of plain values, about 400 bytes once encoded). `:set` replaces
+  the whole row.
+- A filter (`{ court = 3 }`) keeps the rows whose top-level fields are
+  equal (numbers compare by value: `3` and `3.0` match). Without one,
+  every row. When a row stops matching (the player moves to court 4)
+  its watcher gets a `"delete"`; the court 4 watcher an `"insert"`.
+- Changes are sent once a frame (a server tick), one per row however
+  often it changed; a view's `:rows()` and `:get(key)` read its copy.
+- Only where the `sv_` scripts run can a table change (`net.table` is
+  an error on a client); watching works everywhere, alone too.
+- A table belongs to the script that made it: reloading that script
+  empties it, and watchers see only what's different after it ran
+  again. A refused or failed `net.call` undoes its table changes too.
+- Limits: 64 tables, 4,096 rows each, 32 watches per player, 4 filter
+  fields. Every player may watch every table (per-player visibility is
+  planned).
+
+### Groups
+
+One server can hold many rooms at once, like the courts of a sport
+center: put each player in a group and they are only sent the players
+and balls of their own group, plus any groups they choose to watch.
+
+```lua
+-- sv_courts.lua
+net.handle("join_court", function(data, from)
+    net.setGroup(from, data.court)   -- 1 to 10: this court's players and ball
+    net.solid(from, true)
+    return true
+end)
+
+net.handle("spectate", function(data, from)
+    net.setGroup(from, 0)            -- the lobby
+    net.showGroups(from, { data.court }) -- and watch this court
+    net.solid(from, false)           -- walk through the ball, never touch it
+    return true
+end)
+
+local ball = physics.sphere { pos = Vec(0, 1, 0), radius = 0.033, group = 3 } -- court 3's ball
+```
+
+- `net.setGroup(player, group)`, `net.group(player)`,
+  `net.showGroups(player, { group, ... })` (up to 64; `{}` or nil:
+  none), `net.solid(player, yes)`. Groups are 0 to 65535, 0 by default;
+  players and bodies in no group are all in group 0.
+- Only where the `sv_` scripts run (a server, or the host's game); on a
+  client these are an error. `net.group` works everywhere.
+- A body's group is set when it's made (`physics.box{ ..., group = g }`,
+  `physics.sphere{ ... }`).
+- What groups hide is what is sent: everyone's physics is still one
+  world. Leaving forgets a player's group and makes it solid again.
+
+## The API
+
+Events, like GMod's `hook`:
+
+```lua
+hook.Add("Think", "my.id", function(dt) end)      -- every frame
+hook.Add("Tick", "my.id", function(dt, tick) end) -- fixed 60 Hz
+hook.Add("Contact", "my.id", function(c) end)     -- two bodies (not the player): c.a, c.b, c.speed, c.materialA, c.materialB, c.pos
+hook.Add("Break", "my.id", function(id) end)      -- a breakable this script made came apart
+hook.Add("NetMessage", "my.id", function(name, data, from) end) -- net.send from another machine
+hook.Add("InputStyle", "my.id", function(style) end) -- the player switched devices ("xbox", "keyboard", "touch"...): redo prompts built with input.promptText
+hook.Add("Init", "my.id", function() end)         -- once, after all scripts loaded
+hook.Add("Shutdown", "my.id", function() end)
+hook.Remove("Think", "my.id")
+hook.Run("MyEvent", ...)                          -- your own events between scripts
+```
+
+Timers: `timer.Simple(seconds, fn)`, `timer.Create(name, seconds, reps, fn)`
+(reps 0 = forever), `timer.Remove(name)`, `timer.Exists(name)`.
+
+Vectors: `Vec(x, y, z)` with `+ - * /`, `:length()`, `:normalized()`,
+`:dot(v)`, `:cross(v)`. Every binding takes and returns these.
+
+| Table | Functions |
+|---|---|
+| `kke` | `log(...)`, `time()`, `dt()` (and plain `print`) |
+| `physics` | `box{pos, size, density, material, color, velocity, bounce, friction, static, visible, glass, cloudy, group}` / `sphere{pos, radius, ...}` → id (`visible = false`: collides but isn't drawn, an invisible wall; `glass = true`: see-through, tinted by `color`, `cloudy` 0 clear to 1 milky; the look reaches every player); `showHidden([on])` → on: draw the invisible ones faintly, on this machine (building a level; also a checkbox in the F1 Scripts panel); `remove(id)`, `position(id)`, `velocity(id)`, `setVelocity(id, v)`, `impulse(id, v [, point])`, `raycast(from, dir [, maxDist])` → `{pos, normal, distance, body, material}` or nil, `count()` |
+| `audio` | `impact(pos, material, intensity)` (material id or name), `materials()` → `{Stone = 1, Wood = 2, ...}` |
+| `input` | `define(id, label, defaultKey [, padButton])` (pad button names: `"a"`, `"b"`, `"x"`, `"y"`, `"lb"`, `"rb"`, `"lt"`, `"rt"`, `"start"`, `"back"`, `"dpad_up"`...), `pressed(id)`, `held(id)`, `value(id)`; actions show up in the rebinding screen like any other. Button prompts ([INPUT.md](INPUT.md) "Button prompts"): `style([player])` → `"keyboard"`, `"xbox"`, `"playstation"`, `"switch"`, `"steamdeck"`, `"steamcontroller"` or `"touch"`, the device the player uses now; `prompt(action or button [, label, player])` → RML with the button's picture (for `ui.rml`); `promptText("{jump} jump, {sprint} run" [, player])` → RML; `glyph(action or button [, player or style])` → the picture's path (for your own `<img>`), or nil + why. In documents, `<prompt action="jump" label="Jump"/>` redraws by itself. |
+| `camera` | `position()`, `target()`, `forward()` |
+| `mood` | The sky, sun, fog, colour look and ambience in one go ([MOODS.md](MOODS.md)): `set(name)` → true, or false and the reason (`"clear_day"`, `"golden_hour"`, `"sunset"`, `"night"`, `"misty_morning"`, ... or a mood file of the game's own in `moods/`), `current()` → name, `list()` → names |
+| `models` | `load(name)` → model (an asset name from an installed pack, e.g. `"SM_Prop_Crate_01"`, or a path inside the game's folder; nil + reason if missing), `spawn(model, {pos, yaw, scale, tint})` → instance, `move(inst, pos [, yaw, scale])`, `remove(inst)`, `tint(inst, Vec)`, `visible(inst, bool)`, `play(inst, clip [, loop, speed])` (clip name or number; nil stops), `clips(model)` → names, `bounds(model)` → min, max |
+| `breakable` | FEMFX objects that really break. `box{pos, size, material, pattern, cells, chunk, velocity, arm}` → id (material `glass`, `stone`, `wood`, `ice`, `iron`; pattern `shards`, `voronoi`, `splinters`, `radial`, `solid`, default by material), `ball{pos, radius, velocity, material}` → id (iron by default: a projectile), `remove(id)`, `broken(id)`, `pieces(id)`, `count()`. The `Break` hook says when one breaks. |
+| `ui` | RmlUi documents. `open(rml)` / `load("file.rml")` (next to the scripts) → doc, `text(doc, id, text)` (plain text, shown as typed), `rml(doc, id, markup)`, `class(doc, id, name, on)`, `property(doc, id, name, value)`, `show(doc, bool)`, `close(doc)`, `onClick(doc, id, fn)`, `profile()` → `"phone"`, `"desktop"` or `"console"` (the kind of screen, [INPUT.md](INPUT.md) "Phone, PC and console"; every document's body also has the class `kke-phone`/`kke-desktop`/`kke-console` and `kke-portrait`/`kke-landscape` for RCSS) |
+| `scene` | `list()` → names in `scenes/`, `load(name, origin)` → scene, missing count (or nil + reason), `unload(scene)`, `spawnPoint(scene)` → pos, yaw |
+| `net` | `role()` (`"offline"`, `"host"`, `"client"`), `isServer()`, `connected()`, `playerId()`, `players()` → `{ {id, name}, ... }`, `send(name, data)`: from a client to the host, from the host to every client; `data` is nil, a boolean, number, string or a table of those (about 500 bytes encoded, one network event); `call(name, data [, function(ok, answer) end])` → sent? and `handle(name, function(data, from) end)`: a question to the host and its answer ("Calls" below); `table(name)` → a synced table (host/server only: `:set(key, row)`, `:get(key)`, `:remove(key)`, `:rows()`, `:count()`, `:clear()`) and `watch(name [, filter] [, function(event, key, row, old) end])` → a view (`:rows()`, `:get(key)`, `:ready()`, `:count()`, `:stop()`) ("Synced tables" below) |
+| `store` | What outlives the session ("Saving" below): `save(name, value)` → true or false, reason; `load(name [, default])`; `add(name [, n])` → new count; `remove(name)`; `keys([prefix])` → names in order |
+
+Everything a script makes (bodies, models, breakables, documents,
+scenes, click handlers) belongs to it: reloading, unloading or stopping
+the script removes it all. Ids from another script, or made up, are an
+error naming the id. Each kind has a per-script budget
+(`ScriptModule::max*PerScript`: 2,000 bodies and models, 64 breakables,
+16 documents, 4 scenes).
+
+### Play blocks (`play`)
+
+The building blocks of play-to-make ([PLAY_TO_MAKE.md](PLAY_TO_MAKE.md)),
+bound by `kke::bindPlayBlocks` (`kke/PlayScript.h`) wherever a game gives
+them a world: today the sandbox, where the node graph (Look) runs on them.
+Things are numbers (ids), blocks are palette ids (`"person"`, `"bat"`,
+`"box"`), sounds are `bonk`, `wood`, `stone`, `metal`, `glass`, `rubber`,
+`dirt`, `plastic`.
+
+| Function | Does |
+|---|---|
+| `play.spawn(block, pos [, yaw])` → thing | brings a thing out; it belongs to the script and goes when the script unloads (200 per script) |
+| `play.remove(thing)` | takes it away |
+| `play.ragdoll(thing [, push])` / `play.standUp(thing)` / `play.isDown(thing)` | knocks a person over (push in m/s, at most 20), stands them up, asks |
+| `play.swing(thing)` | swings the bat at it |
+| `play.stagger(thing [, push])` | shoves a person, who tries to keep their feet (joint motors); a big shove (about 4 m/s and up) still knocks them over and they get up by themselves ([PROCEDURAL_ANIMATION.md](PROCEDURAL_ANIMATION.md)) |
+| `play.lookAt(thing [, at])` / `play.lookAway(thing)` | a person keeps turning their head toward `at` (a thing, a `Vec` place, or you when left out), on top of whatever they play; `lookAway` stops |
+| `play.sound(name [, pos])` | plays a sound, at a place if given |
+| `play.say(text)` | shows text on screen for a few seconds |
+| `play.addScore(points)` → score / `play.score()` | points |
+| `play.position(thing)` / `play.blockOf(thing)` / `play.blocks()` | where it is, what it is, every block id |
+
+Events (each gets one table):
+
+```lua
+hook.Add("Hit", "my.id", function(e) end)      -- e.target, e.by ("bat"), e.point, e.push, e.block
+hook.Add("Clicked", "my.id", function(e) end)  -- e.thing, e.point, e.block (tapped with the hand)
+hook.Add("Placed", "my.id", function(e) end)   -- e.thing, e.point, e.block (put down in the world)
+hook.Add("FellOver", "my.id", function(e) end) -- e.thing, e.block
+hook.Add("StoodUp", "my.id", function(e) end)  -- e.thing, e.block
+```
+
+Bindings registered with a `kke::ApiFunction` (label, doc, typed
+parameters; `kke/LuaApi.h`) and events described with `describeEvent`
+become node graph blocks automatically.
+
+A table exists only when its module is in the game (no RigidBodyModule,
+no `physics`); `store` is always there. Script bodies are drawn by ScriptModule as one batched
+mesh with shadows.
+
+## Saving
+
+What should still be there next time (a best score, what a player
+unlocked, what someone built) goes in `store`:
+
+```lua
+local best = store.load("best", 0)        -- 0 the first time (nothing saved yet)
+if score > best then store.save("best", score) end
+
+store.save("player.kees", { level = 3, items = { "sword", "map" } })
+local kees = store.load("player.kees")     -- the same table back
+store.add("coins", 5)                      -- counts up from 0; returns the new count
+store.remove("player.kees")                -- or store.save("player.kees", nil)
+for _, key in ipairs(store.keys("player.")) do print(key) end   -- names starting "player.", in order
+```
+
+- A name is 1-256 characters; a value is a number, text, true/false, or
+  a table of those (up to 1 MB saved). Functions can't be saved.
+- `save` and `remove` return true, or false and the reason (a full
+  disk). `load` never breaks a script: when there's nothing (or nothing
+  readable), you get the default.
+- Where it goes: `save/scripts.db` next to the game (a SQLite file,
+  docs/STORAGE.md), in the game's own collection, so another game's
+  scripts can't read or change it. Scripts on a host (`sv_` scripts)
+  save the shared world there; scripts on a player's machine save that
+  player's own things there.
+- break-the-targets (games/first_lua_game) keeps its best score this way.
+
+## Safety and limits
+
+- **Sandbox:** base (without `dofile`, `loadfile`, `load`, `require`),
+  `string` (without `dump`), `table`, `math`, `utf8`, `coroutine`. No
+  `io`, `os`, `debug`, `package`: a script from the marketplace can't
+  read files, run programs or load native code. Only text chunks load
+  (bytecode can be crafted to crash the VM).
+- **Engine tables are read-only** for scripts: `physics.box = nil` or
+  `hook.Add = ...` is an error, not a change for everyone. The shared
+  metatables (strings, `Vec`) are locked too.
+- **Endless loops** are stopped after 20 M instructions per call (each
+  hook, timer, or script load gets its own budget), for good: every call
+  into Lua runs on its own coroutine, and the budget check yields it away,
+  straight past any `pcall` the script wrapped around its loop. The
+  script is then unloaded (its hooks, timers and everything it made
+  removed) and marked STOP in the panel until you fix it and save.
+- **CPU time** per script (ms per frame) is in the Scripts panel.
+- **Memory** is capped at 64 MB per VM; going over is an ordinary Lua
+  "not enough memory" error.
+- **Spawn budget:** 2,000 bodies per script, 32 `Contact` events per
+  frame.
+- **Paths** a script names (`models.load`, `ui.load`, `scene.load`) must
+  be relative and stay inside the game's folders: no absolute paths, no
+  `..`.
+- **Net messages** are checked on arrival: a damaged or oversized message
+  is dropped with a warning, never decoded into something half-built.
+
+## Why it's built this way
+
+- **Lua 5.4** (MIT): small, fast, embeddable, and what Roblox (Luau) and
+  Garry's Mod creators already know.
+- **Compiled as C++**, so a Lua error raised inside a C++ binding unwinds
+  C++ objects properly instead of `longjmp`-ing over them.
+- **hook/timer live in Lua** (a bootstrap chunk in `ScriptVM.cpp`), like
+  GMod's own `hook.lua`: easy to read and change. Its privileged helpers
+  (error reporting, budget reset) are locals, out of scripts' reach.
+- **One VM per game**, one environment per script (its `_ENV`, whose
+  missing names fall through to read-only views of the engine tables).
+  Isolation is what marketplace content needs, and costs a beginner
+  nothing: locals and functions work as before, and `shared` is there
+  for data meant to be shared. `ScriptVM::Limits::isolateScripts = false`
+  gives GMod's one shared global table back. Each hook/timer remembers
+  its script, which is what makes reload and error attribution work.
+- **Every call on a fresh coroutine** (`ScriptVM::resume`): the only way to
+  stop a script that catches its own errors. Cheap (a coroutine is a few
+  hundred bytes), and it also gives each call a clean stack.
+
+## Next
+
+1. Replicating a script body moved by `setVelocity`/`impulse` on a client
+   (today the host's copy wins, as with the level's crates), and models
+   (`models.spawn`) and UI a server script opens.
+2. Character bindings (the player's position, teleport, animation).
+3. `breakable.position`: FEMFX objects don't expose their centre yet.
+4. Hot-reloading `.rml` files a script loaded, like `.lua` files.
+
+========================================================================
+FILE: docs/PLAY_TO_MAKE.md
+========================================================================
+
+# PLAY_TO_MAKE.md — make the game while playing it
+
+A principle, not a rule: **a five-year-old can make a game.** When you
+start the engine you are already inside a game, playing, and making it is
+part of the play. Drag a person out, pick up a bat, bonk them, watch them
+ragdoll: that is fun on its own, and it is also the first step of building
+something.
+
+The same world has three doors, one per kind of person, and every door
+opens onto the same building blocks:
+
+| Level | Who | How you make things | Status |
+|---|---|---|---|
+| **Simple** | A five-year-old, anyone trying it for the first time | Drag big pictures into the world, click to use them | First prototype in the sandbox (below) |
+| **Intermediate** | Creative people who don't write code | A node graph (blueprints): wire "when this happens" to "do that" | First version in the sandbox: the Look tool (below) |
+| **Advanced** | Programmers | Plain Lua scripts ([SCRIPTING.md](SCRIPTING.md)) | Lua v2 works today; the play blocks are bound as `play.*` |
+
+## One set of building blocks
+
+The three levels must not be three engines. Everything is built from one
+set of blocks, and each level is just a different way of holding them:
+
+- **Things** you put in the world: a person, a box, a ball, a light.
+- **Tools** you hold: a bat, a ball launcher, a paint brush.
+- **Events** that happen: clicked, hit, touched, fell over, timer.
+- **Actions** that make something happen: ragdoll, push, spawn, remove,
+  play a sound, add a point.
+
+Each block is written once in C++ (pure logic where possible, unit-tested,
+like `kke/PlayBlocks.h`) and exposed to Lua. Lua is the contract:
+
+- **Advanced** calls the blocks directly: `play.spawn("person", pos)`,
+  `hook.Add("Hit", ...)`, `play.ragdoll(id, push)`.
+- **Intermediate** nodes are those same functions and events drawn as
+  boxes. A graph runs by calling the same bindings (and can be shown as
+  the Lua it is equivalent to).
+- **Simple** palette entries are pre-made recipes: "Bat" is the graph
+  *on click → swing; on hit a person → ragdoll them + bonk sound*. The
+  child never sees the graph, but it is there.
+
+So every level leads to the next: a Simple block has a "look inside"
+that opens its graph, and a graph has "show the Lua". Nobody hits a wall
+where the easy mode stops and a different tool starts.
+
+## Simple mode (the sandbox, today)
+
+`sandbox` now opens in Play mode: no panels, just a row of big pictures
+along the bottom and one line of hint text.
+
+- **Person, Box, Barrel, Ball, Cone:** press a picture and drag it into the
+  world; let go where it should stand. (Or tap it, then click the spot.)
+  People turn to face you; every person dragged out looks different.
+- **Sheep, Cow, Pig, Horse:** animals, dragged out the same way. In Play
+  they live their own lives on the AI core ([AI.md](AI.md)): sheep graze
+  and stay together, cows wander, and a bat swing nearby is a noise they
+  hear and may run from. In Build they stay where they're put. Their
+  recipe is one real graph, *When put down → Be a "sheep"* (`ai.add`),
+  so Look shows it and it can be changed like any other.
+- **Grab (the hand):** press on anything in the world and drag it
+  somewhere else.
+- **Bat:** click anything and the bat swings through that exact spot.
+  People ragdoll from where they were hit, with a wooden bonk; animals
+  tumble and get up again; small props roll and topple; breakable props
+  shatter. Click the ground to swing at the air.
+- **Gun, Fire, Melt:** click a thing to shoot it, set it alight (it chars,
+  spreads fire to wood and cloth nearby and burns down into a heap) or
+  melt it (it glows and slumps into a puddle). People who catch fire
+  stop, drop and roll.
+- **Fly around or Walk around:** the title screen and the pause menu
+  (Esc, Start or Select) pick how you are in the world: the free camera,
+  or a person in third person (the UAL1 mannequin) who picks up the bat
+  and the other tools from the ground and uses them.
+- **Throw** (FEMFX builds): click to throw a ball.
+- **Get up** stands everyone up again; **Clear** empties the world
+  (Ctrl+Z brings it back).
+- **Build** opens the full editor (asset browser, gizmo, breakables,
+  lights, save/load). F2 switches back and forth. `KKE_SANDBOX_MODE=build`
+  starts in the editor.
+
+Only blocks whose assets are on disk appear. The asset names each block
+looks for are in `kke::defaultPlayBlocks()`: POLYGON City Characters or
+Fantasy Characters for people, POLYGON Prototype for the bat and props,
+and Quaternius' Farm Animals (CC0) for the animals.
+
+How the bat works (`kke::BatSwing`, tested in `tests/test_play_blocks.cpp`):
+a right-handed horizontal swing around a shoulder pivot, 0.26 s from the
+left to the right. The pivot is placed so the bat's sweet spot passes
+through the person you clicked. Each frame the bat's segment (hands to
+tip) is swept through the angles it covered, so a fast swing on a slow
+frame still hits. What it hits gets the swing's speed at that point
+(capped at 9 m/s), a little away from you and up, and ragdolls through
+`kke::IRagdollPhysics`, so any physics module that ragdolls works without
+changes; the sandbox picks the best one (`kke::bestRagdollPhysics`: Jolt,
+with joint limits and colliding limbs, over FEMFX).
+
+Ragdolls work in the default build (Jolt, `RigidBodyModule`). The sandbox
+gives Jolt a floor and a static box around every placed piece, so people
+land on the ground, tumble over boxes and slump against barrels. A build
+without Jolt has no ragdolls: the bat still swings and the hint says so.
+
+### Fingers and controllers
+
+A child is as likely to hold a phone or a gamepad as a mouse, so Simple
+mode is built to work with all three.
+
+| | Finger | Gamepad |
+|---|---|---|
+| Point | where you touch | left stick moves a big ring cursor |
+| Drag a picture out, move a thing | touch, slide, let go | hold A, move the stick, let go |
+| Tap / swing the bat | tap | A |
+| Next / previous picture | | RB / LB (or D-pad right / left) |
+| Put it back, drop the tool | | B |
+| Turn the view | two fingers drag (and twist) | right stick |
+| Zoom | pinch | triggers (right in, left out) |
+| Get up | the Up! picture | Y |
+| Grown-up tools | the Tools picture | Start |
+
+- One finger is the mouse (SDL's touch-to-mouse), so everything above
+  that works with a mouse works with a finger. Two fingers belong to the
+  camera (`kke::TouchGestures` in `OrbitCameraModule`); a second finger
+  landing drops whatever the first was dragging back where it came from.
+- The gamepad drives the same pointer: the stick moves the real mouse
+  position and A sends real mouse presses, so the palette, dragging and
+  the bat can't tell it apart. The ring is drawn because phones and TVs
+  show no mouse pointer. Cursor speed has a dead zone and a curve
+  (`kke::padPointerStep`); LB/RB jump along the palette
+  (`kke::stepPaletteCell`).
+- The bat aims itself: a tap or press on the ground within 1.2 m of a
+  standing person swings at them, because fingers and thumbsticks are
+  less exact than a mouse.
+- The view can't go below the ground or level with it in Play mode
+  (`OrbitCameraModule::setPitchLimits`).
+- Checked headless with replays of the real SDL events
+  (`KKE_SANDBOX_REPLAY`, `tests/sandbox_replays/`): a virtual gamepad
+  places a person, takes the bat and knocks them over; two fake fingers
+  zoom and turn the view. Pushed finger events skip SDL's touch-to-mouse
+  step, so one-finger dragging is only checked through the mouse path it
+  becomes; real hardware has to confirm the feel (docs/HARDWARE_TESTS.md HW-016).
+
+### On an iPhone
+
+There is no iOS build yet ([#56](https://github.com/Khyretos/kk-engine/issues/56)): the renderer needs MoltenVK
+(Vulkan on Metal), the build needs a Mac or GitHub's macOS runners, and
+installing needs Xcode with an Apple ID or TestFlight. Jolt runs there,
+so the bat and ragdolls would too; FEMFX (breakables, the thrown ball) is
+x86-only until its SIMDe port.
+
+## Intermediate mode: the node graph (Look)
+
+![The bat's recipe in the node graph editor](images/node-editor.png)
+
+In the sandbox's Play mode, the **Look** picture ("Inside") opens the node
+graph behind something:
+
+- **Look, then a picture in the palette:** that block's recipe, for every
+  one of them. The bat's is *When someone is hit (by the bat) → Knock over
+  (who, push) → Play sound "wood" (where)*, and it is what actually runs
+  when you swing: change it and the bat changes, while the game keeps
+  running.
+- **Look, then a thing in the world:** a graph for just that one person or
+  box (`me` in the graph). **Look, then the ground:** the level's graph
+  (*When the game starts*, *Every few seconds*).
+- **Show Lua** shows the Lua the graph stands for, next to it.
+
+The editor is RmlUi (so it is also there in shipping builds and on touch
+screens), drawn in the style of [Drawflow](https://github.com/jerosoler/drawflow)
+(MIT): white blocks with a coloured head, green for *when*, blue for *do*,
+orange for *if / repeat*, grey for values; round ports coloured by what
+flows through them; soft curved wires on a dotted canvas. Drawflow is
+JavaScript, so its look and way of working are ported, not its code
+(`games/sandbox/GraphEditor.*`).
+
+- **Add a block:** tap it in the list on the left, or drag a wire from a
+  port into empty space: a menu offers only the blocks that fit that port
+  and wires the new one up.
+- **Wire:** drag from a port to another. Ports that don't fit refuse the
+  wire. Dragging from a wired input picks the wire up again.
+- **Remove:** tap a block or a wire, then its round x (or Remove, Delete,
+  or X on a gamepad).
+- **Values:** - / + for numbers, tap to cycle sounds and blocks, tap to
+  flip yes/no; typing is only for text and places.
+- **Move around:** drag the empty canvas; zoom with the wheel, pinch, the
+  - / + buttons or the triggers. **Fit** (or Y) shows everything.
+
+| | Mouse | Finger | Gamepad |
+|---|---|---|---|
+| Press, drag | left button | one finger | A with the ring cursor |
+| Move the view | drag the canvas | two fingers | right stick |
+| Zoom | wheel | pinch | triggers |
+| Remove what's selected | Delete | the x | X |
+| Show everything | Fit | Fit | Y |
+| Close | Done, Esc | Done | B |
+
+How it works (`kke/NodeGraph.h`, `kke/PlayScript.h`):
+
+- **The node library is the Lua API.** Every documented binding
+  (`ScriptVM::registerFunction` with a `kke::ApiFunction`: label, doc,
+  typed parameters) becomes a block, and every documented event
+  (`describeEvent`) a *when* block. Adding a `play.*` binding adds a block.
+- **A graph runs as Lua.** `compileGraph` turns it into the script it stands
+  for (hooks, `timer.Simple`, `if`, `for`) and loads it into a ScriptVM, the
+  same one hand-written scripts use. "Show Lua" is that text.
+- **Live:** every change recompiles; a graph whose Lua changed is reloaded
+  (things it brought out are taken away first). Blocks light up yellow as
+  they run.
+- **Errors land on blocks:** a missing input or a circle is shown on the
+  block before it runs; a Lua error while it runs is mapped from its line
+  back to the block that made that line.
+- **Saved with the level:** graphs are part of `kke.scene` (per placed
+  thing, the level's, and recipes that differ from the default; see
+  `kke/SceneFile.h`).
+- `KKE_SANDBOX_LOOK=bat` (or `level`) starts with that graph open
+  (developer builds; screenshots).
+
+## What makes Simple mode simple
+
+Rules for anything added to the Simple palette:
+
+1. **One gesture per block.** Drag it out, or click with it. No modes,
+   no menus, no typing.
+2. **Pictures, not words.** Labels are one short word under a picture.
+3. **Nothing can go wrong for good.** Get up, Clear and Ctrl+Z undo
+   everything; nothing asks "are you sure?".
+4. **Immediate and physical.** Things react the moment you act, and they
+   react like things (fall, tumble, bounce), because that is the fun.
+5. **Every block is a recipe of real blocks**, so it can be opened in the
+   node graph later.
+
+## Is it attainable?
+
+Yes. Most of the hard parts already exist:
+
+- **Simple:** the sandbox already places assets, ragdolls, breaks things
+  and saves levels; the Play palette and bat are a thin layer on top. What
+  is left is more blocks (a ball launcher, a trampoline, a door, a score),
+  a "play my level" button that turns the scene into a game, and making the
+  palette data-driven so new blocks are Lua recipes.
+- **Advanced:** Lua v2 has hooks, timers, physics, models, UI, scenes and
+  networking, and the play blocks are bound (`play.*`, the `Hit`,
+  `Clicked`, `Placed`, `FellOver` and `StoodUp` events). Still to do:
+  loading a hand-written script onto one placed thing.
+- **Intermediate** works in the sandbox (above). Still to do: more blocks
+  (push, score screens, a door), grouping blocks into your own block, and
+  real touch hardware checking the feel (docs/HARDWARE_TESTS.md).
+
+## Next
+
+- Simple: [#32](https://github.com/Khyretos/kk-engine/issues/32)
+- Intermediate (node graph): [#33](https://github.com/Khyretos/kk-engine/issues/33)
+- Advanced (play blocks in Lua): [#34](https://github.com/Khyretos/kk-engine/issues/34)

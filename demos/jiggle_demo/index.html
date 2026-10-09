@@ -1,0 +1,5505 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A modular, open-source Vulkan game engine in C++17, with Lua scripting.">
+      
+      
+      
+        <link rel="canonical" href="https://khyretos.github.io/kk-engine/demos/jiggle_demo/">
+      
+      
+        <link rel="prev" href="../sea_demo/">
+      
+      
+        <link rel="next" href="../cloth_demo/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Jiggle - Kreative Kompas Engine</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#jiggle-demo" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Kreative Kompas Engine" class="md-header__button md-logo" aria-label="Kreative Kompas Engine" data-md-component="logo">
+      
+  <img src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Kreative Kompas Engine
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Jiggle
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Khyretos/kk-engine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Khyretos/kk-engine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../BUILDING/" class="md-tabs__link">
+          
+  
+  
+  Getting started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../tutorials/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../cookbook/" class="md-tabs__link">
+          
+  
+  
+  Cookbook
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Demos
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../PLAY_TO_MAKE/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/lua-api/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../devlog/" class="md-tabs__link">
+          
+  
+  
+  Project
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Kreative Kompas Engine" class="md-nav__button md-logo" aria-label="Kreative Kompas Engine" data-md-component="logo">
+      
+  <img src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png" alt="logo">
+
+    </a>
+    Kreative Kompas Engine
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Khyretos/kk-engine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Khyretos/kk-engine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BUILDING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install and build
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Make your own game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AI_ASSISTANTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Make games with an AI assistant
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/01-walk-around/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1. Walk around
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/02-break-things/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    2. Break things
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/03-pickups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3. Script a pickup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/04-sound/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    4. Add sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Cookbook
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/first-steps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First steps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/moving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moving things
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/cameras/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cameras
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/gameplay/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gameplay
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/algorithms/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/animation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Animation and IK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/physics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/networking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiplayer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/play-to-make/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Play to make
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/cpp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    C++
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demos
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Demos
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The demos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_2" id="__nav_5_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start here
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Start here
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../template/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Starter game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../first_lua_game/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First Lua game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook player
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_3" id="__nav_5_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Games
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Games
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../climb_race/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Climb Race
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../racing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Racing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flying_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flying
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../party/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Party
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../duel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Duel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tennis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tennis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../goblin_horde/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Goblin Horde
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI and companions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    AI and companions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../farm_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Farm
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pet_companion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pet companion
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../platoon/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Platoon
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../command_kit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command kit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../procedural_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Procedural animation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5_5" id="__nav_5_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics, water and sound
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Physics, water and sound
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../physics_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics (FEMFX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../melt_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Melting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../particles_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sea_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sea
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jiggle
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jiggle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#run-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controls
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Controls">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-settings-panel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The settings panel
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-plays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it plays
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How it works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#startup-and-the-frame" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Startup and the frame
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-jelly-kkejellybody" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The jelly: kke::JellyBody
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-character-setupbodies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The character: setupBodies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-character-each-frame-updatebodies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The character each frame: updateBodies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-body-panels-sliders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The body panel's sliders
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#engine-features-it-uses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Engine features it uses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#assets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#make-a-game-like-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Make a game like this
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cloth_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloth and hair
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audio_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../synty_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Synty characters and ragdolls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_6" id="__nav_5_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Showcases and tools
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Showcases and tools
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../showcase/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    kke_demo showcase
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sandbox/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sandbox
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rmlui_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RmlUi demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../imgui_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ImGui demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PLAY_TO_MAKE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Play to make
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SCRIPTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scripting in Lua
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MOVEMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Movement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AI/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI (animals, enemies, companions)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COMBAT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Melee combat and crowds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PROCEDURAL_ANIMATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Procedural animation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../EQUIPMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equipment and body awareness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../INPUT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TOUCH/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Touch controls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GAME_SHELL/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Menus, pause and settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../LOBBY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start menu and joining
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../OUTFITS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Outfits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEMO_PANEL/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings panel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COMMANDS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands and orders
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AUDIO/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../NETWORKING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Networking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SERVER_HOSTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hosting a server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TOOLS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The kke_ tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../STORAGE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Saving data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ANTI_CHEAT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anti-cheat
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DRM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kreative DRM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MODDING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DLC and mods
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ASSETS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Asset folders and naming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SCENES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scenes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SHOWCASE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The kke_demo showcase
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../JIGGLE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jiggle physics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AUTO_RIG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Auto-rigging a body
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PHYSICS_BRIDGE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BREAKABLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Breakable props
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PARTICLE_EFFECTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle effects
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../RAGDOLLS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ragdolls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CLOTH/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../HAIR/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hair
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/lua-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lua API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DATA_FILES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JSON or YAML data files
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../OPTIMIZATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MOODS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moods (sky, fog, look)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../RENDERING_PRINCIPLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rendering principles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BENCHMARKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BAKING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Baking every download (one command)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COOKED_ART/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cooked art (private builds with Synty art)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BAKING_FOR_FRIENDS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Baking the benchmark with the art, for friends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PERFORMANCE_NOTES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PLATFORMS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Platforms and hardware targets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ANDROID/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Android
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../VM_TESTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Windows and Android in VMs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SCALING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scaling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEPENDENCIES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dependencies and licences
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../HARDWARE_TESTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PLAYTEST_CHECKLIST/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Playtest checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../devlog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Devlog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GO_TO_MARKET/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Going to market
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../RELEASES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Downloadable builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../HISTORY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development history
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DOCS_SITE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    This site
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#run-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controls
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Controls">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-settings-panel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The settings panel
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-plays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it plays
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How it works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#startup-and-the-frame" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Startup and the frame
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-jelly-kkejellybody" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The jelly: kke::JellyBody
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-character-setupbodies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The character: setupBodies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-character-each-frame-updatebodies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The character each frame: updateBodies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-body-panels-sliders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The body panel's sliders
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#engine-features-it-uses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Engine features it uses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#assets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#make-a-game-like-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Make a game like this
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/Khyretos/kk-engine/edit/main/games/jiggle_demo/README.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="jiggle-demo">Jiggle demo<a class="headerlink" href="#jiggle-demo" title="Permanent link">&para;</a></h1>
+<p>Two scenes about secondary motion: things that lag, overshoot and settle
+when what they are attached to moves.</p>
+<ul>
+<li><strong>Jelly.</strong> A strawberry jelly with fruit set in it stands on a plate.
+  Coloured balls rain onto it; they dent it, it wobbles, and it throws them
+  back. You can drop a big ball, squish it from above, change how firm it
+  is and change its flavour and look.</li>
+<li><strong>Body.</strong> A realistic woman (<code>female_body</code>, a free Character Creator 4
+  model from CGTrader) runs a circle on animation clips: stand, jog,
+  jump, sprint, stop dead, jump, walk. Her file has no skeleton, so the
+  engine rigs her when the demo starts (<code>kke::autoRigHumanoid</code>,
+  <a href="../../AUTO_RIG/">docs/AUTO_RIG.md</a>). Her breasts, glutes, belly
+  and thighs jiggle, she wears our strand hair (box braids to start; the
+  panel picks any style and colour), and a twin with the same body and
+  clips but no jiggle can run with her to compare. Without <code>female_body</code>
+  a Synty character takes her place, given extra curves in code.</li>
+</ul>
+<p>The demo teaches the engine's jiggle physics
+(<a href="../../JIGGLE/">docs/JIGGLE.md</a>): <code>kke::JellyBody</code> (a whole soft
+object by lattice shape matching), <code>kke::JiggleRig</code> (bone chains that chase
+the animated pose), <code>kke::JiggleSkin</code> (jiggle on the skin with no bones)
+<code>kke::addHumanoidSoftTissue</code> (adding shape and soft-tissue bones to a
+rig that has none) and <code>kke::autoRigHumanoid</code> (a skeleton for a mesh that
+has none). Start here for characters with hair, tails, capes,
+antennae or soft bodies; for slimes, jelly or gummy creatures; or for any
+cartoon squash-and-stretch.</p>
+<p><img alt="Translucent jelly with balls bouncing off it" src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/website/static/media/jelly.webp" /></p>
+<p><img alt="Soft-tissue bones on a jogging character" src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/website/static/media/jiggle-body.webp" /></p>
+<h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
+<p>The executable is <code>jiggle_demo</code> (<code>kke_add_game(jiggle_demo ...)</code> in
+<a href="https://github.com/Khyretos/kk-engine/blob/main/games/jiggle_demo/CMakeLists.txt">CMakeLists.txt</a>: <code>add_executable</code> on desktop, a shared
+library on Android). The root <code>CMakeLists.txt</code> always adds it; it needs
+no optional library (the hair needs Jolt, <code>KKE_ENABLE_JOLT</code>, on by
+default). The jelly scene needs no files. The body scene needs
+<code>female_body</code> or a Synty character pack (see <a href="#assets">Assets</a>) and
+<code>assets/animations/UAL1_Standard.fbx</code>, which is in the repository.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>cmake<span class="w"> </span>--build<span class="w"> </span>build<span class="w"> </span>--target<span class="w"> </span>jiggle_demo
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>build/bin
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>./jiggle_demo
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="nv">KKE_SKIP_INTRO</span><span class="o">=</span><span class="m">1</span><span class="w"> </span>./jiggle_demo<span class="w">                 </span><span class="c1"># skip the logo intro</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nv">KKE_JIGGLE_SCENE</span><span class="o">=</span>body<span class="w"> </span><span class="nv">KKE_JIGGLE_TWIN</span><span class="o">=</span><span class="m">1</span><span class="w"> </span>./jiggle_demo
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>KKE_JIGGLE_SCENE=body</code> (or <code>character</code>)</td>
+<td>start in the body scene (default: jelly)</td>
+</tr>
+<tr>
+<td><code>KKE_JIGGLE_MOVE=0..4</code></td>
+<td>the move: 0 idle, 1 walk, 2 jog, 3 sprint, 4 tour (default)</td>
+</tr>
+<tr>
+<td><code>KKE_JIGGLE_TWIN=1</code></td>
+<td>show the twin without jiggle</td>
+</tr>
+<tr>
+<td><code>KKE_JELLY_LOOK=0..5</code></td>
+<td>the flavour: strawberry, lime, blue raspberry, orange, panna cotta, clear gelatin</td>
+</tr>
+<tr>
+<td><code>KKE_JIGGLE_CHARACTER=SK_...</code></td>
+<td>a Synty character instead of the realistic body</td>
+</tr>
+<tr>
+<td><code>KKE_JIGGLE_BODY=&lt;file&gt;</code></td>
+<td>a body file to use (rigged or not); default: the first FBX, else OBJ, in <code>&lt;packs&gt;/female_body/</code></td>
+</tr>
+<tr>
+<td><code>KKE_JIGGLE_HAIR=&lt;style&gt;</code></td>
+<td>her hair at the start: <code>bald</code>, <code>box braids</code> (default), <code>afro</code>, <code>puff</code>, <code>locs</code>, <code>wavy</code>, ... (the panel's list)</td>
+</tr>
+<tr>
+<td><code>KKE_JIGGLE_VIEW=yaw,pitch,distance</code></td>
+<td>a set camera angle (radians, metres), for screenshots; in the body scene with "Side view" on, the yaw is from her side</td>
+</tr>
+<tr>
+<td><code>KKE_JIGGLE_TRACE=1</code></td>
+<td>log time, speed, jump height, swing and stretch every frame</td>
+</tr>
+<tr>
+<td><code>KKE_ASSETS_DIR</code>, <code>KKE_SYNTY_DIR</code></td>
+<td>where the Synty packs are (else <code>assets/synty/</code>)</td>
+</tr>
+<tr>
+<td><code>KKE_ANIMATIONS_DIR</code></td>
+<td>where <code>UAL1_Standard.fbx</code> is (else <code>assets/animations/</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>The benchmark suite runs it with <code>KKE_JIGGLE_MOVE=4</code>
+(<a href="https://github.com/Khyretos/kk-engine/blob/main/benchmarks/suite.yaml">benchmarks/suite.yaml</a>). Rebindings are
+saved to <code>jiggle_demo_input.json</code>.</p>
+<h2 id="controls">Controls<a class="headerlink" href="#controls" title="Permanent link">&para;</a></h2>
+<p>The actions are made in <code>JiggleDemoModule::defineInput</code>
+(<a href="https://github.com/Khyretos/kk-engine/blob/main/games/jiggle_demo/JiggleDemoModule.cpp">JiggleDemoModule.cpp</a>), in the "Jiggle" group and
+the <code>game</code> input context.</p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Scene</th>
+<th>Keyboard / mouse</th>
+<th>Controller</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Switch jelly / body (<code>jiggle.scene</code>)</td>
+<td>both</td>
+<td>Tab</td>
+<td>LB (left shoulder)</td>
+</tr>
+<tr>
+<td>Rain balls on / off (<code>jiggle.go</code>)</td>
+<td>jelly</td>
+<td>Space</td>
+<td>A (south)</td>
+</tr>
+<tr>
+<td>Jump (<code>jiggle.go</code>)</td>
+<td>body</td>
+<td>Space</td>
+<td>A (south)</td>
+</tr>
+<tr>
+<td>Drop a big ball (<code>jiggle.ball</code>)</td>
+<td>jelly</td>
+<td>B</td>
+<td>X (west)</td>
+</tr>
+<tr>
+<td>Squish from above (<code>jiggle.squish</code>)</td>
+<td>jelly</td>
+<td>P</td>
+<td>Y (north)</td>
+</tr>
+<tr>
+<td>Reset the jelly (<code>jiggle.reset</code>)</td>
+<td>jelly</td>
+<td>R</td>
+<td>B (east)</td>
+</tr>
+<tr>
+<td>Next move (<code>jiggle.move</code>)</td>
+<td>body</td>
+<td>M</td>
+<td>RB (right shoulder)</td>
+</tr>
+<tr>
+<td>Pick a move: idle, walk, jog, sprint, tour (<code>jiggle.move1</code> to <code>jiggle.move5</code>)</td>
+<td>body</td>
+<td>1 to 5</td>
+<td>the panel's "Move" row</td>
+</tr>
+<tr>
+<td>Turn the camera (<code>camera.orbit</code>)</td>
+<td>both</td>
+<td>left-drag</td>
+<td>right stick</td>
+</tr>
+<tr>
+<td>Pan the camera</td>
+<td>both</td>
+<td>right-drag</td>
+<td>no controller binding yet</td>
+</tr>
+<tr>
+<td>Zoom (<code>camera.zoom</code>)</td>
+<td>both</td>
+<td>mouse wheel</td>
+<td>d-pad up (closer) / down (further)</td>
+</tr>
+<tr>
+<td>Settings panel (<code>panel.toggle</code>)</td>
+<td>both</td>
+<td>F3 or Esc, or click it</td>
+<td>View (Back)</td>
+</tr>
+<tr>
+<td>Developer panels (ImGui)</td>
+<td>both</td>
+<td>F1, developer builds only</td>
+<td>no controller binding yet</td>
+</tr>
+</tbody>
+</table>
+<p>Notes from the code:</p>
+<ul>
+<li><code>readInput</code> only reads <code>jiggle.ball</code>, <code>jiggle.squish</code> and
+  <code>jiggle.reset</code> in the jelly scene, and <code>jiggle.move</code> only in the body
+  scene.</li>
+<li><code>jiggle.move1</code> to <code>jiggle.move5</code> are keyboard-only actions, one per
+  move, bound to keys 1 to 5. They can be rebound like the others and
+  rest while the panel is Active. <code>readInput</code> reads them in both scenes,
+  so a move picked in the jelly scene is the one she runs when you
+  switch. They have no pad binding; on a pad, RB cycles through the same
+  five moves.</li>
+<li>The camera uses the orbit camera's default <code>Viewer</code> controls and
+  <code>setPadControls(true)</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/games/jiggle_demo/main.cpp">main.cpp</a>). In the body scene with
+  "Camera follows" and "Side view" on, the demo turns the camera every
+  frame to keep looking at her side as she runs round the circle. How far
+  you turn it yourself (mouse or right stick) is kept as an offset from
+  that side view (<code>m_sideYawOffset</code>), so turning left and right still
+  works; pitch and zoom work as usual. Turn "Side view" off to orbit
+  freely while it follows.</li>
+<li>Button names are positions: on a PlayStation pad A is Cross, B is
+  Circle, X is Square, Y is Triangle.</li>
+</ul>
+<h3 id="the-settings-panel">The settings panel<a class="headerlink" href="#the-settings-panel" title="Permanent link">&para;</a></h3>
+<p>The settings are a <code>kke::DemoPanelModule</code> titled "Jiggle physics" on the
+right edge (<code>Side::Right</code>), drawn with RmlUi
+(<a href="../../DEMO_PANEL/">docs/DEMO_PANEL.md</a>). It starts open with the
+game keeping the controls; the mouse can click and drag any row.
+<code>panel.toggle</code> (View on a pad, F3 on the keyboard) makes it Active: up and
+down pick a row, left and right change it (hold to sweep), A presses, B or
+Esc hands control back. On the keyboard it reads the arrows, Enter and Esc
+directly. While it is Active, player 1's <code>game</code> context is off, so A does
+not also toggle the rain and B does not reset the jelly. The last row,
+"Hide panel", collapses it.
+Esc works like a pause menu: it opens the panel with the keyboard on
+it, and Esc again goes back to the game. So Esc does not close the
+window; the panel's "Quit" row, just above "Hide panel", does.
+<code>setEscapeMenu(false)</code> gives Esc back to a game that needs it.</p>
+<p>Rows that belong to one scene hide in the other (<code>sectionIf</code>, <code>showIf</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Section</th>
+<th>Rows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Jiggle physics</td>
+<td>Scene (Jelly / Body); a Tab / LB prompt, shown in the jelly scene</td>
+</tr>
+<tr>
+<td>Jelly</td>
+<td>controls line; Rain balls; Every (0.15 to 2 s); Big ball; Squish; Reset; Firmness (0.03 to 1); Iterations (1 to 8); Damping (0 to 0.2); Look: Flavour, Translucent, Fruit inside, Density (0 to 4), Milkiness (0 to 1); status (particles, triangles, balls, deformation in mm, solve time)</td>
+</tr>
+<tr>
+<td>Body</td>
+<td>the character's name, or why it could not load; controls line; Hair (Bald, box braids, afro, puff, high-top fade, twist-out, bantu knots, cornrows, locs, two-strand twists, straight, long, wavy, curly, short); Hair colour (black, dark brown, auburn, blonde), the realistic body only; Twin without jiggle; Move; Jump; Show points; Camera follows; Side view; Breasts: Stiffness, Soften, Stretch, Drag, Gravity, Blend; Glutes: Stiffness, Drag, Blend; status (bones, zones, points, time per frame, asleep, peak swing, stretch)</td>
+</tr>
+</tbody>
+</table>
+<p>When no character could be loaded, the Body section shows only the reason
+(the other rows return a null value and hide).</p>
+<h2 id="how-it-plays">How it plays<a class="headerlink" href="#how-it-plays" title="Permanent link">&para;</a></h2>
+<p>It is a sandbox with no goal. In the jelly scene a ball of 7 to 12 cm
+falls from 1.4 to 2 m every 0.7 s; at most 14 balls exist, the oldest
+removed first. Balls that roll off the plate and stop, fly more than 4 m
+away, or go non-finite are removed. The big ball is 16 cm, dropped from
+2.2 m. Reset makes a fresh jelly but keeps the firmness, iterations and
+damping you set.</p>
+<p>In the body scene, the tour (move 5) repeats every 17 s:</p>
+<table>
+<thead>
+<tr>
+<th>Time (s)</th>
+<th>Target speed</th>
+<th>Event</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0 to 2.5</td>
+<td>stand</td>
+<td></td>
+</tr>
+<tr>
+<td>2.5 to 6.5</td>
+<td>jog (3.6 m/s)</td>
+<td>jump at 5</td>
+</tr>
+<tr>
+<td>6.5 to 10</td>
+<td>sprint (6.2 m/s)</td>
+<td></td>
+</tr>
+<tr>
+<td>10 to 13</td>
+<td>stand: a dead stop</td>
+<td>jump at 11.5</td>
+</tr>
+<tr>
+<td>13 to 17</td>
+<td>walk (1.6 m/s)</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>The comment above it: "Starts and stops are where jiggle shows (and
+where bad jiggle shows most)."</p>
+<h2 id="how-it-works">How it works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
+<h3 id="startup-and-the-frame">Startup and the frame<a class="headerlink" href="#startup-and-the-frame" title="Permanent link">&para;</a></h3>
+<p><a href="https://github.com/Khyretos/kk-engine/blob/main/games/jiggle_demo/main.cpp">main.cpp</a> creates the <code>Application</code> (1280 x 720), sets the mood
+<code>playful</code> (a gradient sky, "a bright cartoon sky for bouncy things"), sets
+the far plane to 100 m and adds the modules in this order:</p>
+<ol>
+<li><code>InputModule</code> (<code>jiggle_demo_input.json</code>)</li>
+<li><code>UiModule</code> (RmlUi, for the panel)</li>
+<li><code>OrbitCameraModule</code> (distance 2.6 m, pitch -0.45, yaw 0.5, target (0, 0.3, 0)), <code>setPadControls(true)</code></li>
+<li><code>ModelModule</code>: draws and skins the characters</li>
+<li><code>kke_jiggle::JiggleDemoModule</code>, the demo; it declares <code>ModelModule</code> as a
+   required dependency ("draws the characters")</li>
+<li><code>DemoPanelModule("Jiggle physics", Side::Right)</code></li>
+<li><code>DebugControlModule</code>, its ImGui window hidden</li>
+<li><code>StatsModule</code></li>
+</ol>
+<p><code>JiggleDemoModule::init</code> builds the plate (a 48-sided disc of 0.8 m) and
+the floor (a square of 24 m) as <code>DynamicMeshRenderer</code>s, makes the jelly
+(<code>resetJelly</code>), loads and prepares the character (<code>setupBodies</code>), reads
+the environment variables, picks the scene (<code>setScene</code>, which also places
+the camera), defines the input and builds the panel.</p>
+<p><code>update</code> reads the input, caps the frame time at 0.1 s, then runs either
+<code>updateJelly</code> or <code>updateBodies</code>: only the visible scene is simulated.
+<code>render</code> draws the floor, then the jelly scene (plate, balls and fruit as
+sphere impostors, then the jelly over them) or, in the body scene, the
+debug points when "Show points" is on. The characters themselves are
+drawn by <code>ModelModule</code>. <code>renderShadow</code> adds the jelly to the shadow map.</p>
+<h3 id="the-jelly-kkejellybody">The jelly: <code>kke::JellyBody</code><a class="headerlink" href="#the-jelly-kkejellybody" title="Permanent link">&para;</a></h3>
+<p><a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/JigglePhysics.h">kke/JigglePhysics.h</a>,
+<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/src/JigglePhysics.cpp">JigglePhysics.cpp</a>. A box filled with
+a lattice of particles. <code>resetJelly</code> sets it up:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">p</span><span class="p">.</span><span class="n">min</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">glm</span><span class="o">::</span><span class="n">vec3</span><span class="p">(</span><span class="mf">-0.42f</span><span class="p">,</span><span class="w"> </span><span class="mf">0.0f</span><span class="p">,</span><span class="w"> </span><span class="mf">-0.42f</span><span class="p">);</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">p</span><span class="p">.</span><span class="n">max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">glm</span><span class="o">::</span><span class="n">vec3</span><span class="p">(</span><span class="mf">0.42f</span><span class="p">,</span><span class="w"> </span><span class="mf">0.5f</span><span class="p">,</span><span class="w"> </span><span class="mf">0.42f</span><span class="p">);</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">p</span><span class="p">.</span><span class="n">cells</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">glm</span><span class="o">::</span><span class="n">ivec3</span><span class="p">(</span><span class="mi">7</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">7</span><span class="p">);</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">p</span><span class="p">.</span><span class="n">stiffness</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.22f</span><span class="p">;</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">p</span><span class="p">.</span><span class="n">iterations</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">3</span><span class="p">;</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">p</span><span class="p">.</span><span class="n">damping</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.015f</span><span class="p">;</span>
+</code></pre></div>
+<p>7 x 4 x 7 cells means 8 x 5 x 8 = 320 particles. Each step, every 2 x 2 x 2
+cell finds the rotation that best fits its eight particles to their rest
+shape, and pulls them toward that rotated rest shape by <code>stiffness</code>.
+Cells overlap, so the whole lattice holds its shape but can bend and
+dent locally (lattice shape matching: Muller et al. 2005, per-cell
+regions after Rivers and James 2007). The bottom layer is glued to the
+plate (<code>pinBottom</code>). The body steps internally at 120 Hz
+(<code>Params::stepHz</code>).</p>
+<p>Balls collide with the particles, and with the top of the jelly as a
+height field, so a fast ball dents it but never ends up inside. The
+collision is two-way: the ball pushes the jelly, the jelly throws the
+ball back.</p>
+<p>After <code>step</code>, <code>deform()</code> moves the render surface. The surface is a
+rounded mesh (14 quads per box face, <code>buildSurface(14)</code>) embedded in the
+lattice by trilinear weights. The fruit is the same idea: each piece has a
+rest position, and <code>deformedPoint(rest)</code> says where the jelly has carried
+it this frame.</p>
+<p><code>squish()</code> is one call: <code>poke</code> at the middle of the top with an impulse of
+6 m/s downward over a 0.35 m radius.</p>
+<p>The demo uploads the surface every frame with each vertex's <code>uv</code> holding
+the look's density and milkiness, because that is where
+<code>DynamicMeshRenderer::drawTranslucent</code> reads them:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1">// drawTranslucent reads uv.x = density, uv.y = milkiness.</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">pos</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="n">v</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kke</span><span class="o">::</span><span class="n">Vertex</span><span class="p">{</span><span class="w"> </span><span class="n">pos</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">look</span><span class="p">.</span><span class="n">tint</span><span class="p">,</span><span class="w"> </span><span class="n">nrm</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">glm</span><span class="o">::</span><span class="n">vec2</span><span class="p">(</span><span class="n">m_density</span><span class="p">,</span><span class="w"> </span><span class="n">m_milkiness</span><span class="p">)</span><span class="w"> </span><span class="p">};</span>
+</code></pre></div>
+<p><code>drawTranslucent</code> is a reusable material in two passes over the front
+faces: the first multiplies what is already drawn by the transmittance
+(Beer-Lambert through a thickness that grows toward the silhouette, so
+edges look richer), the second adds Fresnel reflection, light scattered
+inside and light shining through from behind. That is why <code>render</code> draws
+the plate, balls and fruit first and the jelly last. With "Translucent"
+off it is drawn as an ordinary opaque mesh.</p>
+<h3 id="the-character-setupbodies">The character: <code>setupBodies</code><a class="headerlink" href="#the-character-setupbodies" title="Permanent link">&para;</a></h3>
+<p>This runs once, at start:</p>
+<ol>
+<li>Find <code>UAL1_Standard.fbx</code> with <code>kke::findAssetFolder("assets/animations", {"KKE_ANIMATIONS_DIR"}, ...)</code>.</li>
+<li>Find the packs folder (<code>KKE_ASSETS_DIR</code>, <code>KKE_SYNTY_DIR</code>, else
+   <code>assets/synty</code> near the working directory or the executable). The
+   realistic body comes first: <code>KKE_JIGGLE_BODY</code> if set, else the first
+   <code>.fbx</code>, then <code>.obj</code>, under <code>female_body/</code> there (unless
+   <code>KKE_JIGGLE_CHARACTER</code> asks for a Synty character).</li>
+<li>Load her. Character Creator's see-through shells (eye occlusion, tear
+   lines, eyelashes) are dropped: drawn opaque they would cover her eyes.
+   An OBJ has no units and hers is in centimetres, so a body over 10 m
+   tall is scaled by 0.01. With no skeleton in the file,
+   <code>kke::autoRigHumanoid(body, ual)</code> fits UAL's skeleton to her, weights
+   her skin and lifts her arms from the A-pose into UAL's T-pose (about
+   25 ms; logged with the arm angle). If rigging fails she stands still
+   and the panel says why.
+   Without the realistic body, scan the folder into a <code>kke::AssetCatalog</code>
+   and pick a Synty character: <code>KKE_JIGGLE_CHARACTER</code> if set, else the
+   first found of <code>SK_Character_Female_Gypsy</code>,
+   <code>SK_Character_Female_Peasant_01</code>, <code>SK_Character_HipsterGirl</code>,
+   <code>SK_Character_Female_Druid</code>, <code>SK_Character_Dummy_Female_01</code>, with its
+   pack's texture through <code>kke::packLoadOptions</code>.</li>
+<li>Add soft-tissue bones: <code>kke::addHumanoidSoftTissue(body, tissue)</code>. A
+   Synty character is also reshaped (<code>bust = 0.075</code>, <code>glutes = 0.06</code>,
+   <code>hips = 0.03</code>, metres of extra volume); the realistic body keeps the
+   artist's shape (all 0). It finds the chest, pelvis and thighs by bone
+   name, adds two breast and two glute bones, moves the nearby skin onto
+   them, and returns the rig chains and the skin zones (belly and
+   thighs). Anything it cannot find is logged at info: a character
+   without a breast or belly bone just jiggles less.</li>
+<li>Retarget the UAL clips onto the reshaped body (<code>kke::matchBones</code>,
+   <code>kke::retargetAnimations</code>). This comes after step 4 on purpose: the
+   comment says "the new bones have no UAL counterpart and stay at rest in
+   them", which is what lets the jiggle move them.</li>
+<li>Register the model with <code>ModelModule::add</code>, build an <code>Animator</code> with a
+   1D blend space <code>move</code> (idle 0, walk 1.6, jog 3.6, sprint 6.2 m/s) and
+   clip states for jump start, fall loop and land.</li>
+<li>
+<p>Spawn two instances. The second (<code>jiggle = true</code>) gets a
+   <code>kke::JiggleRig</code> from the chains and a <code>kke::JiggleSkin</code> from the zones.
+   The first is the twin without jiggle.</p>
+</li>
+<li>
+<p>Hair (realistic body only, <code>findHead</code> and <code>buildHair</code>): her head is a
+   sphere fitted to the top of the head's skin; <code>kke::hairstyleOnHead</code>
+   grows the style on it, facing where she faces, its rest pose falling a
+   little back so long hair lies down her back, not through it. The hair
+   lives in its own <code>kke::RigidWorld</code> with a head sphere and neck,
+   shoulder and chest proxies (seen only by hair) that follow her head
+   and <code>spine_03</code> bones each frame. The scalp under the hair is painted
+   the root colour (the head's own triangles near a root, lifted 1.5 mm),
+   so skin between the drawn hairs doesn't read as thin hair. Changing
+   the style or colour in the panel rebuilds it.</p>
+</li>
+</ol>
+<p>If a step fails, <code>m_bodyStatus</code> says why and the panel shows it; the jelly
+scene is unaffected.</p>
+<h3 id="the-character-each-frame-updatebodies">The character each frame: <code>updateBodies</code><a class="headerlink" href="#the-character-each-frame-updatebodies" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Pick the target speed (the tour's schedule or the chosen move) and
+   ease toward it: 5 m/s2 speeding up, 9 m/s2 slowing down ("real people
+   take a moment to speed up and slow down").</li>
+<li>Move around a circle of 2.3 m radius. A jump is a simple ballistic
+   height (3.6 m/s up, 9.81 down) with the jump-start, fall and land
+   clips.</li>
+<li>Feed the speed to the blend space and update the <code>Animator</code>.</li>
+<li>For each instance: place it on the circle (the two are half a lap
+   apart), facing along it, and take the animated <code>Pose</code>. For the jiggle
+   one:</li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">d</span><span class="p">.</span><span class="n">rig</span><span class="p">.</span><span class="n">apply</span><span class="p">(</span><span class="n">m_rig</span><span class="p">,</span><span class="w"> </span><span class="n">pose</span><span class="p">,</span><span class="w"> </span><span class="n">toWorld</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">);</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">d</span><span class="p">.</span><span class="n">skin</span><span class="p">.</span><span class="n">apply</span><span class="p">(</span><span class="n">m_rig</span><span class="p">,</span><span class="w"> </span><span class="n">pose</span><span class="p">,</span><span class="w"> </span><span class="n">toWorld</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">);</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">m_models</span><span class="o">-&gt;</span><span class="n">setSkinJiggle</span><span class="p">(</span><span class="n">d</span><span class="p">.</span><span class="n">instance</span><span class="p">,</span><span class="w"> </span><span class="n">d</span><span class="p">.</span><span class="n">skin</span><span class="p">.</span><span class="n">offsets</span><span class="p">());</span>
+</code></pre></div>
+<p><code>JiggleRig::apply</code> moves verlet points toward where the pose puts
+   them, then turns (and with <code>stretch</code>, lengthens) the soft-tissue bones
+   in the pose to follow the points. <code>JiggleSkin</code> does the same for
+   points that displace the skin near them after skinning. Then
+   <code>kke::poseToLocals</code> writes the pose into the instance's bone locals.
+5. The camera follows the jiggling one at 1 m height. With "Side view" it
+   looks from outside the circle at her side, "across the direction she
+   runs: where lag and bounce show best". Each frame it first adds how
+   far the camera was turned since the last frame to <code>m_sideYawOffset</code>,
+   then sets the yaw to her side plus that offset, so the player can
+   still look around her.</p>
+<p><code>JiggleRig</code> steps at a fixed 90 Hz inside <code>apply</code> and interpolates the
+offset from the pose, not the positions, so it looks the same at any
+frame rate (<a href="../../JIGGLE/">docs/JIGGLE.md</a> "How it's built").</p>
+<p>"Show points" draws each simulated point (pink, glowing) and the point
+the pose wants it at (blue). The distance between the two is the jiggle.</p>
+<h3 id="the-body-panels-sliders">The body panel's sliders<a class="headerlink" href="#the-body-panels-sliders" title="Permanent link">&para;</a></h3>
+<p>The panel edits the live <code>JiggleSettings</code> of the rig through <code>Ref</code>
+functions that return a pointer, or null to hide the row. Both breasts
+share one setting and both glutes another, so the sliders edit chain 0 or
+2 and the <code>share</code> callback copies it to chain 1 or 3:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">size_t</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">m_bones</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="n">rig</span><span class="o">-&gt;</span><span class="n">settings</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rig</span><span class="o">-&gt;</span><span class="n">settings</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">m_bones</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span><span class="w"> </span><span class="n">rig</span><span class="o">-&gt;</span><span class="n">settings</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rig</span><span class="o">-&gt;</span><span class="n">settings</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+</code></pre></div>
+<h2 id="design-decisions">Design decisions<a class="headerlink" href="#design-decisions" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Jiggle driven by the difference from animation.</strong> From
+  <a href="../../JIGGLE/">docs/JIGGLE.md</a>: points chase where the pose puts
+  them, so the authored pose always wins, nothing drifts, and a character
+  standing still does not bounce on its own.</li>
+<li><strong>Its own light solver instead of FEMFX.</strong> JIGGLE.md "Why not FEMFX":
+  FEMFX costs about 0.2 ms per body per step and needs a tet mesh; the
+  rig costs tens of microseconds for a whole character and needs only the
+  skeleton. The jelly (<code>JellyBody</code>, about 0.8 ms) also works on builds
+  without FEMFX, which is the default.</li>
+<li><strong>Soft-tissue bones added in code.</strong> Most game rigs, Synty's included,
+  have no such bones. <code>addHumanoidSoftTissue</code> adds them at load time, so
+  any humanoid can use the demo without an artist changing the model.</li>
+<li><strong>Clips retargeted after the new bones exist.</strong> The new bones then stay
+  at rest in every clip, and the jiggle alone moves them.</li>
+<li><strong>A tour with starts, stops and jumps.</strong> The comment in <code>updateBodies</code>:
+  starts and stops are "where jiggle shows (and where bad jiggle shows
+  most)", so the default move is built to show it.</li>
+<li><strong>A twin without jiggle.</strong> The note in the panel: it runs "with the same
+  body and clips, but no jiggle, to compare". Seeing both is how you judge
+  whether the settings help.</li>
+<li><strong>A camera from the side.</strong> The comment in <code>updateBodies</code>: "the camera
+  follows the jiggling one (not her jumps: that would hide them)", and
+  the side view is "where lag and bounce show best".</li>
+<li><strong>Translucency in two passes without sorting.</strong> JIGGLE.md: no sorting
+  and no extra render targets; draw it after the opaque scene.</li>
+<li><strong>Only the visible scene is simulated.</strong> <code>update</code> steps the jelly or
+  the bodies, never both.</li>
+<li><strong>A fixed ball budget.</strong> At most 14 balls (<code>kMaxBalls</code>); the oldest
+  goes.</li>
+<li><strong>The settings panel is RmlUi, with rows per scene.</strong> Commit 944d596
+  moved the ImGui window to <code>kke::DemoPanelModule</code> so a controller can
+  reach every setting (<a href="../../DEMO_PANEL/">docs/DEMO_PANEL.md</a>).
+  The comment above <code>buildPanel</code>: "Rows for the other scene hide."</li>
+</ul>
+<h2 id="tuning">Tuning<a class="headerlink" href="#tuning" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>What</th>
+<th>Where</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>jelly box, <code>cells = (7, 4, 7)</code></td>
+<td><code>resetJelly</code></td>
+<td>size and particle count; cost grows with particles</td>
+</tr>
+<tr>
+<td><code>stiffness = 0.22</code> ("Firmness")</td>
+<td><code>resetJelly</code>, panel</td>
+<td>higher = firmer, less wobble</td>
+</tr>
+<tr>
+<td><code>iterations = 3</code></td>
+<td><code>resetJelly</code>, panel</td>
+<td>more = stiffer and costlier</td>
+</tr>
+<tr>
+<td><code>damping = 0.015</code></td>
+<td><code>resetJelly</code>, panel</td>
+<td>higher = settles sooner</td>
+</tr>
+<tr>
+<td>ball radius 0.07 to 0.12, height 1.4 to 2, every 0.7 s, restitution 0.55</td>
+<td><code>updateJelly</code>, <code>dropBall</code></td>
+<td>how hard and how often it is hit</td>
+</tr>
+<tr>
+<td><code>kMaxBalls = 14</code></td>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/jiggle_demo/JiggleDemoModule.cpp">JiggleDemoModule.cpp</a></td>
+<td>the ball budget</td>
+</tr>
+<tr>
+<td><code>kLooks</code>: tint, density, milkiness</td>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/jiggle_demo/JiggleDemoModule.cpp">JiggleDemoModule.cpp</a></td>
+<td>the flavours; density is absorption, milkiness is cloudiness</td>
+</tr>
+<tr>
+<td><code>m_tissue.bust = 0.075</code>, <code>glutes = 0.06</code>, <code>hips = 0.03</code></td>
+<td><code>init</code></td>
+<td>extra volume in metres; 0 keeps the artist's shape</td>
+</tr>
+<tr>
+<td><code>HumanoidSoftTissue::breast</code> / <code>glute</code> / <code>skin</code> settings</td>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/JigglePhysics.h">kke/JigglePhysics.h</a></td>
+<td>the starting jiggle; the panel changes breasts and glutes live</td>
+</tr>
+<tr>
+<td><code>kWalkSpeed 1.6</code>, <code>kJogSpeed 3.6</code>, <code>kSprintSpeed 6.2</code></td>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/jiggle_demo/JiggleDemoModule.cpp">JiggleDemoModule.cpp</a></td>
+<td>must match the UAL clips' own speeds, or the feet slide</td>
+</tr>
+<tr>
+<td>acceleration 5, deceleration 9 m/s2</td>
+<td><code>updateBodies</code></td>
+<td>faster stops = bigger jiggle</td>
+</tr>
+<tr>
+<td>jump speed 3.6 m/s</td>
+<td><code>jump</code></td>
+<td>higher jumps = bigger landings</td>
+</tr>
+<tr>
+<td>circle radius 2.3 m</td>
+<td><code>updateBodies</code></td>
+<td>tighter circles add sideways lean and sway</td>
+</tr>
+</tbody>
+</table>
+<p>The jiggle settings themselves (stiffness, soften, stretch, drag, air
+drag, gravity, blend, limits) are explained in
+<a href="../../JIGGLE/">docs/JIGGLE.md</a> "Settings".</p>
+<h2 id="engine-features-it-uses">Engine features it uses<a class="headerlink" href="#engine-features-it-uses" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Header / module</th>
+<th>Doc</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Soft object by lattice shape matching</td>
+<td><code>kke::JellyBody</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/JigglePhysics.h">kke/JigglePhysics.h</a>)</td>
+<td><a href="../../JIGGLE/">JIGGLE.md</a></td>
+</tr>
+<tr>
+<td>Jiggle bone chains</td>
+<td><code>kke::JiggleRig</code>, <code>kke::JiggleSettings</code></td>
+<td><a href="../../JIGGLE/">JIGGLE.md</a></td>
+</tr>
+<tr>
+<td>Jiggle on the skin</td>
+<td><code>kke::JiggleSkin</code>, <code>ModelModule::setSkinJiggle</code></td>
+<td><a href="../../JIGGLE/">JIGGLE.md</a></td>
+</tr>
+<tr>
+<td>Curves and soft-tissue bones for any humanoid</td>
+<td><code>kke::addHumanoidSoftTissue</code></td>
+<td><a href="../../JIGGLE/">JIGGLE.md</a></td>
+</tr>
+<tr>
+<td>Translucent material</td>
+<td><code>DynamicMeshRenderer::drawTranslucent</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/SphereImpostors.h">kke/SphereImpostors.h</a>)</td>
+<td><a href="../../JIGGLE/">JIGGLE.md</a></td>
+</tr>
+<tr>
+<td>Sphere impostors</td>
+<td><code>kke::SphereImpostorRenderer</code></td>
+<td></td>
+</tr>
+<tr>
+<td>Skinned models, bone locals</td>
+<td><code>kke::ModelModule</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/modules/ModelModule.h">kke/modules/ModelModule.h</a>)</td>
+<td></td>
+</tr>
+<tr>
+<td>Animation state machine, blend space</td>
+<td><code>kke::Animator</code>, <code>kke::AnimationSet</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/Animator.h">kke/Animator.h</a>)</td>
+<td><a href="../../MOVEMENT/">MOVEMENT.md</a></td>
+</tr>
+<tr>
+<td>Retargeting clips</td>
+<td><code>kke::matchBones</code>, <code>kke::retargetAnimations</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/AnimRig.h">kke/AnimRig.h</a>)</td>
+<td></td>
+</tr>
+<tr>
+<td>Finding packs and assets</td>
+<td><code>kke::findAssetFolder</code>, <code>kke::AssetCatalog</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/AssetCatalog.h">kke/AssetCatalog.h</a>)</td>
+<td><a href="../../SCENES/">SCENES.md</a></td>
+</tr>
+<tr>
+<td>Actions, bindings, prompts</td>
+<td><code>kke::InputModule</code></td>
+<td><a href="../../INPUT/">INPUT.md</a></td>
+</tr>
+<tr>
+<td>Settings panel</td>
+<td><code>kke::DemoPanelModule</code></td>
+<td><a href="../../DEMO_PANEL/">DEMO_PANEL.md</a></td>
+</tr>
+<tr>
+<td>Orbit camera with pad controls, <code>setView</code>, <code>setTarget</code></td>
+<td><code>kke::OrbitCameraModule</code></td>
+<td><a href="../../DEMO_PANEL/">DEMO_PANEL.md</a></td>
+</tr>
+<tr>
+<td>Sky and colour look</td>
+<td><code>Application::setMood("playful")</code></td>
+<td><a href="../../MOODS/">MOODS.md</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="assets">Assets<a class="headerlink" href="#assets" title="Permanent link">&para;</a></h2>
+<p>The jelly scene uses no files: the jelly, plate, floor, balls and fruit
+are built in code.</p>
+<p>The body scene uses (<a href="../../SCENES/">docs/SCENES.md</a> "Jiggle demo,
+body scene"):</p>
+<table>
+<thead>
+<tr>
+<th>What</th>
+<th>Source</th>
+<th>In the repo?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The clips: <code>Idle_Loop</code>, <code>Walk_Loop</code>, <code>Jog_Fwd_Loop</code>, <code>Sprint_Loop</code>, <code>Jump_Start</code>, <code>Jump_Loop</code>, <code>Jump_Land</code></td>
+<td>Quaternius Universal Animation Library, <code>assets/animations/UAL1_Standard.fbx</code>, CC0 (<a href="../../DEPENDENCIES/">docs/DEPENDENCIES.md</a>)</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>The realistic body: <code>female_body.zip</code> (Obj/obj.obj and its textures)</td>
+<td>"Realistic Human Female Body rigged gameready", free on CGTrader (Kees's copy is on the asset share: <code>tools/fetch_assets.sh female_body</code>)</td>
+<td>no</td>
+</tr>
+<tr>
+<td>or, without it, the character: <code>SK_Character_Female_Gypsy</code>, falling back to <code>SK_Character_Female_Peasant_01</code> or <code>SK_Character_Female_Druid</code></td>
+<td>Synty POLYGON Fantasy Characters</td>
+<td>no</td>
+</tr>
+<tr>
+<td>or <code>SK_Character_HipsterGirl</code></td>
+<td>Synty POLYGON City Characters</td>
+<td>no</td>
+</tr>
+<tr>
+<td>or <code>SK_Character_Dummy_Female_01</code></td>
+<td>Synty POLYGON Prototype</td>
+<td>no</td>
+</tr>
+<tr>
+<td>The character's texture</td>
+<td>the same pack's atlas, via <code>packLoadOptions</code></td>
+<td>no</td>
+</tr>
+</tbody>
+</table>
+<p>Neither the body nor the Synty packs are ever committed. Put
+<code>female_body/</code> in <code>assets/synty/</code> (where <code>tools/fetch_assets.sh</code> puts it)
+or set <code>KKE_ASSETS_DIR</code>. Without it, put a Synty pack in
+<code>assets/synty/POLYGON_Fantasy_Characters/</code> (a symlink works). When no
+body is found, the demo logs it at info level (the files are optional),
+the panel's Body section shows the message ("No body found. Put
+female_body (or a female Synty character: POLYGON Fantasy Characters,
+City Characters) in assets/synty/ or set KKE_ASSETS_DIR."), and the body
+scene shows only the floor. The jelly scene works either way. If
+<code>UAL1_Standard.fbx</code> is missing, the demo logs it at info (BUG-080 in
+BUGS.md, fixed) and says so in the panel.</p>
+<p>The <code>playful</code> mood is a gradient sky with no picture and no ambience.</p>
+<h2 id="make-a-game-like-this">Make a game like this<a class="headerlink" href="#make-a-game-like-this" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Copy the folder.</strong> <code>cp -r games/jiggle_demo games/my_soft</code>, rename the
+   target in <a href="https://github.com/Khyretos/kk-engine/blob/main/games/jiggle_demo/CMakeLists.txt">CMakeLists.txt</a> (including the <code>game.json</code>
+   copy), the namespace <code>kke_jiggle</code> and <code>name()</code>, and add
+   <code>add_subdirectory(games/my_soft)</code> to the root <code>CMakeLists.txt</code>.
+   <code>tools/new_game</code> makes Lua-only games from <code>games/template</code>; jiggle has
+   no Lua bindings, so this starts from C++.</li>
+<li><strong>Pick one scene.</strong> For characters keep <code>setupBodies</code> and
+   <code>updateBodies</code>; for soft objects keep the jelly half. Delete the other.</li>
+<li><strong>Hair, tails, capes.</strong> No new bones needed: make a
+   <code>JiggleRig::Chain{ firstBone }</code> on the rig's own bones (JIGGLE.md
+   "Use") and call <code>rig.apply</code> after the Animator, every frame.</li>
+<li><strong>Your own character.</strong> Load it, call <code>addHumanoidSoftTissue</code> before
+   retargeting, and pass 0 volume to keep the artist's shape. Check the
+   log for "soft tissue: no ..." lines: bone names it could not find.</li>
+<li><strong>Drive it from your gameplay.</strong> Replace the circle with your
+   character controller: the rig only needs the pose, the instance's world
+   transform and <code>dt</code>. A teleport farther than <code>teleportDistance</code> resets
+   the rig instead of whipping it across the map.</li>
+<li><strong>Soft objects in play.</strong> A <code>JellyBody</code> takes balls (<code>Ball</code>) for
+   collision; <code>poke</code> is an explosion or a stomp; <code>deformedPoint</code> carries
+   anything embedded in it (eyes on a slime).</li>
+<li><strong>Read next:</strong> <a href="../../JIGGLE/">JIGGLE.md</a>,
+   <a href="../../DEMO_PANEL/">DEMO_PANEL.md</a>,
+   <a href="../../SCENES/">SCENES.md</a> for asset packs.</li>
+</ol>
+<p>Pitfalls the code shows:</p>
+<ul>
+<li>Add soft-tissue bones before retargeting clips, or the clips may try to
+  drive bones they know nothing about.</li>
+<li>Run the rig after the Animator and before <code>poseToLocals</code>, on the same
+  <code>Pose</code>, every frame.</li>
+<li>Draw translucent things after everything opaque.</li>
+<li>The body panel's sliders assume the chain order breasts left, right,
+  then glutes left, right, which is what <code>addHumanoidSoftTissue</code> returns
+  when it finds both.</li>
+<li>Cap the frame time (<code>std::min(ctx.dt, 0.1f)</code> here) so a hitch does not
+  hand a huge step to the soft body.</li>
+</ul>
+<h2 id="files">Files<a class="headerlink" href="#files" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>What is in it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/jiggle_demo/main.cpp">main.cpp</a></td>
+<td>The application, the mood, the module list and the camera</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/jiggle_demo/JiggleDemoModule.h">JiggleDemoModule.h</a></td>
+<td>The module, scenes, moves, the <code>Dancer</code> struct, all state</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/jiggle_demo/JiggleDemoModule.cpp">JiggleDemoModule.cpp</a></td>
+<td>Flavours, fruit, the jelly and balls, loading and reshaping the character, the tour, jiggle per frame, drawing, input actions, the settings panel</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/jiggle_demo/game.json">game.json</a></td>
+<td>Marketplace manifest (id, title, tags, modules)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/jiggle_demo/CMakeLists.txt">CMakeLists.txt</a></td>
+<td>The executable, its shaders (including <code>translucent_absorb</code>, <code>translucent_light</code>), the manifest, and <code>kke_use_ui</code> (the RmlUi shaders and fonts)</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../sea_demo/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Sea">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Sea
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../cloth_demo/" class="md-footer__link md-footer__link--next" aria-label="Next: Cloth and hair">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Cloth and hair
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      MIT licence. KKE is written by Claude (Anthropic) working in the repository.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/Khyretos/kk-engine" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://ko-fi.com/khyretos" target="_blank" rel="noopener" title="ko-fi.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11.351 2.715c-2.7 0-4.986.025-6.83.26C2.078 3.285 0 5.154 0 8.61c0 3.506.182 6.13 1.585 8.493 1.584 2.701 4.233 4.182 7.662 4.182h.83c4.209 0 6.494-2.234 7.637-4a9.5 9.5 0 0 0 1.091-2.338C21.792 14.688 24 12.22 24 9.208v-.415c0-3.247-2.13-5.507-5.792-5.87-1.558-.156-2.65-.208-6.857-.208m0 1.947c4.208 0 5.09.052 6.571.182 2.624.311 4.13 1.584 4.13 4v.39c0 2.156-1.792 3.844-3.87 3.844h-.935l-.156.649c-.208 1.013-.597 1.818-1.039 2.546-.909 1.428-2.545 3.064-5.922 3.064h-.805c-2.571 0-4.831-.883-6.078-3.195-1.09-2-1.298-4.155-1.298-7.506 0-2.181.857-3.402 3.012-3.714 1.533-.233 3.559-.26 6.39-.26m6.547 2.287c-.416 0-.65.234-.65.546v2.935c0 .311.234.545.65.545 1.324 0 2.051-.754 2.051-2s-.727-2.026-2.052-2.026m-10.39.182c-1.818 0-3.013 1.48-3.013 3.142 0 1.533.858 2.857 1.949 3.897.727.701 1.87 1.429 2.649 1.896a1.47 1.47 0 0 0 1.507 0c.78-.467 1.922-1.195 2.623-1.896 1.117-1.039 1.974-2.364 1.974-3.897 0-1.662-1.247-3.142-3.039-3.142-1.065 0-1.792.545-2.338 1.298-.493-.753-1.246-1.298-2.312-1.298"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

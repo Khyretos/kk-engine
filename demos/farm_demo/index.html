@@ -1,0 +1,5387 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A modular, open-source Vulkan game engine in C++17, with Lua scripting.">
+      
+      
+      
+        <link rel="canonical" href="https://khyretos.github.io/kk-engine/demos/farm_demo/">
+      
+      
+        <link rel="prev" href="../goblin_horde/">
+      
+      
+        <link rel="next" href="../pet_companion/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Farm - Kreative Kompas Engine</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#farm-demo-you-are-the-dog" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Kreative Kompas Engine" class="md-header__button md-logo" aria-label="Kreative Kompas Engine" data-md-component="logo">
+      
+  <img src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Kreative Kompas Engine
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Farm
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Khyretos/kk-engine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Khyretos/kk-engine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../BUILDING/" class="md-tabs__link">
+          
+  
+  
+  Getting started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../tutorials/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../cookbook/" class="md-tabs__link">
+          
+  
+  
+  Cookbook
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Demos
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../PLAY_TO_MAKE/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/lua-api/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../devlog/" class="md-tabs__link">
+          
+  
+  
+  Project
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Kreative Kompas Engine" class="md-nav__button md-logo" aria-label="Kreative Kompas Engine" data-md-component="logo">
+      
+  <img src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png" alt="logo">
+
+    </a>
+    Kreative Kompas Engine
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Khyretos/kk-engine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Khyretos/kk-engine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BUILDING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install and build
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Make your own game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AI_ASSISTANTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Make games with an AI assistant
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/01-walk-around/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1. Walk around
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/02-break-things/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    2. Break things
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/03-pickups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3. Script a pickup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/04-sound/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    4. Add sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Cookbook
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/first-steps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First steps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/moving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moving things
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/cameras/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cameras
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/gameplay/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gameplay
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/algorithms/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/animation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Animation and IK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/physics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/networking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiplayer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/play-to-make/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Play to make
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/cpp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    C++
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demos
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Demos
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The demos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_2" id="__nav_5_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start here
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Start here
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../template/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Starter game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../first_lua_game/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First Lua game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook player
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_3" id="__nav_5_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Games
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Games
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../climb_race/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Climb Race
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../racing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Racing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flying_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flying
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../party/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Party
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../duel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Duel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tennis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tennis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../goblin_horde/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Goblin Horde
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI and companions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    AI and companions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Farm
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Farm
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#run-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controls
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-plays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it plays
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How it works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#startup-and-the-frame" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Startup and the frame
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-level" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The level
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-navmesh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The navmesh
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-animals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The animals
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#models-and-clips" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Models and clips
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-players-dog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The player's dog
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-camera" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The camera
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#events-and-the-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Events and the log
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#teaching-by-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Teaching by example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#engine-features-it-uses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Engine features it uses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#assets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#make-a-game-like-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Make a game like this
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pet_companion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pet companion
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../platoon/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Platoon
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../command_kit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command kit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../procedural_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Procedural animation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_5" id="__nav_5_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics, water and sound
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Physics, water and sound
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../physics_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics (FEMFX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../melt_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Melting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../particles_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sea_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sea
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../jiggle_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jiggle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cloth_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloth and hair
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audio_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../synty_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Synty characters and ragdolls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_6" id="__nav_5_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Showcases and tools
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Showcases and tools
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../showcase/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    kke_demo showcase
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sandbox/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sandbox
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rmlui_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RmlUi demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../imgui_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ImGui demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PLAY_TO_MAKE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Play to make
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SCRIPTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scripting in Lua
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MOVEMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Movement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AI/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI (animals, enemies, companions)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COMBAT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Melee combat and crowds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PROCEDURAL_ANIMATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Procedural animation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../EQUIPMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equipment and body awareness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../INPUT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TOUCH/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Touch controls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GAME_SHELL/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Menus, pause and settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../LOBBY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start menu and joining
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../OUTFITS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Outfits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEMO_PANEL/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings panel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COMMANDS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands and orders
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AUDIO/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../NETWORKING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Networking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SERVER_HOSTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hosting a server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TOOLS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The kke_ tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../STORAGE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Saving data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ANTI_CHEAT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anti-cheat
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DRM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kreative DRM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MODDING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DLC and mods
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ASSETS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Asset folders and naming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SCENES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scenes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SHOWCASE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The kke_demo showcase
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../JIGGLE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jiggle physics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AUTO_RIG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Auto-rigging a body
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PHYSICS_BRIDGE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BREAKABLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Breakable props
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PARTICLE_EFFECTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle effects
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../RAGDOLLS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ragdolls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CLOTH/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../HAIR/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hair
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/lua-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lua API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DATA_FILES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JSON or YAML data files
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../OPTIMIZATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MOODS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moods (sky, fog, look)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../RENDERING_PRINCIPLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rendering principles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BENCHMARKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BAKING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Baking every download (one command)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COOKED_ART/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cooked art (private builds with Synty art)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BAKING_FOR_FRIENDS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Baking the benchmark with the art, for friends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PERFORMANCE_NOTES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PLATFORMS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Platforms and hardware targets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ANDROID/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Android
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../VM_TESTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Windows and Android in VMs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SCALING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scaling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEPENDENCIES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dependencies and licences
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../HARDWARE_TESTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PLAYTEST_CHECKLIST/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Playtest checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../devlog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Devlog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GO_TO_MARKET/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Going to market
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../RELEASES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Downloadable builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../HISTORY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development history
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DOCS_SITE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    This site
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#run-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controls
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-plays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it plays
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How it works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#startup-and-the-frame" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Startup and the frame
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-level" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The level
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-navmesh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The navmesh
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-animals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The animals
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#models-and-clips" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Models and clips
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-players-dog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The player's dog
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-camera" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The camera
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#events-and-the-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Events and the log
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#teaching-by-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Teaching by example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#engine-features-it-uses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Engine features it uses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#assets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#make-a-game-like-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Make a game like this
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/Khyretos/kk-engine/edit/main/games/farm_demo/README.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="farm-demo-you-are-the-dog">Farm demo: you are the dog<a class="headerlink" href="#farm-demo-you-are-the-dog" title="Permanent link">&para;</a></h1>
+<p>You play a German Shepherd on a farm. Every other animal lives its own life
+on the engine's AI core (<a href="../../AI/">docs/AI.md</a>):</p>
+<ul>
+<li><strong>Sheep</strong> graze in their meadow. Run at them and they bolt as a flock,
+  regroup, and calm down once you are gone.</li>
+<li><strong>Cows</strong> in the pasture are curious and come over to look at you.</li>
+<li><strong>Pigs</strong> root around their pen and wander to the hay pile.</li>
+<li><strong>Horses</strong> in the north field spook and gallop off.</li>
+<li><strong>The fox</strong> in the woods keeps its distance.</li>
+</ul>
+<p>A bark is a noise that every animal in range hears. Fences, the barn and
+the trees are obstacles on a navmesh (Recast/Detour) built from the level
+itself when it loads. You can also teach the animals by example: show one
+what to do in a moment like this, then let its whole species learn from
+what you showed.</p>
+<p>This demo is the starting point for any game where creatures act on their
+own: wildlife, herding, stealth (being seen and heard), a zoo or farm sim,
+or a world that feels alive around the player. The game code is small on
+purpose (one module, about 570 lines): the AI core does the thinking, and
+the game only places animals, feeds it the player's position and copies the
+result onto models.</p>
+<p><img alt="Sheep on the farm" src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/website/static/media/farm-sheep.webp" /></p>
+<h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>cmake<span class="w"> </span>--build<span class="w"> </span>build<span class="w"> </span>--target<span class="w"> </span>farm_demo
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>build/bin<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>./farm_demo
+</code></pre></div>
+<p>The executable is <code>farm_demo</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/games/farm_demo/CMakeLists.txt">CMakeLists.txt</a>). It is
+always built: the root <code>CMakeLists.txt</code> adds it with no <code>KKE_ENABLE_*</code>
+guard. The build copies <code>scenes/farm.scene.json</code> next to the executable;
+without that file the farm does not start (see "The level" below).</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>KKE_SKIP_INTRO=1</code></td>
+<td>skip the logo intro</td>
+</tr>
+<tr>
+<td><code>KKE_ASSETS_DIR=/path/to/packs</code></td>
+<td>where the packs are (default <code>assets/synty/</code>; <code>KKE_SYNTY_DIR</code> also works)</td>
+</tr>
+<tr>
+<td><code>KKE_FARM_AUTOPILOT=1</code></td>
+<td>the dog runs a lap through the meadow and barks by itself (headless checks, screenshots)</td>
+</tr>
+<tr>
+<td><code>KKE_FARM_DEBUG=1</code></td>
+<td>start with the F1 panel open</td>
+</tr>
+<tr>
+<td><code>KKE_FARM_NAV=1</code></td>
+<td>start with the navmesh drawn</td>
+</tr>
+<tr>
+<td><code>KKE_FARM_LINEUP=1</code></td>
+<td>one of each animal in a row, all facing +X, with their AI off (a check that every model faces its yaw)</td>
+</tr>
+</tbody>
+</table>
+<p>Any value other than empty or <code>0</code> turns a switch on (<code>envOn</code> in
+<a href="https://github.com/Khyretos/kk-engine/blob/main/games/farm_demo/FarmModule.cpp">FarmModule.cpp</a>).</p>
+<h2 id="controls">Controls<a class="headerlink" href="#controls" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Keyboard and mouse</th>
+<th>Controller</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Move</td>
+<td>WASD</td>
+<td>left stick</td>
+</tr>
+<tr>
+<td>Run</td>
+<td>hold Left Shift</td>
+<td>click the left stick (toggles)</td>
+</tr>
+<tr>
+<td>Look around</td>
+<td>move the mouse after a left click captures it</td>
+<td>right stick</td>
+</tr>
+<tr>
+<td>Bark</td>
+<td>Space</td>
+<td>A (south)</td>
+</tr>
+<tr>
+<td>Open the panel (settings, the two switches below, Quit)</td>
+<td>F3 or Esc</td>
+<td>View / Back</td>
+</tr>
+<tr>
+<td>Show what the animals think</td>
+<td>F1, or "What they think" in the panel</td>
+<td>"What they think" in the panel</td>
+</tr>
+<tr>
+<td>Draw the navmesh</td>
+<td>F2, or "Where they walk" in the panel</td>
+<td>"Where they walk" in the panel</td>
+</tr>
+<tr>
+<td>Next lesson (graze, rest, investigate, watch, regroup, flee, wander)</td>
+<td>Tab</td>
+<td>D-pad right</td>
+</tr>
+<tr>
+<td>Show the nearest animal the lesson</td>
+<td>E</td>
+<td>Y (north)</td>
+</tr>
+<tr>
+<td>Let every species that was shown something learn</td>
+<td>L</td>
+<td>D-pad up</td>
+</tr>
+<tr>
+<td>Ping the surroundings (hear the fences and the barn)</td>
+<td>Q</td>
+<td>D-pad down</td>
+</tr>
+<tr>
+<td>Quit</td>
+<td>Esc, then Quit</td>
+<td>View, then Quit</td>
+</tr>
+</tbody>
+</table>
+<p>All of these are rebindable actions in the <code>InputModule</code>; the user's
+bindings are saved to <code>farm_input.json</code>. Esc releases the mouse in
+<code>FarmModule::onEvent</code> and opens the panel like a pause menu; it no longer
+quits, because <code>kke::DemoPanelModule</code> turns the window's quit-on-Esc off
+and adds a Quit row (<a href="../../DEMO_PANEL/">docs/DEMO_PANEL.md</a>).</p>
+<h2 id="how-it-plays">How it plays<a class="headerlink" href="#how-it-plays" title="Permanent link">&para;</a></h2>
+<p>There is no goal, score or end. You walk around and watch how each species
+reacts to you. The panel in the top left (RmlUi, <code>kke::DemoPanelModule</code>) lists the
+controls, the current lesson, and the last six things that happened ("sheep
+runs from you", "cow comes to see you", "Woof!"), with button prompts for
+the device you use. F1 (or "What they think") adds one line per
+animal from <code>AiWorld::describe</code>: its action, score, fear, hunger and
+animation.</p>
+<p>Teaching: press Tab until the lesson you want shows, walk within 10 m of an
+animal, press E. That records one example for its species. Press L and every
+species with examples trains a small neural network on them; the log shows
+how many examples it learned from and how many it now gets right.</p>
+<h2 id="how-it-works">How it works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
+<h3 id="startup-and-the-frame">Startup and the frame<a class="headerlink" href="#startup-and-the-frame" title="Permanent link">&para;</a></h3>
+<p><a href="https://github.com/Khyretos/kk-engine/blob/main/games/farm_demo/main.cpp">main.cpp</a> builds the app and adds modules in this order:</p>
+<ol>
+<li><code>InputModule("farm_input.json")</code>: actions and bindings.</li>
+<li><code>UiModule</code>: RmlUi, for the panel.</li>
+<li><code>AudioModule</code>, its panel hidden: it plays the mood's ambience loop
+   (<code>meadow_day</code>) and the ping.</li>
+<li><code>ModelModule</code>: loads and draws the farm, the animals and the dog.</li>
+<li><code>DemoPanelModule("Farm")</code> with <code>setDeveloperPanelsKey(false)</code>: the HUD
+   and settings. F1 is the farm's own "what they think".</li>
+<li><code>farm::FarmModule</code>: the game (<a href="https://github.com/Khyretos/kk-engine/blob/main/games/farm_demo/FarmModule.h">FarmModule.h</a>).</li>
+<li><code>StatsModule</code> with its panel hidden.</li>
+</ol>
+<p>It also sets the mood <code>clear_day</code>, a far plane of 300 m and a 55 degree
+field of view. <code>FarmModule::init</code> then does four things in order:
+defines the input actions, sets up the third-person camera rig, calls
+<code>loadLevel()</code>, <code>buildNavMesh()</code> and <code>setupAi()</code>.</p>
+<p>Each frame, <code>FarmModule::update</code>:</p>
+<ol>
+<li>Clamps <code>dt</code> to 0.1 s so a hitch never teleports anyone.</li>
+<li>Reads the toggle actions (F1, F2, Tab, E, L).</li>
+<li><code>updatePlayer(dt)</code>: moves the dog, handles the bark, tells the AI where
+   the dog is.</li>
+<li><code>m_ai.update(dt)</code>: every animal perceives, updates its needs, decides and
+   moves (skipped in lineup mode).</li>
+<li>Turns <code>m_ai.takeEvents()</code> into log lines.</li>
+<li>Copies each agent's position, yaw and <code>anim</code> onto its model.</li>
+<li><code>updateCamera(dt)</code>.</li>
+</ol>
+<p><code>render</code> draws the ground quad and, when on, the navmesh; the HUD is the
+RmlUi panel <code>buildPanel</code> fills once in <code>init</code> (its text rows read live values).</p>
+<h3 id="the-level">The level<a class="headerlink" href="#the-level" title="Permanent link">&para;</a></h3>
+<p><code>loadLevel()</code> reads <code>scenes/farm.scene.json</code> from the executable's folder
+with <code>kke::SceneFile::load</code>. If that fails, the error goes to the panel and
+<code>init</code> stops: no navmesh, no AI, no animals. The scene also sets the mood,
+the sun and the ambient light.</p>
+<p>The grass is one quad the size of the scene's <code>ground.size</code> (170 x 170 m),
+drawn by a <code>DynamicMeshRenderer</code>. The buildings, fences and trees come from
+<strong>POLYGON Farm</strong>: <code>kke::findAssetFolder</code> looks for <code>assets/synty</code> (or
+<code>KKE_ASSETS_DIR</code> / <code>KKE_SYNTY_DIR</code>), <code>AssetCatalog::scan</code> indexes it, and
+if <code>SM_Bld_Barn_01</code> is found, <code>kke::loadScene</code> places every object. Missing
+single assets are logged as warnings. The list of objects is in
+<a href="../../SCENES/#farm-demo-scenesfarmscenejson">docs/SCENES.md</a>.</p>
+<h3 id="the-navmesh">The navmesh<a class="headerlink" href="#the-navmesh" title="Permanent link">&para;</a></h3>
+<p><code>buildNavMesh()</code> gathers triangles and hands them to
+<code>kke::ai::NavMesh::build</code>:</p>
+<ul>
+<li>the ground quad;</li>
+<li>for each scene object with collision, the triangles of its placed
+  instance. It walks <code>m_scene.objects</code> in the same order <code>loadScene</code>
+  placed them (grid objects take <code>gridCount.x * gridCount.y</code> instances),
+  so the n-th instance belongs to the n-th cell;</li>
+<li>objects marked <code>Collision::Box</code> (the trees) get only a thin box around
+  the trunk: 18% of the model's width and depth, full height. The comment
+  says it: "the trunk is what's in the way, not the canopy". Using the
+  whole model would block the ground under every crown.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">kke</span><span class="o">::</span><span class="n">ai</span><span class="o">::</span><span class="n">NavMeshSettings</span><span class="w"> </span><span class="n">s</span><span class="p">;</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">s</span><span class="p">.</span><span class="n">cellSize</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.25f</span><span class="p">;</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">s</span><span class="p">.</span><span class="n">agentRadius</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.35f</span><span class="p">;</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">s</span><span class="p">.</span><span class="n">agentHeight</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0f</span><span class="p">;</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">s</span><span class="p">.</span><span class="n">agentMaxClimb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.3f</span><span class="p">;</span>
+</code></pre></div>
+<p>One navmesh serves every species, sized for a sheep-to-dog animal. The
+build time and polygon count go to the log and the F1 panel. Without POLYGON
+Farm the mesh is only the ground, so everything walks on open grass.</p>
+<h3 id="the-animals">The animals<a class="headerlink" href="#the-animals" title="Permanent link">&para;</a></h3>
+<p><code>setupAi()</code> starts from the built-in species (<code>sheep</code>, <code>cow</code>, <code>pig</code>,
+<code>horse</code>, <code>fox</code>) and changes one thing on each, <code>homeRadius</code>, so they stay
+in their fields:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">auto</span><span class="w"> </span><span class="n">tweak</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="o">&amp;</span><span class="p">](</span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="o">*</span><span class="w"> </span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="kt">float</span><span class="w"> </span><span class="n">homeRadius</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span><span class="n">kke</span><span class="o">::</span><span class="n">ai</span><span class="o">::</span><span class="n">Species</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">*</span><span class="n">m_ai</span><span class="p">.</span><span class="n">species</span><span class="p">(</span><span class="n">id</span><span class="p">);</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="n">s</span><span class="p">.</span><span class="n">homeRadius</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">homeRadius</span><span class="p">;</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="n">s</span><span class="p">.</span><span class="n">actions</span><span class="p">.</span><span class="n">clear</span><span class="p">();</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="n">m_ai</span><span class="p">.</span><span class="n">defineSpecies</span><span class="p">(</span><span class="n">s</span><span class="p">);</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="p">};</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">tweak</span><span class="p">(</span><span class="s">"sheep"</span><span class="p">,</span><span class="w"> </span><span class="mf">11.0f</span><span class="p">);</span>
+</code></pre></div>
+<p><code>actions.clear()</code> makes <code>defineSpecies</code> rebuild the default action list for
+the changed species (<a href="../../AI/">docs/AI.md</a>, "Actions").</p>
+<p>It then:</p>
+<ul>
+<li>registers the player as an <strong>actor</strong> of species <code>dog</code> (id 1). An actor is
+  perceived but never moved by the AI. Every farm species already has an
+  attitude to dogs, so no extra rules are needed.</li>
+<li>adds a <code>water</code> place (radius 2.2 m) at every <code>SM_Prop_Trough_01</code> and a
+  <code>grain</code> place (2.0 m) at every <code>SM_Prop_Hay_Pile_01</code> in the scene. The
+  graze and drink actions find food and water through these.</li>
+<li>spawns herds with a small seeded random generator (an LCG with seed 7),
+  so the farm looks the same every run: 14 sheep, 5 cows, 4 pigs, 3 horses
+  and 1 fox, each around a centre point. <code>spawnAnimal</code> snaps each start to
+  the navmesh with <code>nearestPoint</code>.</li>
+</ul>
+<p>The <code>AiWorld</code> itself is seeded with 2026 (<code>m_ai{ 2026 }</code> in the header),
+which makes the decisions repeatable too.</p>
+<h3 id="models-and-clips">Models and clips<a class="headerlink" href="#models-and-clips" title="Permanent link">&para;</a></h3>
+<p><code>makeLook</code> loads one model per species the first time it is needed and
+remembers it in <code>m_looks</code>:</p>
+<ul>
+<li>Sheep, cow, pig and horse are <strong>Quaternius' Farm Animals</strong> FBX files,
+  scaled down (0.23, 0.3, 0.2, 0.28) because the files are "made a few
+  metres tall".</li>
+<li>The dog and the fox both come from <strong>POLYGON Dogs</strong>
+  <code>Unity_SK_Animals_Dog_01</code>. That file holds every breed on one skeleton;
+  <code>loadDog</code> keeps only the meshes whose material name starts with
+  <code>GermanShepherd_</code> or <code>Fox_</code>. The fox is drawn at 0.8 scale.</li>
+</ul>
+<p>POLYGON Dogs keeps its animations in separate files. <code>appendClip</code> loads each
+animation-only FBX and copies it onto the dog's skeleton <strong>by bone name</strong>;
+bones the file does not move stay at their rest pose. Ten clips are named
+after the AI's <code>anim</code> values: <code>idle</code>, <code>walk</code>, <code>run</code>, <code>eat</code>, <code>drink</code>, <code>sniff</code>,
+<code>bark</code>, <code>alert</code> (the tail wag), <code>attack</code> (a bite) and <code>rest</code> (sleeping).</p>
+<p><code>showAnim</code> plays the right clip only when the name changes. It asks
+<code>kke::ai::clipForAnim</code> (<code>kke/ai/Clips.h</code>), which finds a clip by name for
+each model, and falls back to hopping on <code>Jump</code> when there is no walk clip
+(the Quaternius sheep and pigs only have Idle and Jump). <code>attack</code> and
+<code>bark</code> play once; everything else loops.</p>
+<h3 id="the-players-dog">The player's dog<a class="headerlink" href="#the-players-dog" title="Permanent link">&para;</a></h3>
+<p><code>updatePlayer</code> is a plain kinematic controller, no physics body:</p>
+<ol>
+<li><code>move</code> (a 2D axis) is turned into a direction relative to the camera
+   (<code>m_rig.forward()</code> and <code>m_rig.right()</code>).</li>
+<li>The wanted speed is 3.2 m/s walking or 7 m/s holding <code>sprint</code>.</li>
+<li>The velocity eases toward it: <code>m_vel += (want - m_vel) * (1 - exp(-8 dt))</code>.
+   The <code>exp</code> form gives the same feel at any frame rate.</li>
+<li><code>NavMesh::moveAlongSurface</code> slides the step along the walkable surface,
+   so the dog cannot walk through fences either. The real velocity is then
+   worked out from where it actually ended up.</li>
+<li>The dog turns toward its velocity at up to 540 degrees a second.</li>
+<li>A bark (0.9 s cooldown) calls <code>m_ai.makeNoise({ m_pos, 25.0f, kPlayer, 0 })</code>:
+   a noise heard 25 m away.</li>
+<li><code>m_ai.setTransform(kPlayer, m_pos, m_vel, m_yaw)</code> tells the AI where the
+   dog is and how fast it goes. Fear of a fast dog comes from this velocity.</li>
+<li>The clip is <code>bark</code> for the first half second of a bark, then <code>run</code>
+   above 4.5 m/s, <code>walk</code> above 0.3 m/s, else <code>idle</code>.</li>
+</ol>
+<p>The autopilot replaces steps 1 and 6 with a route of seven points, six
+seconds each, sprinting on legs 1 to 4 and barking once on leg 2.</p>
+<h3 id="the-camera">The camera<a class="headerlink" href="#the-camera" title="Permanent link">&para;</a></h3>
+<p>A <code>kke::CameraRig</code> in third-person mode: pivot 0.9 m up, arm 5.5 m, no
+shoulder offset, pitched 14 degrees down. The mouse turns it only while
+captured (left click captures, Esc releases); the right stick
+(<code>look.rate</code>) always turns it, at 140 degrees a second across and 70% of
+that up and down. The rig's collision callback returns the full distance,
+so the camera never pulls in. In autopilot the rig swings behind the dog.</p>
+<p>Note the two yaw conventions: the dog and the AI use 0 = +Z, while the rig
+uses 0 = -Z, hence <code>m_rig.yaw = 180.0f - m_yaw</code> in <code>loadLevel</code>.</p>
+<h3 id="events-and-the-log">Events and the log<a class="headerlink" href="#events-and-the-log" title="Permanent link">&para;</a></h3>
+<p>After <code>AiWorld::update</code>, <code>takeEvents()</code> returns what happened. The farm
+turns four kinds into log lines: <code>Scared</code> by the player, <code>Calmed</code>,
+<code>ActionChanged</code> to <code>investigate</code> the player, and <code>Attack</code>. It keeps the
+last six.</p>
+<h3 id="teaching-by-example">Teaching by example<a class="headerlink" href="#teaching-by-example" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>teachNearest()</code> finds the closest animal within 10 m and calls
+  <code>m_ai.teach(id, lesson)</code>. This stores the numbers that animal's
+  considerations read right now, plus the lesson, as one example for its
+  species. It fails ("can't") when the species has no such action.</li>
+<li><code>learnAll()</code> calls <code>m_ai.learn(id)</code> for every species with examples. It
+  trains a genann network and returns an accuracy, which the log shows as
+  a percentage.</li>
+</ul>
+<p>The theory, the weights and how the learned policy mixes with instinct are
+in <a href="../../AI/">docs/AI.md</a>, "Teaching by example".</p>
+<h2 id="design-decisions">Design decisions<a class="headerlink" href="#design-decisions" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>The AI core decides, the game only shows it.</strong> <code>FarmModule</code> has no
+  animal logic at all. Every behaviour (flocking, fleeing, curiosity,
+  grazing) is a built-in species. docs/AI.md calls the demo "the whole core
+  in one small game", and the same species run the sandbox's animal blocks.</li>
+<li><strong>Built-in species with one tweak, not new species.</strong> The only farm rule
+  is <code>homeRadius</code>, so the animals stay in their fields. Everything else is
+  whatever <code>builtinSpecies()</code> says, which keeps the demo honest as a test of
+  the defaults.</li>
+<li><strong>The navmesh is built from the scene itself</strong> at load, not authored or
+  cached. Moving a fence in <code>farm.scene.json</code> changes where animals can
+  walk with no extra step. <code>NavMesh::save</code>/<code>load</code> exist for levels where the
+  build is too slow.</li>
+<li><strong>Tree trunks, not tree shapes, block the navmesh</strong>, as the comment in
+  <code>buildNavMesh</code> explains.</li>
+<li><strong>The player's dog is kinematic and slides on the navmesh</strong>, with no
+  physics body. The farm has no physics module at all; <code>moveAlongSurface</code>
+  keeps the dog out of fences with the same data the animals use.</li>
+<li><strong>The player is an actor of species <code>dog</code>.</strong> Every species already has an
+  attitude to dogs, so the player gets the right reactions for free.</li>
+<li><strong>Seeded everything</strong> (world seed 2026, herd seed 7): the same farm and
+  the same decisions every run, so autopilot runs and screenshots repeat.</li>
+<li><strong>Dog clips are copied by bone name</strong> from animation-only files. The
+  first farm commit added <code>allowNoMeshes</code> to <code>loadModel</code> for this, so
+  clip-only FBX files (POLYGON Dogs animations) load as skeletons.</li>
+<li><strong>A missing POLYGON Farm is logged at info, not warning.</strong> Commit 34fadf2
+  says why: it is the normal case in CI and for anyone without the packs,
+  and the panel already says so. A pack that is there but missing one asset
+  still warns.</li>
+</ul>
+<h2 id="tuning">Tuning<a class="headerlink" href="#tuning" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>What</th>
+<th>Where</th>
+<th>Value</th>
+<th>Raising it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Dog walk / run speed</td>
+<td><code>updatePlayer</code></td>
+<td>3.2 / 7 m/s</td>
+<td>faster dog, animals scare sooner (fear reads your speed)</td>
+</tr>
+<tr>
+<td>Dog acceleration</td>
+<td><code>updatePlayer</code>, <code>exp(-8 dt)</code></td>
+<td>8</td>
+<td>snappier starts and stops</td>
+</tr>
+<tr>
+<td>Dog turn rate</td>
+<td><code>updatePlayer</code></td>
+<td>540 deg/s</td>
+<td>quicker turns</td>
+</tr>
+<tr>
+<td>Bark range</td>
+<td><code>makeNoise</code>, loudness</td>
+<td>25 m</td>
+<td>animals further away hear it</td>
+</tr>
+<tr>
+<td>Bark cooldown</td>
+<td><code>m_barkTimer = 0.9f</code></td>
+<td>0.9 s</td>
+<td>fewer barks</td>
+</tr>
+<tr>
+<td>Home radius per species</td>
+<td><code>setupAi</code>, <code>tweak(...)</code></td>
+<td>sheep 11, cow 13, pig 3.5, horse 14, fox 18 m</td>
+<td>they roam further from their start</td>
+</tr>
+<tr>
+<td>Herd sizes and centres</td>
+<td><code>setupAi</code>, <code>herd(...)</code></td>
+<td>14 / 5 / 4 / 3 / 1</td>
+<td>more animals (more CPU in perception)</td>
+</tr>
+<tr>
+<td>Water / grain place radius</td>
+<td><code>setupAi</code>, <code>addPlace</code></td>
+<td>2.2 / 2.0 m</td>
+<td>they drink or graze from further away</td>
+</tr>
+<tr>
+<td>Model scales</td>
+<td><code>makeLook</code>, <code>specs[]</code></td>
+<td>0.2 to 0.3</td>
+<td>bigger animals</td>
+</tr>
+<tr>
+<td>Navmesh cell size, agent radius</td>
+<td><code>buildNavMesh</code></td>
+<td>0.25 m, 0.35 m</td>
+<td>coarser mesh, faster build, gaps close up</td>
+</tr>
+<tr>
+<td>Teach range</td>
+<td><code>teachNearest</code>, <code>bestDist</code></td>
+<td>10 m</td>
+<td>show from further away</td>
+</tr>
+<tr>
+<td>Camera arm, pitch</td>
+<td><code>init</code>, <code>m_rig.settings</code></td>
+<td>5.5 m, -14 deg</td>
+<td>wider view</td>
+</tr>
+<tr>
+<td>Mouse / stick look speed</td>
+<td><code>m_mouseSensitivity</code>, <code>m_stickSpeed</code></td>
+<td>0.15, 140</td>
+<td>faster look</td>
+</tr>
+</tbody>
+</table>
+<p>Species values themselves (speeds, senses, temperament) are data: change
+them in a JSON or YAML file with <code>AiWorld::loadSpecies</code>
+(<a href="../../AI/">docs/AI.md</a>, "Species").</p>
+<h2 id="engine-features-it-uses">Engine features it uses<a class="headerlink" href="#engine-features-it-uses" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Header / module</th>
+<th>Doc</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AI core: species, perception, needs, utility decisions, events</td>
+<td><code>kke/ai/AiWorld.h</code></td>
+<td><a href="../../AI/">AI.md</a></td>
+</tr>
+<tr>
+<td>Navmesh (Recast/Detour)</td>
+<td><code>kke/ai/NavMesh.h</code></td>
+<td><a href="../../AI/#navigation">AI.md</a></td>
+</tr>
+<tr>
+<td>Teaching by example (genann)</td>
+<td><code>kke/ai/Learning.h</code></td>
+<td><a href="../../AI/#teaching-by-example">AI.md</a></td>
+</tr>
+<tr>
+<td>Clip choice per <code>anim</code></td>
+<td><code>kke/ai/Clips.h</code></td>
+<td><a href="../../AI/">AI.md</a></td>
+</tr>
+<tr>
+<td>Scene files and loading</td>
+<td><code>kke/SceneFile.h</code>, <code>kke/SceneLoader.h</code></td>
+<td><a href="../../SCENES/">SCENES.md</a></td>
+</tr>
+<tr>
+<td>Asset packs and catalog</td>
+<td><code>kke/AssetCatalog.h</code></td>
+<td><a href="../../SCENES/">SCENES.md</a></td>
+</tr>
+<tr>
+<td>Models, clips, instances</td>
+<td><code>kke/modules/ModelModule.h</code>, <code>kke/ModelAsset.h</code></td>
+<td></td>
+</tr>
+<tr>
+<td>Rebindable input</td>
+<td><code>kke/modules/InputModule.h</code></td>
+<td><a href="../../INPUT/">INPUT.md</a></td>
+</tr>
+<tr>
+<td>Third-person camera</td>
+<td><code>kke/CameraRig.h</code></td>
+<td>(header comments)</td>
+</tr>
+<tr>
+<td>Moods (sky, light)</td>
+<td><code>Application::setMood</code></td>
+<td><a href="../../MOODS/">MOODS.md</a></td>
+</tr>
+<tr>
+<td>Debug meshes</td>
+<td><code>DynamicMeshRenderer</code> (<code>kke/SphereImpostors.h</code>)</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h2 id="assets">Assets<a class="headerlink" href="#assets" title="Permanent link">&para;</a></h2>
+<p>None of these are in the repository. Put each pack in <code>assets/synty/</code> (a
+symlink to a shared cache works) or point <code>KKE_ASSETS_DIR</code> at the folder
+that holds them. <code>tools/fetch_assets.sh POLYGON_Farm POLYGON_Dogs</code> downloads
+the two Synty packs from the owner's share (it needs <code>KKE_SHARE_HASH</code>).</p>
+<table>
+<thead>
+<tr>
+<th>Pack</th>
+<th>Files</th>
+<th>Used for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>POLYGON Farm</strong> (Synty)</td>
+<td>the 60 objects of <code>scenes/farm.scene.json</code> (<a href="../../SCENES/#farm-demo-scenesfarmscenejson">list</a>)</td>
+<td>the level</td>
+</tr>
+<tr>
+<td><strong>POLYGON Dogs</strong> (Synty)</td>
+<td><code>Unity_SK_Animals_Dog_01</code> (GermanShepherd and Fox parts); clips from <code>Animations/</code>: <code>Locomotion/_POLYGON_Dog_Locomotion_Standing/Walking/Running.fbx</code>, <code>Actions_Standing/_POLYGON_Dog_Action_Standing_Eat/Drink/Sniff/Bark/TailWag.fbx</code>, <code>Attack/_POLYGON_Dog_Attack_Bite.fbx</code>, <code>Sleep/_POLYGON_Dog_Sleep_Idle.fbx</code></td>
+<td>the player and the fox</td>
+</tr>
+<tr>
+<td><strong>Farm Animals Animated by Quaternius</strong> (CC0)</td>
+<td><code>Sheep</code>, <code>Cow</code>, <code>Pig</code>, <code>Horse</code></td>
+<td>the livestock</td>
+</tr>
+</tbody>
+</table>
+<p>What happens when a pack is missing:</p>
+<ul>
+<li><strong>No POLYGON Farm:</strong> the panel says so, the level is a bare green field,
+  and the navmesh is only the ground. The AI still runs.</li>
+<li><strong>No POLYGON Dogs:</strong> the dog and the fox have no model. You still move
+  (the camera follows an invisible dog) and the fox still lives. A missing
+  clip file logs a warning and that clip is skipped.</li>
+<li><strong>No Quaternius animals:</strong> those agents still run in the AI (F1 lists
+  them) but nothing is drawn for them.</li>
+<li><strong>No packs at all:</strong> you see the grass and the panel only.</li>
+</ul>
+<h2 id="make-a-game-like-this">Make a game like this<a class="headerlink" href="#make-a-game-like-this" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Start from this folder: copy <code>games/farm_demo</code> to <code>games/&lt;your_game&gt;</code>,
+   rename the executable in <code>CMakeLists.txt</code>, the namespace <code>farm</code> and the
+   class <code>FarmModule</code>, and give <code>game.json</code> a new <code>id</code> and <code>title</code>. Add
+   <code>add_subdirectory(games/&lt;your_game&gt;)</code> to the root <code>CMakeLists.txt</code> (or
+   to <code>games/my_games.cmake</code>, which <code>tools/new_game</code> uses). If your game is
+   mostly Lua, start with <code>tools/new_game &lt;name&gt;</code> instead and add the AI
+   from C++ later.</li>
+<li>Keep the <code>DemoPanelModule</code>: it is the HUD, and Esc opens it instead of
+   quitting (<code>setEscapeMenu(false)</code> gives Esc back to your game).</li>
+<li>Make your level a scene file (<a href="../../SCENES/">docs/SCENES.md</a>)
+   and mark what blocks walking with <code>collision</code>. The navmesh follows.</li>
+<li>Pick species. Use the built-in ones, tweak one field like <code>setupAi</code>
+   does, or write your own in YAML and load them with
+   <code>AiWorld::loadSpecies</code>. Read <a href="../../AI/">docs/AI.md</a> "Species" and
+   "Actions" before writing actions.</li>
+<li>Add places (<code>addPlace</code>) for anything a need should find: food, water,
+   beds.</li>
+<li>Register the player with <code>addActor</code> and a species the animals already
+   have feelings about, and call <code>setTransform</code> with a real velocity every
+   frame. A zero velocity makes a sprinting player look calm to the AI.</li>
+<li>React to <code>takeEvents()</code>: play a sound on <code>Heard</code>, deal damage on
+   <code>Attack</code> (the AI never deals damage itself).</li>
+<li>Check it: run with <code>KKE_FARM_DEBUG=1</code> style panels of your own
+   (<code>AiWorld::describe</code>) and a headless autopilot so the game can be checked without anyone playing.</li>
+</ol>
+<p>Pitfalls the code shows:</p>
+<ul>
+<li>Keep the navmesh agent size close to your smallest walker. A big
+  <code>agentRadius</code> closes gaps in fences that small animals should get through.</li>
+<li>Models may face a different way than +Z. <code>Look::yawOffset</code> is there for
+  that, and <code>KKE_FARM_LINEUP=1</code> is the quick visual check.</li>
+<li>Quaternius sheep and pigs have no walk clip; <code>clipForAnim</code> makes them hop.
+  Check each model's clips before blaming the AI.</li>
+</ul>
+<h2 id="files">Files<a class="headerlink" href="#files" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>What is in it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/farm_demo/main.cpp">main.cpp</a></td>
+<td>the app, the mood and camera settings, the module list</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/farm_demo/FarmModule.h">FarmModule.h</a></td>
+<td>the module class, its data (animals, looks, dog state, lessons)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/farm_demo/FarmModule.cpp">FarmModule.cpp</a></td>
+<td>input actions, level and navmesh, species and herds, dog, camera, teaching, the RmlUi panel (<code>buildPanel</code>)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/farm_demo/CMakeLists.txt">CMakeLists.txt</a></td>
+<td>the <code>farm_demo</code> executable, copies <code>game.json</code>, the scene file and shaders</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/farm_demo/game.json">game.json</a></td>
+<td>the marketplace entry (id, title, tags, modules)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/scenes/farm.scene.json">../../scenes/farm.scene.json</a></td>
+<td>the level: objects, spawn, sun, ground</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../goblin_horde/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Goblin Horde">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Goblin Horde
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../pet_companion/" class="md-footer__link md-footer__link--next" aria-label="Next: Pet companion">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Pet companion
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      MIT licence. KKE is written by Claude (Anthropic) working in the repository.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/Khyretos/kk-engine" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://ko-fi.com/khyretos" target="_blank" rel="noopener" title="ko-fi.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11.351 2.715c-2.7 0-4.986.025-6.83.26C2.078 3.285 0 5.154 0 8.61c0 3.506.182 6.13 1.585 8.493 1.584 2.701 4.233 4.182 7.662 4.182h.83c4.209 0 6.494-2.234 7.637-4a9.5 9.5 0 0 0 1.091-2.338C21.792 14.688 24 12.22 24 9.208v-.415c0-3.247-2.13-5.507-5.792-5.87-1.558-.156-2.65-.208-6.857-.208m0 1.947c4.208 0 5.09.052 6.571.182 2.624.311 4.13 1.584 4.13 4v.39c0 2.156-1.792 3.844-3.87 3.844h-.935l-.156.649c-.208 1.013-.597 1.818-1.039 2.546-.909 1.428-2.545 3.064-5.922 3.064h-.805c-2.571 0-4.831-.883-6.078-3.195-1.09-2-1.298-4.155-1.298-7.506 0-2.181.857-3.402 3.012-3.714 1.533-.233 3.559-.26 6.39-.26m6.547 2.287c-.416 0-.65.234-.65.546v2.935c0 .311.234.545.65.545 1.324 0 2.051-.754 2.051-2s-.727-2.026-2.052-2.026m-10.39.182c-1.818 0-3.013 1.48-3.013 3.142 0 1.533.858 2.857 1.949 3.897.727.701 1.87 1.429 2.649 1.896a1.47 1.47 0 0 0 1.507 0c.78-.467 1.922-1.195 2.623-1.896 1.117-1.039 1.974-2.364 1.974-3.897 0-1.662-1.247-3.142-3.039-3.142-1.065 0-1.792.545-2.338 1.298-.493-.753-1.246-1.298-2.312-1.298"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
