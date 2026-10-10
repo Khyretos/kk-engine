@@ -18,6 +18,7 @@ git fetch FORGEJO <branch> && git checkout -B <branch> FORGEJO/<branch>
 | `jiggle-body-checks.md` | `feature/jiggle-realistic-body` (on `main` fa1b7f1) |
 | `sandbox-checks.md` | `sandbox/feedback-toys-walk` (`sandbox.patch`, made on `main` fa1b7f1, applied on `main` 9ea425b; screenshots in `sandbox-shots/`; extra files `sandbox-toys.scene.json`, `sandbox-wmclose.c`) |
 | `pet-companion-checks.md` | `pet/companion-feedback` (`pet-companion.patch`, 2 commits on `main` 018027c; screenshots in `pet-companion-shots/`) |
+| `android-femfx-off-unused-checks.md` | `fix/android-unused-femfx-off` (`android-femfx-off-unused.patch`, 1 commit on `main` bcc21ec) |
 | `racing-round-checks.md` | none pushed from this inbox (`racing-round.patch` was not in this batch) |
 
 The "Apply and build" steps in the checks files that run `git am` are already
