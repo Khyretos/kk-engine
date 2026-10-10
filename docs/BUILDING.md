@@ -169,6 +169,7 @@ cd build/bin
 
 `kke_tetrahedralizer` (needs `KKE_ENABLE_TETRAHEDRALIZER=ON`) is a
 command-line tool, not an interactive demo:
+
 ```bash
 ./kke_tetrahedralizer <input.off> <output.ktet.json> [facet_size] [cell_size]
 ```
@@ -180,7 +181,7 @@ the `VK_LAYER_PROFILER_unified` Vulkan layer at startup. If it isn't
 installed on your system, the engine logs a warning and runs normally
 without it -- this is intentional, not a bug. To get the actual
 profiler overlay, you need to separately clone, build, and install
-VulkanProfiler (https://github.com/lstalmir/VulkanProfiler) itself:
+VulkanProfiler (<https://github.com/lstalmir/VulkanProfiler>) itself:
 
 ```bash
 # Debian/Ubuntu build deps for VulkanProfiler specifically:
