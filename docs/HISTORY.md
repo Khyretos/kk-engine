@@ -1029,6 +1029,7 @@ the bundled fonts are a floor, not a lock-in.
 ## Where the RmlUi Vulkan backend lives
 
 `RmlVulkanRenderInterface` (`engine/include/kke/RmlVulkanRenderInterface.h`
+
 - `.cpp`) is the whole thing: geometry compiles into the engine's own
 `Buffer` objects, textures (currently: glyph atlases only) get a real
 VMA-backed `VkImage` + `VkSampler` + descriptor set, and untextured draws
