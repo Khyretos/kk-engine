@@ -942,17 +942,17 @@ void SeaDemoModule::buildPanel() {
     s.toggle("Sunk enemies come back", &m_enemiesRespawn);
     s.heading("The fort");
     s.button("Rebuild the fort", [this] { buildFort(); });
-    s.text([this] {
 #if KKE_ENABLE_FEMFX
+    s.text([this] {
         if (!m_physics || m_fortWalls.empty()) return std::string("Its walls splinter in builds with FEMFX (KKE_ENABLE_FEMFX); this one has none.");
         char buf[160];
         const kke::PhysicsModule::PanelStats st = m_physics->panelStats();
         std::snprintf(buf, sizeof(buf), "FEMFX palisade: %u pieces (%u moving), %.2f ms a step", st.pieces, st.awakePieces, st.stepMsAvg);
         return std::string(buf);
-#else
-        return std::string("Its walls splinter in builds with FEMFX (KKE_ENABLE_FEMFX); this one has none.");
-#endif
     });
+#else
+    s.text([] { return std::string("Its walls splinter in builds with FEMFX (KKE_ENABLE_FEMFX); this one has none."); });
+#endif
     s.heading("Throw");
     std::vector<std::string> kinds;
     for (const Kind& k : kKinds) kinds.push_back(k.name);
