@@ -5,5 +5,15 @@
   "version": "0.1.0",
   "tags": ["demo", "fighting", "combat", "ragdoll", "local-multiplayer"],
   "engine_version": "0.3",
-  "modules": ["Settings", "Input", "RigidBodies", "Models", "UI", "Audio", "Duel", "Stats"]
+  "modules": [
+    "Settings",
+    "Input",
+    "RigidBodies",
+    "Models",
+    "UI",
+    "Audio",
+    "Duel",
+    "Stats",
+    "GameShell"
+  ]
 }

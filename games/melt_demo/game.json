@@ -5,5 +5,15 @@
   "version": "0.1.0",
   "tags": ["demo", "fluid", "lava", "melting", "physics"],
   "engine_version": "0.3",
-  "modules": ["MeltDemo", "OrbitCamera"]
+  "modules": [
+    "MeltDemo",
+    "OrbitCamera",
+    "Audio",
+    "DebugControl",
+    "DemoPanel",
+    "GameShell",
+    "Input",
+    "Stats",
+    "UI"
+  ]
 }

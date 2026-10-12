@@ -27,6 +27,7 @@
     "Network",
     "SeaDemo",
     "DemoPanel",
-    "Stats"
+    "Stats",
+    "DebugControl"
   ]
 }

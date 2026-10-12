@@ -5,5 +5,17 @@
   "version": "0.1.0",
   "tags": ["demo", "ai", "rts", "orders", "touch"],
   "engine_version": "0.3",
-  "modules": ["Settings", "Input", "RigidBodies", "Models", "UI", "Audio", "Scripts", "Platoon", "Stats"]
+  "modules": [
+    "Settings",
+    "Input",
+    "RigidBodies",
+    "Models",
+    "UI",
+    "Audio",
+    "Scripts",
+    "Platoon",
+    "Stats",
+    "DemoPanel",
+    "GameShell"
+  ]
 }

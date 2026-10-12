@@ -59,6 +59,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Every dependency is in docs/DEPENDENCIES.md
         run: python3 -W error tools/ci/check_dependencies.py
+      - name: Every game.json lists the modules its game adds
+        run: python3 -W error tools/ci/check_game_modules.py
 
   # Every std:: name must come from a header the file includes. CI's GCC 13
   # still pulls many headers in through others; GCC 15/16 (Arch, Fedora)

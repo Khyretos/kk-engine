@@ -5,5 +5,19 @@
   "version": "0.1.0",
   "tags": ["demo", "synty", "models", "skinning", "animation"],
   "engine_version": "0.3",
-  "modules": ["Models", "OrbitCamera", "Settings", "UI"]
+  "modules": [
+    "Models",
+    "OrbitCamera",
+    "UI",
+    "Audio",
+    "DebugControl",
+    "DemoPanel",
+    "GameShell",
+    "Input",
+    "Physics",
+    "PhysicsBridge",
+    "RigidBodies",
+    "Stats",
+    "SyntyScene"
+  ]
 }

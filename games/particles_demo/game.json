@@ -5,5 +5,14 @@
   "version": "0.1.0",
   "tags": ["demo", "particles", "effects", "fire", "smoke"],
   "engine_version": "0.3",
-  "modules": ["ParticlesDemo", "OrbitCamera"]
+  "modules": [
+    "ParticlesDemo",
+    "OrbitCamera",
+    "Audio",
+    "DebugControl",
+    "DemoPanel",
+    "Input",
+    "Stats",
+    "UI"
+  ]
 }

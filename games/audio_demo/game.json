@@ -14,7 +14,12 @@
     "Audio",
     "SoundVisualizer",
     "AudioDemo",
-    "Stats"
+    "Stats",
+    "DebugControl",
+    "DemoPanel",
+    "GameShell",
+    "Input",
+    "UI"
   ],
   "requirements": {
     "minimum": {

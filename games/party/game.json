@@ -5,5 +5,20 @@
   "version": "0.1.0",
   "tags": ["demo", "party", "minigames", "physics", "online", "split-screen"],
   "engine_version": "0.3",
-  "modules": ["Settings", "Input", "RigidBodies", "UI", "Audio", "Lobby", "Network", "Voice", "Party", "Stats"]
+  "modules": [
+    "Settings",
+    "Input",
+    "RigidBodies",
+    "UI",
+    "Audio",
+    "Lobby",
+    "Network",
+    "Voice",
+    "Party",
+    "Stats",
+    "DemoPanel",
+    "GameShell",
+    "Models",
+    "VoiceHud"
+  ]
 }

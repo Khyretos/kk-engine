@@ -3,7 +3,29 @@
   "title": "Goblin Horde",
   "description": "Hold the old fort against waves of goblins, alone, split screen or online. Pick your character and weapon: sword and great axe combos and spins, a bow that rewards a full draw and a headshot, a slow but steady crossbow. Five goblin types and giant bosses, every big blow marked on the ground first.",
   "version": "0.1.0",
-  "tags": ["demo", "fantasy", "combat", "ai", "crowd", "ragdoll", "co-op", "split-screen", "online"],
+  "tags": [
+    "demo",
+    "fantasy",
+    "combat",
+    "ai",
+    "crowd",
+    "ragdoll",
+    "co-op",
+    "split-screen",
+    "online"
+  ],
   "engine_version": "0.3",
-  "modules": ["Settings", "Input", "RigidBodies", "Models", "UI", "Audio", "Lobby", "Network", "Horde", "Stats"]
+  "modules": [
+    "Settings",
+    "Input",
+    "RigidBodies",
+    "Models",
+    "UI",
+    "Audio",
+    "Lobby",
+    "Network",
+    "Horde",
+    "Stats",
+    "GameShell"
+  ]
 }

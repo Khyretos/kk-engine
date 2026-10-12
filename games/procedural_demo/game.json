@@ -10,6 +10,11 @@
     "RigidBodies",
     "OrbitCamera",
     "ProceduralDemo",
-    "Stats"
+    "Stats",
+    "Audio",
+    "DemoPanel",
+    "GameShell",
+    "Input",
+    "UI"
   ]
 }

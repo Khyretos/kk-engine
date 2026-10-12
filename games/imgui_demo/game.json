@@ -7,12 +7,7 @@
   "banner": "",
   "tags": ["demo", "imgui", "ui"],
   "engine_version": "0.1.0",
-  "modules": [
-    "Grid",
-    "OrbitCamera",
-    "ImGuiShowcase",
-    "Stats"
-  ],
+  "modules": ["Grid", "OrbitCamera", "ImGuiShowcase", "Stats", "DebugControl"],
   "requirements": {
     "minimum": {
       "vram_mb": 64,

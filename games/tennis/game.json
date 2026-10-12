@@ -5,5 +5,21 @@
   "version": "0.1.0",
   "tags": ["demo", "sport", "tennis", "physics", "femfx"],
   "engine_version": "0.3",
-  "modules": ["Settings", "Input", "RigidBodies", "Physics", "Models", "UI", "Audio", "Lobby", "Network", "DemoPanel", "Tennis", "Stats"]
+  "modules": [
+    "Settings",
+    "Input",
+    "RigidBodies",
+    "Physics",
+    "Models",
+    "UI",
+    "Audio",
+    "Lobby",
+    "Network",
+    "DemoPanel",
+    "Tennis",
+    "Stats",
+    "GameShell",
+    "Voice",
+    "VoiceHud"
+  ]
 }
