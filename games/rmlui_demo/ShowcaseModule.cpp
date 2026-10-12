@@ -1,6 +1,7 @@
 #include "ShowcaseModule.h"
 
 #include "kke/Application.h"
+#include "kke/DevTools.h"
 #include "kke/Log.h"
 #include "kke/modules/SettingsModule.h"
 #include "kke/modules/UiModule.h"
@@ -98,7 +99,7 @@ void ShowcaseModule::init(kke::Application& app) {
     // KKE_UI_ROOT lets you point at the source folder
     // (games/rmlui_demo/ui/) so .rcss edits + F5 show up without a rebuild.
     std::string root = "ui/";
-    if (const char* env = std::getenv("KKE_UI_ROOT")) {
+    if (const char* env = kke::dev::env("KKE_UI_ROOT")) {
         root = env;
         if (!root.empty() && root.back() != '/') root += '/';
         kke::log::get(name())->info("loading UI documents from KKE_UI_ROOT='{}'", root);
@@ -117,7 +118,7 @@ void ShowcaseModule::init(kke::Application& app) {
     m_nav = context->LoadDocument(root + "nav.rml");
     // KKE_SHOWCASE_START=<screen> opens straight on one screen — handy
     // while iterating on a single .rml file, and for screenshots.
-    const char* start = std::getenv("KKE_SHOWCASE_START");
+    const char* start = kke::dev::env("KKE_SHOWCASE_START");
     setScreen(start && m_documents.count(start) ? start : "menu");
 }
 
