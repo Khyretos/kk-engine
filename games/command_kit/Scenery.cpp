@@ -83,6 +83,12 @@ kke::ModelModule::InstanceId Scenery::place(const std::string& name, const glm::
         kke::RigidWorld::BodyDesc b;
         b.motion = kke::RigidWorld::Motion::Static;
         b.halfExtents = glm::max((mx - mn) * 0.5f, glm::vec3(0.02f));
+        const bool tree = name.find("_Tree") != std::string::npos;
+        if (tree) {
+            const float r = std::max(0.15f, 0.06f * ((mx.x - mn.x) + (mx.z - mn.z)));
+            b.halfExtents.x = r;
+            b.halfExtents.z = r;
+        }
         const glm::quat q = glm::angleAxis(glm::radians(-yawDegrees), glm::vec3(0, 1, 0));
         b.position = pos + q * ((mn + mx) * 0.5f);
         b.rotation = q;

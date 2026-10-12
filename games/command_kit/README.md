@@ -459,17 +459,18 @@ Pitfalls the code shows:
   index and the drawn ring will not match.
 - `CommandHud::build` creates a data model named `cmd`; a second HUD in
   the same RmlUi context fails to build.
-- `Scenery::place` with `collide` uses the whole bounding box: a tree's
-  collider includes its canopy. Pass `collide = false` and add a thinner
-  `block` for the trunk when that matters.
+- `Scenery::place` with `collide` gives a model a box over its bounds,
+  except trees (names containing `_Tree`), which collide on a
+  trunk-sized column of their full height so units can walk under the
+  canopy.
 - `Humanoid::update` takes a yaw that it *subtracts* from the model yaw
   (`modelYaw - yawDegrees`); Platoon passes `180 - yaw` for its own
   convention. Check which way your people face on the first run.
 - Destroy the HUD, people, `HumanoidKit` and `Scenery` in your module's
   `shutdown`, before the engine modules go.
-- `Scenery` scans every pack under the asset folder. Against a large
-  shared cache that can be slow; the Goblin Horde scans with
-  `CatalogScanOptions::onlyPacks` for that reason.
+- `Scenery`'s constructor takes the packs to scan (`onlyPacks`); pass
+  the ones your game uses, as Platoon and Pet Companion do, because
+  scanning every pack of a large shared library is slow.
 
 ## Files
 
