@@ -648,6 +648,7 @@ HairStats ClothSystem::hairStats(uint32_t id) const {
         h.vertices += c->second.stats.vertices;
         h.guides += c->second.strandVerts ? c->second.stats.vertices / c->second.strandVerts : 0;
         h.sleeping = h.sleeping && !m_system.GetBodyInterface().IsActive(c->second.body);
+        if (c->second.hairMotion > 0.0f) h.iterations += uint32_t(c->second.iterations);
     }
     return h;
 }

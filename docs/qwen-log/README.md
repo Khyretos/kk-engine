@@ -7,3 +7,4 @@ per task.
 | Task | PR | Lines +/- | Coder units (passed / Claude-fixed / failed) | Coder lines drafted / kept | Claude lines | Coder tokens | Claude tokens | CI rounds | Waits |
 |---|---|---|---|---|---|---|---|---|---|
 | ENG-B068 barrel play block | #27 | +13 / -7 in 4 files (plus lessons and situations) | 3 units: 1 passed on attempt 1 (code), 2 Claude-fixed (README, BUGS.md; K1, K2) | 4 drafted / 2 kept as drafted | 13 (test 9, README 3, BUGS 1) | 3,610 (84 s GPU, soucouyant) | unmeasured per task | pending | none |
+| CI-5 flaky Hair test | pending | +14 / -9 in 3 files | 2 units: 2 passed on attempt 1, both style-corrected by Claude (K3) | 6 drafted / 3 kept as drafted | 12 (test 11, style 3) | 475 (15 s GPU, soucouyant) | unmeasured per task | pending | none |
