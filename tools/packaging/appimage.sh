@@ -23,22 +23,35 @@
 # their settings and saves are kept although the AppImage is read-only.
 set -euo pipefail
 
-die() { echo "appimage.sh: error: $*" >&2; exit 1; }
+die() {
+	echo "appimage.sh: error: $*" >&2
+	exit 1
+}
 
 repo="$(cd "$(dirname "$0")/../.." && pwd)"
 runtime="" out="" tarball=""
 while [ $# -gt 0 ]; do
-    case "$1" in
-    --runtime) runtime="$2"; shift 2 ;;
-    --out) out="$2"; shift 2 ;;
-    -*) die "unknown argument '$1' (see the top of this script)" ;;
-    *) [ -z "$tarball" ] || die "one .tar.gz at a time"; tarball="$1"; shift ;;
-    esac
+	case "$1" in
+	--runtime)
+		runtime="$2"
+		shift 2
+		;;
+	--out)
+		out="$2"
+		shift 2
+		;;
+	-*) die "unknown argument '$1' (see the top of this script)" ;;
+	*)
+		[ -z "$tarball" ] || die "one .tar.gz at a time"
+		tarball="$1"
+		shift
+		;;
+	esac
 done
 [ -n "$tarball" ] || die "which download? Give the kk-engine-<version>-linux-x86_64.tar.gz package.sh made"
 [ -f "$tarball" ] || die "'$tarball' does not exist"
 [ -n "$runtime" ] && [ -f "$runtime" ] || die "--runtime: the AppImage runtime file (docker compose run --rm appimage ... has it)"
-command -v mksquashfs > /dev/null || die "mksquashfs is not installed (squashfs-tools)"
+command -v mksquashfs >/dev/null || die "mksquashfs is not installed (squashfs-tools)"
 base="$(basename "$tarball" .tar.gz)"
 [[ "$base" =~ ^kk-engine-(.+)-linux-x86_64$ ]] || die "'$tarball' is not named like package.sh's kk-engine-<version>-linux-x86_64.tar.gz"
 version="${BASH_REMATCH[1]}"
@@ -54,9 +67,9 @@ app="$work/$base"
 [ -x "$app/kke_demo" ] || die "'$tarball' has no kke_demo: is it a package.sh download?"
 
 # --- The demos AppRun may start: the executables package.sh put in. ----
-(cd "$app" && find . -maxdepth 1 -type f -perm -u+x ! -name '*.so*' | sed 's|^\./||' | sort) > "$app/games.txt"
+(cd "$app" && find . -maxdepth 1 -type f -perm -u+x ! -name '*.so*' | sed 's|^\./||' | sort) >"$app/games.txt"
 
-cat > "$app/AppRun" << 'EOF'
+cat >"$app/AppRun" <<'EOF'
 #!/bin/sh
 # Starts a demo from this AppImage (tools/packaging/appimage.sh).
 here="$(dirname "$(readlink -f "$0")")"
@@ -104,7 +117,7 @@ chmod +x "$app/AppRun"
 # --- Menu entry and icon (the AppImage spec wants both at the top). ------
 cp "$repo/assets/branding/logo-512.png" "$app/kk-engine.png"
 ln -s kk-engine.png "$app/.DirIcon"
-cat > "$app/kk-engine.desktop" << EOF
+cat >"$app/kk-engine.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=Kreative Kompas Engine
@@ -114,26 +127,26 @@ Icon=kk-engine
 Categories=Game;
 Terminal=false
 EOF
-if command -v desktop-file-validate > /dev/null; then
-    desktop-file-validate "$app/kk-engine.desktop" || die "kk-engine.desktop is not a valid desktop entry"
+if command -v desktop-file-validate >/dev/null; then
+	desktop-file-validate "$app/kk-engine.desktop" || die "kk-engine.desktop is not a valid desktop entry"
 fi
 # The licences of what is inside the runtime ride along with the others.
 notice="$(dirname "$runtime")/LICENSES-runtime.txt"
 [ -f "$notice" ] || die "$notice is missing: the runtime's licences must ship with it (docker/appimage.Dockerfile makes it)"
 {
-    echo
-    echo "================================================================"
-    echo "The AppImage file itself starts with the AppImage runtime, a small"
-    echo "program that opens it. It and the libraries inside it:"
-    cat "$notice"
-} >> "$app/THIRD_PARTY_LICENSES.txt"
+	echo
+	echo "================================================================"
+	echo "The AppImage file itself starts with the AppImage runtime, a small"
+	echo "program that opens it. It and the libraries inside it:"
+	cat "$notice"
+} >>"$app/THIRD_PARTY_LICENSES.txt"
 
 # --- Runtime + squashfs = the AppImage. ---------------------------------
 # zstd like appimagetool; fixed times and root-owned files, so the same
 # folder always gives the same image.
-mksquashfs "$app" "$work/image.squashfs" -root-owned -noappend -comp zstd -b 1M -mkfs-time 0 -all-time 0 -quiet -no-progress > /dev/null
-cat "$runtime" "$work/image.squashfs" > "$image.part"
+mksquashfs "$app" "$work/image.squashfs" -root-owned -noappend -comp zstd -b 1M -mkfs-time 0 -all-time 0 -quiet -no-progress >/dev/null
+cat "$runtime" "$work/image.squashfs" >"$image.part"
 chmod 755 "$image.part"
 mv "$image.part" "$image"
-(cd "$out" && sha256sum "$(basename "$image")" > "$(basename "$image").sha256")
-echo "packaged $image ($(du -h "$image" | cut -f1)): $(tr '\n' ' ' < "$app/games.txt")"
+(cd "$out" && sha256sum "$(basename "$image")" >"$(basename "$image").sha256")
+echo "packaged $image ($(du -h "$image" | cut -f1)): $(tr '\n' ' ' <"$app/games.txt")"
