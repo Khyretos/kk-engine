@@ -489,8 +489,9 @@ void ShowcaseModule::DragDropListener::ProcessEvent(Rml::Event& event) {
 void ShowcaseModule::useItem(const std::string& id) {
     Item* item = slotById(id);
     if (!item || item->category != "Consumable") return;
-    showInventoryToast("Used " + item->name + (item->name == "Health Potion" ? " — +40 health" : ""));
+    showInventoryToast("Used " + item->name + (item->name == "Health Potion" ? " — +40 health" : (item->name == "Mana Draught" ? " — +30 mana" : "")));
     if (item->name == "Health Potion") m_hp = std::min<float>(static_cast<float>(m_maxHp), m_hp + 40.0f);
+    if (item->name == "Mana Draught") m_mp = std::min(static_cast<float>(m_maxMp), m_mp + 30.0f);
     if (--item->count <= 0) *item = Item{};
     if (id == m_selected) m_selected.clear();
     recomputeWeight();
@@ -778,7 +779,11 @@ void ShowcaseModule::chooseDialog(int index) {
         setScreen("hud");
         return;
     }
-    if (choice.next == 4 && m_gold >= 40) m_gold -= 40;
+    int price = (m_node == 5) ? 35 : 40;
+    if (choice.next == 4 && m_gold >= price) {
+        m_gold -= price;
+        m_invModel.DirtyVariable("gold");
+    }
     startDialogNode(choice.next);
 }
 

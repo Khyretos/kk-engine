@@ -31,7 +31,7 @@ Status: ⬜ not started, 🔨 in progress, ✅ done.
 
 | ID | Bug | Done when | Status |
 |---|---|---|---|
-| ENG-B067 | rmlui_demo trader: "Fine, thirty-five" charges 40 gold, the inventory gold does not refresh after paying, the Mana Draught does nothing. | The deal charges 35, the gold label updates, the draught restores 30 mana; a test covers the price. | ⬜ |
+| ENG-B067 | rmlui_demo trader: "Fine, thirty-five" charges 40 gold, the inventory gold does not refresh after paying, the Mana Draught does nothing. | The deal charges 35, the gold label updates, the draught restores 30 mana; a check covers the price. | ✅ |
 | ENG-B068 | `SM_Prop_Barrel_01` is in both the `crate` and `barrel` play blocks, so Barrel recipes never fire. | `blockOf("SM_Prop_Barrel_01")` is `barrel`; a test checks no mesh is in two blocks. | ✅ PR #27 |
 | ENG-B069 | Sandbox graph editor: a change and a Done click in one frame return `Closed`, so the graph is not recompiled. | A changed graph closed in the same frame is marked dirty and recompiled; a check covers it. | ✅ |
 | ENG-B072 | duel: a round won on time still shows "K.O."; two-player mode re-adds both AI agents every frame; only player 1 can skip the wait between rounds. | "Time" shows for a timeout, the agents are set once, either player skips. | ⬜ |
