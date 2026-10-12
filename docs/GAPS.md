@@ -64,3 +64,100 @@ Status: ⬜ not started, 🔨 in progress, ✅ done.
 
 ENG-G01 (bugs) is E1a above. ENG-G02 (textures from files) is done: ROADMAP
 "Real image/texture loading from files" is 🟢.
+
+## E2: feature parity with other engines (85 features)
+
+The list from the big-projects plan, compared with Godot, Unity, Unreal,
+Bevy and O3DE (editor UI left out: the engine is used from the IDE, in
+game or through the node scripter). The status column is a first pass
+from ROADMAP.md and docs/; each task re-checks it before starting. ✅
+exists, 🟡 partial, ⬜ missing. Order: rendering and lighting first, then
+by area. The goal is parity with the big engines and more.
+
+| ID | Area | Feature | Status |
+|---|---|---|---|
+| ENG-F01 | Rendering | Real-time global illumination | ⬜ |
+| ENG-F02 | Rendering | Ray-traced reflections and refractions | ⬜ |
+| ENG-F03 | Rendering | Volumetric lighting and fog (height fog only today) | 🟡 |
+| ENG-F04 | Rendering | Screen-space ambient occlusion (GTAO/SSAO) | ⬜ |
+| ENG-F05 | Rendering | Temporal anti-aliasing (MSAA only today) | ⬜ |
+| ENG-F06 | Rendering | Foveated rendering | ⬜ |
+| ENG-F07 | Rendering | Ray-traced shadows | ⬜ |
+| ENG-F08 | Rendering | Deferred rendering path | ⬜ |
+| ENG-F09 | Rendering | Virtual texture streaming | ⬜ |
+| ENG-F10 | Rendering | Post stack: bloom, depth of field, motion blur, LUT grading (tone map, exposure and grade exist) | 🟡 |
+| ENG-F11 | Rendering | GPU particle/VFX system (one compute fountain today; G18) | 🟡 |
+| ENG-F12 | Rendering | Decals | ⬜ |
+| ENG-F13 | Rendering | Occlusion culling at scale, GPU-driven, HZB (frustum culling exists) | 🟡 |
+| ENG-F14 | Rendering | Upscalers such as FSR (render scale exists) | 🟡 |
+| ENG-F15 | Lighting | Light probes with baking | ⬜ |
+| ENG-F16 | Lighting | Contact shadows | ⬜ |
+| ENG-F17 | Lighting | Light portals | ⬜ |
+| ENG-F18 | Lighting | Screen-space reflections | ⬜ |
+| ENG-F19 | 2D | 2D toolkit: tilemaps, sprite animation, 2D lights, 2D physics, parallax | ⬜ |
+| ENG-F20 | XR | OpenXR (VR/AR) on the Vulkan renderer | ⬜ |
+| ENG-F21 | Animation | 2D blend trees (1D blend spaces exist; G19) | 🟡 |
+| ENG-F22 | Animation | IK solver (two-bone, foot, hand and look IK exist; CCD missing) | 🟡 |
+| ENG-F23 | Animation | Motion capture import and clean-up | ⬜ |
+| ENG-F24 | Animation | Procedural animation (docs/PROCEDURAL_ANIMATION.md) | ✅ |
+| ENG-F25 | Animation | Facial animation, blend shapes | ⬜ |
+| ENG-F26 | Animation | Retargeting between skeletons (by bone name; rest-pose matching missing) | 🟡 |
+| ENG-F27 | Animation | Runtime sequencer and cutscenes from Lua or the node scripter | ⬜ |
+| ENG-F28 | Animation | State machine with events and root motion (crossfading state machine and root motion exist; events missing) | 🟡 |
+| ENG-F29 | Physics | Soft bodies: cloth and jelly (docs/CLOTH.md, docs/JIGGLE.md) | ✅ |
+| ENG-F30 | Physics | Fluid simulation (PBF liquids; G12 leftovers) | 🟡 |
+| ENG-F31 | Physics | Vehicle physics (docs/VEHICLES.md, racing) | ✅ |
+| ENG-F32 | Physics | Character controller with advanced locomotion (docs/MOVEMENT.md) | ✅ |
+| ENG-F33 | Physics | Ragdolls with full-body constraints (docs/RAGDOLLS.md) | ✅ |
+| ENG-F34 | Physics | Debris with secondary collisions (G10 leftovers) | 🟡 |
+| ENG-F35 | Physics | Cloth-to-cloth collision | ✅ |
+| ENG-F36 | Physics | Strand hair (docs/HAIR.md) | ✅ |
+| ENG-F37 | Physics | Joints and constraints API in Lua (hinge, slider, spring, motor) | ⬜ |
+| ENG-F38 | Audio | HRTF spatial audio | ⬜ |
+| ENG-F39 | Audio | Dynamic, adaptive music | ⬜ |
+| ENG-F40 | Audio | Spatial voice chat (proximity voice exists) | ✅ |
+| ENG-F41 | Audio | Occlusion and diffraction (ray occlusion exists; diffraction missing) | 🟡 |
+| ENG-F42 | Audio | Mixer buses, snapshots, ducking, reverb zones | 🟡 |
+| ENG-F43 | UI | Widgets with drag and drop (RmlUi; inventory drag exists) | 🟡 |
+| ENG-F44 | UI | Data binding (RmlUi data models) | ✅ |
+| ENG-F45 | UI | Animation curves for UI | 🟡 |
+| ENG-F46 | UI | Multi-monitor | ⬜ |
+| ENG-F47 | Input | Gesture recognition beyond pinch, pan and twist | 🟡 |
+| ENG-F48 | Input | Haptics API (rumble on impacts is next in INPUT) | 🟡 |
+| ENG-F49 | Input | Virtual joystick for phones | 🟡 |
+| ENG-F50 | Input | Action maps, rebinding, glyphs, per-player devices (docs/INPUT.md) | ✅ |
+| ENG-F51 | Scripting | Visual scripting (node graph; #33 leftovers) | 🟡 |
+| ENG-F52 | Scripting | Hot reload of scripts | ✅ |
+| ENG-F53 | Gameplay | Save and load: versioned files, slots, cloud hook | 🟡 |
+| ENG-F54 | Gameplay | Replays of game sessions | 🟡 |
+| ENG-F55 | Networking | Rollback networking for fighting games (GGPO-style) | ⬜ |
+| ENG-F56 | Networking | Client-side prediction | ✅ |
+| ENG-F57 | Networking | Dedicated servers (docs/SERVER_HOSTING.md) | ✅ |
+| ENG-F58 | Networking | Matchmaking (directory exists; relay and join codes #44) | 🟡 |
+| ENG-F59 | Networking | Cross-platform play | 🟡 |
+| ENG-F60 | Content | Texture compression ASTC/BCn (#39) | ⬜ |
+| ENG-F61 | Content | Texture streaming | ⬜ |
+| ENG-F62 | Content | LOD generation | ⬜ |
+| ENG-F63 | Content | Animation compression | ⬜ |
+| ENG-F64 | Content | Level streaming | ⬜ |
+| ENG-F65 | Platforms | Consoles (#69) | ⬜ |
+| ENG-F66 | Platforms | Steamworks: achievements, cloud saves (optional module) | ⬜ |
+| ENG-F67 | Tooling | Runtime CPU/GPU/memory profiler with capture files (frame stats exist) | 🟡 |
+| ENG-F68 | Tooling | Opt-in crash reporting | ⬜ |
+| ENG-F69 | Tooling | Game test harness: input playback, screenshot compare (virtual input and check_game exist) | 🟡 |
+| ENG-F70 | AI | Pathfinding around dynamic obstacles (tiled/dynamic navmesh missing) | 🟡 |
+| ENG-F71 | AI | Behaviour trees | ⬜ |
+| ENG-F72 | AI | Utility AI (docs/AI.md) | ✅ |
+| ENG-F73 | AI | Crowds of hundreds of agents (flocking exists) | 🟡 |
+| ENG-F74 | AI | Navmesh baking (Recast) | ✅ |
+| ENG-F75 | World | Terrain sculpting | ⬜ |
+| ENG-F76 | World | Heightmap terrain | ⬜ |
+| ENG-F77 | World | Procedural terrain (ACTION_PLAN 4.1) | ⬜ |
+| ENG-F78 | World | World streaming (ACTION_PLAN 3.6) | ⬜ |
+| ENG-F79 | World | Foliage | ⬜ |
+| ENG-F80 | World | Water with waves (ocean and buoyancy exist) | ✅ |
+| ENG-F81 | World | Snow and weather | ⬜ |
+| ENG-F82 | World | Day/night cycle (moods exist, no clock) | 🟡 |
+| ENG-F83 | World | Biomes | ⬜ |
+| ENG-F84 | Localization | String tables, plurals, font fallback, RTL, language switch | ⬜ |
+| ENG-F85 | Accessibility | Subtitles, colour-blind modes, UI scale, remapping, screen-reader hooks (captions and remapping exist) | 🟡 |
