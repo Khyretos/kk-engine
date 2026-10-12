@@ -15,7 +15,7 @@ std::vector<PlayBlock> defaultPlayBlocks() {
                          "SK_Character_SummerGirl", "SK_Character_Roadworker", "SK_Character_Hotdog", "SK_Character_Female_Druid" },
                        true, 1.0f, {} });
     blocks.push_back({ "bat", "Bat", PlayBlockKind::Tool, { "SM_Prop_Bat_01" }, false, 1.0f, {} });
-    blocks.push_back({ "crate", "Box", PlayBlockKind::Prop, { "SM_Prop_Crate_01", "SM_Prop_Crate_02", "SM_Prop_Barrel_01" }, false, 1.0f, {} });
+    blocks.push_back({ "crate", "Box", PlayBlockKind::Prop, { "SM_Prop_Crate_01", "SM_Prop_Crate_02" }, false, 1.0f, {} });
     blocks.push_back({ "barrel", "Barrel", PlayBlockKind::Prop, { "SM_Prop_Barrel_01" }, false, 1.0f, {} });
     blocks.push_back({ "ball", "Ball", PlayBlockKind::Prop, { "SM_Primitive_SoccerBall_01", "SM_Prop_Bowling_Ball_01" }, false, 1.0f, {} });
     blocks.push_back({ "cone", "Cone", PlayBlockKind::Prop, { "SM_Primitive_Cone_01" }, false, 1.0f, {} });

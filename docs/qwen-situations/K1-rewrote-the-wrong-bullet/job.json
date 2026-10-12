@@ -1,0 +1,12 @@
+[
+  {
+    "name": "b068-readme",
+    "role": "worker/docs",
+    "mode": "patch",
+    "out": "games/sandbox/README.md",
+    "focus": ["Barrel", "same asset in two blocks"],
+    "prompt": "The bug is fixed: SM_Prop_Barrel_01 is now only in the barrel block (engine/src/PlayBlocks.cpp), so blockOf() returns barrel for it and Barrel recipes fire. The test PlayBlocks.EveryMeshBelongsToOneBlock checks that no mesh is in two blocks.\nUpdate games/sandbox/README.md: delete the whole known-issue bullet that starts with '- **Barrel reports as Box.**' (all four of its lines). In the bullet '- **The same asset in two blocks**', keep the rule but replace 'see the note about Barrel below.' with a sentence saying the default blocks never share a mesh and a test checks it. Keep the line width under 80 characters like the rest of the file.",
+    "check": "python3 /tmp/claude-1000/-media-development/689ef2e5-dd4c-4322-9e2b-ee59fe58d080/scratchpad/jobs/chk_b068doc.py",
+    "precheck": false
+  }
+]

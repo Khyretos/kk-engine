@@ -8,3 +8,5 @@ can be rerun after the models improve. Numbers are kk-engine's own
 
 | # | Date | Task / unit | What went wrong | Rule for the next job | Situation |
 |---|---|---|---|---|---|
+| K1 | 2026-10-12 | ENG-B068 `b068-readme` | Asked to delete one bullet and edit an earlier one, the Coder replaced the deleted bullet with a copy of the earlier one and left the earlier one stale; both repair rounds returned no edit blocks. Claude's own part: the job's check also tested a file the next job edits, so the repair rounds were fed another file's error. | One job edits one place: split "delete X" and "edit Y" into two patch jobs, each with `focus` on its own lines. A job's check tests only that job's file. | [K1](qwen-situations/K1-rewrote-the-wrong-bullet/) |
+| K2 | 2026-10-12 | ENG-B068 `b068-bugs` | The Status cell got an extra unrequested sentence, and file, function and test names were bare text. | Give the exact sentence shape in the prompt and say "nothing else"; say "code names in backticks"; the check rejects extra sentences and bare names. | [K2](qwen-situations/K2-extra-sentence-bare-names/) |
