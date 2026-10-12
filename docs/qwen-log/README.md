@@ -13,3 +13,4 @@ per task.
 | ENG-B069 graph dirty on close | pending | +1 / -1 code, BUGS row | 2 units: both passed on attempt 1 | 2 drafted / 2 kept | 0 | 110 (3 s GPU, soucouyant) | unmeasured per task | pending | none |
 | ENG-B067 rmlui_demo trader | pending | +7 / -2 code, BUGS row | 3 units: 3 passed on attempt 1 (row rerun once: Claude's own check had unquoted parentheses) | 9 drafted / 9 kept | 0 | about 1,300 (60 s GPU, soucouyant) | unmeasured per task | pending | none |
 | ENG-B074 dev switches | pending | +8 / -6 code, BUGS row | 3 units: 3 passed on attempt 1, 1 corrected by Claude (K4) | 15 drafted / 14 kept | 1 | about 900 (40 s GPU, soucouyant) | unmeasured per task | pending | none |
+| ENG-B072 duel round end | pending | +14 / -8 in 3 files, BUGS row | 6 units: 6 passed on attempt 1; header member applied by Claude as literal spec | 19 drafted / 19 kept | 1 | about 1,500 (70 s GPU, soucouyant) | unmeasured per task | pending | none |

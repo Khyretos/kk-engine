@@ -152,6 +152,7 @@ private:
     float m_phaseTime = 0.0f;
     int m_round = 1;
     std::string m_roundWinner;
+    bool m_roundOnTime = false; // the last round ended on the clock, not by a knockout
     bool m_twoPlayers = false, m_allBots = false;
     float m_quitAfter = -1.0f, m_clock = 0.0f, m_reportAt = 5.0f;
     uint32_t m_seed = 1;

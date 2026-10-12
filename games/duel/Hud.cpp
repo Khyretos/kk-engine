@@ -98,7 +98,7 @@ void DuelModule::updateHud() {
         break;
     case Phase::Fight: break;
     case Phase::RoundOver:
-        banner = "K.O.";
+        banner = m_roundOnTime ? "Time" : "K.O.";
         sub = m_roundWinner + " takes round " + std::to_string(m_round);
         break;
     case Phase::MatchOver:
