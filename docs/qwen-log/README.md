@@ -8,3 +8,4 @@ per task.
 |---|---|---|---|---|---|---|---|---|---|
 | ENG-B068 barrel play block | #27 | +13 / -7 in 4 files (plus lessons and situations) | 3 units: 1 passed on attempt 1 (code), 2 Claude-fixed (README, BUGS.md; K1, K2) | 4 drafted / 2 kept as drafted | 13 (test 9, README 3, BUGS 1) | 3,610 (84 s GPU, soucouyant) | unmeasured per task | pending | none |
 | CI-5 flaky Hair test | pending | +14 / -9 in 3 files | 2 units: 2 passed on attempt 1, both style-corrected by Claude (K3) | 6 drafted / 3 kept as drafted | 12 (test 11, style 3) | 475 (15 s GPU, soucouyant) | unmeasured per task | pending | none |
+| CI-2 racing sync hazard | pending | +5 in 1 file | 1 unit: passed on attempt 1 (8 clean racing runs) | 4 drafted / 1 kept; comment reworded by Claude (Claude's own prompt had the cause wrong, no lesson) | 4 | 232 (11 s GPU, soucouyant) | unmeasured per task | pending | about 1 h of diagnosis runs (hazard in 1 of 2 runs) |
