@@ -4,6 +4,7 @@
 #include "kke/Module.h"
 #include "kke/SceneLoader.h"
 #include "kke/ScriptCalls.h"
+#include "kke/ScriptLights.h"
 #include "kke/ScriptStore.h"
 #include "kke/ScriptTables.h"
 #include "kke/ScriptVM.h"
@@ -56,6 +57,7 @@ class DynamicMeshRenderer;
 //   ui.*         open, load, text, rml, class, property, show, close,
 //                onClick                                   (UiModule, RmlUi)
 //   scene.*      list, load, unload, spawnPoint            (ModelModule + scenes/)
+//   light.*      point, move, set, remove, count: lamps     (kke/ScriptLights.h)
 //   net.*        role, isServer, connected, playerId, players, send
 //                                                          (NetModule)
 //   audio.*      impact(pos, material, intensity), materials   (AudioModule)
@@ -168,6 +170,7 @@ private:
     std::vector<std::pair<int, std::string>> m_pendingClicks;
     std::unique_ptr<Rml::EventListener> m_clickListener;
     std::vector<Scene> m_scenes;
+    ScriptLights m_lights; // light.*: lamps scripts placed (kke/ScriptLights.h)
     int m_nextId = 1;
     AssetCatalog m_catalog;
     bool m_catalogScanned = false;

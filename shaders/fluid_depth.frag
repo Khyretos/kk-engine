@@ -8,9 +8,9 @@ layout(location = 3) in vec2 fragCorner;
 layout(location = 0) out float outDepth;
 layout(location = 1) out vec4 outColor;
 
-struct GPULight { vec4 directionOrPosition; vec4 colorIntensity; };
+struct GPULight { vec4 directionOrPosition; vec4 colorIntensity; vec4 params; };
 layout(set = 0, binding = 0) uniform LightingUBO {
-    GPULight lights[4];
+    GPULight lights[16]; // kke::Lighting::kMaxLights
     vec4 ambient;
     vec4 cameraPos;
     mat4 lightViewProj;

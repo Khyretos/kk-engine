@@ -917,22 +917,22 @@ void Application::run() {
         }
         const glm::mat4& lightViewProj = lightViewProjs[0];
 
-        // Point-light shadows: each point light that casts shadows (Light::castsPointShadow, and shadows on)
-        // gets six faces around it, each in its own tile of the point map: tile = light * ShadowMap::kPointFaces + face.
-        // The map shrinks to one tile when no light casts point shadows.
+        // Point-light shadows: the first ShadowMap::kMaxPointShadows point lights that cast shadows
+        // (Lighting::pointShadowSlots) get six faces each, in their slot's tiles of the point map:
+        // tile = slot * ShadowMap::kPointFaces + face. The map shrinks to one tile when none casts.
+        const std::array<int, Lighting::kMaxLights> pointSlots = m_lighting.pointShadowSlots();
         bool anyPointShadow = false;
-        for (const Light& l : m_lighting.lights) anyPointShadow = anyPointShadow || (m_lighting.shadowsEnabled && l.castsPointShadow());
+        for (int s : pointSlots) anyPointShadow = anyPointShadow || s >= 0;
         if (m_pointShadowMap->setTiles(anyPointShadow ? ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces : 1)) writeShadowMapDescriptor();
         std::array<glm::mat4, ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces> pointViewProjs{};
         std::array<glm::vec4, ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces> pointTiles{};
-        for (uint32_t l = 0; l < ShadowMap::kMaxPointShadows; ++l) {
+        for (uint32_t t = 0; t < ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces; ++t) pointTiles[t] = m_pointShadowMap->tileRect(t);
+        for (int l = 0; l < Lighting::kMaxLights; ++l) {
+            if (pointSlots[l] < 0) continue;
             const Light& light = m_lighting.lights[l];
-            for (uint32_t f = 0; f < ShadowMap::kPointFaces; ++f) {
-                const uint32_t t = l * ShadowMap::kPointFaces + f;
-                pointTiles[t] = m_pointShadowMap->tileRect(t);
-                if (light.castsPointShadow())
-                    pointViewProjs[t] = ShadowMap::pointFaceViewProj(light.position, f, light.shadowRange, m_pointShadowMap->tileResolution());
-            }
+            for (uint32_t f = 0; f < ShadowMap::kPointFaces; ++f)
+                pointViewProjs[static_cast<uint32_t>(pointSlots[l]) * ShadowMap::kPointFaces + f] =
+                    ShadowMap::pointFaceViewProj(light.position, f, light.shadowRange, m_pointShadowMap->tileResolution());
         }
 
         RenderContext renderCtx{};
@@ -1048,10 +1048,10 @@ void Application::run() {
                 m_pointShadowMap->beginRenderPass(cmd);
                 if (anyPointShadow) {
                     shadowCtx.renderPass = m_pointShadowMap->renderPass();
-                    for (uint32_t l = 0; l < ShadowMap::kMaxPointShadows; ++l) {
-                        if (!m_lighting.lights[l].castsPointShadow()) continue;
+                    for (int l = 0; l < Lighting::kMaxLights; ++l) {
+                        if (pointSlots[l] < 0) continue;
                         for (uint32_t f = 0; f < ShadowMap::kPointFaces; ++f) {
-                            const uint32_t t = l * ShadowMap::kPointFaces + f;
+                            const uint32_t t = static_cast<uint32_t>(pointSlots[l]) * ShadowMap::kPointFaces + f;
                             m_pointShadowMap->beginTile(cmd, t);
                             shadowCtx.lightViewProj = pointViewProjs[t];
                             shadowCtx.viewIndex = 0;

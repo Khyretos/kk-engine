@@ -875,6 +875,7 @@ void ScriptModule::releaseScript(const std::string& source) {
             if (mine(s.source)) unloadScene(s.loaded, *models, rb ? &rb->world() : nullptr);
 #endif
     m_scenes.erase(std::remove_if(m_scenes.begin(), m_scenes.end(), [&](const Scene& s) { return mine(s.source); }), m_scenes.end());
+    m_lights.releaseAll(m_app->lighting(), source);
 }
 
 void ScriptModule::releaseAll() {
@@ -889,6 +890,7 @@ void ScriptModule::releaseAll() {
     for (const ClickHandler& h : m_clickHandlers) add(h.source);
     for (const Scene& s : m_scenes) add(s.source);
     for (const std::string& s : sources) releaseScript(s);
+    m_lights.clear(m_app->lighting());
 }
 
 } // namespace kke

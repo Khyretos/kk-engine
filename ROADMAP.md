@@ -63,7 +63,7 @@ limitations. 🔴 Not started / stub.
 
 | System | Status | Notes |
 |---|---|---|
-| Multi-light system (up to 4 lights) | 🟢 | Real, verified visually — see docs/HISTORY.md "Lighting" for the full account. |
+| Multi-light system (up to 16 lights) | 🟢 | Real, verified visually — see docs/HISTORY.md "Lighting" for the full account. 16 since ENG-G07, and point lights can have a range (`Light::range`). |
 | Shadow mapping | 🟢 | The directional key light (cascaded, below) and point lights that cast shadows (six cube faces each in a second map, `Light::castsShadows`). |
 | Soft shadows (PCF) | 🟢 | 9 hardware depth-compared bilinear taps, slope-scaled bias, a texel-snapped region that follows the camera. |
 | Shadow casting scope | 🟡 | Every model placed through `ModelModule` (light-frustum culled, instanced), FEMFX objects, script-spawned bodies and most game modules cast. A module drawing its own geometry still has to implement `renderShadow()`. |
@@ -71,7 +71,7 @@ limitations. 🔴 Not started / stub.
 | Cascaded / multiple shadow maps | 🟢 | 4 cascades per view out to 80 m, each in its own tile of the shadow map (ENG-G05). |
 | Image-based ambient lighting | 🟡 | Sky ambient as order-2 spherical harmonics from the mood's image or gradient sky, evaluated per pixel in every lit shader (docs/MOODS.md). **Not yet:** reflections (prefiltered environment map), local probes / cheap GI (#20, #21). |
 | Normal maps | 🟢 | Tangent-space normal maps plus per-pixel roughness and metallic maps on every `ModelModule` model (FBX and OBJ/MTL; docs/ASSETS.md "Material maps"). The tangent frame comes from screen-space derivatives, so meshes need no stored tangents. |
-| Dynamic light add/remove at runtime | 🟡 | The 4 light slots can be enabled, moved and recoloured any frame from C++ (moods do this). **Not yet:** more than 4 lights, a Lua `light.*` API. |
+| Dynamic light add/remove at runtime | 🟢 | The 16 light slots can be enabled, moved and recoloured any frame from C++ (moods do this) and from Lua: `light.point{pos, color, intensity, range, shadows}` takes a free slot, then `light.move`, `light.set`, `light.remove` (ENG-G07). |
 
 ## Physics (AMD FEMFX integration)
 

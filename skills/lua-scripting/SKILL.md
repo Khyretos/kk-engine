@@ -112,6 +112,10 @@ player.position()   player.teleport(Vec(0,1,0))   player.facing()   -- inside ho
 mood.set("golden_hour")   -- or "clear_day", "sunset", "dusk", "night", "misty_morning", "stormy", "playful", ...
 mood.current()   mood.list()
 
+-- Lamps: up to 15 point lights besides the sun (docs/SCRIPTING.md, lamps.lua)
+local lamp = light.point { pos = Vec(0, 2, 0), color = Vec(1, 0.8, 0.5), intensity = 2, range = 8, shadows = true }
+light.move(lamp, Vec(1, 2, 0))   light.set(lamp, { on = false })   light.remove(lamp)   light.count()
+
 -- Sound
 local M = audio.materials()   -- M.Stone, M.Wood, M.Metal, M.Glass, ...: give bodies material = M.Wood
 audio.impact(pos, M.Metal, 0.8)   -- play one now (loudness 0..1)
@@ -152,6 +156,7 @@ game's `scripts/` folder, then change it.
 | build with loops; rebuild on a key | `pyramid.lua` |
 | your own key, hold to charge | `throw.lua` |
 | toggle on press vs. while held | `toggle.lua` |
+| lamps: place, move, colour and switch lights | `lamps.lua` |
 | show which button to press (pictures per device) | `prompts.lua` |
 | steer something relative to the camera | `roll_ball.lua` |
 | a follower (pet, companion, homing) | `pet.lua` |

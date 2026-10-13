@@ -44,10 +44,10 @@ void main() {
 
     float shadow = lighting.ambient.a > 0.5 ? computeShadow(fragPosLightSpace) : 1.0;
     vec3 Lo = vec3(0.0);
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < MAX_LIGHTS; ++i) {
         float intensity = lighting.lights[i].colorIntensity.a;
         if (intensity <= 0.0) continue;
-        vec3 radiance = lighting.lights[i].colorIntensity.rgb * intensity * (i == 0 ? shadow : 1.0);
+        vec3 radiance = lighting.lights[i].colorIntensity.rgb * intensity * lightFalloff(i, fragPosWorld) * (i == 0 ? shadow : 1.0);
         vec3 L = lighting.lights[i].directionOrPosition.w > 0.5 ? normalize(lighting.lights[i].directionOrPosition.xyz - fragPosWorld)
                                                                 : normalize(-lighting.lights[i].directionOrPosition.xyz);
         vec3 H = normalize(L + V);

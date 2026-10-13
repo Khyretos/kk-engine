@@ -1,6 +1,6 @@
 # Gameplay
 
-Four recipes that turn a level into a game: something that reacts to
+Five recipes that turn a level into a game: something that reacts to
 where you are, something you can do to the world, and a round with a goal,
 a clock and a result.
 
@@ -66,6 +66,24 @@ three seconds later.
 have: tables exist only when the game has the module that provides them
 (there's no `audio` without an AudioModule, no `view` outside the
 cookbook game), and a missing table is `nil`.
+
+## Lamps
+
+A lamp is a point light a script places with `light.point`; it lights
+what is within its `range` and fades out towards the edge; up to 15
+lamps besides the sun, the first 4 that ask can cast shadows; here a
+warm lamp lights a pillar and eight coloured ones circle it, **L**
+switches the ring.
+
+![Coloured lamps circling a white pillar](media/lamps.jpg)
+
+```lua title="lamps.lua"
+--8<-- "docs/cookbook/recipes/lamps.lua"
+```
+
+[Download lamps.lua](recipes/lamps.lua){ .md-button }
+
+`light.set` changes any of colour, intensity, range and shadows later, `on = false` switches a lamp off but keeps it, and everything a script placed goes away when the script is reloaded or stops.
 
 ## A whole round
 

@@ -97,14 +97,14 @@ public:
 
     // Point-light shadows: each shadow-casting point light gets a cube of
     // kPointFaces faces around it, each drawn into its own tile of a second
-    // map (the point map): tile = light * kPointFaces + face.
+    // map (the point map): tile = slot * kPointFaces + face (Lighting::pointShadowSlots).
     static constexpr uint32_t kPointFaces = 6;
     // Texels each face's view reaches past its 90 degrees on every side, so the
     // normal offset and the 3x3 taps near a face's edge still read that face.
     static constexpr uint32_t kPointFaceMargin = 4;
     // Texels across one point-light face.
     static constexpr uint32_t kPointTileResolution = 512;
-    // Lights that can cast point shadows: Lighting::kMaxLights (checked in LightingBuffer.cpp).
+    // Point lights that cast shadows at once: the first this many get a slot (Lighting::pointShadowSlots).
     static constexpr uint32_t kMaxPointShadows = 4;
 
     // The face that sees direction toPoint from the light, by its largest axis:

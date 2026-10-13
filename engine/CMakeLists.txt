@@ -135,6 +135,7 @@ set(ENGINE_SOURCES
     src/SkyRenderer.cpp
     src/Mood.cpp
     src/ShadowMap.cpp
+    src/ScriptLights.cpp
     src/Texture.cpp
     src/TextureMips.cpp
     src/MarketplaceIndex.cpp

@@ -8,9 +8,9 @@ layout(location = 1) in vec3 inColor;
 layout(location = 2) in vec3 inParams;
 layout(location = 3) in vec2 inCorner;
 
-struct GPULight { vec4 directionOrPosition; vec4 colorIntensity; };
+struct GPULight { vec4 directionOrPosition; vec4 colorIntensity; vec4 params; };
 layout(set = 0, binding = 0) uniform LightingUBO {
-    GPULight lights[4];
+    GPULight lights[16]; // kke::Lighting::kMaxLights
     vec4 ambient;
     vec4 cameraPos;
     mat4 lightViewProj;
