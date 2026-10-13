@@ -37,6 +37,15 @@ TEST(PlayBlocks, DefaultPaletteHasAPersonAndABat) {
     }
 }
 
+// BUG-068: the sandbox names a placed thing by the first block that lists its
+// mesh, so a mesh in two blocks makes the second block's recipes never fire.
+TEST(PlayBlocks, EveryMeshBelongsToOneBlock) {
+    std::set<std::string> meshes;
+    for (const kke::PlayBlock& b : kke::defaultPlayBlocks())
+        for (const std::string& a : b.assets) EXPECT_TRUE(meshes.insert(a).second) << a << " is in two blocks, the second is " << b.id;
+    EXPECT_TRUE(meshes.count("SM_Prop_Barrel_01"));
+}
+
 TEST(PlayBlocks, AvailableAssetsKeepOrderAndSkipMissing) {
     kke::PlayBlock b{ "x", "X", kke::PlayBlockKind::Prop, { "a", "b", "c" }, false, 1.0f, {} };
     auto have = kke::availableAssets(b, [](const std::string& n) { return n != "b"; });

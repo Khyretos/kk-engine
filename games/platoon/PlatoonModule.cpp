@@ -147,7 +147,8 @@ void PlatoonModule::init(kke::Application& app) {
     if (auto* shell = app.getModule<kke::GameShellModule>())
         shell->settings("Camera").toggle("Move the view at the window's edge", &m_edgePan);
 
-    m_scenery = std::make_unique<command_kit::Scenery>(app, *m_models, *m_rigid);
+    // Only the pack this game uses: a big library isn't read folder by folder at start.
+    m_scenery = std::make_unique<command_kit::Scenery>(app, *m_models, *m_rigid, std::vector<std::string>{ "POLYGON_Prototype" });
     buildField();
     m_kit = std::make_unique<command_kit::HumanoidKit>(app);
     m_kit->load(*m_models);
@@ -227,6 +228,7 @@ void PlatoonModule::init(kke::Application& app) {
     std::vector<command_kit::CommandHud::WheelItem> wheel;
     for (size_t i = 0; i < std::size(kWheelLabels); ++i) wheel.push_back({ kWheelIcons[i], kWheelLabels[i] });
     m_hud->setWheel(std::move(wheel));
+    m_cmd.wheel().setItems(static_cast<int>(std::size(kWheelLabels)));
     m_cmd.overUi = [this](const glm::vec2& p) { return m_hud->overButtons(p); };
 
     m_demo = envOn("KKE_PLATOON_DEMO");

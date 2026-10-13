@@ -11,7 +11,14 @@
     "OrbitCamera",
     "Physics",
     "UI",
-    "Stats"
+    "Stats",
+    "Audio",
+    "DebugControl",
+    "DemoPanel",
+    "GameShell",
+    "Input",
+    "PhysicsDemo",
+    "SoundVisualizer"
   ],
   "requirements": {
     "minimum": {

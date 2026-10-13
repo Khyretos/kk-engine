@@ -13,11 +13,27 @@
     "Physics",
     "Showcase",
     "DebugControl",
-    "Stats"
+    "Stats",
+    "Audio",
+    "GameShell",
+    "Input",
+    "Network",
+    "PhysicsBridge",
+    "Scripts",
+    "Settings",
+    "SoundVisualizer",
+    "UI",
+    "Voice"
   ],
   "requirements": {
-    "minimum": { "vram_mb": 256, "vulkan_api_version": "1.0" },
-    "recommended": { "vram_mb": 1024, "vulkan_api_version": "1.2" },
+    "minimum": {
+      "vram_mb": 256,
+      "vulkan_api_version": "1.0"
+    },
+    "recommended": {
+      "vram_mb": 1024,
+      "vulkan_api_version": "1.2"
+    },
     "notes": "Developer estimates. Runs on the 1-core software-GPU floor at low FPS."
   }
 }

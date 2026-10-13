@@ -98,6 +98,11 @@ Buffer Buffer::createDeviceLocal(VulkanDevice& device, const void* data, VkDevic
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &cmd;
 
+    // Idle first: VMA may hand out memory a finished frame read as another
+    // buffer, and the validation layer in CI (1.3.275) does not count the
+    // frame fences as finishing that read (racing's smoke test, every other
+    // run). This runs when meshes load, so the extra stall is cheap.
+    VK_CHECK(vkQueueWaitIdle(device.graphicsQueue()));
     VK_CHECK(vkQueueSubmit(device.graphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE));
     VK_CHECK(vkQueueWaitIdle(device.graphicsQueue()));
 

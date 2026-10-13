@@ -391,7 +391,9 @@ TEST(Hair, BraidsStayPlaitedAndCornrowsOnTheScalp) {
 // costs nothing to simulate; in between it stays closer to its style than
 // natural hair; back to natural, it swings again.
 TEST(Hair, MotionGoesFromNaturalToSolid) {
-    auto run = [](float motion, float& drift, double& ms) {
+    // Cost is counted in solver iterations, not milliseconds: a shared CI
+    // machine made the timing comparison fail now and then.
+    auto run = [](float motion, float& drift, uint32_t& iterations) {
         kke::RigidWorld::Settings set;
         set.threads = 0;
         kke::RigidWorld world(set);
@@ -412,7 +414,7 @@ TEST(Hair, MotionGoesFromNaturalToSolid) {
         const std::vector<glm::vec3> rest = kke::hairRestPose(d);
         std::vector<glm::vec3> p;
         drift = 0.0f;
-        ms = 0.0;
+        iterations = world.hairStats(hair).iterations;
         for (int f = 0; f < 120; ++f) {
             const float t = float(f) / 60.0f;
             const glm::quat q = glm::angleAxis(0.9f * std::sin(t * 2.5f), glm::vec3(0, 1, 0));
@@ -420,22 +422,22 @@ TEST(Hair, MotionGoesFromNaturalToSolid) {
             world.moveKinematic(body, glm::vec3(m * glm::vec4(centre, 1.0f)), q, 1.0f / 60.0f);
             world.setHairJoint(hair, m);
             world.step(1.0f / 60.0f);
-            ms += world.lastStepMs();
             ASSERT_TRUE(world.hairPositions(hair, p));
             ASSERT_EQ(p.size(), rest.size());
             for (size_t i = 0; i < p.size(); ++i) drift = std::max(drift, glm::distance(p[i], glm::vec3(m * glm::vec4(rest[i], 1.0f))));
         }
     };
     float solid, half, natural;
-    double solidMs, halfMs, naturalMs;
-    run(0.0f, solid, solidMs);
-    run(0.4f, half, halfMs);
-    run(1.0f, natural, naturalMs);
+    uint32_t solidIt, halfIt, naturalIt;
+    run(0.0f, solid, solidIt);
+    run(0.4f, half, halfIt);
+    run(1.0f, natural, naturalIt);
     EXPECT_LT(solid, 1e-4f) << "solid hair is where the style has it";
     EXPECT_LT(half, natural * 0.8f) << "less motion: closer to the style";
     EXPECT_GT(natural, 0.05f) << "natural hair swings";
-    EXPECT_LT(solidMs, naturalMs * 0.3) << "solid hair costs little";
-    EXPECT_LT(halfMs, naturalMs) << "less motion: cheaper";
+    EXPECT_EQ(solidIt, 0u) << "solid hair is not solved at all";
+    EXPECT_GT(naturalIt, 0u);
+    EXPECT_LT(halfIt, naturalIt) << "less motion: fewer solver iterations";
 }
 
 // Solid hair is out of the world: wind (or anything else that wakes the

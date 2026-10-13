@@ -5,5 +5,14 @@
   "version": "0.1.0",
   "tags": ["demo", "ai", "animals", "wildlife", "navmesh"],
   "engine_version": "0.3",
-  "modules": ["Models", "Input", "Farm"]
+  "modules": [
+    "Models",
+    "Input",
+    "Farm",
+    "Audio",
+    "DemoPanel",
+    "GameShell",
+    "Stats",
+    "UI"
+  ]
 }

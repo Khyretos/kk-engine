@@ -1,6 +1,7 @@
 #include "ShowcaseModule.h"
 
 #include "kke/Application.h"
+#include "kke/DevTools.h"
 #include "kke/Log.h"
 #include "kke/modules/SettingsModule.h"
 #include "kke/modules/UiModule.h"
@@ -98,7 +99,7 @@ void ShowcaseModule::init(kke::Application& app) {
     // KKE_UI_ROOT lets you point at the source folder
     // (games/rmlui_demo/ui/) so .rcss edits + F5 show up without a rebuild.
     std::string root = "ui/";
-    if (const char* env = std::getenv("KKE_UI_ROOT")) {
+    if (const char* env = kke::dev::env("KKE_UI_ROOT")) {
         root = env;
         if (!root.empty() && root.back() != '/') root += '/';
         kke::log::get(name())->info("loading UI documents from KKE_UI_ROOT='{}'", root);
@@ -117,7 +118,7 @@ void ShowcaseModule::init(kke::Application& app) {
     m_nav = context->LoadDocument(root + "nav.rml");
     // KKE_SHOWCASE_START=<screen> opens straight on one screen — handy
     // while iterating on a single .rml file, and for screenshots.
-    const char* start = std::getenv("KKE_SHOWCASE_START");
+    const char* start = kke::dev::env("KKE_SHOWCASE_START");
     setScreen(start && m_documents.count(start) ? start : "menu");
 }
 
@@ -489,8 +490,9 @@ void ShowcaseModule::DragDropListener::ProcessEvent(Rml::Event& event) {
 void ShowcaseModule::useItem(const std::string& id) {
     Item* item = slotById(id);
     if (!item || item->category != "Consumable") return;
-    showInventoryToast("Used " + item->name + (item->name == "Health Potion" ? " — +40 health" : ""));
+    showInventoryToast("Used " + item->name + (item->name == "Health Potion" ? " — +40 health" : (item->name == "Mana Draught" ? " — +30 mana" : "")));
     if (item->name == "Health Potion") m_hp = std::min<float>(static_cast<float>(m_maxHp), m_hp + 40.0f);
+    if (item->name == "Mana Draught") m_mp = std::min(static_cast<float>(m_maxMp), m_mp + 30.0f);
     if (--item->count <= 0) *item = Item{};
     if (id == m_selected) m_selected.clear();
     recomputeWeight();
@@ -778,7 +780,11 @@ void ShowcaseModule::chooseDialog(int index) {
         setScreen("hud");
         return;
     }
-    if (choice.next == 4 && m_gold >= 40) m_gold -= 40;
+    int price = (m_node == 5) ? 35 : 40;
+    if (choice.next == 4 && m_gold >= price) {
+        m_gold -= price;
+        m_invModel.DirtyVariable("gold");
+    }
     startDialogNode(choice.next);
 }
 

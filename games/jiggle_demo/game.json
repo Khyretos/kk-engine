@@ -5,5 +5,15 @@
   "version": "0.1.0",
   "tags": ["demo", "physics", "jiggle", "soft body", "animation"],
   "engine_version": "0.3",
-  "modules": ["Models", "OrbitCamera", "UI"]
+  "modules": [
+    "Models",
+    "OrbitCamera",
+    "UI",
+    "DebugControl",
+    "DemoPanel",
+    "GameShell",
+    "Input",
+    "JiggleDemo",
+    "Stats"
+  ]
 }

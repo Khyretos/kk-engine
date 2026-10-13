@@ -5,5 +5,21 @@
   "version": "0.1.0",
   "tags": ["demo", "sandbox", "editor", "synty", "physics", "ragdoll"],
   "engine_version": "0.3",
-  "modules": ["Models", "DebugDraw", "OrbitCamera", "Physics"]
+  "modules": [
+    "Models",
+    "DebugDraw",
+    "OrbitCamera",
+    "Physics",
+    "Audio",
+    "DebugControl",
+    "GameShell",
+    "Input",
+    "PhysicsBridge",
+    "RigidBodies",
+    "Sandbox",
+    "SoundVisualizer",
+    "Stats",
+    "Thumbnails",
+    "UI"
+  ]
 }

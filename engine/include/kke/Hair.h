@@ -154,6 +154,8 @@ std::vector<glm::vec3> hairRestPose(const HairDesc& desc);
 struct HairStats {
     uint32_t guides = 0, vertices = 0;
     bool sleeping = false;
+    // Solver iterations per step summed over the hair's pieces, 0 when solid.
+    uint32_t iterations = 0;
 };
 
 } // namespace kke

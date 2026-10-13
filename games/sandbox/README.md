@@ -933,7 +933,8 @@ Pitfalls the code shows:
 - **Add `DebugDrawModule` before your module**, or your lines are cleared
   the frame you draw them.
 - **The same asset in two blocks** reports the first block in
-  `blockOf()`: see the note about Barrel below.
+  `blockOf()`. The default blocks never share a mesh, and
+  `PlayBlocks.EveryMeshBelongsToOneBlock` checks it.
 
 ## Files
 
@@ -965,10 +966,6 @@ Pitfalls the code shows:
 - **Some ImGui is left.** The pointer ring and the inspector's FPS
   number (`ImGui::GetIO().Framerate`) still come from ImGui, so the
   sandbox needs ImGui even though no player panel is ImGui.
-- **Barrel reports as Box.** `SM_Prop_Barrel_01` is listed in both the
-  Box (`crate`) and Barrel blocks, and `blockOf()` returns the first
-  match, so a barrel dragged from the Barrel picture is block `crate` to
-  the graphs. The Barrel recipe never fires for it; the Box recipe does.
 - **Placed pieces do not collide with FEMFX** inside the sandbox: balls
   and debris only hit the ground, physics objects and ragdolls (HISTORY.md
   "games/sandbox"). Games that load the level collide through Jolt.

@@ -442,7 +442,7 @@ void SandboxModule::updateGraphs(float dt) {
             if (g.target == PlayGraphs::Target::Level) g.level = g.editing;
             else if (g.target == PlayGraphs::Target::Recipe) g.recipes[g.targetRecipe] = g.editing;
             else if (Object* o = find(g.targetThing); o && g.target == PlayGraphs::Target::Thing) o->graph = g.editing;
-            if (r == GraphEditor::Result::Changed) m_graphsDirty = true;
+            if (r == GraphEditor::Result::Changed || r == GraphEditor::Result::Closed) m_graphsDirty = true;
             if (r == GraphEditor::Result::Closed) closeGraphEditor();
         }
         // Two fingers on the editor move and zoom it, not the world.

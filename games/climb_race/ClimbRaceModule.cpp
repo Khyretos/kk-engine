@@ -1,6 +1,7 @@
 #include "ClimbRaceModule.h"
 
 #include "kke/Application.h"
+#include "kke/DevTools.h"
 #include "kke/ImpactSynth.h"
 #include "kke/Log.h"
 #include "kke/SphereImpostors.h"
@@ -32,11 +33,11 @@ constexpr float kFallRegrab = 0.35f;
 constexpr float kRestRate = 30.0f;  // stamina per second standing on a ledge or the ground
 
 float envFloat(const char* name, float fallback) {
-    const char* v = std::getenv(name);
+    const char* v = kke::dev::env(name);
     return v && *v ? static_cast<float>(std::atof(v)) : fallback;
 }
 bool envOn(const char* name) {
-    const char* v = std::getenv(name);
+    const char* v = kke::dev::env(name);
     return v && *v == '1';
 }
 
@@ -94,7 +95,7 @@ void ClimbRaceModule::init(kke::Application& app) {
     if (envOn("KKE_CLIMB_ROCKFALL")) m_rockfall = 1.0f;
     m_climbCamera = envFloat("KKE_CLIMB_CLOSEUP", m_climbCamera);
     // How to play before the first race, unless nobody's there to read it.
-    const char* intro = std::getenv("KKE_CLIMB_INTRO");
+    const char* intro = kke::dev::env("KKE_CLIMB_INTRO");
     m_howtoFirst = intro && *intro ? *intro == '1' : !(m_autopilot || m_quitAfter > 0.0f || m_rockfall >= 0.0f);
 
     // Controls: the usual character actions (move, look, jump, sprint),

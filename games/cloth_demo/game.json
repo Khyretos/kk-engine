@@ -5,5 +5,14 @@
   "version": "0.1.0",
   "tags": ["demo", "physics", "cloth", "hair", "soft body", "benchmark"],
   "engine_version": "0.3",
-  "modules": ["OrbitCamera", "UI"]
+  "modules": [
+    "OrbitCamera",
+    "UI",
+    "ClothDemo",
+    "DebugControl",
+    "DemoPanel",
+    "GameShell",
+    "Input",
+    "Stats"
+  ]
 }

@@ -42,7 +42,10 @@ using namespace layout;
 namespace {
 
 constexpr uint32_t kWood = 2, kMetal = 3;
-constexpr float kLaneA = -162.0f, kLaneB = -151.0f, kLaneC = -139.5f; // the lanes' middles (z)
+constexpr float kLaneA = -162.0f, kLaneC = -139.5f; // the lanes' middles (z)
+#if KKE_ENABLE_FEMFX
+constexpr float kLaneB = -151.0f; // only the breakables stand in the middle lane
+#endif
 constexpr float kPlinthTop = 0.6f;
 // Steel plates: x, z and half size (thin along X, facing the bench).
 struct PlateSpot { float x, z; glm::vec3 half; };

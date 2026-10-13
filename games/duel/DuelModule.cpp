@@ -337,13 +337,16 @@ void DuelModule::spawnFighters() {
 }
 
 void DuelModule::setTwoPlayers(bool on) {
+    const bool changed = (on && !m_allBots) != m_twoPlayers;
     m_twoPlayers = on && !m_allBots;
-    Fighter& red = m_fighters[1];
-    red.bot = !m_twoPlayers;
-    red.name = m_twoPlayers ? "Player 2" : "Red";
-    if (red.bot && !red.brain) red.brain = std::make_unique<SparringBot>(m_seed * 7919u + 1u, SparringBot::skillFor(m_level));
-    if (!red.bot) red.brain.reset();
-    syncAi();
+    if (changed) {
+        Fighter& red = m_fighters[1];
+        red.bot = !m_twoPlayers;
+        red.name = m_twoPlayers ? "Player 2" : "Red";
+        if (red.bot && !red.brain) red.brain = std::make_unique<SparringBot>(m_seed * 7919u + 1u, SparringBot::skillFor(m_level));
+        if (!red.bot) red.brain.reset();
+        syncAi();
+    }
     // Devices: the keyboard serves both (different keys); with two
     // controllers each player has one, with one it's player 2's.
     std::vector<uint32_t> pads, rest;
@@ -545,6 +548,7 @@ void DuelModule::onHit(const kke::HitEvent& e) {
         if (m_phase == Phase::Fight) {
             ++attacker.wins;
             m_roundWinner = attacker.name;
+            m_roundOnTime = false;
             m_phase = attacker.wins >= 2 ? Phase::MatchOver : Phase::RoundOver;
             m_phaseTime = 0.0f;
             kke::log::get(name())->info("round {}: {} knocked out {} ({} - {})", m_round, attacker.name, target.name, m_fighters[0].wins,
@@ -646,12 +650,13 @@ void DuelModule::update(const kke::UpdateContext& ctx) {
             Fighter& winner = h0 >= h1 ? m_fighters[0] : m_fighters[1];
             ++winner.wins;
             m_roundWinner = winner.name;
+            m_roundOnTime = true;
             m_phase = winner.wins >= 2 ? Phase::MatchOver : Phase::RoundOver;
             m_phaseTime = 0.0f;
         }
         break;
     case Phase::RoundOver:
-        if (m_phaseTime > 3.5f || (m_phaseTime > 1.0f && p1.pressed("duel.again"))) {
+        if (m_phaseTime > 3.5f || (m_phaseTime > 1.0f && (p1.pressed("duel.again") || m_input->map(1).pressed("duel.again")))) {
             ++m_round;
             startRound(false);
         }

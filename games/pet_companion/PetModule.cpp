@@ -188,6 +188,7 @@ void PetModule::init(kke::Application& app) {
     std::vector<command_kit::CommandHud::WheelItem> wheel;
     for (size_t i = 0; i < std::size(kWheel); ++i) wheel.push_back({ kWheelIcons[i], kWheelLabels[i] });
     m_hud->setWheel(std::move(wheel));
+    m_cmd.wheel().setItems(static_cast<int>(std::size(kWheelLabels)));
     m_cmd.overUi = [this](const glm::vec2& p) { return m_hud->overButtons(p); };
 
     // The shared menus: where to start, the pet picker, the course.

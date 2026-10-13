@@ -1,0 +1,16 @@
+# Lessons learned: the local Coder on kk-engine
+
+Every correction Claude makes to a Coder draft becomes a numbered lesson
+here, with its exact situation (job prompt, input, wrong output, corrected
+output) in `docs/qwen-situations/<number>-<slug>/`, so the same situation
+can be rerun after the models improve. Numbers are kk-engine's own
+(K1, K2, ...); the Kreative Kompanion repo keeps its own list.
+
+| # | Date | Task / unit | What went wrong | Rule for the next job | Situation |
+|---|---|---|---|---|---|
+| K1 | 2026-10-12 | ENG-B068 `b068-readme` | Asked to delete one bullet and edit an earlier one, the Coder replaced the deleted bullet with a copy of the earlier one and left the earlier one stale; both repair rounds returned no edit blocks. Claude's own part: the job's check also tested a file the next job edits, so the repair rounds were fed another file's error. | One job edits one place: split "delete X" and "edit Y" into two patch jobs, each with `focus` on its own lines. A job's check tests only that job's file. | [K1](qwen-situations/K1-rewrote-the-wrong-bullet/) |
+| K2 | 2026-10-12 | ENG-B068 `b068-bugs` | The Status cell got an extra unrequested sentence, and file, function and test names were bare text. | Give the exact sentence shape in the prompt and say "nothing else"; say "code names in backticks"; the check rejects extra sentences and bare names. | [K2](qwen-situations/K2-extra-sentence-bare-names/) |
+| K3 | 2026-10-12 | CI-5 `hair-stats-field` | A new struct field went in first (changes brace-initialiser order), with a `///` comment in a `//` file and a braced one-line `if`. | Say where a new member goes ("after the last member") and "match the file's comment and brace style"; show a neighbouring member in `focus`. | [K3](qwen-situations/K3-new-field-first-other-style/) |
+| K4 | 2026-10-13 | ENG-B074 `b074-climb` | Told to swap `std::getenv` for `kke::dev::env` and change nothing else, the Coder also dropped `&& *v` from the next line, so an empty variable gave 0 instead of the default. The check only looked for the new calls. | A "replace X with Y" job's check diffs the file and allows only lines that differ by X to Y; quote the lines that must stay. | [K4](qwen-situations/K4-drops-a-condition/) |
+| K5 | 2026-10-13 | ENG-B076 `b076-checker` | A new 170-line checker read `games/*.json` instead of `games/<game>/game.json` (so it checked nothing and said ok), compared class names with module names and swapped missing and extra; both repair rounds were empty one-line patches. | Give a new script's file layout as a literal example path, and split a script over 100 lines into one job per function, each with a behaviour test that fails on "checked nothing". | [K5](qwen-situations/K5-checker-wrong-layout/) |
+| K6 | 2026-10-13 | ENG-B075 `b075-doc-trunk`, `b075-doc-scan` | Markdown bullets came back as one 190-character line each; repair rounds fed "under 80 characters" returned the same line. Claude's check for the second job again read the whole file (K1). | Wrap Coder-written Markdown by script after the job (`textwrap.fill`, width 72, two-space indent) and check the words, not the wrapping; scope each check to its own lines. | [K6](qwen-situations/K6-long-markdown-lines/) |
