@@ -19,7 +19,7 @@
 
 namespace kke {
 
-Texture::Texture(VulkanDevice& device, const std::string& filePath) : m_device(device) {
+void Texture::loadFile(const std::string& filePath, bool srgb) {
     int width = 0, height = 0, channels = 0;
     // Forcing 4 channels (RGBA), same reasoning as
     // RmlVulkanRenderInterface::LoadTexture: matches this class's own
@@ -33,15 +33,23 @@ Texture::Texture(VulkanDevice& device, const std::string& filePath) : m_device(d
         throw std::runtime_error("kke::Texture: failed to load '" + filePath + "' (" +
                                   (stbi_failure_reason() ? stbi_failure_reason() : "unknown reason") + ")");
     }
-    createFromPixels(pixels, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+    createFromPixels(pixels, static_cast<uint32_t>(width), static_cast<uint32_t>(height), srgb);
     stbi_image_free(pixels);
 }
+
+Texture::Texture(VulkanDevice& device, const std::string& filePath) : m_device(device) { loadFile(filePath, true); }
+
+Texture::Texture(VulkanDevice& device, const std::string& filePath, LinearData) : m_device(device) { loadFile(filePath, false); }
 
 Texture::Texture(VulkanDevice& device, const uint8_t* rgbaPixels, uint32_t width, uint32_t height) : m_device(device) {
     createFromPixels(rgbaPixels, width, height);
 }
 
-void Texture::createFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32_t height) {
+Texture::Texture(VulkanDevice& device, const uint8_t* rgbaPixels, uint32_t width, uint32_t height, LinearData) : m_device(device) {
+    createFromPixels(rgbaPixels, width, height, false);
+}
+
+void Texture::createFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32_t height, bool srgb) {
     // Whole mip chain in one staging buffer, one copy region per level.
     uint32_t mipLevels = 1;
     for (uint32_t m = std::max(width, height); m > 1; m >>= 1) ++mipLevels;
@@ -56,7 +64,7 @@ void Texture::createFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32
         // scaleAlphaToCoverage). 0.5 is model.frag's cutoff.
         constexpr float kAlphaCutoff = 0.5f;
         const size_t baseTexels = static_cast<size_t>(w) * h;
-        const bool cutout = hasTransparentTexels(chain.data(), baseTexels);
+        const bool cutout = srgb && hasTransparentTexels(chain.data(), baseTexels);
         const float baseCoverage = cutout ? alphaCoverage(chain.data(), baseTexels, kAlphaCutoff) : 1.0f;
         for (uint32_t level = 0; level < mipLevels; ++level) {
             VkBufferImageCopy r{};
@@ -68,14 +76,15 @@ void Texture::createFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32
             uint32_t nw = std::max(1u, w / 2), nh = std::max(1u, h / 2);
             size_t next = offset + static_cast<size_t>(w) * h * 4;
             chain.resize(next + static_cast<size_t>(nw) * nh * 4);
-            downsampleRgba8Srgb(chain.data() + offset, w, h, chain.data() + next, nw, nh);
+            if (srgb) downsampleRgba8Srgb(chain.data() + offset, w, h, chain.data() + next, nw, nh);
+            else downsampleRgba8Linear(chain.data() + offset, w, h, chain.data() + next, nw, nh);
             if (cutout) scaleAlphaToCoverage(chain.data() + next, static_cast<size_t>(nw) * nh, baseCoverage, kAlphaCutoff);
             offset = next;
             w = nw;
             h = nh;
         }
     }
-    createImage(chain.data(), chain.size(), VK_FORMAT_R8G8B8A8_SRGB, width, height, mipLevels, regions);
+    createImage(chain.data(), chain.size(), srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM, width, height, mipLevels, regions);
 
     // LINEAR + REPEAT -- real defaults for a material texture, not
     // RmlVulkanRenderInterface's own CLAMP_TO_BORDER (appropriate

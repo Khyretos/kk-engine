@@ -121,6 +121,44 @@ TEST(ModelAsset, TextureFoundInExtraSearchPath) {
     fs::remove_all(elsewhere);
 }
 
+// ENG-G03: a PBR material's normal, roughness and metallic maps resolve
+// like the albedo (by file name from the artist's path), and its Pr/Pm
+// numbers are read; a texture sets its factor to 1 (the map holds it).
+TEST(ModelAsset, PbrMapsAndFactorsResolve) {
+    fs::path dir = tempDir("kke_model_pbr");
+    fs::path obj = writeCubeObj(dir, true);
+    for (const char* f : { "Crate_Normal.png", "Crate_Rough.png", "Crate_Metal.png" }) std::ofstream(dir / "Textures" / f) << "x";
+    std::ofstream(dir / "cube.mtl") << "newmtl Red\nKd 1 0 0\nPr 0.3\nPm 0.6\nnorm U:/Artist/Crate_Normal.png\n"
+                                    << "map_Pr U:/Artist/Crate_Rough.png\n"
+                                    << "newmtl Blue\nKd 0 0 1\nPr 0.25\nPm 1\n";
+    kke::ModelData m = kke::loadModel(obj.string());
+    const kke::ModelMaterial *red = nullptr, *blue = nullptr;
+    for (const auto& mat : m.materials) (mat.name == "Red" ? red : blue) = &mat;
+    ASSERT_NE(red, nullptr);
+    ASSERT_NE(blue, nullptr);
+    EXPECT_EQ(fs::path(red->normalTexture).filename().string(), "Crate_Normal.png");
+    EXPECT_EQ(fs::path(red->roughnessTexture).filename().string(), "Crate_Rough.png");
+    EXPECT_TRUE(red->metallicTexture.empty());
+    EXPECT_FLOAT_EQ(red->roughness, 1.0f); // the map holds the roughness
+    EXPECT_FLOAT_EQ(red->metallic, 0.6f);
+    EXPECT_TRUE(blue->normalTexture.empty());
+    EXPECT_FLOAT_EQ(blue->roughness, 0.25f);
+    EXPECT_FLOAT_EQ(blue->metallic, 1.0f);
+    fs::remove_all(dir);
+}
+
+// A plain (non-PBR) material keeps the engine's defaults and has no maps.
+TEST(ModelAsset, PlainMaterialKeepsDefaults) {
+    fs::path dir = tempDir("kke_model_plain");
+    kke::ModelData m = kke::loadModel(writeCubeObj(dir, true).string());
+    for (const auto& mat : m.materials) {
+        EXPECT_FLOAT_EQ(mat.roughness, kke::ModelMaterial{}.roughness) << mat.name;
+        EXPECT_FLOAT_EQ(mat.metallic, 0.0f) << mat.name;
+        EXPECT_TRUE(mat.normalTexture.empty() && mat.roughnessTexture.empty() && mat.metallicTexture.empty()) << mat.name;
+    }
+    fs::remove_all(dir);
+}
+
 TEST(ModelAsset, MissingFileThrowsWithPath) {
     try {
         kke::loadModel("/definitely/not/here.fbx");

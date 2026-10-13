@@ -97,8 +97,8 @@ void boundsOf(kke::ModelData& d) {
 // A wheel: a tyre (a 16-sided cylinder along X) and a hub cap.
 kke::ModelData blockWheel(float radius, float width, bool left) {
     kke::ModelData d;
-    d.materials.push_back({ "tyre", glm::vec3(0.06f, 0.06f, 0.07f), 0.0f, 0.9f, "", "" });
-    d.materials.push_back({ "hub", glm::vec3(0.7f, 0.72f, 0.75f), 0.8f, 0.3f, "", "" });
+    d.materials.push_back({ "tyre", glm::vec3(0.06f, 0.06f, 0.07f), 0.0f, 0.9f, "", "", "", "", "" });
+    d.materials.push_back({ "hub", glm::vec3(0.7f, 0.72f, 0.75f), 0.8f, 0.3f, "", "", "", "", "" });
     kke::ModelMesh tyre, hub;
     tyre.material = 0;
     hub.material = 1;
@@ -407,9 +407,9 @@ CarArt CarGarage::makeBlock(int type, int paint) {
     a.wheelCenter[3] = { -wx, a.wheelRadius, -wz };
     kke::ModelData body;
     const glm::vec3 color = paints()[static_cast<size_t>(paint)].color;
-    body.materials.push_back({ "paint", color, 0.3f, 0.35f, "", "" });
-    body.materials.push_back({ "glass", glm::vec3(0.06f, 0.08f, 0.1f), 0.0f, 0.1f, "", "" });
-    body.materials.push_back({ "trim", glm::vec3(0.12f, 0.12f, 0.13f), 0.2f, 0.6f, "", "" });
+    body.materials.push_back({ "paint", color, 0.3f, 0.35f, "", "", "", "", "" });
+    body.materials.push_back({ "glass", glm::vec3(0.06f, 0.08f, 0.1f), 0.0f, 0.1f, "", "", "", "", "" });
+    body.materials.push_back({ "trim", glm::vec3(0.12f, 0.12f, 0.13f), 0.2f, 0.6f, "", "", "", "", "" });
     kke::ModelMesh paintMesh, glass, trim;
     paintMesh.material = 0;
     glass.material = 1;

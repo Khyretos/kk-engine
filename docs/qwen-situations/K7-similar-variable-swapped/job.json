@@ -1,0 +1,19 @@
+[
+ {
+  "name": "g03-pbr",
+  "role": "worker/cpp-games",
+  "mode": "patch",
+  "out": "engine/src/ModelAsset.cpp",
+  "focus": [
+   "^std::string resolveTexture",
+   "materialIndex\\[src\\] = "
+  ],
+  "prompt": "ENG-G03 (normal and roughness/metallic maps for imported models). Read each material's normal map, roughness and metallic numbers and maps. In loadModel's material loop, directly before the line `materialIndex[src] = static_cast<uint32_t>(model.materials.size());` insert these steps (ModelMaterial's fields are in ModelAsset.h):\n1. `const ufbx_texture* normalTex = src->fbx.normal_map.texture;`\n2. If `normalTex` is null and `src->pbr.normal_map.texture != src->fbx.bump.texture` (a bump map is a height map, not a normal map), set `normalTex = src->pbr.normal_map.texture;`\n3. `mat.normalTexture = resolveTexture(normalTex, searchDirs);`\n4. `if (src->features.pbr.enabled) {` (plain Phong/Lambert materials keep the engine defaults) and inside it:\n   a. if `src->pbr.roughness.has_value`, `mat.roughness = static_cast<float>(src->pbr.roughness.value_real);`\n   b. if `src->pbr.metalness.has_value`, `mat.metallic = static_cast<float>(src->pbr.metalness.value_real);`\n   c. `mat.roughnessTexture = resolveTexture(src->pbr.roughness.texture, searchDirs);`\n   d. `mat.metallicTexture = resolveTexture(src->pbr.metalness.texture, searchDirs);`\n   e. if `mat.roughnessTexture` is not empty, `mat.roughness = 1.0f;` and if `mat.metallicTexture` is not empty, `mat.metallic = 1.0f;` (the map holds the value).\nChange nothing else; resolveTexture already exists.",
+  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g03.py pbr",
+  "precheck": false,
+  "context": [
+   "engine/include/kke/ModelAsset.h"
+  ],
+  "max_tokens": 4000
+ }
+]

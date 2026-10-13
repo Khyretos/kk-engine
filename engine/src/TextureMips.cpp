@@ -35,6 +35,21 @@ size_t countKept(const uint8_t* rgba, size_t texels, float cutoff, float scale) 
 
 } // namespace
 
+// Data (normals, roughness, metallic): bytes averaged as stored.
+void downsampleRgba8Linear(const uint8_t* src, uint32_t sw, uint32_t sh, uint8_t* dst, uint32_t dw, uint32_t dh) {
+    for (uint32_t y = 0; y < dh; ++y) {
+        uint32_t y0 = std::min(y * 2, sh - 1), y1 = std::min(y * 2 + 1, sh - 1);
+        for (uint32_t x = 0; x < dw; ++x) {
+            uint32_t x0 = std::min(x * 2, sw - 1), x1 = std::min(x * 2 + 1, sw - 1);
+            const uint8_t* p[4] = { src + (y0 * sw + x0) * 4, src + (y0 * sw + x1) * 4, src + (y1 * sw + x0) * 4, src + (y1 * sw + x1) * 4 };
+            uint8_t* o = dst + (y * dw + x) * 4;
+            for (int c = 0; c < 4; ++c) {
+                o[c] = static_cast<uint8_t>((p[0][c] + p[1][c] + p[2][c] + p[3][c] + 2) / 4);
+            }
+        }
+    }
+}
+
 // Averaging sRGB bytes directly darkens every mip (a black/white checker
 // would fade to 0.5 sRGB = 0.21 linear instead of 0.5).
 void downsampleRgba8Srgb(const uint8_t* src, uint32_t sw, uint32_t sh, uint8_t* dst, uint32_t dw, uint32_t dh) {

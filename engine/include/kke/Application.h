@@ -261,6 +261,13 @@ public:
     // doubled memory and cost ~200 ms per extra load. VK_NULL_HANDLE if the
     // file can't be loaded (logged once).
     VkDescriptorSet textureSet(const std::string& path);
+    // The same cache's Texture, for modules that build their own
+    // descriptor sets (kke::ModelModule's material maps); nullptr when
+    // the file can't be loaded. linearData: a data map (normals,
+    // roughness), cached apart from the colour copy (Texture::LinearData).
+    const Texture* cachedTexture(const std::string& path, bool linearData = false);
+    // The 1x1 white texture behind defaultTextureDescriptorSet().
+    const Texture& defaultWhiteTexture() const { return *m_defaultWhiteTexture; }
 
     // --- Debug pause/step ---
     // Freezes simulation (fixedUpdate/update stop advancing) while still

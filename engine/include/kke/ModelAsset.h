@@ -38,6 +38,13 @@ struct ModelMaterial {
     // What the file itself said, e.g. an artist's "U:/Dropbox/.../Tex.png"
     // — kept for error messages when resolution fails.
     std::string albedoTextureOriginal;
+    // PBR maps (ENG-G03), resolved like albedoTexture, empty when absent:
+    // a tangent-space normal map (OpenGL convention, +Y up) and grayscale
+    // roughness and metallic maps read from their red channel. A map
+    // multiplies its factor above, which is 1 when the map exists.
+    std::string normalTexture;
+    std::string roughnessTexture;
+    std::string metallicTexture;
 };
 
 struct ModelMesh {

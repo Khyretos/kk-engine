@@ -116,6 +116,25 @@ ModelModule::~ModelModule() = default;
 void ModelModule::init(Application& app) {
     m_app = &app;
     m_device = app.device().device();
+    // ENG-G03: set 2 = albedo, normal, roughness and metallic maps (model.frag).
+    VkDescriptorSetLayoutBinding bindings[4]{};
+    for (uint32_t i = 0; i < 4; ++i) bindings[i] = { i, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr };
+    VkDescriptorSetLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = 4;
+    layoutInfo.pBindings = bindings;
+    VK_CHECK(vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr, &m_surfaceLayout));
+    constexpr uint32_t kMaxSurfaceSets = 1024;
+    VkDescriptorPoolSize size{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4 * kMaxSurfaceSets };
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.maxSets = kMaxSurfaceSets;
+    poolInfo.poolSizeCount = 1;
+    poolInfo.pPoolSizes = &size;
+    VK_CHECK(vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_surfacePool));
+    const uint8_t flat[4] = { 128, 128, 255, 0 };
+    m_flatNormal = std::make_unique<Texture>(app.device(), flat, 1, 1, Texture::LinearData{});
+    m_defaultSurface = surfaceSetFor("", "", "", "");
     {
         // Skinning threads: the governor's worker budget (which counts this
         // thread), never more than the machine has.
@@ -134,8 +153,8 @@ void ModelModule::init(Application& app) {
     // (outer faces culled, the inside of the far faces visible).
     config.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants) };
-    // Set 3 = world overlay texture (same one-sampler layout as set 2).
-    config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), app.materialTextureSetLayout(),
+    // Set 2 = the material's maps (surfaceSetFor), set 3 = world overlay texture.
+    config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), m_surfaceLayout,
                                     app.materialTextureSetLayout() };
     m_pipeline = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/model.vert.spv", "shaders/model.frag.spv", config);
 
@@ -164,7 +183,7 @@ void ModelModule::init(Application& app) {
         inst.customVertexBindings = { binding0, binding1 };
         inst.customVertexAttributes = attrs;
         inst.pushConstantRange = config.pushConstantRange;
-        inst.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), app.materialTextureSetLayout(),
+        inst.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), m_surfaceLayout,
                                       app.materialTextureSetLayout() };
         m_instancedPipeline = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/model_instanced.vert.spv",
                                                          "shaders/model.frag.spv", inst);
@@ -196,6 +215,50 @@ void ModelModule::init(Application& app) {
 // Shared with every other module through Application's texture cache.
 VkDescriptorSet ModelModule::textureSetFor(const std::string& path) { return m_app->textureSet(path); }
 
+VkDescriptorSet ModelModule::surfaceSetFor(const std::string& albedo, const std::string& normal, const std::string& roughness,
+                                          const std::string& metallic) {
+    const std::string key = albedo + '\n' + normal + '\n' + roughness + '\n' + metallic;
+    if (auto it = m_surfaceSets.find(key); it != m_surfaceSets.end()) return it->second;
+
+    const Texture& white = m_app->defaultWhiteTexture();
+    const Texture* maps[4] = { &white, m_flatNormal.get(), &white, &white };
+    const std::string* paths[4] = { &albedo, &normal, &roughness, &metallic };
+
+    for (uint32_t i = 0; i < 4; ++i) {
+        if (!paths[i]->empty()) {
+            if (const Texture* t = m_app->cachedTexture(*paths[i], i != 0)) maps[i] = t;
+        }
+    }
+
+    VkDescriptorSetAllocateInfo alloc{};
+    alloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    alloc.descriptorPool = m_surfacePool;
+    alloc.descriptorSetCount = 1;
+    alloc.pSetLayouts = &m_surfaceLayout;
+
+    VkDescriptorSet set = VK_NULL_HANDLE;
+    if (vkAllocateDescriptorSets(m_device, &alloc, &set) != VK_SUCCESS) {
+        log::get(name())->warn("material set pool full; '{}' drawn with default maps", albedo);
+        return m_defaultSurface;
+    }
+
+    VkDescriptorImageInfo images[4];
+    VkWriteDescriptorSet writes[4]{};
+    for (uint32_t i = 0; i < 4; ++i) {
+        images[i] = { maps[i]->sampler(), maps[i]->imageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[i].dstSet = set;
+        writes[i].dstBinding = i;
+        writes[i].descriptorCount = 1;
+        writes[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writes[i].pImageInfo = &images[i];
+    }
+    vkUpdateDescriptorSets(m_device, 4, writes, 0, nullptr);
+
+    m_surfaceSets[key] = set;
+    return set;
+}
+
 ModelModule::ModelId ModelModule::load(const std::string& path, const ModelLoadOptions& options) {
     if (!m_app) {
         log::get(name())->error("load('{}') called before init()", path);
@@ -223,7 +286,9 @@ ModelModule::ModelId ModelModule::add(ModelData modelData, const std::string& ke
     loaded->data = std::move(modelData);
     const ModelData& data = loaded->data;
     for (const ModelMaterial& mat : data.materials) {
-        GpuMaterial gm{ mat.baseColor, mat.metallic, mat.roughness, textureSetFor(mat.albedoTexture) };
+        GpuMaterial gm{ mat.baseColor, mat.metallic, mat.roughness,
+                        surfaceSetFor(mat.albedoTexture, mat.normalTexture, mat.roughnessTexture, mat.metallicTexture),
+                        !mat.albedoTexture.empty() };
         if (!mat.albedoTextureOriginal.empty() && mat.albedoTexture.empty()) {
             log::get(name())->warn("'{}': material '{}' texture '{}' not found — add its folder to ModelLoadOptions::textureSearchPaths",
                                    path, mat.name, mat.albedoTextureOriginal);
@@ -275,11 +340,11 @@ void ModelModule::drawStandalone(VkCommandBuffer cmd, ModelId id, const glm::mat
     auto it = m_models.find(id);
     if (it == m_models.end()) return;
     LoadedModel& lm = *it->second;
-    VkDescriptorSet sets[] = { lighting, shadowMap, defaultTexture, defaultTexture };
+    VkDescriptorSet sets[] = { lighting, shadowMap, m_defaultSurface, defaultTexture };
     m_pipeline->bind(cmd);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(), 0, 4, sets, 0, nullptr);
     const VkShaderStageFlags pcStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-    VkDescriptorSet bound = defaultTexture;
+    VkDescriptorSet bound = m_defaultSurface;
     for (GpuMesh& gm : lm.meshes) {
         if (!gm.mesh) {
             // Skinned parts are drawn from per-instance skinned copies;
@@ -305,7 +370,7 @@ void ModelModule::drawStandalone(VkCommandBuffer cmd, ModelId id, const glm::mat
             gm.mesh = std::make_unique<Mesh>(m_app->device(), verts, m.indices, Mesh::Memory::HostVisible);
         }
         const GpuMaterial& mat = lm.materials[gm.material];
-        VkDescriptorSet tex = mat.textureSet ? mat.textureSet : defaultTexture;
+        VkDescriptorSet tex = mat.textureSet ? mat.textureSet : m_defaultSurface;
         if (tex != bound) {
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(), 2, 1, &tex, 0, nullptr);
             bound = tex;
@@ -386,7 +451,7 @@ void ModelModule::setVisible(InstanceId id, bool visible) {
 void ModelModule::setTextureOverride(InstanceId id, const std::string& texturePath) {
     auto it = m_instances.find(id);
     if (it == m_instances.end()) return;
-    it->second.textureOverride = texturePath.empty() ? VK_NULL_HANDLE : textureSetFor(texturePath);
+    it->second.textureOverride = texturePath.empty() ? VK_NULL_HANDLE : surfaceSetFor(texturePath, "", "", "");
     it->second.textureOverridePath = texturePath;
 }
 
@@ -789,7 +854,7 @@ void ModelModule::render(const RenderContext& ctx) {
     // the view is neither skinned, uploaded nor drawn.
     const Frustum frustum = Frustum::fromViewProj(ctx.proj * ctx.view);
     VkDescriptorSet overlay = m_overlaySet ? m_overlaySet : ctx.defaultMaterialTextureDescriptorSet;
-    VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, ctx.defaultMaterialTextureDescriptorSet, overlay };
+    VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, m_defaultSurface, overlay };
     const VkShaderStageFlags pcStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     if (m_showMeshes) {
         // Instancing (docs/OPTIMIZATION.md #25): 2+ visible copies of the same
@@ -800,15 +865,15 @@ void ModelModule::render(const RenderContext& ctx) {
             m_instancedPipeline->bind(ctx.cmd);
             vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_instancedPipeline->layout(), 0, 4, sets, 0, nullptr);
             VkBuffer ib = m_instanceBuffers[pass][ctx.frameIndex]->handle();
-            VkDescriptorSet bound = ctx.defaultMaterialTextureDescriptorSet;
+            VkDescriptorSet bound = m_defaultSurface;
             for (const Batch& b : m_batches) {
                 const LoadedModel& lm = *m_models[b.model];
                 VkDeviceSize off = sizeof(InstanceGpu) * b.first;
                 vkCmdBindVertexBuffers(ctx.cmd, 1, 1, &ib, &off);
                 for (const GpuMesh& gm : lm.meshes) {
                     const GpuMaterial& mat = lm.materials[gm.material];
-                    VkDescriptorSet tex = mat.textureSet ? mat.textureSet : ctx.defaultMaterialTextureDescriptorSet;
-                    if (b.textureOverride && mat.textureSet) tex = b.textureOverride;
+                    VkDescriptorSet tex = mat.textureSet ? mat.textureSet : m_defaultSurface;
+                    if (b.textureOverride && mat.albedo) tex = b.textureOverride;
                     if (tex != bound) {
                         vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_instancedPipeline->layout(), 2, 1, &tex, 0, nullptr);
                         bound = tex;
@@ -825,7 +890,7 @@ void ModelModule::render(const RenderContext& ctx) {
         }
         m_pipeline->bind(ctx.cmd);
         vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(), 0, 4, sets, 0, nullptr);
-        VkDescriptorSet boundTexture = ctx.defaultMaterialTextureDescriptorSet;
+        VkDescriptorSet boundTexture = m_defaultSurface;
         // Single draws nearest first too (early-Z, #37). Deformed parts are
         // in world space already (identity transform): they sort by their
         // own origin, i.e. last among close objects, which is harmless.
@@ -852,8 +917,8 @@ void ModelModule::render(const RenderContext& ctx) {
                 // A texture variant (e.g. Synty's _Texture_02) replaces the
                 // atlas of every textured material; untextured ones keep
                 // their plain color.
-                VkDescriptorSet tex = mat.textureSet ? mat.textureSet : ctx.defaultMaterialTextureDescriptorSet;
-                if (inst.textureOverride && mat.textureSet) tex = inst.textureOverride;
+                VkDescriptorSet tex = mat.textureSet ? mat.textureSet : m_defaultSurface;
+                if (inst.textureOverride && mat.albedo) tex = inst.textureOverride;
                 if (tex != boundTexture) {
                     vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(), 2, 1, &tex, 0, nullptr);
                     boundTexture = tex;
@@ -923,6 +988,13 @@ void ModelModule::shutdown() {
     m_skinWorkers.reset();
     m_instances.clear();
     m_models.clear();
+    m_surfaceSets.clear();
+    m_defaultSurface = VK_NULL_HANDLE;
+    if (m_surfacePool) vkDestroyDescriptorPool(m_device, m_surfacePool, nullptr);
+    if (m_surfaceLayout) vkDestroyDescriptorSetLayout(m_device, m_surfaceLayout, nullptr);
+    m_surfacePool = VK_NULL_HANDLE;
+    m_surfaceLayout = VK_NULL_HANDLE;
+    m_flatNormal.reset();
 }
 
 } // namespace kke

@@ -113,6 +113,29 @@ A sprite's name is its file name without the extension. Its category is
 the folder it's in (`Icons_Map`), and its pack is the top folder in
 `assets/sprites` (loose images there are pack `sprites`).
 
+## Material maps
+
+Next to its colour texture, a model's material can have a normal map, a
+roughness map and a metallic map. The engine finds them the same way as
+the colour texture: by file name, also in a folder called `Textures`.
+
+In an FBX file the normal map is the material's `NormalMap` slot (a
+`Bump` map is a height map and is ignored). PBR materials also give
+their roughness and metallic maps and numbers; older Phong materials
+keep the engine's defaults (roughness 0.8, metallic 0).
+
+In an OBJ's `.mtl` file: `norm` is the normal map, `map_Pr` and `map_Pm`
+are the roughness and metallic maps, `Pr` and `Pm` are the numbers.
+`bump` is ignored.
+
+Normal maps use the OpenGL convention: green points up. A DirectX-style
+map (green pointing down) looks lit from below; flip its green channel.
+Roughness and metallic maps are grey images read from the red channel; a
+map replaces its number.
+
+A texture variant such as `_Texture_02` replaces only the colour
+texture, and that model is then drawn without its other maps.
+
 ## Sprites in menus and HUDs
 
 Any RmlUi document (menus, HUDs, the settings panel) shows a sprite by

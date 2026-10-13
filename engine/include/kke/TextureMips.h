@@ -12,6 +12,10 @@ namespace kke {
 // linear light, alpha averaged as is.
 void downsampleRgba8Srgb(const uint8_t* src, uint32_t sw, uint32_t sh, uint8_t* dst, uint32_t dw, uint32_t dh);
 
+// The same 2x2 box step for data (normal, roughness and metallic maps):
+// every channel averaged as stored, rounding to nearest.
+void downsampleRgba8Linear(const uint8_t* src, uint32_t sw, uint32_t sh, uint8_t* dst, uint32_t dw, uint32_t dh);
+
 // True when any texel isn't fully opaque: the texture is a cutout card
 // (leaves, fences, hair) for model.frag's alpha test.
 bool hasTransparentTexels(const uint8_t* rgba, size_t texels);
