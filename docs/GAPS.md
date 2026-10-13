@@ -38,7 +38,7 @@ Status: ⬜ not started, 🔨 in progress, ✅ done.
 | ENG-B074 | `KKE_UI_ROOT`, `KKE_SHOWCASE_START` and most `KKE_CLIMB_*` switches use `std::getenv`, so shipping builds keep them. | They go through `kke::dev::env`; the shipping build ignores them. | ✅ |
 | ENG-B075 | Command kit: `CommandInput` has a fixed 8-slot wheel while `CommandHud` lays out any count; `Scenery` scans every pack; a tree's collider includes its canopy. | The wheel follows `setWheel`'s count, `Scenery` takes `onlyPacks`, trees collide on the trunk only. | ✅ |
 | ENG-B076 | The `modules` lists in sandbox, showcase, rmlui_demo and imgui_demo's game.json leave out modules the games add; some descriptions are stale. | Every list matches the modules the game adds; `tools/ci/check_game_modules.py` compares them in CI. | ✅ |
-| ENG-B087 | GCC 16 Release: third-party opus and sqlite still warn (`-Wstringop-overflow`, `-Wstringop-overread`). | A GCC 16 Release build prints no warnings, without hiding warnings in engine code. | ⬜ |
+| ENG-B087 | GCC 16 Release: third-party opus and sqlite still warn (`-Wstringop-overflow`, `-Wstringop-overread`). | A GCC 16 Release build prints no warnings, without hiding warnings in engine code. | ✅ |
 
 ## E1b: engine gaps (ROADMAP 🟡/🔴)
 
