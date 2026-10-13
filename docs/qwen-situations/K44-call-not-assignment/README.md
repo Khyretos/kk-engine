@@ -4,7 +4,7 @@ Situation: ENG-G07 job `g07-bpoint` (2026-10-13): light.point reads five
 table fields with `d.position = ScriptVM::fieldVec3(L, 1, "pos", d.position);`
 and so on, dictated in the prompt.
 
-Wrong output: the Coder wrote the calls without `d.x = `, so every lamp got
+Wrong output: the Coder wrote the calls without the assignment (`d.x = ...`), so every lamp got
 the Desc defaults (wrong-output.gz). The needles were the call text only,
 so the unit passed; unit tests cannot reach the binding. The picture check
 showed no lamp light; a UBO dump showed every script light at (0,0,0).
