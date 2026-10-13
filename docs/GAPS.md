@@ -39,6 +39,8 @@ Status: ⬜ not started, 🔨 in progress, ✅ done.
 | ENG-B075 | Command kit: `CommandInput` has a fixed 8-slot wheel while `CommandHud` lays out any count; `Scenery` scans every pack; a tree's collider includes its canopy. | The wheel follows `setWheel`'s count, `Scenery` takes `onlyPacks`, trees collide on the trunk only. | ✅ |
 | ENG-B076 | The `modules` lists in sandbox, showcase, rmlui_demo and imgui_demo's game.json leave out modules the games add; some descriptions are stale. | Every list matches the modules the game adds; `tools/ci/check_game_modules.py` compares them in CI. | ✅ |
 | ENG-B087 | GCC 16 Release: third-party opus and sqlite still warn (`-Wstringop-overflow`, `-Wstringop-overread`). | A GCC 16 Release build prints no warnings, without hiding warnings in engine code. | ⬜ |
+| ENG-B090 | A car with a flat tyre rocks for ever: anti-roll bars were about 58 times stiffer than their N/m (found by the macOS job). | Bars are true N/m; a flat car settles; tests cover both. | ✅ |
+| ENG-B091 | `VoiceCleaner.TakesOutSteadyNoise` depends on the standard library's normal distribution and fails on macOS. | The test's noise is the same on every platform and the cleaner passes it there. | ✅ |
 
 ## E1b: engine gaps (ROADMAP 🟡/🔴)
 

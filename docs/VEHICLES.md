@@ -66,7 +66,7 @@ wheel first. `VehicleInput::steer` is positive to the right;
 | `manualGearbox` | `VehicleInput::gear` picks the gear (-1 reverse, 0 neutral) | drag racing |
 | `shiftUpRpm`, `shiftDownRpm` | the automatic gearbox | 5500, 2500 |
 | `limitedSlipRatio` | how different the wheels of a driven axle may spin | 1.4 (LSD) |
-| `antiRollStiffness` | per axle pair | 6000 |
+| `antiRollStiffness` | N/m per axle pair (a road car's bar is 20000-40000; the racing cars use 45000) | 30000 |
 | `VehicleWheelDesc::suspensionFrequency`, `suspensionDamping` | stiffness (Hz) and damping | 1.5-2.5, 0.5 |
 | `suspensionMin`, `suspensionMax` | travel below the attachment point | 0.05, 0.3 m |
 | `maxBrakeTorque`, `maxHandBrakeTorque` | Nm; front-biased brakes let throttle + brake spin the rears (a burnout) | 1500-2600, 4000-5000 on the rears |

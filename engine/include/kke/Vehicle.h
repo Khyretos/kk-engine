@@ -84,7 +84,7 @@ struct VehicleDesc {
     bool manualGearbox = false;           // true: VehicleInput::gear picks the gear
     float shiftUpRpm = 5500.0f, shiftDownRpm = 2500.0f; // automatic gearbox
     float gearSwitchSeconds = 0.3f;
-    float antiRollStiffness = 6000.0f;    // N/m per axle pair (0 = none)
+    float antiRollStiffness = 30000.0f;   // N/m per axle pair (0 = none); a road car's bar is 20000-40000
 };
 
 struct VehicleInput {

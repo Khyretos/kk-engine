@@ -6,6 +6,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 
 using namespace kke;
@@ -221,6 +222,56 @@ TEST(VehicleTyres, AFlatDropsThatCornerAndDrags) {
     EXPECT_LT(after.wheels[0].transform[3].y, before.wheels[0].transform[3].y - 0.03f);
     EXPECT_EQ(after.wheels[0].pressure, 0.0f);
     EXPECT_LT(after.wheels[0].grip, after.wheels[1].grip);
+}
+
+// BUG-090: the anti-roll bars were about 58 times stiffer than their N/m
+// (Jolt hands the bar's impulse to the suspension as a velocity bias, which
+// the solver multiplies by the suspension's effective mass). With a flat the
+// bar lifted that wheel, let go once it was off the ground, dropped it and
+// lifted it again: the car rocked for as long as it stood there.
+TEST(VehicleTyres, AFlatCarSettles) {
+    RigidWorld w(single());
+    ground(w, kTarmac);
+    const RigidWorld::VehicleId v = w.addVehicle(car());
+    for (int i = 0; i < 180; ++i) w.step(1.0f / 60.0f);
+    w.setVehicleTyre(v, 0, TyreCondition::Flat);
+    for (int i = 0; i < 180; ++i) w.step(1.0f / 60.0f);
+    float lo = 1e9f, hi = -1e9f;
+    for (int i = 0; i < 60; ++i) {
+        w.step(1.0f / 60.0f);
+        VehicleState s;
+        w.vehicleState(v, s);
+        EXPECT_TRUE(s.wheels[0].contact) << "the flat wheel is off the ground at step " << i;
+        lo = std::min(lo, s.wheels[0].transform[3].y);
+        hi = std::max(hi, s.wheels[0].transform[3].y);
+    }
+    EXPECT_LT(hi - lo, 0.002f) << "the flat corner still moves " << hi - lo << " m: the car rocks";
+}
+
+// The bar's force is its stiffness times the difference in suspension length
+// across the axle: a flat front-left lengthens that suspension, and the bar
+// moves about that much load off the flat wheel.
+TEST(VehicleTyres, AntiRollBarIsInNewtonsPerMetre) {
+    float load[2] = {}, diff = 0.0f;
+    const float k = 30000.0f;
+    for (int pass = 0; pass < 2; ++pass) {
+        RigidWorld w(single());
+        ground(w, kTarmac);
+        VehicleDesc d = car();
+        d.antiRollStiffness = pass == 0 ? 0.0f : k;
+        const RigidWorld::VehicleId v = w.addVehicle(d);
+        for (int i = 0; i < 180; ++i) w.step(1.0f / 60.0f);
+        w.setVehicleTyre(v, 0, TyreCondition::Flat);
+        for (int i = 0; i < 240; ++i) w.step(1.0f / 60.0f);
+        VehicleState s;
+        w.vehicleState(v, s);
+        load[pass] = s.wheels[0].load;
+        const VehicleWheelDesc& wd = d.wheels[0];
+        if (pass == 1) diff = (s.wheels[0].suspension - s.wheels[1].suspension) * (wd.suspensionMax - wd.suspensionMin);
+    }
+    const float expected = k * std::fabs(diff);
+    EXPECT_GT(expected, 200.0f); // the flat really twists the bar
+    EXPECT_NEAR(load[0] - load[1], expected, 0.3f * expected) << "without the bar " << load[0] << " N, with it " << load[1] << " N";
 }
 
 TEST(VehicleTyres, SpinningTheWheelsHeatsThem) {
