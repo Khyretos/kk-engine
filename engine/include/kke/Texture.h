@@ -38,6 +38,11 @@ public:
     // equirectangular sky is sampled (kke::SkyRenderer).
     struct HalfFloatSky {};
     Texture(VulkanDevice& device, const uint16_t* halfRgba, uint32_t width, uint32_t height, HalfFloatSky);
+    // The same with `levels` mips stored one after another in halfRgba, level 0
+    // first, each half as wide and tall as the one before (kke::EnvMap::toHalfRgba),
+    // sampled trilinearly: the prefiltered sky the lit shaders reflect.
+    struct HalfFloatSkyMips {};
+    Texture(VulkanDevice& device, const uint16_t* halfRgba, uint32_t width, uint32_t height, uint32_t levels, HalfFloatSkyMips);
     // Data, not colour (ENG-G03: normal, roughness and metallic maps):
     // VK_FORMAT_R8G8B8A8_UNORM, so the shader reads the stored numbers, and
     // mips averaged as stored (downsampleRgba8Linear), with no alpha-test

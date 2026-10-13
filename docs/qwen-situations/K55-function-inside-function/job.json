@@ -1,0 +1,18 @@
+[
+ {
+  "name": "g06-lbwenv",
+  "role": "worker/cpp-games",
+  "mode": "patch",
+  "out": "engine/src/LightingBuffer.cpp",
+  "prompt": "ENG-G06: lit surfaces reflect the sky. kke::EnvMap holds the sky prefiltered for reflections: an equirectangular RGB image (u = 0.5 + atan(x, -z) / 2pi, v = acos(y) / pi, kke::equirectUv / kke::equirectDir in kke/Sky.h) in several levels, each half as wide as the one before; level i is the sky seen in a surface of perceptual roughness i / (levels - 1), convolved with GGX by importance sampling with N = V = R (Karis, \"Real Shading in Unreal Engine 4\", 2013, the split sum). The shaders weight it by Karis's analytic environment BRDF (\"Physically Based Shading on Mobile\", 2014). C++20, glm, Vulkan, GLSL 450 std140. Write the new member function LightingBuffer::writeEnvironment (declared in the header, in context), modelled on SkyRenderer::bindImage: put it directly before the line `void LightingBuffer::update(` with a blank line after it, and with this body, copied as it is:\n```\nvoid LightingBuffer::writeEnvironment(uint32_t slot) {\n    const Texture& map = m_envMap ? *m_envMap : *m_placeholder;\n    VkDescriptorImageInfo info{};\n    info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;\n    info.imageView = map.imageView();\n    info.sampler = map.sampler();\n    VkWriteDescriptorSet write{};\n    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;\n    write.dstSet = m_descriptorSets[slot];\n    write.dstBinding = 1;\n    write.descriptorCount = 1;\n    write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;\n    write.pImageInfo = &info;\n    vkUpdateDescriptorSets(m_device.device(), 1, &write, 0, nullptr);\n}\n```\nChange nothing else.",
+  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g06.py lbwenv",
+  "precheck": false,
+  "context": [
+   "engine/include/kke/LightingBuffer.h"
+  ],
+  "max_tokens": 1200,
+  "focus": [
+   "^void LightingBuffer::update\\("
+  ]
+ }
+]

@@ -131,6 +131,32 @@ Texture::Texture(VulkanDevice& device, const uint16_t* halfRgba, uint32_t width,
     VK_CHECK(vkCreateSampler(m_device.device(), &samplerInfo, nullptr, &m_sampler));
 }
 
+Texture::Texture(VulkanDevice& device, const uint16_t* halfRgba, uint32_t width, uint32_t height, uint32_t levels, HalfFloatSkyMips) : m_device(device) {
+    std::vector<VkBufferImageCopy> regions;
+    size_t offset = 0;
+    for (uint32_t level = 0; level < levels; ++level) {
+        const uint32_t w = std::max(1u, width >> level), h = std::max(1u, height >> level);
+        VkBufferImageCopy r{};
+        r.bufferOffset = offset;
+        r.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, level, 0, 1 };
+        r.imageExtent = { w, h, 1 };
+        regions.push_back(r);
+        offset += static_cast<size_t>(w) * h * 4 * sizeof(uint16_t);
+    }
+    createImage(halfRgba, offset, VK_FORMAT_R16G16B16A16_SFLOAT, width, height, levels, regions);
+
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR; // between roughness levels
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;        // round the horizon
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE; // not over the poles
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.maxLod = static_cast<float>(levels - 1);
+    VK_CHECK(vkCreateSampler(m_device.device(), &samplerInfo, nullptr, &m_sampler));
+}
+
 void Texture::createImage(const void* data, size_t size, VkFormat format, uint32_t width, uint32_t height, uint32_t mipLevels,
                           const std::vector<VkBufferImageCopy>& regions) {
     VkDeviceSize dataSize = size;

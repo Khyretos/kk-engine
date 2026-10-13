@@ -1,0 +1,2 @@
+{"name": "g06-k56", "out": ".scratch/k56.md", "gpu_seconds": 2.5, "tokens": 130, "prompt_tokens": 1880, "skills": ["work-habits", "shared/SKILL", "worker/docs/SKILL", "_model-notes/qwen3/SKILL"], "lines": 1, "review": "skipped", "model": "qwen3.5:9b-q8_0-64k", "at": "2026-10-13T18:17:12"}
+{"name": "g06-k56", "out": ".scratch/k56.md", "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g06rows.py k56", "check_attempts": 1, "check_passed": true, "at": "2026-10-13T18:17:12"}

@@ -292,6 +292,11 @@ which this system attempts yet.
 
 ## What's still ahead for lighting
 
+> Update, 2026-10-13: most of the list below has been built since; docs/GAPS.md
+> tracks what is left. The sky now lights the scene through spherical
+> harmonics and shiny surfaces reflect it from a prefiltered environment
+> map (`kke::EnvMap`, ENG-G06).
+
 Shadow mapping (a single directional light, single shadow-casting
 module), PBR materials (Cook-Torrance, real metallic/roughness), real
 flat shading for physics-spawned tetrahedra (fixed a genuine "hollow"-

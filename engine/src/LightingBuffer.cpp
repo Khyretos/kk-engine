@@ -4,8 +4,10 @@
 #include "kke/ShadowMap.h"
 #include "kke/VulkanDevice.h"
 #include "kke/VulkanCheck.h"
+#include "kke/Texture.h"
 
 #include <glm/glm.hpp>
+#include <glm/gtc/packing.hpp>
 #include <algorithm>
 #include <cstring>
 
@@ -54,8 +56,9 @@ struct LightingUBOData {
     glm::vec4 cascadeScaleOffset[ShadowMap::kCascades]; // cascade c's clip xy = the far cascade's xy * (x, y) + (z, w)
     glm::mat4 pointShadowViewProj[ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces]; // light * kPointFaces + face (ShadowMap::pointFaceViewProj)
     glm::vec4 pointShadowTiles[ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces];    // that face's tile of the point map: x, y, width, height in 0..1
+    glm::vec4 envMap; // x = the reflections' top mip (levels - 1), 0 = no map: reflect the ambient SH
 };
-static_assert(sizeof(LightingUBOData) == Lighting::kMaxLights * 3 * 16 + 2 * 16 + 2 * 64 + 11 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16 + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces * (64 + 16), "must match shaders/lighting_ubo.glsl");
+static_assert(sizeof(LightingUBOData) == Lighting::kMaxLights * 3 * 16 + 2 * 16 + 2 * 64 + 11 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16 + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces * (64 + 16) + 16, "must match shaders/lighting_ubo.glsl");
 static_assert(ShadowMap::kMaxPointShadows <= Lighting::kMaxLights, "every point-shadow slot needs a light");
 
 } // namespace
@@ -65,28 +68,37 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
     // vertex and fragment stages (vertex doesn't currently need it, but
     // costs nothing to allow now rather than needing a second layout
     // later for e.g. per-vertex light-space transforms for shadows).
-    VkDescriptorSetLayoutBinding binding{};
-    binding.binding = 0;
-    binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    binding.descriptorCount = 1;
-    binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    std::array<VkDescriptorSetLayoutBinding, 2> bindings{};
+    bindings[0].binding = 0;
+    bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    bindings[0].descriptorCount = 1;
+    bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    // Binding 1: the sky prefiltered for reflections (setEnvironmentMap).
+    bindings[1].binding = 1;
+    bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bindings[1].descriptorCount = 1;
+    bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = 1;
-    layoutInfo.pBindings = &binding;
+    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+    layoutInfo.pBindings = bindings.data();
     VK_CHECK(vkCreateDescriptorSetLayout(device.device(), &layoutInfo, nullptr, &m_setLayout));
 
     // --- Descriptor pool: one set per frame in flight -- every lit
     // module shares these, there's no per-object growth the way
     // RmlVulkanRenderInterface's texture pool needs.
-    VkDescriptorPoolSize poolSize{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSlotCount };
+    const std::array<VkDescriptorPoolSize, 2> poolSizes{ { { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSlotCount },
+                                                          { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, kSlotCount } } };
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.maxSets = kSlotCount;
-    poolInfo.poolSizeCount = 1;
-    poolInfo.pPoolSizes = &poolSize;
+    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+    poolInfo.pPoolSizes = poolSizes.data();
     VK_CHECK(vkCreateDescriptorPool(device.device(), &poolInfo, nullptr, &m_descriptorPool));
+
+    const std::array<uint16_t, 4> black{ glm::packHalf1x16(0.0f), glm::packHalf1x16(0.0f), glm::packHalf1x16(0.0f), glm::packHalf1x16(1.0f) };
+    m_placeholder = std::make_unique<Texture>(device, black.data(), 1, 1, Texture::HalfFloatSky{});
 
     for (uint32_t i = 0; i < kSlotCount; ++i) {
         VkDescriptorSetAllocateInfo allocInfo{};
@@ -114,12 +126,29 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
         write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         write.pBufferInfo = &bufferInfo;
         vkUpdateDescriptorSets(device.device(), 1, &write, 0, nullptr);
+        writeEnvironment(i);
     }
 }
 
 LightingBuffer::~LightingBuffer() {
     if (m_descriptorPool) vkDestroyDescriptorPool(m_device.device(), m_descriptorPool, nullptr);
     if (m_setLayout) vkDestroyDescriptorSetLayout(m_device.device(), m_setLayout, nullptr);
+}
+
+void LightingBuffer::writeEnvironment(uint32_t slot) {
+    const Texture& map = m_envMap ? *m_envMap : *m_placeholder;
+    VkDescriptorImageInfo info{};
+    info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    info.imageView = map.imageView();
+    info.sampler = map.sampler();
+    VkWriteDescriptorSet write{};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = m_descriptorSets[slot];
+    write.dstBinding = 1;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    write.pImageInfo = &info;
+    vkUpdateDescriptorSets(m_device.device(), 1, &write, 0, nullptr);
 }
 
 void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos, const glm::mat4& lightViewProj, const glm::mat4& viewProj,
@@ -184,7 +213,11 @@ void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos
     if (f.enabled) data.fogColor.a = std::max(f.density, 0.0f);
     data.fogParams = glm::vec4(f.heightFalloff, f.height, std::clamp(f.maxOpacity, 0.0f, 1.0f), f.sunScatter);
 
+    data.envMap = glm::vec4(m_envMap && m_envLevels > 1 ? static_cast<float>(m_envLevels - 1) : 0.0f, 0.0f, 0.0f, 0.0f);
+
     m_buffers[m_slot]->upload(&data, sizeof(data));
+    // This slot's set is free now (setFrame came after the frame's fence wait).
+    writeEnvironment(m_slot);
 }
 
 } // namespace kke

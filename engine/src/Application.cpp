@@ -979,6 +979,8 @@ void Application::run() {
             // free, while the other slot may still be drawing on the GPU.
             for (uint32_t i = 0; i < viewCount; ++i) {
                 drawViews[i].lighting->setFrame(m_renderer->currentFrameIndex());
+                drawViews[i].lighting->setEnvironmentMap(m_skyRenderer ? m_skyRenderer->reflections() : nullptr,
+                                                         m_skyRenderer ? m_skyRenderer->reflectionLevels() : 0);
                 drawViews[i].lighting->update(m_lighting, drawViews[i].camera.position, lightViewProjs[i],
                                               drawViews[i].proj * drawViews[i].view, skyEnv,
                                               cascadeTiles[i].data(), cascadeScaleOffsets[i].data(),
