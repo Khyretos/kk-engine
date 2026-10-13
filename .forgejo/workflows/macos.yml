@@ -1,0 +1,70 @@
+# Forgejo CI job: macOS (Intel) native build and tests on a 2018 MacBook Air.
+# Runner: macos-amd64 (on-demand, no schedule), Apple clang 16, MoltenVK from $VULKAN_SDK.
+# Builds the engine, all demos and unit tests; runs tests on MoltenVK; keeps the x86_64 package as an artifact.
+name: macOS
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: macos
+  cancel-in-progress: false
+
+env:
+  KKE_JOBS: "4"   # 2 cores, 4 threads, 8 GB RAM
+  VERSION: macos-test
+
+jobs:
+  build:
+    runs-on: macos-amd64
+    timeout-minutes: 480
+    steps:
+      - uses: actions/checkout@v4
+
+      # Tools: verify availability before configuring.
+      - name: Tools
+        run: |
+          cmake --version
+          ninja --version
+          glslangValidator --version
+          clang --version
+
+      - name: Configure
+        run: |
+          set -o pipefail
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DKKE_ENABLE_FEMFX=ON \
+            -DKKE_WARNINGS_AS_ERRORS=ON \
+            -DKKE_ENABLE_VALIDATION=OFF \
+            "-DKKE_VERSION_NAME=$VERSION" 2>&1 | tee configure.log
+
+      - name: Build
+        run: |
+          set -o pipefail
+          cmake --build build -j "$KKE_JOBS" 2>&1 | tee build.log
+
+      - name: No warnings anywhere
+        run: tools/ci/check_warnings.sh configure.log build.log
+
+      - name: Unit tests
+        run: |
+          # volk opens libvulkan.dylib at run time; macOS drops DYLD_* variables when it starts a system program such as /bin/bash, so it is set inside the step.
+          export DYLD_FALLBACK_LIBRARY_PATH="${VULKAN_SDK:+$VULKAN_SDK/lib:}/usr/local/lib:/usr/lib"
+          mkdir -p results
+          set -o pipefail
+          ./build/bin/kke_tests --gtest_brief=1 --gtest_output=json:results/kke_tests.json 2>&1 | tee results/kke_tests.log
+
+      - name: Package
+        run: tools/packaging/package.sh --bin build/bin --platform macos --version "$VERSION" --out dist --deps build/_deps
+
+      - uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: macos-package
+          path: dist/
+
+      - uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-tests
+          path: results/

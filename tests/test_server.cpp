@@ -540,8 +540,13 @@ TEST(DedicatedServer, BacksUpTheStoreAndKeepsTheNewest) {
     std::vector<std::string> left;
     for (const auto& e : std::filesystem::directory_iterator(dir)) left.push_back(e.path().filename().string());
     std::sort(left.begin(), left.end());
-    ASSERT_EQ(left.size(), 2u); // the newest two: the old one from 2000-01-03 and ours
-    EXPECT_EQ(left[0], "server-20000103-000000.db");
+    // The newest two. backup() and the command land in the same second (the
+    // command's file replaces ours, so the 2000-01-03 one is kept) or in two
+    // seconds (both of ours are kept): either way ours is there.
+    const std::string ours = std::filesystem::path(path).filename().string();
+    ASSERT_EQ(left.size(), 2u);
+    EXPECT_NE(std::find(left.begin(), left.end(), ours), left.end()) << ours;
+    EXPECT_TRUE(left[0] == "server-20000103-000000.db" || left[0] == ours) << left[0];
     auto copy = kke::storage::openStore("sqlite:" + path);
     ASSERT_TRUE(copy);
     EXPECT_EQ(copy->get("world", "day").value_or(""), "7");

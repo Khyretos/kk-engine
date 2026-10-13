@@ -21,6 +21,10 @@ if(UNIX AND NOT APPLE AND NOT ANDROID)
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
     set(CMAKE_BUILD_RPATH "\$ORIGIN;\$ORIGIN/..")
     set(CMAKE_BUILD_RPATH_USE_ORIGIN ON)
+elseif(APPLE)
+    # macOS: the same, with @executable_path for $ORIGIN (dylibs in bin/).
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+    set(CMAKE_BUILD_RPATH "@executable_path;@executable_path/..")
 endif()
 
 # ---------------------------------------------------------------------------
@@ -597,8 +601,9 @@ if(KKE_ENABLE_NET AND KKE_ENABLE_VOICE)
     set(OPUS_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
     set(OPUS_INSTALL_PKG_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
     set(OPUS_INSTALL_CMAKE_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
-    if(ANDROID)
-        # x86_64 Android (the emulator build, docs/VM_TESTS.md): opus's AVX2
+    if(ANDROID OR APPLE)
+        # x86_64 Android (the emulator build, docs/VM_TESTS.md) and Intel macOS
+        # (Apple clang, .forgejo/workflows/macos.yml): opus's AVX2
         # noise-shaping kernel (silk/x86/NSQ_del_dec_avx2.c) casts int16 and
         # int32 pointers to __m128i* for unaligned loads, which NDK clang
         # reports under the -Wcast-align opus enables itself (GCC only does on

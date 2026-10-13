@@ -46,6 +46,19 @@ steps), and runs PowerShell scripts with `-ExecutionPolicy Bypass` from
 The VM job stays as the fallback for when the PC is off, and as a
 clean-install check before a release.
 
+## macOS on the Mac
+
+`.forgejo/workflows/macos.yml` runs only by hand. A 2018 MacBook Air
+(a Forgejo runner with `runs-on: macos-amd64`, macOS 14, 2 cores)
+builds the engine, every demo and the unit tests natively with Apple
+clang, runs the tests on MoltenVK from the runner's `$VULKAN_SDK`, and
+keeps the Intel (x86_64) package as the `macos-package` artifact; the
+test results are `macos-tests`.
+
+The Mac's runner only runs while it is started for a job, so a dispatch
+waits in the queue while the Mac is off. A full build there takes a
+few hours, which is fine: it is a quality check, not a fast one.
+
 ## Graphics in a VM: why lavapipe
 
 soucouyant has one graphics card, the RX 9070 XT, and Hyprland draws the

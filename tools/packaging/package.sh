@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Packages a built bin/ folder into a downloadable archive (docs/RELEASES.md).
 #
-#   tools/packaging/package.sh --bin build/bin --platform linux|windows \
+#   tools/packaging/package.sh --bin build/bin --platform linux|windows|macos \
 #       --version v0.1.0-alpha --out dist [--deps build/_deps] [--strip <strip tool>] [--cooked DIR]
 #
 # --cooked DIR: art cooked with kke_cook (docs/COOKED_ART.md) to add under
@@ -59,9 +59,9 @@ done
 [ -d "$bin" ] || die "bin folder '$bin' does not exist"
 [ -d "$bin/shaders" ] || die "'$bin' has no shaders/ folder: is it a build's bin/ folder?"
 case "$platform" in
-linux) exe="" ;;
+linux | macos) exe="" ;;
 windows) exe=".exe" ;;
-*) die "platform must be linux or windows, got '$platform'" ;;
+*) die "platform must be linux, windows or macos, got '$platform'" ;;
 esac
 [[ "$version" =~ ^[A-Za-z0-9._-]+$ ]] || die "version '$version' may only hold letters, digits, '.', '_' and '-'"
 
@@ -156,6 +156,11 @@ cp "$repo/LICENSE" "$stage/LICENSE.txt"
 		echo "Double-click a demo to start it (kke_demo.exe is the main one)."
 		echo "Windows SmartScreen may warn that the app is unrecognised: it is"
 		echo "not code-signed yet. Choose 'More info' then 'Run anyway'."
+	elif [ "$platform" = macos ]; then
+		echo "Run a demo from Terminal in this folder (./kke_demo). Built for Intel Macs"
+		echo "(x86_64) with macOS 14 or newer. It is not signed: if macOS refuses to"
+		echo "start it, run 'xattr -dr com.apple.quarantine .' in this folder once."
+		echo "Vulkan comes from MoltenVK: install LunarG's Vulkan SDK for macOS."
 	else
 		echo "Run a demo from a terminal (./kke_demo) or double-click it in your"
 		echo "file manager. Built on Ubuntu 24.04: needs glibc 2.39 or newer"
@@ -206,6 +211,7 @@ else
 	archive="$name.tar.gz"
 	tar -czf "$archive" "$name"
 fi
-sha256sum "$archive" >"$archive.sha256"
+# macOS has shasum, not GNU sha256sum; both print the same line.
+if command -v sha256sum >/dev/null; then sha256sum "$archive"; else shasum -a 256 "$archive"; fi >"$archive.sha256"
 rm -rf "$stage"
 echo "packaged $out/$archive ($(du -h "$archive" | cut -f1)): ${demos[*]}"
