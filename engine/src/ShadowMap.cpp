@@ -196,7 +196,7 @@ void ShadowMap::destroyTarget() {
 
 bool ShadowMap::setTiles(uint32_t tiles) {
     const uint32_t grid = gridFor(tiles);
-    const uint32_t tile = std::min(m_baseTile, kMaxResolution / grid);
+    const uint32_t tile = tileResolutionFor(m_baseTile, tiles);
     if (grid == m_grid && tile == m_tile) return false;
     vkDeviceWaitIdle(m_device.device()); // frames in flight still sample the old image
     destroyTarget();
@@ -309,6 +309,10 @@ uint32_t ShadowMap::gridFor(uint32_t tiles) {
     uint32_t grid = 1;
     while (grid * grid < tiles) ++grid;
     return grid;
+}
+
+uint32_t ShadowMap::tileResolutionFor(uint32_t baseTile, uint32_t tiles) {
+    return std::min(baseTile, kMaxResolution / gridFor(tiles));
 }
 
 void ShadowMap::beginRenderPass(VkCommandBuffer cmd) {

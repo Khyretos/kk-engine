@@ -18,6 +18,8 @@ struct EngineSettings {
         float frameRateLimit = 0.0f;   // 0 = unlimited
         float fieldOfView = 60.0f;     // vertical, degrees
         bool shadows = true;
+        // Texels across each shadow cascade's tile: 1024 or 2048 (4 tiles per view).
+        int shadowResolution = 2048;
         // Multisample anti-aliasing for the 3D view: 1 (off), 2, 4 or 8.
         // Read at startup (takes effect on restart); software rasterisers
         // (the min-spec reference) always run at 1.
