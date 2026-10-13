@@ -97,6 +97,10 @@ public:
     // Tiles across the map for `tiles` tiles: the smallest square grid that holds them.
     static uint32_t gridFor(uint32_t tiles);
 
+    // Texels across one tile for `tiles` tiles when each may be `baseTile`:
+    // baseTile, or smaller so the whole map stays within kMaxResolution.
+    static uint32_t tileResolutionFor(uint32_t baseTile, uint32_t tiles);
+
     void beginRenderPass(VkCommandBuffer cmd);
     void endRenderPass(VkCommandBuffer cmd);
 
@@ -107,6 +111,9 @@ public:
     // image was recreated, and then the descriptor set that samples it
     // must be written again.
     bool setTiles(uint32_t tiles);
+    // The tile size the map grows to while it has room (EngineSettings'
+    // shadowResolution). Takes effect at the next setTiles().
+    void setBaseTileResolution(uint32_t texels) { m_baseTile = texels; }
     uint32_t tiles() const { return m_grid * m_grid; }
     // Where tile `tile` is in the map: x, y (top left) and width, height
     // in 0..1 texture coordinates.

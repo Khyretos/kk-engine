@@ -163,3 +163,12 @@ TEST(ShadowProjection, DepthCoversTheWholeBoxInVulkanRange) {
     const glm::vec4 nearer = m * glm::vec4(centre - dir, 1.0f), farther = m * glm::vec4(centre + dir, 1.0f);
     EXPECT_LT(nearer.z, farther.z);
 }
+
+TEST(ShadowCascades, TileResolutionFollowsTheSetting) {
+    // One view: 4 cascades in a 2 x 2 grid of tiles as big as the setting.
+    EXPECT_EQ(kke::ShadowMap::tileResolutionFor(1024, 4), 1024u);
+    EXPECT_EQ(kke::ShadowMap::tileResolutionFor(2048, 4), 2048u);
+    // Split screen: the whole map stays within kMaxResolution.
+    EXPECT_EQ(kke::ShadowMap::tileResolutionFor(2048, 16), kke::ShadowMap::kMaxResolution / 4);
+    EXPECT_EQ(kke::ShadowMap::tileResolutionFor(1024, 16), 1024u);
+}

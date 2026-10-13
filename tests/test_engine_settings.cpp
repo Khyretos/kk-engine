@@ -21,6 +21,7 @@ TEST(EngineSettings, ModifiedValuesRoundTrip) {
     s.graphics.frameRateLimit = 144.0f;
     s.graphics.fieldOfView = 90.0f;
     s.graphics.shadows = false;
+    s.graphics.shadowResolution = 1024;
     s.graphics.msaa = 2;
     s.graphics.brightness = 1.5f;
     s.graphics.uiScale = 1.25f;
@@ -71,6 +72,16 @@ TEST(EngineSettings, OutOfRangeValuesAreClamped) {
     EXPECT_FLOAT_EQ(s.controls.mouseSensitivity, 0.1f);
     EXPECT_EQ(s.gameplay.difficulty, "normal");
     EXPECT_EQ(s.gameplay.maxPhysicsStepsPerFrame, 8);
+}
+
+TEST(EngineSettings, ShadowResolutionIsOneOfTheSupportedSizes) {
+    EXPECT_EQ(EngineSettings{}.graphics.shadowResolution, 2048);
+    auto read = [](int v) { return kke::settingsFromJson("{\"graphics\": {\"shadowResolution\": " + std::to_string(v) + "}}").graphics.shadowResolution; };
+    EXPECT_EQ(read(1024), 1024);
+    EXPECT_EQ(read(2048), 2048);
+    EXPECT_EQ(read(100), 1024);   // too small: the smallest size
+    EXPECT_EQ(read(1500), 1024);  // between: rounded down
+    EXPECT_EQ(read(99999), 2048); // too big: the largest
 }
 
 TEST(EngineSettings, ZeroFrameRateLimitMeansUnlimited) {

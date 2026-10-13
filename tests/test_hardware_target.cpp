@@ -62,6 +62,13 @@ TEST(HardwareTarget, PresetsChangeWhatTheyClaim) {
     EXPECT_FALSE(low.graphics.shadows);
     // Keys a preset leaves out keep the engine defaults.
     EXPECT_EQ(low.controls.keyBindings, kke::EngineSettings{}.controls.keyBindings);
+
+    // Smaller shadow maps where memory is tight (2048 x 2048 in all instead of 4096).
+    EXPECT_EQ(low.graphics.shadowResolution, 1024);
+    EXPECT_EQ(phone.graphics.shadowResolution, 1024);
+    EXPECT_EQ(deck.graphics.shadowResolution, 1024);
+    EXPECT_EQ(kke::settingsForTarget(*kke::findHardwareTarget("handheld-pc")).graphics.shadowResolution, 1024);
+    EXPECT_EQ(kke::settingsForTarget(*kke::findHardwareTarget("ios")).graphics.shadowResolution, 1024);
 }
 
 TEST(HardwareTarget, RecognisesDevices) {
