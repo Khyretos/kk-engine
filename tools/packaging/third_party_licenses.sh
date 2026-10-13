@@ -29,7 +29,7 @@ while [ $# -gt 0 ]; do
 	*) die "unknown argument '$1'" ;;
 	esac
 done
-case "$platform" in linux | windows | android) ;; *) die "--platform must be linux, windows or android" ;; esac
+case "$platform" in linux | windows | android | macos) ;; *) die "--platform must be linux, windows, android or macos" ;; esac
 [ -z "$deps" ] || [ -d "$deps" ] || die "--deps folder '$deps' does not exist"
 repo="$(cd "$(dirname "$0")/../.." && pwd)"
 
