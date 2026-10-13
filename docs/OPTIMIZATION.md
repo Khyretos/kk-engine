@@ -43,7 +43,7 @@ with measurements, then update this table):
 |---|---|---|
 | Physics (fixed step) | 4 ms | Measured dev box: 1.4 ms avg for the 484-piece benchmark. |
 | Game logic / scripts | 2 ms | Lua later. |
-| Animation / skinning | 1 ms | CPU skinning today — see backlog. |
+| Animation / skinning | 1 ms | Skinning on the GPU (log #37); the CPU builds the bone matrices. |
 | Render CPU (culling, command recording) | 3 ms | |
 | UI (RmlUi + ImGui) | 1 ms | |
 | Slack | ~5 ms | OS jitter, spikes. |
@@ -112,7 +112,7 @@ stay under ~500 MB resident. Benchmarks report `peak_rss_mb` for this.
 | Clustered fracture | 2010s (Chaos) | Material-driven fracture patterns (chunks = fewer, bigger, cheaper pieces) | ✅ done (BUG-043) |
 | Time-slicing | all | Asset streaming, tetrahedralization of user-placed props | backlog |
 | Job system / task graph | 2010s | Physics already threaded; engine-wide jobs later | partly |
-| GPU skinning | 2000s | Crowds of characters | backlog |
+| GPU skinning | 2000s | Crowds of characters | ✅ done (ENG-G08, log #37) |
 | GPU-driven rendering / compute culling | 2020s | Large open worlds | later |
 | Lookup tables, branch-free math | 80s/90s | Only where a profiler says so | as needed |
 
@@ -126,6 +126,7 @@ BUGS.md / PERFORMANCE_NOTES.md entry with full detail.
 
 | # | What | Why it works | Measured effect | Where |
 |---|---|---|---|---|
+| 37 | GPU skinning: a compute shader (`shaders/skin.comp`, one invocation per vertex) skins every visible skinned part into the vertex buffers the draw passes already read, every drawn frame; the CPU only builds the bone matrices (on the skinning threads) and the jiggle zones | CPU skinning cost grew with vertices x characters on the main and worker threads; a GPU does each vertex's four-matrix blend in parallel, and the draw paths stay unchanged (same `Vertex` layout). Dispatching paused frames too keeps both frame slots on the drawn pose | goblin_horde bot, wave 10 (60 goblins and a boss), Release, RX 9070 XT, uncapped (`KKE_BENCHMARK=1`), two runs each: frame 2.8-2.9 ms (CPU skinning) -> 0.9 ms | `ModelModule::computeEveryFrame`, `kke/GpuSkin.h`; `KKE_CPU_SKINNING=1` for the old path |
 | 36 | MSAA as a setting (default 4x, 1x on software rasterisers), resolved in the render pass | Anti-aliased geometry edges with no temporal filter: a forward renderer gets MSAA without G-buffer tricks. The multisampled colour is `STORE_OP_DONT_CARE` (never written to memory after the resolve), so the bandwidth cost stays in tile/cache on GPUs that support it (#36) | Not measured on a real GPU yet (HW); lavapipe at 4x renders correctly. The min-spec path is unchanged (1x) | `Renderer::setMsaaSamples`, `Renderer::createSceneCompatiblePass`, `Pipeline` |
 | 35 | Opaque model draws sorted nearest first: instances inside each instanced draw, the instanced draws, then the single draws | Early-Z rejects hidden pixels before they are shaded instead of shading far walls and painting over them. Stable sort, so equal distances never swap and flicker (#37) | Synty demo: same image (only the animated arm differs between captures), validation clean. Overdraw saving not measured yet; needs a real GPU or an overdraw view | `kke::frontToBackOrder`, `ModelModule::buildBatches`/`render` |
 | 34 | `Application::setSceneCovered`: nothing 3D drawn behind a full-screen opaque menu | Rule 1, do less work: the shadow pass and render() produce pixels nobody sees (the Dead Space remake menu case). Simulation and UI-owned prepass work (thumbnails) keep running (#40) | Synty demo with it forced on: 0 scene draw calls, UI unchanged, validation clean. Frame time not compared yet | `Application::run`, `PrepassContext::sceneCovered` |
@@ -191,7 +192,7 @@ BUGS.md / PERFORMANCE_NOTES.md entry with full detail.
 4. **Mip maps** — texture bandwidth and shimmering.
 5. **Vertex quantization for static meshes** — half the vertex memory
    and bandwidth, the N64 way.
-6. **GPU skinning** — for crowds.
+6. **GPU skinning** — done (ENG-G08, log #37).
 7. **Asset cooking** — bake mips, compression (#39), collision and fracture
    data at import, not at load.
 
