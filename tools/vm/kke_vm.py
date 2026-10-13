@@ -6,6 +6,7 @@
     tools/vm/kke_vm.py windows-prepare [--iso FILE] [--if-needed] [--force]
     tools/vm/kke_vm.py windows-test --package ZIP --tests EXE --source DIR --out DIR
     tools/vm/kke_vm.py android-test --apk APK --benchmark-apk APK --out DIR
+    tools/vm/kke_vm.py summarize --results DIR --out DIR [--fact KEY=VALUE ...]
 
 Every VM file lives in $KKE_VM_DIR (default ~/kke-vm): the Windows image
 made once by windows-prepare, the downloads that went into it, and the
@@ -529,6 +530,17 @@ def windows_prepare(args):
 
 
 # --- results ------------------------------------------------------------
+def summarize(args):
+    """Summarize Windows test results into summary.md and summary.json."""
+    results = Path(args.results).resolve()
+    out = Path(args.out).resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    problems_file = results / "problems.txt"
+    problems = [l.strip() for l in (problems_file.read_text(encoding="utf-8").splitlines()) if l.strip()] if problems_file.is_file() else []
+    facts = dict(f.split("=", 1) for f in args.fact)
+    return write_summary(out, args.platform, facts, gtest_summary(results / "kke_tests.json"), benchmark_summary(results), problems)
+
+
 def gtest_summary(json_path):
     if not json_path.is_file():
         return None
@@ -844,6 +856,12 @@ def main():
     w.add_argument("--bench-timeout", type=int, default=5400)
     w.add_argument("--no-kvm", action="store_true", help=argparse.SUPPRESS)
 
+    s = sub.add_parser("summarize", help="summary.md/json from results a native runner made (Windows PC runner)")
+    s.add_argument("--results", required=True, help="folder with kke_tests.json, the benchmark's files and problems.txt")
+    s.add_argument("--out", required=True, help="folder for summary.md and summary.json")
+    s.add_argument("--platform", default="Windows")
+    s.add_argument("--fact", action="append", default=[], help="KEY=VALUE line for the summary's list (repeatable)")
+
     a = sub.add_parser("android-test", help="the demos and every demo through the benchmark app in the emulator")
     a.add_argument("--apk", required=True, help="the demos APK (android-x86_64 build)")
     a.add_argument("--benchmark-apk", required=True, help="the benchmark APK (android-x86_64 build)")
@@ -863,6 +881,8 @@ def main():
             return windows_prepare(args)
         if args.command == "windows-test":
             return windows_test(args)
+        if args.command == "summarize":
+            return summarize(args)
         return android_test(args)
     except VmError as e:
         say(f"error: {e}")

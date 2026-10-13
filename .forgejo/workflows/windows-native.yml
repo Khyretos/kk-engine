@@ -1,0 +1,93 @@
+# Windows (native) tests on Kees's PC (runner label 'windows', host has Node.js, Python, git, lavapipe Vulkan).
+# soucouyant cross-builds the package (MinGW-w64, in the kke-vm image); the PC (Windows 10) then runs the
+# unit tests and every demo on it natively, in minutes instead of the VM's hours.
+# The VM job (vm-tests.yml) stays as the fallback for when the PC is off.
+# Runs nightly and by hand; the 'quick' input reduces demo duration to 8 s each.
+name: Windows (native)
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+    inputs:
+      quick:
+        description: Quick benchmark run (fewer demos, 8 s each)
+        type: boolean
+        default: false
+
+concurrency:
+  group: windows-native
+  cancel-in-progress: false
+
+env:
+  KKE_JOBS: "8"
+  VERSION: windows-native
+
+jobs:
+  build:
+    runs-on: soucouyant
+    timeout-minutes: 120
+    container:
+      image: git.kreative-kompas.com/khyretos/kke-vm:1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (MinGW-w64 cross)
+        run: |
+          set -o pipefail
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DKKE_ENABLE_FEMFX=ON -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_VALIDATION=OFF "-DKKE_VERSION_NAME=$VERSION" \
+            -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake 2>&1 | tee configure.log
+
+      - name: Build
+        run: |
+          set -o pipefail
+          cmake --build build -j "$KKE_JOBS" 2>&1 | tee build.log
+
+      - name: No warnings anywhere
+        run: tools/ci/check_warnings.sh configure.log build.log
+
+      - name: Package
+        run: tools/packaging/package.sh --bin build/bin --platform windows --version "$VERSION" --out dist --deps build/_deps --strip x86_64-w64-mingw32-strip
+
+      - name: Source tree for the tests
+        run: |
+          git archive --format=tar HEAD > dist/src.tar
+          cp build/bin/kke_tests.exe dist/
+
+      - uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: windows-build
+          path: dist/
+
+  test:
+    needs: build
+    runs-on: windows
+    timeout-minutes: 240
+    defaults:
+      run:
+        shell: cmd
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: https://code.forgejo.org/forgejo/download-artifact@v4
+        with:
+          name: windows-build
+          path: dist
+
+      - name: Tests and demos
+        env:
+          QUICK: ${{ inputs.quick && '-Quick' || '' }}
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\windows\native_test.ps1 -Package "dist\kk-engine-%VERSION%-windows-x86_64.zip" -Tests "dist\kke_tests.exe" -SourceTar "dist\src.tar" -SourceDir "/workspace/khyretos/kk-engine" -Work "%RUNNER_TEMP%\kke-run" -Results "results" %QUICK%
+
+      - name: Summary
+        if: always()
+        run: |
+          python tools\vm\kke_vm.py summarize --results results --out results --platform Windows --fact "Runner=Kees's PC (native, lavapipe)"
+
+      - uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-native
+          path: results/
