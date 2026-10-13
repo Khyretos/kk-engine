@@ -599,8 +599,9 @@ if(KKE_ENABLE_NET AND KKE_ENABLE_VOICE)
     set(OPUS_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
     set(OPUS_INSTALL_PKG_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
     set(OPUS_INSTALL_CMAKE_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
-    if(ANDROID)
-        # x86_64 Android (the emulator build, docs/VM_TESTS.md): opus's AVX2
+    if(ANDROID OR APPLE)
+        # x86_64 Android (the emulator build, docs/VM_TESTS.md) and Intel macOS
+        # (osxcross clang, .forgejo/workflows/macos.yml): opus's AVX2
         # noise-shaping kernel (silk/x86/NSQ_del_dec_avx2.c) casts int16 and
         # int32 pointers to __m128i* for unaligned loads, which NDK clang
         # reports under the -Wcast-align opus enables itself (GCC only does on
