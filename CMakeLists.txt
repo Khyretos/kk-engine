@@ -548,6 +548,8 @@ FetchContent_Declare(
     # needs; 3.50.4 warned with -Wdiscarded-qualifiers there.
     URL      https://www.sqlite.org/2026/sqlite-amalgamation-3530400.zip
     URL_HASH SHA256=1e71ddf93849c6a6ecf58b827c0692073d2dd7ee40196158068f7b29f422e87d
+    # GCC 16 Release warning in sqlite3ColumnSetColl (BUG-087; see the script).
+    PATCH_COMMAND ${CMAKE_COMMAND} -DSQLITE_SOURCE_DIR=<SOURCE_DIR> -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patch_sqlite.cmake
 )
 FetchContent_MakeAvailable(sqlite)
 add_library(kke_sqlite STATIC ${sqlite_SOURCE_DIR}/sqlite3.c)
@@ -609,6 +611,9 @@ if(KKE_ENABLE_NET AND KKE_ENABLE_VOICE)
         GIT_REPOSITORY https://github.com/xiph/opus.git
         GIT_TAG        v1.5.2
         GIT_SHALLOW    TRUE
+        # GCC 16 Release warnings in silk/decode_indices.c (BUG-087; see the script).
+        PATCH_COMMAND  ${CMAKE_COMMAND} -DOPUS_SOURCE_DIR=<SOURCE_DIR> -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patch_opus.cmake
+        UPDATE_DISCONNECTED TRUE
     )
     FetchContent_MakeAvailable(opus)
     set_target_properties(opus PROPERTIES POSITION_INDEPENDENT_CODE ON)
