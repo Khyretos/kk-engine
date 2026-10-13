@@ -3,7 +3,7 @@
 # third-party component that ends up in a download or image
 # (docs/DEPENDENCIES.md "What ships with a game").
 #
-#   tools/packaging/third_party_licenses.sh --platform linux|windows|android \
+#   tools/packaging/third_party_licenses.sh --platform linux|windows|android|macos \
 #       [--deps build/_deps] > THIRD_PARTY_LICENSES.txt
 #
 # Used by tools/packaging/package.sh (release downloads) and
