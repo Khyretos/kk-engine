@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Packages a built bin/ folder into a downloadable archive (docs/RELEASES.md).
 #
-#   tools/packaging/package.sh --bin build/bin --platform linux|windows \
+#   tools/packaging/package.sh --bin build/bin --platform linux|windows|macos \
 #       --version v0.1.0-alpha --out dist [--deps build/_deps] [--strip <strip tool>] [--cooked DIR]
 #
 # --cooked DIR: art cooked with kke_cook (docs/COOKED_ART.md) to add under
