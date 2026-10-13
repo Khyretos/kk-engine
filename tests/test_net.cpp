@@ -1016,6 +1016,27 @@ TEST(NetSession, AGuestsImpossibleMoveIsCorrectedByItsSlot) {
 }
 
 #if KKE_ENABLE_NET
+namespace {
+// Every test's sockets bind to loopback only: nothing a test opens is
+// reachable from the network, so the Windows build PC never asks to let
+// kke_tests through its firewall.
+class LoopbackOnly : public ::testing::Environment {
+public:
+    void SetUp() override { kke::net::setBindAddress("127.0.0.1"); }
+};
+const ::testing::Environment* const g_loopbackOnly = ::testing::AddGlobalTestEnvironment(new LoopbackOnly);
+} // namespace
+
+TEST(NetEnet, SocketsBindToTheSetAddress) {
+    EnetTransport host, client;
+    std::string err;
+    ASSERT_TRUE(host.host(0, 2, &err)) << err;
+    EXPECT_EQ(host.boundAddress(), "127.0.0.1");
+    ASSERT_TRUE(client.open(&err)) << err;
+    EXPECT_EQ(client.boundAddress(), "127.0.0.1");
+    EXPECT_NE(kke::net::bindHost(), 0u);
+}
+
 // The real thing on this machine's UDP: two hosts on different ports (two
 // games on one PC), a client finds both by LAN discovery, joins one,
 // and states flow.
