@@ -38,6 +38,13 @@ public:
     // equirectangular sky is sampled (kke::SkyRenderer).
     struct HalfFloatSky {};
     Texture(VulkanDevice& device, const uint16_t* halfRgba, uint32_t width, uint32_t height, HalfFloatSky);
+    // Data, not colour (ENG-G03: normal, roughness and metallic maps):
+    // VK_FORMAT_R8G8B8A8_UNORM, so the shader reads the stored numbers, and
+    // mips averaged as stored (downsampleRgba8Linear), with no alpha-test
+    // coverage fix.
+    struct LinearData {};
+    Texture(VulkanDevice& device, const std::string& filePath, LinearData);
+    Texture(VulkanDevice& device, const uint8_t* rgbaPixels, uint32_t width, uint32_t height, LinearData);
     ~Texture();
 
     Texture(const Texture&) = delete;
@@ -47,7 +54,8 @@ public:
     VkSampler sampler() const { return m_sampler; }
 
 private:
-    void createFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32_t height);
+    void loadFile(const std::string& filePath, bool srgb);
+    void createFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32_t height, bool srgb = true);
     void createImage(const void* data, size_t dataSize, VkFormat format, uint32_t width, uint32_t height, uint32_t mipLevels,
                      const std::vector<VkBufferImageCopy>& regions);
 

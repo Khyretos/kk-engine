@@ -158,7 +158,9 @@ public:
     bool instancingEnabled() const { return m_instancing; }
 
 private:
-    struct GpuMaterial { glm::vec3 color; float metallic, roughness; VkDescriptorSet textureSet = VK_NULL_HANDLE; };
+    // textureSet = this material's set 2 (surfaceSetFor); albedo = it has an
+    // albedo texture (a texture override replaces only those).
+    struct GpuMaterial { glm::vec3 color; float metallic, roughness; VkDescriptorSet textureSet = VK_NULL_HANDLE; bool albedo = false; };
     struct GpuMesh { std::unique_ptr<Mesh> mesh; uint32_t material = 0; bool skinned = false; uint32_t meshIndex = 0; };
     struct LoadedModel {
         ModelData data;
@@ -209,6 +211,11 @@ private:
     std::vector<Instance*> m_singles; // render(): this view's non-instanced draws, reused
 
     VkDescriptorSet textureSetFor(const std::string& path);
+    // ENG-G03: model.frag's set 2 = albedo, normal, roughness and metallic
+    // maps (an empty path = that map's 1x1 default). One set per distinct
+    // combination, shared by every material that uses it.
+    VkDescriptorSet surfaceSetFor(const std::string& albedo, const std::string& normal, const std::string& roughness,
+                                  const std::string& metallic);
     void skinInstance(Instance& inst, uint32_t frameIndex);
     // Skins every visible skinned instance not yet skinned this frame, on
     // the worker threads (a crowd of characters is the CPU's biggest job
@@ -233,6 +240,11 @@ private:
     InstanceId m_nextInstance = 1;
     bool m_showBones = false, m_showMeshes = true;
     VkDescriptorSet m_overlaySet = VK_NULL_HANDLE;
+    VkDescriptorSetLayout m_surfaceLayout = VK_NULL_HANDLE;
+    VkDescriptorPool m_surfacePool = VK_NULL_HANDLE;
+    std::unique_ptr<Texture> m_flatNormal; // (128, 128, 255, 0): alpha 0 tells model.frag "no normal map"
+    std::unordered_map<std::string, VkDescriptorSet> m_surfaceSets;
+    VkDescriptorSet m_defaultSurface = VK_NULL_HANDLE;
     float m_overlayTile = 0.0f, m_overlayStrength = 1.0f;
     uint64_t m_frame = 0;
     size_t m_drawCalls = 0;

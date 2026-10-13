@@ -1111,6 +1111,26 @@ VkDescriptorSet Application::textureSet(const std::string& path) {
     return set;
 }
 
+const Texture* Application::cachedTexture(const std::string& path, bool linearData) {
+    if (!linearData) {
+        if (!textureSet(path)) return nullptr;
+        return m_textureCache[path].texture.get();
+    }
+    // Data maps share the cache under their own key and need no set.
+    const std::string key = "linear:" + path;
+    auto it = m_textureCache.find(key);
+    if (it != m_textureCache.end()) return it->second.texture.get();
+    CachedTexture entry;
+    try {
+        entry.texture = std::make_unique<Texture>(m_renderer->device(), path, Texture::LinearData{});
+    } catch (const std::exception& e) {
+        log::get("Textures")->warn("texture '{}' failed to load ({}); drawn without it", path, e.what());
+    }
+    const Texture* texture = entry.texture.get();
+    m_textureCache[key] = std::move(entry);
+    return texture;
+}
+
 int Application::addEventClaim(EventClaim claim) {
     m_eventClaims.emplace_back(m_nextEventClaim, std::move(claim));
     return m_nextEventClaim++;

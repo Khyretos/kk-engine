@@ -58,6 +58,26 @@ std::string findInDirs(const std::string& fileName, const std::vector<fs::path>&
     return {};
 }
 
+// Resolves a texture the file refers to: the path as written if it exists
+// here, else its file name in `dirs`, else the same name as .png/.tga/...
+std::string resolveTexture(const ufbx_texture* tex, const std::vector<fs::path>& dirs) {
+    if (!tex) return {};
+    const std::string original(tex->filename.data, tex->filename.length);
+    std::error_code ec;
+    if (!original.empty() && fs::is_regular_file(original, ec)) return original;
+    const std::string rel(tex->relative_filename.data, tex->relative_filename.length);
+    const std::string name = baseName(!original.empty() ? original : rel);
+    if (name.empty()) return {};
+    std::string found = findInDirs(name, dirs);
+    if (!found.empty()) return found;
+    const std::string stem = fs::path(name).stem().string();
+    for (const char* ext : { ".png", ".tga", ".jpg", ".jpeg", ".bmp" }) {
+        found = findInDirs(stem + ext, dirs);
+        if (!found.empty()) return found;
+    }
+    return {};
+}
+
 struct CornerKey {
     uint32_t position, normal, uv;
     bool operator==(const CornerKey& o) const { return position == o.position && normal == o.normal && uv == o.uv; }
@@ -134,27 +154,14 @@ ModelData loadModel(const std::string& path, const ModelLoadOptions& options) {
                                       static_cast<float>(base.value_vec3.z));
         }
         const ufbx_texture* tex = base.texture ? base.texture : src->fbx.diffuse_color.texture;
+        std::vector<fs::path> searchDirs = { modelDir, modelDir / "Textures", modelDir / "textures",
+                                             modelDir.parent_path() / "Textures", modelDir.parent_path() / "textures" };
+        for (const std::string& extra : options.textureSearchPaths) searchDirs.emplace_back(extra);
         // A texture node with no file name is no texture.
         if (tex && tex->filename.length == 0 && tex->relative_filename.length == 0) tex = nullptr;
         if (tex) {
             mat.albedoTextureOriginal = std::string(tex->filename.data, tex->filename.length);
-            std::error_code ec;
-            if (!mat.albedoTextureOriginal.empty() && fs::is_regular_file(mat.albedoTextureOriginal, ec)) {
-                mat.albedoTexture = mat.albedoTextureOriginal;
-            } else {
-                std::string rel(tex->relative_filename.data, tex->relative_filename.length);
-                std::string name = baseName(!mat.albedoTextureOriginal.empty() ? mat.albedoTextureOriginal : rel);
-                if (!name.empty()) mat.albedoTexture = findInDirs(name, searchDirs);
-                // Authoring formats (.psd, .tif...) are often referenced by
-                // the FBX while the pack ships the same image as .png/.tga.
-                if (mat.albedoTexture.empty() && !name.empty()) {
-                    std::string stem = fs::path(name).stem().string();
-                    for (const char* ext : { ".png", ".tga", ".jpg", ".jpeg", ".bmp" }) {
-                        mat.albedoTexture = findInDirs(stem + ext, searchDirs);
-                        if (!mat.albedoTexture.empty()) break;
-                    }
-                }
-            }
+            mat.albedoTexture = resolveTexture(tex, searchDirs);
             // A textured material's color is a tint; FBX exporters often
             // leave it at mid-grey, which would darken the texture.
             if (!mat.albedoTexture.empty()) mat.baseColor = glm::vec3(1.0f);
@@ -174,6 +181,27 @@ ModelData loadModel(const std::string& path, const ModelLoadOptions& options) {
         if (mat.albedoTexture.empty() && !options.fallbackTexture.empty() && (tex || (options.atlasForUntextured && neutral))) {
             mat.albedoTexture = options.fallbackTexture;
             if (!tex) mat.baseColor = glm::vec3(1.0f);
+        }
+        const ufbx_texture* normalTex = src->fbx.normal_map.texture;
+        if (normalTex == nullptr && src->pbr.normal_map.texture != src->fbx.bump.texture) {
+            normalTex = src->pbr.normal_map.texture;
+        }
+        mat.normalTexture = resolveTexture(normalTex, searchDirs);
+        if (src->features.pbr.enabled) {
+            if (src->pbr.roughness.has_value) {
+                mat.roughness = static_cast<float>(src->pbr.roughness.value_real);
+            }
+            mat.roughnessTexture = resolveTexture(src->pbr.roughness.texture, searchDirs);
+            if (src->pbr.metalness.has_value) {
+                mat.metallic = static_cast<float>(src->pbr.metalness.value_real);
+            }
+            mat.metallicTexture = resolveTexture(src->pbr.metalness.texture, searchDirs);
+            if (!mat.roughnessTexture.empty()) {
+                mat.roughness = 1.0f;
+            }
+            if (!mat.metallicTexture.empty()) {
+                mat.metallic = 1.0f;
+            }
         }
         materialIndex[src] = static_cast<uint32_t>(model.materials.size());
         model.materials.push_back(std::move(mat));

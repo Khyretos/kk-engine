@@ -23,9 +23,9 @@ Status: ⬜ not started, 🔨 in progress, ✅ done.
 
 | ID | Gap | Done when | Status |
 |---|---|---|---|
-| ENG-A01 | Kees's checkout on soucouyant (`/media/development/Software/kk-engine`) is 17 commits behind Forgejo main. | It fast-forwards to Forgejo main; his untracked animation folders are untouched. | ⬜ |
-| ENG-A02 | Open PR #24 (Android build with FEMFX off) says the FEMFX-on build and an Android build were not verified. | Both builds pass with `-Werror`; the PR is merged with green CI. | ⬜ |
-| ENG-A03 | The nightly lint bot's PRs #23, #25 and #26 have no CI status (bot pushes start no workflows). | Each one gets a lint run and is merged, or is closed because a newer one replaces it. | ⬜ |
+| ENG-A01 | Kees's checkout on soucouyant (`/media/development/Software/kk-engine`) is 17 commits behind Forgejo main. | It fast-forwards to Forgejo main; his untracked animation folders are untouched. | ✅ |
+| ENG-A02 | Open PR #24 (Android build with FEMFX off) says the FEMFX-on build and an Android build were not verified. | Both builds pass with `-Werror`; the PR is merged with green CI. | ✅ PR #27 |
+| ENG-A03 | The nightly lint bot's PRs #23, #25 and #26 have no CI status (bot pushes start no workflows). | Each one gets a lint run and is merged, or is closed because a newer one replaces it. | ✅ PRs #28, #29, #30 |
 
 ## E1a: open bugs (BUGS.md)
 
@@ -44,7 +44,7 @@ Status: ⬜ not started, 🔨 in progress, ✅ done.
 
 | ID | Area | Gap | Status |
 |---|---|---|---|
-| ENG-G03 | Rendering | Normal maps and per-pixel roughness/metallic textures (today one value per object). | ⬜ |
+| ENG-G03 | Rendering | Normal maps and per-pixel roughness/metallic textures (today one value per object). | 🔨 |
 | ENG-G05 | Lighting | Cascaded shadow maps (one map follows the camera today, #20). | ⬜ |
 | ENG-G04 | Lighting | Point-light shadows (only the directional light casts). | ⬜ |
 | ENG-G07 | Lighting | More than 4 lights, and a Lua `light.*` API. | ⬜ |

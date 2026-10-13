@@ -32,6 +32,23 @@ TEST(TextureMips, DownsampleAveragesColourInLinearLight) {
     EXPECT_EQ(out[3], 255);
 }
 
+// ENG-G03: data maps (normals, roughness, metallic) are numbers, not
+// colours: their bytes are averaged as they are, rounding to nearest, and
+// an odd edge repeats its last texel like the sRGB filter.
+TEST(TextureMips, LinearDownsampleAveragesBytes) {
+    std::vector<uint8_t> px = { 0, 10, 128, 255, 255, 20, 128, 0, 255, 30, 128, 255, 0, 41, 129, 0 };
+    uint8_t out[4];
+    kke::downsampleRgba8Linear(px.data(), 2, 2, out, 1, 1);
+    EXPECT_EQ(out[0], 128); // (0 + 255 + 255 + 0 + 2) / 4
+    EXPECT_EQ(out[1], 25);  // 101 / 4 = 25.25 rounds to 25
+    EXPECT_EQ(out[2], 128);
+    EXPECT_EQ(out[3], 128);
+    // 3x1 -> 1x1 reads texels 0 and 1 only (2x2 box at the origin, rows clamped).
+    std::vector<uint8_t> row = { 0, 0, 0, 0, 100, 100, 100, 100, 200, 200, 200, 200 };
+    kke::downsampleRgba8Linear(row.data(), 3, 1, out, 1, 1);
+    EXPECT_EQ(out[0], 50);
+}
+
 TEST(TextureMips, CoverageKeptDownTheMipChain) {
     // Thin leaf-like stripes: one opaque column in four. A plain box
     // filter halves alpha each level, so after two levels nothing passes

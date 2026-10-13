@@ -28,7 +28,7 @@ kke::ModelData part(const std::string& extraBone, uint32_t joint, const glm::mat
     }
     mesh.indices = { 0, 1, 2 };
     m.meshes.push_back(mesh);
-    m.materials.push_back({ "COLOR", glm::vec3(1.0f), 0.0f, 0.8f, "", "" });
+    m.materials.push_back({ "COLOR", glm::vec3(1.0f), 0.0f, 0.8f, "", "", "", "", "" });
     return m;
 }
 
