@@ -59,9 +59,9 @@ done
 [ -d "$bin" ] || die "bin folder '$bin' does not exist"
 [ -d "$bin/shaders" ] || die "'$bin' has no shaders/ folder: is it a build's bin/ folder?"
 case "$platform" in
-linux) exe="" ;;
+linux | macos) exe="" ;;
 windows) exe=".exe" ;;
-*) die "platform must be linux or windows, got '$platform'" ;;
+*) die "platform must be linux, windows or macos, got '$platform'" ;;
 esac
 [[ "$version" =~ ^[A-Za-z0-9._-]+$ ]] || die "version '$version' may only hold letters, digits, '.', '_' and '-'"
 
