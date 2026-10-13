@@ -41,6 +41,7 @@ Status: ⬜ not started, 🔨 in progress, ✅ done.
 | ENG-B087 | GCC 16 Release: third-party opus and sqlite still warn (`-Wstringop-overflow`, `-Wstringop-overread`). | A GCC 16 Release build prints no warnings, without hiding warnings in engine code. | ✅ |
 | ENG-B090 | A car with a flat tyre rocks for ever: anti-roll bars were about 58 times stiffer than their N/m (found by the macOS job). | Bars are true N/m; a flat car settles; tests cover both. | ✅ |
 | ENG-B091 | `VoiceCleaner.TakesOutSteadyNoise` depends on the standard library's normal distribution and fails on macOS. | The test's noise is the same on every platform and the cleaner passes it there. | ✅ |
+| ENG-B092 | `DedicatedServer.BacksUpTheStoreAndKeepsTheNewest` fails when its two backups fall in different seconds. | The test passes whichever second each backup lands in. | ✅ |
 
 ## E1b: engine gaps (ROADMAP 🟡/🔴)
 

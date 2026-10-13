@@ -48,19 +48,23 @@ namespace kke::platform {
 
 namespace {
 
+#if defined(_WIN32) || defined(__linux__) // machineId() and firstLine() only
 std::string trim(std::string s) {
     while (!s.empty() && (s.back() == '\n' || s.back() == '\r' || s.back() == ' ' || s.back() == '\0')) s.pop_back();
     return s;
 }
+#endif
 
 std::string env(const char* name) {
     const char* v = std::getenv(name);
     return v && *v ? std::string(v) : std::string();
 }
 
+#if !defined(__APPLE__) // macOS's secureRandom (arc4random_buf) cannot fail
 void fail(std::string* error, const std::string& what) {
     if (error) *error = what;
 }
+#endif
 
 #if defined(__linux__)
 std::string firstLine(const char* path) {
