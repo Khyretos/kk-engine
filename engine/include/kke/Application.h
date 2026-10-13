@@ -60,6 +60,12 @@ struct Light {
     glm::vec3 position{0.0f};               // meaningful only if !isDirectional
     glm::vec3 color{1.0f, 1.0f, 1.0f};
     float intensity = 1.0f;
+    // Point lights only: cast shadows (ENG-G04, ShadowMap::pointFaceViewProj) out to shadowRange metres from
+    // the light. Six extra shadow passes per light, so it is off unless a game turns it on.
+    bool castsShadows = false;
+    float shadowRange = 20.0f;
+    // Whether this light draws point shadows.
+    bool castsPointShadow() const { return enabled && !isDirectional && castsShadows; }
 };
 
 // Same reasoning as Camera just above: nearly every module that draws
@@ -426,6 +432,8 @@ private:
     // this same layout at pipeline-creation time, before any of them
     // necessarily has a live ShadowMap reference yet.
     std::unique_ptr<ShadowMap> m_shadowMap;
+    // Point-light shadows: six faces per shadow-casting point light (ShadowMap::pointFaceViewProj).
+    std::unique_ptr<ShadowMap> m_pointShadowMap;
     VkDescriptorSetLayout m_shadowMapSetLayout = VK_NULL_HANDLE;
     VkDescriptorPool m_shadowMapDescriptorPool = VK_NULL_HANDLE;
     VkDescriptorSet m_shadowMapDescriptorSet = VK_NULL_HANDLE;

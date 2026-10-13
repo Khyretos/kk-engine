@@ -258,8 +258,9 @@ private:
     // view (each culls against its own camera).
     // One instance buffer per pass and frame in flight: the views' passes
     // (0 .. kMaxViews-1), then their shadow passes (kMaxViews + ShadowRenderContext::tile).
-    std::unique_ptr<Buffer> m_instanceBuffers[kMaxViews + kMaxViews * ShadowMap::kCascades][Renderer::kMaxFramesInFlight];
-    size_t m_instanceCapacity[kMaxViews + kMaxViews * ShadowMap::kCascades][Renderer::kMaxFramesInFlight] = {};
+    static constexpr uint32_t kShadowPasses = kMaxViews * ShadowMap::kCascades + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces;
+    std::unique_ptr<Buffer> m_instanceBuffers[kMaxViews + kShadowPasses][Renderer::kMaxFramesInFlight];
+    size_t m_instanceCapacity[kMaxViews + kShadowPasses][Renderer::kMaxFramesInFlight] = {};
     uint64_t m_viewPass = 0; // m_frame and the view: which draw batchedFrame means
     std::vector<Batch> m_batches;
     std::vector<InstanceGpu> m_instanceData;

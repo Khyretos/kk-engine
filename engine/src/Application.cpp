@@ -132,6 +132,7 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
     // passed explicitly here anyway so the choice is visible at the
     // call site, not buried in a default argument.
     m_shadowMap = std::make_unique<ShadowMap>(m_renderer->device(), 2048);
+    m_pointShadowMap = std::make_unique<ShadowMap>(m_renderer->device(), ShadowMap::kPointTileResolution);
 
     // The shadow map sampler's own descriptor set layout/pool/set (set
     // 1 in cube.frag) -- separate from ShadowMap's own render
@@ -140,19 +141,22 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
     // only (the vertex stage only needs the light-space matrix, which
     // already travels through LightingBuffer's own UBO, not this).
     {
-        VkDescriptorSetLayoutBinding binding{};
-        binding.binding = 0;
-        binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        binding.descriptorCount = 1;
-        binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        VkDescriptorSetLayoutBinding bindings[2]{};
+        bindings[0].binding = 0;
+        bindings[1].binding = 1;
+        for (int i = 0; i < 2; ++i) {
+            bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            bindings[i].descriptorCount = 1;
+            bindings[i].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        }
 
         VkDescriptorSetLayoutCreateInfo layoutInfo{};
         layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        layoutInfo.bindingCount = 1;
-        layoutInfo.pBindings = &binding;
+        layoutInfo.bindingCount = 2;
+        layoutInfo.pBindings = bindings;
         VK_CHECK(vkCreateDescriptorSetLayout(m_renderer->device().device(), &layoutInfo, nullptr, &m_shadowMapSetLayout));
 
-        VkDescriptorPoolSize poolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 };
+        VkDescriptorPoolSize poolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2 };
         VkDescriptorPoolCreateInfo poolInfo{};
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         poolInfo.maxSets = 1;
@@ -403,19 +407,32 @@ void Application::safeInvoke(Module* m, const char* stage, const std::function<v
 }
 
 void Application::writeShadowMapDescriptor() {
-    VkDescriptorImageInfo imageInfo{};
-    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    imageInfo.imageView = m_shadowMap->imageView();
-    imageInfo.sampler = m_shadowMap->sampler();
+    VkDescriptorImageInfo shadowMapInfo{};
+    shadowMapInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    shadowMapInfo.imageView = m_shadowMap->imageView();
+    shadowMapInfo.sampler = m_shadowMap->sampler();
 
-    VkWriteDescriptorSet write{};
-    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write.dstSet = m_shadowMapDescriptorSet;
-    write.dstBinding = 0;
-    write.descriptorCount = 1;
-    write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    write.pImageInfo = &imageInfo;
-    vkUpdateDescriptorSets(m_renderer->device().device(), 1, &write, 0, nullptr);
+    VkDescriptorImageInfo pointShadowMapInfo{};
+    pointShadowMapInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    pointShadowMapInfo.imageView = m_pointShadowMap->imageView();
+    pointShadowMapInfo.sampler = m_pointShadowMap->sampler();
+
+    VkWriteDescriptorSet writes[2]{};
+    writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[0].dstSet = m_shadowMapDescriptorSet;
+    writes[0].dstBinding = 0;
+    writes[0].descriptorCount = 1;
+    writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    writes[0].pImageInfo = &shadowMapInfo;
+
+    writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[1].dstSet = m_shadowMapDescriptorSet;
+    writes[1].dstBinding = 1;
+    writes[1].descriptorCount = 1;
+    writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    writes[1].pImageInfo = &pointShadowMapInfo;
+
+    vkUpdateDescriptorSets(m_renderer->device().device(), 2, writes, 0, nullptr);
 }
 
 void Application::resolveInitOrder() {
@@ -900,6 +917,24 @@ void Application::run() {
         }
         const glm::mat4& lightViewProj = lightViewProjs[0];
 
+        // Point-light shadows: each point light that casts shadows (Light::castsPointShadow, and shadows on)
+        // gets six faces around it, each in its own tile of the point map: tile = light * ShadowMap::kPointFaces + face.
+        // The map shrinks to one tile when no light casts point shadows.
+        bool anyPointShadow = false;
+        for (const Light& l : m_lighting.lights) anyPointShadow = anyPointShadow || (m_lighting.shadowsEnabled && l.castsPointShadow());
+        if (m_pointShadowMap->setTiles(anyPointShadow ? ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces : 1)) writeShadowMapDescriptor();
+        std::array<glm::mat4, ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces> pointViewProjs{};
+        std::array<glm::vec4, ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces> pointTiles{};
+        for (uint32_t l = 0; l < ShadowMap::kMaxPointShadows; ++l) {
+            const Light& light = m_lighting.lights[l];
+            for (uint32_t f = 0; f < ShadowMap::kPointFaces; ++f) {
+                const uint32_t t = l * ShadowMap::kPointFaces + f;
+                pointTiles[t] = m_pointShadowMap->tileRect(t);
+                if (light.castsPointShadow())
+                    pointViewProjs[t] = ShadowMap::pointFaceViewProj(light.position, f, light.shadowRange, m_pointShadowMap->tileResolution());
+            }
+        }
+
         RenderContext renderCtx{};
         renderCtx.renderPass = m_renderer->renderPass();
         renderCtx.shadowMapDescriptorSet = m_shadowMapDescriptorSet;
@@ -946,7 +981,8 @@ void Application::run() {
                 drawViews[i].lighting->setFrame(m_renderer->currentFrameIndex());
                 drawViews[i].lighting->update(m_lighting, drawViews[i].camera.position, lightViewProjs[i],
                                               drawViews[i].proj * drawViews[i].view, skyEnv,
-                                              cascadeTiles[i].data(), cascadeScaleOffsets[i].data());
+                                              cascadeTiles[i].data(), cascadeScaleOffsets[i].data(),
+                                              anyPointShadow ? pointViewProjs.data() : nullptr, pointTiles.data());
             }
             {
                 const VkExtent2D extent = m_renderer->extent();
@@ -1007,6 +1043,28 @@ void Application::run() {
                     }
                 }
                 m_shadowMap->endRenderPass(cmd);
+                // The point map's pass runs every frame, even when no point light casts:
+                // it clears the map and leaves it readable for the shaders.
+                m_pointShadowMap->beginRenderPass(cmd);
+                if (anyPointShadow) {
+                    shadowCtx.renderPass = m_pointShadowMap->renderPass();
+                    for (uint32_t l = 0; l < ShadowMap::kMaxPointShadows; ++l) {
+                        if (!m_lighting.lights[l].castsPointShadow()) continue;
+                        for (uint32_t f = 0; f < ShadowMap::kPointFaces; ++f) {
+                            const uint32_t t = l * ShadowMap::kPointFaces + f;
+                            m_pointShadowMap->beginTile(cmd, t);
+                            shadowCtx.lightViewProj = pointViewProjs[t];
+                            shadowCtx.viewIndex = 0;
+                            shadowCtx.cascade = 0;
+                            shadowCtx.pointLight = static_cast<int>(l);
+                            shadowCtx.tile = kMaxViews * ShadowMap::kCascades + t;
+                            for (Module* m : m_initOrder) {
+                                safeInvoke(m, "renderShadow", [&] { m->renderShadow(shadowCtx); });
+                            }
+                        }
+                    }
+                }
+                m_pointShadowMap->endRenderPass(cmd);
             }
 
             PrepassContext prepassCtx{ cmd, view, proj, drawViews[0].camera.position, sceneExtent, m_lightingBuffer->descriptorSet(),

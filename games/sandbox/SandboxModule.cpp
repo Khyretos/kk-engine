@@ -903,6 +903,7 @@ void SandboxModule::update(const kke::UpdateContext& ctx) {
             l.position = m_pointLights[i].position;
             l.color = m_pointLights[i].color;
             l.intensity = m_pointLights[i].intensity;
+            l.castsShadows = true; // a level's lamps cast shadows (ENG-G04)
             if (!play) m_debug->cross(l.position, i == m_selectedLight ? 0.5f : 0.3f, kLightColor);
         }
     }

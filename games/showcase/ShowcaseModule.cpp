@@ -476,6 +476,7 @@ void ShowcaseModule::visitScene(size_t index) {
         l.position = e.origin + e.file.lights[i].position;
         l.color = e.file.lights[i].color;
         l.intensity = e.file.lights[i].intensity;
+        l.castsShadows = true; // a scene's lamps cast shadows (ENG-G04)
     }
     m_status = e.file.name + (e.loaded.missing.empty() ? std::string() : " (" + std::to_string(e.loaded.missing.size()) + " assets missing: install its packs)");
 }

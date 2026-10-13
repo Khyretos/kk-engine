@@ -46,7 +46,7 @@ Status: ⬜ not started, 🔨 in progress, ✅ done.
 |---|---|---|---|
 | ENG-G03 | Rendering | Normal maps and per-pixel roughness/metallic textures (today one value per object). | ✅ PR #31 |
 | ENG-G05 | Lighting | Cascaded shadow maps: 4 cascades per view out to 80 m, each in its own tile of the shadow map (ShadowMap::kCascades). | ✅ |
-| ENG-G04 | Lighting | Point-light shadows (only the directional light casts). | ⬜ |
+| ENG-G04 | Lighting | Point-light shadows: a point light with `castsShadows` gets six cube faces, each in its own 512-texel tile of a second shadow map, out to `shadowRange` (default 20 m); the sandbox and showcase lamps cast. | ✅ |
 | ENG-G07 | Lighting | More than 4 lights, and a Lua `light.*` API. | ⬜ |
 | ENG-G06 | Lighting | Reflections from a prefiltered environment map (ambient is SH only). | ⬜ |
 | ENG-G08 | Models | GPU skinning in `ModelModule` (CPU skinning today). | ⬜ |

@@ -44,8 +44,14 @@ public:
     // map (ShadowMap::tileRect) and how its clip-space xy follows from
     // lightViewProj, the far cascade's (ShadowMap::cascadeScaleOffset). Null
     // means one cascade covering the whole map.
+    // `pointViewProjs` and `pointTiles` are ShadowMap::kMaxPointShadows *
+    // ShadowMap::kPointFaces entries each (index light * kPointFaces + face):
+    // each face's view-projection (ShadowMap::pointFaceViewProj) and its tile
+    // of the point map. Null pointViewProjs means no point light casts
+    // shadows this frame.
     void update(const Lighting& lighting, const glm::vec3& cameraPos, const glm::mat4& lightViewProj, const glm::mat4& viewProj,
-                const SkyEnvironment* sky = nullptr, const glm::vec4* shadowTiles = nullptr, const glm::vec4* cascadeScaleOffsets = nullptr);
+                const SkyEnvironment* sky = nullptr, const glm::vec4* shadowTiles = nullptr, const glm::vec4* cascadeScaleOffsets = nullptr,
+                const glm::mat4* pointViewProjs = nullptr, const glm::vec4* pointTiles = nullptr);
 
     // Picks the frame-in-flight slot that update() writes and
     // descriptorSet() returns. Each slot has its own buffer: the GPU may

@@ -1,0 +1,16 @@
+[
+ {
+  "name": "g04-light",
+  "role": "worker/cpp-games",
+  "mode": "patch",
+  "out": "engine/include/kke/Application.h",
+  "prompt": "ENG-G04 point-light shadows. Until now only the directional key light (lights[0]) casts shadows, through cascaded shadow maps (class kke::ShadowMap). Now each point light that casts shadows gets a cube of 6 faces around it (+X, -X, +Y, -Y, +Z, -Z), each a perspective view a little wider than 90 degrees, drawn into its own tile of a second ShadowMap (the point map): tile = light * ShadowMap::kPointFaces + face. C++20, glm, Vulkan (depth 0..1, clip-space Y flipped by proj[1][1] *= -1.0f like computeLightViewProj). struct Light gets the point-shadow switch. Your SEARCH block is exactly these lines:\n```\n    float intensity = 1.0f;\n};\n```\nand your REPLACE block is `    float intensity = 1.0f;`, then the new lines, then `};`. Change nothing else; do not copy or move any other line.\nThe new lines, in this order:\n1. A two-line comment: point lights only: cast shadows (ENG-G04, ShadowMap::pointFaceViewProj) out to shadowRange metres from the light; six extra shadow passes per light, so it is off unless a game turns it on.\n2. `    bool castsShadows = false;`\n3. `    float shadowRange = 20.0f;`\n4. A one-line comment: whether this light draws point shadows.\n5. `    bool castsPointShadow() const { return enabled && !isDirectional && castsShadows; }`",
+  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g04.py light",
+  "precheck": false,
+  "context": [],
+  "max_tokens": 2500,
+  "focus": [
+   "^struct Light \\{"
+  ]
+ }
+]
