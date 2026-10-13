@@ -609,6 +609,9 @@ if(KKE_ENABLE_NET AND KKE_ENABLE_VOICE)
         GIT_REPOSITORY https://github.com/xiph/opus.git
         GIT_TAG        v1.5.2
         GIT_SHALLOW    TRUE
+        # GCC 16 Release warnings in silk/decode_indices.c (BUG-087; see the script).
+        PATCH_COMMAND  ${CMAKE_COMMAND} -DOPUS_SOURCE_DIR=<SOURCE_DIR> -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patch_opus.cmake
+        UPDATE_DISCONNECTED TRUE
     )
     FetchContent_MakeAvailable(opus)
     set_target_properties(opus PROPERTIES POSITION_INDEPENDENT_CODE ON)
