@@ -24,6 +24,28 @@ loader, window system and app lifecycle. What it doesn't: how fast. The
 frame rates are lavapipe's, so they compare one run with the next, not a
 VM with a phone or a gaming PC.
 
+## Windows natively on Kees's PC
+
+`.forgejo/workflows/windows-native.yml` runs nightly and by hand.
+soucouyant cross-builds and packages the Windows zip as the VM job does;
+Kees's PC (a Forgejo runner with `runs-on: windows`) downloads it and
+runs the unit tests and every demo natively with
+`tools/vm/windows/native_test.ps1`.
+
+`kke_vm.py summarize` turns the results into the same `summary.md` as
+the VM test; the run's artifact is `windows-native`.
+
+The first full run (2026-10-13) passed: 1,038 unit tests and 21 demos,
+in minutes instead of the VM's hours. Vulkan there is lavapipe on the
+CPU too: the PC's Intel HD 4600 has no Vulkan driver.
+
+The PC needs Python, git and Node.js (for the checkout and artifact
+steps), and runs PowerShell scripts with `-ExecutionPolicy Bypass` from
+`cmd` steps.
+
+The VM job stays as the fallback for when the PC is off, and as a
+clean-install check before a release.
+
 ## Graphics in a VM: why lavapipe
 
 soucouyant has one graphics card, the RX 9070 XT, and Hyprland draws the
