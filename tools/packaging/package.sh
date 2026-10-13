@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Packages a built bin/ folder into a downloadable archive (docs/RELEASES.md).
 #
-#   tools/packaging/package.sh --bin build/bin --platform linux|windows \
+#   tools/packaging/package.sh --bin build/bin --platform linux|windows|macos \
 #       --version v0.1.0-alpha --out dist [--deps build/_deps] [--strip <strip tool>] [--cooked DIR]
 #
 # --cooked DIR: art cooked with kke_cook (docs/COOKED_ART.md) to add under
@@ -59,9 +59,9 @@ done
 [ -d "$bin" ] || die "bin folder '$bin' does not exist"
 [ -d "$bin/shaders" ] || die "'$bin' has no shaders/ folder: is it a build's bin/ folder?"
 case "$platform" in
-linux) exe="" ;;
+linux | macos) exe="" ;;
 windows) exe=".exe" ;;
-*) die "platform must be linux or windows, got '$platform'" ;;
+*) die "platform must be linux, windows or macos, got '$platform'" ;;
 esac
 [[ "$version" =~ ^[A-Za-z0-9._-]+$ ]] || die "version '$version' may only hold letters, digits, '.', '_' and '-'"
 

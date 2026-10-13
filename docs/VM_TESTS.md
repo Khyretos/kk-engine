@@ -46,6 +46,23 @@ steps), and runs PowerShell scripts with `-ExecutionPolicy Bypass` from
 The VM job stays as the fallback for when the PC is off, and as a
 clean-install check before a release.
 
+## macOS on the Mac
+
+`.forgejo/workflows/macos.yml` runs only by hand. soucouyant
+cross-builds the Intel (x86_64) macOS package with osxcross in the
+`kke-macos` image (`docker/macos.Dockerfile`,
+`cmake/toolchains/macos-x86_64-osxcross.cmake`). A 2018 MacBook Air (a
+Forgejo runner with `runs-on: macos-amd64`, macOS 14) downloads it and
+runs the unit tests with `tools/ci/macos_test.sh`; it builds nothing.
+
+The source tree sits at `/tmp/kke-src` in both places, because some
+tests read files from the path they were built at. Vulkan on the Mac is
+MoltenVK from the runner's `$VULKAN_SDK`.
+
+The Mac's runner only runs while it is started for a job, so a dispatch
+waits in the queue while the Mac is off. The run's artifact is
+`macos-tests`.
+
 ## Graphics in a VM: why lavapipe
 
 soucouyant has one graphics card, the RX 9070 XT, and Hyprland draws the
