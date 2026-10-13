@@ -3,27 +3,24 @@ on: [push, workflow_dispatch]
 jobs:
   probe:
     runs-on: windows
-    defaults:
-      run:
-        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
     steps:
-      - name: Facts (default shell)
+      - name: cmd shell
+        shell: cmd
         run: |
+          echo hello from cmd
           whoami
-          echo "HOME=$HOME USERPROFILE=$env:USERPROFILE PWD=$PWD"
-          $PSVersionTable.PSVersion
-          Get-Command python, py, python3, git, tar, node, cmake, ninja, vulkaninfo, vulkaninfoSDK -ErrorAction SilentlyContinue | Format-Table Name, Source -AutoSize
+          where python py node git tar cmake ninja vulkaninfo
           python --version
-          node --version
-          Get-ItemProperty 'HKLM:\SOFTWARE\Khronos\Vulkan\Drivers' -ErrorAction SilentlyContinue | Format-List
-          echo "VK_ICD_FILENAMES=$env:VK_ICD_FILENAMES VK_DRIVER_FILES=$env:VK_DRIVER_FILES"
-          try { New-Item -ItemType Directory -Force C:\workspace\probe | Out-Null; echo "C:\workspace writable"; Remove-Item C:\workspace\probe } catch { echo "C:\workspace NOT writable: $_" }
+          echo USERPROFILE=%USERPROFILE%
+          echo VK_DRIVER_FILES=%VK_DRIVER_FILES% VK_ICD_FILENAMES=%VK_ICD_FILENAMES%
+          reg query HKLM\SOFTWARE\Khronos\Vulkan\Drivers
+          mkdir C:\workspace\probe && echo C:\workspace writable && rmdir C:\workspace\probe
+      - name: powershell -File
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        run: |
+          Write-Output "hello from powershell"
+          $PSVersionTable.PSVersion.ToString()
           [Environment]::UserInteractive
           (Get-Process -Id $PID).SessionId
-      - name: vulkaninfo
-        run: |
-          $v = Get-Command vulkaninfo, vulkaninfoSDK -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($v) { & $v.Source --summary 2>&1 | Select-Object -First 40 } else { Get-ChildItem -Recurse -ErrorAction SilentlyContinue C:\ -Include vulkaninfo*.exe,lvp_icd*.json -Depth 4 | Select-Object -First 10 FullName }
-      - uses: actions/checkout@v4
-      - name: Checkout worked
-        run: Get-ChildItem | Select-Object -First 5 Name
+          $v = Get-Command vulkaninfo -ErrorAction SilentlyContinue
+          if ($v) { & $v.Source --summary 2>&1 | Select-Object -First 40 } else { "no vulkaninfo on PATH" }
