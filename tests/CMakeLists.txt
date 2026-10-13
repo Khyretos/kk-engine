@@ -94,6 +94,7 @@ add_executable(kke_tests
     test_logo_mesh.cpp
     test_texture_mips.cpp
     test_shadow_projection.cpp
+    test_lights.cpp
     test_draw_order.cpp
     test_tone_mapper.cpp
     test_sky.cpp

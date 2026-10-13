@@ -23,6 +23,7 @@ namespace {
 struct GPULight {
     glm::vec4 directionOrPosition; // xyz = direction or position; w = 1.0 if positional (point), 0.0 if directional
     glm::vec4 colorIntensity;      // rgb = color; a = intensity (<=0 means "treat as disabled")
+    glm::vec4 params;              // x = range in metres (0 = no falloff), y = point-shadow slot (Lighting::pointShadowSlots, -1 = none)
 };
 
 struct LightingUBOData {
@@ -51,12 +52,11 @@ struct LightingUBOData {
     glm::vec4 ambientSH[9];
     glm::vec4 shadowTiles[ShadowMap::kCascades];        // each cascade's tile of the shadow map: x, y (top left), width, height in 0..1
     glm::vec4 cascadeScaleOffset[ShadowMap::kCascades]; // cascade c's clip xy = the far cascade's xy * (x, y) + (z, w)
-    glm::vec4 pointShadowOn; // x..w = lights[0..3]: 1 when that point light casts shadows
     glm::mat4 pointShadowViewProj[ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces]; // light * kPointFaces + face (ShadowMap::pointFaceViewProj)
     glm::vec4 pointShadowTiles[ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces];    // that face's tile of the point map: x, y, width, height in 0..1
 };
-static_assert(sizeof(LightingUBOData) == 4 * 2 * 16 + 2 * 16 + 2 * 64 + 11 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16 + 16 + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces * (64 + 16), "must match shaders/lighting_ubo.glsl");
-static_assert(ShadowMap::kMaxPointShadows == Lighting::kMaxLights, "one point map slot per light");
+static_assert(sizeof(LightingUBOData) == Lighting::kMaxLights * 3 * 16 + 2 * 16 + 2 * 64 + 11 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16 + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces * (64 + 16), "must match shaders/lighting_ubo.glsl");
+static_assert(ShadowMap::kMaxPointShadows <= Lighting::kMaxLights, "every point-shadow slot needs a light");
 
 } // namespace
 
@@ -136,6 +136,7 @@ void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos
             data.pointShadowViewProj[f] = pointViewProjs[f];
         }
     }
+    const std::array<int, Lighting::kMaxLights> slots = lighting.pointShadowSlots();
     for (int i = 0; i < Lighting::kMaxLights; ++i) {
         const Light& src = lighting.lights[i];
         GPULight& dst = data.lights[i];
@@ -149,7 +150,8 @@ void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos
             dst.directionOrPosition = glm::vec4(src.position, 1.0f);
         }
         dst.colorIntensity = glm::vec4(src.color, src.intensity);
-        data.pointShadowOn[i] = pointViewProjs && lighting.shadowsEnabled && src.castsPointShadow() ? 1.0f : 0.0f;
+        // x = range (Light::falloffAt), y = its point-shadow slot, -1 when it has none or none is drawn this frame.
+        dst.params = glm::vec4(src.range, pointViewProjs ? static_cast<float>(slots[i]) : -1.0f, 0.0f, 0.0f);
     }
     data.ambient = glm::vec4(lighting.ambientColor, lighting.shadowsEnabled ? 1.0f : 0.0f); // a = shadows on/off, read by cube.frag
     data.cameraPos = glm::vec4(cameraPos, 0.0f);

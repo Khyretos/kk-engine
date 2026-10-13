@@ -45,7 +45,7 @@ public:
     // lightViewProj, the far cascade's (ShadowMap::cascadeScaleOffset). Null
     // means one cascade covering the whole map.
     // `pointViewProjs` and `pointTiles` are ShadowMap::kMaxPointShadows *
-    // ShadowMap::kPointFaces entries each (index light * kPointFaces + face):
+    // ShadowMap::kPointFaces entries each (index slot * kPointFaces + face, slot from Lighting::pointShadowSlots):
     // each face's view-projection (ShadowMap::pointFaceViewProj) and its tile
     // of the point map. Null pointViewProjs means no point light casts
     // shadows this frame.

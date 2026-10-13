@@ -68,7 +68,7 @@ areas), and the TAA / Nanite / "fake optimization" videos.
 Read from the code on 2026-09-26:
 
 - **Forward renderer**: one scene pass, lit in the fragment shader
-  (`shaders/pbr_common.glsl`: GGX, up to 4 lights, flat ambient, shadow on
+  (`shaders/pbr_common.glsl`: GGX, up to 16 lights, flat ambient, shadow on
   light 0). No G-buffer.
 - **No anti-aliasing of any kind**: every attachment is
   `VK_SAMPLE_COUNT_1_BIT`, no post AA, nothing temporal.

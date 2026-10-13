@@ -191,6 +191,52 @@ void ScriptModule::bindAll() {
         return 1;
     });
 
+    // light.*: lamps a script places, kke/ScriptLights.h: free slots of Lighting::lights after the sun, taken back when the script goes
+    vm.registerFunction("light", "point", [this, app](lua_State* L) {
+        luaL_checktype(L, 1, LUA_TTABLE);
+        ScriptLights::Desc d;
+        d.position = ScriptVM::fieldVec3(L, 1, "pos", d.position);
+        d.color = ScriptVM::fieldVec3(L, 1, "color", d.color);
+        d.intensity = ScriptVM::fieldNumber(L, 1, "intensity", d.intensity);
+        d.range = ScriptVM::fieldNumber(L, 1, "range", d.range);
+        d.shadows = ScriptVM::fieldBool(L, 1, "shadows", d.shadows);
+        const int slot = m_lights.add(app->lighting(), m_vm->currentSource(), d);
+        if (slot < 0) {
+            lua_pushnil(L);
+            lua_pushfstring(L, "all %d lights are in use", Lighting::kMaxLights);
+            return 2;
+        }
+        lua_pushinteger(L, slot);
+        return 1;
+    });
+    auto ownLight = [this](lua_State* L, const char* what) -> int {
+        const int slot = static_cast<int>(luaL_checkinteger(L, 1));
+        if (!m_lights.owns(slot, m_vm->currentSource())) luaL_error(L, "%s: %d is not a light this script placed", what, slot);
+        return slot;
+    };
+    vm.registerFunction("light", "move", [app, ownLight](lua_State* L) {
+        app->lighting().lights[ownLight(L, "light.move")].position = ScriptVM::toVec3(L, 2);
+        return 0;
+    });
+    vm.registerFunction("light", "set", [app, ownLight](lua_State* L) {
+        Light& l = app->lighting().lights[ownLight(L, "light.set")];
+        luaL_checktype(L, 2, LUA_TTABLE);
+        l.color = ScriptVM::fieldVec3(L, 2, "color", l.color);
+        l.intensity = ScriptVM::fieldNumber(L, 2, "intensity", l.intensity);
+        l.range = ScriptVM::fieldNumber(L, 2, "range", l.range);
+        l.castsShadows = ScriptVM::fieldBool(L, 2, "shadows", l.castsShadows);
+        l.enabled = ScriptVM::fieldBool(L, 2, "on", l.enabled);
+        return 0;
+    });
+    vm.registerFunction("light", "remove", [this, app, ownLight](lua_State* L) {
+        m_lights.remove(app->lighting(), ownLight(L, "light.remove"));
+        return 0;
+    });
+    vm.registerFunction("light", "count", [this](lua_State* L) {
+        lua_pushinteger(L, static_cast<lua_Integer>(m_lights.count(m_vm->currentSource())));
+        return 1;
+    });
+
     // input.*
     if (auto* in = app->getModule<InputModule>()) {
         vm.registerFunction("input", "define", [in](lua_State* L) {

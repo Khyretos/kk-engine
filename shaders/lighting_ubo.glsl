@@ -9,14 +9,16 @@
 
 #define SHADOW_CASCADES 4 // kke::ShadowMap::kCascades
 #define POINT_SHADOW_FACES 24 // kke::ShadowMap::kMaxPointShadows * kke::ShadowMap::kPointFaces
+#define MAX_LIGHTS 16 // kke::Lighting::kMaxLights
 
 struct GPULight {
     vec4 directionOrPosition; // xyz = direction or position; w = 1.0 if positional (point), 0.0 if directional
     vec4 colorIntensity;      // rgb = color; a = intensity (<=0 means disabled)
+    vec4 params;              // x = range in metres (0 = no falloff), y = point-shadow slot (0..3, -1 = none)
 };
 
 layout(set = 0, binding = 0) uniform LightingUBO {
-    GPULight lights[4];
+    GPULight lights[MAX_LIGHTS];
     vec4 ambient;   // rgb = average ambient colour; a = shadows on (1) / off (0)
     vec4 cameraPos; // rgb = world-space camera position, for specular
     mat4 lightViewProj;
@@ -35,7 +37,7 @@ layout(set = 0, binding = 0) uniform LightingUBO {
     vec4 ambientSH[9]; // ambient light, order-2 spherical harmonics (kke::SkySH)
     vec4 shadowTiles[SHADOW_CASCADES];        // each cascade's tile of the shadow map: xy = top left, zw = size (0..1)
     vec4 cascadeScaleOffset[SHADOW_CASCADES]; // cascade c's clip xy = lightViewProj's (the far cascade's) xy * .xy + .zw
-    vec4 pointShadowOn; // x, y, z, w = lights[0..3]: 1 when that point light casts shadows
+
     mat4 pointShadowViewProj[POINT_SHADOW_FACES]; // index light * 6 + face: that face's view-projection, kke::ShadowMap::pointFaceViewProj
     vec4 pointShadowTiles[POINT_SHADOW_FACES]; // index light * 6 + face: its tile of the point map, xy = top left, zw = size, 0..1
 } lighting;
@@ -54,6 +56,15 @@ vec3 ambientIrradiance(vec3 n) {
 }
 
 int skyKind() { return int(lighting.skyZenith.a + 0.5); }
+
+// How much of light i reaches worldPos: 1 for the sun and for point lights with no range, params.x <= 0; otherwise (1 - (d / range)^4)^2, 1 at the light and 0 at range, as kke::Light::falloffAt.
+float lightFalloff(int i, vec3 worldPos) {
+    float range = lighting.lights[i].params.x;
+    if (lighting.lights[i].directionOrPosition.w < 0.5 || range <= 0.0) return 1.0;
+    float t = length(lighting.lights[i].directionOrPosition.xyz - worldPos) / range;
+    float w = clamp(1.0 - t * t * t * t, 0.0, 1.0);
+    return w * w;
+}
 
 // The gradient part of the sky: kke::gradientSkyRadiance.
 vec3 skyGradient(vec3 d) {

@@ -38,10 +38,11 @@ layout(push_constant) uniform PushConstants {
 struct GPULight {
     vec4 directionOrPosition;
     vec4 colorIntensity;
+    vec4 params;
 };
 
 layout(set = 0, binding = 0) uniform LightingUBO {
-    GPULight lights[4];
+    GPULight lights[16]; // kke::Lighting::kMaxLights
     vec4 ambient;
     vec4 cameraPos;
     mat4 lightViewProj;

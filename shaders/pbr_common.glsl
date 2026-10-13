@@ -73,7 +73,7 @@ float computeShadow(vec4 posLightSpace) {
 // Point-light shadow: the cube face that sees the point (kke::ShadowMap::pointFace),
 // pushed out along the normal by about 1.5 texels, then 3x3 PCF inside that
 // face's tile. Returns 1.0 fully lit, 0.0 in shadow.
-float computePointShadow(int light, vec3 worldPos, vec3 N) {
+float computePointShadow(int light, int slot, vec3 worldPos, vec3 N) {
     vec3 d = worldPos - lighting.lights[light].directionOrPosition.xyz;
     vec3 a = abs(d);
     int face;
@@ -84,7 +84,7 @@ float computePointShadow(int light, vec3 worldPos, vec3 N) {
     } else {
         face = (d.z > 0.0 ? 4 : 5);
     }
-    int f = light * 6 + face;
+    int f = slot * 6 + face; // slot: kke::Lighting::pointShadowSlots
     vec4 tile = lighting.pointShadowTiles[f];
     vec2 mapTexels = vec2(textureSize(pointShadowMap, 0));
     float texel = 2.0 * max(max(a.x, a.y), a.z) / (mapTexels.x * tile.z);
@@ -233,11 +233,13 @@ vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 
     float shadow = lighting.ambient.a > 0.5 ? computeShadow(fragPosLightSpace) : 1.0;
     vec3 Lo = vec3(0.0);
 
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < MAX_LIGHTS; ++i) {
         float intensity = lighting.lights[i].colorIntensity.a;
         if (intensity <= 0.0) continue; // disabled -- see the CPU-side "enabled" convention
+        float falloff = lightFalloff(i, fragPosWorld); // a point light's range (kke::Light::range)
+        if (falloff <= 0.0) continue;                   // out of its reach: costs nothing more
 
-        vec3 radiance = lighting.lights[i].colorIntensity.rgb * intensity;
+        vec3 radiance = lighting.lights[i].colorIntensity.rgb * intensity * falloff;
         bool isPositional = lighting.lights[i].directionOrPosition.w > 0.5;
 
         vec3 L; // direction FROM the surface TOWARD the light
@@ -267,9 +269,10 @@ vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 
         float NdotL = max(dot(N, L), 0.0);
 
         // The directional key light (light 0) uses the cascaded map; a point
-        // light that casts shadows (lighting.pointShadowOn[i]) uses its six faces
-        // in the point map.
-        float thisLightShadow = isPositional ? (lighting.pointShadowOn[i] > 0.5 ? computePointShadow(i, fragPosWorld, N) : 1.0) : (i == 0 ? shadow : 1.0);
+        // light with a point-shadow slot (params.y >= 0) uses its six faces
+        // in that slot's tiles of the point map.
+        int slot = int(lighting.lights[i].params.y + 0.5);
+        float thisLightShadow = isPositional ? (lighting.lights[i].params.y > -0.5 ? computePointShadow(i, slot, fragPosWorld, N) : 1.0) : (i == 0 ? shadow : 1.0);
 
         Lo += (kD * albedo / PI + specular) * radiance * NdotL * thisLightShadow;
     }

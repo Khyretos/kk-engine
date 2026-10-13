@@ -15,6 +15,7 @@
 #include "kke/Texture.h"
 
 #include <glm/glm.hpp>
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <filesystem>
@@ -63,9 +64,21 @@ struct Light {
     // Point lights only: cast shadows (ENG-G04, ShadowMap::pointFaceViewProj) out to shadowRange metres from
     // the light. Six extra shadow passes per light, so it is off unless a game turns it on.
     bool castsShadows = false;
+
     float shadowRange = 20.0f;
     // Whether this light draws point shadows.
     bool castsPointShadow() const { return enabled && !isDirectional && castsShadows; }
+
+    // Point lights only: how far the light reaches in metres; 0 = everywhere (no falloff, as before ranges existed), otherwise it fades smoothly to nothing at range (falloffAt).
+    float range = 0.0f;
+
+    // The share of this light that reaches at: 1 for a directional light or range <= 0, else (1 - (d / range)^4)^2 clamped at 0, so 1 at the light and 0 at range; the shaders mirror it (lightFalloff in shaders/lighting_ubo.glsl).
+    float falloffAt(const glm::vec3& at) const {
+        if (isDirectional || range <= 0.0f) return 1.0f;
+        const float t = glm::length(at - position) / range;
+        const float w = std::clamp(1.0f - t * t * t * t, 0.0f, 1.0f);
+        return w * w;
+    }
 };
 
 // Same reasoning as Camera just above: nearly every module that draws
@@ -73,9 +86,7 @@ struct Light {
 // Application directly rather than behind a getModule<>() lookup.
 // kMaxLights is a real, fixed limit (not "as many as you want") because
 // the GPU-side UBO this feeds has a fixed-size array — see
-// LightingBuffer.h for exactly how that's laid out and why 4 was
-// chosen (a small, genuinely useful number for a first real multi-
-// light slice, not an arbitrary round number).
+// LightingBuffer.h for how that's laid out. 16 since ENG-G07: every lit pixel loops over all of them, skipping lights that are off and point lights out of their range (Light::range), and each costs 48 bytes of the UBO.
 // How lit shaders turn scene light (unbounded) into displayable colour
 // (shaders/tonemap.glsl). The values are what the shaders read, so keep the
 // order. AgX is the default: highlights desaturate towards white instead of
@@ -89,8 +100,22 @@ enum class ToneMapper : int { AgX = 0, ACES = 1, Reinhard = 2 };
 std::optional<ToneMapper> parseToneMapper(const std::string& name);
 
 struct Lighting {
-    static constexpr int kMaxLights = 4;
+    static constexpr int kMaxLights = 16;
     std::array<Light, kMaxLights> lights;
+    // Point shadow slots: -1 means no slot, otherwise the index (0..3) of the point-shadow map this light draws into.
+    // Slots are assigned in light order to the first ShadowMap::kMaxPointShadows lights that cast shadows and have shadows enabled.
+    std::array<int, kMaxLights> pointShadowSlots() const {
+        std::array<int, kMaxLights> slots{};
+        int next = 0;
+        for (int i = 0; i < kMaxLights; ++i) {
+            if (shadowsEnabled && lights[i].castsPointShadow() && next < static_cast<int>(ShadowMap::kMaxPointShadows)) {
+                slots[i] = next++;
+            } else {
+                slots[i] = -1;
+            }
+        }
+        return slots;
+    }
     glm::vec3 ambientColor{0.15f, 0.15f, 0.15f}; // flat fill light so unlit faces read as dim, not pure black
     // Light 0's shadow map is still rendered either way (so toggling is
     // instant), but lit shaders ignore it when this is false.

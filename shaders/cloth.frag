@@ -124,7 +124,7 @@ void main() {
     float NdotV = max(dot(N, V), 1e-3);
     vec3 F0 = vec3(0.04);
     vec3 Lo = vec3(0.0);
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < MAX_LIGHTS; ++i) {
         float intensity = lighting.lights[i].colorIntensity.a;
         if (intensity <= 0.0) continue;
         vec3 L = lighting.lights[i].directionOrPosition.w > 0.5 ? normalize(lighting.lights[i].directionOrPosition.xyz - fragPosWorld)
@@ -137,7 +137,7 @@ void main() {
         // smoothly; the shadow map, a texel at a time, would cut that soft
         // edge into hard blotches. So it fades in as the fold faces the light.
         float sunShadow = mix(1.0, shadow, smoothstep(-wrap, 0.3, NdotLraw));
-        vec3 radiance = lighting.lights[i].colorIntensity.rgb * intensity * (i == 0 ? sunShadow : 1.0);
+        vec3 radiance = lighting.lights[i].colorIntensity.rgb * intensity * lightFalloff(i, fragPosWorld) * (i == 0 ? sunShadow : 1.0);
         float NdotL = max((NdotLraw + wrap) / (1.0 + wrap), 0.0);
         float NdotLs = max(NdotLraw, 0.0);
         float NdotH = max(dot(N, H), 0.0);
