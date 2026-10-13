@@ -48,14 +48,11 @@ jobs:
 
       - name: No warnings anywhere
         working-directory: /tmp/kke-src
-        run: |
-          set -o pipefail
-          tools/ci/check_warnings.sh configure.log build.log
+        run: tools/ci/check_warnings.sh configure.log build.log
 
       - name: Package
         working-directory: /tmp/kke-src
         run: |
-          # --strip is omitted as per spec.
           tools/packaging/package.sh --bin build/bin --platform macos --version "$VERSION" --out "$GITHUB_WORKSPACE/dist" --deps build/_deps
           cp build/bin/kke_tests "$GITHUB_WORKSPACE/dist/"
           cp "$GITHUB_WORKSPACE/src.tar" "$GITHUB_WORKSPACE/dist/"
@@ -78,13 +75,7 @@ jobs:
           path: dist
 
       - name: Unit tests
-        run: |
-          # Unpack the source tree to /tmp/kke-src (expected by macos_test.sh).
-          tar -xf dist/src.tar -C /tmp/
-          
-          # Run the test script.
-          # Arguments: package, kke_tests binary, source tar, runner dir, results dir
-          tools/ci/macos_test.sh "dist/kk-engine-$VERSION-macos-x86_64.tar.gz" dist/kke_tests dist/src.tar kke-run results
+        run: tools/ci/macos_test.sh "dist/kk-engine-$VERSION-macos-x86_64.tar.gz" dist/kke_tests dist/src.tar kke-run results
 
       - uses: https://code.forgejo.org/forgejo/upload-artifact@v4
         if: always()
