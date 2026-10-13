@@ -105,10 +105,14 @@ struct ShadowRenderContext {
     // per view, nearest first), each into its own tile of the map:
     // tile = viewIndex * ShadowMap::kCascades + cascade. Per-frame work
     // belongs with tile 0, and anything written for the GPU per call needs
-    // its own buffer per tile (ShadowMap::kCascades per view).
+    // its own buffer per tile (ShadowMap::kCascades per view, then the point-light faces).
     uint32_t viewIndex = 0;
     uint32_t cascade = 0; // which of the view's ShadowMap::kCascades slices, 0 = nearest the camera
     uint32_t tile = 0;    // viewIndex * ShadowMap::kCascades + cascade: 0 is the first call of the frame
+    // Point-light shadows: the light being drawn, or -1 for the key light's cascades. Its six
+    // faces come after every view's cascades: tile = kMaxViews * ShadowMap::kCascades
+    // + light * ShadowMap::kPointFaces + face, with viewIndex and cascade 0.
+    int pointLight = -1;
 };
 
 // Handed to Module::prepass(): every drawn frame, after the shadow pass

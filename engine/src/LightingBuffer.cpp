@@ -51,8 +51,12 @@ struct LightingUBOData {
     glm::vec4 ambientSH[9];
     glm::vec4 shadowTiles[ShadowMap::kCascades];        // each cascade's tile of the shadow map: x, y (top left), width, height in 0..1
     glm::vec4 cascadeScaleOffset[ShadowMap::kCascades]; // cascade c's clip xy = the far cascade's xy * (x, y) + (z, w)
+    glm::vec4 pointShadowOn; // x..w = lights[0..3]: 1 when that point light casts shadows
+    glm::mat4 pointShadowViewProj[ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces]; // light * kPointFaces + face (ShadowMap::pointFaceViewProj)
+    glm::vec4 pointShadowTiles[ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces];    // that face's tile of the point map: x, y, width, height in 0..1
 };
-static_assert(sizeof(LightingUBOData) == 4 * 2 * 16 + 2 * 16 + 2 * 64 + 11 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16, "must match shaders/lighting_ubo.glsl");
+static_assert(sizeof(LightingUBOData) == 4 * 2 * 16 + 2 * 16 + 2 * 64 + 11 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16 + 16 + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces * (64 + 16), "must match shaders/lighting_ubo.glsl");
+static_assert(ShadowMap::kMaxPointShadows == Lighting::kMaxLights, "one point map slot per light");
 
 } // namespace
 
@@ -119,11 +123,18 @@ LightingBuffer::~LightingBuffer() {
 }
 
 void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos, const glm::mat4& lightViewProj, const glm::mat4& viewProj,
-                            const SkyEnvironment* sky, const glm::vec4* shadowTiles, const glm::vec4* cascadeScaleOffsets) {
+                            const SkyEnvironment* sky, const glm::vec4* shadowTiles, const glm::vec4* cascadeScaleOffsets,
+                            const glm::mat4* pointViewProjs, const glm::vec4* pointTiles) {
     LightingUBOData data{};
     for (uint32_t c = 0; c < ShadowMap::kCascades; ++c) {
         data.shadowTiles[c] = shadowTiles ? shadowTiles[c] : glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
         data.cascadeScaleOffset[c] = cascadeScaleOffsets ? cascadeScaleOffsets[c] : glm::vec4(1.0f, 1.0f, 0.0f, 0.0f);
+    }
+    for (uint32_t f = 0; f < ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces; ++f) {
+        data.pointShadowTiles[f] = pointTiles ? pointTiles[f] : glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+        if (pointViewProjs) {
+            data.pointShadowViewProj[f] = pointViewProjs[f];
+        }
     }
     for (int i = 0; i < Lighting::kMaxLights; ++i) {
         const Light& src = lighting.lights[i];
@@ -138,6 +149,7 @@ void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos
             dst.directionOrPosition = glm::vec4(src.position, 1.0f);
         }
         dst.colorIntensity = glm::vec4(src.color, src.intensity);
+        data.pointShadowOn[i] = pointViewProjs && lighting.shadowsEnabled && src.castsPointShadow() ? 1.0f : 0.0f;
     }
     data.ambient = glm::vec4(lighting.ambientColor, lighting.shadowsEnabled ? 1.0f : 0.0f); // a = shadows on/off, read by cube.frag
     data.cameraPos = glm::vec4(cameraPos, 0.0f);

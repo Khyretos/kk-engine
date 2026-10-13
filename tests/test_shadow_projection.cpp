@@ -172,3 +172,60 @@ TEST(ShadowCascades, TileResolutionFollowsTheSetting) {
     EXPECT_EQ(kke::ShadowMap::tileResolutionFor(2048, 16), kke::ShadowMap::kMaxResolution / 4);
     EXPECT_EQ(kke::ShadowMap::tileResolutionFor(1024, 16), 1024u);
 }
+
+TEST(PointShadows, FacePicksTheLargestAxis) {
+    using kke::ShadowMap;
+    EXPECT_EQ(ShadowMap::pointFace(glm::vec3(2.0f, 1.0f, -1.0f)), 0u);  // +X
+    EXPECT_EQ(ShadowMap::pointFace(glm::vec3(-2.0f, 1.0f, 1.0f)), 1u);  // -X
+    EXPECT_EQ(ShadowMap::pointFace(glm::vec3(0.5f, 3.0f, -1.0f)), 2u);  // +Y
+    EXPECT_EQ(ShadowMap::pointFace(glm::vec3(0.5f, -3.0f, 1.0f)), 3u);  // -Y
+    EXPECT_EQ(ShadowMap::pointFace(glm::vec3(0.5f, 1.0f, 4.0f)), 4u);   // +Z
+    EXPECT_EQ(ShadowMap::pointFace(glm::vec3(-0.5f, 1.0f, -4.0f)), 5u); // -Z
+}
+
+TEST(PointShadows, EveryDirectionLandsInsideItsFace) {
+    // Whatever the direction from the light, the face pointFace picks sees it,
+    // at least kPointFaceMargin texels in from the tile's edge (room for the
+    // normal offset and the 3x3 taps), with depth inside Vulkan's 0..1.
+    using kke::ShadowMap;
+    const glm::vec3 light(1.0f, 3.0f, -2.0f);
+    const float range = 15.0f;
+    const uint32_t res = 512;
+    const float edge = 1.0f - 2.0f * static_cast<float>(ShadowMap::kPointFaceMargin) / static_cast<float>(res) + 1e-4f;
+    for (int i = 0; i < 400; ++i) {
+        const float a = static_cast<float>(i) * 2.399963f, y = 1.0f - 2.0f * (static_cast<float>(i) + 0.5f) / 400.0f;
+        const float r = std::sqrt(1.0f - y * y);
+        const glm::vec3 d(r * std::cos(a), y, r * std::sin(a));
+        const uint32_t face = ShadowMap::pointFace(d);
+        ASSERT_LT(face, ShadowMap::kPointFaces);
+        const glm::mat4 m = ShadowMap::pointFaceViewProj(light, face, range, res);
+        for (float dist : { 0.5f, 5.0f, 14.0f }) {
+            const glm::vec4 c = m * glm::vec4(light + d * dist, 1.0f);
+            ASSERT_GT(c.w, 0.0f) << i;
+            const glm::vec3 p = glm::vec3(c) / c.w;
+            EXPECT_LE(std::abs(p.x), edge) << i << " " << dist;
+            EXPECT_LE(std::abs(p.y), edge) << i << " " << dist;
+            EXPECT_GT(p.z, 0.0f) << i << " " << dist;
+            EXPECT_LT(p.z, 1.0f) << i << " " << dist;
+        }
+    }
+}
+
+TEST(PointShadows, FartherFromTheLightIsDeeper) {
+    using kke::ShadowMap;
+    const glm::vec3 light(0.0f, 2.0f, 0.0f);
+    for (uint32_t face = 0; face < ShadowMap::kPointFaces; ++face) {
+        glm::vec3 axis(0.0f);
+        axis[face / 2] = face % 2 == 0 ? 1.0f : -1.0f;
+        ASSERT_EQ(ShadowMap::pointFace(axis), face);
+        const glm::mat4 m = ShadowMap::pointFaceViewProj(light, face, 20.0f, 512);
+        const glm::vec4 nearer = m * glm::vec4(light + axis * 2.0f, 1.0f), farther = m * glm::vec4(light + axis * 6.0f, 1.0f);
+        EXPECT_LT(nearer.z / nearer.w, farther.z / farther.w) << face;
+        // Straight along the face's axis is the middle of its tile.
+        EXPECT_NEAR(nearer.x / nearer.w, 0.0f, 1e-5f) << face;
+        EXPECT_NEAR(nearer.y / nearer.w, 0.0f, 1e-5f) << face;
+        // The far plane is the light's shadow range.
+        const glm::vec4 beyond = m * glm::vec4(light + axis * 21.0f, 1.0f);
+        EXPECT_GT(beyond.z / beyond.w, 1.0f) << face;
+    }
+}

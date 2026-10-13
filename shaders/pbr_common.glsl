@@ -9,6 +9,8 @@
 
 // A depth-compare sampler (kke::ShadowMap): texture() returns how lit.
 layout(set = 1, binding = 0) uniform sampler2DShadow shadowMap;
+// The point map (kke::ShadowMap, a second one): six faces per shadow-casting point light.
+layout(set = 1, binding = 1) uniform sampler2DShadow pointShadowMap;
 
 // Set 2: the material's own albedo texture -- see kke::Texture and
 // kke::Application's own default 1x1 white texture (bound here for
@@ -63,6 +65,40 @@ float computeShadow(vec4 posLightSpace) {
     for (int dy = -1; dy <= 1; ++dy) {
         for (int dx = -1; dx <= 1; ++dx) {
             litSum += texture(shadowMap, vec3(clamp(shadowUV + vec2(dx, dy) * texelSize, tileMin, tileMax), ref));
+        }
+    }
+    return litSum / 9.0;
+}
+
+// Point-light shadow: the cube face that sees the point (kke::ShadowMap::pointFace),
+// pushed out along the normal by about 1.5 texels, then 3x3 PCF inside that
+// face's tile. Returns 1.0 fully lit, 0.0 in shadow.
+float computePointShadow(int light, vec3 worldPos, vec3 N) {
+    vec3 d = worldPos - lighting.lights[light].directionOrPosition.xyz;
+    vec3 a = abs(d);
+    int face;
+    if (a.x >= a.y && a.x >= a.z) {
+        face = (d.x > 0.0 ? 0 : 1);
+    } else if (a.y >= a.z) {
+        face = (d.y > 0.0 ? 2 : 3);
+    } else {
+        face = (d.z > 0.0 ? 4 : 5);
+    }
+    int f = light * 6 + face;
+    vec4 tile = lighting.pointShadowTiles[f];
+    vec2 mapTexels = vec2(textureSize(pointShadowMap, 0));
+    float texel = 2.0 * max(max(a.x, a.y), a.z) / (mapTexels.x * tile.z);
+    vec4 c = lighting.pointShadowViewProj[f] * vec4(worldPos + N * (1.5 * texel), 1.0);
+    vec3 p = c.xyz / c.w;
+    if (p.z >= 1.0) return 1.0;
+    vec2 uv = tile.xy + (p.xy * 0.5 + 0.5) * tile.zw;
+    vec2 texelSize = 1.0 / mapTexels;
+    vec2 tileMin = tile.xy + 0.5 * texelSize;
+    vec2 tileMax = tile.xy + tile.zw - 0.5 * texelSize;
+    float litSum = 0.0;
+    for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            litSum += texture(pointShadowMap, vec3(clamp(uv + vec2(dx, dy) * texelSize, tileMin, tileMax), p.z));
         }
     }
     return litSum / 9.0;
@@ -230,11 +266,10 @@ vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 
 
         float NdotL = max(dot(N, L), 0.0);
 
-        // Shadow only attenuates light[0] (the key light -- the only
-        // one ShadowMap actually renders a depth pass for). Same real,
-        // documented scope limit as the previous Blinn-Phong version
-        // of this shader, unchanged by the PBR rewrite.
-        float thisLightShadow = (i == 0) ? shadow : 1.0;
+        // The directional key light (light 0) uses the cascaded map; a point
+        // light that casts shadows (lighting.pointShadowOn[i]) uses its six faces
+        // in the point map.
+        float thisLightShadow = isPositional ? (lighting.pointShadowOn[i] > 0.5 ? computePointShadow(i, fragPosWorld, N) : 1.0) : (i == 0 ? shadow : 1.0);
 
         Lo += (kD * albedo / PI + specular) * radiance * NdotL * thisLightShadow;
     }

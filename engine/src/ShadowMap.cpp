@@ -305,6 +305,30 @@ glm::mat4 ShadowMap::cascadeViewProj(const glm::mat4& farViewProj, const glm::ve
     return t * farViewProj;
 }
 
+uint32_t ShadowMap::pointFace(const glm::vec3& toPoint) {
+    const glm::vec3 a = glm::abs(toPoint);
+    if (a.x >= a.y && a.x >= a.z) return toPoint.x > 0.0f ? 0u : 1u;
+    if (a.y >= a.z) return toPoint.y > 0.0f ? 2u : 3u;
+    return toPoint.z > 0.0f ? 4u : 5u;
+}
+
+glm::mat4 ShadowMap::pointFaceViewProj(const glm::vec3& lightPos, uint32_t face, float range, uint32_t tileResolution) {
+    constexpr float kNear = 0.05f;
+    glm::vec3 axis(0.0f);
+    axis[face / 2] = face % 2 == 0 ? 1.0f : -1.0f;
+
+    // Any up not along the axis works: the shaders look up with this same matrix.
+    const glm::vec3 up = face / 2 == 1 ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
+
+    const float res = static_cast<float>(tileResolution);
+    const float tanHalf = res / (res - 2.0f * static_cast<float>(kPointFaceMargin));
+
+    glm::mat4 proj = glm::perspectiveRH_ZO(2.0f * std::atan(tanHalf), 1.0f, kNear, std::max(range, 2.0f * kNear));
+    proj[1][1] *= -1.0f;
+
+    return proj * glm::lookAt(lightPos, lightPos + axis, up);
+}
+
 uint32_t ShadowMap::gridFor(uint32_t tiles) {
     uint32_t grid = 1;
     while (grid * grid < tiles) ++grid;

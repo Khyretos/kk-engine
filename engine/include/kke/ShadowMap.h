@@ -21,7 +21,8 @@ class VulkanDevice;
 // depth-only render target, computed from the scene's key light only
 // (lights[0] in kke::Lighting — see Application.h), and only objects
 // that explicitly implement Module::renderShadow() actually cast one.
-// Still out of scope: point-light shadows (docs/GAPS.md ENG-G04). Each
+// A second ShadowMap holds point-light shadows: six faces per light that
+// casts (pointFace, pointFaceViewProj; docs/GAPS.md ENG-G04). Each
 // view's frustum is split into kCascades cascades, each drawn into its
 // own tile of the map (see kCascades below). Soft edges are 3x3 PCF (pbr_common.glsl, computeShadow),
 // which also picks the cascade.
@@ -93,6 +94,26 @@ public:
 
     // That cascade's light view-projection: scaleOffset applied after farViewProj.
     static glm::mat4 cascadeViewProj(const glm::mat4& farViewProj, const glm::vec4& scaleOffset);
+
+    // Point-light shadows: each shadow-casting point light gets a cube of
+    // kPointFaces faces around it, each drawn into its own tile of a second
+    // map (the point map): tile = light * kPointFaces + face.
+    static constexpr uint32_t kPointFaces = 6;
+    // Texels each face's view reaches past its 90 degrees on every side, so the
+    // normal offset and the 3x3 taps near a face's edge still read that face.
+    static constexpr uint32_t kPointFaceMargin = 4;
+    // Texels across one point-light face.
+    static constexpr uint32_t kPointTileResolution = 512;
+    // Lights that can cast point shadows: Lighting::kMaxLights (checked in LightingBuffer.cpp).
+    static constexpr uint32_t kMaxPointShadows = 4;
+
+    // The face that sees direction toPoint from the light, by its largest axis:
+    // 0 +X, 1 -X, 2 +Y, 3 -Y, 4 +Z, 5 -Z.
+    static uint32_t pointFace(const glm::vec3& toPoint);
+
+    // Face `face`'s view-projection for a point light at lightPos, depth 0..1 out to range,
+    // kPointFaceMargin texels of a tileResolution tile wider than 90 degrees on each side.
+    static glm::mat4 pointFaceViewProj(const glm::vec3& lightPos, uint32_t face, float range, uint32_t tileResolution);
 
     // Tiles across the map for `tiles` tiles: the smallest square grid that holds them.
     static uint32_t gridFor(uint32_t tiles);

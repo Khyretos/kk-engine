@@ -8,6 +8,7 @@
 // Every field is a vec4 so std140 adds no hidden padding.
 
 #define SHADOW_CASCADES 4 // kke::ShadowMap::kCascades
+#define POINT_SHADOW_FACES 24 // kke::ShadowMap::kMaxPointShadows * kke::ShadowMap::kPointFaces
 
 struct GPULight {
     vec4 directionOrPosition; // xyz = direction or position; w = 1.0 if positional (point), 0.0 if directional
@@ -34,6 +35,9 @@ layout(set = 0, binding = 0) uniform LightingUBO {
     vec4 ambientSH[9]; // ambient light, order-2 spherical harmonics (kke::SkySH)
     vec4 shadowTiles[SHADOW_CASCADES];        // each cascade's tile of the shadow map: xy = top left, zw = size (0..1)
     vec4 cascadeScaleOffset[SHADOW_CASCADES]; // cascade c's clip xy = lightViewProj's (the far cascade's) xy * .xy + .zw
+    vec4 pointShadowOn; // x, y, z, w = lights[0..3]: 1 when that point light casts shadows
+    mat4 pointShadowViewProj[POINT_SHADOW_FACES]; // index light * 6 + face: that face's view-projection, kke::ShadowMap::pointFaceViewProj
+    vec4 pointShadowTiles[POINT_SHADOW_FACES]; // index light * 6 + face: its tile of the point map, xy = top left, zw = size, 0..1
 } lighting;
 
 #include "tonemap.glsl"

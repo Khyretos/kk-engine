@@ -768,7 +768,7 @@ void ModelModule::uploadInstances(int pass, uint32_t frameIndex, const std::vect
 
 void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
     if (ctx.tile == 0) ++m_frame; // renderShadow runs first each frame (see Application's frame loop), once per view and cascade
-    const int pass = static_cast<int>(kMaxViews + std::min(ctx.tile, kMaxViews * ShadowMap::kCascades - 1));
+    const int pass = static_cast<int>(kMaxViews + std::min(ctx.tile, kShadowPasses - 1));
     m_shadowPipeline->bind(ctx.cmd);
     // Cull against the light's own frustum: things off camera still cast
     // shadows into view, things outside the shadow map can't.
