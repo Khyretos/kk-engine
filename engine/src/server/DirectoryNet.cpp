@@ -28,7 +28,7 @@ bool UdpSocket::open(uint16_t port, std::string* error) {
     }
     m_socket = static_cast<uint64_t>(s);
     ENetAddress a{};
-    a.host = ENET_HOST_ANY;
+    a.host = net::bindHost();
     a.port = port;
     if (enet_socket_bind(s, &a) != 0) {
         if (error) *error = "UDP port " + std::to_string(port) + " is taken (another server on it?)";

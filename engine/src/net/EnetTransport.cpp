@@ -22,6 +22,7 @@ namespace {
 // counted, so any number of transports can exist.
 std::mutex g_initMutex;
 int g_initCount = 0;
+uint32_t g_bindHost = ENET_HOST_ANY; // setBindAddress
 std::map<ENetHost*, EnetTransport*> g_hosts; // for the intercept callback (ENetHost has no user pointer)
 
 bool retain() {
@@ -89,6 +90,14 @@ void setUp(ENetHost* host) {
 bool enetRetain() { return retain(); }
 void enetRelease() { release(); }
 
+void setBindAddress(const std::string& ip) {
+    ENetAddress a{};
+    if (enet_address_set_host_ip(&a, ip.c_str()) == 0) g_bindHost = a.host;
+    else g_bindHost = ENET_HOST_ANY;
+}
+
+uint32_t bindHost() { return g_bindHost; }
+
 EnetTransport::EnetTransport() {
     if (!retain()) m_port = 0; // every call then fails with a reason
     else m_initialized = true;
@@ -97,6 +106,13 @@ EnetTransport::EnetTransport() {
 EnetTransport::~EnetTransport() {
     close();
     if (m_initialized) release();
+}
+
+std::string EnetTransport::boundAddress() const {
+    ENetAddress a{};
+    char ip[64] = {};
+    if (!m_host || enet_socket_get_address(m_host->socket, &a) != 0 || enet_address_get_host_ip(&a, ip, sizeof ip) != 0) return {};
+    return ip;
 }
 
 bool EnetTransport::host(uint16_t port, size_t maxPeers, std::string* error) {
@@ -109,7 +125,7 @@ bool EnetTransport::host(uint16_t port, size_t maxPeers, std::string* error) {
         return false;
     }
     ENetAddress address{};
-    address.host = ENET_HOST_ANY;
+    address.host = bindHost();
     address.port = port;
     m_host = enet_host_create(&address, maxPeers, 2, 0, 0);
     if (!m_host) {
@@ -133,11 +149,16 @@ bool EnetTransport::ensureClientHost(std::string* error) {
     // themselves (see the class comment); any free port otherwise.
     for (uint32_t p = m_discoveryFirst; m_discoveryFirst && !m_host && p <= m_discoveryLast; ++p) {
         ENetAddress address{};
-        address.host = ENET_HOST_ANY;
+        address.host = bindHost();
         address.port = static_cast<enet_uint16>(p);
         m_host = enet_host_create(&address, 1, 2, 0, 0);
     }
-    if (!m_host) m_host = enet_host_create(nullptr, 1, 2, 0, 0);
+    if (!m_host) {
+        ENetAddress address{};
+        address.host = bindHost();
+        address.port = 0; // any free port
+        m_host = enet_host_create(&address, 1, 2, 0, 0);
+    }
     if (!m_host) {
         if (error) *error = "can't open a UDP socket";
         return false;

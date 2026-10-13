@@ -20,6 +20,14 @@ namespace kke::net {
 bool enetRetain();
 void enetRelease();
 
+// The local IPv4 address every ENet socket binds to: empty = all
+// interfaces (the default). The tests set "127.0.0.1", so nothing a test
+// run opens is reachable from the network (Windows would ask to let it
+// through the firewall). Set it before any socket opens.
+void setBindAddress(const std::string& ip);
+// That address as ENet's ENetAddress::host: 0 (ENET_HOST_ANY) for all.
+uint32_t bindHost();
+
 // ITransport over ENet (MIT, http://enet.bespin.org): reliable ordered and
 // unreliable sequenced channels over one UDP socket, with RTT and loss
 // measurement and its own keep-alive/timeout. Built when KKE_ENABLE_NET is
@@ -61,6 +69,9 @@ public:
     uint16_t port() const override { return m_port; }
     void close() override;
     const char* backendName() const override { return "ENet"; }
+    // The local address the socket is bound to ("0.0.0.0" = every
+    // interface); empty while none is open.
+    std::string boundAddress() const;
     using ITransport::send;
 
     // --- relay datagrams (RawSocket)
