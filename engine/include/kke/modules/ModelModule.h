@@ -51,6 +51,8 @@ public:
     void update(const UpdateContext& ctx) override;
     void render(const RenderContext& ctx) override;
     void renderShadow(const ShadowRenderContext& ctx) override;
+    // ENG-G08: skins every visible skinned instance on the GPU (shaders/skin.comp).
+    void computeEveryFrame(VkCommandBuffer cmd) override;
     void shutdown() override;
 
     // Loads (or returns the cached) model. Only valid after init(). On
@@ -162,7 +164,15 @@ private:
     // textureSet = this material's set 2 (surfaceSetFor); albedo = it has an
     // albedo texture (a texture override replaces only those).
     struct GpuMaterial { glm::vec3 color; float metallic, roughness; VkDescriptorSet textureSet = VK_NULL_HANDLE; bool albedo = false; };
-    struct GpuMesh { std::unique_ptr<Mesh> mesh; uint32_t material = 0; bool skinned = false; uint32_t meshIndex = 0; };
+    // skinBind: a skinned part's bind vertices for shaders/skin.comp
+    // (packSkinBind), uploaded once; null on the CPU skinning path.
+    struct GpuMesh {
+        std::unique_ptr<Mesh> mesh;
+        uint32_t material = 0;
+        bool skinned = false;
+        uint32_t meshIndex = 0;
+        std::unique_ptr<Buffer> skinBind;
+    };
     struct LoadedModel {
         ModelData data;
         std::vector<GpuMesh> meshes;
@@ -173,6 +183,22 @@ private:
         std::unique_ptr<Buffer> indices;
         std::vector<Vertex> cpu;
         uint32_t indexCount = 0;
+        VkDescriptorSet skinSets[Renderer::kMaxFramesInFlight] = {}; // GPU skinning: skin.comp's set per frame slot
+    };
+    // GPU skinning (ENG-G08): an instance's skin.comp descriptor sets come
+    // from its own pool; its skin matrices and jiggle zones (packSkinData)
+    // go up each frame into that frame slot's data buffer, which grows when
+    // they no longer fit. Retired with the instance (frames in flight).
+    struct GpuSkinState {
+        VkDevice device = VK_NULL_HANDLE;
+        VkDescriptorPool pool = VK_NULL_HANDLE;
+        std::unique_ptr<Buffer> data[Renderer::kMaxFramesInFlight];
+        size_t capacity[Renderer::kMaxFramesInFlight] = {}; // vec4s each data buffer holds
+        std::vector<glm::vec4> packed;                        // this frame's packSkinData
+        GpuSkinState() = default;
+        GpuSkinState(const GpuSkinState&) = delete;
+        GpuSkinState& operator=(const GpuSkinState&) = delete;
+        ~GpuSkinState();
     };
     struct Instance {
         ModelId model = 0;
@@ -198,6 +224,7 @@ private:
         bool clipLoop = true;
         uint64_t skinnedFrame = ~0ull;
         uint64_t batchedFrame = ~0ull; // drawn instanced in this view this frame (see render())
+        std::shared_ptr<GpuSkinState> gpuSkin; // GPU skinning only (createGpuSkin)
     };
     // Per-instance data for the instanced pipelines (binding 1).
     struct InstanceGpu { glm::mat4 model; glm::vec4 tint; };
@@ -223,6 +250,17 @@ private:
     // here until skinning moves to the GPU); the draw loops then find them
     // done.
     void skinVisible(const struct Frustum& f, uint32_t frameIndex);
+    // ENG-G08 GPU skinning (KKE_CPU_SKINNING=1 keeps the CPU path above).
+    // createSkinPipeline: skin.comp's set layout, pipeline layout and pipeline.
+    // createGpuSkin: an instance's pool and sets (at spawn).
+    // writeSkinSets: points one frame slot's sets at the buffers.
+    // packSkin: the bone matrices and zones into the slot's data buffer (any thread).
+    // recordSkin: one dispatch per skinned part.
+    void createSkinPipeline();
+    void createGpuSkin(Instance& inst);
+    void writeSkinSets(Instance& inst, uint32_t slot);
+    void packSkin(Instance& inst, uint32_t slot);
+    void recordSkin(VkCommandBuffer cmd, Instance& inst, uint32_t slot);
     void uploadDeformed(Instance& inst, uint32_t frameIndex);
     std::vector<glm::mat4> currentBoneWorld(const Instance& inst) const;
     void advanceClips(const UpdateContext& ctx);
@@ -266,6 +304,10 @@ private:
     std::vector<InstanceGpu> m_instanceData;
     std::unique_ptr<SkinWorkers> m_skinWorkers;
     std::vector<Instance*> m_toSkin;
+    bool m_gpuSkinning = false; // ENG-G08; KKE_CPU_SKINNING=1 turns it off
+    VkDescriptorSetLayout m_skinSetLayout = VK_NULL_HANDLE;
+    VkPipelineLayout m_skinLayout = VK_NULL_HANDLE;
+    VkPipeline m_skinPipeline = VK_NULL_HANDLE;
 };
 
 } // namespace kke

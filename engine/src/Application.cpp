@@ -1009,6 +1009,13 @@ void Application::run() {
                     safeInvoke(m, "compute", [&] { m->compute(cmd); });
                 }
             }
+            // computeEveryFrame() runs paused or not, unless a menu covers the
+            // scene (nothing is drawn then): see Module.h.
+            if (!m_sceneCovered) {
+                for (Module* m : m_initOrder) {
+                    safeInvoke(m, "computeEveryFrame", [&] { m->computeEveryFrame(cmd); });
+                }
+            }
 
             // The shadow pass — a real, separate render pass, entirely
             // before the main color pass begins (see ShadowMap.h's own

@@ -2,8 +2,10 @@
 #include "kke/DrawOrder.h"
 
 #include "kke/Application.h"
+#include "kke/GpuSkin.h"
 #include "kke/Log.h"
 #include "kke/Picking.h"
+#include "kke/ShaderUtils.h"
 #include "kke/VulkanCheck.h"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -11,6 +13,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstdlib>
 #include <condition_variable>
 #include <functional>
 #include <map>
@@ -110,6 +113,10 @@ private:
     bool m_quit = false;
 };
 
+ModelModule::GpuSkinState::~GpuSkinState() {
+    if (pool) vkDestroyDescriptorPool(device, pool, nullptr);
+}
+
 ModelModule::ModelModule() = default;
 ModelModule::~ModelModule() = default;
 
@@ -141,6 +148,13 @@ void ModelModule::init(Application& app) {
         const int hw = static_cast<int>(std::max(1u, std::thread::hardware_concurrency()));
         const int extra = std::min(app.resourceBudget().workerThreads, hw) - 1;
         if (extra > 0) m_skinWorkers = std::make_unique<SkinWorkers>(std::min(extra, 15));
+    }
+    {
+        // ENG-G08: skinning on the GPU (shaders/skin.comp) unless
+        // KKE_CPU_SKINNING=1 (the CPU path, for comparisons).
+        const char* cpuSkinning = std::getenv("KKE_CPU_SKINNING");
+        m_gpuSkinning = !(cpuSkinning && std::string(cpuSkinning) == "1");
+        if (m_gpuSkinning) createSkinPipeline();
     }
 
     PipelineConfig config;
@@ -309,6 +323,12 @@ ModelModule::ModelId ModelModule::add(ModelData modelData, const std::string& ke
             for (const ModelVertex& v : m.vertices) verts.push_back(toVertex(v));
             gm.mesh = std::make_unique<Mesh>(m_app->device(), verts, m.indices, transient ? Mesh::Memory::HostVisible : Mesh::Memory::DeviceLocal);
         }
+        if (m.skinned && m_gpuSkinning && !m.vertices.empty()) {
+            // ENG-G08: the bind vertices skin.comp reads, uploaded once.
+            const std::vector<glm::vec4> bind = packSkinBind(m.vertices);
+            gm.skinBind = std::make_unique<Buffer>(
+                Buffer::createDeviceLocal(m_app->device(), bind.data(), bind.size() * sizeof(glm::vec4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
+        }
         loaded->meshes.push_back(std::move(gm));
     }
     ModelId id = m_nextModel++;
@@ -401,16 +421,21 @@ ModelModule::InstanceId ModelModule::spawn(ModelId modelId, const glm::mat4& tra
         if (!gm.skinned) continue;
         const ModelMesh& src = lm.data.meshes[gm.meshIndex];
         SkinnedBuffers sb;
-        sb.cpu.resize(src.vertices.size());
+        // GPU skinning: skin.comp writes these (device memory); the CPU path
+        // writes them from sb.cpu.
+        if (!m_gpuSkinning) sb.cpu.resize(src.vertices.size());
+        const VkBufferUsageFlags usage =
+            m_gpuSkinning ? VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT : VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
         for (auto& vb : sb.vertices) {
-            vb = std::make_unique<Buffer>(m_app->device(), sizeof(Vertex) * src.vertices.size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                                          VMA_MEMORY_USAGE_CPU_TO_GPU);
+            vb = std::make_unique<Buffer>(m_app->device(), sizeof(Vertex) * std::max<size_t>(1, src.vertices.size()), usage,
+                                          m_gpuSkinning ? VMA_MEMORY_USAGE_GPU_ONLY : VMA_MEMORY_USAGE_CPU_TO_GPU);
         }
         sb.indices = std::make_unique<Buffer>(Buffer::createDeviceLocal(m_app->device(), src.indices.data(),
                                                                         src.indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
         sb.indexCount = static_cast<uint32_t>(src.indices.size());
         inst.skinned.push_back(std::move(sb));
     }
+    if (m_gpuSkinning && !inst.skinned.empty()) createGpuSkin(inst);
     InstanceId id = m_nextInstance++;
     m_instances[id] = std::move(inst);
     return id;
@@ -426,6 +451,7 @@ void ModelModule::remove(InstanceId id) {
         auto buffers = std::make_shared<std::vector<SkinnedBuffers>>(std::move(inst.skinned));
         for (SkinnedBuffers& b : inst.deformed) buffers->push_back(std::move(b));
         m_app->renderer().retire(std::shared_ptr<void>(std::move(buffers)));
+        if (inst.gpuSkin) m_app->renderer().retire(std::shared_ptr<void>(std::move(inst.gpuSkin))); // its sets, same frames
     }
     m_instances.erase(it);
 }
@@ -653,8 +679,155 @@ void ModelModule::uploadDeformed(Instance& inst, uint32_t frameIndex) {
     inst.deformUploaded[frameIndex] = inst.deformVersion;
 }
 
+// skin.comp's descriptor set layout (bind vertices, skin data, the part's
+// vertices: three storage buffers), its pipeline layout and pipeline.
+void ModelModule::createSkinPipeline() {
+    VkDescriptorSetLayoutBinding bindings[3]{};
+    for (uint32_t i = 0; i < 3; ++i) bindings[i] = { i, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr };
+    VkDescriptorSetLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = 3;
+    layoutInfo.pBindings = bindings;
+    VK_CHECK(vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr, &m_skinSetLayout));
+    const VkPushConstantRange push{ VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(SkinPush) };
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &m_skinSetLayout;
+    pipelineLayoutInfo.pushConstantRangeCount = 1;
+    pipelineLayoutInfo.pPushConstantRanges = &push;
+    VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_skinLayout));
+    VkShaderModule module = loadShaderModule(m_app->device(), "shaders/skin.comp.spv");
+    VkComputePipelineCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    info.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    info.stage.module = module;
+    info.stage.pName = "main";
+    info.layout = m_skinLayout;
+    VK_CHECK(vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &info, nullptr, &m_skinPipeline));
+    vkDestroyShaderModule(m_device, module, nullptr);
+}
+
+// An instance's own descriptor pool, with one skin.comp set per skinned
+// part and frame slot. The sets point at the buffers once packSkin has
+// made the slot's data buffer (writeSkinSets).
+void ModelModule::createGpuSkin(Instance& inst) {
+    const uint32_t sets = static_cast<uint32_t>(inst.skinned.size()) * Renderer::kMaxFramesInFlight;
+    auto state = std::make_shared<GpuSkinState>();
+    state->device = m_device;
+    const VkDescriptorPoolSize size{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3 * sets };
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.maxSets = sets;
+    poolInfo.poolSizeCount = 1;
+    poolInfo.pPoolSizes = &size;
+    VK_CHECK(vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &state->pool));
+    for (SkinnedBuffers& sb : inst.skinned) {
+        for (VkDescriptorSet& set : sb.skinSets) {
+            VkDescriptorSetAllocateInfo alloc{};
+            alloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+            alloc.descriptorPool = state->pool;
+            alloc.descriptorSetCount = 1;
+            alloc.pSetLayouts = &m_skinSetLayout;
+            VK_CHECK(vkAllocateDescriptorSets(m_device, &alloc, &set));
+        }
+    }
+    inst.gpuSkin = std::move(state);
+}
+
+// Points frame slot `slot`'s sets at the part's bind vertices, the slot's
+// skin data and the part's vertex buffer for that slot. Safe while
+// recording that slot: its previous frame has finished.
+void ModelModule::writeSkinSets(Instance& inst, uint32_t slot) {
+    const LoadedModel& lm = *m_models.at(inst.model);
+    size_t si = 0;
+    for (const GpuMesh& gm : lm.meshes) {
+        if (!gm.skinned) continue;
+        SkinnedBuffers& sb = inst.skinned[si++];
+        if (!gm.skinBind) continue;
+        const VkDescriptorBufferInfo infos[3] = { { gm.skinBind->handle(), 0, VK_WHOLE_SIZE },
+                                                  { inst.gpuSkin->data[slot]->handle(), 0, VK_WHOLE_SIZE },
+                                                  { sb.vertices[slot]->handle(), 0, VK_WHOLE_SIZE } };
+        VkWriteDescriptorSet writes[3]{};
+        for (uint32_t b = 0; b < 3; ++b) {
+            writes[b].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[b].dstSet = sb.skinSets[slot];
+            writes[b].dstBinding = b;
+            writes[b].descriptorCount = 1;
+            writes[b].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            writes[b].pBufferInfo = &infos[b];
+        }
+        vkUpdateDescriptorSets(m_device, 3, writes, 0, nullptr);
+    }
+}
+
+// The CPU half of GPU skinning, for one instance (runs on the skinning
+// threads): the skin matrices as skinInstance makes them, and the jiggle
+// zones, into frame slot `slot`'s data buffer.
+void ModelModule::packSkin(Instance& inst, uint32_t slot) {
+    const LoadedModel& lm = *m_models.at(inst.model); // no operator[]: this runs on several threads at once
+    const std::vector<glm::mat4> world = currentBoneWorld(inst);
+    std::vector<glm::mat4> skin(world.size());
+    for (size_t b = 0; b < world.size(); ++b) skin[b] = world[b] * lm.data.bones[b].inverseBind;
+    GpuSkinState& state = *inst.gpuSkin;
+    packSkinData(skin, inst.skinJiggle, state.packed);
+    if (state.capacity[slot] < state.packed.size() || !state.data[slot]) {
+        state.capacity[slot] = std::max<size_t>(state.packed.size(), kSkinVec4sPerBone);
+        state.data[slot] = std::make_unique<Buffer>(m_app->device(), state.capacity[slot] * sizeof(glm::vec4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                                                    VMA_MEMORY_USAGE_CPU_TO_GPU);
+        writeSkinSets(inst, slot);
+    }
+    if (!state.packed.empty()) state.data[slot]->upload(state.packed.data(), state.packed.size() * sizeof(glm::vec4));
+}
+
+// One skin.comp dispatch per skinned part of an instance (the pipeline is
+// bound by the caller).
+void ModelModule::recordSkin(VkCommandBuffer cmd, Instance& inst, uint32_t slot) {
+    const LoadedModel& lm = *m_models.at(inst.model);
+    const SkinPush base{ 0u, static_cast<uint32_t>(lm.data.bones.size()), static_cast<uint32_t>(inst.skinJiggle.size()), 0u };
+    size_t si = 0;
+    for (const GpuMesh& gm : lm.meshes) {
+        if (!gm.skinned) continue;
+        SkinnedBuffers& sb = inst.skinned[si++];
+        if (!gm.skinBind) continue;
+        SkinPush pc = base;
+        pc.vertexCount = static_cast<uint32_t>(lm.data.meshes[gm.meshIndex].vertices.size());
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_skinLayout, 0, 1, &sb.skinSets[slot], 0, nullptr);
+        vkCmdPushConstants(cmd, m_skinLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pc), &pc);
+        vkCmdDispatch(cmd, (pc.vertexCount + kSkinGroupSize - 1) / kSkinGroupSize, 1, 1);
+    }
+}
+
+// GPU skinning, every drawn frame (paused too, so both frame slots hold
+// the pose being drawn): the bone matrices of every visible skinned
+// instance on the skinning threads, then one dispatch per part. No frustum
+// test: the views' frustums aren't known yet and the GPU's share is small.
+void ModelModule::computeEveryFrame(VkCommandBuffer cmd) {
+    if (!m_gpuSkinning || !m_showMeshes) return;
+    const uint32_t slot = m_app->renderer().currentFrameIndex();
+    m_toSkin.clear();
+    for (auto& [id, inst] : m_instances)
+        if (inst.visible && inst.gpuSkin && inst.deformed.empty()) m_toSkin.push_back(&inst);
+    if (m_toSkin.empty()) return;
+    if (!m_skinWorkers || m_toSkin.size() < 4) {
+        for (Instance* inst : m_toSkin) packSkin(*inst, slot);
+    } else {
+        const std::function<void(size_t)> job = [this, slot](size_t i) { packSkin(*m_toSkin[i], slot); };
+        m_skinWorkers->run(m_toSkin.size(), job);
+    }
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_skinPipeline);
+    for (Instance* inst : m_toSkin) recordSkin(cmd, *inst, slot);
+    // The shadow, main and pick passes read the vertices as vertex input.
+    VkMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+    barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, 0, 1, &barrier, 0, nullptr, 0, nullptr);
+}
+
 void ModelModule::skinInstance(Instance& inst, uint32_t frameIndex) {
-    if (inst.skinnedFrame == m_frame || inst.skinned.empty()) return;
+    if (m_gpuSkinning || inst.skinnedFrame == m_frame || inst.skinned.empty()) return; // GPU skinning: computeEveryFrame did it
     inst.skinnedFrame = m_frame;
     const LoadedModel& lm = *m_models.at(inst.model); // no operator[]: this runs on several threads at once
     std::vector<glm::mat4> world = currentBoneWorld(inst);
@@ -676,6 +849,7 @@ void ModelModule::skinInstance(Instance& inst, uint32_t frameIndex) {
 }
 
 void ModelModule::skinVisible(const Frustum& f, uint32_t frameIndex) {
+    if (m_gpuSkinning) return; // computeEveryFrame skinned every visible instance
     m_toSkin.clear();
     for (auto& [id, inst] : m_instances)
         if (inst.visible && !inst.skinned.empty() && inst.skinnedFrame != m_frame && mightBeVisible(inst, f)) m_toSkin.push_back(&inst);
@@ -987,6 +1161,12 @@ void ModelModule::render(const RenderContext& ctx) {
 void ModelModule::shutdown() {
     m_skinWorkers.reset();
     m_instances.clear();
+    if (m_skinPipeline) vkDestroyPipeline(m_device, m_skinPipeline, nullptr);
+    if (m_skinLayout) vkDestroyPipelineLayout(m_device, m_skinLayout, nullptr);
+    if (m_skinSetLayout) vkDestroyDescriptorSetLayout(m_device, m_skinSetLayout, nullptr);
+    m_skinPipeline = VK_NULL_HANDLE;
+    m_skinLayout = VK_NULL_HANDLE;
+    m_skinSetLayout = VK_NULL_HANDLE;
     m_models.clear();
     m_surfaceSets.clear();
     m_defaultSurface = VK_NULL_HANDLE;

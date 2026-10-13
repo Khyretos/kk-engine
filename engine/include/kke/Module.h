@@ -206,6 +206,12 @@ public:
     // doesn't allow compute work inside a graphics render pass.
     virtual void compute(VkCommandBuffer /*cmd*/) {}
 
+    // Called every drawn frame, paused or not, after compute() and before
+    // the shadow pass, outside any render pass: GPU work whose result each
+    // frame slot needs even while the game is paused (ModelModule's GPU
+    // skinning writes the vertices every draw pass of this slot reads).
+    virtual void computeEveryFrame(VkCommandBuffer /*cmd*/) {}
+
     // Called for every raw SDL event, before update()/fixedUpdate() for
     // that frame — the same events DebugUi already sees for ImGui, now
     // available to any module (UiModule forwards these into RmlUi's

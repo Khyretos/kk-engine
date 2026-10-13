@@ -1,0 +1,79 @@
+#version 450
+
+// GPU skinning (ENG-G08): one invocation per vertex of one skinned mesh part; kke::ModelModule dispatches it every drawn frame for each visible skinned instance and the draw passes read the result as kke::Vertex; skinPackedVertex in engine/src/GpuSkin.cpp is the same maths on the CPU, so change both together.
+
+layout(local_size_x = 64) in;
+
+// Vertex bind data per instance.
+layout(std430, set = 0, binding = 0) readonly buffer BindVertices { vec4 bindData[]; };
+// Holds kSkinBindVec4s: four vec4s per bind vertex (position xyz, normal xyz, weight w, joint index w).
+layout(std430, set = 0, binding = 1) readonly buffer SkinData { vec4 skinData[]; };
+// Holds bone skin matrices as four columns (mat4), followed by jiggle zones as (centre, radius) and (offset, 0).
+layout(std430, set = 0, binding = 2) writeonly buffer SkinnedVertices { float outData[]; };
+// Holds the final skinned kke::Vertex data: position (3), overlay bind pos (3), normal (3), plus two extra floats.
+
+// Per-instance dispatch counts.
+layout(push_constant) uniform Push {
+    uint vertexCount;
+    uint boneCount;
+    uint zoneCount;
+    uint pad;
+} pc;
+// Push constants providing per-instance counts for the loops and bounds checking.
+
+void main() {
+    uint v = gl_GlobalInvocationID.x;
+    if (v >= pc.vertexCount) return;
+    // Decode vertex data into four vec4s: bindPos, bindNormal, weights, joints.
+    uint b = v * 4u;
+    vec3 bindPos = bindData[b].xyz;
+    vec3 bindNormal = bindData[b + 1u].xyz;
+    vec4 weights = bindData[b + 2u];
+    vec4 joints = bindData[b + 3u];
+    // Accumulators for weighted position and normal.
+    vec3 p = vec3(0.0);
+    vec3 n = vec3(0.0);
+    // Loop over the four influence weights.
+    for (int w = 0; w < 4; ++w) {
+        float weight = weights[w];
+        uint j = uint(joints[w]);
+        if (weight <= 0.0 || j >= pc.boneCount) continue;
+        // Extract the 4x4 matrix for this bone from the flat buffer (columns are vec4).
+        uint c = j * 4u;
+        mat4 m = mat4(skinData[c], skinData[c + 1u], skinData[c + 2u], skinData[c + 3u]);
+        p += weight * vec3(m * vec4(bindPos, 1.0));
+        n += weight * (mat3(m) * bindNormal);
+    }
+    // Normalise the normal; fall back to bind normal if too short.
+    float len = length(n);
+    n = len > 1e-8 ? n / len : bindNormal;
+    // Compute jiggle displacement based on distance to bone centres.
+    vec3 d = vec3(0.0);
+    uint zones = pc.boneCount * 4u;
+    // Loop over all defined jiggle zones in the buffer.
+    for (uint z = 0u; z < pc.zoneCount; ++z) {
+        vec4 centre = skinData[zones + z * 2u];
+        vec3 e = p - centre.xyz;
+        float r2 = centre.w * centre.w;
+        float l2 = dot(e, e);
+        if (l2 >= r2) continue;
+        // Quadratic falloff from the zone edge.
+        float x = 1.0 - l2 / r2;
+        d += skinData[zones + z * 2u + 1u].xyz * (x * x);
+    }
+    p += d;
+    // Write the kke::Vertex layout (11 floats) to the output buffer.
+    uint o = v * 11u;
+    // Write position component.
+    outData[o] = p.x;
+    outData[o + 1u] = p.y;
+    outData[o + 2u] = p.z;
+    outData[o + 3u] = bindPos.x;
+    outData[o + 4u] = bindPos.y;
+    outData[o + 5u] = bindPos.z;
+    outData[o + 6u] = n.x;
+    outData[o + 7u] = n.y;
+    outData[o + 8u] = n.z;
+    outData[o + 9u] = bindData[b].w;
+    outData[o + 10u] = bindData[b + 1u].w;
+}
