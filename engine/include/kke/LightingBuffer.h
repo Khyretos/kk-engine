@@ -39,10 +39,13 @@ public:
     // given the real constraint, not an accident.
     // `sky` is the resolved sky (kke::SkyResolver); without one, the sky
     // is off and ambient is Lighting::ambientColor, flat.
-    // `shadowTile` is the part of the shadow map lightViewProj was drawn
-    // into (ShadowMap::tileRect: one tile per view in split screen).
+    // `shadowTiles` and `cascadeScaleOffsets` are ShadowMap::kCascades
+    // entries each: where each cascade of this view was drawn in the shadow
+    // map (ShadowMap::tileRect) and how its clip-space xy follows from
+    // lightViewProj, the far cascade's (ShadowMap::cascadeScaleOffset). Null
+    // means one cascade covering the whole map.
     void update(const Lighting& lighting, const glm::vec3& cameraPos, const glm::mat4& lightViewProj, const glm::mat4& viewProj,
-                const SkyEnvironment* sky = nullptr, const glm::vec4& shadowTile = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
+                const SkyEnvironment* sky = nullptr, const glm::vec4* shadowTiles = nullptr, const glm::vec4* cascadeScaleOffsets = nullptr);
 
     // Picks the frame-in-flight slot that update() writes and
     // descriptorSet() returns. Each slot has its own buffer: the GPU may

@@ -7,6 +7,8 @@
 // byte for byte; kke::Lighting (Application.h) is what fills it in.
 // Every field is a vec4 so std140 adds no hidden padding.
 
+#define SHADOW_CASCADES 4 // kke::ShadowMap::kCascades
+
 struct GPULight {
     vec4 directionOrPosition; // xyz = direction or position; w = 1.0 if positional (point), 0.0 if directional
     vec4 colorIntensity;      // rgb = color; a = intensity (<=0 means disabled)
@@ -30,7 +32,8 @@ layout(set = 0, binding = 0) uniform LightingUBO {
     vec4 fogColor;   // rgb = fog colour (already the sky's when it follows it), a = density (0 = no fog)
     vec4 fogParams;  // x = height falloff, y = fog height, z = max opacity, w = sun scatter
     vec4 ambientSH[9]; // ambient light, order-2 spherical harmonics (kke::SkySH)
-    vec4 shadowTile;   // this view's tile of the shadow map: xy = top left, zw = size (0..1); split screen has one per view
+    vec4 shadowTiles[SHADOW_CASCADES];        // each cascade's tile of the shadow map: xy = top left, zw = size (0..1)
+    vec4 cascadeScaleOffset[SHADOW_CASCADES]; // cascade c's clip xy = lightViewProj's (the far cascade's) xy * .xy + .zw
 } lighting;
 
 #include "tonemap.glsl"

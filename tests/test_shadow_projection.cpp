@@ -1,6 +1,7 @@
 #include "kke/ShadowMap.h"
 
 #include <gtest/gtest.h>
+#include <array>
 #include <cmath>
 
 namespace {
@@ -41,4 +42,124 @@ TEST(ShadowProjection, CasterConfigHasSlopeBias) {
     const kke::PipelineConfig c = kke::ShadowMap::casterConfig();
     EXPECT_GT(c.depthBiasSlope, 0.0f);
     EXPECT_EQ(c.cullMode, static_cast<VkCullModeFlags>(VK_CULL_MODE_NONE));
+}
+
+namespace {
+
+// The 8 corners of the view frustum between distances n and f.
+std::array<glm::vec3, 8> sliceCorners(const glm::vec3& eye, const glm::vec3& fwd, float tanY, float aspect, float n, float f) {
+    const glm::vec3 right = glm::normalize(glm::cross(fwd, glm::vec3(0.0f, 1.0f, 0.0f)));
+    const glm::vec3 up = glm::cross(right, fwd);
+    std::array<glm::vec3, 8> c;
+    int i = 0;
+    for (float d : { n, f })
+        for (float sx : { -1.0f, 1.0f })
+            for (float sy : { -1.0f, 1.0f }) c[i++] = eye + fwd * d + right * (sx * d * tanY * aspect) + up * (sy * d * tanY);
+    return c;
+}
+
+} // namespace
+
+TEST(ShadowCascades, SpheresCoverTheirSlicesNearToFar) {
+    const glm::vec3 eye(4.0f, 2.0f, -3.0f);
+    const glm::vec3 fwd = glm::normalize(glm::vec3(0.3f, -0.2f, 1.0f));
+    const float tanY = std::tan(glm::radians(22.5f)), aspect = 16.0f / 9.0f, n = 0.1f, dist = 80.0f;
+    const auto s = kke::ShadowMap::cascadeSpheres(eye, fwd, tanY, aspect, n, dist);
+    ASSERT_EQ(s.size(), kke::ShadowMap::kCascades);
+    // Slices meet: each starts where the one before ends, the last ends at dist.
+    float start = n;
+    for (uint32_t k = 0; k < s.size(); ++k) {
+        const float end = kke::ShadowMap::cascadeSplit(k + 1, n, dist);
+        EXPECT_GT(end, start) << "cascade " << k;
+        for (const glm::vec3& c : sliceCorners(eye, fwd, tanY, aspect, start, end)) {
+            EXPECT_LE(glm::length(c - glm::vec3(s[k])), s[k].w * 1.0001f + 1e-4f) << "cascade " << k;
+        }
+        if (k > 0) {
+            EXPECT_GT(s[k].w, s[k - 1].w) << "cascade " << k;
+        }
+        start = end;
+    }
+    EXPECT_NEAR(start, dist, 1e-3f);
+    EXPECT_NEAR(kke::ShadowMap::cascadeSplit(0, n, dist), n, 1e-6f);
+}
+
+TEST(ShadowCascades, RadiusIgnoresWhereTheCameraLooks) {
+    // Same lens, any direction: the radii stay put, so texels keep their size.
+    const float tanY = std::tan(glm::radians(30.0f));
+    const auto a = kke::ShadowMap::cascadeSpheres(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 1.0f), tanY, 1.5f, 0.2f, 60.0f);
+    const auto b = kke::ShadowMap::cascadeSpheres(glm::vec3(9.0f, 1.0f, 2.0f), glm::normalize(glm::vec3(1.0f, -0.5f, 0.2f)), tanY, 1.5f, 0.2f, 60.0f);
+    for (uint32_t k = 0; k < kke::ShadowMap::kCascades; ++k) {
+        EXPECT_NEAR(a[k].w, b[k].w, 1e-4f * a[k].w) << "cascade " << k;
+    }
+}
+
+TEST(ShadowCascades, ScaleOffsetMapsFarCascadeToNear) {
+    // A near cascade is the far cascade's map scaled and shifted, and its
+    // matrix gives the same depth (the shaders pick a cascade from the far
+    // cascade's coordinates alone).
+    const glm::vec3 dir = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f));
+    const uint32_t res = 2048;
+    const glm::vec3 farCentre(10.0f, 1.0f, 20.0f), centre(2.0f, 0.5f, 3.0f);
+    const float farRadius = 40.0f, radius = 5.0f;
+    const glm::mat4 far = kke::ShadowMap::computeLightViewProj(dir, farCentre, farRadius, res);
+    const glm::vec4 so = kke::ShadowMap::cascadeScaleOffset(far, dir, farRadius, centre, radius, res);
+    EXPECT_NEAR(so.x, farRadius / radius, 1e-4f);
+    EXPECT_NEAR(so.y, farRadius / radius, 1e-4f);
+    const glm::mat4 near = kke::ShadowMap::cascadeViewProj(far, so);
+    // Its centre is within a texel of the middle of its map.
+    const glm::vec4 c = near * glm::vec4(centre, 1.0f);
+    EXPECT_LT(std::abs(c.x), 2.0f / res + 1e-5f);
+    EXPECT_LT(std::abs(c.y), 2.0f / res + 1e-5f);
+    for (const glm::vec3& p : { glm::vec3(3.1f, 0.0f, 1.7f), glm::vec3(-1.0f, 2.0f, 4.0f), glm::vec3(5.5f, -0.5f, 2.2f) }) {
+        const glm::vec4 f = far * glm::vec4(p, 1.0f), q = near * glm::vec4(p, 1.0f);
+        EXPECT_NEAR(q.x, f.x * so.x + so.z, 1e-4f);
+        EXPECT_NEAR(q.y, f.y * so.y + so.w, 1e-4f);
+        EXPECT_NEAR(q.z, f.z, 1e-6f);
+        EXPECT_NEAR(q.w, 1.0f, 1e-6f);
+    }
+}
+
+TEST(ShadowCascades, NearCascadeMovesInWholeTexels) {
+    // Both the far cascade and a near one follow the camera; a fixed point
+    // must keep its sub-texel position in the near one, or edges shimmer.
+    const glm::vec3 dir = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f));
+    const uint32_t res = 2048;
+    const glm::vec3 p(3.3f, 0.7f, -2.1f);
+    auto texel = [&](const glm::vec3& cam) {
+        const glm::mat4 far = kke::ShadowMap::computeLightViewProj(dir, cam + glm::vec3(0.0f, 0.0f, 30.0f), 40.0f, res);
+        const glm::vec4 so = kke::ShadowMap::cascadeScaleOffset(far, dir, 40.0f, cam + glm::vec3(0.0f, 0.0f, 2.0f), 4.0f, res);
+        return texelOf(kke::ShadowMap::cascadeViewProj(far, so), p, res);
+    };
+    const glm::vec2 a = texel(glm::vec3(0.0f));
+    for (float t : { 0.013f, 0.37f, 1.9f }) {
+        const glm::vec2 shift = texel(glm::vec3(t, 0.2f * t, -0.6f * t)) - a;
+        EXPECT_NEAR(shift.x, std::round(shift.x), 2e-2f) << "camera offset " << t;
+        EXPECT_NEAR(shift.y, std::round(shift.y), 2e-2f) << "camera offset " << t;
+    }
+}
+
+TEST(ShadowCascades, GridHoldsEveryTile) {
+    EXPECT_EQ(kke::ShadowMap::gridFor(1), 1u);
+    EXPECT_EQ(kke::ShadowMap::gridFor(4), 2u);
+    EXPECT_EQ(kke::ShadowMap::gridFor(5), 3u);
+    EXPECT_EQ(kke::ShadowMap::gridFor(8), 3u);
+    EXPECT_EQ(kke::ShadowMap::gridFor(9), 3u);
+    EXPECT_EQ(kke::ShadowMap::gridFor(16), 4u);
+}
+
+TEST(ShadowProjection, DepthCoversTheWholeBoxInVulkanRange) {
+    // Vulkan clips depth outside 0..1: every caster in the light's box, on
+    // either side of the centre, must land inside it, or it casts nothing.
+    const glm::vec3 dir = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f));
+    const glm::vec3 centre(3.0f, -2.0f, 1.0f);
+    const float r = 20.0f;
+    const glm::mat4 m = kke::ShadowMap::computeLightViewProj(dir, centre, r, 2048);
+    for (float along : { -2.9f * r, -r, 0.0f, r, 2.9f * r }) {
+        const glm::vec4 c = m * glm::vec4(centre + dir * along, 1.0f);
+        EXPECT_GT(c.z / c.w, 0.0f) << "along " << along;
+        EXPECT_LT(c.z / c.w, 1.0f) << "along " << along;
+    }
+    // Closer to the light is smaller depth (the map stores the nearest).
+    const glm::vec4 nearer = m * glm::vec4(centre - dir, 1.0f), farther = m * glm::vec4(centre + dir, 1.0f);
+    EXPECT_LT(nearer.z, farther.z);
 }
