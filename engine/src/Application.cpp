@@ -861,20 +861,43 @@ void Application::run() {
         const glm::mat4& view = drawViews[0].view;
         const glm::mat4& proj = drawViews[0].proj;
 
-        // Real shadow mapping (see kke::ShadowMap) — computed from the
-        // key light (lights[0]) only, over a 15 m radius around what each
-        // view's camera looks at, so shadows follow the player through a
-        // level bigger than that. 15 keeps the texels dense enough that
-        // edges don't turn blocky (checked against a screenshot). The
-        // centre is snapped to shadow texels so the edges don't shimmer as
-        // the camera moves. Split screen: every view gets its own tile of
-        // the map, framed on its own camera, so one player's camera never
-        // moves another player's shadows.
-        if (m_shadowMap->setTiles(viewCount)) writeShadowMapDescriptor();
+        // Cascaded shadow maps (kke::ShadowMap) from the key light (lights[0])
+        // only. Each view's frustum, out to kShadowDistance, is cut into
+        // ShadowMap::kCascades slices, nearest first, each drawn into its own
+        // tile of the map, so near shadows are sharp and far ones still exist.
+        // lightViewProjs[i] is view i's far cascade; the nearer ones are it
+        // scaled and shifted (ShadowMap::cascadeScaleOffset), which is how the
+        // shaders pick one. Every cascade is snapped to its own texels so
+        // edges don't shimmer as the camera moves. Split screen: each view has
+        // its own cascades, framed on its own camera.
+        constexpr float kShadowDistance = 80.0f;
+        if (m_shadowMap->setTiles(viewCount * ShadowMap::kCascades)) writeShadowMapDescriptor();
         std::array<glm::mat4, kMaxViews> lightViewProjs;
-        for (uint32_t i = 0; i < viewCount; ++i)
-            lightViewProjs[i] = ShadowMap::computeLightViewProj(m_lighting.lights[0].direction, drawViews[i].camera.target, 15.0f,
-                                                                m_shadowMap->tileResolution());
+        std::array<std::array<glm::mat4, ShadowMap::kCascades>, kMaxViews> cascadeViewProjs;
+        std::array<std::array<glm::vec4, ShadowMap::kCascades>, kMaxViews> cascadeScaleOffsets, cascadeTiles;
+        const glm::vec3 lightDir = m_lighting.lights[0].direction;
+        const uint32_t tileRes = m_shadowMap->tileResolution();
+        for (uint32_t i = 0; i < viewCount; ++i) {
+            const DrawView& d = drawViews[i];
+            glm::vec3 forward = d.camera.target - d.camera.position;
+            if (glm::dot(forward, forward) < 1e-12f) forward = glm::vec3(0.0f, 0.0f, -1.0f);
+            const float tanHalfFovY = 1.0f / std::abs(d.proj[1][1]);
+            const float aspect = std::abs(d.proj[1][1] / d.proj[0][0]);
+            // The lens from the projection (it already handles tall screens).
+            // A near plane at 0 would put every logarithmic split at 0.
+            const float nearPlane = std::max(0.01f, d.camera.nearPlane);
+            const auto spheres = ShadowMap::cascadeSpheres(d.camera.position, forward, tanHalfFovY, aspect, nearPlane,
+                                                           std::min(d.camera.farPlane, kShadowDistance));
+            const glm::vec4& far = spheres[ShadowMap::kCascades - 1];
+            lightViewProjs[i] = ShadowMap::computeLightViewProj(lightDir, glm::vec3(far), far.w, tileRes);
+            for (uint32_t c = 0; c < ShadowMap::kCascades; ++c) {
+                cascadeScaleOffsets[i][c] = c + 1 == ShadowMap::kCascades
+                    ? glm::vec4(1.0f, 1.0f, 0.0f, 0.0f)
+                    : ShadowMap::cascadeScaleOffset(lightViewProjs[i], lightDir, far.w, glm::vec3(spheres[c]), spheres[c].w, tileRes);
+                cascadeViewProjs[i][c] = ShadowMap::cascadeViewProj(lightViewProjs[i], cascadeScaleOffsets[i][c]);
+                cascadeTiles[i][c] = m_shadowMap->tileRect(i * ShadowMap::kCascades + c);
+            }
+        }
         const glm::mat4& lightViewProj = lightViewProjs[0];
 
         RenderContext renderCtx{};
@@ -922,7 +945,8 @@ void Application::run() {
             for (uint32_t i = 0; i < viewCount; ++i) {
                 drawViews[i].lighting->setFrame(m_renderer->currentFrameIndex());
                 drawViews[i].lighting->update(m_lighting, drawViews[i].camera.position, lightViewProjs[i],
-                                              drawViews[i].proj * drawViews[i].view, skyEnv, m_shadowMap->tileRect(i));
+                                              drawViews[i].proj * drawViews[i].view, skyEnv,
+                                              cascadeTiles[i].data(), cascadeScaleOffsets[i].data());
             }
             {
                 const VkExtent2D extent = m_renderer->extent();
@@ -970,11 +994,16 @@ void Application::run() {
             if (drawScene) {
                 m_shadowMap->beginRenderPass(cmd);
                 for (uint32_t i = 0; i < viewCount; ++i) {
-                    if (viewCount > 1) m_shadowMap->beginTile(cmd, i);
-                    shadowCtx.lightViewProj = lightViewProjs[i];
-                    shadowCtx.viewIndex = i;
-                    for (Module* m : m_initOrder) {
-                        safeInvoke(m, "renderShadow", [&] { m->renderShadow(shadowCtx); });
+                    for (uint32_t c = 0; c < ShadowMap::kCascades; ++c) {
+                        const uint32_t tile = i * ShadowMap::kCascades + c;
+                        m_shadowMap->beginTile(cmd, tile);
+                        shadowCtx.lightViewProj = cascadeViewProjs[i][c];
+                        shadowCtx.viewIndex = i;
+                        shadowCtx.cascade = c;
+                        shadowCtx.tile = tile;
+                        for (Module* m : m_initOrder) {
+                            safeInvoke(m, "renderShadow", [&] { m->renderShadow(shadowCtx); });
+                        }
                     }
                 }
                 m_shadowMap->endRenderPass(cmd);

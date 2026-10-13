@@ -101,11 +101,14 @@ struct ShadowRenderContext {
     VkRenderPass renderPass;
     glm::mat4 lightViewProj;
     uint32_t frameIndex = 0; // same as RenderContext::frameIndex
-    // Split screen draws the shadow pass once per view (each into its own
-    // tile of the map, with its own lightViewProj), like render(): 0 is the
-    // first of the frame. Per-frame work belongs with viewIndex 0, and
-    // anything written for the GPU per call needs its own buffer per view.
+    // The shadow pass is drawn once per view and per cascade (4 cascades
+    // per view, nearest first), each into its own tile of the map:
+    // tile = viewIndex * ShadowMap::kCascades + cascade. Per-frame work
+    // belongs with tile 0, and anything written for the GPU per call needs
+    // its own buffer per tile (ShadowMap::kCascades per view).
     uint32_t viewIndex = 0;
+    uint32_t cascade = 0; // which of the view's ShadowMap::kCascades slices, 0 = nearest the camera
+    uint32_t tile = 0;    // viewIndex * ShadowMap::kCascades + cascade: 0 is the first call of the frame
 };
 
 // Handed to Module::prepass(): every drawn frame, after the shadow pass

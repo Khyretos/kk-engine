@@ -1,6 +1,7 @@
 #include "kke/LightingBuffer.h"
 #include "kke/Application.h"
 #include "kke/Renderer.h"
+#include "kke/ShadowMap.h"
 #include "kke/VulkanDevice.h"
 #include "kke/VulkanCheck.h"
 
@@ -48,9 +49,10 @@ struct LightingUBOData {
     glm::vec4 fogColor;
     glm::vec4 fogParams;
     glm::vec4 ambientSH[9];
-    glm::vec4 shadowTile; // this view's tile of the shadow map: x, y (top left), width, height in 0..1
+    glm::vec4 shadowTiles[ShadowMap::kCascades];        // each cascade's tile of the shadow map: x, y (top left), width, height in 0..1
+    glm::vec4 cascadeScaleOffset[ShadowMap::kCascades]; // cascade c's clip xy = the far cascade's xy * (x, y) + (z, w)
 };
-static_assert(sizeof(LightingUBOData) == 4 * 2 * 16 + 2 * 16 + 2 * 64 + 11 * 16 + 9 * 16 + 16, "must match shaders/lighting_ubo.glsl");
+static_assert(sizeof(LightingUBOData) == 4 * 2 * 16 + 2 * 16 + 2 * 64 + 11 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16, "must match shaders/lighting_ubo.glsl");
 
 } // namespace
 
@@ -117,9 +119,12 @@ LightingBuffer::~LightingBuffer() {
 }
 
 void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos, const glm::mat4& lightViewProj, const glm::mat4& viewProj,
-                            const SkyEnvironment* sky, const glm::vec4& shadowTile) {
+                            const SkyEnvironment* sky, const glm::vec4* shadowTiles, const glm::vec4* cascadeScaleOffsets) {
     LightingUBOData data{};
-    data.shadowTile = shadowTile;
+    for (uint32_t c = 0; c < ShadowMap::kCascades; ++c) {
+        data.shadowTiles[c] = shadowTiles ? shadowTiles[c] : glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+        data.cascadeScaleOffset[c] = cascadeScaleOffsets ? cascadeScaleOffsets[c] : glm::vec4(1.0f, 1.0f, 0.0f, 0.0f);
+    }
     for (int i = 0; i < Lighting::kMaxLights; ++i) {
         const Light& src = lighting.lights[i];
         GPULight& dst = data.lights[i];

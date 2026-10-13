@@ -1,0 +1,21 @@
+[
+ {
+  "name": "g05-pbr",
+  "role": "worker/cpp-games",
+  "mode": "patch",
+  "out": "shaders/pbr_common.glsl",
+  "prompt": "ENG-G05 (cascaded shadow maps for the directional key light: 4 cascades per view, each in its own tile of the shadow map). Shadow lookups pick a cascade. `lighting.lightViewProj` is the far (largest) cascade's matrix; `lighting.cascadeScaleOffset[c]` and `lighting.shadowTiles[c]` (c < SHADOW_CASCADES, nearest first) are declared in lighting_ubo.glsl. Three edits, nothing else:\n1. Directly before the comment block that starts `// Shadow lookup, 3x3 PCF`, add this function with a comment above it saying it returns the nearest cascade whose map holds the point, with room for the PCF taps, or -1 when none does:\n```\nint shadowCascade(vec2 farClip) {\n    float mapTexels = float(textureSize(shadowMap, 0).x);\n    for (int c = 0; c < SHADOW_CASCADES; ++c) {\n        vec2 p = farClip * lighting.cascadeScaleOffset[c].xy + lighting.cascadeScaleOffset[c].zw;\n        float edge = 1.0 - 4.0 / max(mapTexels * lighting.shadowTiles[c].z, 1.0); // two texels: the 3x3 taps and their bilinear footprint\n        if (abs(p.x) <= edge && abs(p.y) <= edge) return c;\n    }\n    return -1;\n}\n```\n2. computeShadow(vec4 posLightSpace): keep `vec3 projCoords = posLightSpace.xyz / posLightSpace.w;`. Replace everything from `vec2 shadowUV = projCoords.xy * 0.5 + 0.5;` up to and including the line `vec2 texelSize = 1.0 / vec2(textureSize(shadowMap, 0));` with:\n```\n    int c = shadowCascade(projCoords.xy);\n    if (c < 0) return 1.0;\n    vec4 so = lighting.cascadeScaleOffset[c];\n    vec4 tile = lighting.shadowTiles[c];\n    vec2 shadowUV = (projCoords.xy * so.xy + so.zw) * 0.5 + 0.5;\n    // The same bias in texels in every cascade: so.x is how many times finer it is.\n    float ref = projCoords.z - 0.0005 / so.x;\n    vec2 texelSize = 1.0 / vec2(textureSize(shadowMap, 0));\n```\nand in the three lines after that, use `tile` instead of `lighting.shadowTile` (`tileMin`, `tileMax` and the `shadowUV = tile.xy + shadowUV * tile.zw;` line); change their comment to say the taps stay inside this cascade's tile so none reads another cascade or view. The PCF loop and `return litSum / 9.0;` stay.\n3. shadowPosNormalOffset: after `mat4 m = lighting.lightViewProj;` add `vec4 farClip = m * vec4(worldPos, 1.0);` and `int c = max(shadowCascade(farClip.xy / farClip.w), 0);`. The half width becomes `1.0 / max(length(vec3(m[0][0], m[1][0], m[2][0])) * lighting.cascadeScaleOffset[c].x, 1e-6)` and the texel line uses `lighting.shadowTiles[c].z` instead of `lighting.shadowTile.z`. Update the comment there: the half width is the cascade's (the far one's divided by its scale). The rest stays.",
+  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g05b.py pbr",
+  "precheck": false,
+  "context": [
+   "shaders/lighting_ubo.glsl"
+  ],
+  "max_tokens": 4000,
+  "focus": [
+   "^// Shadow lookup",
+   "^float computeShadow",
+   "^vec4 shadowPosNormalOffset",
+   "^// The light-space position"
+  ]
+ }
+]

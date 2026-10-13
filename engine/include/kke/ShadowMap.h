@@ -4,6 +4,9 @@
 #include <vk_mem_alloc.h>
 #include <glm/glm.hpp>
 
+#include <array>
+#include <cstdint>
+
 #include "kke/Pipeline.h"
 
 namespace kke {
@@ -18,13 +21,10 @@ class VulkanDevice;
 // depth-only render target, computed from the scene's key light only
 // (lights[0] in kke::Lighting — see Application.h), and only objects
 // that explicitly implement Module::renderShadow() actually cast one.
-// A real, working single-caster proof is worth more than a half-built
-// system that tries to cover every case at once and gets none of them
-// fully right — see docs/HISTORY.md "Immediate next slices" for what's
-// deliberately still out of scope (point-light shadows, multiple
-// shadow casters generalized across every module, cascaded/multiple
-// shadow maps for large scenes). Soft shadow edges (3x3 PCF) are real
-// and working now -- see cube.frag's own computeShadow().
+// Still out of scope: point-light shadows (docs/GAPS.md ENG-G04). Each
+// view's frustum is split into kCascades cascades, each drawn into its
+// own tile of the map (see kCascades below). Soft edges are 3x3 PCF (pbr_common.glsl, computeShadow),
+// which also picks the cascade.
 //
 // Standard shadow-mapping technique, nothing exotic: render the scene
 // from the light's own point of view into a depth-only image, then in
@@ -64,14 +64,48 @@ public:
     // constant bias that detaches shadows from their casters.
     static PipelineConfig casterConfig();
 
+    // Cascaded shadow maps: each view's frustum, out to the shadow distance,
+    // is cut into this many slices, nearest first. Each slice gets its own
+    // tile of the map, so near shadows get small texels and far ones still exist.
+    static constexpr uint32_t kCascades = 4;
+
+    // The whole map never grows past this many texels across: more tiles
+    // (split screen) make each tile smaller instead.
+    static constexpr uint32_t kMaxResolution = 4096;
+
+    // The distance from the camera where slice i starts (i = kCascades: where
+    // the last one ends, shadowDistance). The "practical" split, a blend of
+    // even and logarithmic steps.
+    static float cascadeSplit(uint32_t i, float nearPlane, float shadowDistance);
+
+    // The smallest sphere around each slice of the view frustum (xyz = centre,
+    // w = radius). The radius depends only on the lens, never on where the
+    // camera looks, so texels keep their size as it turns.
+    static std::array<glm::vec4, kCascades> cascadeSpheres(const glm::vec3& eye, const glm::vec3& forward, float tanHalfFovY, float aspect,
+                                                           float nearPlane, float shadowDistance);
+
+    // A near cascade as the far cascade's map scaled and shifted: its clip-space
+    // xy = the far cascade's xy * scale (xy) + offset (zw), its depth the same.
+    // The centre is snapped to the near cascade's own texels (resolution = one
+    // tile), so it does not shimmer.
+    static glm::vec4 cascadeScaleOffset(const glm::mat4& farViewProj, const glm::vec3& lightDirection, float farRadius,
+                                        const glm::vec3& center, float radius, uint32_t resolution);
+
+    // That cascade's light view-projection: scaleOffset applied after farViewProj.
+    static glm::mat4 cascadeViewProj(const glm::mat4& farViewProj, const glm::vec4& scaleOffset);
+
+    // Tiles across the map for `tiles` tiles: the smallest square grid that holds them.
+    static uint32_t gridFor(uint32_t tiles);
+
     void beginRenderPass(VkCommandBuffer cmd);
     void endRenderPass(VkCommandBuffer cmd);
 
-    // Several views (split screen): one tile of the map per view, each
-    // framed on its own camera, so no view's shadows depend on another's
-    // camera. 1 = the whole map, 2..4 = a 2 x 2 grid of tiles, each as
-    // big as the map was (the image grows; true when it was recreated, and
-    // the descriptor set that samples it must be written again).
+    // One tile per cascade of each view (views x kCascades), in the
+    // smallest square grid that holds them (gridFor); each tile is as
+    // big as the constructor's resolution while the whole map stays
+    // within kMaxResolution, smaller beyond that. Returns true when the
+    // image was recreated, and then the descriptor set that samples it
+    // must be written again.
     bool setTiles(uint32_t tiles);
     uint32_t tiles() const { return m_grid * m_grid; }
     // Where tile `tile` is in the map: x, y (top left) and width, height
@@ -91,8 +125,9 @@ private:
     void destroyTarget();
 
     VulkanDevice& m_device;
-    uint32_t m_tile;       // texels across one view's tile
-    uint32_t m_grid = 1;   // tiles across (1 or 2)
+    uint32_t m_baseTile;   // texels across a tile when the map has room (the constructor's resolution)
+    uint32_t m_tile;       // texels across one tile (one cascade of one view)
+    uint32_t m_grid = 1;   // tiles across (ShadowMap::gridFor)
     uint32_t m_resolution; // texels across the whole map: m_tile * m_grid
 
     VkImage m_image = VK_NULL_HANDLE;

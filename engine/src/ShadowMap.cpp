@@ -3,13 +3,43 @@
 #include "kke/VulkanCheck.h"
 
 #include <glm/gtc/matrix_transform.hpp>
+#include <algorithm>
 #include <array>
 #include <cmath>
 
 namespace kke {
 
+namespace {
+
+// The up hint for looking along a directional light. A degenerate up
+// vector (dir parallel to world-up) would make glm::lookAt produce a
+// NaN/garbage matrix: genuinely possible for a light aimed straight
+// down, which the default key light (Application.h's Lighting) is close
+// to. Falls back to world-forward then, same trick used for camera-look
+// code elsewhere.
+glm::vec3 lightUp(const glm::vec3& dir) {
+    return std::abs(glm::dot(dir, glm::vec3(0.0f, 1.0f, 0.0f))) > 0.999f ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
+}
+
+// The centre moved to whole shadow texels across the light (resolution 0
+// = as is): expressed in the light's rotation-only frame, its
+// across-the-light coordinates rounded, and mapped back. A region that
+// follows the camera then slides in texel steps, so edges don't shimmer.
+glm::vec3 snapToTexels(const glm::vec3& lightDirection, const glm::vec3& center, float radius, uint32_t resolution) {
+    if (resolution == 0) return center;
+    const glm::vec3 dir = glm::normalize(lightDirection);
+    const float texel = 2.0f * radius / static_cast<float>(resolution);
+    const glm::mat4 rot = glm::lookAt(glm::vec3(0.0f), dir, lightUp(dir));
+    glm::vec4 c = rot * glm::vec4(center, 1.0f);
+    c.x = std::round(c.x / texel) * texel;
+    c.y = std::round(c.y / texel) * texel;
+    return glm::vec3(glm::inverse(rot) * c);
+}
+
+} // namespace
+
 ShadowMap::ShadowMap(VulkanDevice& device, uint32_t resolution)
-    : m_device(device), m_tile(resolution), m_resolution(resolution) {
+    : m_device(device), m_baseTile(resolution), m_tile(resolution), m_resolution(resolution) {
     // Depth-compare sampler: each lookup in computeShadow()
     // (pbr_common.glsl, a sampler2DShadow) returns the lit fraction of
     // the 2x2 texels around it, bilinearly weighted, so a 3x3 kernel of
@@ -165,28 +195,31 @@ void ShadowMap::destroyTarget() {
 }
 
 bool ShadowMap::setTiles(uint32_t tiles) {
-    const uint32_t grid = tiles <= 1 ? 1u : 2u; // kMaxViews is 4: at most 2 x 2
-    if (grid == m_grid) return false;
+    const uint32_t grid = gridFor(tiles);
+    const uint32_t tile = std::min(m_baseTile, kMaxResolution / grid);
+    if (grid == m_grid && tile == m_tile) return false;
     vkDeviceWaitIdle(m_device.device()); // frames in flight still sample the old image
     destroyTarget();
     m_grid = grid;
+    m_tile = tile;
     m_resolution = m_tile * grid;
     createTarget();
     return true;
 }
 
 glm::vec4 ShadowMap::tileRect(uint32_t tile) const {
-    const float size = 1.0f / static_cast<float>(m_grid);
+    const float size = static_cast<float>(m_tile) / static_cast<float>(m_resolution);
     const uint32_t t = tile % (m_grid * m_grid);
     return { static_cast<float>(t % m_grid) * size, static_cast<float>(t / m_grid) * size, size, size };
 }
 
 void ShadowMap::beginTile(VkCommandBuffer cmd, uint32_t tile) {
-    const glm::vec4 r = tileRect(tile);
-    const float res = static_cast<float>(m_resolution);
-    VkViewport viewport{ r.x * res, r.y * res, static_cast<float>(m_tile), static_cast<float>(m_tile), 0.0f, 1.0f };
+    const uint32_t t = tile % (m_grid * m_grid);
+    const uint32_t x = (t % m_grid) * m_tile;
+    const uint32_t y = (t / m_grid) * m_tile;
+    VkViewport viewport{ static_cast<float>(x), static_cast<float>(y), static_cast<float>(m_tile), static_cast<float>(m_tile), 0.0f, 1.0f };
     vkCmdSetViewport(cmd, 0, 1, &viewport);
-    VkRect2D scissor{ { static_cast<int32_t>(r.x * res), static_cast<int32_t>(r.y * res) }, { m_tile, m_tile } };
+    VkRect2D scissor{ { static_cast<int32_t>(x), static_cast<int32_t>(y) }, { m_tile, m_tile } };
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 }
 
@@ -204,42 +237,78 @@ PipelineConfig ShadowMap::casterConfig() {
 glm::mat4 ShadowMap::computeLightViewProj(const glm::vec3& lightDirection, const glm::vec3& sceneCenter, float sceneRadius,
                                           uint32_t shadowMapResolution) {
     glm::vec3 dir = glm::normalize(lightDirection);
+    const glm::vec3 up = lightUp(dir);
+    const glm::vec3 center = snapToTexels(dir, sceneCenter, sceneRadius, shadowMapResolution);
     // The light's own "camera" sits back along the reverse of its
     // direction, far enough that sceneRadius fits comfortably inside
     // the near/far range set on the ortho projection below.
-    glm::vec3 eye = sceneCenter - dir * (sceneRadius * 3.0f);
-
-    // A degenerate up vector (dir parallel to world-up) would make
-    // glm::lookAt produce a NaN/garbage matrix — genuinely possible for
-    // a directional light aimed straight down, which this project's own
-    // default key light direction (see Application.h's Lighting
-    // default) is close to. Falls back to world-forward as the up hint
-    // in that case, same trick used for camera-look code elsewhere.
-    glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
-    if (std::abs(glm::dot(dir, up)) > 0.999f) {
-        up = glm::vec3(0.0f, 0.0f, 1.0f);
-    }
-
-    glm::vec3 center = sceneCenter;
-    if (shadowMapResolution > 0) {
-        // Express the centre in the light's rotation-only frame, round its
-        // across-the-light coordinates to whole texels, and map it back.
-        const float texel = 2.0f * sceneRadius / static_cast<float>(shadowMapResolution);
-        const glm::mat4 rot = glm::lookAt(glm::vec3(0.0f), dir, up);
-        glm::vec4 c = rot * glm::vec4(sceneCenter, 1.0f);
-        c.x = std::round(c.x / texel) * texel;
-        c.y = std::round(c.y / texel) * texel;
-        center = glm::vec3(glm::inverse(rot) * c);
-        eye = center - dir * (sceneRadius * 3.0f);
-    }
+    const glm::vec3 eye = center - dir * (sceneRadius * 3.0f);
 
     glm::mat4 view = glm::lookAt(eye, center, up);
-    glm::mat4 proj = glm::ortho(-sceneRadius, sceneRadius, -sceneRadius, sceneRadius, 0.1f, sceneRadius * 6.0f);
+    // Depth 0..1, Vulkan's clip range: glm::ortho's -1..1 put every caster
+    // nearer the light than the centre below 0, where it was clipped.
+    glm::mat4 proj = glm::orthoRH_ZO(-sceneRadius, sceneRadius, -sceneRadius, sceneRadius, 0.1f, sceneRadius * 6.0f);
     // Same Vulkan Y-flip every other projection matrix in this engine
     // already applies (see Application.h/Camera) — glm's ortho(), like
     // its perspective(), assumes OpenGL's clip space convention.
     proj[1][1] *= -1.0f;
     return proj * view;
+}
+
+float ShadowMap::cascadeSplit(uint32_t i, float nearPlane, float shadowDistance) {
+    const float t = static_cast<float>(i) / static_cast<float>(kCascades);
+    const float even = nearPlane + (shadowDistance - nearPlane) * t;
+    const float log = nearPlane * std::pow(shadowDistance / nearPlane, t);
+    return 0.8f * log + 0.2f * even;
+}
+
+std::array<glm::vec4, ShadowMap::kCascades> ShadowMap::cascadeSpheres(const glm::vec3& eye, const glm::vec3& forward, float tanHalfFovY,
+                                                                      float aspect, float nearPlane, float shadowDistance) {
+    const glm::vec3 fwd = glm::normalize(forward);
+    // A frustum corner at distance d is d * sqrt(k2) off the axis.
+    const float k2 = tanHalfFovY * tanHalfFovY * (1.0f + aspect * aspect);
+
+    std::array<glm::vec4, kCascades> spheres{};
+    for (uint32_t i = 0; i < kCascades; ++i) {
+        const float n = cascadeSplit(i, nearPlane, shadowDistance);
+        const float f = cascadeSplit(i + 1, nearPlane, shadowDistance);
+
+        float centreDistance, radius;
+        if (k2 >= (f - n) / (f + n)) {
+            // Wide slice: the far rectangle's circle holds the near one.
+            centreDistance = f;
+            radius = f * std::sqrt(k2);
+        } else {
+            // The sphere through all eight corners, centred on the axis.
+            centreDistance = 0.5f * (f + n) * (1.0f + k2);
+            radius = 0.5f * std::sqrt((f - n) * (f - n) + 2.0f * (f * f + n * n) * k2 + (f + n) * (f + n) * k2 * k2);
+        }
+        spheres[i] = glm::vec4(eye + fwd * centreDistance, radius);
+    }
+    return spheres;
+}
+
+glm::vec4 ShadowMap::cascadeScaleOffset(const glm::mat4& farViewProj, const glm::vec3& lightDirection, float farRadius,
+                                        const glm::vec3& center, float radius, uint32_t resolution) {
+    const glm::vec3 snapped = snapToTexels(lightDirection, center, radius, resolution);
+    const glm::vec4 c = farViewProj * glm::vec4(snapped, 1.0f);
+    const float scale = farRadius / radius;
+    return { scale, scale, -scale * c.x, -scale * c.y };
+}
+
+glm::mat4 ShadowMap::cascadeViewProj(const glm::mat4& farViewProj, const glm::vec4& scaleOffset) {
+    glm::mat4 t(1.0f);
+    t[0][0] = scaleOffset.x;
+    t[1][1] = scaleOffset.y;
+    t[3][0] = scaleOffset.z;
+    t[3][1] = scaleOffset.w;
+    return t * farViewProj;
+}
+
+uint32_t ShadowMap::gridFor(uint32_t tiles) {
+    uint32_t grid = 1;
+    while (grid * grid < tiles) ++grid;
+    return grid;
 }
 
 void ShadowMap::beginRenderPass(VkCommandBuffer cmd) {

@@ -45,7 +45,7 @@ Status: ⬜ not started, 🔨 in progress, ✅ done.
 | ID | Area | Gap | Status |
 |---|---|---|---|
 | ENG-G03 | Rendering | Normal maps and per-pixel roughness/metallic textures (today one value per object). | ✅ PR #31 |
-| ENG-G05 | Lighting | Cascaded shadow maps (one map follows the camera today, #20). | ⬜ |
+| ENG-G05 | Lighting | Cascaded shadow maps: 4 cascades per view out to 80 m, each in its own tile of the shadow map (ShadowMap::kCascades). | ✅ |
 | ENG-G04 | Lighting | Point-light shadows (only the directional light casts). | ⬜ |
 | ENG-G07 | Lighting | More than 4 lights, and a Lua `light.*` API. | ⬜ |
 | ENG-G06 | Lighting | Reflections from a prefiltered environment map (ambient is SH only). | ⬜ |

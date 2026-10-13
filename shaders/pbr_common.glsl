@@ -23,6 +23,19 @@ layout(set = 1, binding = 0) uniform sampler2DShadow shadowMap;
 
 const float PI = 3.14159265359;
 
+// The nearest cascade whose map holds this point (its clip-space xy in
+// the far cascade, lightViewProj), with room for the PCF taps; -1 when
+// none does (outside every map: lit).
+int shadowCascade(vec2 farClip) {
+    float mapTexels = float(textureSize(shadowMap, 0).x);
+    for (int c = 0; c < SHADOW_CASCADES; ++c) {
+        vec2 p = farClip * lighting.cascadeScaleOffset[c].xy + lighting.cascadeScaleOffset[c].zw;
+        float edge = 1.0 - 4.0 / max(mapTexels * lighting.shadowTiles[c].z, 1.0); // two texels: the 3x3 taps and their bilinear footprint
+        if (abs(p.x) <= edge && abs(p.y) <= edge) return c;
+    }
+    return -1;
+}
+
 // Shadow lookup, 3x3 PCF on a depth-compare sampler: each tap is itself
 // a bilinear 2x2 comparison done by the hardware, so the nine taps give a
 // smooth edge ~4 texels wide instead of nine hard yes/no steps. Soft
@@ -33,19 +46,18 @@ const float PI = 3.14159265359;
 // taps landing on a sloped receiver.
 float computeShadow(vec4 posLightSpace) {
     vec3 projCoords = posLightSpace.xyz / posLightSpace.w;
-    vec2 shadowUV = projCoords.xy * 0.5 + 0.5;
-
-    if (shadowUV.x < 0.0 || shadowUV.x > 1.0 || shadowUV.y < 0.0 || shadowUV.y > 1.0) {
-        return 1.0;
-    }
-
-    float ref = projCoords.z - 0.0005;
+    int c = shadowCascade(projCoords.xy);
+    if (c < 0) return 1.0;
+    vec4 so = lighting.cascadeScaleOffset[c];
+    vec2 tile = lighting.shadowTiles[c].xy, tileSize = lighting.shadowTiles[c].zw;
+    vec2 shadowUV = (projCoords.xy * so.xy + so.zw) * 0.5 + 0.5;
+    // The same bias in texels in every cascade: so.x is how many times finer it is.
+    float ref = projCoords.z - 0.00025 / so.x;
     vec2 texelSize = 1.0 / vec2(textureSize(shadowMap, 0));
-    // This view's own tile of the map (split screen: one per view). The
-    // taps stay inside it, so no view reads another's shadows.
-    vec2 tileMin = lighting.shadowTile.xy + texelSize * 1.5;
-    vec2 tileMax = lighting.shadowTile.xy + lighting.shadowTile.zw - texelSize * 1.5;
-    shadowUV = lighting.shadowTile.xy + shadowUV * lighting.shadowTile.zw;
+    // The taps stay inside this cascade's tile so none reads another cascade or view.
+    vec2 tileMin = tile + texelSize * 1.5;
+    vec2 tileMax = tile + tileSize - texelSize * 1.5;
+    shadowUV = tile + shadowUV * tileSize;
 
     float litSum = 0.0;
     for (int dy = -1; dy <= 1; ++dy) {
@@ -65,10 +77,13 @@ float computeShadow(vec4 posLightSpace) {
 // texel. N faces the viewer; L points towards the light.
 vec4 shadowPosNormalOffset(vec3 worldPos, vec3 N, vec3 L) {
     // An orthographic light: the first row of lightViewProj is the light's
-    // right axis divided by the half width the map covers.
+    // right axis divided by the half width the far cascade covers; a near
+    // cascade covers that divided by its scale.
     mat4 m = lighting.lightViewProj;
-    float halfWidth = 1.0 / max(length(vec3(m[0][0], m[1][0], m[2][0])), 1e-6);
-    float texel = 2.0 * halfWidth / (float(textureSize(shadowMap, 0).x) * max(lighting.shadowTile.z, 1e-6));
+    vec4 farClip = m * vec4(worldPos, 1.0);
+    int c = max(shadowCascade(farClip.xy / farClip.w), 0);
+    float halfWidth = 1.0 / max(length(vec3(m[0][0], m[1][0], m[2][0])) * lighting.cascadeScaleOffset[c].x, 1e-6);
+    float texel = 2.0 * halfWidth / (float(textureSize(shadowMap, 0).x) * max(lighting.shadowTiles[c].z, 1e-6));
     float NdotL = clamp(dot(N, L), 0.0, 1.0);
     return m * vec4(worldPos + N * texel * (1.0 + 2.0 * (1.0 - NdotL)), 1.0);
 }

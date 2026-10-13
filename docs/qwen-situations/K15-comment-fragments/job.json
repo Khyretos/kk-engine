@@ -1,0 +1,13 @@
+[
+ {
+  "name": "g05-hdr",
+  "role": "worker/cpp-games",
+  "mode": "patch",
+  "out": "engine/include/kke/ShadowMap.h",
+  "prompt": "ENG-G05 (cascaded shadow maps for the directional key light). Declare the cascade helpers in class ShadowMap. Change nothing that is already there.\n1. After `#include <glm/glm.hpp>` add a blank line, then `#include <array>` and `#include <cstdint>`.\n2. Directly after the line `static PipelineConfig casterConfig();` add a blank line and then, each with a short `//` comment above it saying what it is (facts below):\n   a. `static constexpr uint32_t kCascades = 4;` - each view's frustum, out to the shadow distance, is cut into this many slices, nearest first; each slice gets its own tile of the map, so near shadows get small texels and far ones still exist.\n   b. `static constexpr uint32_t kMaxResolution = 4096;` - the whole map never grows past this many texels across; more tiles (split screen) make each tile smaller instead.\n   c. `static float cascadeSplit(uint32_t i, float nearPlane, float shadowDistance);` - the distance from the camera where slice i starts (i = kCascades gives where the last one ends: shadowDistance); the \"practical\" split, a blend of even and logarithmic steps.\n   d. `static std::array<glm::vec4, kCascades> cascadeSpheres(const glm::vec3& eye, const glm::vec3& forward, float tanHalfFovY, float aspect, float nearPlane, float shadowDistance);` - the smallest sphere around each slice of the view frustum (xyz = centre, w = radius); the radius depends only on the lens, never on where the camera looks, so texels keep their size as it turns.\n   e. `static glm::vec4 cascadeScaleOffset(const glm::mat4& farViewProj, const glm::vec3& lightDirection, float farRadius, const glm::vec3& center, float radius, uint32_t resolution);` - a near cascade as the far cascade's map scaled and shifted: its clip-space xy = the far cascade's xy * scale (xy) + offset (zw), its depth the same; the centre is snapped to the near cascade's own texels (resolution = one tile) so it does not shimmer.\n   f. `static glm::mat4 cascadeViewProj(const glm::mat4& farViewProj, const glm::vec4& scaleOffset);` - that cascade's light view-projection: scaleOffset applied after farViewProj.\n   g. `static uint32_t gridFor(uint32_t tiles);` - tiles across the map for `tiles` tiles: the smallest square grid that holds them.\n3. In the private members, directly before `uint32_t m_tile;`, add `uint32_t m_baseTile;   // texels across a tile when the map has room (the constructor's resolution)`.",
+  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g05.py hdr",
+  "precheck": false,
+  "context": [],
+  "max_tokens": 4000
+ }
+]

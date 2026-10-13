@@ -7,6 +7,7 @@
 #include "kke/ModelAsset.h"
 #include "kke/Pipeline.h"
 #include "kke/Renderer.h"
+#include "kke/ShadowMap.h"
 #include "kke/Texture.h"
 
 #include <glm/glm.hpp>
@@ -256,9 +257,9 @@ private:
     // Instance lists: [0] the shadow pass, [1 + view] each split-screen
     // view (each culls against its own camera).
     // One instance buffer per pass and frame in flight: the views' passes
-    // (0 .. kMaxViews-1), then their shadow passes (kMaxViews + view).
-    std::unique_ptr<Buffer> m_instanceBuffers[2 * kMaxViews][Renderer::kMaxFramesInFlight];
-    size_t m_instanceCapacity[2 * kMaxViews][Renderer::kMaxFramesInFlight] = {};
+    // (0 .. kMaxViews-1), then their shadow passes (kMaxViews + ShadowRenderContext::tile).
+    std::unique_ptr<Buffer> m_instanceBuffers[kMaxViews + kMaxViews * ShadowMap::kCascades][Renderer::kMaxFramesInFlight];
+    size_t m_instanceCapacity[kMaxViews + kMaxViews * ShadowMap::kCascades][Renderer::kMaxFramesInFlight] = {};
     uint64_t m_viewPass = 0; // m_frame and the view: which draw batchedFrame means
     std::vector<Batch> m_batches;
     std::vector<InstanceGpu> m_instanceData;
