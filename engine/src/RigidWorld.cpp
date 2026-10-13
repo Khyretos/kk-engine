@@ -1082,12 +1082,26 @@ RigidWorld::VehicleId RigidWorld::addVehicle(const VehicleDesc& d) {
         vcs.mWheels.push_back(ws);
     }
     const int pairs = static_cast<int>(d.wheels.size()) / 2;
+    // Jolt hands an anti-roll bar's impulse to the suspension as a velocity
+    // bias, which the solver multiplies by the suspension's (softened)
+    // effective mass: a bar given in N/m came out ~58x stiffer (BUG-090).
+    // solverMass is that mass at 60 Hz, worked out as Jolt does it.
+    auto solverMass = [&](const JPH::WheelSettingsWV& ws) {
+        const JPH::MotionProperties* mp = body->GetMotionProperties();
+        const JPH::Vec3 at = ws.mPosition + 0.5f * (ws.mSuspensionMinLength + ws.mSuspensionMaxLength) * ws.mSuspensionDirection;
+        const JPH::Vec3 arm = at.Cross(-JPH::Vec3::sAxisY());
+        const float m = 1.0f / (mp->GetInverseMass() + arm.Dot(mp->GetLocalSpaceInverseInertia().Multiply3x3(arm)));
+        const float omega = 2.0f * JPH::JPH_PI * ws.mSuspensionSpring.mFrequency;
+        const float k = m * omega * omega, c = 2.0f * m * ws.mSuspensionSpring.mDamping * omega, dt = 1.0f / 60.0f;
+        return 1.0f / (1.0f / m + 1.0f / (dt * (c + dt * k)));
+    };
     if (d.antiRollStiffness > 0.0f)
         for (int a = 0; a < pairs; ++a) {
             JPH::VehicleAntiRollBar bar;
             bar.mLeftWheel = 2 * a;
             bar.mRightWheel = 2 * a + 1;
-            bar.mStiffness = d.antiRollStiffness;
+            const float mass = 0.5f * (solverMass(*wheelSettings[size_t(bar.mLeftWheel)]) + solverMass(*wheelSettings[size_t(bar.mRightWheel)]));
+            bar.mStiffness = d.antiRollStiffness / mass;
             vcs.mAntiRollBars.push_back(bar);
         }
     JPH::WheeledVehicleControllerSettings* cs = new JPH::WheeledVehicleControllerSettings;

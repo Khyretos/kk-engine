@@ -1,0 +1,2 @@
+{"name": "b090-gaps", "out": "docs/GAPS.md", "mode": "patch", "gpu_seconds": 5.2, "tokens": 243, "prompt_tokens": 3476, "skills": ["work-habits", "shared/SKILL", "worker/docs/SKILL", "_model-notes/qwen3/SKILL"], "lines": 1, "attempts": 1, "model": "qwen3.5:9b-q8_0-64k", "at": "2026-10-13T15:30:14"}
+{"name": "b090-gaps", "out": "docs/GAPS.md", "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_b090.py gaps", "check_attempts": 1, "check_passed": true, "at": "2026-10-13T15:30:14"}

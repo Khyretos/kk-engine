@@ -452,7 +452,7 @@ kke::VehicleDesc vehicleDesc(const CarType& t, const CarArt& art, bool manualGea
     d.gearRatios = { 2.9f, 2.0f, 1.5f, 1.18f, 0.96f, 0.8f };
     d.differentialRatio = 3.6f;
     d.limitedSlipRatio = drift ? 1.2f : 1.4f;
-    d.antiRollStiffness = 9000.0f;
+    d.antiRollStiffness = 45000.0f; // N/m: stiffer than a road car's (VehicleDesc's 30000)
     d.friction = 0.35f;
     d.restitution = 0.15f;
     if (t.drive == 0) d.drivenAxles = { 1 };
