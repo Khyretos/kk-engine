@@ -64,6 +64,8 @@ jobs:
     needs: build
     runs-on: windows
     timeout-minutes: 240
+    env:
+      PSExecutionPolicyPreference: Bypass # the PC's policy is Restricted; shell: powershell steps need this
     defaults:
       run:
         shell: cmd
@@ -74,6 +76,9 @@ jobs:
         with:
           name: windows-build
           path: dist
+
+      - name: PowerShell syntax
+        run: powershell -NoProfile -File tools\vm\windows\parse_check.ps1
 
       - name: Tests and demos
         env:
