@@ -538,7 +538,8 @@ def summarize(args):
     problems_file = results / "problems.txt"
     problems = [l.strip() for l in (problems_file.read_text(encoding="utf-8").splitlines()) if l.strip()] if problems_file.is_file() else []
     facts = dict(f.split("=", 1) for f in args.fact)
-    return write_summary(out, args.platform, facts, gtest_summary(results / "kke_tests.json"), benchmark_summary(results), problems)
+    return write_summary(out, args.platform, facts, gtest_summary(results / "kke_tests.json"), benchmark_summary(results), problems,
+                         title=f"{args.platform} test")
 
 
 def gtest_summary(json_path):
@@ -565,7 +566,7 @@ def benchmark_summary(folder):
     return {"file": str(files[-1]), "demos": demos, "gpu": ", ".join(str(g.get("gpu") or g.get("name")) for g in gpus) if gpus else None}
 
 
-def write_summary(out, platform, facts, tests, bench, problems):
+def write_summary(out, platform, facts, tests, bench, problems, title=None):
     failed = list(problems)
     if tests is not None and (tests["failures"] or tests["errors"]):
         failed.append(f"{tests['failures'] + tests['errors']} unit test(s) failed")
@@ -575,7 +576,7 @@ def write_summary(out, platform, facts, tests, bench, problems):
         bad = [d for d in bench["demos"] if d["status"] not in PASS | NOTE]
         if bad:
             failed.append(f"{len(bad)} benchmark run(s) did not finish cleanly")
-    lines = [f"# {platform} VM test: {'PASSED' if not failed else 'FAILED'}", ""]
+    lines = [f"# {title or platform + ' VM test'}: {'PASSED' if not failed else 'FAILED'}", ""]
     for k, v in facts.items():
         lines.append(f"- **{k}:** {v}")
     if bench and bench.get("gpu"):
@@ -592,7 +593,7 @@ def write_summary(out, platform, facts, tests, bench, problems):
             mark = "✅" if d["status"] in PASS else "ℹ️" if d["status"] in NOTE else "❌"
             fps = f"{d['fps_avg']:.1f}" if isinstance(d["fps_avg"], (int, float)) else "-"
             lines.append(f"| {d['id']} | {mark} {d['status']} | {fps} | {d['reason'] or ''} |")
-        lines += ["", "Frame rates come from lavapipe (Vulkan on the CPU) in a VM: they show a demo runs, not how fast a real GPU would be."]
+        lines += ["", "Frame rates come from lavapipe (Vulkan on the CPU): they show a demo runs, not how fast a real GPU would be."]
     text = "\n".join(lines) + "\n"
     (out / "summary.md").write_text(text, encoding="utf-8")
     (out / "summary.json").write_text(json.dumps({"platform": platform, "passed": not failed, "failed": failed, "facts": facts,

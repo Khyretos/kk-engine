@@ -40,7 +40,8 @@ foreach ($f in 'kke_demo.exe', 'shaders', 'assets', 'benchmark\kke_benchmark.exe
 }
 Copy-Item $Tests "$pkg\"
 
-tar.exe -xf $SourceTar -C $WorkSrc
+# .claude/skills is a symlink, which an ordinary Windows account can't create; the tests don't need it.
+tar.exe -xf $SourceTar --exclude .claude/skills -C $WorkSrc
 if ($LASTEXITCODE -ne 0) { throw "tar.exe could not unpack src.tar: exit code $LASTEXITCODE" }
 
 $link = 'C:' + ($SourceDir -replace '/', '\')
