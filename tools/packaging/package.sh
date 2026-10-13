@@ -156,6 +156,11 @@ cp "$repo/LICENSE" "$stage/LICENSE.txt"
 		echo "Double-click a demo to start it (kke_demo.exe is the main one)."
 		echo "Windows SmartScreen may warn that the app is unrecognised: it is"
 		echo "not code-signed yet. Choose 'More info' then 'Run anyway'."
+	elif [ "$platform" = macos ]; then
+		echo "Run a demo from Terminal in this folder (./kke_demo). Built for Intel Macs"
+		echo "(x86_64) with macOS 14 or newer. It is not signed: if macOS refuses to"
+		echo "start it, run 'xattr -dr com.apple.quarantine .' in this folder once."
+		echo "Vulkan comes from MoltenVK: install LunarG's Vulkan SDK for macOS."
 	else
 		echo "Run a demo from a terminal (./kke_demo) or double-click it in your"
 		echo "file manager. Built on Ubuntu 24.04: needs glibc 2.39 or newer"
