@@ -51,7 +51,7 @@ Status: ⬜ not started, 🔨 in progress, ✅ done.
 | ENG-G05 | Lighting | Cascaded shadow maps: 4 cascades per view out to 80 m, each in its own tile of the shadow map (ShadowMap::kCascades). | ✅ |
 | ENG-G04 | Lighting | Point-light shadows: a point light with `castsShadows` gets six cube faces, each in its own 512-texel tile of a second shadow map, out to `shadowRange` (default 20 m); the sandbox and showcase lamps cast. | ✅ |
 | ENG-G07 | Lighting | 16 lights (`Lighting::kMaxLights`); point lights can have a range (`Light::range`, smooth falloff, 0 = everywhere); the first 4 that cast shadows get a point-shadow slot; a Lua `light.*` API (`point`, `move`, `set`, `remove`, `count`). | ✅ |
-| ENG-G06 | Lighting | Reflections from a prefiltered environment map (ambient is SH only). | ⬜ |
+| ENG-G06 | Lighting | Sky reflections: the fill light prefiltered once per sky into a 128 x 64 equirect map with 6 roughness levels (`kke::EnvMap`, GGX importance sampling), sampled per pixel along the reflection and weighted by Karis's analytic environment BRDF; flat ambient when there is no sky. | ✅ |
 | ENG-G08 | Models | GPU skinning in `ModelModule` (CPU skinning today). | ⬜ |
 | ENG-G09 | UI | RmlUi Vulkan `filter`, `box-shadow`, `backdrop-filter` (silently ignored today). | ⬜ |
 | ENG-G17 | Rendering | Tone mapping as one post pass on an HDR scene target, 10-bit output (#35). | ⬜ |

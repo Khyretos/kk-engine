@@ -277,14 +277,17 @@ vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 
         Lo += (kD * albedo / PI + specular) * radiance * NdotL * thisLightShadow;
     }
 
-    // Ambient: light from the sky (kke::Sky::lightsScene) as spherical
-    // harmonics (kke::SkySH), so a surface facing up takes the sky's blue
-    // and one facing down the ground's bounce. With no sky it is the flat
-    // Lighting::ambientColor exactly (a constant has only the first term).
-    // Diffuse only: reflections of the sky need a prefiltered environment
-    // map, which doesn't exist yet (docs/HISTORY.md, "What's still ahead
-    // for lighting").
-    vec3 ambient = ambientIrradiance(N) * albedo;
+    // Ambient: light from the sky (kke::Sky::lightsScene). Diffuse from its
+    // spherical harmonics (kke::SkySH), so a surface facing up takes the sky's
+    // blue and one facing down the ground's bounce; with no sky it is the flat
+    // Lighting::ambientColor exactly. Specular from the prefiltered sky
+    // (kke::EnvMap) along the reflection, weighted by the environment BRDF:
+    // metals and glancing angles mirror the sky, and what is reflected is
+    // not also scattered (the split sum, Karis 2013).
+    float NdotV = max(dot(N, V), 1e-4);
+    vec3 envSpecular = envBRDFApprox(F0, roughness, NdotV);
+    vec3 ambient = ambientIrradiance(N) * albedo * (vec3(1.0) - envSpecular) * (1.0 - metallic)
+                 + skyReflection(reflect(-V, N), roughness) * envSpecular;
 
     vec3 color = ambient + Lo;
     color = applyFog(color, fragPosWorld);

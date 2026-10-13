@@ -98,6 +98,7 @@ add_executable(kke_tests
     test_draw_order.cpp
     test_tone_mapper.cpp
     test_sky.cpp
+    test_envmap.cpp
     test_jiggle.cpp
     test_auto_rig.cpp
     test_rml_data_binding.cpp

@@ -159,6 +159,12 @@ The types are in `engine/include/kke/Sky.h` and `Mood.h`.
 - All of it lives in the lighting buffer every lit shader already reads
   (`shaders/lighting_ubo.glsl`): no extra passes, no temporal
   accumulation, nothing dithered ([RENDERING_PRINCIPLES.md](RENDERING_PRINCIPLES.md)).
-- Not yet: reflections of the sky in shiny surfaces (needs a prefiltered
-  environment map), clouds that move, and a physically simulated
-  atmosphere for skies at any time of day.
+- Shiny surfaces reflect the sky (`kke::EnvMap`): the same fill light,
+  sun left out, prefiltered once per sky into six levels from mirror to
+  fully rough (GGX, Karis 2013) and sampled along the reflection,
+  weighted by Karis's analytic environment BRDF. Metals take the sky's
+  colour and every surface brightens towards it at glancing angles.
+  `ambientStrength` and `ambientSaturation` apply to it as to the fill.
+  Only the sky is reflected, not the scene around it.
+- Not yet: clouds that move, and a physically simulated atmosphere for
+  skies at any time of day.

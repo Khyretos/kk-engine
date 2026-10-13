@@ -40,7 +40,12 @@ layout(set = 0, binding = 0) uniform LightingUBO {
 
     mat4 pointShadowViewProj[POINT_SHADOW_FACES]; // index light * 6 + face: that face's view-projection, kke::ShadowMap::pointFaceViewProj
     vec4 pointShadowTiles[POINT_SHADOW_FACES]; // index light * 6 + face: its tile of the point map, xy = top left, zw = size, 0..1
+    vec4 envMap; // x = the reflections' top mip (kke::EnvMap levels - 1), 0 = no map: reflect the ambient SH
 } lighting;
+
+// The sky prefiltered for reflections (kke::EnvMap, kke::LightingBuffer::setEnvironmentMap):
+// equirectangular, one mip per roughness level. A black 1x1 while there is none.
+layout(set = 0, binding = 1) uniform sampler2D skyReflections;
 
 #include "tonemap.glsl"
 
@@ -53,6 +58,27 @@ vec3 ambientIrradiance(vec3 n) {
     r += lighting.ambientSH[6].rgb * (0.315392 * (3.0 * n.z * n.z - 1.0));
     r += lighting.ambientSH[7].rgb * (1.092548 * n.x * n.z) + lighting.ambientSH[8].rgb * (0.546274 * (n.x * n.x - n.y * n.y));
     return max(r, vec3(0.0));
+}
+
+// What a surface of perceptual roughness `roughness` reflects of the sky
+// towards r: the prefiltered map at that roughness's mip (kke::EnvMap level
+// i is roughness i / (levels - 1)), or the ambient SH when there is no map.
+vec3 skyReflection(vec3 r, float roughness) {
+    float top = lighting.envMap.x;
+    if (top <= 0.0) return ambientIrradiance(r);
+    vec2 uv = vec2(0.5 + atan(r.x, -r.z) / (2.0 * 3.14159265), acos(clamp(r.y, -1.0, 1.0)) / 3.14159265); // kke::equirectUv
+    return textureLod(skyReflections, uv, roughness * top).rgb;
+}
+
+// The share of the environment a surface reflects (the split sum's second
+// factor), Karis's analytic fit: kke::envBRDFApprox.
+vec3 envBRDFApprox(vec3 specularColor, float roughness, float NdotV) {
+    const vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022);
+    const vec4 c1 = vec4(1.0, 0.0425, 1.04, -0.04);
+    vec4 r = roughness * c0 + c1;
+    float a004 = min(r.x * r.x, exp2(-9.28 * NdotV)) * r.x + r.y;
+    vec2 ab = vec2(-1.04, 1.04) * a004 + r.zw;
+    return specularColor * ab.x + ab.y;
 }
 
 int skyKind() { return int(lighting.skyZenith.a + 0.5); }

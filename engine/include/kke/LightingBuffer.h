@@ -11,6 +11,7 @@ namespace kke {
 
 class VulkanDevice;
 struct SkyEnvironment;
+class Texture;
 struct Lighting; // defined in Application.h — forward-declared here since
                   // update()'s signature is all this file actually needs
 
@@ -53,6 +54,12 @@ public:
                 const SkyEnvironment* sky = nullptr, const glm::vec4* shadowTiles = nullptr, const glm::vec4* cascadeScaleOffsets = nullptr,
                 const glm::mat4* pointViewProjs = nullptr, const glm::vec4* pointTiles = nullptr);
 
+    // The sky prefiltered for reflections (set 0, binding 1; SkyRenderer::reflections)
+    // and its mip count. Null means none: the shaders reflect the ambient SH
+    // instead (exact for a flat ambient). Each update() writes it into that
+    // frame slot's descriptor set, which the GPU is done with by then.
+    void setEnvironmentMap(const Texture* map, uint32_t levels) { m_envMap = map; m_envLevels = map ? levels : 0; }
+
     // Picks the frame-in-flight slot that update() writes and
     // descriptorSet() returns. Each slot has its own buffer: the GPU may
     // still be drawing the previous frame with its camera and shadow
@@ -73,6 +80,11 @@ private:
     VkDescriptorSet m_descriptorSets[kSlotCount] = {};
     std::unique_ptr<Buffer> m_buffers[kSlotCount];
     uint32_t m_slot = 0;
+
+    void writeEnvironment(uint32_t slot); // binding 1 of that slot: m_envMap, or m_placeholder
+    std::unique_ptr<Texture> m_placeholder; // 1x1 black, bound while there is no map
+    const Texture* m_envMap = nullptr;
+    uint32_t m_envLevels = 0;
 };
 
 } // namespace kke

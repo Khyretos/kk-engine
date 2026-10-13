@@ -34,6 +34,11 @@ public:
     // Inside the scene pass, first thing for a view.
     void draw(VkCommandBuffer cmd, const glm::mat4& view, const glm::mat4& proj, VkDescriptorSet lighting);
 
+    // The sky prefiltered for reflections (SkyEnvironment::reflections) on the
+    // GPU, one mip per level, after prepare(); null while the sky has none.
+    const Texture* reflections() const { return m_reflections.get(); }
+    uint32_t reflectionLevels() const { return m_reflectionLevels; }
+
 private:
     void bindImage(const Texture& texture);
 
@@ -44,6 +49,9 @@ private:
     std::unique_ptr<Texture> m_placeholder; // a 1x1 texture while no image sky is on
     std::unique_ptr<Texture> m_image;
     std::shared_ptr<const SkyImage> m_imageSource;
+    std::unique_ptr<Texture> m_reflections;
+    std::shared_ptr<const EnvMap> m_reflectionsSource; // what m_reflections was made from
+    uint32_t m_reflectionLevels = 0;
     VkDescriptorSetLayout m_setLayout = VK_NULL_HANDLE;
     VkDescriptorPool m_pool = VK_NULL_HANDLE;
     VkDescriptorSet m_set = VK_NULL_HANDLE;

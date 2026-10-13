@@ -1,0 +1,17 @@
+[
+ {
+  "name": "g06-skyfield",
+  "role": "worker/cpp-games",
+  "mode": "patch",
+  "out": "engine/include/kke/Sky.h",
+  "prompt": "ENG-G06: lit surfaces reflect the sky. kke::EnvMap holds the sky prefiltered for reflections: an equirectangular RGB image (u = 0.5 + atan(x, -z) / 2pi, v = acos(y) / pi, kke::equirectUv / kke::equirectDir in kke/Sky.h) in several levels, each half as wide as the one before; level i is the sky seen in a surface of perceptual roughness i / (levels - 1), convolved with GGX by importance sampling with N = V = R (Karis, \"Real Shading in Unreal Engine 4\", 2013, the split sum). The shaders weight it by Karis's analytic environment BRDF (\"Physically Based Shading on Mobile\", 2014). C++20, glm, Vulkan, GLSL 450 std140. SkyEnvironment gets the prefiltered sky. Two edits:\n1. Your SEARCH block is exactly these lines:\n```\n// Everything the GPU needs about the sky, worked out from kke::Sky and\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\nclass EnvMap; // kke/EnvMap.h\n\n// Everything the GPU needs about the sky, worked out from kke::Sky and\n```\nChange nothing else; do not copy or move any other line.\n2. Your SEARCH block is exactly these lines:\n```\n    std::shared_ptr<const SkyImage> image; // set when kind == Image\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n    std::shared_ptr<const SkyImage> image; // set when kind == Image\n    std::shared_ptr<const EnvMap> reflections; // the fill light prefiltered for reflections; null when the ambient is flat\n```\nChange nothing else; do not copy or move any other line.\n",
+  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g06.py skyfield",
+  "precheck": false,
+  "context": [],
+  "max_tokens": 1200,
+  "focus": [
+   "^// Everything the GPU needs about the sky",
+   "std::shared_ptr<const SkyImage> image; // set when"
+  ]
+ }
+]

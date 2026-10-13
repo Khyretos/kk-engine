@@ -1,6 +1,7 @@
 #include "kke/SkyRenderer.h"
 
 #include "kke/Application.h"
+#include "kke/EnvMap.h"
 #include "kke/Pipeline.h"
 #include "kke/Texture.h"
 #include "kke/VulkanCheck.h"
@@ -101,6 +102,21 @@ const SkyEnvironment& SkyRenderer::prepare(const Sky& sky, const Fog& fog, const
             m_image.reset();
         }
         m_imageSource = wanted;
+    }
+    if (env.reflections != m_reflectionsSource) {
+        // As above: a frame in flight may still read the old one, and every
+        // lighting buffer points at it until its next update (LightingBuffer::setEnvironmentMap).
+        vkDeviceWaitIdle(m_app.device().device());
+        m_reflections.reset();
+        m_reflectionLevels = 0;
+        if (env.reflections) {
+            const EnvMap& map = *env.reflections;
+            const std::vector<uint16_t> half = map.toHalfRgba();
+            const uint32_t w = static_cast<uint32_t>(map.levelWidth(0));
+            m_reflectionLevels = static_cast<uint32_t>(map.levelCount());
+            m_reflections = std::make_unique<Texture>(m_app.device(), half.data(), w, w / 2, m_reflectionLevels, Texture::HalfFloatSkyMips{});
+        }
+        m_reflectionsSource = env.reflections;
     }
     return env;
 }

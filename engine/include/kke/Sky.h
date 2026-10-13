@@ -179,6 +179,8 @@ private:
 // clockwise seen from above), the way Sky::yawDegrees turns an image sky.
 glm::vec3 rotateYaw(const glm::vec3& v, float degrees);
 
+class EnvMap; // kke/EnvMap.h
+
 // Everything the GPU needs about the sky, worked out from kke::Sky and
 // kke::Fog: an image sky's colours measured, the ambient light projected
 // to spherical harmonics, the fog colour chosen. kke::SkyResolver makes
@@ -196,6 +198,7 @@ struct SkyEnvironment {
     SkySH ambient;                 // what lit surfaces are filled with
     glm::vec3 ambientAverage{0.0f}; // its average, for shaders that want one colour
     std::shared_ptr<const SkyImage> image; // set when kind == Image
+    std::shared_ptr<const EnvMap> reflections; // the fill light prefiltered for reflections; null when the ambient is flat
 };
 
 class SkyResolver {

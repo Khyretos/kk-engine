@@ -1,0 +1,2 @@
+{"name": "g06-math", "out": "engine/src/EnvMap.cpp", "gpu_seconds": 15.2, "tokens": 846, "prompt_tokens": 3480, "skills": ["work-habits", "shared/SKILL", "worker/cpp-games/SKILL", "_model-notes/qwen3/SKILL"], "lines": 42, "review": "skipped", "model": "qwen3.5:9b-q8_0-64k", "at": "2026-10-13T17:46:00"}
+{"name": "g06-math", "out": "engine/src/EnvMap.cpp", "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g06.py math", "check_attempts": 1, "check_passed": true, "at": "2026-10-13T17:46:00"}

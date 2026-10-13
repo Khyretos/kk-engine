@@ -1,4 +1,5 @@
 #include "kke/Sky.h"
+#include "kke/EnvMap.h"
 #include "kke/Log.h"
 
 // No STB_IMAGE_IMPLEMENTATION here: RmlVulkanRenderInterface.cpp has it.
@@ -319,26 +320,29 @@ const SkyEnvironment& SkyResolver::resolve(const Sky& sky, const Fog& fog, const
 
     if (e.kind == Sky::Kind::None || !sky.lightsScene) {
         e.ambient = SkySH::constant(flatAmbient);
-    } else if (e.kind == Sky::Kind::Image) {
-        // The picture without its sun: the sun lights the scene as
-        // lights[0], so counting it here too would light everything twice.
-        const float cap = e.image->analysis().sunClamp;
-        const SkyImage& img = *e.image;
-        const float yaw = sky.yawDegrees;
-        const float scale = e.imageScale * sky.ambientStrength;
-        e.ambient = SkySH::project([&](const glm::vec3& d) {
-            glm::vec3 c = img.sample(rotateYaw(d, -yaw));
-            const float l = luminance(c);
-            if (l > cap) c *= cap / l;
-            return c * scale;
-        });
     } else {
-        Sky g = sky;
-        e.ambient = SkySH::project([&](const glm::vec3& d) { return gradientSkyRadiance(g, d); }) * sky.ambientStrength;
-    }
-    if (e.kind != Sky::Kind::None && sky.lightsScene) {
+        // The light that fills the scene, worked out once for the ambient SH
+        // and the reflections: the sky without its sun (the sun lights the
+        // scene as lights[0], so counting it here too would light everything
+        // twice), times ambientStrength, keeping ambientSaturation of its colour.
+        const bool image = e.kind == Sky::Kind::Image;
+        const float cap = image ? e.image->analysis().sunClamp : 0.0f;
+        const float scale = (image ? e.imageScale : 1.0f) * sky.ambientStrength;
         const float keep = std::clamp(sky.ambientSaturation, 0.0f, 2.0f);
-        for (glm::vec3& c : e.ambient.c) c = glm::mix(glm::vec3(luminance(c)), c, keep);
+        const auto fill = [&](const glm::vec3& d) {
+            glm::vec3 c;
+            if (image) {
+                c = e.image->sample(rotateYaw(d, -sky.yawDegrees));
+                const float l = luminance(c);
+                if (l > cap) c *= cap / l;
+            } else {
+                c = gradientSkyRadiance(sky, d);
+            }
+            c *= scale;
+            return glm::mix(glm::vec3(luminance(c)), c, keep);
+        };
+        e.ambient = SkySH::project(fill);
+        e.reflections = std::make_shared<const EnvMap>(EnvMap::prefilter(fill));
     }
     e.ambientAverage = e.ambient.c[0] * 0.282095f;
     // Distant air takes the colour of the sky a little above the horizon:
