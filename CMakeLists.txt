@@ -21,6 +21,10 @@ if(UNIX AND NOT APPLE AND NOT ANDROID)
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
     set(CMAKE_BUILD_RPATH "\$ORIGIN;\$ORIGIN/..")
     set(CMAKE_BUILD_RPATH_USE_ORIGIN ON)
+elseif(APPLE)
+    # macOS: the same, with @executable_path for $ORIGIN (dylibs in bin/).
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+    set(CMAKE_BUILD_RPATH "@executable_path;@executable_path/..")
 endif()
 
 # ---------------------------------------------------------------------------
