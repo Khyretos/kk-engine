@@ -1,0 +1,26 @@
+name: win-probe
+on: [push, workflow_dispatch]
+jobs:
+  probe:
+    runs-on: windows
+    steps:
+      - name: Facts (default shell)
+        run: |
+          whoami
+          echo "HOME=$HOME USERPROFILE=$env:USERPROFILE PWD=$PWD"
+          $PSVersionTable.PSVersion
+          Get-Command python, py, python3, git, tar, node, cmake, ninja, vulkaninfo, vulkaninfoSDK -ErrorAction SilentlyContinue | Format-Table Name, Source -AutoSize
+          python --version
+          node --version
+          Get-ItemProperty 'HKLM:\SOFTWARE\Khronos\Vulkan\Drivers' -ErrorAction SilentlyContinue | Format-List
+          echo "VK_ICD_FILENAMES=$env:VK_ICD_FILENAMES VK_DRIVER_FILES=$env:VK_DRIVER_FILES"
+          try { New-Item -ItemType Directory -Force C:\workspace\probe | Out-Null; echo "C:\workspace writable"; Remove-Item C:\workspace\probe } catch { echo "C:\workspace NOT writable: $_" }
+          [Environment]::UserInteractive
+          (Get-Process -Id $PID).SessionId
+      - name: vulkaninfo
+        run: |
+          $v = Get-Command vulkaninfo, vulkaninfoSDK -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($v) { & $v.Source --summary 2>&1 | Select-Object -First 40 } else { Get-ChildItem -Recurse -ErrorAction SilentlyContinue C:\ -Include vulkaninfo*.exe,lvp_icd*.json -Depth 4 | Select-Object -First 10 FullName }
+      - uses: actions/checkout@v4
+      - name: Checkout worked
+        run: Get-ChildItem | Select-Object -First 5 Name
