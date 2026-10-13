@@ -54,10 +54,10 @@ if (-not (Test-Path (Join-Path $link 'shaders'))) { throw "source tree not reach
 Write-Output "unpacked $Package into $pkg; source tree linked at $link"
 
 # --- Unit tests ---------------------------------------------------------
-$tests = Start-Process -FilePath (Join-Path $pkg 'kke_tests.exe') -WorkingDirectory $pkg -ArgumentList '--gtest_brief=1', ('--gtest_output=json:' + (Join-Path $Results 'kke_tests.json')) -RedirectStandardOutput (Join-Path $Results 'kke_tests.log') -RedirectStandardError (Join-Path $Results 'kke_tests.err.log') -NoNewWindow -PassThru
+$testRun = Start-Process -FilePath (Join-Path $pkg 'kke_tests.exe') -WorkingDirectory $pkg -ArgumentList '--gtest_brief=1', ('--gtest_output=json:' + (Join-Path $Results 'kke_tests.json')) -RedirectStandardOutput (Join-Path $Results 'kke_tests.log') -RedirectStandardError (Join-Path $Results 'kke_tests.err.log') -NoNewWindow -PassThru
 
-if (-not $tests.WaitForExit($TestsTimeout * 1000)) {
-    $tests.Kill()
+if (-not $testRun.WaitForExit($TestsTimeout * 1000)) {
+    $testRun.Kill()
     Add-Content (Join-Path $Results 'problems.txt') "kke_tests.exe did not finish within $TestsTimeout s (a hang)"
 }
 
