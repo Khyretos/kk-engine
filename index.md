@@ -1,3 +1,4 @@
 - runs/2026-10-14T0615Z-76726a100f: claude/windows-results, test job success
 - runs/2026-10-14T0756Z-3b000998cf: claude/tone-mapping, test job success
 - runs/2026-10-14T0847Z-7ec62c7244: claude/ten-bit, test job success
+- runs/2026-10-14T1002Z-6b8a8fb65b: claude/fx-lua, test job success
