@@ -5,6 +5,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <string>
 #include <vector>
 
 using kke::HardwareTarget;
@@ -29,7 +30,7 @@ std::string chosen(const DeviceHints& h, const std::string& requested = {}, cons
 } // namespace
 
 TEST(HardwareTarget, BuiltInTargetsExistAndTheirSettingsParse) {
-    for (const char* name : { "desktop", "desktop-low", "steam-deck", "handheld-pc", "android", "ios" }) {
+    for (const char* name : { "desktop", "desktop-low", "software-gpu", "steam-deck", "handheld-pc", "android", "ios" }) {
         const HardwareTarget* t = kke::findHardwareTarget(name);
         ASSERT_NE(t, nullptr) << name;
         // A typo in a built-in override would silently fall back to
@@ -110,6 +111,34 @@ TEST(HardwareTarget, RecognisesDevices) {
     // Unknown numbers (a backend that can't tell) are not "low-end".
     DeviceHints unknown;
     EXPECT_EQ(chosen(unknown), "desktop");
+}
+
+TEST(HardwareTarget, ACpuOnlyVulkanDeviceGetsTheSoftwareTarget) {
+    // A PC whose graphics chip has no Vulkan driver renders through Mesa
+    // lavapipe on the CPU: the automatic choices move to software-gpu.
+    for (const char* automatic : { "desktop", "desktop-low" }) {
+        DeviceHints pc = desktopPc();
+        if (std::string(automatic) == "desktop-low") pc.logicalCores = 2;
+        const kke::TargetChoice c = kke::chooseHardwareTarget(pc);
+        ASSERT_EQ(c.target->name, automatic);
+        const kke::TargetChoice soft = kke::refineForSoftwareGpu(c, true, "llvmpipe (LLVM 15.0.7, 256 bits)");
+        EXPECT_EQ(soft.target->name, "software-gpu") << automatic;
+        EXPECT_NE(soft.reason.find("llvmpipe"), std::string::npos);
+        EXPECT_EQ(kke::refineForSoftwareGpu(c, false, "AMD Radeon").target->name, automatic);
+    }
+    // Asked-for targets and recognised devices stay as they are.
+    EXPECT_EQ(kke::refineForSoftwareGpu(kke::chooseHardwareTarget(desktopPc(), "desktop"), true, "llvmpipe").target->name, "desktop");
+    EXPECT_EQ(kke::refineForSoftwareGpu(kke::chooseHardwareTarget(desktopPc(), {}, "steam-deck"), true, "llvmpipe").target->name, "steam-deck");
+    DeviceHints deck = desktopPc();
+    deck.steamDeckMode = true;
+    EXPECT_EQ(kke::refineForSoftwareGpu(kke::chooseHardwareTarget(deck), true, "llvmpipe").target->name, "steam-deck");
+
+    // Measured on 4 cores with lavapipe: shadows and resolution are what a CPU can save on.
+    const kke::EngineSettings s = kke::settingsForTarget(*kke::findHardwareTarget("software-gpu"));
+    EXPECT_EQ(s.graphics.msaa, 1);
+    EXPECT_FALSE(s.graphics.shadows);
+    EXPECT_LT(s.performance.renderScale, 1.0f);
+    EXPECT_EQ(s.graphics.frameRateLimit, 0.0f) << "a CPU-drawn game needs every frame it can get";
 }
 
 TEST(HardwareTarget, OverridesComeFirst) {
