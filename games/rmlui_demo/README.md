@@ -273,12 +273,14 @@ RmlUi setup needs; each one came from a real bug:
 
 Two more rules come from the renderer:
 
-- **No `box-shadow`, `filter` or drop shadows.** The Vulkan RmlUi backend
-  does not implement RmlUi's layer and filter path yet. A `box-shadow`
-  focus ring painted the element white plus a copy at the screen origin,
-  so the focus ring uses border and background colours (BUG-052).
+- **Layers work: `box-shadow`, `filter`, `backdrop-filter`, `mask-image`.**
+  The `.glass` panels blur the 3D scene behind them and float on a
+  shadow, the modal backdrop blurs and greys the menu, the title has a
+  `drop-shadow` filter and the focus ring glows. Each effect renders the
+  element into a full-window layer and runs full-window passes, so keep
+  them to a handful of panels on screen (ENG-G09).
   Gradients (`linear-`, `radial-`, `conic-gradient`), transforms and
-  clip masks do work.
+  clip masks work too.
 - **Emoji are the icons.** The inventory items, hotbar and portraits are
   emoji characters. Noto Color Emoji is loaded as a fallback font by
   `UiModule`, so any character missing from Noto Sans comes from it, in
@@ -587,9 +589,9 @@ cast a shadow (it is skipped in `renderShadow()`).
   the whole window for hit testing. The nav bar, HUD and dialogue bodies
   opt out and re-enable only their real panels, or they would swallow
   clicks meant for the screen underneath (BUG-012, cited in `nav.rml`).
-- **Focus ring from colours, not `box-shadow`.** The theme comment:
-  `box-shadow` goes through a render path the Vulkan backend does not
-  implement (BUG-052).
+- **Focus ring from a border colour and a `box-shadow` glow.** The
+  colour alone already shows focus; the glow came once the Vulkan
+  backend drew box-shadows (BUG-052, ENG-G09).
 - **The Input screen is its own module.** It owns a separate data model
   and a lot of logic, and `ShowcaseModule` declares a dependency on it so
   the `input` model exists before `input.rml` loads.
@@ -710,8 +712,9 @@ Pitfalls the code and comments reveal:
   panels `pointer-events: auto`.
 - An element that shows text needs a `font-family` (the theme's `*`
   rule covers it if you link the theme).
-- `box-shadow`, `filter: blur()` and drop shadows are ignored or broken
-  in this renderer.
+- A `backdrop-filter` over the 3D scene needs a swapchain the renderer
+  can copy from; the first time one is drawn, the renderer recreates it
+  that way, so that first frame shows no backdrop.
 - Remove your `Rml::EventListener`s before you close a document.
 - Enter does not submit a `<form>`; handle it yourself.
 - Put player text in `{{ }}` bindings, or escape it with

@@ -120,6 +120,18 @@ bool Renderer::canCapture() const {
     return m_swapChain->readable() && capturableFormat(m_swapChain->imageFormat(), bgra);
 }
 
+OverlayTarget Renderer::overlayTarget() const {
+    OverlayTarget t;
+    t.image = m_swapChain->image(m_currentImageIndex);
+    t.framebuffer = m_swapChain->framebuffer(m_currentImageIndex);
+    t.resumePass = m_swapChain->overlayPass();
+    t.colorFormat = m_swapChain->imageFormat();
+    t.depthFormat = m_swapChain->depthFormat();
+    t.extent = m_swapChain->extent();
+    t.readable = m_swapChain->readable();
+    return t;
+}
+
 void Renderer::requestCapture(uint64_t tag) { m_captureRequests.push_back(tag); }
 
 std::vector<Renderer::FrameCapture> Renderer::takeCaptures() {

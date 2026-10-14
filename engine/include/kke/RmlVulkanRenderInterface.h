@@ -2,10 +2,13 @@
 
 #include "kke/Pipeline.h"
 #include "kke/Buffer.h"
+#include "kke/Renderer.h"
+#include "kke/RmlFilters.h"
 
 #include <RmlUi/Core/RenderInterface.h>
 #include <vk_mem_alloc.h>
 #include <glm/glm.hpp>
+#include <array>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -48,8 +51,17 @@ public:
     // of that exists.
     // `screenSizePixels` is the whole frame; `origin` is where the context's
     // (0,0) sits in it, so a context sized to the screen's safe area draws
-    // inside that area (UiModule).
-    void beginFrame(VkCommandBuffer cmd, glm::vec2 screenSizePixels, glm::vec2 origin = glm::vec2(0.0f));
+    // inside that area (UiModule). `target` is the frame's own image
+    // (Renderer::overlayTarget()), layer 0 of RmlUi's layer stack.
+    void beginFrame(VkCommandBuffer cmd, glm::vec2 screenSizePixels, glm::vec2 origin, const OverlayTarget& target);
+
+    // Called right after Rml::Context::Render(): leaves the frame's own
+    // image's pass open again for whatever draws after the UI.
+    void endFrame();
+    // True once, the first time a backdrop-filter needed to read the frame's
+    // own image and it could not be copied: UiModule then asks the renderer
+    // for a readable swapchain (Renderer::enableCapture()).
+    bool takeReadableRequest();
 
     // Rml::RenderInterface — required
     Rml::CompiledGeometryHandle CompileGeometry(Rml::Span<const Rml::Vertex> vertices, Rml::Span<const int> indices) override;
@@ -79,6 +91,19 @@ public:
     void EnableClipMask(bool enable) override;
     void RenderToClipMask(Rml::ClipMaskOperation operation, Rml::CompiledGeometryHandle geometry, Rml::Vector2f translation) override;
 
+    // Optional — layers and filters (ENG-G09, engine/src/RmlVulkanLayers.cpp):
+    // CSS `filter`, `backdrop-filter`, `box-shadow` and `mask-image`. Without
+    // them RmlUi drew none of these. Same scheme as RmlUi's GL3 backend:
+    // each layer is a full-frame image, filters are full-frame passes.
+    Rml::LayerHandle PushLayer() override;
+    void CompositeLayers(Rml::LayerHandle source, Rml::LayerHandle destination, Rml::BlendMode blend_mode,
+                         Rml::Span<const Rml::CompiledFilterHandle> filters) override;
+    void PopLayer() override;
+    Rml::TextureHandle SaveLayerAsTexture() override;
+    Rml::CompiledFilterHandle SaveLayerAsMaskImage() override;
+    Rml::CompiledFilterHandle CompileFilter(const Rml::String& name, const Rml::Dictionary& parameters) override;
+    void ReleaseFilter(Rml::CompiledFilterHandle filter) override;
+
 private:
     struct CompiledGeometry {
         std::unique_ptr<Buffer> vertexBuffer;
@@ -91,6 +116,7 @@ private:
         VmaAllocation allocation = VK_NULL_HANDLE;
         VkImageView view = VK_NULL_HANDLE;
         VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+        bool linear = false; // saved from a layer: drawn with rml_layer.frag
     };
 
     CompiledTexture createTextureFromPixels(const uint8_t* pixels, uint32_t width, uint32_t height);
@@ -131,6 +157,66 @@ private:
     uint32_t m_stencilRef = 0;
     void applyStencilState(); // re-sets dynamic stencil state after a pipeline bind
 
+    // The clip-mask operations since the last Set/SetInverse: a new pass
+    // clears the stencil, so beginPass() draws them again.
+    struct ClipMaskOp {
+        Rml::ClipMaskOperation operation;
+        const CompiledGeometry* geometry; // kept alive by m_pendingDeletions past this frame
+        glm::vec2 translation;
+        glm::mat4 transform;
+    };
+    std::vector<ClipMaskOp> m_clipOps;
+    void drawClipMask(const ClipMaskOp& op);
+
+    // --- Layers (engine/src/RmlVulkanLayers.cpp) ---
+    // A full-frame colour image in the swapchain's format, so every RmlUi
+    // pipeline draws into it, with its framebuffer (sharing m_layerDepth)
+    // and a descriptor set to sample it.
+    struct LayerTarget {
+        VkImage image = VK_NULL_HANDLE;
+        VmaAllocation allocation = VK_NULL_HANDLE;
+        VkImageView view = VK_NULL_HANDLE;
+        VkFramebuffer framebuffer = VK_NULL_HANDLE;
+        VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+        VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    };
+    void createLayerResources();
+    void destroyLayerResources();
+    std::unique_ptr<LayerTarget> createLayerTarget();
+    void destroyLayerTarget(LayerTarget& target);
+    LayerTarget* layerTarget(Rml::LayerHandle handle); // nullptr = the frame's own image
+    Rml::LayerHandle topLayer() const;
+    void transition(LayerTarget& target, VkImageLayout layout);
+    void endPass();
+    void beginPass(LayerTarget* target); // nullptr = the frame's own image
+    void copyToPostprocess(Rml::LayerHandle source);
+    void drawFullscreen(LayerTarget* destination, LayerTarget& source, const Pipeline& pipeline, const RmlFilterPush& push,
+                        VkDescriptorSet mask);
+    void blur(float sigma, std::unique_ptr<LayerTarget>& image, std::unique_ptr<LayerTarget>& temp, const RmlFilterPush& region);
+    void applyFilters(Rml::Span<const Rml::CompiledFilterHandle> filters);
+    VkRect2D clampedScissor() const;
+
+    OverlayTarget m_base;
+    VkImageLayout m_baseLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    LayerTarget* m_current = nullptr; // the open pass's target; nullptr = the frame's own image
+    bool m_passOpen = false;
+    bool m_readableRequest = false, m_readableAsked = false;
+    VkRenderPass m_layerPass = VK_NULL_HANDLE;
+    VkExtent2D m_layerExtent{};
+    VkFormat m_layerFormat = VK_FORMAT_UNDEFINED, m_layerDepthFormat = VK_FORMAT_UNDEFINED;
+    VkImage m_layerDepth = VK_NULL_HANDLE;
+    VmaAllocation m_layerDepthAllocation = VK_NULL_HANDLE;
+    VkImageView m_layerDepthView = VK_NULL_HANDLE;
+    std::vector<std::unique_ptr<LayerTarget>> m_layers; // handle n is m_layers[n - 1], reused by depth
+    std::vector<Rml::LayerHandle> m_layerStack;         // pushed this frame; empty = the frame's own image
+    std::array<std::unique_ptr<LayerTarget>, 3> m_post;  // filter ping-pong; [0] holds the result
+    std::unique_ptr<LayerTarget> m_mask;                 // the last SaveLayerAsMaskImage
+    std::unordered_map<uintptr_t, RmlFilter> m_filters;
+    uintptr_t m_nextFilterHandle = 1;
+    std::unique_ptr<Pipeline> m_layerTexturePipeline;               // RenderGeometry with a saved layer texture
+    std::unique_ptr<Pipeline> m_compositeBlend, m_compositeReplace; // onto a layer, under the clip mask
+    std::unique_ptr<Pipeline> m_filterReplace, m_filterBlend;       // between postprocess images
+
     struct PendingDeletion {
         uint64_t queuedAtFrame;
         std::unique_ptr<CompiledGeometry> geometry; // exactly one of these two is set
@@ -165,6 +251,7 @@ private:
     glm::mat4 m_projection{1.0f};
     glm::mat4 m_transform{1.0f};
     bool m_scissorEnabled = false;
+    VkRect2D m_scissor{}; // frame pixels; the whole frame while scissoring is off
 };
 
 } // namespace kke
