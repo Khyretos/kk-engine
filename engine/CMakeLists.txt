@@ -121,6 +121,7 @@ set(ENGINE_SOURCES
     src/JigglePhysics.cpp
     src/AutoRig.cpp
     src/SphereImpostors.cpp
+    src/ParticleSim.cpp
     src/ParticleEffects.cpp
     src/ParticleLibrary.cpp
     src/HairStrands.cpp

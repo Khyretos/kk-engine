@@ -32,7 +32,8 @@ namespace kke {
 //   m_fx->draw(ctx);                                                     // renderTranslucent()
 class ParticleLibrary {
 public:
-    explicit ParticleLibrary(ParticleEffects& fx, uint32_t seed = 0x2545f491u);
+    explicit ParticleLibrary(ParticleSim& sim, uint32_t seed = 0x2545f491u);
+    explicit ParticleLibrary(ParticleEffects& fx, uint32_t seed = 0x2545f491u) : ParticleLibrary(fx.sim(), seed) {}
 
     // Where an effect plays.
     struct Spot {
@@ -71,10 +72,13 @@ public:
     void stopAll();
     size_t running() const { return m_emitters.size(); }
 
-    // Emits for everything running, then moves every particle (fx.update).
+    // Emits for everything running, moves every particle (sim.update), then
+    // plays each dying particle's onDeath effect where it died (at most
+    // kMaxDeathsPerUpdate a frame, so a chain of them can't run away).
     void update(float dt, const glm::vec3& wind = glm::vec3(0.0f));
+    static constexpr int kMaxDeathsPerUpdate = 64;
 
-    ParticleEffects& effects() { return m_fx; }
+    ParticleSim& sim() { return m_sim; }
 
     struct Range {
         float min = 0.0f, max = 0.0f;
@@ -107,6 +111,20 @@ public:
         float thickness = 0.15f;
         ParticleEffects::Shape shape = ParticleEffects::Shape::Square;
         bool flat = false;
+        // ENG-G18: curves over life (keys evenly spaced from birth to death;
+        // size and opacity multiply, colour replaces), a swirl round the
+        // spot (m/s) and a pull to it (m/s^2, negative pushes), bouncing off
+        // the world (when the game set a collider), and an effect to play
+        // where each particle dies.
+        std::vector<float> sizeOverLife;
+        std::vector<glm::vec3> colorOverLife;
+        std::vector<float> opacityOverLife;
+        float vortex = 0.0f;
+        float attract = 0.0f;
+        bool collide = false;
+        std::string onDeath;
+        uint16_t curve = 0; // set by add(): the sim's OverLife for the curves above
+        uint16_t death = 0; // set by add(): onDeath's index in m_deathNames + 1
     };
     struct Effect {
         std::string description;
@@ -129,8 +147,9 @@ private:
     float random01();
     float pick(const Range& r) { return r.min + (r.max - r.min) * random01(); }
 
-    ParticleEffects& m_fx;
+    ParticleSim& m_sim;
     std::map<std::string, Effect> m_effects;
+    std::vector<std::string> m_deathNames; // the onDeath effects layers name
     std::vector<Emitter> m_emitters;
     EmitterId m_nextId = 1;
     uint32_t m_rng;
