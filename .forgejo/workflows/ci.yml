@@ -148,7 +148,7 @@ jobs:
               echo "== $demo: ok"
             fi
           done
-          # The phone path: portrait, 70% render scale blitted up, MSAA.
+          # The phone path: portrait, 70% render scale scaled up by the tone-map pass, MSAA.
           for demo in kke_demo climb_race racing; do
             set +e
             DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_TARGET=android KKE_WINDOW=405x720 KKE_ORIENTATION=portrait timeout 8 "./$demo" > "run_${demo}_phone.log" 2>&1
