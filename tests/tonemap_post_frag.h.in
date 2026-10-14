@@ -1,0 +1,4 @@
+// Generated from shaders/tonemap_post.frag by tests/CMakeLists.txt.
+#pragma once
+
+inline constexpr char kTonemapPostFrag[] = R"kke_glsl(@KKE_TONEMAP_POST_FRAG@)kke_glsl";
