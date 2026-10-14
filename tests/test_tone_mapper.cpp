@@ -6,7 +6,7 @@
 
 #include <string>
 
-// The enum's values are what the shaders read (LightingUBO.toneParams.x),
+// The enum's values are what the tone-map pass reads (PostParams.tone.x),
 // so they must match the branches in shaders/tonemap.glsl.
 TEST(ToneMapper, DefaultsToAgXAtUnitExposure) {
     const kke::Lighting lighting;
@@ -29,6 +29,7 @@ TEST(ToneMapper, ParsesNamesAnyCase) {
     EXPECT_EQ(kke::parseToneMapper("agx"), kke::ToneMapper::AgX);
     EXPECT_EQ(kke::parseToneMapper("ACES"), kke::ToneMapper::ACES);
     EXPECT_EQ(kke::parseToneMapper("Reinhard"), kke::ToneMapper::Reinhard);
+    EXPECT_EQ(kke::parseToneMapper("NONE"), kke::ToneMapper::None);
     EXPECT_FALSE(kke::parseToneMapper("filmic").has_value());
     EXPECT_FALSE(kke::parseToneMapper("").has_value());
 }
