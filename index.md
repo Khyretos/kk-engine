@@ -2,3 +2,4 @@
 - runs/2026-10-14T0756Z-3b000998cf: claude/tone-mapping, test job success
 - runs/2026-10-14T0847Z-7ec62c7244: claude/ten-bit, test job success
 - runs/2026-10-14T1002Z-6b8a8fb65b: claude/fx-lua, test job success
+- runs/2026-10-14T1114Z-bb6d6daf51: claude/particle-v2, test job success
