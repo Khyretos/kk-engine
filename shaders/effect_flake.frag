@@ -41,6 +41,6 @@ void main() {
     float lambert = 0.35 + 0.65 * abs(dot(toCam, sunDirection())) * face;
     float glint = pow(max(0.0, 1.0 - abs(face - 0.5) * 2.0), 8.0) * 0.6;
     vec3 lit = albedo * (ambientIrradiance(toCam) + sun * (lambert + glint) * shadow / PI);
-    lit = displayColor(applyFog(lit, fragWorld));
+    lit = applyFog(lit, fragWorld);
     outColor = vec4(lit * alpha, alpha);
 }

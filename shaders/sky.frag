@@ -2,8 +2,9 @@
 #extension GL_GOOGLE_include_directive : require
 // The sky behind the scene (kke::SkyRenderer): a gradient with a sun
 // disc and halo, or an equirectangular HDR image. Drawn at the far plane
-// before anything else, then fogged and tone mapped like every lit
-// surface so the horizon meets the ground's haze in the same colour.
+// before anything else, then fogged like every lit surface (and tone
+// mapped with them afterwards) so the horizon meets the ground's haze in
+// the same colour.
 layout(location = 0) in vec2 ndc;
 layout(location = 0) out vec4 outColor;
 layout(push_constant) uniform Sky { mat4 invViewProj; } pc;
@@ -39,5 +40,5 @@ void main() {
         c += lighting.sunGlow.rgb * phaseHG(cosSun, 0.76) * smoothstep(-0.1, 0.05, dir.y); // the halo, gone below the horizon
     }
     c = mix(c, fogInscatter(dir), fogAmount(lighting.cameraPos.xyz, dir, -1.0));
-    outColor = vec4(displayColor(c), 1.0);
+    outColor = vec4(c, 1.0);
 }

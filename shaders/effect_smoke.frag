@@ -41,6 +41,6 @@ void main() {
     // Haze scatters: light wraps round it (half-Lambert), a little always gets through.
     float wrap = dot(N, sunDirection()) * 0.5 + 0.5;
     vec3 lit = albedo * (ambientIrradiance(N) + sun * (0.25 + 0.75 * wrap * wrap) * shadow / PI);
-    lit = displayColor(applyFog(lit, fragWorld));
+    lit = applyFog(lit, fragWorld);
     outColor = vec4(lit * alpha, alpha);
 }

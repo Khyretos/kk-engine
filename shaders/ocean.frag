@@ -46,6 +46,5 @@ void main() {
         float dist = length(lighting.cameraPos.xyz - fragPos);
         color = mix(color, skyColor(vec3(0.0, 0.02, 0.0)), smoothstep(40.0, 140.0, dist));
     }
-    color = displayColor(color); // same curve and look as the lit meshes
     outColor = vec4(color, 1.0);
 }

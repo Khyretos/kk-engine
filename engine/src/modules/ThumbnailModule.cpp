@@ -23,13 +23,11 @@ namespace kke {
 
 namespace {
 constexpr VkDeviceSize kTileBytes = VkDeviceSize(ThumbnailModule::kTile) * ThumbnailModule::kTile * 4;
+// A tile as drawn: the scene's HDR format, four half floats per pixel.
+constexpr VkDeviceSize kHdrTileBytes = kTileBytes * 2;
 // A cached picture nobody has looked at for this many frames isn't worth
 // a tile any more (it's still on disk).
 constexpr uint64_t kStaleFrames = 120;
-
-void swapRedBlue(uint8_t* px, size_t pixels) {
-    for (size_t i = 0; i < pixels; ++i) std::swap(px[4 * i], px[4 * i + 2]);
-}
 } // namespace
 
 ThumbnailModule::ThumbnailModule() : ThumbnailModule(Settings{}) {}
@@ -70,22 +68,12 @@ void ThumbnailModule::createGpu() {
     Renderer& r = m_app->renderer();
     VulkanDevice& device = m_app->device();
     VkDevice dev = device.device();
-    m_colorFormat = r.colorFormat();
+    m_colorFormat = r.colorFormat(); // HDR scene light; tone mapped on the CPU after the readback
     m_depthFormat = r.depthFormat();
-    switch (m_colorFormat) {
-        case VK_FORMAT_R8G8B8A8_SRGB:
-        case VK_FORMAT_R8G8B8A8_UNORM: m_bgra = false; break;
-        case VK_FORMAT_B8G8R8A8_SRGB:
-        case VK_FORMAT_B8G8R8A8_UNORM: m_bgra = true; break;
-        default:
-            m_unavailable = "the window's colour format isn't 8-bit RGBA/BGRA, so thumbnails can't be copied to and from disk";
-            log::get(name())->warn("Thumbnails off: {} (format {})", m_unavailable, int(m_colorFormat));
-            return;
-    }
 
     // Laid out exactly like the scene pass (formats, MSAA, resolve,
     // subpass dependency), so ModelModule's lit pipeline draws in it; the
-    // single-sample colour ends ready to be copied. Thumbnails get the
+    // single-sample colour ends ready to be read back. Thumbnails get the
     // same anti-aliasing as the game.
     // Left as an attachment; the barrier after the pass moves it to
     // TRANSFER_SRC with the pass's writes visible to the copy.
@@ -122,7 +110,8 @@ void ThumbnailModule::createGpu() {
               VK_IMAGE_ASPECT_DEPTH_BIT | (r.hasStencil() ? VK_IMAGE_ASPECT_STENCIL_BIT : 0), m_samples);
     if (m_samples > 1)
         makeImage(m_scratchMsaa, kTile, m_colorFormat, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_IMAGE_ASPECT_COLOR_BIT, m_samples);
-    makeImage(m_atlas, kAtlas, m_colorFormat, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    // Finished sRGB pictures, the same bytes as the cache PNGs.
+    makeImage(m_atlas, kAtlas, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
 
     // With MSAA, attachment 2 is the resolve target (see createSceneCompatiblePass).
     std::vector<VkImageView> views = m_samples > 1 ? std::vector<VkImageView>{ m_scratchMsaa.view, m_scratchDepth.view, m_scratchColor.view }
@@ -168,7 +157,7 @@ void ThumbnailModule::createGpu() {
     m_lighting->update(light, thumbnailCameraPosition(), glm::mat4(1.0f), thumbnailProj() * thumbnailView());
 
     for (uint32_t f = 0; f < kFrames; ++f) {
-        m_readback[f] = std::make_unique<Buffer>(device, kTileBytes * VkDeviceSize(settings.rendersPerFrame), VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        m_readback[f] = std::make_unique<Buffer>(device, kHdrTileBytes * VkDeviceSize(settings.rendersPerFrame), VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                                                  VMA_MEMORY_USAGE_GPU_TO_CPU);
         m_upload[f] = std::make_unique<Buffer>(device, kTileBytes * VkDeviceSize(settings.uploadsPerFrame), VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                                VMA_MEMORY_USAGE_CPU_TO_GPU);
@@ -339,19 +328,24 @@ void ThumbnailModule::prepass(const PrepassContext& ctx) {
     const uint32_t f = ctx.frameIndex % kFrames;
     VulkanDevice& device = m_app->device();
 
-    // 1. This frame slot's last readbacks are done (its fence was waited
-    //    on): hand them to the worker to save.
+    // 1. This frame slot's last renders are read back (its fence was
+    //    waited on): tone mapped here, then into the atlas below like a
+    //    cached picture, and to the worker to save.
     if (!m_pendingReadback[f].empty()) {
-        std::vector<uint8_t> all(size_t(kTileBytes) * m_pendingReadback[f].size());
-        m_readback[f]->download(all.data(), all.size());
+        std::vector<uint16_t> all(size_t(kHdrTileBytes / 2) * m_pendingReadback[f].size());
+        m_readback[f]->download(all.data(), all.size() * 2);
+        const PostParams post; // AgX at exposure 1, no look: the cache is shared by every game
         {
             std::lock_guard<std::mutex> lock(m_mutex);
             for (const Readback& rb : m_pendingReadback[f]) {
-                if (rb.cacheFile.empty()) continue;
-                WriteJob job{ rb.cacheFile, std::vector<uint8_t>(all.begin() + ptrdiff_t(kTileBytes * rb.index),
-                                                                 all.begin() + ptrdiff_t(kTileBytes * (rb.index + 1))) };
-                if (m_bgra) swapRedBlue(job.rgba.data(), size_t(kTile) * kTile);
-                m_writes.push_back(std::move(job));
+                Loaded l;
+                l.path = rb.path;
+                l.cacheFile = rb.cacheFile;
+                l.rendered = true;
+                l.rgba.resize(size_t(kTileBytes));
+                thumbnailToDisplay(all.data() + size_t(kHdrTileBytes / 2) * rb.index, size_t(kTile) * kTile, post, l.rgba.data());
+                if (!rb.cacheFile.empty()) m_writes.push_back(WriteJob{ rb.cacheFile, l.rgba });
+                m_done.push_front(std::move(l));
             }
         }
         m_wake.notify_one();
@@ -431,7 +425,6 @@ void ThumbnailModule::prepass(const PrepassContext& ctx) {
         const uint32_t index = uint32_t(copies.size());
         staging.resize(size_t(kTileBytes) * (index + 1));
         std::memcpy(staging.data() + size_t(kTileBytes) * index, l.rgba.data(), size_t(kTileBytes));
-        if (m_bgra) swapRedBlue(staging.data() + size_t(kTileBytes) * index, size_t(kTile) * kTile);
         const ThumbnailTileRect r = thumbnailTileRect(slot, kAtlas, kTile);
         VkBufferImageCopy c{};
         c.bufferOffset = kTileBytes * index;
@@ -440,6 +433,7 @@ void ThumbnailModule::prepass(const PrepassContext& ctx) {
         c.imageExtent = { uint32_t(kTile), uint32_t(kTile), 1 };
         copies.push_back(c);
         e.state = State::Ready;
+        if (l.rendered) continue; // counted when it was drawn
         std::lock_guard<std::mutex> lock(m_mutex);
         ++m_fromDisk;
     }
@@ -449,8 +443,9 @@ void ThumbnailModule::prepass(const PrepassContext& ctx) {
         vkCmdCopyBufferToImage(cmd, m_upload[f]->handle(), m_atlas.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, uint32_t(copies.size()), copies.data());
     }
 
-    // 4. Models: render each into the scratch target, copy it to its tile
-    //    and to the readback buffer (saved to disk two frames from now).
+    // 4. Models: render each into the scratch target and copy it to the
+    //    readback buffer (tone mapped, put in its tile and saved two frames
+    //    from now, step 1).
     const Application& app = *m_app;
     for (Loaded& l : renders) {
         if (!l.error.empty() || !l.model) {
@@ -463,8 +458,6 @@ void ThumbnailModule::prepass(const PrepassContext& ctx) {
             e.error = "the file has no mesh (an animation?)";
             continue;
         }
-        const int slot = tileFor(l.path);
-        if (slot < 0) { requeue(std::move(l)); continue; }
         const glm::mat4 framing = thumbnailFraming(l.model->boundsMin, l.model->boundsMax);
         const ModelModule::ModelId id = m_models->add(std::move(*l.model), "thumbnail:" + l.path, true);
         if (!id) {
@@ -474,11 +467,13 @@ void ThumbnailModule::prepass(const PrepassContext& ctx) {
         }
 
         // The scratch target was last copied from (this frame or the one
-        // before): finish that before drawing over it.
-        VkMemoryBarrier mb{ VK_STRUCTURE_TYPE_MEMORY_BARRIER, nullptr, VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+        // before), and with MSAA its multisampled colour was last drawn:
+        // finish both before drawing over it.
+        VkMemoryBarrier mb{ VK_STRUCTURE_TYPE_MEMORY_BARRIER, nullptr,
+                            VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                             VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
                                 VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT };
-        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT, 0, 1, &mb, 0, nullptr, 0, nullptr);
         std::array<VkClearValue, 3> clears{}; // [2]: MSAA resolve target, not cleared
         clears[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
@@ -511,17 +506,9 @@ void ThumbnailModule::prepass(const PrepassContext& ctx) {
         toCopy.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
         vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1,
                              &toCopy);
-        atlasToTransfer();
-        const ThumbnailTileRect r = thumbnailTileRect(slot, kAtlas, kTile);
-        VkImageCopy ic{};
-        ic.srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
-        ic.dstSubresource = ic.srcSubresource;
-        ic.dstOffset = { r.x, r.y, 0 };
-        ic.extent = { uint32_t(kTile), uint32_t(kTile), 1 };
-        vkCmdCopyImage(cmd, m_scratchColor.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, m_atlas.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &ic);
         const uint32_t index = uint32_t(m_pendingReadback[f].size());
         VkBufferImageCopy bc{};
-        bc.bufferOffset = kTileBytes * index;
+        bc.bufferOffset = kHdrTileBytes * index;
         bc.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
         bc.imageExtent = { uint32_t(kTile), uint32_t(kTile), 1 };
         vkCmdCopyImageToBuffer(cmd, m_scratchColor.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, m_readback[f]->handle(), 1, &bc);
@@ -530,7 +517,6 @@ void ThumbnailModule::prepass(const PrepassContext& ctx) {
             ++m_rendered;
         }
         m_pendingReadback[f].push_back({ l.path, l.cacheFile, index });
-        m_entries[l.path].state = State::Ready;
     }
     if (!m_pendingReadback[f].empty()) {
         VkMemoryBarrier toHost{ VK_STRUCTURE_TYPE_MEMORY_BARRIER, nullptr, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_HOST_READ_BIT };
@@ -557,14 +543,13 @@ void ThumbnailModule::shutdown() {
         vkDeviceWaitIdle(m_app->device().device());
         for (uint32_t f = 0; f < kFrames; ++f) {
             if (m_pendingReadback[f].empty()) continue;
-            std::vector<uint8_t> all(size_t(kTileBytes) * m_pendingReadback[f].size());
-            m_readback[f]->download(all.data(), all.size());
+            std::vector<uint16_t> all(size_t(kHdrTileBytes / 2) * m_pendingReadback[f].size());
+            m_readback[f]->download(all.data(), all.size() * 2);
             std::lock_guard<std::mutex> lock(m_mutex);
             for (const Readback& rb : m_pendingReadback[f]) {
                 if (rb.cacheFile.empty()) continue;
-                WriteJob job{ rb.cacheFile, std::vector<uint8_t>(all.begin() + ptrdiff_t(kTileBytes * rb.index),
-                                                                 all.begin() + ptrdiff_t(kTileBytes * (rb.index + 1))) };
-                if (m_bgra) swapRedBlue(job.rgba.data(), size_t(kTile) * kTile);
+                WriteJob job{ rb.cacheFile, std::vector<uint8_t>(size_t(kTileBytes)) };
+                thumbnailToDisplay(all.data() + size_t(kHdrTileBytes / 2) * rb.index, size_t(kTile) * kTile, PostParams{}, job.rgba.data());
                 m_writes.push_back(std::move(job));
             }
             m_pendingReadback[f].clear();

@@ -53,6 +53,5 @@ void main() {
     vec3 color = albedo * (lighting.ambient.rgb + sun * ndl * 0.8) + sun * spec * 0.6;
     color = mix(color, sky, fresnel * 0.5);
     color = applyFog(color, Pw);
-    color = displayColor(color);
     outColor = vec4(color + glowColor(c.a), 1.0);
 }

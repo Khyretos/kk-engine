@@ -75,4 +75,11 @@ struct ThumbnailTileRect {
 };
 ThumbnailTileRect thumbnailTileRect(int slot, int atlasSize, int tile);
 
+struct PostParams;
+// A thumbnail drawn in the scene's HDR format (RGBA16F, read back as half
+// floats) -> the sRGB-encoded RGBA8 the atlas and the cache PNGs hold:
+// the CPU tone map (ENG-G17). ThumbnailModule passes the default curve
+// (AgX, exposure 1, no look), as thumbnails are cached for every game.
+void thumbnailToDisplay(const uint16_t* rgbaHalf, size_t pixels, const PostParams& post, uint8_t* rgbaOut);
+
 } // namespace kke

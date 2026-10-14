@@ -69,6 +69,7 @@ vec3 toneMap(vec3 c, vec4 toneParams) {
     int op = int(toneParams.x + 0.5);
     if (op == 1) return toneMapAces(c);
     if (op == 2) return c / (c + vec3(1.0));
+    if (op == 3) return clamp(c, 0.0, 1.0);
     return toneMapAgX(c);
 }
 

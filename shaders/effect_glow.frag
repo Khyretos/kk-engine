@@ -16,5 +16,5 @@ void main() {
     if (r >= 1.0) discard;
     float soft = 1.0 - r;
     float k = soft * soft * (0.6 + 0.4 * soft) * clamp(fragParams.y, 0.0, 1.0);
-    outColor = vec4(displayColor(fragColor * k), 1.0);
+    outColor = vec4(fragColor * k, 1.0);
 }

@@ -14,5 +14,5 @@ void main() {
     float across = 1.0 - smoothstep(0.0, 1.0, abs(fragUV.x));
     float along = 0.35 + 0.65 * (fragUV.y * 0.5 + 0.5);
     float k = across * across * along * clamp(fragParams.y, 0.0, 1.0);
-    outColor = vec4(displayColor(fragColor * k), 1.0);
+    outColor = vec4(fragColor * k, 1.0);
 }

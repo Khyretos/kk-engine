@@ -39,11 +39,9 @@ public:
     VkExtent2D extent() const { return m_extent; }
     VkRenderPass renderPass() const { return m_renderPass; }
     // Compatible with renderPass(), but loads the colour instead of
-    // clearing it (starts in TRANSFER_DST layout, after a blit).
+    // clearing it (starts in COLOR_ATTACHMENT_OPTIMAL): resuming the frame.
     VkRenderPass overlayPass() const { return m_overlayPass; }
     VkImage image(uint32_t index) const { return m_images[index]; }
-    // Swapchain images accept linear blits (render scale works).
-    bool canBlitTo() const { return m_canBlitTo; }
     // True when the screen is turned (a phone in landscape) and the system
     // compositor rotates each frame for us. Presenting then reports
     // VK_SUBOPTIMAL_KHR every frame, which is expected, not a reason to
@@ -72,7 +70,6 @@ private:
     std::vector<VkFramebuffer> m_framebuffers;
     VkRenderPass m_renderPass = VK_NULL_HANDLE;
     VkRenderPass m_overlayPass = VK_NULL_HANDLE;
-    bool m_canBlitTo = false;
     bool m_wantReadable = false, m_readable = false;
     bool m_compositorRotates = false;
     VkSurfaceTransformFlagBitsKHR m_surfaceTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;

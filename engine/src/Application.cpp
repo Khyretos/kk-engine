@@ -38,6 +38,7 @@ std::optional<ToneMapper> parseToneMapper(const std::string& name) {
     if (lower == "agx") return ToneMapper::AgX;
     if (lower == "aces") return ToneMapper::ACES;
     if (lower == "reinhard") return ToneMapper::Reinhard;
+    if (lower == "none") return ToneMapper::None;
     return std::nullopt;
 }
 
@@ -136,7 +137,7 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
     }
     if (const char* env = dev::env("KKE_TONEMAP"); env && *env) {
         m_toneMapperOverride = parseToneMapper(env);
-        if (!m_toneMapperOverride) log::get("Application")->warn("KKE_TONEMAP={} is not agx, aces or reinhard; ignored", env);
+        if (!m_toneMapperOverride) log::get("Application")->warn("KKE_TONEMAP={} is not agx, aces, reinhard or none; ignored", env);
     }
     m_lightingBuffer = std::make_unique<LightingBuffer>(m_renderer->device());
     m_mood = std::make_unique<Mood>();
@@ -517,6 +518,8 @@ void Application::playIntro() {
     float freezeAt = -1.0f;
     if (const char* at = dev::env("KKE_INTRO_AT"); at && *at) freezeAt = static_cast<float>(std::atof(at));
 
+    // The intro's colours are final display colours: shown as they are.
+    m_renderer->setPostParams(makePostParams(ToneMapper::None, 1.0f, ColorGrade{}));
     auto last = std::chrono::high_resolution_clock::now();
     bool playing = true, skipped = false;
     while (playing) {
@@ -961,6 +964,7 @@ void Application::run() {
         // every lit module shares one buffer and descriptor set per view
         // and frame in flight (see LightingBuffer.h).
         if (m_toneMapperOverride) m_lighting.toneMapper = *m_toneMapperOverride;
+        m_renderer->setPostParams(makePostParams(m_lighting.toneMapper, m_lighting.exposure, m_lighting.grade));
         const SkyEnvironment* skyEnv = nullptr;
         if (m_lighting.sky.kind != Sky::Kind::None && !m_skyRenderer) m_skyRenderer = std::make_unique<SkyRenderer>(*this);
         if (m_skyRenderer) skyEnv = &m_skyRenderer->prepare(m_lighting.sky, m_lighting.fog, m_lighting.ambientColor);

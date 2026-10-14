@@ -61,5 +61,5 @@ void main() {
     }
     vec3 ambient = ambientIrradiance(N) * albedo;
     vec3 color = applyFog((ambient + Lo) * occlusion, fragPosWorld);
-    outColor = vec4(displayColor(color), 1.0);
+    outColor = vec4(color, 1.0);
 }
