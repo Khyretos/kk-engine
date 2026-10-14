@@ -21,14 +21,13 @@ Pipeline& ParticleEffects::pipeline(Kind kind) {
     config.cullMode = VK_CULL_MODE_NONE;
     config.depthWriteEnable = false; // see-through: tested against the scene, never hides what's behind
     config.blendEnable = true;
-    config.customVertexBindings = { { 0, sizeof(GpuVertex), VK_VERTEX_INPUT_RATE_VERTEX } };
+    config.customVertexBindings = { { 0, sizeof(GpuInstance), VK_VERTEX_INPUT_RATE_INSTANCE } };
     config.customVertexAttributes = {
-        { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, static_cast<uint32_t>(offsetof(GpuVertex, center)) },
-        { 1, 0, VK_FORMAT_R32G32B32_SFLOAT, static_cast<uint32_t>(offsetof(GpuVertex, color)) },
-        { 2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, static_cast<uint32_t>(offsetof(GpuVertex, params)) },
-        { 3, 0, VK_FORMAT_R32G32B32_SFLOAT, static_cast<uint32_t>(offsetof(GpuVertex, velocity)) },
-        { 4, 0, VK_FORMAT_R32G32_SFLOAT, static_cast<uint32_t>(offsetof(GpuVertex, corner)) },
-        { 5, 0, VK_FORMAT_R32G32_SFLOAT, static_cast<uint32_t>(offsetof(GpuVertex, extra)) },
+        { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, static_cast<uint32_t>(offsetof(GpuInstance, center)) },
+        { 1, 0, VK_FORMAT_R32G32B32_SFLOAT, static_cast<uint32_t>(offsetof(GpuInstance, color)) },
+        { 2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, static_cast<uint32_t>(offsetof(GpuInstance, params)) },
+        { 3, 0, VK_FORMAT_R32G32B32_SFLOAT, static_cast<uint32_t>(offsetof(GpuInstance, velocity)) },
+        { 5, 0, VK_FORMAT_R32G32_SFLOAT, static_cast<uint32_t>(offsetof(GpuInstance, extra)) },
     };
     config.descriptorSetLayouts = { m_app.lightingBuffer().descriptorSetLayout(), m_app.shadowMapSetLayout() };
     const bool light = kind == Kind::Spark || kind == Kind::Glow || kind == Kind::Ring;
@@ -51,7 +50,7 @@ Pipeline& ParticleEffects::pipeline(Kind kind) {
 // renderer().retire(); at shutdown the device is idle first.
 ParticleEffects::~ParticleEffects() = default;
 
-void ParticleEffects::build(std::vector<GpuVertex>& out, Kind kind, const glm::vec3& eye) const {
+void ParticleEffects::build(std::vector<GpuInstance>& out, Kind kind, const glm::vec3& eye) const {
     out.clear();
     m_order.clear();
     const std::vector<Particle>& particles = m_sim.particles();
@@ -64,8 +63,7 @@ void ParticleEffects::build(std::vector<GpuVertex>& out, Kind kind, const glm::v
             return glm::dot(da, da) > glm::dot(db, db);
         });
     }
-    static const glm::vec2 corners[6] = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, -1 }, { 1, 1 }, { -1, 1 } };
-    out.reserve(m_order.size() * 6);
+    out.reserve(m_order.size());
     for (uint32_t i : m_order) {
         const Particle& p = particles[i];
         const float t = std::clamp(p.age / p.life, 0.0f, 1.0f);
@@ -96,22 +94,22 @@ void ParticleEffects::build(std::vector<GpuVertex>& out, Kind kind, const glm::v
         }
         const glm::vec4 params(radius, p.opacity * fade, p.angle, p.seed);
         const glm::vec3 streak = kind == Kind::Spark ? p.velocity * p.stretch + glm::vec3(0.0f, 1e-3f, 0.0f) : glm::vec3(0.0f);
-        for (const glm::vec2& c : corners) out.push_back(GpuVertex{ p.position, color, params, streak, c, extra });
+        out.push_back(GpuInstance{ p.position, color, params, streak, extra });
     }
 }
 
-void ParticleEffects::drawBatch(const RenderContext& ctx, Kind kind, const std::vector<GpuVertex>& vertices, int slotIndex) {
-    if (vertices.empty()) return;
+void ParticleEffects::drawBatch(const RenderContext& ctx, Kind kind, const std::vector<GpuInstance>& instances, int slotIndex) {
+    if (instances.empty()) return;
     std::vector<Slot>& slots = m_slots[ctx.frameIndex];
     if (slots.size() <= static_cast<size_t>(slotIndex)) slots.resize(static_cast<size_t>(slotIndex) + 1);
     Slot& slot = slots[static_cast<size_t>(slotIndex)];
-    if (slot.capacity < vertices.size()) {
+    if (slot.capacity < instances.size()) {
         if (slot.buffer) m_app.renderer().retire(std::move(slot.buffer));
-        slot.capacity = std::max<size_t>(vertices.size() * 3 / 2, 6 * 256);
-        slot.buffer = std::make_unique<Buffer>(m_app.device(), slot.capacity * sizeof(GpuVertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        slot.capacity = std::max<size_t>(instances.size() * 3 / 2, 256);
+        slot.buffer = std::make_unique<Buffer>(m_app.device(), slot.capacity * sizeof(GpuInstance), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                                                VMA_MEMORY_USAGE_CPU_TO_GPU);
     }
-    slot.buffer->upload(vertices.data(), vertices.size() * sizeof(GpuVertex));
+    slot.buffer->upload(instances.data(), instances.size() * sizeof(GpuInstance));
     Pipeline& pipe = pipeline(kind);
     pipe.bind(ctx.cmd);
     VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet };
@@ -119,7 +117,7 @@ void ParticleEffects::drawBatch(const RenderContext& ctx, Kind kind, const std::
     VkBuffer vb = slot.buffer->handle();
     VkDeviceSize off = 0;
     vkCmdBindVertexBuffers(ctx.cmd, 0, 1, &vb, &off);
-    vkCmdDraw(ctx.cmd, static_cast<uint32_t>(vertices.size()), 1, 0, 0);
+    vkCmdDraw(ctx.cmd, 6, static_cast<uint32_t>(instances.size()), 0, 0); // six corners, one instance per particle
 }
 
 void ParticleEffects::draw(const RenderContext& ctx) {

@@ -67,16 +67,17 @@ public:
     void draw(const RenderContext& ctx);
 
 private:
-    struct GpuVertex {
+    // One per particle, read per instance: effect.vert makes the quad's six
+    // corners itself (ENG-G18: a seventh of the bytes the old six vertices took).
+    struct GpuInstance {
         glm::vec3 center;
         glm::vec3 color;
         glm::vec4 params;   // radius, opacity, angle, seed
         glm::vec3 velocity; // sparks: the streak
-        glm::vec2 corner;
         glm::vec2 extra;    // flake: (squash 0..1, shape); ring: (-1 flat / -2 facing, thickness)
     };
-    void build(std::vector<GpuVertex>& out, Kind kind, const glm::vec3& eye) const;
-    void drawBatch(const RenderContext& ctx, Kind kind, const std::vector<GpuVertex>& vertices, int slot);
+    void build(std::vector<GpuInstance>& out, Kind kind, const glm::vec3& eye) const;
+    void drawBatch(const RenderContext& ctx, Kind kind, const std::vector<GpuInstance>& instances, int slot);
     Pipeline& pipeline(Kind kind);
 
     Application& m_app;
@@ -85,7 +86,7 @@ private:
     // [frame in flight][view * kKindCount + kind]: each view sorts its own smoke back to front.
     struct Slot { std::unique_ptr<Buffer> buffer; size_t capacity = 0; };
     std::vector<Slot> m_slots[Renderer::kMaxFramesInFlight];
-    std::vector<GpuVertex> m_scratch;
+    std::vector<GpuInstance> m_scratch;
     mutable std::vector<uint32_t> m_order;
 };
 
