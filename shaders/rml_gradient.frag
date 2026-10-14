@@ -11,6 +11,10 @@ layout(location = 0) in vec4 inColor;
 layout(location = 1) in vec2 inTexCoord; // RmlUi puts the gradient-space position here
 layout(location = 0) out vec4 outColor;
 
+// kke::RmlVulkanRenderInterface sets it when the swapchain is UNORM (10-bit,
+// ENG-G17): colour stays sRGB-encoded and blends that way, as in a browser.
+layout(constant_id = 0) const bool kTargetEncoded = false;
+
 layout(set = 0, binding = 0) uniform sampler2D uRamp;
 
 layout(push_constant) uniform PushConstants {
@@ -49,5 +53,5 @@ void main() {
     vec4 c = texture(uRamp, vec2((u * 255.0 + 0.5) / 256.0, 0.5)) * inColor;
     // Premultiplied in/out, linearized for the sRGB swapchain — same as rml_ui.frag.
     vec3 straight = c.a > 0.0 ? c.rgb / c.a : vec3(0.0);
-    outColor = vec4(srgbToLinear(straight) * c.a, c.a);
+    outColor = kTargetEncoded ? c : vec4(srgbToLinear(straight) * c.a, c.a);
 }

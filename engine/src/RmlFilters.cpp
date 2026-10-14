@@ -86,6 +86,11 @@ glm::vec4 rmlLinearPremultiplied(Rml::Colourb color) {
                      srgbToLinear(color.blue / 255.0f) * a, a);
 }
 
+glm::vec4 rmlTargetColor(glm::vec4 c, bool targetEncoded) {
+    if (!targetEncoded || c.a <= 0.0f) return targetEncoded ? glm::vec4(0.0f) : c;
+    return glm::vec4(linearToSrgb(c.r / c.a) * c.a, linearToSrgb(c.g / c.a) * c.a, linearToSrgb(c.b / c.a) * c.a, c.a);
+}
+
 // Three sigmas each side, at most kRmlMaxBlurRadius taps: a wider blur runs
 // as n passes of sigma / sqrt(n), which add up to the same Gaussian.
 RmlBlurPlan rmlBlurPlan(float sigma) {

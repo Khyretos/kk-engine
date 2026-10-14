@@ -41,7 +41,9 @@ class RmlVulkanRenderInterface : public Rml::RenderInterface {
 public:
     // stencilAvailable: the render pass's depth attachment has a stencil
     // aspect (Renderer::hasStencil()); without it clip masks are skipped.
-    RmlVulkanRenderInterface(VulkanDevice& device, VkRenderPass renderPass, bool stencilAvailable = false);
+    // targetEncoded: the frame's image is UNORM (a 10-bit swapchain,
+    // SwapChain::encodesSrgb() false), so the UI writes sRGB-encoded colour.
+    RmlVulkanRenderInterface(VulkanDevice& device, VkRenderPass renderPass, bool stencilAvailable = false, bool targetEncoded = false);
     ~RmlVulkanRenderInterface() override;
 
     // Called by UiModule once per frame, right before Rml::Context::Render()

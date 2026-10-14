@@ -6,9 +6,13 @@ layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 0) uniform sampler2D uTexture;
 
+// kke::RmlVulkanRenderInterface sets it when the swapchain is UNORM (10-bit,
+// ENG-G17): colour stays sRGB-encoded and blends that way, as in a browser.
+layout(constant_id = 0) const bool kTargetEncoded = false;
+
 
 // Colors are authored in sRGB (color pickers, hex codes, palette values)
-// but the swapchain is VK_FORMAT_B8G8R8A8_SRGB, which gamma-encodes
+// but an sRGB swapchain (B8G8R8A8_SRGB) gamma-encodes
 // whatever the shader writes. Writing sRGB values straight out encoded
 // them twice: everything looked washed out. Convert to linear first.
 vec3 srgbToLinear(vec3 c) {
@@ -25,5 +29,5 @@ void main() {
     // blends in sRGB, but no double gamma).
     vec4 c = texture(uTexture, inTexCoord) * inColor;
     vec3 straight = c.a > 0.0 ? c.rgb / c.a : vec3(0.0);
-    outColor = vec4(srgbToLinear(straight) * c.a, c.a);
+    outColor = kTargetEncoded ? c : vec4(srgbToLinear(straight) * c.a, c.a);
 }

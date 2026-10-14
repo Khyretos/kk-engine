@@ -98,31 +98,7 @@ void Renderer::enableCapture() {
     m_recreatePending = true;
 }
 
-namespace {
-// Swapchain formats a capture can be turned into RGBA8 from by copying
-// bytes (and swapping red and blue for the BGRA ones).
-bool capturableFormat(VkFormat f, bool& bgra) {
-    switch (f) {
-    case VK_FORMAT_B8G8R8A8_UNORM:
-    case VK_FORMAT_B8G8R8A8_SRGB:
-        bgra = true;
-        return true;
-    case VK_FORMAT_R8G8B8A8_UNORM:
-    case VK_FORMAT_R8G8B8A8_SRGB:
-    case VK_FORMAT_A8B8G8R8_UNORM_PACK32:
-    case VK_FORMAT_A8B8G8R8_SRGB_PACK32:
-        bgra = false;
-        return true;
-    default:
-        return false;
-    }
-}
-} // namespace
-
-bool Renderer::canCapture() const {
-    bool bgra = false;
-    return m_swapChain->readable() && capturableFormat(m_swapChain->imageFormat(), bgra);
-}
+bool Renderer::canCapture() const { return m_swapChain->readable() && capturableFormat(m_swapChain->imageFormat()); }
 
 OverlayTarget Renderer::overlayTarget() const {
     OverlayTarget t;
@@ -211,18 +187,15 @@ void Renderer::collectCapture(uint32_t frame) {
     CaptureSlot& slot = m_captureSlots[frame];
     if (!slot.pending) return;
     slot.pending = false;
-    bool bgra = false;
-    if (!capturableFormat(slot.format, bgra)) return;
+    if (!capturableFormat(slot.format)) return;
     FrameCapture c;
     c.tag = slot.tag;
     c.width = slot.extent.width;
     c.height = slot.extent.height;
-    c.rgba.resize(size_t(c.width) * c.height * 4);
-    slot.buffer->download(c.rgba.data(), c.rgba.size());
-    for (size_t i = 0; i < c.rgba.size(); i += 4) {
-        if (bgra) std::swap(c.rgba[i], c.rgba[i + 2]);
-        c.rgba[i + 3] = 255;
-    }
+    std::vector<uint8_t> raw(size_t(c.width) * c.height * 4);
+    slot.buffer->download(raw.data(), raw.size());
+    c.rgba.resize(raw.size());
+    captureToRgba8(raw.data(), size_t(c.width) * c.height, slot.format, c.rgba.data());
     m_captured.push_back(std::move(c));
 }
 
@@ -660,7 +633,9 @@ void Renderer::drawPostPass(VkCommandBuffer cmd) {
 
     m_postPipeline->bind(cmd);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_postPipeline->layout(), 0, 1, &m_postSets[m_currentFrame], 0, nullptr);
-    vkCmdPushConstants(cmd, m_postPipeline->layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PostParams), &m_post);
+    PostParams post = m_post;
+    post.tone.z = m_swapChain->encodesSrgb() ? 0.0f : 1.0f; // a UNORM (10-bit) swapchain: the shader encodes sRGB
+    vkCmdPushConstants(cmd, m_postPipeline->layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PostParams), &post);
     vkCmdDraw(cmd, 3, 1, 0, 0);
 }
 

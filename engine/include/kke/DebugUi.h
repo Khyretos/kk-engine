@@ -16,7 +16,9 @@ class VulkanDevice;
 // stays swappable/removable as its own lego piece.
 class DebugUi {
 public:
-    DebugUi(Window& window, VulkanDevice& device, VkRenderPass renderPass, uint32_t imageCount);
+    // targetEncoded: the swapchain is UNORM (10-bit), so ImGui's sRGB colours
+    // are written as they are instead of converted to linear first.
+    DebugUi(Window& window, VulkanDevice& device, VkRenderPass renderPass, uint32_t imageCount, bool targetEncoded = false);
     ~DebugUi();
 
     DebugUi(const DebugUi&) = delete;

@@ -160,6 +160,23 @@ jobs:
               echo "== $demo (phone shape): ok"
             fi
           done
+          # A 10-bit display (ENG-G17): a 30-bit X screen offers only an
+          # A2R10G10B10 (UNORM) swapchain, where the tone-map pass and the UI
+          # encode sRGB themselves.
+          Xvfb :98 -screen 0 1280x720x30 &
+          sleep 2
+          for demo in kke_demo rmlui_demo; do
+            set +e
+            DISPLAY=:98 SDL_VIDEODRIVER=x11 KKE_TARGET=desktop timeout 8 "./$demo" > "run_${demo}_10bit.log" 2>&1
+            code=$?
+            set -e
+            if { [ "$code" -ne 124 ] && [ "$code" -ne 0 ]; } || grep -qiE "Fatal error|Validation Error|SYNC-HAZARD" "run_${demo}_10bit.log" ||
+              ! grep -q "UNORM, shaders encode sRGB" "run_${demo}_10bit.log"; then
+              echo "== $demo (10-bit display): FAILED (exit $code)"; tail -40 "run_${demo}_10bit.log"; failed=1
+            else
+              echo "== $demo (10-bit display): ok"
+            fi
+          done
           exit $failed
 
       # The cookbook (docs/cookbook/): every Lua recipe runs in the starter

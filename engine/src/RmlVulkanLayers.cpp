@@ -446,7 +446,7 @@ void RmlVulkanRenderInterface::applyFilters(Rml::Span<const Rml::CompiledFilterH
             case RmlFilterType::DropShadow:
                 // The shadow into m_post[1], blurred, then the source drawn over it.
                 push.mode = kRmlFilterDropShadow;
-                push.color = f.color;
+                push.color = rmlTargetColor(f.color, !formatEncodesSrgb(m_layerFormat));
                 push.offset = f.offset / size;
                 drawFullscreen(m_post[1].get(), *m_post[0], *m_filterReplace, push, VK_NULL_HANDLE);
                 blur(f.sigma, m_post[1], m_post[2], region);

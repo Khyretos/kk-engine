@@ -2,6 +2,9 @@
 #include "kke/VulkanDevice.h"
 #include "kke/Window.h"
 #include "kke/VulkanCheck.h"
+#include "kke/ColorFormats.h"
+#include "kke/DevTools.h"
+#include "kke/Log.h"
 
 #include <algorithm>
 #include <array>
@@ -76,18 +79,10 @@ void SwapChain::create() {
     std::vector<VkPresentModeKHR> presentModes(presentModeCount);
     vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &presentModeCount, presentModes.data());
 
-    // An sRGB format, so the GPU encodes the final colours: BGRA on
-    // desktops, RGBA on Android, which offers no BGRA.
-    VkSurfaceFormatKHR chosenFormat = formats[0];
-    bool foundSrgb = false;
-    for (VkFormat wanted : { VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_R8G8B8A8_SRGB }) {
-        for (const auto& f : formats) {
-            if (!foundSrgb && f.format == wanted && f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-                chosenFormat = f;
-                foundSrgb = true;
-            }
-        }
-    }
+    // 10-bit where the surface offers it (no steps in dark gradients),
+    // else 8-bit sRGB (kke/ColorFormats.h). On a UNORM format the tone-map
+    // pass and the UI write sRGB-encoded colour themselves.
+    const VkSurfaceFormatKHR chosenFormat = chooseSurfaceFormat(formats, !dev::flag("KKE_SWAPCHAIN_8BIT"));
 
     VkPresentModeKHR chosenPresentMode = VK_PRESENT_MODE_FIFO_KHR; // always available, vsync
     if (!m_vsync) {
@@ -188,6 +183,9 @@ void SwapChain::create() {
     m_images.resize(actualImageCount);
     vkGetSwapchainImagesKHR(m_device.device(), m_swapChain, &actualImageCount, m_images.data());
 
+    if (chosenFormat.format != m_imageFormat) // once, and when a new display changes it (not on every resize)
+        log::get("SwapChain")->info("colour output: format {} ({})", static_cast<int>(chosenFormat.format),
+                                   formatEncodesSrgb(chosenFormat.format) ? "8-bit sRGB" : "UNORM, shaders encode sRGB");
     m_imageFormat = chosenFormat.format;
     m_extent = extent;
 

@@ -26,7 +26,7 @@ PFN_vkVoidFunction imguiVulkanLoader(const char* functionName, void* userData) {
 
 } // namespace
 
-DebugUi::DebugUi(Window& window, VulkanDevice& device, VkRenderPass renderPass, uint32_t imageCount)
+DebugUi::DebugUi(Window& window, VulkanDevice& device, VkRenderPass renderPass, uint32_t imageCount, bool targetEncoded)
     : m_device(device) {
     std::array<VkDescriptorPoolSize, 1> poolSizes = {
         VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 64 }
@@ -55,7 +55,9 @@ DebugUi::DebugUi(Window& window, VulkanDevice& device, VkRenderPass renderPass, 
     // them a second time — every panel looked washed out. Converting the
     // palette to linear once here fixes the look without touching the
     // backend. (Colors passed per-widget, e.g. TextColored, are still raw.)
+    // A UNORM (10-bit) swapchain encodes nothing: the raw colours are right.
     for (ImVec4& c : ImGui::GetStyle().Colors) {
+        if (targetEncoded) continue;
         auto toLinear = [](float v) { return v <= 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f); };
         c = ImVec4(toLinear(c.x), toLinear(c.y), toLinear(c.z), c.w);
     }

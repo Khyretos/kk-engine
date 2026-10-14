@@ -62,6 +62,9 @@ constexpr int kRmlFilterMask = 4;
 RmlFilter compileRmlFilter(const std::string& name, const Rml::Dictionary& parameters);
 // A colour as RmlUi gives it (straight alpha, sRGB) to linear, premultiplied.
 glm::vec4 rmlLinearPremultiplied(Rml::Colourb color);
+// A linear, premultiplied colour as the UI target holds it: unchanged, or
+// sRGB-encoded (still premultiplied) on a UNORM target (ENG-G17).
+glm::vec4 rmlTargetColor(glm::vec4 linearPremultiplied, bool targetEncoded);
 // One linear-filtered sample of rml_filter.frag's blur: taps i and i + 1
 // merged at the position their weights put between them.
 struct RmlBlurTap {
