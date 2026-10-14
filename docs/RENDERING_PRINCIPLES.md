@@ -363,7 +363,8 @@ and ImGui pipelines use `Renderer::overlayRenderPass()`. Thumbnails use
 `Renderer::createSceneCompatiblePass`, so they're anti-aliased too.
 Checked headless at 4x (Synty demo, sandbox with thumbnails, UI
 showcase): smoother edges, validation clean. SMAA 1x is still open in
-# 36.
+
+# 36
 
 **Later the same day:** shadow map quality (#38). The shadow map is
 sampled with a depth-compare sampler (each of the 9 PCF taps is a
