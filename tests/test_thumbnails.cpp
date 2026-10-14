@@ -1,6 +1,10 @@
 #include "kke/Thumbnails.h"
+#include "kke/Sky.h"
+#include "kke/ToneMap.h"
 
 #include <gtest/gtest.h>
+
+#include <glm/gtc/packing.hpp>
 
 #include <cstdlib>
 #include <filesystem>
@@ -139,4 +143,30 @@ TEST(ThumbnailSlots, TileRectsTileTheAtlas) {
     const ThumbnailTileRect nextRow = thumbnailTileRect(perRow, atlas, tile);
     EXPECT_EQ(nextRow.x, 0);
     EXPECT_EQ(nextRow.y, tile);
+}
+
+// ENG-G17: thumbnails are drawn in the HDR scene format; the CPU tone map
+// turns them into the sRGB bytes of the atlas and the cache PNGs.
+TEST(Thumbnails, ToneMapsHdrPixelsToSrgbBytes) {
+    const PostParams post = makePostParams(ToneMapper::AgX, 1.0f, ColorGrade{});
+    const float in[3][4] = { { 0.18f, 0.18f, 0.18f, 1.0f }, { 1.0f, 0.5f, 0.1f, 0.5f }, { 0.0f, 0.0f, 0.0f, 0.0f } };
+    std::vector<uint16_t> half;
+    for (const auto& px : in)
+        for (float c : px) half.push_back(glm::packHalf1x16(c));
+    std::vector<uint8_t> out(3 * 4, 7);
+    thumbnailToDisplay(half.data(), 3, post, out.data());
+    const int want[3][4] = { { 128, 128, 128, 255 }, { 207, 177, 116, 128 }, { 0, 0, 0, 0 } };
+    for (int p = 0; p < 3; ++p)
+        for (int c = 0; c < 4; ++c) EXPECT_NEAR(out[p * 4 + c], want[p][c], 1) << "pixel " << p << " channel " << c;
+}
+
+TEST(Thumbnails, ClampsAlpha) {
+    const PostParams post = makePostParams(ToneMapper::None, 1.0f, ColorGrade{});
+    const uint16_t half[4] = { glm::packHalf1x16(2.0f), glm::packHalf1x16(-1.0f), glm::packHalf1x16(1.0f), glm::packHalf1x16(1.5f) };
+    uint8_t out[4] = {};
+    thumbnailToDisplay(half, 1, post, out);
+    EXPECT_EQ(out[0], 255);
+    EXPECT_EQ(out[1], 0);
+    EXPECT_EQ(out[2], 255);
+    EXPECT_EQ(out[3], 255);
 }

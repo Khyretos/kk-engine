@@ -1,0 +1,18 @@
+[
+ {
+  "mode": "patch",
+  "focus": [
+   "^//\\ The\\ lighting\\ uniform\\ buffer\\ \\(set\\ 0,\\ binding\\ 0\\),\\ shared\\ by\\ every\\ lit$",
+   "^\\ \\ \\ \\ mat4\\ lightViewProj;$",
+   "^layout\\(set\\ =\\ 0,\\ binding\\ =\\ 1\\)\\ uniform\\ sampler2D\\ skyReflections;$"
+  ],
+  "name": "g17-lightingub1",
+  "role": "worker/cpp-games",
+  "out": "shaders/lighting_ubo.glsl",
+  "prompt": "Kreative Kompas Engine (C++20, Vulkan, GLSL): ENG-G17 moves tone mapping out of every surface shader into one pass. The 3D scene now draws scene light into an HDR image (RGBA16F); the tone curve, exposure and look run once per pixel in a full-screen draw at the start of the UI pass.  Make these 3 edits in shaders/lighting_ubo.glsl, each its own SEARCH/REPLACE block.\nEdit 1. Your SEARCH block is exactly these lines:\n```\n// The lighting uniform buffer (set 0, binding 0), shared by every lit\n// shader, and the helpers that read it: ambient light from the sky, the\n// gradient sky, height fog and the tone curve with its look.\n// Mirrors kke::LightingBuffer's LightingUBOData (engine/src/LightingBuffer.cpp)\n// byte for byte; kke::Lighting (Application.h) is what fills it in.\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n// The lighting uniform buffer (set 0, binding 0), shared by every lit\n// shader, and the helpers that read it: ambient light from the sky, the\n// gradient sky and height fog. Lit shaders write scene light; the tone\n// curve, exposure and look run once per pixel afterwards (tonemap_post.frag).\n// Mirrors kke::LightingBuffer's LightingUBOData (engine/src/LightingBuffer.cpp)\n// byte for byte; kke::Lighting (Application.h) is what fills it in.\n```\nEdit 2. Your SEARCH block is exactly these lines:\n```\n    mat4 lightViewProj;\n    mat4 viewProj; // see cube.vert's own comment on why this is here\n    vec4 toneParams; // x = tone mapper (tonemap.glsl), y = exposure\n    vec4 lookSlope;  // rgb = ASC CDL slope, a = saturation\n    vec4 lookOffset; // rgb = offset, a = 1 when a look is set\n    vec4 lookPower;  // rgb = power\n    vec4 skyZenith;  // rgb, a = sky kind (0 none, 1 gradient, 2 image)\n    vec4 skyHorizon; // rgb, a = horizon falloff\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n    mat4 lightViewProj;\n    mat4 viewProj; // see cube.vert's own comment on why this is here\n    vec4 skyZenith;  // rgb, a = sky kind (0 none, 1 gradient, 2 image)\n    vec4 skyHorizon; // rgb, a = horizon falloff\n```\nEdit 3. Your SEARCH block is exactly these lines:\n```\nlayout(set = 0, binding = 1) uniform sampler2D skyReflections;\n\n#include \"tonemap.glsl\"\n\n// Ambient light reaching a surface facing n: kke::SkySH::irradiance.\nvec3 ambientIrradiance(vec3 n) {\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\nlayout(set = 0, binding = 1) uniform sampler2D skyReflections;\n\n// Ambient light reaching a surface facing n: kke::SkySH::irradiance.\nvec3 ambientIrradiance(vec3 n) {\n```\nChange nothing else; do not copy or move any other line.\n",
+  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py g17lightingub1",
+  "precheck": false,
+  "context": [],
+  "max_tokens": 1506
+ }
+]

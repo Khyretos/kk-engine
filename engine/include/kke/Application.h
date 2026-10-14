@@ -7,6 +7,7 @@
 #include "kke/EngineError.h"
 #include "kke/LightingBuffer.h"
 #include "kke/Sky.h"
+#include "kke/ToneMap.h"
 #include "kke/Viewports.h"
 #include "kke/ResourceGovernor.h"
 #include "kke/HardwareTarget.h"
@@ -87,14 +88,10 @@ struct Light {
 // kMaxLights is a real, fixed limit (not "as many as you want") because
 // the GPU-side UBO this feeds has a fixed-size array — see
 // LightingBuffer.h for how that's laid out. 16 since ENG-G07: every lit pixel loops over all of them, skipping lights that are off and point lights out of their range (Light::range), and each costs 48 bytes of the UBO.
-// How lit shaders turn scene light (unbounded) into displayable colour
-// (shaders/tonemap.glsl). The values are what the shaders read, so keep the
-// order. AgX is the default: highlights desaturate towards white instead of
-// shifting hue. ACES gives more contrast (the "movie" look); Reinhard is the
-// engine's original curve. See docs/RENDERING_PRINCIPLES.md §7.
-enum class ToneMapper : int { AgX = 0, ACES = 1, Reinhard = 2 };
+// kke::ToneMapper (how scene light becomes displayable colour) is in
+// kke/ToneMap.h.
 
-// "agx", "aces" or "reinhard" (any case); nullopt for anything else. Used by
+// "agx", "aces", "reinhard" or "none" (any case); nullopt for anything else. Used by
 // the KKE_TONEMAP override, which forces one curve over whatever the game
 // picked, to compare them.
 std::optional<ToneMapper> parseToneMapper(const std::string& name);

@@ -2,7 +2,8 @@
 #define KKE_LIGHTING_UBO_GLSL
 // The lighting uniform buffer (set 0, binding 0), shared by every lit
 // shader, and the helpers that read it: ambient light from the sky, the
-// gradient sky, height fog and the tone curve with its look.
+// gradient sky and height fog. Lit shaders write scene light; the tone
+// curve, exposure and look run once per pixel afterwards (tonemap_post.frag).
 // Mirrors kke::LightingBuffer's LightingUBOData (engine/src/LightingBuffer.cpp)
 // byte for byte; kke::Lighting (Application.h) is what fills it in.
 // Every field is a vec4 so std140 adds no hidden padding.
@@ -23,10 +24,6 @@ layout(set = 0, binding = 0) uniform LightingUBO {
     vec4 cameraPos; // rgb = world-space camera position, for specular
     mat4 lightViewProj;
     mat4 viewProj; // see cube.vert's own comment on why this is here
-    vec4 toneParams; // x = tone mapper (tonemap.glsl), y = exposure
-    vec4 lookSlope;  // rgb = ASC CDL slope, a = saturation
-    vec4 lookOffset; // rgb = offset, a = 1 when a look is set
-    vec4 lookPower;  // rgb = power
     vec4 skyZenith;  // rgb, a = sky kind (0 none, 1 gradient, 2 image)
     vec4 skyHorizon; // rgb, a = horizon falloff
     vec4 skyGround;  // rgb, a = image yaw (radians)
@@ -46,8 +43,6 @@ layout(set = 0, binding = 0) uniform LightingUBO {
 // The sky prefiltered for reflections (kke::EnvMap, kke::LightingBuffer::setEnvironmentMap):
 // equirectangular, one mip per roughness level. A black 1x1 while there is none.
 layout(set = 0, binding = 1) uniform sampler2D skyReflections;
-
-#include "tonemap.glsl"
 
 // Ambient light reaching a surface facing n: kke::SkySH::irradiance.
 vec3 ambientIrradiance(vec3 n) {
@@ -147,11 +142,6 @@ vec3 applyFog(vec3 color, vec3 worldPos) {
     if (dist < 1e-4) return color;
     vec3 rd = d / dist;
     return mix(color, fogInscatter(rd), fogAmount(ro, rd, dist));
-}
-
-// Scene light -> display: exposure, tone curve and the look.
-vec3 displayColor(vec3 c) {
-    return toneMapLook(c, lighting.toneParams, lighting.lookSlope, lighting.lookOffset, lighting.lookPower);
 }
 
 #endif

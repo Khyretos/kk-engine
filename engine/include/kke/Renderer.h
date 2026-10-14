@@ -4,6 +4,7 @@
 #include "kke/SwapChain.h"
 #include "kke/Buffer.h"
 #include "kke/FrameRetireQueue.h"
+#include "kke/ToneMap.h"
 
 #include <glm/glm.hpp>
 #include <array>
@@ -14,6 +15,7 @@
 namespace kke {
 
 class Window;
+class Pipeline;
 
 // The image the overlay (UI) draws into this frame, and how to draw into it
 // again after leaving its pass: kke::RmlVulkanRenderInterface's UI layers
@@ -62,17 +64,18 @@ public:
     void beginRenderPass();
 
     // Switches to full-resolution drawing for what goes on top of the 3D
-    // image (UI, debug overlay). With a render scale below 1 this ends
-    // the scaled 3D pass, upscales it onto the swapchain image and opens
-    // the overlay pass; at scale 1 it does nothing (one pass, no copy).
+    // image (UI, debug overlay): ends the HDR scene pass and opens the
+    // swapchain's pass with the tone map as its first draw, one full-screen
+    // triangle that reads the scene image (filtering it up at a render
+    // scale below 1) and writes display colour (ENG-G17). Called again in
+    // the same frame it only resets the viewport.
     void beginOverlayPass();
 
     // Ends the render pass, submits, and presents.
     void endFrame();
 
     // 3D resolution relative to the window (resource governor, 1.6).
-    // Clamped to 0.5..1; ignored (stays 1) when the swapchain can't be
-    // blitted to. Takes effect on the next frame.
+    // Clamped to 0.5..1. Takes effect on the next frame.
     void setRenderScale(float scale);
     float renderScale() const { return m_renderScale; }
     // Size of the 3D image: extent() times the render scale.
@@ -80,8 +83,9 @@ public:
 
     VkCommandBuffer currentCommandBuffer() const { return m_commandBuffers[m_currentFrame]; }
     // The pass render() draws in: create scene pipelines against this one.
-    // With MSAA it's the multisampled scene pass; otherwise the swapchain's.
-    VkRenderPass renderPass() const { return m_msaa > 1 ? m_scenePass : m_swapChain->renderPass(); }
+    // Its colour is kSceneColorFormat (scene light, before tone mapping),
+    // multisampled when MSAA is on.
+    VkRenderPass renderPass() const { return m_scenePass; }
     // The pass renderOverlay() draws in (always single-sampled, full
     // resolution): UI pipelines (RmlUi, ImGui) are created against this.
     VkRenderPass overlayRenderPass() const { return m_swapChain->renderPass(); }
@@ -104,9 +108,12 @@ public:
     VkRenderPass createSceneCompatiblePass(VkImageLayout colorFinalLayout);
     VkExtent2D extent() const { return m_swapChain->extent(); }
     bool hasStencil() const { return m_swapChain->hasStencil(); }
-    // The main pass's attachment formats: an offscreen pass with the same
-    // ones (and the same subpass dependency) can use every pipeline.
-    VkFormat colorFormat() const { return m_swapChain->imageFormat(); }
+    // The scene pass's attachment formats: an offscreen pass with the same
+    // ones (and the same subpass dependency) can use every scene pipeline.
+    // The colour holds scene light; kke::toneMapCpu() turns it into display
+    // colour on the CPU, as the tone-map pass does on the GPU.
+    static constexpr VkFormat kSceneColorFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+    VkFormat colorFormat() const { return kSceneColorFormat; }
     VkFormat depthFormat() const { return m_swapChain->depthFormat(); }
     float aspectRatio() const {
         auto e = m_swapChain->extent();
@@ -139,9 +146,14 @@ public:
     // next beginFrame() (never mid-frame, while a command buffer that
     // references the old one is being recorded).
     void setVSync(bool vsync);
-    // Background colour, sRGB-authored (converted to linear for the sRGB
-    // swapchain). Default: near-black blue.
+    // Background colour, sRGB-authored: the scene is cleared to the light
+    // that the current tone map shows as this colour. Default: near-black blue.
     void setClearColor(const glm::vec3& srgb);
+    // The tone map, exposure and look the next frames are shown with
+    // (kke::makePostParams); the Application sets them from its Lighting
+    // every frame. Default: AgX at exposure 1, no look.
+    void setPostParams(const PostParams& params);
+    const PostParams& postParams() const { return m_post; }
     // Inside the scene pass: clear color and depth of one part of the
     // image only (a picture-in-picture view drawn over another) and
     // point the viewport and scissor at it.
@@ -167,17 +179,22 @@ public:
     std::vector<FrameCapture> takeCaptures();
 
 private:
-    glm::vec3 m_clearLinear{0.02f, 0.02f, 0.05f};
+    glm::vec3 m_clearSrgb{0.152f, 0.152f, 0.248f}; // linear 0.02, 0.02, 0.05
+    glm::vec3 m_clearScene{0.0f}; // sceneClearColor(m_clearSrgb, m_post)
+    PostParams m_post;
 
     void createSyncObjects();
     void createCommandBuffers();
     void createQueryPools();
     void recreateSwapChain();
-    bool scaled() const { return m_renderScale < 1.0f && m_swapChain->canBlitTo(); }
-    // The 3D pass draws into an offscreen target (then blitted to the
-    // swapchain) when scaled or multisampled.
-    bool offscreenScene() const { return scaled() || m_msaa > 1; }
+    bool scaled() const { return m_renderScale < 1.0f; }
     void createScenePass();
+    // The tone-map pass: its pipeline (against the swapchain's pass,
+    // remade when the swapchain's format changes), sampler and one
+    // descriptor set per frame in flight.
+    void createPostPass();
+    void destroyPostPass();
+    void drawPostPass(VkCommandBuffer cmd);
     void ensureSceneTarget(uint32_t frame);
     void destroySceneTarget(uint32_t frame);
 
@@ -215,8 +232,9 @@ private:
     void collectCapture(uint32_t frame);
     float m_lastGpuFrameTimeMs = -1.0f;
 
-    // Render scale: the 3D pass draws into a smaller image per frame in
-    // flight, blitted up in beginOverlayPass(). Created on first use.
+    // The 3D pass draws into an HDR image per frame in flight (smaller at
+    // a render scale below 1), which the tone-map pass reads in
+    // beginOverlayPass(). Created on first use.
     float m_renderScale = 1.0f;
     uint32_t m_msaa = 1;
     bool m_inScenePass = false;
@@ -225,7 +243,7 @@ private:
     uint32_t m_scenePassSamples = 0;
     struct SceneTarget {
         VkExtent2D extent{};
-        // color: single-sample, the blit source. msaaColor: only with
+        // color: single-sample, read by the tone-map pass. msaaColor: only with
         // MSAA, resolved into color at the end of the pass.
         VkImage color = VK_NULL_HANDLE, depth = VK_NULL_HANDLE, msaaColor = VK_NULL_HANDLE;
         VmaAllocation colorAlloc = VK_NULL_HANDLE, depthAlloc = VK_NULL_HANDLE, msaaColorAlloc = VK_NULL_HANDLE;
@@ -233,6 +251,13 @@ private:
         VkFramebuffer framebuffer = VK_NULL_HANDLE;
     };
     SceneTarget m_sceneTargets[kMaxFramesInFlight];
+
+    std::unique_ptr<Pipeline> m_postPipeline;
+    VkFormat m_postFormat = VK_FORMAT_UNDEFINED;
+    VkSampler m_postSampler = VK_NULL_HANDLE;
+    VkDescriptorSetLayout m_postSetLayout = VK_NULL_HANDLE;
+    VkDescriptorPool m_postPool = VK_NULL_HANDLE;
+    VkDescriptorSet m_postSets[kMaxFramesInFlight] = {};
 };
 
 } // namespace kke

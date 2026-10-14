@@ -98,6 +98,7 @@ private:
         std::unique_ptr<ModelData> model; // a model to render
         std::string cacheFile;         // where its picture is (or goes) on disk
         std::string error;
+        bool rendered = false;         // rgba was just drawn here (not read from disk)
     };
     struct Job { std::string path, pack; ModelLoadOptions options; };
     struct Readback { std::string path, cacheFile; uint32_t index; };
@@ -112,7 +113,6 @@ private:
     ModelModule* m_models = nullptr;
     std::string m_unavailable;
     uint64_t m_frame = 1;
-    bool m_bgra = false;
     std::unordered_map<std::string, Entry> m_entries;
     ThumbnailSlots m_slots{(kAtlas / kTile) * (kAtlas / kTile)};
 

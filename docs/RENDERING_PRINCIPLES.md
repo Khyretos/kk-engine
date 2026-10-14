@@ -26,7 +26,7 @@ What to use instead, by problem:
 |---|---|
 | Foliage, fences, hair cards (cutout alpha) | Alpha test + coverage-preserving mips (done, below); MSAA on the edges when MSAA lands |
 | See-through objects, fades, LOD cross-fades | Real alpha blending, sorted; or a short opacity fade with blending, not a screen-door pattern |
-| Banding in dark gradients (sky, fog) | More precision: an HDR scene target and a 10-bit swapchain where the device has one ([#35](https://github.com/Khyretos/kk-engine/issues/35)) |
+| Banding in dark gradients (sky, fog) | More precision: an HDR scene target (done, ENG-G17) and a 10-bit swapchain where the device has one ([#35](https://github.com/Khyretos/kk-engine/issues/35)) |
 | Soft shadow edges | Filtered shadow lookups (PCF, hardware compare), not random taps |
 | Cheap volumetrics / AO / reflections | Lower resolution with an edge-aware (bilateral) upsample, or fewer, stable samples; never noise left for TAA |
 
@@ -79,7 +79,7 @@ Read from the code on 2026-09-26:
   trilinear; until today no anisotropic filtering.
 - **Culling / batching**: frustum culling and instancing done
   (OPTIMIZATION.md #23, #25); no LODs, no depth prepass, no draw sorting.
-- **Render scale** 0.5-1.0 as an opt-in min-spec knob (bilinear blit),
+- **Render scale** 0.5-1.0 as an opt-in min-spec knob (bilinear, in the tone-map pass since ENG-G17),
   default 1.0 (OPTIMIZATION.md #26).
 - **Nothing temporal and nothing dithered anywhere.** That is a strong
   starting point for everything below: we don't have to unwind a TAA
@@ -252,13 +252,27 @@ app.lighting().toneMapper = kke::ToneMapper::ACES; // AgX (default), ACES, Reinh
 app.lighting().exposure = 1.2f;                    // scene light is multiplied by this first
 ```
 
-`KKE_TONEMAP=agx|aces|reinhard` forces one for every scene, to compare
+`KKE_TONEMAP=agx|aces|reinhard|none` forces one for every scene, to compare
 them. AgX keeps hues as things get bright (a lit orange wall stays
 orange instead of going saturated yellow-orange); ACES has more contrast
-and saturation; Reinhard is the old look. The HDR target, one post pass
-and 10-bit output are still #35: until then the curve still runs per
-surface, before blending, and unlit shaders (sky, particles, grid) are
-still display-referred.
+and saturation; Reinhard is the old look; `None` shows finished display
+colours as they are (the logo intro uses it).
+
+**Done (ENG-G17): one tone-map pass on an HDR scene.** The 3D pass draws
+scene light into an RGBA16F image (`Renderer::kSceneColorFormat`); lit,
+unlit (grid, particles, debug lines) and additive shaders all write
+unbounded light and blend in it. The curve, exposure and look then run
+once per pixel in `shaders/tonemap_post.frag`, the first draw of the UI
+pass: one full-screen triangle that samples the scene image (a linear
+sampler does the render-scale upscale, so there is no blit and no LDR
+copy), before the UI draws on top. `Renderer::setClearColor` keeps its
+meaning: the scene is cleared to the light the curve shows as that sRGB
+colour (`kke::sceneClearColor`, an inverse of the CPU mirror
+`kke::toneMapCpu`, which thumbnails use too). Compared with the usual
+design (a separate tone-map render pass into an LDR image, then the UI
+pass) it saves a render pass, an image and its bandwidth, and the curve
+no longer runs once per shaded fragment (overdraw). 10-bit output is
+still #35.
 
 ### 8. Textures and GPU utilisation
 
@@ -341,8 +355,8 @@ default 4) is read at startup, because every scene pipeline bakes the
 sample count in; `KKE_MSAA=n` overrides it, and software rasterisers
 (the min-spec reference) run at 1x. With MSAA the 3D pass renders into a
 multisampled offscreen target that the render pass resolves, then the
-single-sample image goes to the swapchain the same way render scale
-does, and UI draws on top at full resolution. `kke::Pipeline` takes the
+tone-map pass reads the single-sample image (ENG-G17), and UI draws on
+top at full resolution. `kke::Pipeline` takes the
 sample count from the render pass it's built for
 (`VulkanDevice::renderPassSamples`), so modules need no changes; RmlUi
 and ImGui pipelines use `Renderer::overlayRenderPass()`. Thumbnails use
@@ -369,7 +383,7 @@ in #20.
    (done)
 4. MSAA as a setting (done) + optional SMAA 1x. (#36)
 5. AgX tone curve with exposure, selectable per game (done); HDR
-   target, one tone map pass, 10-bit output. (#35)
+   target and one tone map pass (done, ENG-G17); 10-bit output. (#35)
 6. Front-to-back sorting (done), measured prepass, overdraw view. (#37)
 7. Shadow map quality: compare sampler, slope bias, stable projection. (done, #38)
 8. Texture compression at asset cooking. (#39)

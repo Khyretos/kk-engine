@@ -18,5 +18,5 @@ void main() {
     float d = abs(r - (1.0 - half_)) / half_; // 0 in the middle of the band, 1 at its edges
     if (d >= 1.0) discard;
     float k = (1.0 - d * d) * clamp(fragParams.y, 0.0, 1.0);
-    outColor = vec4(displayColor(fragColor * k * k), 1.0);
+    outColor = vec4(fragColor * k * k, 1.0);
 }

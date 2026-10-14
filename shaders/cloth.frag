@@ -155,5 +155,5 @@ void main() {
     ambient += ambientIrradiance(N) * sheenColor * pow(1.0 - NdotV, 3.0) * (0.5 + fuzz);
 
     vec3 color = applyFog(ambient + Lo, fragPosWorld);
-    outColor = vec4(displayColor(color), 1.0);
+    outColor = vec4(color, 1.0);
 }

@@ -1,0 +1,17 @@
+[
+ {
+  "mode": "patch",
+  "focus": [
+   "^\\(the\\ min\\-spec\\ reference\\)\\ run\\ at\\ 1x\\.\\ With\\ MSAA\\ the\\ 3D\\ pass\\ renders\\ into\\ a$",
+   "^4\\.\\ MSAA\\ as\\ a\\ setting\\ \\(done\\)\\ \\+\\ optional\\ SMAA\\ 1x\\.\\ \\(\\#36\\)$"
+  ],
+  "name": "g17-renderingp2",
+  "role": "worker/cpp-games",
+  "out": "docs/RENDERING_PRINCIPLES.md",
+  "prompt": "Kreative Kompas Engine (C++20, Vulkan, GLSL): ENG-G17 moves tone mapping out of every surface shader into one pass. The 3D scene now draws scene light into an HDR image (RGBA16F); the tone curve, exposure and look run once per pixel in a full-screen draw at the start of the UI pass.  Make these 2 edits in docs/RENDERING_PRINCIPLES.md, each its own SEARCH/REPLACE block.\nEdit 1. Your SEARCH block is exactly these lines:\n```\n(the min-spec reference) run at 1x. With MSAA the 3D pass renders into a\nmultisampled offscreen target that the render pass resolves, then the\nsingle-sample image goes to the swapchain the same way render scale\ndoes, and UI draws on top at full resolution. `kke::Pipeline` takes the\nsample count from the render pass it's built for\n(`VulkanDevice::renderPassSamples`), so modules need no changes; RmlUi\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n(the min-spec reference) run at 1x. With MSAA the 3D pass renders into a\nmultisampled offscreen target that the render pass resolves, then the\ntone-map pass reads the single-sample image (ENG-G17), and UI draws on\ntop at full resolution. `kke::Pipeline` takes the\nsample count from the render pass it's built for\n(`VulkanDevice::renderPassSamples`), so modules need no changes; RmlUi\n```\nEdit 2. Your SEARCH block is exactly these lines:\n```\n4. MSAA as a setting (done) + optional SMAA 1x. (#36)\n5. AgX tone curve with exposure, selectable per game (done); HDR\n   target, one tone map pass, 10-bit output. (#35)\n6. Front-to-back sorting (done), measured prepass, overdraw view. (#37)\n7. Shadow map quality: compare sampler, slope bias, stable projection. (done, #38)\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n4. MSAA as a setting (done) + optional SMAA 1x. (#36)\n5. AgX tone curve with exposure, selectable per game (done); HDR\n   target and one tone map pass (done, ENG-G17); 10-bit output. (#35)\n6. Front-to-back sorting (done), measured prepass, overdraw view. (#37)\n7. Shadow map quality: compare sampler, slope bias, stable projection. (done, #38)\n```\nChange nothing else; do not copy or move any other line.\n",
+  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py g17renderingp2",
+  "precheck": false,
+  "context": [],
+  "max_tokens": 1326
+ }
+]

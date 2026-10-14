@@ -191,7 +191,7 @@ float specularAAKernel(vec3 normalWorld) {
 vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 posWorld, vec4 posLightSpace, float specAAKernel);
 
 // Full lighting for one surface point: PBR (GGX) for up to 4 lights,
-// shadow on light 0, ambient from the sky, fog, tone map and look. Shared by every
+// shadow on light 0, ambient from the sky, fog; returns scene light. Shared by every
 // lit mesh shader (cube.frag, model.frag) so they can't drift apart.
 // Shaders that discard call shadeSurfaceAA with a kernel taken first.
 vec3 shadeSurface(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 posWorld, vec4 posLightSpace) {
@@ -290,8 +290,5 @@ vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 
                  + skyReflection(reflect(-V, N), roughness) * envSpecular;
 
     vec3 color = ambient + Lo;
-    color = applyFog(color, fragPosWorld);
-    color = displayColor(color);
-
-    return color;
+    return applyFog(color, fragPosWorld);
 }

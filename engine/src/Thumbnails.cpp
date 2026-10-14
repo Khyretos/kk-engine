@@ -1,8 +1,10 @@
 #include "kke/Thumbnails.h"
 
 #include "kke/Platform.h"
+#include "kke/ToneMap.h"
 
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/packing.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -148,6 +150,19 @@ ThumbnailTileRect thumbnailTileRect(int slot, int atlasSize, int tile) {
     r.uv0 = glm::vec2(float(r.x), float(r.y)) * inv;
     r.uv1 = glm::vec2(float(r.x + tile), float(r.y + tile)) * inv;
     return r;
+}
+
+void thumbnailToDisplay(const uint16_t* rgbaHalf, size_t pixels, const PostParams& post, uint8_t* rgbaOut) {
+    auto byte = [](float v) { return static_cast<uint8_t>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f)); };
+    auto encode = [](float v) { return v <= 0.0031308f ? v * 12.92f : 1.055f * std::pow(v, 1.0f / 2.4f) - 0.055f; };
+    for (size_t i = 0; i < pixels; ++i) {
+        const uint16_t* in = rgbaHalf + 4 * i;
+        const glm::vec3 scene(glm::unpackHalf1x16(in[0]), glm::unpackHalf1x16(in[1]), glm::unpackHalf1x16(in[2]));
+        const glm::vec3 shown = toneMapCpu(glm::max(scene, glm::vec3(0.0f)), post);
+        uint8_t* out = rgbaOut + 4 * i;
+        for (int c = 0; c < 3; ++c) out[c] = byte(encode(std::clamp(shown[c], 0.0f, 1.0f)));
+        out[3] = byte(glm::unpackHalf1x16(in[3]));
+    }
 }
 
 } // namespace kke

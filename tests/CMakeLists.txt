@@ -97,6 +97,7 @@ add_executable(kke_tests
     test_lights.cpp
     test_draw_order.cpp
     test_tone_mapper.cpp
+    test_tone_map_cpu.cpp
     test_sky.cpp
     test_envmap.cpp
     test_gpu_skin.cpp

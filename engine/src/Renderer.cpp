@@ -2,11 +2,11 @@
 
 #include <cmath>
 #include "kke/Window.h"
+#include "kke/Pipeline.h"
 #include "kke/VulkanCheck.h"
 
 #include <algorithm>
 #include <array>
-#include <iostream>
 #include <stdexcept>
 #include <utility>
 
@@ -24,12 +24,16 @@ Renderer::Renderer(Window& window) : m_window(window) {
     createCommandBuffers();
     createSyncObjects();
     createQueryPools();
+    createScenePass();
+    createPostPass();
+    setClearColor(m_clearSrgb);
 }
 
 Renderer::~Renderer() {
     vkDeviceWaitIdle(m_device->device());
     m_retired.releaseAll();
     for (uint32_t i = 0; i < kMaxFramesInFlight; ++i) destroySceneTarget(i);
+    destroyPostPass();
     if (m_scenePass) vkDestroyRenderPass(m_device->device(), m_scenePass, nullptr);
     for (int i = 0; i < kMaxFramesInFlight; ++i) {
         vkDestroySemaphore(m_device->device(), m_imageAvailable[i], nullptr);
@@ -287,18 +291,21 @@ bool Renderer::beginFrame() {
     return true;
 }
 
-void Renderer::setClearColor(const glm::vec3& c) {
-    auto lin = [](float v) { return v <= 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f); };
-    m_clearLinear = glm::vec3(lin(c.r), lin(c.g), lin(c.b));
+void Renderer::setClearColor(const glm::vec3& srgb) {
+    m_clearSrgb = srgb;
+    m_clearScene = sceneClearColor(srgb, m_post);
+}
+
+void Renderer::setPostParams(const PostParams& params) {
+    const bool same = params.tone == m_post.tone && params.lookSlope == m_post.lookSlope && params.lookOffset == m_post.lookOffset &&
+                      params.lookPower == m_post.lookPower;
+    if (same) return;
+    m_post = params;
+    m_clearScene = sceneClearColor(m_clearSrgb, m_post); // the background keeps its colour under the new curve
 }
 
 void Renderer::setRenderScale(float scale) {
-    scale = std::clamp(scale, 0.5f, 1.0f);
-    if (scale < 1.0f && !m_swapChain->canBlitTo()) {
-        std::cerr << "[renderer] render scale unavailable: the swapchain can't be blitted to; staying at 1.0" << std::endl;
-        scale = 1.0f;
-    }
-    m_renderScale = scale;
+    m_renderScale = std::clamp(scale, 0.5f, 1.0f);
 }
 
 VkExtent2D Renderer::renderExtent() const {
@@ -312,21 +319,16 @@ void Renderer::setMsaaSamples(uint32_t samples) {
     uint32_t want = 1;
     while (want * 2 <= samples && want < 8) want *= 2; // 1, 2, 4 or 8
     const uint32_t maxSupported = static_cast<uint32_t>(m_device->maxUsableSampleCount());
-    want = std::min(want, maxSupported);
-    if (want > 1 && !m_swapChain->canBlitTo()) {
-        std::cerr << "[renderer] MSAA unavailable: the swapchain can't be blitted to; staying at 1x" << std::endl;
-        want = 1;
-    }
-    m_msaa = want;
+    m_msaa = std::min(want, maxSupported);
     createScenePass(); // renderPass() hands it out from now on
 }
 
-// Same attachments as the swapchain's pass (so the same pipelines draw
-// in it), but the colour ends in colorFinalLayout. With MSAA: the colour
+// The scene pass's layout: HDR colour (kSceneColorFormat) and the
+// swapchain's depth format; the colour ends in colorFinalLayout. With MSAA: the colour
 // and depth are multisampled and a third, single-sample attachment
 // receives the resolved colour; the render pass does the resolve.
 VkRenderPass Renderer::createSceneCompatiblePass(VkImageLayout colorFinalLayout) {
-    const VkFormat color = m_swapChain->imageFormat(), depth = m_swapChain->depthFormat();
+    const VkFormat color = kSceneColorFormat, depth = m_swapChain->depthFormat();
     const VkSampleCountFlagBits samples = static_cast<VkSampleCountFlagBits>(m_msaa);
     const bool msaa = m_msaa > 1;
 
@@ -367,15 +369,18 @@ VkRenderPass Renderer::createSceneCompatiblePass(VkImageLayout colorFinalLayout)
     subpass.pResolveAttachments = msaa ? &resolveRef : nullptr;
     subpass.pDepthStencilAttachment = &depthRef;
 
-    // Identical to SwapChain's own dependency: render passes are only
-    // compatible (share pipelines) when their dependencies match. The
-    // hand-off to the blit is a barrier in beginOverlayPass() instead.
+    // Before the pass clears its images: the last frame that used them has
+    // finished writing them (colour, the MSAA colour, depth) and the
+    // tone-map pass has finished reading the colour. The scene pass no
+    // longer shares pipelines with the swapchain's pass (other formats),
+    // so its dependency need not match that one. The hand-off to the
+    // tone-map pass is a barrier in beginOverlayPass().
     VkSubpassDependency dependency{};
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
     dependency.dstSubpass = 0;
-    dependency.srcStageMask =
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-    dependency.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+                              VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    dependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
@@ -394,16 +399,16 @@ VkRenderPass Renderer::createSceneCompatiblePass(VkImageLayout colorFinalLayout)
 }
 
 void Renderer::createScenePass() {
-    VkFormat color = m_swapChain->imageFormat(), depth = m_swapChain->depthFormat();
+    VkFormat color = kSceneColorFormat, depth = m_swapChain->depthFormat();
     if (m_scenePass && m_scenePassFormats[0] == color && m_scenePassFormats[1] == depth && m_scenePassSamples == m_msaa) return;
     if (m_scenePass) vkDestroyRenderPass(m_device->device(), m_scenePass, nullptr);
     m_scenePassFormats[0] = color;
     m_scenePassFormats[1] = depth;
     m_scenePassSamples = m_msaa;
     // The pass leaves the 3D image as an attachment; beginOverlayPass()
-    // moves it to TRANSFER_SRC with a barrier that makes the pass's writes
-    // visible to the blit (a final-layout transition here isn't ordered
-    // before it, which tiled GPUs show as unwritten patches).
+    // moves it to SHADER_READ_ONLY with a barrier that makes the pass's
+    // writes visible to the tone-map pass (a final-layout transition here
+    // isn't ordered before it, which tiled GPUs show as unwritten patches).
     m_scenePass = createSceneCompatiblePass(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     // Formats changed: every target was made for the old pass.
     for (uint32_t i = 0; i < kMaxFramesInFlight; ++i) m_sceneTargets[i].extent = {};
@@ -458,7 +463,7 @@ void Renderer::ensureSceneTarget(uint32_t frame) {
         VK_CHECK(vkCreateImageView(m_device->device(), &vi, nullptr, &view));
     };
     const VkSampleCountFlagBits samples = static_cast<VkSampleCountFlagBits>(m_msaa);
-    makeImage(m_scenePassFormats[0], VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+    makeImage(m_scenePassFormats[0], VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
               VK_IMAGE_ASPECT_COLOR_BIT, VK_SAMPLE_COUNT_1_BIT, t.color, t.colorAlloc, t.colorView);
     makeImage(m_scenePassFormats[1], VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
               VK_IMAGE_ASPECT_DEPTH_BIT | (m_swapChain->hasStencil() ? VK_IMAGE_ASPECT_STENCIL_BIT : 0), samples, t.depth,
@@ -499,7 +504,7 @@ void Renderer::beginView(const VkRect2D& rect, bool clear) {
     VkClearAttachment att[2]{};
     att[0].aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     att[0].colorAttachment = 0;
-    att[0].clearValue.color = { { m_clearLinear.r, m_clearLinear.g, m_clearLinear.b, 1.0f } };
+    att[0].clearValue.color = { { m_clearScene.r, m_clearScene.g, m_clearScene.b, 1.0f } };
     att[1].aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
     att[1].clearValue.depthStencil = { 1.0f, 0 };
     VkClearRect cr{ rect, 0, 1 };
@@ -510,27 +515,22 @@ void Renderer::beginRenderPass() {
     VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
 
     std::array<VkClearValue, 3> clearValues{}; // [2]: MSAA resolve target, not cleared
-    clearValues[0].color = { { m_clearLinear.r, m_clearLinear.g, m_clearLinear.b, 1.0f } };
+    clearValues[0].color = { { m_clearScene.r, m_clearScene.g, m_clearScene.b, 1.0f } };
     clearValues[1].depthStencil = { 1.0f, 0 };
 
+    ensureSceneTarget(m_currentFrame);
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    if (offscreenScene()) {
-        ensureSceneTarget(m_currentFrame);
-        renderPassInfo.renderPass = m_scenePass;
-        renderPassInfo.framebuffer = m_sceneTargets[m_currentFrame].framebuffer;
-    } else {
-        renderPassInfo.renderPass = m_swapChain->renderPass();
-        renderPassInfo.framebuffer = m_swapChain->framebuffer(m_currentImageIndex);
-    }
+    renderPassInfo.renderPass = m_scenePass;
+    renderPassInfo.framebuffer = m_sceneTargets[m_currentFrame].framebuffer;
     VkExtent2D extent = renderExtent();
     renderPassInfo.renderArea.offset = { 0, 0 };
     renderPassInfo.renderArea.extent = extent;
-    renderPassInfo.clearValueCount = offscreenScene() && m_msaa > 1 ? 3u : 2u;
+    renderPassInfo.clearValueCount = m_msaa > 1 ? 3u : 2u;
     renderPassInfo.pClearValues = clearValues.data();
 
     vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    m_inScenePass = offscreenScene();
+    m_inScenePass = true;
     setFullViewport(cmd, extent);
 }
 
@@ -544,73 +544,129 @@ void Renderer::beginOverlayPass() {
     VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
     vkCmdEndRenderPass(cmd);
 
-    const SceneTarget& src = m_sceneTargets[m_currentFrame];
-    VkImage target = m_swapChain->image(m_currentImageIndex);
-    auto barrier = [&](VkImage image, VkImageLayout from, VkImageLayout to, VkAccessFlags srcAccess, VkAccessFlags dstAccess,
-                       VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage) {
-        VkImageMemoryBarrier b{};
-        b.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        b.srcAccessMask = srcAccess;
-        b.dstAccessMask = dstAccess;
-        b.oldLayout = from;
-        b.newLayout = to;
-        b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        b.image = image;
-        b.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-        vkCmdPipelineBarrier(cmd, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &b);
-    };
-    // The 3D image: attachment -> blit source, its writes (and the MSAA
-    // resolve) finished and visible before the blit reads it.
-    barrier(src.color, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            VK_PIPELINE_STAGE_TRANSFER_BIT);
+    // The 3D image: attachment -> sampled, its writes (and the MSAA
+    // resolve) finished and visible before the tone-map pass reads it.
+    VkImageMemoryBarrier b{};
+    b.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    b.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    b.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    b.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    b.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    b.image = m_sceneTargets[m_currentFrame].color;
+    b.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0,
+                         nullptr, 1, &b);
 
-    // Swapchain image: whatever it held -> blit target. The acquire
-    // semaphore is waited on at COLOR_ATTACHMENT_OUTPUT, so the barrier
-    // starts from that stage to chain after it.
-    VkImageMemoryBarrier toDst{};
-    toDst.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    toDst.srcAccessMask = 0;
-    toDst.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    toDst.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    toDst.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    toDst.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    toDst.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    toDst.image = target;
-    toDst.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr,
-                         0, nullptr, 1, &toDst);
-
-    VkExtent2D full = m_swapChain->extent();
-    VkImageBlit blit{};
-    blit.srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
-    blit.srcOffsets[1] = { static_cast<int32_t>(src.extent.width), static_cast<int32_t>(src.extent.height), 1 };
-    blit.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
-    blit.dstOffsets[1] = { static_cast<int32_t>(full.width), static_cast<int32_t>(full.height), 1 };
-    vkCmdBlitImage(cmd, src.color, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
-                   &blit, VK_FILTER_LINEAR);
-    // The overlay pass loads (reads) and draws over what the blit wrote.
-    barrier(target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT,
-            VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
-
+    // The swapchain's own pass: it clears the image (the acquire semaphore
+    // is waited on at COLOR_ATTACHMENT_OUTPUT, which its dependency chains
+    // after), and the tone map covers every pixel before the UI draws.
     std::array<VkClearValue, 2> clearValues{};
     clearValues[1].depthStencil = { 1.0f, 0 };
+    const VkExtent2D full = m_swapChain->extent();
     VkRenderPassBeginInfo info{};
     info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    info.renderPass = m_swapChain->overlayPass();
+    info.renderPass = m_swapChain->renderPass();
     info.framebuffer = m_swapChain->framebuffer(m_currentImageIndex);
     info.renderArea = { { 0, 0 }, full };
     info.clearValueCount = static_cast<uint32_t>(clearValues.size());
     info.pClearValues = clearValues.data();
     vkCmdBeginRenderPass(cmd, &info, VK_SUBPASS_CONTENTS_INLINE);
     setFullViewport(cmd, full);
+    drawPostPass(cmd);
+}
+
+void Renderer::createPostPass() {
+    VkDevice dev = m_device->device();
+    // Linear filtering upscales a scene drawn at a render scale below 1;
+    // at scale 1 every pixel samples its own texel centre.
+    VkSamplerCreateInfo si{};
+    si.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    si.magFilter = VK_FILTER_LINEAR;
+    si.minFilter = VK_FILTER_LINEAR;
+    si.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    si.addressModeU = si.addressModeV = si.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    si.maxLod = 0.0f;
+    VK_CHECK(vkCreateSampler(dev, &si, nullptr, &m_postSampler));
+
+    VkDescriptorSetLayoutBinding binding{};
+    binding.binding = 0;
+    binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    binding.descriptorCount = 1;
+    binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    VkDescriptorSetLayoutCreateInfo li{};
+    li.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    li.bindingCount = 1;
+    li.pBindings = &binding;
+    VK_CHECK(vkCreateDescriptorSetLayout(dev, &li, nullptr, &m_postSetLayout));
+
+    VkDescriptorPoolSize size{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, kMaxFramesInFlight };
+    VkDescriptorPoolCreateInfo pi{};
+    pi.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pi.maxSets = kMaxFramesInFlight;
+    pi.poolSizeCount = 1;
+    pi.pPoolSizes = &size;
+    VK_CHECK(vkCreateDescriptorPool(dev, &pi, nullptr, &m_postPool));
+    std::array<VkDescriptorSetLayout, kMaxFramesInFlight> layouts;
+    layouts.fill(m_postSetLayout);
+    VkDescriptorSetAllocateInfo ai{};
+    ai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    ai.descriptorPool = m_postPool;
+    ai.descriptorSetCount = kMaxFramesInFlight;
+    ai.pSetLayouts = layouts.data();
+    VK_CHECK(vkAllocateDescriptorSets(dev, &ai, m_postSets));
+}
+
+void Renderer::destroyPostPass() {
+    VkDevice dev = m_device->device();
+    m_postPipeline.reset();
+    if (m_postPool) vkDestroyDescriptorPool(dev, m_postPool, nullptr);
+    if (m_postSetLayout) vkDestroyDescriptorSetLayout(dev, m_postSetLayout, nullptr);
+    if (m_postSampler) vkDestroySampler(dev, m_postSampler, nullptr);
+    m_postPool = VK_NULL_HANDLE;
+    m_postSetLayout = VK_NULL_HANDLE;
+    m_postSampler = VK_NULL_HANDLE;
+}
+
+// One full-screen triangle: this frame's scene image through the tone
+// map, exposure and look (shaders/tonemap_post.frag), into the swapchain.
+void Renderer::drawPostPass(VkCommandBuffer cmd) {
+    if (!m_postPipeline || m_postFormat != m_swapChain->imageFormat()) {
+        // The old pipeline may still be used by a frame in flight.
+        if (m_postPipeline) retire(std::move(m_postPipeline));
+        PipelineConfig config;
+        config.useVertexInput = false;
+        config.cullMode = VK_CULL_MODE_NONE;
+        config.depthTestEnable = false;
+        config.depthWriteEnable = false;
+        config.pushConstantRange = { VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PostParams) };
+        config.descriptorSetLayouts = { m_postSetLayout };
+        m_postPipeline = std::make_unique<Pipeline>(*m_device, m_swapChain->renderPass(), "shaders/rml_fullscreen.vert.spv",
+                                                    "shaders/tonemap_post.frag.spv", config);
+        m_postFormat = m_swapChain->imageFormat();
+    }
+    // This slot's previous frame has finished (beginFrame waited on its
+    // fence), so its set can point at this frame's scene image.
+    VkDescriptorImageInfo image{ m_postSampler, m_sceneTargets[m_currentFrame].colorView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+    VkWriteDescriptorSet w{};
+    w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    w.dstSet = m_postSets[m_currentFrame];
+    w.dstBinding = 0;
+    w.descriptorCount = 1;
+    w.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    w.pImageInfo = &image;
+    vkUpdateDescriptorSets(m_device->device(), 1, &w, 0, nullptr);
+
+    m_postPipeline->bind(cmd);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_postPipeline->layout(), 0, 1, &m_postSets[m_currentFrame], 0, nullptr);
+    vkCmdPushConstants(cmd, m_postPipeline->layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PostParams), &m_post);
+    vkCmdDraw(cmd, 3, 1, 0, 0);
 }
 
 void Renderer::endFrame() {
     VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
-    // A frame with nothing drawn over the 3D image still needs it upscaled.
+    // A frame with nothing drawn over the 3D image still needs it tone mapped.
     beginOverlayPass();
     vkCmdEndRenderPass(cmd);
     if (!m_captureRequests.empty()) recordCapture(cmd);

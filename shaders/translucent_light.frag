@@ -60,6 +60,5 @@ void main() {
     // own colour is already on what's behind).
     vec3 toEye = fragPosWorld - lighting.cameraPos.xyz;
     color *= 1.0 - fogAmount(lighting.cameraPos.xyz, normalize(toEye), length(toEye));
-    color = displayColor(color); // same curve and look as shadeSurface
     outColor = vec4(color, 1.0);
 }

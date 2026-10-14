@@ -39,11 +39,8 @@ struct LightingUBOData {
                          // freeing this 64 bytes out of the push constant was what made room for
                          // real per-object metallic/roughness within the 128-byte guaranteed-minimum
                          // push constant limit)
-    glm::vec4 toneParams; // x = tone mapper (0 AgX, 1 ACES, 2 Reinhard -- shaders/tonemap.glsl), y = exposure
-    // The sky, fog and look (kke/Sky.h); shaders/lighting_ubo.glsl names each.
-    glm::vec4 lookSlope;
-    glm::vec4 lookOffset;
-    glm::vec4 lookPower;
+    // The sky and fog (kke/Sky.h); shaders/lighting_ubo.glsl names each.
+    // The curve, exposure and look are the tone-map pass's (kke/ToneMap.h).
     glm::vec4 skyZenith;
     glm::vec4 skyHorizon;
     glm::vec4 skyGround;
@@ -58,7 +55,7 @@ struct LightingUBOData {
     glm::vec4 pointShadowTiles[ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces];    // that face's tile of the point map: x, y, width, height in 0..1
     glm::vec4 envMap; // x = the reflections' top mip (levels - 1), 0 = no map: reflect the ambient SH
 };
-static_assert(sizeof(LightingUBOData) == Lighting::kMaxLights * 3 * 16 + 2 * 16 + 2 * 64 + 11 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16 + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces * (64 + 16) + 16, "must match shaders/lighting_ubo.glsl");
+static_assert(sizeof(LightingUBOData) == Lighting::kMaxLights * 3 * 16 + 2 * 16 + 2 * 64 + 7 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16 + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces * (64 + 16) + 16, "must match shaders/lighting_ubo.glsl");
 static_assert(ShadowMap::kMaxPointShadows <= Lighting::kMaxLights, "every point-shadow slot needs a light");
 
 } // namespace
@@ -186,12 +183,6 @@ void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos
     data.cameraPos = glm::vec4(cameraPos, 0.0f);
     data.lightViewProj = lightViewProj;
     data.viewProj = viewProj;
-    data.toneParams = glm::vec4(static_cast<float>(lighting.toneMapper), lighting.exposure, 0.0f, 0.0f);
-
-    const ColorGrade& g = lighting.grade;
-    data.lookSlope = glm::vec4(g.slope, g.saturation);
-    data.lookOffset = glm::vec4(g.offset, g.isIdentity() ? 0.0f : 1.0f);
-    data.lookPower = glm::vec4(g.power, 0.0f);
 
     SkySH flat;
     if (!sky) flat = SkySH::constant(lighting.ambientColor);
