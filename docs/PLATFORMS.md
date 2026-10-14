@@ -53,6 +53,7 @@ it:
 |---|---|---|
 | `desktop` | any other PC | engine defaults (4x MSAA, shadows, full resolution) |
 | `desktop-low` | 2 cores or fewer, or under 6 GB RAM | no MSAA, no shadows, 75% render scale, 60 fps cap |
+| `software-gpu` | the only Vulkan device is the CPU (Mesa lavapipe: a graphics chip with no Vulkan driver), instead of `desktop` or `desktop-low` | no MSAA, no shadows, 75% render scale, no fps cap; the UI stays at full resolution |
 | `steam-deck` | Steam Deck LCD or OLED, or Steam's Game Mode | fullscreen, 2x MSAA, 60 fps cap, UI 25% larger |
 | `handheld-pc` | ROG Ally, Legion Go, MSI Claw | fullscreen, 2x MSAA, 75% render scale, 60 fps cap, UI 25% larger |
 | `android` | Android | no shadows, 70% render scale, 30 fps cap, UI 50% larger |

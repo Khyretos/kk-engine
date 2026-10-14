@@ -137,7 +137,9 @@ jobs:
             set +e
             # Virtual HOSAS pair + gamepad (SDL virtual joysticks), moving:
             # exercises device keying, polling and bindings with no hardware.
-            DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_VIRTUAL_INPUT=hosas,pad KKE_VIRTUAL_INPUT_ANIMATE=1 timeout 8 "./$demo" > "run_$demo.log" 2>&1
+            # KKE_TARGET=desktop: lavapipe would get the software-gpu target
+            # (no shadows), and every desktop pass belongs under validation.
+            DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_TARGET=desktop KKE_VIRTUAL_INPUT=hosas,pad KKE_VIRTUAL_INPUT_ANIMATE=1 timeout 8 "./$demo" > "run_$demo.log" 2>&1
             code=$?
             set -e
             if { [ "$code" -ne 124 ] && [ "$code" -ne 0 ]; } || grep -qiE "Fatal error|Validation Error|SYNC-HAZARD" "run_$demo.log"; then

@@ -53,6 +53,7 @@ EngineSettings settingsForTarget(const HardwareTarget& target);
 struct TargetChoice {
     const HardwareTarget* target = nullptr; // never null from chooseHardwareTarget()
     std::string reason;
+    bool asked = false; // KKE_TARGET or the build's KKE_DEFAULT_TARGET chose it
 };
 
 // Pure decision, unit-tested:
@@ -64,6 +65,12 @@ struct TargetChoice {
 // 5. "desktop".
 TargetChoice chooseHardwareTarget(const platform::DeviceHints& hints, const std::string& requested = {},
                                   const std::string& buildDefault = {});
+
+// Once the Vulkan device is known: when it is a CPU (Mesa lavapipe, on a
+// graphics chip without a Vulkan driver), an automatic "desktop" or
+// "desktop-low" choice becomes "software-gpu". Asked-for targets and
+// recognised devices stay. Pure, unit-tested.
+TargetChoice refineForSoftwareGpu(const TargetChoice& choice, bool softwareRasterizer, const std::string& deviceName);
 
 // chooseHardwareTarget() for this device: platform::deviceHints(), the
 // KKE_TARGET environment variable and the compiled-in KKE_DEFAULT_TARGET.
