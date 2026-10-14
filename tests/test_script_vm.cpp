@@ -5,6 +5,7 @@
 #include "kke/modules/ScriptModule.h"
 
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 #include <lauxlib.h>
 #include <lua.h>
 
@@ -633,4 +634,48 @@ TEST(ScriptStore, KeepsSavesInAFileAcrossRuns) {
     ASSERT_TRUE(vm.runString("b = store.load('built') n, y = #b, b[2].y"));
     EXPECT_EQ(globalNumber(vm, "n"), 2);
     EXPECT_EQ(globalNumber(vm, "y"), 4);
+}
+
+// ENG-G18: fx.define takes an effect written as a Lua table; it reaches
+// kke::ParticleLibrary as the JSON its YAML would be.
+TEST(ScriptVM, TablesBecomeJson) {
+    ScriptVM vm;
+    lua_State* L = vm.state();
+    ASSERT_EQ(luaL_dostring(L, R"(return {
+        description = "a puff",
+        layers = { { kind = "smoke", count = 12, up = true, colors = { { 0.5, 0.5, 0.5 } }, radius = { 0.1, 0.2 },
+                     box = { x = 1, y = 0, z = 2 } } },
+    })"), LUA_OK);
+    const nlohmann::json j = ScriptVM::toJson(L, -1);
+    lua_pop(L, 1);
+    EXPECT_EQ(j["description"], "a puff");
+    ASSERT_TRUE(j["layers"].is_array());
+    const nlohmann::json& layer = j["layers"][0];
+    EXPECT_EQ(layer["kind"], "smoke");
+    EXPECT_EQ(layer["count"], 12);
+    EXPECT_EQ(layer["up"], true);
+    EXPECT_EQ(layer["colors"], nlohmann::json::parse("[[0.5, 0.5, 0.5]]"));
+    EXPECT_EQ(layer["radius"], nlohmann::json::parse("[0.1, 0.2]"));
+    EXPECT_EQ(layer["box"], nlohmann::json::parse("[1, 0, 2]")); // {x, y, z} and Vec(...) become [x, y, z]
+    EXPECT_EQ(lua_gettop(L), 0);
+}
+
+TEST(ScriptVM, TablesBecomeJsonEdgeCases) {
+    ScriptVM vm;
+    lua_State* L = vm.state();
+    ASSERT_EQ(luaL_dostring(L, "return { 1, 2, n = 3 }"), LUA_OK); // mixed keys: an object
+    nlohmann::json j = ScriptVM::toJson(L, -1);
+    lua_pop(L, 1);
+    EXPECT_TRUE(j.is_object());
+    EXPECT_EQ(j["1"], 1);
+    EXPECT_EQ(j["n"], 3);
+    ASSERT_EQ(luaL_dostring(L, "return {}"), LUA_OK);
+    j = ScriptVM::toJson(L, -1);
+    lua_pop(L, 1);
+    EXPECT_TRUE(j.is_object());
+    EXPECT_TRUE(j.empty());
+    ASSERT_EQ(luaL_dostring(L, "local t = {}; t.self = t; return t"), LUA_OK); // a cycle stops, it does not hang
+    j = ScriptVM::toJson(L, -1);
+    lua_pop(L, 1);
+    EXPECT_TRUE(j["self"].is_null());
 }
