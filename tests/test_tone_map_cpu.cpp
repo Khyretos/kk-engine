@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 
 #include "tonemap_glsl.h"
+#include "tonemap_post_frag.h"
 
 #include <cmath>
 #include <string>
@@ -109,4 +110,11 @@ TEST(ToneMapCpu, ShaderHasTheNoneBranch) {
     EXPECT_EQ(static_cast<int>(kke::ToneMapper::None), 3);
     const std::string src = kTonemapGlsl;
     EXPECT_NE(src.find("if (op == 3) return clamp(c, 0.0, 1.0);"), std::string::npos);
+}
+
+// On a 10-bit (UNORM) swapchain the tone-map pass encodes sRGB itself;
+// Renderer sets PostParams.tone.z for it.
+TEST(ToneMapCpu, PostPassEncodesForUnormTargets) {
+    const std::string src = kTonemapPostFrag;
+    EXPECT_NE(src.find("if (post.tone.z > 0.5) c = linearToSrgb(c);"), std::string::npos);
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "kke/ColorFormats.h"
+
 #include <volk.h>
 #include <vk_mem_alloc.h>
 #include <vector>
@@ -35,6 +37,10 @@ public:
 
     VkSwapchainKHR handle() const { return m_swapChain; }
     VkFormat imageFormat() const { return m_imageFormat; }
+    // True for an *_SRGB format (the GPU encodes); false for a UNORM one
+    // (10-bit, or a display that offers nothing else), where shaders write
+    // sRGB-encoded values themselves.
+    bool encodesSrgb() const { return formatEncodesSrgb(m_imageFormat); }
     VkFormat depthFormat() const { return m_depthFormat; }
     VkExtent2D extent() const { return m_extent; }
     VkRenderPass renderPass() const { return m_renderPass; }

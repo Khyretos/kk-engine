@@ -89,6 +89,9 @@ public:
     // The pass renderOverlay() draws in (always single-sampled, full
     // resolution): UI pipelines (RmlUi, ImGui) are created against this.
     VkRenderPass overlayRenderPass() const { return m_swapChain->renderPass(); }
+    // False on a UNORM (10-bit) swapchain: what draws in the overlay pass
+    // writes sRGB-encoded colour itself (UI, ImGui, the tone-map pass).
+    bool outputEncodesSrgb() const { return m_swapChain->encodesSrgb(); }
     // The image the overlay draws into this frame (call between beginFrame
     // and endFrame).
     OverlayTarget overlayTarget() const;
@@ -163,7 +166,7 @@ public:
     // Screenshots of what the player sees (3D and UI), for the benchmark's
     // best/worst-moment pictures. enableCapture() makes the swapchain
     // readable (rebuilt at the next beginFrame()); canCapture() says
-    // whether it worked (the surface allows it, 8-bit RGBA/BGRA format).
+    // whether it worked (the surface allows it, an 8- or 10-bit RGBA/BGRA format).
     // requestCapture() copies the next frame endFrame() presents; the
     // pixels arrive once the GPU has finished it, a frame or two later,
     // through takeCaptures(). Each copy costs a transfer on the GPU and a

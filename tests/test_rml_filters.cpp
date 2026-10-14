@@ -231,3 +231,18 @@ TEST(RmlFilters, EveryCssFilterRmlUiSendsCompiles) {
     Rml::RemoveContext("filters_test");
     Rml::Shutdown();
 }
+
+// ENG-G17: on a 10-bit (UNORM) swapchain the UI layers hold sRGB-encoded
+// colour, so a drop shadow's colour is encoded back before it is drawn.
+TEST(RmlFilters, TargetColourOnAnEncodedTarget) {
+    const glm::vec4 linear = kke::rmlLinearPremultiplied(Rml::Colourb(128, 64, 255, 128));
+    const glm::vec4 same = kke::rmlTargetColor(linear, false);
+    EXPECT_EQ(same, linear);
+    const glm::vec4 enc = kke::rmlTargetColor(linear, true);
+    const float a = 128.0f / 255.0f;
+    EXPECT_NEAR(enc.a, a, 1e-6f);
+    EXPECT_NEAR(enc.r / a, 128.0f / 255.0f, 1e-3f);
+    EXPECT_NEAR(enc.g / a, 64.0f / 255.0f, 1e-3f);
+    EXPECT_NEAR(enc.b / a, 1.0f, 1e-3f);
+    EXPECT_EQ(kke::rmlTargetColor(glm::vec4(0.0f), true), glm::vec4(0.0f));
+}

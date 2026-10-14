@@ -26,7 +26,7 @@ What to use instead, by problem:
 |---|---|
 | Foliage, fences, hair cards (cutout alpha) | Alpha test + coverage-preserving mips (done, below); MSAA on the edges when MSAA lands |
 | See-through objects, fades, LOD cross-fades | Real alpha blending, sorted; or a short opacity fade with blending, not a screen-door pattern |
-| Banding in dark gradients (sky, fog) | More precision: an HDR scene target (done, ENG-G17) and a 10-bit swapchain where the device has one ([#35](https://github.com/Khyretos/kk-engine/issues/35)) |
+| Banding in dark gradients (sky, fog) | More precision: an HDR scene target and a 10-bit swapchain where the device has one (both done, ENG-G17) |
 | Soft shadow edges | Filtered shadow lookups (PCF, hardware compare), not random taps |
 | Cheap volumetrics / AO / reflections | Lower resolution with an edge-aware (bilateral) upsample, or fewer, stable samples; never noise left for TAA |
 
@@ -271,8 +271,17 @@ colour (`kke::sceneClearColor`, an inverse of the CPU mirror
 `kke::toneMapCpu`, which thumbnails use too). Compared with the usual
 design (a separate tone-map render pass into an LDR image, then the UI
 pass) it saves a render pass, an image and its bandwidth, and the curve
-no longer runs once per shaded fragment (overdraw). 10-bit output is
-still #35.
+no longer runs once per shaded fragment (overdraw).
+
+**Done (ENG-G17): 10-bit output.** The swapchain is A2B10G10R10 or
+A2R10G10B10 (sRGB colour space) wherever the surface offers it
+(`kke::chooseSurfaceFormat`; `KKE_SWAPCHAIN_8BIT=1` keeps 8-bit). No sRGB
+10-bit format exists, so on such a UNORM swapchain the tone-map pass
+encodes sRGB itself, and the UI writes sRGB-encoded colour and blends in
+that space (`kTargetEncoded` in the RmlUi shaders, raw ImGui colours), as
+a browser does; filters and the thumbnail atlas follow. A 30-bit X
+display, which offers nothing but A2R10G10B10, used to get the 8-bit
+pipeline's linear colour and showed everything far too dark.
 
 ### 8. Textures and GPU utilisation
 
@@ -362,9 +371,7 @@ sample count from the render pass it's built for
 and ImGui pipelines use `Renderer::overlayRenderPass()`. Thumbnails use
 `Renderer::createSceneCompatiblePass`, so they're anti-aliased too.
 Checked headless at 4x (Synty demo, sandbox with thumbnails, UI
-showcase): smoother edges, validation clean. SMAA 1x is still open in
-
-# 36
+showcase): smoother edges, validation clean. SMAA 1x is still open (#36).
 
 **Later the same day:** shadow map quality (#38). The shadow map is
 sampled with a depth-compare sampler (each of the 9 PCF taps is a
@@ -383,7 +390,7 @@ in #20.
    (done)
 4. MSAA as a setting (done) + optional SMAA 1x. (#36)
 5. AgX tone curve with exposure, selectable per game (done); HDR
-   target and one tone map pass (done, ENG-G17); 10-bit output. (#35)
+   target, one tone map pass and 10-bit output (done, ENG-G17).
 6. Front-to-back sorting (done), measured prepass, overdraw view. (#37)
 7. Shadow map quality: compare sampler, slope bias, stable projection. (done, #38)
 8. Texture compression at asset cooking. (#39)

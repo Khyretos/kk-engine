@@ -110,8 +110,10 @@ void ThumbnailModule::createGpu() {
               VK_IMAGE_ASPECT_DEPTH_BIT | (r.hasStencil() ? VK_IMAGE_ASPECT_STENCIL_BIT : 0), m_samples);
     if (m_samples > 1)
         makeImage(m_scratchMsaa, kTile, m_colorFormat, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_IMAGE_ASPECT_COLOR_BIT, m_samples);
-    // Finished sRGB pictures, the same bytes as the cache PNGs.
-    makeImage(m_atlas, kAtlas, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    // Finished sRGB pictures, the same bytes as the cache PNGs. ImGui reads
+    // them as linear for an sRGB swapchain, raw for a UNORM (10-bit) one.
+    const VkFormat atlasFormat = r.outputEncodesSrgb() ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
+    makeImage(m_atlas, kAtlas, atlasFormat, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
 
     // With MSAA, attachment 2 is the resolve target (see createSceneCompatiblePass).
     std::vector<VkImageView> views = m_samples > 1 ? std::vector<VkImageView>{ m_scratchMsaa.view, m_scratchDepth.view, m_scratchColor.view }

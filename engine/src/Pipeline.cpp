@@ -28,6 +28,17 @@ Pipeline::Pipeline(VulkanDevice& device, VkRenderPass renderPass,
     fragStage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
     fragStage.module = fragModule;
     fragStage.pName = "main";
+    std::vector<VkSpecializationMapEntry> specEntries;
+    VkSpecializationInfo specInfo{};
+    if (!config.fragmentConstants.empty()) {
+        for (uint32_t i = 0; i < config.fragmentConstants.size(); ++i)
+            specEntries.push_back({ i, static_cast<uint32_t>(i * sizeof(uint32_t)), sizeof(uint32_t) });
+        specInfo.mapEntryCount = static_cast<uint32_t>(specEntries.size());
+        specInfo.pMapEntries = specEntries.data();
+        specInfo.dataSize = config.fragmentConstants.size() * sizeof(uint32_t);
+        specInfo.pData = config.fragmentConstants.data();
+        fragStage.pSpecializationInfo = &specInfo;
+    }
 
     VkPipelineShaderStageCreateInfo stages[] = { vertStage, fragStage };
 

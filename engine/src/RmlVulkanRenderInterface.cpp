@@ -48,7 +48,7 @@ struct GradientPushConstants {
 };
 } // namespace
 
-RmlVulkanRenderInterface::RmlVulkanRenderInterface(VulkanDevice& device, VkRenderPass renderPass, bool stencilAvailable)
+RmlVulkanRenderInterface::RmlVulkanRenderInterface(VulkanDevice& device, VkRenderPass renderPass, bool stencilAvailable, bool targetEncoded)
     : m_stencilAvailable(stencilAvailable), m_device(device) {
     // --- Descriptor set layout: one combined image sampler, fragment-only ---
     VkDescriptorSetLayoutBinding binding{};
@@ -121,6 +121,8 @@ RmlVulkanRenderInterface::RmlVulkanRenderInterface(VulkanDevice& device, VkRende
     }
     config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(RmlPushConstants) };
     config.descriptorSetLayouts = { m_textureSetLayout };
+    // Every UI fragment shader's kTargetEncoded (constant_id 0).
+    config.fragmentConstants = { targetEncoded ? 1u : 0u };
 
     m_pipeline = std::make_unique<Pipeline>(
         device, renderPass, "shaders/rml_ui.vert.spv", "shaders/rml_ui.frag.spv", config);
@@ -146,6 +148,7 @@ RmlVulkanRenderInterface::RmlVulkanRenderInterface(VulkanDevice& device, VkRende
     layer.depthWriteEnable = false;
     layer.pushConstantRange = { VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(RmlFilterPush) };
     layer.descriptorSetLayouts = { m_textureSetLayout, m_textureSetLayout };
+    layer.fragmentConstants = config.fragmentConstants;
     m_filterReplace = std::make_unique<Pipeline>(
         device, renderPass, "shaders/rml_fullscreen.vert.spv", "shaders/rml_filter.frag.spv", layer);
     layer.blendEnable = true;

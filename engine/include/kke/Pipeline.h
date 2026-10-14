@@ -2,6 +2,7 @@
 
 #include <volk.h>
 #include <glm/glm.hpp>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -57,6 +58,10 @@ struct PipelineConfig {
     uint32_t colorAttachmentCount = 1;
     VkPushConstantRange pushConstantRange{}; // size == 0 => pipeline has no push constants
     std::vector<VkDescriptorSetLayout> descriptorSetLayouts; // empty => no descriptor sets
+    // The fragment shader's specialization constants (constant_id 0, 1, ...,
+    // 32-bit each; a bool is 0 or 1): e.g. the UI shaders' "the target is
+    // UNORM, write sRGB-encoded colour" switch (ENG-G17).
+    std::vector<uint32_t> fragmentConstants;
 };
 
 // One graphics pipeline: shaders + fixed-function state for drawing

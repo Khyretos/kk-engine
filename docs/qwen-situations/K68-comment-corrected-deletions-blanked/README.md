@@ -1,5 +1,5 @@
-K68 (g17, 2026-10-14): three dictated blocks in shaders/lighting_ubo.glsl (a header comment changed, 4 UBO fields deleted, one
-#include deleted). Attempt 1 "corrected" the comment it had to copy, writing "(set 0, binding = 0)" for "(set 0, binding 0)" because the
+K68 (g17, 2026-10-14): three dictated blocks in shaders/lighting_ubo.glsl (a header comment changed, 4 UBO fields deleted, and
+one `#include` deleted). Attempt 1 "corrected" the comment it had to copy, writing "(set 0, binding = 0)" for "(set 0, binding 0)" because the
 layout line below says "binding = 0", so the SEARCH did not apply. The repair rounds then paraphrased the new 2-line comment into one
 ("// gradient sky, height fog.") and answered both pure deletions with a blank line where the removed lines were. Failed after 3
 attempts; Claude applied the dictated blocks.

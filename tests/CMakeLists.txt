@@ -98,6 +98,7 @@ add_executable(kke_tests
     test_draw_order.cpp
     test_tone_mapper.cpp
     test_tone_map_cpu.cpp
+    test_color_formats.cpp
     test_sky.cpp
     test_envmap.cpp
     test_gpu_skin.cpp
@@ -131,12 +132,16 @@ if(KKE_ENABLE_JOLT AND KKE_ENABLE_NET)
     target_include_directories(kke_tests PRIVATE ${CMAKE_SOURCE_DIR}/games/party)
 endif()
 
-# ToneMapper.ValuesMatchTheShader reads shaders/tonemap.glsl. It is built
+# ToneMapper.ValuesMatchTheShader reads shaders/tonemap.glsl (and
+# ToneMapCpu.PostPassEncodesForUnormTargets tonemap_post.frag). They are built
 # into the test binary because the Release workflow runs kke_tests from a
 # packaged build (no source tree, and the package ships only SPIR-V).
 file(READ ${CMAKE_SOURCE_DIR}/shaders/tonemap.glsl KKE_TONEMAP_GLSL)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/shaders/tonemap.glsl)
 configure_file(tonemap_glsl.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/tonemap_glsl.h @ONLY)
+file(READ ${CMAKE_SOURCE_DIR}/shaders/tonemap_post.frag KKE_TONEMAP_POST_FRAG)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/shaders/tonemap_post.frag)
+configure_file(tonemap_post_frag.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/tonemap_post_frag.h @ONLY)
 target_include_directories(kke_tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 
 # The cookbook's Lua recipes (docs/cookbook/recipes/), built in the same

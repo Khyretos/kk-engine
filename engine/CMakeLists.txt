@@ -134,6 +134,7 @@ set(ENGINE_SOURCES
     src/TetMeshAsset.cpp
     src/LightingBuffer.cpp
     src/ToneMap.cpp
+    src/ColorFormats.cpp
     src/Sky.cpp
     src/EnvMap.cpp
     src/GpuSkin.cpp

@@ -250,7 +250,7 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
     }
 
     m_debugUi = std::make_unique<DebugUi>(m_window, m_renderer->device(), m_renderer->overlayRenderPass(),
-                                           m_renderer->swapChainImageCount());
+                                           m_renderer->swapChainImageCount(), !m_renderer->outputEncodesSrgb());
     // Shipping builds start (and stay) with the developer panels hidden.
     m_debugUi->setVisible(dev::kEnabled);
 }

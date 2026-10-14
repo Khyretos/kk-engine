@@ -2,7 +2,7 @@
 
 // The RmlUi layer filters of kke::RmlVulkanRenderInterface (ENG-G09), one
 // full-screen pass each, chosen by `mode`. Layers hold linear, premultiplied
-// colour. The CPU copies of this maths are in engine/src/RmlFilters.cpp
+// colour (sRGB-encoded on a UNORM target, kTargetEncoded). The CPU copies of this maths are in engine/src/RmlFilters.cpp
 // (tests/test_rml_filters.cpp): change both together.
 
 layout(location = 0) in vec2 inUv;
@@ -25,6 +25,10 @@ layout(push_constant) uniform Filter {
     int mode;
     float opacity;
 } pc;
+
+// kke::RmlVulkanRenderInterface sets it when the swapchain is UNORM (10-bit,
+// ENG-G17): colour stays sRGB-encoded and blends that way, as in a browser.
+layout(constant_id = 0) const bool kTargetEncoded = false;
 
 vec3 srgbToLinear(vec3 c) {
     return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c));
@@ -51,10 +55,10 @@ void main() {
             outColor = vec4(0.0);
             return;
         }
-        vec3 s = linearToSrgb(c.rgb / c.a);
+        vec3 s = kTargetEncoded ? c.rgb / c.a : linearToSrgb(c.rgb / c.a);
         vec4 t = pc.matrix * vec4(s * c.a, c.a);
         vec3 o = clamp(t.rgb / c.a, 0.0, 1.0);
-        outColor = vec4(srgbToLinear(o) * c.a, c.a);
+        outColor = vec4((kTargetEncoded ? o : srgbToLinear(o)) * c.a, c.a);
     } else if (pc.mode == 2) {
         // One direction of a separable Gaussian: offset is one texel along it.
         // Taps i and i + 1 are one linear-filtered sample placed between them

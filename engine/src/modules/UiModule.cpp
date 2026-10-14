@@ -370,7 +370,8 @@ void UiModule::init(Application& app) {
     m_app = &app;
     m_pixelsPerPoint = app.window().pixelsPerPoint();
     m_systemInterface.window = app.window().handle();
-    m_renderInterface = std::make_unique<RmlVulkanRenderInterface>(app.device(), app.renderer().overlayRenderPass(), app.renderer().hasStencil());
+    m_renderInterface = std::make_unique<RmlVulkanRenderInterface>(app.device(), app.renderer().overlayRenderPass(), app.renderer().hasStencil(),
+                                                                   !app.renderer().outputEncodesSrgb());
 
     Rml::SetSystemInterface(&m_systemInterface);
     Rml::SetRenderInterface(m_renderInterface.get());
